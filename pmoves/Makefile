@@ -261,6 +261,20 @@ venv-bringup: check-prereqs ## Bringup-ready venv: service+tool deps PLUS glance
 update-service-docs: ## Regenerate service update notes from git metadata
 	@$(PYTHON) scripts/update_service_logs.py $(ARGS)
 
+.PHONY: identity-verify
+identity-verify: ## Audit the claim register's identity vocabulary (0 clean / 1 findings / 3 could not measure)
+	@# KNOWN ROAD for pmoves/tools/identity_lineage.py --verify. Until this
+	@# existed the tool had NO caller: the co-owner feature's stated defense --
+	@# "an undeclared co-owner is a --verify finding by design" -- was a command
+	@# nobody ran, and the exit-3 doctrine implemented in main() had no consumer
+	@# that could act on it. Flagged as P3 in the PR #2858 review; the unrouted
+	@# half was the half that would have caught the two P1s.
+	@$(PYTHON) tools/identity_lineage.py --verify
+
+.PHONY: identity-co-owners
+identity-co-owners: ## List every register row that declares co-owners
+	@$(PYTHON) tools/identity_lineage.py --co-owners
+
 .PHONY: docs-runbook
 docs-runbook: ## Open the comprehensive bring-up runbook
 	@if command -v xdg-open >/dev/null 2>&1; then \
@@ -315,6 +329,24 @@ register-release: ## Close a lane in the claim register (OWNER= BRANCH= SCOPE= [
 		exit 2; \
 	fi
 	@$(PYTHON) tools/register_append.py release \
+		--owner "$(or $(OWNER),$(REGISTER_OWNER))" \
+		--branch "$(BRANCH)" $(ARGS)
+
+.PHONY: register-amend
+# THE AMEND ROAD. #2858's co-owner workflow needs the INCUMBENT to add
+# `co-owners:` to a row they already filed -- an in-place edit of one line. The
+# collision gate refuses `sed -i` and `perl -pi` on the register (a PreToolUse
+# hook cannot see what a mid-file rewrite produces), register-claim only
+# appends, and register-docs refuses anything that changes a ledger row. Without
+# this target the field that SUPPRESSES a collision had no sanctioned way to be
+# set from a shell -- the same deadlock class as the missing append road.
+register-amend: export REGISTER_CO_OWNERS = $(CO_OWNER)
+register-amend: ## Add co-owners to YOUR OWN open claim row (OWNER= BRANCH= CO_OWNER=)
+	@if [ -z "$(BRANCH)" ] || [ -z "$(CO_OWNER)" ]; then \
+		echo "usage: make register-amend OWNER='B850-CLAUDE (Knuckles)' BRANCH=fix/x CO_OWNER='4090-CLAUDE:filed the blocker'"; \
+		exit 2; \
+	fi
+	@$(PYTHON) tools/register_append.py amend \
 		--owner "$(or $(OWNER),$(REGISTER_OWNER))" \
 		--branch "$(BRANCH)" $(ARGS)
 

@@ -197,14 +197,135 @@ def insert_docs(anchor: str, block: str, register: Path | None = None) -> int:
     return EXIT_OK
 
 
+def _render_co_owners(specs):
+    """`ID` or `ID:contribution note` -> the register's own rendering."""
+    out = []
+    for spec in specs:
+        ident, _, note = spec.partition(":")
+        ident, note = ident.strip(), note.strip()
+        out.append(f"`{ident}` ({note})" if note else f"`{ident}`")
+    return ", ".join(out)
+
+
+def amend_co_owners(owner, branch, co_owners, register=None, gate=None):
+    """Add `co-owners:` to the caller's OWN open CLAIM row, in validated code.
+
+    THE NEXT DEADLOCK INSTANCE, closed. The collision gate refuses shell writes
+    to the register it cannot check. That is correct for rows, and it left the
+    three-way co-owner workflow with no door: reciprocation requires the
+    INCUMBENT to add `co-owners:` to a row they already filed, which is an
+    in-place edit of one line. `sed -i` and `perl -pi` are refused (rightly --
+    a PreToolUse hook cannot see what a mid-file rewrite produces),
+    `register-claim` only appends, and `register-docs` refuses anything that
+    changes a ledger row. So the field that SUPPRESSES a collision could only be
+    set by the one tool nobody in this fleet has had for five sessions.
+
+    Same answer as the append path: do it in validated code, and make the
+    dangerous outcome structurally impossible rather than merely checked for.
+
+      * YOUR OWN ROW ONLY. The row is located through the gate's own
+        `open_claims_in`, keyed on the CANONICAL identity, and a row whose owner
+        does not fold to the caller is not amendable. Attribution and authority
+        are different powers -- you may declare who worked WITH you, never edit
+        someone else's declaration of who worked with them.
+      * ONE OPEN ROW, or nothing. Two open claims by the same identity on the
+        same lane is ambiguous, and guessing which to amend is how a gate starts
+        editing rows nobody asked it to.
+      * PURE INSERTION. The new row is the old row with one substring added, and
+        that is asserted by removing the substring again and comparing. Every
+        other ledger row must be byte-identical, and the row COUNT must not move.
+    """
+    target = REGISTER if register is None else register
+    original = target.read_text(encoding="utf-8")
+    gate = gate or _load_gate()
+
+    key = gate.canonical_owner(owner)
+    mine = [c for c in gate.open_claims_in(original).get(key, [])
+            if branch in c[1]]
+    if not mine:
+        print(f"register-append: refusing - no OPEN CLAIM by `{owner}` naming "
+              f"branch `{branch}`. You may only amend a row you filed and have "
+              "not released. To declare co-owners on a NEW lane, use "
+              "`make -C pmoves register-claim CO_OWNER=...`.", file=sys.stderr)
+        return EXIT_REFUSED
+    if len(mine) > 1:
+        print(f"register-append: NOT MEASURED - `{owner}` has {len(mine)} open "
+              f"CLAIM rows naming branch `{branch}` (lines "
+              f"{', '.join(str(c[0]) for c in mine)}). Which one to amend is "
+              "ambiguous, so nothing was changed.", file=sys.stderr)
+        return EXIT_UNMEASURED
+
+    lineno = mine[0][0]
+    lines = original.split("\n")
+    row = lines[lineno - 1]
+    rendered = _render_co_owners(co_owners)
+    if not rendered:
+        print("register-append: amend needs at least one --co-owner.",
+              file=sys.stderr)
+        return EXIT_UNMEASURED
+
+    if "co-owners:" in row:
+        inserted = rendered + ", "
+        new_row = re.sub(r"(co-owners:\s*)", lambda m: m.group(1) + inserted,
+                         row, count=1)
+    else:
+        # THE ROW GRAMMAR IS NOT UNIFORM AND THE TOOL MUST NOT ASSUME IT IS.
+        # `build_row` emits ` \xb7 scope:`, and the first cut of this function
+        # keyed on that -- which works for 18 of the register's 264 CLAIM rows
+        # and refuses the other 246, every one of them filed by hand before this
+        # tool existed. Those are precisely the rows an incumbent would need to
+        # amend. Found by running the amend against a copy of the LIVE register
+        # rather than a fixture built to the grammar the tool writes.
+        mid = " " + chr(183) + " "
+        canonical = mid + "scope:"
+        if canonical in row:
+            inserted = mid + "co-owners: " + rendered
+            new_row = row.replace(canonical, inserted + canonical, 1)
+        elif "scope:" in row:
+            idx = row.index("scope:")
+            inserted = chr(183) + " co-owners: " + rendered + " " + chr(183) + " "
+            new_row = row[:idx] + inserted + row[idx:]
+        else:
+            # A row with no scope field at all (1 of 264). Appending keeps the
+            # insertion pure, which is the property the checks below assert.
+            inserted = mid + "co-owners: " + rendered
+            new_row = row.rstrip() + inserted
+
+    if new_row.replace(inserted, "", 1) != row:
+        print("register-append: NOT MEASURED - the amended row is not the "
+              "original plus one insertion. Refusing.", file=sys.stderr)
+        return EXIT_UNMEASURED
+
+    lines[lineno - 1] = new_row
+    updated = "\n".join(lines)
+    before, after = _ledger_rows(original), _ledger_rows(updated)
+    if len(before) != len(after):
+        print(f"register-append: refusing - the ledger changed length "
+              f"({len(before)} rows before, {len(after)} after).",
+              file=sys.stderr)
+        return EXIT_REFUSED
+    changed = [i for i, (a, b) in enumerate(zip(before, after)) if a != b]
+    if changed != [before.index(row)] or len(changed) != 1:
+        print(f"register-append: refusing - {len(changed)} ledger rows changed; "
+              "an amend must touch exactly one.", file=sys.stderr)
+        return EXIT_REFUSED
+
+    target.write_text(updated, encoding="utf-8")
+    print(new_row)
+    print(f"register-append: amended line {lineno}; {len(after)} ledger rows, "
+          "one row changed by insertion only.", file=sys.stderr)
+    return EXIT_OK
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description=__doc__.splitlines()[0],
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    parser.add_argument("kind", choices=["claim", "release", "docs"],
+    parser.add_argument("kind", choices=["claim", "release", "docs", "amend"],
                         help="CLAIM opens a lane, RELEASE closes it, "
-                             "docs inserts prose without touching rows")
+                             "docs inserts prose without touching rows, "
+                             "amend adds co-owners to YOUR OWN open row")
     parser.add_argument("--anchor", default="",
                         help="docs mode: unique line to insert BEFORE")
     parser.add_argument("--text-file", default="",
@@ -244,6 +365,14 @@ def main(argv: list[str] | None = None) -> int:
                              "was refused by the damage-control hook, which "
                              "matches literal strings anywhere in a command -- "
                              "including inside prose.)")
+    parser.add_argument(
+        "--i-have-coordinated", action="store_true",
+        help="proceed with a UNILATERAL co-owner declaration -- a lane whose "
+             "incumbent has NOT named you back. The hook asks a human at this "
+             "point; a CLI has nobody to ask, so it refuses unless you say so "
+             "here. Without this flag the sanctioned path would be the one "
+             "route that skips the question, which is how a gate becomes "
+             "theatre.")
     parser.add_argument("--dry-run", action="store_true",
                         help="render and check the row, write nothing")
     args = parser.parse_args(argv)
@@ -254,6 +383,29 @@ def main(argv: list[str] | None = None) -> int:
                   file=sys.stderr)
             return EXIT_UNMEASURED
         return insert_docs(args.anchor, Path(args.text_file).read_text(encoding="utf-8"))
+
+    if args.kind == "amend":
+        if not args.branch or not args.co_owner:
+            print("register-append: amend needs --branch and at least one "
+                  "--co-owner (or CO_OWNER= via make).", file=sys.stderr)
+            return EXIT_UNMEASURED
+        if not args.owner:
+            print("register-append: amend needs --owner or REGISTER_OWNER: it "
+                  "only ever edits a row filed by that identity.",
+                  file=sys.stderr)
+            return EXIT_UNMEASURED
+        if not REGISTER.is_file():
+            print(f"register-append: NOT MEASURED - no register at {REGISTER}",
+                  file=sys.stderr)
+            return EXIT_UNMEASURED
+        try:
+            gate = _load_gate()
+        except Exception as exc:  # noqa: BLE001 -- report, never guess
+            print("register-append: NOT MEASURED - the collision gate could not "
+                  f"be loaded ({exc}); the row could not be located.",
+                  file=sys.stderr)
+            return EXIT_UNMEASURED
+        return amend_co_owners(args.owner, args.branch, args.co_owner, gate=gate)
 
     if args.scope_file:
         args.scope = Path(args.scope_file).read_text(encoding="utf-8").strip()
@@ -300,19 +452,71 @@ def main(argv: list[str] | None = None) -> int:
         return EXIT_UNMEASURED
 
     existing = REGISTER.read_text(encoding="utf-8", errors="replace")
-    collisions, unkeyed = gate.evaluate_claims(row, gate.open_claims_in(existing))
-    if collisions:
+    # WRAPPED, and the wrapping is the fix for a defect this tool shipped.
+    # `evaluate_claims` used to be called bare. When the gate's return type
+    # widened from 2 categories to a verdict object, this line raised
+    # `ValueError: too many values to unpack` -- an UNCAUGHT traceback, exit 1.
+    # Exit 1 in this tool's own doctrine means "refused: the lane is held by
+    # another owner", so a crash was indistinguishable from a legitimate refusal
+    # by exit code alone, in the one tool the fleet has when the Bash path
+    # denies and there is no Write tool. A crash must never be able to wear a
+    # refusal's exit code; could-not-measure (3) is what it is.
+    try:
+        verdict = gate.evaluate_claims(row, gate.open_claims_in(existing))
+    except Exception as exc:  # noqa: BLE001 -- report, never guess
+        print("register-append: NOT MEASURED - the collision gate raised "
+              f"{type(exc).__name__}: {exc}. The row was NOT checked against "
+              "the open lanes and was NOT written. This is a crash, not a "
+              "refusal -- exit 3, never 1.", file=sys.stderr)
+        return EXIT_UNMEASURED
+
+    if verdict.collisions:
         print("register-append: refusing to add a CLAIM for a lane another "
               "owner holds.", file=sys.stderr)
-        for lane, other, lineno in collisions:
+        for lane, other, lineno in verdict.collisions:
             print(f"  - lane `{lane}` is already claimed by `{other}` "
                   f"(open CLAIM at line {lineno})", file=sys.stderr)
         print("Either coordinate a handoff, wait for their RELEASE, or pick a "
               "different branch (see Village Rule in AGNOTE4482PHI.t1.md).",
               file=sys.stderr)
         return EXIT_REFUSED
-    if unkeyed:
-        for owner in unkeyed:
+
+    # A CONSENTED SHARE IS ALLOWED AND ANNOUNCED. An allow that prints nothing
+    # cannot be told apart from a gate that did not run.
+    for lane, other, lineno in verdict.shared:
+        print(f"register-append: SHARED LANE - `{lane}` is held by `{other}` "
+              f"(open CLAIM at line {lineno}), whose own row declares this "
+              "claimant as a co-owner. Allowing: the incumbent declared it.",
+              file=sys.stderr)
+
+    # UNILATERAL. The hook emits `permissionDecision: "ask"` here and a human
+    # answers. This tool has nobody to ask, so it refuses and names the flag
+    # that answers the question -- rather than being the one path on which the
+    # question is never put.
+    if verdict.one_sided and not args.i_have_coordinated:
+        print("register-append: refusing - this row does not collide only "
+              "because of something IT declares. Nobody on the other side has "
+              "said so:", file=sys.stderr)
+        for owner, lane, other, lineno, witnesses in verdict.one_sided:
+            print(f"  - `{owner}` claims lane `{lane}`, held by `{other}` "
+                  f"(open CLAIM at line {lineno}); `{other}`'s open row does "
+                  f"not declare `{owner}` back, so the sharing is UNILATERAL "
+                  f"(shared participants: {', '.join(witnesses)}).",
+                  file=sys.stderr)
+        print("If you have coordinated -- or the incumbent is offline and you "
+              "are picking the lane up -- re-run with --i-have-coordinated. "
+              "The incumbent's own reciprocation is "
+              "`make -C pmoves register-amend`.", file=sys.stderr)
+        return EXIT_REFUSED
+
+    if verdict.unreadable_co_owners:
+        print("register-append: NOT MEASURED - this row declares `co-owners:` "
+              "and names none the parser can read, so the shared-lane check ran "
+              "WITHOUT them. Write each ID in backticks.", file=sys.stderr)
+        return EXIT_UNMEASURED
+
+    if verdict.unkeyed:
+        for owner in verdict.unkeyed:
             print(f"register-append: NOT MEASURED - CLAIM by `{owner}` names no "
                   "branch the gate can read, so no lane was compared.",
                   file=sys.stderr)
@@ -333,5 +537,28 @@ def main(argv: list[str] | None = None) -> int:
     return EXIT_OK
 
 
+def _guarded(argv=None) -> int:
+    """Run main(), and never let an unexpected exception exit 1.
+
+    The exit codes are a CONTRACT here -- 0 appended / 1 the lane is held / 3
+    could not measure -- and python's default for an uncaught exception is 1.
+    That collapses "this tool crashed" into "another owner holds your lane",
+    which is the fleet's signature defect appearing inside the tool built to
+    prevent it. A traceback is could-not-measure, and it is printed in full.
+    """
+    try:
+        return main(argv)
+    except SystemExit:
+        raise
+    except Exception:  # noqa: BLE001 -- the whole point is to not exit 1
+        import traceback
+        traceback.print_exc()
+        print("register-append: NOT MEASURED - this tool crashed (traceback "
+              "above). Nothing was written. Exit 3, NOT 1: a crash must not be "
+              "indistinguishable from 'refused, the lane is held'.",
+              file=sys.stderr)
+        return EXIT_UNMEASURED
+
+
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(_guarded())
