@@ -188,8 +188,32 @@ SECRETS_ENSURE_KEYS ?= \
   LOGFLARE_PUBLIC_ACCESS_TOKEN \
   LOGFLARE_PRIVATE_ACCESS_TOKEN
 
-.PHONY: secrets-ensure-generated
-secrets-ensure-generated: ensure-env-shared ## Mint stack-generated secrets into env.shared when (and only when) absent/empty. Idempotent; never overwrites a live value.
+.PHONY: secrets-ensure-generated secrets-harvest-check
+secrets-ensure-generated: ensure-env-shared ## Recover live secrets from the running fleet, THEN mint only what is genuinely absent. Idempotent; never overwrites a live value.
+	@# HARVEST BEFORE MINT. THE ORDER IS THE WHOLE POINT.
+	@#
+	@# This step is unconditional and runs inside `make secrets-funnel`, so on a
+	@# node where env.shared has lost one of these values while a running
+	@# container still holds it -- the recovery state this change exists to serve
+	@# -- minting is not a bootstrap. It replaces live cryptographic material, and
+	@# secrets-funnel-sync materializes the replacement into the tier files on the
+	@# very next line of the funnel. A later supabase-pooler recreation then gets a
+	@# different VAULT_ENC_KEY and cannot decrypt the tenant credentials (or the yt
+	@# OAuth cookies) already stored under the old one.
+	@#
+	@# secrets-runtime-hydrate runs earlier and does recover container values, but
+	@# only Supabase aliases plus Meili/Firefly/Agent Zero/Invidious -- never these
+	@# four. So without this guard the mint is reached with the slots still empty.
+	@#
+	@# Telling the operator in a PR body to harvest first does not work: the step
+	@# fires automatically. The guard has to be in front of the mint, and it is
+	@# `&&` rather than `;` so a refusal STOPS the funnel instead of being a
+	@# warning the next line ignores.
+	@#
+	@# It lives here rather than in secrets-runtime-hydrate because
+	@# secrets-ensure-generated is itself a public .PHONY target: a guard one
+	@# target upstream leaves `make secrets-ensure-generated` destructive.
+	@#
 	@# Guard the empty list. bootstrap_env.py with NO key flags falls through to
 	@# the full INTERACTIVE bootstrap(), which prompts and then dies with EOFError
 	@# under make. An empty SECRETS_ENSURE_KEYS must mean "mint nothing", not
@@ -197,7 +221,15 @@ secrets-ensure-generated: ensure-env-shared ## Mint stack-generated secrets into
 	@if [ -z "$(strip $(SECRETS_ENSURE_KEYS))" ]; then \
 	  echo "secrets-ensure-generated: SECRETS_ENSURE_KEYS is empty — nothing to mint"; \
 	else \
+	  $(CODEX_PY) tools/secrets_harvest.py $(foreach k,$(SECRETS_ENSURE_KEYS),--key $(k)) && \
 	  $(CODEX_PY) scripts/bootstrap_env.py $(foreach k,$(SECRETS_ENSURE_KEYS),--ensure $(k)); \
+	fi
+
+secrets-harvest-check: ## Report what secrets-ensure-generated WOULD do (harvest / mint / refuse). Writes nothing. Exit 3 = refused.
+	@if [ -z "$(strip $(SECRETS_ENSURE_KEYS))" ]; then \
+	  echo "secrets-harvest-check: SECRETS_ENSURE_KEYS is empty — nothing to examine"; \
+	else \
+	  $(CODEX_PY) tools/secrets_harvest.py --dry-run $(foreach k,$(SECRETS_ENSURE_KEYS),--key $(k)); \
 	fi
 
 .PHONY: secrets-ensure-check
