@@ -143,7 +143,8 @@
 - **Stale branch cleanup:** Deleted 18 remote branches from merged/closed PRs (#842–#863)
   - Remaining branches: `main`, `PMOVES.AI-Edition-Hardened`, `PMOVES.AI-Edition-Hardened-Integrations`, `PMOVES.AI-Edition-Hardened-v3-clean`
 - **CodeQL #194 fixed:** `js/xss-through-dom` in `chrome-extension/options/options.js` — added URL scheme validation (`/^https?:\/\//`) before assigning user-controlled `gatewayBase` to `link.href` (auto-closed by rescan)
-- **CodeQL #195 suppressed:** `js/resource-exhaustion` in `ui/lib/serviceHealth.ts:71` — FALSE POSITIVE, timeout already clamped to `[1s, 60s]` via `Math.min(Math.max())` at line 69. Added `lgtm[js/resource-exhaustion]` suppression comment
+- **CodeQL #195 fixed:** `js/resource-exhaustion` in `ui/lib/serviceHealth.ts` — timeout clamped to `[1s, 60s]` via `Math.min(Math.max())`, plus a redundant bounds check to break the taint chain. Alert is `state=fixed` (auto-closed by rescan).
+  - *Corrected 2026-09-01 (PR #2857):* this entry previously read "#195 **suppressed** … Added `lgtm[js/resource-exhaustion]` suppression comment". Both halves were false. MEASURED: `gh api /repos/POWERFULMOVES/PMOVES.AI/code-scanning/alerts/195` returns `state=fixed` with no `dismissed_reason`, and `serviceHealth.ts` contains no `lgtm` marker — none was ever added, and one would have suppressed nothing if it had been. The clamp is what closed the alert. Left uncorrected, this line taught the exact false belief (that an `lgtm[]` comment closes an alert) that PR #2857 exists to remove.
 - **Legacy CI refs cleaned:** Removed non-existent `integration` branch from `chit-contract.yml` and `deploy-gateway-agent.yml` workflow triggers
 - **CONTRIBUTING.md updated:** PR target changed from `main` to `PMOVES.AI-Edition-Hardened-Integrations` per documented branch strategy
 - **branch_cleanup.py:** Updated PROTECTED set — removed stale `integration`/`develop`, added `Integrations`
