@@ -71,17 +71,21 @@ def test_no_defaulted_cipher_token_expansion():
     token is 200. Both forms now fail identically when the variable is missing,
     so the tiebreaker is observability, not reachability:
     `mcp_roster_normalize.expand()` records a miss only for a reference with NO
-    default, and treats an exported-but-empty value as missing. The `:-` form
-    therefore 401s SILENTLY; the bare form 401s and lands in the
-    `_pmoves_roster_verdicts` degraded list. See
-    pmoves/docs/operations/CIPHER_AUTH_RUNBOOK.md.
+    default, and treats an exported-but-empty value as missing.
+
+    Not "silent vs auditable" -- that framing was overstated and is corrected
+    here. `session_check.classify` already flagged the `:-` form as soft (`!`);
+    the bare form is flagged hard (`x`) and additionally lands in the
+    `_pmoves_roster_verdicts` degraded list, which currently has no production
+    reader. The gain is a severity upgrade in a manually-run tool. See
+    pmoves/docs/operations/CIPHER_AUTH_RUNBOOK.md §6.
     """
     text = _configurator_text()
     assert "${CIPHER_API_TOKEN:-}" not in text, (
         "defaulted ${CIPHER_API_TOKEN:-} found. An empty bearer is a 401 now "
         "that the token is provisioned, and the `:-` default suppresses the "
-        "roster's missing-variable verdict, so the failure is invisible. "
-        "Use bare ${CIPHER_API_TOKEN}."
+        "roster's missing-variable verdict, downgrading the failure from a "
+        "hard `x` to a soft `!`. Use bare ${CIPHER_API_TOKEN}."
     )
 
 

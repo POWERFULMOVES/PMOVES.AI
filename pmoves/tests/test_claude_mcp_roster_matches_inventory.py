@@ -111,16 +111,23 @@ def test_cipher_bearer_stays_bare_so_a_miss_is_recorded(
     tools). Both forms fail the same way when the variable is missing, so the
     deciding property is whether the failure is VISIBLE:
     `mcp_roster_normalize.expand()` records a miss only for a reference with no
-    default (and counts an exported-empty value as missing). `:-` therefore
-    yields a silent 401 -- a server that loads, looks configured, and offers no
-    tools, which is how this fleet lost persistent memory for weeks. Bare yields
-    the same 401 plus a `_pmoves_roster_verdicts` degraded entry naming
-    CIPHER_API_TOKEN. See pmoves/docs/operations/CIPHER_AUTH_RUNBOOK.md.
+    default (and counts an exported-empty value as missing).
+
+    Stated precisely, because the first draft of this docstring overstated it:
+    `:-` was NOT invisible. `pmoves/scripts/session_check.py::classify` already
+    had a purpose-built `soft` class for it. Measured with the token absent,
+    same tool: `:-` -> `!` (soft, "resolves to empty"), bare -> `x` (hard,
+    "the literal ${VAR} text goes on the wire"). What this assertion buys is
+    that SEVERITY UPGRADE plus a `_pmoves_roster_verdicts` degraded entry naming
+    CIPHER_API_TOKEN -- not the creation of a signal from nothing, and note that
+    the verdicts block has no production reader yet. See
+    pmoves/docs/operations/CIPHER_AUTH_RUNBOOK.md §6.
     """
     for key, entry in _cipher_entries(generated["mcpServers"]).items():
         auth = entry.get("headers", {}).get("Authorization")
         assert auth == "Bearer ${CIPHER_API_TOKEN}", (
             f"{key} Authorization header is {auth!r}; it must be the bare "
-            "reference so a missing token is recorded as degraded rather than "
-            "sent as a silent empty bearer."
+            "reference so a missing token is classified hard (`x`) by "
+            "session_check and recorded as degraded, rather than sent as an "
+            "empty bearer that only ever rates a soft `!`."
         )
