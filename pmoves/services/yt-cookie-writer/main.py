@@ -50,7 +50,23 @@ def _get_fernet() -> Optional[Fernet]:
     if not key_hex:
         return None
     try:
-        key_bytes = bytes.fromhex(key_hex)
+        # VAULT_ENC_KEY_DECODE_V1 -- keep identical in all three consumers:
+        #   pmoves/tools/yt_oauth_flow.py
+        #   pmoves/services/yt-cookie-writer/main.py
+        #   pmoves/services/yt-cookie-refresher/supabase_client.py
+        # One side encrypting with a different derivation than the other decrypts
+        # with is worse than both failing: consent reports success, ciphertext
+        # lands, and the writer silently never produces the refresh-token file.
+        # Hex first (the registry's declared spec for this key), then base64url,
+        # then raw bytes.
+        try:
+            key_bytes = bytes.fromhex(key_hex)
+        except ValueError:
+            try:
+                _padded = key_hex + "=" * (-len(key_hex) % 4)
+                key_bytes = base64.urlsafe_b64decode(_padded) or key_hex.encode("utf-8")
+            except Exception:
+                key_bytes = key_hex.encode("utf-8")
         key_bytes = (key_bytes + b"\x00" * 32)[:32]
         return Fernet(base64.urlsafe_b64encode(key_bytes))
     except Exception:

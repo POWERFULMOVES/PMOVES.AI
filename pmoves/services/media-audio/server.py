@@ -489,7 +489,7 @@ async def _run_analysis(req: AudioAnalysisRequest) -> JSONResponse:
         # included) and rejects anything outside MEDIA_INPUT_DIR via os.path.commonpath (the
         # exact root-confinement guard CodeQL's own py/path-injection remediation recommends);
         # it just doesn't recognize a custom function as a sanitizer barrier (alert #326).
-        if not os.path.exists(path):  # lgtm[py/path-injection]
+        if not os.path.exists(path):
             raise HTTPException(status_code=404, detail="audio file not found")
     try:
         dispatch = {

@@ -1,4 +1,4 @@
-.PHONY: env-bootstrap-lite env-setup env-check preflight flight-check flight-check-retro preflight-retro showtime bringup-showtime smoke-showtime showtime-links showtime-links-open showtime-links-strict submodule-integrity submodule-layer-validate submodule-layer-validate-one submodule-layer-validate-all submodule-layer-validate-all-strict submodule-layer-validate-strict submodule-branch-policy-check audit-layers audit-layers-static audit-layers-runtime ci-runners-check ci-runners-check-strict ci-runners-map ci-runners-map-strict ci-runners-lockdown ci-runners-lockdown-strict ci-runners-local-cert-up ci-runners-local-cert-down ci-runners-local-cert-status ci-queue-sitrep ci-queue-drain-nonpr ci-queue-drain-nonpr-apply skill-registry-validate runner-labels-check runner-labels-refresh auth-alignment auth-alignment-strict topology-chit-gate topology-chit-gate-strict pr-monitor pr-monitor-strict pr-monitor-chit-packet pr-trim-analyze pr-trim-resolve pr-trim-report pr-trim floos-status floos-pr-monitor-validate floos-pr-monitor-resolve floos-pr-monitor-run-dry chit-flow-pr-monitor chit-flow-pr-monitor-strict ports-resolve sign-trail naming-drift-check naming-drift-strict docker-hub-inject showtime-update
+.PHONY: launcher-check launcher-install session-check env-bootstrap-lite env-setup env-check preflight flight-check flight-check-retro preflight-retro showtime bringup-showtime smoke-showtime showtime-links showtime-links-open showtime-links-strict submodule-integrity submodule-layer-validate submodule-layer-validate-one submodule-layer-validate-all submodule-layer-validate-all-strict submodule-layer-validate-strict submodule-branch-policy-check audit-layers audit-layers-static audit-layers-runtime ci-runners-check ci-runners-check-strict ci-runners-map ci-runners-map-strict ci-runners-lockdown ci-runners-lockdown-strict ci-runners-local-cert-up ci-runners-local-cert-down ci-runners-local-cert-status ci-queue-sitrep ci-queue-drain-nonpr ci-queue-drain-nonpr-apply skill-registry-validate runner-labels-check runner-labels-refresh auth-alignment auth-alignment-strict topology-chit-gate topology-chit-gate-strict pr-monitor pr-monitor-strict pr-monitor-chit-packet pr-trim-analyze pr-trim-resolve pr-trim-report pr-trim floos-status floos-pr-monitor-validate floos-pr-monitor-resolve floos-pr-monitor-run-dry chit-flow-pr-monitor chit-flow-pr-monitor-strict ports-resolve sign-trail naming-drift-check naming-drift-strict docker-hub-inject showtime-update
 
 # Force UTF-8 output on Windows (cp1252 chokes on Unicode/emoji in pr-trim et al.)
 export PYTHONIOENCODING ?= utf-8
@@ -119,6 +119,27 @@ else
 endif
 	@echo "Open a NEW shell, then: make -C pmoves launcher-check"
 
+session-check: ## Report which MCP servers THIS session can authenticate (reads no secrets)
+	@# launcher-check and session-check answer different questions, and only the
+	@# second one is about the session you are in.
+	@#
+	@#   launcher-check   does `claude-pmoves` resolve on this host?   (installer)
+	@#   session-check    did THIS process actually get the env?       (session)
+	@#
+	@# A launcher can be installed and simply not used -- starting `claude`
+	@# directly is the habit it exists to replace. Measured on Z890 2026-08-31,
+	@# both true at the same moment: launcher-check OK, and 13 of 20 roster
+	@# entries missing their variables in the live process.
+	@#
+	@# This became load-bearing only once nodes started configuring a cipher
+	@# token. With no token the empty bearer is ACCEPTED (200 on the 4090), so a
+	@# launcher-less session degrades invisibly; with one it is REJECTED (401 on
+	@# Z890). Hardening turns a silent degradation into a hard failure.
+	@#
+	@# Advisory by default and prints NAMES only, never values -- it has to be
+	@# safe to run inside an agent transcript, which is where the fault shows up.
+	@$(PRECHECK_PY) scripts/session_check.py $(ARGS)
+
 env-check: ## Run cross-platform environment preflight checks
 	@# launcher-check is REPORTED here, never required. A first draft made it a
 	@# prerequisite, which would have failed the repo's canonical environment
@@ -128,6 +149,21 @@ env-check: ## Run cross-platform environment preflight checks
 	@# review. A missing launcher is worth SAYING; it is not worth blocking a
 	@# fleet's env validation over.
 	@$(MAKE) --no-print-directory launcher-check || 	  echo "env-check: continuing -- launcher-check is advisory here (run 'make -C pmoves launcher-install' if you use Claude Code on this host)"
+	@# session-check is advisory for the same reason, plus one of its own: on a
+	@# CI runner or any non-Claude host there is no roster to authenticate and
+	@# "13 servers degraded" is not a finding, it is noise. It exits 0 unless
+	@# --strict is passed, so this cannot fail env-check even by accident.
+	@#
+	@# `ARGS=` is REQUIRED, and CI caught its absence
+	@# (tests/make/test_args_no_leak_to_submake.py). env-check consumes $(ARGS)
+	@# and forwards it to env_check.ps1 / env_check.sh; session-check consumes
+	@# $(ARGS) and forwards it to session_check.py. Without the literal clear,
+	@# one ARGS value would have to satisfy two argparse surfaces, so
+	@# `make env-check ARGS=--some-env-check-flag` would hand that flag to
+	@# session_check.py, which rejects unknown flags. The `|| true` would have
+	@# HIDDEN it -- an advisory that silently stops advising is the worst of
+	@# both. Clearing ARGS keeps the advisory honest.
+	@$(MAKE) --no-print-directory ARGS= session-check || true
 ifeq ($(OS),Windows_NT)
 	@pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/env_check.ps1 $(ARGS)
 else
