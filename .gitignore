@@ -360,3 +360,9 @@ indextts/
 checkpoints/
 pmoves/data/models/
 20.md
+
+# Claim-register transaction lock. Only ever created on nodes with no fcntl
+# (Windows), where `register_lock()` falls back to an O_EXCL lockfile. It is
+# removed in a finally block; a filer killed mid-transaction leaves it behind,
+# and that must not become a committed file in the register's own directory.
+AGNOTE4482PHI.t1.md.lock

@@ -418,3 +418,267 @@ def test_describe_self_states_that_nothing_is_grounded():
 def test_describe_self_on_an_unknown_identity_says_so():
     described = il.describe_self("nobody-claude")
     assert described["known"] is False
+
+
+# ---------------------------------------------------------------------------
+# CO-OWNERS -- the field, its parser, and the cases the live gate caught.
+#
+# Two of the tests below exist because the gate FAILED on its first two runs
+# against this lane's own CLAIM row. They are pinned as regressions rather than
+# described in a comment, because "the parser handles prose mentions" is the
+# kind of claim that quietly stops being true.
+# ---------------------------------------------------------------------------
+
+
+def test_a_row_with_no_field_yields_nothing():
+    """Backward compatibility is structural: no marker, no code path, no change."""
+    assert il.co_owners_in("- `t` CLAIM `A` scope: did a thing") == []
+    assert not il.co_owner_field_is_unparseable("- `t` CLAIM `A` scope: did a thing")
+
+
+def test_the_field_parses_ids_and_contributions():
+    row = (
+        "- `t` RELEASE `A` branch: `feat/x` · co-owners: "
+        "`4090-CLAUDE` (filed the blocker), "
+        "`B850-CLAUDE (Knuckles)` (cross-node correction) · scope: ok"
+    )
+    assert il.co_owners_in(row) == [
+        ("4090-CLAUDE", "filed the blocker"),
+        ("B850-CLAUDE (Knuckles)", "cross-node correction"),
+    ]
+
+
+def test_the_backticks_delimit_the_id_not_the_parenthetical():
+    """`B850-CLAUDE (Knuckles)` is ONE identity string, not an ID plus a note.
+
+    Identities already carry parentheticals -- 26 distinct ones in this register
+    -- so a field that split on `(` would corrupt the most common identity form
+    in the file. The backticks are what makes it unambiguous.
+    """
+    parsed = il.co_owners_in("co-owners: `B850-CLAUDE (Knuckles)` (posted the correction)")
+    assert parsed == [("B850-CLAUDE (Knuckles)", "posted the correction")]
+
+
+@pytest.mark.parametrize("row,expected", [
+    ("co-owners: `A` · scope: `feat/decoy`", [("A", "")]),
+    ("co-owners: `A` scope: `feat/decoy`", [("A", "")]),
+    ("co-owners: `A`, `B` — they did it with `feat/x`", [("A", ""), ("B", "")]),
+])
+def test_the_field_terminates_at_its_own_boundary(row, expected):
+    """It must not walk out of its field and eat the next one.
+
+    A scope that opens with a backticked branch token is ordinary in this
+    register, so a parser that kept consuming would read branches as co-owners
+    AND -- worse -- could widen what the row claims.
+    """
+    assert il.co_owners_in(row) == expected
+
+
+@pytest.mark.parametrize("row", [
+    "co-owners: 4090 and SPARK and DARKXSIDE",   # the natural way to get it wrong
+    "co-owners:",                                 # announced, then nothing
+    "co-owners: `` , ``",                         # backticks, no content
+])
+def test_malformed_fields_are_REJECTED_and_reported_as_unmeasured(row):
+    """A gate observed only passing is not known to work.
+
+    Each of these satisfies a human reader and is empty to a machine -- this
+    lane's own defect, one layer down. `[]` alone would be indistinguishable
+    from a row that has no co-owners, so the two are kept apart.
+    """
+    assert il.co_owners_in(row) == []
+    assert il.co_owner_field_is_unparseable(row), (
+        f"malformed field must be reported as unmeasured, not silently empty: {row!r}"
+    )
+
+
+def test_a_code_span_MENTION_of_the_field_is_not_a_declaration():
+    """Caught by the gate on its FIRST live run, against this lane's CLAIM row.
+
+    The register is a document about its own governance, so rows that DESCRIBE
+    the grammar are normal here. Without this, the first row to explain the
+    field was the first row to fail the gate.
+    """
+    row = "scope: adds a `co-owners:` field carrying backticked IDs"
+    assert il.co_owners_in(row) == []
+    assert not il.co_owner_field_is_unparseable(row)
+
+
+def test_the_bare_noun_in_prose_is_not_a_declaration():
+    """Caught by the gate on its SECOND live run, same row.
+
+    `co-owners` occurs in ordinary prose in a way `branch` does not, which is
+    why this marker REQUIRES the `:`/`=` where BRANCH_MARKER_RE makes it
+    optional.
+    """
+    row = "scope: collision keys on PARTICIPANTS (owner + co-owners) intersected with the LANE"
+    assert il.co_owners_in(row) == []
+    assert not il.co_owner_field_is_unparseable(row)
+
+
+def test_a_row_may_describe_the_field_AND_use_it():
+    """Every marker is tried, not just the first -- this lane's RELEASE does both."""
+    row = "the `co-owners:` field is new. co-owners: `A` (did the work)"
+    assert il.co_owners_in(row) == [("A", "did the work")]
+
+
+def test_co_owners_resolve_through_the_same_vocabulary_as_signing_authors():
+    """A co-owner is an author. One name space, not two."""
+    vocab = il.load_vocabulary()
+    for _lineno, _kind, _owner, co_owners in il.co_owner_attribution():
+        for identity, _contribution in co_owners:
+            assert il.canonical_identity(identity, vocab) is not None, (
+                f"co-owner {identity!r} resolves to no declared identity"
+            )
+
+
+@pytest.mark.parametrize("key,canonical", [
+    ("claude_b850", "b850-claude"),
+    ("claude_4090", "4090-claude"),
+    ("claude_5090", "5090-claude"),
+    ("claude_z890", "z890-claude"),
+])
+def test_the_agent_registry_key_is_a_declared_spelling(key, canonical):
+    """The fifth spelling. `canonical_owner` bridged four and stopped."""
+    assert il.canonical_identity(key) == canonical
+
+
+@pytest.mark.parametrize("key", [
+    "metrics_specialist", "logs_specialist", "tracing_specialist",
+    "dashboard_specialist", "llm_observability", "agent_zero", "crush_glm52",
+])
+def test_keys_sharing_a_signature_are_deliberately_NOT_aliased(key):
+    """A SHARED SIGNATURE IS NOT AN ALIAS -- the load-bearing half of that fix.
+
+    `claude-opus` is the signature of six distinct keys and `crush` of two.
+    Aliasing them would declare six different agents to be one identity, and the
+    collision gate keys on identity -- so a genuine clash between, say,
+    metrics_specialist and logs_specialist would stop being reported. Widening
+    the fold would have made the gate quieter and less true, so this pins the
+    boundary rather than trusting whoever edits the vocabulary next to re-derive
+    it.
+    """
+    assert il.canonical_identity(key) is None, (
+        f"{key!r} shares its signature with another agent and must NOT fold"
+    )
+
+
+def test_the_registry_alias_rule_still_holds_against_both_files():
+    """Recomputes the rule rather than restating its result.
+
+    A key is safe to alias iff its `signature:` resolves AND no other key shares
+    that signature. Pinned as a computation so that adding an agent to the
+    registry cannot silently invalidate the vocabulary.
+    """
+    from collections import Counter
+    registry = yaml.safe_load(
+        (REPO_ROOT / "pmoves" / "config" / "agent_registry.yaml").read_text(
+            encoding="utf-8"
+        )
+    )
+    agents = registry.get("agents") or {}
+    signatures = Counter(
+        (spec or {}).get("signature")
+        for spec in agents.values()
+        if (spec or {}).get("signature")
+    )
+    for key, spec in agents.items():
+        signature = (spec or {}).get("signature")
+        if not signature or signatures[signature] != 1:
+            continue
+        if il.canonical_identity(signature) is None:
+            continue  # the signature itself is undeclared; nothing to alias onto
+        assert il.canonical_identity(key) == il.canonical_identity(signature), (
+            f"registry key {key!r} uniquely signs as {signature!r} but does not "
+            f"fold to it -- add it as an alias in identity_vocabulary.yaml"
+        )
+
+
+def test_the_live_register_is_measurable():
+    """Exit-code doctrine: this asserts we CAN measure, not that we found nothing.
+
+    `unmeasured_rows()` non-empty means a row defeated the parser, which is
+    exit 3 -- 'could not measure' -- and must never be reported as clean.
+    """
+    unmeasured = il.unmeasured_rows()
+    assert unmeasured == [], (
+        "rows announce co-owners the parser cannot read: "
+        + "; ".join(f"L{n} `{owner}`" for n, owner in unmeasured)
+    )
+
+
+# --------------------------------------------------------------------------
+# Code spans are matched by BACKTICK RUN LENGTH, not by parity.
+#
+# Parity ("odd number of backticks before pos means inside a span") was
+# documented as failing toward a loud false "could not measure". Measured, it
+# fails the other way: a ``...`` example containing a backticked ID parses as a
+# SUCCESSFUL declaration, so a row that merely documents the grammar grants
+# participation. And an unbalanced backtick earlier in a row silently DROPS a
+# genuine field without reporting it unmeasured -- an attribution that
+# satisfies a human reader and is empty to every machine, which is the exact
+# defect the field exists to remove.
+# --------------------------------------------------------------------------
+
+def test_a_double_backtick_EXAMPLE_is_not_a_declaration():
+    row = (
+        "- `t` CLAIM `A` branch: `feat/x` · scope: the grammar is "
+        "``co-owners: `4090-CLAUDE` (what they did)`` as shown."
+    )
+    assert il.co_owners_in(row) == [], (
+        "an example inside a double-backtick span must not read as a use"
+    )
+    assert not il.co_owner_field_is_unparseable(row), (
+        "and must not be reported unmeasured either -- it declares nothing"
+    )
+
+
+def test_a_documented_example_does_not_shadow_the_row_s_REAL_declaration():
+    """The sharpest form of the parity defect: a WRONG attribution, silently.
+
+    co_owners_in() tries every marker and returns the first that yields items,
+    which is right -- a row may describe the field and then use it. Under
+    parity, the marker inside a ``...`` example counted as real usage, so the
+    example won and the genuine field after it was never reached. The row then
+    attributed its lane to an ID that exists only in a documentation sample,
+    and dropped the co-owner who actually did the work. Both halves silent.
+    """
+    row = (
+        "- `t` CLAIM `A` branch: `feat/x` · scope: the grammar is "
+        "``co-owners: `EXAMPLE-ID` (ex)`` · co-owners: `4090-CLAUDE` (the real one)"
+    )
+    assert il.co_owners_in(row) == [("4090-CLAUDE", "the real one")], (
+        "the example must not shadow the declaration that follows it"
+    )
+
+
+def test_an_unclosed_backtick_reads_the_way_the_row_RENDERS():
+    """Direction B, resolved by AGREEING with the renderer rather than guessing.
+
+    An unbalanced backtick used to flip polarity for the whole REST of the row,
+    so a genuine field far away vanished from every machine surface while the
+    source still read as an attribution to a human. Run matching bounds the
+    damage to where Markdown itself bounds it: the stray opens a span that
+    closes at the next backtick, which is exactly what the renderer shows. The
+    field inside is still not read -- but the reader and the parser now see the
+    same thing, and closing the backtick recovers it.
+    """
+    stray = (
+        "- `t` CLAIM `A` branch: `feat/x` · scope: see ` the note · "
+        "co-owners: `4090-CLAUDE` (ran the validation)"
+    )
+    closed = stray.replace("see ` the note", "see `the note`")
+    assert il.co_owners_in(closed) == [("4090-CLAUDE", "ran the validation")]
+    # And the damage stops at the span: a second, later field is still read.
+    assert il.co_owners_in(stray + " ` · co-owners: `Z890-CLAUDE` (after)") == [
+        ("Z890-CLAUDE", "after")
+    ]
+
+
+def test_a_triple_backtick_fence_does_not_flip_the_rest_of_the_text():
+    """The hook feeds multi-line text through this; a fence is 3 backticks."""
+    text = (
+        "```\n- `t` RELEASE `4090-CLAUDE` branch: `fix/x`\n```\n"
+        "- `t2` CLAIM `A` branch: `feat/y` · co-owners: `Z890-CLAUDE` (helped)"
+    )
+    assert il.co_owners_in(text) == [("Z890-CLAUDE", "helped")]
