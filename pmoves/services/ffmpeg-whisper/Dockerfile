@@ -324,15 +324,28 @@ WORKDIR /app
 
 COPY pmoves/services/ffmpeg-whisper/requirements.txt ./requirements.txt
 COPY pmoves/services/ffmpeg-whisper/requirements.lock ./requirements.lock
-# Arm64 (SPARK GB10 sm_121): the pypi aarch64 wheels for torch are CPU-only and
-# ctranslate2 ships without CUDA, so GPU transcription 500s at Whisper init
-# ("CTranslate2 package was not compiled with CUDA support", measured
-# 2026-09-01). The CUDA path on arm64 is the torch-cu128 stack (proven by
-# media-video/media-audio #2758 and hi-rag-v2-gpu): preinstall the pinned
-# torch from the cu128 index so the lock's `torch==2.9.1` is satisfied by the
-# +cu128 local version and no CPU wheel lands (same preinstall mechanism as
-# media-video). The whisperx provider then runs on the GPU; faster-whisper
-# stays CPU (ctranslate2) -- pass provider=whisper per request on GB10.
+# Arm64 (SPARK GB10 sm_121): the pypi aarch64 wheels for torch are CPU-only, so
+# every torch stage ran on CPU. Preinstall the pinned torch from the cu128 index
+# so the lock's `torch==2.9.1` is satisfied by the +cu128 local version and no CPU
+# wheel lands (same preinstall mechanism as media-video, proven by
+# media-video/media-audio #2758 and hi-rag-v2-gpu).
+#
+# This does NOT make transcription itself run on the GPU here, and an earlier
+# revision of this comment was wrong to say so. ASR goes through CTranslate2, a
+# separate runtime from torch: `whisperx.load_model` builds a subclass of
+# `faster_whisper.WhisperModel` (whisperx/asr.py: `class WhisperModel(
+# faster_whisper.WhisperModel)`), so provider=whisper is CTranslate2 just as
+# provider=faster-whisper is. Measured on the published 4.6.2 wheels: the x86_64
+# manylinux wheel bundles libcudnn 9.1.0, the aarch64 wheel bundles no CUDA
+# library at all and instead carries the literal string "not compiled with CUDA
+# support" -- which is the 500 seen at Whisper init on 2026-09-01.
+#
+# So on arm64 the split is: ASR on CPU (CTranslate2), whisperx alignment and
+# diarization on CUDA (torch) -- which is what this preinstall buys, and what
+# `_select_ctranslate2_device()` in server.py enforces so the request degrades
+# instead of raising. Full arm64 GPU transcription needs a CUDA-enabled
+# CTranslate2 built from source for aarch64, or a torch-native ASR provider;
+# neither is in this change.
 RUN pip install --no-cache-dir uv && \
     if [ "$(uname -m)" = "aarch64" ]; then \
       uv pip install --system --no-cache-dir --index-url https://download.pytorch.org/whl/cu128 torch==2.9.1; \
