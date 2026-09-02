@@ -45,22 +45,42 @@ admits it.
 
 Wired via PreToolUse Write/Edit AND Bash matchers in .claude/settings.json.
 
-THE BASH PATH IS ADVISORY, NOT A BLOCK. A shell command that writes the register
--- a heredoc, `tee`, `sed -i`, `>>` -- never reaches the Write/Edit matcher, so
-for a while the gate had a shell-shaped hole and the agent that filed its own
-CLAIM through a heredoc (this one) sailed straight through it.
+THE BASH PATH NOW BLOCKS. It used to be advisory, and the paragraph here used to
+say it "cannot be closed the same way" because "recovering what will this write
+from arbitrary shell is not something to attempt in a PreToolUse hook."
 
-It cannot be closed the same way. The Write/Edit path works because the proposed
-TEXT is in the payload; a shell command only carries the command, and recovering
-"what will this write" from arbitrary shell is not something to attempt in a
-PreToolUse hook. So the Bash path does what it honestly can: it notices the
-register is being written, surfaces which lanes are currently open, and asks.
+That was right about ARBITRARY shell and wrong about the case every agent here
+actually uses. A heredoc body IS in the command string this hook already
+receives: `cat >> REG <<EOF ... EOF` carries its content in the payload. So the
+content is recoverable, `evaluate_claims()` runs on it, and the shell path
+refuses exactly what the Write path refuses, with the same message.
 
-That is also the right shape on the merits. The register is a shared ledger, not
-a lock -- nodes go offline, work gets handed off, and more than one node on a
-lane is the village working, not a violation. A gate that refuses cannot express
-any of that. `permissionDecision: "ask"` puts the state in front of whoever is
-deciding and lets them decide.
+WHY IT MATTERED MORE THAN IT LOOKED. Measured 2026-09-02, identical content
+against a genuinely held lane: Write exited 2 and blocked; Bash exited 0 with
+`permissionDecision: "ask"` -- and an "ask" is resolved by a permission
+classifier reading the shell COMMAND, not the lane, to which
+`cat >> REG <<EOF` looks entirely benign. Four delivery agents in one session
+had NO Write or Edit tool ("Write is disabled for this session, in subagents as
+well as here"), so the advisory path was the only path they had, and every
+register write in that session was unchecked.
+
+WHAT IS STILL NOT RECOVERABLE is denied, not waved through: `sed -i`, a path in
+a variable, content piped from another process, a python heredoc that computes
+its row. Per this repo's exit-code doctrine -- 0 clean / 1 findings / 3 could
+not measure, NOT a pass -- could-not-measure is a refusal. Exiting 0 with an
+"ask" made could-not-measure indistinguishable from measured-clean on the only
+surface that gates.
+
+THE DENY IS ONLY DEFENSIBLE BECAUSE A SANCTIONED PATH EXISTS. Refusing shell
+writes while agents have no Write tool would deadlock the fleet: nobody could
+file a claim at all, which is strictly worse than the gap being closed. Every
+refusal below names `make -C pmoves register-claim`, which appends through
+validated code -- clock-read timestamp, collision check, O_APPEND.
+
+The register is still a shared ledger and not a lock. What the block refuses is
+an UNCHECKED write, not a shared lane; the ledger's own answer to "more than one
+node on a lane is the village working" is the `co-owners:` field, not an
+unguarded write path.
 
 Owner-ID format in the register (per existing entries):
   `<ISO_TIMESTAMP>` CLAIM `<OWNER-ID>` scope: ...
@@ -242,93 +262,308 @@ def open_claims_in(text: str) -> dict[str, tuple[int, set[str], str]]:
     return open_claims
 
 
-# Shell tokens that mean "this command can modify a file". Deliberately broad:
-# a false positive costs one prompt, a false negative is the hole this closes.
-WRITE_TOKENS = re.compile(
-    r"\btee\b|"                    # tee / tee -a
-    r"\bsed\b[^|]*-i|"             # sed -i
-    r"\bdd\b|"
-    # Replacement-style rewrites. These carry no redirect and no -i, so the
-    # advisory was silent while the register was overwritten wholesale -- the
-    # most ordinary way to replace a file walked straight through the gate.
-    r"\b(?:cp|mv|install|rsync|truncate)\b|"
-    r"\bperl\b[^|]*-[a-zA-Z]*i|"   # perl -pi / -i.bak
-    r"\b(?:write_text|open)\s*\(|"  # python inside a heredoc
-    r"\bcat\b[^|]*<<"              # heredoc
+# --------------------------------------------------------------------------
+# RECOVERING WHAT A SHELL COMMAND WILL WRITE
+#
+# This module's previous docstring said recovering "what will this write" from
+# arbitrary shell "is not something to attempt in a PreToolUse hook". That is
+# right about ARBITRARY shell and wrong about the common case, and the common
+# case is the one every agent here actually uses: a heredoc body IS in the
+# command string the hook already receives. `cat >> REG <<EOF ... EOF` carries
+# its content in the payload. So the content is recoverable, the same collision
+# check the Write path runs can run on it, and the shell-shaped hole closes.
+#
+# What is genuinely NOT recoverable -- `sed -i`, a path in a variable, content
+# piped from another process, a python heredoc that computes its row -- is
+# could-not-measure. Per this repo's exit-code doctrine (0 clean / 1 findings /
+# 3 could not measure -- NOT a pass, see docker_host_policy_check.py and
+# mcp_toolkit_preflight.py) could-not-measure is not a pass, so it is denied
+# with a message naming the sanctioned path rather than waved through as "ask".
+# --------------------------------------------------------------------------
+
+HEREDOC_DELIM_RE = re.compile(r"<<-?\s*(['\"]?)([A-Za-z_][A-Za-z0-9_]*)\1")
+# `(>>?)` captured, because append and truncate are different acts against an
+# append-only ledger and the gate has to be able to tell them apart.
+REDIRECT_RE = re.compile(r"(>>?)\s*([^\s;|&<>]+)")
+TEE_RE = re.compile(r"\btee\b((?:\s+-\S+)*)((?:\s+[^\s;|&<>]+)*)")
+ECHO_LITERAL_RE = re.compile(
+    r"\b(?:echo|printf)\b(?:\s+-\S+)*\s+(['\"])(.*?)\1", re.S
+)
+# Shell write verbs whose CONTENT cannot be read out of the command string.
+SHELL_OPAQUE_RE = re.compile(
+    r"\bsed\b[^|;]*-i|"
+    r"\bperl\b[^|;]*-[a-zA-Z]*i|"
+    r"\b(?:cp|mv|install|rsync|truncate|dd)\b"
+)
+# Python WRITES, kept apart from python reads. `open(p)` alone is ambiguous and
+# a lone `open\s*\(` refused `print(open(REG).read())` -- a read. A mode of
+# `a`/`w`, or a `.write(`/`write_text(` call, is what distinguishes them.
+PY_WRITE_RE = re.compile(
+    r"\.write\s*\(|\bwrite_text\s*\(|"
+    r"\bopen\s*\([^)]*['\"][aw]"
+)
+SEGMENT_SPLIT_RE = re.compile(r"\n|;|&&|\|\||\|")
+INTERPRETER_RE = re.compile(
+    r"\b(?:python3?|perl|ruby|node|deno|bash|sh|zsh|awk|php)\b"
+)
+# An unexpanded `$VAR`, `${...}`, `$(...)` or backtick means the text this hook
+# can SEE is not the text that will be WRITTEN.
+EXPANSION_RE = re.compile(r"[$`]")
+
+SANCTIONED_PATH = (
+    "make -C pmoves register-claim  (or register-release)  -- "
+    "see AGNOTE4482PHI.t1.md " + chr(167) + " Filing a row"
 )
 
-# Redirects are handled separately from the tokens above, because `>` alone
-# says nothing about WHICH file is written. `cat REGISTER 2>/dev/null` and
-# `grep REGISTER > report.txt` both name the register and both redirect, yet
-# neither writes it. This hook runs on every Bash call, so those false asks are
-# friction on ordinary reads -- and friction is what teaches people to click
-# through the one prompt that matters.
-REDIRECT_TARGET_RE = re.compile(r">>?\s*([^\s;|&<>]+)")
 
+def split_heredocs(command: str) -> tuple[str, list[dict]]:
+    """Split `command` into its shell SKELETON and its heredoc bodies.
 
-def _writes_the_register(command: str) -> bool:
-    """True when `command` plausibly MODIFIES the register (not merely reads it)."""
-    if WRITE_TOKENS.search(command):
-        return True
-    return any(
-        REGISTER_NAME in target
-        for target in REDIRECT_TARGET_RE.findall(command)
-    )
+    Separating the two is what makes every check below trustworthy. Analysed as
+    one blob, a heredoc body's own contents are indistinguishable from shell
+    code: a row of register PROSE that happens to contain the word `cp`, or a
+    `>` inside a quoted scope, reads to a regex as a write verb and a redirect.
 
+    That is not a theoretical concern in this repo. The damage-control hook
+    matches literal strings anywhere in a command INCLUDING inside heredoc
+    content, and an agent had its own report blocked for merely quoting a
+    phrase. The first cut of THIS function reproduced the same bug one layer
+    down -- a `cat > /tmp/notes.md` heredoc explaining "use cp to back up the
+    register" was refused as an unmeasurable register write. Found by running
+    the gate, not by reading it.
 
-def _advise_on_shell_write(payload: dict) -> None:
-    """Ask (never block) when a shell command looks like it writes the register.
+    Each heredoc is returned with the line that OPENED it, because two
+    properties that decide everything downstream can only be read there:
 
-    Emits nothing at all unless the command names the register AND carries a
-    write token, so ordinary `grep`/`sed -n` reads stay silent.
+      * `code`    -- fed to an interpreter (its body is instructions ABOUT the
+                     register) versus redirected to a file (its body IS the
+                     register). Asking a data body whether it "writes the
+                     register" is exactly the false positive above.
+      * `literal` -- the delimiter was quoted, so the shell performs no
+                     expansion and the body is byte-for-byte what lands. An
+                     unquoted delimiter can expand a `$VAR` into a whole row
+                     this hook never saw.
+
+    Bodies are matched to delimiters IN ORDER, which is what the shell itself
+    does. A delimiter that never terminates consumes the rest of the command:
+    that over-approximates the body, and over-approximating the text to be
+    CHECKED is the fail-closed direction -- more candidate rows are compared,
+    never fewer.
     """
-    command = ((payload.get("tool_input") or {}).get("command") or "")
-    if REGISTER_NAME not in command or not _writes_the_register(command):
-        return
+    if not HEREDOC_DELIM_RE.search(command):
+        return command, []
+    lines = command.split("\n")
+    skeleton_lines: list[str] = []
+    bodies: list[dict] = []
+    idx = 0
+    while idx < len(lines):
+        line = lines[idx]
+        skeleton_lines.append(line)
+        idx += 1
+        # Every heredoc opened ON THIS LINE takes its body starting now, in the
+        # order the operators appear -- the shell's own rule for `cmd <<A <<B`.
+        for m in HEREDOC_DELIM_RE.finditer(line):
+            quote, delim = m.group(1), m.group(2)
+            body: list[str] = []
+            while idx < len(lines) and lines[idx].strip() != delim:
+                body.append(lines[idx])
+                idx += 1
+            idx += 1  # consume the terminator line itself
+            bodies.append({
+                "delim": delim,
+                "body": "\n".join(body),
+                "opener": line,
+                "literal": bool(quote),
+                "code": bool(INTERPRETER_RE.search(line)),
+            })
+    return "\n".join(skeleton_lines), bodies
 
-    register = _locate_register(payload, command)
-    if register is None:
-        return
-    try:
-        existing_open = open_claims_in(register.read_text(encoding="utf-8", errors="replace"))
-    except OSError:
-        return
 
-    # open_claims_in maps owner -> LIST of (lineno, lanes, as-written), not a
-    # single tuple: one identity can hold several lanes at once, and #2760 made
-    # that explicit because keying one claim per owner silently forgot every
-    # lane but the newest. Count and list CLAIMS, therefore, not owners.
-    keyed = [c for claims in existing_open.values() for c in claims if c[1]]
-    total_open = sum(len(claims) for claims in existing_open.values())
-    lines = [
-        "This shell command writes the claim register. The collision gate reads "
-        "proposed text from Write/Edit payloads and cannot see inside a shell "
-        "command, so it has NOT checked this one.",
-        "",
-        f"Open lanes right now ({total_open} total, {len(keyed)} naming a branch):",
-    ]
-    # Report the AS-WRITTEN owner, not the canonical key: `B850-CLAUDE
-    # (Knuckles)` locates the entry in the register and `b850-claude` does not.
-    for lineno, lanes, raw in sorted(keyed, key=lambda c: c[0]):
-        lines.append(f"  L{lineno}  {raw} -> {', '.join(sorted(lanes))}")
-    unkeyed = total_open - len(keyed)
-    if unkeyed:
-        lines.append(
-            f"  (+{unkeyed} open claim(s) naming no branch -- not comparable)"
+def _segments(text: str) -> list[str]:
+    return [s for s in SEGMENT_SPLIT_RE.split(text) if s.strip()]
+
+
+def _tee_targets(segment: str) -> tuple[list[str], bool]:
+    """(targets, appends) for any `tee` in `segment`."""
+    targets: list[str] = []
+    appends = False
+    for m in TEE_RE.finditer(segment):
+        flags, rest = m.group(1) or "", m.group(2) or ""
+        if re.search(r"-\w*a", flags):
+            appends = True
+        targets += rest.split()
+    return targets, appends
+
+
+def _register_redirects(segment: str) -> tuple[bool, bool]:
+    """(appends_register, truncates_register) for one skeleton segment."""
+    appends = truncates = False
+    for op, target in REDIRECT_RE.findall(segment):
+        if REGISTER_NAME not in target:
+            continue
+        if op == ">>":
+            appends = True
+        else:
+            truncates = True
+    tee_targets, tee_appends = _tee_targets(segment)
+    if any(REGISTER_NAME in t for t in tee_targets):
+        if tee_appends:
+            appends = True
+        else:
+            truncates = True
+    return appends, truncates
+
+
+class ShellWrite:
+    """How a shell command writes the register, and what it will write.
+
+    kind:
+      "none"      -- the command does not write the register (it may name it)
+      "append"    -- appends, and `text` is what will be appended
+      "truncate"  -- rewrites the file wholesale
+      "opaque"    -- writes it, and the content is NOT in the command string
+    """
+
+    def __init__(self, kind: str, text: str = "", why: str = "") -> None:
+        self.kind = kind
+        self.text = text
+        self.why = why
+
+
+def classify_shell_write(command: str) -> ShellWrite:
+    """Decide whether `command` writes the register, and recover the content.
+
+    KEYED ON THE WRITE TARGET, NOT ON MENTION. The advisory this replaces
+    triggered whenever the command NAMED the register and carried any write
+    token anywhere, so writing an unrelated source file whose CONTENT mentions
+    the register -- this hook's own source, a runbook, a test fixture -- raised
+    an advisory listing the live fleet's open lanes. Harmless while the verdict
+    was "ask". Fatal as a deny: it would refuse ordinary work that touches no
+    ledger at all, and a gate that refuses ordinary work gets switched off.
+
+    The question is asked of the EXECUTABLE text only -- the shell skeleton plus
+    the bodies of heredocs fed to an interpreter. A register name appearing
+    solely in DATA (a doc being written, a row being appended, a quoted scope)
+    is a mention, not a write.
+
+    EVERY "opaque" VERDICT REQUIRES POSITIVE EVIDENCE OF A WRITE. The first cut
+    denied anything whose executable text named the register and offered no
+    explicit redirect -- which is the shape of `grep -c CLAIM REG`. It refused
+    a plain READ. That single case would have made the register unreadable from
+    the shell, which is worse than the hole being closed and is precisely the
+    deadlock class this lane exists to avoid. Found by probing the gate with a
+    read, not by reading the code.
+    """
+    skeleton, bodies = split_heredocs(command)
+    executable = "\n".join(
+        [skeleton] + [h["body"] for h in bodies if h["code"]]
+    )
+    if REGISTER_NAME not in executable:
+        return ShellWrite("none")
+
+    appends: list[str] = []
+    for seg in _segments(skeleton):
+        seg_appends, seg_truncates = _register_redirects(seg)
+        if seg_truncates:
+            return ShellWrite(
+                "truncate",
+                why="a single `>` (or a `tee` without `-a`) REPLACES the "
+                    "register. It is append-only: every row is provenance, and "
+                    "a rewrite cannot be distinguished from a redaction after "
+                    "the fact.",
+            )
+        if seg_appends:
+            appends.append(seg)
+
+    if not appends:
+        # No redirect resolves to the register. Either this is not a write at
+        # all, or it is a write whose target this hook cannot see. Only the
+        # second is refused, and only on evidence.
+        for seg in _segments(skeleton):
+            if SHELL_OPAQUE_RE.search(seg) and REGISTER_NAME in seg:
+                return ShellWrite(
+                    "opaque",
+                    why="`" + seg.strip()[:120] + "` writes the register with "
+                        "content that is not in the command string.",
+                )
+        for h in bodies:
+            if h["code"] and REGISTER_NAME in h["body"] \
+                    and PY_WRITE_RE.search(h["body"]):
+                return ShellWrite(
+                    "opaque",
+                    why="a `<<" + h["delim"] + "` heredoc opens the register "
+                        "for writing in code, so any row it adds is computed "
+                        "at run time and is not in the command string.",
+                )
+        # A redirect target the hook cannot resolve -- `cat >> $REG` -- is a
+        # write to somewhere unknown while the register is named in the same
+        # breath. That is could-not-measure, not clean.
+        for op, target in REDIRECT_RE.findall(skeleton):
+            if EXPANSION_RE.search(target):
+                return ShellWrite(
+                    "opaque",
+                    why="the redirect target `" + target + "` is a shell "
+                        "expansion, so which file is written cannot be "
+                        "determined from the command.",
+                )
+        # Nothing writes the register. It is being read, or merely named.
+        return ShellWrite("none")
+
+    # An append whose target is explicit. Recover the content -- but only text
+    # that is genuinely LITERAL. `echo "$ROW" >> REG` recovers the string
+    # `$ROW`, which contains no CLAIM and sailed through the first cut of this
+    # function at exit 0: a fail-open produced by treating an unexpanded
+    # variable as though it were the content. Anything carrying `$` or a
+    # backtick is text this hook cannot see, which is could-not-measure.
+    recovered: list[str] = []
+    for h in bodies:
+        if h["code"]:
+            continue
+        if not h["literal"] and EXPANSION_RE.search(h["body"]):
+            return ShellWrite(
+                "opaque",
+                why="the `<<" + h["delim"] + "` delimiter is unquoted and the "
+                    "body contains a shell expansion, so the text written is "
+                    "not the text in this command.",
+            )
+        recovered.append(h["body"])
+    if not recovered:
+        for seg in appends:
+            # THE QUOTE DECIDES, not the presence of a `$` or a backtick.
+            # Register rows are made of backticks -- every timestamp, owner and
+            # lane is a code span -- so a blanket expansion test condemned
+            # `echo '- `ts` CLAIM ...' >> REG`, an ordinary literal append, as
+            # unmeasurable. Inside SINGLE quotes the shell expands nothing, so
+            # those characters are content. Inside DOUBLE quotes they are not.
+            leftover = seg
+            for m in ECHO_LITERAL_RE.finditer(seg):
+                quote, lit = m.group(1), m.group(2)
+                if quote == '"' and EXPANSION_RE.search(lit):
+                    return ShellWrite(
+                        "opaque",
+                        why="`" + seg.strip()[:120] + "` builds the appended "
+                            "row from a variable or another process, so the "
+                            "row itself is not in the command string.",
+                    )
+                recovered.append(lit)
+                leftover = leftover.replace(m.group(0), " ", 1)
+            # Anything expanding OUTSIDE the quoted literals is still unread.
+            if EXPANSION_RE.search(leftover):
+                return ShellWrite(
+                    "opaque",
+                    why="`" + seg.strip()[:120] + "` carries a shell expansion "
+                        "outside its quoted content, so what lands in the "
+                        "register is not what this command shows.",
+                )
+
+    text = "\n".join(recovered)
+    if not text.strip():
+        return ShellWrite(
+            "opaque",
+            why="the command appends to the register but no literal content "
+                "could be recovered from it.",
         )
-    lines += [
-        "",
-        "A lane held by another node is not a stop sign: nodes go offline, and "
-        "more than one node on a lane is the village working. Coordinate, pick "
-        "it up, or proceed -- but do it knowingly.",
-    ]
-    print(json.dumps({
-        "hookSpecificOutput": {
-            "hookEventName": "PreToolUse",
-            "permissionDecision": "ask",
-            "permissionDecisionReason": "\n".join(lines),
-        }
-    }))
+    return ShellWrite("append", text=text)
 
 
 def _locate_register(payload: dict, command: str) -> Path | None:
@@ -353,48 +588,32 @@ def _locate_register(payload: dict, command: str) -> Path | None:
     return hit if hit.is_file() else None
 
 
-def main() -> None:
-    try:
-        payload = json.load(sys.stdin)
-    except (json.JSONDecodeError, ValueError):
-        sys.exit(0)
+def evaluate_claims(
+    proposed: str, existing_open: dict
+) -> tuple[list, list]:
+    """(collisions, unkeyed) for the CLAIM rows in `proposed`.
 
-    tool = payload.get("tool_name", "")
-    if tool == "Bash":
-        _advise_on_shell_write(payload)
-        sys.exit(0)
-    if tool not in ("Write", "Edit"):
-        sys.exit(0)
-    ti = payload.get("tool_input") or {}
-    file_path = ti.get("file_path", "") or ""
-    if not file_path.endswith(REGISTER_NAME):
-        sys.exit(0)
+    THE ONE PLACE THE COLLISION VERDICT IS COMPUTED. It was previously inline
+    in main(), reachable only from the Write/Edit matcher, while the Bash
+    matcher ran a separate advisory that listed open lanes and never compared
+    anything. Two paths into one register, one of which decided and one of
+    which described -- and the describing one was the only path an agent
+    without a Write tool could use.
 
-    # Proposed-text source differs across tools.
-    proposed = ti.get("new_string") if tool == "Edit" else ti.get("content")
-    proposed = proposed or ""
+    Both paths now call this. Anything that sharpens the verdict sharpens it
+    for the shell too, by construction rather than by remembering.
+
+    Collision == ANOTHER owner already holds an open claim naming this lane.
+    Same owner re-naming their own lane is not a collision: it is the node that
+    already holds it, and blocking that was the false positive this hook
+    shipped with.
+    """
     new_claims = [
         (m.group(1), lanes_in(proposed))
         for m in CLAIM_RE.finditer(proposed)
     ]
-    if not new_claims:
-        sys.exit(0)
-
-    register = Path(file_path)
-    if not register.is_file():
-        sys.exit(0)  # nothing to collide with yet
-    try:
-        existing = register.read_text(encoding="utf-8", errors="replace")
-    except OSError:
-        sys.exit(0)
-    existing_open = open_claims_in(existing)
-
-    # Collision == ANOTHER owner already holds an open claim naming this lane.
-    # Same owner re-naming their own lane is not a collision: it is the node
-    # that already holds it, and blocking that was the false positive this
-    # hook shipped with.
-    collisions = []
-    unkeyed = []
+    collisions: list[tuple[str, str, int]] = []
+    unkeyed: list[str] = []
     for owner, lanes in new_claims:
         if not lanes:
             unkeyed.append(owner)
@@ -408,31 +627,152 @@ def main() -> None:
             for lineno, held, other_as_written in open_list:
                 for lane in sorted(lanes & held):
                     collisions.append((lane, other_as_written, lineno))
+    return collisions, unkeyed
 
+
+def _report_collisions(collisions: list) -> None:
+    """Write the block message. SHARED, so the two paths cannot drift apart.
+
+    An agent that hits this on the shell path and the same agent hitting it on
+    the Write path must be told the same thing; a gate whose refusal depends on
+    which tool you reached for teaches that the tool is the variable.
+    """
+    sys.stderr.write(
+        "claim-collision-pre: refusing to add a CLAIM for a lane another owner holds.\n"
+    )
+    for lane, other, lineno in collisions:
+        sys.stderr.write(
+            f"  - lane `{lane}` is already claimed by `{other}` "
+            f"(open CLAIM at line {lineno})\n"
+        )
+    sys.stderr.write(
+        "Either coordinate a handoff, wait for their RELEASE, or pick a different "
+        "branch (see Village Rule in AGNOTE4482PHI.t1.md).\n"
+    )
+
+
+def _report_unkeyed(unkeyed: list) -> None:
+    for owner in unkeyed:
+        sys.stderr.write(
+            f"claim-collision-pre: NOT CHECKED - CLAIM by `{owner}` names no branch, "
+            "so no lane could be compared. Add ``Branch `<name>``` to the scope to "
+            "make this claim enforceable.\n"
+        )
+
+
+def _gate_shell_write(payload: dict) -> None:
+    """Gate a Bash command that writes the register. Exits 2 to refuse.
+
+    THIS PATH USED TO BE ADVISORY. Measured on 2026-09-02 with identical
+    content against a genuinely held lane: the Write path exited 2 and blocked;
+    the Bash path exited 0 carrying `permissionDecision: "ask"`. The collision
+    was never computed -- the advisory listed open lanes and handed the decision
+    to a permission classifier that evaluates the shell COMMAND, and
+    `cat >> REG <<EOF` looks entirely benign to one of those.
+
+    That gap was load-bearing, not academic: four delivery agents in one
+    session had no Write or Edit tool at all ("Write is disabled for this
+    session, in subagents as well as here"), so the advisory path was the ONLY
+    path any of them could file through, and every register write they made was
+    unchecked.
+
+    WHY THIS IS SAFE TO CLOSE NOW, and was not before: denying shell writes
+    while agents have no Write tool would deadlock the fleet -- nobody could
+    file a claim at all, which is strictly worse than the gap. The deny is only
+    defensible because `make -C pmoves register-claim` exists as a sanctioned
+    path that appends through validated code, and every refusal below names it.
+    """
+    command = ((payload.get("tool_input") or {}).get("command") or "")
+    verdict = classify_shell_write(command)
+    if verdict.kind == "none":
+        return
+
+    register = _locate_register(payload, command)
+    if register is None:
+        # The command writes a register this hook cannot find, so it cannot be
+        # compared against anything. Could-not-measure is not a pass.
+        sys.stderr.write(
+            "claim-collision-pre: NOT MEASURED - this command writes "
+            f"{REGISTER_NAME} but no such file resolved from the command's own "
+            "cwd, so the proposed rows could not be compared against the open "
+            "lanes. Refusing rather than assuming.\n"
+            f"Sanctioned path: {SANCTIONED_PATH}\n"
+        )
+        sys.exit(2)
+    try:
+        existing_open = open_claims_in(
+            register.read_text(encoding="utf-8", errors="replace")
+        )
+    except OSError as exc:
+        sys.stderr.write(
+            "claim-collision-pre: NOT MEASURED - the register could not be "
+            f"read ({exc}), so nothing was compared. Refusing rather than "
+            "assuming.\n"
+            f"Sanctioned path: {SANCTIONED_PATH}\n"
+        )
+        sys.exit(2)
+
+    if verdict.kind in ("truncate", "opaque"):
+        sys.stderr.write(
+            "claim-collision-pre: NOT MEASURED - refusing a register write "
+            "this hook cannot check.\n"
+            f"  {verdict.why}\n"
+            "Could not measure is NOT a pass (0 clean / 1 findings / 3 could "
+            "not measure), and the advisory this replaces treated it as one.\n"
+            f"Sanctioned path, which does the check for you: {SANCTIONED_PATH}\n"
+            "It reads the clock for the timestamp, refuses a lane another "
+            "owner holds, and appends in O_APPEND so the file cannot be "
+            "rewritten.\n"
+        )
+        sys.exit(2)
+
+    # RECOVERED CONTENT -- the same check the Write path runs, on the same
+    # register, reporting the same message.
+    collisions, unkeyed = evaluate_claims(verdict.text, existing_open)
     if collisions:
-        sys.stderr.write(
-            "claim-collision-pre: refusing to add a CLAIM for a lane another owner holds.\n"
-        )
-        for lane, other, lineno in collisions:
-            sys.stderr.write(
-                f"  - lane `{lane}` is already claimed by `{other}` "
-                f"(open CLAIM at line {lineno})\n"
-            )
-        sys.stderr.write(
-            "Either coordinate a handoff, wait for their RELEASE, or pick a different "
-            "branch (see Village Rule in AGNOTE4482PHI.t1.md).\n"
-        )
+        _report_collisions(collisions)
+        sys.exit(2)
+    _report_unkeyed(unkeyed)
+
+def main() -> None:
+    try:
+        payload = json.load(sys.stdin)
+    except (json.JSONDecodeError, ValueError):
+        sys.exit(0)
+
+    tool = payload.get("tool_name", "")
+    if tool == "Bash":
+        _gate_shell_write(payload)
+        sys.exit(0)
+    if tool not in ("Write", "Edit"):
+        sys.exit(0)
+    ti = payload.get("tool_input") or {}
+    file_path = ti.get("file_path", "") or ""
+    if not file_path.endswith(REGISTER_NAME):
+        sys.exit(0)
+
+    # Proposed-text source differs across tools.
+    proposed = ti.get("new_string") if tool == "Edit" else ti.get("content")
+    proposed = proposed or ""
+    if not CLAIM_RE.search(proposed):
+        sys.exit(0)
+
+    register = Path(file_path)
+    if not register.is_file():
+        sys.exit(0)  # nothing to collide with yet
+    try:
+        existing = register.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        sys.exit(0)
+
+    collisions, unkeyed = evaluate_claims(proposed, open_claims_in(existing))
+    if collisions:
+        _report_collisions(collisions)
         sys.exit(2)
 
     # Say plainly when the gate could not check, instead of exiting 0 as though
     # it had. An unkeyed claim is unguarded, not cleared.
-    if unkeyed:
-        for owner in unkeyed:
-            sys.stderr.write(
-                f"claim-collision-pre: NOT CHECKED - CLAIM by `{owner}` names no branch, "
-                "so no lane could be compared. Add ``Branch `<name>``` to the scope to "
-                "make this claim enforceable.\n"
-            )
+    _report_unkeyed(unkeyed)
     sys.exit(0)
 
 

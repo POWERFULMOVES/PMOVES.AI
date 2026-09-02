@@ -391,19 +391,79 @@ def _decision(result):
     return json.loads(result.stdout)["hookSpecificOutput"]["permissionDecision"]
 
 
+# THESE TESTS CHANGED CONTRACT DELIBERATELY, and the old assertions are kept
+# here as the record of what was replaced. Every one of them asserted
+# `permissionDecision: "ask"` on a shell write, because the hook could not read
+# what a shell command would write and said so honestly.
+#
+# It can now read the common case: a heredoc body, and an `echo`/`printf`
+# literal, are IN the command string. So a recoverable write gets the same
+# collision check the Write path gets -- blocking at exit 2 on a held lane, and
+# passing silently when it is clean -- and only a genuinely unreadable write
+# (`sed -i`, a variable, a computed row) is refused as could-not-measure.
+#
+# The change was not cosmetic. Measured 2026-09-02: Write exited 2 on a held
+# lane while Bash exited 0 on identical content, and four delivery agents in
+# one session had no Write tool at all, so "ask" was the only verdict any of
+# them could receive.
+
+
 @pytest.mark.parametrize("command", [
     f"python3 - <<'PY'\nopen('{REGISTER_NAME}','a').write(x)\nPY",
-    f"cat >> {REGISTER_NAME} <<'EOF'\n- entry\nEOF",
-    f"echo '- entry' >> {REGISTER_NAME}",
     f"sed -i 's/a/b/' {REGISTER_NAME}",
-    f"printf '%s' x | tee -a {REGISTER_NAME}",
+    f"printf '%s' \"$ROW\" >> {REGISTER_NAME}",
+    f"cat > {REGISTER_NAME} <<'EOF'\n- entry\nEOF",
 ])
-def test_shell_writes_to_the_register_ask(tmp_path, command):
-    """Every shape that bypassed the Write/Edit matcher must now surface."""
+def test_unreadable_shell_writes_are_refused(tmp_path, command):
+    """A write whose CONTENT is not in the command string is could-not-measure.
+
+    Per the repo doctrine (0 clean / 1 findings / 3 could not measure -- NOT a
+    pass) that is a refusal. The advisory this replaces returned exit 0 with an
+    "ask", which made could-not-measure indistinguishable from measured-clean
+    on the only surface that gates.
+    """
     r = _run_bash(tmp_path, command)
-    assert r.returncode == ALLOW, "advisory must never block"
-    assert _decision(r) == "ask", f"no prompt for: {command!r}"
-    assert "has NOT checked this one" in r.stdout
+    assert r.returncode == BLOCK, f"unreadable write allowed: {command!r}"
+    assert "NOT MEASURED" in r.stderr
+    assert "register-claim" in r.stderr, (
+        "a refusal with no sanctioned alternative is a deadlock, not a gate"
+    )
+
+
+@pytest.mark.parametrize("command", [
+    f"cat >> {REGISTER_NAME} <<'EOF'\n{{row}}\nEOF",
+    f"tee -a {REGISTER_NAME} <<'EOF'\n{{row}}\nEOF",
+    f"echo '{{row}}' >> {REGISTER_NAME}",
+])
+def test_recoverable_shell_writes_are_checked_like_a_write_tool(tmp_path, command):
+    """The heredoc/literal body IS the payload, so it gets the real check.
+
+    Both halves are asserted. A gate observed only refusing is as unproven as
+    one observed only passing, and breaking the routine append is how a gate
+    gets removed.
+    """
+    squat = ("- `t` CLAIM `AGENT-B` scope: **mine now.** Branch `feat/widget`")
+    r = _run_bash(tmp_path, command.format(row=squat))
+    assert r.returncode == BLOCK, f"collision missed on the shell path: {command!r}"
+    assert "feat/widget" in r.stderr and "AGENT-A" in r.stderr
+
+    free = ("- `t` CLAIM `AGENT-B` scope: **new work.** Branch `feat/unheld`")
+    r = _run_bash(tmp_path, command.format(row=free))
+    assert r.returncode == ALLOW, f"routine append broken: {command!r}"
+
+
+def test_the_shell_block_message_matches_the_write_path(tmp_path):
+    """One register, one verdict, one message -- whichever tool you reached for.
+
+    A gate whose refusal depends on the tool teaches that the tool is the
+    variable, which is precisely how the shell path came to be the way to file
+    a claim without being checked.
+    """
+    row = "- `t` CLAIM `AGENT-B` scope: **mine now.** Branch `feat/widget`"
+    via_write = run_hook(tmp_path, row)
+    via_bash = _run_bash(tmp_path, f"cat >> {REGISTER_NAME} <<'EOF'\n{row}\nEOF")
+    assert via_write.returncode == via_bash.returncode == BLOCK
+    assert via_write.stderr == via_bash.stderr
 
 
 @pytest.mark.parametrize("command", [
@@ -419,10 +479,18 @@ def test_reads_and_unrelated_writes_stay_silent(tmp_path, command):
     assert _decision(r) is None, f"spurious prompt for: {command!r}"
 
 
-def test_the_prompt_names_the_open_lanes(tmp_path):
-    """Surfacing state is the whole point -- an opaque prompt is just friction."""
-    r = _run_bash(tmp_path, f"echo x >> {REGISTER_NAME}")
-    assert "AGENT-A" in r.stdout and "feat/widget" in r.stdout
+def test_the_refusal_names_the_lane_and_the_holder(tmp_path):
+    """Surfacing state is still the whole point.
+
+    The advisory listed EVERY open lane because it did not know which one you
+    were about to touch. Now it does, so it names the one that actually
+    collides and the owner holding it -- the same information, minus the noise
+    that trains people to click through.
+    """
+    row = "- `t` CLAIM `AGENT-B` scope: **mine now.** Branch `feat/widget`"
+    r = _run_bash(tmp_path, f"cat >> {REGISTER_NAME} <<'EOF'\n{row}\nEOF")
+    assert r.returncode == BLOCK
+    assert "AGENT-A" in r.stderr and "feat/widget" in r.stderr
 
 
 def test_a_file_path_is_not_a_lane(tmp_path):
@@ -454,31 +522,26 @@ def test_a_real_docs_branch_is_still_a_lane(tmp_path):
     assert r.returncode == BLOCK, "a genuine docs/ branch must still be a lane"
 
 
-def test_the_prompt_lists_every_lane_an_owner_holds(tmp_path):
-    """The advisory must survive open_claims_in's LIST-per-owner shape.
+def test_every_colliding_lane_is_named_not_just_the_first(tmp_path):
+    """One identity can hold several lanes, and a claim can name several.
 
-    This branch was written against the older shape, where open_claims_in
-    returned one tuple per owner. #2760 changed it to a LIST -- precisely
-    because keying one claim per owner silently forgot every lane but the
-    newest. Rebasing onto that left the advisory unpacking a list of claims
-    as if it were `(lineno, lanes)`, which raises for one or three open
-    claims and, for exactly two, "succeeds" by binding two whole claims to
-    `lineno` and `lanes`.
-
-    Every pre-existing advisory test gives each owner a single open claim, so
-    all of them pass against the broken code. Two claims for one owner is the
-    discriminator, and both lanes must appear.
+    #2760 made open_claims_in() keep a LIST per owner because keying one claim
+    per owner silently forgot every lane but the newest. The refusal has to
+    report all of them, or the agent fixes one collision and hits the next.
     """
     existing = (
-        "- `2026-01-01T00:00:00Z` CLAIM `AGENT-A` scope: **one.** Branch `feat/widget`\n"
-        "- `2026-01-02T00:00:00Z` CLAIM `AGENT-A` scope: **two.** Branch `fix/sprocket`\n"
+        "- `t0` CLAIM `AGENT-A` scope: **one.** Branch `feat/one`\n"
+        "- `t1` CLAIM `AGENT-A` scope: **two.** Branch `feat/two`\n"
     )
-    result = _run_bash(tmp_path, f"echo '- entry' >> {REGISTER_NAME}", existing=existing)
-    assert result.returncode == ALLOW, result.stderr
-    reason = json.loads(result.stdout)["hookSpecificOutput"]["permissionDecisionReason"]
-    assert "feat/widget" in reason, reason
-    assert "fix/sprocket" in reason, reason
-    assert "2 total, 2 naming a branch" in reason, reason
+    row = ("- `t2` CLAIM `AGENT-B` scope: **both.** "
+           "Branch `feat/one` and Branch `feat/two`")
+    r = _run_bash(
+        tmp_path, f"cat >> {REGISTER_NAME} <<'EOF'\n{row}\nEOF",
+        existing=existing,
+    )
+    assert r.returncode == BLOCK
+    assert "feat/one" in r.stderr and "feat/two" in r.stderr
+
 
 
 def test_a_release_citing_a_file_still_closes_the_whole_claim(tmp_path):
@@ -507,7 +570,7 @@ def test_a_release_citing_a_file_still_closes_the_whole_claim(tmp_path):
 
 # --- Codex findings on #2755 -------------------------------------------------
 
-def test_replacement_commands_are_advised(tmp_path):
+def test_replacement_commands_are_refused(tmp_path):
     """`cp`/`mv`/`perl -pi` rewrite a file with no redirect and no sed -i.
 
     None of them carried a WRITE_TOKENS match, so the gate stayed silent while
@@ -521,7 +584,8 @@ def test_replacement_commands_are_advised(tmp_path):
         f"install -m 644 new.md {REGISTER_NAME}",
     ):
         r = _run_bash(tmp_path, command)
-        assert _decision(r) == "ask", f"silent on a register rewrite: {command!r}"
+        assert r.returncode == BLOCK, f"silent on a register rewrite: {command!r}"
+        assert "NOT MEASURED" in r.stderr
 
 
 def test_read_only_redirection_is_not_advised(tmp_path):
@@ -541,10 +605,20 @@ def test_read_only_redirection_is_not_advised(tmp_path):
         assert _decision(r) is None, f"false prompt on a read: {command!r}"
 
 
-def test_redirection_onto_the_register_is_still_advised(tmp_path):
-    """The other half of the above: a redirect AT the register must still ask."""
+def test_redirection_onto_the_register_is_checked_not_merely_flagged(tmp_path):
+    """The other half of the above: a redirect AT the register is now READ.
+
+    `echo '- entry' >> REG` used to raise an "ask" because the hook could not
+    see the content. It can: the literal is single-quoted, so the shell expands
+    nothing and `- entry` is exactly what lands. It carries no CLAIM, collides
+    with nothing, and passes -- while the same redirect carrying a claim on a
+    held lane is refused, which the collision tests above pin.
+
+    Silence here is a MEASURED clean, not an unexamined one.
+    """
     r = _run_bash(tmp_path, f"echo '- entry' >> {REGISTER_NAME}")
-    assert _decision(r) == "ask"
+    assert r.returncode == ALLOW
+    assert _decision(r) is None
 
 
 def test_an_explicitly_marked_branch_keeps_its_file_suffix(tmp_path):

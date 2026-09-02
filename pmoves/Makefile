@@ -283,6 +283,52 @@ docs-quickstart: ## Open the quick start guide
 		echo "Full runbook: docs/operations/COMPLETE_BRING_UP_RUNBOOK.md"; \
 	fi
 
+# -------- Claim register (AGNOTE4482) ----------
+# THE SANCTIONED WRITE PATH. `claim-collision-pre.py` refuses shell writes to
+# the register it cannot check, and a refusal with no alternative is a
+# deadlock: four delivery agents in one session had no Write/Edit tool, so a
+# shell append was the only way any of them could file a row. These targets are
+# that alternative -- they read the clock, run the collision gate's own check,
+# and append in O_APPEND.
+
+.PHONY: register-claim
+register-claim: ## Open a lane in the claim register (OWNER= BRANCH= SCOPE= [TTL=72h] [CO_OWNER=])
+	@if [ -z "$(BRANCH)" ] || [ -z "$(SCOPE)" ]; then \
+		echo "usage: make register-claim OWNER='B850-CLAUDE (Knuckles)' BRANCH=fix/x TTL=72h SCOPE='what this lane covers'"; \
+		exit 2; \
+	fi
+	@$(PYTHON) tools/register_append.py claim \
+		--owner "$(or $(OWNER),$(REGISTER_OWNER))" \
+		--branch "$(BRANCH)" --ttl "$(or $(TTL),72h)" --scope "$(SCOPE)" \
+		$(if $(CO_OWNER),--co-owner "$(CO_OWNER)",) $(ARGS)
+
+.PHONY: register-release
+register-release: ## Close a lane in the claim register (OWNER= BRANCH= SCOPE= [CO_OWNER=])
+	@if [ -z "$(SCOPE)" ]; then \
+		echo "usage: make register-release OWNER='B850-CLAUDE (Knuckles)' BRANCH=fix/x SCOPE='what landed'"; \
+		exit 2; \
+	fi
+	@$(PYTHON) tools/register_append.py release \
+		--owner "$(or $(OWNER),$(REGISTER_OWNER))" \
+		--branch "$(BRANCH)" --scope "$(SCOPE)" \
+		$(if $(CO_OWNER),--co-owner "$(CO_OWNER)",) $(ARGS)
+
+.PHONY: register-docs
+register-docs: ## Insert prose into the register without touching ledger rows (ANCHOR= TEXT_FILE=)
+	@if [ -z "$(ANCHOR)" ] || [ -z "$(TEXT_FILE)" ]; then \
+		echo "usage: make register-docs ANCHOR='## Some unique heading' TEXT_FILE=section.md"; \
+		exit 2; \
+	fi
+	@$(PYTHON) tools/register_append.py docs --anchor "$(ANCHOR)" --text-file "$(TEXT_FILE)" $(ARGS)
+
+.PHONY: register-postdate-check
+register-postdate-check: ## Assert rows added on this branch are not postdated (0 clean / 1 findings / 3 could not measure)
+	@$(PYTHON) tools/register_postdate_check.py --base "$(or $(BASE),origin/main)" $(ARGS)
+
+.PHONY: register-postdate-sweep
+register-postdate-sweep: ## Report every postdated row in the register's whole history
+	@$(PYTHON) tools/register_postdate_check.py --sweep $(ARGS)
+
 # -------- Updates ----------
 .PHONY: update
 update: ensure-env-shared  ## Pull repo + images, recreate stack

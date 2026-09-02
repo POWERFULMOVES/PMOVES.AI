@@ -109,6 +109,60 @@ Required handoff fields:
 - `chit_artifact_path`
 - `agent_signature`
 
+### Filing a row
+
+**Use the sanctioned path. It is the only write path that is checked.**
+
+```
+make -C pmoves register-claim   OWNER='B850-CLAUDE (Knuckles)' BRANCH=fix/x TTL=72h SCOPE='what this lane covers'
+make -C pmoves register-release OWNER='B850-CLAUDE (Knuckles)' BRANCH=fix/x SCOPE='what landed'
+make -C pmoves register-docs    ANCHOR='## Active Claim Register' TEXT_FILE=section.md
+```
+
+Add co-owners with `CO_OWNER='4090-CLAUDE:filed the blocker'`; pass `ARGS=--dry-run`
+to render and check a row without writing it.
+
+These targets run `pmoves/tools/register_append.py`, which:
+
+- **reads the clock** for the timestamp, so a row cannot be postdated. A sweep
+  of this file found **41 of 404 rows (10.1%)** asserting a time *later* than the
+  commit that introduced them — worst by 5h05m — and **361 of 404 (89.4%)**
+  carrying `:00` seconds, i.e. hand-rounded rather than read. Rounding explains
+  22 of the 41; it cannot explain the 11 over an hour. Because the register
+  feeds TTL-lateness arithmetic, a postdated row moves its own expiry forward
+  and makes lateness wrong in the direction that flatters the filer.
+- **runs the collision gate's own check** — imported from
+  `.claude/hooks/governance/claim-collision-pre.py`, not reimplemented, so the
+  tool and the gate cannot disagree about what a collision is.
+- **refuses a CLAIM that names no branch.** 78 rows here are already
+  unenforceable for exactly that reason.
+- **appends with `O_APPEND`**, so the write cannot truncate and two nodes
+  filing at once cannot interleave. `docs` mode builds its output as a pure
+  insertion and asserts the ledger rows are byte-identical before and after.
+
+Exit codes follow the repo doctrine: `0 clean · 1 findings · 3 could not
+measure — NOT a pass`. Invoke the tool directly rather than through `make` when
+you need to distinguish 1 from 3; GNU make exits 2 on any recipe failure.
+
+**Writing a row from a raw shell command is refused.** `claim-collision-pre.py`
+is wired to `Write`, `Edit` *and* `Bash`. On the shell path it recovers what the
+command will write when the content is statically present — a heredoc body, a
+single-quoted `echo`/`printf` literal — and runs the same collision check,
+blocking at exit 2 with the same message. When the content is *not* recoverable
+(`sed -i`, `cp`, a path or row held in a variable, a heredoc fed to an
+interpreter), that is *could not measure*, and could-not-measure is not a pass:
+it is refused, naming these targets.
+
+Until 2026-09-02 the shell path only *asked*. Measured with identical content
+against a genuinely held lane: `Write` exited **2** and blocked; `Bash` exited
+**0**. Four delivery agents in one session had no `Write` or `Edit` tool at all,
+so that unchecked path was the only one available to them — which is why the
+sanctioned path above had to exist before the refusal could.
+
+**Known limitation.** The gate cannot tell a prose edit from a row edit inside
+an opaque shell write, so shell edits to *this document's* text are refused too.
+Use the `docs` mode above, or an editor tool.
+
 ## Active Claim Register
 - `2026-02-20T12:12:35.7340973-05:00` CLAIM `CODEX-GPT5` scope: PR convergence + runner/cache/app strategy review.
 - `2026-02-21T10:35:03.6791631-05:00` CLAIM `CODEX-GPT5` scope: Phase 5 CHIT flaw verification + Graphiti signature audit + lane-safe traversal note.

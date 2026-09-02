@@ -1,0 +1,95 @@
+name: Validate Register Postdate
+
+# Asserts one invariant on every row a PR ADDS to the claim register:
+#
+#     row_timestamp <= commit_author_time
+#
+# A row records an event; a commit carries the row. A row cannot honestly claim
+# a moment that had not happened yet when it was written down, so this check has
+# no false-positive mode -- which is why it can gate rather than merely report.
+#
+# WHY IT EXISTS. A sweep of `main` found 41 of 404 rows (10.1%) asserting a time
+# LATER than the commit that introduced them, the worst by 5h05m, across 8 owner
+# identities. 361 of 404 rows (89.4%) carry `:00` seconds and minutes cluster on
+# :00/:15/:30/:45 -- these are hand-rounded, not clock-read. Rounding explains 22
+# of the 41; it cannot explain the 11 that exceed an hour.
+#
+# It matters because the register is provenance-bearing and feeds TTL-lateness
+# arithmetic: rows carry `**TTL 72h (expires <ts>)**`, and a postdated row moves
+# its own expiry FORWARD. It makes lateness wrong in the direction that flatters
+# the filer, which is the direction nobody reports on themselves.
+#
+# RATCHET, NOT A WALL. Only rows added in the PR range are judged. The 41
+# existing rows belong to other nodes and are reported by
+# `make -C pmoves register-postdate-sweep`, never rewritten -- silently
+# correcting another node's provenance record is a worse act than the drift it
+# tidies. Count goes down only. Same shape as validate-command-anchors,
+# validate-composes and validate-dockerfile-paths.
+#
+# The durable fix is upstream of this gate: `make -C pmoves register-claim`
+# reads the clock, so a row filed through the sanctioned path cannot be
+# postdated at all. This catches rows that arrive another way.
+
+on:
+  pull_request:
+    branches:
+      - main
+      - PMOVES.AI-Edition-Hardened
+      - PMOVES.AI-Edition-Hardened-Integrations
+    paths:
+      - "pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md"
+      - "pmoves/tools/register_postdate_check.py"
+      - "pmoves/tools/register_append.py"
+      - "pmoves/tools/tests/test_register_postdate_check.py"
+      - "pmoves/tools/tests/test_register_append.py"
+      - ".claude/hooks/governance/claim-collision-pre.py"
+      - "pmoves/tests/test_claim_collision_hook.py"
+      - ".github/workflows/validate-register-postdate.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  validate-register-postdate:
+    name: validate-register-postdate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The check compares each row against the author time of the COMMIT
+          # that added it, so it needs the commits -- a depth-1 checkout has
+          # nothing to compare and would report "could not measure" on every PR.
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+
+      - name: Postdate gate (stdlib only, no network)
+        run: |
+          # Invoked DIRECTLY, not through `make`. GNU make exits 2 on any recipe
+          # failure, which would collapse this repo's 0 clean / 1 findings /
+          # 3 could-not-measure doctrine into a single "something went wrong".
+          # The distinction is the point: could-not-measure is not a pass, and a
+          # reader has to be able to tell it from a finding.
+          python pmoves/tools/register_postdate_check.py \
+            --base "origin/${{ github.base_ref }}" --head HEAD
+
+      - name: Pytest the gates (regression net for the gates themselves)
+        run: |
+          # pmoves/conftest.py is shared across the suite and imports
+          # pytest_asyncio + pyyaml; the import chain has to resolve or
+          # collection dies before a single test runs. Same note as
+          # validate-command-anchors-ratchet.yml, learned the same way.
+          python -m pip install --quiet pytest pytest-asyncio pyyaml
+          python -m pytest -q \
+            pmoves/tools/tests/test_register_postdate_check.py \
+            pmoves/tools/tests/test_register_append.py \
+            pmoves/tests/test_claim_collision_hook.py
