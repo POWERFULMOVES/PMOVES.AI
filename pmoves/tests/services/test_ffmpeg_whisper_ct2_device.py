@@ -48,6 +48,14 @@ def srv(monkeypatch):
         stub.create_client = lambda *a, **kw: None  # type: ignore[attr-defined]
         monkeypatch.setitem(sys.modules, "supabase", stub)
 
+    # server.py:72-73 reads NATS_URL at IMPORT time and raises KeyError (not
+    # ImportError) when it is unset, so the skip-guard below cannot catch it and
+    # every test errors during setup. CI runs with no NATS_URL, and the service is
+    # right to fail closed there rather than silently publish nowhere -- so the
+    # fixture supplies one instead of the service relaxing. Import-time only:
+    # nothing in these tests opens a connection, hence the .invalid host.
+    monkeypatch.setenv("NATS_URL", "nats://nats.invalid:4222")
+
     monkeypatch.syspath_prepend(str(pmoves))
     spec = importlib.util.spec_from_file_location("ffmpeg_whisper_server", path)
     mod = importlib.util.module_from_spec(spec)
