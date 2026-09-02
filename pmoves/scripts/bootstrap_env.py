@@ -159,6 +159,32 @@ def value_matches_spec(value: Optional[str], spec: Optional[Dict]) -> bool:
     return True
 
 
+def _registry_generator(key: str, registry_path: Optional[str] = None) -> Optional[dict]:
+    """The `generate` spec the bootstrap registry declares for *key*, if any.
+
+    Returns e.g. {"type": "random_hex", "length": 32}. None when the key is not
+    in the registry or declares no generator — callers then fall back to the
+    historical default.
+
+    Read failures are swallowed deliberately: a rotation must not be blocked by
+    an unreadable registry, it should just lose the type hint and say so by
+    printing nothing.
+    """
+    try:
+        import json as _json
+
+        path = Path(registry_path) if registry_path else DEFAULT_REGISTRY_PATH
+        data = _json.loads(path.read_text(encoding="utf-8"))
+        for service in data.get("services") or []:
+            for var in service.get("variables") or []:
+                if var.get("key") == key:
+                    gen = var.get("generate")
+                    return gen if isinstance(gen, dict) else None
+    except Exception:
+        return None
+    return None
+
+
 def rotate_secret(
     key: str,
     *,
@@ -686,8 +712,11 @@ def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--gen-type",
-        default="random_urlsafe",
-        help="Generator type for --rotate (random_urlsafe | random_hex | passphrase).",
+        default=None,
+        help=(
+            "Generator type for --rotate (random_urlsafe | random_hex | passphrase). "
+            "Default: the type the registry declares for this key, else random_urlsafe."
+        ),
     )
     return parser.parse_args(argv)
 
@@ -727,12 +756,42 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
             if rotate_value is None:
                 _error(f"--value-env {args.value_env}: environment variable not set")
                 return 2
+        # HONOUR THE REGISTRY'S DECLARED GENERATOR.
+        #
+        # This defaulted to random_urlsafe regardless of what the key IS, and
+        # `make secrets-rotate` never passed --gen-type. So rotating a key the
+        # registry declares as {"type": "random_hex", "length": 32} produced a
+        # 48-char urlsafe value instead.
+        #
+        # That is not hypothetical: it is how VAULT_ENC_KEY got corrupted on the
+        # 4090 (measured 2026-09-01 -- len 48, urlsafe charset, not hex). The
+        # yt OAuth flow does bytes.fromhex() on it, raised ValueError, swallowed
+        # it, and reported "Encryption is unavailable" with the key set. A
+        # completed browser consent was discarded as a result.
+        #
+        # Rotating to repair it would have regenerated urlsafe again and
+        # reproduced the same defect, which is the trap this closes.
+        gen_type = args.gen_type
+        gen_length = args.length
+        if gen_type is None:
+            declared = _registry_generator(args.rotate, args.registry)
+            if declared:
+                gen_type = declared.get("type") or "random_urlsafe"
+                if gen_length is None and declared.get("length"):
+                    gen_length = declared["length"]
+                print(
+                    f"generator for {args.rotate}: {gen_type}"
+                    + (f" (length {gen_length})" if gen_length else "")
+                    + " — from bootstrap registry"
+                )
+            else:
+                gen_type = "random_urlsafe"
         try:
             rotate_secret(
                 args.rotate,
                 value=rotate_value,
-                length=args.length,
-                gen_type=args.gen_type,
+                length=gen_length if gen_length is not None else 48,
+                gen_type=gen_type,
             )
         except (ValueError, FileNotFoundError) as exc:
             _error(str(exc))
