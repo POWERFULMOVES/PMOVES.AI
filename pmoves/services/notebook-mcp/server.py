@@ -8,14 +8,25 @@ Zero plugin (tools surface as `mcp__notebook__save_note` / `mcp__notebook__searc
 
 Env:
   OPEN_NOTEBOOK_API_URL    default http://open-notebook:5055 (internal alias)
-  OPEN_NOTEBOOK_API_TOKEN  Bearer token (optional; warns if sent over plain http)
+  OPEN_NOTEBOOK_API_TOKEN  fallback Bearer token (optional; warns if sent over plain http)
   MCP_HOST / MCP_PORT      bind for the streamable-http transport (default 0.0.0.0:8092)
   MCP_TRANSPORT            "streamable-http" (default) | "sse" | "stdio"
+  NOTEBOOK_MCP_TENANT_TOKEN_HEADER
+                           inbound header carrying the caller's Open Notebook
+                           token (default X-Open-Notebook-Token)
+  NOTEBOOK_MCP_REQUIRE_TENANT_TOKEN
+                           "true" => fail closed: a request WITHOUT a per-request
+                           token is refused instead of falling back to the shared
+                           env token. Set this whenever more than one tenant can
+                           reach this server.
 
-Tenant note: this wrapper reads ONE Open Notebook token from env. The per-tenant
-credential-injection seam (agent workspace identity -> that tenant's token) lives
-in the mounting harness (dsh `ctx.credentials`, or an A0 per-context header), not
-here — this server stays a thin, stateless REST->MCP bridge.
+Tenancy: the credential is resolved PER REQUEST. A mounting harness (dsh
+`ctx.credentials`, an A0 per-context header, a gateway) passes that tenant's
+Open Notebook token in NOTEBOOK_MCP_TENANT_TOKEN_HEADER and only that tenant's
+notebook is touched. OPEN_NOTEBOOK_API_TOKEN remains as a single-tenant
+convenience fallback; with NOTEBOOK_MCP_REQUIRE_TENANT_TOKEN=true the fallback is
+disabled entirely, so a multi-tenant deployment cannot silently collapse every
+caller onto one Open Notebook account.
 """
 from __future__ import annotations
 
@@ -28,6 +39,13 @@ from mcp.server.fastmcp import FastMCP
 
 API_URL = os.getenv("OPEN_NOTEBOOK_API_URL", "http://open-notebook:5055").rstrip("/")
 TOKEN = os.getenv("OPEN_NOTEBOOK_API_TOKEN", "")
+TENANT_TOKEN_HEADER = os.getenv(
+    "NOTEBOOK_MCP_TENANT_TOKEN_HEADER", "X-Open-Notebook-Token"
+).strip().lower()
+_TRUTHY = {"1", "true", "yes", "on"}
+REQUIRE_TENANT_TOKEN = (
+    os.getenv("NOTEBOOK_MCP_REQUIRE_TENANT_TOKEN", "").strip().lower() in _TRUTHY
+)
 
 mcp = FastMCP(
     "notebook",
@@ -36,17 +54,58 @@ mcp = FastMCP(
 )
 
 
-def _headers() -> dict[str, str]:
+class TenantCredentialError(RuntimeError):
+    """No per-request Open Notebook credential and the shared fallback is disabled."""
+
+
+def _request_token() -> str:
+    """Token supplied by the caller on the in-flight MCP request, else "".
+
+    HTTP transports (streamable-http / sse) carry the originating Starlette
+    request on the request context; stdio has none. Never raises — a missing
+    context simply means "no per-request credential".
+    """
+    try:
+        request = mcp.get_context().request_context.request
+        headers = getattr(request, "headers", None)
+        if headers is None:
+            return ""
+        return (headers.get(TENANT_TOKEN_HEADER) or "").strip()
+    except Exception:  # noqa: BLE001 - no active request context
+        return ""
+
+
+def _resolve_token() -> str:
+    """The Open Notebook credential for THIS request.
+
+    Per-request header wins. The process-wide env token is only a single-tenant
+    fallback and is refused outright when REQUIRE_TENANT_TOKEN is set, so a
+    shared deployment cannot serve every tenant from one account.
+    """
+    token = _request_token()
+    if token:
+        return token
+    if REQUIRE_TENANT_TOKEN:
+        raise TenantCredentialError(
+            f"no per-request credential: send this tenant's Open Notebook token in "
+            f"the {TENANT_TOKEN_HEADER!r} header "
+            f"(NOTEBOOK_MCP_REQUIRE_TENANT_TOKEN is set, so the shared "
+            f"OPEN_NOTEBOOK_API_TOKEN fallback is disabled)."
+        )
+    return TOKEN
+
+
+def _headers(token: str) -> dict[str, str]:
     headers = {"Content-Type": "application/json"}
-    if TOKEN:
+    if token:
         if API_URL.lower().startswith("http://"):
             # Same warning the pmoves_notes plugin emits: a bearer over plain http
             # is fine on the internal pmoves_app network, not for external endpoints.
             print(
-                "[notebook-mcp] WARNING: OPEN_NOTEBOOK_API_TOKEN set but API_URL is "
+                "[notebook-mcp] WARNING: Open Notebook token set but API_URL is "
                 "http:// — token sent unencrypted (ok on the internal network only)."
             )
-        headers["Authorization"] = f"Bearer {TOKEN}"
+        headers["Authorization"] = f"Bearer {token}"
     return headers
 
 
@@ -66,6 +125,11 @@ async def save_note(content: str, title: str = "", tags: list[str] | None = None
     if not content.strip():
         return "save_note error: 'content' is required."
 
+    try:
+        token = _resolve_token()
+    except TenantCredentialError as exc:
+        return f"save_note error: {exc}"
+
     tags = list(tags) if isinstance(tags, (list, tuple)) else []
     if not title:
         first = (content.splitlines() or [content])[0]
@@ -78,7 +142,7 @@ async def save_note(content: str, title: str = "", tags: list[str] | None = None
 
     try:
         async with httpx.AsyncClient(timeout=10) as client:
-            resp = await client.post(f"{API_URL}/api/notes", json=payload, headers=_headers())
+            resp = await client.post(f"{API_URL}/api/notes", json=payload, headers=_headers(token))
             if resp.status_code != 200:
                 return f"save_note failed: HTTP {resp.status_code} — {resp.text}"
             result = resp.json()
@@ -110,6 +174,12 @@ async def search_notes(query: str, limit: int = 10) -> str:
     query = (query if isinstance(query, str) else str(query or "")).strip()
     if not query:
         return "search_notes error: 'query' is required."
+
+    try:
+        token = _resolve_token()
+    except TenantCredentialError as exc:
+        return f"search_notes error: {exc}"
+
     try:
         limit = int(limit)
     except (TypeError, ValueError):
@@ -122,7 +192,7 @@ async def search_notes(query: str, limit: int = 10) -> str:
     }
     try:
         async with httpx.AsyncClient(timeout=10) as client:
-            resp = await client.post(f"{API_URL}/api/search", json=payload, headers=_headers())
+            resp = await client.post(f"{API_URL}/api/search", json=payload, headers=_headers(token))
             if resp.status_code != 200:
                 return f"search_notes failed: HTTP {resp.status_code} — {resp.text}"
             results = resp.json()
@@ -165,5 +235,15 @@ async def _publish_nats(subject: str, data: dict) -> None:
 
 if __name__ == "__main__":
     transport = os.getenv("MCP_TRANSPORT", "streamable-http")
-    print(f"[notebook-mcp] starting: transport={transport} api={API_URL}")
+    if REQUIRE_TENANT_TOKEN:
+        mode = "per-request credentials REQUIRED"
+    elif TOKEN:
+        mode = (
+            "per-request credentials optional, shared OPEN_NOTEBOOK_API_TOKEN fallback "
+            "ACTIVE — single-tenant only; set NOTEBOOK_MCP_REQUIRE_TENANT_TOKEN=true "
+            "if more than one tenant can reach this server"
+        )
+    else:
+        mode = "per-request credentials only (no shared fallback configured)"
+    print(f"[notebook-mcp] starting: transport={transport} api={API_URL} tenancy: {mode}")
     mcp.run(transport=transport)
