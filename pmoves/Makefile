@@ -592,6 +592,35 @@ rebuild-svc: ## build-svc + recreate-svc in one move (the stale-container-object
 	@$(MAKE) --no-print-directory recreate-svc SVC=$(SVC)
 
 # Back-compat alias: the recreate primitive predates the generic name.
+# READ-ONLY SQL against the active Supabase DB, for schemas PostgREST cannot see.
+#
+# WHY THIS EXISTS. `/db:query` and the Supabase MCP both route through
+# PostgREST, which only serves PGRST_DB_SCHEMAS (public,pmoves_core,pmoves_kb).
+# Anything outside that -- `_supavisor`, `auth`, `storage`, `_realtime` -- was
+# unreadable by any sanctioned path, so the only way to answer a question about
+# those schemas was raw `psql`, which the damage-control guard correctly blocks.
+# That gap turned "is there encrypted tenant state in _supavisor?" into an
+# unanswerable question, and an unanswerable question becomes a guess.
+#
+# Exposing those schemas over REST would answer it by widening the attack
+# surface onto a credential vault. This answers it without doing that.
+#
+# READ-ONLY IS ENFORCED BY POSTGRES, NOT BY A REGEX. The statement runs inside
+# `BEGIN; SET TRANSACTION READ ONLY; ...; ROLLBACK;` so any write is rejected by
+# the server. A pattern-matching guard on the SQL string would be the same class
+# of defect this repo keeps producing: a check that looks like enforcement and
+# is really a hope.
+#
+# Usage: make supa-query SQL="select count(*) from _supavisor.tenants"
+supa-query: ## Read-only SQL against the active Supabase DB (server-enforced). Usage: SQL="select ..."
+	$(if $(strip $(SQL)),,$(error Usage: make -C pmoves supa-query SQL="select ..."))
+	@set -uo pipefail; \
+	db=$$(bash "$(SUPABASE_DB_HELPER)" running); \
+	if [ -z "$$db" ]; then echo "error: Supabase DB container not found"; exit 1; fi; \
+	PGDB=$${POSTGRES_DB:-pmoves}; \
+	printf 'BEGIN; SET TRANSACTION READ ONLY;\n%s;\nROLLBACK;\n' "$$SQL" | \
+	  docker exec -i "$$db" sh -c 'PGPASSWORD="$$POSTGRES_PASSWORD" psql -w -h 127.0.0.1 -U supabase_admin -d "'"$$PGDB"'" -v ON_ERROR_STOP=1 -A -F"|" -q'
+
 supa-recreate-svc: ## Surgical recreate of ONE Supabase service with current env: make supa-recreate-svc SVC=supabase-kong
 	@test -n "$(SVC)" || { echo "Usage: make supa-recreate-svc SVC=<compose-service>"; exit 1; }
 	@echo "Recreating $(SVC) with current env (no deps)..."
@@ -827,7 +856,34 @@ supa-migrate: ## Apply SQL files from supabase/migrations into active Supabase D
 .PHONY: supabase-bootstrap supabase-bootstrap-mark-applied
 supabase-bootstrap: ## Apply pending Supabase migrations + seeds (tracked in public.pmoves_bootstrap_history)
 	@echo "🗄️ Applying Supabase schema + seeds..."
-	@$(MAKE) --no-print-directory supa-start >/dev/null
+	@# BEST EFFORT, NOT A PRECONDITION. This used to be a hard dependency and
+	@# that created a bootstrap DEADLOCK: supa-start waits for supabase-postgrest
+	@# to report healthy, PostgREST cannot become healthy until its schema cache
+	@# builds, and the schema this bootstrap installs is what the cache needs.
+	@# So the repair required the thing it repairs. Measured 2026-09-01: the
+	@# stack had been in that state for 3 days --
+	@#   "dependency failed to start: container pmoves-supabase-postgrest-1 is unhealthy"
+	@# and every attempt to fix it through the documented path failed identically.
+	@#
+	@# Nothing below needs PostgREST. The DDL runs via `docker exec` into the DB
+	@# container, and the NEXT recipe line already fails loudly with
+	@# "Supabase DB container not found" if that container is absent -- which is
+	@# the real precondition, checked in the right place.
+	@# Tolerate ONLY the known deadlock, never a runtime-guard rejection.
+	@# A blanket `-` prefix would swallow a conflicting-runtime rejection too,
+	@# after which find_db_container.sh falls back to ANY running
+	@# supabase_db_* container -- so a sibling or stale CLI database could
+	@# receive this repo's DDL. Match the specific failure instead.
+	@log=$$(mktemp); \
+	if $(MAKE) --no-print-directory supa-start >"$$log" 2>&1; then \
+	  rm -f "$$log"; \
+	elif grep -q 'supabase-postgrest' "$$log" && grep -qi 'unhealthy\|failed to start' "$$log"; then \
+	  echo "warn: supa-start failed only on PostgREST health -- continuing; that is precisely what this bootstrap repairs"; \
+	  rm -f "$$log"; \
+	else \
+	  echo "error: supa-start failed for a reason OTHER than PostgREST health -- refusing to apply DDL:"; \
+	  cat "$$log"; rm -f "$$log"; exit 1; \
+	fi
 	@set -uo pipefail; \
 	db=$$(bash "$(SUPABASE_DB_HELPER)" running); \
 	if [ -z "$$db" ]; then echo "❌ Supabase DB container not found"; exit 1; fi; \

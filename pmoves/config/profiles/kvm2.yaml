@@ -1,0 +1,44 @@
+id: kvm2
+name: "KVM2 — Egress / always-on VPS, Pinokio light-app host"
+description: >
+    Hostinger KVM VPS. Fleet exit node and always-on service host. Also the
+    designated headless Pinokio 8 light-app host per the 2026-08-27 policy
+    change (curated fork apps only, no registry installs, no new WAN ports).
+
+# Canonical id and reach name come from pmoves/configs/node-vocabulary.yaml —
+# `kvm2` is the canonical spelling, `pmoves-kvm2` the reach name.
+# Do not introduce a fourth spelling here.
+reach: pmoves-kvm2
+
+# Deployment audience (pmoves/config/deployment_classes.yaml); unset means
+# unset — loaders must not guess a class for a node they cannot place.
+# private-mesh is not inferred here: deployment_classes.yaml's own description
+# of that class names the KVMs explicitly.
+deployment_class: private-mesh
+
+# What this node PROVIDES to the rest of the fleet (pmoves/config/node_roles.yaml).
+# Founder directive 2026-09-01: "the kvms will be exit nodes for egress ...
+# the kvms will host the needed always on services".
+# Declaration only — `tag:exit` / `tag:vps` in configs/tailscale-acl-policy.json
+# are what actually enforce. Both layers, neither sufficient alone.
+provides: [egress, always-on]
+
+# Long-lived containers with mounts. Firecracker `ephemeral-microvm` is the
+# shape for public/enterprise external requests and is NOT declared here yet —
+# no microVM workload is deployed on these nodes today, and declaring a shape
+# nothing runs would be the same defect as an endpoint nothing serves.
+runtime_shape: [persistent]
+
+# HARDWARE DELIBERATELY OMITTED.
+# It has not been measured from this node, and the specs in circulation are
+# known-bad: claw_4090_customization_work_order_2026-08-27.md (L12) records
+# `kvm-exit-node-hosting-strategy.md` as STALE with "wrong kvm2 specs".
+# Copying a spec that a work order flags as wrong would launder it into a
+# config file. Fill this in from `nproc` / `free -g` ON the node.
+# profile_loader requires only `id`; an absent hardware block simply means
+# `pmoves mini profile detect` will never match this profile locally, which is
+# correct for a remote VPS.
+
+notes:
+  - "Created 2026-09-01. These three nodes were in node-vocabulary.yaml but had
+     NO profile at all, while carrying the most specific role in the fleet."
