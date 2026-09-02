@@ -11,6 +11,9 @@ Checks:
 from __future__ import annotations
 
 import argparse
+import hashlib
+import os
+import re
 from pathlib import Path
 
 
@@ -68,6 +71,115 @@ def check_drift() -> list[str]:
     return drift
 
 
+def parse_dotenv_value(raw: str) -> str:
+    """Normalize a dotenv right-hand side to the value Compose resolves.
+
+    This tool compares a file's value against a shell export, so it has to read
+    the file the way Compose does. It did not: it stored ``value.strip()``, the
+    raw text.
+
+    That is not a corner case here. ``tools/brand_defaults.py:114-120`` QUOTES
+    every value containing whitespace or ``#``, on the recorded grounds that
+    "both consumers strip surrounding double quotes" -- so this repo's own
+    generator emits values whose raw spelling never equals what any consumer
+    sees. Comparing raw text reported a correct export as shadowing; and an
+    export carrying the raw quoted spelling, which really does change what the
+    container receives, compared equal and was missed.
+
+    Models the compose-go dotenv rules this repo can produce: surrounding
+    single or double quotes are stripped, escapes are processed only inside
+    double quotes, and an unquoted value ends at a whitespace-preceded ``#``.
+    Interpolation (``${OTHER}``) is deliberately NOT expanded -- its result
+    depends on the very process environment under test, and brand_defaults
+    refuses to quote values carrying ``$`` for the same reason.
+    """
+    value = raw.strip()
+    if not value:
+        return ""
+    if value[0] in ("'", '"'):
+        quote = value[0]
+        escapes = {"n": "\n", "t": "\t", "r": "\r"}
+        buf: list[str] = []
+        i = 1
+        while i < len(value):
+            ch = value[i]
+            # Only double quotes process escapes; '...' is literal.
+            if quote == '"' and ch == "\\" and i + 1 < len(value):
+                nxt = value[i + 1]
+                buf.append(escapes.get(nxt, nxt))
+                i += 2
+                continue
+            if ch == quote:
+                return "".join(buf)
+            buf.append(ch)
+            i += 1
+        return value  # unterminated quote: treat the text as literal
+    # Unquoted: an inline comment needs whitespace in front of the `#`, so a
+    # `#` inside a password is data.
+    match = re.search(r"\s#", value)
+    if match:
+        value = value[: match.start()]
+    return value.strip()
+
+
+def compose_env_files() -> list[Path]:
+    """The --env-file stack the Makefile hands Compose, in Compose's order.
+
+    Mirrors ``COMPOSE_ENV_FILES`` (``pmoves/Makefile:97-134``). check_shadow()
+    first shipped with a hand-written list -- env.shared plus the eight tiers --
+    that differed from it in two ways, each of which changes the answer:
+
+      * MISSING TIERS FALL BACK TO ``.example``. ``resolve_env_file`` takes
+        ``env.tier-X`` if present, else ``env.tier-X.example``. A node that has
+        not run the funnel is running off the examples, and an export shadowing
+        one of them was invisible to this check.
+      * THREE OPTIONAL OVERLAYS LOAD AFTER EVERY TIER, so they outrank them.
+        Reporting a divergence from a tier file that a later overlay has
+        already overridden names a file the operator would edit in vain, and
+        the suggested ``env -u KEY`` would restore the overlay's value rather
+        than the reported one.
+
+    The two runtime switches are read from the process environment because that
+    is where make reads them: ``SUPABASE_RUNTIME ?= compose`` (Makefile:30) and
+    ``INCLUDE_ENV_LOCAL_IN_COMPOSE``.
+    """
+
+    def resolve(name: str) -> Path | None:
+        path = Path(name)
+        if path.exists():
+            return path
+        example = Path(f"{name}.example")
+        return example if example.exists() else None
+
+    files: list[Path] = []
+    primary = resolve("env.shared")
+    if primary is not None:
+        files.append(primary)
+    for tier in TIERS:
+        resolved = resolve(f"env.tier-{tier}")
+        if resolved is not None:
+            files.append(resolved)
+
+    runtime = os.environ.get("SUPABASE_RUNTIME", "compose")
+
+    env_local = Path(".env.local")
+    if env_local.exists() and (
+        runtime != "compose"
+        or os.environ.get("INCLUDE_ENV_LOCAL_IN_COMPOSE") == "1"
+    ):
+        files.append(env_local)
+
+    supa_runtime = Path("env.supa.runtime")
+    if supa_runtime.exists() and runtime == "cli":
+        files.append(supa_runtime)
+
+    urlencoded = Path("env.tier-supabase.urlencoded")
+    if urlencoded.exists():
+        files.append(urlencoded)
+
+    return files
+
+
 def check_shadow() -> list[str]:
     """Report pipeline-owned keys that a process-environment export shadows.
 
@@ -96,30 +208,31 @@ def check_shadow() -> list[str]:
     the fix, let the operator decide. `env -u <KEY> make ...` unblocks a single
     command; clearing it from the launching shell fixes it for good.
 
+    The files consulted are the ones compose is actually given -- see
+    compose_env_files() -- and each side is read through dotenv semantics
+    before comparison, so a quoted file value and its unquoted export are
+    recognised as the same value.
+
     Values are compared by digest and never printed. Identical values are not
     reported -- an export that agrees with the file is harmless.
     """
-    import hashlib
-    import os
-
     def digest(value: str) -> str:
         return hashlib.sha256(value.encode("utf-8")).hexdigest()[:12]
 
-    # env.shared is compose's PRIMARY --env-file; the tier files layer over it.
-    sources = [Path("env.shared")] + [Path(f"env.tier-{t}") for t in TIERS]
-    owned: dict[str, tuple[str, str]] = {}  # key -> (file, value)
-    for path in sources:
-        if not path.exists():
-            continue
+    owned: dict[str, tuple[str, str]] = {}  # key -> (file, parsed value)
+    for path in compose_env_files():
         for raw in path.read_text(encoding="utf-8", errors="ignore").splitlines():
             line = raw.strip()
             if not line or line.startswith("#") or "=" not in line:
                 continue
             key, _, value = line.partition("=")
             key = key.strip()
+            if key.startswith("export "):
+                key = key[len("export ") :].strip()
             if key:
-                # Later files override earlier ones, matching compose's own order.
-                owned[key] = (path.name, value.strip())
+                # Later files override earlier ones, matching compose's order,
+                # so the file named in the report is the one that actually wins.
+                owned[key] = (path.name, parse_dotenv_value(value))
 
     shadowed: list[str] = []
     for key, (source, file_value) in sorted(owned.items()):
@@ -231,16 +344,28 @@ def main(argv: list[str] | None = None) -> int:
             if args.strict:
                 rc = 1
 
-    if rc == 0 and shadow_found:
-        # Never let the summary contradict the lines above it, for the same
-        # reason the drift summary was fixed: the reader believes the last line.
-        print(
-            "SHADOWED KEYS PRESENT (not failing: pass --strict to make this an "
-            "error). The files on disk are correct; the container will not get "
-            "them until the export is cleared."
-        )
-    elif rc == 0:
-        if args.drift and drift_found:
+    if rc == 0:
+        # Never let the summary contradict the lines above it -- in EITHER half.
+        # `rc == 0 and shadow_found` used to win outright, so a run that found
+        # both printed "The files on disk are correct" directly after listing
+        # keys missing from those very files. That sent the operator to clear an
+        # export while the drift went unmentioned, and recreated the
+        # contradictory-summary failure the drift branch below was fixed for.
+        if drift_found and shadow_found:
+            print(
+                "DRIFT AND SHADOWED KEYS BOTH PRESENT (not failing: pass --strict "
+                "to make this an error). Keys above are declared in .example but "
+                "absent from the runtime tier, AND an export outranks the files "
+                "for other keys. Clearing the export is not sufficient on its "
+                "own -- the missing tier keys still have to be funnelled."
+            )
+        elif shadow_found:
+            print(
+                "SHADOWED KEYS PRESENT (not failing: pass --strict to make this an "
+                "error). The files on disk are correct; the container will not get "
+                "them until the export is cleared."
+            )
+        elif drift_found:
             # Previously this branch printed "no drift detected" unconditionally,
             # immediately after listing the drift. A summary that contradicts the
             # output above it is worse than no summary: the reader believes the
