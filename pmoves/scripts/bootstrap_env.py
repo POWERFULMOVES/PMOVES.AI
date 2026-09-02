@@ -28,6 +28,10 @@ ENV_SHARED_PATH = REPO_ROOT / "pmoves" / "env.shared"
 CLEARED_KEYS_PATH = REPO_ROOT / "pmoves" / "configs" / "secrets_cleared.yaml"
 _ENV_KEY_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
+# Used only when neither the command line nor the registry declares an axis.
+DEFAULT_GEN_TYPE = "random_urlsafe"
+DEFAULT_GEN_LENGTH = 48
+
 
 def read_cleared_keys(path: Optional[Path] = None) -> List[str]:
     """Keys deliberately held empty, in declaration order.
@@ -183,6 +187,51 @@ def _registry_generator(key: str, registry_path: Optional[str] = None) -> Option
     except Exception:
         return None
     return None
+
+
+def _resolve_generator_axes(
+    key: str,
+    registry_path: Optional[str],
+    gen_type: Optional[str],
+    length: Optional[int],
+) -> Tuple[str, int, str, str]:
+    """Resolve (gen_type, length) for a rotation, one axis at a time.
+
+    Returns (gen_type, length, type_source, length_source), where each *source*
+    is the provenance string the log line reports for that axis.
+
+    THE TWO AXES ARE INDEPENDENT. Naming one on the command line must not
+    discard the registry's declaration of the other. The previous version put
+    the whole registry lookup under ``if gen_type is None``, so
+    ``--rotate VAULT_ENC_KEY --gen-type random_hex`` skipped the lookup entirely
+    and fell through to the built-in 48 -- while the registry declares 32 and
+    the yt OAuth flow does bytes.fromhex() on the result. That turned the flag
+    an operator would reach for to *avoid* the corruption into a second way to
+    reproduce it, and did so silently: the provenance line lived inside the
+    same skipped branch, so nothing was printed at all.
+
+    `passphrase` sizes itself from ``words`` and ignores ``length``, so
+    inheriting a declared length across an explicit type change is inert
+    rather than wrong.
+    """
+    type_source = "--gen-type" if gen_type is not None else ""
+    length_source = "--length" if length is not None else ""
+
+    if gen_type is None or length is None:
+        declared = _registry_generator(key, registry_path) or {}
+        if gen_type is None and declared.get("type"):
+            gen_type = declared["type"]
+            type_source = "bootstrap registry"
+        if length is None and declared.get("length"):
+            length = int(declared["length"])
+            length_source = "bootstrap registry"
+
+    if gen_type is None:
+        gen_type, type_source = DEFAULT_GEN_TYPE, "built-in default"
+    if length is None:
+        length, length_source = DEFAULT_GEN_LENGTH, "built-in default"
+
+    return gen_type, length, type_source, length_source
 
 
 def rotate_secret(
@@ -815,8 +864,11 @@ def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
     parser.add_argument(
         "--length",
         type=int,
-        default=48,
-        help="Length of the generated --rotate value (default: 48).",
+        default=None,
+        help=(
+            "Length of the generated --rotate value. "
+            "Default: the length the registry declares for this key, else 48."
+        ),
     )
     parser.add_argument(
         "--gen-type",
@@ -953,26 +1005,41 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
         #
         # Rotating to repair it would have regenerated urlsafe again and
         # reproduced the same defect, which is the trap this closes.
-        gen_type = args.gen_type
-        gen_length = args.length
-        if gen_type is None:
-            declared = _registry_generator(args.rotate, args.registry)
-            if declared:
-                gen_type = declared.get("type") or "random_urlsafe"
-                if gen_length is None and declared.get("length"):
-                    gen_length = declared["length"]
-                print(
-                    f"generator for {args.rotate}: {gen_type}"
-                    + (f" (length {gen_length})" if gen_length else "")
-                    + " — from bootstrap registry"
-                )
-            else:
-                gen_type = "random_urlsafe"
+        # BOTH AXES COME FROM THE REGISTRY, OR NEITHER DOES.
+        #
+        # The first version of this block resolved `type` from the registry but
+        # left `--length` defaulting to 48, so `gen_length` was never None and
+        # the length branch below could not fire. The registry's declared length
+        # was read, printed, and discarded.
+        #
+        # Measured 2026-09-02: rotating SECRET_KEY_BASE (registry: 96) emitted a
+        # 48-char value, and supabase-realtime stayed in its crash loop
+        # ("cookie store expects conn.secret_key_base to be at least 64 bytes").
+        # The same hole meant VAULT_ENC_KEY would rotate to 48 hex chars where
+        # Supabase documents "exactly 32 characters" -- a value Supavisor
+        # rejects.
+        #
+        # `--gen-type` and `--length` therefore BOTH default to None: None means
+        # "not specified, ask the registry", and an explicit flag always wins.
+        gen_type, gen_length, type_source, length_source = _resolve_generator_axes(
+            args.rotate, args.registry, args.gen_type, args.length
+        )
+        # Attribute each axis to where it actually came from, and print it
+        # unconditionally. Claiming "from bootstrap registry" over a value the
+        # registry did not supply -- or printing nothing at all because an
+        # explicit flag was given -- is the step-report defect this file
+        # exists to avoid.
+        if rotate_value is None:
+            print(
+                f"generator for {args.rotate}: "
+                f"{gen_type} (from {type_source}), "
+                f"length {gen_length} (from {length_source})"
+            )
         try:
             rotate_secret(
                 args.rotate,
                 value=rotate_value,
-                length=gen_length if gen_length is not None else 48,
+                length=gen_length,
                 gen_type=gen_type,
             )
         except (ValueError, FileNotFoundError) as exc:
@@ -984,8 +1051,9 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
         # leave a latent trap behind.
         unmark_key_cleared(args.rotate)
         source = (
-            "supplied value" if (args.value or args.value_env)
-            else f"generated {args.gen_type}"
+            "supplied value"
+            if (args.value or args.value_env)
+            else f"generated {gen_type}, length {gen_length}"
         )
         _info(
             f"Rotated {args.rotate} in env.shared ({source}). "
