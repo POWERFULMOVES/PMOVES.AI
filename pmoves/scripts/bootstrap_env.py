@@ -707,8 +707,11 @@ def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
     parser.add_argument(
         "--length",
         type=int,
-        default=48,
-        help="Length of the generated --rotate value (default: 48).",
+        default=None,
+        help=(
+            "Length of the generated --rotate value. "
+            "Default: the length the registry declares for this key, else 48."
+        ),
     )
     parser.add_argument(
         "--gen-type",
@@ -771,18 +774,42 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
         #
         # Rotating to repair it would have regenerated urlsafe again and
         # reproduced the same defect, which is the trap this closes.
+        # BOTH AXES COME FROM THE REGISTRY, OR NEITHER DOES.
+        #
+        # The first version of this block resolved `type` from the registry but
+        # left `--length` defaulting to 48, so `gen_length` was never None and
+        # the length branch below could not fire. The registry's declared length
+        # was read, printed, and discarded.
+        #
+        # Measured 2026-09-02: rotating SECRET_KEY_BASE (registry: 96) emitted a
+        # 48-char value, and supabase-realtime stayed in its crash loop
+        # ("cookie store expects conn.secret_key_base to be at least 64 bytes").
+        # The same hole meant VAULT_ENC_KEY would rotate to 48 hex chars where
+        # Supabase documents "exactly 32 characters" -- a value Supavisor
+        # rejects.
+        #
+        # `--gen-type` and `--length` therefore BOTH default to None: None means
+        # "not specified, ask the registry", and an explicit flag always wins.
         gen_type = args.gen_type
         gen_length = args.length
+        length_source = "--length" if gen_length is not None else None
         if gen_type is None:
             declared = _registry_generator(args.rotate, args.registry)
             if declared:
                 gen_type = declared.get("type") or "random_urlsafe"
                 if gen_length is None and declared.get("length"):
                     gen_length = declared["length"]
+                    length_source = "bootstrap registry"
+                # Attribute each axis to where it actually came from. Saying
+                # "from bootstrap registry" over a value the registry did not
+                # supply is the step-report defect this file exists to avoid.
                 print(
-                    f"generator for {args.rotate}: {gen_type}"
-                    + (f" (length {gen_length})" if gen_length else "")
-                    + " — from bootstrap registry"
+                    f"generator for {args.rotate}: {gen_type} (from bootstrap registry)"
+                    + (
+                        f", length {gen_length} (from {length_source})"
+                        if gen_length is not None
+                        else ", length 48 (built-in default)"
+                    )
                 )
             else:
                 gen_type = "random_urlsafe"
