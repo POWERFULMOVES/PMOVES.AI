@@ -2734,7 +2734,12 @@ up-agents-auto: ## Capability-aware bring-up: tier (lean|capable|gpu) picks the 
 		fi ;; \
 	esac
 
-up-core-capable: ## Capable tier: dependency-ordered core (data tier BEFORE agents) + Consciousness/CHIT
+up-core-capable: cipher-build-pin-check ## Capable tier: dependency-ordered core (data tier BEFORE agents) + Consciousness/CHIT
+	@# Gated even though this recipe has no --build: cipher-api declares build:
+	@# with no image: (docker-compose.yml), and neither overlay stacked here
+	@# defines cipher-api at all — so on a node with no pmoves-cipher-api image,
+	@# `up -d cipher-api` builds it from the worktree. A conditional build road,
+	@# silent on exactly the fresh node where it fires (review F2, 2026-09-02).
 	@echo "🧩 Capable tier: hardened dep-ordered core + Consciousness/CHIT (consciousness-service, cipher-api)…"
 	@$(MAKE) --no-print-directory up-core-hardened
 	@$(DC) -f docker-compose.agents.images.yml -f docker-compose.hardened.yml --profile agents up -d consciousness-service cipher-api
@@ -3381,7 +3386,7 @@ up-jellyfin:
 # (:3090). Re-integrating a first-class 0.6.0 archon service into this compose is
 # the tracked "#5 Archon integration" follow-up.
 .PHONY: up-agents up-agents-stack
-up-agents-stack: ## Start Agents (NATS, Agent Zero, Archon 0.6.0 + its Postgres, Cipher Memory, etc.)
+up-agents-stack: cipher-build-pin-check ## Start Agents (NATS, Agent Zero, Archon 0.6.0 + its Postgres, Cipher Memory, etc.)
 	@$(DC) --profile agents up -d --build nats agent-zero archon-postgres archon mesh-agent deepresearch publisher-discord cipher-api
 	@$(MAKE) --no-print-directory qdrant-provision-cipher || rc=$$?; 	rc=$${rc:-0}; if [ $$rc -ne 0 ] && [ $$rc -ne 2 ]; then echo "qdrant-provision-cipher failed (exit $$rc)"; exit $$rc; fi
 
@@ -3396,13 +3401,24 @@ cipher-build-pin-check: ## Refuse to build cipher from a submodule worktree that
 	@# WORKTREE. Docker reads files on disk and knows nothing about gitlinks, so a
 	@# drifted checkout is faithfully compiled and the road still prints "ready".
 	@# That is how B850 served `initialize -> 400 stream is not readable` for two
-	@# weeks while main carried the fix (c69adb43, pinned since PR #2366).
+	@# weeks while main carried the fix (c69adb43, pinned 2026-07-30 by 96cfa3311;
+	@# PR #2366 later moved the pin to d5c4045e on 2026-08-03).
+	@# It also refuses when the worktree sits exactly ON the pin but the files the
+	@# Dockerfile COPYs are modified — `git submodule status` shows no `+` for that,
+	@# and Pmoves-cipher has no .dockerignore, so an uncommitted edit under src/ is
+	@# compiled straight into the image. Naming Dockerfile.pmoves narrows that check
+	@# to what it actually copies from the context, so the untracked runtime data/
+	@# this node carries does not produce a false block (review F1, 2026-09-02).
 	@# Set CIPHER_BUILD_PIN=warn to build anyway — e.g. deliberately testing an
 	@# unpushed submodule change. It must be typed, and it says so in the output.
-	@rc=0; $(PYTHON) tools/submodule_build_pin_check.py Pmoves-cipher || rc=$$?; \
+	@rc=0; $(PYTHON) tools/submodule_build_pin_check.py Pmoves-cipher:Dockerfile.pmoves || rc=$$?; \
 	if [ $$rc -ne 0 ]; then \
 		if [ "$${CIPHER_BUILD_PIN}" = "warn" ]; then \
-			echo "CIPHER_BUILD_PIN=warn — building from the drifted worktree anyway (exit $$rc suppressed)"; \
+			if [ $$rc -eq 3 ]; then \
+				echo "CIPHER_BUILD_PIN=warn — building WITHOUT KNOWING what commit this compiles (exit 3, could not measure, suppressed)"; \
+			else \
+				echo "CIPHER_BUILD_PIN=warn — building from the drifted/dirty worktree anyway (exit $$rc suppressed)"; \
+			fi; \
 		else \
 			echo "Refusing to build. Sync the worktree, or set CIPHER_BUILD_PIN=warn to override."; \
 			exit $$rc; \

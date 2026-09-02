@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Is the submodule this build road is about to compile the commit `main` records?
+"""Will this build road compile the submodule commit -- and the files -- this checkout records?
 
 WHY THIS EXISTS
 ---------------
@@ -10,9 +10,10 @@ WORKTREE. Docker reads the files on disk. It has no idea a gitlink exists.
 So when the worktree drifts from the recorded gitlink, the road faithfully
 builds the wrong commit and prints ``✔ Cipher Memory ready``.
 
-Measured on B850, 2026-09-01. `main` had pinned Pmoves-cipher at ``d5c4045e``
-since PR #2366; that commit contains ``c69adb43``, which fixes cipher's MCP
-transport by mounting the ``/mcp`` router BEFORE ``express.json()`` so the SDK's
+Measured on B850, 2026-09-01. `main` pinned Pmoves-cipher at ``d5c4045e``
+(promote ``4ffb56dcb`` / PR #2366, 2026-08-03); the fix itself, ``c69adb43``,
+had already been pinned earlier by promote ``96cfa3311`` on 2026-07-30. It
+mounts the ``/mcp`` router BEFORE ``express.json()`` so the SDK's
 ``handlePostMessage()`` still has a readable body stream. The checked-out
 worktree was four commits behind at ``986e6e2f``. The image built from it on
 2026-08-16 answered every ``initialize`` with
@@ -39,6 +40,44 @@ worktree != gitlink, and it fails on it. Two reasons it cannot serve here:
 This check takes the submodules ONE road actually consumes, so its answer is
 about that road and a red result is always actionable.
 
+WHAT IS COMPARED, EXACTLY
+-------------------------
+``git ls-tree HEAD <path>`` -- the gitlink recorded in THIS CHECKOUT's HEAD.
+Not ``origin/main``'s, and the tool does not claim otherwise anywhere in its
+output. That is the right reference for the docker question: a legitimate
+promote branch has the worktree moved and the gitlink bumped to match, and it
+should read clean. The claim is deliberately the small one -- "the commit this
+checkout records" -- because that is the only one this comparison supports.
+
+AND THE FILES, NOT JUST THE COMMIT (review F1, 2026-09-02)
+----------------------------------------------------------
+HEAD matching the pin does not make a build reproducible. Docker reads FILES.
+A worktree sitting exactly on the pin with an uncommitted edit under ``src/``
+compiles that edit into the image, and ``git submodule status`` shows no ``+``
+for it -- so the entire ``+``-prefix family is blind to the single most common
+real drift, a developer mid-change.
+
+So a submodule whose HEAD matches the pin but whose build inputs are modified
+is ``dirty``, and dirty blocks (exit 1) exactly like drift. ``CIPHER_BUILD_PIN=warn``
+is the documented way to build mid-change on purpose.
+
+"Build inputs" is narrowed to what the Dockerfile actually copies FROM THE
+CONTEXT, when the caller names one (``Pmoves-cipher:Dockerfile.pmoves``).
+Cipher's copies ``package.json``, ``package-lock.json``, ``tsconfig.json``,
+``src/`` and ``packages/`` -- and the real B850 worktree carries an untracked
+``data/`` that no COPY reads. Blocking on ``data/`` would get this gate switched
+off inside a day with ``CIPHER_BUILD_PIN=warn``, which is precisely the
+all-or-nothing failure this file objects to in submodule_integrity.py above.
+The narrowing is derived from the Dockerfile rather than duplicated from it, so
+adding a ``COPY`` widens the gate automatically instead of blinding it.
+
+Name no Dockerfile and the whole worktree is watched -- the conservative answer
+for a road that did not say what it reads. Name one that cannot be read or that
+copies nothing from the context, and that is exit 3, not a narrower pass.
+
+``.dockerignore`` is NOT subtracted (Pmoves-cipher has none). If one appears,
+this over-reports rather than under-reports, which is the safe direction.
+
 WHY A GATE AND NOT AN AUTO-SYNC
 -------------------------------
 Deliberate. A drifted worktree is sometimes a developer mid-change, and
@@ -62,11 +101,16 @@ whole check exists to stop.
 
 Usage:
   python3 pmoves/tools/submodule_build_pin_check.py Pmoves-cipher
+  python3 pmoves/tools/submodule_build_pin_check.py Pmoves-cipher:Dockerfile.pmoves
   python3 pmoves/tools/submodule_build_pin_check.py Pmoves-cipher --json
 
+An argument is ``<submodule-path>`` or ``<submodule-path>:<dockerfile>``, where
+the dockerfile is relative to the submodule and names the build's Dockerfile.
+
 Exit codes:
-  0  every named submodule's worktree HEAD == its recorded gitlink
-  1  drift -- the build would compile a commit the superproject does not record
+  0  worktree HEAD == the recorded gitlink AND no build input is modified
+  1  drift or dirty -- the build would compile something this checkout does
+     not record
   3  could not measure -- NOT a pass
 """
 from __future__ import annotations
@@ -137,11 +181,113 @@ def worktree_head(path: str) -> str | None:
     return proc.stdout.strip() or None
 
 
-def check(paths: list[str]) -> tuple[int, list[dict]]:
+# The Dockerfile parse below returns this when a COPY reads the whole context
+# (``COPY . /app``). It is not a path; it means "watch everything".
+WHOLE_CONTEXT = object()
+
+
+def _logical_lines(text: str) -> list[str]:
+    """Dockerfile lines with backslash continuations joined and comments dropped."""
+    lines: list[str] = []
+    buf = ""
+    for raw in text.splitlines():
+        stripped = raw.strip()
+        if not buf and (not stripped or stripped.startswith("#")):
+            continue
+        if stripped.endswith("\\"):
+            buf += stripped[:-1] + " "
+            continue
+        lines.append((buf + stripped).strip())
+        buf = ""
+    if buf.strip():
+        lines.append(buf.strip())
+    return lines
+
+
+def context_paths(dockerfile: Path) -> set | None:
+    """Paths a Dockerfile copies FROM THE BUILD CONTEXT, or None if unreadable.
+
+    ``COPY --from=<stage>`` reads a previous stage, not the context, so it is
+    excluded -- cipher's runtime stage copies ``/app/dist`` and
+    ``/app/node_modules`` from the builder and neither is a worktree file.
+
+    Returns ``{WHOLE_CONTEXT}`` for ``COPY . .`` and friends. Returns None when
+    the file cannot be read or when nothing is copied from the context at all;
+    both mean "cannot say which files docker reads", which is exit 3, never a
+    narrower pass.
+    """
+    try:
+        text = dockerfile.read_text(encoding="utf-8")
+    except OSError:
+        return None
+
+    sources: set = set()
+    for line in _logical_lines(text):
+        parts = line.split(None, 1)
+        if len(parts) < 2 or parts[0].upper() not in ("COPY", "ADD"):
+            continue
+        rest = parts[1]
+
+        args: list[str] = []
+        from_stage = False
+        # Flags come first: --from=, --chown=, --chmod=, --link ...
+        while rest.startswith("--"):
+            flag, _, rest = rest.partition(" ")
+            if flag.startswith("--from="):
+                from_stage = True
+            rest = rest.lstrip()
+        if from_stage:
+            continue
+
+        if rest.startswith("["):
+            try:
+                args = [str(x) for x in json.loads(rest)]
+            except (ValueError, TypeError):
+                return None  # exec-form we cannot read -> refuse to guess
+        else:
+            args = rest.split()
+
+        if len(args) < 2:
+            return None  # malformed COPY -> refuse to guess
+        for src in args[:-1]:
+            src = src.strip().rstrip("/")
+            if src in ("", ".", "./", "*"):
+                return {WHOLE_CONTEXT}
+            sources.add(src.lstrip("./"))
+
+    return sources or None
+
+
+def dirty_build_inputs(path: str, watched: set | None) -> list[str] | None:
+    """Modified/untracked build inputs in the submodule worktree, or None on error.
+
+    `git status --porcelain` and not `git submodule status`: the latter prints
+    `+` only when HEAD differs from the gitlink, so it is silent on exactly the
+    case this catches. Gitignored files are excluded by git's own default, which
+    is what keeps `dist/` and `node_modules/` out of the answer.
+    """
+    sub = REPO_ROOT / path
+    args = ["status", "--porcelain", "--untracked-files=all"]
+    if watched is not None and WHOLE_CONTEXT not in watched:
+        args += ["--", *sorted(watched)]
+    proc = run_git(*args, cwd=sub)
+    if proc.returncode != 0:
+        return None
+    return [ln for ln in proc.stdout.splitlines() if ln.strip()]
+
+
+def check(specs: list[str]) -> tuple[int, list[dict]]:
+    """Answer for each ``<path>`` or ``<path>:<dockerfile>`` spec.
+
+    Precedence when more than one thing is wrong: unmeasured (3) beats drift and
+    dirty (1) beats clean (0). A submodule we could not read never vouches for
+    one we could, and a clean sibling never vouches for an unreadable one.
+    """
     findings: list[dict] = []
     unmeasured = False
 
-    for path in paths:
+    for spec in specs:
+        path, _, dockerfile = spec.partition(":")
         pin = recorded_gitlink(path)
         head = worktree_head(path)
 
@@ -164,18 +310,67 @@ def check(paths: list[str]) -> tuple[int, list[dict]]:
             unmeasured = True
             continue
 
+        # Which files docker will read. None means "could not narrow", and when
+        # a Dockerfile was NAMED that is a measurement failure, not a licence to
+        # check nothing. With no Dockerfile named we watch the whole worktree.
+        watched: set | None = None
+        if dockerfile:
+            watched = context_paths(REPO_ROOT / path / dockerfile)
+            if watched is None:
+                findings.append({
+                    "path": path,
+                    "status": "unmeasured",
+                    "detail": "cannot read the build inputs from %s/%s -- "
+                              "missing, unparseable, or it copies nothing from "
+                              "the build context" % (path, dockerfile),
+                })
+                unmeasured = True
+                continue
+
+        dirt = dirty_build_inputs(path, watched)
+        if dirt is None:
+            findings.append({
+                "path": path,
+                "status": "unmeasured",
+                "detail": "git status failed in %s -- cannot tell whether the "
+                          "build inputs are modified" % path,
+            })
+            unmeasured = True
+            continue
+
+        if head != pin:
+            # Drift is the larger claim; record the dirt alongside rather than
+            # letting one mask the other.
+            status = "drift"
+        elif dirt:
+            status = "dirty"
+        else:
+            status = "clean"
+
         findings.append({
             "path": path,
-            "status": "clean" if head == pin else "drift",
+            "status": status,
             "gitlink": pin,
             "worktree": head,
+            "dirty": bool(dirt),
+            "dirty_entries": dirt[:20],
+            "watched": ("<whole worktree>" if watched is None
+                        else "<whole build context>" if WHOLE_CONTEXT in watched
+                        else sorted(watched)),
         })
 
     if unmeasured:
         return 3, findings
-    if any(f["status"] == "drift" for f in findings):
+    if any(f["status"] in ("drift", "dirty") for f in findings):
         return 1, findings
     return 0, findings
+
+
+def _print_dirt(f: dict) -> None:
+    for entry in f["dirty_entries"]:
+        print("                " + entry)
+    if f["watched"] != "<whole worktree>":
+        print("              (build inputs watched: %s)" % (f["watched"],))
 
 
 def main() -> int:
@@ -186,7 +381,10 @@ def main() -> int:
     parser.add_argument(
         "paths",
         nargs="+",
-        help="submodule paths, relative to the repo root (e.g. Pmoves-cipher)",
+        help="submodule path relative to the repo root, optionally "
+             "<path>:<dockerfile> to narrow the modified-build-input check "
+             "to what that Dockerfile copies from the build context "
+             "(e.g. Pmoves-cipher:Dockerfile.pmoves)",
     )
     parser.add_argument("--json", action="store_true", help="emit JSON")
     args = parser.parse_args()
@@ -209,17 +407,29 @@ def main() -> int:
             print(f"  DRIFT     {f['path']}")
             print(f"              recorded gitlink : {f['gitlink']}")
             print(f"              checked out      : {f['worktree']}")
-            print("              docker build reads the CHECKED OUT tree, so this")
-            print("              road would ship a commit that is on nobody's main.")
+            print("              docker build reads the CHECKED OUT tree, so this road")
+            print("              would ship a commit this checkout does not record.")
+            if f["dirty"]:
+                print("              and its build inputs are modified on top:")
+                _print_dirt(f)
             print(f"              fix: git -C {f['path']} fetch && "
                   f"git submodule update --checkout {f['path']}")
+        elif f["status"] == "dirty":
+            print(f"  DIRTY     {f['path']} @ {f['gitlink'][:12]}")
+            print("              HEAD matches the pin, but docker reads FILES, and")
+            print("              these build inputs are not the recorded ones:")
+            _print_dirt(f)
+            print("              `git submodule status` shows no `+` for this state.")
+            print(f"              fix: commit or stash them in {f['path']}, or set")
+            print("              CIPHER_BUILD_PIN=warn to build mid-change on purpose.")
         else:
             print(f"  UNMEASURED {f['path']}: {f['detail']}")
 
     if code == 0:
         print("submodule build pins: clean")
     elif code == 1:
-        print("submodule build pins: DRIFT -- refusing to build a stale commit")
+        print("submodule build pins: DRIFT/DIRTY -- refusing to build something "
+              "this checkout does not record")
     else:
         print("submodule build pins: COULD NOT MEASURE -- this is not a pass")
     return code
