@@ -119,10 +119,27 @@ if [ -f "$ENVF" ]; then
   rm -f "$tmpf"
   set -H 2>/dev/null || true
   echo "[claude-pmoves] loaded $n vars from $ENVF" >&2
+  PMOVES_LAUNCHER_SESSION="claude-pmoves.sh ($n vars)"
 else
   echo "[claude-pmoves] WARN: $ENVF not found — MCP creds may be missing." >&2
   echo "[claude-pmoves]       run: make -C pmoves ensure-env-shared" >&2
+  PMOVES_LAUNCHER_SESSION="claude-pmoves.sh (env file NOT FOUND)"
 fi
+
+# Leave a marker in the child's environment so "did this session come through
+# the launcher" is ANSWERABLE from inside the session.
+#
+# `launcher-check` asks whether the command resolves on this host. That is a
+# question about the installer, and it passes on a host where the launcher is
+# installed and simply was not used -- which is the actual failure mode, since
+# starting `claude` directly is the habit the launcher exists to replace. Both
+# were true simultaneously on Z890 (2026-08-31): launcher-check OK, and 13 of
+# 20 roster entries missing their variables in the live process.
+#
+# The marker carries the count, not just a flag, because "loaded 0 vars" and
+# "never ran" are different faults with different remedies and would otherwise
+# be indistinguishable to anything reading it.
+export PMOVES_LAUNCHER_SESSION
 
 # Resolve ${TS_<NODE>} for the cross-node MCP servers in the roster.
 #
@@ -164,7 +181,22 @@ fi
 MCP_ROSTER="$ROOT/.claude/mcp.json"
 MCP_ROSTER_SOURCE="working tree"
 if [ -z "${PMOVES_ROSTER_FROM_TREE:-}" ]; then
-  _main_roster="${TMPDIR:-/tmp}/pmoves-roster-origin-main.json"
+  # PER-LAUNCH name, not a fixed one. The old fixed
+  # `$TMPDIR/pmoves-roster-origin-main.json` is shared by every concurrent
+  # session on the node, so a second launch overwrites the file the first is
+  # still pointing at: if origin/main moved in between, the older session now
+  # reads the NEWER roster. That is invisible while nothing reads the file
+  # after launch -- and this change makes something read it, since
+  # PMOVES_MCP_ROSTER is exported for `make -C pmoves session-check`. An older
+  # session could report success against a roster it never loaded, which is the
+  # exact false-negative that tool exists to prevent.
+  #
+  # Same lesson the normalizer already learned two blocks down ("the old fixed
+  # name is squattable in a world-writable /tmp"); the raw copy simply never
+  # got the fix. mktemp also removes the squat, since this file is written
+  # before anything validates it.
+  _main_roster="$(mktemp "${TMPDIR:-/tmp}/pmoves-roster-origin-main.XXXXXXXX.json" 2>/dev/null)" \
+    || _main_roster="${TMPDIR:-/tmp}/pmoves-roster-origin-main.$$.json"
   git -C "$ROOT" fetch --quiet origin main >/dev/null 2>&1 || true
   if git -C "$ROOT" show origin/main:.claude/mcp.json > "$_main_roster" 2>/dev/null      && [ -s "$_main_roster" ]; then
     MCP_ROSTER="$_main_roster"
@@ -174,6 +206,18 @@ if [ -z "${PMOVES_ROSTER_FROM_TREE:-}" ]; then
     echo "[claude-pmoves]   (offline, or origin/main not fetched -- servers may differ from the fleet's)" >&2
   fi
 fi
+# Tell the session which roster it got, and from where.
+#
+# Deliberately the RAW roster, not the normalized "$RESOLVED" produced below.
+# The normalized copy has every ${VAR} already expanded and every unresolvable
+# server DROPPED, so anything reading it sees a clean roster and cannot tell a
+# healthy session from one that lost five servers on the way in -- it would
+# report OK precisely when something went wrong. The raw file still carries the
+# references, so `make -C pmoves session-check` evaluates the same expressions
+# the launcher evaluated, against the same environment.
+export PMOVES_MCP_ROSTER="$MCP_ROSTER"
+export PMOVES_MCP_ROSTER_SOURCE="$MCP_ROSTER_SOURCE"
+
 if [ -f "$MCP_ROSTER" ]; then
   echo "[claude-pmoves] MCP roster source: $MCP_ROSTER_SOURCE"
   # Normalize the roster before handing it to Claude:

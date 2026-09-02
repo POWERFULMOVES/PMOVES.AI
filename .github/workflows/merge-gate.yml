@@ -142,6 +142,28 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: python pmoves/tools/action_pin_audit.py
 
+  # `# lgtm[<rule>]` is LGTM.com syntax. LGTM.com was folded into GitHub code
+  # scanning, which ignores the pragma entirely — so every such marker claims a
+  # suppression it does not perform, and the next reader reads an open HIGH
+  # alert as triaged. Ten of them were live here on 2026-08-31 while four of the
+  # marked lines carried open HIGH alerts (334/335/336/265). Same failure shape
+  # as the two gates above: something that reports handled without having acted.
+  suppression-marker-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      # Stdlib-only, discovers via `git ls-files`, so checkout is all it needs.
+      # Exits 3 (not 0) if it cannot enumerate the tree — could-not-measure is
+      # not a pass.
+      - name: Check for lgtm[] suppression markers
+        run: python pmoves/tools/lgtm_marker_check.py
+
   # pmoves/config/agent_registry.yaml is what a human or a tool reads to answer
   # "what is this component and how do I reach it". Two entries claimed a
   # submodule that is not in .gitmodules and an SSE endpoint nothing listens on,
@@ -239,7 +261,8 @@ jobs:
     # Reads nothing and writes nothing - it only inspects `needs` results.
     permissions: {}
     needs: [python-tests, docker-build-validation, hardening-validation, action-pin-validation,
-            agent-registry-check, dep-matrix-check, agent-zero-pin-check]
+            agent-registry-check, dep-matrix-check, agent-zero-pin-check,
+            suppression-marker-check]
     runs-on: ubuntu-latest
     if: always()
     steps:
@@ -253,6 +276,7 @@ jobs:
           echo "  agent-registry-check: ${{ needs.agent-registry-check.result }}"
           echo "  dep-matrix-check: ${{ needs.dep-matrix-check.result }}"
           echo "  agent-zero-pin-check: ${{ needs.agent-zero-pin-check.result }}"
+          echo "  suppression-marker-check: ${{ needs.suppression-marker-check.result }}"
           # REQUIRE success — do not merely reject "failure".
           #
           # A needs.<job>.result is one of success | failure | cancelled | skipped.
@@ -261,7 +285,7 @@ jobs:
           # shape this PR exists to remove, reproduced in the gate meant to close it:
           # an instrument that reports fine without having measured anything.
           #
-          # None of the seven jobs carries an `if:` or a path filter, so they always
+          # None of the eight jobs carries an `if:` or a path filter, so they always
           # run — a skip is not a legitimate state here, and if one ever appears it
           # is itself worth failing on rather than passing silently.
           failed=0
@@ -271,7 +295,8 @@ jobs:
                    "action-pin-validation:${{ needs.action-pin-validation.result }}" \
                    "agent-registry-check:${{ needs.agent-registry-check.result }}" \
                    "dep-matrix-check:${{ needs.dep-matrix-check.result }}" \
-                   "agent-zero-pin-check:${{ needs.agent-zero-pin-check.result }}"; do
+                   "agent-zero-pin-check:${{ needs.agent-zero-pin-check.result }}" \
+                   "suppression-marker-check:${{ needs.suppression-marker-check.result }}"; do
             job="${r%%:*}"; res="${r#*:}"
             if [[ "$res" != "success" ]]; then
               echo "::error::Merge gate FAILED — $job did not succeed (result: ${res:-<empty>})"
@@ -281,4 +306,4 @@ jobs:
           if [[ "$failed" -ne 0 ]]; then
             exit 1
           fi
-          echo "Merge gate PASSED — all seven gates reported success"
+          echo "Merge gate PASSED — all eight gates reported success"

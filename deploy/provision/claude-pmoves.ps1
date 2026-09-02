@@ -72,9 +72,18 @@ if (Test-Path $envf) {
     $n = 0
     foreach ($k in $vars.Keys) { [Environment]::SetEnvironmentVariable($k, $vars[$k], 'Process'); $n++ }
     Write-Host "[claude-pmoves] loaded $n vars from $envf"
+    $script:launcherSession = "claude-pmoves.ps1 ($n vars)"
 } else {
     Write-Warning "[claude-pmoves] $envf not found - MCP creds may be missing. Run: make -C pmoves ensure-env-shared"
+    $script:launcherSession = 'claude-pmoves.ps1 (env file NOT FOUND)'
 }
+
+# Leave a marker in the process environment so "did this session come through
+# the launcher" is ANSWERABLE from inside the session. Mirrors the export in
+# claude-pmoves.sh; see the comment there for why launcher-check cannot answer
+# it. Set on BOTH branches -- "loaded 0 vars" and "never ran" are different
+# faults with different remedies, and a bare boolean would merge them.
+[Environment]::SetEnvironmentVariable('PMOVES_LAUNCHER_SESSION', $script:launcherSession, 'Process')
 
 # ---------------------------------------------------------------------------
 # Interpreter discovery — the Windows half of pmoves/scripts/pm-python.sh.
@@ -221,7 +230,12 @@ function Test-PmovesRosterHasBarePlaceholder {
 $roster = Join-Path $root '.claude\mcp.json'
 $rosterSource = 'working tree'
 if (-not $env:PMOVES_ROSTER_FROM_TREE) {
-    $mainRoster = Join-Path ([System.IO.Path]::GetTempPath()) 'pmoves-roster-origin-main.json'
+    # PER-LAUNCH name, not a fixed one. Mirrors claude-pmoves.sh; see the
+    # comment there. A fixed name is shared by every concurrent session on the
+    # node, so a later launch overwrites the file an earlier one still points
+    # at -- and PMOVES_MCP_ROSTER now makes something read it after launch.
+    $mainRoster = Join-Path ([System.IO.Path]::GetTempPath()) `
+        ('pmoves-roster-origin-main.' + [System.IO.Path]::GetRandomFileName() + '.json')
     $prev = $ErrorActionPreference; $ErrorActionPreference = 'SilentlyContinue'
     & git -C $root fetch --quiet origin main 2>$null | Out-Null
     $blob = & git -C $root show origin/main:.claude/mcp.json 2>$null
@@ -245,6 +259,12 @@ if (-not $env:PMOVES_ROSTER_FROM_TREE) {
         Write-Warning "[claude-pmoves]   (offline, or origin/main not fetched -- servers may differ from the fleet's)"
     }
 }
+# Tell the session which roster it got, and from where. Mirrors the export in
+# claude-pmoves.sh -- see the comment there for why this is the RAW roster and
+# not the normalized copy handed to Claude.
+[Environment]::SetEnvironmentVariable('PMOVES_MCP_ROSTER', $roster, 'Process')
+[Environment]::SetEnvironmentVariable('PMOVES_MCP_ROSTER_SOURCE', $rosterSource, 'Process')
+
 if (Test-Path $roster) {
     Write-Host ("[claude-pmoves] MCP roster source: " + $rosterSource)
     # Normalize the roster before handing it to Claude. The transform used to be
