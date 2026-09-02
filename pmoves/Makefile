@@ -2137,7 +2137,20 @@ check-tier-envs: ## Validate all tier environment files exist
 	@# a year invoking the checker with no flags, which silently disabled the half
 	@# that catches a key declared in .example and absent from the runtime tier.
 	@# Add --strict here once the current backlog is cleared, to ratchet it shut.
-	@$(PYTHON) tools/check_tier_envs.py --drift
+	@#
+	@# --shadow is named for the same reason as --drift, and catches the opposite
+	@# half of the same failure: drift is the funnelled value never ARRIVING in a
+	@# tier file; shadow is it arriving and being OVERRULED, because Compose reads
+	@# the process environment ahead of every --env-file. Measured 2026-09-02: 43
+	@# pipeline-owned keys on the 4090 resolve from a shell export rather than
+	@# from the pipeline, SECRET_KEY_BASE among them -- two rotations wrote the
+	@# correct value to all eight tier files and the container kept the stale one.
+	@#
+	@# It reports and does not strip. Two of those 43 (SUPABASE_ANON_KEY,
+	@# SUPABASE_SERVICE_ROLE_KEY) are EMPTY in the tier file and real only in the
+	@# shell, so unsetting pipeline-owned exports wholesale would hand Supabase
+	@# empty credentials. The operator decides; the check only refuses to be silent.
+	@$(PYTHON) tools/check_tier_envs.py --drift --shadow
 
 .PHONY: bootstrap-tier-envs
 bootstrap-tier-envs: ## Create missing tier env files from examples (Hardened branch compliance)
@@ -3592,8 +3605,22 @@ qdrant-verify-cipher: ## Provision + round-trip a probe through the Cipher colle
 	@# needing a reachable embedding backend — the dense half uses a synthetic
 	@# vector. Use cipher-memory-smoke for the end-to-end check through Cipher's
 	@# own HTTP surface.
+	@#
+	@# MSYS_NO_PATHCONV: on Git Bash this recipe FAILED before the probe ever ran.
+	@# The container-side `/scripts/provision_qdrant_cipher_memory.py` was rewritten
+	@# to `//C:/Program Files/Git/scripts/...` and python3 exited 2 with
+	@# "No such file or directory" -- a host path substituted into a container
+	@# argument. Same conversion recorded in three handoffs on this node, and the
+	@# same two exports scripts/channel_monitor_up.sh:16-17 already carries.
+	@# Harmless on Linux/macOS, where both variables are simply unused.
+	@#
+	@# This mattered more than a broken target: qdrant-verify-cipher PROVISIONS the
+	@# collection and needs no reachable embedder to do it. While it failed here,
+	@# `pmoves_cipher_memory` did not exist on the 4090, so every Cipher store
+	@# returned embedded:false and every search silently fell through to
+	@# lexicalFallback() -- which ignores the query text entirely.
 	@echo "🧠 Verifying Qdrant collection round trip for Cipher Memory..."
-	@$(LOAD_ENV_SHARED); docker run --rm --network pmoves_data \
+	@export MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*'; $(LOAD_ENV_SHARED); docker run --rm --network pmoves_data \
 		-v "$(CURDIR)/scripts:/scripts:ro" \
 		-e PYTHONDONTWRITEBYTECODE=1 \
 		-e QDRANT_URL=$${QDRANT_URL:-http://qdrant:6333} \
