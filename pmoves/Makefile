@@ -297,6 +297,117 @@ docs-quickstart: ## Open the quick start guide
 		echo "Full runbook: docs/operations/COMPLETE_BRING_UP_RUNBOOK.md"; \
 	fi
 
+# -------- Claim register (AGNOTE4482) ----------
+# THE SANCTIONED WRITE PATH. `claim-collision-pre.py` refuses shell writes to
+# the register it cannot check, and a refusal with no alternative is a
+# deadlock: four delivery agents in one session had no Write/Edit tool, so a
+# shell append was the only way any of them could file a row. These targets are
+# that alternative -- they read the clock, run the collision gate's own check,
+# take an exclusive lock across the whole check-and-append, and append in
+# O_APPEND.
+#
+# NO REGISTER FIELD EVER BECOMES A SHELL WORD. Every one of them travels by
+# ENVIRONMENT, and the emptiness guards below test the EXPORTED variable
+# (`$$REGISTER_BRANCH`) rather than the make expansion (`$(BRANCH)`). Register
+# prose is full of backticks; expanded into a recipe they are command
+# substitutions that the shell runs before python is even started. Measured at
+# 776b429b9, when SCOPE already travelled by environment and only the guard
+# line still expanded it:
+#
+#     make register-claim ... SCOPE='document `touch /tmp/PROOF` behavior'
+#     -> the recorded row was correct, AND /tmp/PROOF was created
+#
+# A correct row is not the whole test. The command ran. OWNER, BRANCH, TTL,
+# ANCHOR and TEXT_FILE were interpolated outright, with no environment door at
+# all. ARGS is deliberately still expanded: it carries FLAGS (--dry-run), not
+# content, and it is the caller's own text.
+#
+# `:=` and a separate name for the owner, because `register-claim: export
+# REGISTER_OWNER = $(or $(OWNER),$(REGISTER_OWNER))` is a target-specific
+# variable defined in terms of itself, which make rejects as recursive.
+# THE INTERPRETER MUST HAVE THE GATE'S DEPENDENCIES, or the check silently
+# gets coarser. `register_append.py` imports `claim-collision-pre.py`, whose
+# `_load_lineage()` needs PyYAML to read `identity_vocabulary.yaml`. Without it
+# the gate falls back to comparing owner strings EXACTLY -- and one identity in
+# this register writes itself several ways (`(Knuckles)` x16, `(Knuckles, opus
+# 4.7 1M)` x7, `(Opus 5)` x2), so a RELEASE under one spelling stops closing a
+# CLAIM opened under another and the same node reads as a stranger to itself.
+# The hook declares the dependency in a PEP 723 block for `uv run`; a bare
+# `$(PYTHON)` honours no such declaration.
+#
+# Probed, not assumed, and RECURSIVE (`=`, not `:=`) so the probe runs only when
+# a register target actually expands it rather than on every make invocation.
+# `$(PYTHON)` is preferred when it already has PyYAML -- switching a working
+# interpreter for `uv run --script` would trade a silent degradation for a first
+# -run network fetch, which is a worse failure on an offline node.
+REGISTER_PYTHON = $(shell if $(PYTHON) -c 'import yaml' >/dev/null 2>&1; then \
+	echo '$(PYTHON)'; \
+	elif command -v uv >/dev/null 2>&1; then echo 'uv run --script'; \
+	else echo '$(PYTHON)'; fi)
+
+REGISTER_OWNER_VALUE := $(if $(OWNER),$(OWNER),$(REGISTER_OWNER))
+
+.PHONY: register-claim
+register-claim: export REGISTER_OWNER = $(REGISTER_OWNER_VALUE)
+register-claim: export REGISTER_BRANCH = $(BRANCH)
+register-claim: export REGISTER_TTL = $(if $(TTL),$(TTL),72h)
+register-claim: export REGISTER_SCOPE = $(SCOPE)
+register-claim: export REGISTER_CO_OWNERS = $(CO_OWNER)
+register-claim: ## Open a lane in the claim register (OWNER= BRANCH= SCOPE= [TTL=72h] [CO_OWNER=])
+	@if [ -z "$$REGISTER_BRANCH" ] || [ -z "$$REGISTER_SCOPE" ]; then \
+		echo "usage: make register-claim OWNER='B850-CLAUDE (Knuckles)' BRANCH=fix/x TTL=72h SCOPE='what this lane covers'"; \
+		exit 2; \
+	fi
+	@$(REGISTER_PYTHON) tools/register_append.py claim $(ARGS)
+
+.PHONY: register-release
+register-release: export REGISTER_OWNER = $(REGISTER_OWNER_VALUE)
+register-release: export REGISTER_BRANCH = $(BRANCH)
+register-release: export REGISTER_SCOPE = $(SCOPE)
+register-release: export REGISTER_CO_OWNERS = $(CO_OWNER)
+register-release: ## Close a lane in the claim register (OWNER= BRANCH= SCOPE= [CO_OWNER=])
+	@if [ -z "$$REGISTER_SCOPE" ]; then \
+		echo "usage: make register-release OWNER='B850-CLAUDE (Knuckles)' BRANCH=fix/x SCOPE='what landed'"; \
+		exit 2; \
+	fi
+	@$(REGISTER_PYTHON) tools/register_append.py release $(ARGS)
+
+.PHONY: register-amend
+# THE AMEND ROAD. #2858's co-owner workflow needs the INCUMBENT to add
+# `co-owners:` to a row they already filed -- an in-place edit of one line. The
+# collision gate refuses in-place rewrites of the register (a PreToolUse hook
+# cannot see what a mid-file rewrite produces), register-claim only appends, and
+# register-docs refuses anything that changes a ledger row. Without this target
+# the field that SUPPRESSES a collision had no sanctioned way to be set from a
+# shell -- the same deadlock class as the missing append road.
+register-amend: export REGISTER_OWNER = $(REGISTER_OWNER_VALUE)
+register-amend: export REGISTER_BRANCH = $(BRANCH)
+register-amend: export REGISTER_CO_OWNERS = $(CO_OWNER)
+register-amend: ## Add co-owners to YOUR OWN open claim row (OWNER= BRANCH= CO_OWNER=)
+	@if [ -z "$$REGISTER_BRANCH" ] || [ -z "$$REGISTER_CO_OWNERS" ]; then \
+		echo "usage: make register-amend OWNER='B850-CLAUDE (Knuckles)' BRANCH=fix/x CO_OWNER='4090-CLAUDE:filed the blocker'"; \
+		exit 2; \
+	fi
+	@$(REGISTER_PYTHON) tools/register_append.py amend $(ARGS)
+
+.PHONY: register-docs
+register-docs: export REGISTER_ANCHOR = $(ANCHOR)
+register-docs: export REGISTER_TEXT_FILE = $(TEXT_FILE)
+register-docs: ## Insert prose into the register without touching ledger rows (ANCHOR= TEXT_FILE=)
+	@if [ -z "$$REGISTER_ANCHOR" ] || [ -z "$$REGISTER_TEXT_FILE" ]; then \
+		echo "usage: make register-docs ANCHOR='## Some unique heading' TEXT_FILE=section.md"; \
+		exit 2; \
+	fi
+	@$(REGISTER_PYTHON) tools/register_append.py docs $(ARGS)
+
+.PHONY: register-postdate-check
+register-postdate-check: ## Assert rows added on this branch are not postdated (0 clean / 1 findings / 3 could not measure)
+	@$(PYTHON) tools/register_postdate_check.py --base "$(or $(BASE),origin/main)" $(ARGS)
+
+.PHONY: register-postdate-sweep
+register-postdate-sweep: ## Report every postdated row in the register's whole history
+	@$(PYTHON) tools/register_postdate_check.py --sweep $(ARGS)
+
 # -------- Updates ----------
 .PHONY: update
 update: ensure-env-shared  ## Pull repo + images, recreate stack
