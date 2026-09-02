@@ -270,6 +270,92 @@ def rotate_secret(
     return value
 
 
+def read_env_value(key: str, env_path: Optional[Path] = None) -> Optional[str]:
+    """Return the value of *key* in an env file, or None when absent.
+
+    Last-wins, matching ``chit_encode_secrets``' parser: a duplicate later line
+    is what the funnel would actually read, so that is what "is it set?" must
+    answer against.
+    """
+    target = env_path or ENV_SHARED_PATH
+    if not target.exists():
+        return None
+    found: Optional[str] = None
+    for raw in target.read_text(encoding="utf-8").splitlines():
+        stripped = raw.lstrip()
+        if not stripped or stripped.startswith("#") or "=" not in stripped:
+            continue
+        name, _, value = stripped.partition("=")
+        if name.strip() == key:
+            found = value
+    return found
+
+
+def ensure_secret(
+    key: str,
+    *,
+    env_path: Optional[Path] = None,
+    registry_path: Optional[str] = None,
+) -> Tuple[bool, str]:
+    """Mint *key* into env.shared **only when it is absent or empty**.
+
+    Returns ``(generated, reason)``. ``generated`` is False when the slot
+    already held a value, and in that case the file is not touched at all.
+
+    Why this exists, and why it is not ``bootstrap()``
+    --------------------------------------------------
+    A handful of Supabase secrets (SECRET_KEY_BASE, VAULT_ENC_KEY, the two
+    LOGFLARE tokens) are declared ``required: true`` in the bootstrap registry
+    WITH correct generators, and ``required: true`` in the CHIT manifest -- yet
+    nothing in ``make secrets-funnel`` ever ran a generator for them. So they
+    were never minted into env.shared, never reached the CGP bundle, and
+    ``secrets_sync`` then classified them as operator-missing. Because
+    ``SECRETS_ALLOW_MISSING`` defaults to 1 that was only a *warning*, and
+    because ``build_outputs`` puts a missing required entry into ``rejected_out``
+    the funnel actively DELETED those keys from the generated tier file.
+    Compose's ``${SECRET_KEY_BASE:?}`` then failed -- and compose interpolates
+    the whole project before acting, so four unset Supabase variables blocked
+    ``up -d cipher-api`` and every other unrelated service on the node.
+
+    Deliberately NOT ``bootstrap(..., accept_defaults=True)``:
+
+    * ``bootstrap`` also regenerates a slot whose existing value fails
+      ``value_matches_spec``. That self-heal is a real recovery path but must
+      stay operator-invoked (``make env-setup``) rather than fire implicitly on
+      every funnel run: it rewrites a ``random_hex`` slot on format failure, and
+      VAULT_ENC_KEY is read with ``bytes.fromhex()`` by the yt OAuth vault, so an
+      implicit reshape is a data-loss event for stored OAuth cookies.
+    * ``bootstrap`` walks every service and errors in non-interactive mode on any
+      required slot that has no generator (operator-supplied API keys), which
+      would turn the funnel into a hard failure on partially-provisioned nodes.
+
+    This fills absent-or-empty slots and nothing else, so it is idempotent and
+    can never rotate live cryptographic material.
+    """
+    existing = read_env_value(key, env_path)
+    if existing not in (None, ""):
+        return False, "already set"
+
+    declared = _registry_generator(key, registry_path)
+    if not declared:
+        return False, "no generator declared in bootstrap registry"
+
+    gen_type = declared.get("type") or "random_urlsafe"
+    length = declared.get("length")
+    rotate_secret(
+        key,
+        value=None,
+        length=int(length) if length else 48,
+        gen_type=gen_type,
+        env_path=env_path,
+    )
+    # A freshly minted key is no longer deliberately empty; leaving the
+    # tombstone would permanently block secrets-local-hydrate from it.
+    unmark_key_cleared(key)
+    detail = gen_type + (f" length {length}" if length else "")
+    return True, f"generated ({detail})"
+
+
 def normalize_bool(value: str) -> str:
     truthy = {"true", "t", "yes", "y", "1"}
     falsy = {"false", "f", "no", "n", "0"}
@@ -693,6 +779,28 @@ def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
         "Then run: make -C pmoves chit-export && make -C pmoves secrets-funnel.",
     )
     parser.add_argument(
+        "--ensure",
+        metavar="KEY",
+        action="append",
+        default=None,
+        help="Mint KEY into env.shared ONLY if it is absent or empty, using the "
+        "generator the bootstrap registry declares for it. Repeatable. Never "
+        "overwrites an existing value and never reshapes one that fails a format "
+        "check (that self-heal stays with --accept-defaults). This is what "
+        "`make secrets-funnel` runs so registry-generatable secrets reach the CGP "
+        "bundle instead of being reported missing and deleted from the tier files.",
+    )
+    parser.add_argument(
+        "--ensure-dry-run",
+        action="store_true",
+        default=False,
+        help="With --ensure: report only, write nothing, and exit 1 if any key is "
+        "still unprovisioned. This is the gate for the class of defect where a "
+        "secret is `required: true` in both the registry and the CHIT manifest, "
+        "compose declares it ${VAR:?}, and the funnel nonetheless exits 0 with a "
+        "warning — so the whole compose project fails to interpolate.",
+    )
+    parser.add_argument(
         "--value",
         help="Explicit new value for --rotate (e.g. an externally-minted API key). "
         "If omitted, a value is generated from --gen-type/--length. "
@@ -728,6 +836,10 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
         _error("--clear and --rotate are mutually exclusive: pick one key operation")
         return 2
 
+    if args.ensure and (args.clear or args.rotate):
+        _error("--ensure is mutually exclusive with --clear/--rotate: pick one key operation")
+        return 2
+
     if args.clear:
         try:
             rotate_secret(args.clear, value="", allow_empty=True)
@@ -748,6 +860,76 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
             "then restart the affected consumers."
         )
         return 0
+
+    if args.ensure:
+        # Runs inside secrets-funnel BEFORE chit-export, so a freshly minted
+        # value is encoded into the CGP bundle in the same pass and reaches the
+        # generated tier files through the normal manifest path.
+        rc = 0
+        minted: List[str] = []
+        if args.ensure_dry_run:
+            unprovisioned = []
+            for key in args.ensure:
+                value = read_env_value(key)
+                if value in (None, ""):
+                    unprovisioned.append(key)
+                    _error(f"{key}: UNPROVISIONED (absent or empty in env.shared)")
+                else:
+                    print(f"{key}: provisioned")
+            if unprovisioned:
+                _error(
+                    "Unprovisioned stack-generated secrets: "
+                    + ", ".join(unprovisioned)
+                    + ". Compose declares these ${VAR:?}, and compose interpolates "
+                    "the ENTIRE project before acting — so these block `up` for every "
+                    "service, not just their own. Fix: make -C pmoves secrets-funnel"
+                )
+                return 1
+            return 0
+        for key in args.ensure:
+            try:
+                generated, reason = ensure_secret(key, registry_path=args.registry)
+            except (ValueError, FileNotFoundError) as exc:
+                _error(f"--ensure {key}: {exc}")
+                rc = 2
+                continue
+            if generated:
+                _info(f"{key}: {reason}")
+                # An EMPTY slot does not prove the value was never in use. On
+                # B850 (measured 2026-09-02) supabase-pooler and
+                # supabase-analytics were running with all four of these set at
+                # exactly the declared lengths while every env file had lost
+                # them -- because a missing required entry lands in
+                # secrets_sync's rejected_out and write_env_files DELETES it.
+                # Minting a fresh value there is correct for a virgin node and
+                # WRONG for that one: Supavisor encrypts tenant credentials at
+                # rest with VAULT_ENC_KEY (Cloak AES.GCM), so a new key means
+                # the pooler cannot decrypt existing rows once recreated.
+                # We cannot tell the two apart from the env file alone, so say
+                # so instead of guessing.
+                minted.append(key)
+            elif reason == "already set":
+                # Not noise: the no-op is the safety property being asserted.
+                print(f"{key}: already set — left untouched")
+            else:
+                _warn(f"{key}: {reason} — cannot mint, still unprovisioned")
+                rc = 2
+        if minted:
+            _warn(
+                "Minted a FRESH value for: " + ", ".join(minted) + ". "
+                "If a service is ALREADY RUNNING with a different value for one "
+                "of these, recreating it against the new value is a desync, not a "
+                "fix -- VAULT_ENC_KEY decrypts Supavisor tenant credentials at "
+                "rest. Check before recreating:\n"
+                "  docker inspect <container> | python -c \"import json,sys; "
+                "print({k.split(chr(61))[0] for k in "
+                "json.load(sys.stdin)[0]['Config']['Env']})\"\n"
+                "If it is set there, HARVEST the live value instead of keeping "
+                "this one:\n"
+                "  export PMOVES_ROTATE_VALUE=<live value>\n"
+                "  make -C pmoves secrets-rotate KEY=<KEY>"
+            )
+        return rc
 
     if args.rotate:
         rotate_value = args.value

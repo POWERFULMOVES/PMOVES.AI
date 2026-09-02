@@ -41,7 +41,7 @@ else
 SECRETS_FUNNEL_BOOT_USER_TARGET :=
 endif
 
-.PHONY: codex-config codex-audit codex-parity-check codex-parity-check-strict codex-home codex-health-quick secrets-audit tooling-audit tooling-audit-strict chit-export chit-manifest-sync chit-manifest-check secrets-local-hydrate secrets-runtime-hydrate secrets-funnel-sync secrets-funnel secrets-rotate secrets-untrack a0-plugins-check a0-plugins-check-remote
+.PHONY: codex-config codex-audit codex-parity-check codex-parity-check-strict codex-home codex-health-quick secrets-audit tooling-audit tooling-audit-strict chit-export chit-manifest-sync chit-manifest-check secrets-local-hydrate secrets-runtime-hydrate secrets-funnel-sync secrets-funnel secrets-ensure-generated secrets-ensure-check secrets-rotate secrets-untrack a0-plugins-check a0-plugins-check-remote
 codex-config: ## Install repo-pinned Codex config into ~/.codex/config.toml
 	@pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/codex_apply_config.ps1
 
@@ -161,10 +161,61 @@ env-shared-repair: ## Self-heal env.shared: collapse raw multi-line PEM/SSH valu
 # Measured on B850 2026-08-23: postgrest, gotrue and storage came back 28P01
 # while holding a correct POSTGRES_PASSWORD in their own environment. Running
 # the funnel a SECOND time healed it, which is the signature of this ordering.
+
+# ---------------------------------------------------------------------------
+# Secrets the STACK mints, not the operator: declared `required: true` in
+# bootstrap/registry.json WITH a generator, and `required: true` in the CHIT
+# manifest -- but no step of the funnel ever ran that generator. They were
+# therefore never in env.shared, never in the CGP bundle, and secrets_sync
+# classified them as operator-missing. SECRETS_ALLOW_MISSING defaults to 1 so
+# that was a WARNING, while build_outputs put them in `rejected_out` and
+# write_env_files DELETED them from the generated tier file. Compose then failed
+# `${SECRET_KEY_BASE:?}` -- and compose interpolates the ENTIRE project before
+# acting, so four unset Supabase variables blocked `up -d cipher-api` and every
+# other unrelated service on the node.
+#
+# NOT "every registry key that declares a generator". Deliberately curated:
+#   * ANON_KEY / SERVICE_ROLE_KEY are HS256 JWTs derived from JWT_SECRET
+#     (tools/secrets_self_generated.py). Minting a random 64-char token would
+#     satisfy the `:?` gate with a value that is not a valid JWT.
+#   * POSTGRES_PASSWORD is minted at db-init and must match the running
+#     database; a funnel-invented value desyncs it (28P01).
+# Those stay out. Add a key here only once you have checked it is pure random
+# material with no derivation and no external consumer that pins its value.
+SECRETS_ENSURE_KEYS ?= \
+  SECRET_KEY_BASE \
+  VAULT_ENC_KEY \
+  LOGFLARE_PUBLIC_ACCESS_TOKEN \
+  LOGFLARE_PRIVATE_ACCESS_TOKEN
+
+.PHONY: secrets-ensure-generated
+secrets-ensure-generated: ensure-env-shared ## Mint stack-generated secrets into env.shared when (and only when) absent/empty. Idempotent; never overwrites a live value.
+	@# Guard the empty list. bootstrap_env.py with NO key flags falls through to
+	@# the full INTERACTIVE bootstrap(), which prompts and then dies with EOFError
+	@# under make. An empty SECRETS_ENSURE_KEYS must mean "mint nothing", not
+	@# "reconfigure the whole node".
+	@if [ -z "$(strip $(SECRETS_ENSURE_KEYS))" ]; then \
+	  echo "secrets-ensure-generated: SECRETS_ENSURE_KEYS is empty — nothing to mint"; \
+	else \
+	  $(CODEX_PY) scripts/bootstrap_env.py $(foreach k,$(SECRETS_ENSURE_KEYS),--ensure $(k)); \
+	fi
+
+.PHONY: secrets-ensure-check
+secrets-ensure-check: ## Fail if any stack-generated secret is still unprovisioned (the ${VAR:?} compose gate, checked before compose sees it).
+	@if [ -z "$(strip $(SECRETS_ENSURE_KEYS))" ]; then \
+	  echo "secrets-ensure-check: SECRETS_ENSURE_KEYS is empty — nothing to check"; \
+	else \
+	  $(CODEX_PY) scripts/bootstrap_env.py --ensure-dry-run $(foreach k,$(SECRETS_ENSURE_KEYS),--ensure $(k)); \
+	fi
+
 secrets-funnel: ## Portable secrets flow: env repair -> local hydrate -> CHIT export -> manifest sync -> urlencode -> audit gates (FORCE=1 to overwrite stale)
 	@$(MAKE) --no-print-directory env-shared-repair
 	@$(MAKE) --no-print-directory secrets-local-hydrate
 	@$(MAKE) --no-print-directory secrets-runtime-hydrate
+	@# ORDER IS LOAD-BEARING: must precede secrets-funnel-sync, because that
+	@# target's chit-export prerequisite encodes env.shared into the CGP bundle.
+	@# Mint after this point and the bundle is already sealed without the value.
+	@$(MAKE) --no-print-directory secrets-ensure-generated
 	@$(MAKE) --no-print-directory secrets-funnel-sync
 	@$(CODEX_PY) tools/credential_urlencoder.py
 	@$(MAKE) --no-print-directory secrets-audit
