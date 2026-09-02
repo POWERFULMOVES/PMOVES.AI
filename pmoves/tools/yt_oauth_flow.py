@@ -223,6 +223,11 @@ def _get_fernet() -> Optional[object]:
     # match it), then base64url, then raw bytes. Whatever survives is padded or
     # truncated to 32 as before.
     import base64
+
+    # VAULT_ENC_KEY_DECODE_V1 -- keep identical in all three consumers:
+    #   pmoves/tools/yt_oauth_flow.py
+    #   pmoves/services/yt-cookie-writer/main.py
+    #   pmoves/services/yt-cookie-refresher/supabase_client.py
     def _decode_key(raw: str) -> bytes:
         try:
             return bytes.fromhex(raw)
