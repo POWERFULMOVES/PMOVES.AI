@@ -461,6 +461,23 @@ _SED_WRITES_RE = re.compile(
 )
 _FIND_WRITES_RE = re.compile(r"-(?:delete|exec|execdir|ok|okdir|fls|fprint\w*)\b")
 _INPLACE_FLAG_RE = re.compile(r"(^|\s)(-i\b|--in-place\b)")
+# Commands that READ by default but take an output FILE. They sat on
+# `_READ_ONLY_COMMANDS` and were reachable at exit 0 with the register as the
+# destination: `sort -o <register>` and `shuf -o <register>` TRUNCATE the
+# append-only ledger, and `xxd -r dump <register>` rewrites it. The
+# enumerate-the-reads cut fixed the interpreter class and then re-made the same
+# mistake one layer in -- "usually a read" is not "certified not to write".
+# Guarded the way `sed -i` and `jq -i` are: the flag present at all is
+# could-not-measure, and could-not-measure is not a pass.
+_OUTPUT_FLAG_RE = re.compile(r"(^|\s)(-o\b|--output(=|\s|$))")
+_XXD_REVERSE_RE = re.compile(r"(^|\s)(-r\b|-revert\b)")
+_OUTPUT_FLAG_COMMANDS = {"sort": _OUTPUT_FLAG_RE, "shuf": _OUTPUT_FLAG_RE,
+                         "xxd": _XXD_REVERSE_RE}
+# `split` flags that consume the NEXT token, so it is a value and not an operand.
+_SPLIT_VALUE_FLAGS = frozenset({
+    "-l", "--lines", "-b", "--bytes", "-C", "--line-bytes", "-a",
+    "--suffix-length", "-n", "--number", "--additional-suffix", "--filter",
+})
 # git subcommands that cannot alter a file in the working tree. `add` stages an
 # already-written file and is on the list; `checkout`, `restore`, `switch`,
 # `stash`, `apply`, `reset` and `clean` are NOT -- `git checkout --ours -- REG`
@@ -780,6 +797,59 @@ def _dd_verdict(rest):
     return True, ""
 
 
+def _output_flag_verdict(cmd, segment):
+    """A read-by-default command carrying its own output-file flag."""
+    if _OUTPUT_FLAG_COMMANDS[cmd].search(segment):
+        return False, (
+            "`" + cmd + "` here carries its output-file flag, so it can write "
+            "the file it is pointed at rather than only read it. "
+            "`sort -o <register>` and `shuf -o <register>` REPLACE the "
+            "append-only ledger; `xxd -r` rewrites it from a dump."
+        )
+    return True, ""
+
+
+def _split_verdict(cmd, rest):
+    """`split`/`csplit` write files named from a PREFIX, never from stdin."""
+    if cmd == "csplit":
+        for j, tok in enumerate(rest):
+            if tok in ("-f", "--prefix") and j + 1 < len(rest):
+                if _is_register(rest[j + 1]):
+                    return False, (
+                        "`csplit -f <register>` names the register as its "
+                        "output PREFIX, so it writes beside or onto it."
+                    )
+            if tok.startswith("--prefix=") and _is_register(tok.split("=", 1)[1]):
+                return False, (
+                    "`csplit --prefix=<register>` names the register as its "
+                    "output PREFIX, so it writes beside or onto it."
+                )
+        return True, ""
+    # `split [OPTION]... [FILE [PREFIX]]`. The PREFIX is the LAST operand and
+    # only exists when there are two of them -- `split <register>` reads it.
+    # Option VALUES are not operands: counting `-l 100` as one made a plain read
+    # of the register look like a write, which is the false-refusal that gets a
+    # gate switched off.
+    operands = []
+    j = 0
+    while j < len(rest):
+        tok = rest[j]
+        if tok in _SPLIT_VALUE_FLAGS:
+            j += 2
+            continue
+        if tok.startswith("-"):
+            j += 1
+            continue
+        operands.append(tok)
+        j += 1
+    if len(operands) >= 2 and _is_register(operands[-1]):
+        return False, (
+            "`split` names the register as its output PREFIX, so it writes "
+            "beside or onto it."
+        )
+    return True, ""
+
+
 def _segment_verdict(segment, assignments):
     """(understood_as_not_writing_the_register, why_not).
 
@@ -846,6 +916,10 @@ def _segment_verdict(segment, assignments):
         if _INPLACE_FLAG_RE.search(segment):
             return False, "`" + cmd + " -i` rewrites the file in place."
         return True, ""
+    if cmd in _OUTPUT_FLAG_COMMANDS:
+        return _output_flag_verdict(cmd, segment)
+    if cmd in ("split", "csplit"):
+        return _split_verdict(cmd, rest)
     if cmd in _READ_ONLY_COMMANDS:
         return True, ""
 

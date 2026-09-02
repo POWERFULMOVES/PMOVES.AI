@@ -1361,3 +1361,67 @@ def test_lanes_and_co_owners_are_read_per_row_not_per_payload(tmp_path):
     assert "fix/totally-innocent" not in r.stderr, (
         "ALICE's innocent lane was charged with BOB's collision"
     )
+
+
+# --------------------------------------------------------------------------
+# A read-by-default command carrying its own output-file flag.
+#
+# The allowlist above fixed the interpreter class and then re-made the same
+# mistake one layer in: `sort`, `shuf` and `xxd` were admitted wholesale as
+# "read-only commands", and each of them takes an OUTPUT file. Measured against
+# the allowlist cut, all at exit 0 with the register as the destination:
+#
+#     sort -o <register> in.txt          <- REPLACES the append-only ledger
+#     shuf -o <register> in.txt          <- REPLACES it
+#     xxd -r dump.hex <register>         <- rewrites it from a dump
+#
+# None of these appears in the review, in the 22-case matrix, or in the 32-probe
+# sweep that replaced it. They were found by asking the allowlist the question it
+# asks of everything else -- is this command CERTIFIED not to write? -- rather
+# than by thinking of more shapes. "Usually a read" is not "certified".
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("command", [
+    "sort -o {R} /tmp/in.txt",
+    "sort --output={R} /tmp/in.txt",
+    "sort --output {R} /tmp/in.txt",
+    "shuf -o {R} /tmp/in.txt",
+    "shuf --output={R} /tmp/in.txt",
+    "xxd -r /tmp/dump.hex {R}",
+    "xxd -revert /tmp/dump.hex {R}",
+    "csplit -f {R} /tmp/in.txt 2",
+    "csplit --prefix={R} /tmp/in.txt 2",
+    "split -l 1 /tmp/in.txt {R}",
+])
+def test_a_read_only_command_with_an_output_flag_is_refused(tmp_path, command):
+    """`sort -o <register>` truncates an append-only ledger at exit 0."""
+    reg = tmp_path / REGISTER_NAME
+    r = _run_bash(tmp_path, command.format(R=str(reg)))
+    assert r.returncode == BLOCK, f"output-flag bypass: {command!r}"
+    assert "NOT MEASURED" in r.stderr
+    assert "register-claim" in r.stderr
+
+
+@pytest.mark.parametrize("command", [
+    "sort {R}",
+    "sort {R} > /tmp/sorted.txt",
+    "sort -u {R}",
+    "shuf -n 3 {R}",
+    "xxd {R}",
+    "xxd {R} > /tmp/dump.hex",
+    "od -c {R}",
+    "split -l 100 {R} /tmp/part-",
+    "csplit -f /tmp/pre- {R} 100",
+])
+def test_those_same_commands_still_read_the_register(tmp_path, command):
+    """The guard keys on the output flag, not on the command name.
+
+    `split -l 100 <register> /tmp/part-` reads it. A first cut of this guard
+    counted `100` as an operand and refused that, which is the false-refusal
+    direction -- the one that gets a gate switched off rather than bypassed.
+    """
+    reg = tmp_path / REGISTER_NAME
+    r = _run_bash(tmp_path, command.format(R=str(reg)))
+    assert r.returncode == ALLOW, f"read refused: {command!r}\n{r.stderr}"
+    assert _decision(r) is None, f"spurious prompt for: {command!r}"
