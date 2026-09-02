@@ -3605,8 +3605,22 @@ qdrant-verify-cipher: ## Provision + round-trip a probe through the Cipher colle
 	@# needing a reachable embedding backend — the dense half uses a synthetic
 	@# vector. Use cipher-memory-smoke for the end-to-end check through Cipher's
 	@# own HTTP surface.
+	@#
+	@# MSYS_NO_PATHCONV: on Git Bash this recipe FAILED before the probe ever ran.
+	@# The container-side `/scripts/provision_qdrant_cipher_memory.py` was rewritten
+	@# to `//C:/Program Files/Git/scripts/...` and python3 exited 2 with
+	@# "No such file or directory" -- a host path substituted into a container
+	@# argument. Same conversion recorded in three handoffs on this node, and the
+	@# same two exports scripts/channel_monitor_up.sh:16-17 already carries.
+	@# Harmless on Linux/macOS, where both variables are simply unused.
+	@#
+	@# This mattered more than a broken target: qdrant-verify-cipher PROVISIONS the
+	@# collection and needs no reachable embedder to do it. While it failed here,
+	@# `pmoves_cipher_memory` did not exist on the 4090, so every Cipher store
+	@# returned embedded:false and every search silently fell through to
+	@# lexicalFallback() -- which ignores the query text entirely.
 	@echo "🧠 Verifying Qdrant collection round trip for Cipher Memory..."
-	@$(LOAD_ENV_SHARED); docker run --rm --network pmoves_data \
+	@export MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*'; $(LOAD_ENV_SHARED); docker run --rm --network pmoves_data \
 		-v "$(CURDIR)/scripts:/scripts:ro" \
 		-e PYTHONDONTWRITEBYTECODE=1 \
 		-e QDRANT_URL=$${QDRANT_URL:-http://qdrant:6333} \
