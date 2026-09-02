@@ -76,12 +76,12 @@
           "key": "SECRET_KEY_BASE",
           "file": "pmoves/env.tier-supabase",
           "prompt": "Secret key base (Realtime + Supavisor encryption)",
-          "help": "Used by Realtime and Supavisor. Generate: openssl rand -base64 48",
+          "help": "Used by Realtime and Supavisor. Generate: openssl rand -base64 72",
           "required": true,
           "sensitive": true,
           "generate": {
             "type": "random_urlsafe",
-            "length": 64
+            "length": 96
           }
         },
         {
