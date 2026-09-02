@@ -261,6 +261,20 @@ venv-bringup: check-prereqs ## Bringup-ready venv: service+tool deps PLUS glance
 update-service-docs: ## Regenerate service update notes from git metadata
 	@$(PYTHON) scripts/update_service_logs.py $(ARGS)
 
+.PHONY: identity-verify
+identity-verify: ## Audit the claim register's identity vocabulary (0 clean / 1 findings / 3 could not measure)
+	@# KNOWN ROAD for pmoves/tools/identity_lineage.py --verify. Until this
+	@# existed the tool had NO caller: the co-owner feature's stated defense --
+	@# "an undeclared co-owner is a --verify finding by design" -- was a command
+	@# nobody ran, and the exit-3 doctrine implemented in main() had no consumer
+	@# that could act on it. Flagged as P3 in the PR #2858 review; the unrouted
+	@# half was the half that would have caught the two P1s.
+	@$(PYTHON) tools/identity_lineage.py --verify
+
+.PHONY: identity-co-owners
+identity-co-owners: ## List every register row that declares co-owners
+	@$(PYTHON) tools/identity_lineage.py --co-owners
+
 .PHONY: docs-runbook
 docs-runbook: ## Open the comprehensive bring-up runbook
 	@if command -v xdg-open >/dev/null 2>&1; then \
