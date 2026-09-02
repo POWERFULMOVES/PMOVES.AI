@@ -29,8 +29,11 @@ the whole time. Three independent causes, each necessary, none sufficient:
    pipeline never supplied. TensorZero fails its **entire** config load on one
    missing provider key, so the gateway crash-looped every 60s and no routing of
    any kind worked.
-2. `tensorzero.toml:793` asked Ollama for `qwen3-embedding:4b`; Ollama had only
-   `:8b`. Pulled `4b`.
+2. `tensorzero.toml:770` asked Ollama for `qwen3-embedding:4b`; Ollama had only
+   `:8b`. Pulled `4b`. (Verified against this commit: `:770` is the
+   `qwen3_embedding_4b_local` provider's `model_name`; `:793` is `bge-m3`.
+   A brief that routes protected Compose work has to point at the line the
+   implementer will actually edit.)
 3. **The one that survived the first two fixes.** Cipher budgets
    `AbortSignal.timeout(10000)` for the embed call (`embedding.ts:73`, and the
    same for the Ollama fallback at `:96`). A **warm** call through TensorZero
@@ -74,16 +77,47 @@ in one compose file. Whatever shape is chosen must not make that worse.
 
 1. **Dedicated GPU embedding container vs host Ollama.** The current path is
    Cipher → TensorZero → `host.docker.internal:11434` (Ollama on the host, not a
-   container). A GPU-backed embedding service removes the cold-load problem
-   rather than nursing it with `keep_alive`. What already exists that this
-   should build on, rather than a new service?
+   container). What already exists that this should build on, rather than a
+   new service?
+
+   **A container does not by itself remove the cold load.** An earlier draft
+   said it did. An Ollama-backed container lazy-loads on first request and
+   unloads again on the default `keep_alive` idle timeout, so it reproduces
+   cause (3) above after every restart, eviction, or idle gap — the same
+   failure, now behind a service boundary that makes it harder to see. What
+   actually removes it is a **residency guarantee**, and the option chosen
+   has to state which one it provides:
+
+   - load at startup and never evict (`keep_alive: -1` plus a warmup call on
+     boot — this is the lever already proven here: pinning the model resident
+     made the very next store return `embedded: true` first time), **or**
+   - a server whose model is resident by construction rather than by policy
+     (TEI, vLLM, Infinity all load at startup and do not evict), **or**
+   - a timeout large enough to absorb a cold load.
+
+   Note the budget is tight even when warm: 7206 ms measured against Cipher's
+   10 s, so 2.8 s of headroom. Residency is necessary; on this evidence it may
+   not be sufficient, and the timeout deserves revisiting either way.
 2. **Per-data-type models.** Medical, code, audio, and general text want
    different embedding models. Does the selection live in Cipher (per
    `category`?), in TensorZero routing, or in the caller? Note
-   `tensorzero.toml` already declares five embedding models
-   (`qwen3_embedding_4b_local`, `_8b_local`, `gemma_embed_local`, `bge_m3_local`,
-   `archon_nomic_embed_local`) — the routing vocabulary exists; nothing selects
-   between them at runtime.
+   `tensorzero.toml` already declares **eleven** embedding models — the
+   routing vocabulary exists; nothing selects between them at runtime.
+   Counted at this commit:
+
+   - **five local**, all Ollama on `host.docker.internal:11434`:
+     `qwen3_embedding_4b_local`, `qwen3_embedding_8b_local`,
+     `gemma_embed_local`, `bge_m3_local`, `archon_nomic_embed_local`
+   - **six remote**: `archon_bge_large_together`, `archon_e5_large_together`,
+     `together_embedding` (Together), `openai_text_embedding_small` (OpenAI),
+     `openrouter_embedding` (OpenRouter), `venice_embedding` (Venice)
+
+   An earlier draft said five and listed only the local ones. That matters
+   here specifically: this inventory is the basis for deciding whether
+   existing routing can be reused, and under-counting it argues for building
+   vocabulary that already exists. The remote routes also carry their own
+   dimensions and their own key requirements, both of which bear on question
+   3 below.
 3. **Dimension is not free.** The Qdrant collection is created at the dimension
    of whatever model embedded first (`2560` today, from `EMBEDDING_DIM`).
    Different models mean different dimensions, which means **separate
