@@ -91,10 +91,16 @@ fi
       fi
     done
     if [ -n "$INTERNAL" ]; then
-      echo "  Cause: every attached network is internal:$INTERNAL"
-      echo "  An internal network cannot publish ports. Docker reports no error."
-      echo "  Fix: attach the service to a non-internal network (pmoves_external)."
-      echo "       Fleet-wide audit and rationale: PR #2897."
+      echo "  Every attached network is internal:$INTERNAL"
+      echo "  On Docker Desktop, a service attached ONLY to internal networks does"
+      echo "  not get its published ports activated, and Docker reports no error."
+      echo "  (Measured on the 4090. Native Linux Engine may differ -- this script"
+      echo "   reports what the LOCAL daemon did, so trust the finding above, not"
+      echo "   this explanation, if you are on a Linux node.)"
+      echo "  Fix: attach a NON-internal bridge. Do NOT reach for pmoves_external"
+      echo "       unless the service genuinely needs outbound internet --"
+      echo "       docs/operations/DOCKER_NETWORK_HARDENING.md Rule 1 forbids it."
+      echo "       Fleet-wide audit: PR #2897."
     fi
   else
     echo "  No host binding was requested for $PORT/tcp."

@@ -708,17 +708,25 @@ build-svc: ## Build ONE service image from current source: make build-svc SVC=fl
 
 recreate-svc: ## Surgical recreate of ONE service with current env+image: make recreate-svc SVC=flute-gateway
 	@test -n "$(SVC)" || { echo "Usage: make recreate-svc SVC=<compose-service>"; exit 1; }
-	@# 89 of this stack's 107 services sit behind a compose profile. Without
-	@# --profile "*" compose resolves only 18 of them -- so this target could not
-	@# recreate flute-gateway, the very service its own help text names.
-	@# --no-deps still limits creation to SVC: the wildcard widens LOOKUP, not
-	@# what gets started. (Measured on the 4090, 2026-09-03: 18 vs 107.)
+	@# The --profile "*" below is for the LOOKUP on the next line only.
+	@#
+	@# CORRECTION (2026-09-03): an earlier revision of this comment claimed the
+	@# bare `up` could not recreate a profiled service such as flute-gateway.
+	@# That was wrong. Compose auto-enables a service's profile when the service
+	@# is named explicitly, so `up -d --no-deps flute-gateway` has always worked
+	@# -- verified by running exactly that, with no --profile, on the 4090.
+	@#
+	@# What IS true: `config --services` hides profiled services (18 of 107 on
+	@# this stack), so the existence check needs the wildcard or it would reject
+	@# every profiled service as "not in this stack". The check earns its keep
+	@# because compose's own error for an unresolvable service does not separate
+	@# "misspelled" from "hidden behind a profile".
 	@$(DC) --profile "*" config --services 2>/dev/null | grep -qx "$(SVC)" || { \
 	  echo "✖ no compose service named '$(SVC)' in this stack"; \
 	  echo "  list them: make recreate-svc-list"; \
 	  exit 1; }
 	@echo "Recreating $(SVC) with current env (no deps)..."
-	@$(DC) --profile "*" up -d --force-recreate --no-deps $(SVC)
+	@$(DC) up -d --force-recreate --no-deps $(SVC)
 	@echo "Done. If Kong fronts it, bounce kong too (cached upstream DNS): docker restart pmoves-supabase-kong-1"
 
 recreate-svc-list: ## List every compose service recreate-svc can target (all profiles)
