@@ -7,27 +7,36 @@ reuses the exact endpoints/payloads already proven by the `pmoves_notes` Agent
 Zero plugin (tools surface as `mcp__notebook__save_note` / `mcp__notebook__search_notes`).
 
 Env:
-  OPEN_NOTEBOOK_API_URL    default http://open-notebook:5055 (internal alias)
-  OPEN_NOTEBOOK_API_TOKEN  Bearer token (optional; warns if sent over plain http)
+  OPEN_NOTEBOOK_API_URL    default http://open-notebook:5055 (internal alias; override
+                           to http://open-notebook-ext:5055 on the up-external topology)
+  OPEN_NOTEBOOK_API_TOKEN  baseline Bearer token (optional; warns if sent over plain http)
   MCP_HOST / MCP_PORT      bind for the streamable-http transport (default 0.0.0.0:8092)
   MCP_TRANSPORT            "streamable-http" (default) | "sse" | "stdio"
 
-Tenant note: this wrapper reads ONE Open Notebook token from env. The per-tenant
-credential-injection seam (agent workspace identity -> that tenant's token) lives
-in the mounting harness (dsh `ctx.credentials`, or an A0 per-context header), not
-here — this server stays a thin, stateless REST->MCP bridge.
+Tenant seam: this wrapper carries ONE baseline Open Notebook token from env, but a
+per-request `Authorization` header set by the mounting harness (dsh `ctx.credentials`
+/ an A0 per-context header) is forwarded verbatim and takes precedence — so multiple
+tenants mounting one server instance are NOT collapsed onto the service identity.
+Absent an inbound header it falls back to the baseline token. The wrapper stays a
+thin, stateless REST->MCP bridge; tenant identity is resolved by the harness above it.
 """
 from __future__ import annotations
 
 import json
 import os
+import sys
 from datetime import datetime, timezone
 
 import httpx
-from mcp.server.fastmcp import FastMCP
+from mcp.server.fastmcp import Context, FastMCP
 
 API_URL = os.getenv("OPEN_NOTEBOOK_API_URL", "http://open-notebook:5055").rstrip("/")
 TOKEN = os.getenv("OPEN_NOTEBOOK_API_TOKEN", "")
+
+# In stdio mode, stdout is reserved for MCP JSON-RPC frames — diagnostics MUST go to
+# stderr or a stdio client can treat them as malformed protocol frames.
+def _log(msg: str) -> None:
+    print(msg, file=sys.stderr, flush=True)
 
 mcp = FastMCP(
     "notebook",
@@ -36,13 +45,34 @@ mcp = FastMCP(
 )
 
 
-def _headers() -> dict[str, str]:
+def _inbound_auth(ctx: Context | None) -> str:
+    """The Authorization header on THIS request, if the transport carries one.
+
+    For HTTP transports FastMCP exposes the Starlette request at
+    ctx.request_context.request; other transports (stdio) have none. Best-effort:
+    any failure yields "" and the caller falls back to the baseline token.
+    """
+    if ctx is None:
+        return ""
+    try:
+        req = getattr(ctx.request_context, "request", None)
+        if req is not None:
+            return req.headers.get("authorization", "") or ""
+    except Exception:
+        pass
+    return ""
+
+
+def _headers(ctx: Context | None = None) -> dict[str, str]:
     headers = {"Content-Type": "application/json"}
+    # Per-tenant credential (mounting harness) wins over the process baseline token.
+    inbound = _inbound_auth(ctx)
+    if inbound:
+        headers["Authorization"] = inbound
+        return headers
     if TOKEN:
         if API_URL.lower().startswith("http://"):
-            # Same warning the pmoves_notes plugin emits: a bearer over plain http
-            # is fine on the internal pmoves_app network, not for external endpoints.
-            print(
+            _log(
                 "[notebook-mcp] WARNING: OPEN_NOTEBOOK_API_TOKEN set but API_URL is "
                 "http:// — token sent unencrypted (ok on the internal network only)."
             )
@@ -51,7 +81,10 @@ def _headers() -> dict[str, str]:
 
 
 @mcp.tool()
-async def save_note(content: str, title: str = "", tags: list[str] | None = None) -> str:
+async def save_note(
+    content: str, title: str = "", tags: list[str] | None = None,
+    ctx: Context | None = None,
+) -> str:
     """Save a note to the PMOVES Open Notebook knowledge base.
 
     Args:
@@ -78,7 +111,7 @@ async def save_note(content: str, title: str = "", tags: list[str] | None = None
 
     try:
         async with httpx.AsyncClient(timeout=10) as client:
-            resp = await client.post(f"{API_URL}/api/notes", json=payload, headers=_headers())
+            resp = await client.post(f"{API_URL}/api/notes", json=payload, headers=_headers(ctx))
             if resp.status_code != 200:
                 return f"save_note failed: HTTP {resp.status_code} — {resp.text}"
             result = resp.json()
@@ -97,7 +130,7 @@ async def save_note(content: str, title: str = "", tags: list[str] | None = None
 
 
 @mcp.tool()
-async def search_notes(query: str, limit: int = 10) -> str:
+async def search_notes(query: str, limit: int = 10, ctx: Context | None = None) -> str:
     """Search the PMOVES Open Notebook knowledge base for notes.
 
     Args:
@@ -122,7 +155,7 @@ async def search_notes(query: str, limit: int = 10) -> str:
     }
     try:
         async with httpx.AsyncClient(timeout=10) as client:
-            resp = await client.post(f"{API_URL}/api/search", json=payload, headers=_headers())
+            resp = await client.post(f"{API_URL}/api/search", json=payload, headers=_headers(ctx))
             if resp.status_code != 200:
                 return f"search_notes failed: HTTP {resp.status_code} — {resp.text}"
             results = resp.json()
@@ -150,20 +183,36 @@ async def search_notes(query: str, limit: int = 10) -> str:
 
 
 async def _publish_nats(subject: str, data: dict) -> None:
-    """Best-effort NATS publish; never raises (mirrors the plugin's event trail)."""
+    """Best-effort NATS publish; never raises and never blocks the tool result.
+
+    Bounded: a black-holed broker must not stall a save/search. We disable the
+    client's default 60-attempt reconnect loop and cap the whole publish path with
+    a short timeout, so worst case is a couple of seconds, not ~2 minutes.
+    """
     try:
+        import asyncio
+
         import nats  # optional dependency
 
-        nc = await nats.connect(os.getenv("NATS_URL", "nats://nats:pmoves@nats:4222"))
-        try:
-            await nc.publish(subject, json.dumps(data).encode())
-        finally:
-            await nc.close()
+        async def _do() -> None:
+            nc = await nats.connect(
+                os.getenv("NATS_URL", "nats://nats:pmoves@nats:4222"),
+                connect_timeout=2,
+                allow_reconnect=False,
+                max_reconnect_attempts=0,
+            )
+            try:
+                await nc.publish(subject, json.dumps(data).encode())
+                await nc.flush(timeout=2)
+            finally:
+                await nc.close()
+
+        await asyncio.wait_for(_do(), timeout=5)
     except Exception as exc:  # noqa: BLE001
-        print(f"[notebook-mcp] NATS publish to {subject} failed: {exc}")
+        _log(f"[notebook-mcp] NATS publish to {subject} failed: {exc}")
 
 
 if __name__ == "__main__":
     transport = os.getenv("MCP_TRANSPORT", "streamable-http")
-    print(f"[notebook-mcp] starting: transport={transport} api={API_URL}")
+    _log(f"[notebook-mcp] starting: transport={transport} api={API_URL}")
     mcp.run(transport=transport)
