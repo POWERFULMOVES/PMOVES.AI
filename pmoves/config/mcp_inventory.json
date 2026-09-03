@@ -144,16 +144,12 @@
         },
         {
           "key": "composio",
-          "description": "Composio hosted MCP gateway - SaaS toolkits behind one server; exact per-toolkit server URL + COMPOSIO_API_KEY come from the operator's Composio dashboard via the secrets funnel (never committed)",
-          "transport": "sse",
+          "description": "Composio Connect hosted MCP - SaaS toolkits behind 7 COMPOSIO_* meta-tools with in-band managed OAuth (search tools, connect apps, execute, remote sandbox)",
+          "transport": "http",
           "endpoint": "external",
-          "url": "https://mcp.composio.dev",
-          "headers": {
-            "X-API-Key": "${COMPOSIO_API_KEY}"
-          },
-          "disabled": true,
-          "_note": "Operator-approved 2026-08-27, registered but NOT served to any client. `clients: []` is the fail-closed switch -- ServerSpec.applies_to() in mcp_config_generator.py returns `client in self.clients`, so an empty list matches nothing. `disabled: true` alone does NOT keep it out: that key is a Cline/Roo convention absent from Claude Code's .mcp.json schema, so the renderer passes it straight through -- verified, with COMPOSIO_API_KEY set the unscoped entry WAS emitted into the Claude config. Populate `clients` only after the toolkit URL, transport and header name are verified against the Composio dashboard AND COMPOSIO_API_KEY is registered in the canonical CHIT secrets manifest plus the client launcher allowlists.",
-          "clients": []
+          "url": "https://connect.composio.dev/mcp",
+          "clients": [],
+          "_note": "Registered but NOT served to any client (fail-closed; `clients: []` matches nothing in ServerSpec.applies_to()). URL updated 2026-09-02 from stale mcp.composio.dev to connect.composio.dev/mcp - the current Composio Connect endpoint used by the official plugin (submodule pmoves-composio-mcp-plugin). Auth is in-band managed OAuth: agent requests connection -> OAuth link returned -> operator authorizes -> connection reusable; NOT a static X-API-Key header. Old 2026-08-27 note (superseded but preserved): operator-approved registration; populate `clients` only after the endpoint is verified live AND COMPOSIO_API_KEY is registered in the CHIT secrets manifest (slot exists: composio_api_key, tier llm) plus client launcher allowlists. The stale `disabled: true` + X-API-Key header block was removed with this update."
         },
         {
           "key": "titanmail",

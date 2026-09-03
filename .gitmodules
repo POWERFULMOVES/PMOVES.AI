@@ -445,3 +445,11 @@
 	path = PMOVES-deepseek-harness
 	url = https://github.com/POWERFULMOVES/PMOVES-deepseek-harness.git
 	branch = PMOVES.AI-Edition-Hardened
+[submodule "PMOVES-composio"]
+	url = https://github.com/POWERFULMOVES/PMOVES-composio.git
+	branch = PMOVES.AI-Edition-Hardened
+	shallow = true
+[submodule "pmoves-composio-mcp-plugin"]
+	url = https://github.com/POWERFULMOVES/pmoves-composio-mcp-plugin.git
+	branch = PMOVES.AI-Edition-Hardened
+	shallow = true
