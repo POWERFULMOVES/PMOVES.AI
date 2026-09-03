@@ -400,7 +400,20 @@ def open_claims_in(text: str) -> dict:
 HEREDOC_DELIM_RE = re.compile(r"<<-?\s*(['\"]?)([A-Za-z_][A-Za-z0-9_]*)\1")
 # `(>>?)` captured, because append and truncate are different acts against an
 # append-only ledger and the gate has to be able to tell them apart.
-REDIRECT_RE = re.compile(r"(>>?)\s*([^\s;|&<>]+)")
+# QUOTED FIRST, because the unquoted alternative stops at whitespace and a
+# quoted path is the normal way to write one that contains a space. Without the
+# quoted alternatives, `echo x > "C:\Users\Jane Doe\...\AGNOTE4482PHI.t1.md"`
+# handed `"C:\Users\Jane` to `_is_register`, which is not the register, so
+# `_segment_verdict` certified `echo` as read-only and the hook exited 0.
+#
+# This is redirect-specific and NOT spelling-specific: `tee` and `cp` route
+# through `_tokens`, where shlex already understands quoting, and they refused
+# the same paths correctly. Measured with a `Jane Doe` directory -- `>` after
+# echo/printf/cat passed silently in BOTH "\" and "/" spellings, so it is a
+# pre-existing hole in redirect parsing rather than part of the path-spelling
+# defect this file's other fix addresses. `_is_register` strips the quotes it
+# now receives.
+REDIRECT_RE = re.compile(r"(>>?)\s*(\"[^\"]*\"|'[^']*'|[^\s;|&<>]+)")
 TEE_RE = re.compile(r"\btee\b((?:\s+-\S+)*)((?:\s+[^\s;|&<>]+)*)")
 ECHO_LITERAL_RE = re.compile(
     r"\b(?:echo|printf)\b(?:\s+-\S+)*\s+(['\"])(.*?)\1", re.S

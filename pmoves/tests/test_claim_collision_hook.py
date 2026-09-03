@@ -1527,3 +1527,40 @@ def test_neighbouring_filenames_stay_allowed_in_both_spellings(tmp_path, sep, su
     reg = str(tmp_path / REGISTER_NAME).replace("/", sep).replace("\\", sep)
     r = _run_bash(tmp_path, f"echo x > {reg}{suffix}")
     assert r.returncode == ALLOW, f"{suffix} refused as the register ({sep!r}): {r.stderr}"
+
+
+@pytest.mark.parametrize("quote", ['"', "'"])
+@pytest.mark.parametrize("sep", ["/", "\\"])
+@pytest.mark.parametrize(
+    "command",
+    [
+        "echo x > {Q}{R}{Q}",
+        "printf y > {Q}{R}{Q}",
+        "cat /tmp/in.txt > {Q}{R}{Q}",
+        "echo x >> {Q}{R}{Q}",
+    ],
+)
+def test_a_quoted_redirect_target_with_a_space_is_still_the_register(
+    tmp_path, command, sep, quote
+):
+    r"""`REDIRECT_RE` stopped at whitespace, so a quoted path with a space was
+    truncated before `_is_register` ever saw the basename.
+
+    `echo x > "C:\Users\Jane Doe\...\AGNOTE4482PHI.t1.md"` handed
+    `"C:\Users\Jane` to the check, which is not the register, so
+    `_segment_verdict` certified `echo` as read-only and the hook exited 0 --
+    a silent truncate of an append-only ledger.
+
+    Deliberately parametrized over BOTH separators: this one is redirect
+    parsing, not path spelling, and it reproduced identically with "/" and
+    "\\". `tee` and `cp` were never affected because they route through
+    `_tokens`, where shlex already understands quoting.
+    """
+    d = tmp_path / "Jane Doe"
+    d.mkdir()
+    reg = str(d / REGISTER_NAME).replace("/", sep).replace("\\", sep)
+    r = _run_bash(tmp_path, command.format(R=reg, Q=quote))
+    assert r.returncode == BLOCK, (
+        f"quoted redirect bypassed the guard: {command!r}\n"
+        f"target={reg!r}\nstderr={r.stderr}"
+    )
