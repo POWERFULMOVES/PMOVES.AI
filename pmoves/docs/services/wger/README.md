@@ -17,9 +17,9 @@ working.
 
 ## Image + Branding Defaults
 
-- Compose now points at `ghcr.io/cataclysm-studios-inc/pmoves-health-wger:pmoves-latest` by default. Override it with
+- Compose now points at `ghcr.io/powerfulmoves/pmoves-health-wger:pmoves-latest` by default. Override it with
   `WGER_IMAGE` if you publish a branded build elsewhere (same shape as the upstream production Dockerfile).
-- `make up-external-wger` calls `scripts/wger_brand_defaults.sh` after the containers start. The helper
+- `make up-external` (external stack) calls `scripts/wger_brand_defaults.sh` after the containers start. The helper
   now waits for Django to finish migrations (including the `django_site` bootstrap) before touching the
   database, then updates the `Site` record, seed gym row, and admin profile so the very first login already
   carries PMOVES branding. Tune the values via (and review the upstream guidance in the
@@ -28,7 +28,7 @@ working.
   - `WGER_BRAND_SITE_NAME`, `WGER_BRAND_GYM_NAME`, `WGER_BRAND_GYM_CITY`
   - `WGER_BRAND_ADMIN_*` (first name, last name, email, username) and `WGER_BRAND_WAIT_SECS` if you
     need a longer bootstrap wait.
-- Re-run `make wger-brand-defaults` whenever you reset the SQLite volume or want to apply different
+- Re-run `make brand-defaults` whenever you reset the SQLite volume or want to apply different
   copy—it's idempotent and only touches the site/gym/admin rows.
 
 ### API surface
@@ -56,14 +56,14 @@ working.
 
 ### Bring up Wger with static assets
 
-- Local compose (development): `make integrations-up-wger` starts Postgres + Wger in the new integrations stack. Use
-  `make integrations-up-all` if you also want Firefly and the n8n flows watcher online.
+- Local compose (development): `make up-external` starts the external stack incl. Wger. Use
+  `make up-external` (full set) if you also want Firefly and the n8n flows watcher online.
 - Legacy external bundle: keep `docker-compose.external.yml` around if you need the nginx proxy variant or published images. Run
   `DOCKER_CONFIG=$PWD/.docker-nocreds docker compose -p pmoves -f docker-compose.external.yml up -d wger wger-nginx`.
 
 Collectstatic runs automatically during the Django bootstrap path. If you need to refresh the
 artefacts (for example, after an upstream theme update) recreate the containers or run
-`make integrations-down && make integrations-up-wger` (or rerun the external compose command).
+`docker compose -p pmoves stop wger wger-db && make up-external` (or rerun the external compose command).
 
 ### Verifying the proxy / API
 
@@ -72,8 +72,8 @@ artefacts (for example, after an upstream theme update) recreate the containers 
 
 If either check fails, inspect the proxy logs with `docker logs cataclysm-wger-nginx` and confirm that
 `cataclysm-wger` finished its bootstrap (look for `static files copied` in the Django logs). Re-run
-`make wger-brand-defaults` if you need to reapply the PMOVES copy after wiping the volumes.
+`make brand-defaults` if you need to reapply the PMOVES copy after wiping the volumes.
 
 ### n8n automation assets
 
-- Workflow exports are stored under `pmoves/integrations/health-wger/n8n/flows/`. Drop JSON files there and start the watcher with `make integrations-up-all` (or run `make integrations-import-flows` once) to sync them into n8n.
+- Workflow exports are stored under `pmoves/integrations/health-wger/n8n/flows/`. Drop JSON files there and start the watcher with `make integrations-up-all` (or run `make n8n-import-flows` once) to sync them into n8n.
