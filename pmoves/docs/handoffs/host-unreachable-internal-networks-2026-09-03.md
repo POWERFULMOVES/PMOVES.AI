@@ -48,6 +48,31 @@ supabase-gotrue · supabase-pooler · supabase-realtime · supabase-storage ·
 supabase-studio · supaserch · tensorzero-clickhouse · tokenism-simulator ·
 tokenism-ui · voice-relay · voice-sampler · watch-folder-router
 
+## SCOPE CORRECTION (added after first publication)
+
+**34 is an upper bound on the files parsed, not a measurement of what runs.**
+
+The audit read only the five `STACK_FILES` documents. Services started by targets
+that use a DIFFERENT compose file are not covered, and a service defined in more
+than one file may run with networks the parsed definition does not show.
+
+Confirmed false positive: `p7-room-orchestrator` is listed below, but the
+container that actually runs (`pmoves-p7`, started by `up-openroom` from another
+file) is on `pmoves_app pmoves_bus pmoves_external` — it HAS the external
+network and publishes `127.0.0.1:8120` successfully, returning 200.
+
+So the list is a set of CANDIDATES to check, not a verdict per service. Before
+acting on any row, verify against the running container:
+
+```
+docker inspect <container> --format '{{range $k,$v := .NetworkSettings.Networks}}{{$k}} {{end}}'
+docker ps --format '{{.Names}} {{.Ports}}'      # a real HOST:PORT->CONTAINER mapping, or nothing
+```
+
+The static parse is still the right way to FIND the class — it is how the class
+was found — but a compose file is a declaration and a container is a fact, and
+this repo has several services declared in two files at once.
+
 ## Two sub-classes — they need different fixes
 
 **A. Should be host-reachable, is not.** `tokenism-ui`, `supaserch`,
