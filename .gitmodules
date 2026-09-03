@@ -455,3 +455,13 @@
 	url = https://github.com/POWERFULMOVES/pmoves-composio-mcp-plugin.git
 	branch = PMOVES.AI-Edition-Hardened
 	shallow = true
+[submodule "PMOVES-activepieces"]
+	path = PMOVES-activepieces
+	url = https://github.com/POWERFULMOVES/PMOVES-activepieces.git
+	branch = PMOVES.AI-Edition-Hardened
+	shallow = true
+[submodule "PMOVES-N8N-Auto"]
+	path = PMOVES-N8N-Auto
+	url = https://github.com/POWERFULMOVES/PMOVES-N8N-Auto.git
+	branch = PMOVES.AI-Edition-Hardened
+	shallow = true
