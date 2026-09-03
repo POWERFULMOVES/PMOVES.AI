@@ -74,7 +74,7 @@
         },
         {
           "key": "SECRET_KEY_BASE",
-          "file": "pmoves/env.tier-supabase",
+          "file": "pmoves/env.shared",
           "prompt": "Secret key base (Realtime + Supavisor encryption)",
           "help": "Used by Realtime and Supavisor. Generate: openssl rand -base64 72",
           "required": true,
@@ -86,7 +86,7 @@
         },
         {
           "key": "VAULT_ENC_KEY",
-          "file": "pmoves/env.tier-supabase",
+          "file": "pmoves/env.shared",
           "prompt": "Vault encryption key (Supavisor)",
           "help": "32+ char hex key. Generate: openssl rand -hex 16",
           "required": true,
@@ -110,7 +110,7 @@
         },
         {
           "key": "LOGFLARE_PUBLIC_ACCESS_TOKEN",
-          "file": "pmoves/env.tier-supabase",
+          "file": "pmoves/env.shared",
           "prompt": "Logflare public access token",
           "help": "Analytics (Logflare) public token for log shipping.",
           "required": true,
@@ -122,7 +122,7 @@
         },
         {
           "key": "LOGFLARE_PRIVATE_ACCESS_TOKEN",
-          "file": "pmoves/env.tier-supabase",
+          "file": "pmoves/env.shared",
           "prompt": "Logflare private access token",
           "help": "Analytics (Logflare) private token for admin access.",
           "required": true,
