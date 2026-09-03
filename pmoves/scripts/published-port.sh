@@ -5,11 +5,16 @@
 #
 #   published-port.sh <container-or-compose-service> <container-port>
 #     exit 0 -> prints host:port, measured from the live daemon
-#     exit 1 -> not published; prints the reason on stderr
-#     exit 2 -> usage error, or no such container
+#     exit 1 -> the container exists but does not publish that port (says why)
+#     exit 2 -> UNMEASURABLE: no such container, or bad arguments
 #
 # Sibling of nats-endpoint.sh and pinokio-root.sh: exit 0 means measured,
 # non-zero means we could not measure. Never guess a port.
+#
+# Callers MUST distinguish 1 from 2. They are opposite facts: 1 means the
+# service is up and simply internal; 2 means it is not there at all (it never
+# started, or it crashed immediately). Collapsing them reports a dead service
+# as a healthy internal one — the exact failure this script exists to catch.
 #
 # Why `docker port` and not compose/PortBindings: a container on an internal
 # network stores its binding and never activates it, silently. Measured on the
@@ -29,16 +34,37 @@ case "$PORT" in ''|*[!0-9]*) echo "✖ container port must be numeric: $PORT" >&
 
 command -v docker >/dev/null 2>&1 || { echo "✖ docker not on PATH" >&2; exit 2; }
 
-# Accept a container name, or a compose service name (resolve via label).
+# Scope the service lookup to one compose project. Without this, two worktrees
+# or a different PROJECT= on the same daemon both match the service label and
+# head -1 can hand back another stack's container.
+PROJECT="${PUBLISHED_PORT_PROJECT:-${COMPOSE_PROJECT_NAME:-}}"
+
 CONTAINER=""
 if docker inspect "$NAME" >/dev/null 2>&1; then
   CONTAINER="$NAME"
 else
-  CONTAINER="$(docker ps --filter "label=com.docker.compose.service=$NAME" \
-                         --format '{{.Names}}' 2>/dev/null | head -1)"
+  set -- --filter "label=com.docker.compose.service=$NAME"
+  [ -n "$PROJECT" ] && set -- "$@" --filter "label=com.docker.compose.project=$PROJECT"
+  MATCHES="$(docker ps "$@" --format '{{.Names}}' 2>/dev/null)"
+  COUNT="$(printf '%s\n' "$MATCHES" | grep -c . || true)"
+  if [ "${COUNT:-0}" -gt 1 ]; then
+    {
+      echo "✖ '$NAME' matches $COUNT running containers:"
+      printf '%s\n' "$MATCHES" | sed 's/^/    /'
+      if [ -z "$PROJECT" ]; then
+        echo "  Set COMPOSE_PROJECT_NAME (or PUBLISHED_PORT_PROJECT) to pick a project."
+      fi
+    } >&2
+    exit 2
+  fi
+  CONTAINER="$(printf '%s\n' "$MATCHES" | head -1)"
 fi
 if [ -z "$CONTAINER" ]; then
-  echo "✖ no running container named or labelled '$NAME'" >&2
+  {
+    echo "✖ no running container named or labelled '$NAME'${PROJECT:+ in project '$PROJECT'}."
+    echo "  It never started, or it exited immediately. This is NOT the same as"
+    echo "  'running but not published' — check: docker ps -a --filter name=$NAME"
+  } >&2
   exit 2
 fi
 
@@ -67,8 +93,8 @@ fi
     if [ -n "$INTERNAL" ]; then
       echo "  Cause: every attached network is internal:$INTERNAL"
       echo "  An internal network cannot publish ports. Docker reports no error."
-      echo "  Fix: attach the service to pmoves_external — see"
-      echo "       pmoves/docs/handoffs/host-unreachable-internal-networks-2026-09-03.md"
+      echo "  Fix: attach the service to a non-internal network (pmoves_external)."
+      echo "       Fleet-wide audit and rationale: PR #2897."
     fi
   else
     echo "  No host binding was requested for $PORT/tcp."

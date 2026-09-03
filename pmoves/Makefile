@@ -1605,22 +1605,15 @@ up-tokenism: ## Start the Tokenism simulator + Next.js UI (reports the ports it 
 	@# never activates it -- so polling a declared port burned the full 120s
 	@# timeout on every run and then printed two addresses that refuse
 	@# connections (measured on the 4090, 2026-09-03).
-	@ui_ep="$$(bash scripts/published-port.sh tokenism-ui 8504 2>/dev/null)"; \
-	 api_ep="$$(bash scripts/published-port.sh tokenism-simulator 8100 2>/dev/null)"; \
-	 if [ -n "$$ui_ep" ]; then \
-	   timeout 120 bash -c "until curl -sf http://$$ui_ep/ >/dev/null 2>&1; do sleep 3; done" \
-	     || echo "⚠️  UI published at $$ui_ep but did not answer within 120s"; \
-	   echo "✅ Tokenism UI (Next.js): http://$$ui_ep"; \
-	 else \
-	   echo "→ Tokenism UI runs, but publishes no host port - skipping the health poll."; \
-	   bash scripts/published-port.sh tokenism-ui 8504 || true; \
-	 fi; \
-	 if [ -n "$$api_ep" ]; then \
-	   echo "✅ Tokenism simulator API: http://$$api_ep"; \
-	 else \
-	   echo "→ Tokenism simulator API is reachable only inside the compose network."; \
-	   bash scripts/published-port.sh tokenism-simulator 8100 || true; \
-	 fi
+	@#
+	@# report_endpoint.sh branches on the helper's STATUS, so "running but
+	@# internal-only" (exit 1) and "never came up" (exit 2) stay distinct. An
+	@# earlier revision captured stdout and dropped the status, which made a
+	@# crashed container look like a healthy internal one -- the very defect this
+	@# target is being fixed for. COMPOSE_PROJECT_NAME scopes the service lookup
+	@# to this stack so a second worktree's container can never be measured here.
+	@COMPOSE_PROJECT_NAME=$(PROJECT) bash scripts/report_endpoint.sh tokenism-ui 8504 "Tokenism UI (Next.js)" /
+	@COMPOSE_PROJECT_NAME=$(PROJECT) bash scripts/report_endpoint.sh tokenism-simulator 8100 "Tokenism simulator API"
 
 down-tokenism: ## Stop the Tokenism simulator + UI
 	@$(LOAD_ENV_SHARED); $(DC) --profile agents stop tokenism-simulator tokenism-ui
