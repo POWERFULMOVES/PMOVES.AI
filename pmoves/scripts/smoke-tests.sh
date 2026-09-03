@@ -175,10 +175,32 @@ test_tcp_connectivity() {
     if timeout "$TIMEOUT" bash -c "echo >/dev/tcp/$host/$port" 2>/dev/null; then
         print_pass "$name connectivity"
         return 0
-    else
-        print_warn "$name connectivity (port $port unreachable)"
-        return 1
     fi
+
+    # Unreachable has two causes and the suite used to collapse them into one
+    # warning, which exits 0 on the reasoning "expected if you haven't started
+    # all profiles". That is right for a service that is DOWN, and wrong for one
+    # that is UP and asked for a host port it never received -- a silent bind.
+    # The second is a real defect and was passing as an expected condition.
+    if [ "$host" = "localhost" ] || [ "$host" = "127.0.0.1" ]; then
+        _svc="$(printf '%s' "$name" | tr 'A-Z ' 'a-z-' | sed 's/-\(http\|bolt\|api\|health\).*$//')"
+        _owner="$(docker ps --filter "publish=$port" --format '{{.Names}}' 2>/dev/null | head -1)"
+        [ -z "$_owner" ] && _owner="$(docker ps --format '{{.Names}}' 2>/dev/null | grep -m1 -- "$_svc")"
+        if [ -n "$_owner" ]; then
+            _requested="$(docker inspect "$_owner" \
+                --format '{{range $p,$b := .HostConfig.PortBindings}}{{range $b}}{{.HostPort}} {{end}}{{end}}' 2>/dev/null \
+                | tr -s ' ' '\n' | grep -c "^$port$" || true)"
+            _active="$(docker port "$_owner" 2>/dev/null | grep -c ":$port$" || true)"
+            if [ "${_requested:-0}" -gt 0 ] && [ "${_active:-0}" -eq 0 ]; then
+                print_fail "$name — SILENT BIND: $_owner requested :$port, Docker never activated it"
+                print_info "  diagnose: make -C pmoves net-reality   (moby/moby#36174)"
+                return 1
+            fi
+        fi
+    fi
+
+    print_warn "$name connectivity (port $port unreachable)"
+    return 1
 }
 
 # Functional test: TensorZero inference
