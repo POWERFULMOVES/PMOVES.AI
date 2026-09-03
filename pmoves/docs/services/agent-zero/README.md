@@ -70,8 +70,8 @@ Smokes & tests
   docker compose logs -n 50 agent-zero
   ```
 - Make-based health check (used by `agents-headless-smoke`):
-  - `make -C pmoves health-agent-zero` — **NOTE: target currently MISSING from the Makefile (audit 2026-09-03); `agents-headless-smoke` at Makefile:3708 invokes it and breaks. Track: define or delete.**
-  - Dedicated MCP smokes below exist and are the Known Road until that lands.
+  - `make -C pmoves health-agent-zero` — **until PR #2905 merges this is a .PHONY NO-OP: it exits 0 checking nothing, so `agents-headless-smoke` silently skips the A0 check.** Real checks land in #2905 (`tools/agent_zero_smoke.py` against the :8080 supervisor).
+  - The smoke targets (`a0-mcp-smoke`, `a0-mcp-exec-smoke`) also only exist once #2905 merges.
 
 Runbook
 - Start/stop via the `agents` targets documented in [LOCAL_TOOLING_REFERENCE](../../PMOVES.AI%20PLANS/LOCAL_TOOLING_REFERENCE.md), e.g.:
