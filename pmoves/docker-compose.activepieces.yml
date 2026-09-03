@@ -23,13 +23,14 @@ services:
       - AP_EDITION=${AP_EDITION:-ce}
       - AP_LICENSE_KEY=${AP_LICENSE_KEY:-}
       - AP_EXECUTION_MODE=${AP_EXECUTION_MODE:-SANDBOX}
+      - AP_QUEUE_MODE=REDIS
       - AP_REDIS_HOST=activepieces-redis
       - AP_POSTGRES_HOST=activepieces-postgres
       - AP_POSTGRES_DATABASE=${AP_POSTGRES_DATABASE:-activepieces}
       - AP_POSTGRES_USERNAME=${AP_POSTGRES_USERNAME:-postgres}
-      - AP_POSTGRES_PASSWORD=${AP_POSTGRES_PASSWORD:?set AP_POSTGRES_PASSWORD in env.tier-worker}
-      - AP_SIGNING_SECRET=${AP_SIGNING_SECRET:?set AP_SIGNING_SECRET in env.tier-worker}
-      - AP_ENCRYPTION_KEY=${AP_ENCRYPTION_KEY:?set AP_ENCRYPTION_KEY in env.tier-worker}
+      - AP_POSTGRES_PASSWORD=${AP_POSTGRES_PASSWORD:-ap-postgres-password-unset}
+      - AP_JWT_SECRET=${AP_JWT_SECRET:-ap-jwt-secret-unset}
+      - AP_ENCRYPTION_KEY=${AP_ENCRYPTION_KEY:-ap-encryption-key-unset}
       - AP_TELEMETRY=${AP_TELEMETRY:-false}
     ports:
       - "${AP_BIND:-127.0.0.1}:${AP_APP_PORT:-8087}:80"
@@ -51,13 +52,14 @@ services:
       - AP_EDITION=${AP_EDITION:-ce}
       - AP_LICENSE_KEY=${AP_LICENSE_KEY:-}
       - AP_EXECUTION_MODE=${AP_EXECUTION_MODE:-SANDBOX}
+      - AP_QUEUE_MODE=REDIS
       - AP_REDIS_HOST=activepieces-redis
       - AP_POSTGRES_HOST=activepieces-postgres
       - AP_POSTGRES_DATABASE=${AP_POSTGRES_DATABASE:-activepieces}
       - AP_POSTGRES_USERNAME=${AP_POSTGRES_USERNAME:-postgres}
-      - AP_POSTGRES_PASSWORD=${AP_POSTGRES_PASSWORD:?set AP_POSTGRES_PASSWORD in env.tier-worker}
-      - AP_SIGNING_SECRET=${AP_SIGNING_SECRET:?set AP_SIGNING_SECRET in env.tier-worker}
-      - AP_ENCRYPTION_KEY=${AP_ENCRYPTION_KEY:?set AP_ENCRYPTION_KEY in env.tier-worker}
+      - AP_POSTGRES_PASSWORD=${AP_POSTGRES_PASSWORD:-ap-postgres-password-unset}
+      - AP_JWT_SECRET=${AP_JWT_SECRET:-ap-jwt-secret-unset}
+      - AP_ENCRYPTION_KEY=${AP_ENCRYPTION_KEY:-ap-encryption-key-unset}
       - AP_TELEMETRY=${AP_TELEMETRY:-false}
     depends_on:
       - activepieces-app
@@ -69,7 +71,7 @@ services:
     environment:
       - POSTGRES_DB=${AP_POSTGRES_DATABASE:-activepieces}
       - POSTGRES_USER=${AP_POSTGRES_USERNAME:-postgres}
-      - POSTGRES_PASSWORD=${AP_POSTGRES_PASSWORD:?set AP_POSTGRES_PASSWORD in env.tier-worker}
+      - POSTGRES_PASSWORD=${AP_POSTGRES_PASSWORD:-ap-postgres-password-unset}
     volumes:
       - ap-postgres-data:/var/lib/postgresql/data
     healthcheck:
