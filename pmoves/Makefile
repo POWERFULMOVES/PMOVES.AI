@@ -726,9 +726,37 @@ build-svc: ## Build ONE service image from current source: make build-svc SVC=fl
 
 recreate-svc: ## Surgical recreate of ONE service with current env+image: make recreate-svc SVC=flute-gateway
 	@test -n "$(SVC)" || { echo "Usage: make recreate-svc SVC=<compose-service>"; exit 1; }
+	@# The --profile "*" below is for the LOOKUP on the next line only.
+	@#
+	@# CORRECTION (2026-09-03): an earlier revision of this comment claimed the
+	@# bare `up` could not recreate a profiled service such as flute-gateway.
+	@# That was wrong. Compose auto-enables a service's profile when the service
+	@# is named explicitly, so `up -d --no-deps flute-gateway` has always worked
+	@# -- verified by running exactly that, with no --profile, on the 4090.
+	@#
+	@# What IS true: `config --services` hides profiled services (18 of 107 on
+	@# this stack), so the existence check needs the wildcard or it would reject
+	@# every profiled service as "not in this stack". The check earns its keep
+	@# because compose's own error for an unresolvable service does not separate
+	@# "misspelled" from "hidden behind a profile".
+	@$(DC) --profile "*" config --services 2>/dev/null | grep -qx "$(SVC)" || { \
+	  echo "✖ no compose service named '$(SVC)' in this stack"; \
+	  echo "  list them: make recreate-svc-list"; \
+	  exit 1; }
 	@echo "Recreating $(SVC) with current env (no deps)..."
 	@$(DC) up -d --force-recreate --no-deps $(SVC)
 	@echo "Done. If Kong fronts it, bounce kong too (cached upstream DNS): docker restart pmoves-supabase-kong-1"
+
+recreate-svc-list: ## List every compose service recreate-svc can target (all profiles)
+	@$(DC) --profile "*" config --services 2>/dev/null | sort
+
+.PHONY: net-reality
+net-reality: ## Cross-check every published port against a real host listener (catches silent binds). PORTS_ONLY=1 to skip subnet probes. 0 clean / 1 drift / 2 docker unavailable.
+	@# Propagate PROJECT: the script reads COMPOSE_PROJECT_NAME and otherwise
+	@# defaults to "pmoves", so `make PROJECT=other net-reality` would audit the
+	@# WRONG stack and return clean -- a green gate for containers nobody asked
+	@# about. (Raised in review on PR #2908.)
+	COMPOSE_PROJECT_NAME=$(PROJECT) bash scripts/audit_network_reality.sh $(if $(PORTS_ONLY),--ports-only)
 
 rebuild-svc: ## build-svc + recreate-svc in one move (the stale-container-object killer)
 	@$(MAKE) --no-print-directory build-svc SVC=$(SVC)
@@ -1615,11 +1643,23 @@ up-openroom: ## Start PMOVES OpenRoom (room-experience desktop at port 5173)
 	@echo "   Try a room:   http://localhost:5173/webuiapps/?room=persona.room.livingdoc"
 
 .PHONY: up-tokenism down-tokenism
-up-tokenism: ## Start the Tokenism simulator + Next.js UI (dashboard :8504, API :8103)
+up-tokenism: ## Start the Tokenism simulator + Next.js UI (reports the ports it MEASURES, not the ones it asked for)
 	@echo "🪙 Starting Tokenism simulator + Next.js UI..."
 	@$(LOAD_ENV_SHARED); $(DC) --profile agents up -d tokenism-simulator tokenism-ui
-	@timeout 120 bash -c 'until curl -sf http://localhost:$(or $(TOKENISM_UI_HOST_PORT),8504)/ >/dev/null 2>&1; do sleep 3; done' || echo "⚠️ UI may still be starting (check: docker logs pmoves-tokenism-ui-1)"
-	@echo "✅ Tokenism UI (Next.js): http://localhost:$(or $(TOKENISM_UI_HOST_PORT),8504)  |  simulator API: http://localhost:$(or $(TOKENISM_HOST_PORT),8103)"
+	@# Ask Docker what it actually published before waiting on, or advertising,
+	@# any URL. A container on an internal network stores its port binding and
+	@# never activates it -- so polling a declared port burned the full 120s
+	@# timeout on every run and then printed two addresses that refuse
+	@# connections (measured on the 4090, 2026-09-03).
+	@#
+	@# report_endpoint.sh branches on the helper's STATUS, so "running but
+	@# internal-only" (exit 1) and "never came up" (exit 2) stay distinct. An
+	@# earlier revision captured stdout and dropped the status, which made a
+	@# crashed container look like a healthy internal one -- the very defect this
+	@# target is being fixed for. COMPOSE_PROJECT_NAME scopes the service lookup
+	@# to this stack so a second worktree's container can never be measured here.
+	@COMPOSE_PROJECT_NAME=$(PROJECT) bash scripts/report_endpoint.sh tokenism-ui 8504 "Tokenism UI (Next.js)" /
+	@COMPOSE_PROJECT_NAME=$(PROJECT) bash scripts/report_endpoint.sh tokenism-simulator 8100 "Tokenism simulator API"
 
 down-tokenism: ## Stop the Tokenism simulator + UI
 	@$(LOAD_ENV_SHARED); $(DC) --profile agents stop tokenism-simulator tokenism-ui
@@ -2129,18 +2169,73 @@ loki-ready: ## Check Loki readiness endpoint (/ready)
 
 # -------- Backups / Restore helpers ----------
 .PHONY: backup restore
-BACKUP_DIR ?= backups/$$(date +%Y%m%d_%H%M%S)
-backup: ## Dump Postgres, snapshot Qdrant, mirror MinIO bucket, Meili dump (best-effort)
+# Deferred `=` would re-run date on EVERY expansion, so `mkdir -p $(BACKUP_DIR)`
+# created one timestamped directory and the writes targeted a later second --
+# "backups/20260903_162919/postgres.sql.partial: No such file or directory",
+# measured on the 4090 2026-09-03. `:=` snapshots it once per make invocation.
+BACKUP_TS := $(shell date +%Y%m%d_%H%M%S)
+BACKUP_DIR ?= backups/$(BACKUP_TS)
+backup: ## Dump Postgres, snapshot Qdrant, mirror MinIO, dump Meili. Reports PER COMPONENT; non-zero if any fail (BACKUP_BEST_EFFORT=1 to accept partial).
 	@mkdir -p "$(BACKUP_DIR)"
-	@echo "→ Backing up Postgres…"
-	-@$(DC) exec -T postgres pg_dump -U $$POSTGRES_USER -d $$POSTGRES_DB > "$(BACKUP_DIR)/postgres.sql"
-	@echo "→ Snapshotting Qdrant…"
-	-@curl -fsS "http://localhost:6333/collections/$$QDRANT_COLLECTION/snapshots" -X POST -H 'content-type: application/json' -d '{}' > "$(BACKUP_DIR)/qdrant_snapshot.json"
-	@echo "→ Mirroring MinIO bucket '$(MINIO_BUCKET)' (requires mc alias 'local')…"
-	-@$(DC) exec -T minio mc mirror --overwrite local/$$MINIO_BUCKET "$(BACKUP_DIR)/minio_$$MINIO_BUCKET"
-	@echo "→ Dumping Meilisearch…"
-	-@curl -fsS "http://localhost:7700/dumps" -X POST -H "X-Meili-API-Key: $$MEILI_MASTER_KEY" -d '{}' > "$(BACKUP_DIR)/meili_dump.json"
-	@echo "✔ Backup written to: $(BACKUP_DIR)"
+	@# Every component here carried make's `-` prefix, which DISCARDS the exit
+	@# status, while the `>` redirect still created a file. So any failure left a
+	@# plausible-looking artifact and the target printed "Backup written to:".
+	@#
+	@# Measured on the 4090 2026-09-03: qdrant and meilisearch sit on
+	@# internal-only networks, so their host ports are never activated and both
+	@# curls fail with "Failed to connect" (`make net-reality` reports this).
+	@# The URLs below are still the RIGHT target -- routing around it with a
+	@# sidecar container would hide the topology defect instead of surfacing it,
+	@# so these keep pointing at localhost and now FAIL LOUDLY until the network
+	@# tier is fixed (DOCKER_NETWORK_HARDENING.md x-network-tailnet-published).
+	@#
+	@# Each component writes <file>.partial and is promoted only on success, so a
+	@# failed component leaves evidence and never a plausible-looking artifact.
+	@# This recipe reads POSTGRES_USER / QDRANT_COLLECTION / MEILI_MASTER_KEY /
+	@# MINIO_BUCKET from the shell, but never loaded env.shared -- unlike the 39
+	@# other targets that use LOAD_ENV_SHARED. So every one of those expanded
+	@# EMPTY: pg_dump ran as `-U  -d `, the Meili key was blank, the Qdrant URL
+	@# pointed at no collection. Combined with the discarded exit codes above,
+	@# `make backup` produced an EMPTY directory and reported success.
+	@$(LOAD_ENV_SHARED); rc=0; \
+	 echo "→ Backing up Postgres…"; \
+	 if $(DC) exec -T postgres pg_dump -U $${POSTGRES_USER:-} -d $${POSTGRES_DB:-} > "$(BACKUP_DIR)/postgres.sql.partial" 2>/dev/null; then \
+	   mv "$(BACKUP_DIR)/postgres.sql.partial" "$(BACKUP_DIR)/postgres.sql"; \
+	   echo "  ✔ postgres.sql ($$(wc -c < "$(BACKUP_DIR)/postgres.sql") bytes)"; \
+	 else echo "  ✖ postgres FAILED (left postgres.sql.partial)"; rc=1; fi; \
+	 echo "→ Snapshotting Qdrant…"; \
+	 if curl -fsS "http://localhost:6333/collections/$${QDRANT_COLLECTION:-}/snapshots" \
+	      -X POST -H 'content-type: application/json' -d '{}' \
+	      > "$(BACKUP_DIR)/qdrant_snapshot.json.partial" 2>/dev/null; then \
+	   mv "$(BACKUP_DIR)/qdrant_snapshot.json.partial" "$(BACKUP_DIR)/qdrant_snapshot.json"; \
+	   echo "  ✔ qdrant_snapshot.json ($$(wc -c < "$(BACKUP_DIR)/qdrant_snapshot.json") bytes)"; \
+	 else echo "  ✖ qdrant FAILED (collection '$${QDRANT_COLLECTION:-}' missing, or service down)"; rc=1; fi; \
+	 bucket="$${MINIO_BUCKET:-}"; \
+	 echo "→ Mirroring MinIO bucket '$${bucket:-<unset>}'…"; \
+	 if [ -z "$$bucket" ]; then \
+	   echo "  ✖ minio SKIPPED — MINIO_BUCKET unset (absent from env.shared)"; rc=1; \
+	 elif $(DC) exec -T minio mc mirror --overwrite "local/$$bucket" "$(BACKUP_DIR)/minio_$$bucket" >/dev/null 2>&1; then \
+	   echo "  ✔ minio_$$bucket"; \
+	 else echo "  ✖ minio FAILED (needs mc alias 'local')"; rc=1; fi; \
+	 echo "→ Dumping Meilisearch…"; \
+	 if curl -fsS "http://localhost:7700/dumps" -X POST \
+	      -H "X-Meili-API-Key: $${MEILI_MASTER_KEY:-}" -d '{}' \
+	      > "$(BACKUP_DIR)/meili_dump.json.partial" 2>/dev/null; then \
+	   mv "$(BACKUP_DIR)/meili_dump.json.partial" "$(BACKUP_DIR)/meili_dump.json"; \
+	   echo "  ✔ meili_dump.json ($$(wc -c < "$(BACKUP_DIR)/meili_dump.json") bytes)"; \
+	 else echo "  ✖ meilisearch FAILED"; rc=1; fi; \
+	 echo ""; \
+	 if [ "$$rc" = "0" ]; then \
+	   echo "✔ Backup complete — every component succeeded: $(BACKUP_DIR)"; \
+	 elif [ "$${BACKUP_BEST_EFFORT:-0}" = "1" ]; then \
+	   echo "⚠ PARTIAL backup at $(BACKUP_DIR) — see ✖ above. Exit forced to 0 by BACKUP_BEST_EFFORT=1."; \
+	   rc=0; \
+	 else \
+	   echo "✖ PARTIAL backup at $(BACKUP_DIR) — see ✖ above. NOT a restore point."; \
+	   echo "  A silently-partial backup is worse than none: it looks like a restore point and is not."; \
+	   echo "  Accept partial deliberately: BACKUP_BEST_EFFORT=1 make -C pmoves backup"; \
+	 fi; \
+	 exit $$rc
 
 restore: ## See docs/LOCAL_DEV.md for restore steps
 	@echo "See docs/LOCAL_DEV.md (Restore) for step-by-step instructions."
@@ -2492,7 +2587,7 @@ endif
 
 # Canonical layer service sets for deterministic tiered bring-up/down.
 WORKER_SERVICES := hi-rag-gateway-v2 retrieval-eval render-webhook langextract extract-worker pdf-ingest transcribe-backend
-AGENT_SERVICES := agent-zero archon deepresearch supaserch mesh-agent publisher-discord botz-gateway tokenism-simulator
+AGENT_SERVICES := agent-zero archon deepresearch supaserch mesh-agent publisher-discord botz-gateway tokenism-simulator notebook-mcp
 
 down:
 	@$(DC) down
@@ -2890,7 +2985,12 @@ up-agents-auto: ## Capability-aware bring-up: tier (lean|capable|gpu) picks the 
 		fi ;; \
 	esac
 
-up-core-capable: ## Capable tier: dependency-ordered core (data tier BEFORE agents) + Consciousness/CHIT
+up-core-capable: cipher-build-pin-check ## Capable tier: dependency-ordered core (data tier BEFORE agents) + Consciousness/CHIT
+	@# Gated even though this recipe has no --build: cipher-api declares build:
+	@# with no image: (docker-compose.yml), and neither overlay stacked here
+	@# defines cipher-api at all — so on a node with no pmoves-cipher-api image,
+	@# `up -d cipher-api` builds it from the worktree. A conditional build road,
+	@# silent on exactly the fresh node where it fires (review F2, 2026-09-02).
 	@echo "🧩 Capable tier: hardened dep-ordered core + Consciousness/CHIT (consciousness-service, cipher-api)…"
 	@$(MAKE) --no-print-directory up-core-hardened
 	@$(DC) -f docker-compose.agents.images.yml -f docker-compose.hardened.yml --profile agents up -d consciousness-service cipher-api
@@ -3537,7 +3637,7 @@ up-jellyfin:
 # (:3090). Re-integrating a first-class 0.6.0 archon service into this compose is
 # the tracked "#5 Archon integration" follow-up.
 .PHONY: up-agents up-agents-stack
-up-agents-stack: ## Start Agents (NATS, Agent Zero, Archon 0.6.0 + its Postgres, Cipher Memory, etc.)
+up-agents-stack: cipher-build-pin-check ## Start Agents (NATS, Agent Zero, Archon 0.6.0 + its Postgres, Cipher Memory, etc.)
 	@$(DC) --profile agents up -d --build nats agent-zero archon-postgres archon mesh-agent deepresearch publisher-discord cipher-api
 	@$(MAKE) --no-print-directory qdrant-provision-cipher || rc=$$?; 	rc=$${rc:-0}; if [ $$rc -ne 0 ] && [ $$rc -ne 2 ]; then echo "qdrant-provision-cipher failed (exit $$rc)"; exit $$rc; fi
 
@@ -3546,8 +3646,44 @@ up-notebooklm: ## Start the NotebookLM MCP agent (stdio MCP; reached via docker 
 	@$(DC) --profile agents up -d --build notebooklm-agent
 	@echo "✔ NotebookLM MCP agent up (stdio via docker exec; needs GOOGLE_REFRESH_TOKEN for live NotebookLM calls)"
 
+.PHONY: cipher-build-pin-check
+cipher-build-pin-check: ## Refuse to build cipher from a submodule worktree that drifted off the recorded gitlink
+	@# docker compose's build.context for cipher-api is ../Pmoves-cipher — the
+	@# WORKTREE. Docker reads files on disk and knows nothing about gitlinks, so a
+	@# drifted checkout is faithfully compiled and the road still prints "ready".
+	@# That is how B850 served `initialize -> 400 stream is not readable` for two
+	@# weeks while main carried the fix (c69adb43, pinned 2026-07-30 by 96cfa3311;
+	@# PR #2366 later moved the pin to d5c4045e on 2026-08-03).
+	@# It also refuses when the worktree sits exactly ON the pin but the files the
+	@# Dockerfile COPYs are modified — `git submodule status` shows no `+` for that,
+	@# and Pmoves-cipher has no .dockerignore, so an uncommitted edit under src/ is
+	@# compiled straight into the image. Naming Dockerfile.pmoves narrows that check
+	@# to what it actually copies from the context, so the untracked runtime data/
+	@# this node carries does not produce a false block (review F1, 2026-09-02).
+	@# Set CIPHER_BUILD_PIN=warn to build anyway — e.g. deliberately testing an
+	@# unpushed submodule change. It must be typed, and it says so in the output.
+	@# The override is echoed as a whole pasteable command, built from $(CURDIR)
+	@# and $(MAKECMDGOALS) so it is correct from any directory — the operator
+	@# reading this is NOT standing in pmoves/, make is. Same reason the check
+	@# itself prints absolute git -C paths (review comment 3910500690). GOALS is
+	@# never empty here: .DEFAULT_GOAL is help, which does not depend on this gate.
+	@rc=0; $(PYTHON) tools/submodule_build_pin_check.py Pmoves-cipher:Dockerfile.pmoves || rc=$$?; \
+	if [ $$rc -ne 0 ]; then \
+		if [ "$${CIPHER_BUILD_PIN}" = "warn" ]; then \
+			if [ $$rc -eq 3 ]; then \
+				echo "CIPHER_BUILD_PIN=warn — building WITHOUT KNOWING what commit this compiles (exit 3, could not measure, suppressed)"; \
+			else \
+				echo "CIPHER_BUILD_PIN=warn — building from the drifted/dirty worktree anyway (exit $$rc suppressed)"; \
+			fi; \
+		else \
+			echo "Refusing to build. Run the command the check printed above, or override with:"; \
+			echo "    CIPHER_BUILD_PIN=warn $(MAKE) -C $(CURDIR) $(MAKECMDGOALS)"; \
+			exit $$rc; \
+		fi; \
+	fi
+
 .PHONY: up-cipher
-up-cipher: ## Start Cipher Memory (knowledge-graph memory for Claude Code / agents)
+up-cipher: cipher-build-pin-check ## Start Cipher Memory (knowledge-graph memory for Claude Code / agents)
 	@$(DC) --profile agents up -d --build cipher-api
 	@# Idempotent. ONLY the schema-mismatch exit 2 is tolerated (the smoke
 	@# gate fails loudly on it); every other failure — bad Qdrant creds,
@@ -3650,7 +3786,7 @@ qdrant-verify-cipher: ## Provision + round-trip a probe through the Cipher colle
 		python3 -u /scripts/provision_qdrant_cipher_memory.py --self-test
 
 .PHONY: up-cipher-full
-up-cipher-full: ## Start Cipher Memory with full embedding pipeline (Qdrant + TensorZero + Ollama + NATS)
+up-cipher-full: cipher-build-pin-check ## Start Cipher Memory with full embedding pipeline (Qdrant + TensorZero + Ollama + NATS)
 	@echo "Starting full Cipher embedding stack..."
 	@$(DC) up -d nats qdrant
 	@$(DC) --profile tensorzero up -d tensorzero-gateway pmoves-ollama

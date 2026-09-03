@@ -69,6 +69,7 @@ SERVICE_GROUPS = {
         "hf-agent",
         "hf-research-agent",
         "hf-mcp-server",
+        "notebook-mcp",
     ],
     "media": [
         "media-video",

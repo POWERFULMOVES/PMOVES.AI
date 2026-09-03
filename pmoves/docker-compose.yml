@@ -3321,7 +3321,7 @@ services:
     # observed stale (retired-secret signature); same preference as #2333/#2346.
     - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-${SERVICE_ROLE_KEY:-}}
     - CIPHER_MCP_URL=${CIPHER_MCP_URL:-http://cipher-api:8105/mcp/sse}
-    - 'A0_SET_mcp_servers={"mcpServers":{"docker":{"command":"docker","args":["run","--rm","-i","--mount","type=bind,src=/var/run/docker.sock,dst=/var/run/docker.sock","mcp/docker"]},"pmoves-supabase":{"command":"mcp-server-postgrest","args":["--apiUrl","${SUPABASE_REST_URL:-http://supabase-kong:8000/rest/v1}","--apiKey","${SERVICE_ROLE_KEY:-${SUPABASE_SERVICE_ROLE_KEY:-}}","--schema","public,storage"]},"cipher":{"type":"sse","url":"${CIPHER_MCP_URL:-http://cipher-api:8105/mcp/sse}"}}}'
+    - 'A0_SET_mcp_servers={"mcpServers":{"docker":{"command":"docker","args":["run","--rm","-i","--mount","type=bind,src=/var/run/docker.sock,dst=/var/run/docker.sock","mcp/docker"]},"pmoves-supabase":{"command":"mcp-server-postgrest","args":["--apiUrl","${SUPABASE_REST_URL:-http://supabase-kong:8000/rest/v1}","--apiKey","${SERVICE_ROLE_KEY:-${SUPABASE_SERVICE_ROLE_KEY:-}}","--schema","public,storage"]},"cipher":{"type":"sse","url":"${CIPHER_MCP_URL:-http://cipher-api:8105/mcp/sse}"},"notebook":{"type":"streamable-http","url":"${NOTEBOOK_MCP_URL:-http://notebook-mcp:8092/mcp}"}}}'
     # LLM routing: use TensorZero gateway as OpenAI-compatible provider
     # Agent Zero's get_default_value() reads A0_SET_* from env (dotenv priority)
     # Dummy key silences LiteLLM "Missing API Key" warning — TensorZero handles auth
@@ -3664,6 +3664,58 @@ services:
         limits:
           cpus: '1.0'
           memory: 1G
+
+  notebook-mcp:
+    # notebook-mcp — MCP wrapper for Open Notebook (build once, mount by any agent).
+    # Exposes save_note/search_notes over MCP (streamable-http) so A0's :8081 client,
+    # deepseek-harness (dsh-mcp-client), and Claude/Codex all mount ONE wrapper instead
+    # of re-implementing the REST calls. Reuses the exact pmoves_notes REST contract
+    # (POST /api/notes, POST /api/search) + the same OPEN_NOTEBOOK_API_TOKEN bearer auth.
+    # Tenant seam stays in the mounting harness (dsh ctx.credentials / A0 per-context).
+    <<: *tier-agent-hardened-rw
+    build:
+      context: ./services/notebook-mcp
+      dockerfile: Dockerfile
+    image: ${NOTEBOOK_MCP_IMAGE:-ghcr.io/powerfulmoves/pmoves-notebook-mcp:pmoves-latest}
+    container_name: pmoves-notebook-mcp
+    hostname: notebook-mcp
+    restart: unless-stopped
+    environment:
+    - MCP_HOST=0.0.0.0
+    - MCP_PORT=8092
+    - MCP_TRANSPORT=${NOTEBOOK_MCP_TRANSPORT:-streamable-http}
+    # In-network service DNS via a DEDICATED override var — do NOT inherit
+    # ${OPEN_NOTEBOOK_API_URL}, which the env pipeline sets to http://localhost:5055
+    # for HOST-side tools (inside a container localhost is itself, not Open Notebook).
+    # Default = the standalone `open-notebook` alias (verified /api/search -> HTTP 200).
+    # On the `make up-external` topology set NOTEBOOK_MCP_API_URL=http://open-notebook-ext:5055
+    # (that stack registers open-notebook-ext / pmoves-open-notebook-ext, not open-notebook).
+    - OPEN_NOTEBOOK_API_URL=${NOTEBOOK_MCP_API_URL:-http://open-notebook:5055}
+    # Token IS required — /api/* returns 401 without it. Sourced from the env pipeline
+    # (same OPEN_NOTEBOOK_API_TOKEN the pmoves_notes plugin uses). Per-tenant credential
+    # resolution is the mounting harness's job on top of this baseline.
+    - OPEN_NOTEBOOK_API_TOKEN=${OPEN_NOTEBOOK_API_TOKEN:-}
+    - NATS_URL=${NATS_URL}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus
+    ports:
+    - ${NOTEBOOK_MCP_BIND:-127.0.0.1}:${NOTEBOOK_MCP_PORT:-8207}:8092
+    depends_on:
+      nats:
+        condition: service_healthy
+    profiles: ["agents", "research"]
+    networks: [pmoves_app, pmoves_bus]  # open-notebook reachable on pmoves_app
+    # python:3.12-slim has no curl; use a stdlib TCP-connect probe on the MCP port.
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket,sys; s=socket.socket(); s.settimeout(3); sys.exit(0 if s.connect_ex(('127.0.0.1',8092))==0 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
 
   # Tier: agent (NotebookLM Agent - Google NotebookLM integration)
   cipher-api:
