@@ -1527,3 +1527,103 @@ Two read-only reviewers ran in tandem; folded into PR #2025 provenance.
 - Branch: `docs/instrument-trust-audit`
 
 <!-- GRAPHITI_MARK: B850-CLAUDE::INSTRUMENT-TRUST-AUDIT::2026-08-15 -->
+
+## Register Hygiene Audit Record (2026-09-03)
+
+### Work Performed
+- Closed 5 expired-and-never-released B850 lanes in `AGNOTE4482PHI.t1.md`'s Active
+  Claim Register via `register-release`: `fix/pm-pick-python-empty-array` (#2809,
+  merged), `fix/register-write-path-failclosed` (#2879, merged),
+  `chore/cli-prereq-preflight` (#2761, closed unmerged — underlying gap still open),
+  `fix/nats-bus-auth-outage` (delivered), `fix/branch-audit-protected-divergence`
+  (never-delivered). `docs/hardened-branch-topology` was also closed; see Key
+  Findings for why it is flagged PARTIAL/overrun rather than clean.
+- Net effect on the register: open claims 24 → 18, expired-and-never-released
+  claims 5 → 0.
+- Investigated and refuted a hypothesis attached to the `nats` lane (see below).
+
+### Key Findings
+- **Refuted hypothesis on the nats lane.** The lane's claim asserted that
+  `rotate_secret` replaces only the *first* occurrence of `NATS_PASSWORD` while
+  readers take the *last*, making rotations silent no-ops. Checked directly:
+  `NATS_PASSWORD` occurs exactly once in the relevant env file, and
+  `rotate_secret` has dropped later duplicate keys since #1854 (2026-06-21). The
+  real cause of the outage this lane was tracking was an **exported shell
+  variable shadowing `--env-file`** — compose gives process environment
+  precedence over `--env-file` values. Restore path:
+  `env -u NATS_PASSWORD make -C pmoves up-bus`.
+- **`docs/hardened-branch-topology` was overrun.** Its own CLAIM row stated
+  "characterisation only — no merge, rebase, retire, or push." PR #2818 then
+  performed exactly that re-baseline, under a different branch name. The
+  register named one action under one name while a larger action happened
+  under two names — closed as PARTIAL, not clean, and called out here so the
+  next reader doesn't take the CLAIM row's scope note at face value.
+- **A recurring defect shape appeared four times in one session: an absence
+  read as consent.** Naming it because it is the most reusable finding here:
+  a query that can only see what exists, asked about something that stopped
+  existing, and interpreted as "nothing wrong."
+  - A `dirty` merge ref meant `pull_request` workflows never dispatched, so
+    required status contexts were *absent*, not failing (38 check-runs → 4).
+    Caused by a push from the steward.
+  - `test_register_status.py` is collected by zero pytest paths — `pyproject.toml`
+    `testpaths` excludes `pmoves/tools/tests` — so the CI workflow fires, runs
+    three older files, goes green, and the one test that would prove the read
+    path didn't punch a hole never executes.
+  - `# lgtm[...]` markers in the diff suppress nothing here: that syntax is
+    LGTM.com's, and GitHub code scanning does not recognize it.
+  - `grep -c` against a nonexistent path returns `0`, which reads identically
+    to "zero matches in a file that exists."
+- **The orientation failure that produced the missing-ACK gap below was not
+  tooling.** AGNOTE4482.md:21 says read the gateway first, then claim.
+  Six RELEASE rows were filed today via `register-release` with no
+  `agent_signature` and no `GRAPHITI_MARK`, while every neighbouring row
+  carries both — because the steward read only the SITREP and the register,
+  not this gateway file, before acting. Recording this plainly since it is the
+  most reusable finding in the session: the doctrine was already written, it
+  just wasn't read first.
+- **CHIT signing is not broken on this node**, correcting a stale fleet
+  belief: it resolved the registered `b850-claude` identity with no fallback
+  warning and stamped an active signing card (see signed trail below).
+
+### Signed Trail
+```
+agent_id        b850-claude
+display_name    B850 Claude
+phase           Phase H
+timestamp       2026-09-03T21:32:57.188032+00:00
+signing_card_id 00000000-0000-4000-8000-000000000036
+sig.alg         HMAC-SHA256
+sig.kid         chit-signing-v01
+sig.hmac        HAMOWC8PnZONLRclX9LmEeJKCcCYyEv2Qi2KIpdZzV0=
+summary         Register hygiene 2026-09-03: closed 5 expired B850 lanes (open 24->18, expired 5->0); corrected the nats lane's refuted rotate_secret hypothesis; 2 gaps returned unowned.
+```
+Artifact: `pmoves/docs/logs/graphiti_signed_latest.json`.
+
+### Handoff Notes
+- Two gaps returned unowned, open for the fleet:
+  - `branch_cleanup.py` PROTECTED rows carry blank divergence/age columns with
+    no test covering that gap.
+  - The "hardened = old main + drift" determination (129/200 sampled files
+    byte-identical to March-era main) exists only in PR #2818's description —
+    no committed file carries it, so a fresh clone does not inherit the
+    finding.
+  - `bootstrap_env.py`'s `rotate_secret` still prints `[info] Rotated` without
+    checking whether the effective value actually changed; #2882 landed
+    detection for this in `check_tier_envs.py` as a separate target, not in
+    `rotate_secret` itself.
+- The PR #2894 fixes referenced by this session (repairing the six
+  missing-ACK RELEASE rows, wiring `test_register_status.py` into
+  `testpaths`) are in flight and unverified as of this record. Not signed for
+  here — see Agent ACK below.
+
+### Agent ACK
+- Agent: `B850-CLAUDE`
+- Signature: `ACK::B850-CLAUDE::REGISTER-HYGIENE-2026-09-03`
+- Timestamp: `2026-09-03T21:32:57Z`
+- Branch: `docs/agnote-register-hygiene-ack`
+- Scope: signed only for the register-hygiene work measured and closed today
+  (claim-register closures, the nats-lane correction, the hardened-branch-topology
+  overrun flag, and the four findings above). Not signed for PR #2894, which
+  remains in flight and unverified.
+
+<!-- GRAPHITI_MARK: B850-CLAUDE::REGISTER-HYGIENE-2026-09-03::2026-09-03 -->
