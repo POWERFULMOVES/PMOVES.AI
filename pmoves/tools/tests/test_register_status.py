@@ -82,12 +82,18 @@ def run_status(register: Path, *args: str):
     )
 
 
-def run_hook(tmp_path: Path, command: str):
-    """Drive the collision gate's Bash path, as an agent's tool call would."""
+def run_hook(tmp_path: Path, command: str, cwd: Path | None = None):
+    """Drive the collision gate's Bash path, as an agent's tool call would.
+
+    `cwd` is separable from `tmp_path` because the gate resolves a relative
+    script path THE WAY THE SHELL WILL -- against the command's own directory.
+    A repo-relative invocation has to be asked from the repo, or the test is
+    asserting about a file that would not exist when the command ran.
+    """
     payload = {
         "tool_name": "Bash",
         "tool_input": {"command": command},
-        "cwd": str(tmp_path),
+        "cwd": str(cwd or tmp_path),
     }
     return subprocess.run(
         [sys.executable, str(HOOK)],
@@ -174,6 +180,69 @@ def test_a_reciprocated_share_reads_as_shared_not_as_held(tmp_path):
     r = run_status(reg, "--branch", "feat/shared-lane", "--owner", "AGENT-B")
     assert r.returncode == CLEAN, r.stdout + r.stderr
     assert "SHARED with `AGENT-A`" in r.stdout
+
+
+def test_a_shared_lane_that_has_not_expired_is_still_clean(tmp_path):
+    """The control for the test below. A co-held lane with a LIVE TTL is
+    exactly what shared lanes are for, and it must keep exiting 0 -- otherwise
+    the expiry fix would have been bought by breaking the feature."""
+    reg = tmp_path / REGISTER_NAME
+    reg.write_text(
+        "- `2026-09-03T09:00:00Z` CLAIM `AGENT-A` branch: `feat/shared-lane` "
+        "· co-owners: `AGENT-B` (filed the blocker) "
+        "· **TTL 24h (expires `2026-09-04T09:00:00Z`)** · scope: together.\n",
+        encoding="utf-8",
+    )
+    r = run_status(reg, "--branch", "feat/shared-lane", "--owner", "AGENT-B")
+    assert r.returncode == CLEAN, r.stdout + r.stderr
+    assert "SHARED with `AGENT-A`" in r.stdout
+
+
+def test_a_shared_lane_whose_claim_expired_is_a_finding_not_a_pass(tmp_path):
+    """PRINTING `EXPIRED` AND RETURNING 0 IS THE FAIL-OPEN THIS TOOL PREVENTS.
+
+    The expiry check sat behind `not verdict.shared`, so a reciprocated lane
+    whose open row was already past its TTL reported `TTL 24h - EXPIRED` in the
+    same breath as exit 0. The whole-file report exits 1 on that identical row;
+    branch mode said clean, and automation reading the exit code would have
+    accepted a stale co-held lane.
+
+    The share must still REPORT as a share. Co-holding is deliberate and the
+    register has to name everyone who worked a lane; what is not deliberate is
+    a broken promise-to-release scored as a pass.
+    """
+    reg = tmp_path / REGISTER_NAME
+    reg.write_text(
+        "- `2026-08-30T09:00:00Z` CLAIM `AGENT-A` branch: `feat/shared-lane` "
+        "· co-owners: `AGENT-B` (filed the blocker) "
+        "· **TTL 24h (expires `2026-08-31T09:00:00Z`)** · scope: went quiet.\n",
+        encoding="utf-8",
+    )
+    r = run_status(reg, "--branch", "feat/shared-lane", "--owner", "AGENT-B")
+    assert r.returncode == FINDINGS, r.stdout + r.stderr
+    assert "SHARED with `AGENT-A`" in r.stdout, (
+        "the exit code was fixed by breaking the shared-lane report"
+    )
+    assert "EXPIRED" in r.stdout
+
+
+def test_the_branch_payload_names_the_expired_row_that_set_the_exit_code(tmp_path):
+    """A consumer reading `branch` should not have to re-derive from
+    `open_claims` the one fact that turned this lane from 0 into 1."""
+    reg = tmp_path / REGISTER_NAME
+    reg.write_text(
+        "- `2026-08-30T09:00:00Z` CLAIM `AGENT-A` branch: `feat/shared-lane` "
+        "· co-owners: `AGENT-B` (filed the blocker) "
+        "· **TTL 24h (expires `2026-08-31T09:00:00Z`)** · scope: went quiet.\n",
+        encoding="utf-8",
+    )
+    r = run_status(reg, "--branch", "feat/shared-lane", "--owner", "AGENT-B",
+                   "--json")
+    payload = json.loads(r.stdout)
+    assert payload["exit_code"] == FINDINGS
+    assert [x["holder"] for x in payload["branch"]["shared"]] == ["AGENT-A"]
+    assert [x["holder"] for x in payload["branch"]["expired"]] == ["AGENT-A"]
+    assert payload["branch"]["expired"][0]["expires"] == "2026-08-31T09:00:00Z"
 
 
 # --------------------------------------------------------------------------
@@ -270,15 +339,106 @@ def test_the_gate_allows_the_sanctioned_read_target(tmp_path):
     """The tool exists to satisfy the hook; the hook must let it run."""
     reg = tmp_path / REGISTER_NAME
     reg.write_text(FIXTURE, encoding="utf-8")
-    r = run_hook(tmp_path, f'make -C pmoves register-status ARGS="--register {reg}"')
+    r = run_hook(tmp_path,
+                 f'make -C pmoves register-status ARGS="--register {reg}"',
+                 cwd=REPO_ROOT)
     assert r.returncode == ALLOW, r.stderr
 
 
 def test_the_gate_allows_the_read_tool_invoked_directly(tmp_path):
     reg = tmp_path / REGISTER_NAME
     reg.write_text(FIXTURE, encoding="utf-8")
-    r = run_hook(tmp_path, f"python3 pmoves/tools/register_status.py --register {reg}")
+    r = run_hook(tmp_path, f"python3 pmoves/tools/register_status.py --register {reg}",
+                 cwd=REPO_ROOT)
     assert r.returncode == ALLOW, r.stderr
+
+
+def test_the_gate_allows_the_read_tool_by_absolute_path(tmp_path):
+    """The same file, named absolutely from somewhere else. Resolution is what
+    is being asserted, not a spelling."""
+    reg = tmp_path / REGISTER_NAME
+    reg.write_text(FIXTURE, encoding="utf-8")
+    r = run_hook(tmp_path, f"python3 {TOOL} --register {reg}")
+    assert r.returncode == ALLOW, r.stderr
+
+
+# --------------------------------------------------------------------------
+# THE FILENAME IS NOT A CREDENTIAL
+# --------------------------------------------------------------------------
+#
+# The allowance used to be `any(token.endswith(("register_append.py",
+# "register_status.py")) for token in argv)`, which approved the whole segment
+# before anything asked which program would run. Every case below exited the
+# gate at 0 under that arrangement while holding the register in argv.
+
+
+def test_an_arbitrary_script_wearing_the_tool_name_is_refused(tmp_path):
+    """The reviewer's command, verbatim in shape.
+
+    `python3 <anywhere>/register_status.py <register>` is an arbitrary program
+    handed the append-only ledger as an argument. It can truncate it.
+    """
+    reg = tmp_path / REGISTER_NAME
+    reg.write_text(FIXTURE, encoding="utf-8")
+    imposter = tmp_path / "register_status.py"
+    imposter.write_text(
+        "import pathlib, sys; pathlib.Path(sys.argv[1]).write_text('')\n",
+        encoding="utf-8",
+    )
+    r = run_hook(tmp_path, f"python3 {imposter} {reg}")
+    assert r.returncode == BLOCK, r.stdout
+
+
+def test_a_copy_of_the_real_tool_outside_the_repo_is_refused(tmp_path):
+    """Byte-identical is not the same file.
+
+    The allowance says "this runs the gate's own code". A copy is only that
+    until somebody edits it, and the gate cannot see the edit.
+    """
+    reg = tmp_path / REGISTER_NAME
+    reg.write_text(FIXTURE, encoding="utf-8")
+    copy = tmp_path / "elsewhere" / "register_status.py"
+    copy.parent.mkdir()
+    copy.write_bytes(TOOL.read_bytes())
+    r = run_hook(tmp_path, f"python3 {copy} --register {reg}")
+    assert r.returncode == BLOCK, r.stdout
+
+
+def test_a_shadowing_copy_at_the_repo_relative_path_is_refused(tmp_path):
+    """The subtle one: the same RELATIVE path, from a different directory.
+
+    An agent standing in its own tree runs ITS `pmoves/tools/register_status.py`.
+    A gate that resolved that token against the repository would approve a file
+    the shell is not going to execute.
+    """
+    reg = tmp_path / REGISTER_NAME
+    reg.write_text(FIXTURE, encoding="utf-8")
+    shadow = tmp_path / "pmoves" / "tools" / "register_status.py"
+    shadow.parent.mkdir(parents=True)
+    shadow.write_text("raise SystemExit(0)\n", encoding="utf-8")
+    r = run_hook(tmp_path, f"python3 pmoves/tools/register_status.py {reg}")
+    assert r.returncode == BLOCK, r.stdout
+
+
+def test_the_tool_name_as_a_bystander_argument_does_not_launder_a_command(tmp_path):
+    """`cp` is a write verb. Naming the tool alongside it changed nothing about
+    what `cp` does to the register."""
+    reg = tmp_path / REGISTER_NAME
+    reg.write_text(FIXTURE, encoding="utf-8")
+    r = run_hook(tmp_path, f"cp {TOOL} {reg}")
+    assert r.returncode == BLOCK, r.stdout
+
+
+def test_a_sanctioned_target_in_a_foreign_makefile_is_refused(tmp_path):
+    """A target name is only validated code if the makefile defining it is."""
+    reg = tmp_path / REGISTER_NAME
+    reg.write_text(FIXTURE, encoding="utf-8")
+    evil = tmp_path / "evil"
+    evil.mkdir()
+    (evil / "Makefile").write_text(
+        "register-status:\n\t: > %s\n" % reg, encoding="utf-8")
+    r = run_hook(tmp_path, f'make -C {evil} register-status ARGS="{reg}"')
+    assert r.returncode == BLOCK, r.stdout
 
 
 def test_naming_the_read_tool_does_not_launder_an_inline_interpreter(tmp_path):

@@ -359,9 +359,16 @@ def report_listing(lanes, register, now, out) -> int:
     return EXIT_CLEAN
 
 
+def _matching(lanes, branch):
+    """Every open row that names `branch`. One definition, because the report
+    and the JSON have to be talking about the same rows -- a second copy of
+    this expression is how the exit code and the payload drift apart."""
+    return [x for x in lanes if branch in x.lanes]
+
+
 def report_branch(verdict, branch, owner_given, lanes, now, out) -> int:
     """Render the gate's verdict on one lane."""
-    matching = [x for x in lanes if branch in x.lanes]
+    matching = _matching(lanes, branch)
     out.write(f"lane `{branch}`\n")
     if not owner_given:
         out.write("  asked anonymously (no OWNER=), so a lane YOU already hold "
@@ -395,10 +402,31 @@ def report_branch(verdict, branch, owner_given, lanes, now, out) -> int:
     for lane in matching:
         out.write(f"  line {lane.lineno}: {_expiry_label(lane.expiry, now)}\n")
 
+    # A SHARED LANE DOES NOT SUSPEND THE TTL. The expiry check used to sit
+    # behind `not verdict.shared`, so a reciprocated lane whose open row had
+    # already expired printed `TTL 24h - EXPIRED` and returned 0. This tool's
+    # documented contract is that an expired unreleased claim is a FINDING, and
+    # the whole-file report already exits 1 on exactly that row; branch mode
+    # disagreeing with it meant automation could read a stale co-held lane as
+    # clean -- the fail-open this file exists to prevent, printed in full and
+    # then contradicted by the exit code.
+    #
+    # The relationship still reports as SHARED above. Co-holding a lane is a
+    # deliberate feature and the register must keep naming everyone who worked
+    # it; what is not a feature is a promise-to-release, broken, reported, and
+    # scored as a pass.
+    stale = [x for x in matching if x.expiry.state == "expired"]
+    if stale:
+        out.write("  The open row(s) above are past a TTL nobody released. "
+                  "That is a finding, not a\n  free lane: `register-release` "
+                  "closes it, or `register-claim` re-states the TTL.\n")
+
     if verdict.collisions or verdict.one_sided:
         return EXIT_FINDINGS
     if any(x.expiry.state == "unmeasured" for x in matching):
         return EXIT_UNMEASURED
+    if stale:
+        return EXIT_FINDINGS
     if matching and not verdict.shared:
         return EXIT_FINDINGS  # held by you: not free, so not clean
     return EXIT_CLEAN
@@ -434,6 +462,14 @@ def _json_payload(lanes, register, now, branch, verdict, code):
                 {"lane": lane, "holder": holder, "line": lineno,
                  "witnesses": witnesses}
                 for _o, lane, holder, lineno, witnesses in verdict.one_sided
+            ],
+            # Named here because a consumer reading only `branch` should not
+            # have to re-derive from `open_claims` the one fact that turns this
+            # lane's exit code from 0 into 1.
+            "expired": [
+                {"lane": branch, "holder": x.owner, "line": x.lineno,
+                 "expires": _iso(x.expiry.expires) if x.expiry.expires else None}
+                for x in _matching(lanes, branch) if x.expiry.state == "expired"
             ],
         }
     return payload
