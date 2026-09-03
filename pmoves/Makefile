@@ -3703,10 +3703,19 @@ cipher-health: ## Check Cipher Memory health
 spark-health: ## Check SPARK node (DGX Spark) health: Ollama, TensorZero, NATS, Cipher, Agent Zero SPARK
 	@$(PYTHON) scripts/spark_health.py
 
-.PHONY: agents-headless-smoke
+.PHONY: agents-headless-smoke health-agent-zero a0-mcp-smoke a0-mcp-exec-smoke
 agents-headless-smoke: ## Check Agent Zero and Archon headless services
 	@$(MAKE) health-agent-zero
 	@$(MAKE) archon-headless-smoke
+
+health-agent-zero: ## Verify Agent Zero headless API: /healthz 200 + default form + non-empty env config
+	@$(LOAD_ENV_SHARED) $(PYTHON) tools/agent_zero_smoke.py health
+
+a0-mcp-smoke: ## List Agent Zero MCP commands and print count/sample
+	@$(LOAD_ENV_SHARED) $(PYTHON) tools/agent_zero_smoke.py mcp-list
+
+a0-mcp-exec-smoke: ## Execute form.get via /mcp/execute and assert the form is present
+	@$(LOAD_ENV_SHARED) $(PYTHON) tools/agent_zero_smoke.py mcp-exec
 
 .PHONY: up-agents-published
 up-agents-published: ## Start Agents (NATS, Agent Zero, Archon, etc.) using published images where available
