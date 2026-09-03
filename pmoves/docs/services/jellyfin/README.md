@@ -13,7 +13,7 @@ curated media tree, and exposes the server on `http://localhost:8096` via `pmove
 Create the tree with:
 
 ```bash
-docker exec pmoves-jellyfin jellyfin folders sync
+mkdir -p <your-media-bind-mount>/{movies,tv,shows}  # raw docker exec is hook-blocked; create the tree on the host side
 ```
 
 Drop assets into the relevant subfolders or mount additional host paths by editing the compose file. Set

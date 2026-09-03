@@ -21,7 +21,7 @@ Networking/Ports
 - Default Firefly web: `8075` (as defined in the compose bundle)
 
 Environment
-- `FIREFLY_BASE_URL` (e.g., `http://cataclysm-firefly:8075` on the compose network)
+- `FIREFLY_BASE_URL` (e.g., `http://pmoves-firefly:8080` on the compose network)
 - `FIREFLY_ACCESS_TOKEN` (personal access token)
 
 API/Contracts
@@ -38,10 +38,10 @@ API/Contracts
 - Usage:
   ```bash
   # Optional preview
-  DRY_RUN=1 python pmoves/scripts/firefly_seed_sample.py
+  python pmoves/scripts/firefly_seed_sample_data.py --dry-run
 
   # Apply dataset (loads users → accounts → transactions)
-  python pmoves/scripts/firefly_seed_sample.py
+  python pmoves/scripts/firefly_seed_sample_data.py
   ```
 - Direct invocation:
   ```bash
