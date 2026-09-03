@@ -300,26 +300,41 @@ MCP_SPECS: List[MCPSpec] = [
         config={
             "type": "sse",
             "url": "http://${TS_Z890}:8105/mcp/sse",
-            "headers": {"Authorization": "Bearer ${CIPHER_API_TOKEN:-}"},
+            "headers": {"Authorization": "Bearer ${CIPHER_API_TOKEN}"},
             "timeout": 30,
         },
-        # Deliberately NO required_env: the shim accepts an EMPTY bearer
-        # (dev-skip when CIPHER_API_TOKEN is unset), which is exactly what the
-        # `:-` default in the header above exists to send. Keeping the token
-        # required would re-disable the spec on tokenless nodes through
-        # missing_envs() -- URL and header fixed, entry still dark, the same
-        # silence this PR exists to end.
+        # Still NO required_env -- but the 2026-08 reasoning for it is now dead
+        # and must not be quoted again. That reasoning was: "the shim accepts an
+        # EMPTY bearer, which is exactly what the `:-` default in the header
+        # above exists to send." Both halves have expired. There is no `:-`
+        # default any more (removed 2026-09-02), and once CIPHER_API_TOKEN is
+        # set on the serving node an empty bearer is a MEASURED 401, not a 200.
+        #
+        # The decision stands on a different, still-true argument:
+        # missing_envs() -> `disabled: True`, i.e. the entry DISAPPEARS from the
+        # generated config on a tokenless node. That is the silently-tool-less
+        # outcome this lane exists to end, and it is strictly worse than an entry
+        # that is present and 401s where session_check can name it.
+        #
+        # The counter-argument is real and deliberately not taken here: unlike
+        # `_pmoves_roster_verdicts`, `disabled: True` IS a durable, greppable,
+        # diffable record, so for crush specifically the gate would be a better
+        # observability channel than the 401. Reversing #2762's un-gating is a
+        # behaviour change on every tokenless node and belongs in a lane that can
+        # measure crush end-to-end; it is not free-riding on this one.
+        # See pmoves/docs/operations/CIPHER_AUTH_RUNBOOK.md §6/§6a.
     ),
     MCPSpec(
         key="pmoves-cipher-local",
         config={
             "type": "sse",
             "url": "http://localhost:8105/mcp/sse",
-            "headers": {"Authorization": "Bearer ${CIPHER_API_TOKEN:-}"},
+            "headers": {"Authorization": "Bearer ${CIPHER_API_TOKEN}"},
             "timeout": 30,
         },
-        # See pmoves-cipher above: no required_env, the empty bearer is
-        # supported by the server.
+        # See pmoves-cipher above: still no required_env, and for the reason
+        # stated there -- NOT for the retired "the empty bearer is supported by
+        # the server", which is false once the token is set.
     ),
     MCPSpec(
         key="agent-zero",
