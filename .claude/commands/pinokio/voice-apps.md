@@ -17,8 +17,13 @@ Voice-specific Pinokio app discovery. Filters for TTS/voice/audio apps and shows
 ```bash
 python -c "
 import json, subprocess
+# Pinokio root is per-node (C: here, D: elsewhere); derive it rather than
+# hardcoding a drive letter. See .claude/scripts/pinokio-root.sh
+_root = subprocess.run(['bash','.claude/scripts/pinokio-root.sh'],
+                       capture_output=True, text=True).stdout.strip()
+PTERM = f'{_root}/bin/npm/pterm.cmd'
 result = subprocess.run(
-    ['D:/pinokio/bin/npm/pterm.cmd', 'search', ''],
+    [PTERM, 'search', ''],
     capture_output=True, text=True, encoding='utf-8', errors='replace'
 )
 d = json.loads(result.stdout)

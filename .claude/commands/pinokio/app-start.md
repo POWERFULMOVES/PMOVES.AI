@@ -19,15 +19,18 @@ Launch a Pinokio app and wait for it to become ready. Uses `pterm start` with th
 ## Implementation
 
 ```bash
+# Pinokio root is a PER-NODE value (C: here, D: on other nodes), so derive it.
+# pinokio-root.sh exits 1 when it had to guess -- see .claude/scripts/pinokio-root.sh
+PTERM="$(bash .claude/scripts/pinokio-root.sh)/bin/npm/pterm.cmd"
 APP_ID="{{args.app_id}}"
 TIMEOUT="{{args.timeout_seconds|default:300}}"
 
 # Trigger launch (pterm run = equivalent to clicking "Run" in the UI)
-D:/pinokio/bin/npm/pterm.cmd run "$APP_ID" 2>&1 | head -5
+"$PTERM" run "$APP_ID" 2>&1 | head -5
 
 # Poll for ready state every 5s
 for i in $(seq 1 $((TIMEOUT / 5))); do
-  STATE=$(D:/pinokio/bin/npm/pterm.cmd search "$APP_ID" 2>&1 | python -c "
+  STATE=$("$PTERM" search "$APP_ID" 2>&1 | python -c "
 import sys, json
 d = json.load(sys.stdin)
 for app in d.get('apps', []):
