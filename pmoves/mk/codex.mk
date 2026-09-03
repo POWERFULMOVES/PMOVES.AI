@@ -41,7 +41,7 @@ else
 SECRETS_FUNNEL_BOOT_USER_TARGET :=
 endif
 
-.PHONY: codex-config codex-audit codex-parity-check codex-parity-check-strict codex-home codex-health-quick secrets-audit tooling-audit tooling-audit-strict chit-export chit-manifest-sync chit-manifest-check secrets-local-hydrate secrets-runtime-hydrate secrets-funnel-sync secrets-funnel secrets-rotate secrets-untrack a0-plugins-check a0-plugins-check-remote
+.PHONY: codex-config codex-audit codex-parity-check codex-parity-check-strict codex-home codex-health-quick secrets-audit tooling-audit tooling-audit-strict chit-export chit-manifest-sync chit-manifest-check secrets-local-hydrate secrets-runtime-hydrate secrets-funnel-sync secrets-funnel secrets-ensure-generated secrets-ensure-check secrets-rotate secrets-untrack a0-plugins-check a0-plugins-check-remote
 codex-config: ## Install repo-pinned Codex config into ~/.codex/config.toml
 	@pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/codex_apply_config.ps1
 
@@ -79,8 +79,30 @@ tooling-audit: ## Audit PMOVES tools/scripts overlap vs submodule tooling (auth/
 tooling-audit-strict: ## Run tooling-audit in strict mode (warnings fail)
 	@$(CODEX_PY) tools/tooling_script_audit.py --strict
 
-chit-export: ensure-env-shared ## Export env.shared into a user-scoped CHIT bundle (default no-cleartext)
-	@$(CODEX_PY) tools/chit_encode_secrets.py --env-file "$(CHIT_EXPORT_ENV)" --out "$(CHIT_EXPORT_PATH)" $(CHIT_ENCODE_FLAGS)
+chit-export: ensure-env-shared ## Export env.shared into a user-scoped CHIT bundle (default no-cleartext). Refuses to clobber a CI-pulled bundle; CHIT_EXPORT_FORCE=1 overrides.
+	@# REFUSE TO CLOBBER A CI BUNDLE.
+	@#
+	@# This writes CHIT_EXPORT_PATH, which is the SAME path `secrets-pull`
+	@# installs the CI bundle to -- and chit-export runs as the second step of
+	@# `secrets-rotate`. So rotating any unrelated secret silently replaced a CI
+	@# bundle with a local export built from env.shared, which is a strict subset:
+	@# prod-only keys (delivered by sync-secrets-local.yml) never live in
+	@# env.shared at all.
+	@#
+	@# Measured 2026-09-03 on the 4090. MINIMAX_TOKEN_PLAN_API_KEY arrived by
+	@# bundle, funnelled to env.tier-llm, TensorZero healthy. Three later
+	@# secrets-rotate runs each overwrote the bundle; the next ordinary
+	@# secrets-funnel regenerated env.tier-llm without the key; the gateway
+	@# crash-looped hours later looking like an unrelated regression.
+	@#
+	@# The loss is silent and delayed, which is the expensive combination. Fail
+	@# closed instead: pull_chit_bundle.sh now stamps <bundle>.provenance, and a
+	@# local export refuses to overwrite a bundle it did not produce.
+	@# The check, the write and the marker cleanup have to be indivisible, or a
+	@# concurrent secrets-pull lands between them and the export clobbers a CI
+	@# bundle it would have refused (raised in review on PR #2901). Both writers
+	@# of this path now run under one lock.
+	@bash scripts/chit_bundle_lock.sh bash scripts/chit_export_guarded.sh "$(CODEX_PY)" "$(CHIT_EXPORT_ENV)" "$(CHIT_EXPORT_PATH)" $(CHIT_ENCODE_FLAGS)
 	@echo CHIT bundle written to $(CHIT_EXPORT_PATH)
 
 chit-manifest-register: ## Idempotently add missing registry entries to the v2 CHIT manifest (ARGS='--check' to gate)
@@ -116,7 +138,7 @@ secrets-funnel-sync: chit-manifest-sync chit-export ## Materialize generated env
 
 .PHONY: secrets-pull secrets-funnel-from-prod
 secrets-pull: ## Pattern B consumer: install the newest CI CHIT bundle at the canonical user-scoped path (runnerless nodes; no path juggling)
-	@bash scripts/pull_chit_bundle.sh
+	@bash scripts/chit_bundle_lock.sh bash scripts/pull_chit_bundle.sh
 
 secrets-funnel-from-prod: secrets-pull secrets-funnel-sync-from-bundle ## One-shot prod funnel for runnerless nodes: pull bundle, materialize tiers, refresh local.env, force-hydrate env.shared
 	@echo "→ Refreshing local.env from CHIT bundle (runnerless parity with sync-secrets-local.yml)"
@@ -161,10 +183,93 @@ env-shared-repair: ## Self-heal env.shared: collapse raw multi-line PEM/SSH valu
 # Measured on B850 2026-08-23: postgrest, gotrue and storage came back 28P01
 # while holding a correct POSTGRES_PASSWORD in their own environment. Running
 # the funnel a SECOND time healed it, which is the signature of this ordering.
+
+# ---------------------------------------------------------------------------
+# Secrets the STACK mints, not the operator: declared `required: true` in
+# bootstrap/registry.json WITH a generator, and `required: true` in the CHIT
+# manifest -- but no step of the funnel ever ran that generator. They were
+# therefore never in env.shared, never in the CGP bundle, and secrets_sync
+# classified them as operator-missing. SECRETS_ALLOW_MISSING defaults to 1 so
+# that was a WARNING, while build_outputs put them in `rejected_out` and
+# write_env_files DELETED them from the generated tier file. Compose then failed
+# `${SECRET_KEY_BASE:?}` -- and compose interpolates the ENTIRE project before
+# acting, so four unset Supabase variables blocked `up -d cipher-api` and every
+# other unrelated service on the node.
+#
+# NOT "every registry key that declares a generator". Deliberately curated:
+#   * ANON_KEY / SERVICE_ROLE_KEY are HS256 JWTs derived from JWT_SECRET
+#     (tools/secrets_self_generated.py). Minting a random 64-char token would
+#     satisfy the `:?` gate with a value that is not a valid JWT.
+#   * POSTGRES_PASSWORD is minted at db-init and must match the running
+#     database; a funnel-invented value desyncs it (28P01).
+# Those stay out. Add a key here only once you have checked it is pure random
+# material with no derivation and no external consumer that pins its value.
+SECRETS_ENSURE_KEYS ?= \
+  SECRET_KEY_BASE \
+  VAULT_ENC_KEY \
+  LOGFLARE_PUBLIC_ACCESS_TOKEN \
+  LOGFLARE_PRIVATE_ACCESS_TOKEN
+
+.PHONY: secrets-ensure-generated secrets-harvest-check
+secrets-ensure-generated: ensure-env-shared ## Recover live secrets from the running fleet, THEN mint only what is genuinely absent. Idempotent; never overwrites a live value.
+	@# HARVEST BEFORE MINT. THE ORDER IS THE WHOLE POINT.
+	@#
+	@# This step is unconditional and runs inside `make secrets-funnel`, so on a
+	@# node where env.shared has lost one of these values while a running
+	@# container still holds it -- the recovery state this change exists to serve
+	@# -- minting is not a bootstrap. It replaces live cryptographic material, and
+	@# secrets-funnel-sync materializes the replacement into the tier files on the
+	@# very next line of the funnel. A later supabase-pooler recreation then gets a
+	@# different VAULT_ENC_KEY and cannot decrypt the tenant credentials (or the yt
+	@# OAuth cookies) already stored under the old one.
+	@#
+	@# secrets-runtime-hydrate runs earlier and does recover container values, but
+	@# only Supabase aliases plus Meili/Firefly/Agent Zero/Invidious -- never these
+	@# four. So without this guard the mint is reached with the slots still empty.
+	@#
+	@# Telling the operator in a PR body to harvest first does not work: the step
+	@# fires automatically. The guard has to be in front of the mint, and it is
+	@# `&&` rather than `;` so a refusal STOPS the funnel instead of being a
+	@# warning the next line ignores.
+	@#
+	@# It lives here rather than in secrets-runtime-hydrate because
+	@# secrets-ensure-generated is itself a public .PHONY target: a guard one
+	@# target upstream leaves `make secrets-ensure-generated` destructive.
+	@#
+	@# Guard the empty list. bootstrap_env.py with NO key flags falls through to
+	@# the full INTERACTIVE bootstrap(), which prompts and then dies with EOFError
+	@# under make. An empty SECRETS_ENSURE_KEYS must mean "mint nothing", not
+	@# "reconfigure the whole node".
+	@if [ -z "$(strip $(SECRETS_ENSURE_KEYS))" ]; then \
+	  echo "secrets-ensure-generated: SECRETS_ENSURE_KEYS is empty — nothing to mint"; \
+	else \
+	  $(CODEX_PY) tools/secrets_harvest.py $(foreach k,$(SECRETS_ENSURE_KEYS),--key $(k)) && \
+	  $(CODEX_PY) scripts/bootstrap_env.py $(foreach k,$(SECRETS_ENSURE_KEYS),--ensure $(k)); \
+	fi
+
+secrets-harvest-check: ## Report what secrets-ensure-generated WOULD do (harvest / mint / refuse). Writes nothing. Exit 3 = refused.
+	@if [ -z "$(strip $(SECRETS_ENSURE_KEYS))" ]; then \
+	  echo "secrets-harvest-check: SECRETS_ENSURE_KEYS is empty — nothing to examine"; \
+	else \
+	  $(CODEX_PY) tools/secrets_harvest.py --dry-run $(foreach k,$(SECRETS_ENSURE_KEYS),--key $(k)); \
+	fi
+
+.PHONY: secrets-ensure-check
+secrets-ensure-check: ## Fail if any stack-generated secret is still unprovisioned (the ${VAR:?} compose gate, checked before compose sees it).
+	@if [ -z "$(strip $(SECRETS_ENSURE_KEYS))" ]; then \
+	  echo "secrets-ensure-check: SECRETS_ENSURE_KEYS is empty — nothing to check"; \
+	else \
+	  $(CODEX_PY) scripts/bootstrap_env.py --ensure-dry-run $(foreach k,$(SECRETS_ENSURE_KEYS),--ensure $(k)); \
+	fi
+
 secrets-funnel: ## Portable secrets flow: env repair -> local hydrate -> CHIT export -> manifest sync -> urlencode -> audit gates (FORCE=1 to overwrite stale)
 	@$(MAKE) --no-print-directory env-shared-repair
 	@$(MAKE) --no-print-directory secrets-local-hydrate
 	@$(MAKE) --no-print-directory secrets-runtime-hydrate
+	@# ORDER IS LOAD-BEARING: must precede secrets-funnel-sync, because that
+	@# target's chit-export prerequisite encodes env.shared into the CGP bundle.
+	@# Mint after this point and the bundle is already sealed without the value.
+	@$(MAKE) --no-print-directory secrets-ensure-generated
 	@$(MAKE) --no-print-directory secrets-funnel-sync
 	@$(CODEX_PY) tools/credential_urlencoder.py
 	@$(MAKE) --no-print-directory secrets-audit
@@ -177,7 +282,19 @@ secrets-rotate: ## Rotate ONE secret in env.shared then re-funnel. Usage: make s
 	$(if $(strip $(KEY)),,$(error Usage: make -C pmoves secrets-rotate KEY=<env.shared key> [VALUE=<minted>] [LEN=<n>]. For values with shell-active chars ($$ ` \ " ') instead: export PMOVES_ROTATE_VALUE=<minted> first. Generates a random_urlsafe value when neither is set.))
 	@echo "→ Rotating $(KEY) in env.shared (surgical, single-line)"
 	@$(CODEX_PY) scripts/bootstrap_env.py --rotate "$(KEY)" $(if $(PMOVES_ROTATE_VALUE),--value-env PMOVES_ROTATE_VALUE,$(if $(VALUE),--value "$(VALUE)",)) $(if $(LEN),--length $(LEN),)
-	@$(MAKE) --no-print-directory chit-export
+	@# Rotation is a LEGITIMATE reason to re-export, so force past the CI-bundle
+	@# guard rather than failing the road -- but say plainly what was replaced.
+	@# The defect this fixes was never the overwrite; it was the SILENCE. A local
+	@# export drops prod-only keys, and the loss only surfaced hours later when a
+	@# service that needed one restarted and looked like an unrelated regression.
+	@if [ -f "$(CHIT_EXPORT_PATH).provenance" ]; then \
+	  echo "⚠ rotation replaced the CI-pulled CHIT bundle with a local export."; \
+	  echo "  Prod-only keys delivered by sync-secrets-local.yml are NOT in"; \
+	  echo "  env.shared and are now absent from the bundle. Re-pull before the"; \
+	  echo "  next funnel, or services needing them will fail on their next"; \
+	  echo "  restart:  PMOVES_NODE=<node> make -C pmoves secrets-pull"; \
+	fi
+	@CHIT_EXPORT_FORCE=1 $(MAKE) --no-print-directory chit-export
 	@$(MAKE) --no-print-directory secrets-funnel
 	@echo "✔ $(KEY) rotated + funnelled. STILL TO DO: (1) restart consumers (e.g. make up-<svc> / supa-restart);"
 	@echo "  (2) rotate any off-box copy (GitHub Actions / Docker secret); (3) for Postgres also run 'make supa-bootstrap-db' to ALTER roles; (4) revoke the OLD value at its source (e.g. Jellyfin /Auth/Keys DELETE)."

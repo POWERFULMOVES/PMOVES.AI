@@ -1,8 +1,24 @@
 # Pinokio Launcher Development Guide
 
-> **On-demand context.** Load when working on Pinokio launcher scripts (`install.js`, `start.js`, `update.js`, `reset.js`, `pinokio.js`) tied to `D:\pinokio\`. The root `CLAUDE.md` no longer auto-loads this — read it explicitly when the task requires it.
+> **`<PINOKIO_ROOT>` is per-node — derive it, never hardcode a drive letter.**
+> This guide used to say `D:\pinokio` throughout. On the 4090 the install is at
+> `C:\pinokio`, so every one of those references was wrong and each
+> `pinokio:*` command failed at its first call with a bare `FileNotFoundError`
+> — which reads as "Pinokio is broken" rather than "this path is wrong here".
+> Resolve it once:
+>
+> ```bash
+> PINOKIO_ROOT="$(bash .claude/scripts/pinokio-root.sh)"   # exit 1 = it guessed
+> PTERM="$PINOKIO_ROOT/bin/npm/pterm.cmd"
+> ```
+>
+> Substitute `<PINOKIO_ROOT>` below with that value. Set the `PINOKIO_ROOT`
+> environment variable on a node whose install is somewhere else again.
 
-This guide was extracted verbatim from the legacy root `CLAUDE.md` (pre-`docs/claude-md-modernize-fleet` keystone restructure). Source of truth for Pinokio API syntax remains `D:\pinokio\prototype\PINOKIO.md`.
+
+> **On-demand context.** Load when working on Pinokio launcher scripts (`install.js`, `start.js`, `update.js`, `reset.js`, `pinokio.js`) tied to `<PINOKIO_ROOT>\`. The root `CLAUDE.md` no longer auto-loads this — read it explicitly when the task requires it.
+
+This guide was extracted verbatim from the legacy root `CLAUDE.md` (pre-`docs/claude-md-modernize-fleet` keystone restructure). Source of truth for Pinokio API syntax remains `<PINOKIO_ROOT>\prototype\PINOKIO.md`.
 
 ---
 
@@ -10,8 +26,8 @@ This guide was extracted verbatim from the legacy root `CLAUDE.md` (pre-`docs/cl
 
 To guarantee every contribution follows this guide precisely, obey this checklist **before any edits** and **again before finalizing**. Do not skip or reorder.
 1. **AGENTS Snapshot:** Re-open this file and write down (in your working notes or response draft) the exact sections relevant to the requested task. No work begins until this snapshot exists.
-2. **Example Lock-in:** Identify the closest matching script in `D:\pinokio\prototype\system\examples`. Record its path and keep it open while editing. Every launcher change must mirror that reference unless the user explicitly instructs otherwise.
-3. **Pre-flight Checklist:** Convert the applicable rules from this document and `PINOKIO.md` at D:\pinokio\prototype\PINOKIO.md into a task-specific checklist (install/start/reset/update structure, regex patterns, menu defaults, log checks, etc.). Confirm each item is ticked **before** making changes.
+2. **Example Lock-in:** Identify the closest matching script in `<PINOKIO_ROOT>\prototype\system\examples`. Record its path and keep it open while editing. Every launcher change must mirror that reference unless the user explicitly instructs otherwise.
+3. **Pre-flight Checklist:** Convert the applicable rules from this document and `PINOKIO.md` at <PINOKIO_ROOT>\prototype\PINOKIO.md into a task-specific checklist (install/start/reset/update structure, regex patterns, menu defaults, log checks, etc.). Confirm each item is ticked **before** making changes.
 4. **Mid-task Verification:** Any time you touch a Pinokio script, cross-check the corresponding example line to ensure syntax and structure match. Document the reference (example path + line) in your reasoning.
 5. **Exit Checklist:** Before responding to the user, revisit the pre-flight checklist and explicitly confirm every item is satisfied. If anything diverges from the example or these rules, fix it first.
 
@@ -44,9 +60,9 @@ on: [{
 
 Deviation from this pattern requires written approval from the user.
 
-- Make sure to keep this entire document and `PINOKIO.md` at D:\pinokio\prototype\PINOKIO.md in memory with high priority before making any decision. Pinokio is a system that makes it easy to write launchers through scripting by providing various cross-platform APIs, so whenever possible you should prioritize using Pinokio API over lower level APIs.
-- When writing pinokio scripts, ALWAYS check the examples folder (in D:\pinokio\prototype\system\examples folder) to see if there are existing example scripts you can imitate, instead of assuming syntax.
-- When implementing pinokio script APIs and you cannot infer the syntax just based on the examples, always search the API documentation `PINOKIO.md` at D:\pinokio\prototype\PINOKIO.md to use the correct syntax instead of assuming the syntax.
+- Make sure to keep this entire document and `PINOKIO.md` at <PINOKIO_ROOT>\prototype\PINOKIO.md in memory with high priority before making any decision. Pinokio is a system that makes it easy to write launchers through scripting by providing various cross-platform APIs, so whenever possible you should prioritize using Pinokio API over lower level APIs.
+- When writing pinokio scripts, ALWAYS check the examples folder (in <PINOKIO_ROOT>\prototype\system\examples folder) to see if there are existing example scripts you can imitate, instead of assuming syntax.
+- When implementing pinokio script APIs and you cannot infer the syntax just based on the examples, always search the API documentation `PINOKIO.md` at <PINOKIO_ROOT>\prototype\PINOKIO.md to use the correct syntax instead of assuming the syntax.
 - When trying to fix something or figure out what's going on, ALWAYS start by checking the `logs` folder before doing anything else, as mentioned in the "Troubleshooting with Logs" section.
 - Finally, make sure to ALWAYS follow all the items in the "best practices" section below.
 
@@ -95,7 +111,7 @@ project-root/
 └── pinokio.json         # Metadata (title, description, icon)
 ```
 
-IMPORTANT: ALWAYS try to follow the best practices in the examples folder (D:\pinokio\prototype\system\examples) instead of trying to come up with your own structure. The examples have been optimized for the best user experience.
+IMPORTANT: ALWAYS try to follow the best practices in the examples folder (<PINOKIO_ROOT>\prototype\system\examples) instead of trying to come up with your own structure. The examples have been optimized for the best user experience.
 
 ## Launcher Project Working Directory
 
@@ -147,7 +163,7 @@ If we are starting with existing launcher script files, work with the existing f
 - **Don't touch working scripts:** Unless adding/updating specific commands
 - **Follow existing conventions:** Match the style and structure already present
 ### 3. Try to adopt from examples as much as possible
-- If starting from scratch, first determine what type of project you will be building, and then check the examples folder (D:\pinokio\prototype\system\examples) to see if you can adopt them instead of coming up everything from scratch.
+- If starting from scratch, first determine what type of project you will be building, and then check the examples folder (<PINOKIO_ROOT>\prototype\system\examples) to see if you can adopt them instead of coming up everything from scratch.
 - Even if there are no relevant examples, check the examples to get inspiration for how you would structure the script files even if you have to write from scratch.
 ### 4. Writing from scratch as a last resort
 If there are no relevant examples to adopt from, write the scripts from scratch, but just make sure to follow the requirements in the next section.
@@ -252,8 +268,8 @@ module.exports = {
 ## API
 
 This section lists all the script APIs available on Pinokio. To learn the details of how they are used, you can:
-1. Check the examples in the D:\pinokio\prototype\system\examples folder
-2. Read the `PINOKIO.md` at D:\pinokio\prototype\PINOKIO.md further documentation on the full syntax
+1. Check the examples in the <PINOKIO_ROOT>\prototype\system\examples folder
+2. Read the `PINOKIO.md` at <PINOKIO_ROOT>\prototype\PINOKIO.md further documentation on the full syntax
 
 ### Script API
 
@@ -376,7 +392,7 @@ logs/
 - If you are starting with existing script files, before modifying, creating, or removing any script files, first look at `pinokio.js` to understand which script files are actually used in the launcher. The only script files used are the ones mentioned in the `pinokio.js` file. The `pinokio.js` file is the file that constructs the UI dynamically.
 - Do not create a redundant script file that does something that already exists. Instead modify the existing script file for the feature. For example, do not create an `install.json` file for installation if `install.js` already exists. Instead, modify the `install.js` file.
 - Pinokio accepts both JSON and JS script files, so when determining whether a script for a specific purpose already exists, check both JSON and JS files mentioned in the `pinokio.js` file. Do not create script files for redundant purpose.
-- When building launchers for existing projects cloned from a repository, try to stay away from modifying the project folder (the `D:\pinokio\api\Ultimate-TTS-Studio.git` folder), even if installations are failing. Instead, try to work around it by creating additional files in the launcher folder, and using those files IN ADDITION to the default project.
+- When building launchers for existing projects cloned from a repository, try to stay away from modifying the project folder (the `<PINOKIO_ROOT>\api\Ultimate-TTS-Studio.git` folder), even if installations are failing. Instead, try to work around it by creating additional files in the launcher folder, and using those files IN ADDITION to the default project.
   - The only exception when you may need to make changes to the project folder is when the user explicitly wants to modify the existing project. Otherwise if the purpose is to simply write a launcher, the app logic folder should never be touched.
 - When running shell commands, take full advantage of the Pinokio `shell.run` API, which provides features like `env`, `venv`, `input`, `path`, `sudo`, `on`, etc. which can greatly reduce the amount of script code.
   - Python apps: Always use virtual environments via `venv` attribute. This attribute automatically creates a venv or uses if it already exists.
@@ -402,19 +418,19 @@ logs/
     - during the install process, the `install.js` menu item needs to be set as the `default`, so it automatically executes the script
     - when launching the `start.js` menu item needs to be set as the `default`, so it automatically executes the script
     - after the app has launched, the `default` needs to be set on the web UI URL, so the user is sent to the actual app automatically.
-  - Check the examples in the D:\pinokio\prototype\system\examples folder to see how these are being used.
+  - Check the examples in the <PINOKIO_ROOT>\prototype\system\examples folder to see how these are being used.
 ### 8. No need for stop scripts
 - `pinokio.js` does NOT need a separate `stop` script. Every script that can be started can also be natively stopped through the Pinokio UI, therefore you do not need a separate stop script for start script
 ### 9. Writing launchers for existing projects
 - When writing or modifying pinokio launcher scripts, figure out the install/launch steps by reading the project folder `app`.
-- In most cases, the `README.md` file in the `D:\pinokio\api\Ultimate-TTS-Studio.git` folder contains the instructions needed to install and run the app, but if not, figure out by scanning the rest of the project files.
+- In most cases, the `README.md` file in the `<PINOKIO_ROOT>\api\Ultimate-TTS-Studio.git` folder contains the instructions needed to install and run the app, but if not, figure out by scanning the rest of the project files.
 - Install scripts should work for each specific operating system, so ignore Docker related instructions. Instead use install/launch instructions for each platform.
 ### 10. Don't use Docker unless really necessary
 - Some projects suggest docker as installation options. But even in these cases, try to find "development" options to launch the app without relying on Docker, as much as possible. We do not need Docker since we can automatically install and launch apps specifically for the user's platform, since we can write scripts that run cross platform.
 ### 11. pinokio.json
 - Do not touch the `version` field since the version is the script schema version and the one pre-set in `pinokio.js` must be used.
 - `icon`: It's best if we have a user friendly icon to represent the app, so try to get an image and link it from `pinokio.json`.
-  - If the git repository for the `D:\pinokio\api\Ultimate-TTS-Studio.git` folder points to GitHub (for example https://github.com/`<USERNAME>`/`<REPO_NAME>`), ask the user if they want to download the icon from GitHub, and if approved, get the `avatar_url` by fetching `https://api.github.com/users/<USERNAME>`, and then download the image to the root folder as `icon.png`, and set `icon.png` as the `icon` field of the `pinokio.json`. 
+  - If the git repository for the `<PINOKIO_ROOT>\api\Ultimate-TTS-Studio.git` folder points to GitHub (for example https://github.com/`<USERNAME>`/`<REPO_NAME>`), ask the user if they want to download the icon from GitHub, and if approved, get the `avatar_url` by fetching `https://api.github.com/users/<USERNAME>`, and then download the image to the root folder as `icon.png`, and set `icon.png` as the `icon` field of the `pinokio.json`. 
 ### 12. Gitignore
 - When a launcher involves cloning 3rd party repositories, downloading files dynamically, or some files to be generated, these need to be included in the .gitignore file. This may include things like:
   - Cloning git repositories
@@ -463,9 +479,9 @@ The `torch.js` script also includes ways to install pytorch dependent libraries 
 
 ## Quick Reference
 ### Essential Documentation
-- **Pinokio Programming:** See `PINOKIO.md` at D:\pinokio\prototype\PINOKIO.md → "Programming Pinokio" section
-- **Dynamic Menus:** See `PINOKIO.md` at D:\pinokio\prototype\PINOKIO.md → "Dynamic menu rendering" section  
-- **CLI Commands:** See `PTERM.md` at D:\pinokio\prototype\PTERM.md
+- **Pinokio Programming:** See `PINOKIO.md` at <PINOKIO_ROOT>\prototype\PINOKIO.md → "Programming Pinokio" section
+- **Dynamic Menus:** See `PINOKIO.md` at <PINOKIO_ROOT>\prototype\PINOKIO.md → "Dynamic menu rendering" section  
+- **CLI Commands:** See `PTERM.md` at <PINOKIO_ROOT>\prototype\PTERM.md
 ### Common Patterns
 - **Python Virtual Env:** `shell.run` with `venv` attribute
 - **Cross-platform Commands:** Always test on multiple platforms
