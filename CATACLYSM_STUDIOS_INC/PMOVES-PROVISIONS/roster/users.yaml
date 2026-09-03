@@ -10,6 +10,10 @@ humans:
     display_name: "DARKXSIDE (Russell Richardson)"
     role: "Founder / Operator — Emperor (final signoff, direction)"
     contact: cataclysmstudios@gmail.com
+    contact_aliases:
+      - powerfulmoves@pmoves.ai
+      - pmoves@pmoves.ai
+    # cataclysmstudios.com domain addresses: inventory TBD via Composio → Hostinger review
     tier: owner
     guilds: [core, infra-cloud, governance]
     contributor_ref: "agent_registry.yaml → external_contributors: powerfulmoves"

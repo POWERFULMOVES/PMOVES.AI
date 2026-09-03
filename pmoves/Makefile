@@ -708,9 +708,21 @@ build-svc: ## Build ONE service image from current source: make build-svc SVC=fl
 
 recreate-svc: ## Surgical recreate of ONE service with current env+image: make recreate-svc SVC=flute-gateway
 	@test -n "$(SVC)" || { echo "Usage: make recreate-svc SVC=<compose-service>"; exit 1; }
+	@# 89 of this stack's 107 services sit behind a compose profile. Without
+	@# --profile "*" compose resolves only 18 of them -- so this target could not
+	@# recreate flute-gateway, the very service its own help text names.
+	@# --no-deps still limits creation to SVC: the wildcard widens LOOKUP, not
+	@# what gets started. (Measured on the 4090, 2026-09-03: 18 vs 107.)
+	@$(DC) --profile "*" config --services 2>/dev/null | grep -qx "$(SVC)" || { \
+	  echo "✖ no compose service named '$(SVC)' in this stack"; \
+	  echo "  list them: make recreate-svc-list"; \
+	  exit 1; }
 	@echo "Recreating $(SVC) with current env (no deps)..."
-	@$(DC) up -d --force-recreate --no-deps $(SVC)
+	@$(DC) --profile "*" up -d --force-recreate --no-deps $(SVC)
 	@echo "Done. If Kong fronts it, bounce kong too (cached upstream DNS): docker restart pmoves-supabase-kong-1"
+
+recreate-svc-list: ## List every compose service recreate-svc can target (all profiles)
+	@$(DC) --profile "*" config --services 2>/dev/null | sort
 
 rebuild-svc: ## build-svc + recreate-svc in one move (the stale-container-object killer)
 	@$(MAKE) --no-print-directory build-svc SVC=$(SVC)
@@ -1597,11 +1609,23 @@ up-openroom: ## Start PMOVES OpenRoom (room-experience desktop at port 5173)
 	@echo "   Try a room:   http://localhost:5173/webuiapps/?room=persona.room.livingdoc"
 
 .PHONY: up-tokenism down-tokenism
-up-tokenism: ## Start the Tokenism simulator + Next.js UI (dashboard :8504, API :8103)
+up-tokenism: ## Start the Tokenism simulator + Next.js UI (reports the ports it MEASURES, not the ones it asked for)
 	@echo "🪙 Starting Tokenism simulator + Next.js UI..."
 	@$(LOAD_ENV_SHARED); $(DC) --profile agents up -d tokenism-simulator tokenism-ui
-	@timeout 120 bash -c 'until curl -sf http://localhost:$(or $(TOKENISM_UI_HOST_PORT),8504)/ >/dev/null 2>&1; do sleep 3; done' || echo "⚠️ UI may still be starting (check: docker logs pmoves-tokenism-ui-1)"
-	@echo "✅ Tokenism UI (Next.js): http://localhost:$(or $(TOKENISM_UI_HOST_PORT),8504)  |  simulator API: http://localhost:$(or $(TOKENISM_HOST_PORT),8103)"
+	@# Ask Docker what it actually published before waiting on, or advertising,
+	@# any URL. A container on an internal network stores its port binding and
+	@# never activates it -- so polling a declared port burned the full 120s
+	@# timeout on every run and then printed two addresses that refuse
+	@# connections (measured on the 4090, 2026-09-03).
+	@#
+	@# report_endpoint.sh branches on the helper's STATUS, so "running but
+	@# internal-only" (exit 1) and "never came up" (exit 2) stay distinct. An
+	@# earlier revision captured stdout and dropped the status, which made a
+	@# crashed container look like a healthy internal one -- the very defect this
+	@# target is being fixed for. COMPOSE_PROJECT_NAME scopes the service lookup
+	@# to this stack so a second worktree's container can never be measured here.
+	@COMPOSE_PROJECT_NAME=$(PROJECT) bash scripts/report_endpoint.sh tokenism-ui 8504 "Tokenism UI (Next.js)" /
+	@COMPOSE_PROJECT_NAME=$(PROJECT) bash scripts/report_endpoint.sh tokenism-simulator 8100 "Tokenism simulator API"
 
 down-tokenism: ## Stop the Tokenism simulator + UI
 	@$(LOAD_ENV_SHARED); $(DC) --profile agents stop tokenism-simulator tokenism-ui
