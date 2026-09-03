@@ -3330,9 +3330,27 @@ voice-follow-logs: ## Tail voice-follow logs
 
 voice-health: ## Check health of full voice stack (NATS, Flute, TTS backends, Voice-Relay)
 	@echo "=== Voice Stack Health ==="
-	@curl -sf http://localhost:4222/healthz > /dev/null 2>&1 \
-	  && echo "  NATS       (:4222) ✔" \
-	  || echo "  NATS       (:4222) ✗  — run: make up-bus"
+	@# 4222 is the NATS CLIENT PROTOCOL port, not HTTP -- it answers a raw INFO
+	@# line, never `/healthz`. `curl http://localhost:4222/healthz` therefore fails
+	@# on every node, always, so this row reported NATS down even with the broker
+	@# healthy and told the operator to run `up-bus` on a running service.
+	@# Measured 2026-09-02 on the 4090: container Up 11 hours (healthy),
+	@# 4222/tcp -> 0.0.0.0:4222, a raw TCP connect returns INFO {"server_id":...},
+	@# and this check still printed the failure branch.
+	@#
+	@# A check that can only ever say NO is worse than none: the four rows below it
+	@# are real, and a permanently-red first line trains you to skip the block.
+	@#
+	@# HTTP monitoring lives on 8222, published here at 127.0.0.1:9223 -- which is
+	@# exactly what .claude/scripts/nats-endpoint.sh derives (PR #2861). Reuse it
+	@# rather than hardcoding a port that varies per node; it exits non-zero when it
+	@# had to assume rather than measure, so an unresolved endpoint reads as down.
+	@ep=$$(bash "$(CURDIR)/../.claude/scripts/nats-endpoint.sh" 2>/dev/null); \
+	if [ -n "$$ep" ] && curl -sf "$$ep/healthz" > /dev/null 2>&1; then \
+	  echo "  NATS       (monitor) ✔"; \
+	else \
+	  echo "  NATS       (monitor) ✗  — run: make up-bus"; \
+	fi
 	@curl -sf http://localhost:8055/healthz > /dev/null 2>&1 \
 	  && echo "  Flute      (:8055) ✔" \
 	  || echo "  Flute      (:8055) ✗  — run: make overlay-up-media  (needs env.tier-media)"
