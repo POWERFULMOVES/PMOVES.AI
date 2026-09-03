@@ -876,8 +876,25 @@ def build_config() -> Tuple[Dict[str, object], Dict[str, ProviderSpec]]:
         (repo_root / "pmoves/data/identity/node-identity.md").resolve(),
     ]
 
+    # EMIT WHAT WAS VALIDATED. The filter below resolves relative candidates
+    # against repo_root, but the emitted value used to be `candidate.as_posix()`
+    # -- still relative. Crush joins relative context_paths to its LAUNCH working
+    # directory, and crush-pmoves does not cd to the repo root first: it runs
+    # `make -C "$REPO_ROOT/pmoves" crush-bootstrap` (which changes make's
+    # directory, not the shell's) and then `exec crush "$@"`. Launch it from
+    # pmoves/ and `pmoves/docs/AGENTS/AGNOTE4482.md` resolves to
+    # `pmoves/pmoves/docs/...`, which does not exist and is silently dropped --
+    # so the CHIT-aware boot this change exists to provide boots unaware.
+    #
+    # The two neighbours already learned this: the node-identity candidate above
+    # is `.resolve()`d, and skills_paths below carries the same note verbatim
+    # ("relative entries resolve from the launch cwd, and crush-pmoves does not
+    # cd to the repo root first"). The committed candidates were left relative on
+    # the premise that they "are read from the project root" -- a premise the
+    # launcher never enforces. Resolving here makes the emitted path match the
+    # path the filter actually checked.
     context_paths = [
-        candidate.as_posix()
+        (candidate if candidate.is_absolute() else (repo_root / candidate).resolve()).as_posix()
         for candidate in context_candidates
         if (candidate.is_absolute() and candidate.exists())
         or (not candidate.is_absolute() and (repo_root / candidate).exists())
