@@ -172,7 +172,7 @@ signatures:
     color: "#F59E0B"             # Gold
     accent: "#FCD34D"
     voice: directive              # vision-setting, mission-critical
-    co_author: "Russell Olivier <russell@powerfulmoves.ai>"
+    co_author: "Russell Richardson <powerfulmoves@pmoves.ai>"
     resonance:
       - vision
       - doctrine
