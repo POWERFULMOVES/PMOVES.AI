@@ -168,7 +168,33 @@ cross_node:
     voice:
       role: synthesis
       via: flute-gateway
-      endpoint: "http://pmoves-5090:8055/v1/voice/synthesize/prosodic"
+      # LOCAL FIRST (founder, 2026-09-02). This pointed at pmoves-5090:8055, and
+      # that peer's Flute is DOWN: measured 2026-09-02, pmoves-5090 is
+      # "active; direct" in the tailnet while :8055 answers 000. Node reachable,
+      # service absent -- the same distinction the fleet sitrep keeps surfacing.
+      #
+      # This node has an RTX 4090 (16GB VRAM) and its GPU is idle, because
+      # Claude runs in the cloud. Routing synthesis to a peer that is down, past
+      # a free local GPU, is the wrong default for a fabric documented as
+      # capability-routed and self-healing.
+      #
+      # THIS BLOCK IS DESCRIPTIVE, NOT CONSUMED. pmoves/tools/profile_loader.py
+      # does not read `channels` (verified 2026-09-02; its only importer is
+      # mini_cli.py), so changing this line declares intent and activates
+      # nothing. Said plainly because the opposite assumption is this repo's
+      # recurring defect -- gw-priority applied to 0 of 107 services,
+      # pmoves_core.vpn_nodes with 0 writers, gateway-agent POSTing to a
+      # /skills route Cipher never mounted. A config that looks authoritative
+      # and matches nothing is worse than an absent one.
+      #
+      # Actual activation is separate and operator-side: the engines are Pinokio
+      # 8 apps, and Pinokio's daemon is not running on this node (no process,
+      # 127.0.0.1:42000 -> 000). See .claude/scripts/pinokio-root.sh for the
+      # per-node root, and `make -C pmoves voice-health` for the live stack.
+      endpoint: "http://localhost:8055/v1/voice/synthesize/prosodic"
+      # Kept as the documented peer to fall back to once either side is up. No
+      # loader reads this either -- it records the intent, it does not route.
+      peer_endpoint: "http://pmoves-5090:8055/v1/voice/synthesize/prosodic"
     pinokio:
       role: launcher
       via: pbnj
