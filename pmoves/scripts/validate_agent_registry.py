@@ -140,6 +140,38 @@ def main(argv: list[str]) -> int:
             errors.append(f"registry[{key}] invalid: {exc}")
         registry_keys.add(key)
 
+    # node_affinity resolution (registry -> vocabulary direction) ---------
+    # Every node_affinity token must resolve through node-vocabulary.yaml.
+    # Tokens canonicalizing to NON_NODE_KINDS (placeholder, runner-label,
+    # class, unresolved) pass with their kind noted -- they are declared
+    # concepts, not unknown spellings. An UNKNOWN spelling fails: that is the
+    # name-bound-in-one-context-consumed-in-another defect class from
+    # 4090-open-findings-2026-08-31. A vocabulary that cannot load at all
+    # (duplicate alias) surfaces as a gate error naming the file -- never as
+    # a traceback that aborts the whole report.
+    try:
+        vocab = load_vocabulary(VOCABULARY)
+    except ValueError as exc:
+        errors.append(f"node-vocabulary.yaml: {exc}")
+        vocab = None
+    if vocab is not None:
+        for key, entry in (reg_raw.get("agents") or {}).items():
+            topology = (entry or {}).get("topology") or {}
+            raw = topology.get("node_affinity")
+            if raw is None:
+                continue
+            tokens = raw if isinstance(raw, list) else [raw]
+            for token in tokens:
+                token_s = str(token).strip()
+                if not token_s:
+                    continue
+                node = canonical_node(token_s, vocab)
+                if node is None:
+                    errors.append(
+                        f"registry[{key}] node_affinity token {token_s!r} does not "
+                        "resolve in node-vocabulary.yaml (unknown spelling)"
+                    )
+
     team_map: dict[str, list[str]] = {}
     for tkey, tval in (teams_raw.get("teams") or {}).items():
         if not SNAKE.match(tkey):
