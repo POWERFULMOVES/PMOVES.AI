@@ -426,6 +426,20 @@ SANCTIONED_PATH = (
     "see AGNOTE4482PHI.t1.md " + chr(167) + " Filing a row"
 )
 
+# EVERY PATH ABOVE IS A WRITE, and for a while that was the whole list. An
+# agent that ran an interpreter to ask `open_claims_in()` WHETHER A LANE WAS
+# FREE got refused and then handed three ways to write -- a refusal with no
+# answer to the question actually asked, which is a dead end wearing a gate's
+# clothes. The read is NOT loosened to fix that: a command line cannot be
+# trusted to declare its own intent, which is the entire reason the allowlist
+# enumerates what it positively recognises. The question is ANSWERED instead,
+# and the answer is named in every refusal below beside the write path.
+SANCTIONED_READ_PATH = (
+    "make -C pmoves register-status  (add BRANCH=<lane> OWNER='<you>' to ask "
+    "whether one lane is free) -- read-only; 0 clean / 1 findings / 3 could "
+    "not measure"
+)
+
 # ---- WHAT IS DELIBERATELY ALLOWED --------------------------------------------
 #
 # Every entry here is a command this hook asserts CANNOT modify the register in
@@ -511,8 +525,12 @@ _WRAPPERS = frozenset({"sudo", "doas", "env", "command", "builtin", "nohup",
                        "time", "nice", "ionice", "stdbuf", "exec", "timeout",
                        "setsid", "chrt"})
 _PY_INTERPRETERS = re.compile(r"^(?:python3?(?:\.\d+)?|uv|uvx)$")
-_SANCTIONED_TOOL = "register_append.py"
-_SANCTIONED_MAKE_TARGET_RE = re.compile(r"^register-(claim|release|docs|amend)$")
+# A TUPLE, because `str.endswith` takes one and there are now two roads:
+# the write tool and the read tool. Both run THIS FILE's functions rather
+# than a second implementation of them, which is what makes naming them
+# here an assertion about behaviour and not an exemption from it.
+_SANCTIONED_TOOL = ("register_append.py", "register_status.py")
+_SANCTIONED_MAKE_TARGET_RE = re.compile(r"^register-(claim|release|docs|amend|status)$")
 
 
 def split_heredocs(command: str):
@@ -931,7 +949,10 @@ def _segment_verdict(segment, assignments):
             "the code it runs, so what the code does to the file is not "
             "readable from the command string. `python3 -c \"open(REG,'a')\"`, "
             "`node -e`, `ruby -e` and `ed` all reached the ledger this way while "
-            "the gate reported clean. To READ it from an interpreter, pipe it in "
+            "the gate reported clean.\n"
+            "  To ASK WHAT IS OPEN -- usually the actual question -- use "
+            + SANCTIONED_READ_PATH + ".\n"
+            "  To read the raw file from an interpreter anyway, pipe it in "
             "instead of naming it: `cat <register> | " + cmd + " ...`."
         )
     return False, (
@@ -1477,7 +1498,10 @@ def _gate_shell_write(payload: dict) -> None:
             f"  {verdict.why}\n"
             "Could not measure is NOT a pass (0 clean / 1 findings / 3 could "
             "not measure), and the advisory this replaces treated it as one.\n"
-            f"Sanctioned path, which does the check for you: {SANCTIONED_PATH}\n"
+            f"To WRITE, the sanctioned path does the check for you: "
+            f"{SANCTIONED_PATH}\n"
+            f"To READ, the sanctioned path answers without an interpreter: "
+            f"{SANCTIONED_READ_PATH}\n"
             "It reads the clock for the timestamp, refuses a lane another "
             "owner holds, and appends in O_APPEND so the file cannot be "
             "rewritten.\n"

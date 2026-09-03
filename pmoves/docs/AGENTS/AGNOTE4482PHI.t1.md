@@ -199,6 +199,72 @@ Required handoff fields:
 - `chit_artifact_path`
 - `agent_signature`
 
+### Reading a row — asking before you file
+
+**Use the sanctioned path. It is the only read guaranteed to agree with the gate.**
+
+```
+make -C pmoves register-status                                               # every open lane, who holds it, what has expired
+make -C pmoves register-status BRANCH=fix/x OWNER='B850-CLAUDE (Knuckles)'   # is this one lane free FOR ME?
+make -C pmoves register-status ARGS=--json                                   # the same answer, machine-readable
+```
+
+For a while this existed nowhere, and the gap was structural rather than an
+oversight. The collision gate fails closed on the shell path: anything it cannot
+positively recognise as a read is refused, and an interpreter that *names* this
+file is unrecognisable by construction — `python3 -c` opening it to print and
+`python3 -c` opening it to truncate are the same shape at the shell level. So
+`open_claims_in()`, the authority on what is open, sat behind a door that only
+opened for writes: every path the refusal named (`register-claim`,
+`register-release`, `register-amend` — all below) was a write. **An agent could
+file a claim and could not ask whether the lane was free.** The fix was not to
+loosen the gate, because a command line cannot be trusted to declare its own
+intent. It was to answer the question, and to name the answer in the refusal.
+
+`register-status` runs `pmoves/tools/register_status.py`, which:
+
+- **delegates every judgement.** `open_claims_in()` and `canonical_owner()` for
+  what is open and who holds it, `evaluate_claims()` for whether a lane is free,
+  `build_row()` for the grammar its probe is phrased in, `_ttl_delta()` for what
+  `72h` means, `ROW_RE` / `parse_ts()` for a row's own timestamp. Two parsers is
+  how this file acquired 20 spellings of one owner and three lanes with more
+  releases than claims; a read path with its own opinion would be wrong first.
+- **asks the gate rather than comparing branch strings.** `BRANCH=` renders the
+  row `register-claim` would file and puts it through `evaluate_claims()`, so the
+  answer is the gate's own three-way verdict — `HELD`, `SHARED` (the incumbent
+  declared you), `DECLARED ONE-SIDED` (they did not declare you back, so the gate
+  would *ask*), or `FREE`. The row is rendered in memory and never appended.
+  Without `OWNER=` a lane **you** hold reads as held by a stranger, so pass it.
+- **reports TTLs, including the ones nobody wrote down.** A row stating only
+  `TTL 72h` — the hand-written form that predates the sanctioned write path —
+  has its expiry derived from its own timestamp, so the oldest rows are not
+  silently exempt from the one check that can flag them. Measured on this file
+  at 21 open claims: **3 expired and never released**, and **15 carrying no TTL
+  at all**, which cannot expire and so will never prompt a release.
+- **refuses to answer when it cannot fold owner spellings.** Without PyYAML the
+  gate compares owner IDs exactly. For a *write* that fails closed — it blocks
+  more. For a *read* the same degradation inverts and fails **open**: a lane held
+  under one spelling would be reported free to someone asking under another. So
+  the tool exits `3` with the remedy instead of answering. That is why the target
+  resolves `REGISTER_PYTHON` rather than `$(PYTHON)`.
+- **never writes.** Asserted in the tests as byte-identity of the register across
+  every mode, rather than assumed from the tool's name.
+
+Exit codes follow the repo doctrine: `0 clean · 1 findings · 3 could not measure
+— NOT a pass`. `1` means the lane is held (or needs a human decision), or an open
+claim's TTL has expired unreleased. As with the write targets, GNU make exits `2`
+on any recipe failure, so invoke the tool directly when you need to tell `1` from
+`3`.
+
+This is also the answer to the *"an inline interpreter may not name the register
+even to read it"* limitation listed at the end of the next section. That
+restriction stands — it is what keeps the write surface closed — but it is no
+longer a dead end.
+
+Times reported here are as the rows *assert* them. Whether a row's asserted time
+precedes the commit that introduced it is a different question with its own
+target: `make -C pmoves register-postdate-check`.
+
 ### Filing a row
 
 **Use the sanctioned path. It is the only write path that is checked.**
@@ -2669,3 +2735,4 @@ b8cea26c8\ that added it to the top-level equired\ array). (2) PMOVES-pinokio PR
 
 <!-- GRAPHITI_MARK: B850-CLAUDE::LANE-ATTRIBUTION-CI-UNBLOCK::2026-09-02 -->
 - `2026-09-02T18:12:23Z` CLAIM `B850-CLAUDE (Knuckles)` branch: `fix/register-write-path-failclosed` · **TTL 24h (expires `2026-09-03T18:12:23Z`)** · scope: **Resumed the REGISTER-INTEGRITY-GATES lane after the prior body was killed mid-merge; closed both P1s an independent review filed against PR #2879, and two more defects the review did not reach.** **Merge completed, not reconstructed:** the inherited tree was `UU` on the hook but carried ZERO conflict markers in any file and passed 135 tests, so the `UU` was an index state and the resolution content was intact; reconstructing would have discarded ~1400 lines that existed nowhere else, un-pushed. `origin/main` is now an ancestor, which is the P1-2 merge-order defect gone structurally. **P1-1, re-measured independently rather than re-run:** my own 32-probe harness, including three shapes nobody in this lane had listed — an `awk` redirect, `tee -a`, and a `d`+`d of=` — reports **13 defects at the pre-fix head and 0 after**. **P1-2 is worse than recorded:** the review reported a tuple-arity `ValueError`; driving the SANCTIONED path against main's gate gives `AttributeError: module has no attribute evaluate_claims` at **EXIT=1**, and exit 1 in this tool's own doctrine means "refused, the lane is held by another owner" — a crash wearing a refusal's code. Now **EXIT=3** with an explicit NOT MEASURED. One correction to the review: main's `open_claims_in` already returned 4-tuples, same as this branch; the incompatibility was the missing function and the category count, not the tuple width, and main's own type annotation saying 3-tuple is stale. **Two defects found here that neither the review nor the prior body reached, both by asking the allowlist the question it asks of everything else rather than by thinking of more shapes.** (1) `sort`, `shuf` and `xxd` were admitted wholesale as read-only commands and every one takes an OUTPUT file: `sort -o` and `shuf -o` REPLACE the append-only ledger, `xxd -r` rewrites it from a dump — all EXIT=0 against the allowlist cut that was built to close exactly this class. "Usually a read" is not "certified not to write"; an allowlist whose entries are command NAMES rather than BEHAVIOURS is a denylist wearing the other hat. Guarded the way `sed -i` and `jq -i` already are. (2) The amend road, driven against a copy of the LIVE register instead of a fixture, amended the WRONG row at EXIT=0 reporting success: it was aimed by a branch the row merely CITES in a double-backticked example, and then inserted the new field into the middle of a sentence that merely DISCUSSES the co-owner field, so the real field was never set and the prose was corrupted. The purity check cannot catch either — inserting in the wrong place is still an insertion, and the row count does not move. **Named, not fixed:** collision detection still reads the whole row, so a cited branch there causes an over-block -- as does the co-owner field name appearing in prose, which refused this very row on its first attempt (EXIT=3, NOT MEASURED); that errs CLOSED and narrowing it would trade a false refusal for a missed collision, so it is reported rather than changed under cover of an amend patch. **Evidence:** 158 tests on the two touched files (228 with lineage and postdate), 62/62 probes across two independent harnesses, postdate ratchet clean over the PR range, `merge=union` verified exactly — base 461, ours 463, theirs 470, merged 472, zero rows lost from either side, zero invented, zero conflict markers. The live register was never used as a probe destination; every write probe named a temp copy and the live sha was asserted unchanged after each one. **Three-body:** delivery=B850-CLAUDE (Knuckles; this), control=team-lead direction, memory=this trail. `agent_signature: ACK::B850-CLAUDE::REGISTER-P1-CLOSEOUT::2026-09-02`.
+- `2026-09-03T11:22:58Z` CLAIM `B850-CLAUDE (Knuckles)` branch: `fix/register-read-path` · **TTL 24h (expires `2026-09-04T11:22:58Z`)** · scope: Register has a sanctioned WRITE path (register-claim/release/amend) and NO sanctioned READ path. The fail-closed Bash gate refuses any interpreter naming the register, so open_claims_in() — the register-native authority on what is open — is unreachable to an agent. An agent can file a claim but cannot ask whether the lane is free. Adding register-status plus a read-classification fix.

@@ -400,6 +400,24 @@ register-docs: ## Insert prose into the register without touching ledger rows (A
 	fi
 	@$(REGISTER_PYTHON) tools/register_append.py docs $(ARGS)
 
+.PHONY: register-status
+# THE SANCTIONED READ PATH. #2879 closed the shell write-hole correctly and left
+# the register with no way to ASK: every path its refusal named was a write, and
+# `open_claims_in()` -- the authority on what is open -- sits inside an
+# interpreter the gate refuses. An agent could file a claim and could not check
+# whether the lane was free.
+#
+# REGISTER_PYTHON, not $(PYTHON), and this is load-bearing for a READ in a way
+# it is not for a write. Without PyYAML the gate compares owner spellings
+# exactly; a write then over-blocks (fail closed) but a read under-reports --
+# it answers "free" for a lane held under a spelling it did not fold. The tool
+# refuses outright in that state rather than answer, so the interpreter choice
+# is the difference between an answer and a 3.
+register-status: export REGISTER_OWNER = $(REGISTER_OWNER_VALUE)
+register-status: export REGISTER_BRANCH = $(BRANCH)
+register-status: ## Read open lanes / whether a lane is free ([BRANCH=] [OWNER=]) -- 0 clean / 1 findings / 3 could not measure
+	@$(REGISTER_PYTHON) tools/register_status.py $(ARGS)
+
 .PHONY: register-postdate-check
 register-postdate-check: ## Assert rows added on this branch are not postdated (0 clean / 1 findings / 3 could not measure)
 	@$(PYTHON) tools/register_postdate_check.py --base "$(or $(BASE),origin/main)" $(ARGS)
