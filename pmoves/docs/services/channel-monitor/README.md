@@ -25,10 +25,12 @@ Runbook
   ```bash
   SUPABASE_RUNTIME=cli make -C pmoves up
   ```
-- Start the PMOVES.YT and monitor lane if it is not already up:
+- Start the PMOVES.YT and monitor lane if it is not already up (Known Road — raw `docker compose up` is hook-blocked):
   ```bash
-  docker compose -f pmoves/docker-compose.yml up -d pmoves-yt channel-monitor
+  make -C pmoves up-yt            # pmoves-yt + cookies overlay + whisper stack
+  make -C pmoves channel-monitor-up  # channel-monitor with Supabase URL wiring
   ```
+- Env note: `CHANNEL_MONITOR_SECRET` and `CHANNEL_MONITOR_DISCORD_APPROVAL_MODE` are read via env_file (services/channel-monitor/channel_monitor/main.py:115,118), not set in compose environment — set them in the tier env files.
 - Repo smoke:
   ```bash
   make -C pmoves channel-monitor-smoke
