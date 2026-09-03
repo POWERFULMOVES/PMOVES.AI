@@ -2403,7 +2403,8 @@ STACK_FILES ?= \
 	-f docker-compose.comfyui.yml \
 	-f docker-compose.ultimate-tts-studio.yml \
 	-f docker-compose.archon.submodule.yml \
-	-f docker-compose.apps.yml
+	-f docker-compose.apps.yml \
+	-f docker-compose.activepieces.yml
 
 # AMD/ROCm nodes (Knuckles/B850 class) have no NVIDIA container runtime, so the
 # deploy.resources.reservations.devices block ffmpeg-whisper declares in
@@ -2798,6 +2799,14 @@ up-yt-amd: ## Start YouTube ingest stack on AMD/ROCm nodes (ffmpeg-whisper on th
 .PHONY: channel-monitor-up
 channel-monitor-up: ensure-env-shared ## Start channel-monitor with runtime-aware Supabase DB URL wiring
 	@bash ./scripts/channel_monitor_up.sh
+
+.PHONY: activepieces-up
+activepieces-up: ensure-env-shared ## Start ActivePieces (profile automation): app + worker + own postgres/redis
+	@$(DC) --profile automation up -d activepieces-app activepieces-worker
+
+.PHONY: activepieces-down
+activepieces-down: ## Stop ActivePieces stack
+	@$(DC) --profile automation stop activepieces-app activepieces-worker
 
 .PHONY: channel-monitor-smoke
 channel-monitor-smoke: ## Verify channel-monitor HTTP endpoints
