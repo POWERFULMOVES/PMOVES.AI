@@ -79,8 +79,36 @@ tooling-audit: ## Audit PMOVES tools/scripts overlap vs submodule tooling (auth/
 tooling-audit-strict: ## Run tooling-audit in strict mode (warnings fail)
 	@$(CODEX_PY) tools/tooling_script_audit.py --strict
 
-chit-export: ensure-env-shared ## Export env.shared into a user-scoped CHIT bundle (default no-cleartext)
+chit-export: ensure-env-shared ## Export env.shared into a user-scoped CHIT bundle (default no-cleartext). Refuses to clobber a CI-pulled bundle; CHIT_EXPORT_FORCE=1 overrides.
+	@# REFUSE TO CLOBBER A CI BUNDLE.
+	@#
+	@# This writes CHIT_EXPORT_PATH, which is the SAME path `secrets-pull`
+	@# installs the CI bundle to -- and chit-export runs as the second step of
+	@# `secrets-rotate`. So rotating any unrelated secret silently replaced a CI
+	@# bundle with a local export built from env.shared, which is a strict subset:
+	@# prod-only keys (delivered by sync-secrets-local.yml) never live in
+	@# env.shared at all.
+	@#
+	@# Measured 2026-09-03 on the 4090. MINIMAX_TOKEN_PLAN_API_KEY arrived by
+	@# bundle, funnelled to env.tier-llm, TensorZero healthy. Three later
+	@# secrets-rotate runs each overwrote the bundle; the next ordinary
+	@# secrets-funnel regenerated env.tier-llm without the key; the gateway
+	@# crash-looped hours later looking like an unrelated regression.
+	@#
+	@# The loss is silent and delayed, which is the expensive combination. Fail
+	@# closed instead: pull_chit_bundle.sh now stamps <bundle>.provenance, and a
+	@# local export refuses to overwrite a bundle it did not produce.
+	@if [ -f "$(CHIT_EXPORT_PATH).provenance" ] && [ "$${CHIT_EXPORT_FORCE:-0}" != "1" ]; then \
+	  echo "✖ refusing to overwrite a CI-pulled CHIT bundle at $(CHIT_EXPORT_PATH)"; \
+	  sed 's/^/    /' "$(CHIT_EXPORT_PATH).provenance" 2>/dev/null || true; \
+	  echo "  A local export is built from env.shared and DROPS prod-only keys that"; \
+	  echo "  reached this node by bundle (e.g. MINIMAX_TOKEN_PLAN_API_KEY)."; \
+	  echo "  Re-pull after exporting:  PMOVES_NODE=<node> make -C pmoves secrets-pull"; \
+	  echo "  Or override deliberately: CHIT_EXPORT_FORCE=1 make -C pmoves chit-export"; \
+	  exit 1; \
+	fi
 	@$(CODEX_PY) tools/chit_encode_secrets.py --env-file "$(CHIT_EXPORT_ENV)" --out "$(CHIT_EXPORT_PATH)" $(CHIT_ENCODE_FLAGS)
+	@rm -f "$(CHIT_EXPORT_PATH).provenance" 2>/dev/null || true
 	@echo CHIT bundle written to $(CHIT_EXPORT_PATH)
 
 chit-manifest-register: ## Idempotently add missing registry entries to the v2 CHIT manifest (ARGS='--check' to gate)
@@ -260,7 +288,19 @@ secrets-rotate: ## Rotate ONE secret in env.shared then re-funnel. Usage: make s
 	$(if $(strip $(KEY)),,$(error Usage: make -C pmoves secrets-rotate KEY=<env.shared key> [VALUE=<minted>] [LEN=<n>]. For values with shell-active chars ($$ ` \ " ') instead: export PMOVES_ROTATE_VALUE=<minted> first. Generates a random_urlsafe value when neither is set.))
 	@echo "→ Rotating $(KEY) in env.shared (surgical, single-line)"
 	@$(CODEX_PY) scripts/bootstrap_env.py --rotate "$(KEY)" $(if $(PMOVES_ROTATE_VALUE),--value-env PMOVES_ROTATE_VALUE,$(if $(VALUE),--value "$(VALUE)",)) $(if $(LEN),--length $(LEN),)
-	@$(MAKE) --no-print-directory chit-export
+	@# Rotation is a LEGITIMATE reason to re-export, so force past the CI-bundle
+	@# guard rather than failing the road -- but say plainly what was replaced.
+	@# The defect this fixes was never the overwrite; it was the SILENCE. A local
+	@# export drops prod-only keys, and the loss only surfaced hours later when a
+	@# service that needed one restarted and looked like an unrelated regression.
+	@if [ -f "$(CHIT_EXPORT_PATH).provenance" ]; then \
+	  echo "⚠ rotation replaced the CI-pulled CHIT bundle with a local export."; \
+	  echo "  Prod-only keys delivered by sync-secrets-local.yml are NOT in"; \
+	  echo "  env.shared and are now absent from the bundle. Re-pull before the"; \
+	  echo "  next funnel, or services needing them will fail on their next"; \
+	  echo "  restart:  PMOVES_NODE=<node> make -C pmoves secrets-pull"; \
+	fi
+	@CHIT_EXPORT_FORCE=1 $(MAKE) --no-print-directory chit-export
 	@$(MAKE) --no-print-directory secrets-funnel
 	@echo "✔ $(KEY) rotated + funnelled. STILL TO DO: (1) restart consumers (e.g. make up-<svc> / supa-restart);"
 	@echo "  (2) rotate any off-box copy (GitHub Actions / Docker secret); (3) for Postgres also run 'make supa-bootstrap-db' to ALTER roles; (4) revoke the OLD value at its source (e.g. Jellyfin /Auth/Keys DELETE)."
