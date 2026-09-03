@@ -98,17 +98,11 @@ chit-export: ensure-env-shared ## Export env.shared into a user-scoped CHIT bund
 	@# The loss is silent and delayed, which is the expensive combination. Fail
 	@# closed instead: pull_chit_bundle.sh now stamps <bundle>.provenance, and a
 	@# local export refuses to overwrite a bundle it did not produce.
-	@if [ -f "$(CHIT_EXPORT_PATH).provenance" ] && [ "$${CHIT_EXPORT_FORCE:-0}" != "1" ]; then \
-	  echo "✖ refusing to overwrite a CI-pulled CHIT bundle at $(CHIT_EXPORT_PATH)"; \
-	  sed 's/^/    /' "$(CHIT_EXPORT_PATH).provenance" 2>/dev/null || true; \
-	  echo "  A local export is built from env.shared and DROPS prod-only keys that"; \
-	  echo "  reached this node by bundle (e.g. MINIMAX_TOKEN_PLAN_API_KEY)."; \
-	  echo "  Re-pull after exporting:  PMOVES_NODE=<node> make -C pmoves secrets-pull"; \
-	  echo "  Or override deliberately: CHIT_EXPORT_FORCE=1 make -C pmoves chit-export"; \
-	  exit 1; \
-	fi
-	@$(CODEX_PY) tools/chit_encode_secrets.py --env-file "$(CHIT_EXPORT_ENV)" --out "$(CHIT_EXPORT_PATH)" $(CHIT_ENCODE_FLAGS)
-	@rm -f "$(CHIT_EXPORT_PATH).provenance" 2>/dev/null || true
+	@# The check, the write and the marker cleanup have to be indivisible, or a
+	@# concurrent secrets-pull lands between them and the export clobbers a CI
+	@# bundle it would have refused (raised in review on PR #2901). Both writers
+	@# of this path now run under one lock.
+	@bash scripts/chit_bundle_lock.sh bash scripts/chit_export_guarded.sh "$(CODEX_PY)" "$(CHIT_EXPORT_ENV)" "$(CHIT_EXPORT_PATH)" $(CHIT_ENCODE_FLAGS)
 	@echo CHIT bundle written to $(CHIT_EXPORT_PATH)
 
 chit-manifest-register: ## Idempotently add missing registry entries to the v2 CHIT manifest (ARGS='--check' to gate)
@@ -144,7 +138,7 @@ secrets-funnel-sync: chit-manifest-sync chit-export ## Materialize generated env
 
 .PHONY: secrets-pull secrets-funnel-from-prod
 secrets-pull: ## Pattern B consumer: install the newest CI CHIT bundle at the canonical user-scoped path (runnerless nodes; no path juggling)
-	@bash scripts/pull_chit_bundle.sh
+	@bash scripts/chit_bundle_lock.sh bash scripts/pull_chit_bundle.sh
 
 secrets-funnel-from-prod: secrets-pull secrets-funnel-sync-from-bundle ## One-shot prod funnel for runnerless nodes: pull bundle, materialize tiers, refresh local.env, force-hydrate env.shared
 	@echo "→ Refreshing local.env from CHIT bundle (runnerless parity with sync-secrets-local.yml)"
