@@ -3,11 +3,11 @@
 > **Single source of truth** for PMOVES.AI production readiness.
 > Supersedes all individual audit documents accumulated Feb 7 -- Feb 18, 2026.
 
-**Last Updated:** 2026-07-29 (auto-reconciled)
+**Last Updated:** 2026-09-03 (auto-reconciled)
 
 > ⚠️ **STALE — DO NOT TRUST AT FACE VALUE (as of 2026-07-21).** This dashboard has not been refreshed since 2026-04-24 (~3 months) and its "COMPLETE" assertions no longer reflect the repo. A 2026-07-21 ship-readiness assessment found gaps this doc does not mention: two services wired into the production compose are **empty scaffolds that crash-loop** (`media-video`, `media-audio`), and a dozen-plus fully-coded services have **no deployment path**. Treat this file as historical until it is re-reconciled. See the ship-readiness assessment for current state.
 **Branch:** `main`
-**Commit:** `1df8ba47d3` (post 6-PR merge batch)
+**Commit:** `c838caac4` (post 6-PR merge batch)
 **Consolidated From:** 27 audit documents
 **Evidence:** live runbook execution on 2026-03-05 (`make ghcr-prepublish-inrepo-build`, strict local Trivy sweep logs under `pmoves/docs/logs/ghcr-local-prepublish/`)
 

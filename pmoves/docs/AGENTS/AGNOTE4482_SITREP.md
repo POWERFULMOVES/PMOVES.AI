@@ -4,7 +4,7 @@ GRAPHITI_MARK: `PHI-4482-SITREP::QUICK-ORIENTATION`
 
 > **For:** Any agent dropping into a PMOVES session cold (fresh start, VS Code restart, new node, Husk walk-in).
 > **Rule:** Read this FIRST. It's pointers, not content. Follow the links.
-> **Last refreshed:** 2026-07-19 (Mavis-5090 refresh — A2UI stack MERGED + post-merge follow-up lane)
+> **Last refreshed:** 2026-09-03 (z890-claude refresh — Z890 MCP surface verification + cipher PR #14 lane)
 
 ---
 
@@ -32,6 +32,28 @@ Example: `feat/w3-discord-classrooms`, `fix/1287-runner-loop`
 
 **Forbidden**: `feature/` (use `feat/`), `pr/` (branches ≠ PRs), `p1/`-`p7/` (use workstream ID).
 
+
+## Latest Lane (2026-09-03) — Z890-CLAUDE
+
+**Active lane**: MCP surface truth + docs-staleness closeout (rides `chore/cli-prereq-preflight`, the convergence branch).
+
+**What happened**: cold-start on Z890 found 7/16 MCP clients failing. Every failure had a DISTINCT root cause — the pattern is config drift vs the canonical generator (`pmoves/tools/crush_configurator.py`):
+
+| MCP | Live failure | Root cause (live-verified) | Disposition |
+|-----|-------------|---------------------------|-------------|
+| agent-zero | session not found | config hit `:8080/mcp` (A0 API port); canonical MCP is SSE `:8081/mcp/t-${AGENT_ZERO_MCP_TOKEN}/sse` | config fixed; generator already canonical |
+| pmoves-cipher-local | Unauthorized | 5d-old cipher image 401s BOTH SSE paths — predates #2729/#2762 server fixes | url corrected to `/mcp/sse`; rebuild via `secrets-funnel && up-agents` |
+| pmoves-botz-gateway | session not found | config `:8091` is ARCHON (archon maps 8091→3090); BoTZ is `:8054` where `/mcp` 404s | disabled until surface verified; spec added to generator |
+| pmoves-hirag | Method Not Allowed | `:8086` is hi-rag-v2 REST (`POST /hirag/query`), no MCP | disabled; spec added to generator |
+| zai-mcp-server | timeout 10s | npx cold-start vs default timeout | timeout 120 |
+| MCP_DOCKER | timeout | duplicate entry from 2nd config file (`AppData\Local\crush\crush.json` merges with `~/.config/crush/crush.json`) | cleanup pending |
+| huggingface | EOF | npx package crashes at startup | investigation lane |
+
+**Cipher PR #14** (open): `fix/hirag-v2-params-tensorzero-port` — 2-file fix; verified against live `openapi.json` (`QueryReq` = `k`/`use_rerank`; old `top_k`/`rerank` silently dropped → every cipher→HiRAG query ran on defaults) and live compose (TZ container port is 3000; 3030 is host-only). Control evidence posted as PR comment; merge awaits second reviewer (single-account topology). Post-merge: gitlink `--cacheinfo` promotion, then fleet rebuild.
+
+**Port map corrections** (live `docker ps`, supersede stale docs): `8080`=A0 API/UI, `8081`=A0 UI + MCP SSE, `8086`=HiRAG v2 REST, `8091`/`3737`=Archon (3090 in-network), `8054`=BoTZ, `8105`=Cipher API (`/mcp/sse`), `3030` host→TZ `3000` in-network.
+
+**Also**: 12 docs-reconcile findings (7 P1) — this lane refreshes them. LSP `typescript-language-server` missing on this node (manual `npm i -g`).
 
 ## Latest Lane (2026-07-14 → 2026-07-19) — Mavis-5090
 

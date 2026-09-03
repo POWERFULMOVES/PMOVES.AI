@@ -1527,3 +1527,25 @@ Two read-only reviewers ran in tandem; folded into PR #2025 provenance.
 - Branch: `docs/instrument-trust-audit`
 
 <!-- GRAPHITI_MARK: B850-CLAUDE::INSTRUMENT-TRUST-AUDIT::2026-08-15 -->
+
+## MCP Surface Verification Record (2026-09-03)
+
+### Work Performed
+- Cold-start MCP triage on Z890: 7/16 clients failing with 7 DISTINCT root causes; all live-probed (docker port maps, gateway `openapi.json`, SSE probes, env-token presence checks)
+- Identified the meta-defect: hand-edited live config drifting from the canonical generator `pmoves/tools/crush_configurator.py`; the live hand-adds (`botz`, `hirag`) were absent from its spec entirely
+- Verified cipher PR #14 (hirag-client `k`/`use_rerank` schema + TensorZero `:3000` default) against the live v2 gateway openapi and live compose; control evidence posted as PR comment (self-approval blocked — single-account topology per the review-gate-topology finding below)
+- Fixed live config in place (cipher path, agent-zero SSE+token, zai timeout; hirag/botz disabled) and taught the generator both entries so regeneration cannot resurrect dark entries
+
+### Key Findings
+1. `:8091` is Archon (8091→3090), NOT BoTZ — BoTZ publishes `:8054` and does not answer `/mcp`; its MCP surface is unverified
+2. `:8086` is hi-rag-gateway-v2 REST — no MCP endpoint exists there; the "hirag MCP" entry could never have connected
+3. A0 MCP surface is SSE `:8081/mcp/t-${AGENT_ZERO_MCP_TOKEN}/sse`; `:8080/mcp` answers "session not found"
+4. Cipher 401s both SSE paths on the running (5d-old) image — server predates #2729/#2762; rebuilding the image is the fix, not more config
+5. Crush merges TWO config files (`~/.config/crush/` + `AppData\Local\crush\`) — duplicate docker entries and cross-file model/key drift come from the merge
+
+### Agent ACK
+- Agent: `Z890-CLAUDE`
+- Signature: `ACK::Z890-CLAUDE::MCP-SURFACE-VERIFICATION`
+- Timestamp: `2026-09-03`
+
+<!-- GRAPHITI_MARK: Z890-CLAUDE::MCP-SURFACE-VERIFICATION::2026-09-03 -->
