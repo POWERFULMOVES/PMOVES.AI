@@ -14,7 +14,8 @@
 #   bash pmoves/scripts/audit_network_reality.sh
 #   bash pmoves/scripts/audit_network_reality.sh --ports-only   # skip subnet probes
 #
-# Exit codes: 0 = all OK, 1 = drift detected, 2 = docker not available
+# Exit codes: 0 = all OK, 1 = drift detected, 2 = docker not available,
+#             3 = UNMEASURABLE (no containers found — never report this as a pass)
 
 set -euo pipefail
 
@@ -37,6 +38,7 @@ warn_sum() { echo -e "  ${YLW}⚠${RST}  $*"; }
 
 DRIFT=0
 WARNINGS=0
+CHECKED=0
 PORTS_ONLY=0
 
 for arg in "$@"; do
@@ -149,6 +151,7 @@ for svc in "${!EXPECTED_PORTS[@]}"; do
     dim "$svc (:$port) — container not running, skipping"
     continue
   fi
+  CHECKED=$((CHECKED+1))
 
   binding=$(docker inspect "$container" \
     --format "{{range \$p,\$b := .NetworkSettings.Ports}}{{if \$b}}{{range \$b}}{{.HostIp}}:{{.HostPort}} {{end}}{{end}}{{end}}" \
@@ -158,11 +161,26 @@ for svc in "${!EXPECTED_PORTS[@]}"; do
     # different causes, and collapsing them hid the silent-bind failure this
     # script exists to catch: a service that ASKED for a host port and never
     # got one reported as a mild "no port mapping" warning.
-    # .HostConfig.PortBindings holds what was REQUESTED — compare the two.
-    requested=$(docker inspect "$container" \
-      --format "{{index .HostConfig.PortBindings \"$port/tcp\"}}" 2>/dev/null || echo "")
-    if [[ -n "$requested" && "$requested" != "[]" && "$requested" != "<no value>" ]]; then
-      fail "$svc (:$port) — SILENT BIND: requested $requested, never activated"
+    #
+    # Compare SETS, never a single hardcoded port. EXPECTED_PORTS holds the
+    # HOST port, while .HostConfig.PortBindings is keyed by CONTAINER port, so
+    # indexing it with $port conflates the two: on a node that overrides the
+    # host port (QDRANT_PORT, NATS_PORT, HIRAG_V2_HOST_PORT ...) the container
+    # key still matches and a HEALTHY stack gets reported as a silent bind.
+    # A gate that cries wolf gets switched off, which is worse than one that
+    # under-reports.
+    requested_hp=$(docker inspect "$container" \
+      --format '{{range $p,$b := .HostConfig.PortBindings}}{{range $b}}{{.HostPort}} {{end}}{{end}}' \
+      2>/dev/null | tr -s ' ' '\n' | grep -c . || true)
+    active_hp=$(docker inspect "$container" \
+      --format '{{range $p,$b := .NetworkSettings.Ports}}{{if $b}}{{range $b}}{{.HostPort}} {{end}}{{end}}{{end}}' \
+      2>/dev/null | tr -s ' ' '\n' | grep -c . || true)
+
+    if [[ "${requested_hp:-0}" -gt 0 && "${active_hp:-0}" -eq 0 ]]; then
+      # Requested host ports, got none activated at all: unambiguous.
+      wanted=$(docker inspect "$container" \
+        --format '{{range $p,$b := .HostConfig.PortBindings}}{{$p}}->{{range $b}}{{.HostIp}}:{{.HostPort}}{{end}} {{end}}' 2>/dev/null)
+      fail "$svc (:$port) — SILENT BIND: requested $wanted, none activated"
       internal_nets=""
       for net in $(docker inspect "$container" \
                    --format '{{range $k,$v := .NetworkSettings.Networks}}{{$k}} {{end}}' 2>/dev/null); do
@@ -176,6 +194,23 @@ for svc in "${!EXPECTED_PORTS[@]}"; do
       fi
       continue
     fi
+
+    if [[ "${active_hp:-0}" -gt 0 ]]; then
+      # Bindings ARE active, just not on the host port this table expects --
+      # a node-level override (QDRANT_PORT, NATS_PORT, HIRAG_V2_HOST_PORT...).
+      # Probe what the daemon actually published; a remapped healthy service
+      # must not be reported as drift.
+      actual=$(docker inspect "$container" \
+        --format '{{range $p,$b := .NetworkSettings.Ports}}{{if $b}}{{range $b}}{{.HostPort}} {{end}}{{end}}{{end}}' \
+        2>/dev/null | tr -s ' ' '\n' | grep -m1 . || echo "")
+      if [[ -n "$actual" ]] && _host_port_listening "$actual"; then
+        ok "$svc — published on :$actual, not the expected :$port (host override) — listener ✔"
+      else
+        fail "$svc — published on :$actual (expected :$port) but no host listener"
+      fi
+      continue
+    fi
+
     warn "$svc (:$port) — no host port requested (nothing to verify)"
     continue
   fi
@@ -231,8 +266,19 @@ dim "    docker network inspect pmoves_bus --format '{{range .Containers}}{{.Nam
 
 echo ""
 echo "=== Summary ==="
+# An audit that examined NOTHING must not report green. Every service being
+# skipped means the containers were not found -- usually a wrong PROJECT or a
+# stack that is down -- and "no drift" there is a statement about an empty set.
+# Exit 3 (unmeasurable), never 0. Same rule as the other PMOVES gates.
+if [[ ${CHECKED:-0} -eq 0 ]]; then
+  warn_sum "measured NOTHING — no containers found in project '$PROJECT'"
+  echo ""
+  echo "  This is not a pass. Check the stack is up, or pass PROJECT=<name>:"
+  echo "    make -C pmoves net-reality PROJECT=<compose-project>"
+  exit 3
+fi
 if [[ $DRIFT -eq 0 ]] && [[ $WARNINGS -eq 0 ]]; then
-  ok_sum "All checks passed — no reality drift detected"
+  ok_sum "All $CHECKED service(s) checked — no reality drift detected"
 elif [[ $DRIFT -eq 0 ]]; then
   warn_sum "$WARNINGS warning(s) — review above"
 else
