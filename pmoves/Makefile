@@ -732,6 +732,10 @@ recreate-svc: ## Surgical recreate of ONE service with current env+image: make r
 recreate-svc-list: ## List every compose service recreate-svc can target (all profiles)
 	@$(DC) --profile "*" config --services 2>/dev/null | sort
 
+.PHONY: net-reality
+net-reality: ## Cross-check every published port against a real host listener (catches silent binds). PORTS_ONLY=1 to skip subnet probes. 0 clean / 1 drift / 2 docker unavailable.
+	@bash scripts/audit_network_reality.sh $(if $(PORTS_ONLY),--ports-only)
+
 rebuild-svc: ## build-svc + recreate-svc in one move (the stale-container-object killer)
 	@$(MAKE) --no-print-directory build-svc SVC=$(SVC)
 	@$(MAKE) --no-print-directory recreate-svc SVC=$(SVC)

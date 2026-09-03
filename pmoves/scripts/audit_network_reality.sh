@@ -154,7 +154,29 @@ for svc in "${!EXPECTED_PORTS[@]}"; do
     --format "{{range \$p,\$b := .NetworkSettings.Ports}}{{if \$b}}{{range \$b}}{{.HostIp}}:{{.HostPort}} {{end}}{{end}}{{end}}" \
     2>/dev/null | tr -s ' ' '\n' | grep ":$port" | head -1 || echo "")
   if [[ -z "$binding" ]]; then
-    warn "$svc (:$port) — docker inspect shows no port mapping"
+    # .NetworkSettings.Ports holds ACTIVE bindings. Empty here has two very
+    # different causes, and collapsing them hid the silent-bind failure this
+    # script exists to catch: a service that ASKED for a host port and never
+    # got one reported as a mild "no port mapping" warning.
+    # .HostConfig.PortBindings holds what was REQUESTED — compare the two.
+    requested=$(docker inspect "$container" \
+      --format "{{index .HostConfig.PortBindings \"$port/tcp\"}}" 2>/dev/null || echo "")
+    if [[ -n "$requested" && "$requested" != "[]" && "$requested" != "<no value>" ]]; then
+      fail "$svc (:$port) — SILENT BIND: requested $requested, never activated"
+      internal_nets=""
+      for net in $(docker inspect "$container" \
+                   --format '{{range $k,$v := .NetworkSettings.Networks}}{{$k}} {{end}}' 2>/dev/null); do
+        if [[ "$(docker network inspect "$net" --format '{{.Internal}}' 2>/dev/null)" == "true" ]]; then
+          internal_nets="$internal_nets $net"
+        fi
+      done
+      if [[ -n "$internal_nets" ]]; then
+        dim "every attached network is internal:$internal_nets — moby/moby#36174"
+        dim "remedy: DOCKER_NETWORK_HARDENING.md x-network-tailnet-published (NOT pmoves_external)"
+      fi
+      continue
+    fi
+    warn "$svc (:$port) — no host port requested (nothing to verify)"
     continue
   fi
 

@@ -92,15 +92,17 @@ fi
     done
     if [ -n "$INTERNAL" ]; then
       echo "  Every attached network is internal:$INTERNAL"
-      echo "  On Docker Desktop, a service attached ONLY to internal networks does"
-      echo "  not get its published ports activated, and Docker reports no error."
-      echo "  (Measured on the 4090. Native Linux Engine may differ -- this script"
-      echo "   reports what the LOCAL daemon did, so trust the finding above, not"
-      echo "   this explanation, if you are on a Linux node.)"
-      echo "  Fix: attach a NON-internal bridge. Do NOT reach for pmoves_external"
-      echo "       unless the service genuinely needs outbound internet --"
-      echo "       docs/operations/DOCKER_NETWORK_HARDENING.md Rule 1 forbids it."
-      echo "       Fleet-wide audit: PR #2897."
+      echo "  A service attached ONLY to internal networks does not get its"
+      echo "  published ports activated, and Docker reports no error."
+      echo "  Undocumented upstream: moby/moby#36174 (open since 2018, filed on"
+      echo "  native Linux Engine). Docker's own docs define 'internal' only as"
+      echo "  'externally isolated' -- about egress, silent on published ingress."
+      echo "  Fix: docs/operations/DOCKER_NETWORK_HARDENING.md -- the"
+      echo "       x-network-tailnet-published tier (internal: false + Rule 4:"
+      echo "       bind 0.0.0.0, restrict at the Tailscale ACL layer)."
+      echo "       Do NOT use pmoves_external: Rule 1 reserves it for services"
+      echo "       that genuinely need outbound internet."
+      echo "  Fleet audit: bash scripts/audit_network_reality.sh (make net-reality)"
     fi
   else
     echo "  No host binding was requested for $PORT/tcp."
