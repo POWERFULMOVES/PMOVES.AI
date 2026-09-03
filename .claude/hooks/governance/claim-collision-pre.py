@@ -668,7 +668,38 @@ def _is_register(token: str) -> bool:
     token = token.strip().strip("'\"")
     if not token:
         return False
-    return os.path.basename(token.rstrip("/")) == REGISTER_NAME
+
+    # Split on EITHER separator, not os.sep. `os.path.basename` is
+    # platform-dependent: on Linux it does not treat "\" as a separator, so a
+    # Windows-spelled path reaching a Linux runner would arrive as one long
+    # basename and miss. The guard has to answer the same way wherever it runs.
+    base = re.split(r"[\\/]", token.rstrip("/\\"))[-1]
+    if base == REGISTER_NAME:
+        return True
+
+    # THE POSIX TOKENIZER ATE THE SEPARATORS. `_tokens` calls
+    # `shlex.split(..., posix=True)` -- correct for bash, and it treats "\" as
+    # an ESCAPE. So a Windows-spelled path is not merely split wrong, it comes
+    # back with its separators deleted:
+    #
+    #   C:\Users\me\Temp\t0\AGNOTE4482PHI.t1.md
+    #     -> C:UsersmeTempt0AGNOTE4482PHI.t1.md
+    #
+    # There is no separator left for any basename test to find. Measured on
+    # Z890 (win32) against this file's own suite: with the register named in
+    # Windows spelling, `cp`, `dd of=`, `install`, `csplit -f`,
+    # `csplit --prefix=` and `split` ALL passed silently, where the identical
+    # commands spelled with "/" were refused. Six write vectors, decided by
+    # which slash the operator happened to type.
+    #
+    # `endswith` is the right shape for a guard here: it OVER-matches (a file
+    # genuinely named `notes-AGNOTE4482PHI.t1.md` would be refused) and
+    # over-matching is the safe direction. It still leaves the neighbour cases
+    # alone -- `<REG>.bak`, `.orig`, `.rej`, `.BACKUP.123` all END with their
+    # own suffix, not with the register name, so git's merge artifacts are
+    # untouched. That distinction is what the substring form got wrong and is
+    # preserved here deliberately.
+    return token.endswith(REGISTER_NAME)
 
 
 def _assignments(skeleton: str) -> dict:

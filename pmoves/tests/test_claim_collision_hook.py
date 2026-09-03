@@ -1464,3 +1464,66 @@ def test_those_same_commands_still_read_the_register(tmp_path, command):
     r = _run_bash(tmp_path, command.format(R=str(reg)))
     assert r.returncode == ALLOW, f"read refused: {command!r}\n{r.stderr}"
     assert _decision(r) is None, f"spurious prompt for: {command!r}"
+
+
+# ---------------------------------------------------------------------------
+# Path SPELLING must not decide whether the guard fires.
+#
+# These pin the platform-independent behaviour on purpose. The suite's other
+# cases build paths with `tmp_path / REGISTER_NAME`, which yields "\" on
+# Windows and "/" on Linux -- so a Linux runner exercises only one spelling and
+# can never catch a regression of this. Hard-code both.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "cp /tmp/whatever.md {R}",
+        "dd of={R}",
+        "install /tmp/x {R}",
+        "csplit -f {R} /tmp/in.txt 2",
+        "csplit --prefix={R} /tmp/in.txt 2",
+        "split -l 1 /tmp/in.txt {R}",
+        "mv /tmp/x {R}",
+        "echo x > {R}",
+        "tee {R}",
+        "sed -i s/a/b/ {R}",
+    ],
+)
+def test_a_backslash_spelled_register_is_still_the_register(tmp_path, command):
+    r"""`shlex.split(posix=True)` treats "\\" as an ESCAPE, not a separator.
+
+    So a Windows-spelled target does not merely tokenize oddly -- it comes back
+    with its separators DELETED:
+
+        C:\Users\me\Temp\t0\AGNOTE4482PHI.t1.md
+          -> C:UsersmeTempt0AGNOTE4482PHI.t1.md
+
+    leaving no separator for any basename test to find. Measured on Z890
+    (win32) before the fix: cp, dd of=, install, csplit -f, csplit --prefix=
+    and split ALL passed silently, while the identical commands spelled with
+    "/" were refused. Six write vectors on an append-only provenance file,
+    decided by which slash the operator happened to type.
+    """
+    reg = str(tmp_path / REGISTER_NAME).replace("/", "\\")
+    r = _run_bash(tmp_path, command.format(R=reg))
+    assert r.returncode == BLOCK, (
+        f"backslash spelling bypassed the guard: {command!r}\n"
+        f"target={reg!r}\nstderr={r.stderr}"
+    )
+
+
+@pytest.mark.parametrize("sep", ["/", "\\"])
+@pytest.mark.parametrize("suffix", [".bak", ".orig", ".rej", ".BACKUP.123"])
+def test_neighbouring_filenames_stay_allowed_in_both_spellings(tmp_path, sep, suffix):
+    """The over-match has a bound, and this is where it has to hold.
+
+    `_is_register` now falls back to `endswith` precisely because the POSIX
+    tokenizer can destroy the separators. That fallback must NOT swallow git's
+    merge-conflict artifacts -- the scenario where a careful hand fixup is the
+    entire recovery story, and the one the substring form got wrong.
+    """
+    reg = str(tmp_path / REGISTER_NAME).replace("/", sep).replace("\\", sep)
+    r = _run_bash(tmp_path, f"echo x > {reg}{suffix}")
+    assert r.returncode == ALLOW, f"{suffix} refused as the register ({sep!r}): {r.stderr}"
