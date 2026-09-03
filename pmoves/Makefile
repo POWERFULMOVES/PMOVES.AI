@@ -2514,7 +2514,7 @@ endif
 
 # Canonical layer service sets for deterministic tiered bring-up/down.
 WORKER_SERVICES := hi-rag-gateway-v2 retrieval-eval render-webhook langextract extract-worker pdf-ingest transcribe-backend
-AGENT_SERVICES := agent-zero archon deepresearch supaserch mesh-agent publisher-discord botz-gateway tokenism-simulator
+AGENT_SERVICES := agent-zero archon deepresearch supaserch mesh-agent publisher-discord botz-gateway tokenism-simulator notebook-mcp
 
 down:
 	@$(DC) down
