@@ -19,9 +19,8 @@ python -c "
 import json, subprocess
 # Pinokio root is per-node (C: here, D: elsewhere); derive it rather than
 # hardcoding a drive letter. See .claude/scripts/pinokio-root.sh
-_root = subprocess.run(['bash','.claude/scripts/pinokio-root.sh'],
+PTERM = subprocess.run(['bash','.claude/scripts/pinokio-root.sh','--exe'],
                        capture_output=True, text=True).stdout.strip()
-PTERM = f'{_root}/bin/npm/pterm.cmd'
 result = subprocess.run(
     [PTERM, 'search', ''],
     capture_output=True, text=True, encoding='utf-8', errors='replace'

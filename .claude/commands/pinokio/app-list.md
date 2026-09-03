@@ -17,7 +17,7 @@ List every installed Pinokio app with its running state, grouped by status.
 ```bash
 # Pinokio root is a PER-NODE value (C: here, D: on other nodes), so derive it.
 # pinokio-root.sh exits 1 when it had to guess -- see .claude/scripts/pinokio-root.sh
-PTERM="$(bash .claude/scripts/pinokio-root.sh)/bin/npm/pterm.cmd"
+PTERM="$(bash .claude/scripts/pinokio-root.sh --exe)"
 "$PTERM" search "" 2>&1 | python -c "
 import sys, json
 d = json.load(sys.stdin)

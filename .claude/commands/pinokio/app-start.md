@@ -21,7 +21,7 @@ Launch a Pinokio app and wait for it to become ready. Uses `pterm start` with th
 ```bash
 # Pinokio root is a PER-NODE value (C: here, D: on other nodes), so derive it.
 # pinokio-root.sh exits 1 when it had to guess -- see .claude/scripts/pinokio-root.sh
-PTERM="$(bash .claude/scripts/pinokio-root.sh)/bin/npm/pterm.cmd"
+PTERM="$(bash .claude/scripts/pinokio-root.sh --exe)"
 APP_ID="{{args.app_id}}"
 TIMEOUT="{{args.timeout_seconds|default:300}}"
 
