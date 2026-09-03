@@ -91,10 +91,18 @@ fi
       fi
     done
     if [ -n "$INTERNAL" ]; then
-      echo "  Cause: every attached network is internal:$INTERNAL"
-      echo "  An internal network cannot publish ports. Docker reports no error."
-      echo "  Fix: attach the service to a non-internal network (pmoves_external)."
-      echo "       Fleet-wide audit and rationale: PR #2897."
+      echo "  Every attached network is internal:$INTERNAL"
+      echo "  A service attached ONLY to internal networks does not get its"
+      echo "  published ports activated, and Docker reports no error."
+      echo "  Undocumented upstream: moby/moby#36174 (open since 2018, filed on"
+      echo "  native Linux Engine). Docker's own docs define 'internal' only as"
+      echo "  'externally isolated' -- about egress, silent on published ingress."
+      echo "  Fix: docs/operations/DOCKER_NETWORK_HARDENING.md -- the"
+      echo "       x-network-tailnet-published tier (internal: false + Rule 4:"
+      echo "       bind 0.0.0.0, restrict at the Tailscale ACL layer)."
+      echo "       Do NOT use pmoves_external: Rule 1 reserves it for services"
+      echo "       that genuinely need outbound internet."
+      echo "  Fleet audit: bash scripts/audit_network_reality.sh (make net-reality)"
     fi
   else
     echo "  No host binding was requested for $PORT/tcp."
