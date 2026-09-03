@@ -2151,18 +2151,73 @@ loki-ready: ## Check Loki readiness endpoint (/ready)
 
 # -------- Backups / Restore helpers ----------
 .PHONY: backup restore
-BACKUP_DIR ?= backups/$$(date +%Y%m%d_%H%M%S)
-backup: ## Dump Postgres, snapshot Qdrant, mirror MinIO bucket, Meili dump (best-effort)
+# Deferred `=` would re-run date on EVERY expansion, so `mkdir -p $(BACKUP_DIR)`
+# created one timestamped directory and the writes targeted a later second --
+# "backups/20260903_162919/postgres.sql.partial: No such file or directory",
+# measured on the 4090 2026-09-03. `:=` snapshots it once per make invocation.
+BACKUP_TS := $(shell date +%Y%m%d_%H%M%S)
+BACKUP_DIR ?= backups/$(BACKUP_TS)
+backup: ## Dump Postgres, snapshot Qdrant, mirror MinIO, dump Meili. Reports PER COMPONENT; non-zero if any fail (BACKUP_BEST_EFFORT=1 to accept partial).
 	@mkdir -p "$(BACKUP_DIR)"
-	@echo "→ Backing up Postgres…"
-	-@$(DC) exec -T postgres pg_dump -U $$POSTGRES_USER -d $$POSTGRES_DB > "$(BACKUP_DIR)/postgres.sql"
-	@echo "→ Snapshotting Qdrant…"
-	-@curl -fsS "http://localhost:6333/collections/$$QDRANT_COLLECTION/snapshots" -X POST -H 'content-type: application/json' -d '{}' > "$(BACKUP_DIR)/qdrant_snapshot.json"
-	@echo "→ Mirroring MinIO bucket '$(MINIO_BUCKET)' (requires mc alias 'local')…"
-	-@$(DC) exec -T minio mc mirror --overwrite local/$$MINIO_BUCKET "$(BACKUP_DIR)/minio_$$MINIO_BUCKET"
-	@echo "→ Dumping Meilisearch…"
-	-@curl -fsS "http://localhost:7700/dumps" -X POST -H "X-Meili-API-Key: $$MEILI_MASTER_KEY" -d '{}' > "$(BACKUP_DIR)/meili_dump.json"
-	@echo "✔ Backup written to: $(BACKUP_DIR)"
+	@# Every component here carried make's `-` prefix, which DISCARDS the exit
+	@# status, while the `>` redirect still created a file. So any failure left a
+	@# plausible-looking artifact and the target printed "Backup written to:".
+	@#
+	@# Measured on the 4090 2026-09-03: qdrant and meilisearch sit on
+	@# internal-only networks, so their host ports are never activated and both
+	@# curls fail with "Failed to connect" (`make net-reality` reports this).
+	@# The URLs below are still the RIGHT target -- routing around it with a
+	@# sidecar container would hide the topology defect instead of surfacing it,
+	@# so these keep pointing at localhost and now FAIL LOUDLY until the network
+	@# tier is fixed (DOCKER_NETWORK_HARDENING.md x-network-tailnet-published).
+	@#
+	@# Each component writes <file>.partial and is promoted only on success, so a
+	@# failed component leaves evidence and never a plausible-looking artifact.
+	@# This recipe reads POSTGRES_USER / QDRANT_COLLECTION / MEILI_MASTER_KEY /
+	@# MINIO_BUCKET from the shell, but never loaded env.shared -- unlike the 39
+	@# other targets that use LOAD_ENV_SHARED. So every one of those expanded
+	@# EMPTY: pg_dump ran as `-U  -d `, the Meili key was blank, the Qdrant URL
+	@# pointed at no collection. Combined with the discarded exit codes above,
+	@# `make backup` produced an EMPTY directory and reported success.
+	@$(LOAD_ENV_SHARED); rc=0; \
+	 echo "→ Backing up Postgres…"; \
+	 if $(DC) exec -T postgres pg_dump -U $${POSTGRES_USER:-} -d $${POSTGRES_DB:-} > "$(BACKUP_DIR)/postgres.sql.partial" 2>/dev/null; then \
+	   mv "$(BACKUP_DIR)/postgres.sql.partial" "$(BACKUP_DIR)/postgres.sql"; \
+	   echo "  ✔ postgres.sql ($$(wc -c < "$(BACKUP_DIR)/postgres.sql") bytes)"; \
+	 else echo "  ✖ postgres FAILED (left postgres.sql.partial)"; rc=1; fi; \
+	 echo "→ Snapshotting Qdrant…"; \
+	 if curl -fsS "http://localhost:6333/collections/$${QDRANT_COLLECTION:-}/snapshots" \
+	      -X POST -H 'content-type: application/json' -d '{}' \
+	      > "$(BACKUP_DIR)/qdrant_snapshot.json.partial" 2>/dev/null; then \
+	   mv "$(BACKUP_DIR)/qdrant_snapshot.json.partial" "$(BACKUP_DIR)/qdrant_snapshot.json"; \
+	   echo "  ✔ qdrant_snapshot.json ($$(wc -c < "$(BACKUP_DIR)/qdrant_snapshot.json") bytes)"; \
+	 else echo "  ✖ qdrant FAILED (collection '$${QDRANT_COLLECTION:-}' missing, or service down)"; rc=1; fi; \
+	 bucket="$${MINIO_BUCKET:-}"; \
+	 echo "→ Mirroring MinIO bucket '$${bucket:-<unset>}'…"; \
+	 if [ -z "$$bucket" ]; then \
+	   echo "  ✖ minio SKIPPED — MINIO_BUCKET unset (absent from env.shared)"; rc=1; \
+	 elif $(DC) exec -T minio mc mirror --overwrite "local/$$bucket" "$(BACKUP_DIR)/minio_$$bucket" >/dev/null 2>&1; then \
+	   echo "  ✔ minio_$$bucket"; \
+	 else echo "  ✖ minio FAILED (needs mc alias 'local')"; rc=1; fi; \
+	 echo "→ Dumping Meilisearch…"; \
+	 if curl -fsS "http://localhost:7700/dumps" -X POST \
+	      -H "X-Meili-API-Key: $${MEILI_MASTER_KEY:-}" -d '{}' \
+	      > "$(BACKUP_DIR)/meili_dump.json.partial" 2>/dev/null; then \
+	   mv "$(BACKUP_DIR)/meili_dump.json.partial" "$(BACKUP_DIR)/meili_dump.json"; \
+	   echo "  ✔ meili_dump.json ($$(wc -c < "$(BACKUP_DIR)/meili_dump.json") bytes)"; \
+	 else echo "  ✖ meilisearch FAILED"; rc=1; fi; \
+	 echo ""; \
+	 if [ "$$rc" = "0" ]; then \
+	   echo "✔ Backup complete — every component succeeded: $(BACKUP_DIR)"; \
+	 elif [ "$${BACKUP_BEST_EFFORT:-0}" = "1" ]; then \
+	   echo "⚠ PARTIAL backup at $(BACKUP_DIR) — see ✖ above. Exit forced to 0 by BACKUP_BEST_EFFORT=1."; \
+	   rc=0; \
+	 else \
+	   echo "✖ PARTIAL backup at $(BACKUP_DIR) — see ✖ above. NOT a restore point."; \
+	   echo "  A silently-partial backup is worse than none: it looks like a restore point and is not."; \
+	   echo "  Accept partial deliberately: BACKUP_BEST_EFFORT=1 make -C pmoves backup"; \
+	 fi; \
+	 exit $$rc
 
 restore: ## See docs/LOCAL_DEV.md for restore steps
 	@echo "See docs/LOCAL_DEV.md (Restore) for step-by-step instructions."
