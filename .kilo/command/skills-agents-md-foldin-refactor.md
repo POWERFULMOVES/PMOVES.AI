@@ -304,3 +304,118 @@ correct change is extending its `$note` to mention the corpus link path.
 - Scope discipline (PR3 §2.3): `.claude/context/submodules.md:11` still says
   "Total submodules: 54" and the real count is higher. It is stale. Leave it —
   a count audit is its own slice.
+
+### Handoff Target
+
+The operator named the implementer for this brief: **PMOVESxDARKXSIDExKiLO-KlAW**.
+Everything below is what an agent needs to pick the brief up, plus the one thing
+about that handoff that is *not* settled.
+
+#### Which profile — an operator decision, not resolved here
+
+The name maps onto two different profiles, and the corpus says they are not
+interchangeable:
+
+| profile | what the corpus says it is |
+|---|---|
+| `pmoves/configs/agent-profiles/kiloclaw.yaml` | the **node-agnostic harness target** — "the fleet-wide KiloClaw identity behind the bootstrap routing entry (`pmoves-bootstrap/v1` CGP: `routing.kiloclaw`, wire target `glm-5.1`)" (header, L4-5). Model `glm-5.1`, control agent `mavis`. |
+| `pmoves/configs/agent-profiles/kilocode_glm.yaml` | the **5090 DARKXSIDE co-creation edition** — and `kiloclaw.yaml`'s own header (L8-9) says it is "**not** the harness target." Model `glm-5-turbo`, control agent `darkxside`, `cocreator: darkxside`. |
+
+`PMOVESxDARKXSIDExKiLO-KlAW` reads like the DARKXSIDE edition — which is the one
+the corpus explicitly excludes from harness dispatch. Both readings are live:
+
+- **Reading 1 (harness).** The operator means the dispatchable claw, and
+  DARKXSIDE is attribution: DARKXSIDE witnesses all three 5090 agent interfaces
+  per `KRISS_KROSS_ACK.md` § "KiloCode GLM — Third Agent on 5090", so the name
+  can carry the witness without naming a different profile. Target is
+  `kiloclaw.yaml` and the subjects below apply as written.
+- **Reading 2 (co-creation edition).** The operator means `kilocode_glm.yaml`
+  literally. Then this is a **5090-local, operator-driven** handoff and not a bus
+  dispatch at all: that profile does not subscribe to `pmoves.agent.task.v1` —
+  only `claw.task.assign.v1`, `botz.workitem.claimed.v1`, and
+  `mesh.gpu.model.loaded.v1`.
+
+**Do not pick one silently.** The readings differ in model, in control agent, and
+in whether a harness dispatch is even possible. The operator decides. Record the
+choice in the CLAIM row so the next agent inherits the answer instead of this
+paragraph.
+
+#### Dispatch subjects
+
+Per `kiloclaw.yaml` § `nats` (L52-60), cross-checked against
+`pmoves/tools/agent_task_subscriber.py:70-71`:
+
+| direction | subject | note |
+|---|---|---|
+| in | `pmoves.agent.task.v1` | harness dispatch; match `target=glm-5.1` / alias `kiloclaw` |
+| in | `claw.task.assign.v1` | direct claw lane — the only inbound lane both profiles share |
+| out | `pmoves.agent.result.v1` | harness result return |
+| out | `claw.task.complete.v1` | claw completion |
+| out | `agent.graphiti.signed.v1` | signed-trail emission |
+
+Node-side worker: `pmoves/tools/agent_task_subscriber.py --agent glm-5.1 --alias kiloclaw`.
+
+#### Node affinity — this handoff leaves B850
+
+`kiloclaw.yaml` § `node_affinity` (L21-24): **5090** (primary), **laptop-4090**
+(portable), **z890** (fallback). `kilocode_glm.yaml` lists the same three.
+**B850 (Knuckles) is on neither list.** This brief was written on B850; the
+implementation is expected to run elsewhere. An implementer that finds itself on
+B850 should read that as a signal it picked up the wrong lane, not as a fallback
+to improvise around.
+
+#### The dispatch surface is UNVERIFIED
+
+`kiloclaw.yaml`'s own header (L14-15) states the precondition: *"Until that
+subscriber runs on a node, the routing entry is a hint, not a dispatch surface."*
+
+What was measured, on B850, 2026-09-03:
+
+- `agent_task_subscriber.py` is **not running on B850** — `pgrep -af
+  agent_task_subscriber` with the self-match excluded returns no match, exit 1.
+- Whether *any* consumer is attached to `pmoves.agent.task.v1` **fleet-wide**
+  **could not be measured from this node.** The NATS containers publish no
+  host-mapped monitoring port, and `/varz` + `/subsz` on both 8222 and 9223
+  return HTTP 000 / URLError from here.
+
+Under the exit-code doctrine — `0 clean · 1 findings · 3 could not measure` —
+**could-not-measure is not a pass.** So the dispatch surface is UNVERIFIED:
+nobody has shown that publishing to `pmoves.agent.task.v1` reaches KiloClaw. A
+publish that succeeds proves the broker accepted the message, not that anything
+is listening.
+
+Exactly two things would settle it. Either is sufficient:
+
+1. **A reachable NATS monitoring endpoint.** Query `/subsz` and `/varz` on a node
+   where the monitoring port is actually mapped, and show a subscriber on
+   `pmoves.agent.task.v1`. Refer to that node by hostname.
+2. **Confirmation from a node with affinity** (5090, laptop-4090, or z890) that
+   `agent_task_subscriber.py --agent glm-5.1 --alias kiloclaw` is running there —
+   either a process listing, or a round trip: publish a no-op task and observe
+   the matching `pmoves.agent.result.v1`.
+
+Until one of those lands, hand the brief over out-of-band — operator, or the
+AGNOTE lane board per `mavis_inter_agent_handoff_LEARNINGS.md` Lesson 6 — and say
+in the CLAIM that the bus path is unverified. Do not report a bus dispatch as
+delivered on the strength of a successful publish.
+
+#### Closing the loop
+
+On completion the implementer signs a trail: `kiloclaw` carries capability
+`trail_signing` (`kiloclaw.yaml` L49) and publishes `agent.graphiti.signed.v1`.
+The registered signing identity is **`kilocode`** in
+`pmoves/config/agent_signatures.yaml` (glyph U+25B2, emerald `#059669`, voice
+*architectural*), with alter **`kilocode-glm`** for the GLM / 5090 / DARKXSIDE
+mode.
+
+Then file a register row in `AGNOTE4482PHI.t1.md` carrying **both**:
+
+- `agent_signature: ACK::<AGENT>::<MARK>`
+- `<!-- GRAPHITI_MARK: … -->`
+
+That pairing is not optional decoration. The marker appears **307 times** in that
+file at this branch's tip (measured 2026-09-03; the count tracks the register, so
+re-measure rather than quoting this number). Six rows filed on B850 on 2026-09-03
+omitted both — the motivating incident recorded in PR #2915 and in B2 above. A
+handoff that lands the work and then files a bare row repeats the exact defect
+this brief exists to close.
