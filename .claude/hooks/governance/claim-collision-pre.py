@@ -413,7 +413,7 @@ HEREDOC_DELIM_RE = re.compile(r"<<-?\s*(['\"]?)([A-Za-z_][A-Za-z0-9_]*)\1")
 # pre-existing hole in redirect parsing rather than part of the path-spelling
 # defect this file's other fix addresses. `_is_register` strips the quotes it
 # now receives.
-REDIRECT_RE = re.compile(r"(>>?)\s*(\"[^\"]*\"|'[^']*'|[^\s;|&<>]+)")
+REDIRECT_RE = re.compile(r"(>>?)\s*((?:\"[^\"]*\"|'[^']*'|\\.|[^\s;|&<>])+)")
 TEE_RE = re.compile(r"\btee\b((?:\s+-\S+)*)((?:\s+[^\s;|&<>]+)*)")
 ECHO_LITERAL_RE = re.compile(
     r"\b(?:echo|printf)\b(?:\s+-\S+)*\s+(['\"])(.*?)\1", re.S
@@ -686,6 +686,23 @@ def _is_register(token: str) -> bool:
     # platform-dependent: on Linux it does not treat "\" as a separator, so a
     # Windows-spelled path reaching a Linux runner would arrive as one long
     # basename and miss. The guard has to answer the same way wherever it runs.
+    # Quotes are stripped EVERYWHERE, not just at the ends. A redirect word can
+    # mix quoted and unquoted spans -- bash concatenates them into one word --
+    # and both directions were wrong before this:
+    #
+    #   > /tmp/"Jane Doe"/AGNOTE4482PHI.t1.md   under-matched: the basename was
+    #                                           never reached, so a real
+    #                                           truncate passed as read-only
+    #   > "/tmp/AGNOTE4482PHI.t1.md".bak        over-matched: the quoted span
+    #                                           alone looked like the register,
+    #                                           so a git merge artifact was
+    #                                           refused -- exactly the case the
+    #                                           neighbour rule exists to permit
+    #
+    # Removing the quote characters first makes the token the path bash would
+    # actually open, and both cases then fall out of the ordinary basename test.
+    token = token.replace('"', "").replace("'", "")
+
     base = re.split(r"[\\/]", token.rstrip("/\\"))[-1]
     if base == REGISTER_NAME:
         return True

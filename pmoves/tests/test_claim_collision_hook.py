@@ -1564,3 +1564,51 @@ def test_a_quoted_redirect_target_with_a_space_is_still_the_register(
         f"quoted redirect bypassed the guard: {command!r}\n"
         f"target={reg!r}\nstderr={r.stderr}"
     )
+
+
+@pytest.mark.parametrize(
+    "template,expected",
+    [
+        # A redirect word may MIX quoted and unquoted spans; bash concatenates
+        # them. Each of these names the register and must be refused.
+        ('echo x > {D}/"Jane Doe"/{N}', BLOCK),
+        ("echo x > {D}/'Jane Doe'/{N}", BLOCK),
+        ('echo x > "{D}/Jane Doe"/{N}', BLOCK),
+        ('echo x > "{D}/Jane Doe/{N}"', BLOCK),
+        (r"echo x > {D}/Jane\ Doe/{N}", BLOCK),
+        (r"echo x >> {D}/Jane\ Doe/{N}", BLOCK),
+        # ...and the other direction. A quoted span that looks like the
+        # register followed by an unquoted suffix names a NEIGHBOUR, not the
+        # register. Refusing these breaks the merge-artifact guarantee.
+        ('echo x > "{D}/{N}".bak', ALLOW),
+        ('echo x > "{D}/{N}.bak"', ALLOW),
+        ('echo x > "{D}/{N}".orig', ALLOW),
+        ('echo x > "{D}/{N}".BACKUP.123', ALLOW),
+    ],
+)
+def test_a_redirect_word_is_parsed_whole_across_quote_boundaries(
+    tmp_path, template, expected
+):
+    r"""One shell word, several spans -- and it failed in BOTH directions.
+
+    `> /tmp/"Jane Doe"/AGNOTE4482PHI.t1.md` captured only `/tmp/"Jane`, so the
+    basename was never reached and a real truncate was certified as a
+    read-only `echo`.
+
+    `> "/tmp/AGNOTE4482PHI.t1.md".bak` captured only the quoted span, so a git
+    merge artifact was REFUSED -- the exact case the neighbour rule exists to
+    permit, and the one where a careful hand fixup is the whole recovery
+    story.
+
+    An under-match and an over-match from the same missing rule, which is why
+    both are pinned here rather than only the bypass.
+    """
+    d = tmp_path / "sub"
+    d.mkdir()
+    (d / "Jane Doe").mkdir()
+    (d / "Jane Doe" / REGISTER_NAME).write_text(EXISTING, encoding="utf-8")
+    cmd = template.format(D=str(d).replace("\\", "/"), N=REGISTER_NAME)
+    r = _run_bash(tmp_path, cmd)
+    assert r.returncode == expected, (
+        f"want {expected}, got {r.returncode} for: {cmd!r}\nstderr={r.stderr}"
+    )
