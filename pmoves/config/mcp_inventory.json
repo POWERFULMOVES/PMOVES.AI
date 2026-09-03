@@ -152,6 +152,16 @@
           "_note": "Registered but NOT served to any client (fail-closed; `clients: []` matches nothing in ServerSpec.applies_to()). URL updated 2026-09-02 from stale mcp.composio.dev to connect.composio.dev/mcp - the current Composio Connect endpoint used by the official plugin (submodule pmoves-composio-mcp-plugin). Auth is in-band managed OAuth: agent requests connection -> OAuth link returned -> operator authorizes -> connection reusable; NOT a static X-API-Key header. Old 2026-08-27 note (superseded but preserved): operator-approved registration; populate `clients` only after the endpoint is verified live AND COMPOSIO_API_KEY is registered in the CHIT secrets manifest (slot exists: composio_api_key, tier llm) plus client launcher allowlists. The stale `disabled: true` + X-API-Key header block was removed with this update."
         },
         {
+          "key": "jcodemunch",
+          "description": "jCodemunch MCP - token-efficient code exploration via tree-sitter AST parsing (70+ languages, 95%+ token savings over grep loops). Fork: PMOVES-jcodemunch-mcp (Hardened).",
+          "transport": "stdio",
+          "endpoint": "local",
+          "command": "uvx",
+          "args": ["jcodemunch-mcp", "serve", "--transport", "stdio"],
+          "clients": ["hermes"],
+          "_note": "Verified live 2026-09-03: initialize handshake clean against server v1.108.316 (PyPI run of the forked tool). Index repos first via `uvx jcodemunch-mcp index <repo>` (one-time per repo; `watch` keeps fresh). Fleet priority indexes: PMOVES.AI parent, PMOVES-pinokio, PMOVES-hermes-agent, PMOVES-composio. Registered directly to hermes client - stdio local tool, no secrets, no fail-closed risk surface."
+        },
+        {
           "key": "titanmail",
           "description": "Titan Mail hosted MCP (https://api.titan.email/mcp) — search/read/send email, folders, labels, calendar, contacts. OAuth via interactive Titan sign-in (no static API key). EU-hosted reseller accounts (Blacknight, MonoVM, DomainDiscount24, Fluccs, Domain Central) use https://api-euc1.titan.email/mcp instead.",
           "transport": "http",
