@@ -4,7 +4,7 @@
 >
 > **See also:** [CHIT Documentation Suite](../PMOVESCHIT/README.md) for the complete documentation index with reading paths and glossary. | [CHIT Tools Catalog](../CHIT_TOOLS_CATALOG.md) for all Python tools.
 
-**Last Updated:** March 24, 2026
+**Last Updated:** September 3, 2026
 **CHIT Protocol Version:** v0.1 (legacy), v0.2 (stable), v1.0 (current)
 **Geometry Bus:** NATS-based event bus for geometric intelligence
 
@@ -21,6 +21,8 @@
 > - **DeepResearch**: Audit doc corrected to reflect v1.0 CGP + dual NATS publishing
 >
 > Previous: Mar 1 review wave, Mar 4 promotion sync (Agent Zero, BoTZ, DoX fixes)
+>
+> **Sep 3 live bus audit (Z890):** NATS core bus LIVE (`:4222` in-network, host `:9223`→8222 — the audit-tool default of 8222 produces all-orphans against the host mapping; see the a0-archon-bridge skill). Geometry CGP path functional. Per the 2026-08-26 SPARK audit, most JetStream streams remain 0-msg/0-consumer dormant and `chit.>` + `agent.graphiti.signed.v1` still have no stream (docs-only). Cipher memory chain (cipher→TensorZero embed→Qdrant hybrid) verified end-to-end on SPARK, pending Pmoves-cipher PR #14 (v2 `k`/`use_rerank` schema fix) for caller-intent params.
 
 ### What is CHIT?
 

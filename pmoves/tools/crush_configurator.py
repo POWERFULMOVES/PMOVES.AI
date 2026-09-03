@@ -464,6 +464,36 @@ MCP_SPECS: List[MCPSpec] = [
             "disabled": True,
         },
     ),
+    # Verified live on Z890 (2026-09-03): :8086 is hi-rag-gateway-v2's REST
+    # surface (GET / answers {"service":"hi-rag-gateway-v2","hint":"POST
+    # /hirag/query"}; POST to the root answers 405). No MCP endpoint exists
+    # there, so this entry stays disabled by default -- a hand-added live
+    # entry pointed here for weeks and every session paid a 405 init failure.
+    # Same REST-only shape as archon above (fleet decision in #2303).
+    MCPSpec(
+        key="pmoves-hirag",
+        config={
+            "type": "http",
+            "url": "http://localhost:8086",
+            "timeout": 30,
+            "disabled": True,
+        },
+    ),
+    # Verified live on Z890 (2026-09-03): pmoves-botz-gateway-1 publishes
+    # :8054 and answers 404 on /mcp; the MCP surface is unverified. The
+    # hand-added live config pointed at :8091 -- which is ARCHON
+    # (pmoves-archon-1 maps 8091->3090) -- so "botz" sessions were silently
+    # talking to Archon. Disabled until the real MCP path on :8054 is
+    # pinned; do not re-enable against a guessed URL.
+    MCPSpec(
+        key="pmoves-botz-gateway",
+        config={
+            "type": "http",
+            "url": "http://localhost:8054/mcp",
+            "timeout": 30,
+            "disabled": True,
+        },
+    ),
 ]
 
 

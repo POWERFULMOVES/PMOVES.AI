@@ -12,6 +12,29 @@ The PMOVES console renders Quick Links with live health badges. Some integration
 - Health path override: `NEXT_PUBLIC_ARCHON_HEALTH_PATH` (default `/healthz`)
 - Fallback order: `/healthz` → `/api/health` → `/`
 
+## HiRAG Gateway v2 (REST-only — no MCP)
+- Base URL: `http://localhost:8086` (compose `pmoves-hi-rag-gateway-v2-1`)
+- Query: `POST /hirag/query` — body `QueryReq`: `query`, `namespace`, `k`, `alpha`, `use_rerank`, `rerank_topn`, `rerank_k`, `entity_types`. NOT `top_k`/`rerank` (unknown fields are silently dropped; fixed in Pmoves-cipher PR #14).
+- Health: `GET /` answers `{"ok":true,"service":"hi-rag-gateway-v2","hint":"POST /hirag/query"}`; admin: `/hirag/admin/stats`
+- OpenAPI: `GET /openapi.json`. No MCP endpoint exists on this port — MCP clients must not target it.
+
+## Agent Zero MCP (SSE + token)
+- API/UI: `http://localhost:8080`; UI also published on `:8081`
+- MCP surface: SSE `http://localhost:8081/mcp/t-${AGENT_ZERO_MCP_TOKEN}/sse` (token embedded in path — generator-canonical). `:8080/mcp` answers "session not found" — do not use.
+
+## Cipher API (memory + MCP)
+- Base URL: `http://localhost:8105` (compose `pmoves-cipher-api-1`)
+- MCP surface: SSE `http://localhost:8105/mcp/sse`, bearer `${CIPHER_API_TOKEN:-}` (empty bearer accepted by current server)
+- Health: `GET /health` (container healthcheck). Image must postdate the #2729/#2762 server fixes — older images 401 both SSE paths.
+
+## Archon port map (verified 2026-09-03)
+- Host `:8091` and `:3737` both map to container `:3090` — same service. Archon is REST-only (fleet decision #2303): rich health `GET /api/health`, simple `GET /health`. No MCP.
+- Do NOT point other services' MCP configs at `:8091` — it is Archon, not BoTZ.
+
+## BoTZ Gateway
+- Base URL: `http://localhost:8054` (compose `pmoves-botz-gateway-1`)
+- `/mcp` answers 404 — MCP surface unverified (as of 2026-09-03).
+
 ## PostgREST / Personas (pmoves_core)
 When Supabase CLI REST (65421) does not expose the `pmoves_core` schema, the console can query an alternate PostgREST directly using the `Accept-Profile: pmoves_core` header.
 
