@@ -270,7 +270,7 @@ curl -X POST "http://pmoves-spark:8080/mcp/execute" \
 ## Pinokio pterm (Windows)
 
 - Resolve path: `GET http://127.0.0.1:42000/pinokio/path/pterm`
-- Windows binary: `D:/pinokio/bin/npm/pterm.cmd` (use `.cmd` shim, not bare `pterm`)
+- Windows binary: `<PINOKIO_ROOT>/bin/npm/pterm.cmd` (use `.cmd` shim, not bare `pterm`)
 - P7 Ask AI: drawer on app Run page (not a separate dashboard tab)
 - Agent Interpreter: auto-discovers apps via `pterm search` + `SKILL.md` files
 - subprocess encoding: always `encoding="utf-8", errors="replace"` for pterm output on Windows

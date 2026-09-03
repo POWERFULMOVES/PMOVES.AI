@@ -82,6 +82,7 @@
       "Bash(rm -rf /:*)"
     ],
     "additionalDirectories": [
+      "C:/pinokio",
       "D:/pinokio"
     ]
   },
