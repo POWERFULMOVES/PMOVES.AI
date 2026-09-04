@@ -3285,6 +3285,7 @@ services:
     #   NATS_OPERATOR_JWT, NATS_SYS_ACCOUNT_PUBKEY/JWT,
     #   NATS_CORE_ACCOUNT_PUBKEY/JWT, NATS_EDGE_ACCOUNT_PUBKEY/JWT,
     #   NATS_CLOUD_ACCOUNT_PUBKEY/JWT — all arrive via env_file from the anchor.
+    - PMOVES_NETWORKS=pmoves_bus,pmoves_external
     ports:
     # client 4222 (cross-node, account-authenticated) — leaf 7422 (cross-node,
     # the port EDGE/CLOUD leaves attach to; 4222 is the WRONG port for leaves)
