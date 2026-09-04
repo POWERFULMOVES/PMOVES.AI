@@ -547,7 +547,13 @@ x-network-bus-internal-dns: &network-bus-internal-dns
 
 # Internet-capable. Rule 1: only for services that genuinely need outbound
 # (LLM APIs, package installs). Never reach for this merely to publish a port.
-x-network-external-bridged: &network-external-bridged
+#
+# DECLARATION ONLY -- deliberately carries no `&anchor`. The tier it describes
+# is pmoves_external, which is `external: true`: compose adopts that network and
+# does not own its driver/internal, so nothing here can merge this in. An unused
+# anchor is also not round-trip stable -- ruamel drops it on re-serialize, which
+# fails scripts/inject_pmoves_networks.py --check (it compares the whole file).
+x-network-external-bridged:
   driver: bridge
   internal: false
 
