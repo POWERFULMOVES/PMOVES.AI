@@ -30,8 +30,14 @@ dsh --profile web --patch <…>/pmoves.cordis.patch.yml --dump-config
 
 Env it reads (per process / per tenant — the tenant seam):
 - `CIPHER_API_TOKEN` — required (Cipher 401s without it)
-- `CIPHER_MCP_HTTP_URL` — optional override (default `http://cipher-api:8105/mcp`)
-- `NOTEBOOK_MCP_URL` — optional override (default `http://notebook-mcp:8092/mcp`)
+- `CIPHER_MCP_HTTP_URL` — override. **Default `http://localhost:8105/mcp`** (cipher-api's
+  host-published port), correct for `dsh` run **on the host**. Set to
+  `http://cipher-api:8105/mcp` when dsh runs **in-network** (a container on `pmoves_app`).
+- `NOTEBOOK_MCP_URL` — override. **Default `http://localhost:8207/mcp`** (notebook-mcp
+  publishes host `:8207` → container `:8092`). In-network: `http://notebook-mcp:8092/mcp`.
+
+> The defaults target the host run because that is dsh's only current deployment. When dsh
+> becomes a fleet container on `pmoves_app`, override both to the Docker-DNS URLs above.
 
 ## Status (2026-09-04)
 

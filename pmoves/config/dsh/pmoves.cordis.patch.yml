@@ -27,7 +27,12 @@
       config:
         serverName: cipher
         transport: streamable-http
-        url: !!js 'process.env.CIPHER_MCP_HTTP_URL || "http://cipher-api:8105/mcp"'
+        # Default to the HOST-published endpoint: the only currently available dsh
+        # deployment is `dsh --profile web` on the host, where the Docker-DNS name
+        # `cipher-api` does not resolve. cipher-api publishes 127.0.0.1:8105. An
+        # in-network/containerized dsh overrides via CIPHER_MCP_HTTP_URL to the
+        # Docker-DNS URL (http://cipher-api:8105/mcp).
+        url: !!js 'process.env.CIPHER_MCP_HTTP_URL || "http://localhost:8105/mcp"'
         headers:
           Authorization: !!js '`Bearer ${process.env.CIPHER_API_TOKEN}`'
         # Don't wedge dsh startup if Cipher is briefly unreachable; tools register on
@@ -43,5 +48,8 @@
       config:
         serverName: notebook
         transport: streamable-http
-        url: !!js 'process.env.NOTEBOOK_MCP_URL || "http://notebook-mcp:8092/mcp"'
+        # Host-published default: notebook-mcp publishes 127.0.0.1:8207 (host) → 8092
+        # (container). On the host use :8207; an in-network dsh overrides to the
+        # Docker-DNS URL (http://notebook-mcp:8092/mcp) via NOTEBOOK_MCP_URL.
+        url: !!js 'process.env.NOTEBOOK_MCP_URL || "http://localhost:8207/mcp"'
         failOnStartupError: false
