@@ -37,6 +37,11 @@ from pathlib import Path
 REGISTRY_PATH = Path(__file__).resolve().parents[1] / "config" / "fork_registry.json"
 GITMODULES_PATH = Path(__file__).resolve().parents[2] / ".gitmodules"
 
+# Entries with no `branch` and no .gitmodules pin to recover one from. These
+# four are registry-only (no submodule), so the value cannot be derived and
+# needs operator triage. Ratchet: may only be LOWERED, never raised.
+BRANCH_MISSING_BUDGET = 4
+
 
 def _validate(registry: dict) -> tuple[int, int, list[str]]:
     """Return (decided, total, list_of_problems)."""
@@ -67,6 +72,36 @@ def _validate(registry: dict) -> tuple[int, int, list[str]]:
         decided += 1
 
     return decided, total, problems
+
+
+def _validate_branch_coverage(registry: dict, budget: int) -> tuple[int, list[str]]:
+    """Return (missing_count, problems) for the `branch` field.
+
+    Rules 1-3 gate the sync DECISION. They never gated `branch` -- and `branch`
+    is the field that decides where work actually lands. The cost was measured
+    on 2026-09-04: two separate pieces of work targeted `main` on forks whose
+    declared branch is `PMOVES.AI-Edition-Hardened`, because every tool
+    (`gh pr create`, `gh api .../compare`, clone) defaults to GitHub's default
+    branch rather than the declared one. One PR carried four commits it did not
+    own; one fork with six PMOVES commits was reported as an empty mirror.
+
+    Ratchet, not a hard gate, matching rule 3: a BUDGET of known-missing entries
+    is allowed and may only shrink. Four registry entries have no .gitmodules
+    pin to recover a branch from and need operator triage, so failing outright
+    would gate CI on work nobody has scheduled.
+    """
+    forks: dict[str, dict] = registry.get("forks", {})
+    missing = [n for n, e in forks.items() if not str(e.get("branch", "")).strip()]
+    problems: list[str] = []
+    if len(missing) > budget:
+        problems.append(
+            f"branch coverage regressed: {len(missing)} forks missing 'branch' "
+            f"(budget {budget}). Newly missing: {', '.join(sorted(missing)[:5])}. "
+            f"Recover the value from the submodule's `branch = ` pin in .gitmodules; "
+            f"do NOT read it from GitHub's default branch, which disagrees for "
+            f"42 of 65 forks."
+        )
+    return len(missing), problems
 
 
 def _submodule_repos(gitmodules: Path) -> dict[str, str]:
@@ -170,6 +205,13 @@ def main() -> int:
     coverage_checked = args.registry.resolve() == REGISTRY_PATH.resolve()
     if coverage_checked:
         problems += _validate_coverage(registry, args.gitmodules)
+    # Branch coverage ratchet. BRANCH_MISSING_BUDGET is the count of entries
+    # that have no .gitmodules pin to recover a branch from; it may only be
+    # lowered. Lower it whenever one of those four gets triaged.
+    branch_missing, branch_problems = _validate_branch_coverage(
+        registry, BRANCH_MISSING_BUDGET
+    )
+    problems += branch_problems
     coverage = f"{decided}/{total}"
 
     payload = {
