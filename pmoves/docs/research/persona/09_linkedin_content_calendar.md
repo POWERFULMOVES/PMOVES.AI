@@ -1,14 +1,14 @@
 # DARKXSIDE LinkedIn Content Calendar
 
-> **Generated:** July 30, 2026 (link + claim re-verification: 2026-08-10)
-> **Pipeline (planned):** ActivePieces → persona.pmoves.ai → pmoves.ai exhibits. **Not yet operable** — no publishing flow is exported to `pmoves/activepieces/flows/`, and `persona.pmoves.ai` did not resolve on 2026-08-10. See § Prerequisites before scheduling anything.
-> **AI Playlist:** 2,028 videos crawled (`pmoves/docs/research/DARKXSIDE_PLAYLIST_ANALYSIS_2026-07-28.md`); 2,017 recorded as classified across 11 resonance domains (`docs/AGENT_TRAIL.md`). Crawled and classified are different buckets — do not use them interchangeably in post copy.
+> **Generated:** July 30, 2026 (link + claim re-verification: 2026-09-03 by kiloclaw — see the 2026-09-03 addendum at the bottom)
+> **Pipeline (planned):** ActivePieces → persona.pmoves.ai → pmoves.ai exhibits. **Not yet operable** — no publishing flow is exported to `pmoves/activepieces/flows/`, and `persona.pmoves.ai` still did not resolve on 2026-09-03 (NXDOMAIN; `pmoves.ai` 403; `/chit-tour/` 404). See § Prerequisites before scheduling anything.
+> **AI Playlist:** 2,028 videos crawled (`pmoves/docs/research/DARKXSIDE_PLAYLIST_ANALYSIS_2026-07-28.md`); 2,017 recorded as classified across 11 resonance domains (`docs/AGENT_TRAIL.md`). Crawled and classified are different buckets — do not use them interchangeably in post copy. **Live YouTube count 2026-09-03 (composio, channel @PMOVESAI): the `ai` playlist now holds 2,234 videos** — the 2,028 figure is the last crawl snapshot, not the current total. A new **`PMOVES.AI` playlist (345 videos, created 2026-08-11, `PLa64xecRY4d0`)** postdates this calendar and is a ready-made content source for pmoves-branded posts.
 
 ---
 
 ## Content → Resonance → Destination Map
 
-Each LinkedIn post is *intended* to route to a specific pmoves.ai exhibit, with the persona room (`persona.pmoves.ai`) as the primary landing. **Every destination below is a target, not a verified live URL.** As of 2026-08-10 `persona.pmoves.ai` returns NXDOMAIN and no `pmoves.ai/*` exhibit path was reachable from outside the mesh. Confirm each destination serves publicly before it goes into a post.
+Each LinkedIn post is *intended* to route to a specific pmoves.ai exhibit, with the persona room (`persona.pmoves.ai`) as the primary landing. **Every destination below is a target, not a verified live URL.** Re-verified 2026-09-03: `persona.pmoves.ai` still returns NXDOMAIN, `pmoves.ai` returns 403, and `/chit-tour/` returns 404. No exhibit path is publicly reachable yet. Confirm each destination serves publicly before it goes into a post.
 
 | # | Artifact | Format | Primary Resonance | pmoves.ai Destination |
 |---|----------|--------|-------------------|----------------------|
@@ -52,7 +52,7 @@ The AI Playlist (2,028 crawled videos) is the intended input to auto-research th
 | 2 | "BPM-Prosodic Bridge" (Artifact 4) | ai-ml + energy | Beats constellation | Draft ready |
 | 3 | "5 Dimensions" carousel (Artifact 3) | science-philosophy | `persona.pmoves.ai` | Draft ready |
 | 4 | "SOUL MOVES" origin myth (Artifact 2) | media-creative | Beats constellation | Draft ready |
-| 5 | "CHIT 37/37" milestone (Artifact 6) | security-privacy | CHIT Tour | Draft ready (re-verify agent count against `pmoves/config/agent_registry.yaml` at post time — 98 on 2026-08-10) |
+| 5 | "CHIT 37/37" milestone (Artifact 6) | security-privacy | CHIT Tour | Draft ready (re-verify agent count against `pmoves/config/agent_registry.yaml` at post time — **104 on 2026-09-03**, was 98 on 2026-08-10) |
 | 6 | "From the Bronx" (Artifact 7) | community | `persona.pmoves.ai` | Draft ready |
 | 7 | "The Sketch Is a Prototype" (Artifact 5) | dev-tools | Hyperdim | Draft ready (X thread) |
 | 8 | Auto-research from playlist domain | Rotating | Research artifact on `persona.pmoves.ai` | Generated weekly |
@@ -105,3 +105,16 @@ YouTube AI Playlist (2,028 videos)
 - [ ] **ActivePieces content queue**: Build and export the LinkedIn publishing flow to `pmoves/activepieces/flows/`, then wire the 7 artifacts into the AP scheduler
 - [ ] **Playlist stats pagination**: Fix the unpaginated `--stats` query in `pmoves/tools/yt_playlist_enrich.py` so the 11-domain table reflects all classified videos rather than a 1,000-row page
 - [ ] **Auto-research cron**: Weekly DeepResearch run on highest-video-count domain
+
+---
+
+## 2026-09-03 verification addendum (kiloclaw)
+
+Re-verified from the hosted kiloclaw instance with live sources (composio YouTube API, DNS/HTTP probes, repo registry):
+
+- **AI Playlist current size: 2,234 videos** (`PLGupOT04oMfok7S8W8Js7lZZIlhM8ufc8`). All crawl-derived counts above are snapshots from 2026-07-28 and understate the live playlist.
+- **New source playlist: `PMOVES.AI` — 345 videos, created 2026-08-11** (`PLa64xecRY4d0`). Postdates this calendar; prime material for artifact #1/#6 posts and the persona room.
+- **Registry counts now: 104 agents, 14 teams, 13 rooms, 79 gitlinked submodules** (was 98/13/13/64 on 2026-08-10). Any post quoting fleet size must re-verify at post time — the fleet is growing weekly.
+- **Site status unchanged/worse:** `persona.pmoves.ai` NXDOMAIN, `pmoves.ai` 403, `/chit-tour/` 404. The calendar's hard blocker stands. Cloudflare DNS access is available via composio (`cloudflare` toolkit ACTIVE on org `pmoves_ai`) — the cutover is an operator decision away, not an access problem.
+- **Gmail ingestion is not yet wired:** composio gmail toolkit not linked; local `gog` OAuth is expired (`invalid_grant`). `composio link gmail` is the one-command fix before the next source-gathering pass.
+- Ops context for the pipeline: see `pmoves/docs/operations/KILOCLAW_INSTANCE_INTEGRATION_2026-09-03.md`.
