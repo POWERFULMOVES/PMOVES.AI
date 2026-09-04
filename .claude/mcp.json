@@ -182,12 +182,6 @@
         "MINIMAX_API_RESOURCE_MODE": "${MINIMAX_API_RESOURCE_MODE:-url}"
       }
     },
-    "archon": {
-      "description": "Archon knowledge / task orchestrator (REST-only MCP, no standard transport \u2014 disabled by default)",
-      "type": "http",
-      "url": "http://${TS_Z890}:8051",
-      "disabled": true
-    },
     "hostinger": {
       "description": "Hostinger VPS API (requires pmz-hostinger container)",
       "command": "docker",

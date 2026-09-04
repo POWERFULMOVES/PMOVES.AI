@@ -1798,29 +1798,15 @@ nats server report connections
 **`archon.crawl.request.v1`** — ⚠️ **STUB — does not crawl.** Web crawl request (Agent/UI → Archon)
 **`archon.crawl.result.v1`** — ⚠️ **STUB — echoes the request.** Crawl result (Archon → requesting agent)
 
-> **Read this before building against the crawl pair.** A handler does exist —
-> `ArchonOrchestrator` (`pmoves/services/archon/orchestrator.py:22`) subscribes to
-> `archon.crawl.request[.v1]` — but `_process_crawl` takes the `metadata` dict **from the
-> request message** and republishes it unchanged as `extracted_text` and `fragments`,
-> stamped `"status": "completed"`. Nothing fetches the URL: there is no HTTP client,
-> headless browser, or crawler anywhere under `pmoves/services/archon/`.
->
-> So a consumer receives a success result whose content is whatever the *requester*
-> supplied. That is a stronger failure than an unimplemented subject — an unimplemented
-> subject times out and you notice; this one reports completion. The existing tests are not
-> thin — `test_archon_orchestrator.py:206-264` covers the crawl state machine
-> (`queued -> processing -> completed`), result publication on `archon.crawl.result.v1`, and
-> the result payload's shape. What none of them assert is **network retrieval**: no test
-> checks that the URL was ever fetched or that the returned content came from it.
-> `test_crawl_result_payload_structure` in fact demonstrates the defect — it feeds
-> `metadata.fragments = ["a", "b"]` in the request and asserts the *result* carries the same
-> `["a", "b"]` back. That round-trip passes whether or not a crawler exists, which is why
-> the gap survived a well-covered suite.
->
-> **Retire-vs-implement is an open operator decision**, parked and delegated to Archon in
-> `AGNOTE4482PHI.t1.md` (`ACK::Z890-CLAUDE::CONTROL-ITEMS-RESOLVED-2026-08-08`). This entry
-> does not pre-empt it — it only stops the catalog from advertising a crawler that is not
-> there.
+> **No live subscriber — the stub was retired, not fixed.** The handler this
+> entry used to document (`ArchonOrchestrator`, `pmoves/services/archon/`)
+> echoed request `metadata` back as a "completed" crawl result — no fetch, no
+> crawler, tests that round-tripped the defect. It was removed with the old
+> Python-Archon surface (2026-09-04, PR #2943): publishing
+> `archon.crawl.request.v1` now reaches nobody. The retire-vs-implement
+> decision parked in `AGNOTE4482PHI.t1.md` resolved to retire; if a crawler is
+> ever wanted, build it against native Archon 0.6.0 (REST,
+> `/api/workflows*`), not by reviving the echo stub.
 **`persona.publish.v1`** — Persona definition publish (Archon → Agent Zero)
 **`persona.update.v1`** — Persona update (Archon → Agent Zero)
 **`mesh.node.announce.v2`** — Node announcement v2 format (Mesh Agent → Agent Zero)

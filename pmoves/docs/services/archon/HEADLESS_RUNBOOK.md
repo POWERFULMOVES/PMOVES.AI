@@ -19,9 +19,9 @@ Targets
   - `make -C pmoves up-agents-hardened`
 
 Health & Readiness
-- Archon API health: `make -C pmoves archon-smoke`
-- Archon readiness + MCP bridge: `make -C pmoves archon-headless-smoke`
-- Archon MCP health (port 8051): `curl -sS http://localhost:8051/health | jq .`
+- Archon API/UI health: `make -C pmoves archon-ui-smoke`
+- Archon native health (:3090 / host `ARCHON_API_PORT`): `make -C pmoves archon-native-health`
+- Archon REST policy probe: `make -C pmoves archon-rest-policy-smoke`
 - Agent Zero API health: `make -C pmoves health-agent-zero`
 - Combined: `make -C pmoves agents-headless-smoke`
 - Agent Zero MCP: `make -C pmoves a0-mcp-smoke` and `make -C pmoves a0-mcp-exec-smoke`
@@ -30,19 +30,14 @@ Agent Zero MCP
 - Seed Agent Zero MCP servers from env/runtime:
   - `make -C pmoves a0-mcp-seed`
 
-Rebuild Archon with updated vendor
-- Option A — Clone-at-build (current default):
-  - Set `ARCHON_GIT_REF` (and optional `ARCHON_GIT_REMOTE`) then run `make -C pmoves archon-rebuild`.
-- Option B — Submodule build (recommended for local dev):
-  - Ensure submodule exists at `pmoves/integrations/archon` (see docs/SUBMODULES.md).
-  - Run `make -C pmoves up-archon-submodule` to build from the submodule tree.
+Rebuild Archon
+- The compose `archon` service builds from the `../PMOVES-Archon` submodule:
+  - `make -C pmoves archon-rebuild` after pulling the submodule.
+- Native standalone (own compose, `:3090`): `make -C pmoves up-archon-native`.
 
 Troubleshooting
-- If Archon container starts but shows a placeholder service at `/`:
-  - The vendored Archon import failed. Rebuild the image (vendor is cloned at build time) or set `ARCHON_VENDOR_ROOT` to a valid checkout.
-- If `/healthz` is 503:
-  - Supabase/PostgREST is not reachable. Ensure `postgrest` service is healthy or set `SUPA_REST_URL` to a reachable REST endpoint.
-- If `/ready` is 503:
-  - Check NATS connectivity (env `NATS_URL`) and Supabase reachability.
- - If `/mcp/describe` reachable=false:
-   - Ensure the MCP bridge is running; restart the container or check logs for the MCP subprocess. Verify that port 8051 is bound inside the container.
+- If `/api/health` is not 200:
+  - Check `docker logs` for the archon container; native 0.6.0 is TS/SQLite-native
+    and does not depend on Supabase/PostgREST for its own health.
+- The SPA catch-all answers 200 HTML for unknown routes — probe `/api/health`
+  (JSON), never the bare host, and read the body, not just the status code.

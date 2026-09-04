@@ -2034,8 +2034,8 @@ verify-all: ## Full verify: bring-up (parallel waits), then retro preflight + mo
 	-@$(MAKE) --no-print-directory monitoring-report
 	@echo "-> yt-dlp catalog smoke"
 	-@$(MAKE) --no-print-directory yt-docs-catalog-smoke
-	@echo "-> Archon smoke"
-	-@$(MAKE) --no-print-directory archon-smoke
+	@echo "-> Archon native health"
+	-@$(MAKE) --no-print-directory archon-native-health
 	@echo "-> Archon REST policy probe"
 	-@$(MAKE) --no-print-directory archon-rest-policy-smoke
 	@echo "-> Core smoke"
@@ -2046,34 +2046,9 @@ verify-all: ## Full verify: bring-up (parallel waits), then retro preflight + mo
 	-@$(MAKE) --no-print-directory channel-monitor-smoke
 	@echo "-> Agents headless smoke"
 	-@$(MAKE) --no-print-directory agents-headless-smoke
-	@echo "-> Archon MCP evidence"
-	-@$(MAKE) --no-print-directory archon-mcp-evidence
 	@echo "-> Model & persona readiness"
 	-@$(MAKE) --no-print-directory model-readiness
 	@echo "OK Verify-all sequence executed. Review console + Grafana."
-
-.PHONY: archon-mcp-evidence
-archon-mcp-evidence: ## Capture Archon MCP describe/commands/execute evidence under pmoves/docs/logs/
-	@mkdir -p pmoves/docs/logs
-	@STAMP=$$(date +%Y-%m-%d_%H-%M-%S); \
-	  ARCHON_URL=$${SERVICE_ARCHON_URL:-$${ARCHON_BASE_URL:-http://localhost:8091}}; \
-	  echo "→ Archon MCP describe ($$ARCHON_URL)"; \
-	  curl -sf "$$ARCHON_URL/mcp/describe" | jq . > pmoves/docs/logs/$${STAMP}_archon_mcp_describe.json; \
-	  echo "→ Archon MCP commands"; \
-	  curl -sf "$$ARCHON_URL/mcp/commands" | jq . > pmoves/docs/logs/$${STAMP}_archon_mcp_commands.json; \
-	  tool=$$(jq -r 'first(.commands[] | select(.name=="form.get").name) // .commands[0].name' pmoves/docs/logs/$${STAMP}_archon_mcp_commands.json); \
-	  echo "→ Archon MCP execute $$tool"; \
-	  curl -sS -X POST "$$ARCHON_URL/mcp/execute" -H 'content-type: application/json' -d "{\"tool\":\"$$tool\",\"arguments\":{}}" | jq . > pmoves/docs/logs/$${STAMP}_archon_mcp_execute.json; \
-	  echo "✔ Evidence saved under pmoves/docs/logs/ with stamp $$STAMP"
-
-.PHONY: archon-submodule-extract
-archon-submodule-extract: ## Extract Archon service to a submodule repo (set ARCHON_SUBMODULE_REPO=Org/Repo)
-	@if [ -z "$$ARCHON_SUBMODULE_REPO" ]; then echo "Usage: make archon-submodule-extract ARCHON_SUBMODULE_REPO=Org/Repo" && exit 2; fi; \
-	bash tools/submodules/extract_to_submodule.sh services/archon "$$ARCHON_SUBMODULE_REPO" integrations/archon
-
-.PHONY: up-archon-submodule
-up-archon-submodule: ## Build Archon from submodule (pmoves/integrations/archon)
-	@$(DC) up -d archon
 
 # Native Archon 0.6.0: TS/SQLite-native, runs from its OWN compose + own env file.
 # 0.6.0 upstream rewrote Python -> TypeScript and does NOT use Supabase — it uses
@@ -3890,7 +3865,7 @@ agents-headless-smoke: ## Check Agent Zero and Archon headless services
 # probes against in-process stubs, so a green below cannot mean "measured nothing".
 	@$(MAKE) --no-print-directory a0-smoke-selftest
 	@$(MAKE) health-agent-zero
-	@$(MAKE) archon-headless-smoke
+	@$(MAKE) archon-ui-smoke
 
 a0-smoke-selftest: ## Positive control: prove the Agent Zero probes go green on contract and red on each known defect (no service needed)
 	@$(PYTHON) tools/agent_zero_smoke.py selftest
@@ -3926,25 +3901,12 @@ a0-mcp-show: ## Print Agent Zero runtime MCP server map
 	echo "→ $$file"; \
 	sed -E 's/(password=)[^&"]+/\1***REDACTED***/g; s/(key=)[^&"]+/\1***REDACTED***/g' "$$file"
 
-.PHONY: archon-mcp-smoke
-archon-mcp-smoke: ## Quick MCP bridge smoke: assert port is open and returns HTTP (404 is acceptable)
-	@code=$$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8051/ || true); \
-	if [ "$$code" = "000" ]; then echo "✖ archon-mcp not reachable on :8051" && exit 1; else echo "✔ archon-mcp HTTP $$code"; fi
-
 .PHONY: archon-ui-smoke
 archon-ui-smoke: ## Verify consolidated Archon service API/UI endpoints are reachable (200)
-	@api=$$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8091/healthz || true); ui=$$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3737 || true); \
-	if [ "$$api" != "200" ]; then echo "✖ archon API /healthz => $$api" && exit 1; fi; \
+	@api=$$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8091/api/health || true); ui=$$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3737 || true); \
+	if [ "$$api" != "200" ]; then echo "✖ archon API /api/health => $$api" && exit 1; fi; \
 	if [ "$$ui" != "200" ]; then echo "✖ archon UI / => $$ui" && exit 1; fi; \
 	echo "✔ archon API/ UI healthy (API $$api, UI $$ui)"
-
-.PHONY: archon-smoke
-archon-smoke: ## Combined Archon smoke: /healthz 200 and Supabase CLI REST reachable
-	@$(LOAD_ENV_SHARED) $(PYTHON) tools/archon_smoke.py full
-
-.PHONY: archon-upload-smoke
-archon-upload-smoke: ## Upload a tiny document to Archon (/api/documents/upload) to validate embedding wiring
-	@$(LOAD_ENV_SHARED) $(PYTHON) tools/archon_smoke.py upload
 
 .PHONY: archon-rest-policy-smoke
 archon-rest-policy-smoke: ## Probe a CLI REST table with anon key (non-fatal on 401/403; fails only on 5xx/timeout)
@@ -3999,10 +3961,6 @@ archon-rest-policy-smoke: ## Probe a CLI REST table with anon key (non-fatal on 
 	elif [ "$$code" = "401" ] || [ "$$code" = "403" ] || [ "$$code" = "404" ]; then echo "↷ $$table not accessible (policy/missing) — OK ($$code)"; \
 	elif [ -z "$$code" ] || echo "$$code" | grep -Eq "^0+$$" || [ "$$code" -ge 500 ]; then echo "✖ REST probe failed (HTTP $$code)"; exit 1; \
 	else echo "↷ REST probe HTTP $$code"; fi'
-
-.PHONY: archon-headless-smoke
-archon-headless-smoke: ## Verify Archon headless services: /ready 200 and MCP bridge responds
-	@$(LOAD_ENV_SHARED) $(PYTHON) tools/archon_smoke.py headless
 
 .PHONY: archon-rebuild
 archon-rebuild: ## Rebuild Archon image with vendor update (set ARCHON_GIT_REF/REMOTE as needed)

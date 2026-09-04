@@ -17,7 +17,7 @@ PMOVES companions:
 Core checks:
 - `curl -fsS http://localhost:8091/healthz | jq .`
 - `curl -fsS -o /dev/null -w "%{http_code}" http://localhost:3737/`
-- `make -C pmoves archon-mcp-smoke`
+- `make -C pmoves archon-ui-smoke`
 
 Related parity tokens:
 - `/archon:status`
