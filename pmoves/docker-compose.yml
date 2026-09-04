@@ -3867,7 +3867,29 @@ services:
     depends_on:
       nats:
         condition: service_healthy
-    networks: [pmoves_app, pmoves_bus, pmoves_external]
+    # Alias `p7-room-orchestrator` on pmoves_app: openroom's nginx is built with
+    # `server p7-room-orchestrator:8120` (PMOVES-OpenRoom
+    # apps/webuiapps/nginx/default.conf:24), which resolves to nothing, so nginx
+    # aborts at startup -- `host not found in upstream` -- and the container had
+    # restarted 758 times by 2026-09-04.
+    #
+    # The name is not invented: docker-compose.yml ALSO defines a service called
+    # p7-room-orchestrator (~line 4310) building from the SAME Dockerfile as this
+    # one. Two definitions of one service, and consumers disagree about which
+    # name to use. This service is the one that actually runs.
+    #
+    # The alias is a stopgap that stops the loop with no rebuild. The real defect
+    # is the duplicate definition, which needs deduplicating separately -- do not
+    # read this as blessing two names for one service.
+    #
+    # Measured on pmoves_app before/after:
+    #   p7:8120                    -> 200
+    #   p7-room-orchestrator:8120  -> 000  (before this alias)
+    networks:
+      pmoves_app:
+        aliases: [p7-room-orchestrator]
+      pmoves_bus: {}
+      pmoves_external: {}
     # "ui" so the OpenRoom lane brings up the /api/p7 upstream its nginx proxy
     # targets (p7:8120) — without it the proxy 502s on every session call.
     # This carries the OVERLAY path specifically: `up-ui-new` runs
