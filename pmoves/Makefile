@@ -356,6 +356,9 @@ register-claim: export REGISTER_CO_OWNERS = $(CO_OWNER)
 register-claim: ## Open a lane in the claim register (OWNER= BRANCH= SCOPE= [TTL=72h] [CO_OWNER=])
 	@if [ -z "$$REGISTER_BRANCH" ] || [ -z "$$REGISTER_SCOPE" ]; then \
 		echo "usage: make register-claim OWNER='B850-CLAUDE (Knuckles)' BRANCH=fix/x TTL=72h SCOPE='what this lane covers'"; \
+		echo "  the single quotes are LOAD-BEARING: double quotes let the shell expand \$$VARS into the prose before"; \
+		echo "  make ever sees it, and the register is append-only so an absorbed expansion is uncorrectable."; \
+		echo "  long prose: write it to a file and pass ARGS='--scope-file=path' so it never joins a command string."; \
 		exit 2; \
 	fi
 	@$(REGISTER_PYTHON) tools/register_append.py claim $(ARGS)
@@ -368,6 +371,8 @@ register-release: export REGISTER_CO_OWNERS = $(CO_OWNER)
 register-release: ## Close a lane in the claim register (OWNER= BRANCH= SCOPE= [CO_OWNER=])
 	@if [ -z "$$REGISTER_SCOPE" ]; then \
 		echo "usage: make register-release OWNER='B850-CLAUDE (Knuckles)' BRANCH=fix/x SCOPE='what landed'"; \
+		echo "  single-quote SCOPE for the same reason register-claim says to: an expansion absorbed into"; \
+		echo "  a row cannot be corrected afterwards; ARGS='--scope-file=path' for long prose."; \
 		exit 2; \
 	fi
 	@$(REGISTER_PYTHON) tools/register_append.py release $(ARGS)

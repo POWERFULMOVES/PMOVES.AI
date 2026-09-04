@@ -826,3 +826,123 @@ def test_a_substitution_in_a_field_value_is_not_executed_by_make(tmp_path):
         f"the row does not carry the scope verbatim:\n{r.stdout}")
     assert not marker.exists(), (
         "make executed a command substitution embedded in SCOPE")
+
+
+# --- absorbed-expansion symptoms --------------------------------------------
+
+def test_refuses_a_scope_with_an_empty_assignment(mod, capsys):
+    """`NAME=` followed by whitespace is the swallowed-expansion signature.
+
+    A double-quoted SCOPE='...' where the shell already expanded `${X}` to
+    nothing arrives here as an empty assignment; once appended it is
+    uncorrectable, so it is refused on content alone.
+    """
+    rc = mod.main(["claim", "--owner", "AGENT-B", "--branch", "feat/free-lane",
+                   "--scope", "the env had SUPABASE_ANON_KEY= and nothing else"])
+    assert rc == mod.EXIT_REFUSED
+    assert len(_rows(mod)) == 1, "a symptom-refused claim must not be written"
+    err = capsys.readouterr().err
+    assert "empty assignment" in err
+    assert "--literal-assignments" in err, (
+        "a refusal with no named override is a dead end, not a gate")
+
+
+def test_literal_assignments_override_files_quoted_evidence(mod):
+    """The one legitimate use: a row QUOTING empty assignments as evidence.
+
+    A real live row reads 'env.tier-ui had empty SUPABASE_ANON_KEY= entries';
+    a bare refusal would make that row unfileable forever.
+    """
+    rc = mod.main(["claim", "--owner", "AGENT-B", "--branch", "feat/free-lane",
+                   "--scope", "env.tier-ui had empty SUPABASE_ANON_KEY= entries",
+                   "--literal-assignments"])
+    assert rc == mod.EXIT_OK
+    assert len(_rows(mod)) == 2
+    assert "SUPABASE_ANON_KEY= entries" in _rows(mod)[-1]
+
+
+def test_literal_assignments_does_not_waive_the_compose_chain(mod):
+    rc = mod.main(["claim", "--owner", "AGENT-B", "--branch", "feat/free-lane",
+                   "--scope", "ran docker compose -f a.yml --env-file x "
+                              "--env-file y up -d with FOO= empty too",
+                   "--literal-assignments"])
+    assert rc == mod.EXIT_REFUSED
+    assert len(_rows(mod)) == 1
+
+
+def test_refuses_a_compose_invocation_with_its_env_file_chain(mod, capsys):
+    """A make variable expanded into a full compose command -- the other
+    recorded incident, verbatim in shape."""
+    rc = mod.main(["claim", "--owner", "AGENT-B", "--branch", "feat/free-lane",
+                   "--scope", "up-external runs docker compose --project-directory x "
+                              "--env-file env.shared --env-file env.tier-agent up -d"])
+    assert rc == mod.EXIT_REFUSED
+    assert "--env-file" in capsys.readouterr().err
+    assert len(_rows(mod)) == 1
+
+
+def test_a_single_implausibly_long_token_is_refused(mod):
+    rc = mod.main(["claim", "--owner", "AGENT-B", "--branch", "feat/free-lane",
+                   "--scope", "x " + "a" * (mod.LONG_TOKEN_LIMIT + 1)])
+    assert rc == mod.EXIT_REFUSED
+    assert len(_rows(mod)) == 1
+    # The longest legitimate token in the live register (153 chars, a
+    # signature string) must keep filing.
+    rc = mod.main(["claim", "--owner", "AGENT-B", "--branch", "feat/other-lane",
+                   "--scope", "signed " + "S" * 153])
+    assert rc == mod.EXIT_OK
+
+
+def test_scope_file_content_is_validated_too(mod, tmp_path):
+    """Validation runs on the RESOLVED prose, so --scope-file is not a bypass."""
+    f = tmp_path / "scope.md"
+    f.write_text("the env had TOKEN= missing", encoding="utf-8")
+    rc = mod.main(["claim", "--owner", "AGENT-B", "--branch", "feat/free-lane",
+                   "--scope-file", str(f)])
+    assert rc == mod.EXIT_REFUSED
+    assert len(_rows(mod)) == 1
+
+
+def test_docs_block_with_a_symptom_is_refused(mod, tmp_path):
+    """docs mode inserts prose into the register; the same expansion could
+    arrive through REGISTER_TEXT_FILE, so it gets the same check."""
+    register = mod.REGISTER
+    anchor = "# register"
+    f = tmp_path / "block.md"
+    f.write_text("note: KEY= was empty in the env file\n", encoding="utf-8")
+    rc = mod.main(["docs", "--anchor", anchor, "--text-file", str(f)])
+    assert rc == mod.EXIT_REFUSED
+    assert register.read_text(encoding="utf-8").count("KEY=") == 0
+
+
+def test_pydantic_layer_agrees_with_the_function(mod):
+    """The typed surface and the stdlib enforcement must never disagree."""
+    if mod.RegisterProse is None:
+        pytest.skip("pydantic not importable in this interpreter")
+    from pydantic import ValidationError
+    cases = [
+        "clean scope with `backticks` and TTL=72h inside",
+        "swallowed TOKEN= expansion",
+        "docker compose --env-file a --env-file b up",
+        "token " + "a" * (mod.LONG_TOKEN_LIMIT + 1),
+    ]
+    for text in cases:
+        fn_finds = bool(mod.expansion_symptoms(text))
+        try:
+            mod.RegisterProse(text=text)
+            model_finds = False
+        except ValidationError:
+            model_finds = True
+        assert fn_finds == model_finds, text
+
+
+def test_usage_lines_name_the_single_quote_reason():
+    """The static half of the invocation-boundary fix: the usage line must say
+    WHY single quotes, not merely show them."""
+    makefile = MAKEFILE.read_text(encoding="utf-8")
+    claim_block = makefile.split("register-claim:", 1)[1].split("register-release:", 1)[0]
+    assert "LOAD-BEARING" in claim_block
+    assert "uncorrectable" in claim_block
+    assert "--scope-file" in claim_block
+    release_block = makefile.split("register-release:", 1)[1].split("register-amend:", 1)[0]
+    assert "single-quote SCOPE" in release_block

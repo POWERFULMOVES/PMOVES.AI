@@ -47,7 +47,9 @@ What this does that a heredoc cannot:
 
 Exit codes follow this repo's doctrine (see docker_host_policy_check.py):
   0  appended
-  1  refused -- the lane is held by another owner
+  1  refused -- the lane is held by another owner, or the content was refused
+     (absorbed-expansion symptoms in the prose; nothing was written, and the
+     message names the override for deliberately-quoted literal assignments)
   3  could not measure -- refused, and NOT a pass
 """
 
@@ -116,6 +118,117 @@ def _ttl_delta(ttl: str) -> timedelta | None:
     if ttl.endswith("d") and ttl[:-1].isdigit():
         return timedelta(days=int(ttl[:-1]))
     raise ValueError(f"unparseable TTL {ttl!r} (use e.g. 72h, 7d, or n/a)")
+
+
+# --- absorbed-expansion symptoms -------------------------------------------
+#
+# SYMPTOMS, NOT CAUSES. A guard inside this tool cannot catch the CAUSE of a
+# shell or Make expansion, because the expansion happens BEFORE this tool is
+# invoked: bash expands "${X}" inside a double-quoted SCOPE=, and make consumes
+# a dollar of its own (a literal one needs doubling), so python only ever
+# receives post-expansion text and never sees a dollar-brace to guard. Two
+# register rows have already absorbed an expansion this way -- a make variable
+# expanded into a full compose invocation with its whole env-file chain, and a
+# shell parameter expansion swallowed to empty -- and the register is
+# APPEND-ONLY, so both are uncorrectable. What a validator CAN do is detect
+# the SYMPTOM in the text it is handed, and refuse before it is written.
+#
+# Thresholds calibrated against the live register (469 ledger rows at
+# measurement time), not invented:
+#   * longest legitimate single token in any row: 153 chars (a signature
+#     string) -> LONG_TOKEN_LIMIT = 300 carries 2x margin;
+#   * the empty-assignment pattern matches 3 occurrences in live rows, and all
+#     three are rows deliberately QUOTING env/command text as evidence -- so
+#     the refusal names --literal-assignments rather than dead-ending the one
+#     legitimate use of the pattern;
+#   * a compose invocation carrying >= 2 --env-file flags matches 0 live rows.
+_EMPTY_ASSIGNMENT_RE = re.compile(
+    r"(?<![A-Za-z0-9_`/])[A-Z][A-Z0-9_]{1,31}=(?=[\s$]|$|[,;)])")
+_COMPOSE_INVOCATION_RE = re.compile(r"docker[\s+-]compose\b")
+LONG_TOKEN_LIMIT = 300
+
+
+def expansion_symptoms(text: str) -> list[str]:
+    """Every absorbed-expansion symptom found in `text`, as human strings.
+
+    Pure and stdlib-only so enforcement never depends on an import that an
+    offline interpreter may lack. `text` is scope prose or a docs block --
+    free text a filer handed this tool AFTER whatever shell or make layer
+    surrounded the invocation has already had its way with it.
+    """
+    symptoms: list[str] = []
+    # ``double-backticked`` spans are a row quoting its OWN grammar; the
+    # corpus strips them before branch matching for the same reason.
+    scanned = _QUOTED_EXAMPLE_RE.sub(" ", text)
+    for m in _EMPTY_ASSIGNMENT_RE.finditer(scanned):
+        symptoms.append(
+            f"empty assignment {m.group(0)!r} (uppercase name, `=`, then "
+            "whitespace or end of field) -- the signature of a shell "
+            "parameter expansion swallowed to empty")
+    if (_COMPOSE_INVOCATION_RE.search(scanned)
+            and scanned.count("--env-file") >= 2):
+        symptoms.append(
+            "a docker compose invocation carrying its whole --env-file chain "
+            "-- the signature of a make variable expanded into a full command")
+    for tok in scanned.split():
+        if len(tok) > LONG_TOKEN_LIMIT:
+            symptoms.append(
+                f"a {len(tok)}-character single token (limit {LONG_TOKEN_LIMIT};"
+                " the longest legitimate token in the live register is 153)")
+    return symptoms
+
+
+def assert_prose_clean(text: str, literal_assignments: bool = False) -> None:
+    """Raise ValueError naming every symptom, unless explicitly overridden.
+
+    `literal_assignments` is the escape hatch for the one legitimate use of
+    the empty-assignment pattern: a row that QUOTES env or command text as
+    evidence ("env.tier-ui had empty SUPABASE_ANON_KEY= entries" is a real
+    row, and a bare refusal would be a dead end rather than a gate). The
+    override is per-invocation and named in the refusal message, so a filer
+    reaches it without reading source. It does NOT waive the compose-chain or
+    long-token symptoms -- those have no legitimate quoted-literal use.
+    """
+    symptoms = expansion_symptoms(text)
+    if literal_assignments:
+        symptoms = [s for s in symptoms if "empty assignment" not in s]
+    if not symptoms:
+        return
+    raise ValueError(
+        "the prose shows symptoms of an absorbed shell/Make expansion: "
+        + "; ".join(symptoms)
+        + ". The register is append-only, so a row that absorbs an expansion"
+        " is UNCORRECTABLE -- refused now so it is re-filed properly. Expansion"
+        " happens BEFORE this tool runs: single-quote SCOPE= at the make"
+        " invocation (double quotes let the shell expand it first), or pass the"
+        " prose via --scope-file / REGISTER_TEXT_FILE so it never becomes part"
+        " of a command string. If these assignments are quoted LITERALLY as"
+        " evidence, re-run with --literal-assignments.")
+
+
+# A pydantic layer over the same check, for callers that validate typed fields
+# rather than drive the CLI. Corpus precedent: chit_security_validator.py.
+# The import is GUARDED because the sanctioned path must run on the interpreter
+# the Makefile picks for PyYAML alone, which offline may not carry pydantic;
+# the stdlib function above is the enforcement, and this model must never
+# disagree with it -- a test pins that it cannot.
+try:
+    from pydantic import BaseModel, field_validator  # type: ignore[import-untyped]
+
+    class RegisterProse(BaseModel):
+        """Scope/docs prose carrying no absorbed-expansion symptom."""
+
+        text: str
+
+        @field_validator("text")
+        @classmethod
+        def _no_absorbed_expansion(cls, value: str) -> str:
+            symptoms = expansion_symptoms(value)
+            if symptoms:
+                raise ValueError("; ".join(symptoms))
+            return value
+except ImportError:  # pragma: no cover -- exercised only off-venv
+    RegisterProse = None  # type: ignore[assignment,misc]
 
 
 def build_row(
@@ -579,7 +692,8 @@ def _dispatch(argv: list[str] | None = None) -> int:
                                  if c.strip()],
                         metavar="ID[:note]",
                         help="another body that worked this lane; repeatable")
-    parser.add_argument("--scope-file", default="",
+    parser.add_argument("--scope-file",
+                        default=os.environ.get("REGISTER_SCOPE_FILE", ""),
                         help="read the scope prose from a FILE. The most "
                              "robust option and the one to reach for with long "
                              "rows: prose never becomes part of a command "
@@ -597,6 +711,12 @@ def _dispatch(argv: list[str] | None = None) -> int:
              "here. Without this flag the sanctioned path would be the one "
              "route that skips the question, which is how a gate becomes "
              "theatre.")
+    parser.add_argument(
+        "--literal-assignments", action="store_true",
+        help="proceed when the prose QUOTES empty assignments as evidence "
+             "(e.g. 'env.tier-ui had empty SUPABASE_ANON_KEY= entries') -- "
+             "the one legitimate use of the swallowed-expansion signature. "
+             "Does NOT waive the compose-chain or long-token symptoms.")
     parser.add_argument("--dry-run", action="store_true",
                         help="render and check the row, write nothing")
     args = parser.parse_args(argv)
@@ -606,7 +726,14 @@ def _dispatch(argv: list[str] | None = None) -> int:
             print("register-append: docs mode needs --anchor and --text-file",
                   file=sys.stderr)
             return EXIT_UNMEASURED
-        return insert_docs(args.anchor, Path(args.text_file).read_text(encoding="utf-8"))
+        block = Path(args.text_file).read_text(encoding="utf-8")
+        try:
+            assert_prose_clean(block,
+                               literal_assignments=args.literal_assignments)
+        except ValueError as exc:
+            print(f"register-append: refusing - {exc}", file=sys.stderr)
+            return EXIT_REFUSED
+        return insert_docs(args.anchor, block)
 
     if args.kind == "amend":
         if not args.branch or not args.co_owner:
@@ -648,6 +775,19 @@ def _dispatch(argv: list[str] | None = None) -> int:
               "unenforceable -- 78 rows in this register are already in that "
               "state.", file=sys.stderr)
         return EXIT_UNMEASURED
+
+    # CONTENT REFUSAL, before any lane comparison. A scope that absorbed a
+    # shell or Make expansion is uncorrectable once appended, so it is refused
+    # on its own text regardless of how it arrived (--scope, the environment,
+    # or --scope-file all resolve to this one string). Exit 1: this is a
+    # finding, not a measurement failure -- and never exit 3, which would let
+    # a filer read "could not measure" as "nothing was found".
+    try:
+        assert_prose_clean(args.scope,
+                           literal_assignments=args.literal_assignments)
+    except ValueError as exc:
+        print(f"register-append: refusing - {exc}", file=sys.stderr)
+        return EXIT_REFUSED
 
     try:
         row = build_row(
