@@ -124,7 +124,14 @@ services:
     # Prefer the secrets-sync name — the legacy local SERVICE_ROLE_KEY has been
     # observed stale (retired-secret signature); same preference as #2333/#2346.
     - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-${SERVICE_ROLE_KEY:-}}
+    # Cipher MCP endpoints — two transports, two DIFFERENT paths:
+    #   CIPHER_MCP_URL      = legacy SSE stream  (…/mcp/sse), kept for SSE consumers
+    #   CIPHER_MCP_HTTP_URL = modern streamable-http (…/mcp), what A0 mounts below
+    # A remote/non-default Cipher deployment MUST override BOTH (the paths differ, so
+    # one can't stand in for the other) — declared here + in env templates so an
+    # override is never silently dropped.
     - CIPHER_MCP_URL=${CIPHER_MCP_URL:-http://cipher-api:8105/mcp/sse}
+    - CIPHER_MCP_HTTP_URL=${CIPHER_MCP_HTTP_URL:-http://cipher-api:8105/mcp}
     - 'A0_SET_mcp_servers={"mcpServers":{"docker":{"command":"docker","args":["run","--rm","-i","--mount","type=bind,src=/var/run/docker.sock,dst=/var/run/docker.sock","mcp/docker"]},"pmoves-supabase":{"command":"mcp-server-postgrest","args":["--apiUrl","${SUPABASE_REST_URL:-http://supabase-kong:8000/rest/v1}","--apiKey","${SERVICE_ROLE_KEY:-${SUPABASE_SERVICE_ROLE_KEY:-}}","--schema","public,storage"]},"cipher":{"type":"streamable-http","url":"${CIPHER_MCP_HTTP_URL:-http://cipher-api:8105/mcp}","headers":{"Authorization":"Bearer
       ${CIPHER_API_TOKEN}"}},"notebook":{"type":"streamable-http","url":"${NOTEBOOK_MCP_URL:-http://notebook-mcp:8092/mcp}"}}}'
     # LLM routing: use TensorZero gateway as OpenAI-compatible provider
