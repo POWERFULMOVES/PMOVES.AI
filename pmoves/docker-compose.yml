@@ -3173,6 +3173,11 @@ services:
   # ── NATS Message Bus — JetStream-enabled event broker ──────────────────
   # Auth: nats://nats:***@nats:4222 | Monitoring: :8222/varz
   # See: pmoves/docs/NATS_CONFIGURATION.md
+  #
+  # The accounts/leaf hub (SYS/CORE/EDGE/CLOUD, 7422 leafnodes) is `nats-hub`
+  # below — spec §9 Phase 2, profile-gated OFF so default bring-up is unchanged
+  # until the funnel renders the trust material. Spec:
+  # pmoves/docs/specs/nats-accounts-leaf-topology-v0-spec-2026-08-07.md
   nats:
     # Graceful stop: JetStream state flush.
     stop_grace_period: 30s
@@ -3232,6 +3237,88 @@ services:
         limits:
           cpus: '1.0'
           memory: 512M
+
+  # ── NATS accounts/leaf hub — spec §9 Phase 2 (PMOVES-nats-server fork) ──
+  # Four trust zones (SYS/CORE/EDGE/CLOUD) via memory resolver of nsc-minted
+  # account JWTs; 7422 leafnode listener for EDGE/CLOUD leaves; SYS-guarded
+  # monitoring. Two-gate model: the account is the transport-trust gate; CHIT
+  # signing (inside messages) is the payload-provenance gate — broker-level CHIT
+  # enforcement is out of scope per spec §11. No Go patches (spec global
+  # constraint): the fork's value is config + packaging on stock nats:2.11.
+  #
+  # OFF by default (profile `nats-hub`): flipping bring-up to the hub requires
+  # the funnel-rendered trust material (see environment/secrets below) — the
+  # fork entrypoint fails fast without it. Default `nats` above is the
+  # flag-launched single-principal bus until the operator cuts over per spec §9.
+  #
+  # CONFIG NOTE: the fork image bakes the Aug-8 §7a conf, which predates the
+  # Aug-15 lab finding that `operator:` is REQUIRED (without it the server dies
+  # at boot: "error resolving system account: account validation failed"). The
+  # lab-verified template — pmoves/config/nats/pmoves-nats.conf, VERIFIED
+  # 2026-08-15 on z890 with leaf attach + account isolation proven — is mounted
+  # OVER the baked conf. Its ${NATS_*} placeholders expand from container env
+  # (env_file via the tier anchor; funnel renders them into env.shared per §8 —
+  # nats-server expands $VAR itself, no ${VAR:-default} supported).
+  #
+  # Cutover path (spec §9): Phase 2 = enable here on the hub node (KVM4-2 per
+  # mcp.json, or z890 lab first) → Phase 3 migrate CORE clients to .creds →
+  # Phase 4/5 attach EDGE/CLOUD leaves at 7422 → Phase 6 MCP NATS_CREDS cutover.
+  nats-hub:
+    stop_grace_period: 30s
+    <<: *tier-data-hardened
+    build:
+      context: ./PMOVES-nats-server/pmoves
+      dockerfile: Dockerfile
+    image: ghcr.io/powerfulmoves/pmoves-nats:pmoves-latest
+    container_name: pmoves-nats-hub-1
+    restart: unless-stopped
+    profiles:
+    - nats-hub
+    volumes:
+    # Lab-verified hub template (newer than the baked one — carries the required
+    # `operator:` directive). Placeholders resolve from container env.
+    - ./config/nats/pmoves-nats.conf:/etc/nats/pmoves-nats.conf:ro
+    - pmoves-nats-hub-js:/data/js
+    environment:
+    - PMOVES_NATS_SERVER_NAME=pmoves-nats-hub-${PMOVES_NODE:-z890}
+    # Template vars (funnel-rendered into env.shared per spec §8; PUBLIC values):
+    #   NATS_OPERATOR_JWT, NATS_SYS_ACCOUNT_PUBKEY/JWT,
+    #   NATS_CORE_ACCOUNT_PUBKEY/JWT, NATS_EDGE_ACCOUNT_PUBKEY/JWT,
+    #   NATS_CLOUD_ACCOUNT_PUBKEY/JWT — all arrive via env_file from the anchor.
+    ports:
+    # client 4222 (cross-node, account-authenticated) — leaf 7422 (cross-node,
+    # the port EDGE/CLOUD leaves attach to; 4222 is the WRONG port for leaves)
+    - ${NATS_BIND:-0.0.0.0}:${NATS_PORT:-4222}:4222
+    - ${NATS_LEAF_BIND:-0.0.0.0}:${NATS_LEAF_PORT:-7422}:7422
+    # monitoring: SYS-account-guarded in the hub (fixes the unguarded 8222 gap);
+    # loopback by default, same policy as `nats` above
+    - ${NATS_MONITORING_BIND:-127.0.0.1}:${NATS_MONITORING_PORT:-9223}:8222
+    # websocket surface A2UI/browser clients ride (spec §3)
+    - ${NATS_WS_BIND:-0.0.0.0}:${NATS_WS_PORT:-8080}:8080
+    secrets:
+    # Satisfies the fork entrypoint's fail-fast (trust-material-present check).
+    # PUBLIC nsc-minted account JWTs, funnel-rendered — shape: fork
+    # pmoves/examples/resolver_preload.conf.example. The template renders the
+    # same JWTs from env, so this file is the redundancy gate, not the source.
+    - source: nats_resolver_preload
+      target: /etc/nats/resolver_preload.conf
+    networks:
+    - pmoves_bus
+    - pmoves_external
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - wget --no-verbose --tries=1 --spider http://localhost:8222/varz || exit 1
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+
   nats-init:
     image: natsio/nats-box:0.14.5
     entrypoint: ["/bin/sh", "/scripts/init_streams.sh"]
@@ -6074,6 +6161,20 @@ volumes:
   wger-media: {}
   wger-prometheus: {}
   pmoves-yt-data: {}
+  # NATS accounts/leaf hub (profile: nats-hub) — spec §9 Phase 2. Separate
+  # volume from the legacy `nats` service so the two never share JetStream
+  # state during cutover (spec §9: phased, each independently testable).
+  pmoves-nats-hub-js: {}
+secrets:
+  # ── NATS hub trust material (profile: nats-hub) — funnel-rendered (spec §8) ──
+  # resolver_preload: PUBLIC nsc-minted account JWTs (SYS/CORE/EDGE/CLOUD) —
+  #   safe in a rendered config and in logs. Render via
+  #   `nsc generate config --mem-resolver` from the CHIT-vault-held operator
+  #   material; shape: fork pmoves/examples/resolver_preload.conf.example.
+  #   Satisfies the fork entrypoint's fail-fast gate; the mounted template
+  #   renders the same JWTs from env — this file is the redundancy, not source.
+  nats_resolver_preload:
+    file: ${CHIT_VAULT:-./secrets}/nats/resolver_preload.conf
 networks:
   pmoves_data:
     <<: *network-internal-only
