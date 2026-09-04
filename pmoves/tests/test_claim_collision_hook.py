@@ -1612,3 +1612,43 @@ def test_a_redirect_word_is_parsed_whole_across_quote_boundaries(
     assert r.returncode == expected, (
         f"want {expected}, got {r.returncode} for: {cmd!r}\nstderr={r.stderr}"
     )
+
+
+@pytest.mark.parametrize(
+    "template,expected",
+    [
+        # Bash deletes `\<newline>` before parsing, so all of these name the
+        # register and must be refused. `{C}` is spelled as a substitution
+        # rather than an escape on purpose: written inline, the backslash count
+        # is ambiguous to every layer that touches this file, and a first draft
+        # silently became backslash-plus-letter-n -- which is not a
+        # continuation, so the tests failed against a hook that was correct.
+        ("echo x > {D}/AGNOTE4482PHI.t1.{C}md", BLOCK),
+        ("echo x >> {D}/AGNOTE4482PHI.t1.{C}md", BLOCK),
+        ("echo x > {D}/AGNOTE{C}4482PHI.t1.md", BLOCK),
+        ("echo x >> {D}/AGNOTE{C}4482PHI.t1.md", BLOCK),
+        ("echo x > {D}/AGNO{C}TE4482PHI.t1.md", BLOCK),
+    ],
+)
+def test_a_line_continuation_cannot_hide_the_register(tmp_path, template, expected):
+    r"""`\<newline>` is removed by bash BEFORE it parses anything.
+
+    So `echo x > .../AGNOTE4482PHI.t1.\` + newline + `md` truncates the real
+    register, while every check in the hook was looking at text where the name
+    is split across two lines: the literal-name gate finds no contiguous
+    `AGNOTE4482PHI.t1.md` and returns "none", and `REDIRECT_RE`'s `\.` cannot
+    bridge it either, because `.` does not match a newline.
+
+    The continuation is built by substitution, not written inline. A first
+    draft spelled it as an escape and it arrived as backslash-plus-letter-n --
+    two ordinary characters, no newline at all -- so the tests failed against a
+    hook that was already correct. Chasing that cost more time than the fix
+    did, and the same ambiguity would bite the next person editing this file.
+    """
+    continuation = "\\" + "\n"
+    cmd = template.format(D=str(tmp_path).replace("\\", "/"), C=continuation)
+    assert "\\\n" in cmd, "the fixture built no continuation; the test is vacuous"
+    r = _run_bash(tmp_path, cmd)
+    assert r.returncode == expected, (
+        f"line continuation hid the register: {cmd!r}\nstderr={r.stderr}"
+    )

@@ -414,6 +414,9 @@ HEREDOC_DELIM_RE = re.compile(r"<<-?\s*(['\"]?)([A-Za-z_][A-Za-z0-9_]*)\1")
 # defect this file's other fix addresses. `_is_register` strips the quotes it
 # now receives.
 REDIRECT_RE = re.compile(r"(>>?)\s*((?:\"[^\"]*\"|'[^']*'|\\.|[^\s;|&<>])+)")
+# `\` followed by a line ending. Bash removes these before parsing, so the
+# guard has to as well -- see the comment at the top of classify_shell_write.
+CONTINUATION_RE = re.compile(r"\\\r?\n")
 TEE_RE = re.compile(r"\btee\b((?:\s+-\S+)*)((?:\s+[^\s;|&<>]+)*)")
 ECHO_LITERAL_RE = re.compile(
     r"\b(?:echo|printf)\b(?:\s+-\S+)*\s+(['\"])(.*?)\1", re.S
@@ -1211,6 +1214,30 @@ def classify_shell_write(command: str, cwd=None) -> ShellWrite:
     the recoverable append itself.
     """
     skeleton, bodies = split_heredocs(command)
+
+    # BASH DELETES `\<newline>` BEFORE IT PARSES ANYTHING. So
+    #
+    #     echo x > pmoves/docs/AGENTS/AGNOTE4482PHI.t1.\
+    #     md
+    #
+    # truncates the real register, while every check below looked at text where
+    # the name is split across two lines: the literal-name gate three lines down
+    # finds no contiguous `AGNOTE4482PHI.t1.md` and returns "none", and
+    # `REDIRECT_RE`'s `\\.` cannot bridge it either because `.` does not match a
+    # newline. Rejoining first means the rest of this function sees the same
+    # command bash does.
+    #
+    # SKELETON ONLY, after `split_heredocs`. A heredoc body is literal text --
+    # `\<newline>` inside a quoted delimiter is two real characters, not a
+    # continuation -- so rejoining there would invent content. A continuation is
+    # a shell-line construct and lives in the skeleton.
+    #
+    # Inside single quotes a `\<newline>` is also literal, so this
+    # over-normalizes that one case. It is the safe direction for a guard: the
+    # worst outcome is seeing a register name bash would not, which refuses a
+    # write that was not going to happen. The reverse would miss a truncate.
+    skeleton = CONTINUATION_RE.sub("", skeleton)
+
     executable = "\n".join(
         [skeleton] + [h["body"] for h in bodies if h["code"]]
     )
