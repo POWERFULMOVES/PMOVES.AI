@@ -39,8 +39,12 @@ Per governance, production VPS changes go through the on-node Make targets, not 
 
 ```bash
 cd /opt/PMOVES.AI/pmoves
-# 1. bring up the subscriber set (verify targets first: make -n)
-make agent-gym-up            # or the compose profile that carries geometry subscribers
+# 1. bring up the geometry-subscriber stack. There is no Known Road make target
+#    for this one yet; agentgym-rl-coordinator is the geometry subscriber here
+#    (it subscribes to geometry.event.v1 + tokenism.geometry.event.v1), and the
+#    only invocation the repo documents is the profile in its compose header:
+docker compose -f docker-compose.yml -f docker-compose.agentgym.yml \
+  --profile agentgym --profile supabase-local up -d
 # 2. start harness subscribers (kiloclaw/hermes lanes)
 uv run pmoves/tools/agent_task_subscriber.py --agent glm-5.1 --alias kiloclaw &
 # 3. flute geometry subscriber (consumes geometry.cgp.v1)
