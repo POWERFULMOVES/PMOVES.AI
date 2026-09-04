@@ -1,6 +1,6 @@
 # KiloClaw Instance Integration — Ops Baseline 2026-09-03
 
-> **Instance:** `kiloclaw` (hosted KiloClaw, tailnet `100.87.181.8`, user-owned `cataclysmstudios@`)
+> **Instance:** `kiloclaw` (hosted KiloClaw, user-owned `cataclysmstudios@` device, untagged on the tailnet)
 > **Scope:** Configure this instance as the cloud/mirror PMOVES.AI ops claw — composio operations surface, geometry-bus activation tracking, reticulum overlay status, LinkedIn persona source gathering.
 > **Method:** Every fact below was verified live from this instance on 2026-09-03. Nothing is inherited from Claude-context on other nodes.
 
@@ -8,28 +8,33 @@
 
 ## 1. Verified fleet state (from this node)
 
-| Node | Tailnet IP | Status |
+> **Addresses are deliberately omitted.** Raw `tailscale status` output is
+> leakable fleet topology (AGENTS.md Known Road), so this table carries node
+> names, tags and roles only. Resolve addresses at need with
+> `make -C pmoves fleet-status`, which redacts them, or by MagicDNS name.
+
+| Node | Tailnet tags | Status |
 |---|---|---|
-| `kiloclaw` (this) | 100.87.181.8 | user-owned, linux |
-| `pmoves-4090` | 100.105.8.81 | tagged, windows — local field claw seat (PMOVES--4090Z.AIClAW) |
-| `pmoves-5090` | 100.73.74.3 | tagged, windows |
-| `pmoves-z890` | 100.113.38.37 | tagged, windows |
-| `pmoves-kvm4-1` | 100.110.13.48 | tagged, linux, idle — **TensorZero/API-gateway node** |
-| `pmoves-kvm4-2` | 100.124.50.76 | tagged, linux, idle — **NATS hub + designated Reticulum hub** |
-| `pmoves-kvm2` | 100.74.146.76 | tagged, linux, idle — egress/SSL node |
-| `pmoves-spark`, `nano-pmoves`, `pmoves-nano-1`, `pmoves-b850-ai-top`, others | — | online/intermittent |
+| `kiloclaw` (this) | *(untagged — user-owned)* | user-owned, linux |
+| `pmoves-4090` | `tag:gpu` `tag:lab` `tag:pmoves` | tagged, windows — local field claw seat (PMOVES--4090Z.AIClAW) |
+| `pmoves-5090` | `tag:gpu` `tag:lab` `tag:pmoves` | tagged, windows |
+| `pmoves-z890` | `tag:gpu` `tag:lab` `tag:pmoves` | tagged, windows |
+| `pmoves-kvm4-1` | `tag:vps` `tag:exit` `tag:lab` `tag:pmoves` | tagged, linux, idle — **TensorZero/API-gateway node** |
+| `pmoves-kvm4-2` | `tag:vps` `tag:exit` `tag:lab` `tag:pmoves` | tagged, linux, idle — **NATS hub + designated Reticulum hub** |
+| `pmoves-kvm2` | `tag:vps` `tag:exit` `tag:lab` `tag:pmoves` | tagged, linux, idle — egress/SSL node |
+| `pmoves-spark`, `nano-pmoves`, `pmoves-nano-1`, `pmoves-b850-ai-top`, others | mixed `tag:gpu` / `tag:lab` / `tag:pmoves` | online/intermittent |
 
 **Network reachability (verified):**
 - `tailscale ping` OK to all KVMs (~20ms) and pmoves-4090 (DERP ~49ms).
 - **Direct TCP to `pmoves-kvm4-2:4222` from this node is BLOCKED** (tailscale ACL: user-owned device vs tagged fleet devices).
-- **SSH port 22 to KVM tailnet IPs is BLOCKED** from this node.
+- **SSH port 22 to the KVMs is BLOCKED** from this node.
 - `tailscale ssh` (daemon-routed) to `root@pmoves-kvm4-2` **works** — this is the Known Road for KVM access from kiloclaw.
 - Repo on kvm4-2: `/opt/PMOVES.AI` (compose project `pmoves`).
 
 ## 2. Geometry bus (NATS) — current state
 
 - Hub: `pmoves-nats-1` container on **kvm4-2**, up 6 weeks, healthy, `nats:2.11.8-alpine`, JetStream + monitoring enabled.
-- Binds tailnet IP only (`100.124.50.76:4222`); loopback refused. Creds `nats:pmoves` (documented weak default; real password overrides via env).
+- Binds the node's tailnet interface only (reach it as `pmoves-kvm4-2:4222`); loopback refused. Creds `nats:pmoves` (documented weak default; real password overrides via env).
 - **AUTH VERIFIED** from inside the hub network (`docker run --network host` probe): connect + auth OK.
 - **BUS IS IDLE: zero publishers/subscribers observed in a 6s wildcard subscribe.** The geometry bus needs activation — consumers/subscribers (flute geometry subscriber, agent task subscribers, geometry publishers) are not running on any KVM.
 
@@ -37,7 +42,15 @@
 
 Per governance, production VPS changes go through the on-node Make targets, not raw SSH from here. From an operator shell on kvm4-2 (`/opt/PMOVES.AI`):
 
+**Working directories differ between step 1 and steps 2-4 — that is deliberate,
+not a typo.** Compose must run from `pmoves/` (the project name is derived from
+that directory; from the repo root the stack comes up as project `PMOVES.AI`
+with different container names). The subscriber paths are repo-root relative, so
+running them from `pmoves/` doubles the prefix to `pmoves/pmoves/tools/...` and
+`uv` exits `No such file or directory`.
+
 ```bash
+# --- step 1 runs from pmoves/ (compose project name) ---
 cd /opt/PMOVES.AI/pmoves
 # 1. bring up the geometry-subscriber stack. There is no Known Road make target
 #    for this one yet; agentgym-rl-coordinator is the geometry subscriber here
@@ -45,13 +58,28 @@ cd /opt/PMOVES.AI/pmoves
 #    only invocation the repo documents is the profile in its compose header:
 docker compose -f docker-compose.yml -f docker-compose.agentgym.yml \
   --profile agentgym --profile supabase-local up -d
-# 2. start harness subscribers (kiloclaw/hermes lanes)
-uv run pmoves/tools/agent_task_subscriber.py --agent glm-5.1 --alias kiloclaw &
-# 3. flute geometry subscriber (consumes geometry.cgp.v1)
-uv run pmoves/tools/flute_geometry_subscriber.py &
+
+# --- steps 2-4 run from the repo root ---
+cd /opt/PMOVES.AI
+# 2. start harness subscribers (kiloclaw/hermes lanes). Module form, not a script
+#    path: agent_task_subscriber.py is a plain package module (NO PEP-723 header),
+#    so `uv run <path>` has no dependency set to resolve. with-env.sh supplies
+#    NATS_URL — the bare default is the in-network hostname `nats`, which does not
+#    resolve from a host shell. This is the invocation the tool's own docstring
+#    and .claude/skills/a0-archon-bridge/SKILL.md document.
+bash pmoves/scripts/with-env.sh python3 -m pmoves.tools.agent_task_subscriber \
+  --agent glm-5.1 --alias kiloclaw &
+# 3. flute geometry subscriber (consumes geometry.cgp.v1). This one IS a PEP-723
+#    uv script, but it is a Typer app with three subcommands (listen/dump/test)
+#    and no default — a bare invocation exits 2 with "Missing command".
+bash pmoves/scripts/with-env.sh uv run pmoves/tools/flute_geometry_subscriber.py listen &
 # 4. verify publishers/subscribers are live on the bus
-make geometry-bus-status     # -> pmoves/tools/geometry_bus_health.py
+make -C pmoves geometry-bus-status     # -> pmoves/tools/geometry_bus_health.py
 ```
+
+Every command above was resolved on B850 against this tree on 2026-09-03
+(`--help` / `-n` dry-run, exit 0); the two pre-correction forms were confirmed
+failing (`uv` spawn error on the doubled path; Typer exit 2 on the bare call).
 
 **Validation ladder (updated tests + validations):**
 1. `pmoves/tests/test_flute_geometry_subscriber.py` — run locally before deploy (golden rule: validate on 4090/this instance first).
@@ -63,7 +91,7 @@ make geometry-bus-status     # -> pmoves/tools/geometry_bus_health.py
 
 Direct connect is ACL-blocked. Two working options, verified/derived:
 - **On-node execution** via `tailscale ssh root@pmoves-kvm4-2 'docker run --rm --network host -i python:3.12-slim sh -c "pip install -q nats-py; python3 -"' < probe.py` — proven working this session.
-- **ACL fix (operator decision):** allow `kiloclaw` → tagged fleet `*:4222` in the Tailscale ACL, or tag this node as a fleet device. Until then, kiloclaw orchestrates the bus through on-node Known Roads.
+- **ACL grant (this PR, partial):** `pmoves/configs/tailscale-acl-policy.json` now accepts `cataclysmstudios@gmail.com` → `tag:vps:4222` + `tag:vps:4243`. `tag:vps` is the KVM concentrator tier (kvm2, kvm4-1, kvm4-2) — the narrowest selector that still contains the canonical hub, chosen over `tag:pmoves` so the grant does not open these ports on every fleet node. **Two over-grants remain open by design**, because neither can be closed from inside the policy file: `dst` names a tier rather than kvm4-2 alone (a per-host `hosts` alias would commit a raw tailnet address, which the Known Road bars), and `src` is a user identity, so every untagged device on that account inherits it (narrowing it needs an operator-issued auth key so this VM can hold a device tag). Until the operator issues that key, kiloclaw should keep orchestrating the bus through on-node Known Roads rather than relying on this grant.
 
 ## 3. Reticulum overlay — current state
 
@@ -110,7 +138,8 @@ Direct connect is ACL-blocked. Two working options, verified/derived:
 - [ ] `composio link gmail` — operator OAuth click
 - [ ] `gog` re-auth (`invalid_grant`)
 - [ ] gh re-auth or rely on composio github
-- [ ] Tailscale ACL decision: kiloclaw → fleet 4222/4243
+- [x] Tailscale ACL: scoped grant landed — `cataclysmstudios@` → `tag:vps:4222`/`4243` (§2)
+- [ ] **Operator:** issue an auth key so this VM can hold a fleet device tag, then narrow the ACL `src` off the user identity and the `dst` off `tag:vps` onto that tag
 - [ ] Bus activation on kvm4-2 (§2 runbook) + subscriber set
 - [ ] reticulum hub stand-up on kvm4-2 (§3)
 

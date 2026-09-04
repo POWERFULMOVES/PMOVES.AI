@@ -85,10 +85,38 @@
     // node SSH continues via the tailscale ssh rules above. Verified needed 2026-09-03
     // (direct TCP 4222 from kiloclaw times out; see
     // pmoves/docs/operations/KILOCLAW_INSTANCE_INTEGRATION_2026-09-03.md §2).
+    //
+    // DST SCOPE - deliberately tag:vps, NOT tag:pmoves. The documented need is
+    // kvm4-2 alone. tag:pmoves is the whole fleet (every workstation, Jetson,
+    // travel router and KVM); tag:vps is held only by the three KVM concentrators
+    // (kvm2, kvm4-1, kvm4-2), which is the narrowest selector that still contains
+    // the canonical hub. Dropping the tag:pmoves half is why this rule no longer
+    // opens 4222/4243 on every fleet node.
+    //
+    // RESIDUAL - RECORDED, NOT OVERLOOKED. This rule is still broader than the
+    // kiloclaw-to-kvm4-2 exception it documents, on two axes that cannot be closed
+    // from inside this file:
+    //   1. dst is a tier, not a host. Tailscale names a single machine in a dst
+    //      only through a "hosts" alias, and a hosts entry is literally
+    //      name -> IP/CIDR - so per-host scoping means committing a raw tailnet
+    //      address. That is barred by the no-raw-address Known Road (AGENTS.md),
+    //      and this file already set the precedent: see the autoApprovers NOTE
+    //      below, where a literal CIDR is deliberately kept out of the repo and
+    //      added in the admin console instead. The alternative, a dedicated tag
+    //      (e.g. tag:bus on kvm4-2 only), is an OPERATOR action - a tag grants
+    //      nothing until it is applied to the device.
+    //   2. src is a USER identity, so every untagged device on the
+    //      cataclysmstudios@ account inherits this grant, not kiloclaw alone.
+    //      Converting it to a device selector requires an operator-issued auth
+    //      key - the very constraint named at the top of this comment. Left
+    //      user-scoped ON PURPOSE rather than papered over with a tag nobody
+    //      holds, which would silently grant nothing.
+    // Both closures are tracked in the integration doc's section 6 checklist.
+    // Tighten this rule when the operator issues the key; do not widen it.
     {
       "action": "accept",
       "src": ["cataclysmstudios@gmail.com"],
-      "dst": ["tag:pmoves:4222", "tag:pmoves:4243", "tag:vps:4222", "tag:vps:4243"]
+      "dst": ["tag:vps:4222", "tag:vps:4243"]
     },
     // Admins + Owner (DARKXSIDE) have full network access. Owner is listed explicitly
     // because Tailscale SSH requires BOTH a network-access rule (this) AND an ssh rule;
