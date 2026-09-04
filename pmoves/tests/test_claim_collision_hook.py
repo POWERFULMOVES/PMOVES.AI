@@ -1464,3 +1464,151 @@ def test_those_same_commands_still_read_the_register(tmp_path, command):
     r = _run_bash(tmp_path, command.format(R=str(reg)))
     assert r.returncode == ALLOW, f"read refused: {command!r}\n{r.stderr}"
     assert _decision(r) is None, f"spurious prompt for: {command!r}"
+
+
+# ---------------------------------------------------------------------------
+# Path SPELLING must not decide whether the guard fires.
+#
+# These pin the platform-independent behaviour on purpose. The suite's other
+# cases build paths with `tmp_path / REGISTER_NAME`, which yields "\" on
+# Windows and "/" on Linux -- so a Linux runner exercises only one spelling and
+# can never catch a regression of this. Hard-code both.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "cp /tmp/whatever.md {R}",
+        "dd of={R}",
+        "install /tmp/x {R}",
+        "csplit -f {R} /tmp/in.txt 2",
+        "csplit --prefix={R} /tmp/in.txt 2",
+        "split -l 1 /tmp/in.txt {R}",
+        "mv /tmp/x {R}",
+        "echo x > {R}",
+        "tee {R}",
+        "sed -i s/a/b/ {R}",
+    ],
+)
+def test_a_backslash_spelled_register_is_still_the_register(tmp_path, command):
+    r"""`shlex.split(posix=True)` treats "\\" as an ESCAPE, not a separator.
+
+    So a Windows-spelled target does not merely tokenize oddly -- it comes back
+    with its separators DELETED:
+
+        C:\Users\me\Temp\t0\AGNOTE4482PHI.t1.md
+          -> C:UsersmeTempt0AGNOTE4482PHI.t1.md
+
+    leaving no separator for any basename test to find. Measured on Z890
+    (win32) before the fix: cp, dd of=, install, csplit -f, csplit --prefix=
+    and split ALL passed silently, while the identical commands spelled with
+    "/" were refused. Six write vectors on an append-only provenance file,
+    decided by which slash the operator happened to type.
+    """
+    reg = str(tmp_path / REGISTER_NAME).replace("/", "\\")
+    r = _run_bash(tmp_path, command.format(R=reg))
+    assert r.returncode == BLOCK, (
+        f"backslash spelling bypassed the guard: {command!r}\n"
+        f"target={reg!r}\nstderr={r.stderr}"
+    )
+
+
+@pytest.mark.parametrize("sep", ["/", "\\"])
+@pytest.mark.parametrize("suffix", [".bak", ".orig", ".rej", ".BACKUP.123"])
+def test_neighbouring_filenames_stay_allowed_in_both_spellings(tmp_path, sep, suffix):
+    """The over-match has a bound, and this is where it has to hold.
+
+    `_is_register` now falls back to `endswith` precisely because the POSIX
+    tokenizer can destroy the separators. That fallback must NOT swallow git's
+    merge-conflict artifacts -- the scenario where a careful hand fixup is the
+    entire recovery story, and the one the substring form got wrong.
+    """
+    reg = str(tmp_path / REGISTER_NAME).replace("/", sep).replace("\\", sep)
+    r = _run_bash(tmp_path, f"echo x > {reg}{suffix}")
+    assert r.returncode == ALLOW, f"{suffix} refused as the register ({sep!r}): {r.stderr}"
+
+
+@pytest.mark.parametrize("quote", ['"', "'"])
+@pytest.mark.parametrize("sep", ["/", "\\"])
+@pytest.mark.parametrize(
+    "command",
+    [
+        "echo x > {Q}{R}{Q}",
+        "printf y > {Q}{R}{Q}",
+        "cat /tmp/in.txt > {Q}{R}{Q}",
+        "echo x >> {Q}{R}{Q}",
+    ],
+)
+def test_a_quoted_redirect_target_with_a_space_is_still_the_register(
+    tmp_path, command, sep, quote
+):
+    r"""`REDIRECT_RE` stopped at whitespace, so a quoted path with a space was
+    truncated before `_is_register` ever saw the basename.
+
+    `echo x > "C:\Users\Jane Doe\...\AGNOTE4482PHI.t1.md"` handed
+    `"C:\Users\Jane` to the check, which is not the register, so
+    `_segment_verdict` certified `echo` as read-only and the hook exited 0 --
+    a silent truncate of an append-only ledger.
+
+    Deliberately parametrized over BOTH separators: this one is redirect
+    parsing, not path spelling, and it reproduced identically with "/" and
+    "\\". `tee` and `cp` were never affected because they route through
+    `_tokens`, where shlex already understands quoting.
+    """
+    d = tmp_path / "Jane Doe"
+    d.mkdir()
+    reg = str(d / REGISTER_NAME).replace("/", sep).replace("\\", sep)
+    r = _run_bash(tmp_path, command.format(R=reg, Q=quote))
+    assert r.returncode == BLOCK, (
+        f"quoted redirect bypassed the guard: {command!r}\n"
+        f"target={reg!r}\nstderr={r.stderr}"
+    )
+
+
+@pytest.mark.parametrize(
+    "template,expected",
+    [
+        # A redirect word may MIX quoted and unquoted spans; bash concatenates
+        # them. Each of these names the register and must be refused.
+        ('echo x > {D}/"Jane Doe"/{N}', BLOCK),
+        ("echo x > {D}/'Jane Doe'/{N}", BLOCK),
+        ('echo x > "{D}/Jane Doe"/{N}', BLOCK),
+        ('echo x > "{D}/Jane Doe/{N}"', BLOCK),
+        (r"echo x > {D}/Jane\ Doe/{N}", BLOCK),
+        (r"echo x >> {D}/Jane\ Doe/{N}", BLOCK),
+        # ...and the other direction. A quoted span that looks like the
+        # register followed by an unquoted suffix names a NEIGHBOUR, not the
+        # register. Refusing these breaks the merge-artifact guarantee.
+        ('echo x > "{D}/{N}".bak', ALLOW),
+        ('echo x > "{D}/{N}.bak"', ALLOW),
+        ('echo x > "{D}/{N}".orig', ALLOW),
+        ('echo x > "{D}/{N}".BACKUP.123', ALLOW),
+    ],
+)
+def test_a_redirect_word_is_parsed_whole_across_quote_boundaries(
+    tmp_path, template, expected
+):
+    r"""One shell word, several spans -- and it failed in BOTH directions.
+
+    `> /tmp/"Jane Doe"/AGNOTE4482PHI.t1.md` captured only `/tmp/"Jane`, so the
+    basename was never reached and a real truncate was certified as a
+    read-only `echo`.
+
+    `> "/tmp/AGNOTE4482PHI.t1.md".bak` captured only the quoted span, so a git
+    merge artifact was REFUSED -- the exact case the neighbour rule exists to
+    permit, and the one where a careful hand fixup is the whole recovery
+    story.
+
+    An under-match and an over-match from the same missing rule, which is why
+    both are pinned here rather than only the bypass.
+    """
+    d = tmp_path / "sub"
+    d.mkdir()
+    (d / "Jane Doe").mkdir()
+    (d / "Jane Doe" / REGISTER_NAME).write_text(EXISTING, encoding="utf-8")
+    cmd = template.format(D=str(d).replace("\\", "/"), N=REGISTER_NAME)
+    r = _run_bash(tmp_path, cmd)
+    assert r.returncode == expected, (
+        f"want {expected}, got {r.returncode} for: {cmd!r}\nstderr={r.stderr}"
+    )

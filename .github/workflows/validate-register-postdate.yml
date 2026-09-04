@@ -40,8 +40,10 @@ on:
       - "pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md"
       - "pmoves/tools/register_postdate_check.py"
       - "pmoves/tools/register_append.py"
+      - "pmoves/tools/register_status.py"
       - "pmoves/tools/tests/test_register_postdate_check.py"
       - "pmoves/tools/tests/test_register_append.py"
+      - "pmoves/tools/tests/test_register_status.py"
       - ".claude/hooks/governance/claim-collision-pre.py"
       - "pmoves/tests/test_claim_collision_hook.py"
       - ".github/workflows/validate-register-postdate.yml"
@@ -91,8 +93,17 @@ jobs:
           # pytest_asyncio + pyyaml; the import chain has to resolve or
           # collection dies before a single test runs. Same note as
           # validate-command-anchors-ratchet.yml, learned the same way.
+          #
+          # Every file is named EXPLICITLY, and that is load-bearing rather
+          # than verbose. `pmoves/pyproject.toml` `testpaths` lists only
+          # `pmoves/tests*` -- `pmoves/tools/tests` is outside it, so a test
+          # written there and not added to a list like this one is collected
+          # by NOTHING and runs on no machine but its author's. Adding a file
+          # under pmoves/tools/tests is therefore two edits, not one: the
+          # `paths:` trigger above and this invocation.
           python -m pip install --quiet pytest pytest-asyncio pyyaml
           python -m pytest -q \
             pmoves/tools/tests/test_register_postdate_check.py \
             pmoves/tools/tests/test_register_append.py \
+            pmoves/tools/tests/test_register_status.py \
             pmoves/tests/test_claim_collision_hook.py

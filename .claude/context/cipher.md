@@ -3,7 +3,7 @@
 **Submodule:** [Pmoves-cipher/](https://github.com/POWERFULMOVES/Pmoves-cipher) + [pmoves-cipher-mcp/](https://github.com/POWERFULMOVES/pmoves-cipher-mcp)
 **MCP server name:** `pmoves-cipher`
 **Transport:** SSE at `http://localhost:8105/mcp/sse`
-**Bearer auth:** `Authorization: Bearer ${CIPHER_API_TOKEN}` (header expands empty without the env var → 401, expected)
+**Bearer auth:** `Authorization: Bearer ${CIPHER_API_TOKEN}` — bare, no `:-` default. Without the env var the header does **not** expand empty: Claude Code sends the literal `${CIPHER_API_TOKEN}` text (MEASURED → 401). With the var set it sends the real token, which is a 401 too until the container has been recreated to pick the token up. See `pmoves/docs/operations/CIPHER_AUTH_RUNBOOK.md` §2a for the state table.
 **Discovery entry:** `pmoves/config/agent_registry.yaml` → `mcp_servers.pmoves_cipher_mcp`
 
 > **Live state, verified 2026-08-21 on 4090.** `/health` returns
