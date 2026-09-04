@@ -473,6 +473,50 @@ x-tier-api-hardened-gpu:
   - SETGID
   - SETUID
 
+# ── Network-tier anchors (§1465 PR-A) ─────────────────────────────────────────
+# Mirrors the x-tier-*-hardened service anchors above: the tier DECISION becomes
+# a named, greppable thing instead of a bare `internal:` literal repeated seven
+# times. Each network still carries its own name/ipam; only the tier is shared.
+#
+# `internal: true` does more than block egress. A service attached ONLY to
+# internal networks has its published ports stored and never activated, silently
+# -- Docker documents `internal` as "externally isolated" and says nothing about
+# published ingress; the behaviour lives in moby/moby#36174 (open since 2018).
+# Verify what a node actually publishes with `make -C pmoves net-reality`.
+#
+# There is NO publish-without-egress primitive: internal:false grants both.
+# See docs/operations/DOCKER_NETWORK_HARDENING.md Rules 1, 4 and 5.
+
+# Air-gapped: container-to-container only. Ports declared here never publish.
+x-network-internal-only: &network-internal-only
+  driver: bridge
+  internal: true
+
+# Message bus: internal, but pinned to Docker's embedded resolver so a service
+# needing external DNS resolution fails loudly here rather than silently.
+x-network-bus-internal-dns: &network-bus-internal-dns
+  driver: bridge
+  internal: true
+
+# Internet-capable. Rule 1: only for services that genuinely need outbound
+# (LLM APIs, package installs). Never reach for this merely to publish a port.
+#
+# DECLARATION ONLY -- deliberately carries no `&anchor`. The tier it describes
+# is pmoves_external, which is `external: true`: compose adopts that network and
+# does not own its driver/internal, so nothing here can merge this in. An unused
+# anchor is also not round-trip stable -- ruamel drops it on re-serialize, which
+# fails scripts/inject_pmoves_networks.py --check (it compares the whole file).
+x-network-external-bridged:
+  driver: bridge
+  internal: false
+
+# Host-reachable, therefore ALSO egress-capable (Rule 5 -- Docker offers no way
+# to separate them). On Docker Desktop Windows bind 0.0.0.0 and restrict at the
+# Tailscale ACL layer; IP-specific binds are silently dropped there (Rule 4).
+x-network-tailnet-published: &network-tailnet-published
+  driver: bridge
+  internal: false
+
 # PMOVES.AI production compose project
 name: pmoves
 volumes:
@@ -509,57 +553,52 @@ volumes:
   pmoves-yt-data: {}
 networks:
   pmoves_data:
+    <<: *network-internal-only
     name: pmoves_data
-    driver: bridge
-    internal: true
     ipam:
       driver: default
       config:
       - subnet: 172.30.4.0/24
         gateway: 172.30.4.1
-  # Non-internal bridge for services that expose host-facing ports.
-  # Kong proxy/admin and PostgREST REST port attach here; the services still
-  # default to 127.0.0.1 host binds for safer standalone operation.
+  # Host-reachable tier. Kong proxy/admin and PostgREST attach here; the
+  # services still default to 127.0.0.1 host binds for safer standalone
+  # operation. Being internal:false this is ALSO egress-capable -- see the
+  # x-network-tailnet-published anchor and DOCKER_NETWORK_HARDENING.md Rule 5.
   pmoves_public:
+    <<: *network-tailnet-published
     name: pmoves_public
-    driver: bridge
-    internal: false
     ipam:
       driver: default
       config:
       - subnet: 172.30.7.0/24
         gateway: 172.30.7.1
   pmoves_api:
+    <<: *network-internal-only
     name: pmoves_api
-    driver: bridge
-    internal: true
     ipam:
       driver: default
       config:
       - subnet: 172.30.1.0/24
         gateway: 172.30.1.1
   pmoves_app:
+    <<: *network-internal-only
     name: pmoves_app
-    driver: bridge
-    internal: true
     ipam:
       driver: default
       config:
       - subnet: 172.30.2.0/24
         gateway: 172.30.2.1
   pmoves_bus:
+    <<: *network-bus-internal-dns
     name: pmoves_bus
-    driver: bridge
-    internal: true
     ipam:
       driver: default
       config:
       - subnet: 172.30.3.0/24
         gateway: 172.30.3.1
   pmoves_monitoring:
+    <<: *network-internal-only
     name: pmoves_monitoring
-    driver: bridge
-    internal: true
     ipam:
       driver: default
       config:
