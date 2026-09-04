@@ -19,13 +19,16 @@ Content-Type: application/json
 X-API-KEY: <mcp_server_token>        # only needed off-loopback; loopback callers pass session auth
 ```
 
-Handler inventory (29): `message_send`, `chats_list`, `chat_get`, `chat_reset`, `chat_delete`, `compact_chat`, `log_tail`, `pause`, `nudge`, `capabilities`, `agents_list`, `agent_editor`, `agent_profile_set`, `model_presets`, `model_switcher`, `projects`, `settings_get`, `settings_set`, `skills_list`, `skills_activate`, `skills_delete`, `installed_plugins`, `browser_runtime`, `launcher_gateway_status`, `launcher_gateway_control`, `token_status`, `capabilities`.
+Handler inventory (33 features, live on v2.11-hardened `5c280a9`): `chat_create`, `chats_list`, `chat_get`, `chat_reset`, `chat_delete`, `pause`, `nudge`, `message_send`, `message_queue`, `log_tail`, `projects`, `text_editor_remote`, `code_execution_remote`, `computer_use_remote`, `browser_host_remote`, `connector_browser_op`, `remote_file_tree`, `token_status`, `launcher_gateway`, `launcher_gateway_file_write`, `settings_get`, `settings_set`, `agent_profile_set`, `agent_editor`, `agents_list`, `skills_list`, `skills_activate`, `skills_delete`, `installed_plugins`, `model_presets`, `model_switcher`, `browser_runtime_config`, `compact_chat`.
+
+`capabilities` also reports `auth` modes (`["session"]`), `streaming: true`, the websocket namespace (`/ws`, handler `plugins/_a0_connector/ws_connector`), and an attachments contract (`path_or_url`, `http_upload: base64_to_file`, `max_files: 20`).
 
 Key shapes (live-verified):
-- `capabilities` → `{"protocol":"a0-connector.v1", "agent_zero_version":..., "transports":["http","websocket"]}` — best readiness probe (200 only when the plugin system booted)
-- `message_send` `{"message":"...","context_id":opt}` → `{"context_id","status":"completed","response"}` (~7s warm; 35s if routed to a cold 51GB local model)
+- `capabilities` → `{"protocol":"a0-connector.v1", "agent_zero_version":..., "auth":["session"], "auth_required":false, "transports":["http","websocket"], "streaming":true, "websocket_namespace":"/ws", "attachments":{...}, "features":[...33]}` — best readiness probe (200 only when the plugin system booted)
+- `message_send` `{"message":"...","context_id":opt,"attachments":[{"filename","base64"}]}` → `{"context_id","status":"completed","response"}` (~7s warm; 35s if routed to a cold 51GB local model)
 - `log_tail` `{"context_id","limit"}` → `{"context_id","events":[{"sequence","event","timestamp","data"}]}` — event names like `assistant_message`; the wrapper's fetch_log still uses `/api/api_log_get` until a consumer maps this shape
 - `pause`/`token_status` require `context_id` (400 otherwise)
+- **MCP arg filter (v2.11-hardened `5c280a9`+)**: `filter_declared_args` drops schema-undeclared argument keys at the client boundary and logs `dropping undeclared args for '<tool>': ...` — tool calls must stick to the declared `input_schema.properties`; extras are stripped with an orange log, not rejected
 
 ## 2. Agent Zero — PMOVES wrapper (compose :8080)
 
@@ -38,11 +41,22 @@ GET  http://<a0-host>:8080/mcp/commands                   → 17 PMOVES MCP comm
 POST http://<a0-host>:8080/mcp/execute {"cmd","arguments":{...}}   ← note: "arguments", not "args"
 ```
 
-Wrapper env contract — **requires PR #2780's compose wiring to be merged** (until then a clean checkout defaults to the raw `/api_message` path and sends no key; on such nodes set these three env vars explicitly): `AGENT_ZERO_MESSAGE_PATH=/api/plugins/_a0_connector/v1/message_send`, `AGENT_ZERO_HEALTH_PATH=/api/plugins/_a0_connector/v1/capabilities`, `AGENT_ZERO_API_KEY=<AGENT_ZERO_MCP_TOKEN value>` (canonical #2056 token; env.shared's `MCP_SERVER_TOKEN=dev-local-...` is a placeholder that must never win interpolation).
+Wrapper env contract — **requires PR #2780's compose wiring to be merged** (until then a clean checkout defaults to the raw `/api_message` path and sends no key; on such nodes set these env vars explicitly): `AGENT_ZERO_MESSAGE_PATH=/api/plugins/_a0_connector/v1/message_send`, `AGENT_ZERO_HEALTH_PATH=/api/plugins/_a0_connector/v1/capabilities`, `AGENT_ZERO_API_KEY=<AGENT_ZERO_MCP_TOKEN value>` (canonical #2056 token; env.shared's `MCP_SERVER_TOKEN=dev-local-...` is a placeholder that must never win interpolation). Post-#2813 additions: `AGENT_ZERO_HEALTH_METHOD=POST` (capabilities is POST-only — a GET probe 405s and degrades to the 404-means-alive heuristic) and `AGENT_ZERO_MESSAGE_TIMEOUT=600` (inner-call timeout, was hardcoded 60s — long tasks surfaced as wrapper 503s).
+
+**`healthz` is a child-process check, not a reachability check.** It returns 503 **only** when the child process is not running -- the 503 branch tests `process_manager.is_running` and nothing else (`pmoves/services/agent-zero/main.py:851-856`). Two ways a **200** can come back over a runtime you cannot actually talk to:
+
+- the probe raises: `healthz()` catches `AgentZeroRequestError`, records `runtime.status = "error"`, and falls through to 200 (`main.py:843-858`);
+- the probe 404s: `client.health()` treats 404 as "running but no health endpoint" and returns `{"status": "ok", "note": "health endpoint not found (404)"}` (`main.py:331-338`, and the same for the fallback path at `:354-360`).
+
+The second is not hypothetical -- it is what this node returns today (measured B850, 2026-09-02): `GET :8080/healthz` -> **HTTP 200**, `runtime: {"status": "ok", "note": "health endpoint not found (404)"}`, i.e. the connector path is not being reached at all and the body still says `ok`.
+
+So **do not read the HTTP code alone**: read `runtime.status` *and* `runtime.note` from the body. `status: ok` with a 404 note means the wrapper is up and the connector wiring above is not in place.
+
+This is the same green-while-dead shape the 503 branch was added to fix (its own comment at `main.py:852-854` says so), still open one level in. Documented rather than patched here: making probe failures 503 changes Docker healthcheck semantics for every A0 container on the fleet, including the nodes this same paragraph describes as lacking the connector wiring, so it belongs to the service lane and not to a docs change.
 
 ## 3. Archon — REST only
 
-MCP deliberately disabled (fleet decision, PR #2303 — archon is REST-only). Native Archon 0.6.0 serves API/UI/MCP unified on **:3090**, with **:3737** a host alias onto it. **:8091 is NOT this service** — it was the old Python/Supabase Archon that 0.6.0 rewrote (#2217), and `make -C pmoves` starts native Archon standalone on :3090 only. Probing :8091 on a current node reaches nothing; see `.claude/CATALOG.md`:
+MCP deliberately disabled (fleet decision, PR #2303 — archon is REST-only). One native-Archon 0.6.0 service on container **:3090**, host-published by default on **:8091** (`ARCHON_API_PORT`, docker-compose agents overlay) with **:3737** an alias onto it — identical `/api/health` payloads measured on all three (SPARK, 2026-09-04). mcp-gateway also binds 8091 in-network but is host-published as 8189 by default to avoid exactly this collision. CATALOG's "0.6.0 rewrote the old Python `:8091` service" is history, not a port claim — the current compose re-adopted 8091 as Archon's default API port; see `.claude/CATALOG.md`:
 
 ```
 GET /api/health   → {"status":"ok","adapter":"web","concurrency":{...}}   # rich
