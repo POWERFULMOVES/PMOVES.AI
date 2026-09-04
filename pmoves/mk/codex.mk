@@ -136,9 +136,26 @@ secrets-runtime-hydrate: ensure-env-shared ## Pull runtime-emitted labels (Supab
 secrets-funnel-sync: chit-manifest-sync chit-export ## Materialize generated env files from CHIT + secrets manifest
 	@PYTHONPATH="$(CURDIR)/.." $(CODEX_PY) tools/secrets_sync.py generate --manifest pmoves/chit/secrets_manifest.yaml --cgp "$(CHIT_EXPORT_PATH)" $(SECRETS_SYNC_FLAGS)
 
-.PHONY: secrets-pull secrets-funnel-from-prod
+.PHONY: secrets-pull secrets-funnel-from-prod chit-provenance-check
 secrets-pull: ## Pattern B consumer: install the newest CI CHIT bundle at the canonical user-scoped path (runnerless nodes; no path juggling)
 	@bash scripts/chit_bundle_lock.sh bash scripts/pull_chit_bundle.sh
+
+chit-provenance-check: ## Is this node's CHIT bundle CI-pulled, and is a pullable artifact still alive? (read-only; ARGS='--strict' to gate, '--offline' to skip the artifact query)
+	@# STANDING, not rotate-triggered. The two existing warnings -- chit-export's
+	@# refusal and secrets-rotate's notice -- both fire during a ROTATE. A node
+	@# that has not rotated sits in the degraded state and is never told.
+	@# Measured on Z890 2026-09-04, nothing having rotated for days: bundle 163h
+	@# old, no provenance marker, 40 declared keys unprojectable, and the newest
+	@# producer run held no unexpired bundle for this node.
+	@#
+	@# The urgency is the SHELF LIFE. sync-secrets-local.yml uploads with
+	@# retention-days: 1, so `secrets-pull` only works if a producer ran today.
+	@# Past that the remedy is a different, slower procedure -- and an operator
+	@# discovers that at exactly the wrong moment.
+	@#
+	@# Read-only by construction: it never pulls, never writes, and prints key
+	@# NAMES only, so it is safe to run inside an agent transcript.
+	@$(CODEX_PY) tools/chit_provenance_check.py $(ARGS)
 
 secrets-funnel-from-prod: secrets-pull secrets-funnel-sync-from-bundle ## One-shot prod funnel for runnerless nodes: pull bundle, materialize tiers, refresh local.env, force-hydrate env.shared
 	@echo "→ Refreshing local.env from CHIT bundle (runnerless parity with sync-secrets-local.yml)"
