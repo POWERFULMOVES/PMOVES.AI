@@ -2822,6 +2822,33 @@ services:
         limits:
           cpus: '1.0'
           memory: 512M
+  fleet-sentinel:
+    <<: *tier-agent-hardened-ro
+    build: ./services/fleet_sentinel
+    restart: unless-stopped
+    environment:
+    # Host environment leak guard (see x-host-leak-guard docs above)
+    - SSL_CERT_FILE=
+    - SSL_CERT_DIR=
+    - REQUESTS_CA_BUNDLE=
+    - CURL_CA_BUNDLE=
+    - NODE_EXTRA_CA_CERTS=
+    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - SENTINEL_POLL_INTERVAL=${SENTINEL_POLL_INTERVAL:-30}
+    - SENTINEL_FAILURE_THRESHOLD=${SENTINEL_FAILURE_THRESHOLD:-3}
+    - SENTINEL_RESTART_COOLDOWN=${SENTINEL_RESTART_COOLDOWN:-600}
+    - SENTINEL_SELF_HEAL=${SENTINEL_SELF_HEAL:-1}
+    # Restart actions shell out to make on the host checkout
+    - SENTINEL_PMOVES_DIR=${SENTINEL_PMOVES_DIR:-/srv/pmoves}
+    volumes:
+    # Read-only mount of the pmoves checkout for Known-Road restart invocations
+    - ${PWD}/..:/srv/pmoves:ro
+    - fleet-sentinel-data:/data/fleet-sentinel
+    ports:
+    - ${SENTINEL_BIND:-127.0.0.1}:${SENTINEL_PORT:-8099}:8099
+    depends_on:
+    - nats
+
   channel-monitor:
     <<: *tier-agent-hardened-ro
     build: ./services/channel-monitor
@@ -6044,6 +6071,7 @@ services:
           memory: 256M
 volumes:
   neo4j-data: {}
+  fleet-sentinel-data: {}  # fleet-sentinel action trail (jsonl) + state
   archon-data: {}          # Archon /.archon workspaces + SQLite/state (#2217)
   archon-user-home: {}     # Archon /home/appuser (Claude/gh creds, git config)
   archon-pg-data: {}       # Archon dedicated Postgres data (pg_notify realtime)
