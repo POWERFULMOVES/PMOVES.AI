@@ -2498,7 +2498,8 @@ STACK_FILES ?= \
 	-f docker-compose.comfyui.yml \
 	-f docker-compose.ultimate-tts-studio.yml \
 	-f docker-compose.archon.submodule.yml \
-	-f docker-compose.apps.yml
+	-f docker-compose.apps.yml \
+	-f docker-compose.activepieces.yml
 
 # AMD/ROCm nodes (Knuckles/B850 class) have no NVIDIA container runtime, so the
 # deploy.resources.reservations.devices block ffmpeg-whisper declares in
@@ -2893,6 +2894,14 @@ up-yt-amd: ## Start YouTube ingest stack on AMD/ROCm nodes (ffmpeg-whisper on th
 .PHONY: channel-monitor-up
 channel-monitor-up: ensure-env-shared ## Start channel-monitor with runtime-aware Supabase DB URL wiring
 	@bash ./scripts/channel_monitor_up.sh
+
+.PHONY: activepieces-up
+activepieces-up: ensure-env-shared ## Start ActivePieces (profile automation): app + worker + own postgres/redis
+	@$(DC) --profile automation up -d activepieces-app activepieces-worker
+
+.PHONY: activepieces-down
+activepieces-down: ## Stop ActivePieces stack
+	@$(DC) --profile automation stop activepieces-app activepieces-worker
 
 .PHONY: channel-monitor-smoke
 channel-monitor-smoke: ## Verify channel-monitor HTTP endpoints
@@ -3430,9 +3439,27 @@ voice-follow-logs: ## Tail voice-follow logs
 
 voice-health: ## Check health of full voice stack (NATS, Flute, TTS backends, Voice-Relay)
 	@echo "=== Voice Stack Health ==="
-	@curl -sf http://localhost:4222/healthz > /dev/null 2>&1 \
-	  && echo "  NATS       (:4222) ✔" \
-	  || echo "  NATS       (:4222) ✗  — run: make up-bus"
+	@# 4222 is the NATS CLIENT PROTOCOL port, not HTTP -- it answers a raw INFO
+	@# line, never `/healthz`. `curl http://localhost:4222/healthz` therefore fails
+	@# on every node, always, so this row reported NATS down even with the broker
+	@# healthy and told the operator to run `up-bus` on a running service.
+	@# Measured 2026-09-02 on the 4090: container Up 11 hours (healthy),
+	@# 4222/tcp -> 0.0.0.0:4222, a raw TCP connect returns INFO {"server_id":...},
+	@# and this check still printed the failure branch.
+	@#
+	@# A check that can only ever say NO is worse than none: the four rows below it
+	@# are real, and a permanently-red first line trains you to skip the block.
+	@#
+	@# HTTP monitoring lives on 8222, published here at 127.0.0.1:9223 -- which is
+	@# exactly what .claude/scripts/nats-endpoint.sh derives (PR #2861). Reuse it
+	@# rather than hardcoding a port that varies per node; it exits non-zero when it
+	@# had to assume rather than measure, so an unresolved endpoint reads as down.
+	@ep=$$(bash "$(CURDIR)/../.claude/scripts/nats-endpoint.sh" 2>/dev/null); \
+	if [ -n "$$ep" ] && curl -sf "$$ep/healthz" > /dev/null 2>&1; then \
+	  echo "  NATS       (monitor) ✔"; \
+	else \
+	  echo "  NATS       (monitor) ✗  — run: make up-bus"; \
+	fi
 	@curl -sf http://localhost:8055/healthz > /dev/null 2>&1 \
 	  && echo "  Flute      (:8055) ✔" \
 	  || echo "  Flute      (:8055) ✗  — run: make overlay-up-media  (needs env.tier-media)"
@@ -3839,10 +3866,19 @@ cipher-health: ## Check Cipher Memory health
 spark-health: ## Check SPARK node (DGX Spark) health: Ollama, TensorZero, NATS, Cipher, Agent Zero SPARK
 	@$(PYTHON) scripts/spark_health.py
 
-.PHONY: agents-headless-smoke
+.PHONY: agents-headless-smoke health-agent-zero a0-mcp-smoke a0-mcp-exec-smoke
 agents-headless-smoke: ## Check Agent Zero and Archon headless services
 	@$(MAKE) health-agent-zero
 	@$(MAKE) archon-headless-smoke
+
+health-agent-zero: ## Verify Agent Zero headless API: /healthz 200 + default form + non-empty env config
+	@$(LOAD_ENV_SHARED) $(PYTHON) tools/agent_zero_smoke.py health
+
+a0-mcp-smoke: ## List Agent Zero MCP commands and print count/sample
+	@$(LOAD_ENV_SHARED) $(PYTHON) tools/agent_zero_smoke.py mcp-list
+
+a0-mcp-exec-smoke: ## Execute form.get via /mcp/execute and assert the form is present
+	@$(LOAD_ENV_SHARED) $(PYTHON) tools/agent_zero_smoke.py mcp-exec
 
 .PHONY: up-agents-published
 up-agents-published: ## Start Agents (NATS, Agent Zero, Archon, etc.) using published images where available

@@ -7,7 +7,7 @@ Overview
 
 Compose
 - Service: `extract-worker`
-- Port: `${EXTRACT_WORKER_HOST_PORT:-8083}:8083`
+- Port: `${EXTRACT_WORKER_PORT:-8083}:8083`
 - Profiles: `workers`, `orchestration`
 - Depends on: (none explicit) — expects `qdrant`, `meilisearch`, `postgrest` reachable
 

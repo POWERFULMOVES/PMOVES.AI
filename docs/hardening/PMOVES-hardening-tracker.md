@@ -1,3 +1,4 @@
+- 2026-08-31: upstream yt-dlp 2026.8.19 released -- build-validated only, NO pin moved (see pmoves/docs/services/pmoves-yt/YTDLP_CURRENCY.md)
 <!-- yt-dlp currency notes. `yt-dlp-bump.yml` prepends a dated line to this file
      each week; those lines are UPSTREAM-RELEASE NOTIFICATIONS, not bumps. The
      workflow moves no pin. Historical lines are preserved verbatim for provenance

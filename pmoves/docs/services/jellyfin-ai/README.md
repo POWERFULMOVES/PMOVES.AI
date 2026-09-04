@@ -25,7 +25,7 @@ Runbook
 Smoke
 ```
 docker compose -f pmoves/docker-compose.jellyfin-ai.yml ps jellyfin
-curl -sS http://localhost:8096/web/index.html | head -c 200 || true
+curl -sS http://localhost:9096/web/index.html | head -c 200 || true
 ```
 
 Integration Points
