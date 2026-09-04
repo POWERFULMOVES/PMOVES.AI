@@ -3294,8 +3294,11 @@ services:
     # monitoring: SYS-account-guarded in the hub (fixes the unguarded 8222 gap);
     # loopback by default, same policy as `nats` above
     - ${NATS_MONITORING_BIND:-127.0.0.1}:${NATS_MONITORING_PORT:-9223}:8222
-    # websocket surface A2UI/browser clients ride (spec §3)
-    - ${NATS_WS_BIND:-0.0.0.0}:${NATS_WS_PORT:-8080}:8080
+    # websocket surface A2UI/browser clients ride (spec §3). Host port 9280 by
+    # default: 8080 is agent-zero's (host_port_map ambiguity guard — two
+    # publishers of one host port drops the mapping; 9280 is unmapped and
+    # mnemonic: 92xx = NATS hub surface family alongside 9223 monitoring)
+    - ${NATS_WS_BIND:-0.0.0.0}:${NATS_WS_PORT:-9280}:8080
     secrets:
     # Satisfies the fork entrypoint's fail-fast (trust-material-present check).
     # PUBLIC nsc-minted account JWTs, funnel-rendered — shape: fork
