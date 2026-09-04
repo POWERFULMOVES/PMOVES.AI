@@ -50,7 +50,12 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 PMOVES = REPO_ROOT / "pmoves"
 
 WORKFLOW = "sync-secrets-local.yml"
-REPO = "POWERFULMOVES/PMOVES.AI"
+# Same override the puller honours (pull_chit_bundle.sh:21). Hard-coding it
+# meant a node with PMOVES_REPO set would have its artifact checked against
+# upstream while `secrets-pull` queried the fork -- so the check could report
+# a live artifact that the pull could not find, or demand a producer run when
+# the overridden repo already had one.
+REPO = os.environ.get("PMOVES_REPO", "POWERFULMOVES/PMOVES.AI")
 RETENTION_HOURS = 24
 
 
@@ -219,8 +224,8 @@ def main() -> int:
         print("      PMOVES_NODE=%s make -C pmoves secrets-pull" % args.node)
         if _needs_producer(window):
             print("  That will fail as things stand -- produce an artifact first:")
-            print("      gh workflow run %s --ref main -f targets=%s"
-                  % (WORKFLOW, args.producer))
+            print("      make -C pmoves secrets-sync-trigger TARGETS=%s"
+                  % args.producer)
         return 1 if args.strict else 0
 
     age_h = (time.time() - bundle.stat().st_mtime) / 3600.0
@@ -264,7 +269,7 @@ def main() -> int:
     print("  Restore:   PMOVES_NODE=%s make -C pmoves secrets-pull" % args.node)
     if _needs_producer(window):
         print("  The artifact is gone (retention is 1 day), so produce one first:")
-        print("      gh workflow run %s --ref main -f targets=%s" % (WORKFLOW, args.producer))
+        print("      make -C pmoves secrets-sync-trigger TARGETS=%s" % args.producer)
         print("  ...then wait for it to finish and re-run secrets-pull.")
 
     return 1 if args.strict else 0
