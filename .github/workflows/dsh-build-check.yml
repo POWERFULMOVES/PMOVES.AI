@@ -1,0 +1,59 @@
+# dsh build + Cipher-mount compose check (Linux).
+#
+# Why: the deepseek-harness (dsh) `build:lib` JS emit FAILS on the Windows/submodule
+# dev env through 3 layers (pnpm verify-deps-before-run → lefthook postinstall can't run
+# in a git submodule → tsdown config-load). This job establishes whether dsh builds on
+# Linux (the expected clean env) and whether the PMOVES Cipher/notebook cordis mount
+# (pmoves/config/dsh/pmoves.cordis.patch.yml) composes into a dsh profile.
+#
+# It does NOT do the full live dsh→cipher boot — that needs a reachable cipher-api and
+# belongs on a fleet node (SPARK). This job is the buildability + config-validity gate.
+name: dsh build check
+
+on:
+  pull_request:
+    paths:
+      - 'PMOVES-deepseek-harness'
+      - 'pmoves/config/dsh/**'
+      - '.github/workflows/dsh-build-check.yml'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  dsh-build-and-compose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout (with the dsh submodule)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Enable pnpm (via corepack)
+        run: corepack enable
+
+      - name: Install dsh deps (skip postinstall — lefthook can't run in a submodule)
+        working-directory: PMOVES-deepseek-harness
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Build dsh lib (the Linux build proof — Windows fails here)
+        working-directory: PMOVES-deepseek-harness
+        run: pnpm run build:lib
+
+      - name: Verify the Cipher/notebook mount composes into a dsh profile
+        working-directory: PMOVES-deepseek-harness
+        run: |
+          set -euo pipefail
+          PATCH="$GITHUB_WORKSPACE/pmoves/config/dsh/pmoves.cordis.patch.yml"
+          TSX="$(ls node_modules/.pnpm/tsx@*/node_modules/tsx/dist/cli.mjs | head -1)"
+          out="$(node "$TSX" apps/cli/src/bin.ts --profile web --patch "$PATCH" --dump-config)"
+          echo "$out" | grep -q "serverName: cipher"   || { echo "::error::cipher mount row missing from composed profile"; exit 1; }
+          echo "$out" | grep -q "serverName: notebook" || { echo "::error::notebook mount row missing from composed profile"; exit 1; }
+          echo "✓ cipher + notebook mount rows compose into the dsh profile tree"
