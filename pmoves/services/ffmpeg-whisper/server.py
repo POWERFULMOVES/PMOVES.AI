@@ -370,6 +370,50 @@ def _compute_type(device: str) -> str:
     return os.environ.get("WHISPER_COMPUTE_TYPE") or ("float16" if device.startswith("cuda") else "int8")
 
 
+@lru_cache(maxsize=1)
+def _ctranslate2_cuda_available() -> bool:
+    """Whether the INSTALLED CTranslate2 build can actually run on CUDA.
+
+    Torch having CUDA says nothing about this. CTranslate2 is a separate runtime
+    shipping its own wheels, and only the x86_64 manylinux wheel is built with
+    CUDA (it bundles libcudnn); the aarch64 wheel is CPU-only and carries the
+    literal "not compiled with CUDA support" error instead. Asking it for
+    device="cuda" therefore cannot succeed on arm64 no matter which torch is
+    installed -- it raises at model load, which surfaces as a 500 on the very
+    first transcription.
+
+    This is not just the faster-whisper provider: whisperx's ASR class subclasses
+    faster_whisper.WhisperModel, so provider=whisper runs its transcription on
+    CTranslate2 too. Only whisperx's alignment and diarization are torch-native.
+    """
+    try:  # pragma: no cover - depends on the installed wheel
+        import ctranslate2  # type: ignore
+
+        return ctranslate2.get_cuda_device_count() > 0
+    except Exception:  # noqa: BLE001 - absent, or a build without the CUDA symbol
+        logger.debug("ctranslate2 CUDA probe failed", exc_info=True)
+        return False
+
+
+def _select_ctranslate2_device() -> str:
+    """Device for the CTranslate2-backed paths (faster-whisper, whisperx ASR).
+
+    Degrades to CPU rather than raising: there is no configuration under which a
+    CUDA request against a non-CUDA CTranslate2 build succeeds, so a 500 here
+    buys nothing over a slower transcription that actually returns.
+    """
+    device = _select_device()
+    if device.startswith("cuda") and not _ctranslate2_cuda_available():
+        logger.warning(
+            "CTranslate2 has no CUDA support in this image (expected on arm64, "
+            "where the published wheel is CPU-only) -- running ASR on CPU. Torch "
+            "CUDA is unaffected, so whisperx alignment/diarization still use %s.",
+            device,
+        )
+        return "cpu"
+    return device
+
+
 def ffmpeg_extract_audio(src: str, dst: str, sample_rate: int = 16000) -> None:
     cmd = [
         "ffmpeg",
@@ -430,15 +474,21 @@ def _summarise_speakers(segments: Iterable[Dict[str, Any]]) -> Dict[str, Any]:
 
 
 def _run_whisperx(audio_path: str, *, language: Optional[str], model_name: str, diarize: bool) -> Dict[str, Any]:
+    # Two runtimes, two devices: whisperx.load_model is CTranslate2 (it subclasses
+    # faster_whisper.WhisperModel), while align/diarize are torch. On arm64 the
+    # first has no CUDA and the second does, so they must not share one device.
     device = _select_device()
-    compute_type = _compute_type(device)
+    asr_device = _select_ctranslate2_device()
+    compute_type = _compute_type(asr_device)
     try:  # pragma: no cover - optional dependency
         import whisperx  # type: ignore
     except ImportError as exc:  # pragma: no cover
         raise HTTPException(500, "whisperx package is required for provider=whisper") from exc
 
-    logger.info("loading WhisperX model %s on %s", model_name, device)
-    model = whisperx.load_model(model_name, device=device, compute_type=compute_type)
+    logger.info(
+        "loading WhisperX model %s (asr=%s, align/diarize=%s)", model_name, asr_device, device
+    )
+    model = whisperx.load_model(model_name, device=asr_device, compute_type=compute_type)
     transcription = model.transcribe(audio_path, language=language)
     detected_language = transcription.get("language") or language
     align_model, metadata = whisperx.load_align_model(language_code=detected_language, device=device)
@@ -459,7 +509,8 @@ def _run_whisperx(audio_path: str, *, language: Optional[str], model_name: str, 
         "segments": segments,
         "word_segments": words,
         "speakers": _summarise_speakers(segments),
-        "device": device,
+        "device": asr_device,
+        "align_device": device,
         "model": model_name,
     }
 
@@ -473,7 +524,7 @@ def _load_faster_whisper(model_name: str, device: str, compute_type: str):
 
 
 def _run_faster_whisper(audio_path: str, *, language: Optional[str], model_name: str) -> Dict[str, Any]:
-    device = _select_device()
+    device = _select_ctranslate2_device()
     compute_type = _compute_type(device)
     model = _load_faster_whisper(model_name, device, compute_type)
     segments_iter, info = model.transcribe(audio_path, language=language)

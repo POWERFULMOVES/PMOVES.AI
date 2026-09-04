@@ -32,8 +32,33 @@
 
 set -uo pipefail
 
-CONTAINER=${NATS_CONTAINER:-pmoves-nats-1}
 CONTAINER_PORT=${NATS_CONTAINER_PORT:-8222}
+
+# THE CONTAINER NAME IS ALSO PER-NODE. `pmoves-nats-1` is the hub's name under
+# the default compose project; Z890 runs the `nats-leaf` service under the
+# `<project>-z890` project (docker-compose.z890.yml:21) and publishes its monitor
+# on 8222. Defaulting to the hub name there looks up a container that does not
+# exist, `docker port` returns nothing, and this script falls back to 9223 --
+# reporting a healthy leaf broker as down. Review P2 on PR #2889.
+#
+# Fixing the port while leaving the NAME hardcoded would have replaced one
+# per-node assumption with another, which is the exact defect this file was
+# written to remove. So: ask Docker which container is actually serving a NATS
+# monitor, and only fall back to the well-known name.
+CONTAINER=${NATS_CONTAINER:-}
+if [ -z "$CONTAINER" ]; then
+  # Prefer a running container built from a nats image that publishes the
+  # monitor port. `docker ps` filters on ancestor are image-tag sensitive, so
+  # match on the image NAME field instead and take the first that answers.
+  for c in $(docker ps --format '{{.Names}} {{.Image}}' 2>/dev/null \
+             | awk '$2 ~ /(^|\/)nats(:|$)/ {print $1}'); do
+    if docker port "$c" "$CONTAINER_PORT" >/dev/null 2>&1; then
+      CONTAINER="$c"
+      break
+    fi
+  done
+fi
+CONTAINER=${CONTAINER:-pmoves-nats-1}
 
 pub=$(docker port "$CONTAINER" "$CONTAINER_PORT" 2>/dev/null | head -1)
 
