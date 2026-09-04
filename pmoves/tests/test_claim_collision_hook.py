@@ -1723,3 +1723,66 @@ def test_a_continuation_in_the_heredoc_OPENER_still_marks_the_body_as_code(
     assert r.returncode == BLOCK, (
         f"a continued opener hid the heredoc body:\n{cmd}\nstderr={r.stderr}"
     )
+
+
+def test_a_split_terminator_cannot_hide_a_following_command(tmp_path):
+    r"""For an UNQUOTED heredoc, bash folds `\<newline>` while reading the body
+    and matches the terminator against the rejoined line.
+
+    So `EO\` + newline + `F` closes the heredoc and everything after it is
+    ordinary shell again. The hook saw an unterminated heredoc, absorbed the
+    following truncate as inert body data, and returned 0 -- hiding a whole
+    COMMAND rather than a path, which is what makes this worse than the
+    earlier continuation cases.
+    """
+    continuation = "\\" + "\n"
+    reg = str(tmp_path / REGISTER_NAME).replace("\\", "/")
+    notes = str(tmp_path / "notes.md").replace("\\", "/")
+    # The heredoc writes an UNRELATED file on purpose. A first version opened
+    # with `cat >> <register> <<EOF`, which the hook refuses on the redirect
+    # alone -- so it passed against the unfixed hook and proved nothing. The
+    # negative control caught it. Here the ONLY route to a refusal is folding
+    # the terminator and seeing the command that follows.
+    cmd = (
+        "cat > " + notes + " <<EOF\n"
+        "hello\n"
+        "EO" + continuation + "F\n"
+        "echo DESTROYED > " + reg + "\n"
+    )
+    assert continuation in cmd, "the fixture built no continuation; the test is vacuous"
+    assert REGISTER_NAME not in cmd.split("EOF", 1)[0], (
+        "the opener already names the register; the test would pass without the fix"
+    )
+    r = _run_bash(tmp_path, cmd)
+    assert r.returncode == BLOCK, (
+        f"a split terminator hid the following truncate:\n{cmd}\nstderr={r.stderr}"
+    )
+
+
+def test_a_quoted_delimiter_does_NOT_fold_its_terminator(tmp_path):
+    r"""The bound on the fix above, exercised through the real entrypoint.
+
+    With a QUOTED delimiter bash takes the body byte-for-byte and performs no
+    joining, so `EO\` + newline + `F` is body CONTENT, not a terminator.
+    Folding there would close the heredoc early and hand the remainder to the
+    shell parser as code -- inventing a register truncate that was never run,
+    which is the inverse failure and just as wrong.
+
+    The heredoc here writes an unrelated file, so the only way this refuses is
+    if the trailing line escaped the body.
+    """
+    continuation = "\\" + "\n"
+    reg = str(tmp_path / REGISTER_NAME).replace("\\", "/")
+    notes = str(tmp_path / "notes.md").replace("\\", "/")
+    cmd = (
+        "cat > " + notes + " <<'EOF'\n"
+        "EO" + continuation + "F\n"
+        "echo DESTROYED > " + reg + "\n"
+        "EOF\n"
+    )
+    assert continuation in cmd, "the fixture built no continuation; the test is vacuous"
+    r = _run_bash(tmp_path, cmd)
+    assert r.returncode == ALLOW, (
+        "a quoted delimiter's terminator was folded, so body content was parsed "
+        f"as a command:\n{cmd}\nstderr={r.stderr}"
+    )
