@@ -22,7 +22,8 @@
 | `pmoves-kvm4-1` | `tag:vps` `tag:exit` `tag:lab` `tag:pmoves` | tagged, linux, idle — **TensorZero/API-gateway node** |
 | `pmoves-kvm4-2` | `tag:vps` `tag:exit` `tag:lab` `tag:pmoves` | tagged, linux, idle — **NATS hub + designated Reticulum hub** |
 | `pmoves-kvm2` | `tag:vps` `tag:exit` `tag:lab` `tag:pmoves` | tagged, linux, idle — egress/SSL node |
-| `pmoves-spark`, `nano-pmoves`, `pmoves-nano-1`, `pmoves-b850-ai-top`, others | mixed `tag:gpu` / `tag:lab` / `tag:pmoves` | online/intermittent |
+| `pmoves-b850-ai-top` | `tag:gpu` `tag:lab` `tag:pmoves` | tagged, linux, online — **B850 "Knuckles" primary dev host + ROCm inference** (runner topology: `llama-server` :8090 RDNA4, Ollama :11434) |
+| `pmoves-spark`, `nano-pmoves`, `pmoves-nano-1`, others | mixed `tag:gpu` / `tag:lab` / `tag:pmoves` | online/intercepted. Spark: heavyweight CUDA node; `nano-pmoves`/`pmoves-nano-1`: edge nodes |
 
 **Network reachability (verified):**
 - `tailscale ping` OK to all KVMs (~20ms) and pmoves-4090 (DERP ~49ms).
