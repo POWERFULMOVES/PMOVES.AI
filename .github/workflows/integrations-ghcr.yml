@@ -175,7 +175,7 @@ jobs:
 
     steps:
       - name: Harden Runner
-        uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1
         with:
           egress-policy: audit
 
@@ -396,7 +396,7 @@ jobs:
 
     steps:
       - name: Harden Runner
-        uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1
         with:
           egress-policy: audit
           allowed-endpoints: >
@@ -616,7 +616,7 @@ jobs:
           df -h
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8
+        uses: docker/setup-qemu-action@1f40c72289eff860ee54a304f1438e3cff362e0a
 
       - name: Set up Docker Buildx
         uses: ./.github/actions/pmoves-buildx
