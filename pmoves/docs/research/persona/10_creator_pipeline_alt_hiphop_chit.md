@@ -67,3 +67,27 @@ Build what you need. Sign every line.
 - **Sequence:** publish AFTER `persona.pmoves.ai` goes live (calendar hard blocker) or run as text-only post linking the GitHub repo (allowed now — Featured Item 1 pattern in `06`).
 - **Numbers discipline:** 82 tracks / 2,234 / 345 / 104 / 79 re-verified 2026-09-03 — re-verify again at post time; fleet grows weekly.
 - **Next drafts in this series:** Artifact 8b (video cut — PMOVES.AI playlist B-roll + SoundCloud tag audio under CHIT signoff visual), 8c (long-form PreTeXt case study "CHIT as hip-hop provenance" for the persona room).
+
+---
+
+## 5. Cultural moment — the Bronx just standardized the spelling (2026-09)
+
+Verified via live search 2026-09-03. This is the topical hook Artifact 8 should ride:
+
+- **The Bronx School of Hip Hop (09X657) opened September 2026** — first-of-its-kind non-charter public high school, 1600 Webster Ave, Claremont (District 9, South Bronx). Founding principal Jason Reyes (Soundview-born). ~115-125 ninth graders, scaling to 400-450. (Chalkbeat 2025-12-18, NY Post 2026-05-13, Bronx Times 2026-07-24, NYC MySchools)
+- **Curriculum**: the five elements (Emceeing, DJing, Graffiti, Breaking, Knowledge of Self) as a rigorous academic framework — Regents/AP-aligned, "culture is the curriculum and **ownership is the outcome**," graduates as "Hip-Hop Scholar-Entrepreneurs."
+- **Universal Hip Hop Museum** opening fall 2026 at 585 Exterior St on the Harlem River — includes a **Hip-Hop Science program** (STEM principles behind production, dance, technology).
+- **College Unbound × Hip-Hop Education Center** launched a national BA cohort for hip-hop educators (April 2026).
+
+### The sync points (why this locks to the Artifact 8 spine)
+
+1. **"Ownership is the outcome" is CHIT's thesis stated as a school mission.** Sign your work, own your work, prove your work — in the classroom and in the protocol. Quote them directly; the parallel writes itself.
+2. **DJ Premier is in both rooms.** Principal Reyes: "When you see someone like DJ Premier create a beat and really analyze his process, you see mathematics." The PMOVES.AI promo playlist carries DJ Premier — "Survivors Remorse." The curriculum quote and the soundtrack cite the same producer.
+3. **Hip-Hop Science = BPM-as-state-vector, institutionally.** The museum is legitimizing signal/math-through-culture — the exact lane of the DARKXSIDE prosodic pipeline (librosa, CLAP, FFT).
+4. **Spelling note (founder's "proper spelling lol"):** when the culture becomes curriculum, the spelling standardizes — the DOE school is "Hip Hop" (two words), the museum "Hip-Hop." For post copy: use "Hip-Hop" attributively, "hip-hop" as noun, and never spell it wrong in a post that quotes a school.
+
+### Angle for the post (one line)
+
+> "The Bronx just opened the nation's first School of Hip-Hop — 'culture is the curriculum, ownership is the outcome.' I've been building that sentence into software: every agent on PMOVES.AI signs its work. The tag scaled into a protocol."
+
+Timing: school opened Sept 2026, museum opens this fall — publish inside the news window or reference it evergreen. Artifact 7 ("From the Bronx," 1520 Sedgwick 1973 → Fordham Hill 2026) gains a third beat: 2026 also opened the school.
