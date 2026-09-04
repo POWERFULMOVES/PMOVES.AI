@@ -1692,3 +1692,34 @@ def test_a_continuation_inside_a_code_heredoc_cannot_hide_the_register(
     assert r.returncode == BLOCK, (
         f"continuation inside a {delim} heredoc hid the register:\n{cmd}\nstderr={r.stderr}"
     )
+
+
+@pytest.mark.parametrize("delim", ["'PY'", "PY"])
+def test_a_continuation_in_the_heredoc_OPENER_still_marks_the_body_as_code(
+    tmp_path, delim
+):
+    r"""`python3 \` + newline + `<<'PY'` is ONE command line to the shell.
+
+    Read physically, the line carrying the `<<` operator contains no
+    interpreter, so `code` came out False, the body was classified as DATA, and
+    it was then excluded from the detection string entirely -- while still
+    reaching python and still truncating the register.
+
+    Normalizing in the caller cannot fix this: `code` is decided from the
+    opener inside `split_heredocs`, so by the time the caller sees the result
+    the classification has already been made on the wrong text.
+    """
+    continuation = "\\" + "\n"
+    body_path = str(tmp_path).replace("\\", "/") + "/" + REGISTER_NAME
+    end = delim.strip("'")
+    cmd = (
+        "python3 " + continuation
+        + "<<" + delim + "\n"
+        + "open('" + body_path + "', 'w').write('')\n"
+        + end + "\n"
+    )
+    assert continuation in cmd, "the fixture built no continuation; the test is vacuous"
+    r = _run_bash(tmp_path, cmd)
+    assert r.returncode == BLOCK, (
+        f"a continued opener hid the heredoc body:\n{cmd}\nstderr={r.stderr}"
+    )

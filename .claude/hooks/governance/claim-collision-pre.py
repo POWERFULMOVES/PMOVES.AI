@@ -746,6 +746,29 @@ def split_heredocs(command: str):
         line = lines[idx]
         skeleton_lines.append(line)
         idx += 1
+
+        # REBUILD THE LOGICAL LINE FIRST. A `\<newline>` joins this line to the
+        # next before the shell sees either, so
+        #
+        #     python3 \
+        #     <<'PY'
+        #
+        # is ONE command line -- but read physically, the line carrying the
+        # `<<` operator contains no interpreter, `code` comes out False, the
+        # body is classified as data, and it is then excluded from the
+        # detection string entirely. The body still reaches python and still
+        # truncates the register.
+        #
+        # This has to happen HERE rather than in the caller: `code` is decided
+        # from the opener inside this loop, so a caller that normalizes after
+        # the split has already lost. Bodies are untouched -- the join only
+        # runs while we are positioned on a skeleton line, which is precisely
+        # the region where a continuation is a shell construct.
+        while line.endswith("\\") and idx < len(lines):
+            line = line[:-1] + lines[idx]
+            skeleton_lines[-1] = line
+            idx += 1
+
         # Every heredoc opened ON THIS LINE takes its body starting now, in the
         # order the operators appear -- the shell's own rule for `cmd <<A <<B`.
         for m in HEREDOC_DELIM_RE.finditer(line):
