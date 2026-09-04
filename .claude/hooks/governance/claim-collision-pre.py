@@ -439,6 +439,20 @@ SANCTIONED_PATH = (
     "see AGNOTE4482PHI.t1.md " + chr(167) + " Filing a row"
 )
 
+# EVERY PATH ABOVE IS A WRITE, and for a while that was the whole list. An
+# agent that ran an interpreter to ask `open_claims_in()` WHETHER A LANE WAS
+# FREE got refused and then handed three ways to write -- a refusal with no
+# answer to the question actually asked, which is a dead end wearing a gate's
+# clothes. The read is NOT loosened to fix that: a command line cannot be
+# trusted to declare its own intent, which is the entire reason the allowlist
+# enumerates what it positively recognises. The question is ANSWERED instead,
+# and the answer is named in every refusal below beside the write path.
+SANCTIONED_READ_PATH = (
+    "make -C pmoves register-status  (add BRANCH=<lane> OWNER='<you>' to ask "
+    "whether one lane is free) -- read-only; 0 clean / 1 findings / 3 could "
+    "not measure"
+)
+
 # ---- WHAT IS DELIBERATELY ALLOWED --------------------------------------------
 #
 # Every entry here is a command this hook asserts CANNOT modify the register in
@@ -524,8 +538,165 @@ _WRAPPERS = frozenset({"sudo", "doas", "env", "command", "builtin", "nohup",
                        "time", "nice", "ionice", "stdbuf", "exec", "timeout",
                        "setsid", "chrt"})
 _PY_INTERPRETERS = re.compile(r"^(?:python3?(?:\.\d+)?|uv|uvx)$")
-_SANCTIONED_TOOL = "register_append.py"
-_SANCTIONED_MAKE_TARGET_RE = re.compile(r"^register-(claim|release|docs|amend)$")
+# THE SANCTIONED TOOLS ARE FILES, NOT NAMES.
+#
+# These two names used to be a `str.endswith` tuple tested against EVERY token
+# of the command, which made the FILENAME the credential: any argument ending
+# in `register_status.py`, anywhere in argv, approved the whole segment before
+# anything asked which program would actually run. Measured on the parent
+# revision of this line:
+#
+#     python3 /tmp/register_status.py pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md
+#
+# exited the hook at 0. That is an arbitrary script, chosen by the caller,
+# handed the register as argv[1] with the gate's blessing -- it can truncate
+# the ledger. #2879 made this path fail closed precisely because a shell hole
+# let agents write the register unchecked; a trusted filename is the same hole
+# wearing the door's clothes.
+#
+# So the allowance is keyed on the RESOLVED FILE. A token is the sanctioned
+# tool only when it resolves to the same real path as this repository's copy --
+# the repository being located from THIS FILE, which is the one path in the
+# command's environment the caller does not choose. A symlink to the real tool
+# passes, because it IS the real tool; a byte-identical copy outside the repo
+# does not, because "same content today" is not "runs the gate's own code".
+_SANCTIONED_TOOL_NAMES = ("register_append.py", "register_status.py")
+_SANCTIONED_TOOL_DIR = REPO_ROOT_GUESS / "pmoves" / "tools"
+_SANCTIONED_TOOL_REAL = frozenset(
+    os.path.realpath(str(_SANCTIONED_TOOL_DIR / n)) for n in _SANCTIONED_TOOL_NAMES
+)
+_SANCTIONED_MAKE_DIR_REAL = os.path.realpath(str(REPO_ROOT_GUESS / "pmoves"))
+_SANCTIONED_MAKE_TARGET_RE = re.compile(r"^register-(claim|release|docs|amend|status)$")
+# `-c`/`-e`/`-m`/`--command` anywhere alongside the tool means an interpreter
+# was asked to run something OTHER than the file named, so the file named stops
+# being evidence of what runs.
+_INLINE_CODE_FLAGS = frozenset({"-c", "-e", "-m", "--command"})
+# Interpreter flags that CONSUME the next token, so that token is a value and
+# not the script operand. `uv run --with pyyaml <script>` is the shape the
+# repo's own docs use, and counting `pyyaml` as the script would refuse it.
+# A flag NOT listed here whose value looks like an operand fails to resolve and
+# is refused -- the fail-closed direction.
+_INTERPRETER_VALUE_FLAGS = frozenset({
+    "-X", "-W", "--check-hash-based-pycs",                     # python
+    "--with", "--with-requirements", "--with-editable",        # uv
+    "--python", "-p", "--directory", "--project", "--index",
+    "--index-url", "--extra-index-url", "--find-links",
+    "--constraints", "--overrides", "--refresh-package",
+})
+_MAKE_DIR_FLAGS = frozenset({"-C", "--directory"})
+_MAKE_FILE_FLAGS = frozenset({"-f", "--file", "--makefile"})
+
+
+def _resolve_from_cwd(token: str, cwd):
+    """Real path of `token` THE WAY THE SHELL WILL RESOLVE IT.
+
+    Against the command's own cwd and nothing else. Falling back to the repo
+    root when the cwd-relative path does not exist would re-open the hole this
+    resolution exists to close, one indirection along: an agent standing in
+    `/tmp/x` that writes its own `pmoves/tools/register_status.py` runs THAT
+    file, while a hook resolving the same token against the repo would approve
+    the repository's. The two must name the same file or the check is measuring
+    a program that is not the one about to run.
+    """
+    token = token.strip().strip("'\"")
+    if not token:
+        return None
+    try:
+        base = Path(cwd) if cwd else Path.cwd()
+        real = os.path.realpath(str(Path(token) if Path(token).is_absolute()
+                                   else base / token))
+    except OSError:
+        return None
+    return real if os.path.exists(real) else None
+
+
+def _is_sanctioned_tool(token: str, cwd) -> bool:
+    """True only for THIS repository's register tool, resolved on disk."""
+    if os.path.basename(token.strip().strip("'\"")) not in _SANCTIONED_TOOL_NAMES:
+        return False
+    real = _resolve_from_cwd(token, cwd)
+    return real is not None and real in _SANCTIONED_TOOL_REAL and os.path.isfile(real)
+
+
+def _runs_sanctioned_tool(tail, cwd) -> bool:
+    """True when `tail` runs the repository's register tool, in a shape whose
+    argv is readable from the command string.
+
+    Two shapes are recognised and no others:
+
+        <repo>/pmoves/tools/register_status.py ...      (shebang, executed)
+        python3|uv|uvx [interpreter flags] <that file> ...
+
+    The interpreter must reach the tool as its SCRIPT operand. Anything else
+    -- the tool's name as an argument to `rm`, to `cp`, to a second script, or
+    to an interpreter that also carries `-c` -- is not this shape and falls
+    through to the allowlist like any other command.
+    """
+    if not tail or any(t in _INLINE_CODE_FLAGS for t in tail):
+        return False
+    if _is_sanctioned_tool(tail[0], cwd):
+        return True
+    if not _PY_INTERPRETERS.match(os.path.basename(tail[0].strip().strip("'\""))):
+        return False
+    j = 1
+    while j < len(tail):
+        tok = tail[j]
+        if tok in _INTERPRETER_VALUE_FLAGS:
+            j += 2
+            continue
+        if tok.startswith("-"):
+            j += 1
+            continue
+        # `uv run [python] <script>`: still interpreter machinery, not the
+        # script operand.
+        if tok == "run" or _PY_INTERPRETERS.match(os.path.basename(tok)):
+            j += 1
+            continue
+        return _is_sanctioned_tool(tok, cwd)   # the FIRST operand decides
+    return False
+
+
+def _make_verdict(rest, cwd):
+    """`make` is allowed only when it runs THIS repository's register targets.
+
+    The target name alone was the test, which had the same defect the tool
+    suffix had one layer up: `make -C /tmp/evil register-status ARGS=<register>`
+    names a sanctioned target in an arbitrary Makefile. A target is only
+    validated code if the Makefile defining it is the repo's.
+    """
+    if not any(_SANCTIONED_MAKE_TARGET_RE.match(t) for t in rest):
+        return False, (
+            "`make` is only recognised here for the register-* targets, which "
+            "append through validated code."
+        )
+    if any(t in _MAKE_FILE_FLAGS or t.startswith("--file=")
+           or t.startswith("--makefile=") for t in rest):
+        return False, (
+            "`make -f` chooses which makefile defines the target, so the "
+            "register-* target name stops being evidence of what runs."
+        )
+    directory = None
+    for j, tok in enumerate(rest):
+        if tok in _MAKE_DIR_FLAGS and j + 1 < len(rest):
+            directory = rest[j + 1]
+        elif tok.startswith("--directory="):
+            directory = tok.split("=", 1)[1]
+    if directory is None:
+        return False, (
+            "`make` here must name the directory explicitly, as "
+            + SANCTIONED_PATH.split("  ")[0] + " does. Without `-C` the target "
+            "resolves against whatever directory the shell happens to be in, "
+            "and which makefile defines `register-*` is then not readable from "
+            "the command."
+        )
+    real = _resolve_from_cwd(directory, cwd)
+    if real != _SANCTIONED_MAKE_DIR_REAL:
+        return False, (
+            "`make -C " + directory + "` is not this repository's `pmoves` "
+            "directory, so the `register-*` target it runs is not the "
+            "validated one."
+        )
+    return True, ""
 
 
 def split_heredocs(command: str):
@@ -913,7 +1084,7 @@ def _split_verdict(cmd, rest):
     return True, ""
 
 
-def _segment_verdict(segment, assignments):
+def _segment_verdict(segment, assignments, cwd):
     """(understood_as_not_writing_the_register, why_not).
 
     THE BURDEN OF PROOF SITS ON THE READ. Anything this function does not
@@ -930,25 +1101,21 @@ def _segment_verdict(segment, assignments):
         # the unresolved-target sweep.
         return True, ""
 
-    # THE SANCTIONED TOOLS, named explicitly. They run the very check this hook
-    # runs, so refusing them would leave the fleet with a gate and no door --
-    # and a register row's own scope prose routinely names the register file.
+    # THE SANCTIONED TOOLS, identified by the FILE THEY RUN. They run the very
+    # check this hook runs, so refusing them would leave the fleet with a gate
+    # and no door -- and a register row's own scope prose routinely names the
+    # register file. The allowance is not a name: see `_runs_sanctioned_tool`,
+    # which resolves the script operand against this repository's own copy,
+    # because keying it on the filename made the filename a password.
     tail = tokens[i:]
-    if any(t.endswith(_SANCTIONED_TOOL) for t in tail) and not any(
-        t in ("-c", "-e", "-m", "--command") for t in tail
-    ):
+    if _runs_sanctioned_tool(tail, cwd):
         return True, ""
 
     cmd = os.path.basename(tokens[i])
     rest = tokens[i + 1:]
 
     if cmd == "make":
-        if any(_SANCTIONED_MAKE_TARGET_RE.match(t) for t in rest):
-            return True, ""
-        return False, (
-            "`make` is only recognised here for the register-* targets, which "
-            "append through validated code."
-        )
+        return _make_verdict(rest, cwd)
     if cmd == "git":
         return _git_verdict(rest)
     if cmd in _ALWAYS_DESTRUCTIVE:
@@ -992,7 +1159,10 @@ def _segment_verdict(segment, assignments):
             "the code it runs, so what the code does to the file is not "
             "readable from the command string. `python3 -c \"open(REG,'a')\"`, "
             "`node -e`, `ruby -e` and `ed` all reached the ledger this way while "
-            "the gate reported clean. To READ it from an interpreter, pipe it in "
+            "the gate reported clean.\n"
+            "  To ASK WHAT IS OPEN -- usually the actual question -- use "
+            + SANCTIONED_READ_PATH + ".\n"
+            "  To read the raw file from an interpreter anyway, pipe it in "
             "instead of naming it: `cat <register> | " + cmd + " ...`."
         )
     return False, (
@@ -1019,7 +1189,7 @@ class ShellWrite:
         self.why = why
 
 
-def classify_shell_write(command: str) -> ShellWrite:
+def classify_shell_write(command: str, cwd=None) -> ShellWrite:
     """Decide whether `command` writes the register, and recover the content.
 
     KEYED ON THE WRITE TARGET, NOT ON MENTION. The advisory this replaces
@@ -1078,7 +1248,7 @@ def classify_shell_write(command: str) -> ShellWrite:
             # unresolved-redirect sweep below is for, and it still covers this
             # segment.
             continue
-        ok, why = _segment_verdict(seg, assignments)
+        ok, why = _segment_verdict(seg, assignments, cwd)
         if not ok:
             return ShellWrite("opaque", why=why)
         certified_reads.append(seg)
@@ -1502,7 +1672,7 @@ def _gate_shell_write(payload: dict) -> None:
     that appends through validated code, and every refusal below names it.
     """
     command = ((payload.get("tool_input") or {}).get("command") or "")
-    verdict = classify_shell_write(command)
+    verdict = classify_shell_write(command, payload.get("cwd"))
     if verdict.kind == "none":
         return
 
@@ -1538,7 +1708,10 @@ def _gate_shell_write(payload: dict) -> None:
             f"  {verdict.why}\n"
             "Could not measure is NOT a pass (0 clean / 1 findings / 3 could "
             "not measure), and the advisory this replaces treated it as one.\n"
-            f"Sanctioned path, which does the check for you: {SANCTIONED_PATH}\n"
+            f"To WRITE, the sanctioned path does the check for you: "
+            f"{SANCTIONED_PATH}\n"
+            f"To READ, the sanctioned path answers without an interpreter: "
+            f"{SANCTIONED_READ_PATH}\n"
             "It reads the clock for the timestamp, refuses a lane another "
             "owner holds, and appends in O_APPEND so the file cannot be "
             "rewritten.\n"

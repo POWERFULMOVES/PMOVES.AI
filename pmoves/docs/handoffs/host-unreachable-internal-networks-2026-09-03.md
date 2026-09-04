@@ -1,8 +1,52 @@
-# Handoff — 34 services declare a port they can never publish
+# Handoff — services declare a port they can never publish
+
+> ## ⚠ SUPERSEDED — do not follow the remedy in this document
+>
+> Written before the behaviour was measured. It is kept as the incident record;
+> its **diagnosis is sound and its remedy is wrong**. Three specific corrections,
+> each verified on the 4090 the same day:
+>
+> **1. Do NOT attach services to `pmoves_external`.** This document recommends it
+> five times. `docs/operations/DOCKER_NETWORK_HARDENING.md` **Rule 1** forbids it:
+> that bridge is internet-capable and shared with Agent Zero, Archon and Hi-RAG.
+> Putting a datastore there to solve a *publishing* problem is a security
+> regression. See **Rule 5**: Docker has no publish-without-egress primitive, so
+> the real options are gateway-fronting (Kong is already the published door with
+> backends internal behind it) or accepting egress deliberately, in writing.
+>
+> **2. "34 services" is an unverified upper bound — and there is no verified
+> number to put in its place.** 34 came from parsing `STACK_FILES`: a count of
+> files parsed, not services confirmed, and `p7-room-orchestrator` was already
+> found to be a false positive. Do not quote 34, and do not substitute another
+> fleet-wide figure from this document — measure the specific services you are
+> about to change. Note what the obvious tool does *not* answer:
+> `make -C pmoves net-reality` cross-checks eight hardcoded services against
+> host listeners (`scripts/audit_network_reality.sh` `EXPECTED_PORTS`) and skips
+> any that are not running. It never enumerates the fleet and has no concept of
+> a severity class, so it cannot produce a "how many services are affected"
+> total for you.
+>
+> **3. This is not Docker-Desktop-specific.** Docker's own docs define `internal`
+> only as "externally isolated" — about egress, silent on published ingress. The
+> behaviour is undocumented upstream and lives in
+> [moby/moby#36174](https://github.com/moby/moby/issues/36174), open since 2018
+> and **filed on native Linux Engine**.
+>
+> **Current, measured replacement:**
+> [`network-planes-and-package-sharing-2026-09-03.md`](network-planes-and-package-sharing-2026-09-03.md)
+> — three network planes, the tested refutation of the upstream
+> `enable_ip_masquerade` workaround, and the Pinokio/Docker package-sharing
+> comparison.
+>
+> **For the remedy itself, go straight to the doctrine, not to a handoff:**
+> [`DOCKER_NETWORK_HARDENING.md` § Network-Tier Hardening Anchors](../operations/DOCKER_NETWORK_HARDENING.md#network-tier-hardening-anchors-pr-a--landed-2026-09-03).
+> The `x-network-tailnet-published` anchor is **defined** — `docker-compose.yml:563-565` —
+> and it landed through Known Roads. Any document telling you that anchor is
+> absent, or that you need a `COMPOSE_EDIT=1` override to add it, is stale.
 
 **From:** 4090-CLAUDE (PMOVES-4090)
 **Date:** 2026-09-03
-**Status:** measured; fix not applied
+**Status:** SUPERSEDED 2026-09-03 — diagnosis sound, remedy wrong (see banner)
 **Doubles as:** the `handoff:` artifact for
 `KNOWN_ROAD=compose:handoff:host-unreachable-internal-networks-2026-09-03.md`
 
@@ -79,11 +123,24 @@ this repo has several services declared in two files at once.
 `p7-room-orchestrator`, `voice-relay`, `a2ui-renderer`, `gateway-agent`,
 `langextract`, `consciousness-service`, and similar app-tier services. These
 want a host port and cannot have one.
-→ Fix: multi-home onto `pmoves_external`, exactly as `flute-gateway` already is
-(`pmoves_api pmoves_app pmoves_bus pmoves_external`).
+→ ~~Fix: multi-home onto `pmoves_external`, exactly as `flute-gateway` already is
+(`pmoves_api pmoves_app pmoves_bus pmoves_external`).~~
+> **✖ DO NOT DO THIS.** `pmoves_external` is the internet-capable bridge shared
+> with Agent Zero, Archon and Hi-RAG. `DOCKER_NETWORK_HARDENING.md` **Rule 1**
+> forbids putting a service there that does not need outbound. `flute-gateway` is
+> on it because it makes external TTS/model calls — that is the *reason*, not a
+> precedent for copying the attachment. Per **Rule 5** there is no
+> publish-without-egress network in Docker, so the honest options are
+> gateway-fronting (Kong pattern: the gateway is the only published thing) or
+> accepting egress deliberately and in writing, per service.
 
 **B. Correctly internal, but the `ports:` line is a lie.** `qdrant`, `neo4j`,
 `tensorzero-clickhouse`, `supabase-pooler`, and the other data-tier services.
+> **Correction:** `qdrant` and `neo4j` are **not** in this class. They have real
+> host-side consumers — `scripts/smoke-tests.sh:335-338` probes them, and the
+> `backup` target snapshots Qdrant over `localhost:6333`. Both were failing
+> silently at the time this was written. Their `ports:` lines are not lies; they
+> are unmet requirements. Class them with A, not B.
 These *should* stay internal. The defect is the `ports:` declaration, which
 reads as an interface contract that nothing enforces and nobody can use.
 → Fix: drop `ports:`, or move it behind a documented, opt-in overlay.

@@ -125,7 +125,8 @@ services:
     # observed stale (retired-secret signature); same preference as #2333/#2346.
     - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-${SERVICE_ROLE_KEY:-}}
     - CIPHER_MCP_URL=${CIPHER_MCP_URL:-http://cipher-api:8105/mcp/sse}
-    - 'A0_SET_mcp_servers={"mcpServers":{"docker":{"command":"docker","args":["run","--rm","-i","--mount","type=bind,src=/var/run/docker.sock,dst=/var/run/docker.sock","mcp/docker"]},"pmoves-supabase":{"command":"mcp-server-postgrest","args":["--apiUrl","${SUPABASE_REST_URL:-http://supabase-kong:8000/rest/v1}","--apiKey","${SERVICE_ROLE_KEY:-${SUPABASE_SERVICE_ROLE_KEY:-}}","--schema","public,storage"]},"cipher":{"type":"sse","url":"${CIPHER_MCP_URL:-http://cipher-api:8105/mcp/sse}"},"notebook":{"type":"streamable-http","url":"${NOTEBOOK_MCP_URL:-http://notebook-mcp:8092/mcp}"}}}'
+    - 'A0_SET_mcp_servers={"mcpServers":{"docker":{"command":"docker","args":["run","--rm","-i","--mount","type=bind,src=/var/run/docker.sock,dst=/var/run/docker.sock","mcp/docker"]},"pmoves-supabase":{"command":"mcp-server-postgrest","args":["--apiUrl","${SUPABASE_REST_URL:-http://supabase-kong:8000/rest/v1}","--apiKey","${SERVICE_ROLE_KEY:-${SUPABASE_SERVICE_ROLE_KEY:-}}","--schema","public,storage"]},"cipher":{"type":"sse","url":"${CIPHER_MCP_URL:-http://cipher-api:8105/mcp/sse}","headers":{"Authorization":"Bearer
+      ${CIPHER_API_TOKEN}"}},"notebook":{"type":"streamable-http","url":"${NOTEBOOK_MCP_URL:-http://notebook-mcp:8092/mcp}"}}}'
     # LLM routing: use TensorZero gateway as OpenAI-compatible provider
     # Agent Zero's get_default_value() reads A0_SET_* from env (dotenv priority)
     # Dummy key silences LiteLLM "Missing API Key" warning — TensorZero handles auth
@@ -690,7 +691,21 @@ services:
       - SETGID
       - SETUID
 
-# PMOVES.AI production compose project
+# ── Network-tier anchors (§1465 PR-A) ─────────────────────────────────────────
+# Mirrors the x-tier-*-hardened service anchors above: the tier DECISION becomes
+# a named, greppable thing instead of a bare `internal:` literal repeated seven
+# times. Each network still carries its own name/ipam; only the tier is shared.
+#
+# `internal: true` does more than block egress. A service attached ONLY to
+# internal networks has its published ports stored and never activated, silently
+# -- Docker documents `internal` as "externally isolated" and says nothing about
+# published ingress; the behaviour lives in moby/moby#36174 (open since 2018).
+# Verify what a node actually publishes with `make -C pmoves net-reality`.
+#
+# There is NO publish-without-egress primitive: internal:false grants both.
+# See docs/operations/DOCKER_NETWORK_HARDENING.md Rules 1, 4 and 5.
+
+# Air-gapped: container-to-container only. Ports declared here never publish.
     build:
       context: .
       dockerfile: services/hi-rag-gateway-v2/Dockerfile.gpu
