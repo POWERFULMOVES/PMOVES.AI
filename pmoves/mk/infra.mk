@@ -237,6 +237,18 @@ tailscale-docker-ip: ## Show Tailscale Docker container's IP
 # Skills: /fleet:status, /fleet:rustdesk-check, /fleet:enroll, /fleet:fix-relay
 # Docs:   pmoves/docs/operations/FLEET_REMOTE_ACCESS_RUNBOOK.md
 
+.PHONY: fleet-registry
+fleet-registry: ## Show the live service registry (fleet-sentinel /registry.json)
+	@echo "=== Fleet Service Registry (sentinel) ==="
+	@if command -v curl >/dev/null 2>&1; then \
+		curl -fsS "$${SENTINEL_URL:-http://localhost:8099}/registry.json" \
+		  | $$(command -v jq >/dev/null 2>&1 && echo jq . || echo cat) \
+		|| echo "sentinel unreachable at $${SENTINEL_URL:-http://localhost:8099} (make up-sentinel?)"; \
+	else \
+		echo "curl not available"; exit 1; \
+	fi
+
+
 fleet-status: ## Show Tailscale nodes (hostnames only) + RustDesk relay health
 	@echo "=== Tailscale Fleet Status ==="
 	@if command -v tailscale >/dev/null 2>&1; then \
