@@ -21,7 +21,7 @@
           "endpoint": "fleet",
           "endpoint_prefix": "cipher",
           "headers": {
-            "Authorization": "Bearer ${CIPHER_API_TOKEN:-}"
+            "Authorization": "Bearer ${CIPHER_API_TOKEN}"
           }
         },
         {
@@ -32,7 +32,7 @@
           "endpoint_pinned": true,
           "endpoint_prefix": "cipher",
           "headers": {
-            "Authorization": "Bearer ${CIPHER_API_TOKEN:-}"
+            "Authorization": "Bearer ${CIPHER_API_TOKEN}"
           },
           "clients": [
             "hermes",
