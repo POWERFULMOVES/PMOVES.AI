@@ -172,6 +172,14 @@ REGISTRY: Dict[str, Dict[str, Any]] = {
     "JUICEFS_META_PASSWORD": {"tier": "data", "required": False},
     "NATS_EVENT_BUS_TOKEN": {"tier": "data", "required": True},
     "PMOVES_BRIDGE_TOKEN": {"tier": "worker", "required": True},
+    # ActivePieces self-host (docker-compose.activepieces.yml, PR #2906). The
+    # pinned 0.86.3 image reads AP_JWT_SECRET for stable auth signing across
+    # app+worker restarts (NOT AP_SIGNING_SECRET — that key is ignored by this
+    # image). Queue mode note: split app/worker containers require
+    # AP_QUEUE_MODE=REDIS in BOTH, set in the overlay.
+    "AP_POSTGRES_PASSWORD": {"tier": "worker", "required": False},
+    "AP_JWT_SECRET": {"tier": "worker", "required": False, "min_length": 32},
+    "AP_ENCRYPTION_KEY": {"tier": "worker", "required": False},
     # min_length=64 is not a style preference -- supabase-realtime is Phoenix, and
     # Plug's cookie store raises at REQUEST time, not boot:
     #   (ArgumentError) cookie store expects conn.secret_key_base to be at least

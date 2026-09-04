@@ -400,7 +400,20 @@ def open_claims_in(text: str) -> dict:
 HEREDOC_DELIM_RE = re.compile(r"<<-?\s*(['\"]?)([A-Za-z_][A-Za-z0-9_]*)\1")
 # `(>>?)` captured, because append and truncate are different acts against an
 # append-only ledger and the gate has to be able to tell them apart.
-REDIRECT_RE = re.compile(r"(>>?)\s*([^\s;|&<>]+)")
+# QUOTED FIRST, because the unquoted alternative stops at whitespace and a
+# quoted path is the normal way to write one that contains a space. Without the
+# quoted alternatives, `echo x > "C:\Users\Jane Doe\...\AGNOTE4482PHI.t1.md"`
+# handed `"C:\Users\Jane` to `_is_register`, which is not the register, so
+# `_segment_verdict` certified `echo` as read-only and the hook exited 0.
+#
+# This is redirect-specific and NOT spelling-specific: `tee` and `cp` route
+# through `_tokens`, where shlex already understands quoting, and they refused
+# the same paths correctly. Measured with a `Jane Doe` directory -- `>` after
+# echo/printf/cat passed silently in BOTH "\" and "/" spellings, so it is a
+# pre-existing hole in redirect parsing rather than part of the path-spelling
+# defect this file's other fix addresses. `_is_register` strips the quotes it
+# now receives.
+REDIRECT_RE = re.compile(r"(>>?)\s*((?:\"[^\"]*\"|'[^']*'|\\.|[^\s;|&<>])+)")
 TEE_RE = re.compile(r"\btee\b((?:\s+-\S+)*)((?:\s+[^\s;|&<>]+)*)")
 ECHO_LITERAL_RE = re.compile(
     r"\b(?:echo|printf)\b(?:\s+-\S+)*\s+(['\"])(.*?)\1", re.S
@@ -839,7 +852,55 @@ def _is_register(token: str) -> bool:
     token = token.strip().strip("'\"")
     if not token:
         return False
-    return os.path.basename(token.rstrip("/")) == REGISTER_NAME
+
+    # Split on EITHER separator, not os.sep. `os.path.basename` is
+    # platform-dependent: on Linux it does not treat "\" as a separator, so a
+    # Windows-spelled path reaching a Linux runner would arrive as one long
+    # basename and miss. The guard has to answer the same way wherever it runs.
+    # Quotes are stripped EVERYWHERE, not just at the ends. A redirect word can
+    # mix quoted and unquoted spans -- bash concatenates them into one word --
+    # and both directions were wrong before this:
+    #
+    #   > /tmp/"Jane Doe"/AGNOTE4482PHI.t1.md   under-matched: the basename was
+    #                                           never reached, so a real
+    #                                           truncate passed as read-only
+    #   > "/tmp/AGNOTE4482PHI.t1.md".bak        over-matched: the quoted span
+    #                                           alone looked like the register,
+    #                                           so a git merge artifact was
+    #                                           refused -- exactly the case the
+    #                                           neighbour rule exists to permit
+    #
+    # Removing the quote characters first makes the token the path bash would
+    # actually open, and both cases then fall out of the ordinary basename test.
+    token = token.replace('"', "").replace("'", "")
+
+    base = re.split(r"[\\/]", token.rstrip("/\\"))[-1]
+    if base == REGISTER_NAME:
+        return True
+
+    # THE POSIX TOKENIZER ATE THE SEPARATORS. `_tokens` calls
+    # `shlex.split(..., posix=True)` -- correct for bash, and it treats "\" as
+    # an ESCAPE. So a Windows-spelled path is not merely split wrong, it comes
+    # back with its separators deleted:
+    #
+    #   C:\Users\me\Temp\t0\AGNOTE4482PHI.t1.md
+    #     -> C:UsersmeTempt0AGNOTE4482PHI.t1.md
+    #
+    # There is no separator left for any basename test to find. Measured on
+    # Z890 (win32) against this file's own suite: with the register named in
+    # Windows spelling, `cp`, `dd of=`, `install`, `csplit -f`,
+    # `csplit --prefix=` and `split` ALL passed silently, where the identical
+    # commands spelled with "/" were refused. Six write vectors, decided by
+    # which slash the operator happened to type.
+    #
+    # `endswith` is the right shape for a guard here: it OVER-matches (a file
+    # genuinely named `notes-AGNOTE4482PHI.t1.md` would be refused) and
+    # over-matching is the safe direction. It still leaves the neighbour cases
+    # alone -- `<REG>.bak`, `.orig`, `.rej`, `.BACKUP.123` all END with their
+    # own suffix, not with the register name, so git's merge artifacts are
+    # untouched. That distinction is what the substring form got wrong and is
+    # preserved here deliberately.
+    return token.endswith(REGISTER_NAME)
 
 
 def _assignments(skeleton: str) -> dict:

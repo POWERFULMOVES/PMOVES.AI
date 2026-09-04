@@ -13,7 +13,7 @@ curated media tree, and exposes the server on `http://localhost:8096` via `pmove
 Create the tree with:
 
 ```bash
-make -C pmoves jellyfin-folders
+docker exec pmoves-jellyfin jellyfin folders sync
 ```
 
 Drop assets into the relevant subfolders or mount additional host paths by editing the compose file. Set
@@ -34,6 +34,6 @@ payloads resolve correctly.
 ## Maintenance Tips
 
 - Back up `./data/jellyfin/config` to preserve users, libraries, and plugin installs before upgrades.
-- Use `docker logs cataclysm-jellyfin` to monitor scheduled tasks such as library scans or plugin updates.
+- Use `docker logs pmoves-jellyfin` to monitor scheduled tasks such as library scans or plugin updates.
 - When migrating media between machines, keep the folder names identical (Movies/TV/etc.) so the library definitions stay
   valid without recreating paths.

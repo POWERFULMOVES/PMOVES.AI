@@ -14,14 +14,14 @@ Overview
   - CHIT decoder/specs: `../../PMOVESCHIT/PMOVESCHIT_DECODERv0.1.md`
 
 Deployment
-- Local compose: use `make integrations-up-firefly` for Firefly only or `make integrations-up-all` for Firefly + Wger + watcher.
+- Local compose: use `make up-external` for Firefly only or `make up-external` for Firefly + Wger + watcher.
 - Flows live under `pmoves/integrations/firefly-iii/n8n/flows/`; drop exported JSON there for auto-imports when the watcher is running.
 
 Networking/Ports
-- Default Firefly web: `8080` (as defined in the compose bundle)
+- Default Firefly web: `8075` (as defined in the compose bundle)
 
 Environment
-- `FIREFLY_BASE_URL` (e.g., `http://cataclysm-firefly:8080` on the compose network)
+- `FIREFLY_BASE_URL` (e.g., `http://cataclysm-firefly:8075` on the compose network)
 - `FIREFLY_ACCESS_TOKEN` (personal access token)
 
 API/Contracts
@@ -32,16 +32,16 @@ API/Contracts
 - n8n flows in `pmoves/integrations/firefly-iii/n8n/flows/` poll Firefly transactions, normalize categories, and write to Supabase.
 
 ## Sample dataset
-- Script: `pmoves/scripts/firefly_seed_sample_data.py` (Make target `make firefly-seed-sample`).
+- Script: `pmoves/scripts/firefly_seed_sample_data.py` (Make target `python scripts/firefly_seed_sample.py`).
 - Fixture: `pmoves/data/firefly/sample_transactions.json` (deterministic 5-year projection revenue/cost mix).
 - Required env vars: `FIREFLY_BASE_URL`, `FIREFLY_ACCESS_TOKEN` (admin token if creating demo users).
 - Usage:
   ```bash
   # Optional preview
-  DRY_RUN=1 make -C pmoves firefly-seed-sample
+  DRY_RUN=1 python pmoves/scripts/firefly_seed_sample.py
 
   # Apply dataset (loads users → accounts → transactions)
-  make -C pmoves firefly-seed-sample
+  python pmoves/scripts/firefly_seed_sample.py
   ```
 - Direct invocation:
   ```bash
