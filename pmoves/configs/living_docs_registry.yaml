@@ -174,10 +174,20 @@ tracked:
   # worst combination. 102 docs live under docs/operations/ and only 2 were
   # tracked before this block.
   #
-  # Proven on 2026-09-04: the deployed tailnet policy refused SSH that
-  # tailscale-acl-policy.json grants (tag:pmoves -> tag:pmoves, autogroup:nonroot),
-  # discovered only by being locked out of a node whose disk was full. Nothing
-  # was watching the gap between the file and the tailnet.
+  # Why these and not the other 100: each one answers "how do I REACH this node",
+  # and each is consulted when a node is already in trouble. On 2026-09-04 a full
+  # disk on SPARK took out its display manager and RustDesk together, leaving
+  # tailnet SSH as the only door. Every access-path doc was load-bearing that
+  # hour and none was freshness-checked.
+  #
+  # (An earlier draft of this block claimed the deployed tailnet policy had
+  # drifted from tailscale-acl-policy.json. It has NOT. The live policy was
+  # fetched from the Tailscale API the same day and carries the same
+  # tag:pmoves -> tag:pmoves autogroup:nonroot SSH rule. The lockout was mine:
+  # autogroup:nonroot admits any non-root user THAT EXISTS on the target, and I
+  # tried five usernames without trying the one already visible in
+  # /home/powerfulmoves. Recorded here because a wrong reason for a right
+  # decision is still a ghost anchor.)
   #
   # P2 (warn, do not gate) for the same reason as the block above: freshness is
   # measured from last-commit date and several are already outside budget.
@@ -185,7 +195,7 @@ tracked:
   - path: pmoves/configs/tailscale-acl-policy.json
     freshness_days: 30
     severity: P2
-    description: "Tailnet ACL + SSH policy — the repo copy of the deployed tailnet policy. Verified drifted from the live tailnet 2026-09-04; audit with fleet:acl-audit before trusting it for access decisions."
+    description: "Tailnet ACL + SSH policy — the repo copy of the deployed tailnet policy. Verified MATCHING the live tailnet 2026-09-04 (the tag:pmoves -> tag:pmoves autogroup:nonroot SSH rule is present in both). Tracked because it governs fleet access and drift here is silent; audit with fleet:acl-audit."
   - path: pmoves/docs/operations/FLEET_INVENTORY_LIVE.md
     freshness_days: 30
     severity: P2
