@@ -224,7 +224,15 @@ agents:
       team: orchestration
       ci_runner: null
       compose_profile: null
-    description: "B850/Knuckles node CLI identity -- data-tier host, infra + governance lane"
+    # Affinity, not exclusivity. The earlier wording ("data-tier host, infra +
+    # governance lane") read as a singular assignment; .claude/CLAUDE.md states
+    # every node is a pore in the lattice, capacity-class rather than
+    # expertise-lane, so what this row records is where work lands by preference,
+    # not what the node is alone permitted to hold.
+    description: >-
+      B850/Knuckles node CLI identity. Affinity for data-tier and AMD/ROCm Linux
+      workloads, with an infra + governance lane -- a preference, not an
+      exclusive claim. Admin over the node_steward role it launches into.
   claude_5090:
     name: "5090 Claude"
     class: standard
@@ -398,6 +406,53 @@ agents:
       ci_runner: ai-lab
       compose_profile: agents
     description: "Private co-creator and witness identity for darkxsides.room; public egress remains approval- and redaction-gated."
+
+  node_steward:
+    name: "Node Steward"
+    # The session ROLE the CLI identities above load into, not a node identity of
+    # its own. `pmoves/scripts/claude-pmoves.sh:82` resolves
+    # `DEFAULT_AGENT="${PMOVES_DEFAULT_AGENT:-node-steward}"` and then execs
+    # `claude --agent "$AGENT"`, so every launcher-started session on every node
+    # begins in this role -- yet this file, which .claude/CLAUDE.md names the
+    # source of truth for agent taxonomy, did not describe it.
+    class: specialized
+    primary_type: agent
+    secondary_type: ui
+    # No listening socket. A CLI session role, not a service.
+    port: null
+    health: null
+    layers: [L0, L2, L4]
+    evolution_stage: stage_1
+    # Pre-work face of the Control Body, per the role_classes block above:
+    # "Decomposes intent into scoped work: specs, plans, lane claims. Read-heavy;
+    # produces no production edits." That is this role verbatim -- it claims the
+    # lane and spawns delivery agents -- and .claude/agents/node-steward.md
+    # withholds Write/Edit, so "no production edits" is enforced, not asserted.
+    role_class: planner
+    # Deliberately no `signature`. The signing roster (agent_signatures.yaml and
+    # external_contributors above) carries NODE identities -- a steward session on
+    # this host signs as `b850-claude`. Minting a card for the role would give one
+    # signer two resolvable names.
+    #
+    # Deliberately empty: the steward publishes nothing to NATS. Its claim goes
+    # through the `pmoves-chit-sign` skill, not a subject of its own.
+    nats:
+      publishes: []
+      subscribes: []
+    topology:
+      # `any`, following botz_auditor: this role is not affine to one machine. It
+      # is the default on every node the launcher starts, which is what
+      # .claude/CLAUDE.md means by capacity-class rather than expertise-lane.
+      node_affinity: [any]
+      team: orchestration
+      ci_runner: null
+      compose_profile: null
+    description: >-
+      Per-node session role: holds node identity, reads and claims in the
+      AGNOTE4482 register before edits, then spawns delivery and review agents to
+      execute. Directed by the node's CLI identity (claude_b850 on Knuckles); its
+      own domain is administration of that node. Definition and rationale live in
+      .claude/agents/node-steward.md.
 
   space_agent:
     name: "PMOVES Space-Agent"
