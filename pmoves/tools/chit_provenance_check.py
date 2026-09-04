@@ -147,17 +147,45 @@ def recovery_window(node: str, offline: bool) -> str:
         if mine:
             return "OK -- an unexpired artifact for '%s' exists (run %s)" % (node, run_id)
         if live:
-            return ("no unexpired artifact for '%s'; %d other node bundle(s) still live "
-                    "(run %s)" % (node, len(live), run_id))
+            # ANOTHER NODE'S BUNDLE IS STILL A PULL. pull_chit_bundle.sh:60-62
+            # prefers `chit-bundle-<node>-*` and then FALLS BACK to any
+            # unexpired `chit-bundle-*`. Reporting this as unrecoverable and
+            # sending the operator to dispatch a workflow would be a false
+            # alarm that costs a CI run and several minutes -- and an advisory
+            # that cries wolf is the one that gets switched off.
+            return ("OK -- no artifact for '%s', but %d other unexpired bundle(s) "
+                    "exist and the puller falls back to them (run %s)"
+                    % (node, len(live), run_id))
         return "EXPIRED -- newest run %s has no unexpired chit-bundle-* (1-day retention)" % run_id
     except (OSError, subprocess.SubprocessError, ValueError, KeyError) as exc:
         return "not checked (%s)" % type(exc).__name__
+
+
+def _needs_producer(window: str) -> bool:
+    """Is dispatching a workflow the actual remedy, or would a pull work?
+
+    Named once and shared by both call sites. The distinction is the whole
+    point of the check: `secrets-pull` is right when ANY unexpired bundle
+    exists (the puller falls back across nodes), and wrong -- it will fail --
+    when none does. Telling an operator to dispatch when a pull would have
+    worked costs a CI run and several minutes; an advisory that cries wolf is
+    the one that gets switched off.
+    """
+    return window.startswith("EXPIRED") or window.startswith("NO successful")
 
 
 def main() -> int:
     ap = argparse.ArgumentParser(description="CHIT bundle provenance + recoverability")
     ap.add_argument("--bundle", default=None)
     ap.add_argument("--node", default=os.environ.get("PMOVES_NODE", "5090"))
+    # The DISPATCH target is the producer, not this node. Pattern-B nodes
+    # (Z890, the default 5090) are consumers with no self-hosted runner, and
+    # sync-secrets-local.yml schedules on one -- so `-f targets=z890` names a
+    # job that cannot be picked up. pull_chit_bundle.sh:27 already carries the
+    # distinction as PMOVES_BUNDLE_PRODUCER (default b850); same default here so
+    # the two roads cannot disagree.
+    ap.add_argument("--producer",
+                    default=os.environ.get("PMOVES_BUNDLE_PRODUCER", "b850"))
     ap.add_argument("--offline", action="store_true", help="skip the artifact query")
     ap.add_argument("--strict", action="store_true",
                     help="exit non-zero when the bundle is a local export")
@@ -179,8 +207,20 @@ def main() -> int:
     if not bundle.is_file():
         print("             ABSENT")
         print()
+        # RECOVERY IS CHECKED HERE TOO. An earlier version returned straight
+        # after naming `secrets-pull`, which is the one case where the operator
+        # has NO bundle at all -- so being told to run a command that will fail
+        # is worse here than anywhere else. If the artifact has expired, the
+        # pull is not the remedy and saying so costs one API call.
+        window = recovery_window(args.node, args.offline)
+        print("  recovery   %s" % window)
+        print()
         print("  No bundle at all, so the funnel has nothing to project from.")
         print("      PMOVES_NODE=%s make -C pmoves secrets-pull" % args.node)
+        if _needs_producer(window):
+            print("  That will fail as things stand -- produce an artifact first:")
+            print("      gh workflow run %s --ref main -f targets=%s"
+                  % (WORKFLOW, args.producer))
         return 1 if args.strict else 0
 
     age_h = (time.time() - bundle.stat().st_mtime) / 3600.0
@@ -222,9 +262,9 @@ def main() -> int:
     print("  restarts, which is usually much later and looks unrelated.")
     print()
     print("  Restore:   PMOVES_NODE=%s make -C pmoves secrets-pull" % args.node)
-    if "EXPIRED" in window or "NO successful" in window or "no unexpired" in window:
+    if _needs_producer(window):
         print("  The artifact is gone (retention is 1 day), so produce one first:")
-        print("      gh workflow run %s --ref main -f targets=%s" % (WORKFLOW, args.node))
+        print("      gh workflow run %s --ref main -f targets=%s" % (WORKFLOW, args.producer))
         print("  ...then wait for it to finish and re-run secrets-pull.")
 
     return 1 if args.strict else 0

@@ -179,10 +179,17 @@ def test_the_missing_list_is_parsed_from_the_existing_projection(tmp_path, monke
     "window,expect_producer",
     [
         ("EXPIRED -- newest run 1 has no unexpired chit-bundle-* (1-day retention)", True),
-        ("no unexpired artifact for 'z890'; 1 other node bundle(s) still live (run 1)", True),
         ("NO successful producer run found at all", True),
         ("OK -- an unexpired artifact for 'z890' exists (run 1)", False),
+        # ANOTHER NODE'S bundle is recoverable: pull_chit_bundle.sh falls back
+        # to any unexpired chit-bundle-*. An earlier version treated this as
+        # unrecoverable and sent the operator to dispatch a workflow that was
+        # not needed -- a false alarm costing a CI run, on an advisory whose
+        # only real currency is being believed.
+        ("OK -- no artifact for 'z890', but 2 other unexpired bundle(s) exist "
+         "and the puller falls back to them (run 1)", False),
         ("not checked (--offline)", False),
+        ("not checked (gh unavailable or unauthenticated)", False),
     ],
 )
 def test_the_producer_command_appears_only_when_pulling_cannot_work(
@@ -200,3 +207,58 @@ def test_the_producer_command_appears_only_when_pulling_cannot_work(
     out = capsys.readouterr().out
     assert ("gh workflow run" in out) is expect_producer
     assert "secrets-pull" in out, "the restore road is always worth naming"
+
+
+def test_the_dispatch_target_is_the_producer_not_this_node(tmp_path, monkeypatch, capsys):
+    """Pattern-B nodes are CONSUMERS with no self-hosted runner, and
+    sync-secrets-local.yml schedules on one -- so `-f targets=z890` names a job
+    nothing can pick up. pull_chit_bundle.sh:27 already draws the distinction as
+    PMOVES_BUNDLE_PRODUCER (default b850); the same default is used here so the
+    two roads cannot disagree about who can produce."""
+    b = _bundle(tmp_path)
+    monkeypatch.setattr(
+        cpc, "recovery_window",
+        lambda node, offline: "EXPIRED -- newest run 1 has no unexpired chit-bundle-*",
+    )
+    monkeypatch.setattr(cpc, "audit_missing", lambda bundle: (0, [], ""))
+    monkeypatch.setattr("sys.argv", ["x", "--bundle", str(b), "--node", "z890"])
+    cpc.main()
+    out = capsys.readouterr().out
+    assert "targets=b850" in out
+    assert "targets=z890" not in out, "dispatched at a node with no runner"
+
+
+def test_an_absent_bundle_still_reports_recoverability(tmp_path, monkeypatch, capsys):
+    """The one case where the operator has NO bundle is the worst place to be
+    told to run a command that will fail. An earlier version returned before
+    checking, so `secrets-pull` was the only instruction offered even when the
+    artifact behind it had expired."""
+    monkeypatch.setattr(
+        cpc, "recovery_window",
+        lambda node, offline: "EXPIRED -- newest run 1 has no unexpired chit-bundle-*",
+    )
+    monkeypatch.setattr(
+        "sys.argv", ["x", "--bundle", str(tmp_path / "gone.json"), "--node", "z890"]
+    )
+    cpc.main()
+    out = capsys.readouterr().out
+    assert "recovery" in out
+    assert "will fail as things stand" in out
+    assert "targets=b850" in out
+
+
+def test_an_absent_bundle_does_not_cry_wolf_when_a_pull_would_work(
+    tmp_path, monkeypatch, capsys
+):
+    """Bound on the test above."""
+    monkeypatch.setattr(
+        cpc, "recovery_window",
+        lambda node, offline: "OK -- an unexpired artifact for 'z890' exists (run 1)",
+    )
+    monkeypatch.setattr(
+        "sys.argv", ["x", "--bundle", str(tmp_path / "gone.json"), "--node", "z890"]
+    )
+    cpc.main()
+    out = capsys.readouterr().out
+    assert "secrets-pull" in out
+    assert "gh workflow run" not in out
