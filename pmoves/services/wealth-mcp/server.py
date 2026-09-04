@@ -31,7 +31,9 @@ import httpx
 from mcp.server.fastmcp import Context, FastMCP
 
 API_URL = os.getenv("FIREFLY_API_URL", "http://firefly:8080/api/v1").rstrip("/")
-PAT = os.getenv("FIREFLY_PAT", "")
+# Fleet convention is FIREFLY_ACCESS_TOKEN (integration-auth-setup.sh lands it in
+# env.shared); accept the older FIREFLY_PAT as a fallback.
+PAT = os.getenv("FIREFLY_ACCESS_TOKEN", "") or os.getenv("FIREFLY_PAT", "")
 
 # Firefly III speaks JSON:API.
 _ACCEPT = "application/vnd.api+json"

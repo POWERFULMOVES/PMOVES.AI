@@ -3790,6 +3790,10 @@ services:
     # Firefly reachable in-network on pmoves_app (alias `firefly`). Do NOT inherit a
     # host-oriented URL; this is a compose service, always in-network.
     - FIREFLY_API_URL=${WEALTH_MCP_FIREFLY_URL:-http://firefly:8080/api/v1}
+    # Fleet convention: FIREFLY_ACCESS_TOKEN (integration-auth-setup.sh lands it in
+    # env.shared). FIREFLY_PAT kept as a back-compat fallback. Per-tenant PATs are
+    # forwarded per-request by the mounting harness (they win over these baselines).
+    - FIREFLY_ACCESS_TOKEN=${FIREFLY_ACCESS_TOKEN:-}
     - FIREFLY_PAT=${FIREFLY_PAT:-}
     - NATS_URL=${NATS_URL}
     - PMOVES_NETWORKS=pmoves_app,pmoves_bus

@@ -79,3 +79,4 @@
 {"agent": "5090", "domain": "compose", "file": "C:/Users/russe/Documents/GitHub/PMOVES.AI/pmoves/docker-compose.yml", "reason": "handoff:notebook-mcp-build-2026-09-02.md", "session": "unknown", "tool": "Edit", "ts": "2026-09-04T11:54:51Z"}
 {"agent": "5090", "domain": "dockerfile", "file": "C:/Users/russe/Documents/GitHub/PMOVES.AI/pmoves/services/wealth-mcp/Dockerfile", "reason": "handoff:wealth-mcp-build-2026-09-04.md", "session": "unknown", "tool": "Write", "ts": "2026-09-04T15:36:10Z"}
 {"agent": "5090", "domain": "compose", "file": "C:/Users/russe/Documents/GitHub/PMOVES.AI/pmoves/docker-compose.yml", "reason": "handoff:wealth-mcp-build-2026-09-04.md", "session": "unknown", "tool": "Edit", "ts": "2026-09-04T15:37:43Z"}
+{"agent": "5090", "domain": "compose", "file": "C:/Users/russe/Documents/GitHub/PMOVES.AI/pmoves/docker-compose.yml", "reason": "handoff:wealth-mcp-build-2026-09-04.md", "session": "unknown", "tool": "Edit", "ts": "2026-09-04T16:09:58Z"}
