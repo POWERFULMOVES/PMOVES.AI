@@ -205,7 +205,7 @@ def test_the_producer_command_appears_only_when_pulling_cannot_work(
     monkeypatch.setattr("sys.argv", ["x", "--bundle", str(b), "--node", "z890"])
     cpc.main()
     out = capsys.readouterr().out
-    assert ("gh workflow run" in out) is expect_producer
+    assert ("secrets-sync-trigger" in out) is expect_producer
     assert "secrets-pull" in out, "the restore road is always worth naming"
 
 
@@ -224,8 +224,8 @@ def test_the_dispatch_target_is_the_producer_not_this_node(tmp_path, monkeypatch
     monkeypatch.setattr("sys.argv", ["x", "--bundle", str(b), "--node", "z890"])
     cpc.main()
     out = capsys.readouterr().out
-    assert "targets=b850" in out
-    assert "targets=z890" not in out, "dispatched at a node with no runner"
+    assert "TARGETS=b850" in out
+    assert "TARGETS=z890" not in out, "dispatched at a node with no runner"
 
 
 def test_an_absent_bundle_still_reports_recoverability(tmp_path, monkeypatch, capsys):
@@ -244,7 +244,7 @@ def test_an_absent_bundle_still_reports_recoverability(tmp_path, monkeypatch, ca
     out = capsys.readouterr().out
     assert "recovery" in out
     assert "will fail as things stand" in out
-    assert "targets=b850" in out
+    assert "TARGETS=b850" in out
 
 
 def test_an_absent_bundle_does_not_cry_wolf_when_a_pull_would_work(
@@ -261,4 +261,53 @@ def test_an_absent_bundle_does_not_cry_wolf_when_a_pull_would_work(
     cpc.main()
     out = capsys.readouterr().out
     assert "secrets-pull" in out
-    assert "gh workflow run" not in out
+    assert "secrets-sync-trigger" not in out
+
+
+def test_it_honours_the_repo_override_the_puller_honours(monkeypatch):
+    """pull_chit_bundle.sh:21 reads PMOVES_REPO. Hard-coding it here meant a node
+    with the override set would have its artifact checked against upstream while
+    `secrets-pull` queried the fork -- reporting a live artifact the pull could
+    not find, or demanding a producer run the overridden repo already had."""
+    monkeypatch.setenv("PMOVES_REPO", "SOMEONE/ELSE")
+    assert _load().REPO == "SOMEONE/ELSE"
+    monkeypatch.delenv("PMOVES_REPO", raising=False)
+    assert _load().REPO == "POWERFULMOVES/PMOVES.AI"
+
+
+def test_the_override_reaches_the_actual_query(monkeypatch):
+    """The constant is not the contract -- the query is."""
+    monkeypatch.setenv("PMOVES_REPO", "SOMEONE/ELSE")
+    mod = _load()
+    seen = []
+
+    class _R:
+        returncode = 1
+        stdout = ""
+        stderr = ""
+
+    monkeypatch.setattr(mod.subprocess, "run", lambda cmd, *a, **k: (seen.append(cmd), _R())[1])
+    mod.recovery_window("z890", offline=False)
+    assert any("SOMEONE/ELSE" in " ".join(c) for c in seen), seen
+
+
+def test_the_dispatch_is_a_known_road_not_a_raw_gh_call(tmp_path, monkeypatch, capsys):
+    """Routed through `make secrets-sync-trigger` (infra.mk:314) rather than a
+    raw `gh workflow run`.
+
+    NOTE the reviewer's stated reason -- that damage-control intercepts raw
+    dispatches -- did NOT reproduce: the hook returns 0 for that command on this
+    node. The recommendation still stands on the better ground that the make
+    target is the Known Road and does more than the raw call, waiting for the
+    run to start and reporting it."""
+    b = _bundle(tmp_path)
+    monkeypatch.setattr(
+        cpc, "recovery_window",
+        lambda node, offline: "EXPIRED -- newest run 1 has no unexpired chit-bundle-*",
+    )
+    monkeypatch.setattr(cpc, "audit_missing", lambda bundle: (0, [], ""))
+    monkeypatch.setattr("sys.argv", ["x", "--bundle", str(b), "--node", "z890"])
+    cpc.main()
+    printed = capsys.readouterr().out
+    assert "make -C pmoves secrets-sync-trigger" in printed
+    assert "gh workflow run" not in printed
