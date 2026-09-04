@@ -124,9 +124,17 @@ services:
     # Prefer the secrets-sync name — the legacy local SERVICE_ROLE_KEY has been
     # observed stale (retired-secret signature); same preference as #2333/#2346.
     - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-${SERVICE_ROLE_KEY:-}}
+    # Cipher MCP endpoints — two transports, two DIFFERENT paths:
+    #   CIPHER_MCP_URL      = legacy SSE stream  (…/mcp/sse), kept for SSE consumers
+    #   CIPHER_MCP_HTTP_URL = modern streamable-http (…/mcp), what A0 mounts below
+    # A remote/non-default Cipher deployment MUST override BOTH (the paths differ, so
+    # one can't stand in for the other) — declared here + in env templates so an
+    # override is never silently dropped.
     - CIPHER_MCP_URL=${CIPHER_MCP_URL:-http://cipher-api:8105/mcp/sse}
-    - 'A0_SET_mcp_servers={"mcpServers":{"docker":{"command":"docker","args":["run","--rm","-i","--mount","type=bind,src=/var/run/docker.sock,dst=/var/run/docker.sock","mcp/docker"]},"pmoves-supabase":{"command":"mcp-server-postgrest","args":["--apiUrl","${SUPABASE_REST_URL:-http://supabase-kong:8000/rest/v1}","--apiKey","${SERVICE_ROLE_KEY:-${SUPABASE_SERVICE_ROLE_KEY:-}}","--schema","public,storage"]},"cipher":{"type":"sse","url":"${CIPHER_MCP_URL:-http://cipher-api:8105/mcp/sse}","headers":{"Authorization":"Bearer
-      ${CIPHER_API_TOKEN}"}},"notebook":{"type":"streamable-http","url":"${NOTEBOOK_MCP_URL:-http://notebook-mcp:8092/mcp}"}}}'
+    - CIPHER_MCP_HTTP_URL=${CIPHER_MCP_HTTP_URL:-http://cipher-api:8105/mcp}
+    - 'A0_SET_mcp_servers={"mcpServers":{"docker":{"command":"docker","args":["run","--rm","-i","--mount","type=bind,src=/var/run/docker.sock,dst=/var/run/docker.sock","mcp/docker"]},"pmoves-supabase":{"command":"mcp-server-postgrest","args":["--apiUrl","${SUPABASE_REST_URL:-http://supabase-kong:8000/rest/v1}","--apiKey","${SERVICE_ROLE_KEY:-${SUPABASE_SERVICE_ROLE_KEY:-}}","--schema","public,storage"]},"cipher":{"type":"streamable-http","url":"${CIPHER_MCP_HTTP_URL:-http://cipher-api:8105/mcp}","headers":{"Authorization":"Bearer
+      ${CIPHER_API_TOKEN}"}},"notebook":{"type":"streamable-http","url":"${NOTEBOOK_MCP_URL:-http://notebook-mcp:8092/mcp}"},"wealth":{"type":"streamable-http","url":"${WEALTH_MCP_URL:-http://wealth-mcp:8092/mcp}","headers":{"Authorization":"Bearer
+      ${FIREFLY_ACCESS_TOKEN}"}}}}'
     # LLM routing: use TensorZero gateway as OpenAI-compatible provider
     # Agent Zero's get_default_value() reads A0_SET_* from env (dotenv priority)
     # Dummy key silences LiteLLM "Missing API Key" warning — TensorZero handles auth
@@ -1408,6 +1416,55 @@ services:
     profiles: ["agents", "research"]
     networks: [pmoves_app, pmoves_bus]  # open-notebook reachable on pmoves_app
     # python:3.12-slim has no curl; use a stdlib TCP-connect probe on the MCP port.
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket,sys; s=socket.socket(); s.settimeout(3); sys.exit(0 if s.connect_ex(('127.0.0.1',8092))==0 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+
+  wealth-mcp:
+    # wealth-mcp — MCP wrapper for Firefly III (build once, mount by any agent).
+    # Exposes list_accounts/list_transactions/search_transactions/create_transaction
+    # over MCP (streamable-http) so A0's :8081 client, deepseek-harness, and Claude/Codex
+    # mount ONE wrapper. Tenancy supports BOTH Firefly models: a per-request Bearer PAT
+    # forwarded by the mounting harness (shared Firefly + per-tenant PATs), or
+    # WEALTH_MCP_FIREFLY_URL per tenant instance. FIREFLY_PAT is the baseline fallback.
+    <<: *tier-agent-hardened-rw
+    build:
+      context: ./services/wealth-mcp
+      dockerfile: Dockerfile
+    image: ${WEALTH_MCP_IMAGE:-ghcr.io/powerfulmoves/pmoves-wealth-mcp:pmoves-latest}
+    container_name: pmoves-wealth-mcp
+    hostname: wealth-mcp
+    restart: unless-stopped
+    environment:
+    - MCP_HOST=0.0.0.0
+    - MCP_PORT=8092
+    - MCP_TRANSPORT=${WEALTH_MCP_TRANSPORT:-streamable-http}
+    # Firefly reachable in-network on pmoves_app (alias `firefly`). Do NOT inherit a
+    # host-oriented URL; this is a compose service, always in-network.
+    - FIREFLY_API_URL=${WEALTH_MCP_FIREFLY_URL:-http://firefly:8080/api/v1}
+    # Fleet convention: FIREFLY_ACCESS_TOKEN (integration-auth-setup.sh lands it in
+    # env.shared). FIREFLY_PAT kept as a back-compat fallback. Per-tenant PATs are
+    # forwarded per-request by the mounting harness (they win over these baselines).
+    - FIREFLY_ACCESS_TOKEN=${FIREFLY_ACCESS_TOKEN:-}
+    - FIREFLY_PAT=${FIREFLY_PAT:-}
+    - NATS_URL=${NATS_URL}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus
+    ports:
+    - ${WEALTH_MCP_BIND:-127.0.0.1}:${WEALTH_MCP_PORT:-8208}:8092
+    depends_on:
+      nats:
+        condition: service_healthy
+    profiles: ["agents", "research"]
+    networks: [pmoves_app, pmoves_bus]  # firefly reachable on pmoves_app
+    # python:3.12-slim has no curl; stdlib TCP-connect probe on the MCP port.
     healthcheck:
       test: ["CMD", "python", "-c", "import socket,sys; s=socket.socket(); s.settimeout(3); sys.exit(0 if s.connect_ex(('127.0.0.1',8092))==0 else 1)"]
       interval: 30s
