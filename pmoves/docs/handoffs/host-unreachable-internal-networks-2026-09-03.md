@@ -14,11 +14,17 @@
 > the real options are gateway-fronting (Kong is already the published door with
 > backends internal behind it) or accepting egress deliberately, in writing.
 >
-> **2. "34 services" is an unverified upper bound.** It came from parsing
-> `STACK_FILES` — a count of files parsed, not services confirmed — and
-> `p7-room-orchestrator` was already found to be a false positive. The measured
-> figure is **16 class-A among 63 running containers**, from
-> `make -C pmoves net-reality`. Re-measure; do not quote 34.
+> **2. "34 services" is an unverified upper bound — and there is no verified
+> number to put in its place.** 34 came from parsing `STACK_FILES`: a count of
+> files parsed, not services confirmed, and `p7-room-orchestrator` was already
+> found to be a false positive. Do not quote 34, and do not substitute another
+> fleet-wide figure from this document — measure the specific services you are
+> about to change. Note what the obvious tool does *not* answer:
+> `make -C pmoves net-reality` cross-checks eight hardcoded services against
+> host listeners (`scripts/audit_network_reality.sh` `EXPECTED_PORTS`) and skips
+> any that are not running. It never enumerates the fleet and has no concept of
+> a severity class, so it cannot produce a "how many services are affected"
+> total for you.
 >
 > **3. This is not Docker-Desktop-specific.** Docker's own docs define `internal`
 > only as "externally isolated" — about egress, silent on published ingress. The
@@ -31,6 +37,12 @@
 > — three network planes, the tested refutation of the upstream
 > `enable_ip_masquerade` workaround, and the Pinokio/Docker package-sharing
 > comparison.
+>
+> **For the remedy itself, go straight to the doctrine, not to a handoff:**
+> [`DOCKER_NETWORK_HARDENING.md` § Network-Tier Hardening Anchors](../operations/DOCKER_NETWORK_HARDENING.md#network-tier-hardening-anchors-pr-a--landed-2026-09-03).
+> The `x-network-tailnet-published` anchor is **defined** — `docker-compose.yml:563-565` —
+> and it landed through Known Roads. Any document telling you that anchor is
+> absent, or that you need a `COMPOSE_EDIT=1` override to add it, is stale.
 
 **From:** 4090-CLAUDE (PMOVES-4090)
 **Date:** 2026-09-03
