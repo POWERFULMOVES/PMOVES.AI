@@ -774,10 +774,38 @@ def split_heredocs(command: str):
         for m in HEREDOC_DELIM_RE.finditer(line):
             quote, delim = m.group(1), m.group(2)
             body = []
-            while idx < len(lines) and lines[idx].strip() != delim:
+            # FOLD CONTINUATIONS WHEN LOOKING FOR THE TERMINATOR, but only for
+            # an UNQUOTED delimiter -- that is precisely where bash performs
+            # expansion and line-joining while reading the body. With a quoted
+            # delimiter the body is taken byte-for-byte and `EO\` + newline +
+            # `F` is not a terminator, so folding there would end the heredoc
+            # early and hand the rest of the body to the shell parser as code.
+            #
+            # Unfolded, this hides a whole COMMAND rather than a path:
+            #
+            #     cat >> REG <<EOF
+            #     ...
+            #     EO\
+            #     F
+            #     echo DESTROYED > REG
+            #
+            # bash rejoins `EOF`, closes the heredoc, and runs the truncate.
+            # The hook saw the heredoc as unterminated, absorbed the truncate
+            # as inert body data, and returned 0.
+            term_lines = 1
+            while idx < len(lines):
+                cand = lines[idx]
+                n = 1
+                if not quote:
+                    while cand.endswith("\\") and idx + n < len(lines):
+                        cand = cand[:-1] + lines[idx + n]
+                        n += 1
+                if cand.strip() == delim:
+                    term_lines = n
+                    break
                 body.append(lines[idx])
                 idx += 1
-            idx += 1  # consume the terminator line itself
+            idx += term_lines  # consume the terminator, however many lines it spans
             bodies.append({
                 "delim": delim,
                 "body": "\n".join(body),
