@@ -70,3 +70,4 @@
 {"agent": "5090", "domain": "compose", "file": "C:/Users/russe/Documents/GitHub/PMOVES.AI/pmoves/docker-compose.yml", "reason": "handoff:notebook-mcp-build-2026-09-02.md", "session": "unknown", "tool": "Edit", "ts": "2026-09-03T17:53:57Z"}
 {"agent": "5090", "domain": "compose", "file": "C:/Users/russe/Documents/GitHub/PMOVES.AI/pmoves/docker-compose.yml", "reason": "handoff:notebook-mcp-build-2026-09-02.md", "session": "unknown", "tool": "Edit", "ts": "2026-09-03T18:23:55Z"}
 {"agent": "5090", "domain": "compose", "file": "C:/Users/russe/Documents/GitHub/PMOVES.AI/pmoves/docker-compose.yml", "reason": "handoff:notebook-mcp-build-2026-09-02.md", "session": "unknown", "tool": "Edit", "ts": "2026-09-03T18:43:09Z"}
+{"agent": "5090", "domain": "compose", "file": "C:/Users/russe/Documents/GitHub/PMOVES.AI/pmoves/docker-compose.yml", "reason": "handoff:notebook-mcp-build-2026-09-02.md", "session": "unknown", "tool": "Edit", "ts": "2026-09-04T01:36:47Z"}
