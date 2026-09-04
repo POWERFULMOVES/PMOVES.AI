@@ -164,6 +164,15 @@ env-check: ## Run cross-platform environment preflight checks
 	@# HIDDEN it -- an advisory that silently stops advising is the worst of
 	@# both. Clearing ARGS keeps the advisory honest.
 	@$(MAKE) --no-print-directory ARGS= session-check || true
+	@# chit-provenance-check, same advisory contract and the same cleared ARGS.
+	@# `--offline` is deliberate HERE and only here: env-check is the routine
+	@# environment validation and must not acquire a network dependency, a gh
+	@# auth dependency, or two API round-trips of latency. The local half --
+	@# marker present, bundle age, which declared keys cannot project -- needs
+	@# none of that and is the half that says whether anything is wrong at all.
+	@# Run the target directly, without --offline, to learn whether the artifact
+	@# that would fix it is still inside its 1-day retention.
+	@$(MAKE) --no-print-directory ARGS=--offline chit-provenance-check || true
 ifeq ($(OS),Windows_NT)
 	@pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/env_check.ps1 $(ARGS)
 else
