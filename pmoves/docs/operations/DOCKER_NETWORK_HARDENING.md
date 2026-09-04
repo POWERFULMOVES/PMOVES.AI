@@ -160,11 +160,13 @@ the Tailscale layer. Never rely on IP-specific binds on Windows hosts.**
 
 ---
 
-## Pending: Network-Tier Hardening Anchors (PR-A)
+## Network-Tier Hardening Anchors (PR-A — LANDED 2026-09-03)
 
-PR-A (pending operator action — requires `COMPOSE_EDIT=1` override on
-damage-control hook) will add four YAML anchors mirroring the existing 11
-service-tier-hardened anchors:
+PR-A adds four YAML anchors mirroring the existing service-tier-hardened
+anchors. It landed 2026-09-03 under a Known Road grant
+(`compose:handoff:network-planes-and-package-sharing-2026-09-03.md`, recorded
+in `known-roads.jsonl`) — the `COMPOSE_EDIT=1` override this line used to name
+is not the current mechanism; protected-path edits go through Known Roads:
 
 | Anchor | Purpose | Key settings |
 |--------|---------|-------------|
@@ -173,8 +175,15 @@ service-tier-hardened anchors:
 | `x-network-external-bridged` | Internet-capable tier | `internal: false`, explicit subnet |
 | `x-network-tailnet-published` | Tailnet-reachable with per-OS portforward notes | `internal: false` + Windows bind caveat |
 
-Until PR-A lands, the network definitions in compose are functional but undocumented
-as anchors. The rules in this doc apply regardless.
+All four are defined in `docker-compose.yml` and applied to the six
+compose-defined networks. `pmoves_external` and `pmoves_db_egress` are
+`external: true` — compose adopts them and does not own their `driver`/
+`internal`, so they carry no anchor.
+
+Landing it was a pure refactor, verified rather than asserted: `docker compose
+--profile "*" config` before and after produced an IDENTICAL networks section
+(71 lines both) and an IDENTICAL services section; the only whole-file
+difference was the four anchor definitions echoed back as `x-` extension keys.
 
 ---
 
