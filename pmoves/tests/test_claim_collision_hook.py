@@ -1647,8 +1647,48 @@ def test_a_line_continuation_cannot_hide_the_register(tmp_path, template, expect
     """
     continuation = "\\" + "\n"
     cmd = template.format(D=str(tmp_path).replace("\\", "/"), C=continuation)
-    assert "\\\n" in cmd, "the fixture built no continuation; the test is vacuous"
+    assert continuation in cmd, "the fixture built no continuation; the test is vacuous"
     r = _run_bash(tmp_path, cmd)
     assert r.returncode == expected, (
         f"line continuation hid the register: {cmd!r}\nstderr={r.stderr}"
+    )
+
+
+@pytest.mark.parametrize("delim", ["'PY'", "PY"])
+@pytest.mark.parametrize(
+    "template",
+    [
+        "python3 <<{Q}\nopen('{D}/AGNOTE4482PHI.t1.{C}md', 'w').write('')\n{E}\n",
+        "python3 <<{Q}\nopen('{D}/AGNO{C}TE4482PHI.t1.md', 'w').write('')\n{E}\n",
+    ],
+)
+def test_a_continuation_inside_a_code_heredoc_cannot_hide_the_register(
+    tmp_path, template, delim
+):
+    r"""A heredoc body is literal to BASH -- but a `code` body is handed to an
+    interpreter, and python folds `\<newline>` inside a string literal exactly
+    as bash folds it in a command.
+
+    So the body opens the real register while the literal-name gate sees no
+    contiguous `AGNOTE4482PHI.t1.md` and returns "none". With an UNQUOTED
+    delimiter bash performs the join itself before python is even reached, so
+    the bypass does not depend on the interpreter -- which is why both
+    delimiter forms are parametrized here.
+
+    This is the case the first version of the continuation fix explicitly
+    argued AGAINST normalizing, on the grounds that rejoining a literal body
+    would invent content. That reasoning was right about bash and wrong about
+    what happens next.
+    """
+    continuation = "\\" + "\n"
+    cmd = template.format(
+        D=str(tmp_path).replace("\\", "/"),
+        C=continuation,
+        Q=delim,
+        E=delim.strip("'"),
+    )
+    assert continuation in cmd, "the fixture built no continuation; the test is vacuous"
+    r = _run_bash(tmp_path, cmd)
+    assert r.returncode == BLOCK, (
+        f"continuation inside a {delim} heredoc hid the register:\n{cmd}\nstderr={r.stderr}"
     )

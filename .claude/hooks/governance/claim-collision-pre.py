@@ -1238,6 +1238,32 @@ def classify_shell_write(command: str, cwd=None) -> ShellWrite:
     # write that was not going to happen. The reverse would miss a truncate.
     skeleton = CONTINUATION_RE.sub("", skeleton)
 
+    # CODE heredoc bodies too, and the reasoning above is why they are a
+    # SEPARATE case rather than the same one. A body is literal to bash -- but
+    # a body marked `code` is handed to an interpreter, and python, node and
+    # ruby all fold `\<newline>` inside a string literal exactly as bash folds
+    # it in a command. So
+    #
+    #     python3 <<'PY'
+    #     open('/tmp/AGNOTE4482PHI.t1.\
+    #     md', 'w').write('')
+    #     PY
+    #
+    # opens the real register while the literal-name gate below sees no
+    # contiguous name and returns "none". With an UNQUOTED delimiter bash
+    # performs the join itself before the interpreter is even reached, so the
+    # bypass does not depend on which interpreter it is.
+    #
+    # Normalizing the body is over-eager for the one case where the sequence is
+    # genuinely two characters to the interpreter (a python raw string). Same
+    # trade as the skeleton: over-matching refuses a write that was not going
+    # to happen; under-matching misses one that was. Non-code bodies are left
+    # alone -- they are data, nothing interprets them, and they are not part of
+    # the detection string.
+    for h in bodies:
+        if h["code"]:
+            h["body"] = CONTINUATION_RE.sub("", h["body"])
+
     executable = "\n".join(
         [skeleton] + [h["body"] for h in bodies if h["code"]]
     )
