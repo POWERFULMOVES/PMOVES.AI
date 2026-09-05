@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import subprocess
+import sys
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -201,7 +202,21 @@ def _review_thread_flags(repo: str, number: int) -> dict[str, tuple[bool, bool]]
         ]
         if cursor:
             cmd.extend(["-F", f"after={cursor}"])
-        payload = _run_json(cmd)
+        try:
+            payload = _run_json(cmd)
+        except RuntimeError as exc:
+            # Review threads are GraphQL-only (no REST equivalent), so thread
+            # resolved/outdated state degrades — loudly — when the GraphQL
+            # budget is exhausted. Comment bodies still flow: they come from
+            # the REST pulls endpoints and carry the learnings.
+            if "rate limit" in str(exc).lower():
+                print(
+                    f"warn: GraphQL rate-limited fetching review threads for #{number}; "
+                    "resolved/outdated flags unknown for this PR",
+                    file=sys.stderr,
+                )
+                break
+            raise
         if not isinstance(payload, dict):
             break
         data = payload.get("data")
@@ -451,45 +466,127 @@ def _collect_review_summary(repo: str, number: int, detail: dict[str, Any], *, h
 def _pr_numbers(repo: str, base: str, state: str, explicit_prs: list[int]) -> list[int]:
     if explicit_prs:
         return sorted(set(explicit_prs))
+    # REST transport (operator direction 2026-09-05): `gh pr list --json` rides
+    # GraphQL, and multi-node monitor runs (B850 + SPARK + CI bots) exhaust the
+    # 5000/h GraphQL budget while REST stays plentiful. The pulls list endpoint
+    # carries everything this needs — number, base, state; `merged` maps to
+    # closed+filter because REST has no merged state of its own.
+    rest_state = "closed" if state == "merged" else state
     rows = _run_json(
         [
             "gh",
-            "pr",
-            "list",
-            "--repo",
-            repo,
-            "--state",
-            state,
-            "--base",
-            base,
-            "--json",
-            "number",
+            "api",
+            "--paginate",
+            f"repos/{repo}/pulls?state={rest_state}&base={base}&per_page=100",
         ]
     )
     if not isinstance(rows, list):
         return []
     out: list[int] = []
     for row in rows:
-        if isinstance(row, dict):
-            number = row.get("number")
-            if isinstance(number, int):
-                out.append(number)
+        if not isinstance(row, dict):
+            continue
+        if state == "merged" and not row.get("merged_at"):
+            continue
+        number = row.get("number")
+        if isinstance(number, int):
+            out.append(number)
     return sorted(set(out))
 
 
+def _pr_detail(repo: str, number: int) -> dict[str, Any]:
+    """PR detail via REST, shaped like `gh pr view --json` output.
+
+    `gh pr view --json` rides GraphQL, and multi-node monitor runs (B850 +
+    SPARK + CI bots in one hour) exhaust the 5000/h GraphQL budget while REST
+    stays plentiful — measured live 2026-09-05. Every field below has a REST
+    equivalent except review-thread resolved/outdated state, which has none
+    and degrades separately in `_review_thread_flags`.
+    """
+    detail = _run_json(["gh", "api", f"repos/{repo}/pulls/{number}"])
+    if not isinstance(detail, dict):
+        raise RuntimeError(f"invalid PR payload for #{number}")
+    head = detail.get("head") or {}
+    base = detail.get("base") or {}
+    head_sha = str(head.get("sha") or "")
+
+    comments = _run_json(
+        ["gh", "api", f"repos/{repo}/issues/{number}/comments?per_page=100"]
+    ) or []
+    reviews = _run_json(
+        ["gh", "api", f"repos/{repo}/pulls/{number}/reviews?per_page=100"]
+    ) or []
+
+    # reviewDecision: latest SUBMITTED review per author wins (GitHub's own
+    # semantics — PENDING is a draft review and does not count); any APPROVED
+    # -> APPROVED, else any CHANGES_REQUESTED -> CHANGES_REQUESTED.
+    latest_by_author: dict[str, str] = {}
+    for review in reviews:
+        if not isinstance(review, dict):
+            continue
+        user = review.get("user") or {}
+        login = str(user.get("login") or "")
+        state = str(review.get("state") or "")
+        if login and state != "PENDING":
+            latest_by_author[login] = state
+    states = set(latest_by_author.values())
+    if "APPROVED" in states:
+        review_decision = "APPROVED"
+    elif "CHANGES_REQUESTED" in states:
+        review_decision = "CHANGES_REQUESTED"
+    else:
+        review_decision = "REVIEW_REQUIRED"
+
+    mergeable = {True: "MERGEABLE", False: "CONFLICTING"}.get(detail.get("mergeable"), "UNKNOWN")
+    state_map = {
+        "clean": "CLEAN",
+        "has_hooks": "HAS_HOOKS",
+        "unstable": "UNSTABLE",
+        "blocked": "BLOCKED",
+        "dirty": "DIRTY",
+        "draft": "DRAFT",
+    }
+    merge_state = state_map.get(str(detail.get("mergeable_state") or ""), "UNKNOWN")
+
+    rollup: list[dict[str, Any]] = []
+    if head_sha:
+        runs = _run_json(["gh", "api", f"repos/{repo}/commits/{head_sha}/check-runs"]) or {}
+        for run in runs.get("check_runs") or []:
+            if isinstance(run, dict):
+                rollup.append(
+                    {
+                        "__typename": "CheckRun",
+                        "status": run.get("status"),
+                        "conclusion": run.get("conclusion"),
+                    }
+                )
+
+    def _author_body_url(row: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "author": row.get("user"),
+            "body": row.get("body"),
+            "url": row.get("html_url"),
+        }
+
+    return {
+        "number": detail.get("number"),
+        "title": detail.get("title"),
+        "url": detail.get("html_url"),
+        "headRefName": head.get("ref"),
+        "headRefOid": head_sha,
+        "baseRefName": base.get("ref"),
+        "mergeable": mergeable,
+        "mergeStateStatus": merge_state,
+        "reviewDecision": review_decision,
+        "isDraft": bool(detail.get("draft")),
+        "statusCheckRollup": rollup,
+        "comments": [_author_body_url(c) for c in comments if isinstance(c, dict)],
+        "reviews": [_author_body_url(r) for r in reviews if isinstance(r, dict)],
+    }
+
+
 def _pr_summary(repo: str, number: int) -> PrSummary:
-    detail = _run_json(
-        [
-            "gh",
-            "pr",
-            "view",
-            str(number),
-            "--repo",
-            repo,
-            "--json",
-            "number,title,url,headRefName,headRefOid,baseRefName,mergeable,mergeStateStatus,reviewDecision,isDraft,statusCheckRollup,comments,reviews",
-        ]
-    )
+    detail = _pr_detail(repo, number)
     if not isinstance(detail, dict):
         raise RuntimeError(f"invalid PR payload for #{number}")
     checks = _check_summary(detail.get("statusCheckRollup"))
