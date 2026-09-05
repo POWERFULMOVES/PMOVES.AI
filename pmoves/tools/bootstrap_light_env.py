@@ -43,6 +43,15 @@ def parse_args() -> argparse.Namespace:
         help="Requirements file(s) relative to pmoves/ (repeatable).",
     )
     parser.add_argument(
+        "--with-embeddings",
+        action="store_true",
+        help=(
+            "Also install tools/requirements-lite-embeddings.txt (torch stack, "
+            "hundreds of MB — only for embedding-decode tools; the core lite "
+            "venv is deliberately CUDA-free)."
+        ),
+    )
+    parser.add_argument(
         "--skip-install",
         action="store_true",
         help="Create/check the venv but skip package installation.",
@@ -216,6 +225,8 @@ def main() -> int:
     args = parse_args()
     venv_path = resolve_under_pmoves(args.venv)
     req_files = [resolve_under_pmoves(item) for item in args.requirements]
+    if args.with_embeddings:
+        req_files.append(resolve_under_pmoves("tools/requirements-lite-embeddings.txt"))
 
     print(f"PMOVES root: {PMOVES_ROOT}")
     print(f"Repository root: {REPO_ROOT}")
