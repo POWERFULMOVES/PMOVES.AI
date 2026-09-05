@@ -157,6 +157,14 @@ def test_a_projection_failure_names_the_cause_not_the_traceback_header(
     assert n == -1 and names == []
     assert "ModuleNotFoundError" in err
     assert "Traceback" not in err
+    # ...and names the remedy, because this cause is specific and common:
+    # a git WORKTREE has no .venv-pmoves (gitignored, per-checkout), so
+    # CODEX_PY falls back to a bare interpreter that lacks PyYAML. Measured:
+    # the identical manifest-audit succeeds in the main checkout and fails in
+    # a worktree. Without this the message reads like a broken NODE rather
+    # than an unbootstrapped directory -- which is exactly what I concluded
+    # the first time, and reported as a pre-existing defect. It was not.
+    assert "venv-bringup" in err
 
 
 def test_the_missing_list_is_parsed_from_the_existing_projection(tmp_path, monkeypatch):
