@@ -83,12 +83,13 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import socket
 import sys
 import urllib.error
 import urllib.request
 from pathlib import Path
-from typing import Any, Dict, List, Mapping, Optional
+from typing import Any, Dict, Iterable, List, Mapping, Optional
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_ROSTER = _REPO_ROOT / ".claude" / "mcp.json"
@@ -105,6 +106,10 @@ from mcp_roster_normalize import expand as _expand_vars  # noqa: E402
 # Long enough to cross the tailnet, short enough that a wedged endpoint does not
 # hold up a session start. Only the status line is awaited, never the body.
 CONNECT_TIMEOUT = 6.0
+
+# http.client refuses these in a header value -- and names the value in the
+# exception. We check first so the secret never reaches that message.
+_ILLEGAL_HEADER_CHARS = re.compile(r"[\r\n]")
 
 
 class Unmeasured(RuntimeError):
@@ -193,8 +198,24 @@ def _resolve_headers(
         if misses:
             missing.extend(misses)
             continue
-        resolved[key] = value
+        # RFC 7230 3.2.4: a field value excludes leading/trailing OWS. Stripping
+        # is spec-correct, not a workaround, and it disposes of the common real
+        # case -- a token carrying a trailing newline from an env file, a
+        # `$(cat ...)`, or a CRLF paste. Left in place, http.client rejects the
+        # header with a ValueError whose message embeds the SECRET verbatim.
+        resolved[key] = value.strip()
     return resolved, missing
+
+
+def _header_safe(values: Iterable[str]) -> bool:
+    """No CR/LF left inside a header value.
+
+    Anything still containing them after OWS stripping is either corrupt or a
+    header-injection attempt. Refuse to hand it to http.client, whose
+    ``ValueError('Invalid header value %r' % value)`` would print the
+    credential.
+    """
+    return not any(_ILLEGAL_HEADER_CHARS.search(v) for v in values)
 
 
 def probe(
@@ -236,6 +257,17 @@ def probe(
     elif missing:
         row["auth"] = "unresolved"
 
+    if sent and not _header_safe(sent.values()):
+        # Never build the request. http.client would raise
+        # ValueError('Invalid header value %r' % value), printing the token.
+        row["error"] = (
+            "credential is not a valid HTTP header value (embedded CR/LF) — "
+            "value withheld"
+        )
+        row["verdict"] = "credential_malformed"
+        row["auth"] = "malformed"
+        return row
+
     # `sent` holds the secret. It goes onto the request and is not retained.
     request_headers = {"Accept": "text/event-stream", **sent}
     req = urllib.request.Request(url, headers=request_headers)
@@ -262,6 +294,12 @@ def probe(
     except (urllib.error.URLError, socket.timeout, TimeoutError, OSError) as exc:
         row["error"] = str(getattr(exc, "reason", exc))
         row["verdict"] = "unreachable"
+    except ValueError:
+        # Deliberately NOT interpolated. http.client puts the rejected header
+        # value in the message, so `str(exc)` here would be the credential.
+        # _header_safe should have caught this already; this is the backstop.
+        row["error"] = "request rejected before send (malformed header) — value withheld"
+        row["verdict"] = "credential_malformed"
     return row
 
 

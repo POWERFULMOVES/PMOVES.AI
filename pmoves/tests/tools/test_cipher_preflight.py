@@ -337,3 +337,49 @@ def test_the_network_seam_installs_the_non_redirecting_handler(monkeypatch):
     monkeypatch.setattr(cp.urllib.request, "build_opener", fake_build_opener)
     cp._urlopen(urllib.request.Request("http://localhost:8105/mcp/sse"), 1.0)
     assert cp._NoRedirect in seen["handlers"]
+
+
+def test_a_trailing_newline_on_the_token_does_not_break_the_probe(monkeypatch, tmp_path):
+    """The common real case: a token read from an env file keeps its newline.
+
+    RFC 7230 3.2.4 excludes leading/trailing OWS from a field value, so
+    stripping is correct. Left in, http.client raises
+    `ValueError('Invalid header value %r' % value)` -- which prints the token.
+    """
+    monkeypatch.setenv("CIPHER_API_TOKEN", f"{SENTINEL}\n")
+    monkeypatch.setattr(cp, "_urlopen", _auth_gated())
+    assert cp.main(["--roster", str(_cipher_roster(tmp_path))]) == 0
+
+
+def test_an_embedded_crlf_credential_is_refused_without_printing_it(
+    monkeypatch, tmp_path, capsys
+):
+    """A token with an interior CR/LF is corrupt or an injection attempt.
+
+    It must never reach http.client, whose ValueError message quotes the value
+    verbatim. Nothing is contacted, so this is could-not-measure (3).
+    """
+    poisoned = f"{SENTINEL}\r\nX-Injected: 1"
+    monkeypatch.setenv("CIPHER_API_TOKEN", poisoned)
+
+    def explode(*a, **k):  # pragma: no cover - must never be reached
+        raise AssertionError("a malformed header was handed to the transport")
+
+    monkeypatch.setattr(cp, "_urlopen", explode)
+    assert cp.main(["--roster", str(_cipher_roster(tmp_path))]) == 3
+    cap = capsys.readouterr()
+    assert SENTINEL not in cap.out and SENTINEL not in cap.err
+    assert "value withheld" in cap.err
+
+
+def test_a_transport_valueerror_never_surfaces_its_message(monkeypatch, tmp_path, capsys):
+    """Backstop. `str(exc)` on http.client's ValueError IS the credential."""
+    monkeypatch.setenv("CIPHER_API_TOKEN", SENTINEL)
+
+    def raise_valueerror(*a, **k):
+        raise ValueError(f"Invalid header value {('Bearer ' + SENTINEL)!r}")
+
+    monkeypatch.setattr(cp, "_urlopen", raise_valueerror)
+    cp.main(["--roster", str(_cipher_roster(tmp_path))])
+    cap = capsys.readouterr()
+    assert SENTINEL not in cap.out and SENTINEL not in cap.err

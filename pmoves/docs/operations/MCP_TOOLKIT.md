@@ -366,6 +366,14 @@ Read the verdict before acting:
 | `cipher UNAUTHORIZED … HTTP 401` | **up**, credential refused | export `CIPHER_API_TOKEN` and re-launch |
 | `cipher DOWN … unresolved variable in URL` | tailnet helper did not run | resolve `${TS_<NODE>}`, or ignore if the local entry is OK |
 | `cipher DOWN … refused` / DNS failure | nothing is listening | start the service |
+| `cipher DOWN … embedded CR/LF — value withheld` | the token itself is corrupt | re-issue `CIPHER_API_TOKEN`; a stray CR/LF is usually a bad paste |
+
+A trailing newline on the token — the usual result of reading it out of a file
+— is stripped and works (RFC 7230 §3.2.4 excludes leading/trailing OWS from a
+field value). A CR/LF *inside* the value is refused before the request is
+built, because `http.client` would reject it with
+`ValueError('Invalid header value %r' % value)` — a message that quotes the
+credential.
 
 Same 0/1/3 doctrine as § 5.1 and `docker_host_policy_check.py`. The credential
 is never printed — the tools report variable NAMES and lengths only.
