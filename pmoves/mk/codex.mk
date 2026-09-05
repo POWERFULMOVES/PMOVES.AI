@@ -321,6 +321,9 @@ secrets-rotate: ## Rotate ONE secret in env.shared then re-funnel. Usage: make s
 	@echo "✔ $(KEY) rotated + funnelled. STILL TO DO: (1) restart consumers (e.g. make up-<svc> / supa-restart);"
 	@echo "  (2) rotate any off-box copy (GitHub Actions / Docker secret); (3) for Postgres also run 'make supa-bootstrap-db' to ALTER roles; (4) revoke the OLD value at its source (e.g. Jellyfin /Auth/Keys DELETE)."
 
+firefly-automint: ## Auto-mint a Firefly III API PAT and land it as FIREFLY_ACCESS_TOKEN via the canonical secrets flow (secrets-rotate). Firefly disables web /register under remote_user_guard, so this provisions the user via the trusted Remote-User header + mints a passport PAT in-container. Usage: make firefly-automint [FIREFLY_ADMIN_EMAIL=pmoves@pmoves.ai] [FIREFLY_CONTAINER=pmoves-firefly]
+	@bash scripts/firefly_automint.sh
+
 cf-dns-token-provision: ## Mint a pmoves.ai-scoped Cloudflare DNS-Edit token for Traefik ACME + funnel it as CLOUDFLARE_DNS_API_TOKEN. Needs CF_ADMIN_API_TOKEN in the env (API Tokens Write + Zone Read; never argv). Dry-run unless APPLY=1. Usage: export CF_ADMIN_API_TOKEN=...; make cf-dns-token-provision [APPLY=1] [ZONE=pmoves.ai]
 	@$(CODEX_PY) tools/cf_dns_token_provision.py $(if $(ZONE),--zone "$(ZONE)",) $(if $(filter 1,$(APPLY)),--apply,)
 
