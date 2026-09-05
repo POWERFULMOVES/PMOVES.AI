@@ -123,6 +123,105 @@ Cards are append-only — never delete. To rotate (e.g., new SSH key after the o
 
 The audit script (Phase 4) follows the `supersedes_card_id` chain to verify there is exactly one active card per `h.agent_id` at any time.
 
+## The CHIT HMAC layer: signing keys and `kid`
+
+A card establishes *who* an agent is. It does not by itself make that agent's
+CHIT signature distinguishable from anyone else's.
+
+Every trail entry is HMAC-signed by `pmoves/tools/chit_security.py`, which
+stamps a key id into `sig`:
+
+```json
+"sig": {"alg": "HMAC-SHA256", "kid": "chit-signing-v01", "hmac": "..."}
+```
+
+Until the `kid`-resolution change, `verify_cgp()` never read that field. Every
+verifier resolved exactly one key from `CHIT_SIGNING_KEY`, so a signature
+naming any other key id was still checked against the shared deployment key.
+The `kid` was write-only, and **the HMAC authenticated the deployment, not the
+agent named by `signing_card_id`.** Anyone holding the deployment key could
+mint a trail entry under any agent's card.
+
+Verification now resolves the key by `kid`.
+
+### Provisioning a per-agent key
+
+Same shape as `CHIT_SIGNING_KEY` / `CHIT_SIGNING_KEY_FILE`, with the kid
+appended after a double underscore. The kid is upper-cased and every
+non-alphanumeric run becomes one underscore:
+
+| kid | env var |
+|---|---|
+| `chit-signing-v01` | `CHIT_SIGNING_KEY__CHIT_SIGNING_V01` |
+| `agent-b850-claude` | `CHIT_SIGNING_KEY__AGENT_B850_CLAUDE` |
+
+`CHIT_SIGNING_KEY__<KID>_FILE` points at a file containing the value. The
+separator is a *double* underscore so the pre-existing `CHIT_SIGNING_KEY_ID`
+and `CHIT_SIGNING_KEY_FILE` can never be misparsed as per-kid entries.
+
+Issuing a key is an operator action requiring approval. Nothing in the code
+generates or rotates one.
+
+### Strictness — `CHIT_KID_STRICT`
+
+| value | behaviour |
+|---|---|
+| unset (**default**) | AUTO: strict as soon as *any* per-kid key is configured |
+| `1` / `true` | always strict — only provisioned per-kid keys and the default-kid aliases resolve |
+| `0` / `false` | never strict — migration escape hatch, restores single-key behaviour |
+
+In strict mode a `kid` with no configured key is a **hard failure** at both
+sign and verify. It does not fall back to the default key: reporting "valid"
+for a signature naming a key you do not have is a check that cannot fail.
+
+AUTO is what lets fail-closed and don't-break-history coexist. No per-kid key
+exists in the fleet today, so AUTO is currently non-strict and behaviour is
+byte-identical to before. Provisioning the first per-agent key is the act that
+turns strictness on — the gate keys off operator configuration, never off
+payload content, so a crafted payload cannot talk the verifier out of it.
+
+### Backwards compatibility
+
+The existing trail history keeps verifying unchanged:
+
+- `kid: "chit-signing-v01"` (what every current signature carries) resolves to
+  the default key, in strict mode too.
+- The value of `CHIT_SIGNING_KEY_ID`, if a deployment renamed its default kid,
+  also resolves to the default key.
+- A payload with no `kid` at all resolves to the default key.
+
+### Reading a result
+
+`verify_cgp()` returns a plain `bool` and is fail-closed. Where the difference
+matters, call `verify_cgp_detailed()`, which returns a `VerifyResult` carrying
+`status` and an `exit_code` on the fleet's 0/1/3 doctrine:
+
+| status | exit | meaning |
+|---|---|---|
+| `OK` | 0 | verified against a key pinned to this signature's own `kid` |
+| `OK_UNPINNED` | 0 | verified, but by the deployment key — authenticates the deployment, **not** the named agent |
+| `MISMATCH` | 1 | key resolved, MAC did not match |
+| `NO_SIGNATURE` | 1 | no `sig` block |
+| `UNRESOLVED_KID` | 3 | names a key not configured here — could-not-verify, never a pass |
+
+`OK_UNPINNED` is the honest status for every signature in the trail today.
+
+`VerifyResult` never carries key material: `key_source` is an env var *name*,
+and `KidResolutionError` is constructed from names only, so no error path or
+log line can leak a key.
+
+### Not yet covered
+
+Two vendored signers still have the original write-only `kid` in their own
+`verify_cgp()` and are unaffected by this change:
+
+- `pmoves/services/flute-gateway/chit_signing.py`
+- `pmoves/services/consciousness-service/chr_algorithm.py`
+
+They use a different secret accessor (`get_secret`). The right fix is to have
+them import the canonical resolver rather than grow a third copy of it; that
+is a separate consolidation lane.
+
 ## Card roles
 
 - **operator** — the human running PMOVES.AI. Exactly one card active at a time (DARKXSIDE).
