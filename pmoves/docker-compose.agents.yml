@@ -837,6 +837,11 @@ services:
   # ── NATS Message Bus — JetStream-enabled event broker ──────────────────
   # Auth: nats://nats:***@nats:4222 | Monitoring: :8222/varz
   # See: pmoves/docs/NATS_CONFIGURATION.md
+  #
+  # The accounts/leaf hub (SYS/CORE/EDGE/CLOUD, 7422 leafnodes) is `nats-hub`
+  # below — spec §9 Phase 2, profile-gated OFF so default bring-up is unchanged
+  # until the funnel renders the trust material. Spec:
+  # pmoves/docs/specs/nats-accounts-leaf-topology-v0-spec-2026-08-07.md
   mesh-agent:
     <<: &tier-agent-hardened-ro
       env_file:
