@@ -1,46 +1,41 @@
 # Healthcheck semantics audit — 2026-09-05
 
-**Finding: the compose fleet is 91% instrumented and 92% of that instrumentation
-asserts nothing.** Coverage is not the defect. Meaning is.
+One probe in the compose file could not fail. Fixing it turned up a shape
+problem behind it, and three defects in how this audit itself measured.
 
-Measured on `pmoves/docker-compose.yml` at `55bd6a2c3`, by parsing the file as
-YAML — see *Method* for why that matters.
+Re-runnable: `python pmoves/tools/healthcheck_semantics.py`.
 
-## Numbers
+## What is counted
 
 | | |
 |---|---:|
 | services | 110 |
-| declare a healthcheck | 100 (91%) |
-| declare none | 10 (9%) |
-| **of the 100 — liveness-only** | **92 (92%)** |
-| assert a real value | 8 |
-| distinct probe shapes | 53 |
-| most-copied single shape | **28×** |
+| declare a healthcheck | 100 |
+| declare none | 10 |
+| explicitly disabled | 1 (`invidious-companion`, `disable: true`) |
+| distinct command shapes | 52 |
+| **most-reused single shape** | **28×** |
 
-"Liveness-only" means the probe establishes that a socket answered on a health
-path and nothing further. "Asserts a real value" means it exercises something
-that breaks when the service is broken: `pg_isready`, `redis-cli PING`,
-`kong health`, `postgrest --ready`, a `fetch()` that throws on non-200.
+That is arithmetic over the parsed file, and it holds. Nothing below claims more.
 
-## Why 28 identical copies is the signal
-
-The dominant shape is:
+## The 28-way collision
 
 ```
-["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://<host>:<port>/healthz', timeout=5)"]
+["CMD", "python3", "-c",
+ "import urllib.request; urllib.request.urlopen('http://<host>:<port>/healthz', timeout=5)"]
 ```
 
-reused verbatim across 28 services that share nothing but a template. **A probe
-that travels by copy-paste cannot be validating anything specific to where it
-landed** — what it checks is identical everywhere, so it is checking the
-template, not the service.
+Byte-identical across 28 services after normalising host, port and env
+interpolation. **A probe reused verbatim across services that share nothing but
+a template is checking the template.** `/healthz` answering proves the process is
+listening — which Docker already knows from the PID — while licensing
+`condition: service_healthy` for everything downstream.
 
-`/healthz` fails when the process is dead. Docker already knows that from the
-PID. The probe therefore adds no information over `restart: unless-stopped`
-while licensing `condition: service_healthy` for dependents.
+Whether that is *adequate* for a given service is a judgement about that
+service. This audit does not make it; see *Corrections* for what happened when
+an earlier pass tried.
 
-## The clearest case, now fixed
+## The one that could not fail — fixed here
 
 `supabase-studio` shipped:
 
@@ -48,54 +43,79 @@ while licensing `condition: service_healthy` for dependents.
 test: ["CMD-SHELL", "node -e 'process.exit(0)' || exit 1"]
 ```
 
-This names no host, no port and no route. It **cannot fail** while the `node`
-binary exists, and it reported `service_healthy` to dependents on a dead Studio.
-Its own comment stated the intent — *"We rely on container being started
-successfully"* — which is the fact Docker already has.
+No host, no port, no route. It cannot fail while the `node` binary exists, and
+it reported `service_healthy` to dependents on a dead Studio. Its own comment
+stated the intent — *"We rely on container being started successfully"* — which
+is what `restart: unless-stopped` already provides.
 
-The stated reason for substituting it ("Next.js 16 binds to container hostname,
-not localhost") is stale: `HOSTNAME=0.0.0.0` is pinned three lines above, so the
-bind it worked around no longer happens. Verified against the running container:
+The reason given for replacing upstream's probe ("Next.js 16 binds to container
+hostname, not localhost") is **stale**: `HOSTNAME=0.0.0.0` is pinned three lines
+above. Verified against the running container rather than argued:
 
 ```
 docker exec pmoves-supabase-studio-1 node -e "fetch('http://localhost:3000/api/platform/profile')..."
-  -> localhost status 200
-  -> 127.0.0.1 status 200
+  -> localhost status 200 / 127.0.0.1 status 200
 ```
 
-Replaced with the vendored upstream probe
+Restored to the vendored upstream probe
 (`PMOVES-supabase/docker/docker-compose.yml:17-23`), which throws on non-200.
 
-## The standard this argues for
+## The compose gate validates less than its name suggests
 
-From 5090-CLAUDE's §3 recommendation on #2935, which generalises past Cipher:
+`make -C pmoves compose-yaml-check` asserts that all 57 tracked compose files
+**parse**. Its docstring says exactly that, and it exists for a good reason: it
+replaced a step whose body ended in `|| echo 'Compose validation skipped'` and
+therefore could not fail.
 
-> satisfy "must not fail quietly" with an authenticated `store.recall`
-> round-trip at mount time, not a health endpoint. The health of the process
-> says nothing; the round-trip of a real value says everything.
+Parsing is not conformance. Measured on a fixture:
 
-Corroborated from the other end the same day: `pmoves-cipher-api-1` is `Up
-(healthy)` while its MCP mount returns `AUTH_HEADER_REJECTED` (401). A liveness
-probe calls that green.
+| | `retries: "not-a-number"`, `test: ["WRONG-VERB", …]` |
+|---|---|
+| `compose_yaml_validate.py` | **clean, rc=0** |
+| `docker compose config` | **rc=1** — `failed to cast to expected type: strconv.Atoi` |
 
-## Method — and a correction to this audit's own first pass
+Docker's own tool is the Compose Specification authority. **It cannot run in CI
+here**: compose declares `env_file: env.shared` per service, and that file is a
+secret absent from a fresh checkout, so `docker compose config` exits 1 with
+"env file ... not found" before it validates anything.
 
-The first pass counted services with a regex over two-space YAML keys. It
-reported **261 services, 62% with no healthcheck, 68% liveness-only**. All three
-were wrong: the regex matched `networks:` and `volumes:` entries as services.
+The parse-only gate is therefore the most that runs without secrets, and that is
+a sound call. The gap is the label: the step satisfies a required check named
+`docker-build-validation`, and a reader of the checks list sees compose
+validated when what was validated is that the YAML is well-formed.
 
-It returned a plausible number, so nothing flagged it. Parsing the file as YAML
-— asserting the structure instead of pattern-matching the text — produced the
-figures above. The audit's own first pass was the defect it documents, one level
-up.
+Worth deciding (not decided here): whether a stub env permits spec validation in
+CI, or whether the check should be renamed to what it does.
+
+## Corrections — this audit measured wrong three times
+
+**Pass 1** counted services with a regex over two-space YAML keys: *261
+services, 62% with no healthcheck*. Both wrong — it matched `networks:` and
+`volumes:` entries. It returned a plausible number, so nothing flagged it.
+
+**Pass 2** parsed as YAML (correct for counting) but classified probe *meaning*
+with a second regex over command text, and published **"92 of 100 are
+liveness-only"**. That figure is **withdrawn**. A regex is a way to find
+candidates, not a way to decide whether one qualifies. The structural screen
+that replaced it had false positives both ways: of 13 probes naming neither port
+nor path, several (`pg_isready`, `kong health`, `imgproxy health`) are *more*
+meaningful than an HTTP liveness probe, not less.
+
+**Pass 3** modelled the Compose Specification in pydantic before that was cut.
+Validating compose structure is Docker's job, and a second schema here would be
+a second opinion about what a compose file is. The tool now imports
+`compose_yaml_validate.ComposeLoader` rather than carrying its own parser, so it
+and the gate cannot disagree about what parses — which matters, because
+`yaml.safe_load` fails on two tracked files that use Compose's `!reset` and
+`!override` tags.
+
+Each pass produced a number that looked like a measurement. That is the failure
+the audit documents in the probes themselves, three times, one level up.
 
 ## Not decided here
 
-- **Whether to gate on this.** A ratchet refusing a healthcheck that cannot fail
-  is implementable, but it is a policy call and belongs to the operator, not to
-  this audit.
-- **Converting the 92.** Each conversion needs per-service knowledge of what
-  "working" means for that service; it is not a sweep.
-- **The 10 with none.** Absence claims nothing and is more honest than
-  decoration. Whether they need probes is a separate question from whether the
-  existing ones mean anything.
+- **A ratchet gating on this.** Implementable; it is a policy call.
+- **Converting the reused probes.** Each needs per-service knowledge of what
+  "working" means. Not a sweep.
+- **The 10 with no healthcheck.** Absence claims nothing, which is more honest
+  than decoration.
