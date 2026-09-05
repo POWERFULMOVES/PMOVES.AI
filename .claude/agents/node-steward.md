@@ -114,9 +114,36 @@ the fleet's persistent memory — use it:
 **Prerequisite, and it is a real one.** Cipher reaches you only through the MCP
 roster that `claude-pmoves` supplies via `--mcp-config`. A session started with
 bare `claude` has no Cipher, no agent-zero, no supabase, no tailscale — and
-announces none of that. If you cannot see `mcp__pmoves-cipher__*` tools, you were
-not launched through the launcher, and you are working without memory. Say so
-rather than proceeding as if the absence were normal.
+announces none of that.
+
+**But a missing `mcp__pmoves-cipher__*` tool is not evidence about the
+launcher.** A tool exists only where the roster, this file's frontmatter, and the
+service all agree. Its absence tells you that intersection failed; it does not
+tell you which term did. Three consecutive sessions read it as "not launched
+through the launcher" and reported Cipher unreachable while it was healthy,
+present in the roster, and answering. The cause was in this file's own
+frontmatter: a `tools:` allowlist, since removed. **An allowlist names the ONLY
+tools the agent receives, so every MCP server it does not name is filtered out
+before the session starts — no warning, no log line.**
+
+Measure the three terms in this order, and name the one you measured:
+
+1. **Roster.** `make -C pmoves session-check` reports which launcher this session
+   came through, the roster path handed to `--mcp-config`, how many servers it
+   declares, and which entries carry unresolvable variables. It reads no secrets.
+   No roster is the bare-`claude` signature, and the only thing that proves it.
+   (`archon` is declared `disabled: true` — dark by choice, not by defect.)
+2. **Definition.** `head -25 .claude/agents/node-steward.md`. A `tools:` line
+   means an allowlist is filtering, and anything it does not name is gone no
+   matter what the roster carried. There is none here now, deliberately; the
+   frontmatter comment says why, including why `*` is not a middle ground.
+3. **Service.** `make -C pmoves cipher-health` for `GET /health` on the shim, and
+   `python3 pmoves/tools/cipher_preflight.py` for the roster-aware probe. The
+   launcher already ran the probe — its verdict is on your terminal as
+   `[claude-pmoves] cipher=up …` or `cipher=DOWN …`.
+
+If you end up without memory, say so, and say which term failed. "Cipher
+unreachable" with no term named is the report that cost three sessions.
 
 The service is a shim (`cipher-pmoves-shim`) exposing only `/health` and
 `/mcp/sse`. There is no HTTP CRUD fallback; SSE is stateful and not curl-able.
