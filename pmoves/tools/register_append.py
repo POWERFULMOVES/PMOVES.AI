@@ -47,7 +47,9 @@ What this does that a heredoc cannot:
 
 Exit codes follow this repo's doctrine (see docker_host_policy_check.py):
   0  appended
-  1  refused -- the lane is held by another owner
+  1  refused -- the lane is held by another owner, or the content was refused
+     (absorbed-expansion symptoms in the prose; nothing was written, and the
+     message names the override for deliberately-quoted literal assignments)
   3  could not measure -- refused, and NOT a pass
 """
 
@@ -63,6 +65,7 @@ import sys
 import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from typing import Annotated, Literal
 
 try:  # POSIX. Absent on this fleet's Windows nodes, which get the fallback below.
     import fcntl
@@ -118,6 +121,311 @@ def _ttl_delta(ttl: str) -> timedelta | None:
     raise ValueError(f"unparseable TTL {ttl!r} (use e.g. 72h, 7d, or n/a)")
 
 
+# --- absorbed-expansion symptoms -------------------------------------------
+#
+# SYMPTOMS, NOT CAUSES. A guard inside this tool cannot catch the CAUSE of a
+# shell or Make expansion, because the expansion happens BEFORE this tool is
+# invoked: bash expands "${X}" inside a double-quoted SCOPE=, and make consumes
+# a dollar of its own (a literal one needs doubling), so python only ever
+# receives post-expansion text and never sees a dollar-brace to guard. Two
+# register rows have already absorbed an expansion this way -- a make variable
+# expanded into a full compose invocation with its whole env-file chain, and a
+# shell parameter expansion swallowed to empty -- and the register is
+# APPEND-ONLY, so both are uncorrectable. What a validator CAN do is detect
+# the SYMPTOM in the text it is handed, and refuse before it is written.
+#
+# Thresholds calibrated against the live register (469 ledger rows at
+# measurement time), not invented:
+#   * longest legitimate single token in any row: 153 chars (a signature
+#     string) -> LONG_TOKEN_LIMIT = 300 carries 2x margin;
+#   * the empty-assignment pattern matches 3 occurrences in live rows, and all
+#     three are rows deliberately QUOTING env/command text as evidence -- so
+#     the refusal names --literal-assignments rather than dead-ending the one
+#     legitimate use of the pattern;
+#   * a compose invocation carrying >= 2 --env-file flags matches 0 live rows.
+_EMPTY_ASSIGNMENT_RE = re.compile(
+    r"(?<![A-Za-z0-9_`/])[A-Z][A-Z0-9_]{1,31}=(?=[\s$]|$|[,;)])")
+_COMPOSE_INVOCATION_RE = re.compile(r"docker[\s+-]compose\b")
+LONG_TOKEN_LIMIT = 300
+
+# --- row shape ---------------------------------------------------------------
+#
+# STDLIB, AND UNCONDITIONAL. These were pydantic validators only, which meant
+# the guarantee vanished wherever pydantic is absent -- and it IS absent in
+# `validate-register-postdate.yml`, which installs `pytest pytest-asyncio
+# pyyaml` and nothing else, as well as on any offline fleet node. A row could
+# therefore be forged by exactly the environment least able to notice.
+#
+# So the rules live here and `build_row` always calls them. `RegisterRow` adds
+# the typed surface on top and calls the same functions, so the two cannot
+# disagree about what a row may contain.
+ROW_KINDS = ("CLAIM", "RELEASE", "UPDATE")
+
+
+def assert_no_control_characters(field: str, value: str) -> None:
+    """A ledger row is ONE LINE of text.
+
+    A newline in a field forges a second row -- every reader of this file
+    parses by line, and a forged row is indistinguishable from a filed one.
+    A NUL makes the whole file read as binary to grep and to GitHub, which is
+    the corruption repaired in 8b040956e. TAB is allowed; it is whitespace.
+    """
+    bad = sorted({c for c in value if ord(c) < 0x20 and c != "\t"})
+    if bad:
+        raise ValueError(
+            f"{field} contains control character(s) "
+            + ", ".join(hex(ord(c)) for c in bad)
+            + " -- a ledger row is one line of text. This is the signature of "
+            "terminal output or a multi-line command captured into a field; "
+            "re-file it as clean prose, or via --scope-file so it never joins "
+            "a command string.")
+
+
+def assert_row_shape(kind: str, owner: str, branch: str, ttl: str,
+                     scope: str) -> None:
+    """Everything about a row that no waiver may override.
+
+    Prose symptoms are separate and DO have an override (see
+    `assert_prose_clean`); shape does not. A control character or an
+    unparseable TTL is damage under every flag.
+    """
+    if kind not in ROW_KINDS:
+        raise ValueError(
+            f"kind {kind!r} is not one of {', '.join(ROW_KINDS)}. Only those "
+            "verbs are parsed by register_status, identity_lineage and the "
+            "collision gate, so a row filed under any other one appends "
+            "cleanly and is then invisible to every reader of the ledger.")
+    for field, value in (("owner", owner), ("branch", branch),
+                         ("ttl", ttl), ("scope", scope)):
+        assert_no_control_characters(field, value)
+    if not owner.strip():
+        raise ValueError("owner is empty -- a row with no owner is unenforceable")
+    for field, value in (("owner", owner), ("branch", branch)):
+        if len(value) > LONG_TOKEN_LIMIT:
+            raise ValueError(
+                f"{field} is {len(value)} characters (limit {LONG_TOKEN_LIMIT};"
+                " the longest legitimate token in the live register is 153)")
+    _ttl_delta(ttl)  # raises on an unparseable TTL, before anything is rendered
+
+
+def expansion_symptoms(text: str) -> list[str]:
+    """Every absorbed-expansion symptom found in `text`, as human strings.
+
+    Pure and stdlib-only so enforcement never depends on an import that an
+    offline interpreter may lack. `text` is scope prose or a docs block --
+    free text a filer handed this tool AFTER whatever shell or make layer
+    surrounded the invocation has already had its way with it.
+    """
+    symptoms: list[str] = []
+    # ``double-backticked`` spans are a row quoting its OWN grammar; the
+    # corpus strips them before branch matching for the same reason.
+    scanned = _QUOTED_EXAMPLE_RE.sub(" ", text)
+    for m in _EMPTY_ASSIGNMENT_RE.finditer(scanned):
+        symptoms.append(
+            f"empty assignment {m.group(0)!r} (uppercase name, `=`, then "
+            "whitespace or end of field) -- the signature of a shell "
+            "parameter expansion swallowed to empty")
+    if (_COMPOSE_INVOCATION_RE.search(scanned)
+            and scanned.count("--env-file") >= 2):
+        symptoms.append(
+            "a docker compose invocation carrying its whole --env-file chain "
+            "-- the signature of a make variable expanded into a full command")
+    for tok in scanned.split():
+        if len(tok) > LONG_TOKEN_LIMIT:
+            symptoms.append(
+                f"a {len(tok)}-character single token (limit {LONG_TOKEN_LIMIT};"
+                " the longest legitimate token in the live register is 153)")
+    return symptoms
+
+
+def assert_prose_clean(text: str, literal_assignments: bool = False) -> None:
+    """Raise ValueError naming every symptom, unless explicitly overridden.
+
+    `literal_assignments` is the escape hatch for the one legitimate use of
+    the empty-assignment pattern: a row that QUOTES env or command text as
+    evidence ("env.tier-ui had empty SUPABASE_ANON_KEY= entries" is a real
+    row, and a bare refusal would be a dead end rather than a gate). The
+    override is per-invocation and named in the refusal message, so a filer
+    reaches it without reading source. It does NOT waive the compose-chain or
+    long-token symptoms -- those have no legitimate quoted-literal use.
+    """
+    if RegisterProse is not None:
+        try:
+            RegisterProse(text=text, literal_assignments=literal_assignments)
+        except Exception as exc:  # pydantic ValidationError subclasses ValueError
+            raise ValueError(_first_refusal(exc)) from None
+        return
+
+    # Offline fallback. LOUD, because a second copy of the rules enforcing
+    # silently is how two validators drift into disagreeing about what is
+    # legal -- the failure this module already warns about for PyYAML.
+    print("register-append: DEGRADED - pydantic is not importable in this "
+          "interpreter, so prose is validated by the stdlib fallback rather "
+          "than by the RegisterProse model. The two are pinned against the "
+          "same fixtures, but only the model is the declared contract. Run "
+          "this through `make -C pmoves register-claim`, which picks an "
+          "interpreter that has it.", file=sys.stderr)
+    symptoms = expansion_symptoms(text)
+    if literal_assignments:
+        symptoms = [s for s in symptoms if "empty assignment" not in s]
+    if symptoms:
+        raise ValueError(_expansion_refusal(symptoms))
+
+
+def _expansion_refusal(symptoms: list[str]) -> str:
+    """The refusal wording, in one place so both paths cannot drift apart.
+
+    Shared WORDING, not shared verdicts: the model decides, this renders.
+    """
+    return (
+        "the prose shows symptoms of an absorbed shell/Make expansion: "
+        + "; ".join(symptoms)
+        + ". The register is append-only, so a row that absorbs an expansion"
+        " is UNCORRECTABLE -- refused now so it is re-filed properly. Expansion"
+        " happens BEFORE this tool runs: single-quote SCOPE= at the make"
+        " invocation (double quotes let the shell expand it first), or pass the"
+        " prose via --scope-file / REGISTER_TEXT_FILE so it never becomes part"
+        " of a command string. If these assignments are quoted LITERALLY as"
+        " evidence, re-run with --literal-assignments.")
+
+
+def _first_refusal(exc: Exception) -> str:
+    """Unwrap pydantic's envelope back to the message a filer needs to read.
+
+    A ValidationError renders as a multi-line report with a docs URL. That is
+    right for a schema violation and wrong for this one, where the whole value
+    of the refusal is the sentence telling the filer how to re-file.
+    """
+    errors = getattr(exc, "errors", None)
+    if callable(errors):
+        for err in errors():
+            msg = str(err.get("msg", ""))
+            # pydantic prefixes ValueError messages raised in validators.
+            return msg.split("Value error, ", 1)[-1]
+    return str(exc)
+
+
+# THE TYPED SURFACE IS THE ENFORCEMENT, and it did not used to be.
+#
+# The first cut of this block wrapped `expansion_symptoms()` in a
+# `@field_validator` and called the result "a pydantic layer". It validated
+# nothing of its own: the model delegated to the stdlib function, so the test
+# that pinned them together -- comparing `expansion_symptoms(text)` against
+# `RegisterProse(text=text)` raising -- evaluated the SAME function on both
+# sides and could never fail. A test that copies the logic cannot catch the
+# logic breaking.
+#
+# The stated reason for stdlib-only enforcement does not hold either. It reads
+# "the sanctioned path must run on the interpreter the Makefile picks for
+# PyYAML alone, which offline may not carry pydantic" -- but
+# `.github/requirements-tests.txt` installs BOTH `pydantic` and `pyyaml`, and
+# that is the file the merge gate runs on. In the environment that decides
+# whether this lands, pydantic is present.
+#
+# So the model owns the invariant and the CLI calls it. The stdlib path remains
+# for a genuinely offline node, and degrades LOUDLY there rather than silently
+# enforcing a second copy of the rules -- the same treatment `_load_lineage()`
+# already gives a missing PyYAML a few lines up.
+#
+# What pydantic does NOT buy here, stated rather than papered over: no
+# declarative constraint expresses "no whitespace-delimited token longer than
+# N" or "no uppercase assignment followed by whitespace". Those stay validator
+# bodies in any design. What the model does own is the field typing, the
+# override as a real field rather than a positional flag, and one place where
+# the invariant is declared.
+try:
+    from pydantic import (  # type: ignore[import-untyped]
+        BaseModel, ConfigDict, StringConstraints, model_validator,
+    )
+
+    class RegisterProse(BaseModel):
+        """Scope/docs prose carrying no absorbed-expansion symptom.
+
+        `literal_assignments` is a field, not an argument, so the waiver
+        travels with the value it applies to and shows up in the model dump
+        that a caller logs. It waives ONLY the empty-assignment symptom -- the
+        compose chain and the long token have no legitimate quoted use.
+        """
+
+        model_config = ConfigDict(extra="forbid")
+
+        text: str
+        literal_assignments: bool = False
+
+        @model_validator(mode="after")
+        def _no_absorbed_expansion(self) -> "RegisterProse":
+            symptoms = expansion_symptoms(self.text)
+            if self.literal_assignments:
+                symptoms = [s for s in symptoms if "empty assignment" not in s]
+            if symptoms:
+                raise ValueError(_expansion_refusal(symptoms))
+            return self
+
+    class RegisterRow(BaseModel):
+        """One ledger row, as typed fields rather than as a format string.
+
+        `expansion_symptoms()` detects damage AFTER a value has been built.
+        This makes a class of damage UNREPRESENTABLE instead:
+
+        * `kind` is a `Literal`, so a row cannot be filed under a verb the
+          readers do not parse. `build_row` accepted any string, and
+          `register_status`/`identity_lineage` only match CLAIM/RELEASE/UPDATE
+          -- so a typo produced a line that appended cleanly and was invisible
+          to every reader of the ledger.
+        * no field may contain a newline or a control character. The two rows
+          that provoked this whole lane absorbed a shell/Make expansion; a
+          multi-line compose invocation with its env-file chain cannot be a
+          `branch` or an `owner` here, because the type refuses it before the
+          row is rendered.
+        * `ttl` must parse. It was rendered into `**TTL ... (expires ...)**`
+          via `_ttl_delta`, which raises -- but only after the row string had
+          already been assembled around it.
+
+        The bounds are the measured ones: the longest legitimate single token
+        in the live register is 153 characters (LONG_TOKEN_LIMIT carries 2x
+        margin at 300), so 300 is the field cap too rather than a new number.
+        """
+
+        model_config = ConfigDict(extra="forbid")
+
+        kind: Literal["CLAIM", "RELEASE", "UPDATE"]
+        owner: Annotated[str, StringConstraints(
+            strip_whitespace=True, min_length=1, max_length=LONG_TOKEN_LIMIT)]
+        scope: str
+        branch: Annotated[str, StringConstraints(
+            strip_whitespace=True, max_length=LONG_TOKEN_LIMIT)] = ""
+        ttl: Annotated[str, StringConstraints(strip_whitespace=True)] = ""
+        co_owners: list[str] = []
+
+        @model_validator(mode="after")
+        def _shape_is_legal(self) -> "RegisterRow":
+            # The SAME functions `build_row` calls unconditionally, so the
+            # typed surface and the stdlib path cannot disagree about what a
+            # row may contain. pydantic contributes the Literal, the length
+            # constraints and the field typing; the control-character scan has
+            # no declarative equivalent and lives in one place rather than two.
+            assert_row_shape(self.kind, self.owner, self.branch, self.ttl,
+                             self.scope)
+            return self
+
+        # DELIBERATELY NOT re-running expansion_symptoms() on `scope` here.
+        # The CLI already validates prose through `RegisterProse`, which owns
+        # the `--literal-assignments` waiver. A second check on this model
+        # cannot see that waiver, so it refused the one legitimate case the
+        # override exists for -- a row quoting `SUPABASE_ANON_KEY=` as
+        # evidence. Two validators, one blind to the escape hatch, is how an
+        # override stops working; pinned by
+        # test_literal_assignments_override_files_quoted_evidence.
+        #
+        # What this model owns is what a waiver must never reach: the row's
+        # SHAPE. A control character or an unparseable TTL is damage under
+        # every override.
+
+except ImportError:  # pragma: no cover -- exercised only off-venv
+    RegisterProse = None  # type: ignore[assignment,misc]
+    RegisterRow = None  # type: ignore[assignment,misc]
+
+
 def build_row(
     kind: str,
     owner: str,
@@ -127,7 +435,34 @@ def build_row(
     co_owners: list[str] | None = None,
     now: datetime | None = None,
 ) -> str:
-    """Render one register row. Pure, so the tests can pin the grammar."""
+    """Render one register row. Pure, so the tests can pin the grammar.
+
+    Validation happens BEFORE rendering, through `RegisterRow`, so a field that
+    cannot legally appear in a row never becomes part of a row string. The
+    previous order assembled the line first and validated fragments of it
+    afterwards -- `_ttl_delta` raised only once the row was already built
+    around the bad TTL, and `kind` was never checked at all.
+    """
+    # UNCONDITIONAL. Not inside the `RegisterRow is not None` branch, because
+    # pydantic is absent in validate-register-postdate.yml and on offline
+    # nodes, and a row's shape must hold there too.
+    assert_row_shape(kind, owner, branch, ttl, scope)
+
+    if RegisterRow is not None:
+        try:
+            validated = RegisterRow(
+                kind=kind, owner=owner, branch=branch, scope=scope, ttl=ttl,
+                co_owners=list(co_owners or []),
+            )
+        except Exception as exc:  # pydantic ValidationError subclasses ValueError
+            raise ValueError(_first_refusal(exc)) from None
+        kind = validated.kind
+        owner = validated.owner
+        branch = validated.branch
+        scope = validated.scope
+        ttl = validated.ttl
+        co_owners = validated.co_owners
+
     now = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
     now = now.replace(microsecond=0)
     ts = now.strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -579,7 +914,8 @@ def _dispatch(argv: list[str] | None = None) -> int:
                                  if c.strip()],
                         metavar="ID[:note]",
                         help="another body that worked this lane; repeatable")
-    parser.add_argument("--scope-file", default="",
+    parser.add_argument("--scope-file",
+                        default=os.environ.get("REGISTER_SCOPE_FILE", ""),
                         help="read the scope prose from a FILE. The most "
                              "robust option and the one to reach for with long "
                              "rows: prose never becomes part of a command "
@@ -597,6 +933,12 @@ def _dispatch(argv: list[str] | None = None) -> int:
              "here. Without this flag the sanctioned path would be the one "
              "route that skips the question, which is how a gate becomes "
              "theatre.")
+    parser.add_argument(
+        "--literal-assignments", action="store_true",
+        help="proceed when the prose QUOTES empty assignments as evidence "
+             "(e.g. 'env.tier-ui had empty SUPABASE_ANON_KEY= entries') -- "
+             "the one legitimate use of the swallowed-expansion signature. "
+             "Does NOT waive the compose-chain or long-token symptoms.")
     parser.add_argument("--dry-run", action="store_true",
                         help="render and check the row, write nothing")
     args = parser.parse_args(argv)
@@ -606,7 +948,14 @@ def _dispatch(argv: list[str] | None = None) -> int:
             print("register-append: docs mode needs --anchor and --text-file",
                   file=sys.stderr)
             return EXIT_UNMEASURED
-        return insert_docs(args.anchor, Path(args.text_file).read_text(encoding="utf-8"))
+        block = Path(args.text_file).read_text(encoding="utf-8")
+        try:
+            assert_prose_clean(block,
+                               literal_assignments=args.literal_assignments)
+        except ValueError as exc:
+            print(f"register-append: refusing - {exc}", file=sys.stderr)
+            return EXIT_REFUSED
+        return insert_docs(args.anchor, block)
 
     if args.kind == "amend":
         if not args.branch or not args.co_owner:
@@ -648,6 +997,19 @@ def _dispatch(argv: list[str] | None = None) -> int:
               "unenforceable -- 78 rows in this register are already in that "
               "state.", file=sys.stderr)
         return EXIT_UNMEASURED
+
+    # CONTENT REFUSAL, before any lane comparison. A scope that absorbed a
+    # shell or Make expansion is uncorrectable once appended, so it is refused
+    # on its own text regardless of how it arrived (--scope, the environment,
+    # or --scope-file all resolve to this one string). Exit 1: this is a
+    # finding, not a measurement failure -- and never exit 3, which would let
+    # a filer read "could not measure" as "nothing was found".
+    try:
+        assert_prose_clean(args.scope,
+                           literal_assignments=args.literal_assignments)
+    except ValueError as exc:
+        print(f"register-append: refusing - {exc}", file=sys.stderr)
+        return EXIT_REFUSED
 
     try:
         row = build_row(
