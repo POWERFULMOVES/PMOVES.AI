@@ -148,6 +148,65 @@ _EMPTY_ASSIGNMENT_RE = re.compile(
 _COMPOSE_INVOCATION_RE = re.compile(r"docker[\s+-]compose\b")
 LONG_TOKEN_LIMIT = 300
 
+# --- row shape ---------------------------------------------------------------
+#
+# STDLIB, AND UNCONDITIONAL. These were pydantic validators only, which meant
+# the guarantee vanished wherever pydantic is absent -- and it IS absent in
+# `validate-register-postdate.yml`, which installs `pytest pytest-asyncio
+# pyyaml` and nothing else, as well as on any offline fleet node. A row could
+# therefore be forged by exactly the environment least able to notice.
+#
+# So the rules live here and `build_row` always calls them. `RegisterRow` adds
+# the typed surface on top and calls the same functions, so the two cannot
+# disagree about what a row may contain.
+ROW_KINDS = ("CLAIM", "RELEASE", "UPDATE")
+
+
+def assert_no_control_characters(field: str, value: str) -> None:
+    """A ledger row is ONE LINE of text.
+
+    A newline in a field forges a second row -- every reader of this file
+    parses by line, and a forged row is indistinguishable from a filed one.
+    A NUL makes the whole file read as binary to grep and to GitHub, which is
+    the corruption repaired in 8b040956e. TAB is allowed; it is whitespace.
+    """
+    bad = sorted({c for c in value if ord(c) < 0x20 and c != "\t"})
+    if bad:
+        raise ValueError(
+            f"{field} contains control character(s) "
+            + ", ".join(hex(ord(c)) for c in bad)
+            + " -- a ledger row is one line of text. This is the signature of "
+            "terminal output or a multi-line command captured into a field; "
+            "re-file it as clean prose, or via --scope-file so it never joins "
+            "a command string.")
+
+
+def assert_row_shape(kind: str, owner: str, branch: str, ttl: str,
+                     scope: str) -> None:
+    """Everything about a row that no waiver may override.
+
+    Prose symptoms are separate and DO have an override (see
+    `assert_prose_clean`); shape does not. A control character or an
+    unparseable TTL is damage under every flag.
+    """
+    if kind not in ROW_KINDS:
+        raise ValueError(
+            f"kind {kind!r} is not one of {', '.join(ROW_KINDS)}. Only those "
+            "verbs are parsed by register_status, identity_lineage and the "
+            "collision gate, so a row filed under any other one appends "
+            "cleanly and is then invisible to every reader of the ledger.")
+    for field, value in (("owner", owner), ("branch", branch),
+                         ("ttl", ttl), ("scope", scope)):
+        assert_no_control_characters(field, value)
+    if not owner.strip():
+        raise ValueError("owner is empty -- a row with no owner is unenforceable")
+    for field, value in (("owner", owner), ("branch", branch)):
+        if len(value) > LONG_TOKEN_LIMIT:
+            raise ValueError(
+                f"{field} is {len(value)} characters (limit {LONG_TOKEN_LIMIT};"
+                " the longest legitimate token in the live register is 153)")
+    _ttl_delta(ttl)  # raises on an unparseable TTL, before anything is rendered
+
 
 def expansion_symptoms(text: str) -> list[str]:
     """Every absorbed-expansion symptom found in `text`, as human strings.
@@ -276,8 +335,7 @@ def _first_refusal(exc: Exception) -> str:
 # the invariant is declared.
 try:
     from pydantic import (  # type: ignore[import-untyped]
-        BaseModel, ConfigDict, StringConstraints, field_validator,
-        model_validator,
+        BaseModel, ConfigDict, StringConstraints, model_validator,
     )
 
     class RegisterProse(BaseModel):
@@ -339,26 +397,16 @@ try:
         ttl: Annotated[str, StringConstraints(strip_whitespace=True)] = ""
         co_owners: list[str] = []
 
-        @field_validator("owner", "branch", "ttl", "scope")
-        @classmethod
-        def _no_control_characters(cls, value: str) -> str:
-            bad = sorted({c for c in value
-                          if ord(c) < 0x20 and c not in "\t"})
-            if bad:
-                raise ValueError(
-                    "field contains control character(s) "
-                    + ", ".join(hex(ord(c)) for c in bad)
-                    + " -- a ledger row is one line of text. This is the "
-                    "signature of terminal output or a multi-line command "
-                    "captured into a field; re-file it as clean prose, or via "
-                    "--scope-file so it never joins a command string.")
-            return value
-
-        @field_validator("ttl")
-        @classmethod
-        def _ttl_parses(cls, value: str) -> str:
-            _ttl_delta(value)  # raises ValueError on an unparseable TTL
-            return value
+        @model_validator(mode="after")
+        def _shape_is_legal(self) -> "RegisterRow":
+            # The SAME functions `build_row` calls unconditionally, so the
+            # typed surface and the stdlib path cannot disagree about what a
+            # row may contain. pydantic contributes the Literal, the length
+            # constraints and the field typing; the control-character scan has
+            # no declarative equivalent and lives in one place rather than two.
+            assert_row_shape(self.kind, self.owner, self.branch, self.ttl,
+                             self.scope)
+            return self
 
         # DELIBERATELY NOT re-running expansion_symptoms() on `scope` here.
         # The CLI already validates prose through `RegisterProse`, which owns
@@ -395,6 +443,11 @@ def build_row(
     afterwards -- `_ttl_delta` raised only once the row was already built
     around the bad TTL, and `kind` was never checked at all.
     """
+    # UNCONDITIONAL. Not inside the `RegisterRow is not None` branch, because
+    # pydantic is absent in validate-register-postdate.yml and on offline
+    # nodes, and a row's shape must hold there too.
+    assert_row_shape(kind, owner, branch, ttl, scope)
+
     if RegisterRow is not None:
         try:
             validated = RegisterRow(
