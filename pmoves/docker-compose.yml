@@ -2841,9 +2841,16 @@ services:
     # Restart actions shell out to make on the host checkout
     - SENTINEL_PMOVES_DIR=${SENTINEL_PMOVES_DIR:-/srv/pmoves}
     volumes:
-    # Read-only mount of the pmoves checkout for Known-Road restart invocations
+    # Read-only mount of the repo root for Known-Road restart invocations
+    # (restarts run make -C /srv/pmoves/pmoves via with-env.sh; docker socket
+    # intentionally NOT mounted — restart actions require a host-side runner
+    # until the dsh agent runtime provides a constrained route)
     - ${PWD}/..:/srv/pmoves:ro
     - fleet-sentinel-data:/data/fleet-sentinel
+    networks:
+    - pmoves_app
+    - pmoves_bus
+    - pmoves_external
     ports:
     - ${SENTINEL_BIND:-127.0.0.1}:${SENTINEL_PORT:-8099}:8099
     depends_on:

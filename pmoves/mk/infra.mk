@@ -237,6 +237,11 @@ tailscale-docker-ip: ## Show Tailscale Docker container's IP
 # Skills: /fleet:status, /fleet:rustdesk-check, /fleet:enroll, /fleet:fix-relay
 # Docs:   pmoves/docs/operations/FLEET_REMOTE_ACCESS_RUNBOOK.md
 
+.PHONY: up-sentinel
+up-sentinel: ensure-env-shared ## Start fleet-sentinel (announce listener + health poller + self-heal, :8099)
+	@$(DC) up -d fleet-sentinel
+	@echo "✔ fleet-sentinel up — registry at http://localhost:$${SENTINEL_PORT:-8099}/registry.json"
+
 .PHONY: fleet-registry
 fleet-registry: ## Show the live service registry (fleet-sentinel /registry.json)
 	@echo "=== Fleet Service Registry (sentinel) ==="

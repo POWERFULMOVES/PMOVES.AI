@@ -21,6 +21,7 @@ import asyncio
 import json
 import logging
 import os
+import re
 import subprocess
 import time
 from dataclasses import dataclass, field
@@ -42,6 +43,9 @@ ANNOUNCE_STALE_FACTOR = float(os.environ.get("SENTINEL_STALE_FACTOR", "2.0"))
 PMOVES_DIR = Path(os.environ.get("SENTINEL_PMOVES_DIR", "/srv/pmoves"))
 ACTION_TRAIL = Path(os.environ.get("SENTINEL_ACTION_TRAIL", "/data/fleet-sentinel/actions.jsonl"))
 SELF_HEAL = os.environ.get("SENTINEL_SELF_HEAL", "1") == "1"
+# Slug allowlist: announcements are untrusted input. A slug that fails this
+# pattern can never reach a shell command (RCE via metacharacters, review P1).
+SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$")
 HTTP_TIMEOUT = float(os.environ.get("SENTINEL_HTTP_TIMEOUT", "5"))
 
 
@@ -58,6 +62,7 @@ class SentinelEntry:
     consecutive_failures: int = 0
     last_restart: float = 0.0
     restarts: int = 0
+    announce_interval_s: Optional[float] = None  # None = one-shot startup announce
 
     def to_public(self) -> Dict[str, Any]:
         return {
@@ -80,21 +85,31 @@ class FleetSentinel:
         self.listener = None
 
     async def start_listener(self) -> None:
-        from services.common.nats_service_listener import ServiceAnnouncementListener
+        try:
+            from services.common.nats_service_listener import ServiceAnnouncementListener
+        except ImportError:
+            # Standalone image layout (no services/common sibling): subscribe
+            # directly on the announce subject with the same schema.
+            return await self._start_raw_listener()
 
         async def on_announce(info: Any) -> None:
-            slug = info.slug
+            slug = str(info.slug)
+            if not SLUG_RE.match(slug):
+                logger.warning("rejected announcement with invalid slug: %r", info.slug)
+                return
             prev = self.registry.get(slug)
             self.registry[slug] = SentinelEntry(
                 slug=slug,
                 name=info.name,
                 url=getattr(info, "base_url", "") or "",
                 health_check=info.health_check_url or "",
-                tier=str(getattr(info, "tier", "unknown")),
+                tier=(getattr(info, "tier", None).value if getattr(info, "tier", None) else "unknown"),
                 port=info.default_port,
                 consecutive_failures=prev.consecutive_failures if prev else 0,
                 restarts=prev.restarts if prev else 0,
                 health=(prev.health if prev else "unknown"),
+                announce_interval_s=getattr(info, "metadata", {}).get("announce_interval_s")
+                if isinstance(getattr(info, "metadata", None), dict) else None,
             )
             logger.info("registry upsert: %s (tier=%s)", slug, getattr(info, "tier", "?"))
 
@@ -113,7 +128,12 @@ class FleetSentinel:
             if not entry.health_check:
                 entry.health = "unknown"
                 continue
-            if now - entry.last_announce > ANNOUNCE_STALE_FACTOR * 60:
+            # NOTE: existing publishers announce ONCE at startup (announce_service
+            # closes its connection); there is no heartbeat yet. Until producers
+            # adopt the BackgroundAnnouncer, announce-age staleness would mark
+            # every service stale after ~2min — so staleness is HEARTBEAT-GATED:
+            # only applies when the announcement payload declares an interval.
+            if entry.announce_interval_s and now - entry.last_announce > ANNOUNCE_STALE_FACTOR * entry.announce_interval_s:
                 entry.health = "stale"
                 continue
             try:
@@ -150,14 +170,24 @@ class FleetSentinel:
             "failures": entry.consecutive_failures,
         }
         logger.warning("self-heal: %s after %d failures", slug, entry.consecutive_failures)
+        # Fixed argv (no shell, no interpolation beyond the validated slug),
+        # correct checkout layout: repo root mounted at /srv/pmoves -> the
+        # pmoves Makefile lives at /srv/pmoves/pmoves.
+        make_dir = PMOVES_DIR / "pmoves" if (PMOVES_DIR / "pmoves" / "Makefile").exists() else PMOVES_DIR
         try:
             proc = await asyncio.create_subprocess_exec(
-                "bash", "-c",
-                f"cd {PMOVES_DIR} && bash scripts/with-env.sh make secrets-funnel && "
-                f"bash scripts/with-env.sh make up-{slug}",
+                "bash", str(make_dir / "scripts" / "with-env.sh"), "make", "-C", str(make_dir),
+                "secrets-funnel",
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT,
             )
+            if proc.returncode == 0:
+                proc = await asyncio.create_subprocess_exec(
+                    "bash", str(make_dir / "scripts" / "with-env.sh"), "make", "-C", str(make_dir),
+                    f"up-{slug}",
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.STDOUT,
+                )
             out, _ = await proc.communicate()
             action["exit"] = proc.returncode
             action["tail"] = (out or b"").decode(errors="replace")[-500:]
@@ -222,3 +252,38 @@ async def actions() -> Dict[str, Any]:
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("SENTINEL_PORT", "8099")))
+
+
+    async def _start_raw_listener(self) -> None:
+        """Minimal subscriber when services.common is unavailable in-image."""
+        import nats as nats_lib
+        import urllib.parse
+
+        nc = await nats_lib.connect(NATS_URL)
+        self._raw_nc = nc
+
+        async def cb(msg: Any) -> None:
+            try:
+                data = json.loads(msg.data.decode())
+            except Exception:
+                return
+            slug = str(data.get("slug", ""))
+            if not SLUG_RE.match(slug):
+                return
+            prev = self.registry.get(slug)
+            md = data.get("metadata") or {}
+            self.registry[slug] = SentinelEntry(
+                slug=slug,
+                name=data.get("name", slug),
+                url=data.get("url", ""),
+                health_check=data.get("health_check", ""),
+                tier=str(data.get("tier", "unknown")),
+                port=data.get("port"),
+                consecutive_failures=prev.consecutive_failures if prev else 0,
+                restarts=prev.restarts if prev else 0,
+                health=(prev.health if prev else "unknown"),
+                announce_interval_s=md.get("announce_interval_s") if isinstance(md, dict) else None,
+            )
+
+        await nc.subscribe("services.announce.v1", cb=cb)
+        logger.info("raw announce listener started (%s)", NATS_URL)
