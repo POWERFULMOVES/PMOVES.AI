@@ -118,6 +118,14 @@ identities:
       declares `4090-field` as a formal ALTER, so some of that drift is a real
       distinction the register had no field for.
 
+  - canonical: kiloclaw
+    aliases: ["KILOCLAW"]
+    node: kiloclaw
+    note: >-
+      Hosted VPS brain of the fleet (Fly Machine, loopback-only, no GPU).
+      Registered 2026-09-04 in agent_signatures.yaml per KiloClaw action plan
+      §5.2; first trail ACK filed in the same commit (PR #2918).
+
   - canonical: mavis
     aliases: ["Mavis", "Mavis-verifier"]
     node: "5090"
