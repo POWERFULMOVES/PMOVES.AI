@@ -42,8 +42,30 @@ Common models tracked from the local model discovery playlist:
 - gemma3:embed — embeddings
 - llama4:scout — efficient inference
 
+## MiniMax Models (Token Plan)
+
+```bash
+# Populate MiniMax M2.7
+echo "MINIMAX_M27=$(curl -sf https://api.minimax.io/v1/models \
+  -H "Authorization: Bearer $MINIMAX_API_KEY" \
+  | python3 -c "import json,sys; d=json.load(sys.stdin); print('READY' if any('MiniMax-M2.7' in m['id'] for m in d.get('data',[])) else 'MISSING')")"
+
+# Populate MiniMax M2.1
+echo "MINIMAX_M21=$(curl -sf https://api.minimax.io/v1/models \
+  -H "Authorization: Bearer $MINIMAX_API_KEY" \
+  | python3 -c "import json,sys; d=json.load(sys.stdin); print('READY' if any('MiniMax-M2.1' in m['id'] for m in d.get('data',[])) else 'MISSING')")"
+```
+
+Models confirmed available:
+- `MiniMax-M2.7` — 1M token context, wave-function collapse
+- `MiniMax-M2.7-highspeed` — fast variant
+- `MiniMax-M2.5` / `MiniMax-M2.5-highspeed` — previous gen
+- `MiniMax-M2.1` — 100K context, efficient
+- `MiniMax-Text-01` — text-only model
+
 ## Notes
 
 - Use PMOVES.Flare naming: pmoves/<model-family>/<variant>
 - GPU orchestrator auto-discovers via mesh.gpu.model.loaded.v1
 - vLLM can serve any Ollama model with higher throughput
+- MiniMax is a cloud-only provider (no local Ollama pull needed)
