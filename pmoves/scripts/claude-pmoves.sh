@@ -189,10 +189,20 @@ if [ -f "$CIPHER_TOOL" ] && [ ${#IDENT_PY[@]} -gt 0 ]; then
       echo "[claude-pmoves] cipher=up (${CIPHER_WHICH:-unknown endpoint})" >&2
       IDENTITY_ARGS+=(--append-system-prompt "Persistent memory IS available this session via the Cipher MCP server '${CIPHER_WHICH:-unknown}'. Use it for recall and for writes; do not fall back to the auto-memory directory while it is up.")
       ;;
+    1)
+      # FINDINGS: something ANSWERED and was not usable -- overwhelmingly a 401
+      # from /mcp/sse, which requires a bearer. Cipher is UP. Telling the agent
+      # "no persistent memory, Cipher is down" here is a false negative that
+      # sends the operator to restart a healthy service, and it is what the
+      # wildcard branch used to do for every non-zero code.
+      echo "[claude-pmoves] cipher=UNAUTHORIZED (exit 1) — service is UP, credential not accepted" >&2
+      printf '%s\n' "$CIPHER_OUT" >&2
+      IDENTITY_ARGS+=(--append-system-prompt "Cipher ANSWERED this session but refused the credential (preflight exit 1), so persistent memory is not usable right now. The service is UP -- this is an access problem, not an outage, so do NOT report Cipher as down and do not restart it. Use the file-based auto-memory directory meanwhile and say which of the two it is. Remedy: bind CIPHER_API_TOKEN into the roster. Recovery: pmoves/docs/operations/MCP_TOOLKIT.md.")
+      ;;
     *)
-      # 1 = every endpoint was reached and none answered. 3 = nothing to measure
-      # (no cipher entry in the roster at all). Both mean no memory; the agent
-      # is told which, because the fixes differ.
+      # 3 = could not measure: no cipher entry in the roster, nothing
+      # resolvable, or nothing reachable at all. This is the only case where
+      # "you have no memory" is a true statement.
       echo "[claude-pmoves] cipher=DOWN (exit ${cipher_rc}) — session has no persistent memory" >&2
       printf '%s\n' "$CIPHER_OUT" >&2
       IDENTITY_ARGS+=(--append-system-prompt "Cipher is NOT reachable this session (preflight exit ${cipher_rc}), so you have NO persistent memory. Say so at session start rather than recalling nothing silently, and use the file-based auto-memory directory instead. Recovery: pmoves/docs/operations/MCP_TOOLKIT.md.")

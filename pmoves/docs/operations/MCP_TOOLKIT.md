@@ -323,6 +323,53 @@ python pmoves/tools/docker_mcp_secrets_hydrate.py --dry-run --env-shared pmoves/
 
 Only a value missing from BOTH needs `secrets-rotate`.
 
+### 5.2 Recovery — "Cipher is down" when Cipher is up
+
+`pmoves/scripts/claude-pmoves.sh` points here when the Cipher startup check
+reports a problem, so this is where the two cases are told apart.
+
+`http://localhost:8105/mcp/sse` **requires a bearer**. Measured on B850,
+2026-09-05:
+
+```
+GET /health                       -> 200
+GET /mcp/sse  (no Authorization)  -> 401
+GET /mcp/sse  (Bearer $TOKEN)     -> 200
+```
+
+`.claude/mcp.json` carries `headers.Authorization: "Bearer ${CIPHER_API_TOKEN}"`
+on both cipher entries. `cipher_preflight.py` used to read only `url` out of the
+roster and discard the header, so it sent no credential — and against an
+endpoint that requires one, 401 was the *only* outcome it could reach. 401 was
+then folded into "DOWN" and the summary printed `No cipher endpoint answered`.
+It had answered. Three consecutive sessions were told they had no persistent
+memory while Cipher was healthy throughout. Fixed: the probe now presents the
+roster credential and gives 401 its own verdict.
+
+```bash
+python pmoves/tools/cipher_preflight.py            # text
+python pmoves/tools/cipher_preflight.py --json     # verdict per endpoint
+#   0  an endpoint answered usably — memory IS available; the report names WHICH
+#   1  findings: something ANSWERED but not usably (401/403, or another status).
+#      The service is UP. Remedy is to bind the token, NOT to restart Cipher
+#      — the report names the unresolved variable, never its value
+#   3  could not measure — no roster, no cipher entry, nothing resolvable, or
+#      nothing reachable at all. The only case where "you have no memory" is
+#      a true statement. NOT a pass
+```
+
+Read the verdict before acting:
+
+| Output | Means | Do |
+|--------|-------|-----|
+| `cipher OK` | answered 200 | nothing |
+| `cipher UNAUTHORIZED … HTTP 401` | **up**, credential refused | export `CIPHER_API_TOKEN` and re-launch |
+| `cipher DOWN … unresolved variable in URL` | tailnet helper did not run | resolve `${TS_<NODE>}`, or ignore if the local entry is OK |
+| `cipher DOWN … refused` / DNS failure | nothing is listening | start the service |
+
+Same 0/1/3 doctrine as § 5.1 and `docker_host_policy_check.py`. The credential
+is never printed — the tools report variable NAMES and lengths only.
+
 ---
 
 ## 6. E2B + sandboxed agents
