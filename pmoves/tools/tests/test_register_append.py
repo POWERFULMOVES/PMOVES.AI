@@ -915,25 +915,85 @@ def test_docs_block_with_a_symptom_is_refused(mod, tmp_path):
     assert register.read_text(encoding="utf-8").count("KEY=") == 0
 
 
-def test_pydantic_layer_agrees_with_the_function(mod):
-    """The typed surface and the stdlib enforcement must never disagree."""
+# Fixtures with EXPECTED verdicts, not two paths compared against each other.
+#
+# The previous version of this test evaluated `expansion_symptoms(text)` on one
+# side and `RegisterProse(text=text)` on the other -- and the model called that
+# same function, so both sides were one expression. It could not fail, in
+# either direction, for any input. Pinning each path against a stated expected
+# outcome is what makes a divergence visible.
+PROSE_CASES = [
+    ("clean scope with `backticks` and TTL=72h inside", False),
+    ("swallowed TOKEN= expansion", True),
+    ("docker compose --env-file a --env-file b up", True),
+    ("token " + "a" * 301, True),
+    ("a normal sentence about a lane that landed", False),
+    ("quoting ``SUPABASE_ANON_KEY=`` as evidence", False),  # backticked span
+]
+
+
+@pytest.mark.parametrize("text,should_reject", PROSE_CASES)
+def test_the_model_rejects_exactly_the_stated_cases(mod, text, should_reject):
+    """The typed surface, pinned against expected verdicts."""
     if mod.RegisterProse is None:
         pytest.skip("pydantic not importable in this interpreter")
     from pydantic import ValidationError
-    cases = [
-        "clean scope with `backticks` and TTL=72h inside",
-        "swallowed TOKEN= expansion",
-        "docker compose --env-file a --env-file b up",
-        "token " + "a" * (mod.LONG_TOKEN_LIMIT + 1),
-    ]
-    for text in cases:
-        fn_finds = bool(mod.expansion_symptoms(text))
-        try:
-            mod.RegisterProse(text=text)
-            model_finds = False
-        except ValidationError:
-            model_finds = True
-        assert fn_finds == model_finds, text
+    try:
+        mod.RegisterProse(text=text)
+        rejected = False
+    except ValidationError:
+        rejected = True
+    assert rejected is should_reject, text
+
+
+@pytest.mark.parametrize("text,should_reject", PROSE_CASES)
+def test_the_offline_fallback_rejects_exactly_the_same_cases(mod, text, should_reject):
+    """The stdlib path, pinned against the SAME expected verdicts.
+
+    Independently asserted rather than compared to the model, so if the two
+    ever diverge the failure names which one moved.
+    """
+    assert bool(mod.expansion_symptoms(text)) is should_reject, text
+
+
+def test_the_model_is_the_enforcement_not_a_mirror(mod):
+    """assert_prose_clean must route through the model when it is importable.
+
+    The structural assertion the old agreement test could not make: that the
+    typed surface is on the enforcement path at all. Without this, the model
+    could be deleted and every other test here would still pass.
+    """
+    if mod.RegisterProse is None:
+        pytest.skip("pydantic not importable in this interpreter")
+    calls = []
+    original = mod.RegisterProse
+
+    class Spy(original):  # type: ignore[misc,valid-type]
+        def __init__(self, **kwargs):
+            calls.append(kwargs)
+            super().__init__(**kwargs)
+
+    mod.RegisterProse = Spy
+    try:
+        mod.assert_prose_clean("a clean scope line")
+    finally:
+        mod.RegisterProse = original
+    assert calls, (
+        "assert_prose_clean() did not construct RegisterProse -- the model is "
+        "decorative again and the stdlib copy is the real enforcement"
+    )
+
+
+def test_the_waiver_is_a_field_on_the_model(mod):
+    """`literal_assignments` waives the assignment symptom and nothing else."""
+    if mod.RegisterProse is None:
+        pytest.skip("pydantic not importable in this interpreter")
+    from pydantic import ValidationError
+    mod.RegisterProse(text="quoted SUPABASE_ANON_KEY= entries",
+                      literal_assignments=True)
+    with pytest.raises(ValidationError):
+        mod.RegisterProse(text="docker compose --env-file a --env-file b up",
+                          literal_assignments=True)
 
 
 def test_usage_lines_name_the_single_quote_reason():

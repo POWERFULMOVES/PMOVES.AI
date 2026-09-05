@@ -189,12 +189,35 @@ def assert_prose_clean(text: str, literal_assignments: bool = False) -> None:
     reaches it without reading source. It does NOT waive the compose-chain or
     long-token symptoms -- those have no legitimate quoted-literal use.
     """
+    if RegisterProse is not None:
+        try:
+            RegisterProse(text=text, literal_assignments=literal_assignments)
+        except Exception as exc:  # pydantic ValidationError subclasses ValueError
+            raise ValueError(_first_refusal(exc)) from None
+        return
+
+    # Offline fallback. LOUD, because a second copy of the rules enforcing
+    # silently is how two validators drift into disagreeing about what is
+    # legal -- the failure this module already warns about for PyYAML.
+    print("register-append: DEGRADED - pydantic is not importable in this "
+          "interpreter, so prose is validated by the stdlib fallback rather "
+          "than by the RegisterProse model. The two are pinned against the "
+          "same fixtures, but only the model is the declared contract. Run "
+          "this through `make -C pmoves register-claim`, which picks an "
+          "interpreter that has it.", file=sys.stderr)
     symptoms = expansion_symptoms(text)
     if literal_assignments:
         symptoms = [s for s in symptoms if "empty assignment" not in s]
-    if not symptoms:
-        return
-    raise ValueError(
+    if symptoms:
+        raise ValueError(_expansion_refusal(symptoms))
+
+
+def _expansion_refusal(symptoms: list[str]) -> str:
+    """The refusal wording, in one place so both paths cannot drift apart.
+
+    Shared WORDING, not shared verdicts: the model decides, this renders.
+    """
+    return (
         "the prose shows symptoms of an absorbed shell/Make expansion: "
         + "; ".join(symptoms)
         + ". The register is append-only, so a row that absorbs an expansion"
@@ -206,27 +229,76 @@ def assert_prose_clean(text: str, literal_assignments: bool = False) -> None:
         " evidence, re-run with --literal-assignments.")
 
 
-# A pydantic layer over the same check, for callers that validate typed fields
-# rather than drive the CLI. Corpus precedent: chit_security_validator.py.
-# The import is GUARDED because the sanctioned path must run on the interpreter
-# the Makefile picks for PyYAML alone, which offline may not carry pydantic;
-# the stdlib function above is the enforcement, and this model must never
-# disagree with it -- a test pins that it cannot.
+def _first_refusal(exc: Exception) -> str:
+    """Unwrap pydantic's envelope back to the message a filer needs to read.
+
+    A ValidationError renders as a multi-line report with a docs URL. That is
+    right for a schema violation and wrong for this one, where the whole value
+    of the refusal is the sentence telling the filer how to re-file.
+    """
+    errors = getattr(exc, "errors", None)
+    if callable(errors):
+        for err in errors():
+            msg = str(err.get("msg", ""))
+            # pydantic prefixes ValueError messages raised in validators.
+            return msg.split("Value error, ", 1)[-1]
+    return str(exc)
+
+
+# THE TYPED SURFACE IS THE ENFORCEMENT, and it did not used to be.
+#
+# The first cut of this block wrapped `expansion_symptoms()` in a
+# `@field_validator` and called the result "a pydantic layer". It validated
+# nothing of its own: the model delegated to the stdlib function, so the test
+# that pinned them together -- comparing `expansion_symptoms(text)` against
+# `RegisterProse(text=text)` raising -- evaluated the SAME function on both
+# sides and could never fail. A test that copies the logic cannot catch the
+# logic breaking.
+#
+# The stated reason for stdlib-only enforcement does not hold either. It reads
+# "the sanctioned path must run on the interpreter the Makefile picks for
+# PyYAML alone, which offline may not carry pydantic" -- but
+# `.github/requirements-tests.txt` installs BOTH `pydantic` and `pyyaml`, and
+# that is the file the merge gate runs on. In the environment that decides
+# whether this lands, pydantic is present.
+#
+# So the model owns the invariant and the CLI calls it. The stdlib path remains
+# for a genuinely offline node, and degrades LOUDLY there rather than silently
+# enforcing a second copy of the rules -- the same treatment `_load_lineage()`
+# already gives a missing PyYAML a few lines up.
+#
+# What pydantic does NOT buy here, stated rather than papered over: no
+# declarative constraint expresses "no whitespace-delimited token longer than
+# N" or "no uppercase assignment followed by whitespace". Those stay validator
+# bodies in any design. What the model does own is the field typing, the
+# override as a real field rather than a positional flag, and one place where
+# the invariant is declared.
 try:
-    from pydantic import BaseModel, field_validator  # type: ignore[import-untyped]
+    from pydantic import BaseModel, ConfigDict, model_validator  # type: ignore[import-untyped]
 
     class RegisterProse(BaseModel):
-        """Scope/docs prose carrying no absorbed-expansion symptom."""
+        """Scope/docs prose carrying no absorbed-expansion symptom.
+
+        `literal_assignments` is a field, not an argument, so the waiver
+        travels with the value it applies to and shows up in the model dump
+        that a caller logs. It waives ONLY the empty-assignment symptom -- the
+        compose chain and the long token have no legitimate quoted use.
+        """
+
+        model_config = ConfigDict(extra="forbid")
 
         text: str
+        literal_assignments: bool = False
 
-        @field_validator("text")
-        @classmethod
-        def _no_absorbed_expansion(cls, value: str) -> str:
-            symptoms = expansion_symptoms(value)
+        @model_validator(mode="after")
+        def _no_absorbed_expansion(self) -> "RegisterProse":
+            symptoms = expansion_symptoms(self.text)
+            if self.literal_assignments:
+                symptoms = [s for s in symptoms if "empty assignment" not in s]
             if symptoms:
-                raise ValueError("; ".join(symptoms))
-            return value
+                raise ValueError(_expansion_refusal(symptoms))
+            return self
+
 except ImportError:  # pragma: no cover -- exercised only off-venv
     RegisterProse = None  # type: ignore[assignment,misc]
 
