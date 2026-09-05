@@ -3,7 +3,7 @@
 # reach = Tailscale hostname (NEVER a raw 100.x IP).
 nodes:
   - node_id: "4090"
-    reach: "pmoves-laptop"
+    reach: "pmoves-4090"
     vram_gb: 16
     caps: ["cuda", "comfyui", "browser", "voice"]
   - node_id: "5090"
