@@ -32,6 +32,11 @@ Baseline `FIREFLY_PAT` env is the fallback when no inbound header is set.
 the automint provisions the user via the trusted `Remote-User` header, mints a passport PAT
 in-container, and lands it as `FIREFLY_ACCESS_TOKEN` through the canonical secrets flow
 (`secrets-rotate` → env.shared + CGP bundle + tier env files). Then recreate this service.
+Re-running it supersedes the previous baseline PAT: once the landed token round-trips, older
+tokens of the same name are revoked in Firefly, and a run that fails after minting revokes the
+token it just created and scrubs the in-container temp files. It refuses to run on a node that
+carries a CI-pulled CHIT bundle (`secrets-rotate` would replace it and drop prod-only keys);
+re-pull first or set `FIREFLY_AUTOMINT_ALLOW_BUNDLE_REPLACE=1` knowingly.
 
 **Manual / per-tenant:** mint per-user in the Firefly UI (host `:8075` → Profile → OAuth →
 Personal Access Tokens), or have the mounting harness inject a per-tenant PAT per request.
