@@ -414,6 +414,9 @@ HEREDOC_DELIM_RE = re.compile(r"<<-?\s*(['\"]?)([A-Za-z_][A-Za-z0-9_]*)\1")
 # defect this file's other fix addresses. `_is_register` strips the quotes it
 # now receives.
 REDIRECT_RE = re.compile(r"(>>?)\s*((?:\"[^\"]*\"|'[^']*'|\\.|[^\s;|&<>])+)")
+# `\` followed by a line ending. Bash removes these before parsing, so the
+# guard has to as well -- see the comment at the top of classify_shell_write.
+CONTINUATION_RE = re.compile(r"\\\r?\n")
 TEE_RE = re.compile(r"\btee\b((?:\s+-\S+)*)((?:\s+[^\s;|&<>]+)*)")
 ECHO_LITERAL_RE = re.compile(
     r"\b(?:echo|printf)\b(?:\s+-\S+)*\s+(['\"])(.*?)\1", re.S
@@ -743,15 +746,66 @@ def split_heredocs(command: str):
         line = lines[idx]
         skeleton_lines.append(line)
         idx += 1
+
+        # REBUILD THE LOGICAL LINE FIRST. A `\<newline>` joins this line to the
+        # next before the shell sees either, so
+        #
+        #     python3 \
+        #     <<'PY'
+        #
+        # is ONE command line -- but read physically, the line carrying the
+        # `<<` operator contains no interpreter, `code` comes out False, the
+        # body is classified as data, and it is then excluded from the
+        # detection string entirely. The body still reaches python and still
+        # truncates the register.
+        #
+        # This has to happen HERE rather than in the caller: `code` is decided
+        # from the opener inside this loop, so a caller that normalizes after
+        # the split has already lost. Bodies are untouched -- the join only
+        # runs while we are positioned on a skeleton line, which is precisely
+        # the region where a continuation is a shell construct.
+        while line.endswith("\\") and idx < len(lines):
+            line = line[:-1] + lines[idx]
+            skeleton_lines[-1] = line
+            idx += 1
+
         # Every heredoc opened ON THIS LINE takes its body starting now, in the
         # order the operators appear -- the shell's own rule for `cmd <<A <<B`.
         for m in HEREDOC_DELIM_RE.finditer(line):
             quote, delim = m.group(1), m.group(2)
             body = []
-            while idx < len(lines) and lines[idx].strip() != delim:
+            # FOLD CONTINUATIONS WHEN LOOKING FOR THE TERMINATOR, but only for
+            # an UNQUOTED delimiter -- that is precisely where bash performs
+            # expansion and line-joining while reading the body. With a quoted
+            # delimiter the body is taken byte-for-byte and `EO\` + newline +
+            # `F` is not a terminator, so folding there would end the heredoc
+            # early and hand the rest of the body to the shell parser as code.
+            #
+            # Unfolded, this hides a whole COMMAND rather than a path:
+            #
+            #     cat >> REG <<EOF
+            #     ...
+            #     EO\
+            #     F
+            #     echo DESTROYED > REG
+            #
+            # bash rejoins `EOF`, closes the heredoc, and runs the truncate.
+            # The hook saw the heredoc as unterminated, absorbed the truncate
+            # as inert body data, and returned 0.
+            term_lines = 1
+            while idx < len(lines):
+                cand = lines[idx]
+                n = 1
+                if not quote:
+                    while cand.endswith("\\") and idx + n < len(lines):
+                        cand = cand[:-1] + lines[idx + n]
+                        n += 1
+                if cand.strip() == delim:
+                    term_lines = n
+                    break
                 body.append(lines[idx])
                 idx += 1
-            idx += 1  # consume the terminator line itself
+            idx += term_lines  # consume the terminator, however many lines it spans
             bodies.append({
                 "delim": delim,
                 "body": "\n".join(body),
@@ -1211,6 +1265,56 @@ def classify_shell_write(command: str, cwd=None) -> ShellWrite:
     the recoverable append itself.
     """
     skeleton, bodies = split_heredocs(command)
+
+    # BASH DELETES `\<newline>` BEFORE IT PARSES ANYTHING. So
+    #
+    #     echo x > pmoves/docs/AGENTS/AGNOTE4482PHI.t1.\
+    #     md
+    #
+    # truncates the real register, while every check below looked at text where
+    # the name is split across two lines: the literal-name gate three lines down
+    # finds no contiguous `AGNOTE4482PHI.t1.md` and returns "none", and
+    # `REDIRECT_RE`'s `\\.` cannot bridge it either because `.` does not match a
+    # newline. Rejoining first means the rest of this function sees the same
+    # command bash does.
+    #
+    # SKELETON ONLY, after `split_heredocs`. A heredoc body is literal text --
+    # `\<newline>` inside a quoted delimiter is two real characters, not a
+    # continuation -- so rejoining there would invent content. A continuation is
+    # a shell-line construct and lives in the skeleton.
+    #
+    # Inside single quotes a `\<newline>` is also literal, so this
+    # over-normalizes that one case. It is the safe direction for a guard: the
+    # worst outcome is seeing a register name bash would not, which refuses a
+    # write that was not going to happen. The reverse would miss a truncate.
+    skeleton = CONTINUATION_RE.sub("", skeleton)
+
+    # CODE heredoc bodies too, and the reasoning above is why they are a
+    # SEPARATE case rather than the same one. A body is literal to bash -- but
+    # a body marked `code` is handed to an interpreter, and python, node and
+    # ruby all fold `\<newline>` inside a string literal exactly as bash folds
+    # it in a command. So
+    #
+    #     python3 <<'PY'
+    #     open('/tmp/AGNOTE4482PHI.t1.\
+    #     md', 'w').write('')
+    #     PY
+    #
+    # opens the real register while the literal-name gate below sees no
+    # contiguous name and returns "none". With an UNQUOTED delimiter bash
+    # performs the join itself before the interpreter is even reached, so the
+    # bypass does not depend on which interpreter it is.
+    #
+    # Normalizing the body is over-eager for the one case where the sequence is
+    # genuinely two characters to the interpreter (a python raw string). Same
+    # trade as the skeleton: over-matching refuses a write that was not going
+    # to happen; under-matching misses one that was. Non-code bodies are left
+    # alone -- they are data, nothing interprets them, and they are not part of
+    # the detection string.
+    for h in bodies:
+        if h["code"]:
+            h["body"] = CONTINUATION_RE.sub("", h["body"])
+
     executable = "\n".join(
         [skeleton] + [h["body"] for h in bodies if h["code"]]
     )
