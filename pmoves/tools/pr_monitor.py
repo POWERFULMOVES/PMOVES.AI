@@ -108,6 +108,31 @@ def _run_json(cmd: list[str]) -> Any:
     return json.loads(payload)
 
 
+def _run_json_pages(repo_path: str, *, list_key: str | None = None) -> list[Any]:
+    """Every page of a REST list endpoint, flattened.
+
+    `gh api --paginate` alone concatenates one JSON document per page, which
+    `json.loads` cannot read past the first page. `--slurp` wraps the pages in
+    one outer array; this flattens it. Endpoints that return an object with a
+    list inside (check-runs -> `check_runs`) pass `list_key` so each page's
+    list is concatenated instead of the page objects.
+    """
+    sep = "&" if "?" in repo_path else "?"
+    pages = _run_json(["gh", "api", "--paginate", "--slurp", f"{repo_path}{sep}per_page=100"]) or []
+    if not isinstance(pages, list):
+        pages = [pages]
+    out: list[Any] = []
+    for page in pages:
+        if list_key is not None:
+            if isinstance(page, dict):
+                out.extend(page.get(list_key) or [])
+        elif isinstance(page, list):
+            out.extend(page)
+        elif page is not None:
+            out.append(page)
+    return out
+
+
 def _parse_origin_remote() -> str | None:
     """Parse owner/repo from the origin remote URL.
 
@@ -472,16 +497,7 @@ def _pr_numbers(repo: str, base: str, state: str, explicit_prs: list[int]) -> li
     # carries everything this needs — number, base, state; `merged` maps to
     # closed+filter because REST has no merged state of its own.
     rest_state = "closed" if state == "merged" else state
-    rows = _run_json(
-        [
-            "gh",
-            "api",
-            "--paginate",
-            f"repos/{repo}/pulls?state={rest_state}&base={base}&per_page=100",
-        ]
-    )
-    if not isinstance(rows, list):
-        return []
+    rows = _run_json_pages(f"repos/{repo}/pulls?state={rest_state}&base={base}")
     out: list[int] = []
     for row in rows:
         if not isinstance(row, dict):
@@ -510,30 +526,35 @@ def _pr_detail(repo: str, number: int) -> dict[str, Any]:
     base = detail.get("base") or {}
     head_sha = str(head.get("sha") or "")
 
-    comments = _run_json(
-        ["gh", "api", f"repos/{repo}/issues/{number}/comments?per_page=100"]
-    ) or []
-    reviews = _run_json(
-        ["gh", "api", f"repos/{repo}/pulls/{number}/reviews?per_page=100"]
-    ) or []
+    comments = _run_json_pages(f"repos/{repo}/issues/{number}/comments")
+    reviews = _run_json_pages(f"repos/{repo}/pulls/{number}/reviews")
 
     # reviewDecision: latest SUBMITTED review per author wins (GitHub's own
     # semantics — PENDING is a draft review and does not count); any APPROVED
     # -> APPROVED, else any CHANGES_REQUESTED -> CHANGES_REQUESTED.
+    # GitHub's own semantics, over EVERY page of reviews in submission order:
+    # PENDING is a draft and does not count; COMMENTED never changes an author's
+    # standing; DISMISSED clears it; the latest APPROVED / CHANGES_REQUESTED is
+    # the author's standing; and one outstanding CHANGES_REQUESTED blocks no
+    # matter how many approvals exist -- change requests are checked FIRST.
     latest_by_author: dict[str, str] = {}
     for review in reviews:
         if not isinstance(review, dict):
             continue
         user = review.get("user") or {}
         login = str(user.get("login") or "")
-        state = str(review.get("state") or "")
-        if login and state != "PENDING":
+        state = str(review.get("state") or "").upper()
+        if not login:
+            continue
+        if state in {"APPROVED", "CHANGES_REQUESTED"}:
             latest_by_author[login] = state
+        elif state == "DISMISSED":
+            latest_by_author.pop(login, None)
     states = set(latest_by_author.values())
-    if "APPROVED" in states:
-        review_decision = "APPROVED"
-    elif "CHANGES_REQUESTED" in states:
+    if "CHANGES_REQUESTED" in states:
         review_decision = "CHANGES_REQUESTED"
+    elif "APPROVED" in states:
+        review_decision = "APPROVED"
     else:
         review_decision = "REVIEW_REQUIRED"
 
@@ -550,14 +571,28 @@ def _pr_detail(repo: str, number: int) -> dict[str, Any]:
 
     rollup: list[dict[str, Any]] = []
     if head_sha:
-        runs = _run_json(["gh", "api", f"repos/{repo}/commits/{head_sha}/check-runs"]) or {}
-        for run in runs.get("check_runs") or []:
+        # Every page of check-runs: a busy PR exceeds the 30-per-page default and
+        # a truncated list under-counts pending/failed runs.
+        for run in _run_json_pages(f"repos/{repo}/commits/{head_sha}/check-runs", list_key="check_runs"):
             if isinstance(run, dict):
                 rollup.append(
                     {
                         "__typename": "CheckRun",
                         "status": run.get("status"),
                         "conclusion": run.get("conclusion"),
+                    }
+                )
+        # Legacy commit statuses (external CI / bots post these, not check-runs)
+        # are what the GraphQL rollup folded in as StatusContext.
+        combined = _run_json(["gh", "api", f"repos/{repo}/commits/{head_sha}/status"]) or {}
+        statuses = combined.get("statuses") if isinstance(combined, dict) else None
+        for status in statuses or []:
+            if isinstance(status, dict):
+                rollup.append(
+                    {
+                        "__typename": "StatusContext",
+                        "state": status.get("state"),
+                        "context": status.get("context"),
                     }
                 )
 
