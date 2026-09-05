@@ -1535,7 +1535,7 @@ services:
     stop_grace_period: 30s
     <<: *tier-data-hardened
     build:
-      context: ./PMOVES-nats-server/pmoves
+      context: ../PMOVES-nats-server/pmoves
       dockerfile: Dockerfile
     image: ghcr.io/powerfulmoves/pmoves-nats:pmoves-latest
     container_name: pmoves-nats-hub-1
@@ -1559,14 +1559,16 @@ services:
     # the port EDGE/CLOUD leaves attach to; 4222 is the WRONG port for leaves)
     - ${NATS_BIND:-0.0.0.0}:${NATS_PORT:-4222}:4222
     - ${NATS_LEAF_BIND:-0.0.0.0}:${NATS_LEAF_PORT:-7422}:7422
-    # monitoring: SYS-account-guarded in the hub (fixes the unguarded 8222 gap);
-    # loopback by default, same policy as `nats` above
-    - ${NATS_MONITORING_BIND:-127.0.0.1}:${NATS_MONITORING_PORT:-9223}:8222
-    # websocket surface A2UI/browser clients ride (spec §3). Host port 9280 by
-    # default: 8080 is agent-zero's (host_port_map ambiguity guard — two
-    # publishers of one host port drops the mapping; 9280 is unmapped and
-    # mnemonic: 92xx = NATS hub surface family alongside 9223 monitoring)
-    - ${NATS_WS_BIND:-0.0.0.0}:${NATS_WS_PORT:-9280}:8080
+    # monitoring: the HTTP monitor (/varz, /connz, /leafz ...) is UNAUTHENTICATED —
+    # `system_account` guards the $SYS.> subjects, not this port. Loopback-only,
+    # on a hub-specific bind var so a tailnet NATS_MONITORING_BIND set for the
+    # legacy `nats` service cannot leak it off-host. Cross-node ops read /leafz
+    # via the SYS account over the bus, not via HTTP.
+    - ${NATS_HUB_MONITORING_BIND:-127.0.0.1}:${NATS_MONITORING_PORT:-9223}:8222
+    # No websocket publish: pmoves-nats.conf declares no `websocket {}` block
+    # (client 4222 / monitor 8222 / leaf 7422 only) and the v0 spec defines no
+    # browser surface. Add the listener block and the publish together when
+    # A2UI needs it — never advertise a port nothing listens on.
     secrets:
     # Satisfies the fork entrypoint's fail-fast (trust-material-present check).
     # PUBLIC nsc-minted account JWTs, funnel-rendered — shape: fork
