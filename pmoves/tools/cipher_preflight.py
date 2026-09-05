@@ -75,8 +75,13 @@ Exit codes:
   0  at least one cipher endpoint answered usably — memory is available
   1  findings: something ANSWERED but not usably (401 unauthorized, or another
      HTTP status). The service is up; the session's access to it is not
-  3  could not measure — no roster, nothing resolvable, or nothing reachable
-     at all. NOT a pass
+  3  could not measure — no roster, nothing resolvable, nothing reachable at
+     all, or the check itself crashed. NOT a pass
+
+A crash lands on 3 and not on python's own uncaught-exception 1, because the
+launcher treats 1 as "it answered, the service is UP". Reporting health from a
+run that took no measurement is the failure this file exists to end, and it
+would be no better for the tool to commit it than for the thing it checks.
 """
 from __future__ import annotations
 
@@ -101,7 +106,22 @@ _tools_dir = Path(__file__).resolve().parent
 if str(_tools_dir) not in sys.path:
     sys.path.insert(0, str(_tools_dir))
 
-from mcp_roster_normalize import expand as _expand_vars  # noqa: E402
+try:
+    from mcp_roster_normalize import expand as _expand_vars  # noqa: E402
+except Exception as _exc:  # pragma: no cover - depends on the tree layout
+    # An uncaught ImportError here aborted the module and python exits 1 on an
+    # uncaught exception -- which claude-pmoves.sh reads as "findings: the
+    # service is UP, do not restart it". A crash is COULD-NOT-MEASURE. Degrade
+    # to a verdict the caller can act on instead of asserting health we never
+    # observed. Class name only, never the message: see the ValueError handler
+    # in probe() for why an exception's text is not safe to print here.
+    _EXPANDER_ERROR = (
+        f"cannot import mcp_roster_normalize ({type(_exc).__name__}) — the "
+        "roster cannot be resolved the way the session will resolve it"
+    )
+    _expand_vars = None  # type: ignore[assignment]
+else:
+    _EXPANDER_ERROR = None
 
 # Long enough to cross the tailnet, short enough that a wedged endpoint does not
 # hold up a session start. Only the status line is awaited, never the body.
@@ -270,7 +290,22 @@ def probe(
 
     # `sent` holds the secret. It goes onto the request and is not retained.
     request_headers = {"Accept": "text/event-stream", **sent}
-    req = urllib.request.Request(url, headers=request_headers)
+    try:
+        req = urllib.request.Request(url, headers=request_headers)
+    except ValueError:
+        # `Request()` raises ValueError("unknown url type: ...") for a
+        # schemeless or otherwise unparseable url. This construction sat
+        # OUTSIDE the try, so a bad roster entry crashed the whole run -- and
+        # an uncaught exception exits 1, which the launcher reports as "the
+        # service is UP". One malformed row is a per-row verdict, not a crash,
+        # and certainly not a health assertion.
+        #
+        # NOT interpolated. ValueError is also how a rejected header value
+        # surfaces out of http.client, message and credential included, so this
+        # handler stays as blind as the one below.
+        row["error"] = "endpoint URL is not a usable HTTP URL — detail withheld"
+        row["verdict"] = "invalid_url"
+        return row
     try:
         with _urlopen(req, timeout) as resp:
             row["status"] = resp.status
@@ -304,6 +339,11 @@ def probe(
 
 
 def check(urls: Optional[List[str]] = None, roster: Optional[Path] = None) -> Dict[str, Any]:
+    if _EXPANDER_ERROR:
+        # Without the shared expander the credential would resolve differently
+        # here than on the path into Claude Code, so any answer this probe got
+        # would be vouching for something else. Say so; do not guess.
+        raise Unmeasured(_EXPANDER_ERROR)
     if urls:
         candidates = [{"name": "--url", "url": u} for u in urls]
     else:
@@ -366,6 +406,31 @@ def main(argv: Optional[List[str]] = None) -> int:
     args = parser.parse_args(argv)
 
     try:
+        return _run(args)
+    except Exception as exc:  # noqa: BLE001 - deliberate backstop, see below
+        # A CRASH IS COULD-NOT-MEASURE. Python exits 1 on an uncaught
+        # exception, and claude-pmoves.sh reads exit 1 as "something ANSWERED
+        # — the service is UP, do not restart it". So without this, any
+        # unexpected failure asserted the health of a service it never
+        # contacted: the exact inversion this tool was written to remove.
+        #
+        # The TYPE only, never `str(exc)`. http.client's ValueError for a
+        # rejected header embeds the credential verbatim — the same reason the
+        # ValueError handlers in probe() are deliberately blind. A backstop
+        # that leaks the token would be worse than the crash it catches.
+        detail = f"unexpected {type(exc).__name__} during the check"
+        if args.as_json:
+            print(json.dumps(
+                {"measured": False, "reason": f"{detail} — detail withheld"}, indent=2
+            ))
+        else:
+            print(f"UNMEASURED: {detail} — detail withheld", file=sys.stderr)
+            print("  This is NOT a pass — assume no persistent memory.", file=sys.stderr)
+        return 3
+
+
+def _run(args: argparse.Namespace) -> int:
+    try:
         verdict = check(args.urls, args.roster)
     except Unmeasured as exc:
         if args.as_json:
@@ -394,8 +459,13 @@ def main(argv: Optional[List[str]] = None) -> int:
                 file=sys.stderr,
             )
         else:
+            # The second token IS the verdict class, and claude-pmoves.sh
+            # branches on it. "DOWN" for a 404 was the same collapse this tool
+            # exists to undo one layer down: something answered, so the remedy
+            # is not "start the service" either.
+            label = "ANSWERED" if row["verdict"] in ("http_error", "redirect") else "DOWN"
             print(
-                f"cipher DOWN {row['name']}  ({row['url']}) -> {row['error']}",
+                f"cipher {label} {row['name']}  ({row['url']}) -> {row['error']}",
                 file=sys.stderr,
             )
 

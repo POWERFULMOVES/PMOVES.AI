@@ -383,3 +383,177 @@ def test_a_transport_valueerror_never_surfaces_its_message(monkeypatch, tmp_path
     cp.main(["--roster", str(_cipher_roster(tmp_path))])
     cap = capsys.readouterr()
     assert SENTINEL not in cap.out and SENTINEL not in cap.err
+
+
+# ---------------------------------------------------------------------------
+# A crash is could-not-measure, not "the service is UP"
+# ---------------------------------------------------------------------------
+#
+# `main()` returned 1 on any uncaught exception -- python's own exit code for
+# one -- and claude-pmoves.sh reads exit 1 as "Cipher ANSWERED, the service is
+# UP, do NOT report it as down and do not restart it". So a crash asserted the
+# health of a service it had never contacted. That is this file's own thesis
+# inverted, and it fired on two paths the reviewer actually executed: a
+# schemeless roster url, and a failed import of the roster expander.
+
+
+def test_an_unexpected_crash_is_could_not_measure_not_a_finding(monkeypatch, tmp_path):
+    """Exit 3. Exit 1 would tell the launcher a service we never reached is UP."""
+
+    def explode(*a, **k):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(cp, "check", explode)
+    roster = _roster(tmp_path, {"pmoves-cipher-local": {"url": "http://localhost:8105/mcp/sse"}})
+    assert cp.main(["--roster", str(roster)]) == 3
+
+
+def test_the_crash_backstop_never_prints_the_exception_message(
+    monkeypatch, tmp_path, capsys
+):
+    """`str(exc)` is not safe here: http.client's ValueError IS the credential."""
+
+    def explode(*a, **k):
+        raise ValueError(f"Invalid header value {('Bearer ' + SENTINEL)!r}")
+
+    monkeypatch.setattr(cp, "check", explode)
+    roster = _roster(tmp_path, {"pmoves-cipher-local": {"url": "http://localhost:8105/mcp/sse"}})
+    assert cp.main(["--roster", str(roster)]) == 3
+    cap = capsys.readouterr()
+    assert SENTINEL not in cap.out and SENTINEL not in cap.err
+    assert "ValueError" in cap.err  # the TYPE is useful and safe
+    assert "NOT a pass" in cap.err
+
+
+def test_the_crash_backstop_holds_in_json_mode(monkeypatch, tmp_path, capsys):
+    def explode(*a, **k):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(cp, "check", explode)
+    roster = _roster(tmp_path, {"pmoves-cipher-local": {"url": "http://localhost:8105/mcp/sse"}})
+    assert cp.main(["--roster", str(roster), "--json"]) == 3
+    assert json.loads(capsys.readouterr().out)["measured"] is False
+
+
+def test_a_schemeless_url_is_a_row_verdict_not_a_crash(monkeypatch, tmp_path, capsys):
+    """`Request("example.com/x")` raises ValueError('unknown url type').
+
+    That construction sat outside the try, so one malformed roster row took the
+    whole run down -- and the crash exited 1, i.e. "the service is UP".
+    """
+
+    def explode(*a, **k):  # pragma: no cover - must never be reached
+        raise AssertionError("a malformed url was dialled")
+
+    monkeypatch.setattr(cp, "_urlopen", explode)
+    row = cp.probe("example.com/mcp/sse")
+    assert row["verdict"] == "invalid_url"
+    assert row["ok"] is False
+
+    roster = _roster(tmp_path, {"pmoves-cipher-local": {"url": "example.com/mcp/sse"}})
+    # Nothing was contacted, so there is no measurement: 3, not 1.
+    assert cp.main(["--roster", str(roster)]) == 3
+    assert "NO persistent memory" in capsys.readouterr().err
+
+
+def test_a_schemeless_url_does_not_disturb_the_unresolved_verdict(tmp_path):
+    """`${TS_Z890}` still reports `unresolved`, which is its own diagnosis."""
+    row = cp.probe("http://${TS_Z890}:8105/mcp/sse")
+    assert row["verdict"] == "unresolved"
+
+
+def test_a_broken_roster_expander_is_could_not_measure(monkeypatch, tmp_path, capsys):
+    """The import at line ~104 failing used to abort the module -> exit 1.
+
+    Without the shared expander the credential would resolve differently here
+    than on the path into Claude Code, so any answer would vouch for something
+    else. Refuse rather than guess.
+    """
+    monkeypatch.setattr(cp, "_EXPANDER_ERROR", "cannot import mcp_roster_normalize (ImportError)")
+    roster = _roster(tmp_path, {"pmoves-cipher-local": {"url": "http://localhost:8105/mcp/sse"}})
+    assert cp.main(["--roster", str(roster)]) == 3
+    assert "mcp_roster_normalize" in capsys.readouterr().err
+
+
+# ---------------------------------------------------------------------------
+# The launcher must not collapse every exit 1 into "bind the token"
+# ---------------------------------------------------------------------------
+
+
+def test_an_answered_but_unusable_endpoint_is_not_labelled_down(
+    monkeypatch, tmp_path, capsys
+):
+    """A 404 answered. "DOWN" says start the service; nothing is stopped."""
+
+    def fake(*a, **k):
+        raise urllib.error.HTTPError("u", 404, "nf", None, None)
+
+    monkeypatch.setattr(cp, "_urlopen", fake)
+    roster = _roster(tmp_path, {"pmoves-cipher-local": {"url": "http://localhost:8105/mcp/sse"}})
+    assert cp.main(["--roster", str(roster)]) == 1
+    err = capsys.readouterr().err
+    assert "cipher ANSWERED" in err
+    assert "cipher DOWN" not in err
+
+
+def test_the_ok_line_shape_the_launcher_awks_is_intact(monkeypatch, tmp_path, capsys):
+    """`awk '/^cipher OK/ {print $3; exit}'` in claude-pmoves.sh reads $3 = name."""
+    monkeypatch.setattr(cp, "_urlopen", lambda *a, **k: _Resp(200))
+    roster = _roster(tmp_path, {"pmoves-cipher-local": {"url": "http://localhost:8105/mcp/sse"}})
+    cp.main(["--roster", str(roster)])
+    line = next(
+        ln for ln in capsys.readouterr().out.splitlines() if ln.startswith("cipher OK")
+    )
+    assert line.split()[2] == "pmoves-cipher-local"
+
+
+def test_the_launcher_does_not_blame_the_token_for_every_exit_1():
+    """exit 1 is also a 404 or a refused 302. "bind CIPHER_API_TOKEN" is wrong there."""
+    body = LAUNCHER.read_text(encoding="utf-8")
+    assert 'case "$CIPHER_OUT" in' in body, (
+        "claude-pmoves.sh still hardcodes one remedy for every exit 1"
+    )
+    assert "ANSWERED-UNUSABLE" in body, (
+        "claude-pmoves.sh has no branch for answered-but-not-401"
+    )
+
+
+# ---------------------------------------------------------------------------
+# The seam is not merely built correctly -- probe() actually goes through it
+# ---------------------------------------------------------------------------
+
+
+def test_probe_routes_through_the_non_redirecting_seam(monkeypatch):
+    """The companion to the build_opener test above, which only proved the seam
+    CONSTRUCTS the right opener. A `probe` that called `urlopen` directly would
+    pass that and still forward the bearer to a redirect target."""
+    seen = {}
+
+    def fake_build_opener(*handlers):
+        seen["handlers"] = handlers
+
+        class _O:
+            def open(self, req, timeout=None):
+                return _Resp(200)
+
+        return _O()
+
+    monkeypatch.setattr(cp.urllib.request, "build_opener", fake_build_opener)
+    row = cp.probe("http://localhost:8105/mcp/sse")
+    assert row["status"] == 200
+    assert cp._NoRedirect in seen.get("handlers", ()), (
+        "probe() did not go through _urlopen — the redirect refusal is bypassed"
+    )
+
+
+def test_the_directory_network_guard_is_armed():
+    """Enforcement of the enforcer.
+
+    The stubs in this file silently detached once already, when probe() moved to
+    an opener: the suite kept passing while hitting the real network, visible
+    only as runtime going 0.05s -> 6.35s. pmoves/tests/tools/conftest.py denies
+    outbound connects so that failure is loud next time. If this assertion ever
+    goes red, the guard is gone and every "offline" test here is unverified.
+    """
+    with pytest.raises(AssertionError):
+        socket.create_connection(("127.0.0.1", 9), timeout=0.1)
