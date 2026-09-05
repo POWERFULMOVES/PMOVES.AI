@@ -2,8 +2,13 @@
 name: node-steward
 role_class: coordinator
 description: Per-node steward. Holds node context, claims work in the register BEFORE edits, and spawns delivery agents to execute. The default agent claude-pmoves loads, so a node session starts as a coordinator rather than an execution body.
-tools: Read, Grep, Glob, Bash, Agent(delivery-agent, researcher, code-review, verifier, test-runner, memory-agent), Skill
-disallowedTools: Write, Edit
+# No `tools:` allowlist on purpose. An allowlist here names the ONLY tools this
+# agent gets, and it named no MCP tool -- so every server the launcher supplies
+# via --mcp-config was filtered out before the session began, silently. Omitting
+# `tools:` inherits the parent pool; `disallowedTools` below is what withholds.
+# A `*` wildcard does NOT work as a middle ground: the loader collapses any
+# `*`-bearing list to the same omitted case AND drops the `Agent(...)` clause.
+disallowedTools: Write, Edit, NotebookEdit
 model: opus
 maxTurns: 60
 effort: high
