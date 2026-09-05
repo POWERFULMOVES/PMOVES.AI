@@ -112,7 +112,18 @@ def audit_missing(bundle: Path) -> tuple[int, list[str], str]:
             # a fixable environment problem rather than an unexplained failure.
             lines = [ln.strip() for ln in blob.splitlines() if ln.strip()]
             why = lines[-1] if lines else "no output"
-            return -1, [], "could not run (%s)" % why[:140]
+            if "No module named" in why:
+                # NAME THE REMEDY, because this one has a specific and common
+                # cause. CODEX_PY prefers .venv-pmoves and falls back to a bare
+                # interpreter when it is absent (codex.mk:20-21). A git WORKTREE
+                # has no venv -- it is gitignored and per-checkout -- so every
+                # agent working in one hits the fallback, which routinely lacks
+                # PyYAML. Measured: identical `manifest-audit` succeeds in the
+                # main checkout and fails in a worktree. Without this line the
+                # message reads like a broken node rather than an unbootstrapped
+                # directory, which is what I concluded the first time.
+                why += "  -- run: make -C pmoves venv-bringup"
+            return -1, [], "could not run (%s)" % why[:200]
         return 0, [], ""
     names = [n.strip() for n in m.group(1).split(",") if n.strip()]
     return len(names), names, ""
