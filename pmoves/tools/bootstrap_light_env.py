@@ -57,6 +57,17 @@ def parse_args() -> argparse.Namespace:
         help="Create/check the venv but skip package installation.",
     )
     parser.add_argument(
+        "--check",
+        action="store_true",
+        help=(
+            "Precheck only: NO venv creation, NO installs. Verifies the venv "
+            "exists and the requirement files' imports resolve; exit 3 with a "
+            "remediation message when they do not. For funnel/preflight gates — "
+            "a secrets run must fail before it starts, not discover a missing "
+            "venv mid-flight and start downloading wheels."
+        ),
+    )
+    parser.add_argument(
         "--strict-tools",
         action="store_true",
         help="Fail when make/docker/uv are missing on host.",
@@ -221,12 +232,73 @@ def activation_hint(venv_path: Path) -> None:
         print(f"Activate (bash/zsh): source {venv_path}/bin/activate")
 
 
+def _precheck_only(venv_path: Path, req_files: list[Path]) -> int:
+    """Fail-cast gate for funnel/preflight entry points.
+
+    Never creates, never installs: a run that would otherwise bootstrap
+    mid-flight (and pull wheels on a full disk) stops HERE with the exact
+    remediation command instead.
+    """
+    import importlib
+
+    # import name mapping for the lite requirement files
+    _IMPORT = {
+        "pyyaml": "yaml",
+        "scikit-learn": "sklearn",
+        "sentence-transformers": "sentence_transformers",
+    }
+
+    venv_python = venv_path / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+    if not venv_python.exists():
+        print(
+            f"precheck FAIL: lite venv missing at {venv_path}\n"
+            "  remediation: make -C pmoves env-bootstrap-lite",
+            file=sys.stderr,
+        )
+        return 3
+
+    missing: list[str] = []
+    for req_file in req_files:
+        for line in req_file.read_text(encoding="utf-8").splitlines():
+            line = line.split("#")[0].strip()
+            if not line or line.startswith("-"):
+                continue
+            dist = line.split(";")[0].split("[")[0].split("=")[0].split(">")[0].split("<")[0].split("!")[0].split("~")[0]
+            dist = dist.strip().lower()
+            if not dist:
+                continue
+            module = _IMPORT.get(dist, dist.replace("-", "_"))
+            probe = subprocess.run(
+                [str(venv_python), "-c", f"import {module}"],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if probe.returncode != 0:
+                missing.append(f"{dist} (import {module})")
+
+    if missing:
+        print(
+            "precheck FAIL: lite venv present but requirements unsatisfied:\n  "
+            + "\n  ".join(missing)
+            + f"\n  remediation: make -C pmoves env-bootstrap-lite",
+            file=sys.stderr,
+        )
+        return 3
+
+    print(f"precheck OK: {venv_path} satisfies {', '.join(p.name for p in req_files)}")
+    return 0
+
+
 def main() -> int:
     args = parse_args()
     venv_path = resolve_under_pmoves(args.venv)
     req_files = [resolve_under_pmoves(item) for item in args.requirements]
     if args.with_embeddings:
         req_files.append(resolve_under_pmoves("tools/requirements-lite-embeddings.txt"))
+
+    if args.check:
+        return _precheck_only(venv_path, req_files)
 
     print(f"PMOVES root: {PMOVES_ROOT}")
     print(f"Repository root: {REPO_ROOT}")
