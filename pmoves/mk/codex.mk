@@ -287,12 +287,34 @@ secrets-rotate: ## Rotate ONE secret in env.shared then re-funnel. Usage: make s
 	@# The defect this fixes was never the overwrite; it was the SILENCE. A local
 	@# export drops prod-only keys, and the loss only surfaced hours later when a
 	@# service that needed one restarted and looked like an unrelated regression.
+	@# Warn on BOTH the transition and the standing state.
+	@#
+	@# This used to be `if [ -f provenance ]` only -- it announced the moment a
+	@# CI bundle became a local export, and said NOTHING on every rotate after
+	@# that. But the danger is not the transition, it is the STATE: once the
+	@# bundle is a local export, every funnel regenerates tier files without the
+	@# prod-only keys, and each subsequent rotate silently re-confirms that.
+	@#
+	@# Measured 2026-09-04 on the 4090: two rotates ran with the marker already
+	@# absent, both silent, and MINIMAX_TOKEN_PLAN_API_KEY went missing from
+	@# env.tier-llm again -- the exact regression this guard was added for, on a
+	@# path the guard did not cover. A gate that only reports the edge misses
+	@# everything that is already over it.
 	@if [ -f "$(CHIT_EXPORT_PATH).provenance" ]; then \
 	  echo "⚠ rotation replaced the CI-pulled CHIT bundle with a local export."; \
 	  echo "  Prod-only keys delivered by sync-secrets-local.yml are NOT in"; \
 	  echo "  env.shared and are now absent from the bundle. Re-pull before the"; \
 	  echo "  next funnel, or services needing them will fail on their next"; \
 	  echo "  restart:  PMOVES_NODE=<node> make -C pmoves secrets-pull"; \
+	else \
+	  echo "⚠ this CHIT bundle is a LOCAL export (no CI provenance marker)."; \
+	  echo "  It was already local before this rotation, so prod-only keys"; \
+	  echo "  delivered by sync-secrets-local.yml are absent from it and from"; \
+	  echo "  every tier file the funnel just regenerated."; \
+	  echo "  Restore before the next service restart:"; \
+	  echo "    PMOVES_NODE=<node> make -C pmoves secrets-pull"; \
+	  echo "  If the artifact has expired (1-day retention), produce one first:"; \
+	  echo "    gh workflow run sync-secrets-local.yml --ref main -f targets=b850"; \
 	fi
 	@CHIT_EXPORT_FORCE=1 $(MAKE) --no-print-directory chit-export
 	@$(MAKE) --no-print-directory secrets-funnel

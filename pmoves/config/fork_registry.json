@@ -12,148 +12,10 @@
   },
   "org": "POWERFULMOVES",
   "forks": {
-    "PMOVES-ClawZ": {
-      "upstream": "openclaw/openclaw",
-      "sync": true,
-      "reason": "re-forked 2026-08-05 from upstream/main; auto-sync on trigger; default upstream branch",
-      "branch": "PMOVES.AI-Edition-Hardened"
-    },
-    "PMOVES-Creator": {
-      "upstream": "Comfy-Org/ComfyUI",
-      "sync": true,
-      "reason": "auto-sync on cron; default upstream branch"
-    },
-    "PMOVES-supabase": {
-      "upstream": "supabase/supabase",
-      "branch": "PMOVES.AI-Edition-Hardened",
-      "sync": true,
-      "reason": "auto-sync on cron; consumable branch is PMOVES.AI-Edition-Hardened (default branch is upstream 'master' which is the wrong surface for PMOVES.AI-Edition consumers)"
-    },
-    "PMOVES-tensorzero": {
-      "upstream": "tensorzero/tensorzero",
-      "sync": true,
-      "reason": "auto-sync on cron; default upstream branch"
-    },
-    "PMOVES-Wealth": {
-      "upstream": "firefly-iii/firefly-iii",
-      "sync": true,
-      "reason": "auto-sync on cron; default upstream branch"
-    },
-    "PMOVES-a0-plugins": {
-      "upstream": "agent0ai/a0-plugins",
-      "sync": true,
-      "reason": "auto-sync on cron; default upstream branch"
-    },
-    "PMOVES-Archon": {
-      "upstream": "coleam00/Archon",
-      "sync": true,
-      "reason": "auto-sync on cron; default upstream branch"
-    },
-    "PMOVES-Open-Notebook": {
-      "upstream": "lfnovo/open-notebook",
-      "sync": true,
-      "reason": "auto-sync on cron; default upstream branch"
-    },
-    "PMOVES-hermes-agent": {
-      "upstream": "NousResearch/hermes-agent",
-      "sync": true,
-      "reason": "re-forked 2026-08-05 from upstream/main; hardened branch tracks NousResearch/hermes-agent; auto-sync enabled",
-      "branch": "PMOVES.AI-Edition-Hardened"
-    },
-    "PMOVES-headscale": {
-      "upstream": "juanfont/headscale",
-      "sync": true,
-      "reason": "auto-sync on cron; default upstream branch"
-    },
-    "PMOVES-E2B-Danger-Room": {
-      "upstream": "e2b-dev/E2B",
-      "sync": true,
-      "reason": "auto-sync on cron; default upstream branch"
-    },
-    "PMOVES-A2UI": {
-      "upstream": "google/A2UI",
-      "sync": true,
-      "reason": "auto-sync on cron; default upstream branch"
-    },
-    "Pmoves-Health-wger": {
-      "upstream": "wger-project/wger",
-      "sync": true,
-      "reason": "auto-sync on cron; default upstream branch"
-    },
-    "PMOVES-E2b-Spells": {
-      "upstream": "e2b-dev/e2b-cookbook",
-      "sync": true,
-      "reason": "auto-sync on cron; default upstream branch"
-    },
-    "PMOVES-E2B-Danger-Room-Desktop": {
-      "upstream": "e2b-dev/desktop",
-      "sync": true,
-      "reason": "auto-sync on cron; default upstream branch"
-    },
-    "PMOVES-FinceptTerminal": {
-      "upstream": "Fincept-Corporation/FinceptTerminal",
-      "sync": true,
-      "reason": "auto-sync on cron; default upstream branch"
-    },
-    "PMOVES-Agent-Zero": {
-      "upstream": "agent0ai/agent-zero",
-      "sync": true,
-      "reason": "auto-sync on cron; consumable branch is read from .gitmodules (PMOVES.AI-Edition-Hardened) — that branch is what gets the upstream merge, not the default branch"
-    },
-    "PMOVES-BotZ-gateway": {
-      "upstream": "microsoft/mcp-gateway",
-      "sync": true,
-      "reason": "auto-sync on cron; default upstream branch"
-    },
-    "Pmoves-hyperdimensions": {
-      "upstream": "MaxRobinsonTheGreat/hyperdimensions",
-      "sync": true,
-      "reason": "auto-sync on cron; default upstream branch"
-    },
-    "PMOVES-llama-throughput-lab": {
-      "upstream": "alexziskind1/llama-throughput-lab",
-      "sync": true,
-      "reason": "auto-sync on cron; default upstream branch"
-    },
-    "PMOVES-Pinokio-Ultimate-TTS-Studio": {
-      "upstream": "pinokiofactory/Ultimate-TTS-Studio",
-      "sync": true,
-      "reason": "auto-sync on cron; default upstream branch"
-    },
-    "pmoves-e2b-mcp-server": {
-      "upstream": "e2b-dev/mcp-server",
-      "sync": true,
-      "reason": "auto-sync on cron; default upstream branch"
-    },
-    "PMOVES-ClawRouter": {
-      "upstream": "BlockRunAI/ClawRouter",
-      "sync": true,
-      "reason": "auto-sync on cron; default upstream branch"
-    },
-    "PMOVES-AgentGym": {
-      "upstream": "WooooDyy/AgentGym",
-      "sync": true,
-      "reason": "auto-sync on cron; default upstream branch"
-    },
-    "PMOVES-autoresearch": {
-      "upstream": "karpathy/autoresearch",
-      "sync": false,
-      "reason": "PMOVES fork is a frozen snapshot for offline reference; upstream moves fast and most commits are not consumable for our use. Manual bump on demand."
-    },
     "LMRL-Gym": {
       "upstream": "eric-mitchell/lmrl-gym",
       "sync": false,
       "reason": "historical research repo; no active development on the PMOVES side. Pin and forget."
-    },
-    "PMOVES-MiniMax-MCP": {
-      "upstream": "MiniMax-AI/MiniMax-MCP",
-      "sync": false,
-      "reason": "API contract is unstable on upstream; PMOVES customizations are large and most upstream commits would conflict. Manual sync on demand."
-    },
-    "PMOVES-mike": {
-      "upstream": "mike-engel/mike",
-      "sync": false,
-      "reason": "small static-site generator; PMOVES fork is feature-complete and we do not need upstream changes. Pin and forget."
     },
     "PM-Spark-video-search-and-summarization": {
       "upstream": "NVIDIA-AI-Blueprints/video-search-and-summarization",
@@ -161,11 +23,41 @@
       "branch": "PMOVES.AI-Edition-Hardened",
       "reason": "untriaged - backfilled by the .gitmodules coverage cross-check. Promoting to sync: true also widens the App-token scope (Workflows:write on the fork), so it is a deliberate, reviewable act rather than a default"
     },
+    "PMOVES-a0-plugins": {
+      "upstream": "agent0ai/a0-plugins",
+      "sync": true,
+      "reason": "auto-sync on cron; default upstream branch",
+      "branch": "PMOVES.AI-Edition-Hardened"
+    },
+    "PMOVES-A2UI": {
+      "upstream": "google/A2UI",
+      "sync": true,
+      "reason": "auto-sync on cron; default upstream branch",
+      "branch": "PMOVES.AI-Edition-Hardened"
+    },
+    "PMOVES-activepieces": {
+      "upstream": "activepieces/activepieces",
+      "sync": true,
+      "reason": "Absorbed 2026-09-04 by the rule-4 cross-check. Measured at declaration: 13 behind upstream, 0 PMOVES commits on PMOVES.AI-Edition-Hardened, so a sync is a clean fast-forward with nothing to conflict. sync=true matches the standing posture that PMOVES tracks upstream and hardening is a transformation layer, not a divergence.",
+      "branch": "PMOVES.AI-Edition-Hardened"
+    },
     "PMOVES-agent-sandbox-skill": {
       "upstream": "disler/agent-sandbox-skill",
       "sync": false,
       "branch": "main",
       "reason": "untriaged - backfilled by the .gitmodules coverage cross-check. Promoting to sync: true also widens the App-token scope (Workflows:write on the fork), so it is a deliberate, reviewable act rather than a default"
+    },
+    "PMOVES-Agent-Zero": {
+      "upstream": "agent0ai/agent-zero",
+      "sync": true,
+      "reason": "auto-sync on cron; consumable branch is read from .gitmodules (PMOVES.AI-Edition-Hardened) — that branch is what gets the upstream merge, not the default branch",
+      "branch": "PMOVES.AI-Edition-Hardened"
+    },
+    "PMOVES-AgentGym": {
+      "upstream": "WooooDyy/AgentGym",
+      "sync": true,
+      "reason": "auto-sync on cron; default upstream branch",
+      "branch": "PMOVES.AI-Edition-Hardened"
     },
     "Pmoves-AgentGym-RL": {
       "upstream": "WooooDyy/AgentGym-RL",
@@ -173,17 +65,70 @@
       "branch": "PMOVES.AI-Edition-Hardened",
       "reason": "untriaged - backfilled by the .gitmodules coverage cross-check. Promoting to sync: true also widens the App-token scope (Workflows:write on the fork), so it is a deliberate, reviewable act rather than a default"
     },
+    "PMOVES-agents.md": {
+      "upstream": "agentsmd/agents.md",
+      "sync": false,
+      "branch": "PMOVES.AI-Edition-Hardened",
+      "reason": "untriaged - backfilled by the .gitmodules coverage cross-check. Promoting to sync: true also widens the App-token scope (Workflows:write on the fork), so it is a deliberate, reviewable act rather than a default"
+    },
+    "PMOVES-Archon": {
+      "upstream": "coleam00/Archon",
+      "sync": true,
+      "reason": "auto-sync on cron; default upstream branch",
+      "branch": "PMOVES.AI-Edition-Hardened"
+    },
+    "PMOVES-autoresearch": {
+      "upstream": "karpathy/autoresearch",
+      "sync": false,
+      "reason": "PMOVES fork is a frozen snapshot for offline reference; upstream moves fast and most commits are not consumable for our use. Manual bump on demand.",
+      "branch": "PMOVES.AI-Edition-Hardened"
+    },
     "PMOVES-awesome-agent-skills": {
       "upstream": "heilcheng/awesome-agent-skills",
       "sync": false,
       "branch": "main",
       "reason": "untriaged - backfilled by the .gitmodules coverage cross-check. Promoting to sync: true also widens the App-token scope (Workflows:write on the fork), so it is a deliberate, reviewable act rather than a default"
     },
+    "PMOVES-BotZ-gateway": {
+      "upstream": "microsoft/mcp-gateway",
+      "sync": true,
+      "reason": "auto-sync on cron; default upstream branch",
+      "branch": "PMOVES.AI-Edition-Hardened"
+    },
     "Pmoves-claude-d3js-skill": {
       "upstream": "chrisvoncsefalvay/claude-d3js-skill",
       "sync": false,
       "branch": "main",
       "reason": "untriaged - backfilled by the .gitmodules coverage cross-check. Promoting to sync: true also widens the App-token scope (Workflows:write on the fork), so it is a deliberate, reviewable act rather than a default"
+    },
+    "PMOVES-ClawRouter": {
+      "upstream": "BlockRunAI/ClawRouter",
+      "sync": true,
+      "reason": "auto-sync on cron; default upstream branch"
+    },
+    "PMOVES-ClawZ": {
+      "upstream": "openclaw/openclaw",
+      "sync": true,
+      "reason": "re-forked 2026-08-05 from upstream/main; auto-sync on trigger; default upstream branch",
+      "branch": "PMOVES.AI-Edition-Hardened"
+    },
+    "PMOVES-composio": {
+      "upstream": "ComposioHQ/composio",
+      "sync": true,
+      "reason": "Absorbed 2026-09-04 by the rule-4 cross-check. Measured at declaration: 19 behind upstream, 0 PMOVES commits on the hardened branch — clean fast-forward. Paired with pmoves-composio-mcp-plugin; sync them together so the SDK and its MCP plugin do not skew.",
+      "branch": "PMOVES.AI-Edition-Hardened"
+    },
+    "pmoves-composio-mcp-plugin": {
+      "upstream": "ComposioHQ/composio-mcp-plugin",
+      "sync": true,
+      "reason": "Absorbed 2026-09-04 by the rule-4 cross-check. Measured at declaration: 0 behind, 0 ahead — already level with upstream. Declared so it stays visible to rules 1-3 rather than drifting unwatched, which is exactly how PMOVES.YT reached 206 behind.",
+      "branch": "PMOVES.AI-Edition-Hardened"
+    },
+    "PMOVES-Creator": {
+      "upstream": "Comfy-Org/ComfyUI",
+      "sync": true,
+      "reason": "auto-sync on cron; default upstream branch",
+      "branch": "PMOVES.AI-Edition-Hardened"
     },
     "PMOVES-crush": {
       "upstream": "charmbracelet/crush",
@@ -209,17 +154,94 @@
       "branch": "PMOVES.AI-Edition-Hardened",
       "reason": "upstream is a developer preview that promises compatibility-breaking changes; the hardened branch carries PMOVES customization (CHIT integration and other PMOVES plugins) that auto-sync would fight. Contribution is expected to flow upstream rather than down. Revisit sync:true once upstream stabilises."
     },
+    "PMOVES-E2B-Danger-Room": {
+      "upstream": "e2b-dev/E2B",
+      "sync": true,
+      "reason": "auto-sync on cron; default upstream branch",
+      "branch": "PMOVES.AI-Edition-Hardened"
+    },
+    "PMOVES-E2B-Danger-Room-Desktop": {
+      "upstream": "e2b-dev/desktop",
+      "sync": true,
+      "reason": "auto-sync on cron; default upstream branch",
+      "branch": "PMOVES.AI-Edition-Hardened"
+    },
+    "pmoves-e2b-mcp-server": {
+      "upstream": "e2b-dev/mcp-server",
+      "sync": true,
+      "reason": "auto-sync on cron; default upstream branch",
+      "branch": "PMOVES.AI-Edition-Hardened"
+    },
+    "PMOVES-E2b-Spells": {
+      "upstream": "e2b-dev/e2b-cookbook",
+      "sync": true,
+      "reason": "auto-sync on cron; default upstream branch",
+      "branch": "PMOVES.AI-Edition-Hardened"
+    },
+    "PMOVES-FinceptTerminal": {
+      "upstream": "Fincept-Corporation/FinceptTerminal",
+      "sync": true,
+      "reason": "auto-sync on cron; default upstream branch"
+    },
+    "PMOVES-fluidd": {
+      "upstream": "TheSpaghettiDetective/fluidd",
+      "sync": false,
+      "branch": "develop",
+      "reason": "untriaged - backfilled by the .gitmodules coverage cross-check. Promoting to sync: true also widens the App-token scope (Workflows:write on the fork), so it is a deliberate, reviewable act rather than a default"
+    },
     "pmoves-fork-repository-skill": {
       "upstream": "disler/fork-repository-skill",
       "sync": false,
       "branch": "main",
       "reason": "untriaged - backfilled by the .gitmodules coverage cross-check. Promoting to sync: true also widens the App-token scope (Workflows:write on the fork), so it is a deliberate, reviewable act rather than a default"
     },
+    "PMOVES-gepeto": {
+      "upstream": "pinokiocomputer/gepeto",
+      "sync": false,
+      "branch": "PMOVES.AI-Edition-Hardened",
+      "reason": "new fork 2026-08-20 for the Pinokio gepeto script generator, to be wired as a Pinokio api/ app with SKILL.md. sync:false until first use is proven; promoting also widens App-token scope on the fork"
+    },
+    "PMOVES-headscale": {
+      "upstream": "juanfont/headscale",
+      "sync": true,
+      "reason": "auto-sync on cron; default upstream branch",
+      "branch": "PMOVES.AI-Edition-Hardened"
+    },
+    "PMOVES-Headscale": {
+      "upstream": "juanfont/headscale",
+      "sync": false,
+      "branch": "PMOVES.AI-Edition-Hardened",
+      "reason": "submodule tracks PMOVES.AI-Edition-Hardened; sync=false until triaged (no PMOVES hardening layer identified)"
+    },
+    "Pmoves-Health-wger": {
+      "upstream": "wger-project/wger",
+      "sync": true,
+      "reason": "auto-sync on cron; default upstream branch",
+      "branch": "PMOVES.AI-Edition-Hardened"
+    },
+    "PMOVES-hermes-agent": {
+      "upstream": "NousResearch/hermes-agent",
+      "sync": true,
+      "reason": "re-forked 2026-08-05 from upstream/main; hardened branch tracks NousResearch/hermes-agent; auto-sync enabled",
+      "branch": "PMOVES.AI-Edition-Hardened"
+    },
     "PMOVES-HiRAG": {
       "upstream": "hhy-huang/HiRAG",
       "sync": false,
       "branch": "PMOVES.AI-Edition-Hardened",
       "reason": "untriaged - backfilled by the .gitmodules coverage cross-check. Promoting to sync: true also widens the App-token scope (Workflows:write on the fork), so it is a deliberate, reviewable act rather than a default"
+    },
+    "pmoves-hirag-mcp": {
+      "upstream": "_first_party",
+      "sync": false,
+      "branch": "PMOVES.AI-Edition-Hardened",
+      "reason": "PMOVES first-party MCP bridge; no upstream to sync"
+    },
+    "Pmoves-hyperdimensions": {
+      "upstream": "MaxRobinsonTheGreat/hyperdimensions",
+      "sync": true,
+      "reason": "auto-sync on cron; default upstream branch",
+      "branch": "PMOVES.AI-Edition-Hardened"
     },
     "PMOVES-jcodemunch-mcp": {
       "upstream": "jgravelle/jcodemunch-mcp",
@@ -233,131 +255,46 @@
       "branch": "PMOVES.AI-Edition-Hardened",
       "reason": "untriaged - backfilled by the .gitmodules coverage cross-check. Promoting to sync: true also widens the App-token scope (Workflows:write on the fork), so it is a deliberate, reviewable act rather than a default"
     },
-    "PMOVES-MAI-UI": {
-      "upstream": "Tongyi-MAI/MAI-UI",
-      "sync": false,
-      "branch": "PMOVES.AI-Edition-Hardened",
-      "reason": "no common ancestor with upstream (compare returns HTTP 404) - hardened branch built from orphan/squashed history; needs a re-fork, not a retry"
-    },
-    "PMOVES-neo4j": {
-      "upstream": "neo4j/neo4j",
-      "sync": false,
-      "branch": "PMOVES.AI-Edition-Hardened",
-      "reason": "untriaged - backfilled by the .gitmodules coverage cross-check. Promoting to sync: true also widens the App-token scope (Workflows:write on the fork), so it is a deliberate, reviewable act rather than a default"
-    },
-    "PMOVES-ollama": {
-      "upstream": "ollama/ollama",
-      "sync": false,
-      "branch": "PMOVES.AI-Edition-Hardened",
-      "reason": "untriaged - backfilled by the .gitmodules coverage cross-check. Promoting to sync: true also widens the App-token scope (Workflows:write on the fork), so it is a deliberate, reviewable act rather than a default"
-    },
-    "PMOVES-OpenRoom": {
-      "upstream": "MiniMax-AI/OpenRoom",
-      "sync": false,
-      "branch": "PMOVES.AI-Edition-Hardened",
-      "reason": "untriaged - backfilled by the .gitmodules coverage cross-check. Promoting to sync: true also widens the App-token scope (Workflows:write on the fork), so it is a deliberate, reviewable act rather than a default"
-    },
-    "PMOVES-pinokio": {
-      "upstream": "pinokiocomputer/pinokio",
-      "sync": false,
-      "branch": "PMOVES.AI-Edition-Hardened",
-      "reason": "untriaged - backfilled by the .gitmodules coverage cross-check. Promoting to sync: true also widens the App-token scope (Workflows:write on the fork), so it is a deliberate, reviewable act rather than a default"
-    },
-    "pmoves-pipecat": {
-      "upstream": "pipecat-ai/pipecat",
-      "sync": false,
-      "branch": "main",
-      "reason": "untriaged - backfilled by the .gitmodules coverage cross-check. Promoting to sync: true also widens the App-token scope (Workflows:write on the fork), so it is a deliberate, reviewable act rather than a default"
-    },
-    "Pmoves-pretext": {
-      "upstream": "chenglou/pretext",
-      "sync": false,
-      "branch": "PMOVES.AI-Edition-Hardened",
-      "reason": "untriaged - backfilled by the .gitmodules coverage cross-check. Promoting to sync: true also widens the App-token scope (Workflows:write on the fork), so it is a deliberate, reviewable act rather than a default"
-    },
-    "PMOVES-Remote-View": {
-      "upstream": "rustdesk/rustdesk-server",
-      "sync": false,
-      "branch": "PMOVES.AI-Edition-Hardened",
-      "reason": "untriaged - backfilled by the .gitmodules coverage cross-check. Promoting to sync: true also widens the App-token scope (Workflows:write on the fork), so it is a deliberate, reviewable act rather than a default"
-    },
-    "PMOVES-skills": {
-      "upstream": "vercel-labs/skills",
-      "sync": false,
-      "branch": "PMOVES.AI-Edition-Hardened",
-      "reason": "the skills package/CLI. Tracks PMOVES.AI-Edition-Hardened, which carries the sources/ overlay; main stays byte-identical to upstream so fork-sync is always a fast-forward. Entry previously read upstream anthropics/skills under the name Pmoves-skills -- that was the Anthropic fork, since renamed to Pmoves-Claude-skills, and GitHub name case-insensitivity handed the vacated name to this repo"
-    },
-    "PMOVES-surf": {
-      "upstream": "e2b-dev/surf",
-      "sync": false,
-      "branch": "PMOVES.AI-Edition-Hardened",
-      "reason": "untriaged - backfilled by the .gitmodules coverage cross-check. Promoting to sync: true also widens the App-token scope (Workflows:write on the fork), so it is a deliberate, reviewable act rather than a default"
-    },
-    "PMOVES-Tailscale": {
-      "upstream": "tailscale/tailscale",
-      "sync": false,
-      "branch": "PMOVES.AI-Edition-Hardened",
-      "reason": "untriaged - backfilled by the .gitmodules coverage cross-check. Promoting to sync: true also widens the App-token scope (Workflows:write on the fork), so it is a deliberate, reviewable act rather than a default"
-    },
-    "PMOVES-Ultimate-TTS-Studio": {
-      "upstream": "SUP3RMASS1VE/Ultimate-TTS-Studio-SUP3R-Edition",
-      "sync": false,
-      "branch": "PMOVES.AI-Edition-Hardened",
-      "reason": "untriaged - backfilled by the .gitmodules coverage cross-check. Promoting to sync: true also widens the App-token scope (Workflows:write on the fork), so it is a deliberate, reviewable act rather than a default"
-    },
-    "PMOVES.YT": {
-      "upstream": "yt-dlp/yt-dlp",
-      "sync": false,
-      "branch": "PMOVES.AI-Edition-Hardened",
-      "reason": "untriaged - backfilled by the .gitmodules coverage cross-check. Promoting to sync: true also widens the App-token scope (Workflows:write on the fork), so it is a deliberate, reviewable act rather than a default"
-    },
-    "PMOVES-Headscale": {
-      "upstream": "juanfont/headscale",
-      "sync": false,
-      "branch": "PMOVES.AI-Edition-Hardened",
-      "reason": "submodule tracks PMOVES.AI-Edition-Hardened; sync=false until triaged (no PMOVES hardening layer identified)"
-    },
-    "PMOVES-Pipecat": {
-      "upstream": "pipecat-ai/pipecat",
-      "sync": false,
-      "branch": "PMOVES.AI-Edition-Hardened",
-      "reason": "submodule tracks PMOVES.AI-Edition-Hardened; sync=false until triaged (used as reference, no PMOVES overlay)"
-    },
-    "PMOVES-Spark-VSS": {
-      "upstream": "NVIDIA-AI-Blueprints/video-search-and-summarization",
-      "sync": false,
-      "branch": "PMOVES.AI-Edition-Hardened",
-      "reason": "submodule tracks PMOVES.AI-Edition-Hardened; sync=false (Spark-specific integration, manual updates)"
-    },
-    "pmoves-hirag-mcp": {
-      "upstream": "_first_party",
-      "sync": false,
-      "branch": "PMOVES.AI-Edition-Hardened",
-      "reason": "PMOVES first-party MCP bridge; no upstream to sync"
-    },
-    "PMOVES-agents.md": {
-      "upstream": "agentsmd/agents.md",
-      "sync": false,
-      "branch": "PMOVES.AI-Edition-Hardened",
-      "reason": "untriaged - backfilled by the .gitmodules coverage cross-check. Promoting to sync: true also widens the App-token scope (Workflows:write on the fork), so it is a deliberate, reviewable act rather than a default"
-    },
-    "PMOVES-fluidd": {
-      "upstream": "TheSpaghettiDetective/fluidd",
-      "sync": false,
-      "branch": "develop",
-      "reason": "untriaged - backfilled by the .gitmodules coverage cross-check. Promoting to sync: true also widens the App-token scope (Workflows:write on the fork), so it is a deliberate, reviewable act rather than a default"
-    },
     "pmoves-keygen": {
       "upstream": "charmbracelet/keygen",
       "sync": false,
       "branch": "PMOVES.AI-Edition-Hardened",
       "reason": "untriaged - backfilled by the .gitmodules coverage cross-check. Promoting to sync: true also widens the App-token scope (Workflows:write on the fork), so it is a deliberate, reviewable act rather than a default"
     },
+    "PMOVES-llama-throughput-lab": {
+      "upstream": "alexziskind1/llama-throughput-lab",
+      "sync": true,
+      "reason": "auto-sync on cron; default upstream branch",
+      "branch": "PMOVES.AI-Edition-Hardened"
+    },
+    "PMOVES-MAI-UI": {
+      "upstream": "Tongyi-MAI/MAI-UI",
+      "sync": false,
+      "branch": "PMOVES.AI-Edition-Hardened",
+      "reason": "no common ancestor with upstream (compare returns HTTP 404) - hardened branch built from orphan/squashed history; needs a re-fork, not a retry"
+    },
+    "PMOVES-mcp-gateway": {
+      "upstream": "docker/mcp-gateway",
+      "sync": false,
+      "branch": "PMOVES.AI-Edition-Hardened",
+      "reason": "Docker's official MCP Gateway + docker-mcp CLI plugin. Chosen over the Microsoft McpGateway fork (PMOVES-BotZ-gateway) for the compose fleet because its server entries support type: remote (url/transport_type/headers), so an MCP server that ALREADY RUNS can be federated. The Microsoft one requires ImageName+ImageVersion on every adapter and deploys them via a Kubernetes-only IAdapterDeploymentManager, so it cannot point at an existing endpoint at all. Microsoft's stays for Kubernetes; this is the Docker-substrate gateway. sync=false: PMOVES carries local catalog/config, so upstream merges are a deliberate act."
+    },
+    "PMOVES-mike": {
+      "upstream": "mike-engel/mike",
+      "sync": false,
+      "reason": "small static-site generator; PMOVES fork is feature-complete and we do not need upstream changes. Pin and forget."
+    },
     "Pmoves-minimax-cli": {
       "upstream": "MiniMax-AI/cli",
       "sync": false,
       "branch": "PMOVES.AI-Edition-Hardened",
       "reason": "untriaged - backfilled by the .gitmodules coverage cross-check. Promoting to sync: true also widens the App-token scope (Workflows:write on the fork), so it is a deliberate, reviewable act rather than a default"
+    },
+    "PMOVES-MiniMax-MCP": {
+      "upstream": "MiniMax-AI/MiniMax-MCP",
+      "sync": false,
+      "reason": "API contract is unstable on upstream; PMOVES customizations are large and most upstream commits would conflict. Manual sync on demand.",
+      "branch": "PMOVES.AI-Edition-Hardened"
     },
     "Pmoves-MiniMax-Provider-Verifier": {
       "upstream": "MiniMax-AI/MiniMax-Provider-Verifier",
@@ -371,14 +308,20 @@
       "branch": "master",
       "reason": "untriaged - backfilled by the .gitmodules coverage cross-check. Promoting to sync: true also widens the App-token scope (Workflows:write on the fork), so it is a deliberate, reviewable act rather than a default"
     },
-    "PMOVES-mcp-gateway": {
-      "upstream": "docker/mcp-gateway",
-      "sync": false,
-      "branch": "PMOVES.AI-Edition-Hardened",
-      "reason": "Docker's official MCP Gateway + docker-mcp CLI plugin. Chosen over the Microsoft McpGateway fork (PMOVES-BotZ-gateway) for the compose fleet because its server entries support type: remote (url/transport_type/headers), so an MCP server that ALREADY RUNS can be federated. The Microsoft one requires ImageName+ImageVersion on every adapter and deploys them via a Kubernetes-only IAdapterDeploymentManager, so it cannot point at an existing endpoint at all. Microsoft's stays for Kubernetes; this is the Docker-substrate gateway. sync=false: PMOVES carries local catalog/config, so upstream merges are a deliberate act."
+    "PMOVES-N8N-Auto": {
+      "upstream": "n8n-io/n8n",
+      "sync": true,
+      "reason": "Absorbed 2026-09-04 by the rule-4 cross-check. Measured at declaration: 74 behind upstream, 0 PMOVES commits on the hardened branch — the largest gap of the four and a clean fast-forward. n8n ships frequently; this one earns the weekly backstop.",
+      "branch": "PMOVES.AI-Edition-Hardened"
     },
     "PMOVES-nats-server": {
       "upstream": "nats-io/nats-server",
+      "sync": false,
+      "branch": "PMOVES.AI-Edition-Hardened",
+      "reason": "untriaged - backfilled by the .gitmodules coverage cross-check. Promoting to sync: true also widens the App-token scope (Workflows:write on the fork), so it is a deliberate, reviewable act rather than a default"
+    },
+    "PMOVES-neo4j": {
+      "upstream": "neo4j/neo4j",
       "sync": false,
       "branch": "PMOVES.AI-Edition-Hardened",
       "reason": "untriaged - backfilled by the .gitmodules coverage cross-check. Promoting to sync: true also widens the App-token scope (Workflows:write on the fork), so it is a deliberate, reviewable act rather than a default"
@@ -395,10 +338,64 @@
       "branch": "master",
       "reason": "untriaged - backfilled by the .gitmodules coverage cross-check. Promoting to sync: true also widens the App-token scope (Workflows:write on the fork), so it is a deliberate, reviewable act rather than a default"
     },
+    "PMOVES-ollama": {
+      "upstream": "ollama/ollama",
+      "sync": false,
+      "branch": "PMOVES.AI-Edition-Hardened",
+      "reason": "untriaged - backfilled by the .gitmodules coverage cross-check. Promoting to sync: true also widens the App-token scope (Workflows:write on the fork), so it is a deliberate, reviewable act rather than a default"
+    },
+    "PMOVES-Open-Notebook": {
+      "upstream": "lfnovo/open-notebook",
+      "sync": true,
+      "reason": "auto-sync on cron; default upstream branch",
+      "branch": "PMOVES.AI-Edition-Hardened"
+    },
+    "PMOVES-OpenRoom": {
+      "upstream": "MiniMax-AI/OpenRoom",
+      "sync": false,
+      "branch": "PMOVES.AI-Edition-Hardened",
+      "reason": "untriaged - backfilled by the .gitmodules coverage cross-check. Promoting to sync: true also widens the App-token scope (Workflows:write on the fork), so it is a deliberate, reviewable act rather than a default"
+    },
     "PMOVES-OrcaSlicer": {
       "upstream": "OrcaSlicer/OrcaSlicer",
       "sync": false,
       "branch": "main",
+      "reason": "untriaged - backfilled by the .gitmodules coverage cross-check. Promoting to sync: true also widens the App-token scope (Workflows:write on the fork), so it is a deliberate, reviewable act rather than a default"
+    },
+    "PMOVES-pinokio": {
+      "upstream": "pinokiocomputer/pinokio",
+      "sync": false,
+      "branch": "PMOVES.AI-Edition-Hardened",
+      "reason": "untriaged - backfilled by the .gitmodules coverage cross-check. Promoting to sync: true also widens the App-token scope (Workflows:write on the fork), so it is a deliberate, reviewable act rather than a default"
+    },
+    "PMOVES-Pinokio-Ultimate-TTS-Studio": {
+      "upstream": "pinokiofactory/Ultimate-TTS-Studio",
+      "sync": true,
+      "reason": "auto-sync on cron; default upstream branch",
+      "branch": "PMOVES.AI-Edition-Hardened"
+    },
+    "PMOVES-pinokiod": {
+      "upstream": "pinokiocomputer/pinokiod",
+      "sync": false,
+      "branch": "PMOVES.AI-Edition-Hardened",
+      "reason": "new fork 2026-08-20. The hardened branch carries our bound-isHttp patch (upstream PR pinokiocomputer/pinokiod#11, unmerged) that stops an unbounded accumulator from filling the disk. Auto-sync MUST stay false while that delta is un-upstreamed, or a sync could silently revert the fix"
+    },
+    "pmoves-pipecat": {
+      "upstream": "pipecat-ai/pipecat",
+      "sync": false,
+      "branch": "main",
+      "reason": "untriaged - backfilled by the .gitmodules coverage cross-check. Promoting to sync: true also widens the App-token scope (Workflows:write on the fork), so it is a deliberate, reviewable act rather than a default"
+    },
+    "PMOVES-Pipecat": {
+      "upstream": "pipecat-ai/pipecat",
+      "sync": false,
+      "branch": "PMOVES.AI-Edition-Hardened",
+      "reason": "submodule tracks PMOVES.AI-Edition-Hardened; sync=false until triaged (used as reference, no PMOVES overlay)"
+    },
+    "Pmoves-pretext": {
+      "upstream": "chenglou/pretext",
+      "sync": false,
+      "branch": "PMOVES.AI-Edition-Hardened",
       "reason": "untriaged - backfilled by the .gitmodules coverage cross-check. Promoting to sync: true also widens the App-token scope (Workflows:write on the fork), so it is a deliberate, reviewable act rather than a default"
     },
     "PMOVES-pterm": {
@@ -407,17 +404,65 @@
       "branch": "PMOVES.AI-Edition-Hardened",
       "reason": "new fork 2026-08-20 for the Pinokio pterm CLI, to be wired as a Pinokio api/ app with SKILL.md. sync:false until first use is proven; promoting also widens App-token scope on the fork, so it stays a deliberate act"
     },
-    "PMOVES-gepeto": {
-      "upstream": "pinokiocomputer/gepeto",
+    "PMOVES-Remote-View": {
+      "upstream": "rustdesk/rustdesk-server",
       "sync": false,
       "branch": "PMOVES.AI-Edition-Hardened",
-      "reason": "new fork 2026-08-20 for the Pinokio gepeto script generator, to be wired as a Pinokio api/ app with SKILL.md. sync:false until first use is proven; promoting also widens App-token scope on the fork"
+      "reason": "untriaged - backfilled by the .gitmodules coverage cross-check. Promoting to sync: true also widens the App-token scope (Workflows:write on the fork), so it is a deliberate, reviewable act rather than a default"
     },
-    "PMOVES-pinokiod": {
-      "upstream": "pinokiocomputer/pinokiod",
+    "PMOVES-skills": {
+      "upstream": "vercel-labs/skills",
       "sync": false,
       "branch": "PMOVES.AI-Edition-Hardened",
-      "reason": "new fork 2026-08-20. The hardened branch carries our bound-isHttp patch (upstream PR pinokiocomputer/pinokiod#11, unmerged) that stops an unbounded accumulator from filling the disk. Auto-sync MUST stay false while that delta is un-upstreamed, or a sync could silently revert the fix"
+      "reason": "the skills package/CLI. Tracks PMOVES.AI-Edition-Hardened, which carries the sources/ overlay; main stays byte-identical to upstream so fork-sync is always a fast-forward. Entry previously read upstream anthropics/skills under the name Pmoves-skills -- that was the Anthropic fork, since renamed to Pmoves-Claude-skills, and GitHub name case-insensitivity handed the vacated name to this repo"
+    },
+    "PMOVES-Spark-VSS": {
+      "upstream": "NVIDIA-AI-Blueprints/video-search-and-summarization",
+      "sync": false,
+      "branch": "PMOVES.AI-Edition-Hardened",
+      "reason": "submodule tracks PMOVES.AI-Edition-Hardened; sync=false (Spark-specific integration, manual updates)"
+    },
+    "PMOVES-supabase": {
+      "upstream": "supabase/supabase",
+      "branch": "PMOVES.AI-Edition-Hardened",
+      "sync": true,
+      "reason": "auto-sync on cron; consumable branch is PMOVES.AI-Edition-Hardened (default branch is upstream 'master' which is the wrong surface for PMOVES.AI-Edition consumers)"
+    },
+    "PMOVES-surf": {
+      "upstream": "e2b-dev/surf",
+      "sync": false,
+      "branch": "PMOVES.AI-Edition-Hardened",
+      "reason": "untriaged - backfilled by the .gitmodules coverage cross-check. Promoting to sync: true also widens the App-token scope (Workflows:write on the fork), so it is a deliberate, reviewable act rather than a default"
+    },
+    "PMOVES-Tailscale": {
+      "upstream": "tailscale/tailscale",
+      "sync": false,
+      "branch": "PMOVES.AI-Edition-Hardened",
+      "reason": "untriaged - backfilled by the .gitmodules coverage cross-check. Promoting to sync: true also widens the App-token scope (Workflows:write on the fork), so it is a deliberate, reviewable act rather than a default"
+    },
+    "PMOVES-tensorzero": {
+      "upstream": "tensorzero/tensorzero",
+      "sync": true,
+      "reason": "auto-sync on cron; default upstream branch",
+      "branch": "PMOVES.AI-Edition-Hardened"
+    },
+    "PMOVES-Ultimate-TTS-Studio": {
+      "upstream": "SUP3RMASS1VE/Ultimate-TTS-Studio-SUP3R-Edition",
+      "sync": false,
+      "branch": "PMOVES.AI-Edition-Hardened",
+      "reason": "untriaged - backfilled by the .gitmodules coverage cross-check. Promoting to sync: true also widens the App-token scope (Workflows:write on the fork), so it is a deliberate, reviewable act rather than a default"
+    },
+    "PMOVES-Wealth": {
+      "upstream": "firefly-iii/firefly-iii",
+      "sync": true,
+      "reason": "auto-sync on cron; default upstream branch",
+      "branch": "PMOVES.AI-Edition-Hardened"
+    },
+    "PMOVES.YT": {
+      "upstream": "yt-dlp/yt-dlp",
+      "sync": false,
+      "branch": "PMOVES.AI-Edition-Hardened",
+      "reason": "untriaged - backfilled by the .gitmodules coverage cross-check. Promoting to sync: true also widens the App-token scope (Workflows:write on the fork), so it is a deliberate, reviewable act rather than a default"
     }
   },
   "_excluded": {
