@@ -157,6 +157,18 @@
       "current_stage": "rehearsal",
       "stage_source": "manifest stage field (new room, no P7 session yet)",
       "stage_verified_at": "2026-07-31T00:00:00Z"
+    },
+    {
+      "room_id": "b850-ledger.room.evidence",
+      "agent_id": "b850-claude",
+      "alter": "b850-ledger",
+      "display_name": "B850 Ledger Evidence Room",
+      "stage": "rehearsal",
+      "manifest": "b850-ledger.room.evidence.json",
+      "summary": "Evidence room for the B850 Knuckles data-tier node: claim register, CHIT-signed trails, peer-claim verification, and data-tier measurement discipline. Stage: rehearsal - activation is the operator's to grant.",
+      "current_stage": "rehearsal",
+      "stage_source": "manifest stage field (new room, no P7 session yet)",
+      "stage_verified_at": "2026-09-05T00:00:00Z"
     }
   ]
 }

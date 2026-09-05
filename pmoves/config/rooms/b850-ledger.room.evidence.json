@@ -1,0 +1,435 @@
+{
+  "room_id": "b850-ledger.room.evidence",
+  "version": "1.0.0",
+  "stage": "rehearsal",
+  "display_name": "B850 Ledger Evidence Room",
+  "description": "Evidence room for the B850 Knuckles data-tier node: the claim register, CHIT-signed trails, verification of other bodies' claims, and measurement discipline over the data tier (postgres, qdrant, neo4j, meilisearch, minio). Durable evidence lives in the notebook, which is authoritative here — the room is a reading surface, not the record. No MCP-backed memory server is bound: pmoves_cipher_mcp is status:planned in agent_registry.yaml and, measured from this node on 2026-09-05, cipher-api /health answers 200 while the MCP path /mcp/sse answers 401, so it is not declared as a dependency of this room.",
+  "agent_id": "b850-claude",
+  "alter": "b850-ledger",
+  "room_type": "operator",
+  "owner_mode": "alter",
+  "access": {
+    "visibility": "unlisted"
+  },
+  "meta": {
+    "chit": {
+      "card_id": "00000000-0000-4000-8000-000000000036"
+    }
+  },
+  "shell": {
+    "theme": {
+      "theme_id": "ledger-evidence",
+      "accent_color": "#DC2626",
+      "skin": "ledger-grid",
+      "icon": "benzene"
+    },
+    "layout": {
+      "default_route": "/dashboard/graphiti",
+      "panels": [
+        {
+          "panel_id": "evidence-chat",
+          "kind": "chat",
+          "position": "left",
+          "size": 22,
+          "pinned": true
+        },
+        {
+          "panel_id": "trail-ledger",
+          "kind": "graph",
+          "position": "center",
+          "size": 46,
+          "pinned": true
+        },
+        {
+          "panel_id": "claim-lanes",
+          "kind": "tasks",
+          "position": "right",
+          "size": 18,
+          "pinned": true
+        },
+        {
+          "panel_id": "data-tier-health",
+          "kind": "controls",
+          "position": "bottom",
+          "size": 14,
+          "pinned": false
+        }
+      ]
+    }
+  },
+  "apps": [
+    {
+      "app_id": "graphiti-trails",
+      "kind": "graph",
+      "route": "/dashboard/graphiti",
+      "provider": "pmoves-ui",
+      "action_namespace": "graphiti",
+      "capabilities": ["trail", "audit", "signed-envelope", "signing-card", "handoff"],
+      "pinned": true,
+      "status": "active"
+    },
+    {
+      "app_id": "chit-ledger",
+      "kind": "dashboard",
+      "route": "/dashboard/chit",
+      "provider": "pmoves-ui",
+      "action_namespace": "chit",
+      "capabilities": ["chit-encode", "chit-decode", "trail-verify", "signing-cards"],
+      "pinned": true,
+      "status": "active"
+    },
+    {
+      "app_id": "review-audit",
+      "kind": "dashboard",
+      "route": "/dashboard/review",
+      "provider": "pmoves-ui",
+      "action_namespace": "review",
+      "capabilities": ["pr-audit-summary", "thread-count", "risk-level", "claim-verification"],
+      "pinned": true,
+      "status": "active"
+    },
+    {
+      "app_id": "notebook-workbench",
+      "kind": "notebook",
+      "route": "/notebook-workbench",
+      "provider": "pmoves-notebook-workbench",
+      "action_namespace": "notebook",
+      "capabilities": ["threads", "entries", "pages", "snapshots"],
+      "pinned": true,
+      "status": "active"
+    },
+    {
+      "app_id": "data-tier-services",
+      "kind": "dashboard",
+      "route": "/dashboard/services",
+      "provider": "pmoves-ui",
+      "action_namespace": "ops",
+      "capabilities": ["service-health", "data-tier-status", "collection-integrity", "compose-topology"],
+      "pinned": false,
+      "status": "active"
+    },
+    {
+      "app_id": "claim-register",
+      "kind": "custom",
+      "route": "/dashboard/claims",
+      "provider": "pmoves-ui",
+      "action_namespace": "claims",
+      "capabilities": ["open-claims", "lane-ownership", "release-history", "collision-check"],
+      "pinned": true,
+      "status": "planned"
+    }
+  ],
+  "notebook": {
+    "provider": "open-notebook",
+    "workspace_ref": "b850-evidence",
+    "thread_ref": "claim-register-trail",
+    "default_page": "open-claims",
+    "sync": {
+      "mode": "authoritative",
+      "writeback_targets": ["entries", "pages", "threads", "snapshots"],
+      "artifact_prefix": "rooms/b850-ledger"
+    }
+  },
+  "storage": {
+    "provider": "juicefs",
+    "volume": "pmoves-media",
+    "mounts": [
+      {
+        "mount_id": "evidence-inbox",
+        "role": "inbox",
+        "path": "rooms/b850-ledger/inbox",
+        "access": "read-write",
+        "watch": false,
+        "visibility": "room"
+      },
+      {
+        "mount_id": "audit-outbox",
+        "role": "outbox",
+        "path": "rooms/b850-ledger/outbox",
+        "access": "read-write",
+        "watch": false,
+        "visibility": "room"
+      }
+    ]
+  },
+  "persona": {
+    "signature_ref": "b850-claude",
+    "voice": "analytical",
+    "glyph": "⌬",
+    "resonance": [
+      "rocm-dual-gpu",
+      "data-tier",
+      "dynamic-model-plane",
+      "cloud-hybrid-workers",
+      "evidence-discipline",
+      "claim-verification"
+    ]
+  },
+  "skill_bindings": [
+    {
+      "binding_id": "chit-sign-trail",
+      "skill_id": "pmoves-chit-sign",
+      "room_id": "b850-ledger.room.evidence",
+      "display_name": "Sign Trail / Record Claim",
+      "intent": ["chit", "trail", "claim", "release", "provenance"],
+      "activation": {
+        "invocation_mode": "explicit",
+        "trigger_phrases": ["sign the trail", "record this claim", "release the lane"],
+        "requires_selection": false
+      },
+      "surface": {
+        "app_id": "graphiti-trails",
+        "target": "toolbar",
+        "route": "/dashboard/graphiti"
+      },
+      "execution": {
+        "mode": "workflow",
+        "run_as": "agent",
+        "stream": "status",
+        "max_steps": 5
+      },
+      "context": {
+        "sources": ["graphiti-trail", "persona", "room-state", "agent-registry"],
+        "include_last_turns": 5,
+        "notebook_writeback": true,
+        "artifact_types": ["text", "json"]
+      },
+      "outputs": [
+        {
+          "target": "nats-event",
+          "delivery": "emit",
+          "subject": "agent.graphiti.signed.v1",
+          "artifact_type": "json"
+        },
+        {
+          "target": "notebook-entry",
+          "delivery": "append",
+          "path": "threads/claim-register-trail",
+          "artifact_type": "text"
+        }
+      ],
+      "guardrails": {
+        "require_approval": true,
+        "max_runtime_sec": 240,
+        "fail_open": false,
+        "one_active_run": true
+      },
+      "enabled": true,
+      "tags": ["chit", "graphiti", "claim-register", "evidence"]
+    },
+    {
+      "binding_id": "claim-verify",
+      "skill_id": "pmoves-pair-review",
+      "room_id": "b850-ledger.room.evidence",
+      "display_name": "Verify a Peer Claim",
+      "intent": ["review", "verify", "audit", "handoff"],
+      "activation": {
+        "invocation_mode": "suggested",
+        "trigger_phrases": ["verify this claim", "review the peer PR", "check the evidence"],
+        "requires_selection": true
+      },
+      "surface": {
+        "app_id": "review-audit",
+        "target": "canvas",
+        "route": "/dashboard/review"
+      },
+      "execution": {
+        "mode": "workflow",
+        "run_as": "agent",
+        "stream": "status",
+        "max_steps": 8
+      },
+      "context": {
+        "sources": ["notebook-thread", "graphiti-trail", "persona", "room-state", "user-intent"],
+        "include_last_turns": 8,
+        "notebook_writeback": true,
+        "artifact_types": ["text", "json"]
+      },
+      "outputs": [
+        {
+          "target": "notebook-page",
+          "delivery": "append",
+          "path": "pages/claim-verification",
+          "artifact_type": "text"
+        },
+        {
+          "target": "nats-event",
+          "delivery": "emit",
+          "subject": "ops.pr.review.completed.v1",
+          "artifact_type": "json"
+        }
+      ],
+      "guardrails": {
+        "require_approval": false,
+        "max_runtime_sec": 900,
+        "fail_open": false,
+        "one_active_run": true
+      },
+      "enabled": true,
+      "tags": ["review", "verification", "pair-review", "evidence"]
+    },
+    {
+      "binding_id": "data-tier-preflight",
+      "skill_id": "pmoves-mesh-preflight",
+      "room_id": "b850-ledger.room.evidence",
+      "display_name": "Data-Tier Preflight",
+      "intent": ["health", "preflight", "measurement", "data-tier"],
+      "activation": {
+        "invocation_mode": "workflow",
+        "trigger_phrases": ["run preflight", "check the data tier", "measure service health"],
+        "requires_selection": false
+      },
+      "surface": {
+        "app_id": "data-tier-services",
+        "target": "toolbar",
+        "route": "/dashboard/services"
+      },
+      "execution": {
+        "mode": "background",
+        "run_as": "worker",
+        "stream": "events",
+        "max_steps": 6
+      },
+      "context": {
+        "sources": ["room-state", "open-apps", "agent-registry"],
+        "include_last_turns": 2,
+        "notebook_writeback": true,
+        "artifact_types": ["text", "json"]
+      },
+      "outputs": [
+        {
+          "target": "room-state",
+          "delivery": "replace",
+          "path": "evidence/data-tier-preflight",
+          "artifact_type": "json"
+        },
+        {
+          "target": "notebook-page",
+          "delivery": "append",
+          "path": "pages/preflight-log",
+          "artifact_type": "text"
+        }
+      ],
+      "guardrails": {
+        "require_approval": false,
+        "max_runtime_sec": 300,
+        "fail_open": false,
+        "one_active_run": true
+      },
+      "enabled": true,
+      "tags": ["health", "preflight", "data-tier", "measurement"]
+    },
+    {
+      "binding_id": "subject-audit",
+      "skill_id": "pmoves-nats-subject-audit",
+      "room_id": "b850-ledger.room.evidence",
+      "display_name": "NATS Subject Audit",
+      "intent": ["nats", "audit", "declared-vs-live", "orphans"],
+      "activation": {
+        "invocation_mode": "explicit",
+        "trigger_phrases": ["audit nats subjects", "find orphan subjects", "diff declared subjects"],
+        "requires_selection": false
+      },
+      "surface": {
+        "app_id": "chit-ledger",
+        "target": "sidebar",
+        "route": "/dashboard/chit"
+      },
+      "execution": {
+        "mode": "workflow",
+        "run_as": "worker",
+        "stream": "events",
+        "max_steps": 6
+      },
+      "context": {
+        "sources": ["room-state", "agent-registry", "open-apps"],
+        "include_last_turns": 2,
+        "notebook_writeback": true,
+        "artifact_types": ["text", "json"]
+      },
+      "outputs": [
+        {
+          "target": "notebook-page",
+          "delivery": "append",
+          "path": "pages/nats-subject-audit",
+          "artifact_type": "text"
+        },
+        {
+          "target": "chat-response",
+          "delivery": "notify",
+          "artifact_type": "text"
+        }
+      ],
+      "guardrails": {
+        "require_approval": false,
+        "max_runtime_sec": 420,
+        "fail_open": false,
+        "one_active_run": true
+      },
+      "enabled": true,
+      "tags": ["nats", "audit", "evidence", "measurement"]
+    }
+  ],
+  "hardware_requirements": {
+    "gpu": false,
+    "min_vram_mb": 0,
+    "cpu_arch": ["x86_64"]
+  },
+  "team_refs": ["data", "infra", "observability", "orchestration"],
+  "service_refs": [
+    "supabase-db",
+    "supabase-postgrest",
+    "qdrant",
+    "neo4j",
+    "meilisearch",
+    "minio",
+    "presign",
+    "nats",
+    "prometheus",
+    "grafana",
+    "model-registry",
+    "p7"
+  ],
+  "launcher_refs": [
+    "up-data-tier",
+    "up-supabase",
+    "up-monitoring",
+    "sign-trail",
+    "register-claim",
+    "register-release"
+  ],
+  "policies": {
+    "model_routing": "tensorzero",
+    "publish": {
+      "allow_nats_emit": true,
+      "allow_external_publish": false,
+      "allowed_subjects": [
+        "agent.graphiti.signed.v1",
+        "ops.pr.review.completed.v1",
+        "room.session.updated.v1"
+      ]
+    },
+    "memory": {
+      "graphiti": true,
+      "notebook_writeback": true,
+      "chit_handoff": true
+    }
+  },
+  "telemetry": {
+    "graphiti_phase": "Ledger Evidence",
+    "room_events_subject": "room.session.updated.v1",
+    "healthcheck_route": "/api/audit/summary"
+  },
+  "provenance": {
+    "source": "pmoves/config/rooms/catalog.json",
+    "updated_at": "2026-09-05T00:00:00Z",
+    "related_docs": [
+      "pmoves/docs/ROOM_MANIFEST_CONTRACT.md",
+      "pmoves/docs/ROOMS_ON_A_STAGE.md",
+      "pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md",
+      "pmoves/docs/AGENTS/AGNOTE4482_SIGNOFF_CHECKLIST.md",
+      "pmoves/config/agent_signatures.yaml",
+      "pmoves/config/signing_identity_cards.yaml"
+    ]
+  }
+}
