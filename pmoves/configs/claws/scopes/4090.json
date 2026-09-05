@@ -3,7 +3,7 @@
     "node": "4090",
     "role": "gpu-inference",
     "description": "Active GPU contributor \u2014 UI/CLI specialist, mobile inference, Crush companion",
-    "hostname": "pmoves-laptop"
+    "hostname": "pmoves-4090"
   },
   "openclaw_overrides": {
     "agents.defaults.model.primary": "claude-sonnet-4",

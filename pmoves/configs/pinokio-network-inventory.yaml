@@ -218,10 +218,10 @@ nodes:
         description: "Docker Desktop internal listeners"
 
   # ─────────────────────────────────────────────────────────────────────────────
-  # Node: 4090 (pmoves-laptop) — Mobile Relay
+  # Node: 4090 (pmoves-4090) — Mobile Relay
   # ─────────────────────────────────────────────────────────────────────────────
-  - hostname: pmoves-laptop
-    tailscale_host: pmoves-laptop
+  - hostname: pmoves-4090
+    tailscale_host: pmoves-4090
     role: mobile-relay
     pinokio_lww: false
     note: "Consumer node — accesses 5090/Z890 via Pinokio LWW network view"
