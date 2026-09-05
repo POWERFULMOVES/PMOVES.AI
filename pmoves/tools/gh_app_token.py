@@ -157,7 +157,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--print", dest="print_token", action="store_true", help="ALSO print the raw token to stdout (controlled piping only)")
     args = parser.parse_args(argv)
 
-    app_id = os.environ.get("GH_APP_ID", "").strip() or _env("GH_APP_CLIENT_ID")
+    # JWT iss: the docs recommend the App's CLIENT ID (v3); the numeric v1
+    # GH_APP_ID still works and stays as fallback for nodes that only funneled it.
+    app_id = os.environ.get("GH_APP_CLIENT_ID", "").strip() or _env("GH_APP_ID")
     installation_id = _env("GH_APP_INSTALLATION_ID")
     private_key = _load_private_key()
 
