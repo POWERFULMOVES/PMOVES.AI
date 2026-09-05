@@ -65,6 +65,7 @@ import sys
 import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from typing import Annotated, Literal
 
 try:  # POSIX. Absent on this fleet's Windows nodes, which get the fallback below.
     import fcntl
@@ -274,7 +275,10 @@ def _first_refusal(exc: Exception) -> str:
 # override as a real field rather than a positional flag, and one place where
 # the invariant is declared.
 try:
-    from pydantic import BaseModel, ConfigDict, model_validator  # type: ignore[import-untyped]
+    from pydantic import (  # type: ignore[import-untyped]
+        BaseModel, ConfigDict, StringConstraints, field_validator,
+        model_validator,
+    )
 
     class RegisterProse(BaseModel):
         """Scope/docs prose carrying no absorbed-expansion symptom.
@@ -299,8 +303,79 @@ try:
                 raise ValueError(_expansion_refusal(symptoms))
             return self
 
+    class RegisterRow(BaseModel):
+        """One ledger row, as typed fields rather than as a format string.
+
+        `expansion_symptoms()` detects damage AFTER a value has been built.
+        This makes a class of damage UNREPRESENTABLE instead:
+
+        * `kind` is a `Literal`, so a row cannot be filed under a verb the
+          readers do not parse. `build_row` accepted any string, and
+          `register_status`/`identity_lineage` only match CLAIM/RELEASE/UPDATE
+          -- so a typo produced a line that appended cleanly and was invisible
+          to every reader of the ledger.
+        * no field may contain a newline or a control character. The two rows
+          that provoked this whole lane absorbed a shell/Make expansion; a
+          multi-line compose invocation with its env-file chain cannot be a
+          `branch` or an `owner` here, because the type refuses it before the
+          row is rendered.
+        * `ttl` must parse. It was rendered into `**TTL ... (expires ...)**`
+          via `_ttl_delta`, which raises -- but only after the row string had
+          already been assembled around it.
+
+        The bounds are the measured ones: the longest legitimate single token
+        in the live register is 153 characters (LONG_TOKEN_LIMIT carries 2x
+        margin at 300), so 300 is the field cap too rather than a new number.
+        """
+
+        model_config = ConfigDict(extra="forbid")
+
+        kind: Literal["CLAIM", "RELEASE", "UPDATE"]
+        owner: Annotated[str, StringConstraints(
+            strip_whitespace=True, min_length=1, max_length=LONG_TOKEN_LIMIT)]
+        scope: str
+        branch: Annotated[str, StringConstraints(
+            strip_whitespace=True, max_length=LONG_TOKEN_LIMIT)] = ""
+        ttl: Annotated[str, StringConstraints(strip_whitespace=True)] = ""
+        co_owners: list[str] = []
+
+        @field_validator("owner", "branch", "ttl", "scope")
+        @classmethod
+        def _no_control_characters(cls, value: str) -> str:
+            bad = sorted({c for c in value
+                          if ord(c) < 0x20 and c not in "\t"})
+            if bad:
+                raise ValueError(
+                    "field contains control character(s) "
+                    + ", ".join(hex(ord(c)) for c in bad)
+                    + " -- a ledger row is one line of text. This is the "
+                    "signature of terminal output or a multi-line command "
+                    "captured into a field; re-file it as clean prose, or via "
+                    "--scope-file so it never joins a command string.")
+            return value
+
+        @field_validator("ttl")
+        @classmethod
+        def _ttl_parses(cls, value: str) -> str:
+            _ttl_delta(value)  # raises ValueError on an unparseable TTL
+            return value
+
+        # DELIBERATELY NOT re-running expansion_symptoms() on `scope` here.
+        # The CLI already validates prose through `RegisterProse`, which owns
+        # the `--literal-assignments` waiver. A second check on this model
+        # cannot see that waiver, so it refused the one legitimate case the
+        # override exists for -- a row quoting `SUPABASE_ANON_KEY=` as
+        # evidence. Two validators, one blind to the escape hatch, is how an
+        # override stops working; pinned by
+        # test_literal_assignments_override_files_quoted_evidence.
+        #
+        # What this model owns is what a waiver must never reach: the row's
+        # SHAPE. A control character or an unparseable TTL is damage under
+        # every override.
+
 except ImportError:  # pragma: no cover -- exercised only off-venv
     RegisterProse = None  # type: ignore[assignment,misc]
+    RegisterRow = None  # type: ignore[assignment,misc]
 
 
 def build_row(
@@ -312,7 +387,29 @@ def build_row(
     co_owners: list[str] | None = None,
     now: datetime | None = None,
 ) -> str:
-    """Render one register row. Pure, so the tests can pin the grammar."""
+    """Render one register row. Pure, so the tests can pin the grammar.
+
+    Validation happens BEFORE rendering, through `RegisterRow`, so a field that
+    cannot legally appear in a row never becomes part of a row string. The
+    previous order assembled the line first and validated fragments of it
+    afterwards -- `_ttl_delta` raised only once the row was already built
+    around the bad TTL, and `kind` was never checked at all.
+    """
+    if RegisterRow is not None:
+        try:
+            validated = RegisterRow(
+                kind=kind, owner=owner, branch=branch, scope=scope, ttl=ttl,
+                co_owners=list(co_owners or []),
+            )
+        except Exception as exc:  # pydantic ValidationError subclasses ValueError
+            raise ValueError(_first_refusal(exc)) from None
+        kind = validated.kind
+        owner = validated.owner
+        branch = validated.branch
+        scope = validated.scope
+        ttl = validated.ttl
+        co_owners = validated.co_owners
+
     now = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
     now = now.replace(microsecond=0)
     ts = now.strftime("%Y-%m-%dT%H:%M:%SZ")

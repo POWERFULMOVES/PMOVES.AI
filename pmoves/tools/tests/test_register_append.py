@@ -27,8 +27,17 @@ HELD = (
 
 
 def _load():
+    # REGISTERED IN sys.modules, which it was not before. `exec_module` alone
+    # produces a working module for anything that resolves names through the
+    # module object -- which is why this loader looked fine for 60-odd tests --
+    # but pydantic resolves a model's type namespace through
+    # `sys.modules[cls.__module__]`. With the module absent from sys.modules,
+    # `Literal` and `Annotated` cannot be resolved and every model raises
+    # "`RegisterRow` is not fully defined". The module under test was fine; the
+    # loader was lying about how Python loads modules.
     spec = importlib.util.spec_from_file_location("register_append", TOOL)
     module = importlib.util.module_from_spec(spec)
+    sys.modules["register_append"] = module
     spec.loader.exec_module(module)
     return module
 
@@ -628,6 +637,7 @@ import importlib.util, os, sys, time, pathlib
 TOOL, REG, BARRIER, OWNER, LANE = sys.argv[1:6]
 spec = importlib.util.spec_from_file_location("register_append", TOOL)
 mod = importlib.util.module_from_spec(spec)
+sys.modules["register_append"] = mod  # pydantic resolves types via sys.modules
 spec.loader.exec_module(mod)
 mod.REGISTER = pathlib.Path(REG)
 
@@ -1006,3 +1016,58 @@ def test_usage_lines_name_the_single_quote_reason():
     assert "--scope-file" in claim_block
     release_block = makefile.split("register-release:", 1)[1].split("register-amend:", 1)[0]
     assert "single-quote SCOPE" in release_block
+
+
+# --- the row model: damage made unrepresentable, not detected afterwards -----
+#
+# `expansion_symptoms()` inspects a value AFTER it has been built. These pin
+# the other half: a field that cannot legally appear in a ledger row is refused
+# by the type before `build_row` renders anything.
+
+def test_a_row_cannot_be_filed_under_an_unparsed_verb(mod):
+    """`kind` was any string, and only CLAIM/RELEASE/UPDATE are ever read.
+
+    A typo appended cleanly and was then invisible to `register_status`,
+    `identity_lineage` and the collision gate alike -- a row that exists in the
+    file and not in the ledger.
+    """
+    with pytest.raises(ValueError) as exc:
+        mod.build_row("CLIAM", "B850-CLAUDE (Knuckles)", "fix/x", "typo verb")
+    assert "CLAIM" in str(exc.value)
+
+
+@pytest.mark.parametrize("field,value", [
+    ("owner", "B850\x1b[0m-CLAUDE"),      # ESC: pasted terminal colour codes
+    ("branch", "fix/x\nplus a second line"),
+    ("scope", "up on \x00.0.0.0:4482"),   # the exact corruption 8b040956e fixed
+])
+def test_no_field_may_carry_a_control_character(mod, field, value):
+    """The register carries 21 of these already, from pasted terminal output.
+
+    A row is one line of text; a newline in a field silently forges a second
+    row, and a NUL makes the whole file read as binary to grep and to GitHub.
+    """
+    kwargs = dict(kind="CLAIM", owner="B850-CLAUDE (Knuckles)",
+                  branch="fix/x", scope="clean")
+    kwargs[field] = value
+    with pytest.raises(ValueError) as exc:
+        mod.build_row(**kwargs)
+    assert "control character" in str(exc.value)
+
+
+def test_an_unparseable_ttl_is_refused_before_the_row_is_built(mod):
+    """`_ttl_delta` raised -- but only after the row string was assembled."""
+    with pytest.raises(ValueError):
+        mod.build_row("CLAIM", "B850-CLAUDE (Knuckles)", "fix/x", "s",
+                      ttl="72 hours")
+
+
+def test_the_row_grammar_is_unchanged_by_the_model(mod):
+    """The model validates and normalises; it must not alter the rendering."""
+    row = mod.build_row("CLAIM", "B850-CLAUDE (Knuckles)", "fix/x", "some scope",
+                        ttl="72h",
+                        now=datetime(2026, 1, 1, tzinfo=timezone.utc))
+    assert row.startswith("- `2026-01-01T00:00:00Z` CLAIM `B850-CLAUDE (Knuckles)`")
+    assert "branch: `fix/x`" in row
+    assert "**TTL 72h (expires `2026-01-04T00:00:00Z`)**" in row
+    assert row.endswith("· scope: some scope\n")
