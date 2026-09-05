@@ -238,17 +238,17 @@ tailscale-docker-ip: ## Show Tailscale Docker container's IP
 # Docs:   pmoves/docs/operations/FLEET_REMOTE_ACCESS_RUNBOOK.md
 
 .PHONY: up-sentinel
-up-sentinel: ensure-env-shared ## Start fleet-sentinel (announce listener + health poller + self-heal, :8099)
+up-sentinel: ensure-env-shared ## Start fleet-sentinel (announce listener + health poller + self-heal, :8116)
 	@$(DC) up -d fleet-sentinel
-	@echo "✔ fleet-sentinel up — registry at http://localhost:$${SENTINEL_PORT:-8099}/registry.json"
+	@echo "✔ fleet-sentinel up — registry at http://localhost:$${SENTINEL_PORT:-8116}/registry.json"
 
 .PHONY: fleet-registry
 fleet-registry: ## Show the live service registry (fleet-sentinel /registry.json)
 	@echo "=== Fleet Service Registry (sentinel) ==="
 	@if command -v curl >/dev/null 2>&1; then \
-		curl -fsS "$${SENTINEL_URL:-http://localhost:8099}/registry.json" \
+		curl -fsS "$${SENTINEL_URL:-http://localhost:8116}/registry.json" \
 		  | $$(command -v jq >/dev/null 2>&1 && echo jq . || echo cat) \
-		|| echo "sentinel unreachable at $${SENTINEL_URL:-http://localhost:8099} (make up-sentinel?)"; \
+		|| echo "sentinel unreachable at $${SENTINEL_URL:-http://localhost:8116} (make up-sentinel?)"; \
 	else \
 		echo "curl not available"; exit 1; \
 	fi

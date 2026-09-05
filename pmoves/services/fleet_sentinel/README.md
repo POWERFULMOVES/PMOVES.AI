@@ -21,7 +21,7 @@ sentinel is that consumer (design: `docs/services/IDE_PINOKIO_FLEET_CONSOLE_PLAN
 | `SENTINEL_PMOVES_DIR` | `/srv/pmoves` | pmoves checkout for make invocations |
 | `SENTINEL_ACTION_TRAIL` | `/data/fleet-sentinel/actions.jsonl` | Append-only restart trail |
 
-## API (port 8099)
+## API (port 8116)
 
 - `GET /healthz` — sentinel status + listener state + service count
 - `GET /registry.json` — the Pinokio/A2UI consumption surface (slug, url, tier, health, port per service)

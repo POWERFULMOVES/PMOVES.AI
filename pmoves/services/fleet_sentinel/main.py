@@ -251,7 +251,7 @@ async def actions() -> Dict[str, Any]:
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
-    uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("SENTINEL_PORT", "8099")))
+    uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("SENTINEL_PORT", "8116")))
 
 
     async def _start_raw_listener(self) -> None:

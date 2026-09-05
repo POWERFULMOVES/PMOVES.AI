@@ -2824,7 +2824,9 @@ services:
           memory: 512M
   fleet-sentinel:
     <<: *tier-agent-hardened-ro
-    build: ./services/fleet_sentinel
+    build:
+      context: .
+      dockerfile: services/fleet_sentinel/Dockerfile
     restart: unless-stopped
     environment:
     # Host environment leak guard (see x-host-leak-guard docs above)
@@ -2852,7 +2854,7 @@ services:
     - pmoves_bus
     - pmoves_external
     ports:
-    - ${SENTINEL_BIND:-127.0.0.1}:${SENTINEL_PORT:-8099}:8099
+    - ${SENTINEL_BIND:-127.0.0.1}:${SENTINEL_PORT:-8116}:8116
     depends_on:
     - nats
 
