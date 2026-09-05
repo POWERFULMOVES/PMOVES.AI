@@ -82,7 +82,7 @@
             "--apiUrl",
             "${SUPABASE_REST_URL:-http://localhost:8000/rest/v1}",
             "--apiKey",
-            "${SUPABASE_SERVICE_ROLE_KEY:-${SUPABASE_SERVICE_KEY}}",
+            "${SUPABASE_SERVICE_ROLE_KEY:-${SUP…EY}}",
             "--schema",
             "public"
           ]
@@ -148,8 +148,11 @@
           "transport": "http",
           "endpoint": "external",
           "url": "https://connect.composio.dev/mcp",
-          "clients": [],
-          "_note": "Registered but NOT served to any client (fail-closed; `clients: []` matches nothing in ServerSpec.applies_to()). URL updated 2026-09-02 from stale mcp.composio.dev to connect.composio.dev/mcp - the current Composio Connect endpoint used by the official plugin (submodule pmoves-composio-mcp-plugin). Auth is in-band managed OAuth: agent requests connection -> OAuth link returned -> operator authorizes -> connection reusable; NOT a static X-API-Key header. Old 2026-08-27 note (superseded but preserved): operator-approved registration; populate `clients` only after the endpoint is verified live AND COMPOSIO_API_KEY is registered in the CHIT secrets manifest (slot exists: composio_api_key, tier llm) plus client launcher allowlists. The stale `disabled: true` + X-API-Key header block was removed with this update."
+          "clients": [
+            "claude",
+            "crush"
+          ],
+          "_note": "ACTIVATED 2026-09-04: clients populated per the fail-closed checklist — COMPOSIO_API_KEY registered in the CHIT secrets manifest (#2837, slot composio_api_key, tier llm) and DELIVERED via the Pattern-B funnel (secrets-funnel-from-prod, bundle chit-bundle-b850-33907455784); clients = claude + crush (the 4090 control-plane coding agents; KiloCode joins via #2918's lane). Auth is in-band managed OAuth: the client's first connect returns the OAuth link, the operator authorizes, the connection is reusable — NOT a static X-API-Key header. Endpoint updated 2026-09-02 from stale mcp.composio.dev to connect.composio.dev/mcp. Old 2026-08-27 note (superseded): operator-approved registration; the stale disabled:true + X-API-Key header block was removed 2026-09-02."
         },
         {
           "key": "titanmail",
@@ -192,7 +195,7 @@
           "endpoint": "local",
           "url": "http://localhost:8090/sse",
           "headers": {
-            "Authorization": "Bearer ${MCP_GATEWAY_AUTH_TOKEN}"
+            "Authorization": "Bearer ${CIPHER_API_TOKEN}"
           },
           "clients": [
             "hermes",
