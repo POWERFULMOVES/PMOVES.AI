@@ -151,6 +151,18 @@ secrets-funnel-from-prod: secrets-pull secrets-funnel-sync-from-bundle ## One-sh
 gh-secret-capacity-audit: ## Reconcile CHIT manifest github_secret targets against GitHub's 100-per-scope cap (ENV=<name> for an environment; JSON=1). Exit 1 on findings, 3 if unmeasurable.
 	@$(CODEX_PY) tools/github_secret_capacity_audit.py $(if $(ENV),--env "$(ENV)") $(if $(JSON),--json)
 
+.PHONY: gh-app-token
+gh-app-token: ## Mint a GitHub App installation token (dsh github agent). REPOSITORIES=a,b PERMISSIONS=contents:read[,x:write] OUT=<file> ALL=1(over-broad, needs CONFIRM=1)
+	@$(LOAD_ENV_SHARED); args=""; \
+	if [ -n "$(REPOSITORIES)" ]; then args="$$args --repositories $(REPOSITORIES)"; fi; \
+	if [ -n "$(PERMISSIONS)" ]; then args="$$args --permissions $(PERMISSIONS)"; fi; \
+	if [ -n "$(OUT)" ]; then args="$$args --out $(OUT)"; fi; \
+	if [ "$(ALL)" = "1" ]; then \
+	  if [ "$$(CONFIRM)" != "1" ]; then echo "ALL=1 mints installation-default scope; pass CONFIRM=1 to acknowledge" >&2; exit 3; fi; \
+	  args="$$args --all --yes"; \
+	fi; \
+	PYTHONPATH="$(CURDIR)/.." $(CODEX_PY) tools/gh_app_token.py $$args
+
 .PHONY: docker-mcp-secrets-hydrate
 docker-mcp-secrets-hydrate: ## Re-push funnel-managed values into the Docker MCP Toolkit secret store (recovery after a Docker Desktop VMM/migration wipes the MCP resolver). DRY_RUN=1 to preview. PROFILE=<id> to force a gateway profile (otherwise discovered from .mcp.json, else PMOVES_MCP_PROFILE_ID). Run AFTER Docker Desktop restart (resolver must be up).
 	@PYTHONPATH="$(CURDIR)/.." $(CODEX_PY) tools/docker_mcp_secrets_hydrate.py $(if $(DRY_RUN),--dry-run) $(if $(PROFILE),--profile "$(PROFILE)")
