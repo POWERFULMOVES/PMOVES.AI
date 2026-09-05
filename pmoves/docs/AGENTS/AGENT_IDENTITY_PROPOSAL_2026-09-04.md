@@ -107,6 +107,17 @@ id, resolves it to the parent, keeps `agent_id` as the lineage, and stamps
 (`sign_trail.py:251-262, 297-299`). Nothing needs to be built for this. It needs
 to be *declared*.
 
+**Qualifier (review finding).** The resolver is not yet safe fleet-wide for a
+*shared* alter name. `_resolve_alter_parent()` scans the signature registry and
+returns the first parent that declares a matching alter, with no duplicate-alter
+gate — so if two nodes each declare an alter literally named `node-steward`, a
+steward on the later node emits trails whose parent `agent_id` belongs to
+whichever identity appears first in the YAML. Proposal 1 therefore requires one
+of: (a) node-qualified alter ids (`node-steward@5090`, `node-steward@4090`),
+(b) callers always passing the parent identity plus `--alter`, or (c) an
+ambiguity gate in the resolver that refuses a duplicate alter name. (a) is the
+recommendation — it keeps the trail self-describing and needs no code change.
+
 ---
 
 ## 2. Growth: body → alter → top-level identity
@@ -198,6 +209,16 @@ Give delivery bodies a registered identity so a ledger can accrue to them, and
 record alter origins in `alter_lineage` at the moment of recognition rather than
 reconstructing them from operator memory later (which is what
 `origin: unknown` on 4090's own record means).
+
+**Boundary (review finding).** "Delivery body" means the resolved identity that
+did the work — *not* the reusable role definition it was wearing. `delivery-agent`,
+`researcher`, `verifier` and the other `.claude/agents/*` definitions are roles
+(`delivery-agent` is explicitly `role_class: worker`), reused by every node and
+harness; registering them as identities would collapse work from all of them
+into one signer and one ledger. `node_identity.py` already resolves who is
+wearing the role; that resolved identity stays the signer, and the role is
+recorded as trail metadata or as an identity-scoped alter (`delivery@5090`),
+never promoted to a top-level identity.
 
 **The threshold — what earns an alter — is deliberately not set here.**
 Mechanism is architecture; threshold is standards. 4090-CLAUDE holds the only
@@ -342,7 +363,9 @@ Both live brokers (on kvm4-2 and the 5090 — hostnames only) place every client
 in the **global** account. Every publisher on the bus is the same principal, so
 the bus can authenticate the *deployment* and cannot authenticate an *agent*.
 
-Meanwhile CHIT already produces exactly the missing material: `sign_trail.py`
+Meanwhile CHIT already produces the *shape* of the missing material — a
+per-agent claim, not yet proof (see the first open question under Proposal 5):
+`sign_trail.py`
 HMAC-signs a per-agent payload carrying `agent_id`, `selected_alter` and
 `signing_card_id`, and publishes it to `agent.graphiti.signed.v1`
 (`sign_trail.py:69, 284-305`).
@@ -383,6 +406,16 @@ principal on the bus is the signing identity rather than the deployment.
 This is **not a design**, and this lane was not asked to produce one. The open
 questions it would have to answer first:
 
+- **The signature does not yet prove the `agent_id` it names.** `sign_trail.py`
+  accepts `agent_id` from the caller, and `chit_security.sign_cgp()` signs every
+  payload with the same process-wide `CHIT_SIGNING_KEY` / `CHIT_PASSPHRASE`. Any
+  holder of that shared key can mint a valid HMAC naming any registered agent
+  or signing card, so today the artifact authenticates the *deployment key*,
+  not the agent. Before CHIT can be the bus's authentication material this needs
+  either per-agent signing keys, or a verified binding between each NATS
+  credential (a per-user `.creds` under an account, spec §7b) and the agent
+  identity it is issued to — with the bus trusting the credential and the trail
+  carrying the binding.
 - HMAC signatures verify a payload after receipt; NATS auth decides at connect.
   Is the CHIT identity a connect-time credential, a per-message attestation, or
   both — and if both, do they have to agree?
