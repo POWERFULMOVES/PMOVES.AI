@@ -319,9 +319,9 @@
     },
     "PMOVES-Pipecat": {
       "upstream": "pipecat-ai/pipecat",
-      "sync": false,
+      "sync": true,
       "branch": "PMOVES.AI-Edition-Hardened",
-      "reason": "submodule tracks PMOVES.AI-Edition-Hardened; sync=false until triaged (used as reference, no PMOVES overlay)"
+      "reason": "Corrected 2026-09-06; the previous reason was false in both halves. It read 'used as reference, no PMOVES overlay' -- but hardened carries 9 PMOVES commits: integration patterns (1bf8afea), Phase 1 critical bug fixes (0b27fb7e), and a NATS-defaults / CHIT-scope auth alignment (fafeaa85). And sync=false was not being honoured: a12efa49 merged 3541 upstream commits on 2026-08-06. Measured at correction: status=diverged, 1252 behind, 9 ahead; upstream shipped v1.7.0, v1.8.0 and v1.8.1 after that merge. Pipecat is the substrate for flute-gateway, so this is consumed code, not a reference checkout. sync=true, and the merge is NOT a fast-forward -- the 9 local commits must be carried."
     },
     "PMOVES-Spark-VSS": {
       "upstream": "NVIDIA-AI-Blueprints/video-search-and-summarization",
