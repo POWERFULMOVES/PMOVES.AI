@@ -15,7 +15,7 @@ Compose
 
 Environment
 - `PORT` — listen port (default `8113`)
-- `SUPA_REST_URL` / `SUPA_REST_URL` — PostgREST endpoint consumed for geometry reads and pack upserts
+- `SUPA_REST_URL (accepted alias: SUPABASE_REST_URL)` / `SUPA_REST_URL (accepted alias: SUPABASE_REST_URL)` — PostgREST endpoint consumed for geometry reads and pack upserts
 - `SUPABASE_SERVICE_ROLE_KEY` / compatible secret aliases — Supabase auth for REST writes
 - `EVOSWARM_POLL_SECONDS` — loop cadence (default `300`)
 - `EVOSWARM_SAMPLE_LIMIT` — CGPs sampled per iteration (default `25`)

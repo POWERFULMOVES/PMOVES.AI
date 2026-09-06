@@ -8,7 +8,9 @@
     "agent_zero_fleet_url": "http://${TS_Z890}:8081/mcp/t-${AGENT_ZERO_MCP_TOKEN}/sse",
     "archon_local_url": "http://localhost:8051",
     "archon_fleet_url": "http://${TS_Z890}:8051",
-    "docker_gateway_port": 8090
+    "docker_gateway_port": 8090,
+    "flute_local_url": "http://localhost:8055/sse",
+    "flute_fleet_url": "http://${TS_Z890}:8055/sse"
   },
   "groups": {
     "core_pmoves": {
@@ -48,7 +50,7 @@
         },
         {
           "key": "archon",
-          "description": "Archon knowledge / task orchestrator (REST-only MCP, no standard transport — disabled by default)",
+          "description": "Archon knowledge / task orchestrator (REST-only MCP, no standard transport \u2014 disabled by default)",
           "transport": "http",
           "endpoint": "local",
           "endpoint_prefix": "archon",
@@ -156,12 +158,39 @@
         },
         {
           "key": "titanmail",
-          "description": "Titan Mail hosted MCP (https://api.titan.email/mcp) — search/read/send email, folders, labels, calendar, contacts. OAuth via interactive Titan sign-in (no static API key). EU-hosted reseller accounts (Blacknight, MonoVM, DomainDiscount24, Fluccs, Domain Central) use https://api-euc1.titan.email/mcp instead.",
+          "description": "Titan Mail hosted MCP (https://api.titan.email/mcp) \u2014 search/read/send email, folders, labels, calendar, contacts. OAuth via interactive Titan sign-in (no static API key). EU-hosted reseller accounts (Blacknight, MonoVM, DomainDiscount24, Fluccs, Domain Central) use https://api-euc1.titan.email/mcp instead.",
           "transport": "http",
           "endpoint": "external",
           "url": "https://api.titan.email/mcp",
           "clients": [],
-          "_note": "Registered 2026-09-02, NOT served to any client (fail-closed, same rule as composio). Auth is OAuth: the client must complete an interactive Titan login + consent dance. Do NOT populate `clients` until (a) the target client's MCP stack supports browser-based OAuth for remote HTTP servers, verified live, and (b) operator confirms which mailbox(es) — powerfulmoves@pmoves.ai / pmoves@pmoves.ai / @cataclysmstudios.com — connect. Also verify whether the pmoves.ai mail is even Titan-hosted before wiring (Hostinger commonly provisions Titan); inventory via Composio → Hostinger first."
+          "_note": "Registered 2026-09-02, NOT served to any client (fail-closed, same rule as composio). Auth is OAuth: the client must complete an interactive Titan login + consent dance. Do NOT populate `clients` until (a) the target client's MCP stack supports browser-based OAuth for remote HTTP servers, verified live, and (b) operator confirms which mailbox(es) \u2014 powerfulmoves@pmoves.ai / pmoves@pmoves.ai / @cataclysmstudios.com \u2014 connect. Also verify whether the pmoves.ai mail is even Titan-hosted before wiring (Hostinger commonly provisions Titan); inventory via Composio \u2192 Hostinger first."
+        },
+        {
+          "key": "flute-voice",
+          "description": "Voice fabric \u2014 14 TTS engines + intents + VRAM management (flute-gateway :8055)",
+          "transport": "sse",
+          "endpoint": "local",
+          "endpoint_prefix": "flute",
+          "headers": {
+            "X-API-Key": "${FLUTE_API_KEY}"
+          },
+          "notes": "Auth: X-API-Key header (main.py:222). When FLUTE_API_KEY is unset flute runs dev-mode (auth skipped) \u2014 set via secrets funnel for fleet exposure."
+        },
+        {
+          "key": "pipecat-context-hub",
+          "description": "Local-first Pipecat docs/examples/API index (ChromaDB+FTS5, cited) \u2014 the knowledge-ingestion pattern for voice agents",
+          "transport": "stdio",
+          "command": "uvx",
+          "args": [
+            "pipecat-ai-context-hub",
+            "serve"
+          ],
+          "clients": [
+            "hermes",
+            "agent-zero",
+            "crush"
+          ],
+          "notes": "Upstream fork POWERFULMOVES/Pmoves-pipecat-context-hub; index at ~/.pipecat-context-hub. Fork ships claude-code/cursor/vscode/zed client configs \u2014 hermes config is via this inventory render."
         }
       ]
     },
