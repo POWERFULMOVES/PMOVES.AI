@@ -6,6 +6,9 @@
 # COULD-NOT-MEASURE is an acceptable outcome; falling back to the host is not.
 #
 # Never prints E2B_API_KEY. Name and length only.
+# Defence in depth: if anyone runs this with `bash -x`, xtrace would expand the
+# `[ -n "$E2B_API_KEY" ]` test and print the credential. Disable it immediately.
+set +x
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
@@ -15,6 +18,13 @@ CLI_DIR="$ROOT_DIR/skills/PMOVES-agent-sandbox-skill/.claude/skills/agent-sandbo
 
 # shellcheck disable=SC1091
 . "$PMOVES_DIR/scripts/with-env.sh" 2>/dev/null || true
+# with-env.sh begins with `set -euo pipefail`; SOURCING it turns errexit on in
+# THIS shell. That is not cosmetic: it made the first version of this script die
+# at the `create_out=$(...)` capture and exit 1 (findings) instead of 3
+# (could-not-measure), swallowing the provisioning error entirely. We need to
+# survive non-zero commands in order to classify them, so turn errexit back off.
+set +e
+set +x
 
 SENTINEL="pmoves-sandbox-smoke-ok"
 TIMEOUT="${SANDBOX_TIMEOUT:-300}"
@@ -37,7 +47,14 @@ echo "[sandbox-smoke] provisioning (timeout ${TIMEOUT}s)..."
 create_out="$(uv run sbx init --timeout "$TIMEOUT" --name pmoves-smoke 2>&1)"
 create_rc=$?
 echo "$create_out"
-[ $create_rc -eq 0 ] || cnm "provision failed (rc=$create_rc)"
+if [ $create_rc -ne 0 ]; then
+  # An unusable credential is COULD-NOT-MEASURE, not a code finding. Surface the
+  # exact provider error so the operator can act; never echo the key itself.
+  if printf '%s' "$create_out" | grep -qi 'unauthorized\|api key\|401'; then
+    cnm "E2B rejected the credential (rc=$create_rc). Exact provider error is above. Fix the key, do NOT fall back to running this on the host."
+  fi
+  cnm "provision failed (rc=$create_rc)"
+fi
 
 # "Sandbox ID: <id>" — strip rich markup and take the last field.
 SBX="$(printf '%s\n' "$create_out" | sed -n 's/.*Sandbox ID:[[:space:]]*//p' | tr -d '\r' | awk '{print $1}' | tail -1)"
