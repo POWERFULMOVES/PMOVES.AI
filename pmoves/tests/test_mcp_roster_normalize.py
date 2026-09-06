@@ -240,7 +240,10 @@ def test_the_real_roster_keeps_its_optional_credential_servers():
     names = set(clean["mcpServers"])
     for server in ("huggingface", "cloudflare", "pmoves-4090-web", "pmoves-supabase"):
         assert server in names, f"{server} dropped on an empty environment"
-    assert {n for n, _ in dropped} == {"pmoves-cipher", "agent-zero", "archon"}
+    assert {n for n, _ in dropped} == {"pmoves-cipher", "agent-zero"}
+    # archon left the MCP roster with the Python-Archon surface retirement
+    # (native 0.6.0 REST-only, fleet decision #2303): it can no longer be
+    # dropped on an empty environment because it is no longer an MCP server.
 
 
 def test_the_real_roster_is_fully_resolvable_when_the_tailnet_resolves():
