@@ -94,7 +94,9 @@
         "nats_mcp.server"
       ],
       "env": {
-        "NATS_URL": "${NATS_URL}"
+        "NATS_URL": "${NATS_URL}",
+        "NATS_CREDS": "${NATS_CREDS:-}",
+        "_NATS_CREDS_NOTE": "v0.2 (spec \u00a77b): path to a CORE-account .creds (nsc-minted, CHIT-vault-held). When set, the MCP binds to the CORE account (transport-trust gate) and CHIT-signs CHIT-aware subjects (payload-provenance gate) \u2014 two-gate model, spec \u00a711. Unset = legacy NATS_URL user/pass (single-principal bus). Fallback is enforced in code, not assumed: _nats_creds() rejects an empty value AND an unresolved \"${...}\" placeholder (a bare \"${NATS_CREDS}\" survives literally when the var is absent and would otherwise be a truthy bogus path), so the MCP uses NATS_URL until the funnel materializes the .creds. \"${NATS_CREDS:-}\" also collapses to empty where the launcher supports default-expansion."
       },
       "description": "NATS fleet messaging bridge"
     },
