@@ -189,10 +189,45 @@ if [ -f "$CIPHER_TOOL" ] && [ ${#IDENT_PY[@]} -gt 0 ]; then
       echo "[claude-pmoves] cipher=up (${CIPHER_WHICH:-unknown endpoint})" >&2
       IDENTITY_ARGS+=(--append-system-prompt "Persistent memory IS available this session via the Cipher MCP server '${CIPHER_WHICH:-unknown}'. Use it for recall and for writes; do not fall back to the auto-memory directory while it is up.")
       ;;
+    1)
+      # FINDINGS: something ANSWERED and was not usable. Cipher is UP either
+      # way, so "no persistent memory, Cipher is down" stays wrong here -- that
+      # false negative is what the wildcard branch used to emit for every
+      # non-zero code, and it sends the operator to restart a healthy service.
+      #
+      # But exit 1 is NOT synonymous with 401. `http_error` (a 404) and
+      # `redirect` (a refused 302) also land on 1, and hardcoding "bind
+      # CIPHER_API_TOKEN" tells an operator staring at a 404 to fix a
+      # credential that was never the problem -- the same collapse of distinct
+      # verdicts into one remedy, just moved up a layer.
+      #
+      # So branch on the verdict the tool actually reported. The second token
+      # of each row IS the verdict class (OK / UNAUTHORIZED / ANSWERED / DOWN),
+      # emitted from `row["verdict"]` in cipher_preflight.py. Matched with
+      # `case`, not `grep`: errexit is live from the `set -e` above and a pipe
+      # into `grep -q` can also lose to SIGPIPE.
+      case "$CIPHER_OUT" in
+        *"cipher UNAUTHORIZED"*)
+          echo "[claude-pmoves] cipher=UNAUTHORIZED (exit 1) — service is UP, credential not accepted" >&2
+          IDENTITY_ARGS+=(--append-system-prompt "Cipher ANSWERED this session but refused the credential (preflight exit 1, verdict unauthorized), so persistent memory is not usable right now. The service is UP -- this is an access problem, not an outage, so do NOT report Cipher as down and do not restart it. Use the file-based auto-memory directory meanwhile and say which of the two it is. Remedy: bind CIPHER_API_TOKEN into the roster. Recovery: pmoves/docs/operations/MCP_TOOLKIT.md.")
+          ;;
+        *)
+          echo "[claude-pmoves] cipher=ANSWERED-UNUSABLE (exit 1) — something is listening; see the status below" >&2
+          IDENTITY_ARGS+=(--append-system-prompt "Cipher ANSWERED this session but not usably (preflight exit 1, and NOT a 401/403 -- read the status printed above, e.g. an HTTP error or a refused redirect), so persistent memory is not usable right now. Something IS listening on that endpoint, so do NOT report Cipher as simply down, and do NOT assume the credential is at fault -- the preflight would have said unauthorized if it were. Use the file-based auto-memory directory meanwhile and say which of the two it is. Recovery: pmoves/docs/operations/MCP_TOOLKIT.md.")
+          ;;
+      esac
+      printf '%s\n' "$CIPHER_OUT" >&2
+      ;;
     *)
-      # 1 = every endpoint was reached and none answered. 3 = nothing to measure
-      # (no cipher entry in the roster at all). Both mean no memory; the agent
-      # is told which, because the fixes differ.
+      # 3 = could not measure: no cipher entry in the roster, nothing
+      # resolvable, nothing reachable at all, or the check itself crashed.
+      # This is the only case where "you have no memory" is a true statement.
+      #
+      # A crash belongs HERE and not in the exit-1 branch above. Python exits 1
+      # on an uncaught exception, so before cipher_preflight.py grew its own
+      # backstop, a schemeless roster url or a failed import landed on "the
+      # service is UP, do not restart it" -- a health assertion from a run that
+      # contacted nothing.
       echo "[claude-pmoves] cipher=DOWN (exit ${cipher_rc}) — session has no persistent memory" >&2
       printf '%s\n' "$CIPHER_OUT" >&2
       IDENTITY_ARGS+=(--append-system-prompt "Cipher is NOT reachable this session (preflight exit ${cipher_rc}), so you have NO persistent memory. Say so at session start rather than recalling nothing silently, and use the file-based auto-memory directory instead. Recovery: pmoves/docs/operations/MCP_TOOLKIT.md.")
