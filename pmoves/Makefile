@@ -5766,7 +5766,12 @@ sandbox-preflight: ## Check the agent-sandbox CLI is runnable and E2B_API_KEY is
 		else echo "[sandbox] CLI dir: MISSING — run: git submodule update --init --recursive skills/"; rc=3; fi; \
 		if command -v uv >/dev/null 2>&1; then echo "[sandbox] uv: $$(uv --version 2>/dev/null)"; \
 		else echo "[sandbox] uv: MISSING — required (CLI is a uv package, python >=3.12)"; rc=3; fi; \
-		if [ -n "$${E2B_API_KEY:-}" ]; then echo "[sandbox] E2B_API_KEY: present (length $${#E2B_API_KEY})"; \
+		if [ -n "$${E2B_API_KEY:-}" ]; then \
+			echo "[sandbox] E2B_API_KEY: present (length $${#E2B_API_KEY})"; \
+			case "$${E2B_API_KEY}" in \
+			  e2b_*) echo "[sandbox] E2B_API_KEY: shape OK (e2b_ prefix)" ;; \
+			  *) echo "[sandbox] E2B_API_KEY: MALFORMED — E2B requires an \"e2b_\" prefix; the provider will 401. See https://docs.e2b.dev/api-key"; rc=3 ;; \
+			esac; \
 		else echo "[sandbox] E2B_API_KEY: UNSET — sandbox provisioning will fail"; rc=3; fi; \
 		if [ -n "$${E2B_DOMAIN:-}" ]; then echo "[sandbox] E2B_DOMAIN: set (self-hosted target)"; \
 		else echo "[sandbox] E2B_DOMAIN: unset — targeting e2b.dev cloud (see SKILL.md self-hosting note)"; fi; \
