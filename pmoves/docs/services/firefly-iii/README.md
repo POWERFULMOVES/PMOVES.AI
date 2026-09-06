@@ -14,7 +14,7 @@ Overview
   - CHIT decoder/specs: `../../PMOVESCHIT/PMOVESCHIT_DECODERv0.1.md`
 
 Deployment
-- Local compose: use `make up-external` for Firefly only or `make up-external` for Firefly + Wger + watcher.
+- Local compose: `make up-external` is the GROUPED target (Wger + Firefly + Open Notebook + Jellyfin — pmoves/Makefile:4743); there is no Firefly-only make target. For Firefly alone: `docker compose -f docker-compose.external.yml up -d pmoves-firefly` (raw compose is fine for docs; hooks only block raw `docker exec`).
 - Flows live under `pmoves/integrations/firefly-iii/n8n/flows/`; drop exported JSON there for auto-imports when the watcher is running.
 
 Networking/Ports
@@ -32,7 +32,7 @@ API/Contracts
 - n8n flows in `pmoves/integrations/firefly-iii/n8n/flows/` poll Firefly transactions, normalize categories, and write to Supabase.
 
 ## Sample dataset
-- Script: `pmoves/scripts/firefly_seed_sample_data.py` (Make target `python scripts/firefly_seed_sample.py`).
+- Script: `pmoves/scripts/firefly_seed_sample_data.py` — invoke directly (`python pmoves/scripts/firefly_seed_sample_data.py`); no make wrapper exists.
 - Fixture: `pmoves/data/firefly/sample_transactions.json` (deterministic 5-year projection revenue/cost mix).
 - Required env vars: `FIREFLY_BASE_URL`, `FIREFLY_ACCESS_TOKEN` (admin token if creating demo users).
 - Usage:
