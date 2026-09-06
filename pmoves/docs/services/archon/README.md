@@ -79,7 +79,7 @@ For deeper integration checks:
 
 - Follow the “All Services Up, Then Tests” checklist in `pmoves/docs/SMOKETESTS.md`.
 - Use `make -C pmoves verify-all` (when available) to run the hardened integration verification gates described in `docs/PMOVES.AI-Edition-Hardened.md` (signatures, SBOMs, `/healthz` checks, Supabase reachability).
-- If an explicit `make -C pmoves archon-smoke` target is present in this repo, use it to probe Archon’s `/healthz` plus a trivial Supabase REST query.
+- Use `make -C pmoves archon-ui-smoke` to probe Archon's native `/api/health` and UI, and `make -C pmoves archon-rest-policy-smoke` for the Supabase REST policy check.
 
 When Archon health flaps (e.g. `/healthz` returns non-200 during bring-up):
 

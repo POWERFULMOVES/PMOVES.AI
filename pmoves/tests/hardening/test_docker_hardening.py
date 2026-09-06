@@ -451,7 +451,6 @@ class TestDockerfileSecurity:
     """Tests for Dockerfile security best practices."""
 
     @pytest.mark.parametrize("service,dockerfile", [
-        ("archon", "pmoves/services/archon/Dockerfile"),
         ("agent-zero", "pmoves/services/agent-zero/Dockerfile"),
         ("flute-gateway", "pmoves/services/flute-gateway/Dockerfile"),
         ("tokenism-simulator", "pmoves/services/tokenism-simulator/Dockerfile"),
@@ -483,7 +482,6 @@ class TestDockerfileSecurity:
                 f"USER directive must come before CMD in {service}"
 
     @pytest.mark.parametrize("service,dockerfile", [
-        ("archon", "pmoves/services/archon/Dockerfile"),
         ("agent-zero", "pmoves/services/agent-zero/Dockerfile"),
         ("flute-gateway", "pmoves/services/flute-gateway/Dockerfile"),
         ("tokenism-simulator", "pmoves/services/tokenism-simulator/Dockerfile"),

@@ -76,12 +76,9 @@ def _resolve_supabase_key() -> str:
 
 def _build_default_entries() -> list[tuple[str, str]]:
     fs_roots = os.environ.get("A0_MCP_FILESYSTEM_ROOTS", "/data").strip() or "/data"
-    # Archon 0.6.0 serves API/UI/MCP on the unified port 3090 (the :8051 Python
-    # MCP bridge was removed in the TS rewrite — #2217).
-    archon_endpoint = (
-        os.environ.get("A0_MCP_ARCHON_ENDPOINT", "http://archon-server:3090").strip()
-        or "http://archon-server:3090"
-    )
+    # Archon is REST-only by fleet decision (#2303) and is not seeded as an A0
+    # MCP server — the old :8051 Python MCP bridge died with the TS rewrite
+    # (#2217) and native 0.6.0 exposes no MCP transport.
     neo4j_url = os.environ.get("A0_MCP_NEO4J_URL", "bolt://neo4j:7687").strip() or "bolt://neo4j:7687"
     neo4j_user = os.environ.get("A0_MCP_NEO4J_USER", os.environ.get("NEO4J_USER", "neo4j")).strip() or "neo4j"
     neo4j_password = _resolve_neo4j_password()
@@ -94,7 +91,6 @@ def _build_default_entries() -> list[tuple[str, str]]:
 
     return [
         ("fs", f"mcp://filesystem?roots={_q(fs_roots)}"),
-        ("archon", f"mcp://http?endpoint={_q(archon_endpoint)}"),
         ("neo4j", f"mcp://neo4j?url={_q(neo4j_url)}&user={_q(neo4j_user)}&password={_q(neo4j_password)}"),
         ("supabase", f"mcp://supabase?url={_q(supabase_url)}&key={_q(supabase_key)}"),
         ("gateway", f"mcp://http?endpoint={_q(gateway_endpoint)}"),

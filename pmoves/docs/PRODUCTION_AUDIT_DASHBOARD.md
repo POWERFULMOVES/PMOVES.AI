@@ -714,7 +714,7 @@ Release coordination note: `https://github.com/POWERFULMOVES/PMOVES.AI/pull/699#
 |-------|--------|
 | `make -C pmoves smoke` | PASS (production path: `tools/smoke_prod.py`) |
 | `make -C pmoves agents-headless-smoke` | PASS |
-| `make -C pmoves archon-smoke` | PASS |
+| `make -C pmoves archon-ui-smoke` | PASS |
 | `make -C pmoves monitoring-smoke` | PASS (`active=36`, `healthy=21`) |
 | Supabase storage migrator | RECOVERED (`supabase_storage_pmoves` healthy) |
 | Supabase DB collation warning | CLEARED (no new `collation version mismatch` log entries after refresh) |
