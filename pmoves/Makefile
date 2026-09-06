@@ -2588,7 +2588,7 @@ endif
 
 # Canonical layer service sets for deterministic tiered bring-up/down.
 WORKER_SERVICES := hi-rag-gateway-v2 retrieval-eval render-webhook langextract extract-worker pdf-ingest transcribe-backend
-AGENT_SERVICES := agent-zero archon deepresearch supaserch mesh-agent publisher-discord botz-gateway tokenism-simulator notebook-mcp
+AGENT_SERVICES := agent-zero archon deepresearch supaserch mesh-agent publisher-discord botz-gateway tokenism-simulator notebook-mcp wealth-mcp
 
 down:
 	@$(DC) down
@@ -3884,18 +3884,26 @@ cipher-health: ## Check Cipher Memory health
 spark-health: ## Check SPARK node (DGX Spark) health: Ollama, TensorZero, NATS, Cipher, Agent Zero SPARK
 	@$(PYTHON) scripts/spark_health.py
 
-.PHONY: agents-headless-smoke health-agent-zero a0-mcp-smoke a0-mcp-exec-smoke
+.PHONY: agents-headless-smoke health-agent-zero a0-mcp-smoke a0-mcp-exec-smoke a0-smoke-selftest
 agents-headless-smoke: ## Check Agent Zero and Archon headless services
+# Prove the instrument before trusting its reading: a0-smoke-selftest runs the
+# probes against in-process stubs, so a green below cannot mean "measured nothing".
+	@$(MAKE) --no-print-directory a0-smoke-selftest
 	@$(MAKE) health-agent-zero
 	@$(MAKE) archon-headless-smoke
 
-health-agent-zero: ## Verify Agent Zero headless API: /healthz 200 + default form + non-empty env config
+a0-smoke-selftest: ## Positive control: prove the Agent Zero probes go green on contract and red on each known defect (no service needed)
+	@$(PYTHON) tools/agent_zero_smoke.py selftest
+
+# NOTE: /healthz returns {status, command, pid, last_returncode, nats[, runtime]}
+# and has never carried a form. The CHIT persona form lives on /mcp/commands.
+health-agent-zero: ## Verify Agent Zero supervisor (port 8080): /healthz status=ok + non-empty /config/environment
 	@$(LOAD_ENV_SHARED) $(PYTHON) tools/agent_zero_smoke.py health
 
-a0-mcp-smoke: ## List Agent Zero MCP commands and print count/sample
+a0-mcp-smoke: ## List Agent Zero MCP commands via /mcp/commands and assert default_form is configured
 	@$(LOAD_ENV_SHARED) $(PYTHON) tools/agent_zero_smoke.py mcp-list
 
-a0-mcp-exec-smoke: ## Execute form.get via /mcp/execute and assert the form is present
+a0-mcp-exec-smoke: ## Execute form.get via POST /mcp/execute {cmd,arguments} and assert result.form
 	@$(LOAD_ENV_SHARED) $(PYTHON) tools/agent_zero_smoke.py mcp-exec
 
 .PHONY: up-agents-published
