@@ -5,7 +5,13 @@
 # Exit-code doctrine: 0 clean / 1 findings / 3 could-not-measure.
 # COULD-NOT-MEASURE is an acceptable outcome; falling back to the host is not.
 #
-# Never prints E2B_API_KEY. Name and length only.
+# Deployment mode is EXPLICIT and selectable, defaulting to self-host local:
+#   make -C pmoves sandbox-smoke                      # selfhost-local (default)
+#   make -C pmoves sandbox-smoke E2B_MODE=cloud       # e2b.dev fallback
+#   make -C pmoves sandbox-smoke E2B_MODE=selfhost-gcp
+# Per-mode variable sets and shape rules live in scripts/e2b_mode.sh.
+#
+# Never prints E2B_API_KEY. Name, prefix and length only.
 # Defence in depth: if anyone runs this with `bash -x`, xtrace would expand the
 # `[ -n "$E2B_API_KEY" ]` test and print the credential. Disable it immediately.
 set +x
@@ -33,13 +39,16 @@ cnm() { echo "[sandbox-smoke] COULD-NOT-MEASURE: $*"; exit 3; }
 
 [ -d "$CLI_DIR" ] || cnm "CLI missing at $CLI_DIR (git submodule update --init --recursive skills/)"
 command -v uv >/dev/null 2>&1 || cnm "uv not on PATH (CLI is a uv package, python >=3.12)"
-[ -n "${E2B_API_KEY:-}" ] || cnm "E2B_API_KEY unset after loading scripts/with-env.sh"
-echo "[sandbox-smoke] E2B_API_KEY present (length ${#E2B_API_KEY})"
-if [ -n "${E2B_DOMAIN:-}" ]; then
-  echo "[sandbox-smoke] E2B_DOMAIN set (self-hosted target)"
-else
-  echo "[sandbox-smoke] E2B_DOMAIN unset -> targeting e2b.dev cloud"
-fi
+
+# Mode resolution + SHAPE validation. A `[ -n "$VAR" ]` presence test passes a
+# truncated secret; that is how a two-character truncation in secrets delivery
+# reached the provider undetected. Bad shape is COULD-NOT-MEASURE (exit 3), not
+# a code finding — the credential road is broken, the sandbox code is not.
+# shellcheck disable=SC1091
+. "$PMOVES_DIR/scripts/e2b_mode.sh"
+e2b_resolve_mode || cnm "could not resolve an E2B deployment mode (set E2B_MODE=cloud|selfhost-gcp|selfhost-local)"
+e2b_apply_mode_env || cnm "could not apply mode environment for $E2B_MODE_RESOLVED"
+e2b_validate_shapes || cnm "credentials for mode $E2B_MODE_RESOLVED are missing or malformed (see the per-variable verdicts above). Fix delivery through the secrets funnel; do NOT hand-patch a key and do NOT fall back to running this on the host."
 
 cd "$CLI_DIR" || cnm "cannot enter $CLI_DIR"
 
@@ -51,9 +60,13 @@ if [ $create_rc -ne 0 ]; then
   # An unusable credential is COULD-NOT-MEASURE, not a code finding. Surface the
   # exact provider error so the operator can act; never echo the key itself.
   if printf '%s' "$create_out" | grep -qi 'unauthorized\|api key\|401'; then
-    cnm "E2B rejected the credential (rc=$create_rc). Exact provider error is above. Fix the key, do NOT fall back to running this on the host."
+    cnm "E2B rejected the credential in mode $E2B_MODE_RESOLVED (rc=$create_rc). Exact provider error is above. Fix the key, do NOT fall back to running this on the host."
   fi
-  cnm "provision failed (rc=$create_rc)"
+  if [ "$E2B_MODE_RESOLVED" = "selfhost-local" ] && \
+     printf '%s' "$create_out" | grep -qi 'connection refused\|failed to establish\|connect.*timed out\|name or service not known'; then
+    cnm "cannot reach the local self-hosted control plane at ${E2B_API_URL:-<unset>} (rc=$create_rc). The stack is not up on this node, or E2B_API_URL points elsewhere. Bring-up is an operator action with a named owning node — see pmoves/docs/operations/E2B_SELF_HOST_RUNBOOK.md."
+  fi
+  cnm "provision failed in mode $E2B_MODE_RESOLVED (rc=$create_rc)"
 fi
 
 # "Sandbox ID: <id>" — strip rich markup and take the last field.
