@@ -21,6 +21,12 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[3]  # .../PMOVES.AI-ghapp
 TOOL = REPO_ROOT / "pmoves" / "tools" / "gh_app_token.py"
 
+# CI's python-tests env does not carry the crypto stack; the tool itself
+# guards its import with a remediation message. Skip rather than fail where
+# the dependency is deliberately absent (GITHUB_APP.md documents the venv
+# install for nodes that mint).
+pytest.importorskip("cryptography", reason="gh_app_token test keys need cryptography")
+
 spec = importlib.util.spec_from_file_location("gh_app_token", TOOL)
 mod = importlib.util.module_from_spec(spec)
 sys.modules["gh_app_token"] = mod
