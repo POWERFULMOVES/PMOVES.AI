@@ -22,6 +22,26 @@
 #   selfhost-local  | E2B_API_KEY + E2B_ACCESS_TOKEN + E2B_API_URL
 #                   |   + E2B_ENVD_API_URL         (NO E2B_DOMAIN)
 #
+# ── What the pinned client actually reads (measured, not assumed) ────────────
+# e2b python SDK 2.6.4 (skills/PMOVES-agent-sandbox-skill/.../sandbox_cli),
+# e2b/connection_config.py reads exactly five variables:
+#   E2B_DOMAIN (default "e2b.app"), E2B_DEBUG, E2B_API_KEY, E2B_API_URL,
+#   E2B_ACCESS_TOKEN.
+# Two consequences the vendor dotenv block does not spell out:
+#   * E2B_DEBUG=true is REQUIRED for the local stack. e2b/sandbox/main.py:198
+#     returns `localhost:{port}` only when debug is set, and line 49 picks
+#     http:// vs https:// off the same flag. Without it the SDK builds
+#     `https://49983-<id>.e2b.app` and never reaches your local cluster.
+#   * E2B_ENVD_API_URL has NO consumer at our pins. Grep counts (positive
+#     control alongside): in PMOVES-E2B-Danger-Room (the SDK monorepo)
+#     E2B_API_KEY matches 24 files, E2B_DOMAIN 17, E2B_ACCESS_TOKEN 10,
+#     E2B_ENVD_API_URL 0. In PMOVES-Danger-infra it matches exactly one file:
+#     DEV-LOCAL.md itself. The SDK derives the envd URL from debug + host
+#     instead (main.py:49), so it targets localhost:49983 — NOT the
+#     client-proxy port 3002 the doc names. We therefore validate the variable
+#     when present but do not fail on it, and the runbook carries the
+#     reachability caveat.
+#
 # ── Why SHAPE and not presence ───────────────────────────────────────────────
 # `[ -n "$VAR" ]` passes a TRUNCATED secret. That is exactly how a two-character
 # truncation in secrets delivery went unnoticed here: the key was "present" at
@@ -189,7 +209,20 @@ e2b_validate_shapes() {
       _e2b_shape_report E2B_API_KEY "$E2B_API_KEY_PREFIX" "$E2B_API_KEY_HEX_LOCAL" "$E2B_API_KEY_HEX_CLOUD"
       _e2b_shape_report E2B_ACCESS_TOKEN "$E2B_ACCESS_TOKEN_PREFIX" "$E2B_ACCESS_TOKEN_HEX"
       _e2b_require_url E2B_API_URL
-      _e2b_require_url E2B_ENVD_API_URL
+      # E2B_DEBUG is not in the vendor dotenv block but the pinned SDK cannot
+      # reach a local cluster without it (see header). Fail on it.
+      if [ "${E2B_DEBUG:-}" = "true" ]; then
+        _e2b_log "E2B_DEBUG: true (required — SDK routes to localhost over http)"
+      else
+        _e2b_log "E2B_DEBUG: '${E2B_DEBUG:-<unset>}' — MUST be 'true' for selfhost-local. e2b/sandbox/main.py:198 only returns localhost:<port> when debug is set; otherwise the SDK builds https://<port>-<id>.e2b.app and never reaches your cluster."
+        E2B_SHAPE_ERRORS=$((E2B_SHAPE_ERRORS + 1))
+      fi
+      # Advisory only: declared by DEV-LOCAL.md, zero consumers at our pins.
+      if [ -n "${E2B_ENVD_API_URL:-}" ]; then
+        _e2b_log "E2B_ENVD_API_URL: ${E2B_ENVD_API_URL} (declared by DEV-LOCAL.md; the pinned python SDK does not read it — it derives envd from E2B_DEBUG and targets localhost:49983)"
+      else
+        _e2b_log "E2B_ENVD_API_URL: unset (advisory — no consumer at our pins; set it for JS/CLI parity with DEV-LOCAL.md)"
+      fi
       _e2b_forbid E2B_DOMAIN "DEV-LOCAL.md does not use E2B_DOMAIN for the local stack — it is the GCP self-host variable and setting it here can misroute the SDK"
       ;;
   esac
