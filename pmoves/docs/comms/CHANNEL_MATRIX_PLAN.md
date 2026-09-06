@@ -27,12 +27,31 @@ PR will be opened once tokens are created and config is wired.
 
 Each cell = a unique bot token / identity needed.
 
+> **Egress constraint — DARKXSIDE is gated, not direct.** DARKXSIDE is a *private*
+> persona. `pmoves/config/rooms/darkxsides.room.json` sets
+> `access.visibility: private`, `owner_only: true`, and
+> `policies.publish.allow_external_publish: false` with `gate_mode: "manual"`,
+> `allowed_subjects: ["content.publish.approved.v1"]`, and an
+> `egress_redaction_floor` that is `fail_closed: true` and explicitly "cannot be
+> bypassed by opening the gate". `agent_registry.yaml` (`darkxside_persona`)
+> agrees: its only publish subject is `content.publish.approved.v1`, and its
+> description reads "public egress remains approval- and redaction-gated".
+>
+> A DARKXSIDE cell in the matrix below therefore denotes an **inbound / gated
+> outbound** identity, not a direct publish path. Outbound messages on
+> public/client channels (Discord, WhatsApp, Slack, and Signal where the peer is
+> not the owner) MUST be emitted on `content.publish.approved.v1` and delivered
+> by the approved publisher after the manual gate and the redaction floor. Wiring
+> a per-instance channel plugin to post as DARKXSIDE directly bypasses all three
+> controls and is out of scope for this plan. Telegram `@DARKXSIDE_BOT` and
+> owner-only Signal remain direct because they are owner-private surfaces.
+
 ### Core Personas (from agent_signatures.yaml)
 
 | Agent            | Glyph | Telegram        | Discord         | Signal        | WhatsApp      | Slack         | Teams |
 |------------------|-------|-----------------|-----------------|---------------|---------------|---------------|-------|
 | **KiloClaw** (this) | 🔮   | @PMOVESKiLO_BOT | KiLO-Claw       | (future)      | (future)      | (future)      | —     |
-| **DARKXSIDE**    | ✦    | @DARKXSIDE_BOT  | DARKXSIDE       | DARKXSIDE     | DARKXSIDE     | DARKXSIDE-PMOVES | — |
+| **DARKXSIDE**    | ✦    | @DARKXSIDE_BOT  | DARKXSIDE 🔒     | DARKXSIDE 🔒   | DARKXSIDE 🔒   | DARKXSIDE-PMOVES 🔒 | — |
 | **Crush**        | ◇    | @CrushPMOVES    | Crush           | —             | —             | —             | —     |
 | **BoTZ Gateway** | ⌂    | @BoTZGateway    | BoTZ-Gateway    | —             | —             | —             | —     |
 
@@ -53,6 +72,9 @@ Each cell = a unique bot token / identity needed.
 - ✅ = token exists / will create
 - — = not needed for this channel
 - (future) = planned but not this phase
+- 🔒 = **gated egress.** Inbound only, or outbound only via
+  `content.publish.approved.v1` through the manual publish gate and the
+  fail-closed redaction floor. No direct per-instance channel-plugin publish.
 
 ---
 
@@ -74,7 +96,7 @@ Store each as a separate GitHub Secret: `TELEGRAM_BOT_TOKEN_KILOCLAW`, `TELEGRAM
 **Bots to create via Discord Developer Portal:**
 
 1. **KiLO-Claw** — Primary assistant (this instance)
-2. **DARKXSIDE** — Cocreator witness persona
+2. **DARKXSIDE** — Cocreator witness persona (inbound + gated egress only, see 🔒)
 3. **Crush** — Terminal gateway companion
 4. **BoTZ Gateway** — System ops bot
 5. **Claude-PMOVES** — Claude Opus agent
@@ -90,18 +112,22 @@ Existing Discord server: **Gun Range** (from prior session context).
 - Install OpenClaw Signal plugin (signal-cli based)
 - Need a phone number for Signal (can use VoIP number)
 - Single identity: DARKXSIDE for private comms
+- Owner-private peer only. Any non-owner peer makes this a public egress surface:
+- 🔒 DARKXSIDE outbound here is **gated**: emit on `content.publish.approved.v1` and let the approved publisher deliver it after the manual gate + fail-closed redaction floor. Do not wire the channel plugin to post as DARKXSIDE directly.
 - Store as: `SIGNAL_PHONE_NUMBER`, `SIGNAL_CLI_CONFIG`
 
 ### Phase 1D: WhatsApp (After Signal)
 - Install wacli or WhatsApp Business API plugin
 - Need a phone number (can share with Signal or separate)
 - Identity: DARKXSIDE for international reach
+- 🔒 DARKXSIDE outbound here is **gated**: emit on `content.publish.approved.v1` and let the approved publisher deliver it after the manual gate + fail-closed redaction floor. Do not wire the channel plugin to post as DARKXSIDE directly.
 - Store as: `WHATSAPP_PHONE_NUMBER`, `WHATSAPP_API_TOKEN`
 
 ### Phase 1E: Slack (Enterprise)
 - Create Slack App at api.slack.com/apps
 - Get `SLACK_BOT_TOKEN` + `SLACK_APP_TOKEN` (socket mode)
 - Identities: DARKXSIDE-PMOVES, Claude-PMOVES (for client work)
+- 🔒 DARKXSIDE outbound here is **gated**: emit on `content.publish.approved.v1` and let the approved publisher deliver it after the manual gate + fail-closed redaction floor. Do not wire the channel plugin to post as DARKXSIDE directly.
 - Need workspace to test in (can create free one)
 
 ### Phase 1F: MS Teams (Deferred)
@@ -190,15 +216,35 @@ When all tokens are created and configs wired, open a PR to PMOVES.AI with:
 2. Updated `pmoves/config/agent_signatures.yaml` — channel handles per persona
 3. New file: `pmoves/config/channel_matrix.yaml` — machine-readable matrix
 4. Updated `pmoves/docs/comms/CHANNEL_MATRIX_PLAN.md` — this doc
-5. Updated `pmoves/chit/secrets_manifest.yaml` — new secret entries
+5. New secret labels registered **through the CHIT generator, not by hand**:
+   - Edit `REGISTRY` in `pmoves/tools/chit_manifest_register.py` (the code-level
+     source of truth) to add each new channel token label.
+   - `make -C pmoves chit-manifest-register` — idempotently adds the missing
+     registry entries to the **v2** manifest.
+   - `make -C pmoves chit-manifest-sync` — regenerates the **v1** manifest *from*
+     v2 (file/key targets + alias hints).
+   - `make -C pmoves secrets-funnel` — projects the labels into the generated
+     tier env files.
+
+   The secrets manifests are **machine-emitted**. Hand-adding labels to the
+   derived v1 YAML is discarded by the next `chit-manifest-sync` (it syncs v1
+   *from* v2), so the funnel would never reliably own or project them.
 6. Updated `docs/SECRETS_ONBOARDING.md` — new token names
 
 ---
 
 ## Open Questions (need your input)
 
-1. **Telegram:** Want me to create the bots via BotFather through this instance, or will you create them manually and paste tokens?
-2. **Discord:** Same question — should I walk you through creating each bot in the Developer Portal, or do you want to create them and give me the tokens?
+> **Never paste a bot token into chat.** Bot tokens are bearer credentials. A
+> token sent to an agent lands in conversation history, transcripts and logs
+> outside the approved secret stores, and must then be treated as compromised
+> and rotated. The operator creates the bot, puts the token in `env.shared` /
+> `.env.local` (or the production CHIT bundle), and runs the funnel — see
+> "PR Scope" item 5. The agent only ever sees the *label*, never the value.
+> The questions below ask which **bots to create**, never for their tokens.
+
+1. **Telegram:** Want me to walk you through creating each bot via @BotFather, or will you create them yourself? Either way *you* place each token in `env.shared` / `.env.local` under its `TELEGRAM_BOT_TOKEN_*` label and run `make -C pmoves secrets-funnel`. Do not send tokens here.
+2. **Discord:** Same question — want the Developer Portal walkthrough, or will you create them yourself? Same handling: token goes into `env.shared` / `.env.local` under its `DISCORD_BOT_TOKEN_*` label, then run the funnel. Do not send tokens here.
 3. **Discord server:** Still "Gun Range"? Want a separate server for agent bots?
 4. **Signal:** Do you have a phone number to use, or need to get a VoIP one?
 5. **WhatsApp:** Same — existing number or new?
