@@ -1,6 +1,10 @@
+# Core lite bootstrap — MUST stay CUDA-free: this file is installed by
+# env-bootstrap-lite on every funnel/preflight path, and the secrets
+# materialization chain (chit-manifest-sync and friends) does not touch
+# embeddings. sentence-transformers/scikit-learn (which drag torch and the
+# multi-GB nvidia wheel stack) live in requirements-lite-embeddings.txt.
 PyYAML>=6.0
 rich>=13.7.0
-sentence-transformers>=2.0.0
-scikit-learn>=1.3.0
 jsonschema>=4.0.0
 psutil>=5.9.8
+numpy>=1.26
