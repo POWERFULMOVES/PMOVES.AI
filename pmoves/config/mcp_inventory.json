@@ -172,6 +172,22 @@
             "X-API-Key": "${FLUTE_API_KEY}"
           },
           "notes": "Auth: X-API-Key header (main.py:222). When FLUTE_API_KEY is unset flute runs dev-mode (auth skipped) \u2014 set via secrets funnel for fleet exposure."
+        },
+        {
+          "key": "pipecat-context-hub",
+          "description": "Local-first Pipecat docs/examples/API index (ChromaDB+FTS5, cited) \u2014 the knowledge-ingestion pattern for voice agents",
+          "transport": "stdio",
+          "command": "uvx",
+          "args": [
+            "pipecat-ai-context-hub",
+            "serve"
+          ],
+          "clients": [
+            "hermes",
+            "agent-zero",
+            "crush"
+          ],
+          "notes": "Upstream fork POWERFULMOVES/Pmoves-pipecat-context-hub; index at ~/.pipecat-context-hub. Fork ships claude-code/cursor/vscode/zed client configs \u2014 hermes config is via this inventory render."
         }
       ]
     },
