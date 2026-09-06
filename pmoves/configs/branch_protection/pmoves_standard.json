@@ -219,6 +219,10 @@
     "POWERFULMOVES/PMOVES-nats-server": {
       "profile": "fork",
       "branch": "PMOVES.AI-Edition-Hardened"
+    },
+    "POWERFULMOVES/PMOVES-OpenRoom": {
+      "profile": "fork",
+      "branch": "PMOVES.AI-Edition-Hardened"
     }
   }
 }
