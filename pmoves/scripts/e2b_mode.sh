@@ -179,6 +179,22 @@ e2b_resolve_mode() {
   return 0
 }
 
+# e2b_apply_mode_env — export the NON-SECRET knobs that the selected mode
+# implies. Mode selection has to actually configure the client, not just judge
+# it. Only E2B_DEBUG qualifies: it is a routing flag, not a credential, and the
+# local stack is unreachable without it. Credentials are NEVER defaulted here —
+# a missing secret must stay a delivery failure, not something a script papers
+# over.
+e2b_apply_mode_env() {
+  set +x
+  [ -n "$E2B_MODE_RESOLVED" ] || { _e2b_log "e2b_resolve_mode must run first"; return 1; }
+  if [ "$E2B_MODE_RESOLVED" = "selfhost-local" ] && [ -z "${E2B_DEBUG:-}" ]; then
+    export E2B_DEBUG=true
+    _e2b_log "E2B_DEBUG: defaulted to true by mode selection (selfhost-local routing flag, not a secret)"
+  fi
+  return 0
+}
+
 # e2b_validate_shapes — per-mode required set + shape checks.
 # Returns 0 clean, 1 when any variable is missing or malformed.
 e2b_validate_shapes() {
