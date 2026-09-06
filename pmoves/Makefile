@@ -5741,3 +5741,65 @@ beats-pipeline: ## Full pipeline: analyze -> cluster -> export to Hyperdimension
 	@$(MAKE) -C $(CURDIR) beats-analyze
 	@$(MAKE) -C $(CURDIR) beats-hyperdim
 	@echo "[beats] Done. Open website/hyperdim/ or website/embeds/beats-constellation/"
+
+# ---------------------------------------------------------------------------
+# Agent sandboxes (E2B) — the sanctioned substitute for proving a fix that
+# would otherwise need a live mutation against production.
+#
+# Entrypoint doc: .claude/skills/agent-sandbox/SKILL.md
+# CLI source:     skills/PMOVES-agent-sandbox-skill/.claude/skills/agent-sandboxes/sandbox_cli/
+#
+# E2B_API_KEY is loaded through scripts/with-env.sh (LOAD_ENV_SHARED), never
+# hardcoded and never echoed. A Makefile $(VAR) cannot see funnel-delivered
+# values, so every recipe sources the loader inside the shell.
+# ---------------------------------------------------------------------------
+SANDBOX_CLI_DIR := $(CURDIR)/../skills/PMOVES-agent-sandbox-skill/.claude/skills/agent-sandboxes/sandbox_cli
+SANDBOX_TIMEOUT ?= 600
+
+.PHONY: sandbox-preflight sandbox-help sandbox-create sandbox-list sandbox-info \
+        sandbox-exec sandbox-kill sandbox-smoke
+
+sandbox-preflight: ## Check the agent-sandbox CLI is runnable and E2B_API_KEY is present (name/length only)
+	@bash -lc '. ./scripts/with-env.sh 2>/dev/null || true; \
+		rc=0; \
+		if [ -d "$(SANDBOX_CLI_DIR)" ]; then echo "[sandbox] CLI dir: present"; \
+		else echo "[sandbox] CLI dir: MISSING — run: git submodule update --init --recursive skills/"; rc=3; fi; \
+		if command -v uv >/dev/null 2>&1; then echo "[sandbox] uv: $$(uv --version 2>/dev/null)"; \
+		else echo "[sandbox] uv: MISSING — required (CLI is a uv package, python >=3.12)"; rc=3; fi; \
+		if [ -n "$${E2B_API_KEY:-}" ]; then echo "[sandbox] E2B_API_KEY: present (length $${#E2B_API_KEY})"; \
+		else echo "[sandbox] E2B_API_KEY: UNSET — sandbox provisioning will fail"; rc=3; fi; \
+		if [ -n "$${E2B_DOMAIN:-}" ]; then echo "[sandbox] E2B_DOMAIN: set (self-hosted target)"; \
+		else echo "[sandbox] E2B_DOMAIN: unset — targeting e2b.dev cloud (see SKILL.md self-hosting note)"; fi; \
+		[ $$rc -eq 0 ] && echo "[sandbox] preflight OK" || echo "[sandbox] preflight COULD-NOT-MEASURE (exit 3)"; \
+		exit $$rc'
+
+sandbox-help: ## Show the real agent-sandbox CLI command surface
+	@bash -lc '. ./scripts/with-env.sh 2>/dev/null || true; \
+		cd "$(SANDBOX_CLI_DIR)" && uv run sbx $(or $(GROUP),) --help'
+
+sandbox-create: ## Provision a sandbox and print its ID [SANDBOX_TIMEOUT=600] [NAME=..] [TEMPLATE=..] [ARGS=..]
+	@bash -lc '. ./scripts/with-env.sh 2>/dev/null || true; \
+		cd "$(SANDBOX_CLI_DIR)" && uv run sbx init --timeout $(SANDBOX_TIMEOUT) \
+		$(if $(NAME),--name "$(NAME)",) $(if $(TEMPLATE),--template "$(TEMPLATE)",) $(ARGS)'
+
+sandbox-list: ## List running sandboxes [LIMIT=20]
+	@bash -lc '. ./scripts/with-env.sh 2>/dev/null || true; \
+		cd "$(SANDBOX_CLI_DIR)" && uv run sbx sandbox list --limit $(or $(LIMIT),20)'
+
+sandbox-info: ## Show sandbox details: SBX=<sandbox_id>
+	@if [ -z "$(SBX)" ]; then echo "Usage: make -C pmoves sandbox-info SBX=<sandbox_id>"; exit 1; fi
+	@bash -lc '. ./scripts/with-env.sh 2>/dev/null || true; \
+		cd "$(SANDBOX_CLI_DIR)" && uv run sbx sandbox info "$(SBX)"'
+
+sandbox-exec: ## Run a command inside a sandbox: SBX=<id> CMD='echo hi' [ARGS=--shell]
+	@if [ -z "$(SBX)" ] || [ -z "$(CMD)" ]; then echo "Usage: make -C pmoves sandbox-exec SBX=<sandbox_id> CMD='echo hi' [ARGS=--shell]"; exit 1; fi
+	@bash -lc '. ./scripts/with-env.sh 2>/dev/null || true; \
+		cd "$(SANDBOX_CLI_DIR)" && uv run sbx exec "$(SBX)" "$(CMD)" $(ARGS)'
+
+sandbox-kill: ## Tear down a sandbox: SBX=<sandbox_id>
+	@if [ -z "$(SBX)" ]; then echo "Usage: make -C pmoves sandbox-kill SBX=<sandbox_id>"; exit 1; fi
+	@bash -lc '. ./scripts/with-env.sh 2>/dev/null || true; \
+		cd "$(SANDBOX_CLI_DIR)" && uv run sbx sandbox kill "$(SBX)"'
+
+sandbox-smoke: ## End-to-end proof: provision -> exec echo -> tear down (exit 3 = could-not-measure)
+	@bash $(CURDIR)/scripts/sandbox_smoke.sh
