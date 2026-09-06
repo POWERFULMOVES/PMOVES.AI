@@ -15,7 +15,6 @@ import sys
 import time
 from pathlib import Path
 
-import jwt
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[3]  # .../PMOVES.AI-ghapp
@@ -24,7 +23,10 @@ TOOL = REPO_ROOT / "pmoves" / "tools" / "gh_app_token.py"
 # CI's python-tests env does not carry the crypto stack; the tool itself
 # guards its import with a remediation message. Skip rather than fail where
 # the dependency is deliberately absent (GITHUB_APP.md documents the venv
-# install for nodes that mint).
+# install for nodes that mint). importorskip returns the module, so `jwt`
+# is bound here instead of a bare top-level import that would die at
+# collection time before the guard runs.
+jwt = pytest.importorskip("jwt", reason="gh_app_token tests need PyJWT")
 pytest.importorskip("cryptography", reason="gh_app_token test keys need cryptography")
 
 spec = importlib.util.spec_from_file_location("gh_app_token", TOOL)
