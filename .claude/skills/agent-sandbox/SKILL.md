@@ -115,6 +115,30 @@ tool calls — a killed session loses it and leaks a running sandbox.
 - Reproducing an incident in isolation.
 - Executing untrusted or generated code.
 
+## Known blocker on B850/Knuckles (2026-09-06): malformed E2B_API_KEY
+
+`make -C pmoves sandbox-preflight` currently reports **MALFORMED** on this node and
+provisioning returns:
+
+```
+401: Unauthorized ... API key is malformed: expected the "e2b_" prefix
+```
+
+Measured shape of the delivered value (value never printed): **42 chars, begins `b_`,
+followed by exactly 40 lowercase hex chars.** E2B's canonical format is `e2b_` + 40 hex =
+**44 chars**. The delivered value is that string with its leading `e2` missing — a
+two-character truncation somewhere in secrets delivery, not a wrong or expired key.
+
+Positive control confirming the rest of the road is healthy: substituting a *fabricated*
+well-formed key (`e2b_` + 40 zeros, registered nowhere) changes the error to
+`Invalid API key ... Cannot get the team for the given API key`. A different error at a
+later stage proves the CLI, the uv environment, the network path and the E2B API are all
+reachable and working — **the credential is the only blocker.**
+
+**Operator action:** re-deliver `E2B_API_KEY` through the secrets funnel with the leading
+`e2` intact, then `make -C pmoves sandbox-smoke` should go green. Agents must not
+reconstruct or patch the key themselves.
+
 ## If it does not work
 
 Report **COULD-NOT-MEASURE** with the exact error and stop. Do not fall back to doing the
