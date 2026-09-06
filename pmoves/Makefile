@@ -5763,6 +5763,20 @@ beats-pipeline: ## Full pipeline: analyze -> cluster -> export to Hyperdimension
 # the single place that knows them, and it validates prefix + length + charset
 # rather than mere presence (a `[ -n ]` test passes a truncated secret).
 # Runbook: pmoves/docs/operations/E2B_SELF_HOST_RUNBOOK.md
+#
+# ── EXIT CODES: `make` CANNOT CARRY THEM ────────────────────────────────────
+# These scripts speak the fleet doctrine 0 clean / 1 findings / 3
+# could-not-measure. GNU make DOES NOT propagate a recipe's status: it exits 2
+# for any recipe failure. Measured here — a recipe exiting 1 and a recipe
+# exiting 3 both make `make` exit 2, while running the script directly returns
+# 3. So the distinction between "this failed" and "this could not be measured"
+# is DESTROYED by the make wrapper, and could-not-measure is precisely the
+# outcome that must never be mistaken for either a pass or a failure.
+# Therefore: every target below PRINTS its real exit code, and anything that
+# needs to branch on it (CI, a gate, another script) must call the script
+# directly, not through make:
+#   bash pmoves/scripts/probe_danger_room_host.sh ; echo $?
+#   bash pmoves/scripts/sandbox_smoke.sh          ; echo $?
 # ---------------------------------------------------------------------------
 SANDBOX_CLI_DIR := $(CURDIR)/../skills/PMOVES-agent-sandbox-skill/.claude/skills/agent-sandboxes/sandbox_cli
 SANDBOX_TIMEOUT ?= 600
@@ -5773,9 +5787,10 @@ SANDBOX_ENV = $(if $(E2B_MODE),E2B_MODE="$(E2B_MODE)",) . ./scripts/with-env.sh 
 	. ./scripts/e2b_mode.sh; e2b_resolve_mode >/dev/null && e2b_apply_mode_env >/dev/null
 
 .PHONY: sandbox-preflight sandbox-mode sandbox-help sandbox-create sandbox-list \
-        sandbox-info sandbox-exec sandbox-kill sandbox-smoke
+        sandbox-info sandbox-exec sandbox-kill sandbox-smoke sandbox-host-probe \
+        sandbox-runbook
 
-sandbox-preflight: ## Check the CLI is runnable and the SELECTED mode's credentials are well-shaped [E2B_MODE=selfhost-local|cloud|selfhost-gcp|auto]
+sandbox-preflight: ## Check the CLI is runnable and the SELECTED mode's credentials are well-shaped (make masks the code as 2 — see header) [E2B_MODE=selfhost-local|cloud|selfhost-gcp|auto]
 	@bash -lc 'set +x; $(if $(E2B_MODE),E2B_MODE="$(E2B_MODE)",) . ./scripts/with-env.sh 2>/dev/null || true; set +e; set +x; \
 		rc=0; \
 		if [ -d "$(SANDBOX_CLI_DIR)" ]; then echo "[sandbox] CLI dir: present"; \
@@ -5821,5 +5836,38 @@ sandbox-kill: ## Tear down a sandbox: SBX=<sandbox_id>
 	@bash -lc 'set +x; $(SANDBOX_ENV); \
 		cd "$(SANDBOX_CLI_DIR)" && uv run sbx sandbox kill "$(SBX)"'
 
-sandbox-smoke: ## End-to-end proof: provision -> exec echo -> tear down (exit 3 = could-not-measure) [E2B_MODE=..]
-	@$(if $(E2B_MODE),E2B_MODE="$(E2B_MODE)",) bash $(CURDIR)/scripts/sandbox_smoke.sh
+sandbox-smoke: ## End-to-end proof: provision -> exec echo -> tear down. Prints the real 0/1/3 code; make itself reports 2 for both 1 and 3 [E2B_MODE=..]
+	@set +e; $(if $(E2B_MODE),E2B_MODE="$(E2B_MODE)",) bash $(CURDIR)/scripts/sandbox_smoke.sh; rc=$$?; \
+		echo "[sandbox] sandbox_smoke.sh exit=$$rc (0 clean / 1 findings / 3 could-not-measure). make will report 2 for any non-zero — branch on the script directly, not on make."; \
+		exit $$rc
+
+# --- Self-host capability probe --------------------------------------------
+# Answers "can THIS node host the Danger Room?" against the real requirements
+# in PMOVES-Danger-infra/DEV-LOCAL.md. Read-only: it loads no module, writes no
+# sysctl, brings nothing up and touches no credential.
+#
+# It must run ON the candidate node. The owning node for the Danger Room is
+# pmoves-5090 (operator decision 2026-09-06); running the probe on any other
+# node measures that other node and answers nothing about the 5090.
+#
+# Verdicts are PASS / FAIL / COULD-NOT-MEASURE per item, and could-not-measure
+# is NOT a pass — it outranks FAIL in the overall exit code so an incomplete
+# reading can never be reported as a clean one.
+#   exit 0 = clean, 1 = findings, 3 = could-not-measure
+sandbox-host-probe: ## Probe THIS node's fitness to host the E2B self-host stack (read-only; 0 clean / 1 findings / 3 could-not-measure)
+	@echo "[sandbox] Danger Room capability probe — read-only, provisions nothing."
+	@echo "[sandbox] Owning node for the Danger Room is pmoves-5090. Run this ON the node you are judging."
+	@echo "[sandbox] On a Windows host, run scripts/probe_danger_room_host.ps1 FIRST, then this inside WSL2."
+	@set +e; bash $(CURDIR)/scripts/probe_danger_room_host.sh; rc=$$?; \
+		echo "[sandbox] probe_danger_room_host.sh exit=$$rc (0 clean / 1 findings / 3 could-not-measure)."; \
+		[ $$rc -eq 3 ] && echo "[sandbox] COULD-NOT-MEASURE is NOT a pass. Resolve the unread items and re-run before placing any workload here." || true; \
+		echo "[sandbox] make collapses this to 2 for any non-zero — a gate must call the script directly."; \
+		exit $$rc
+
+sandbox-runbook: ## Print the self-host runbook path + the owning node
+	@echo "owning node: pmoves-5090  (Ryzen 9 9950XD / RTX 5090 / 192 GB, deployment_class private-mesh)"
+	@echo "runbook:     pmoves/docs/operations/E2B_SELF_HOST_RUNBOOK.md"
+	@echo "probe:       pmoves/scripts/probe_danger_room_host.ps1  (Windows host half)"
+	@echo "             pmoves/scripts/probe_danger_room_host.sh   (Linux/WSL2 half)"
+	@echo "vendor docs: PMOVES-Danger-infra/DEV-LOCAL.md  (local bare metal)"
+	@echo "             PMOVES-Danger-infra/self-host.md  (GCP)"
