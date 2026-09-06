@@ -100,3 +100,24 @@ V3 model manifest (8 files, superset of V1's 6):
 Custom-node stack beyond V1's Spectrum node: rgthree (Power Lora Loader, Fast
 Groups Bypasser), VHS VideoCombine, KJ-nodes (SageAttention patch),
 MiniMaxH3SigmaShift / MediaLoader, ResolutionSelector.
+
+## SPARK stage-1 result (measured 2026-09-06): SageAttention runs on GB10
+
+The unlock is one environment variable — Triton 3.5.1 ships a `ptxas` that
+predates `sm_121a`, and the kernel JIT dies with
+`ptxas fatal: Value 'sm_121a' is not defined for option 'gpu-name'`.
+The host's CUDA 13.0 toolkit knows the arch:
+
+```bash
+export TRITON_PTXAS_PATH=/usr/local/cuda-13.0/bin/ptxas
+```
+
+Probe (autoresearch venv, torch 2.9.1+cu128, triton 3.5.1, pip
+`sageattention`): `sageattn(q,k,v, tensor_core=True, pv_accum_dtype="fp16+fp32")`
+executed with mean abs diff **0.00053** vs SDPA reference — numerically PASS.
+At the tiny probe shape (1×16×1024×128) sageattn is not yet faster than SDPA
+(0.16 vs 0.12 ms — quant overhead dominates); the payoff arrives at video-gen
+sequence lengths, which is what the H3 V3 pipeline feeds it. Any SPARK
+ComfyUI/serving container that wants the 11 SageAttention patch sites must
+export `TRITON_PTXAS_PATH` (or carry CUDA 13 ptxas) — same lesson class as
+the #2871 torch-cu128 preinstall.
