@@ -692,3 +692,19 @@ agent-zero-lock: ## Regenerate services/agent-zero/requirements.lock (the ONLY s
 
 compose-yaml-check: ## Assert every tracked compose file parses (incl. Compose's !reset/!override tags)
 	@uv run --quiet --with pyyaml python tools/compose_yaml_validate.py
+
+# ── Service recovery (engine-restart safe) ──────────────────────────
+# After a Docker Desktop/WSL2 engine restart, containers can sit in
+# "Created" (image pulled, never started). This starts them via compose
+# (no raw docker), so the Known Road covers the recovery case.
+.PHONY: svc-start svc-status
+svc-start: ## Start one service's containers after engine restart. Usage: make svc-start SVC=flute-gateway
+	@if [ -z "$(SVC)" ]; then echo "usage: make svc-start SVC=<compose-service>"; exit 2; fi
+	@case "$(SVC)" in *[!a-z0-9-]*|'') echo "invalid service slug: $(SVC)"; exit 2;; esac
+	@echo "svc-start $(SVC): starting via compose"
+	@$(DC) start $(SVC) 2>/dev/null || { echo "  not startable directly — falling back to up -d --no-deps"; $(DC) up -d --no-deps $(SVC); }
+	@$(DC) ps $(SVC)
+
+svc-status: ## Show compose status for one service. Usage: make svc-status SVC=flute-gateway
+	@if [ -z "$(SVC)" ]; then echo "usage: make svc-status SVC=<compose-service>"; exit 2; fi
+	@$(DC) ps $(SVC)
