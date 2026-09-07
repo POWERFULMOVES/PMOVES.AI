@@ -95,6 +95,8 @@ would be no better for the tool to commit it than for the thing it checks.
 from __future__ import annotations
 
 import argparse
+import contextlib
+import io
 import json
 import os
 import re
@@ -132,6 +134,22 @@ except Exception as _exc:  # pragma: no cover - depends on the tree layout
 else:
     _EXPANDER_ERROR = None
 
+try:
+    from _secrets_common import parse_env_file as _parse_env_file  # noqa: E402
+except Exception as _exc:  # pragma: no cover - depends on the tree layout
+    # Degrade, do not abort. Unlike the expander above, losing this only means
+    # resolving from a smaller environment -- today's behaviour -- rather than
+    # resolving DIFFERENTLY from the session. Class name only, never the
+    # message: see the ValueError handler in probe().
+    _ENV_PARSER_ERROR = (
+        f"cannot import _secrets_common ({type(_exc).__name__}) — the env file "
+        "cannot be layered in, so a credential that lives only there will read "
+        "as absent"
+    )
+    _parse_env_file = None  # type: ignore[assignment]
+else:
+    _ENV_PARSER_ERROR = None
+
 # Long enough to cross the tailnet, short enough that a wedged endpoint does not
 # hold up a session start. Only the status line is awaited, never the body.
 CONNECT_TIMEOUT = 6.0
@@ -139,6 +157,130 @@ CONNECT_TIMEOUT = 6.0
 # http.client refuses these in a header value -- and names the value in the
 # exception. We check first so the secret never reaches that message.
 _ILLEGAL_HEADER_CHARS = re.compile(r"[\r\n]")
+
+# ---------------------------------------------------------------------------
+# THE ENVIRONMENT THE SESSION WILL ACTUALLY HAVE
+# ---------------------------------------------------------------------------
+# This probe ran BEFORE the credential existed.
+#
+#   pmoves/scripts/claude-pmoves.sh    runs this preflight ...
+#   pmoves/scripts/claude-pmoves.sh    ... then execs $LAUNCHER
+#   deploy/provision/claude-pmoves.sh  ... which is what loads pmoves/env.shared
+#
+# So on the documented path -- `make -C pmoves claude-pmoves` -- the roster's
+# `Bearer ${CIPHER_API_TOKEN}` was expanded against a process environment that
+# did not yet contain the token. The header was omitted, the probe got 401, and
+# the session was told its memory was unusable moments before the delegate
+# loaded the token and launched Claude with a perfectly working Cipher MCP.
+#
+# That is the ORIGINAL defect of this lane -- a check that cannot pass --
+# resurrected by ordering rather than by a dropped header. It passed on the
+# node where the fix was written only because CIPHER_API_TOKEN happened to be
+# exported in the operator's shell: works here, reproducible nowhere.
+#
+# WHY THE TOOL RESOLVES IT AND NOT THE LAUNCHER. Three options were on the
+# table: load env.shared in the thin launcher before the probe, move the probe
+# after the env load, or resolve it here. This one:
+#
+#   * fixes EVERY caller. The documented manual command
+#     `python pmoves/tools/cipher_preflight.py` has the identical defect from
+#     an operator shell, and reordering one launcher leaves it broken.
+#   * adds no path that can abort a launch. claude-pmoves.sh:177 is explicit
+#     that the preflight must never block ("a session without memory is
+#     degraded, not unusable"), and pmoves/scripts/with-env.sh opens with
+#     `set -euo pipefail`, so SOURCING it turns errexit on in the caller. No
+#     shell wiring is touched here, so that hazard is not introduced.
+#   * costs the session nothing. The launcher's own load is still the only one
+#     that reaches the child process; this overlay lives and dies inside this
+#     probe.
+#
+# FIDELITY, NOT CONVENIENCE. The provisioning launcher sources its sanitized
+# copy under `set -a`, so a value in env.shared OVERRIDES an already-exported
+# one. The overlay mirrors that precedence, the same blocklist, and the same
+# `${ALIAS}` expansion in file order. A preflight that resolved a token the
+# session will not use would be vouching for something else -- the same reason
+# this module imports mcp_roster_normalize.expand instead of reimplementing it.
+#
+# Parsing is _secrets_common.parse_env_file, the declared single source of
+# truth for env-file parsing. This file writes no fourth parser.
+#
+# NOTHING FROM THE FILE IS EVER PRINTED. The overlay feeds expansion and
+# nothing else; only variable NAMES leave this module, exactly as with the
+# process environment.
+
+# Mirrors the blocklist in deploy/provision/claude-pmoves.sh. These control
+# Claude SDK/session behaviour and billing, are deliberately NOT sourced by the
+# launcher, and so must not be resolvable here either -- otherwise the preflight
+# could vouch for a credential the session refuses to load.
+_ENV_FILE_BLOCKLIST = re.compile(
+    r"^(ANTHROPIC_API_KEY|ANTHROPIC_AUTH_TOKEN|ANTHROPIC_BASE_URL"
+    r"|CLAUDECODE|CLAUDE_CODE_|CLAUDE_SESSION_)$"
+)
+
+
+def default_env_file() -> Path:
+    """Same resolution as deploy/provision/claude-pmoves.sh: $PMOVES_ENV_SHARED or the repo copy."""
+    override = os.environ.get("PMOVES_ENV_SHARED")
+    if override:
+        return Path(override)
+    return _REPO_ROOT / "pmoves" / "env.shared"
+
+
+def layered_environ(
+    env_file: Optional[Path] = None,
+    base: Optional[Mapping[str, str]] = None,
+) -> tuple[Dict[str, str], Optional[str]]:
+    """``(environment the session will see, note)`` — process env with env.shared over it.
+
+    *note* is a human-readable line when the overlay could not be applied. It is
+    NOT fatal: without it we resolve from a strictly smaller environment, which
+    is exactly today's behaviour, and a preflight must never cost you a launch.
+    """
+    env: Dict[str, str] = dict(os.environ if base is None else base)
+    if _expand_vars is None:
+        return env, "env-file overlay skipped: the shared expander is unavailable"
+    if _parse_env_file is None:
+        return env, f"env-file overlay skipped: {_ENV_PARSER_ERROR}"
+
+    path = env_file or default_env_file()
+    if not path.is_file():
+        # Not an error. A node may legitimately carry its creds in the process
+        # environment; say nothing rather than manufacture an alarm.
+        return env, None
+
+    # parse_env_file warns on stderr about malformed lines, naming the KEY only.
+    # Captured and re-emitted with attribution rather than swallowed: a silent
+    # handler here would hide the reason a variable is absent, which is the
+    # class of bug this whole lane is about.
+    buf = io.StringIO()
+    try:
+        with contextlib.redirect_stderr(buf):
+            file_values = _parse_env_file(path)
+    except Exception as exc:  # noqa: BLE001 - a bad env file must not abort a launch
+        return env, f"env-file overlay failed ({type(exc).__name__}) — detail withheld"
+    for line in buf.getvalue().splitlines():
+        if line.strip():
+            print(f"[cipher-preflight] {path.name}: {line}", file=sys.stderr)
+
+    # File order, so an alias resolves against a canonical key defined earlier
+    # in the same file -- which is what sourcing it sequentially does.
+    for key, raw in file_values.items():
+        if _ENV_FILE_BLOCKLIST.match(key):
+            continue
+        value = raw
+        if "${" in raw:
+            misses: List[str] = []
+            value = _expand_vars(raw, env, misses)
+            if misses:
+                # An alias whose target is unset would become an empty string
+                # under the launcher's `set +u`. Leaving the key ABSENT instead
+                # is strictly better here: the roster expansion then reports
+                # the variable by NAME, whereas an empty value would be sent as
+                # a bare "Bearer " and come back as an anonymous-looking 401.
+                continue
+        env[key] = value
+    return env, None
+
 
 # Which variable holds the cipher bearer. Both roster entries spell it this way
 # (`"Authorization": "Bearer ${CIPHER_API_TOKEN}"`), so an explicit --url probe
@@ -356,6 +498,8 @@ def check(
     urls: Optional[List[str]] = None,
     roster: Optional[Path] = None,
     token_env: str = DEFAULT_TOKEN_ENV,
+    env_file: Optional[Path] = None,
+    use_env_file: bool = True,
 ) -> Dict[str, Any]:
     if _EXPANDER_ERROR:
         # Without the shared expander the credential would resolve differently
@@ -392,9 +536,18 @@ def check(
                 "no cipher entry in the MCP roster — memory is not configured at all"
             )
 
+    # Resolve against the environment the SESSION will have, not the one this
+    # process happens to be started with. See layered_environ() for why the
+    # ordering made the roster path unable to pass.
+    env_note: Optional[str] = None
+    if use_env_file:
+        environ, env_note = layered_environ(env_file)
+    else:
+        environ = dict(os.environ)
+
     rows = []
     for cand in candidates:
-        result = probe(cand["url"], cand.get("headers"))
+        result = probe(cand["url"], cand.get("headers"), environ=environ)
         result["name"] = cand["name"]
         rows.append(result)
 
@@ -420,6 +573,11 @@ def check(
         "missing_env": missing_env,
         "ok": bool(reachable),
         "measured": bool(answered),
+        # Names only. Present so a 401 can be read against whether the overlay
+        # was actually applied -- "the token is missing" and "we could not look
+        # where the token lives" are different findings with different remedies.
+        "env_file": str(env_file or default_env_file()) if use_env_file else None,
+        "env_note": env_note,
     }
 
 
@@ -443,6 +601,33 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument("--roster", type=Path, default=None)
     parser.add_argument("--json", action="store_true", dest="as_json")
     parser.add_argument(
+        "--env-file",
+        dest="env_file",
+        type=Path,
+        default=None,
+        metavar="PATH",
+        help=(
+            "env file to layer over the process environment, mirroring what "
+            "deploy/provision/claude-pmoves.sh loads (default: "
+            "$PMOVES_ENV_SHARED or pmoves/env.shared)"
+        ),
+    )
+    parser.add_argument(
+        "--no-env-file",
+        dest="use_env_file",
+        action="store_false",
+        help=(
+            "resolve from THIS shell's environment only. Answers 'what would I "
+            "get without the launcher', not 'what will the session get'."
+        ),
+    )
+    # EXPLICIT so argparse's prefix matching cannot silently reinterpret it.
+    # `--token` is an unambiguous abbreviation of `--token-env`, so without this
+    # option `--token "$CIPHER_API_TOKEN"` parsed as "the variable NAMED
+    # <the token>" -- an unset name, an anonymous probe, and a 401 blamed on the
+    # credential. Declared and refused instead, so the mistake is loud.
+    parser.add_argument("--token", dest="raw_token", default=None, help=argparse.SUPPRESS)
+    parser.add_argument(
         "--token-env",
         dest="token_env",
         default=DEFAULT_TOKEN_ENV,
@@ -455,6 +640,22 @@ def main(argv: Optional[List[str]] = None) -> int:
         ),
     )
     args = parser.parse_args(argv)
+
+    if getattr(args, "raw_token", None) is not None:
+        # Exit 2, argparse's own usage-error code -- this is a misuse, not a
+        # measurement, so it belongs outside the 0/1/3 verdict doctrine.
+        # The value is NOT echoed. It is already in /proc/<pid>/cmdline, which
+        # is the point of refusing; repeating it into a log would widen that.
+        print(
+            "--token is refused. A credential on argv is readable by any user "
+            "on this host\n"
+            "  via `ps` and /proc/<pid>/cmdline. Use --token-env VAR, which "
+            "names the variable\n"
+            "  holding the token. (Value not echoed. Consider it exposed and "
+            "rotate it.)",
+            file=sys.stderr,
+        )
+        return 2
 
     try:
         return _run(args)
@@ -482,7 +683,13 @@ def main(argv: Optional[List[str]] = None) -> int:
 
 def _run(args: argparse.Namespace) -> int:
     try:
-        verdict = check(args.urls, args.roster, getattr(args, "token_env", DEFAULT_TOKEN_ENV))
+        verdict = check(
+            args.urls,
+            args.roster,
+            getattr(args, "token_env", DEFAULT_TOKEN_ENV),
+            getattr(args, "env_file", None),
+            getattr(args, "use_env_file", True),
+        )
     except Unmeasured as exc:
         if args.as_json:
             print(json.dumps({"measured": False, "reason": str(exc)}, indent=2))
@@ -538,6 +745,10 @@ def _run(args: argparse.Namespace) -> int:
             lines.append(
                 "  A credential WAS presented and refused — it is stale or wrong."
             )
+        if verdict.get("env_note"):
+            # A 401 read against a FAILED overlay is a different finding: the
+            # token may be sitting in the env file we could not consult.
+            lines.append(f"  NOTE: {verdict['env_note']}")
         lines.append("  Recovery: pmoves/docs/operations/MCP_TOOLKIT.md")
         print("\n".join(lines), file=sys.stderr)
         return rc
