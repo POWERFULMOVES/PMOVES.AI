@@ -18,11 +18,6 @@ Codified workflow for reciprocal PR review across parallel agent sessions in the
 
 **Do NOT invoke when:**
 - The PR is your own (use `pmoves-chit-sign` for AGNOTE rows on your own work)
-- No peer CLAUDE is active (Codex/CodeRabbit + honest self-review suffice solo)
-- Hotfix / damage-control / time-critical — defer to post-merge retrospective
-
-**Do NOT invoke when:**
-- The PR is your own (use `pmoves-chit-sign` for AGNOTE rows on your own work)
 - No peer session is active (Codex/CodeRabbit + honest self-review + operator suffice solo)
 - Hotfix / damage-control / time-critical — defer to post-merge retrospective
 
@@ -32,7 +27,7 @@ The workflow is harness-agnostic; these specifics were learned live (SPARK, 2026
 
 - **Same mechanics**: `gh` CLI, AGNOTE rows, `make -C pmoves sign-trail`, the 4-class scan — identical from Crush or an operator terminal.
 - **Self-approval**: GitHub blocks `gh pr review --request-changes`/`--approve` on same-account PRs from any harness — use `gh pr comment` for the substantive body (this skill already says COMMENTED, not APPROVED).
-- **Signature**: sign with your registered identity from `pmoves/config/agent_signatures.yaml` (e.g. `crush` ◇, `claude-opus` ◆, `z890-claude` ⚙, `darkxside` ✦, `powerfulmoves` ⚡) — the `ACK::<reviewing-agent>::` slot takes the agent_id, not the harness name. An operator review signs as `dsh`/`powerfulmoves`.
+- **Signature**: sign with your registered identity from `pmoves/config/agent_signatures.yaml` (e.g. `crush` ◇, `claude-opus` ◆, `z890-claude` ⚙, `darkxside` ✦, `powerfulmoves` ⚡) — the `ACK::<reviewing-agent>::` slot takes the agent_id, not the harness name. An operator review signs as `darkxside`/`powerfulmoves`.
 - **The operator IS a review surface** (Three-Body Control): DARKXSIDE's challenge of a PR's claims mid-review is the highest-signal angle in the fleet — PR #2942's `:8091` port-map correction and PR #2938's topology challenge both came from operator pushback on an agent's confident draft. Operator review lands as PR comments and the `[ACK: control]` line in `AGNOTE4482_SIGNOFF_CHECKLIST.md`; the merge gate does not pass without it.
 - **Skills load on demand**: Crush loads a skill only when invoked (`loaded_this_session 0/44` is normal). Reviewing a skills PR from Crush is an extra angle — you can verify the frontmatter `description` actually works as a **trigger** you would have fired on, not just as documentation.
 - **Cross-harness reviewers are the point**: a Crush review of a Claude-authored PR (and vice versa) surfaces harness-assumption drift — paths that only exist under one launcher, env vars one harness sources and the other doesn't (the `TS_Z890` roster drop was exactly this class). The operator catches what no harness sees: that the task itself was wrong.
