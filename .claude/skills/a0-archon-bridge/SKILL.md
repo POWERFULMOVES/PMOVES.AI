@@ -90,7 +90,15 @@ Work submission goes through REST conversation endpoints (see `make archon-nativ
 ## Validation one-liners
 
 ```bash
-python3 -c "import urllib.request,json; print(json.load(urllib.request.urlopen('http://localhost:8080/healthz'))['status'])"
+# healthz: top-level status says "ok" even when the connector path 404s —
+# fail unless runtime.status is ok AND runtime.note carries no 404 marker
+python3 -c "
+import urllib.request, json, sys
+b = json.load(urllib.request.urlopen('http://localhost:8080/healthz'))
+rt = b.get('runtime', {})
+ok = b.get('status') == 'ok' and rt.get('status') == 'ok' and '404' not in rt.get('note', '')
+print(json.dumps({'status': b.get('status'), 'runtime': rt, 'verdict': 'HEALTHY' if ok else 'UNREACHABLE-CONNECTOR'}))
+sys.exit(0 if ok else 1)"
 python3 -c "import urllib.request,json; r=urllib.request.Request('http://localhost:8080/sessions',data=json.dumps({'message':'reply: OK'}).encode(),headers={'Content-Type':'application/json'}); print(json.load(urllib.request.urlopen(r,timeout=120)))"
 python3 .claude/skills/pmoves-nats-subject-audit/scripts/audit.py   # then re-check orphans against :9223
 ```
