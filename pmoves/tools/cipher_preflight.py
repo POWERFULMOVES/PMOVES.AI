@@ -70,6 +70,15 @@ Usage:
   python pmoves/tools/cipher_preflight.py
   python pmoves/tools/cipher_preflight.py --json
   python pmoves/tools/cipher_preflight.py --url http://localhost:8105/mcp/sse
+  python pmoves/tools/cipher_preflight.py --url ... --token-env OTHER_TOKEN_VAR
+  python pmoves/tools/cipher_preflight.py --url ... --token-env ''   # anonymous
+
+An explicit ``--url`` presents ``Bearer ${CIPHER_API_TOKEN}`` too, expanded by
+the same shared expander. It did not, which made the documented manual command
+above unable to pass against an endpoint that requires a bearer -- this file's
+own thesis, surviving in the path an operator reaches for when they doubt the
+roster. The token is taken from a NAMED VARIABLE and never from argv, where it
+would be readable in ``ps``.
 
 Exit codes:
   0  at least one cipher endpoint answered usably — memory is available
@@ -130,6 +139,11 @@ CONNECT_TIMEOUT = 6.0
 # http.client refuses these in a header value -- and names the value in the
 # exception. We check first so the secret never reaches that message.
 _ILLEGAL_HEADER_CHARS = re.compile(r"[\r\n]")
+
+# Which variable holds the cipher bearer. Both roster entries spell it this way
+# (`"Authorization": "Bearer ${CIPHER_API_TOKEN}"`), so an explicit --url probe
+# that synthesises the same header is probing the way the session will.
+DEFAULT_TOKEN_ENV = "CIPHER_API_TOKEN"
 
 
 class Unmeasured(RuntimeError):
@@ -338,14 +352,39 @@ def probe(
     return row
 
 
-def check(urls: Optional[List[str]] = None, roster: Optional[Path] = None) -> Dict[str, Any]:
+def check(
+    urls: Optional[List[str]] = None,
+    roster: Optional[Path] = None,
+    token_env: str = DEFAULT_TOKEN_ENV,
+) -> Dict[str, Any]:
     if _EXPANDER_ERROR:
         # Without the shared expander the credential would resolve differently
         # here than on the path into Claude Code, so any answer this probe got
         # would be vouching for something else. Say so; do not guess.
         raise Unmeasured(_EXPANDER_ERROR)
     if urls:
-        candidates = [{"name": "--url", "url": u} for u in urls]
+        # An explicit --url used to build a candidate with NO headers, so the
+        # documented command
+        #
+        #     python pmoves/tools/cipher_preflight.py --url http://localhost:8105/mcp/sse
+        #
+        # probed anonymously against an endpoint that requires a bearer and
+        # could therefore only ever report 401. That is this file's own thesis
+        # -- a check that cannot pass -- surviving in the manual path after it
+        # was removed from the roster path.
+        #
+        # The bearer is derived from the ENVIRONMENT, never taken on argv:
+        # `--token AAA` would put the credential in /proc/<pid>/cmdline and in
+        # every `ps` on the box. `--token-env` names the variable instead, and
+        # the value is expanded by the same shared expander the roster uses, so
+        # an unset variable is announced as `auth: unresolved` rather than sent
+        # as the literal string "Bearer ${CIPHER_API_TOKEN}".
+        #
+        # `--token-env ""` probes anonymously on purpose: that is how you
+        # measure whether an endpoint requires a credential at all, which is
+        # the observation this whole lane started from.
+        hdrs = {"Authorization": f"Bearer ${{{token_env}}}"} if token_env else {}
+        candidates = [{"name": "--url", "url": u, "headers": dict(hdrs)} for u in urls]
     else:
         candidates = cipher_urls_from_roster(roster)
         if not candidates:
@@ -403,6 +442,18 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument("--url", action="append", dest="urls")
     parser.add_argument("--roster", type=Path, default=None)
     parser.add_argument("--json", action="store_true", dest="as_json")
+    parser.add_argument(
+        "--token-env",
+        dest="token_env",
+        default=DEFAULT_TOKEN_ENV,
+        metavar="VAR",
+        help=(
+            "environment variable holding the bearer for --url probes "
+            f"(default: {DEFAULT_TOKEN_ENV}; pass an empty string to probe "
+            "anonymously). Names a VARIABLE, never the token itself -- a "
+            "token on argv is visible in ps and in /proc/<pid>/cmdline."
+        ),
+    )
     args = parser.parse_args(argv)
 
     try:
@@ -431,7 +482,7 @@ def main(argv: Optional[List[str]] = None) -> int:
 
 def _run(args: argparse.Namespace) -> int:
     try:
-        verdict = check(args.urls, args.roster)
+        verdict = check(args.urls, args.roster, getattr(args, "token_env", DEFAULT_TOKEN_ENV))
     except Unmeasured as exc:
         if args.as_json:
             print(json.dumps({"measured": False, "reason": str(exc)}, indent=2))

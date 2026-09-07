@@ -349,6 +349,20 @@ roster credential and gives 401 its own verdict.
 ```bash
 python pmoves/tools/cipher_preflight.py            # text
 python pmoves/tools/cipher_preflight.py --json     # verdict per endpoint
+
+# Probe one endpoint directly, bypassing the roster. This ALSO presents
+# `Bearer ${CIPHER_API_TOKEN}` -- it did not until #2951, so the command below
+# probed anonymously against an endpoint that requires a bearer and could only
+# ever print 401, which is the same "check that cannot pass" described above
+# surviving in the manual path.
+python pmoves/tools/cipher_preflight.py --url http://localhost:8105/mcp/sse
+
+# Name a DIFFERENT variable, or probe with no credential on purpose (which is
+# how you confirm the endpoint requires one). `--token-env` takes a variable
+# NAME; there is deliberately no flag that takes the token itself, because an
+# argv token is readable in `ps` and in /proc/<pid>/cmdline.
+python pmoves/tools/cipher_preflight.py --url ... --token-env OTHER_VAR
+python pmoves/tools/cipher_preflight.py --url ... --token-env ''
 #   0  an endpoint answered usably — memory IS available; the report names WHICH
 #   1  findings: something ANSWERED but not usably (401/403, or another status).
 #      The service is UP. Remedy is to bind the token, NOT to restart Cipher
