@@ -143,6 +143,14 @@ class VoiceboxProvider(VoiceProvider):
             raise VoiceboxError(f"Unexpected /profiles response shape: {first!r}")
 
         self._cached_profile_id = profile_id
+        # Preset profiles only accept their own engine (voicebox 400s with
+        # "only supports engine X, not Y" otherwise — hit live 2026-09-07 with
+        # a qwen_custom_voice preset against our qwen default). Cache the
+        # profile's engine so synthesis sends the right one when the caller
+        # didn't specify.
+        preset_engine = first.get("preset_engine") or first.get("default_engine")
+        if preset_engine:
+            self._cached_profile_engine = preset_engine
         logger.info("Voicebox auto-selected profile_id=%s (%s)", profile_id, first.get("name", "?"))
         return profile_id
 
@@ -190,10 +198,13 @@ class VoiceboxProvider(VoiceProvider):
         """
         profile_id = await self._resolve_profile_id(voice)
 
+        # Engine resolution order: explicit caller kwarg > the auto-selected
+        # profile's own engine (preset profiles reject anything else) > default.
+        engine = kwargs.get("engine") or getattr(self, "_cached_profile_engine", None) or self.DEFAULT_ENGINE
         payload: Dict[str, Any] = {
             "profile_id": profile_id,
             "text": text,
-            "engine": kwargs.get("engine"),
+            "engine": engine,
             "model_size": kwargs.get("model_size", self.DEFAULT_MODEL_SIZE),
             "language": kwargs.get("language"),
             "seed": kwargs.get("seed"),
