@@ -531,6 +531,56 @@ def test_the_ok_line_shape_the_launcher_awks_is_intact(monkeypatch, tmp_path, ca
     assert line.split()[2] == "pmoves-cipher-local"
 
 
+def _row_text(monkeypatch, tmp_path, capsys, status: int) -> str:
+    """The tool's stderr for one endpoint returning *status*."""
+    monkeypatch.setenv("CIPHER_API_TOKEN", SENTINEL)
+
+    def fake(req, *a, **k):
+        raise urllib.error.HTTPError(req.full_url, status, "x", None, None)
+
+    monkeypatch.setattr(cp, "_urlopen", fake)
+    cp.main(["--roster", str(_cipher_roster(tmp_path))])
+    return capsys.readouterr().err
+
+
+@pytest.mark.parametrize("status", [404, 500, 502])
+def test_a_non_auth_finding_does_not_trip_the_launchers_unauthorized_arm(
+    monkeypatch, tmp_path, capsys, status
+):
+    """The CONTRACT between the two files, which nothing pinned.
+
+    claude-pmoves.sh selects its remedy with
+    `case "$CIPHER_OUT" in *"cipher UNAUTHORIZED"*)`. That literal is emitted
+    here, in _run(). Nothing tied them together, so renaming the label would
+    have dropped every 401 into the wildcard arm silently -- reinstating the
+    review finding (3939783862) with no test going red.
+
+    Asserted from the other side too: a 404/5xx must NOT contain that string,
+    or an unhealthy Cipher sends the operator to bind a credential that was
+    never the problem.
+    """
+    err = _row_text(monkeypatch, tmp_path, capsys, status)
+    assert "cipher UNAUTHORIZED" not in err, (
+        f"HTTP {status} would trip the launcher's unauthorized arm"
+    )
+    assert "cipher ANSWERED" in err, (
+        f"HTTP {status} must read as ANSWERED -- something IS listening"
+    )
+
+
+@pytest.mark.parametrize("status", [401, 403])
+def test_an_auth_finding_emits_exactly_the_literal_the_launcher_matches(
+    monkeypatch, tmp_path, capsys, status
+):
+    """The positive half. Both halves, or the pair can drift in one direction."""
+    err = _row_text(monkeypatch, tmp_path, capsys, status)
+    launcher = LAUNCHER.read_text(encoding="utf-8")
+    assert "cipher UNAUTHORIZED" in err
+    assert '*"cipher UNAUTHORIZED"*)' in launcher, (
+        "the launcher no longer matches the literal this tool emits"
+    )
+
+
 def test_the_launcher_does_not_blame_the_token_for_every_exit_1():
     """exit 1 is also a 404 or a refused 302. "bind CIPHER_API_TOKEN" is wrong there."""
     body = LAUNCHER.read_text(encoding="utf-8")
@@ -620,6 +670,37 @@ def test_a_token_that_lives_only_in_the_env_file_still_authenticates(
         "--env-file", str(envf),
     ])
     assert rc == 0
+
+
+def test_the_launcher_path_env_var_is_honoured_not_just_the_flag(
+    monkeypatch, tmp_path, capsys
+):
+    """The P1 control that runs on IDENTICAL argv before and after the fix.
+
+    Every other P1 test here needs `--env-file`, which does not exist pre-fix,
+    so pre-fix they fail with SystemExit(2) -- a missing-symbol failure, which
+    is not evidence of the bug. PMOVES_ENV_SHARED exists on both sides (pre-fix
+    simply ignores it) and is the variable deploy/provision/claude-pmoves.sh
+    itself consults, so this reproduces the launcher path with no new surface.
+
+    Measured against 47a9e6fc3 with this exact scenario and argv:
+        pre-fix   exit=1  verdict=unauthorized  status=401
+                  auth=unresolved  missing_env=['CIPHER_API_TOKEN']
+        post-fix  exit=0  verdict=ok  status=200  auth=presented  missing_env=[]
+    """
+    monkeypatch.delenv("CIPHER_API_TOKEN", raising=False)
+    monkeypatch.setenv("PMOVES_ENV_SHARED",
+                       str(_env_file(tmp_path, f"CIPHER_API_TOKEN={SENTINEL}\n")))
+    monkeypatch.setattr(cp, "_urlopen", _auth_gated())
+    rc = cp.main(["--roster", str(_cipher_roster(tmp_path)), "--json"])
+    row = json.loads(capsys.readouterr().out)["endpoints"][0]
+    assert rc == 0
+    assert row["verdict"] == "ok" and row["status"] == 200
+    assert row["auth"] == "presented", (
+        "the token lives only in the env file the launcher loads AFTER this "
+        "check runs; pre-fix this row read auth=unresolved and returned 401"
+    )
+    assert row["missing_env"] == []
 
 
 def test_the_pre_fix_failure_reason_is_unauthorized_not_merely_nonzero(
