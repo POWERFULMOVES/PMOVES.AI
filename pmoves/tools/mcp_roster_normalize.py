@@ -467,18 +467,27 @@ def _default_out_dir() -> str:
     return tempfile.gettempdir()
 
 
-def _sweep_dirs(out_dir: str) -> list[str]:
+def _sweep_dirs(out_dir: str, explicit: bool) -> list[str]:
     """Directories the sweep must cover.
 
     Moving custody to ``XDG_RUNTIME_DIR`` would otherwise strand every roster
-    previously written to the temp dir -- the security goal would quietly stop
-    applying to exactly the files it was written for. The legacy location stays
-    in scope.
+    already written to the temp dir -- the security goal would quietly stop
+    applying to exactly the files it was written for. So in DEFAULT custody the
+    legacy temp dir stays in scope.
+
+    When the caller passed ``--out-dir`` it does NOT. Reaching outside the
+    directory you were pointed at to delete files in the shared temp dir is a
+    surprise at best, and under test it is a live hazard: the suite runs this
+    CLI repeatedly with a throwaway out-dir on a machine whose real ``/tmp``
+    holds the roster of a running session. A sweep is a delete path; it gets the
+    narrowest scope that still does its job.
     """
+    if explicit:
+        return [out_dir]
     dirs = [out_dir]
-    for extra in (_default_out_dir(), tempfile.gettempdir()):
-        if extra not in dirs:
-            dirs.append(extra)
+    legacy = tempfile.gettempdir()
+    if legacy not in dirs:
+        dirs.append(legacy)
     return dirs
 
 
@@ -571,7 +580,7 @@ def main(argv: list[str] | None = None) -> int:
 
     # One process-table scan, reused across every directory in scope.
     live = _live_roster_paths()
-    for sweep_dir in _sweep_dirs(out_dir):
+    for sweep_dir in _sweep_dirs(out_dir, explicit=args.out_dir is not None):
         _sweep_stale(sweep_dir, live)
     print(write_private(out_dir, payload))
     return 0
