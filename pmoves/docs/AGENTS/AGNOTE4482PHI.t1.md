@@ -362,6 +362,49 @@ against a genuinely held lane: `Write` exited **2** and blocked; `Bash` exited
 so that unchecked path was the only one available to them — which is why the
 sanctioned path above had to exist before the refusal could.
 
+**Recording a fact: `register-note`.**
+
+```
+make -C pmoves register-note OWNER='B850-CLAUDE (Knuckles)' SCOPE='the fact being recorded'
+```
+
+A `NOTE` row **opens nothing and closes nothing**. Until 2026-09-08 there was no
+such kind: `register_append.py` accepted `claim`, `release`, `docs` and `amend`,
+so recording a correction meant filing a `release` — the only non-CLAIM kind on
+offer. Combined with the rule below, that was a trap rather than an
+inconvenience.
+
+**A `RELEASE` naming no lane closes *every* lane its owner holds.** That is this
+file's own convention for a full handoff — 142 rows are filed that way — and
+`open_claims_in()` will keep reading them so, because reinterpreting them would
+reopen years of closed work. What changed is the write path: **it can no longer
+happen by omission.** A `release` with no `BRANCH=` now refuses and names both
+doors; `ARGS=--all-lanes` is the opt-in for a full handoff; `BRANCH=` and
+`--all-lanes` together refuse, because "this one" and "everything" cannot both
+be the instruction.
+
+Put together, the two defects compounded: an agent appending a footnote under an
+owner with open lanes would have closed every one of them while believing it was
+adding a comment. Observed live on 2026-09-08, harmless **only** because that
+owner's lanes happened to be closed already. A hazard whose harm depends on
+ordering is untriggered, not safe.
+
+A note's inertness is proved twice, because these rows quote `CLAIM` and
+`RELEASE` for a living and one guarantee is a promise about one file's contents:
+
+- The gate parses `NOTE` rows as inert (`INERT_ROW_KINDS`) on **both** sides —
+  `open_claims_in()` for the existing register and `evaluate_claims()` for the
+  proposed write — so a note reading *"the RELEASE `X` on line 42 was
+  mis-attributed"* no longer closes every lane `X` holds.
+- `append_note()` additionally computes the open-lane map before and after the
+  simulated append and **refuses** if it moved, naming which owner gained or
+  lost lanes.
+
+Measured against this register before and after: **5 `NOTE` rows, 0 of which
+were being read as a CLAIM or a RELEASE**, so no lane changed hands. `REVIEW`,
+`UPDATE`, `HANDOFF` and `CORRECTION` rows carry the same latent hazard and are
+deliberately *not* in the inert set — widening it owes its own measurement.
+
 **Known limitations, named rather than discovered.**
 
 - The gate cannot tell a prose edit from a row edit inside an opaque shell
