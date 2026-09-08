@@ -10,9 +10,9 @@
       "stage": "rehearsal",
       "manifest": "4090-field.room.control.json",
       "summary": "Scout/control room for review, topology, handoff, and notebook-backed triage.",
-      "current_stage": "live",
-      "stage_source": "ROOMS_ON_A_STAGE.md typical-stage table",
-      "stage_verified_at": "2026-07-20T18:00:00Z"
+      "current_stage": "rehearsal",
+      "stage_source": "4090-field.room.control.json::stage (reseeded 2026-09-08; the prior 'live' came from the ROOMS_ON_A_STAGE.md typical-stage table, which is not an activation)",
+      "stage_verified_at": "2026-09-08T00:00:00Z"
     },
     {
       "room_id": "5090-voice.room.studio",
@@ -22,9 +22,9 @@
       "stage": "rehearsal",
       "manifest": "5090-voice.room.studio.json",
       "summary": "Voice-first room for TTS, media pipelines, notebook-backed iteration, and audition workflows.",
-      "current_stage": "live",
-      "stage_source": "ROOMS_ON_A_STAGE.md typical-stage table",
-      "stage_verified_at": "2026-07-20T18:00:00Z"
+      "current_stage": "rehearsal",
+      "stage_source": "5090-voice.room.studio.json::stage (reseeded 2026-09-08; the prior 'live' came from the ROOMS_ON_A_STAGE.md typical-stage table, which is not an activation)",
+      "stage_verified_at": "2026-09-08T00:00:00Z"
     },
     {
       "room_id": "z890-infra.room.fabric",
@@ -34,9 +34,9 @@
       "stage": "rehearsal",
       "manifest": "z890-infra.room.fabric.json",
       "summary": "Infrastructure room for topology, service health, secrets discipline, and operator bring-up.",
-      "current_stage": "live",
-      "stage_source": "ROOMS_ON_A_STAGE.md typical-stage table",
-      "stage_verified_at": "2026-07-20T18:00:00Z"
+      "current_stage": "rehearsal",
+      "stage_source": "z890-infra.room.fabric.json::stage (reseeded 2026-09-08; the prior 'live' came from the ROOMS_ON_A_STAGE.md typical-stage table, which is not an activation)",
+      "stage_verified_at": "2026-09-08T00:00:00Z"
     },
     {
       "room_id": "5090-kilocode.room.studio",
