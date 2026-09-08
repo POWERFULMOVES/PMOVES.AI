@@ -172,3 +172,221 @@ Two distinct failure families keep getting conflated because both are "networkin
 
 When triaging "cipher is down", establish which family it is first. The
 exit-node hypothesis is not applicable to a loopback binding.
+
+---
+
+## Finding 3 — Room portability is already mandated; the capability mechanism is undocumented
+
+### The mandate exists
+
+**MEASURED (repo).** `pmoves/docs/ROOM_MANIFEST_CONTRACT.md:55` already forbids
+node-specific state in a manifest:
+
+> It does **not** own host paths, node names, or absolute filesystem locations. Those
+> are per-node runtime concerns; a manifest that hardcodes them stops being portable
+> across the fleet.
+
+So portability is not a new idea to argue for. It is already contract law.
+
+### The mechanism that would satisfy it is barely used
+
+**MEASURED (repo).** `hardware_requirements` appears in **2 of 16** room manifests in
+`pmoves/config/rooms/`:
+
+- `creator-studio.room.collab.json`
+- `pmoves.room.helpdesk.json`
+
+Its shape, per `pmoves/contracts/schemas/room/room.manifest.v1.schema.json:500`:
+`{ gpu, min_vram_mb, gpu_arch, node_roles, cpu_arch }`.
+
+It has real consumers:
+
+- `pmoves/tools/creator-collab-evidence/render_dashboard.py:69-71` — reads
+  `room.get("hardware_requirements", {})` off the manifest directly.
+- `pmoves/services/pinokio_bridge/app.py:453-478` — `GET /v1/gpu/match`, which answers
+  `min_vram` + `gpu_arch` queries against the detected GPU and normalizes raw CUDA
+  compute capability (`12.0`) to the schema's `sm_XX` form.
+
+  **Precision note:** the bridge is a *conforming counterpart* to the field, not a
+  reader of the manifest. It implements the matching service that the field's values
+  are meant to be queried against; it never opens a room manifest itself. Do not
+  record it as "the manifest consumer" — there is exactly one of those
+  (`render_dashboard.py`).
+
+### The gap
+
+**MEASURED (repo).** `grep -c hardware_requirements pmoves/docs/ROOM_MANIFEST_CONTRACT.md`
+returns **0**.
+
+The field is defined in the JSON Schema, has a design spec
+(`pmoves/docs/specs/creator-collab-room-extensions-2026-07-27.md:27,57-61`), has a
+matching service, and has a dashboard renderer — and is entirely absent from the
+document that room authors actually read. That is the straightforward explanation for
+why 14 of 16 rooms omit it: **there is a mechanism for portability and no road to it.**
+
+This is the same shape as `project_cipher_collection_provisioner_no_road` — a
+capability that exists but has no Known Road never gets used, and its absence looks
+like a design decision rather than an oversight.
+
+> **Ownership:** a sibling agent (`room-portability-delivery-2`) may be documenting
+> `hardware_requirements` in `ROOM_MANIFEST_CONTRACT.md` concurrently. This document
+> deliberately **does not edit that file** — it only references it. If that lane has
+> landed, this section's gap statement is the historical record of why, and should be
+> updated with a pointer rather than deleted.
+
+### Design intent, verbatim
+
+Recorded from the operator this session, because the framing is the requirement and
+paraphrasing it loses the point:
+
+> rooms are living docs — "portable reproducable and they upgrade with capability
+> capacity just like pc games are made to run on all types of hard ware... designed
+> for infinite playability not just replay."
+
+Read as a spec, that is: a room declares *what capability it needs*, never *which
+machine it runs on*; the runtime scales the experience to whatever capacity the host
+offers (the PC-game graphics-settings model); and the room stays replayable on
+hardware that did not exist when it was authored. `hardware_requirements` is the
+declarative half of that. The scaling half — degrading gracefully rather than
+refusing to admit — is **UNVERIFIED** as existing anywhere today; `min_vram_mb` is
+currently a hard admission floor, not a quality dial.
+
+---
+
+## Finding 4 — Node role assignments
+
+Recorded from the operator this session. Role assignments are operator intent, not
+measurements, and are marked REPORTED unless a repo artifact backs them.
+
+| Node | Role |
+|---|---|
+| **B850** (Knuckles) | Home of the CHIT deploy bundle — *"the ultimate bootstrap, bootstrap it from CHIT."* |
+| **SPARK** (`dgx-spark-grace-blackwell`) | "Node dreamer"; holds the local model store. |
+| **Z890** | Coordinator; declared Cipher host (see Finding 1). |
+| **KVM2 / KVM4-1 / KVM4-2** | Always-on; offer exit nodes. |
+
+**MEASURED (repo)** for Spark, which the profile independently corroborates —
+`pmoves/config/profiles/dgx-spark-grace-blackwell.yaml`: arm64, GB10 Grace-Blackwell,
+128 GB unified LPDDR5X, `compute_capability: "12.1"` (SM_121, explicitly annotated
+*"unique to GB10, NOT sm_120"*). Its `always_resident` model list at line 86 pins
+`qwen3-embedding:8b` (4700 MB) with `reason: "HiRAG, extract-worker, cipher-memory
+embeddings"` — i.e. **the profile already assigns Spark the embedding work that Cipher
+memory depends on.** Finding 1's unreachable Cipher and Spark's declared embedding
+residency are two halves of the same undelivered pipeline.
+
+### DEFECT — Spark's declared tailnet hostname does not match the tailnet
+
+**MEASURED (B850, 2026-09-08), two independent sources:**
+
+- `pmoves/config/profiles/dgx-spark-grace-blackwell.yaml:108` declares
+  `hostname_pattern: "pmoves-gb10-spark"`.
+- `tailscale status` on this node lists the peer as **`pmoves-spark`**.
+- The repo already contradicts itself: `pmoves/config/profiles/laptop-4090.yaml:150,152`
+  refers to the node as `pmoves-spark` and sets `tailscale_host: pmoves-spark`.
+
+Anything resolving Spark by the declared `hostname_pattern` will miss. The 4090's
+profile is right and Spark's own profile is wrong, which is the worse direction — the
+authoritative record for a node is the one that is incorrect. Fixing it is a
+one-line change in `dgx-spark-grace-blackwell.yaml`; it is **not** made here (this
+task is documentation only) and should be verified against the tailnet from a second
+node before landing, in case `pmoves-gb10-spark` is a planned rename rather than a
+typo.
+
+---
+
+## Finding 5 — Harness bugs found in our own instruments
+
+Recorded because these recur, and both are cases where the *instrument* was the
+defect. This fleet's usual failure is a check that cannot pass
+(`project_cipher_preflight_cannot_pass`); these are its neighbours.
+
+### 5a. `.conclusion // .status` does not fall through on a running check
+
+**REPORTED.** GitHub's GraphQL check rollup renders a not-yet-completed check's
+`conclusion` as an **empty string**, not `null`. jq's `//` operator falls through only
+on `null` and `false` — an empty string is neither. So:
+
+```jq
+.conclusion // .status      # WRONG: yields "" for a running check
+(.conclusion | select(. != "")) // .status   # correct
+```
+
+**The lesson is the severity, not the bug.** In the harness where this was found, the
+decision predicate was a *separate* expression that counted `!= "SUCCESS"`. An empty
+string is not `"SUCCESS"`, so a running check was still counted as not-passing. The
+bug was **cosmetic — it mis-displayed a state, it did not open a gate.** Record it
+that way. Reporting a display bug as a fail-open defect is its own kind of wrong fact,
+and it inflates the apparent danger of the tool.
+
+**UNVERIFIED at write time.** No in-flight check existed on any open PR when this was
+written; every `CheckRun` entry sampled on PR #3002 was `COMPLETED` with a non-empty
+string conclusion. Re-verification is one command against any PR with a running job:
+
+```sh
+gh pr view <N> --json statusCheckRollup \
+  -q '.statusCheckRollup[] | select(.__typename=="CheckRun") | [.name,.status,(.conclusion|type),(.conclusion|tostring)] | @tsv'
+```
+
+### 5b. A superseded (concurrency-cancelled) run and the check-name discriminator
+
+**REPORTED (the observation).** On PR #3000, `claude-review` was **cancelled at
+15:07:59** and then **succeeded at 15:09:34 on the identical head SHA** — the first
+run was killed by workflow concurrency when the second superseded it. A tool that
+takes the *worst* conclusion across same-named runs would treat that check name as
+permanently poisoned.
+
+**CORRECTION — this behaviour is not in `pr_closeout.py`.** The claim carried into
+this task was that `pmoves/tools/pr_closeout.py` takes the worst conclusion across
+same-named checks. **MEASURED (repo):** it does not.
+
+- **Primary path.** `_fetch_required_checks` (`pr_closeout.py:341`) shells out to
+  `gh pr checks <N> --required --json name,state,bucket,link,workflow`. Whatever
+  same-name dedup happens, happens inside `gh` / the GraphQL rollup — not in our code.
+- **REST fallback path.** `_required_checks_from_rest` (`pr_closeout.py:233`) builds
+  `by_name[str(run["name"])] = run` — a plain **last-wins overwrite** in iteration
+  order, not a worst-wins aggregation. It also passes **no `filter=` parameter** to
+  `GET /repos/{repo}/commits/{sha}/check-runs`, so GitHub's default `filter=latest`
+  applies and the endpoint returns only the most recent run per name.
+- **Corroborating measurement.** `gh pr view 3000 --json statusCheckRollup` today
+  returns exactly **one** `claude-review` entry, `COMPLETED` / `SUCCESS`. The rollup
+  itself collapses same-named runs.
+
+So: **do not "fix" `pr_closeout.py` for this.** There is nothing there to fix, and a
+speculative patch would add a dedup rule to code that currently defers correctly to
+GitHub's own latest-per-name semantics.
+
+The original 15:07:59 / 15:09:34 pair could **not be reproduced** at write time —
+#3000 has since acquired a newer `claude-review` run (started 19:03:18Z, completed
+19:12:31Z, SUCCESS) and the rollup surfaces only that one. The observation is recorded
+as REPORTED and the code claim is marked **NOT SUBSTANTIATED**.
+
+**The discriminator is still worth having**, wherever same-name collapsing does turn
+out to matter (a custom aggregator, a cached rollup, a log scrape): a superseded run
+is identifiable by **matching `head_sha` plus earlier start time** against a later run
+of the same name. Same SHA + earlier start + `CANCELLED` = superseded, not failed.
+Encode that as the test, not "ignore cancellations", which would also swallow a real
+manual cancel.
+
+---
+
+## Open items (documentation only — none actioned here)
+
+| # | Item | Owner |
+|---|---|---|
+| 1 | Re-authenticate `pmoves-z890` (expired tailnet node key) | Operator, on Z890 |
+| 2 | Bring Cipher up on Z890 after (1); verify `/mcp/sse` 200 with bearer | Z890 |
+| 3 | Decide the reachability model for node-private services (per-service tailnet identity vs a reverse proxy vs binding change) | Fleet design lane |
+| 4 | Document `hardware_requirements` in `ROOM_MANIFEST_CONTRACT.md` | `room-portability-delivery-2` (in flight) |
+| 5 | Fix `hostname_pattern` in `dgx-spark-grace-blackwell.yaml` (`pmoves-gb10-spark` → `pmoves-spark`), after confirming it is a typo not a planned rename | Spark or fleet-config lane |
+| 6 | Re-test the roster-sweep / OOM-resume hypothesis once a reachable Cipher exists | Whoever holds the Cipher lane |
+
+## Cross-references
+
+- `.claude/mcp.json:5` — the `pmoves-cipher` `_note`; the fullest existing record of
+  Cipher's auth posture and the reason the bearer is bare.
+- `pmoves/docs/operations/CIPHER_AUTH_RUNBOOK.md` — Cipher auth runbook.
+- `pmoves/docs/ROOM_MANIFEST_CONTRACT.md` — room manifest contract (portability
+  mandate at line 55). **Not edited by this document.**
+- `pmoves/docs/specs/creator-collab-room-extensions-2026-07-27.md` — the
+  `hardware_requirements` design spec.
+- `pmoves/config/profiles/` — per-node hardware and service declarations.
