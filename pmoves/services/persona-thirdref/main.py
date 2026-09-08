@@ -211,22 +211,6 @@ class Service:
         return {"trace": trace, "profile": profile}
 
 
-async def _nats_publisher(nats_url: str):
-    """Build an async publish(subject, payload) over NATS, or None."""
-    try:
-        from nats.aio.client import Client as NATS
-
-        client = NATS()
-        await client.connect(nats_url, connect_timeout=5)
-    except Exception as exc:  # noqa: BLE001
-        LOGGER.warning("NATS unavailable (%s); log-only mode", exc)
-        return None
-
-    async def publish(subject: str, payload: dict[str, Any]) -> None:
-        await client.publish(subject, json.dumps(payload).encode())
-
-    return publish
-
 
 def create_app(joiner: Joiner | None = None, service: Service | None = None) -> FastAPI:
     app = FastAPI(title="persona-thirdref", version="0.1.0")
@@ -238,30 +222,37 @@ def create_app(joiner: Joiner | None = None, service: Service | None = None) -> 
 
     @app.on_event("startup")
     async def _startup() -> None:  # pragma: no cover — transport wiring
+        # Wiring runs as a BACKGROUND task: nats-py's reconnect loop can hang
+        # indefinitely on an unresolvable host, and startup must never block
+        # on transport — healthz has to answer even when the bus is gone.
+        asyncio.create_task(_wire_bus(svc))
+
+    async def _wire_bus(svc: Service) -> None:
         if _env("PERSONA_THIRDREF_DISABLE_NATS"):
             return
-        publisher = await _nats_publisher(_env("NATS_URL", "nats://nats:pmoves@nats:4222"))
-
-        async def bridge(msg) -> None:
-            try:
-                await svc.handle(json.loads(msg.data.decode()))
-            except jsonschema.ValidationError as exc:
-                LOGGER.warning("invalid consumption event: %s", exc.message)
-            except Exception:  # noqa: BLE001
-                LOGGER.exception("handler error")
-
+        url = _env("NATS_URL", "nats://nats:pmoves@nats:4222")
         try:
             import nats.aio.client as nats_client
 
+            async def bridge(msg) -> None:
+                try:
+                    await svc.handle(json.loads(msg.data.decode()))
+                except jsonschema.ValidationError as exc:
+                    LOGGER.warning("invalid consumption event: %s", exc.message)
+                except Exception:  # noqa: BLE001
+                    LOGGER.exception("handler error")
+
             nc = nats_client.Client()
-            await nc.connect(_env("NATS_URL", "nats://nats:pmoves@nats:4222"), connect_timeout=5)
+            await nc.connect(url, connect_timeout=5, max_reconnect_attempts=0)
             await nc.subscribe(SUB_CONSUMPTION, cb=bridge)
-            if publisher is None:
-                svc.publisher = None
-            else:
-                svc.publisher = publisher
-        except Exception as exc:
-            LOGGER.warning("subscriber offline (%s); HTTP record still active", exc)
+
+            async def publish(subject: str, payload: dict[str, Any]) -> None:
+                await nc.publish(subject, json.dumps(payload).encode())
+
+            svc.publisher = publish
+            LOGGER.info("bus wired: sub %s", SUB_CONSUMPTION)
+        except Exception as exc:  # noqa: BLE001 — degrade, never die
+            LOGGER.warning("bus wiring offline (%s); HTTP + log-only mode", exc)
 
     @app.get("/healthz")
     async def healthz() -> dict[str, Any]:
