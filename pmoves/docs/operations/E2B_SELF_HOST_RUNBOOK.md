@@ -330,3 +330,60 @@ Stated plainly so nobody reads this page as a completed bring-up:
 - **No credential was minted, rotated, revoked or set.** Where proving
   something would have required a live mutation, the answer recorded is
   COULD-NOT-MEASURE — which is an acceptable outcome, and not a pass.
+
+### The secrets delivery step is REGISTERED but not DELIVERED
+
+Commit `b008781aa` added `E2B_API_KEY` and `E2B_ACCESS_TOKEN` to the
+code-level `REGISTRY` in `pmoves/tools/chit_manifest_register.py:206-238`.
+That is the *declaration* only. It verified with `--check`, which by design
+**writes nothing** — so at the close of this lane the two labels were still
+reported as *pending*, the manifest did not contain them, and no tier env
+file had ever been projected with an E2B row in it.
+
+The three remaining steps were recorded only in that commit's message. A step
+that lives in a commit body does not get executed: nobody scans commit bodies
+for todos, so it is written here, in the section people actually read before
+picking the lane up.
+
+Per that tool's own doctrine (`chit_manifest_register.py:1-24`) — the manifests
+are **machine-emitted**; edit the code-level registry, never the YAML by hand:
+
+```
+# 1. Apply the registration (no --check). Additive only; existing entries are
+#    never modified or reordered. Commit the resulting manifest diff.
+python pmoves/tools/chit_manifest_register.py
+
+# 2. Derive the v1 manifest from v2.
+make -C pmoves chit-manifest-sync
+
+# 3. Project the tier env files. E2B is tier `agent`, so this is what puts the
+#    two labels into env.tier-agent.
+make -C pmoves secrets-funnel
+```
+
+Ownership, because "someone should run this" is how a step stalls:
+
+- **Steps 1–2 are repo-level and run once**, by whichever node picks this lane
+  up; the manifest diff is committed. As of this writing that is unclaimed.
+- **Step 3 is per-node and is not transitive.** `secrets-funnel` projects onto
+  the node it runs on, so it must be run on **pmoves-5090** (the owning node
+  named in §6 and by `make -C pmoves sandbox-runbook`) and on any other node
+  that will use the sandbox lane. Landing steps 1–2 does not deliver anything
+  to 5090.
+
+None of the three has been run by this lane, on any node. Deliberately: they
+mutate secrets delivery, which is outside a wiring-and-documentation lane.
+
+Two things this sequence does **not** do, so the next reader does not
+over-read it:
+
+- It does **not** mint a credential. Registration routes a value the operator
+  supplies; it does not create one. The measured B850 blocker — the third
+  bullet above, and `.claude/skills/agent-sandbox/SKILL.md:145-161` — is a
+  *malformed* `E2B_API_KEY`: 42 characters where a well-formed one is 44
+  (`e2b_` + 40 hex), its leading `e2` missing. The funnel will faithfully
+  deliver that same malformed value.
+- `min_length` is a floor, not the shape check — 42 > 36, so the manifest
+  passes that key exactly as `[ -n "$VAR" ]` did. Prefix, charset and per-mode
+  length are enforced at use time by `pmoves/scripts/e2b_mode.sh`, which is why
+  `sandbox-preflight` still fails on B850 after a successful funnel run.
