@@ -121,11 +121,96 @@ The room manifest declares:
 - apps: routes, capabilities, action namespaces
 - notebook: provider, workspace/thread refs, sync mode
 - storage: optional file plane — provider, volume, and role-tagged logical mounts (`inbox`/`outbox`/`library`/`scratch`)
+- hardware requirements: optional capability floor — what the room *needs*, never which node it runs on (see below)
 - skill bindings: room-local binding records
 - policies: model routing, publish policy, memory policy
 - stage: required persistent lifecycle state (`rehearsal` | `live` | `review` | `archive`)
 - activation metadata: optional structured `meta.chit` signing-card reference
 - telemetry/provenance: optional observability and trace context
+
+## Hardware Requirements
+
+`hardware_requirements` is the room's **capability floor**: the minimum a host must
+offer for the room to run. It is the mechanism behind the portability rule above —
+a room says what it *needs*, a node says what it *has*, and the runtime negotiates.
+The room never names a node.
+
+The field is **optional**. It is not in the schema's top-level `required` list, and
+14 of the 16 seed manifests omit it entirely.
+
+Defined in `pmoves/contracts/schemas/room/room.manifest.v1.schema.json`
+(`properties.hardware_requirements`, `additionalProperties: false`). Added
+2026-07-27 by the creator-collab lane; documented here 2026-09-08, which is why
+adoption is thin — the field shipped without a contract entry.
+
+### Fields
+
+| Field | Type | Required | Meaning |
+|---|---|---|---|
+| `gpu` | bool | **yes** (within the block) | Does the room's own session need a GPU? A room that *triggers* renders elsewhere is still `false` — see "session vs render" below. |
+| `min_vram_mb` | int ≥ 0 | **yes** (within the block) | Minimum total VRAM on the host. Conditionally constrained: `gpu: false` ⇒ must be exactly `0`; `gpu: true` ⇒ must be ≥ 1. Enforced by an `allOf` block in the schema, so `gpu: true` with no VRAM budget is rejected. |
+| `gpu_arch` | array of enum | no | Allowed NVIDIA compute capabilities. Enum: `sm_75`, `sm_80`, `sm_86`, `sm_87`, `sm_89`, `sm_90`, `sm_100`, `sm_110`, `sm_120`. Omit for CPU-only rooms. See the known defect below before adding a Blackwell value. |
+| `node_roles` | array of enum | no | Coarse routing preference by fleet role. Enum: `primary-gpu-tts`, `infra-coordinator`, `mobile-relay`, `gpu-inference`, `edge-ai`, `api-gateway`, `data-storage`, `exit-proxy`. Sourced from `pmoves/configs/pinokio-network-inventory.yaml`. |
+| `cpu_arch` | array of enum | no | Host CPU architectures the room runs on. Enum: `x86_64`, `arm64`. **Declare `arm64` unless something in the room is genuinely x86-only.** Omitting it is not neutral in practice: a reader that treats the list as an allowlist will exclude every arm64 node, including SPARK (DGX Grace-Blackwell). |
+
+`additionalProperties: false` — an unrecognized key inside the block fails
+validation. Add fields to the schema first, then to manifests.
+
+### Session vs render
+
+`gpu` describes the **room session**, not work the room can dispatch. The helpdesk
+and Fordham rooms are `gpu: false` because their sessions are chat and routing
+surfaces; a render triggered *from* one of those rooms is a separate request that
+goes to a GPU node through the mesh-render path. Setting `gpu: true` because a room
+can ask for a picture pins the session to a GPU host it does not need, and takes
+VRAM away from the fleet that does.
+
+### What happens when it is absent
+
+Measured 2026-09-08 against the tree, not inferred:
+
+- **Schema validation** — passes. `python pmoves/scripts/validate_room_manifests.py`
+  reports OK for the 14 manifests without the block. Absence is legal.
+- **`pmoves/tools/creator-collab-evidence/render_dashboard.py:69-71`** — the room
+  card renders the literal string `no hardware_requirements` instead of a hardware
+  summary. Cosmetic; nothing is blocked.
+- **`pmoves/services/pinokio_bridge`** — nothing happens, because the bridge never
+  reads a room manifest. Its `GET /v1/gpu/match` (`app.py:445`) takes `min_vram` and
+  `gpu_arch` as **required query parameters** and reports whether *the host it is
+  running on* satisfies them. It is a host-side probe that a scheduler is meant to
+  feed; the docstring at `app.py:453` names the `hardware_requirements` schema as the
+  source of those parameters but does not parse it. Repo-wide, the only callers of
+  `/v1/gpu/match` are its own tests and documentation.
+- **P7 session-open** — nothing happens. The schema description and
+  `pmoves/docs/specs/creator-collab-room-extensions-2026-07-27.md` both state that
+  P7's session-open handler reads this field plus the node profile to pick a host.
+  `pmoves/services/p7-room-orchestrator/` contains **zero** references to
+  `hardware_requirements`, `vram`, `gpu`, `cpu_arch`, or `node_roles`. That routing
+  is specified, not implemented.
+
+So today the block is a **declaration with one cosmetic reader**. Declare it
+correctly anyway: it is the machine-readable statement of what the room needs, and
+it is what the scheduler will read when the routing lands. But do not write a
+manifest whose correctness depends on enforcement that does not exist yet.
+
+### Known defect: Blackwell compute capability
+
+`creator-studio.room.collab.json` declares `gpu_arch: ["sm_120", "sm_121"]`, and
+`sm_121` is **not in the schema enum**. That manifest fails validation today:
+
+```
+FAIL creator-studio.room.collab: 'sm_121' is not one of
+  ['sm_75','sm_80','sm_86','sm_87','sm_89','sm_90','sm_100','sm_110','sm_120']
+```
+
+The two sides disagree about how to name GB10 (DGX Spark). The schema's own enum
+description assigns it `sm_110`; the hardware reports compute capability `12.1`,
+which the bridge's `_to_sm` normalizer (`app.py:461-478`) converts to `sm_121`. Both
+identifiers are in the tree and only one can be right. Copying either existing room
+verbatim is therefore not a safe pattern — validate against the schema, not against
+a sibling manifest. Resolving this needs its own claim; it changes what a real SPARK
+host will match at schedule time.
+
 
 ## Skill-to-Room Binding Model
 A skill binding is intentionally separate from the skill definition.
