@@ -237,6 +237,23 @@ tailscale-docker-ip: ## Show Tailscale Docker container's IP
 # Skills: /fleet:status, /fleet:rustdesk-check, /fleet:enroll, /fleet:fix-relay
 # Docs:   pmoves/docs/operations/FLEET_REMOTE_ACCESS_RUNBOOK.md
 
+.PHONY: up-sentinel
+up-sentinel: ensure-env-shared ## Start fleet-sentinel (announce listener + health poller + self-heal, :8116)
+	@$(DC) up -d fleet-sentinel
+	@echo "✔ fleet-sentinel up — registry at http://localhost:$${SENTINEL_PORT:-8116}/registry.json"
+
+.PHONY: fleet-registry
+fleet-registry: ## Show the live service registry (fleet-sentinel /registry.json)
+	@echo "=== Fleet Service Registry (sentinel) ==="
+	@if command -v curl >/dev/null 2>&1; then \
+		curl -fsS "$${SENTINEL_URL:-http://localhost:8116}/registry.json" \
+		  | $$(command -v jq >/dev/null 2>&1 && echo jq . || echo cat) \
+		|| echo "sentinel unreachable at $${SENTINEL_URL:-http://localhost:8116} (make up-sentinel?)"; \
+	else \
+		echo "curl not available"; exit 1; \
+	fi
+
+
 fleet-status: ## Show Tailscale nodes (hostnames only) + RustDesk relay health
 	@echo "=== Tailscale Fleet Status ==="
 	@if command -v tailscale >/dev/null 2>&1; then \
@@ -692,3 +709,19 @@ agent-zero-lock: ## Regenerate services/agent-zero/requirements.lock (the ONLY s
 
 compose-yaml-check: ## Assert every tracked compose file parses (incl. Compose's !reset/!override tags)
 	@uv run --quiet --with pyyaml python tools/compose_yaml_validate.py
+
+# ── Service recovery (engine-restart safe) ──────────────────────────
+# After a Docker Desktop/WSL2 engine restart, containers can sit in
+# "Created" (image pulled, never started). This starts them via compose
+# (no raw docker), so the Known Road covers the recovery case.
+.PHONY: svc-start svc-status
+svc-start: ## Start one service's containers after engine restart. Usage: make svc-start SVC=flute-gateway
+	@if [ -z "$(SVC)" ]; then echo "usage: make svc-start SVC=<compose-service>"; exit 2; fi
+	@case "$(SVC)" in *[!a-z0-9-]*|'') echo "invalid service slug: $(SVC)"; exit 2;; esac
+	@echo "svc-start $(SVC): starting via compose"
+	@$(DC) start $(SVC) 2>/dev/null || { echo "  not startable directly — falling back to up -d --no-deps"; $(DC) up -d --no-deps $(SVC); }
+	@$(DC) ps $(SVC)
+
+svc-status: ## Show compose status for one service. Usage: make svc-status SVC=flute-gateway
+	@if [ -z "$(SVC)" ]; then echo "usage: make svc-status SVC=<compose-service>"; exit 2; fi
+	@$(DC) ps $(SVC)
