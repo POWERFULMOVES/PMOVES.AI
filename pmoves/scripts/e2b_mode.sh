@@ -137,11 +137,39 @@ _e2b_require_url() {
 }
 
 # _e2b_forbid <var_name> <why>
+# Validation phase. This is an ASSERTION that e2b_apply_mode_env already
+# neutralised the variable, so it must FAIL, not merely narrate.
+#
+# Review finding F2 (PR #2982): this used to log and return, incrementing
+# nothing and unsetting nothing. The header of this file promises "mode
+# selection has to actually configure the client, not just judge it" — and it
+# did neither: a forbidden variable survived into the SDK AND the run was
+# reported clean.
 _e2b_forbid() {
   set +x
   local name="$1" why="$2"
   if [ -n "${!name:-}" ]; then
-    _e2b_log "$name: SET but not used by mode $E2B_MODE_RESOLVED — $why"
+    _e2b_log "$name: SET but mode $E2B_MODE_RESOLVED does not use it — $why"
+    _e2b_log "$name: this should have been unset by e2b_apply_mode_env; call it before e2b_validate_shapes"
+    E2B_SHAPE_ERRORS=$((E2B_SHAPE_ERRORS + 1))
+    return 1
+  fi
+  return 0
+}
+
+# _e2b_neutralise <var_name> <why>
+# Apply phase. Actually unsets a ROUTING variable the selected mode does not
+# use. Only routing knobs are ever unset here — never a credential: a missing
+# or surplus secret must stay a delivery failure, not something a script papers
+# over.
+_e2b_neutralise() {
+  set +x
+  local name="$1" why="$2"
+  if [ -n "${!name:-}" ]; then
+    _e2b_log "$name: UNSET by mode selection (mode $E2B_MODE_RESOLVED does not use it) — $why"
+    unset "$name"
+    E2B_MODE_NEUTRALISED="${E2B_MODE_NEUTRALISED:+$E2B_MODE_NEUTRALISED }$name"
+    export E2B_MODE_NEUTRALISED
   fi
 }
 
@@ -179,19 +207,55 @@ e2b_resolve_mode() {
   return 0
 }
 
-# e2b_apply_mode_env — export the NON-SECRET knobs that the selected mode
-# implies. Mode selection has to actually configure the client, not just judge
-# it. Only E2B_DEBUG qualifies: it is a routing flag, not a credential, and the
-# local stack is unreachable without it. Credentials are NEVER defaulted here —
-# a missing secret must stay a delivery failure, not something a script papers
-# over.
+# e2b_apply_mode_env — CONFIGURE the client for the selected mode. Mode
+# selection has to actually configure the client, not just judge it, and that
+# cuts both ways: set the non-secret knobs the mode implies, and UNSET the
+# routing variables the mode does not use.
+#
+# The unset half was missing (review finding F2, PR #2982). env.shared.example
+# ships E2B_API_URL=http://localhost:3000 and E2B_DEBUG=true as unconditional
+# GLOBALS for the selfhost-local default, and the pinned SDK (e2b 2.6.4,
+# connection_config.py:104-106) resolves
+#     api_url = E2B_API_URL or ("http://localhost:3000" if debug else https://api.<domain>)
+# so either global on its own silently redirects a cloud or GCP run at
+# localhost. Judging them was not enough; they have to be removed from the
+# environment the SDK reads.
+#
+# Only ROUTING knobs are ever set or unset here. Credentials are NEVER
+# defaulted and NEVER unset — a missing secret must stay a delivery failure,
+# not something a script papers over.
 e2b_apply_mode_env() {
   set +x
   [ -n "$E2B_MODE_RESOLVED" ] || { _e2b_log "e2b_resolve_mode must run first"; return 1; }
-  if [ "$E2B_MODE_RESOLVED" = "selfhost-local" ] && [ -z "${E2B_DEBUG:-}" ]; then
-    export E2B_DEBUG=true
-    _e2b_log "E2B_DEBUG: defaulted to true by mode selection (selfhost-local routing flag, not a secret)"
-  fi
+  E2B_MODE_NEUTRALISED=""
+  export E2B_MODE_NEUTRALISED
+  case "$E2B_MODE_RESOLVED" in
+    cloud)
+      # Two INDEPENDENT paths route a cloud run at localhost. Both are shipped
+      # as unconditional globals in env.shared.example, so neither is
+      # hypothetical:
+      #   1. E2B_API_URL   -> connection_config.py:104 takes it verbatim.
+      #   2. E2B_DEBUG     -> connection_config.py:106 falls back to
+      #                       "http://localhost:3000" when debug is true, even
+      #                       with E2B_API_URL unset.
+      _e2b_neutralise E2B_API_URL "cloud talks to the hosted API; a local URL would silently redirect the run"
+      _e2b_neutralise E2B_DEBUG "debug=true makes the SDK fall back to http://localhost:3000 (connection_config.py:106)"
+      _e2b_neutralise E2B_DOMAIN "E2B_DOMAIN is the GCP self-host variable"
+      ;;
+    selfhost-gcp)
+      # self-host.md addresses the cluster by domain. A local URL or debug flag
+      # left over from the selfhost-local defaults would override that domain.
+      _e2b_neutralise E2B_API_URL "selfhost-gcp is addressed by E2B_DOMAIN, not by an explicit API URL"
+      _e2b_neutralise E2B_DEBUG "debug=true makes the SDK fall back to http://localhost:3000 (connection_config.py:106)"
+      ;;
+    selfhost-local)
+      _e2b_neutralise E2B_DOMAIN "DEV-LOCAL.md does not use E2B_DOMAIN for the local stack — it is the GCP self-host variable and setting it here can misroute the SDK"
+      if [ -z "${E2B_DEBUG:-}" ]; then
+        export E2B_DEBUG=true
+        _e2b_log "E2B_DEBUG: defaulted to true by mode selection (selfhost-local routing flag, not a secret)"
+      fi
+      ;;
+  esac
   return 0
 }
 
@@ -204,7 +268,8 @@ e2b_validate_shapes() {
   case "$E2B_MODE_RESOLVED" in
     cloud)
       _e2b_shape_report E2B_API_KEY "$E2B_API_KEY_PREFIX" "$E2B_API_KEY_HEX_CLOUD"
-      _e2b_forbid E2B_API_URL "cloud talks to https://api.e2b.dev; unset it or switch to E2B_MODE=selfhost-local"
+      _e2b_forbid E2B_API_URL "cloud talks to the hosted API; unset it or switch to E2B_MODE=selfhost-local"
+      _e2b_forbid E2B_DEBUG "E2B_DEBUG=true routes the SDK to http://localhost:3000 (connection_config.py:106) even with E2B_API_URL unset"
       _e2b_forbid E2B_DOMAIN "E2B_DOMAIN is the GCP self-host variable"
       ;;
     selfhost-gcp)
@@ -217,6 +282,8 @@ e2b_validate_shapes() {
       else
         _e2b_log "E2B_DOMAIN: ${E2B_DOMAIN}"
       fi
+      _e2b_forbid E2B_API_URL "selfhost-gcp is addressed by E2B_DOMAIN; an explicit API URL overrides it"
+      _e2b_forbid E2B_DEBUG "E2B_DEBUG=true routes the SDK to http://localhost:3000 (connection_config.py:106)"
       ;;
     selfhost-local)
       # DEV-LOCAL.md "Client configuration" block: four variables, NO E2B_DOMAIN.
