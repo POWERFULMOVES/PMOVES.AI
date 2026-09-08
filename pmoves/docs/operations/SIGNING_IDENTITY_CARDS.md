@@ -238,10 +238,15 @@ intent, not a mechanism — the value only arrives if the funnel put it in
 `env.tier-agent` on that node. Run this once per node:
 
 ```bash
-python pmoves/tools/chit_manifest_register.py   # add the entries to the v2 manifest
-make -C pmoves chit-manifest-sync               # derive v1 from v2
-make -C pmoves secrets-funnel                   # project into the tier env files
+make -C pmoves chit-manifest-register   # add the entries to the v2 manifest
+make -C pmoves chit-manifest-sync       # derive v1 from v2
+make -C pmoves secrets-funnel           # project into the tier env files
 ```
+
+`make -C pmoves chit-manifest-register ARGS='--check'` reports what is still
+pending and writes nothing (exit 1 if any). Nothing in CI runs that gate, so
+these three steps happen because an operator runs them, not because a build
+turns red.
 
 Until then the card is `h-only / pending-ml` on that node: the H half reads
 fine, nothing verifies, and any activation checklist that requires resolvable

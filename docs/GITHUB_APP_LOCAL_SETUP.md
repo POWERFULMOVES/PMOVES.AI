@@ -60,10 +60,15 @@ does **not** deliver it. The secrets manifests are machine-emitted; an operator
 must run the funnel once for the values to appear in `env.tier-agent`:
 
 ```bash
-python pmoves/tools/chit_manifest_register.py   # add the entries to the v2 manifest
-make -C pmoves chit-manifest-sync               # derive v1 from v2
-make -C pmoves secrets-funnel                   # project into the tier env files
+make -C pmoves chit-manifest-register   # add the entries to the v2 manifest
+make -C pmoves chit-manifest-sync       # derive v1 from v2
+make -C pmoves secrets-funnel           # project into the tier env files
 ```
+
+`make -C pmoves chit-manifest-register ARGS='--check'` reports what is still
+pending and writes nothing (exit 1 if any). Nothing in CI runs that gate, so
+these three steps happen because an operator runs them, not because a build
+turns red.
 
 Until this runs on a node, `github_webhook_auto_config.py` reports
 `GH_APP_ID or GH_APP_SEC not found in env.tier-agent`, `mint_github_token.py`
