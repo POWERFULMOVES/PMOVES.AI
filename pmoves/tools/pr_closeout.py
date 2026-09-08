@@ -163,7 +163,19 @@ def _pr_from_rest(repo: str, number: int) -> dict[str, Any]:
     `mergeable` are re-spelled into GraphQL's vocabulary because the evaluator
     compares against MERGED/MERGEABLE/CONFLICTING.
     """
+    # GitHub computes `mergeable` lazily: the first GET after a base change (or
+    # an update-branch) returns null while it recomputes. Poll a few times so
+    # the closeout waits the transient UNKNOWN out instead of fail-closing on a
+    # PR that is actually mergeable — the exact race a hot merge wave triggers.
+    import time as _time
     pr = _rest(f"repos/{repo}/pulls/{number}")
+    for _ in range(5):
+        if not isinstance(pr, dict):
+            break
+        if pr.get("mergeable") is not None and str(pr.get("mergeable_state") or "").lower() != "unknown":
+            break
+        _time.sleep(3)
+        pr = _rest(f"repos/{repo}/pulls/{number}")
     if not isinstance(pr, dict):
         raise RuntimeError(f"invalid REST PR payload for {repo}#{number}")
 
