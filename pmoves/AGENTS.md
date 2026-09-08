@@ -64,7 +64,7 @@
 - If you intentionally skip one of those checks (docs-only change, etc.), record the rationale in the PR Reviewer Notes so reviewers know the risk envelope.
 - UI updates: run `make -C pmoves notebook-workbench-smoke ARGS="--thread=<uuid>"` to lint the Next.js bundle and validate Supabase connectivity. Reference `pmoves/docs/UI_NOTEBOOK_WORKBENCH.md` when collecting smoke evidence.
 - Hi-RAG gateway: after touching reranker or embedding code, run `make -C pmoves smoke-gpu`. The target now pipes the validation query through `docker compose exec` so FlagEmbedding/Qwen rerankers that only accept batch size 1 still report `"used_rerank": true` (first run downloads the 4B checkpoint).
-- Agents/Archon: for full-stack validation, follow the “All Services Up, Then Tests (Archon + Agents Flow)” section in `pmoves/docs/SMOKETESTS.md` and the Archon service guide in `pmoves/docs/services/archon/README.md`; use `make -C pmoves agents-headless-smoke`, `make -C pmoves smoke-gpu`, and (when available) `make -C pmoves verify-all`/`make -C pmoves archon-smoke` to exercise health endpoints and Supabase wiring.
+- Agents/Archon: for full-stack validation, follow the “All Services Up, Then Tests (Archon + Agents Flow)” section in `pmoves/docs/SMOKETESTS.md` and the Archon service guide in `pmoves/docs/services/archon/README.md`; use `make -C pmoves agents-headless-smoke`, `make -C pmoves smoke-gpu`, and (when available) `make -C pmoves verify-all`/`make -C pmoves archon-ui-smoke` to exercise health endpoints and Supabase wiring.
 
 - Storage unified to Supabase Storage S3 endpoint. Ensure in `pmoves/env.shared`:
   - `MINIO_ENDPOINT=http://host.docker.internal:65421/storage/v1/s3`
@@ -195,13 +195,13 @@ A0_MCP_SERVERS=fs: "mcp://filesystem?roots=/data"; archon: "mcp://http?endpoint=
 make -C pmoves a0-mcp-seed
 ```
 
-- Quick MCP smoke for Archon’s bridge (port only, 404 acceptable):
+- Quick native Archon health check (:3090, JSON body — the SPA catch-all makes status-only probes false-positive):
 
 ```
-make -C pmoves archon-mcp-smoke
+make -C pmoves archon-native-health
 ```
 
-Archon runs headless for orchestrations (Agent Zero → Archon via MCP) while the Archon UI can also issue MCP requests to the same headless bridge.
+Archon runs headless for orchestrations (Agent Zero → Archon native REST) while the Archon UI serves the same API.
 - From your forks (integrations workspace):
   - `make -C pmoves agents-integrations-clone` (once)
   - `make -C pmoves build-agents-integrations`

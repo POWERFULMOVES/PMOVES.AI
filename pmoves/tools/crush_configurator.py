@@ -470,15 +470,6 @@ MCP_SPECS: List[MCPSpec] = [
         required_commands=["docker"],
         required_env="HOSTINGER_API_TOKEN",
     ),
-    MCPSpec(
-        key="archon",
-        config={
-            "type": "http",
-            "url": "http://localhost:8051",
-            "timeout": 30,
-            "disabled": True,
-        },
-    ),
 ]
 
 

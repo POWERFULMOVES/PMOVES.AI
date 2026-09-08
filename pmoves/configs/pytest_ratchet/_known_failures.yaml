@@ -148,7 +148,6 @@ known_failures:
   - "ERROR|tests.integration.test_pr483_critical_path|test_critical_path_tensorzero"
   - "ERROR|tests.integration.test_pr483_critical_path|test_end_to_end_archon_to_supabase"
   - "ERROR|tests.integration.test_pr483_critical_path|test_end_to_end_pmoves_ui"
-  - "ERROR|tests.services.test_archon_mcp|<collection-error>"
   - "ERROR|tests.services.test_gateway_agent_api|<collection-error>"
   - "ERROR|tests.services.test_gateway_agent|<collection-error>"
   - "ERROR|tests.test_tools|<collection-error>"
