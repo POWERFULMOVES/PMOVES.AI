@@ -57,6 +57,7 @@ import socket
 import subprocess
 import sys
 from dataclasses import dataclass, field as dc_field
+from fnmatch import fnmatch
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Iterable, Sequence
@@ -413,11 +414,35 @@ def detect_d1(
         b.host_port for c in containers for b in c.bindings if b.is_wildcard
     }
 
+    # docker publishes a wildcard port twice, once per address family
+    # ("0.0.0.0:9090->9090/tcp, [::]:9090->9090/tcp"). One host port is one
+    # reachability fact, so it gets one finding.
+    seen: set[tuple[str, int]] = set()
+
     for c in containers:
         for b in c.bindings:
-            if not b.is_loopback or b.host_port not in declared:
+            if b.host_port not in declared:
                 continue
+            if (c.name, b.host_port) in seen:
+                continue
+            seen.add((c.name, b.host_port))
             group = declared[b.host_port]
+            if b.is_wildcard:
+                # The known-good counterpart is reported EXPLICITLY rather than
+                # by omission. "No finding" and "measured and fine" read the
+                # same in a summary, and this tool exists because things that
+                # were never measured got counted as fine.
+                findings.append(Finding(
+                    "D1", f"{c.name}:{b.host_port}", CLEAN,
+                    f"declared peer-reachable and published on {b.host_ip} -- "
+                    "reachable from peers",
+                    {"host_port": b.host_port, "bound_to": b.host_ip,
+                     "declared_for_hosts": sorted({d.host_expr for d in group}),
+                     "declared_in": sorted({d.source for d in group})[:5],
+                     "declaration_count": len(group)}))
+                continue
+            if not b.is_loopback:
+                continue
             ev = {
                 "host_port": b.host_port,
                 "bound_to": b.host_ip,
@@ -580,6 +605,52 @@ SKIP_DIRS = {
     ".mypy_cache", ".pytest_cache", ".ruff_cache", "site-packages",
 }
 
+# Secret material is never a useful declaration source and this tool prints the
+# paths it scanned, so the manifests are skipped outright rather than read and
+# then filtered. Named as a glob so a v3 manifest is covered on arrival.
+SKIP_DATA_GLOBS = ("pmoves/chit/secrets_manifest*",)
+
+# The audit tool NAMES the fields it hunts, in prose and in DEFAULT_D3_FIELDS.
+# Without this exclusion D3 finds itself and reports every field "read" --
+# measured 2026-09-08: `cpu_arch` came back CLEAN with exactly one reader, this
+# file, on the strength of the phrase `hardware_requirements.cpu_arch` in the
+# module docstring. A detector that reports its own mention as a reader is the
+# defect it hunts, so this exclusion is load-bearing, not cosmetic.
+SELF_PATH = Path(__file__).resolve()
+
+_PY_TRIPLE_DELIMS = (chr(34) * 3, chr(39) * 3)
+_PY_TRIPLE_RE = re.compile("|".join(re.escape(d) for d in _PY_TRIPLE_DELIMS))
+
+
+def strip_py_string_blocks(text: str) -> str:
+    """Blank out triple-quoted blocks so prose cannot masquerade as a read.
+
+    Docstrings routinely spell a field as `parent.field` while reading nothing.
+    Lines are replaced, not deleted, so any reported line numbers stay true.
+    """
+    out: list[str] = []
+    delim: str | None = None
+    for line in text.splitlines():
+        if delim is None:
+            m = _PY_TRIPLE_RE.search(line)
+            if not m:
+                out.append(line)
+                continue
+            d = m.group(0)
+            rest = line[m.end():]
+            if d in rest:  # opened and closed on the same line
+                out.append(line[: m.start()] + rest.split(d, 1)[1])
+                continue
+            delim = d
+            out.append(line[: m.start()])
+        else:
+            if delim in line:
+                out.append(line.split(delim, 1)[1])
+                delim = None
+            else:
+                out.append("")
+    return "\n".join(out)
+
 
 def _walk(root: Path, suffixes: set[str]) -> Iterable[Path]:
     for dirpath, dirnames, filenames in os.walk(root):
@@ -627,8 +698,14 @@ def detect_d3(
                         f"no search root exists under {repo_root}",
                         {"search_roots": list(search_roots)})]
 
-    data_files = [p for r in roots for p in _walk(r, DATA_SUFFIXES)]
-    code_files = [p for r in roots for p in _walk(r, CODE_SUFFIXES)]
+    def _skipped_data(p: Path) -> bool:
+        rel = p.relative_to(repo_root).as_posix()
+        return any(fnmatch(rel, g) for g in SKIP_DATA_GLOBS)
+
+    data_files = [p for r in roots for p in _walk(r, DATA_SUFFIXES)
+                  if not _skipped_data(p)]
+    code_files = [p for r in roots for p in _walk(r, CODE_SUFFIXES)
+                  if p.resolve() != SELF_PATH]
 
     findings: list[Finding] = []
     for f in fields:
@@ -654,6 +731,8 @@ def detect_d3(
                 continue
             if f not in text:
                 continue
+            if p.suffix == ".py":
+                text = strip_py_string_blocks(text)
             for ln in text.splitlines():
                 if _is_comment(ln):
                     continue  # a mention in a comment is not a reader
@@ -830,9 +909,12 @@ def detect_d4(
 # CLI
 # --------------------------------------------------------------------------
 
+# A matched pair, both declared in pmoves/config/rooms/*.json, so the control
+# differs from the fixture in exactly one way -- whether anything reads it.
 DEFAULT_D3_FIELDS = (
-    "cpu_arch",     # fixture 4: expected FIRE  (declared, read by nothing)
-    "min_length",   # positive control: expected CLEAN (chit_manifest_register.py)
+    "cpu_arch",   # fixture 4: expect FIRE  -- declared + schema-validated, 0 readers
+    "room_id",    # positive control: expect CLEAN -- read at
+                  # pmoves/services/p7-room-orchestrator/catalog.py:107
 )
 
 VERDICT_NAME = {
