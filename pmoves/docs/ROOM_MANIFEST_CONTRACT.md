@@ -228,6 +228,53 @@ Binding dimensions:
 
 This keeps the marketplace portable while letting each agent room feel distinct.
 
+## Publish Policy
+
+### `allowed_subjects` is a ceiling, not a topology claim
+
+`policies.publish.allowed_subjects` is the **allowlist of subjects this room may
+ever emit on**. It is not an assertion that anything emits them today.
+
+Read it from its neighbours in the schema. Every other field under
+`policies.publish` is a gate: `allow_nats_emit`, `allow_external_publish`,
+`gate_param`, `gate_mode`, `egress_redaction_floor`. `allow_external_publish:
+false` does not mean "this agent does not publish externally", it means "it is
+not permitted to". `allowed_subjects` has the same grammar — a bound, not a
+declaration.
+
+**The authoritative statement of what actually flows is
+`pmoves/config/agent_registry.yaml` → `<agent>.nats.publishes`.** That is the
+list registry-derived topology reads, and the one that must never overstate.
+
+### The two lists cannot be the same list
+
+`room.session.updated.v1` appears in the `allowed_subjects` of five seed rooms
+and is published by **P7, the room orchestrator** —
+`pmoves/services/p7-room-orchestrator/nats_pub.py:42` — never by the room's
+bound agent. A room-scoped allowlist necessarily covers room-*runtime*
+emissions alongside agent emissions, so it can never be a copy of any single
+agent's `publishes`.
+
+### What a gap between them means
+
+A subject in `allowed_subjects` that is absent from the bound agent's
+`nats.publishes` is a **not-yet-wired** emission. At `stage: rehearsal` that is
+the expected state, not a defect. It holds for four seed rooms on `main` today
+— `4090-field.room.control`, `5090-voice.room.studio`, `z890-infra.room.fabric`
+and `b850-ledger.room.evidence` — because all four are bound to node-CLI Claude
+identities (`claude_4090`, `claude_5090`, `claude_z890`, `claude_b850`) that
+each declare `nats.publishes: []`. Those sessions genuinely publish nothing.
+
+### The direction that *is* a defect
+
+Adding entries to `<agent>.nats.publishes` so it matches a room's ceiling. That
+declares publisher edges for emissions that do not exist and is precisely what
+issue #2734 exists to prevent; `claude_b850`'s registry entry carries a comment
+saying so.
+
+**Rule:** narrow the ceiling when a room will never emit a subject. Never widen
+`publishes` to match a ceiling. Wire the emission first, then declare it.
+
 ## Example Manifest
 ```json
 {
