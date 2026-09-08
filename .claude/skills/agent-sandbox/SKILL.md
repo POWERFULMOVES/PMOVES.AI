@@ -20,11 +20,14 @@ the entrypoint. That gap is why this file now carries the invocation.
 
 ## Known Road (preferred)
 
-Use the Make targets. They route `E2B_API_KEY` through `pmoves/scripts/with-env.sh`
+Use the Make targets. They route credentials through `pmoves/scripts/with-env.sh`
 (the canonical loader) so nothing is hardcoded and no credential is echoed:
 
 ```bash
-make -C pmoves sandbox-preflight            # check uv + CLI + E2B_API_KEY presence (name/length only)
+make -C pmoves sandbox-runbook              # owning node + every path in this lane
+make -C pmoves sandbox-mode                 # which deployment mode am I resolved to?
+make -C pmoves sandbox-host-probe           # is THIS node fit to self-host? (read-only)
+make -C pmoves sandbox-preflight            # uv + CLI + the SELECTED mode's credential SHAPES
 make -C pmoves sandbox-help                 # real command surface, straight from the CLI
 make -C pmoves sandbox-create               # provision; prints the sandbox ID
 make -C pmoves sandbox-exec SBX=<id> CMD='echo hello'
@@ -35,6 +38,20 @@ make -C pmoves sandbox-smoke                # end-to-end: create -> exec -> kill
 
 `SBX` is the sandbox ID. `CMD` is the command to run inside the sandbox. Extra flags go in
 `ARGS`. See `pmoves/Makefile` → `sandbox-*`.
+
+`sandbox-preflight` checks **shape**, not presence: prefix + charset + per-mode length.
+`[ -n "$VAR" ]` passes a truncated secret — see the B850 blocker below, where a *longer*
+than expected value sailed through every presence gate.
+
+> **`make` cannot carry the exit-code doctrine.** GNU make exits **2** for any recipe
+> failure. Measured with a control: recipes exiting 1 and exiting 3 both make `make` exit
+> 2, while the script run directly returns 3 — so "findings" and "could-not-measure" are
+> indistinguishable through make. The targets print their real code. Anything that
+> *branches* on it must call the script directly:
+> ```bash
+> bash pmoves/scripts/sandbox_smoke.sh;          echo "exit=$?"
+> bash pmoves/scripts/probe_danger_room_host.sh; echo "exit=$?"
+> ```
 
 ## Direct invocation
 
@@ -51,7 +68,13 @@ uv run sbx --help
 
 ### Credentials
 
-`E2B_API_KEY` is required. The CLI does **not** read it directly; the `e2b` SDK reads it
+**Which** credentials are required depends on the deployment mode — see "Three deployment
+modes" below; `E2B_API_KEY` alone is only sufficient for `cloud`. Both `E2B_API_KEY` and
+`E2B_ACCESS_TOKEN` are funnel-managed (registered in
+`pmoves/tools/chit_manifest_register.py`, delivered to `env.tier-agent`); the URLs,
+`E2B_DEBUG` and `E2B_DOMAIN` are routing config and live in `env.shared`.
+
+The CLI does **not** read credentials directly; the `e2b` SDK reads them
 from the process environment. `src/main.py` calls
 `load_dotenv(<submodule-root>/.env)` as a fallback — and `python-dotenv` does **not**
 override values already exported — so an exported `E2B_API_KEY` always wins. Prefer
@@ -146,12 +169,64 @@ operation on the host — that is the exact failure this skill exists to prevent
 Exit-code doctrine: `0` clean / `1` findings / `3` could-not-measure. Could-not-measure is
 not a pass, but it *is* an acceptable outcome.
 
-## Self-hosting (not wired — operator decision)
+## Three deployment modes — do not generalise from one page
 
-`E2B_DOMAIN` is unset, so the SDK targets **e2b.dev cloud**. The fleet already owns
-`PMOVES-Danger-infra` (self-hostable E2B infrastructure, `iac/`, `go.work`, `DEV-LOCAL.md`)
-and `PMOVES-E2B-Danger-Room`. Pointing `E2B_DOMAIN` at self-hosted infra has cost and
-topology implications and is an operator decision — do not flip it unilaterally.
+**This section replaced an earlier one that was wrong.** It said "`E2B_DOMAIN` is unset,
+so the SDK targets e2b.dev cloud... pointing `E2B_DOMAIN` at self-hosted infra" — treating
+`E2B_DOMAIN` as *the* self-host switch. It is not. `E2B_DOMAIN` is the **GCP** self-host
+variable; the **local** self-host stack does not use it at all, and setting it locally
+misroutes every sandbox host the SDK builds. Reading one vendor page and generalising it
+to another mode produced two wrong wirings on this lane before it was caught, which is
+why all three modes are now on one page.
+
+| Mode | Required | Vendor source |
+|---|---|---|
+| `cloud` | `E2B_API_KEY` (`e2b_` + 40 hex) | e2b.dev docs |
+| `selfhost-gcp` | `E2B_ACCESS_TOKEN` (`sk_e2b_` + 32 hex) **+ `E2B_DOMAIN`** | `PMOVES-Danger-infra/self-host.md` |
+| `selfhost-local` | `E2B_API_KEY` + `E2B_ACCESS_TOKEN` + `E2B_API_URL` + **`E2B_DEBUG=true`**, and **no `E2B_DOMAIN`** | `PMOVES-Danger-infra/DEV-LOCAL.md` |
+
+The mode is **explicit and selectable**. Default is `selfhost-local` (operator decision,
+2026-09-06 — self-host is approved; cloud remains reachable as a fallback):
+
+```bash
+make -C pmoves sandbox-mode                          # what am I pointed at, and why
+make -C pmoves sandbox-preflight E2B_MODE=cloud
+make -C pmoves sandbox-preflight E2B_MODE=selfhost-gcp
+make -C pmoves sandbox-preflight E2B_MODE=selfhost-local
+make -C pmoves sandbox-preflight E2B_MODE=auto       # infer from which vars are set
+```
+
+`pmoves/scripts/e2b_mode.sh` is the single place that knows the three sets. Two traps it
+encodes, neither of which the vendor dotenv block states:
+
+- **`E2B_DEBUG=true` is REQUIRED for `selfhost-local`.** The pinned e2b python SDK (2.6.4)
+  only returns `localhost:{port}` hosts when debug is set (`e2b/sandbox/main.py:198`) and
+  picks `http://` over `https://` off the same flag (`:49`). Without it the SDK builds
+  `https://49983-<id>.e2b.app` and silently talks to the wrong place. Mode selection
+  exports it.
+- **`E2B_ENVD_API_URL` has no consumer at our pins.** Grep counts with a positive control:
+  in the SDK monorepo `E2B_API_KEY` matches 24 files, `E2B_DOMAIN` 17, `E2B_ACCESS_TOKEN`
+  10, `E2B_ENVD_API_URL` **0**; in `PMOVES-Danger-infra` it matches only `DEV-LOCAL.md`
+  itself. Set it for vendor/JS parity, but do not treat setting it as having wired envd.
+
+### Self-hosting: owning node is `pmoves-5090`
+
+Bring-up is an **operator action on one named node**, not "someone". Full runbook —
+requirements, the twelve `DEV-LOCAL.md` steps with their traps, the nine services
+`make local-infra` starts, the port table and the `:3000` collision risk:
+
+**`pmoves/docs/operations/E2B_SELF_HOST_RUNBOOK.md`**
+
+The blocker to resolve first: `tailscale status` reports `pmoves-5090` as **windows**,
+and `DEV-LOCAL.md` requires Linux because Firecracker is a KVM VMM and `nbd`/hugepages
+are kernel features. Probe before assuming a shape — read-only, provisions nothing:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File pmoves\scripts\probe_danger_room_host.ps1  # Windows host half
+```
+```bash
+wsl -d <distro> -- bash pmoves/scripts/probe_danger_room_host.sh                     # Linux half
+```
 
 ## Cross-references
 
