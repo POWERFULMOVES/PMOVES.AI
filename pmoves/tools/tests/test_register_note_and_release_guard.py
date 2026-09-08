@@ -75,8 +75,8 @@ def _open_lanes(gate, register: Path) -> dict:
 
 
 def _rows(register: Path) -> list[str]:
-    return [l for l in register.read_text(encoding="utf-8").split("\n")
-            if l.startswith("- `")]
+    return [line for line in register.read_text(encoding="utf-8").split("\n")
+            if line.startswith("- `")]
 
 
 # --- A. a NOTE records a fact and transitions nothing -------------------------
@@ -111,7 +111,7 @@ def test_a_note_quoting_a_release_is_still_inert(gate):
         "filed on 2026-01-01 names no lane, which is worth recording.\n"
     )
     lanes = {
-        owner: sorted(l for _ln, ls, _r, _p in rows for l in ls)
+        owner: sorted(lane for _ln, held, _r, _p in rows for lane in held)
         for owner, rows in gate.open_claims_in(HELD + note).items()
     }
     assert lanes == {"AGENT-A": ["feat/widget", "fix/sprocket"]}, (
