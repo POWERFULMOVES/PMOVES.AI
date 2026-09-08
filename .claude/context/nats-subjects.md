@@ -838,6 +838,21 @@ Voice references are personal data: payloads carry JuiceFS keys only, never audi
 - **Payload:** `{persona_id, catalog_id, room, refs: [keys], source_batch, chit_sig, timestamp}`
 - **Profiles:** `workers`, `voice`
 
+## Persona Third-Ref Subjects
+
+Third-reference persona grounding (persona-thirdref service, port 8099; schema
+`pmoves/contracts/schemas/persona/consumption.recorded.v1.schema.json`). Consumption
+is gravitational signal: what a human or agent actually consumes of the shared
+library is the third reference for persona grounding, after authored config and
+observed interaction telemetry.
+
+**`persona.consumption.recorded.v1`**
+- **Publishers:** `pmoves/tools/persona_consumption.py` (agent side), jellyfin-bridge playback lane (human side, `source: jellyfin`)
+- **Subscribers:** persona-thirdref (joins Supabase `youtube_videos` enrichment: resonance_domain/resonance_secondary/persona_signal/curriculum_track)
+- **Payload:** `{consumer_kind: human|agent, user_id?, agent_id?, item_kind: youtube_video|beat|generic, item_id, session_id?, source, duration_seconds?, resonance_domains?, timestamp}`
+- **Emits:** `shape.trace.recorded.v1` (`interaction_type: media`) per event; `shape.profile.updated.v1` (normalized resonance-domain histogram) every `PERSONA_THIRDREF_PROFILE_THRESHOLD` events per identity
+- **Profiles:** `workers`, `orchestration`
+
 ## Cast TTS Subjects
 
 **`voice.cast.completed.v1`**

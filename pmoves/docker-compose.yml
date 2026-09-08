@@ -2162,6 +2162,48 @@ services:
         limits:
           cpus: '0.5'
           memory: 256M
+  persona-thirdref:
+    <<: *tier-worker-hardened
+    build:
+      context: .
+      dockerfile: services/persona-thirdref/Dockerfile
+    restart: unless-stopped
+    environment:
+    - NATS_URL=${NATS_URL}
+    - SUPABASE_URL=${SUPABASE_URL}
+    - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+    - PERSONA_THIRDREF_TOKEN=${PERSONA_THIRDREF_TOKEN:-}
+    - PERSONA_THIRDREF_PROFILE_THRESHOLD=${PERSONA_THIRDREF_PROFILE_THRESHOLD:-10}
+    # Host environment leak guard (see x-host-leak-guard docs above)
+    - SSL_CERT_FILE=
+    - SSL_CERT_DIR=
+    - REQUESTS_CA_BUNDLE=
+    - CURL_CA_BUNDLE=
+    - NODE_EXTRA_CA_CERTS=
+    - HTTP_PROXY=
+    - HTTPS_PROXY=
+    - NO_PROXY=
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus
+    profiles:
+    - workers
+    - orchestration
+    networks:
+    - pmoves_app
+    - pmoves_bus
+    depends_on:
+      nats:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8099/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
   pdf-ingest:
     <<: *tier-worker-hardened
     build:
