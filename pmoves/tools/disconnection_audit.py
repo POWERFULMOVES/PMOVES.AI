@@ -304,7 +304,8 @@ _CATALOG_PORT_RE = re.compile(r"`:(?P<port>\d{2,5})`")
 CONFIG_GLOBS = (
     ".claude/*.json",
     ".claude/*.md",
-    ".claude/context/*.md",
+    ".claude/**/*.json",
+    ".claude/**/*.md",
     "pmoves/config/*.yaml",
     "pmoves/config/*.yml",
     "pmoves/config/*.json",
@@ -340,7 +341,7 @@ def load_node_reach_names(repo_root: Path) -> set[str]:
     if not path.exists():
         return names
     for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
-        m = re.match(r"\s*reach:\s*['\"]?([A-Za-z0-9._-]+)['\"]?\s*$", line)
+        m = re.match(r"\s*-?\s*reach:\s*['\"]?([A-Za-z0-9._-]+)['\"]?\s*$", line)
         if m:
             names.add(m.group(1))
     return names
@@ -641,6 +642,13 @@ SKIP_DATA_GLOBS = ("pmoves/chit/secrets_manifest*",)
 # module docstring. A detector that reports its own mention as a reader is the
 # defect it hunts, so this exclusion is load-bearing, not cosmetic.
 SELF_PATH = Path(__file__).resolve()
+# The test suite names every field too, in assertions like out["cpu_arch"] --
+# a genuine subscript that no regex can tell apart from a real read. Both files
+# talk ABOUT the fields; neither consumes one.
+SELF_EXCLUDED = {
+    SELF_PATH,
+    SELF_PATH.parent / "tests" / f"test_{SELF_PATH.stem}.py",
+}
 
 _PY_TRIPLE_DELIMS = (chr(34) * 3, chr(39) * 3)
 _PY_TRIPLE_RE = re.compile("|".join(re.escape(d) for d in _PY_TRIPLE_DELIMS))
@@ -690,7 +698,11 @@ def _read_patterns(field: str) -> re.Pattern:
     return re.compile(
         r"(?:"
         rf"\.get\(\s*['\"]{f}['\"]"        # d.get("field")
-        rf"|\[\s*['\"]{f}['\"]\s*\]"       # d["field"]
+        # A subscript needs something to subscript. Without the lookbehind
+        # the bare list literal ["cpu_arch", "room_id"] reads as a field
+        # access, which is how an audit tool's own field list -- and its test
+        # suite's -- got counted as readers on 2026-09-08.
+        rf"|(?<=[\w\)\]])\[\s*['\"]{f}['\"]\s*\]"   # d["field"]
         rf"|getattr\([^)]*['\"]{f}['\"]"   # getattr(o, "field")
         rf"|\.{f}\b"                       # o.field / obj?.field / jq '.field'
         rf"|\b{f}\s*="                     # field = ...  (assignment / kwarg)
@@ -729,7 +741,7 @@ def detect_d3(
     data_files = [p for r in roots for p in _walk(r, DATA_SUFFIXES)
                   if not _skipped_data(p)]
     code_files = [p for r in roots for p in _walk(r, CODE_SUFFIXES)
-                  if p.resolve() != SELF_PATH]
+                  if p.resolve() not in SELF_EXCLUDED]
 
     findings: list[Finding] = []
     for f in fields:
