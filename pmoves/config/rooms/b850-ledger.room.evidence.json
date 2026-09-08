@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "stage": "rehearsal",
   "display_name": "B850 Ledger Evidence Room",
-  "description": "Evidence room for the B850 Knuckles data-tier node: the claim register, CHIT-signed trails, verification of other bodies' claims, and measurement discipline over the data tier (postgres, qdrant, neo4j, meilisearch, minio). Durable evidence lives in the notebook, which is authoritative here — the room is a reading surface, not the record. No MCP-backed memory server is bound: pmoves_cipher_mcp is status:planned in agent_registry.yaml and, measured from this node on 2026-09-05, cipher-api /health answers 200 while the MCP path /mcp/sse answers 401, so it is not declared as a dependency of this room.",
+  "description": "Evidence room for the b850-ledger alter: the claim register, CHIT-signed trails, verification of other bodies' claims, and measurement discipline over the data tier (postgres, qdrant, neo4j, meilisearch, minio). Durable evidence lives in the notebook, which is authoritative here — the room is a reading surface, not the record. No MCP-backed memory server is bound: pmoves_cipher_mcp is status:planned in agent_registry.yaml and its rooms list scopes it to z890-infra.room.fabric, so this room declares no dependency on it. The room is named for the alter that opened it, not for a machine: it needs no GPU, no node-local storage and no host-specific address, so any fleet node satisfying hardware_requirements can host the session.",
   "agent_id": "b850-claude",
   "alter": "b850-ledger",
   "room_type": "operator",
@@ -373,7 +373,7 @@
   "hardware_requirements": {
     "gpu": false,
     "min_vram_mb": 0,
-    "cpu_arch": ["x86_64"]
+    "cpu_arch": ["x86_64", "arm64"]
   },
   "team_refs": ["data", "infra", "observability", "orchestration"],
   "service_refs": [
@@ -422,7 +422,7 @@
   },
   "provenance": {
     "source": "pmoves/config/rooms/catalog.json",
-    "updated_at": "2026-09-05T00:00:00Z",
+    "updated_at": "2026-09-08T00:00:00Z",
     "related_docs": [
       "pmoves/docs/ROOM_MANIFEST_CONTRACT.md",
       "pmoves/docs/ROOMS_ON_A_STAGE.md",
