@@ -671,6 +671,12 @@ def _dispatch(argv: list[str] | None = None) -> int:
              "here. Without this flag the sanctioned path would be the one "
              "route that skips the question, which is how a gate becomes "
              "theatre.")
+    parser.add_argument(
+        "--all-lanes", action="store_true",
+        help="RELEASE mode: close EVERY lane this owner holds. The register's "
+             "convention for a full handoff -- 142 rows already use it -- and "
+             "from now on it must be asked for. It used to be what you got by "
+             "leaving --branch off.")
     parser.add_argument("--dry-run", action="store_true",
                         help="render and check the row, write nothing")
     args = parser.parse_args(argv)
@@ -721,6 +727,45 @@ def _dispatch(argv: list[str] | None = None) -> int:
               "collision gate has nothing to compare, and the claim is "
               "unenforceable -- 78 rows in this register are already in that "
               "state.", file=sys.stderr)
+        return EXIT_UNMEASURED
+    # AN UNTARGETED DESTRUCTIVE ACTION REFUSES; IT DOES NOT BROADEN.
+    #
+    # `open_claims_in()` closes EVERY lane an owner holds when a RELEASE names
+    # none, and that reading must stay -- 142 rows in the live register are
+    # filed that way and reinterpreting them would reopen years of closed work.
+    # What changes is the WRITE path: omission is no longer how you ask for it.
+    #
+    # This is the second half of the trap the `note` kind opens the door out of.
+    # With no way to record a fact, a correction had to be filed as a release;
+    # a release with no lane closes everything; so a footnote could empty a
+    # node's whole workload while reading like a comment. Observed live, and
+    # harmless only because that owner had nothing open at the time.
+    #
+    # EXIT 3, NOT 1, and the choice is deliberate. In this tool exit 1 means
+    # "another owner holds your lane" -- a fact about the register. Nothing was
+    # measured here: the invocation is under-specified, exactly like a CLAIM
+    # naming no branch, which has always been 3.
+    if args.kind == "release" and not args.branch and not args.all_lanes:
+        print("register-append: refusing - a RELEASE naming no lane closes "
+              "EVERY lane `" + args.owner + "` holds, and nothing in this "
+              "command says that was the intention.\n"
+              "  To close one lane:      --branch <lane>   (usually what you "
+              "want)\n"
+              "  To close ALL your lanes: --all-lanes       (a full handoff, "
+              "stated on purpose)\n"
+              "  To record a FACT without closing anything: file a `note` "
+              "instead -- `make -C pmoves register-note`.\n"
+              "Nothing was written.", file=sys.stderr)
+        return EXIT_UNMEASURED
+    if args.kind == "release" and args.branch and args.all_lanes:
+        print("register-append: NOT MEASURED - --branch names one lane and "
+              "--all-lanes closes every lane. Both cannot be the instruction, "
+              "and guessing which you meant is how a release closes work "
+              "nobody asked it to. Nothing was written.", file=sys.stderr)
+        return EXIT_UNMEASURED
+    if args.kind == "note" and args.all_lanes:
+        print("register-append: NOT MEASURED - --all-lanes is a RELEASE flag. "
+              "A NOTE closes nothing by construction.", file=sys.stderr)
         return EXIT_UNMEASURED
     if args.kind == "note" and args.ttl:
         print("register-append: a NOTE takes no --ttl. A TTL is a promise to "

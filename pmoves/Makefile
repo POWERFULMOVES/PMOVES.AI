@@ -365,9 +365,16 @@ register-release: export REGISTER_OWNER = $(REGISTER_OWNER_VALUE)
 register-release: export REGISTER_BRANCH = $(BRANCH)
 register-release: export REGISTER_SCOPE = $(SCOPE)
 register-release: export REGISTER_CO_OWNERS = $(CO_OWNER)
-register-release: ## Close a lane in the claim register (OWNER= BRANCH= SCOPE= [CO_OWNER=])
+# BRANCH IS NOT OPTIONAL HERE, and the guard is in the python rather than in
+# this recipe on purpose: `ARGS=--all-lanes` is the sanctioned way to ask for a
+# full handoff, and a make-level `[ -z "$$REGISTER_BRANCH" ]` cannot see it. The
+# tool refuses an untargeted release with a message naming both doors -- which
+# survives `make` collapsing every nonzero recipe exit to 2, because the message
+# is the structured part, not the code.
+register-release: ## Close a lane in the claim register (OWNER= BRANCH= SCOPE= [CO_OWNER=]; ARGS=--all-lanes to close ALL your lanes)
 	@if [ -z "$$REGISTER_SCOPE" ]; then \
 		echo "usage: make register-release OWNER='B850-CLAUDE (Knuckles)' BRANCH=fix/x SCOPE='what landed'"; \
+		echo "       BRANCH= is required. To close EVERY lane you hold, say so: ARGS=--all-lanes"; \
 		exit 2; \
 	fi
 	@$(REGISTER_PYTHON) tools/register_append.py release $(ARGS)

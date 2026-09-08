@@ -213,3 +213,51 @@ def test_no_live_claim_or_release_row_is_classified_inert(gate):
     assert "CLAIM" in kinds and "RELEASE" in kinds and "NOTE" in kinds, (
         f"the row-kind parser stopped recognising the live grammar: "
         f"{sorted(k for k in kinds if k)}")
+
+
+# --- B. an untargeted RELEASE refuses instead of broadening -------------------
+
+def test_a_release_naming_no_lane_refuses(mod, gate, capsys):
+    """The destructive default, closed.
+
+    A bare RELEASE closes every lane its owner holds. That is the register's
+    documented convention for a full handoff and it must stay readable for the
+    142 rows already filed that way -- but it must never happen by OMISSION.
+    """
+    before = _open_lanes(gate, mod.REGISTER)
+
+    rc = mod.main(["release", "--owner", "AGENT-A", "--scope", "done"])
+
+    assert rc == mod.EXIT_UNMEASURED, (
+        "an under-specified release must fail closed")
+    err = capsys.readouterr().err
+    assert "--branch" in err and "--all-lanes" in err, (
+        "the refusal must name the ambiguity AND how to be explicit: " + err)
+    assert _open_lanes(gate, mod.REGISTER) == before
+    assert len(_rows(mod.REGISTER)) == 2, "a refused release must not be written"
+
+
+def test_an_explicit_release_closes_exactly_that_lane(mod, gate):
+    rc = mod.main(["release", "--owner", "AGENT-A", "--branch", "feat/widget",
+                   "--scope", "landed"])
+
+    assert rc == mod.EXIT_OK
+    assert _open_lanes(gate, mod.REGISTER) == {"AGENT-A": ["fix/sprocket"]}, (
+        "a targeted release closed more (or less) than the lane it named")
+
+
+def test_all_lanes_is_an_explicit_opt_in_that_still_works(mod, gate):
+    """Closing everything stays available -- it just cannot happen by omission."""
+    rc = mod.main(["release", "--owner", "AGENT-A", "--all-lanes",
+                   "--scope", "handing the whole node off"])
+
+    assert rc == mod.EXIT_OK
+    assert _open_lanes(gate, mod.REGISTER) == {}, "the opt-in must still close all"
+
+
+def test_all_lanes_and_branch_together_are_refused(mod):
+    """"close this one" and "close everything" cannot both be the instruction."""
+    rc = mod.main(["release", "--owner", "AGENT-A", "--branch", "feat/widget",
+                   "--all-lanes", "--scope", "which is it"])
+    assert rc == mod.EXIT_UNMEASURED
+    assert len(_rows(mod.REGISTER)) == 2
