@@ -108,11 +108,20 @@ def test_no_recursion_into_env_bootstrap_lite_forwards_args():
 
 def test_env_bootstrap_lite_recursions_are_actually_present():
     """Paired with the test above: proves it is guarding real call sites rather
-    than an empty set that would pass if the recursions were renamed away."""
+    than an empty set that would pass if the recursions were renamed away.
+
+    The funnel entry points (chit-manifest-*) recurse into `env-bootstrap-check`
+    (precheck only, no ARGS consumer) instead of `env-bootstrap-lite` since the
+    CUDA-free lite split, so the guarded population is both targets: the lite
+    sites must all clear ARGS, and the combined count proves the scanner still
+    sees the real call sites rather than a renamed-away empty set."""
     _, recursions = _scan()
-    sites = [r for r in recursions if r["child"] == "env-bootstrap-lite"]
-    assert len(sites) >= 7, f"expected >=7 call sites, found {len(sites)}"
-    assert all(r["cleared"] for r in sites)
+    lite = [r for r in recursions if r["child"] == "env-bootstrap-lite"]
+    check = [r for r in recursions if r["child"] == "env-bootstrap-check"]
+    assert len(lite) >= 4, f"expected >=4 env-bootstrap-lite call sites, found {len(lite)}"
+    assert len(check) >= 3, f"expected >=3 env-bootstrap-check call sites, found {len(check)}"
+    assert len(lite) + len(check) >= 7, f"expected >=7 guarded call sites, found {len(lite) + len(check)}"
+    assert all(r["cleared"] for r in lite)
 
 
 def test_args_consuming_parent_never_forwards_to_a_different_tool():

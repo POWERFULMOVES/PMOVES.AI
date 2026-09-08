@@ -19,7 +19,7 @@ working.
 
 - Compose now points at `ghcr.io/powerfulmoves/pmoves-health-wger:pmoves-latest` by default. Override it with
   `WGER_IMAGE` if you publish a branded build elsewhere (same shape as the upstream production Dockerfile).
-- `make up-external` (external stack) calls `scripts/wger_brand_defaults.sh` after the containers start. The helper
+- `make up-external` (GROUPED external stack) does NOT call it — invoke `scripts/wger_brand_defaults.sh` after the containers start. The helper
   now waits for Django to finish migrations (including the `django_site` bootstrap) before touching the
   database, then updates the `Site` record, seed gym row, and admin profile so the very first login already
   carries PMOVES branding. Tune the values via (and review the upstream guidance in the
@@ -28,7 +28,7 @@ working.
   - `WGER_BRAND_SITE_NAME`, `WGER_BRAND_GYM_NAME`, `WGER_BRAND_GYM_CITY`
   - `WGER_BRAND_ADMIN_*` (first name, last name, email, username) and `WGER_BRAND_WAIT_SECS` if you
     need a longer bootstrap wait.
-- Re-run `make brand-defaults` whenever you reset the SQLite volume or want to apply different
+- Re-run `make brand-defaults` (shared defaults + MinIO buckets only; Site/gym/admin updates = scripts/wger_brand_defaults.sh manually) whenever you reset the SQLite volume or want to apply different
   copy—it's idempotent and only touches the site/gym/admin rows.
 
 ### API surface
@@ -72,7 +72,7 @@ artefacts (for example, after an upstream theme update) recreate the containers 
 
 If either check fails, inspect the proxy logs with `docker logs cataclysm-wger-nginx` and confirm that
 `cataclysm-wger` finished its bootstrap (look for `static files copied` in the Django logs). Re-run
-`make brand-defaults` if you need to reapply the PMOVES copy after wiping the volumes.
+`make brand-defaults` (shared defaults + MinIO buckets only; Site/gym/admin updates = scripts/wger_brand_defaults.sh manually) if you need to reapply the PMOVES copy after wiping the volumes.
 
 ### n8n automation assets
 

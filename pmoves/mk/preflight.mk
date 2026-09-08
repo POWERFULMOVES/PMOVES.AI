@@ -78,6 +78,9 @@ endif
 env-bootstrap-lite: ensure-env-shared ## Bootstrap lightweight runtime env (uv-first) and check core host tools
 	@$(PRECHECK_PY) tools/bootstrap_light_env.py $(ARGS)
 
+env-bootstrap-check: ## Precheck ONLY (no create/install): lite venv + core deps present, else exit 3 with remediation. Gate for funnel entry points.
+	@$(PRECHECK_PY) tools/bootstrap_light_env.py --check
+
 env-setup: ensure-env-shared ## Unified env bootstrap (registry-driven + strict env drift checks + showtime quick diagnostics)
 	@$(PRECHECK_PY) tools/env_setup_unified.py $(ARGS)
 
