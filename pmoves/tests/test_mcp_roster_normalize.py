@@ -749,11 +749,24 @@ def test_windows_liveness_reads_command_lines_when_the_query_works(monkeypatch):
     assert any(p.endswith("claude-pmoves-mcp-roster.zz99.json") for p in live)
 
 
+def _executable_lines(launcher):
+    """A launcher's code with comment lines removed.
+
+    Both of the launcher assertions below are substring greps, and both were
+    tripped by the explanatory comments this same change added -- prose that
+    NAMES `--out-dir` and `XDG_RUNTIME_DIR` in order to warn a future editor
+    off them read as a use of them. Weakening the assertions would have been
+    the wrong repair; a grep over a shell script should look at the script.
+    """
+    lines = launcher.read_text(encoding="utf-8", errors="replace").splitlines()
+    return "\n".join(l for l in lines if not l.lstrip().startswith("#"))
+
+
 def test_the_windows_launcher_does_not_hand_the_tool_a_posix_only_out_dir():
     """XDG_RUNTIME_DIR does not exist on Windows; the .ps1 must not invent one.
-    Custody there stays the temp dir, chosen by the tool's own fallback."""
-    text = LAUNCHER_PS1.read_text(encoding="utf-8", errors="replace")
-    assert "XDG_RUNTIME_DIR" not in text
+    Custody there stays the temp dir -- already per-user on Windows -- chosen
+    by the tool's own fallback."""
+    assert "XDG_RUNTIME_DIR" not in _executable_lines(LAUNCHER_PS1)
 
 
 # --------------------------------------------------------------------------
@@ -765,8 +778,7 @@ def test_neither_launcher_pins_the_roster_to_the_shared_temp_dir():
     """A hardcoded --out-dir in either launcher would silently undo the custody
     move for every session on the fleet while these unit tests stayed green."""
     for launcher in (LAUNCHER, LAUNCHER_PS1):
-        text = launcher.read_text(encoding="utf-8", errors="replace")
-        assert "--out-dir" not in text, (
+        assert "--out-dir" not in _executable_lines(launcher), (
             f"{launcher.name} pins --out-dir; the tool must choose custody"
         )
 
@@ -781,3 +793,62 @@ def test_the_sweep_has_a_liveness_check_at_all():
     assert re.search(r"/proc/|cmdline|Win32_Process", text), (
         "the sweep unlinks on mtime alone again"
     )
+
+
+def test_default_custody_is_xdg_runtime_dir_not_the_shared_temp_dir(tmp_path):
+    """BEHAVIOURAL control for the custody move, through the existing CLI
+    contract rather than through a new symbol.
+
+    Neither launcher passes ``--out-dir`` -- they let the tool choose -- so
+    "where does the CLI put the file when nobody tells it" IS the shipped
+    behaviour, and it is observable on both the old and the new code. Pre-fix
+    this lands in the shared temp dir; post-fix in XDG_RUNTIME_DIR, mode 0700
+    and owned by the login session.
+
+    TMPDIR is redirected at the fake temp dir on purpose: this test runs the
+    CLI in DEFAULT custody, which also sweeps the temp dir, and the real one on
+    this node holds the roster of a running session. A test must not be able to
+    delete it.
+    """
+    xdg = tmp_path / "run-user"
+    faketmp = tmp_path / "faketmp"
+    xdg.mkdir()
+    faketmp.mkdir()
+
+    src = tmp_path / "mcp.json"
+    src.write_text(json.dumps(_roster(good={"url": "https://example.com/mcp"})))
+    proc = subprocess.run(
+        [sys.executable, str(TOOL), str(src), "--root", "/repo", "--label", "t"],
+        capture_output=True,
+        text=True,
+        env={
+            **os.environ,
+            "XDG_RUNTIME_DIR": str(xdg),
+            "TMPDIR": str(faketmp),
+        },
+    )
+    assert proc.returncode == 0, proc.stderr
+    written = Path(proc.stdout.strip())
+    assert written.parent == xdg, (
+        f"roster landed in {written.parent} -- a file holding expanded bearer "
+        f"tokens belongs in XDG_RUNTIME_DIR, not the shared temp dir"
+    )
+
+
+def test_the_launchers_pass_the_roster_path_where_the_liveness_scan_can_see_it():
+    """The fix depends on a launcher coupling, so the coupling gets a test.
+
+    The sweep can only spare a live session's roster if that path appears in
+    the session's own command line. Both launchers use the glued
+    ``--mcp-config=<path>`` form -- chosen originally because ``--mcp-config``
+    is variadic and the space form swallowed a trailing prompt -- and that is
+    exactly the spelling ``_roster_paths_in`` matches. If either launcher ever
+    stops naming the path on the command line, the liveness check goes blind
+    and the sweep silently reverts to deleting live sessions' rosters.
+    """
+    for launcher in (LAUNCHER, LAUNCHER_PS1):
+        text = launcher.read_text(encoding="utf-8", errors="replace")
+        assert "--mcp-config=" in text, (
+            f"{launcher.name} no longer passes the roster path in argv; "
+            f"the liveness scan cannot see it"
+        )
