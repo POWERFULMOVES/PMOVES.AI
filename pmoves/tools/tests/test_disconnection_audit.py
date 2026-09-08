@@ -278,9 +278,38 @@ def synthetic_repo(tmp_path: Path) -> Path:
         '        if row.get("room_id") == room_id:\n'
         '            return row\n'
         '# cpu_arch is mentioned here but never read -- a comment is not a reader\n'
-        '"""And hardware_requirements.cpu_arch in a docstring is not one either."""\n'
+        '\n'
+        'def documented():\n'
+        '    """Summary line.\n'
+        '\n'
+        '    A room declares hardware_requirements.cpu_arch, and this sentence\n'
+        '    is prose about it on an INTERIOR docstring line -- the line does\n'
+        '    not start with a quote, so the comment-prefix check cannot see it.\n'
+        '    Only stripping the triple-quoted block keeps it out of the read set.\n'
+        '    """\n'
+        '    return None\n'
     )
     return tmp_path
+
+
+def test_strip_py_string_blocks_blanks_interior_docstring_lines():
+    src = (
+        'def f():\n'
+        '    """doc\n'
+        '    mentions obj.cpu_arch here\n'
+        '    """\n'
+        '    return cfg.get("cpu_arch")\n'
+    )
+    stripped = da.strip_py_string_blocks(src)
+    assert "obj.cpu_arch" not in stripped, "prose inside a docstring must not survive"
+    assert 'cfg.get("cpu_arch")' in stripped, "real code must survive"
+    # Line count is preserved so any reported line number stays true.
+    assert len(stripped.splitlines()) == len(src.splitlines())
+
+
+def test_strip_py_string_blocks_leaves_a_single_line_docstring_harmless():
+    src = 'def f():\n    """mentions x.cpu_arch"""\n    return 1\n'
+    assert "x.cpu_arch" not in da.strip_py_string_blocks(src)
 
 
 def test_d3_shows_BOTH_outcomes_on_a_synthetic_repo(synthetic_repo):

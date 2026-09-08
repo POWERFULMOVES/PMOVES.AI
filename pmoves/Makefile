@@ -750,6 +750,36 @@ recreate-svc: ## Surgical recreate of ONE service with current env+image: make r
 recreate-svc-list: ## List every compose service recreate-svc can target (all profiles)
 	@$(DC) --profile "*" config --services 2>/dev/null | sort
 
+.PHONY: disconnection-audit
+disconnection-audit: ## Detect services that are running, HEALTHY and disconnected. 0 clean / 1 findings / 3 could-not-measure
+	@# KNOWN ROAD for pmoves/tools/disconnection_audit.py. A verification
+	@# harness that lives only in an agent brief reaches exactly one agent;
+	@# a Known Road reaches the fleet.
+	@#
+	@# READ THE JSON, NOT make's EXIT CODE. make collapses every nonzero
+	@# recipe exit to 2, so `1 findings` and `3 could-not-measure` are
+	@# indistinguishable through this target -- which is why the tool also
+	@# writes a structured verdict carrying exit_code. Point --json at a file
+	@# and read .exit_code, or call the tool directly, when you need the
+	@# distinction. could-not-measure is NOT a pass.
+	@#
+	@# Read-only against the live runtime: it never starts, stops, recreates
+	@# or reconfigures a container, and never reads a secret file.
+	@#
+	@# Tunables: DETECTORS=D1,D3  WINDOW_MIN=15  REPEAT=5  LOG_TAIL=400
+	@#   FIELD=cpu_arch (repeatable via ARGS)  JSON=path/to/verdict.json
+	$(PYTHON) tools/disconnection_audit.py \
+	  --repo-root .. \
+	  --detectors $(or $(DETECTORS),D1,D2,D3,D4) \
+	  --log-window-min $(or $(WINDOW_MIN),15) \
+	  --repeat-threshold $(or $(REPEAT),5) \
+	  --log-tail $(or $(LOG_TAIL),400) \
+	  $(if $(JSON),--json $(JSON)) $(ARGS)
+
+.PHONY: disconnection-audit-test
+disconnection-audit-test: ## Validate the validator: prove each detector fires on its ground-truth fixture
+	$(PYTHON) -m pytest tools/tests/test_disconnection_audit.py -q
+
 .PHONY: net-reality
 net-reality: ## Cross-check every published port against a real host listener (catches silent binds). PORTS_ONLY=1 to skip subnet probes. 0 clean / 1 drift / 2 docker unavailable.
 	@# Propagate PROJECT: the script reads COMPOSE_PROJECT_NAME and otherwise
