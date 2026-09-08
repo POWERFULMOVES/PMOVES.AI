@@ -154,11 +154,12 @@ class DockerProbe:
     def __init__(self, timeout: int = 20) -> None:
         self.timeout = timeout
 
-    def _run(self, args: list[str]) -> str:
+    def _run(self, args: list[str], merge_stderr: bool = False) -> str:
         try:
             proc = subprocess.run(
                 ["docker", *args],
-                capture_output=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT if merge_stderr else subprocess.PIPE,
                 text=True,
                 timeout=self.timeout,
             )
@@ -167,10 +168,9 @@ class DockerProbe:
         except subprocess.TimeoutExpired as exc:
             raise DockerUnavailable(f"docker {args[0]} timed out") from exc
         if proc.returncode != 0:
+            detail = (proc.stderr or proc.stdout or "").strip()[:200]
             raise DockerUnavailable(
-                f"docker {args[0]} exited {proc.returncode}: "
-                f"{proc.stderr.strip()[:200]}"
-            )
+                f"docker {args[0]} exited {proc.returncode}: {detail}")
         return proc.stdout
 
     def containers(self) -> list[Container]:
@@ -200,7 +200,14 @@ class DockerProbe:
         host --since silently returns zero lines for actively-logging
         containers, which would turn D2 into a check that cannot fail.
         """
-        raw = self._run(["logs", "--tail", str(tail), "--timestamps", name])
+        # merge_stderr is LOAD-BEARING. `docker logs` relays a container's
+        # stderr to ITS stderr, and most services log errors there: promtail,
+        # the D2 ground-truth fixture, writes 100% of its output to stderr.
+        # Reading only stdout returned zero lines for it -- measured
+        # 2026-09-08 -- so D2 called the fixture unmeasurable and would have
+        # called it CLEAN under any less strict empty-result policy.
+        raw = self._run(["logs", "--tail", str(tail), "--timestamps", name],
+                        merge_stderr=True)
         return parse_timestamped_logs(raw)
 
 
@@ -567,14 +574,31 @@ def detect_d2(
 
         if not lines:
             findings.append(Finding("D2", c.name, CNM,
-                                    "log fetch returned zero lines", ev))
+                                    "log fetch returned zero lines -- cannot "
+                                    "distinguish a silent service from a "
+                                    "failed read", ev))
             continue
         if not in_window:
-            findings.append(Finding(
-                "D2", c.name, CNM,
-                f"{len(lines)} line(s) fetched but none carried a timestamp "
-                f"inside the {window_minutes}m window -- cannot distinguish a "
-                "quiet service from a broken log read", ev))
+            # --tail returns the NEWEST N lines. If the newest DATED line
+            # predates the cutoff, nothing was emitted inside the window and
+            # that is a conclusive measurement, not an unknown. But if no line
+            # carried a parseable timestamp at all, the window cannot be
+            # applied and the honest answer is could-not-measure.
+            dated = [ts for ts, _ in lines if ts is not None]
+            if dated:
+                newest = max(dated)
+                ev["newest_line_age_minutes"] = round(
+                    (now - newest).total_seconds() / 60.0, 1)
+                findings.append(Finding(
+                    "D2", c.name, CLEAN,
+                    f"silent for the whole {window_minutes}m window "
+                    f"(newest of {len(lines)} line(s) is "
+                    f"{ev['newest_line_age_minutes']}m old)", ev))
+            else:
+                findings.append(Finding(
+                    "D2", c.name, CNM,
+                    f"{len(lines)} line(s) fetched but NONE carried a parseable "
+                    "timestamp -- the window cannot be applied", ev))
             continue
 
         if counts:
