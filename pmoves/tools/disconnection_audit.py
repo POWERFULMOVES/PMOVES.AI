@@ -437,3 +437,542 @@ def detect_d1(
                     f"{len(group)} place(s) but is published only on "
                     f"{b.host_ip} -- unreachable from any peer", ev))
     return findings
+
+
+# --------------------------------------------------------------------------
+# D2 -- healthy-but-erroring
+# --------------------------------------------------------------------------
+
+ERROR_MARKERS = (
+    "level=error",
+    "level=fatal",
+    "level=critical",
+    " error ",
+    "error:",
+    "exception",
+    "traceback",
+    "cannot connect",
+    "connection refused",
+    "name or service not known",
+    "no such host",
+    "permission denied",
+    "panic:",
+    "fatal:",
+)
+
+# Ordered most-specific-first: a UUID has to be collapsed before the bare-hex
+# and digit rules chew it into fragments that no longer match across lines.
+_NOISE_SUBS = (
+    (re.compile(r"\b\d{4}-\d{2}-\d{2}t?[\d:.]+z?\b"), "<ts>"),
+    (re.compile(r"\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b"), "<uuid>"),
+    (re.compile(r"\b[0-9a-f]{12,}\b"), "<hex>"),
+    (re.compile(r"\b\d+(\.\d+)?\b"), "<n>"),
+)
+
+
+def error_signature(line: str) -> str | None:
+    """Collapse a log line to a stable signature, or None if it is not an error.
+
+    Timestamps, counters, durations, hashes and ids are erased so the SAME
+    failure re-emitted with a fresh timestamp collapses to one signature --
+    which is what "repeating" has to mean for D2 to be able to count anything.
+    """
+    low = line.lower()
+    if not any(marker in low for marker in ERROR_MARKERS):
+        return None
+    sig = low
+    for pattern, repl in _NOISE_SUBS:
+        sig = pattern.sub(repl, sig)
+    sig = re.sub(r"\s+", " ", sig).strip()
+    return sig[:400] or None
+
+
+def detect_d2(
+    containers: Sequence[Container],
+    log_fetch,
+    *,
+    window_minutes: int,
+    repeat_threshold: int,
+    tail: int,
+    now: datetime | None = None,
+) -> list[Finding]:
+    """Green container whose own logs show the same error N+ times in M minutes.
+
+    `window_minutes` and `repeat_threshold` are parameters, not magic numbers:
+    a 5-second retry loop and a 5-minute reconcile loop need different
+    thresholds, and one fixed pair would either miss the slow one or cry wolf
+    on the fast one.
+    """
+    now = now or datetime.now(timezone.utc)
+    cutoff = now - timedelta(minutes=window_minutes)
+    findings: list[Finding] = []
+
+    for c in containers:
+        if not c.looks_green:
+            continue  # already reporting badly -- not this defect class
+        try:
+            lines = log_fetch(c.name, tail)
+        except DockerUnavailable as exc:
+            findings.append(Finding("D2", c.name, CNM, f"could not read logs: {exc}",
+                                    {"status": c.status, "health": c.health}))
+            continue
+
+        in_window = [(ts, t) for ts, t in lines if ts is not None and ts >= cutoff]
+        undated = sum(1 for ts, _ in lines if ts is None)
+
+        counts: dict[str, int] = {}
+        for _, text in in_window:
+            sig = error_signature(text)
+            if sig:
+                counts[sig] = counts.get(sig, 0) + 1
+
+        # ALWAYS report both input sizes. An empty result reads identically
+        # whether the service was quiet or the log read returned nothing --
+        # see the --since harness trap in the module docstring.
+        ev = {
+            "status": c.status,
+            "health": c.health,
+            "lines_examined": len(lines),
+            "lines_in_window": len(in_window),
+            "lines_undated": undated,
+            "window_minutes": window_minutes,
+            "repeat_threshold": repeat_threshold,
+            "distinct_error_signatures": len(counts),
+        }
+
+        if not lines:
+            findings.append(Finding("D2", c.name, CNM,
+                                    "log fetch returned zero lines", ev))
+            continue
+        if not in_window:
+            findings.append(Finding(
+                "D2", c.name, CNM,
+                f"{len(lines)} line(s) fetched but none carried a timestamp "
+                f"inside the {window_minutes}m window -- cannot distinguish a "
+                "quiet service from a broken log read", ev))
+            continue
+
+        if counts:
+            top_sig, top_n = max(counts.items(), key=lambda kv: kv[1])
+            ev["top_signature"] = top_sig[:240]
+            ev["top_signature_count"] = top_n
+            if top_n >= repeat_threshold:
+                findings.append(Finding(
+                    "D2", c.name, FIRE,
+                    f"reports {c.health or 'Up'} while the same error repeated "
+                    f"{top_n}x in the last {window_minutes}m "
+                    f"(threshold {repeat_threshold})", ev))
+                continue
+        findings.append(Finding(
+            "D2", c.name, CLEAN,
+            "no error signature reached the repeat threshold in the window", ev))
+    return findings
+
+
+# --------------------------------------------------------------------------
+# D3 -- declared-but-unread
+# --------------------------------------------------------------------------
+
+DATA_SUFFIXES = {".json", ".yaml", ".yml", ".toml"}
+CODE_SUFFIXES = {".py", ".ts", ".tsx", ".js", ".jsx", ".go", ".sh", ".rs"}
+SKIP_DIRS = {
+    ".git", "node_modules", "__pycache__", ".venv", "venv", "dist", "build",
+    ".mypy_cache", ".pytest_cache", ".ruff_cache", "site-packages",
+}
+
+
+def _walk(root: Path, suffixes: set[str]) -> Iterable[Path]:
+    for dirpath, dirnames, filenames in os.walk(root):
+        dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS]
+        for fn in sorted(filenames):
+            p = Path(dirpath) / fn
+            if p.suffix in suffixes:
+                yield p
+
+
+def _read_patterns(field: str) -> re.Pattern:
+    f = re.escape(field)
+    return re.compile(
+        r"(?:"
+        rf"\.get\(\s*['\"]{f}['\"]"        # d.get("field")
+        rf"|\[\s*['\"]{f}['\"]\s*\]"       # d["field"]
+        rf"|getattr\([^)]*['\"]{f}['\"]"   # getattr(o, "field")
+        rf"|\.{f}\b"                       # o.field / obj?.field / jq '.field'
+        rf"|\b{f}\s*="                     # field = ...  (assignment / kwarg)
+        rf"|\b{f}\s*:"                     # field: T     (annotation / TS type)
+        r")"
+    )
+
+
+_COMMENT_PREFIXES = ("#", "//", "*", "/*", '"""', "'''")
+
+
+def _is_comment(line: str) -> bool:
+    return line.lstrip().startswith(_COMMENT_PREFIXES)
+
+
+def detect_d3(
+    repo_root: Path,
+    fields: Sequence[str],
+    search_roots: Sequence[str] = ("pmoves",),
+) -> list[Finding]:
+    """Is a declared config field read by ANY code?
+
+    A field that is declared, schema-validated and read by nothing is a
+    constraint that cannot bind: it looks enforced and enforces nothing.
+    """
+    roots = [repo_root / r for r in search_roots if (repo_root / r).is_dir()]
+    if not roots:
+        return [Finding("D3", ",".join(fields), CNM,
+                        f"no search root exists under {repo_root}",
+                        {"search_roots": list(search_roots)})]
+
+    data_files = [p for r in roots for p in _walk(r, DATA_SUFFIXES)]
+    code_files = [p for r in roots for p in _walk(r, CODE_SUFFIXES)]
+
+    findings: list[Finding] = []
+    for f in fields:
+        decl_re = re.compile(rf"['\"]{re.escape(f)}['\"]\s*:|^\s*{re.escape(f)}\s*:")
+        read_re = _read_patterns(f)
+
+        declared_in: list[str] = []
+        for p in data_files:
+            try:
+                text = p.read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                continue
+            if f not in text:
+                continue
+            if any(decl_re.search(ln) for ln in text.splitlines()):
+                declared_in.append(p.relative_to(repo_root).as_posix())
+
+        read_in: list[str] = []
+        for p in code_files:
+            try:
+                text = p.read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                continue
+            if f not in text:
+                continue
+            for ln in text.splitlines():
+                if _is_comment(ln):
+                    continue  # a mention in a comment is not a reader
+                if read_re.search(ln):
+                    read_in.append(p.relative_to(repo_root).as_posix())
+                    break
+
+        ev = {
+            "field": f,
+            "data_files_scanned": len(data_files),
+            "code_files_scanned": len(code_files),
+            "declared_in_count": len(declared_in),
+            "declared_in": sorted(declared_in)[:8],
+            "read_in_count": len(read_in),
+            "read_in": sorted(read_in)[:8],
+        }
+        if not declared_in:
+            findings.append(Finding("D3", f, CNM,
+                                    "field is not declared in any data file under "
+                                    "the search roots -- nothing to assess", ev))
+        elif read_in:
+            findings.append(Finding("D3", f, CLEAN,
+                                    f"declared in {len(declared_in)} file(s) and "
+                                    f"read by {len(read_in)} code file(s)", ev))
+        else:
+            findings.append(Finding("D3", f, FIRE,
+                                    f"declared in {len(declared_in)} data file(s) "
+                                    "and read by ZERO code files -- a constraint "
+                                    "that cannot bind", ev))
+    return findings
+
+
+# --------------------------------------------------------------------------
+# D4 -- pointed-at-nothing
+# --------------------------------------------------------------------------
+
+R_LISTENING = "listening"
+R_PORT_CLOSED = "port-closed"
+R_ADDRESS_WRONG = "address-wrong"
+R_TRANSPORT_DEAD = "transport-dead"
+
+
+class NetProbe:
+    """Three discriminators, because a single failure code lies.
+
+    Lesson from this node on 2026-09-08: `HTTP 000` from curl meant an EXPIRED
+    TAILSCALE NODE KEY, not a down service. Collapsing that to "service down"
+    sends someone to restart a container that was never the problem. So a
+    failure is only classified after asking three separate questions -- does the
+    NAME resolve, does the MESH path carry, does the PORT answer.
+    """
+
+    def __init__(self, connect_timeout: float = 3.0, mesh_timeout: float = 4.0) -> None:
+        self.connect_timeout = connect_timeout
+        self.mesh_timeout = mesh_timeout
+
+    def resolves(self, host: str) -> bool:
+        try:
+            socket.getaddrinfo(host, None)
+            return True
+        except socket.gaierror:
+            return False
+
+    def tcp(self, host: str, port: int) -> str:
+        """-> "open" | "refused" | "unreachable" | "timeout"."""
+        try:
+            with socket.create_connection((host, port), timeout=self.connect_timeout):
+                return "open"
+        except socket.timeout:
+            return "timeout"
+        except OSError as exc:
+            if exc.errno == errno.ECONNREFUSED:
+                return "refused"
+            if exc.errno in (errno.EHOSTUNREACH, errno.ENETUNREACH):
+                return "unreachable"
+            return "timeout"
+
+    def mesh_reachable(self, host: str) -> bool | None:
+        """tailscale ping -> True / False, or None when tailscale is unavailable."""
+        try:
+            proc = subprocess.run(
+                ["tailscale", "ping", "--c", "1",
+                 "--timeout", f"{int(self.mesh_timeout)}s", host],
+                capture_output=True, text=True, timeout=self.mesh_timeout + 4,
+            )
+        except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+            return None
+        return proc.returncode == 0
+
+
+def detect_d4(
+    decls: Sequence[Declaration],
+    probe: NetProbe,
+    env: dict[str, str] | None = None,
+) -> list[Finding]:
+    """For each declared endpoint: is anything actually LISTENING?"""
+    env = env if env is not None else dict(os.environ)
+    findings: list[Finding] = []
+
+    targets: dict[tuple[str, int], list[Declaration]] = {}
+    for d in decls:
+        targets.setdefault((d.host_expr, d.port), []).append(d)
+
+    for (host_expr, port), group in sorted(targets.items()):
+        ev = {
+            "host_expr": host_expr,   # env-var NAME or hostname, never an address
+            "port": port,
+            "declared_in": sorted({d.source for d in group})[:5],
+        }
+        subject = f"{host_expr}:{port}"
+
+        m = re.fullmatch(r"\$\{?([A-Z0-9_]+)\}?", host_expr)
+        if m:
+            var = m.group(1)
+            ev["env_var"] = var
+            host = env.get(var, "")
+            if not host:
+                findings.append(Finding(
+                    "D4", subject, CNM,
+                    f"{var} is unset in this environment -- the endpoint cannot "
+                    "be resolved from this node", ev))
+                continue
+            ev["env_var_resolved"] = True  # the VALUE is deliberately not recorded
+        else:
+            host = host_expr
+
+        if not probe.resolves(host):
+            findings.append(Finding(
+                "D4", subject, FIRE,
+                f"{R_ADDRESS_WRONG}: the declared host does not resolve from "
+                "this node", {**ev, "classification": R_ADDRESS_WRONG}))
+            continue
+
+        state = probe.tcp(host, port)
+        ev["tcp_state"] = state
+        if state == "open":
+            findings.append(Finding(
+                "D4", subject, CLEAN,
+                f"{R_LISTENING}: something answered on port {port}",
+                {**ev, "classification": R_LISTENING}))
+            continue
+        if state == "refused":
+            findings.append(Finding(
+                "D4", subject, FIRE,
+                f"{R_PORT_CLOSED}: host reachable, nothing listening on port "
+                f"{port} -- config right, service absent",
+                {**ev, "classification": R_PORT_CLOSED}))
+            continue
+
+        # timeout / unreachable is ambiguous: dead mesh path or filtered port.
+        mesh = probe.mesh_reachable(host)
+        ev["mesh_reachable"] = mesh
+        if mesh is None:
+            findings.append(Finding(
+                "D4", subject, CNM,
+                f"tcp {state} and no mesh prober available -- cannot tell a dead "
+                "transport from a filtered port", ev))
+        elif mesh is False:
+            findings.append(Finding(
+                "D4", subject, FIRE,
+                f"{R_TRANSPORT_DEAD}: the mesh path to the host does not carry "
+                "(e.g. expired node key) -- the SERVICE is not the thing to "
+                "restart", {**ev, "classification": R_TRANSPORT_DEAD}))
+        else:
+            findings.append(Finding(
+                "D4", subject, FIRE,
+                f"{R_PORT_CLOSED}: mesh path carries but port {port} did not "
+                f"answer ({state}) -- filtered or not bound",
+                {**ev, "classification": R_PORT_CLOSED}))
+    return findings
+
+
+# --------------------------------------------------------------------------
+# CLI
+# --------------------------------------------------------------------------
+
+DEFAULT_D3_FIELDS = (
+    "cpu_arch",     # fixture 4: expected FIRE  (declared, read by nothing)
+    "min_length",   # positive control: expected CLEAN (chit_manifest_register.py)
+)
+
+VERDICT_NAME = {
+    EXIT_CLEAN: "clean",
+    EXIT_FINDINGS: "findings",
+    EXIT_COULD_NOT_MEASURE: "could-not-measure",
+}
+
+
+def build_report(findings: Sequence[Finding], node: str) -> dict:
+    by_verdict: dict[str, int] = {}
+    by_detector: dict[str, dict[str, int]] = {}
+    for f in findings:
+        by_verdict[f.verdict] = by_verdict.get(f.verdict, 0) + 1
+        bucket = by_detector.setdefault(f.detector, {})
+        bucket[f.verdict] = bucket.get(f.verdict, 0) + 1
+    code = aggregate_exit_code(findings)
+    return {
+        "tool": "disconnection_audit",
+        "schema": 1,
+        "node": node,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "exit_code": code,
+        "verdict": VERDICT_NAME[code],
+        "counts": by_verdict,
+        "by_detector": by_detector,
+        "findings": [f.to_dict() for f in findings],
+    }
+
+
+def _infer_repo_root() -> Path:
+    here = Path(__file__).resolve()
+    for parent in here.parents:
+        if (parent / ".git").exists() and (parent / "pmoves").is_dir():
+            return parent
+    return here.parents[2]
+
+
+def _print_summary(report: dict, stream) -> None:
+    print("", file=stream)
+    print(f"disconnection_audit -> {report['verdict']} "
+          f"(exit {report['exit_code']})", file=stream)
+    for f in report["findings"]:
+        if f["verdict"] == CLEAN:
+            continue
+        print(f"  [{f['verdict']:<17}] {f['detector']} {f['subject']}: "
+              f"{f['reason']}", file=stream)
+    print("  totals: " + ", ".join(f"{k}={v}" for k, v in sorted(report["counts"].items())),
+          file=stream)
+    if report["exit_code"] != EXIT_CLEAN:
+        print("  NOTE: `make` collapses every nonzero exit to 2. "
+              "Read exit_code in the JSON verdict.", file=stream)
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(
+        description="Detect built-running-healthy-and-disconnected services.",
+        epilog="exit 0 clean / 1 findings / 3 could-not-measure "
+               "(make collapses nonzero to 2 -- read exit_code in the JSON)",
+    )
+    ap.add_argument("--repo-root", default=None, help="repo root (default: infer)")
+    ap.add_argument("--detectors", default="D1,D2,D3,D4",
+                    help="comma-separated subset, e.g. D1,D3")
+    ap.add_argument("--log-window-min", type=int, default=15,
+                    help="D2: minutes of log history to consider (default 15)")
+    ap.add_argument("--repeat-threshold", type=int, default=5,
+                    help="D2: identical error signatures needed to call it "
+                         "repeating (default 5)")
+    ap.add_argument("--log-tail", type=int, default=400,
+                    help="D2: lines to pull per container (default 400)")
+    ap.add_argument("--field", action="append", default=None,
+                    help="D3: config field to test (repeatable). default: "
+                         + ", ".join(DEFAULT_D3_FIELDS))
+    ap.add_argument("--json", default=None,
+                    help="write the JSON verdict here instead of stdout")
+    ap.add_argument("--quiet", action="store_true", help="suppress the text table")
+    args = ap.parse_args(argv)
+
+    repo_root = Path(args.repo_root).resolve() if args.repo_root else _infer_repo_root()
+    wanted = {d.strip().upper() for d in args.detectors.split(",") if d.strip()}
+    findings: list[Finding] = []
+
+    docker = DockerProbe()
+    containers: list[Container] = []
+    docker_error: str | None = None
+    if {"D1", "D2"} & wanted:
+        try:
+            containers = docker.containers()
+        except DockerUnavailable as exc:
+            docker_error = str(exc)
+
+    decls = discover_declarations(repo_root) if {"D1", "D4"} & wanted else []
+
+    if "D1" in wanted:
+        if docker_error:
+            findings.append(Finding("D1", "<runtime>", CNM,
+                                    f"docker unavailable: {docker_error}", {}))
+        elif not decls:
+            findings.append(Finding("D1", "<repo>", CNM,
+                                    "no fleet-reachable declarations found in repo "
+                                    "config -- cannot judge any binding",
+                                    {"repo_root": str(repo_root)}))
+        else:
+            findings += detect_d1(containers, declared_fleet_ports(decls))
+
+    if "D2" in wanted:
+        if docker_error:
+            findings.append(Finding("D2", "<runtime>", CNM,
+                                    f"docker unavailable: {docker_error}", {}))
+        else:
+            findings += detect_d2(
+                containers, docker.logs,
+                window_minutes=args.log_window_min,
+                repeat_threshold=args.repeat_threshold,
+                tail=args.log_tail,
+            )
+
+    if "D3" in wanted:
+        findings += detect_d3(repo_root, args.field or list(DEFAULT_D3_FIELDS))
+
+    if "D4" in wanted:
+        if not decls:
+            findings.append(Finding("D4", "<repo>", CNM,
+                                    "no endpoint declarations found in repo config",
+                                    {"repo_root": str(repo_root)}))
+        else:
+            findings += detect_d4(decls, NetProbe())
+
+    report = build_report(
+        findings, node=os.environ.get("PMOVES_NODE", socket.gethostname()))
+    payload = json.dumps(report, indent=2)
+    if args.json:
+        Path(args.json).write_text(payload + "\n", encoding="utf-8")
+    else:
+        print(payload)
+
+    if not args.quiet:
+        _print_summary(report, sys.stderr)
+    return report["exit_code"]
+
+
+if __name__ == "__main__":
+    sys.exit(main())
