@@ -5780,20 +5780,51 @@ beats-pipeline: ## Full pipeline: analyze -> cluster -> export to Hyperdimension
 # ---------------------------------------------------------------------------
 SANDBOX_CLI_DIR := $(CURDIR)/../skills/PMOVES-agent-sandbox-skill/.claude/skills/agent-sandboxes/sandbox_cli
 SANDBOX_TIMEOUT ?= 600
+# SECURITY (review finding F3, PR #2982): a caller-supplied value is NEVER
+# interpolated into a recipe's shell text. It used to be:
+#     uv run sbx exec "$(SBX)" "$(CMD)" $(ARGS)
+# inside bash -lc '...'. make pastes CMD in literally, so an apostrophe closed
+# the quoting and the remainder ran ON THE HOST:
+#     make sandbox-exec SBX=x CMD="x'; touch /tmp/pwned; echo '"
+# created /tmp/pwned on the host — the exact isolation failure this sandbox
+# exists to prevent. Same shape applied to NAME, TEMPLATE, SBX, ARGS, E2B_MODE.
+#
+# Every caller value now reaches the shell through a target-specific `export`,
+# i.e. through execve's environment, never through shell text, and is read back
+# as "$$VAR_ARG". Regression test: pmoves/tests/test_sandbox_make_quoting.sh
+# (asserts the payload does NOT execute, with a positive control proving the
+# harness can still observe an execution when one happens).
+#
 # Passed into every recipe's shell so the resolver sees an operator override.
 # E2B_MODE is forwarded ONLY when non-empty: an empty exported var shadows a
 # value the env files would otherwise supply (the classic tier-env shadow bug).
-SANDBOX_ENV = $(if $(E2B_MODE),E2B_MODE="$(E2B_MODE)",) . ./scripts/with-env.sh 2>/dev/null || true; set +e; \
+# That non-empty check now happens in the shell, on the exported E2B_MODE_ARG.
+export SANDBOX_CLI_DIR
+SANDBOX_ENV = if [ -n "$${E2B_MODE_ARG:-}" ]; then export E2B_MODE="$$E2B_MODE_ARG"; fi; \
+	. ./scripts/with-env.sh 2>/dev/null || true; set +e; \
 	. ./scripts/e2b_mode.sh; e2b_resolve_mode >/dev/null && e2b_apply_mode_env >/dev/null
 
 .PHONY: sandbox-preflight sandbox-mode sandbox-help sandbox-create sandbox-list \
         sandbox-info sandbox-exec sandbox-kill sandbox-smoke sandbox-host-probe \
         sandbox-runbook
 
+# --- Caller values in, via the environment only (see SECURITY note above) ---
+sandbox-preflight sandbox-mode sandbox-help sandbox-create sandbox-list \
+sandbox-info sandbox-exec sandbox-kill sandbox-smoke: export E2B_MODE_ARG = $(E2B_MODE)
+sandbox-info sandbox-exec sandbox-kill: export SBX_ARG = $(SBX)
+sandbox-exec: export CMD_ARG = $(CMD)
+sandbox-create sandbox-exec: export ARGS_ARG = $(ARGS)
+sandbox-create: export NAME_ARG = $(NAME)
+sandbox-create: export TEMPLATE_ARG = $(TEMPLATE)
+sandbox-create: export SANDBOX_TIMEOUT_ARG = $(SANDBOX_TIMEOUT)
+sandbox-list: export LIMIT_ARG = $(LIMIT)
+sandbox-help: export GROUP_ARG = $(GROUP)
+
 sandbox-preflight: ## Check the CLI is runnable and the SELECTED mode's credentials are well-shaped (make masks the code as 2 — see header) [E2B_MODE=selfhost-local|cloud|selfhost-gcp|auto]
-	@bash -lc 'set +x; $(if $(E2B_MODE),E2B_MODE="$(E2B_MODE)",) . ./scripts/with-env.sh 2>/dev/null || true; set +e; set +x; \
+	@bash -lc 'set +x; if [ -n "$${E2B_MODE_ARG:-}" ]; then export E2B_MODE="$$E2B_MODE_ARG"; fi; \
+		. ./scripts/with-env.sh 2>/dev/null || true; set +e; set +x; \
 		rc=0; \
-		if [ -d "$(SANDBOX_CLI_DIR)" ]; then echo "[sandbox] CLI dir: present"; \
+		if [ -d "$$SANDBOX_CLI_DIR" ]; then echo "[sandbox] CLI dir: present"; \
 		else echo "[sandbox] CLI dir: MISSING — run: git submodule update --init --recursive skills/"; rc=3; fi; \
 		if command -v uv >/dev/null 2>&1; then echo "[sandbox] uv: $$(uv --version 2>/dev/null)"; \
 		else echo "[sandbox] uv: MISSING — required (CLI is a uv package, python >=3.12)"; rc=3; fi; \
@@ -5805,39 +5836,49 @@ sandbox-preflight: ## Check the CLI is runnable and the SELECTED mode's credenti
 		exit $$rc'
 
 sandbox-mode: ## Print the resolved E2B deployment mode and its variable set (no values)
-	@bash -lc 'set +x; $(if $(E2B_MODE),E2B_MODE="$(E2B_MODE)",) . ./scripts/with-env.sh 2>/dev/null || true; set +e; set +x; \
+	@bash -lc 'set +x; if [ -n "$${E2B_MODE_ARG:-}" ]; then export E2B_MODE="$$E2B_MODE_ARG"; fi; \
+		. ./scripts/with-env.sh 2>/dev/null || true; set +e; set +x; \
 		. ./scripts/e2b_mode.sh; e2b_resolve_mode && e2b_apply_mode_env && e2b_validate_shapes'
 
 sandbox-help: ## Show the real agent-sandbox CLI command surface
 	@bash -lc 'set +x; $(SANDBOX_ENV); \
-		cd "$(SANDBOX_CLI_DIR)" && uv run sbx $(or $(GROUP),) --help'
+		cd "$$SANDBOX_CLI_DIR" || exit 3; \
+		if [ -n "$${GROUP_ARG:-}" ]; then uv run sbx "$$GROUP_ARG" --help; else uv run sbx --help; fi'
 
 sandbox-create: ## Provision a sandbox and print its ID [SANDBOX_TIMEOUT=600] [NAME=..] [TEMPLATE=..] [ARGS=..]
 	@bash -lc 'set +x; $(SANDBOX_ENV); \
-		cd "$(SANDBOX_CLI_DIR)" && uv run sbx init --timeout $(SANDBOX_TIMEOUT) \
-		$(if $(NAME),--name "$(NAME)",) $(if $(TEMPLATE),--template "$(TEMPLATE)",) $(ARGS)'
+		cd "$$SANDBOX_CLI_DIR" || exit 3; \
+		set -- init --timeout "$${SANDBOX_TIMEOUT_ARG:-600}"; \
+		if [ -n "$${NAME_ARG:-}" ]; then set -- "$$@" --name "$$NAME_ARG"; fi; \
+		if [ -n "$${TEMPLATE_ARG:-}" ]; then set -- "$$@" --template "$$TEMPLATE_ARG"; fi; \
+		uv run sbx "$$@" $$ARGS_ARG'
 
 sandbox-list: ## List running sandboxes [LIMIT=20]
 	@bash -lc 'set +x; $(SANDBOX_ENV); \
-		cd "$(SANDBOX_CLI_DIR)" && uv run sbx sandbox list --limit $(or $(LIMIT),20)'
+		cd "$$SANDBOX_CLI_DIR" || exit 3; \
+		uv run sbx sandbox list --limit "$${LIMIT_ARG:-20}"'
 
 sandbox-info: ## Show sandbox details: SBX=<sandbox_id>
-	@if [ -z "$(SBX)" ]; then echo "Usage: make -C pmoves sandbox-info SBX=<sandbox_id>"; exit 1; fi
+	@if [ -z "$$SBX_ARG" ]; then echo "Usage: make -C pmoves sandbox-info SBX=<sandbox_id>"; exit 1; fi
 	@bash -lc 'set +x; $(SANDBOX_ENV); \
-		cd "$(SANDBOX_CLI_DIR)" && uv run sbx sandbox info "$(SBX)"'
+		cd "$$SANDBOX_CLI_DIR" || exit 3; \
+		uv run sbx sandbox info "$$SBX_ARG"'
 
 sandbox-exec: ## Run a command inside a sandbox: SBX=<id> CMD='echo hi' [ARGS=--shell]
-	@if [ -z "$(SBX)" ] || [ -z "$(CMD)" ]; then echo "Usage: make -C pmoves sandbox-exec SBX=<sandbox_id> CMD='echo hi' [ARGS=--shell]"; exit 1; fi
+	@if [ -z "$$SBX_ARG" ] || [ -z "$$CMD_ARG" ]; then echo "Usage: make -C pmoves sandbox-exec SBX=<sandbox_id> CMD='echo hi' [ARGS=--shell]"; exit 1; fi
 	@bash -lc 'set +x; $(SANDBOX_ENV); \
-		cd "$(SANDBOX_CLI_DIR)" && uv run sbx exec "$(SBX)" "$(CMD)" $(ARGS)'
+		cd "$$SANDBOX_CLI_DIR" || exit 3; \
+		uv run sbx exec "$$SBX_ARG" "$$CMD_ARG" $$ARGS_ARG'
 
 sandbox-kill: ## Tear down a sandbox: SBX=<sandbox_id>
-	@if [ -z "$(SBX)" ]; then echo "Usage: make -C pmoves sandbox-kill SBX=<sandbox_id>"; exit 1; fi
+	@if [ -z "$$SBX_ARG" ]; then echo "Usage: make -C pmoves sandbox-kill SBX=<sandbox_id>"; exit 1; fi
 	@bash -lc 'set +x; $(SANDBOX_ENV); \
-		cd "$(SANDBOX_CLI_DIR)" && uv run sbx sandbox kill "$(SBX)"'
+		cd "$$SANDBOX_CLI_DIR" || exit 3; \
+		uv run sbx sandbox kill "$$SBX_ARG"'
 
 sandbox-smoke: ## End-to-end proof: provision -> exec echo -> tear down. Prints the real 0/1/3 code; make itself reports 2 for both 1 and 3 [E2B_MODE=..]
-	@set +e; $(if $(E2B_MODE),E2B_MODE="$(E2B_MODE)",) bash $(CURDIR)/scripts/sandbox_smoke.sh; rc=$$?; \
+	@set +e; if [ -n "$$E2B_MODE_ARG" ]; then export E2B_MODE="$$E2B_MODE_ARG"; fi; \
+		bash $(CURDIR)/scripts/sandbox_smoke.sh; rc=$$?; \
 		echo "[sandbox] sandbox_smoke.sh exit=$$rc (0 clean / 1 findings / 3 could-not-measure). make will report 2 for any non-zero — branch on the script directly, not on make."; \
 		exit $$rc
 
