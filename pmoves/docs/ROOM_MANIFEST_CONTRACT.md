@@ -248,8 +248,10 @@ list registry-derived topology reads, and the one that must never overstate.
 
 ### The two lists cannot be the same list
 
-`room.session.updated.v1` appears in the `allowed_subjects` of five seed rooms
-and is published by **P7, the room orchestrator** —
+`room.session.updated.v1` appears in the `allowed_subjects` of eight seed rooms
+(`creator-studio`, `demo`, `fordham`, `hermes-agent`, `persona.livingdoc`,
+`pmoves.helpdesk`, `tokenism.exchange`, `b850-ledger`) and is published by
+**P7, the room orchestrator** —
 `pmoves/services/p7-room-orchestrator/nats_pub.py:42` — never by the room's
 bound agent. A room-scoped allowlist necessarily covers room-*runtime*
 emissions alongside agent emissions, so it can never be a copy of any single
