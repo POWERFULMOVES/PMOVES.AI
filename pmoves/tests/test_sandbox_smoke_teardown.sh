@@ -86,7 +86,8 @@ run_smoke() { # run_smoke <KILL_MODE> <STATUS_MODE> -> "<exit>|<output>"
     # deterministic, well-shaped, entirely fake credentials. cloud mode, so the
     # local-stack routing variables are not required.
     export E2B_MODE=cloud
-    export E2B_API_KEY="e2b_$(printf '0%.0s' $(seq 1 40))"
+    E2B_API_KEY="e2b_$(printf '0%.0s' $(seq 1 40))"   # e2b_ + 40 hex = the 44-char cloud shape
+    export E2B_API_KEY
     unset E2B_API_URL E2B_DEBUG E2B_DOMAIN E2B_ACCESS_TOKEN
     out="$(bash "$SMOKE" 2>&1)"; ec=$?
     printf '%s|%s' "$ec" "$out"
@@ -132,7 +133,8 @@ assert_case "kill exits non-zero"                     rcfail   gone    1 "$OKLIN
   export KILL_MODE=ok STATUS_MODE=gone HANG_EXEC=1
   export PATH="$STUBDIR:$PATH"
   export E2B_MODE=cloud
-  export E2B_API_KEY="e2b_$(printf '0%.0s' $(seq 1 40))"
+  E2B_API_KEY="e2b_$(printf '0%.0s' $(seq 1 40))"   # e2b_ + 40 hex = the 44-char cloud shape
+  export E2B_API_KEY
   unset E2B_API_URL E2B_DEBUG E2B_DOMAIN E2B_ACCESS_TOKEN
   bash "$SMOKE" >/dev/null 2>&1 &
   pid=$!
