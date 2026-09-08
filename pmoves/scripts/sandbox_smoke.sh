@@ -74,6 +74,68 @@ SBX="$(printf '%s\n' "$create_out" | sed -n 's/.*Sandbox ID:[[:space:]]*//p' | t
 [ -n "$SBX" ] || cnm "could not parse sandbox ID from create output"
 echo "[sandbox-smoke] sandbox: $SBX"
 
+# ── Teardown ────────────────────────────────────────────────────────────────
+# Review finding F4 (PR #2982). This used to be:
+#     if ! uv run sbx sandbox kill "$SBX"; then ... rc=1; fi
+# which CANNOT detect a failed teardown. sandbox_cli/src/commands/sandbox.py:96-102
+# prints "✗ Sandbox not found" and falls through with NO click.Abort() — so the
+# command exits 0 on the one path we care about, and the script went on to print
+# "OK — provision, exec and teardown all verified" while a sandbox leaked.
+# `sandbox status` (:285-297) has the identical shape: it exits 0 whether the
+# sandbox is running or not. So BOTH checks have to assert on the OUTPUT.
+SBX_TORN_DOWN=0
+
+_sandbox_teardown() {
+  set +x
+  [ "$SBX_TORN_DOWN" = "1" ] && return 0
+  [ -n "${SBX:-}" ] || return 0
+  SBX_TORN_DOWN=1
+
+  local kill_out kill_rc status_out
+  kill_out="$(uv run sbx sandbox kill "$SBX" 2>&1)"; kill_rc=$?
+  printf '%s\n' "$kill_out"
+
+  if [ $kill_rc -ne 0 ]; then
+    echo "[sandbox-smoke] FINDING: teardown command failed for $SBX (rc=$kill_rc) — kill it manually: make -C pmoves sandbox-kill SBX=$SBX"
+    return 1
+  fi
+  # rc=0 is not evidence. Require the success string the CLI prints only when
+  # kill_sandbox() actually returned truthy.
+  if ! printf '%s' "$kill_out" | grep -q 'Sandbox killed'; then
+    echo "[sandbox-smoke] FINDING: teardown did NOT confirm for $SBX — the CLI exited 0 without printing 'Sandbox killed' (it prints '✗ Sandbox not found' and still exits 0). Kill it manually: make -C pmoves sandbox-kill SBX=$SBX"
+    return 1
+  fi
+
+  # Independent re-check. Also exits 0 either way, so assert on the text.
+  status_out="$(uv run sbx sandbox status "$SBX" 2>&1)"
+  if printf '%s' "$status_out" | grep -q 'is not running'; then
+    echo "[sandbox-smoke] teardown confirmed: status reports $SBX is not running"
+  elif printf '%s' "$status_out" | grep -q 'is running'; then
+    echo "[sandbox-smoke] FINDING: $SBX is STILL RUNNING after a successful-looking kill — kill it manually: make -C pmoves sandbox-kill SBX=$SBX"
+    return 1
+  else
+    # The sandbox is usually gone entirely, which raises and Aborts. That is
+    # consistent with a successful teardown, so it is not a finding — but say
+    # so rather than letting silence read as confirmation.
+    echo "[sandbox-smoke] teardown: status gave no running/not-running verdict for $SBX (sandbox likely already reaped); kill string was confirmed above"
+  fi
+  return 0
+}
+
+# On ANY exit path — including a session cycle, which is routine on this host —
+# the sandbox gets torn down instead of orphaned. Without this, an interrupt
+# between provision and kill leaks a live sandbox and its billing.
+_sandbox_on_exit() {
+  local ec=$?
+  if [ "$SBX_TORN_DOWN" != "1" ] && [ -n "${SBX:-}" ]; then
+    echo "[sandbox-smoke] exiting with $SBX still up — tearing it down"
+    _sandbox_teardown || true
+  fi
+  return $ec
+}
+trap _sandbox_on_exit EXIT
+trap 'echo "[sandbox-smoke] interrupted"; exit 3' INT TERM HUP
+
 rc=0
 exec_out="$(uv run sbx exec "$SBX" "echo $SENTINEL" 2>&1)"
 exec_rc=$?
@@ -89,10 +151,7 @@ else
 fi
 
 echo "[sandbox-smoke] tearing down $SBX..."
-if ! uv run sbx sandbox kill "$SBX"; then
-  echo "[sandbox-smoke] FINDING: teardown failed for $SBX — kill it manually: make -C pmoves sandbox-kill SBX=$SBX"
-  rc=1
-fi
+_sandbox_teardown || rc=1
 
 [ $rc -eq 0 ] && echo "[sandbox-smoke] OK — provision, exec and teardown all verified"
 exit $rc
