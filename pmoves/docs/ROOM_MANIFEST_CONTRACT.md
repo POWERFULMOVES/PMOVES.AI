@@ -261,11 +261,12 @@ agent's `publishes`.
 
 A subject in `allowed_subjects` that is absent from the bound agent's
 `nats.publishes` is a **not-yet-wired** emission. At `stage: rehearsal` that is
-the expected state, not a defect. It holds for four seed rooms on `main` today
-— `4090-field.room.control`, `5090-voice.room.studio`, `z890-infra.room.fabric`
-and `b850-ledger.room.evidence` — because all four are bound to node-CLI Claude
-identities (`claude_4090`, `claude_5090`, `claude_z890`, `claude_b850`) that
-each declare `nats.publishes: []`. Those sessions genuinely publish nothing.
+the expected state, not a defect. It holds for three seed rooms already on
+`main` — `4090-field.room.control`, `5090-voice.room.studio` and
+`z890-infra.room.fabric` — and for `b850-ledger.room.evidence`, because all
+four are bound to node-CLI Claude identities (`claude_4090`, `claude_5090`,
+`claude_z890`, `claude_b850`) that each declare `nats.publishes: []`. Those
+sessions genuinely publish nothing.
 
 ### The direction that *is* a defect
 
