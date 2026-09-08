@@ -515,9 +515,9 @@
           "type": "array",
           "items": {
             "type": "string",
-            "enum": ["sm_75", "sm_80", "sm_86", "sm_87", "sm_89", "sm_90", "sm_100", "sm_110", "sm_120"]
+            "enum": ["sm_75", "sm_80", "sm_86", "sm_87", "sm_89", "sm_90", "sm_100", "sm_120", "sm_121"]
           },
-          "description": "Allowed NVIDIA compute capabilities. sm_75 = Turing (RTX 20-series, T4), sm_80 = A100 (data-center Ampere), sm_86 = RTX 3060-3090 / RTX 3090 Ti (consumer Ampere, also the Z890 fleet node), sm_87 = Jetson Orin NX (edge Ampere), sm_89 = RTX 4090 (Ada Lovelace), sm_90 = H100 (Hopper), sm_100 = GB100 / B200 (data-center Blackwell), sm_110 = GB10 (DGX Spark, unified-memory Blackwell), sm_120 = RTX 5090 (consumer Blackwell)."
+          "description": "Allowed NVIDIA compute capabilities. sm_75 = Turing (RTX 20-series, T4), sm_80 = A100 (data-center Ampere), sm_86 = RTX 3060-3090 / RTX 3090 Ti (consumer Ampere, also the Z890 fleet node), sm_87 = Jetson Orin NX (edge Ampere), sm_89 = RTX 4090 (Ada Lovelace), sm_90 = H100 (Hopper), sm_100 = GB100 / B200 (data-center Blackwell), sm_120 = RTX 5090 (consumer Blackwell), sm_121 = GB10 (DGX Spark, unified-memory Blackwell). sm_110 was listed here for GB10 and is not a real NVIDIA compute capability -- there is no CC 11.x, nothing in pmoves/config/rooms/ ever declared it, and the fleet's own hardware profile (pmoves/config/profiles/dgx-spark-grace-blackwell.yaml) records GB10 as compute_capability 12.1 with the comment \"SM_121 -- unique to GB10, NOT sm_120\"."
         },
         "node_roles": {
           "type": "array",
