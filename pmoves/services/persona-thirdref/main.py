@@ -29,7 +29,14 @@ import jsonschema
 from fastapi import FastAPI, HTTPException, Request
 
 LOGGER = logging.getLogger("persona-thirdref")
-SCHEMA_DIR = Path(__file__).resolve().parents[2] / "contracts" / "schemas"
+_CANDIDATE_SCHEMA_DIRS = [
+    # repo layout: services/persona-thirdref/main.py -> pmoves/contracts/...
+    Path(__file__).resolve().parents[2] / "contracts" / "schemas",
+    # container layout: schema shipped at /app/contracts (root build context)
+    Path("/app/contracts/schemas"),
+]
+SCHEMA_DIR = next(d for d in _CANDIDATE_SCHEMA_DIRS
+                  if (d / "persona" / "consumption.recorded.v1.schema.json").exists())
 CONSUMPTION_SCHEMA = json.loads(
     (SCHEMA_DIR / "persona" / "consumption.recorded.v1.schema.json").read_text()
 )

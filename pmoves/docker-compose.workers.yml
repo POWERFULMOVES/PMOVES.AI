@@ -155,7 +155,9 @@ services:
           memory: 256M
   persona-thirdref:
     <<: *tier-worker-hardened
-    build: ./services/persona-thirdref
+    build:
+      context: .
+      dockerfile: services/persona-thirdref/Dockerfile
     restart: unless-stopped
     environment:
     - NATS_URL=${NATS_URL}
