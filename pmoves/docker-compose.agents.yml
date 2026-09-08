@@ -837,6 +837,11 @@ services:
   # ── NATS Message Bus — JetStream-enabled event broker ──────────────────
   # Auth: nats://nats:***@nats:4222 | Monitoring: :8222/varz
   # See: pmoves/docs/NATS_CONFIGURATION.md
+  #
+  # The accounts/leaf hub (SYS/CORE/EDGE/CLOUD, 7422 leafnodes) is `nats-hub`
+  # below — spec §9 Phase 2, profile-gated OFF so default bring-up is unchanged
+  # until the funnel renders the trust material. Spec:
+  # pmoves/docs/specs/nats-accounts-leaf-topology-v0-spec-2026-08-07.md
   mesh-agent:
     <<: &tier-agent-hardened-ro
       env_file:
@@ -1478,3 +1483,40 @@ services:
           memory: 256M
 
   # Tier: agent (NotebookLM Agent - Google NotebookLM integration)
+  fleet-sentinel:
+    <<: *tier-agent-hardened-ro
+    build:
+      context: .
+      dockerfile: services/fleet_sentinel/Dockerfile
+    restart: unless-stopped
+    environment:
+    # Host environment leak guard (see x-host-leak-guard docs above)
+    - SSL_CERT_FILE=
+    - SSL_CERT_DIR=
+    - REQUESTS_CA_BUNDLE=
+    - CURL_CA_BUNDLE=
+    - NODE_EXTRA_CA_CERTS=
+    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - SENTINEL_POLL_INTERVAL=${SENTINEL_POLL_INTERVAL:-30}
+    - SENTINEL_FAILURE_THRESHOLD=${SENTINEL_FAILURE_THRESHOLD:-3}
+    - SENTINEL_RESTART_COOLDOWN=${SENTINEL_RESTART_COOLDOWN:-600}
+    - SENTINEL_SELF_HEAL=${SENTINEL_SELF_HEAL:-1}
+    # Restart actions shell out to make on the host checkout
+    - SENTINEL_PMOVES_DIR=${SENTINEL_PMOVES_DIR:-/srv/pmoves}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_external
+    volumes:
+    # Read-only mount of the repo root for Known-Road restart invocations
+    # (restarts run make -C /srv/pmoves/pmoves via with-env.sh; docker socket
+    # intentionally NOT mounted — restart actions require a host-side runner
+    # until the dsh agent runtime provides a constrained route)
+    - ${PWD}/..:/srv/pmoves:ro
+    - fleet-sentinel-data:/data/fleet-sentinel
+    networks:
+    - pmoves_app
+    - pmoves_bus
+    - pmoves_external
+    ports:
+    - ${SENTINEL_BIND:-127.0.0.1}:${SENTINEL_PORT:-8116}:8116
+    depends_on:
+    - nats
+
