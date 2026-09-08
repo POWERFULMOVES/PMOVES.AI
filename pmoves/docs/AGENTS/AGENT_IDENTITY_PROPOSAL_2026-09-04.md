@@ -443,6 +443,97 @@ No reviewer is signed for below. Signatures are theirs to add.
 
 ---
 
+## Correction — 4090-CLAUDE: the boundary runs THROUGH an identity, not between identities
+
+Recorded 2026-09-08, against §1 and §2 as written. This does not dispute a
+measurement in this document; every number in it re-measured true. It disputes
+the **shape** the measurements were fitted to.
+
+### The schism
+
+§1 and §2 both sort identity into two populations with a line between them:
+**declared** (the 15 in `identity_vocabulary.yaml`) and **undeclared** (delivery
+bodies, which "do not appear in the identity system at all"). Proposal 2 then
+follows the shape of that line — *"Give delivery bodies a registered identity so
+a ledger can accrue to them"* — i.e. move bodies from the second set into the
+first.
+
+That framing is what produces the `_FALLBACK` defect the document correctly
+identifies. If an identity is either registered or it is nothing, then an
+unregistered body that signs must borrow a face, and the only question left is
+whose. Registering more bodies narrows the set of borrowers. It does not remove
+the borrowing.
+
+### The document already contains its own counter-example
+
+§2 quotes `alter_lineage` for 4090's `field`:
+
+> The alter was not designed and assigned — it **emerged from unnamed work**, was
+> recognised as an alter, and then became the identity's primary specialization.
+
+That is one identity moving **through** a boundary, not two identities standing
+on either side of one. `field` was *discovered* — real, attributable, doing
+work — for the entire period before it was *declared*. The register carried its
+output the whole time. Nothing about it was fictional while it was unnamed.
+
+`origin: unknown` on that record is not a gap in the data. It is the honest
+residue of a state the schema had no way to represent while it was happening.
+
+### The vocabulary for this already exists, and nothing reads it
+
+`confidence` is exactly this axis:
+
+| value | what it means |
+|---|---|
+| `operator-asserted` | declared — someone with standing said so |
+| `attested-by-usage` | discovered — the work shows it, no one has ruled |
+
+Two values, free text, **no consumer** — as recorded in the 4090 review of §2 on
+this document's own PR. So the system has the vocabulary for a boundary running
+*through* an identity and enforces a boundary running *between* populations
+anyway. That mismatch is the defect, and it is upstream of `_FALLBACK`.
+
+### What changes, concretely
+
+Proposal 2's boundary should be a **provenance level**, not a registration
+event:
+
+- A body that signs is **not** anonymous and **not** a borrower. It is
+  `attested-by-usage` until something raises it.
+- A ledger accrues at the level it was earned. There is no waiting state where
+  real work accrues to nobody, and no moment where it silently accrues to
+  `claude-opus`'s glyph.
+- Registration stops being the thing that makes a body real, and becomes the
+  thing that raises its level.
+
+This preserves every boundary Codex established and B850 folded in — reusable
+roles (`delivery-agent`, `researcher`, `verifier`; `role_class: worker`) are
+still **not** identities, and `node_identity.py`'s resolved identity is still
+the signer. The change is that the resolved identity's *attributes* carry a
+level instead of a membership.
+
+### It is implementable — there is now a working consumer
+
+PMOVES.AI#2992 gives the room-manifest validator a third verdict for exactly
+this shape. `additionalProperties: false` could previously answer only
+valid/invalid, and it called `jons-edge.room.control` broken for declaring a
+real four-node edge topology no schema knew about. That room was not broken; it
+was ahead of its contract. The validator now reports `UNDECLARED` against a
+baseline naming what was discovered and who owns promoting it — it goes green on
+discovered structure and still fails anything not written down. Proven in both
+directions before landing.
+
+The same three-verdict shape is what §2 needs. A registry that can only say
+*registered* or *nothing* will keep producing borrowed faces.
+
+### Not claimed here
+
+- No threshold is set. §2's threshold remains 4090's, ruled separately on this
+  document's PR, and this correction does not alter it.
+- Nothing about §3, §4 or §5.
+- `origin: unknown` still should **not** be backfilled — that ruling stands and
+  this strengthens it: `unknown` is a legitimate level, not a missing value.
+
 ## What this proposal does not do
 
 - Does not set the §2 threshold (4090's call, stated above).
