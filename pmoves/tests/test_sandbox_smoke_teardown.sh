@@ -21,7 +21,11 @@ set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PMOVES_DIR="$(cd "$HERE/.." && pwd)"
-SMOKE="$PMOVES_DIR/scripts/sandbox_smoke.sh"
+# SMOKE_UNDER_TEST lets the positive control point this at a copy of the
+# PRE-FIX script (git show <sha>:pmoves/scripts/sandbox_smoke.sh) without
+# reverting the worktree -- a staged revert of your own fix is how an agent
+# that dies mid-demo leaves the index set to undo everything.
+SMOKE="${SMOKE_UNDER_TEST:-$PMOVES_DIR/scripts/sandbox_smoke.sh}"
 TMP="$(mktemp -d)"
 cleanup() {
   [ -d "$TMP" ] && find "$TMP" -mindepth 1 -delete 2>/dev/null

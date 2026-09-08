@@ -5806,7 +5806,7 @@ SANDBOX_ENV = if [ -n "$${E2B_MODE_ARG:-}" ]; then export E2B_MODE="$$E2B_MODE_A
 
 .PHONY: sandbox-preflight sandbox-mode sandbox-help sandbox-create sandbox-list \
         sandbox-info sandbox-exec sandbox-kill sandbox-smoke sandbox-host-probe \
-        sandbox-runbook
+        sandbox-runbook sandbox-selftest
 
 # --- Caller values in, via the environment only (see SECURITY note above) ---
 sandbox-preflight sandbox-mode sandbox-help sandbox-create sandbox-list \
@@ -5904,6 +5904,24 @@ sandbox-host-probe: ## Probe THIS node's fitness to host the E2B self-host stack
 		[ $$rc -eq 3 ] && echo "[sandbox] COULD-NOT-MEASURE is NOT a pass. Resolve the unread items and re-run before placing any workload here." || true; \
 		echo "[sandbox] make collapses this to 2 for any non-zero — a gate must call the script directly."; \
 		exit $$rc
+
+sandbox-selftest: ## Run the sandbox regression tests (no credentials, no provisioning, no network)
+	@# These two tests guard defects that a green smoke run could not have caught:
+	@#   test_sandbox_make_quoting.sh   - F3, host escape through the sandbox-* targets
+	@#   test_sandbox_smoke_teardown.sh - F4, a teardown check that could not fail
+	@# Both stub the CLI, so they need no E2B credentials and provision nothing.
+	@# make collapses any nonzero recipe exit to 2; the per-test codes are printed
+	@# below. Doctrine: 0 clean / 1 findings / 3 could-not-measure.
+	@set +x; rc=0; \
+	for t in tests/test_sandbox_make_quoting.sh tests/test_sandbox_smoke_teardown.sh; do \
+		if [ ! -f "$$t" ]; then echo "[sandbox-selftest] $$t MISSING - could-not-measure"; [ $$rc -eq 0 ] && rc=3; continue; fi; \
+		echo "[sandbox-selftest] === $$t ==="; \
+		bash "$$t"; tc=$$?; \
+		echo "[sandbox-selftest] $$t exit=$$tc"; \
+		if [ $$tc -eq 1 ]; then rc=1; elif [ $$tc -ne 0 ] && [ $$rc -eq 0 ]; then rc=3; fi; \
+	done; \
+	echo "[sandbox-selftest] overall exit=$$rc"; \
+	exit $$rc
 
 sandbox-runbook: ## Print the self-host runbook path + the owning node
 	@echo "owning node: pmoves-5090  (Ryzen 9 9950XD / RTX 5090 / 192 GB, deployment_class private-mesh)"
