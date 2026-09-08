@@ -6,8 +6,6 @@
     "cipher_fleet_url": "http://${TS_Z890}:8105/mcp/sse",
     "agent_zero_local_url": "http://localhost:8081/mcp/t-${AGENT_ZERO_MCP_TOKEN}/sse",
     "agent_zero_fleet_url": "http://${TS_Z890}:8081/mcp/t-${AGENT_ZERO_MCP_TOKEN}/sse",
-    "archon_local_url": "http://localhost:8051",
-    "archon_fleet_url": "http://${TS_Z890}:8051",
     "docker_gateway_port": 8090,
     "flute_local_url": "http://localhost:8055/sse",
     "flute_fleet_url": "http://${TS_Z890}:8055/sse"
@@ -49,14 +47,7 @@
           "endpoint_prefix": "agent_zero"
         },
         {
-          "key": "archon",
-          "description": "Archon knowledge / task orchestrator (REST-only MCP, no standard transport \u2014 disabled by default)",
-          "transport": "http",
-          "endpoint": "local",
-          "endpoint_prefix": "archon",
-          "disabled": true
-        },
-        {
+
           "key": "pmoves-nats-fleet",
           "description": "NATS fleet messaging bridge",
           "transport": "stdio",
