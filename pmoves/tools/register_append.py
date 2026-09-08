@@ -11,7 +11,7 @@
 # for an interpreter chosen by this file's caller. Without it the gate degrades
 # to comparing owner strings exactly, one identity that spells itself several
 # ways stops recognising its own open claims, and nothing fails.
-"""Append a CLAIM or RELEASE row to the AGNOTE4482 claim register, safely.
+"""Append a CLAIM, RELEASE or NOTE row to the AGNOTE4482 claim register, safely.
 
 THE SANCTIONED WRITE PATH. It exists because the collision gate now REFUSES
 shell writes it cannot check, and a refusal with no alternative is a deadlock,
@@ -526,13 +526,87 @@ def amend_co_owners(owner, branch, co_owners, register=None, gate=None):
         return EXIT_OK
 
 
+def append_note(row: str, gate, register: Path | None = None) -> int:
+    """Append a row that records a FACT and transitions no lane state.
+
+    THE MISSING RECORD TYPE, and the reason the trap existed. This tool used to
+    accept `claim`, `release`, `docs` and `amend` -- no way to say "here is a
+    fact about the register". The register itself has always had one: 5 rows
+    read `NOTE`, all hand-inserted before this tool existed, alongside REVIEW,
+    UPDATE, HANDOFF and CORRECTION.
+
+    With no `note`, recording a correction meant filing a `release`, because it
+    was the only non-CLAIM kind available. And a RELEASE that names no lane
+    closes EVERY lane its owner holds -- 142 rows in the live register use it
+    that way, so the convention is real and load-bearing. Put together: an agent
+    appending a footnote under an owner with open lanes would have closed all of
+    them while believing it was adding a comment. Observed live; harmless only
+    because that owner's lanes happened to be closed already.
+
+    INERTNESS IS PROVED, NOT ASSERTED. The kind is parsed as inert by the gate
+    (`INERT_ROW_KINDS`), and this function additionally computes the open-lane
+    map before and after the proposed append and REFUSES if it moved. Two
+    independent guarantees, because the prose in these rows quotes `CLAIM` and
+    `RELEASE` for a living and a parser change alone is a promise about one
+    file's contents.
+    """
+    target = REGISTER if register is None else register
+    with register_lock(target):
+        existing = target.read_text(encoding="utf-8", errors="replace")
+        # A register whose last byte is not a newline would GLUE the appended
+        # row onto the previous one -- for the check and for the write alike.
+        # Normalised here so the simulated file is the file that would result.
+        joined = existing if (not existing or existing.endswith("\n")) else existing + "\n"
+        try:
+            before = gate.open_claims_in(joined)
+            after = gate.open_claims_in(joined + row)
+        except Exception as exc:  # noqa: BLE001 -- report, never guess
+            print("register-append: NOT MEASURED - the collision gate raised "
+                  f"{type(exc).__name__}: {exc} while checking that this NOTE "
+                  "changes no lane. Nothing was written.", file=sys.stderr)
+            return EXIT_UNMEASURED
+
+        if after != before:
+            print("register-append: refusing - this NOTE would CHANGE the open "
+                  "lanes, which a note must never do. Its prose almost certainly "
+                  "quotes a `CLAIM `owner`` or `RELEASE `owner`` sequence that the "
+                  "gate reads as a real row. Rewrite the prose (name the row by "
+                  "line number, or drop the backticks around the owner) and file "
+                  "it again.", file=sys.stderr)
+            _print_lane_delta(before, after)
+            return EXIT_REFUSED
+
+        append_row(row, target)
+        print(row.rstrip("\n"))
+        try:
+            where = target.relative_to(REPO_ROOT)
+        except ValueError:
+            where = target
+        print(f"register-append: appended a NOTE to {where}; "
+              f"{sum(len(v) for v in before.values())} open lane(s), unchanged.",
+              file=sys.stderr)
+        return EXIT_OK
+
+
+def _print_lane_delta(before: dict, after: dict) -> None:
+    """Name what moved. A refusal that does not say what it saw is a wall."""
+    for owner in sorted(set(before) | set(after), key=str):
+        was = len(before.get(owner, []))
+        now = len(after.get(owner, []))
+        if was != now:
+            print(f"  - `{owner}`: {was} open lane(s) before, {now} after",
+                  file=sys.stderr)
+
+
 def _dispatch(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description=__doc__.splitlines()[0],
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    parser.add_argument("kind", choices=["claim", "release", "docs", "amend"],
+    parser.add_argument("kind",
+                        choices=["claim", "release", "note", "docs", "amend"],
                         help="CLAIM opens a lane, RELEASE closes it, "
+                             "NOTE records a fact and transitions nothing, "
                              "docs inserts prose without touching rows, "
                              "amend adds co-owners to YOUR OWN open row")
     parser.add_argument("--anchor",
@@ -648,6 +722,12 @@ def _dispatch(argv: list[str] | None = None) -> int:
               "unenforceable -- 78 rows in this register are already in that "
               "state.", file=sys.stderr)
         return EXIT_UNMEASURED
+    if args.kind == "note" and args.ttl:
+        print("register-append: a NOTE takes no --ttl. A TTL is a promise to "
+              "release a lane by a deadline, and a note holds no lane; an "
+              "expiring footnote would be read as an overdue claim.",
+              file=sys.stderr)
+        return EXIT_UNMEASURED
 
     try:
         row = build_row(
@@ -674,6 +754,14 @@ def _dispatch(argv: list[str] | None = None) -> int:
               f"loaded ({exc}), so this row was NOT checked against the open "
               "lanes. Refusing rather than appending unchecked.", file=sys.stderr)
         return EXIT_UNMEASURED
+
+    if args.kind == "note":
+        if args.dry_run:
+            sys.stdout.write(row)
+            print("register-append: dry run - rendered, not written.",
+                  file=sys.stderr)
+            return EXIT_OK
+        return append_note(row, gate, REGISTER)
 
     # THE WHOLE TRANSACTION, UNDER ONE LOCK. Reading the register, deciding,
     # and appending are one operation or they are a race: two filers can both

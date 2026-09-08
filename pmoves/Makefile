@@ -372,6 +372,23 @@ register-release: ## Close a lane in the claim register (OWNER= BRANCH= SCOPE= [
 	fi
 	@$(REGISTER_PYTHON) tools/register_append.py release $(ARGS)
 
+.PHONY: register-note
+# THE FACT ROAD. Without it the only non-CLAIM kind this tool accepted was
+# `release`, so recording a correction meant filing one -- and a RELEASE naming
+# no lane closes EVERY lane its owner holds. A footnote could therefore close a
+# node's whole workload silently. A NOTE transitions nothing, by construction
+# and by a before/after check on the open-lane map.
+register-note: export REGISTER_OWNER = $(REGISTER_OWNER_VALUE)
+register-note: export REGISTER_BRANCH = $(BRANCH)
+register-note: export REGISTER_SCOPE = $(SCOPE)
+register-note: export REGISTER_CO_OWNERS = $(CO_OWNER)
+register-note: ## Record a fact in the register WITHOUT opening or closing a lane (OWNER= SCOPE= [BRANCH=])
+	@if [ -z "$$REGISTER_SCOPE" ]; then \
+		echo "usage: make register-note OWNER='B850-CLAUDE (Knuckles)' SCOPE='the fact being recorded'"; \
+		exit 2; \
+	fi
+	@$(REGISTER_PYTHON) tools/register_append.py note $(ARGS)
+
 .PHONY: register-amend
 # THE AMEND ROAD. #2858's co-owner workflow needs the INCUMBENT to add
 # `co-owners:` to a row they already filed -- an in-place edit of one line. The
