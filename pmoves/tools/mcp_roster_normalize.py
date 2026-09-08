@@ -70,6 +70,14 @@ _OUT_SUFFIX = ".json"
 # (pair-review nit: the earlier 12h window was 12x looser than needed).
 _STALE_SECONDS = 3600
 
+# Seconds allowed for the Windows command-line query. Exceeding it is not an
+# error, it is "undeterminable" -- which keeps every file.
+_LIVENESS_TIMEOUT_SECONDS = 8.0
+
+# Distinguishes "caller passed no liveness result, compute one" from "caller
+# passed None, meaning undeterminable". None is a MEANINGFUL value here.
+_UNSET_LIVE: Any = object()
+
 # Top-level key carrying the P5 verdicts into the roster itself. Pair-review
 # finding: the stderr warnings print immediately before `exec claude` and the
 # TUI overwrites them within a second -- no agent can read what was dropped or
@@ -247,13 +255,161 @@ def normalize(
     return out, dropped, degraded
 
 
-def _sweep_stale(out_dir: str) -> None:
-    """Remove our own expired roster files. Never fatal.
+def _live_roster_paths() -> set[str] | None:
+    """Roster paths named by a currently-running process, or ``None``.
+
+    ``None`` means LIVENESS COULD NOT BE DETERMINED, and every caller must read
+    it as "keep everything". It is not an empty set. An empty set is the
+    positive assertion "I enumerated the process table and nothing references a
+    roster"; ``None`` is "I could not enumerate it". Collapsing the two is the
+    exact shape of the bug this function exists to fix.
+
+    POSIX: scan ``/proc/<pid>/cmdline``. The launcher ``exec``s, so the roster
+    path is an argument of the live session itself (``--mcp-config=<path>``,
+    which is one NUL-separated argv entry, hence a substring test rather than
+    an equality test).
+
+    Races, handled explicitly rather than hopefully:
+
+    * A process exits between ``scandir`` and ``open``. The read raises
+      ENOENT/ESRCH; that pid is genuinely gone, so skipping it is correct and
+      we stay determinable.
+    * A process starts after we scan. Its roster was written seconds ago and is
+      therefore inside the freshness window, so the mtime test keeps it. The
+      two predicates cover each other; neither alone is sufficient.
+    * We are refused a read (EACCES/EPERM, e.g. a ``hidepid`` mount). Now we
+      cannot prove ABSENCE of a reference, so the whole scan degrades to
+      ``None``. A refused read is not a missing reference.
+    * PID reuse cannot produce a false KEEP here: we match on the roster path
+      appearing in argv, not on a recorded pid.
+
+    Windows has no ``/proc``. See ``_windows_live_roster_paths``.
+    """
+    if sys.platform == "win32":
+        return _windows_live_roster_paths()
+    if not os.path.isdir("/proc"):
+        return None
+    try:
+        pids = [e.name for e in os.scandir("/proc") if e.name.isdigit()]
+    except OSError:
+        return None
+
+    live: set[str] = set()
+    for pid in pids:
+        try:
+            with open(f"/proc/{pid}/cmdline", "rb") as fh:
+                raw = fh.read()
+        except (FileNotFoundError, ProcessLookupError):
+            # Exited mid-scan. Genuinely gone; not a gap in our knowledge.
+            continue
+        except PermissionError:
+            # We were refused. We can no longer assert that nothing references
+            # a roster, so the answer for the whole sweep is "unknown".
+            return None
+        except OSError:
+            return None
+        for arg in raw.split(b"\0"):
+            if not arg:
+                continue
+            try:
+                text = arg.decode("utf-8", "surrogateescape")
+            except Exception:  # pragma: no cover - decode above cannot raise
+                continue
+            for token in _roster_paths_in(text):
+                live.add(token)
+    return live
+
+
+def _windows_live_roster_paths() -> set[str] | None:
+    """Windows equivalent of ``_live_roster_paths``; ``None`` when unavailable.
+
+    There is no ``/proc``, and the Win32 way to read another process's command
+    line (``NtQueryInformationProcess`` + a cross-bitness PEB walk) is not
+    something a startup-path script should be doing. ``Get-CimInstance
+    Win32_Process`` exposes ``CommandLine`` supported and without elevation, so
+    we shell out once, with a timeout.
+
+    Every failure mode -- powershell absent, WMI refused, timeout, non-zero
+    exit -- returns ``None``, i.e. KEEP EVERYTHING. On a Windows box where this
+    query never succeeds the sweep is effectively disabled and roster files
+    accumulate until the OS temp cleaner takes them. That is the deliberate
+    direction: a leaked token file is recoverable and detectable, a session
+    silently stripped of its MCP servers is neither.
+    """
+    import subprocess  # local: never imported on the POSIX path
+
+    cmd = [
+        "powershell.exe",
+        "-NoProfile",
+        "-NonInteractive",
+        "-Command",
+        "Get-CimInstance Win32_Process | ForEach-Object { $_.CommandLine }",
+    ]
+    try:
+        proc = subprocess.run(
+            cmd,
+            capture_output=True,
+            timeout=_LIVENESS_TIMEOUT_SECONDS,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if proc.returncode != 0:
+        return None
+    text = proc.stdout.decode("utf-8", "replace")
+    live: set[str] = set()
+    for line in text.splitlines():
+        for token in _roster_paths_in(line):
+            live.add(token)
+    return live
+
+
+def _roster_paths_in(text: str) -> Iterable[str]:
+    """Yield every substring of *text* that looks like one of our roster files.
+
+    Deliberately shape-based rather than an exact path match. The launcher may
+    pass the path as its own argv entry or glued to a flag
+    (``--mcp-config=/run/user/1000/claude-pmoves-mcp-roster.ab12cd.json``), and
+    on Windows the whole command line arrives as one quoted string. Matching
+    ``<prefix>…<suffix>`` inside the text covers all three.
+    """
+    start = 0
+    while True:
+        i = text.find(_OUT_PREFIX, start)
+        if i < 0:
+            return
+        j = text.find(_OUT_SUFFIX, i)
+        if j < 0:
+            return
+        end = j + len(_OUT_SUFFIX)
+        yield text[i:end]
+        start = end
+
+
+def _sweep_stale(out_dir: str, live: Any = _UNSET_LIVE) -> None:
+    """Remove our own expired, UNREFERENCED roster files. Never fatal.
 
     The file holds expanded bearer tokens and the launcher ``exec``s, so no
     trap can clean up after the session. Sweeping on the next launch bounds how
-    long a token sits on disk.
+    long a token sits on disk. That goal is unchanged.
+
+    What changed is the predicate. Age alone deleted the roster of a session
+    that was still running: this node had a session alive for over two days
+    whose ``--mcp-config`` file was unlinked an hour in, leaving it with its
+    identity and system prompt and no MCP servers at all -- no memory, no
+    agent-zero, no retrieval -- and nothing reported it. Age now only nominates
+    a candidate; a live reference vetoes the delete.
+
+    *live* is the result of ``_live_roster_paths``. ``None`` means
+    undeterminable, and nothing is deleted.
     """
+    if live is _UNSET_LIVE:
+        live = _live_roster_paths()
+    if live is None:
+        # Could not determine liveness. Keep everything. This is the safe
+        # direction and it is a real outcome, not a pass.
+        return
+
     uid = os.getuid() if hasattr(os, "getuid") else None
     cutoff = time.time() - _STALE_SECONDS
     try:
@@ -267,10 +423,63 @@ def _sweep_stale(out_dir: str) -> None:
             st = entry.stat(follow_symlinks=False)
             if uid is not None and st.st_uid != uid:
                 continue
-            if st.st_mtime < cutoff:
-                os.unlink(entry.path)
+            if st.st_mtime >= cutoff:
+                continue
+            if _is_referenced(entry.path, live):
+                continue
+            os.unlink(entry.path)
         except OSError:
             continue
+
+
+def _is_referenced(path: str, live: set[str]) -> bool:
+    """True if *path* is named by a live process.
+
+    Compared on the basename as well as the full path: the launcher resolves
+    the roster through ``mkstemp``, but a caller may hand Claude a relative or
+    differently-normalized spelling of the same file, and a false KEEP costs a
+    token file while a false DELETE costs a session.
+    """
+    base = os.path.basename(path)
+    real = os.path.realpath(path)
+    for seen in live:
+        if seen == path or seen == real:
+            return True
+        if os.path.basename(seen) == base:
+            return True
+    return False
+
+
+def _default_out_dir() -> str:
+    """Where the roster should live.
+
+    ``XDG_RUNTIME_DIR`` (``/run/user/<uid>``) beats the shared temp dir for a
+    file holding expanded bearer tokens: logind creates it mode 0700 owned by
+    the user, and its lifetime is tied to the login session rather than to an
+    arbitrary age window. Nothing else on the box can even list it.
+
+    It is absent on Windows, in most CI containers, and under ``sudo``/cron, so
+    the temp dir stays as the fallback. ``--out-dir`` still overrides both.
+    """
+    xdg = os.environ.get("XDG_RUNTIME_DIR")
+    if xdg and os.path.isdir(xdg) and os.access(xdg, os.W_OK | os.X_OK):
+        return xdg
+    return tempfile.gettempdir()
+
+
+def _sweep_dirs(out_dir: str) -> list[str]:
+    """Directories the sweep must cover.
+
+    Moving custody to ``XDG_RUNTIME_DIR`` would otherwise strand every roster
+    previously written to the temp dir -- the security goal would quietly stop
+    applying to exactly the files it was written for. The legacy location stays
+    in scope.
+    """
+    dirs = [out_dir]
+    for extra in (_default_out_dir(), tempfile.gettempdir()):
+        if extra not in dirs:
+            dirs.append(extra)
+    return dirs
 
 
 def write_private(out_dir: str, payload: dict[str, Any]) -> str:
@@ -317,7 +526,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--label", default="mcp-roster", help="stderr message prefix")
     args = ap.parse_args(argv)
 
-    out_dir = args.out_dir or tempfile.gettempdir()
+    out_dir = args.out_dir or _default_out_dir()
 
     # utf-8-sig, not the default: it strips a UTF-8 BOM when present and is a
     # no-op when absent. A BOM'd roster fails a plain open()+json.load() with
@@ -360,7 +569,10 @@ def main(argv: list[str] | None = None) -> int:
             "      it may run unauthenticated, or fail on first call.",
         ])
 
-    _sweep_stale(out_dir)
+    # One process-table scan, reused across every directory in scope.
+    live = _live_roster_paths()
+    for sweep_dir in _sweep_dirs(out_dir):
+        _sweep_stale(sweep_dir, live)
     print(write_private(out_dir, payload))
     return 0
 
