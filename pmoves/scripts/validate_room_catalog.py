@@ -44,6 +44,15 @@ A row's `current_stage` is trustworthy only if one of these holds:
 Anything else is a value that outranks the manifest with no activation
 behind it. Prose may explain a stage; it may not confer one.
 
+A third source was considered and deliberately not added: the catalog's
+`_version_notes` used to name "each manifest's `p7.stage` block (if present)"
+alongside the typical-stage table. Measured 2026-09-08 -- a `p7` block exists
+in exactly two files, `demo.room.extras.json` and
+`hermes-agent.room.control.extras.json`, both reading `rehearsal` in agreement
+with their rooms' manifests, and no catalog row's `manifest` field points at an
+`.extras.json`. So honouring `p7.stage` would change no verdict today while
+adding a second place a stage could come from. Rule (b) already covers both.
+
 Exit codes: 0 = every row accounted for, 2 = at least one seeded row.
 """
 
