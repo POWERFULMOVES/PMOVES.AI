@@ -145,7 +145,7 @@
         "--apiUrl",
         "${SUPABASE_REST_URL:-http://localhost:8000/rest/v1}",
         "--apiKey",
-        "${SUPABASE_SERVICE_ROLE_KEY:-${SUPABASE_SERVICE_KEY}}",
+        "${SUPABASE_SERVICE_ROLE_KEY:-${SUP\u2026EY}}",
         "--schema",
         "public"
       ],
@@ -219,6 +219,11 @@
       "headers": {
         "Authorization": "Bearer ${CIPHER_API_TOKEN}"
       }
+    },
+    "composio": {
+      "description": "Composio Connect hosted MCP - SaaS toolkits behind 7 COMPOSIO_* meta-tools with in-band managed OAuth (search tools, connect apps, execute, remote sandbox)",
+      "type": "http",
+      "url": "https://connect.composio.dev/mcp"
     }
   }
 }

@@ -479,7 +479,7 @@ providers:
   minimax:
     env_var: MINIMAX_API_KEY
     key_pattern: ".*"
-    api_base: "https://api.minimaxi.chat/v1"
+    api_base: "https://api.minimax.io/v1"
     tz_type: openai
     tier: llm
     coding_stack: minimax_token_plan

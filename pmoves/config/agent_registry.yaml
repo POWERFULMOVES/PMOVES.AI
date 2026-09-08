@@ -2783,7 +2783,7 @@ agents:
       recovery_strategy: cipher_resumable
       cipher_categories: [agent_plan, agent_completion]
     topology:
-      node_affinity: [powerfulmoves, pmoves-laptop]
+      node_affinity: [powerfulmoves, pmoves-4090]
       team: orchestration
       ci_runner: ai-lab
       compose_profile: agents

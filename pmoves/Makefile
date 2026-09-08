@@ -4625,7 +4625,7 @@ voicebox-profile-create: ## Create a default Voicebox preset profile (Kokoro, no
 # ────────────────────────────────────────────────────────────────────────────
 
 .PHONY: up-flute-gateway flute-gateway-rebuild flute-gateway-smoke
-up-flute-gateway: ## Start Flute-Gateway voice communication service
+up-flute-gateway: up-bus ## Start Flute-Gateway voice communication service (NATS first — lifespan blocks on bus connect)
 	@echo "Starting Flute-Gateway..."
 	@$(DC) --profile orchestration up -d --build flute-gateway
 	@sleep 5
