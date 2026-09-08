@@ -1183,13 +1183,7 @@ services:
     # for `localhost` because the service name differs here.
     - PMOVES_NETWORKS=pmoves_api
     healthcheck:
-      test:
-        [
-          "CMD",
-          "node",
-          "-e",
-          "fetch('http://localhost:3000/api/platform/profile').then((r) => {if (r.status !== 200) throw new Error(r.status)})"
-        ]
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3000/api/platform/profile').then((r) => {if (r.status !== 200) throw new Error(r.status)})"]
       interval: 30s
       timeout: 5s
       retries: 3
