@@ -230,7 +230,7 @@
     {"src": "tag:guest", "accept": ["tag:gpu:8081"]},
     {"src": "tag:guest", "deny": ["tag:pmoves:22", "tag:gpu:11434"]},
     // T5 — SSH port reachability rides the mesh rule (T1), not a grant of its own.
-    {"src": "tag:lab", "accept": ["tag:gpu:11434"]},
+    {"src": "tag:lab", "accept": ["tag:gpu:11434"]}
   ],
   "sshTests": [
     // S1 — tagged node SSH: nonroot accepted, root denied (hardening stance).
@@ -244,7 +244,7 @@
     {"src": "tag:lab", "dst": ["tag:pmoves"], "deny": ["root"]},
     // S4 — the fleet-management exception must never leak into partner/guest.
     {"src": "tag:partner", "dst": ["tag:pmoves"], "deny": ["root", "autogroup:nonroot"]},
-    {"src": "tag:guest", "dst": ["tag:pmoves"], "deny": ["root", "autogroup:nonroot"]},
+    {"src": "tag:guest", "dst": ["tag:pmoves"], "deny": ["root", "autogroup:nonroot"]}
   ],
   "nodeAttrs": [
     // Funnel on tag:exit is LIVE, not vestigial. Recorded here because a grep for
