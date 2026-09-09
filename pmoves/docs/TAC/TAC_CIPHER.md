@@ -63,53 +63,81 @@ Hub credentials on the base `node:22-slim`; the operator re-authenticated.
 After `make -C pmoves up-cipher`: image rebuilt, **`streamable` = 1**, `/health`
 200, `cipher_preflight` local row **OK 200**. Z890 now matches 5090.
 
-### Reconciliation: the fleet entry versus the loopback bind
+### Reconciliation: grounded against source, 2026-09-09
 
-This is the open design question, stated plainly because the workaround has
-outlived the memory of why it exists.
+**Provenance rule applied here:** every claim below cites the file and line it
+came from, at submodule pin `e24f1323` or superproject `origin/main`. An earlier
+revision of this section proposed three remedies and cited nothing; it was
+reasoning from THIS runbook, which was itself stale. A runbook with no provenance
+link to source is unverified, and it was wrong.
 
-**Measured:**
+**What the official docs say the deployment is:**
 
-| Fact | Value |
+| Claim | Source |
 |---|---|
-| `docker port pmoves-cipher-api-1` | `8105/tcp -> 127.0.0.1:8105` |
-| roster `pmoves-cipher` | `http://${TS_Z890}:8105/mcp/sse` |
-| roster `pmoves-cipher-local` | `http://localhost:8105/mcp/sse` |
-| fleet row, resolver sourced | connection **actively refused** |
+| Upstream is the ByteRover CLI (`brv`); memory is a context tree with curate/sync | `Pmoves-cipher/README.md:24-28` @ `e24f1323` |
+| `PMOVES_HOST` default is **`0.0.0.0`** | `Pmoves-cipher/PMOVES.AI_INTEGRATION.md:96` @ `e24f1323` |
+| Documented run publishes **`-p 8105:8105`** (all interfaces) | `Pmoves-cipher/PMOVES.AI_INTEGRATION.md:111` @ `e24f1323` |
+| node-gyp/pnpm build fixes are **obsolete on the new arch** | `Pmoves-cipher/PMOVES.AI_INTEGRATION.md:127` @ `e24f1323` |
+| OAuth2/RBAC **never implemented** (aspirational) | `Pmoves-cipher/PMOVES.AI_INTEGRATION.md:126` @ `e24f1323` |
+| BoTZ cipher `:8081` and DoX CipherService `:8096` are **different services** | `Pmoves-cipher/PMOVES.AI_INTEGRATION.md:131-133` @ `e24f1323` |
 
-`TS_Z890` resolves correctly — it maps to the Z890 node, and the resolver is
-right. The refusal is not a naming problem: the port is published on **loopback
-only**, so nothing on the tailnet interface is listening. The roster's fleet
-entry therefore **cannot have worked from any node, ever**, and neither can it
-work from Z890 itself when addressed by its tailnet name.
+**What this deployment does:**
 
-**The `pmoves-cipher-local` entry is the workaround** (added in #2792, after the
-roster had carried only the fleet endpoint — "memory that silently wasn't
-there"). It works, and it is what the fleet is running on today. It is also
-per-node: it can only ever reach a cipher on the same host.
+| Fact | Source |
+|---|---|
+| `PMOVES_HOST=0.0.0.0` — matches the documented default | `pmoves/docker-compose.agents.yml`, `cipher-api` env |
+| publish is `"${CIPHER_BIND:-127.0.0.1}:${CIPHER_PORT:-8105}:8105"` | `pmoves/docker-compose.agents.yml`, `cipher-api` ports |
+| healthcheck self-probes `http://127.0.0.1:8105/health` from INSIDE | `pmoves/docker-compose.agents.yml`, `cipher-api` healthcheck |
+| observed: `docker port` -> `8105/tcp -> 127.0.0.1:8105` | measured on Z890 2026-09-09 |
 
-**Three ways to reconcile, none of them taken here** — this is an operator and
-topology decision, and the point of writing it down is that it should be decided
-rather than inherited:
+**The correction.** The app is not loopback-bound — it listens on `0.0.0.0`
+inside the container, exactly as documented. The narrowing happens at the HOST
+publish, and it is already **parameterised**: `CIPHER_BIND` defaults to
+`127.0.0.1`. So the roster's `${TS_Z890}:8105` entry matches the DOCUMENTED
+deployment, and it is this node's `CIPHER_BIND` default that diverges from it.
 
-1. **Per-node cipher, and DELETE the fleet entry.** Honest about what runs
-   today. Every node keeps its own memory; nothing is shared. The `${TS_Z890}`
-   row should then be removed, because a roster entry that cannot connect is not
-   a fallback — it is a check that cannot pass, and every session pays a probe
-   timeout for it.
-2. **Publish on the tailnet interface.** Makes the fleet entry real. Cipher is
-   already Bearer-gated (`src/pmoves/auth.ts`, keep-list item 3), which is
-   precisely the control this would rely on — but it also requires distributing
-   `CIPHER_API_TOKEN` to every node and accepting tailnet-wide reachability.
-3. **`tailscale serve` in front of the loopback bind.** No compose change, no
-   change to the publish scope, tailnet-only exposure, and identity handled by
-   Tailscale rather than by a shared bearer. Likely the smallest correct step,
-   but it is not a pattern this repo uses yet, so it should be proven on one
-   node before the fleet.
+That makes the earlier framing wrong in an important way: the fleet entry is not
+"decorative" and does not want deleting. **It wants `CIPHER_BIND` set.** No code
+change, no compose edit, no new pattern, and no `tailscale serve` — the knob
+already exists and was missed because this runbook was consulted instead of the
+source.
 
-Until one is chosen, **option 1 is the de-facto state** and the fleet row is
-decorative. Recorded so the next agent does not spend a session, as this one
-did, discovering it from first principles.
+Setting it is still an operator decision (it exposes a Bearer-gated service to
+the tailnet, and the bearer is the only control — `PMOVES.AI_INTEGRATION.md:126`
+records that OAuth2/RBAC was never built), but it is a CONFIGURATION decision,
+not a redesign.
+
+### The real blocker for agent access is token provisioning, not transport
+
+| Fact | Source |
+|---|---|
+| `agentId` is REQUIRED on every store/search call | `.claude/skills/pmoves-cipher-memory/SKILL.md` |
+| the `agentId` to use is the signing-card `agent_id` | same, referencing `pmoves/config/signing_identity_cards.yaml` |
+| a `z890-claude` card exists | `pmoves/config/signing_identity_cards.yaml:188` |
+| cross-agent wildcard is refused under token enforcement | `Pmoves-cipher/src/pmoves/memory-routes.ts:20-22` @ `e24f1323` |
+| measured: this node's token resolves to agent `bootstrap` | 403 `token belongs to agent 'bootstrap', but request specified 'z890-claude'` |
+
+The node holds a **bootstrap** token, not a per-agent token for `z890-claude`.
+So an agent following the documented path — pass your signing-card id — is
+correctly refused, because the credential it was given belongs to a different
+identity. This is the same finding as the unclaimed expensive half of the cipher
+token-model lane (bootstrap as a shared six-scope identity, ACTIVE on this node),
+seen from the client side.
+
+Remedy is a mint through the pipeline, per agent, not a transport change.
+
+### Corrected claims from the previous revision of this section
+
+- ~~"the fleet entry can never have worked and should be deleted"~~ — it matches
+  the documented deployment; `CIPHER_BIND` is the divergence.
+- ~~"three options, one of which is `tailscale serve`"~~ — a supported knob
+  already exists; `tailscale serve` is not needed to make the documented
+  topology work.
+- ~~"the store/search routes are blocked (skill, 2026-04-01)"~~ — measured false:
+  `POST /api/memory` -> 201 with a non-null `embedding_id`, and a semantic recall
+  under different phrasing returned the new record. `.claude/skills/cipher-search`
+  still carries that stale blocker and instructs agents to skip cipher entirely.
 
 ---
 
