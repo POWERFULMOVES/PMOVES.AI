@@ -136,7 +136,7 @@ Full audit: `pmoves/docs/CLAUDE_CONTEXT_AUDIT.md`.
 **Agent Zero MCP protocol server** — served by the A0 runtime on port 8081 at `/t-{MCP_SERVER_TOKEN}/sse`, `/t-{...}/http`, `/t-{...}/messages/`. The runtime authenticates with `X-API-KEY`. A2A routes (`/a2a/v1/*`, `/.well-known/agent-card.json`) on 8080 use a Supabase JWT `Authorization: Bearer`, gated by `A2A_DISCOVERY_PUBLIC` / `A2A_TASKS_PUBLIC`.
 
 **Configured local MCP servers** (`.claude/mcp.json`):
-- `pmoves-cipher` (SSE `http://localhost:8105/mcp/sse`) — persistent memory lookups + writes. Path verified 2026-08-12 against the running container; `/sse` and `/api/mcp/sse` both 404.
+- `pmoves-cipher` (SSE `http://localhost:8105/mcp/sse`) — persistent memory lookups + writes. **Re-measured 2026-09-08; the 2026-08-12 note that `/sse` and `/api/mcp/sse` are 404 no longer holds and cannot be re-derived that way.** Auth middleware now runs BEFORE routing, so *every* path returns 401 unauthenticated — including `/xyzzy` and `/definitely-not-a-route` (measured). An unauthenticated 401 therefore proves nothing about whether a route exists; route discovery on this service requires an AUTHENTICATED probe. `/health` is the only unauthenticated route (200, `{"service":"cipher-pmoves-shim"}`). The `pmoves-cipher-shim` process name is the sanctioned A1-Shim design (`pmoves/docs/TAC/TAC_CIPHER.md`), not a broken deployment.
 - `docker` (`mcp/docker`) — container inspection via local Docker socket
 - `hostinger-mcp` — Hostinger API tasks via `$HOSTINGER_API_KEY`
 - `tailscale` — tailnet inventory, stale-node cleanup, tag inspection, ACL operations
