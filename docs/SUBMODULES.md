@@ -25,8 +25,8 @@ Archon submodule (this repo)
 - Source list: see docs/githuborgan.md (POWERFULMOVES/PMOVES-Archon).
 - Add as submodule (already linked here):
   `git submodule add https://github.com/POWERFULMOVES/PMOVES-Archon.git pmoves/integrations/archon`
-- Build from submodule instead of clone‑at‑build:
-  `make -C pmoves up-archon-submodule`
+- Build/start the native Archon 0.6.0 stack (TS/SQLite, :3090):
+  `make -C pmoves up-archon-native`
 
 Make Targets
 - `make up-yt-published` — run PMOVES.YT from GHCR.

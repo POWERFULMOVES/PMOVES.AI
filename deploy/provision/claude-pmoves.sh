@@ -276,6 +276,22 @@ if [ -f "$MCP_ROSTER" ]; then
     fi
   fi
 
+  # TWO couplings to the normalizer's sweep live in this line. Both are load-
+  # bearing and neither is obvious from here:
+  #
+  #  1. We `exec`, so this path becomes an argument of the SESSION's own
+  #     process, and that is the only reason the sweep can tell a live roster
+  #     from an abandoned one. Before it could, a roster was unlinked one hour
+  #     in purely on mtime while the session that named it was still running.
+  #     If this ever stops naming the path on the command line, the liveness
+  #     check goes blind and the sweep quietly reverts to deleting live files.
+  #  2. We deliberately pass NO `--out-dir`. The tool picks custody --
+  #     XDG_RUNTIME_DIR (0700, logind-managed) when it exists, the temp dir
+  #     otherwise -- because the file holds EXPANDED bearer tokens. Pinning a
+  #     directory here would silently undo that for the whole fleet.
+  #
+  # pmoves/tests/test_mcp_roster_normalize.py pins both.
+  #
   # Pass the config with `--mcp-config=<file>` (the `=` form): `--mcp-config` is a
   # variadic option (`<configs...>`), so the space form would swallow a trailing
   # positional prompt as another config value (Codex #2243 P1). The `=` binds
