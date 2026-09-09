@@ -2,6 +2,9 @@
 
 # =============================================================================
 # Python venvs (machine-local; canonical bringup venv is pmoves/.venv-pmoves/
+# ...and the bare path too: a symlink named .venv-pmoves is a file, not a dir,
+# and slipped past the trailing-slash rule into PR #2961.
+pmoves/.venv-pmoves
 # via `make -C pmoves venv-bringup` — see pmoves/scripts/create_venv.sh)
 # =============================================================================
 .venv/

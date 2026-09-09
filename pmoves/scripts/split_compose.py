@@ -71,6 +71,7 @@ SERVICE_GROUPS = {
         "hf-mcp-server",
         "notebook-mcp",
         "wealth-mcp",
+        "fleet-sentinel",
     ],
     "media": [
         "media-video",
@@ -106,6 +107,7 @@ SERVICE_GROUPS = {
         "extract-worker",
         "watch-folder-router",
         "spark-shape-worker",
+        "persona-thirdref",
         "pdf-ingest",
         "langextract",
         "notebook-sync",
