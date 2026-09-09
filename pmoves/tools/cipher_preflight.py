@@ -419,12 +419,36 @@ def probe(
         "missing_env": [],
     }
     if "${" in url:
-        # An unexpanded ${TS_<NODE>} means the launcher's tailnet helper did not
-        # resolve it. Claude Code would use the literal text as a hostname, so
-        # this is a real "not configured", not a transient outage.
-        row["error"] = "unresolved variable in URL (tailnet helper did not run?)"
-        row["verdict"] = "unresolved"
-        return row
+        # Expand the URL from the SAME mapping the headers use. This used to
+        # short-circuit on any `${`, which made the row unpassable: a session
+        # that had sourced the tailnet helper still got "tailnet helper did not
+        # run?" because nothing ever consulted the environment it had just
+        # populated. Measured on Z890 2026-09-08 -- TS_Z890 exported, fleet row
+        # still refused. That is this tool's own 401 defect one line further
+        # down: a verdict the operator cannot reach by doing the right thing,
+        # and a message naming a cause that is not the cause.
+        url_misses: List[str] = []
+        url = _expand_vars(url, os.environ if environ is None else environ, url_misses)
+        # row["url"] deliberately KEEPS the unexpanded literal. The expanded
+        # value is a 100.64/10 CGNAT tailnet address, and this row is printed to
+        # stdout, captured into session logs, and pasted into PRs. Displaying it
+        # would put live fleet topology in every one of those -- the exact thing
+        # the repo's topology guard exists to stop. Caught by running this fix
+        # against the live tailnet and reading my own output: the resolved
+        # address was already on screen before I noticed.
+        if url_misses:
+            # Still unresolved AFTER consulting the environment -- now the
+            # original diagnosis is actually true. Name the variables, as the
+            # header path already does, so the operator knows what to set
+            # instead of being told a helper "did not run".
+            row["missing_env"] = sorted(set(url_misses))
+            row["error"] = (
+                "unresolved variable in URL: "
+                + ", ".join(sorted(set(url_misses)))
+                + " (tailnet helper did not run?)"
+            )
+            row["verdict"] = "unresolved"
+            return row
 
     sent, missing = _resolve_headers(headers or {}, environ)
     row["missing_env"] = sorted(set(missing))

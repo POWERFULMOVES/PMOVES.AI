@@ -977,3 +977,93 @@ def test_the_launcher_still_precedes_the_env_loading_delegate():
     assert "set -a" not in body[:probe_at], (
         "the thin launcher now loads an env file itself — re-read the overlay's rationale"
     )
+
+
+# ---------------------------------------------------------------------------
+# The URL is expanded from the environment too, not only the headers.
+#
+# `_resolve_headers(headers, environ)` already expands `${CIPHER_API_TOKEN}`
+# out of the same mapping. `probe()` did not give the URL the same treatment:
+# any `${` short-circuited to verdict "unresolved" with the message "tailnet
+# helper did not run?". Measured on Z890 2026-09-08: after `source
+# pmoves/scripts/tailscale-node-ips.sh` exported TS_Z890, the fleet row STILL
+# reported the helper had not run. The helper had run. The message named the
+# wrong cause, and it is the same shape as the 401 defect this PR fixes -- a
+# row that cannot reach a passing verdict no matter what the operator does.
+# ---------------------------------------------------------------------------
+
+
+def test_url_var_resolves_from_environ(monkeypatch):
+    """A ${VAR} the environment CAN supply must be expanded, not refused."""
+    seen = {}
+
+    class _Resp:
+        status = 200
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+
+    def fake_urlopen(req, timeout):
+        seen["url"] = req.full_url
+        return _Resp()
+
+    monkeypatch.setattr(cp, "_urlopen", fake_urlopen)
+    row = cp.probe(
+        "http://${TS_Z890}:8105/mcp/sse",
+        headers={},
+        environ={"TS_Z890": "100.64.0.9"},
+    )
+    assert row["verdict"] != "unresolved", (
+        f"URL var was in the environment but the row still refused it: {row}"
+    )
+    assert "${" not in seen.get("url", ""), f"URL was not expanded: {seen}"
+    assert "100.64.0.9" in seen.get("url", ""), seen
+    assert row["verdict"] == "ok", row
+
+
+def test_url_var_absent_from_environ_still_unresolved():
+    """CONTROL: with nothing to expand from, the old verdict must stand."""
+    row = cp.probe(
+        "http://${TS_Z890}:8105/mcp/sse",
+        headers={},
+        environ={},
+    )
+    assert row["verdict"] == "unresolved", row
+    assert "TS_Z890" in (row.get("missing_env") or []) or "unresolved" in (row["error"] or "")
+
+
+def test_url_var_names_the_missing_variable():
+    """The row must say WHICH variable to set, as the header path already does."""
+    row = cp.probe(
+        "http://${TS_Z890}:8105/mcp/sse",
+        headers={},
+        environ={},
+    )
+    assert "TS_Z890" in (row.get("missing_env") or []), (
+        f"row does not name the unresolved variable: {row}"
+    )
+
+
+def test_expanded_url_never_reaches_the_printed_row(monkeypatch):
+    """The row is printed, logged and pasted into PRs — it must not carry the IP.
+
+    Expanding the URL is required to probe it; DISPLAYING the expansion would
+    put a live 100.64/10 tailnet address into stdout and every transcript that
+    captures it. The request gets the real host, the row keeps the literal.
+    """
+    seen = {}
+
+    class _Resp:
+        status = 200
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+
+    monkeypatch.setattr(cp, "_urlopen", lambda req, timeout: (seen.setdefault("url", req.full_url), _Resp())[1])
+    row = cp.probe(
+        "http://${TS_Z890}:8105/mcp/sse",
+        headers={},
+        environ={"TS_Z890": "100.64.0.9"},
+    )
+    assert "100.64.0.9" in seen["url"], "request must use the expanded host"
+    assert "100.64.0.9" not in row["url"], f"resolved address leaked into the row: {row['url']}"
+    assert "${TS_Z890}" in row["url"], f"row should keep the literal: {row['url']}"
+    assert "100.64.0.9" not in str(row), f"resolved address leaked somewhere in the row: {row}"
