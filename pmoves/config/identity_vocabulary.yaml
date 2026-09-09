@@ -396,6 +396,25 @@ alter_lineage:
       mining jewels from PR reviews") and none of the path.
     confidence: operator-asserted
 
+  - identity: b850-claude
+    alter: b850-ledger
+    became: room-owner
+    origin: declared-2026-09-05
+    asserted_on: '2026-09-05'
+    note: >-
+      DECLARED, not discovered -- the opposite of the 4090/field record above,
+      and recorded that way on purpose. B850 was the only node in
+      pmoves/config/rooms/catalog.json with no room; this alter was created on
+      2026-09-05 to own `b850-ledger.room.evidence`. There is no prior work
+      signed as `b850-ledger` in AGNOTE4482PHI.t1.md, so there is no path to
+      reconstruct and none is invented here. The name is node-qualified because
+      `_resolve_alter_parent()` in pmoves/tools/sign_trail.py returns the FIRST
+      parent declaring a matching alter with no duplicate gate; a generic
+      `ledger` would misattribute trails fleet-wide once a second node declared
+      it. The room ships at stage `rehearsal`; activation is the operator's to
+      grant, and the operator may rename both room and alter.
+    confidence: declared-at-creation
+
 # The HARNESS the identity was worn through. Surfaced by parsing: `SPARK-KIMI
 # (Crush, GLM via qwen3-coder)` x17 put a harness in the parenthetical, which
 # is the last of the four join fields the preflight says is missing. The suit
