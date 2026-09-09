@@ -27,18 +27,89 @@ client can reach it. That is §3 of `AGENT_IDENTITY_PROPOSAL_2026-09-04.md`
 **authenticated store→recall round-trip at mount time** rather than a health
 endpoint.
 
+**Keep-list audited 2026-09-09 — nothing was dropped.** Every PMOVES additive
+capability listed under §PMOVES Additive Commits survives the re-fork,
+re-implemented in `src/pmoves/` as A1-Shim intended (the SHAs do not carry over,
+so the SHAs are the wrong thing to check): dossier -> `PMOVES.AI_INTEGRATION.md`;
+A2A + canonical agent-card -> `a2a.ts`; Bearer middleware -> `auth.ts`;
+`/api/memory` CRUD -> `memory-routes.ts`; Ollama/embedding backend ->
+`embedding.ts` (now TensorZero-primary with `OLLAMA_URL` fallback). Six modules
+exist BEYOND the keep-list: `graph.ts`, `health.ts`, `hirag-client.ts`,
+`mcp-catalog.ts`, `mcp-sse.ts`, `nats-emitter.ts`. The one item with no trace is
+the build fix (node-gyp `disturl` + pnpm 9 workspaces) — no `disturl` or
+`packageManager` pin is present, and the image now builds without it, so it
+appears obsoleted by the new upstream rather than lost.
+
+**Windows papercut, found running the road:** `make -C pmoves up-cipher`
+succeeds, then `qdrant-provision-cipher` fails with
+`python3: can't open file '//C:/Program Files/Git/scripts/provision_qdrant_cipher_memory.py'`
+— MSYS path conversion mangling an absolute `/scripts/...` argument. The
+collection is therefore NOT provisioned on Windows nodes even though the road
+prints "Cipher Memory ready". Reported, not fixed here.
+
 **401 is a catch-all.** After the restart, `/mcp`, `/mcp/sse`, `/api/memory`,
 `/sse`, `/api/mcp/sse` all return 401 — and so do `/xyzzy` and
 `/definitely-not-a-route`. Auth runs before routing, so an unauthenticated 401
 proves nothing about whether a route exists. Route discovery here needs an
 authenticated probe; `/health` is the only unauthenticated route.
 
-**Image drift is separate and still open on this node.** The running image was
-built 2026-08-06 and `grep -rl streamable /app/dist` = **0** (5090 = 1, per
-#2955), so this node still lacks the streamable-http work from #2923. Rebuild is
-blocked: `cipher-api` has no `image:` (it builds from `context: ../Pmoves-cipher`)
-and the base `node:22-slim` pull fails `401 Unauthorized` on stale Docker Hub
-credentials, with no cached copy.
+**Image drift: RESOLVED 2026-09-09.** The running image had been built
+2026-08-06 with `grep -rl streamable /app/dist` = **0** (5090 = 1, per #2955).
+`cipher-api` has no `image:` — it builds from `context: ../Pmoves-cipher` — so
+the fix was to promote this node's submodule gitlink `d5c4045e -> e24f1323`
+(main's pin since #2923) and rebuild. The pull had been blocked by stale Docker
+Hub credentials on the base `node:22-slim`; the operator re-authenticated.
+
+After `make -C pmoves up-cipher`: image rebuilt, **`streamable` = 1**, `/health`
+200, `cipher_preflight` local row **OK 200**. Z890 now matches 5090.
+
+### Reconciliation: the fleet entry versus the loopback bind
+
+This is the open design question, stated plainly because the workaround has
+outlived the memory of why it exists.
+
+**Measured:**
+
+| Fact | Value |
+|---|---|
+| `docker port pmoves-cipher-api-1` | `8105/tcp -> 127.0.0.1:8105` |
+| roster `pmoves-cipher` | `http://${TS_Z890}:8105/mcp/sse` |
+| roster `pmoves-cipher-local` | `http://localhost:8105/mcp/sse` |
+| fleet row, resolver sourced | connection **actively refused** |
+
+`TS_Z890` resolves correctly — it maps to the Z890 node, and the resolver is
+right. The refusal is not a naming problem: the port is published on **loopback
+only**, so nothing on the tailnet interface is listening. The roster's fleet
+entry therefore **cannot have worked from any node, ever**, and neither can it
+work from Z890 itself when addressed by its tailnet name.
+
+**The `pmoves-cipher-local` entry is the workaround** (added in #2792, after the
+roster had carried only the fleet endpoint — "memory that silently wasn't
+there"). It works, and it is what the fleet is running on today. It is also
+per-node: it can only ever reach a cipher on the same host.
+
+**Three ways to reconcile, none of them taken here** — this is an operator and
+topology decision, and the point of writing it down is that it should be decided
+rather than inherited:
+
+1. **Per-node cipher, and DELETE the fleet entry.** Honest about what runs
+   today. Every node keeps its own memory; nothing is shared. The `${TS_Z890}`
+   row should then be removed, because a roster entry that cannot connect is not
+   a fallback — it is a check that cannot pass, and every session pays a probe
+   timeout for it.
+2. **Publish on the tailnet interface.** Makes the fleet entry real. Cipher is
+   already Bearer-gated (`src/pmoves/auth.ts`, keep-list item 3), which is
+   precisely the control this would rely on — but it also requires distributing
+   `CIPHER_API_TOKEN` to every node and accepting tailnet-wide reachability.
+3. **`tailscale serve` in front of the loopback bind.** No compose change, no
+   change to the publish scope, tailnet-only exposure, and identity handled by
+   Tailscale rather than by a shared bearer. Likely the smallest correct step,
+   but it is not a pattern this repo uses yet, so it should be proven on one
+   node before the fleet.
+
+Until one is chosen, **option 1 is the de-facto state** and the fleet row is
+decorative. Recorded so the next agent does not spend a session, as this one
+did, discovering it from first principles.
 
 ---
 
