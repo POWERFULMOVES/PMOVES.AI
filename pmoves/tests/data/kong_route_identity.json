@@ -77,6 +77,12 @@
     "model_id": "glm-5.2",
     "provider": "zai"
   },
+  "glm-5.3": {
+    "api_base": "https://api.z.ai/api/coding/paas/v4",
+    "api_key_env": "Z_AI_API_KEY",
+    "model_id": "glm-5.3",
+    "provider": "zai"
+  },
   "kilo-auto-balanced": {
     "api_base": "https://api.kilocode.ai/api/openrouter",
     "api_key_env": "KILOCODE_API_KEY",
