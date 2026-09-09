@@ -61,5 +61,5 @@ Goal: one-command bring-up, no red containers, and smoketests green for M2 (Crea
 ## 7) Evidence capture (for PR)
 - [ ] Save logs in `pmoves/docs/logs/` (optional but recommended):
   - `make -C pmoves gpu-rerank-evidence`
-  - `make -C pmoves archon-mcp-evidence`
+  - `make -C pmoves archon-rest-policy-smoke`
   - `make -C pmoves evidence-auto`
