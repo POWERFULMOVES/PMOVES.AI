@@ -8,16 +8,21 @@ from pathlib import Path
 import pytest
 
 # Bridge main.py lives one level up and imports its sibling modules
-# (tac_tree) by name — put the service dir on sys.path so collection works
-# from any rootdir (the ratchet runs from repo root).
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-
-_spec = importlib.util.spec_from_file_location(
-    "jellyfin_bridge_main", Path(__file__).resolve().parents[1] / "main.py"
-)
-bridge = importlib.util.module_from_spec(_spec)
-sys.modules["jellyfin_bridge_main"] = bridge
-_spec.loader.exec_module(bridge)
+# (tac_tree) by name — the service dir must be on sys.path DURING exec,
+# then comes off again: leaving it pollutes the all-services suite, where
+# another service's bare `import main` would re-execute the bridge and
+# double-register its prometheus counters (DuplicateTimeseries).
+_SERVICE_DIR = str(Path(__file__).resolve().parents[1])
+sys.path.insert(0, _SERVICE_DIR)
+try:
+    _spec = importlib.util.spec_from_file_location(
+        "jellyfin_bridge_main", Path(_SERVICE_DIR) / "main.py"
+    )
+    bridge = importlib.util.module_from_spec(_spec)
+    sys.modules["jellyfin_bridge_main"] = bridge
+    _spec.loader.exec_module(bridge)
+finally:
+    sys.path.remove(_SERVICE_DIR)
 
 
 def _payload(ntype, user="DARKXSIDE", item="track-1", itype="Audio", **over):
