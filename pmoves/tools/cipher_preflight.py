@@ -33,6 +33,14 @@ exits 3, not 0 — same doctrine as docker_host_policy_check.py. A probe that
 says "pass" when it took no measurement is the failure mode this repo has spent
 a lot of effort removing.
 
+Bearer auth
+-----------
+The shim 401s unauthenticated callers whenever `CIPHER_API_TOKEN` is set on the
+server, so an uncredentialed probe reports a healthy Cipher as DOWN. The token
+is resolved the same way crush_configurator.py resolves it — process env
+first, then the repo env candidates — so every node probes with the funnel's
+token and no path or secret is ever written into this file.
+
 Usage:
   python pmoves/tools/cipher_preflight.py
   python pmoves/tools/cipher_preflight.py --json
@@ -47,6 +55,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import socket
 import sys
 import urllib.error
@@ -56,6 +65,16 @@ from typing import Any, Dict, List, Optional
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_ROSTER = _REPO_ROOT / ".claude" / "mcp.json"
+TOKEN_ENV = "CIPHER_API_TOKEN"
+TOKEN_ENV_FILES = (
+    ".env.generated",
+    "env.shared.generated",
+    ".env",
+    "env.shared",
+    Path("pmoves") / "env.shared",
+    Path("pmoves") / "env.tier-llm",
+    Path("pmoves") / "env.tier-llm.generated",
+)
 
 # Long enough to cross the tailnet, short enough that a wedged endpoint does not
 # hold up a session start. Only the status line is awaited, never the body.
@@ -89,20 +108,49 @@ def cipher_urls_from_roster(roster: Optional[Path] = None) -> List[Dict[str, str
     return found
 
 
-def probe(url: str, timeout: float = CONNECT_TIMEOUT) -> Dict[str, Any]:
+def bearer_token(root: Optional[Path] = None) -> Optional[str]:
+    """CIPHER_API_TOKEN from the process env, else the repo env candidates.
+
+    Mirrors crush_configurator._lookup_env so the probe authenticates exactly
+    the clients the generator configures. None means "probe unauthenticated",
+    which is correct for dev-mode shims running without a token.
+    """
+    value = os.environ.get(TOKEN_ENV)
+    if value:
+        return value
+    base = root if root is not None else _REPO_ROOT
+    for name in TOKEN_ENV_FILES:
+        path = base / name
+        if not path.exists():
+            continue
+        for line in path.read_text(encoding="utf-8").splitlines():
+            if line.startswith(f"{TOKEN_ENV}="):
+                candidate = line.split("=", 1)[1].strip().strip('"').strip("'")
+                if candidate:
+                    return candidate
+    return None
+
+
+def probe(url: str, timeout: float = CONNECT_TIMEOUT,
+          token: Optional[str] = None) -> Dict[str, Any]:
     """Reach the endpoint and read ONLY the status line.
 
     Returns a row describing the outcome; never raises for a reachability
     failure, because "this one is down" is a measurement.
     """
-    row: Dict[str, Any] = {"url": url, "ok": False, "status": None, "error": None}
+    row: Dict[str, Any] = {"url": url, "ok": False, "status": None,
+                           "auth": "bearer" if token else "none",
+                           "error": None}
     if "${" in url:
         # An unexpanded ${TS_<NODE>} means the launcher's tailnet helper did not
         # resolve it. Claude Code would use the literal text as a hostname, so
         # this is a real "not configured", not a transient outage.
         row["error"] = "unresolved variable in URL (tailnet helper did not run?)"
         return row
-    req = urllib.request.Request(url, headers={"Accept": "text/event-stream"})
+    headers = {"Accept": "text/event-stream"}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    req = urllib.request.Request(url, headers=headers)
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             row["status"] = resp.status
@@ -127,9 +175,10 @@ def check(urls: Optional[List[str]] = None, roster: Optional[Path] = None) -> Di
                 "no cipher entry in the MCP roster — memory is not configured at all"
             )
 
+    token = bearer_token()
     rows = []
     for cand in candidates:
-        result = probe(cand["url"])
+        result = probe(cand["url"], token=token)
         result["name"] = cand["name"]
         rows.append(result)
 

@@ -3380,7 +3380,7 @@ qdrant-provision-cipher: ## Provision the Qdrant collection Cipher Memory writes
 	@# in supa-start. Image is the repo's standard pinned python base, so this
 	@# pulls nothing new on a node that has built any Python service.
 	@echo "🧠 Provisioning Qdrant collection for Cipher Memory..."
-	@$(LOAD_ENV_SHARED); docker run --rm --network pmoves_data \
+	@$(LOAD_ENV_SHARED); MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL="*" docker run --rm --network pmoves_data \
 		-v "$(CURDIR)/scripts:/scripts:ro" \
 		-e PYTHONDONTWRITEBYTECODE=1 \
 		-e QDRANT_URL=$${QDRANT_URL:-http://qdrant:6333} \
@@ -3399,7 +3399,7 @@ qdrant-verify-cipher: ## Provision + round-trip a probe through the Cipher colle
 	@# vector. Use cipher-memory-smoke for the end-to-end check through Cipher's
 	@# own HTTP surface.
 	@echo "🧠 Verifying Qdrant collection round trip for Cipher Memory..."
-	@$(LOAD_ENV_SHARED); docker run --rm --network pmoves_data \
+	@$(LOAD_ENV_SHARED); MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL="*" docker run --rm --network pmoves_data \
 		-v "$(CURDIR)/scripts:/scripts:ro" \
 		-e PYTHONDONTWRITEBYTECODE=1 \
 		-e QDRANT_URL=$${QDRANT_URL:-http://qdrant:6333} \
@@ -3445,10 +3445,16 @@ cipher-memory-smoke: ## Smoke test cipher /api/memory POST + search — FAILS if
 	@#             (memory-routes.ts sets score from the vector hit; the lexical
 	@#             fallback has no score field at all)
 	@# A missing agentId is a 400, so the payload must carry one.
+	@# Defect 3 (2026-09-09): once CIPHER_API_TOKEN reached the container the
+	@# shim enforces auth — curl -sf swallowed the 401/403 body and the target
+	@# failed with the same empty message as defect 1. Send the funnel's token
+	@# and an identity the token is allowed to use (legacy token = "bootstrap";
+	@# per-agent-token nodes override CIPHER_SMOKE_AGENT).
 	@echo "Testing cipher /api/memory POST..."
 	@resp=$$(curl -sf -X POST http://localhost:$${CIPHER_PORT:-8105}/api/memory \
 		-H 'Content-Type: application/json' \
-		-d '{"content":"PMOVES cipher smoke test","category":"test","tags":["smoke"],"agentId":"cipher-memory-smoke"}' 2>&1) \
+		-H "Authorization: Bearer $${CIPHER_API_TOKEN:-}" \
+		-d "{\"content\":\"PMOVES cipher smoke test\",\"category\":\"test\",\"tags\":[\"smoke\"],\"agentId\":\"$${CIPHER_SMOKE_AGENT:-bootstrap}\"}" 2>&1) \
 		&& echo "  POST OK: $$resp" \
 		|| (echo "  POST FAILED: $$resp" && exit 1); \
 	case "$$resp" in \
@@ -3461,7 +3467,8 @@ cipher-memory-smoke: ## Smoke test cipher /api/memory POST + search — FAILS if
 			exit 1;; \
 	esac
 	@echo "Testing cipher /api/memory/search..."
-	@resp=$$(curl -sf "http://localhost:$${CIPHER_PORT:-8105}/api/memory/search?q=cipher&limit=1" 2>&1) \
+	@resp=$$(curl -sf "http://localhost:$${CIPHER_PORT:-8105}/api/memory/search?q=cipher&limit=1&agentId=$${CIPHER_SMOKE_AGENT:-bootstrap}" \
+		-H "Authorization: Bearer $${CIPHER_API_TOKEN:-}" 2>&1) \
 		&& echo "  SEARCH OK: $$resp" \
 		|| (echo "  SEARCH FAILED: $$resp" && exit 1); \
 	case "$$resp" in \

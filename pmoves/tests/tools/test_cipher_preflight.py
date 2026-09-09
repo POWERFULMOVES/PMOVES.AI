@@ -32,11 +32,57 @@ cp = importlib.util.module_from_spec(spec)
 sys.modules["cipher_preflight"] = cp
 spec.loader.exec_module(cp)
 
+# Saved before any test runs so the autouse hermetic patch below cannot
+# shadow the real resolver in the tests that exercise it directly.
+_real_bearer_token = cp.bearer_token
+
 
 def _roster(tmp_path: Path, servers: dict) -> Path:
     path = tmp_path / "mcp.json"
     path.write_text(json.dumps({"mcpServers": servers}), encoding="utf-8")
     return path
+
+
+@pytest.fixture(autouse=True)
+def _no_bearer(monkeypatch):
+    """Keep verdict tests hermetic — the node's real env.shared must not leak in."""
+    monkeypatch.setattr(cp, "bearer_token", lambda root=None: None)
+
+
+def test_bearer_token_is_sent_when_resolved(monkeypatch, tmp_path):
+    """A token-protected shim 401s anonymous probes; the check must authenticate."""
+    monkeypatch.setattr(cp, "bearer_token", lambda root=None: "tok-123")
+    captured = {}
+
+    def fake(req, *a, **k):
+        captured["auth"] = req.get_header("Authorization")
+        return _Resp(200)
+
+    monkeypatch.setattr(cp.urllib.request, "urlopen", fake)
+    roster = _roster(tmp_path, {"pmoves-cipher-local": {"url": "http://localhost:8105/mcp/sse"}})
+    assert cp.main(["--roster", str(roster)]) == 0
+    assert captured["auth"] == "Bearer tok-123"
+
+
+def test_bearer_token_resolved_from_repo_env_file(monkeypatch, tmp_path):
+    """The funnel writes the token to env.shared; the probe must find it there."""
+    monkeypatch.delenv(cp.TOKEN_ENV, raising=False)
+    (tmp_path / "env.shared").write_text("CIPHER_API_TOKEN=tok-from-funnel\n", encoding="utf-8")
+    assert _real_bearer_token(root=tmp_path) == "tok-from-funnel"
+
+
+def test_bearer_token_prefers_process_env(monkeypatch, tmp_path):
+    monkeypatch.delenv(cp.TOKEN_ENV, raising=False)
+    (tmp_path / "env.shared").write_text("CIPHER_API_TOKEN=from-file\n", encoding="utf-8")
+    monkeypatch.setenv(cp.TOKEN_ENV, "from-process")
+    assert _real_bearer_token(root=tmp_path) == "from-process"
+
+
+def test_probe_reports_auth_mode_in_row(monkeypatch, tmp_path):
+    monkeypatch.setattr(cp.urllib.request, "urlopen", lambda *a, **k: _Resp(200))
+    roster = _roster(tmp_path, {"pmoves-cipher-local": {"url": "http://localhost:8105/mcp/sse"}})
+    rows = cp.check(roster=roster)["endpoints"]
+    assert rows[0]["auth"] == "none"
 
 
 class _Resp:
