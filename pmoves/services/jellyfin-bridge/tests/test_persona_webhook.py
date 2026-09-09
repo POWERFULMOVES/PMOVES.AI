@@ -7,7 +7,11 @@ from pathlib import Path
 
 import pytest
 
-# Import the bridge module without package context (it is a flat main.py).
+# Bridge main.py lives one level up and imports its sibling modules
+# (tac_tree) by name — put the service dir on sys.path so collection works
+# from any rootdir (the ratchet runs from repo root).
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
 _spec = importlib.util.spec_from_file_location(
     "jellyfin_bridge_main", Path(__file__).resolve().parents[1] / "main.py"
 )
