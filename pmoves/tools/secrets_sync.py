@@ -13,6 +13,7 @@ import yaml
 
 from pmoves.chit.codec import decode_secret_map, load_cgp
 from pmoves.tools.secret_shape import inspect_value
+from pmoves.tools._secrets_common import is_placeholder
 from pmoves.tools.secrets_self_generated import fill_self_generated, SELF_GENERATED, _SUPABASE_JWT_KEYS
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -144,16 +145,33 @@ def _parse_target(data: Mapping) -> Target:
     return Target(file=file_name, key=key)
 
 
-def _first_usable(secrets: Mapping[str, str], entry: "Entry") -> str | None:
+def _first_usable(
+    secrets: Mapping[str, str],
+    entry: "Entry",
+    nonvalue_out: set[str] | None = None,
+) -> str | None:
     """First of label-then-aliases whose value is non-empty after stripping.
 
     Returns None when every candidate is absent OR present-but-blank, so callers
     can treat "delivered as empty" and "never delivered" identically — which is how
     every consumer of a line-based env file already treats them.
+
+    A value that parses as non-empty but is not a secret — an unexpanded
+    ``${OTHER_VAR}`` reference or a ``PLACEHOLDER_*`` literal — is skipped the
+    same way, and its key recorded in ``nonvalue_out`` so the caller can warn.
+    Measured on Z890, 2026-09-09: the CGP carried ``SUPABASE_JWT_SECRET=${JWT_SECRET}``
+    (13 chars) from an unexpanded write, this function accepted it as usable, and
+    the merge write-back overwrote fresh 58-char values in env.shared and every
+    tier file. A ref is a pointer to a value, not a value; fail toward preserving
+    what the target already holds (merge mode) and naming the gap loudly.
     """
     for key in (entry.label, *entry.aliases):
         value = secrets.get(key)
         if value is not None and value.strip():
+            if is_placeholder(value):
+                if nonvalue_out is not None:
+                    nonvalue_out.add(key)
+                continue
             return key
     return None
 
@@ -178,6 +196,7 @@ def build_outputs(
     too_short: List[str] = []
     shape_withheld: List[str] = []
     shape_warnings: List[str] = []
+    nonvalues: set[str] = set()
     for entry in entries:
         # Honor legacy aliases: an operator may supply a deprecated name (e.g.
         # MCP_SERVER_TOKEN) that maps to a canonical label. Emit the canonical
@@ -198,10 +217,38 @@ def build_outputs(
         # as unset, but `${KEY?}` accepts it, and anything that SOURCES an env file
         # and exports it re-exports the blank — where shell environment then beats
         # every `--env-file`. An empty secret is not a secret; treat it as absent.
-        source_key = _first_usable(secrets, entry)
+        entry_nonvalues: set[str] = set()
+        source_key = _first_usable(secrets, entry, entry_nonvalues)
+        nonvalues |= entry_nonvalues
         if source_key is None:
             if entry.required:
                 missing.append(entry.label)
+            # PRESERVE, do not remove, when the reason was a NON-VALUE.
+            #
+            # `_first_usable` returns None for two different situations, and
+            # they want opposite treatment:
+            #
+            #   absent / present-but-blank -> REMOVE. "Omission is not
+            #       removal"; clearing CIPHER_API_TOKEN must actually clear it
+            #       downstream, which is what the comment below describes.
+            #
+            #   unexpanded ${VAR} ref / PLACEHOLDER_* literal -> PRESERVE.
+            #       This branch previously removed these too, contradicting
+            #       all three places that describe the behaviour:
+            #       `_first_usable`'s docstring ("fail toward preserving what
+            #       the target already holds (merge mode)"), the operator
+            #       WARNING below ("targets keep their existing values in
+            #       --merge mode"), and the measured incident the guard exists
+            #       for -- a CGP carrying SUPABASE_JWT_SECRET=${JWT_SECRET}
+            #       overwriting fresh 58-char values. Removing the key does
+            #       not overwrite the good value, it DELETES it: the same data
+            #       loss by another route, while the warning tells the operator
+            #       their existing values were kept.
+            #
+            # A ref is a pointer to a value, not a value. It is not evidence
+            # the operator cleared anything, so it must not be read as a clear.
+            if entry_nonvalues:
+                continue
             # Cleared or never delivered -- either way this key must NOT survive
             # in the generated targets. `write_env_files` runs in merge mode by
             # default (SECRETS_SYNC_FLAGS), and merge PRESERVES keys it is not
@@ -315,6 +362,40 @@ def build_outputs(
             "non-ASCII character cannot be placed in an HTTP header at all, and "
             "surrounding whitespace is emitted verbatim, so verify each against "
             "its source.",
+            file=sys.stderr,
+        )
+    if nonvalues:
+        # Names only, by design: an operator must know WHICH entries were
+        # withheld, and no value (nor any span of one) is ever emitted here.
+        # Reviewed — variable names are configuration, not credential material.
+        # NOT SUPPRESSED, and deliberately not pretending to be. The marker
+        # that stood here read `# codeql[python/clear-text-logging-of-sensitive-
+        # information]`, which is wrong twice: the rule is
+        # `py/clear-text-logging-sensitive-data` (measured from the live alert),
+        # and GitHub code scanning does not honour inline CodeQL suppression
+        # comments at all -- .github/codeql-config.yml carries only paths-ignore,
+        # no query-filters. A marker that silences nothing while reading as
+        # handled is worse than no marker: the next reader stops looking.
+        #
+        # WHY THE ALERT IS A FALSE POSITIVE: `nonvalues` is built from KEYS
+        # only -- (key for key, value in secrets.items() if is_placeholder(value))
+        # -- and `value` appears solely in the predicate; it is never stored or
+        # emitted. CodeQL taints the comprehension because it reads a secret map,
+        # not because a secret reaches the sink. And is_placeholder(value) being
+        # true means the value is empty, an unexpanded ${VAR} ref, or a
+        # PLACEHOLDER_* literal -- by definition not credential material.
+        #
+        # The operator MUST see which keys were refused, or the funnel drops
+        # them silently. Resolution is an alert dismissal (a security-audit
+        # action, operator-owned), not a code change.
+        print(
+            "WARNING: withheld "
+            + str(len(nonvalues))
+            + " non-value secret(s) (unexpanded ${VAR} refs or placeholder "
+            "literals): "
+            + ", ".join(sorted(nonvalues))
+            + " -- targets keep their existing values in --merge mode; rotate "
+            "with `make -C pmoves secrets-rotate KEY=<NAME>` to mint real ones.",
             file=sys.stderr,
         )
     if missing and strict:
