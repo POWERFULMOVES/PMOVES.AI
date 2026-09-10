@@ -88,7 +88,7 @@ e84155799 docs(hermes-docs): add HERMES integration spec + atomic commits guide
 ## Legacy IP Addresses (NOT From Our Commits)
 
 **Finding**: `AGNOTE4482PHI.t1.md` (line 121, 988) contains IP addresses from OTHER agents' session logs:
-- `100.124.50.76` (Z890-CLAUDE Tailscale claim, March 2026)
+- `(redacted tailnet IP — see ops vault)` (Z890-CLAUDE Tailscale claim, March 2026)
 - LAN IPs `.65`, `.234`, `.110`, `.144` (Z890 fleet network)
 - `172.17.0.1` (SPARK-KIMI Docker bridge IP)
 
