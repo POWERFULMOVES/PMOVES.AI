@@ -12,7 +12,7 @@
    never resolved: `[Errno -3] Temporary failure in name resolution`.
 2. Cipher's actual home is the **Z890 GPU node** (`cipher-pmoves-shim v0.1.0`,
    port 8105, auth-gated). It is reachable from *tagged* tailnet nodes
-   (kvm4-2 → 100.113.38.37:8105 = HTTP 200) but **not** from user-owned nodes
+   (kvm4-2 → <Z890-TAILNET-IP>:8105  # resolve via `tailscale status` / ops vault — never hardcode = HTTP 200) but **not** from user-owned nodes
    (kiloclaw direct = timeout; same ACL class as the 2026-09-08 finding).
 3. Even with a reachable URL, containers cannot use the tailnet: all `pmoves_*`
    networks are `internal: true` (PMOVES network-hardening doctrine) → no route
@@ -24,16 +24,16 @@ Containers CAN reach their own bridge gateway. So a host-level socat relay on th
 `pmoves_api` gateway IP bridges the two worlds without touching the doctrine:
 
 ```
-container → 172.30.1.1:8105 (pmoves_api bridge gw)
+container → the pmoves_api bridge gateway (discover dynamically: `docker network inspect pmoves_api --format '{{(index .IPAM.Config 0).Gateway}}'`):8105 (pmoves_api bridge gw)
           → socat (pmoves-cipher-relay.service, host netns)
-          → 100.113.38.37:8105 (cipher-pmoves-shim on Z890, via tailnet)
+          → <Z890-TAILNET-IP>:8105  # resolve via `tailscale status` / ops vault — never hardcode (cipher-pmoves-shim on Z890, via tailnet)
 ```
 
 ### Deployed artifacts
 
 **kvm4-2** (canonical gateway-agent node):
 - `/etc/systemd/system/pmoves-cipher-relay.service` — enabled, active
-- `pmoves-gateway-agent` container recreated with `CIPHER_URL=http://172.30.1.1:8105`
+- `pmoves-gateway-agent` container recreated with `CIPHER_URL=http://the pmoves_api bridge gateway (discover dynamically: `docker network inspect pmoves_api --format '{{(index .IPAM.Config 0).Gateway}}'`):8105`
   (all other env faithfully carried over from the previous container, captured via
   `docker inspect` before removal; image `pmoves/gateway-agent:latest` unchanged)
 - Verified: `GET /healthz` → `cipher: healthy` (2026-09-10 ~08:01 UTC)
@@ -63,13 +63,13 @@ container → 172.30.1.1:8105 (pmoves_api bridge gw)
 ### Durable repo fix
 
 `.github/workflows/deploy-gateway-agent.yml` (Deploy to VPS job) now sets
-`CIPHER_URL: http://172.30.1.1:8105` at build + deploy, with comments pointing
+`CIPHER_URL: http://the pmoves_api bridge gateway (discover dynamically: `docker network inspect pmoves_api --format '{{(index .IPAM.Config 0).Gateway}}'`):8105` at build + deploy, with comments pointing
 here. Precondition for CI redeploys: the relay unit must exist on the target
 node (this doc is the runbook).
 
 ## Security notes
 
-- The relay binds ONLY the `pmoves_api` bridge gateway IP (172.30.1.1), not
+- The relay binds ONLY the `pmoves_api` bridge gateway IP (the pmoves_api bridge gateway (discover dynamically: `docker network inspect pmoves_api --format '{{(index .IPAM.Config 0).Gateway}}'`)), not
   0.0.0.0 — nothing outside the docker bridge can use it.
 - Cipher remains Bearer-token-gated; the relay adds no auth surface on Z890
   (it forwards to the same auth-gated endpoint).
