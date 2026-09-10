@@ -1,4 +1,16 @@
 {
+  "git.autoRepositoryDetection": false,
+  "git.autofetch": true,
+  "git.autorefetch": false,
+  "git.repositoryScanIgnoredFolders": [
+    "**/PMOVES-*",
+    "**/Pmoves-*",
+    "pmoves-*",
+    "pmoves-cipher-openclaw"
+  ],
+  "git.enableSmartCommit": true,
+  "git.confirmSync": false,
+  "git.decorations.enabled": true,
   "python.venvPath": "${workspaceFolder}/pmoves",
   "python.terminal.activateEnvInCurrentTerminal": false,
   "python.analysis.typeCheckingMode": "basic",
@@ -64,10 +76,6 @@
     "${workspaceFolder}/pmoves/contracts/schemas/room/room.manifest.v1.schema.json": "pmoves/config/rooms/*.json"
   },
   "yaml.customTags": [],
-  "git.autofetch": true,
-  "git.enableSmartCommit": true,
-  "git.confirmSync": false,
-  "git.decorations.enabled": true,
   "workbench.colorTheme": "One Dark Pro",
   "workbench.iconTheme": "material-icon-theme",
   "workbench.startupEditor": "none",
@@ -80,5 +88,6 @@
   },
   "makefile.configureOnOpen": false,
   "java.compile.nullAnalysis.mode": "automatic",
-  "python.defaultInterpreterPath": "${workspaceFolder}/pmoves/.venv-pmoves"
+  "python.defaultInterpreterPath": "${workspaceFolder}/pmoves/.venv-pmoves",
+  "markdown.validate.enabled": true
 }
