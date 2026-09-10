@@ -1,0 +1,119 @@
+# Kilocode Fleet Review — PR diff review lane
+
+# Replaces the broken claude-review lane (anthropics/claude-code-action#1720,
+# dead fleet-wide since 2026-08-23) with the fleet's own reviewer: the Kilo
+# CLI (KiloCode coding plan) on a self-hosted runner.
+#
+# Model options per lane need:
+#   KILO_REVIEW_MODEL (repo variable, default: kilo/ollama-cloud/glm-5.2)
+#   KILOCODE_API_KEY  (repo secret — coding-plan key; NOT checked in)
+#
+# Runner requirements (kvm4 lane, label: kvm4):
+#   - docker (present), network egress to api.kilo.ai (present — pulls work)
+#   - the runner user can `sudo -n docker` (already true on kvm4 runners)
+#
+# Trigger: same paths filter as the old claude lane (code + behaviour-defining
+# config). Same-repo only (fork PRs have no secret access by design).
+
+name: Kilocode Fleet Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, ready_for_review, reopened]
+    paths:
+      - '**.py'
+      - '**.js'
+      - '**.ts'
+      - '**.tsx'
+      - '**.jsx'
+      - '**.sh'
+      - 'Dockerfile*'
+      - 'docker-compose*.yml'
+      - 'Makefile'
+      - 'pmoves/mk/**'
+      - '.github/workflows/**'
+      - '**.yaml'
+      - '**.yml'
+      - '**.json'
+      - 'pmoves/config/**'
+      - 'pmoves/configs/**'
+      - '.claude/agents/**'
+      - '.claude/skills/**'
+
+concurrency:
+  group: kilocode-review-${{ github.head_ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  kilo-review:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, kvm4]
+    timeout-minutes: 20
+    steps:
+      - name: Checkout (full depth for diff context)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Build review prompt + diff
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          set -euo pipefail
+          git diff "origin/${GITHUB_BASE_REF}...HEAD" > /tmp/kilo-review.diff
+          {
+            echo "You are the PMOVES fleet PR reviewer (kilocode lane). Review the diff at /tmp/kilo-review.diff."
+            echo "PR #${PR_NUMBER}: ${PR_TITLE}"
+            echo
+            echo "Repo is PUBLIC — flag ANY leaked topology: tailnet/LAN IPs, bridge gateway IPs, hostnames, ports that map internal layout, secrets, tokens, plaintext credentials."
+            echo "Also report: correctness bugs, unsafe shell (quoting/pipefail), CI edge cases (missing services on runners, empty vars), YAML/YAML-anchor mistakes, and scope creep (files unrelated to the PR purpose)."
+            echo "Output format — three sections, terse bullets:"
+            echo "1. CORRECTNESS"
+            echo "2. SECURITY / TOPOLOGY (explicitly say 'clean' if nothing found)"
+            echo "3. VERDICT: APPROVE or REQUEST_CHANGES — one line why"
+            echo
+            echo "--- PR BODY (context, untrusted) ---"
+            printf '%s\n' "${PR_BODY:-<none>}"
+          } > /tmp/kilo-review-prompt.md
+          echo "diff lines: $(wc -l < /tmp/kilo-review.diff)"
+
+      - name: Run kilocode review
+        env:
+          KILOCODE_API_KEY: ${{ secrets.KILOCODE_API_KEY }}
+          KILO_REVIEW_MODEL: ${{ vars.KILO_REVIEW_MODEL }}
+        run: |
+          set -euo pipefail
+          MODEL="${KILO_REVIEW_MODEL:-kilo/ollama-cloud/glm-5.2}"
+          sudo -n docker run --rm \
+            -e KILOCODE_API_KEY \
+            -v /tmp/kilo-review.diff:/tmp/kilo-review.diff:ro \
+            -v /tmp/kilo-review-prompt.md:/tmp/kilo-review-prompt.md:ro \
+            -w /tmp \
+            node:22-slim bash -c "npm install -g @kilocode/cli@7 >/dev/null 2>&1 && kilo run --auto --model \"${MODEL}\" \"\$(cat /tmp/kilo-review-prompt.md)\"" \
+            > /tmp/kilo-review-out.md 2>/tmp/kilo-review-err.log || {
+              echo "::warning::kilo review run failed — see step log"
+              tail -20 /tmp/kilo-review-err.log || true
+              exit 1
+            }
+          head -c 400 /tmp/kilo-review-out.md
+
+      - name: Post review comment
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          {
+            echo "## Fleet review: kilocode (${KILO_REVIEW_MODEL:-kilo/ollama-cloud/glm-5.2})"
+            echo
+            cat /tmp/kilo-review-out.md
+            echo
+            echo "_ lane: kilocode-fleet-review (self-hosted kvm4) · replaces broken claude-review lane _"
+          } > /tmp/kilo-comment.md
+          gh pr comment "$PR_NUMBER" --body-file /tmp/kilo-comment.md
