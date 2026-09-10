@@ -89,7 +89,6 @@ if [ -f "$ENVF" ]; then
   # canonical keys defined earlier in the same file.
   set +H 2>/dev/null || true   # tolerate '!' in values (no history expansion)
   tmpf=$(mktemp)
-  n=0
   while IFS= read -r line || [ -n "$line" ]; do
     line="${line%$'\r'}"                       # normalize CRLF
     case "$line" in ''|\#*) continue;; esac
@@ -109,15 +108,53 @@ if [ -f "$ENVF" ]; then
       esc="${val//\'/\'\\\'\'}"                 # escape single quotes: ' -> '\''
       printf "%s='%s'\n" "$key" "$esc" >> "$tmpf"
     fi
-    n=$((n+1))
   done < "$ENVF"
-  set -a; set +u                               # auto-export; tolerate forward refs
+  set +u                                # tolerate forward refs
   # shellcheck source=/dev/null
   . "$tmpf"
-  set +a; set -u
+  set -u
   rm -f "$tmpf"
   set -H 2>/dev/null || true
-  echo "[claude-pmoves] loaded $n vars from $ENVF" >&2
+
+  # ---------------------------------------------------------------------------
+  # ALLOWLIST EXPORT — export only what the MCP roster references, not the file.
+  #
+  # This used to be `set -a; . "$tmpf"`, which auto-exported every env.shared key
+  # into the session. That is the root spreader of the demo-key disease: the
+  # session env then shadows the tier files for every child process, and docker
+  # compose gives shell env precedence over --env-file values — so a STALE value
+  # sitting in env.shared silently beat the fresh one the funnel had written into
+  # env.tier-*. Measured on Z890, 2026-09-09: kong ran on a demo-era JWT from
+  # exactly this path while postgrest enforced the fresh secret.
+  #
+  # crush-env.sh (the Crush twin) already follows the allowlist doctrine. This
+  # launcher derives its allowlist from the roster itself: every ${VAR} named in
+  # .claude/mcp.json (plus the per-node .mcp.json gateway entry) gets exported
+  # when env.shared can supply a non-empty value; nothing else crosses the
+  # boundary. Self-maintaining — new roster servers pick up their own vars.
+  # ---------------------------------------------------------------------------
+  roster_vars=""
+  for roster_file in "$ROOT/.claude/mcp.json" "$ROOT/.mcp.json"; do
+    [ -f "$roster_file" ] || continue
+    # Bracket-class form, not \$: GNU grep's ERE parser rejects \$ before \{
+    # (measured: 0 matches on the real roster) while [$][{] matches everywhere.
+    refs=$(grep -oE "[\$][{][A-Za-z_][A-Za-z0-9_]*" "$roster_file" 2>/dev/null | sed 's/^[$][{]//' || true)
+    [ -n "$refs" ] && roster_vars="$roster_vars$refs"$'\n'
+  done
+  exported=0
+  if [ -n "$roster_vars" ]; then
+    for v in $(printf '%s' "$roster_vars" | sort -u); do
+      # Indirect expansion: value of the shell var named by $v (set by the source
+      # above, NOT exported). Skip empties and anything the operator already
+      # exported — an explicit value beats the file, matching crush-env.sh.
+      val=$(eval 'printf %s "${'"$v"'-}"')
+      [ -n "$val" ] || continue
+      [ -n "$(printenv "$v" 2>/dev/null || true)" ] && continue
+      export "$v=$val"
+      exported=$((exported+1))
+    done
+  fi
+  echo "[claude-pmoves] exported $exported roster-referenced vars from $ENVF (allowlist; env.shared no longer bulk-exports)" >&2
 else
   echo "[claude-pmoves] WARN: $ENVF not found — MCP creds may be missing." >&2
   echo "[claude-pmoves]       run: make -C pmoves ensure-env-shared" >&2

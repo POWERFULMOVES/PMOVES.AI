@@ -69,9 +69,39 @@ if (Test-Path $envf) {
         }
         if (-not $changed) { break }
     }
+    # ---------------------------------------------------------------------------
+    # ALLOWLIST EXPORT — export only what the MCP roster references, not the file.
+    #
+    # This used to set EVERY parsed key into the process env. That is the root
+    # spreader of the demo-key disease: the session env then shadows the tier
+    # files for every child process, and docker compose gives shell env precedence
+    # over --env-file values — so a STALE env.shared value silently beat the fresh
+    # one the funnel had written into env.tier-*. Measured on Z890, 2026-09-09:
+    # kong ran on a demo-era JWT from exactly this path while postgrest enforced
+    # the fresh secret.
+    #
+    # crush-env.sh (the Crush twin) already follows the allowlist doctrine. The
+    # allowlist here is derived from the roster itself: every ${VAR} named in
+    # .claude\mcp.json (plus the per-node .mcp.json gateway entry) is exported
+    # when env.shared can supply a non-empty value; nothing else crosses the
+    # boundary. Self-maintaining — new roster servers pick up their own vars.
+    # ---------------------------------------------------------------------------
+    $rosterVars = @()
+    foreach ($rf in @((Join-Path $root '.claude\mcp.json'), (Join-Path $root '.mcp.json'))) {
+        if (Test-Path $rf) {
+            $raw = Get-Content -LiteralPath $rf -Raw
+            foreach ($m in [regex]::Matches($raw, '\$\{([A-Za-z_][A-Za-z0-9_]*)(?::-[^}]*)?\}')) {
+                $rosterVars += $m.Groups[1].Value
+            }
+        }
+    }
     $n = 0
-    foreach ($k in $vars.Keys) { [Environment]::SetEnvironmentVariable($k, $vars[$k], 'Process'); $n++ }
-    Write-Host "[claude-pmoves] loaded $n vars from $envf"
+    foreach ($k in ($rosterVars | Sort-Object -Unique)) {
+        if ($vars.Contains($k) -and $vars[$k] -ne '' -and -not [Environment]::GetEnvironmentVariable($k)) {
+            [Environment]::SetEnvironmentVariable($k, $vars[$k], 'Process'); $n++
+        }
+    }
+    Write-Host "[claude-pmoves] exported $n roster-referenced vars from $envf (allowlist; env.shared no longer bulk-exports)"
 } else {
     Write-Warning "[claude-pmoves] $envf not found - MCP creds may be missing. Run: make -C pmoves ensure-env-shared"
 }
