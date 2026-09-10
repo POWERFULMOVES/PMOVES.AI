@@ -211,7 +211,7 @@
       ]
     },
     "pmoves-cipher-local": {
-      "description": "Local agent memory on this node (cipher is published on loopback, so the fleet URL is unreachable cross-node)",
+      "description": "Local agent memory on this node (preferred over the fleet entry; since 2026-09-09 Z890 publishes cipher to the tailnet — per-node memory, one TS_<NODE> name per fleet-memory node)",
       "type": "sse",
       "url": "http://localhost:8105/mcp/sse",
       "headers": {

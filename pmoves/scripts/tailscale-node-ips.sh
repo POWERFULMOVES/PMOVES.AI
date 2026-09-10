@@ -44,6 +44,7 @@ pmoves_resolve_tailscale_node_ips() {
       pmoves-z890)     _pm_ts_set TS_Z890   "$ip" ;;
       pmoves-5090)     _pm_ts_set TS_5090   "$ip" ;;
       pmoves-laptop)   _pm_ts_set TS_4090   "$ip" ;;
+      pmoves-4090)     _pm_ts_set TS_4090   "$ip" ;;
       pmoves-spark)    _pm_ts_set TS_SPARK  "$ip" ;;
       pmoves-b850-*)   _pm_ts_set TS_B850   "$ip" ;;
       pmoves-kvm4-1)   _pm_ts_set TS_KVM4_1 "$ip" ;;
