@@ -24,7 +24,7 @@ Containers CAN reach their own bridge gateway. So a host-level socat relay on th
 `pmoves_api` gateway IP bridges the two worlds without touching the doctrine:
 
 ```
-container → the pmoves_api bridge gateway (discover dynamically: `docker network inspect pmoves_api --format '{{(index .IPAM.Config 0).Gateway}}'`):8105 (pmoves_api bridge gw)
+container → <PMOVES_API_GW>:8105 (pmoves_api bridge gw)
           → socat (pmoves-cipher-relay.service, host netns)
           → <Z890-TAILNET-IP>:8105  # resolve via `tailscale status` / ops vault — never hardcode (cipher-pmoves-shim on Z890, via tailnet)
 ```
@@ -33,7 +33,7 @@ container → the pmoves_api bridge gateway (discover dynamically: `docker netwo
 
 **kvm4-2** (canonical gateway-agent node):
 - `/etc/systemd/system/pmoves-cipher-relay.service` — enabled, active
-- `pmoves-gateway-agent` container recreated with `CIPHER_URL=http://the pmoves_api bridge gateway (discover dynamically: `docker network inspect pmoves_api --format '{{(index .IPAM.Config 0).Gateway}}'`):8105`
+- `pmoves-gateway-agent` container recreated with `CIPHER_URL=http://<PMOVES_API_GW>:8105`
   (all other env faithfully carried over from the previous container, captured via
   `docker inspect` before removal; image `pmoves/gateway-agent:latest` unchanged)
 - Verified: `GET /healthz` → `cipher: healthy` (2026-09-10 ~08:01 UTC)
@@ -62,14 +62,16 @@ container → the pmoves_api bridge gateway (discover dynamically: `docker netwo
 
 ### Durable repo fix
 
-`.github/workflows/deploy-gateway-agent.yml` (Deploy to VPS job) now sets
-`CIPHER_URL: http://the pmoves_api bridge gateway (discover dynamically: `docker network inspect pmoves_api --format '{{(index .IPAM.Config 0).Gateway}}'`):8105` at build + deploy, with comments pointing
-here. Precondition for CI redeploys: the relay unit must exist on the target
-node (this doc is the runbook).
+.github/workflows/deploy-gateway-agent.yml` (Deploy to VPS job) exports
+`CIPHER_URL=http://<PMOVES_API_GW>:8105` at deploy time after resolving the
+bridge gateway dynamically, with guards (fail fast if the pmoves_api network
+is missing on the runner or the gateway is not an IPv4 address). Precondition
+for CI redeploys: the relay unit must exist on the target node (this doc is
+the runbook).
 
 ## Security notes
 
-- The relay binds ONLY the `pmoves_api` bridge gateway IP (the pmoves_api bridge gateway (discover dynamically: `docker network inspect pmoves_api --format '{{(index .IPAM.Config 0).Gateway}}'`)), not
+- The relay binds ONLY the `pmoves_api` bridge gateway IP (<PMOVES_API_GW>), not
   0.0.0.0 — nothing outside the docker bridge can use it.
 - Cipher remains Bearer-token-gated; the relay adds no auth surface on Z890
   (it forwards to the same auth-gated endpoint).

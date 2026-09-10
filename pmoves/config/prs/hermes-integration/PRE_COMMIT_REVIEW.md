@@ -89,8 +89,8 @@ e84155799 docs(hermes-docs): add HERMES integration spec + atomic commits guide
 
 **Finding**: `AGNOTE4482PHI.t1.md` (line 121, 988) contains IP addresses from OTHER agents' session logs:
 - `(redacted tailnet IP — see ops vault)` (Z890-CLAUDE Tailscale claim, March 2026)
-- LAN IPs `.65`, `.234`, `.110`, `.144` (Z890 fleet network)
-- `172.17.0.1` (SPARK-KIMI Docker bridge IP)
+- LAN host octets on the Z890 fleet network (redacted — see ops vault)
+- a Docker bridge IP on SPARK-KIMI (redacted — default bridge, low sensitivity)
 
 **Status**: These are from PRE-EXISTING agent claims, NOT introduced by our 12 HERMES commits.
 

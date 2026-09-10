@@ -202,9 +202,6 @@ jobs:
           SUPABASE_SERVICE_KEY: ci-deploy-placeholder
         run: |
           cd pmoves
-          # Dynamic bridge-gateway discovery — no hardcoded topology in CI
-          PMOVES_API_GW=$(sudo -n docker network inspect pmoves_api --format '{{(index .IPAM.Config 0).Gateway}}')
-          echo "CIPHER_URL=http://${PMOVES_API_GW}:8105" >> "$GITHUB_ENV"
           touch env.shared env.shared.generated .env.generated .env.local \
             env.tier-data env.tier-api env.tier-llm env.tier-worker \
             env.tier-media env.tier-agent env.tier-ui env.tier-supabase
@@ -359,12 +356,18 @@ jobs:
           # host-level socat relay on the pmoves_api bridge gateway. The relay
           # unit (pmoves-cipher-relay.service) must exist on the target node —
           # see pmoves/docs/operations/CIPHER_RELAY_2026-09-10.md
-          CIPHER_URL: http://127.0.0.1:8105  # placeholder — overridden below by dynamic bridge-gw discovery
         run: |
           cd pmoves
-          # Dynamic bridge-gateway discovery — no hardcoded topology in CI
-          PMOVES_API_GW=$(sudo -n docker network inspect pmoves_api --format '{{(index .IPAM.Config 0).Gateway}}')
-          echo "CIPHER_URL=http://${PMOVES_API_GW}:8105" >> "$GITHUB_ENV"
+          # Dynamic bridge-gateway discovery (VPS relay topology — see
+          # pmoves/docs/operations/CIPHER_RELAY_2026-09-10.md). Guards: the
+          # network must exist on this self-hosted runner AND yield an IPv4
+          # gateway; otherwise fail fast rather than deploy a dead CIPHER_URL.
+          PMOVES_API_GW=$(sudo -n docker network inspect pmoves_api --format '{{(index .IPAM.Config 0).Gateway}}' 2>/dev/null) || true
+          if [ -z "$PMOVES_API_GW" ] || ! echo "$PMOVES_API_GW" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::pmoves_api bridge gateway not resolvable on this runner (network missing or no IPv4 gw) — relay precondition failed"
+            exit 1
+          fi
+          export CIPHER_URL="http://${PMOVES_API_GW}:8105"
           touch env.shared env.shared.generated .env.generated .env.local \
             env.tier-data env.tier-api env.tier-llm env.tier-worker \
             env.tier-media env.tier-agent env.tier-ui env.tier-supabase
@@ -486,9 +489,6 @@ jobs:
         shell: bash
         run: |
           cd pmoves
-          # Dynamic bridge-gateway discovery — no hardcoded topology in CI
-          PMOVES_API_GW=$(sudo -n docker network inspect pmoves_api --format '{{(index .IPAM.Config 0).Gateway}}')
-          echo "CIPHER_URL=http://${PMOVES_API_GW}:8105" >> "$GITHUB_ENV"
           touch env.shared env.shared.generated .env.generated .env.local \
             env.tier-data env.tier-api env.tier-llm env.tier-worker \
             env.tier-media env.tier-agent env.tier-ui env.tier-supabase
@@ -551,9 +551,6 @@ jobs:
         shell: bash
         run: |
           cd pmoves
-          # Dynamic bridge-gateway discovery — no hardcoded topology in CI
-          PMOVES_API_GW=$(sudo -n docker network inspect pmoves_api --format '{{(index .IPAM.Config 0).Gateway}}')
-          echo "CIPHER_URL=http://${PMOVES_API_GW}:8105" >> "$GITHUB_ENV"
           touch env.shared env.shared.generated .env.generated .env.local \
             env.tier-data env.tier-api env.tier-llm env.tier-worker \
             env.tier-media env.tier-agent env.tier-ui env.tier-supabase
