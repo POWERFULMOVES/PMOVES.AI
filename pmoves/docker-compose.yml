@@ -3644,6 +3644,13 @@ services:
     - QDRANT_URL=http://qdrant:6333
     - QDRANT_API_KEY=${QDRANT__API_KEY:-}
     - QDRANT_COLLECTION=pmoves_cipher_memory
+    # Per-agent token resolution (auth.ts): cipher_<uuid> tokens are validated
+    # against Supabase cipher_agent_tokens from inside this container.
+    - SUPABASE_REST_URL=${SUPABASE_REST_URL:-http://supabase-kong:8000/rest/v1}
+    - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-${SERVICE_ROLE_KEY:-}}
+    - NEO4J_URL=${NEO4J_URL:-bolt://neo4j:7687}
+    - NEO4J_USER=${NEO4J_USER:-neo4j}
+    - NEO4J_PASSWORD=${NEO4J_PASSWORD:-}
     - EMBEDDING_MODEL=tensorzero::embedding_model_name::qwen3_embedding_4b_local
     - EMBEDDING_DIM=2560
     - PMOVES_NETWORKS=pmoves_app,pmoves_data,pmoves_bus,pmoves_external,pmoves_api
