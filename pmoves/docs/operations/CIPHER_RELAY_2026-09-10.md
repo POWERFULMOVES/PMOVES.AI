@@ -41,7 +41,7 @@ container → <PMOVES_API_GW>:8105 (pmoves_api bridge gw)
 **kvm4-1**:
 - Same relay unit, enabled + active
 - Image transferred kvm4-2 → kiloclaw → kvm4-1 (`docker save | gzip`, 66 MB
-  compressed; kvm4-1 has no registry pull access to the CI-built image)
+  compressed; this node cannot pull the CI-built image from the registry — see ops vault)
 - `pmoves-gateway-agent` deployed on `pmoves_api` + `pmoves_app` (no `pmoves_bus`
   on this node — NATS integration is optional and degrades gracefully)
 - Same env minus the node-specific TAILSCALE_API_KEY (kvm4-2's key was not
@@ -80,7 +80,7 @@ the runbook).
 ## Operator follow-ups
 
 1. ACL: allow tagged KVMs → kvm2 A0 port (32768) if cross-node Agent Zero is wanted
-2. Stand up TensorZero on kvm4-1 (node v20 present, 77 GB free, 12 GB avail RAM)
+2. Stand up TensorZero on kvm4-1 (sufficient free disk/RAM verified at deploy time — see ops vault for node specs)
 3. Mint per-agent cipher tokens (Supabase `cipher_agent_tokens`) for real
    authenticated MCP use — the relay is transport-only
 4. Consider promoting the socat relay into the compose stack as an official
