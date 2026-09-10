@@ -5,7 +5,7 @@
 # CLI (KiloCode coding plan) on a self-hosted runner.
 #
 # Model options per lane need:
-#   KILO_REVIEW_MODEL (repo variable, default: glm-5.2)
+#   KILO_REVIEW_MODEL (repo variable, default: ollama-cloud/glm-5.2)
 #   KILOCODE_API_KEY  (repo secret — coding-plan key; NOT checked in)
 #
 # Runner requirements (kvm4 lane, label: kvm4):
@@ -89,13 +89,13 @@ jobs:
           KILO_REVIEW_MODEL: ${{ vars.KILO_REVIEW_MODEL }}
         run: |
           set -euo pipefail
-          MODEL="${KILO_REVIEW_MODEL:-glm-5.2}"
+          MODEL="${KILO_REVIEW_MODEL:-ollama-cloud/glm-5.2}"
           sudo -n docker run --rm \
             -e KILOCODE_API_KEY \
             -v /tmp/kilo-review.diff:/tmp/kilo-review.diff:ro \
             -v /tmp/kilo-review-prompt.md:/tmp/kilo-review-prompt.md:ro \
             -w /tmp \
-            node:22-slim bash -c "npm install -g @kilocode/cli@7 >/dev/null 2>&1 && kilo run --auto --model \"${MODEL}\" \"\$(cat /tmp/kilo-review-prompt.md)\"" \
+            node:22-slim bash -c "npm install -g @kilocode/cli@7.4.22 >/dev/null 2>&1 && kilo run --auto --model \"${MODEL}\" \"\$(cat /tmp/kilo-review-prompt.md)\"" \
             > /tmp/kilo-review-out.md 2>/tmp/kilo-review-err.log || {
               echo "::warning::kilo review run failed — see step log"
               tail -20 /tmp/kilo-review-err.log || true
@@ -110,7 +110,7 @@ jobs:
         run: |
           set -euo pipefail
           {
-            echo "## Fleet review: kilocode (${KILO_REVIEW_MODEL:-glm-5.2})"
+            echo "## Fleet review: kilocode (${KILO_REVIEW_MODEL:-ollama-cloud/glm-5.2})"
             echo
             cat /tmp/kilo-review-out.md
             echo
