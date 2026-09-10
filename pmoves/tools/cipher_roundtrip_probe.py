@@ -65,18 +65,26 @@ def main() -> int:
     print(f"initialize OK server={server.get('name')} v{server.get('version')}")
 
     record = (
-        "Z890 Crush cipher access restored (2026-09-09). Symptom: "
-        "pmoves-cipher-local MCP Unauthorized because the live crush.json "
-        "predated the generator's Bearer header fix. Reproducible restore, "
-        "no hardcoded paths: (1) CIPHER_API_TOKEN lives in pmoves/env.shared "
-        "via secrets-funnel; (2) regenerate with "
-        "`python3 -m pmoves.tools.mini_cli crush setup`; (3) launch via "
-        "crush-pmoves so the process env carries the token for the "
-        "${CIPHER_API_TOKEN:-} placeholder; (4) verify with "
-        "`python pmoves/tools/cipher_preflight.py` which now authenticates. "
-        "Fleet entry pmoves-cipher (${TS_Z890}:8105) stays gated until the "
-        "tailnet hostname resolves in env. Cipher is fleet-wide memory for "
-        "ALL PMOVES agents per agents.md, not a single-node tool."
+        "Cipher fleet restore recipe v2 (2026-09-09, Z890) for ALL PMOVES "
+        "agents and peer nodes. Symptom: MCP 401/Unauthorized and chronic "
+        "REST 401s. Root cause: session launchers export demo-era Supabase "
+        "keys and compose gives shell env precedence over --env-file, so "
+        "kong keyauth held a demo JWT (iss:supabase-demo) while postgrest "
+        "enforced a different secret. Cure: (1) write freshly-signed "
+        "postgrest-trusted HS256 service/anon keys (iss:supabase, role "
+        "claims) into pmoves/env.shared plus all env.tier-* and generated "
+        "files; (2) leave SUPABASE_SECRET_KEY and SUPABASE_PUBLISHABLE_KEY "
+        "blank so kong-entrypoint drops duplicate keyauth entries; (3) "
+        "recreate kong env-scrubbed via python subprocess with filtered "
+        "os.environ (raw shell recreates re-inject demo keys); (4) set "
+        "CIPHER_BIND=0.0.0.0 in env.shared for the tailnet fleet endpoint "
+        "${TS_Z890}:8105; (5) mint per-agent identity with `make -C pmoves "
+        "cipher-mint-token AGENT=<id>` and store CIPHER_<ID>_TOKEN in "
+        "env.shared - per-agent mode REQUIRES agentId on every call and "
+        "rejects the '*' wildcard; (6) verify with cipher_preflight.py, "
+        "qdrant-verify-cipher, cipher-memory-smoke, then this probe. "
+        "Peers: pull the parent branch for SKILL.md + compose wiring; the "
+        "upstream-able Accept-Profile fix is Pmoves-cipher PR #19."
     )
     stored = call({
         "jsonrpc": "2.0", "method": "tools/call", "params": {
@@ -85,7 +93,7 @@ def main() -> int:
                 "content": record,
                 "agentId": AGENT_ID,
                 "category": "decision",
-                "tags": [NODE_TAG, "cipher", "memory", "access-restore"],
+                "tags": [NODE_TAG, "cipher", "memory", "access-restore", "peer-handoff", "fleet"],
             },
         }, "id": 2,
     }, token)
@@ -111,12 +119,14 @@ def main() -> int:
             "arguments": {
                 "agentId": AGENT_ID,
                 "summary": (
-                    "Restored cipher memory access on Z890: regenerated "
-                    "crush.json with Bearer auth, fixed cipher_preflight to "
-                    "authenticate (14/14 tests), verified store+search "
-                    "round-trip over POST /mcp. Next lanes: fleet cipher "
-                    "bind on KVM, SKILL.md fleet-wide rewrite, agent-zero "
-                    "MCP token, venv+VSCode+Pinokio review."
+                    "Cipher fleet restore complete on Z890 (2026-09-09): "
+                    "freshly-signed postgrest-trusted Supabase keys, kong "
+                    "env-scrubbed, CIPHER_BIND=0.0.0.0 serving the tailnet "
+                    "at TS_Z890:8105, crush-spark per-agent token minted and "
+                    "validated end to end, Neo4j graph wired. Recipe v2 "
+                    "stored as a peer-handoff memory; SKILL.md carries the "
+                    "durable fleet doc. Next: funnel freshness-ordering fix, "
+                    "launcher env-export hygiene, agent-zero MCP token."
                 ),
                 "harness": "crush",
                 "model": "glm-5.3-flash",
