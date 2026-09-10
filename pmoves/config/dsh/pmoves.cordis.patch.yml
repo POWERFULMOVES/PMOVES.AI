@@ -53,3 +53,17 @@
         # Docker-DNS URL (http://notebook-mcp:8092/mcp) via NOTEBOOK_MCP_URL.
         url: !!js 'process.env.NOTEBOOK_MCP_URL || "http://localhost:8207/mcp"'
         failOnStartupError: false
+
+    # Wealth — Firefly III (list/search/create transactions). Host-published default
+    # :8208 (wealth-mcp publishes 127.0.0.1:8208 → 8092); in-network dsh overrides to
+    # http://wealth-mcp:8092/mcp via WEALTH_MCP_URL. Firefly needs a Bearer PAT — a
+    # per-tenant PAT from the harness wins; FIREFLY_ACCESS_TOKEN is the baseline.
+    - id: mcp-wealth
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        serverName: wealth
+        transport: streamable-http
+        url: !!js 'process.env.WEALTH_MCP_URL || "http://localhost:8208/mcp"'
+        headers:
+          Authorization: !!js '`Bearer ${process.env.FIREFLY_ACCESS_TOKEN}`'
+        failOnStartupError: false
