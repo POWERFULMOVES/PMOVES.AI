@@ -121,7 +121,7 @@ jobs:
           WGER_ADMIN_PASSWORD: ci-build-placeholder
           WGER_DB_PASSWORD: ci-build-placeholder
           WGER_SECRET_KEY: ci-build-placeholder
-          NATS_URL: nats://nats:pmoves@nats:4222
+          NATS_URL: ${{ secrets.NATS_URL }}
           PRESIGN_SHARED_SECRET: ci-build-placeholder
           SUPABASE_SERVICE_KEY: ci-build-placeholder
         run: |
@@ -197,7 +197,7 @@ jobs:
           WGER_DB_PASSWORD: ci-deploy-placeholder
           WGER_SECRET_KEY: ci-deploy-placeholder
           GATEWAY_AGENT_PORT: "8111"
-          NATS_URL: nats://nats:pmoves@nats:4222
+          NATS_URL: ${{ secrets.NATS_URL }}
           PRESIGN_SHARED_SECRET: ci-deploy-placeholder
           SUPABASE_SERVICE_KEY: ci-deploy-placeholder
         run: |
@@ -317,7 +317,7 @@ jobs:
           WGER_ADMIN_PASSWORD: ci-build-placeholder
           WGER_DB_PASSWORD: ci-build-placeholder
           WGER_SECRET_KEY: ci-build-placeholder
-          NATS_URL: nats://nats:pmoves@nats:4222
+          NATS_URL: ${{ secrets.NATS_URL }}
           PRESIGN_SHARED_SECRET: ci-build-placeholder
           SUPABASE_SERVICE_KEY: ci-build-placeholder
         run: |
@@ -348,7 +348,7 @@ jobs:
           WGER_ADMIN_PASSWORD: ci-deploy-placeholder
           WGER_DB_PASSWORD: ci-deploy-placeholder
           WGER_SECRET_KEY: ci-deploy-placeholder
-          NATS_URL: nats://nats:pmoves@nats:4222
+          NATS_URL: ${{ secrets.NATS_URL }}
           PRESIGN_SHARED_SECRET: ci-deploy-placeholder
           SUPABASE_SERVICE_KEY: ci-deploy-placeholder
           # Cipher lives on the Z890 GPU node (tailnet; resolve via ops vault); the
