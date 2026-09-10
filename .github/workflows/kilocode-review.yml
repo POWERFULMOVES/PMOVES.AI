@@ -86,6 +86,7 @@ jobs:
       - name: Run kilocode review
         env:
           KILOCODE_API_KEY: ${{ secrets.KILOCODE_API_KEY }}
+          KILO_API_KEY: ${{ secrets.KILOCODE_API_KEY }}  # same JWT — this is the var that unlocks the kilo/* model catalog
           KILO_REVIEW_MODEL: ${{ vars.KILO_REVIEW_MODEL }}
         run: |
           set -euo pipefail
