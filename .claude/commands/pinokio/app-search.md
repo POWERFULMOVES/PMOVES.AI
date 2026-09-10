@@ -18,8 +18,11 @@ Search the local Pinokio installation for apps matching a query. Uses `pterm sea
 ## Implementation
 
 ```bash
+# Pinokio root is a PER-NODE value (C: here, D: on other nodes), so derive it.
+# pinokio-root.sh exits 1 when it had to guess -- see .claude/scripts/pinokio-root.sh
+PTERM="$(bash .claude/scripts/pinokio-root.sh --exe)"
 # Base search (JSON output)
-D:/pinokio/bin/npm/pterm.cmd search "{{args.query}}" 2>&1 | python -c "
+"$PTERM" search "{{args.query}}" 2>&1 | python -c "
 import sys, json
 d = json.load(sys.stdin)
 apps = d.get('apps', [])
@@ -41,7 +44,7 @@ for app in apps[:20]:
 
 ## Notes
 
-- On Windows, always use `D:/pinokio/bin/npm/pterm.cmd` (the `.cmd` shim), not bare `pterm`
+- On Windows, always use `"$PTERM"` (the `.cmd` shim), not bare `pterm`
 - Output is JSON; parse with `.get('apps',[])`
 - State priorities: `running=True` > `ready=True` > `score descending`
 - Registry search (remote): `pterm registry search <query>` — separate command

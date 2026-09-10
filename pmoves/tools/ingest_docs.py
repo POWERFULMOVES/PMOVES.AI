@@ -35,6 +35,12 @@ PRIORITY_PATTERNS = [
     "pmoves/docs/PMOVESCHIT/*.md",
     "pmoves/docs/services/README.md",
     "pmoves/docs/services/*/README.md",
+    # Operations runbooks. Added 2026-09-02 (B850): a --priority-only run
+    # matched 279 files and ZERO from pmoves/docs/operations/, so every
+    # runbook in the fleet -- bring-up, credential, recovery, and now
+    # CIPHER_AUTH_RUNBOOK.md -- was unreachable from Hi-RAG unless someone
+    # ran the full-repo rglob, which also drags in every submodule.
+    "pmoves/docs/operations/*.md",
     "pmoves/configs/tac_trees/*.yaml",
     "docs/*.md",
     "docs/architecture/*.md",

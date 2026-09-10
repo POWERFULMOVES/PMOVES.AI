@@ -32,7 +32,7 @@ curl -sS http://localhost:8089/hirag/query -H 'content-type: application/json' -
 
 # GPU (preferred)
 docker compose --profile gpu --profile legacy up -d hi-rag-gateway-gpu
-curl -sS http://localhost:8090/hirag/query -H 'content-type: application/json' -d '{"query":"hello","namespace":"pmoves","k":3}' | jq .
+curl -sS http://localhost:8187/hirag/query -H 'content-type: application/json' -d '{"query":"hello","namespace":"pmoves","k":3}' | jq .
 ```
 
 Notes

@@ -1,7 +1,7 @@
 - name: Default
   chat:
     provider: tensorzero
-    name: tensorzero::function_name::agent_zero
+    name: tensorzero::model_name::chat_zai_glm53
     api_base: http://tensorzero-gateway:3000/openai/v1
     ctx_length: 128000
     ctx_history: 0.7
@@ -13,7 +13,7 @@
     kwargs: {}
   utility:
     provider: tensorzero
-    name: tensorzero::function_name::agent_zero
+    name: tensorzero::model_name::chat_zai_glm53
     api_base: http://tensorzero-gateway:3000/openai/v1
     ctx_length: 128000
     ctx_input: 0.7

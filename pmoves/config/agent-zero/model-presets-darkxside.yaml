@@ -11,7 +11,7 @@
 - name: Default
   chat:
     provider: zai_coding
-    name: glm-5-turbo
+    name: glm-5.3
     api_base: ''
     ctx_length: 128000
     ctx_history: 0.7
@@ -23,7 +23,7 @@
     kwargs: {}
   utility:
     provider: zai_coding
-    name: glm-5-turbo
+    name: glm-5.3
     api_base: ''
     ctx_length: 128000
     ctx_input: 0.7

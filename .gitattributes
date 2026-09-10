@@ -21,6 +21,14 @@ Dockerfile text eol=lf
 
 # Append-only audit trails — union-merge so concurrent branch appends never conflict
 .claude/hooks/damage-control/known-roads.jsonl merge=union eol=lf
+# The claim register is the most append-only file in this repo and was the one
+# NOT covered. Two nodes filing rows on two branches conflicted on the last
+# line every time, and the resolution is always the same: keep both. Doing it
+# by hand invites `--ours`/`--theirs`, either of which SILENTLY DROPS another
+# node's provenance row -- and the collision gate now refuses the shell writes
+# a manual fixup would need, so the conflict had no sanctioned resolution at
+# all. Union is the policy the register already states; this makes git enforce it.
+pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md merge=union eol=lf
 
 # Machine-emitted, never hand-edited. `compose-split` regenerates all eight from
 # docker-compose.yml (Makefile: COMPOSE_SPLIT_FILES), and compose-split-check

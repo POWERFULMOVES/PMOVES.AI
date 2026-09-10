@@ -200,14 +200,51 @@ def _get_fernet() -> Optional[object]:
     if Fernet is None:
         print("WARNING: cryptography not installed — tokens stored unencrypted.", file=sys.stderr)
         return None
-    key_hex = _env("VAULT_ENC_KEY")
-    if not key_hex:
+    key_raw = _env("VAULT_ENC_KEY")
+    if not key_raw:
         print("WARNING: VAULT_ENC_KEY not set — tokens stored unencrypted.", file=sys.stderr)
         return None
-    # VAULT_ENC_KEY is hex; Fernet needs base64-encoded 32-byte key
+    # Fernet needs a base64url-encoded 32-byte key. VAULT_ENC_KEY's declared
+    # spec is hex -- bootstrap/registry.json generates it as
+    # {"type": "random_hex", "length": 32} -- but the value on a node may not
+    # match that spec, and a mismatch here is EXPENSIVE to fix at the source.
+    #
+    # That key belongs to supabase-pooler (Supavisor), which the registry names
+    # "Vault encryption key (Supavisor)". Rotating it to satisfy THIS tool means
+    # re-keying a running pooler's credential vault. Measured 2026-09-01: the
+    # value was 48 chars and NOT hex, `bytes.fromhex()` raised, the exception was
+    # swallowed, and the flow reported "Encryption is unavailable (set
+    # VAULT_ENC_KEY and install 'cryptography')" -- with the key set and
+    # cryptography installed. The message named neither the real cause nor the
+    # real fix, so a completed OAuth consent was discarded.
+    #
+    # So: accept what is there rather than demand a rotation. Hex first (the
+    # declared spec, and forward-compatible if the value is ever regenerated to
+    # match it), then base64url, then raw bytes. Whatever survives is padded or
+    # truncated to 32 as before.
     import base64
+
+    # VAULT_ENC_KEY_DECODE_V1 -- keep identical in all three consumers:
+    #   pmoves/tools/yt_oauth_flow.py
+    #   pmoves/services/yt-cookie-writer/main.py
+    #   pmoves/services/yt-cookie-refresher/supabase_client.py
+    def _decode_key(raw: str) -> bytes:
+        try:
+            return bytes.fromhex(raw)
+        except ValueError:
+            pass
+        try:
+            # validate=False: tolerate a value that is base64-ish with stray
+            # characters rather than failing closed on a usable key.
+            padded = raw + "=" * (-len(raw) % 4)
+            decoded = base64.urlsafe_b64decode(padded)
+            if decoded:
+                return decoded
+        except Exception:
+            pass
+        return raw.encode("utf-8")
     try:
-        key_bytes = bytes.fromhex(key_hex)
+        key_bytes = _decode_key(key_raw)
         if len(key_bytes) < 16:
             key_bytes = key_bytes.ljust(32, b"\x00")
         elif len(key_bytes) < 32:
@@ -217,7 +254,8 @@ def _get_fernet() -> Optional[object]:
         fernet_key = base64.urlsafe_b64encode(key_bytes)
         return Fernet(fernet_key)
     except Exception as e:
-        print(f"WARNING: VAULT_ENC_KEY invalid ({e}) — tokens stored unencrypted.", file=sys.stderr)
+        print(f"WARNING: VAULT_ENC_KEY unusable after hex/base64/raw decode ({e})"
+              " — tokens stored unencrypted.", file=sys.stderr)
         return None
 
 

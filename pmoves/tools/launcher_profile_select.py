@@ -209,11 +209,18 @@ def main(argv: list[str] | None = None) -> int:
         if args.write:
             hermes_profile_dir.mkdir(parents=True, exist_ok=True)
             with open(env_template_path, "w", encoding="utf-8") as f:
-                f.write(env_content)  # lgtm[py/clear-text-storage-sensitive-data] -- env_content holds secret KEY NAMES only (render_env_template), values are always left blank for the operator to fill in
+                # Not a secret write: render_env_template() emits `f"{secret}="` per key —
+                # key NAMES only, values always left blank for the operator to fill in.
+                # CodeQL py/clear-text-storage-sensitive-data flags it regardless; that is
+                # triaged in the code scanning UI (inline pragmas do not suppress alerts).
+                f.write(env_content)
             print(f"Wrote .env template: {env_template_path}")
         else:
             print(f"\nDry run: would write .env template to {env_template_path}")
-            print(env_content)  # lgtm[py/clear-text-logging-sensitive-data] -- env_content holds secret KEY NAMES only (render_env_template), values are always left blank for the operator to fill in
+            # Same reasoning as the write above: env_content is key NAMES with blank
+            # values, so this dry-run echo cannot disclose a secret.
+            # CodeQL py/clear-text-logging-sensitive-data flags it regardless.
+            print(env_content)
         return 0
 
     # ─────────────────────────────────────────────────────────────────────
@@ -240,7 +247,10 @@ def main(argv: list[str] | None = None) -> int:
     print(f"Wrote Hermes config: {hermes_config_path}")
 
     with open(env_template_path, "w", encoding="utf-8") as f:
-        f.write(env_content)  # lgtm[py/clear-text-storage-sensitive-data] -- env_content holds secret KEY NAMES only (render_env_template), values are always left blank for the operator to fill in
+        # Same reasoning as the --env-template-only branch above: env_content is key
+        # NAMES with blank values (render_env_template), never secret material.
+        # CodeQL py/clear-text-storage-sensitive-data flags it regardless.
+        f.write(env_content)
     print(f"Wrote .env template: {env_template_path}")
 
     print("\nNext steps:")

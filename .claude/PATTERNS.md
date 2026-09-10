@@ -270,7 +270,7 @@ curl -X POST "http://pmoves-spark:8080/mcp/execute" \
 ## Pinokio pterm (Windows)
 
 - Resolve path: `GET http://127.0.0.1:42000/pinokio/path/pterm`
-- Windows binary: `D:/pinokio/bin/npm/pterm.cmd` (use `.cmd` shim, not bare `pterm`)
+- Windows binary: `<PINOKIO_ROOT>/bin/npm/pterm.cmd` (use `.cmd` shim, not bare `pterm`)
 - P7 Ask AI: drawer on app Run page (not a separate dashboard tab)
 - Agent Interpreter: auto-discovers apps via `pterm search` + `SKILL.md` files
 - subprocess encoding: always `encoding="utf-8", errors="replace"` for pterm output on Windows
@@ -1096,3 +1096,27 @@ because the whole point is that you are abandoning a checkout, not a commit.
 
 Related: [[Blank Is Not Absent]] — same family, in that the dangerous state and
 the benign state are visually identical at the place you habitually look.
+
+## Python/TS Packaging — Cut Every Agent as a Locked Cassette (2026-09-03)
+
+Canonical discipline lives in the **`uv-cassettes` skill** (`.claude/skills/uv-cassettes/`).
+Invoke it whenever you add or edit a service image, MCP server, A0/dsh plugin, or standalone
+tool — anywhere Python deps are declared.
+
+DARKXSIDE canon: each agent/plugin is a **cassette** the platform (Soundwave / P7) ejects into
+any layer; reproducible **locked** packaging is what makes it play identically in **sandbox, on
+host, and deployed**. Lockless deps = a cassette that plays differently in each deck.
+
+- **Service images:** uv + a committed `requirements.lock` (botz-gateway / ffmpeg-whisper
+  pattern): `uv pip install --system --constraint requirements.lock -r requirements.txt`.
+  `requirements.txt` bounds the major (`mcp>=1.2,<2` — never a bare `>=`); the lock pins direct
+  + transitive. **70 of 73 service Dockerfiles are lockless** — the same break can recur on any.
+- **Single-file agents (PEP 723 / IndyDevDan):** inline `# /// script … dependencies = […] ///`
+  run via `uv run --script`; `uv lock --script` for a frozen drop. The file IS the cassette.
+- **TypeScript:** the pnpm/bun lockfile is the equivalent; install `--frozen-lockfile`.
+- **Deploy** through Make (`build-svc` / `recreate-svc` / `rebuild-svc SVC=<name>`), never a
+  hand-run `docker compose --env-file` (guard-blocked) or `docker run` (skips the env pipeline).
+
+Proof it's load-bearing: notebook-mcp shipped unpinned `mcp>=1.2.0`; a rebuild pulled mcp 2.x
+(FastMCP→MCPServer) → crash-loop. See [[Check which compose file is LIVE before editing a stanza]]
+(same session, sibling lesson) and memory `vision_agents_as_cassettes_uv_portability`.
