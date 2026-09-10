@@ -57,6 +57,12 @@ PLACEHOLDER_VALUES: frozenset[str] = frozenset({
     "example.com",
 })
 
+# Whole-value unexpanded variable references. `${VAR}`, `${VAR:-default}` and
+# bare `$VAR` forms; an interior match (`sk-live-$OTHER`) stays allowed.
+_UNEXPANDED_REF_RE = re.compile(
+    r"\$\{[A-Za-z_][A-Za-z0-9_]*(?::-[^}]*)?\}|\$[A-Za-z_][A-Za-z0-9_]*"
+)
+
 
 def normalize_env_value(value: str) -> str:
     """Strip whitespace and unquote matching outer single/double quotes.
@@ -86,6 +92,18 @@ def is_placeholder(value: str | None) -> bool:
     normalized = normalize_env_value(value)
     lowered = normalized.lower()
     if not lowered or lowered in PLACEHOLDER_VALUES:
+        return True
+    # Unexpanded compose/shell variable references: `${JWT_SECRET}`, `$JWT_SECRET`,
+    # or a `${VAR:-default}` fallback form. These are interpolation SOURCE text,
+    # not secrets. Measured on Z890, 2026-09-09: env.shared held
+    # SUPABASE_JWT_SECRET=`${JWT_SECRET}` (13 chars) where a fresh 58-char value
+    # belonged — the ref was chit-exported verbatim into the CGP, secrets_sync's
+    # non-empty check accepted it as usable, and the write-back spread it across
+    # every tier file (the "JWT went 58 -> 13" reversion). env.shared legitimately
+    # carries refs for NON-secret interpolation keys, so this detection is only
+    # correct inside the secrets pipe — which is the only consumer set below
+    # (sync/hydrate/encode), all of which handle secret values.
+    if _UNEXPANDED_REF_RE.fullmatch(normalized):
         return True
     # Pattern: your_* prefix (any position), placeholder_* prefix
     if "your_" in lowered:

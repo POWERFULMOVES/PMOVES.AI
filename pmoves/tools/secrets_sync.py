@@ -12,6 +12,7 @@ from typing import Dict, List, Mapping, Sequence
 import yaml
 
 from pmoves.chit.codec import decode_secret_map, load_cgp
+from pmoves.tools._secrets_common import is_placeholder
 from pmoves.tools.secrets_self_generated import fill_self_generated, SELF_GENERATED, _SUPABASE_JWT_KEYS
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -130,16 +131,33 @@ def _parse_target(data: Mapping) -> Target:
     return Target(file=file_name, key=key)
 
 
-def _first_usable(secrets: Mapping[str, str], entry: "Entry") -> str | None:
+def _first_usable(
+    secrets: Mapping[str, str],
+    entry: "Entry",
+    nonvalue_out: set[str] | None = None,
+) -> str | None:
     """First of label-then-aliases whose value is non-empty after stripping.
 
     Returns None when every candidate is absent OR present-but-blank, so callers
     can treat "delivered as empty" and "never delivered" identically — which is how
     every consumer of a line-based env file already treats them.
+
+    A value that parses as non-empty but is not a secret — an unexpanded
+    ``${OTHER_VAR}`` reference or a ``PLACEHOLDER_*`` literal — is skipped the same
+    way, and its key recorded in ``nonvalue_out`` so the caller can warn. Measured
+    on Z890, 2026-09-09: the CGP carried ``SUPABASE_JWT_SECRET=${JWT_SECRET}``
+    (13 chars) from an unexpanded write, this function accepted it as usable, and
+    the merge write-back overwrote fresh 58-char values in env.shared and every
+    tier file. A ref is a pointer to a value, not a value; fail toward preserving
+    what the target already holds (merge mode) and naming the gap loudly.
     """
     for key in (entry.label, *entry.aliases):
         value = secrets.get(key)
         if value is not None and value.strip():
+            if is_placeholder(value):
+                if nonvalue_out is not None:
+                    nonvalue_out.add(key)
+                continue
             return key
     return None
 
@@ -162,6 +180,7 @@ def build_outputs(
     outputs: Dict[str, Dict[str, str]] = defaultdict(dict)
     missing: List[str] = []
     too_short: List[str] = []
+    nonvalues: set[str] = set()
     for entry in entries:
         # Honor legacy aliases: an operator may supply a deprecated name (e.g.
         # MCP_SERVER_TOKEN) that maps to a canonical label. Emit the canonical
@@ -182,7 +201,7 @@ def build_outputs(
         # as unset, but `${KEY?}` accepts it, and anything that SOURCES an env file
         # and exports it re-exports the blank — where shell environment then beats
         # every `--env-file`. An empty secret is not a secret; treat it as absent.
-        source_key = _first_usable(secrets, entry)
+        source_key = _first_usable(secrets, entry, nonvalues)
         if source_key is None:
             if entry.required:
                 missing.append(entry.label)
@@ -223,6 +242,17 @@ def build_outputs(
             "one. The value is present but shorter than its consumer accepts, so "
             "emitting it would produce a service that starts and then fails every "
             "request.",
+            file=sys.stderr,
+        )
+    if nonvalues:
+        print(
+            "WARNING: withheld "
+            + str(len(nonvalues))
+            + " non-value secret(s) (unexpanded ${VAR} refs or placeholder "
+            "literals): "
+            + ", ".join(sorted(nonvalues))
+            + " -- targets keep their existing values in --merge mode; rotate "
+            "with `make -C pmoves secrets-rotate KEY=<NAME>` to mint real ones.",
             file=sys.stderr,
         )
     if missing and strict:
