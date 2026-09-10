@@ -92,13 +92,13 @@ jobs:
           set -euo pipefail
           MODEL="${KILO_REVIEW_MODEL:-kilo/ollama-cloud/glm-5.2}"
           sudo -n docker run --rm \
-            -e KILOCODE_API_KEY \
-            -e KILO_API_KEY \
+            -e KILOCODE_API_KEY="${KILOCODE_API_KEY}" \
+            -e KILO_API_KEY="${KILO_API_KEY}" \
             -e KILOCODE_DEFAULT_MODEL="${MODEL}" \
             -v /tmp/kilo-review.diff:/tmp/kilo-review.diff:ro \
             -v /tmp/kilo-review-prompt.md:/tmp/kilo-review-prompt.md:ro \
             -w /tmp \
-            node:22-slim bash -c "npm install -g @kilocode/cli@7.4.22 >/dev/null 2>&1 && mkdir -p ~/.config/kilo && cd ~/.config/kilo && npm init -y >/dev/null 2>&1 && npm install --no-audit --no-fund @kilocode/plugin@7.4.22 >/dev/null 2>&1 && printf '{\"model\": \"%s\"}' \"${MODEL}\" > ~/.config/kilo/kilo.json && echo \"DBG vars: \$(env | grep -oE ^KILO[A-Z_]* | sort | tr \\\" \\\" )\" && kilo run --auto \"\$(cat /tmp/kilo-review-prompt.md)\"" \
+            node:22-slim bash -c "npm install -g @kilocode/cli@7.4.22 >/dev/null 2>&1 && mkdir -p ~/.config/kilo && cd ~/.config/kilo && npm init -y >/dev/null 2>&1 && npm install --no-audit --no-fund @kilocode/plugin@7.4.22 >/dev/null 2>&1 && printf '{\"model\": \"%s\"}' \"${MODEL}\" > ~/.config/kilo/kilo.json && kilo run --auto \"\$(cat /tmp/kilo-review-prompt.md)\"" \
             > /tmp/kilo-review-out.md 2>/tmp/kilo-review-err.log || {
               echo "::warning::kilo review run failed — see step log"
               tail -20 /tmp/kilo-review-err.log || true
