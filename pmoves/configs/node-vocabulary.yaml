@@ -32,6 +32,13 @@ nodes:
   - pmoves-spark
   - dgx-spark
   - PMOVES-SPARK
+  default_identity:
+    # crush only, per declared-not-inferred: the Crush harness has run here
+    # (cipher fleet-restore lane); no claude-code session has, so no
+    # claude_spark identity exists yet and node-steward launched via
+    # claude-pmoves resolves identity=unresolved on this node until one is
+    # declared.
+    crush: crush_spark
 - canonical: z890
   kind: node
   reach: pmoves-z890

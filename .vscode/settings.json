@@ -1,4 +1,8 @@
 {
+  "git.autoRepositoryDetection": false,
+  "git.autoFetch": false,
+  "git.autoRefresh": false,
+  "git.repositoryScanIgnoredFolders": ["**/PMOVES-*", "**/Pmoves-*", "pmoves-*", "pmoves-cipher-openclaw"],
   "python.venvPath": "${workspaceFolder}/pmoves",
   "python.terminal.activateEnvInCurrentTerminal": true,
   "python.analysis.typeCheckingMode": "basic",
@@ -79,5 +83,6 @@
     "docker-compose.yml": "docker-compose.*.yml,.env*"
   },
   "makefile.configureOnOpen": false,
-  "java.compile.nullAnalysis.mode": "automatic"
+  "java.compile.nullAnalysis.mode": "automatic",
+  "markdown.validate.enabled": true
 }

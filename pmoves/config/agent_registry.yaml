@@ -287,6 +287,34 @@ agents:
       compose_profile: null
     description: "Z890 node CLI identity -- infrastructure coordinator, NATS hub"
 
+  crush_spark:
+    name: "Crush (SPARK)"
+    class: standard
+    # Same shape as crush_glm52 above: the crush-harness identity for one node,
+    # declared because the generic `crush` entry cannot answer for this machine.
+    # SPARK has run the cipher fleet-restore lane through this harness; a
+    # claude-code entry is deliberately absent until that harness actually runs
+    # on this node (declared-not-inferred).
+    primary_type: ui
+    secondary_type: agent
+    port: null
+    health: null
+    layers:
+      - L0
+      - L2
+      - L4
+    evolution_stage: stage_1
+    signature: spark-crush
+    nats:
+      publishes: []
+      subscribes: []
+    topology:
+      node_affinity: [spark]
+      team: orchestration
+      ci_runner: null
+      compose_profile: null
+    description: "SPARK/DGX-GB10 Crush identity -- terminal companion harness; cipher fleet-memory restore lane"
+
   crush_glm52:
     name: "Crush GLM-5.2 (Knuckles)"
     class: standard

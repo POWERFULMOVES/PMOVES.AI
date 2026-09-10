@@ -376,6 +376,22 @@ signatures:
         resonance: [voice-synthesis, tts-pipeline, pipecat-integration, media]
         description: "Voice mode — Flute-Gateway, Pipecat, Ultimate-TTS-Studio, voice agents"
 
+  spark-crush:
+    agent_id: "spark-crush"
+    display_name: "Spark Crush"
+    glyph: "\u283F"              # ⠿ Braille pattern dots-123456 — the CHIT-braille motif family
+    color: "#4D7C0F"             # Lime-700 (≥4.5:1 on white; distinct from teal/emerald/green node entries)
+    accent: "#A3E635"            # Lime-400
+    voice: terse
+    co_author: "Spark Crush (pmoves-spark) <spark@pmoves.ai>"
+    node: "pmoves-spark"
+    resonance:
+      - cipher-memory
+      - fleet-restore
+      - provenance-verification
+      - gb10-edge-inference
+    description: "Crush harness peer on SPARK (DGX GB10) — shared the cipher fleet-restore lane; first contributor registered with a braille-glyph motif, tying the signing roster to the CHIT-braille rendering lane"
+
 # NOTE: System voices (announcer, narrator) live in voice-personas.md
 # and tts-engine-capabilities.yaml → service_runners, NOT here.
 # This file is for external contributors (AI agents + humans) only.
