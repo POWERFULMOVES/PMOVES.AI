@@ -38,7 +38,9 @@
 - Licensing: food data open-license; game inspirations are stylistic homage (palette, layout, phrasing) — no trademarked assets, sprites, or music.
 
 ## Verification (per Known Roads)
-- Room manifest: `make -C pmoves rooms-validate` (if present) or schema-conform to ROOM_MANIFEST_CONTRACT.md
+- Room manifest: schema-conform to ROOM_MANIFEST_CONTRACT.md; once public,
+  `make -C pmoves stage-data-check` bakes website/stage/data from manifests
+  and fails on drift (unlisted rooms are not baked — contract check only)
 - nutritional-db: unit tests + live /search + /meal/analyze against USDA sandbox; compose healthcheck :8107/healthz
 - Skins: already live on elder-melchor (pmoves active; ageless-beauty listed)
 
