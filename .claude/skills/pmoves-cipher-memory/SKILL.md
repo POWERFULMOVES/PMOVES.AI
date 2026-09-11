@@ -61,6 +61,30 @@ was done during the 2026-09-09 investigation and it was wrong. `docker inspect`
 renders every service credential in plaintext to anything holding the Docker
 socket; that is a separate reported gap, not a supported access path.
 
+## Check before you write: which agent will your memories be filed under
+
+```bash
+make -C pmoves cipher-identity            # uses your resolved node identity
+make -C pmoves cipher-identity AGENT=z890-claude
+```
+
+Reads no secret, sends nothing, prints one of three verdicts. It exists because
+the answer is not what a session assumes. `Pmoves-cipher/src/pmoves/auth.ts:46`
+forks on a seven-character prefix:
+
+| your `CIPHER_API_TOKEN` | auth.ts path | your writes are filed under |
+|---|---|---|
+| starts with `cipher_` | `:54-90` Supabase lookup | the **minted agent** on that row |
+| anything else | `:44-52` single-token compare | `bootstrap` — *not you* |
+| absent (server token also unset) | `:103-110` | advisory; whatever `agentId` you pass |
+
+So a session can be told "you are `z890-claude`", believe it, and file every
+memory under `bootstrap` — which is also where it will read them back from,
+mixed with every other agent on the node. If `cipher-identity` reports a **carry
+gap**, treat recalled memories as possibly another agent's and say so rather than
+claiming them. `claude-pmoves.sh` now runs this at launch and puts the verdict in
+your context, so you should already know before you are asked.
+
 ## Reaching cipher when the MCP server is not connected
 
 The documented rule, and it is not a failure state: **say so and use auto-memory.**

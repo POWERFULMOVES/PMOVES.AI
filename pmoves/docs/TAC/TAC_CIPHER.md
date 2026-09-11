@@ -159,6 +159,77 @@ Remedy is a mint through the pipeline, per agent, not a transport change.
 | **Class** | Specialized |
 | **Evolution** | Base |
 
+## Agent Identity Carry — bootstrap is a launcher, and nothing was being launched
+
+**Known Road:** `make -C pmoves cipher-identity [AGENT=<card id>]` — reports which
+`agent_id` this session's memory writes will actually be filed under. Reads no
+secret, sends nothing over the network, exits `0` only when the carry is intact.
+
+Provenance — `Pmoves-cipher/src/pmoves/auth.ts`, `resolveToken()`:
+
+| line | condition | resulting `agentId` |
+|---|---|---|
+| `:46` `if (!token.startsWith('cipher_'))` | bearer lacks the prefix | `:49` **`'bootstrap'`**, six scopes, **no Supabase lookup at all** |
+| `:54`–`:60` per-agent mode | bearer is `cipher_<uuid>` | `:82`–`:86` the `agent_id` on that `pmoves_core.cipher_agent_tokens` row |
+| `:106`–`:108` | no bearer, and server `CIPHER_API_TOKEN` unset | `undefined` — advisory, the caller self-declares per call |
+
+`auth.ts:44` labels the first row "legacy / bootstrap". It is the single-token
+launch path, whose purpose is to hand off to a minted agent — and the handoff is
+that seven-character prefix. **Nothing in this repo checked it.**
+
+Consequence, measured on Z890 2026-09-09: `claude-pmoves.sh` resolves the node's
+registered identity and tells the session it is `z890-claude`; the session writes
+to memory all session; every row lands under `bootstrap`, shared with every other
+agent on the node and attributed to none of them; and not one line of output
+disagrees. The session's grounding shaped everything it concluded about its own
+memory, and the grounding was invisible to it.
+
+Two changes close the **visible** half of this:
+
+- `pmoves/tools/cipher_identity.py` measures the carry, and `claude-pmoves.sh`
+  appends the verdict to session context beside the node-identity and
+  cipher-health verdicts it already appends. Fail-open-loudly, matching the rest
+  of that file: it never blocks a launch, never prints or exports a token, and
+  never reads a bearer past its prefix.
+- `pmoves/scripts/mint_cipher_token.py` now requires an **ACTIVE signing card**
+  in `pmoves/config/signing_identity_cards.yaml` for `--agent`, with an
+  `--allow-uncarded` escape hatch that warns on stderr. Before this gate,
+  `--agent` accepted any string — which is the mechanism behind #2935's "the
+  signature and the ledger are separate systems". That was never a stance; it
+  was the implementation. The card is the unlock.
+
+**Still open — operator decisions, not code.** The carry is now *measured*, not
+*closed*. Closing it means minting `cipher_<uuid>` tokens per carded agent and
+delivering them through the CHIT pipeline; no launcher can do that without
+putting a secret through a shell, so it is not attempted here.
+
+Two findings fall out of the card gate and are recorded rather than fixed:
+
+1. `TAC_CIPHER_VILLAGE.md:28` names the village's agent ids and sources them,
+   explicitly, to `signing_identity_cards.yaml` `agent_id` — and `:188` answers
+   "match `signing_identity_cards.yaml` `agent_id` exactly? — **YES**". Checked
+   against the 25 active cards, **none of the six exists**:
+
+   | documented id | actual card |
+   |---|---|
+   | `crush-spark` | `crush` |
+   | `claude-4090` | `4090-claude` |
+   | `kimi-spark` | — none |
+   | `clawz-darkxsides` | — none |
+   | `hermes-knuckles` | `hermes` / `hermes-agent` |
+   | `nemotron-1` | — none |
+
+   So the canonical mint invocation (`:86`, `AGENT=crush-spark`) now fails
+   closed, and the village doc's own naming rule has never been satisfied by the
+   village doc. The gate did not create this; it made it visible on first use.
+   Reconciling those ids is a separate lane — renaming an `agent_id` moves the
+   memories filed under it.
+2. The reverse direction is unguarded: a token minted before this gate, for an
+   agent whose card is later deactivated, keeps working. `cipher_identity.py`
+   reports that state (`minted token in use, but ... has no active signing card`)
+   but nothing revokes it. Revocation lives in `cipher_agent_tokens.revoked_at`
+   and no tool writes that column.
+
 ## ⚠️ Architectural Fork — PMOVES vs Upstream
 
 The PMOVES fork of `campfirein/byterover-cli` (formerly "Cipher") is **798 commits ahead / 3097 commits behind** upstream `main`. The "ahead" commits are stale upstream code from before the rewrite, NOT PMOVES work. Only **6 commits on fork `main`** + **2 parallel on `PMOVES.AI-Edition-Hardened`** are genuine PMOVES additions.
