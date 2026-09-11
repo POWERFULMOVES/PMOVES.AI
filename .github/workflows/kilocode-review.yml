@@ -119,4 +119,16 @@ jobs:
             echo
             echo "_ lane: kilocode-fleet-review (self-hosted kvm4) · replaces broken claude-review lane _"
           } > /tmp/kilo-comment.md
-          gh pr comment "$PR_NUMBER" --body-file /tmp/kilo-comment.md
+          python3 - "$PR_NUMBER" << 'PYEOF'
+          import json, os, sys, urllib.request
+          pr = sys.argv[1]
+          body = open("/tmp/kilo-comment.md").read()
+          req = urllib.request.Request(
+              f"https://api.github.com/repos/{os.environ['GITHUB_REPOSITORY']}/issues/{pr}/comments",
+              data=json.dumps({"body": body}).encode(),
+              headers={"Authorization": f"Bearer {os.environ['GH_TOKEN']}",
+                       "Accept": "application/vnd.github+json"},
+              method="POST")
+          with urllib.request.urlopen(req) as r:
+              print("posted comment:", r.status)
+          PYEOF
