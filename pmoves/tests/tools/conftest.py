@@ -28,8 +28,11 @@ worse, make it always report NATS down). Verified against the full
 `pmoves/tests/tools/` run: pass/fail counts are unchanged with this file in
 place.
 
-Listening, binding and socketpair are untouched -- only OUTBOUND connects are
-denied -- so a test that stands up a local server on demand still can.
+Listening, binding and socketpair are untouched. Outbound CONNECTS to the
+loopback (127.0.0.0/8, ::1, localhost) are ALSO allowed: tests/tools spins up
+its own stub servers on 127.0.0.1 (agent_zero_smoke) and must be able to dial
+them. Everything else -- every non-loopback address -- is denied. A test that
+needs a remote service patches the module's seam instead of dialling it.
 """
 
 from __future__ import annotations
@@ -52,19 +55,49 @@ _MESSAGE = (
 )
 
 
+def _loopback(target) -> bool:
+    """Is this connect target the test's own loopback? (stub servers bind there)"""
+    if isinstance(target, tuple) and target:
+        host = str(target[0]).strip("[]").lower()
+    elif isinstance(target, bytes):
+        host = target.decode("utf-8", "replace").strip("[]").lower()
+    elif isinstance(target, str):
+        host = target.strip("[]").lower()
+    else:
+        return False
+    return host in _LOOPBACK_HOSTS or host.startswith("127.")
+
+
+_LOOPBACK_HOSTS = {"::1", "localhost"}
+
+
 @pytest.fixture(autouse=True)
 def _deny_outbound_network(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Autouse: fail any outbound socket connect with a message that explains it."""
+    """Autouse: fail outbound connects to NON-loopback addresses.
 
-    def _refuse(*args, **kwargs):
-        # args[0] is `self` for the bound methods, the address for the
-        # module-level helper. Report whichever looks like an address; never
-        # anything else, since this is on a path that prints.
-        target = next(
-            (a for a in args if isinstance(a, (tuple, str, bytes))), "unknown"
-        )
+    Loopback connects are allowed: tests/tools stands up its own stub servers
+    on 127.0.0.1 (agent_zero_smoke) and dials them — that dial is the test
+    double, not a network escape. Everything off-box is refused loudly.
+    """
+
+    real_connect = socket.socket.connect
+    real_connect_ex = socket.socket.connect_ex
+    real_create_connection = socket.create_connection
+
+    def _guard(target, allow_real, *args, **kwargs):
+        if _loopback(target):
+            return allow_real(*args, **kwargs)
         raise NetworkEscape(_MESSAGE.format(target=target))
 
-    monkeypatch.setattr(socket.socket, "connect", _refuse, raising=True)
-    monkeypatch.setattr(socket.socket, "connect_ex", _refuse, raising=True)
-    monkeypatch.setattr(socket, "create_connection", _refuse, raising=True)
+    def _connect(self, address, *args, **kwargs):
+        return _guard(address, real_connect, self, address, *args, **kwargs)
+
+    def _connect_ex(self, address, *args, **kwargs):
+        return _guard(address, real_connect_ex, self, address, *args, **kwargs)
+
+    def _create_connection(address, *args, **kwargs):
+        return _guard(address, real_create_connection, address, *args, **kwargs)
+
+    monkeypatch.setattr(socket.socket, "connect", _connect, raising=True)
+    monkeypatch.setattr(socket.socket, "connect_ex", _connect_ex, raising=True)
+    monkeypatch.setattr(socket, "create_connection", _create_connection, raising=True)
