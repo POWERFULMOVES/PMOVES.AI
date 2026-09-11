@@ -94,9 +94,36 @@ Standing the broker up locally (done, 2026-09-11) was safe under all three. **No
 wired until this is called** — the split-brain guardrail and the spec disagree, and that is an
 operator topology decision, not an implementation detail.
 
+### 5.1 Operator direction (2026-09-11, DARKXSIDE): the question was descript, not a menu
+
+The operator's call, on being shown the three options: *"doesn't answer — is descript."* The
+direction is **not to pin one hub at all**, but a **three-in-one floating topology**:
+
+> split-brain-safe **local** broker per capable node · a **multi-lane** broker role that floats ·
+> **projecting to nodes on the local mesh, connecting mesh and mesh** · **dynamic constraint
+> optimization for hardware scaling** — "so the ecosystem is present across" — optimizing for
+> maximum mechanical flexibility.
+
+In NATS-native terms this is exactly the capability triangle the manual already provides — none of
+which requires choosing a permanent hub:
+
+| Operator phrase | NATS-native mechanism |
+|---|---|
+| split-brain-safe local | a broker on every capable node (as Knuckles now runs), with **single-writer/RAFT-anchored JetStream streams** so a partition heals rather than forks |
+| multi-lane floating broker | **cluster** (RAFT quorum) whose members can live on different nodes — the "lane" follows capacity, not a name |
+| connecting mesh and mesh | **gateways** — full mesh-to-mesh federation between clusters, the piece no PMOVES doc has ever used |
+| projecting to nodes on local mesh | **leafnodes** at the edge of each island (jetsons, KVMs) attaching to the nearest lane |
+| dynamic constraint optimizing for hardware | placement decided by measured capacity (VRAM/class/uptime), not by a static spec table — the MOF capacity-class doctrine, applied to broker placement |
+
+What this changes in §6: step 1 becomes **"size the lanes"** (which nodes cluster, which leaf,
+which gateway) rather than "decide the hub." The split-brain guardrail is satisfied not by
+exile of a second broker but by stream-level single-writer semantics — the thing the accounts+RAFT
+design is *for*. This remains a design record: no wiring has changed on any node.
+
 ## 6. Paced rollout (spec §9, updated with today's deltas)
 
-1. **Decide the hub** (§5) — operator.
+1. **Size the lanes** (§5.1 — operator direction received): which nodes cluster (RAFT), which
+   leaf, which gateway; placement by measured capacity, not a static table.
 2. **Mint** — nsc operator PMOVES → SYS/CORE/EDGE/CLOUD + users; seeds to CHIT-vault custody track
    (#1901 precedent); manifest entries, never hand-env.
 3. **Hub** — deploy the fork overlay on the chosen node; publish 7422; SYS-guarded monitoring;
