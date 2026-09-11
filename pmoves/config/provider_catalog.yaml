@@ -346,6 +346,23 @@ providers:
             weight: 0.0
         strength_ref: glm-5.1
         vram_mb: 0
+      chat_zai_glm53:
+        # Verifier: static provider_verifier_gate PASS (2026-09-06, 6/6); Provider-Verifier
+        # conformance PASS 5/5 on the 5090 (2026-09-02, #2878); live on the managed VPS via
+        # openclaw. Weight stays 0.0 until the Archon mint promotes it — routable, not primary.
+        model_name: "glm-5.3"
+        tz_model_key: chat_zai_glm53
+        serves:
+          - function: agent_zero
+            variant_name: hosted_zai_glm53
+            role: candidate
+            weight: 0.0
+          - function: coding_glm
+            variant_name: cloud_zai_glm53
+            role: candidate
+            weight: 0.0
+        strength_ref: glm-5.3
+        vram_mb: 0
       chat_zai_glm5_turbo:
         model_name: "glm-5-turbo"
         tz_model_key: chat_zai_glm5_turbo
