@@ -9,7 +9,7 @@ ARG A0_BASE_TAG=latest
 FROM agent0ai/agent-zero-base:${A0_BASE_TAG} AS upstream
 
 ARG AGENT_ZERO_REPO=https://github.com/POWERFULMOVES/PMOVES-Agent-Zero.git
-ARG AGENT_ZERO_REF=PMOVES.AI-Edition-Hardened
+ARG AGENT_ZERO_REF=PMOVES.AI-Edition-v2.12
 
 # Cache-bust the clone when the branch tip moves: ADD of this ref URL
 # re-fetches whenever the branch head changes, invalidating the clone layer
