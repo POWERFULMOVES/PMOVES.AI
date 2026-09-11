@@ -200,6 +200,42 @@ if [ -f "$CIPHER_TOOL" ] && [ ${#IDENT_PY[@]} -gt 0 ]; then
   esac
 fi
 
+# IDENTITY CARRY — the join the two blocks above never made.
+#
+# The identity block tells the model it is 'z890-claude'. The cipher block tells
+# it memory is up. Neither says which agent_id those memories are FILED under,
+# and the answer has been 'bootstrap' on every node since per-agent tokens
+# shipped: Pmoves-cipher/src/pmoves/auth.ts:46 forks on a 'cipher_' prefix, and
+# nothing in this repo ever checked it. So a session is told it is one agent and
+# writes as another, with no line of output disagreeing.
+#
+# bootstrap is not an agent. It is the single-token launch path whose whole
+# purpose is to hand off to a minted one, and the handoff has never been wired.
+# This does not wire it — a token cannot be minted from a launcher without
+# putting a secret through a shell. It ENDS THE SILENCE, which is the half that
+# was costing us: identity grounding that shapes a model's perspective while
+# nobody can see what it is grounded on.
+#
+# Fail-open-loudly, same as everything above it. Never blocks. Never prints,
+# reads past the prefix of, or exports a token.
+CARRY_TOOL="$ROOT/pmoves/tools/cipher_identity.py"
+if [ -f "$CARRY_TOOL" ] && [ ${#IDENT_PY[@]} -gt 0 ] && [ -n "${PMOVES_NODE_IDENTITY:-}" ]; then
+  set +e
+  CARRY_OUT="$("${IDENT_PY[@]}" "$CARRY_TOOL" --agent "$PMOVES_NODE_IDENTITY" --shell 2>/dev/null)"
+  carry_rc=$?
+  set -e
+  if [ -n "$CARRY_OUT" ]; then
+    eval "$CARRY_OUT"
+    if [ "$carry_rc" = "0" ]; then
+      echo "[claude-pmoves] cipher identity=${PMOVES_CIPHER_EFFECTIVE_ID} (carry intact)" >&2
+      IDENTITY_ARGS+=(--append-system-prompt "Your cipher memory writes are attributed to agent_id '${PMOVES_CIPHER_EFFECTIVE_ID}', which matches your registered identity. Recall and writes are yours.")
+    else
+      echo "[claude-pmoves] cipher identity=${PMOVES_CIPHER_EFFECTIVE_ID:-advisory} — CARRY GAP: ${PMOVES_CIPHER_WHY}" >&2
+      IDENTITY_ARGS+=(--append-system-prompt "IDENTITY CARRY GAP: you are '${PMOVES_NODE_IDENTITY}', but cipher will attribute your memory writes to '${PMOVES_CIPHER_EFFECTIVE_ID:-an advisory id you declare per call}' — not to you. Reason: ${PMOVES_CIPHER_WHY} Treat anything you recall as possibly another agent's, say so when it matters, and do not claim a memory as your own on the strength of finding it. Road to close it: make -C pmoves cipher-identity.")
+    fi
+  fi
+fi
+
 if [ ! -f "$LAUNCHER" ]; then
   # Degrade to the pre-delegation behavior rather than failing: the agent still
   # loads, MCP creds do not. Warn so the missing half is visible, not silent.

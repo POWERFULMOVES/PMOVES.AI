@@ -10,6 +10,15 @@ import uuid
 import urllib.request
 import urllib.error
 
+from pathlib import Path
+
+# One card reader for this pipeline, not a second copy. cipher_identity.py reads
+# the cards to report which agent a SESSION carries; this script reads them to
+# decide which agent may be MINTED. If those two ever disagree about what an
+# active card is, the gate is theatre.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
+from cipher_identity import CARDS, load_active_card_agents  # noqa: E402
+
 
 def _redact(text: str, token_uuid: uuid.UUID) -> str:
     """Blank both spellings of the uuid: stored form is dashed, bearer form is not."""
@@ -24,7 +33,46 @@ def main() -> int:
     parser.add_argument("--scopes", default="memory:read,memory:write", help="Comma-separated scopes")
     parser.add_argument("--rest-url", default=os.environ.get("SUPABASE_REST_URL", "http://localhost:8000/rest/v1"))
     parser.add_argument("--service-key", default=os.environ.get("SUPABASE_SERVICE_KEY", os.environ.get("SERVICE_ROLE_KEY", "")))
+    parser.add_argument(
+        "--allow-uncarded",
+        action="store_true",
+        help="mint for an agent that has no active signing card (records the exception loudly)",
+    )
     args = parser.parse_args()
+
+    # The signing card is the unlock. #2935 recorded that "the signature and the
+    # ledger are separate systems" as a finding; until this gate, it was also the
+    # implementation -- `--agent` took any string, so the memory layer would file
+    # rows under identities the CHIT pipeline had never heard of and could never
+    # verify. A minted token is an authority to BE someone in fleet memory, and
+    # authority comes from the card or it comes from nowhere.
+    # Explicit CARDS, not the imported default: the module-level name is what a
+    # test (or an operator with a staging roster) can redirect. Relying on the
+    # default binding would make the gate untestable except against live cards.
+    active_cards, card_err = load_active_card_agents(CARDS)
+    if card_err:
+        blocker = f"cannot verify a signing card for {args.agent!r}: {card_err}"
+        remedy = "install PyYAML or restore the card file, or pass --allow-uncarded"
+    elif args.agent not in active_cards:
+        blocker = f"{args.agent!r} has no ACTIVE card in {CARDS}"
+        remedy = "add a card (make -C pmoves keygen-cards) or pass --allow-uncarded"
+    else:
+        blocker = remedy = ""
+
+    if blocker:
+        if not args.allow_uncarded:
+            print(f"error: {blocker}", file=sys.stderr)
+            print(f"       {remedy}", file=sys.stderr)
+            return 1
+        # Proceeding is the operator's call, but it is never quiet. An uncarded
+        # token is an identity fleet memory will accept and the signing pipeline
+        # cannot verify -- exactly the split this gate exists to close.
+        print(f"WARNING: {blocker}", file=sys.stderr)
+        print(
+            f"WARNING: minting UNCARDED token for {args.agent!r} -- this identity can write "
+            "to fleet memory but cannot be verified by the CHIT signing pipeline",
+            file=sys.stderr,
+        )
 
     if not args.service_key:
         print("error: SUPABASE_SERVICE_KEY or SERVICE_ROLE_KEY must be set", file=sys.stderr)

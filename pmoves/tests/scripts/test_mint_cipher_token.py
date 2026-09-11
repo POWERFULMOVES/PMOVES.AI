@@ -57,7 +57,40 @@ class _FakeResponse:
 
 
 @pytest.fixture
-def run_mint(monkeypatch):
+def stub_cards(tmp_path, monkeypatch):
+    """Point the card gate at a fixture roster.
+
+    The gate added alongside these tests refuses to mint for an agent with no
+    ACTIVE signing card. `test-agent` has no card and must not acquire one just
+    to keep a test green -- the live roster is fleet state, not test scaffolding.
+    Redirecting the lookup keeps these tests measuring emission, and leaves the
+    gate itself to the card-gate tests at the bottom of this file.
+    """
+    yaml = pytest.importorskip("yaml")
+
+    def _write(agents=("test-agent",)):
+        doc = {
+            "cards": [
+                {
+                    "card_id": f"00000000-0000-4000-8000-{i:012d}",
+                    "active": True,
+                    "ml": {"primary_method": "github-app"},
+                    "h": {"agent_id": a, "role": "agent"},
+                }
+                for i, a in enumerate(agents, start=1)
+            ]
+        }
+        p = tmp_path / "cards.yaml"
+        p.write_text(yaml.safe_dump(doc), encoding="utf-8")
+        monkeypatch.setattr(mint, "CARDS", p)
+        return p
+
+    _write()
+    return _write
+
+
+@pytest.fixture
+def run_mint(monkeypatch, stub_cards):
     """Run main() with the network stubbed; return (exit_code, stdout, sent_payload)."""
 
     def _run(argv_extra=None, representation=True, http_error_body=None):
@@ -192,3 +225,107 @@ def test_error_body_cannot_leak_the_uuid_to_stderr(run_mint):
     assert "<redacted:token_uuid>" in err, err
     # And nothing at all on stdout: the mint failed.
     assert out == "", "failed mint still emitted stdout:\n" + out
+
+
+# ---------------------------------------------------------------------------
+# The card gate: a minted token is an authority to BE someone in fleet memory.
+#
+# Before this gate, `--agent` accepted any string. That is the mechanism behind
+# #2935's "the signature and the ledger are separate systems" -- not a stance,
+# an implementation. The CHIT signing pipeline knows every agent by card; the
+# memory layer knew none of them, and nothing refused to widen the gap.
+# ---------------------------------------------------------------------------
+
+def _run_gate(monkeypatch, agent, extra=(), cards_path=None):
+    """Invoke main() with the network stubbed to EXPLODE.
+
+    The gate must refuse before any request is built, so a urlopen that raises
+    on contact is the assertion: if the mint reaches the network, the test fails
+    with the stub's error rather than silently passing.
+    """
+    def exploding_urlopen(req, *a, **kw):  # pragma: no cover - must never run
+        raise AssertionError("gate let the mint reach the network")
+
+    monkeypatch.setattr(mint.urllib.request, "urlopen", exploding_urlopen)
+    if cards_path is not None:
+        monkeypatch.setattr(mint, "CARDS", cards_path)
+    monkeypatch.setattr(sys, "argv", [
+        "mint_cipher_token.py",
+        "--agent", agent,
+        "--service-key", "svc-key",
+        "--rest-url", "http://stub/rest/v1",
+    ] + list(extra))
+    out, err = io.StringIO(), io.StringIO()
+    monkeypatch.setattr(sys, "stdout", out)
+    monkeypatch.setattr(sys, "stderr", err)
+    code = mint.main()
+    monkeypatch.undo()
+    return code, out.getvalue(), err.getvalue()
+
+
+def test_uncarded_agent_is_refused_before_the_network(monkeypatch, stub_cards):
+    stub_cards(("z890-claude",))
+    code, out, err = _run_gate(monkeypatch, "not-an-agent")
+    assert code == 1
+    assert "no ACTIVE card" in err
+    assert out == "", "a refused mint must not emit a token:\n" + out
+
+
+def test_carded_agent_passes_the_gate(monkeypatch, stub_cards):
+    """NEGATIVE CONTROL for the test above.
+
+    Without this, a gate that refused EVERY agent would pass the refusal test
+    and quietly break minting for the whole fleet. Reaching the network is the
+    proof that the gate opened -- the exploding stub turns that into a failure
+    with a message that says so.
+    """
+    stub_cards(("z890-claude",))
+    with pytest.raises(AssertionError, match="reach the network"):
+        _run_gate(monkeypatch, "z890-claude")
+
+
+def test_inactive_card_does_not_authorise_a_mint(monkeypatch, tmp_path):
+    yaml = pytest.importorskip("yaml")
+    p = tmp_path / "cards.yaml"
+    p.write_text(yaml.safe_dump({"cards": [{
+        "card_id": "00000000-0000-4000-8000-000000000001",
+        "active": False,
+        "ml": {"primary_method": "github-app"},
+        "h": {"agent_id": "retired-agent", "role": "agent"},
+    }]}), encoding="utf-8")
+    code, out, err = _run_gate(monkeypatch, "retired-agent", cards_path=p)
+    # Revocation has to mean something on this path too, or deactivating a card
+    # leaves the agent free to mint itself a fresh memory identity.
+    assert code == 1 and "no ACTIVE card" in err
+
+
+def test_allow_uncarded_proceeds_but_is_never_quiet(monkeypatch, stub_cards):
+    stub_cards(("z890-claude",))
+    with pytest.raises(AssertionError, match="reach the network"):
+        _run_gate(monkeypatch, "not-an-agent", extra=["--allow-uncarded"])
+
+
+def test_allow_uncarded_warns_on_stderr(monkeypatch, stub_cards):
+    """The escape hatch is an operator decision, not a silent one."""
+    stub_cards(("z890-claude",))
+
+    def refusing_urlopen(req, *a, **kw):
+        raise urllib.error.URLError("stubbed: no network in tests")
+
+    monkeypatch.setattr(mint.urllib.request, "urlopen", refusing_urlopen)
+    monkeypatch.setattr(sys, "argv", [
+        "mint_cipher_token.py", "--agent", "not-an-agent",
+        "--service-key", "svc-key", "--rest-url", "http://stub/rest/v1",
+        "--allow-uncarded",
+    ])
+    err = io.StringIO()
+    monkeypatch.setattr(sys, "stdout", io.StringIO())
+    monkeypatch.setattr(sys, "stderr", err)
+    try:
+        mint.main()
+    except urllib.error.URLError:
+        pass
+    monkeypatch.undo()
+    text = err.getvalue()
+    assert "UNCARDED" in text
+    assert "cannot be verified by the CHIT signing pipeline" in text
