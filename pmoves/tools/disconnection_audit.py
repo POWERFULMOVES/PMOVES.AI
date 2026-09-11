@@ -671,24 +671,30 @@ def strip_py_string_blocks(text: str) -> str:
             d = m.group(0)
             rest = line[m.end():]
             prefix = line[: m.start()]
+            is_fstring = prefix.rstrip().endswith(("f", "rf", "fr"))
             if d in rest:  # opened and closed on the same line
                 # f-strings contain LIVE reads (f"""{cfg['x']}""") —
                 # blanking them turns a real read into a false FIRE
                 # (2026-09-11 kilocode review finding). Keep content,
                 # drop only the triple delimiters so patterns still match.
-                if prefix.rstrip().endswith(("f", "rf", "fr")):
+                if is_fstring:
                     out.append(prefix + rest.replace(d, "", 2))
                 else:
                     out.append(prefix + rest.split(d, 1)[1])
                 continue
             delim = d
-            out.append(line[: m.start()])
+            live_str = is_fstring  # multi-line f-string: interior interpolations read
+            if live_str:
+                out.append(line)  # keep opener + any same-line reads verbatim
+            else:
+                out.append(line[: m.start()])
         else:
             if delim in line:
-                out.append(line.split(delim, 1)[1])
+                tail = line.split(delim, 1)[1]
+                out.append(line if live_str else tail)
                 delim = None
             else:
-                out.append("")
+                out.append(line if live_str else "")
     return "\n".join(out)
 
 

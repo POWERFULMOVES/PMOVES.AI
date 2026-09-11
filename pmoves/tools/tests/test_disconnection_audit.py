@@ -151,12 +151,22 @@ HEALTHY = da.Container("monitoring-loki-1", "Up 5 days (healthy)", "healthy", []
 def _lines(text: str, count: int, start_min_ago: int = 1, spacing_s: int = 2):
     """`count` copies of `text`, each with a DIFFERENT timestamp.
 
+    If `text` contains a `{ts}` placeholder the per-line timestamp is
+    embedded in the text itself, so lines differ VERBATIM and only
+    normalisation can collapse them (2026-09-11 kilocode review: the
+    old fixture put the rotation in the datetime tuples only, which
+    made the signature test pass trivially).
+
     Spacing is kept tight on purpose: at 5s spacing 180 lines span 15 minutes
     and half of them fall outside the default window, which silently halves
     the count the assertions are about.
     """
-    return [(NOW - timedelta(minutes=start_min_ago, seconds=spacing_s * i), text)
-            for i in range(count)]
+    out = []
+    for i in range(count):
+        ts = NOW - timedelta(minutes=start_min_ago, seconds=spacing_s * i)
+        line = text.format(ts=ts.isoformat()) if "{ts}" in text else text
+        out.append((ts, line))
+    return out
 
 
 def _d2(container, lines, **kw):
@@ -176,8 +186,18 @@ def test_d2_FIRES_on_the_promtail_fixture():
 def test_d2_signature_survives_the_rotating_timestamp():
     # The whole detector rests on this: every promtail line is unique verbatim
     # and identical after normalisation. Counting raw lines would find 1 each.
-    sigs = {da.error_signature(t) for _, t in _lines(PROMTAIL_ERR, 20)}
-    assert len(sigs) == 1
+    # 2026-09-11 kilocode review: the rotation must live IN the text ({ts}),
+    # not just in the datetime tuples — otherwise the assertion passes
+    # trivially on 20 identical strings.
+    tmpl = (
+        'level=error ts={ts} caller=refresh.go:90 '
+        'component=docker_discovery discovery=docker msg="Unable to refresh '
+        'target groups" err="Cannot connect to the Docker daemon"'
+    )
+    lines = _lines(tmpl, 20)
+    assert len({t for _, t in lines}) == 20  # verbatim: all different
+    sigs = {da.error_signature(t) for _, t in lines}
+    assert len(sigs) == 1                    # normalised: exactly one
 
 
 def test_d2_stays_CLEAN_on_a_healthy_chatty_service():
