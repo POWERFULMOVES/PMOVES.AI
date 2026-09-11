@@ -3,7 +3,7 @@
 
 The defect class: a thing that is BUILT, RUNNING, and REPORTING HEALTHY while
 being functionally disconnected from everything that was supposed to consume it.
-Five instances were measured on PMOVES-B850-AI-TOP on 2026-09-08 and are the
+Five instances were measured on fleet-node-b850 on 2026-09-08 and are the
 ground-truth fixtures for the test suite:
 
   1. cipher-api          -- container `healthy`, /health 200, bound 127.0.0.1:8105.
@@ -290,7 +290,7 @@ def parse_timestamped_logs(raw: str) -> list[tuple[datetime | None, str]]:
 class Declaration:
     """A repo statement that <host>:<port> is reachable from another node."""
 
-    host_expr: str   # "${TS_Z890}" or "pmoves-kvm4-2" -- never a resolved address
+    host_expr: str   # "${TS_Z890}" or "fleet-node-vps" -- never a resolved address
     port: int
     source: str      # repo-relative path
     kind: str        # "fleet-host-url" | "catalog-node-service"
@@ -298,7 +298,7 @@ class Declaration:
 
 # `${TS_Z890}:8105`, `$TS_Z890:8105`, `http://${TS_5090}:8055/...`
 _TS_HOST_RE = re.compile(r"\$\{?(?P<var>TS_[A-Z0-9_]+)\}?:(?P<port>\d{2,5})")
-# `| \`pmoves-kvm4-2\` | ... NATS \`:4222\` ...` rows in .claude/CATALOG.md
+# `| \`fleet-node-vps\` | ... NATS \`:4222\` ...` rows in .claude/CATALOG.md
 _CATALOG_PORT_RE = re.compile(r"`:(?P<port>\d{2,5})`")
 
 CONFIG_GLOBS = (
@@ -670,8 +670,16 @@ def strip_py_string_blocks(text: str) -> str:
                 continue
             d = m.group(0)
             rest = line[m.end():]
+            prefix = line[: m.start()]
             if d in rest:  # opened and closed on the same line
-                out.append(line[: m.start()] + rest.split(d, 1)[1])
+                # f-strings contain LIVE reads (f"""{cfg['x']}""") —
+                # blanking them turns a real read into a false FIRE
+                # (2026-09-11 kilocode review finding). Keep content,
+                # drop only the triple delimiters so patterns still match.
+                if prefix.rstrip().endswith(("f", "rf", "fr")):
+                    out.append(prefix + rest.replace(d, "", 2))
+                else:
+                    out.append(prefix + rest.split(d, 1)[1])
                 continue
             delim = d
             out.append(line[: m.start()])
@@ -850,7 +858,7 @@ class NetProbe:
         """tailscale ping -> True / False, or None when tailscale is unavailable."""
         try:
             proc = subprocess.run(
-                ["tailscale", "ping", "--c", "1",
+                ["tailscale", "ping", "-c", "1",
                  "--timeout", f"{int(self.mesh_timeout)}s", host],
                 capture_output=True, text=True, timeout=self.mesh_timeout + 4,
             )
@@ -1031,6 +1039,9 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     repo_root = Path(args.repo_root).resolve() if args.repo_root else _infer_repo_root()
     wanted = {d.strip().upper() for d in args.detectors.split(",") if d.strip()}
+    if not wanted:
+        print("error: --detectors selected nothing (empty set)", file=sys.stderr)
+        sys.exit(2)
     findings: list[Finding] = []
 
     docker = DockerProbe()
