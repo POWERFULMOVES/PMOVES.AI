@@ -20,7 +20,7 @@ Every node validates exactly one class; the fleet covers all four.
 | elder-melchor | windows-pro | private-mesh | winget + `make -C pmoves hermes-bootstrap` (WSL2 make) |
 | z890 | windows-pro | private-mesh | same, GPU extras (3090 Ti) |
 | 5090 | windows-pro | private-mesh | same, MiniMax H3 lane pending release |
-| KVM4-1/4-2, KVM2 | linux-server | private-mesh | cloud-init → `make node-bringup` (headless: tmux+Atuin per FLEET_TERMINAL_STRATEGY) |
+| KVM4-1/4-2, KVM2 | linux-server | private-mesh | cloud-init → `make bringup-layered` (headless: tmux+Atuin per FLEET_TERMINAL_STRATEGY) |
 | fresh workstations | **omarchy** | **community** (Fordham Hill pilot seats) | PMOVES-omarchy unattended install → hermes-pmoves launcher |
 | edge/tablet seats | windows-iot | **school** | IoT unattend.xml + learner-safe defaults (requires_ack=false only) |
 | hosted/VPS path | linux-server | **enterprise** | images carry commercial-OK components only (hosted_path: true) |
@@ -32,11 +32,11 @@ Every node validates exactly one class; the fleet covers all four.
 2. `git clone --recurse-submodules --depth 1` PMOVES.AI
 3. `make -C pmoves hermes-bootstrap` (profile pmoves-hermes-<node> + MCP + CHIT)
 4. Gateway as login item (proven on elder-melchor), terminal: PMOVES Wave fork (Win10 1809+)
-5. Validation gate: `make doctor` + sentinel announces on NATS → pmoves-fleet shows the node
+5. Validation gate: `make check-prereqs` + sentinel announces on NATS → pmoves-fleet shows the node
 
 ### linux-server (KVMs, enterprise VPS path)
 1. cloud-init: docker, git, jq, tmux, atuin
-2. repo clone (shallow) + `make node-bringup` (services per node purpose)
+2. repo clone (shallow) + `make bringup-layered` (services per node purpose)
 3. Headless agents: tmux+Atuin lingua franca; hermes gateway via systemd unit
 4. Enterprise VPS: only requires_ack=false components baked in (deployment_classes gate)
 
