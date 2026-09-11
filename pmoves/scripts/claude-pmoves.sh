@@ -220,18 +220,21 @@ fi
 # reads past the prefix of, or exports a token.
 CARRY_TOOL="$ROOT/pmoves/tools/cipher_identity.py"
 if [ -f "$CARRY_TOOL" ] && [ ${#IDENT_PY[@]} -gt 0 ] && [ -n "${PMOVES_NODE_IDENTITY:-}" ]; then
-  set +e
-  CARRY_OUT="$("${IDENT_PY[@]}" "$CARRY_TOOL" --agent "$PMOVES_NODE_IDENTITY" --shell 2>/dev/null)"
-  carry_rc=$?
-  set -e
+  # `|| carry_rc=$?` rather than a set +e/set -e sandwich. This file runs under
+  # `set -u` and NOT `set -e` (line 32), so a bare `set -e` turns errexit ON for
+  # everything below it -- a shell-wide behaviour change smuggled in by a block
+  # that only wanted to read one exit code. A `||` list is exempt from errexit
+  # under either setting, so this reads the code without touching the options.
+  carry_rc=0
+  CARRY_OUT="$("${IDENT_PY[@]}" "$CARRY_TOOL" --agent "$PMOVES_NODE_IDENTITY" --shell 2>/dev/null)" || carry_rc=$?
   if [ -n "$CARRY_OUT" ]; then
     eval "$CARRY_OUT"
     if [ "$carry_rc" = "0" ]; then
-      echo "[claude-pmoves] cipher identity=${PMOVES_CIPHER_EFFECTIVE_ID} (carry intact)" >&2
-      IDENTITY_ARGS+=(--append-system-prompt "Your cipher memory writes are attributed to agent_id '${PMOVES_CIPHER_EFFECTIVE_ID}', which matches your registered identity. Recall and writes are yours.")
+      echo "[claude-pmoves] cipher identity=${PMOVES_CIPHER_EFFECTIVE_ID:-} (carry intact)" >&2
+      IDENTITY_ARGS+=(--append-system-prompt "Your cipher memory writes are attributed to agent_id '${PMOVES_CIPHER_EFFECTIVE_ID:-}', which matches your registered identity. Recall and writes are yours.")
     else
-      echo "[claude-pmoves] cipher identity=${PMOVES_CIPHER_EFFECTIVE_ID:-advisory} — CARRY GAP: ${PMOVES_CIPHER_WHY}" >&2
-      IDENTITY_ARGS+=(--append-system-prompt "IDENTITY CARRY GAP: you are '${PMOVES_NODE_IDENTITY}', but cipher will attribute your memory writes to '${PMOVES_CIPHER_EFFECTIVE_ID:-an advisory id you declare per call}' — not to you. Reason: ${PMOVES_CIPHER_WHY} Treat anything you recall as possibly another agent's, say so when it matters, and do not claim a memory as your own on the strength of finding it. Road to close it: make -C pmoves cipher-identity.")
+      echo "[claude-pmoves] cipher identity=${PMOVES_CIPHER_EFFECTIVE_ID:-advisory} — CARRY GAP: ${PMOVES_CIPHER_WHY:-no reason emitted}" >&2
+      IDENTITY_ARGS+=(--append-system-prompt "IDENTITY CARRY GAP: you are '${PMOVES_NODE_IDENTITY}', but cipher will attribute your memory writes to '${PMOVES_CIPHER_EFFECTIVE_ID:-an advisory id you declare per call}' — not to you. Reason: ${PMOVES_CIPHER_WHY:-no reason emitted} Treat anything you recall as possibly another agent's, say so when it matters, and do not claim a memory as your own on the strength of finding it. Road to close it: make -C pmoves cipher-identity.")
     fi
   fi
 fi
