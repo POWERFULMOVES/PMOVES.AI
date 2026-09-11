@@ -144,7 +144,7 @@ def _ttl_delta(ttl: str) -> timedelta | None:
 #     legitimate use of the pattern;
 #   * a compose invocation carrying >= 2 --env-file flags matches 0 live rows.
 _EMPTY_ASSIGNMENT_RE = re.compile(
-    r"(?<![A-Za-z0-9_`/])[A-Z][A-Z0-9_]{1,31}=(?=[\s$]|$|[,;)])")
+    r"(?<![A-Za-z0-9_`/])[A-Z][A-Z0-9_]*=(?=[\s$]|$|[,;)])")
 _COMPOSE_INVOCATION_RE = re.compile(r"docker[\s+-]compose\b")
 LONG_TOKEN_LIMIT = 300
 
