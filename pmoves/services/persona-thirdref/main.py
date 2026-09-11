@@ -28,7 +28,31 @@ from typing import Any
 import jsonschema
 from fastapi import FastAPI, HTTPException, Request
 
+try:
+    from nats.js.api import StreamConfig
+    from nats.js.errors import NotFoundError
+except ImportError:  # nats-py absent or shadowed (e.g. sibling nats/ dir on a
+    # test sys.path) — keep the service importable and tests runnable.
+    class NotFoundError(Exception):  # noqa: D401 — stand-in for nats.js.errors
+        """Fallback for environments without the real nats.js module."""
+
+    def StreamConfig(name, subjects, retention="limits", max_msgs=None, **_):
+        from types import SimpleNamespace
+        return SimpleNamespace(
+            name=name, subjects=subjects, retention=retention, max_msgs=max_msgs,
+        )
+
 LOGGER = logging.getLogger("persona-thirdref")
+
+
+def _env(name: str, default: str = "") -> str:
+    return os.environ.get(name, default)
+
+
+# Under uvicorn only uvicorn.* loggers get handlers; without this the
+# service's own wiring status is invisible in container logs — which once
+# cost a debugging cycle (bus state unknowable from docker logs).
+logging.basicConfig(level=_env("PERSONA_THIRDREF_LOG_LEVEL", "INFO"))
 _CANDIDATE_SCHEMA_DIRS = [
     # repo layout: services/persona-thirdref/main.py -> pmoves/contracts/...
     Path(__file__).resolve().parents[2] / "contracts" / "schemas",
@@ -45,10 +69,6 @@ TRACE_REQUIRED = ["user_id", "agent_id", "timestamp", "interaction_type"]
 SUB_CONSUMPTION = "persona.consumption.recorded.v1"
 PUB_TRACE = "shape.trace.recorded.v1"
 PUB_PROFILE = "shape.profile.updated.v1"
-
-
-def _env(name: str, default: str = "") -> str:
-    return os.environ.get(name, default)
 
 
 class Joiner:
@@ -212,6 +232,29 @@ class Service:
 
 
 
+async def _ensure_stream(js, name: str, subjects: list[str] | None = None) -> None:
+    """Idempotently create-or-widen the durability stream.
+
+    get -> missing? add : widen subjects union if the existing stream binds
+    fewer. Never narrows and never deletes — other subjects may be bound by
+    other lanes. Testable with an async stub.
+    """
+    wanted = list(subjects or [SUB_CONSUMPTION])
+    try:
+        info = await js.stream_info(name)
+        existing = set(info.config.subjects or [])
+        if not set(wanted).issubset(existing):
+            info.config.subjects = sorted(existing | set(wanted))
+            await js.update_stream(info.config)
+    except NotFoundError:
+        await js.add_stream(StreamConfig(
+            name=name,
+            subjects=wanted,
+            retention="limits",
+            max_msgs=100_000,
+        ))
+
+
 def create_app(joiner: Joiner | None = None, service: Service | None = None) -> FastAPI:
     app = FastAPI(title="persona-thirdref", version="0.1.0")
     svc = service or Service(joiner=joiner)
@@ -231,6 +274,8 @@ def create_app(joiner: Joiner | None = None, service: Service | None = None) -> 
         if _env("PERSONA_THIRDREF_DISABLE_NATS"):
             return
         url = _env("NATS_URL", "nats://nats:pmoves@nats:4222")
+        stream_name = _env("PERSONA_THIRDREF_STREAM", "PMOVES-PERSONA")
+        durable = _env("PERSONA_THIRDREF_DURABLE", "persona-thirdref")
         try:
             import nats.aio.client as nats_client
 
@@ -241,16 +286,34 @@ def create_app(joiner: Joiner | None = None, service: Service | None = None) -> 
                     LOGGER.warning("invalid consumption event: %s", exc.message)
                 except Exception:  # noqa: BLE001
                     LOGGER.exception("handler error")
+                finally:
+                    ack = getattr(msg, "ack", None)
+                    if ack is not None:
+                        try:
+                            await ack()
+                        except Exception:  # noqa: BLE001 — already acked/redelivered
+                            pass
 
             nc = nats_client.Client()
             await nc.connect(url, connect_timeout=5, max_reconnect_attempts=0)
-            await nc.subscribe(SUB_CONSUMPTION, cb=bridge)
+            js = nc.jetstream()
+            await _ensure_stream(js, stream_name)
+            # Durable JetStream subscription: events published while this
+            # consumer is down are replayed on reconnect, so grounding signal
+            # survives restarts instead of dropping on the floor.
+            sub = await js.subscribe(
+                SUB_CONSUMPTION, durable=durable, cb=bridge, manual_ack=True
+            )
+            app.state.nats_sub = sub
 
             async def publish(subject: str, payload: dict[str, Any]) -> None:
                 await nc.publish(subject, json.dumps(payload).encode())
 
             svc.publisher = publish
-            LOGGER.info("bus wired: sub %s", SUB_CONSUMPTION)
+            LOGGER.info(
+                "bus wired: stream %s durable %s sub %s",
+                stream_name, durable, SUB_CONSUMPTION,
+            )
         except Exception as exc:  # noqa: BLE001 — degrade, never die
             LOGGER.warning("bus wiring offline (%s); HTTP + log-only mode", exc)
 

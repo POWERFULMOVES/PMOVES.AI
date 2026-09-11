@@ -141,3 +141,51 @@ async def test_generic_item_carries_caller_domains_only():
     await svc.handle(sample_event(item_kind="generic", item_id="sketch",
                                   resonance_domains=["creative-arts"]))
     assert rec.published[0][1]["resonance_domains"] == ["creative-arts"]
+
+
+class StubJS:
+    """Async JetStream stub for _ensure_stream tests."""
+
+    def __init__(self, existing_subjects=None, exists=True):
+        from types import SimpleNamespace
+        self.calls = []
+        cfg = SimpleNamespace(subjects=list(existing_subjects or []))
+        self.info = SimpleNamespace(config=cfg)
+        self._exists = exists
+
+    async def stream_info(self, name):
+        if not self._exists:
+            raise thirdref.NotFoundError("no stream")
+        return self.info
+
+    async def update_stream(self, config):
+        self.calls.append(("update", sorted(config.subjects)))
+
+    async def add_stream(self, config):
+        self.calls.append(("add", sorted(config.subjects), config.name))
+
+
+@pytest.mark.asyncio
+async def test_ensure_stream_creates_when_missing():
+    js = StubJS(exists=False)
+    await thirdref._ensure_stream(js, "PMOVES-PERSONA")
+    kind, subjects, name = js.calls[0]
+    assert kind == "add"
+    assert subjects == ["persona.consumption.recorded.v1"]
+    assert name == "PMOVES-PERSONA"
+
+
+@pytest.mark.asyncio
+async def test_ensure_stream_widens_never_narrows():
+    js = StubJS(existing_subjects=["other.subject.v1"])
+    await thirdref._ensure_stream(js, "PMOVES-PERSONA")
+    kind, subjects = js.calls[0]
+    assert kind == "update"
+    assert subjects == ["other.subject.v1", "persona.consumption.recorded.v1"]
+
+
+@pytest.mark.asyncio
+async def test_ensure_stream_noop_when_bound():
+    js = StubJS(existing_subjects=["persona.consumption.recorded.v1"])
+    await thirdref._ensure_stream(js, "PMOVES-PERSONA")
+    assert js.calls == []
