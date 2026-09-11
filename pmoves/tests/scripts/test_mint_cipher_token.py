@@ -329,3 +329,31 @@ def test_allow_uncarded_warns_on_stderr(monkeypatch, stub_cards):
     text = err.getvalue()
     assert "UNCARDED" in text
     assert "cannot be verified by the CHIT signing pipeline" in text
+
+
+def test_importing_the_cli_does_not_mutate_sys_path():
+    """The card reader is shared by path, not by rearranging the importer.
+
+    `sys.path.insert(0, pmoves/tools)` was the first way this script reached
+    `cipher_identity`. That directory holds several `test_*.py` helpers
+    (`test_bpm_encoder`, `test_chit_tools`, `test_hf_ssl`, ...), so prepending it
+    inside a pytest process can shadow real test modules by bare name -- a CLI
+    import silently changing which tests run. Caught while auditing a full-suite
+    run for contamination from this lane.
+    """
+    import importlib.util as _il
+
+    before = list(sys.path)
+    spec = _il.spec_from_file_location("_mint_syspath_probe", MODULE)
+    assert spec and spec.loader
+    module = _il.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    assert sys.path == before, (
+        "importing mint_cipher_token mutated sys.path: "
+        f"{[p for p in sys.path if p not in before]!r}"
+    )
+    # NEGATIVE CONTROL: the import must still have produced a working gate, or a
+    # script that imported nothing at all would pass the assertion above.
+    assert module.CARDS.name == "signing_identity_cards.yaml"
+    assert callable(module.load_active_card_agents)

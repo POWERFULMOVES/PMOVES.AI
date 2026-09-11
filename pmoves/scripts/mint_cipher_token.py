@@ -10,14 +10,37 @@ import uuid
 import urllib.request
 import urllib.error
 
+import importlib.util
 from pathlib import Path
 
-# One card reader for this pipeline, not a second copy. cipher_identity.py reads
-# the cards to report which agent a SESSION carries; this script reads them to
-# decide which agent may be MINTED. If those two ever disagree about what an
-# active card is, the gate is theatre.
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
-from cipher_identity import CARDS, load_active_card_agents  # noqa: E402
+
+def _load_cipher_identity():
+    """Import pmoves/tools/cipher_identity.py BY PATH, without touching sys.path.
+
+    One card reader for this pipeline, not a second copy: cipher_identity reads
+    the cards to report which agent a SESSION carries, this script reads them to
+    decide which agent may be MINTED, and if the two ever disagree about what an
+    active card is then the gate is theatre.
+
+    The obvious way to share it -- `sys.path.insert(0, .../tools)` -- is a global
+    side effect that outlives this import. `pmoves/tools/` holds several
+    `test_*.py` helpers (test_bpm_encoder, test_chit_tools, test_hf_ssl, ...), so
+    prepending that directory inside a pytest process can shadow real test
+    modules by bare name. A CLI has no business rearranging the importer for
+    whatever runs after it.
+    """
+    path = Path(__file__).resolve().parents[1] / "tools" / "cipher_identity.py"
+    spec = importlib.util.spec_from_file_location("_pmoves_cipher_identity", path)
+    if spec is None or spec.loader is None:  # pragma: no cover - packaging guard
+        raise ImportError(f"cannot load {path}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+_ci = _load_cipher_identity()
+CARDS = _ci.CARDS
+load_active_card_agents = _ci.load_active_card_agents
 
 
 def _redact(text: str, token_uuid: uuid.UUID) -> str:
