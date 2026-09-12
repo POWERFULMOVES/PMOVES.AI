@@ -149,6 +149,20 @@ done
 `test_proportionality.py` is the template for the shape that matters: every ALLOW
 case paired with the in-repo form of the same operation, which must still refuse.
 
+**Then run the sweep, because the suite is not enough.** On the change that added
+these files the hand-written suite was green while the sweep found 16 permissive
+regressions. A suite tests the cases someone thought of; a sweep tests the cases
+`patterns.yaml` actually contains.
+
+```bash
+# 6548 commands x two guards, ~15 minutes. Exit 0 clean / 1 findings / 3 cannot run.
+python3 .claude/hooks/damage-control/sweep_differential.py <base-git-ref>
+```
+
+Every verdict change it reports must be a deliberate, named relaxation. If one is
+not, that is a permissive regression in a security guard — stop and report it
+rather than shipping it.
+
 ## Related
 
 - `pmoves-chit-sign` — sign the trail after guard-adjacent work
