@@ -83,15 +83,35 @@ if trail is not None and annotations is not None:
           sum(1 for r in trail if r.get("reason") == "pr:2656") == 167)
 
     # The distinction the marking exists to preserve, restated as evidence:
-    # the synthetic targets do not exist, the genuine one does.
+    # the synthetic targets name nothing real, the genuine one names a file that
+    # is in this repository.
+    #
+    # Resolved as a SUFFIX under REPO, not as the absolute path in the row. The
+    # rows carry one node's absolute paths; asserting those exist would pass on
+    # the node that wrote them and fail everywhere else, including CI -- a test
+    # that encodes the author's filesystem is not a test of the trail.
+    def repo_rel(recorded):
+        parts = recorded.split("/")
+        for i in range(len(parts)):
+            tail = "/".join(parts[i:])
+            # An ABSOLUTE candidate must be skipped: REPO / "/abs/path" is
+            # "/abs/path", so the very first candidate would resolve against the
+            # host and the check would silently become "does this exist on the
+            # machine that wrote the row" -- the exact thing being removed.
+            if not tail or tail.startswith("/") or tail.startswith("~"):
+                continue
+            if (REPO / tail).exists():
+                return tail
+        return None
+
     synthetic = [r for i, r in enumerate(trail) if states[i] == "synthetic-corpus"]
     genuine = [r for i, r in enumerate(trail) if states[i] == "genuine-stale-reason"]
-    check("every synthetic target is absent from disk",
-          all(not Path(r["file"]).exists() for r in synthetic),
-          [r["file"] for r in synthetic if Path(r["file"]).exists()][:3])
-    check("every genuine target is present on disk",
-          all(Path(r["file"]).exists() for r in genuine),
-          [r["file"] for r in genuine if not Path(r["file"]).exists()][:3])
+    check("no synthetic target resolves to anything in this repository",
+          all(repo_rel(r["file"]) is None for r in synthetic),
+          [r["file"] for r in synthetic if repo_rel(r["file"])][:3])
+    check("every genuine target resolves to the one real compose file",
+          {repo_rel(r["file"]) for r in genuine} == {"pmoves/docker-compose.mcp-gateway.yml"},
+          sorted({repo_rel(r["file"]) for r in genuine}))
     check("the genuine rows are Edit/Write, never the sweep's Bash",
           {r["tool"] for r in genuine} <= {"Edit", "Write"},
           sorted({r["tool"] for r in genuine}))
