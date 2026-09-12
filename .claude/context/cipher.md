@@ -20,11 +20,53 @@
 > `localhost:8105` is unreachable by design and must be proxied through the
 > BoTZ-gateway is **superseded**.
 >
-> Endpoint map: `/health` 200, `/mcp/sse` 200 (GET only). `/healthz`, `/mcp` and
-> `/api/health` all 404. **`POST /mcp/sse` is not routed** — the SSE stream emits
+> Endpoint map (as measured 2026-08-21 on 4090): `/health` 200, `/mcp/sse` 200
+> (GET only). `/healthz`, `/mcp` and `/api/health` all 404.
+>
+> **Re-measured 2026-09-09 on Z890 — the 404s are gone and the METHOD no longer
+> works.** Auth now runs BEFORE routing, so every unauthenticated path returns
+> **401**, including `/xyzzy` and `/definitely-not-a-route`. An unauthenticated
+> 401 therefore proves nothing about whether a route exists, and probing for 404s
+> can no longer map the surface. `/health` is the only unauthenticated route.
+> Route discovery requires an authenticated probe. **`POST /mcp/sse` is not routed** — the SSE stream emits
 > `event: endpoint` naming `/mcp/messages?sessionId=...`, and JSON-RPC is POSTed
 > there while the stream is held open. Responses arrive on the stream, not as the
 > POST body (the POST returns the bare string `Accepted`).
+
+## Host bind: `CIPHER_BIND` (why the fleet roster entry is refused)
+
+The roster carries two cipher entries, and only one connects today:
+
+| Entry | URL | State |
+|---|---|---|
+| `pmoves-cipher` | `http://${TS_Z890}:8105/mcp/sse` | refused |
+| `pmoves-cipher-local` | `http://localhost:8105/mcp/sse` | works |
+
+**This is configuration, not a design flaw, and the fleet entry should not be
+deleted.** Grounded in source at submodule pin `e24f1323`:
+
+- the app listens on `0.0.0.0` by design — `PMOVES.AI_INTEGRATION.md:96`
+  (`PMOVES_HOST` default `0.0.0.0`), and our compose sets exactly that
+- the documented run publishes `-p 8105:8105`, i.e. all interfaces —
+  `PMOVES.AI_INTEGRATION.md:111`
+- our compose narrows the HOST publish, and it is **parameterised**:
+  `"${CIPHER_BIND:-127.0.0.1}:${CIPHER_PORT:-8105}:8105"`
+  (`pmoves/docker-compose.agents.yml`)
+
+So the roster's `${TS_Z890}` entry matches the DOCUMENTED deployment; this node's
+`CIPHER_BIND` default is the divergence. `TS_Z890` resolves correctly and maps to
+the Z890 node — the refusal is the publish scope, not the name.
+
+Setting `CIPHER_BIND` to the node's tailnet address makes the fleet entry work
+with **no code change, no compose edit, and no `tailscale serve`**. It is still an
+operator decision, because the bearer is then the only control:
+`PMOVES.AI_INTEGRATION.md:126` records that OAuth2/RBAC was **never implemented**,
+and the loopback default is what currently "keeps the LAN and mesh out" (above).
+Weigh that against every node needing `CIPHER_API_TOKEN` distributed.
+
+Until it is set, cipher memory is **per-node**, not fleet-shared — and a
+per-agent token still has to be minted before an agent can use its own identity
+(see `.claude/skills/pmoves-cipher-memory/SKILL.md` §the 403 you will actually hit).
 
 Cipher is the PMOVES memory layer. Every cross-session knowledge lookup, every durable plan/checkpoint/completion, every state-changing action's signed audit trail flows through it. This context captures what's encrypted, where the keys live, the NATS custody chain, and how a Mavis-class agent should use it.
 

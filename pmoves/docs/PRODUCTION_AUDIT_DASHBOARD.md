@@ -3,11 +3,11 @@
 > **Single source of truth** for PMOVES.AI production readiness.
 > Supersedes all individual audit documents accumulated Feb 7 -- Feb 18, 2026.
 
-**Last Updated:** 2026-07-29 (auto-reconciled)
+**Last Updated:** 2026-09-11 (auto-reconciled)
 
 > ⚠️ **STALE — DO NOT TRUST AT FACE VALUE (as of 2026-07-21).** This dashboard has not been refreshed since 2026-04-24 (~3 months) and its "COMPLETE" assertions no longer reflect the repo. A 2026-07-21 ship-readiness assessment found gaps this doc does not mention: two services wired into the production compose are **empty scaffolds that crash-loop** (`media-video`, `media-audio`), and a dozen-plus fully-coded services have **no deployment path**. Treat this file as historical until it is re-reconciled. See the ship-readiness assessment for current state.
 **Branch:** `main`
-**Commit:** `1df8ba47d3` (post 6-PR merge batch)
+**Commit:** `99bf40608` (post 6-PR merge batch)
 **Consolidated From:** 27 audit documents
 **Evidence:** live runbook execution on 2026-03-05 (`make ghcr-prepublish-inrepo-build`, strict local Trivy sweep logs under `pmoves/docs/logs/ghcr-local-prepublish/`)
 
@@ -714,7 +714,7 @@ Release coordination note: `https://github.com/POWERFULMOVES/PMOVES.AI/pull/699#
 |-------|--------|
 | `make -C pmoves smoke` | PASS (production path: `tools/smoke_prod.py`) |
 | `make -C pmoves agents-headless-smoke` | PASS |
-| `make -C pmoves archon-smoke` | PASS |
+| `make -C pmoves archon-ui-smoke` | PASS |
 | `make -C pmoves monitoring-smoke` | PASS (`active=36`, `healthy=21`) |
 | Supabase storage migrator | RECOVERED (`supabase_storage_pmoves` healthy) |
 | Supabase DB collation warning | CLEARED (no new `collation version mismatch` log entries after refresh) |
