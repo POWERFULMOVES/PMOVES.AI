@@ -758,10 +758,11 @@ services:
       retries: 5
       start_period: 60s
     depends_on:
+    # No cross-overlay depends_on: model-registry is defined in a sibling overlay,
+    # and a depends_on referencing an undefined service invalidates the
+    # WHOLE project for this overlay (overlay-up fails fleet-wide). The
+    # dependency is runtime HTTP, not startup ordering.
       nats:
-        condition: service_healthy
-        required: false
-      model-registry:
         condition: service_healthy
         required: false
 
