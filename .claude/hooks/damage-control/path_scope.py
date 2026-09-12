@@ -46,7 +46,7 @@ import fnmatch
 import os
 import re
 import shlex
-from typing import List, Optional, Sequence, Tuple
+from typing import Callable, List, Optional, Sequence, Tuple
 
 # Shell operators that shlex(punctuation_chars=True) emits as their own tokens.
 _OPERATORS = {
@@ -172,25 +172,46 @@ def entry_components(entry: str) -> List[str]:
     return _components(entry)
 
 
+def _window_match(tcomp: List[str], start: int, ecomp: Sequence[str]) -> bool:
+    """Match entry components against token components from `start`.
+
+    A '**' component matches ZERO OR MORE token components. Requiring it to match
+    exactly one silently unblocked four operations on `./Dockerfile` against the
+    entry `**/Dockerfile`: the token normalizes to a single component, the entry
+    carried two, and the length check rejected it before any comparison ran. A
+    differential sweep against the previous guard caught it; nothing in the
+    hand-written suite did, because no case combined a '**' entry with a './'
+    prefix. Zero-or-more is also what the glob means.
+    """
+    if not ecomp:
+        return True
+    if ecomp[0] == "**":
+        rest = ecomp[1:]
+        for skip in range(len(tcomp) - start + 1):
+            if _window_match(tcomp, start + skip, rest):
+                return True
+        return False
+    if start >= len(tcomp):
+        return False
+    if not fnmatch.fnmatch(tcomp[start], ecomp[0]):
+        return False
+    return _window_match(tcomp, start + 1, ecomp[1:])
+
+
 def token_matches_entry(token: str, entry: str) -> bool:
     """True when `token` names a path that the protected `entry` covers.
 
-    Component-wise fnmatch over a contiguous window. Handles literal entries,
-    basename globs, directory-prefix entries and multi-segment globs uniformly.
+    Component-wise fnmatch over a window that may start anywhere in the token, so
+    a relative entry matches at any depth. An absolute entry's leading empty
+    component can only match the token's own leading empty component, which
+    anchors it to the start -- that is what keeps a sentence mentioning a system
+    directory from matching.
     """
     tcomp = _components(token)
     ecomp = entry_components(entry)
     if not tcomp or not ecomp:
         return False
-    if len(ecomp) > len(tcomp):
-        return False
-    for start in range(len(tcomp) - len(ecomp) + 1):
-        if all(
-            fnmatch.fnmatch(tcomp[start + off], ecomp[off])
-            for off in range(len(ecomp))
-        ):
-            return True
-    return False
+    return any(_window_match(tcomp, start, ecomp) for start in range(len(tcomp) + 1))
 
 
 def resolve(token: str) -> Tuple[str, bool]:
@@ -215,6 +236,7 @@ def confirm(
     tokens: Optional[Sequence[str]],
     entry: str,
     repo_scoped: Sequence[str],
+    legacy_match: Optional[Callable[[str, str], bool]] = None,
 ) -> Tuple[bool, List[str]]:
     """Confirm a regex candidate against resolved paths.
 
@@ -224,6 +246,16 @@ def confirm(
                         (or the command could not be decided -- fail closed)
       keep_block=False  the regex matched prose only, or the entry is repo-scoped
                         and every matching token lies outside the repository
+
+    `legacy_match(token, entry)` is the guard's ORIGINAL matcher, applied to one
+    token instead of to the whole command. It is passed in rather than reproduced
+    here so it cannot drift from the matcher actually in force. Its role is to
+    make this stage provably monotonic: a token the original rules matched keeps
+    its block even if the component matcher is stricter, so the ONLY blocks that
+    can be dropped are the two sanctioned classes. It was not optional -- without
+    it, four operations on './Dockerfile.z' stopped being refused, because the
+    original glob regex was unanchored and matched a prefix of the filename while
+    component matching correctly did not.
     """
     if tokens is None:
         # Undecidable: the command could not be lexed. Keep the refusal.
@@ -234,7 +266,10 @@ def confirm(
     saw_token_match = False
 
     for token in tokens:
-        if not token_matches_entry(token, entry):
+        hit = token_matches_entry(token, entry)
+        if not hit and legacy_match is not None:
+            hit = legacy_match(token, entry)
+        if not hit:
             continue
         saw_token_match = True
         absolute, inside = resolve(token)

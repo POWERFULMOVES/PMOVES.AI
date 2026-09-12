@@ -283,6 +283,39 @@ def _escape_path(path: str) -> str:
     return re.escape(path)
 
 
+def _legacy_entry_match(token: str, path: str) -> bool:
+    """Does the patterns.yaml entry `path` match this single TOKEN under the
+    ORIGINAL matching rules?
+
+    The original rules ran over the WHOLE COMMAND, which is the defect. Running
+    the same rules over one resolved token keeps every block whose target is a
+    real path, while prose stops matching -- and prose is excluded structurally:
+    a path token in these commands never contains whitespace, and a sentence
+    always does. A quoted path that genuinely contains a space is still covered,
+    by the component matcher in path_scope.
+
+    Deliberately reuses is_glob_pattern / glob_to_regex / _escape_path rather than
+    restating them, so this cannot drift from the matcher in force above. An
+    uncompilable pattern returns True (undecidable -> keep the refusal).
+    """
+    if not token or any(ch.isspace() for ch in token):
+        return False
+
+    if is_glob_pattern(path):
+        try:
+            return re.search(glob_to_regex(path), token, re.IGNORECASE) is not None
+        except re.error:
+            return True
+
+    for escaped in (_escape_path(os.path.expanduser(path)), _escape_path(path)):
+        try:
+            if re.search(escaped, token):
+                return True
+        except re.error:
+            return True
+    return False
+
+
 def check_path_patterns(
     command: str,
     path: str,
@@ -313,7 +346,7 @@ def check_path_patterns(
         tokens = path_scope.command_tokens(command)
 
     def _verdict(operation: str) -> Tuple[bool, str]:
-        keep, _hits = path_scope.confirm(tokens, path, repo_scoped)
+        keep, _hits = path_scope.confirm(tokens, path, repo_scoped, _legacy_entry_match)
         if not keep:
             # The regex matched prose, or every resolved match for this
             # repo-scoped entry lies outside the repository. Entry inapplicable.
@@ -523,7 +556,7 @@ def check_command(command: str, config: Dict[str, Any]) -> Tuple[bool, bool, str
 
     def _decide(entry: str, reason: str) -> Tuple[bool, bool, str]:
         """Attach the Known Road verdict to a confirmed path block."""
-        _keep, hits = path_scope.confirm(tokens, entry, repo_scoped)
+        _keep, hits = path_scope.confirm(tokens, entry, repo_scoped, _legacy_entry_match)
         allowed, detail, hint = _known_road_verdict(hits)
         if allowed:
             return False, False, ""
