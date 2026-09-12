@@ -50,8 +50,10 @@ WHAT IT CANNOT SEE -- stated, not implied away
   2. PATHS OUTSIDE THE REPOSITORY. The system directories and the shell-rc files
      in readOnlyPaths are paths git cannot report on. Those keep only their
      PreToolUse text-matching coverage.
-  3. A WRITE THAT RESTORES THE ORIGINAL BYTES. The measurement is divergence from
-     the index, not "was opened for writing". Write-then-revert reads as no change.
+  3. A WRITE THAT LEAVES NO TRACE IN (porcelain code, mtime, size). Write-then-
+     revert within one command reads as no change, and so would a rewrite that
+     preserved both mtime and size. The measurement is divergence, not "was
+     opened for writing".
   4. ATTRIBUTION IS TO THE LAST OBSERVED Bash CALL IN THIS REPOSITORY, not
      provably to the command that just ran. The baseline is a file, so two
      concurrent sessions in one checkout can cross-attribute. The DETECTION still
@@ -151,10 +153,31 @@ def git_status(repo: Path) -> Tuple[Optional[Dict[str, str]], str]:
     return rows, ""
 
 
+def _stamp(repo: Path, path: str) -> str:
+    """mtime:size for one path, "" when it is gone.
+
+    The porcelain code ALONE is not a fingerprint. A protected file that is
+    already " M" stays " M" through every further write, so a second change to a
+    file the previous call already reported would be invisible -- and the second
+    change is the interesting one, because the first has just been alerted on and
+    a body that keeps going is exactly what needs catching. Measured while
+    building the end-to-end test: two consecutive diffs applied to one protected
+    compose file produced one detection.
+
+    Only paths git ALREADY reports as changed are stamped -- a handful, never the
+    tree -- so this adds a stat() per dirty protected path and nothing else.
+    """
+    try:
+        st = os.stat(os.path.join(str(repo), path))
+    except OSError:
+        return ""
+    return "%d:%d" % (st.st_mtime_ns, st.st_size)
+
+
 def filter_protected(
-    rows: Dict[str, str], entries: List[Tuple[str, str]]
+    rows: Dict[str, str], entries: List[Tuple[str, str]], repo: Path
 ) -> Dict[str, Dict[str, str]]:
-    """{path: {"xy":..., "entry":..., "kind":...}} for rows a protected entry covers.
+    """{path: {"xy":..., "st":..., "entry":..., "kind":...}} for protected rows.
 
     Matching goes through path_scope.token_matches_entry -- the SAME matcher the
     PreToolUse guard confirms its candidates with -- so the protected set cannot
@@ -164,7 +187,8 @@ def filter_protected(
     for path, xy in rows.items():
         for entry, kind in entries:
             if path_scope.token_matches_entry(path, entry):
-                hits[path] = {"xy": xy, "entry": entry, "kind": kind}
+                hits[path] = {"xy": xy, "st": _stamp(repo, path),
+                              "entry": entry, "kind": kind}
                 break
     return hits
 
@@ -200,7 +224,9 @@ def diff(before: Dict[str, Dict], after: Dict[str, Dict]) -> List[Dict]:
     for path in sorted(set(before) | set(after)):
         was = (before.get(path) or {}).get("xy")
         now = (after.get(path) or {}).get("xy")
-        if was == now:
+        was_st = (before.get(path) or {}).get("st")
+        now_st = (after.get(path) or {}).get("st")
+        if (was, was_st) == (now, now_st):
             continue
         meta = after.get(path) or before.get(path) or {}
         changes.append({
@@ -253,6 +279,8 @@ def describe(change: Dict) -> str:
         what = "restored to the index (was %r)" % (change["was"],)
     elif change["was"] is None:
         what = "now %r" % (change["now"],)
+    elif change["was"] == change["now"]:
+        what = "%r, written again (mtime/size moved)" % (change["now"],)
     else:
         what = "%r -> %r" % (change["was"], change["now"])
     return "  %s  [%s %s]  %s" % (
@@ -349,7 +377,7 @@ def run(payload: Dict) -> int:
     if rows is None:
         return _notice(state, spath, now, why)
 
-    after = filter_protected(rows, protected_entries(config))
+    after = filter_protected(rows, protected_entries(config), repo)
     before = state.get("protected")
 
     if not isinstance(before, dict):
