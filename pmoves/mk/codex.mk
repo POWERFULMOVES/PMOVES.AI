@@ -133,6 +133,13 @@ secrets-runtime-hydrate: ensure-env-shared ## Pull runtime-emitted labels (Supab
 	-@$(MAKE) --no-print-directory supa-status
 	@$(CODEX_PY) tools/runtime_secrets_hydrate.py --env-file env.shared --status-file .supabase.status.env
 
+secrets-runtime-hydrate-dry: ## Show (masked) what secrets-runtime-hydrate WOULD pull from running containers; writes nothing
+	@# Deliberately NO ensure-env-shared prerequisite: that step runs brand_defaults
+	@# and rewrites env.shared on every invocation, which is exactly what a dry run
+	@# must never do. supa-status is skipped for the same reason (it refreshes the
+	@# status snapshot); the tool reads whatever snapshot already exists.
+	@$(CODEX_PY) tools/runtime_secrets_hydrate.py --env-file env.shared --status-file .supabase.status.env --dry-run
+
 secrets-funnel-sync: chit-manifest-sync chit-export ## Materialize generated env files from CHIT + secrets manifest
 	@PYTHONPATH="$(CURDIR)/.." $(CODEX_PY) tools/secrets_sync.py generate --manifest pmoves/chit/secrets_manifest.yaml --cgp "$(CHIT_EXPORT_PATH)" $(SECRETS_SYNC_FLAGS)
 
