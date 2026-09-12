@@ -428,8 +428,8 @@
     "PMOVES-activepieces": {
       "upstream": "activepieces/activepieces",
       "sync": false,
-      "reason": "fork of activepieces/activepieces for self-hosted automation (pmoves-activepieces skill); sync deferred until next tracked release",
-      "branch": "main"
+      "reason": "fork of activepieces/activepieces for self-hosted automation (pmoves-activepieces skill); tracks PMOVES.AI-Edition-Hardened per .gitmodules; sync deferred until next tracked release",
+      "branch": "PMOVES.AI-Edition-Hardened"
     },
     "PMOVES-composio": {
       "upstream": "ComposioHQ/composio",
@@ -446,8 +446,8 @@
     "PMOVES-N8N-Auto": {
       "upstream": "n8n-io/n8n",
       "sync": false,
-      "reason": "automation fork of n8n-io/n8n (heads/master); self-hosted n8n lane (pmoves-n8n skill); sync deferred until next tracked release",
-      "branch": "master"
+      "reason": "automation fork of n8n-io/n8n; self-hosted n8n lane (pmoves-n8n skill); tracks PMOVES.AI-Edition-Hardened per .gitmodules; sync deferred until next tracked release",
+      "branch": "PMOVES.AI-Edition-Hardened"
     }
   },
   "_excluded": {
