@@ -515,7 +515,7 @@ services:
     # fleet-wide). The dependency is runtime HTTP (HIRAG_URL), not
     # startup ordering.
     ports:
-    - ${RETRIEVAL_EVAL_BIND:-0.0.0.0}:${RETRIEVAL_EVAL_PORT:-8090}:8090
+    - ${RETRIEVAL_EVAL_BIND:-127.0.0.1}:${RETRIEVAL_EVAL_PORT:-8090}:8090
     volumes:
     - ./services/retrieval-eval:/app:rw
     - ./datasets:/app/data:rw
