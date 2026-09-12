@@ -2074,7 +2074,6 @@ b8cea26c8\ that added it to the top-level equired\ array). (2) PMOVES-pinokio PR
 
 
 
-<!-- GRAPHITI_MARK: 5090-CLAUDE::VOICE-SAMPLER-FOUNDATIONS::2026-08-07 -->
 
 
 ## Skill-check Danger Room — verifiable artifacts — HANDOFF 4090 → SPARK (2026-08-08)
@@ -2936,7 +2935,6 @@ b8cea26c8\ that added it to the top-level equired\ array). (2) PMOVES-pinokio PR
 - `2026-09-09T13:55:53Z` CLAIM `CRUSH-SPARK (KIMI)` branch: `feat/persona-bus-durability` · **TTL 96h (expires `2026-09-13T13:55:53Z`)** · scope: Two slices completing the third-ref loop: (1) JetStream binding for persona.consumption.recorded.v1 + shape.trace/profile subjects so grounding events survive consumer restarts (verify by replay test); (2) jellyfin-bridge playback lane emitting persona.consumption.recorded.v1 with consumer_kind=human source=jellyfin — operator phone listens become the human-side grounding signal.
 - `2026-09-09T15:55:56Z` RELEASE `CRUSH-SPARK (KIMI)` branch: `feat/persona-bus-durability` · scope: PR #3010 merged: JetStream durability (PMOVES-PERSONA stream, durable manual-ack sub, replay proven live) + jellyfin-bridge human-side producer (POST /jellyfin/webhook, start/stop duration pairing, e2e proven). Validation caught: stash-pop unstaging loss, sys.path pollution cross-service import collision, unbounded nats reconnect in webhook publisher, stale semantic-cache baseline from main.
 
-<!-- GRAPHITI_MARK: HERMES-AGENT::WEALTH-TRI-REFRESH-CLAIM::2026-09-09 -->
 
 - `2026-09-09T21:47:00Z` RELEASE `HERMES-AGENT (elder-melchor)` branch: `feat/wealth-tri-refresh` · scope: **PMOVES.AI #3012 merged 2026-09-09T21:41:24Z** (tri-integration recon doc + ToKenism-Multi pin d17ea07→04285b8; findings: sim :8103 DOWN on spark, :8100 = mcp-toolkit not sim, fleet-sentinel undeployed — filed for spark/crush lane). **PMOVES-Wealth #56 merged 21:45:43Z** (fork readme/tri context), **#57 merged 21:46:48Z** (upstream sync, 21-behind→0). NOT delivered: tri-integration runtime verification (needs sim restart on spark — spark-side), fleet-sentinel deployment (main-checkout post-merge step). agent_signature: ACK::powerfulmoves::hermes-agent::2026-09-09T21:47:00Z<!-- GRAPHITI_MARK: HERMES-AGENT::WEALTH-TRI-REFRESH-RELEASE::2026-09-09 -->
 - `2026-09-10T08:12:40Z` CLAIM `HERMES-AGENT (elder-melchor)` branch: `feat/ageless-beauty-edition` · **TTL 72h (expires `2026-09-13T08:12:40Z`)** · scope: **Ageless Beauty PMOVES Edition — room manifest + nutritional interactive database workorder + conformant care team + mobile branding spec for NP/minister practice (elder contribution). Docs-first; service implementation follows.**<!-- GRAPHITI_MARK: HERMES-AGENT::AGELESS-BEAUTY-EDITION-CLAIM::2026-09-10 -->

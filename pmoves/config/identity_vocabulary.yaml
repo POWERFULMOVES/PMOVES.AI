@@ -176,9 +176,9 @@ identities:
       bare `KILOCODE`; merged here rather than split, same doctrine as
       `CRUSH-GLM52`. The registry KEY `kilocode_glm` (underscore) is a sixth
       spelling, added per this file's own doctrine on the `claude_b850` key
-      above -- once `kilocode` resolves, `test_the_registry_alias_rule_still_
-      holds_against_both_files` requires the key to fold to the same
-      identity too.
+      above -- once `kilocode` resolves, the test
+      `test_the_registry_alias_rule_still_holds_against_both_files` requires
+      the key to fold to the same identity too.
 
   - canonical: pmoves-minimax
     aliases: ["PMOVES-MINIMAX"]
