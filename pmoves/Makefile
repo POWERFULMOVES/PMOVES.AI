@@ -455,6 +455,20 @@ register-postdate-check: ## Assert rows added on this branch are not postdated (
 register-postdate-sweep: ## Report every postdated row in the register's whole history
 	@$(PYTHON) tools/register_postdate_check.py --sweep $(ARGS)
 
+# -------- GitHub notification pool (3-surface review triage) ----------
+# The founding defect (PR #3025, 2026-09-12): fleet reviews post as bot
+# ISSUE COMMENTS, so review-endpoint scans return confident zeros while a
+# REQUEST_CHANGES sits in plain sight. The pool normalizes all three REST
+# surfaces per open PR and publishes to NATS github.pool.review.v1
+# (JetStream GITHUB_POOL, limits retention) -- one sweep, every agent reads.
+.PHONY: github-pool-sync
+github-pool-sync: ## Sweep PR review surfaces into the NATS pool (0 clean / 1 urgent / 3 could not measure)
+	@$(PYTHON) tools/github_pool_sync.py $(ARGS)
+
+.PHONY: github-pool-latest
+github-pool-latest: ## Print the last N pooled records (N=10)
+	@nats -s $(GITHUB_POOL_NATS_URL) stream view GITHUB_POOL --count $(or $(N),10) $(ARGS)
+
 # -------- Updates ----------
 .PHONY: update
 update: ensure-env-shared  ## Pull repo + images, recreate stack
