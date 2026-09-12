@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Agent Wealth Transaction Created",
+  "description": "Emitted by wealth-mcp after a Firefly transaction is created",
+  "type": "object",
+  "required": ["transaction_id", "kind", "amount", "timestamp"],
+  "additionalProperties": false,
+  "properties": {
+    "transaction_id": {
+      "type": "string",
+      "description": "Firefly transaction id (or 'unknown' if the response shape lacked it)"
+    },
+    "kind": {
+      "type": "string",
+      "enum": ["withdrawal", "deposit", "transfer"],
+      "description": "Firefly transaction type"
+    },
+    "amount": {
+      "type": "string",
+      "description": "Decimal amount as a string, e.g. \"42.50\""
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "UTC ISO-8601 time the transaction was created"
+    }
+  }
+}
