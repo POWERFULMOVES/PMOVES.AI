@@ -168,6 +168,51 @@ tracked:
     severity: P2
     description: "Per-service health endpoint truth — reference for compose healthchecks and Prometheus blackbox probes"
 
+  # ── Access-path + secrets-road docs (enrolled 2026-09-04) ──────────────────
+  # These describe how an operator or agent REACHES the fleet and how credentials
+  # travel. They drift silently and are consulted during incidents, which is the
+  # worst combination. 102 docs live under docs/operations/ and only 2 were
+  # tracked before this block.
+  #
+  # Why these and not the other 100: each one answers "how do I REACH this node",
+  # and each is consulted when a node is already in trouble. On 2026-09-04 a full
+  # disk on SPARK took out its display manager and RustDesk together, leaving
+  # tailnet SSH as the only door. Every access-path doc was load-bearing that
+  # hour and none was freshness-checked.
+  #
+  # (An earlier draft of this block claimed the deployed tailnet policy had
+  # drifted from tailscale-acl-policy.json. It has NOT. The live policy was
+  # fetched from the Tailscale API the same day and carries the same
+  # tag:pmoves -> tag:pmoves autogroup:nonroot SSH rule. The lockout was mine:
+  # autogroup:nonroot admits any non-root user THAT EXISTS on the target, and I
+  # tried five usernames without trying the one already visible in
+  # /home/powerfulmoves. Recorded here because a wrong reason for a right
+  # decision is still a ghost anchor.)
+  #
+  # P2 (warn, do not gate) for the same reason as the block above: freshness is
+  # measured from last-commit date and several are already outside budget.
+  # Promote to P1 after a refresh pass brings them inside.
+  - path: pmoves/configs/tailscale-acl-policy.json
+    freshness_days: 30
+    severity: P2
+    description: "Tailnet ACL + SSH policy — the repo copy of the deployed tailnet policy. Verified MATCHING the live tailnet 2026-09-04 (the tag:pmoves -> tag:pmoves autogroup:nonroot SSH rule is present in both). Tracked because it governs fleet access and drift here is silent; audit with fleet:acl-audit."
+  - path: pmoves/docs/operations/FLEET_INVENTORY_LIVE.md
+    freshness_days: 30
+    severity: P2
+    description: "Node inventory and access paths — named LIVE, so staleness is a contradiction in terms. First stop when a node is unreachable."
+  - path: pmoves/docs/operations/WINDOWS_SSH_PARITY.md
+    freshness_days: 90
+    severity: P2
+    description: "SSH parity on the tailnet for Windows nodes + ufw narrowing on Linux nodes. The fallback access path when Tailscale SSH policy is wrong or the control plane is down."
+  - path: pmoves/docs/operations/RUSTDESK_SELF_HOSTED.md
+    freshness_days: 90
+    severity: P2
+    description: "Self-hosted RustDesk relay — the graphical access path. Consulted exactly when a node has no video, which is when it is least verifiable."
+  - path: .claude/context/tier-architecture.md
+    freshness_days: 60
+    severity: P2
+    description: "7-tier env model and how env.shared relates to tier files. Describes the direction credentials travel (env.shared -> CHIT bundle -> tier files); a wrong reading here sends fixes to the wrong file."
+
 
 # ============================================================================
 # Renderable entries (Lane 2228, 2026-08-02)
