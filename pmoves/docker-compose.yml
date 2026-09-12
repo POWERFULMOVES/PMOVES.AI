@@ -3822,7 +3822,7 @@ services:
     - HTTP_PROXY=
     - HTTPS_PROXY=
     - NO_PROXY=
-    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_external
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_external,pmoves_api
     depends_on:
       archon-postgres:
         condition: service_healthy

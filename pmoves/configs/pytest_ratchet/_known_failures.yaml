@@ -288,7 +288,6 @@ known_failures:
   - "FAIL|tests.smoke.test_neo4j_dual_ports|test_neo4j_http_port_exposed"
   - "FAIL|tests.smoke.test_network_configuration|test_agent_zero_connects_to_tensorzero"
   - "FAIL|tests.smoke.test_network_configuration|test_tensorzero_uses_internal_port"
-  - "FAIL|tests.smoke.test_supabase_network|test_archon_uses_host_dot_internal_for_supabase"
   - "FAIL|tests.smoke.test_supabase_network|test_pmoves_ui_on_supabase_network"
   - "FAIL|tests.smoke.test_supabase_network|test_supabase_network_exists"
   - "FAIL|tests.smoke.test_supabase_selfhosted|test_env_shared_has_jwt_comment"
