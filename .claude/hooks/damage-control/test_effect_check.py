@@ -32,6 +32,7 @@ GUARD_FILES = [
 ]
 
 failures = []
+LAST = {"stdout": ""}
 
 
 def check(label, condition, detail=""):
@@ -72,6 +73,9 @@ def run_hook(root, command):
     proc = subprocess.run(
         [sys.executable, str(root / ".claude/hooks/damage-control/effect_check.py")],
         input=payload, capture_output=True, text=True, env=env, cwd=str(root))
+    # stdout is the hook's structured channel and is kept SEPARATE for the
+    # one-document assertion below; the merged string is what the other checks read.
+    LAST["stdout"] = proc.stdout
     return proc.returncode, proc.stdout + proc.stderr
 
 
@@ -171,6 +175,16 @@ def main():
               "DETECTION, not prevention" in log, log)
         check("no grant means nothing is appended to the trail",
               rows_before == rows_after == 0, (rows_before, rows_after))
+
+        # stdout carries a JSON hookSpecificOutput document. TWO of them in one
+        # invocation is not two messages, it is malformed output -- and it would
+        # go wrong in the branch that has the most to say.
+        try:
+            parsed = json.loads(LAST["stdout"])
+            single = parsed.get("hookSpecificOutput", {}).get("hookEventName") == "PostToolUse"
+        except ValueError as exc:
+            parsed, single = str(exc), False
+        check("stdout is exactly one JSON hook document", single, LAST["stdout"][:200])
 
         # ------------------------------------------------------------------
         # The inverse defect: an AUTHORIZED opaque write went unrecorded too, so

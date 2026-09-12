@@ -426,37 +426,44 @@ def run(payload: Dict) -> int:
         return 0
 
     granted, ungranted = adjudicate(repo, changes)
+
+    # ONE emit per run. `emit` writes a JSON document to stdout, and two of them
+    # in one invocation is not "two messages", it is malformed output -- the
+    # second would be discarded or would break the parse, silently, in the branch
+    # where the most is being reported. Everything is accumulated and sent once.
+    lines: List[str] = []
+
     if not save_state(spath, state):
-        emit("EFFECT-CHECK COULD-NOT-MEASURE: the baseline could not be written "
-             "to %s; the change(s) below will be reported again next call."
-             % spath)
+        lines.append(
+            "EFFECT-CHECK COULD-NOT-MEASURE: the baseline could not be written "
+            "to %s; the change(s) below will be reported again next call." % spath)
 
     if granted:
-        print("EFFECT-CHECK: %d protected path(s) changed under the active Known "
-              "Road and were recorded to known-roads.jsonl:" % len(granted),
-              file=sys.stderr)
-        for change in granted:
-            print(describe(change), file=sys.stderr)
+        lines.append(
+            "EFFECT-CHECK: %d protected path(s) changed under the active Known "
+            "Road and were recorded to known-roads.jsonl:" % len(granted))
+        lines += [describe(c) for c in granted]
 
-    if not ungranted:
-        return 0
+    if ungranted:
+        lines.append(
+            "EFFECT-CHECK ALERT: %d protected path(s) changed with no valid "
+            "Known Road grant. This is DETECTION, not prevention -- the write "
+            "has already happened." % len(ungranted))
+        lines += [describe(c) for c in ungranted]
+        lines += ["  grant refused: " + r for r in
+                  sorted({c["grant_error"] for c in ungranted if c.get("grant_error")})]
+        lines += [
+            "Command just run: " + command[:300] + ("..." if len(command) > 300 else ""),
+            "Attribution note: the baseline is per-checkout, so this is the change "
+            "since the last observed Bash call in THIS repository -- a concurrent "
+            "session in the same checkout can cross-attribute.",
+            "Do not silence this. Disclose it, then revert or justify the change: "
+            "see .claude/skills/known-roads/SKILL.md.",
+        ]
 
-    lines = ["EFFECT-CHECK ALERT: %d protected path(s) changed with no valid "
-             "Known Road grant. This is DETECTION, not prevention -- the write "
-             "has already happened." % len(ungranted)]
-    lines += [describe(c) for c in ungranted]
-    lines += ["  grant refused: " + r for r in
-              sorted({c["grant_error"] for c in ungranted if c.get("grant_error")})]
-    lines += [
-        "Command just run: " + command[:300] + ("..." if len(command) > 300 else ""),
-        "Attribution note: the baseline is per-checkout, so this is the change "
-        "since the last observed Bash call in THIS repository -- a concurrent "
-        "session in the same checkout can cross-attribute.",
-        "Do not silence this. Disclose it, then revert or justify the change: "
-        "see .claude/skills/known-roads/SKILL.md.",
-    ]
-    emit("\n".join(lines))
-    return 2
+    if lines:
+        emit("\n".join(lines))
+    return 2 if ungranted else 0
 
 
 def main() -> None:
