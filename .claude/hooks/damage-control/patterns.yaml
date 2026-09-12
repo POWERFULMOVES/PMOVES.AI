@@ -656,6 +656,56 @@ bashToolPatterns:
       Use `/fleet:status` skill or `make -C pmoves fleet-status` for hostname-only output.
     ask: true
 
+
+  # The two remaining RFC1918 ranges. 172.16/12 is Docker's default bridge
+  # allocation and is how container addresses reached a public repo past a
+  # guard built to stop exactly that; 10/8 covers VPS and overlay addressing.
+  #
+  # Both are NARROWED, because the broad forms would flag PMOVES's own declared
+  # network plan. Measured over tracked files on main: broad 10/8 = 42 files,
+  # broad 172.16/12 = 68 files (the bulk of the latter being the project's own
+  # subnet declarations in pmoves/Makefile and the compose files). Structural
+  # exclusions below cut that to 24 and 12. Excluded, because none of them
+  # identify a host:
+  #   - a CIDR-suffixed address (a subnet declaration, not a host)
+  #   - a network base address (last octet 0)
+  #   - a gateway address (last octet 1) - derivable from the subnet itself
+  # What remains is an assigned host address, which is the reconnaissance.
+  - pattern: '\b10\.\d{1,3}\.\d{1,3}\.(?!0\b)(?!1\b)\d{1,3}\b(?!/)'
+    reason: >-
+      TOPOLOGY LEAKAGE: Private RFC1918 host address (10.x.x.x) detected. Use
+      Tailscale hostnames or docker-compose service names instead of raw
+      addresses in committed files. Assigned host addresses expose internal
+      network structure in a public repo.
+      Use `/fleet:status` skill or `make -C pmoves fleet-status` for hostname-only output.
+      ---
+      KNOWN ROADS: Fleet management uses /fleet:* skills (status, rustdesk-check,
+      enroll, fix-relay, stale-nodes, acl-audit). Never use raw IPs in commands.
+      ---
+      INTEGRITY CHECK: Subnet declarations (CIDR-suffixed), network bases (last
+      octet 0) and gateways (last octet 1) are already excluded by this pattern.
+      If your address is none of those it identifies a host, and does not belong
+      in a committed file - use the hostname or service name.
+    ask: true
+
+  - pattern: '\b172\.(?:1[6-9]|2\d|3[01])\.\d{1,3}\.(?!0\b)(?!1\b)\d{1,3}\b(?!/)'
+    reason: >-
+      TOPOLOGY LEAKAGE: Container/bridge host address (Docker's default bridge
+      allocation) detected. Container addresses are assigned at runtime, differ
+      per host, and map internal topology in a public repo.
+      Use the docker-compose service name - containers resolve each other by
+      service name on a shared network, so the address is never needed.
+      Use `/fleet:status` skill or `make -C pmoves fleet-status` for hostname-only output.
+      ---
+      KNOWN ROADS: Inspect networks with `make -C pmoves fleet-status` rather than
+      pasting `docker inspect` address output into docs, handoffs or the register.
+      ---
+      INTEGRITY CHECK: The declared subnets in pmoves/Makefile and the compose
+      files are CIDR-suffixed and are already excluded, as are network bases
+      (last octet 0) and gateways (last octet 1). A match here is a runtime
+      container address, which should be redacted to a placeholder.
+    ask: true
+
   # ---------------------------------------------------------------------------
   # HOST NETWORK CONFIGURATION — Known Roads via z890-host-setup
   # ---------------------------------------------------------------------------
