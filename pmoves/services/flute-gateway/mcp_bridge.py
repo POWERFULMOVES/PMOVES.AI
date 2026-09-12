@@ -30,7 +30,7 @@ import logging
 import os
 import uuid
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 import yaml
 from fastapi import APIRouter, Request
@@ -375,9 +375,20 @@ class MCPSession:
 
     async def handle_message(self, message: dict) -> None:
         """Process a JSON-RPC message and enqueue the response."""
+        response = await self.dispatch(message)
+        if response is not None:
+            await self.queue.put(json.dumps(response))
+
+    async def dispatch(self, message: dict) -> Optional[dict]:
+        """Process one JSON-RPC message; return the response dict (None = notification, no reply).
+
+        Stateless: safe to call from the streamable-http /mcp route without an
+        SSE session — the same dispatcher backs both transports.
+        """
         method = message.get("method", "")
         msg_id = message.get("id")
         params = message.get("params", {})
+
 
         if method == "initialize":
             response = {
@@ -396,7 +407,7 @@ class MCPSession:
 
         elif method == "notifications/initialized":
             # Client acknowledgement — no response needed
-            return
+            return None
 
         elif method == "tools/list":
             response = {
@@ -447,7 +458,7 @@ class MCPSession:
                 "error": {"code": -32601, "message": f"Method not found: {method}"},
             }
 
-        await self.queue.put(json.dumps(response))
+        return response
 
     async def _publish_tts_event(self, tool: str, args: dict, result: dict) -> None:
         """Publish TTS synthesis event to NATS."""
@@ -486,6 +497,34 @@ def create_mcp_router(
         APIRouter with /sse and /messages endpoints mounted.
     """
     router = APIRouter()
+
+    # Streamable-http MCP endpoint (protocol 2025-03-26 single-post style):
+    # one POST per JSON-RPC message, response in the body. Stateless — every
+    # request goes through MCPSession.dispatch, so no SSE session needed.
+    # This is the transport Hermes' native MCP client and cipher's shim speak;
+    # the older SSE surface (/sse + /messages) stays for existing consumers.
+    from fastapi.responses import JSONResponse
+
+    @router.post("/mcp")
+    async def mcp_streamable(request: Request):
+        body = await request.json()
+        # A single message or a batch — dispatch each, drop notifications.
+        messages = body if isinstance(body, list) else [body]
+        responses = []
+        for msg in messages:
+            if not isinstance(msg, dict):
+                responses.append({
+                    "jsonrpc": "2.0", "id": None,
+                    "error": {"code": -32600, "message": "Invalid Request"},
+                })
+                continue
+            session = MCPSession("stateless", get_provider(), get_nats_client())
+            resp = await session.dispatch(msg)
+            if resp is not None:
+                responses.append(resp)
+        if not responses:
+            return JSONResponse(status_code=202, content={})
+        return responses[0] if len(responses) == 1 and not isinstance(body, list) else responses
 
     @router.get("/sse")
     async def sse_endpoint(request: Request):
