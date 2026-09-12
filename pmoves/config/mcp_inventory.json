@@ -6,8 +6,6 @@
     "cipher_fleet_url": "http://${TS_Z890}:8105/mcp/sse",
     "agent_zero_local_url": "http://localhost:8081/mcp/t-${AGENT_ZERO_MCP_TOKEN}/sse",
     "agent_zero_fleet_url": "http://${TS_Z890}:8081/mcp/t-${AGENT_ZERO_MCP_TOKEN}/sse",
-    "archon_local_url": "http://localhost:8051",
-    "archon_fleet_url": "http://${TS_Z890}:8051",
     "docker_gateway_port": 8090,
     "flute_local_url": "http://localhost:8055/sse",
     "flute_fleet_url": "http://${TS_Z890}:8055/sse"
@@ -49,14 +47,7 @@
           "endpoint_prefix": "agent_zero"
         },
         {
-          "key": "archon",
-          "description": "Archon knowledge / task orchestrator (REST-only MCP, no standard transport \u2014 disabled by default)",
-          "transport": "http",
-          "endpoint": "local",
-          "endpoint_prefix": "archon",
-          "disabled": true
-        },
-        {
+
           "key": "pmoves-nats-fleet",
           "description": "NATS fleet messaging bridge",
           "transport": "stdio",
@@ -74,6 +65,26 @@
           }
         },
         {
+          "key": "e2b-danger-room",
+          "description": "E2B Danger Room \u2014 run AI-generated code in an isolated E2B sandbox (tool: run_code). The fleet's safe-execution seam; forked at POWERFULMOVES/pmoves-e2b-mcp-server (hardened).",
+          "transport": "stdio",
+          "command": "node",
+          "args": [
+            "./pmoves-e2b-mcp-server/packages/js/build/index.js"
+          ],
+          "env": {
+            "E2B_API_KEY": "${E2B_API_KEY}"
+          },
+          "clients": [
+            "claude",
+            "crush",
+            "kilocode",
+            "kimi",
+            "opencode"
+          ],
+          "_note": "Registered 2026-09-06. Stdio server spawned per client with E2B_API_KEY (built via npm --prefix pmoves-e2b-mcp-server/packages/js run build). Reachable like pmoves-nats-fleet/docker-gateway (command-spawn), not an HTTP health service. E2B execution is cloud (E2B_DOMAIN unset); self-hosting needs GCP."
+        },
+        {
           "key": "pmoves-supabase",
           "description": "Supabase PostgREST API",
           "transport": "stdio",
@@ -84,7 +95,7 @@
             "--apiUrl",
             "${SUPABASE_REST_URL:-http://localhost:8000/rest/v1}",
             "--apiKey",
-            "${SUPABASE_SERVICE_ROLE_KEY:-${SUP…EY}}",
+            "${SUPABASE_SERVICE_ROLE_KEY:-${SUP\u2026EY}}",
             "--schema",
             "public"
           ]
@@ -154,7 +165,7 @@
             "claude",
             "crush"
           ],
-          "_note": "ACTIVATED 2026-09-04: clients populated per the fail-closed checklist — COMPOSIO_API_KEY registered in the CHIT secrets manifest (#2837, slot composio_api_key, tier llm) and DELIVERED via the Pattern-B funnel (secrets-funnel-from-prod, bundle chit-bundle-b850-33907455784); clients = claude + crush (the 4090 control-plane coding agents; KiloCode joins via #2918's lane). Auth is in-band managed OAuth: the client's first connect returns the OAuth link, the operator authorizes, the connection is reusable — NOT a static X-API-Key header. Endpoint updated 2026-09-02 from stale mcp.composio.dev to connect.composio.dev/mcp. Old 2026-08-27 note (superseded): operator-approved registration; the stale disabled:true + X-API-Key header block was removed 2026-09-02."
+          "_note": "ACTIVATED 2026-09-04: clients populated per the fail-closed checklist \u2014 COMPOSIO_API_KEY registered in the CHIT secrets manifest (#2837, slot composio_api_key, tier llm) and DELIVERED via the Pattern-B funnel (secrets-funnel-from-prod, bundle chit-bundle-b850-33907455784); clients = claude + crush (the 4090 control-plane coding agents; KiloCode joins via #2918's lane). Auth is in-band managed OAuth: the client's first connect returns the OAuth link, the operator authorizes, the connection is reusable \u2014 NOT a static X-API-Key header. Endpoint updated 2026-09-02 from stale mcp.composio.dev to connect.composio.dev/mcp. Old 2026-08-27 note (superseded): operator-approved registration; the stale disabled:true + X-API-Key header block was removed 2026-09-02."
         },
         {
           "key": "titanmail",
