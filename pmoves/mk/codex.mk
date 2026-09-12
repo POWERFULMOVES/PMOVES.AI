@@ -106,21 +106,21 @@ chit-export: ensure-env-shared ## Export env.shared into a user-scoped CHIT bund
 	@echo CHIT bundle written to $(CHIT_EXPORT_PATH)
 
 chit-manifest-register: ## Idempotently add missing registry entries to the v2 CHIT manifest (ARGS='--check' to gate)
-	@$(MAKE) --no-print-directory env-bootstrap-lite ARGS= >/dev/null
+	@$(MAKE) --no-print-directory env-bootstrap-check
 	@runner="$(CODEX_PY)"; \
 	if [ -x "$(CODEX_VENV_WIN)" ]; then runner="$(CODEX_VENV_WIN)"; \
 	elif [ -x "$(CODEX_VENV_UNIX)" ]; then runner="$(CODEX_VENV_UNIX)"; fi; \
 	$$runner tools/chit_manifest_register.py $(ARGS)
 
 chit-manifest-sync: ## Sync v1 CHIT manifest from v2 (file/key targets + alias hints)
-	@$(MAKE) --no-print-directory env-bootstrap-lite ARGS= >/dev/null
+	@$(MAKE) --no-print-directory env-bootstrap-check
 	@runner="$(CODEX_PY)"; \
 	if [ -x "$(CODEX_VENV_WIN)" ]; then runner="$(CODEX_VENV_WIN)"; \
 	elif [ -x "$(CODEX_VENV_UNIX)" ]; then runner="$(CODEX_VENV_UNIX)"; fi; \
 	$$runner tools/chit_manifest_sync.py --source "$(CHIT_MANIFEST_SOURCE)" --dest "$(CHIT_MANIFEST_DEST)"
 
 chit-manifest-check: ## Verify v1 CHIT manifest is in sync with v2 source
-	@$(MAKE) --no-print-directory env-bootstrap-lite ARGS= >/dev/null
+	@$(MAKE) --no-print-directory env-bootstrap-check
 	@runner="$(CODEX_PY)"; \
 	if [ -x "$(CODEX_VENV_WIN)" ]; then runner="$(CODEX_VENV_WIN)"; \
 	elif [ -x "$(CODEX_VENV_UNIX)" ]; then runner="$(CODEX_VENV_UNIX)"; fi; \
@@ -136,9 +136,26 @@ secrets-runtime-hydrate: ensure-env-shared ## Pull runtime-emitted labels (Supab
 secrets-funnel-sync: chit-manifest-sync chit-export ## Materialize generated env files from CHIT + secrets manifest
 	@PYTHONPATH="$(CURDIR)/.." $(CODEX_PY) tools/secrets_sync.py generate --manifest pmoves/chit/secrets_manifest.yaml --cgp "$(CHIT_EXPORT_PATH)" $(SECRETS_SYNC_FLAGS)
 
-.PHONY: secrets-pull secrets-funnel-from-prod
+.PHONY: secrets-pull secrets-funnel-from-prod chit-provenance-check
 secrets-pull: ## Pattern B consumer: install the newest CI CHIT bundle at the canonical user-scoped path (runnerless nodes; no path juggling)
 	@bash scripts/chit_bundle_lock.sh bash scripts/pull_chit_bundle.sh
+
+chit-provenance-check: ## Is this node's CHIT bundle CI-pulled, and is a pullable artifact still alive? (read-only; ARGS='--strict' to gate, '--offline' to skip the artifact query)
+	@# STANDING, not rotate-triggered. The two existing warnings -- chit-export's
+	@# refusal and secrets-rotate's notice -- both fire during a ROTATE. A node
+	@# that has not rotated sits in the degraded state and is never told.
+	@# Measured on Z890 2026-09-04, nothing having rotated for days: bundle 163h
+	@# old, no provenance marker, 40 declared keys unprojectable, and the newest
+	@# producer run held no unexpired bundle for this node.
+	@#
+	@# The urgency is the SHELF LIFE. sync-secrets-local.yml uploads with
+	@# retention-days: 1, so `secrets-pull` only works if a producer ran today.
+	@# Past that the remedy is a different, slower procedure -- and an operator
+	@# discovers that at exactly the wrong moment.
+	@#
+	@# Read-only by construction: it never pulls, never writes, and prints key
+	@# NAMES only, so it is safe to run inside an agent transcript.
+	@$(CODEX_PY) tools/chit_provenance_check.py $(ARGS)
 
 secrets-funnel-from-prod: secrets-pull secrets-funnel-sync-from-bundle ## One-shot prod funnel for runnerless nodes: pull bundle, materialize tiers, refresh local.env, force-hydrate env.shared
 	@echo "→ Refreshing local.env from CHIT bundle (runnerless parity with sync-secrets-local.yml)"
@@ -150,6 +167,18 @@ secrets-funnel-from-prod: secrets-pull secrets-funnel-sync-from-bundle ## One-sh
 .PHONY: gh-secret-capacity-audit
 gh-secret-capacity-audit: ## Reconcile CHIT manifest github_secret targets against GitHub's 100-per-scope cap (ENV=<name> for an environment; JSON=1). Exit 1 on findings, 3 if unmeasurable.
 	@$(CODEX_PY) tools/github_secret_capacity_audit.py $(if $(ENV),--env "$(ENV)") $(if $(JSON),--json)
+
+.PHONY: gh-app-token
+gh-app-token: ## Mint a GitHub App installation token (dsh github agent). REPOSITORIES=a,b PERMISSIONS=contents:read[,x:write] OUT=<file> ALL=1(over-broad, needs CONFIRM=1)
+	@$(LOAD_ENV_SHARED); args=""; \
+	if [ -n "$(REPOSITORIES)" ]; then args="$$args --repositories $(REPOSITORIES)"; fi; \
+	if [ -n "$(PERMISSIONS)" ]; then args="$$args --permissions $(PERMISSIONS)"; fi; \
+	if [ -n "$(OUT)" ]; then args="$$args --out $(OUT)"; fi; \
+	if [ "$(ALL)" = "1" ]; then \
+	  if [ "$$(CONFIRM)" != "1" ]; then echo "ALL=1 mints installation-default scope; pass CONFIRM=1 to acknowledge" >&2; exit 3; fi; \
+	  args="$$args --all --yes"; \
+	fi; \
+	PYTHONPATH="$(CURDIR)/.." $(CODEX_PY) tools/gh_app_token.py $$args
 
 .PHONY: docker-mcp-secrets-hydrate
 docker-mcp-secrets-hydrate: ## Re-push funnel-managed values into the Docker MCP Toolkit secret store (recovery after a Docker Desktop VMM/migration wipes the MCP resolver). DRY_RUN=1 to preview. PROFILE=<id> to force a gateway profile (otherwise discovered from .mcp.json, else PMOVES_MCP_PROFILE_ID). Run AFTER Docker Desktop restart (resolver must be up).
