@@ -30,7 +30,12 @@ import yaml
 # Known Roads + proportionate path resolution live beside this script.
 sys.path.insert(0, str(Path(__file__).parent))
 import path_scope  # noqa: E402
-from known_roads import evaluate_known_road, known_road_hint  # noqa: E402
+from known_roads import (  # noqa: E402
+    active_grant,
+    evaluate_known_road,
+    known_road_hint,
+    record_use,
+)
 
 
 def is_glob_pattern(pattern: str) -> bool:
@@ -283,6 +288,39 @@ def _escape_path(path: str) -> str:
     return re.escape(path)
 
 
+def _legacy_entry_match(token: str, path: str) -> bool:
+    """Does the patterns.yaml entry `path` match this single TOKEN under the
+    ORIGINAL matching rules?
+
+    The original rules ran over the WHOLE COMMAND, which is the defect. Running
+    the same rules over one resolved token keeps every block whose target is a
+    real path, while prose stops matching -- and prose is excluded structurally:
+    a path token in these commands never contains whitespace, and a sentence
+    always does. A quoted path that genuinely contains a space is still covered,
+    by the component matcher in path_scope.
+
+    Deliberately reuses is_glob_pattern / glob_to_regex / _escape_path rather than
+    restating them, so this cannot drift from the matcher in force above. An
+    uncompilable pattern returns True (undecidable -> keep the refusal).
+    """
+    if not token or any(ch.isspace() for ch in token):
+        return False
+
+    if is_glob_pattern(path):
+        try:
+            return re.search(glob_to_regex(path), token, re.IGNORECASE) is not None
+        except re.error:
+            return True
+
+    for escaped in (_escape_path(os.path.expanduser(path)), _escape_path(path)):
+        try:
+            if re.search(escaped, token):
+                return True
+        except re.error:
+            return True
+    return False
+
+
 def check_path_patterns(
     command: str,
     path: str,
@@ -313,7 +351,7 @@ def check_path_patterns(
         tokens = path_scope.command_tokens(command)
 
     def _verdict(operation: str) -> Tuple[bool, str]:
-        keep, _hits = path_scope.confirm(tokens, path, repo_scoped)
+        keep, _hits = path_scope.confirm(tokens, path, repo_scoped, _legacy_entry_match)
         if not keep:
             # The regex matched prose, or every resolved match for this
             # repo-scoped entry lies outside the repository. Entry inapplicable.
@@ -368,6 +406,71 @@ def check_path_patterns(
     return False, ""
 
 
+# The zero-access class is the one refusal with NO road, and saying so is the whole
+# point of this string. The other three block classes each name an alternative now
+# -- command-shape via `alternative:` / `cacheRoads`, read-only and no-delete via
+# the Known Road hint -- so an agent that meets a bare "no operations allowed"
+# cannot tell "no road exists" from "a road exists and I have not found it yet",
+# and probes spellings until it gives up. That probing is the cost this change
+# removes, and here it is removed by stating the absence outright.
+#
+# MESSAGE TEXT ONLY. Appended to a `return True, False, ...` whose verdict is
+# already decided. Nothing here is consulted on the allow path, and nothing here
+# can open anything -- least of all this class, which is precisely what it says.
+#
+# That no grant applies is a property of the code ORDER, not a policy note: both
+# zero-access returns are reached before Known Roads is consulted at all.
+_ZERO_ACCESS_NOTE = (
+    " | THERE IS NO ROAD HERE, by design: this gate runs BEFORE Known Roads, so no "
+    "KNOWN_ROAD grant can open this class -- do not spend turns looking for one. "
+    "Sanctioned routes for the legitimate intents behind this shape: tier and "
+    "environment files are GENERATED, so change the source and re-run "
+    "`make -C pmoves secrets-funnel` instead of editing the file; to learn what a "
+    "path is protected as WITHOUT tripping this gate, run "
+    "`python3 .claude/skills/known-roads/roads.py check <path>`, or "
+    "`... roads.py protected` for the whole class list. If the work genuinely needs "
+    "the secret itself, escalate to the operator with the exact path and the reason "
+    "-- that is the route, not a workaround."
+)
+
+
+def _cache_roads(command: str, config: Dict[str, Any]) -> str:
+    """Vendor cache commands for any tool cache this command names.
+
+    Returns "" when none apply. Message text only -- see _pattern_route().
+    """
+    hits = []
+    for item in config.get("cacheRoads", []) or []:
+        match = item.get("match", "")
+        cmd = item.get("command", "")
+        if match and cmd and match.lower() in command.lower():
+            if cmd not in hits:
+                hits.append(cmd)
+    if not hits:
+        return ""
+    return " | CACHE ROADS for what this command names: " + "; ".join(hits)
+
+
+def _pattern_route(item: Dict[str, Any], command: str, config: Dict[str, Any]) -> str:
+    """The sanctioned alternative for a command-shape block, if one is declared.
+
+    A guard that teaches only by refusal spends the fleet's discovery budget on its
+    own configuration. The observed case: clearing regenerable tool caches with a
+    recursive removal, on a host at 100 percent disk, was refused -- correctly --
+    and named no alternative, so the route was discoverable only by guessing.
+
+    MESSAGE TEXT ONLY. This runs AFTER a block has been decided and appends to the
+    reason. It cannot allow anything, cannot change a verdict, and is never
+    consulted on the allow path. Declared per-entry as `alternative:` in
+    patterns.yaml so the route set is enumerable rather than folded into prose.
+    """
+    route = (item.get("alternative") or "").strip()
+    suffix = _cache_roads(command, config)
+    if route:
+        return " | " + route + suffix
+    return suffix
+
+
 def _known_road_verdict(paths: List[str]) -> Tuple[bool, str, str]:
     """Evaluate Known Roads for the resolved paths a block matched.
 
@@ -399,6 +502,110 @@ def _known_road_verdict(paths: List[str]) -> Tuple[bool, str, str]:
     return False, "", hint
 
 
+_HEREDOC_OPEN = re.compile(r"<<-?\s*(['\"]?)([A-Za-z_][A-Za-z0-9_]*)\1")
+
+
+def strip_heredoc_bodies(command: str) -> str:
+    """`command` with the BODY of every heredoc removed, openers kept.
+
+    Only the opaque-verb tripwire uses this. That tripwire has no path text to
+    keep a match honest, so it must treat a newline as a command separator --
+    and the moment it does, every line of a document being written through a
+    heredoc becomes a command position. Writing a note that quotes one of these
+    verbs would then prompt on its own prose. Same failure the proportionality
+    work fixed for the {path} rules, arriving from the other direction.
+
+    Deliberately NOT applied to any other check: those are all path-bound, and
+    removing text can only remove matches. Here it cannot lose a real block --
+    the tripwire is the last gate and only ever escalates allow to ask.
+
+    KNOWN HOLE, stated rather than papered over: a heredoc whose body is FED TO A
+    SHELL (`bash <<EOF ... EOF`) really does execute its contents, and this
+    strips it, so an opaque verb in there is not seen. Distinguishing a heredoc
+    that is a document from one that is a script needs to know what consumes it,
+    which is interpretation, not lexing. The trade was made knowingly: without
+    stripping, writing a note that merely quotes one of these verbs prompts on
+    its own prose, every time, and a gate that cries wolf on documentation gets
+    switched off. The executed case is covered where it is actually decidable --
+    by effect, in effect_check.py.
+    """
+    out = []
+    pos = 0
+    while True:
+        match = _HEREDOC_OPEN.search(command, pos)
+        if not match:
+            out.append(command[pos:])
+            return "".join(out)
+        newline = command.find("\n", match.end())
+        if newline == -1:                       # opener with no body in view
+            out.append(command[pos:])
+            return "".join(out)
+        out.append(command[pos:newline + 1])
+        terminator = match.group(2)
+        rest = command[newline + 1:]
+        offset = None
+        cursor = 0
+        for line in rest.split("\n"):
+            if line.strip() == terminator:
+                offset = cursor + len(line)
+                break
+            cursor += len(line) + 1
+        if offset is None:                      # unterminated: nothing follows
+            return "".join(out)
+        pos = newline + 1 + offset
+
+
+def check_opaque_write_verbs(
+    command: str, config: Dict[str, Any]
+) -> Tuple[bool, bool, str]:
+    """Last gate: a verb that can write a path the command never spells.
+
+    Runs AFTER every path rule and only on the fall-through, so it can turn an
+    allow into an `ask` and nothing else. It cannot relax a single existing
+    block -- every one of them has already returned by the time this is reached.
+
+    A provable Known Road grant allows and RECORDS. `active_grant()` asserts less
+    than `evaluate_known_road()` -- it says a grant is open, not that it covers
+    this file -- which is the honest reading here, because there is no file to
+    check the domain predicate against. That weaker assertion is acceptable only
+    because this gate never sees a NAMED protected path: any command that named
+    one was decided above.
+    """
+    stripped = strip_heredoc_bodies(command)
+    for item in config.get("opaqueWriteVerbs", []) or []:
+        pattern = item.get("pattern", "")
+        if not pattern:
+            continue
+        try:
+            if not re.search(pattern, stripped):
+                continue
+            unless = item.get("unless", "")
+            if unless and re.search(unless, stripped):
+                continue
+        except re.error as e:
+            print(f"WARNING: Invalid regex in opaqueWriteVerbs ({item.get('verb')}): {e}",
+                  file=sys.stderr)
+            continue
+
+        verb = item.get("verb", "?")
+        why = item.get("reason", "writes targets not named in the command")
+        domain, reason, provable = active_grant()
+        if provable:
+            record_use(
+                "Bash(opaque-verb)", f"<opaque-verb:{verb}>", domain, reason,
+                note=f"{verb} — target not derivable from command text",
+            )
+            return False, False, ""
+        return False, True, (
+            f"OPAQUE WRITE: `{verb}` {why}. The damage-control guard matches "
+            "command TEXT, so it cannot tell whether this touches a protected "
+            "path — no path rule applies to a target the command never names. "
+            "Approve only if you know what it writes. Any protected path it does "
+            "change will be reported afterwards by the PostToolUse effect check."
+        )
+    return False, False, ""
+
+
 def check_command(command: str, config: Dict[str, Any]) -> Tuple[bool, bool, str]:
     """Check if command should be blocked or requires confirmation.
 
@@ -420,10 +627,14 @@ def check_command(command: str, config: Dict[str, Any]) -> Tuple[bool, bool, str
 
         try:
             if re.search(pattern, command, re.IGNORECASE):
+                # The route is appended to BOTH outcomes: an `ask` prompt that names
+                # the sanctioned path lets the operator pick it instead of approving
+                # the refused shape.
+                route = _pattern_route(item, command, config)
                 if should_ask:
-                    return False, True, reason  # Ask for confirmation
+                    return False, True, reason + route  # Ask for confirmation
                 else:
-                    return True, False, f"Blocked: {reason}"  # Block
+                    return True, False, f"Blocked: {reason}{route}"  # Block
         except re.error as e:
             print(f"WARNING: Invalid regex in bashToolPatterns: {pattern!r} — {e}", file=sys.stderr)
             continue
@@ -470,7 +681,8 @@ def check_command(command: str, config: Dict[str, Any]) -> Tuple[bool, bool, str
                             f"Template files should update from source. "
                             f"Approve only if intentionally modifying templates (e.g., security remediation)."
                         )
-                    return True, False, f"Blocked: zero-access pattern {zero_path} (no operations allowed)"
+                    return True, False, (f"Blocked: zero-access pattern {zero_path} "
+                                        f"(no operations allowed){_ZERO_ACCESS_NOTE}")
             except re.error as e:
                 print(f"WARNING: Invalid regex for zero-access glob {zero_path}: {e}", file=sys.stderr)
                 continue
@@ -496,7 +708,8 @@ def check_command(command: str, config: Dict[str, Any]) -> Tuple[bool, bool, str
                         f"Template files should update from source. "
                         f"Approve only if intentionally modifying templates (e.g., security remediation)."
                     )
-                return True, False, f"Blocked: zero-access path {zero_path} (no operations allowed)"
+                return True, False, (f"Blocked: zero-access path {zero_path} "
+                                    f"(no operations allowed){_ZERO_ACCESS_NOTE}")
 
     # 2b. Bash delete allowlist — explicit, whole-command-anchored exceptions to the
     # read-only / no-delete blocks below (e.g. clearing git's own orphaned lockfiles).
@@ -523,7 +736,7 @@ def check_command(command: str, config: Dict[str, Any]) -> Tuple[bool, bool, str
 
     def _decide(entry: str, reason: str) -> Tuple[bool, bool, str]:
         """Attach the Known Road verdict to a confirmed path block."""
-        _keep, hits = path_scope.confirm(tokens, entry, repo_scoped)
+        _keep, hits = path_scope.confirm(tokens, entry, repo_scoped, _legacy_entry_match)
         allowed, detail, hint = _known_road_verdict(hits)
         if allowed:
             return False, False, ""
@@ -545,7 +758,10 @@ def check_command(command: str, config: Dict[str, Any]) -> Tuple[bool, bool, str
         if blocked:
             return _decide(no_delete, reason)
 
-    return False, False, ""
+    # 5. LAST: verbs that write paths they never spell. Placed after every path
+    # rule on purpose -- it only ever sees commands the rules above allowed, so
+    # it is provably incapable of relaxing one of them.
+    return check_opaque_write_verbs(command, config)
 
 
 # ============================================================================

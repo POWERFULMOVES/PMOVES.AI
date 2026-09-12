@@ -46,7 +46,7 @@ import fnmatch
 import os
 import re
 import shlex
-from typing import List, Optional, Sequence, Tuple
+from typing import Callable, List, Optional, Sequence, Tuple
 
 # Shell operators that shlex(punctuation_chars=True) emits as their own tokens.
 _OPERATORS = {
@@ -58,7 +58,13 @@ _OPERATORS = {
 # (--out=a/b, f(a/b), [a/b], a/b;c). Whitespace is deliberately NOT included:
 # splitting on spaces would turn a prose sentence back into bare words and
 # reintroduce the exact false positive this module removes.
-_SUBSPLIT = re.compile(r"[=,()\[\]{};&|<>`$*?!\t]+")
+_SUBSPLIT = re.compile(r"[=,()\[\]{};&|<>`$*?!\t'\"]+")
+
+# Characters that mark a token as a CODE FRAGMENT rather than a path. Every one of
+# them is in _SUBSPLIT, so whenever a token contains one, a cleaner sub-token
+# covering the same text is guaranteed to be in the list too. That guarantee is
+# what makes it safe to exclude fragments from the repo-scoping decision.
+_CODE_CHARS = set("=,()[]{};&|<>`$*?!\t'\"")
 
 # Bodies of quoted string literals. The interpreter-write patterns in the guard
 # require the path inside quotes, and a lexed token for embedded code keeps the
@@ -172,25 +178,46 @@ def entry_components(entry: str) -> List[str]:
     return _components(entry)
 
 
+def _window_match(tcomp: List[str], start: int, ecomp: Sequence[str]) -> bool:
+    """Match entry components against token components from `start`.
+
+    A '**' component matches ZERO OR MORE token components. Requiring it to match
+    exactly one silently unblocked four operations on `./Dockerfile` against the
+    entry `**/Dockerfile`: the token normalizes to a single component, the entry
+    carried two, and the length check rejected it before any comparison ran. A
+    differential sweep against the previous guard caught it; nothing in the
+    hand-written suite did, because no case combined a '**' entry with a './'
+    prefix. Zero-or-more is also what the glob means.
+    """
+    if not ecomp:
+        return True
+    if ecomp[0] == "**":
+        rest = ecomp[1:]
+        for skip in range(len(tcomp) - start + 1):
+            if _window_match(tcomp, start + skip, rest):
+                return True
+        return False
+    if start >= len(tcomp):
+        return False
+    if not fnmatch.fnmatch(tcomp[start], ecomp[0]):
+        return False
+    return _window_match(tcomp, start + 1, ecomp[1:])
+
+
 def token_matches_entry(token: str, entry: str) -> bool:
     """True when `token` names a path that the protected `entry` covers.
 
-    Component-wise fnmatch over a contiguous window. Handles literal entries,
-    basename globs, directory-prefix entries and multi-segment globs uniformly.
+    Component-wise fnmatch over a window that may start anywhere in the token, so
+    a relative entry matches at any depth. An absolute entry's leading empty
+    component can only match the token's own leading empty component, which
+    anchors it to the start -- that is what keeps a sentence mentioning a system
+    directory from matching.
     """
     tcomp = _components(token)
     ecomp = entry_components(entry)
     if not tcomp or not ecomp:
         return False
-    if len(ecomp) > len(tcomp):
-        return False
-    for start in range(len(tcomp) - len(ecomp) + 1):
-        if all(
-            fnmatch.fnmatch(tcomp[start + off], ecomp[off])
-            for off in range(len(ecomp))
-        ):
-            return True
-    return False
+    return any(_window_match(tcomp, start, ecomp) for start in range(len(tcomp) + 1))
 
 
 def resolve(token: str) -> Tuple[str, bool]:
@@ -199,7 +226,15 @@ def resolve(token: str) -> Tuple[str, bool]:
     A relative token resolves against the repository root, which is the Bash
     tool's working directory. That is the conservative reading: a relative token
     stays in scope even if the command changed directory first.
+
+    QUOTES ARE STRIPPED FIRST. A token lexed out of embedded code can keep its
+    literal quotes, and a leading quote stops '~' from expanding -- so a host path
+    like '~/.cache/go-build' resolved as a RELATIVE path, landed inside the repo,
+    and defeated repo scoping. Measured: clearing that host cache was refused as
+    "read-only path build/", naming a repo directory it never touched. Stripping
+    can only yield the true path, so it cannot lose a block.
     """
+    token = token.strip("'\"")
     expanded = os.path.expanduser(token)
     if os.path.isabs(expanded):
         absolute = os.path.normpath(expanded)
@@ -215,6 +250,7 @@ def confirm(
     tokens: Optional[Sequence[str]],
     entry: str,
     repo_scoped: Sequence[str],
+    legacy_match: Optional[Callable[[str, str], bool]] = None,
 ) -> Tuple[bool, List[str]]:
     """Confirm a regex candidate against resolved paths.
 
@@ -224,6 +260,16 @@ def confirm(
                         (or the command could not be decided -- fail closed)
       keep_block=False  the regex matched prose only, or the entry is repo-scoped
                         and every matching token lies outside the repository
+
+    `legacy_match(token, entry)` is the guard's ORIGINAL matcher, applied to one
+    token instead of to the whole command. It is passed in rather than reproduced
+    here so it cannot drift from the matcher actually in force. Its role is to
+    make this stage provably monotonic: a token the original rules matched keeps
+    its block even if the component matcher is stricter, so the ONLY blocks that
+    can be dropped are the two sanctioned classes. It was not optional -- without
+    it, four operations on './Dockerfile.z' stopped being refused, because the
+    original glob regex was unanchored and matched a prefix of the filename while
+    component matching correctly did not.
     """
     if tokens is None:
         # Undecidable: the command could not be lexed. Keep the refusal.
@@ -232,11 +278,28 @@ def confirm(
     is_repo_scoped = entry in set(repo_scoped)
     matched: List[str] = []
     saw_token_match = False
+    saw_path_like = False
 
     for token in tokens:
-        if not token_matches_entry(token, entry):
+        hit = token_matches_entry(token, entry)
+        if not hit and legacy_match is not None:
+            hit = legacy_match(token, entry)
+        if not hit:
             continue
         saw_token_match = True
+
+        # A CODE FRAGMENT must not decide repo scoping. A quoted argument such as
+        # open('<host-cache-dir>/x' has no whitespace, so it reached here as a
+        # "path"; it is not absolute, so it resolved against the repo root, landed
+        # INSIDE the repo, and kept a block on a host cache directory the command
+        # never touched -- reported against an unrelated repo build directory. Its
+        # cleaner sub-token is guaranteed present (every _CODE_CHARS member is a
+        # _SUBSPLIT separator), so skipping the fragment loses nothing; and if ONLY
+        # fragments matched, we fail closed below.
+        if _CODE_CHARS & set(token):
+            continue
+        saw_path_like = True
+
         absolute, inside = resolve(token)
         if is_repo_scoped and not inside:
             continue
@@ -245,6 +308,9 @@ def confirm(
     if not saw_token_match:
         # Case 1: prose only -- no token in this command names such a path.
         return False, []
+    if not saw_path_like:
+        # Undecidable: every match was a code fragment. Keep the refusal.
+        return True, []
     if not matched:
         # Case 2: repo-scoped entry, every match resolves outside the repository.
         return False, []
