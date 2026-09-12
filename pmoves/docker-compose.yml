@@ -4132,6 +4132,20 @@ services:
       args:
         ENV: production
         APP_PATH: /app/apps/webuiapps
+        # The app is served under /webuiapps/ (see the nginx location below and
+        # apps/webuiapps/nginx/default.conf). vite.config.ts::getBase() returns
+        # '/' + BIZ_PROJECT_NAME + '/' for a production build and '/' when the
+        # variable is empty -- its own comment reads "Test: sub-path
+        # /webuiapps/". The Dockerfile already accepts BIZ_PROJECT_NAME as a
+        # build ARG and exports it as ENV for the build; compose was the one
+        # link that never passed a value.
+        #
+        # Without it every asset in index.html is emitted root-relative
+        # (/assets/index-*.js), nginx has no `location /assets/`, and the whole
+        # bundle 404s while /webuiapps/ still answers 200 with the HTML. The
+        # page renders blank and any probe of the app root reports healthy.
+        # Measured on PMOVES-4090 2026-09-08.
+        BIZ_PROJECT_NAME: webuiapps
     image: pmoves-openroom:latest
     container_name: pmoves-openroom
     restart: unless-stopped
