@@ -135,7 +135,7 @@ jobs:
           set -e
           echo "sweep exit=${rc}"
           case "${rc}" in
-            0) echo "CLEAN — every verdict change is a sanctioned relaxation class" ;;
+            0) echo "CLEAN — no relaxations. Any tightening present was adjudicated in sweep_baseline.yaml; see the breakdown above." ;;
             1) echo "::error::PERMISSIVE REGRESSION — this change lets through something the base guard refused, or newly blocks something it allowed. See the UNSANCTIONED list above."; exit 1 ;;
             3) echo "::error::COULD NOT MEASURE — the sweep did not run. This is NOT a pass."; exit 1 ;;
             *) echo "::error::sweep exited ${rc}, which it does not document."; exit 1 ;;
@@ -148,7 +148,7 @@ jobs:
             echo "### differential sweep"
             echo
             echo '```'
-            grep -E '^base=|^corpus:|^verdict changes:|^OK —|UNSANCTIONED' /tmp/sweep.log \
+            grep -E '^base=|^corpus:|^verdict changes:|^relaxations|^tightenings|^OK —|RELAXATION|TIGHTENING' /tmp/sweep.log \
               || echo "no sweep output captured — the sweep did not reach its corpus"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
