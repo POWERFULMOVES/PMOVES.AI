@@ -63,7 +63,7 @@ LOCKFILE = "poetry" + ".lock"
 SECRET_DIR = "~/.s" + "sh"
 
 
-def _grant(value):
+def _set_road_reason(value):
     if value is None:
         os.environ.pop("KNOWN_ROAD", None)
     else:
@@ -73,10 +73,10 @@ def _grant(value):
 def main() -> int:
     failures = 0
 
-    def check(label, grant, command, want_blocked, want_in_reason=None,
+    def check(label, road_reason, command, want_blocked, want_in_reason=None,
               want_not_in_reason=None):
         nonlocal failures
-        _grant(grant)
+        _set_road_reason(road_reason)
         blocked, _ask, reason = dc.check_command(command, cfg)
         ok = blocked == want_blocked
         if ok and want_in_reason is not None:
@@ -86,7 +86,7 @@ def main() -> int:
         failures += 0 if ok else 1
         print(f"  [{'PASS' if ok else 'FAIL'}] {label}")
         if not ok:
-            print(f"          grant={grant!r} cmd={command}")
+            print(f"          road_reason={road_reason!r} cmd={command}")
             print(f"          blocked={blocked} (want {want_blocked})")
             print(f"          reason={reason!r}")
 
@@ -135,7 +135,7 @@ def main() -> int:
           "compose:pr:2656", V_RM + " -rf " + COMPOSE, True)
 
     # ---- 7. the grant was RECORDED, and to the test trail only ------------
-    _grant("compose:pr:2656")
+    _set_road_reason("compose:pr:2656")
     dc.check_command(V_SED + " -i s/a/b/ " + COMPOSE, cfg)
     recorded = _TRAIL.is_file() and "compose" in _TRAIL.read_text(encoding="utf-8")
     failures += 0 if recorded else 1
@@ -149,7 +149,7 @@ def main() -> int:
     failures += 0 if clean else 1
     print(f"  [{'PASS' if clean else 'FAIL'}] the real audit log was not touched by this suite")
 
-    _grant(None)
+    _set_road_reason(None)
 
     if failures:
         print(f"\nFAIL — {failures} check(s) failed.")
