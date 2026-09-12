@@ -207,6 +207,45 @@
     }
   ],
 
+  // ===== tests + sshTests: the verifiable runbook (2026-09-09) =====
+  // Every invariant the FLEET_REMOTE_ACCESS_RUNBOOK states in prose is now an
+  // assertion Tailscale itself evaluates on every gitops apply. A failing
+  // assertion REJECTS the policy, so the runbook can no longer drift from
+  // the applied policy silently.
+  "tests": [
+    // T1 — full mesh: a tagged fleet node reaches any tagged fleet node.
+    {"src": "tag:pmoves", "accept": ["tag:pmoves:22", "tag:pmoves:4222"]},
+    // T2 — user-identity gap (the 2026-09-09 spark denial, encoded): plain
+    // member users (user-authenticated devices with no admin/owner role and no
+    // fleet tag) must NOT reach fleet SSH or fleet ports. The elder-melchor
+    // Windows node presents exactly this identity class (per-node user login,
+    // not tag-authenticated) — which is why its spark SSH was denied while
+    // tagged spark was allowed. If the operator ever grants member access
+    // deliberately, this test breaks and forces the review.
+    {"src": "russellrich44@gmail.com", "deny": ["tag:pmoves:22", "tag:vps:4222"]},
+    // T3 — partner is scoped: inference ports only, no fleet SSH.
+    {"src": "tag:partner", "accept": ["tag:gpu:3030", "tag:gpu:8080", "tag:gpu:8081"]},
+    {"src": "tag:partner", "deny": ["tag:pmoves:22", "tag:vps:4222"]},
+    // T4 — guest is narrower still: A0 UI only.
+    {"src": "tag:guest", "accept": ["tag:gpu:8081"]},
+    {"src": "tag:guest", "deny": ["tag:pmoves:22", "tag:gpu:11434"]},
+    // T5 — SSH port reachability rides the mesh rule (T1), not a grant of its own.
+    {"src": "tag:lab", "accept": ["tag:gpu:11434"]}
+  ],
+  "sshTests": [
+    // S1 — tagged node SSH: nonroot accepted, root denied (hardening stance).
+    {"src": "tag:pmoves", "dst": ["tag:pmoves"], "accept": ["autogroup:nonroot"], "deny": ["root"]},
+    // S2 — owner SSH (concrete identity — sshTest src must be user/group/tag/host,
+    // autogroup:admin is rejected by the validator): root accepted for provisioning.
+    {"src": "cataclysmstudios@gmail.com", "dst": ["tag:pmoves", "tag:vps"], "accept": ["root", "autogroup:nonroot"]},
+    // S3 — the lab→vps root exception (#2401) stays scoped: lab gets root on
+    // VPS/exit, but NOT on the pmoves mesh at large.
+    {"src": "tag:lab", "dst": ["tag:vps", "tag:exit"], "accept": ["root"]},
+    {"src": "tag:lab", "dst": ["tag:pmoves"], "deny": ["root"]},
+    // S4 — the fleet-management exception must never leak into partner/guest.
+    {"src": "tag:partner", "dst": ["tag:pmoves"], "deny": ["root", "autogroup:nonroot"]},
+    {"src": "tag:guest", "dst": ["tag:pmoves"], "deny": ["root", "autogroup:nonroot"]}
+  ],
   "nodeAttrs": [
     // Funnel on tag:exit is LIVE, not vestigial. Recorded here because a grep for
     // "funnel" is dominated by `secrets-funnel` -- the credential pipeline, an
