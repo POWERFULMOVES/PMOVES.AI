@@ -339,9 +339,29 @@ def canonical_identity(author: str, vocab: Vocabulary | None = None) -> str | No
 
 
 def read_register(path: Path | None = None) -> str:
-    """The register contains a NUL byte and other control characters, so it must
-    be read with errors='replace'. `grep` classifies it as binary and stops
-    printing after its first match -- do not audit this file with grep."""
+    """Centralised reader for the register, which carries control characters.
+
+    The NUL that used to live here is gone -- it was a corrupted `0` inside
+    `0.0.0.0:4482`, repaired in place. While it was present, `grep` classified
+    the whole file as binary and stopped printing after its first match, and
+    GitHub omitted the diff entirely; both are why reads are centralised here
+    rather than left to callers. `test_the_register_carries_no_NUL_byte` now
+    holds that state instead of this docstring describing it.
+
+    Two things the previous version of this docstring asserted were not true,
+    and are corrected rather than carried forward:
+
+    * `errors="replace"` is NOT required for decoding. The register is valid
+      UTF-8, and NUL is a legal codepoint (U+0000) that never raised
+      UnicodeDecodeError. It is kept as cheap insurance on a file that has
+      repeatedly absorbed terminal output, not because a decode has failed.
+    * The grep-is-binary behaviour was caused by the NUL specifically, not by
+      "control characters" generally. BEL, BS, VT, FF and ESC are still here
+      (21 of them) and grep reads the file fine.
+
+    The remaining control characters DO still matter for line numbering -- see
+    `entry_lines`, where they make `splitlines()` and `split("\\n")` disagree.
+    """
     path = path or REGISTER_PATH
     return path.read_text(encoding="utf-8", errors="replace")
 
