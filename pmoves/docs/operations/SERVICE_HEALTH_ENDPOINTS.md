@@ -2,6 +2,7 @@
 
 The PMOVES console renders Quick Links with live health badges. Some integrations expose different health paths depending on the fork or image you run. You can customize the badge probes via environment variables.
 
+> **Re-verified 2026-09-10 (crush-spark):** the canonical live-service map (ports, hosts, health paths) is `.claude/CATALOG.md`; Archon's native surface answers JSON `/api/health` on `:3090` (SPA catch-all makes status-only probes false-positive — #2943); persona-thirdref exposes `/healthz` on `:8099`. Rows below predate this pass — cross-check CATALOG before citing.
 ## Agent Zero (MCP)
 - Default base URL: `NEXT_PUBLIC_AGENT_ZERO_URL` (default `http://localhost:8080`)
 - Health path override: `NEXT_PUBLIC_AGENT_ZERO_HEALTH_PATH` (default `/healthz`)

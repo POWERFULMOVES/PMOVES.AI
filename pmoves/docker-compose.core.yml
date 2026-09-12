@@ -305,7 +305,7 @@ services:
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
     # DNS configuration - Docker embedded DNS (default)
-    - PMOVES_NETWORKS=pmoves_api
+    - PMOVES_NETWORKS=pmoves_api,pmoves_external
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9999/health"]
       interval: 15s
@@ -321,6 +321,12 @@ services:
       pmoves_api:
         aliases:
         - auth   # upstream Supabase name used by vendored kong.yml
+      # Egress for external identity providers. pmoves_api is internal-only, so
+      # GoTrue could not fetch https://accounts.google.com/.well-known/openid-configuration
+      # ("lookup accounts.google.com ... server misbehaving") and every Google
+      # sign-in -- and therefore every Archon mint Step 0 -- failed with 400.
+      # It still listens only behind Kong (#2974).
+      pmoves_external: {}
 
     deploy:
       resources:
