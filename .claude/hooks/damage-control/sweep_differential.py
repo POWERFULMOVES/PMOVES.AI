@@ -212,6 +212,26 @@ print("\nby entry (sanctioned relaxations):")
 for (cls, entry), n in Counter((c[0], c[1]) for c in changed).most_common():
     print(f"  {n:5d}  {cls:28s} {entry}")
 
+# WHAT THIS SWEEP IS VACUOUS ABOUT, and it is not a small thing.
+#
+# `opaqueWriteVerbs` (patterns.yaml) turns allow into ASK for verbs that write
+# paths they never spell. This sweep cannot see that class, for two independent
+# reasons, and a clean run says NOTHING about it:
+#
+#   1. OPS above contains none of those verbs, so no corpus command reaches the
+#      gate. Measured on the change that introduced it: 6548 commands, 0 verdict
+#      changes -- a true statement about the path rules and an empty one about
+#      the tripwire.
+#   2. The classifier below has no allow->ask DIRECTION. `nb and not ob` catches
+#      allow->block; an allow->ask arrives with nb False and falls through to the
+#      relaxation branch, where it would be reported as UNCLASSIFIED RELAXATION.
+#      A tightening reported as a relaxation is a false alarm in a gate whose
+#      whole value is that its alarms are trustworthy.
+#
+# Adding the verbs to OPS therefore requires fixing (2) FIRST -- a third
+# direction, adjudicated like a tightening, never waived like a relaxation.
+# Doing one without the other turns this file red for the wrong reason.
+#
 # Split the findings by DIRECTION before deciding. A relaxation and a tightening
 # are both "unsanctioned" to the classifier above, but they point opposite ways:
 # a relaxation opens a hole, a tightening closes one. Only the second can be
