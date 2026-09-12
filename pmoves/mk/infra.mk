@@ -710,6 +710,19 @@ agent-zero-lock: ## Regenerate services/agent-zero/requirements.lock (the ONLY s
 compose-yaml-check: ## Assert every tracked compose file parses (incl. Compose's !reset/!override tags)
 	@uv run --quiet --with pyyaml python tools/compose_yaml_validate.py
 
+room-manifest-check: ## Assert every room manifest validates against the schema + catalog
+	@# THE VALIDATOR EXISTED AND RAN NOWHERE. ROOM_MANIFEST_CONTRACT.md line 362
+	@# records this smoke path as DONE, struck through, naming the script -- and
+	@# nothing invoked it: no make target, no workflow, no gate. Two manifests
+	@# had been failing schema validation invisibly as a result
+	@# (creator-studio.room.collab, jons-edge.room.control), because the only
+	@# thing that would have said so was never called.
+	@#
+	@# `referencing` as well as `jsonschema`: the script imports it for $ref
+	@# resolution and falls back when absent, and the fallback path is not the
+	@# one CI should be exercising.
+	@uv run --quiet --with jsonschema --with referencing --with pyyaml python scripts/validate_room_manifests.py
+
 # ── Service recovery (engine-restart safe) ──────────────────────────
 # After a Docker Desktop/WSL2 engine restart, containers can sit in
 # "Created" (image pulled, never started). This starts them via compose

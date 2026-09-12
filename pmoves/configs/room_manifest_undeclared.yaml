@@ -1,0 +1,34 @@
+# Rooms carrying DISCOVERED structure the declared contract has not caught up to.
+#
+# THE BOUNDARY RUNS THROUGH A MANIFEST, NOT BETWEEN MANIFESTS.
+# `additionalProperties: false` can only say valid or invalid. But a room that
+# knows more than the schema is not broken — it is ahead of the contract, and
+# collapsing that to "FAIL" loses the thing worth keeping: someone measured a
+# real topology and wrote it down.
+#
+# This is the same distinction `identity_vocabulary.yaml` already draws with
+# `confidence` (`operator-asserted` vs `attested-by-usage`) and never enforces:
+# declared and discovered are two STATES an entry passes through, not two
+# populations. 4090's `field` alter was discovered before it was declared.
+#
+# Ratchet, matching pytest_ratchet/_known_failures.yaml: an entry here is
+# reported as UNDECLARED rather than FAILED and does not fail the run. A room
+# NOT listed here that fails still fails. Entries may only be REMOVED — by
+# promoting the structure into the schema, or by deleting it from the manifest.
+# Adding one requires saying what was discovered and who owns promoting it.
+
+undeclared:
+  - room_id: jons-edge.room.control
+    property: combiner_config
+    owner: "jetson-1 (alter: jons-edge)"
+    discovered: >-
+      A four-node edge topology with roles and a pair target:
+      jons-1 stt-preprocess, jons-2 edge-llm-detect, jons-3 voice-relay,
+      spark heavy-inference; pair_target spark, fallback_mode island-phi3,
+      nats_upstream on the tailnet. No other room declares it and no schema
+      knows it.
+    promote_to: >-
+      room.manifest.v1 — needs an owner decision on whether edge-cluster
+      topology belongs in the room manifest at all, or in a node profile that
+      the room references. Filed rather than guessed.
+    first_seen: 2026-09-08

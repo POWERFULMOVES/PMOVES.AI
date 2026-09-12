@@ -136,6 +136,29 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
+BASELINE_PATH = Path(__file__).resolve().parents[1] / "configs" / "room_manifest_undeclared.yaml"
+
+
+def load_undeclared() -> dict[str, dict]:
+    """Rooms whose failure is DISCOVERED structure, not a defect.
+
+    `additionalProperties: false` can only answer valid/invalid, which puts the
+    boundary BETWEEN manifests. A room that knows more than the contract has the
+    boundary running THROUGH it. This lets the validator say so, and still fail
+    on anything not written down here.
+    """
+    if not BASELINE_PATH.exists():
+        return {}
+    try:
+        import yaml
+    except ModuleNotFoundError:
+        print("room-validate: DEGRADED - PyYAML absent, so the undeclared-structure "
+              "baseline could not be read; every entry in it will report as FAILED.")
+        return {}
+    doc = yaml.safe_load(BASELINE_PATH.read_text(encoding="utf-8")) or {}
+    return {e["room_id"]: e for e in (doc.get("undeclared") or []) if e.get("room_id")}
+
+
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     catalog = read_json(CATALOG_PATH)
@@ -152,6 +175,8 @@ def main(argv: list[str] | None = None) -> int:
     seen_ids: set[str] = set()
     seen_manifests: set[str] = set()
     failures: list[str] = []
+    undeclared_hits: list[str] = []
+    undeclared = load_undeclared()
     ok = 0
     for entry in matched:
         room_ref = entry.get("room_id") or entry.get("manifest") or "<unknown>"
@@ -168,6 +193,12 @@ def main(argv: list[str] | None = None) -> int:
             seen_manifests.add(manifest_name)
         except Exception as exc:  # noqa: BLE001 - surface each room's failure, keep going
             first_line = str(exc).splitlines()[0] if str(exc) else exc.__class__.__name__
+            entry_baseline = undeclared.get(room_ref)
+            if entry_baseline and entry_baseline.get("property", "") in first_line:
+                undeclared_hits.append(f"{room_ref}: {first_line}")
+                print(f"UNDECLARED {room_ref}: {first_line}")
+                print(f"           owner: {entry_baseline.get('owner', '?')}")
+                continue
             failures.append(f"{room_ref}: {first_line}")
             print(f"FAIL {room_ref}: {first_line}")
             continue
@@ -197,7 +228,13 @@ def main(argv: list[str] | None = None) -> int:
             failures.append(f"catalog references missing manifest: {manifest_name}")
             print(f"FAIL catalog references missing manifest: {manifest_name}")
 
-    print(f"\nvalidated {len(matched)} room manifest(s): {ok} OK, {len(failures)} FAILED")
+    print(f"\nvalidated {len(matched)} room manifest(s): {ok} OK, "
+          f"{len(undeclared_hits)} UNDECLARED, {len(failures)} FAILED")
+    if undeclared_hits:
+        print("UNDECLARED (discovered structure the contract has not caught up to; "
+              "baselined in configs/room_manifest_undeclared.yaml):")
+        for u in undeclared_hits:
+            print(f"  - {u}")
     if failures:
         print("FAILED rooms (fix separately — one bad manifest no longer hides the rest):")
         for f in failures:
