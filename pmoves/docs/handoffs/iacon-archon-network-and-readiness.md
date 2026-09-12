@@ -116,7 +116,7 @@ Add one entry to the service's `networks:` mapping, after `pmoves_external:`:
       # Supabase REST/auth live on pmoves_api. Without this the service cannot
       # resolve supabase-kong at all: Errno -2 is membership, not a DNS outage.
       # pmoves_data is deliberately NOT added -- supabase-db resolves from
-      # pmoves_api (verified 172.30.1.6) and the failing path is REST.
+      # pmoves_api (verified <bridge-ip>) and the failing path is REST.
       pmoves_api:
 ```
 
@@ -199,7 +199,7 @@ Reporting `ready: true` as achieved would require running it.
 ## Known Road status — BLOCKED, not skipped
 
 `KNOWN_ROAD` is unset in the delivering session
-(`KNOWN_ROAD=[UNSET] CLAUDE_PROJECT_DIR=[/home/pmoves-knuckles/pinokio/api/PMOVES.AI]`),
+(`KNOWN_ROAD=[UNSET] CLAUDE_PROJECT_DIR=[<repo-root>]`),
 and hooks are spawned by the client rather than by the agent's shell, so the
 agent cannot set it. That leaves the file grant, which holds a spent
 `compose:pr:2656`. Verified in a sandboxed `CLAUDE_PROJECT_DIR` (no real trail
@@ -270,7 +270,7 @@ routes to its image are closed, each measured:
 
 | route | result |
 |---|---|
-| local image tag | **absent.** The running container's image is `sha256:06727ac67412…` with `RepoTags=[]` — an untagged 18.2 GB image. No `archon` tag exists locally. |
+| local image tag | **absent.** The running container's image is `sha256:<digest>` with `RepoTags=[]` — an untagged image of roughly the size noted in the landmine below. No `archon` tag exists locally. |
 | registry pull | **denied.** `docker pull ghcr.io/powerfulmoves/pmoves-archon:pmoves-latest` → `error from registry: denied`. |
 | local build | **impossible at the pinned commit.** Compose declares `build: context: ../PMOVES-Archon, dockerfile: Dockerfile`, but submodule `PMOVES-Archon` at its pinned `e4c407593` has **no root `Dockerfile`** — only `.dockerignore`, `docker-compose.yml`, `docker-compose.pmoves.yml`. Dockerfiles exist solely under `python/` (`Dockerfile.server`, `Dockerfile.mcp`, …) and `archon-ui-main/`. |
 
@@ -284,25 +284,26 @@ recreate, and why `/api/health` is reported unchanged.** It is not a gap in the
 fix; it is a prior, larger blocker that the fix sits behind.
 
 Safe for now: the image counts as ACTIVE while the container runs, so
-`docker image prune` will not take it (`docker system df`: 65 of 69 images
-active, 8.46 GB reclaimable). The exposure is that the moment this container is
+`docker image prune` will not take it (`docker system df` reports it among the ACTIVE images, with only a small
+fraction of image space reclaimable). The exposure is that the moment this container is
 removed or stopped-and-pruned, Archon is gone from B850. Do not prune volumes
-either — 29.66 GB of 32.83 GB shows reclaimable on the single data-tier host.
+either — nearly all volume space shows reclaimable on the single data-tier host.
 
 Unblocking it needs one of: the GHCR tag republished or pull access restored; or
 the compose `dockerfile:` corrected to a path that exists at the pinned commit
 (likely `python/Dockerfile.server`) **and** enough disk headroom to build an
-18 GB image — currently 19 GB free at 98%, which is not enough for image plus
+18 GB image — the node currently has less free space than the image itself and sits near
+capacity, which is not enough for image plus
 build cache.
 
 ## Before / after, complete
 
 | probe | before | after `pmoves_api` | after `pmoves_api` + URL fix |
 |---|---|---|---|
-| `getent hosts supabase-kong` (in-container) | rc=2, no answer | **rc=0, 172.30.1.30** | rc=0 |
-| `getent hosts supabase-db` | rc=2 | **rc=0, 172.30.1.6** | rc=0 |
+| `getent hosts supabase-kong` (in-container) | rc=2, no answer | **rc=0, <bridge-ip>** | rc=0 |
+| `getent hosts supabase-db` | rc=2 | **rc=0, <bridge-ip>** | rc=0 |
 | bare `kong` / `gotrue` / `rest` / `pooler` | rc=2 | rc=2 — still fail, the working aliases are `supabase-` prefixed | rc=2 |
-| `getent hosts nats` | rc=0, 172.30.6.4 — never broken | rc=0 | rc=0 |
+| `getent hosts nats` | rc=0, <bridge-ip> — never broken | rc=0 | rc=0 |
 | schema query via the wrapper's own code path | `ConnectError [Errno -2]` | `ConnectError [Errno -2]` — unchanged, this is defect 2 | **`APIError PGRST205` table not found** |
 | `/api/health` | 200, `ready:false`, Errno -2 | 200, `ready:false`, Errno -2 | not reachable — needs recreate |
 | container health verdict | `healthy`, streak 0 | `healthy`, streak 0 | — |
