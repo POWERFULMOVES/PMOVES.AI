@@ -628,9 +628,17 @@ def test_the_directory_network_guard_is_armed():
     only as runtime going 0.05s -> 6.35s. pmoves/tests/tools/conftest.py denies
     outbound connects so that failure is loud next time. If this assertion ever
     goes red, the guard is gone and every "offline" test here is unverified.
+
+    The probe target is RFC 5737 documentation address space (192.0.2.0/24),
+    NOT loopback: since 6af520c8f the guard deliberately allows loopback
+    connects (tests/tools dials its own stub servers on 127.0.0.1), so a
+    127.0.0.1 probe would pass straight through to the OS and only fail when
+    nothing is listening — the exact silent-detach failure mode this test
+    exists to catch. The guard raises before any packet is formed, so this
+    never leaves the process.
     """
     with pytest.raises(AssertionError):
-        socket.create_connection(("127.0.0.1", 9), timeout=0.1)
+        socket.create_connection(("192.0.2.1", 9), timeout=0.1)
 
 
 # ---------------------------------------------------------------------------
