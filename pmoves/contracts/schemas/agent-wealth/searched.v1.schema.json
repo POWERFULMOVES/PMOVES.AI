@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Agent Wealth Searched",
+  "description": "Emitted by wealth-mcp after a Firefly transaction search",
+  "type": "object",
+  "required": ["query", "results_count", "timestamp"],
+  "additionalProperties": false,
+  "properties": {
+    "query": {
+      "type": "string",
+      "description": "The search query text sent to Firefly /api/v1/search/transactions"
+    },
+    "results_count": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Number of matching transactions returned"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "UTC ISO-8601 time the search completed"
+    }
+  }
+}
