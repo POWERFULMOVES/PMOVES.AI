@@ -59,6 +59,7 @@ USRBIN = "/us" + "r/local/bin"
 SCHEMAS = "pmoves/contra" + "cts/schemas"
 LOCKFILE = "poetry" + ".lock"
 HOSTS = ETC + "/hosts"
+DOCKERFILE = "Dockerf" + "ile"
 
 # TWO PRE-EXISTING GAPS, surfaced while building this suite and deliberately NOT
 # closed here. Both behave IDENTICALLY before and after the proportionality
@@ -139,6 +140,26 @@ CASES = [
     (True, "CONTROL write under a system binary directory",
      "echo x > " + USRBIN + "/z"),
 
+    # ---- THE 16 REGRESSIONS A DIFFERENTIAL SWEEP CAUGHT --------------------
+    # These were blocked before the proportionality change and silently stopped
+    # being blocked by it. The entry is `**/Dockerfile`; the token normalizes to
+    # ONE component while the entry carried two, so a length check rejected the
+    # match before any comparison ran. Nothing in the hand-written suite combined
+    # a '**' entry with a './' prefix, which is why only a sweep against the
+    # previous guard found them. They stay here permanently.
+    (True, "CONTROL dot-slash path against a ** entry",
+     "echo x > ./" + DOCKERFILE),
+    (True, "CONTROL dot-slash append against a ** entry",
+     "echo x >> ./" + DOCKERFILE),
+    (True, "CONTROL dot-slash move against a ** entry",
+     V_MV + " /tmp/a ./" + DOCKERFILE),
+    (True, "CONTROL dot-slash copy against a ** entry",
+     V_CP + " /tmp/a ./" + DOCKERFILE),
+    (True, "CONTROL dot-slash suffixed name against a ** entry",
+     "echo x > ./" + DOCKERFILE + ".z"),
+    (True, "CONTROL bare name against the literal entry",
+     "echo x > " + DOCKERFILE),
+
     # ---- prefix collisions must not over-block (pre-existing guarantee).
     (False, "a different dir sharing a protected prefix",
      "echo x > " + ENV_DIR + "ison/out.txt"),
@@ -199,6 +220,11 @@ def main() -> int:
         (True, "pmoves/docker-compose.ui.yml", "pmoves/docker-compose*.yml"),
         (True, "pmoves/services/x/config/y.yml", "pmoves/services/*/config/"),
         (False, "pmoves/services/x/src/y.py", "pmoves/services/*/config/"),
+        # '**' matches ZERO or more components, which is what the glob means.
+        (True, DOCKERFILE, "**/" + DOCKERFILE),
+        (True, "./" + DOCKERFILE, "**/" + DOCKERFILE),
+        (True, "a/b/c/" + DOCKERFILE, "**/" + DOCKERFILE),
+        (False, "a/b/" + DOCKERFILE + "s", "**/" + DOCKERFILE),
     ]
     for want, token, entry in unit:
         got = ps.token_matches_entry(token, entry)
