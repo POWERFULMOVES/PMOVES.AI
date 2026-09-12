@@ -401,6 +401,34 @@ def check_path_patterns(
     return False, ""
 
 
+# The zero-access class is the one refusal with NO road, and saying so is the whole
+# point of this string. The other three block classes each name an alternative now
+# -- command-shape via `alternative:` / `cacheRoads`, read-only and no-delete via
+# the Known Road hint -- so an agent that meets a bare "no operations allowed"
+# cannot tell "no road exists" from "a road exists and I have not found it yet",
+# and probes spellings until it gives up. That probing is the cost this change
+# removes, and here it is removed by stating the absence outright.
+#
+# MESSAGE TEXT ONLY. Appended to a `return True, False, ...` whose verdict is
+# already decided. Nothing here is consulted on the allow path, and nothing here
+# can open anything -- least of all this class, which is precisely what it says.
+#
+# That no grant applies is a property of the code ORDER, not a policy note: both
+# zero-access returns are reached before Known Roads is consulted at all.
+_ZERO_ACCESS_NOTE = (
+    " | THERE IS NO ROAD HERE, by design: this gate runs BEFORE Known Roads, so no "
+    "KNOWN_ROAD grant can open this class -- do not spend turns looking for one. "
+    "Sanctioned routes for the legitimate intents behind this shape: tier and "
+    "environment files are GENERATED, so change the source and re-run "
+    "`make -C pmoves secrets-funnel` instead of editing the file; to learn what a "
+    "path is protected as WITHOUT tripping this gate, run "
+    "`python3 .claude/skills/known-roads/roads.py check <path>`, or "
+    "`... roads.py protected` for the whole class list. If the work genuinely needs "
+    "the secret itself, escalate to the operator with the exact path and the reason "
+    "-- that is the route, not a workaround."
+)
+
+
 def _cache_roads(command: str, config: Dict[str, Any]) -> str:
     """Vendor cache commands for any tool cache this command names.
 
@@ -544,7 +572,8 @@ def check_command(command: str, config: Dict[str, Any]) -> Tuple[bool, bool, str
                             f"Template files should update from source. "
                             f"Approve only if intentionally modifying templates (e.g., security remediation)."
                         )
-                    return True, False, f"Blocked: zero-access pattern {zero_path} (no operations allowed)"
+                    return True, False, (f"Blocked: zero-access pattern {zero_path} "
+                                        f"(no operations allowed){_ZERO_ACCESS_NOTE}")
             except re.error as e:
                 print(f"WARNING: Invalid regex for zero-access glob {zero_path}: {e}", file=sys.stderr)
                 continue
@@ -570,7 +599,8 @@ def check_command(command: str, config: Dict[str, Any]) -> Tuple[bool, bool, str
                         f"Template files should update from source. "
                         f"Approve only if intentionally modifying templates (e.g., security remediation)."
                     )
-                return True, False, f"Blocked: zero-access path {zero_path} (no operations allowed)"
+                return True, False, (f"Blocked: zero-access path {zero_path} "
+                                    f"(no operations allowed){_ZERO_ACCESS_NOTE}")
 
     # 2b. Bash delete allowlist — explicit, whole-command-anchored exceptions to the
     # read-only / no-delete blocks below (e.g. clearing git's own orphaned lockfiles).
