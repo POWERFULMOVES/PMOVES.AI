@@ -1,0 +1,97 @@
+# Operation IACON — attach Archon to its dependency network, and make its healthcheck able to fail
+
+**Lane:** `infra/iacon-archon-network`
+**Owner:** B850-CLAUDE (Knuckles)
+**Opened:** 2026-09-12
+**Known Road reason:** this file — `KNOWN_ROAD=compose:handoff:iacon-archon-network-and-readiness.md`
+
+## Why a compose Known Road is needed
+
+`pmoves/docker-compose.yml` is a `readOnlyPath` in the `compose` Known Road domain.
+Two edits to the `archon` service are required and both are structural, so neither
+can be expressed anywhere else:
+
+1. add `pmoves_api` to the service's `networks:` list;
+2. replace the healthcheck so it fails when the service reports `ready: false`.
+
+## Measured state before the change (B850 / Knuckles, 2026-09-12T08:17Z)
+
+`GET http://127.0.0.1:3090/api/health` returned **HTTP 200** with body:
+
+```json
+{"status":"migration_required","service":"knowledge-api","ready":false,
+ "migration_required":true,
+ "message":"Schema check error: ConnectError: [Errno -2] Name or service not known"}
+```
+
+Container health status: `healthy`, `FailingStreak=0` — for nine days.
+The healthcheck is `curl -fsS http://localhost:3090/api/health || exit 1`, and
+`curl -f` keys on the HTTP status code only. The endpoint answers 200 while
+saying `ready:false` in the body, so the check cannot observe the failure it
+exists to observe.
+
+Network membership, measured via `docker inspect`:
+
+| container | networks |
+|---|---|
+| `pmoves-archon-1` | `pmoves_app`, `pmoves_bus`, `pmoves_external` |
+| `pmoves-supabase-kong-1` | `pmoves_api`, `pmoves_public` |
+| `pmoves-supabase-gotrue-1` | `pmoves_api` |
+| `pmoves-supabase-pooler-1` | `pmoves_data` |
+
+No overlap. `Errno -2` here is a **membership** failure, not a DNS outage —
+`nats` and `pmoves-nats-1` both resolve from inside the same container.
+
+## Two independent defects, not one
+
+Attaching the network is necessary but **not sufficient**. After attaching
+`pmoves_api` the name resolves and PostgREST answers, yet `/api/health` still
+reported `Errno -2`. The second defect is env precedence.
+
+`/app/services/archon/main.py:_ensure_supabase_env()` rewrites
+`os.environ["SUPABASE_URL"]` at startup with this priority:
+
+1. `ARCHON_SUPABASE_BASE_URL`
+2. `SUPA_REST_URL` stripped of its `/rest/v1` suffix
+3. existing `SUPABASE_URL` (left as-is)
+
+The shared env supplies `SUPA_REST_URL=http://host.docker.internal:54321/rest/v1`
+(the Supabase **CLI** dev topology), which outranks the correct service-level
+`SUPABASE_URL=http://supabase-kong:8000`. The wrapper therefore forces
+`SUPABASE_URL=http://host.docker.internal:54321`, and the container has
+`extra_hosts: []`, so `host.docker.internal` does not resolve, giving `Errno -2`.
+
+This is why the outage read as purely a network problem for nine days: the
+network *was* broken, and fixing it alone changes nothing observable.
+
+Note the measurement trap: `/proc/1/environ` still shows the correct
+`SUPABASE_URL=http://supabase-kong:8000`, because that file is the process's
+*startup* env and the rewrite happens in `os.environ` afterwards. Reading
+`/proc/1/environ` alone would have cleared the service of this defect.
+
+The fix uses the wrapper's own documented highest-precedence knob rather than
+fighting it: set `ARCHON_SUPABASE_BASE_URL` to the in-cluster Kong base.
+
+## Out of scope
+
+- The migration the health message advises
+  (`migration/add_source_url_display_name.sql`). Once the network and URL are
+  correct the schema check reaches PostgREST and returns `PGRST205 — Could not
+  find the table 'public.archon_sources'`. That is a real but *different*
+  blocker and it is deliberately not touched here.
+- `pmoves_data`. Not required: `supabase-db` resolves from `pmoves_api`, and the
+  failing path is the Supabase REST path, not direct postgres.
+
+## Incidental findings (not fixed in this lane)
+
+- `.claude/hooks/damage-control/.known-road-active` holds `compose:pr:2656`,
+  written 2026-08-21. The grant is 22 days old and the PR it cites has merged.
+  Because `evaluate_known_road()` consults that file whenever `KNOWN_ROAD` is
+  unset, **any** later compose edit by **any** agent is silently granted and
+  recorded to the git-tracked `known-roads.jsonl` under that spent reason.
+- `pmoves-archon-1` accumulates `[curl] <defunct>` zombies — PID 1 is
+  `python -m services.archon.main` with no subreaper and no `init: true`, so
+  every healthcheck curl leaks a process table entry.
+- The compose comment above the `archon` service says the wrapper under
+  `services/archon/` "is dead — see #2217", but that wrapper is PID 1 in the
+  running container and is the code that performs the URL rewrite above.
