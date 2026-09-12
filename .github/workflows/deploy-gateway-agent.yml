@@ -121,7 +121,7 @@ jobs:
           WGER_ADMIN_PASSWORD: ci-build-placeholder
           WGER_DB_PASSWORD: ci-build-placeholder
           WGER_SECRET_KEY: ci-build-placeholder
-          NATS_URL: nats://nats:pmoves@nats:4222
+          NATS_URL: ${{ secrets.NATS_URL }}
           PRESIGN_SHARED_SECRET: ci-build-placeholder
           SUPABASE_SERVICE_KEY: ci-build-placeholder
         run: |
@@ -197,7 +197,7 @@ jobs:
           WGER_DB_PASSWORD: ci-deploy-placeholder
           WGER_SECRET_KEY: ci-deploy-placeholder
           GATEWAY_AGENT_PORT: "8111"
-          NATS_URL: nats://nats:pmoves@nats:4222
+          NATS_URL: ${{ secrets.NATS_URL }}
           PRESIGN_SHARED_SECRET: ci-deploy-placeholder
           SUPABASE_SERVICE_KEY: ci-deploy-placeholder
         run: |
@@ -317,7 +317,7 @@ jobs:
           WGER_ADMIN_PASSWORD: ci-build-placeholder
           WGER_DB_PASSWORD: ci-build-placeholder
           WGER_SECRET_KEY: ci-build-placeholder
-          NATS_URL: nats://nats:pmoves@nats:4222
+          NATS_URL: ${{ secrets.NATS_URL }}
           PRESIGN_SHARED_SECRET: ci-build-placeholder
           SUPABASE_SERVICE_KEY: ci-build-placeholder
         run: |
@@ -348,11 +348,26 @@ jobs:
           WGER_ADMIN_PASSWORD: ci-deploy-placeholder
           WGER_DB_PASSWORD: ci-deploy-placeholder
           WGER_SECRET_KEY: ci-deploy-placeholder
-          NATS_URL: nats://nats:pmoves@nats:4222
+          NATS_URL: ${{ secrets.NATS_URL }}
           PRESIGN_SHARED_SECRET: ci-deploy-placeholder
           SUPABASE_SERVICE_KEY: ci-deploy-placeholder
+          # Cipher lives on the Z890 GPU node (tailnet; resolve via ops vault); the
+          # pmoves_* networks are internal:true so containers reach it via the
+          # host-level socat relay on the pmoves_api bridge gateway. The relay
+          # unit (pmoves-cipher-relay.service) must exist on the target node —
+          # see pmoves/docs/operations/CIPHER_RELAY_2026-09-10.md
         run: |
           cd pmoves
+          # Dynamic bridge-gateway discovery (VPS relay topology — see
+          # pmoves/docs/operations/CIPHER_RELAY_2026-09-10.md). Guards: the
+          # network must exist on this self-hosted runner AND yield an IPv4
+          # gateway; otherwise fail fast rather than deploy a dead CIPHER_URL.
+          PMOVES_API_GW=$(sudo -n docker network inspect pmoves_api --format '{{(index .IPAM.Config 0).Gateway}}' 2>/dev/null) || true
+          if [ -z "$PMOVES_API_GW" ] || ! echo "$PMOVES_API_GW" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::pmoves_api bridge gateway not resolvable on this runner (network missing or no IPv4 gw) — relay precondition failed"
+            exit 1
+          fi
+          export CIPHER_URL="http://${PMOVES_API_GW}:8105"
           touch env.shared env.shared.generated .env.generated .env.local \
             env.tier-data env.tier-api env.tier-llm env.tier-worker \
             env.tier-media env.tier-agent env.tier-ui env.tier-supabase

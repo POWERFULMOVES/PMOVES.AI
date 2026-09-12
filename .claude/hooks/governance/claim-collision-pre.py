@@ -171,6 +171,49 @@ def lanes_in(text: str) -> set:
     return declared | inferred
 
 
+# The RECORD KIND of a register row: the word immediately after the backticked
+# leading timestamp on an anchored bullet. `CLAIM`, `RELEASE`, `CLAIM+RELEASE`,
+# and a long informational tail -- NOTE, REVIEW, UPDATE, HANDOFF, CORRECTION.
+_ROW_KIND_RE = re.compile(
+    r'^\s*[-*]\s+`[0-9]{4}-[0-9]{2}-[0-9]{2}[^`]*`\s+([A-Za-z][A-Za-z+-]*)'
+)
+
+# KINDS THAT RECORD A FACT AND TRANSITION NOTHING.
+#
+# WHY THIS SET EXISTS. Until now the register had no record type meaning "here
+# is a fact", so a correction had to be filed as a RELEASE -- the only kind the
+# sanctioned write tool accepted that was not a CLAIM. Combined with the bare-
+# RELEASE convention below (a RELEASE naming no lane closes EVERYTHING that
+# owner holds), filing a footnote under an owner with open lanes would have
+# closed every one of them silently. That did not happen only because the owner
+# in question had no open lanes at that moment; a hazard whose harm depends on
+# ordering is untriggered, not safe.
+#
+# So NOTE rows are parsed as INERT: whatever their prose says, they neither open
+# nor close a lane. That matters beyond the new write path, because these rows
+# discuss claims and releases for a living -- a note reading "the RELEASE `X` on
+# line 42 was mis-attributed" carries the exact byte sequence RELEASE_RE looks
+# for, and would otherwise close every lane `X` holds.
+#
+# MEASURED BEFORE AND AFTER against the live register: 5 NOTE rows, 0 of which
+# were being read as a CLAIM or a RELEASE today, so this changes no lane's state
+# now and removes the trap for every note filed from here on. Only NOTE is
+# listed: REVIEW / UPDATE / HANDOFF / CORRECTION carry the same latent hazard,
+# and widening the set is a separate change owing its own measurement.
+INERT_ROW_KINDS = frozenset({"NOTE"})
+
+
+def row_kind(line: str) -> str:
+    """The record kind of a register row, upper-cased. Empty if not a row."""
+    m = _ROW_KIND_RE.match(line)
+    return m.group(1).upper() if m else ""
+
+
+def is_inert_row(line: str) -> bool:
+    """True when this row records a fact and must not transition lane state."""
+    return row_kind(line) in INERT_ROW_KINDS
+
+
 _UNSET = object()
 _FOLDER = _UNSET
 _LINEAGE = _UNSET
@@ -334,6 +377,11 @@ def open_claims_in(text: str) -> dict:
     """
     open_claims = {}
     for lineno, line in enumerate(text.split("\n"), start=1):
+        if is_inert_row(line):
+            # A NOTE records a fact. It opens nothing and closes nothing, and
+            # this skip is what makes that true of its PROSE as well as its
+            # intent -- these rows quote `CLAIM` and `RELEASE` constantly.
+            continue
         m = CLAIM_RE.search(line)
         if m:
             owner_key = canonical_owner(m.group(1))
@@ -400,7 +448,23 @@ def open_claims_in(text: str) -> dict:
 HEREDOC_DELIM_RE = re.compile(r"<<-?\s*(['\"]?)([A-Za-z_][A-Za-z0-9_]*)\1")
 # `(>>?)` captured, because append and truncate are different acts against an
 # append-only ledger and the gate has to be able to tell them apart.
-REDIRECT_RE = re.compile(r"(>>?)\s*([^\s;|&<>]+)")
+# QUOTED FIRST, because the unquoted alternative stops at whitespace and a
+# quoted path is the normal way to write one that contains a space. Without the
+# quoted alternatives, `echo x > "C:\Users\Jane Doe\...\AGNOTE4482PHI.t1.md"`
+# handed `"C:\Users\Jane` to `_is_register`, which is not the register, so
+# `_segment_verdict` certified `echo` as read-only and the hook exited 0.
+#
+# This is redirect-specific and NOT spelling-specific: `tee` and `cp` route
+# through `_tokens`, where shlex already understands quoting, and they refused
+# the same paths correctly. Measured with a `Jane Doe` directory -- `>` after
+# echo/printf/cat passed silently in BOTH "\" and "/" spellings, so it is a
+# pre-existing hole in redirect parsing rather than part of the path-spelling
+# defect this file's other fix addresses. `_is_register` strips the quotes it
+# now receives.
+REDIRECT_RE = re.compile(r"(>>?)\s*((?:\"[^\"]*\"|'[^']*'|\\.|[^\s;|&<>])+)")
+# `\` followed by a line ending. Bash removes these before parsing, so the
+# guard has to as well -- see the comment at the top of classify_shell_write.
+CONTINUATION_RE = re.compile(r"\\\r?\n")
 TEE_RE = re.compile(r"\btee\b((?:\s+-\S+)*)((?:\s+[^\s;|&<>]+)*)")
 ECHO_LITERAL_RE = re.compile(
     r"\b(?:echo|printf)\b(?:\s+-\S+)*\s+(['\"])(.*?)\1", re.S
@@ -424,6 +488,20 @@ ASSIGNMENT_RE = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*)=(.*)$", re.S)
 SANCTIONED_PATH = (
     "make -C pmoves register-claim  (or register-release / register-amend)  -- "
     "see AGNOTE4482PHI.t1.md " + chr(167) + " Filing a row"
+)
+
+# EVERY PATH ABOVE IS A WRITE, and for a while that was the whole list. An
+# agent that ran an interpreter to ask `open_claims_in()` WHETHER A LANE WAS
+# FREE got refused and then handed three ways to write -- a refusal with no
+# answer to the question actually asked, which is a dead end wearing a gate's
+# clothes. The read is NOT loosened to fix that: a command line cannot be
+# trusted to declare its own intent, which is the entire reason the allowlist
+# enumerates what it positively recognises. The question is ANSWERED instead,
+# and the answer is named in every refusal below beside the write path.
+SANCTIONED_READ_PATH = (
+    "make -C pmoves register-status  (add BRANCH=<lane> OWNER='<you>' to ask "
+    "whether one lane is free) -- read-only; 0 clean / 1 findings / 3 could "
+    "not measure"
 )
 
 # ---- WHAT IS DELIBERATELY ALLOWED --------------------------------------------
@@ -511,8 +589,166 @@ _WRAPPERS = frozenset({"sudo", "doas", "env", "command", "builtin", "nohup",
                        "time", "nice", "ionice", "stdbuf", "exec", "timeout",
                        "setsid", "chrt"})
 _PY_INTERPRETERS = re.compile(r"^(?:python3?(?:\.\d+)?|uv|uvx)$")
-_SANCTIONED_TOOL = "register_append.py"
-_SANCTIONED_MAKE_TARGET_RE = re.compile(r"^register-(claim|release|docs|amend)$")
+# THE SANCTIONED TOOLS ARE FILES, NOT NAMES.
+#
+# These two names used to be a `str.endswith` tuple tested against EVERY token
+# of the command, which made the FILENAME the credential: any argument ending
+# in `register_status.py`, anywhere in argv, approved the whole segment before
+# anything asked which program would actually run. Measured on the parent
+# revision of this line:
+#
+#     python3 /tmp/register_status.py pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md
+#
+# exited the hook at 0. That is an arbitrary script, chosen by the caller,
+# handed the register as argv[1] with the gate's blessing -- it can truncate
+# the ledger. #2879 made this path fail closed precisely because a shell hole
+# let agents write the register unchecked; a trusted filename is the same hole
+# wearing the door's clothes.
+#
+# So the allowance is keyed on the RESOLVED FILE. A token is the sanctioned
+# tool only when it resolves to the same real path as this repository's copy --
+# the repository being located from THIS FILE, which is the one path in the
+# command's environment the caller does not choose. A symlink to the real tool
+# passes, because it IS the real tool; a byte-identical copy outside the repo
+# does not, because "same content today" is not "runs the gate's own code".
+_SANCTIONED_TOOL_NAMES = ("register_append.py", "register_status.py")
+_SANCTIONED_TOOL_DIR = REPO_ROOT_GUESS / "pmoves" / "tools"
+_SANCTIONED_TOOL_REAL = frozenset(
+    os.path.realpath(str(_SANCTIONED_TOOL_DIR / n)) for n in _SANCTIONED_TOOL_NAMES
+)
+_SANCTIONED_MAKE_DIR_REAL = os.path.realpath(str(REPO_ROOT_GUESS / "pmoves"))
+_SANCTIONED_MAKE_TARGET_RE = re.compile(
+    r"^register-(claim|release|note|docs|amend|status)$")
+# `-c`/`-e`/`-m`/`--command` anywhere alongside the tool means an interpreter
+# was asked to run something OTHER than the file named, so the file named stops
+# being evidence of what runs.
+_INLINE_CODE_FLAGS = frozenset({"-c", "-e", "-m", "--command"})
+# Interpreter flags that CONSUME the next token, so that token is a value and
+# not the script operand. `uv run --with pyyaml <script>` is the shape the
+# repo's own docs use, and counting `pyyaml` as the script would refuse it.
+# A flag NOT listed here whose value looks like an operand fails to resolve and
+# is refused -- the fail-closed direction.
+_INTERPRETER_VALUE_FLAGS = frozenset({
+    "-X", "-W", "--check-hash-based-pycs",                     # python
+    "--with", "--with-requirements", "--with-editable",        # uv
+    "--python", "-p", "--directory", "--project", "--index",
+    "--index-url", "--extra-index-url", "--find-links",
+    "--constraints", "--overrides", "--refresh-package",
+})
+_MAKE_DIR_FLAGS = frozenset({"-C", "--directory"})
+_MAKE_FILE_FLAGS = frozenset({"-f", "--file", "--makefile"})
+
+
+def _resolve_from_cwd(token: str, cwd):
+    """Real path of `token` THE WAY THE SHELL WILL RESOLVE IT.
+
+    Against the command's own cwd and nothing else. Falling back to the repo
+    root when the cwd-relative path does not exist would re-open the hole this
+    resolution exists to close, one indirection along: an agent standing in
+    `/tmp/x` that writes its own `pmoves/tools/register_status.py` runs THAT
+    file, while a hook resolving the same token against the repo would approve
+    the repository's. The two must name the same file or the check is measuring
+    a program that is not the one about to run.
+    """
+    token = token.strip().strip("'\"")
+    if not token:
+        return None
+    try:
+        base = Path(cwd) if cwd else Path.cwd()
+        real = os.path.realpath(str(Path(token) if Path(token).is_absolute()
+                                   else base / token))
+    except OSError:
+        return None
+    return real if os.path.exists(real) else None
+
+
+def _is_sanctioned_tool(token: str, cwd) -> bool:
+    """True only for THIS repository's register tool, resolved on disk."""
+    if os.path.basename(token.strip().strip("'\"")) not in _SANCTIONED_TOOL_NAMES:
+        return False
+    real = _resolve_from_cwd(token, cwd)
+    return real is not None and real in _SANCTIONED_TOOL_REAL and os.path.isfile(real)
+
+
+def _runs_sanctioned_tool(tail, cwd) -> bool:
+    """True when `tail` runs the repository's register tool, in a shape whose
+    argv is readable from the command string.
+
+    Two shapes are recognised and no others:
+
+        <repo>/pmoves/tools/register_status.py ...      (shebang, executed)
+        python3|uv|uvx [interpreter flags] <that file> ...
+
+    The interpreter must reach the tool as its SCRIPT operand. Anything else
+    -- the tool's name as an argument to `rm`, to `cp`, to a second script, or
+    to an interpreter that also carries `-c` -- is not this shape and falls
+    through to the allowlist like any other command.
+    """
+    if not tail or any(t in _INLINE_CODE_FLAGS for t in tail):
+        return False
+    if _is_sanctioned_tool(tail[0], cwd):
+        return True
+    if not _PY_INTERPRETERS.match(os.path.basename(tail[0].strip().strip("'\""))):
+        return False
+    j = 1
+    while j < len(tail):
+        tok = tail[j]
+        if tok in _INTERPRETER_VALUE_FLAGS:
+            j += 2
+            continue
+        if tok.startswith("-"):
+            j += 1
+            continue
+        # `uv run [python] <script>`: still interpreter machinery, not the
+        # script operand.
+        if tok == "run" or _PY_INTERPRETERS.match(os.path.basename(tok)):
+            j += 1
+            continue
+        return _is_sanctioned_tool(tok, cwd)   # the FIRST operand decides
+    return False
+
+
+def _make_verdict(rest, cwd):
+    """`make` is allowed only when it runs THIS repository's register targets.
+
+    The target name alone was the test, which had the same defect the tool
+    suffix had one layer up: `make -C /tmp/evil register-status ARGS=<register>`
+    names a sanctioned target in an arbitrary Makefile. A target is only
+    validated code if the Makefile defining it is the repo's.
+    """
+    if not any(_SANCTIONED_MAKE_TARGET_RE.match(t) for t in rest):
+        return False, (
+            "`make` is only recognised here for the register-* targets, which "
+            "append through validated code."
+        )
+    if any(t in _MAKE_FILE_FLAGS or t.startswith("--file=")
+           or t.startswith("--makefile=") for t in rest):
+        return False, (
+            "`make -f` chooses which makefile defines the target, so the "
+            "register-* target name stops being evidence of what runs."
+        )
+    directory = None
+    for j, tok in enumerate(rest):
+        if tok in _MAKE_DIR_FLAGS and j + 1 < len(rest):
+            directory = rest[j + 1]
+        elif tok.startswith("--directory="):
+            directory = tok.split("=", 1)[1]
+    if directory is None:
+        return False, (
+            "`make` here must name the directory explicitly, as "
+            + SANCTIONED_PATH.split("  ")[0] + " does. Without `-C` the target "
+            "resolves against whatever directory the shell happens to be in, "
+            "and which makefile defines `register-*` is then not readable from "
+            "the command."
+        )
+    real = _resolve_from_cwd(directory, cwd)
+    if real != _SANCTIONED_MAKE_DIR_REAL:
+        return False, (
+            "`make -C " + directory + "` is not this repository's `pmoves` "
+            "directory, so the `register-*` target it runs is not the "
+            "validated one."
+        )
+    return True, ""
 
 
 def split_heredocs(command: str):
@@ -559,15 +795,66 @@ def split_heredocs(command: str):
         line = lines[idx]
         skeleton_lines.append(line)
         idx += 1
+
+        # REBUILD THE LOGICAL LINE FIRST. A `\<newline>` joins this line to the
+        # next before the shell sees either, so
+        #
+        #     python3 \
+        #     <<'PY'
+        #
+        # is ONE command line -- but read physically, the line carrying the
+        # `<<` operator contains no interpreter, `code` comes out False, the
+        # body is classified as data, and it is then excluded from the
+        # detection string entirely. The body still reaches python and still
+        # truncates the register.
+        #
+        # This has to happen HERE rather than in the caller: `code` is decided
+        # from the opener inside this loop, so a caller that normalizes after
+        # the split has already lost. Bodies are untouched -- the join only
+        # runs while we are positioned on a skeleton line, which is precisely
+        # the region where a continuation is a shell construct.
+        while line.endswith("\\") and idx < len(lines):
+            line = line[:-1] + lines[idx]
+            skeleton_lines[-1] = line
+            idx += 1
+
         # Every heredoc opened ON THIS LINE takes its body starting now, in the
         # order the operators appear -- the shell's own rule for `cmd <<A <<B`.
         for m in HEREDOC_DELIM_RE.finditer(line):
             quote, delim = m.group(1), m.group(2)
             body = []
-            while idx < len(lines) and lines[idx].strip() != delim:
+            # FOLD CONTINUATIONS WHEN LOOKING FOR THE TERMINATOR, but only for
+            # an UNQUOTED delimiter -- that is precisely where bash performs
+            # expansion and line-joining while reading the body. With a quoted
+            # delimiter the body is taken byte-for-byte and `EO\` + newline +
+            # `F` is not a terminator, so folding there would end the heredoc
+            # early and hand the rest of the body to the shell parser as code.
+            #
+            # Unfolded, this hides a whole COMMAND rather than a path:
+            #
+            #     cat >> REG <<EOF
+            #     ...
+            #     EO\
+            #     F
+            #     echo DESTROYED > REG
+            #
+            # bash rejoins `EOF`, closes the heredoc, and runs the truncate.
+            # The hook saw the heredoc as unterminated, absorbed the truncate
+            # as inert body data, and returned 0.
+            term_lines = 1
+            while idx < len(lines):
+                cand = lines[idx]
+                n = 1
+                if not quote:
+                    while cand.endswith("\\") and idx + n < len(lines):
+                        cand = cand[:-1] + lines[idx + n]
+                        n += 1
+                if cand.strip() == delim:
+                    term_lines = n
+                    break
                 body.append(lines[idx])
                 idx += 1
-            idx += 1  # consume the terminator line itself
+            idx += term_lines  # consume the terminator, however many lines it spans
             bodies.append({
                 "delim": delim,
                 "body": "\n".join(body),
@@ -668,7 +955,55 @@ def _is_register(token: str) -> bool:
     token = token.strip().strip("'\"")
     if not token:
         return False
-    return os.path.basename(token.rstrip("/")) == REGISTER_NAME
+
+    # Split on EITHER separator, not os.sep. `os.path.basename` is
+    # platform-dependent: on Linux it does not treat "\" as a separator, so a
+    # Windows-spelled path reaching a Linux runner would arrive as one long
+    # basename and miss. The guard has to answer the same way wherever it runs.
+    # Quotes are stripped EVERYWHERE, not just at the ends. A redirect word can
+    # mix quoted and unquoted spans -- bash concatenates them into one word --
+    # and both directions were wrong before this:
+    #
+    #   > /tmp/"Jane Doe"/AGNOTE4482PHI.t1.md   under-matched: the basename was
+    #                                           never reached, so a real
+    #                                           truncate passed as read-only
+    #   > "/tmp/AGNOTE4482PHI.t1.md".bak        over-matched: the quoted span
+    #                                           alone looked like the register,
+    #                                           so a git merge artifact was
+    #                                           refused -- exactly the case the
+    #                                           neighbour rule exists to permit
+    #
+    # Removing the quote characters first makes the token the path bash would
+    # actually open, and both cases then fall out of the ordinary basename test.
+    token = token.replace('"', "").replace("'", "")
+
+    base = re.split(r"[\\/]", token.rstrip("/\\"))[-1]
+    if base == REGISTER_NAME:
+        return True
+
+    # THE POSIX TOKENIZER ATE THE SEPARATORS. `_tokens` calls
+    # `shlex.split(..., posix=True)` -- correct for bash, and it treats "\" as
+    # an ESCAPE. So a Windows-spelled path is not merely split wrong, it comes
+    # back with its separators deleted:
+    #
+    #   C:\Users\me\Temp\t0\AGNOTE4482PHI.t1.md
+    #     -> C:UsersmeTempt0AGNOTE4482PHI.t1.md
+    #
+    # There is no separator left for any basename test to find. Measured on
+    # Z890 (win32) against this file's own suite: with the register named in
+    # Windows spelling, `cp`, `dd of=`, `install`, `csplit -f`,
+    # `csplit --prefix=` and `split` ALL passed silently, where the identical
+    # commands spelled with "/" were refused. Six write vectors, decided by
+    # which slash the operator happened to type.
+    #
+    # `endswith` is the right shape for a guard here: it OVER-matches (a file
+    # genuinely named `notes-AGNOTE4482PHI.t1.md` would be refused) and
+    # over-matching is the safe direction. It still leaves the neighbour cases
+    # alone -- `<REG>.bak`, `.orig`, `.rej`, `.BACKUP.123` all END with their
+    # own suffix, not with the register name, so git's merge artifacts are
+    # untouched. That distinction is what the substring form got wrong and is
+    # preserved here deliberately.
+    return token.endswith(REGISTER_NAME)
 
 
 def _assignments(skeleton: str) -> dict:
@@ -852,7 +1187,7 @@ def _split_verdict(cmd, rest):
     return True, ""
 
 
-def _segment_verdict(segment, assignments):
+def _segment_verdict(segment, assignments, cwd):
     """(understood_as_not_writing_the_register, why_not).
 
     THE BURDEN OF PROOF SITS ON THE READ. Anything this function does not
@@ -869,25 +1204,21 @@ def _segment_verdict(segment, assignments):
         # the unresolved-target sweep.
         return True, ""
 
-    # THE SANCTIONED TOOLS, named explicitly. They run the very check this hook
-    # runs, so refusing them would leave the fleet with a gate and no door --
-    # and a register row's own scope prose routinely names the register file.
+    # THE SANCTIONED TOOLS, identified by the FILE THEY RUN. They run the very
+    # check this hook runs, so refusing them would leave the fleet with a gate
+    # and no door -- and a register row's own scope prose routinely names the
+    # register file. The allowance is not a name: see `_runs_sanctioned_tool`,
+    # which resolves the script operand against this repository's own copy,
+    # because keying it on the filename made the filename a password.
     tail = tokens[i:]
-    if any(t.endswith(_SANCTIONED_TOOL) for t in tail) and not any(
-        t in ("-c", "-e", "-m", "--command") for t in tail
-    ):
+    if _runs_sanctioned_tool(tail, cwd):
         return True, ""
 
     cmd = os.path.basename(tokens[i])
     rest = tokens[i + 1:]
 
     if cmd == "make":
-        if any(_SANCTIONED_MAKE_TARGET_RE.match(t) for t in rest):
-            return True, ""
-        return False, (
-            "`make` is only recognised here for the register-* targets, which "
-            "append through validated code."
-        )
+        return _make_verdict(rest, cwd)
     if cmd == "git":
         return _git_verdict(rest)
     if cmd in _ALWAYS_DESTRUCTIVE:
@@ -931,7 +1262,10 @@ def _segment_verdict(segment, assignments):
             "the code it runs, so what the code does to the file is not "
             "readable from the command string. `python3 -c \"open(REG,'a')\"`, "
             "`node -e`, `ruby -e` and `ed` all reached the ledger this way while "
-            "the gate reported clean. To READ it from an interpreter, pipe it in "
+            "the gate reported clean.\n"
+            "  To ASK WHAT IS OPEN -- usually the actual question -- use "
+            + SANCTIONED_READ_PATH + ".\n"
+            "  To read the raw file from an interpreter anyway, pipe it in "
             "instead of naming it: `cat <register> | " + cmd + " ...`."
         )
     return False, (
@@ -958,7 +1292,7 @@ class ShellWrite:
         self.why = why
 
 
-def classify_shell_write(command: str) -> ShellWrite:
+def classify_shell_write(command: str, cwd=None) -> ShellWrite:
     """Decide whether `command` writes the register, and recover the content.
 
     KEYED ON THE WRITE TARGET, NOT ON MENTION. The advisory this replaces
@@ -980,6 +1314,56 @@ def classify_shell_write(command: str) -> ShellWrite:
     the recoverable append itself.
     """
     skeleton, bodies = split_heredocs(command)
+
+    # BASH DELETES `\<newline>` BEFORE IT PARSES ANYTHING. So
+    #
+    #     echo x > pmoves/docs/AGENTS/AGNOTE4482PHI.t1.\
+    #     md
+    #
+    # truncates the real register, while every check below looked at text where
+    # the name is split across two lines: the literal-name gate three lines down
+    # finds no contiguous `AGNOTE4482PHI.t1.md` and returns "none", and
+    # `REDIRECT_RE`'s `\\.` cannot bridge it either because `.` does not match a
+    # newline. Rejoining first means the rest of this function sees the same
+    # command bash does.
+    #
+    # SKELETON ONLY, after `split_heredocs`. A heredoc body is literal text --
+    # `\<newline>` inside a quoted delimiter is two real characters, not a
+    # continuation -- so rejoining there would invent content. A continuation is
+    # a shell-line construct and lives in the skeleton.
+    #
+    # Inside single quotes a `\<newline>` is also literal, so this
+    # over-normalizes that one case. It is the safe direction for a guard: the
+    # worst outcome is seeing a register name bash would not, which refuses a
+    # write that was not going to happen. The reverse would miss a truncate.
+    skeleton = CONTINUATION_RE.sub("", skeleton)
+
+    # CODE heredoc bodies too, and the reasoning above is why they are a
+    # SEPARATE case rather than the same one. A body is literal to bash -- but
+    # a body marked `code` is handed to an interpreter, and python, node and
+    # ruby all fold `\<newline>` inside a string literal exactly as bash folds
+    # it in a command. So
+    #
+    #     python3 <<'PY'
+    #     open('/tmp/AGNOTE4482PHI.t1.\
+    #     md', 'w').write('')
+    #     PY
+    #
+    # opens the real register while the literal-name gate below sees no
+    # contiguous name and returns "none". With an UNQUOTED delimiter bash
+    # performs the join itself before the interpreter is even reached, so the
+    # bypass does not depend on which interpreter it is.
+    #
+    # Normalizing the body is over-eager for the one case where the sequence is
+    # genuinely two characters to the interpreter (a python raw string). Same
+    # trade as the skeleton: over-matching refuses a write that was not going
+    # to happen; under-matching misses one that was. Non-code bodies are left
+    # alone -- they are data, nothing interprets them, and they are not part of
+    # the detection string.
+    for h in bodies:
+        if h["code"]:
+            h["body"] = CONTINUATION_RE.sub("", h["body"])
+
     executable = "\n".join(
         [skeleton] + [h["body"] for h in bodies if h["code"]]
     )
@@ -1017,7 +1401,7 @@ def classify_shell_write(command: str) -> ShellWrite:
             # unresolved-redirect sweep below is for, and it still covers this
             # segment.
             continue
-        ok, why = _segment_verdict(seg, assignments)
+        ok, why = _segment_verdict(seg, assignments, cwd)
         if not ok:
             return ShellWrite("opaque", why=why)
         certified_reads.append(seg)
@@ -1204,6 +1588,12 @@ def evaluate_claims(proposed: str, existing_open: dict) -> ClaimVerdict:
     payload_lanes = lanes_in(proposed)
     for m in CLAIM_RE.finditer(proposed):
         row = _row_at(proposed, m.start())
+        if is_inert_row(row):
+            # Symmetry with open_claims_in(). A NOTE in the PROPOSED write is
+            # inert too, so a note whose prose quotes a CLAIM is not charged as
+            # one. Without this the two sides disagree about what a row is,
+            # which is worse than either being wrong alone.
+            continue
         owner = m.group(1)
         lanes = lanes_in(row) or payload_lanes
         declared = co_owners_in(row)
@@ -1441,7 +1831,7 @@ def _gate_shell_write(payload: dict) -> None:
     that appends through validated code, and every refusal below names it.
     """
     command = ((payload.get("tool_input") or {}).get("command") or "")
-    verdict = classify_shell_write(command)
+    verdict = classify_shell_write(command, payload.get("cwd"))
     if verdict.kind == "none":
         return
 
@@ -1477,7 +1867,10 @@ def _gate_shell_write(payload: dict) -> None:
             f"  {verdict.why}\n"
             "Could not measure is NOT a pass (0 clean / 1 findings / 3 could "
             "not measure), and the advisory this replaces treated it as one.\n"
-            f"Sanctioned path, which does the check for you: {SANCTIONED_PATH}\n"
+            f"To WRITE, the sanctioned path does the check for you: "
+            f"{SANCTIONED_PATH}\n"
+            f"To READ, the sanctioned path answers without an interpreter: "
+            f"{SANCTIONED_READ_PATH}\n"
             "It reads the clock for the timestamp, refuses a lane another "
             "owner holds, and appends in O_APPEND so the file cannot be "
             "rewritten.\n"

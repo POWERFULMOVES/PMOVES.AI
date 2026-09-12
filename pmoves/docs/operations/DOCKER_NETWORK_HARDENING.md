@@ -19,13 +19,52 @@ Six Docker networks are defined across the compose stack:
 | `pmoves_bus` | bridge | **yes** | 172.30.3.0/24 | Message bus — NATS only; high-trust, no internet |
 | `pmoves_monitoring` | bridge | **yes** | 172.30.5.0/24 | Observability — Prometheus, Grafana, Loki, cAdvisor |
 | `pmoves_external` | bridge | **no** | 172.30.6.0/24 | Internet-capable — TensorZero-gateway, Agent Zero, Archon, Hi-RAG |
+| `pmoves_public` | bridge | **no** | 172.30.7.0/24 | Host-reachable + egress-capable — Kong, PostgREST, edge-functions |
 
-**Rule 1 — All internal networks air-gap from internet.** Only `pmoves_external`
-carries outbound internet access. Services not needing LLM API calls or pip installs
+> **`pmoves_public` was missing from this table until 2026-09-03** while being
+> live with three attached containers and referenced nine times in compose. An
+> agent reading only this table to choose a network for a host-unreachable
+> service will reach for `pmoves_external` and violate Rule 1 — which is exactly
+> what happened. It is documented here now.
+
+**Rule 1 — Internal networks air-gap from the internet.** **TWO** networks are
+`internal: false` and therefore carry outbound access: `pmoves_external` and
+`pmoves_public`. Services not needing LLM API calls or pip installs
 must never appear in `pmoves_external`.
 
 **Rule 2 — Subnets are permanent.** Never renumber them; NATS auth, TLS SANs, and
 firewall rules are baked against these CIDRs.
+
+**Rule 5 — There is no "publish without egress." Front it with a gateway.**
+
+Docker offers no network primitive that publishes a host port while blocking
+outbound. Measured on the 4090, 2026-09-03:
+
+| network config | host port published | outbound egress |
+|---|---|---|
+| `internal: true` | **no** (binding stored, never activated) | blocked |
+| `internal: false` | yes | **yes** |
+| bridge + `enable_ip_masquerade: false` | yes | **yes, on Docker Desktop** |
+
+The third row is the workaround recommended in
+[moby/moby#36174](https://github.com/moby/moby/issues/36174) (open since 2018,
+filed on native Linux Engine — the ingress behaviour is documented in **no**
+official Docker page). It works on Linux, and does **not** isolate here:
+Docker Desktop runs a second NAT layer inside its WSL2 VM, so removing the
+bridge masquerade leaves egress intact. Re-measure per platform before adopting.
+
+So a service that must be reachable from the host has exactly two honest
+options, and "attach it to an egress-capable network" is the one to avoid:
+
+1. **Gateway-front it (preferred).** The gateway is the only published service;
+   backends stay `internal: true` behind it. This is already the load-bearing
+   pattern here — `kong`, `postgrest` and `edge-functions` are the three
+   containers on `pmoves_public`, and Kong is the published door at `:8000`.
+2. **Accept egress**, deliberately and in writing, for that specific service.
+
+Verify either with `make -C pmoves net-reality`, which compares what each
+container **requested** against what the daemon **activated** (exit 0 clean /
+1 drift / 2 docker unavailable / 3 measured nothing).
 
 ---
 
@@ -121,11 +160,13 @@ the Tailscale layer. Never rely on IP-specific binds on Windows hosts.**
 
 ---
 
-## Pending: Network-Tier Hardening Anchors (PR-A)
+## Network-Tier Hardening Anchors (PR-A — LANDED 2026-09-03)
 
-PR-A (pending operator action — requires `COMPOSE_EDIT=1` override on
-damage-control hook) will add four YAML anchors mirroring the existing 11
-service-tier-hardened anchors:
+PR-A adds four YAML anchors mirroring the existing service-tier-hardened
+anchors. It landed 2026-09-03 under a Known Road grant
+(`compose:handoff:network-planes-and-package-sharing-2026-09-03.md`, recorded
+in `known-roads.jsonl`) — the `COMPOSE_EDIT=1` override this line used to name
+is not the current mechanism; protected-path edits go through Known Roads:
 
 | Anchor | Purpose | Key settings |
 |--------|---------|-------------|
@@ -134,8 +175,15 @@ service-tier-hardened anchors:
 | `x-network-external-bridged` | Internet-capable tier | `internal: false`, explicit subnet |
 | `x-network-tailnet-published` | Tailnet-reachable with per-OS portforward notes | `internal: false` + Windows bind caveat |
 
-Until PR-A lands, the network definitions in compose are functional but undocumented
-as anchors. The rules in this doc apply regardless.
+All four are defined in `docker-compose.yml` and applied to the six
+compose-defined networks. `pmoves_external` and `pmoves_db_egress` are
+`external: true` — compose adopts them and does not own their `driver`/
+`internal`, so they carry no anchor.
+
+Landing it was a pure refactor, verified rather than asserted: `docker compose
+--profile "*" config` before and after produced an IDENTICAL networks section
+(71 lines both) and an IDENTICAL services section; the only whole-file
+difference was the four anchor definitions echoed back as `x-` extension keys.
 
 ---
 

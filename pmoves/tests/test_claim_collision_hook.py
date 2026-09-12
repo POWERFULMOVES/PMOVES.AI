@@ -1464,3 +1464,325 @@ def test_those_same_commands_still_read_the_register(tmp_path, command):
     r = _run_bash(tmp_path, command.format(R=str(reg)))
     assert r.returncode == ALLOW, f"read refused: {command!r}\n{r.stderr}"
     assert _decision(r) is None, f"spurious prompt for: {command!r}"
+
+
+# ---------------------------------------------------------------------------
+# Path SPELLING must not decide whether the guard fires.
+#
+# These pin the platform-independent behaviour on purpose. The suite's other
+# cases build paths with `tmp_path / REGISTER_NAME`, which yields "\" on
+# Windows and "/" on Linux -- so a Linux runner exercises only one spelling and
+# can never catch a regression of this. Hard-code both.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "cp /tmp/whatever.md {R}",
+        "dd of={R}",
+        "install /tmp/x {R}",
+        "csplit -f {R} /tmp/in.txt 2",
+        "csplit --prefix={R} /tmp/in.txt 2",
+        "split -l 1 /tmp/in.txt {R}",
+        "mv /tmp/x {R}",
+        "echo x > {R}",
+        "tee {R}",
+        "sed -i s/a/b/ {R}",
+    ],
+)
+def test_a_backslash_spelled_register_is_still_the_register(tmp_path, command):
+    r"""`shlex.split(posix=True)` treats "\\" as an ESCAPE, not a separator.
+
+    So a Windows-spelled target does not merely tokenize oddly -- it comes back
+    with its separators DELETED:
+
+        C:\Users\me\Temp\t0\AGNOTE4482PHI.t1.md
+          -> C:UsersmeTempt0AGNOTE4482PHI.t1.md
+
+    leaving no separator for any basename test to find. Measured on Z890
+    (win32) before the fix: cp, dd of=, install, csplit -f, csplit --prefix=
+    and split ALL passed silently, while the identical commands spelled with
+    "/" were refused. Six write vectors on an append-only provenance file,
+    decided by which slash the operator happened to type.
+    """
+    reg = str(tmp_path / REGISTER_NAME).replace("/", "\\")
+    r = _run_bash(tmp_path, command.format(R=reg))
+    assert r.returncode == BLOCK, (
+        f"backslash spelling bypassed the guard: {command!r}\n"
+        f"target={reg!r}\nstderr={r.stderr}"
+    )
+
+
+@pytest.mark.parametrize("sep", ["/", "\\"])
+@pytest.mark.parametrize("suffix", [".bak", ".orig", ".rej", ".BACKUP.123"])
+def test_neighbouring_filenames_stay_allowed_in_both_spellings(tmp_path, sep, suffix):
+    """The over-match has a bound, and this is where it has to hold.
+
+    `_is_register` now falls back to `endswith` precisely because the POSIX
+    tokenizer can destroy the separators. That fallback must NOT swallow git's
+    merge-conflict artifacts -- the scenario where a careful hand fixup is the
+    entire recovery story, and the one the substring form got wrong.
+    """
+    reg = str(tmp_path / REGISTER_NAME).replace("/", sep).replace("\\", sep)
+    r = _run_bash(tmp_path, f"echo x > {reg}{suffix}")
+    assert r.returncode == ALLOW, f"{suffix} refused as the register ({sep!r}): {r.stderr}"
+
+
+@pytest.mark.parametrize("quote", ['"', "'"])
+@pytest.mark.parametrize("sep", ["/", "\\"])
+@pytest.mark.parametrize(
+    "command",
+    [
+        "echo x > {Q}{R}{Q}",
+        "printf y > {Q}{R}{Q}",
+        "cat /tmp/in.txt > {Q}{R}{Q}",
+        "echo x >> {Q}{R}{Q}",
+    ],
+)
+def test_a_quoted_redirect_target_with_a_space_is_still_the_register(
+    tmp_path, command, sep, quote
+):
+    r"""`REDIRECT_RE` stopped at whitespace, so a quoted path with a space was
+    truncated before `_is_register` ever saw the basename.
+
+    `echo x > "C:\Users\Jane Doe\...\AGNOTE4482PHI.t1.md"` handed
+    `"C:\Users\Jane` to the check, which is not the register, so
+    `_segment_verdict` certified `echo` as read-only and the hook exited 0 --
+    a silent truncate of an append-only ledger.
+
+    Deliberately parametrized over BOTH separators: this one is redirect
+    parsing, not path spelling, and it reproduced identically with "/" and
+    "\\". `tee` and `cp` were never affected because they route through
+    `_tokens`, where shlex already understands quoting.
+    """
+    d = tmp_path / "Jane Doe"
+    d.mkdir()
+    reg = str(d / REGISTER_NAME).replace("/", sep).replace("\\", sep)
+    r = _run_bash(tmp_path, command.format(R=reg, Q=quote))
+    assert r.returncode == BLOCK, (
+        f"quoted redirect bypassed the guard: {command!r}\n"
+        f"target={reg!r}\nstderr={r.stderr}"
+    )
+
+
+@pytest.mark.parametrize(
+    "template,expected",
+    [
+        # A redirect word may MIX quoted and unquoted spans; bash concatenates
+        # them. Each of these names the register and must be refused.
+        ('echo x > {D}/"Jane Doe"/{N}', BLOCK),
+        ("echo x > {D}/'Jane Doe'/{N}", BLOCK),
+        ('echo x > "{D}/Jane Doe"/{N}', BLOCK),
+        ('echo x > "{D}/Jane Doe/{N}"', BLOCK),
+        (r"echo x > {D}/Jane\ Doe/{N}", BLOCK),
+        (r"echo x >> {D}/Jane\ Doe/{N}", BLOCK),
+        # ...and the other direction. A quoted span that looks like the
+        # register followed by an unquoted suffix names a NEIGHBOUR, not the
+        # register. Refusing these breaks the merge-artifact guarantee.
+        ('echo x > "{D}/{N}".bak', ALLOW),
+        ('echo x > "{D}/{N}.bak"', ALLOW),
+        ('echo x > "{D}/{N}".orig', ALLOW),
+        ('echo x > "{D}/{N}".BACKUP.123', ALLOW),
+    ],
+)
+def test_a_redirect_word_is_parsed_whole_across_quote_boundaries(
+    tmp_path, template, expected
+):
+    r"""One shell word, several spans -- and it failed in BOTH directions.
+
+    `> /tmp/"Jane Doe"/AGNOTE4482PHI.t1.md` captured only `/tmp/"Jane`, so the
+    basename was never reached and a real truncate was certified as a
+    read-only `echo`.
+
+    `> "/tmp/AGNOTE4482PHI.t1.md".bak` captured only the quoted span, so a git
+    merge artifact was REFUSED -- the exact case the neighbour rule exists to
+    permit, and the one where a careful hand fixup is the whole recovery
+    story.
+
+    An under-match and an over-match from the same missing rule, which is why
+    both are pinned here rather than only the bypass.
+    """
+    d = tmp_path / "sub"
+    d.mkdir()
+    (d / "Jane Doe").mkdir()
+    (d / "Jane Doe" / REGISTER_NAME).write_text(EXISTING, encoding="utf-8")
+    cmd = template.format(D=str(d).replace("\\", "/"), N=REGISTER_NAME)
+    r = _run_bash(tmp_path, cmd)
+    assert r.returncode == expected, (
+        f"want {expected}, got {r.returncode} for: {cmd!r}\nstderr={r.stderr}"
+    )
+
+
+@pytest.mark.parametrize(
+    "template,expected",
+    [
+        # Bash deletes `\<newline>` before parsing, so all of these name the
+        # register and must be refused. `{C}` is spelled as a substitution
+        # rather than an escape on purpose: written inline, the backslash count
+        # is ambiguous to every layer that touches this file, and a first draft
+        # silently became backslash-plus-letter-n -- which is not a
+        # continuation, so the tests failed against a hook that was correct.
+        ("echo x > {D}/AGNOTE4482PHI.t1.{C}md", BLOCK),
+        ("echo x >> {D}/AGNOTE4482PHI.t1.{C}md", BLOCK),
+        ("echo x > {D}/AGNOTE{C}4482PHI.t1.md", BLOCK),
+        ("echo x >> {D}/AGNOTE{C}4482PHI.t1.md", BLOCK),
+        ("echo x > {D}/AGNO{C}TE4482PHI.t1.md", BLOCK),
+    ],
+)
+def test_a_line_continuation_cannot_hide_the_register(tmp_path, template, expected):
+    r"""`\<newline>` is removed by bash BEFORE it parses anything.
+
+    So `echo x > .../AGNOTE4482PHI.t1.\` + newline + `md` truncates the real
+    register, while every check in the hook was looking at text where the name
+    is split across two lines: the literal-name gate finds no contiguous
+    `AGNOTE4482PHI.t1.md` and returns "none", and `REDIRECT_RE`'s `\.` cannot
+    bridge it either, because `.` does not match a newline.
+
+    The continuation is built by substitution, not written inline. A first
+    draft spelled it as an escape and it arrived as backslash-plus-letter-n --
+    two ordinary characters, no newline at all -- so the tests failed against a
+    hook that was already correct. Chasing that cost more time than the fix
+    did, and the same ambiguity would bite the next person editing this file.
+    """
+    continuation = "\\" + "\n"
+    cmd = template.format(D=str(tmp_path).replace("\\", "/"), C=continuation)
+    assert continuation in cmd, "the fixture built no continuation; the test is vacuous"
+    r = _run_bash(tmp_path, cmd)
+    assert r.returncode == expected, (
+        f"line continuation hid the register: {cmd!r}\nstderr={r.stderr}"
+    )
+
+
+@pytest.mark.parametrize("delim", ["'PY'", "PY"])
+@pytest.mark.parametrize(
+    "template",
+    [
+        "python3 <<{Q}\nopen('{D}/AGNOTE4482PHI.t1.{C}md', 'w').write('')\n{E}\n",
+        "python3 <<{Q}\nopen('{D}/AGNO{C}TE4482PHI.t1.md', 'w').write('')\n{E}\n",
+    ],
+)
+def test_a_continuation_inside_a_code_heredoc_cannot_hide_the_register(
+    tmp_path, template, delim
+):
+    r"""A heredoc body is literal to BASH -- but a `code` body is handed to an
+    interpreter, and python folds `\<newline>` inside a string literal exactly
+    as bash folds it in a command.
+
+    So the body opens the real register while the literal-name gate sees no
+    contiguous `AGNOTE4482PHI.t1.md` and returns "none". With an UNQUOTED
+    delimiter bash performs the join itself before python is even reached, so
+    the bypass does not depend on the interpreter -- which is why both
+    delimiter forms are parametrized here.
+
+    This is the case the first version of the continuation fix explicitly
+    argued AGAINST normalizing, on the grounds that rejoining a literal body
+    would invent content. That reasoning was right about bash and wrong about
+    what happens next.
+    """
+    continuation = "\\" + "\n"
+    cmd = template.format(
+        D=str(tmp_path).replace("\\", "/"),
+        C=continuation,
+        Q=delim,
+        E=delim.strip("'"),
+    )
+    assert continuation in cmd, "the fixture built no continuation; the test is vacuous"
+    r = _run_bash(tmp_path, cmd)
+    assert r.returncode == BLOCK, (
+        f"continuation inside a {delim} heredoc hid the register:\n{cmd}\nstderr={r.stderr}"
+    )
+
+
+@pytest.mark.parametrize("delim", ["'PY'", "PY"])
+def test_a_continuation_in_the_heredoc_OPENER_still_marks_the_body_as_code(
+    tmp_path, delim
+):
+    r"""`python3 \` + newline + `<<'PY'` is ONE command line to the shell.
+
+    Read physically, the line carrying the `<<` operator contains no
+    interpreter, so `code` came out False, the body was classified as DATA, and
+    it was then excluded from the detection string entirely -- while still
+    reaching python and still truncating the register.
+
+    Normalizing in the caller cannot fix this: `code` is decided from the
+    opener inside `split_heredocs`, so by the time the caller sees the result
+    the classification has already been made on the wrong text.
+    """
+    continuation = "\\" + "\n"
+    body_path = str(tmp_path).replace("\\", "/") + "/" + REGISTER_NAME
+    end = delim.strip("'")
+    cmd = (
+        "python3 " + continuation
+        + "<<" + delim + "\n"
+        + "open('" + body_path + "', 'w').write('')\n"
+        + end + "\n"
+    )
+    assert continuation in cmd, "the fixture built no continuation; the test is vacuous"
+    r = _run_bash(tmp_path, cmd)
+    assert r.returncode == BLOCK, (
+        f"a continued opener hid the heredoc body:\n{cmd}\nstderr={r.stderr}"
+    )
+
+
+def test_a_split_terminator_cannot_hide_a_following_command(tmp_path):
+    r"""For an UNQUOTED heredoc, bash folds `\<newline>` while reading the body
+    and matches the terminator against the rejoined line.
+
+    So `EO\` + newline + `F` closes the heredoc and everything after it is
+    ordinary shell again. The hook saw an unterminated heredoc, absorbed the
+    following truncate as inert body data, and returned 0 -- hiding a whole
+    COMMAND rather than a path, which is what makes this worse than the
+    earlier continuation cases.
+    """
+    continuation = "\\" + "\n"
+    reg = str(tmp_path / REGISTER_NAME).replace("\\", "/")
+    notes = str(tmp_path / "notes.md").replace("\\", "/")
+    # The heredoc writes an UNRELATED file on purpose. A first version opened
+    # with `cat >> <register> <<EOF`, which the hook refuses on the redirect
+    # alone -- so it passed against the unfixed hook and proved nothing. The
+    # negative control caught it. Here the ONLY route to a refusal is folding
+    # the terminator and seeing the command that follows.
+    cmd = (
+        "cat > " + notes + " <<EOF\n"
+        "hello\n"
+        "EO" + continuation + "F\n"
+        "echo DESTROYED > " + reg + "\n"
+    )
+    assert continuation in cmd, "the fixture built no continuation; the test is vacuous"
+    assert REGISTER_NAME not in cmd.split("EOF", 1)[0], (
+        "the opener already names the register; the test would pass without the fix"
+    )
+    r = _run_bash(tmp_path, cmd)
+    assert r.returncode == BLOCK, (
+        f"a split terminator hid the following truncate:\n{cmd}\nstderr={r.stderr}"
+    )
+
+
+def test_a_quoted_delimiter_does_NOT_fold_its_terminator(tmp_path):
+    r"""The bound on the fix above, exercised through the real entrypoint.
+
+    With a QUOTED delimiter bash takes the body byte-for-byte and performs no
+    joining, so `EO\` + newline + `F` is body CONTENT, not a terminator.
+    Folding there would close the heredoc early and hand the remainder to the
+    shell parser as code -- inventing a register truncate that was never run,
+    which is the inverse failure and just as wrong.
+
+    The heredoc here writes an unrelated file, so the only way this refuses is
+    if the trailing line escaped the body.
+    """
+    continuation = "\\" + "\n"
+    reg = str(tmp_path / REGISTER_NAME).replace("\\", "/")
+    notes = str(tmp_path / "notes.md").replace("\\", "/")
+    cmd = (
+        "cat > " + notes + " <<'EOF'\n"
+        "EO" + continuation + "F\n"
+        "echo DESTROYED > " + reg + "\n"
+        "EOF\n"
+    )
+    assert continuation in cmd, "the fixture built no continuation; the test is vacuous"
+    r = _run_bash(tmp_path, cmd)
+    assert r.returncode == ALLOW, (
+        "a quoted delimiter's terminator was folded, so body content was parsed "
+        f"as a command:\n{cmd}\nstderr={r.stderr}"
+    )

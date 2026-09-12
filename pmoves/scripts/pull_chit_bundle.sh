@@ -92,5 +92,30 @@ STAGE="$DEST.tmp.$$"
 cp "$BUNDLE" "$STAGE"
 chmod 600 "$STAGE"
 mv "$STAGE" "$DEST"
+
+# PROVENANCE MARKER -- who wrote this bundle.
+#
+# `chit-export` writes to the SAME path (CHIT_EXPORT_PATH, mk/codex.mk:4), and it
+# runs as the second step of `secrets-rotate`. So rotating ANY unrelated secret
+# silently replaces a CI bundle with a local export derived from env.shared --
+# which is a strict subset, because prod-only keys never live in env.shared.
+#
+# Measured 2026-09-03 on the 4090: MINIMAX_TOKEN_PLAN_API_KEY arrived via this
+# bundle, reached env.tier-llm, and TensorZero came up healthy. Three later
+# `secrets-rotate` runs (for NATS_PASSWORD and DEFAULT_VOICE_PROVIDER) each
+# overwrote the bundle, the next ordinary funnel regenerated env.tier-llm without
+# the key, and the gateway crash-looped again hours later -- presenting as an
+# unrelated regression in a service nobody had touched.
+#
+# Nothing warned, because a producer and a consumer shared one path with no way
+# to tell the two apart. This marker is that way: chit-export reads it and
+# refuses rather than clobbering a bundle it did not produce.
+printf '%s\n' \
+  "source=ci" \
+  "artifact=$ARTIFACT" \
+  "installed_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+  > "$DEST.provenance" 2>/dev/null || true
+chmod 600 "$DEST.provenance" 2>/dev/null || true
+
 echo "✔ CHIT bundle installed at $DEST (artifact: $ARTIFACT, mode 0600)"
 echo "  Next: make -C pmoves secrets-funnel-sync-from-bundle (or the one-shot secrets-funnel-from-prod)"

@@ -118,6 +118,14 @@ identities:
       declares `4090-field` as a formal ALTER, so some of that drift is a real
       distinction the register had no field for.
 
+  - canonical: kiloclaw
+    aliases: ["KILOCLAW"]
+    node: kiloclaw
+    note: >-
+      Hosted VPS brain of the fleet (Fly Machine, loopback-only, no GPU).
+      Registered 2026-09-04 in agent_signatures.yaml per KiloClaw action plan
+      §5.2; first trail ACK filed in the same commit (PR #2918).
+
   - canonical: mavis
     aliases: ["Mavis", "Mavis-verifier"]
     node: "5090"
@@ -149,12 +157,14 @@ identities:
     note: 32 entries under two orderings of the same two words.
 
   - canonical: crush
-    aliases: ["CRUSH", "CRUSH-GLM52"]
+    aliases: ["CRUSH", "CRUSH-GLM52", "CRUSH-SPARK (KIMI)"]
     note: >-
       13 entries. The `-GLM52` suffix is a MODEL, not a different identity --
       the same lane appears as `CRUSH (z890, glm-5.2)` and `CRUSH-GLM52
       (Z890)`. Merged here; split them if crush-on-GLM is ever meant to be a
-      distinct signer.
+      distinct signer. `CRUSH-SPARK (KIMI)` is the same decoration shape on
+      the SPARK node (model kimi-k2), 5 entries from the 2026-09-08 merge
+      wave.
 
   - canonical: kilocode-glm
     aliases: ["KILOCODE-GLM"]
@@ -347,6 +357,12 @@ models:
       answering; the route belongs in the harness field once one exists.
   - canonical: minimax-m3
     aliases: ["MiniMax-M3", "minimax"]
+  - canonical: kimi-k2
+    aliases: ["KIMI", "kimi-k2"]
+    note: >-
+      The model behind CRUSH-SPARK on the SPARK node (register decoration
+      `CRUSH-SPARK (KIMI)`, 5 entries from the 2026-09-08 merge wave) -- the
+      same model+node decoration shape as `CRUSH-GLM52 (Z890)`.
 
 # Lanes and alters. `field` is a declared ALTER of 4090-claude
 # (agent_signatures.yaml:216), not a free-text note.

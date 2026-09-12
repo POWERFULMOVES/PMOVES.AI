@@ -79,26 +79,48 @@ tooling-audit: ## Audit PMOVES tools/scripts overlap vs submodule tooling (auth/
 tooling-audit-strict: ## Run tooling-audit in strict mode (warnings fail)
 	@$(CODEX_PY) tools/tooling_script_audit.py --strict
 
-chit-export: ensure-env-shared ## Export env.shared into a user-scoped CHIT bundle (default no-cleartext)
-	@$(CODEX_PY) tools/chit_encode_secrets.py --env-file "$(CHIT_EXPORT_ENV)" --out "$(CHIT_EXPORT_PATH)" $(CHIT_ENCODE_FLAGS)
+chit-export: ensure-env-shared ## Export env.shared into a user-scoped CHIT bundle (default no-cleartext). Refuses to clobber a CI-pulled bundle; CHIT_EXPORT_FORCE=1 overrides.
+	@# REFUSE TO CLOBBER A CI BUNDLE.
+	@#
+	@# This writes CHIT_EXPORT_PATH, which is the SAME path `secrets-pull`
+	@# installs the CI bundle to -- and chit-export runs as the second step of
+	@# `secrets-rotate`. So rotating any unrelated secret silently replaced a CI
+	@# bundle with a local export built from env.shared, which is a strict subset:
+	@# prod-only keys (delivered by sync-secrets-local.yml) never live in
+	@# env.shared at all.
+	@#
+	@# Measured 2026-09-03 on the 4090. MINIMAX_TOKEN_PLAN_API_KEY arrived by
+	@# bundle, funnelled to env.tier-llm, TensorZero healthy. Three later
+	@# secrets-rotate runs each overwrote the bundle; the next ordinary
+	@# secrets-funnel regenerated env.tier-llm without the key; the gateway
+	@# crash-looped hours later looking like an unrelated regression.
+	@#
+	@# The loss is silent and delayed, which is the expensive combination. Fail
+	@# closed instead: pull_chit_bundle.sh now stamps <bundle>.provenance, and a
+	@# local export refuses to overwrite a bundle it did not produce.
+	@# The check, the write and the marker cleanup have to be indivisible, or a
+	@# concurrent secrets-pull lands between them and the export clobbers a CI
+	@# bundle it would have refused (raised in review on PR #2901). Both writers
+	@# of this path now run under one lock.
+	@bash scripts/chit_bundle_lock.sh bash scripts/chit_export_guarded.sh "$(CODEX_PY)" "$(CHIT_EXPORT_ENV)" "$(CHIT_EXPORT_PATH)" $(CHIT_ENCODE_FLAGS)
 	@echo CHIT bundle written to $(CHIT_EXPORT_PATH)
 
 chit-manifest-register: ## Idempotently add missing registry entries to the v2 CHIT manifest (ARGS='--check' to gate)
-	@$(MAKE) --no-print-directory env-bootstrap-lite ARGS= >/dev/null
+	@$(MAKE) --no-print-directory env-bootstrap-check
 	@runner="$(CODEX_PY)"; \
 	if [ -x "$(CODEX_VENV_WIN)" ]; then runner="$(CODEX_VENV_WIN)"; \
 	elif [ -x "$(CODEX_VENV_UNIX)" ]; then runner="$(CODEX_VENV_UNIX)"; fi; \
 	$$runner tools/chit_manifest_register.py $(ARGS)
 
 chit-manifest-sync: ## Sync v1 CHIT manifest from v2 (file/key targets + alias hints)
-	@$(MAKE) --no-print-directory env-bootstrap-lite ARGS= >/dev/null
+	@$(MAKE) --no-print-directory env-bootstrap-check
 	@runner="$(CODEX_PY)"; \
 	if [ -x "$(CODEX_VENV_WIN)" ]; then runner="$(CODEX_VENV_WIN)"; \
 	elif [ -x "$(CODEX_VENV_UNIX)" ]; then runner="$(CODEX_VENV_UNIX)"; fi; \
 	$$runner tools/chit_manifest_sync.py --source "$(CHIT_MANIFEST_SOURCE)" --dest "$(CHIT_MANIFEST_DEST)"
 
 chit-manifest-check: ## Verify v1 CHIT manifest is in sync with v2 source
-	@$(MAKE) --no-print-directory env-bootstrap-lite ARGS= >/dev/null
+	@$(MAKE) --no-print-directory env-bootstrap-check
 	@runner="$(CODEX_PY)"; \
 	if [ -x "$(CODEX_VENV_WIN)" ]; then runner="$(CODEX_VENV_WIN)"; \
 	elif [ -x "$(CODEX_VENV_UNIX)" ]; then runner="$(CODEX_VENV_UNIX)"; fi; \
@@ -114,9 +136,26 @@ secrets-runtime-hydrate: ensure-env-shared ## Pull runtime-emitted labels (Supab
 secrets-funnel-sync: chit-manifest-sync chit-export ## Materialize generated env files from CHIT + secrets manifest
 	@PYTHONPATH="$(CURDIR)/.." $(CODEX_PY) tools/secrets_sync.py generate --manifest pmoves/chit/secrets_manifest.yaml --cgp "$(CHIT_EXPORT_PATH)" $(SECRETS_SYNC_FLAGS)
 
-.PHONY: secrets-pull secrets-funnel-from-prod
+.PHONY: secrets-pull secrets-funnel-from-prod chit-provenance-check
 secrets-pull: ## Pattern B consumer: install the newest CI CHIT bundle at the canonical user-scoped path (runnerless nodes; no path juggling)
-	@bash scripts/pull_chit_bundle.sh
+	@bash scripts/chit_bundle_lock.sh bash scripts/pull_chit_bundle.sh
+
+chit-provenance-check: ## Is this node's CHIT bundle CI-pulled, and is a pullable artifact still alive? (read-only; ARGS='--strict' to gate, '--offline' to skip the artifact query)
+	@# STANDING, not rotate-triggered. The two existing warnings -- chit-export's
+	@# refusal and secrets-rotate's notice -- both fire during a ROTATE. A node
+	@# that has not rotated sits in the degraded state and is never told.
+	@# Measured on Z890 2026-09-04, nothing having rotated for days: bundle 163h
+	@# old, no provenance marker, 40 declared keys unprojectable, and the newest
+	@# producer run held no unexpired bundle for this node.
+	@#
+	@# The urgency is the SHELF LIFE. sync-secrets-local.yml uploads with
+	@# retention-days: 1, so `secrets-pull` only works if a producer ran today.
+	@# Past that the remedy is a different, slower procedure -- and an operator
+	@# discovers that at exactly the wrong moment.
+	@#
+	@# Read-only by construction: it never pulls, never writes, and prints key
+	@# NAMES only, so it is safe to run inside an agent transcript.
+	@$(CODEX_PY) tools/chit_provenance_check.py $(ARGS)
 
 secrets-funnel-from-prod: secrets-pull secrets-funnel-sync-from-bundle ## One-shot prod funnel for runnerless nodes: pull bundle, materialize tiers, refresh local.env, force-hydrate env.shared
 	@echo "→ Refreshing local.env from CHIT bundle (runnerless parity with sync-secrets-local.yml)"
@@ -128,6 +167,18 @@ secrets-funnel-from-prod: secrets-pull secrets-funnel-sync-from-bundle ## One-sh
 .PHONY: gh-secret-capacity-audit
 gh-secret-capacity-audit: ## Reconcile CHIT manifest github_secret targets against GitHub's 100-per-scope cap (ENV=<name> for an environment; JSON=1). Exit 1 on findings, 3 if unmeasurable.
 	@$(CODEX_PY) tools/github_secret_capacity_audit.py $(if $(ENV),--env "$(ENV)") $(if $(JSON),--json)
+
+.PHONY: gh-app-token
+gh-app-token: ## Mint a GitHub App installation token (dsh github agent). REPOSITORIES=a,b PERMISSIONS=contents:read[,x:write] OUT=<file> ALL=1(over-broad, needs CONFIRM=1)
+	@$(LOAD_ENV_SHARED); args=""; \
+	if [ -n "$(REPOSITORIES)" ]; then args="$$args --repositories $(REPOSITORIES)"; fi; \
+	if [ -n "$(PERMISSIONS)" ]; then args="$$args --permissions $(PERMISSIONS)"; fi; \
+	if [ -n "$(OUT)" ]; then args="$$args --out $(OUT)"; fi; \
+	if [ "$(ALL)" = "1" ]; then \
+	  if [ "$$(CONFIRM)" != "1" ]; then echo "ALL=1 mints installation-default scope; pass CONFIRM=1 to acknowledge" >&2; exit 3; fi; \
+	  args="$$args --all --yes"; \
+	fi; \
+	PYTHONPATH="$(CURDIR)/.." $(CODEX_PY) tools/gh_app_token.py $$args
 
 .PHONY: docker-mcp-secrets-hydrate
 docker-mcp-secrets-hydrate: ## Re-push funnel-managed values into the Docker MCP Toolkit secret store (recovery after a Docker Desktop VMM/migration wipes the MCP resolver). DRY_RUN=1 to preview. PROFILE=<id> to force a gateway profile (otherwise discovered from .mcp.json, else PMOVES_MCP_PROFILE_ID). Run AFTER Docker Desktop restart (resolver must be up).
@@ -260,10 +311,25 @@ secrets-rotate: ## Rotate ONE secret in env.shared then re-funnel. Usage: make s
 	$(if $(strip $(KEY)),,$(error Usage: make -C pmoves secrets-rotate KEY=<env.shared key> [VALUE=<minted>] [LEN=<n>]. For values with shell-active chars ($$ ` \ " ') instead: export PMOVES_ROTATE_VALUE=<minted> first. Generates a random_urlsafe value when neither is set.))
 	@echo "→ Rotating $(KEY) in env.shared (surgical, single-line)"
 	@$(CODEX_PY) scripts/bootstrap_env.py --rotate "$(KEY)" $(if $(PMOVES_ROTATE_VALUE),--value-env PMOVES_ROTATE_VALUE,$(if $(VALUE),--value "$(VALUE)",)) $(if $(LEN),--length $(LEN),)
-	@$(MAKE) --no-print-directory chit-export
+	@# Rotation is a LEGITIMATE reason to re-export, so force past the CI-bundle
+	@# guard rather than failing the road -- but say plainly what was replaced.
+	@# The defect this fixes was never the overwrite; it was the SILENCE. A local
+	@# export drops prod-only keys, and the loss only surfaced hours later when a
+	@# service that needed one restarted and looked like an unrelated regression.
+	@if [ -f "$(CHIT_EXPORT_PATH).provenance" ]; then \
+	  echo "⚠ rotation replaced the CI-pulled CHIT bundle with a local export."; \
+	  echo "  Prod-only keys delivered by sync-secrets-local.yml are NOT in"; \
+	  echo "  env.shared and are now absent from the bundle. Re-pull before the"; \
+	  echo "  next funnel, or services needing them will fail on their next"; \
+	  echo "  restart:  PMOVES_NODE=<node> make -C pmoves secrets-pull"; \
+	fi
+	@CHIT_EXPORT_FORCE=1 $(MAKE) --no-print-directory chit-export
 	@$(MAKE) --no-print-directory secrets-funnel
 	@echo "✔ $(KEY) rotated + funnelled. STILL TO DO: (1) restart consumers (e.g. make up-<svc> / supa-restart);"
 	@echo "  (2) rotate any off-box copy (GitHub Actions / Docker secret); (3) for Postgres also run 'make supa-bootstrap-db' to ALTER roles; (4) revoke the OLD value at its source (e.g. Jellyfin /Auth/Keys DELETE)."
+
+firefly-automint: ## Auto-mint a Firefly III API PAT and land it as FIREFLY_ACCESS_TOKEN via the canonical secrets flow (secrets-rotate). Firefly disables web /register under remote_user_guard, so this provisions the user via the trusted Remote-User header + mints a passport PAT in-container. Usage: make firefly-automint [FIREFLY_ADMIN_EMAIL=pmoves@pmoves.ai] [FIREFLY_CONTAINER=pmoves-firefly]
+	@bash scripts/firefly_automint.sh
 
 cf-dns-token-provision: ## Mint a pmoves.ai-scoped Cloudflare DNS-Edit token for Traefik ACME + funnel it as CLOUDFLARE_DNS_API_TOKEN. Needs CF_ADMIN_API_TOKEN in the env (API Tokens Write + Zone Read; never argv). Dry-run unless APPLY=1. Usage: export CF_ADMIN_API_TOKEN=...; make cf-dns-token-provision [APPLY=1] [ZONE=pmoves.ai]
 	@$(CODEX_PY) tools/cf_dns_token_provision.py $(if $(ZONE),--zone "$(ZONE)",) $(if $(filter 1,$(APPLY)),--apply,)

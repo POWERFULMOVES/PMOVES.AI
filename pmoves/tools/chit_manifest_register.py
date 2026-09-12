@@ -98,6 +98,61 @@ REGISTRY: Dict[str, Dict[str, Any]] = {
     # approved coding-plan inventory, so this is a missing slot rather than a
     # new policy decision.
     "CLAUDE_CODE_OAUTH_TOKEN": {"tier": "agent", "required": False},
+    # Tier 5: Agent — the GitHub App identity the fleet mints tokens with.
+    #
+    # These two are the runtime half of a signing identity, not ordinary config.
+    # signing_identity_cards.yaml declares `ml.primary_method: github-app` on
+    # every agent card and leaves `ml.github_app_installation_id` null with the
+    # comment "populated from GH_APP_INSTALLATION_ID secret at runtime"
+    # (pmoves/config/signing_identity_cards.yaml:53). Nothing in the pipeline was
+    # responsible for supplying that secret: neither name appeared in this
+    # REGISTRY, so the funnel never routed either into env.tier-agent.
+    #
+    # The failure is node-shaped, which is why it stayed invisible. On the node
+    # where the operator hand-placed the values, the card resolves and the CHIT
+    # room-activation checklist passes; on every node brought up from the funnel
+    # the same checklist has no key material to resolve. Same family as
+    # JUICEFS_META_PASSWORD below — one node works, no second node can be stood
+    # up without hand-copying a secret, which is the thing the funnel exists to
+    # prevent.
+    #
+    # env.tier-agent is not a guess: github_webhook_auto_config.py:447-460 opens
+    # `pmoves/env.tier-agent` by name and fails with "GH_APP_ID or GH_APP_SEC not
+    # found in env.tier-agent". It reads from a file nothing was writing to.
+    #
+    # required=False, and here that is not the silent choice the CHIT_PROD_
+    # PASSPHRASE note below warns about: both consumers already fail loudly and
+    # name the missing variable — github_client.py:61 raises "Configure GH_APP_ID,
+    # GH_APP_INSTALLATION_ID, and GH_APP_SEC", and the webhook tool returns the
+    # message quoted above. Under `--merge` (strict) required=True would instead
+    # fail the whole funnel — and therefore every unrelated service — on any node
+    # that legitimately does not mint GitHub tokens.
+    #
+    # min_length is shape, not presence. `[ -n "$VAR" ]` accepts a truncated id,
+    # and secrets_sync.py:218 is the only place in the pipeline that measures a
+    # value rather than testing it for emptiness: an under-length value is
+    # WITHHELD and warned with both numbers, so compose's `${VAR:?}` refuses at
+    # `up` time instead of a container booting with a half id.
+    #
+    # The floors are minimums for a modern GitHub App, not the local values:
+    # installation ids are currently 8 digits and app ids 6-7, so 7/5 catch the
+    # two-character truncation family while still admitting a shorter legacy id.
+    # What they do NOT catch: a one-character truncation, or a value of the right
+    # length that is not numeric at all. The registry has no `pattern` field
+    # (build_entry supports tier/required/aliases/min_length; RECONCILED_FIELDS
+    # is ("min_length",)) and adding one would mean changing the emitter, the
+    # v1 sync and the funnel's validator together — deliberately out of scope
+    # here rather than half-done.
+    #
+    # GH_APP_SEC is deliberately ABSENT from this registry despite being the
+    # third leg of the same credential. It is a PEM private key, and
+    # secrets_sync.py:251 `_drop_multiline` refuses to emit any newline-bearing
+    # value into a line-based env file (compose env_file is strictly one
+    # VAR=VAL per line). Registering it here would create a slot that reports as
+    # delivered and is dropped with a warning on every run. It needs the *_FILE
+    # convention or a Docker secret; see the PR that added these two.
+    "GH_APP_INSTALLATION_ID": {"tier": "agent", "required": False, "min_length": 7},
+    "GH_APP_ID": {"tier": "agent", "required": False, "min_length": 5},
     # Tier: supabase — Studio basic-auth through the Kong gateway. These became
     # HARD-REQUIRED when supabase-kong moved to DB-less declarative mode: the
     # vendored kong.yml declares a `basicauth_credentials` entry, and Kong
@@ -172,6 +227,14 @@ REGISTRY: Dict[str, Dict[str, Any]] = {
     "JUICEFS_META_PASSWORD": {"tier": "data", "required": False},
     "NATS_EVENT_BUS_TOKEN": {"tier": "data", "required": True},
     "PMOVES_BRIDGE_TOKEN": {"tier": "worker", "required": True},
+    # ActivePieces self-host (docker-compose.activepieces.yml, PR #2906). The
+    # pinned 0.86.3 image reads AP_JWT_SECRET for stable auth signing across
+    # app+worker restarts (NOT AP_SIGNING_SECRET — that key is ignored by this
+    # image). Queue mode note: split app/worker containers require
+    # AP_QUEUE_MODE=REDIS in BOTH, set in the overlay.
+    "AP_POSTGRES_PASSWORD": {"tier": "worker", "required": False},
+    "AP_JWT_SECRET": {"tier": "worker", "required": False, "min_length": 32},
+    "AP_ENCRYPTION_KEY": {"tier": "worker", "required": False},
     # min_length=64 is not a style preference -- supabase-realtime is Phoenix, and
     # Plug's cookie store raises at REQUEST time, not boot:
     #   (ArgumentError) cookie store expects conn.secret_key_base to be at least

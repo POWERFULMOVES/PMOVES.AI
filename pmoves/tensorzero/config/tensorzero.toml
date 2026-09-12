@@ -386,10 +386,39 @@ model_name = "MiniMax-M3"
 #   export PMOVES_ROTATE_VALUE=<the token-plan key>
 #   make -C pmoves secrets-rotate KEY=MINIMAX_TOKEN_PLAN_API_KEY
 #
-# Until then TensorZero fails its ENTIRE config load on this one missing key,
-# which takes down all model routing AND degrades Cipher (its embed() calls
-# TensorZero first; on null it falls through to a "search" that ignores the query).
-api_key_location = "env::MINIMAX_TOKEN_PLAN_API_KEY"
+# WHY THIS IS dynamic:: AND NOT env:: (B850, 2026-09-03, measured).
+# An absent env:: credential does not disable one model -- it aborts the WHOLE
+# config load, taking down all model routing AND the local embedding route that
+# has nothing to do with MiniMax, which drops Cipher onto a lexical path that
+# ignores the query text. That is what was happening here: 646 restarts.
+#
+# TensorZero 2026.1.8 offers no "use this env var if present, else disable this
+# model" form. All four candidates were run against the real image with the key
+# absent; only the last one boots:
+#   "env::MINIMAX_TOKEN_PLAN_API_KEY"                              -> exit 1
+#   { default = "env::...", fallback = "dynamic::..." }             -> exit 1
+#   { default = "dynamic::...", fallback = "env::..." }             -> exit 1
+#   "dynamic::minimax_token_plan_api_key"                           -> boots
+# ANY mention of env:: -- default or fallback -- is validated at startup.
+#
+# NOT fixed by adding MINIMAX_TOKEN_PLAN_API_KEY=${...:-local-disabled} to the
+# gateway's compose environment: block, the way the 17 sibling provider keys are
+# guarded. Measured: a compose environment: entry OVERRIDES env_file, so that
+# line resolves to the literal "local-disabled" and would clobber the real key
+# the moment an operator finally delivers it into the tier env files. The
+# placeholder convention is a boot-guard that silently defeats delivery.
+#
+# Consequence, accepted: MiniMax now serves only when a caller supplies the
+# credential per-request via `tensorzero::credentials`. It is unavailable
+# otherwise, which is correct provider-scoped degradation. This regresses no
+# working node: per gap (b) above the manifest routes this entry to the PAYG
+# secret name, so the correctly-named variable is delivered NOWHERE today and
+# env:: was unsatisfiable fleet-wide, not just on B850.
+#
+# RESTORE PATH: once gap (b) is repaired and the operator lane above has run,
+# change this back to "env::MINIMAX_TOKEN_PLAN_API_KEY". Do not restore it
+# before then -- it will crash-loop every gateway that lacks the key.
+api_key_location = "dynamic::minimax_token_plan_api_key"
 
 # --- GLM 5.1 (Upgraded per Z.AI coding plan docs — PR #1151) ---
 [models.chat_zai_glm51]

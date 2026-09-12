@@ -8,7 +8,7 @@ Overview
 Compose
 - Service: `meilisearch`
 - Ports: `7700:7700`
-- Profile: `data`
+- Profiles: none (always-on)
 - Network: `pmoves-net`
 
 Used by
