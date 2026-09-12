@@ -48,6 +48,7 @@ PMOVES uses a Known Roads model: every dangerous-but-necessary operation has a c
 | `docker compose up voice-relay` (NATS bridge for mic chain) | `make -C pmoves up-voice-relay` | `/voice:status` |
 | `docker compose build hi-rag-gateway-v2` | `make -C pmoves up-hirag` | `/search:hirag` |
 | `tailscale status` (raw IPs) | `make -C pmoves fleet-status` | `/fleet:status` |
+| Proving a fix by mutating **production** (revoke/rotate a credential, delete a record, write to a live service) | `make -C pmoves sandbox-smoke` / `sandbox-create` + `sandbox-exec SBX=.. CMD=..` + `sandbox-kill` | `agent-sandbox` |
 | RustDesk deep diagnostics | `make -C pmoves fleet-status` + `pmoves/docs/operations/RUSTDESK_SELF_HOSTED.md` | `/fleet:rustdesk-check` |
 | SSH to KVM2 for RustDesk relay | `make -C pmoves fleet-rustdesk-fix` | `/fleet:fix-relay` |
 | Tailscale admin API calls | `make -C pmoves fleet-stale-audit` | `/fleet:stale-nodes` |

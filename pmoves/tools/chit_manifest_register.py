@@ -258,6 +258,39 @@ REGISTRY: Dict[str, Dict[str, Any]] = {
     # API. Only the password is a secret; SMTP_HOST/PORT/USER/ADMIN_EMAIL are
     # plain config and live in env.shared.
     "SMTP_PASS": {"tier": "supabase", "required": False},
+    # Tier 5: Agent — E2B agent-sandbox credentials (PR #2982).
+    #
+    # ROOT CAUSE of the sandbox lane being dark: neither name appeared anywhere
+    # in this REGISTRY or in brand_defaults.py. Positive control: 25 other
+    # labels were registered here at the time, so the search was working — E2B
+    # was simply never funnel-managed. Nothing generated, validated, delivered
+    # or rotated it, and the only symptom available was the provider rejecting
+    # a request deep inside a provisioning call.
+    #
+    # There are THREE deployment modes and they need DIFFERENT subsets:
+    #   cloud           E2B_API_KEY
+    #   selfhost-gcp    E2B_ACCESS_TOKEN  (+ E2B_DOMAIN, non-secret config)
+    #   selfhost-local  E2B_API_KEY + E2B_ACCESS_TOKEN
+    #                   (+ E2B_API_URL / E2B_DEBUG, non-secret config)
+    # Only the two credentials belong here. The URLs, E2B_DOMAIN and E2B_DEBUG
+    # are routing config, not secrets, and live in env.shared(.example) —
+    # putting plain config through the secrets funnel would make rotation and
+    # audit noisier without protecting anything.
+    #
+    # required=False for both: no single node needs both modes, and under
+    # `--merge` (strict) a required slot fails the whole funnel on every node
+    # that legitimately lacks it. An absent E2B credential fails loudly at
+    # `make -C pmoves sandbox-preflight` (exit 3), not quietly at runtime, so
+    # the silence that required=False usually buys does not apply here.
+    #
+    # min_length is a floor, NOT the shape check. e2b_ + 32 hex = 36 and
+    # sk_e2b_ + 32 hex = 39. The failure actually observed on B850 was a
+    # 42-character E2B_API_KEY missing its leading "e2" — LONGER than the
+    # floor, so min_length would have passed it, exactly as `[ -n "$VAR" ]`
+    # did. Prefix + charset + per-mode length are enforced at delivery by
+    # pmoves/scripts/e2b_mode.sh; this floor only catches gross truncation.
+    "E2B_API_KEY": {"tier": "agent", "required": False, "min_length": 36},
+    "E2B_ACCESS_TOKEN": {"tier": "agent", "required": False, "min_length": 39},
 }
 
 

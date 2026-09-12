@@ -7,6 +7,25 @@ description: >
 # unset — loaders must not guess a class for a node they cannot place.
 deployment_class: private-mesh
 
+# Host operating system. Added 2026-09-06 (PR #2982) because a Danger Room
+# placement decision needed it and the profile — the FIRST place such a
+# decision looks — did not carry it; it had to be learned from
+# `tailscale status` instead. Values: linux | windows | darwin.
+#
+# UNSET MEANS UNSET. Do not guess. Only 3 of 18 profile FILES set this today
+# — 2 distinct machines, since workstation_5090 is an alias of desktop-9950xd
+# — because those are the only ones whose OS has a reading. A wrong `os:`
+# is worse than an absent one: absent makes a reader go look, wrong makes a
+# reader stop looking. Add each node as its OS is measured on that node.
+#
+# Provenance for this value: `tailscale status` reports peer `pmoves-5090` as OS `windows` (online,
+#   read 2026-09-06 alongside 25 other peers, so the field is populated rather
+#   than defaulted). operator_nodes.yaml maps node_id "5090" -> reach
+#   "pmoves-5090", and this profile is the fleet's only 9950XD/RTX 5090.
+#   NOT measured on the node itself — run pmoves/scripts/probe_danger_room_host.ps1
+#   there to confirm, and correct this if it disagrees.
+os: windows
+
 hardware:
   cpu:
     vendor: AMD
