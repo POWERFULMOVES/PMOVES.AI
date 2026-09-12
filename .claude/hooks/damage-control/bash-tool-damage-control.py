@@ -30,7 +30,12 @@ import yaml
 # Known Roads + proportionate path resolution live beside this script.
 sys.path.insert(0, str(Path(__file__).parent))
 import path_scope  # noqa: E402
-from known_roads import evaluate_known_road, known_road_hint  # noqa: E402
+from known_roads import (  # noqa: E402
+    active_grant,
+    evaluate_known_road,
+    known_road_hint,
+    record_use,
+)
 
 
 def is_glob_pattern(pattern: str) -> bool:
@@ -497,6 +502,100 @@ def _known_road_verdict(paths: List[str]) -> Tuple[bool, str, str]:
     return False, "", hint
 
 
+_HEREDOC_OPEN = re.compile(r"<<-?\s*(['\"]?)([A-Za-z_][A-Za-z0-9_]*)\1")
+
+
+def strip_heredoc_bodies(command: str) -> str:
+    """`command` with the BODY of every heredoc removed, openers kept.
+
+    Only the opaque-verb tripwire uses this. That tripwire has no path text to
+    keep a match honest, so it must treat a newline as a command separator --
+    and the moment it does, every line of a document being written through a
+    heredoc becomes a command position. Writing a note that quotes one of these
+    verbs would then prompt on its own prose. Same failure the proportionality
+    work fixed for the {path} rules, arriving from the other direction.
+
+    Deliberately NOT applied to any other check: those are all path-bound, and
+    removing text can only remove matches. Here it cannot lose a real block --
+    the tripwire is the last gate and only ever escalates allow to ask.
+    """
+    out = []
+    pos = 0
+    while True:
+        match = _HEREDOC_OPEN.search(command, pos)
+        if not match:
+            out.append(command[pos:])
+            return "".join(out)
+        newline = command.find("\n", match.end())
+        if newline == -1:                       # opener with no body in view
+            out.append(command[pos:])
+            return "".join(out)
+        out.append(command[pos:newline + 1])
+        terminator = match.group(2)
+        rest = command[newline + 1:]
+        offset = None
+        cursor = 0
+        for line in rest.split("\n"):
+            if line.strip() == terminator:
+                offset = cursor + len(line)
+                break
+            cursor += len(line) + 1
+        if offset is None:                      # unterminated: nothing follows
+            return "".join(out)
+        pos = newline + 1 + offset
+
+
+def check_opaque_write_verbs(
+    command: str, config: Dict[str, Any]
+) -> Tuple[bool, bool, str]:
+    """Last gate: a verb that can write a path the command never spells.
+
+    Runs AFTER every path rule and only on the fall-through, so it can turn an
+    allow into an `ask` and nothing else. It cannot relax a single existing
+    block -- every one of them has already returned by the time this is reached.
+
+    A provable Known Road grant allows and RECORDS. `active_grant()` asserts less
+    than `evaluate_known_road()` -- it says a grant is open, not that it covers
+    this file -- which is the honest reading here, because there is no file to
+    check the domain predicate against. That weaker assertion is acceptable only
+    because this gate never sees a NAMED protected path: any command that named
+    one was decided above.
+    """
+    stripped = strip_heredoc_bodies(command)
+    for item in config.get("opaqueWriteVerbs", []) or []:
+        pattern = item.get("pattern", "")
+        if not pattern:
+            continue
+        try:
+            if not re.search(pattern, stripped):
+                continue
+            unless = item.get("unless", "")
+            if unless and re.search(unless, stripped):
+                continue
+        except re.error as e:
+            print(f"WARNING: Invalid regex in opaqueWriteVerbs ({item.get('verb')}): {e}",
+                  file=sys.stderr)
+            continue
+
+        verb = item.get("verb", "?")
+        why = item.get("reason", "writes targets not named in the command")
+        domain, reason, provable = active_grant()
+        if provable:
+            record_use(
+                "Bash(opaque-verb)", f"<opaque-verb:{verb}>", domain, reason,
+                note=f"{verb} — target not derivable from command text",
+            )
+            return False, False, ""
+        return False, True, (
+            f"OPAQUE WRITE: `{verb}` {why}. The damage-control guard matches "
+            "command TEXT, so it cannot tell whether this touches a protected "
+            "path — no path rule applies to a target the command never names. "
+            "Approve only if you know what it writes. Any protected path it does "
+            "change will be reported afterwards by the PostToolUse effect check."
+        )
+    return False, False, ""
+
+
 def check_command(command: str, config: Dict[str, Any]) -> Tuple[bool, bool, str]:
     """Check if command should be blocked or requires confirmation.
 
@@ -649,7 +748,10 @@ def check_command(command: str, config: Dict[str, Any]) -> Tuple[bool, bool, str
         if blocked:
             return _decide(no_delete, reason)
 
-    return False, False, ""
+    # 5. LAST: verbs that write paths they never spell. Placed after every path
+    # rule on purpose -- it only ever sees commands the rules above allowed, so
+    # it is provably incapable of relaxing one of them.
+    return check_opaque_write_verbs(command, config)
 
 
 # ============================================================================

@@ -1331,3 +1331,51 @@ cacheRoads:
     command: 'find <dir> -mindepth 1 -delete   (no vendor prune command exists)'
   - match: 'docker'
     command: 'docker builder prune (build cache) or docker image prune (images). For a PMOVES data volume use make -C pmoves volume-reset SERVICE=<name>.'
+
+# ============================================================================
+# OPAQUE-WRITE VERBS - commands that write paths they never spell
+# ============================================================================
+# Every path rule above interpolates {path}, so the guard only sees a write that
+# NAMES a protected path in the command text. These verbs take their targets from
+# a diff, an archive, a source tree or a device, so the target never appears in
+# the command at all. Measured: applying a diff from a file wrote two protected
+# compose files and the trail read 250 rows before and 250 after.
+#
+# THIS DOES NOT CLOSE THE CLASS AND MUST NOT BE READ AS DOING SO. An executed
+# shell script, an executed python file and a build-tool target are the same
+# shape and are deliberately absent: the moment this list looks exhaustive it
+# stops being obviously partial, and a partial fix that announces itself as total
+# removes the suspicion that would find the rest. The class is closed by EFFECT,
+# post-hoc, in effect_check.py. This is the cheap PreToolUse half that catches
+# the common shapes while prevention is still possible.
+#
+# Verdict: a provable Known Road grant -> allowed and RECORDED (the trail row
+# carries the verb, not a path, because no path is derivable). No grant -> `ask`,
+# not block. These verbs are legitimate constantly; blocking them outright would
+# be disproportionate, and an operator confirmation is the proportionate answer
+# to "this can write somewhere I cannot see".
+#
+# `pattern` fires; `unless` (optional) withdraws it for the read-only forms of
+# the same verb. Both are matched against the command with HEREDOC BODIES
+# REMOVED, so a document that merely quotes one of these verbs does not trip it.
+# Separators deliberately include \n: unlike the {path} rules, there is no path
+# text here to keep a match honest, so every command position must be reachable.
+opaqueWriteVerbs:
+  - verb: 'patch'
+    pattern: '(?:^|[\n;&|]\s*|\$\(\s*)patch(?![\w-])'
+    unless: '(?:^|\s)--dry-run(?:\s|=|$)'
+    reason: "applies a diff — every target comes from the diff, not the command line"
+  - verb: 'git apply'
+    pattern: '(?:^|[\n;&|]\s*|\$\(\s*)git\s+(?:(?:-[cC]|--git-dir|--work-tree|--namespace|--exec-path)(?:=|\s+)\S+\s+|-[^\s]+\s+)*apply(?![\w-])'
+    unless: '(?:^|\s)--(?:check|stat|numstat|summary)(?:\s|=|$)'
+    reason: "applies a diff — every target comes from the diff, not the command line"
+  - verb: 'tar extract'
+    pattern: '(?:^|[\n;&|]\s*|\$\(\s*)tar(?![\w-])[^\n]*(?:\s-[A-Za-z]*x[A-Za-z]*(?:\s|$)|\s--extract(?:\s|=|$))'
+    reason: "extracts an archive — every target comes from the archive, not the command line"
+  - verb: 'rsync'
+    pattern: '(?:^|[\n;&|]\s*|\$\(\s*)rsync(?![\w-])'
+    unless: '(?:^|\s)(?:--dry-run|-[A-Za-z]*n[A-Za-z]*)(?:\s|=|$)'
+    reason: "mirrors a source tree — targets are derived from the source, not named"
+  - verb: 'dd'
+    pattern: '(?:^|[\n;&|]\s*|\$\(\s*)dd(?![\w-])[^\n]*\sof='
+    reason: "block copy to a device or file — writes past every filesystem-level rule"
