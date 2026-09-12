@@ -418,6 +418,36 @@
       "sync": false,
       "branch": "PMOVES.AI-Edition-Hardened",
       "reason": "new fork 2026-08-20. The hardened branch carries our bound-isHttp patch (upstream PR pinokiocomputer/pinokiod#11, unmerged) that stops an unbounded accumulator from filling the disk. Auto-sync MUST stay false while that delta is un-upstreamed, or a sync could silently revert the fix"
+    },
+    "PMOVES-A0-codex-docker": {
+      "upstream": "frdel/codex-docker",
+      "sync": false,
+      "reason": "fork of frdel/codex-docker; base image for the a0-elder-melchor agent container (#3017); local overlay only, no upstream sync scheduled",
+      "branch": "main"
+    },
+    "PMOVES-activepieces": {
+      "upstream": "activepieces/activepieces",
+      "sync": false,
+      "reason": "fork of activepieces/activepieces for self-hosted automation (pmoves-activepieces skill); sync deferred until next tracked release",
+      "branch": "main"
+    },
+    "PMOVES-composio": {
+      "upstream": "ComposioHQ/composio",
+      "sync": false,
+      "reason": "fork of ComposioHQ/composio tracked on PMOVES.AI-Edition-Hardened; consumed as reference for integration patterns; sync deferred",
+      "branch": "PMOVES.AI-Edition-Hardened"
+    },
+    "pmoves-composio-mcp-plugin": {
+      "upstream": "ComposioHQ/composio-mcp-plugin",
+      "sync": false,
+      "reason": "fork of ComposioHQ/composio-mcp-plugin tracked on PMOVES.AI-Edition-Hardened; MCP plugin wiring reference; sync deferred",
+      "branch": "PMOVES.AI-Edition-Hardened"
+    },
+    "PMOVES-N8N-Auto": {
+      "upstream": "n8n-io/n8n",
+      "sync": false,
+      "reason": "automation fork of n8n-io/n8n (heads/master); self-hosted n8n lane (pmoves-n8n skill); sync deferred until next tracked release",
+      "branch": "master"
     }
   },
   "_excluded": {
