@@ -78,6 +78,9 @@ endif
 env-bootstrap-lite: ensure-env-shared ## Bootstrap lightweight runtime env (uv-first) and check core host tools
 	@$(PRECHECK_PY) tools/bootstrap_light_env.py $(ARGS)
 
+env-bootstrap-check: ## Precheck ONLY (no create/install): lite venv + core deps present, else exit 3 with remediation. Gate for funnel entry points.
+	@$(PRECHECK_PY) tools/bootstrap_light_env.py --check
+
 env-setup: ensure-env-shared ## Unified env bootstrap (registry-driven + strict env drift checks + showtime quick diagnostics)
 	@$(PRECHECK_PY) tools/env_setup_unified.py $(ARGS)
 
@@ -164,6 +167,15 @@ env-check: ## Run cross-platform environment preflight checks
 	@# HIDDEN it -- an advisory that silently stops advising is the worst of
 	@# both. Clearing ARGS keeps the advisory honest.
 	@$(MAKE) --no-print-directory ARGS= session-check || true
+	@# chit-provenance-check, same advisory contract and the same cleared ARGS.
+	@# `--offline` is deliberate HERE and only here: env-check is the routine
+	@# environment validation and must not acquire a network dependency, a gh
+	@# auth dependency, or two API round-trips of latency. The local half --
+	@# marker present, bundle age, which declared keys cannot project -- needs
+	@# none of that and is the half that says whether anything is wrong at all.
+	@# Run the target directly, without --offline, to learn whether the artifact
+	@# that would fix it is still inside its 1-day retention.
+	@$(MAKE) --no-print-directory ARGS=--offline chit-provenance-check || true
 ifeq ($(OS),Windows_NT)
 	@pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/env_check.ps1 $(ARGS)
 else

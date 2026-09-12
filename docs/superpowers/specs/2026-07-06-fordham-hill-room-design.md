@@ -70,7 +70,7 @@ to Archon's "Psychronus". There is not one Archon just as there is not one Agent
 
 For the Fordham mint, **this node (4090) runs its own Agent-Zero + Archon duo** — no central
 host decision. Bring-up on 4090: the Agent-Zero + Archon duo (Supabase-backed) via the agents
-compose (`make -C pmoves up-archon-submodule` + `archon-db-setup`, with Agent Zero as the duo
+compose (`make -C pmoves up-archon-native` + `archon-db-setup`, with Agent Zero as the duo
 partner). Gates the live mint-activation only; artifact scaffolding does not need it.
 
 ## Fan-out lanes (once approved)

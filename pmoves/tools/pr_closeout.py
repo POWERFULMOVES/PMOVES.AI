@@ -163,7 +163,19 @@ def _pr_from_rest(repo: str, number: int) -> dict[str, Any]:
     `mergeable` are re-spelled into GraphQL's vocabulary because the evaluator
     compares against MERGED/MERGEABLE/CONFLICTING.
     """
+    # GitHub computes `mergeable` lazily: the first GET after a base change (or
+    # an update-branch) returns null while it recomputes. Poll a few times so
+    # the closeout waits the transient UNKNOWN out instead of fail-closing on a
+    # PR that is actually mergeable — the exact race a hot merge wave triggers.
+    import time as _time
     pr = _rest(f"repos/{repo}/pulls/{number}")
+    for _ in range(5):
+        if not isinstance(pr, dict):
+            break
+        if pr.get("mergeable") is not None and str(pr.get("mergeable_state") or "").lower() != "unknown":
+            break
+        _time.sleep(3)
+        pr = _rest(f"repos/{repo}/pulls/{number}")
     if not isinstance(pr, dict):
         raise RuntimeError(f"invalid REST PR payload for {repo}#{number}")
 
@@ -195,11 +207,45 @@ def _pr_from_rest(repo: str, number: int) -> dict[str, Any]:
         "mergeStateStatus": merge_state,
         "reviewDecision": _review_decision_from_rest(repo, number),
         "body": pr.get("body") or "",
-        # Left absent deliberately: required checks are fetched separately, and
-        # a fabricated empty rollup would read as "no checks" rather than
-        # "not fetched here".
-        "statusCheckRollup": None,
+        # Reconstructed from REST (check-runs + combined status) so a throttled
+        # GraphQL does not leave this "unavailable" — the same data the required-
+        # checks path reads. Empty list only if the SHA truly has no checks.
+        "statusCheckRollup": _rest_status_rollup(repo, (pr.get("head") or {}).get("sha") or ""),
     }
+
+
+def _rest_status_rollup(repo: str, head_sha: str) -> list[dict[str, Any]]:
+    """Reconstruct GitHub's statusCheckRollup from REST when GraphQL is throttled.
+
+    check-runs -> CheckRun items, the combined-status statuses[] -> StatusContext
+    items, in the exact shape _evaluate_rollup consumes. Same data the required-
+    checks path already reads over REST, so a throttled GraphQL no longer leaves
+    the rollup 'unavailable'.
+    """
+    if not head_sha:
+        return []
+    rollup: list[dict[str, Any]] = []
+    for run in (r for page in _rest_pages(f"repos/{repo}/commits/{head_sha}/check-runs")
+                for r in ((page.get("check_runs") or []) if isinstance(page, dict) else [])):
+        if isinstance(run, dict):
+            rollup.append({
+                "__typename": "CheckRun",
+                "name": run.get("name"),
+                "status": run.get("status"),
+                "conclusion": run.get("conclusion"),
+                "detailsUrl": run.get("details_url") or run.get("html_url") or "",
+            })
+    combined = _rest(f"repos/{repo}/commits/{head_sha}/status")
+    statuses = combined.get("statuses") if isinstance(combined, dict) else None
+    for st in (statuses or []):
+        if isinstance(st, dict):
+            rollup.append({
+                "__typename": "StatusContext",
+                "context": st.get("context"),
+                "state": st.get("state"),
+                "targetUrl": st.get("target_url") or "",
+            })
+    return rollup
 
 
 def _review_decision_from_rest(repo: str, number: int) -> str:
@@ -399,9 +445,20 @@ def _fetch_threads(repo: str, number: int) -> list[Any]:
     try:
         return fetch_threads(repo, number)
     except Exception as exc:  # noqa: BLE001 - transport shape varies by caller
-        if _looks_throttled(str(exc)):
+        if not _looks_throttled(str(exc)):
+            raise
+        # GraphQL is throttled. REST cannot report a thread's RESOLUTION state,
+        # but it can prove ABSENCE: a review thread always has at least one
+        # review comment, so zero review comments means zero threads -- nothing
+        # to resolve. That is safe to pass (a PR with live feedback still has
+        # comments and still fails closed below). Anything >0 stays UNMEASURED.
+        try:
+            comments = _rest(f"repos/{repo}/pulls/{number}/comments?per_page=1")
+        except Exception:  # noqa: BLE001 - REST also down; cannot prove absence
             raise ThreadsUnmeasured(str(exc)) from exc
-        raise
+        if isinstance(comments, list) and len(comments) == 0:
+            return []
+        raise ThreadsUnmeasured(str(exc)) from exc
 
 
 def _value(item: Any, key: str, default: Any = "") -> Any:
