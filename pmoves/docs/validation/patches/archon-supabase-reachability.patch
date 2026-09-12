@@ -1,0 +1,102 @@
+--- a/pmoves/docker-compose.yml
++++ b/pmoves/docker-compose.yml
+@@ -3629,7 +3629,17 @@
+     - HTTP_PROXY=
+     - HTTPS_PROXY=
+     - NO_PROXY=
+-    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_external
++    # Supabase reachability. Ten peer services in this same file already set
++    # SUPABASE_URL=http://supabase-kong:8000; archon set it NOWHERE, so it fell
++    # through to the host-oriented CLI default (host.docker.internal:54321) --
++    # a name that does not resolve in this container (ExtraHosts is []) and a
++    # port nothing listens on. Measured from /healthz on 2026-09-08.
++    - SUPABASE_URL=${SUPABASE_URL:-http://supabase-kong:8000}
++    # pmoves_api added: supabase-kong lives on pmoves_api + pmoves_public and
++    # Docker DNS only resolves across SHARED networks. Without it the name
++    # above cannot resolve either. pmoves_api is internal:true, so egress is
++    # still supplied solely by pmoves_external.
++    - PMOVES_NETWORKS=pmoves_api,pmoves_app,pmoves_bus,pmoves_external
+     depends_on:
+       archon-postgres:
+         condition: service_healthy
+@@ -3649,17 +3659,27 @@
+     - type: tmpfs
+       target: /home/appuser
+     networks:
++      # Supabase tier. supabase-kong (172.30.1.30) and supabase-db attach here.
++      # Must match the PMOVES_NETWORKS declaration above.
++      pmoves_api:
+       pmoves_app:
+         aliases:
+         - archon-server
+       pmoves_bus:
+       # Archon needs egress to reach the Claude API + GitHub with the configured
+-      # credentials; pmoves_app/pmoves_bus are internal-only.
++      # credentials; pmoves_app/pmoves_bus/pmoves_api are internal-only.
+       pmoves_external:
+     profiles:
+     - agents
+     healthcheck:
+-      test: ["CMD-SHELL", "curl -fsS http://localhost:3090/api/health || exit 1"]
++      # Assert on the READINESS FIELD, not merely on the HTTP status.
++      # /api/health answers 200 while carrying {"ready":false,
++      # "migration_required":true,"message":"Schema check error: ..."} -- and
++      # `curl -f` only fails on an error STATUS, so a 200 with a failure payload
++      # passed forever: the container reported `healthy`, failing_streak 0, for
++      # 5 days while being completely non-functional.
++      # grep is present in this image; jq is not -- verified in-container.
++      test: ["CMD-SHELL", "curl -fsS http://localhost:3090/api/health | grep -q '\"ready\":true' || exit 1"]
+       interval: 30s
+       timeout: 10s
+       retries: 5
+--- a/pmoves/docker-compose.agents.yml
++++ b/pmoves/docker-compose.agents.yml
+@@ -360,7 +360,17 @@
+     - HTTP_PROXY=
+     - HTTPS_PROXY=
+     - NO_PROXY=
+-    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_external
++    # Supabase reachability. Ten peer services in this same file already set
++    # SUPABASE_URL=http://supabase-kong:8000; archon set it NOWHERE, so it fell
++    # through to the host-oriented CLI default (host.docker.internal:54321) --
++    # a name that does not resolve in this container (ExtraHosts is []) and a
++    # port nothing listens on. Measured from /healthz on 2026-09-08.
++    - SUPABASE_URL=${SUPABASE_URL:-http://supabase-kong:8000}
++    # pmoves_api added: supabase-kong lives on pmoves_api + pmoves_public and
++    # Docker DNS only resolves across SHARED networks. Without it the name
++    # above cannot resolve either. pmoves_api is internal:true, so egress is
++    # still supplied solely by pmoves_external.
++    - PMOVES_NETWORKS=pmoves_api,pmoves_app,pmoves_bus,pmoves_external
+     depends_on:
+       archon-postgres:
+         condition: service_healthy
+@@ -380,17 +390,27 @@
+     - type: tmpfs
+       target: /home/appuser
+     networks:
++      # Supabase tier. supabase-kong (172.30.1.30) and supabase-db attach here.
++      # Must match the PMOVES_NETWORKS declaration above.
++      pmoves_api:
+       pmoves_app:
+         aliases:
+         - archon-server
+       pmoves_bus:
+       # Archon needs egress to reach the Claude API + GitHub with the configured
+-      # credentials; pmoves_app/pmoves_bus are internal-only.
++      # credentials; pmoves_app/pmoves_bus/pmoves_api are internal-only.
+       pmoves_external:
+     profiles:
+     - agents
+     healthcheck:
+-      test: ["CMD-SHELL", "curl -fsS http://localhost:3090/api/health || exit 1"]
++      # Assert on the READINESS FIELD, not merely on the HTTP status.
++      # /api/health answers 200 while carrying {"ready":false,
++      # "migration_required":true,"message":"Schema check error: ..."} -- and
++      # `curl -f` only fails on an error STATUS, so a 200 with a failure payload
++      # passed forever: the container reported `healthy`, failing_streak 0, for
++      # 5 days while being completely non-functional.
++      # grep is present in this image; jq is not -- verified in-container.
++      test: ["CMD-SHELL", "curl -fsS http://localhost:3090/api/health | grep -q '\"ready\":true' || exit 1"]
+       interval: 30s
+       timeout: 10s
+       retries: 5
