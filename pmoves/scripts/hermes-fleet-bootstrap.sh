@@ -102,7 +102,14 @@ if HERMES_VERSION_OUTPUT="$(hermes --version 2>&1)"; then
 else
   HERMES_VERSION_RC=$?
 fi
-HERMES_VERSION="$(printf '%s\n' "$HERMES_VERSION_OUTPUT" | head -1)"
+# On success, prefer the actual "Hermes Agent v..." line over line 1 --
+# hermes can print unrelated startup warnings (e.g. a malformed API key
+# env var) to stderr before its version banner, and those warnings would
+# otherwise become the reported "version" despite the CLI working fine.
+HERMES_VERSION="$(printf '%s\n' "$HERMES_VERSION_OUTPUT" | grep -m1 -E '^Hermes Agent v' || true)"
+if [ -z "$HERMES_VERSION" ]; then
+  HERMES_VERSION="$(printf '%s\n' "$HERMES_VERSION_OUTPUT" | head -1)"
+fi
 
 if [ "$HERMES_VERSION_RC" -ne 0 ] || [ -z "$HERMES_VERSION" ]; then
   warn "hermes --version failed (exit ${HERMES_VERSION_RC}): ${HERMES_VERSION_OUTPUT}"
