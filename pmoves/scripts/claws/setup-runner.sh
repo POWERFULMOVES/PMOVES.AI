@@ -56,7 +56,9 @@ if [[ -z "$TARGET" ]]; then
   echo "Labels: ai-lab → self-hosted,ai-lab,gpu,Linux,X64"
   echo "        vps    → self-hosted,vps,Linux,X64"
   echo "        hotfix → self-hosted,hotfix,Linux,X64"
-  echo "        other  → self-hosted,pmoves,<lane>,Linux,X64"
+  echo "        other  → self-hosted,ai-lab,pmoves,<lane>,Linux,X64
+                (ai-lab included since sync-secrets-local requires it; found
+                2026-09-06 when an elder-melchor dispatch queued forever)"
   exit 1
 fi
 
@@ -109,7 +111,7 @@ case "$LANE" in
   ai-lab)  LABELS="self-hosted,ai-lab,gpu,Linux,X64" ;;
   vps)     LABELS="self-hosted,vps,Linux,X64" ;;
   hotfix)  LABELS="self-hosted,hotfix,Linux,X64" ;;
-  *)       LABELS="self-hosted,pmoves,${LANE},Linux,X64" ;;
+  *)       LABELS="self-hosted,ai-lab,pmoves,${LANE},Linux,X64" ;; # ai-lab required by sync-secrets-local runs-on (2026-09-06: elder-melchor dispatch queued forever without it)
 esac
 
 echo "============================================"

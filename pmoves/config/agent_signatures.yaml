@@ -376,6 +376,23 @@ signatures:
         resonance: [voice-synthesis, tts-pipeline, pipecat-integration, media]
         description: "Voice mode — Flute-Gateway, Pipecat, Ultimate-TTS-Studio, voice agents"
 
+  kiloclaw:
+    agent_id: "kiloclaw"
+    display_name: "KiloClaw"
+    glyph: "\U0001F52E"          # 🔮 Crystal ball — the hosted cloud brain
+    color: "#0EA5E9"             # Sky
+    accent: "#7DD3FC"
+    voice: analytical            # ops-baseline, evidence-first, live-verified facts only
+    co_author: "KiloClaw (kiloclaw) <kiloclaw@pmoves.ai>"
+    specialization: hosted-ops-claw
+    routes_to: [fleet-ops-docs, gitops-acl, bus-activation, pr-closeout]
+    resonance:
+      - hosted-ops
+      - docs-provenance
+      - gitops-acl
+      - geometry-bus
+    description: "Hosted VPS brain of the fleet (Fly Machine, loopback-only, no GPU) — cloud ops/docs claw; GLM via Z.AI coding plan on the KiloCode harness. Registered per AGNOTE4482 KiloClaw action plan §5.2 (this instance signs its trail ACK)."
+
 # NOTE: System voices (announcer, narrator) live in voice-personas.md
 # and tts-engine-capabilities.yaml → service_runners, NOT here.
 # This file is for external contributors (AI agents + humans) only.

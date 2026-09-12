@@ -1,0 +1,69 @@
+# PMOVES dsh mounts — the CHIT/Cipher + app-MCP integration for deepseek-harness.
+#
+# Apply as a profile/home/--patch overlay when dsh runs, e.g.:
+#   dsh --profile web --patch pmoves/config/dsh/pmoves.cordis.patch.yml
+# (path relative to where dsh is launched; copy/point at it from the dsh home).
+#
+# This is the "mount twice" half of build-once-mount-twice: the SAME MCP servers
+# Agent Zero mounts (PMOVES.AI #2910 notebook, #2919/#2923 cipher) become dsh tools
+# named mcp__<serverName>__<rawName> via @deepseek-ai/dsh-mcp-client. The streamable-http
+# /mcp transport + `Authorization: Bearer` is the exact shape verified LIVE against A0
+# on the 5090 (cipher store→recall similarity 1.0; notebook save_note persisted).
+#
+# Per PMOVES.AI_INTEGRATION.md pending item #2, the CHIT/Cipher memory seam mounts as a
+# plugin beside the others (dsh has no privileged core) — this file is that mount.
+#
+# Recipe + field reference: packages/mcp/mcp-client/README.md. The !!js tag evaluates the
+# scalar as JS at load, so env-based url/headers resolve per-process (the per-tenant seam:
+# set CIPHER_API_TOKEN / the URL per workspace to reach that tenant's Cipher).
+
+- insert:
+    # Cipher — the CHIT-backed memory seam. Surfaces the 10 pmoves_cipher_* tools as
+    # mcp__cipher__pmoves_cipher_store / _search / _session_save / _session_recall /
+    # _store_reasoning / _reasoning_patterns / _hybrid_search / _graph_expand /
+    # _mcp_list / _mcp_get. Cipher requires the Bearer token (401 without it).
+    - id: mcp-cipher
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        serverName: cipher
+        transport: streamable-http
+        # Default to the HOST-published endpoint: the only currently available dsh
+        # deployment is `dsh --profile web` on the host, where the Docker-DNS name
+        # `cipher-api` does not resolve. cipher-api publishes 127.0.0.1:8105. An
+        # in-network/containerized dsh overrides via CIPHER_MCP_HTTP_URL to the
+        # Docker-DNS URL (http://cipher-api:8105/mcp).
+        url: !!js 'process.env.CIPHER_MCP_HTTP_URL || "http://localhost:8105/mcp"'
+        headers:
+          Authorization: !!js '`Bearer ${process.env.CIPHER_API_TOKEN}`'
+        # Don't wedge dsh startup if Cipher is briefly unreachable; tools register on
+        # reconnect. Cipher's stateless streamable-http endpoint has no session map, so
+        # it can't emit the "Unknown session" 400 the legacy SSE flow did.
+        failOnStartupError: false
+
+    # Notebook — Open Notebook (build once, mount twice; A0 mounts the same server).
+    # Surfaces mcp__notebook__save_note / search_notes. Per-request auth is forwarded
+    # by the server, so the token is optional here (baseline is anonymous/allowed).
+    - id: mcp-notebook
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        serverName: notebook
+        transport: streamable-http
+        # Host-published default: notebook-mcp publishes 127.0.0.1:8207 (host) → 8092
+        # (container). On the host use :8207; an in-network dsh overrides to the
+        # Docker-DNS URL (http://notebook-mcp:8092/mcp) via NOTEBOOK_MCP_URL.
+        url: !!js 'process.env.NOTEBOOK_MCP_URL || "http://localhost:8207/mcp"'
+        failOnStartupError: false
+
+    # Wealth — Firefly III (list/search/create transactions). Host-published default
+    # :8208 (wealth-mcp publishes 127.0.0.1:8208 → 8092); in-network dsh overrides to
+    # http://wealth-mcp:8092/mcp via WEALTH_MCP_URL. Firefly needs a Bearer PAT — a
+    # per-tenant PAT from the harness wins; FIREFLY_ACCESS_TOKEN is the baseline.
+    - id: mcp-wealth
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        serverName: wealth
+        transport: streamable-http
+        url: !!js 'process.env.WEALTH_MCP_URL || "http://localhost:8208/mcp"'
+        headers:
+          Authorization: !!js '`Bearer ${process.env.FIREFLY_ACCESS_TOKEN}`'
+        failOnStartupError: false
