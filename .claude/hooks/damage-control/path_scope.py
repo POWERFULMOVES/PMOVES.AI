@@ -58,7 +58,13 @@ _OPERATORS = {
 # (--out=a/b, f(a/b), [a/b], a/b;c). Whitespace is deliberately NOT included:
 # splitting on spaces would turn a prose sentence back into bare words and
 # reintroduce the exact false positive this module removes.
-_SUBSPLIT = re.compile(r"[=,()\[\]{};&|<>`$*?!\t]+")
+_SUBSPLIT = re.compile(r"[=,()\[\]{};&|<>`$*?!\t'\"]+")
+
+# Characters that mark a token as a CODE FRAGMENT rather than a path. Every one of
+# them is in _SUBSPLIT, so whenever a token contains one, a cleaner sub-token
+# covering the same text is guaranteed to be in the list too. That guarantee is
+# what makes it safe to exclude fragments from the repo-scoping decision.
+_CODE_CHARS = set("=,()[]{};&|<>`$*?!\t'\"")
 
 # Bodies of quoted string literals. The interpreter-write patterns in the guard
 # require the path inside quotes, and a lexed token for embedded code keeps the
@@ -220,7 +226,15 @@ def resolve(token: str) -> Tuple[str, bool]:
     A relative token resolves against the repository root, which is the Bash
     tool's working directory. That is the conservative reading: a relative token
     stays in scope even if the command changed directory first.
+
+    QUOTES ARE STRIPPED FIRST. A token lexed out of embedded code can keep its
+    literal quotes, and a leading quote stops '~' from expanding -- so a host path
+    like '~/.cache/go-build' resolved as a RELATIVE path, landed inside the repo,
+    and defeated repo scoping. Measured: clearing that host cache was refused as
+    "read-only path build/", naming a repo directory it never touched. Stripping
+    can only yield the true path, so it cannot lose a block.
     """
+    token = token.strip("'\"")
     expanded = os.path.expanduser(token)
     if os.path.isabs(expanded):
         absolute = os.path.normpath(expanded)
@@ -264,6 +278,7 @@ def confirm(
     is_repo_scoped = entry in set(repo_scoped)
     matched: List[str] = []
     saw_token_match = False
+    saw_path_like = False
 
     for token in tokens:
         hit = token_matches_entry(token, entry)
@@ -272,6 +287,19 @@ def confirm(
         if not hit:
             continue
         saw_token_match = True
+
+        # A CODE FRAGMENT must not decide repo scoping. A quoted argument such as
+        # open('<host-cache-dir>/x' has no whitespace, so it reached here as a
+        # "path"; it is not absolute, so it resolved against the repo root, landed
+        # INSIDE the repo, and kept a block on a host cache directory the command
+        # never touched -- reported against an unrelated repo build directory. Its
+        # cleaner sub-token is guaranteed present (every _CODE_CHARS member is a
+        # _SUBSPLIT separator), so skipping the fragment loses nothing; and if ONLY
+        # fragments matched, we fail closed below.
+        if _CODE_CHARS & set(token):
+            continue
+        saw_path_like = True
+
         absolute, inside = resolve(token)
         if is_repo_scoped and not inside:
             continue
@@ -280,6 +308,9 @@ def confirm(
     if not saw_token_match:
         # Case 1: prose only -- no token in this command names such a path.
         return False, []
+    if not saw_path_like:
+        # Undecidable: every match was a code fragment. Keep the refusal.
+        return True, []
     if not matched:
         # Case 2: repo-scoped entry, every match resolves outside the repository.
         return False, []
