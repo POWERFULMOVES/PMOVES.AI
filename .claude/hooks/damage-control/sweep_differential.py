@@ -178,11 +178,54 @@ print("\nby entry (sanctioned relaxations):")
 for (cls, entry), n in Counter((c[0], c[1]) for c in changed).most_common():
     print(f"  {n:5d}  {cls:28s} {entry}")
 
-if unsanctioned:
-    print(f"\n>>> {len(unsanctioned)} UNSANCTIONED CHANGE(S) — STOP:")
-    for row in unsanctioned[:30]:
+# Split the findings by DIRECTION before deciding. A relaxation and a tightening
+# are both "unsanctioned" to the classifier above, but they point opposite ways:
+# a relaxation opens a hole, a tightening closes one. Only the second can be
+# adjudicated, and only by exact command string.
+relaxations = [r for r in unsanctioned if r[0] != "NEWLY BLOCKED"]
+tightenings = [r for r in unsanctioned if r[0] == "NEWLY BLOCKED"]
+
+# The baseline is read ONLY here, ONLY for tightenings. `relaxations` is never
+# consulted against it, so no entry in that file can make this sweep tolerate
+# something being let through -- which is the only property of it that matters.
+BASELINE = DC / "sweep_baseline.yaml"
+adjudicated = set()
+if BASELINE.is_file():
+    try:
+        import yaml
+        doc = yaml.safe_load(BASELINE.read_text(encoding="utf-8")) or {}
+        adjudicated = {t["command"] for t in (doc.get("tightenings") or []) if t.get("command")}
+    except Exception as exc:  # a baseline we cannot parse waives NOTHING
+        print(f"warning: could not read {BASELINE.name}: {exc} — waiving nothing",
+              file=sys.stderr)
+        adjudicated = set()
+
+new_tightenings = [r for r in tightenings if r[3] not in adjudicated]
+known_tightenings = [r for r in tightenings if r[3] in adjudicated]
+
+print(f"\nrelaxations (always fatal)      : {len(relaxations)}")
+print(f"tightenings, adjudicated         : {len(known_tightenings)}")
+print(f"tightenings, NOT yet adjudicated : {len(new_tightenings)}")
+
+if relaxations:
+    print(f"\n>>> {len(relaxations)} RELAXATION(S) — STOP. This change lets through "
+          f"something the base guard refused:")
+    for row in relaxations[:30]:
         print("   ", row[0], "|", row[1], "|", row[3][:110])
         print("        old:", row[4][:100])
         print("        new:", row[5][:100])
+if new_tightenings:
+    print(f"\n>>> {len(new_tightenings)} UNADJUDICATED TIGHTENING(S) — this change "
+          f"refuses something the base guard allowed. If each is intended, record it "
+          f"in {BASELINE.name} with a reason:")
+    for row in new_tightenings[:30]:
+        print("   ", row[0], "|", row[1], "|", row[3][:110])
+        print("        old:", row[4][:100])
+        print("        new:", row[5][:100])
+if relaxations or new_tightenings:
     sys.exit(1)
-print("\nOK — every verdict change is one of the two sanctioned classes.")
+if known_tightenings:
+    print(f"\nOK — {len(known_tightenings)} adjudicated tightening(s), no relaxations, "
+          f"every other verdict change in a sanctioned class.")
+else:
+    print("\nOK — every verdict change is one of the two sanctioned classes.")
