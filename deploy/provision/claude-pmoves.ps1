@@ -356,6 +356,21 @@ if (Test-Path $roster) {
             Write-Warning "[claude-pmoves] Lost: '_'-prefixed disabled duplicates are not dropped, and ./ paths stay relative to your CWD."
         }
     }
+    # Same two couplings to the normalizer's sweep as the POSIX twin, and one
+    # Windows-specific note:
+    #
+    #  1. The path must appear on the launched process's command line, because
+    #     that is what the sweep's liveness check reads. On Windows there is no
+    #     /proc, so it asks Get-CimInstance Win32_Process for CommandLine; every
+    #     failure of that query (absent powershell, refused WMI, timeout,
+    #     non-zero exit) is treated as UNDETERMINABLE and keeps every file.
+    #     A leaked token file is recoverable; a session stripped of its servers
+    #     is not.
+    #  2. No `--out-dir` here either. XDG_RUNTIME_DIR does not exist on Windows,
+    #     so the tool falls back to the temp dir -- which on Windows is already
+    #     per-user (%LOCALAPPDATA%\Temp), not world-writable. Do not invent an
+    #     XDG path here to compensate.
+    #
     # `--mcp-config=<file>` (the `=` form): `--mcp-config` is variadic
     # (`<configs...>`), so the space form would swallow a trailing positional
     # prompt as another config value (Codex #2243 P1).

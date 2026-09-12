@@ -229,6 +229,40 @@ is a separate consolidation lane.
 - **service-account** — non-human, non-agent signers. Currently one: `github-app`. The PMOVES GitHub App. Its private key is the canonical replacement for PAT once §2 of the sitrep clears.
 - **runner** — CI runners (ai-lab, kvm4, kvm2, cloudstartup, spark). They don't sign commits — their identity is the `ci_runner_label` they advertise to GitHub Actions, plus the workflow file that scheduled them. They get cards so the trail can attribute "this commit pushed by github-app, but the build that produced its artifact ran on kvm4-runner" when an ML pipeline crosses the line.
 
+## How a `github-app` card gets its ML half (operator, once per node)
+
+Cards whose `ml.primary_method` is `github-app` ship with
+`ml.github_app_installation_id` left null and annotated *"populated from
+GH_APP_INSTALLATION_ID secret at runtime"*. That annotation describes an
+intent, not a mechanism — the value only arrives if the funnel put it in
+`env.tier-agent` on that node. Run this once per node:
+
+```bash
+make -C pmoves chit-manifest-register   # add the entries to the v2 manifest
+make -C pmoves chit-manifest-sync       # derive v1 from v2
+make -C pmoves secrets-funnel           # project into the tier env files
+```
+
+`make -C pmoves chit-manifest-register ARGS='--check'` reports what is still
+pending and writes nothing (exit 1 if any). Nothing in CI runs that gate, so
+these three steps happen because an operator runs them, not because a build
+turns red.
+
+Until then the card is `h-only / pending-ml` on that node: the H half reads
+fine, nothing verifies, and any activation checklist that requires resolvable
+key material has nothing to resolve. This is node-shaped and therefore easy to
+miss — a node where an operator hand-placed the value passes while every node
+built from the funnel does not.
+
+The schema types `github_app_installation_id` as `integer | null`, so the id is
+numeric. The registry enforces a `min_length` floor on `GH_APP_INSTALLATION_ID`
+and withholds an under-length value rather than emitting a truncated id; it
+cannot check *numeric-ness* (the registry has no pattern field), so a
+right-length non-numeric value would still reach the card.
+
+`GH_APP_SEC`, the PEM half of the same identity, does **not** travel this path —
+see `docs/GITHUB_APP_LOCAL_SETUP.md`.
+
 ## Why both halves matter
 
 A signature with only the ML half is anonymous: the verifier knows the bytes match a key, but a human reading the trail months later has to look up the fingerprint to figure out who acted. Most audits never run that lookup, and "valid signature, unknown party" passes through.
