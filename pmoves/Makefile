@@ -157,6 +157,11 @@ all: help ## Default target - show help
 .PHONY: test
 test: test-smoke ## Run pytest smoke tests
 
+.PHONY: test-smoke
+test-smoke: ## Run pytest smoke tests for services (pre-refactor recipe restored)
+	@echo "Running pytest smoke tests..."
+	$(PYTHON) -m pytest tests/smoke/ -v -m smoke --tb=short
+
 .DEFAULT_GOAL := help
 
 .PHONY: help
