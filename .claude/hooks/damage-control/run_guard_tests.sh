@@ -28,7 +28,7 @@ set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Ratchet floor. Raise it when the suite grows; never lower it.
-MIN_TESTS="${MIN_TESTS:-8}"
+MIN_TESTS="${MIN_TESTS:-10}"
 PY="${PYTHON:-python3}"
 
 shopt -s nullglob
