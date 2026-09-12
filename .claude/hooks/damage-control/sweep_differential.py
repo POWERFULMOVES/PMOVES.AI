@@ -69,6 +69,40 @@ old = load("dc_old", SCRATCH / "old_guard.py")
 cfg = new.load_config()
 ps = load("ps", DC / "path_scope.py")
 
+# Take away node-local grant state, and keep this run out of the audit trail.
+#
+# The KNOWN_ROAD pop above carries the comment "a grant open on this node would
+# make the result depend on state outside the run" -- but _active_grant() falls
+# back to a FILE grant (.known-road-active) whenever the env var is empty, so the
+# pop neutralized one of two sources and delivered half its intent. Both halves of
+# the consequence were measured on 2026-09-12:
+#
+#   1. 156 rows appended to the git-TRACKED known-roads.jsonl in a single
+#      5.5-minute run, every one a synthetic corpus target -- docker-composez.yml
+#      from the `*`->`z` substitution in concretize(), pmoves/sub/ and /srv/stack/
+#      from PLACES. That trail exists to answer "who authorized this edit, and
+#      why"; probes in it make it answer wrongly, and a trail that lies is worse
+#      than an empty one, because an empty one does not mislead.
+#   2. The verdicts themselves depended on whether this node happened to hold an
+#      open grant -- precisely what the pop above set out to prevent.
+#
+# Both go away by removing both grant sources and pointing the trail at this run's
+# own scratch dir. `_trail_path` and `_grant_file` are levers the module already
+# offers; test_bash_known_roads.py patches `_trail_path` the same way.
+#
+# This CANNOT skew the comparison. Both guard versions resolve `known_roads`
+# through the one entry in sys.modules, so anything neutralized here is
+# neutralized identically on both sides and the DIFFERENTIAL is untouched -- a
+# granted allow/allow pair simply becomes a blocked/blocked pair, and neither is
+# a verdict change.
+_kr = sys.modules.get("known_roads")
+if _kr is None:  # the guard imports it; if that ever stops, say so, do not guess
+    print("could not reach the known_roads module to isolate the audit trail; "
+          "refusing to run a sweep that would write to it", file=sys.stderr)
+    raise SystemExit(3)
+_kr._trail_path = lambda: SCRATCH / "known-roads.jsonl"
+_kr._grant_file = lambda: SCRATCH / "no-grant-here"
+
 RO = cfg["readOnlyPaths"]
 ND = cfg["noDeletePaths"]
 REPO_SCOPED = set(cfg.get("repoScopedPaths") or [])

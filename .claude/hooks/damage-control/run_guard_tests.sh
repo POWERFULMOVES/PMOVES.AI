@@ -48,6 +48,16 @@ if [ "${#TESTS[@]}" -lt "$MIN_TESTS" ]; then
   exit 1
 fi
 
+# The guard's audit trail is git-TRACKED, and a granted operation APPENDS to it.
+# A test corpus that trips a granted domain therefore writes synthetic rows into a
+# provenance record whose whole job is answering "who authorized this edit, and
+# why" -- measured once already: 156 rows in one run. Counted before and after
+# rather than trusting each test to isolate itself, because the next test added
+# will not know to.
+TRAIL="$HERE/known-roads.jsonl"
+trail_before="$([ -f "$TRAIL" ] && wc -l < "$TRAIL" || echo 0)"
+trail_before="${trail_before// /}"
+
 executed=0; passed=0; failed=0; failures=()
 echo
 printf '%-34s %4s  %s\n' "TEST FILE" "RC" "LAST LINE"
@@ -69,6 +79,16 @@ done
 
 echo
 echo "discovered=${#TESTS[@]} executed=$executed passed=$passed failed=$failed"
+trail_after="$([ -f "$TRAIL" ] && wc -l < "$TRAIL" || echo 0)"
+trail_after="${trail_after// /}"
+echo "audit trail rows: before=$trail_before after=$trail_after  ($TRAIL)"
+if [ "$trail_before" != "$trail_after" ]; then
+  echo "FAIL: the suite wrote $((trail_after - trail_before)) row(s) to the git-tracked audit trail."
+  echo "      A test must record to a throwaway path — see how test_bash_known_roads.py"
+  echo "      patches known_roads._trail_path, and how sweep_differential.py also takes"
+  echo "      away the FILE grant so nothing is granted in the first place."
+  exit 1
+fi
 if [ "$executed" -ne "${#TESTS[@]}" ] || [ "$executed" -eq 0 ]; then
   echo "FAIL: executed $executed of ${#TESTS[@]} discovered test file(s)."
   exit 1
