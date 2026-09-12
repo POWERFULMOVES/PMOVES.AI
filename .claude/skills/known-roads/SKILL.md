@@ -163,6 +163,38 @@ Every verdict change it reports must be a deliberate, named relaxation. If one i
 not, that is a permissive regression in a security guard — stop and report it
 rather than shipping it.
 
+## What the PreToolUse guard cannot see, and what catches it instead
+
+Every path rule interpolates the protected path into the pattern, so the guard
+only sees a write that NAMES a protected path in the command. Applying a diff
+from a file, extracting an archive, mirroring a tree, a block copy, an executed
+shell or python script, and a build-tool target all write paths the command never
+spells. Measured: a diff applied from a file wrote two protected compose files
+and the trail read 250 rows before and 250 after.
+
+Two mechanisms, and they are not equivalent:
+
+| | where | what it can do |
+|---|---|---|
+| `opaqueWriteVerbs` in `patterns.yaml` | PreToolUse | the common shapes, while prevention is still possible. **Deliberately partial.** A grant allows and records; no grant asks. |
+| `effect_check.py` | PostToolUse(Bash) | closes the class. Asks whether a protected path is DIFFERENT, which every verb answers the same way. Detection only -- the write already happened. |
+
+```bash
+# what state is each historical trail row in? (156 synthetic / 11 genuine / rest current)
+python3 .claude/hooks/damage-control/trail_states.py
+```
+
+The effect check costs ~60 ms per Bash call (measured, 6 warm rounds, full-size
+checkout; the git scan is 4-5 ms of that and interpreter startup is the rest --
+the existing PreToolUse guard measured 121-139 ms the same way). What it cannot
+see is listed at the top of `effect_check.py` and is not implied away: untracked
+and gitignored protected paths, paths outside the repository, a write that leaves
+porcelain code, mtime and size unchanged, and attribution finer than "since the
+last Bash call in this checkout".
+
+If it alerts, **disclose it and then revert or justify** -- do not silence it, and
+do not edit `patterns.yaml` to make your own change fit.
+
 ## Related
 
 - `pmoves-chit-sign` — sign the trail after guard-adjacent work
