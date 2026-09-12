@@ -53,8 +53,7 @@ def main() -> int:
             "http://localhost:8081/",
         ],
         "archon": [
-            os.getenv("CODEX_HEALTH_ARCHON_URL", "http://localhost:8091/healthz"),
-            "http://localhost:8051/healthz",
+            os.getenv("CODEX_HEALTH_ARCHON_URL", "http://localhost:8091/api/health"),
         ],
         "hirag-v2": [
             os.getenv("CODEX_HEALTH_HIRAG_URL", "http://localhost:8086/hirag/admin/stats"),

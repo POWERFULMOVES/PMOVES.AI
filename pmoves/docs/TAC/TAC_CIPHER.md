@@ -4,6 +4,143 @@
 > See [§Decision Matrix](#decision-matrix--path-selection) for the full path comparison + [§A1-Shim Workorder](#a1-shim-workorder) for execution phases.
 > **Last refreshed:** 2026-07-14 (CRUSH-GLM52, A1-Shim Phases 4-5 + Codex P1 fix delivered via PR #2117).
 
+## Measured on Z890, 2026-09-08 (Z890-CLAUDE)
+
+An outage here was **not** any of the causes this document lists. Recording it
+because every signal except one said the service was fine:
+
+| Signal | Said |
+|---|---|
+| `docker ps` | `Up 30 hours (healthy)`, `RestartCount 0`, `FailingStreak 0` |
+| host `GET /health` | connection closed — **curl and PowerShell alike** |
+| in-container probe | **200** on loopback, `0.0.0.0` **and** eth0 (`172.30.1.8`) |
+| `cipher_preflight.py` | `NO persistent memory` |
+
+**Root cause: a stale Docker published-port mapping.** `docker restart
+pmoves-cipher-api-1` restored it — no rebuild, no config change, no code change.
+
+Why the healthcheck could not see it: it is
+`node -e http.get('http://127.0.0.1:8105/health')` executed *inside* the
+container. It probes itself over loopback and cannot observe that no external
+client can reach it. That is §3 of `AGENT_IDENTITY_PROPOSAL_2026-09-04.md`
+("Memory absence must be loud") in the field, and why #2955 recommends an
+**authenticated store→recall round-trip at mount time** rather than a health
+endpoint.
+
+**Keep-list audited 2026-09-09 — nothing was dropped.** Every PMOVES additive
+capability listed under §PMOVES Additive Commits survives the re-fork,
+re-implemented in `src/pmoves/` as A1-Shim intended (the SHAs do not carry over,
+so the SHAs are the wrong thing to check): dossier -> `PMOVES.AI_INTEGRATION.md`;
+A2A + canonical agent-card -> `a2a.ts`; Bearer middleware -> `auth.ts`;
+`/api/memory` CRUD -> `memory-routes.ts`; Ollama/embedding backend ->
+`embedding.ts` (now TensorZero-primary with `OLLAMA_URL` fallback). Six modules
+exist BEYOND the keep-list: `graph.ts`, `health.ts`, `hirag-client.ts`,
+`mcp-catalog.ts`, `mcp-sse.ts`, `nats-emitter.ts`. The one item with no trace is
+the build fix (node-gyp `disturl` + pnpm 9 workspaces) — no `disturl` or
+`packageManager` pin is present, and the image now builds without it, so it
+appears obsoleted by the new upstream rather than lost.
+
+**Windows papercut, found running the road:** `make -C pmoves up-cipher`
+succeeds, then `qdrant-provision-cipher` fails with
+`python3: can't open file '//C:/Program Files/Git/scripts/provision_qdrant_cipher_memory.py'`
+— MSYS path conversion mangling an absolute `/scripts/...` argument. The
+collection is therefore NOT provisioned on Windows nodes even though the road
+prints "Cipher Memory ready". Reported, not fixed here.
+
+**401 is a catch-all.** After the restart, `/mcp`, `/mcp/sse`, `/api/memory`,
+`/sse`, `/api/mcp/sse` all return 401 — and so do `/xyzzy` and
+`/definitely-not-a-route`. Auth runs before routing, so an unauthenticated 401
+proves nothing about whether a route exists. Route discovery here needs an
+authenticated probe; `/health` is the only unauthenticated route.
+
+**Image drift: RESOLVED 2026-09-09.** The running image had been built
+2026-08-06 with `grep -rl streamable /app/dist` = **0** (5090 = 1, per #2955).
+`cipher-api` has no `image:` — it builds from `context: ../Pmoves-cipher` — so
+the fix was to promote this node's submodule gitlink `d5c4045e -> e24f1323`
+(main's pin since #2923) and rebuild. The pull had been blocked by stale Docker
+Hub credentials on the base `node:22-slim`; the operator re-authenticated.
+
+After `make -C pmoves up-cipher`: image rebuilt, **`streamable` = 1**, `/health`
+200, `cipher_preflight` local row **OK 200**. Z890 now matches 5090.
+
+### Reconciliation: grounded against source, 2026-09-09
+
+**Provenance rule applied here:** every claim below cites the file and line it
+came from, at submodule pin `e24f1323` or superproject `origin/main`. An earlier
+revision of this section proposed three remedies and cited nothing; it was
+reasoning from THIS runbook, which was itself stale. A runbook with no provenance
+link to source is unverified, and it was wrong.
+
+**What the official docs say the deployment is:**
+
+| Claim | Source |
+|---|---|
+| Upstream is the ByteRover CLI (`brv`); memory is a context tree with curate/sync | `Pmoves-cipher/README.md:24-28` @ `e24f1323` |
+| `PMOVES_HOST` default is **`0.0.0.0`** | `Pmoves-cipher/PMOVES.AI_INTEGRATION.md:96` @ `e24f1323` |
+| Documented run publishes **`-p 8105:8105`** (all interfaces) | `Pmoves-cipher/PMOVES.AI_INTEGRATION.md:111` @ `e24f1323` |
+| node-gyp/pnpm build fixes are **obsolete on the new arch** | `Pmoves-cipher/PMOVES.AI_INTEGRATION.md:127` @ `e24f1323` |
+| OAuth2/RBAC **never implemented** (aspirational) | `Pmoves-cipher/PMOVES.AI_INTEGRATION.md:126` @ `e24f1323` |
+| BoTZ cipher `:8081` and DoX CipherService `:8096` are **different services** | `Pmoves-cipher/PMOVES.AI_INTEGRATION.md:131-133` @ `e24f1323` |
+
+**What this deployment does:**
+
+| Fact | Source |
+|---|---|
+| `PMOVES_HOST=0.0.0.0` — matches the documented default | `pmoves/docker-compose.agents.yml`, `cipher-api` env |
+| publish is `"${CIPHER_BIND:-127.0.0.1}:${CIPHER_PORT:-8105}:8105"` | `pmoves/docker-compose.agents.yml`, `cipher-api` ports |
+| healthcheck self-probes `http://127.0.0.1:8105/health` from INSIDE | `pmoves/docker-compose.agents.yml`, `cipher-api` healthcheck |
+| observed: `docker port` -> `8105/tcp -> 127.0.0.1:8105` | measured on Z890 2026-09-09 |
+
+**The correction.** The app is not loopback-bound — it listens on `0.0.0.0`
+inside the container, exactly as documented. The narrowing happens at the HOST
+publish, and it is already **parameterised**: `CIPHER_BIND` defaults to
+`127.0.0.1`. So the roster's `${TS_Z890}:8105` entry matches the DOCUMENTED
+deployment, and it is this node's `CIPHER_BIND` default that diverges from it.
+
+That makes the earlier framing wrong in an important way: the fleet entry is not
+"decorative" and does not want deleting. **It wants `CIPHER_BIND` set.** No code
+change, no compose edit, no new pattern, and no `tailscale serve` — the knob
+already exists and was missed because this runbook was consulted instead of the
+source.
+
+Setting it is still an operator decision (it exposes a Bearer-gated service to
+the tailnet, and the bearer is the only control — `PMOVES.AI_INTEGRATION.md:126`
+records that OAuth2/RBAC was never built), but it is a CONFIGURATION decision,
+not a redesign.
+
+### The real blocker for agent access is token provisioning, not transport
+
+| Fact | Source |
+|---|---|
+| `agentId` is REQUIRED on every store/search call | `.claude/skills/pmoves-cipher-memory/SKILL.md` |
+| the `agentId` to use is the signing-card `agent_id` | same, referencing `pmoves/config/signing_identity_cards.yaml` |
+| a `z890-claude` card exists | `pmoves/config/signing_identity_cards.yaml:188` |
+| cross-agent wildcard is refused under token enforcement | `Pmoves-cipher/src/pmoves/memory-routes.ts:20-22` @ `e24f1323` |
+| measured: this node's token resolves to agent `bootstrap` | 403 `token belongs to agent 'bootstrap', but request specified 'z890-claude'` |
+
+The node holds a **bootstrap** token, not a per-agent token for `z890-claude`.
+So an agent following the documented path — pass your signing-card id — is
+correctly refused, because the credential it was given belongs to a different
+identity. This is the same finding as the unclaimed expensive half of the cipher
+token-model lane (bootstrap as a shared six-scope identity, ACTIVE on this node),
+seen from the client side.
+
+Remedy is a mint through the pipeline, per agent, not a transport change.
+
+### Corrected claims from the previous revision of this section
+
+- ~~"the fleet entry can never have worked and should be deleted"~~ — it matches
+  the documented deployment; `CIPHER_BIND` is the divergence.
+- ~~"three options, one of which is `tailscale serve`"~~ — a supported knob
+  already exists; `tailscale serve` is not needed to make the documented
+  topology work.
+- ~~"the store/search routes are blocked (skill, 2026-04-01)"~~ — measured false:
+  `POST /api/memory` -> 201 with a non-null `embedding_id`, and a semantic recall
+  under different phrasing returned the new record. `.claude/skills/cipher-search`
+  still carries that stale blocker and instructs agents to skip cipher entirely.
+
+---
+
 ## Service Identity
 
 | Field | Value |
@@ -11,8 +148,8 @@
 | **Service** | Cipher Memory (a.k.a. `cipher-api`) |
 | **Current gitlink** | `6f8150cf` on `Pmoves-cipher` fork `PMOVES.AI-Edition-Hardened` (Phase 5 + Codex P1 + search() complement; PR #2117) — pre-refork `1c9b2851` archived 2026-07-13 |
 | **Fleet rule status** | ✅ **RESOLVED** — `.gitmodules` flipped to `branch = PMOVES.AI-Edition-Hardened` (Phase 1, commit `99bbe8d03`) |
-| **Host port** | `8105` (host-published from container `:3000`) |
-| **Container port** | `3000` (internal listener) |
+| **Host port** | `8105` (published `127.0.0.1:8105->8105/tcp`) |
+| **Container port** | `8105` — **RE-MEASURED 2026-09-08 on Z890, was documented as `3000`.** `/proc/net/tcp` in `pmoves-cipher-api-1` shows `00000000:1FA9` = `0.0.0.0:8105` LISTEN, and the app answers 200 on loopback, `0.0.0.0` and its eth0 address alike. |
 | **Health** | `GET /health` (NOT `/healthz`) |
 | **Metrics** | None |
 | **Submodule** | `Pmoves-cipher` (fork of `campfirein/byterover-cli`, formerly `campfirein/cipher`) |
@@ -320,7 +457,7 @@ These subjects are declared across registries, TAC trees, topology docs, and BoT
 | 278 vulnerabilities (9 critical) on fork default branch | **CRITICAL** | Open — closed by re-fork (A1-Shim or A3-Full) |
 | No API authentication (upstream base) | P2 | **Fixed** — Bearer token via `CIPHER_API_TOKEN` (PMOVES-added, PR #1) |
 | A2A discovery endpoint unauthenticated | P1 | **Fixed** — auth-gated (PR #1) |
-| `CIPHER_URL` host/container port mismatch | P1 | **Open** — in-network services use `:8105` but container listens on `:3000` |
+| `CIPHER_URL` host/container port mismatch | P1 | **STALE AS WRITTEN (2026-09-08)** — the premise no longer holds: the container listens on `:8105`, not `:3000`, so host and container agree. Re-scope or close this row rather than acting on it. |
 | `pmoves-cipher-mcp/` not a proper submodule | P2 | Open (low priority — bridge is dead code) |
 | `.gitmodules` tracks `main` not `PMOVES.AI-Edition-Hardened` | P1 | **Open** — fleet rule violation |
 
@@ -358,7 +495,7 @@ b4a780b0 feat(api): add /api/memory CRUD routes for pmoves-cipher-mcp bridge (#5
 ### Post-decision (any path)
 - [ ] Remove stale vendored cipher copies (4 mirror sites)
 - [ ] Reconcile `TAC_CIPHER.md`, `CATALOG.md`, `AGNOTE4482_SITREP.md`, `pmoves-cipher-mcp/README.md` to single source of truth
-- [ ] Fix `CIPHER_URL` host/container port mismatch in compose (3 files: `docker-compose.yml`, `docker-compose.agents.yml`, `docker-compose.vps.override.yml`)
+- [ ] ~~Fix `CIPHER_URL` host/container port mismatch in compose~~ — **premise re-measured false 2026-09-08**: container listens on `:8105`. Verify on other nodes before closing.
 - [ ] Remove or rewire dead NATS subjects (`cipher.memory.*.v1`) — zero subscribers
 - [ ] Remove dead gateway-agent `/skills/*` calls (already 404)
 

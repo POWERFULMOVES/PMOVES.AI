@@ -107,6 +107,7 @@ SERVICE_GROUPS = {
         "extract-worker",
         "watch-folder-router",
         "spark-shape-worker",
+        "persona-thirdref",
         "pdf-ingest",
         "langextract",
         "notebook-sync",
