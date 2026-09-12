@@ -171,6 +171,49 @@ def lanes_in(text: str) -> set:
     return declared | inferred
 
 
+# The RECORD KIND of a register row: the word immediately after the backticked
+# leading timestamp on an anchored bullet. `CLAIM`, `RELEASE`, `CLAIM+RELEASE`,
+# and a long informational tail -- NOTE, REVIEW, UPDATE, HANDOFF, CORRECTION.
+_ROW_KIND_RE = re.compile(
+    r'^\s*[-*]\s+`[0-9]{4}-[0-9]{2}-[0-9]{2}[^`]*`\s+([A-Za-z][A-Za-z+-]*)'
+)
+
+# KINDS THAT RECORD A FACT AND TRANSITION NOTHING.
+#
+# WHY THIS SET EXISTS. Until now the register had no record type meaning "here
+# is a fact", so a correction had to be filed as a RELEASE -- the only kind the
+# sanctioned write tool accepted that was not a CLAIM. Combined with the bare-
+# RELEASE convention below (a RELEASE naming no lane closes EVERYTHING that
+# owner holds), filing a footnote under an owner with open lanes would have
+# closed every one of them silently. That did not happen only because the owner
+# in question had no open lanes at that moment; a hazard whose harm depends on
+# ordering is untriggered, not safe.
+#
+# So NOTE rows are parsed as INERT: whatever their prose says, they neither open
+# nor close a lane. That matters beyond the new write path, because these rows
+# discuss claims and releases for a living -- a note reading "the RELEASE `X` on
+# line 42 was mis-attributed" carries the exact byte sequence RELEASE_RE looks
+# for, and would otherwise close every lane `X` holds.
+#
+# MEASURED BEFORE AND AFTER against the live register: 5 NOTE rows, 0 of which
+# were being read as a CLAIM or a RELEASE today, so this changes no lane's state
+# now and removes the trap for every note filed from here on. Only NOTE is
+# listed: REVIEW / UPDATE / HANDOFF / CORRECTION carry the same latent hazard,
+# and widening the set is a separate change owing its own measurement.
+INERT_ROW_KINDS = frozenset({"NOTE"})
+
+
+def row_kind(line: str) -> str:
+    """The record kind of a register row, upper-cased. Empty if not a row."""
+    m = _ROW_KIND_RE.match(line)
+    return m.group(1).upper() if m else ""
+
+
+def is_inert_row(line: str) -> bool:
+    """True when this row records a fact and must not transition lane state."""
+    return row_kind(line) in INERT_ROW_KINDS
+
+
 _UNSET = object()
 _FOLDER = _UNSET
 _LINEAGE = _UNSET
@@ -334,6 +377,11 @@ def open_claims_in(text: str) -> dict:
     """
     open_claims = {}
     for lineno, line in enumerate(text.split("\n"), start=1):
+        if is_inert_row(line):
+            # A NOTE records a fact. It opens nothing and closes nothing, and
+            # this skip is what makes that true of its PROSE as well as its
+            # intent -- these rows quote `CLAIM` and `RELEASE` constantly.
+            continue
         m = CLAIM_RE.search(line)
         if m:
             owner_key = canonical_owner(m.group(1))
@@ -414,6 +462,9 @@ HEREDOC_DELIM_RE = re.compile(r"<<-?\s*(['\"]?)([A-Za-z_][A-Za-z0-9_]*)\1")
 # defect this file's other fix addresses. `_is_register` strips the quotes it
 # now receives.
 REDIRECT_RE = re.compile(r"(>>?)\s*((?:\"[^\"]*\"|'[^']*'|\\.|[^\s;|&<>])+)")
+# `\` followed by a line ending. Bash removes these before parsing, so the
+# guard has to as well -- see the comment at the top of classify_shell_write.
+CONTINUATION_RE = re.compile(r"\\\r?\n")
 TEE_RE = re.compile(r"\btee\b((?:\s+-\S+)*)((?:\s+[^\s;|&<>]+)*)")
 ECHO_LITERAL_RE = re.compile(
     r"\b(?:echo|printf)\b(?:\s+-\S+)*\s+(['\"])(.*?)\1", re.S
@@ -566,7 +617,8 @@ _SANCTIONED_TOOL_REAL = frozenset(
     os.path.realpath(str(_SANCTIONED_TOOL_DIR / n)) for n in _SANCTIONED_TOOL_NAMES
 )
 _SANCTIONED_MAKE_DIR_REAL = os.path.realpath(str(REPO_ROOT_GUESS / "pmoves"))
-_SANCTIONED_MAKE_TARGET_RE = re.compile(r"^register-(claim|release|docs|amend|status)$")
+_SANCTIONED_MAKE_TARGET_RE = re.compile(
+    r"^register-(claim|release|note|docs|amend|status)$")
 # `-c`/`-e`/`-m`/`--command` anywhere alongside the tool means an interpreter
 # was asked to run something OTHER than the file named, so the file named stops
 # being evidence of what runs.
@@ -743,15 +795,66 @@ def split_heredocs(command: str):
         line = lines[idx]
         skeleton_lines.append(line)
         idx += 1
+
+        # REBUILD THE LOGICAL LINE FIRST. A `\<newline>` joins this line to the
+        # next before the shell sees either, so
+        #
+        #     python3 \
+        #     <<'PY'
+        #
+        # is ONE command line -- but read physically, the line carrying the
+        # `<<` operator contains no interpreter, `code` comes out False, the
+        # body is classified as data, and it is then excluded from the
+        # detection string entirely. The body still reaches python and still
+        # truncates the register.
+        #
+        # This has to happen HERE rather than in the caller: `code` is decided
+        # from the opener inside this loop, so a caller that normalizes after
+        # the split has already lost. Bodies are untouched -- the join only
+        # runs while we are positioned on a skeleton line, which is precisely
+        # the region where a continuation is a shell construct.
+        while line.endswith("\\") and idx < len(lines):
+            line = line[:-1] + lines[idx]
+            skeleton_lines[-1] = line
+            idx += 1
+
         # Every heredoc opened ON THIS LINE takes its body starting now, in the
         # order the operators appear -- the shell's own rule for `cmd <<A <<B`.
         for m in HEREDOC_DELIM_RE.finditer(line):
             quote, delim = m.group(1), m.group(2)
             body = []
-            while idx < len(lines) and lines[idx].strip() != delim:
+            # FOLD CONTINUATIONS WHEN LOOKING FOR THE TERMINATOR, but only for
+            # an UNQUOTED delimiter -- that is precisely where bash performs
+            # expansion and line-joining while reading the body. With a quoted
+            # delimiter the body is taken byte-for-byte and `EO\` + newline +
+            # `F` is not a terminator, so folding there would end the heredoc
+            # early and hand the rest of the body to the shell parser as code.
+            #
+            # Unfolded, this hides a whole COMMAND rather than a path:
+            #
+            #     cat >> REG <<EOF
+            #     ...
+            #     EO\
+            #     F
+            #     echo DESTROYED > REG
+            #
+            # bash rejoins `EOF`, closes the heredoc, and runs the truncate.
+            # The hook saw the heredoc as unterminated, absorbed the truncate
+            # as inert body data, and returned 0.
+            term_lines = 1
+            while idx < len(lines):
+                cand = lines[idx]
+                n = 1
+                if not quote:
+                    while cand.endswith("\\") and idx + n < len(lines):
+                        cand = cand[:-1] + lines[idx + n]
+                        n += 1
+                if cand.strip() == delim:
+                    term_lines = n
+                    break
                 body.append(lines[idx])
                 idx += 1
-            idx += 1  # consume the terminator line itself
+            idx += term_lines  # consume the terminator, however many lines it spans
             bodies.append({
                 "delim": delim,
                 "body": "\n".join(body),
@@ -1211,6 +1314,56 @@ def classify_shell_write(command: str, cwd=None) -> ShellWrite:
     the recoverable append itself.
     """
     skeleton, bodies = split_heredocs(command)
+
+    # BASH DELETES `\<newline>` BEFORE IT PARSES ANYTHING. So
+    #
+    #     echo x > pmoves/docs/AGENTS/AGNOTE4482PHI.t1.\
+    #     md
+    #
+    # truncates the real register, while every check below looked at text where
+    # the name is split across two lines: the literal-name gate three lines down
+    # finds no contiguous `AGNOTE4482PHI.t1.md` and returns "none", and
+    # `REDIRECT_RE`'s `\\.` cannot bridge it either because `.` does not match a
+    # newline. Rejoining first means the rest of this function sees the same
+    # command bash does.
+    #
+    # SKELETON ONLY, after `split_heredocs`. A heredoc body is literal text --
+    # `\<newline>` inside a quoted delimiter is two real characters, not a
+    # continuation -- so rejoining there would invent content. A continuation is
+    # a shell-line construct and lives in the skeleton.
+    #
+    # Inside single quotes a `\<newline>` is also literal, so this
+    # over-normalizes that one case. It is the safe direction for a guard: the
+    # worst outcome is seeing a register name bash would not, which refuses a
+    # write that was not going to happen. The reverse would miss a truncate.
+    skeleton = CONTINUATION_RE.sub("", skeleton)
+
+    # CODE heredoc bodies too, and the reasoning above is why they are a
+    # SEPARATE case rather than the same one. A body is literal to bash -- but
+    # a body marked `code` is handed to an interpreter, and python, node and
+    # ruby all fold `\<newline>` inside a string literal exactly as bash folds
+    # it in a command. So
+    #
+    #     python3 <<'PY'
+    #     open('/tmp/AGNOTE4482PHI.t1.\
+    #     md', 'w').write('')
+    #     PY
+    #
+    # opens the real register while the literal-name gate below sees no
+    # contiguous name and returns "none". With an UNQUOTED delimiter bash
+    # performs the join itself before the interpreter is even reached, so the
+    # bypass does not depend on which interpreter it is.
+    #
+    # Normalizing the body is over-eager for the one case where the sequence is
+    # genuinely two characters to the interpreter (a python raw string). Same
+    # trade as the skeleton: over-matching refuses a write that was not going
+    # to happen; under-matching misses one that was. Non-code bodies are left
+    # alone -- they are data, nothing interprets them, and they are not part of
+    # the detection string.
+    for h in bodies:
+        if h["code"]:
+            h["body"] = CONTINUATION_RE.sub("", h["body"])
+
     executable = "\n".join(
         [skeleton] + [h["body"] for h in bodies if h["code"]]
     )
@@ -1435,6 +1588,12 @@ def evaluate_claims(proposed: str, existing_open: dict) -> ClaimVerdict:
     payload_lanes = lanes_in(proposed)
     for m in CLAIM_RE.finditer(proposed):
         row = _row_at(proposed, m.start())
+        if is_inert_row(row):
+            # Symmetry with open_claims_in(). A NOTE in the PROPOSED write is
+            # inert too, so a note whose prose quotes a CLAIM is not charged as
+            # one. Without this the two sides disagree about what a row is,
+            # which is worse than either being wrong alone.
+            continue
         owner = m.group(1)
         lanes = lanes_in(row) or payload_lanes
         declared = co_owners_in(row)

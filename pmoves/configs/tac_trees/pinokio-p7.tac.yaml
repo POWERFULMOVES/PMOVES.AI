@@ -149,7 +149,7 @@ root:
           action:
             type: shell
             command: "tailscale status"
-            expect: "pmoves-powerfulmoves, pmoves-z890, pmoves-laptop all online"
+            expect: "pmoves-powerfulmoves, pmoves-z890, pmoves-4090 all online"
           agent_hint: 5090-claude
           status: done
 

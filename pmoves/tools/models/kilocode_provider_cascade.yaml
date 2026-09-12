@@ -51,7 +51,7 @@ cascade:
     # Models in cascade priority order (highest first)
     models:
       - glm-5-turbo       # Primary — agentic workflow, tool-calling (355B MoE, 32B active)
-      - glm-5.1           # Fallback — long-horizon autonomy (744B MoE, 40B active)
+      - glm-5.3           # Fallback — verifier-gated 2026-09-06 (was glm-5.1, the stalest pin)
       - glm-4-air         # Edge — cost-efficient (9B dense)
       - kilo-auto/balanced # Overflow — KiloCode plan-routed lane
 
