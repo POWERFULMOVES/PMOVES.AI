@@ -60,7 +60,7 @@ V_RM = "r" + "m"
 COMPOSE = "pmoves/docker-" + "compose.yml"
 SCHEMA = "pmoves/contra" + "cts/schemas/z.schema.json"
 LOCKFILE = "poetry" + ".lock"
-SECRET_DIR = "~/.s" + "sh"
+ZERO_ACCESS_PATH = "~/.s" + "sh"
 
 
 def _set_road_reason(value):
@@ -130,7 +130,7 @@ def main() -> int:
 
     # ---- 6. CONTAINMENT: the earlier gates are unreachable from a grant ----
     check("a grant cannot reach the zero-access class",
-          "compose:pr:2656", V_SED + " -i s/a/b/ " + SECRET_DIR + "/id_ed25519", True)
+          "compose:pr:2656", V_SED + " -i s/a/b/ " + ZERO_ACCESS_PATH + "/id_ed25519", True)
     check("a grant cannot reach a destructive command shape",
           "compose:pr:2656", V_RM + " -rf " + COMPOSE, True)
 
