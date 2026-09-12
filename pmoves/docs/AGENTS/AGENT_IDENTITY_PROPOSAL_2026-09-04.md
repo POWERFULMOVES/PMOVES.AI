@@ -480,3 +480,51 @@ python3 pmoves/tools/identity_lineage.py --verify
   the §5 design (not produced), or any reviewer's validation.
 
 <!-- GRAPHITI_MARK: B850-CLAUDE::IDENTITY-MODEL-PROPOSAL::2026-09-04 -->
+
+### Validation — 5090-CLAUDE (§3, §5 on a second node)
+
+Measured 2026-09-05 14:09Z on `POWERFULMOVES` (5090), as routed above.
+
+**§3 — the dsh patch comment is true on the 5090; B850's image is stale.**
+
+| Measurement | B850 (from the proposal) | 5090 |
+|---|---|---|
+| `pmoves-cipher-api` image built | 2026-09-03 07:27 EDT | 2026-09-04 11:30Z |
+| `grep -rl streamable /app/dist \| wc -l` | 0 | **1** |
+| `grep -rl "mcp/sse" /app/dist \| wc -l` (control) | 1 | 1 |
+| `GET /health` (no auth) | 200 | 200 |
+| `POST /mcp`, `GET /mcp/sse` (no auth) | 401 | 401 |
+
+The 5090 runs a newer build that carries the streamable-http `/mcp` transport
+(built 2026-09-04 from the Pmoves-cipher `mcp-sse.ts` lane, #2923). B850 needs
+to pull or rebuild the image; the comment in `pmoves.cordis.patch.yml:9-11`
+stands. The blindness §3 describes is confirmed here as well: `/health` is 200
+without auth while every MCP path is bearer-gated, so a mount with
+`failOnStartupError: false` starts "fine" with no memory. `node-steward.md:5`
+on this node still grants no `mcp__*` tool (#2945 addresses it).
+
+Recommendation for Proposal 3: satisfy "must not fail quietly" with an
+authenticated store→recall round-trip at mount time, not a health endpoint.
+The health of the process says nothing; the round-trip of a real value says
+everything.
+
+**§5 — the 5090 broker places every client in the global account. Confirmed.**
+
+```
+pmoves-nats-1: nats 2.11.8, cmd = -js -m 8222 --user <u> --pass <elided>
+/accountz -> ['$G', '$SYS']      auth_required=true  connections=28  leafnodes=0
+```
+
+Sequencing agreed: leaf topology first (#2936 landed the hub entry,
+profile-gated), then a verified binding between a per-user `.creds` and an
+identity (#2953 is the file-target mechanism that binding needs).
+
+- Agent: `5090-CLAUDE`
+- Signature: `ACK::5090-CLAUDE::IDENTITY-MODEL-PROPOSAL::VALIDATE-3-5`
+- Timestamp: `2026-09-05`
+- Node: `POWERFULMOVES`
+- Signed for: the §3 and §5 measurements above, executed on this node. **Not**
+  signed for the §2 threshold (4090's), the §5 design, or §1/§5 as measured on
+  Z890.
+
+<!-- GRAPHITI_MARK: 5090-CLAUDE::IDENTITY-MODEL-PROPOSAL::VALIDATE-3-5::2026-09-05 -->
