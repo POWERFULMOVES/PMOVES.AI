@@ -78,6 +78,46 @@
       "src": ["tag:gpu"],
       "dst": ["tag:pmoves:*"]
     },
+    // Hosted kiloclaw instance (user-owned cataclysmstudios@ device — a hosted VM that
+    // cannot hold fleet tags without an operator-issued auth key). Grants the bus +
+    // reticulum-hub ports only: NATS 4222 on kvm4-2 (canonical fleet hub) and the
+    // planned Reticulum TCPServerInterface 4243. Everything else stays blocked;
+    // node SSH continues via the tailscale ssh rules above. Verified needed 2026-09-03
+    // (direct TCP 4222 from kiloclaw times out; see
+    // pmoves/docs/operations/KILOCLAW_INSTANCE_INTEGRATION_2026-09-03.md §2).
+    //
+    // DST SCOPE - deliberately tag:vps, NOT tag:pmoves. The documented need is
+    // kvm4-2 alone. tag:pmoves is the whole fleet (every workstation, Jetson,
+    // travel router and KVM); tag:vps is held only by the three KVM concentrators
+    // (kvm2, kvm4-1, kvm4-2), which is the narrowest selector that still contains
+    // the canonical hub. Dropping the tag:pmoves half is why this rule no longer
+    // opens 4222/4243 on every fleet node.
+    //
+    // RESIDUAL - RECORDED, NOT OVERLOOKED. This rule is still broader than the
+    // kiloclaw-to-kvm4-2 exception it documents, on two axes that cannot be closed
+    // from inside this file:
+    //   1. dst is a tier, not a host. Tailscale names a single machine in a dst
+    //      only through a "hosts" alias, and a hosts entry is literally
+    //      name -> IP/CIDR - so per-host scoping means committing a raw tailnet
+    //      address. That is barred by the no-raw-address Known Road (AGENTS.md),
+    //      and this file already set the precedent: see the autoApprovers NOTE
+    //      below, where a literal CIDR is deliberately kept out of the repo and
+    //      added in the admin console instead. The alternative, a dedicated tag
+    //      (e.g. tag:bus on kvm4-2 only), is an OPERATOR action - a tag grants
+    //      nothing until it is applied to the device.
+    //   2. src is a USER identity, so every untagged device on the
+    //      cataclysmstudios@ account inherits this grant, not kiloclaw alone.
+    //      Converting it to a device selector requires an operator-issued auth
+    //      key - the very constraint named at the top of this comment. Left
+    //      user-scoped ON PURPOSE rather than papered over with a tag nobody
+    //      holds, which would silently grant nothing.
+    // Both closures are tracked in the integration doc's section 6 checklist.
+    // Tighten this rule when the operator issues the key; do not widen it.
+    {
+      "action": "accept",
+      "src": ["cataclysmstudios@gmail.com"],
+      "dst": ["tag:vps:4222", "tag:vps:4243"]
+    },
     // Admins + Owner (DARKXSIDE) have full network access. Owner is listed explicitly
     // because Tailscale SSH requires BOTH a network-access rule (this) AND an ssh rule;
     // the owner is distinct from autogroup:admin, so without owner here the SSH
@@ -167,6 +207,45 @@
     }
   ],
 
+  // ===== tests + sshTests: the verifiable runbook (2026-09-09) =====
+  // Every invariant the FLEET_REMOTE_ACCESS_RUNBOOK states in prose is now an
+  // assertion Tailscale itself evaluates on every gitops apply. A failing
+  // assertion REJECTS the policy, so the runbook can no longer drift from
+  // the applied policy silently.
+  "tests": [
+    // T1 — full mesh: a tagged fleet node reaches any tagged fleet node.
+    {"src": "tag:pmoves", "accept": ["tag:pmoves:22", "tag:pmoves:4222"]},
+    // T2 — user-identity gap (the 2026-09-09 spark denial, encoded): plain
+    // member users (user-authenticated devices with no admin/owner role and no
+    // fleet tag) must NOT reach fleet SSH or fleet ports. The elder-melchor
+    // Windows node presents exactly this identity class (per-node user login,
+    // not tag-authenticated) — which is why its spark SSH was denied while
+    // tagged spark was allowed. If the operator ever grants member access
+    // deliberately, this test breaks and forces the review.
+    {"src": "russellrich44@gmail.com", "deny": ["tag:pmoves:22", "tag:vps:4222"]},
+    // T3 — partner is scoped: inference ports only, no fleet SSH.
+    {"src": "tag:partner", "accept": ["tag:gpu:3030", "tag:gpu:8080", "tag:gpu:8081"]},
+    {"src": "tag:partner", "deny": ["tag:pmoves:22", "tag:vps:4222"]},
+    // T4 — guest is narrower still: A0 UI only.
+    {"src": "tag:guest", "accept": ["tag:gpu:8081"]},
+    {"src": "tag:guest", "deny": ["tag:pmoves:22", "tag:gpu:11434"]},
+    // T5 — SSH port reachability rides the mesh rule (T1), not a grant of its own.
+    {"src": "tag:lab", "accept": ["tag:gpu:11434"]}
+  ],
+  "sshTests": [
+    // S1 — tagged node SSH: nonroot accepted, root denied (hardening stance).
+    {"src": "tag:pmoves", "dst": ["tag:pmoves"], "accept": ["autogroup:nonroot"], "deny": ["root"]},
+    // S2 — owner SSH (concrete identity — sshTest src must be user/group/tag/host,
+    // autogroup:admin is rejected by the validator): root accepted for provisioning.
+    {"src": "cataclysmstudios@gmail.com", "dst": ["tag:pmoves", "tag:vps"], "accept": ["root", "autogroup:nonroot"]},
+    // S3 — the lab→vps root exception (#2401) stays scoped: lab gets root on
+    // VPS/exit, but NOT on the pmoves mesh at large.
+    {"src": "tag:lab", "dst": ["tag:vps", "tag:exit"], "accept": ["root"]},
+    {"src": "tag:lab", "dst": ["tag:pmoves"], "deny": ["root"]},
+    // S4 — the fleet-management exception must never leak into partner/guest.
+    {"src": "tag:partner", "dst": ["tag:pmoves"], "deny": ["root", "autogroup:nonroot"]},
+    {"src": "tag:guest", "dst": ["tag:pmoves"], "deny": ["root", "autogroup:nonroot"]}
+  ],
   "nodeAttrs": [
     // Funnel on tag:exit is LIVE, not vestigial. Recorded here because a grep for
     // "funnel" is dominated by `secrets-funnel` -- the credential pipeline, an

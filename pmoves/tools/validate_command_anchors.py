@@ -39,9 +39,10 @@ SCOPE AND TOPOLOGY, NOT JUST DOCKER
 Make targets reach docker, ssh, python, git, systemd, NATS and each other. An
 anchor keyed only to docker would miss most of the surface, so every target is
 classified by SCOPE, and remote-scope targets are additionally checked against
-the known-node TOPOLOGY (`pmoves/config/fleet-map.yaml`, the per-node scopes in
-`pmoves/configs/claws/scopes/`, and `pmoves/config/operator_nodes.yaml`) rather
-than against a hardcoded host list.
+the known-node TOPOLOGY (`pmoves/configs/node-vocabulary.yaml`, which is the
+canonical node-name vocabulary, plus `pmoves/config/fleet-map.yaml`, the
+per-node scopes in `pmoves/configs/claws/scopes/`, and
+`pmoves/config/operator_nodes.yaml`) rather than against a hardcoded host list.
 
 FINDING CLASSES
 ---------------
@@ -218,7 +219,16 @@ def known_hosts() -> Set[str]:
                     hosts.add(str(ident[key]))
             hosts.add(p.stem)
 
-    for rel in ("config/fleet-map.yaml", "config/operator_nodes.yaml"):
+    # node-vocabulary.yaml is the canonical node-name vocabulary -- the file
+    # `test_operator_nodes_ids_all_resolve` makes operator_nodes.yaml resolve
+    # against. Omitting it made every node declared ONLY there invisible here,
+    # so the canonical fleet NATS hub `pmoves-kvm4-2` read as an UNKNOWN_HOST
+    # while being the one machine the geometry bus actually runs on.
+    for rel in (
+        "configs/node-vocabulary.yaml",
+        "config/fleet-map.yaml",
+        "config/operator_nodes.yaml",
+    ):
         p = PMOVES / rel
         if not p.is_file():
             continue

@@ -160,7 +160,8 @@
         "--schema",
         "public",
         "${SUPABASE_REST_URL:-http://localhost:8000/rest/v1}",
-        "${SUPABASE_SERVICE_ROLE_KEY:-${SUPABASE_SERVICE_KEY}}"
+        "${SUPABASE_SERVICE_ROLE_KEY:-${SUPABASE_SERVICE_KEY}}",
+        "${SUPABASE_SERVICE_ROLE_KEY:-${SUP\u2026EY}}"
       ]
     },
     "supabase-db": {
@@ -178,7 +179,7 @@
       "type": "remote",
       "url": "http://localhost:8090/sse",
       "headers": {
-        "Authorization": "Bearer ${MCP_GATEWAY_AUTH_TOKEN}"
+        "Authorization": "Bearer ${CIPHER_API_TOKEN}"
       }
     },
     "archon": {

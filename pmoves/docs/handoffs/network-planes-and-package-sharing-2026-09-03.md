@@ -98,10 +98,13 @@ per platform before adopting.
   Tailscale ACL layer. Never rely on IP-specific binds on Windows hosts.
 
 The correct tier is the **`x-network-tailnet-published`** anchor
-(`internal: false` + the Windows bind caveat), listed in that doc under
-"Pending: Network-Tier Hardening Anchors (PR-A)". Verified absent from compose
-as of this date — PR-A has not landed, and the doc says it needs the
-`COMPOSE_EDIT=1` damage-control override.
+(`internal: false` + the Windows bind caveat). **PR-A has since landed**: the
+anchor is defined at `docker-compose.yml:563-565` and
+`DOCKER_NETWORK_HARDENING.md` § "Network-Tier Hardening Anchors (PR-A — LANDED
+2026-09-03)" records all four anchors applied to the six compose-defined
+networks. It landed through a Known Roads grant, not the `COMPOSE_EDIT=1`
+override this paragraph used to name — that is no longer the mechanism for
+protected-path compose edits. Do not re-derive the anchor; reference it.
 
 ### Which services actually need publishing
 
