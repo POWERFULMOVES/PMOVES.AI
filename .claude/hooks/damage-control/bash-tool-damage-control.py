@@ -401,6 +401,43 @@ def check_path_patterns(
     return False, ""
 
 
+def _cache_roads(command: str, config: Dict[str, Any]) -> str:
+    """Vendor cache commands for any tool cache this command names.
+
+    Returns "" when none apply. Message text only -- see _pattern_route().
+    """
+    hits = []
+    for item in config.get("cacheRoads", []) or []:
+        match = item.get("match", "")
+        cmd = item.get("command", "")
+        if match and cmd and match.lower() in command.lower():
+            if cmd not in hits:
+                hits.append(cmd)
+    if not hits:
+        return ""
+    return " | CACHE ROADS for what this command names: " + "; ".join(hits)
+
+
+def _pattern_route(item: Dict[str, Any], command: str, config: Dict[str, Any]) -> str:
+    """The sanctioned alternative for a command-shape block, if one is declared.
+
+    A guard that teaches only by refusal spends the fleet's discovery budget on its
+    own configuration. The observed case: clearing regenerable tool caches with a
+    recursive removal, on a host at 100 percent disk, was refused -- correctly --
+    and named no alternative, so the route was discoverable only by guessing.
+
+    MESSAGE TEXT ONLY. This runs AFTER a block has been decided and appends to the
+    reason. It cannot allow anything, cannot change a verdict, and is never
+    consulted on the allow path. Declared per-entry as `alternative:` in
+    patterns.yaml so the route set is enumerable rather than folded into prose.
+    """
+    route = (item.get("alternative") or "").strip()
+    suffix = _cache_roads(command, config)
+    if route:
+        return " | " + route + suffix
+    return suffix
+
+
 def _known_road_verdict(paths: List[str]) -> Tuple[bool, str, str]:
     """Evaluate Known Roads for the resolved paths a block matched.
 
@@ -453,10 +490,14 @@ def check_command(command: str, config: Dict[str, Any]) -> Tuple[bool, bool, str
 
         try:
             if re.search(pattern, command, re.IGNORECASE):
+                # The route is appended to BOTH outcomes: an `ask` prompt that names
+                # the sanctioned path lets the operator pick it instead of approving
+                # the refused shape.
+                route = _pattern_route(item, command, config)
                 if should_ask:
-                    return False, True, reason  # Ask for confirmation
+                    return False, True, reason + route  # Ask for confirmation
                 else:
-                    return True, False, f"Blocked: {reason}"  # Block
+                    return True, False, f"Blocked: {reason}{route}"  # Block
         except re.error as e:
             print(f"WARNING: Invalid regex in bashToolPatterns: {pattern!r} — {e}", file=sys.stderr)
             continue

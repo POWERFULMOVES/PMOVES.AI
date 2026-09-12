@@ -33,18 +33,23 @@ bashToolPatterns:
   # further down the file ("Container sweep hard-blocks" section).
   - pattern: '(?<!docker\s)(?<!podman\s)(?<!git\s)\brm\s+(-[^\s]*)*-[rRf]'
     reason: rm with recursive or force flags (filesystem rm, not docker/podman/git)
+    alternative: "SANCTIONED ROUTES for removing files: (1) if the target is a TOOL CACHE, use the vendor's own command -- run `python3 .claude/skills/known-roads/roads.py caches` for the table; (2) otherwise enumerate and delete without recursive/force flags, e.g. `find <dir> -type f -delete` or `find <dir> -mindepth 1 -delete`; (3) for a PMOVES data volume use `make -C pmoves volume-reset SERVICE=<name>`, never the raw volume-removal subcommand; (4) for git's own lockfiles a bare removal is allowlisted. Run `python3 .claude/skills/known-roads/roads.py protected` to see what is off limits, and `python3 .claude/skills/known-roads/roads.py domains` for paths that have a provable bypass."
 
   - pattern: '(?<!docker\s)(?<!podman\s)(?<!git\s)\brm\s+-[rRf]'
     reason: rm with recursive or force flags (filesystem rm, not docker/podman/git)
+    alternative: "SANCTIONED ROUTES: vendor cache command, or `find <dir> -type f -delete`, or `make -C pmoves volume-reset SERVICE=<name>` for a PMOVES data volume. Run `python3 .claude/skills/known-roads/roads.py caches` and `python3 .claude/skills/known-roads/roads.py protected`."
 
   - pattern: '(?<!docker\s)(?<!podman\s)(?<!git\s)\brm\s+--recursive'
     reason: rm with --recursive flag (filesystem rm, not docker/podman/git)
+    alternative: "SANCTIONED ROUTES: vendor cache command, or `find <dir> -type f -delete`. Run `python3 .claude/skills/known-roads/roads.py caches`."
 
   - pattern: '(?<!docker\s)(?<!podman\s)(?<!git\s)\brm\s+--force'
     reason: rm with --force flag (filesystem rm, not docker/podman/git)
+    alternative: "SANCTIONED ROUTES: vendor cache command, or `find <dir> -type f -delete`. Run `python3 .claude/skills/known-roads/roads.py caches`."
 
   - pattern: '\bsudo\s+rm\b'
     reason: sudo rm
+    alternative: "SANCTIONED ROUTE: do not remove system files from an agent session. If a package must go, use the package manager (apt remove / conda remove / brew uninstall). Otherwise escalate to the operator with the exact path and the reason."
 
   - pattern: '\brmdir\s+--ignore-fail-on-non-empty'
     reason: rmdir ignore-fail
@@ -1280,3 +1285,49 @@ repoScopedPaths:
   - '__pycache__/'
   - 'venv/'
   - '.venv/'
+
+# ============================================================================
+# CACHE ROADS - vendor commands that clear a tool cache safely
+# ============================================================================
+# The destructive-pattern gate refuses removal with recursive/force flags,
+# correctly, and used to stop there. An agent clearing a REGENERABLE cache on a
+# full disk was told no and given nothing, so it either probed spellings or
+# abandoned an urgent task. This table is the enumerable answer: when a refused
+# command names one of these directories, the guard prints the vendor command.
+#
+# `match` is a plain substring tested against the command text. These entries grant
+# NOTHING. They are never consulted when deciding a verdict -- they only add text to
+# a refusal that has already happened. List them with `roads.py caches`.
+cacheRoads:
+  - match: 'go-build'
+    command: 'go clean -cache'
+  - match: 'ms-playwright'
+    command: 'npx playwright uninstall --all'
+  - match: 'playwright'
+    command: 'npx playwright uninstall --all'
+  - match: 'node-gyp'
+    command: 'npm cache clean --force'
+  - match: '.npm'
+    command: 'npm cache clean --force'
+  - match: 'pnpm'
+    command: 'pnpm store prune'
+  - match: 'yarn'
+    command: 'yarn cache clean'
+  - match: 'bun'
+    command: 'bun pm cache rm'
+  - match: 'uv'
+    command: 'uv cache prune   (full wipe: uv cache clean)'
+  - match: 'pip'
+    command: 'pip cache purge'
+  - match: 'cargo'
+    command: 'cargo cache --autoclean   (cargo-cache must be installed)'
+  - match: 'huggingface'
+    command: 'hf cache scan first, then hf cache delete - never wipe the whole hub blindly'
+  - match: 'conda'
+    command: 'conda clean --all'
+  - match: 'ccache'
+    command: 'ccache -C'
+  - match: 'electron'
+    command: 'find <dir> -mindepth 1 -delete   (no vendor prune command exists)'
+  - match: 'docker'
+    command: 'docker builder prune (build cache) or docker image prune (images). For a PMOVES data volume use make -C pmoves volume-reset SERVICE=<name>.'
