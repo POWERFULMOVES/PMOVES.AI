@@ -21,12 +21,13 @@ production code paths.
 import pytest
 
 from tools.chit_manifest_register import REGISTRY, RECONCILED_FIELDS, build_entry
+from tools.chit_manifest_sync import _build_v1_entry
 from tools.secret_shape import (
     LOOKALIKE_SUBSTITUTIONS,
     describe_codepoint,
     inspect_value,
 )
-from tools.secrets_sync import Entry, Target, build_outputs
+from tools.secrets_sync import Entry, Target, build_outputs, load_manifest
 
 # ── Synthetic fixtures. Invented for this test; safe to read aloud. ──────────
 EM_DASH = "—"
@@ -273,3 +274,61 @@ def test_no_registry_entry_declares_an_unrecognised_constraint_key():
         "unrecognised registry keys are silently dropped by build_entry: "
         f"{offenders}"
     )
+
+
+# ── The derivation hop, where a constraint is easiest to lose ───────────────
+
+
+@pytest.mark.parametrize("label", ["GATE_API_KEY", "E2B_API_KEY"])
+def test_constraints_survive_the_v2_to_v1_derivation(label):
+    """secrets_sync reads the DERIVED v1 manifest, not the v2 registry output.
+
+    `secrets-funnel-sync` derives v1 from v2 and hands the derived file to
+    secrets_sync.py, whose --manifest default is the v1 path. Anything
+    ``_build_v1_entry`` does not explicitly copy is invisible to load_manifest --
+    so a constraint declared in v2 would be enforced by nothing while both files
+    looked correct. min_length already carries that comment in
+    chit_manifest_sync.py for exactly this reason; `prefix` is the second such
+    constraint and would have been dropped the same way.
+    """
+    v2 = build_entry(label, REGISTRY[label])
+    v1 = _build_v1_entry(v2)
+    for field in ("min_length", "prefix"):
+        assert v1.get(field) == v2.get(field), (
+            f"{label}: {field} did not survive the v2 -> v1 derivation, so the "
+            "funnel would never see it"
+        )
+
+
+def test_load_manifest_parses_prefix_from_the_yaml(tmp_path):
+    """The registry, the YAML and the Entry are three separate surfaces."""
+    manifest = tmp_path / "m.yaml"
+    manifest.write_text(
+        "version: 1\n"
+        "cgp_file: pmoves/data/chit/synthetic.json\n"
+        "entries:\n"
+        "  - id: synthetic_label\n"
+        "    source: {type: cgp, label: SYNTHETIC_LABEL}\n"
+        "    targets: [{file: env.tier-worker, key: SYNTHETIC_LABEL}]\n"
+        "    required: false\n"
+        "    prefix: e2b_\n",
+        encoding="utf-8",
+    )
+    _, entries = load_manifest(manifest)
+    assert entries[0].prefix == "e2b_"
+
+
+def test_load_manifest_rejects_a_non_string_prefix(tmp_path):
+    manifest = tmp_path / "m.yaml"
+    manifest.write_text(
+        "version: 1\n"
+        "cgp_file: pmoves/data/chit/synthetic.json\n"
+        "entries:\n"
+        "  - id: synthetic_label\n"
+        "    source: {type: cgp, label: SYNTHETIC_LABEL}\n"
+        "    targets: [{file: env.tier-worker, key: SYNTHETIC_LABEL}]\n"
+        "    prefix: 42\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="non-string prefix"):
+        load_manifest(manifest)
