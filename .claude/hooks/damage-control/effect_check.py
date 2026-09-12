@@ -58,7 +58,10 @@ WHAT IT CANNOT SEE -- stated, not implied away
      provably to the command that just ran. The baseline is a file, so two
      concurrent sessions in one checkout can cross-attribute. The DETECTION still
      fires; only the "which command" is approximate, and the alert says so.
-  5. ONE TREE: whichever CLAUDE_PROJECT_DIR names. A command that writes inside a
+  5. A noDeletePath IS ONLY WATCHED FOR DELETION, matching what the PreToolUse
+     guard refuses there. Editing `pmoves/tools/x.py` is ordinary allowed work
+     and is deliberately not reported; deleting it is.
+  6. ONE TREE: whichever CLAUDE_PROJECT_DIR names. A command that writes inside a
      different worktree is not measured here. A worktree is not a checkout.
 
 Exit codes:
@@ -218,8 +221,25 @@ def save_state(path: Path, state: Dict) -> bool:
         return False
 
 
+def _is_deletion(xy: Optional[str]) -> bool:
+    """True when the porcelain code says the path was removed."""
+    return bool(xy) and "D" in xy
+
+
 def diff(before: Dict[str, Dict], after: Dict[str, Dict]) -> List[Dict]:
-    """Protected paths whose working-tree status changed since the last scan."""
+    """Protected paths whose working-tree status changed since the last scan.
+
+    PROPORTIONALITY, and it is not a detail. A readOnlyPath refuses ALL
+    modification, so any change to one is reportable. A noDeletePath refuses only
+    DELETION -- read, write and edit are explicitly allowed there -- and that set
+    is `pmoves/services/`, `pmoves/tools/`, `pmoves/tests/`, `.github/`,
+    `README.md` and the rest of the ordinary working tree. Reporting every edit
+    under those would have alerted on almost every commit anyone makes in this
+    repository, and an alert that fires on normal work gets turned off, which
+    leaves the actual class open again. So a noDeletePath is reported only when
+    the change is a deletion. That is exactly what the PreToolUse guard refuses
+    there, so the two halves agree on what each class means.
+    """
     changes: List[Dict] = []
     for path in sorted(set(before) | set(after)):
         was = (before.get(path) or {}).get("xy")
@@ -229,6 +249,8 @@ def diff(before: Dict[str, Dict], after: Dict[str, Dict]) -> List[Dict]:
         if (was, was_st) == (now, now_st):
             continue
         meta = after.get(path) or before.get(path) or {}
+        if meta.get("kind") == "no-delete path" and not _is_deletion(now):
+            continue
         changes.append({
             "path": path,
             "was": was,

@@ -199,6 +199,28 @@ def main():
                   (row.get("domain"), row.get("reason")) == ("compose", "pr:3034"), row)
 
         # ------------------------------------------------------------------
+        # PROPORTIONALITY. A noDeletePath allows read/write/edit and refuses only
+        # deletion. Reporting every edit under pmoves/tools/, pmoves/services/,
+        # .github/ and README.md would fire on almost every commit anyone makes,
+        # and an alert that fires on normal work gets turned off -- which leaves
+        # the class it was built for open again.
+        # ------------------------------------------------------------------
+        tool_file = root / "pmoves" / "tools" / "ordinary.py"
+        tool_file.parent.mkdir(parents=True, exist_ok=True)
+        tool_file.write_text("x = 1\n", encoding="utf-8")
+        git(root, "add", "-A")
+        git(root, "commit", "-q", "-m", "an ordinary tool")
+        run_hook(root, "seed the baseline after the commit")
+        tool_file.write_text("x = 2\n", encoding="utf-8")
+        rc, log = run_hook(root, "edited an ordinary tool")
+        check("editing a no-delete path is NOT reported",
+              rc == 0 and "ALERT" not in log, (rc, log))
+        tool_file.unlink()
+        rc, log = run_hook(root, "deleted an ordinary tool")
+        check("deleting a no-delete path IS reported",
+              rc == 2 and "pmoves/tools/ordinary.py" in log, (rc, log))
+
+        # ------------------------------------------------------------------
         # A check that cannot see must SAY so. This fleet's dominant defect is
         # the opposite: quietly passing when the measurement did not happen.
         # ------------------------------------------------------------------
