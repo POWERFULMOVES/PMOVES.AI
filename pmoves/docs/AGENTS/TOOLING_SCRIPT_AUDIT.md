@@ -7,7 +7,7 @@ _Generated: 2026-09-03_
 - Submodule keyword-matched scripts/tools: **861**
 - Potential overlap rows: **188**
 - Keywords with overlap: **auth, bootstrap, credential, onboard, password, profile, secret, session, token, user**
-- Findings: **0 error(s)**, **6 warning(s)**
+- Findings: **0 error(s)**, **5 warning(s)**
 
 ## Canonical Workflow Routes
 | Keyword | PMOVES Can-Openers |
@@ -219,7 +219,6 @@ _Generated: 2026-09-03_
 - [WARN] `SUBMODULE_SCAN_CAPPED` `PMOVES-ClawZ`: Scan capped at 600 matched files for this submodule.
 - [WARN] `DUPLICATE_SCRIPT_STEM`: Potential duplicate/ad-hoc tooling stem 'bootstrap_node' found in: pmoves/scripts/bootstrap-node.sh, pmoves/scripts/claws/bootstrap-node.sh
 - [WARN] `DUPLICATE_SCRIPT_STEM`: Potential duplicate/ad-hoc tooling stem 'fork_sync' found in: pmoves/tools/fork_sync.py, pmoves/tools/_deprecated/fork_sync.py
-- [WARN] `ORPHAN_PMOVES_DIR` `pmoves-nats-mcp`: Directory looks like a PMOVES module but is not mapped in .gitmodules.
 - [WARN] `ORPHAN_PMOVES_DIR` `pmoves-tailscale-mcp`: Directory looks like a PMOVES module but is not mapped in .gitmodules.
 - [WARN] `MISSING_WORKFLOW_ROUTE`: No canonical workflow route defined for keyword 'session'.
 
