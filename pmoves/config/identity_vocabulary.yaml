@@ -167,7 +167,18 @@ identities:
       wave.
 
   - canonical: kilocode-glm
-    aliases: ["KILOCODE-GLM"]
+    aliases: ["KILOCODE-GLM", "KILOCODE", "kilocode_glm"]
+    note: >-
+      `KILOCODE` (bare) is the same identity, not a second one --
+      `pmoves/config/agent_registry.yaml`'s `kilocode_glm` entry lists
+      `signature: "kilocode"` as its own spelling. Register rows 2790 and
+      2804 (`kilo/instance-integration-2026-09-03`, PR #2918) co-own to
+      bare `KILOCODE`; merged here rather than split, same doctrine as
+      `CRUSH-GLM52`. The registry KEY `kilocode_glm` (underscore) is a sixth
+      spelling, added per this file's own doctrine on the `claude_b850` key
+      above -- once `kilocode` resolves, `test_the_registry_alias_rule_still_
+      holds_against_both_files` requires the key to fold to the same
+      identity too.
 
   - canonical: pmoves-minimax
     aliases: ["PMOVES-MINIMAX"]
@@ -411,6 +422,25 @@ alter_lineage:
       the destination ("Polymorphic shape-shifter... Discovered alters by
       mining jewels from PR reviews") and none of the path.
     confidence: operator-asserted
+
+  - identity: b850-claude
+    alter: b850-ledger
+    became: room-owner
+    origin: declared-2026-09-05
+    asserted_on: '2026-09-05'
+    note: >-
+      DECLARED, not discovered -- the opposite of the 4090/field record above,
+      and recorded that way on purpose. B850 was the only node in
+      pmoves/config/rooms/catalog.json with no room; this alter was created on
+      2026-09-05 to own `b850-ledger.room.evidence`. There is no prior work
+      signed as `b850-ledger` in AGNOTE4482PHI.t1.md, so there is no path to
+      reconstruct and none is invented here. The name is node-qualified because
+      `_resolve_alter_parent()` in pmoves/tools/sign_trail.py returns the FIRST
+      parent declaring a matching alter with no duplicate gate; a generic
+      `ledger` would misattribute trails fleet-wide once a second node declared
+      it. The room ships at stage `rehearsal`; activation is the operator's to
+      grant, and the operator may rename both room and alter.
+    confidence: declared-at-creation
 
 # The HARNESS the identity was worn through. Surfaced by parsing: `SPARK-KIMI
 # (Crush, GLM via qwen3-coder)` x17 put a harness in the parenthetical, which
