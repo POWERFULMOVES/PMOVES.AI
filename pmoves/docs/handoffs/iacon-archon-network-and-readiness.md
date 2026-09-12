@@ -95,3 +95,128 @@ fighting it: set `ARCHON_SUPABASE_BASE_URL` to the in-cluster Kong base.
 - The compose comment above the `archon` service says the wrapper under
   `services/archon/` "is dead — see #2217", but that wrapper is PID 1 in the
   running container and is the code that performs the URL rewrite above.
+
+---
+
+## Exact change to apply (blocked on the Known Road, see below)
+
+Three edits, applied identically in **both** defining overlays — the running
+container came from the first, and the `agents` profile uses the second:
+
+| file | networks | healthcheck |
+|---|---|---|
+| `pmoves/docker-compose.yml` | L3832-3839 | L3842-3843 |
+| `pmoves/docker-compose.agents.yml` | L382-389 | L392-393 |
+
+### 1. Attach `pmoves_api` (both files)
+
+Add one entry to the service's `networks:` mapping, after `pmoves_external:`:
+
+```yaml
+      # Supabase REST/auth live on pmoves_api. Without this the service cannot
+      # resolve supabase-kong at all: Errno -2 is membership, not a DNS outage.
+      # pmoves_data is deliberately NOT added -- supabase-db resolves from
+      # pmoves_api (verified 172.30.1.6) and the failing path is REST.
+      pmoves_api:
+```
+
+### 2. Point the Supabase base URL at in-cluster Kong (both files)
+
+Add to the service's `environment:` list. The knob exists in
+`env.shared.example:131` but ships empty, so the wrapper falls through to
+`SUPA_REST_URL`. The `${VAR:-default}` form is required, not a bare value: a
+service-level `environment:` entry overrides `env_file`, so a hardcoded value
+would silently discard an operator's override -- the same nested-default lesson
+already documented for `ANTHROPIC_AUTH_TOKEN` in this file.
+
+```yaml
+    # Highest-priority input to services/archon/main.py:_ensure_supabase_env(),
+    # which otherwise ranks SUPA_REST_URL (host.docker.internal:54321, the
+    # Supabase CLI topology) ABOVE the correct SUPABASE_URL and forces it to a
+    # host this container has no extra_hosts mapping for.
+    - ARCHON_SUPABASE_BASE_URL=${ARCHON_SUPABASE_BASE_URL:-http://supabase-kong:8000}
+```
+
+### 3. Readiness-aware healthcheck (both files)
+
+Replace the `test:` line with:
+
+```yaml
+      # READINESS-AWARE HEALTHCHECK. `curl -f` keys on the status code only, and
+      # this endpoint answers 200 while its body says ready:false -- so the old
+      # check reported `healthy` for nine days while the service was not.
+      # Reusable shape for any PMOVES service whose /health carries a status
+      # string; copy it rather than writing a new one-off.
+      #
+      # Deliberately asserts on `status`, NOT on `ready`: the ready field is
+      # emitted ONLY in the failure branch (api_routes/knowledge_api.py), so
+      # `grep '"ready":true'` would be a check that can never pass.
+      # Fail-closed: an unrecognised status word fails, which is correct here.
+      test: ["CMD-SHELL", "curl -fsS http://localhost:3090/api/health | grep -qE '\"status\"[[:space:]]*:[[:space:]]*\"(healthy|ok|ready|up)\"'"]
+```
+
+## Proof the new healthcheck can fail (and does not always fail)
+
+Four throwaway containers built from Archon's own image ID, each serving one of
+the two body shapes the code actually emits, each wired to Docker's real
+healthcheck machinery, then torn down:
+
+| body served | old check | new check |
+|---|---|---|
+| `200` + `"ready":false` (the real failing body) | **healthy**, FailingStreak 0 | **unhealthy**, FailingStreak 5 |
+| `200` + `{"status":"healthy"}` (no `ready` field) | healthy | **healthy** |
+
+The old check's own probe log shows `ExitCode=0` on the failing body — the
+nine-day blindness reproduced exactly. The bottom-right cell is the negative
+control: it proves the new check is not merely always-failing, and specifically
+that the healthy body's *absence* of a `ready` field still passes.
+
+Fifth control, no server listening at all: new check → `unhealthy`,
+`ExitCode=1`. No regression on a genuinely dead service.
+
+## Proof the env fix works, through the wrapper's own code path
+
+Calling `_ensure_supabase_env()` in-container, then running the exact schema
+query the health endpoint runs:
+
+```
+WITHOUT fix:  SUPABASE_URL -> http://host.docker.internal:54321
+              RESULT: ConnectError [Errno -2] Name or service not known
+WITH fix:     SUPABASE_URL -> http://supabase-kong:8000
+              GET http://supabase-kong:8000/rest/v1/archon_sources... 404
+              RESULT: APIError PGRST205 Could not find the table 'public.archon_sources'
+```
+
+The failure mode advances from "cannot resolve a name" to "the table is not
+there" — a real application answer over a working connection.
+
+## `ready: true` is NOT reachable in this lane — COULD-NOT-MEASURE
+
+With both fixes in place the blocker becomes `PGRST205`: the `archon_sources`
+table does not exist. That is the migration this lane explicitly does not run.
+Reporting `ready: true` as achieved would require running it.
+
+## Known Road status — BLOCKED, not skipped
+
+`KNOWN_ROAD` is unset in the delivering session
+(`KNOWN_ROAD=[UNSET] CLAUDE_PROJECT_DIR=[/home/pmoves-knuckles/pinokio/api/PMOVES.AI]`),
+and hooks are spawned by the client rather than by the agent's shell, so the
+agent cannot set it. That leaves the file grant, which holds a spent
+`compose:pr:2656`. Verified in a sandboxed `CLAUDE_PROJECT_DIR` (no real trail
+written):
+
+```
+active grant : 'compose:pr:2656'
+domain match : True
+verdict      : (True, 'Known Road compose:pr:2656 (recorded to known-roads.jsonl)')
+```
+
+The stale grant therefore launders **automatically**, with no cooperation from
+the agent: every compose write by every agent is stamped `pr:2656` into the
+git-tracked `known-roads.jsonl`. Both write channels are affected — the Write/Edit
+hook and the Bash hook both call `evaluate_known_road()`.
+
+The three edits above are consequently specified rather than applied. Applying
+them needs exactly one of: the grant file rotated to
+`compose:handoff:iacon-archon-network-and-readiness.md`, or `KNOWN_ROAD` set in
+the delivering session's environment.
