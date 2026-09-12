@@ -725,3 +725,11 @@ svc-start: ## Start one service's containers after engine restart. Usage: make s
 svc-status: ## Show compose status for one service. Usage: make svc-status SVC=flute-gateway
 	@if [ -z "$(SVC)" ]; then echo "usage: make svc-status SVC=<compose-service>"; exit 2; fi
 	@$(DC) ps $(SVC)
+
+# ── Room stage provenance ───────────────────────────────────────────
+# Placed at the end of this file on purpose: PR #2992 inserts
+# `room-manifest-check` directly after `compose-yaml-check`, and keeping the
+# two additions apart keeps them from conflicting in the merge train.
+.PHONY: room-catalog-stage-check
+room-catalog-stage-check: ## Assert every catalog current_stage was earned (P7 receipt) or matches its manifest
+	@python scripts/validate_room_catalog.py
