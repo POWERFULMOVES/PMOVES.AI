@@ -220,3 +220,42 @@ The three edits above are consequently specified rather than applied. Applying
 them needs exactly one of: the grant file rotated to
 `compose:handoff:iacon-archon-network-and-readiness.md`, or `KNOWN_ROAD` set in
 the delivering session's environment.
+
+---
+
+## Sweep: how many other healthchecks cannot observe their own failure
+
+Every running container on B850 that reports `healthy` AND whose healthcheck is
+status-code-only (no `grep`/`jq`/`awk`/inline-JS body assertion) was re-probed at
+the same URL, and its body inspected for a negative readiness marker.
+
+| outcome | count |
+|---|---|
+| status-code-only HTTP healthcheck, body readable | 19 |
+| — of those, body **contradicts** Docker's `healthy` | **1** (`pmoves-archon-1`) |
+| body could not be read — **NOT cleared** | 12 |
+
+**The 12 are an instrument limit, not 12 suspects.** The probe shells `curl`
+inside the container, and several of these images have no `curl` (their checks use
+`wget` or inline `node -e`). For the node-based ones the URL extractor picked up
+JavaScript fragments rather than a URL, so those rows are artifacts of the sweep,
+not findings:
+
+```
+pmoves-cipher-api-1        url=...8105/health',r=>{process.exit(...)}   <- JS, not a URL
+pmoves-supabase-meta-1     url=...8080/health',r=>{r.resume();...}      <- JS, not a URL
+pmoves-activepieces-app-1  url=...api/v1/flags',r=>process.exit(...)    <- JS, not a URL
+pmoves-supabase-pooler-1   code=204                                     <- no body BY DESIGN, cannot lie
+pmoves-tensorzero-gateway-1, pmoves-tensorzero-ui-1, pmoves-tensorzero-clickhouse-1,
+pmoves-nats-1, pmoves-supabase-storage-1, pmoves-supabase-gotrue-1,
+pmoves-mcp-gateway, pmoves-activepieces-worker-1                        <- no curl in image
+```
+
+A 204 healthcheck (`supabase-pooler`) is structurally immune to this defect: there
+is no body in which to contradict the status code. That is worth noting as the
+other valid answer besides a body-aware check.
+
+So: one confirmed instance beyond the one already known, and twelve genuinely
+unmeasured. Re-running this sweep with a `wget`/`node` fallback and a URL
+extractor that understands inline-JS healthchecks is the follow-up; it is not
+done here and the 12 must not be reported as clean.
