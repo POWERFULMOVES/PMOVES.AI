@@ -1,0 +1,75 @@
+# MiniMax Claw — Hybrid Cloud + Local Inference Claw
+# Primary: MiniMax M2.7/M2.1 via token plan (cloud)
+# Local fallback: DGX Spark Ollama + ROCm llama-server via NATS mesh
+#
+# This claw participates in the fleet as both a cloud inference consumer
+# and a local inference target. Wave-function collapse reasoning (not CoT).
+# BoTZ tactical partner with deep HERMES integration readiness.
+
+name: minimax_claw
+role: hybrid-cloud-local-inference-claw
+description: "MiniMax M2.7/M2.1 — hybrid cloud+local inference claw, wave-function collapse, 1M token context, BoTZ tactical partner"
+
+node_affinity:
+  - kilo-claw
+  - spark
+  - rdna4
+hostname_pattern: "pmoves-*"
+
+model:
+  provider: minimax
+  model: MiniMax-M2.7
+  endpoint: https://api.minimax.io/v1
+  fallback: tensorzero
+  # Local inference targets (fleet fallback pool):
+  # - DGX Spark Ollama:  http://pmoves-spark:11434/v1
+  # - ROCm llama-server: http://pmoves-rdna4:8080/v1
+
+capabilities:
+  - cloud_inference
+  - local_inference_rocm
+  - local_inference_spark
+  - wave_function_collapse
+  - long_context_1m
+  - agent_teams
+  - multimodal
+  - botz_tactical_partner
+  - hermes_integration_ready
+
+nats:
+  url: nats://nats:pmoves@nats:4222
+  subscribe:
+    - mesh.minimax.wave.v1
+    - mesh.gpu.command.v1
+    - pinokio.agent.session.v1
+  publish:
+    - mesh.minimax.status.v1
+    - mesh.minimax.model.loaded.v1
+    - mesh.minimax.wave.collapse.v1
+    - mesh.gpu.status.v1
+
+exec_permissions:
+  - curl
+  - git
+  - python3
+  - nats
+  - docker
+
+health:
+  endpoint: https://api.minimax.io/v1/models
+  heartbeat_subject: mesh.minimax.status.v1
+  heartbeat_interval_seconds: 30
+
+agent_zero:
+  subordinate: true
+  profile: minimax_claw
+  inherit_context: true
+  report_to: agent_zero
+
+# HERMES Integration Note:
+# This claw is HERMES-ready. Hermes Agent (Nous Research) can proxy through
+# MiniMax as its underlying inference model. Integration path:
+#   HERMES_API_PROVIDER=minimax
+#   HERMES_API_BASE=https://api.minimax.io/v1
+# Hermes provides the autonomous agent loop (skills, memory, delegation);
+# MiniMax provides the inference. See pmoves/docs/AGENTS/HERMES_INTEGRATION.md.
