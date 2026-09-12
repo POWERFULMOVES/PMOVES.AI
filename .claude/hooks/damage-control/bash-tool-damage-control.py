@@ -518,6 +518,16 @@ def strip_heredoc_bodies(command: str) -> str:
     Deliberately NOT applied to any other check: those are all path-bound, and
     removing text can only remove matches. Here it cannot lose a real block --
     the tripwire is the last gate and only ever escalates allow to ask.
+
+    KNOWN HOLE, stated rather than papered over: a heredoc whose body is FED TO A
+    SHELL (`bash <<EOF ... EOF`) really does execute its contents, and this
+    strips it, so an opaque verb in there is not seen. Distinguishing a heredoc
+    that is a document from one that is a script needs to know what consumes it,
+    which is interpretation, not lexing. The trade was made knowingly: without
+    stripping, writing a note that merely quotes one of these verbs prompts on
+    its own prose, every time, and a gate that cries wolf on documentation gets
+    switched off. The executed case is covered where it is actually decidable --
+    by effect, in effect_check.py.
     """
     out = []
     pos = 0
