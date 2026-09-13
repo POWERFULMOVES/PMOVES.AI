@@ -270,7 +270,6 @@ known_failures:
   - "FAIL|tests.services.test_voice_cloning.TestCloningSynthesisProvider|test_synthesis_provider_initialization"
   - "FAIL|tests.smoke.test_critical_path|test_postgres_health"
   - "FAIL|tests.smoke.test_health_endpoints|test_service_health_endpoint[postgres]"
-  - "FAIL|tests.smoke.test_supabase_network|test_archon_uses_host_dot_internal_for_supabase"
   - "FAIL|tests.smoke.test_supabase_network|test_supabase_network_exists"
   - "FAIL|tests.smoke.test_supabase_selfhosted|test_supabase_network_exists"
   - "FAIL|tests.test_audit_naming_drift|test_cards_summary_active_count_matches_seed"
