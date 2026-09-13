@@ -103,3 +103,22 @@ class TestRatchetBehavior:
         monkeypatch.setattr(cpa, "BASELINE", tmp_path / "baseline.json")
         monkeypatch.setattr(sys, "argv", ["compose_provenance_audit.py"])
         assert cpa.main() == 1
+
+
+class TestRemoteForkConsumer:
+    def test_detects_in_image_clone(self):
+        df = (
+            "FROM python:3.11\n"
+            "RUN git clone --depth=1 https://github.com/POWERFULMOVES/PMOVES-Widget.git /app\n"
+        )
+        assert cpa._clone_fork_repo(df) == "PMOVES-Widget"
+
+    def test_detects_cache_bust_ref_url(self):
+        df = "ADD https://api.github.com/repos/POWERFULMOVES/PMOVES-Agent-Zero/git/ref/heads/main /tmp/ref.json\n"
+        assert cpa._clone_fork_repo(df) == "PMOVES-Agent-Zero"
+
+    def test_no_clone_is_none(self):
+        assert cpa._clone_fork_repo("FROM alpine\nRUN echo hi") is None
+
+    def test_env_var_context_classifies_submodule(self):
+        assert cpa._classify({"context": "${INTEGRATIONS_WORKSPACE:-../integrations-workspace}/PMOVES-Agent-Zero"}) == cpa.SUBMODULE

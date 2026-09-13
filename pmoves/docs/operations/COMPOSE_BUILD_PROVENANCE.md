@@ -6,15 +6,27 @@
 
 A compose service that compiles code must build from a **submodule** Dockerfile — a fork under `POWERFULMOVES/`, pinned by gitlink, covered by `submodule-gitlink-gate`, registered in `fork_registry.json`, and carrying CHIT trail provenance. A `build:` stanza with `context: .` + a Dockerfile in `pmoves/services/<name>/` is a **hand-rolled shim**: it lives only in the superproject, has no upstream, no fork lineage, no gitlink pin, and its provenance chain is exactly one rewrite away from silent drift.
 
-## Measured state (2026-09-12, `docker-compose.yml`)
+## Measured state (2026-09-13, after REMOTE-FORK-CONSUMER class added — operator correction: "a lot more than 14 submodules")
+
+**80 submodules are pinned; 14 compose builds consume one directly; 2 more consume a fork by cloning it inside the image; 72 are pure superproject shims (baselined).**
 
 | class | count | examples |
 |---|---|---|
-| SUBMODULE build | 8 | archon (`../PMOVES-Archon`), openroom, pmoves-yt, transcribe-backend/frontend, nats-hub, tokenism-ui, llama-throughput-lab |
+| SUBMODULE build (incl. env-var-prefixed contexts) | 14 | archon, agent-zero (via integrations overlay), openroom, pmoves-yt, transcribe-and-fetch, nats-hub, n8n, llama-throughput-lab, cipher-api, tokenism-ui, jellyfin-ai ×3 |
+| REMOTE-FORK-CONSUMER (clones the fork in-image) | 2 | a0-elder-melchor → PMOVES-A0-codex-docker/PMOVES-Agent-Zero, ultimate-tts-studio → PMOVES-Ultimate-TTS-Studio |
 | IMAGE only (no build) | 38 | published/digest-pinned images |
-| SUPERPROJECT shim | 52 | `context: .` + `pmoves/services/*/Dockerfile` |
+| SUPERPROJECT shim (registered exceptions) | 72 | `context: .` + superproject Dockerfiles |
 
-The 52 are the violation class. Many are legitimate PMOVES-original glue (fleet-sentinel, presign, render-webhook) whose source tree genuinely is the superproject — the doctrine does not demand forks for first-party glue; it demands **registered exceptions**, so the set can only grow deliberately.
+### Promotion shortlist — VERIFIED, not fuzzy-matched (2026-09-13)
+
+The name-similarity shortlist (agent-zero, botz-gateway, pmoves-ui, ultimate-tts-studio) did NOT survive verification:
+
+- **agent-zero** — NOT a violation. The integrations overlay already builds from `${INTEGRATIONS_WORKSPACE}/PMOVES-Agent-Zero`; the base compose's multi-stage Dockerfile clones the fork in-image with a cache-bust ref (the #2202 stale-clone fix). Both faces consume the fork.
+- **ultimate-tts-studio** — legitimate REMOTE-FORK-CONSUMER: 209-line hardened multi-stage Dockerfile cloning PMOVES-Ultimate-TTS-Studio; the fork's own root Dockerfile (44 lines) is the upstream UI, a different artifact.
+- **botz-gateway** — the shim (FastAPI :8054 coordinator) and the PMOVES-BotZ-gateway fork (the BoTZ engine: botz.py, portal, dotnet) are DIFFERENT programs sharing a name. The shim is first-party glue; the fork is consumed elsewhere. No promotion; both are correctly registered.
+- **pmoves-ui** — the Next.js portal's source tree IS `pmoves/ui` (first-party). PMOVES-A2UI is the renderer library (no Next app); not its build context. No promotion.
+
+**Net: zero promotions needed from the shortlist.** The real gap is the other direction — submodules with no consumer at all; that audit is the next lane.
 
 ## Compliant shapes, in order of preference
 
