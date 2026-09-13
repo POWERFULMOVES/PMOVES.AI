@@ -8,7 +8,6 @@
 #
 # Pair with: node Pmoves-cipher/dist/src/app/index.cjs --mode mcp (stdio, launched by Hermes)
 
-version: "3.9"
 
 services:
   neo4j:
