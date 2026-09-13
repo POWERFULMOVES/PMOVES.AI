@@ -165,13 +165,14 @@ Remedy is a mint through the pipeline, per agent, not a transport change.
 `agent_id` this session's memory writes will actually be filed under. Reads no
 secret, sends nothing over the network, exits `0` only when the carry is intact.
 
-Provenance — `Pmoves-cipher/src/pmoves/auth.ts`, `resolveToken()`:
+Provenance — `Pmoves-cipher/src/pmoves/auth.ts` @ **`e24f1323`** (the gitlink on
+`main`), `resolveToken()`:
 
 | line | condition | resulting `agentId` |
 |---|---|---|
 | `:46` `if (!token.startsWith('cipher_'))` | bearer lacks the prefix | `:49` **`'bootstrap'`**, six scopes, **no Supabase lookup at all** |
-| `:54`–`:60` per-agent mode | bearer is `cipher_<uuid>` | `:82`–`:86` the `agent_id` on that `pmoves_core.cipher_agent_tokens` row |
-| `:106`–`:108` | no bearer, and server `CIPHER_API_TOKEN` unset | `undefined` — advisory, the caller self-declares per call |
+| `:54`–`:60` per-agent mode | bearer is `cipher_<uuid>` | `:79`–`:81` the `agent_id` on that `pmoves_core.cipher_agent_tokens` row |
+| `:103`–`:105` | no bearer, and server `CIPHER_API_TOKEN` unset | `undefined` — advisory, the caller self-declares per call |
 
 `auth.ts:44` labels the first row "legacy / bootstrap". It is the single-token
 launch path, whose purpose is to hand off to a minted agent — and the handoff is
@@ -197,6 +198,20 @@ Two changes close the **visible** half of this:
   `--agent` accepted any string — which is the mechanism behind #2935's "the
   signature and the ledger are separate systems". That was never a stance; it
   was the implementation. The card is the unlock.
+
+**Provenance hazard, found the hard way.** The first revision of this section
+cited `:82`-`:86` and `:106`-`:108`. Those numbers were read off this node's
+`Pmoves-cipher` submodule **working tree**, which is checked out on
+`fix/per-agent-token-profile-header` (`d94a1dcc`) — the head of *unmerged* fork
+PR #19, which inserts three lines at `:67`. The gitlink `main` carries is
+`e24f1323`, where the same statements are at `:79`-`:81` and `:103`-`:105`.
+
+Every citation above is now verified line-by-line against
+`git show e24f1323:src/pmoves/auth.ts`, not against the checkout. This is the
+same class as the runbook rule that produced this section: a working tree is not
+a source of truth, and a submodule parked on someone's open PR is a source of
+*plausible* truth, which is worse. Anyone quoting `auth.ts` on this node should
+run `git -C Pmoves-cipher status -sb` first.
 
 **Still open — operator decisions, not code.** The carry is now *measured*, not
 *closed*. Closing it means minting `cipher_<uuid>` tokens per carded agent and
