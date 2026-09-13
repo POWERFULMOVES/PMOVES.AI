@@ -24,6 +24,7 @@ from models import (
     KBUpsertMessage,
 )
 from neo4j_client import Neo4jClient
+from chit_signer import verify_neo4j_node, CHIT_SIGN_NEO4J
 
 logger = structlog.get_logger(__name__)
 
@@ -130,6 +131,34 @@ class NATSHandler:
     async def _handle_message(self, subject: str, msg: Any) -> None:
         """""""""Deserialize, route, and process a NATS message."""""""""
         raw = msg.data.decode("utf-8") if isinstance(msg.data, bytes) else msg.data
+
+        # CHIT signature gate (consumer edge) — closes the THIRD_ANCHOR gap:
+        # sign_neo4j_node produced signatures but no consumer verified them.
+        # With a key available, invalid signatures are ALWAYS rejected;
+        # unsigned packets pass in dev mode and are rejected fail-closed
+        # under CHIT_REQUIRE_SIGNATURE — same env contract as the
+        # a2ui-nats-bridge geometry gate.
+        try:
+            payload_gate = json.loads(raw)
+            if (
+                isinstance(payload_gate, dict)
+                and isinstance(payload_gate.get("payload"), dict)
+            ):
+                passes, reason = self._signature_gate(payload_gate["payload"])
+                if not passes:
+                    counters.failed += 1
+                    logger.warning(
+                        "chit.signature_rejected",
+                        subject=subject,
+                        reason=reason,
+                    )
+                    await self._publish_dead_letter(
+                        subject, msg, f"chit signature gate: {reason}"
+                    )
+                    return
+        except (json.JSONDecodeError, AttributeError, TypeError):
+            pass  # not JSON — envelope validation below raises the real error
+
         envelope = NATSMessage.model_validate_json(raw)
 
         if subject == "gen.image.result.v1":
@@ -143,6 +172,30 @@ class NATSHandler:
             self._neo4j.handle_kb_upsert_request(parsed)
         else:
             logger.warning("nats.unknown_subject", subject=subject)
+
+    # -- CHIT signature gate ----------------------------------------------
+
+    def _signature_gate(self, data: dict) -> tuple[bool, str]:
+        """""""""Decide whether an envelope's data payload may be written to Neo4j.
+
+        Mirrors the a2ui-nats-bridge consumer-edge rules:
+        - unsigned payloads pass in dev mode, rejected under CHIT_REQUIRE_SIGNATURE;
+        - with a signing key available, invalid signatures are ALWAYS rejected;
+        - without a key (dev), everything unverifiable passes unless fail-closed.
+        """""""""
+        import os
+
+        require = os.getenv("CHIT_REQUIRE_SIGNATURE", "false").strip().lower() in {
+            "1", "true", "yes", "on",
+        }
+        if not CHIT_SIGN_NEO4J:
+            # Signing subsystem disabled => verifier disabled => dev passthrough
+            return (not require), "unverifiable"
+        if "sig" not in data:
+            return (not require), "unsigned"
+        if verify_neo4j_node(data):
+            return True, ""
+        return False, "invalid"
 
     # -- Dead-letter ------------------------------------------------------
 
