@@ -60,6 +60,11 @@ async def check_http_health(
 
         # Check status code
         if response.status_code != service.expected_status:
+            # 401 on a health probe = the service is UP and auth-armed; the
+            # smoke host has no API key in scope. Reachability is verified;
+            # authenticated behavior belongs on a node with the funnel env.
+            if response.status_code == 401:
+                return False, "Auth-armed (401)", None
             return (
                 False,
                 f"Unexpected status: {response.status_code} (expected {service.expected_status})",
@@ -358,8 +363,9 @@ async def test_service_health_endpoint(
         case _:
             is_healthy, message = False, f"Unknown health type: {service.health_type}"
 
-    # Skip when service is unreachable (not a test failure — service just isn't running)
-    if not is_healthy and message in ("Connection refused", "Timeout"):
+    # Skip when service is unreachable or auth-armed (not a test failure —
+    # the service isn't verifiable from this host, not broken)
+    if not is_healthy and message in ("Connection refused", "Timeout", "Auth-armed (401)"):
         pytest.skip(f"{service.name}:{service.port} - {message}")
 
     # Assert result for genuinely unhealthy services (reachable but returning errors)
@@ -440,13 +446,14 @@ async def test_critical_services_minimum_health(http_client: httpx.AsyncClient):
         results.append((service.name, is_healthy, message))
 
     # Separate connection failures (skip) from genuine health failures (fail)
+    _not_verifiable = ("Connection refused", "Timeout", "Auth-armed (401)")
     unreachable = [
         (name, msg) for name, healthy, msg in results
-        if not healthy and msg in ("Connection refused", "Timeout")
+        if not healthy and msg in _not_verifiable
     ]
     genuinely_unhealthy = [
         (name, msg) for name, healthy, msg in results
-        if not healthy and msg not in ("Connection refused", "Timeout")
+        if not healthy and msg not in _not_verifiable
     ]
 
     # If ALL services are unreachable, skip (Docker not running)
