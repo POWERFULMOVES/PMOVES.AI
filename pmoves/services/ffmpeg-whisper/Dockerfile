@@ -350,7 +350,12 @@ RUN pip install --no-cache-dir uv && \
     if [ "$(uname -m)" = "aarch64" ]; then \
       uv pip install --system --no-cache-dir --index-url https://download.pytorch.org/whl/cu128 torch==2.9.1; \
     fi && \
-    uv pip install --system --no-cache-dir --extra-index-url https://download.pytorch.org/whl/cu128 -r requirements.txt
+    # unsafe-best-match: the cu128 index is a partial mirror that also hosts
+    # plain-PyPI names (certifi, sympy, ...) at stale versions, and uv's
+    # default first-index strategy then rejects the lock-pinned PyPI version
+    # as "unsatisfiable". Both indexes are equally trusted (pytorch.org,
+    # pypi.org); there is no dependency-confusion surface to protect here.
+    uv pip install --system --no-cache-dir --index-strategy unsafe-best-match --extra-index-url https://download.pytorch.org/whl/cu128 -r requirements.txt
 
 COPY pmoves/services /app/services
 
