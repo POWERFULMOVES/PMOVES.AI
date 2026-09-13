@@ -320,6 +320,7 @@ website/hyperdim/
 
 # Known Roads live file-grant (operator-written, never commit)
 .claude/hooks/damage-control/.known-road-active
+.claude/hooks/damage-control/.effect-state.json
 pmoves/docs/logs/village_gate_latest.json
 crush.json
 *.crush
