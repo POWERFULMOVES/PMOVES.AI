@@ -1549,6 +1549,19 @@ fork-registry-ratchet-json: ## Same as fork-registry-ratchet, but JSON output (f
 	@$(PYTHON) tools/fork_registry_ratchet.py --json
 
 # ----------------------------------------------------------------------------
+# Compose build-provenance ratchet (2026-09-12)
+#   compose-provenance-audit    - every build: is SUBMODULE or baselined shim
+#   compose-provenance-baseline - rewrite the shim baseline (deliberate; say why)
+# ----------------------------------------------------------------------------
+.PHONY: compose-provenance-audit compose-provenance-baseline
+compose-provenance-audit: ## Assert every compose build is a submodule build or a baselined shim (no network, ~200ms)
+	@echo "🔒 Compose build-provenance ratchet..."
+	@$(PYTHON) tools/compose_provenance_audit.py
+
+compose-provenance-baseline: ## Re-baseline the superproject-shim exceptions (deliberate; state why in the PR)
+	@$(PYTHON) tools/compose_provenance_audit.py --baseline
+
+# ----------------------------------------------------------------------------
 # Validate-composes ratchet (2026-08-05)
 #   validate-composes        - assert no short-form .env.local in any overlay
 #   validate-composes-json   - same, JSON output
