@@ -348,9 +348,19 @@ COPY pmoves/services/ffmpeg-whisper/requirements.lock ./requirements.lock
 # neither is in this change.
 RUN pip install --no-cache-dir uv && \
     if [ "$(uname -m)" = "aarch64" ]; then \
-      uv pip install --system --no-cache-dir --index-url https://download.pytorch.org/whl/cu128 torch==2.9.1; \
+      # Preinstall the full torch trio from the cu128 index. The lock pins
+      # plain-PyPI hashes; the cu128 wheels (what GB10/Jetson actually need)
+      # carry different hashes, so torchaudio must be satisfied BEFORE the
+      # locked install resolves -- a PEP 440 local version (2.9.1+cu128)
+      # matches the ==2.9.1 pin and is never re-downloaded or hash-checked.
+      uv pip install --system --no-cache-dir --index-url https://download.pytorch.org/whl/cu128 torch==2.9.1 torchaudio==2.9.1; \
     fi && \
-    uv pip install --system --no-cache-dir --extra-index-url https://download.pytorch.org/whl/cu128 -r requirements.txt
+    # unsafe-best-match: the cu128 index is a partial mirror that also hosts
+    # plain-PyPI names (certifi, sympy, ...) at stale versions, and uv's
+    # default first-index strategy then rejects the lock-pinned PyPI version
+    # as "unsatisfiable". Both indexes are equally trusted (pytorch.org,
+    # pypi.org); there is no dependency-confusion surface to protect here.
+    uv pip install --system --no-cache-dir --index-strategy unsafe-best-match --extra-index-url https://download.pytorch.org/whl/cu128 -r requirements.txt
 
 COPY pmoves/services /app/services
 

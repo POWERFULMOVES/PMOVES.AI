@@ -1,8 +1,18 @@
 #!/usr/bin/env bash
 # mcp-toolkit-connect.sh
 #
-# Connects the local Claude Code client to the canonical PMOVES Docker MCP
-# Toolkit profile (default: pmoves_5090_web). Idempotent — safe to re-run.
+# Connects the local Claude Code client to THIS NODE's Docker MCP Toolkit
+# profile, resolved by pmoves/tools/node_gateway_profile.py. Idempotent — safe
+# to re-run.
+#
+# The default used to be the literal `pmoves_5090_web`. That is one node's
+# profile serving as every node's default, and it failed silently: measured on
+# the 4090 on 2026-09-13, `docker mcp profile ls` lists BOTH pmoves_4090_web and
+# pmoves_5090_web, so the pre-flight below passed and the node connected
+# claude-code to the other node's server set. There is no fallback default now —
+# an unresolvable node is an error the operator can fix (declare
+# `docker_mcp.gateway_profile` in its pmoves/config/profiles/<id>.yaml, pin a
+# profile, or pass PROFILE=), not a guess this script makes on their behalf.
 #
 # Per `pmoves/docs/operations/MCP_TOOLKIT.md` § 4. Run AFTER
 # `make mcp-toolkit-bootstrap` confirms the profile is imported on this node.
@@ -16,7 +26,7 @@
 # If absent, bootstrap first.
 #
 # Usage:
-#   make -C pmoves mcp-toolkit-connect                 # default profile
+#   make -C pmoves mcp-toolkit-connect                 # this node's profile
 #   make -C pmoves mcp-toolkit-connect PROFILE=other   # override
 #   ./pmoves/scripts/mcp-toolkit-connect.sh            # direct invocation
 #
@@ -25,10 +35,40 @@
 #   1 — docker mcp CLI missing
 #   2 — profile not imported (run mcp-toolkit-bootstrap first)
 #   3 — connect command itself failed
+#   4 — this node's gateway profile could not be resolved
 
 set -euo pipefail
 
-PROFILE="${PROFILE:-pmoves_5090_web}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+
+# 0. Which profile is THIS node's?
+#
+# Shared python discovery, not a bare `python3` — pm-python.sh is the repo's one
+# convention for this and already handles the venv/py-launcher/Windows spread.
+# The `yaml` probe is load-bearing, not decoration: the resolver reads node
+# profile YAMLs through profile_loader, so an interpreter without PyYAML would
+# be selected and then ImportError at the point of use. A per-user
+# site-packages is on every interpreter on some of these nodes, which is exactly
+# how a missing dep hides until the one machine that lacks it runs this.
+if [ -z "${PROFILE:-}" ]; then
+  # shellcheck source=pm-python.sh
+  . "$REPO_ROOT/pmoves/scripts/pm-python.sh"
+  if ! pm_pick_python yaml; then
+    echo "[mcp-toolkit-connect] no python with PyYAML to resolve this node's profile." >&2
+    echo "   Pass it explicitly: make -C pmoves mcp-toolkit-connect PROFILE=<name>" >&2
+    exit 4
+  fi
+  if ! PROFILE="$("${PM_PY[@]}" "$REPO_ROOT/pmoves/tools/node_gateway_profile.py")"; then
+    # The resolver already printed WHY on stderr. Do not restate it as a guess.
+    echo "[mcp-toolkit-connect] cannot determine this node's gateway profile." >&2
+    echo "   Fix one of: declare docker_mcp.gateway_profile in this node's" >&2
+    echo "   pmoves/config/profiles/<id>.yaml, run \`pmoves mini profile use <id>\`," >&2
+    echo "   or pass PROFILE=<name>." >&2
+    exit 4
+  fi
+  echo "[mcp-toolkit-connect] Resolved this node's profile: $PROFILE"
+fi
 
 # 1. CLI present?
 if ! command -v docker >/dev/null 2>&1 || ! docker mcp version >/dev/null 2>&1; then

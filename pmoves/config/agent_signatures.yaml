@@ -349,6 +349,21 @@ signatures:
       - dynamic-model-plane
       - cloud-hybrid-workers
     description: "Data-tier + ROCm coordinator on B850 Knuckles (dual R9700 64GB, ROCm 7.1) — dynamic model plane, TensorZero routing, HERMES/Agent Zero standup"
+    alters:
+      # Node-qualified on purpose. `_resolve_alter_parent()` in
+      # pmoves/tools/sign_trail.py returns the FIRST parent declaring a matching
+      # alter and has no duplicate-alter gate, so a generic name (`ledger`,
+      # `node-steward`) would misattribute trails fleet-wide the moment a second
+      # node declared it. Every existing alter follows this convention.
+      - name: "b850-ledger"
+        glyph: "⌬"                   # ⌬ Benzene ring — same lineage as the parent
+        color: "#DC2626"             # AMD Red (same)
+        accent: "#F87171"
+        voice: analytical
+        co_author: "B850 Claude (pmoves-b850) <b850@pmoves.ai>"
+        resonance: [data-tier, evidence-discipline, claim-verification, chit-trails, measurement]
+        room: "b850-ledger.room.evidence"
+        description: "Evidence mode — claim register, CHIT-signed trails, verification of peer claims, data-tier measurement discipline. Declared 2026-09-05; not reconstructed from prior work. See alter_lineage in pmoves/config/identity_vocabulary.yaml."
 
   5090-claude:
     agent_id: "5090-claude"

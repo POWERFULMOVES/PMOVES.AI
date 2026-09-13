@@ -41,6 +41,13 @@ mcp:
   - compose
   - host
   - telemetry
+
+# Docker MCP Toolkit gateway profile for THIS node. Read by
+# pmoves/tools/node_gateway_profile.py, which mcp-toolkit-connect.sh and
+# mcp_config_generator.py use instead of the old literal `pmoves_5090_web`.
+# Registered with `make -C pmoves mcp-toolkit-bootstrap`.
+docker_mcp:
+  gateway_profile: pmoves_5090_web
 messaging:
   telegram: true
   discord: true

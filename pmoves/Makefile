@@ -157,6 +157,11 @@ all: help ## Default target - show help
 .PHONY: test
 test: test-smoke ## Run pytest smoke tests
 
+.PHONY: test-smoke
+test-smoke: ## Run pytest smoke tests for services (pre-refactor recipe restored)
+	@echo "Running pytest smoke tests..."
+	$(PYTHON) -m pytest tests/smoke/ -v -m smoke --tb=short
+
 .DEFAULT_GOAL := help
 
 .PHONY: help
@@ -449,6 +454,20 @@ register-postdate-check: ## Assert rows added on this branch are not postdated (
 .PHONY: register-postdate-sweep
 register-postdate-sweep: ## Report every postdated row in the register's whole history
 	@$(PYTHON) tools/register_postdate_check.py --sweep $(ARGS)
+
+# -------- GitHub notification pool (3-surface review triage) ----------
+# The founding defect (PR #3025, 2026-09-12): fleet reviews post as bot
+# ISSUE COMMENTS, so review-endpoint scans return confident zeros while a
+# REQUEST_CHANGES sits in plain sight. The pool normalizes all three REST
+# surfaces per open PR and publishes to NATS github.pool.review.v1
+# (JetStream GITHUB_POOL, limits retention) -- one sweep, every agent reads.
+.PHONY: github-pool-sync
+github-pool-sync: ## Sweep PR review surfaces into the NATS pool (0 clean / 1 urgent / 3 could not measure)
+	@$(PYTHON) tools/github_pool_sync.py $(ARGS)
+
+.PHONY: github-pool-latest
+github-pool-latest: ## Print the last N pooled records (N=10)
+	@nats -s $(GITHUB_POOL_NATS_URL) stream view GITHUB_POOL --count $(or $(N),10) $(ARGS)
 
 # -------- Updates ----------
 .PHONY: update
@@ -1528,6 +1547,19 @@ fork-registry-ratchet: ## Assert every fork in pmoves/config/fork_registry.json 
 
 fork-registry-ratchet-json: ## Same as fork-registry-ratchet, but JSON output (for CI annotation)
 	@$(PYTHON) tools/fork_registry_ratchet.py --json
+
+# ----------------------------------------------------------------------------
+# Compose build-provenance ratchet (2026-09-12)
+#   compose-provenance-audit    - every build: is SUBMODULE or baselined shim
+#   compose-provenance-baseline - rewrite the shim baseline (deliberate; say why)
+# ----------------------------------------------------------------------------
+.PHONY: compose-provenance-audit compose-provenance-baseline
+compose-provenance-audit: ## Assert every compose build is a submodule build or a baselined shim (no network, ~200ms)
+	@echo "🔒 Compose build-provenance ratchet..."
+	@$(PYTHON) tools/compose_provenance_audit.py
+
+compose-provenance-baseline: ## Re-baseline the superproject-shim exceptions (deliberate; state why in the PR)
+	@$(PYTHON) tools/compose_provenance_audit.py --baseline
 
 # ----------------------------------------------------------------------------
 # Validate-composes ratchet (2026-08-05)
@@ -5721,7 +5753,7 @@ kimi: ## Launch Kimi Code CLI with PMOVES project config and MCP set
 	  kimi --config-file "$(CURDIR)/../.kimi/config.toml"; \
 	fi
 
-.PHONY: claude-pmoves kimi-pmoves kilo-pmoves codex-pmoves cipher-mint-token
+.PHONY: claude-pmoves kimi-pmoves kilo-pmoves codex-pmoves cipher-mint-token cipher-identity
 claude-pmoves: ## Launch Claude Code with PMOVES delivery-agent context
 	@bash $(CURDIR)/scripts/claude-pmoves.sh
 
@@ -5734,8 +5766,11 @@ kilo-pmoves: ## Launch KiloCode/OpenCode with PMOVES 5090 node config
 codex-pmoves: ## Launch Codex CLI with PMOVES context
 	@bash $(CURDIR)/scripts/codex-pmoves.sh
 
-cipher-mint-token: ## Mint a new per-agent cipher token: AGENT=crush-spark [SCOPES="memory:read,memory:write"]
-	@if [ -z "$(AGENT)" ]; then echo "Usage: make -C pmoves cipher-mint-token AGENT=crush-spark [SCOPES='memory:read,memory:write']"; exit 1; fi
+cipher-identity: ## Which agent_id will this session's cipher memories be filed under? [AGENT=z890-claude]
+	@$(PYTHON) $(CURDIR)/tools/cipher_identity.py $(if $(AGENT),--agent "$(AGENT)",) || true
+
+cipher-mint-token: ## Mint a per-agent cipher token (requires an ACTIVE signing card): AGENT=z890-claude [SCOPES=...]
+	@if [ -z "$(AGENT)" ]; then echo "Usage: make -C pmoves cipher-mint-token AGENT=z890-claude [SCOPES='memory:read,memory:write']"; exit 1; fi
 	@$(PYTHON) $(CURDIR)/scripts/mint_cipher_token.py --agent "$(AGENT)" --scopes "$(or $(SCOPES),memory:read,memory:write,reasoning:read,reasoning:write,session:read,session:write)"
 
 .PHONY: beats-analyze beats-hyperdim beats-pipeline

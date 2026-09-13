@@ -1,7 +1,7 @@
 {
   "room_id": "ageless-beauty.room.practice",
   "version": "0.1.0",
-  "stage": "draft",
+  "stage": "rehearsal",
   "display_name": "Ageless Beauty — Practice",
   "description": "Nurse practitioner's own practice floor: interactive nutrition database, conformant care-team agents, exercise 'good beat' tuning, and ministry-resonant reflection surfaces. Decision support only — the NP reviews every patient-facing output.",
   "agent_id": "hermes-agent",
@@ -52,7 +52,12 @@
       "route": "/practice/nutrition",
       "provider": "nutritional-db",
       "action_namespace": "nutrition",
-      "capabilities": ["search", "food-detail", "meal-analyze", "interaction-check"],
+      "capabilities": [
+        "search",
+        "food-detail",
+        "meal-analyze",
+        "interaction-check"
+      ],
       "pinned": true,
       "status": "planned"
     },
@@ -62,7 +67,11 @@
       "route": "/practice/beat",
       "provider": "nutritional-db",
       "action_namespace": "beat",
-      "capabilities": ["zone-lookup", "weekly-trend", "goal-tune"],
+      "capabilities": [
+        "zone-lookup",
+        "weekly-trend",
+        "goal-tune"
+      ],
       "pinned": false,
       "status": "planned"
     },
@@ -72,7 +81,11 @@
       "route": "/practice/reflection",
       "provider": "open-notebook",
       "action_namespace": "reflection",
-      "capabilities": ["prompt-of-the-day", "journal-entry", "theme-browse"],
+      "capabilities": [
+        "prompt-of-the-day",
+        "journal-entry",
+        "theme-browse"
+      ],
       "pinned": false,
       "status": "planned"
     }
@@ -84,7 +97,9 @@
     "default_page": "today",
     "sync": {
       "mode": "mirrored",
-      "writeback_targets": ["entries"],
+      "writeback_targets": [
+        "entries"
+      ],
       "artifact_prefix": "rooms/ageless-beauty"
     }
   },
@@ -92,7 +107,13 @@
     "signature_ref": "hermes-agent",
     "voice": "measured",
     "glyph": "✦",
-    "resonance": ["nutrition", "movement", "stewardship-of-body", "rest", "gratitude"]
+    "resonance": [
+      "nutrition",
+      "movement",
+      "stewardship-of-body",
+      "rest",
+      "gratitude"
+    ]
   },
   "skill_bindings": [
     {
@@ -100,73 +121,246 @@
       "skill_id": "pmoves/nutrition-lookup",
       "room_id": "ageless-beauty.room.practice",
       "display_name": "Look Up a Food",
-      "intent": ["nutrition", "food", "macros", "ingredients"],
-      "surface": {"app_id": "nutritional-db", "target": "toolbar", "route": "/practice/nutrition"},
-      "execution": {"mode": "workflow", "run_as": "agent", "stream": "status", "max_steps": 4},
-      "context": {"sources": ["user-intent", "room-state"], "include_last_turns": 2, "artifact_types": ["json"]},
-      "outputs": [{"target": "chat-response", "delivery": "notify", "artifact_type": "text"}],
-      "guardrails": {"require_approval": false, "max_runtime_sec": 60, "fail_open": false, "one_active_run": true},
+      "intent": [
+        "nutrition",
+        "food",
+        "macros",
+        "ingredients"
+      ],
+      "surface": {
+        "app_id": "nutritional-db",
+        "target": "toolbar",
+        "route": "/practice/nutrition"
+      },
+      "execution": {
+        "mode": "workflow",
+        "run_as": "agent",
+        "stream": "status",
+        "max_steps": 4
+      },
+      "context": {
+        "sources": [
+          "user-intent",
+          "room-state"
+        ],
+        "include_last_turns": 2,
+        "artifact_types": [
+          "json"
+        ]
+      },
+      "outputs": [
+        {
+          "target": "chat-response",
+          "delivery": "notify",
+          "artifact_type": "text"
+        }
+      ],
+      "guardrails": {
+        "require_approval": false,
+        "max_runtime_sec": 60,
+        "fail_open": false,
+        "one_active_run": true
+      },
       "enabled": true,
-      "tags": ["nutrition", "database"]
+      "tags": [
+        "nutrition",
+        "database"
+      ]
     },
     {
       "binding_id": "meal-plan-draft",
       "skill_id": "pmoves/meal-plan-draft",
       "room_id": "ageless-beauty.room.practice",
       "display_name": "Draft a Meal Plan (NP reviews)",
-      "intent": ["meal plan", "weekly menu", "nutrition goal"],
-      "surface": {"app_id": "nutritional-db", "target": "toolbar", "route": "/practice/nutrition"},
-      "execution": {"mode": "workflow", "run_as": "agent", "stream": "status", "max_steps": 6},
-      "context": {"sources": ["user-intent", "room-state", "notebook-selection"], "include_last_turns": 3, "notebook_writeback": true, "artifact_types": ["json", "text"]},
-      "outputs": [{"target": "chat-response", "delivery": "notify", "artifact_type": "text"}, {"target": "notebook", "delivery": "writeback", "artifact_type": "json"}],
-      "guardrails": {"require_approval": true, "max_runtime_sec": 300, "fail_open": false, "one_active_run": true},
+      "intent": [
+        "meal plan",
+        "weekly menu",
+        "nutrition goal"
+      ],
+      "surface": {
+        "app_id": "nutritional-db",
+        "target": "toolbar",
+        "route": "/practice/nutrition"
+      },
+      "execution": {
+        "mode": "workflow",
+        "run_as": "agent",
+        "stream": "status",
+        "max_steps": 6
+      },
+      "context": {
+        "sources": [
+          "user-intent",
+          "room-state",
+          "notebook-selection"
+        ],
+        "include_last_turns": 3,
+        "notebook_writeback": true,
+        "artifact_types": [
+          "json",
+          "text"
+        ]
+      },
+      "outputs": [
+        {
+          "target": "chat-response",
+          "delivery": "notify",
+          "artifact_type": "text"
+        },
+        {
+          "target": "notebook-entry",
+          "artifact_type": "json",
+          "delivery": "append"
+        }
+      ],
+      "guardrails": {
+        "require_approval": true,
+        "max_runtime_sec": 300,
+        "fail_open": false,
+        "one_active_run": true
+      },
       "enabled": true,
-      "tags": ["nutrition", "draft", "np-review"]
+      "tags": [
+        "nutrition",
+        "draft",
+        "np-review"
+      ]
     },
     {
       "binding_id": "devotion-prompt",
       "skill_id": "pmoves/devotion-prompt",
       "room_id": "ageless-beauty.room.practice",
       "display_name": "Reflection Prompt",
-      "intent": ["devotion", "reflection", "meditation", "scripture"],
-      "surface": {"app_id": "reflection-journal", "target": "toolbar", "route": "/practice/reflection"},
-      "execution": {"mode": "workflow", "run_as": "agent", "stream": "status", "max_steps": 2},
-      "context": {"sources": ["curated-corpus"], "include_last_turns": 0, "notebook_writeback": false, "artifact_types": ["text"]},
-      "outputs": [{"target": "chat-response", "delivery": "notify", "artifact_type": "text"}],
-      "guardrails": {"require_approval": false, "max_runtime_sec": 30, "fail_open": false, "one_active_run": true, "curated_only": true},
+      "intent": [
+        "devotion",
+        "reflection",
+        "meditation",
+        "scripture"
+      ],
+      "surface": {
+        "app_id": "reflection-journal",
+        "target": "toolbar",
+        "route": "/practice/reflection"
+      },
+      "execution": {
+        "mode": "workflow",
+        "run_as": "agent",
+        "stream": "status",
+        "max_steps": 2
+      },
+      "context": {
+        "sources": [
+          "notebook-selection"
+        ],
+        "include_last_turns": 0,
+        "notebook_writeback": false,
+        "artifact_types": [
+          "text"
+        ]
+      },
+      "outputs": [
+        {
+          "target": "chat-response",
+          "delivery": "notify",
+          "artifact_type": "text"
+        }
+      ],
+      "guardrails": {
+        "require_approval": false,
+        "max_runtime_sec": 30,
+        "fail_open": false,
+        "one_active_run": true
+      },
       "enabled": true,
-      "tags": ["reflection", "ministry", "curated"]
+      "tags": [
+        "reflection",
+        "ministry",
+        "curated"
+      ]
     },
     {
       "binding_id": "care-summary-for-np",
       "skill_id": "pmoves/care-summary-for-np",
       "room_id": "ageless-beauty.room.practice",
       "display_name": "Summarize for Practitioner Review",
-      "intent": ["summary", "care review", "patient beat"],
-      "surface": {"app_id": "care-team-console", "target": "toolbar", "route": "/practice/console"},
-      "execution": {"mode": "workflow", "run_as": "agent", "stream": "status", "max_steps": 5},
-      "context": {"sources": ["notebook-thread", "room-state"], "include_last_turns": 5, "notebook_writeback": false, "artifact_types": ["json", "text"]},
-      "outputs": [{"target": "chat-response", "delivery": "notify", "artifact_type": "text"}, {"target": "nats-event", "delivery": "emit", "subject": "care.review.ready.v1", "artifact_type": "json"}],
-      "guardrails": {"require_approval": true, "max_runtime_sec": 120, "fail_open": false, "one_active_run": true},
+      "intent": [
+        "summary",
+        "care review",
+        "patient beat"
+      ],
+      "surface": {
+        "app_id": "care-team-console",
+        "target": "toolbar",
+        "route": "/practice/console"
+      },
+      "execution": {
+        "mode": "workflow",
+        "run_as": "agent",
+        "stream": "status",
+        "max_steps": 5
+      },
+      "context": {
+        "sources": [
+          "notebook-thread",
+          "room-state"
+        ],
+        "include_last_turns": 5,
+        "notebook_writeback": false,
+        "artifact_types": [
+          "json",
+          "text"
+        ]
+      },
+      "outputs": [
+        {
+          "target": "chat-response",
+          "delivery": "notify",
+          "artifact_type": "text"
+        },
+        {
+          "target": "nats-event",
+          "delivery": "emit",
+          "subject": "care.review.ready.v1",
+          "artifact_type": "json"
+        }
+      ],
+      "guardrails": {
+        "require_approval": true,
+        "max_runtime_sec": 120,
+        "fail_open": false,
+        "one_active_run": true
+      },
       "enabled": true,
-      "tags": ["care-team", "np-review"]
+      "tags": [
+        "care-team",
+        "np-review"
+      ]
     }
   ],
-  "team_refs": ["wellness"],
-  "service_refs": ["nutritional-db", "open-notebook", "nats", "cipher"],
+  "team_refs": [
+    "wellness"
+  ],
+  "service_refs": [
+    "nutritional-db",
+    "open-notebook",
+    "nats",
+    "cipher"
+  ],
   "launcher_refs": [],
   "policies": {
     "model_routing": "hybrid",
     "publish": {
       "allow_nats_emit": true,
       "allow_external_publish": false,
-      "allowed_subjects": ["care.review.ready.v1", "room.session.updated.v1"]
+      "allowed_subjects": [
+        "care.review.ready.v1",
+        "room.session.updated.v1"
+      ]
     },
     "memory": {
       "graphiti": false,
       "notebook_writeback": true,
-      "chit_handoff": true,
-      "phi_stays_local": true
+      "chit_handoff": true
     }
   },
   "telemetry": {

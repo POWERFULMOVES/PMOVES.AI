@@ -55,7 +55,12 @@ lives in DATA, not baked into agent prompts (fresh per decision, compact, citabl
   any MCP-capable harness gets voice for free. No PMOVES-only protocol.
 
 ## Sequencing
-1. flute `/mcp` mount + `voice_engines_list`/`capabilities` tools + inventory entry (PR — small)
+1. ~~flute `/mcp` mount + `voice_engines_list`/`capabilities` tools + inventory entry (PR — small)~~
+   DONE 2026-09-12: POST /mcp streamable-http route added to mcp_bridge.py (stateless
+   dispatch shared with the SSE surface; tools already existed as tts_* — the plan's
+   voice_engines_list/capabilities map onto tts_list_engines/tts_engine_status).
+   Inventory entry `flute-voice-mcp` + flute_mcp_{local,fleet}_url defaults. Tests:
+   pmoves/tests/test_flute_mcp_streamable.py (7).
 2. engines/*.yaml manifests for the 8 providers (PR — data)
 3. voice-router dsh agent wrap (post Archon PR #27 merge)
 4. Hermes desktop plugin on MCP tools (hermes-desktop-plugins skill pattern)
