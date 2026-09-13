@@ -57,6 +57,7 @@ COMPOSE_GLOB = "docker-compose*.yml"
 BASELINE = PMOVES_DIR / "configs" / "compose_provenance_baseline.json"
 
 SUBMODULE, IMAGE, SHIM = "SUBMODULE", "IMAGE", "SUPERPROJECT-SHIM"
+REMOTE_FORK = "REMOTE-FORK-CONSUMER"
 
 
 def _compose_files() -> list[Path]:
@@ -74,6 +75,31 @@ def _classify(build: object) -> str:
     if any(p.startswith("PMOVES") or p.startswith("Pmoves") for p in parts):
         return SUBMODULE
     return SHIM  # any other local path is superproject-tree relative
+
+
+
+def _dockerfile_text(pmov: Path, ctx: str, build: object) -> str:
+    """Best-effort read of the Dockerfile a stanza builds, for remote-clone detection."""
+    try:
+        df = build.get("dockerfile", "Dockerfile") if isinstance(build, dict) else "Dockerfile"
+        base = (pmov / ctx).resolve() if not ctx.startswith("..") else (pmov.parent / ctx.replace("../", "", 1)).resolve()
+        cand = base / df if df and not df.startswith("/") else None
+        if cand and cand.is_file():
+            return cand.read_text(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+    return ""
+
+
+def _clone_fork_repo(dockerfile_text: str) -> str | None:
+    """POWERFULMOVES repo cloned inside the image (git clone or cache-bust ref URL)."""
+    import re as _re
+    pattern = (
+        r"(?:git[ ]clone[^\n]*?|api[.]github[.]com/repos/)"
+        r"POWERFULMOVES/([A-Za-z0-9_.-]+)"
+    )
+    m = _re.search(pattern, dockerfile_text)
+    return m.group(1).removesuffix(".git") if m else None
 
 
 def collect() -> dict[str, dict]:
@@ -95,9 +121,17 @@ def collect() -> dict[str, dict]:
             # here since only build stanzas are scanned — keep first-seen
             # submodule context, else first seen).
             cls = _classify(ctx)
+            fork = None
+            if cls == SHIM:
+                dtext = _dockerfile_text(PMOVES_DIR, ctx_str, ctx)
+                fork = _clone_fork_repo(dtext)
+                if fork:
+                    cls = REMOTE_FORK
             prev = out.get(name)
-            if prev is None or (prev["class"] == SHIM and cls == SUBMODULE):
+            if prev is None or (prev["class"] == SHIM and cls in (SUBMODULE, REMOTE_FORK)):
                 out[name] = {"class": cls, "context": ctx_str, "file": f.name}
+                if fork:
+                    out[name]["fork"] = fork
     return out
 
 
@@ -120,6 +154,7 @@ def main() -> int:
 
     shims = {k: v for k, v in found.items() if v["class"] == SHIM}
     subs = {k: v for k, v in found.items() if v["class"] == SUBMODULE}
+    remotes = {k: v.get("fork", "?") for k, v in found.items() if v["class"] == REMOTE_FORK}
 
     if args.baseline:
         BASELINE.parent.mkdir(parents=True, exist_ok=True)
@@ -138,6 +173,7 @@ def main() -> int:
         print(json.dumps({
             "files_scanned": [f.name for f in _compose_files()],
             "submodule_builds": sorted(subs),
+            "remote_fork_consumers": remotes,
             "image_only_excluded": True,
             "shims_total": len(shims),
             "shims_baselined": len(set(shims) & known_shims),
@@ -145,8 +181,9 @@ def main() -> int:
             "retired_baseline_entries": retired,
         }, indent=2))
     else:
-        print(f"compose build provenance: {len(subs)} SUBMODULE / {len(shims)} SUPERPROJECT-SHIM "
-              f"({len(set(shims) & known_shims)} baselined)")
+        print(f"compose build provenance: {len(subs)} SUBMODULE / {len(remotes)} REMOTE-FORK-CONSUMER "
+              f"({', '.join(f'{k}->{v}' for k, v in sorted(remotes.items())) or 'none'}) / "
+              f"{len(shims)} SUPERPROJECT-SHIM ({len(set(shims) & known_shims)} baselined)")
         if unregistered:
             print(f"\nUNREGISTERED SHIMS ({len(unregistered)}) — promote to a fork submodule or baseline deliberately:")
             for s in unregistered:

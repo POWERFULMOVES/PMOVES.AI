@@ -1,7 +1,6 @@
 {
   "_doc": "Deliberate superproject-shim exceptions (see COMPOSE_BUILD_PROVENANCE.md). Each entry: the service builds from the superproject tree on purpose.",
   "shims": [
-    "a0-elder-melchor",
     "a2ui-nats-bridge",
     "a2ui-renderer",
     "agentgym-env-pmoves",
@@ -66,7 +65,6 @@
     "sso-auth",
     "supaserch",
     "tokenism-simulator",
-    "ultimate-tts-studio",
     "vibevoice",
     "voice-relay",
     "voice-sampler",
