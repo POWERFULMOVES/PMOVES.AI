@@ -46,7 +46,10 @@ async def tensorzero_client():
             f"TensorZero Gateway not reachable at localhost:{TENSORZERO_GATEWAY.port}"
         )
     yield client
-    await client.aclose()
+    try:
+        await client.aclose()
+    except RuntimeError:
+        pass  # loop already closed by pytest-asyncio teardown ordering
 
 
 @pytest.fixture
@@ -71,7 +74,10 @@ async def clickhouse_client():
             f"ClickHouse not reachable at localhost:{TENSORZERO_CLICKHOUSE.port}"
         )
     yield client
-    await client.aclose()
+    try:
+        await client.aclose()
+    except RuntimeError:
+        pass  # loop already closed by pytest-asyncio teardown ordering
 
 
 # ============================================================================
