@@ -15,8 +15,8 @@ non-functional — it could not resolve Supabase at all. Meanwhile the shape-mat
 probes **already caught it**:
 
 ```
-make -C pmoves archon-smoke      -> FAIL: archon /healthz => 401     exit 2
-make -C pmoves archon-mcp-smoke  -> ✖ archon-mcp not reachable :8051  exit 2
+make -C pmoves archon-smoke      -> FAIL: archon /healthz => 401     exit 2   # recipe retired by #2943; successor: archon-native-health
+make -C pmoves archon-mcp-smoke  -> ✖ archon-mcp not reachable :8051  exit 2   # recipe retired by #2943; successor: archon-ui-smoke
 ```
 
 **So shape validation exists and works here. It is simply not wired to the light.**
@@ -120,5 +120,5 @@ trusts.
 | [curl manual, `-f, --fail`](https://curl.se/docs/manpage.html) | fetched 2026-09-08 | Fails only at HTTP ≥400, exit 22; "by default curl does not consider HTTP response codes to indicate failure"; the "not fail-safe" caveat |
 | `pmoves/docker-compose.yml` archon stanza L3538-3673 | `origin/main` @ 21789f225 | Healthcheck definition, networks, absence of `SUPABASE_URL`, `PMOVES_NETWORKS` self-declaration |
 | `pmoves/docker-compose.agents.yml` archon stanza L269-404 | `origin/main` @ 21789f225 | Byte-identical overlay stanza — must be patched in lockstep |
-| `pmoves/Makefile` L3921-3945 | `origin/main` @ 21789f225 | `archon-mcp-smoke`, `archon-ui-smoke`, `archon-smoke`, `archon-upload-smoke` recipes |
+| `pmoves/Makefile` L3921-3945 | `origin/main` @ 21789f225 | `archon-mcp-smoke`, `archon-ui-smoke`, `archon-smoke`, `archon-upload-smoke` recipes (the first and third retired by #2943 — successors: `archon-ui-smoke`, `archon-native-health`, `archon-rest-policy-smoke`) |
 | Live containers on B850 | measured 2026-09-08 | Network membership, DNS resolution + controls, health payloads and `curl -f` exits, presence of `grep`/absence of `jq` |

@@ -113,7 +113,7 @@ git apply pmoves/docs/validation/patches/archon-supabase-reachability.patch
 make -C pmoves up-agents          # a RESTART IS REQUIRED: the 30-attempt
                                   # credential retry budget is already spent,
                                   # so archon will not recover on its own.
-make -C pmoves archon-smoke       # must go from FAIL to pass
+make -C pmoves archon-native-health  # must go from FAIL to pass (archon-smoke retired by #2943)
 docker inspect pmoves-archon-1 --format '{{.State.Health.Status}}'
 ```
 
