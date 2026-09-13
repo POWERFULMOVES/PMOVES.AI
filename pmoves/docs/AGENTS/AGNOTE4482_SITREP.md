@@ -4,9 +4,26 @@ GRAPHITI_MARK: `PHI-4482-SITREP::QUICK-ORIENTATION`
 
 > **For:** Any agent dropping into a PMOVES session cold (fresh start, VS Code restart, new node, Husk walk-in).
 > **Rule:** Read this FIRST. It's pointers, not content. Follow the links.
-> **Last refreshed:** 2026-07-19 (Mavis-5090 refresh — A2UI stack MERGED + post-merge follow-up lane)
+> **Last refreshed:** 2026-09-10 (crush-spark refresh — archon-native era)
 
 ---
+
+## 2026-09-10 convergence snapshot (crush-spark)
+
+- **Archon is native-only**: the Python-Archon surface retired (#2943); Archon 0.6.0
+  REST is live on `:3090` (JSON `/api/health` — the SPA catch-all makes status-only
+  probes false-positive). MCP roster entry removed; `archon-native-health`,
+  `up-archon-native`, `archon-rest-policy-smoke` are the targets.
+- **Third-ref persona loop live**: `persona.consumption.recorded.v1` → Supabase
+  enrichment join → `shape.trace.recorded.v1` + `shape.profile.updated.v1`
+  (persona-thirdref service, durable JetStream `PMOVES-PERSONA`; jellyfin-bridge
+  webhook is the human-side producer). #3002/#3010.
+- **H3 V3 proven on GB10**: ComfyUI + sageattn (sm_121) render path verified;
+  archive in `pmoves/tools/comfyui/`. Models live on the 4T external.
+- **Fleet merge friction**: shared GraphQL budget races — REST-first tooling +
+  window-watcher merges are the pattern (see FlOO$ lane docs).
+- Register discipline: RELEASE rows via `make register-release`; identity
+  vocabulary gates register authors (`pmoves/config/identity_vocabulary.yaml`).
 
 ## Where Am I?
 

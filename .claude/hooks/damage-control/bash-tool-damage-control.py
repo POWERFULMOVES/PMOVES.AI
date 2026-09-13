@@ -27,6 +27,11 @@ from typing import Tuple, List, Dict, Any
 
 import yaml
 
+# Known Roads + proportionate path resolution live beside this script.
+sys.path.insert(0, str(Path(__file__).parent))
+import path_scope  # noqa: E402
+from known_roads import evaluate_known_road, known_road_hint  # noqa: E402
+
 
 def is_glob_pattern(pattern: str) -> bool:
     """Check if pattern contains glob wildcards."""
@@ -278,13 +283,43 @@ def _escape_path(path: str) -> str:
     return re.escape(path)
 
 
-def check_path_patterns(command: str, path: str, patterns: List[Tuple[str, str]], path_type: str) -> Tuple[bool, str]:
+def check_path_patterns(
+    command: str,
+    path: str,
+    patterns: List[Tuple[str, str]],
+    path_type: str,
+    tokens=None,
+    repo_scoped: Tuple[str, ...] = (),
+) -> Tuple[bool, str]:
     """Check command against a list of patterns for a specific path.
 
     Supports both:
     - Literal paths: ~/.bashrc, /etc/hosts (prefix matching)
     - Glob patterns: *.lock, *.md, src/* (glob matching)
+
+    PROPORTIONALITY: the regex above is CANDIDATE DETECTION only. Every template
+    bridges the verb and the path with `.*`, so a sentence that merely NAMES a
+    protected directory matched, and a bare directory entry matched that name
+    anywhere on the host rather than inside this repository. Both refused real
+    work (see path_scope.py for the two observed cases).
+
+    A candidate is therefore confirmed against RESOLVED PATHS via
+    path_scope.confirm(), which is monotonic -- it can only turn a block into an
+    allow, never the reverse -- and fails CLOSED when the command cannot be
+    lexed. `tokens` is computed once per command by the caller; passing None
+    recomputes it here so the older 4-argument call sites keep working.
     """
+    if tokens is None:
+        tokens = path_scope.command_tokens(command)
+
+    def _verdict(operation: str) -> Tuple[bool, str]:
+        keep, _hits = path_scope.confirm(tokens, path, repo_scoped)
+        if not keep:
+            # The regex matched prose, or every resolved match for this
+            # repo-scoped entry lies outside the repository. Entry inapplicable.
+            return False, ""
+        return True, f"Blocked: {operation} operation on {path_type} {path}"
+
     if is_glob_pattern(path):
         # Glob pattern - convert to regex for command matching
         glob_regex = glob_to_regex(path)
@@ -309,7 +344,7 @@ def check_path_patterns(command: str, path: str, patterns: List[Tuple[str, str]]
                 # glob_to_regex emits no anchors, so it is safe to embed mid-pattern.
                 filled = pattern_template.replace('{path}', glob_regex)
                 if filled and re.search(filled, command, re.IGNORECASE):
-                    return True, f"Blocked: {operation} operation on {path_type} {path}"
+                    return _verdict(operation)
             except re.error as e:
                 print(f"WARNING: Invalid regex for glob path pattern ({operation}, {path}): {e}", file=sys.stderr)
                 continue
@@ -325,12 +360,43 @@ def check_path_patterns(command: str, path: str, patterns: List[Tuple[str, str]]
             pattern_original = pattern_template.replace("{path}", escaped_original)
             try:
                 if re.search(pattern_expanded, command) or re.search(pattern_original, command):
-                    return True, f"Blocked: {operation} operation on {path_type} {path}"
+                    return _verdict(operation)
             except re.error as e:
                 print(f"WARNING: Invalid regex for literal path pattern ({operation}, {path}): {e}", file=sys.stderr)
                 continue
 
     return False, ""
+
+
+def _known_road_verdict(paths: List[str]) -> Tuple[bool, str, str]:
+    """Evaluate Known Roads for the resolved paths a block matched.
+
+    Returns (allowed, invalid_detail, hint):
+      (True,  "",     "")     an active, provable grant covers one of these paths
+                              -- recorded to known-roads.jsonl by known_roads.py
+      (False, detail, "")     a path IS in the declared domain but the grant is
+                              not provable -- refuse, surfacing `detail`
+      (False, "",     hint)   no grant active; `hint` names the sanctioned road
+                              when one exists for this path ("" when none does)
+
+    This is the same mechanism the Edit and Write guards already consult. Before
+    this, Bash blocked and then abandoned: it never named the road, so the
+    protected set was discoverable only by tripping it. A road that the tool
+    naming it cannot actually take is not guidance.
+
+    It cannot open anything the destructive-pattern gate or the zero-access gate
+    already refused: both run EARLIER in check_command and return before here.
+    """
+    hint = ""
+    for absolute in paths:
+        allowed, detail = evaluate_known_road("Bash", absolute, absolute)
+        if allowed:
+            return True, "", ""
+        if detail:
+            return False, detail, ""
+        if not hint:
+            hint = known_road_hint(absolute)
+    return False, "", hint
 
 
 def check_command(command: str, config: Dict[str, Any]) -> Tuple[bool, bool, str]:
@@ -449,17 +515,35 @@ def check_command(command: str, config: Dict[str, Any]) -> Tuple[bool, bool, str
             print(f"WARNING: Invalid regex in bashDeleteAllowlist: {pat!r} — {e}", file=sys.stderr)
             continue
 
+    # Resolve the command's path tokens ONCE. ~94 entries follow and the
+    # confirmation stage below consults these for every candidate; lexing per
+    # entry would re-scan the command 94 times inside a blocking PreToolUse hook.
+    tokens = path_scope.command_tokens(command)
+    repo_scoped = tuple(config.get("repoScopedPaths", []) or ())
+
+    def _decide(entry: str, reason: str) -> Tuple[bool, bool, str]:
+        """Attach the Known Road verdict to a confirmed path block."""
+        _keep, hits = path_scope.confirm(tokens, entry, repo_scoped)
+        allowed, detail, hint = _known_road_verdict(hits)
+        if allowed:
+            return False, False, ""
+        if detail:
+            return True, False, f"Blocked: {detail}"
+        return True, False, reason + hint
+
     # 3. Check for modifications to read-only paths (reads allowed)
     for readonly in read_only_paths:
-        blocked, reason = check_path_patterns(command, readonly, READ_ONLY_BLOCKED, "read-only path")
+        blocked, reason = check_path_patterns(
+            command, readonly, READ_ONLY_BLOCKED, "read-only path", tokens, repo_scoped)
         if blocked:
-            return True, False, reason
+            return _decide(readonly, reason)
 
     # 4. Check for deletions on no-delete paths (read/write/edit allowed)
     for no_delete in no_delete_paths:
-        blocked, reason = check_path_patterns(command, no_delete, NO_DELETE_BLOCKED, "no-delete path")
+        blocked, reason = check_path_patterns(
+            command, no_delete, NO_DELETE_BLOCKED, "no-delete path", tokens, repo_scoped)
         if blocked:
-            return True, False, reason
+            return _decide(no_delete, reason)
 
     return False, False, ""
 

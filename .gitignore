@@ -375,3 +375,8 @@ AGNOTE4482PHI.t1.md.lock
 # into the commit -- which is how they reached a PR that touches neither.
 pmoves/tools/tests/_renders/
 pmoves/tools/comfyui/_input/
+
+# Node-local runtime caches (sqlite/tiktoken/tool state) and test-fixture
+# output - generated in any working checkout, never committable content.
+/data/
+/tests/test_data/

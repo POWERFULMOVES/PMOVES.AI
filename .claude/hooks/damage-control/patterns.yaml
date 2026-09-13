@@ -1256,3 +1256,27 @@ noDeletePaths:
   - "pmoves/tools/"
   - "pmoves/tests/"
   - "pmoves/monitoring/"
+
+# ============================================================================
+# REPO-SCOPED PATHS
+# ============================================================================
+# A subset of readOnlyPaths written as a BARE DIRECTORY NAME. Those entries are
+# matched against command text, so they fired on that name anywhere on the host
+# -- including a host-level interpreter environment rebuilt OUTSIDE this repo,
+# which refused legitimate bringup work. Listing an entry here scopes it to this
+# repository: the guard still refuses the same operation on the same directory
+# inside the working tree, and stops claiming authority over identically-named
+# directories elsewhere on the machine. It protects nothing new.
+#
+# Only bare build/dependency artifact directory names belong here. Do NOT add an
+# entry that names a PMOVES-owned path (a contract, a migration, a compose file):
+# those are already repo-relative in meaning and must keep matching wherever a
+# copy of the tree lives. Enforced by path_scope.confirm().
+repoScopedPaths:
+  - 'dist/'
+  - 'build/'
+  - 'out/'
+  - 'node_modules/'
+  - '__pycache__/'
+  - 'venv/'
+  - '.venv/'
