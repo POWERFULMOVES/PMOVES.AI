@@ -448,6 +448,12 @@
       "sync": false,
       "reason": "automation fork of n8n-io/n8n; self-hosted n8n lane (pmoves-n8n skill); tracks PMOVES.AI-Edition-Hardened per .gitmodules; sync deferred until next tracked release",
       "branch": "PMOVES.AI-Edition-Hardened"
+    },
+    "PMOVES-spynel": {
+      "upstream": "agent0ai/spynel",
+      "sync": true,
+      "reason": "fork of agent0ai/spynel (Go, multi-agent chat orchestration) created 2026-09-12 for fleet evaluation; sync=true at upstream parity (0/0) until a PMOVES overlay lands; consumed-or-archived decision owed by the unconsumed-fork audit",
+      "branch": "main"
     }
   },
   "_excluded": {
