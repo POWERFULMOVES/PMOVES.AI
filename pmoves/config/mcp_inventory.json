@@ -218,8 +218,8 @@
       ]
     },
     "docker_toolkit": {
-      "description": "Docker MCP Toolkit gateway exposing the canonical PMOVES profile.",
-      "profile": "pmoves_5090_web",
+      "description": "Docker MCP Toolkit gateway exposing THIS NODE's PMOVES profile.",
+      "_profile_note": "There is no canonical fleet-wide profile. This group used to declare `\"profile\": \"pmoves_5090_web\"` and repeat that literal in the stdio args, so every node's rendered crush/kimi/opencode config launched a gateway serving the 5090's server set. No code ever read the group-level key — it was documentation asserting something untrue. PMOVES_MCP_PROFILE_ID below is seeded by mcp_config_generator from pmoves/tools/node_gateway_profile.py (env override -> pinned profile -> hardware detection -> refuse), and can be overridden with `--set PMOVES_MCP_PROFILE_ID=<name>`.",
       "servers": [
         {
           "key": "pmoves-docker-gateway",
@@ -231,10 +231,10 @@
             "gateway",
             "run",
             "--profile",
-            "pmoves_5090_web"
+            "${PMOVES_MCP_PROFILE_ID}"
           ],
+          "_clients_note": "`claude` was REMOVED 2026-09-13. .claude/mcp.json is the FLEET roster that deploy/provision/claude-pmoves.sh reads from origin/main on every node, and the launcher deliberately omits --strict-mcp-config so the PER-NODE .mcp.json written by `make -C pmoves mcp-toolkit-connect` stays live alongside it. Rendering the gateway into both put two entries under different keys into one session (MEASURED 2026-09-13 on the 4090: `MCP_DOCKER` and `pmoves-docker-gateway` both in the failed-server list). The other three clients have no per-node merge, so they keep the entry — with the profile resolved per node.",
           "clients": [
-            "claude",
             "kimi",
             "opencode",
             "crush"
