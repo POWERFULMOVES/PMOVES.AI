@@ -479,8 +479,10 @@ services:
     volumes:
     - ./config:/app/config
     depends_on:
-      pmoves-yt:
-        condition: service_started
+      # No cross-overlay depends_on: pmoves-yt is defined in a sibling overlay,
+      # and a depends_on referencing an undefined service invalidates the
+      # WHOLE project for this overlay (overlay-up fails fleet-wide). The
+      # dependency is runtime HTTP, not startup ordering.
       nats:
         condition: service_healthy
     ports:
@@ -727,12 +729,14 @@ services:
     - ${GITHUB_CLEANUP_BIND:-0.0.0.0}:8100:8100
     - ${GITHUB_CLEANUP_BIND:-0.0.0.0}:9096:9096
     depends_on:
+    # No cross-overlay depends_on: agent-zero is defined in a sibling overlay,
+    # and a depends_on referencing an undefined service invalidates the
+    # WHOLE project for this overlay (overlay-up fails fleet-wide). The
+    # dependency is runtime HTTP, not startup ordering.
       nats:
         condition: service_healthy
       nats-init:
         condition: service_completed_successfully
-      agent-zero:
-        condition: service_healthy
     profiles: ["agents", "github-automation"]
     networks: [pmoves_app, pmoves_bus, pmoves_api, pmoves_monitoring, pmoves_external]  # GitHub API
     healthcheck:
@@ -768,14 +772,18 @@ services:
     - ${GITHUB_TRIAGE_BIND:-0.0.0.0}:8101:8101
     - ${GITHUB_TRIAGE_BIND:-0.0.0.0}:9097:9097
     depends_on:
+    # No cross-overlay depends_on: botz-gateway is defined in a sibling overlay,
+    # and a depends_on referencing an undefined service invalidates the
+    # WHOLE project for this overlay (overlay-up fails fleet-wide). The
+    # dependency is runtime HTTP, not startup ordering.
+    # No cross-overlay depends_on: hi-rag-gateway-v2 is defined in a sibling overlay,
+    # and a depends_on referencing an undefined service invalidates the
+    # WHOLE project for this overlay (overlay-up fails fleet-wide). The
+    # dependency is runtime HTTP, not startup ordering.
       nats:
         condition: service_healthy
       nats-init:
         condition: service_completed_successfully
-      hi-rag-gateway-v2:
-        condition: service_healthy
-      botz-gateway:
-        condition: service_healthy
     profiles: ["agents", "github-automation"]
     networks: [pmoves_app, pmoves_bus, pmoves_api, pmoves_monitoring, pmoves_external]  # GitHub API
     healthcheck:
@@ -811,9 +819,11 @@ services:
     - pmoves_monitoring
     - pmoves_external  # GitHub API
     depends_on:
+    # No cross-overlay depends_on: agent-zero is defined in a sibling overlay,
+    # and a depends_on referencing an undefined service invalidates the
+    # WHOLE project for this overlay (overlay-up fails fleet-wide). The
+    # dependency is runtime HTTP, not startup ordering.
       nats:
-        condition: service_healthy
-      agent-zero:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8102/healthz"]
@@ -855,9 +865,11 @@ services:
     - pmoves_monitoring
     - pmoves_external  # GitHub API + git clone
     depends_on:
+    # No cross-overlay depends_on: agent-zero is defined in a sibling overlay,
+    # and a depends_on referencing an undefined service invalidates the
+    # WHOLE project for this overlay (overlay-up fails fleet-wide). The
+    # dependency is runtime HTTP, not startup ordering.
       nats:
-        condition: service_healthy
-      agent-zero:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8103/healthz"]
@@ -896,9 +908,11 @@ services:
     - pmoves_monitoring
     - pmoves_external  # GitHub API for PR management
     depends_on:
+    # No cross-overlay depends_on: agent-zero is defined in a sibling overlay,
+    # and a depends_on referencing an undefined service invalidates the
+    # WHOLE project for this overlay (overlay-up fails fleet-wide). The
+    # dependency is runtime HTTP, not startup ordering.
       nats:
-        condition: service_healthy
-      agent-zero:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8104/healthz"]
