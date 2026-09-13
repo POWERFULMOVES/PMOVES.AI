@@ -28,6 +28,14 @@ async def archon_client():
                 f"Port {ARCHON.port} is responding but /healthz returned 404 "
                 "(Archon may not be running)"
             )
+        if resp.status_code == 401:
+            await client.aclose()
+            pytest.skip(
+                f"Archon at localhost:{ARCHON.port} is UP but auth-armed (401) — "
+                "the smoke host has no API key in scope. Service reachability is "
+                "verified; authenticated behavior must be tested on a node with "
+                "the funnel env."
+            )
     except (httpx.ConnectError, httpx.ConnectTimeout):
         await client.aclose()
         pytest.skip(f"Archon not reachable at localhost:{ARCHON.port}")

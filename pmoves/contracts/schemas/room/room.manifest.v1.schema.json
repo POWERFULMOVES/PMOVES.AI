@@ -374,7 +374,8 @@
               "type": "array",
               "items": {
                 "type": "string"
-              }
+              },
+              "description": "Ceiling: the subjects this room MAY emit on. Not a claim that anything emits them today \u2014 what actually flows is agent_registry.yaml <agent>.nats.publishes. The two lists necessarily differ: this one also covers room-runtime emissions such as room.session.updated.v1, which P7 publishes and no bound agent does. A subject here but absent from the agent's publishes is a not-yet-wired emission, expected at stage:rehearsal. Narrow this list when a room will never emit a subject; never widen publishes to match it. See ROOM_MANIFEST_CONTRACT.md \u00a7 Publish Policy."
             },
             "gate_param": {
               "type": "string",

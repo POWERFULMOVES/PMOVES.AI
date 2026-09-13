@@ -18,6 +18,17 @@ from typing import Dict, List, Set
 
 from _smoke_helpers import grep_file, grep_numbered, PROJECT_ROOT, PMOVES_DIR
 
+# CI runners and fleet smoke hosts never carry env.shared / env.tier-* —
+# they are gitignored, funnel-generated OPERATOR-checkout artifacts. Tests
+# that read them measure the operator's local environment, not the code;
+# skip loudly when the funnel output is absent.
+_ENV_SHARED = PMOVES_DIR / "env.shared"
+requires_env_files = pytest.mark.skipif(
+    not _ENV_SHARED.exists(),
+    reason="env.shared not present (funnel-generated operator artifact; "
+           "not on CI runners or smoke hosts) — run on a node checkout",
+)
+
 
 def extract_env_vars_from_file(file_path: Path) -> Dict[str, str]:
     """Extract environment variable definitions from a file.
@@ -97,6 +108,7 @@ def get_all_env_files() -> List[Path]:
 
 
 @pytest.mark.smoke
+@requires_env_files
 def test_env_shared_exists() -> None:
     """Verify env.shared exists and has required variables."""
     env_shared = PMOVES_DIR / "env.shared"
@@ -110,6 +122,7 @@ def test_env_shared_exists() -> None:
 
 
 @pytest.mark.smoke
+@requires_env_files
 def test_no_duplicate_jwt_secrets() -> None:
     """Verify JWT secret is not duplicated across env files."""
     all_files = get_all_env_files()
@@ -224,6 +237,7 @@ def test_compose_services_use_env_vars() -> None:
 
 
 @pytest.mark.smoke
+@requires_env_files
 def test_env_files_have_no_export_keywords() -> None:
     """Verify environment files don't have 'export' keywords (Docker Compose doesn't parse them)."""
     all_files = get_all_env_files()
@@ -299,6 +313,7 @@ def test_postgres_password_alignment() -> None:
 
 
 @pytest.mark.smoke
+@requires_env_files
 def test_no_trailing_whitespace_in_env_files() -> None:
     """Verify environment files don't have trailing whitespace (causes parsing issues)."""
     all_files = get_all_env_files()
