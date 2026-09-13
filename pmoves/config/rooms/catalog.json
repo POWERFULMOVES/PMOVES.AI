@@ -157,6 +157,18 @@
       "current_stage": "rehearsal",
       "stage_source": "manifest stage field (new room, no P7 session yet)",
       "stage_verified_at": "2026-07-31T00:00:00Z"
+    },
+    {
+      "room_id": "ageless-beauty.room.practice",
+      "agent_id": "hermes-agent",
+      "alter": "ageless-beauty-navigator",
+      "display_name": "Ageless Beauty — Practice",
+      "stage": "rehearsal",
+      "manifest": "ageless-beauty.room.practice.json",
+      "summary": "Ageless Beauty practice edition — workorder + room manifest (docs-first, PR #3016). Stage: rehearsal.",
+      "current_stage": "rehearsal",
+      "stage_source": "ageless-beauty.room.practice.json::stage",
+      "stage_verified_at": "2026-09-13T00:00:00Z"
     }
   ]
 }
