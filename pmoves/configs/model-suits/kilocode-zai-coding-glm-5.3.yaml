@@ -1,0 +1,70 @@
+# ============================================================
+# KiloCode Z.AI-Coding GLM-5.3 Model Suit
+# Role: Hosted KiloClaw runtime lane — plan-routed GLM flagship
+# Best for: The kiloclaw VPS instance's live coding/agentic lane
+#           (KiloClaw gateway session model), Kilo CLI runs against
+#           the KiloCode plan's Z.AI coding routing
+# Provider: KiloCode (api.kilocode.ai) → Z.AI coding plan
+# Runtime model id: kilocode/zai-coding/glm-5.3
+# Version: 1.0.0 (cloned from kilo-auto-balanced v1.0.0; context from
+#           glm-5.3 suit — 128K measured, unverified beyond)
+# ============================================================
+
+model_suit:
+  name: kilocode/zai-coding/glm-5.3
+  provider: kilocode
+  base_url: "https://api.kilocode.ai/api/openrouter"
+  api_key_env: KILOCODE_API_KEY
+
+  architecture:
+    type: moe
+    total_params: "744B+"   # underlying GLM-5.3 (see glm-5.3.yaml)
+    active_params: "40B+"
+    attention: standard
+
+  context:
+    max_window: 128000      # UNMEASURED beyond this: matches glm-5.3.yaml measured preset
+    effective_window: 128000
+    working_window: 128000
+
+  defaults:
+    temperature: 0.7
+    top_p: 0.95
+    max_tokens: 8192
+    frequency_penalty: 0.0
+    presence_penalty: 0.0
+
+  advanced:
+    tool_call_parser: glm47
+    enable_thinking: true
+    reasoning_effort: max
+    mtp_steps: shared
+
+  harness_mappings:
+    plan_routed_coding:
+      temperature: 0.7
+      top_p: 0.95
+      max_tokens: 16384
+      system_prompt: directive_engineer
+
+    orchestration_overflow:
+      temperature: 0.7
+      top_p: 0.95
+      max_tokens: 8192
+      system_prompt: directive_engineer
+
+    agentic_workflow:
+      temperature: 0.8
+      top_p: 0.95
+      max_tokens: 8192
+      system_prompt: directive_engineer
+
+  cgp_state_vector:
+    delta: 0.30
+    Hz: 0.08
+    kappa: 1.8
+    A: 0.35
+    F: 0.05
+
+  fallback_to: glm-5.3   # direct Z.AI lane when plan routing is dry
+  priority: 6

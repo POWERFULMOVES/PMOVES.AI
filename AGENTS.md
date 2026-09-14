@@ -143,6 +143,7 @@ Don't dump everything into AGENTS.md. The tiered context map:
 | **Roadmap** | `pmoves/docs/PMOVES.AI PLANS/ROADMAP.md` |
 | **Claude runbook** | `.claude/CLAUDE.md` — live service map and operator guide |
 | **Codex operator** | `pmoves/docs/AGENTS/CODEX_OPERATOR_HOME.md` — Codex-first runbook |
+| **Kilo CLI harness** | `pmoves/docs/operations/KILO_CLI_HARNESS.md` — Kilo CLI (`@kilocode/cli`), fork submodule, `kilo.json` config contract |
 | **Sidecar deploy** | `deploy/sidecar/README.md` — standalone deployment on any device |
 | **Rooms on a Stage** | `pmoves/docs/ROOMS_ON_A_STAGE.md` — end-to-end model: rooms, stages, suits, P7 role |
 | **Room Manifest Contract** | `pmoves/docs/ROOM_MANIFEST_CONTRACT.md` — room/notebook interface specification |
