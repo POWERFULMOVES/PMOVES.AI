@@ -123,6 +123,21 @@ PR #1233 split the compose stack into a base + 6 overlay files (`base.yml` + `co
 
 **Detail + failure modes + cold-start recovery:** `pmoves/docs/operations/COMPOSE_LAYERING_RUNBOOK.md`.
 
+### Shell env wins over `--env-file` (the host-`NATS_URL` leak, 2026-09-13)
+
+Compose interpolation prefers the **calling shell's environment** over every `--env-file`. A
+host profile that exports runner-style values (e.g. `NATS_URL` pointing at `localhost` for
+host-side MCP clients) silently rewrites every `${NATS_URL}` service on `make overlay-up-*` —
+containers come up with a bus URL that resolves to nothing inside the network. Same class as
+the B850 #2322 NATS bug. **Deploy with host vars stripped:**
+
+```bash
+env -u NATS_URL make -C pmoves overlay-up-workers   # repeat -u for any host-only runner vars
+```
+
+Symptom: healthy containers, `ConnectionRefusedError` in subscriber logs against a URL that
+contains `localhost`. Verify with `docker exec <svc> printenv NATS_URL` after any overlay up.
+
 ## Damage-Control Hook Recovery
 
 If `patterns.yaml` is left with unresolved merge conflict markers during a rebase, `bash-tool-damage-control.py` fails to parse the file and blocks ALL Bash commands (fail-closed). Deadlock — you can't run `git status` or `git rebase --continue`.
@@ -495,6 +510,16 @@ Health check: `gh run list --workflow=claude-code-review.yml --limit 10` — a w
 ### Node signatures in the claim register — disambiguate primary vs mirror
 
 Multiple Claude instances can run as the **same node identity** (e.g. a 4090 primary and its 1M-context mirror both signing `4090-CLAUDE`). When two same-named claims race the AGNOTE append slot, **union-merge** (keep both — they're usually non-overlapping lanes), never pick-one. To prevent ambiguity, disambiguate the signature when a mirror is active (`4090-CLAUDE` vs `4090-CLAUDE-mirror`, or distinct `ACK::` scope tags) so `claim-collision-agent` and humans can tell the lanes apart.
+
+### `mergeable: UNKNOWN` can persist AFTER a successful merge (2026-09-13)
+
+The guarded `pr-closeout-merge` reads live PR state; GitHub's `mergeable`/`mergeStateStatus`
+recompute is asynchronous and can stay `UNKNOWN` for minutes — including **after the merge
+already happened**. Symptom: first merge attempt reports blockers (UNKNOWN state, a CANCELLED
+`emit lifecycle trail`), a retry reports "PR state is MERGED, not OPEN" — the first call
+landed. **Before re-invoking the merge, check `gh pr view <N> --json state` first.** A
+CANCELLED lifecycle-trail run from a force-push is fixed by `gh run rerun <id>`, not by
+re-pushing.
 
 ## Merge Hazards — Stacked PRs and Squash-Merge Rebase
 
