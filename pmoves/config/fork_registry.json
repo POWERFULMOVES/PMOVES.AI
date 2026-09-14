@@ -463,6 +463,12 @@
       "sync": false,
       "branch": "PMOVES.AI-Edition-Hardened",
       "reason": "untriaged - backfilled by the .gitmodules coverage cross-check. Promoting to sync: true also widens the App-token scope (Workflows:write on the fork), so it is a deliberate, reviewable act rather than a default"
+    },
+    "PMOVES-A0-codex-docker": {
+      "upstream": "frdel/codex-docker",
+      "sync": false,
+      "reason": "fork of frdel/codex-docker; base image for the a0-elder-melchor agent container (#3017); local overlay only, no upstream sync scheduled",
+      "branch": "main"
     }
   },
   "_excluded": {
