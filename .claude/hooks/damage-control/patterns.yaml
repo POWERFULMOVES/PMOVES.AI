@@ -33,18 +33,23 @@ bashToolPatterns:
   # further down the file ("Container sweep hard-blocks" section).
   - pattern: '(?<!docker\s)(?<!podman\s)(?<!git\s)\brm\s+(-[^\s]*)*-[rRf]'
     reason: rm with recursive or force flags (filesystem rm, not docker/podman/git)
+    alternative: "SANCTIONED ROUTES for removing files: (1) if the target is a TOOL CACHE, use the vendor's own command -- run `python3 .claude/skills/known-roads/roads.py caches` for the table; (2) otherwise enumerate and delete without recursive/force flags, e.g. `find <dir> -type f -delete` or `find <dir> -mindepth 1 -delete`; (3) for a PMOVES data volume use `make -C pmoves volume-reset SERVICE=<name>`, never the raw volume-removal subcommand; (4) for git's own lockfiles a bare removal is allowlisted. Run `python3 .claude/skills/known-roads/roads.py protected` to see what is off limits, and `python3 .claude/skills/known-roads/roads.py domains` for paths that have a provable bypass."
 
   - pattern: '(?<!docker\s)(?<!podman\s)(?<!git\s)\brm\s+-[rRf]'
     reason: rm with recursive or force flags (filesystem rm, not docker/podman/git)
+    alternative: "SANCTIONED ROUTES: vendor cache command, or `find <dir> -type f -delete`, or `make -C pmoves volume-reset SERVICE=<name>` for a PMOVES data volume. Run `python3 .claude/skills/known-roads/roads.py caches` and `python3 .claude/skills/known-roads/roads.py protected`."
 
   - pattern: '(?<!docker\s)(?<!podman\s)(?<!git\s)\brm\s+--recursive'
     reason: rm with --recursive flag (filesystem rm, not docker/podman/git)
+    alternative: "SANCTIONED ROUTES: vendor cache command, or `find <dir> -type f -delete`. Run `python3 .claude/skills/known-roads/roads.py caches`."
 
   - pattern: '(?<!docker\s)(?<!podman\s)(?<!git\s)\brm\s+--force'
     reason: rm with --force flag (filesystem rm, not docker/podman/git)
+    alternative: "SANCTIONED ROUTES: vendor cache command, or `find <dir> -type f -delete`. Run `python3 .claude/skills/known-roads/roads.py caches`."
 
   - pattern: '\bsudo\s+rm\b'
     reason: sudo rm
+    alternative: "SANCTIONED ROUTE: do not remove system files from an agent session. If a package must go, use the package manager (apt remove / conda remove / brew uninstall). Otherwise escalate to the operator with the exact path and the reason."
 
   - pattern: '\brmdir\s+--ignore-fail-on-non-empty'
     reason: rmdir ignore-fail
@@ -1280,3 +1285,97 @@ repoScopedPaths:
   - '__pycache__/'
   - 'venv/'
   - '.venv/'
+
+# ============================================================================
+# CACHE ROADS - vendor commands that clear a tool cache safely
+# ============================================================================
+# The destructive-pattern gate refuses removal with recursive/force flags,
+# correctly, and used to stop there. An agent clearing a REGENERABLE cache on a
+# full disk was told no and given nothing, so it either probed spellings or
+# abandoned an urgent task. This table is the enumerable answer: when a refused
+# command names one of these directories, the guard prints the vendor command.
+#
+# `match` is a plain substring tested against the command text. These entries grant
+# NOTHING. They are never consulted when deciding a verdict -- they only add text to
+# a refusal that has already happened. List them with `roads.py caches`.
+cacheRoads:
+  - match: 'go-build'
+    command: 'go clean -cache'
+  - match: 'ms-playwright'
+    command: 'npx playwright uninstall --all'
+  - match: 'playwright'
+    command: 'npx playwright uninstall --all'
+  - match: 'node-gyp'
+    command: 'npm cache clean --force'
+  - match: '.npm'
+    command: 'npm cache clean --force'
+  - match: 'pnpm'
+    command: 'pnpm store prune'
+  - match: 'yarn'
+    command: 'yarn cache clean'
+  - match: 'bun'
+    command: 'bun pm cache rm'
+  - match: 'uv'
+    command: 'uv cache prune   (full wipe: uv cache clean)'
+  - match: 'pip'
+    command: 'pip cache purge'
+  - match: 'cargo'
+    command: 'cargo cache --autoclean   (cargo-cache must be installed)'
+  - match: 'huggingface'
+    command: 'hf cache scan first, then hf cache delete - never wipe the whole hub blindly'
+  - match: 'conda'
+    command: 'conda clean --all'
+  - match: 'ccache'
+    command: 'ccache -C'
+  - match: 'electron'
+    command: 'find <dir> -mindepth 1 -delete   (no vendor prune command exists)'
+  - match: 'docker'
+    command: 'docker builder prune (build cache) or docker image prune (images). For a PMOVES data volume use make -C pmoves volume-reset SERVICE=<name>.'
+
+# ============================================================================
+# OPAQUE-WRITE VERBS - commands that write paths they never spell
+# ============================================================================
+# Every path rule above interpolates {path}, so the guard only sees a write that
+# NAMES a protected path in the command text. These verbs take their targets from
+# a diff, an archive, a source tree or a device, so the target never appears in
+# the command at all. Measured: applying a diff from a file wrote two protected
+# compose files and the trail read 250 rows before and 250 after.
+#
+# THIS DOES NOT CLOSE THE CLASS AND MUST NOT BE READ AS DOING SO. An executed
+# shell script, an executed python file and a build-tool target are the same
+# shape and are deliberately absent: the moment this list looks exhaustive it
+# stops being obviously partial, and a partial fix that announces itself as total
+# removes the suspicion that would find the rest. The class is closed by EFFECT,
+# post-hoc, in effect_check.py. This is the cheap PreToolUse half that catches
+# the common shapes while prevention is still possible.
+#
+# Verdict: a provable Known Road grant -> allowed and RECORDED (the trail row
+# carries the verb, not a path, because no path is derivable). No grant -> `ask`,
+# not block. These verbs are legitimate constantly; blocking them outright would
+# be disproportionate, and an operator confirmation is the proportionate answer
+# to "this can write somewhere I cannot see".
+#
+# `pattern` fires; `unless` (optional) withdraws it for the read-only forms of
+# the same verb. Both are matched against the command with HEREDOC BODIES
+# REMOVED, so a document that merely quotes one of these verbs does not trip it.
+# Separators deliberately include \n: unlike the {path} rules, there is no path
+# text here to keep a match honest, so every command position must be reachable.
+opaqueWriteVerbs:
+  - verb: 'patch'
+    pattern: '(?:^|[\n;&|]\s*|\$\(\s*)patch(?![\w-])'
+    unless: '(?:^|\s)--dry-run(?:\s|=|$)'
+    reason: "applies a diff — every target comes from the diff, not the command line"
+  - verb: 'git apply'
+    pattern: '(?:^|[\n;&|]\s*|\$\(\s*)git\s+(?:(?:-[cC]|--git-dir|--work-tree|--namespace|--exec-path)(?:=|\s+)\S+\s+|-[^\s]+\s+)*apply(?![\w-])'
+    unless: '(?:^|\s)--(?:check|stat|numstat|summary)(?:\s|=|$)'
+    reason: "applies a diff — every target comes from the diff, not the command line"
+  - verb: 'tar extract'
+    pattern: '(?:^|[\n;&|]\s*|\$\(\s*)tar(?![\w-])[^\n]*(?:\s-[A-Za-z]*x[A-Za-z]*(?:\s|$)|\s--extract(?:\s|=|$))'
+    reason: "extracts an archive — every target comes from the archive, not the command line"
+  - verb: 'rsync'
+    pattern: '(?:^|[\n;&|]\s*|\$\(\s*)rsync(?![\w-])'
+    unless: '(?:^|\s)(?:--dry-run|-[A-Za-z]*n[A-Za-z]*)(?:\s|=|$)'
+    reason: "mirrors a source tree — targets are derived from the source, not named"
+  - verb: 'dd'
+    pattern: '(?:^|[\n;&|]\s*|\$\(\s*)dd(?![\w-])[^\n]*\sof='
+    reason: "block copy to a device or file — writes past every filesystem-level rule"

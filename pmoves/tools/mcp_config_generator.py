@@ -20,6 +20,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
+from pmoves.tools.node_gateway_profile import (  # noqa: E402
+    ENV_OVERRIDE as _GATEWAY_PROFILE_VAR,
+    resolve as resolve_node_gateway_profile,
+)
+
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 PMOVES_DIR = PROJECT_ROOT / "pmoves"
 INVENTORY_PATH = PMOVES_DIR / "config" / "mcp_inventory.json"
@@ -482,6 +489,34 @@ def main(argv: Optional[List[str]] = None) -> int:
             return 2
         k, v = item.split("=", 1)
         context[k] = v
+
+    # Seed THIS NODE's Docker MCP gateway profile.
+    #
+    # The inventory carries ${PMOVES_MCP_PROFILE_ID} rather than a profile name
+    # because there is no fleet-wide one: it used to hold the literal
+    # `pmoves_5090_web`, so every node rendered a config that launched the
+    # 5090's gateway. Seeding the CONTEXT rather than special-casing the
+    # gateway's server key keeps this in the expansion path every other value
+    # already uses -- no key-specific branch to keep in sync with the inventory.
+    #
+    # setdefault, so an explicit `--set PMOVES_MCP_PROFILE_ID=...` still wins;
+    # _expand also consults os.environ, but only for clients that allow it, and
+    # the placeholder has to resolve for the tracked ones too.
+    if _GATEWAY_PROFILE_VAR not in context:
+        resolved, why = resolve_node_gateway_profile()
+        if resolved:
+            context[_GATEWAY_PROFILE_VAR] = resolved
+        else:
+            # Loud, and specific about the consequence. Silently emitting a
+            # literal `${PMOVES_MCP_PROFILE_ID}` into a client config is the
+            # kind of well-formed-but-dead entry this generator exists to avoid.
+            print(
+                f"WARNING: {_GATEWAY_PROFILE_VAR} unresolved ({why}); the Docker MCP "
+                f"gateway entry will keep the literal placeholder and will not start. "
+                f"Pass --set {_GATEWAY_PROFILE_VAR}=<profile> or declare "
+                f"docker_mcp.gateway_profile in this node's pmoves/config/profiles/<id>.yaml.",
+                file=sys.stderr,
+            )
 
     clients = list(RENDERERS.keys()) if args.client == "all" else [args.client]
 
