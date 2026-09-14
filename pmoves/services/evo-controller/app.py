@@ -346,26 +346,22 @@ class EvoSwarmController:
             "version": pack.get("version"),
             "population_id": pack.get("population_id"),
             "best_fitness": pack.get("fitness"),
-            "metrics": pack.get("energy"),
+            # NOTE: geometry.swarm.meta.v1 is additionalProperties:false — a
+            # "metrics" passthrough (or a CHIT sign_cgp wrap of this dict)
+            # fails A0's schema validation and the event never reaches the
+            # bus. CHIT provenance belongs on the pack record (the table has
+            # a signature column) and in A0's envelope layer, not inside this
+            # payload. See AGNOTE4482_EVO_CONTROLLER_DEEP_DIVE.md gap list.
             "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ"),
         }
-        # CHIT-sign the event payload before it enters the geometry bus
-        # (Agent Zero forwards the payload verbatim to geometry.swarm.meta.v1).
         key = _chit_signing_key()
-        if CHIT_AVAILABLE and key:
-            payload = sign_cgp(payload, passphrase=key)
-        elif _chit_signature_required():
+        if _chit_signature_required() and not (CHIT_AVAILABLE and key):
             logger.error(
                 "CHIT_REQUIRE_SIGNATURE is set but signing is unavailable "
                 "(missing signing key or chit wrappers) — refusing to publish "
-                "unsigned geometry.swarm.meta.v1"
+                "geometry.swarm.meta.v1"
             )
             return
-        else:
-            logger.warning(
-                "No CHIT signing key set — publishing geometry.swarm.meta.v1 "
-                "unsigned (dev mode)"
-            )
         body = {
             "topic": "geometry.swarm.meta.v1",
             "source": "evo-controller",
