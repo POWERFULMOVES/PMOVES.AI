@@ -279,20 +279,102 @@ def test_the_succession_marker_is_not_collapsed_to_an_endpoint():
 
 
 # --------------------------------------------------------------------------
-# The register cannot be audited with grep
+# Register byte integrity
+#
+# This section used to assert the OPPOSITE -- that a NUL byte was PRESENT,
+# as the standing reason `read_register()` exists. The NUL was not a feature:
+# it was a corrupted `0` in the string `0.0.0.0:4482`, at offset 1950 of line
+# 1705, and the repair restored it with the line length unchanged at 3305.
+#
+# The old assertion then failed, correctly, and its message invited its own
+# deletion ("this test and the warning should go with it"). Deleting it would
+# have removed the only thing in this repo that notices a byte-level change to
+# an append-only ledger -- the detector, retired for successfully detecting.
+#
+# So the canary is INVERTED rather than dropped. NUL is now a hard failure,
+# and the remaining control bytes are ratcheted against a measured census, in
+# the idiom already used by fork_registry_ratchet.py and hardening_ratchet.py:
+# the budget may only be LOWERED.
 # --------------------------------------------------------------------------
 
-def test_the_register_needs_a_tolerant_reader():
-    """It contains a NUL byte, so `grep` calls it binary and stops printing
-    after the first match. Any grep-based audit of this file is silently
-    truncated -- which is why the reader is centralised here."""
-    raw = il.REGISTER_PATH.read_bytes()
-    assert b"\x00" in raw, (
-        "the NUL is gone -- if the file was cleaned, this test and the warning "
-        "in read_register() should go with it"
+# Measured on the register at the commit that repaired the NUL. TAB/LF/CR are
+# excluded as structural. What remains is terminal-paste residue (BEL, BS,
+# ESC) and page breaks (VT, FF) that predate this gate. They are tolerated
+# because they are already there and removing them would be another in-place
+# rewrite of history; they are CAPPED so that new damage cannot hide among
+# them.
+CONTROL_BYTE_BUDGET = 21
+STRUCTURAL_BYTES = frozenset({0x09, 0x0a, 0x0d})  # TAB, LF, CR
+
+
+def _control_bytes(raw: bytes) -> dict[int, int]:
+    counts: dict[int, int] = {}
+    for byte in raw:
+        if byte < 0x20 and byte not in STRUCTURAL_BYTES:
+            counts[byte] = counts.get(byte, 0) + 1
+    return counts
+
+
+def test_the_register_carries_no_NUL_byte():
+    """A NUL makes the ledger unreadable in the two places review happens.
+
+    `grep` classifies the file as binary and stops printing after its first
+    match, so any grep-based audit is silently truncated. GitHub does the same
+    and omits the patch entirely -- PR #2944's own register hunk came back with
+    `has patch: False`, meaning the one edit that touched an append-only ledger
+    byte-wise could not be seen by any reviewer, human or bot.
+
+    So this is a hard gate, not a ratchet. A NUL here is damage every time.
+    """
+    counts = _control_bytes(il.REGISTER_PATH.read_bytes())
+    assert counts.get(0x00, 0) == 0, (
+        f"{counts[0x00]} NUL byte(s) in the register. grep and GitHub both "
+        "treat the whole file as binary, so the diff becomes unreviewable. "
+        "Find it with the byte offset and restore the character it replaced -- "
+        "do NOT delete it, which shortens a historical row."
+    )
+
+
+def test_the_register_control_byte_census_only_shrinks():
+    """Ratchet, so new damage cannot hide among the residue already present.
+
+    Lower CONTROL_BYTE_BUDGET whenever residue is legitimately cleaned. Raising
+    it means something wrote control bytes into a ledger row -- find out what
+    before editing this number.
+    """
+    counts = _control_bytes(il.REGISTER_PATH.read_bytes())
+    total = sum(counts.values())
+    assert total <= CONTROL_BYTE_BUDGET, (
+        f"control-byte census grew to {total} (budget {CONTROL_BYTE_BUDGET}): "
+        f"{ {hex(k): v for k, v in sorted(counts.items())} }. A row absorbed "
+        "terminal output or an escape sequence; re-file it as clean text."
     )
     text = il.read_register()
     assert len(il.register_entries(text)) > 300
+
+
+def test_entry_line_numbers_follow_split_not_splitlines():
+    """The reason `entry_lines()` spells `split("\\n")` -- and it was untested.
+
+    The register carries VT and FF characters. `str.splitlines()` breaks on
+    those; `split("\\n")`, grep, sed and every editor do not. The two therefore
+    disagree by an offset that GROWS down the file and lands hardest on the
+    NEWEST rows -- the ones any message points at. If this ever passes with the
+    two counts equal, the residue is gone and the distinction stops mattering.
+    """
+    text = il.read_register()
+    assert len(text.splitlines()) != len(text.split("\n")), (
+        "splitlines() and split('\\n') now agree, so the register no longer "
+        "carries VT/FF; entry_lines() may be simplified and this test retired"
+    )
+    numbered = il.entry_lines(text)
+    by_split = text.split("\n")
+    for lineno, line in numbered:
+        assert by_split[lineno - 1] == line, (
+            f"entry_lines() reported row {lineno} but split('\\n') has a "
+            "different line there -- the numbering has drifted from what a "
+            "reader following the message would see"
+        )
 
 
 # --------------------------------------------------------------------------
