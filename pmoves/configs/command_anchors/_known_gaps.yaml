@@ -429,6 +429,8 @@ known_gaps:
   - "GHOST_TARGET|pmoves/docs/specs/p7-service-spec-2026-07-20.md|rooms-reload"
   - "GHOST_TARGET|pmoves/docs/specs/tts-pterm-gepeto-review-readmes-2026-08-01.md|tac-check"
   - "GHOST_TARGET|pmoves/docs/specs/tts-pterm-gepeto-review-readmes-2026-08-01.md|tts-test-all"
+  - "GHOST_TARGET|pmoves/docs/validation/VALIDATION_MATCHES_SHAPE.md|archon-mcp-smoke"
+  - "GHOST_TARGET|pmoves/docs/validation/VALIDATION_MATCHES_SHAPE.md|archon-smoke"
   - "UNKNOWN_HOST|deploy/runbooks/amd-r9700-install-day.md|pmoves-9850x3d-r9700"
   - "UNKNOWN_HOST|deploy/runbooks/fresh-install-fleet.md|pmoves-9850x3d-r9700"
   - "UNKNOWN_HOST|deploy/runbooks/fresh-install-fleet.md|pmoves-pve-01"
