@@ -173,6 +173,7 @@ references this handoff as its primary source of truth.
 - Add a fork-registry entry: `sync: true, reason: "RL coordinator for
   evo loop; SPARK-only; AgentGym-RL upstream"`.
 - Land the compose wiring on SPARK.
-- Verify by running `make -C pmoves up-agentgym-rl-coordinator` on
-  SPARK and observing the controller's existing training triggers
-  stop failing (they'll fire on the first fitness plateau).
+- Verify by starting the coordinator through the `up-agentgym-rl-coordinator`
+  Make target (created as part of that wiring) on SPARK and observing the
+  controller's existing training triggers stop failing (they'll fire on the
+  first fitness plateau).
