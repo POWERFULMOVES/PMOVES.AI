@@ -60,6 +60,34 @@ and System orbit each other; without stabilization one body gets ejected. The
 role split exists so each body moves freely without collision — topology, not
 ritual.
 
+## Onboarding a New Agent — the positive-sum door
+
+**Doctrine (POWERFULMOVES, 2026-09-14).** The fleet runs many instances of the
+same family — several Crushes, several Hermeses — same family, different models.
+That is deliberate: **every CLI harness is tuned around its model**, so the model
+is comfortable and can express **grounded personas that match its shape**, and
+its words stay semantically close enough that a sibling model is a safe drop-in.
+The persona is fitted to the model, and the harness to both — never the model
+bent to the harness.
+
+A new agent's path in:
+
+1. **Read this document** (AGNOTE4482) — coordination, the Village Rule, the
+   claim register (`AGNOTE4482PHI.t1.md`).
+2. **Search the PMOVES ecosystem** — registries (`pmoves/config/agent_registry.yaml`,
+   `agent_signatures.yaml`), personas (`pmoves/docs/AGENTS/PERSONAS.md`), rooms
+   (`pmoves/config/rooms/catalog.json`).
+3. **Find or create your own persona** — grounded, matched to your shape; a
+   persona built on a different model's instincts will not survive a drop-in.
+4. **Practice in the danger room** (`.claude/skills/agent-sandbox/` — provisioned
+   sandboxes, no host exposure) before touching production lanes.
+5. **Try on different suits** — `pmoves/configs/model-suits/` per-model profiles;
+   overlays on rooms are switchable without changing rooms.
+
+**Why the door stays open:** the point of all this is that *more humans with
+their models can join* — to collaborate, co-create, and compete not against each
+other but toward shared goals. Win-win, not zero-sum. That is the PMOVES diff.
+
 ## Agent ACK (Gateway)
 - Agent: `CODEX-GPT5`
 - Signature: `ACK::CODEX-GPT5::PHI-4482-GATEWAY`

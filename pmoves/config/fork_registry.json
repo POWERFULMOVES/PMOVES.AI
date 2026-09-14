@@ -473,8 +473,8 @@
     "PMOVES-spynel": {
       "upstream": "agent0ai/spynel",
       "sync": true,
-      "reason": "fork of agent0ai/spynel (Go, multi-agent chat orchestration) created 2026-09-12 for fleet evaluation; sync=true at upstream parity (0/0) until a PMOVES overlay lands; consumed-or-archived decision owed by the unconsumed-fork audit",
-      "branch": "main"
+      "reason": "fork of agent0ai/spynel (Go, multi-agent chat orchestration); overlay landed: PMOVES.AI-Edition-Hardened carries PMOVES.AI_INTEGRATION.md (source-build install F1, transport boundaries F3, template governance F4); consumable branch is the hardened branch; default tracks parity",
+      "branch": "PMOVES.AI-Edition-Hardened"
     }
   },
   "_excluded": {
