@@ -26,44 +26,300 @@ perfectly healthy Cipher as a timeout — measured on the 4090, a 10s budget
 returned HTTP 200 after exactly 10.0s because the deadline, not the server,
 ended it. So this reads the STATUS LINE and stops.
 
+/mcp/sse REQUIRES a bearer, so the probe must present one
+---------------------------------------------------------
+Measured on B850 2026-09-05 against the live container:
+
+    GET /health                       -> 200
+    GET /mcp/sse  (no Authorization)  -> 401
+    GET /mcp/sse  (Bearer $TOKEN)     -> 200
+
+Both roster entries already carry ``headers.Authorization: "Bearer
+${CIPHER_API_TOKEN}"``. This tool used to read only ``url`` out of the roster
+and throw the header away, so it sent no credential — against an endpoint that
+requires one, the only reachable outcome was 401. Then 401 was folded into
+"DOWN" and the summary said *No cipher endpoint answered*. It had answered; the
+answer was 401, which is proof of life.
+
+That is the mirror of the usual bug. Not a check that cannot fail — a check
+that could not pass. Three consecutive sessions were told they had no
+persistent memory while Cipher was healthy and reachable throughout.
+
+``${VAR}`` expansion is imported from mcp_roster_normalize (P4) rather than
+reimplemented, so the roster resolves the same way here as it does on the path
+into Claude Code. Per that module's P5 split verdict, an unresolvable
+*header* is announced and the probe continues anonymously — it is not fatal
+the way an unresolvable *url* is.
+
+NEVER LOG THE CREDENTIAL. Header values are consumed by the request and never
+enter a result row, the JSON payload, or a message. Only variable NAMES do.
+
 Refusing to guess
 -----------------
 An endpoint that cannot be resolved or reached at all is reported as such and
-exits 3, not 0 — same doctrine as docker_host_policy_check.py. A probe that
-says "pass" when it took no measurement is the failure mode this repo has spent
-a lot of effort removing.
+exits 3, not 0 — same doctrine as docker_host_policy_check.py and
+mcp_toolkit_preflight.py. A probe that says "pass" when it took no measurement
+is the failure mode this repo has spent a lot of effort removing.
+
+The corollary matters just as much: a probe that says "fail, and by the way you
+have no memory" when it DID take a measurement is the same sin inverted. 401 is
+a measurement. It gets its own verdict and its own remedy — bind the token,
+which is not the same instruction as start the service.
 
 Usage:
   python pmoves/tools/cipher_preflight.py
   python pmoves/tools/cipher_preflight.py --json
   python pmoves/tools/cipher_preflight.py --url http://localhost:8105/mcp/sse
+  python pmoves/tools/cipher_preflight.py --url ... --token-env OTHER_TOKEN_VAR
+  python pmoves/tools/cipher_preflight.py --url ... --token-env ''   # anonymous
+
+An explicit ``--url`` presents ``Bearer ${CIPHER_API_TOKEN}`` too, expanded by
+the same shared expander. It did not, which made the documented manual command
+above unable to pass against an endpoint that requires a bearer -- this file's
+own thesis, surviving in the path an operator reaches for when they doubt the
+roster. The token is taken from a NAMED VARIABLE and never from argv, where it
+would be readable in ``ps``.
 
 Exit codes:
-  0  at least one cipher endpoint answered — memory is available
-  1  every candidate endpoint was reached and none answered usably
-  3  could not measure (no roster, nothing resolvable) — NOT a pass
+  0  at least one cipher endpoint answered usably — memory is available
+  1  findings: something ANSWERED but not usably (401 unauthorized, or another
+     HTTP status). The service is up; the session's access to it is not
+  3  could not measure — no roster, nothing resolvable, nothing reachable at
+     all, or the check itself crashed. NOT a pass
+
+A crash lands on 3 and not on python's own uncaught-exception 1, because the
+launcher treats 1 as "it answered, the service is UP". Reporting health from a
+run that took no measurement is the failure this file exists to end, and it
+would be no better for the tool to commit it than for the thing it checks.
 """
 from __future__ import annotations
 
 import argparse
+import contextlib
+import io
 import json
+import os
+import re
 import socket
 import sys
 import urllib.error
 import urllib.request
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Iterable, List, Mapping, Optional
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_ROSTER = _REPO_ROOT / ".claude" / "mcp.json"
+
+# Reuse the roster expander rather than writing a second one. Divergence here
+# would mean the credential resolves differently for the preflight than for the
+# session it is vouching for, which is worse than no preflight.
+_tools_dir = Path(__file__).resolve().parent
+if str(_tools_dir) not in sys.path:
+    sys.path.insert(0, str(_tools_dir))
+
+try:
+    from mcp_roster_normalize import expand as _expand_vars  # noqa: E402
+except Exception as _exc:  # pragma: no cover - depends on the tree layout
+    # An uncaught ImportError here aborted the module and python exits 1 on an
+    # uncaught exception -- which claude-pmoves.sh reads as "findings: the
+    # service is UP, do not restart it". A crash is COULD-NOT-MEASURE. Degrade
+    # to a verdict the caller can act on instead of asserting health we never
+    # observed. Class name only, never the message: see the ValueError handler
+    # in probe() for why an exception's text is not safe to print here.
+    _EXPANDER_ERROR = (
+        f"cannot import mcp_roster_normalize ({type(_exc).__name__}) — the "
+        "roster cannot be resolved the way the session will resolve it"
+    )
+    _expand_vars = None  # type: ignore[assignment]
+else:
+    _EXPANDER_ERROR = None
+
+try:
+    from _secrets_common import parse_env_file as _parse_env_file  # noqa: E402
+except Exception as _exc:  # pragma: no cover - depends on the tree layout
+    # Degrade, do not abort. Unlike the expander above, losing this only means
+    # resolving from a smaller environment -- today's behaviour -- rather than
+    # resolving DIFFERENTLY from the session. Class name only, never the
+    # message: see the ValueError handler in probe().
+    _ENV_PARSER_ERROR = (
+        f"cannot import _secrets_common ({type(_exc).__name__}) — the env file "
+        "cannot be layered in, so a credential that lives only there will read "
+        "as absent"
+    )
+    _parse_env_file = None  # type: ignore[assignment]
+else:
+    _ENV_PARSER_ERROR = None
 
 # Long enough to cross the tailnet, short enough that a wedged endpoint does not
 # hold up a session start. Only the status line is awaited, never the body.
 CONNECT_TIMEOUT = 6.0
 
+# http.client refuses these in a header value -- and names the value in the
+# exception. We check first so the secret never reaches that message.
+_ILLEGAL_HEADER_CHARS = re.compile(r"[\r\n]")
+
+# ---------------------------------------------------------------------------
+# THE ENVIRONMENT THE SESSION WILL ACTUALLY HAVE
+# ---------------------------------------------------------------------------
+# This probe ran BEFORE the credential existed.
+#
+#   pmoves/scripts/claude-pmoves.sh    runs this preflight ...
+#   pmoves/scripts/claude-pmoves.sh    ... then execs $LAUNCHER
+#   deploy/provision/claude-pmoves.sh  ... which is what loads pmoves/env.shared
+#
+# So on the documented path -- `make -C pmoves claude-pmoves` -- the roster's
+# `Bearer ${CIPHER_API_TOKEN}` was expanded against a process environment that
+# did not yet contain the token. The header was omitted, the probe got 401, and
+# the session was told its memory was unusable moments before the delegate
+# loaded the token and launched Claude with a perfectly working Cipher MCP.
+#
+# That is the ORIGINAL defect of this lane -- a check that cannot pass --
+# resurrected by ordering rather than by a dropped header. It passed on the
+# node where the fix was written only because CIPHER_API_TOKEN happened to be
+# exported in the operator's shell: works here, reproducible nowhere.
+#
+# WHY THE TOOL RESOLVES IT AND NOT THE LAUNCHER. Three options were on the
+# table: load env.shared in the thin launcher before the probe, move the probe
+# after the env load, or resolve it here. This one:
+#
+#   * fixes EVERY caller. The documented manual command
+#     `python pmoves/tools/cipher_preflight.py` has the identical defect from
+#     an operator shell, and reordering one launcher leaves it broken.
+#   * adds no path that can abort a launch. claude-pmoves.sh:177 is explicit
+#     that the preflight must never block ("a session without memory is
+#     degraded, not unusable"), and pmoves/scripts/with-env.sh opens with
+#     `set -euo pipefail`, so SOURCING it turns errexit on in the caller. No
+#     shell wiring is touched here, so that hazard is not introduced.
+#   * costs the session nothing. The launcher's own load is still the only one
+#     that reaches the child process; this overlay lives and dies inside this
+#     probe.
+#
+# FIDELITY, NOT CONVENIENCE. The provisioning launcher sources its sanitized
+# copy under `set -a`, so a value in env.shared OVERRIDES an already-exported
+# one. The overlay mirrors that precedence, the same blocklist, and the same
+# `${ALIAS}` expansion in file order. A preflight that resolved a token the
+# session will not use would be vouching for something else -- the same reason
+# this module imports mcp_roster_normalize.expand instead of reimplementing it.
+#
+# Parsing is _secrets_common.parse_env_file, the declared single source of
+# truth for env-file parsing. This file writes no fourth parser.
+#
+# NOTHING FROM THE FILE IS EVER PRINTED. The overlay feeds expansion and
+# nothing else; only variable NAMES leave this module, exactly as with the
+# process environment.
+
+# Mirrors the blocklist in deploy/provision/claude-pmoves.sh. These control
+# Claude SDK/session behaviour and billing, are deliberately NOT sourced by the
+# launcher, and so must not be resolvable here either -- otherwise the preflight
+# could vouch for a credential the session refuses to load.
+_ENV_FILE_BLOCKLIST = re.compile(
+    r"^(ANTHROPIC_API_KEY|ANTHROPIC_AUTH_TOKEN|ANTHROPIC_BASE_URL"
+    r"|CLAUDECODE|CLAUDE_CODE_|CLAUDE_SESSION_)$"
+)
+
+
+def default_env_file() -> Path:
+    """Same resolution as deploy/provision/claude-pmoves.sh: $PMOVES_ENV_SHARED or the repo copy."""
+    override = os.environ.get("PMOVES_ENV_SHARED")
+    if override:
+        return Path(override)
+    return _REPO_ROOT / "pmoves" / "env.shared"
+
+
+def layered_environ(
+    env_file: Optional[Path] = None,
+    base: Optional[Mapping[str, str]] = None,
+) -> tuple[Dict[str, str], Optional[str]]:
+    """``(environment the session will see, note)`` — process env with env.shared over it.
+
+    *note* is a human-readable line when the overlay could not be applied. It is
+    NOT fatal: without it we resolve from a strictly smaller environment, which
+    is exactly today's behaviour, and a preflight must never cost you a launch.
+    """
+    env: Dict[str, str] = dict(os.environ if base is None else base)
+    if _expand_vars is None:
+        return env, "env-file overlay skipped: the shared expander is unavailable"
+    if _parse_env_file is None:
+        return env, f"env-file overlay skipped: {_ENV_PARSER_ERROR}"
+
+    path = env_file or default_env_file()
+    if not path.is_file():
+        # Not an error. A node may legitimately carry its creds in the process
+        # environment; say nothing rather than manufacture an alarm.
+        return env, None
+
+    # parse_env_file warns on stderr about malformed lines, naming the KEY only.
+    # Captured and re-emitted with attribution rather than swallowed: a silent
+    # handler here would hide the reason a variable is absent, which is the
+    # class of bug this whole lane is about.
+    buf = io.StringIO()
+    try:
+        with contextlib.redirect_stderr(buf):
+            file_values = _parse_env_file(path)
+    except Exception as exc:  # noqa: BLE001 - a bad env file must not abort a launch
+        return env, f"env-file overlay failed ({type(exc).__name__}) — detail withheld"
+    for line in buf.getvalue().splitlines():
+        if line.strip():
+            print(f"[cipher-preflight] {path.name}: {line}", file=sys.stderr)
+
+    # File order, so an alias resolves against a canonical key defined earlier
+    # in the same file -- which is what sourcing it sequentially does.
+    for key, raw in file_values.items():
+        if _ENV_FILE_BLOCKLIST.match(key):
+            continue
+        value = raw
+        if "${" in raw:
+            misses: List[str] = []
+            value = _expand_vars(raw, env, misses)
+            if misses:
+                # An alias whose target is unset would become an empty string
+                # under the launcher's `set +u`. Leaving the key ABSENT instead
+                # is strictly better here: the roster expansion then reports
+                # the variable by NAME, whereas an empty value would be sent as
+                # a bare "Bearer " and come back as an anonymous-looking 401.
+                continue
+        env[key] = value
+    return env, None
+
+
+# Which variable holds the cipher bearer. Both roster entries spell it this way
+# (`"Authorization": "Bearer ${CIPHER_API_TOKEN}"`), so an explicit --url probe
+# that synthesises the same header is probing the way the session will.
+DEFAULT_TOKEN_ENV = "CIPHER_API_TOKEN"
+
 
 class Unmeasured(RuntimeError):
     """The check could not be performed. Never reported as a pass."""
+
+
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Refuse redirects, because this request carries a bearer token.
+
+    urllib forwards EVERY header except content-length/content-type to the
+    redirect target, including ``Authorization``, and including a target on a
+    different host (see ``HTTPRedirectHandler.redirect_request`` — unlike
+    ``requests``, there is no cross-host strip). Following a redirect here
+    would hand the Cipher credential to whatever the Location header names.
+
+    That vector did not exist before this probe started sending a credential,
+    so it is introduced by the fix and closed in the same change. Declining is
+    also the honest answer on the merits: a 3xx is not an open SSE stream, so
+    "memory is available" was never established.
+    """
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        raise urllib.error.HTTPError(req.full_url, code, msg, headers, fp)
+
+
+def _urlopen(req: urllib.request.Request, timeout: float):
+    """The single network seam, so redirect refusal cannot be bypassed.
+
+    Tests patch THIS rather than `urllib.request.urlopen`: an opener-based call
+    does not route through that function, so a stub on it would silently let
+    the suite hit the real network — which is exactly what happened when the
+    opener was first introduced.
+    """
+    return urllib.request.build_opener(_NoRedirect).open(req, timeout=timeout)
 
 
 def cipher_urls_from_roster(roster: Optional[Path] = None) -> List[Dict[str, str]]:
@@ -79,47 +335,224 @@ def cipher_urls_from_roster(roster: Optional[Path] = None) -> List[Dict[str, str
     except (OSError, ValueError) as exc:
         raise Unmeasured(f"cannot read MCP roster {path}: {exc}") from exc
 
-    found: List[Dict[str, str]] = []
+    found: List[Dict[str, Any]] = []
     for name, spec in (doc.get("mcpServers") or {}).items():
         if name.startswith("_") or "cipher" not in name.lower():
             continue
         url = (spec or {}).get("url")
         if url:
-            found.append({"name": name, "url": url})
+            # `headers` rides along. Dropping it here was the whole bug: the
+            # roster declares the bearer /mcp/sse requires, and a probe that
+            # discards it can only ever be told 401.
+            headers = (spec or {}).get("headers") or {}
+            found.append({"name": name, "url": url, "headers": headers})
     return found
 
 
-def probe(url: str, timeout: float = CONNECT_TIMEOUT) -> Dict[str, Any]:
-    """Reach the endpoint and read ONLY the status line.
+def _resolve_headers(
+    headers: Dict[str, str], environ: Optional[Mapping[str, str]] = None
+) -> tuple[Dict[str, str], List[str]]:
+    """Expand ``${VAR}`` in header values. Returns ``(resolved, missing_names)``.
+
+    A header whose references did not all resolve is OMITTED rather than sent:
+    transmitting the literal text ``Bearer ${CIPHER_API_TOKEN}`` would earn a
+    401 that looks exactly like a wrong token and would send the operator after
+    the wrong fix. Its variable NAMES are returned so the caller can say which
+    one to set.
+
+    The returned values are secret. Callers put them on the request and nowhere
+    else — never into a row, a log line, or the JSON payload.
+    """
+    env = os.environ if environ is None else environ
+    resolved: Dict[str, str] = {}
+    missing: List[str] = []
+    for key, raw in (headers or {}).items():
+        if not isinstance(raw, str):
+            continue
+        misses: List[str] = []
+        value = _expand_vars(raw, env, misses)
+        if misses:
+            missing.extend(misses)
+            continue
+        # RFC 7230 3.2.4: a field value excludes leading/trailing OWS. Stripping
+        # is spec-correct, not a workaround, and it disposes of the common real
+        # case -- a token carrying a trailing newline from an env file, a
+        # `$(cat ...)`, or a CRLF paste. Left in place, http.client rejects the
+        # header with a ValueError whose message embeds the SECRET verbatim.
+        resolved[key] = value.strip()
+    return resolved, missing
+
+
+def _header_safe(values: Iterable[str]) -> bool:
+    """No CR/LF left inside a header value.
+
+    Anything still containing them after OWS stripping is either corrupt or a
+    header-injection attempt. Refuse to hand it to http.client, whose
+    ``ValueError('Invalid header value %r' % value)`` would print the
+    credential.
+    """
+    return not any(_ILLEGAL_HEADER_CHARS.search(v) for v in values)
+
+
+def probe(
+    url: str,
+    headers: Optional[Dict[str, str]] = None,
+    timeout: float = CONNECT_TIMEOUT,
+    environ: Optional[Mapping[str, str]] = None,
+) -> Dict[str, Any]:
+    """Reach the endpoint, present its credential, and read ONLY the status line.
 
     Returns a row describing the outcome; never raises for a reachability
     failure, because "this one is down" is a measurement.
+
+    The row records the credential's DISPOSITION (`auth`) and the NAMES of any
+    variables that would not resolve (`missing_env`). It never records the
+    header value.
     """
-    row: Dict[str, Any] = {"url": url, "ok": False, "status": None, "error": None}
+    row: Dict[str, Any] = {
+        "url": url,
+        "ok": False,
+        "status": None,
+        "error": None,
+        "verdict": "unreachable",
+        "auth": "none",
+        "missing_env": [],
+    }
     if "${" in url:
-        # An unexpanded ${TS_<NODE>} means the launcher's tailnet helper did not
-        # resolve it. Claude Code would use the literal text as a hostname, so
-        # this is a real "not configured", not a transient outage.
-        row["error"] = "unresolved variable in URL (tailnet helper did not run?)"
+        # Expand the URL from the SAME mapping the headers use. This used to
+        # short-circuit on any `${`, which made the row unpassable: a session
+        # that had sourced the tailnet helper still got "tailnet helper did not
+        # run?" because nothing ever consulted the environment it had just
+        # populated. Measured on Z890 2026-09-08 -- TS_Z890 exported, fleet row
+        # still refused. That is this tool's own 401 defect one line further
+        # down: a verdict the operator cannot reach by doing the right thing,
+        # and a message naming a cause that is not the cause.
+        url_misses: List[str] = []
+        url = _expand_vars(url, os.environ if environ is None else environ, url_misses)
+        # row["url"] deliberately KEEPS the unexpanded literal. The expanded
+        # value is a 100.64/10 CGNAT tailnet address, and this row is printed to
+        # stdout, captured into session logs, and pasted into PRs. Displaying it
+        # would put live fleet topology in every one of those -- the exact thing
+        # the repo's topology guard exists to stop. Caught by running this fix
+        # against the live tailnet and reading my own output: the resolved
+        # address was already on screen before I noticed.
+        if url_misses:
+            # Still unresolved AFTER consulting the environment -- now the
+            # original diagnosis is actually true. Name the variables, as the
+            # header path already does, so the operator knows what to set
+            # instead of being told a helper "did not run".
+            row["missing_env"] = sorted(set(url_misses))
+            row["error"] = (
+                "unresolved variable in URL: "
+                + ", ".join(sorted(set(url_misses)))
+                + " (tailnet helper did not run?)"
+            )
+            row["verdict"] = "unresolved"
+            return row
+
+    sent, missing = _resolve_headers(headers or {}, environ)
+    row["missing_env"] = sorted(set(missing))
+    if sent:
+        row["auth"] = "presented"
+    elif missing:
+        row["auth"] = "unresolved"
+
+    if sent and not _header_safe(sent.values()):
+        # Never build the request. http.client would raise
+        # ValueError('Invalid header value %r' % value), printing the token.
+        row["error"] = (
+            "credential is not a valid HTTP header value (embedded CR/LF) — "
+            "value withheld"
+        )
+        row["verdict"] = "credential_malformed"
+        row["auth"] = "malformed"
         return row
-    req = urllib.request.Request(url, headers={"Accept": "text/event-stream"})
+
+    # `sent` holds the secret. It goes onto the request and is not retained.
+    request_headers = {"Accept": "text/event-stream", **sent}
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
+        req = urllib.request.Request(url, headers=request_headers)
+    except ValueError:
+        # `Request()` raises ValueError("unknown url type: ...") for a
+        # schemeless or otherwise unparseable url. This construction sat
+        # OUTSIDE the try, so a bad roster entry crashed the whole run -- and
+        # an uncaught exception exits 1, which the launcher reports as "the
+        # service is UP". One malformed row is a per-row verdict, not a crash,
+        # and certainly not a health assertion.
+        #
+        # NOT interpolated. ValueError is also how a rejected header value
+        # surfaces out of http.client, message and credential included, so this
+        # handler stays as blind as the one below.
+        row["error"] = "endpoint URL is not a usable HTTP URL — detail withheld"
+        row["verdict"] = "invalid_url"
+        return row
+    try:
+        with _urlopen(req, timeout) as resp:
             row["status"] = resp.status
             row["ok"] = 200 <= resp.status < 400
+            row["verdict"] = "ok" if row["ok"] else "http_error"
     except urllib.error.HTTPError as exc:
         # A 4xx still proves something is LISTENING and speaking HTTP, which is
-        # a different problem from an absent Cipher — say which.
+        # a different problem from an absent Cipher — say which. 401/403 get
+        # their own verdict because the remedy differs: bind the token, versus
+        # start the service.
         row["status"] = exc.code
         row["error"] = f"HTTP {exc.code}"
+        if exc.code in (401, 403):
+            row["verdict"] = "unauthorized"
+        elif 300 <= exc.code < 400:
+            # Declined by _NoRedirect. Say so, and say the token stayed put.
+            row["verdict"] = "redirect"
+            row["error"] = f"HTTP {exc.code} redirect refused (credential not forwarded)"
+        else:
+            row["verdict"] = "http_error"
     except (urllib.error.URLError, socket.timeout, TimeoutError, OSError) as exc:
         row["error"] = str(getattr(exc, "reason", exc))
+        row["verdict"] = "unreachable"
+    except ValueError:
+        # Deliberately NOT interpolated. http.client puts the rejected header
+        # value in the message, so `str(exc)` here would be the credential.
+        # _header_safe should have caught this already; this is the backstop.
+        row["error"] = "request rejected before send (malformed header) — value withheld"
+        row["verdict"] = "credential_malformed"
     return row
 
 
-def check(urls: Optional[List[str]] = None, roster: Optional[Path] = None) -> Dict[str, Any]:
+def check(
+    urls: Optional[List[str]] = None,
+    roster: Optional[Path] = None,
+    token_env: str = DEFAULT_TOKEN_ENV,
+    env_file: Optional[Path] = None,
+    use_env_file: bool = True,
+) -> Dict[str, Any]:
+    if _EXPANDER_ERROR:
+        # Without the shared expander the credential would resolve differently
+        # here than on the path into Claude Code, so any answer this probe got
+        # would be vouching for something else. Say so; do not guess.
+        raise Unmeasured(_EXPANDER_ERROR)
     if urls:
-        candidates = [{"name": "--url", "url": u} for u in urls]
+        # An explicit --url used to build a candidate with NO headers, so the
+        # documented command
+        #
+        #     python pmoves/tools/cipher_preflight.py --url http://localhost:8105/mcp/sse
+        #
+        # probed anonymously against an endpoint that requires a bearer and
+        # could therefore only ever report 401. That is this file's own thesis
+        # -- a check that cannot pass -- surviving in the manual path after it
+        # was removed from the roster path.
+        #
+        # The bearer is derived from the ENVIRONMENT, never taken on argv:
+        # `--token AAA` would put the credential in /proc/<pid>/cmdline and in
+        # every `ps` on the box. `--token-env` names the variable instead, and
+        # the value is expanded by the same shared expander the roster uses, so
+        # an unset variable is announced as `auth: unresolved` rather than sent
+        # as the literal string "Bearer ${CIPHER_API_TOKEN}".
+        #
+        # `--token-env ""` probes anonymously on purpose: that is how you
+        # measure whether an endpoint requires a credential at all, which is
+        # the observation this whole lane started from.
+        hdrs = {"Authorization": f"Bearer ${{{token_env}}}"} if token_env else {}
+        candidates = [{"name": "--url", "url": u, "headers": dict(hdrs)} for u in urls]
     else:
         candidates = cipher_urls_from_roster(roster)
         if not candidates:
@@ -127,18 +560,63 @@ def check(urls: Optional[List[str]] = None, roster: Optional[Path] = None) -> Di
                 "no cipher entry in the MCP roster — memory is not configured at all"
             )
 
+    # Resolve against the environment the SESSION will have, not the one this
+    # process happens to be started with. See layered_environ() for why the
+    # ordering made the roster path unable to pass.
+    env_note: Optional[str] = None
+    if use_env_file:
+        environ, env_note = layered_environ(env_file)
+    else:
+        environ = dict(os.environ)
+
     rows = []
     for cand in candidates:
-        result = probe(cand["url"])
+        result = probe(cand["url"], cand.get("headers"), environ=environ)
         result["name"] = cand["name"]
         rows.append(result)
 
     reachable = [r for r in rows if r["ok"]]
+    # "Answered" is the distinction the old code lacked. An endpoint that
+    # returned 401 answered; it is up. Only a probe that reached NOTHING
+    # justifies telling a session it has no memory.
+    answered = [
+        r for r in rows
+        if r["verdict"] in ("ok", "unauthorized", "http_error", "redirect")
+    ]
+    unauthorized = [r for r in rows if r["verdict"] == "unauthorized"]
+    missing_env: List[str] = []
+    for r in rows:
+        for name in r.get("missing_env") or []:
+            if name not in missing_env:
+                missing_env.append(name)
     return {
         "endpoints": rows,
         "reachable": [r["name"] for r in reachable],
+        "answered": [r["name"] for r in answered],
+        "unauthorized": [r["name"] for r in unauthorized],
+        "missing_env": missing_env,
         "ok": bool(reachable),
+        "measured": bool(answered),
+        # Names only. Present so a 401 can be read against whether the overlay
+        # was actually applied -- "the token is missing" and "we could not look
+        # where the token lives" are different findings with different remedies.
+        "env_file": str(env_file or default_env_file()) if use_env_file else None,
+        "env_note": env_note,
     }
+
+
+def exit_code(verdict: Dict[str, Any]) -> int:
+    """0 clean / 1 findings / 3 could-not-measure. Fleet doctrine.
+
+    Shared with mcp_toolkit_preflight.py and docker_host_policy_check.py so an
+    operator reading a non-zero code does not have to remember which tool it
+    came from.
+    """
+    if verdict["ok"]:
+        return 0
+    if verdict["measured"]:
+        return 1  # something answered, just not usably — a finding
+    return 3  # nothing answered at all — no measurement was taken
 
 
 def main(argv: Optional[List[str]] = None) -> int:
@@ -146,10 +624,96 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument("--url", action="append", dest="urls")
     parser.add_argument("--roster", type=Path, default=None)
     parser.add_argument("--json", action="store_true", dest="as_json")
+    parser.add_argument(
+        "--env-file",
+        dest="env_file",
+        type=Path,
+        default=None,
+        metavar="PATH",
+        help=(
+            "env file to layer over the process environment, mirroring what "
+            "deploy/provision/claude-pmoves.sh loads (default: "
+            "$PMOVES_ENV_SHARED or pmoves/env.shared)"
+        ),
+    )
+    parser.add_argument(
+        "--no-env-file",
+        dest="use_env_file",
+        action="store_false",
+        help=(
+            "resolve from THIS shell's environment only. Answers 'what would I "
+            "get without the launcher', not 'what will the session get'."
+        ),
+    )
+    # EXPLICIT so argparse's prefix matching cannot silently reinterpret it.
+    # `--token` is an unambiguous abbreviation of `--token-env`, so without this
+    # option `--token "$CIPHER_API_TOKEN"` parsed as "the variable NAMED
+    # <the token>" -- an unset name, an anonymous probe, and a 401 blamed on the
+    # credential. Declared and refused instead, so the mistake is loud.
+    parser.add_argument("--token", dest="raw_token", default=None, help=argparse.SUPPRESS)
+    parser.add_argument(
+        "--token-env",
+        dest="token_env",
+        default=DEFAULT_TOKEN_ENV,
+        metavar="VAR",
+        help=(
+            "environment variable holding the bearer for --url probes "
+            f"(default: {DEFAULT_TOKEN_ENV}; pass an empty string to probe "
+            "anonymously). Names a VARIABLE, never the token itself -- a "
+            "token on argv is visible in ps and in /proc/<pid>/cmdline."
+        ),
+    )
     args = parser.parse_args(argv)
 
+    if getattr(args, "raw_token", None) is not None:
+        # Exit 2, argparse's own usage-error code -- this is a misuse, not a
+        # measurement, so it belongs outside the 0/1/3 verdict doctrine.
+        # The value is NOT echoed. It is already in /proc/<pid>/cmdline, which
+        # is the point of refusing; repeating it into a log would widen that.
+        print(
+            "--token is refused. A credential on argv is readable by any user "
+            "on this host\n"
+            "  via `ps` and /proc/<pid>/cmdline. Use --token-env VAR, which "
+            "names the variable\n"
+            "  holding the token. (Value not echoed. Consider it exposed and "
+            "rotate it.)",
+            file=sys.stderr,
+        )
+        return 2
+
     try:
-        verdict = check(args.urls, args.roster)
+        return _run(args)
+    except Exception as exc:  # noqa: BLE001 - deliberate backstop, see below
+        # A CRASH IS COULD-NOT-MEASURE. Python exits 1 on an uncaught
+        # exception, and claude-pmoves.sh reads exit 1 as "something ANSWERED
+        # — the service is UP, do not restart it". So without this, any
+        # unexpected failure asserted the health of a service it never
+        # contacted: the exact inversion this tool was written to remove.
+        #
+        # The TYPE only, never `str(exc)`. http.client's ValueError for a
+        # rejected header embeds the credential verbatim — the same reason the
+        # ValueError handlers in probe() are deliberately blind. A backstop
+        # that leaks the token would be worse than the crash it catches.
+        detail = f"unexpected {type(exc).__name__} during the check"
+        if args.as_json:
+            print(json.dumps(
+                {"measured": False, "reason": f"{detail} — detail withheld"}, indent=2
+            ))
+        else:
+            print(f"UNMEASURED: {detail} — detail withheld", file=sys.stderr)
+            print("  This is NOT a pass — assume no persistent memory.", file=sys.stderr)
+        return 3
+
+
+def _run(args: argparse.Namespace) -> int:
+    try:
+        verdict = check(
+            args.urls,
+            args.roster,
+            getattr(args, "token_env", DEFAULT_TOKEN_ENV),
+            getattr(args, "env_file", None),
+            getattr(args, "use_env_file", True),
+        )
     except Unmeasured as exc:
         if args.as_json:
             print(json.dumps({"measured": False, "reason": str(exc)}, indent=2))
@@ -158,20 +722,68 @@ def main(argv: Optional[List[str]] = None) -> int:
             print("  This is NOT a pass — assume no persistent memory.", file=sys.stderr)
         return 3
 
+    rc = exit_code(verdict)
+
     if args.as_json:
-        print(json.dumps({"measured": True, **verdict}, indent=2))
-        return 0 if verdict["ok"] else 1
+        # `measured` here means a measurement was TAKEN (something answered),
+        # not merely that the roster was readable.
+        print(json.dumps(verdict, indent=2))
+        return rc
 
     for row in verdict["endpoints"]:
         if row["ok"]:
+            # Prefix is load-bearing: claude-pmoves.sh awks /^cipher OK/ for $3.
             print(f"cipher OK   {row['name']}  ({row['url']}) -> {row['status']}")
-        else:
+        elif row["verdict"] == "unauthorized":
             print(
-                f"cipher DOWN {row['name']}  ({row['url']}) -> {row['error']}",
+                f"cipher UNAUTHORIZED {row['name']}  ({row['url']}) -> "
+                f"{row['error']} — reachable, credential not accepted",
                 file=sys.stderr,
             )
+        else:
+            # The second token IS the verdict class, and claude-pmoves.sh
+            # branches on it. "DOWN" for a 404 was the same collapse this tool
+            # exists to undo one layer down: something answered, so the remedy
+            # is not "start the service" either.
+            label = "ANSWERED" if row["verdict"] in ("http_error", "redirect") else "DOWN"
+            print(
+                f"cipher {label} {row['name']}  ({row['url']}) -> {row['error']}",
+                file=sys.stderr,
+            )
+
     if verdict["ok"]:
         return 0
+
+    if verdict["unauthorized"]:
+        # The service is UP. Saying "no memory" here is the false negative that
+        # cost three sessions their memory layer.
+        lines = [
+            "Cipher ANSWERED but did not accept the credential (HTTP 401/403).",
+            "  The service is UP — this is an access problem, not an outage.",
+            "  Do not restart Cipher; bind its token.",
+        ]
+        if verdict["missing_env"]:
+            names = ", ".join(verdict["missing_env"])
+            lines.append(f"  Unresolved in the roster: {names} (set and re-launch).")
+        else:
+            lines.append(
+                "  A credential WAS presented and refused — it is stale or wrong."
+            )
+        if verdict.get("env_note"):
+            # A 401 read against a FAILED overlay is a different finding: the
+            # token may be sitting in the env file we could not consult.
+            lines.append(f"  NOTE: {verdict['env_note']}")
+        lines.append("  Recovery: pmoves/docs/operations/MCP_TOOLKIT.md")
+        print("\n".join(lines), file=sys.stderr)
+        return rc
+
+    if verdict["measured"]:
+        print(
+            "Cipher answered, but not usably (see the status above). The service\n"
+            "  is reachable; memory may be degraded rather than absent.",
+            file=sys.stderr,
+        )
+        return rc
 
     print(
         "No cipher endpoint answered. This session has NO persistent memory —\n"
@@ -179,7 +791,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         "  recalling nothing silently.",
         file=sys.stderr,
     )
-    return 1
+    return rc
 
 
 if __name__ == "__main__":

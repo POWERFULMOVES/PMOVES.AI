@@ -8,7 +8,9 @@
     "agent_zero_fleet_url": "http://${TS_Z890}:8081/mcp/t-${AGENT_ZERO_MCP_TOKEN}/sse",
     "docker_gateway_port": 8090,
     "flute_local_url": "http://localhost:8055/sse",
-    "flute_fleet_url": "http://${TS_Z890}:8055/sse"
+    "flute_fleet_url": "http://${TS_Z890}:8055/sse",
+    "flute_mcp_local_url": "http://localhost:8055/mcp",
+    "flute_mcp_fleet_url": "http://${TS_Z890}:8055/mcp"
   },
   "groups": {
     "core_pmoves": {
@@ -47,7 +49,6 @@
           "endpoint_prefix": "agent_zero"
         },
         {
-
           "key": "pmoves-nats-fleet",
           "description": "NATS fleet messaging bridge",
           "transport": "stdio",
@@ -66,7 +67,7 @@
         },
         {
           "key": "e2b-danger-room",
-          "description": "E2B Danger Room \u2014 run AI-generated code in an isolated E2B sandbox (tool: run_code). The fleet's safe-execution seam; forked at POWERFULMOVES/pmoves-e2b-mcp-server (hardened).",
+          "description": "E2B Danger Room — run AI-generated code in an isolated E2B sandbox (tool: run_code). The fleet's safe-execution seam; forked at POWERFULMOVES/pmoves-e2b-mcp-server (hardened).",
           "transport": "stdio",
           "command": "node",
           "args": [
@@ -95,7 +96,7 @@
             "--apiUrl",
             "${SUPABASE_REST_URL:-http://localhost:8000/rest/v1}",
             "--apiKey",
-            "${SUPABASE_SERVICE_ROLE_KEY:-${SUP\u2026EY}}",
+            "${SUPABASE_SERVICE_ROLE_KEY:-${SUP…EY}}",
             "--schema",
             "public"
           ]
@@ -165,31 +166,52 @@
             "claude",
             "crush"
           ],
-          "_note": "ACTIVATED 2026-09-04: clients populated per the fail-closed checklist \u2014 COMPOSIO_API_KEY registered in the CHIT secrets manifest (#2837, slot composio_api_key, tier llm) and DELIVERED via the Pattern-B funnel (secrets-funnel-from-prod, bundle chit-bundle-b850-33907455784); clients = claude + crush (the 4090 control-plane coding agents; KiloCode joins via #2918's lane). Auth is in-band managed OAuth: the client's first connect returns the OAuth link, the operator authorizes, the connection is reusable \u2014 NOT a static X-API-Key header. Endpoint updated 2026-09-02 from stale mcp.composio.dev to connect.composio.dev/mcp. Old 2026-08-27 note (superseded): operator-approved registration; the stale disabled:true + X-API-Key header block was removed 2026-09-02."
+          "_note": "ACTIVATED 2026-09-04: clients populated per the fail-closed checklist — COMPOSIO_API_KEY registered in the CHIT secrets manifest (#2837, slot composio_api_key, tier llm) and DELIVERED via the Pattern-B funnel (secrets-funnel-from-prod, bundle chit-bundle-b850-33907455784); clients = claude + crush (the 4090 control-plane coding agents; KiloCode joins via #2918's lane). Auth is in-band managed OAuth: the client's first connect returns the OAuth link, the operator authorizes, the connection is reusable — NOT a static X-API-Key header. Endpoint updated 2026-09-02 from stale mcp.composio.dev to connect.composio.dev/mcp. Old 2026-08-27 note (superseded): operator-approved registration; the stale disabled:true + X-API-Key header block was removed 2026-09-02."
+        },
+        {
+          "key": "jcodemunch",
+          "description": "jCodemunch MCP - token-efficient code exploration via tree-sitter AST parsing (70+ languages, 95%+ token savings over grep loops). Fork: PMOVES-jcodemunch-mcp (Hardened).",
+          "transport": "stdio",
+          "endpoint": "local",
+          "command": "uvx",
+          "args": ["jcodemunch-mcp", "serve", "--transport", "stdio"],
+          "clients": ["hermes"],
+          "_note": "Verified live 2026-09-03: initialize handshake clean against server v1.108.316 (PyPI run of the forked tool). Index repos first via `uvx jcodemunch-mcp index <repo>` (one-time per repo; `watch` keeps fresh). Fleet priority indexes: PMOVES.AI parent, PMOVES-pinokio, PMOVES-hermes-agent, PMOVES-composio. Registered directly to hermes client - stdio local tool, no secrets, no fail-closed risk surface."
         },
         {
           "key": "titanmail",
-          "description": "Titan Mail hosted MCP (https://api.titan.email/mcp) \u2014 search/read/send email, folders, labels, calendar, contacts. OAuth via interactive Titan sign-in (no static API key). EU-hosted reseller accounts (Blacknight, MonoVM, DomainDiscount24, Fluccs, Domain Central) use https://api-euc1.titan.email/mcp instead.",
+          "description": "Titan Mail hosted MCP (https://api.titan.email/mcp) — search/read/send email, folders, labels, calendar, contacts. OAuth via interactive Titan sign-in (no static API key). EU-hosted reseller accounts (Blacknight, MonoVM, DomainDiscount24, Fluccs, Domain Central) use https://api-euc1.titan.email/mcp instead.",
           "transport": "http",
           "endpoint": "external",
           "url": "https://api.titan.email/mcp",
           "clients": [],
-          "_note": "Registered 2026-09-02, NOT served to any client (fail-closed, same rule as composio). Auth is OAuth: the client must complete an interactive Titan login + consent dance. Do NOT populate `clients` until (a) the target client's MCP stack supports browser-based OAuth for remote HTTP servers, verified live, and (b) operator confirms which mailbox(es) \u2014 powerfulmoves@pmoves.ai / pmoves@pmoves.ai / @cataclysmstudios.com \u2014 connect. Also verify whether the pmoves.ai mail is even Titan-hosted before wiring (Hostinger commonly provisions Titan); inventory via Composio \u2192 Hostinger first."
+          "_note": "Registered 2026-09-02, NOT served to any client (fail-closed, same rule as composio). Auth is OAuth: the client must complete an interactive Titan login + consent dance. Do NOT populate `clients` until (a) the target client's MCP stack supports browser-based OAuth for remote HTTP servers, verified live, and (b) operator confirms which mailbox(es) — powerfulmoves@pmoves.ai / pmoves@pmoves.ai / @cataclysmstudios.com — connect. Also verify whether the pmoves.ai mail is even Titan-hosted before wiring (Hostinger commonly provisions Titan); inventory via Composio → Hostinger first."
         },
         {
           "key": "flute-voice",
-          "description": "Voice fabric \u2014 14 TTS engines + intents + VRAM management (flute-gateway :8055)",
+          "description": "Voice fabric — 14 TTS engines + intents + VRAM management (flute-gateway :8055)",
           "transport": "sse",
           "endpoint": "local",
           "endpoint_prefix": "flute",
           "headers": {
             "X-API-Key": "${FLUTE_API_KEY}"
           },
-          "notes": "Auth: X-API-Key header (main.py:222). When FLUTE_API_KEY is unset flute runs dev-mode (auth skipped) \u2014 set via secrets funnel for fleet exposure."
+          "notes": "Auth: X-API-Key header (main.py:222). When FLUTE_API_KEY is unset flute runs dev-mode (auth skipped) — set via secrets funnel for fleet exposure."
+        },
+        {
+          "key": "flute-voice-mcp",
+          "description": "Voice fabric — streamable-http MCP surface (POST /mcp, same tools as flute-voice; Hermes native MCP + cipher shim transport)",
+          "transport": "http",
+          "endpoint": "local",
+          "endpoint_prefix": "flute_mcp",
+          "headers": {
+            "X-API-Key": "${FLUTE_API_KEY}"
+          },
+          "notes": "Stateless JSON-RPC dispatch over POST /mcp (mcp_bridge.py) — same handlers as the SSE surface, no session state. SSE (flute-voice) stays for existing consumers. Auth: same X-API-Key."
         },
         {
           "key": "pipecat-context-hub",
-          "description": "Local-first Pipecat docs/examples/API index (ChromaDB+FTS5, cited) \u2014 the knowledge-ingestion pattern for voice agents",
+          "description": "Local-first Pipecat docs/examples/API index (ChromaDB+FTS5, cited) — the knowledge-ingestion pattern for voice agents",
           "transport": "stdio",
           "command": "uvx",
           "args": [
@@ -201,13 +223,13 @@
             "agent-zero",
             "crush"
           ],
-          "notes": "Upstream fork POWERFULMOVES/Pmoves-pipecat-context-hub; index at ~/.pipecat-context-hub. Fork ships claude-code/cursor/vscode/zed client configs \u2014 hermes config is via this inventory render."
+          "notes": "Upstream fork POWERFULMOVES/Pmoves-pipecat-context-hub; index at ~/.pipecat-context-hub. Fork ships claude-code/cursor/vscode/zed client configs — hermes config is via this inventory render."
         }
       ]
     },
     "docker_toolkit": {
-      "description": "Docker MCP Toolkit gateway exposing the canonical PMOVES profile.",
-      "profile": "pmoves_5090_web",
+      "description": "Docker MCP Toolkit gateway exposing THIS NODE's PMOVES profile.",
+      "_profile_note": "There is no canonical fleet-wide profile. This group used to declare `\"profile\": \"pmoves_5090_web\"` and repeat that literal in the stdio args, so every node's rendered crush/kimi/opencode config launched a gateway serving the 5090's server set. No code ever read the group-level key — it was documentation asserting something untrue. PMOVES_MCP_PROFILE_ID below is seeded by mcp_config_generator from pmoves/tools/node_gateway_profile.py (env override -> pinned profile -> hardware detection -> refuse), and can be overridden with `--set PMOVES_MCP_PROFILE_ID=<name>`.",
       "servers": [
         {
           "key": "pmoves-docker-gateway",
@@ -219,10 +241,10 @@
             "gateway",
             "run",
             "--profile",
-            "pmoves_5090_web"
+            "${PMOVES_MCP_PROFILE_ID}"
           ],
+          "_clients_note": "`claude` was REMOVED 2026-09-13. .claude/mcp.json is the FLEET roster that deploy/provision/claude-pmoves.sh reads from origin/main on every node, and the launcher deliberately omits --strict-mcp-config so the PER-NODE .mcp.json written by `make -C pmoves mcp-toolkit-connect` stays live alongside it. Rendering the gateway into both put two entries under different keys into one session (MEASURED 2026-09-13 on the 4090: `MCP_DOCKER` and `pmoves-docker-gateway` both in the failed-server list). The other three clients have no per-node merge, so they keep the entry — with the profile resolved per node.",
           "clients": [
-            "claude",
             "kimi",
             "opencode",
             "crush"
