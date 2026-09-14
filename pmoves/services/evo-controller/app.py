@@ -194,7 +194,11 @@ class EvoSwarmController:
         # Upsert a minimal parameter pack (namespace inferred from first CGP).
         # Column shape mirrors geometry_parameter_packs: cg_builder/decoder jsonb
         # are NOT NULL — a flat "params" dict 400s against the table contract.
-        namespace = self.config.namespace or (payload[0].get("namespace") if payload and isinstance(payload[0], dict) else "pmoves")
+        # Namespace from the first CGP's payload when present; a CGP without one
+        # must not become a None namespace — geometry_parameter_packs.namespace
+        # is NOT NULL and PostgREST 400s the whole tick (23502).
+        first_cgp = payload[0] if payload and isinstance(payload[0], dict) else {}
+        namespace = self.config.namespace or first_cgp.get("namespace") or "pmoves"
         pack = {
             "namespace": namespace,
             "modality": "video",
