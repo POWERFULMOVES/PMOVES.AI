@@ -191,7 +191,9 @@ class EvoSwarmController:
         payload = await self._fetch_recent_cgps()
         logger.debug("fetched %s CGPs for evaluation", len(payload))
 
-        # Upsert a minimal parameter pack (namespace inferred from first CGP)
+        # Upsert a minimal parameter pack (namespace inferred from first CGP).
+        # Column shape mirrors geometry_parameter_packs: cg_builder/decoder jsonb
+        # are NOT NULL — a flat "params" dict 400s against the table contract.
         namespace = self.config.namespace or (payload[0].get("namespace") if payload and isinstance(payload[0], dict) else "pmoves")
         pack = {
             "namespace": namespace,
@@ -199,7 +201,8 @@ class EvoSwarmController:
             "version": time.strftime("v%Y%m%d-%H%M%S"),
             "status": "draft",
             "pack_type": "cg_builder",
-            "params": {"K": 8, "bins": 32, "tau": 0.2, "beta": 0.7},
+            "cg_builder": {"K": 8, "bins": 32, "tau": 0.2, "beta": 0.7},
+            "decoder": {},
             "energy": {"note": "placeholder"},
         }
         ok = await self._upsert_pack(pack)
