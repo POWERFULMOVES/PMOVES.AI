@@ -87,6 +87,7 @@ curl http://pmoves-kvm4-2:8000/rest/v1/  # 401 = reachable (auth required), not 
 - JuiceFS exposure precedent + remaining steps:
   `pmoves/docs/operations/JUICEFS_CROSSNODE_CUTOVER_CHECKLIST.md` (2026-09-14 reconciliation)
 - NATS hub addressing: `.claude/CATALOG.md` (kvm4-2)
-- Cipher's scoped-API model: `pmoves/services/cipher*`, per-agentId isolation
+- Cipher's scoped-API model: the cipher API/MCP services under
+  `pmoves/services/` (per-agentId isolation)
 - The supabase-db tailnet-exposure mechanism (bridge + pg_hba + bind env) already in
   `pmoves/docker-compose.yml` — this lane generalizes it to kong
