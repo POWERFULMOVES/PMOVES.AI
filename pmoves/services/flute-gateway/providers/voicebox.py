@@ -91,7 +91,11 @@ class VoiceboxProvider(VoiceProvider):
     """
 
     DEFAULT_ENGINE = "qwen"
-    DEFAULT_MODEL_SIZE = "1.7B"
+    # Voicebox's own docs make model_size a per-request API param (1.7B default,
+    # 0.6B lighter variant). Node-level default belongs here at the caller —
+    # mirrors VOICEBOX_TIMEOUT_SEC — so constrained GPUs (GTX 1650 4GB) can pin
+    # the lighter variant without patching Voicebox routes.
+    DEFAULT_MODEL_SIZE = os.getenv("VOICEBOX_MODEL_SIZE", "1.7B")
 
     def __init__(self, base_url: str = "http://host.docker.internal:17493"):
         """Initialize Voicebox provider.
