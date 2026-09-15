@@ -131,6 +131,13 @@ host_clis:
       windows: "winget install sst.opencode  # or: curl -fsSL https://opencode.ai/install | bash"
       linux: "curl -fsSL https://opencode.ai/install | bash"
     check: "opencode --version"
+  kilo:
+    purpose: "Kilo CLI (@kilocode/cli) — the maintained KiloCode fork (PMOVES-KeYlOkODe tracks Kilo-Org/kilocode); kilo.json is its native project config"
+    required: false
+    install:
+      windows: "npm install -g @kilocode/cli  # or: curl -fsSL https://kilo.ai/cli/install | bash"
+      linux: "npm install -g @kilocode/cli  # or: curl -fsSL https://kilo.ai/cli/install | bash"
+    check: "kilo --version"
   node:
     purpose: "Node.js — web toolchains (jest/eslint run via package.json scripts, not global). Windows: nvm4w manages versions"
     required: false
@@ -192,7 +199,11 @@ service_clis:
   kilocode-project:
     path: kilo.json
     wrapper: kilo-pmoves
-    purpose: "KiloCode project config (default_agent kilocode-glm, zai/glm-5.2)"
+    purpose: "Kilo project config (default_agent kilocode-glm, zai/glm-5.3, kilocode plan-routed overflow lane)"
+  keylokode-fork:
+    path: PMOVES-KeYlOkODe
+    wrapper: null
+    purpose: "PMOVES fork of Kilo CLI upstream (Kilo-Org/kilocode, v7.6.2) — harness source of truth; npx delivery via @kilocode/cli"
   hostinger-mcp:
     path: mcp_hostinger-api (session MCP)
     wrapper: null
