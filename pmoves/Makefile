@@ -342,10 +342,23 @@ docs-quickstart: ## Open the quick start guide
 #
 # Probed, not assumed, and RECURSIVE (`=`, not `:=`) so the probe runs only when
 # a register target actually expands it rather than on every make invocation.
-# `$(PYTHON)` is preferred when it already has PyYAML -- switching a working
-# interpreter for `uv run --script` would trade a silent degradation for a first
-# -run network fetch, which is a worse failure on an offline node.
-REGISTER_PYTHON = $(shell if $(PYTHON) -c 'import yaml' >/dev/null 2>&1; then \
+# `$(PYTHON)` is preferred when it already has the dependencies -- switching a
+# working interpreter for `uv run --script` would trade a silent degradation for
+# a first-run network fetch, which is a worse failure on an offline node.
+#
+# The offline tradeoff is unchanged in shape but now honest: the fallback
+# actually DELIVERS both dependencies, because the PEP 723 block in
+# register_append.py declares `pydantic>=2` alongside `pyyaml`. Before, an
+# offline node fell back to a `uv run --script` that still could not supply
+# pydantic, so the fetch bought nothing and the notice fired anyway.
+# PROBE EVERY DEPENDENCY THE GATE ACTUALLY USES, not just the first one that
+# ever mattered. This tested `import yaml` alone, so an interpreter with
+# PyYAML and no pydantic was chosen as GOOD and then printed a DEGRADED
+# notice on every write -- measured 2026-09-15 on two register-release runs.
+# `register_append.py` needs both: PyYAML for the identity vocabulary above,
+# pydantic for the RegisterProse model that is the DECLARED prose contract.
+# A probe that checks one of two dependencies reports on the half it looked at.
+REGISTER_PYTHON = $(shell if $(PYTHON) -c 'import yaml, pydantic' >/dev/null 2>&1; then \
 	echo '$(PYTHON)'; \
 	elif command -v uv >/dev/null 2>&1; then echo 'uv run --script'; \
 	else echo '$(PYTHON)'; fi)
