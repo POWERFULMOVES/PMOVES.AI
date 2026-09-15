@@ -75,6 +75,34 @@ else
   echo "# Node identity (generated at launch) — resolver unavailable on this host." > "$IDENTITY_FILE"
 fi
 
+# IDENTITY CARRY — which agent_id will crush's memories actually be filed under?
+#
+# The block above tells crush who it IS. It does not say who cipher will think
+# it is, and those have been different on every node: auth.ts:46 @ e24f1323
+# forks on a 'cipher_' bearer prefix, and without it every write is filed under
+# 'bootstrap' -- shared with every other agent on the node, attributed to none.
+#
+# Wired here and not only in claude-pmoves because CRUSH runs on this fleet too
+# and was getting no verdict at all. The measurement is shared (pm-cipher-identity.sh)
+# so the two harnesses cannot drift into telling their agents different things.
+# shellcheck source=./pm-cipher-identity.sh
+. "$REPO_ROOT/pmoves/scripts/pm-cipher-identity.sh"
+pm_cipher_identity "$REPO_ROOT" "${PMOVES_NODE_IDENTITY:-}" ${IDENT_PY[@]+"${IDENT_PY[@]}"} || true
+echo "[crush-pmoves] ${PM_CARRY_LINE}" >&2
+# crush has no --append-system-prompt; its context arrives through IDENTITY_FILE,
+# so the verdict goes where crush will actually read it.
+{
+  echo ""
+  if [ "${PM_CARRY_OK:-0}" = "1" ]; then
+    echo "Cipher memory writes are attributed to \`${PM_CARRY_ID}\` — your own identity."
+  else
+    echo "**IDENTITY CARRY GAP.** Cipher will file your memory writes under"
+    echo "\`${PM_CARRY_ID:-an advisory id you declare per call}\`, not \`${PMOVES_NODE_IDENTITY:-unresolved}\`."
+    echo "Reason: ${PM_CARRY_WHY}"
+    echo "Treat anything you recall as possibly another agent's. Road: \`make -C pmoves cipher-identity\`."
+  fi
+} >> "$IDENTITY_FILE"
+
 echo "◇ crush-pmoves → bootstrapping from $REPO_ROOT"
 make -C "$REPO_ROOT/pmoves" crush-bootstrap
 

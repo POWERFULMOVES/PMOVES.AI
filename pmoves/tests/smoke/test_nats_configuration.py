@@ -175,27 +175,73 @@ def test_nats_subjects_follow_naming_convention() -> None:
             )
 
 
+def _nats_service() -> dict:
+    """Parse the nats service out of the compose file.
+
+    Previously these two tests grepped a FIXED LINE WINDOW after `^  nats:`
+    (after=25 / after=35) and asserted against the raw text. That makes the
+    assertion position-dependent: adding COMMENTS to the service pushes `ports:`
+    out of the window and the test fails with "NATS should expose client port
+    4222" while the port is present and unchanged. It is a false negative that
+    accuses the wrong thing, and it had already been band-aided once — the
+    removed comment read "Use a wider context window ... may be separated from
+    the service key by anchor expansion."
+
+    Parsing the YAML removes the whole failure mode. `yaml` is already the
+    convention for compose assertions in this directory (test_compose_structure,
+    test_port_conflicts, test_service_contracts all import it).
+    """
+    import yaml
+
+    with open(COMPOSE_FILE, encoding="utf-8") as fh:
+        compose = yaml.safe_load(fh)
+    svc = (compose.get("services") or {}).get("nats")
+    assert svc, "NATS service not found in compose"
+    return svc
+
+
 @pytest.mark.smoke
 def test_nats_has_correct_ports_exposed() -> None:
     """Verify NATS exposes the correct ports."""
-    # Use a wider context window to capture ports section (may be
-    # separated from the service key by anchor expansion).
-    output = grep_context(COMPOSE_FILE, r"^  nats:", after=25)
-    assert output, "NATS service not found"
-
-    assert "4222:4222" in output or "${NATS_PORT" in output, (
-        "NATS should expose client port 4222"
+    ports = " ".join(str(p) for p in (_nats_service().get("ports") or []))
+    assert "4222:4222" in ports or "${NATS_PORT" in ports, (
+        f"NATS should expose client port 4222 (ports: {ports!r})"
     )
 
 
 @pytest.mark.smoke
 def test_nats_includes_jetstream() -> None:
     """Verify NATS is configured with JetStream enabled."""
-    output = grep_context(COMPOSE_FILE, r"^  nats:", after=35)
-    assert output, "NATS service not found"
+    svc = _nats_service()
+    command = " ".join(str(c) for c in (svc.get("command") or []))
+    assert "-js" in command or "jetstream" in command.lower(), (
+        f"NATS should have JetStream enabled (-js flag) (command: {command!r})"
+    )
 
-    assert "-js" in output or "jetstream" in output.lower(), (
-        "NATS should have JetStream enabled (-js flag)"
+
+@pytest.mark.smoke
+def test_nats_jetstream_store_is_persistent() -> None:
+    """JetStream must not fall back to the container's /tmp.
+
+    Without an explicit --store_dir, nats-server uses /tmp/nats/jetstream and
+    warns "Temporary storage directory used, data could be lost on system
+    reboot". Measured on z890 2026-09-15 that was the live state: streams=0,
+    because every recreate discarded them. Core pub/sub stayed green throughout,
+    so nothing else catches this.
+    """
+    svc = _nats_service()
+    command = [str(c) for c in (svc.get("command") or [])]
+    assert "--store_dir" in command, (
+        "NATS -js without --store_dir defaults to /tmp and loses durable "
+        f"streams on recreate (command: {command!r})"
+    )
+    store = command[command.index("--store_dir") + 1]
+    assert not store.startswith("/tmp"), f"JetStream store must not be under /tmp: {store!r}"
+
+    mounts = " ".join(str(v) for v in (svc.get("volumes") or []))
+    assert store in mounts, (
+        f"--store_dir {store!r} is not backed by a volume (volumes: {mounts!r}) — "
+        "the store would still be lost on recreate"
     )
 
 

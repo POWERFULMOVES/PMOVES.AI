@@ -33,6 +33,18 @@ services:
     image: nats:2.11.8-alpine
     command:
     - -js
+    # JetStream store. WITHOUT this flag the server falls back to
+    # /tmp/nats/jetstream and logs, in its own words:
+    #   "Temporary storage directory used, data could be lost on system reboot"
+    # That is not theoretical: measured on z890 2026-09-15 the bus reported
+    # streams=0 consumers=0 messages=0 — the durable PMOVES-PERSONA stream
+    # created and replay-proven by #3010 was gone, because this service had no
+    # volume at all and /tmp does not survive a container recreate.
+    # Paired with the pmoves-nats-js volume below. Same path the hub uses
+    # (config/nats/pmoves-nats.conf -> store_dir: /data/js), different volume:
+    # legacy and hub must never share JetStream state during the spec §9 cutover.
+    - --store_dir
+    - /data/js
     - -m
     - '8222'
     - --user
@@ -57,6 +69,9 @@ services:
     # Loopback by default; set NATS_MONITORING_BIND explicitly (ideally to the
     # tailnet IP, not 0.0.0.0) if a node genuinely needs remote NATS monitoring.
     - ${NATS_MONITORING_BIND:-127.0.0.1}:${NATS_MONITORING_PORT:-9223}:8222
+    volumes:
+    # Persists JetStream across recreate. See --store_dir above.
+    - pmoves-nats-js:/data/js
     networks:
     # pmoves_bus is internal:true (isolated in-stack mesh bus). A container on an
     # internal-only network gets NO published-port DNAT rules from Docker, so the
