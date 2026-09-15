@@ -342,10 +342,43 @@ docs-quickstart: ## Open the quick start guide
 #
 # Probed, not assumed, and RECURSIVE (`=`, not `:=`) so the probe runs only when
 # a register target actually expands it rather than on every make invocation.
-# `$(PYTHON)` is preferred when it already has PyYAML -- switching a working
-# interpreter for `uv run --script` would trade a silent degradation for a first
-# -run network fetch, which is a worse failure on an offline node.
-REGISTER_PYTHON = $(shell if $(PYTHON) -c 'import yaml' >/dev/null 2>&1; then \
+# `$(PYTHON)` is preferred when it already has the dependencies -- switching a
+# working interpreter for `uv run --script` would trade a silent degradation for
+# a first-run network fetch, which is a worse failure on an offline node.
+#
+# The offline tradeoff is unchanged in shape but now honest: the fallback
+# actually DELIVERS both dependencies, because the PEP 723 block in
+# register_append.py declares `pydantic>=2` alongside `pyyaml`. Before, an
+# offline node fell back to a `uv run --script` that still could not supply
+# pydantic, so the fetch bought nothing and the notice fired anyway.
+# PROBE EVERY DEPENDENCY THE GATE ACTUALLY USES, not just the first one that
+# ever mattered. This tested `import yaml` alone, so an interpreter with
+# PyYAML and no pydantic was chosen as GOOD and then printed a DEGRADED
+# notice on every write -- measured 2026-09-15 on two register-release runs.
+# `register_append.py` needs both: PyYAML for the identity vocabulary above,
+# pydantic for the RegisterProse model that is the DECLARED prose contract.
+# A probe that checks one of two dependencies reports on the half it looked at.
+REGISTER_PYTHON = $(shell if $(PYTHON) -c 'import yaml, pydantic' >/dev/null 2>&1; then \
+	echo '$(PYTHON)'; \
+	elif command -v uv >/dev/null 2>&1; then echo 'uv run --script'; \
+	else echo '$(PYTHON)'; fi)
+
+# THE PATTERN, stated once so it can be reused instead of re-derived.
+#
+#   1. every tool declares its third-party deps in a PEP 723 block
+#   2. every target selects an interpreter that SATISFIES that declaration
+#   3. the fallback is `uv run --script`, which reads the block
+#
+# $(PYTHON) answers 'is there an interpreter', which is a different question
+# from 'can it import what this tool needs' -- and only the second one
+# decides whether the tool can do its job. A target that asks the first and
+# acts on the second degrades silently on whichever nodes happen to differ,
+# which is every fleet.
+#
+# PYTHON_YAML is REGISTER_PYTHON's shape for the (much larger) set of tools
+# needing PyYAML alone. Recursive `=` so the probe runs only when a target
+# expands it, not on every make invocation.
+PYTHON_YAML = $(shell if $(PYTHON) -c 'import yaml' >/dev/null 2>&1; then \
 	echo '$(PYTHON)'; \
 	elif command -v uv >/dev/null 2>&1; then echo 'uv run --script'; \
 	else echo '$(PYTHON)'; fi)
@@ -5774,7 +5807,7 @@ codex-pmoves: ## Launch Codex CLI with PMOVES context
 	@bash $(CURDIR)/scripts/codex-pmoves.sh
 
 cipher-identity: ## Which agent_id will this session's cipher memories be filed under? [AGENT=z890-claude]
-	@$(PYTHON) $(CURDIR)/tools/cipher_identity.py $(if $(AGENT),--agent "$(AGENT)",) || true
+	@$(PYTHON_YAML) $(CURDIR)/tools/cipher_identity.py $(if $(AGENT),--agent "$(AGENT)",) || true
 
 cipher-mint-token: ## Mint a per-agent cipher token (requires an ACTIVE signing card): AGENT=z890-claude [SCOPES=...]
 	@if [ -z "$(AGENT)" ]; then echo "Usage: make -C pmoves cipher-mint-token AGENT=z890-claude [SCOPES='memory:read,memory:write']"; exit 1; fi
