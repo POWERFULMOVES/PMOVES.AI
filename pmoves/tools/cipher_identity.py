@@ -9,7 +9,7 @@ context. A session also already knows whether cipher is reachable
     the identity the session believes it has
     is not the identity its memories are filed under.
 
-Grounded in `Pmoves-cipher/src/pmoves/auth.ts` at submodule pin `e24f1323` --
+Grounded in `Pmoves-cipher/src/pmoves/auth.ts` at submodule pin `975e02e6` --
 the gitlink PMOVES.AI `main` actually carries. The pin matters: this node's
 submodule working tree sits on `fix/per-agent-token-profile-header` (the head of
 unmerged fork PR #19), which adds three lines at :67 and shifts every citation
@@ -21,10 +21,10 @@ fleet runs.
     auth.ts:44-52   token does NOT start with "cipher_"  -> compared against the
                     CIPHER_API_TOKEN env var; on match the request is attributed
                     to agentId "bootstrap". No Supabase lookup happens at all.
-    auth.ts:54-88   token DOES start with "cipher_"      -> the uuid is looked up
+    auth.ts:54-91   token DOES start with "cipher_"      -> the uuid is looked up
                     in pmoves_core.cipher_agent_tokens and the request is
                     attributed to THAT row's agent_id -- the minted agent.
-    auth.ts:103-106 no Bearer at all, server token unset -> agentId undefined,
+    auth.ts:106-109 no Bearer at all, server token unset -> agentId undefined,
                     "advisory" mode: the caller self-declares in tool args.
 
 So bootstrap is not an agent and never was. It is the single-token launch path,
@@ -173,7 +173,7 @@ def resolve(agent, environ=None, cards_path: Path = CARDS) -> dict:
         row["effective_id"] = ""
         row["why"] = (
             "no CIPHER_API_TOKEN visible to this process: either the session is in "
-            "advisory mode (auth.ts:103-106, agentId self-declared per call) or the "
+            "advisory mode (auth.ts:106-109, agentId self-declared per call) or the "
             "token is injected downstream and simply not readable from here"
         )
 
