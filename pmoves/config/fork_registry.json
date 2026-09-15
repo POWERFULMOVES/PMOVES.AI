@@ -5,9 +5,9 @@
   "_schema": {
     "upstream": "owner/repo on the upstream forge",
     "branch": "optional branch override (3rd FORKS column in fork-sync.yml)",
-    "sync": "required boolean decision â€” true means the fork-sync workflow will attempt auto-sync; false means it is explicitly opted out",
-    "reason": "required string â€” why this fork is sync:true or sync:false. Operators read this before changing the decision.",
-    "skip": "DEPRECATED â€” the ratchet gate fails CI if any fork still has this field. Use sync+reason.",
+    "sync": "required boolean decision \u00e2\u20ac\u201d true means the fork-sync workflow will attempt auto-sync; false means it is explicitly opted out",
+    "reason": "required string \u00e2\u20ac\u201d why this fork is sync:true or sync:false. Operators read this before changing the decision.",
+    "skip": "DEPRECATED \u00e2\u20ac\u201d the ratchet gate fails CI if any fork still has this field. Use sync+reason.",
     "_first_party": "submodules that are NOT forks (no upstream); declared so the coverage cross-check can tell \"no upstream\" from \"undeclared\""
   },
   "org": "POWERFULMOVES",
@@ -110,7 +110,7 @@
     "PMOVES-Agent-Zero": {
       "upstream": "agent0ai/agent-zero",
       "sync": true,
-      "reason": "auto-sync on cron; consumable branch is read from .gitmodules (PMOVES.AI-Edition-Hardened) — that branch is what gets the upstream merge, not the default branch",
+      "reason": "auto-sync on cron; consumable branch is read from .gitmodules (PMOVES.AI-Edition-Hardened) \u2014 that branch is what gets the upstream merge, not the default branch",
       "branch": "PMOVES.AI-Edition-Hardened"
     },
     "PMOVES-BotZ-gateway": {
@@ -475,10 +475,34 @@
       "sync": true,
       "reason": "fork of agent0ai/spynel (Go, multi-agent chat orchestration); overlay landed: PMOVES.AI-Edition-Hardened carries PMOVES.AI_INTEGRATION.md (source-build install F1, transport boundaries F3, template governance F4); consumable branch is the hardened branch; default tracks parity",
       "branch": "PMOVES.AI-Edition-Hardened"
+    },
+    "PMOVES-registry": {
+      "upstream": "agentclientprotocol/registry",
+      "sync": true,
+      "reason": "fork of agentclientprotocol/registry (the official ACP agent registry); tracks upstream entries (MiniMax Code, harn, factory-droid, ...); substrate for the cross-agent shared-registry vision (a0/archon/every agent discover each other) \u2014 open wiring: map ACP entries to pmoves agent_registry.yaml",
+      "branch": "main"
+    },
+    "PMOVES-natscli-CHIT-EeZz": {
+      "upstream": "nats-io/natscli",
+      "sync": true,
+      "reason": "CHIT-evaluation fork of nats-io/natscli; at upstream parity with no CHIT delta committed yet; consumed-or-archived decision owed (pmoves-nats-mcp already covers CHIT-signed publishes)",
+      "branch": "main"
+    },
+    "Pmoves-nats.net": {
+      "upstream": "nats-io/nats.net",
+      "sync": true,
+      "reason": ".NET async NATS client (JetStream/KV/ObjectStore/Services); candidate for Danger-Room-Desktop and C# fleet lanes; unconsumed-fork decision owed",
+      "branch": "main"
+    },
+    "Pmoves-pipecat-context-hub": {
+      "upstream": "pipecat-ai/pipecat-context-hub",
+      "sync": true,
+      "reason": "local-first MCP server with Pipecat docs/examples/API context; Flute Gateway context option \u2014 wire as MCP for the flute/voice lanes before further pipecat overlay work",
+      "branch": "main"
     }
   },
   "_excluded": {
-    "Pmoves-cipher": "No common ancestor with upstream â€” cannot sync via merge API"
+    "Pmoves-cipher": "No common ancestor with upstream \u00e2\u20ac\u201d cannot sync via merge API"
   },
   "_first_party": [
     "PMOVES-BoTZ",
