@@ -90,7 +90,7 @@ jobs:
           KILO_REVIEW_MODEL: ${{ vars.KILO_REVIEW_MODEL }}
         run: |
           set -euo pipefail
-          MODEL="${KILO_REVIEW_MODEL:-kilo/ollama-cloud/glm-5.2}"
+          MODEL="${KILO_REVIEW_MODEL:-z-ai/glm-4.5}"
           sudo -n docker run --rm \
             -e KILOCODE_API_KEY="${KILOCODE_API_KEY}" \
             -e KILO_API_KEY="${KILO_API_KEY}" \
@@ -113,7 +113,7 @@ jobs:
         run: |
           set -euo pipefail
           {
-            echo "## Fleet review: kilocode (${KILO_REVIEW_MODEL:-kilo/ollama-cloud/glm-5.2})"
+            echo "## Fleet review: kilocode (${KILO_REVIEW_MODEL:-z-ai/glm-4.5})"
             echo
             cat /tmp/kilo-review-out.md
             echo
