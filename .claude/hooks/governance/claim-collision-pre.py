@@ -868,7 +868,37 @@ def split_heredocs(command: str):
 _NAIVE_SEGMENT_RE = re.compile(r"\n|;|&&|\|\||\||&")
 
 
-def _segments(text: str):
+_MAX_SUBSTITUTION_DEPTH = 8
+
+
+def _substitution_body(text: str, i: int):
+    """Return (body, index_after) for the substitution starting at `i`, or (None, i).
+
+    Handles `$( ... )` with nesting and `` ` ... ` `` without. Returns None when
+    the construct is unterminated, so the caller keeps the character as literal
+    text and the segment faces the allowlist unchanged -- an unbalanced `$(`
+    must not swallow the rest of the command.
+    """
+    if text[i:i + 2] == "$(":
+        depth, j = 1, i + 2
+        while j < len(text) and depth:
+            if text[j] == "(":
+                depth += 1
+            elif text[j] == ")":
+                depth -= 1
+                if not depth:
+                    return text[i + 2:j], j + 1
+            j += 1
+        return None, i
+    if text[i] == "`":
+        j = text.find("`", i + 1)
+        if j == -1:
+            return None, i
+        return text[i + 1:j], j + 1
+    return None, i
+
+
+def _segments(text: str, depth: int = 0):
     """Split on shell separators WITHOUT splitting inside quotes.
 
     Quote-awareness is not tidiness. A multi-line quoted argument --
@@ -888,6 +918,35 @@ def _segments(text: str):
     allowlist, so the verdict can only get stricter -- whereas letting one
     unbalanced quote swallow the rest of the command would hide a real write
     inside an earlier, allowed segment.
+
+    A COMMAND SUBSTITUTION IS A COMMAND, and is emitted as its own segment.
+    Without this, `$(` and `)` stayed glued to the adjacent tokens and BOTH
+    directions of the verdict were wrong (measured 2026-09-15):
+
+        N=$(env cp /tmp/x <register>)   -> ALLOWED
+        env cp /tmp/x <register>        -> blocked, "cp writes the register as
+                                           its DESTINATION"
+
+      `N=$(env` matched ASSIGNMENT_RE on its `N=` prefix, so the whole token was
+      consumed as an assignment and `env` was never seen by the wrapper-stripper.
+      The destination then arrived as `<register>)` -- with the paren attached --
+      so `_is_register` said no and the copy-verb guard never fired. Wrapping a
+      blocked write in `$( )` plus one leading word turned BLOCK into ALLOW. The
+      header above records six shapes that bypassed the previous design; this was
+      a seventh, inside the allowlist.
+
+        N=$(git show origin/main:<register>)  -> refused as "`show` is not a
+                                                 command", though `show` IS in
+                                                 _GIT_READ_SUBCOMMANDS
+
+      Same fault: `git` was eaten with the `N=`, so the SUBCOMMAND was judged as
+      if it were the command. `git diff` survived only by accident -- `diff` also
+      exists as a top-level read-only command -- which made the documented
+      read path work for the wrong reason.
+
+    The body is segmented RECURSIVELY and the substitution is removed from the
+    outer text, leaving a bare `N=` that names no command. Arithmetic `$((...))`
+    is NOT a command substitution and is preserved verbatim.
     """
     segs, buf, quote, i = [], [], None, 0
     while i < len(text):
@@ -911,6 +970,32 @@ def _segments(text: str):
             buf.append(ch)
             buf.append(text[i + 1])
             i += 2
+            continue
+        # Arithmetic expansion first: `$((` is not a command substitution, and
+        # treating it as one would judge `1` or `+` as a command name.
+        if text[i:i + 3] == "$((":
+            close = text.find("))", i + 3)
+            if close == -1:
+                buf.append(ch)
+                i += 1
+                continue
+            buf.append(text[i:close + 2])
+            i = close + 2
+            continue
+        if text[i:i + 2] == "$(" or ch == "`":
+            body, nxt = _substitution_body(text, i)
+            if body is None:
+                buf.append(ch)
+                i += 1
+                continue
+            if depth < _MAX_SUBSTITUTION_DEPTH:
+                segs.extend(_segments(body, depth + 1))
+            else:
+                # Refuse to stop looking. An over-nested substitution becomes one
+                # unparseable segment, which the allowlist refuses -- rather than
+                # silently vanishing from the text the way it used to.
+                segs.append(body)
+            i = nxt
             continue
         if text[i:i + 2] in ("&&", "||"):
             segs.append("".join(buf))
