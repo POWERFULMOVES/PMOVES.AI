@@ -369,32 +369,68 @@ a0-plugins-check-remote: ## Validate local Agent0 plugin catalog + remote GitHub
 # ---------------------------------------------------------------------------
 # Submodule sync targets
 # ---------------------------------------------------------------------------
+# SUBMODULES LIVE AT THE SUPERPROJECT ROOT, AND MAKE RUNS FROM pmoves/.
+#
+# Every documented invocation in this repo is `make -C pmoves <target>`, so
+# $(CURDIR) is pmoves/ -- a SUBDIRECTORY of the superproject, not its root. A
+# bare `git submodule update -- "Pmoves-cipher"` therefore resolves the pathspec
+# against pmoves/ and matches nothing:
+#
+#     $ make -C pmoves submodule-sync-one SM=Pmoves-cipher
+#     error: pathspec 'Pmoves-cipher' did not match any file(s) known to git
+#
+# Measured 2026-09-15 promoting the cipher gitlink. The target could not work
+# from the invocation its own help string documented, so the promotion was done
+# by hand from the repo root -- which is the failure mode Known Roads exist to
+# prevent: a road that cannot run teaches everyone to drive around it.
+#
+# `git -C` and not `cd ..`: a recipe that changes directory changes it for every
+# line after it, and these recipes mix superproject commands with per-submodule
+# ones. Naming the repo for each command keeps that explicit.
+#
+# Same spelling as mk/creator.mk and mk/kilo.mk. Identical value, so a
+# redefinition across includes is harmless -- but it must stay identical.
+REPO_ROOT := $(abspath $(CURDIR)/..)
+
 .PHONY: submodule-sync-one submodule-sync-all submodule-promote
 
-submodule-sync-one: ## Update single submodule: make submodule-sync-one SM=PMOVES-Agent-Zero
+submodule-sync-one: ## Update single submodule: make -C pmoves submodule-sync-one SM=PMOVES-Agent-Zero
 	@if [ -z "$(SM)" ]; then \
 	  echo "ERROR: SM is required."; \
-	  echo "Usage:  make submodule-sync-one SM=PMOVES-Agent-Zero"; \
+	  echo "Usage:  make -C pmoves submodule-sync-one SM=PMOVES-Agent-Zero"; \
+	  exit 1; \
+	fi
+	@if [ ! -e "$(REPO_ROOT)/$(SM)" ]; then \
+	  echo "ERROR: $(SM) is not a path in $(REPO_ROOT)."; \
+	  echo "       Submodule names are repo-root relative; see .gitmodules."; \
 	  exit 1; \
 	fi
 	@echo "=== Syncing submodule: $(SM) ==="
-	git submodule update --init -- "$(SM)"
-	git submodule update --remote -- "$(SM)"
+	git -C "$(REPO_ROOT)" submodule update --init -- "$(SM)"
+	git -C "$(REPO_ROOT)" submodule update --remote -- "$(SM)"
 	@echo "Updated $(SM) to latest remote commit:"
-	@git -C "$(SM)" log -1 --oneline
-	@echo "Stage with: git add $(SM)"
+	@git -C "$(REPO_ROOT)/$(SM)" log -1 --oneline
+	@echo "Stage with: git -C $(REPO_ROOT) add $(SM)"
 
 submodule-sync-all: ## Update all submodules to latest hardened branch
 	@echo "=== Syncing all submodules ==="
-	git submodule update --init --recursive
-	git submodule update --remote --recursive
+	git -C "$(REPO_ROOT)" submodule update --init --recursive
+	git -C "$(REPO_ROOT)" submodule update --remote --recursive
 	@echo ""
 	@echo "Updated submodules:"
-	@git submodule status --recursive
+	@git -C "$(REPO_ROOT)" submodule status --recursive
 	@echo ""
-	@echo "Review changes with: git diff --submodule"
+	@echo "Review changes with: git -C $(REPO_ROOT) diff --submodule"
 
-submodule-promote: ## Create PR from integration -> hardened after audit passes
+# NOT REPO-ROOTED, DELIBERATELY. This target promotes a SUBMODULE's own
+# integration branch and opens a PR on that submodule's fork, so it must run
+# with the submodule as the working directory, not via `make -C pmoves`.
+# Under `make -C pmoves` the branch check below reads the SUPERPROJECT's
+# branch and `gh pr create` would target the SUPERPROJECT's repo -- both
+# wrong, and the branch check is what stops it. Repo-rooting this one would
+# make it run CONFIDENTLY on the wrong repository, which is worse than
+# refusing, so it is left alone and the constraint is stated instead.
+submodule-promote: ## Create PR from integration -> hardened (run from INSIDE the submodule)
 	@echo "=== Promoting integration to PMOVES.AI-Edition-Hardened ==="
 	@CURRENT=$$(git branch --show-current); \
 	if [ "$$CURRENT" != "integration" ]; then \
