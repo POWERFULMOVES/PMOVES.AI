@@ -448,3 +448,4 @@ known_gaps:
   - "UNRUNNABLE_DOC|pmoves/docs/operations/PMOVES_DISK_CLEANUP.md|'docker system prune -a' in: docker system prune -af"
   - "UNRUNNABLE_DOC|pmoves/docs/operations/PMOVES_DISK_CLEANUP.md|'docker volume rm' in: docker volume rm buildx_…"
   - "UNRUNNABLE_DOC|pmoves/docs/services/supabase/README.md|'docker system prune -a' in: docker system prune -a"
+  - "GHOST_ENDPOINT|pmoves/docs/operations/SERVICE_HEALTH_ENDPOINTS.md|agent-zero/mcp/t-"

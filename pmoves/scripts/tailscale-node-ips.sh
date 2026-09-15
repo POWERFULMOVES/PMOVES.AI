@@ -54,6 +54,10 @@ pmoves_resolve_tailscale_node_ips() {
     case "$host" in
       pmoves-z890)     _pm_ts_set TS_Z890   "$ip" ;;
       pmoves-5090)     _pm_ts_set TS_5090   "$ip" ;;
+<<<<<<< HEAD
+      pmoves-laptop)   _pm_ts_set TS_4090   "$ip" ;;
+=======
+>>>>>>> origin/main
       pmoves-4090)     _pm_ts_set TS_4090   "$ip" ;;
       pmoves-spark)    _pm_ts_set TS_SPARK  "$ip" ;;
       pmoves-b850-*)   _pm_ts_set TS_B850   "$ip" ;;

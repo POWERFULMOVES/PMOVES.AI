@@ -1,4 +1,8 @@
 {
+  "git.autoRepositoryDetection": false,
+  "git.autofetch": false,
+  "git.autorefetch": false,
+  "git.repositoryScanIgnoredFolders": ["**/PMOVES-*", "**/Pmoves-*", "pmoves-*", "pmoves-cipher-openclaw"],
   "python.venvPath": "${workspaceFolder}/pmoves",
   "python.terminal.activateEnvInCurrentTerminal": false,
   "python.analysis.typeCheckingMode": "basic",
@@ -80,5 +84,5 @@
   },
   "makefile.configureOnOpen": false,
   "java.compile.nullAnalysis.mode": "automatic",
-  "python.defaultInterpreterPath": "${workspaceFolder}/pmoves/.venv-pmoves"
+  "markdown.validate.enabled": true
 }
