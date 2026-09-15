@@ -258,6 +258,40 @@ REGISTRY: Dict[str, Dict[str, Any]] = {
     # API. Only the password is a secret; SMTP_HOST/PORT/USER/ADMIN_EMAIL are
     # plain config and live in env.shared.
     "SMTP_PASS": {"tier": "supabase", "required": False},
+    "SMTP_PASS": {"tier": "supabase", "required": False},
+    # Tier: worker -- the content-provenance-gate service's inbound bearer, read
+    # at import by pmoves/services/content-provenance-gate/main.py:210 and
+    # enforced on /metrics, /v1/preview/raw and /v1/evaluate.
+    #
+    # This is the label whose DELIVERY defect opened the charset gap: the value
+    # arrives carrying an EM DASH (U+2014) inside the key. It appears in
+    # chit_encode_secrets.py -- so it has always been IN the funnel -- but it was
+    # never registered here, so no manifest entry ever described its shape and the
+    # funnel had nothing to check even if it had wanted to. The em dash was found
+    # by a third-party vendor CLI that validated the value before putting it in an
+    # HTTP header; our own pipeline, whose entire job is credential delivery, said
+    # nothing. secret_shape.inspect_value now withholds it.
+    #
+    # min_length is a floor, not the local value. env.shared.example documents
+    # `openssl rand -hex 32`, which is 64 characters, so 32 admits a shorter
+    # hand-minted token while still refusing an obvious fragment. What a floor
+    # canNOT catch is this label's actual defect -- an em dash does not change a
+    # value's length -- which is precisely why charset validation had to exist
+    # separately rather than being folded into a bigger number here.
+    #
+    # required=False: the service has no compose wiring at all (it is listed in
+    # configs/dockerfiles/_known_orphans.yaml), so a required slot would fail the
+    # strict funnel on every node for a service none of them run.
+    #
+    # Recorded because it is load-bearing and NOT closed by this entry: the gate
+    # FAILS OPEN. main.py:227 `if not GATE_API_KEY: return  # no key configured =
+    # open`. So withholding a corrupt value moves the gate from "rejects every
+    # legitimate caller" to "authenticates everyone", and neither is acceptable.
+    # Withholding is still the better of the two because it is LOUD -- the funnel
+    # names the variable -- whereas the corrupt value 401s silently. The fail-open
+    # default is a separate defect in that service and is not fixed here.
+    "GATE_API_KEY": {"tier": "worker", "required": False, "min_length": 32},
+    # Tier 5: Agent -- the E2B sandbox credential, read by agent-zero's MCP server
     # Tier 5: Agent -- E2B agent-sandbox credentials (PR #2982; union-merged with
     # main's stricter shape). ROOT CAUSE of the sandbox lane being dark: neither
     # name appeared anywhere in this REGISTRY or in brand_defaults.py -- E2B was

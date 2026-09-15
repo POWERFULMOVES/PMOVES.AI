@@ -132,11 +132,11 @@ Run from the `PMOVES-Danger-infra` checkout, inside the Linux environment:
 ```bash
 sudo modprobe nbd nbds_max=64                 # 1
 sudo sysctl -w vm.nr_hugepages=2048           # 2   reserves 4 GiB
-make download-public-kernels                  # 3
-make local-infra                              # 4   nine services, see below
+make -C "$INFRA_CHECKOUT" download-public-kernels   # 3  (INFRA_CHECKOUT=the PMOVES-Danger-infra root)
+make -C "$INFRA_CHECKOUT" local-infra               # 4   nine services, see below
 cd packages/db        && make migrate-local   # 5
 cd packages/envd      && make build-debug     # 6   embedded in templates
-make download-public-firecrackers             # 7
+make -C "$INFRA_CHECKOUT" download-public-firecrackers # 7
 cd packages/local-dev && go run seed-local-database.go   # 8  mints the dev user/team/token
 cd packages/api           && make run-local   # 9   :3000
 cd packages/orchestrator  && make run-local   # 10  :5008 (+ template-manager)
@@ -163,7 +163,7 @@ Traps, in the order you will hit them:
    a production credential — but it is still a credential: do not paste it into
    a PR, a log, or a commit.
 
-### What `make local-infra` starts (step 4)
+### What the infra repo `local-infra` target starts (step 4)
 
 `clickhouse`, `grafana`, `loki`, `memcached`, `mimir`, `otel`, `postgres`,
 `redis`, `tempo` — nine services — **plus** the three E2B services you start by
@@ -315,7 +315,7 @@ Mode resolver: `pmoves/scripts/e2b_mode.sh`.
 
 Stated plainly so nobody reads this page as a completed bring-up:
 
-- **The stack has not been brought up anywhere.** No `make local-infra`, no
+- **The stack has not been brought up anywhere.** No infra-repo `local-infra`, no
   Terraform, no Packer, no gcloud. This lane was wiring, probing and
   documentation only.
 - **Nothing has been run on the 5090.** Both probe halves were written *for*

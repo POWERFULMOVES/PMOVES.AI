@@ -213,7 +213,7 @@ encodes, neither of which the vendor dotenv block states:
 
 Bring-up is an **operator action on one named node**, not "someone". Full runbook —
 requirements, the twelve `DEV-LOCAL.md` steps with their traps, the nine services
-`make local-infra` starts, the port table and the `:3000` collision risk:
+the infra repo's `local-infra` target starts, the port table and the `:3000` collision risk:
 
 **`pmoves/docs/operations/E2B_SELF_HOST_RUNBOOK.md`**
 
