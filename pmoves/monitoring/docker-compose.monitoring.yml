@@ -116,10 +116,61 @@ services:
       start_period: 30s
     profiles: ["linux"]
 
+  # NATS bus metrics. The bus was the ONE component nothing watched: measured
+  # 2026-09-15, Prometheus had 46 active targets and ZERO nats ones.
+  #
+  # WHY AN EXPORTER AND NOT A DIRECT SCRAPE: nats' monitoring endpoint serves
+  # JSON (/varz, /jsz, /leafz), not Prometheus text — prometheus cannot read it.
+  #
+  # WHY BRIDGED ONTO TWO NETWORKS: prometheus sits on pmoves-net/_api/_app/_data/
+  # _monitoring; nats sits on pmoves_bus/pmoves_external. They share NONE, so
+  # there was no path to scrape even if the format had matched. This container
+  # joins pmoves_bus (to read nats:8222) and monitoring_tier (so prometheus can
+  # read it) — the same "run on the network, don't add a host hop" reasoning the
+  # amd-gpu exporter comment in prometheus.yml records.
+  #
+  # MEASURED on first bring-up, so the flags are not aspirational:
+  #   gnatsd_varz_connections            18      (matches /varz)
+  #   gnatsd_leafz_conn_nodes_total       0      <- mesh signal, currently islanded
+  #   gnatsd_varz_jetstream_stats_storage 0      <- durability signal
+  #
+  # -jsz=all is accepted but emits NO gnatsd_jsz_* series while streams=0 —
+  # there is nothing to enumerate. It populates once durable streams exist
+  # again (see the /tmp store_dir fix). Until then the durability signal comes
+  # from gnatsd_varz_jetstream_stats_{storage,memory}, which read 0 and thereby
+  # corroborate that PMOVES-PERSONA is gone. Keep the flag: it costs nothing and
+  # is the series you want the moment streams return.
+  # -leafz is the mesh signal for fleet geo-bus confirmation.
+  # No host port: prometheus reaches it over the network.
+  nats-exporter:
+    image: natsio/prometheus-nats-exporter:0.20.2
+    restart: unless-stopped
+    command:
+      - -port=7777
+      - -varz
+      - -jsz=all
+      - -leafz
+      - -connz
+      - -subz
+      - -routez
+      - http://nats:8222
+    networks: [monitoring_tier, pmoves_bus]
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:7777/metrics"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
 networks:
   monitoring_tier:
     external: true
     name: pmoves_monitoring
+  # The in-stack bus network (internal: true). Joined ONLY by nats-exporter so it
+  # can reach nats:8222; nothing here publishes a port onto it.
+  pmoves_bus:
+    external: true
+    name: pmoves_bus
   pmoves_api:
     external: true
     name: pmoves_api
