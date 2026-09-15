@@ -66,7 +66,7 @@ After `make -C pmoves up-cipher`: image rebuilt, **`streamable` = 1**, `/health`
 ### Reconciliation: grounded against source, 2026-09-09
 
 **Provenance rule applied here:** every claim below cites the file and line it
-came from, at submodule pin `e24f1323` or superproject `origin/main`. An earlier
+came from, at submodule pin `975e02e6` or superproject `origin/main`. An earlier
 revision of this section proposed three remedies and cited nothing; it was
 reasoning from THIS runbook, which was itself stale. A runbook with no provenance
 link to source is unverified, and it was wrong.
@@ -165,14 +165,14 @@ Remedy is a mint through the pipeline, per agent, not a transport change.
 `agent_id` this session's memory writes will actually be filed under. Reads no
 secret, sends nothing over the network, exits `0` only when the carry is intact.
 
-Provenance — `Pmoves-cipher/src/pmoves/auth.ts` @ **`e24f1323`** (the gitlink on
+Provenance — `Pmoves-cipher/src/pmoves/auth.ts` @ **`975e02e6`** (the gitlink on
 `main`), `resolveToken()`:
 
 | line | condition | resulting `agentId` |
 |---|---|---|
 | `:46` `if (!token.startsWith('cipher_'))` | bearer lacks the prefix | `:49` **`'bootstrap'`**, six scopes, **no Supabase lookup at all** |
-| `:54`–`:60` per-agent mode | bearer is `cipher_<uuid>` | `:79`–`:81` the `agent_id` on that `pmoves_core.cipher_agent_tokens` row |
-| `:103`–`:105` | no bearer, and server `CIPHER_API_TOKEN` unset | `undefined` — advisory, the caller self-declares per call |
+| `:54`–`:60` per-agent mode | bearer is `cipher_<uuid>` | `:82`–`:84` the `agent_id` on that `pmoves_core.cipher_agent_tokens` row |
+| `:106`–`:108` | no bearer, and server `CIPHER_API_TOKEN` unset | `undefined` — advisory, the caller self-declares per call |
 
 `auth.ts:44` labels the first row "legacy / bootstrap". It is the single-token
 launch path, whose purpose is to hand off to a minted agent — and the handoff is
@@ -199,19 +199,29 @@ Two changes close the **visible** half of this:
   signature and the ledger are separate systems". That was never a stance; it
   was the implementation. The card is the unlock.
 
-**Provenance hazard, found the hard way.** The first revision of this section
-cited `:82`-`:86` and `:106`-`:108`. Those numbers were read off this node's
-`Pmoves-cipher` submodule **working tree**, which is checked out on
-`fix/per-agent-token-profile-header` (`d94a1dcc`) — the head of *unmerged* fork
-PR #19, which inserts three lines at `:67`. The gitlink `main` carries is
-`e24f1323`, where the same statements are at `:79`-`:81` and `:103`-`:105`.
+**Provenance hazard, and why these numbers are now machine-checked.** This
+section's citations have been wrong twice, for two different reasons, inside one
+week. Both are recorded because the second one was *predicted* by the first and
+still had to be fixed by hand.
 
-Every citation above is now verified line-by-line against
-`git show e24f1323:src/pmoves/auth.ts`, not against the checkout. This is the
-same class as the runbook rule that produced this section: a working tree is not
+| | pin | what happened |
+|---|---|---|
+| 1 | `d94a1dcc` | The first revision read line numbers off this node's submodule **working tree**, which sat on `fix/per-agent-token-profile-header` — the head of *unmerged* fork PR #19. It inserts three lines at `:67`, so four citations were wrong for everyone who did not have that branch checked out. |
+| 2 | `e24f1323` | Re-verified against the gitlink `main` actually carried. Correct — until #19 merged. |
+| 3 | `975e02e6` | #19 merged (`Accept-Profile: pmoves_core`) and the gitlink promoted. The same three inserted lines moved the same four citations again: `e24f1323:79` → `975e02e6:82`, and `e24f1323:103` → `975e02e6:106`. The prefix fork at `:44`/`:46`/`:49`/`:54`/`:60` sits above the insertion and never moved. |
+
+Re-numbering by hand on each pin bump is not a fix; it is the same manual step
+failing again on a schedule. `pmoves/tests/tools/test_auth_citations_resolve.py`
+now checks three things on the required test job: the gitlink still equals the
+pin these numbers were read at, every cited line still carries its **anchor
+text**, and the docs quote the current numbers and not the superseded ones.
+Anchors are the real citation; the numbers are a convenience for a human reader,
+and that test is what keeps the convenience honest.
+
+The underlying rule is the one that produced this section: a working tree is not
 a source of truth, and a submodule parked on someone's open PR is a source of
-*plausible* truth, which is worse. Anyone quoting `auth.ts` on this node should
-run `git -C Pmoves-cipher status -sb` first.
+*plausible* truth, which is worse. Anyone quoting `auth.ts` on a node should run
+`git -C Pmoves-cipher status -sb` first — or just let the test say it.
 
 **Still open — operator decisions, not code.** The carry is now *measured*, not
 *closed*. Closing it means minting `cipher_<uuid>` tokens per carded agent and
