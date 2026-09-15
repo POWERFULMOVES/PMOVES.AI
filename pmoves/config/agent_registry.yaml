@@ -371,6 +371,48 @@ agents:
       compose_profile: agents
     description: "VS Code-native GLM-5-Turbo delivery agent via KiloCode. Blueprint-first implementation, MCP-integrated, DARKXSIDE witness."
 
+  kiloclaw:
+    name: "KiloClaw"
+    class: standard
+    kind: harness
+    primary_type: agent
+    secondary_type: llm
+    port: null
+    health: null
+    layers: [L0, L2, L4]
+    evolution_stage: stage_2
+    role_class: worker
+    signature: "kilocode"   # same lineage as kilocode_glm (▲ emerald alter)
+    nats:
+      publishes:
+        - pmoves.agent.result.v1
+        - claw.task.complete.v1
+        - agent.graphiti.signed.v1
+      subscribes:
+        - pmoves.agent.task.v1
+        - claw.task.assign.v1
+    chit_toggles:
+      delta_sensitive: true
+      kappa_sensitive: true
+      hz_sensitive: false
+      swarm_participant: true
+      attribution_gated: true
+    resilience:
+      context_budget: large
+      checkpoint_frequency: per_wave
+      recovery_strategy: cipher_resumable
+      cipher_categories: [agent_checkpoint, agent_completion]
+    topology:
+      node_affinity: [5090, laptop-4090, z890, kiloclaw]
+      team: implementation
+      ci_runner: vps
+      compose_profile: null   # hosted KiloClaw VPS — managed runtime, not a compose service
+    description: >-
+      Fleet KiloCode claw behind the Mavis harness routing entry (wire target glm-5.1).
+      Node-agnostic Kilo CLI worker on the Z.AI coding plan, including the hosted KiloClaw
+      VPS (runtime lane kilocode/zai-coding/glm-5.3). CLI harness source of truth:
+      PMOVES-KeYlOkODe (fork of Kilo-Org/kilocode, @kilocode/cli); reads repo kilo.json natively.
+
   darkxside_persona:
     name: "DARKXSIDE Persona"
     class: specialized
