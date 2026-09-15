@@ -3330,6 +3330,25 @@ mcp_servers:
     rooms: ["4090-field.room.control", "hermes-agent.room.control"]
     status: "planned"
 
+  pipecat_context_hub:
+    name: "pipecat-context-hub"
+    # Fork (Pmoves-pipecat-context-hub, upstream pipecat-ai/pipecat-context-hub),
+    # not yet a submodule - see fork_registry.json and
+    # AGNOTE4482_FLEET_FORK_REVIEW_2026-09-15.md.
+    fork: "Pmoves-pipecat-context-hub"
+    class: utility
+    transport: "http"
+    # endpoint null per the e2b convention above: no compose service serves this
+    # yet. The Flute/voice lane owes the service; restore the endpoint when it
+    # listens (planned: http://pipecat-context-hub:8204/mcp).
+    endpoint: null
+    action_namespace: "mcp.v1.pipecat-context"
+    capabilities: ["pipecat-docs", "pipecat-examples", "pipecat-api-context"]
+    # Local-first grounding for anything touching the voice stack: authoritative
+    # Pipecat API/docs context without web calls - a Flute Gateway context option.
+    grounding_source: true
+    status: "planned"
+
   pmoves_hirag_mcp:
     name: "pmoves-hirag-mcp"
     submodule: "pmoves-hirag-mcp"

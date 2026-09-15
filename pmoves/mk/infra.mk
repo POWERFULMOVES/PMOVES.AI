@@ -678,6 +678,11 @@ dep-matrix-shutdown: ## Print the graceful shutdown order (reverse of bring-up l
 agent-registry-check: ## Assert agent_registry.yaml describes reality (submodule vs path, transport vs endpoint)
 	@uv run --quiet --with pyyaml python tools/agent_registry_check.py
 
+# Sibling of the REPO ROOT (make -C pmoves runs from pmoves/, hence ../../).
+ACP_REGISTRY_PATH ?= ../../PMOVES-registry
+acp-registry-map: ## Regenerate the ACP <-> PMOVES registry mapping (clone POWERFULMOVES/PMOVES-registry as a repo-root sibling first)
+	@uv run --quiet --with pyyaml python tools/acp_registry_map.py --registry $(ACP_REGISTRY_PATH) --write
+
 # ── Agent Zero dependency overlay ──────────────────────────────
 # The image installs deps twice into one venv: the fork's requirements first,
 # ours second as a --constraint. Ours therefore wins. These two targets keep
