@@ -29,7 +29,7 @@
     "react-markdown": "^9.1.0",
     "remark-gfm": "^4.0.0",
     "toml": "3.0.0",
-    "uuid": "^14.0.1",
+    "uuid": "^14.0.2",
     "yaml": "^2.8.3"
   },
   "overrides": {
