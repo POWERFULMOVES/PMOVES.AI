@@ -1034,7 +1034,7 @@ async def enrich_all_from_huggingface(
             results["enriched"].append({"id": model_id, "hf_id": hf_id, "dimensions": enrichment.get("dimensions")})
             logger.info(f"Enriched {model.get('name')} from HF ({hf_id})")
         except Exception as e:
-            results["failed"].append({"id": model_id, "hf_id": hf_id, "error": str(e)})
+            results["failed"].append({"id": model_id, "hf_id": hf_id, "error": type(e).__name__})
             logger.warning(f"Failed to enrich {model.get('name')}: {e}")
 
     if nats_client and results["enriched"]:

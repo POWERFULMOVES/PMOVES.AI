@@ -224,7 +224,15 @@ agents:
       team: orchestration
       ci_runner: null
       compose_profile: null
-    description: "B850/Knuckles node CLI identity -- data-tier host, infra + governance lane"
+    # Affinity, not exclusivity. The earlier wording ("data-tier host, infra +
+    # governance lane") read as a singular assignment; .claude/CLAUDE.md states
+    # every node is a pore in the lattice, capacity-class rather than
+    # expertise-lane, so what this row records is where work lands by preference,
+    # not what the node is alone permitted to hold.
+    description: >-
+      B850/Knuckles node CLI identity. Affinity for data-tier and AMD/ROCm Linux
+      workloads, with an infra + governance lane -- a preference, not an
+      exclusive claim. Admin over the node_steward role it launches into.
   claude_5090:
     name: "5090 Claude"
     class: standard
@@ -391,6 +399,48 @@ agents:
       compose_profile: agents
     description: "VS Code-native GLM-5-Turbo delivery agent via KiloCode. Blueprint-first implementation, MCP-integrated, DARKXSIDE witness."
 
+  kiloclaw:
+    name: "KiloClaw"
+    class: standard
+    kind: harness
+    primary_type: agent
+    secondary_type: llm
+    port: null
+    health: null
+    layers: [L0, L2, L4]
+    evolution_stage: stage_2
+    role_class: worker
+    signature: "kilocode"   # same lineage as kilocode_glm (▲ emerald alter)
+    nats:
+      publishes:
+        - pmoves.agent.result.v1
+        - claw.task.complete.v1
+        - agent.graphiti.signed.v1
+      subscribes:
+        - pmoves.agent.task.v1
+        - claw.task.assign.v1
+    chit_toggles:
+      delta_sensitive: true
+      kappa_sensitive: true
+      hz_sensitive: false
+      swarm_participant: true
+      attribution_gated: true
+    resilience:
+      context_budget: large
+      checkpoint_frequency: per_wave
+      recovery_strategy: cipher_resumable
+      cipher_categories: [agent_checkpoint, agent_completion]
+    topology:
+      node_affinity: [5090, laptop-4090, z890, kiloclaw]
+      team: implementation
+      ci_runner: vps
+      compose_profile: null   # hosted KiloClaw VPS — managed runtime, not a compose service
+    description: >-
+      Fleet KiloCode claw behind the Mavis harness routing entry (wire target glm-5.1).
+      Node-agnostic Kilo CLI worker on the Z.AI coding plan, including the hosted KiloClaw
+      VPS (runtime lane kilocode/zai-coding/glm-5.3). CLI harness source of truth:
+      PMOVES-KeYlOkODe (fork of Kilo-Org/kilocode, @kilocode/cli); reads repo kilo.json natively.
+
   darkxside_persona:
     name: "DARKXSIDE Persona"
     class: specialized
@@ -426,6 +476,53 @@ agents:
       ci_runner: ai-lab
       compose_profile: agents
     description: "Private co-creator and witness identity for darkxsides.room; public egress remains approval- and redaction-gated."
+
+  node_steward:
+    name: "Node Steward"
+    # The session ROLE the CLI identities above load into, not a node identity of
+    # its own. `pmoves/scripts/claude-pmoves.sh:82` resolves
+    # `DEFAULT_AGENT="${PMOVES_DEFAULT_AGENT:-node-steward}"` and then execs
+    # `claude --agent "$AGENT"`, so every launcher-started session on every node
+    # begins in this role -- yet this file, which .claude/CLAUDE.md names the
+    # source of truth for agent taxonomy, did not describe it.
+    class: specialized
+    primary_type: agent
+    secondary_type: ui
+    # No listening socket. A CLI session role, not a service.
+    port: null
+    health: null
+    layers: [L0, L2, L4]
+    evolution_stage: stage_1
+    # Pre-work face of the Control Body, per the role_classes block above:
+    # "Decomposes intent into scoped work: specs, plans, lane claims. Read-heavy;
+    # produces no production edits." That is this role verbatim -- it claims the
+    # lane and spawns delivery agents -- and .claude/agents/node-steward.md
+    # withholds Write/Edit, so "no production edits" is enforced, not asserted.
+    role_class: planner
+    # Deliberately no `signature`. The signing roster (agent_signatures.yaml and
+    # external_contributors above) carries NODE identities -- a steward session on
+    # this host signs as `b850-claude`. Minting a card for the role would give one
+    # signer two resolvable names.
+    #
+    # Deliberately empty: the steward publishes nothing to NATS. Its claim goes
+    # through the `pmoves-chit-sign` skill, not a subject of its own.
+    nats:
+      publishes: []
+      subscribes: []
+    topology:
+      # `any`, following botz_auditor: this role is not affine to one machine. It
+      # is the default on every node the launcher starts, which is what
+      # .claude/CLAUDE.md means by capacity-class rather than expertise-lane.
+      node_affinity: [any]
+      team: orchestration
+      ci_runner: null
+      compose_profile: null
+    description: >-
+      Per-node session role: holds node identity, reads and claims in the
+      AGNOTE4482 register before edits, then spawns delivery and review agents to
+      execute. Directed by the node's CLI identity (claude_b850 on Knuckles); its
+      own domain is administration of that node. Definition and rationale live in
+      .claude/agents/node-steward.md.
 
   space_agent:
     name: "PMOVES Space-Agent"
@@ -2811,7 +2908,7 @@ agents:
       recovery_strategy: cipher_resumable
       cipher_categories: [agent_plan, agent_completion]
     topology:
-      node_affinity: [powerfulmoves, pmoves-laptop]
+      node_affinity: [powerfulmoves, pmoves-4090]
       team: orchestration
       ci_runner: ai-lab
       compose_profile: agents
@@ -3301,6 +3398,25 @@ mcp_servers:
     action_namespace: "mcp.v1.e2b"
     capabilities: ["sandbox", "execution", "artifacts"]
     rooms: ["4090-field.room.control", "hermes-agent.room.control"]
+    status: "planned"
+
+  pipecat_context_hub:
+    name: "pipecat-context-hub"
+    # Fork (Pmoves-pipecat-context-hub, upstream pipecat-ai/pipecat-context-hub),
+    # not yet a submodule - see fork_registry.json and
+    # AGNOTE4482_FLEET_FORK_REVIEW_2026-09-15.md.
+    fork: "Pmoves-pipecat-context-hub"
+    class: utility
+    transport: "http"
+    # endpoint null per the e2b convention above: no compose service serves this
+    # yet. The Flute/voice lane owes the service; restore the endpoint when it
+    # listens (planned: http://pipecat-context-hub:8204/mcp).
+    endpoint: null
+    action_namespace: "mcp.v1.pipecat-context"
+    capabilities: ["pipecat-docs", "pipecat-examples", "pipecat-api-context"]
+    # Local-first grounding for anything touching the voice stack: authoritative
+    # Pipecat API/docs context without web calls - a Flute Gateway context option.
+    grounding_source: true
     status: "planned"
 
   pmoves_hirag_mcp:

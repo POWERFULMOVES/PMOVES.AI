@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "persona.consumption.recorded.v1",
+  "description": "A third-reference consumption event: a human or an agent consumed a playlist/media item. The persona-thirdref consumer joins this against Supabase enrichment (resonance domains, persona signals, curriculum tracks) and emits shape.trace.recorded.v1 so personas enrich from shared consumption — the third reference source for persona grounding after authored config and observed interaction.",
+  "type": "object",
+  "required": ["consumer_kind", "item_kind", "item_id", "timestamp"],
+  "additionalProperties": false,
+  "properties": {
+    "consumer_kind": {
+      "type": "string",
+      "enum": ["human", "agent"],
+      "description": "Which body of the three-body system consumed. Humans carry user_id; agents carry agent_id."
+    },
+    "user_id": {
+      "type": "string",
+      "description": "Human consumer identity (required when consumer_kind=human)"
+    },
+    "agent_id": {
+      "type": "string",
+      "description": "Agent consumer identity — matches agent_signatures.yaml agent_id (required when consumer_kind=agent)"
+    },
+    "item_kind": {
+      "type": "string",
+      "enum": ["youtube_video", "beat", "generic"],
+      "description": "What was consumed. youtube_video joins the enrichment columns on pmoves_core.youtube_videos; beat joins the BPM/CLAP beats metadata; generic carries caller-provided resonance_domains."
+    },
+    "item_id": {
+      "type": "string",
+      "description": "Identifier of the consumed item (video id, track filename, or free-form key)"
+    },
+    "session_id": {
+      "type": "string",
+      "description": "Grouping identifier for related consumption"
+    },
+    "source": {
+      "type": "string",
+      "description": "Where the event came from (jellyfin, cli, pipeline, jellyfin-bridge)"
+    },
+    "duration_seconds": {
+      "type": "number",
+      "minimum": 0,
+      "description": "How much of the item was consumed; 0/absent means unmeasured"
+    },
+    "resonance_domains": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Caller-provided domains; used as-is when item_kind=generic, merged with joined domains otherwise"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO-8601 time of consumption"
+    }
+  }
+}

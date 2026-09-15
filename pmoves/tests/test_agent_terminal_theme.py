@@ -1,5 +1,6 @@
 """Tests for agent_terminal_theme.py — W1 Agent Theming renderer."""
 import json
+import re
 import os
 import subprocess
 import sys
@@ -164,3 +165,64 @@ class TestDemoRoster:
         result = _run([])
         assert result.returncode == 1
         assert "usage:" in result.stdout.lower() or "usage:" in result.stderr.lower()
+
+
+def test_host_map_keys_are_hostnames_not_hardware_descriptions():
+    """The 4090 resolved to "unknown" because its key was a DESCRIPTION.
+
+    `_HOST_MAP` had "z890" and "powerfulmoves" (hostnames) alongside "laptop"
+    (what the machine is). When the box was named PMOVES-4090, nothing matched:
+    the signature `4090-claude` existed, the node had an identity, and --whoami
+    returned "unknown (not in signatures)".
+
+    Asserted against the REAL signature list so a node cannot be mapped to an
+    identity that does not exist, and so the 4090's own hostname keeps
+    resolving.
+    """
+    import re
+    src = open(_SCRIPT, encoding="utf-8").read()
+    block = re.search(r"_HOST_MAP = \{(.*?)\}", src, re.S)
+    assert block, "_HOST_MAP not found"
+    pairs = re.findall(r'"([^"]+)":\s*"([^"]+)"', block.group(1))
+    mapping = dict(pairs)
+
+    # the concrete regression: this machine's real hostname must resolve
+    assert "pmoves-4090" in mapping, "the 4090's real hostname is not mapped"
+    assert mapping["pmoves-4090"] == "4090-claude"
+
+    # and every target must be a signature that actually exists
+    import yaml
+    sig_path = os.path.join(os.path.dirname(__file__), "..", "config", "agent_signatures.yaml")
+    sigs = yaml.safe_load(open(sig_path, encoding="utf-8"))["signatures"]
+    known = set(sigs) if isinstance(sigs, dict) else {s.get("id") for s in sigs}
+    unknown = {v for v in mapping.values() if v not in known}
+    assert not unknown, f"_HOST_MAP points at signatures that do not exist: {unknown}"
+
+
+def test_there_is_exactly_one_host_map():
+    """A second copy is how the first fix missed half the problem.
+
+    `botz_cli.py::_resolve_agent_id` carried a byte-identical hostname map, so
+    fixing the theme resolver left `botz_cli whoami` returning "unknown" on
+    PMOVES-4090. Two maps, one fix. This asserts the map is DEFINED once and
+    imported elsewhere, so the next person cannot reintroduce the split.
+    """
+    tools = os.path.join(os.path.dirname(__file__), "..", "tools")
+    definitions = []
+    for name in os.listdir(tools):
+        if not name.endswith(".py"):
+            continue
+        text = open(os.path.join(tools, name), encoding="utf-8").read()
+        # a DEFINITION assigns a dict literal; an import does not
+        # re.I matters: the first version of this pattern used [Hh]ost, which
+        # cannot match _HOST_MAP -- it missed the real definition and flagged
+        # only the lowercase copy. A test that looks for duplicates must be
+        # able to see the original.
+        # A POPULATED literal only. `host_map = {}` in an import-guard is not a
+        # second source of truth; requiring the brace to open onto a newline or
+        # a string key tells the two apart.
+        if re.search(r"^\s*_?host_?map\s*=\s*\{\s*(?:$|[\"'])", text, re.M | re.I):
+            definitions.append(name)
+    assert definitions == ["agent_terminal_theme.py"], (
+        f"hostname map should be defined once; found definitions in {definitions}"
+    )

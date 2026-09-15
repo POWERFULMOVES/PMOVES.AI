@@ -84,6 +84,32 @@ services:
         limits:
           cpus: '1.0'
           memory: 512M
+
+  # ── NATS accounts/leaf hub — spec §9 Phase 2 (PMOVES-nats-server fork) ──
+  # Four trust zones (SYS/CORE/EDGE/CLOUD) via memory resolver of nsc-minted
+  # account JWTs; 7422 leafnode listener for EDGE/CLOUD leaves; SYS-guarded
+  # monitoring. Two-gate model: the account is the transport-trust gate; CHIT
+  # signing (inside messages) is the payload-provenance gate — broker-level CHIT
+  # enforcement is out of scope per spec §11. No Go patches (spec global
+  # constraint): the fork's value is config + packaging on stock nats:2.11.
+  #
+  # OFF by default (profile `nats-hub`): flipping bring-up to the hub requires
+  # the funnel-rendered trust material (see environment/secrets below) — the
+  # fork entrypoint fails fast without it. Default `nats` above is the
+  # flag-launched single-principal bus until the operator cuts over per spec §9.
+  #
+  # CONFIG NOTE: the fork image bakes the Aug-8 §7a conf, which predates the
+  # Aug-15 lab finding that `operator:` is REQUIRED (without it the server dies
+  # at boot: "error resolving system account: account validation failed"). The
+  # lab-verified template — pmoves/config/nats/pmoves-nats.conf, VERIFIED
+  # 2026-08-15 on z890 with leaf attach + account isolation proven — is mounted
+  # OVER the baked conf. Its ${NATS_*} placeholders expand from container env
+  # (env_file via the tier anchor; funnel renders them into env.shared per §8 —
+  # nats-server expands $VAR itself, no ${VAR:-default} supported).
+  #
+  # Cutover path (spec §9): Phase 2 = enable here on the hub node (KVM4-2 per
+  # mcp.json, or z890 lab first) → Phase 3 migrate CORE clients to .creds →
+  # Phase 4/5 attach EDGE/CLOUD leaves at 7422 → Phase 6 MCP NATS_CREDS cutover.
   nats-init:
     image: natsio/nats-box:0.14.5
     entrypoint: ["/bin/sh", "/scripts/init_streams.sh"]
@@ -279,7 +305,7 @@ services:
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
     # DNS configuration - Docker embedded DNS (default)
-    - PMOVES_NETWORKS=pmoves_api
+    - PMOVES_NETWORKS=pmoves_api,pmoves_external
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9999/health"]
       interval: 15s
@@ -295,6 +321,12 @@ services:
       pmoves_api:
         aliases:
         - auth   # upstream Supabase name used by vendored kong.yml
+      # Egress for external identity providers. pmoves_api is internal-only, so
+      # GoTrue could not fetch https://accounts.google.com/.well-known/openid-configuration
+      # ("lookup accounts.google.com ... server misbehaving") and every Google
+      # sign-in -- and therefore every Archon mint Step 0 -- failed with 400.
+      # It still listens only behind Kong (#2974).
+      pmoves_external: {}
 
     deploy:
       resources:
@@ -909,12 +941,26 @@ services:
     # embedded DNS) and the server exits, kicking the container into a
     # restart loop. Pinning to 0.0.0.0 skips the lookup entirely.
     - HOSTNAME=0.0.0.0
-    # Healthcheck: External check (Next.js 16 binds to container hostname, not localhost)
-    # Note: Official Supabase uses node -e fetch but their image has different network config
-    # We rely on container being started successfully (logs show "Ready in Xms")
+    # Healthcheck: the upstream probe, which this service had replaced with a
+    # no-op. The previous test was `node -e 'process.exit(0)' || exit 1` --
+    # it names no host, no port and no route, so it could not fail while the
+    # `node` binary existed, and it reported `service_healthy` to dependents
+    # on a dead Studio. Its own comment said so: "We rely on container being
+    # started successfully", which is a fact Docker already has from the PID.
+    #
+    # The stated reason for the substitution ("Next.js 16 binds to container
+    # hostname, not localhost") is stale: `HOSTNAME=0.0.0.0` is pinned three
+    # lines above, so the bind it worked around no longer happens. Verified
+    # against the running container 2026-09-05 -- both spellings answer:
+    #   docker exec pmoves-supabase-studio-1 node -e "fetch('http://localhost:3000/api/platform/profile')..."
+    #   -> localhost status 200 / 127.0.0.1 status 200
+    #
+    # Probe body copied from the vendored upstream at
+    # PMOVES-supabase/docker/docker-compose.yml:17-23, with `studio` swapped
+    # for `localhost` because the service name differs here.
     - PMOVES_NETWORKS=pmoves_api
     healthcheck:
-      test: ["CMD-SHELL", "node -e 'process.exit(0)' || exit 1"]
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3000/api/platform/profile').then((r) => {if (r.status !== 200) throw new Error(r.status)})"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -1433,9 +1479,27 @@ services:
     - CLIP_DEVICE=${CLIP_DEVICE:-cpu}
     - CLIP_EMBED_PORT=8109
     - MODEL_REGISTRY_URL=${MODEL_REGISTRY_URL:-http://model-registry:8110}
-    - PMOVES_NETWORKS=pmoves_api,pmoves_bus
+    - PMOVES_NETWORKS=pmoves_api,pmoves_bus,pmoves_external
     ports:
     - "${CLIP_EMBED_BIND:-0.0.0.0}:8109:8109"
+    # networks: clip-embed carried PMOVES_NETWORKS but NO networks: key, so it
+    # landed on the compose DEFAULT network while self-reporting api+bus.
+    # Not cosmetic: MODEL_REGISTRY_URL is the SERVICE NAME model-registry:8110,
+    # which lives on pmoves_api/bus/external -- from the default network that
+    # name does not resolve. Its twin clap-embed, the very next block with the
+    # same *tier-api-hardened anchor, already had this key.
+    # pmoves_external is REQUIRED, not optional: this service calls
+    # CLIPModel.from_pretrained at first request, which downloads weights from
+    # HuggingFace. pmoves_api and pmoves_bus are both `internal: true`, so
+    # without an egress network the container reports HEALTHY and then fails
+    # the first real request. Codex caught this on clip-embed; clap-embed had
+    # the identical defect, which is why copying clap-embed's network list
+    # onto clip-embed fixed one bug and propagated another. Neither service
+    # has ever been run.
+    networks:
+    - pmoves_api
+    - pmoves_bus
+    - pmoves_external
     restart: unless-stopped
     profiles:
     - orchestration
@@ -1452,7 +1516,7 @@ services:
     - CLAP_EMBED_PORT=8108
     - NATS_URL=${NATS_URL:-}
     - MODEL_REGISTRY_URL=${MODEL_REGISTRY_URL:-http://model-registry:8110}
-    - PMOVES_NETWORKS=pmoves_api,pmoves_bus
+    - PMOVES_NETWORKS=pmoves_api,pmoves_bus,pmoves_external
     ports:
     - "${CLAP_EMBED_BIND:-0.0.0.0}:8108:8108"
     restart: unless-stopped
@@ -1468,9 +1532,18 @@ services:
       timeout: 5s
       start_period: 60s
       retries: 3
+    # pmoves_external is REQUIRED, not optional: this service calls
+    # ClapModel.from_pretrained at first request, which downloads weights from
+    # HuggingFace. pmoves_api and pmoves_bus are both `internal: true`, so
+    # without an egress network the container reports HEALTHY and then fails
+    # the first real request. Codex caught this on clip-embed; clap-embed had
+    # the identical defect, which is why copying clap-embed's network list
+    # onto clip-embed fixed one bug and propagated another. Neither service
+    # has ever been run.
     networks:
     - pmoves_api
     - pmoves_bus
+    - pmoves_external
     extra_hosts:
     - host.docker.internal:host-gateway
     deploy:
@@ -1478,6 +1551,68 @@ services:
         limits:
           cpus: '2.0'
           memory: 2G
+  nats-hub:
+    stop_grace_period: 30s
+    <<: *tier-data-hardened
+    build:
+      context: ../PMOVES-nats-server/pmoves
+      dockerfile: Dockerfile
+    image: ghcr.io/powerfulmoves/pmoves-nats:pmoves-latest
+    container_name: pmoves-nats-hub-1
+    restart: unless-stopped
+    profiles:
+    - nats-hub
+    volumes:
+    # Lab-verified hub template (newer than the baked one — carries the required
+    # `operator:` directive). Placeholders resolve from container env.
+    - ./config/nats/pmoves-nats.conf:/etc/nats/pmoves-nats.conf:ro
+    - pmoves-nats-hub-js:/data/js
+    environment:
+    - PMOVES_NATS_SERVER_NAME=pmoves-nats-hub-${PMOVES_NODE:-z890}
+    # Template vars (funnel-rendered into env.shared per spec §8; PUBLIC values):
+    #   NATS_OPERATOR_JWT, NATS_SYS_ACCOUNT_PUBKEY/JWT,
+    #   NATS_CORE_ACCOUNT_PUBKEY/JWT, NATS_EDGE_ACCOUNT_PUBKEY/JWT,
+    #   NATS_CLOUD_ACCOUNT_PUBKEY/JWT — all arrive via env_file from the anchor.
+    - PMOVES_NETWORKS=pmoves_bus,pmoves_external
+    ports:
+    # client 4222 (cross-node, account-authenticated) — leaf 7422 (cross-node,
+    # the port EDGE/CLOUD leaves attach to; 4222 is the WRONG port for leaves)
+    - ${NATS_BIND:-0.0.0.0}:${NATS_PORT:-4222}:4222
+    - ${NATS_LEAF_BIND:-0.0.0.0}:${NATS_LEAF_PORT:-7422}:7422
+    # monitoring: the HTTP monitor (/varz, /connz, /leafz ...) is UNAUTHENTICATED —
+    # `system_account` guards the $SYS.> subjects, not this port. Loopback-only,
+    # on a hub-specific bind var so a tailnet NATS_MONITORING_BIND set for the
+    # legacy `nats` service cannot leak it off-host. Cross-node ops read /leafz
+    # via the SYS account over the bus, not via HTTP.
+    - ${NATS_HUB_MONITORING_BIND:-127.0.0.1}:${NATS_MONITORING_PORT:-9223}:8222
+    # No websocket publish: pmoves-nats.conf declares no `websocket {}` block
+    # (client 4222 / monitor 8222 / leaf 7422 only) and the v0 spec defines no
+    # browser surface. Add the listener block and the publish together when
+    # A2UI needs it — never advertise a port nothing listens on.
+    secrets:
+    # Satisfies the fork entrypoint's fail-fast (trust-material-present check).
+    # PUBLIC nsc-minted account JWTs, funnel-rendered — shape: fork
+    # pmoves/examples/resolver_preload.conf.example. The template renders the
+    # same JWTs from env, so this file is the redundancy gate, not the source.
+    - source: nats_resolver_preload
+      target: /etc/nats/resolver_preload.conf
+    networks:
+    - pmoves_bus
+    - pmoves_external
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - wget --no-verbose --tries=1 --spider http://localhost:8222/varz || exit 1
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+
   archon-postgres:
     # Graceful stop: PostgreSQL: same reason as supabase-db, fewer sessions.
     stop_grace_period: 60s

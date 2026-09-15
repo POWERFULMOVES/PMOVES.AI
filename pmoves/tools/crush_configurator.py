@@ -300,26 +300,41 @@ MCP_SPECS: List[MCPSpec] = [
         config={
             "type": "sse",
             "url": "http://${TS_Z890}:8105/mcp/sse",
-            "headers": {"Authorization": "Bearer ${CIPHER_API_TOKEN:-}"},
+            "headers": {"Authorization": "Bearer ${CIPHER_API_TOKEN}"},
             "timeout": 30,
         },
-        # Deliberately NO required_env: the shim accepts an EMPTY bearer
-        # (dev-skip when CIPHER_API_TOKEN is unset), which is exactly what the
-        # `:-` default in the header above exists to send. Keeping the token
-        # required would re-disable the spec on tokenless nodes through
-        # missing_envs() -- URL and header fixed, entry still dark, the same
-        # silence this PR exists to end.
+        # Still NO required_env -- but the 2026-08 reasoning for it is now dead
+        # and must not be quoted again. That reasoning was: "the shim accepts an
+        # EMPTY bearer, which is exactly what the `:-` default in the header
+        # above exists to send." Both halves have expired. There is no `:-`
+        # default any more (removed 2026-09-02), and once CIPHER_API_TOKEN is
+        # set on the serving node an empty bearer is a MEASURED 401, not a 200.
+        #
+        # The decision stands on a different, still-true argument:
+        # missing_envs() -> `disabled: True`, i.e. the entry DISAPPEARS from the
+        # generated config on a tokenless node. That is the silently-tool-less
+        # outcome this lane exists to end, and it is strictly worse than an entry
+        # that is present and 401s where session_check can name it.
+        #
+        # The counter-argument is real and deliberately not taken here: unlike
+        # `_pmoves_roster_verdicts`, `disabled: True` IS a durable, greppable,
+        # diffable record, so for crush specifically the gate would be a better
+        # observability channel than the 401. Reversing #2762's un-gating is a
+        # behaviour change on every tokenless node and belongs in a lane that can
+        # measure crush end-to-end; it is not free-riding on this one.
+        # See pmoves/docs/operations/CIPHER_AUTH_RUNBOOK.md §6/§6a.
     ),
     MCPSpec(
         key="pmoves-cipher-local",
         config={
             "type": "sse",
             "url": "http://localhost:8105/mcp/sse",
-            "headers": {"Authorization": "Bearer ${CIPHER_API_TOKEN:-}"},
+            "headers": {"Authorization": "Bearer ${CIPHER_API_TOKEN}"},
             "timeout": 30,
         },
-        # See pmoves-cipher above: no required_env, the empty bearer is
-        # supported by the server.
+        # See pmoves-cipher above: still no required_env, and for the reason
+        # stated there -- NOT for the retired "the empty bearer is supported by
+        # the server", which is false once the token is set.
     ),
     MCPSpec(
         key="agent-zero",
@@ -455,45 +470,6 @@ MCP_SPECS: List[MCPSpec] = [
         required_commands=["docker"],
         required_env="HOSTINGER_API_TOKEN",
     ),
-    MCPSpec(
-        key="archon",
-        config={
-            "type": "http",
-            "url": "http://localhost:8051",
-            "timeout": 30,
-            "disabled": True,
-        },
-    ),
-    # Verified live on Z890 (2026-09-03): :8086 is hi-rag-gateway-v2's REST
-    # surface (GET / answers {"service":"hi-rag-gateway-v2","hint":"POST
-    # /hirag/query"}; POST to the root answers 405). No MCP endpoint exists
-    # there, so this entry stays disabled by default -- a hand-added live
-    # entry pointed here for weeks and every session paid a 405 init failure.
-    # Same REST-only shape as archon above (fleet decision in #2303).
-    MCPSpec(
-        key="pmoves-hirag",
-        config={
-            "type": "http",
-            "url": "http://localhost:8086",
-            "timeout": 30,
-            "disabled": True,
-        },
-    ),
-    # Verified live on Z890 (2026-09-03): pmoves-botz-gateway-1 publishes
-    # :8054 and answers 404 on /mcp; the MCP surface is unverified. The
-    # hand-added live config pointed at :8091 -- which is ARCHON
-    # (pmoves-archon-1 maps 8091->3090) -- so "botz" sessions were silently
-    # talking to Archon. Disabled until the real MCP path on :8054 is
-    # pinned; do not re-enable against a guessed URL.
-    MCPSpec(
-        key="pmoves-botz-gateway",
-        config={
-            "type": "http",
-            "url": "http://localhost:8054/mcp",
-            "timeout": 30,
-            "disabled": True,
-        },
-    ),
 ]
 
 
@@ -628,6 +604,54 @@ def guard_unresolvable_ts(mcp_config, env=None):
     return notes
 
 
+def _load_model_suit(spec_id: str) -> Optional[Dict[str, object]]:
+    """Read pmoves/configs/model-suits/<id>.yaml -- the fleet's source of truth
+    for context windows and output budgets. Returns the model_suit mapping or
+    None (missing file, unreadable YAML, no PyYAML); callers fall back to the
+    spec's built-in defaults rather than failing the bootstrap."""
+    suit_path = PROJECT_ROOT / "configs" / "model-suits" / f"{spec_id}.yaml"
+    try:
+        import yaml
+
+        doc = yaml.safe_load(suit_path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+    if not isinstance(doc, dict):
+        return None
+    suit = doc.get("model_suit")
+    return suit if isinstance(suit, dict) else None
+
+
+def _zai_models_from_suits() -> List[Dict[str, object]]:
+    """Per-model entries for the zai provider, sourced from the model suits.
+
+    Without these, Crush falls back to its bundled registry for known model
+    ids -- and glm-5.2 is not in upstream's registry, so the harness would
+    assume a small default window and compact sessions long before the
+    model's real limit. effective_window (not max_window) is the deployable
+    figure: Crush counts system prompt + output inside this budget, and the
+    suit's max is the provider's headline number. Understating fires
+    compaction early; overstating risks provider 400s at the margin."""
+    entries: List[Dict[str, object]] = []
+    for spec in ZAI_SPEC.models:
+        entry: Dict[str, object] = {"id": spec.id, "name": spec.name}
+        suit = _load_model_suit(spec.id)
+        if suit:
+            context = suit.get("context") or {}
+            defaults = suit.get("defaults") or {}
+            advanced = suit.get("advanced") or {}
+            if context.get("effective_window"):
+                entry["context_window"] = context["effective_window"]
+            if defaults.get("max_tokens"):
+                entry["default_max_tokens"] = defaults["max_tokens"]
+            if advanced.get("enable_thinking"):
+                entry["can_reason"] = True
+        if spec.can_reason:
+            entry["can_reason"] = True
+        entries.append(entry)
+    return entries
+
+
 def build_config() -> Tuple[Dict[str, object], Dict[str, ProviderSpec]]:
     """Build Crush config with TensorZero as the preferred provider.
 
@@ -742,6 +766,10 @@ def build_config() -> Tuple[Dict[str, object], Dict[str, ProviderSpec]]:
             "id": "zai",
             "name": "Z.AI Coding Plan",
             "base_url": zai_spec.base_url,
+            # Suit-sourced windows/budgets (see _zai_models_from_suits). Without
+            # these, glm-5.2 is unknown to Crush's bundled registry and sessions
+            # compact at a fraction of the model's real context.
+            "models": _zai_models_from_suits(),
         }
         available_specs["zai"] = zai_spec
         provider_models["zai"] = zai_spec.models
@@ -827,6 +855,20 @@ def build_config() -> Tuple[Dict[str, object], Dict[str, ProviderSpec]]:
         Path("pmoves/docs/SMOKETESTS.md"),
         Path("pmoves/chit/secrets_manifest.yaml"),
         Path("docs/PMOVES_MINI_CLI_SPEC.md"),
+        # CHIT-aware governance set. AGNOTE4482.md carries the Village Rule
+        # (claim -> work -> sign -> release) and the signoff contract; the
+        # SITREP is the cold-start digest. Both are context_paths because
+        # they are NOT project-root instruction files -- the same class as
+        # ROADMAP/NEXT_STEPS above.
+        # Two deliberate ABSENCES:
+        #   AGENTS.md -- Crush auto-loads root instruction files (AGENTS.md,
+        #     CLAUDE.md, GEMINI.md, .cursorrules) natively; listing it here
+        #     would double-load it into every session.
+        #   AGNOTE4482PHI.t1.md -- the ACTIVE claims register, ~921KB
+        #     (~230k tokens). The SITREP digest pays that down; the register
+        #     is read on demand, it does not ride the system prompt.
+        Path("pmoves/docs/AGENTS/AGNOTE4482.md"),
+        Path("pmoves/docs/AGENTS/AGNOTE4482_SITREP.md"),
         # Written at launch by crush-pmoves (node_identity.py resolver). Crush
         # has no --append-system-prompt, so this generated context file is how
         # the session's node identity reaches the model. exists() keeps nodes
@@ -840,11 +882,42 @@ def build_config() -> Tuple[Dict[str, object], Dict[str, ProviderSpec]]:
         (repo_root / "pmoves/data/identity/node-identity.md").resolve(),
     ]
 
+    # EMIT WHAT WAS VALIDATED. The filter below resolves relative candidates
+    # against repo_root, but the emitted value used to be `candidate.as_posix()`
+    # -- still relative. Crush joins relative context_paths to its LAUNCH working
+    # directory, and crush-pmoves does not cd to the repo root first: it runs
+    # `make -C "$REPO_ROOT/pmoves" crush-bootstrap` (which changes make's
+    # directory, not the shell's) and then `exec crush "$@"`. Launch it from
+    # pmoves/ and `pmoves/docs/AGENTS/AGNOTE4482.md` resolves to
+    # `pmoves/pmoves/docs/...`, which does not exist and is silently dropped --
+    # so the CHIT-aware boot this change exists to provide boots unaware.
+    #
+    # The two neighbours already learned this: the node-identity candidate above
+    # is `.resolve()`d, and skills_paths below carries the same note verbatim
+    # ("relative entries resolve from the launch cwd, and crush-pmoves does not
+    # cd to the repo root first"). The committed candidates were left relative on
+    # the premise that they "are read from the project root" -- a premise the
+    # launcher never enforces. Resolving here makes the emitted path match the
+    # path the filter actually checked.
     context_paths = [
-        candidate.as_posix()
+        (candidate if candidate.is_absolute() else (repo_root / candidate).resolve()).as_posix()
         for candidate in context_candidates
         if (candidate.is_absolute() and candidate.exists())
         or (not candidate.is_absolute() and (repo_root / candidate).exists())
+    ]
+
+    # Native Agent Skills discovery (agentskills.io). Crush scans
+    # .claude/skills, .crush/skills, .agents/skills and .cursor/skills in the
+    # project automatically -- the constellation's mirrored forks
+    # (agent-sandbox, fork-repository, claude-d3js) load through .claude/skills
+    # already. The PMOVES-skills package fork sits outside every default scan
+    # path, so it gets an explicit skills_paths entry. ABSOLUTE for the same
+    # reason as the identity file above: relative entries resolve from the
+    # launch cwd, and crush-pmoves does not cd to the repo root first.
+    skills_paths = [
+        path.as_posix()
+        for path in [(repo_root / "skills/PMOVES-skills/skills").resolve()]
+        if path.is_dir()
     ]
 
     config = {
@@ -854,6 +927,7 @@ def build_config() -> Tuple[Dict[str, object], Dict[str, ProviderSpec]]:
         "mcp": mcp_config,
         "options": {
             "context_paths": context_paths,
+            "skills_paths": skills_paths,
             "tui": {"compact_mode": True},
             "attribution": {"generated_with": True, "co_authored_by": False},
         },

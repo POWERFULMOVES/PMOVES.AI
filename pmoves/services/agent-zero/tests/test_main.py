@@ -245,3 +245,101 @@ def test_send_message_without_a_pinned_token_fails_with_an_actionable_error(
     body = excinfo.value.message
     assert "AGENT_ZERO_MCP_TOKEN" in body
     assert "MCP_SERVER_TOKEN" in body
+
+
+def test_send_message_passes_configured_message_timeout(
+    monkeypatch, load_service_module
+):
+    """AGENT_ZERO_MESSAGE_TIMEOUT must reach the inner HTTP call.
+
+    The inner-call timeout was hardcoded to 60s, so any agent task longer
+    than a minute surfaced as a wrapper 503 even though the runtime was
+    healthy (SPARK 2026-08-28: long research prompts, three failed dispatches).
+    """
+    import asyncio
+
+    module = load_service_module("agent_zero_main", "services/agent-zero/main.py")
+    monkeypatch.setenv("AGENT_ZERO_MESSAGE_TIMEOUT", "900")
+    config = module.AgentZeroRuntimeConfig()
+    config.api_key = "test-key"
+    assert config.message_timeout == 900.0
+
+    captured: Dict[str, Any] = {}
+
+    async def fake_request(method, path, *, params=None, json_body=None, timeout=None):
+        captured.update(method=method, path=path, timeout=timeout)
+        return {"context_id": "c1", "status": "completed", "response": "ok"}
+
+    client = module.AgentZeroClient(config)
+    monkeypatch.setattr(client, "_request", fake_request)
+    result = asyncio.run(client.send_message({"message": "hello"}))
+    assert result["status"] == "completed"
+    assert captured["timeout"] == 900.0
+    assert captured["method"] == "POST"
+
+
+def test_health_method_is_configurable(monkeypatch, load_service_module):
+    """AGENT_ZERO_HEALTH_METHOD=POST must be used for the connector probe.
+
+    The #2780 compose default points AGENT_ZERO_HEALTH_PATH at the
+    POST-only _a0_connector capabilities route; a GET-only probe receives
+    405 and silently degrades to the 404-means-alive heuristic.
+    """
+    import asyncio
+
+    module = load_service_module("agent_zero_main", "services/agent-zero/main.py")
+    monkeypatch.setenv("AGENT_ZERO_HEALTH_METHOD", "post")
+    config = module.AgentZeroRuntimeConfig()
+    assert config.health_method == "POST"
+
+    captured: Dict[str, Any] = {}
+
+    async def fake_request(method, path, *, params=None, json_body=None, timeout=None):
+        captured.update(method=method, path=path)
+        return {"protocol": "a0-connector.v1"}
+
+    client = module.AgentZeroClient(config)
+    monkeypatch.setattr(client, "_request", fake_request)
+    result = asyncio.run(client.health())
+    assert result["protocol"] == "a0-connector.v1"
+    assert captured["method"] == "POST"
+    assert captured["path"] == config.health_path
+
+
+def test_healthz_reports_503_when_inner_runtime_is_down(
+    monkeypatch, load_service_module
+):
+    """healthz must fail when the inner runtime is dead.
+
+    Previously it returned HTTP 200 with body status=stopped, keeping
+    Docker's healthcheck green while every message call failed.
+    """
+    module = load_service_module("agent_zero_main", "services/agent-zero/main.py")
+    module.service_config = module.load_service_config()
+    module = _prepare_agent_zero(module, monkeypatch)
+    module.process_manager._process = None
+
+    with TestClient(module.app) as client:
+        response = client.get("/healthz")
+    assert response.status_code == 503
+    assert response.json()["status"] == "stopped"
+
+
+def test_healthz_reports_200_when_inner_runtime_is_running(
+    monkeypatch, load_service_module
+):
+    module = load_service_module("agent_zero_main", "services/agent-zero/main.py")
+    module.service_config = module.load_service_config()
+    module = _prepare_agent_zero(module, monkeypatch)
+    module.process_manager._process = SimpleNamespace(returncode=None, pid=4242)
+
+    async def fake_health():
+        return {"status": "ok"}
+
+    monkeypatch.setattr(module.client, "health", fake_health)
+    with TestClient(module.app) as client:
+        response = client.get("/healthz")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "ok"
+    assert body["pid"] == 4242

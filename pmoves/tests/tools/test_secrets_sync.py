@@ -202,3 +202,85 @@ def test_removal_reaches_a_file_that_has_no_other_outputs(tmp_path, monkeypatch)
     )
     body = target.read_text()
     assert "SECRET_KEY_BASE" not in body and "KEEP=1" in body
+
+
+# --- clearing a secret must propagate, too (review on #2823) ------------------
+#
+# The `remove` machinery above was built for a value REJECTED by min_length. The
+# other way a managed key stops having a usable value -- the operator clears it,
+# or it was never delivered -- took a bare `continue`, so it landed in neither
+# `outputs` nor `rejected` and merge kept the old value.
+#
+# That made the documented way to return Cipher to unauthenticated mode a no-op:
+# clear CIPHER_API_TOKEN in env.shared, rerun the funnel, and the previous token
+# is still sitting in env.tier-agent for Compose to inject.
+
+
+def _cipher_entry(required=False):
+    """An optional secret with no length floor -- CIPHER_API_TOKEN's shape."""
+    return secrets_sync.Entry(
+        id="cipher_api_token", label="CIPHER_API_TOKEN", required=required,
+        targets=[secrets_sync.Target(file="env.tier-agent", key="CIPHER_API_TOKEN")],
+    )
+
+
+def test_a_cleared_secret_is_reported_for_removal():
+    """Present but blank. `_first_usable` already refuses it; the caller has to
+    say so, or merge silently preserves the old value."""
+    rejected = {}
+    secrets_sync.build_outputs(
+        {"CIPHER_API_TOKEN": "   "}, [_cipher_entry()], strict=False,
+        rejected_out=rejected,
+    )
+    assert rejected == {"env.tier-agent": {"CIPHER_API_TOKEN"}}
+
+
+def test_an_absent_secret_is_reported_for_removal():
+    """`_first_usable` documents that absent and present-but-blank are handled
+    identically. They must stay identical here."""
+    rejected = {}
+    secrets_sync.build_outputs({}, [_cipher_entry()], strict=False, rejected_out=rejected)
+    assert rejected == {"env.tier-agent": {"CIPHER_API_TOKEN"}}
+
+
+def test_a_usable_secret_is_not_marked_for_removal():
+    """Negative control. Without this the fix could mark everything for deletion
+    and every test above would still pass."""
+    rejected = {}
+    outputs, _ = secrets_sync.build_outputs(
+        {"CIPHER_API_TOKEN": "a-real-token"}, [_cipher_entry()], strict=False,
+        rejected_out=rejected,
+    )
+    assert rejected == {}
+    assert outputs["env.tier-agent"]["CIPHER_API_TOKEN"] == "a-real-token"
+
+
+def test_clearing_a_secret_removes_it_from_the_generated_tier_file(tmp_path, monkeypatch):
+    """End to end, in merge mode -- the funnel's actual default.
+
+    This is the failure the review named: the tier file has already been
+    funnelled once, the operator clears the source, and the old token must not
+    survive the next run.
+    """
+    monkeypatch.setattr(secrets_sync, "PROJECT_ROOT", tmp_path)
+    target = tmp_path / "env.tier-agent"
+    target.write_text("CIPHER_API_TOKEN=old-live-token\nUNRELATED=keepme\n", encoding="utf-8")
+    rejected = {}
+    outputs, _ = secrets_sync.build_outputs(
+        {"CIPHER_API_TOKEN": ""}, [_cipher_entry()], strict=False, rejected_out=rejected,
+    )
+    secrets_sync.write_env_files(outputs, merge=True, remove=rejected)
+    body = target.read_text()
+    assert "old-live-token" not in body, "cleared secret stayed live for Compose"
+    assert "CIPHER_API_TOKEN" not in body
+    assert "UNRELATED=keepme" in body, "removal must not touch unrelated keys"
+
+
+def test_a_required_secret_that_is_missing_is_still_reported_missing():
+    """The removal must not swallow the existing `missing` signal."""
+    rejected = {}
+    _, missing = secrets_sync.build_outputs(
+        {}, [_cipher_entry(required=True)], strict=False, rejected_out=rejected,
+    )
+    assert "CIPHER_API_TOKEN" in missing
+    assert rejected == {"env.tier-agent": {"CIPHER_API_TOKEN"}}

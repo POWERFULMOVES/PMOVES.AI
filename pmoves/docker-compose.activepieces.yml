@@ -1,0 +1,93 @@
+# PMOVES.AI — ActivePieces main-compose integration (Phase 2)
+#
+# Folds the standalone stack (pmoves/activepieces/docker-compose.yml, Phase 1)
+# into the standard fleet tree per the plugin-style pattern:
+#   - profile `automation` (opt-in, same convention as other companions)
+#   - env via the secrets funnel (env.shared → env.tier-worker), NOT a private
+#     env file; values fall back to the Phase-1 standalone defaults
+#   - own postgres+redis (AP expects dedicated versions; sharing the fleet
+#     instances risks migration/extension collisions)
+#   - flows-as-code stays at pmoves/activepieces/flows/ (git-sync or export)
+#
+# Bring up:  make -C pmoves activepieces-up     (or: docker compose --profile automation up -d activepieces)
+# App UI:    http://localhost:${AP_APP_PORT:-8087}
+
+services:
+  activepieces-app:
+    image: ${AP_IMAGE:-ghcr.io/activepieces/activepieces:0.86.3}
+    restart: unless-stopped
+    profiles: [automation]
+    environment:
+      - AP_CONTAINER_TYPE=APP
+      - AP_FRONTEND_URL=${AP_FRONTEND_URL:-http://localhost:${AP_APP_PORT:-8087}}
+      - AP_EDITION=${AP_EDITION:-ce}
+      - AP_LICENSE_KEY=${AP_LICENSE_KEY:-}
+      - AP_EXECUTION_MODE=${AP_EXECUTION_MODE:-SANDBOX}
+      - AP_QUEUE_MODE=REDIS
+      - AP_REDIS_HOST=activepieces-redis
+      - AP_POSTGRES_HOST=activepieces-postgres
+      - AP_POSTGRES_DATABASE=${AP_POSTGRES_DATABASE:-activepieces}
+      - AP_POSTGRES_USERNAME=${AP_POSTGRES_USERNAME:-postgres}
+      - AP_POSTGRES_PASSWORD=${AP_POSTGRES_PASSWORD:-ap-postgres-password-unset}
+      - AP_JWT_SECRET=${AP_JWT_SECRET:-ap-jwt-secret-unset}
+      - AP_ENCRYPTION_KEY=${AP_ENCRYPTION_KEY:-ap-encryption-key-unset}
+      - AP_TELEMETRY=${AP_TELEMETRY:-false}
+    ports:
+      - "${AP_BIND:-127.0.0.1}:${AP_APP_PORT:-8087}:80"
+    depends_on:
+      activepieces-postgres:
+        condition: service_healthy
+      activepieces-redis:
+        condition: service_started
+    volumes:
+      - ap-frontend-data:/persist
+
+  activepieces-worker:
+    image: ${AP_IMAGE:-ghcr.io/activepieces/activepieces:0.86.3}
+    restart: unless-stopped
+    profiles: [automation]
+    environment:
+      - AP_CONTAINER_TYPE=WORKER
+      - AP_FRONTEND_URL=${AP_FRONTEND_URL:-http://localhost:${AP_APP_PORT:-8087}}
+      - AP_EDITION=${AP_EDITION:-ce}
+      - AP_LICENSE_KEY=${AP_LICENSE_KEY:-}
+      - AP_EXECUTION_MODE=${AP_EXECUTION_MODE:-SANDBOX}
+      - AP_QUEUE_MODE=REDIS
+      - AP_REDIS_HOST=activepieces-redis
+      - AP_POSTGRES_HOST=activepieces-postgres
+      - AP_POSTGRES_DATABASE=${AP_POSTGRES_DATABASE:-activepieces}
+      - AP_POSTGRES_USERNAME=${AP_POSTGRES_USERNAME:-postgres}
+      - AP_POSTGRES_PASSWORD=${AP_POSTGRES_PASSWORD:-ap-postgres-password-unset}
+      - AP_JWT_SECRET=${AP_JWT_SECRET:-ap-jwt-secret-unset}
+      - AP_ENCRYPTION_KEY=${AP_ENCRYPTION_KEY:-ap-encryption-key-unset}
+      - AP_TELEMETRY=${AP_TELEMETRY:-false}
+    depends_on:
+      - activepieces-app
+
+  activepieces-postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    profiles: [automation]
+    environment:
+      - POSTGRES_DB=${AP_POSTGRES_DATABASE:-activepieces}
+      - POSTGRES_USER=${AP_POSTGRES_USERNAME:-postgres}
+      - POSTGRES_PASSWORD=${AP_POSTGRES_PASSWORD:-ap-postgres-password-unset}
+    volumes:
+      - ap-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${AP_POSTGRES_USERNAME:-postgres}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  activepieces-redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    profiles: [automation]
+    volumes:
+      - ap-redis-data:/data
+
+volumes:
+  ap-frontend-data: {}
+  ap-postgres-data: {}
+  ap-redis-data: {}

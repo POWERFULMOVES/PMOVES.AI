@@ -2,13 +2,14 @@ version: 1
 nodes:
 - canonical: '4090'
   kind: node
-  reach: pmoves-laptop
+  reach: pmoves-4090
   aliases:
   - '4090'
   - laptop-4090
-  - pmoves-laptop
+  - pmoves-4090
   - pmoves-4090
   - PMOVES-4090
+  - pmoves-laptop
   note: The mobile node. `4090` matches operator_nodes.yaml (the scheduler's vocabulary);
     the rest are spellings found in the registry, the automode doc, and this machine's
     own hostname.
@@ -113,6 +114,14 @@ nodes:
   aliases:
   - jetson
   note: A hardware class covering the nano-* nodes, not one machine.
+- canonical: kiloclaw
+  kind: node
+  reach: kiloclaw.internal
+  aliases:
+  - kiloclaw
+  - pmoves-kiloclaw
+  note: The hosted Fly-Machine VPS brain (KiloClaw) -- loopback-only, no GPU,
+    not tailnet-reachable; reach is a placeholder token, not a diallable name.
 - canonical: ai-lab
   kind: runner-label
   aliases:

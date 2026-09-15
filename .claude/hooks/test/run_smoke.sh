@@ -116,16 +116,27 @@ PAYLOAD2D=$(jq -nc --arg fp "$REGISTER" --arg ns "- new CLAIM \`FRESH-OWNER\` sc
   '{tool_name:"Edit",tool_input:{file_path:$fp,new_string:$ns}}')
 run_case "released lane is free → ALLOW" 0 "python3 $HOOK2" "$PAYLOAD2D"
 
-# A claim naming no branch cannot be compared. It must ALLOW, but say so rather
-# than exiting 0 as though it had verified something.
+# A claim naming no branch cannot be compared against anything, so it is
+# REFUSED. This asserted ALLOW plus a "NOT CHECKED" line until 2026-09-02,
+# which made the raw shell write more permissive than `register_append.py` --
+# the sanctioned path refuses the identical row at exit 3. AGENTS.md requires
+# a CLAIM to carry branch + scope + TTL, and could-not-measure is not a pass.
 PAYLOAD2E=$(jq -nc --arg fp "$REGISTER" --arg ns "- new CLAIM \`FRESH-OWNER\` scope: freeform prose, no branch named" \
   '{tool_name:"Edit",tool_input:{file_path:$fp,new_string:$ns}}')
-run_case "unkeyed claim → ALLOW" 0 "python3 $HOOK2" "$PAYLOAD2E"
-if python3 "$HOOK2" <<<"$PAYLOAD2E" 2>&1 >/dev/null | grep -q "NOT CHECKED"; then
-  ok "unkeyed claim announces NOT CHECKED"
-else
-  bad "unkeyed claim announces NOT CHECKED"
-fi
+run_case "unkeyed claim → BLOCK" 2 "python3 $HOOK2" "$PAYLOAD2E"
+# CAPTURED, NOT PIPED. `set -o pipefail` is on and the hook now exits 2, so
+# `hook | grep -q` returns 2 however well the grep matched -- the assertion
+# would report a missing message that is right there. Every stderr check
+# below reads a variable.
+OUT2E=$(python3 "$HOOK2" <<<"$PAYLOAD2E" 2>&1 >/dev/null || true)
+case "$OUT2E" in
+  *"names no branch"*) ok "unkeyed claim refusal names the missing lane" ;;
+  *) bad "unkeyed claim refusal names the missing lane" ;;
+esac
+case "$OUT2E" in
+  *"register-claim"*) ok "unkeyed claim refusal names the sanctioned path" ;;
+  *) bad "unkeyed claim refusal names the sanctioned path" ;;
+esac
 
 # Non-register file → ALLOW
 PAYLOAD2F=$(jq -nc --arg ns "- CLAIM \`whatever\` Branch \`feat/held-lane\`" \

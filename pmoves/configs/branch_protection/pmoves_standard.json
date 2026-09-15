@@ -17,17 +17,16 @@
             { "type": "non_fast_forward" },
             { "type": "required_signatures" },
             { "type": "required_linear_history" },
-            { "type": "required_conversation_resolution" },
             { "type": "copilot_code_review" },
             {
               "type": "required_status_checks",
               "parameters": {
                 "required_status_checks": [
-                  { "context": "merge-decision" },
-                  { "context": "python-tests" },
-                  { "context": "hardening-validation" },
-                  { "context": "verify" },
-                  { "context": "submodule-gitlink-gate" }
+                  { "context": "merge-decision", "integration_id": 15368 },
+                  { "context": "python-tests", "integration_id": 15368 },
+                  { "context": "hardening-validation", "integration_id": 15368 },
+                  { "context": "verify", "integration_id": 15368 },
+                  { "context": "submodule-gitlink-gate", "integration_id": 15368 }
                 ],
                 "strict_required_status_checks_policy": true
               }
@@ -218,6 +217,10 @@
       }
     },
     "POWERFULMOVES/PMOVES-nats-server": {
+      "profile": "fork",
+      "branch": "PMOVES.AI-Edition-Hardened"
+    },
+    "POWERFULMOVES/PMOVES-OpenRoom": {
       "profile": "fork",
       "branch": "PMOVES.AI-Edition-Hardened"
     }

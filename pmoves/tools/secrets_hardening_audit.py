@@ -255,7 +255,6 @@ def main() -> int:
         REPO_ROOT / "pmoves/services/evo-controller",
         REPO_ROOT / "pmoves/services/evoswarm",
         REPO_ROOT / "pmoves/services/agent-zero",
-        REPO_ROOT / "pmoves/services/archon",
     )
     for root in focus_roots:
         if not root.exists():

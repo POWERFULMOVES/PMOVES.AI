@@ -133,14 +133,18 @@ def _resolve_agent_id() -> tuple[str, str]:
         return agent_id, "env"
 
     hostname = socket.gethostname().lower()
-    host_map = {
-        "z890": "z890-claude",
-        "pmoves-z890": "z890-claude",
-        "powerfulmoves": "5090-claude",
-        "pmoves-powerfulmoves": "5090-claude",
-        "laptop": "4090-claude",
-        "pmoves-laptop": "4090-claude",
-    }
+    # ONE map, imported -- not a second copy. This function used to carry a
+    # byte-identical duplicate, so fixing the theme resolver's map left
+    # `botz_cli whoami` still returning "unknown" on PMOVES-4090. Caught in
+    # review. Falls back to a minimal inline map only if the import fails, so a
+    # broken import degrades to less coverage rather than to a crash.
+    try:
+        from agent_terminal_theme import _HOST_MAP as host_map
+    except Exception:  # pragma: no cover - import guard
+        # Deliberately EMPTY, not a smaller copy. A fallback map is still a
+        # second source of truth that drifts; resolution falls through to the
+        # gateway/unknown path, which reports why.
+        host_map = {}
     for pattern, aid in host_map.items():
         if pattern in hostname:
             return aid, "hostname"

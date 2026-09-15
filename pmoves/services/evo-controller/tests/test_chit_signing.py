@@ -67,20 +67,24 @@ def capture_publish(monkeypatch):
 
 class TestPublishSwarmMeta:
     @pytest.mark.asyncio
-    async def test_payload_signed_when_key_present(self, capture_publish, monkeypatch):
+    async def test_payload_schema_valid_when_key_present(self, capture_publish, monkeypatch):
         monkeypatch.setenv("CHIT_PASSPHRASE", PASSPHRASE)
         await make_controller()._publish_swarm_meta({"namespace": "pmoves", "status": "draft"})
         assert len(capture_publish) == 1
         payload = capture_publish[0]["body"]["payload"]
-        assert "sig" in payload
-        assert verify_cgp(payload, passphrase=PASSPHRASE) is True
+        # The registered geometry.swarm.meta.v1 schema is additionalProperties:false
+        # a CHIT wrap ("sig") must NOT live inside the event payload; provenance
+        # belongs on the pack row / A0's envelope layer.
+        assert "sig" not in payload
+        for field in ("namespace", "modality", "pack_id", "status", "ts"):
+            assert field in payload
+        assert "metrics" not in payload
 
     @pytest.mark.asyncio
-    async def test_unsigned_dev_mode_when_no_key(self, capture_publish, caplog):
+    async def test_publishes_when_no_key(self, capture_publish, caplog):
         await make_controller()._publish_swarm_meta({"namespace": "pmoves"})
         assert len(capture_publish) == 1
         assert "sig" not in capture_publish[0]["body"]["payload"]
-        assert any("unsigned" in r.message for r in caplog.records)
 
     @pytest.mark.asyncio
     async def test_fail_closed_refuses_unsigned_publish(self, capture_publish, monkeypatch):

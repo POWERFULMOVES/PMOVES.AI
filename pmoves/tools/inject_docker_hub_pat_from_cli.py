@@ -140,9 +140,25 @@ def inject_into_env_file(env_path: pathlib.Path, username: str, token: str) -> N
         return f"{content}{sep}{new_line}\n"
 
     text = _upsert(text, "DOCKERHUB_USERNAME", username)
-    text = _upsert(text, "DOCKERHUB_PAT", token)  # lgtm[py/clear-text-storage-of-sensitive-data]
+    # This DOES place a live PAT into env-file text in clear text — that is the tool's
+    # entire purpose, not an oversight, and NOT a false positive. Accepted because the
+    # destination is an untracked, gitignored env file created 0600 AT open() TIME, so it
+    # is never even briefly group/world-readable (below).
+    #
+    # The parent directory is deliberately NOT claimed as a mitigation. mkdir(mode=0o700)
+    # below applies its mode only to directories it actually CREATES, and the default
+    # destination sits directly under <repo>/pmoves/, which already exists (measured 0775
+    # on a normal checkout). So the 0700 never fires on the default path. The 0600 on the
+    # file is the whole of the mitigation.
+    #
+    # CodeQL py/clear-text-storage-sensitive-data is triaged as "won't fix" in the code
+    # scanning UI; an inline pragma would suppress nothing.
+    text = _upsert(text, "DOCKERHUB_PAT", token)
 
     try:
+        # mode=0o700 only takes effect when this call CREATES the directory (custom
+        # --env-file under a fresh path). For the default destination the parent
+        # already exists and keeps its existing mode — see the note above.
         env_path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     except OSError as e:
         print(f"ERROR: cannot create {env_path.parent}: {e}", file=sys.stderr)
@@ -150,11 +166,23 @@ def inject_into_env_file(env_path: pathlib.Path, username: str, token: str) -> N
 
     tmp_path = env_path.with_suffix(env_path.suffix + ".tmp")
     try:
-        tmp_path.write_text(text, encoding="utf-8")  # lgtm[py/clear-text-storage-of-sensitive-data]
-        try:
+        # Same accepted risk as the _upsert() above. The PAT must not exist on disk
+        # group/world-readable even for an instant, and that includes the .tmp sibling:
+        # write_text() then chmod() creates the file at the ambient umask first (0002 on
+        # a typical dev box -> 0664) and only narrows it afterwards. os.open() applies
+        # mode 0o600 at creation, so there is no window. O_EXCL after an unlink means a
+        # stale .tmp from an earlier crash cannot donate its mode to this write.
+        tmp_path.unlink(missing_ok=True)
+        fd = os.open(tmp_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            fh.write(text)
+        if os.name != "nt":
+            # umask can only clear bits, so 0600 survives it — but a restrictive mount
+            # or an inherited default ACL could still widen the result. On POSIX a chmod
+            # failure here is a real failure and must not be swallowed: exiting 3 beats
+            # printing OK over a world-readable PAT. (Skipped on Windows, where POSIX
+            # mode bits are not meaningful and chmod would fail spuriously.)
             os.chmod(tmp_path, 0o600)
-        except OSError:
-            pass  # no-op on Windows filesystems
         tmp_path.replace(env_path)
     except OSError as e:
         print(f"ERROR: cannot write {env_path}: {e}", file=sys.stderr)

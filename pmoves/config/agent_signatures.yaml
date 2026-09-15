@@ -172,7 +172,7 @@ signatures:
     color: "#F59E0B"             # Gold
     accent: "#FCD34D"
     voice: directive              # vision-setting, mission-critical
-    co_author: "Russell Olivier <russell@powerfulmoves.ai>"
+    co_author: "Russell Richardson <powerfulmoves@pmoves.ai>"
     resonance:
       - vision
       - doctrine
@@ -349,6 +349,21 @@ signatures:
       - dynamic-model-plane
       - cloud-hybrid-workers
     description: "Data-tier + ROCm coordinator on B850 Knuckles (dual R9700 64GB, ROCm 7.1) — dynamic model plane, TensorZero routing, HERMES/Agent Zero standup"
+    alters:
+      # Node-qualified on purpose. `_resolve_alter_parent()` in
+      # pmoves/tools/sign_trail.py returns the FIRST parent declaring a matching
+      # alter and has no duplicate-alter gate, so a generic name (`ledger`,
+      # `node-steward`) would misattribute trails fleet-wide the moment a second
+      # node declared it. Every existing alter follows this convention.
+      - name: "b850-ledger"
+        glyph: "⌬"                   # ⌬ Benzene ring — same lineage as the parent
+        color: "#DC2626"             # AMD Red (same)
+        accent: "#F87171"
+        voice: analytical
+        co_author: "B850 Claude (pmoves-b850) <b850@pmoves.ai>"
+        resonance: [data-tier, evidence-discipline, claim-verification, chit-trails, measurement]
+        room: "b850-ledger.room.evidence"
+        description: "Evidence mode — claim register, CHIT-signed trails, verification of peer claims, data-tier measurement discipline. Declared 2026-09-05; not reconstructed from prior work. See alter_lineage in pmoves/config/identity_vocabulary.yaml."
 
   5090-claude:
     agent_id: "5090-claude"
@@ -391,6 +406,22 @@ signatures:
       - provenance-verification
       - gb10-edge-inference
     description: "Crush harness peer on SPARK (DGX GB10) — shared the cipher fleet-restore lane; first contributor registered with a braille-glyph motif, tying the signing roster to the CHIT-braille rendering lane"
+  kiloclaw:
+    agent_id: "kiloclaw"
+    display_name: "KiloClaw"
+    glyph: "\U0001F52E"          # 🔮 Crystal ball — the hosted cloud brain
+    color: "#0EA5E9"             # Sky
+    accent: "#7DD3FC"
+    voice: analytical            # ops-baseline, evidence-first, live-verified facts only
+    co_author: "KiloClaw (kiloclaw) <kiloclaw@pmoves.ai>"
+    specialization: hosted-ops-claw
+    routes_to: [fleet-ops-docs, gitops-acl, bus-activation, pr-closeout]
+    resonance:
+      - hosted-ops
+      - docs-provenance
+      - gitops-acl
+      - geometry-bus
+    description: "Hosted VPS brain of the fleet (Fly Machine, loopback-only, no GPU) — cloud ops/docs claw; GLM via Z.AI coding plan on the KiloCode harness. Registered per AGNOTE4482 KiloClaw action plan §5.2 (this instance signs its trail ACK)."
 
 # NOTE: System voices (announcer, narrator) live in voice-personas.md
 # and tts-engine-capabilities.yaml → service_runners, NOT here.

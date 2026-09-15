@@ -70,3 +70,61 @@ def test_routing_fields_match_the_committed_snapshot():
         "pmoves/tests/data/kong_route_identity.json deliberately — do not "
         "loosen this assertion."
     )
+
+
+# --- the selected credential must survive into the plan (review on #2825) -----
+#
+# `_parse_model_suits` picks the token-plan key over the pay-as-you-go one, but
+# `_generate_plan` used to drop it: the identity snapshot said
+# MINIMAX_TOKEN_PLAN_API_KEY while the plan -- the thing that actually reaches
+# Kong -- carried no opinion at all. Nothing downstream could tell the two
+# apart, which is how a selection becomes unauditable.
+
+
+def test_the_plan_carries_the_selected_key():
+    seeder = _seeder()
+    groups = {"minimax": [
+        {"model_id": "MiniMax-M3", "api_base": "https://x/v1",
+         "api_key_env": "MINIMAX_TOKEN_PLAN_API_KEY"},
+    ]}
+    plan = seeder._generate_plan(groups)
+    svc = plan["services"][0]
+    assert svc["api_key_env"] == "MINIMAX_TOKEN_PLAN_API_KEY"
+    assert svc["api_key_envs"] == ["MINIMAX_TOKEN_PLAN_API_KEY"]
+
+
+def test_conflicting_keys_in_one_service_are_not_collapsed():
+    """A service groups several models. If they disagree on the credential,
+    picking one silently would bill some of them on a key nobody chose."""
+    seeder = _seeder()
+    groups = {"minimax": [
+        {"model_id": "a", "api_base": "https://x/v1", "api_key_env": "PLAN_KEY"},
+        {"model_id": "b", "api_base": "https://x/v1", "api_key_env": "PAYG_KEY"},
+    ]}
+    svc = seeder._generate_plan(groups)["services"][0]
+    assert svc["api_key_env"] is None, "an ambiguous choice must not be made silently"
+    assert svc["api_key_envs"] == ["PAYG_KEY", "PLAN_KEY"]
+
+
+def test_execution_says_kong_auth_is_not_configured(caplog):
+    """The seeder upserts services and routes and configures NO auth plugin, so
+    whichever key the gateway already holds is the key that bills. A run that
+    reports "routes created" otherwise reads as "routes use the token plan"."""
+    import logging
+    seeder = _seeder()
+    plan = {
+        "services": [{"name": "pmoves-minimax", "url": "https://x/v1",
+                      "api_key_env": "MINIMAX_TOKEN_PLAN_API_KEY",
+                      "api_key_envs": ["MINIMAX_TOKEN_PLAN_API_KEY"]}],
+        "routes": [],
+    }
+
+    class _Client:
+        def upsert_service(self, *a, **k):
+            return True
+
+    with caplog.at_level(logging.WARNING):
+        seeder._execute_plan(_Client(), plan, dry_run=False)
+    joined = " ".join(r.getMessage() for r in caplog.records)
+    assert "auth is NOT configured" in joined
+    assert "MINIMAX_TOKEN_PLAN_API_KEY" in joined

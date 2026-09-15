@@ -1,0 +1,15 @@
+# Curated smoke-test dependencies for the self-hosted submodule-smoke runner.
+#
+# The ai-lab runners (b850 / spark) carry system python3 without pytest, and
+# `make test` (pmoves/Makefile test-smoke target) shells out to
+# `$(PYTHON) -m pytest tests/smoke/ -m smoke`. This is the minimum set those
+# 242 tests need to collect and run offline; anything heavier belongs in the
+# service images, not the runner.
+#
+# Kept deliberately tiny: every entry here installs on BOTH x64 and ARM64
+# (spark is ARM64 — no torch, no GPU stacks).
+pytest>=8,<10
+pytest-asyncio>=0.23
+pyyaml>=6
+httpx>=0.25
+fastapi>=0.110

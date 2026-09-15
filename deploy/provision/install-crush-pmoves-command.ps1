@@ -14,12 +14,37 @@
 # PowerShell 7 CurrentUserAllHosts profiles, so the command works whichever
 # edition you launch. Re-run after moving the repo to update the path.
 # ---------------------------------------------------------------------------
+param([switch]$Force)
+
 $ErrorActionPreference = "Stop"
 
 # Repo root = two levels up from deploy/provision/
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 $cmd = Join-Path $repoRoot "deploy\provision\crush-pmoves.cmd"
 if (-not (Test-Path $cmd)) { throw "launcher not found: $cmd (is this the pmoves repo?)" }
+
+$gitPath = Join-Path $repoRoot ".git"
+if ((Test-Path $gitPath) -and -not (Test-Path $gitPath -PathType Container)) {
+    # Write-Host, not Write-Error: $ErrorActionPreference is "Stop" above, which
+    # makes Write-Error TERMINATING -- it throws before reaching `exit 2`, so the
+    # refusal returned 1 and -Force could never be honoured. Diagnosed by running
+    # both paths and reading the real exit code, which needs the call NOT to be
+    # piped: `$?` after `| head` is head's status, not PowerShell's.
+    Write-Host ""
+    Write-Host "REFUSING: this is a linked git worktree, not the canonical checkout." -ForegroundColor Red
+    Write-Host "  resolved root : $repoRoot"
+    Write-Host "  .git          : a file (gitdir pointer), so this tree is disposable"
+    Write-Host ""
+    Write-Host "Installing from here would point ``crush-pmoves`` at a checkout that may"
+    Write-Host "be removed, and the failure would be SILENT -- the command resolves, the"
+    Write-Host "launcher runs, and env loads from a tree that is gone."
+    Write-Host ""
+    Write-Host "Run it from the canonical repo instead, or pass -Force to override."
+    if (-not $Force) { exit 2 }
+    Write-Host "  -Force given: installing from a worktree anyway." -ForegroundColor Yellow
+}
+
+Write-Host "  resolved repo root: $repoRoot"
 
 $begin = "# >>> pmoves crush-pmoves >>>"
 $end   = "# <<< pmoves crush-pmoves <<<"

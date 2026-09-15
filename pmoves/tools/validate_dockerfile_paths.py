@@ -58,6 +58,7 @@ import argparse
 import json
 import re
 import sys
+from functools import lru_cache
 from pathlib import Path
 
 
@@ -90,6 +91,43 @@ DOCKERFILE_PARENT_DIRS = (
 
 # We also pick up a top-level `pmoves/Dockerfile` if one exists.
 TOP_LEVEL_DOCKERFILE = PMOVES_DIR / "Dockerfile"
+
+# `.gitmodules` sections are `[submodule "name"]` with a `path = ...`
+# line; the same expression `check_bind_sources.py:73` uses.
+SUBMODULE_PATH_RE = re.compile(r"^\s*path\s*=\s*(.+?)\s*$", re.MULTILINE)
+
+
+@lru_cache(maxsize=1)
+def _registered_submodule_paths() -> frozenset[str]:
+    """Submodule paths as declared in .gitmodules, repo-root-relative.
+
+    READ, not inferred from a directory name. `pmoves/integrations/archon`
+    lives under `integrations/`, which DOCKERFILE_PARENT_DIRS calls
+    in-scope, but it is a registered submodule: its Dockerfiles are in
+    another repository and are never in this tree.
+
+    Whether one is on disk answers a question about the runner's
+    checkout depth, not about whether the compose file is correct.
+    `pmoves/docker-compose.archon-ui.submodule.yml` points at
+    `archon-ui-main/Dockerfile`, which IS present at the pinned
+    submodule commit and absent in CI, where submodules are not
+    checked out -- so the ratchet reported a broken build for a build
+    that works. `.gitmodules` is in the tree, so it reads identically
+    in CI and locally; the filesystem does not.
+
+    A missing .gitmodules yields an empty set: a repo with no
+    submodules exempts nothing, which is git's own semantics. If the
+    file were somehow lost, every submodule path becomes in-scope and
+    the ratchet fails loudly rather than passing quietly.
+    """
+    gitmodules = REPO_ROOT / ".gitmodules"
+    if not gitmodules.is_file():
+        return frozenset()
+    text = gitmodules.read_text(encoding="utf-8")
+    return frozenset(
+        m.group(1).replace("\\", "/").strip("/")
+        for m in SUBMODULE_PATH_RE.finditer(text)
+    )
 
 
 def _yaml_safe_load_with_compose_tags(text):
@@ -146,11 +184,13 @@ def _is_in_scope_build_target(abs_path: Path) -> bool:
         via `make submodules` or manual clone at bring-up)
       - paths under CATACLYSM_STUDIOS_INC / provisions
         (operator-side workspace, gitignored or sibling clone)
-      - paths into sibling submodules (PMOVES-Archon, PMOVES.YT,
-        Pmoves-cipher, PMOVES-transcribe-and-fetch,
-        PMOVES-llama-throughput-lab, PMOVES-n8n, PMOVES-ToKenism-Multi,
-        etc.) — these don't have their Dockerfiles in this repo at
-        all, so the ratchet can't statically check them
+      - paths inside any submodule REGISTERED in .gitmodules, read
+        from that file rather than guessed from a directory name —
+        their Dockerfiles are in another repository, so whether one is
+        on disk depends on the runner's checkout depth. This includes
+        submodules nested under an in-scope parent dir, such as
+        `pmoves/integrations/archon`
+      - paths into sibling checkouts outside `pmoves/` entirely
       - any ${VAR} that resolves to a non-pmoves/ path
 
     The ratchet only flags in-scope broken builds. Out-of-scope
@@ -175,8 +215,14 @@ def _is_in_scope_build_target(abs_path: Path) -> bool:
         return False
     if "provisions" in parts:
         return False
-    # Sibling-submodule patterns: PMOVES-Archon, PMOVES.YT, etc.
-    # We only scan under pmoves/{services,images,integrations,docker,compose,ui}.
+    # Registered submodules, wherever they sit. This has to come BEFORE
+    # the DOCKERFILE_PARENT_DIRS check: `pmoves/integrations/archon` is
+    # a submodule that lives inside an in-scope parent dir, so a
+    # name-based allowlist alone would claim it.
+    rel_posix = rel.as_posix()
+    for sub in _registered_submodule_paths():
+        if rel_posix == sub or rel_posix.startswith(sub + "/"):
+            return False
     if parts[1] in DOCKERFILE_PARENT_DIRS:
         return True
     if len(parts) == 2 and parts[1] == "Dockerfile":

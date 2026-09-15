@@ -62,6 +62,71 @@ Under enforcement:
 - `agentId` is **required on every call** (including search).
 - `agentId: "*"` cross-agent search is **rejected** (403) — it is a dev-mode
   convenience only. Cold-start reads therefore only see your own scope.
+## The 403 you will actually hit: the token is minted for another agent
+
+`agentId` must match the agent your node's token was minted for. If it does not,
+the service refuses you — correctly:
+
+```
+403  token belongs to agent 'bootstrap', but request specified 'z890-claude'
+```
+
+Measured on Z890 2026-09-09. The node holds a shared **`bootstrap`** token, while
+the signing card for this node is `z890-claude`
+(`pmoves/config/signing_identity_cards.yaml`). So an agent doing exactly what this
+skill says — pass your signing-card `agent_id` — is rejected, and the rejection
+looks like a permissions bug rather than a provisioning one.
+
+**This is not a reason to fall back to auto-memory silently, and not a reason to
+pass `bootstrap`.** Writing as `bootstrap` puts your memories under a shared
+six-scope identity that every agent on the node can read and that attributes to
+nobody. The remedy is a per-agent mint through the CHIT pipeline
+(`make -C pmoves cipher-mint-token AGENT=<card id>` — it prints a secret, so never
+run it in an agent transcript).
+
+Cross-agent `agentId: "*"` is refused under token enforcement
+(`Pmoves-cipher/src/pmoves/memory-routes.ts`), so the wildcard advice below only
+applies in advisory mode (no token configured).
+
+**Never** source `CIPHER_API_TOKEN` from `docker inspect` or a container's
+environment to get around this. It works, and it is a CHIT-pipeline bypass — it
+was done during the 2026-09-09 investigation and it was wrong. `docker inspect`
+renders every service credential in plaintext to anything holding the Docker
+socket; that is a separate reported gap, not a supported access path.
+
+## Check before you write: which agent will your memories be filed under
+
+```bash
+make -C pmoves cipher-identity            # uses your resolved node identity
+make -C pmoves cipher-identity AGENT=z890-claude
+```
+
+Reads no secret, sends nothing, prints one of three verdicts. It exists because
+the answer is not what a session assumes. `Pmoves-cipher/src/pmoves/auth.ts:46`
+forks on a seven-character prefix (line numbers at submodule pin `e24f1323`, the gitlink on `main`):
+
+| your `CIPHER_API_TOKEN` | auth.ts path | your writes are filed under |
+|---|---|---|
+| starts with `cipher_` | `:54-88` Supabase lookup | the **minted agent** on that row |
+| anything else | `:44-52` single-token compare | `bootstrap` — *not you* |
+| absent (server token also unset) | `:103-106` | advisory; whatever `agentId` you pass |
+
+So a session can be told "you are `z890-claude`", believe it, and file every
+memory under `bootstrap` — which is also where it will read them back from,
+mixed with every other agent on the node. If `cipher-identity` reports a **carry
+gap**, treat recalled memories as possibly another agent's and say so rather than
+claiming them. `claude-pmoves.sh` now runs this at launch and puts the verdict in
+your context, so you should already know before you are asked.
+
+## Reaching cipher when the MCP server is not connected
+
+The documented rule, and it is not a failure state: **say so and use auto-memory.**
+`pmoves/tools/cipher_preflight.py` prints it verbatim — "fall back to the
+auto-memory directory and say so rather than recalling nothing silently" — and
+`/cipher:search` Step 2b says the same. There is no sanctioned third path. If you
+find yourself inventing one, that is the signal to stop.
+
+## Cold start is a requirement, not a health check
 
 Mint a per-agent token (requires Supabase up):
 `make -C pmoves cipher-mint-token AGENT=crush` — distribution into a node's
@@ -79,6 +144,10 @@ Mint a per-agent token (requires Supabase up):
 
 The URL/bearer contract is mirrored from `pmoves/config/mcp_inventory.json`
 (canonical) and guarded by `test_crush_cipher_matches_inventory.py`.
+Verified 2026-08-21: the store was **empty**. Re-measured **2026-09-09 on Z890**:
+the store held exactly **one** record, written 2026-08-06. Still close to empty,
+and the reason is the next section — agents have been unable to write, so they
+stopped trying. Writing matters more, not less.
 
 ## MCP Tools
 

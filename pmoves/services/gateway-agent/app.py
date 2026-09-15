@@ -484,7 +484,9 @@ async def health_check():
     # Check TensorZero
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
-            response = await client.get(f"{TENSORZERO_URL}/healthz")
+            # TensorZero serves /health (not /healthz) — 404 here was being
+            # reported as "unhealthy" while the gateway was fully operational.
+            response = await client.get(f"{TENSORZERO_URL}/health")
             services["tensorzero"] = "healthy" if response.status_code == 200 else "unhealthy"
     except Exception as e:
         services["tensorzero"] = f"unreachable: {e}"

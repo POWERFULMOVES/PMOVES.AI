@@ -6,9 +6,11 @@
     "cipher_fleet_url": "http://${TS_Z890}:8105/mcp/sse",
     "agent_zero_local_url": "http://localhost:8081/mcp/t-${AGENT_ZERO_MCP_TOKEN}/sse",
     "agent_zero_fleet_url": "http://${TS_Z890}:8081/mcp/t-${AGENT_ZERO_MCP_TOKEN}/sse",
-    "archon_local_url": "http://localhost:8051",
-    "archon_fleet_url": "http://${TS_Z890}:8051",
-    "docker_gateway_port": 8090
+    "docker_gateway_port": 8090,
+    "flute_local_url": "http://localhost:8055/sse",
+    "flute_fleet_url": "http://${TS_Z890}:8055/sse",
+    "flute_mcp_local_url": "http://localhost:8055/mcp",
+    "flute_mcp_fleet_url": "http://${TS_Z890}:8055/mcp"
   },
   "groups": {
     "core_pmoves": {
@@ -21,7 +23,7 @@
           "endpoint": "fleet",
           "endpoint_prefix": "cipher",
           "headers": {
-            "Authorization": "Bearer ${CIPHER_API_TOKEN:-}"
+            "Authorization": "Bearer ${CIPHER_API_TOKEN}"
           }
         },
         {
@@ -32,7 +34,7 @@
           "endpoint_pinned": true,
           "endpoint_prefix": "cipher",
           "headers": {
-            "Authorization": "Bearer ${CIPHER_API_TOKEN:-}"
+            "Authorization": "Bearer ${CIPHER_API_TOKEN}"
           },
           "clients": [
             "hermes",
@@ -45,14 +47,6 @@
           "transport": "sse",
           "endpoint": "local",
           "endpoint_prefix": "agent_zero"
-        },
-        {
-          "key": "archon",
-          "description": "Archon knowledge / task orchestrator (REST-only MCP, no standard transport — disabled by default)",
-          "transport": "http",
-          "endpoint": "local",
-          "endpoint_prefix": "archon",
-          "disabled": true
         },
         {
           "key": "pmoves-nats-fleet",
@@ -72,6 +66,26 @@
           }
         },
         {
+          "key": "e2b-danger-room",
+          "description": "E2B Danger Room — run AI-generated code in an isolated E2B sandbox (tool: run_code). The fleet's safe-execution seam; forked at POWERFULMOVES/pmoves-e2b-mcp-server (hardened).",
+          "transport": "stdio",
+          "command": "node",
+          "args": [
+            "./pmoves-e2b-mcp-server/packages/js/build/index.js"
+          ],
+          "env": {
+            "E2B_API_KEY": "${E2B_API_KEY}"
+          },
+          "clients": [
+            "claude",
+            "crush",
+            "kilocode",
+            "kimi",
+            "opencode"
+          ],
+          "_note": "Registered 2026-09-06. Stdio server spawned per client with E2B_API_KEY (built via npm --prefix pmoves-e2b-mcp-server/packages/js run build). Reachable like pmoves-nats-fleet/docker-gateway (command-spawn), not an HTTP health service. E2B execution is cloud (E2B_DOMAIN unset); self-hosting needs GCP."
+        },
+        {
           "key": "pmoves-supabase",
           "description": "Supabase PostgREST API",
           "transport": "stdio",
@@ -82,7 +96,7 @@
             "--apiUrl",
             "${SUPABASE_REST_URL:-http://localhost:8000/rest/v1}",
             "--apiKey",
-            "${SUPABASE_SERVICE_ROLE_KEY:-${SUPABASE_SERVICE_KEY}}",
+            "${SUPABASE_SERVICE_ROLE_KEY:-${SUP…EY}}",
             "--schema",
             "public"
           ]
@@ -144,22 +158,78 @@
         },
         {
           "key": "composio",
-          "description": "Composio hosted MCP gateway - SaaS toolkits behind one server; exact per-toolkit server URL + COMPOSIO_API_KEY come from the operator's Composio dashboard via the secrets funnel (never committed)",
-          "transport": "sse",
+          "description": "Composio Connect hosted MCP - SaaS toolkits behind 7 COMPOSIO_* meta-tools with in-band managed OAuth (search tools, connect apps, execute, remote sandbox)",
+          "transport": "http",
           "endpoint": "external",
-          "url": "https://mcp.composio.dev",
+          "url": "https://connect.composio.dev/mcp",
+          "clients": [
+            "claude",
+            "crush"
+          ],
+          "_note": "ACTIVATED 2026-09-04: clients populated per the fail-closed checklist — COMPOSIO_API_KEY registered in the CHIT secrets manifest (#2837, slot composio_api_key, tier llm) and DELIVERED via the Pattern-B funnel (secrets-funnel-from-prod, bundle chit-bundle-b850-33907455784); clients = claude + crush (the 4090 control-plane coding agents; KiloCode joins via #2918's lane). Auth is in-band managed OAuth: the client's first connect returns the OAuth link, the operator authorizes, the connection is reusable — NOT a static X-API-Key header. Endpoint updated 2026-09-02 from stale mcp.composio.dev to connect.composio.dev/mcp. Old 2026-08-27 note (superseded): operator-approved registration; the stale disabled:true + X-API-Key header block was removed 2026-09-02."
+        },
+        {
+          "key": "jcodemunch",
+          "description": "jCodemunch MCP - token-efficient code exploration via tree-sitter AST parsing (70+ languages, 95%+ token savings over grep loops). Fork: PMOVES-jcodemunch-mcp (Hardened).",
+          "transport": "stdio",
+          "endpoint": "local",
+          "command": "uvx",
+          "args": ["jcodemunch-mcp", "serve", "--transport", "stdio"],
+          "clients": ["hermes"],
+          "_note": "Verified live 2026-09-03: initialize handshake clean against server v1.108.316 (PyPI run of the forked tool). Index repos first via `uvx jcodemunch-mcp index <repo>` (one-time per repo; `watch` keeps fresh). Fleet priority indexes: PMOVES.AI parent, PMOVES-pinokio, PMOVES-hermes-agent, PMOVES-composio. Registered directly to hermes client - stdio local tool, no secrets, no fail-closed risk surface."
+        },
+        {
+          "key": "titanmail",
+          "description": "Titan Mail hosted MCP (https://api.titan.email/mcp) — search/read/send email, folders, labels, calendar, contacts. OAuth via interactive Titan sign-in (no static API key). EU-hosted reseller accounts (Blacknight, MonoVM, DomainDiscount24, Fluccs, Domain Central) use https://api-euc1.titan.email/mcp instead.",
+          "transport": "http",
+          "endpoint": "external",
+          "url": "https://api.titan.email/mcp",
+          "clients": [],
+          "_note": "Registered 2026-09-02, NOT served to any client (fail-closed, same rule as composio). Auth is OAuth: the client must complete an interactive Titan login + consent dance. Do NOT populate `clients` until (a) the target client's MCP stack supports browser-based OAuth for remote HTTP servers, verified live, and (b) operator confirms which mailbox(es) — powerfulmoves@pmoves.ai / pmoves@pmoves.ai / @cataclysmstudios.com — connect. Also verify whether the pmoves.ai mail is even Titan-hosted before wiring (Hostinger commonly provisions Titan); inventory via Composio → Hostinger first."
+        },
+        {
+          "key": "flute-voice",
+          "description": "Voice fabric — 14 TTS engines + intents + VRAM management (flute-gateway :8055)",
+          "transport": "sse",
+          "endpoint": "local",
+          "endpoint_prefix": "flute",
           "headers": {
-            "X-API-Key": "${COMPOSIO_API_KEY}"
+            "X-API-Key": "${FLUTE_API_KEY}"
           },
-          "disabled": true,
-          "_note": "Operator-approved 2026-08-27, registered but NOT served to any client. `clients: []` is the fail-closed switch -- ServerSpec.applies_to() in mcp_config_generator.py returns `client in self.clients`, so an empty list matches nothing. `disabled: true` alone does NOT keep it out: that key is a Cline/Roo convention absent from Claude Code's .mcp.json schema, so the renderer passes it straight through -- verified, with COMPOSIO_API_KEY set the unscoped entry WAS emitted into the Claude config. Populate `clients` only after the toolkit URL, transport and header name are verified against the Composio dashboard AND COMPOSIO_API_KEY is registered in the canonical CHIT secrets manifest plus the client launcher allowlists.",
-          "clients": []
+          "notes": "Auth: X-API-Key header (main.py:222). When FLUTE_API_KEY is unset flute runs dev-mode (auth skipped) — set via secrets funnel for fleet exposure."
+        },
+        {
+          "key": "flute-voice-mcp",
+          "description": "Voice fabric — streamable-http MCP surface (POST /mcp, same tools as flute-voice; Hermes native MCP + cipher shim transport)",
+          "transport": "http",
+          "endpoint": "local",
+          "endpoint_prefix": "flute_mcp",
+          "headers": {
+            "X-API-Key": "${FLUTE_API_KEY}"
+          },
+          "notes": "Stateless JSON-RPC dispatch over POST /mcp (mcp_bridge.py) — same handlers as the SSE surface, no session state. SSE (flute-voice) stays for existing consumers. Auth: same X-API-Key."
+        },
+        {
+          "key": "pipecat-context-hub",
+          "description": "Local-first Pipecat docs/examples/API index (ChromaDB+FTS5, cited) — the knowledge-ingestion pattern for voice agents",
+          "transport": "stdio",
+          "command": "uvx",
+          "args": [
+            "pipecat-ai-context-hub",
+            "serve"
+          ],
+          "clients": [
+            "hermes",
+            "agent-zero",
+            "crush"
+          ],
+          "notes": "Upstream fork POWERFULMOVES/Pmoves-pipecat-context-hub; index at ~/.pipecat-context-hub. Fork ships claude-code/cursor/vscode/zed client configs — hermes config is via this inventory render."
         }
       ]
     },
     "docker_toolkit": {
-      "description": "Docker MCP Toolkit gateway exposing the canonical PMOVES profile.",
-      "profile": "pmoves_5090_web",
+      "description": "Docker MCP Toolkit gateway exposing THIS NODE's PMOVES profile.",
+      "_profile_note": "There is no canonical fleet-wide profile. This group used to declare `\"profile\": \"pmoves_5090_web\"` and repeat that literal in the stdio args, so every node's rendered crush/kimi/opencode config launched a gateway serving the 5090's server set. No code ever read the group-level key — it was documentation asserting something untrue. PMOVES_MCP_PROFILE_ID below is seeded by mcp_config_generator from pmoves/tools/node_gateway_profile.py (env override -> pinned profile -> hardware detection -> refuse), and can be overridden with `--set PMOVES_MCP_PROFILE_ID=<name>`.",
       "servers": [
         {
           "key": "pmoves-docker-gateway",
@@ -171,10 +241,10 @@
             "gateway",
             "run",
             "--profile",
-            "pmoves_5090_web"
+            "${PMOVES_MCP_PROFILE_ID}"
           ],
+          "_clients_note": "`claude` was REMOVED 2026-09-13. .claude/mcp.json is the FLEET roster that deploy/provision/claude-pmoves.sh reads from origin/main on every node, and the launcher deliberately omits --strict-mcp-config so the PER-NODE .mcp.json written by `make -C pmoves mcp-toolkit-connect` stays live alongside it. Rendering the gateway into both put two entries under different keys into one session (MEASURED 2026-09-13 on the 4090: `MCP_DOCKER` and `pmoves-docker-gateway` both in the failed-server list). The other three clients have no per-node merge, so they keep the entry — with the profile resolved per node.",
           "clients": [
-            "claude",
             "kimi",
             "opencode",
             "crush"
@@ -187,7 +257,7 @@
           "endpoint": "local",
           "url": "http://localhost:8090/sse",
           "headers": {
-            "Authorization": "Bearer ${MCP_GATEWAY_AUTH_TOKEN}"
+            "Authorization": "Bearer ${CIPHER_API_TOKEN}"
           },
           "clients": [
             "hermes",

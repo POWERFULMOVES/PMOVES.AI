@@ -48,6 +48,7 @@ PMOVES uses a Known Roads model: every dangerous-but-necessary operation has a c
 | `docker compose up voice-relay` (NATS bridge for mic chain) | `make -C pmoves up-voice-relay` | `/voice:status` |
 | `docker compose build hi-rag-gateway-v2` | `make -C pmoves up-hirag` | `/search:hirag` |
 | `tailscale status` (raw IPs) | `make -C pmoves fleet-status` | `/fleet:status` |
+| Proving a fix by mutating **production** (revoke/rotate a credential, delete a record, write to a live service) | `make -C pmoves sandbox-smoke` / `sandbox-create` + `sandbox-exec SBX=.. CMD=..` + `sandbox-kill` | `agent-sandbox` |
 | RustDesk deep diagnostics | `make -C pmoves fleet-status` + `pmoves/docs/operations/RUSTDESK_SELF_HOSTED.md` | `/fleet:rustdesk-check` |
 | SSH to KVM2 for RustDesk relay | `make -C pmoves fleet-rustdesk-fix` | `/fleet:fix-relay` |
 | Tailscale admin API calls | `make -C pmoves fleet-stale-audit` | `/fleet:stale-nodes` |
@@ -122,6 +123,21 @@ PR #1233 split the compose stack into a base + 6 overlay files (`base.yml` + `co
 | Single-overlay `up`, `restart`, `--force-recreate` | **DO NOT** — use the matching `overlay-up-<tier>` target |
 
 **Detail + failure modes + cold-start recovery:** `pmoves/docs/operations/COMPOSE_LAYERING_RUNBOOK.md`.
+
+### Shell env wins over `--env-file` (the host-`NATS_URL` leak, 2026-09-13)
+
+Compose interpolation prefers the **calling shell's environment** over every `--env-file`. A
+host profile that exports runner-style values (e.g. `NATS_URL` pointing at `localhost` for
+host-side MCP clients) silently rewrites every `${NATS_URL}` service on `make overlay-up-*` —
+containers come up with a bus URL that resolves to nothing inside the network. Same class as
+the B850 #2322 NATS bug. **Deploy with host vars stripped:**
+
+```bash
+env -u NATS_URL make -C pmoves overlay-up-workers   # repeat -u for any host-only runner vars
+```
+
+Symptom: healthy containers, `ConnectionRefusedError` in subscriber logs against a URL that
+contains `localhost`. Verify with `docker exec <svc> printenv NATS_URL` after any overlay up.
 
 ## Damage-Control Hook Recovery
 
@@ -270,7 +286,7 @@ curl -X POST "http://pmoves-spark:8080/mcp/execute" \
 ## Pinokio pterm (Windows)
 
 - Resolve path: `GET http://127.0.0.1:42000/pinokio/path/pterm`
-- Windows binary: `D:/pinokio/bin/npm/pterm.cmd` (use `.cmd` shim, not bare `pterm`)
+- Windows binary: `<PINOKIO_ROOT>/bin/npm/pterm.cmd` (use `.cmd` shim, not bare `pterm`)
 - P7 Ask AI: drawer on app Run page (not a separate dashboard tab)
 - Agent Interpreter: auto-discovers apps via `pterm search` + `SKILL.md` files
 - subprocess encoding: always `encoding="utf-8", errors="replace"` for pterm output on Windows
@@ -495,6 +511,16 @@ Health check: `gh run list --workflow=claude-code-review.yml --limit 10` — a w
 ### Node signatures in the claim register — disambiguate primary vs mirror
 
 Multiple Claude instances can run as the **same node identity** (e.g. a 4090 primary and its 1M-context mirror both signing `4090-CLAUDE`). When two same-named claims race the AGNOTE append slot, **union-merge** (keep both — they're usually non-overlapping lanes), never pick-one. To prevent ambiguity, disambiguate the signature when a mirror is active (`4090-CLAUDE` vs `4090-CLAUDE-mirror`, or distinct `ACK::` scope tags) so `claim-collision-agent` and humans can tell the lanes apart.
+
+### `mergeable: UNKNOWN` can persist AFTER a successful merge (2026-09-13)
+
+The guarded `pr-closeout-merge` reads live PR state; GitHub's `mergeable`/`mergeStateStatus`
+recompute is asynchronous and can stay `UNKNOWN` for minutes — including **after the merge
+already happened**. Symptom: first merge attempt reports blockers (UNKNOWN state, a CANCELLED
+`emit lifecycle trail`), a retry reports "PR state is MERGED, not OPEN" — the first call
+landed. **Before re-invoking the merge, check `gh pr view <N> --json state` first.** A
+CANCELLED lifecycle-trail run from a force-push is fixed by `gh run rerun <id>`, not by
+re-pushing.
 
 ## Merge Hazards — Stacked PRs and Squash-Merge Rebase
 
@@ -1096,3 +1122,27 @@ because the whole point is that you are abandoning a checkout, not a commit.
 
 Related: [[Blank Is Not Absent]] — same family, in that the dangerous state and
 the benign state are visually identical at the place you habitually look.
+
+## Python/TS Packaging — Cut Every Agent as a Locked Cassette (2026-09-03)
+
+Canonical discipline lives in the **`uv-cassettes` skill** (`.claude/skills/uv-cassettes/`).
+Invoke it whenever you add or edit a service image, MCP server, A0/dsh plugin, or standalone
+tool — anywhere Python deps are declared.
+
+DARKXSIDE canon: each agent/plugin is a **cassette** the platform (Soundwave / P7) ejects into
+any layer; reproducible **locked** packaging is what makes it play identically in **sandbox, on
+host, and deployed**. Lockless deps = a cassette that plays differently in each deck.
+
+- **Service images:** uv + a committed `requirements.lock` (botz-gateway / ffmpeg-whisper
+  pattern): `uv pip install --system --constraint requirements.lock -r requirements.txt`.
+  `requirements.txt` bounds the major (`mcp>=1.2,<2` — never a bare `>=`); the lock pins direct
+  + transitive. **70 of 73 service Dockerfiles are lockless** — the same break can recur on any.
+- **Single-file agents (PEP 723 / IndyDevDan):** inline `# /// script … dependencies = […] ///`
+  run via `uv run --script`; `uv lock --script` for a frozen drop. The file IS the cassette.
+- **TypeScript:** the pnpm/bun lockfile is the equivalent; install `--frozen-lockfile`.
+- **Deploy** through Make (`build-svc` / `recreate-svc` / `rebuild-svc SVC=<name>`), never a
+  hand-run `docker compose --env-file` (guard-blocked) or `docker run` (skips the env pipeline).
+
+Proof it's load-bearing: notebook-mcp shipped unpinned `mcp>=1.2.0`; a rebuild pulled mcp 2.x
+(FastMCP→MCPServer) → crash-loop. See [[Check which compose file is LIVE before editing a stanza]]
+(same session, sibling lesson) and memory `vision_agents_as_cassettes_uv_portability`.

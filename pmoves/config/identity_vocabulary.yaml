@@ -39,16 +39,59 @@
 # string in the register that does not resolve, so a 50th spelling cannot enter
 # silently.
 
+# THE agent_registry.yaml KEY IS A FIFTH SPELLING, AND IT WAS UNRESOLVABLE.
+# ------------------------------------------------------------------------
+# `canonical_identity` folded `B850-CLAUDE (Knuckles)` -> `B850-CLAUDE` ->
+# `b850-claude`, but NOT `claude_b850` -- the key that identifies the same lane
+# in `pmoves/config/agent_registry.yaml`. The `2026-08-28T16:47:00Z` CLAIM on
+# `docs/governance-enforcement-gap` recorded that split (item 3) and left it
+# open. It is closed here by adding the registry key as an alias, because the
+# registry key IS a spelling of the identity and this file is where spellings
+# live.
+#
+# ONLY A FEW KEYS WERE ADDED, AND THE RULE IS NOT "whatever was left over".
+#
+# CORRECTION (2026-09-01, review of PR #2858): the first version of this note
+# said "104 keys under `agents:`, 11 of which do not resolve", which reads as
+# "11 of 104 are unresolvable". That is wrong by an order of magnitude and the
+# reviewer was right to flag it. Measured: **97 of 104 keys do not resolve as
+# keys.** The 11 was a different, unstated population -- keys whose `signature:`
+# resolves while the key itself does not, i.e. the only keys ALIASING COULD
+# HELP. The decision was right; the sentence was not, and an unstated
+# denominator in a governance file is the kind of thing that gets quoted later.
+#
+# Measured 2026-09-01, after `hermes-agent` was declared:
+#   104 keys · 7 resolve as keys · 97 do not
+#   20 keys carry a `signature:` · 13 of those signatures resolve here
+#   7 of those 13 are keys that still do not resolve -- deliberately, below
+#
+# A key is safe to alias only when its `signature:` resolves here AND no OTHER
+# key shares that signature:
+#
+#   claude_4090 -> 4090-claude    claude_5090 -> 5090-claude
+#   claude_b850 -> b850-claude    claude_z890 -> z890-claude
+#   hermes_agent -> hermes-agent
+#
+# The remaining seven are deliberately NOT aliased. `claude-opus` is the signature
+# of SIX distinct keys (agent_zero, metrics_specialist, dashboard_specialist,
+# logs_specialist, tracing_specialist, llm_observability) and `crush` of TWO.
+# Aliasing those would declare six different agents to be one identity, and the
+# collision gate keys on identity -- so a genuine collision between, say,
+# metrics_specialist and logs_specialist would stop being reported. A SHARED
+# SIGNATURE IS NOT AN ALIAS: it means several agents sign with one key, which
+# is a fact about signing, not about who they are. Widening the fold here would
+# have made the gate quieter and less true.
+
 version: 1
 
 identities:
   - canonical: 5090-claude
-    aliases: ["5090-CLAUDE"]
+    aliases: ["5090-CLAUDE", "claude_5090"]
     node: "5090"
     note: Primary workhorse lane. 51 entries across 8 spellings.
 
   - canonical: z890-claude
-    aliases: ["Z890-CLAUDE"]
+    aliases: ["Z890-CLAUDE", "claude_z890"]
     node: z890
     note: >-
       44 entries. Six of them were later reattributed to b850-claude as
@@ -56,7 +99,7 @@ identities:
       matters: those entries were never z890's work.
 
   - canonical: b850-claude
-    aliases: ["B850-CLAUDE"]
+    aliases: ["B850-CLAUDE", "claude_b850"]
     node: knuckles
     note: >-
       34 entries. `NODE_PROFILES/B850-CLAUDE.md:10` declares the canonical
@@ -66,7 +109,7 @@ identities:
     # `4090-CLAUDE-OPUS-5`: the identity signing with its model appended.
     # Identity 4090-claude, model claude-opus-5 -- both recovered by
     # wearing(), so neither is erased. See the doctrine note below.
-    aliases: ["4090-CLAUDE", "4090-claude", "4090-CLAUDE-OPUS-5"]
+    aliases: ["4090-CLAUDE", "4090-claude", "4090-CLAUDE-OPUS-5", "claude_4090"]
     node: "4090"
     note: >-
       32 entries across NINE spellings, the widest drift of any identity --
@@ -74,6 +117,14 @@ identities:
       lane)` and `4090-CLAUDE (pr-trim, opus-5)`. `agent_signatures.yaml:216`
       declares `4090-field` as a formal ALTER, so some of that drift is a real
       distinction the register had no field for.
+
+  - canonical: kiloclaw
+    aliases: ["KILOCLAW"]
+    node: kiloclaw
+    note: >-
+      Hosted VPS brain of the fleet (Fly Machine, loopback-only, no GPU).
+      Registered 2026-09-04 in agent_signatures.yaml per KiloClaw action plan
+      §5.2; first trail ACK filed in the same commit (PR #2918).
 
   - canonical: mavis
     aliases: ["Mavis", "Mavis-verifier"]
@@ -106,21 +157,45 @@ identities:
     note: 32 entries under two orderings of the same two words.
 
   - canonical: crush
-    aliases: ["CRUSH", "CRUSH-GLM52"]
+    aliases: ["CRUSH", "CRUSH-GLM52", "CRUSH-SPARK (KIMI)"]
     note: >-
       13 entries. The `-GLM52` suffix is a MODEL, not a different identity --
       the same lane appears as `CRUSH (z890, glm-5.2)` and `CRUSH-GLM52
       (Z890)`. Merged here; split them if crush-on-GLM is ever meant to be a
-      distinct signer.
+      distinct signer. `CRUSH-SPARK (KIMI)` is the same decoration shape on
+      the SPARK node (model kimi-k2), 5 entries from the 2026-09-08 merge
+      wave.
 
   - canonical: kilocode-glm
-    aliases: ["KILOCODE-GLM"]
+    aliases: ["KILOCODE-GLM", "KILOCODE", "kilocode_glm"]
+    note: >-
+      `KILOCODE` (bare) is the same identity, not a second one --
+      `pmoves/config/agent_registry.yaml`'s `kilocode_glm` entry lists
+      `signature: "kilocode"` as its own spelling. Register rows 2790 and
+      2804 (`kilo/instance-integration-2026-09-03`, PR #2918) co-own to
+      bare `KILOCODE`; merged here rather than split, same doctrine as
+      `CRUSH-GLM52`. The registry KEY `kilocode_glm` (underscore) is a sixth
+      spelling, added per this file's own doctrine on the `claude_b850` key
+      above -- once `kilocode` resolves, the test
+      `test_the_registry_alias_rule_still_holds_against_both_files` requires
+      the key to fold to the same identity too.
 
   - canonical: pmoves-minimax
     aliases: ["PMOVES-MINIMAX"]
 
   - canonical: missing-link-hermes
     aliases: ["MISSING-LINK-HERMES"]
+
+  - canonical: hermes-agent
+    aliases: ["HERMES-AGENT", "hermes_agent"]
+    note: >-
+      Surfaced when ENTRY was widened to cover indented rows -- HERMES-AGENT
+      holds an OPEN claim the audit surface could not see. Declared, not
+      aliased into anything else. `agent_registry.yaml` carries `hermes_agent`
+      with the signature `hermes-agent`, held by exactly one key, and the
+      register spells it `HERMES-AGENT`. Same rule the four node CLAUDEs were
+      added under -- a unique registry signature matching the register's own
+      spelling is a declaration, not a guess about who somebody is.
 
   - canonical: cowork-claude
     aliases: ["COWORK-CLAUDE"]
@@ -206,6 +281,35 @@ corrections:
     asserted_on: "2026-08-25"
     evidence: "AGNOTE4482PHI.t1.md, B850-CLAUDE preflight"
 
+  # A MEASUREMENT correction, not an authorship one. The 144/15 figure first
+  # recorded on this entry reproduced under no grammar; Codex caught it on
+  # #2811 and the replacement figures reproduce exactly. There is no author to
+  # recover here -- the entry was signed correctly -- so this record carries
+  # `corrects: measurement` and no `actual`.
+  - entry:
+      timestamp: '2026-08-28T16:47:00Z'
+      kind: CLAIM
+    corrects: measurement
+    reason: >-
+      the 144/15 figure reproduced under no grammar and was wrong; the
+      replacement figures reproduce exactly
+    asserted_on: '2026-08-29'
+    evidence: 'Codex P2 review on #2811'
+  # A FACTUAL correction, not an authorship one. The entry originally claimed
+  # branch_cleanup.py already computed divergence; Codex showed it does not --
+  # the complete audit path calls only `git branch --merged` and `git log -1`,
+  # and BranchInfo carries no divergence field. The entry was signed correctly,
+  # so there is no author to recover and no `actual` to name.
+  - entry:
+      timestamp: '2026-08-28T17:44:00Z'
+      kind: CLAIM
+    corrects: fact
+    reason: >-
+      the entry claimed branch_cleanup.py already computed divergence; its
+      audit path calls only `git branch --merged` and `git log -1`, and
+      BranchInfo has no divergence field
+    asserted_on: '2026-08-29'
+    evidence: 'Codex P2 review on #2812'
 # The forward edge. "Identity A became identity B" -- what the register has
 # never been able to say, and the reason correction #1-6 were implemented as a
 # rewrite instead of an edge.
@@ -264,6 +368,12 @@ models:
       answering; the route belongs in the harness field once one exists.
   - canonical: minimax-m3
     aliases: ["MiniMax-M3", "minimax"]
+  - canonical: kimi-k2
+    aliases: ["KIMI", "kimi-k2"]
+    note: >-
+      The model behind CRUSH-SPARK on the SPARK node (register decoration
+      `CRUSH-SPARK (KIMI)`, 5 entries from the 2026-09-08 merge wave) -- the
+      same model+node decoration shape as `CRUSH-GLM52 (Z890)`.
 
 # Lanes and alters. `field` is a declared ALTER of 4090-claude
 # (agent_signatures.yaml:216), not a free-text note.
@@ -312,6 +422,25 @@ alter_lineage:
       the destination ("Polymorphic shape-shifter... Discovered alters by
       mining jewels from PR reviews") and none of the path.
     confidence: operator-asserted
+
+  - identity: b850-claude
+    alter: b850-ledger
+    became: room-owner
+    origin: declared-2026-09-05
+    asserted_on: '2026-09-05'
+    note: >-
+      DECLARED, not discovered -- the opposite of the 4090/field record above,
+      and recorded that way on purpose. B850 was the only node in
+      pmoves/config/rooms/catalog.json with no room; this alter was created on
+      2026-09-05 to own `b850-ledger.room.evidence`. There is no prior work
+      signed as `b850-ledger` in AGNOTE4482PHI.t1.md, so there is no path to
+      reconstruct and none is invented here. The name is node-qualified because
+      `_resolve_alter_parent()` in pmoves/tools/sign_trail.py returns the FIRST
+      parent declaring a matching alter with no duplicate gate; a generic
+      `ledger` would misattribute trails fleet-wide once a second node declared
+      it. The room ships at stage `rehearsal`; activation is the operator's to
+      grant, and the operator may rename both room and alter.
+    confidence: declared-at-creation
 
 # The HARNESS the identity was worn through. Surfaced by parsing: `SPARK-KIMI
 # (Crush, GLM via qwen3-coder)` x17 put a harness in the parenthetical, which

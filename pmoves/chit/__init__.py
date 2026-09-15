@@ -424,7 +424,7 @@ def sync_common_credentials(
                             current = line.split("=", 1)[1].strip()
                             if current != value:
                                 lines[i] = f"{cred}={value}"
-                                changes.append(f"Updated {cred}={value[:8]}..." if len(value) > 8 else f"Updated {cred}={value}")
+                                changes.append(f"Updated credential '{cred}' (value rotated)")
                                 modified = True
                                 logger.info(f"Updated credential '{cred}' in {tier_path.name}")
                         break
@@ -435,7 +435,7 @@ def sync_common_credentials(
                     for j in range(len(lines) - 1, -1, -1):
                         if lines[j].strip() and not lines[j].startswith("#"):
                             lines.insert(j + 1, f"{cred}={value}")
-                            changes.append(f"Added {cred}={value[:8]}..." if len(value) > 8 else f"Added {cred}={value}")
+                            changes.append(f"Added credential '{cred}' (value set)")
                             modified = True
                             logger.info(f"Added credential '{cred}' to {tier_path.name}")
                             break

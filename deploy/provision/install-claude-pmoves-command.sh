@@ -17,6 +17,31 @@ repo_root="$(cd "$script_dir/../.." && pwd)"
 launcher="$repo_root/deploy/provision/claude-pmoves.sh"
 [ -f "$launcher" ] || { echo "launcher not found: $launcher (is this the pmoves repo?)" >&2; exit 1; }
 
+# The root is resolved from THIS SCRIPT'S location, so running the copy inside a
+# linked worktree binds the command to a checkout that gets deleted. Not
+# hypothetical: on 2026-08-30 the installed `crush-pmoves` pointed at
+# GitHub/pmoves-main -- a detached worktree 151 commits behind main -- and every
+# launch used that tree. The symptoms read as "env.shared error" and "didn't
+# load the custom version"; neither named the cause.
+#
+# In a linked worktree `.git` is a FILE (a gitdir pointer); in the canonical
+# checkout it is a directory. That is the whole test.
+# Kept in step with the PowerShell twin.
+if [ -e "$repo_root/.git" ] && [ ! -d "$repo_root/.git" ]; then
+  echo "" >&2
+  echo "REFUSING: this is a linked git worktree, not the canonical checkout." >&2
+  echo "  resolved root : $repo_root" >&2
+  echo "  .git          : a file (gitdir pointer), so this tree is disposable" >&2
+  echo "" >&2
+  echo "Installing from here would point the command at a checkout that may be" >&2
+  echo "removed, and the failure would be SILENT -- the command resolves, the" >&2
+  echo "launcher runs, and env loads from a tree that is gone." >&2
+  echo "" >&2
+  echo "Run it from the canonical repo instead, or pass --force to override." >&2
+  case " $* " in *" --force "*) echo "  --force given: installing from a worktree anyway." >&2 ;; *) exit 2 ;; esac
+fi
+echo "  resolved repo root: $repo_root"
+
 begin="# >>> pmoves claude-pmoves >>>"
 end="# <<< pmoves claude-pmoves <<<"
 

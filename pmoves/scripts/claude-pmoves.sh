@@ -42,24 +42,24 @@ set -u
 # `claude --agent` with no creds — the silent-credless class this file exists to
 # close.
 #
-# WHY `CDPATH= cd -P --`: dirname yields a bare relative path when the script is
+# WHY `CDPATH='' cd -P --`: dirname yields a bare relative path when the script is
 # invoked relatively; `cd` consults CDPATH for such arguments, which both jumps
 # elsewhere AND echoes the destination, embedding a newline in the captured path.
 # ---------------------------------------------------------------------------
 SELF="${BASH_SOURCE[0]:-$0}"
 while [ -L "$SELF" ]; do
-  link_dir="$(CDPATH= cd -P -- "$(dirname -- "$SELF")" && pwd)"
+  link_dir="$(CDPATH='' cd -P -- "$(dirname -- "$SELF")" && pwd)"
   SELF="$(readlink -- "$SELF")"
   case "$SELF" in /*) ;; *) SELF="$link_dir/$SELF" ;; esac
 done
-SELF_DIR="$(CDPATH= cd -P -- "$(dirname -- "$SELF")" && pwd)"
+SELF_DIR="$(CDPATH='' cd -P -- "$(dirname -- "$SELF")" && pwd)"
 
 # PMOVES_LAUNCHER_ROOT, not PMOVES_REPO_ROOT: the latter is already consumed by
 # pmoves/services/creator-operator/config.py.
 if [ -n "${PMOVES_LAUNCHER_ROOT:-}" ]; then
   ROOT="$PMOVES_LAUNCHER_ROOT"
 else
-  ROOT="$(CDPATH= cd -P -- "$SELF_DIR/../.." && pwd)" || ROOT=""
+  ROOT="$(CDPATH='' cd -P -- "$SELF_DIR/../.." && pwd)" || ROOT=""
 fi
 
 LAUNCHER="$ROOT/deploy/provision/claude-pmoves.sh"
@@ -119,6 +119,7 @@ IDENT_TOOL="$ROOT/pmoves/tools/node_identity.py"
 # scalar form silently never ran the resolver and sessions launched unbound —
 # the exact gap #2763 fixed for crush-pmoves, which this launcher then still
 # carried (pair-review finding on #2769).
+# shellcheck source=./pm-python.sh
 . "$ROOT/pmoves/scripts/pm-python.sh"
 IDENT_PY=()
 if [ -f "$IDENT_TOOL" ] && pm_pick_python yaml; then
@@ -188,15 +189,89 @@ if [ -f "$CIPHER_TOOL" ] && [ ${#IDENT_PY[@]} -gt 0 ]; then
       echo "[claude-pmoves] cipher=up (${CIPHER_WHICH:-unknown endpoint})" >&2
       IDENTITY_ARGS+=(--append-system-prompt "Persistent memory IS available this session via the Cipher MCP server '${CIPHER_WHICH:-unknown}'. Use it for recall and for writes; do not fall back to the auto-memory directory while it is up.")
       ;;
+    1)
+      # FINDINGS: something ANSWERED and was not usable. Cipher is UP either
+      # way, so "no persistent memory, Cipher is down" stays wrong here -- that
+      # false negative is what the wildcard branch used to emit for every
+      # non-zero code, and it sends the operator to restart a healthy service.
+      #
+      # But exit 1 is NOT synonymous with 401. `http_error` (a 404) and
+      # `redirect` (a refused 302) also land on 1, and hardcoding "bind
+      # CIPHER_API_TOKEN" tells an operator staring at a 404 to fix a
+      # credential that was never the problem -- the same collapse of distinct
+      # verdicts into one remedy, just moved up a layer.
+      #
+      # So branch on the verdict the tool actually reported. The second token
+      # of each row IS the verdict class (OK / UNAUTHORIZED / ANSWERED / DOWN),
+      # emitted from `row["verdict"]` in cipher_preflight.py. Matched with
+      # `case`, not `grep`: errexit is live from the `set -e` above and a pipe
+      # into `grep -q` can also lose to SIGPIPE.
+      case "$CIPHER_OUT" in
+        *"cipher UNAUTHORIZED"*)
+          echo "[claude-pmoves] cipher=UNAUTHORIZED (exit 1) — service is UP, credential not accepted" >&2
+          IDENTITY_ARGS+=(--append-system-prompt "Cipher ANSWERED this session but refused the credential (preflight exit 1, verdict unauthorized), so persistent memory is not usable right now. The service is UP -- this is an access problem, not an outage, so do NOT report Cipher as down and do not restart it. Use the file-based auto-memory directory meanwhile and say which of the two it is. Remedy: bind CIPHER_API_TOKEN into the roster. Recovery: pmoves/docs/operations/MCP_TOOLKIT.md.")
+          ;;
+        *)
+          echo "[claude-pmoves] cipher=ANSWERED-UNUSABLE (exit 1) — something is listening; see the status below" >&2
+          IDENTITY_ARGS+=(--append-system-prompt "Cipher ANSWERED this session but not usably (preflight exit 1, and NOT a 401/403 -- read the status printed above, e.g. an HTTP error or a refused redirect), so persistent memory is not usable right now. Something IS listening on that endpoint, so do NOT report Cipher as simply down, and do NOT assume the credential is at fault -- the preflight would have said unauthorized if it were. Use the file-based auto-memory directory meanwhile and say which of the two it is. Recovery: pmoves/docs/operations/MCP_TOOLKIT.md.")
+          ;;
+      esac
+      printf '%s\n' "$CIPHER_OUT" >&2
+      ;;
     *)
-      # 1 = every endpoint was reached and none answered. 3 = nothing to measure
-      # (no cipher entry in the roster at all). Both mean no memory; the agent
-      # is told which, because the fixes differ.
+      # 3 = could not measure: no cipher entry in the roster, nothing
+      # resolvable, nothing reachable at all, or the check itself crashed.
+      # This is the only case where "you have no memory" is a true statement.
+      #
+      # A crash belongs HERE and not in the exit-1 branch above. Python exits 1
+      # on an uncaught exception, so before cipher_preflight.py grew its own
+      # backstop, a schemeless roster url or a failed import landed on "the
+      # service is UP, do not restart it" -- a health assertion from a run that
+      # contacted nothing.
       echo "[claude-pmoves] cipher=DOWN (exit ${cipher_rc}) — session has no persistent memory" >&2
       printf '%s\n' "$CIPHER_OUT" >&2
       IDENTITY_ARGS+=(--append-system-prompt "Cipher is NOT reachable this session (preflight exit ${cipher_rc}), so you have NO persistent memory. Say so at session start rather than recalling nothing silently, and use the file-based auto-memory directory instead. Recovery: pmoves/docs/operations/MCP_TOOLKIT.md.")
       ;;
   esac
+fi
+
+# IDENTITY CARRY — the join the two blocks above never made.
+#
+# The identity block tells the model it is 'z890-claude'. The cipher block tells
+# it memory is up. Neither says which agent_id those memories are FILED under,
+# and the answer has been 'bootstrap' on every node since per-agent tokens
+# shipped: Pmoves-cipher/src/pmoves/auth.ts:46 forks on a 'cipher_' prefix, and
+# nothing in this repo ever checked it. So a session is told it is one agent and
+# writes as another, with no line of output disagreeing.
+#
+# bootstrap is not an agent. It is the single-token launch path whose whole
+# purpose is to hand off to a minted one, and the handoff has never been wired.
+# This does not wire it — a token cannot be minted from a launcher without
+# putting a secret through a shell. It ENDS THE SILENCE, which is the half that
+# was costing us: identity grounding that shapes a model's perspective while
+# nobody can see what it is grounded on.
+#
+# Fail-open-loudly, same as everything above it. Never blocks. Never prints,
+# reads past the prefix of, or exports a token.
+CARRY_TOOL="$ROOT/pmoves/tools/cipher_identity.py"
+if [ -f "$CARRY_TOOL" ] && [ ${#IDENT_PY[@]} -gt 0 ] && [ -n "${PMOVES_NODE_IDENTITY:-}" ]; then
+  # `|| carry_rc=$?` rather than a set +e/set -e sandwich. This file runs under
+  # `set -u` and NOT `set -e` (line 32), so a bare `set -e` turns errexit ON for
+  # everything below it -- a shell-wide behaviour change smuggled in by a block
+  # that only wanted to read one exit code. A `||` list is exempt from errexit
+  # under either setting, so this reads the code without touching the options.
+  carry_rc=0
+  CARRY_OUT="$("${IDENT_PY[@]}" "$CARRY_TOOL" --agent "$PMOVES_NODE_IDENTITY" --shell 2>/dev/null)" || carry_rc=$?
+  if [ -n "$CARRY_OUT" ]; then
+    eval "$CARRY_OUT"
+    if [ "$carry_rc" = "0" ]; then
+      echo "[claude-pmoves] cipher identity=${PMOVES_CIPHER_EFFECTIVE_ID:-} (carry intact)" >&2
+      IDENTITY_ARGS+=(--append-system-prompt "Your cipher memory writes are attributed to agent_id '${PMOVES_CIPHER_EFFECTIVE_ID:-}', which matches your registered identity. Recall and writes are yours.")
+    else
+      echo "[claude-pmoves] cipher identity=${PMOVES_CIPHER_EFFECTIVE_ID:-advisory} — CARRY GAP: ${PMOVES_CIPHER_WHY:-no reason emitted}" >&2
+      IDENTITY_ARGS+=(--append-system-prompt "IDENTITY CARRY GAP: you are '${PMOVES_NODE_IDENTITY}', but cipher will attribute your memory writes to '${PMOVES_CIPHER_EFFECTIVE_ID:-an advisory id you declare per call}' — not to you. Reason: ${PMOVES_CIPHER_WHY:-no reason emitted} Treat anything you recall as possibly another agent's, say so when it matters, and do not claim a memory as your own on the strength of finding it. Road to close it: make -C pmoves cipher-identity.")
+    fi
+  fi
 fi
 
 if [ ! -f "$LAUNCHER" ]; then

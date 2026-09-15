@@ -55,7 +55,7 @@ make verify-all
 # Individual smoke tests
 make smoke           # Core services
 make smoke-gpu       # GPU-enabled services
-make archon-smoke    # Archon services
+make archon-ui-smoke    # Archon services
 make deepresearch-smoke  # DeepResearch orchestration
 make supaserch-smoke     # SupaSerch multi-source search
 ```
@@ -145,10 +145,7 @@ make deepresearch-smoke-in-net
 # SupaSerch multi-source integration
 make supaserch-smoke
 
-# Archon MCP bridge integration
-make archon-mcp-smoke
-
-# Archon REST policy validation
+# Archon REST policy validation (native surface)
 make archon-rest-policy-smoke
 
 # YouTube docs catalog sync

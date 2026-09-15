@@ -63,6 +63,17 @@ _download_lock = threading.Lock()
 _SAFE_MODEL_RE = re.compile(r"^[a-zA-Z0-9._/-]+$")
 
 
+_SAFE_COMPONENT_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}")
+_ALLOWED_QUANTIZE = {"f16", "q4_0", "q4_k_m", "q5_0", "q8_0"}
+
+
+def _validated_component(value: str, field: str) -> str:
+    """Strict allowlist gate for user-provided path/file-name components."""
+    if not value or not _SAFE_COMPONENT_RE.fullmatch(value):
+        raise HTTPException(status_code=400, detail=f"Invalid {field}")
+    return value
+
+
 def _safe_model_path(model_id: str) -> Path:
     """Resolve a model cache path, rejecting path traversal attempts."""
     if ".." in model_id or not _SAFE_MODEL_RE.match(model_id):
@@ -774,6 +785,13 @@ async def hf_model_convert_gguf(
         Conversion result with output path
     """
     # Resolve the HF model cache path via _safe_model_path (path-injection sanitized)
+    # CodeQL gate: re-validate every user-provided component with a strict
+    # fullmatch allowlist so no tainted value reaches a path expression.
+    model_id = _validated_component(model_id, "model_id")
+    quantize = _validated_component(quantize, "quantize")
+    if quantize not in _ALLOWED_QUANTIZE:
+        raise HTTPException(status_code=400, detail=f"Unsupported quantize format: {quantize}")
+    output_dir = _validated_component(output_dir, "output_dir") if output_dir else None
     cache_dir = _safe_model_path(model_id)
 
     if not cache_dir.exists():

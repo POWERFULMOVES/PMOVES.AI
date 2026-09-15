@@ -92,7 +92,12 @@ from tools.chit_common import canon as _canon
 def sign_enrollment(payload: dict[str, Any], passphrase: str) -> dict[str, Any]:
     """Sign an enrollment payload with HMAC-SHA256."""
     doc = json.loads(json.dumps(payload))
-    kid = hashlib.sha256(passphrase.encode()).hexdigest()[:16]
+    # kid is a public identifier derived from the enrollment passphrase. Derive
+    # it with PBKDF2 rather than a bare SHA-256 digest so a leaked kid cannot
+    # be brute-forced back to a weak passphrase. Deterministic via fixed salt.
+    kid = hashlib.pbkdf2_hmac(
+        "sha256", passphrase.encode("utf-8"), b"pmoves-enrollment-kid-v2", 200_000
+    ).hex()[:16]
     doc_nosig = json.loads(json.dumps(doc))
     doc_nosig.pop("sig", None)
     mac = hmac.new(

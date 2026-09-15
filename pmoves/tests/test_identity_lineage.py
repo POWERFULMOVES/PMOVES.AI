@@ -150,19 +150,46 @@ def test_a_corrected_entry_names_both_authors():
     assert "d85b46961" in why, "the correction cites no recoverable evidence"
 
 
-def test_every_correction_preserves_the_original_string():
+def test_every_correction_carries_its_evidence():
+    """Evidence is universal; `recorded_as` is not.
+
+    An AUTHORSHIP correction must preserve the string the register originally
+    carried, or the repair is laundered into the line. A correction of a
+    measurement or a count has no original identity string -- the entry was
+    signed correctly and only a figure was wrong -- so requiring one there
+    would make a legitimate repair unexpressible.
+    """
     vocab = il.load_vocabulary()
     assert vocab.corrections, "no corrections recorded"
     for record in vocab.corrections:
-        assert record.get("recorded_as"), record
         assert record.get("evidence"), record
+        if record.get("corrects", "authorship") == "authorship":
+            assert record.get("recorded_as"), record
 
 
-def test_all_seven_annotated_corrections_are_recorded():
-    """Seven, not six. The seventh is B850's own from 2026-08-25 and is a
-    different class -- key drift, not misattribution."""
+def test_a_non_authorship_correction_needs_no_identity():
+    """The gate used to demand `actual` from every record, which no factual
+    correction can supply. Proven against the real gate, not a stub."""
+    findings = il.verify()
+    assert not any("unknown identity" in f for f in findings), findings
+
+
+# The register grows, so this is a RATCHET rather than a fixed count: a new
+# annotated correction is expected, an annotation that loses its record is not.
+# The number lived in the test's NAME once and went stale the moment an eighth
+# correction landed -- a count belongs in an assertion, never an identifier.
+MIN_ANNOTATED_CORRECTIONS = 8
+
+
+def test_every_annotated_correction_is_recorded():
+    """The property, not the count: no prose correction may stand alone.
+
+    Eight today. Six were the 2026-05-16 misattribution sweep, the seventh is
+    B850's 2026-08-25 lane-key drift, and the eighth is #2811's measurement
+    repair -- the first that corrects a FIGURE rather than an author.
+    """
     annotated = il.annotated_corrections()
-    assert len(annotated) == 7, [a[:2] for a in annotated]
+    assert len(annotated) >= MIN_ANNOTATED_CORRECTIONS, [a[:2] for a in annotated]
     for timestamp, kind, _ in annotated:
         assert il.correction_for(timestamp, kind) is not None, (timestamp, kind)
 
@@ -252,20 +279,102 @@ def test_the_succession_marker_is_not_collapsed_to_an_endpoint():
 
 
 # --------------------------------------------------------------------------
-# The register cannot be audited with grep
+# Register byte integrity
+#
+# This section used to assert the OPPOSITE -- that a NUL byte was PRESENT,
+# as the standing reason `read_register()` exists. The NUL was not a feature:
+# it was a corrupted `0` in the string `0.0.0.0:4482`, at offset 1950 of line
+# 1705, and the repair restored it with the line length unchanged at 3305.
+#
+# The old assertion then failed, correctly, and its message invited its own
+# deletion ("this test and the warning should go with it"). Deleting it would
+# have removed the only thing in this repo that notices a byte-level change to
+# an append-only ledger -- the detector, retired for successfully detecting.
+#
+# So the canary is INVERTED rather than dropped. NUL is now a hard failure,
+# and the remaining control bytes are ratcheted against a measured census, in
+# the idiom already used by fork_registry_ratchet.py and hardening_ratchet.py:
+# the budget may only be LOWERED.
 # --------------------------------------------------------------------------
 
-def test_the_register_needs_a_tolerant_reader():
-    """It contains a NUL byte, so `grep` calls it binary and stops printing
-    after the first match. Any grep-based audit of this file is silently
-    truncated -- which is why the reader is centralised here."""
-    raw = il.REGISTER_PATH.read_bytes()
-    assert b"\x00" in raw, (
-        "the NUL is gone -- if the file was cleaned, this test and the warning "
-        "in read_register() should go with it"
+# Measured on the register at the commit that repaired the NUL. TAB/LF/CR are
+# excluded as structural. What remains is terminal-paste residue (BEL, BS,
+# ESC) and page breaks (VT, FF) that predate this gate. They are tolerated
+# because they are already there and removing them would be another in-place
+# rewrite of history; they are CAPPED so that new damage cannot hide among
+# them.
+CONTROL_BYTE_BUDGET = 21
+STRUCTURAL_BYTES = frozenset({0x09, 0x0a, 0x0d})  # TAB, LF, CR
+
+
+def _control_bytes(raw: bytes) -> dict[int, int]:
+    counts: dict[int, int] = {}
+    for byte in raw:
+        if byte < 0x20 and byte not in STRUCTURAL_BYTES:
+            counts[byte] = counts.get(byte, 0) + 1
+    return counts
+
+
+def test_the_register_carries_no_NUL_byte():
+    """A NUL makes the ledger unreadable in the two places review happens.
+
+    `grep` classifies the file as binary and stops printing after its first
+    match, so any grep-based audit is silently truncated. GitHub does the same
+    and omits the patch entirely -- PR #2944's own register hunk came back with
+    `has patch: False`, meaning the one edit that touched an append-only ledger
+    byte-wise could not be seen by any reviewer, human or bot.
+
+    So this is a hard gate, not a ratchet. A NUL here is damage every time.
+    """
+    counts = _control_bytes(il.REGISTER_PATH.read_bytes())
+    assert counts.get(0x00, 0) == 0, (
+        f"{counts[0x00]} NUL byte(s) in the register. grep and GitHub both "
+        "treat the whole file as binary, so the diff becomes unreviewable. "
+        "Find it with the byte offset and restore the character it replaced -- "
+        "do NOT delete it, which shortens a historical row."
+    )
+
+
+def test_the_register_control_byte_census_only_shrinks():
+    """Ratchet, so new damage cannot hide among the residue already present.
+
+    Lower CONTROL_BYTE_BUDGET whenever residue is legitimately cleaned. Raising
+    it means something wrote control bytes into a ledger row -- find out what
+    before editing this number.
+    """
+    counts = _control_bytes(il.REGISTER_PATH.read_bytes())
+    total = sum(counts.values())
+    assert total <= CONTROL_BYTE_BUDGET, (
+        f"control-byte census grew to {total} (budget {CONTROL_BYTE_BUDGET}): "
+        f"{ {hex(k): v for k, v in sorted(counts.items())} }. A row absorbed "
+        "terminal output or an escape sequence; re-file it as clean text."
     )
     text = il.read_register()
     assert len(il.register_entries(text)) > 300
+
+
+def test_entry_line_numbers_follow_split_not_splitlines():
+    """The reason `entry_lines()` spells `split("\\n")` -- and it was untested.
+
+    The register carries VT and FF characters. `str.splitlines()` breaks on
+    those; `split("\\n")`, grep, sed and every editor do not. The two therefore
+    disagree by an offset that GROWS down the file and lands hardest on the
+    NEWEST rows -- the ones any message points at. If this ever passes with the
+    two counts equal, the residue is gone and the distinction stops mattering.
+    """
+    text = il.read_register()
+    assert len(text.splitlines()) != len(text.split("\n")), (
+        "splitlines() and split('\\n') now agree, so the register no longer "
+        "carries VT/FF; entry_lines() may be simplified and this test retired"
+    )
+    numbered = il.entry_lines(text)
+    by_split = text.split("\n")
+    for lineno, line in numbered:
+        assert by_split[lineno - 1] == line, (
+            f"entry_lines() reported row {lineno} but split('\\n') has a "
+            "different line there -- the numbering has drifted from what a "
+            "reader following the message would see"
+        )
 
 
 # --------------------------------------------------------------------------
@@ -391,3 +500,267 @@ def test_describe_self_states_that_nothing_is_grounded():
 def test_describe_self_on_an_unknown_identity_says_so():
     described = il.describe_self("nobody-claude")
     assert described["known"] is False
+
+
+# ---------------------------------------------------------------------------
+# CO-OWNERS -- the field, its parser, and the cases the live gate caught.
+#
+# Two of the tests below exist because the gate FAILED on its first two runs
+# against this lane's own CLAIM row. They are pinned as regressions rather than
+# described in a comment, because "the parser handles prose mentions" is the
+# kind of claim that quietly stops being true.
+# ---------------------------------------------------------------------------
+
+
+def test_a_row_with_no_field_yields_nothing():
+    """Backward compatibility is structural: no marker, no code path, no change."""
+    assert il.co_owners_in("- `t` CLAIM `A` scope: did a thing") == []
+    assert not il.co_owner_field_is_unparseable("- `t` CLAIM `A` scope: did a thing")
+
+
+def test_the_field_parses_ids_and_contributions():
+    row = (
+        "- `t` RELEASE `A` branch: `feat/x` · co-owners: "
+        "`4090-CLAUDE` (filed the blocker), "
+        "`B850-CLAUDE (Knuckles)` (cross-node correction) · scope: ok"
+    )
+    assert il.co_owners_in(row) == [
+        ("4090-CLAUDE", "filed the blocker"),
+        ("B850-CLAUDE (Knuckles)", "cross-node correction"),
+    ]
+
+
+def test_the_backticks_delimit_the_id_not_the_parenthetical():
+    """`B850-CLAUDE (Knuckles)` is ONE identity string, not an ID plus a note.
+
+    Identities already carry parentheticals -- 26 distinct ones in this register
+    -- so a field that split on `(` would corrupt the most common identity form
+    in the file. The backticks are what makes it unambiguous.
+    """
+    parsed = il.co_owners_in("co-owners: `B850-CLAUDE (Knuckles)` (posted the correction)")
+    assert parsed == [("B850-CLAUDE (Knuckles)", "posted the correction")]
+
+
+@pytest.mark.parametrize("row,expected", [
+    ("co-owners: `A` · scope: `feat/decoy`", [("A", "")]),
+    ("co-owners: `A` scope: `feat/decoy`", [("A", "")]),
+    ("co-owners: `A`, `B` — they did it with `feat/x`", [("A", ""), ("B", "")]),
+])
+def test_the_field_terminates_at_its_own_boundary(row, expected):
+    """It must not walk out of its field and eat the next one.
+
+    A scope that opens with a backticked branch token is ordinary in this
+    register, so a parser that kept consuming would read branches as co-owners
+    AND -- worse -- could widen what the row claims.
+    """
+    assert il.co_owners_in(row) == expected
+
+
+@pytest.mark.parametrize("row", [
+    "co-owners: 4090 and SPARK and DARKXSIDE",   # the natural way to get it wrong
+    "co-owners:",                                 # announced, then nothing
+    "co-owners: `` , ``",                         # backticks, no content
+])
+def test_malformed_fields_are_REJECTED_and_reported_as_unmeasured(row):
+    """A gate observed only passing is not known to work.
+
+    Each of these satisfies a human reader and is empty to a machine -- this
+    lane's own defect, one layer down. `[]` alone would be indistinguishable
+    from a row that has no co-owners, so the two are kept apart.
+    """
+    assert il.co_owners_in(row) == []
+    assert il.co_owner_field_is_unparseable(row), (
+        f"malformed field must be reported as unmeasured, not silently empty: {row!r}"
+    )
+
+
+def test_a_code_span_MENTION_of_the_field_is_not_a_declaration():
+    """Caught by the gate on its FIRST live run, against this lane's CLAIM row.
+
+    The register is a document about its own governance, so rows that DESCRIBE
+    the grammar are normal here. Without this, the first row to explain the
+    field was the first row to fail the gate.
+    """
+    row = "scope: adds a `co-owners:` field carrying backticked IDs"
+    assert il.co_owners_in(row) == []
+    assert not il.co_owner_field_is_unparseable(row)
+
+
+def test_the_bare_noun_in_prose_is_not_a_declaration():
+    """Caught by the gate on its SECOND live run, same row.
+
+    `co-owners` occurs in ordinary prose in a way `branch` does not, which is
+    why this marker REQUIRES the `:`/`=` where BRANCH_MARKER_RE makes it
+    optional.
+    """
+    row = "scope: collision keys on PARTICIPANTS (owner + co-owners) intersected with the LANE"
+    assert il.co_owners_in(row) == []
+    assert not il.co_owner_field_is_unparseable(row)
+
+
+def test_a_row_may_describe_the_field_AND_use_it():
+    """Every marker is tried, not just the first -- this lane's RELEASE does both."""
+    row = "the `co-owners:` field is new. co-owners: `A` (did the work)"
+    assert il.co_owners_in(row) == [("A", "did the work")]
+
+
+def test_co_owners_resolve_through_the_same_vocabulary_as_signing_authors():
+    """A co-owner is an author. One name space, not two."""
+    vocab = il.load_vocabulary()
+    for _lineno, _kind, _owner, co_owners in il.co_owner_attribution():
+        for identity, _contribution in co_owners:
+            assert il.canonical_identity(identity, vocab) is not None, (
+                f"co-owner {identity!r} resolves to no declared identity"
+            )
+
+
+@pytest.mark.parametrize("key,canonical", [
+    ("claude_b850", "b850-claude"),
+    ("claude_4090", "4090-claude"),
+    ("claude_5090", "5090-claude"),
+    ("claude_z890", "z890-claude"),
+])
+def test_the_agent_registry_key_is_a_declared_spelling(key, canonical):
+    """The fifth spelling. `canonical_owner` bridged four and stopped."""
+    assert il.canonical_identity(key) == canonical
+
+
+@pytest.mark.parametrize("key", [
+    "metrics_specialist", "logs_specialist", "tracing_specialist",
+    "dashboard_specialist", "llm_observability", "agent_zero", "crush_glm52",
+])
+def test_keys_sharing_a_signature_are_deliberately_NOT_aliased(key):
+    """A SHARED SIGNATURE IS NOT AN ALIAS -- the load-bearing half of that fix.
+
+    `claude-opus` is the signature of six distinct keys and `crush` of two.
+    Aliasing them would declare six different agents to be one identity, and the
+    collision gate keys on identity -- so a genuine clash between, say,
+    metrics_specialist and logs_specialist would stop being reported. Widening
+    the fold would have made the gate quieter and less true, so this pins the
+    boundary rather than trusting whoever edits the vocabulary next to re-derive
+    it.
+    """
+    assert il.canonical_identity(key) is None, (
+        f"{key!r} shares its signature with another agent and must NOT fold"
+    )
+
+
+def test_the_registry_alias_rule_still_holds_against_both_files():
+    """Recomputes the rule rather than restating its result.
+
+    A key is safe to alias iff its `signature:` resolves AND no other key shares
+    that signature. Pinned as a computation so that adding an agent to the
+    registry cannot silently invalidate the vocabulary.
+    """
+    from collections import Counter
+    registry = yaml.safe_load(
+        (REPO_ROOT / "pmoves" / "config" / "agent_registry.yaml").read_text(
+            encoding="utf-8"
+        )
+    )
+    agents = registry.get("agents") or {}
+    signatures = Counter(
+        (spec or {}).get("signature")
+        for spec in agents.values()
+        if (spec or {}).get("signature")
+    )
+    for key, spec in agents.items():
+        signature = (spec or {}).get("signature")
+        if not signature or signatures[signature] != 1:
+            continue
+        if il.canonical_identity(signature) is None:
+            continue  # the signature itself is undeclared; nothing to alias onto
+        assert il.canonical_identity(key) == il.canonical_identity(signature), (
+            f"registry key {key!r} uniquely signs as {signature!r} but does not "
+            f"fold to it -- add it as an alias in identity_vocabulary.yaml"
+        )
+
+
+def test_the_live_register_is_measurable():
+    """Exit-code doctrine: this asserts we CAN measure, not that we found nothing.
+
+    `unmeasured_rows()` non-empty means a row defeated the parser, which is
+    exit 3 -- 'could not measure' -- and must never be reported as clean.
+    """
+    unmeasured = il.unmeasured_rows()
+    assert unmeasured == [], (
+        "rows announce co-owners the parser cannot read: "
+        + "; ".join(f"L{n} `{owner}`" for n, owner in unmeasured)
+    )
+
+
+# --------------------------------------------------------------------------
+# Code spans are matched by BACKTICK RUN LENGTH, not by parity.
+#
+# Parity ("odd number of backticks before pos means inside a span") was
+# documented as failing toward a loud false "could not measure". Measured, it
+# fails the other way: a ``...`` example containing a backticked ID parses as a
+# SUCCESSFUL declaration, so a row that merely documents the grammar grants
+# participation. And an unbalanced backtick earlier in a row silently DROPS a
+# genuine field without reporting it unmeasured -- an attribution that
+# satisfies a human reader and is empty to every machine, which is the exact
+# defect the field exists to remove.
+# --------------------------------------------------------------------------
+
+def test_a_double_backtick_EXAMPLE_is_not_a_declaration():
+    row = (
+        "- `t` CLAIM `A` branch: `feat/x` · scope: the grammar is "
+        "``co-owners: `4090-CLAUDE` (what they did)`` as shown."
+    )
+    assert il.co_owners_in(row) == [], (
+        "an example inside a double-backtick span must not read as a use"
+    )
+    assert not il.co_owner_field_is_unparseable(row), (
+        "and must not be reported unmeasured either -- it declares nothing"
+    )
+
+
+def test_a_documented_example_does_not_shadow_the_row_s_REAL_declaration():
+    """The sharpest form of the parity defect: a WRONG attribution, silently.
+
+    co_owners_in() tries every marker and returns the first that yields items,
+    which is right -- a row may describe the field and then use it. Under
+    parity, the marker inside a ``...`` example counted as real usage, so the
+    example won and the genuine field after it was never reached. The row then
+    attributed its lane to an ID that exists only in a documentation sample,
+    and dropped the co-owner who actually did the work. Both halves silent.
+    """
+    row = (
+        "- `t` CLAIM `A` branch: `feat/x` · scope: the grammar is "
+        "``co-owners: `EXAMPLE-ID` (ex)`` · co-owners: `4090-CLAUDE` (the real one)"
+    )
+    assert il.co_owners_in(row) == [("4090-CLAUDE", "the real one")], (
+        "the example must not shadow the declaration that follows it"
+    )
+
+
+def test_an_unclosed_backtick_reads_the_way_the_row_RENDERS():
+    """Direction B, resolved by AGREEING with the renderer rather than guessing.
+
+    An unbalanced backtick used to flip polarity for the whole REST of the row,
+    so a genuine field far away vanished from every machine surface while the
+    source still read as an attribution to a human. Run matching bounds the
+    damage to where Markdown itself bounds it: the stray opens a span that
+    closes at the next backtick, which is exactly what the renderer shows. The
+    field inside is still not read -- but the reader and the parser now see the
+    same thing, and closing the backtick recovers it.
+    """
+    stray = (
+        "- `t` CLAIM `A` branch: `feat/x` · scope: see ` the note · "
+        "co-owners: `4090-CLAUDE` (ran the validation)"
+    )
+    closed = stray.replace("see ` the note", "see `the note`")
+    assert il.co_owners_in(closed) == [("4090-CLAUDE", "ran the validation")]
+    # And the damage stops at the span: a second, later field is still read.
+    assert il.co_owners_in(stray + " ` · co-owners: `Z890-CLAUDE` (after)") == [
+        ("Z890-CLAUDE", "after")
+    ]
+
+
+def test_a_triple_backtick_fence_does_not_flip_the_rest_of_the_text():
+    """The hook feeds multi-line text through this; a fence is 3 backticks."""
+    text = (
+        "```\n- `t` RELEASE `4090-CLAUDE` branch: `fix/x`\n```\n"
+        "- `t2` CLAIM `A` branch: `feat/y` · co-owners: `Z890-CLAUDE` (helped)"
+    )
+    assert il.co_owners_in(text) == [("Z890-CLAUDE", "helped")]

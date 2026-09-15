@@ -104,6 +104,23 @@ class TestCheck:
         assert reg.main(["--manifest", str(manifest), "--check"]) == 1
         assert manifest.read_text(encoding="utf-8") == before
 
+    def test_check_reports_gh_app_identity_as_pending(self, tmp_path, capsys):
+        """A manifest without the GitHub App identity must FAIL --check, by name.
+
+        The signing cards resolve `ml.github_app_installation_id` from this
+        secret at runtime; a manifest missing it is exactly the state that made
+        the CHIT room-activation checklist pass on one node and have nothing to
+        resolve on the rest. Silently exiting 0 would keep that invisible.
+        """
+        manifest = tmp_path / "m.yaml"
+        write_manifest(manifest, [entry_for("Z_AI_API_KEY")])
+
+        assert reg.main(["--manifest", str(manifest), "--check"]) == 1
+        out = capsys.readouterr().out
+        assert "GH_APP_INSTALLATION_ID" in out
+        assert "GH_APP_ID" in out
+        assert "tier agent" in out
+
     def test_check_passes_on_complete_manifest(self, tmp_path):
         manifest = tmp_path / "m.yaml"
         write_manifest(manifest, [])

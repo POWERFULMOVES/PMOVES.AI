@@ -3,11 +3,19 @@
 > **Single source of truth** for PMOVES.AI production readiness.
 > Supersedes all individual audit documents accumulated Feb 7 -- Feb 18, 2026.
 
+<<<<<<< HEAD
 **Last Updated:** 2026-09-03 (auto-reconciled)
 
 > ⚠️ **STALE — DO NOT TRUST AT FACE VALUE (as of 2026-07-21).** This dashboard has not been refreshed since 2026-04-24 (~3 months) and its "COMPLETE" assertions no longer reflect the repo. A 2026-07-21 ship-readiness assessment found gaps this doc does not mention: two services wired into the production compose are **empty scaffolds that crash-loop** (`media-video`, `media-audio`), and a dozen-plus fully-coded services have **no deployment path**. Treat this file as historical until it is re-reconciled. See the ship-readiness assessment for current state.
 **Branch:** `main`
 **Commit:** `c838caac4` (post 6-PR merge batch)
+=======
+**Last Updated:** 2026-09-11 (auto-reconciled)
+
+> ⚠️ **STALE — DO NOT TRUST AT FACE VALUE (as of 2026-07-21).** This dashboard has not been refreshed since 2026-04-24 (~3 months) and its "COMPLETE" assertions no longer reflect the repo. A 2026-07-21 ship-readiness assessment found gaps this doc does not mention: two services wired into the production compose are **empty scaffolds that crash-loop** (`media-video`, `media-audio`), and a dozen-plus fully-coded services have **no deployment path**. Treat this file as historical until it is re-reconciled. See the ship-readiness assessment for current state.
+**Branch:** `main`
+**Commit:** `99bf40608` (post 6-PR merge batch)
+>>>>>>> origin/main
 **Consolidated From:** 27 audit documents
 **Evidence:** live runbook execution on 2026-03-05 (`make ghcr-prepublish-inrepo-build`, strict local Trivy sweep logs under `pmoves/docs/logs/ghcr-local-prepublish/`)
 
@@ -143,7 +151,8 @@
 - **Stale branch cleanup:** Deleted 18 remote branches from merged/closed PRs (#842–#863)
   - Remaining branches: `main`, `PMOVES.AI-Edition-Hardened`, `PMOVES.AI-Edition-Hardened-Integrations`, `PMOVES.AI-Edition-Hardened-v3-clean`
 - **CodeQL #194 fixed:** `js/xss-through-dom` in `chrome-extension/options/options.js` — added URL scheme validation (`/^https?:\/\//`) before assigning user-controlled `gatewayBase` to `link.href` (auto-closed by rescan)
-- **CodeQL #195 suppressed:** `js/resource-exhaustion` in `ui/lib/serviceHealth.ts:71` — FALSE POSITIVE, timeout already clamped to `[1s, 60s]` via `Math.min(Math.max())` at line 69. Added `lgtm[js/resource-exhaustion]` suppression comment
+- **CodeQL #195 fixed:** `js/resource-exhaustion` in `ui/lib/serviceHealth.ts` — timeout clamped to `[1s, 60s]` via `Math.min(Math.max())`, plus a redundant bounds check to break the taint chain. Alert is `state=fixed` (auto-closed by rescan).
+  - *Corrected 2026-09-01 (PR #2857):* this entry previously read "#195 **suppressed** … Added `lgtm[js/resource-exhaustion]` suppression comment". Both halves were false. MEASURED: `gh api /repos/POWERFULMOVES/PMOVES.AI/code-scanning/alerts/195` returns `state=fixed` with no `dismissed_reason`, and `serviceHealth.ts` contains no `lgtm` marker — none was ever added, and one would have suppressed nothing if it had been. The clamp is what closed the alert. Left uncorrected, this line taught the exact false belief (that an `lgtm[]` comment closes an alert) that PR #2857 exists to remove.
 - **Legacy CI refs cleaned:** Removed non-existent `integration` branch from `chit-contract.yml` and `deploy-gateway-agent.yml` workflow triggers
 - **CONTRIBUTING.md updated:** PR target changed from `main` to `PMOVES.AI-Edition-Hardened-Integrations` per documented branch strategy
 - **branch_cleanup.py:** Updated PROTECTED set — removed stale `integration`/`develop`, added `Integrations`
@@ -713,7 +722,7 @@ Release coordination note: `https://github.com/POWERFULMOVES/PMOVES.AI/pull/699#
 |-------|--------|
 | `make -C pmoves smoke` | PASS (production path: `tools/smoke_prod.py`) |
 | `make -C pmoves agents-headless-smoke` | PASS |
-| `make -C pmoves archon-smoke` | PASS |
+| `make -C pmoves archon-ui-smoke` | PASS |
 | `make -C pmoves monitoring-smoke` | PASS (`active=36`, `healthy=21`) |
 | Supabase storage migrator | RECOVERED (`supabase_storage_pmoves` healthy) |
 | Supabase DB collation warning | CLEARED (no new `collation version mismatch` log entries after refresh) |

@@ -63,12 +63,25 @@ permissions:
   contents: read
   packages: write
 
+# Every job below carries an explicit `name:`. Its six jobs previously published
+# the same check contexts as self-hosted-builds-hardened.yml -- GPU Services,
+# CPU Services, Validate NATS Contracts, Deploy Staging, Deploy Production,
+# Functional Tests -- because neither workflow named them and a job's context
+# falls back to its job id.
+#
+# GitHub matches required status checks on name alone: "Required status checks
+# do not take workflow, matrix, or event trigger types into account." Being
+# workflow_dispatch-only is NOT protection -- measured 2026-08-30 on
+# verify-attestation.yml, a dispatch published a check-run on the target ref's
+# head commit, from the same app as the real gate (#2840). None of these six is
+# required today, which is exactly how the `verify` collision stayed latent for
+# months.
 jobs:
   # ============================================================================
   # GPU Builds - AI Lab Runner
   # ============================================================================
   build-gpu:
-    name: GPU Services
+    name: Manual GPU Services
     # `gpu` is not a registered label and never has been — this job has been
     # unschedulable since 2025-12-13, queuing until GitHub cancelled it. b850 is
     # the ai-lab GPU host; target it by a label that exists. If a second GPU host
@@ -155,7 +168,7 @@ jobs:
   # CPU Builds - Any VPS Runner
   # ============================================================================
   build-cpu:
-    name: CPU Services
+    name: Manual CPU Services
     runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 60
     permissions:
@@ -224,7 +237,7 @@ jobs:
   # Contract Validation - Fast, any runner
   # ============================================================================
   validate-contracts:
-    name: Validate NATS Contracts
+    name: Manual Validate NATS Contracts
     runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 15
     permissions:
@@ -266,7 +279,7 @@ jobs:
   # Deploy Staging - cloudstartup Runner
   # ============================================================================
   deploy-staging:
-    name: Deploy Staging
+    name: Manual Deploy Staging
     # NEITHER `cloudstartup` NOR `staging` is a registered label. There is a
     # cloudstartup-runner signing card but no runner registered against it, so
     # this job cannot schedule. Disabled explicitly rather than left to queue and
@@ -315,7 +328,7 @@ jobs:
   # Deploy Production - kvm4 Runner
   # ============================================================================
   deploy-production:
-    name: Deploy Production
+    name: Manual Deploy Production
     runs-on: [self-hosted, kvm4, production]
     timeout-minutes: 30
     permissions:
@@ -359,7 +372,7 @@ jobs:
   # Functional Tests - After deployment
   # ============================================================================
   functional-tests:
-    name: Functional Tests
+    name: Manual Functional Tests
     runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 30
     permissions:

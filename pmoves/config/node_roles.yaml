@@ -1,0 +1,110 @@
+# Node-role registry — what a node PROVIDES to the rest of the fleet.
+#
+# WHY THIS FILE EXISTS
+#   `deployment_classes.yaml` answers "what may this node SHIP" (license axis).
+#   `profiles/*.yaml` answer "what hardware IS this node".
+#   Neither answers "what does this node DO FOR OTHERS" — and that is the
+#   question egress, always-on hosting, and dispatch all key on. The KVMs are
+#   the sharpest case: they are designated exit nodes and always-on hosts, and
+#   until now that fact lived only in ACL tags and prose.
+#
+#   This is the same gap deployment_classes.yaml was created to close, one axis
+#   over. Its header says profiles were "hardware shapes with no tenant_type
+#   anywhere, so nothing could answer 'is this node an enterprise deployment?'".
+#   Nothing could answer "is this node providing egress?" either.
+#
+# DECLARATION *AND* ENFORCEMENT — BOTH, NOT EITHER (founder, 2026-09-01)
+#   A role is not a single fact in a single place. It is:
+#     declared   here + `provides:` on the node profile   (intent, reviewable,
+#                                                          diffable, testable)
+#     enforced   by the Tailscale ACL tag                 (runtime authority)
+#   Neither substitutes for the other. A declaration with no tag grants
+#   nothing; a tag with no declaration is an unreviewed capability nobody can
+#   find by reading the repo. `enforced_by` below names the tag, and the
+#   coupling test asserts every declared role maps to a tag that the ACL
+#   actually defines in tagOwners.
+#
+#   THIS REGISTRY INVENTS NO NEW VOCABULARY. Every `enforced_by` value is a tag
+#   that already exists in configs/tailscale-acl-policy.json. A parallel role
+#   vocabulary would be the fifth naming system in a fleet whose recurring
+#   defect is naming systems that do not join.
+#
+# RUNTIME SHAPE IS A SEPARATE AXIS
+#   The same role is served by different container shapes (founder, 2026-09-01):
+#   a service answering public/enterprise external requests may be an ephemeral
+#   Firecracker microVM, while the same service for local and fleet operation is
+#   persistent with proper mounts. Shape is therefore NOT part of the role — it
+#   is `runtime_shape:` on the profile, and a node may declare more than one.
+#
+# HOW PROFILES REFERENCE THIS
+#   pmoves/config/profiles/<node>.yaml gains OPTIONAL fields:
+#       provides: [egress, always-on]
+#       runtime_shape: [persistent]
+#   Unset means unset. Loaders must not guess a role for a node that does not
+#   declare one — same declare-never-infer posture as deployment_class and node
+#   identity. A node that provides nothing to others simply omits the field.
+
+schema_version: 1
+
+roles:
+  egress:
+    description: "Exit node: carries other nodes' internet traffic off-fleet"
+    enforced_by: "tag:exit"
+    notes: >-
+      Founder directive 2026-09-01: the KVMs are the fleet's exit nodes.
+      Declaring this does NOT enable it — the node must also be tagged and
+      approved as an exit node in the tailnet. The declaration exists so the
+      repo can answer which nodes are *supposed* to carry egress, which is what
+      makes an unexpected exit node detectable.
+
+  gateway:
+    description: "Shareable-WiFi / mesh gateway (Gateway Kit) fronting non-fleet clients"
+    enforced_by: "tag:gateway"
+    notes: >-
+      Distinct from `egress`: egress is fleet traffic going out, gateway is
+      outside clients coming in. A Gateway Kit node typically declares both.
+
+  always-on:
+    description: "Hosts services the fleet depends on being up; not a workstation"
+    enforced_by: "tag:vps"
+    notes: >-
+      Founder directive 2026-09-01: the KVMs host the needed always-on
+      services. This is the field a placement decision should read before
+      putting a service somewhere that sleeps. `tag:vps` is the closest
+      existing enforcement tag; it is about *where the box lives*, so the
+      coupling here is weaker than for egress — treat the tag as necessary,
+      not sufficient.
+
+  gpu-compute:
+    description: "Offers GPU capacity to other nodes (render, inference, voice)"
+    enforced_by: "tag:gpu"
+    notes: >-
+      Capacity-class, not expertise-lane (MOF: every node is a pore). A node
+      declaring this accepts dispatched GPU work; it does not claim exclusivity
+      over any workload. Ultimate-TTS runs anywhere — affinity is a preference,
+      not a binding.
+
+  lab:
+    description: "Development / experimentation node; may run license-restricted components"
+    enforced_by: "tag:lab"
+    notes: >-
+      Pairs with deployment_class: private-mesh. The license question is
+      answered there, not here — this role only says the box is a lab box.
+
+# RUNTIME SHAPES (the `runtime_shape:` field on a profile)
+#   These describe how a node's workloads are CONTAINED, not what they do.
+runtime_shapes:
+  persistent:
+    description: "Long-lived containers with proper mounts; local + fleet operation"
+    notes: >-
+      The default shape for anything holding state, serving the fleet, or
+      needing volumes. All current fleet nodes are this.
+
+  ephemeral-microvm:
+    description: "Firecracker microVM per request; public / enterprise external traffic"
+    notes: >-
+      Founder directive 2026-09-01. Chosen for isolation when the caller is
+      outside the fleet, at the cost of state: no persistent mounts, so
+      anything needed must be passed in or fetched. A node may declare BOTH
+      shapes — the same service can run persistent for fleet callers and
+      ephemeral for public ones. The site advertises 150 ms spawn.

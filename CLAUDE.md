@@ -34,7 +34,7 @@ P7 is the runtime launcher and fleet orchestrator — not just a process spawner
 
 ## Pinokio launcher development
 
-This repo also serves as the home for Pinokio launcher scripts that pair with `D:\pinokio\`. The full Pinokio API guide, execution checklist, and `start.js` URL-capture pattern moved to **[`.claude/PINOKIO_LAUNCHER_GUIDE.md`](.claude/PINOKIO_LAUNCHER_GUIDE.md)** — load it on demand when writing or modifying launcher scripts. Source-of-truth API docs remain `D:\pinokio\prototype\PINOKIO.md`.
+This repo also serves as the home for Pinokio launcher scripts that pair with `<PINOKIO_ROOT>\`. The full Pinokio API guide, execution checklist, and `start.js` URL-capture pattern moved to **[`.claude/PINOKIO_LAUNCHER_GUIDE.md`](.claude/PINOKIO_LAUNCHER_GUIDE.md)** — load it on demand when writing or modifying launcher scripts. Source-of-truth API docs remain `<PINOKIO_ROOT>\prototype\PINOKIO.md`.
 
 ## End state
 

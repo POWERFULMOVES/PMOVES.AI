@@ -70,6 +70,21 @@ REGISTRY: Dict[str, Dict[str, Any]] = {
         "required": False,
         "aliases": ["MCP_SERVER_TOKEN"],
     },
+    # Tier 5: Agent — Cipher Memory's inbound bearer. Same shape as the
+    # GROQ_API_KEY note above: live in env.shared and consumed by compose
+    # (`CIPHER_API_TOKEN=${CIPHER_API_TOKEN:-}` in docker-compose.agents.yml)
+    # but never registered, so the funnel never routed it into env.tier-agent
+    # and `manifest-audit` showed no cipher row at all.
+    #
+    # The visible symptom is a 401, not a missing var: `.claude/mcp.json` sends
+    # `Bearer ${CIPHER_API_TOKEN:-}`, an unset var collapses to an empty bearer,
+    # and Cipher rejects it. `.claude/context/cipher.md` already documents that
+    # ("header expands empty without the env var -> 401, expected") — the gap
+    # was that nothing in the pipeline was responsible for supplying it.
+    #
+    # Registering it also makes rotation a Known Road instead of a hand-edit:
+    # change the value, `make -C pmoves secrets-funnel`, recreate cipher.
+    "CIPHER_API_TOKEN": {"tier": "agent", "required": False},
     # Tier 5: Agent — the Claude Code coding-plan credential.
     # env.tier-agent.example has declared this since PR #2359, and both compose
     # files wire `${CLAUDE_CODE_OAUTH_TOKEN:-}` into the archon service, but it
@@ -83,6 +98,61 @@ REGISTRY: Dict[str, Dict[str, Any]] = {
     # approved coding-plan inventory, so this is a missing slot rather than a
     # new policy decision.
     "CLAUDE_CODE_OAUTH_TOKEN": {"tier": "agent", "required": False},
+    # Tier 5: Agent — the GitHub App identity the fleet mints tokens with.
+    #
+    # These two are the runtime half of a signing identity, not ordinary config.
+    # signing_identity_cards.yaml declares `ml.primary_method: github-app` on
+    # every agent card and leaves `ml.github_app_installation_id` null with the
+    # comment "populated from GH_APP_INSTALLATION_ID secret at runtime"
+    # (pmoves/config/signing_identity_cards.yaml:53). Nothing in the pipeline was
+    # responsible for supplying that secret: neither name appeared in this
+    # REGISTRY, so the funnel never routed either into env.tier-agent.
+    #
+    # The failure is node-shaped, which is why it stayed invisible. On the node
+    # where the operator hand-placed the values, the card resolves and the CHIT
+    # room-activation checklist passes; on every node brought up from the funnel
+    # the same checklist has no key material to resolve. Same family as
+    # JUICEFS_META_PASSWORD below — one node works, no second node can be stood
+    # up without hand-copying a secret, which is the thing the funnel exists to
+    # prevent.
+    #
+    # env.tier-agent is not a guess: github_webhook_auto_config.py:447-460 opens
+    # `pmoves/env.tier-agent` by name and fails with "GH_APP_ID or GH_APP_SEC not
+    # found in env.tier-agent". It reads from a file nothing was writing to.
+    #
+    # required=False, and here that is not the silent choice the CHIT_PROD_
+    # PASSPHRASE note below warns about: both consumers already fail loudly and
+    # name the missing variable — github_client.py:61 raises "Configure GH_APP_ID,
+    # GH_APP_INSTALLATION_ID, and GH_APP_SEC", and the webhook tool returns the
+    # message quoted above. Under `--merge` (strict) required=True would instead
+    # fail the whole funnel — and therefore every unrelated service — on any node
+    # that legitimately does not mint GitHub tokens.
+    #
+    # min_length is shape, not presence. `[ -n "$VAR" ]` accepts a truncated id,
+    # and secrets_sync.py:218 is the only place in the pipeline that measures a
+    # value rather than testing it for emptiness: an under-length value is
+    # WITHHELD and warned with both numbers, so compose's `${VAR:?}` refuses at
+    # `up` time instead of a container booting with a half id.
+    #
+    # The floors are minimums for a modern GitHub App, not the local values:
+    # installation ids are currently 8 digits and app ids 6-7, so 7/5 catch the
+    # two-character truncation family while still admitting a shorter legacy id.
+    # What they do NOT catch: a one-character truncation, or a value of the right
+    # length that is not numeric at all. The registry has no `pattern` field
+    # (build_entry supports tier/required/aliases/min_length; RECONCILED_FIELDS
+    # is ("min_length",)) and adding one would mean changing the emitter, the
+    # v1 sync and the funnel's validator together — deliberately out of scope
+    # here rather than half-done.
+    #
+    # GH_APP_SEC is deliberately ABSENT from this registry despite being the
+    # third leg of the same credential. It is a PEM private key, and
+    # secrets_sync.py:251 `_drop_multiline` refuses to emit any newline-bearing
+    # value into a line-based env file (compose env_file is strictly one
+    # VAR=VAL per line). Registering it here would create a slot that reports as
+    # delivered and is dropped with a warning on every run. It needs the *_FILE
+    # convention or a Docker secret; see the PR that added these two.
+    "GH_APP_INSTALLATION_ID": {"tier": "agent", "required": False, "min_length": 7},
+    "GH_APP_ID": {"tier": "agent", "required": False, "min_length": 5},
     # Tier: supabase — Studio basic-auth through the Kong gateway. These became
     # HARD-REQUIRED when supabase-kong moved to DB-less declarative mode: the
     # vendored kong.yml declares a `basicauth_credentials` entry, and Kong
@@ -157,6 +227,14 @@ REGISTRY: Dict[str, Dict[str, Any]] = {
     "JUICEFS_META_PASSWORD": {"tier": "data", "required": False},
     "NATS_EVENT_BUS_TOKEN": {"tier": "data", "required": True},
     "PMOVES_BRIDGE_TOKEN": {"tier": "worker", "required": True},
+    # ActivePieces self-host (docker-compose.activepieces.yml, PR #2906). The
+    # pinned 0.86.3 image reads AP_JWT_SECRET for stable auth signing across
+    # app+worker restarts (NOT AP_SIGNING_SECRET — that key is ignored by this
+    # image). Queue mode note: split app/worker containers require
+    # AP_QUEUE_MODE=REDIS in BOTH, set in the overlay.
+    "AP_POSTGRES_PASSWORD": {"tier": "worker", "required": False},
+    "AP_JWT_SECRET": {"tier": "worker", "required": False, "min_length": 32},
+    "AP_ENCRYPTION_KEY": {"tier": "worker", "required": False},
     # min_length=64 is not a style preference -- supabase-realtime is Phoenix, and
     # Plug's cookie store raises at REQUEST time, not boot:
     #   (ArgumentError) cookie store expects conn.secret_key_base to be at least
@@ -180,6 +258,65 @@ REGISTRY: Dict[str, Dict[str, Any]] = {
     # API. Only the password is a secret; SMTP_HOST/PORT/USER/ADMIN_EMAIL are
     # plain config and live in env.shared.
     "SMTP_PASS": {"tier": "supabase", "required": False},
+    "SMTP_PASS": {"tier": "supabase", "required": False},
+    # Tier: worker -- the content-provenance-gate service's inbound bearer, read
+    # at import by pmoves/services/content-provenance-gate/main.py:210 and
+    # enforced on /metrics, /v1/preview/raw and /v1/evaluate.
+    #
+    # This is the label whose DELIVERY defect opened the charset gap: the value
+    # arrives carrying an EM DASH (U+2014) inside the key. It appears in
+    # chit_encode_secrets.py -- so it has always been IN the funnel -- but it was
+    # never registered here, so no manifest entry ever described its shape and the
+    # funnel had nothing to check even if it had wanted to. The em dash was found
+    # by a third-party vendor CLI that validated the value before putting it in an
+    # HTTP header; our own pipeline, whose entire job is credential delivery, said
+    # nothing. secret_shape.inspect_value now withholds it.
+    #
+    # min_length is a floor, not the local value. env.shared.example documents
+    # `openssl rand -hex 32`, which is 64 characters, so 32 admits a shorter
+    # hand-minted token while still refusing an obvious fragment. What a floor
+    # canNOT catch is this label's actual defect -- an em dash does not change a
+    # value's length -- which is precisely why charset validation had to exist
+    # separately rather than being folded into a bigger number here.
+    #
+    # required=False: the service has no compose wiring at all (it is listed in
+    # configs/dockerfiles/_known_orphans.yaml), so a required slot would fail the
+    # strict funnel on every node for a service none of them run.
+    #
+    # Recorded because it is load-bearing and NOT closed by this entry: the gate
+    # FAILS OPEN. main.py:227 `if not GATE_API_KEY: return  # no key configured =
+    # open`. So withholding a corrupt value moves the gate from "rejects every
+    # legitimate caller" to "authenticates everyone", and neither is acceptable.
+    # Withholding is still the better of the two because it is LOUD -- the funnel
+    # names the variable -- whereas the corrupt value 401s silently. The fail-open
+    # default is a separate defect in that service and is not fixed here.
+    "GATE_API_KEY": {"tier": "worker", "required": False, "min_length": 32},
+    # Tier 5: Agent -- the E2B sandbox credential, read by agent-zero's MCP server
+    # Tier 5: Agent -- E2B agent-sandbox credentials (PR #2982; union-merged with
+    # main's stricter shape). ROOT CAUSE of the sandbox lane being dark: neither
+    # name appeared anywhere in this REGISTRY or in brand_defaults.py -- E2B was
+    # never funnel-managed; the only symptom was the provider rejecting a request
+    # deep inside a provisioning call.
+    #
+    # THREE deployment modes need DIFFERENT subsets:
+    #   cloud           E2B_API_KEY
+    #   selfhost-gcp    E2B_ACCESS_TOKEN  (+ E2B_DOMAIN, non-secret config)
+    #   selfhost-local  E2B_API_KEY + E2B_ACCESS_TOKEN
+    #                   (+ E2B_API_URL / E2B_DEBUG, non-secret config)
+    # Only the two credentials belong here; URLs/DOMAIN/DEBUG are routing config
+    # and live in env.shared(.example). required=False for both: no single node
+    # needs both modes, an absent credential fails loudly at sandbox-preflight
+    # (exit 3), and per-mode prefix+charset+length are enforced at delivery by
+    # pmoves/scripts/e2b_mode.sh. min_length here only catches gross truncation.
+    # Shape kept from main (stricter): prefix e2b_ catches the observed delivery
+    # defect (42 chars missing the leading e2); floor 40 > PR's 36.
+    "E2B_API_KEY": {
+        "tier": "agent",
+        "required": False,
+        "min_length": 40,
+        "prefix": "e2b_",
+    },
+    "E2B_ACCESS_TOKEN": {"tier": "agent", "required": False, "min_length": 39},
 }
 
 
@@ -208,6 +345,9 @@ def build_entry(label: str, spec: Dict[str, Any]) -> Dict[str, Any]:
     min_length = spec.get("min_length")
     if min_length:
         entry["min_length"] = int(min_length)
+    prefix = spec.get("prefix")
+    if prefix:
+        entry["prefix"] = str(prefix)
     return entry
 
 
@@ -237,7 +377,12 @@ def existing_labels(entries: Sequence[Any]) -> set[str]:
 # may have tuned those per-node, and silently reverting them to the registry's
 # view would be a different bug wearing this one's clothes. Only constraints the
 # registry is the sole author of belong here.
-RECONCILED_FIELDS = ("min_length",)
+#
+# `prefix` joins min_length for the same reason it exists: a label that is ALREADY
+# in the manifest and gains a prefix constraint would otherwise never see it --
+# the add-only pass keys on absence, so nothing would be "pending" while the
+# constraint never reached the YAML the funnel reads.
+RECONCILED_FIELDS = ("min_length", "prefix")
 
 
 def reconcile_entry(existing: Dict[str, Any], spec: Dict[str, Any]) -> List[str]:
