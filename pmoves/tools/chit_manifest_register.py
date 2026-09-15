@@ -258,6 +258,7 @@ REGISTRY: Dict[str, Dict[str, Any]] = {
     # API. Only the password is a secret; SMTP_HOST/PORT/USER/ADMIN_EMAIL are
     # plain config and live in env.shared.
     "SMTP_PASS": {"tier": "supabase", "required": False},
+    "SMTP_PASS": {"tier": "supabase", "required": False},
     # Tier: worker -- the content-provenance-gate service's inbound bearer, read
     # at import by pmoves/services/content-provenance-gate/main.py:210 and
     # enforced on /metrics, /v1/preview/raw and /v1/evaluate.
@@ -291,32 +292,31 @@ REGISTRY: Dict[str, Dict[str, Any]] = {
     # default is a separate defect in that service and is not fixed here.
     "GATE_API_KEY": {"tier": "worker", "required": False, "min_length": 32},
     # Tier 5: Agent -- the E2B sandbox credential, read by agent-zero's MCP server
-    # (services/agent-zero/mcp_server.py:62 `get_secret("E2B_API_KEY", "")`) and
-    # sent as the X-E2B-API-Key header at line 346.
+    # Tier 5: Agent -- E2B agent-sandbox credentials (PR #2982; union-merged with
+    # main's stricter shape). ROOT CAUSE of the sandbox lane being dark: neither
+    # name appeared anywhere in this REGISTRY or in brand_defaults.py -- E2B was
+    # never funnel-managed; the only symptom was the provider rejecting a request
+    # deep inside a provisioning call.
     #
-    # Registered here for the same reason GROQ_API_KEY and CIPHER_API_TOKEN were:
-    # the name is wired into compose (docker-compose.vps.override.yml:89) and
-    # expected by secrets_hardening_audit.py:242, but it appeared nowhere in this
-    # REGISTRY -- so the funnel never routed it into any tier file and every
-    # funnel-built node reaches `get_secret` and finds nothing.
-    #
-    # `prefix` is the reason this entry is not deferred. A real E2B key is 44
-    # characters beginning `e2b_`; the one this fleet was delivered was 42
-    # characters beginning `b_`, the leading `e2` lost somewhere in the funnel. A
-    # presence check passed it, the Danger Room never ran, and for weeks the
-    # failure was read as an E2B outage rather than a delivery defect. The prefix
-    # is what catches that exact shape; min_length=40 catches a gross truncation
-    # that happens to preserve the prefix. Neither is a guess about the local
-    # value -- 44/`e2b_` is E2B's published format.
-    #
-    # required=False: only nodes that actually run sandboxed code need it, and the
-    # compose reference is `${E2B_API_KEY}` (unguarded), so absence gates nothing.
+    # THREE deployment modes need DIFFERENT subsets:
+    #   cloud           E2B_API_KEY
+    #   selfhost-gcp    E2B_ACCESS_TOKEN  (+ E2B_DOMAIN, non-secret config)
+    #   selfhost-local  E2B_API_KEY + E2B_ACCESS_TOKEN
+    #                   (+ E2B_API_URL / E2B_DEBUG, non-secret config)
+    # Only the two credentials belong here; URLs/DOMAIN/DEBUG are routing config
+    # and live in env.shared(.example). required=False for both: no single node
+    # needs both modes, an absent credential fails loudly at sandbox-preflight
+    # (exit 3), and per-mode prefix+charset+length are enforced at delivery by
+    # pmoves/scripts/e2b_mode.sh. min_length here only catches gross truncation.
+    # Shape kept from main (stricter): prefix e2b_ catches the observed delivery
+    # defect (42 chars missing the leading e2); floor 40 > PR's 36.
     "E2B_API_KEY": {
         "tier": "agent",
         "required": False,
         "min_length": 40,
         "prefix": "e2b_",
     },
+    "E2B_ACCESS_TOKEN": {"tier": "agent", "required": False, "min_length": 39},
 }
 
 
