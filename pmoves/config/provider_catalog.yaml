@@ -793,6 +793,20 @@ providers:
             weight: 0.3
         strength_ref: null
         vram_mb: 0
+      chat_kilocode_zai_glm53:
+        # Live runtime lane of the hosted KiloClaw VPS (kilocode/zai-coding/glm-5.3):
+        # the KiloCode plan's own Z.AI coding routing to GLM-5.3. CLI harness source of
+        # truth: PMOVES-KeYlOkODe (fork of Kilo-Org/kilocode, Kilo CLI @kilocode/cli).
+        model_name: "zai-coding/glm-5.3"
+        tz_model_key: chat_kilocode_zai_glm53
+        model_suit: kilocode-zai-coding-glm-5.3   # pmoves/configs/model-suits/kilocode-zai-coding-glm-5.3.yaml
+        serves:
+          - function: coding_kilocode
+            variant_name: cloud_kilocode_zai_glm53
+            role: primary
+            weight: 0.7
+        strength_ref: glm-5.3
+        vram_mb: 0
 
   # ---------------------------------------------------------------------------
   # Ollama Cloud — Ollama Pro plan (hosted models at ollama.com)

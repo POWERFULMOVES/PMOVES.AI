@@ -12,6 +12,22 @@ description: >
 # unset — loaders must not guess a class for a node they cannot place.
 deployment_class: private-mesh
 
+# Host operating system. Added 2026-09-06 (PR #2982) because a Danger Room
+# placement decision needed it and the profile — the FIRST place such a
+# decision looks — did not carry it; it had to be learned from
+# `tailscale status` instead. Values: linux | windows | darwin.
+#
+# UNSET MEANS UNSET. Do not guess. Only 3 of 18 profile FILES set this today
+# — 2 distinct machines, since workstation_5090 is an alias of desktop-9950xd
+# — because those are the only ones whose OS has a reading. A wrong `os:`
+# is worse than an absent one: absent makes a reader go look, wrong makes a
+# reader stop looking. Add each node as its OS is measured on that node.
+#
+# Provenance for this value: measured directly ON this node — `uname -s` = Linux, kernel 7.0.0-30-generic,
+#   /proc/cpuinfo reports "AMD Ryzen 7 9850X3D 8-Core Processor", and
+#   `tailscale status` Self is PMOVES-B850-AI-TOP / linux.
+os: linux
+
 hardware:
   cpu:
     vendor: AMD
