@@ -107,6 +107,14 @@ nodes:
   aliases:
   - jetson
   note: A hardware class covering the nano-* nodes, not one machine.
+- canonical: kiloclaw
+  kind: node
+  reach: kiloclaw.internal
+  aliases:
+  - kiloclaw
+  - pmoves-kiloclaw
+  note: The hosted Fly-Machine VPS brain (KiloClaw) -- loopback-only, no GPU,
+    not tailnet-reachable; reach is a placeholder token, not a diallable name.
 - canonical: ai-lab
   kind: runner-label
   aliases:
