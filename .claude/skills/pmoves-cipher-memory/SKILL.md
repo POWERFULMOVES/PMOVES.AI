@@ -70,13 +70,13 @@ make -C pmoves cipher-identity AGENT=z890-claude
 
 Reads no secret, sends nothing, prints one of three verdicts. It exists because
 the answer is not what a session assumes. `Pmoves-cipher/src/pmoves/auth.ts:46`
-forks on a seven-character prefix (line numbers at submodule pin `e24f1323`, the gitlink on `main`):
+forks on a seven-character prefix (line numbers at submodule pin `975e02e6`, the gitlink on `main`):
 
 | your `CIPHER_API_TOKEN` | auth.ts path | your writes are filed under |
 |---|---|---|
-| starts with `cipher_` | `:54-88` Supabase lookup | the **minted agent** on that row |
+| starts with `cipher_` | `:54-91` Supabase lookup | the **minted agent** on that row |
 | anything else | `:44-52` single-token compare | `bootstrap` — *not you* |
-| absent (server token also unset) | `:103-106` | advisory; whatever `agentId` you pass |
+| absent (server token also unset) | `:106-109` | advisory; whatever `agentId` you pass |
 
 So a session can be told "you are `z890-claude`", believe it, and file every
 memory under `bootstrap` — which is also where it will read them back from,
