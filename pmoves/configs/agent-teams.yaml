@@ -12,6 +12,7 @@ teams:
     - agents
     - tier-agent
     agents:
+    - kiloclaw         # hosted VPS ops claw (Fly Machine, loopback-only)
     - claude_4090
     - claude_b850
     - crush_glm52

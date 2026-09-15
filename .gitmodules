@@ -469,3 +469,7 @@
 	path = PMOVES-A0-codex-docker
 	url = https://github.com/POWERFULMOVES/PMOVES-A0-codex-docker.git
 	branch = main
+[submodule "PMOVES-KeYlOkODe"]
+	path = PMOVES-KeYlOkODe
+	url = https://github.com/POWERFULMOVES/PMOVES-KeYlOkODe.git
+	branch = main
