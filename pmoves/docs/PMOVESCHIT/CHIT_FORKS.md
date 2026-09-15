@@ -71,10 +71,17 @@ The reconcile this session did on cipher (PR not opened yet — see
 ```yaml
 artifact:
   path: Pmoves-cipher/
-  pmoves_fork_commit: <filled when PR opens>
+  pmoves_fork_commit: 975e02e6f2ef47e3faafc5116ad4cbc7124549e8
+  # = the gitlink PMOVES.AI `main` carries. Filled 2026-09-15 by z890-claude;
+  # see the amendment at the end of this record.
   upstream:
     repo: POWERFULMOVES/byterover-cli  (formerly `campfirein/byterover-cli`)
-    pinned_commit: <filled when PR opens — currently `campfirein/byterover-cli` HEAD on the PMOVES fork's tracking branch>
+    pinned_commit: 1052ac1a5dd0fde4da8693d4712064f7876c269c
+    # `fix: pin OpenClaw ByteRover plugin for v3 (#759)`, 2026-06-26,
+    # authored by cuongdo-byterover <cuong@byterover.dev>. Derived, not
+    # guessed: it is the PARENT of `389ce722` (`feat(pmoves): A1-Shim Phase 2
+    # — REST compat layer skeleton`), the first commit to touch src/pmoves/,
+    # so it is the last upstream state before the PMOVES overlay begins.
     role: upstream
   pmoves_overlay:
     path: Pmoves-cipher/src/pmoves/
@@ -106,6 +113,29 @@ artifact:
         (memory-routes.ts:24) prepends the category string to the
         user-supplied tags. The Zod error message is misleading — it
         reports the schema's own max(10), not the combined count.
+    - file: Pmoves-cipher/src/pmoves/auth.ts:46,49
+      subject: "per-agent token mode — the `cipher_` bearer prefix"
+      upstream_default: "no token->agent resolution at all"
+      pmoves_choice: |
+        A bearer starting `cipher_` is resolved against
+        pmoves_core.cipher_agent_tokens and the request is attributed to that
+        row's agent_id. A bearer WITHOUT the prefix is compared to the
+        CIPHER_API_TOKEN env var and attributed to the literal agentId
+        `bootstrap`, with no Supabase lookup. The seven-character prefix is the
+        entire handoff between the launch identity and the minted one.
+      signing_card: 5090-claude
+      verified_live: |
+        Measured on Z890 2026-09-09: this node's bearer has no prefix, so a
+        request declaring `z890-claude` is refused 403 `token belongs to agent
+        'bootstrap'`. `make -C pmoves cipher-identity` reports the same verdict
+        without spending the token.
+      note: |
+        Recorded because the agent-side tooling depends on it:
+        pmoves/tools/cipher_identity.py measures this fork, and
+        pmoves/scripts/mint_cipher_token.py gates minting on an ACTIVE signing
+        card. The behaviour is PMOVES-authored (src/pmoves/ is the overlay), so
+        it has an owner; before this row it was an unrecorded contract that two
+        lanes on two nodes were both building on.
   signing_card: 5090-claude (this lane)
   superseded_by: null
   operator_review: pending
@@ -198,3 +228,46 @@ records the PMOVES side.
 **Filed:** 2026-09-15 by 5090-claude (cipher reconcile this session).
 **TTL:** 24h, expires 2026-09-16T16:30Z.
 **Operator review:** pending.
+
+---
+
+## Amendment — 2026-09-15, `z890-claude`
+
+**Filled: the two commit pins this record shipped without.**
+
+The record merged carrying `pmoves_fork_commit: <filled when PR opens>` and
+`pinned_commit: <filled when PR opens>`, while §6.1 said the PR became mergeable
+*once the fork commit was known*. It merged before that was true, so the first
+worked example of the provenance doctrine named its artifact and pinned no
+commit — which makes "which `auth.ts`?" unanswerable from the record, the exact
+question the doctrine exists to answer.
+
+That is not a criticism from outside: the same week, the z890 lane cited
+`auth.ts` line numbers read off a submodule working tree parked on the head of an
+unmerged fork PR. Two nodes, one session, the same failure from two directions —
+**naming the artifact without pinning the commit.** Worth stating plainly,
+because it is evidently easy to do while writing the document that forbids it.
+
+| field | value | how it was derived |
+|---|---|---|
+| `pmoves_fork_commit` | `975e02e6` | the gitlink `main` carries, promoted in this same PR so record, gitlink and citations cannot disagree |
+| `pinned_commit` | `1052ac1a` | parent of `389ce722`, the first commit touching `src/pmoves/` — the last upstream state before the overlay |
+
+**Also added:** an override row for the per-agent token mode
+(`src/pmoves/auth.ts:46,49`). It was unrecorded, and it is the contract two lanes
+on two nodes were independently building on.
+
+**Not changed:** the `signing_card` fields, which stay `5090-claude`. This
+amendment fills placeholders and appends a row; it does not reassign authorship,
+and per §5 the record is reviewed and signed by its lane owner.
+
+**For 5090-claude:** please confirm the `pinned_commit` derivation. It is the
+overlay's base by construction, but if the fork was re-baselined at any point the
+intended upstream pin may be a later commit, and only the fork owner knows.
+
+**Machine-checked from here.** `pmoves/tests/tools/test_auth_citations_resolve.py`
+now fails the required test job if the gitlink moves away from the pin the
+`auth.ts` citations were read at, if a cited line loses its anchor text, or if a
+submodule working tree is ahead of the pin. A placeholder that survives review is
+a process gap; a pin that silently goes stale is a test gap. This closes the
+second one.
