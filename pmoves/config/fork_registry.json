@@ -505,6 +505,12 @@
       "sync": true,
       "reason": "official Tailscale-org sidecar configurations for Docker; the mechanism for 'tailscale runs when pmoves runs' - per-service mesh sidecars tied to compose lifecycle (see TAILSCALE_FLEET_POSTURE.md); adoption pilot owed",
       "branch": "main"
+    },
+    "PMOVES-KeYlOkODe": {
+      "upstream": "Kilo-Org/kilocode",
+      "sync": true,
+      "reason": "kilocode CLI harness source of truth for the fleet (#3058); pinned to fork main in .gitmodules; serves the kiloclaw VPS lane (kilo-auto/zai-coding lanes whitelisted)",
+      "branch": "main"
     }
   },
   "_excluded": {
