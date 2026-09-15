@@ -133,3 +133,66 @@ def test_import_names_and_distribution_names_are_not_confused(tool_text: str):
         "PEP 723 lists `yaml` as a distribution; the distribution is `pyyaml` "
         "and installing `yaml` gets an unrelated package"
     )
+
+
+# ---------------------------------------------------------------------------
+# THE PATTERN, not just the one target.
+#
+# `make -C pmoves cipher-identity` had the SAME defect and it was found by
+# running it: a bare $(PYTHON) with no PyYAML reported `signing card: unknown`
+# for an agent whose card is active and present. A tool that cannot read the
+# card file reports on its own inability, in the same shape as a real verdict.
+#
+#   1. every tool declares its third-party deps in a PEP 723 block
+#   2. every target selects an interpreter that SATISFIES that declaration
+#   3. the fallback is `uv run --script`, which reads the block
+#
+# $(PYTHON) answers "is there an interpreter". That is a different question from
+# "can it import what this tool needs", and only the second decides whether the
+# tool can do its job.
+# ---------------------------------------------------------------------------
+
+YAML_TOOLS = {
+    "cipher_identity.py": "PYTHON_YAML",
+    "register_append.py": "REGISTER_PYTHON",
+}
+
+
+def test_yaml_reading_tools_declare_pyyaml():
+    missing = []
+    for name in YAML_TOOLS:
+        path = REPO_ROOT / "pmoves" / "tools" / name
+        if not path.is_file():
+            continue
+        if "pyyaml" not in _pep723_block(path.read_text(encoding="utf-8")).lower():
+            missing.append(name)
+    assert not missing, (
+        f"{missing} import yaml but declare no PEP 723 dependency, so "
+        "`uv run --script` cannot supply it and the tool degrades instead"
+    )
+
+
+def test_targets_running_yaml_tools_use_a_yaml_capable_selector(makefile_text: str):
+    bad = []
+    for name, selector in YAML_TOOLS.items():
+        for line in makefile_text.splitlines():
+            if name not in line or not line.startswith("\t"):
+                continue
+            if "$(%s)" % selector not in line:
+                bad.append(f"{line.strip()[:88]}  (expected $({selector}))")
+    assert not bad, (
+        "these recipes run a yaml-reading tool through an interpreter that was "
+        "never checked for yaml:\n  " + "\n  ".join(bad) +
+        "\nMeasured: cipher-identity reported `signing card: unknown` for a card "
+        "that is present and active, because $(PYTHON) here has no PyYAML."
+    )
+
+
+def test_the_selector_actually_probes_yaml(makefile_text: str):
+    """NEGATIVE CONTROL: naming a variable PYTHON_YAML does not make it one."""
+    m = re.search(r"PYTHON_YAML\s*=.*?-c\s*'([^']+)'", makefile_text, re.S)
+    assert m, "PYTHON_YAML is not defined as a probe over an import list"
+    assert "yaml" in m.group(1), (
+        f"PYTHON_YAML probes {m.group(1)!r}, which does not include yaml — the "
+        "name would be the only thing guaranteeing the property"
+    )

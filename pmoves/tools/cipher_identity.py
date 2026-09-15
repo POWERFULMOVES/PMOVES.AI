@@ -1,4 +1,15 @@
 #!/usr/bin/env python3
+# /// script
+# requires-python = ">=3.9"
+# dependencies = ["pyyaml"]
+# ///
+#
+# DECLARED, NOT ASSUMED. This tool reads signing_identity_cards.yaml, so an
+# interpreter without PyYAML reports `card status unverifiable` for every
+# agent -- which is a measurement failure wearing a measurement's clothes.
+# Measured on Z890 2026-09-15: `make -C pmoves cipher-identity` did exactly
+# that, because the target used a bare $(PYTHON). The block below is what
+# lets `uv run --script` supply the dependency instead of shrugging.
 """Answer one question: which agent will the memory layer attribute this session's writes to?
 
 A session already knows who it is. `pmoves/tools/node_identity.py` resolves the

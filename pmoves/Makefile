@@ -363,6 +363,26 @@ REGISTER_PYTHON = $(shell if $(PYTHON) -c 'import yaml, pydantic' >/dev/null 2>&
 	elif command -v uv >/dev/null 2>&1; then echo 'uv run --script'; \
 	else echo '$(PYTHON)'; fi)
 
+# THE PATTERN, stated once so it can be reused instead of re-derived.
+#
+#   1. every tool declares its third-party deps in a PEP 723 block
+#   2. every target selects an interpreter that SATISFIES that declaration
+#   3. the fallback is `uv run --script`, which reads the block
+#
+# $(PYTHON) answers 'is there an interpreter', which is a different question
+# from 'can it import what this tool needs' -- and only the second one
+# decides whether the tool can do its job. A target that asks the first and
+# acts on the second degrades silently on whichever nodes happen to differ,
+# which is every fleet.
+#
+# PYTHON_YAML is REGISTER_PYTHON's shape for the (much larger) set of tools
+# needing PyYAML alone. Recursive `=` so the probe runs only when a target
+# expands it, not on every make invocation.
+PYTHON_YAML = $(shell if $(PYTHON) -c 'import yaml' >/dev/null 2>&1; then \
+	echo '$(PYTHON)'; \
+	elif command -v uv >/dev/null 2>&1; then echo 'uv run --script'; \
+	else echo '$(PYTHON)'; fi)
+
 REGISTER_OWNER_VALUE := $(if $(OWNER),$(OWNER),$(REGISTER_OWNER))
 
 .PHONY: register-claim
@@ -5787,7 +5807,7 @@ codex-pmoves: ## Launch Codex CLI with PMOVES context
 	@bash $(CURDIR)/scripts/codex-pmoves.sh
 
 cipher-identity: ## Which agent_id will this session's cipher memories be filed under? [AGENT=z890-claude]
-	@$(PYTHON) $(CURDIR)/tools/cipher_identity.py $(if $(AGENT),--agent "$(AGENT)",) || true
+	@$(PYTHON_YAML) $(CURDIR)/tools/cipher_identity.py $(if $(AGENT),--agent "$(AGENT)",) || true
 
 cipher-mint-token: ## Mint a per-agent cipher token (requires an ACTIVE signing card): AGENT=z890-claude [SCOPES=...]
 	@if [ -z "$(AGENT)" ]; then echo "Usage: make -C pmoves cipher-mint-token AGENT=z890-claude [SCOPES='memory:read,memory:write']"; exit 1; fi
