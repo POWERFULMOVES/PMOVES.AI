@@ -56,7 +56,8 @@
         }
       },
       "whitelist": [
-        "kilo-auto/balanced"
+        "kilo-auto/*",
+        "zai-coding/*"
       ]
     },
     "minimax": {

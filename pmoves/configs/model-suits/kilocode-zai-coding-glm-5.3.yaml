@@ -35,6 +35,11 @@ model_suit:
     presence_penalty: 0.0
 
   advanced:
+    # glm47 = kilocode's GLM-family tool-call parser; the name is a parser-version
+    # label (introduced with GLM-4.7), not a model match - GLM-5.x uses the same
+    # function-call protocol. Contrast kilo-auto-balanced.yaml, which uses the
+    # `openai` parser for the hosted lane. Gate: the lane smoke (kilo executing a
+    # tool call on glm-5.3) must pass before the VPS cutover.
     tool_call_parser: glm47
     enable_thinking: true
     reasoning_effort: max
