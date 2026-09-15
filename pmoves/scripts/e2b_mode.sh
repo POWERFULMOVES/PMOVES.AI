@@ -269,6 +269,7 @@ e2b_validate_shapes() {
     cloud)
       _e2b_shape_report E2B_API_KEY "$E2B_API_KEY_PREFIX" "$E2B_API_KEY_HEX_CLOUD"
       _e2b_forbid E2B_API_URL "cloud talks to the hosted API; unset it or switch to E2B_MODE=selfhost-local"
+      _e2b_forbid E2B_ENVD_API_URL "the local-stack parity var has no consumer in cloud mode; its presence also flips auto-resolution to selfhost-local"
       _e2b_forbid E2B_DEBUG "E2B_DEBUG=true routes the SDK to http://localhost:3000 (connection_config.py:106) even with E2B_API_URL unset"
       _e2b_forbid E2B_DOMAIN "E2B_DOMAIN is the GCP self-host variable"
       ;;
@@ -283,6 +284,7 @@ e2b_validate_shapes() {
         _e2b_log "E2B_DOMAIN: ${E2B_DOMAIN}"
       fi
       _e2b_forbid E2B_API_URL "selfhost-gcp is addressed by E2B_DOMAIN; an explicit API URL overrides it"
+      _e2b_forbid E2B_ENVD_API_URL "the local-stack parity var belongs to selfhost-local only; its presence also flips auto-resolution to selfhost-local"
       _e2b_forbid E2B_DEBUG "E2B_DEBUG=true routes the SDK to http://localhost:3000 (connection_config.py:106)"
       ;;
     selfhost-local)

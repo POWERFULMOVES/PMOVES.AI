@@ -5854,9 +5854,15 @@ SANDBOX_TIMEOUT ?= 600
 # value the env files would otherwise supply (the classic tier-env shadow bug).
 # That non-empty check now happens in the shell, on the exported E2B_MODE_ARG.
 export SANDBOX_CLI_DIR
+# Fail-closed (fleet review 2982). Provenance: E2B SDK env contract per upstream docs
+# (docs.e2b.dev - the SDK reads E2B_API_KEY / E2B_ACCESS_TOKEN / E2B_DOMAIN; see the
+# docs-provenance note in the e2b lane before changing which vars are loaded here).
 SANDBOX_ENV = if [ -n "$${E2B_MODE_ARG:-}" ]; then export E2B_MODE="$$E2B_MODE_ARG"; fi; \
-	. ./scripts/with-env.sh 2>/dev/null || true; set +e; \
-	. ./scripts/e2b_mode.sh; e2b_resolve_mode >/dev/null && e2b_apply_mode_env >/dev/null
+	if [ ! -f ./scripts/with-env.sh ]; then echo "SANDBOX_ENV: scripts/with-env.sh missing - cannot load sandbox credentials" >&2; exit 3; fi; \
+	. ./scripts/with-env.sh; set +e; \
+	. ./scripts/e2b_mode.sh; \
+	{ e2b_resolve_mode >/dev/null && e2b_apply_mode_env >/dev/null; } || { echo "SANDBOX_ENV: e2b mode resolution failed - refusing to continue misconfigured" >&2; exit 3; }; \
+	e2b_validate_shapes || exit 3
 
 .PHONY: sandbox-preflight sandbox-mode sandbox-help sandbox-create sandbox-list \
         sandbox-info sandbox-exec sandbox-kill sandbox-smoke sandbox-host-probe \
@@ -5967,7 +5973,7 @@ sandbox-selftest: ## Run the sandbox regression tests (no credentials, no provis
 	@# make collapses any nonzero recipe exit to 2; the per-test codes are printed
 	@# below. Doctrine: 0 clean / 1 findings / 3 could-not-measure.
 	@set +x; rc=0; \
-	for t in tests/test_sandbox_make_quoting.sh tests/test_sandbox_smoke_teardown.sh; do \
+	for t in tests/test_sandbox_make_quoting.sh tests/test_sandbox_smoke_teardown.sh tests/test_e2b_mode_configures.sh; do \
 		if [ ! -f "$$t" ]; then echo "[sandbox-selftest] $$t MISSING - could-not-measure"; [ $$rc -eq 0 ] && rc=3; continue; fi; \
 		echo "[sandbox-selftest] === $$t ==="; \
 		bash "$$t"; tc=$$?; \

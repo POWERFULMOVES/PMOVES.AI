@@ -178,7 +178,7 @@ hdr "3. nbd module — DEV-LOCAL.md step 1 (modprobe nbd nbds_max=$REQ_NBDS_MAX)
 # inserting it. A probe that loaded the module would be provisioning.
 if ! command -v modprobe >/dev/null 2>&1; then
   cnm "nbd: modprobe not on PATH (kmod not installed, or a container without module tooling)"
-elif printf '%s\n' "$(lsmod 2>/dev/null)" | grep -qE '^nbd[[:space:]]'; then
+elif printf '%s\n' "${LSMOD_OUT:-$(lsmod 2>/dev/null)}" | grep -qE '^nbd[[:space:]]'; then  # reuse the earlier capture; refetch only if it failed
   CUR_NBDS="$(cat /sys/module/nbd/parameters/nbds_max 2>/dev/null || echo '?')"
   if [ "$CUR_NBDS" = "?" ]; then
     pass "nbd: already loaded (nbds_max not readable, but the module is in)"
