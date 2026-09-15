@@ -137,10 +137,11 @@
     "monitoring_smoke"
   ],
   "known_non_submodule_dirs": [
-    "pmoves",
     "PMOVES-BoTZ-check",
+    "PMOVES-Pinokio-Ultimate-TTS-Studio.__backup_before_submodule_init",
+    "pmoves",
     "pmoves-cipher-mcp",
-    "PMOVES-Pinokio-Ultimate-TTS-Studio.__backup_before_submodule_init"
+    "pmoves-nats-mcp"
   ],
   "workflow_routes": {
     "auth": [

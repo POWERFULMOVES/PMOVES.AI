@@ -580,6 +580,21 @@
         "write_info_json": true
       },
       "metadata_note": "PBnJ math lineage; dendrite setup = first SPARK reproduction target; substack richardaragon.substack.com; spec hf-seat-curator-spark-2026-08-04"
+    },
+    {
+      "channel_id": "yt:channel:@DigitalSpaceport",
+      "channel_name": "Digital Spaceport",
+      "source_class": "watched"
+    },
+    {
+      "channel_id": "yt:channel:@Level1Techs",
+      "channel_name": "Level1Techs",
+      "source_class": "watched"
+    },
+    {
+      "channel_id": "yt:channel:@GamersNexus",
+      "channel_name": "Gamers Nexus",
+      "source_class": "watched"
     }
   ],
   "global_settings": {

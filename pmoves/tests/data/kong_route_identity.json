@@ -89,6 +89,12 @@
     "model_id": "kilo-auto/balanced",
     "provider": "kilocode"
   },
+  "kilocode-zai-coding-glm-5.3": {
+    "api_base": "https://api.kilocode.ai/api/openrouter",
+    "api_key_env": "KILOCODE_API_KEY",
+    "model_id": "kilocode/zai-coding/glm-5.3",
+    "provider": "kilocode"
+  },
   "kimi-k2": {
     "api_base": "https://api.moonshot.cn/v1",
     "api_key_env": "MOONSHOT_API_KEY",

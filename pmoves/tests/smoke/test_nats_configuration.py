@@ -16,6 +16,14 @@ from _smoke_helpers import grep_file, grep_count, grep_context, PROJECT_ROOT, PM
 
 
 NATS_CONFIG_DOC = PMOVES_DIR / "docs" / "NATS_CONFIGURATION.md"
+
+# env.tier-* are funnel-generated operator-checkout artifacts (gitignored);
+# CI runners and smoke hosts never carry them.
+requires_env_files = pytest.mark.skipif(
+    not any((PMOVES_DIR / f"env.tier-{t}").exists() for t in ("agent", "worker")),
+    reason="env.tier-agent/worker not present (funnel-generated operator "
+           "artifacts; not on CI runners or smoke hosts) — run on a node checkout",
+)
 COMPOSE_FILE = PMOVES_DIR / "docker-compose.yml"
 
 
@@ -63,6 +71,7 @@ def test_nats_service_has_documentation_header() -> None:
 
 
 @pytest.mark.smoke
+@requires_env_files
 def test_nats_url_defined_in_tier_files() -> None:
     """Verify NATS_URL is defined in all required tier env files (not env.shared)."""
     import warnings
@@ -94,6 +103,7 @@ def test_nats_url_defined_in_tier_files() -> None:
 
 
 @pytest.mark.smoke
+@requires_env_files
 def test_nats_url_has_credentials() -> None:
     """Verify NATS_URL includes authentication credentials in tier files."""
     checked = 0
@@ -230,9 +240,11 @@ def test_critical_services_depend_on_nats() -> None:
 
     missing_deps = []
     for service in critical_services:
-        # Use a wide context window to capture depends_on from the
-        # service block (may be after environment/volumes sections)
-        output = grep_context(COMPOSE_FILE, rf"^  {service}:", after=50)
+        # Use a wide context window to capture depends_on from the service
+        # block. agent-zero's depends_on sits ~164 lines into its block
+        # (environment + volumes first), so 50 lines missed it and reported
+        # a dependency that exists. 250 covers the largest service block.
+        output = grep_context(COMPOSE_FILE, rf"^  {service}:", after=250)
         if not output:
             continue  # Service may not exist in this compose file
 
@@ -253,9 +265,11 @@ def test_nats_on_correct_networks() -> None:
     """Verify NATS is on the correct Docker networks.
 
     Network assignment may come from a YAML anchor or be listed directly.
-    Search a wide context window to capture both.
+    The nats block carries ~30 lines of ports + security commentary before
+    its networks: list, so a 25-line window truncated before networks: and
+    failed while the assignment was present. 250 covers the whole block.
     """
-    output = grep_context(COMPOSE_FILE, r"^  nats:", after=25)
+    output = grep_context(COMPOSE_FILE, r"^  nats:", after=250)
 
     if output:
         assert "pmoves_bus" in output, (
