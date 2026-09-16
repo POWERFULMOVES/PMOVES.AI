@@ -259,6 +259,88 @@ function Test-PmovesRosterHasBarePlaceholder {
 # and SAY WHICH in either case -- a launcher that silently picks a source is how
 # this happened.
 #   PMOVES_ROSTER_FROM_TREE=1  use the working tree (editing the roster itself)
+# ---------------------------------------------------------------------------
+# NODE IDENTITY -- the Windows half of a binding that only ever ran on POSIX.
+#
+# pmoves/scripts/claude-pmoves.sh resolves the node's registered identity and
+# injects it with --append-system-prompt, carrying this comment: "Exported
+# variables do not reach the model's context; an appended system prompt does.
+# This is the difference between the identity existing and the identity
+# working." That is correct, and on this node it never ran: Windows enters
+# through claude-pmoves.cmd -> this file, which had no identity logic at all.
+#
+# Measured on Z890 2026-09-16 inside a session launched the Windows way:
+#   PMOVES_RESOLVED_IDENTITY=UNSET   PMOVES_NODE_IDENTITY=UNSET
+# while the resolver, run by hand on the same node, answers immediately:
+#   PMOVES_NODE='z890'  PMOVES_RESOLVED_IDENTITY='claude_z890'
+#   WHY: node z890 via hostname=PMOVES-Z890; identity via node-vocabulary.yaml
+#
+# So the identity was never missing -- it was never ASKED FOR. A session that
+# must rediscover who it is will sometimes guess, and the register already
+# carries 49 distinct author strings for roughly a dozen identities
+# (identity_vocabulary.yaml). Every one of those began as a session nobody told.
+#
+# FAIL-OPEN, deliberately, matching the POSIX twin: "an identity is a
+# convenience; losing it must not cost you the session." Every failure warns
+# and launches.
+# ---------------------------------------------------------------------------
+$identityArgs = @()
+$identTool = Join-Path $root 'pmoves\tools\node_identity.py'
+if (Test-Path -LiteralPath $identTool) {
+    $identPy = Get-PmovesPythonArgv -Root $root
+    if (-not $identPy) {
+        Write-Warning '[claude-pmoves] node identity: no usable python; launching without it.'
+    } else {
+        # Same settings.local.json read as the POSIX twin: the resolver runs
+        # BEFORE the harness loads that file, so a node whose hostname collides
+        # with a vocabulary entry resolves to nothing unless PMOVES_NODE_ID is
+        # read from the same block that declares it. A shell value still wins.
+        if (-not $env:PMOVES_NODE_ID) {
+            $slPath = Join-Path $root '.claude\settings.local.json'
+            if (Test-Path -LiteralPath $slPath) {
+                try {
+                    $cfg = Get-Content -LiteralPath $slPath -Raw | ConvertFrom-Json
+                    $envProp = $cfg.PSObject.Properties['env']
+                    if ($envProp) {
+                        $sid = $envProp.Value.PMOVES_NODE_ID
+                        if ($sid) { $env:PMOVES_NODE_ID = $sid }
+                    }
+                } catch { }   # a malformed settings file must not cost the session
+            }
+        }
+        $identArgv = @($identTool, '--harness', 'claude-code', '--shell')
+        if ($identPy.Count -gt 1) { $identArgv = @($identPy[1..($identPy.Count - 1)]) + $identArgv }
+        $identOut = & $identPy[0] @identArgv 2>$null
+        if ($LASTEXITCODE -eq 0 -and $identOut) {
+            # The tool emits shell assignments (KEY='value'); PARSE them rather
+            # than eval. PowerShell has no eval of shell syntax, and inventing
+            # one would mean running tool output as code for no gain.
+            $ident = @{}
+            foreach ($line in @($identOut)) {
+                if ($line -match "^([A-Z_]+)='(.*)'$") { $ident[$Matches[1]] = $Matches[2] }
+            }
+            $nodeName  = $ident['PMOVES_NODE']
+            $nodeIdent = $ident['PMOVES_RESOLVED_IDENTITY']
+            if ($nodeIdent) {
+                $env:PMOVES_NODE = $nodeName
+                # PMOVES_NODE_IDENTITY is the operator's INPUT override and the
+                # name the resolver READS; PMOVES_RESOLVED_IDENTITY is its
+                # ANSWER. Export both, as the POSIX twin does, so a tool reading
+                # either spelling sees the same value.
+                $env:PMOVES_NODE_IDENTITY = $nodeIdent
+                $env:PMOVES_RESOLVED_IDENTITY = $nodeIdent
+                Write-Host "[claude-pmoves] node=$nodeName identity=$nodeIdent"
+                $identityArgs = @('--append-system-prompt', "You are running on PMOVES node '$nodeName'. Your registered identity in pmoves/config/agent_registry.yaml is '$nodeIdent'. Disclose it at session start rather than rediscovering it, and file claim-register rows under it.")
+            } else {
+                $w = $ident['PMOVES_IDENTITY_WHY']
+                if (-not $w) { $w = 'no reason given' }
+                Write-Warning "[claude-pmoves] node identity unresolved: $w"
+            }
+        } else {
+            Write-Warning '[claude-pmoves] node identity: resolver failed; launching without it.'
+        }
+    }
+}
 $roster = Join-Path $root '.claude\mcp.json'
 $rosterSource = 'working tree'
 if (-not $env:PMOVES_ROSTER_FROM_TREE) {
@@ -406,9 +488,9 @@ if (Test-Path $roster) {
     # `--mcp-config=<file>` (the `=` form): `--mcp-config` is variadic
     # (`<configs...>`), so the space form would swallow a trailing positional
     # prompt as another config value (Codex #2243 P1).
-    & claude "--mcp-config=$useRoster" @args
+    & claude "--mcp-config=$useRoster" @identityArgs @args
 } else {
     Write-Warning "[claude-pmoves] $roster not found - PMOVES MCP servers will not load."
-    & claude @args
+    & claude @identityArgs @args
 }
 exit $LASTEXITCODE
