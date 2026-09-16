@@ -39,7 +39,11 @@ MAKEFILES = [REPO_ROOT / "pmoves" / "Makefile"] + sorted(
 # stopped matching and the rule became UNENFORCED rather than satisfied — the
 # negative control below is the only reason that was caught.
 ROOT_SENSITIVE = re.compile(
-    r"\bgit\s+(?:-[-\w]+(?:[= ]\S+)?\s+)*(?:submodule|worktree)\b"
+    # {0,8} bound (CodeQL re-dos alert): the unbounded star over a
+    # alternation-with-optional-value can backtrack exponentially on
+    # adversarial input; git flag lists here are short, so the bound is
+    # semantically identical and provably linear.
+    r"\bgit\s+(?:-[-\w]+(?:[= ]\S+)?\s+){0,8}(?:submodule|worktree)\b"
 )
 
 # `git -C <something>` names the repo explicitly — that is the fix, in any spelling.
