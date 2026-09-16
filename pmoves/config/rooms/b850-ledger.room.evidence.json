@@ -196,12 +196,6 @@
       },
       "outputs": [
         {
-          "target": "nats-event",
-          "delivery": "emit",
-          "subject": "agent.graphiti.signed.v1",
-          "artifact_type": "json"
-        },
-        {
           "target": "notebook-entry",
           "delivery": "append",
           "path": "threads/claim-register-trail",
@@ -251,12 +245,6 @@
           "delivery": "append",
           "path": "pages/claim-verification",
           "artifact_type": "text"
-        },
-        {
-          "target": "nats-event",
-          "delivery": "emit",
-          "subject": "ops.pr.review.completed.v1",
-          "artifact_type": "json"
         }
       ],
       "guardrails": {
@@ -404,8 +392,6 @@
       "allow_nats_emit": true,
       "allow_external_publish": false,
       "allowed_subjects": [
-        "agent.graphiti.signed.v1",
-        "ops.pr.review.completed.v1",
         "room.session.updated.v1"
       ]
     },
