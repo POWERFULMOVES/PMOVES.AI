@@ -89,10 +89,10 @@ def _discover_real_services(repo_root: Path) -> dict:
                 continue
             canonical = child.name.replace("_", "-")
             entry = {
-                "directory": str(child.relative_to(repo_root)),
-                "dockerfile": str((child / variants[0]).relative_to(repo_root)),
+                "directory": child.relative_to(repo_root).as_posix(),
+                "dockerfile": (child / variants[0]).relative_to(repo_root).as_posix(),
                 "variants": variants,
-                "roots": [str(root.relative_to(repo_root))],
+                "roots": [root.relative_to(repo_root).as_posix()],
             }
             existing = out.get(canonical)
             if existing:
@@ -100,8 +100,9 @@ def _discover_real_services(repo_root: Path) -> dict:
                 for v in variants:
                     if v not in existing["variants"]:
                         existing["variants"].append(v)
-                if root not in existing["roots"]:
-                    existing["roots"].append(str(root.relative_to(repo_root)))
+                root_rel = root.relative_to(repo_root).as_posix()
+                if root_rel not in existing["roots"]:
+                    existing["roots"].append(root_rel)
             else:
                 out[canonical] = entry
     return out

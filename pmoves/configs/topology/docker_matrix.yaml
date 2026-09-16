@@ -139,12 +139,12 @@ overlays:
 
 services:
   - name: a0-elder-melchor
-    directory: pmoves\services\a0-elder-melchor
-    dockerfile: pmoves\services\a0-elder-melchor\Dockerfile
+    directory: pmoves/services/a0-elder-melchor
+    dockerfile: pmoves/services/a0-elder-melchor/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: a0-elder-melchor
         compose_key: a0-elder-melchor
@@ -179,12 +179,12 @@ services:
       - schema
       - topic
   - name: a2ui-renderer
-    directory: pmoves\services\a2ui-renderer
-    dockerfile: pmoves\services\a2ui-renderer\Dockerfile
+    directory: pmoves/services/a2ui-renderer
+    dockerfile: pmoves/services/a2ui-renderer/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: core
         compose_key: a2ui-renderer
@@ -247,12 +247,12 @@ services:
       - schema
       - topic
   - name: agentgym-rl-coordinator
-    directory: pmoves\services\agentgym-rl-coordinator
-    dockerfile: pmoves\services\agentgym-rl-coordinator\Dockerfile
+    directory: pmoves/services/agentgym-rl-coordinator
+    dockerfile: pmoves/services/agentgym-rl-coordinator/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: agentgym
         compose_key: agentgym-rl-coordinator
@@ -265,12 +265,12 @@ services:
       - schema
       - topic
   - name: alertmanager-discord-bridge
-    directory: pmoves\services\alertmanager-discord-bridge
-    dockerfile: pmoves\services\alertmanager-discord-bridge\Dockerfile
+    directory: pmoves/services/alertmanager-discord-bridge
+    dockerfile: pmoves/services/alertmanager-discord-bridge/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: alertmanager
         compose_key: alertmanager-discord-bridge
@@ -283,12 +283,12 @@ services:
       - schema
       - topic
   - name: analysis-echo
-    directory: pmoves\services\analysis-echo
-    dockerfile: pmoves\services\analysis-echo\Dockerfile
+    directory: pmoves/services/analysis-echo
+    dockerfile: pmoves/services/analysis-echo/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays: []
     # NOTE: no compose overlay declares this service
     guard_paths: []
@@ -349,12 +349,12 @@ services:
       - schema
       - topic
   - name: audio-reprocess
-    directory: pmoves\services\audio-reprocess
-    dockerfile: pmoves\services\audio-reprocess\Dockerfile
+    directory: pmoves/services/audio-reprocess
+    dockerfile: pmoves/services/audio-reprocess/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays: []
     # NOTE: no compose overlay declares this service
     guard_paths: []
@@ -389,12 +389,12 @@ services:
       - schema
       - topic
   - name: cast-tts-gateway
-    directory: pmoves\services\cast-tts-gateway
-    dockerfile: pmoves\services\cast-tts-gateway\Dockerfile
+    directory: pmoves/services/cast-tts-gateway
+    dockerfile: pmoves/services/cast-tts-gateway/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: media
         compose_key: cast-tts-gateway
@@ -411,12 +411,12 @@ services:
       - schema
       - topic
   - name: channel-monitor
-    directory: pmoves\services\channel-monitor
-    dockerfile: pmoves\services\channel-monitor\Dockerfile
+    directory: pmoves/services/channel-monitor
+    dockerfile: pmoves/services/channel-monitor/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: arm64.override
         compose_key: channel-monitor
@@ -441,12 +441,12 @@ services:
       - schema
       - topic
   - name: chat-relay
-    directory: pmoves\services\chat-relay
-    dockerfile: pmoves\services\chat-relay\Dockerfile
+    directory: pmoves/services/chat-relay
+    dockerfile: pmoves/services/chat-relay/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays: []
     # NOTE: no compose overlay declares this service
     guard_paths: []
@@ -484,12 +484,12 @@ services:
       - schema
       - topic
   - name: clap-embed
-    directory: pmoves\services\clap-embed
-    dockerfile: pmoves\services\clap-embed\Dockerfile
+    directory: pmoves/services/clap-embed
+    dockerfile: pmoves/services/clap-embed/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: core
         compose_key: clap-embed
@@ -506,12 +506,12 @@ services:
       - schema
       - topic
   - name: clip-embed
-    directory: pmoves\services\clip-embed
-    dockerfile: pmoves\services\clip-embed\Dockerfile
+    directory: pmoves/services/clip-embed
+    dockerfile: pmoves/services/clip-embed/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: core
         compose_key: clip-embed
@@ -528,12 +528,12 @@ services:
       - schema
       - topic
   - name: comfy-watcher
-    directory: pmoves\services\comfy-watcher
-    dockerfile: pmoves\services\comfy-watcher\Dockerfile
+    directory: pmoves/services/comfy-watcher
+    dockerfile: pmoves/services/comfy-watcher/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: hardened
         compose_key: comfy-watcher
@@ -554,12 +554,12 @@ services:
       - schema
       - topic
   - name: comfyui
-    directory: pmoves\services\comfyui
-    dockerfile: pmoves\services\comfyui\Dockerfile
+    directory: pmoves/services/comfyui
+    dockerfile: pmoves/services/comfyui/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: comfyui
         compose_key: comfyui
@@ -576,12 +576,12 @@ services:
       - schema
       - topic
   - name: consciousness-service
-    directory: pmoves\services\consciousness-service
-    dockerfile: pmoves\services\consciousness-service\Dockerfile
+    directory: pmoves/services/consciousness-service
+    dockerfile: pmoves/services/consciousness-service/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: agents
         compose_key: consciousness-service
@@ -598,12 +598,12 @@ services:
       - schema
       - topic
   - name: container-agent
-    directory: pmoves\services\container-agent
-    dockerfile: pmoves\services\container-agent\Dockerfile
+    directory: pmoves/services/container-agent
+    dockerfile: pmoves/services/container-agent/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: z890
         compose_key: container-agent
@@ -616,12 +616,12 @@ services:
       - schema
       - topic
   - name: content-provenance-gate
-    directory: pmoves\services\content-provenance-gate
-    dockerfile: pmoves\services\content-provenance-gate\Dockerfile
+    directory: pmoves/services/content-provenance-gate
+    dockerfile: pmoves/services/content-provenance-gate/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays: []
     # NOTE: no compose overlay declares this service
     guard_paths: []
@@ -631,12 +631,12 @@ services:
       - schema
       - topic
   - name: deepresearch
-    directory: pmoves\services\deepresearch
-    dockerfile: pmoves\services\deepresearch\Dockerfile
+    directory: pmoves/services/deepresearch
+    dockerfile: pmoves/services/deepresearch/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: agents.images
         compose_key: deepresearch
@@ -661,12 +661,12 @@ services:
       - schema
       - topic
   - name: evo-controller
-    directory: pmoves\services\evo-controller
-    dockerfile: pmoves\services\evo-controller\Dockerfile
+    directory: pmoves/services/evo-controller
+    dockerfile: pmoves/services/evo-controller/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: agents
         compose_key: evo-controller
@@ -683,12 +683,12 @@ services:
       - schema
       - topic
   - name: extract-worker
-    directory: pmoves\services\extract-worker
-    dockerfile: pmoves\services\extract-worker\Dockerfile
+    directory: pmoves/services/extract-worker
+    dockerfile: pmoves/services/extract-worker/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: hardened
         compose_key: extract-worker
@@ -709,12 +709,12 @@ services:
       - schema
       - topic
   - name: ffmpeg-whisper
-    directory: pmoves\services\ffmpeg-whisper
-    dockerfile: pmoves\services\ffmpeg-whisper\Dockerfile
+    directory: pmoves/services/ffmpeg-whisper
+    dockerfile: pmoves/services/ffmpeg-whisper/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: amd
         compose_key: ffmpeg-whisper
@@ -747,12 +747,12 @@ services:
       - schema
       - topic
   - name: fleet-sentinel
-    directory: pmoves\services\fleet_sentinel
-    dockerfile: pmoves\services\fleet_sentinel\Dockerfile
+    directory: pmoves/services/fleet_sentinel
+    dockerfile: pmoves/services/fleet_sentinel/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: agents
         compose_key: fleet-sentinel
@@ -769,12 +769,12 @@ services:
       - schema
       - topic
   - name: flute-gateway
-    directory: pmoves\services\flute-gateway
-    dockerfile: pmoves\services\flute-gateway\Dockerfile
+    directory: pmoves/services/flute-gateway
+    dockerfile: pmoves/services/flute-gateway/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: amd-voice
         compose_key: flute-gateway
@@ -795,12 +795,12 @@ services:
       - schema
       - topic
   - name: gateway
-    directory: pmoves\services\gateway
-    dockerfile: pmoves\services\gateway\Dockerfile
+    directory: pmoves/services/gateway
+    dockerfile: pmoves/services/gateway/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: agents
         compose_key: hi-rag-gateway
@@ -865,12 +865,12 @@ services:
       - schema
       - topic
   - name: gateway-agent
-    directory: pmoves\services\gateway-agent
-    dockerfile: pmoves\services\gateway-agent\Dockerfile
+    directory: pmoves/services/gateway-agent
+    dockerfile: pmoves/services/gateway-agent/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: agents
         compose_key: gateway-agent
@@ -891,12 +891,12 @@ services:
       - schema
       - topic
   - name: github-branch-cleanup
-    directory: pmoves\services\github-branch-cleanup
-    dockerfile: pmoves\services\github-branch-cleanup\Dockerfile
+    directory: pmoves/services/github-branch-cleanup
+    dockerfile: pmoves/services/github-branch-cleanup/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: workers
         compose_key: github-branch-cleanup
@@ -913,12 +913,12 @@ services:
       - schema
       - topic
   - name: github-crossrepo-pr
-    directory: pmoves\services\github-crossrepo-pr
-    dockerfile: pmoves\services\github-crossrepo-pr\Dockerfile
+    directory: pmoves/services/github-crossrepo-pr
+    dockerfile: pmoves/services/github-crossrepo-pr/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: workers
         compose_key: github-crossrepo-pr
@@ -935,12 +935,12 @@ services:
       - schema
       - topic
   - name: github-issue-triage
-    directory: pmoves\services\github-issue-triage
-    dockerfile: pmoves\services\github-issue-triage\Dockerfile
+    directory: pmoves/services/github-issue-triage
+    dockerfile: pmoves/services/github-issue-triage/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: workers
         compose_key: github-issue-triage
@@ -957,12 +957,12 @@ services:
       - schema
       - topic
   - name: github-runner-ctl
-    directory: pmoves\services\github-runner-ctl
-    dockerfile: pmoves\services\github-runner-ctl\Dockerfile
+    directory: pmoves/services/github-runner-ctl
+    dockerfile: pmoves/services/github-runner-ctl/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: workers
         compose_key: github-runner-ctl
@@ -979,12 +979,12 @@ services:
       - schema
       - topic
   - name: gpu-orchestrator
-    directory: pmoves\services\gpu-orchestrator
-    dockerfile: pmoves\services\gpu-orchestrator\Dockerfile
+    directory: pmoves/services/gpu-orchestrator
+    dockerfile: pmoves/services/gpu-orchestrator/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: gpu-4090
         compose_key: gpu-orchestrator
@@ -1005,12 +1005,12 @@ services:
       - schema
       - topic
   - name: graph-linker
-    directory: pmoves\services\graph-linker
-    dockerfile: pmoves\services\graph-linker\Dockerfile
+    directory: pmoves/services/graph-linker
+    dockerfile: pmoves/services/graph-linker/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays: []
     # NOTE: no compose overlay declares this service
     guard_paths: []
@@ -1020,12 +1020,12 @@ services:
       - schema
       - topic
   - name: grayjay-plugin-host
-    directory: pmoves\services\grayjay-plugin-host
-    dockerfile: pmoves\services\grayjay-plugin-host\Dockerfile
+    directory: pmoves/services/grayjay-plugin-host
+    dockerfile: pmoves/services/grayjay-plugin-host/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: hardened
         compose_key: grayjay-plugin-host
@@ -1046,12 +1046,12 @@ services:
       - schema
       - topic
   - name: hf-agent
-    directory: pmoves\services\hf-agent
-    dockerfile: pmoves\services\hf-agent\Dockerfile
+    directory: pmoves/services/hf-agent
+    dockerfile: pmoves/services/hf-agent/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: agents
         compose_key: hf-agent
@@ -1068,12 +1068,12 @@ services:
       - schema
       - topic
   - name: hf-mcp-server
-    directory: pmoves\services\hf-mcp-server
-    dockerfile: pmoves\services\hf-mcp-server\Dockerfile
+    directory: pmoves/services/hf-mcp-server
+    dockerfile: pmoves/services/hf-mcp-server/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: agents
         compose_key: hf-mcp-server
@@ -1090,12 +1090,12 @@ services:
       - schema
       - topic
   - name: hf-research-agent
-    directory: pmoves\services\hf-research-agent
-    dockerfile: pmoves\services\hf-research-agent\Dockerfile
+    directory: pmoves/services/hf-research-agent
+    dockerfile: pmoves/services/hf-research-agent/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: agents
         compose_key: hf-research-agent
@@ -1112,12 +1112,12 @@ services:
       - schema
       - topic
   - name: hi-rag-gateway
-    directory: pmoves\services\hi-rag-gateway
-    dockerfile: pmoves\services\hi-rag-gateway\Dockerfile
+    directory: pmoves/services/hi-rag-gateway
+    dockerfile: pmoves/services/hi-rag-gateway/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: agents
         compose_key: hi-rag-gateway
@@ -1134,12 +1134,12 @@ services:
       - schema
       - topic
   - name: hi-rag-gateway-v2
-    directory: pmoves\services\hi-rag-gateway-v2
-    dockerfile: pmoves\services\hi-rag-gateway-v2\Dockerfile
+    directory: pmoves/services/hi-rag-gateway-v2
+    dockerfile: pmoves/services/hi-rag-gateway-v2/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: agents
         compose_key: hi-rag-gateway-v2
@@ -1164,12 +1164,12 @@ services:
       - schema
       - topic
   - name: invidious-companion-proxy
-    directory: pmoves\services\invidious-companion-proxy
-    dockerfile: pmoves\services\invidious-companion-proxy\Dockerfile
+    directory: pmoves/services/invidious-companion-proxy
+    dockerfile: pmoves/services/invidious-companion-proxy/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: hardened
         compose_key: invidious-companion-proxy
@@ -1190,12 +1190,12 @@ services:
       - schema
       - topic
   - name: jellyfin-bridge
-    directory: pmoves\services\jellyfin-bridge
-    dockerfile: pmoves\services\jellyfin-bridge\Dockerfile
+    directory: pmoves/services/jellyfin-bridge
+    dockerfile: pmoves/services/jellyfin-bridge/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: gpu
         compose_key: jellyfin-bridge
@@ -1220,12 +1220,12 @@ services:
       - schema
       - topic
   - name: langextract
-    directory: pmoves\services\langextract
-    dockerfile: pmoves\services\langextract\Dockerfile
+    directory: pmoves/services/langextract
+    dockerfile: pmoves/services/langextract/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: hardened
         compose_key: langextract
@@ -1246,12 +1246,12 @@ services:
       - schema
       - topic
   - name: mai-ui-agent
-    directory: pmoves\services\mai-ui-agent
-    dockerfile: pmoves\services\mai-ui-agent\Dockerfile
+    directory: pmoves/services/mai-ui-agent
+    dockerfile: pmoves/services/mai-ui-agent/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: agents
         compose_key: mai-ui-agent
@@ -1272,12 +1272,12 @@ services:
       - schema
       - topic
   - name: media-audio
-    directory: pmoves\services\media-audio
-    dockerfile: pmoves\services\media-audio\Dockerfile
+    directory: pmoves/services/media-audio
+    dockerfile: pmoves/services/media-audio/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: hardened
         compose_key: media-audio
@@ -1302,12 +1302,12 @@ services:
       - schema
       - topic
   - name: media-video
-    directory: pmoves\services\media-video
-    dockerfile: pmoves\services\media-video\Dockerfile
+    directory: pmoves/services/media-video
+    dockerfile: pmoves/services/media-video/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: gpu
         compose_key: media-video
@@ -1336,12 +1336,12 @@ services:
       - schema
       - topic
   - name: mesh-agent
-    directory: pmoves\services\mesh-agent
-    dockerfile: pmoves\services\mesh-agent\Dockerfile
+    directory: pmoves/services/mesh-agent
+    dockerfile: pmoves/services/mesh-agent/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: agents
         compose_key: mesh-agent
@@ -1378,12 +1378,12 @@ services:
       - schema
       - topic
   - name: mesh-exposure
-    directory: pmoves\services\mesh_exposure
-    dockerfile: pmoves\services\mesh_exposure\Dockerfile
+    directory: pmoves/services/mesh_exposure
+    dockerfile: pmoves/services/mesh_exposure/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays: []
     # NOTE: no compose overlay declares this service
     guard_paths: []
@@ -1393,12 +1393,12 @@ services:
       - schema
       - topic
   - name: model-fitness-bridge
-    directory: pmoves\services\model-fitness-bridge
-    dockerfile: pmoves\services\model-fitness-bridge\Dockerfile
+    directory: pmoves/services/model-fitness-bridge
+    dockerfile: pmoves/services/model-fitness-bridge/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays: []
     # NOTE: no compose overlay declares this service
     guard_paths: []
@@ -1408,12 +1408,12 @@ services:
       - schema
       - topic
   - name: model-registry
-    directory: pmoves\services\model-registry
-    dockerfile: pmoves\services\model-registry\Dockerfile
+    directory: pmoves/services/model-registry
+    dockerfile: pmoves/services/model-registry/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: workers
         compose_key: model-registry
@@ -1430,12 +1430,12 @@ services:
       - schema
       - topic
   - name: nats-echo
-    directory: pmoves\services\nats-echo
-    dockerfile: pmoves\services\nats-echo\Dockerfile
+    directory: pmoves/services/nats-echo
+    dockerfile: pmoves/services/nats-echo/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays: []
     # NOTE: no compose overlay declares this service
     guard_paths: []
@@ -1445,12 +1445,12 @@ services:
       - schema
       - topic
   - name: nats-event-bus
-    directory: pmoves\services\nats_event_bus
-    dockerfile: pmoves\services\nats_event_bus\Dockerfile
+    directory: pmoves/services/nats_event_bus
+    dockerfile: pmoves/services/nats_event_bus/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: apps
         compose_key: nats_event_bus
@@ -1467,12 +1467,12 @@ services:
       - schema
       - topic
   - name: notebook-mcp
-    directory: pmoves\services\notebook-mcp
-    dockerfile: pmoves\services\notebook-mcp\Dockerfile
+    directory: pmoves/services/notebook-mcp
+    dockerfile: pmoves/services/notebook-mcp/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: agents
         compose_key: notebook-mcp
@@ -1489,12 +1489,12 @@ services:
       - schema
       - topic
   - name: notebook-sync
-    directory: pmoves\services\notebook-sync
-    dockerfile: pmoves\services\notebook-sync\Dockerfile
+    directory: pmoves/services/notebook-sync
+    dockerfile: pmoves/services/notebook-sync/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: hardened
         compose_key: notebook-sync
@@ -1515,12 +1515,12 @@ services:
       - schema
       - topic
   - name: notebooklm-agent
-    directory: pmoves\services\notebooklm-agent
-    dockerfile: pmoves\services\notebooklm-agent\Dockerfile
+    directory: pmoves/services/notebooklm-agent
+    dockerfile: pmoves/services/notebooklm-agent/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: agents
         compose_key: notebooklm-agent
@@ -1537,12 +1537,12 @@ services:
       - schema
       - topic
   - name: owner-presence
-    directory: pmoves\services\owner-presence
-    dockerfile: pmoves\services\owner-presence\Dockerfile
+    directory: pmoves/services/owner-presence
+    dockerfile: pmoves/services/owner-presence/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays: []
     # NOTE: no compose overlay declares this service
     guard_paths: []
@@ -1552,12 +1552,12 @@ services:
       - schema
       - topic
   - name: p7-room-orchestrator
-    directory: pmoves\services\p7-room-orchestrator
-    dockerfile: pmoves\services\p7-room-orchestrator\Dockerfile
+    directory: pmoves/services/p7-room-orchestrator
+    dockerfile: pmoves/services/p7-room-orchestrator/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: agents
         compose_key: p7-room-orchestrator
@@ -1578,12 +1578,12 @@ services:
       - schema
       - topic
   - name: pdf-ingest
-    directory: pmoves\services\pdf-ingest
-    dockerfile: pmoves\services\pdf-ingest\Dockerfile
+    directory: pmoves/services/pdf-ingest
+    dockerfile: pmoves/services/pdf-ingest/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: hardened
         compose_key: pdf-ingest
@@ -1604,12 +1604,12 @@ services:
       - schema
       - topic
   - name: persona-thirdref
-    directory: pmoves\services\persona-thirdref
-    dockerfile: pmoves\services\persona-thirdref\Dockerfile
+    directory: pmoves/services/persona-thirdref
+    dockerfile: pmoves/services/persona-thirdref/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: workers
         compose_key: persona-thirdref
@@ -1626,12 +1626,12 @@ services:
       - schema
       - topic
   - name: pinokio-bridge
-    directory: pmoves\services\pinokio_bridge
-    dockerfile: pmoves\services\pinokio_bridge\Dockerfile
+    directory: pmoves/services/pinokio_bridge
+    dockerfile: pmoves/services/pinokio_bridge/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: apps
         compose_key: pinokio_bridge
@@ -1663,12 +1663,12 @@ services:
       - schema
       - topic
   - name: pmoves-yt
-    directory: pmoves\services\pmoves-yt
-    dockerfile: pmoves\services\pmoves-yt\Dockerfile
+    directory: pmoves/services/pmoves-yt
+    dockerfile: pmoves/services/pmoves-yt/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: apps
         compose_key: pmoves-yt
@@ -1709,12 +1709,12 @@ services:
       - schema
       - topic
   - name: presign
-    directory: pmoves\services\presign
-    dockerfile: pmoves\services\presign\Dockerfile
+    directory: pmoves/services/presign
+    dockerfile: pmoves/services/presign/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: hardened
         compose_key: presign
@@ -1735,12 +1735,12 @@ services:
       - schema
       - topic
   - name: publisher
-    directory: pmoves\services\publisher
-    dockerfile: pmoves\services\publisher\Dockerfile
+    directory: pmoves/services/publisher
+    dockerfile: pmoves/services/publisher/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays: []
     # NOTE: no compose overlay declares this service
     guard_paths: []
@@ -1750,12 +1750,12 @@ services:
       - schema
       - topic
   - name: publisher-discord
-    directory: pmoves\services\publisher-discord
-    dockerfile: pmoves\services\publisher-discord\Dockerfile
+    directory: pmoves/services/publisher-discord
+    dockerfile: pmoves/services/publisher-discord/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: hardened
         compose_key: publisher-discord
@@ -1776,12 +1776,12 @@ services:
       - schema
       - topic
   - name: render-webhook
-    directory: pmoves\services\render-webhook
-    dockerfile: pmoves\services\render-webhook\Dockerfile
+    directory: pmoves/services/render-webhook
+    dockerfile: pmoves/services/render-webhook/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: hardened
         compose_key: render-webhook
@@ -1802,12 +1802,12 @@ services:
       - schema
       - topic
   - name: replay-compressor
-    directory: pmoves\services\replay-compressor
-    dockerfile: pmoves\services\replay-compressor\Dockerfile
+    directory: pmoves/services/replay-compressor
+    dockerfile: pmoves/services/replay-compressor/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays: []
     # NOTE: no compose overlay declares this service
     guard_paths: []
@@ -1817,12 +1817,12 @@ services:
       - schema
       - topic
   - name: retrieval-eval
-    directory: pmoves\services\retrieval-eval
-    dockerfile: pmoves\services\retrieval-eval\Dockerfile
+    directory: pmoves/services/retrieval-eval
+    dockerfile: pmoves/services/retrieval-eval/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: hardened
         compose_key: retrieval-eval
@@ -1843,12 +1843,12 @@ services:
       - schema
       - topic
   - name: semantic-cache
-    directory: pmoves\services\semantic-cache
-    dockerfile: pmoves\services\semantic-cache\Dockerfile
+    directory: pmoves/services/semantic-cache
+    dockerfile: pmoves/services/semantic-cache/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: cache
         compose_key: semantic-cache
@@ -1861,12 +1861,12 @@ services:
       - schema
       - topic
   - name: session-context-worker
-    directory: pmoves\services\session-context-worker
-    dockerfile: pmoves\services\session-context-worker\Dockerfile
+    directory: pmoves/services/session-context-worker
+    dockerfile: pmoves/services/session-context-worker/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: workers
         compose_key: session-context-worker
@@ -1883,12 +1883,12 @@ services:
       - schema
       - topic
   - name: shape-attestation-bridge
-    directory: pmoves\services\shape-attestation-bridge
-    dockerfile: pmoves\services\shape-attestation-bridge\Dockerfile
+    directory: pmoves/services/shape-attestation-bridge
+    dockerfile: pmoves/services/shape-attestation-bridge/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays: []
     # NOTE: no compose overlay declares this service
     guard_paths: []
@@ -1898,12 +1898,12 @@ services:
       - schema
       - topic
   - name: spark-shape-worker
-    directory: pmoves\services\spark-shape-worker
-    dockerfile: pmoves\services\spark-shape-worker\Dockerfile
+    directory: pmoves/services/spark-shape-worker
+    dockerfile: pmoves/services/spark-shape-worker/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: workers
         compose_key: spark-shape-worker
@@ -1920,12 +1920,12 @@ services:
       - schema
       - topic
   - name: sso-auth
-    directory: pmoves\services\sso-auth
-    dockerfile: pmoves\services\sso-auth\Dockerfile
+    directory: pmoves/services/sso-auth
+    dockerfile: pmoves/services/sso-auth/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: sso
         compose_key: sso-auth
@@ -1938,12 +1938,12 @@ services:
       - schema
       - topic
   - name: supaserch
-    directory: pmoves\services\supaserch
-    dockerfile: pmoves\services\supaserch\Dockerfile
+    directory: pmoves/services/supaserch
+    dockerfile: pmoves/services/supaserch/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: agents.images
         compose_key: supaserch
@@ -1968,12 +1968,12 @@ services:
       - schema
       - topic
   - name: token-stub
-    directory: pmoves\services\token-stub
-    dockerfile: pmoves\services\token-stub\Dockerfile
+    directory: pmoves/services/token-stub
+    dockerfile: pmoves/services/token-stub/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays: []
     # NOTE: no compose overlay declares this service
     guard_paths: []
@@ -1983,12 +1983,12 @@ services:
       - schema
       - topic
   - name: tokenism-simulator
-    directory: pmoves\services\tokenism-simulator
-    dockerfile: pmoves\services\tokenism-simulator\Dockerfile
+    directory: pmoves/services/tokenism-simulator
+    dockerfile: pmoves/services/tokenism-simulator/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: ui
         compose_key: tokenism-simulator
@@ -2005,12 +2005,12 @@ services:
       - schema
       - topic
   - name: vibevoice-realtime
-    directory: pmoves\services\vibevoice-realtime
-    dockerfile: pmoves\services\vibevoice-realtime\Dockerfile
+    directory: pmoves/services/vibevoice-realtime
+    dockerfile: pmoves/services/vibevoice-realtime/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays: []
     # NOTE: no compose overlay declares this service
     guard_paths: []
@@ -2020,12 +2020,12 @@ services:
       - schema
       - topic
   - name: voice-relay
-    directory: pmoves\services\voice-relay
-    dockerfile: pmoves\services\voice-relay\Dockerfile
+    directory: pmoves/services/voice-relay
+    dockerfile: pmoves/services/voice-relay/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: media
         compose_key: voice-relay
@@ -2042,12 +2042,12 @@ services:
       - schema
       - topic
   - name: voice-sampler
-    directory: pmoves\services\voice-sampler
-    dockerfile: pmoves\services\voice-sampler\Dockerfile
+    directory: pmoves/services/voice-sampler
+    dockerfile: pmoves/services/voice-sampler/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays: []
     # NOTE: no compose overlay declares this service
     guard_paths: []
@@ -2057,12 +2057,12 @@ services:
       - schema
       - topic
   - name: watch-folder-router
-    directory: pmoves\services\watch-folder-router
-    dockerfile: pmoves\services\watch-folder-router\Dockerfile
+    directory: pmoves/services/watch-folder-router
+    dockerfile: pmoves/services/watch-folder-router/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays: []
     # NOTE: no compose overlay declares this service
     guard_paths: []
@@ -2072,12 +2072,12 @@ services:
       - schema
       - topic
   - name: wealth-mcp
-    directory: pmoves\services\wealth-mcp
-    dockerfile: pmoves\services\wealth-mcp\Dockerfile
+    directory: pmoves/services/wealth-mcp
+    dockerfile: pmoves/services/wealth-mcp/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: agents
         compose_key: wealth-mcp
@@ -2094,12 +2094,12 @@ services:
       - schema
       - topic
   - name: wger-nats-bridge
-    directory: pmoves\services\wger-nats-bridge
-    dockerfile: pmoves\services\wger-nats-bridge\Dockerfile
+    directory: pmoves/services/wger-nats-bridge
+    dockerfile: pmoves/services/wger-nats-bridge/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: apps
         compose_key: wger-nats-bridge
@@ -2116,12 +2116,12 @@ services:
       - schema
       - topic
   - name: yt-cookie-refresher
-    directory: pmoves\services\yt-cookie-refresher
-    dockerfile: pmoves\services\yt-cookie-refresher\Dockerfile
+    directory: pmoves/services/yt-cookie-refresher
+    dockerfile: pmoves/services/yt-cookie-refresher/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: yt-cookies
         compose_key: yt-cookie-refresher
@@ -2134,12 +2134,12 @@ services:
       - schema
       - topic
   - name: yt-cookie-writer
-    directory: pmoves\services\yt-cookie-writer
-    dockerfile: pmoves\services\yt-cookie-writer\Dockerfile
+    directory: pmoves/services/yt-cookie-writer
+    dockerfile: pmoves/services/yt-cookie-writer/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: yt-cookies
         compose_key: yt-cookie-writer
