@@ -150,7 +150,8 @@ def _collect_overlay_service_names(repo_root: Path) -> dict:
 
     Returns {overlay_short: {service_name: [path,...]}}. Service names
     include both canonical (hyphenated) and underscore-versions found in
-    compose.
+    compose. Paths are stored as repo-relative POSIX strings so the matrix
+    is portable across machines (no operator-home directory leaks).
     """
     overlays = sorted(repo_root.glob("pmoves/docker-compose*.yml"))
     out: dict = {}
@@ -164,7 +165,12 @@ def _collect_overlay_service_names(repo_root: Path) -> dict:
             name = m.group(1)
             if name in KNOWN_TOP_LEVEL_KEYS:
                 continue
-            out.setdefault(ov_short, {}).setdefault(name, []).append(str(p))
+            rel = p
+            try:
+                rel = p.relative_to(repo_root)
+            except ValueError:
+                pass
+            out.setdefault(ov_short, {}).setdefault(name, []).append(rel.as_posix())
     return out
 
 
@@ -201,7 +207,7 @@ def _match(real_name: str, real_entry: dict, compose_name: str) -> bool:
     return False
 
 
-def _emit(real_services: dict, overlays_by_name: dict) -> str:
+def _emit(real_services: dict, overlays_by_name: dict, repo_root: Path) -> str:
     out: list = []
     out.append("# Docker Matrix - directory-first enumeration of real PMOVES services.")
     out.append("#")
@@ -235,9 +241,19 @@ def _emit(real_services: dict, overlays_by_name: dict) -> str:
     overlays = sorted(overlays_by_name.keys())
     out.append("overlays:")
     for ov in overlays:
-        # path reconstruction: pick first overlay file in overlays_by_name[ov]
+        # path reconstruction: pick first overlay file in overlays_by_name[ov],
+        # but always as a repo-relative POSIX path. Absolute paths leak the
+        # operator's home directory (see feedback_no_topology_in_commits).
         first_path = next(iter(overlays_by_name[ov].values()), [])
-        first = first_path[0] if first_path else f"pmoves/docker-compose.{ov}.yml"
+        if first_path:
+            rel = Path(first_path[0])
+            try:
+                rel = rel.relative_to(repo_root)
+            except ValueError:
+                pass
+            first = rel.as_posix()
+        else:
+            first = f"pmoves/docker-compose.{ov}.yml"
         out.append(f"  - name: {ov}")
         out.append(f"    canonical_path: {first}")
     out.append("")
@@ -268,7 +284,12 @@ def _emit(real_services: dict, overlays_by_name: dict) -> str:
                 out.append(f"        compose_key: {cn}")
                 out.append(f"        paths:")
                 for p in sorted(set(paths)):
-                    out.append(f"          - {p}")
+                    rel = Path(p)
+                    try:
+                        rel = rel.relative_to(repo_root)
+                    except ValueError:
+                        pass
+                    out.append(f"          - {rel.as_posix()}")
         else:
             out.append("    overlays: []")
             out.append(f"    # NOTE: no compose overlay declares this service")
@@ -301,7 +322,12 @@ def _emit(real_services: dict, overlays_by_name: dict) -> str:
                 out.append(f"  - overlay: {ov}")
                 out.append(f"    compose_key: {cn}")
                 for p in sorted(set(overlays_by_name[ov][cn])):
-                    out.append(f"    path: {p}")
+                    rel = Path(p)
+                    try:
+                        rel = rel.relative_to(repo_root)
+                    except ValueError:
+                        pass
+                    out.append(f"    path: {rel.as_posix()}")
     return "\n".join(out) + "\n"
 
 
@@ -317,7 +343,7 @@ def main():
         return 1
 
     args.out.parent.mkdir(parents=True, exist_ok=True)
-    args.out.write_text(_emit(real_services, overlays_by_name), encoding="utf-8")
+    args.out.write_text(_emit(real_services, overlays_by_name, args.root), encoding="utf-8")
     print(f"wrote {args.out} ({len(real_services)} real services, {len(overlays_by_name)} overlays)")
     return 0
 
