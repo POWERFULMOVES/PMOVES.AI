@@ -390,7 +390,68 @@ if (Test-Path -LiteralPath $identTool) {
                 $env:PMOVES_NODE_IDENTITY = $nodeIdent
                 $env:PMOVES_RESOLVED_IDENTITY = $nodeIdent
                 Write-Host "[claude-pmoves] node=$nodeName identity=$nodeIdent"
-                $identityArgs = @('--append-system-prompt', "You are running on PMOVES node '$nodeName'. Your registered identity in pmoves/config/agent_registry.yaml is '$nodeIdent'. Disclose it at session start rather than rediscovering it, and file claim-register rows under it.")
+                # ---------------------------------------------------------
+                # IDENTITY CARRY -- does cipher record these memories as THIS
+                # agent? Resolution without the carry is the half-wired state
+                # pmoves/tests/scripts/test_launcher_carry_parity.py exists to
+                # block, and it blocked this change until the carry landed.
+                #
+                # pm-cipher-identity.sh is the shared fragment for the eight
+                # shell launchers; its own header names "the deploy/provision
+                # delegates and their .ps1/.cmd twins" as needing this, and the
+                # parity test records that a .ps1 "cannot source a bash
+                # fragment". So the CONTRACT is mirrored, not the code: same
+                # tool, same verdict fields, same doctrine.
+                #
+                # ALWAYS LOUD, per that fragment: every path prints a line.
+                # Silence on a skip is indistinguishable from a healthy carry,
+                # which is the defect the fragment was written to end.
+                # ---------------------------------------------------------
+                $carryLine = ''
+                $carryTool = Join-Path $root 'pmoves/tools/cipher_identity.py'
+                if (-not (Test-Path -LiteralPath $carryTool)) {
+                    $carryLine = "cipher carry: unmeasurable (no $carryTool)"
+                } else {
+                    $carryArgv = @($carryTool, '--agent', $nodeIdent, '--shell')
+                    if ($identPy.Count -gt 1) { $carryArgv = @($identPy[1..($identPy.Count - 1)]) + $carryArgv }
+                    $carryOut = & $identPy[0] @carryArgv 2>$null
+                    # EXIT CODE IS A VERDICT, NOT SUCCESS/FAILURE. The tool
+                    # documents: 0 carry intact | 1 carry GAP (bootstrap /
+                    # advisory / uncarded) | 2 usage error | 3 nothing to
+                    # measure. 1 is a MEASUREMENT -- and on this node it is the
+                    # normal one, since the session has no CIPHER_API_TOKEN.
+                    # Treating it as failure would report "unmeasurable" while
+                    # holding a perfectly good verdict, which is the same
+                    # conflation of "found something" with "broke" that the
+                    # exit-code doctrine exists to prevent.
+                    $carryExit = $LASTEXITCODE
+                    if ($carryExit -ge 2 -or -not $carryOut) {
+                        $carryLine = "cipher carry: unmeasurable (cipher_identity.py exit=$carryExit)"
+                    } else {
+                        $c = @{}
+                        foreach ($line in @($carryOut)) {
+                            if ($line -match "^(PMOVES_CIPHER_[A-Z_]+)=(.*)$") {
+                                # shlex.quote output: strip one layer of single quotes
+                                $v = $Matches[2]
+                                if ($v.StartsWith("'") -and $v.EndsWith("'") -and $v.Length -ge 2) {
+                                    $v = $v.Substring(1, $v.Length - 2).Replace("'''", "'")
+                                }
+                                $c[$Matches[1]] = $v
+                            }
+                        }
+                        $mode   = $c['PMOVES_CIPHER_MODE']
+                        $carded = $c['PMOVES_CIPHER_CARDED']
+                        $eff    = $c['PMOVES_CIPHER_EFFECTIVE_ID']
+                        $landsAs = if ($eff) { $eff } else { 'advisory / self-declared' }
+                        $carryLine = "cipher carry: mode=$mode card=$carded writes-land-as=$landsAs"
+                        if ($carded -ne 'yes' -or $mode -eq 'unknown') {
+                            $carryLine += " -- why: $($c['PMOVES_CIPHER_WHY'])"
+                        }
+                    }
+                }
+                Write-Host "[claude-pmoves] $carryLine"
+
+                $identityArgs = @('--append-system-prompt', "You are running on PMOVES node '$nodeName'. Your registered identity in pmoves/config/agent_registry.yaml is '$nodeIdent'. Disclose it at session start rather than rediscovering it, and file claim-register rows under it. Cipher memory carry for this session -- $carryLine.")
             } else {
                 $w = $ident['PMOVES_IDENTITY_WHY']
                 if (-not $w) { $w = 'no reason given' }
