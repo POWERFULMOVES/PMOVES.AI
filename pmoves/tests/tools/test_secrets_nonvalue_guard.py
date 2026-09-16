@@ -125,6 +125,69 @@ def test_merge_writeback_preserves_fresh_value_when_source_is_ref(tmp_path, monk
     assert parsed["SUPABASE_JWT_SECRET"] == fresh
 
 
+def test_merge_writeback_preserves_fresh_value_on_main_s_path(tmp_path, monkeypatch):
+    """The same guarantee, exercised the way `main()` actually calls it.
+
+    The test above passes `build_outputs` no `rejected_out` and `write_env_files`
+    no `remove`, so it only proves that OMITTING a key preserves it. `main()`
+    passes both (secrets_sync.py: `rejected: Dict[str, set] = {}` ->
+    `rejected_out=rejected` -> `remove=rejected`), and a key named in `remove` is
+    DELETED from the target rather than left alone.
+
+    Measured: this test fails without the non-value branch in `build_outputs` --
+    the ref-carrying source marks SUPABASE_JWT_SECRET for removal and the fresh
+    58-char value is dropped from the tier file. That is the same data loss the
+    guard was written to prevent, arriving by deletion instead of overwrite,
+    while the operator warning says targets kept their existing values.
+    """
+    monkeypatch.setattr(secrets_sync, "PROJECT_ROOT", tmp_path)
+    fresh = "xT9mQ2vLpK4wR7zJ3nB8cD5fH1sA6yU0eG4iO2aW"
+    tier = tmp_path / "env.tier-test"
+    tier.write_text(f"SUPABASE_JWT_SECRET={fresh}\n")
+
+    entry = _entry("SUPABASE_JWT_SECRET", aliases=("JWT_SECRET",))
+    rejected: dict[str, set] = {}
+    outputs, _missing = secrets_sync.build_outputs(
+        {"SUPABASE_JWT_SECRET": "${JWT_SECRET}"},
+        [entry],
+        strict=False,
+        rejected_out=rejected,
+    )
+    secrets_sync.write_env_files(outputs, merge=True, remove=rejected)
+
+    parsed = _parse_strict(tier.read_text())
+    assert parsed["SUPABASE_JWT_SECRET"] == fresh, (
+        "a ${VAR} ref must not delete the fresh value it failed to replace"
+    )
+
+
+def test_cleared_secret_is_still_removed(tmp_path, monkeypatch):
+    """The other half: preserving non-values must NOT resurrect cleared ones.
+
+    `_first_usable` returns None for absent/blank too, and for those "omission is
+    not removal" still holds -- clearing CIPHER_API_TOKEN in env.shared must
+    actually clear it downstream. This pins that the non-value fix did not widen
+    into a blanket preserve.
+    """
+    monkeypatch.setattr(secrets_sync, "PROJECT_ROOT", tmp_path)
+    tier = tmp_path / "env.tier-test"
+    tier.write_text("SUPABASE_JWT_SECRET=stale-value-to-be-cleared\n")
+
+    entry = _entry("SUPABASE_JWT_SECRET", aliases=("JWT_SECRET",))
+    rejected: dict[str, set] = {}
+    outputs, _missing = secrets_sync.build_outputs(
+        {"SUPABASE_JWT_SECRET": ""},
+        [entry],
+        strict=False,
+        rejected_out=rejected,
+    )
+    secrets_sync.write_env_files(outputs, merge=True, remove=rejected)
+
+    assert "SUPABASE_JWT_SECRET" not in _parse_strict(tier.read_text()), (
+        "a cleared secret must still be removed -- omission is not removal"
+    )
+
+
 def _parse_strict(text: str) -> dict[str, str]:
     out: dict[str, str] = {}
     for line in text.splitlines():
