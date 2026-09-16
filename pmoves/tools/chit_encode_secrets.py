@@ -111,7 +111,27 @@ def main() -> None:
         # Names only, by design: an operator must know WHICH keys were refused,
         # and no value (nor any span of one) is ever emitted here. Reviewed —
         # the map's keys are configuration names, not credential material.
-        print(  # codeql[python/clear-text-logging-of-sensitive-information]
+        # NOT SUPPRESSED, and deliberately not pretending to be. The marker
+        # that stood here read `# codeql[python/clear-text-logging-of-sensitive-
+        # information]`, which is wrong twice: the rule is
+        # `py/clear-text-logging-sensitive-data` (measured from the live alert),
+        # and GitHub code scanning does not honour inline CodeQL suppression
+        # comments at all -- .github/codeql-config.yml carries only paths-ignore,
+        # no query-filters. A marker that silences nothing while reading as
+        # handled is worse than no marker: the next reader stops looking.
+        #
+        # WHY THE ALERT IS A FALSE POSITIVE: `nonvalues` is built from KEYS
+        # only -- (key for key, value in secrets.items() if is_placeholder(value))
+        # -- and `value` appears solely in the predicate; it is never stored or
+        # emitted. CodeQL taints the comprehension because it reads a secret map,
+        # not because a secret reaches the sink. And is_placeholder(value) being
+        # true means the value is empty, an unexpanded ${VAR} ref, or a
+        # PLACEHOLDER_* literal -- by definition not credential material.
+        #
+        # The operator MUST see which keys were refused, or the funnel drops
+        # them silently. Resolution is an alert dismissal (a security-audit
+        # action, operator-owned), not a code change.
+        print(
             f"WARNING: excluded {len(nonvalues)} non-value key(s) from the CGP "
             f"(empty, ${{VAR}} ref, or placeholder literal): {', '.join(sorted(nonvalues))}. "
             "Set real values in the env file before exporting.",
