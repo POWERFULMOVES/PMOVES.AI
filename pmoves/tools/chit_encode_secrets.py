@@ -108,9 +108,12 @@ def main() -> None:
     for key in nonvalues:
         del secrets[key]
     if nonvalues:
-        print(
+        # Names only, by design: an operator must know WHICH keys were refused,
+        # and no value (nor any span of one) is ever emitted here. Reviewed —
+        # the map's keys are configuration names, not credential material.
+        print(  # codeql[python/clear-text-logging-of-sensitive-information]
             f"WARNING: excluded {len(nonvalues)} non-value key(s) from the CGP "
-            f"(empty, ${{VAR}} ref, or placeholder literal): {', '.join(nonvalues)}. "
+            f"(empty, ${{VAR}} ref, or placeholder literal): {', '.join(sorted(nonvalues))}. "
             "Set real values in the env file before exporting.",
             file=sys.stderr,
         )
