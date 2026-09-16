@@ -260,6 +260,66 @@ function Test-PmovesRosterHasBarePlaceholder {
 # this happened.
 #   PMOVES_ROSTER_FROM_TREE=1  use the working tree (editing the roster itself)
 # ---------------------------------------------------------------------------
+# TAILNET NODE ADDRESSES -- the second thing the POSIX twin does and this file
+# did not, with a measurable cost on this node.
+#
+# .claude/mcp.json addresses two MCP servers by tailnet name:
+#     pmoves-cipher  -> ${TS_Z890}
+#     agent-zero     -> ${TS_Z890}
+# deploy/provision/claude-pmoves.sh sources pmoves/scripts/tailscale-node-ips.sh
+# to resolve those. This file never did, so on Windows TS_Z890 stayed unset and
+# the roster normalizer DROPPED both servers. Measured on Z890 2026-09-16, from
+# this launcher's own output:
+#     [claude-pmoves] WARN: dropping MCP server 'pmoves-cipher'
+#                     unset variable(s): TS_Z890
+# The bash helper's header already recorded this exact drift shipping here --
+# "the same roster resolved under Crush and stayed literal under Claude" -- and
+# the Windows half was the half left open.
+#
+# PORTED, NOT SHELLED OUT: invoking the .sh would need a bash on PATH, and a
+# launcher that silently depends on Git Bash to reach its own memory service is
+# the same class of hidden dependency. The mapping is small and lives beside its
+# twin; test-launcher-root-resolution.sh is the existing pattern for keeping
+# paired launchers honest.
+#
+# Addresses are 100.64/10 CGNAT and MUST stay runtime-derived -- the helper's
+# header says baking one in would leak topology into a public tree and rot on
+# re-registration. Nothing is hardcoded here.
+#
+# An already-set value WINS, matching _pm_ts_set: an operator pin beats the
+# tailnet. Best-effort throughout -- no tailscale CLI just means unset, and the
+# normalizer's existing drop-with-a-warning path still applies.
+# ---------------------------------------------------------------------------
+if (Get-Command tailscale -ErrorAction SilentlyContinue) {
+    # Prefix match for b850 (`pmoves-b850-*`), exact for the rest -- same shape
+    # as the case statement in tailscale-node-ips.sh.
+    $tsExact = @{
+        'pmoves-z890'   = 'TS_Z890'
+        'pmoves-5090'   = 'TS_5090'
+        'pmoves-4090'   = 'TS_4090'
+        'pmoves-spark'  = 'TS_SPARK'
+        'pmoves-kvm4-1' = 'TS_KVM4_1'
+        'pmoves-kvm4-2' = 'TS_KVM4_2'
+        'pmoves-kvm2'   = 'TS_KVM2'
+    }
+    try {
+        foreach ($line in @(tailscale status 2>$null)) {
+            $f = -split $line
+            if ($f.Count -lt 2) { continue }
+            $ip = $f[0]; $host_ = $f[1]
+            $var = $null
+            if ($tsExact.ContainsKey($host_)) { $var = $tsExact[$host_] }
+            elseif ($host_ -like 'pmoves-b850-*') { $var = 'TS_B850' }
+            if (-not $var) { continue }
+            # already set wins
+            if ([Environment]::GetEnvironmentVariable($var)) { continue }
+            [Environment]::SetEnvironmentVariable($var, $ip, 'Process')
+        }
+    } catch {
+        Write-Warning '[claude-pmoves] tailnet addresses: tailscale status failed; cross-node MCP servers may be dropped.'
+    }
+}
+# ---------------------------------------------------------------------------
 # NODE IDENTITY -- the Windows half of a binding that only ever ran on POSIX.
 #
 # pmoves/scripts/claude-pmoves.sh resolves the node's registered identity and
