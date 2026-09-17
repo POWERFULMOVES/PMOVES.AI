@@ -556,6 +556,10 @@ volumes:
   # volume from the legacy `nats` service so the two never share JetStream
   # state during cutover (spec §9: phased, each independently testable).
   pmoves-nats-hub-js: {}
+  # Legacy `nats` JetStream store. Added 2026-09-15: the service ran with no
+  # volume, so JetStream lived in the container's /tmp and every recreate
+  # silently discarded durable streams.
+  pmoves-nats-js: {}
 secrets:
   # ── NATS hub trust material (profile: nats-hub) — funnel-rendered (spec §8) ──
   # resolver_preload: PUBLIC nsc-minted account JWTs (SYS/CORE/EDGE/CLOUD) —
