@@ -5850,6 +5850,10 @@ cipher-mint-token: ## Mint a per-agent cipher token (requires an ACTIVE signing 
 	@if [ -z "$(AGENT)" ]; then echo "Usage: make -C pmoves cipher-mint-token AGENT=z890-claude [SCOPES='memory:read,memory:write']"; exit 1; fi
 	@$(PYTHON) $(CURDIR)/scripts/mint_cipher_token.py --agent "$(AGENT)" --scopes "$(or $(SCOPES),$(CIPHER_MINT_DEFAULT_SCOPES))"
 
+cipher-revoke-token: ## Retire an agent's cipher tokens (sets revoked_at; auth.ts already rejects them): AGENT=z890-claude [TOKEN_UUID=... DRY_RUN=1]
+	@if [ -z "$(AGENT)" ]; then echo "Usage: make -C pmoves cipher-revoke-token AGENT=z890-claude [TOKEN_UUID=<one> DRY_RUN=1]"; exit 1; fi
+	@$(PYTHON) $(CURDIR)/scripts/revoke_cipher_token.py --agent "$(AGENT)" $(if $(TOKEN_UUID),--token-uuid "$(TOKEN_UUID)",) $(if $(DRY_RUN),--dry-run,)
+
 .PHONY: beats-analyze beats-hyperdim beats-pipeline
 beats-analyze: ## Re-run DARKXSIDE sonic fingerprint analysis (librosa + ffmpeg lavfi)
 	@echo "[beats] Running sonic fingerprint analysis (glaze mode)..."

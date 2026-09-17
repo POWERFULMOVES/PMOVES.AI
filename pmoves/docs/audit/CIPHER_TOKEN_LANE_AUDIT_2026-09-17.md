@@ -69,3 +69,72 @@ A revoke surface needs decisions this audit does not make: per-token or
 per-agent; who may perform it; whether it writes `cipher_access_log`; whether it
 is an endpoint (matching the unbuilt `:82` pattern) or a make target. Those are
 design choices, and the design doc's silence is the gap — not the missing code.
+
+---
+
+## Addendum — upstream provenance, and the pattern is repo-wide
+
+Added after research (`cipher-provenance`), then re-verified locally. The rule
+applied: *the specs are set by the parts it is comprised of* — provenance docs,
+example code, the code it was built from.
+
+### Upstream has no revoke to inherit
+
+| | |
+|---|---|
+| upstream | `campfirein/cipher`, rebranded **ByteRover CLI** (`byterover-cli` v3.16.1) |
+| fork distance | 798 ahead / 3097 behind; the "ahead" commits are **stale upstream code, not PMOVES work** (`TAC_CIPHER.md:260`) |
+| genuine PMOVES additions | 6 commits on fork `main` + 2 on `PMOVES.AI-Edition-Hardened` |
+
+Upstream **does** ship auth — `token-store.ts`, OAuth/OIDC, PKCE, refresh
+exchange — but for ByteRover's own SaaS login, not the REST surface.
+`TAC_CIPHER.md:273` states the split outright:
+
+> `Auth | Bearer middleware (PMOVES-added) | OAuth + API key for ByteRover cloud sync (not REST middleware)`
+
+And upstream has **no revoke concept either**: `ITokenStore` exposes only
+`clear/load/save`; `brv logout` hard-clears the local credential file. There is
+no "retire this token while others stay live" anywhere upstream. So the PMOVES
+REST auth surface — and its revocation — is PMOVES-owned end to end. There was
+no upstream pattern to match, which is why inventing one here is correct rather
+than presumptuous.
+
+### FOUR parts specify revocation; the doc was the outlier
+
+| part | anchor |
+|---|---|
+| column | `20260728100000:10` `revoked_at TIMESTAMPTZ NULL` |
+| index **built for it** | `:19-21` `ON (agent_id, revoked_at)` — *"Agent index for audit and revocation"* |
+| middleware enforces it | `auth.ts:68` filter + `:122` 401 |
+| **grant permits it** | `:48` `GRANT SELECT, INSERT, UPDATE, DELETE` — **issuance alone never needs UPDATE** |
+
+`TAC_CIPHER_VILLAGE.md` mentions revocation once, as a column name. Four parts
+against one passing mention: the parts are the spec.
+
+### The gap is repo-wide, not a cipher quirk
+
+Three tables declare `revoked_at` and, before this change, **nothing in the tree
+ever set any of them**:
+
+- `20250108000000_remote_access.sql:141`
+- `20260802000000_voice_cloning_provenance.sql:39-40` (also `revoked_reason`)
+- `20260728100000_cipher_agent_tokens.sql:10`
+
+Verified: the only writer of `revoked_at` anywhere is
+`pmoves/scripts/revoke_cipher_token.py`, added here. Soft-revocation was
+designed three times and implemented zero times. The other two remain open and
+are **not** closed by this change.
+
+### Prior art checked and deliberately NOT copied
+
+`yt_oauth_flow.py:561-584` (`cmd_revoke`) revokes at the external IdP and then
+**hard-deletes** the row. That is a different pattern and the wrong one here:
+cipher's schema keeps the row and stamps `revoked_at`, which is what preserves
+*when* a credential was retired — the one fact a compromise audit needs.
+
+### Open, and not decided here
+
+`cipher_access_log` is granted `SELECT, INSERT` only (append-only by grant).
+Whether a revocation should write an event there is undecided: the table
+documents *"authenticated cipher tool usage"*, and an operator revoking a token
+is not that. Left for the operator rather than assumed.
