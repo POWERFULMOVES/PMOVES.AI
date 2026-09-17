@@ -113,53 +113,21 @@ fi
 # this file keeps having to fix, so the reason is always printed.
 # ---------------------------------------------------------------------------
 IDENTITY_ARGS=()
-IDENT_TOOL="$ROOT/pmoves/tools/node_identity.py"
-# Shared discovery (pm-python.sh), not a scalar `python`: on hosts where only
-# python3 exists, or where python lacks PyYAML while .venv-pmoves has it, the
-# scalar form silently never ran the resolver and sessions launched unbound —
-# the exact gap #2763 fixed for crush-pmoves, which this launcher then still
-# carried (pair-review finding on #2769).
-# shellcheck source=./pm-python.sh
-. "$ROOT/pmoves/scripts/pm-python.sh"
-IDENT_PY=()
-if [ -f "$IDENT_TOOL" ] && pm_pick_python yaml; then
-  IDENT_PY=("${PM_PY[@]}")
-fi
-# The resolver reads the process env, but this launcher runs BEFORE the harness
-# loads .claude/settings.local.json. So a node whose HOSTNAME collides — the 5090,
-# whose POWERFULMOVES casefolds onto the `powerfulmoves` org vocabulary entry
-# (kind=unresolved) — resolves to nothing and fail-opens to an unbound session,
-# even though its identity is declared in settings.local.json's env block. Read
-# PMOVES_NODE_ID from that SAME block so declaring it once binds both the launcher
-# and the session. A shell env value still wins if already set (kept parity with
-# claude-pmoves.bat; node_identity.py invocation below is unchanged).
-if [ -z "${PMOVES_NODE_ID:-}" ] && [ ${#IDENT_PY[@]} -gt 0 ] && [ -f "$ROOT/.claude/settings.local.json" ]; then
-  _sid="$("${IDENT_PY[@]}" -c 'import json,sys;print((json.load(open(sys.argv[1])).get("env") or {}).get("PMOVES_NODE_ID","") or "")' "$ROOT/.claude/settings.local.json" 2>/dev/null || true)"
-  [ -n "$_sid" ] && export PMOVES_NODE_ID="$_sid"
-  unset _sid
-fi
-if [ -f "$IDENT_TOOL" ] && [ ${#IDENT_PY[@]} -gt 0 ]; then
-  if IDENT_OUT="$("${IDENT_PY[@]}" "$IDENT_TOOL" --harness claude-code --shell 2>/dev/null)"; then
-    # The tool emits PMOVES_RESOLVED_IDENTITY, not PMOVES_NODE_IDENTITY: the
-    # latter is the operator's INPUT override, and a resolver that answers under
-    # the same name it reads cannot be called twice safely.
-    eval "$IDENT_OUT"
-    PMOVES_NODE_IDENTITY="${PMOVES_RESOLVED_IDENTITY:-}"
-    export PMOVES_NODE PMOVES_NODE_IDENTITY
-    if [ -n "${PMOVES_NODE_IDENTITY:-}" ]; then
-      echo "[claude-pmoves] node=${PMOVES_NODE} identity=${PMOVES_NODE_IDENTITY} agent=${AGENT}" >&2
-      # Put it where the session can actually READ it. Exported variables do
-      # not reach the model's context; an appended system prompt does. This is
-      # the difference between the identity existing and the identity working.
-      IDENTITY_ARGS=(--append-system-prompt "You are running on PMOVES node '${PMOVES_NODE}'. Your registered identity in pmoves/config/agent_registry.yaml is '${PMOVES_NODE_IDENTITY}'. Disclose it at session start rather than rediscovering it. Your selected role for this session is the '${AGENT}' agent.")
-    else
-      echo "[claude-pmoves] node=${PMOVES_NODE:-unknown} identity=unresolved: ${PMOVES_IDENTITY_WHY:-no reason given}" >&2
-    fi
-  else
-    echo "[claude-pmoves] node identity: $IDENT_TOOL failed; launching without it." >&2
-  fi
-elif [ -f "$IDENT_TOOL" ]; then
-  echo "[claude-pmoves] node identity: no usable python found (tried .venv-pmoves, python3, py -3, python — yaml required); launching without it." >&2
+# Resolution moved to the shared fragment (2026-09-16). It was ~35 lines here and
+# again in crush-pmoves, and nowhere in the other seven launchers -- the same
+# shape pm-python.sh and pm-cipher-identity.sh were extracted for. The behaviour
+# is unchanged: same tool, same --harness, same settings.local.json read, same
+# fail-open-loudly rule. See pmoves/scripts/pm-node-identity.sh.
+# shellcheck source=./pm-node-identity.sh
+. "$ROOT/pmoves/scripts/pm-node-identity.sh"
+pm_node_identity "$ROOT" claude-code claude-pmoves || true
+IDENT_PY=(${PM_IDENT_PY[@]+"${PM_IDENT_PY[@]}"})
+echo "${PM_IDENT_LINE}" >&2
+if [ "${PM_IDENT_OK:-0}" = "1" ]; then
+  # Put it where the session can actually READ it. Exported variables do not
+  # reach the model's context; an appended system prompt does. This is the
+  # difference between the identity existing and the identity working.
+  IDENTITY_ARGS=(--append-system-prompt "You are running on PMOVES node '${PMOVES_NODE}'. Your registered identity in pmoves/config/agent_registry.yaml is '${PMOVES_NODE_IDENTITY}'. Disclose it at session start rather than rediscovering it. Your selected role for this session is the '${AGENT}' agent.")
 fi
 
 # CIPHER — persistent memory. Same reasoning as the identity block above: the
