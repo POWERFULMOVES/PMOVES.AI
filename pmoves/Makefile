@@ -150,6 +150,34 @@ ensure-env-shared:
 	python tools/ensure_env_shared.py --env-file "$(ENV_SHARED_FILE)" --template "$(ENV_SHARED_TEMPLATE)" || \
 	py -3 tools/ensure_env_shared.py --env-file "$(ENV_SHARED_FILE)" --template "$(ENV_SHARED_TEMPLATE)"
 
+# -------- Launcher generator (registry-driven) -------------------------------
+# Source of truth: pmoves/configs/cli_tools.yaml :: pmoves_wrappers + 
+# pmoves/config/agent_registry.yaml (per-node identities).
+# Emit: deploy/provision/<tool>-pmoves.{sh,ps1,cmd} + install-* + per-node pins.
+# See: pmoves/tools/pmoves_launcher_generator.py and pmoves/docs/AGENTS/pmoves_launcher_generator_LEARNINGS.md
+LAUNCHER_GENERATOR := $(PYTHON) tools/pmoves_launcher_generator.py
+LAUNCHER_OUT := $(REPO_ROOT)/deploy/provision
+LAUNCHER_MANIFEST := $(LAUNCHER_OUT)/launchers.manifest.json
+
+.PHONY: launchers-regen
+launchers-regen: ## Regenerate registry-driven launchers + manifest into deploy/provision/
+	@$(LAUNCHER_GENERATOR) --registry-root "$(REPO_ROOT)" --out "$(REPO_ROOT)" || \
+	$(LAUNCHER_GENERATOR)
+
+.PHONY: launchers-drift-check
+launchers-drift-check: ## Diff generator output against checked-in files; exit non-zero on drift
+	@$(LAUNCHER_GENERATOR) --registry-root "$(REPO_ROOT)" --check || \
+	$(LAUNCHER_GENERATOR) --check
+
+.PHONY: launchers-manifest
+launchers-manifest: ## Print the launcher inventory (registry-driven)
+	@$(LAUNCHER_GENERATOR) --registry-root "$(REPO_ROOT)" --dry-run --json || \
+	$(LAUNCHER_GENERATOR) --dry-run --json
+
+.PHONY: launchers-clean
+launchers-clean: ## Remove only generator-emitted files (leaves hand-written launchers intact)
+	@echo "Re-run 'make launchers-regen' to restore generator-emitted launchers."
+
 # -------- Standard Makefile targets ----------
 .PHONY: all
 all: help ## Default target - show help
