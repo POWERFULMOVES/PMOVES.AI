@@ -73,7 +73,15 @@ Resolved measurement gaps (2026-09-17):
 | E | spynel-entry | planned | operator | Publish `PMOVES-Spynel` as a registry entry per CONTRIBUTING.md (id/version/license_url/icon/distribution). Publishing fleet tooling publicly is an operator call. |
 | F | fork-sync-posture | planned | crush | `fork_registry.json` says `sync: true`; upstream's hourly version cron means constant drift. Verify `fleet-fork-sync` covers this fork; confirm the nightly matrix cross-check lands in the fleet sync report. |
 
-## Key Commands
+## Related Lanes (checked against remote 2026-09-17)
+
+| PR | Lane | Relationship |
+|----|------|--------------|
+| #3095 | test ratchets: kilo binary-path chain + minimax/Mavis 240s timeout | **Same subject, complementary angle.** Their ratchets assert the npm→shim→binary dispatch chain exists and `--version` answers; our probe proves the registry archive speaks the full ACP handshake. Their open question (platform vs upstream) is answered by our root cause: Node ≥ 22.19 engine gate (host: 22.17.1) + DNS EAI_FAIL — posted on the PR. |
+| #3092 | registry-driven launcher generator (`deploy/provision/` trio per node) | Fleet launcher-fabric side; zero file overlap with this lane. Future consumer candidate for `acp_registry_map.json` — generator input manifest is PMOVES-side today. |
+| #3094 | launcher dispatch parity (`pmoves/scripts/*-pmoves*` + damage-control hooks) | Adjacent (spawn wrappers), no overlap. |
+| #3089 | topology docker-matrix relative paths | Shares the "no machine-local state in tracked artifacts" doctrine; the probe/map artifacts follow the same portability rule. |
+
 
 ```bash
 # sibling clone (once per node)
