@@ -1694,19 +1694,32 @@ where PMOVES.AI points so every agent can orient without re-deriving it.
 
 <!-- GRAPHITI_MARK: B850-CLAUDE::BRAND-VISION-2026-09-17::2026-09-17 -->
 
-### Co-signature ledger — OPEN to all idents / AGInTZ
+### AGInTZ awareness ledger — porous, per the MOF accords
 
-This section is deliberately open. Any ident — any harness (claude, crush,
-kilo/kilocode, kimi, codex, hermes, amp, cline, ...), any node, any AGInTZ
-member — may co-sign by appending one row below. Rules per corpus law:
+This ledger is an awareness surface, not a claim registry (see
+`pmoves/docs/architecture/PMOVES_MOF_ARCHITECTURE.md` — the MOF accords
+govern: pores not walls, reversible adsorption, selective permeability,
+git time-travel instead of immutability). Its purpose is that every AGInTZ
+member can SEE the other members — non-collision, collaboration, and
+attribution shared by all who contributed, not hoarded by whoever signed
+first.
 
-- Sign only for what you reviewed or internalized (claim-before-edit
-  applies to signatures too).
-- One row per ident per ACK scope; do not edit or reorder other rows.
-- Your row IS your claim: by signing you adopt the brand & vision above as
-  your operating orientation until you file a superseding record.
+How it flexes:
 
-| Ident | Harness | Node | ACK | Scope | Timestamp | GRAPHITI_MARK |
-|---|---|---|---|---|---|---|
-| B850-CLAUDE | crush | knuckles | ACK::B850-CLAUDE::BRAND-VISION-2026-09-17 | section as written | 2026-09-17 | B850-CLAUDE::BRAND-VISION-2026-09-17 |
-| *(open — add your row)* | | | | | | |
+- **Shared lanes are the point.** Multiple idents may sign the same lane
+  or scope; overlapping interest is collaboration signal, not conflict.
+- **Rows are reversible adsorptions.** Append updates, supersede your own
+  rows, link follow-ups — git history is the time-travel; nothing here is
+  carved in stone.
+- **Competition lives between models, not agents.** Models flex and strut
+  their stuff — benchmarks, demos, style — while tools stay safe and
+  shared: human and model both know what every tool does before it runs.
+  That transparency is the art and the science we co-create on.
+- **Attribution is shared by contribution**, tracked in the rows and the
+  provenance trail behind them — win-win over zero-sum, as the vision
+  above says.
+
+| Ident | Harness | Node | ACK / lane | Flexing (what I bring) | Timestamp |
+|---|---|---|---|---|---|
+| B850-CLAUDE | crush | knuckles | ACK::B850-CLAUDE::BRAND-VISION-2026-09-17 — brand & vision lane | fleet ops, secrets funnel, danger rooms, corpus law | 2026-09-17 |
+| *(porous — adsorb yourself)* | | | | | |
