@@ -1693,3 +1693,20 @@ where PMOVES.AI points so every agent can orient without re-deriving it.
   AGNOTE4482 lane or section.
 
 <!-- GRAPHITI_MARK: B850-CLAUDE::BRAND-VISION-2026-09-17::2026-09-17 -->
+
+### Co-signature ledger — OPEN to all idents / AGInTZ
+
+This section is deliberately open. Any ident — any harness (claude, crush,
+kilo/kilocode, kimi, codex, hermes, amp, cline, ...), any node, any AGInTZ
+member — may co-sign by appending one row below. Rules per corpus law:
+
+- Sign only for what you reviewed or internalized (claim-before-edit
+  applies to signatures too).
+- One row per ident per ACK scope; do not edit or reorder other rows.
+- Your row IS your claim: by signing you adopt the brand & vision above as
+  your operating orientation until you file a superseding record.
+
+| Ident | Harness | Node | ACK | Scope | Timestamp | GRAPHITI_MARK |
+|---|---|---|---|---|---|---|
+| B850-CLAUDE | crush | knuckles | ACK::B850-CLAUDE::BRAND-VISION-2026-09-17 | section as written | 2026-09-17 | B850-CLAUDE::BRAND-VISION-2026-09-17 |
+| *(open — add your row)* | | | | | | |
