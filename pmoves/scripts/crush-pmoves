@@ -44,6 +44,36 @@ pm_node_identity "$REPO_ROOT" crush crush-pmoves || true
 IDENT_PY=(${PM_IDENT_PY[@]+"${PM_IDENT_PY[@]}"})
 echo "${PM_IDENT_LINE}" >&2
 mkdir -p "$(dirname "$IDENTITY_FILE")"
+
+# EVERY BRANCH WRITES. crush reads its context from this file, so a path that
+# skips the write leaves the PREVIOUS launch's identity sitting in front of the
+# model -- a confidently wrong identity, which is worse than none.
+#
+# Regression caught by tests/test_crush_node_identity.py on the first cut of the
+# fragment migration: extracting resolution dropped the write count from 4 to 1,
+# because the resolver-failed and resolver-unavailable branches each carried
+# their own write and the extraction took them with it. The fragment always sets
+# PM_IDENT_OK and PM_IDENT_LINE precisely so the caller can branch here instead.
+if [ "${PM_IDENT_OK:-0}" = "1" ]; then
+  {
+    echo "# Node identity (generated at launch)"
+    echo ""
+    echo "You are running on PMOVES node \`${PMOVES_NODE}\`."
+    echo "Your registered identity in \`pmoves/config/agent_registry.yaml\` is \`${PMOVES_NODE_IDENTITY}\`."
+    echo "Disclose it at session start rather than rediscovering it."
+  } > "$IDENTITY_FILE"
+else
+  # The reason, not just the absence: an unbound session is recoverable, a
+  # silent one is not. PM_IDENT_LINE already carries why.
+  {
+    echo "# Node identity (generated at launch) — UNRESOLVED; launching unbound."
+    echo ""
+    echo "${PM_IDENT_LINE}"
+    echo ""
+    echo "Declare one in \`pmoves/configs/node-vocabulary.yaml\` (\`default_identity.crush\`)"
+    echo "or set PMOVES_NODE_IDENTITY — do not guess an identity."
+  } > "$IDENTITY_FILE"
+fi
 # The block above tells crush who it IS. It does not say who cipher will think
 # it is, and those have been different on every node: auth.ts:46 @ e24f1323
 # forks on a 'cipher_' bearer prefix, and without it every write is filed under
