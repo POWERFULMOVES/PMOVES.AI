@@ -5,7 +5,7 @@
 # DO NOT EDIT BY HAND -- your changes will be overwritten by the next regen.
 # If you need a per-CLI customisation, add it to launcher_overrides.yaml
 # (pmoves/configs/launcher_overrides.yaml), not to this file.
-# kilo-pmoves.sh -- launch `kilo-pmoves` with pmoves/env.shared loaded
+# kilo-pmoves.sh -- launch `kilo` with pmoves/env.shared loaded
 # ===========================================================================
 # Auto-generated wrapper for kilo-pmoves. Mirrors the hand-written
 # claude-pmoves.sh / crush-pmoves.sh SHELL pattern (resolve repo root via
@@ -48,6 +48,35 @@ if [ ! -f "${ROOT:-/nonexistent}/pmoves/Makefile" ]; then
     echo "[kilo-pmoves]        (resolved from: $SELF)" >&2
     exit 1
   fi
+fi
+
+# --- MAVIS SDK ENV STRIP ---------------------------------------------------
+# The Mavis SDK's `env` block in `~/.claude/settings.json` injects
+# ANTHROPIC_BASE_URL, ANTHROPIC_AUTH_TOKEN, ANTHROPIC_MODEL, MCP_TIMEOUT,
+# API_TIMEOUT_MS, CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC, ... into every
+# Claude Code session's process env.  That env block is inherited by the
+# shell that runs this launcher, and would otherwise be inherited by the
+# launched `kilo` -- overriding the operator's own CLI settings
+# (their API endpoint, their model picker).
+#
+# The strip checks each Mavis SDK var against `kilo`'s NEEDS list
+# (defined in pmoves/scripts/mavis_sdk_env.sh alongside this comment):
+#   * keeps the ones `kilo` consumes
+#   * preserves the others under PMOVES_MAVIS_SDK_<NAME> for inspection
+#   * unsets the originals
+#   * emits one WARN line summarizing what was caught
+#
+# Sourced AFTER repo-root resolution (helper file is repo-relative) and
+# BEFORE env.shared loading (the env.shared reader below has a parallel
+# blocklist for env.shared itself; the two layers cover the SHELL env and
+# env.shared independently).
+# ---------------------------------------------------------------------------
+if [ -f "$ROOT/pmoves/scripts/mavis_sdk_env.sh" ]; then
+  # shellcheck source=../../pmoves/scripts/mavis_sdk_env.sh
+  . "$ROOT/pmoves/scripts/mavis_sdk_env.sh"
+  mavis_sdk_strip_env_for "kilo"
+else
+  echo "[kilo-pmoves] WARN: mavis_sdk_env.sh not found at $ROOT/pmoves/scripts/ -- Mavis SDK env may bleed into the launched session." >&2
 fi
 
 # --- ENV.SHARED LOADING (mirror claude-pmoves.sh :: lines 72-127) -----------
@@ -106,4 +135,4 @@ fi
 
 # --- LAUNCH ---------------------------------------------------------------
 export PMOVES_LAUNCHER_SESSION="kilo-pmoves.sh"
-exec kilo-pmoves "$@"
+exec kilo "$@"

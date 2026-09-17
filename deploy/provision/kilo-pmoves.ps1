@@ -5,7 +5,7 @@
 # DO NOT EDIT BY HAND -- your changes will be overwritten by the next regen.
 # If you need a per-CLI customisation, add it to launcher_overrides.yaml
 # (pmoves/configs/launcher_overrides.yaml), not to this file.
-# kilo-pmoves.ps1 -- launch `kilo-pmoves` with pmoves/env.shared loaded
+# kilo-pmoves.ps1 -- launch `kilo` with pmoves/env.shared loaded
 # ===========================================================================
 # Auto-generated PowerShell twin of kilo-pmoves.sh. Same shell
 # pattern as the hand-written claude-pmoves.ps1 / crush-pmoves.ps1:
@@ -27,11 +27,26 @@ $envf = if ($env:PMOVES_ENV_SHARED) { $env:PMOVES_ENV_SHARED } else { Join-Path 
 
 if (Test-Path $envf) {
     # Per-CLI blocklist (mirrors DEFAULT_BLOCKLIST_BY_TOOL in pmoves_launcher_generator.py).
-    # These control the kilo-pmoves SDK itself, not MCP creds -- sourcing them would
+    # These control the kilo SDK itself, not MCP creds -- sourcing them would
     # clobber session state or force API billing.
     $blocklist = @(
         # (no blocklist entries -- this CLI sources every var from env.shared)
     ) -replace '\*', '.*'
+
+    # Mavis SDK env strip -- dot-source pmoves/scripts/mavis_sdk_env.ps1
+    # (PowerShell twin of mavis_sdk_env.sh) and apply the per-CLI needs
+    # check. The strip happens BEFORE env.shared is read, because the
+    # SHELL env (parent process) and env.shared (PMOVES fleet creds) are
+    # independent layers -- the blocklist above handles env.shared, this
+    # strip handles SHELL vars that came in from the operator's parent
+    # process (typically the Mavis `~/.claude/settings.json` env block).
+    $mavis_helper = Join-Path $root 'pmoves\scripts\mavis_sdk_env.ps1'
+    if (Test-Path $mavis_helper) {
+        . $mavis_helper
+        Strip-MavisSdkEnvFor -CliName 'kilo'
+    } else {
+        Write-Warning "[kilo-pmoves] mavis_sdk_env.ps1 not found at $mavis_helper -- Mavis SDK env may bleed into the launched session."
+    }
 
     # Pass 1: read KEY=VALUE verbatim into an ordered map, skipping blocklisted keys.
     $vars = [ordered]@{}
@@ -87,4 +102,4 @@ if (Test-Path $envf) {
 # (no name bridges for this CLI)
 
 # --- LAUNCH ---------------------------------------------------------------
-& kilo-pmoves @args
+& kilo @args

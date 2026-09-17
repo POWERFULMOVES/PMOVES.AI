@@ -5,7 +5,7 @@ REM Drift check:   python pmoves/tools/pmoves_launcher_generator.py --check
 REM DO NOT EDIT BY HAND -- your changes will be overwritten by the next regen.
 REM If you need a per-CLI customisation, add it to launcher_overrides.yaml
 REM (pmoves/configs/launcher_overrides.yaml), not to this file.
-REM hermes-pmoves.cmd -- double-click / run to launch `hermes-pmoves`
+REM hermes-pmoves.cmd -- double-click / run to launch `hermes`
 REM with pmoves/env.shared loaded. Wraps the .ps1.
 @echo off
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0hermes-pmoves.ps1" %*

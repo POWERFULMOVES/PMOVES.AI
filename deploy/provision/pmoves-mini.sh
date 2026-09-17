@@ -50,6 +50,35 @@ if [ ! -f "${ROOT:-/nonexistent}/pmoves/Makefile" ]; then
   fi
 fi
 
+# --- MAVIS SDK ENV STRIP ---------------------------------------------------
+# The Mavis SDK's `env` block in `~/.claude/settings.json` injects
+# ANTHROPIC_BASE_URL, ANTHROPIC_AUTH_TOKEN, ANTHROPIC_MODEL, MCP_TIMEOUT,
+# API_TIMEOUT_MS, CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC, ... into every
+# Claude Code session's process env.  That env block is inherited by the
+# shell that runs this launcher, and would otherwise be inherited by the
+# launched `pmoves-mini` -- overriding the operator's own CLI settings
+# (their API endpoint, their model picker).
+#
+# The strip checks each Mavis SDK var against `pmoves-mini`'s NEEDS list
+# (defined in pmoves/scripts/mavis_sdk_env.sh alongside this comment):
+#   * keeps the ones `pmoves-mini` consumes
+#   * preserves the others under PMOVES_MAVIS_SDK_<NAME> for inspection
+#   * unsets the originals
+#   * emits one WARN line summarizing what was caught
+#
+# Sourced AFTER repo-root resolution (helper file is repo-relative) and
+# BEFORE env.shared loading (the env.shared reader below has a parallel
+# blocklist for env.shared itself; the two layers cover the SHELL env and
+# env.shared independently).
+# ---------------------------------------------------------------------------
+if [ -f "$ROOT/pmoves/scripts/mavis_sdk_env.sh" ]; then
+  # shellcheck source=../../pmoves/scripts/mavis_sdk_env.sh
+  . "$ROOT/pmoves/scripts/mavis_sdk_env.sh"
+  mavis_sdk_strip_env_for "pmoves-mini"
+else
+  echo "[pmoves-mini] WARN: mavis_sdk_env.sh not found at $ROOT/pmoves/scripts/ -- Mavis SDK env may bleed into the launched session." >&2
+fi
+
 # --- ENV.SHARED LOADING (mirror claude-pmoves.sh :: lines 72-127) -----------
 # env.shared is Docker Compose env_file format: unquoted values + ALIAS lines
 # like `SUPABASE_SERVICE_ROLE_KEY=${SERVICE_ROLE_KEY}`.  Two hazards:

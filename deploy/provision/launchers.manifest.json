@@ -15,18 +15,18 @@
       "sha256": "f60746ecb04b3931e564c1ed69fac24456f789cfb10520e7ce90a965960ec379"
     },
     {
-      "bytes": 5102,
+      "bytes": 6675,
       "executable": true,
       "managed_by": "generator",
       "relpath": "deploy/provision/pmoves-mini.sh",
-      "sha256": "3b10de546a336061c1940f3188549ef7f7299e5f116dbd95e6feb0a64694d59a"
+      "sha256": "683126dd8b2635bbc0afd7442c81a86680ea82996bcd38f86c34efa5bfe7bee6"
     },
     {
-      "bytes": 4375,
+      "bytes": 5219,
       "executable": false,
       "managed_by": "generator",
       "relpath": "deploy/provision/pmoves-mini.ps1",
-      "sha256": "3986fb0847895b0a91a3d03a7af2f42ae325c5de3b44d740ba3e2bfa75ea4e35"
+      "sha256": "f0fc00a44c237aefef529d9d8732c744a00c14e39bc7a9b56796fcc84ebbe140"
     },
     {
       "bytes": 748,
@@ -134,25 +134,25 @@
       "sha256": "f300fd6ffee92e8bbbfd64eee3729cdf5f0606ed6024798ff6e139350adbe3d6"
     },
     {
-      "bytes": 5090,
+      "bytes": 6626,
       "executable": true,
       "managed_by": "generator",
       "relpath": "deploy/provision/codex-pmoves.sh",
-      "sha256": "fcfb639eb54d61a5ebe488dd4571bb092a7a7e39c8e13c4c8d20457ae000fc02"
+      "sha256": "0153fcd93161b5848d441d6633a3941051b0d38fee644d4e615819658c4bcdd9"
     },
     {
-      "bytes": 4361,
+      "bytes": 5179,
       "executable": false,
       "managed_by": "generator",
       "relpath": "deploy/provision/codex-pmoves.ps1",
-      "sha256": "c07dbbf4ca127dae108442bb7eb98e1a00693ceaea7364b94f4c74aaaed819f4"
+      "sha256": "3ce9aa71ccac8fce096a475e76ab0d074695400fd7504a737df9041b140038a8"
     },
     {
-      "bytes": 751,
+      "bytes": 744,
       "executable": false,
       "managed_by": "generator",
       "relpath": "deploy/provision/codex-pmoves.cmd",
-      "sha256": "9e6c80add34993e77a0939be9eb0ac0076bb74408ac3791d584767595537b5a0"
+      "sha256": "3339c0cc9e72d2c36bed9fc2050bd558ac32135dc5b62f7cd78e50ae20dee4ed"
     },
     {
       "bytes": 3980,
@@ -169,25 +169,25 @@
       "sha256": "1f262f30f62dcffc44fcca5df5f9edd7f2c6bf413daf222836f4bc89b610e586"
     },
     {
-      "bytes": 5123,
+      "bytes": 6654,
       "executable": true,
       "managed_by": "generator",
       "relpath": "deploy/provision/kilo-pmoves.sh",
-      "sha256": "9f41c188dcae0d485c6cc86adbc9440aa4c68c54488f441b90c358bbbd3a2b33"
+      "sha256": "d1c42d218518f615e0a43aedcba3d187f0a47d7e4159d2769fce1c4ffccb89a8"
     },
     {
-      "bytes": 4396,
+      "bytes": 5212,
       "executable": false,
       "managed_by": "generator",
       "relpath": "deploy/provision/kilo-pmoves.ps1",
-      "sha256": "01f7186cb3124b9e4c6722fad35dc756dba9133079adfc3e2188de4cbbb1e353"
+      "sha256": "ce1124d1a6a52839aa91b4c640403b99e3b4a84fccfe13406ff264ad2bc1fda6"
     },
     {
-      "bytes": 748,
+      "bytes": 741,
       "executable": false,
       "managed_by": "generator",
       "relpath": "deploy/provision/kilo-pmoves.cmd",
-      "sha256": "0cb81549678ca02242927def40f2682dc28b62567860f6d359568022d91d4fd2"
+      "sha256": "4d44b2f512bab15fdaadd29e596d5ab86dfec1c82528a5723d0bf5191909122f"
     },
     {
       "bytes": 1527,
@@ -246,25 +246,25 @@
       "sha256": "0e1f511ec3276b516dea5776b5072cbaf7833e77e0b8f74753015f9f1ba96aa3"
     },
     {
-      "bytes": 5099,
+      "bytes": 6630,
       "executable": true,
       "managed_by": "generator",
       "relpath": "deploy/provision/kimi-pmoves.sh",
-      "sha256": "cb4e3cb0bb2a3757e059554db0cfaf8955f64a72c144e7494ba5627175427a9b"
+      "sha256": "afbd617aa0dab8a64455b0092758d11f1b90d0b78eb4acfa6ff4b743e2a29541"
     },
     {
-      "bytes": 4372,
+      "bytes": 5188,
       "executable": false,
       "managed_by": "generator",
       "relpath": "deploy/provision/kimi-pmoves.ps1",
-      "sha256": "6e6fea60e94a635643a446f3aedc6e850b2458db180125ad457f26bf1ddf78a7"
+      "sha256": "5cb57b956133e74fe3622854d2d9436e3d5b660d7e1bb52d4a6e91bceea98829"
     },
     {
-      "bytes": 748,
+      "bytes": 741,
       "executable": false,
       "managed_by": "generator",
       "relpath": "deploy/provision/kimi-pmoves.cmd",
-      "sha256": "e3974532bd58e6264ef58f633ae242e89fb167f15bf51253ee8c25c1bb5241bf"
+      "sha256": "af7958d42e237bdce5f5b89633ed89408a1448befdc988694c2835dc1f6af6c1"
     },
     {
       "bytes": 1522,
@@ -323,25 +323,25 @@
       "sha256": "c25995e084fcf7f6efe19ceb9d805f67ed8d967a6b8dfd175f0f2194b4191d86"
     },
     {
-      "bytes": 5125,
+      "bytes": 6666,
       "executable": true,
       "managed_by": "generator",
       "relpath": "deploy/provision/hermes-pmoves.sh",
-      "sha256": "d1838727a04f7a77b2c5317b19acd150f387907f865977094382f7466c18ef6e"
+      "sha256": "fbf81d0c6c91d7bf19cd02aecbbb560e39a231e3621bbd31ce33929a63da8abe"
     },
     {
-      "bytes": 4394,
+      "bytes": 5214,
       "executable": false,
       "managed_by": "generator",
       "relpath": "deploy/provision/hermes-pmoves.ps1",
-      "sha256": "8f4b0ce13ce79d558ba393491dc7292641e37ef2d01d98939113d04684cfe1d8"
+      "sha256": "da4d3a8a80713e7b4447ff6212acc144bfa6ee01dc60737c7bb20baab9e46bea"
     },
     {
-      "bytes": 754,
+      "bytes": 747,
       "executable": false,
       "managed_by": "generator",
       "relpath": "deploy/provision/hermes-pmoves.cmd",
-      "sha256": "25c05bad301927e6ed0fcb99a007db4435d749b8d64a67f2a30a14b5613ae4de"
+      "sha256": "6b8f8d9f0df4bad899636324d21c2a27a197296d1936a2b52be6a619a59e49c4"
     }
   ],
   "generator_version": "1.0.0",

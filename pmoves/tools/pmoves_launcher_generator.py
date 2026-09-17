@@ -273,7 +273,7 @@ def load_cli_tools(registry_root: Path) -> list[CliTool]:
         tool = CliTool(
             name=name,
             purpose=str(entry.get("purpose", "")).strip(),
-            binary=BINARY_BY_TOOL.get(name, name),
+            binary=BINARY_BY_TOOL.get(_family_of(name), _family_of(name)),
             blocklist=list(DEFAULT_BLOCKLIST_BY_TOOL.get(name, [])),
             bridges=list(DEFAULT_BRIDGES_BY_TOOL.get(name, [])),
             signature_aliases=list(DEFAULT_SIGNATURE_ALIASES.get(_family_of(name), [name])),
@@ -402,6 +402,35 @@ if [ ! -f "${{ROOT:-/nonexistent}}/pmoves/Makefile" ]; then
     echo "[{tool.launcher_basename}]        (resolved from: $SELF)" >&2
     exit 1
   fi
+fi
+
+# --- MAVIS SDK ENV STRIP ---------------------------------------------------
+# The Mavis SDK's `env` block in `~/.claude/settings.json` injects
+# ANTHROPIC_BASE_URL, ANTHROPIC_AUTH_TOKEN, ANTHROPIC_MODEL, MCP_TIMEOUT,
+# API_TIMEOUT_MS, CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC, ... into every
+# Claude Code session's process env.  That env block is inherited by the
+# shell that runs this launcher, and would otherwise be inherited by the
+# launched `{tool.binary}` -- overriding the operator's own CLI settings
+# (their API endpoint, their model picker).
+#
+# The strip checks each Mavis SDK var against `{tool.binary}`'s NEEDS list
+# (defined in pmoves/scripts/mavis_sdk_env.sh alongside this comment):
+#   * keeps the ones `{tool.binary}` consumes
+#   * preserves the others under PMOVES_MAVIS_SDK_<NAME> for inspection
+#   * unsets the originals
+#   * emits one WARN line summarizing what was caught
+#
+# Sourced AFTER repo-root resolution (helper file is repo-relative) and
+# BEFORE env.shared loading (the env.shared reader below has a parallel
+# blocklist for env.shared itself; the two layers cover the SHELL env and
+# env.shared independently).
+# ---------------------------------------------------------------------------
+if [ -f "$ROOT/pmoves/scripts/mavis_sdk_env.sh" ]; then
+  # shellcheck source=../../pmoves/scripts/mavis_sdk_env.sh
+  . "$ROOT/pmoves/scripts/mavis_sdk_env.sh"
+  mavis_sdk_strip_env_for "{tool.family}"
+else
+  echo "[{tool.launcher_basename}] WARN: mavis_sdk_env.sh not found at $ROOT/pmoves/scripts/ -- Mavis SDK env may bleed into the launched session." >&2
 fi
 
 # --- ENV.SHARED LOADING (mirror claude-pmoves.sh :: lines 72-127) -----------
@@ -541,6 +570,21 @@ if (Test-Path $envf) {{
     $blocklist = @(
 {blocklist_entries}
     ) -replace '\\*', '.*'
+
+    # Mavis SDK env strip -- dot-source pmoves/scripts/mavis_sdk_env.ps1
+    # (PowerShell twin of mavis_sdk_env.sh) and apply the per-CLI needs
+    # check. The strip happens BEFORE env.shared is read, because the
+    # SHELL env (parent process) and env.shared (PMOVES fleet creds) are
+    # independent layers -- the blocklist above handles env.shared, this
+    # strip handles SHELL vars that came in from the operator's parent
+    # process (typically the Mavis `~/.claude/settings.json` env block).
+    $mavis_helper = Join-Path $root 'pmoves\scripts\mavis_sdk_env.ps1'
+    if (Test-Path $mavis_helper) {{
+        . $mavis_helper
+        Strip-MavisSdkEnvFor -CliName '{tool.family}'
+    }} else {{
+        Write-Warning "[{tool.launcher_basename}] mavis_sdk_env.ps1 not found at $mavis_helper -- Mavis SDK env may bleed into the launched session."
+    }}
 
     # Pass 1: read KEY=VALUE verbatim into an ordered map, skipping blocklisted keys.
     $vars = [ordered]@{{}}

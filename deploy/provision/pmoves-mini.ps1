@@ -33,6 +33,21 @@ if (Test-Path $envf) {
         # (no blocklist entries -- this CLI sources every var from env.shared)
     ) -replace '\*', '.*'
 
+    # Mavis SDK env strip -- dot-source pmoves/scripts/mavis_sdk_env.ps1
+    # (PowerShell twin of mavis_sdk_env.sh) and apply the per-CLI needs
+    # check. The strip happens BEFORE env.shared is read, because the
+    # SHELL env (parent process) and env.shared (PMOVES fleet creds) are
+    # independent layers -- the blocklist above handles env.shared, this
+    # strip handles SHELL vars that came in from the operator's parent
+    # process (typically the Mavis `~/.claude/settings.json` env block).
+    $mavis_helper = Join-Path $root 'pmoves\scripts\mavis_sdk_env.ps1'
+    if (Test-Path $mavis_helper) {
+        . $mavis_helper
+        Strip-MavisSdkEnvFor -CliName 'pmoves-mini'
+    } else {
+        Write-Warning "[pmoves-mini] mavis_sdk_env.ps1 not found at $mavis_helper -- Mavis SDK env may bleed into the launched session."
+    }
+
     # Pass 1: read KEY=VALUE verbatim into an ordered map, skipping blocklisted keys.
     $vars = [ordered]@{}
     foreach ($line in Get-Content -LiteralPath $envf) {

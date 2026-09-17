@@ -154,6 +154,79 @@ class TestGeneratorRegistryDriven(unittest.TestCase):
             os.chdir(cwd_before)
             shutil.rmtree(scratch, ignore_errors=True)
 
+    def test_every_emitted_bash_contains_mavis_sdk_strip(self):
+        # Every generator-managed bash LAUNCHER must contain the Mavis SDK env
+        # strip section that sources pmoves/scripts/mavis_sdk_env.sh and calls
+        # mavis_sdk_strip_env_for with the FAMILY name (not the launcher name).
+        # Install scripts (install-*-command.sh) are excluded -- they only
+        # install PATH/profile entries, they do NOT exec the CLI, so the strip
+        # is not their concern.  Per-node pin launchers (e.g.
+        # claude-pmoves-4090.sh, kilo-pmoves-kilocode_glm.sh) are excluded --
+        # they set PMOVES_NODE_ID and exec the parent launcher (which DOES
+        # carry the strip), so the pin launcher delegates the strip.
+        plan = gen.build_plan(REPO_ROOT, include_hand=False)
+        bash_files = [
+            f for f in plan.files
+            if f.relpath.endswith(".sh")
+            and not Path(f.relpath).name.startswith("install-")
+            # 3-segment launchers are pin wrappers: <cli>-pmoves-<variant>.sh
+            # (e.g. claude-pmoves-4090.sh, kilo-pmoves-kilocode_glm.sh,
+            # crush-pmoves-glm52.sh).  2-segment launchers are the parent
+            # launchers that actually exec the CLI.
+            and len(Path(f.relpath).name.split("-")) == 2
+        ]
+        self.assertGreater(len(bash_files), 0, "no bash launchers emitted")
+        for f in bash_files:
+            self.assertIn(
+                "mavis_sdk_strip_env_for",
+                f.body,
+                f"{f.relpath} missing mavis_sdk_strip_env_for call",
+            )
+            # Family name must be the argument (e.g. "kilo", not "kilo-pmoves").
+            import re
+            m = re.search(r'mavis_sdk_strip_env_for\s+"([^"]+)"', f.body)
+            self.assertIsNotNone(m, f"{f.relpath} has unparseable strip call")
+            cli_arg = m.group(1)
+            self.assertFalse(
+                cli_arg.endswith("-pmoves"),
+                f"{f.relpath} strip call uses launcher name {cli_arg!r}; "
+                f"needs registry family (e.g. 'kilo', not 'kilo-pmoves')",
+            )
+
+    def test_every_emitted_ps1_contains_mavis_sdk_strip(self):
+        # Same regression pin for the PowerShell twin.
+        plan = gen.build_plan(REPO_ROOT, include_hand=False)
+        ps1_files = [
+            f for f in plan.files
+            if f.relpath.endswith(".ps1")
+            and not Path(f.relpath).name.startswith("install-")
+            and len(Path(f.relpath).name.split("-")) == 2
+        ]
+        self.assertGreater(len(ps1_files), 0, "no ps1 launchers emitted")
+        for f in ps1_files:
+            self.assertIn(
+                "Strip-MavisSdkEnvFor",
+                f.body,
+                f"{f.relpath} missing Strip-MavisSdkEnvFor call",
+            )
+
+    def test_hand_written_launchers_have_strip_step(self):
+        # The hand-written claude-pmoves.{sh,ps1} / crush-pmoves.{sh,ps1}
+        # ALSO need the Mavis SDK env strip (per operator's "parity along
+        # that surface" directive).  Only claude-pmoves is checked here
+        # because crush-pmoves may be the next hand-edit target.
+        for fname, marker in [
+            ("claude-pmoves.sh", "mavis_sdk_strip_env_for"),
+            ("claude-pmoves.ps1", "Strip-MavisSdkEnvFor"),
+        ]:
+            fpath = REPO_ROOT / "deploy" / "provision" / fname
+            self.assertTrue(fpath.exists(), f"hand-written {fname} missing")
+            content = fpath.read_text(encoding="utf-8")
+            self.assertIn(
+                marker, content,
+                f"{fname} missing Mavis SDK env strip step",
+            )
+
     def test_every_emitted_ps1_parses(self):
         # pwsh parser; skip when pwsh isn't installed (CI portability).
         if not _has_pwsh():
