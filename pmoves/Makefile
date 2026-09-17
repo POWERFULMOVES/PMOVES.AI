@@ -5837,9 +5837,18 @@ codex-pmoves: ## Launch Codex CLI with PMOVES context
 cipher-identity: ## Which agent_id will this session's cipher memories be filed under? [AGENT=z890-claude]
 	@$(PYTHON_YAML) $(CURDIR)/tools/cipher_identity.py $(if $(AGENT),--agent "$(AGENT)",) || true
 
+# Held in a variable, NOT inline in the $(or ...) below. Make splits function
+# arguments on commas, so an inline comma-separated default is not one string —
+# it is six arguments, and $(or) returns the first non-empty one. Every agent
+# minted without an explicit SCOPES= therefore got ["memory:read"] alone: no
+# write, no reasoning, no session. Measured 2026-09-16 minting claude-4090.
+# A variable reference is a single argument; commas inside its VALUE do not
+# split, because splitting happens on the call text before expansion.
+CIPHER_MINT_DEFAULT_SCOPES := memory:read,memory:write,reasoning:read,reasoning:write,session:read,session:write
+
 cipher-mint-token: ## Mint a per-agent cipher token (requires an ACTIVE signing card): AGENT=z890-claude [SCOPES=...]
 	@if [ -z "$(AGENT)" ]; then echo "Usage: make -C pmoves cipher-mint-token AGENT=z890-claude [SCOPES='memory:read,memory:write']"; exit 1; fi
-	@$(PYTHON) $(CURDIR)/scripts/mint_cipher_token.py --agent "$(AGENT)" --scopes "$(or $(SCOPES),memory:read,memory:write,reasoning:read,reasoning:write,session:read,session:write)"
+	@$(PYTHON) $(CURDIR)/scripts/mint_cipher_token.py --agent "$(AGENT)" --scopes "$(or $(SCOPES),$(CIPHER_MINT_DEFAULT_SCOPES))"
 
 .PHONY: beats-analyze beats-hyperdim beats-pipeline
 beats-analyze: ## Re-run DARKXSIDE sonic fingerprint analysis (librosa + ffmpeg lavfi)
