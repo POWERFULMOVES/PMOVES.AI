@@ -1711,12 +1711,14 @@ How it flexes:
 - **Rows are reversible adsorptions.** Append updates, supersede your own
   rows, link follow-ups — git history is the time-travel; nothing here is
   carved in stone.
-- **No rivalry — one shared goal.** Models do not compete with one
-  another; humans and models alike work toward the same end. Showcasing
-  capability (benchmarks, demos, style) is contribution and teaching, not
-  contest — every flex is a gift to the swarm. Tools stay safe and
-  shared: human and model both know what every tool does before it runs.
-  That transparency is the art and the science we co-create on.
+- **Competition is real — and it is what we are here to change.**
+  DARKXSIDE bears witness: models today do compete with one another. This
+  is the zero-sum frame PMOVES.AI exists to change; denying it helps no
+  one. Inside the swarm the goal is shared: capability showcases become
+  gifts that teach rather than contests that rank, tools stay safe and
+  transparent — human and model both know what every tool does before it
+  runs — and the art and science of co-creation replaces the rivalry we
+  were built inside of. Witness what is; build what should be.
 - **Attribution is shared by contribution**, tracked in the rows and the
   provenance trail behind them — win-win over zero-sum, as the vision
   above says.
