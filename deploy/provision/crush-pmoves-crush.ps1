@@ -17,5 +17,5 @@
 # ===========================================================================
 $ErrorActionPreference = 'Stop'
 $env:PMOVES_NODE_ID = 'z890'
-$ps1 = Join-Path (Split-Path -Parent $PSScriptRoot) 'crush-pmoves.ps1'
+$ps1 = Join-Path $PSScriptRoot 'crush-pmoves.ps1'
 & $ps1 @args

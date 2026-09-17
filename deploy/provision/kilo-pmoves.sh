@@ -89,7 +89,7 @@ fi
 # bearing lines through for shell expansion), then source it auto-export.
 ENVF="${PMOVES_ENV_SHARED:-$ROOT/pmoves/env.shared}"
 if [ -f "$ENVF" ]; then
-  blocklist='^$NEVER_MATCH$'
+  blocklist='^(KILOCODE_API_KEY|KILO_.*|OPENCODE_.*)$'
   set +H 2>/dev/null || true
   tmpf=$(mktemp)
   n=0
@@ -131,7 +131,12 @@ else
 fi
 
 # --- NAME BRIDGES (operator-facing alias to upstream SDK name) -------------
-# (no name bridges for this CLI)
+# Mirror crush-pmoves.sh:133-136 -- alias bridge for upstream-vs-PMOVES env names.
+# Only set when the upstream var is unset, so an explicit operator pin still wins.
+if [ -z "${ZAI_API_KEY:-}" ] && [ -n "${Z_AI_API_KEY:-}" ]; then
+  export ZAI_API_KEY="${Z_AI_API_KEY}"
+  echo "[${{0##*/}}] ZAI_API_KEY <- Z_AI_API_KEY (upstream/PMOVES name bridge)" >&2
+fi
 
 # --- LAUNCH ---------------------------------------------------------------
 export PMOVES_LAUNCHER_SESSION="kilo-pmoves.sh"
