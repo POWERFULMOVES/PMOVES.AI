@@ -49,11 +49,11 @@ Probe: `make -C pmoves acp-launcher-probe` (scope with `ACP_PROBE_ENTRIES=`; PAS
 | codex-acp v1.11.0 | npx | **PASS** | 2 |
 | claude-acp v0.77.0 | npx | **PASS** | 2 |
 | kilo v7.6.2 | npx **and** binary | **PASS** / **PASS** | 1 |
-| minimax-code v0.2.7 | npx | **FAIL — root-caused** | — |
+| minimax-code v0.2.7 | npx | **PASS under Node 24** (auth=1) — FAIL on system Node 22.17.1, root-caused | 1 |
 
 Resolved measurement gaps (2026-09-17):
 - **kilo binary path verified** — windows-x86_64 archive downloaded, sha256 verified, extracted, `kilo acp` answered initialize (`--distribution binary`). Both kilo distribution paths now pass.
-- **minimax-code FAIL decomposed** — two stacked causes: (1) its installer hard-gates **Node ≥ 22.19** (this node runs 22.17.1: `"This Node.js release is outside the verified MCode compatibility range"`), so the upstream-parity pre-install cannot complete and cold `npx` hangs instead of erroring over ACP; (2) the node's DNS is flaky (`EAI_FAIL` across registry fetches, 70s stalls), which crashed npm mid-install with the "Exit handler never called" wrapper on the first attempt and muddied the signal. **Action: bump Node to ≥ 22.19 (24 LTS recommended by MiniMax) on Windows fleet nodes — node-infra lane, not a probe fix.** After the bump, re-run `--entries minimax-code`.
+- **minimax-code FAIL decomposed** — two stacked causes: (1) its installer hard-gates **Node ≥ 22.19** (this node runs 22.17.1: `"This Node.js release is outside the verified MCode compatibility range"`), so the upstream-parity pre-install cannot complete and cold `npx` hangs instead of erroring over ACP; (2) the node's DNS is flaky (`EAI_FAIL` across registry fetches, 70s stalls), which crashed npm mid-install with the "Exit handler never called" wrapper on the first attempt and muddied the signal. **RESOLVED 2026-09-17 as a managed dep:** fnm (winget-installed but dormant on this node) now manages Node — `fnm install 24` (v24.21.0, default alias), repo pin `.node-version` = `24`, `fnm env --use-on-cd` wired into PowerShell profiles + `~/.bashrc`. Verified: minimax-code **PASS auth=1** under 24.21.0. System MSI 22.17.1 stays as machine-wide fallback. Remaining fleet action: repeat `fnm install 24 && fnm default 24` + profile wiring on Z890/Knuckles.
 
 ## Reconciliation Doctrine — upstream-first
 
@@ -67,7 +67,7 @@ Resolved measurement gaps (2026-09-17):
 | Branch | Phase | Status | Owner | Scope |
 |--------|-------|--------|-------|-------|
 | A | upstream-portability | planned | crush | PR to `agentclientprotocol/registry`: replace `select` pipe waits with Windows-safe reads, drain stderr during handshake, kill process tree on Windows. Unblocks running upstream's own verifier on fleet Windows nodes. |
-| B | probe-hardening | **done** | crush | `--distribution` flag added (kilo binary path verified PASS); upstream-parity npx pre-install adopted (`prepare_npx_package` semantics); minimax-code root-caused (Node ≥ 22.19 engine gate + node DNS flakiness). Residual: Node bump is node-infra, outside this branch. |
+| B | probe-hardening | **done** | crush | `--distribution` flag added (kilo binary path verified PASS); upstream-parity npx pre-install adopted (`prepare_npx_package` semantics); minimax-code root-caused (Node ≥ 22.19 engine gate + node DNS flakiness) and **fixed as a managed dep** (fnm 24.21.0 + `.node-version` pin + profile wiring) — now PASS. |
 | C | mapping-bridges | in_progress | crush | `kilo` live. Remove or realize dead `spynel` bridge. Candidate: `glm-acp-agent → zai` lane bridge (needs explicit operator decision, matching stays conservative). |
 | D | fleet-bringup-docs | planned | crush | Sibling-clone convention per node; Linux nodes (KVM4-1/2, KVM2, SPARK) should run upstream `verify_agents.py` natively instead of the port. |
 | E | spynel-entry | planned | operator | Publish `PMOVES-Spynel` as a registry entry per CONTRIBUTING.md (id/version/license_url/icon/distribution). Publishing fleet tooling publicly is an operator call. |
@@ -86,6 +86,9 @@ Resolved measurement gaps (2026-09-17):
 ```bash
 # sibling clone (once per node)
 git clone https://github.com/POWERFULMOVES/PMOVES-registry ../PMOVES-registry
+
+# managed Node (once per node; repo .node-version pins the major)
+fnm install 24 && fnm default 24   # then reload shell (fnm env is profile-wired)
 
 # regenerate the ACP<->PMOVES mapping artifact
 make -C pmoves acp-registry-map
