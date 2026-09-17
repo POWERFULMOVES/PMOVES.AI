@@ -3897,7 +3897,7 @@ qdrant-provision-cipher: ## Provision the Qdrant collection Cipher Memory writes
 	@# in supa-start. Image is the repo's standard pinned python base, so this
 	@# pulls nothing new on a node that has built any Python service.
 	@echo "🧠 Provisioning Qdrant collection for Cipher Memory..."
-	@$(LOAD_ENV_SHARED); docker run --rm --network pmoves_data \
+	@export MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*'; $(LOAD_ENV_SHARED); docker run --rm --network pmoves_data \
 		-v "$(CURDIR)/scripts:/scripts:ro" \
 		-e PYTHONDONTWRITEBYTECODE=1 \
 		-e QDRANT_URL=$${QDRANT_URL:-http://qdrant:6333} \
