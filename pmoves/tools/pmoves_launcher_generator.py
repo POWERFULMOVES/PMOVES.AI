@@ -1060,10 +1060,18 @@ def emit(plan: Plan, out_root: Path, plan_root: Path | None = None) -> list[Path
     """
     written: list[Path] = []
     base = plan_root if plan_root is not None else Path.cwd()
+    # Line endings per repo policy (.gitattributes): ps1/bat/cmd are
+    # eol=crlf (Windows scripts), everything else eol=lf. emit() must write
+    # what the worktree will contain after checkout conversion, or the
+    # byte-stability test compares CRLF (repo checkout) against LF (regen)
+    # and fails on EVERY platform — the blob is LF in git, the attribute
+    # converts at checkout, the generator must match the attribute.
+    def _eol(relpath: str) -> str:
+        return "\r\n" if relpath.endswith((".ps1", ".bat", ".cmd")) else "\n"
     for f in plan.files:
         target = out_root / f.relpath
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(f.body, encoding="utf-8", newline="\n")
+        target.write_text(f.body, encoding="utf-8", newline=_eol(f.relpath))
         if f.executable:
             mode = target.stat().st_mode
             target.chmod(mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
@@ -1074,7 +1082,7 @@ def emit(plan: Plan, out_root: Path, plan_root: Path | None = None) -> list[Path
     manifest_target.parent.mkdir(parents=True, exist_ok=True)
     manifest_target.write_text(
         json.dumps(plan.manifest_dict(), indent=2, sort_keys=True) + "\n",
-        encoding="utf-8",
+        encoding="utf-8", newline="\n",
     )
     return written
 
