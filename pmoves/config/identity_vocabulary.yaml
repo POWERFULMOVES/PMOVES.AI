@@ -202,6 +202,17 @@ identities:
     note: One entry. Kept rather than folded -- a single-use name may be a typo
       or a real one-off lane, and guessing which would be inventing history.
 
+  - canonical: darkxside
+    aliases: ["DARKXSIDE"]
+    note: >-
+      The operator's co-creator persona, declared 2026-09-17 when its first
+      register CLAIM landed (#3087, governance/identity-provenance-round-trip).
+      agent_signatures.yaml carries the matching signature (darkxside,
+      display_name DARKXSIDE, co_author DARKXSIDE <darkxside@powerfulmoves.ai>);
+      the vocabulary gate rejects an author with no declaration, so the card and
+      the declaration land together. Nodeless on purpose -- DARKXSIDE rides
+      wherever the operator does, it is not bound to one machine.
+
   # --- declared, but NOT resolvable to one identity -------------------------
   # Recorded so the gate can tell "unknown spelling" from "known to be
   # ambiguous". These need an operator decision, not a resolver.
