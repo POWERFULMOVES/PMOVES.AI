@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import importlib.util
+import re
 import sys
 from pathlib import Path
 
@@ -11,6 +12,43 @@ import yaml
 REPO_ROOT = Path(__file__).resolve().parents[2]
 LAUNCHER = REPO_ROOT / "pmoves" / "scripts" / "claude-pmoves.sh"
 WIN_LAUNCHER = REPO_ROOT / "pmoves" / "scripts" / "windows" / "claude-pmoves.bat"
+# The launchers no longer carry identity resolution inline: #3094 extracted it
+# into the shared fragment pm-node-identity.sh (the same shape pm-python.sh and
+# pm-cipher-identity.sh set). These tests grep launcher TEXT for the invariants
+# -- "resolves", "fails open audibly", "reads the resolver's output variable"
+# -- so the text they read must be the SOURCE CHAIN, launcher plus every file
+# it sources, or extraction hollows the invariant while the test stays green.
+_SOURCE_RE = re.compile(r'^\s*(?:source|\.)\s+("?)([^"\'\s]+)\1')
+
+def _sourced_files(text: str) -> list[Path]:
+    files: list[Path] = []
+    for line in text.splitlines():
+        match = _SOURCE_RE.match(line)
+        if not match:
+            continue
+        source = match.group(2)
+        # $ROOT is the repo root the launchers resolve at runtime; the fragment
+        # lives beside them, so $ROOT/pmoves/scripts/x.sh == LAUNCHER.parent/x.sh.
+        source = source.replace("$ROOT", str(LAUNCHER.parent))
+        source = source.replace("${ROOT}", str(LAUNCHER.parent))
+        if "$" in source or not source.endswith(".sh"):
+            continue
+        candidate = Path(source)
+        if not candidate.is_file():
+            candidate = LAUNCHER.parent / Path(source).name
+        if candidate.is_file():
+            files.append(candidate)
+    return files
+
+def _launcher_text(launcher: Path) -> str:
+    """The launcher plus, recursively, everything it sources."""
+    text = launcher.read_text(encoding="utf-8")
+    seen = {launcher}
+    for frag in _sourced_files(text):
+        if frag not in seen:
+            seen.add(frag)
+            text += "\n" + frag.read_text(encoding="utf-8")
+    return text
 
 
 def _module():
@@ -265,7 +303,7 @@ def test_both_launchers_invoke_the_resolver(launcher):
                          ids=["posix", "windows"])
 def test_both_launchers_fail_open_audibly(launcher):
     """Losing the identity must never cost the launch, or be silent."""
-    text = launcher.read_text(encoding="utf-8")
+    text = _launcher_text(launcher)
     assert "launching without it" in text, f"{launcher.name}: no audible fallback"
 
 
@@ -279,7 +317,7 @@ def test_no_launcher_clears_the_operator_override_before_resolving():
     collide again.
     """
     for launcher in (LAUNCHER, WIN_LAUNCHER):
-        text = launcher.read_text(encoding="utf-8")
+        text = _launcher_text(launcher)
         assert 'PMOVES_NODE_IDENTITY=""' not in text, launcher.name
         assert 'set "PMOVES_NODE_IDENTITY="' not in text, launcher.name
         assert "PMOVES_RESOLVED_IDENTITY" in text, (
