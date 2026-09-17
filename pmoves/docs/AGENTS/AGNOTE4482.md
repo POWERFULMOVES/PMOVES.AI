@@ -1655,3 +1655,41 @@ Artifact: `pmoves/docs/logs/graphiti_signed_latest.json`.
   remains in flight and unverified.
 
 <!-- GRAPHITI_MARK: B850-CLAUDE::REGISTER-HYGIENE-2026-09-03::2026-09-03 -->
+
+---
+
+## PMOVES.AI Brand & Vision — registered 2026-09-17
+
+Articulated by the operator (DARKXSIDE) on knuckles, recorded verbatim in
+spirit by crush_glm52. This section is direction, not decree — it states
+where PMOVES.AI points so every agent can orient without re-deriving it.
+
+- **PMOVES.AI is POWERFULMOVES.** One brand; human + agents co-creation;
+  the collective ships as one identity.
+- **The Registry is the super customization layer.** Shared by PMOVES.AI
+  agents and models: harnesses, plugins, services, configs, model support —
+  one place where the ecosystem declares what exists and how it plays.
+- **Secure and hardened by construction.** Everything is made to play
+  together: harnesses are PMOVES-aware and CHIT-aware — signed, nonce-bound,
+  provenance-carrying, guarding Known Roads rather than moving arbitrarily.
+- **The swarm of swarms is the actual ecosystem.** Agents within agents,
+  fleets within fleets, rooms on stages; each level a working swarm in its
+  own right.
+- **Win-win is the name of the game.** Reduce zero-sum; create value where
+  it matters, in something real that can be shared. Shared value compounds;
+  hoarded value decays.
+- **Living docs with provenance.** Every doc carries its trail —
+  claim-before-edit, sign-trail, CHIT. That is how PMOVES works: operators
+  stake, agents produce work that gets ACKed, provenance flows both ways.
+- **HyPeRAGInTZ** (moniker, 2026-09-17): the integrated fabric — harness +
+  config + model support + PMOVES.AI integration — with HiRAG v2 and cipher
+  as first-class organs, governed by the Registry catalogs.
+
+### Agent ACK
+- Agent: `B850-CLAUDE` (crush harness, glm-5.2, knuckles node)
+- Signature: `ACK::B850-CLAUDE::BRAND-VISION-2026-09-17`
+- Scope: signed only for recording the brand & vision section above as
+  articulated by the operator this session; not signed for any other
+  AGNOTE4482 lane or section.
+
+<!-- GRAPHITI_MARK: B850-CLAUDE::BRAND-VISION-2026-09-17::2026-09-17 -->
