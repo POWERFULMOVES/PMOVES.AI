@@ -683,6 +683,10 @@ ACP_REGISTRY_PATH ?= ../../PMOVES-registry
 acp-registry-map: ## Regenerate the ACP <-> PMOVES registry mapping (clone POWERFULMOVES/PMOVES-registry as a repo-root sibling first)
 	@uv run --quiet --with pyyaml python tools/acp_registry_map.py --registry $(ACP_REGISTRY_PATH) --write
 
+ACP_PROBE_ENTRIES ?= kilo,glm-acp-agent,minimax-code,qwen-code,codex-acp,claude-acp
+acp-launcher-probe: ## Verify ACP registry launchers on this node (see pmoves/docs/TAC/TAC_ACP_REGISTRY.md); scope with ACP_PROBE_ENTRIES=kilo
+	@uv run --quiet --with pyyaml python tools/acp_launcher_probe.py --registry $(ACP_REGISTRY_PATH) --entries "$(ACP_PROBE_ENTRIES)"
+
 # ── Agent Zero dependency overlay ──────────────────────────────
 # The image installs deps twice into one venv: the fork's requirements first,
 # ours second as a --constraint. Ours therefore wins. These two targets keep
