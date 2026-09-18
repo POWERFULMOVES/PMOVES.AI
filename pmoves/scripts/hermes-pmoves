@@ -10,6 +10,10 @@ for candidate in \
   "$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"; do
   if [ -f "$candidate/pmoves/Makefile" ]; then
     REPO_ROOT="$candidate"
+    break
+  fi
+done
+
 # ---------------------------------------------------------------------------
 # NODE IDENTITY + CIPHER CARRY -- added 2026-09-16.
 #
@@ -28,6 +32,9 @@ for candidate in \
 # FAIL-OPEN, ALWAYS LOUD. Neither call can cost the launch, and every path prints
 # its reason -- an unbound session is degraded, not broken, but never silent.
 # ---------------------------------------------------------------------------
+# NOTE: this block MUST sit after root discovery (below `done`), not inside the
+# candidate loop -- running it per-candidate both repeats the work and silently
+# no-ops when the first candidate lacks pmoves/Makefile.
 if [ -f "$REPO_ROOT/pmoves/scripts/pm-node-identity.sh" ]; then
   # shellcheck source=./pm-node-identity.sh
   . "$REPO_ROOT/pmoves/scripts/pm-node-identity.sh"
@@ -40,9 +47,6 @@ if [ -f "$REPO_ROOT/pmoves/scripts/pm-node-identity.sh" ]; then
     echo "[hermes-pmoves] ${PM_CARRY_LINE}" >&2
   fi
 fi
-    break
-  fi
-done
 
 if [ -z "$REPO_ROOT" ]; then
   echo "ERROR: Could not find PMOVES.AI repo root" >&2
