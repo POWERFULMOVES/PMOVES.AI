@@ -105,3 +105,71 @@ pm_node_identity() {
   PM_IDENT_LINE="[$label] node=${PMOVES_NODE} identity=${PMOVES_NODE_IDENTITY}"
   return 0
 }
+
+# ---------------------------------------------------------------------------
+# PROMPT ACCUMULATION — pm_ident_append / pm_ident_prompt_args
+#
+# WHY A STRING AND NOT AN ARRAY OF FLAGS
+# --------------------------------------
+# `claude --append-system-prompt` does NOT accumulate. The LAST occurrence wins
+# and every earlier one is discarded — no warning, no log line, no non-zero
+# exit. Measured on B850 2026-09-17:
+#
+#   $ claude --print \
+#       --append-system-prompt "MARKER_ALPHA is ZEBRA." \
+#       --append-system-prompt "MARKER_BETA is WALRUS." \
+#       "Output ALPHA=<value or UNKNOWN> and BETA=<value or UNKNOWN>."
+#   ALPHA=UNKNOWN     <- first flag, dropped
+#   BETA=WALRUS       <- last flag, survived
+#
+# and the same two facts in ONE flag, separated by a blank line:
+#
+#   ALPHA=ZEBRA
+#   BETA=WALRUS
+#
+# claude-pmoves.sh had THREE contributors — node identity, cipher status, the
+# identity-carry verdict — across six call sites, each adding its own flag. Only
+# the last one ever reached the model. The node identity this whole fragment
+# exists to resolve was the FIRST contributor, so it was the one that never
+# arrived: the launcher
+# printed `node=knuckles identity=claude_b850` to stderr, exported it, appended
+# it — and the session still began by rediscovering both. Resolution was never
+# at fault; the flag layer silently ate it.
+#
+# The cancellation is invisible from any test that inspects the array: the
+# string IS in IDENTITY_ARGS on every path. It is lost one layer further out, in
+# the argv the harness parses. So the invariant is enforced where it breaks —
+# ONE flag, built by concatenation — and the test asserts on the composed argv.
+# See pmoves/tests/test_launcher_prompt_accumulation.py.
+#
+# CONTRIBUTORS MUST NOT KNOW ABOUT EACH OTHER. That is the point: `+=` on a flag
+# array reads as accumulation and is not, so every future contributor inherits
+# the bug by writing the obvious thing. pm_ident_append can only ever add.
+#
+# NOT EXPORTED. This is argv material for one exec, not environment; the
+# resolver's own note applies — exported variables do not reach the model.
+PM_IDENT_PROMPT="${PM_IDENT_PROMPT:-}"
+
+# pm_ident_append <text> — add one block to the single accumulated prompt.
+# Empty text is a no-op, so a contributor with nothing to say cannot inject a
+# stray separator. Blocks are joined by a blank line: the harness receives one
+# system prompt, and the model reads it as distinct paragraphs.
+pm_ident_append() {
+  local text="${1:-}"
+  [ -n "$text" ] || return 0
+  if [ -n "${PM_IDENT_PROMPT:-}" ]; then
+    PM_IDENT_PROMPT="${PM_IDENT_PROMPT}"$'\n\n'"${text}"
+  else
+    PM_IDENT_PROMPT="$text"
+  fi
+}
+
+# pm_ident_prompt_args — compose the ONE flag, once, at the exec site.
+# Sets PM_IDENT_PROMPT_ARGS[@]: either empty (nothing to say — do not pass a
+# flag with an empty value) or exactly the two elements
+# `--append-system-prompt` and the accumulated text.
+pm_ident_prompt_args() {
+  PM_IDENT_PROMPT_ARGS=()
+  [ -n "${PM_IDENT_PROMPT:-}" ] || return 0
+  PM_IDENT_PROMPT_ARGS=(--append-system-prompt "$PM_IDENT_PROMPT")
+}

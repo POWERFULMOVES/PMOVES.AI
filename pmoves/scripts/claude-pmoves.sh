@@ -112,7 +112,6 @@ fi
 # losing it must never cost you the launch. Losing it SILENTLY is the defect
 # this file keeps having to fix, so the reason is always printed.
 # ---------------------------------------------------------------------------
-IDENTITY_ARGS=()
 # Resolution moved to the shared fragment (2026-09-16). It was ~35 lines here and
 # again in crush-pmoves, and nowhere in the other seven launchers -- the same
 # shape pm-python.sh and pm-cipher-identity.sh were extracted for. The behaviour
@@ -127,7 +126,7 @@ if [ "${PM_IDENT_OK:-0}" = "1" ]; then
   # Put it where the session can actually READ it. Exported variables do not
   # reach the model's context; an appended system prompt does. This is the
   # difference between the identity existing and the identity working.
-  IDENTITY_ARGS=(--append-system-prompt "You are running on PMOVES node '${PMOVES_NODE}'. Your registered identity in pmoves/config/agent_registry.yaml is '${PMOVES_NODE_IDENTITY}'. Disclose it at session start rather than rediscovering it. Your selected role for this session is the '${AGENT}' agent.")
+  pm_ident_append "You are running on PMOVES node '${PMOVES_NODE}'. Your registered identity in pmoves/config/agent_registry.yaml is '${PMOVES_NODE_IDENTITY}'. Disclose it at session start rather than rediscovering it. Your selected role for this session is the '${AGENT}' agent."
 fi
 
 # CIPHER — persistent memory. Same reasoning as the identity block above: the
@@ -155,7 +154,7 @@ if [ -f "$CIPHER_TOOL" ] && [ ${#IDENT_PY[@]} -gt 0 ]; then
     0)
       CIPHER_WHICH="$(printf '%s\n' "$CIPHER_OUT" | awk '/^cipher OK/ {print $3; exit}')"
       echo "[claude-pmoves] cipher=up (${CIPHER_WHICH:-unknown endpoint})" >&2
-      IDENTITY_ARGS+=(--append-system-prompt "Persistent memory IS available this session via the Cipher MCP server '${CIPHER_WHICH:-unknown}'. Use it for recall and for writes; do not fall back to the auto-memory directory while it is up.")
+      pm_ident_append "Persistent memory IS available this session via the Cipher MCP server '${CIPHER_WHICH:-unknown}'. Use it for recall and for writes; do not fall back to the auto-memory directory while it is up."
       ;;
     1)
       # FINDINGS: something ANSWERED and was not usable. Cipher is UP either
@@ -177,11 +176,11 @@ if [ -f "$CIPHER_TOOL" ] && [ ${#IDENT_PY[@]} -gt 0 ]; then
       case "$CIPHER_OUT" in
         *"cipher UNAUTHORIZED"*)
           echo "[claude-pmoves] cipher=UNAUTHORIZED (exit 1) — service is UP, credential not accepted" >&2
-          IDENTITY_ARGS+=(--append-system-prompt "Cipher ANSWERED this session but refused the credential (preflight exit 1, verdict unauthorized), so persistent memory is not usable right now. The service is UP -- this is an access problem, not an outage, so do NOT report Cipher as down and do not restart it. Use the file-based auto-memory directory meanwhile and say which of the two it is. Remedy: bind CIPHER_API_TOKEN into the roster. Recovery: pmoves/docs/operations/MCP_TOOLKIT.md.")
+          pm_ident_append "Cipher ANSWERED this session but refused the credential (preflight exit 1, verdict unauthorized), so persistent memory is not usable right now. The service is UP -- this is an access problem, not an outage, so do NOT report Cipher as down and do not restart it. Use the file-based auto-memory directory meanwhile and say which of the two it is. Remedy: bind CIPHER_API_TOKEN into the roster. Recovery: pmoves/docs/operations/MCP_TOOLKIT.md."
           ;;
         *)
           echo "[claude-pmoves] cipher=ANSWERED-UNUSABLE (exit 1) — something is listening; see the status below" >&2
-          IDENTITY_ARGS+=(--append-system-prompt "Cipher ANSWERED this session but not usably (preflight exit 1, and NOT a 401/403 -- read the status printed above, e.g. an HTTP error or a refused redirect), so persistent memory is not usable right now. Something IS listening on that endpoint, so do NOT report Cipher as simply down, and do NOT assume the credential is at fault -- the preflight would have said unauthorized if it were. Use the file-based auto-memory directory meanwhile and say which of the two it is. Recovery: pmoves/docs/operations/MCP_TOOLKIT.md.")
+          pm_ident_append "Cipher ANSWERED this session but not usably (preflight exit 1, and NOT a 401/403 -- read the status printed above, e.g. an HTTP error or a refused redirect), so persistent memory is not usable right now. Something IS listening on that endpoint, so do NOT report Cipher as simply down, and do NOT assume the credential is at fault -- the preflight would have said unauthorized if it were. Use the file-based auto-memory directory meanwhile and say which of the two it is. Recovery: pmoves/docs/operations/MCP_TOOLKIT.md."
           ;;
       esac
       printf '%s\n' "$CIPHER_OUT" >&2
@@ -198,7 +197,7 @@ if [ -f "$CIPHER_TOOL" ] && [ ${#IDENT_PY[@]} -gt 0 ]; then
       # contacted nothing.
       echo "[claude-pmoves] cipher=DOWN (exit ${cipher_rc}) — session has no persistent memory" >&2
       printf '%s\n' "$CIPHER_OUT" >&2
-      IDENTITY_ARGS+=(--append-system-prompt "Cipher is NOT reachable this session (preflight exit ${cipher_rc}), so you have NO persistent memory. Say so at session start rather than recalling nothing silently, and use the file-based auto-memory directory instead. Recovery: pmoves/docs/operations/MCP_TOOLKIT.md.")
+      pm_ident_append "Cipher is NOT reachable this session (preflight exit ${cipher_rc}), so you have NO persistent memory. Say so at session start rather than recalling nothing silently, and use the file-based auto-memory directory instead. Recovery: pmoves/docs/operations/MCP_TOOLKIT.md."
       ;;
   esac
 fi
@@ -227,8 +226,17 @@ pm_cipher_identity "$ROOT" "${PMOVES_NODE_IDENTITY:-}" ${IDENT_PY[@]+"${IDENT_PY
 # no PyYAML must not look identical to a node whose carry is fine.
 echo "[claude-pmoves] ${PM_CARRY_LINE}" >&2
 if [ -n "${PM_CARRY_PROMPT:-}" ]; then
-  IDENTITY_ARGS+=(--append-system-prompt "$PM_CARRY_PROMPT")
+  pm_ident_append "$PM_CARRY_PROMPT"
 fi
+
+# ONE FLAG, COMPOSED ONCE. Every block above called pm_ident_append, which
+# concatenates; none of them pushed a flag of its own. `claude
+# --append-system-prompt` keeps only its LAST occurrence, so the multi-flag form
+# this file used to build handed the model the cipher-carry sentence and
+# silently discarded the node identity resolved a hundred lines earlier. See
+# pm-node-identity.sh for the measurement.
+pm_ident_prompt_args
+IDENTITY_ARGS=(${PM_IDENT_PROMPT_ARGS[@]+"${PM_IDENT_PROMPT_ARGS[@]}"})
 
 if [ ! -f "$LAUNCHER" ]; then
   # Degrade to the pre-delegation behavior rather than failing: the agent still
