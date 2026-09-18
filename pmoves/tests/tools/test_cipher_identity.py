@@ -1,7 +1,9 @@
 """Tests for pmoves/tools/cipher_identity.py.
 
 Every assertion here is pinned to a line of `Pmoves-cipher/src/pmoves/auth.ts`
-at submodule pin `975e02e6` -- the gitlink `main` carries, NOT this node's
+at submodule pin `975e02e6` (re-pinned `c88b009a2` by #3103; `auth.ts` is
+unchanged between the two, so every line number below still holds) -- the
+gitlink `main` carries, NOT this node's
 submodule working tree, which sits on an unmerged fork PR branch. The whole tool
 is a claim about what that file does with a bearer:
 

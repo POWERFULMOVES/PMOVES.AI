@@ -606,6 +606,93 @@ def check_opaque_write_verbs(
     return False, False, ""
 
 
+# A quoted heredoc feeding `git commit`: the delimiter quoting is what makes
+# the body inert, and `git commit` is what makes it a message rather than code.
+# Skip git's global flags (--no-pager, -c) before the subcommand.
+#
+# ONE branch, not an alternation. The first revision used
+#     (?:-[^\s]+\s+|--[^\s]+(?:=[^\s]+)?\s+)*
+# and CodeQL flagged it as exponential backtracking, correctly: BOTH branches
+# match a token beginning "--", because `-[^\s]+` happily consumes "--foo". An
+# ambiguous alternation under `*` lets a FAILING match split the same input two
+# ways at every position -- 2^n paths. Reported triggers were repetitions of
+# '--' and '!=\t--'.
+#
+# This matters more here than in ordinary code: the hook is PreToolUse, so it
+# runs before EVERY Bash call. A pathological command line would hang the whole
+# session, and this file already carries a 22s-stall regression from a different
+# runaway pattern (see INTERPRETER WRITE PATTERNS above).
+#
+# A git flag token is just "-" followed by non-space, so the two branches were
+# always the same shape. Collapsing them leaves exactly one way to match any
+# token: `-`, then non-space up to the whitespace that ends it. No ambiguity, no
+# backtracking. Deliberately a superset of the old pair (it also accepts a bare
+# "-"), which is harmless in a prefix-skipper whose next obligation is `commit`.
+_GIT_COMMIT_HEREDOC_START = re.compile(
+    r"\bgit\s+(?:-\S*\s+)*commit\b[^\n]*?"
+    r"<<(-?)\s*(['\"])([A-Za-z_][A-Za-z0-9_]*)\2[^\n]*\n"
+)
+
+
+def _mask_git_commit_heredocs(command: str) -> str:
+    """Blank the BODY of a QUOTED heredoc that feeds `git commit`.
+
+    A commit message is not an operation. Writing
+
+        git commit -F - <<'EOF'
+        ... deliberately skipped pmoves/chit/secrets_manifest.yaml ...
+        EOF
+
+    tripped the zero-access scan, which -- unlike every other check here --
+    matches a bare path ANYWHERE in the command text with no operation verb
+    required. That breadth is correct for "no operations allowed" (it is what
+    catches `cat`), but it means DESCRIBING a protected path is indistinguishable
+    from touching one. The practical cost is perverse: it pushes commit messages
+    toward vagueness exactly where precision matters most -- recording why a
+    protected file was deliberately excluded.
+
+    WHY THIS IS SAFE, AND WHERE THE LINE IS:
+      * Only a QUOTED delimiter (<<'EOF' / <<"EOF") qualifies. With quoting the
+        shell performs no $(...), backtick, or parameter expansion, so the body
+        cannot execute -- it is literal bytes handed to git. An UNQUOTED <<EOF
+        still expands and therefore keeps being scanned in full.
+      * Only `git commit` qualifies. `python - <<'PY'` stays scanned, which is
+        what INTERPRETER_WRITE_PATTERNS exist for -- masking heredocs generally
+        would blow a hole straight through them.
+
+    Masking preserves length and newlines, so every other pattern sees identical
+    offsets and line structure; only message characters become spaces.
+
+    RESIDUAL GAP, stated not papered over: `git commit -m "...path..."` is NOT
+    covered. Quoting and escaping in an inline argument need a real shell parse,
+    not a regex, and a wrong parse here fails open. Use a heredoc when a commit
+    message must name a protected path.
+    """
+    out = command
+    for m in _GIT_COMMIT_HEREDOC_START.finditer(command):
+        dash, delim = m.group(1), m.group(3)
+        body_start = m.end()
+        # Match the shell exactly. `<<-EOF` strips leading tabs, so an indented
+        # terminator ends it; plain `<<EOF` does NOT, so its terminator must sit
+        # at column 0. Accepting indentation for both was wrong in the direction
+        # of ending the mask EARLY -- a commit message that quotes a heredoc
+        # example (indented EOF inside the prose) resumed scanning mid-message.
+        # That failed closed rather than open, but it false-positived precisely
+        # the case this function exists to serve.
+        indent = r"[ \t]*" if dash else r""
+        terminator = re.compile(
+            r"^" + indent + re.escape(delim) + r"[ \t]*$", re.MULTILINE
+        )
+        t = terminator.search(out, body_start)
+        body_end = t.start() if t else len(out)
+        span = out[body_start:body_end]
+        # Length-preserving: keeps offsets stable for the remaining finditer
+        # matches, which were computed against the original string.
+        masked = "".join("\n" if ch == "\n" else " " for ch in span)
+        out = out[:body_start] + masked + out[body_end:]
+    return out
+
+
 def check_command(command: str, config: Dict[str, Any]) -> Tuple[bool, bool, str]:
     """Check if command should be blocked or requires confirmation.
 
@@ -618,6 +705,12 @@ def check_command(command: str, config: Dict[str, Any]) -> Tuple[bool, bool, str
     zero_access_paths = config.get("zeroAccessPaths", [])
     read_only_paths = config.get("readOnlyPaths", [])
     no_delete_paths = config.get("noDeletePaths", [])
+
+    # A commit message is not an operation. Mask the body of a QUOTED heredoc that
+    # feeds `git commit` before any path scan, so DESCRIBING a protected path does
+    # not read as touching one. Placed after the destructive-pattern gate (step 1)
+    # and before every path rule, so masking can only narrow what they see.
+    path_scan = _mask_git_commit_heredocs(command)
 
     # 1. Check against patterns from YAML (may block or ask)
     for item in patterns:
@@ -672,9 +765,9 @@ def check_command(command: str, config: Dict[str, Any]) -> Tuple[bool, bool, str
             # Convert glob to regex for command matching.
             glob_regex = glob_to_regex(zero_path) + token_boundary
             try:
-                if re.search(glob_regex, command, re.IGNORECASE):
+                if re.search(glob_regex, path_scan, re.IGNORECASE):
                     # Check if command targets a template file
-                    if any(suffix in command.lower() for suffix in template_suffixes):
+                    if any(suffix in path_scan.lower() for suffix in template_suffixes):
                         return False, True, (
                             f"ENV TEMPLATE: Command matches zero-access pattern {zero_path} but targets a template file. "
                             f"In production, env files populate from the secrets pipeline (make -C pmoves secrets-funnel). "
@@ -699,9 +792,9 @@ def check_command(command: str, config: Dict[str, Any]) -> Tuple[bool, bool, str
             # they match anything in the directory, including word-char filenames.
             bounded_expanded = escaped_expanded + token_boundary
             bounded_original = escaped_original + token_boundary
-            if re.search(bounded_expanded, command) or re.search(bounded_original, command):
+            if re.search(bounded_expanded, path_scan) or re.search(bounded_original, path_scan):
                 # Check if command targets a template file
-                if any(suffix in command.lower() for suffix in template_suffixes):
+                if any(suffix in path_scan.lower() for suffix in template_suffixes):
                     return False, True, (
                         f"ENV TEMPLATE: Command matches zero-access path {zero_path} but targets a template file. "
                         f"In production, env files populate from the secrets pipeline (make -C pmoves secrets-funnel). "
