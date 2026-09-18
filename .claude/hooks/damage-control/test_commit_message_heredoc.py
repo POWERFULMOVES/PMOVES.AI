@@ -85,7 +85,18 @@ for label, cmd, want_blocked in cases:
 import re as _re
 import time as _time
 
-_OLD_AMBIGUOUS = _re.compile(
+# CodeQL flags the next pattern, and CodeQL is RIGHT -- it is the vulnerable
+# regex, kept verbatim on purpose. It is the control in a two-sided assertion:
+# the suite checks both that the CURRENT pattern is linear AND that this one
+# still blows up. Delete it and the test silently stops discriminating, which is
+# precisely the failure the surrounding comment documents.
+#
+# Suppressed rather than obfuscated. Building the same regex from fragments
+# would hide it from the scanner while leaving it just as exploitable, and would
+# make the next reader think it was safe. It is never used on untrusted input:
+# it is searched exactly once, against a locally constructed string, at a size
+# bounded by _N.
+_OLD_AMBIGUOUS = _re.compile(  # codeql[py/redos] -- intentional: regression control, see above
     r"\bgit\s+(?:-[^\s]+\s+|--[^\s]+(?:=[^\s]+)?\s+)*commit\b[^\n]*?"
     r"<<(-?)\s*(['\"])([A-Za-z_][A-Za-z0-9_]*)\2[^\n]*\n"
 )
