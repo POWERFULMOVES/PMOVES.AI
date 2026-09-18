@@ -84,7 +84,7 @@ fi
 # so the two harnesses cannot drift into telling their agents different things.
 # shellcheck source=./pm-cipher-identity.sh
 . "$REPO_ROOT/pmoves/scripts/pm-cipher-identity.sh"
-pm_cipher_identity "$REPO_ROOT" "${PMOVES_NODE_IDENTITY:-}" ${IDENT_PY[@]+"${IDENT_PY[@]}"} || true
+pm_cipher_identity "$REPO_ROOT" "${PM_IDENT_CIPHER_ID:-${PMOVES_NODE_IDENTITY:-}}" ${IDENT_PY[@]+"${IDENT_PY[@]}"} || true
 echo "[crush-pmoves] ${PM_CARRY_LINE}" >&2
 # crush has no --append-system-prompt; its context arrives through IDENTITY_FILE,
 # so the verdict goes where crush will actually read it.
@@ -97,6 +97,20 @@ echo "[crush-pmoves] ${PM_CARRY_LINE}" >&2
     echo "\`${PM_CARRY_ID:-an advisory id you declare per call}\`, not \`${PMOVES_NODE_IDENTITY:-unresolved}\`."
     echo "Reason: ${PM_CARRY_WHY}"
     echo "Treat anything you recall as possibly another agent's. Road: \`make -C pmoves cipher-identity\`."
+  fi
+  # The agentId cipher REQUIRES on every call, into the file rather than onto
+  # stderr, for the reason this whole file exists: stderr is not context. crush
+  # has no declared agentId on any node yet (its card is nodeless -- see
+  # node-vocabulary.yaml's header), so this normally prints the absence. An
+  # absence the model can read beats one only the terminal saw.
+  echo ""
+  if [ -n "${PM_IDENT_CIPHER_ID:-}" ]; then
+    echo "When calling Cipher MCP tools, pass \`agentId: ${PM_IDENT_CIPHER_ID}\` — the"
+    echo "signing-card spelling, not your registry identity, which cipher refuses."
+  else
+    echo "**NO DECLARED CIPHER agentId.** Cipher requires one on every call, so declare"
+    echo "it per call and say that you are doing so."
+    echo "Reason: ${PM_IDENT_CIPHER_WHY:-not measured}"
   fi
 } >> "$IDENTITY_FILE"
 

@@ -165,6 +165,28 @@ def _resolver_says(harness: str = "claude-code") -> tuple[str, str]:
     return node, identity
 
 
+def _resolver_cipher_agent_id(harness: str = "claude-code") -> str:
+    """The cipher agentId the resolver declares, as the launcher receives it."""
+    env = dict(os.environ, PMOVES_NODE_ID=TEST_NODE_ID)
+    env.pop("PMOVES_NODE_IDENTITY", None)
+    env.pop("PMOVES_CIPHER_AGENT_ID", None)
+    proc = subprocess.run(
+        [sys.executable, str(REPO_ROOT / "pmoves" / "tools" / "node_identity.py"),
+         "--harness", harness, "--shell"],
+        capture_output=True, text=True, env=env, timeout=60,
+    )
+    for line in proc.stdout.splitlines():
+        key, _, value = line.partition("=")
+        if key == "PMOVES_CIPHER_AGENT_ID":
+            value = value.strip("'\"")
+            if value:
+                return value
+    pytest.fail(
+        f"no cipher agentId declared for {harness} on {TEST_NODE_ID}; "
+        "node-vocabulary.yaml declares one for every claude-code node"
+    )
+
+
 @pytest.fixture()
 def wired_root(tmp_path: Path) -> Path:
     """Every contributor able to fire: identity, cipher-up, carry."""
@@ -213,6 +235,18 @@ def test_the_one_prompt_carries_node_identity_and_role(tmp_path: Path, wired_roo
     assert identity in prompt, f"identity {identity!r} never reached argv:\n{prompt}"
     assert "delivery-agent" in prompt, f"role never reached argv:\n{prompt}"
 
+    # The cipher agentId is a FOURTH contributor, added after the fix. Pre-fix it
+    # would have been a fourth flag -- and, being last, the one that cancelled
+    # the other three rather than the one that got cancelled.
+    cipher_id = _resolver_cipher_agent_id()
+    assert cipher_id in prompt, f"cipher agentId {cipher_id!r} never reached argv:\n{prompt}"
+    # The spellings differ, and announcing the registry one is what cipher
+    # refuses. Assert the prompt does not tell the agent to pass it as agentId.
+    assert f"agentId '{identity}'" not in prompt, (
+        f"the prompt offers the REGISTRY spelling {identity!r} as an agentId; "
+        f"cipher wants {cipher_id!r}"
+    )
+
 
 def test_every_contributor_survives_into_the_same_prompt(tmp_path: Path, wired_root: Path):
     """The cancellation was per-contributor, so assert on all three at once.
@@ -233,27 +267,45 @@ def test_every_contributor_survives_into_the_same_prompt(tmp_path: Path, wired_r
     # node's token. Assert on the phrase both branches share, or the test passes
     # or fails on the credential rather than on the accumulation.
     assert "memory writes" in prompt                # contributor 3: the carry verdict
+    assert "agentId" in prompt                      # contributor 4: the cipher agentId
     assert node in prompt
 
 
-def test_a_session_with_nothing_to_say_passes_no_flag(tmp_path: Path):
-    """An empty prompt is not a prompt. Never hand the harness a bare flag.
+def test_an_empty_prompt_never_becomes_a_bare_flag(tmp_path: Path):
+    """`--append-system-prompt` with nothing after it is an error, not a no-op.
 
-    Undeclared node id, and no cipher tools at all: identity fails open, the
-    cipher block is skipped, the carry is unmeasurable. Zero contributors.
+    This used to be tested through the launcher, by making every contributor
+    fail. It cannot be any more: a session with no declared Cipher agentId is
+    now TOLD so, because cipher refuses every call without one -- so the
+    launcher always has at least one thing to say. The guarantee did not move,
+    only the layer that can still demonstrate it. pm_ident_prompt_args is where
+    an empty prompt would turn into a bare flag, so it is tested directly.
     """
-    root = _fake_root(tmp_path, tools={
-        "node_identity.py": REPO_ROOT / "pmoves" / "tools" / "node_identity.py",
-    })
-    argv, stderr, rc = _run(
-        tmp_path, root, ["delivery-agent"],
-        env_extra={"PMOVES_NODE_ID": "a-node-that-is-not-in-the-vocabulary"},
+    fragment = REPO_ROOT / "pmoves" / "scripts" / "pm-node-identity.sh"
+    script = f"""
+      set -u
+      . '{fragment}'
+      pm_ident_prompt_args;              echo "empty=${{#PM_IDENT_PROMPT_ARGS[@]}}"
+      pm_ident_append ""
+      pm_ident_prompt_args;              echo "after_empty_append=${{#PM_IDENT_PROMPT_ARGS[@]}}"
+      pm_ident_append "first"
+      pm_ident_append "second"
+      pm_ident_prompt_args;              echo "after_two=${{#PM_IDENT_PROMPT_ARGS[@]}}"
+      echo "flag=${{PM_IDENT_PROMPT_ARGS[0]}}"
+      echo "text<<<${{PM_IDENT_PROMPT_ARGS[1]}}>>>"
+    """
+    proc = subprocess.run([_bash(), "-c", script], capture_output=True, text=True, timeout=60)
+    assert proc.returncode == 0, proc.stderr
+    out = dict(
+        line.split("=", 1) for line in proc.stdout.splitlines() if line.startswith(("empty=", "after_"))
     )
-    assert rc == 0, stderr
-    assert argv, f"stub claude was never reached; stderr:\n{stderr}"
-    assert FLAG not in argv, f"empty prompt still passed a flag:\n{argv}"
-    # Fail-open, loudly: losing the identity must not be silent.
-    assert "identity=unresolved" in stderr or "node identity:" in stderr, stderr
+    assert out["empty"] == "0", "nothing to say must produce NO flag, not an empty one"
+    assert out["after_empty_append"] == "0", "an empty contributor must not create a flag"
+    assert out["after_two"] == "2", "two contributors must still produce exactly one flag"
+    assert f"flag={FLAG}" in proc.stdout, proc.stdout
+    # Blank-line separated, so the model reads distinct paragraphs rather than a
+    # run-on sentence -- and so a later contributor cannot glue onto an earlier.
+    assert "text<<<first\n\nsecond>>>" in proc.stdout, proc.stdout
 
 
 def test_both_exec_paths_pass_the_same_composed_array(tmp_path: Path, wired_root: Path):

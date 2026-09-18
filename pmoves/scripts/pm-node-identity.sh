@@ -48,6 +48,10 @@ pm_node_identity() {
   PM_IDENT_PY=()
   PM_IDENT_LINE=""
   PM_IDENT_OK=0
+  # The cipher agentId is a THIRD output, not a spelling of the second. Reset on
+  # every call so a second resolution cannot inherit the first node's answer.
+  PM_IDENT_CIPHER_ID=""
+  PM_IDENT_CIPHER_WHY=""
 
   local tool="$root/pmoves/tools/node_identity.py"
   if [ ! -f "$tool" ]; then
@@ -96,13 +100,40 @@ pm_node_identity() {
   PMOVES_NODE_IDENTITY="${PMOVES_RESOLVED_IDENTITY:-}"
   export PMOVES_NODE PMOVES_NODE_IDENTITY
 
+  # CIPHER AGENT ID -- the spelling cipher actually accepts.
+  #
+  # `agentId` is required on every cipher call and must be the signing-card
+  # spelling (b850-claude), not the registry one (claude_b850). Passing the
+  # registry spelling was not merely unhelpful: cipher_identity.py tests the id
+  # it is given against the active card set, so every launcher on every node read
+  # back a false `signing card: no`. Measured 2026-09-17 --
+  #   --agent claude_b850 -> signing card: no
+  #   --agent b850-claude -> signing card: yes
+  #
+  # DECLARED ONLY, and empty when there is none. The fallback to the registry
+  # identity lives at each CALL SITE -- `${PM_IDENT_CIPHER_ID:-${PMOVES_NODE_IDENTITY:-}}`
+  # -- so the carry check keeps measuring exactly what it measures today for the
+  # harnesses with no declaration (crush, codex, hermes, kimi, kilo; their cards
+  # are nodeless or ambiguous, see node-vocabulary.yaml's header) while this
+  # variable stays honest about whether an agentId EXISTS.
+  #
+  # Folding the fallback in here was the first cut and it was wrong: the launcher
+  # line then read `cipher_agent=crush_glm52` on a node with no declared agentId,
+  # presenting a registry spelling cipher refuses as though it were the answer --
+  # the exact confusion between the two namespaces this whole block exists to end.
+  PM_IDENT_CIPHER_ID="${PMOVES_CIPHER_AGENT_ID:-}"
+  PM_IDENT_CIPHER_WHY="${PMOVES_CIPHER_AGENT_WHY:-}"
+
   if [ -z "${PMOVES_NODE_IDENTITY:-}" ]; then
     PM_IDENT_LINE="[$label] node=${PMOVES_NODE:-unknown} identity=unresolved: ${PMOVES_IDENTITY_WHY:-no reason given}"
     return 1
   fi
 
   PM_IDENT_OK=1
-  PM_IDENT_LINE="[$label] node=${PMOVES_NODE} identity=${PMOVES_NODE_IDENTITY}"
+  # cipher_agent on the same line as the identity, for all nine launchers: the
+  # two spellings differ, and a line that prints only one of them is how the
+  # mismatch stayed invisible.
+  PM_IDENT_LINE="[$label] node=${PMOVES_NODE} identity=${PMOVES_NODE_IDENTITY} cipher_agent=${PM_IDENT_CIPHER_ID:-none}"
   return 0
 }
 

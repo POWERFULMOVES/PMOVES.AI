@@ -40,7 +40,7 @@ if [ -f "$PROJECT_ROOT/pmoves/scripts/pm-node-identity.sh" ]; then
   if [ -f "$PROJECT_ROOT/pmoves/scripts/pm-cipher-identity.sh" ]; then
     # shellcheck source=./pm-cipher-identity.sh
     . "$PROJECT_ROOT/pmoves/scripts/pm-cipher-identity.sh"
-    pm_cipher_identity "$PROJECT_ROOT" "${PMOVES_NODE_IDENTITY:-}" ${PM_IDENT_PY[@]+"${PM_IDENT_PY[@]}"} || true
+    pm_cipher_identity "$PROJECT_ROOT" "${PM_IDENT_CIPHER_ID:-${PMOVES_NODE_IDENTITY:-}}" ${PM_IDENT_PY[@]+"${PM_IDENT_PY[@]}"} || true
     echo "[kilo-pmoves] ${PM_CARRY_LINE}" >&2
   fi
 fi

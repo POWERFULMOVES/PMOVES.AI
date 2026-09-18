@@ -122,6 +122,16 @@ fi
 pm_node_identity "$ROOT" claude-code claude-pmoves || true
 IDENT_PY=(${PM_IDENT_PY[@]+"${PM_IDENT_PY[@]}"})
 echo "${PM_IDENT_LINE}" >&2
+# Cipher refuses every call without an `agentId`, and refuses a wrong one under
+# token enforcement, so a session that is not told the spelling cannot use
+# persistent memory at all. It rides in the same accumulated prompt -- a fourth
+# flag would have cancelled the three above it.
+if [ -n "${PM_IDENT_CIPHER_ID:-}" ]; then
+  pm_ident_append "When calling the Cipher MCP tools, pass agentId '${PM_IDENT_CIPHER_ID}'. It is REQUIRED on every call and is the signing-card spelling from pmoves/config/signing_identity_cards.yaml -- not your registry identity, which cipher refuses."
+else
+  pm_ident_append "You have NO declared Cipher agentId this session. Cipher requires one on every call, so declare it per call and say that you are doing so. Reason: ${PM_IDENT_CIPHER_WHY:-not measured}"
+fi
+
 if [ "${PM_IDENT_OK:-0}" = "1" ]; then
   # Put it where the session can actually READ it. Exported variables do not
   # reach the model's context; an appended system prompt does. This is the
@@ -221,7 +231,11 @@ fi
 # that file's header for why (same reason pm-python.sh exists).
 # shellcheck source=./pm-cipher-identity.sh
 . "$ROOT/pmoves/scripts/pm-cipher-identity.sh"
-pm_cipher_identity "$ROOT" "${PMOVES_NODE_IDENTITY:-}" ${IDENT_PY[@]+"${IDENT_PY[@]}"} || true
+# PM_IDENT_CIPHER_ID, not PMOVES_NODE_IDENTITY: cipher keys on the signing-card
+# spelling, and handing it the registry one made this very check report `signing
+# card: no` on every node. It falls back to the registry identity where no
+# agentId is declared, so nothing that measures today stops measuring.
+pm_cipher_identity "$ROOT" "${PM_IDENT_CIPHER_ID:-${PMOVES_NODE_IDENTITY:-}}" ${IDENT_PY[@]+"${IDENT_PY[@]}"} || true
 # Printed on EVERY path, including the ones that could not measure: a node with
 # no PyYAML must not look identical to a node whose carry is fine.
 echo "[claude-pmoves] ${PM_CARRY_LINE}" >&2

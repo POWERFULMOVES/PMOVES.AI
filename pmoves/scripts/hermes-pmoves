@@ -36,7 +36,7 @@ if [ -f "$REPO_ROOT/pmoves/scripts/pm-node-identity.sh" ]; then
   if [ -f "$REPO_ROOT/pmoves/scripts/pm-cipher-identity.sh" ]; then
     # shellcheck source=./pm-cipher-identity.sh
     . "$REPO_ROOT/pmoves/scripts/pm-cipher-identity.sh"
-    pm_cipher_identity "$REPO_ROOT" "${PMOVES_NODE_IDENTITY:-}" ${PM_IDENT_PY[@]+"${PM_IDENT_PY[@]}"} || true
+    pm_cipher_identity "$REPO_ROOT" "${PM_IDENT_CIPHER_ID:-${PMOVES_NODE_IDENTITY:-}}" ${PM_IDENT_PY[@]+"${PM_IDENT_PY[@]}"} || true
     echo "[hermes-pmoves] ${PM_CARRY_LINE}" >&2
   fi
 fi
