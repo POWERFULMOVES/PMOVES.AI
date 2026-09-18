@@ -1,4 +1,15 @@
 #!/usr/bin/env python3
+# /// script
+# requires-python = ">=3.9"
+# dependencies = ["pyyaml"]
+# ///
+#
+# DECLARED, NOT ASSUMED. This tool reads signing_identity_cards.yaml, so an
+# interpreter without PyYAML reports `card status unverifiable` for every
+# agent -- which is a measurement failure wearing a measurement's clothes.
+# Measured on Z890 2026-09-15: `make -C pmoves cipher-identity` did exactly
+# that, because the target used a bare $(PYTHON). The block below is what
+# lets `uv run --script` supply the dependency instead of shrugging.
 """Answer one question: which agent will the memory layer attribute this session's writes to?
 
 A session already knows who it is. `pmoves/tools/node_identity.py` resolves the
@@ -9,9 +20,11 @@ context. A session also already knows whether cipher is reachable
     the identity the session believes it has
     is not the identity its memories are filed under.
 
-Grounded in `Pmoves-cipher/src/pmoves/auth.ts` at submodule pin `e24f1323` --
-the gitlink PMOVES.AI `main` actually carries. The pin matters: this node's
-submodule working tree sits on `fix/per-agent-token-profile-header` (the head of
+Grounded in `Pmoves-cipher/src/pmoves/auth.ts` at submodule pin `975e02e6`
+(re-pinned `c88b009a2` by #3103; `auth.ts` is unchanged between the two, so
+every line number below still holds) -- the gitlink PMOVES.AI `main` actually
+carries. The pin matters: at the time these numbers were read, this node's
+submodule working tree sat on `fix/per-agent-token-profile-header` (the head of
 unmerged fork PR #19), which adds three lines at :67 and shifts every citation
 below it. Line numbers read off a working tree are not line numbers of what the
 fleet runs.
@@ -21,10 +34,10 @@ fleet runs.
     auth.ts:44-52   token does NOT start with "cipher_"  -> compared against the
                     CIPHER_API_TOKEN env var; on match the request is attributed
                     to agentId "bootstrap". No Supabase lookup happens at all.
-    auth.ts:54-88   token DOES start with "cipher_"      -> the uuid is looked up
+    auth.ts:54-91   token DOES start with "cipher_"      -> the uuid is looked up
                     in pmoves_core.cipher_agent_tokens and the request is
                     attributed to THAT row's agent_id -- the minted agent.
-    auth.ts:103-106 no Bearer at all, server token unset -> agentId undefined,
+    auth.ts:106-109 no Bearer at all, server token unset -> agentId undefined,
                     "advisory" mode: the caller self-declares in tool args.
 
 So bootstrap is not an agent and never was. It is the single-token launch path,
@@ -173,7 +186,7 @@ def resolve(agent, environ=None, cards_path: Path = CARDS) -> dict:
         row["effective_id"] = ""
         row["why"] = (
             "no CIPHER_API_TOKEN visible to this process: either the session is in "
-            "advisory mode (auth.ts:103-106, agentId self-declared per call) or the "
+            "advisory mode (auth.ts:106-109, agentId self-declared per call) or the "
             "token is injected downstream and simply not readable from here"
         )
 

@@ -150,6 +150,34 @@ ensure-env-shared:
 	python tools/ensure_env_shared.py --env-file "$(ENV_SHARED_FILE)" --template "$(ENV_SHARED_TEMPLATE)" || \
 	py -3 tools/ensure_env_shared.py --env-file "$(ENV_SHARED_FILE)" --template "$(ENV_SHARED_TEMPLATE)"
 
+# -------- Launcher generator (registry-driven) -------------------------------
+# Source of truth: pmoves/configs/cli_tools.yaml :: pmoves_wrappers + 
+# pmoves/config/agent_registry.yaml (per-node identities).
+# Emit: deploy/provision/<tool>-pmoves.{sh,ps1,cmd} + install-* + per-node pins.
+# See: pmoves/tools/pmoves_launcher_generator.py and pmoves/docs/AGENTS/pmoves_launcher_generator_LEARNINGS.md
+LAUNCHER_GENERATOR := $(PYTHON) tools/pmoves_launcher_generator.py
+LAUNCHER_OUT := $(REPO_ROOT)/deploy/provision
+LAUNCHER_MANIFEST := $(LAUNCHER_OUT)/launchers.manifest.json
+
+.PHONY: launchers-regen
+launchers-regen: ## Regenerate registry-driven launchers + manifest into deploy/provision/
+	@$(LAUNCHER_GENERATOR) --registry-root "$(REPO_ROOT)" --out "$(REPO_ROOT)" || \
+	$(LAUNCHER_GENERATOR)
+
+.PHONY: launchers-drift-check
+launchers-drift-check: ## Diff generator output against checked-in files; exit non-zero on drift
+	@$(LAUNCHER_GENERATOR) --registry-root "$(REPO_ROOT)" --check || \
+	$(LAUNCHER_GENERATOR) --check
+
+.PHONY: launchers-manifest
+launchers-manifest: ## Print the launcher inventory (registry-driven)
+	@$(LAUNCHER_GENERATOR) --registry-root "$(REPO_ROOT)" --dry-run --json || \
+	$(LAUNCHER_GENERATOR) --dry-run --json
+
+.PHONY: launchers-clean
+launchers-clean: ## Remove only generator-emitted files (leaves hand-written launchers intact)
+	@echo "Re-run 'make launchers-regen' to restore generator-emitted launchers."
+
 # -------- Standard Makefile targets ----------
 .PHONY: all
 all: help ## Default target - show help
@@ -342,10 +370,43 @@ docs-quickstart: ## Open the quick start guide
 #
 # Probed, not assumed, and RECURSIVE (`=`, not `:=`) so the probe runs only when
 # a register target actually expands it rather than on every make invocation.
-# `$(PYTHON)` is preferred when it already has PyYAML -- switching a working
-# interpreter for `uv run --script` would trade a silent degradation for a first
-# -run network fetch, which is a worse failure on an offline node.
-REGISTER_PYTHON = $(shell if $(PYTHON) -c 'import yaml' >/dev/null 2>&1; then \
+# `$(PYTHON)` is preferred when it already has the dependencies -- switching a
+# working interpreter for `uv run --script` would trade a silent degradation for
+# a first-run network fetch, which is a worse failure on an offline node.
+#
+# The offline tradeoff is unchanged in shape but now honest: the fallback
+# actually DELIVERS both dependencies, because the PEP 723 block in
+# register_append.py declares `pydantic>=2` alongside `pyyaml`. Before, an
+# offline node fell back to a `uv run --script` that still could not supply
+# pydantic, so the fetch bought nothing and the notice fired anyway.
+# PROBE EVERY DEPENDENCY THE GATE ACTUALLY USES, not just the first one that
+# ever mattered. This tested `import yaml` alone, so an interpreter with
+# PyYAML and no pydantic was chosen as GOOD and then printed a DEGRADED
+# notice on every write -- measured 2026-09-15 on two register-release runs.
+# `register_append.py` needs both: PyYAML for the identity vocabulary above,
+# pydantic for the RegisterProse model that is the DECLARED prose contract.
+# A probe that checks one of two dependencies reports on the half it looked at.
+REGISTER_PYTHON = $(shell if $(PYTHON) -c 'import yaml, pydantic' >/dev/null 2>&1; then \
+	echo '$(PYTHON)'; \
+	elif command -v uv >/dev/null 2>&1; then echo 'uv run --script'; \
+	else echo '$(PYTHON)'; fi)
+
+# THE PATTERN, stated once so it can be reused instead of re-derived.
+#
+#   1. every tool declares its third-party deps in a PEP 723 block
+#   2. every target selects an interpreter that SATISFIES that declaration
+#   3. the fallback is `uv run --script`, which reads the block
+#
+# $(PYTHON) answers 'is there an interpreter', which is a different question
+# from 'can it import what this tool needs' -- and only the second one
+# decides whether the tool can do its job. A target that asks the first and
+# acts on the second degrades silently on whichever nodes happen to differ,
+# which is every fleet.
+#
+# PYTHON_YAML is REGISTER_PYTHON's shape for the (much larger) set of tools
+# needing PyYAML alone. Recursive `=` so the probe runs only when a target
+# expands it, not on every make invocation.
+PYTHON_YAML = $(shell if $(PYTHON) -c 'import yaml' >/dev/null 2>&1; then \
 	echo '$(PYTHON)'; \
 	elif command -v uv >/dev/null 2>&1; then echo 'uv run --script'; \
 	else echo '$(PYTHON)'; fi)
@@ -3836,7 +3897,7 @@ qdrant-provision-cipher: ## Provision the Qdrant collection Cipher Memory writes
 	@# in supa-start. Image is the repo's standard pinned python base, so this
 	@# pulls nothing new on a node that has built any Python service.
 	@echo "🧠 Provisioning Qdrant collection for Cipher Memory..."
-	@$(LOAD_ENV_SHARED); docker run --rm --network pmoves_data \
+	@export MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*'; $(LOAD_ENV_SHARED); docker run --rm --network pmoves_data \
 		-v "$(CURDIR)/scripts:/scripts:ro" \
 		-e PYTHONDONTWRITEBYTECODE=1 \
 		-e QDRANT_URL=$${QDRANT_URL:-http://qdrant:6333} \
@@ -5774,11 +5835,20 @@ codex-pmoves: ## Launch Codex CLI with PMOVES context
 	@bash $(CURDIR)/scripts/codex-pmoves.sh
 
 cipher-identity: ## Which agent_id will this session's cipher memories be filed under? [AGENT=z890-claude]
-	@$(PYTHON) $(CURDIR)/tools/cipher_identity.py $(if $(AGENT),--agent "$(AGENT)",) || true
+	@$(PYTHON_YAML) $(CURDIR)/tools/cipher_identity.py $(if $(AGENT),--agent "$(AGENT)",) || true
+
+# Held in a variable, NOT inline in the $(or ...) below. Make splits function
+# arguments on commas, so an inline comma-separated default is not one string —
+# it is six arguments, and $(or) returns the first non-empty one. Every agent
+# minted without an explicit SCOPES= therefore got ["memory:read"] alone: no
+# write, no reasoning, no session. Measured 2026-09-16 minting claude-4090.
+# A variable reference is a single argument; commas inside its VALUE do not
+# split, because splitting happens on the call text before expansion.
+CIPHER_MINT_DEFAULT_SCOPES := memory:read,memory:write,reasoning:read,reasoning:write,session:read,session:write
 
 cipher-mint-token: ## Mint a per-agent cipher token (requires an ACTIVE signing card): AGENT=z890-claude [SCOPES=...]
 	@if [ -z "$(AGENT)" ]; then echo "Usage: make -C pmoves cipher-mint-token AGENT=z890-claude [SCOPES='memory:read,memory:write']"; exit 1; fi
-	@$(PYTHON) $(CURDIR)/scripts/mint_cipher_token.py --agent "$(AGENT)" --scopes "$(or $(SCOPES),memory:read,memory:write,reasoning:read,reasoning:write,session:read,session:write)"
+	@$(PYTHON) $(CURDIR)/scripts/mint_cipher_token.py --agent "$(AGENT)" --scopes "$(or $(SCOPES),$(CIPHER_MINT_DEFAULT_SCOPES))"
 
 .PHONY: beats-analyze beats-hyperdim beats-pipeline
 beats-analyze: ## Re-run DARKXSIDE sonic fingerprint analysis (librosa + ffmpeg lavfi)

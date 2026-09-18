@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # /// script
 # requires-python = ">=3.9"
-# dependencies = ["pyyaml"]
+# dependencies = ["pyyaml", "pydantic>=2"]
 # ///
 #
 # DECLARED HERE TOO, not only in the hook. This tool imports
@@ -265,12 +265,22 @@ def assert_prose_clean(text: str, literal_assignments: bool = False) -> None:
     # Offline fallback. LOUD, because a second copy of the rules enforcing
     # silently is how two validators drift into disagreeing about what is
     # legal -- the failure this module already warns about for PyYAML.
-    print("register-append: DEGRADED - pydantic is not importable in this "
-          "interpreter, so prose is validated by the stdlib fallback rather "
-          "than by the RegisterProse model. The two are pinned against the "
-          "same fixtures, but only the model is the declared contract. Run "
-          "this through `make -C pmoves register-claim`, which picks an "
-          "interpreter that has it.", file=sys.stderr)
+    # THE REMEDY MUST NOT BE THE THING YOU JUST RAN. This used to say "run
+    # this through `make -C pmoves register-claim`, which picks an interpreter
+    # that has it" -- and register-claim expands the SAME $(REGISTER_PYTHON) as
+    # register-release, whose probe tested `import yaml` and nothing else. So
+    # the notice named itself as its own fix, every time, on both targets. A
+    # degradation warning whose remedy is a no-op teaches people to skip
+    # warnings, which costs more than the degradation it reports.
+    print(f"register-append: DEGRADED - pydantic is not importable in "
+          f"{sys.executable}, so prose is validated by the stdlib fallback "
+          "rather than by the RegisterProse model. The two are pinned against "
+          "the same fixtures, but only the model is the declared contract. "
+          "Fix: install pydantic>=2 into that interpreter, or install `uv` -- "
+          "the make targets prefer an interpreter carrying BOTH pyyaml and "
+          "pydantic, and fall back to `uv run --script`, which reads the "
+          "PEP 723 block at the top of this file and now declares both.",
+          file=sys.stderr)
     symptoms = expansion_symptoms(text)
     if literal_assignments:
         symptoms = [s for s in symptoms if "empty assignment" not in s]

@@ -1,14 +1,16 @@
 """Tests for pmoves/tools/cipher_identity.py.
 
 Every assertion here is pinned to a line of `Pmoves-cipher/src/pmoves/auth.ts`
-at submodule pin `e24f1323` -- the gitlink `main` carries, NOT this node's
+at submodule pin `975e02e6` (re-pinned `c88b009a2` by #3103; `auth.ts` is
+unchanged between the two, so every line number below still holds) -- the
+gitlink `main` carries, NOT this node's
 submodule working tree, which sits on an unmerged fork PR branch. The whole tool
 is a claim about what that file does with a bearer:
 
   auth.ts:46   if (!token.startsWith('cipher_')) { ... }
   auth.ts:49   return {agentId: 'bootstrap', ...}
   auth.ts:60   const uuidHex = token.slice(7)
-  auth.ts:103  if (!legacyToken && skipIfUnset) { req.agentId = undefined }
+  auth.ts:106  if (!legacyToken && skipIfUnset) { req.agentId = undefined }
 
 If cipher's auth changes, these tests should fail loudly rather than let the
 launcher keep announcing an identity carry that no longer exists.
@@ -67,7 +69,7 @@ def test_token_without_prefix_is_bootstrap_not_per_agent():
 
 
 def test_absent_token_is_advisory():
-    # auth.ts:103-105 — no bearer and no server token means agentId undefined.
+    # auth.ts:106-108 — no bearer and no server token means agentId undefined.
     assert ci.classify_token(None) == ci.MODE_ADVISORY
     assert ci.classify_token("") == ci.MODE_ADVISORY
 
