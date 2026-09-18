@@ -24,13 +24,20 @@ if ($ps1 -eq '') { $ps1 = $PSCommandPath }
 $scriptDir = Split-Path -Parent $ps1
 $repoRoot = (Resolve-Path (Join-Path $scriptDir '..\..')).Path
 
-# Source env.shared if it exists. Same .pm.-style sanitization as the .sh
-# launcher: ALIAS lines like `KEY=${OTHER_VAR}` get expanded, while literal
-# ${...} that point at unset vars are passed through (claude-pmoves does
-# the same FAIL-CLOSED treatment in its env-loading block).
+# Source env.shared — same narrow posture as the .sh twin: ONLY the keys
+# listed in PMOVES_CIPHER_REQUIRED_KEYS (default: CIPHER_API_TOKEN) are
+# loaded into the process env. Sourcing the whole file would leak
+# ANTHROPIC_* / CLAUDE_CODE_* keys into every child of this launcher when it
+# is invoked from a CI step or a hook script, which is the documented class
+# of bug; the cipher CLI needs the cipher bearer and nothing else. Aliases
+# like `KEY=${OTHER_VAR}` are expanded only against allow-listed, loaded
+# keys (+ the process env for self-reference); a reference to a key outside
+# the allow-list is left as literal ${...} text, exactly like the .sh
+# loader's semantics.
+$requiredKeys = if ($env:PMOVES_CIPHER_REQUIRED_KEYS) { @($env:PMOVES_CIPHER_REQUIRED_KEYS -split '\s+' | Where-Object { $_ }) } else { @('CIPHER_API_TOKEN') }
+$vars = [ordered]@{}
 $envFile = if ($env:PMOVES_ENV_SHARED) { $env:PMOVES_ENV_SHARED } else { Join-Path $repoRoot 'pmoves\env.shared' }
 if (Test-Path $envFile) {
-    $vars = [ordered]@{}
     foreach ($line in Get-Content -LiteralPath $envFile) {
         if ($line -match '^\s*#') { continue }
         if ($line -match '^\s*$') { continue }
@@ -38,9 +45,11 @@ if (Test-Path $envFile) {
         if ($eq -lt 1) { continue }
         $key = $line.Substring(0, $eq).Trim()
         $val = ($line.Substring($eq + 1) -replace '\r$', '')
-        if ($key) { $vars[$key] = $val }
+        if (-not $key) { continue }
+        if ($requiredKeys -notcontains $key) { continue }  # allow-list gate (mirrors pmoves-cipher.sh)
+        $vars[$key] = $val
     }
-    # One-pass ${{...}} expansion against the map.
+    # One-pass ${...} expansion against the allow-listed map (+ process env).
     for ($pass = 0; $pass -lt 5; $pass++) {
         $changed = $false
         foreach ($k in @($vars.Keys)) {
@@ -49,14 +58,20 @@ if (Test-Path $envFile) {
                 param($m)
                 $name = $m.Groups[1].Value
                 $repl = $null
-                if ($name -ne $curKey -and $vars.Contains($name) -and $vars[$name] -ne '') { $repl = $vars[$name] }
-                elseif ($name -ne $curKey) {
-                    $envv = [Environment]::GetEnvironmentVariable($name)
-                    if ($envv) { $repl = $envv }
+                if ($requiredKeys -contains $name) {
+                    if ($name -ne $curKey -and $vars.Contains($name) -and $vars[$name] -ne '') {
+                        $repl = $vars[$name]
+                    } else {
+                        # Self-reference or not-yet-loaded alias: fall back to
+                        # the process env (mirrors the .sh ${!name} indirect
+                        # expansion, which reads the already-exported env).
+                        $envv = [Environment]::GetEnvironmentVariable($name)
+                        if ($envv) { $repl = $envv }
+                    }
                 }
                 if ($null -ne $repl) { $repl }
                 elseif ($m.Groups[2].Success) { $m.Groups[2].Value }
-                else { '' }
+                else { $m.Value }   # outside the allow-list: keep literal ${...}
             })
             if ($resolved -ne $vars[$k]) { $vars[$k] = $resolved; $changed = $true }
         }
@@ -71,9 +86,10 @@ if (Test-Path $envFile) {
 }
 
 # Python interpreter discovery. Prefer the venv that's already on this repo,
-# then fall back to python on PATH. We don't gate on a Microsoft-Store stub
-# the way pm-python.sh does (no pwsh equivalent ladder in this repo yet);
-# that's a follow-up if the Store stub ever sneaks in.
+# then fall back to python on PATH (Get-Command resolves PATH/PATHEXT;
+# Test-Path cannot see bare commands like 'python' or 'py'). We don't gate
+# on a Microsoft-Store stub the way pm-python.sh does (no pwsh equivalent
+# ladder in this repo yet); that's a follow-up if the Store stub ever sneaks in.
 $candidatePaths = @(
     (Join-Path $repoRoot 'pmoves\.venv-pmoves\Scripts\python.exe'),
     (Join-Path $repoRoot 'pmoves\.venv-pmoves\bin\python'),
@@ -81,16 +97,23 @@ $candidatePaths = @(
     'python3',
     'py -3'
 )
-$python = $null
+$pythonExe = $null
+$pythonArgs = @()
 foreach ($cand in $candidatePaths) {
     $parts = $cand -split ' '
     $exe = $parts[0]
-    if (Test-Path $exe) {
-        $python = $cand
-        break
+    $candArgs = @()
+    if ($parts.Count -gt 1) { $candArgs = $parts[1..($parts.Count - 1)] }
+    if ($exe -match '[\\/]') {
+        # Path candidate (venv python) -- Test-Path is correct here.
+        if (Test-Path -LiteralPath $exe) { $pythonExe = $exe; $pythonArgs = $candArgs; break }
+    } else {
+        # Bare command -- resolve via PATH/PATHEXT, not Test-Path.
+        $resolved = Get-Command -Name $exe -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($resolved) { $pythonExe = $resolved.Source; $pythonArgs = $candArgs; break }
     }
 }
-if (-not $python) {
+if (-not $pythonExe) {
     Write-Host "[pmoves-cipher] ERROR: no usable python interpreter." -ForegroundColor Red
     Write-Host "[pmoves-cipher]        Tried: $($candidatePaths -join ', ')"
     exit 1
@@ -102,12 +125,8 @@ if (-not (Test-Path $cli)) {
     exit 1
 }
 
-[Environment]::SetEnvironmentVariable('PMOVES_LAUNCHER_SESSION', 'pmoves-cipher.ps1', 'Process')
+[Environment]::SetEnvironmentVariable('PMOVES_LAUNCHER_SESSION', "pmoves-cipher.ps1 (loaded $($vars.Count) vars)", 'Process')
 
 # Invoke python with the cli + forwarded args. Quoting preserved by pwsh.
-$parts = $python -split ' '
-$exe = $parts[0]
-$exeArgs = @()
-if ($parts.Count -gt 1) { $exeArgs = $parts[1..($parts.Count - 1)] }
-& $exe @exeArgs $cli @args
+& $pythonExe @pythonArgs $cli @args
 exit $LASTEXITCODE

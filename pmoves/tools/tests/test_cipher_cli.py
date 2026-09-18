@@ -168,6 +168,26 @@ class TestSubprocessDispatch(unittest.TestCase):
         rc = cc.cmd_verify(mock.Mock(file=str(self.tmp_path / "nonexistent.json")))
         self.assertEqual(rc, 2, "missing file should return usage-error code 2")
 
+    def test_missing_tool_returns_two(self):
+        # _run_chit returns 2 for a missing/unspawnable tool; verify must NOT
+        # flatten that to 3 -- usage errors stay 2 (docstring contract).
+        rc, msg = cc._run_chit("definitely_not_a_real_chit_tool.py", [], "verify")
+        self.assertEqual(rc, 2)
+        self.assertIn("missing tool", msg)
+
+    def test_wrapped_rc_ge_two_passes_through(self):
+        # Passthrough contract: rc >= 2 from a wrapped tool surfaces verbatim
+        # (e.g. chit_manifest_register's 4 for parse/usage errors).
+        self.assertEqual(cc._map_wrapped_rc(4), 4)
+        self.assertEqual(cc._map_wrapped_rc(7), 7)
+        self.assertEqual(cc._map_wrapped_rc(2), 2)
+
+    def test_wrapped_rc_one_becomes_three(self):
+        # The chit family's generic 1 is normalized to 3 so the generic
+        # Unix 1 never leaks as this CLI's exit code.
+        self.assertEqual(cc._map_wrapped_rc(1), 3)
+        self.assertEqual(cc._map_wrapped_rc(0), 0)
+
 
 class TestLaneLedgerAppend(unittest.TestCase):
     """register and bundle append a JSON-Lines record on success."""
@@ -205,12 +225,14 @@ class TestLaneLedgerAppend(unittest.TestCase):
         self.assertEqual(records[0]["action"], "bundle")
         self.assertEqual(records[0]["lane"], "lane-name")
 
-    def test_failed_subprocess_does_not_append(self):
+    def test_failed_subprocess_still_appends(self):
         # register() appends BEFORE the subprocess runs (per the docstring
         # contract: "the audit trail exists even if the chit invocation
         # below fails"). So a failed subprocess DOES still produce a ledger
         # entry. The test pins that behavior -- changing it would be a
-        # contract change, not a regression.
+        # contract change, not a regression. (Named for what it asserts:
+        # an earlier revision was called test_failed_subprocess_does_not_append,
+        # which asserted the opposite of its own name.)
         ledger = self.tmp_path / "lanes.jsonl"
         with mock.patch.object(cc, "LANES_LEDGER", ledger):
             with mock.patch.object(cc, "subprocess") as ms:

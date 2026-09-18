@@ -34,13 +34,20 @@ Exit codes
 ----------
   0  subcommand completed its primary action (regardless of what the wrapped
      tool printed; a tool that already returned 0 to us)
-  2  usage error (missing/invalid args, file does not exist)
-  3  wrapped tool exited non-zero
-  4  health endpoint unreachable / HTTP error (only used by `health`)
+  2  usage error (missing/invalid args, input file does not exist) -- also
+     the code passed through when the wrapped tool is missing or unspawnable
+  3  wrapped tool failed: its exit was the chit family's generic 1, which
+     this CLI normalizes so callers never see the generic Unix 1
+  4  health endpoint unreachable / HTTP error (emitted by `health`)
 
-The non-zero codes are deliberately narrow so callers can branch on them
-without false positives (e.g. a chit tool that prints a warning to stderr but
-returns 0 stays a 0 from this CLI).
+Passthrough rule: a wrapped tool that exits with rc >= 2 surfaces its own
+code verbatim. Its stderr already reached the terminal (subprocess.run does
+not capture it), so the operator sees the failure where it happened, and the
+chit family's documented codes stay observable (e.g.
+chit_manifest_register's 4 for parse/usage errors). Only rc == 1 is
+remapped, to 3. The non-zero vocabulary stays deliberately narrow (2/3/4)
+so callers can branch on them without false positives (e.g. a chit tool
+that prints a warning to stderr but returns 0 stays a 0 from this CLI).
 """
 from __future__ import annotations
 
@@ -72,9 +79,12 @@ HEALTH_TIMEOUT = float(os.environ.get("PMOVES_CIPHER_HEALTH_TIMEOUT", "3"))
 # ----------------------------------------------------------------------------
 # Lane ledger -- append-only JSONL audit trail for `register <lane> <summary>`
 # and `bundle <lane>` invocations. Lives under pmoves/data/chit/ which is
-# gitignored at file granularity (only env.cgp.json is excluded; lanes.jsonl
-# is an audit artifact that SHOULD be in git so future agents can see what
-# lanes have been registered).
+# gitignored WHOLESALE (pmoves/.gitignore excludes data/chit/; an earlier
+# revision of this comment claimed the ledger SHOULD be committed -- that
+# was wrong, and entries embed host/user that must not reach a public repo
+# anyway). The ledger is intentionally local-node audit data. Lane history
+# that must outlive the node lives in cipher MCP / lane-aware AGNOTE rows
+# (pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md), not in git.
 # ----------------------------------------------------------------------------
 def _ensure_ledger() -> Path:
     LANES_LEDGER.parent.mkdir(parents=True, exist_ok=True)
@@ -120,6 +130,22 @@ def _run_chit(script: str, argv: Sequence[str], label: str) -> Tuple[int, str]:
     return completed.returncode, f"{label} exited {completed.returncode}"
 
 
+def _map_wrapped_rc(rc: int) -> int:
+    """Normalize a wrapped tool's exit code to this CLI's exit contract.
+
+    0 stays 0. The chit family's generic 1 becomes 3 (wrapped-tool failed)
+    so this CLI never leaks the generic Unix 1. rc >= 2 passes through
+    verbatim: the tool's stderr already reached the terminal (subprocess.run
+    does not capture it), and the tool's own documented codes (e.g.
+    chit_manifest_register's 4 for parse/usage errors) stay observable.
+    """
+    if rc == 0:
+        return 0
+    if rc == 1:
+        return 3
+    return rc
+
+
 def cmd_register(args: argparse.Namespace) -> int:
     lane = args.lane
     summary = args.summary
@@ -149,7 +175,7 @@ def cmd_register(args: argparse.Namespace) -> int:
         )
     else:
         print(f"register: lane={lane} summary={summary!r} {msg}", file=sys.stderr)
-        return 3
+        return _map_wrapped_rc(rc)
     return 0
 
 
@@ -160,7 +186,7 @@ def cmd_verify(args: argparse.Namespace) -> int:
         return 2
     rc, msg = _run_chit("chit_verify.py", ["--cgp", str(path)], "verify")
     print(f"verify: {path} {msg}")
-    return 3 if rc != 0 else 0
+    return _map_wrapped_rc(rc)
 
 
 def cmd_decode(args: argparse.Namespace) -> int:
@@ -173,7 +199,7 @@ def cmd_decode(args: argparse.Namespace) -> int:
     # "decoding" an env.cgp.json to inspect it.
     rc, msg = _run_chit("chit_decode_secrets.py", ["--cgp", str(path)], "decode")
     print(f"decode: {path} {msg}")
-    return 3 if rc != 0 else 0
+    return _map_wrapped_rc(rc)
 
 
 def cmd_encode(args: argparse.Namespace) -> int:
@@ -187,7 +213,7 @@ def cmd_encode(args: argparse.Namespace) -> int:
     # env.shared` is the standard "regenerate the canonical bundle" call.
     rc, msg = _run_chit("chit_encode_secrets.py", ["--env-file", str(path)], "encode")
     print(f"encode: {path} {msg}")
-    return 3 if rc != 0 else 0
+    return _map_wrapped_rc(rc)
 
 
 def cmd_bundle(args: argparse.Namespace) -> int:
@@ -204,7 +230,7 @@ def cmd_bundle(args: argparse.Namespace) -> int:
     # the ledger above so the bundle output can be traced to a lane.
     rc, msg = _run_chit("chit_sync_workflow_bundle.py", [], "bundle")
     print(f"bundle: lane={lane} {msg}")
-    return 3 if rc != 0 else 0
+    return _map_wrapped_rc(rc)
 
 
 def cmd_health(args: argparse.Namespace) -> int:
