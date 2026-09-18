@@ -10,10 +10,42 @@ $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $envf = if ($env:PMOVES_ENV_SHARED) { $env:PMOVES_ENV_SHARED } else { Join-Path $root 'pmoves\env.shared' }
 
+# --- MAVIS SDK ENV STRIP ----------------------------------------------------
+# The Mavis SDK's `env` block in `~/.claude/settings.json` injects
+# ANTHROPIC_BASE_URL, ANTHROPIC_AUTH_TOKEN, ANTHROPIC_MODEL, MCP_TIMEOUT,
+# API_TIMEOUT_MS, CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC, ... into every
+# Claude Code session's process env.  That env block is inherited by the
+# shell that runs `claude-pmoves.ps1`, and would otherwise be inherited by
+# the launched `claude` -- overriding the operator's own Claude Code settings
+# (their Anthropic API endpoint, their model picker).
+#
+# The strip checks each Mavis SDK var against claude's NEEDS list
+# (ANTHROPIC_BASE_URL + ANTHROPIC_AUTH_TOKEN + ANTHROPIC_API_KEY) and:
+#   * keeps the ones claude consumes
+#   * preserves the others under PMOVES_MAVIS_SDK_<NAME> for inspection
+#   * unsets the originals
+#   * emits one WARN line summarizing what was caught
+#
+# Mirrors deploy/provision/claude-pmoves.sh:42-66.  Both twins source the
+# shared helper at pmoves/scripts/mavis_sdk_env.{sh,ps1} and call the
+# per-platform strip function with the same registry keys.
+# ----------------------------------------------------------------------------
+$mavis_helper = Join-Path $root 'pmoves\scripts\mavis_sdk_env.ps1'
+if (Test-Path $mavis_helper) {
+    . $mavis_helper
+    Strip-MavisSdkEnvFor -CliName 'claude'
+} else {
+    Write-Warning "[claude-pmoves] mavis_sdk_env.ps1 not found at $mavis_helper -- Mavis SDK env may bleed into the launched session."
+}
+
 if (Test-Path $envf) {
     # Blocklist: vars that control Claude SDK/session behavior and should NEVER be
     # sourced by the launcher. These are user's personal billing/config, not fleet MCP creds.
     # Sourcing them forces API billing (ANTHROPIC_API_KEY) or clobbers session state.
+    #
+    # Kept in step with deploy/provision/claude-pmoves.sh -- the bash twin
+    # has the same names but uses `CLAUDE_CODE_.+` regex anchor; the
+    # PowerShell twin's `-replace '\*','.*'` produces `CLAUDE_CODE_.*`.
     $blocklist = @(
         'ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_BASE_URL'
         'CLAUDECODE', 'CLAUDE_CODE_*', 'CLAUDE_SESSION_*'

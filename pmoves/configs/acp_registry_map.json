@@ -35,7 +35,7 @@
       "name": "Claude Agent",
       "repository": "https://github.com/agentclientprotocol/claude-agent-acp",
       "status": "available",
-      "version": "0.76.0"
+      "version": "0.77.0"
     },
     "cline": {
       "name": "Cline",
@@ -77,7 +77,7 @@
       "name": "Cursor",
       "repository": null,
       "status": "available",
-      "version": "2026.09.08"
+      "version": "2026.09.10"
     },
     "deepagents": {
       "name": "DeepAgents",
