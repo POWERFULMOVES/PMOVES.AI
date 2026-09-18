@@ -608,9 +608,28 @@ def check_opaque_write_verbs(
 
 # A quoted heredoc feeding `git commit`: the delimiter quoting is what makes
 # the body inert, and `git commit` is what makes it a message rather than code.
-# Allow the usual git global flags (-c x=y, --no-pager) before the subcommand.
+# Skip git's global flags (--no-pager, -c) before the subcommand.
+#
+# ONE branch, not an alternation. The first revision used
+#     (?:-[^\s]+\s+|--[^\s]+(?:=[^\s]+)?\s+)*
+# and CodeQL flagged it as exponential backtracking, correctly: BOTH branches
+# match a token beginning "--", because `-[^\s]+` happily consumes "--foo". An
+# ambiguous alternation under `*` lets a FAILING match split the same input two
+# ways at every position -- 2^n paths. Reported triggers were repetitions of
+# '--' and '!=\t--'.
+#
+# This matters more here than in ordinary code: the hook is PreToolUse, so it
+# runs before EVERY Bash call. A pathological command line would hang the whole
+# session, and this file already carries a 22s-stall regression from a different
+# runaway pattern (see INTERPRETER WRITE PATTERNS above).
+#
+# A git flag token is just "-" followed by non-space, so the two branches were
+# always the same shape. Collapsing them leaves exactly one way to match any
+# token: `-`, then non-space up to the whitespace that ends it. No ambiguity, no
+# backtracking. Deliberately a superset of the old pair (it also accepts a bare
+# "-"), which is harmless in a prefix-skipper whose next obligation is `commit`.
 _GIT_COMMIT_HEREDOC_START = re.compile(
-    r"\bgit\s+(?:-[^\s]+\s+|--[^\s]+(?:=[^\s]+)?\s+)*commit\b[^\n]*?"
+    r"\bgit\s+(?:-\S*\s+)*commit\b[^\n]*?"
     r"<<(-?)\s*(['\"])([A-Za-z_][A-Za-z0-9_]*)\2[^\n]*\n"
 )
 

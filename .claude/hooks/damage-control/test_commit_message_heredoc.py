@@ -68,6 +68,64 @@ for label, cmd, want_blocked in cases:
     print(f"[{status}] blocked={blocked!s:5} want={want_blocked!s:5} :: {label}"
           f"{('  -> ' + reason) if reason else ''}")
 
+# --- ReDoS regression (CodeQL flagged the first revision of this pattern) ---
+#
+# The original prefix-skipper was an ambiguous alternation:
+#     (?:-[^\s]+\s+|--[^\s]+(?:=[^\s]+)?\s+)*
+# A token like "--a" is matched BOTH ways -- branch 1 as (-)(-a), branch 2 as
+# (--)(a) -- so a FAILING match explores 2^n splits. This hook is PreToolUse: it
+# runs before EVERY Bash call, so a pathological command line stalls the whole
+# session, not just one command.
+#
+# The adversarial token must be one both branches accept. A bare "--" is NOT
+# enough: branch 2 requires at least one character after the dashes, so only
+# branch 1 matches and there is no ambiguity. The first draft of this test used
+# bare "--", measured 0.0000s at every size, and would have passed forever while
+# proving nothing. Measured, not assumed.
+import re as _re
+import time as _time
+
+_OLD_AMBIGUOUS = _re.compile(
+    r"\bgit\s+(?:-[^\s]+\s+|--[^\s]+(?:=[^\s]+)?\s+)*commit\b[^\n]*?"
+    r"<<(-?)\s*(['\"])([A-Za-z_][A-Za-z0-9_]*)\2[^\n]*\n"
+)
+
+_N = 20                 # old ~0.23s here; ~4 minutes by N=30
+_BUDGET_S = 0.05        # new pattern is ~1e-5s; budget is 4 orders of margin
+_MIN_RATIO = 100        # below this, the repro has stopped discriminating
+
+_evil = "git " + "--a " * _N + "!=\t"   # ambiguous tokens, then no `commit`
+
+
+def _elapsed(pattern, text):
+    _t0 = _time.perf_counter()
+    pattern.search(text)
+    return _time.perf_counter() - _t0
+
+
+_new_s = _elapsed(mod._GIT_COMMIT_HEREDOC_START, _evil)
+_old_s = _elapsed(_OLD_AMBIGUOUS, _evil)
+_ratio = _old_s / max(_new_s, 1e-9)
+
+print(f"\n[ReDoS] input: 'git ' + '--a '*{_N} + '!=\\t'")
+print(f"[ReDoS] current={_new_s:.6f}s  old={_old_s:.4f}s  ratio={_ratio:.0f}x")
+
+if _new_s > _BUDGET_S:
+    failures.append(("ReDoS: current pattern over budget",
+                     f"<{_BUDGET_S}s", f"{_new_s:.4f}s", ""))
+    print(f"[FAIL] current pattern took {_new_s:.4f}s (budget {_BUDGET_S}s)")
+else:
+    print(f"[OK]   current pattern linear ({_new_s:.6f}s < {_BUDGET_S}s)")
+
+# Guards the TEST, not the code: if the old pattern stops blowing up, this
+# input no longer reproduces the bug and a regression could slip through green.
+if _ratio < _MIN_RATIO:
+    failures.append(("ReDoS repro no longer discriminates",
+                     f">{_MIN_RATIO}x", f"{_ratio:.0f}x", ""))
+    print(f"[FAIL] old pattern only {_ratio:.0f}x slower — repro is no longer meaningful")
+else:
+    print(f"[OK]   old pattern still blows up ({_ratio:.0f}x) — repro is meaningful")
+
 if failures:
     print(f"\n{len(failures)} FAILURE(S)")
     for label, want, got, reason in failures:
