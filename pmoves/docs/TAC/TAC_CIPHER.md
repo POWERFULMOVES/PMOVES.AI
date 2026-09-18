@@ -66,7 +66,9 @@ After `make -C pmoves up-cipher`: image rebuilt, **`streamable` = 1**, `/health`
 ### Reconciliation: grounded against source, 2026-09-09
 
 **Provenance rule applied here:** every claim below cites the file and line it
-came from, at submodule pin `975e02e6` or superproject `origin/main`. An earlier
+came from, at submodule pin `975e02e6` (later `c88b009a2` — #3103 re-pinned;
+`auth.ts` is unchanged between the two, so every line number below still holds)
+or superproject `origin/main`. An earlier
 revision of this section proposed three remedies and cited nothing; it was
 reasoning from THIS runbook, which was itself stale. A runbook with no provenance
 link to source is unverified, and it was wrong.
@@ -209,6 +211,7 @@ still had to be fixed by hand.
 | 1 | `d94a1dcc` | The first revision read line numbers off this node's submodule **working tree**, which sat on `fix/per-agent-token-profile-header` — the head of *unmerged* fork PR #19. It inserts three lines at `:67`, so four citations were wrong for everyone who did not have that branch checked out. |
 | 2 | `e24f1323` | Re-verified against the gitlink `main` actually carried. Correct — until #19 merged. |
 | 3 | `975e02e6` | #19 merged (`Accept-Profile: pmoves_core`) and the gitlink promoted. The same three inserted lines moved the same four citations again: `e24f1323:79` → `975e02e6:82`, and `e24f1323:103` → `975e02e6:106`. The prefix fork at `:44`/`:46`/`:49`/`:54`/`:60` sits above the insertion and never moved. |
+| 4 | `c88b009a2` | #3103 bumped the pin for cipher build fix #21 + installer #20. Neither commit touches `auth.ts`; all nine citations re-verified at the same lines and only the pin constant moved. The quiet bump this test exists to keep quiet. |
 
 Re-numbering by hand on each pin bump is not a fix; it is the same manual step
 failing again on a schedule. `pmoves/tests/tools/test_auth_citations_resolve.py`

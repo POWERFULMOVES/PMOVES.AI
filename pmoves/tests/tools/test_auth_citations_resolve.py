@@ -12,6 +12,10 @@ by that twice in one week:
         agentId: 'bootstrap'            49  ->  49   (+0)
         records.length === 0            79  ->  82   (+3)
         !legacyToken && skipIfUnset    103  -> 106   (+3)
+  * #3103 bumped the pin again — `975e02e6` -> `c88b009a2` (cipher build fix
+    #21 + installer #20). Neither commit touches `auth.ts`, so all nine
+    citations re-verified at the same lines and only PIN moved. This is the
+    boring case this test exists to keep boring.
 
 Re-numbering by hand each time is not a fix; it is the same manual step failing
 again on a schedule. This test makes the citation machine-checkable in three
@@ -38,7 +42,7 @@ AUTH_TS = REPO_ROOT / SUBMODULE / "src" / "pmoves" / "auth.ts"
 
 # The commit these line numbers were read at. Advancing the gitlink without
 # updating this constant is the drift this file exists to catch.
-PIN = "975e02e6f2ef47e3faafc5116ad4cbc7124549e8"
+PIN = "c88b009a227b99329937a79fb782f16aff77e1aa"
 
 # line -> a fragment that must appear on it. Keep in sync with the tables in
 # TAC_CIPHER.md, cipher_identity.py and the cipher-memory SKILL.
@@ -55,7 +59,7 @@ CITATIONS = {
 }
 
 # Files that quote the numbers above, and the substrings that must be present.
-# A doc citing `:79` after the pin moved to 975e02e6 is pointing a reviewer at
+# A doc citing `:79` after the pin moved to c88b009a2 is pointing a reviewer at
 # the wrong statement — which is exactly how the first round went wrong.
 DOC_CITATIONS = {
     Path("pmoves") / "docs" / "TAC" / "TAC_CIPHER.md": ["`:46`", "`:49`", "`:82`", "`:106`"],
@@ -161,7 +165,7 @@ def test_docs_do_not_carry_the_pre_pin_numbers(rel: Path, stale: list):
     Asserting the NEW numbers are present does not prove the OLD ones are gone —
     a half-finished edit leaves both, and a reviewer following the stale one is
     sent to the wrong statement with no warning. These are the exact numbers that
-    were correct at `e24f1323` and are wrong at `975e02e6`.
+    were correct at `e24f1323` and are wrong since `975e02e6`.
     """
     path = REPO_ROOT / rel
     if not path.is_file():
