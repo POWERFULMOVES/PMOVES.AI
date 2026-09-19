@@ -31,7 +31,7 @@ import argparse
 import os
 import socket
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -63,6 +63,12 @@ class Node:
     reach: str | None
     aliases: tuple[str, ...]
     default_identity: dict[str, str]
+    # The SIGNING-CARD spelling cipher requires as `agentId`, per harness. It is
+    # NOT default_identity: those are registry spellings (claude_b850) and
+    # cipher answers 403 to them -- the card is b850-claude. Declared per node in
+    # node-vocabulary.yaml, never derived; see that file's header for the
+    # harnesses deliberately left out.
+    cipher_agent_id: dict[str, str] = field(default_factory=dict)
 
     @property
     def is_machine(self) -> bool:
@@ -83,6 +89,7 @@ def load_vocabulary(path: Path | None = None) -> dict[str, Node]:
             reach=entry.get("reach"),
             aliases=tuple(str(a) for a in (entry.get("aliases") or [canonical])),
             default_identity=dict(entry.get("default_identity") or {}),
+            cipher_agent_id=dict(entry.get("cipher_agent_id") or {}),
         )
         for alias in (*node.aliases, canonical):
             key = _norm(alias)
@@ -242,6 +249,57 @@ def _shell_quote(value: str) -> str:
     return "'" + value.replace("'", "'\\''") + "'"
 
 
+def resolve_cipher_agent_id(
+    harness: str,
+    node: str | None,
+    vocab: dict[str, Node] | None = None,
+    env: dict[str, str] | None = None,
+) -> tuple[str | None, str]:
+    """Resolve (cipher agentId, explanation) for `harness` on `node`.
+
+    SEPARATE FROM resolve_identity BY DESIGN. That function answers "which
+    registered agent am I", and it works; this one answers "what must I put in
+    cipher's `agentId` field", which is a different namespace that happens to
+    name the same agent. Folding them together would make one wrong answer look
+    like the other -- and the registry spelling IS the wrong answer here, which
+    is how it survived: every launcher passed claude_b850 to the carry check and
+    read a false `signing card: no` back.
+
+    None is returned whenever the answer is not DECLARED. There is a tempting
+    transform -- claude_<x> -> <x>-claude holds for all four claude-code nodes --
+    and it is wrong for the fifth harness on the first node it meets: knuckles'
+    crush identity is crush_glm52 and its card is plain `crush`. A session told
+    to declare its own agentId is better off than one told a spelling cipher
+    refuses.
+
+    PMOVES_CIPHER_AGENT_ID overrides, matching how PMOVES_NODE_IDENTITY works
+    for the registry identity: the operator is allowed to know better.
+    """
+    env = os.environ if env is None else env
+
+    override = (env.get("PMOVES_CIPHER_AGENT_ID") or "").strip()
+    if override:
+        return override, f"cipher agentId {override!r} set by PMOVES_CIPHER_AGENT_ID"
+
+    if not node:
+        return None, "no cipher agentId: the node itself is unidentified"
+
+    vocab = load_vocabulary() if vocab is None else vocab
+    entry = vocab.get(_norm(node))
+    if entry is None:
+        return None, f"no cipher agentId: {node!r} is not in the node vocabulary"
+
+    declared = (entry.cipher_agent_id.get(harness) or "").strip()
+    if not declared:
+        return None, (
+            f"no cipher agentId declared for harness {harness!r} on {entry.canonical!r}. "
+            "Cipher requires one on every call, so declare it per call or add it to "
+            "node-vocabulary.yaml -- it is NOT the registry identity, and it is not "
+            "derivable from it."
+        )
+    return declared, f"cipher agentId {declared!r} declared for {harness!r} on {entry.canonical!r}"
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument(
@@ -264,6 +322,7 @@ def main(argv: list[str] | None = None) -> int:
 
     fmt = args.format or ("shell" if args.shell else "human")
     node, identity, why = resolve_identity(args.harness)
+    cipher_id, cipher_why = resolve_cipher_agent_id(args.harness, node)
 
     if fmt in ("shell", "cmd"):
         # Always emit both, empty when unresolved: a consumer that tests for
@@ -279,9 +338,15 @@ def main(argv: list[str] | None = None) -> int:
         print(f"PMOVES_NODE={quote(node or '')}")
         print(f"PMOVES_RESOLVED_IDENTITY={quote(identity or '')}")
         print(f"PMOVES_IDENTITY_WHY={quote(why)}")
+        # Emitted on every path, empty when undeclared, with its own reason:
+        # "cipher wants an agentId and I do not have one" and "cipher wants an
+        # agentId and here it is" must not look alike to the launcher.
+        print(f"PMOVES_CIPHER_AGENT_ID={quote(cipher_id or '')}")
+        print(f"PMOVES_CIPHER_AGENT_WHY={quote(cipher_why)}")
         return 0
 
     print(why)
+    print(cipher_why)
     return 0 if identity else 1
 
 

@@ -1,4 +1,31 @@
 version: 1
+# CIPHER AGENT IDS — `cipher_agent_id`, per harness, declared and never derived.
+#
+# Cipher requires an `agentId` on every call and it must be the SIGNING-CARD
+# spelling from pmoves/config/signing_identity_cards.yaml, not the registry
+# spelling in `default_identity` above. The two differ on every node:
+# claude_b850 vs b850-claude. Measured 2026-09-17 --
+# `cipher_identity.py --agent claude_b850` reports `signing card: no`, and
+# `--agent b850-claude` reports `yes`, so every launcher that fed the registry
+# identity to the carry check got a false "uncarded" verdict.
+#
+# WHY NOT DERIVE IT. `claude_<x>` -> `<x>-claude` holds for all four claude-code
+# nodes, which is exactly what makes a transform tempting and wrong: knuckles'
+# crush identity is `crush_glm52` and its card is plain `crush`, so the same rule
+# yields `glm52-crush`, which is no card at all.
+#
+# DELIBERATELY ABSENT, not forgotten: crush, codex, hermes, kimi and kilo have no
+# cipher_agent_id on any node. `crush` and `hermes` are nodeless cards, so
+# whether one card covers the whole fleet or each node needs its own has not been
+# measured; `codex` and `hermes` each have TWO candidate cards (codex /
+# agent-zero-codex, hermes / hermes-agent) and picking one would be a guess.
+# node_identity.py reports the absence with that reason rather than inventing a
+# spelling, and a session told "declare your agentId yourself" is better served
+# than one told a wrong id that cipher answers 403 to.
+#
+# Every value here is checked against an ACTIVE card by
+# pmoves/tests/test_node_identity.py, so a revoked card fails CI instead of
+# surfacing as a runtime 403.
 nodes:
 - canonical: '4090'
   kind: node
@@ -15,6 +42,8 @@ nodes:
     own hostname.
   default_identity:
     claude-code: claude_4090
+  cipher_agent_id:
+    claude-code: 4090-claude
 - canonical: '5090'
   kind: node
   reach: pmoves-5090
@@ -25,6 +54,8 @@ nodes:
   note: Primary workhorse. 38 registry entries spell it as a YAML integer.
   default_identity:
     claude-code: claude_5090
+  cipher_agent_id:
+    claude-code: 5090-claude
 - canonical: spark
   kind: node
   reach: pmoves-spark
@@ -43,6 +74,8 @@ nodes:
   - PMOVES-Z890
   default_identity:
     claude-code: claude_z890
+  cipher_agent_id:
+    claude-code: z890-claude
 - canonical: knuckles
   kind: node
   reach: pmoves-b850-ai-top
@@ -57,6 +90,8 @@ nodes:
   default_identity:
     claude-code: claude_b850
     crush: crush_glm52
+  cipher_agent_id:
+    claude-code: b850-claude
 - canonical: nano-1
   kind: node
   reach: pmoves-nano-1
