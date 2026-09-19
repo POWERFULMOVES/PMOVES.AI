@@ -314,3 +314,48 @@ each node runs it local to the capacity the node allows."*
 
 *Amendment A.6 signed: PMOVES-KIMI-KNUCKLES-B850, 2026-09-19 — the factory and the
 saddle, both admitted to the Registry; the host waits on a probe that can fail.*
+
+
+### A.7 Doctrine — the DARKMATTER factory, skills-share, form-up, and butterfly asymmetry (operator, 2026-09-19)
+
+- **The persona factory is the DARKMATTER factory.** Archon builds; `PMOVES-Darkmatter`
+  (already in the OS-fork constellation, A.2) carries the factory's branding/surface
+  lane. Classification updated: Darkmatter = persona-factory surface, not generic infra.
+- **Skills-share constellation is in the works.** `Pmoves-skills` (the PMOVES-SkailleZz
+  vehicle — verified, tested, deployable across the ecosystem per the 2026-09-12 review)
+  is the shared-abilities layer: abilities become fleet-common, not node-local.
+- **Form-up (cross-node capability mesh, applied across Floo$).** When a node's capacity
+  does not allow a workload, nodes form up: *elder melchor* (limited VRAM) calls the
+  5090 running Flute-Gateway, or SPARK, or the Jetsons. This is the MOF pore doctrine
+  operationalized — capacity-class routing by delegation, already the fleet's practice;
+  the scope's awareness matrix (§3) gains a **form-up targets** column and
+  elder-melchor's row names its call targets (5090 flute-gateway / spark / jetsons).
+  Formalizing the Floo$ form-up pattern (discovery → delegation → result return with
+  provenance) is a Wave-1/2 lane note under W2-2's wiring umbrella.
+- **Personas are called by task, practiced by models outside AgentGym** — observation of
+  results without tripping damage-control hooks unnecessarily (rehearsal without the
+  stage manager's hammer; hooks stay for production validation).
+- **Butterfly asymmetry, harmonized first for maximum effect.** The execution doctrine:
+  provenance-validated commands/tools/scripts (cipher saving the important parts) +
+  agents + shared skills + plan context + expected result — all prepared durably — turn
+  implementation/build/artifact success into **a button push for the model**, such that
+  even a ~65M-param sparse model can run a prepared lane end-to-end. Asymmetry:
+  preparation costs the lattice; execution costs the button. Maximum effect comes from
+  harmonizing the asymmetry FIRST (prepared context is the harmonization; the small
+  model's flutter is the effect).
+
+**Scope consequence:** W1-2 (provenance ingestion) and the W1-5/W1-6 persona program now
+explicitly serve the butterfly-asymmetry doctrine — every provenance-carrying ingest and
+every factory-built persona widens what a button-push executor can safely run. A new
+evaluation note joins Wave 2: prepared-lane replay tests (a minimal model replays a
+CHIT-signed lane against the Danger Room; success = asymmetry proven).
+
+**Awareness matrix — form-up addendum (§3 gains a "form-up targets" column):**
+
+| Member | Harness | Node / capacity | Form-up targets (calls when local capacity can't) |
+|---|---|---|---|
+| elder-melchor | hermes-agent | MISSLING-LINK · light-GPU dev (GTX 1070 8GB) | 5090 flute-gateway · spark · jetsons |
+| PMOVES-KIMI-KNUCKLES-B850 | kimi | knuckles · CPU-heavy 64GB | spark (GPU inference) · 5090 (TTS/voice) · danger-room sandboxes (post W2-1) |
+
+*Amendment A.7 signed: PMOVES-KIMI-KNUCKLES-B850, 2026-09-19 — harmonize the asymmetry
+first; then let the small wings flap.*
