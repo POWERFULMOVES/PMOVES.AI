@@ -156,12 +156,37 @@ def _is_migrations_target(normalized_fwd: str) -> bool:
 
 # domain name -> predicate(normalized_forward_slash_path) -> bool
 # Extend here to open a new readOnlyPath class to Known Roads.
+def _is_launcher_target(path: str) -> bool:
+    """launcher domain: a PMOVES agent launcher or one of its shared fragments.
+
+    WHY THESE ARE PROTECTED AT ALL. The shared env file is a zeroAccessPath --
+    no operation, no road. The launchers READ it and export 410 variables into
+    a process they then exec a harness inside. Measured 2026-09-16: the secret
+    was sealed and every script that opens it was covered by nothing in
+    patterns.yaml. Defense in depth says the reader of a secret inherits the
+    secret's classification; here the reader was the one unguarded hop.
+
+    They also decide WHO an agent is (node_identity) and whether cipher records
+    its memories as itself (pm-cipher-identity), so an edit here is an identity
+    and credential change wearing a shell script's clothes.
+
+    readOnly, not zeroAccess: reading a launcher is how an agent learns the
+    sanctioned bring-up, and sealing that would push people back to guessing.
+    """
+    norm = path.replace(chr(92), "/")
+    tail = norm.rsplit("/", 1)[-1]
+    if "/pmoves/scripts/pm-" in norm and tail.endswith(".sh"):
+        return True
+    return ("/pmoves/scripts/" in norm or "/deploy/provision/" in norm) and "-pmoves" in tail
+
+
 DOMAIN_PATTERNS: Dict[str, Callable[[str], bool]] = {
     "compose": _is_compose_target,
     "schema": _is_schema_target,
     "topic": _is_topic_target,
     "dockerfile": _is_dockerfile_target,
     "migrations": _is_migrations_target,
+    "launcher": _is_launcher_target,
 }
 
 _REASON_RE = re.compile(r"^(handoff:[^/\\]+|pr:[0-9]+|issue:[0-9]+)$")
