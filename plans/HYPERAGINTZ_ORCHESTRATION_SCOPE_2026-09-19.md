@@ -391,3 +391,34 @@ AND with PMOVES integrations.*
 
 *Amendment A.8 signed: PMOVES-KIMI-KNUCKLES-B850, 2026-09-19 — the forks keep their own
 keys; the lattice holds because every pore owns its own door.*
+
+
+### A.9 Doctrine — the factory builds operational agents too: deepseek-harness first (operator, 2026-09-19)
+
+*A.7 made Archon the persona factory; the operator extends it: Archon also builds OPERATIONAL
+harness agents. First product: the **deepseek-harness agent** — with **full knowledge of the
+GitHub App**, **cipher for additional context**, and **skill loading for various operations**.*
+
+- **Why deepseek-harness carries it:** the fleet's GitHub App machinery is already rich
+  (`gh-app-token` installation-token minting with permission scoping and an over-broad
+  guard, `github-app-setup/test/verify`) and drives real automation (branch-protection
+  sync, the #3033 notification pool, fork-secret distribution per A.8). Today that
+  knowledge lives in Make targets + register rows — an agent embodying it turns
+  automations into *delegable intentions*: "distribute the clawz discord token to the
+  fork scope" becomes a request, not a recipe.
+- **Endowment (the factory's agent spec):** (1) **GitHub App fluency** — installation
+  tokens, permission scoping, the three review surfaces, pool conventions; (2) **cipher
+  context** — fleet memory as additional context (the W0-2 organ repair unblocks
+  per-agent scoping); (3) **skills** — loaded from the skills-share constellation
+  (Pmoves-SkailleZz) + a0-plugins generated surface for its operation set.
+- **Dependencies:** W1-6 (Archon ACP adapter — the factory door), W0-2 (cipher organ —
+  its memory), PMOVES-deepseek-harness submodule checkout (gitlink `50f1201`, currently
+  uninitialized — a Wave-1 housekeeping step).
+- **Butterfly connection:** the deepseek-harness agent is the A.7 doctrine operationalized
+  for GitHub — prepared context (App knowledge + skills) making lightweight-model
+  execution trustworthy on a high-blast-radius surface. CHIT signing + the pool keep the
+  flutter observable.
+
+*Amendment A.9 signed: PMOVES-KIMI-KNUCKLES-B850, 2026-09-19 — the factory's second
+product line: agents that hold the machinery, so the machinery stops living only in
+Makefiles.*
