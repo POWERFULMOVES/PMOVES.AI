@@ -34,46 +34,85 @@ source "$REPO_ROOT/pmoves/scripts/crush-env.sh"
 # defect, so every failure mode writes its reason into the file instead.
 # ---------------------------------------------------------------------------
 IDENTITY_FILE="$REPO_ROOT/pmoves/data/identity/node-identity.md"
-IDENT_TOOL="$REPO_ROOT/pmoves/tools/node_identity.py"
-# Shared discovery (pm-python.sh): this launcher's inline chain was one of
-# THREE python conventions across the launchers (scalar `python` in
-# claude-pmoves, bare `command -v python3` in the provision twin, this chain).
-# Pair-review finding on #2769: unify on one helper rather than keep three
-# answers to one question. `yaml` probe — the resolver imports pyyaml.
-. "$REPO_ROOT/pmoves/scripts/pm-python.sh"
-IDENT_PY=()
-if pm_pick_python yaml; then
-  IDENT_PY=("${PM_PY[@]}")
-fi
+# Resolution moved to the shared fragment (2026-09-16). It was ~30 lines here
+# and again in claude-pmoves.sh, and nowhere in the other seven launchers --
+# the same shape pm-python.sh and pm-cipher-identity.sh were extracted for.
+# Behaviour unchanged: same tool, same --harness crush, same fail-open rule.
+# shellcheck source=./pm-node-identity.sh
+. "$REPO_ROOT/pmoves/scripts/pm-node-identity.sh"
+pm_node_identity "$REPO_ROOT" crush crush-pmoves || true
+IDENT_PY=(${PM_IDENT_PY[@]+"${PM_IDENT_PY[@]}"})
+echo "${PM_IDENT_LINE}" >&2
 mkdir -p "$(dirname "$IDENTITY_FILE")"
-if [ -f "$IDENT_TOOL" ] && [ ${#IDENT_PY[@]} -gt 0 ]; then
-  if IDENT_OUT="$("${IDENT_PY[@]}" "$IDENT_TOOL" --harness crush --shell 2>/dev/null)"; then
-    eval "$IDENT_OUT"
-    PMOVES_NODE_IDENTITY="${PMOVES_RESOLVED_IDENTITY:-}"
-    export PMOVES_NODE PMOVES_NODE_IDENTITY
-    echo "[crush-pmoves] node=${PMOVES_NODE:-unknown} identity=${PMOVES_NODE_IDENTITY:-unresolved: ${PMOVES_IDENTITY_WHY:-no reason given}}" >&2
-    {
-      echo "# Node identity (generated at launch by crush-pmoves — do not edit)"
-      echo ""
-      echo "You are running on PMOVES node \`${PMOVES_NODE:-unknown}\`."
-      if [ -n "${PMOVES_NODE_IDENTITY:-}" ]; then
-        echo "Your registered identity in pmoves/config/agent_registry.yaml is \`${PMOVES_NODE_IDENTITY}\` (harness: crush)."
-        echo "Disclose it at session start rather than rediscovering it."
-      else
-        echo "No identity is bound for the crush harness on this node:"
-        echo "\`${PMOVES_IDENTITY_WHY:-no reason given}\`."
-        echo "Declare one in pmoves/configs/node-vocabulary.yaml (\`default_identity.crush\`)"
-        echo "or set PMOVES_NODE_IDENTITY — do not guess an identity."
-      fi
-    } > "$IDENTITY_FILE"
-  else
-    echo "[crush-pmoves] node identity: resolver failed; writing the reason." >&2
-    echo "# Node identity (generated at launch) — resolver FAILED; launching unbound." > "$IDENTITY_FILE"
-  fi
+
+# EVERY BRANCH WRITES. crush reads its context from this file, so a path that
+# skips the write leaves the PREVIOUS launch's identity sitting in front of the
+# model -- a confidently wrong identity, which is worse than none.
+#
+# Regression caught by tests/test_crush_node_identity.py on the first cut of the
+# fragment migration: extracting resolution dropped the write count from 4 to 1,
+# because the resolver-failed and resolver-unavailable branches each carried
+# their own write and the extraction took them with it. The fragment always sets
+# PM_IDENT_OK and PM_IDENT_LINE precisely so the caller can branch here instead.
+if [ "${PM_IDENT_OK:-0}" = "1" ]; then
+  {
+    echo "# Node identity (generated at launch)"
+    echo ""
+    echo "You are running on PMOVES node \`${PMOVES_NODE}\`."
+    echo "Your registered identity in \`pmoves/config/agent_registry.yaml\` is \`${PMOVES_NODE_IDENTITY}\`."
+    echo "Disclose it at session start rather than rediscovering it."
+  } > "$IDENTITY_FILE"
 else
-  echo "[crush-pmoves] node identity: $IDENT_TOOL or a usable python (tried .venv-pmoves, python3, py -3, python — each must import yaml) unavailable; launching unbound." >&2
-  echo "# Node identity (generated at launch) — resolver unavailable on this host." > "$IDENTITY_FILE"
+  # The reason, not just the absence: an unbound session is recoverable, a
+  # silent one is not. PM_IDENT_LINE already carries why.
+  {
+    echo "# Node identity (generated at launch) — UNRESOLVED; launching unbound."
+    echo ""
+    echo "${PM_IDENT_LINE}"
+    echo ""
+    echo "Declare one in \`pmoves/configs/node-vocabulary.yaml\` (\`default_identity.crush\`)"
+    echo "or set PMOVES_NODE_IDENTITY — do not guess an identity."
+  } > "$IDENTITY_FILE"
 fi
+# The block above tells crush who it IS. It does not say who cipher will think
+# it is, and those have been different on every node: auth.ts:46 @ e24f1323
+# forks on a 'cipher_' bearer prefix, and without it every write is filed under
+# 'bootstrap' -- shared with every other agent on the node, attributed to none.
+#
+# Wired here and not only in claude-pmoves because CRUSH runs on this fleet too
+# and was getting no verdict at all. The measurement is shared (pm-cipher-identity.sh)
+# so the two harnesses cannot drift into telling their agents different things.
+# shellcheck source=./pm-cipher-identity.sh
+. "$REPO_ROOT/pmoves/scripts/pm-cipher-identity.sh"
+pm_cipher_identity "$REPO_ROOT" "${PM_IDENT_CIPHER_ID:-${PMOVES_NODE_IDENTITY:-}}" ${IDENT_PY[@]+"${IDENT_PY[@]}"} || true
+echo "[crush-pmoves] ${PM_CARRY_LINE}" >&2
+# crush has no --append-system-prompt; its context arrives through IDENTITY_FILE,
+# so the verdict goes where crush will actually read it.
+{
+  echo ""
+  if [ "${PM_CARRY_OK:-0}" = "1" ]; then
+    echo "Cipher memory writes are attributed to \`${PM_CARRY_ID}\` — your own identity."
+  else
+    echo "**IDENTITY CARRY GAP.** Cipher will file your memory writes under"
+    echo "\`${PM_CARRY_ID:-an advisory id you declare per call}\`, not \`${PMOVES_NODE_IDENTITY:-unresolved}\`."
+    echo "Reason: ${PM_CARRY_WHY}"
+    echo "Treat anything you recall as possibly another agent's. Road: \`make -C pmoves cipher-identity\`."
+  fi
+  # The agentId cipher REQUIRES on every call, into the file rather than onto
+  # stderr, for the reason this whole file exists: stderr is not context. crush
+  # has no declared agentId on any node yet (its card is nodeless -- see
+  # node-vocabulary.yaml's header), so this normally prints the absence. An
+  # absence the model can read beats one only the terminal saw.
+  echo ""
+  if [ -n "${PM_IDENT_CIPHER_ID:-}" ]; then
+    echo "When calling Cipher MCP tools, pass \`agentId: ${PM_IDENT_CIPHER_ID}\` — the"
+    echo "signing-card spelling, not your registry identity, which cipher refuses."
+  else
+    echo "**NO DECLARED CIPHER agentId.** Cipher requires one on every call, so declare"
+    echo "it per call and say that you are doing so."
+    echo "Reason: ${PM_IDENT_CIPHER_WHY:-not measured}"
+  fi
+} >> "$IDENTITY_FILE"
 
 echo "◇ crush-pmoves → bootstrapping from $REPO_ROOT"
 make -C "$REPO_ROOT/pmoves" crush-bootstrap

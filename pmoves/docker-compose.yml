@@ -1170,12 +1170,26 @@ services:
     # embedded DNS) and the server exits, kicking the container into a
     # restart loop. Pinning to 0.0.0.0 skips the lookup entirely.
     - HOSTNAME=0.0.0.0
-    # Healthcheck: External check (Next.js 16 binds to container hostname, not localhost)
-    # Note: Official Supabase uses node -e fetch but their image has different network config
-    # We rely on container being started successfully (logs show "Ready in Xms")
+    # Healthcheck: the upstream probe, which this service had replaced with a
+    # no-op. The previous test was `node -e 'process.exit(0)' || exit 1` --
+    # it names no host, no port and no route, so it could not fail while the
+    # `node` binary existed, and it reported `service_healthy` to dependents
+    # on a dead Studio. Its own comment said so: "We rely on container being
+    # started successfully", which is a fact Docker already has from the PID.
+    #
+    # The stated reason for the substitution ("Next.js 16 binds to container
+    # hostname, not localhost") is stale: `HOSTNAME=0.0.0.0` is pinned three
+    # lines above, so the bind it worked around no longer happens. Verified
+    # against the running container 2026-09-05 -- both spellings answer:
+    #   docker exec pmoves-supabase-studio-1 node -e "fetch('http://localhost:3000/api/platform/profile')..."
+    #   -> localhost status 200 / 127.0.0.1 status 200
+    #
+    # Probe body copied from the vendored upstream at
+    # PMOVES-supabase/docker/docker-compose.yml:17-23, with `studio` swapped
+    # for `localhost` because the service name differs here.
     - PMOVES_NETWORKS=pmoves_api
     healthcheck:
-      test: ["CMD-SHELL", "node -e 'process.exit(0)' || exit 1"]
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3000/api/platform/profile').then((r) => {if (r.status !== 200) throw new Error(r.status)})"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -1843,10 +1857,13 @@ services:
     - HIRAG_URL=${HIRAG_URL:-http://hi-rag-gateway-v2:8086}
     - EVAL_HTTP_PORT=${EVAL_HTTP_PORT:-8090}
     - PMOVES_NETWORKS=pmoves_app,pmoves_api,pmoves_bus
-    depends_on:
-    - hi-rag-gateway-v2
+    # No cross-overlay depends_on: hi-rag-gateway-v2 is defined in a
+    # sibling overlay, and a depends_on referencing an undefined service
+    # invalidates the WHOLE workers project (overlay-up-workers fails
+    # fleet-wide). The dependency is runtime HTTP (HIRAG_URL), not
+    # startup ordering.
     ports:
-    - ${RETRIEVAL_EVAL_BIND:-0.0.0.0}:${RETRIEVAL_EVAL_PORT:-8090}:8090
+    - ${RETRIEVAL_EVAL_BIND:-127.0.0.1}:${RETRIEVAL_EVAL_PORT:-8090}:8090
     volumes:
     - ./services/retrieval-eval:/app:rw
     - ./datasets:/app/data:rw
@@ -2938,8 +2955,10 @@ services:
     volumes:
     - ./config:/app/config
     depends_on:
-      pmoves-yt:
-        condition: service_started
+      # No cross-overlay depends_on: pmoves-yt is defined in a sibling overlay,
+      # and a depends_on referencing an undefined service invalidates the
+      # WHOLE project for this overlay (overlay-up fails fleet-wide). The
+      # dependency is runtime HTTP, not startup ordering.
       nats:
         condition: service_healthy
     ports:
@@ -3271,6 +3290,18 @@ services:
     image: nats:2.11.8-alpine
     command:
     - -js
+    # JetStream store. WITHOUT this flag the server falls back to
+    # /tmp/nats/jetstream and logs, in its own words:
+    #   "Temporary storage directory used, data could be lost on system reboot"
+    # That is not theoretical: measured on z890 2026-09-15 the bus reported
+    # streams=0 consumers=0 messages=0 — the durable PMOVES-PERSONA stream
+    # created and replay-proven by #3010 was gone, because this service had no
+    # volume at all and /tmp does not survive a container recreate.
+    # Paired with the pmoves-nats-js volume below. Same path the hub uses
+    # (config/nats/pmoves-nats.conf -> store_dir: /data/js), different volume:
+    # legacy and hub must never share JetStream state during the spec §9 cutover.
+    - --store_dir
+    - /data/js
     - -m
     - '8222'
     - --user
@@ -3295,6 +3326,9 @@ services:
     # Loopback by default; set NATS_MONITORING_BIND explicitly (ideally to the
     # tailnet IP, not 0.0.0.0) if a node genuinely needs remote NATS monitoring.
     - ${NATS_MONITORING_BIND:-127.0.0.1}:${NATS_MONITORING_PORT:-9223}:8222
+    volumes:
+    # Persists JetStream across recreate. See --store_dir above.
+    - pmoves-nats-js:/data/js
     networks:
     # pmoves_bus is internal:true (isolated in-stack mesh bus). A container on an
     # internal-only network gets NO published-port DNAT rules from Docker, so the
@@ -3727,6 +3761,18 @@ services:
     - PORT=3090
     - HOST=0.0.0.0
     - NODE_ENV=production
+    # Highest-priority input to services/archon/main.py:_ensure_supabase_env(),
+    # which otherwise ranks SUPA_REST_URL -- shipped fleet-wide as
+    # host.docker.internal:54321, the Supabase CLI topology -- ABOVE the correct
+    # SUPABASE_URL, and forces it to a host this container has no extra_hosts
+    # mapping for. That rewrite, not the network, is what kept /api/health
+    # reporting Errno -2 even after pmoves_api was attached.
+    #
+    # The ${VAR:-default} form is load-bearing: a service-level environment entry
+    # OVERRIDES env_file, so a bare value would silently discard an operator
+    # override -- the same nested-default lesson already documented above for
+    # ANTHROPIC_AUTH_TOKEN.
+    - ARCHON_SUPABASE_BASE_URL=${ARCHON_SUPABASE_BASE_URL:-http://supabase-kong:8000}
     - ARCHON_DOCKER=true
     # Postgres backend (pg_notify realtime). Archon auto-inits its schema on boot.
     - DATABASE_URL=${ARCHON_DATABASE_URL:-postgresql://${ARCHON_DB_USER:-archon}:${ARCHON_DB_PASSWORD:-archon}@archon-postgres:5432/${ARCHON_DB_NAME:-remote_coding_agent}}
@@ -3807,7 +3853,7 @@ services:
     - HTTP_PROXY=
     - HTTPS_PROXY=
     - NO_PROXY=
-    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_external
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_external,pmoves_api
     depends_on:
       archon-postgres:
         condition: service_healthy
@@ -3834,10 +3880,29 @@ services:
       # Archon needs egress to reach the Claude API + GitHub with the configured
       # credentials; pmoves_app/pmoves_bus are internal-only.
       pmoves_external:
+      # Supabase REST and auth live on pmoves_api. Without this the container
+      # cannot resolve supabase-kong at all -- Errno -2 here is a network
+      # MEMBERSHIP failure, not a DNS outage (nats resolves fine from inside).
+      # pmoves_data is deliberately NOT added: supabase-db is reachable from
+      # pmoves_api and the failing path is REST, not direct postgres.
+      pmoves_api:
     profiles:
     - agents
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:3090/api/health || exit 1"]
+      # READINESS-AWARE HEALTHCHECK. `curl -f` keys on the HTTP status code only,
+      # and this endpoint answers 200 while its body says ready:false -- so the
+      # previous check reported `healthy` with FailingStreak=0 for nine days while
+      # the service told anyone who read the body that it was not ready.
+      #
+      # Deliberately asserts on `status`, NOT on `ready`: the `ready` field is
+      # emitted ONLY by the failure branch (api_routes/knowledge_api.py), so a
+      # grep for '"ready":true' would be a check that can never pass. Verified
+      # against both body shapes with real Docker health machinery.
+      #
+      # Fail-closed on an unrecognised status word, which is correct for a health
+      # probe. Reusable shape for any PMOVES service whose /health carries a
+      # status string -- copy this rather than writing another one-off.
+      test: ["CMD-SHELL", "curl -fsS http://localhost:3090/api/health | grep -qE '\"status\"[[:space:]]*:[[:space:]]*\"(healthy|ok|ready|up)\"'"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -4129,6 +4194,20 @@ services:
       args:
         ENV: production
         APP_PATH: /app/apps/webuiapps
+        # The app is served under /webuiapps/ (see the nginx location below and
+        # apps/webuiapps/nginx/default.conf). vite.config.ts::getBase() returns
+        # '/' + BIZ_PROJECT_NAME + '/' for a production build and '/' when the
+        # variable is empty -- its own comment reads "Test: sub-path
+        # /webuiapps/". The Dockerfile already accepts BIZ_PROJECT_NAME as a
+        # build ARG and exports it as ENV for the build; compose was the one
+        # link that never passed a value.
+        #
+        # Without it every asset in index.html is emitted root-relative
+        # (/assets/index-*.js), nginx has no `location /assets/`, and the whole
+        # bundle 404s while /webuiapps/ still answers 200 with the HTML. The
+        # page renders blank and any probe of the app root reports healthy.
+        # Measured on PMOVES-4090 2026-09-08.
+        BIZ_PROJECT_NAME: webuiapps
     image: pmoves-openroom:latest
     container_name: pmoves-openroom
     restart: unless-stopped
@@ -4229,12 +4308,14 @@ services:
     - ${GITHUB_CLEANUP_BIND:-0.0.0.0}:8100:8100
     - ${GITHUB_CLEANUP_BIND:-0.0.0.0}:9096:9096
     depends_on:
+    # No cross-overlay depends_on: agent-zero is defined in a sibling overlay,
+    # and a depends_on referencing an undefined service invalidates the
+    # WHOLE project for this overlay (overlay-up fails fleet-wide). The
+    # dependency is runtime HTTP, not startup ordering.
       nats:
         condition: service_healthy
       nats-init:
         condition: service_completed_successfully
-      agent-zero:
-        condition: service_healthy
     profiles: ["agents", "github-automation"]
     networks: [pmoves_app, pmoves_bus, pmoves_api, pmoves_monitoring, pmoves_external]  # GitHub API
     healthcheck:
@@ -4270,14 +4351,18 @@ services:
     - ${GITHUB_TRIAGE_BIND:-0.0.0.0}:8101:8101
     - ${GITHUB_TRIAGE_BIND:-0.0.0.0}:9097:9097
     depends_on:
+    # No cross-overlay depends_on: botz-gateway is defined in a sibling overlay,
+    # and a depends_on referencing an undefined service invalidates the
+    # WHOLE project for this overlay (overlay-up fails fleet-wide). The
+    # dependency is runtime HTTP, not startup ordering.
+    # No cross-overlay depends_on: hi-rag-gateway-v2 is defined in a sibling overlay,
+    # and a depends_on referencing an undefined service invalidates the
+    # WHOLE project for this overlay (overlay-up fails fleet-wide). The
+    # dependency is runtime HTTP, not startup ordering.
       nats:
         condition: service_healthy
       nats-init:
         condition: service_completed_successfully
-      hi-rag-gateway-v2:
-        condition: service_healthy
-      botz-gateway:
-        condition: service_healthy
     profiles: ["agents", "github-automation"]
     networks: [pmoves_app, pmoves_bus, pmoves_api, pmoves_monitoring, pmoves_external]  # GitHub API
     healthcheck:
@@ -5032,10 +5117,11 @@ services:
       retries: 5
       start_period: 60s
     depends_on:
+    # No cross-overlay depends_on: model-registry is defined in a sibling overlay,
+    # and a depends_on referencing an undefined service invalidates the
+    # WHOLE project for this overlay (overlay-up fails fleet-wide). The
+    # dependency is runtime HTTP, not startup ordering.
       nats:
-        condition: service_healthy
-        required: false
-      model-registry:
         condition: service_healthy
         required: false
 
@@ -5211,6 +5297,10 @@ services:
     # NATS_URL from env.shared/env.tier-media has credentials: nats://nats:***@nats:4222
     - PORT=8055
     - NATS_URL=${NATS_URL}
+    # Voicebox model variant (per-request API param in Voicebox's docs; this is
+    # the node-level default the provider falls back to). 0.6B = GTX 1650 4GB
+    # class — 1.7B OOMs at synthesis time on 4GB cards.
+    - VOICEBOX_MODEL_SIZE=${VOICEBOX_MODEL_SIZE:-0.6B}
     - SUPABASE_URL=${SUPABASE_INTERNAL_URL:-${SUPABASE_URL:-http://supabase-kong:8000}}
     - TENSORZERO_URL=${TENSORZERO_URL:-http://tensorzero-gateway:3000}
     # Default TTS = OmniVoice (k2-fsa, Apache-2.0; license-clean creator-pipeline
@@ -5598,8 +5688,10 @@ services:
     networks:
     - pmoves_app
     - pmoves_bus
-    depends_on:
-    - hi-rag-gateway-v2
+    # No cross-overlay depends_on: hi-rag-gateway-v2 is defined in a
+    # sibling overlay, and a depends_on referencing an undefined service
+    # invalidates the WHOLE workers project (overlay-up-workers fails
+    # fleet-wide). The dependency is runtime HTTP, not startup ordering.
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8100/healthz', timeout=5)"]
       interval: 30s
@@ -6119,9 +6211,11 @@ services:
     - pmoves_monitoring
     - pmoves_external  # GitHub API
     depends_on:
+    # No cross-overlay depends_on: agent-zero is defined in a sibling overlay,
+    # and a depends_on referencing an undefined service invalidates the
+    # WHOLE project for this overlay (overlay-up fails fleet-wide). The
+    # dependency is runtime HTTP, not startup ordering.
       nats:
-        condition: service_healthy
-      agent-zero:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8102/healthz"]
@@ -6163,9 +6257,11 @@ services:
     - pmoves_monitoring
     - pmoves_external  # GitHub API + git clone
     depends_on:
+    # No cross-overlay depends_on: agent-zero is defined in a sibling overlay,
+    # and a depends_on referencing an undefined service invalidates the
+    # WHOLE project for this overlay (overlay-up fails fleet-wide). The
+    # dependency is runtime HTTP, not startup ordering.
       nats:
-        condition: service_healthy
-      agent-zero:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8103/healthz"]
@@ -6204,9 +6300,11 @@ services:
     - pmoves_monitoring
     - pmoves_external  # GitHub API for PR management
     depends_on:
+    # No cross-overlay depends_on: agent-zero is defined in a sibling overlay,
+    # and a depends_on referencing an undefined service invalidates the
+    # WHOLE project for this overlay (overlay-up fails fleet-wide). The
+    # dependency is runtime HTTP, not startup ordering.
       nats:
-        condition: service_healthy
-      agent-zero:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8104/healthz"]
@@ -6257,6 +6355,10 @@ volumes:
   # volume from the legacy `nats` service so the two never share JetStream
   # state during cutover (spec §9: phased, each independently testable).
   pmoves-nats-hub-js: {}
+  # Legacy `nats` JetStream store. Added 2026-09-15: the service ran with no
+  # volume, so JetStream lived in the container's /tmp and every recreate
+  # silently discarded durable streams.
+  pmoves-nats-js: {}
 secrets:
   # ── NATS hub trust material (profile: nats-hub) — funnel-rendered (spec §8) ──
   # resolver_preload: PUBLIC nsc-minted account JWTs (SYS/CORE/EDGE/CLOUD) —

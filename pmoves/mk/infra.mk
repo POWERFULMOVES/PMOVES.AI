@@ -678,6 +678,11 @@ dep-matrix-shutdown: ## Print the graceful shutdown order (reverse of bring-up l
 agent-registry-check: ## Assert agent_registry.yaml describes reality (submodule vs path, transport vs endpoint)
 	@uv run --quiet --with pyyaml python tools/agent_registry_check.py
 
+# Sibling of the REPO ROOT (make -C pmoves runs from pmoves/, hence ../../).
+ACP_REGISTRY_PATH ?= ../../PMOVES-registry
+acp-registry-map: ## Regenerate the ACP <-> PMOVES registry mapping (clone POWERFULMOVES/PMOVES-registry as a repo-root sibling first)
+	@uv run --quiet --with pyyaml python tools/acp_registry_map.py --registry $(ACP_REGISTRY_PATH) --write
+
 # ── Agent Zero dependency overlay ──────────────────────────────
 # The image installs deps twice into one venv: the fork's requirements first,
 # ours second as a --constraint. Ours therefore wins. These two targets keep
@@ -710,6 +715,19 @@ agent-zero-lock: ## Regenerate services/agent-zero/requirements.lock (the ONLY s
 compose-yaml-check: ## Assert every tracked compose file parses (incl. Compose's !reset/!override tags)
 	@uv run --quiet --with pyyaml python tools/compose_yaml_validate.py
 
+room-manifest-check: ## Assert every room manifest validates against the schema + catalog
+	@# THE VALIDATOR EXISTED AND RAN NOWHERE. ROOM_MANIFEST_CONTRACT.md line 362
+	@# records this smoke path as DONE, struck through, naming the script -- and
+	@# nothing invoked it: no make target, no workflow, no gate. Two manifests
+	@# had been failing schema validation invisibly as a result
+	@# (creator-studio.room.collab, jons-edge.room.control), because the only
+	@# thing that would have said so was never called.
+	@#
+	@# `referencing` as well as `jsonschema`: the script imports it for $ref
+	@# resolution and falls back when absent, and the fallback path is not the
+	@# one CI should be exercising.
+	@uv run --quiet --with jsonschema --with referencing --with pyyaml python scripts/validate_room_manifests.py
+
 # ── Service recovery (engine-restart safe) ──────────────────────────
 # After a Docker Desktop/WSL2 engine restart, containers can sit in
 # "Created" (image pulled, never started). This starts them via compose
@@ -725,3 +743,11 @@ svc-start: ## Start one service's containers after engine restart. Usage: make s
 svc-status: ## Show compose status for one service. Usage: make svc-status SVC=flute-gateway
 	@if [ -z "$(SVC)" ]; then echo "usage: make svc-status SVC=<compose-service>"; exit 2; fi
 	@$(DC) ps $(SVC)
+
+# ── Room stage provenance ───────────────────────────────────────────
+# Placed at the end of this file on purpose: PR #2992 inserts
+# `room-manifest-check` directly after `compose-yaml-check`, and keeping the
+# two additions apart keeps them from conflicting in the merge train.
+.PHONY: room-catalog-stage-check
+room-catalog-stage-check: ## Assert every catalog current_stage was earned (P7 receipt) or matches its manifest
+	@python scripts/validate_room_catalog.py

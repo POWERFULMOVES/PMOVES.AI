@@ -465,3 +465,11 @@
 	url = https://github.com/POWERFULMOVES/PMOVES-N8N-Auto.git
 	branch = PMOVES.AI-Edition-Hardened
 	shallow = true
+[submodule "PMOVES-A0-codex-docker"]
+	path = PMOVES-A0-codex-docker
+	url = https://github.com/POWERFULMOVES/PMOVES-A0-codex-docker.git
+	branch = main
+[submodule "PMOVES-KeYlOkODe"]
+	path = PMOVES-KeYlOkODe
+	url = https://github.com/POWERFULMOVES/PMOVES-KeYlOkODe.git
+	branch = main

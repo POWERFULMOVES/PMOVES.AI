@@ -33,6 +33,18 @@ services:
     image: nats:2.11.8-alpine
     command:
     - -js
+    # JetStream store. WITHOUT this flag the server falls back to
+    # /tmp/nats/jetstream and logs, in its own words:
+    #   "Temporary storage directory used, data could be lost on system reboot"
+    # That is not theoretical: measured on z890 2026-09-15 the bus reported
+    # streams=0 consumers=0 messages=0 — the durable PMOVES-PERSONA stream
+    # created and replay-proven by #3010 was gone, because this service had no
+    # volume at all and /tmp does not survive a container recreate.
+    # Paired with the pmoves-nats-js volume below. Same path the hub uses
+    # (config/nats/pmoves-nats.conf -> store_dir: /data/js), different volume:
+    # legacy and hub must never share JetStream state during the spec §9 cutover.
+    - --store_dir
+    - /data/js
     - -m
     - '8222'
     - --user
@@ -57,6 +69,9 @@ services:
     # Loopback by default; set NATS_MONITORING_BIND explicitly (ideally to the
     # tailnet IP, not 0.0.0.0) if a node genuinely needs remote NATS monitoring.
     - ${NATS_MONITORING_BIND:-127.0.0.1}:${NATS_MONITORING_PORT:-9223}:8222
+    volumes:
+    # Persists JetStream across recreate. See --store_dir above.
+    - pmoves-nats-js:/data/js
     networks:
     # pmoves_bus is internal:true (isolated in-stack mesh bus). A container on an
     # internal-only network gets NO published-port DNAT rules from Docker, so the
@@ -941,12 +956,26 @@ services:
     # embedded DNS) and the server exits, kicking the container into a
     # restart loop. Pinning to 0.0.0.0 skips the lookup entirely.
     - HOSTNAME=0.0.0.0
-    # Healthcheck: External check (Next.js 16 binds to container hostname, not localhost)
-    # Note: Official Supabase uses node -e fetch but their image has different network config
-    # We rely on container being started successfully (logs show "Ready in Xms")
+    # Healthcheck: the upstream probe, which this service had replaced with a
+    # no-op. The previous test was `node -e 'process.exit(0)' || exit 1` --
+    # it names no host, no port and no route, so it could not fail while the
+    # `node` binary existed, and it reported `service_healthy` to dependents
+    # on a dead Studio. Its own comment said so: "We rely on container being
+    # started successfully", which is a fact Docker already has from the PID.
+    #
+    # The stated reason for the substitution ("Next.js 16 binds to container
+    # hostname, not localhost") is stale: `HOSTNAME=0.0.0.0` is pinned three
+    # lines above, so the bind it worked around no longer happens. Verified
+    # against the running container 2026-09-05 -- both spellings answer:
+    #   docker exec pmoves-supabase-studio-1 node -e "fetch('http://localhost:3000/api/platform/profile')..."
+    #   -> localhost status 200 / 127.0.0.1 status 200
+    #
+    # Probe body copied from the vendored upstream at
+    # PMOVES-supabase/docker/docker-compose.yml:17-23, with `studio` swapped
+    # for `localhost` because the service name differs here.
     - PMOVES_NETWORKS=pmoves_api
     healthcheck:
-      test: ["CMD-SHELL", "node -e 'process.exit(0)' || exit 1"]
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3000/api/platform/profile').then((r) => {if (r.status !== 200) throw new Error(r.status)})"]
       interval: 30s
       timeout: 5s
       retries: 3

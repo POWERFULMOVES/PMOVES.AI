@@ -3,6 +3,13 @@
 > **Part of the [PMOVES.AI Integration Layer](../INTEGRATIONS_OVERVIEW.md)** | Category: CHIT & Geometry
 >
 > **See also:** [CHIT Documentation Suite](../PMOVESCHIT/README.md) for the complete documentation index with reading paths and glossary. | [CHIT Tools Catalog](../CHIT_TOOLS_CATALOG.md) for all Python tools.
+> **Re-verified 2026-09-10 (crush-spark):** cipher MCP transport paths are
+> `/api/mcp/sse` (the `/mcp/sse` form 404s); persona-thirdref joined the
+> geometry bus with durable JetStream (stream `PMOVES-PERSONA`) — the first
+> JetStream-persisted subject on SPARK; jellyfin-bridge now publishes playback
+> events onto the bus (`persona.consumption.recorded.v1`). Per-service tiers
+> below predate this verification; regenerate per-service rows from live
+> probes before citing them as current.
 
 **Last Updated:** March 24, 2026
 **CHIT Protocol Version:** v0.1 (legacy), v0.2 (stable), v1.0 (current)

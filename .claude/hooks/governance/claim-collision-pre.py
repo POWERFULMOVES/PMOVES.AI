@@ -171,6 +171,49 @@ def lanes_in(text: str) -> set:
     return declared | inferred
 
 
+# The RECORD KIND of a register row: the word immediately after the backticked
+# leading timestamp on an anchored bullet. `CLAIM`, `RELEASE`, `CLAIM+RELEASE`,
+# and a long informational tail -- NOTE, REVIEW, UPDATE, HANDOFF, CORRECTION.
+_ROW_KIND_RE = re.compile(
+    r'^\s*[-*]\s+`[0-9]{4}-[0-9]{2}-[0-9]{2}[^`]*`\s+([A-Za-z][A-Za-z+-]*)'
+)
+
+# KINDS THAT RECORD A FACT AND TRANSITION NOTHING.
+#
+# WHY THIS SET EXISTS. Until now the register had no record type meaning "here
+# is a fact", so a correction had to be filed as a RELEASE -- the only kind the
+# sanctioned write tool accepted that was not a CLAIM. Combined with the bare-
+# RELEASE convention below (a RELEASE naming no lane closes EVERYTHING that
+# owner holds), filing a footnote under an owner with open lanes would have
+# closed every one of them silently. That did not happen only because the owner
+# in question had no open lanes at that moment; a hazard whose harm depends on
+# ordering is untriggered, not safe.
+#
+# So NOTE rows are parsed as INERT: whatever their prose says, they neither open
+# nor close a lane. That matters beyond the new write path, because these rows
+# discuss claims and releases for a living -- a note reading "the RELEASE `X` on
+# line 42 was mis-attributed" carries the exact byte sequence RELEASE_RE looks
+# for, and would otherwise close every lane `X` holds.
+#
+# MEASURED BEFORE AND AFTER against the live register: 5 NOTE rows, 0 of which
+# were being read as a CLAIM or a RELEASE today, so this changes no lane's state
+# now and removes the trap for every note filed from here on. Only NOTE is
+# listed: REVIEW / UPDATE / HANDOFF / CORRECTION carry the same latent hazard,
+# and widening the set is a separate change owing its own measurement.
+INERT_ROW_KINDS = frozenset({"NOTE"})
+
+
+def row_kind(line: str) -> str:
+    """The record kind of a register row, upper-cased. Empty if not a row."""
+    m = _ROW_KIND_RE.match(line)
+    return m.group(1).upper() if m else ""
+
+
+def is_inert_row(line: str) -> bool:
+    """True when this row records a fact and must not transition lane state."""
+    return row_kind(line) in INERT_ROW_KINDS
+
+
 _UNSET = object()
 _FOLDER = _UNSET
 _LINEAGE = _UNSET
@@ -334,6 +377,11 @@ def open_claims_in(text: str) -> dict:
     """
     open_claims = {}
     for lineno, line in enumerate(text.split("\n"), start=1):
+        if is_inert_row(line):
+            # A NOTE records a fact. It opens nothing and closes nothing, and
+            # this skip is what makes that true of its PROSE as well as its
+            # intent -- these rows quote `CLAIM` and `RELEASE` constantly.
+            continue
         m = CLAIM_RE.search(line)
         if m:
             owner_key = canonical_owner(m.group(1))
@@ -569,7 +617,8 @@ _SANCTIONED_TOOL_REAL = frozenset(
     os.path.realpath(str(_SANCTIONED_TOOL_DIR / n)) for n in _SANCTIONED_TOOL_NAMES
 )
 _SANCTIONED_MAKE_DIR_REAL = os.path.realpath(str(REPO_ROOT_GUESS / "pmoves"))
-_SANCTIONED_MAKE_TARGET_RE = re.compile(r"^register-(claim|release|docs|amend|status)$")
+_SANCTIONED_MAKE_TARGET_RE = re.compile(
+    r"^register-(claim|release|note|docs|amend|status)$")
 # `-c`/`-e`/`-m`/`--command` anywhere alongside the tool means an interpreter
 # was asked to run something OTHER than the file named, so the file named stops
 # being evidence of what runs.
@@ -819,7 +868,37 @@ def split_heredocs(command: str):
 _NAIVE_SEGMENT_RE = re.compile(r"\n|;|&&|\|\||\||&")
 
 
-def _segments(text: str):
+_MAX_SUBSTITUTION_DEPTH = 8
+
+
+def _substitution_body(text: str, i: int):
+    """Return (body, index_after) for the substitution starting at `i`, or (None, i).
+
+    Handles `$( ... )` with nesting and `` ` ... ` `` without. Returns None when
+    the construct is unterminated, so the caller keeps the character as literal
+    text and the segment faces the allowlist unchanged -- an unbalanced `$(`
+    must not swallow the rest of the command.
+    """
+    if text[i:i + 2] == "$(":
+        depth, j = 1, i + 2
+        while j < len(text) and depth:
+            if text[j] == "(":
+                depth += 1
+            elif text[j] == ")":
+                depth -= 1
+                if not depth:
+                    return text[i + 2:j], j + 1
+            j += 1
+        return None, i
+    if text[i] == "`":
+        j = text.find("`", i + 1)
+        if j == -1:
+            return None, i
+        return text[i + 1:j], j + 1
+    return None, i
+
+
+def _segments(text: str, depth: int = 0):
     """Split on shell separators WITHOUT splitting inside quotes.
 
     Quote-awareness is not tidiness. A multi-line quoted argument --
@@ -839,6 +918,35 @@ def _segments(text: str):
     allowlist, so the verdict can only get stricter -- whereas letting one
     unbalanced quote swallow the rest of the command would hide a real write
     inside an earlier, allowed segment.
+
+    A COMMAND SUBSTITUTION IS A COMMAND, and is emitted as its own segment.
+    Without this, `$(` and `)` stayed glued to the adjacent tokens and BOTH
+    directions of the verdict were wrong (measured 2026-09-15):
+
+        N=$(env cp /tmp/x <register>)   -> ALLOWED
+        env cp /tmp/x <register>        -> blocked, "cp writes the register as
+                                           its DESTINATION"
+
+      `N=$(env` matched ASSIGNMENT_RE on its `N=` prefix, so the whole token was
+      consumed as an assignment and `env` was never seen by the wrapper-stripper.
+      The destination then arrived as `<register>)` -- with the paren attached --
+      so `_is_register` said no and the copy-verb guard never fired. Wrapping a
+      blocked write in `$( )` plus one leading word turned BLOCK into ALLOW. The
+      header above records six shapes that bypassed the previous design; this was
+      a seventh, inside the allowlist.
+
+        N=$(git show origin/main:<register>)  -> refused as "`show` is not a
+                                                 command", though `show` IS in
+                                                 _GIT_READ_SUBCOMMANDS
+
+      Same fault: `git` was eaten with the `N=`, so the SUBCOMMAND was judged as
+      if it were the command. `git diff` survived only by accident -- `diff` also
+      exists as a top-level read-only command -- which made the documented
+      read path work for the wrong reason.
+
+    The body is segmented RECURSIVELY and the substitution is removed from the
+    outer text, leaving a bare `N=` that names no command. Arithmetic `$((...))`
+    is NOT a command substitution and is preserved verbatim.
     """
     segs, buf, quote, i = [], [], None, 0
     while i < len(text):
@@ -862,6 +970,32 @@ def _segments(text: str):
             buf.append(ch)
             buf.append(text[i + 1])
             i += 2
+            continue
+        # Arithmetic expansion first: `$((` is not a command substitution, and
+        # treating it as one would judge `1` or `+` as a command name.
+        if text[i:i + 3] == "$((":
+            close = text.find("))", i + 3)
+            if close == -1:
+                buf.append(ch)
+                i += 1
+                continue
+            buf.append(text[i:close + 2])
+            i = close + 2
+            continue
+        if text[i:i + 2] == "$(" or ch == "`":
+            body, nxt = _substitution_body(text, i)
+            if body is None:
+                buf.append(ch)
+                i += 1
+                continue
+            if depth < _MAX_SUBSTITUTION_DEPTH:
+                segs.extend(_segments(body, depth + 1))
+            else:
+                # Refuse to stop looking. An over-nested substitution becomes one
+                # unparseable segment, which the allowlist refuses -- rather than
+                # silently vanishing from the text the way it used to.
+                segs.append(body)
+            i = nxt
             continue
         if text[i:i + 2] in ("&&", "||"):
             segs.append("".join(buf))
@@ -1539,6 +1673,12 @@ def evaluate_claims(proposed: str, existing_open: dict) -> ClaimVerdict:
     payload_lanes = lanes_in(proposed)
     for m in CLAIM_RE.finditer(proposed):
         row = _row_at(proposed, m.start())
+        if is_inert_row(row):
+            # Symmetry with open_claims_in(). A NOTE in the PROPOSED write is
+            # inert too, so a note whose prose quotes a CLAIM is not charged as
+            # one. Without this the two sides disagree about what a row is,
+            # which is worse than either being wrong alone.
+            continue
         owner = m.group(1)
         lanes = lanes_in(row) or payload_lanes
         declared = co_owners_in(row)

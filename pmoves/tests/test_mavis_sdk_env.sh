@@ -1,0 +1,206 @@
+#!/usr/bin/env bash
+# test_mavis_sdk_env.sh - native bash test runner for mavis_sdk_env.sh
+#
+# Why a bash test runner instead of a Python subprocess harness: the helper
+# is itself bash, and PowerShell quoting around `bash -c '...'` strips or
+# rewrites the `$VAR` references that are central to the contract (caught
+# here: 8 of 13 Python-harness tests failed because inline `export` and
+# `$VAR` references got mangled by the call chain -- PowerShell passes the
+# arg to bash.exe, bash sees a different shell session, vars that were
+# "just exported" never appear).  Writing the test as a script file in the
+# workspace -- the same harness style as test-launcher-root-resolution.sh --
+# keeps the env mutations local to one bash process.
+#
+# Layout:
+#   each scenario is a function, sourced from this file's directory.  We
+#   `set -u` for fail-fast on unbound vars but NOT `set -e` (assertions are
+#   explicit via `t_<name>` helpers, mimicking the Python unittest style).
+#
+# Exit codes:
+#   0  all scenarios passed
+#   1  one or more scenarios failed (number reported on stderr)
+#   2  test runner itself failed to bootstrap (helper missing, etc.)
+set -u
+# The helper sits next to us at ../scripts/mavis_sdk_env.sh.
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+HELPER="$HERE/../scripts/mavis_sdk_env.sh"
+if [ ! -f "$HELPER" ]; then
+  echo "FATAL: helper not found: $HELPER" >&2
+  exit 2
+fi
+
+PASS=0
+FAIL=0
+
+# ---------------------------------------------------------------------------
+# Assertion helpers (mimic unittest.TestCase methods).
+#
+# Scenarios run in subshells (so var mutations don't leak across scenarios),
+# which means PASS/FAIL counters scoped to the parent shell don't see them.
+# Workaround: each scenario writes its pass/fail count to a temp file, then
+# the parent reads + sums.  This keeps each scenario isolated without losing
+# the counter.
+# ---------------------------------------------------------------------------
+
+SCENARIO_RESULTS_DIR="$(mktemp -d)"
+trap 'rm -rf "$SCENARIO_RESULTS_DIR"' EXIT
+
+run_scenario() {
+  local name="$1"
+  shift
+  local results_file="$SCENARIO_RESULTS_DIR/$name"
+  (
+    PASS=0
+    FAIL=0
+    set -u
+    "$@"
+    echo "$PASS $FAIL" > "$results_file"
+  )
+}
+
+assert_equal() {
+  local actual="$1" expected="$2" label="$3"
+  if [ "$actual" = "$expected" ]; then
+    PASS=$((PASS + 1))
+    return 0
+  fi
+  echo "    FAIL: $label" >&2
+  echo "      expected: $expected" >&2
+  echo "      actual:   $actual" >&2
+  FAIL=$((FAIL + 1))
+  return 1
+}
+
+assert_in() {
+  local haystack="$1" needle="$2" label="$3"
+  if [[ "$haystack" == *"$needle"* ]]; then
+    PASS=$((PASS + 1))
+    return 0
+  fi
+  echo "    FAIL: $label" >&2
+  echo "      needle:   $needle" >&2
+  echo "      haystack: $haystack" >&2
+  FAIL=$((FAIL + 1))
+  return 1
+}
+
+# ---------------------------------------------------------------------------
+# Scenarios (each runs in its own subshell via run_scenario so var mutations
+# don't leak; pass/fail counts are written to a temp file and aggregated by
+# the parent shell).
+# ---------------------------------------------------------------------------
+
+scenario_kilo_strips_everything_body() {
+  source "$HELPER"
+  export ANTHROPIC_BASE_URL="https://api.minimax.io/anthropic"
+  export ANTHROPIC_AUTH_TOKEN="sk-cp-fake"
+  export ANTHROPIC_MODEL="MiniMax-M3"
+  export MCP_TIMEOUT="120000"
+  export API_TIMEOUT_MS="3000000"
+  export CLAUDECODE="1"
+  export CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC="1"
+  export NOT_A_MAVIS_VAR="keepme"
+  mavis_sdk_strip_env_for "kilo"
+  assert_equal "${ANTHROPIC_BASE_URL:-<unset>}" "<unset>" "ANTHROPIC_BASE_URL stripped"
+  assert_equal "${ANTHROPIC_AUTH_TOKEN:-<unset>}" "<unset>" "ANTHROPIC_AUTH_TOKEN stripped"
+  assert_equal "${ANTHROPIC_MODEL:-<unset>}" "<unset>" "ANTHROPIC_MODEL stripped"
+  assert_equal "${MCP_TIMEOUT:-<unset>}" "<unset>" "MCP_TIMEOUT stripped"
+  assert_equal "${API_TIMEOUT_MS:-<unset>}" "<unset>" "API_TIMEOUT_MS stripped"
+  assert_equal "${CLAUDECODE:-<unset>}" "<unset>" "CLAUDECODE stripped"
+  assert_equal "${CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC:-<unset>}" "<unset>" "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC stripped"
+  assert_equal "${NOT_A_MAVIS_VAR:-<unset>}" "keepme" "NOT_A_MAVIS_VAR preserved"
+  assert_equal "${PMOVES_MAVIS_SDK_ANTHROPIC_BASE_URL:-<unset>}" "https://api.minimax.io/anthropic" "PMOVES_MAVIS_SDK_ANTHROPIC_BASE_URL preserved"
+  assert_equal "${PMOVES_MAVIS_SDK_ANTHROPIC_MODEL:-<unset>}" "MiniMax-M3" "PMOVES_MAVIS_SDK_ANTHROPIC_MODEL preserved"
+  assert_equal "${PMOVES_MAVIS_SDK_MCP_TIMEOUT:-<unset>}" "120000" "PMOVES_MAVIS_SDK_MCP_TIMEOUT preserved"
+  assert_equal "${PMOVES_MAVIS_SDK_ANTHROPIC_AUTH_TOKEN:-<unset>}" "sk-cp-fake" "PMOVES_MAVIS_SDK_ANTHROPIC_AUTH_TOKEN preserved"
+  assert_in "${PMOVES_MAVIS_SDK_STRIPPED:-}" "ANTHROPIC_BASE_URL" "STRIPPED list contains ANTHROPIC_BASE_URL"
+  assert_in "${PMOVES_MAVIS_SDK_STRIPPED:-}" "MCP_TIMEOUT" "STRIPPED list contains MCP_TIMEOUT"
+  assert_equal "${PMOVES_MAVIS_SDK_CLI:-<unset>}" "kilo" "CLI marker set"
+}
+
+scenario_claude_keeps_anthropic_body() {
+  source "$HELPER"
+  export ANTHROPIC_BASE_URL="https://api.minimax.io/anthropic"
+  export ANTHROPIC_AUTH_TOKEN="sk-cp-fake"
+  export ANTHROPIC_MODEL="MiniMax-M3"
+  export MCP_TIMEOUT="120000"
+  export API_TIMEOUT_MS="3000000"
+  export CLAUDECODE="1"
+  export CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC="1"
+  mavis_sdk_strip_env_for "claude"
+  assert_equal "${ANTHROPIC_BASE_URL:-<unset>}" "https://api.minimax.io/anthropic" "ANTHROPIC_BASE_URL preserved"
+  assert_equal "${ANTHROPIC_AUTH_TOKEN:-<unset>}" "sk-cp-fake" "ANTHROPIC_AUTH_TOKEN preserved"
+  assert_equal "${ANTHROPIC_MODEL:-<unset>}" "<unset>" "ANTHROPIC_MODEL stripped"
+  assert_equal "${MCP_TIMEOUT:-<unset>}" "<unset>" "MCP_TIMEOUT stripped"
+  assert_equal "${API_TIMEOUT_MS:-<unset>}" "<unset>" "API_TIMEOUT_MS stripped"
+  assert_equal "${CLAUDECODE:-<unset>}" "<unset>" "CLAUDECODE stripped"
+  assert_equal "${CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC:-<unset>}" "<unset>" "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC stripped"
+  assert_equal "${PMOVES_MAVIS_SDK_ANTHROPIC_MODEL:-<unset>}" "MiniMax-M3" "PMOVES_MAVIS_SDK_ANTHROPIC_MODEL preserved"
+  assert_equal "${PMOVES_MAVIS_SDK_MCP_TIMEOUT:-<unset>}" "120000" "PMOVES_MAVIS_SDK_MCP_TIMEOUT preserved"
+}
+
+scenario_pmoves_mini_wildcard_body() {
+  source "$HELPER"
+  export ANTHROPIC_BASE_URL="https://api.minimax.io/anthropic"
+  export ANTHROPIC_MODEL="MiniMax-M3"
+  export MCP_TIMEOUT="120000"
+  export CLAUDECODE="1"
+  export API_TIMEOUT_MS="3000000"
+  mavis_sdk_strip_env_for "pmoves-mini"
+  assert_equal "${ANTHROPIC_BASE_URL:-<unset>}" "https://api.minimax.io/anthropic" "ANTHROPIC_BASE_URL kept"
+  assert_equal "${ANTHROPIC_MODEL:-<unset>}" "MiniMax-M3" "ANTHROPIC_MODEL kept"
+  assert_equal "${MCP_TIMEOUT:-<unset>}" "120000" "MCP_TIMEOUT kept"
+  assert_equal "${CLAUDECODE:-<unset>}" "1" "CLAUDECODE kept"
+  assert_equal "${API_TIMEOUT_MS:-<unset>}" "3000000" "API_TIMEOUT_MS kept"
+  assert_equal "${PMOVES_MAVIS_SDK_ANTHROPIC_BASE_URL:-<unset>}" "<unset>" "no prefixed copy for pmoves-mini"
+}
+
+scenario_glob_pattern_body() {
+  source "$HELPER"
+  export ANTHROPIC_BASE_URL="https://x"
+  export CLAUDE_CODE_AUTO_COMPACT_WINDOW="1000000"
+  mavis_sdk_strip_env_for "claude"
+  assert_equal "${CLAUDE_CODE_AUTO_COMPACT_WINDOW:-<unset>}" "<unset>" "CLAUDE_CODE_AUTO_COMPACT_WINDOW stripped"
+  assert_equal "${PMOVES_MAVIS_SDK_CLAUDE_CODE_AUTO_COMPACT_WINDOW:-<unset>}" "1000000" "PMOVES_MAVIS_SDK_CLAUDE_CODE_AUTO_COMPACT_WINDOW preserved"
+  assert_equal "${ANTHROPIC_BASE_URL:-<unset>}" "https://x" "ANTHROPIC_BASE_URL kept"
+}
+
+scenario_unknown_cli_strips_body() {
+  source "$HELPER"
+  export ANTHROPIC_BASE_URL="https://api.minimax.io/anthropic"
+  mavis_sdk_strip_env_for "totally-new-cli-not-in-registry"
+  assert_equal "${ANTHROPIC_BASE_URL:-<unset>}" "<unset>" "ANTHROPIC_BASE_URL stripped for unknown CLI"
+}
+
+# ---------------------------------------------------------------------------
+# Run all scenarios; aggregate pass/fail count.
+# ---------------------------------------------------------------------------
+echo "[scenario] kilo strips everything"
+run_scenario kilo scenario_kilo_strips_everything_body
+echo "[scenario] claude keeps ANTHROPIC_*"
+run_scenario claude_keeps scenario_claude_keeps_anthropic_body
+echo "[scenario] pmoves-mini consumes everything via *"
+run_scenario pmoves_mini scenario_pmoves_mini_wildcard_body
+echo "[scenario] CLAUDE_CODE_* glob matches live var"
+run_scenario glob_pattern scenario_glob_pattern_body
+echo "[scenario] unknown CLI name strips everything (safe default)"
+run_scenario unknown_cli scenario_unknown_cli_strips_body
+
+echo "--------------------------------------------------"
+# Aggregate from per-scenario result files.
+TOTAL_PASS=0
+TOTAL_FAIL=0
+for f in "$SCENARIO_RESULTS_DIR"/*; do
+  if [ -f "$f" ]; then
+    read -r p fl < "$f"
+    TOTAL_PASS=$((TOTAL_PASS + p))
+    TOTAL_FAIL=$((TOTAL_FAIL + fl))
+  fi
+done
+echo "PASS: $TOTAL_PASS    FAIL: $TOTAL_FAIL"
+echo "--------------------------------------------------"
+
+if [ "$TOTAL_FAIL" -gt 0 ]; then
+  exit 1
+fi
+exit 0

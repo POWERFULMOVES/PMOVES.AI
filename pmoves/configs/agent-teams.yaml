@@ -12,6 +12,7 @@ teams:
     - agents
     - tier-agent
     agents:
+    - kiloclaw         # hosted VPS ops claw (Fly Machine, loopback-only)
     - claude_4090
     - claude_b850
     - crush_glm52
@@ -32,6 +33,9 @@ teams:
     - hermes_agent
     - mavis
     - missinglinc_validator
+    # The session role every node's launcher starts in; orchestration is the
+    # team its CLI identities (claude_b850, claude_4090, ...) already sit in.
+    - node_steward
   implementation:
     name: Implementation
     description: Blueprint-first coding and delivery agents

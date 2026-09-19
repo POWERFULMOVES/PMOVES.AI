@@ -156,12 +156,37 @@ def _is_migrations_target(normalized_fwd: str) -> bool:
 
 # domain name -> predicate(normalized_forward_slash_path) -> bool
 # Extend here to open a new readOnlyPath class to Known Roads.
+def _is_launcher_target(path: str) -> bool:
+    """launcher domain: a PMOVES agent launcher or one of its shared fragments.
+
+    WHY THESE ARE PROTECTED AT ALL. The shared env file is a zeroAccessPath --
+    no operation, no road. The launchers READ it and export 410 variables into
+    a process they then exec a harness inside. Measured 2026-09-16: the secret
+    was sealed and every script that opens it was covered by nothing in
+    patterns.yaml. Defense in depth says the reader of a secret inherits the
+    secret's classification; here the reader was the one unguarded hop.
+
+    They also decide WHO an agent is (node_identity) and whether cipher records
+    its memories as itself (pm-cipher-identity), so an edit here is an identity
+    and credential change wearing a shell script's clothes.
+
+    readOnly, not zeroAccess: reading a launcher is how an agent learns the
+    sanctioned bring-up, and sealing that would push people back to guessing.
+    """
+    norm = path.replace(chr(92), "/")
+    tail = norm.rsplit("/", 1)[-1]
+    if "/pmoves/scripts/pm-" in norm and tail.endswith(".sh"):
+        return True
+    return ("/pmoves/scripts/" in norm or "/deploy/provision/" in norm) and "-pmoves" in tail
+
+
 DOMAIN_PATTERNS: Dict[str, Callable[[str], bool]] = {
     "compose": _is_compose_target,
     "schema": _is_schema_target,
     "topic": _is_topic_target,
     "dockerfile": _is_dockerfile_target,
     "migrations": _is_migrations_target,
+    "launcher": _is_launcher_target,
 }
 
 _REASON_RE = re.compile(r"^(handoff:[^/\\]+|pr:[0-9]+|issue:[0-9]+)$")
@@ -197,8 +222,16 @@ def _trail_path() -> Path:
     return _project_dir() / ".claude" / "hooks" / "damage-control" / "known-roads.jsonl"
 
 
-def _record(tool: str, file_path: str, domain: str, reason: str) -> bool:
-    """Append one provable trail line. Returns False if it could not be written."""
+def _record(tool: str, file_path: str, domain: str, reason: str,
+            note: str = "") -> bool:
+    """Append one provable trail line. Returns False if it could not be written.
+
+    `note` is free text describing HOW the use was observed. It is optional and
+    omitted when empty, so existing rows and existing readers are unaffected --
+    rows carrying a note already exist in the trail. The PostToolUse effect check
+    uses it to distinguish a use it observed AFTER the fact (the command text
+    never named the path) from a grant consulted BEFORE the write.
+    """
     entry = {
         "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "tool": tool,
@@ -208,6 +241,8 @@ def _record(tool: str, file_path: str, domain: str, reason: str) -> bool:
         "agent": os.environ.get("AGENT_ID") or os.environ.get("PMOVES_NODE_ID") or "unknown",
         "session": os.environ.get("CLAUDE_SESSION_ID") or os.environ.get("SESSION_ID") or "unknown",
     }
+    if note:
+        entry["note"] = note
     try:
         path = _trail_path()
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -249,7 +284,42 @@ def _active_grant() -> str:
     return ""
 
 
-def evaluate_known_road(tool: str, file_path: str, normalized_fwd: str) -> Tuple[bool, str]:
+def active_grant() -> Tuple[str, str, bool]:
+    """(domain, reason, provable) for the grant currently in force.
+
+    ("", "", False) when none is active.
+
+    Public because the opaque-write tripwire in the Bash guard has to decide with
+    NO TARGET PATH IN HAND: it fires on a verb that can write a path the command
+    never spells, which is precisely why evaluate_known_road() -- whose whole
+    contract is a per-file domain predicate -- has nothing to test against there.
+    A caller using this is asserting less than one using evaluate_known_road: it
+    learns that SOME grant is open, not that this grant covers this file. It must
+    therefore never be used to allow an operation on a NAMED protected path; that
+    decision stays with evaluate_known_road.
+    """
+    raw = _active_grant()
+    if not raw or ":" not in raw:
+        return "", "", False
+    domain, reason = raw.split(":", 1)
+    domain = domain.strip().lower()
+    reason = reason.strip()
+    if domain not in DOMAIN_PATTERNS:
+        return domain, reason, False
+    provable, _detail = _reason_is_provable(reason)
+    return domain, reason, provable
+
+
+def record_use(tool: str, file_path: str, domain: str, reason: str,
+               note: str = "") -> bool:
+    """Append one row to the trail. Public entry point for callers that have
+    already made their own authorization decision (the opaque-write tripwire,
+    the PostToolUse effect check). Returns False if it could not be written."""
+    return _record(tool, file_path, domain, reason, note)
+
+
+def evaluate_known_road(tool: str, file_path: str, normalized_fwd: str,
+                        note: str = "") -> Tuple[bool, str]:
     """Evaluate the active Known Road grant (KNOWN_ROAD env var or file grant) for this edit/write.
 
     Returns (allowed, detail):
@@ -278,7 +348,7 @@ def evaluate_known_road(tool: str, file_path: str, normalized_fwd: str) -> Tuple
     if not provable:
         return False, f"Known Road reason not provable — {detail}"
 
-    if not _record(tool, file_path, domain, reason):
+    if not _record(tool, file_path, domain, reason, note):
         return False, (
             "Known Road bypass could not be recorded to known-roads.jsonl — "
             "an unprovable bypass is denied (fail-closed)"

@@ -4,24 +4,30 @@
 # The fleet-wide KiloClaw identity behind the bootstrap routing entry
 # (pmoves-bootstrap/v1 CGP: routing.kiloclaw, wire target glm-5.1).
 # Runs wherever the operator has KiloCode open against the Z.AI coding
-# plan — 5090 (primary), laptop-4090 (portable), z890 (fallback). This
-# is the node-agnostic profile; kilocode_glm.yaml remains the 5090
-# DARKXSIDE co-creation edition, not the harness target.
+# plan — 5090 (primary), laptop-4090 (portable), z890 (fallback), and
+# kiloclaw (the hosted KiloClaw VPS itself, glm-5.3 lane). This is the
+# node-agnostic profile; kilocode_glm.yaml remains the 5090 DARKXSIDE
+# co-creation edition, not the harness target.
 #
 # Harness: Mavis dispatches on pmoves.agent.task.v1 with target=glm-5.1;
 # the node-side worker is pmoves/tools/agent_task_subscriber.py
 # (--agent glm-5.1 --alias kiloclaw). Results return on
 # pmoves.agent.result.v1. Until that subscriber runs on a node, the
 # routing entry is a hint, not a dispatch surface.
+#
+# CLI harness source of truth: PMOVES-KeYlOkODe (submodule) — PMOVES fork
+# tracking Kilo-Org/kilocode (Kilo CLI, @kilocode/cli). The Kilo CLI reads
+# this repo's kilo.json natively (model pin, providers, MCP, skills).
 
 name: kiloclaw
 role: kilocode-claw
-description: "Fleet KiloCode claw — blueprint-first coding worker behind the Mavis harness routing entry (wire target glm-5.1). Runs on any node with KiloCode + the Z.AI coding plan."
+description: "Fleet KiloCode claw — blueprint-first coding worker behind the Mavis harness routing entry (wire target glm-5.1). Runs on any node with the Kilo CLI + the Z.AI coding plan, including the hosted KiloClaw VPS (glm-5.3)."
 
 node_affinity:
   - 5090  # Primary — POWERFULMOVES workstation, KiloCode primary seat
   - laptop-4090  # Portable — KiloCode runs here in the field (Mavis session host 2026-08)
   - z890  # Fallback — when 5090/4090 unavailable
+  - kiloclaw  # Hosted KiloClaw VPS (this gateway) — GLM-5.3 via KiloCode/zai-coding plan
 
 model:
   provider: zai
@@ -32,10 +38,13 @@ model:
   vision_model: glm-5v-turbo
   api_key_env: Z_AI_API_KEY
 
-# Direct KiloCode plan-routed lane (orchestration overflow, same as kilocode_glm)
+# Direct KiloCode plan-routed lane (orchestration overflow, same as kilocode_glm).
+# This instance's runtime lane is kilocode/zai-coding/glm-5.3 — the plan's own
+# GLM routing, which supersedes the static kilo-auto/balanced mapping here.
 kilocode_direct:
   provider: kilocode
   model: kilo-auto/balanced
+  runtime_model: "kilocode/zai-coding/glm-5.3"
   endpoint: "https://api.kilocode.ai/api/openrouter"
   api_key_env: KILOCODE_API_KEY
 
