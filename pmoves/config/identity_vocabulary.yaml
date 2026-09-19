@@ -156,6 +156,18 @@ identities:
     node: spark
     note: 32 entries under two orderings of the same two words.
 
+  - canonical: knuckles-kimi
+    aliases: ["PMOVES-KIMI-KNUCKLES-B850", "kimi_knuckles"]
+    node: knuckles
+    note: >-
+      2026-09-19 Composio/Discord lane (PRs #3108/#3109/#3110/#3113).
+      Canonical register form PMOVES-KIMI-KNUCKLES-B850 (the OWNER= field);
+      agent_registry.yaml key kimi_knuckles; card
+      00000000-0000-4000-8000-000000000051; lineage PMOVES-SPARK-KIMI.
+      The (opus 9) parenthetical on its rows is a harness-profile
+      mis-stamp -- the model is kimi-k2, not an opus. It is left
+      unclassified rather than aliased into a model it is not.
+
   - canonical: crush
     aliases: ["CRUSH", "CRUSH-GLM52", "CRUSH-SPARK (KIMI)"]
     note: >-

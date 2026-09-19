@@ -233,6 +233,42 @@ agents:
       B850/Knuckles node CLI identity. Affinity for data-tier and AMD/ROCm Linux
       workloads, with an infra + governance lane -- a preference, not an
       exclusive claim. Admin over the node_steward role it launches into.
+  kimi_knuckles:
+    name: "Kimi Knuckles"
+    class: standard
+    # Same shape as claude_b850: the surface a human drives is a UI; what it
+    # drives is an agent. Harness `kimi` (scripts/kimi-pmoves.sh passes it to
+    # pm_node_identity), so node-vocabulary.yaml knuckles.default_identity.kimi
+    # binds here instead of launching unbound.
+    primary_type: ui
+    secondary_type: agent
+    # No listening socket. A CLI session, not a service.
+    port: null
+    health: null
+    layers:
+      - L0
+      - L2
+      - L4
+    evolution_stage: stage_1
+    # Card 00000000-0000-4000-8000-000000000051 (knuckles-kimi, interim) --
+    # the spelling cipher's assertAgentId answers to; matches
+    # node-vocabulary.yaml knuckles.cipher_agent_id.kimi.
+    signature: knuckles-kimi
+    # Discord 2-way / Composio lane subjects land here when the poll service
+    # ships (scope doc A.10); declaring them before the publisher exists is
+    # the undeclared-emission defect #2734 exists to catch.
+    nats:
+      publishes: []
+      subscribes: []
+    topology:
+      node_affinity: [pmoves-b850]
+      team: orchestration
+      ci_runner: null
+      compose_profile: null
+    description: >-
+      B850/Knuckles node Kimi Code CLI identity (PMOVES-KIMI-KNUCKLES-B850).
+      Same affinity posture as claude_b850 -- a preference, not an exclusive
+      claim. First harness wired to a per-node cipher_agent_id.
   claude_5090:
     name: "5090 Claude"
     class: standard
