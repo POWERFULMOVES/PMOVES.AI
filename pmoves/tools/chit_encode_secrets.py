@@ -18,6 +18,7 @@ DEFAULT_ENV_FILE = PMOVES_DIR / "env.shared"
 DEFAULT_OUT = PMOVES_DIR / "data/chit/env.cgp.json"
 
 from pmoves.chit import encode_secret_map
+from pmoves.tools._secrets_common import is_placeholder
 
 
 def load_env_file(path: Path, keys: set[str] | None = None) -> Dict[str, str]:
@@ -94,6 +95,54 @@ def main() -> None:
     args = parser.parse_args()
 
     secrets = load_env_file(args.env_file, set(args.keys) if args.keys else None)
+
+    # Keep non-values out of the bundle. An unexpanded `${VAR}` reference or a
+    # `PLACEHOLDER_*` literal in the CGP is how a stale ref becomes the fleet's
+    # "current" secret: secrets_sync's write-back previously accepted any
+    # non-empty string, so the ref was spread across every tier file on the next
+    # funnel (the Z890 JWT 58 -> 13 reversion). The write-back now refuses them
+    # too — this side keeps the poison out of circulation at the source.
+    nonvalues = sorted(
+        key for key, value in secrets.items() if is_placeholder(value)
+    )
+    for key in nonvalues:
+        del secrets[key]
+    if nonvalues:
+        # Names only, by design: an operator must know WHICH keys were refused,
+        # and no value (nor any span of one) is ever emitted here. Reviewed —
+        # the map's keys are configuration names, not credential material.
+        # NOT SUPPRESSED, and deliberately not pretending to be. The marker
+        # that stood here read `# codeql[python/clear-text-logging-of-sensitive-
+        # information]`, which is wrong twice: the rule is
+        # `py/clear-text-logging-sensitive-data` (measured from the live alert),
+        # and GitHub code scanning does not honour inline CodeQL suppression
+        # comments at all -- .github/codeql-config.yml carries only paths-ignore,
+        # no query-filters. A marker that silences nothing while reading as
+        # handled is worse than no marker: the next reader stops looking.
+        #
+        # WHY THE ALERT IS A FALSE POSITIVE: `nonvalues` is built from KEYS
+        # only -- (key for key, value in secrets.items() if is_placeholder(value))
+        # -- and `value` appears solely in the predicate; it is never stored or
+        # emitted. CodeQL taints the comprehension because it reads a secret map,
+        # not because a secret reaches the sink. And is_placeholder(value) being
+        # true means the value is empty, an unexpanded ${VAR} ref, or a
+        # PLACEHOLDER_* literal -- by definition not credential material.
+        #
+        # The operator MUST see which keys were refused, or the funnel drops
+        # them silently. Resolution is an alert dismissal (a security-audit
+        # action, operator-owned), not a code change.
+        print(
+            f"WARNING: excluded {len(nonvalues)} non-value key(s) from the CGP "
+            f"(empty, ${{VAR}} ref, or placeholder literal): {', '.join(sorted(nonvalues))}. "
+            "Set real values in the env file before exporting.",
+            file=sys.stderr,
+        )
+    if not secrets:
+        raise RuntimeError(
+            f"{args.env_file} held no exportable secret values "
+            "(every candidate was empty, a ref, or a placeholder)"
+        )
+
     cgp = encode_secret_map(
         secrets,
         namespace=args.namespace,
