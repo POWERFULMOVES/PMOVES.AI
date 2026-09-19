@@ -248,3 +248,69 @@ pipeline runnable end-to-end on knuckles via make targets, feeding `persona.room
 
 *Amendment signed: PMOVES-KIMI-KNUCKLES-B850, 2026-09-19. The wire holds; the entry
 point changes nothing about who is speaking.*
+
+
+### A.5 Correction — persona counts are node-local measurements, reconciled not canonical
+
+Operator correction to §A.3/D4: *"There were actually more [personas] found by the 5090 node;
+each node runs it local to the capacity the node allows."*
+
+- **Principle (MOF-consistent):** persona discovery is a **node-local pipeline run, bounded by
+  the node's capacity class**. The 5090 ran the pipeline and found more personas than the 8
+  production seeds; that dataset lives on the 5090 node and is not present in this node's
+  working tree (measured: `PERSONAS.md` here still records 8 seeds + the debunked planning
+  figure; the 5090's findings are cross-node state, attested by the operator).
+- **Therefore the doc truth is per-node until reconciled:** PERSONAS.md's "8 seeds" is this
+  node's measured view, not the fleet's. Reconciling node-local persona discoveries into the
+  fleet record IS the living-docs provenance lane (W1-2) — ingest the 5090's persona dataset
+  through the pipeline (HiRAG + Open-Notebook + cipher) with provenance, then refresh
+  PERSONAS.md from the reconciled record. Until then, no node may overwrite another node's
+  persona count — git time-travel instead of immutability, adsorption instead of assertion.
+- **W1-5 amended:** the knuckles leg runs the same pipeline to *knuckles' capacity* (CPU-heavy
+  batch), publishes its discoveries the same way, and lets reconciliation — not node priority —
+  assemble the whole. D4 state: **superseded by A.5** — expansion is measured per node and
+  merged by the pipeline.
+
+*Amendment A.5 signed: PMOVES-KIMI-KNUCKLES-B850, 2026-09-19 — measured what I could
+(this node), attested what I could not (the 5090's), and wrote the difference down.*
+
+
+### A.6 Decisions D1–D4 resolved (operator, 2026-09-19) + the Archon keystone
+
+- **D1 — FINAL: APPROVED as recommended.** Spynel is registered by what it drives: **the
+  Registry and PMOVES services** — DARKXSIDE's saddle into the whole. Entry-point
+  agnosticism (A.1) is the standing doctrine; W1-1 registers Agent Zero as the first
+  driven harness, and the Registry gains its first PMOVES-custom entries.
+- **D2 — KVM candidates identified; probe before commit.** The fleet's three Hostinger
+  KVMs are live and Linux (`fleet-status`: kvm2 exit-proxy, kvm4-1 API gateway, kvm4-2
+  data storage — all `active`). Their capacity vs the Danger Room prerequisites
+  (16+ cores, 64 GB+ RAM, 4 GB/sandbox, **nested `/dev/kvm`** — not guaranteed on VPS
+  plans) is **unmeasured from this node** and must not be assumed. Host lane (W2-1)
+  step 0 amended: run `probe_danger_room_host` against all three KVMs; the first that
+  passes becomes the self-host target; **E2B cloud-interim stands until a probe passes.**
+  Do not retire cloud mode on a probe promise — retire it on a green `sandbox-smoke`.
+- **D3 — APPROVED: Archon earns the full ACP adapter.** New lane **W1-6 — Archon ACP
+  adapter (effort L):** an ACP-server wrapper (initialize + authMethods + session
+  proxy) over Archon's native REST (:3090), distributed per registry contract, making
+  Archon a registry citizen AND room-drivable from any entry point.
+- **D4/A.5 — the keystone, operator-spotted:** *"lmao that is what Archon does"* — the
+  persona factory IS Archon. coleam00's Archon is the agent-building agent: persona
+  schema + knowledge + prompt assembly is its native craft. Therefore W1-5 (persona
+  pipeline legs) and W1-6 (Archon adapter) are **the same program seen from two sides**:
+  node-local pipeline runs (knuckles + 5090 legs) feed Archon the discovered persona
+  material; Archon, once ACP-adapted, builds/expands personas drivable from Spynel,
+  CLI, or any room — persona expansion becomes *running the factory*, exactly as A.5
+  demands. The debunked "325+" stays debunked as a PLANNING number; the FACTORY makes
+  real counts whatever the nodes measure.
+
+**Decision table (final for this scope revision):**
+
+| Decision | State |
+|---|---|
+| D1 Spynel | RESOLVED — entry-point tooling; register what it drives (Registry + PMOVES services) |
+| D2 Danger Room host | KVM probe-first (3 Hostinger candidates); cloud-interim until a probe passes |
+| D3 Archon | APPROVED — full ACP adapter (W1-6) |
+| D4 Personas | Persona factory = Archon; node-local measurement (A.5) + factory expansion (W1-5+W1-6) |
+
+*Amendment A.6 signed: PMOVES-KIMI-KNUCKLES-B850, 2026-09-19 — the factory and the
+saddle, both admitted to the Registry; the host waits on a probe that can fail.*
