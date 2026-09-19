@@ -37,6 +37,12 @@ on:
     branches: [main, PMOVES.AI-Edition-Hardened]
     types: [opened, synchronize, reopened]
 
+# HAND-MAINTAINED COUNT (1 of 3). The gate-job count appears literally in three
+# places that nothing keeps in step: here, in the no-skip rationale inside
+# merge-decision, and in merge-decision's final "all nine gates" message. Adding
+# a job means `needs:`, the `for r in` loop, AND all three of these. Miss the loop
+# and the aggregator passes while ignoring a gate.
+#
 # All nine jobs are read-only: checkout, install, run a make target or a python
 # script, and report. Verified before setting this -- no `gh pr`/`gh api`, no
 # github-script, no comment or label writes, and the ghcr/"packages" hits in this
@@ -368,6 +374,11 @@ jobs:
           # shape this PR exists to remove, reproduced in the gate meant to close it:
           # an instrument that reports fine without having measured anything.
           #
+          # HAND-MAINTAINED COUNT (2 of 3). The other two are the `permissions`
+          # comment at the top of this file and the "all nine gates" message at
+          # the end of this step. The authority is the `for r in` loop below, not
+          # any of these three numbers.
+          #
           # None of the nine jobs carries an `if:` or a path filter, so they always
           # run — a skip is not a legitimate state here, and if one ever appears it
           # is itself worth failing on rather than passing silently.
@@ -390,4 +401,8 @@ jobs:
           if [[ "$failed" -ne 0 ]]; then
             exit 1
           fi
+          # HAND-MAINTAINED COUNT (3 of 3). The other two are the `permissions`
+          # comment at the top of this file and the no-skip rationale above. This
+          # line is cosmetic — the loop above is what decides — but a stale number
+          # here is how a reader learns to distrust the other two.
           echo "Merge gate PASSED — all nine gates reported success"
