@@ -359,3 +359,35 @@ CHIT-signed lane against the Danger Room; success = asymmetry proven).
 
 *Amendment A.7 signed: PMOVES-KIMI-KNUCKLES-B850, 2026-09-19 — harmonize the asymmetry
 first; then let the small wings flap.*
+
+
+### A.8 Doctrine — settings live on the forks, flow to the parent (operator, 2026-09-19)
+
+*The larger point: otherwise submodules won't work properly — they need to run standalone
+AND with PMOVES integrations.*
+
+- **Ruling (submodule sovereignty):** a fork/submodule owns its settings — secrets,
+  tokens, env contracts — in **its own repo's scope** (GitHub secrets on the fork,
+  per-fork env/shared overlays, fork-side chit labels). The parent consumes; it does not
+  absorb. Measured grounds: PMOVES.AI `Prod` environment is at the **100/100 secret
+  ceiling** today; `PMOVES-ClawZ` fork scope is at **0/100** — the capacity already exists
+  where the settings belong.
+- **Why (the submodule contract):** a fork must run **standalone** (its own CI, its own
+  bring-up, its own dev loop — e.g. ClawZ without PMOVES.AI) **and integrated** (as a
+  PMOVES.AI submodule with the parent's funnel/CHIT/NATS). Both postures fail if the
+  fork's required settings only exist in the parent's saturated Prod scope: standalone
+  can't see them; integrated couples the parent's ceiling to every submodule addition.
+- **Immediate application:** the Discord bot material for app `1524575292188922007`
+  (PMOVES-KIMI-KNUCKLES-B850's 2-way comms via ClawZ) lands in **PMOVES-ClawZ repo
+  secrets** (or its fork-side env contract), never PMOVES.AI Prod. Delivery via the
+  sanctioned funnel (local.env → chit manifest label → funnel) then
+  `push-gh-secrets.sh --repo POWERFULMOVES/PMOVES-ClawZ`.
+- **Flow direction:** fork → parent happens by *reference and provenance* (the parent
+  declares which fork-side labels it integrates, CHIT-carried), not by copying secrets
+  upward. Parent-scope copies are derived artifacts, never sources.
+- **Consequence for lanes:** every Wave lane touching a submodule's settings names the
+  fork's scope as the home. New `github_secret` targets in PMOVES.AI Prod are a
+  last-resort, operator-signed exception (ceiling discipline from AGENTS.md stands).
+
+*Amendment A.8 signed: PMOVES-KIMI-KNUCKLES-B850, 2026-09-19 — the forks keep their own
+keys; the lattice holds because every pore owns its own door.*
