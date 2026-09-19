@@ -37,7 +37,7 @@ on:
     branches: [main, PMOVES.AI-Edition-Hardened]
     types: [opened, synchronize, reopened]
 
-# All eight jobs are read-only: checkout, install, run a make target or a python
+# All nine jobs are read-only: checkout, install, run a make target or a python
 # script, and report. Verified before setting this -- no `gh pr`/`gh api`, no
 # github-script, no comment or label writes, and the ghcr/"packages" hits in this
 # file are all prose in comments, not registry pulls. So contents:read is the
@@ -106,6 +106,59 @@ jobs:
       # ran it. Two manifests were failing schema validation invisibly.
       - name: Validate every room manifest against the schema and catalog
         run: make -C pmoves room-manifest-check
+  # The split overlays (docker-compose.{base,core,agents,media,ui,workers,apps,
+  # juicefs}.yml) are GENERATED from docker-compose.yml. A drift gate for them
+  # already exists -- the `Validate Compose Files` job in
+  # hardening-validation.yml -- and it has no authority:
+  #
+  #   * That workflow is `paths:`-filtered on pmoves/docker-compose*.yml, so on a
+  #     PR that touches no compose file the job does not run AT ALL. Measured: it
+  #     is absent from all 23 checks reported on PR #3102.
+  #   * main's required contexts are python-tests, hardening-validation, verify
+  #     and submodule-gitlink-gate, with enforce_admins false. The drift job is
+  #     not among them, so it blocks nothing even when it does run -- PR #3082
+  #     merged while it was red.
+  #
+  # Requiring `Validate Compose Files` directly is NOT the fix: a path-filtered
+  # workflow can never safely be a required context, because a skipped workflow
+  # leaves its check Pending and the PR waits forever. This file's `on:` block
+  # already records that exact defect costing `PMOVES.AI-Edition-Hardened` every
+  # merge since 2026-03-17. So the check lives HERE, in a workflow with no path
+  # filter, aggregated by merge-decision -- the same reasoning as
+  # agent-zero-pin-check below.
+  #
+  # Unlike the room-manifest smoke path above, this is its own job rather than
+  # another step on docker-build-validation. Deliberate: it adds no required
+  # context (merge-decision remains the only one), and while the compose source
+  # drift on main is unrepaired this failure needs to be legible by NAME in the
+  # checks list rather than surfacing as a red `docker-build-validation`.
+  compose-split-drift-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      # Installed via the official script rather than a marketplace action, as the
+      # sibling jobs do. The make target renders through
+      # `uv run --no-project --with ruamel.yaml==0.19.1`, and that ruamel pin is
+      # what keeps the CI render byte-identical to a local one -- an unpinned
+      # ruamel would report drift that is only a formatting difference.
+      - name: Install uv
+        run: |
+          set -euo pipefail
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      # The same make target a human runs. It regenerates the overlays in place
+      # and fails on `git status --porcelain` output -- porcelain rather than
+      # `git diff --exit-code`, because diff exits 0 for untracked files, so a PR
+      # that DELETED a generated overlay would regenerate it as untracked and
+      # pass a diff-based gate.
+      - name: Check split overlays are in sync with the compose source
+        run: make -C pmoves compose-split-check
 
   # Ratcheted: judges ALL 99 tracked Dockerfiles (previously globbed
   # pmoves/services/*/Dockerfile, which sees 76 of them and misses 10 of the 12
@@ -270,7 +323,8 @@ jobs:
   merge-decision:
     # Reads nothing and writes nothing - it only inspects `needs` results.
     permissions: {}
-    needs: [python-tests, docker-build-validation, hardening-validation, action-pin-validation,
+    needs: [python-tests, docker-build-validation, compose-split-drift-check,
+            hardening-validation, action-pin-validation,
             agent-registry-check, dep-matrix-check, agent-zero-pin-check,
             suppression-marker-check]
     runs-on: ubuntu-latest
@@ -281,6 +335,7 @@ jobs:
           echo "Merge gate evaluation:"
           echo "  python-tests: ${{ needs.python-tests.result }}"
           echo "  docker-build-validation: ${{ needs.docker-build-validation.result }}"
+          echo "  compose-split-drift-check: ${{ needs.compose-split-drift-check.result }}"
           echo "  hardening-validation: ${{ needs.hardening-validation.result }}"
           echo "  action-pin-validation: ${{ needs.action-pin-validation.result }}"
           echo "  agent-registry-check: ${{ needs.agent-registry-check.result }}"
@@ -295,12 +350,13 @@ jobs:
           # shape this PR exists to remove, reproduced in the gate meant to close it:
           # an instrument that reports fine without having measured anything.
           #
-          # None of the eight jobs carries an `if:` or a path filter, so they always
+          # None of the nine jobs carries an `if:` or a path filter, so they always
           # run — a skip is not a legitimate state here, and if one ever appears it
           # is itself worth failing on rather than passing silently.
           failed=0
           for r in "python-tests:${{ needs.python-tests.result }}" \
                    "docker-build-validation:${{ needs.docker-build-validation.result }}" \
+                   "compose-split-drift-check:${{ needs.compose-split-drift-check.result }}" \
                    "hardening-validation:${{ needs.hardening-validation.result }}" \
                    "action-pin-validation:${{ needs.action-pin-validation.result }}" \
                    "agent-registry-check:${{ needs.agent-registry-check.result }}" \
@@ -316,4 +372,4 @@ jobs:
           if [[ "$failed" -ne 0 ]]; then
             exit 1
           fi
-          echo "Merge gate PASSED — all eight gates reported success"
+          echo "Merge gate PASSED — all nine gates reported success"
