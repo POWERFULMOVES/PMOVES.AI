@@ -153,6 +153,27 @@ REGISTRY: Dict[str, Dict[str, Any]] = {
     # convention or a Docker secret; see the PR that added these two.
     "GH_APP_INSTALLATION_ID": {"tier": "agent", "required": False, "min_length": 7},
     "GH_APP_ID": {"tier": "agent", "required": False, "min_length": 5},
+    # Tier 5: Agent — Composio Connect MCP surface (scope doc Amendments A.10/A.11,
+    # 2026-09-19). Three slots close the funnel gap for the Discord 2-way lane:
+    # the v3 MCP-clients admin API (/api/v3/mcp/clients, verified live) requires
+    # an ak_ privileged PROJECT key; the kimi-knuckles Connect client
+    # authenticates MCP calls with its ck_ consumer key (x-consumer-api-key
+    # header); and the Discord bot identity (app 1524575292188922007) enters
+    # Composio's discordbot auth config. The legacy COMPOSIO_API_KEY slot
+    # (already in the emitted v2 manifest, tier llm — it predates this
+    # REGISTRY) carries the refreshed uak_ user key; no new user-key slot. Per A.8 submodule
+    # sovereignty the VALUES live in fork scope and flow by reference; these
+    # slots make the funnel route them. required=False: per-node enablement —
+    # only Composio-wired nodes carry them, and the consumers fail loudly
+    # (401) when truly absent. min_length is shape, not presence: Composio
+    # keys measured ~47 chars on 2026-09-19 (uak_ family), Discord bot tokens
+    # ~70; floors catch the truncation family without admitting half-keys.
+    # Tier agent (not llm) deliberate: these are fleet-identity/admin material
+    # in the CIPHER_API_TOKEN / GH_APP_* neighborhood, not LLM-provider keys,
+    # and the agent tier keeps them out of the TensorZero gateway's env file.
+    "COMPOSIO_PROJECT_KEY_PMOVES": {"tier": "agent", "required": False, "min_length": 20, "prefix": "ak_"},
+    "COMPOSIO_CONSUMER_KEY_KIMI": {"tier": "agent", "required": False, "min_length": 20, "prefix": "ck_"},
+    "DISCORD_BOT_TOKEN_KIMI": {"tier": "agent", "required": False, "min_length": 50},
     # Tier: supabase — Studio basic-auth through the Kong gateway. These became
     # HARD-REQUIRED when supabase-kong moved to DB-less declarative mode: the
     # vendored kong.yml declares a `basicauth_credentials` entry, and Kong
@@ -202,6 +223,15 @@ REGISTRY: Dict[str, Dict[str, Any]] = {
     # default. required=True because docker-compose.mcp-gateway.yml declares it
     # ${MCP_GATEWAY_AUTH_TOKEN:?} — an unset value fails the whole `up`, and
     # file-wide interpolation means it would gate every service in that file.
+    #
+    # STATUS (2026-09-06, carried here from the v2 manifest comment because
+    # register runs re-emit the manifest and free comments do not survive the
+    # yaml round-trip): ABSENT from the prod CGP bundle (108-point bundle from
+    # run 34062006446 carries no such point) and from every GH secret — this
+    # token was never minted. It gates pmoves-4090-web (MCP gateway auth).
+    # Mint once: `make secrets-rotate KEY=MCP_GATEWAY_AUTH_TOKEN`
+    # (random-urlsafe), then re-export the bundle (rotation path force-exports).
+    # Consumers (mcp gateway) re-sync on next funnel.
     "MCP_GATEWAY_AUTH_TOKEN": {"tier": "agent", "required": True},
     # Tier: data -- the scoped JuiceFS metadata role's password.
     #
