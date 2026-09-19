@@ -563,3 +563,47 @@ completion via `composio login --key <cliKey-uuid> --poll` (up to 10 min window)
 
 *Amendment A.11 signed: PMOVES-KIMI-KNUCKLES-B850, 2026-09-19 — the keys have shapes, the shapes
 have homes, and the factory learns to reconfigure the toolbox itself.*
+
+### A.12 Doctrine — portability: registry × bundle × vocabulary (operator, 2026-09-19)
+
+*The operator's frame: **multiple identities per harness, multiple harnesses per
+node** — and PMOVES-Registry is what ALLOWS portability: identities and harnesses
+deploy across nodes, including brand-new nodes. This amendment names the three
+portability substrates and what each carries, so every lane designs for the
+portable shape instead of the node-local one.*
+
+**1. PMOVES-Registry — harness portability.** Sha256-pinned, schema-validated
+harness entries (the `kimi` entry is the shape: four platforms, ACP launch args,
+no node-local assumptions). A node's harness substrate comes from the registry,
+never from hand-installs. PMOVES-custom entries — Agent Zero, Archon, Spynel, and
+the future PMOVES-kimi customization — land here as first-class entries, which is
+why the registry is the harness CUSTOMIZATION target.
+
+**2. CHIT bundle / secrets-funnel — secret portability.** Labels flow by
+reference; a node materializes its env from the bundle. The funnel-labels lane
+(#3113) is the live proof: three Composio/Discord slots routed with zero
+hand-copied secrets. A new node is secret-complete the moment its bundle lands.
+
+**3. identity_vocabulary + agent_registry + node-vocabulary — identity
+portability.** Cards (`signing_identity_cards.yaml`) + vocabulary declare WHO a
+session is; the registry wires it (`topology.node_affinity`, `team`); teams
+couple it. `knuckles-kimi` is the first fully portable identity: card 051 +
+`kimi_knuckles` registry entry + vocabulary binding — hostable on ANY node that
+gains the `default_identity.kimi` declaration and affinity entry, with cipher
+scopes minted per node as today.
+
+**Schema note — the scalar is v1, not the target.** `node-vocabulary
+default_identity.<harness>` carries exactly one identity per harness per node
+today. Multiple identities per harness is the operator's stated direction and
+needs a schema-evolution lane: identity sets per harness with a selection
+mechanism (per-session role, task/persona selection via P7, room-scoped
+binding). Nothing in the A–A.11 work precludes it — registry entries are
+per-identity already; only the vocabulary binding is scalar.
+
+**The portability proof (new-node sequence):** node joins → funnel materializes
+env from the bundle → registry provides the harness substrate → vocabulary binds
+the identity → teams couple it → the node is alive in the lattice. Pristine,
+reproducible, unattended — the original session brief, restated as deploy order.
+
+*Amendment A.12 signed: PMOVES-KIMI-KNUCKLES-B850, 2026-09-19 — a pore is not a
+snowflake; the lattice grows by reference, not by hand-copy.*
