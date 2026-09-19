@@ -422,3 +422,80 @@ GitHub App**, **cipher for additional context**, and **skill loading for various
 *Amendment A.9 signed: PMOVES-KIMI-KNUCKLES-B850, 2026-09-19 — the factory's second
 product line: agents that hold the machinery, so the machinery stops living only in
 Makefiles.*
+
+### A.10 Integration route — Discord 2-way (and the harness tool surface) via Composio Connect MCP (operator-routed, 2026-09-19)
+
+*The operator surfaced `dashboard.composio.dev/pmoves_ai/~/connect/clients/openclaw` — a Composio
+Connect client (`openclaw`) already exists in the `pmoves_ai` project — with the directive: **this
+can be done with Composio MCP.** This amendment routes the Discord 2-way lane (register row
+`2026-09-19T15:32:42Z`) through Composio instead of the hand-rolled `pmoves/services/discord-bridge/`
+service recon'd earlier, and generalizes: the same Connect client is the harness stack's door to
+Composio's full toolkit surface — entry-point agnosticism (D1) at the *integration* layer too.*
+
+**Measured state (knuckles, 2026-09-19, this lane):**
+
+- **CLI upgraded 0.2.27 → 0.4.1** via the official installer (`curl -fsSL https://composio.dev/install`,
+  checksum-verified, `COMPOSIO_INSTALL_SHELL=none COMPOSIO_INSTALL_PLUGINS=0`). Two hard-won facts:
+  (1) in-CLI `composio upgrade` is **broken by design** — it extracts a bundle whose `composio` is the
+  *bun runtime* and then ETXTBSYs copying over its own running executable; the installer is the known
+  road. (2) The fleet's stored `uak_` key is **revoked** — `APIKey_InvalidAPIKey` (code 801) against
+  `/api/v3/*`; `whoami` is local-only and still "works", which masked it. The earlier "v1 API retired"
+  reading was incomplete: the backend did retire v1 (410), but v3 rejects the key itself.
+  → **Re-login is operator-gated:** `composio login --no-browser` (URL handoff) or
+  `composio login --user-api-key <uak_> --org pmoves_ai -y`.
+- **Toolkit inventory (public docs, provenance):** Composio fields **two** Discord toolkits —
+  `discord` (user OAuth) and **`discordbot`** (bot-token auth) — and the bot lane is ours:
+  [docs.composio.dev/toolkits/discordbot](https://docs.composio.dev/toolkits/discordbot), 167 tools,
+  version `20260917_00`. Load-bearing slugs:
+  - `DISCORDBOT_TEST_AUTH` — validate the configured bot token (preflight after every token rotation)
+  - `DISCORDBOT_GET_MY_APPLICATION` — the app record for `1524575292188922007`
+  - `DISCORDBOT_CREATE_MESSAGE` — **outbound**
+  - `DISCORDBOT_LIST_MESSAGES` / `DISCORDBOT_SEARCH_GUILD_MESSAGES` — **inbound by polling**
+    (`after_id` watermark), plus the full guild/channel/member/webhook surface for room ops
+    (DARKSIDE'S room assembly included).
+- **No triggers:** `discordbot` ships zero Composio triggers (tools page lists none; verifiable
+  post-login via `composio triggers list discordbot`). There is no Composio-mediated push path —
+  **inbound v1 is a poll lane**, not a gateway websocket. This amends the 15:32:42Z recon: the
+  discord-bridge service is superseded; a native gateway daemon stays a Wave-2 option only if
+  poll latency or semantics disappoint.
+- **Connect client contract** (public docs): MCP endpoint `https://connect.composio.dev/mcp`,
+  auth header `x-consumer-api-key: ck_...`, one consumer key per AI client, minted/copied at
+  Dashboard → project → Connect → AI Clients → client. The `openclaw` client exists; the Kimi
+  harness gets its own (e.g. `kimi-knuckles`). OpenClaw's documented pattern is
+  `openclaw plugins install @composio/openclaw-plugin` + dashboard key — the PMOVES-KIMI analogue is
+  an `.kimi/mcp.json` entry (same shape as the `pmoves-cipher-local` entry in #3108).
+
+**Revised wiring plan (supersedes the bridge-service recon):**
+
+1. **Outbound:** harness / Creator pipeline → Composio MCP (`discordbot` tools) → Discord. The bus
+   keeps visibility: publisher-discord stays the fleet-format outbound for rendered content, and
+   ad-hoc harness sends may also publish a `content.published.v1` shadow for the ledger.
+2. **Inbound:** poll lane — a small cron-ticked service (or Agent-Zero-scheduled task) calls
+   `DISCORDBOT_LIST_MESSAGES` with a per-channel watermark, publishes
+   `comms.discord.message.received.v1` (subject naming from the recon stands, add to
+   `pmoves/contracts/topics.json`), Creator pipeline consumes. No new websocket infra.
+3. **Secrets (A.8 sovereignty holds):** the `ck_` consumer key and the Discord bot token land in
+   **PMOVES-ClawZ fork scope** via the funnel (chit labels, never chat); the token is additionally
+   configured as Composio's `discordbot` auth config (dashboard-side operator act, or
+   `composio dev auth-configs create` post-login). Prod stays at ceiling discipline.
+4. **Registry:** PMOVES-KIMI row in `pmoves/config/agent_registry.yaml` (from recon) — now with a
+   Composio-connected tool surface instead of bridge-service env.
+
+**Operator-gated checklist (the only three items blocking this lane):**
+
+1. **Composio re-login on knuckles** (revoked `uak_`): mint a user API key on the dashboard
+   (pmoves_ai org) or complete `composio login --no-browser`; store in the node vault, never chat.
+2. **Mint the `kimi-knuckles` Connect client** in project `pmoves_ai`; its `ck_` key funnels to
+   ClawZ fork scope as e.g. `COMPOSIO_CONSUMER_KEY_KIMI`.
+3. **Mint the Discord bot token** for app `1524575292188922007` (Developer Portal, Bot scope) →
+   Composio `discordbot` auth config + fork-scope funnel label (convention exists:
+   `DISCORD_BOT_TOKEN_KIMI` per `CHANNEL_MATRIX_PLAN.md:107`).
+
+**After the gates clear (implementation, in-worktree, Danger-Room visible):** live-verify
+`DISCORDBOT_TEST_AUTH` + `DISCORDBOT_GET_MY_APPLICATION` through the new client; land the
+`.kimi/mcp.json` entry; build the poll lane as a `pmoves/services/` service (small, bus-native);
+add the registry row; register row + sign + PR — the Discord 2-way todo closes only when a
+round-trip message (outbound send → inbound poll → NATS → Creator render) is demonstrated.
+
+*Amendment A.10 signed: PMOVES-KIMI-KNUCKLES-B850, 2026-09-19 — the lattice does not hand-roll what
+the ecosystem already carries; PMOVES.AI rides the Composio wire, and the wire rides provenance.*
