@@ -1,0 +1,104 @@
+--- a/pmoves/docker-compose.yml
++++ b/pmoves/docker-compose.yml
+@@ -3730,6 +3730,18 @@
+     - PORT=3090
+     - HOST=0.0.0.0
+     - NODE_ENV=production
++    # Highest-priority input to services/archon/main.py:_ensure_supabase_env(),
++    # which otherwise ranks SUPA_REST_URL -- shipped fleet-wide as
++    # host.docker.internal:54321, the Supabase CLI topology -- ABOVE the correct
++    # SUPABASE_URL, and forces it to a host this container has no extra_hosts
++    # mapping for. That rewrite, not the network, is what kept /api/health
++    # reporting Errno -2 even after pmoves_api was attached.
++    #
++    # The ${VAR:-default} form is load-bearing: a service-level environment entry
++    # OVERRIDES env_file, so a bare value would silently discard an operator
++    # override -- the same nested-default lesson already documented above for
++    # ANTHROPIC_AUTH_TOKEN.
++    - ARCHON_SUPABASE_BASE_URL=${ARCHON_SUPABASE_BASE_URL:-http://supabase-kong:8000}
+     - ARCHON_DOCKER=true
+     # Postgres backend (pg_notify realtime). Archon auto-inits its schema on boot.
+     - DATABASE_URL=${ARCHON_DATABASE_URL:-postgresql://${ARCHON_DB_USER:-archon}:${ARCHON_DB_PASSWORD:-archon}@archon-postgres:5432/${ARCHON_DB_NAME:-remote_coding_agent}}
+@@ -3837,10 +3849,29 @@
+       # Archon needs egress to reach the Claude API + GitHub with the configured
+       # credentials; pmoves_app/pmoves_bus are internal-only.
+       pmoves_external:
++      # Supabase REST and auth live on pmoves_api. Without this the container
++      # cannot resolve supabase-kong at all -- Errno -2 here is a network
++      # MEMBERSHIP failure, not a DNS outage (nats resolves fine from inside).
++      # pmoves_data is deliberately NOT added: supabase-db is reachable from
++      # pmoves_api and the failing path is REST, not direct postgres.
++      pmoves_api:
+     profiles:
+     - agents
+     healthcheck:
+-      test: ["CMD-SHELL", "curl -fsS http://localhost:3090/api/health || exit 1"]
++      # READINESS-AWARE HEALTHCHECK. `curl -f` keys on the HTTP status code only,
++      # and this endpoint answers 200 while its body says ready:false -- so the
++      # previous check reported `healthy` with FailingStreak=0 for nine days while
++      # the service told anyone who read the body that it was not ready.
++      #
++      # Deliberately asserts on `status`, NOT on `ready`: the `ready` field is
++      # emitted ONLY by the failure branch (api_routes/knowledge_api.py), so a
++      # grep for '"ready":true' would be a check that can never pass. Verified
++      # against both body shapes with real Docker health machinery.
++      #
++      # Fail-closed on an unrecognised status word, which is correct for a health
++      # probe. Reusable shape for any PMOVES service whose /health carries a
++      # status string -- copy this rather than writing another one-off.
++      test: ["CMD-SHELL", "curl -fsS http://localhost:3090/api/health | grep -qE '\"status\"[[:space:]]*:[[:space:]]*\"(healthy|ok|ready|up)\"'"]
+       interval: 30s
+       timeout: 10s
+       retries: 5
+--- a/pmoves/docker-compose.agents.yml
++++ b/pmoves/docker-compose.agents.yml
+@@ -280,6 +280,18 @@
+     - PORT=3090
+     - HOST=0.0.0.0
+     - NODE_ENV=production
++    # Highest-priority input to services/archon/main.py:_ensure_supabase_env(),
++    # which otherwise ranks SUPA_REST_URL -- shipped fleet-wide as
++    # host.docker.internal:54321, the Supabase CLI topology -- ABOVE the correct
++    # SUPABASE_URL, and forces it to a host this container has no extra_hosts
++    # mapping for. That rewrite, not the network, is what kept /api/health
++    # reporting Errno -2 even after pmoves_api was attached.
++    #
++    # The ${VAR:-default} form is load-bearing: a service-level environment entry
++    # OVERRIDES env_file, so a bare value would silently discard an operator
++    # override -- the same nested-default lesson already documented above for
++    # ANTHROPIC_AUTH_TOKEN.
++    - ARCHON_SUPABASE_BASE_URL=${ARCHON_SUPABASE_BASE_URL:-http://supabase-kong:8000}
+     - ARCHON_DOCKER=true
+     # Postgres backend (pg_notify realtime). Archon auto-inits its schema on boot.
+     - DATABASE_URL=${ARCHON_DATABASE_URL:-postgresql://${ARCHON_DB_USER:-archon}:${ARCHON_DB_PASSWORD:-archon}@archon-postgres:5432/${ARCHON_DB_NAME:-remote_coding_agent}}
+@@ -387,10 +399,29 @@
+       # Archon needs egress to reach the Claude API + GitHub with the configured
+       # credentials; pmoves_app/pmoves_bus are internal-only.
+       pmoves_external:
++      # Supabase REST and auth live on pmoves_api. Without this the container
++      # cannot resolve supabase-kong at all -- Errno -2 here is a network
++      # MEMBERSHIP failure, not a DNS outage (nats resolves fine from inside).
++      # pmoves_data is deliberately NOT added: supabase-db is reachable from
++      # pmoves_api and the failing path is REST, not direct postgres.
++      pmoves_api:
+     profiles:
+     - agents
+     healthcheck:
+-      test: ["CMD-SHELL", "curl -fsS http://localhost:3090/api/health || exit 1"]
++      # READINESS-AWARE HEALTHCHECK. `curl -f` keys on the HTTP status code only,
++      # and this endpoint answers 200 while its body says ready:false -- so the
++      # previous check reported `healthy` with FailingStreak=0 for nine days while
++      # the service told anyone who read the body that it was not ready.
++      #
++      # Deliberately asserts on `status`, NOT on `ready`: the `ready` field is
++      # emitted ONLY by the failure branch (api_routes/knowledge_api.py), so a
++      # grep for '"ready":true' would be a check that can never pass. Verified
++      # against both body shapes with real Docker health machinery.
++      #
++      # Fail-closed on an unrecognised status word, which is correct for a health
++      # probe. Reusable shape for any PMOVES service whose /health carries a
++      # status string -- copy this rather than writing another one-off.
++      test: ["CMD-SHELL", "curl -fsS http://localhost:3090/api/health | grep -qE '\"status\"[[:space:]]*:[[:space:]]*\"(healthy|ok|ready|up)\"'"]
+       interval: 30s
+       timeout: 10s
+       retries: 5

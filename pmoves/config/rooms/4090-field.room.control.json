@@ -52,7 +52,13 @@
       "route": "/notebook-workbench",
       "provider": "pmoves-notebook-workbench",
       "action_namespace": "notebook",
-      "capabilities": ["threads", "entries", "snapshots", "search", "handoff-notes"],
+      "capabilities": [
+        "threads",
+        "entries",
+        "snapshots",
+        "search",
+        "handoff-notes"
+      ],
       "pinned": true
     },
     {
@@ -61,7 +67,12 @@
       "route": "/dashboard/graphiti",
       "provider": "pmoves-ui",
       "action_namespace": "graphiti",
-      "capabilities": ["trail", "audit", "handoff", "claim-register"],
+      "capabilities": [
+        "trail",
+        "audit",
+        "handoff",
+        "claim-register"
+      ],
       "pinned": false
     },
     {
@@ -70,7 +81,11 @@
       "route": "/dashboard/review",
       "provider": "pmoves-ui",
       "action_namespace": "review",
-      "capabilities": ["pr-triage", "thread-classify", "risk-notes"],
+      "capabilities": [
+        "pr-triage",
+        "thread-classify",
+        "risk-notes"
+      ],
       "pinned": false,
       "status": "active"
     },
@@ -80,7 +95,11 @@
       "route": "/mcp/e2b",
       "provider": "pmoves-e2b-mcp-server",
       "action_namespace": "mcp.v1.e2b",
-      "capabilities": ["sandbox", "execution", "artifacts"],
+      "capabilities": [
+        "sandbox",
+        "execution",
+        "artifacts"
+      ],
       "status": "planned"
     },
     {
@@ -89,7 +108,12 @@
       "route": "/mcp/hirag",
       "provider": "pmoves-hirag-mcp",
       "action_namespace": "mcp.v1.hirag",
-      "capabilities": ["retrieve", "graph", "search", "notebook"],
+      "capabilities": [
+        "retrieve",
+        "graph",
+        "search",
+        "notebook"
+      ],
       "status": "planned"
     }
   ],
@@ -100,15 +124,24 @@
     "default_page": "current-lane",
     "sync": {
       "mode": "mirrored",
-      "writeback_targets": ["entries", "threads", "snapshots"],
+      "writeback_targets": [
+        "entries",
+        "threads",
+        "snapshots"
+      ],
       "artifact_prefix": "rooms/4090-field"
     }
   },
   "persona": {
     "signature_ref": "4090-claude",
     "voice": "terse",
-    "glyph": "◎",
-    "resonance": ["polymorphic-ops", "alter-discovery", "pattern-mining", "node-gateway"]
+    "glyph": "\u25ce",
+    "resonance": [
+      "polymorphic-ops",
+      "alter-discovery",
+      "pattern-mining",
+      "node-gateway"
+    ]
   },
   "skill_bindings": [
     {
@@ -116,10 +149,18 @@
       "skill_id": "submodule-parity",
       "room_id": "4090-field.room.control",
       "display_name": "Scout Handoff",
-      "intent": ["handoff", "review", "triage"],
+      "intent": [
+        "handoff",
+        "review",
+        "triage"
+      ],
       "activation": {
         "invocation_mode": "suggested",
-        "trigger_phrases": ["prepare handoff", "review this lane", "triage this branch"],
+        "trigger_phrases": [
+          "prepare handoff",
+          "review this lane",
+          "triage this branch"
+        ],
         "requires_selection": true
       },
       "surface": {
@@ -134,10 +175,18 @@
         "max_steps": 6
       },
       "context": {
-        "sources": ["notebook-thread", "graphiti-trail", "persona", "room-state"],
+        "sources": [
+          "notebook-thread",
+          "graphiti-trail",
+          "persona",
+          "room-state"
+        ],
         "include_last_turns": 8,
         "notebook_writeback": true,
-        "artifact_types": ["text", "json"]
+        "artifact_types": [
+          "text",
+          "json"
+        ]
       },
       "outputs": [
         {
@@ -159,17 +208,28 @@
         "one_active_run": true
       },
       "enabled": true,
-      "tags": ["handoff", "graphiti", "control"]
+      "tags": [
+        "handoff",
+        "graphiti",
+        "control"
+      ]
     },
     {
       "binding_id": "pattern-miner",
       "skill_id": "persona-grounding",
       "room_id": "4090-field.room.control",
       "display_name": "Pattern Miner",
-      "intent": ["alter-discovery", "persona", "classification"],
+      "intent": [
+        "alter-discovery",
+        "persona",
+        "classification"
+      ],
       "activation": {
         "invocation_mode": "explicit",
-        "trigger_phrases": ["find the pattern", "discover the alter"],
+        "trigger_phrases": [
+          "find the pattern",
+          "discover the alter"
+        ],
         "requires_selection": false
       },
       "surface": {
@@ -184,10 +244,18 @@
         "max_steps": 5
       },
       "context": {
-        "sources": ["graphiti-trail", "agent-registry", "search-results", "user-intent"],
+        "sources": [
+          "graphiti-trail",
+          "agent-registry",
+          "search-results",
+          "user-intent"
+        ],
         "include_last_turns": 4,
         "notebook_writeback": true,
-        "artifact_types": ["text", "json"]
+        "artifact_types": [
+          "text",
+          "json"
+        ]
       },
       "outputs": [
         {
@@ -210,17 +278,28 @@
         "one_active_run": true
       },
       "enabled": true,
-      "tags": ["identity", "review", "discovery"]
+      "tags": [
+        "identity",
+        "review",
+        "discovery"
+      ]
     },
     {
       "binding_id": "e2b-mcp-bridge",
       "skill_id": "pmoves_e2b_mcp",
       "room_id": "4090-field.room.control",
       "display_name": "E2B Sandbox MCP Bridge",
-      "intent": ["sandbox", "execution", "artifacts"],
+      "intent": [
+        "sandbox",
+        "execution",
+        "artifacts"
+      ],
       "activation": {
         "invocation_mode": "explicit",
-        "trigger_phrases": ["open e2b mcp", "run sandbox"],
+        "trigger_phrases": [
+          "open e2b mcp",
+          "run sandbox"
+        ],
         "requires_selection": false
       },
       "surface": {
@@ -235,10 +314,15 @@
         "max_steps": 4
       },
       "context": {
-        "sources": ["room-state", "agent-registry"],
+        "sources": [
+          "room-state",
+          "agent-registry"
+        ],
         "include_last_turns": 2,
         "notebook_writeback": true,
-        "artifact_types": ["json"]
+        "artifact_types": [
+          "json"
+        ]
       },
       "outputs": [
         {
@@ -260,7 +344,11 @@
         "one_active_run": true
       },
       "enabled": false,
-      "tags": ["mcp", "e2b", "planned"],
+      "tags": [
+        "mcp",
+        "e2b",
+        "planned"
+      ],
       "metadata": {
         "status": "planned"
       }
@@ -270,10 +358,18 @@
       "skill_id": "pmoves_hirag_mcp",
       "room_id": "4090-field.room.control",
       "display_name": "HiRAG MCP Bridge",
-      "intent": ["retrieve", "graph", "search", "notebook"],
+      "intent": [
+        "retrieve",
+        "graph",
+        "search",
+        "notebook"
+      ],
       "activation": {
         "invocation_mode": "explicit",
-        "trigger_phrases": ["open hirag mcp", "search graph"],
+        "trigger_phrases": [
+          "open hirag mcp",
+          "search graph"
+        ],
         "requires_selection": false
       },
       "surface": {
@@ -288,10 +384,16 @@
         "max_steps": 4
       },
       "context": {
-        "sources": ["room-state", "notebook-thread", "agent-registry"],
+        "sources": [
+          "room-state",
+          "notebook-thread",
+          "agent-registry"
+        ],
         "include_last_turns": 2,
         "notebook_writeback": true,
-        "artifact_types": ["json"]
+        "artifact_types": [
+          "json"
+        ]
       },
       "outputs": [
         {
@@ -313,21 +415,39 @@
         "one_active_run": true
       },
       "enabled": false,
-      "tags": ["mcp", "hirag", "planned"],
+      "tags": [
+        "mcp",
+        "hirag",
+        "planned"
+      ],
       "metadata": {
         "status": "planned"
       }
     }
   ],
-  "team_refs": ["orchestration", "research"],
-  "service_refs": ["agent-zero", "archon", "hirag-v2", "cipher-memory"],
-  "launcher_refs": ["up-agents", "up-hirag"],
+  "team_refs": [
+    "orchestration",
+    "research"
+  ],
+  "service_refs": [
+    "agent-zero",
+    "archon",
+    "hirag-v2",
+    "cipher-memory"
+  ],
+  "launcher_refs": [
+    "up-agents",
+    "up-hirag"
+  ],
   "policies": {
     "model_routing": "hybrid",
     "publish": {
       "allow_nats_emit": true,
       "allow_external_publish": false,
-      "allowed_subjects": ["agent.graphiti.signed.v1", "ops.pr.review.completed.v1"]
+      "allowed_subjects": [
+        "agent.graphiti.signed.v1",
+        "ops.pr.review.completed.v1"
+      ]
     },
     "memory": {
       "graphiti": true,
@@ -341,12 +461,45 @@
     "healthcheck_route": "/api/audit/summary"
   },
   "provenance": {
-    "source": "pmoves/config/rooms/catalog.json",
-    "updated_at": "2026-03-27T12:30:00Z",
+    "source": "pmoves/config/rooms/4090-field.room.control.json",
+    "updated_at": "2026-09-08T00:00:00Z",
     "related_docs": [
       "pmoves/docs/ROOM_MANIFEST_CONTRACT.md",
       "pmoves/docs/infrastructure/UI_NOTEBOOK_WORKBENCH.md",
-      "pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md"
+      "pmoves/docs/AGENTS/AGENT_IDENTITY_PROPOSAL_2026-09-04.md",
+      "pmoves/docs/audit/HEALTHCHECK_SEMANTICS_2026-09-05.md"
     ]
+  },
+  "storage": {
+    "provider": "juicefs",
+    "volume": "pmoves-media",
+    "mounts": [
+      {
+        "mount_id": "evidence",
+        "role": "inbox",
+        "path": "rooms/4090-field/evidence",
+        "access": "read-write",
+        "watch": true,
+        "emit_subject": "room.storage.arrived.v1",
+        "visibility": "room"
+      },
+      {
+        "mount_id": "findings",
+        "role": "outbox",
+        "path": "rooms/4090-field/findings",
+        "access": "read-write",
+        "watch": false,
+        "visibility": "room"
+      }
+    ]
+  },
+  "meta": {
+    "updated_by": "4090-CLAUDE-OPUS-5 (field)",
+    "provenance_note": "Refreshed 2026-09-08. The prior provenance said source=catalog.json, updated 2026-03-27 -- the catalog points at this manifest, so the room's provenance pointed at the index that points back at it. Now self-sourced and dated.",
+    "planned_apps_blocked_by": {
+      "mcp-e2b": "Measured 2026-09-06: Agent Zero advertises 6 e2b.* commands and every one is unreachable. POST /mcp/execute e2b.sandbox.create returns 'Failed to reach E2B server'. No E2B service is declared in compose and no container exists in any state; A0 holds a cloud-format key and no E2B_API_URL, so it targets E2B cloud. Tracked in PMOVES.AI#2981.",
+      "mcp-hirag": "Measured 2026-09-08: the pmoves-hirag-mcp mount reports CONNECTION_CLOSED. Hi-RAG's health endpoint is `/` and not /healthz, so a probe on the wrong path reads as down even when the service is up -- verify the service before blaming the mount."
+    },
+    "gate_history": "This manifest was rejected twice by room-manifest-check while being finished: first for a per-app `note` field, then for `note`/`updated_by` on provenance. Both were real -- the contract closes apps[] and provenance with additionalProperties:false and declares `meta` as free-form, which is where measured detail belongs. Recorded rather than baselined as UNDECLARED: that hatch is for structure discovered in the field with an owner decision pending, not for the author of the gate to widen it for his own room."
   }
 }

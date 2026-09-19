@@ -71,11 +71,50 @@ fi
 
 ENVF="${PMOVES_ENV_SHARED:-$ROOT/pmoves/env.shared}"
 
+# ---------------------------------------------------------------------------
+# Mavis SDK env strip — see pmoves/scripts/mavis_sdk_env.sh for the WHY.
+#
+# The Mavis SDK's `env` block in `~/.claude/settings.json` injects
+# ANTHROPIC_BASE_URL, ANTHROPIC_AUTH_TOKEN, ANTHROPIC_MODEL, MCP_TIMEOUT,
+# API_TIMEOUT_MS, CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC, ... into every
+# Claude Code session's process env.  That env block is inherited by the
+# shell that runs `claude-pmoves.sh`, and would otherwise be inherited by
+# the launched `claude` -- overriding the operator's own Claude Code
+# settings (their Anthropic API endpoint, their model picker).
+#
+# The strip checks each Mavis SDK var against claude's NEEDS list
+# (ANTHROPIC_BASE_URL + ANTHROPIC_AUTH_TOKEN + ANTHROPIC_API_KEY) and:
+#   * keeps the ones claude consumes
+#   * preserves the others under PMOVES_MAVIS_SDK_<NAME> for inspection
+#   * unsets the originals
+#   * emits one WARN line summarizing what was caught
+#
+# Sourced AFTER repo-root resolution (helper file is repo-relative) and
+# BEFORE env.shared loading (the env.shared reader below has a parallel
+# blocklist for env.shared itself; the two layers cover the SHELL env
+# and env.shared independently).
+# ---------------------------------------------------------------------------
+if [ -f "$ROOT/pmoves/scripts/mavis_sdk_env.sh" ]; then
+  # shellcheck source=../../pmoves/scripts/mavis_sdk_env.sh
+  . "$ROOT/pmoves/scripts/mavis_sdk_env.sh"
+  mavis_sdk_strip_env_for "claude"
+else
+  echo "[claude-pmoves] WARN: mavis_sdk_env.sh not found at $ROOT/pmoves/scripts/ -- Mavis SDK env may bleed into the launched session." >&2
+fi
+
 if [ -f "$ENVF" ]; then
   # Blocklist: vars that control Claude SDK/session behavior and should NEVER be
   # sourced by the launcher. These are user's personal billing/config, not fleet MCP creds.
   # Sourcing them forces API billing (ANTHROPIC_API_KEY) or clobbers session state.
-  blocklist='^(ANTHROPIC_API_KEY|ANTHROPIC_AUTH_TOKEN|ANTHROPIC_BASE_URL|CLAUDECODE|CLAUDE_CODE_|CLAUDE_SESSION_)$'
+  #
+  # DRIFT FIX 2026-09-17: `CLAUDE_CODE_` and `CLAUDE_SESSION_` were anchored
+  # literal matches -- they caught only a var named EXACTLY `CLAUDE_CODE_`,
+  # not `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC`.  The PowerShell twin
+  # already had `CLAUDE_CODE_*` (regex) which translates to `CLAUDE_CODE_.*`.
+  # The bash twin is now brought into step: `CLAUDE_CODE_.+` (regex, require
+  # at least one char after the prefix) matches the same set as the ps1.
+  # Kept in step with deploy/provision/claude-pmoves.ps1:25-31.
+  blocklist='^(ANTHROPIC_API_KEY|ANTHROPIC_AUTH_TOKEN|ANTHROPIC_BASE_URL|CLAUDECODE|CLAUDE_CODE_.+|CLAUDE_SESSION_.+)$'
 
   # env.shared is Docker Compose env_file format: unquoted values, and some are
   # ALIAS lines like SUPABASE_SERVICE_ROLE_KEY=${SERVICE_ROLE_KEY}. Two hazards:

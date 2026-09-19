@@ -65,6 +65,20 @@ echo "NATS reachable at $NATS_URL — creating streams"
 FAIL_COUNT=0
 add_stream() {
   name="$1"; shift
+  # Existence check FIRST. Classifying the CLI's error TEXT is fragile: a stream
+  # that already exists can fail `stream add` with a message that never mentions
+  # "already exists" — notably `insufficient storage resources available (10047)`,
+  # raised when re-reserving the stream's --max-bytes would exceed JetStream's
+  # max_storage. Measured on B850 2026-09-12: the 9 streams below reserve
+  # 10,175,381,504 B of a 10,343,150,592 B ceiling (~168 MB spare, with ZERO
+  # messages stored), so every re-run failed all 9 and the one-shot exited 1.
+  # Anything gated on `nats-init: service_completed_successfully` — agent-zero,
+  # p7-room-orchestrator, botz-gateway — then could never start again after the
+  # first successful init.
+  if nats -s "$NATS_URL" stream info "$name" >/dev/null 2>&1; then
+    echo "$name: already exists (ok)"
+    return 0
+  fi
   output=$(nats -s "$NATS_URL" stream add "$name" "$@" --defaults 2>&1) && {
     echo "$name: created"
     return 0

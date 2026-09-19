@@ -30,7 +30,8 @@ async def test_tick_publishes_pack_id(monkeypatch):
         "modality": "video",
         "status": "draft",
         "pack_type": "cg_builder",
-        "params": {"K": 8},
+        "cg_builder": {"K": 8},
+        "decoder": {},
         "energy": {"note": "placeholder"},
     }
 

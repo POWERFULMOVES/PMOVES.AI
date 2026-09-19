@@ -10,10 +10,42 @@ $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $envf = if ($env:PMOVES_ENV_SHARED) { $env:PMOVES_ENV_SHARED } else { Join-Path $root 'pmoves\env.shared' }
 
+# --- MAVIS SDK ENV STRIP ----------------------------------------------------
+# The Mavis SDK's `env` block in `~/.claude/settings.json` injects
+# ANTHROPIC_BASE_URL, ANTHROPIC_AUTH_TOKEN, ANTHROPIC_MODEL, MCP_TIMEOUT,
+# API_TIMEOUT_MS, CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC, ... into every
+# Claude Code session's process env.  That env block is inherited by the
+# shell that runs `claude-pmoves.ps1`, and would otherwise be inherited by
+# the launched `claude` -- overriding the operator's own Claude Code settings
+# (their Anthropic API endpoint, their model picker).
+#
+# The strip checks each Mavis SDK var against claude's NEEDS list
+# (ANTHROPIC_BASE_URL + ANTHROPIC_AUTH_TOKEN + ANTHROPIC_API_KEY) and:
+#   * keeps the ones claude consumes
+#   * preserves the others under PMOVES_MAVIS_SDK_<NAME> for inspection
+#   * unsets the originals
+#   * emits one WARN line summarizing what was caught
+#
+# Mirrors deploy/provision/claude-pmoves.sh:42-66.  Both twins source the
+# shared helper at pmoves/scripts/mavis_sdk_env.{sh,ps1} and call the
+# per-platform strip function with the same registry keys.
+# ----------------------------------------------------------------------------
+$mavis_helper = Join-Path $root 'pmoves\scripts\mavis_sdk_env.ps1'
+if (Test-Path $mavis_helper) {
+    . $mavis_helper
+    Strip-MavisSdkEnvFor -CliName 'claude'
+} else {
+    Write-Warning "[claude-pmoves] mavis_sdk_env.ps1 not found at $mavis_helper -- Mavis SDK env may bleed into the launched session."
+}
+
 if (Test-Path $envf) {
     # Blocklist: vars that control Claude SDK/session behavior and should NEVER be
     # sourced by the launcher. These are user's personal billing/config, not fleet MCP creds.
     # Sourcing them forces API billing (ANTHROPIC_API_KEY) or clobbers session state.
+    #
+    # Kept in step with deploy/provision/claude-pmoves.sh -- the bash twin
+    # has the same names but uses `CLAUDE_CODE_.+` regex anchor; the
+    # PowerShell twin's `-replace '\*','.*'` produces `CLAUDE_CODE_.*`.
     $blocklist = @(
         'ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_BASE_URL'
         'CLAUDECODE', 'CLAUDE_CODE_*', 'CLAUDE_SESSION_*'
@@ -227,6 +259,209 @@ function Test-PmovesRosterHasBarePlaceholder {
 # and SAY WHICH in either case -- a launcher that silently picks a source is how
 # this happened.
 #   PMOVES_ROSTER_FROM_TREE=1  use the working tree (editing the roster itself)
+# ---------------------------------------------------------------------------
+# TAILNET NODE ADDRESSES -- the second thing the POSIX twin does and this file
+# did not, with a measurable cost on this node.
+#
+# .claude/mcp.json addresses two MCP servers by tailnet name:
+#     pmoves-cipher  -> ${TS_Z890}
+#     agent-zero     -> ${TS_Z890}
+# deploy/provision/claude-pmoves.sh sources pmoves/scripts/tailscale-node-ips.sh
+# to resolve those. This file never did, so on Windows TS_Z890 stayed unset and
+# the roster normalizer DROPPED both servers. Measured on Z890 2026-09-16, from
+# this launcher's own output:
+#     [claude-pmoves] WARN: dropping MCP server 'pmoves-cipher'
+#                     unset variable(s): TS_Z890
+# The bash helper's header already recorded this exact drift shipping here --
+# "the same roster resolved under Crush and stayed literal under Claude" -- and
+# the Windows half was the half left open.
+#
+# PORTED, NOT SHELLED OUT: invoking the .sh would need a bash on PATH, and a
+# launcher that silently depends on Git Bash to reach its own memory service is
+# the same class of hidden dependency. The mapping is small and lives beside its
+# twin; test-launcher-root-resolution.sh is the existing pattern for keeping
+# paired launchers honest.
+#
+# Addresses are 100.64/10 CGNAT and MUST stay runtime-derived -- the helper's
+# header says baking one in would leak topology into a public tree and rot on
+# re-registration. Nothing is hardcoded here.
+#
+# An already-set value WINS, matching _pm_ts_set: an operator pin beats the
+# tailnet. Best-effort throughout -- no tailscale CLI just means unset, and the
+# normalizer's existing drop-with-a-warning path still applies.
+# ---------------------------------------------------------------------------
+if (Get-Command tailscale -ErrorAction SilentlyContinue) {
+    # Prefix match for b850 (`pmoves-b850-*`), exact for the rest -- same shape
+    # as the case statement in tailscale-node-ips.sh.
+    $tsExact = @{
+        'pmoves-z890'   = 'TS_Z890'
+        'pmoves-5090'   = 'TS_5090'
+        'pmoves-4090'   = 'TS_4090'
+        'pmoves-spark'  = 'TS_SPARK'
+        'pmoves-kvm4-1' = 'TS_KVM4_1'
+        'pmoves-kvm4-2' = 'TS_KVM4_2'
+        'pmoves-kvm2'   = 'TS_KVM2'
+    }
+    try {
+        foreach ($line in @(tailscale status 2>$null)) {
+            $f = -split $line
+            if ($f.Count -lt 2) { continue }
+            $ip = $f[0]; $host_ = $f[1]
+            $var = $null
+            if ($tsExact.ContainsKey($host_)) { $var = $tsExact[$host_] }
+            elseif ($host_ -like 'pmoves-b850-*') { $var = 'TS_B850' }
+            if (-not $var) { continue }
+            # already set wins
+            if ([Environment]::GetEnvironmentVariable($var)) { continue }
+            [Environment]::SetEnvironmentVariable($var, $ip, 'Process')
+        }
+    } catch {
+        Write-Warning '[claude-pmoves] tailnet addresses: tailscale status failed; cross-node MCP servers may be dropped.'
+    }
+}
+# ---------------------------------------------------------------------------
+# NODE IDENTITY -- the Windows half of a binding that only ever ran on POSIX.
+#
+# pmoves/scripts/claude-pmoves.sh resolves the node's registered identity and
+# injects it with --append-system-prompt, carrying this comment: "Exported
+# variables do not reach the model's context; an appended system prompt does.
+# This is the difference between the identity existing and the identity
+# working." That is correct, and on this node it never ran: Windows enters
+# through claude-pmoves.cmd -> this file, which had no identity logic at all.
+#
+# Measured on Z890 2026-09-16 inside a session launched the Windows way:
+#   PMOVES_RESOLVED_IDENTITY=UNSET   PMOVES_NODE_IDENTITY=UNSET
+# while the resolver, run by hand on the same node, answers immediately:
+#   PMOVES_NODE='z890'  PMOVES_RESOLVED_IDENTITY='claude_z890'
+#   WHY: node z890 via hostname=PMOVES-Z890; identity via node-vocabulary.yaml
+#
+# So the identity was never missing -- it was never ASKED FOR. A session that
+# must rediscover who it is will sometimes guess, and the register already
+# carries 49 distinct author strings for roughly a dozen identities
+# (identity_vocabulary.yaml). Every one of those began as a session nobody told.
+#
+# FAIL-OPEN, deliberately, matching the POSIX twin: "an identity is a
+# convenience; losing it must not cost you the session." Every failure warns
+# and launches.
+# ---------------------------------------------------------------------------
+$identityArgs = @()
+$identTool = Join-Path $root 'pmoves\tools\node_identity.py'
+if (Test-Path -LiteralPath $identTool) {
+    $identPy = Get-PmovesPythonArgv -Root $root
+    if (-not $identPy) {
+        Write-Warning '[claude-pmoves] node identity: no usable python; launching without it.'
+    } else {
+        # Same settings.local.json read as the POSIX twin: the resolver runs
+        # BEFORE the harness loads that file, so a node whose hostname collides
+        # with a vocabulary entry resolves to nothing unless PMOVES_NODE_ID is
+        # read from the same block that declares it. A shell value still wins.
+        if (-not $env:PMOVES_NODE_ID) {
+            $slPath = Join-Path $root '.claude\settings.local.json'
+            if (Test-Path -LiteralPath $slPath) {
+                try {
+                    $cfg = Get-Content -LiteralPath $slPath -Raw | ConvertFrom-Json
+                    $envProp = $cfg.PSObject.Properties['env']
+                    if ($envProp) {
+                        $sid = $envProp.Value.PMOVES_NODE_ID
+                        if ($sid) { $env:PMOVES_NODE_ID = $sid }
+                    }
+                } catch { }   # a malformed settings file must not cost the session
+            }
+        }
+        $identArgv = @($identTool, '--harness', 'claude-code', '--shell')
+        if ($identPy.Count -gt 1) { $identArgv = @($identPy[1..($identPy.Count - 1)]) + $identArgv }
+        $identOut = & $identPy[0] @identArgv 2>$null
+        if ($LASTEXITCODE -eq 0 -and $identOut) {
+            # The tool emits shell assignments (KEY='value'); PARSE them rather
+            # than eval. PowerShell has no eval of shell syntax, and inventing
+            # one would mean running tool output as code for no gain.
+            $ident = @{}
+            foreach ($line in @($identOut)) {
+                if ($line -match "^([A-Z_]+)='(.*)'$") { $ident[$Matches[1]] = $Matches[2] }
+            }
+            $nodeName  = $ident['PMOVES_NODE']
+            $nodeIdent = $ident['PMOVES_RESOLVED_IDENTITY']
+            if ($nodeIdent) {
+                $env:PMOVES_NODE = $nodeName
+                # PMOVES_NODE_IDENTITY is the operator's INPUT override and the
+                # name the resolver READS; PMOVES_RESOLVED_IDENTITY is its
+                # ANSWER. Export both, as the POSIX twin does, so a tool reading
+                # either spelling sees the same value.
+                $env:PMOVES_NODE_IDENTITY = $nodeIdent
+                $env:PMOVES_RESOLVED_IDENTITY = $nodeIdent
+                Write-Host "[claude-pmoves] node=$nodeName identity=$nodeIdent"
+                # ---------------------------------------------------------
+                # IDENTITY CARRY -- does cipher record these memories as THIS
+                # agent? Resolution without the carry is the half-wired state
+                # pmoves/tests/scripts/test_launcher_carry_parity.py exists to
+                # block, and it blocked this change until the carry landed.
+                #
+                # pm-cipher-identity.sh is the shared fragment for the eight
+                # shell launchers; its own header names "the deploy/provision
+                # delegates and their .ps1/.cmd twins" as needing this, and the
+                # parity test records that a .ps1 "cannot source a bash
+                # fragment". So the CONTRACT is mirrored, not the code: same
+                # tool, same verdict fields, same doctrine.
+                #
+                # ALWAYS LOUD, per that fragment: every path prints a line.
+                # Silence on a skip is indistinguishable from a healthy carry,
+                # which is the defect the fragment was written to end.
+                # ---------------------------------------------------------
+                $carryLine = ''
+                $carryTool = Join-Path $root 'pmoves/tools/cipher_identity.py'
+                if (-not (Test-Path -LiteralPath $carryTool)) {
+                    $carryLine = "cipher carry: unmeasurable (no $carryTool)"
+                } else {
+                    $carryArgv = @($carryTool, '--agent', $nodeIdent, '--shell')
+                    if ($identPy.Count -gt 1) { $carryArgv = @($identPy[1..($identPy.Count - 1)]) + $carryArgv }
+                    $carryOut = & $identPy[0] @carryArgv 2>$null
+                    # EXIT CODE IS A VERDICT, NOT SUCCESS/FAILURE. The tool
+                    # documents: 0 carry intact | 1 carry GAP (bootstrap /
+                    # advisory / uncarded) | 2 usage error | 3 nothing to
+                    # measure. 1 is a MEASUREMENT -- and on this node it is the
+                    # normal one, since the session has no CIPHER_API_TOKEN.
+                    # Treating it as failure would report "unmeasurable" while
+                    # holding a perfectly good verdict, which is the same
+                    # conflation of "found something" with "broke" that the
+                    # exit-code doctrine exists to prevent.
+                    $carryExit = $LASTEXITCODE
+                    if ($carryExit -ge 2 -or -not $carryOut) {
+                        $carryLine = "cipher carry: unmeasurable (cipher_identity.py exit=$carryExit)"
+                    } else {
+                        $c = @{}
+                        foreach ($line in @($carryOut)) {
+                            if ($line -match "^(PMOVES_CIPHER_[A-Z_]+)=(.*)$") {
+                                # shlex.quote output: strip one layer of single quotes
+                                $v = $Matches[2]
+                                if ($v.StartsWith("'") -and $v.EndsWith("'") -and $v.Length -ge 2) {
+                                    $v = $v.Substring(1, $v.Length - 2).Replace("'''", "'")
+                                }
+                                $c[$Matches[1]] = $v
+                            }
+                        }
+                        $mode   = $c['PMOVES_CIPHER_MODE']
+                        $carded = $c['PMOVES_CIPHER_CARDED']
+                        $eff    = $c['PMOVES_CIPHER_EFFECTIVE_ID']
+                        $landsAs = if ($eff) { $eff } else { 'advisory / self-declared' }
+                        $carryLine = "cipher carry: mode=$mode card=$carded writes-land-as=$landsAs"
+                        if ($carded -ne 'yes' -or $mode -eq 'unknown') {
+                            $carryLine += " -- why: $($c['PMOVES_CIPHER_WHY'])"
+                        }
+                    }
+                }
+                Write-Host "[claude-pmoves] $carryLine"
+
+                $identityArgs = @('--append-system-prompt', "You are running on PMOVES node '$nodeName'. Your registered identity in pmoves/config/agent_registry.yaml is '$nodeIdent'. Disclose it at session start rather than rediscovering it, and file claim-register rows under it. Cipher memory carry for this session -- $carryLine.")
+            } else {
+                $w = $ident['PMOVES_IDENTITY_WHY']
+                if (-not $w) { $w = 'no reason given' }
+                Write-Warning "[claude-pmoves] node identity unresolved: $w"
+            }
+        } else {
+            Write-Warning '[claude-pmoves] node identity: resolver failed; launching without it.'
+        }
+    }
+}
 $roster = Join-Path $root '.claude\mcp.json'
 $rosterSource = 'working tree'
 if (-not $env:PMOVES_ROSTER_FROM_TREE) {
@@ -374,9 +609,9 @@ if (Test-Path $roster) {
     # `--mcp-config=<file>` (the `=` form): `--mcp-config` is variadic
     # (`<configs...>`), so the space form would swallow a trailing positional
     # prompt as another config value (Codex #2243 P1).
-    & claude "--mcp-config=$useRoster" @args
+    & claude "--mcp-config=$useRoster" @identityArgs @args
 } else {
     Write-Warning "[claude-pmoves] $roster not found - PMOVES MCP servers will not load."
-    & claude @args
+    & claude @identityArgs @args
 }
 exit $LASTEXITCODE

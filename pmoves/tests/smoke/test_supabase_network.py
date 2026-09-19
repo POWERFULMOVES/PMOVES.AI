@@ -45,7 +45,8 @@ def test_supabase_network_name_correct_in_compose() -> None:
 @pytest.mark.smoke
 def test_pmoves_ui_on_supabase_network() -> None:
     """Verify pmoves-ui service is connected to a Supabase-accessible network."""
-    config = grep_context(COMPOSE, r"pmoves-ui:", after=55)
+    # pmoves-ui's block is ~107 lines; networks: sits at ~90 (after env/ports).
+    config = grep_context(COMPOSE, r"pmoves-ui:", after=130)
 
     if not config:
         pytest.skip("pmoves-ui service not found in docker-compose.yml")
@@ -129,6 +130,9 @@ def test_supabase_cli_running() -> None:
     except FileNotFoundError:
         pytest.skip("supabase CLI not found")
         return
+    except PermissionError as e:
+        pytest.skip(f"supabase CLI present but not executable for this user: {e}")
+        return
 
     # Should not have errors about containers not running
     assert "exited" not in result.stderr.lower(), (
@@ -139,7 +143,7 @@ def test_supabase_cli_running() -> None:
 @pytest.mark.smoke
 def test_archon_uses_host_dot_internal_for_supabase() -> None:
     """Verify Archon service uses host.docker.internal for Supabase (cross-network)."""
-    config = grep_context(COMPOSE, r"archon:", after=30)
+    config = grep_context(COMPOSE, r"archon:", after=140)
 
     if not config:
         pytest.skip("archon service not found in docker-compose.yml")
@@ -147,10 +151,14 @@ def test_archon_uses_host_dot_internal_for_supabase() -> None:
     # Archon should use host.docker.internal for Supabase access
     # since it may be on different networks.
     # Accept either host.docker.internal or direct container references.
+    # Post-#3038 archon carries its own archon-postgres (DATABASE_URL at
+    # offset ~16 of a 135-line block); accept that as the data-tier reference
+    # too — the point is "archon names its database explicitly".
     has_supabase_ref = (
         ("host.docker.internal" in config and "SUPABASE" in config)
         or ("supabase-postgrest" in config)
         or ("SUPA_REST_URL" in config)
+        or ("archon-postgres" in config and "DATABASE_URL" in config)
     )
 
     assert has_supabase_ref, (

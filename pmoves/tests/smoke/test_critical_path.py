@@ -67,6 +67,8 @@ async def test_postgres_health():
 
     except subprocess.TimeoutExpired:
         pytest.skip("PostgreSQL health check timed out")
+    except PermissionError as e:
+        pytest.skip(f"pg_isready present but not executable for this user: {e}")
     except FileNotFoundError:
         # pg_isready not in PATH, try direct connection
         try:

@@ -30,7 +30,7 @@ Runbook
   make -C pmoves up-yt            # pmoves-yt + cookies overlay + whisper stack
   make -C pmoves channel-monitor-up  # channel-monitor with Supabase URL wiring
   ```
-- Env note: `CHANNEL_MONITOR_SECRET` and `CHANNEL_MONITOR_DISCORD_APPROVAL_MODE` are read via env_file (services/channel-monitor/channel_monitor/main.py:115,118), not set in compose environment — set them in the tier env files.
+- Env note: `CHANNEL_MONITOR_SECRET` and `CHANNEL_MONITOR_DISCORD_APPROVAL_MODE` are read via env_file (services/channel-monitor/channel_monitor/main.py:115,118), not set in compose environment — **register them as funnel INPUTS (chit secrets manifest → env.tier-worker target), never write directly into generated env.tier-* files: the next `make secrets-funnel` overwrites those and a missing secret re-enables unauthenticated protected endpoints.**
 - Repo smoke:
   ```bash
   make -C pmoves channel-monitor-smoke

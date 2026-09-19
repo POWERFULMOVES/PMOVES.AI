@@ -74,6 +74,9 @@ async def test_supabase_realtime_http_accessible() -> None:
 @pytest.mark.asyncio
 async def test_supabase_realtime_tenant_exists() -> None:
     """Verify tenant(s) exist in the Realtime database schema."""
+    _anon = os.getenv("SUPABASE_ANON_KEY", "")
+    if not _anon:
+        pytest.skip("SUPABASE_ANON_KEY not in scope (funnel artifact) — tenant check needs a node checkout")
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             response = await client.get(

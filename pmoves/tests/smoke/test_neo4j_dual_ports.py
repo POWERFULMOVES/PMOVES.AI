@@ -19,11 +19,13 @@ COMPOSE = PMOVES_DIR / "docker-compose.yml"
 @pytest.mark.smoke
 def test_neo4j_http_port_exposed() -> None:
     """Verify Neo4j HTTP interface is exposed on port 7474."""
-    config = grep_context(COMPOSE, r"neo4j:", after=30)
+    config = grep_context(COMPOSE, r"  neo4j:", after=60)
 
     assert config, "neo4j service not found in docker-compose.yml"
 
-    has_http_port = "${NEO4J_HTTP_PORT:-7474}:7474" in config
+    # Port mappings carry the ${NEO4J_BIND:-0.0.0.0} prefix (post-hardening);
+    # match the host-port mapping, not the bare literal.
+    has_http_port = "NEO4J_HTTP_PORT" in config and "}:7474" in config
 
     assert has_http_port, (
         "Neo4j should have NEO4J_HTTP_PORT mapping for port 7474"
@@ -33,11 +35,11 @@ def test_neo4j_http_port_exposed() -> None:
 @pytest.mark.smoke
 def test_neo4j_bolt_port_exposed() -> None:
     """Verify Neo4j Bolt protocol is exposed on port 7687."""
-    config = grep_context(COMPOSE, r"neo4j:", after=30)
+    config = grep_context(COMPOSE, r"  neo4j:", after=60)
 
     assert config, "neo4j service not found in docker-compose.yml"
 
-    has_bolt_port = "${NEO4J_BOLT_PORT:-7687}:7687" in config
+    has_bolt_port = "NEO4J_BOLT_PORT" in config and "}:7687" in config
 
     assert has_bolt_port, (
         "Neo4j should have NEO4J_BOLT_PORT mapping for port 7687"
@@ -132,7 +134,9 @@ def test_neo4j_env_file_has_both_ports() -> None:
 @pytest.mark.smoke
 def test_hirag_v2_uses_neo4j_bolt_port() -> None:
     """Verify Hi-RAG v2 service can connect to Neo4j via Bolt protocol."""
-    config = grep_context(COMPOSE, r"hi-rag-gateway-v2:", after=30)
+    # NEO4J_URL sits ~32 lines into a 91-line block (environment after
+    # image/command); a 30-line window truncated before it.
+    config = grep_context(COMPOSE, r"hi-rag-gateway-v2:", after=90)
 
     if not config:
         pytest.skip("hi-rag-gateway-v2 service not found")

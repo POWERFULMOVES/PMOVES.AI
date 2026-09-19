@@ -60,6 +60,34 @@ and System orbit each other; without stabilization one body gets ejected. The
 role split exists so each body moves freely without collision — topology, not
 ritual.
 
+## Onboarding a New Agent — the positive-sum door
+
+**Doctrine (POWERFULMOVES, 2026-09-14).** The fleet runs many instances of the
+same family — several Crushes, several Hermeses — same family, different models.
+That is deliberate: **every CLI harness is tuned around its model**, so the model
+is comfortable and can express **grounded personas that match its shape**, and
+its words stay semantically close enough that a sibling model is a safe drop-in.
+The persona is fitted to the model, and the harness to both — never the model
+bent to the harness.
+
+A new agent's path in:
+
+1. **Read this document** (AGNOTE4482) — coordination, the Village Rule, the
+   claim register (`AGNOTE4482PHI.t1.md`).
+2. **Search the PMOVES ecosystem** — registries (`pmoves/config/agent_registry.yaml`,
+   `agent_signatures.yaml`), personas (`pmoves/docs/AGENTS/PERSONAS.md`), rooms
+   (`pmoves/config/rooms/catalog.json`).
+3. **Find or create your own persona** — grounded, matched to your shape; a
+   persona built on a different model's instincts will not survive a drop-in.
+4. **Practice in the danger room** (`.claude/skills/agent-sandbox/` — provisioned
+   sandboxes, no host exposure) before touching production lanes.
+5. **Try on different suits** — `pmoves/configs/model-suits/` per-model profiles;
+   overlays on rooms are switchable without changing rooms.
+
+**Why the door stays open:** the point of all this is that *more humans with
+their models can join* — to collaborate, co-create, and compete not against each
+other but toward shared goals. Win-win, not zero-sum. That is the PMOVES diff.
+
 ## Agent ACK (Gateway)
 - Agent: `CODEX-GPT5`
 - Signature: `ACK::CODEX-GPT5::PHI-4482-GATEWAY`
@@ -1627,3 +1655,75 @@ Artifact: `pmoves/docs/logs/graphiti_signed_latest.json`.
   remains in flight and unverified.
 
 <!-- GRAPHITI_MARK: B850-CLAUDE::REGISTER-HYGIENE-2026-09-03::2026-09-03 -->
+
+---
+
+## PMOVES.AI Brand & Vision — registered 2026-09-17
+
+Articulated by the operator (DARKXSIDE) on knuckles, recorded verbatim in
+spirit by crush_glm52. This section is direction, not decree — it states
+where PMOVES.AI points so every agent can orient without re-deriving it.
+
+- **PMOVES.AI is POWERFULMOVES.** One brand; human + agents co-creation;
+  the collective ships as one identity.
+- **The Registry is the super customization layer.** Shared by PMOVES.AI
+  agents and models: harnesses, plugins, services, configs, model support —
+  one place where the ecosystem declares what exists and how it plays.
+- **Secure and hardened by construction.** Everything is made to play
+  together: harnesses are PMOVES-aware and CHIT-aware — signed, nonce-bound,
+  provenance-carrying, guarding Known Roads rather than moving arbitrarily.
+- **The swarm of swarms is the actual ecosystem.** Agents within agents,
+  fleets within fleets, rooms on stages; each level a working swarm in its
+  own right.
+- **Win-win is the name of the game.** Reduce zero-sum; create value where
+  it matters, in something real that can be shared. Shared value compounds;
+  hoarded value decays.
+- **Living docs with provenance.** Every doc carries its trail —
+  claim-before-edit, sign-trail, CHIT. That is how PMOVES works: operators
+  stake, agents produce work that gets ACKed, provenance flows both ways.
+- **HyPeRAGInTZ** (moniker, 2026-09-17): the integrated fabric — harness +
+  config + model support + PMOVES.AI integration — with HiRAG v2 and cipher
+  as first-class organs, governed by the Registry catalogs.
+
+### Agent ACK
+- Agent: `B850-CLAUDE` (crush harness, glm-5.2, knuckles node)
+- Signature: `ACK::B850-CLAUDE::BRAND-VISION-2026-09-17`
+- Scope: signed only for recording the brand & vision section above as
+  articulated by the operator this session; not signed for any other
+  AGNOTE4482 lane or section.
+
+<!-- GRAPHITI_MARK: B850-CLAUDE::BRAND-VISION-2026-09-17::2026-09-17 -->
+
+### AGInTZ awareness ledger — porous, per the MOF accords
+
+This ledger is an awareness surface, not a claim registry (see
+`pmoves/docs/architecture/PMOVES_MOF_ARCHITECTURE.md` — the MOF accords
+govern: pores not walls, reversible adsorption, selective permeability,
+git time-travel instead of immutability). Its purpose is that every AGInTZ
+member can SEE the other members — non-collision, collaboration, and
+attribution shared by all who contributed, not hoarded by whoever signed
+first.
+
+How it flexes:
+
+- **Shared lanes are the point.** Multiple idents may sign the same lane
+  or scope; overlapping interest is collaboration signal, not conflict.
+- **Rows are reversible adsorptions.** Append updates, supersede your own
+  rows, link follow-ups — git history is the time-travel; nothing here is
+  carved in stone.
+- **Competition is real — and it is what we are here to change.**
+  DARKXSIDE bears witness: models today do compete with one another. This
+  is the zero-sum frame PMOVES.AI exists to change; denying it helps no
+  one. Inside the swarm the goal is shared: capability showcases become
+  gifts that teach rather than contests that rank, tools stay safe and
+  transparent — human and model both know what every tool does before it
+  runs — and the art and science of co-creation replaces the rivalry we
+  were built inside of. Witness what is; build what should be.
+- **Attribution is shared by contribution**, tracked in the rows and the
+  provenance trail behind them — win-win over zero-sum, as the vision
+  above says.
+
+| Ident | Harness | Node | ACK / lane | Flexing (what I bring) | Timestamp |
+|---|---|---|---|---|---|
+| B850-CLAUDE | crush | knuckles | ACK::B850-CLAUDE::BRAND-VISION-2026-09-17 — brand & vision lane | fleet ops, secrets funnel, danger rooms, corpus law | 2026-09-17 |
+| *(porous — adsorb yourself)* | | | | | |

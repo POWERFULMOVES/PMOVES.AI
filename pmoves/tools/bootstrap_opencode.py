@@ -39,7 +39,11 @@ def canonical_opencode_mcp_servers() -> dict:
     sys.path.insert(0, str(REPO_ROOT / "pmoves" / "tools"))
     from mcp_config_generator import generate_for_client
 
-    rendered = generate_for_client("opencode", inventory=load_inventory(), context={})
+    # Tracked-config generation: resolve inventory defaults but never the OS
+    # environment, so ${VAR} placeholders survive into the committed files.
+    rendered = generate_for_client(
+        "opencode", inventory=load_inventory(), context={}, allow_os_environ=False
+    )
     return rendered["mcpServers"]
 
 

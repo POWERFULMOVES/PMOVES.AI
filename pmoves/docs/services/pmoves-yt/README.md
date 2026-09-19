@@ -14,7 +14,7 @@ Overview
 Compose
 - Service: `pmoves-yt`
 - Port: `8077:8077`
-- Profiles: none (always-on with the core stack; run via `make up-yt` which adds the yt-cookies overlay)
+- Profiles: none — but NOT part of the core Known Road either: `make -C pmoves up` does not start it. Start explicitly with `make -C pmoves up-yt` (adds the yt-cookies overlay; without it downloads run cookie-less and bot-gate)
 - Depends on: `minio`
 - Build context: `../PMOVES.YT`
 - Dockerfile: `pmoves_yt_service/Dockerfile`
