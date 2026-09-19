@@ -158,7 +158,25 @@ jobs:
       # that DELETED a generated overlay would regenerate it as untracked and
       # pass a diff-based gate.
       - name: Check split overlays are in sync with the compose source
-        run: make -C pmoves compose-split-check
+        # The bare make target fails with a plain-text ERROR line, which reaches
+        # the log but leaves the check summary reading only "Process completed
+        # with exit code 2" (measured on this job's first run). A blocking gate
+        # has to say WHY where the author actually looks -- and above all has to
+        # say what NOT to do: `compose-split` would make this green by DELETING
+        # the hand-edits that were never ported into the source. The sibling
+        # check in hardening-validation.yml annotates for the same reason.
+        #
+        # set +e because the default shell is `bash -e`, which would abort the
+        # step before the annotation is written. The make exit code is preserved.
+        run: |
+          set +e
+          make -C pmoves compose-split-check
+          rc=$?
+          set -e
+          if [ "$rc" -ne 0 ]; then
+            echo "::error::Split overlays are out of sync with pmoves/docker-compose.yml (see the ERROR line and file list above). Do NOT run 'make -C pmoves compose-split' to clear this: the overlays carry hand-edits that were never ported into the source monolith, so regenerating DELETES live config. Port the edits into pmoves/docker-compose.yml first, then regenerate."
+            exit "$rc"
+          fi
 
   # Ratcheted: judges ALL 99 tracked Dockerfiles (previously globbed
   # pmoves/services/*/Dockerfile, which sees 76 of them and misses 10 of the 12
