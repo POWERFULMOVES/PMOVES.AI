@@ -592,13 +592,22 @@ couple it. `knuckles-kimi` is the first fully portable identity: card 051 +
 gains the `default_identity.kimi` declaration and affinity entry, with cipher
 scopes minted per node as today.
 
-**Schema note — the scalar is v1, not the target.** `node-vocabulary
-default_identity.<harness>` carries exactly one identity per harness per node
-today. Multiple identities per harness is the operator's stated direction and
-needs a schema-evolution lane: identity sets per harness with a selection
-mechanism (per-session role, task/persona selection via P7, room-scoped
-binding). Nothing in the A–A.11 work precludes it — registry entries are
-per-identity already; only the vocabulary binding is scalar.
+**Schema note — corrected 2026-09-19 (operator): the scalar is the default
+binding; the multiplicity machinery already ships in the fleet.** `node-vocabulary
+default_identity.<harness>` carries one default identity per harness per node —
+that stays the *fallback*, not a ceiling. Multiple identities per harness +
+selection composes three EXISTING references rather than waiting on a schema
+lane: (1) **hermes evolution** — hermes-gating-v6 profiles with
+evolution_proposal → Main approval already evolve workspace rules; identity/
+selection rules ride the same proposal rail (this workspace already runs an
+active-learning hermes profile); (2) **evo swarm** — `brv swarm` in the
+Pmoves-cipher fork federates memory/knowledge across pluggable providers
+(byterover, gbrain, local-markdown, memory-wiki, obsidian): an identity set per
+harness is a swarm routing question as much as a schema one; (3)
+**consciousness_service** — the registered specialized agent (agent_registry)
+is the fleet's existing continuity/selection surface across identities. The
+knuckles-kimi wiring is the default-binding template; multiplicity layers on
+these three without touching the vocabulary scalar.
 
 **The portability proof (new-node sequence):** node joins → funnel materializes
 env from the bundle → registry provides the harness substrate → vocabulary binds
@@ -607,3 +616,27 @@ reproducible, unattended — the original session brief, restated as deploy orde
 
 *Amendment A.12 signed: PMOVES-KIMI-KNUCKLES-B850, 2026-09-19 — a pore is not a
 snowflake; the lattice grows by reference, not by hand-copy.*
+
+### A.13 Secrets routing — Composio fork scope (operator, 2026-09-19)
+
+*The operator forked the Composio repos and directs: **secrets go there** — the
+parent PMOVES.AI `Prod` environment is at the 100/100 ceiling (A.8 measured) and
+Composio material must not add to it. A.8 submodule sovereignty, applied.*
+
+- **Home for Composio secrets:** `POWERFULMOVES/PMOVES-composio` (fork of
+  `ComposioHQ/composio`, default branch `master`; sibling fork
+  `pmoves-composio-mcp-plugin`). Routing: `COMPOSIO_PROJECT_KEY_PMOVES` (ak_),
+  `COMPOSIO_CONSUMER_KEY_KIMI` (ck_), and the refreshed `uak_`
+  (`COMPOSIO_API_KEY`) distribute to the fork scope via
+  `push-gh-secrets.sh --repo POWERFULMOVES/PMOVES-composio`.
+- **Discord surface unchanged:** `DISCORD_BOT_TOKEN_KIMI` stays in the
+  PMOVES-ClawZ fork scope per A.8 + the `CHANNEL_MATRIX` convention — it is
+  Discord material, not Composio material.
+- **Capacity note:** the fork's secrets endpoint 404s from knuckles (fleet token
+  lacks admin on the fork) — count unmeasured, expected fresh (fork created
+  2026-09-03). Fork-secret distribution is a DESIGNED operation of the
+  deepseek-harness agent (A.9/A.11 endowment: GitHub App + cipher + skills) —
+  this is its first live job.
+
+*Amendment A.13 signed: PMOVES-KIMI-KNUCKLES-B850, 2026-09-19 — the forks keep
+their own keys; now the forks are named.*
