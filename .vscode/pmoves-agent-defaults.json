@@ -35,6 +35,11 @@
       "role": "Jetson Orin Nano Super edge inference (×3)",
       "auto_load": [],
       "on_demand": ["model:load", "fleet:status", "gpu:status"]
+    },
+    "kimi-knuckles": {
+      "role": "Kimi Code harness on Knuckles (B850, AMD 9850X3D, CPU-heavy, no discrete GPU) — batch/overflow, ACP registry surface, cipher-first session discipline",
+      "auto_load": ["health:check-all"],
+      "on_demand": ["cipher:preflight", "register:status", "chit:sign-trail", "fleet:status", "kimi:session", "clawz:logs", "pinokio:bridge-smoke"]
     }
   }
 }
