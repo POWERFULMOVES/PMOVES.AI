@@ -191,15 +191,22 @@ class EvoSwarmController:
         payload = await self._fetch_recent_cgps()
         logger.debug("fetched %s CGPs for evaluation", len(payload))
 
-        # Upsert a minimal parameter pack (namespace inferred from first CGP)
-        namespace = self.config.namespace or (payload[0].get("namespace") if payload and isinstance(payload[0], dict) else "pmoves")
+        # Upsert a minimal parameter pack (namespace inferred from first CGP).
+        # Column shape mirrors geometry_parameter_packs: cg_builder/decoder jsonb
+        # are NOT NULL — a flat "params" dict 400s against the table contract.
+        # Namespace from the first CGP's payload when present; a CGP without one
+        # must not become a None namespace — geometry_parameter_packs.namespace
+        # is NOT NULL and PostgREST 400s the whole tick (23502).
+        first_cgp = payload[0] if payload and isinstance(payload[0], dict) else {}
+        namespace = self.config.namespace or first_cgp.get("namespace") or "pmoves"
         pack = {
             "namespace": namespace,
             "modality": "video",
             "version": time.strftime("v%Y%m%d-%H%M%S"),
             "status": "draft",
             "pack_type": "cg_builder",
-            "params": {"K": 8, "bins": 32, "tau": 0.2, "beta": 0.7},
+            "cg_builder": {"K": 8, "bins": 32, "tau": 0.2, "beta": 0.7},
+            "decoder": {},
             "energy": {"note": "placeholder"},
         }
         ok = await self._upsert_pack(pack)
@@ -339,26 +346,22 @@ class EvoSwarmController:
             "version": pack.get("version"),
             "population_id": pack.get("population_id"),
             "best_fitness": pack.get("fitness"),
-            "metrics": pack.get("energy"),
+            # NOTE: geometry.swarm.meta.v1 is additionalProperties:false — a
+            # "metrics" passthrough (or a CHIT sign_cgp wrap of this dict)
+            # fails A0's schema validation and the event never reaches the
+            # bus. CHIT provenance belongs on the pack record (the table has
+            # a signature column) and in A0's envelope layer, not inside this
+            # payload. See AGNOTE4482_EVO_CONTROLLER_DEEP_DIVE.md gap list.
             "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ"),
         }
-        # CHIT-sign the event payload before it enters the geometry bus
-        # (Agent Zero forwards the payload verbatim to geometry.swarm.meta.v1).
         key = _chit_signing_key()
-        if CHIT_AVAILABLE and key:
-            payload = sign_cgp(payload, passphrase=key)
-        elif _chit_signature_required():
+        if _chit_signature_required() and not (CHIT_AVAILABLE and key):
             logger.error(
                 "CHIT_REQUIRE_SIGNATURE is set but signing is unavailable "
                 "(missing signing key or chit wrappers) — refusing to publish "
-                "unsigned geometry.swarm.meta.v1"
+                "geometry.swarm.meta.v1"
             )
             return
-        else:
-            logger.warning(
-                "No CHIT signing key set — publishing geometry.swarm.meta.v1 "
-                "unsigned (dev mode)"
-            )
         body = {
             "topic": "geometry.swarm.meta.v1",
             "source": "evo-controller",

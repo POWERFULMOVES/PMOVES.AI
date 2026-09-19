@@ -12,6 +12,7 @@ from typing import Dict, List, Mapping, Sequence
 import yaml
 
 from pmoves.chit.codec import decode_secret_map, load_cgp
+from pmoves.tools.secret_shape import inspect_value
 from pmoves.tools.secrets_self_generated import fill_self_generated, SELF_GENERATED, _SUPABASE_JWT_KEYS
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -42,6 +43,15 @@ class Entry:
     # the health check had failed 6118 consecutive times, which reads as a flaky
     # service rather than a mis-sized secret.
     min_length: int = 0
+    # Vendor-guaranteed leading substring, when the label declares one. "" means
+    # unconstrained.
+    #
+    # This is the constraint that would have caught E2B_API_KEY. It arrived 42
+    # characters starting `b_` instead of 44 starting `e2b_` -- the leading `e2`
+    # lost in delivery -- and because presence was the only gate, it materialized
+    # into every tier file and the E2B Danger Room simply never ran. min_length
+    # alone would not have caught it: 42 is not obviously short.
+    prefix: str = ""
 
 
 def load_manifest(path: Path) -> tuple[Path, Sequence[Entry]]:
@@ -102,6 +112,9 @@ def load_manifest(path: Path) -> tuple[Path, Sequence[Entry]]:
         min_length = item.get("min_length", 0)
         if not isinstance(min_length, int) or isinstance(min_length, bool) or min_length < 0:
             raise ValueError(f"Entry {entry_id} has non-integer min_length")
+        prefix = item.get("prefix", "")
+        if not isinstance(prefix, str):
+            raise ValueError(f"Entry {entry_id} has non-string prefix")
         entries.append(
             Entry(
                 id=entry_id,
@@ -110,6 +123,7 @@ def load_manifest(path: Path) -> tuple[Path, Sequence[Entry]]:
                 targets=targets,
                 aliases=aliases,
                 min_length=min_length,
+                prefix=prefix,
             )
         )
 
@@ -162,6 +176,8 @@ def build_outputs(
     outputs: Dict[str, Dict[str, str]] = defaultdict(dict)
     missing: List[str] = []
     too_short: List[str] = []
+    shape_withheld: List[str] = []
+    shape_warnings: List[str] = []
     for entry in entries:
         # Honor legacy aliases: an operator may supply a deprecated name (e.g.
         # MCP_SERVER_TOKEN) that maps to a canonical label. Emit the canonical
@@ -205,6 +221,34 @@ def build_outputs(
                     rejected_out.setdefault(target.file, set()).add(target.key)
             continue
         value = secrets[source_key]
+        # Charset and shape -- the class this pipeline has never inspected.
+        #
+        # The min_length check below measures a value's LENGTH; nothing ever
+        # measured its CHARACTERS. A delivered GATE_API_KEY carries an EM DASH
+        # (U+2014) inside the key, and the only reason that is known is that a
+        # third-party vendor CLI inspected it before putting it in an HTTP header
+        # and said so in plain language. See pmoves/tools/secret_shape.py for the
+        # full defect, and for why a lookalike glyph withholds while an ordinary
+        # non-ASCII character only warns.
+        #
+        # Withheld, never repaired. Stripping the em dash is a GUESS at the real
+        # value, and a guessed key produces the same opaque 401 as the corrupt one
+        # while destroying the evidence that anything was wrong. Refusing makes
+        # compose's `${VAR:?}` name the variable at `up` time instead. Same
+        # doctrine as the under-length branch: loud beats late.
+        verdict = inspect_value(entry.label, value, prefix=entry.prefix)
+        shape_warnings.extend(verdict.warn)
+        # Branch on `.withhold` explicitly. A ShapeVerdict instance is always
+        # truthy, so `if verdict:` would read as "there is a problem" while being
+        # unconditionally true.
+        if verdict.withhold:
+            shape_withheld.extend(verdict.withhold)
+            if rejected_out is not None:
+                for target in entry.targets:
+                    rejected_out.setdefault(target.file, set()).add(target.key)
+            if entry.required:
+                missing.append(entry.label)
+            continue
         # A secret can be present, non-empty, and still unusable because it is too
         # SHORT. That is the same failure family as blank-is-not-absent above, one
         # rung further along: `_first_usable` already refuses "" because an empty
@@ -240,6 +284,37 @@ def build_outputs(
             "one. The value is present but shorter than its consumer accepts, so "
             "emitting it would produce a service that starts and then fails every "
             "request.",
+            file=sys.stderr,
+        )
+    if shape_withheld:
+        print(
+            "WARNING: withheld "
+            + str(len(shape_withheld))
+            + " mis-shaped secret(s): "
+            + "; ".join(sorted(shape_withheld))
+            + " -- a lookalike glyph (em dash for hyphen, smart quote, "
+            "non-breaking space, zero-width) or a wrong vendor prefix means the "
+            "value was corrupted BEFORE it reached this pipeline, typically by a "
+            "copy-paste through a PDF, rich-text editor or rendered web page. "
+            "Re-deliver the credential by retyping it or copying from a "
+            "plain-text source. The funnel deliberately does NOT strip the "
+            "character: a guessed value fails identically to a corrupt one while "
+            "hiding that anything was wrong. Nothing above is secret material -- "
+            "only the variable name, the codepoint, the position and the length.",
+            file=sys.stderr,
+        )
+    if shape_warnings:
+        print(
+            "WARNING: "
+            + str(len(shape_warnings))
+            + " delivered secret(s) carry a suspicious character and were emitted "
+            "ANYWAY: "
+            + "; ".join(sorted(shape_warnings))
+            + " -- not withheld, because a human-chosen password may legitimately "
+            "contain these and several registered labels are passwords. But a "
+            "non-ASCII character cannot be placed in an HTTP header at all, and "
+            "surrounding whitespace is emitted verbatim, so verify each against "
+            "its source.",
             file=sys.stderr,
         )
     if missing and strict:

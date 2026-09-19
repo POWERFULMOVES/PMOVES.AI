@@ -150,12 +150,45 @@ ensure-env-shared:
 	python tools/ensure_env_shared.py --env-file "$(ENV_SHARED_FILE)" --template "$(ENV_SHARED_TEMPLATE)" || \
 	py -3 tools/ensure_env_shared.py --env-file "$(ENV_SHARED_FILE)" --template "$(ENV_SHARED_TEMPLATE)"
 
+# -------- Launcher generator (registry-driven) -------------------------------
+# Source of truth: pmoves/configs/cli_tools.yaml :: pmoves_wrappers + 
+# pmoves/config/agent_registry.yaml (per-node identities).
+# Emit: deploy/provision/<tool>-pmoves.{sh,ps1,cmd} + install-* + per-node pins.
+# See: pmoves/tools/pmoves_launcher_generator.py and pmoves/docs/AGENTS/pmoves_launcher_generator_LEARNINGS.md
+LAUNCHER_GENERATOR := $(PYTHON) tools/pmoves_launcher_generator.py
+LAUNCHER_OUT := $(REPO_ROOT)/deploy/provision
+LAUNCHER_MANIFEST := $(LAUNCHER_OUT)/launchers.manifest.json
+
+.PHONY: launchers-regen
+launchers-regen: ## Regenerate registry-driven launchers + manifest into deploy/provision/
+	@$(LAUNCHER_GENERATOR) --registry-root "$(REPO_ROOT)" --out "$(REPO_ROOT)" || \
+	$(LAUNCHER_GENERATOR)
+
+.PHONY: launchers-drift-check
+launchers-drift-check: ## Diff generator output against checked-in files; exit non-zero on drift
+	@$(LAUNCHER_GENERATOR) --registry-root "$(REPO_ROOT)" --check || \
+	$(LAUNCHER_GENERATOR) --check
+
+.PHONY: launchers-manifest
+launchers-manifest: ## Print the launcher inventory (registry-driven)
+	@$(LAUNCHER_GENERATOR) --registry-root "$(REPO_ROOT)" --dry-run --json || \
+	$(LAUNCHER_GENERATOR) --dry-run --json
+
+.PHONY: launchers-clean
+launchers-clean: ## Remove only generator-emitted files (leaves hand-written launchers intact)
+	@echo "Re-run 'make launchers-regen' to restore generator-emitted launchers."
+
 # -------- Standard Makefile targets ----------
 .PHONY: all
 all: help ## Default target - show help
 
 .PHONY: test
 test: test-smoke ## Run pytest smoke tests
+
+.PHONY: test-smoke
+test-smoke: ## Run pytest smoke tests for services (pre-refactor recipe restored)
+	@echo "Running pytest smoke tests..."
+	$(PYTHON) -m pytest tests/smoke/ -v -m smoke --tb=short
 
 .DEFAULT_GOAL := help
 
@@ -337,10 +370,43 @@ docs-quickstart: ## Open the quick start guide
 #
 # Probed, not assumed, and RECURSIVE (`=`, not `:=`) so the probe runs only when
 # a register target actually expands it rather than on every make invocation.
-# `$(PYTHON)` is preferred when it already has PyYAML -- switching a working
-# interpreter for `uv run --script` would trade a silent degradation for a first
-# -run network fetch, which is a worse failure on an offline node.
-REGISTER_PYTHON = $(shell if $(PYTHON) -c 'import yaml' >/dev/null 2>&1; then \
+# `$(PYTHON)` is preferred when it already has the dependencies -- switching a
+# working interpreter for `uv run --script` would trade a silent degradation for
+# a first-run network fetch, which is a worse failure on an offline node.
+#
+# The offline tradeoff is unchanged in shape but now honest: the fallback
+# actually DELIVERS both dependencies, because the PEP 723 block in
+# register_append.py declares `pydantic>=2` alongside `pyyaml`. Before, an
+# offline node fell back to a `uv run --script` that still could not supply
+# pydantic, so the fetch bought nothing and the notice fired anyway.
+# PROBE EVERY DEPENDENCY THE GATE ACTUALLY USES, not just the first one that
+# ever mattered. This tested `import yaml` alone, so an interpreter with
+# PyYAML and no pydantic was chosen as GOOD and then printed a DEGRADED
+# notice on every write -- measured 2026-09-15 on two register-release runs.
+# `register_append.py` needs both: PyYAML for the identity vocabulary above,
+# pydantic for the RegisterProse model that is the DECLARED prose contract.
+# A probe that checks one of two dependencies reports on the half it looked at.
+REGISTER_PYTHON = $(shell if $(PYTHON) -c 'import yaml, pydantic' >/dev/null 2>&1; then \
+	echo '$(PYTHON)'; \
+	elif command -v uv >/dev/null 2>&1; then echo 'uv run --script'; \
+	else echo '$(PYTHON)'; fi)
+
+# THE PATTERN, stated once so it can be reused instead of re-derived.
+#
+#   1. every tool declares its third-party deps in a PEP 723 block
+#   2. every target selects an interpreter that SATISFIES that declaration
+#   3. the fallback is `uv run --script`, which reads the block
+#
+# $(PYTHON) answers 'is there an interpreter', which is a different question
+# from 'can it import what this tool needs' -- and only the second one
+# decides whether the tool can do its job. A target that asks the first and
+# acts on the second degrades silently on whichever nodes happen to differ,
+# which is every fleet.
+#
+# PYTHON_YAML is REGISTER_PYTHON's shape for the (much larger) set of tools
+# needing PyYAML alone. Recursive `=` so the probe runs only when a target
+# expands it, not on every make invocation.
+PYTHON_YAML = $(shell if $(PYTHON) -c 'import yaml' >/dev/null 2>&1; then \
 	echo '$(PYTHON)'; \
 	elif command -v uv >/dev/null 2>&1; then echo 'uv run --script'; \
 	else echo '$(PYTHON)'; fi)
@@ -352,10 +418,14 @@ register-claim: export REGISTER_OWNER = $(REGISTER_OWNER_VALUE)
 register-claim: export REGISTER_BRANCH = $(BRANCH)
 register-claim: export REGISTER_TTL = $(if $(TTL),$(TTL),72h)
 register-claim: export REGISTER_SCOPE = $(SCOPE)
+register-claim: export REGISTER_SCOPE_VIA_FILE = $(findstring --scope-file,$(ARGS))
 register-claim: export REGISTER_CO_OWNERS = $(CO_OWNER)
 register-claim: ## Open a lane in the claim register (OWNER= BRANCH= SCOPE= [TTL=72h] [CO_OWNER=])
-	@if [ -z "$$REGISTER_BRANCH" ] || [ -z "$$REGISTER_SCOPE" ]; then \
+	@if [ -z "$$REGISTER_BRANCH" ] || { [ -z "$$REGISTER_SCOPE" ] && [ -z "$$REGISTER_SCOPE_VIA_FILE" ]; }; then \
 		echo "usage: make register-claim OWNER='B850-CLAUDE (Knuckles)' BRANCH=fix/x TTL=72h SCOPE='what this lane covers'"; \
+		echo "  the single quotes are LOAD-BEARING: double quotes let the shell expand \$$VARS into the prose before"; \
+		echo "  make ever sees it, and the register is append-only so an absorbed expansion is uncorrectable."; \
+		echo "  long prose: write it to a file and pass ARGS='--scope-file=path' so it never joins a command string."; \
 		exit 2; \
 	fi
 	@$(REGISTER_PYTHON) tools/register_append.py claim $(ARGS)
@@ -364,6 +434,7 @@ register-claim: ## Open a lane in the claim register (OWNER= BRANCH= SCOPE= [TTL
 register-release: export REGISTER_OWNER = $(REGISTER_OWNER_VALUE)
 register-release: export REGISTER_BRANCH = $(BRANCH)
 register-release: export REGISTER_SCOPE = $(SCOPE)
+register-release: export REGISTER_SCOPE_VIA_FILE = $(findstring --scope-file,$(ARGS))
 register-release: export REGISTER_CO_OWNERS = $(CO_OWNER)
 # BRANCH IS NOT OPTIONAL HERE, and the guard is in the python rather than in
 # this recipe on purpose: `ARGS=--all-lanes` is the sanctioned way to ask for a
@@ -372,8 +443,10 @@ register-release: export REGISTER_CO_OWNERS = $(CO_OWNER)
 # survives `make` collapsing every nonzero recipe exit to 2, because the message
 # is the structured part, not the code.
 register-release: ## Close a lane in the claim register (OWNER= BRANCH= SCOPE= [CO_OWNER=]; ARGS=--all-lanes to close ALL your lanes)
-	@if [ -z "$$REGISTER_SCOPE" ]; then \
+	@if [ -z "$$REGISTER_SCOPE" ] && [ -z "$$REGISTER_SCOPE_VIA_FILE" ]; then \
 		echo "usage: make register-release OWNER='B850-CLAUDE (Knuckles)' BRANCH=fix/x SCOPE='what landed'"; \
+		echo "  single-quote SCOPE for the same reason register-claim says to: an expansion absorbed into"; \
+		echo "  a row cannot be corrected afterwards; ARGS='--scope-file=path' for long prose."; \
 		echo "       BRANCH= is required. To close EVERY lane you hold, say so: ARGS=--all-lanes"; \
 		exit 2; \
 	fi
@@ -449,6 +522,20 @@ register-postdate-check: ## Assert rows added on this branch are not postdated (
 .PHONY: register-postdate-sweep
 register-postdate-sweep: ## Report every postdated row in the register's whole history
 	@$(PYTHON) tools/register_postdate_check.py --sweep $(ARGS)
+
+# -------- GitHub notification pool (3-surface review triage) ----------
+# The founding defect (PR #3025, 2026-09-12): fleet reviews post as bot
+# ISSUE COMMENTS, so review-endpoint scans return confident zeros while a
+# REQUEST_CHANGES sits in plain sight. The pool normalizes all three REST
+# surfaces per open PR and publishes to NATS github.pool.review.v1
+# (JetStream GITHUB_POOL, limits retention) -- one sweep, every agent reads.
+.PHONY: github-pool-sync
+github-pool-sync: ## Sweep PR review surfaces into the NATS pool (0 clean / 1 urgent / 3 could not measure)
+	@$(PYTHON) tools/github_pool_sync.py $(ARGS)
+
+.PHONY: github-pool-latest
+github-pool-latest: ## Print the last N pooled records (N=10)
+	@nats -s $(GITHUB_POOL_NATS_URL) stream view GITHUB_POOL --count $(or $(N),10) $(ARGS)
 
 # -------- Updates ----------
 .PHONY: update
@@ -1528,6 +1615,19 @@ fork-registry-ratchet: ## Assert every fork in pmoves/config/fork_registry.json 
 
 fork-registry-ratchet-json: ## Same as fork-registry-ratchet, but JSON output (for CI annotation)
 	@$(PYTHON) tools/fork_registry_ratchet.py --json
+
+# ----------------------------------------------------------------------------
+# Compose build-provenance ratchet (2026-09-12)
+#   compose-provenance-audit    - every build: is SUBMODULE or baselined shim
+#   compose-provenance-baseline - rewrite the shim baseline (deliberate; say why)
+# ----------------------------------------------------------------------------
+.PHONY: compose-provenance-audit compose-provenance-baseline
+compose-provenance-audit: ## Assert every compose build is a submodule build or a baselined shim (no network, ~200ms)
+	@echo "🔒 Compose build-provenance ratchet..."
+	@$(PYTHON) tools/compose_provenance_audit.py
+
+compose-provenance-baseline: ## Re-baseline the superproject-shim exceptions (deliberate; state why in the PR)
+	@$(PYTHON) tools/compose_provenance_audit.py --baseline
 
 # ----------------------------------------------------------------------------
 # Validate-composes ratchet (2026-08-05)
@@ -3797,7 +3897,7 @@ qdrant-provision-cipher: ## Provision the Qdrant collection Cipher Memory writes
 	@# in supa-start. Image is the repo's standard pinned python base, so this
 	@# pulls nothing new on a node that has built any Python service.
 	@echo "🧠 Provisioning Qdrant collection for Cipher Memory..."
-	@$(LOAD_ENV_SHARED); docker run --rm --network pmoves_data \
+	@export MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*'; $(LOAD_ENV_SHARED); docker run --rm --network pmoves_data \
 		-v "$(CURDIR)/scripts:/scripts:ro" \
 		-e PYTHONDONTWRITEBYTECODE=1 \
 		-e QDRANT_URL=$${QDRANT_URL:-http://qdrant:6333} \
@@ -5721,7 +5821,7 @@ kimi: ## Launch Kimi Code CLI with PMOVES project config and MCP set
 	  kimi --config-file "$(CURDIR)/../.kimi/config.toml"; \
 	fi
 
-.PHONY: claude-pmoves kimi-pmoves kilo-pmoves codex-pmoves cipher-mint-token
+.PHONY: claude-pmoves kimi-pmoves kilo-pmoves codex-pmoves cipher-mint-token cipher-identity
 claude-pmoves: ## Launch Claude Code with PMOVES delivery-agent context
 	@bash $(CURDIR)/scripts/claude-pmoves.sh
 
@@ -5734,9 +5834,21 @@ kilo-pmoves: ## Launch KiloCode/OpenCode with PMOVES 5090 node config
 codex-pmoves: ## Launch Codex CLI with PMOVES context
 	@bash $(CURDIR)/scripts/codex-pmoves.sh
 
-cipher-mint-token: ## Mint a new per-agent cipher token: AGENT=crush-spark [SCOPES="memory:read,memory:write"]
-	@if [ -z "$(AGENT)" ]; then echo "Usage: make -C pmoves cipher-mint-token AGENT=crush-spark [SCOPES='memory:read,memory:write']"; exit 1; fi
-	@$(PYTHON) $(CURDIR)/scripts/mint_cipher_token.py --agent "$(AGENT)" --scopes "$(or $(SCOPES),memory:read,memory:write,reasoning:read,reasoning:write,session:read,session:write)"
+cipher-identity: ## Which agent_id will this session's cipher memories be filed under? [AGENT=z890-claude]
+	@$(PYTHON_YAML) $(CURDIR)/tools/cipher_identity.py $(if $(AGENT),--agent "$(AGENT)",) || true
+
+# Held in a variable, NOT inline in the $(or ...) below. Make splits function
+# arguments on commas, so an inline comma-separated default is not one string —
+# it is six arguments, and $(or) returns the first non-empty one. Every agent
+# minted without an explicit SCOPES= therefore got ["memory:read"] alone: no
+# write, no reasoning, no session. Measured 2026-09-16 minting claude-4090.
+# A variable reference is a single argument; commas inside its VALUE do not
+# split, because splitting happens on the call text before expansion.
+CIPHER_MINT_DEFAULT_SCOPES := memory:read,memory:write,reasoning:read,reasoning:write,session:read,session:write
+
+cipher-mint-token: ## Mint a per-agent cipher token (requires an ACTIVE signing card): AGENT=z890-claude [SCOPES=...]
+	@if [ -z "$(AGENT)" ]; then echo "Usage: make -C pmoves cipher-mint-token AGENT=z890-claude [SCOPES='memory:read,memory:write']"; exit 1; fi
+	@$(PYTHON) $(CURDIR)/scripts/mint_cipher_token.py --agent "$(AGENT)" --scopes "$(or $(SCOPES),$(CIPHER_MINT_DEFAULT_SCOPES))"
 
 .PHONY: beats-analyze beats-hyperdim beats-pipeline
 beats-analyze: ## Re-run DARKXSIDE sonic fingerprint analysis (librosa + ffmpeg lavfi)
@@ -5753,3 +5865,198 @@ beats-pipeline: ## Full pipeline: analyze -> cluster -> export to Hyperdimension
 	@$(MAKE) -C $(CURDIR) beats-analyze
 	@$(MAKE) -C $(CURDIR) beats-hyperdim
 	@echo "[beats] Done. Open website/hyperdim/ or website/embeds/beats-constellation/"
+
+# ---------------------------------------------------------------------------
+# Agent sandboxes (E2B) — the sanctioned substitute for proving a fix that
+# would otherwise need a live mutation against production.
+#
+# Entrypoint doc: .claude/skills/agent-sandbox/SKILL.md
+# CLI source:     skills/PMOVES-agent-sandbox-skill/.claude/skills/agent-sandboxes/sandbox_cli/
+#
+# Credentials are loaded through scripts/with-env.sh (LOAD_ENV_SHARED), never
+# hardcoded and never echoed. A Makefile $(VAR) cannot see funnel-delivered
+# values, so every recipe sources the loader inside the shell.
+#
+# DEPLOYMENT MODE is explicit and selectable. Self-host is the default target;
+# e2b.dev cloud remains reachable as a fallback:
+#   make -C pmoves sandbox-preflight                    # selfhost-local
+#   make -C pmoves sandbox-preflight E2B_MODE=cloud
+#   make -C pmoves sandbox-preflight E2B_MODE=selfhost-gcp
+#   make -C pmoves sandbox-preflight E2B_MODE=auto      # infer from env
+# The three modes take three DIFFERENT credential sets; scripts/e2b_mode.sh is
+# the single place that knows them, and it validates prefix + length + charset
+# rather than mere presence (a `[ -n ]` test passes a truncated secret).
+# Runbook: pmoves/docs/operations/E2B_SELF_HOST_RUNBOOK.md
+#
+# ── EXIT CODES: `make` CANNOT CARRY THEM ────────────────────────────────────
+# These scripts speak the fleet doctrine 0 clean / 1 findings / 3
+# could-not-measure. GNU make DOES NOT propagate a recipe's status: it exits 2
+# for any recipe failure. Measured here — a recipe exiting 1 and a recipe
+# exiting 3 both make `make` exit 2, while running the script directly returns
+# 3. So the distinction between "this failed" and "this could not be measured"
+# is DESTROYED by the make wrapper, and could-not-measure is precisely the
+# outcome that must never be mistaken for either a pass or a failure.
+# Therefore: every target below PRINTS its real exit code, and anything that
+# needs to branch on it (CI, a gate, another script) must call the script
+# directly, not through make:
+#   bash pmoves/scripts/probe_danger_room_host.sh ; echo $?
+#   bash pmoves/scripts/sandbox_smoke.sh          ; echo $?
+# ---------------------------------------------------------------------------
+SANDBOX_CLI_DIR := $(CURDIR)/../skills/PMOVES-agent-sandbox-skill/.claude/skills/agent-sandboxes/sandbox_cli
+SANDBOX_TIMEOUT ?= 600
+# SECURITY (review finding F3, PR #2982): a caller-supplied value is NEVER
+# interpolated into a recipe's shell text. It used to be:
+#     uv run sbx exec "$(SBX)" "$(CMD)" $(ARGS)
+# inside bash -lc '...'. make pastes CMD in literally, so an apostrophe closed
+# the quoting and the remainder ran ON THE HOST:
+#     make sandbox-exec SBX=x CMD="x'; touch /tmp/pwned; echo '"
+# created /tmp/pwned on the host — the exact isolation failure this sandbox
+# exists to prevent. Same shape applied to NAME, TEMPLATE, SBX, ARGS, E2B_MODE.
+#
+# Every caller value now reaches the shell through a target-specific `export`,
+# i.e. through execve's environment, never through shell text, and is read back
+# as "$$VAR_ARG". Regression test: pmoves/tests/test_sandbox_make_quoting.sh
+# (asserts the payload does NOT execute, with a positive control proving the
+# harness can still observe an execution when one happens).
+#
+# Passed into every recipe's shell so the resolver sees an operator override.
+# E2B_MODE is forwarded ONLY when non-empty: an empty exported var shadows a
+# value the env files would otherwise supply (the classic tier-env shadow bug).
+# That non-empty check now happens in the shell, on the exported E2B_MODE_ARG.
+export SANDBOX_CLI_DIR
+# Fail-closed (fleet review 2982). Provenance: E2B SDK env contract per upstream docs
+# (docs.e2b.dev - the SDK reads E2B_API_KEY / E2B_ACCESS_TOKEN / E2B_DOMAIN; see the
+# docs-provenance note in the e2b lane before changing which vars are loaded here).
+SANDBOX_ENV = if [ -n "$${E2B_MODE_ARG:-}" ]; then export E2B_MODE="$$E2B_MODE_ARG"; fi; \
+	if [ ! -f ./scripts/with-env.sh ]; then echo "SANDBOX_ENV: scripts/with-env.sh missing - cannot load sandbox credentials" >&2; exit 3; fi; \
+	. ./scripts/with-env.sh; set +e; \
+	. ./scripts/e2b_mode.sh; \
+	{ e2b_resolve_mode >/dev/null && e2b_apply_mode_env >/dev/null; } || { echo "SANDBOX_ENV: e2b mode resolution failed - refusing to continue misconfigured" >&2; exit 3; }; \
+	e2b_validate_shapes || exit 3
+
+.PHONY: sandbox-preflight sandbox-mode sandbox-help sandbox-create sandbox-list \
+        sandbox-info sandbox-exec sandbox-kill sandbox-smoke sandbox-host-probe \
+        sandbox-runbook sandbox-selftest
+
+# --- Caller values in, via the environment only (see SECURITY note above) ---
+sandbox-preflight sandbox-mode sandbox-help sandbox-create sandbox-list \
+sandbox-info sandbox-exec sandbox-kill sandbox-smoke: export E2B_MODE_ARG = $(E2B_MODE)
+sandbox-info sandbox-exec sandbox-kill: export SBX_ARG = $(SBX)
+sandbox-exec: export CMD_ARG = $(CMD)
+sandbox-create sandbox-exec: export ARGS_ARG = $(ARGS)
+sandbox-create: export NAME_ARG = $(NAME)
+sandbox-create: export TEMPLATE_ARG = $(TEMPLATE)
+sandbox-create: export SANDBOX_TIMEOUT_ARG = $(SANDBOX_TIMEOUT)
+sandbox-list: export LIMIT_ARG = $(LIMIT)
+sandbox-help: export GROUP_ARG = $(GROUP)
+
+sandbox-preflight: ## Check the CLI is runnable and the SELECTED mode's credentials are well-shaped (make masks the code as 2 — see header) [E2B_MODE=selfhost-local|cloud|selfhost-gcp|auto]
+	@bash -lc 'set +x; if [ -n "$${E2B_MODE_ARG:-}" ]; then export E2B_MODE="$$E2B_MODE_ARG"; fi; \
+		. ./scripts/with-env.sh 2>/dev/null || true; set +e; set +x; \
+		rc=0; \
+		if [ -d "$$SANDBOX_CLI_DIR" ]; then echo "[sandbox] CLI dir: present"; \
+		else echo "[sandbox] CLI dir: MISSING — run: git submodule update --init --recursive skills/"; rc=3; fi; \
+		if command -v uv >/dev/null 2>&1; then echo "[sandbox] uv: $$(uv --version 2>/dev/null)"; \
+		else echo "[sandbox] uv: MISSING — required (CLI is a uv package, python >=3.12)"; rc=3; fi; \
+		. ./scripts/e2b_mode.sh; \
+		e2b_resolve_mode || rc=3; \
+		e2b_apply_mode_env || rc=3; \
+		if [ $$rc -eq 0 ] || [ -n "$$E2B_MODE_RESOLVED" ]; then e2b_validate_shapes || rc=3; fi; \
+		[ $$rc -eq 0 ] && echo "[sandbox] preflight OK (mode $$E2B_MODE_RESOLVED)" || echo "[sandbox] preflight COULD-NOT-MEASURE (exit 3)"; \
+		exit $$rc'
+
+sandbox-mode: ## Print the resolved E2B deployment mode and its variable set (no values)
+	@bash -lc 'set +x; if [ -n "$${E2B_MODE_ARG:-}" ]; then export E2B_MODE="$$E2B_MODE_ARG"; fi; \
+		. ./scripts/with-env.sh 2>/dev/null || true; set +e; set +x; \
+		. ./scripts/e2b_mode.sh; e2b_resolve_mode && e2b_apply_mode_env && e2b_validate_shapes'
+
+sandbox-help: ## Show the real agent-sandbox CLI command surface
+	@bash -lc 'set +x; $(SANDBOX_ENV); \
+		cd "$$SANDBOX_CLI_DIR" || exit 3; \
+		if [ -n "$${GROUP_ARG:-}" ]; then uv run sbx "$$GROUP_ARG" --help; else uv run sbx --help; fi'
+
+sandbox-create: ## Provision a sandbox and print its ID [SANDBOX_TIMEOUT=600] [NAME=..] [TEMPLATE=..] [ARGS=..]
+	@bash -lc 'set +x; $(SANDBOX_ENV); \
+		cd "$$SANDBOX_CLI_DIR" || exit 3; \
+		set -- init --timeout "$${SANDBOX_TIMEOUT_ARG:-600}"; \
+		if [ -n "$${NAME_ARG:-}" ]; then set -- "$$@" --name "$$NAME_ARG"; fi; \
+		if [ -n "$${TEMPLATE_ARG:-}" ]; then set -- "$$@" --template "$$TEMPLATE_ARG"; fi; \
+		uv run sbx "$$@" $$ARGS_ARG'
+
+sandbox-list: ## List running sandboxes [LIMIT=20]
+	@bash -lc 'set +x; $(SANDBOX_ENV); \
+		cd "$$SANDBOX_CLI_DIR" || exit 3; \
+		uv run sbx sandbox list --limit "$${LIMIT_ARG:-20}"'
+
+sandbox-info: ## Show sandbox details: SBX=<sandbox_id>
+	@if [ -z "$$SBX_ARG" ]; then echo "Usage: make -C pmoves sandbox-info SBX=<sandbox_id>"; exit 1; fi
+	@bash -lc 'set +x; $(SANDBOX_ENV); \
+		cd "$$SANDBOX_CLI_DIR" || exit 3; \
+		uv run sbx sandbox info "$$SBX_ARG"'
+
+sandbox-exec: ## Run a command inside a sandbox: SBX=<id> CMD='echo hi' [ARGS=--shell]
+	@if [ -z "$$SBX_ARG" ] || [ -z "$$CMD_ARG" ]; then echo "Usage: make -C pmoves sandbox-exec SBX=<sandbox_id> CMD='echo hi' [ARGS=--shell]"; exit 1; fi
+	@bash -lc 'set +x; $(SANDBOX_ENV); \
+		cd "$$SANDBOX_CLI_DIR" || exit 3; \
+		uv run sbx exec "$$SBX_ARG" "$$CMD_ARG" $$ARGS_ARG'
+
+sandbox-kill: ## Tear down a sandbox: SBX=<sandbox_id>
+	@if [ -z "$$SBX_ARG" ]; then echo "Usage: make -C pmoves sandbox-kill SBX=<sandbox_id>"; exit 1; fi
+	@bash -lc 'set +x; $(SANDBOX_ENV); \
+		cd "$$SANDBOX_CLI_DIR" || exit 3; \
+		uv run sbx sandbox kill "$$SBX_ARG"'
+
+sandbox-smoke: ## End-to-end proof: provision -> exec echo -> tear down. Prints the real 0/1/3 code; make itself reports 2 for both 1 and 3 [E2B_MODE=..]
+	@set +e; if [ -n "$$E2B_MODE_ARG" ]; then export E2B_MODE="$$E2B_MODE_ARG"; fi; \
+		bash $(CURDIR)/scripts/sandbox_smoke.sh; rc=$$?; \
+		echo "[sandbox] sandbox_smoke.sh exit=$$rc (0 clean / 1 findings / 3 could-not-measure). make will report 2 for any non-zero — branch on the script directly, not on make."; \
+		exit $$rc
+
+# --- Self-host capability probe --------------------------------------------
+# Answers "can THIS node host the Danger Room?" against the real requirements
+# in PMOVES-Danger-infra/DEV-LOCAL.md. Read-only: it loads no module, writes no
+# sysctl, brings nothing up and touches no credential.
+#
+# It must run ON the candidate node. The owning node for the Danger Room is
+# pmoves-5090 (operator decision 2026-09-06); running the probe on any other
+# node measures that other node and answers nothing about the 5090.
+#
+# Verdicts are PASS / FAIL / COULD-NOT-MEASURE per item, and could-not-measure
+# is NOT a pass — it outranks FAIL in the overall exit code so an incomplete
+# reading can never be reported as a clean one.
+#   exit 0 = clean, 1 = findings, 3 = could-not-measure
+sandbox-host-probe: ## Probe THIS node's fitness to host the E2B self-host stack (read-only; 0 clean / 1 findings / 3 could-not-measure)
+	@echo "[sandbox] Danger Room capability probe — read-only, provisions nothing."
+	@echo "[sandbox] Owning node for the Danger Room is pmoves-5090. Run this ON the node you are judging."
+	@echo "[sandbox] On a Windows host, run scripts/probe_danger_room_host.ps1 FIRST, then this inside WSL2."
+	@set +e; bash $(CURDIR)/scripts/probe_danger_room_host.sh; rc=$$?; \
+		echo "[sandbox] probe_danger_room_host.sh exit=$$rc (0 clean / 1 findings / 3 could-not-measure)."; \
+		[ $$rc -eq 3 ] && echo "[sandbox] COULD-NOT-MEASURE is NOT a pass. Resolve the unread items and re-run before placing any workload here." || true; \
+		echo "[sandbox] make collapses this to 2 for any non-zero — a gate must call the script directly."; \
+		exit $$rc
+
+sandbox-selftest: ## Run the sandbox regression tests (no credentials, no provisioning, no network)
+	@# These two tests guard defects that a green smoke run could not have caught:
+	@#   test_sandbox_make_quoting.sh   - F3, host escape through the sandbox-* targets
+	@#   test_sandbox_smoke_teardown.sh - F4, a teardown check that could not fail
+	@# Both stub the CLI, so they need no E2B credentials and provision nothing.
+	@# make collapses any nonzero recipe exit to 2; the per-test codes are printed
+	@# below. Doctrine: 0 clean / 1 findings / 3 could-not-measure.
+	@set +x; rc=0; \
+	for t in tests/test_sandbox_make_quoting.sh tests/test_sandbox_smoke_teardown.sh tests/test_e2b_mode_configures.sh; do \
+		if [ ! -f "$$t" ]; then echo "[sandbox-selftest] $$t MISSING - could-not-measure"; [ $$rc -eq 0 ] && rc=3; continue; fi; \
+		echo "[sandbox-selftest] === $$t ==="; \
+		bash "$$t"; tc=$$?; \
+		echo "[sandbox-selftest] $$t exit=$$tc"; \
+		if [ $$tc -eq 1 ]; then rc=1; elif [ $$tc -ne 0 ] && [ $$rc -eq 0 ]; then rc=3; fi; \
+	done; \
+	echo "[sandbox-selftest] overall exit=$$rc"; \
+	exit $$rc
+
+sandbox-runbook: ## Print the self-host runbook path + the owning node
+	@echo "owning node: pmoves-5090  (Ryzen 9 9950XD / RTX 5090 / 192 GB, deployment_class private-mesh)"
+	@echo "runbook:     pmoves/docs/operations/E2B_SELF_HOST_RUNBOOK.md"
+	@echo "probe:       pmoves/scripts/probe_danger_room_host.ps1  (Windows host half)"
+	@echo "             pmoves/scripts/probe_danger_room_host.sh   (Linux/WSL2 half)"
+	@echo "vendor docs: PMOVES-Danger-infra/DEV-LOCAL.md  (local bare metal)"
+	@echo "             PMOVES-Danger-infra/self-host.md  (GCP)"

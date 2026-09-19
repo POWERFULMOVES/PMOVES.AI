@@ -47,6 +47,34 @@ info()  { printf '\033[1;34m[hermes-bootstrap]\033[0m %s\n' "$*"; }
 warn()  { printf '\033[1;33m[hermes-bootstrap] WARN:\033[0m %s\n' "$*" >&2; }
 fail()  { printf '\033[1;31m[hermes-bootstrap] FAIL:\033[0m %s\n' "$*" >&2; exit 1; }
 
+# Known, recurring, node-specific cause: a venv's base interpreter was
+# provisioned under an editor's snap revision dir (e.g. VS Code Insiders'
+# snap XDG_DATA_HOME leak -- see .bashrc XDG_DATA_HOME normalization).
+# Snap revisions get garbage-collected, leaving venv/bin/python* dangling
+# symlinks. Walk the resolved `hermes` binary -- following one level of
+# wrapper-script `exec` if present -- to its venv's pyvenv.cfg and flag it.
+diagnose_broken_hermes() {
+  local hermes_path target exec_target venv_dir pyvenv_cfg home_line
+  hermes_path="$(command -v hermes 2>/dev/null || true)"
+  [ -z "$hermes_path" ] && return 0
+  target="$hermes_path"
+  if [ -f "$target" ] && head -c 2 "$target" 2>/dev/null | grep -q '^#!'; then
+    exec_target=$(grep -oE 'exec[[:space:]]+"[^"]+"' "$target" 2>/dev/null | head -1 | sed 's/^exec[[:space:]]*"//; s/"$//')
+    [ -n "${exec_target:-}" ] && target="$exec_target"
+  fi
+  venv_dir="$(dirname "$(dirname "$target")")"
+  pyvenv_cfg="${venv_dir}/pyvenv.cfg"
+  if [ -f "$pyvenv_cfg" ]; then
+    home_line=$(grep '^home' "$pyvenv_cfg" 2>/dev/null || true)
+    if [[ "$home_line" == *"/snap/"* ]]; then
+      warn "Known cause detected: venv base interpreter lives under a snap revision dir"
+      warn "  ${pyvenv_cfg}: ${home_line}"
+      warn "  Snap revisions get garbage-collected, leaving venv/bin/python* dangling."
+      warn "  Fix: delete that venv directory (${venv_dir}) and recreate it with 'uv venv --python 3.11' on a non-snap interpreter, then 'uv sync --extra all --locked'."
+    fi
+  fi
+}
+
 info "Starting Hermes fleet bootstrap on node: ${HERMES_NODE}"
 info "Profile: ${HERMES_PROFILE}"
 
@@ -55,7 +83,39 @@ info "Profile: ${HERMES_PROFILE}"
 if ! command -v hermes >/dev/null 2>&1; then
   fail "hermes CLI not found on PATH. Install: curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash"
 fi
-HERMES_VERSION=$(hermes --version 2>/dev/null | head -1 || echo "unknown")
+
+# `command -v` only proves the WRAPPER exists -- a wrapper whose exec target
+# (or that target's interpreter shebang) is a dangling symlink still passes
+# it. Actually run the CLI and require a non-empty version before trusting
+# it. Capture stdout+stderr together (the failure reason, e.g. "cannot
+# execute: required file not found", is the only diagnostic signal here --
+# do not discard it) and read the exit status directly off the command
+# substitution (no pipe involved, so no PIPESTATUS trap either).
+# `set -e` would otherwise kill the script right here (a simple
+# VAR=$(cmd) assignment IS subject to errexit) before we ever get to
+# inspect $?, print a diagnostic, or call fail() -- the failure would
+# surface as a silent, unexplained non-zero script exit. Keep the
+# failing command as the condition of an if/else so errexit does not
+# fire on it.
+if HERMES_VERSION_OUTPUT="$(hermes --version 2>&1)"; then
+  HERMES_VERSION_RC=0
+else
+  HERMES_VERSION_RC=$?
+fi
+# On success, prefer the actual "Hermes Agent v..." line over line 1 --
+# hermes can print unrelated startup warnings (e.g. a malformed API key
+# env var) to stderr before its version banner, and those warnings would
+# otherwise become the reported "version" despite the CLI working fine.
+HERMES_VERSION="$(printf '%s\n' "$HERMES_VERSION_OUTPUT" | grep -m1 -E '^Hermes Agent v' || true)"
+if [ -z "$HERMES_VERSION" ]; then
+  HERMES_VERSION="$(printf '%s\n' "$HERMES_VERSION_OUTPUT" | head -1)"
+fi
+
+if [ "$HERMES_VERSION_RC" -ne 0 ] || [ -z "$HERMES_VERSION" ]; then
+  warn "hermes --version failed (exit ${HERMES_VERSION_RC}): ${HERMES_VERSION_OUTPUT}"
+  diagnose_broken_hermes
+  fail "hermes CLI is on PATH but its interpreter chain is broken (see WARN above). Fix that before continuing -- a broken CLI cannot create profiles, and the failure would otherwise only surface three steps later as a confusing 'Could not create profile' error."
+fi
 info "Hermes CLI: ${HERMES_VERSION}"
 
 # ── 2. Ensure profile exists (clone from base if available) ─────────────────

@@ -100,7 +100,17 @@ jobs:
           export HOME="${HOME:-$PWD}"
           bindir="$HOME/.local/bin"
           mkdir -p "$bindir"
-          curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR="$bindir" sh
+          # Reuse the persistent install on self-hosted runners ($HOME survives
+          # jobs): the unconditional curl was stalling ~5min against astral.sh
+          # on the ai-lab runner and canceling the whole job (uv download died
+          # mid-transfer; PRs #3048/#3043 showed it twice). Only fetch when the
+          # binary is missing, and when we do fetch: retries + bounded time.
+          if [ -x "$bindir/uv" ]; then
+            echo "uv already installed at $bindir/uv (persistent runner home)"
+          else
+            curl --retry 4 --retry-delay 3 --retry-all-errors --max-time 120 -LsSf \
+              https://astral.sh/uv/install.sh | env UV_INSTALL_DIR="$bindir" sh
+          fi
           echo "$bindir" >> "$GITHUB_PATH"
           "$bindir/uv" --version
 

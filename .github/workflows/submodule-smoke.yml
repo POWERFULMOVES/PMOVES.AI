@@ -122,6 +122,13 @@ jobs:
         run: |
           set -euo pipefail
 
+          # The self-hosted ai-lab runner (b850/spark) has system python3 but
+          # no pytest; the smoke target shells out to `$(PYTHON) -m pytest`.
+          # Install the minimum so `make test` measures the tests, not the
+          # runner image. requirements-smoke.txt is the curated subset.
+          python3 -m pip install --quiet --disable-pip-version-check \
+            -r requirements-smoke.txt
+
           # NOTE: make verify-all was previously used here, but it prefixes
           # downstream smoke targets with '-' (ignore-errors) and can exit 0
           # even when smokes fail. Use strict smoke targets directly so any

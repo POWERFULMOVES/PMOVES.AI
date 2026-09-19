@@ -97,6 +97,16 @@ jobs:
       - name: Validate every tracked compose file parses
         run: make -C pmoves compose-yaml-check
 
+      # Lives in THIS job rather than its own because this job already installs
+      # uv and is the static-config validator in practice. A separate job would
+      # add a new check name, and required_status_checks contexts are branch
+      # protection -- a governance change, not a workflow one.
+      #
+      # ROOM_MANIFEST_CONTRACT.md records this smoke path as DONE and nothing
+      # ran it. Two manifests were failing schema validation invisibly.
+      - name: Validate every room manifest against the schema and catalog
+        run: make -C pmoves room-manifest-check
+
   # Ratcheted: judges ALL 99 tracked Dockerfiles (previously globbed
   # pmoves/services/*/Dockerfile, which sees 76 of them and misses 10 of the 12
   # that run as root) and can actually fail (previously ended in `|| echo`).

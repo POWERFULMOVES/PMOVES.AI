@@ -323,12 +323,34 @@ secrets-rotate: ## Rotate ONE secret in env.shared then re-funnel. Usage: make s
 	@# The defect this fixes was never the overwrite; it was the SILENCE. A local
 	@# export drops prod-only keys, and the loss only surfaced hours later when a
 	@# service that needed one restarted and looked like an unrelated regression.
+	@# Warn on BOTH the transition and the standing state.
+	@#
+	@# This used to be `if [ -f provenance ]` only -- it announced the moment a
+	@# CI bundle became a local export, and said NOTHING on every rotate after
+	@# that. But the danger is not the transition, it is the STATE: once the
+	@# bundle is a local export, every funnel regenerates tier files without the
+	@# prod-only keys, and each subsequent rotate silently re-confirms that.
+	@#
+	@# Measured 2026-09-04 on the 4090: two rotates ran with the marker already
+	@# absent, both silent, and MINIMAX_TOKEN_PLAN_API_KEY went missing from
+	@# env.tier-llm again -- the exact regression this guard was added for, on a
+	@# path the guard did not cover. A gate that only reports the edge misses
+	@# everything that is already over it.
 	@if [ -f "$(CHIT_EXPORT_PATH).provenance" ]; then \
 	  echo "⚠ rotation replaced the CI-pulled CHIT bundle with a local export."; \
 	  echo "  Prod-only keys delivered by sync-secrets-local.yml are NOT in"; \
 	  echo "  env.shared and are now absent from the bundle. Re-pull before the"; \
 	  echo "  next funnel, or services needing them will fail on their next"; \
 	  echo "  restart:  PMOVES_NODE=<node> make -C pmoves secrets-pull"; \
+	else \
+	  echo "⚠ this CHIT bundle is a LOCAL export (no CI provenance marker)."; \
+	  echo "  It was already local before this rotation, so prod-only keys"; \
+	  echo "  delivered by sync-secrets-local.yml are absent from it and from"; \
+	  echo "  every tier file the funnel just regenerated."; \
+	  echo "  Restore before the next service restart:"; \
+	  echo "    PMOVES_NODE=<node> make -C pmoves secrets-pull"; \
+	  echo "  If the artifact has expired (1-day retention), produce one first:"; \
+	  echo "    gh workflow run sync-secrets-local.yml --ref main -f targets=b850"; \
 	fi
 	@CHIT_EXPORT_FORCE=1 $(MAKE) --no-print-directory chit-export
 	@$(MAKE) --no-print-directory secrets-funnel
@@ -354,32 +376,68 @@ a0-plugins-check-remote: ## Validate local Agent0 plugin catalog + remote GitHub
 # ---------------------------------------------------------------------------
 # Submodule sync targets
 # ---------------------------------------------------------------------------
+# SUBMODULES LIVE AT THE SUPERPROJECT ROOT, AND MAKE RUNS FROM pmoves/.
+#
+# Every documented invocation in this repo is `make -C pmoves <target>`, so
+# $(CURDIR) is pmoves/ -- a SUBDIRECTORY of the superproject, not its root. A
+# bare `git submodule update -- "Pmoves-cipher"` therefore resolves the pathspec
+# against pmoves/ and matches nothing:
+#
+#     $ make -C pmoves submodule-sync-one SM=Pmoves-cipher
+#     error: pathspec 'Pmoves-cipher' did not match any file(s) known to git
+#
+# Measured 2026-09-15 promoting the cipher gitlink. The target could not work
+# from the invocation its own help string documented, so the promotion was done
+# by hand from the repo root -- which is the failure mode Known Roads exist to
+# prevent: a road that cannot run teaches everyone to drive around it.
+#
+# `git -C` and not `cd ..`: a recipe that changes directory changes it for every
+# line after it, and these recipes mix superproject commands with per-submodule
+# ones. Naming the repo for each command keeps that explicit.
+#
+# Same spelling as mk/creator.mk and mk/kilo.mk. Identical value, so a
+# redefinition across includes is harmless -- but it must stay identical.
+REPO_ROOT := $(abspath $(CURDIR)/..)
+
 .PHONY: submodule-sync-one submodule-sync-all submodule-promote
 
-submodule-sync-one: ## Update single submodule: make submodule-sync-one SM=PMOVES-Agent-Zero
+submodule-sync-one: ## Update single submodule: make -C pmoves submodule-sync-one SM=PMOVES-Agent-Zero
 	@if [ -z "$(SM)" ]; then \
 	  echo "ERROR: SM is required."; \
-	  echo "Usage:  make submodule-sync-one SM=PMOVES-Agent-Zero"; \
+	  echo "Usage:  make -C pmoves submodule-sync-one SM=PMOVES-Agent-Zero"; \
+	  exit 1; \
+	fi
+	@if [ ! -e "$(REPO_ROOT)/$(SM)" ]; then \
+	  echo "ERROR: $(SM) is not a path in $(REPO_ROOT)."; \
+	  echo "       Submodule names are repo-root relative; see .gitmodules."; \
 	  exit 1; \
 	fi
 	@echo "=== Syncing submodule: $(SM) ==="
-	git submodule update --init -- "$(SM)"
-	git submodule update --remote -- "$(SM)"
+	git -C "$(REPO_ROOT)" submodule update --init -- "$(SM)"
+	git -C "$(REPO_ROOT)" submodule update --remote -- "$(SM)"
 	@echo "Updated $(SM) to latest remote commit:"
-	@git -C "$(SM)" log -1 --oneline
-	@echo "Stage with: git add $(SM)"
+	@git -C "$(REPO_ROOT)/$(SM)" log -1 --oneline
+	@echo "Stage with: git -C $(REPO_ROOT) add $(SM)"
 
 submodule-sync-all: ## Update all submodules to latest hardened branch
 	@echo "=== Syncing all submodules ==="
-	git submodule update --init --recursive
-	git submodule update --remote --recursive
+	git -C "$(REPO_ROOT)" submodule update --init --recursive
+	git -C "$(REPO_ROOT)" submodule update --remote --recursive
 	@echo ""
 	@echo "Updated submodules:"
-	@git submodule status --recursive
+	@git -C "$(REPO_ROOT)" submodule status --recursive
 	@echo ""
-	@echo "Review changes with: git diff --submodule"
+	@echo "Review changes with: git -C $(REPO_ROOT) diff --submodule"
 
-submodule-promote: ## Create PR from integration -> hardened after audit passes
+# NOT REPO-ROOTED, DELIBERATELY. This target promotes a SUBMODULE's own
+# integration branch and opens a PR on that submodule's fork, so it must run
+# with the submodule as the working directory, not via `make -C pmoves`.
+# Under `make -C pmoves` the branch check below reads the SUPERPROJECT's
+# branch and `gh pr create` would target the SUPERPROJECT's repo -- both
+# wrong, and the branch check is what stops it. Repo-rooting this one would
+# make it run CONFIDENTLY on the wrong repository, which is worse than
+# refusing, so it is left alone and the constraint is stated instead.
+submodule-promote: ## Create PR from integration -> hardened (run from INSIDE the submodule)
 	@echo "=== Promoting integration to PMOVES.AI-Edition-Hardened ==="
 	@CURRENT=$$(git branch --show-current); \
 	if [ "$$CURRENT" != "integration" ]; then \

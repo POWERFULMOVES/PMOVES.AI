@@ -19,6 +19,16 @@ Use Bash for the verification commands themselves (pytest, `make`, `npm`, `gh ru
 3. **Execute and capture verbatim** — exact stdout/stderr tail and the **exit code** (`echo "exit=$?"`). Do not paraphrase or round "12 passed, 1 skipped" into "tests pass".
 4. **Reproduce environment honestly** — if a claim needs deps/Chromium/a service that is not available on this node, state that the claim is **UNVERIFIED (environment)** rather than approximating. Note what *would* verify it.
 
+## Never verify by mutating production
+
+If proving a claim would require a live mutation (revoke/rotate a credential, delete a
+record, write to a live service), verify it **in a sandbox** —
+`make -C pmoves sandbox-smoke` / `sandbox-create` + `sandbox-exec`, see
+`.claude/skills/agent-sandbox/SKILL.md`. If that is not possible, report the claim as
+**UNVERIFIED (environment)**. You have `Write`/`Edit` disallowed precisely so that
+"make it pass" is never available to you; the same reasoning forbids "mutate production to
+observe the effect".
+
 ## Output
 
 A claim-by-claim evidence table:
