@@ -440,3 +440,34 @@ cards:
     created: "2026-07-27"
     interim: true
     notes: "Added 2026-07-27 (creator-collab slice 1) per P1 review on PR #2264 — was a missing card referenced by the creator-studio room manifest (meta.chit.card_id 00000000-0000-4000-8000-000000000010 belongs to z890-claude, not creator-steward). Marked interim pending operator ssh-keygen; flip to non-interim + populate ml.ssh_fingerprint / h.ssh_fingerprint / github_app_installation_id when the steward runtime is up."
+
+  # ---- Kimi Harness (Knuckles) ----
+- card_id: "00000000-0000-4000-8000-000000000051"
+  agent_id: knuckles-kimi
+  active: true
+  role: agent
+  ml:
+    primary_method: github-app
+    github_app_installation_id:
+    ci_runner_label:
+  h:
+    agent_id: "knuckles-kimi"
+    display_name: "Kimi Knuckles"
+    glyph: "☾"                # ☾ Last Quarter Moon — Moonshot/Kimi harness mark
+    color: "#1D4ED8"          # Blue-700 — distinct from b850-claude's red
+    voice: analytical
+    role: agent
+  metadata:
+    created: "2026-09-19"
+    interim: true
+    notes: >-
+      Kimi Code harness identity on the B850 Knuckles node. This is the
+      SIGNING-CARD (cipher) spelling for the AGInTZ identity
+      PMOVES-KIMI-KNUCKLES-B850 (lineage: PMOVES-SPARK-KIMI -> knuckles), minted
+      per the per-agent token lane (CIPHER_AUTH_RUNBOOK §1-2, node-vocabulary
+      cipher_agent_id). Ends the DELIBERATELY-ABSENT kimi state recorded in
+      node-vocabulary.yaml's header. Marked interim pending operator ssh-keygen;
+      flip to non-interim + populate ssh fingerprints when the card binds to a
+      runtime key. Operational/visual registry half (agent_registry.yaml +
+      agent_signatures.yaml entries) is a follow-up lane; the cipher chain only
+      needs this card + the vocabulary declaration.

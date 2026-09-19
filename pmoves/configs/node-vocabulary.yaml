@@ -14,7 +14,7 @@ version: 1
 # crush identity is `crush_glm52` and its card is plain `crush`, so the same rule
 # yields `glm52-crush`, which is no card at all.
 #
-# DELIBERATELY ABSENT, not forgotten: crush, codex, hermes, kimi and kilo have no
+# DELIBERATELY ABSENT, not forgotten: crush, codex, hermes and kilo have no
 # cipher_agent_id on any node. `crush` and `hermes` are nodeless cards, so
 # whether one card covers the whole fleet or each node needs its own has not been
 # measured; `codex` and `hermes` each have TWO candidate cards (codex /
@@ -22,6 +22,13 @@ version: 1
 # node_identity.py reports the absence with that reason rather than inventing a
 # spelling, and a session told "declare your agentId yourself" is better served
 # than one told a wrong id that cipher answers 403 to.
+#
+# kimi RESOLVED 2026-09-19: `kimi` carries a per-node cipher_agent_id starting
+# with knuckles (`knuckles-kimi`, card 00000000-0000-4000-8000-000000000051) —
+# the first harness to leave this absent list. The spelling is <node>-<harness>
+# matching the claude cards (b850-claude), NOT the <harness>-<node> order the
+# mint-lane doc examples show (crush-spark, kimi-spark); the card is the
+# normative spelling because cipher's assertAgentId answers to it.
 #
 # Every value here is checked against an ACTIVE card by
 # pmoves/tests/test_node_identity.py, so a revoked card fails CI instead of
@@ -90,8 +97,10 @@ nodes:
   default_identity:
     claude-code: claude_b850
     crush: crush_glm52
+    kimi: kimi_knuckles
   cipher_agent_id:
     claude-code: b850-claude
+    kimi: knuckles-kimi
 - canonical: nano-1
   kind: node
   reach: pmoves-nano-1
