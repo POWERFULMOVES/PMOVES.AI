@@ -1073,6 +1073,27 @@ bashDeleteAllowlist:
   # See known_roads.py and .claude/PATTERNS.md § Known Roads.
 
 readOnlyPaths:
+  # --- PMOVES agent launchers and their shared fragments --------------------
+  # The shared env file is zeroAccess: no operation, no road. These scripts READ
+  # it and export 410 variables into a process they then exec a harness inside.
+  # Measured 2026-09-16: the secret was sealed and every script that opens it
+  # was covered by nothing here. The reader of a secret inherits the secret's
+  # classification; this was the one unguarded hop.
+  #
+  # They also decide WHO an agent is and whether cipher records its memories as
+  # itself, so an edit here is an identity and credential change in a shell
+  # script's clothes.
+  #
+  # readOnly, NOT zeroAccess: reading a launcher is how an agent learns the
+  # sanctioned bring-up. Legitimate edits go through KNOWN_ROAD=launcher:<reason>.
+  - pmoves/scripts/pm-python.sh
+  - pmoves/scripts/pm-cipher-identity.sh
+  - pmoves/scripts/pm-node-identity.sh
+  - pmoves/scripts/*-pmoves
+  - pmoves/scripts/*-pmoves.sh
+  - deploy/provision/*-pmoves.sh
+  - deploy/provision/*-pmoves.ps1
+  - deploy/provision/*-pmoves.cmd
   # ---------------------------------------------------------------------------
   # SYSTEM DIRECTORIES
   # ---------------------------------------------------------------------------

@@ -20,9 +20,11 @@ context. A session also already knows whether cipher is reachable
     the identity the session believes it has
     is not the identity its memories are filed under.
 
-Grounded in `Pmoves-cipher/src/pmoves/auth.ts` at submodule pin `975e02e6` --
-the gitlink PMOVES.AI `main` actually carries. The pin matters: this node's
-submodule working tree sits on `fix/per-agent-token-profile-header` (the head of
+Grounded in `Pmoves-cipher/src/pmoves/auth.ts` at submodule pin `975e02e6`
+(re-pinned `c88b009a2` by #3103; `auth.ts` is unchanged between the two, so
+every line number below still holds) -- the gitlink PMOVES.AI `main` actually
+carries. The pin matters: at the time these numbers were read, this node's
+submodule working tree sat on `fix/per-agent-token-profile-header` (the head of
 unmerged fork PR #19), which adds three lines at :67 and shifts every citation
 below it. Line numbers read off a working tree are not line numbers of what the
 fleet runs.
@@ -115,6 +117,38 @@ def load_active_card_agents(cards_path: Path = CARDS) -> tuple[set, str | None]:
     return agents, None
 
 
+def _fold(agent: str) -> str:
+    """Fold an author spelling to its canonical identity, or return it unchanged.
+
+    WHY THIS EXISTS: node_identity.py answers with the agent_registry KEY
+    (`claude_z890`), and signing_identity_cards.yaml is written with the
+    canonical identity (`z890-claude`). Comparing the two as raw strings made
+    this tool report the OPPOSITE verdict for one identity depending on which
+    spelling it was handed:
+
+        --agent claude_z890   -> signing card: no
+        --agent z890-claude   -> signing card: yes
+
+    Measured on Z890 2026-09-16. A carry that says "no signing card" when the
+    card exists is worse than no carry: it is a confident wrong answer about
+    whether an agent's memories are its own, and every launcher prints it.
+
+    identity_vocabulary.yaml already declares `claude_z890` as an alias -- that
+    fold was added precisely so "the registry key IS a spelling of the
+    identity". This routes through the same resolver the register uses, so the
+    two cannot disagree.
+
+    Degrades to identity, never raises: an undeclared spelling or an absent
+    vocabulary leaves the input alone and the carded verdict is then measured on
+    the literal string, which is the pre-existing behaviour.
+    """
+    try:
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        from identity_lineage import canonical_identity  # local tool, no deps
+        return canonical_identity(agent) or agent
+    except Exception:  # noqa: BLE001 - a fold failure must not cost the verdict
+        return agent
+
 def classify_token(token: str | None) -> str:
     """Map a bearer to one of auth.ts's three modes.
 
@@ -155,7 +189,10 @@ def resolve(agent, environ=None, cards_path: Path = CARDS) -> dict:
     if card_err:
         row["carded"] = "unknown"
     else:
-        row["carded"] = "yes" if agent in active else "no"
+        # Compare on the CANONICAL spelling; see _fold's docstring for the
+        # measured false "no" this prevents.
+        folded = _fold(agent)
+        row["carded"] = "yes" if (agent in active or folded in active) else "no"
 
     if mode == MODE_PER_AGENT:
         # The bearer is a minted token. Which agent it resolves to lives in
