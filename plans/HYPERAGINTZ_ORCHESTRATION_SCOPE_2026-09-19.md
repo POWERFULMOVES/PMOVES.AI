@@ -176,3 +176,75 @@ Effort classes: **S** (≤1 session) · **M** (a lane, days) · **L** (multi-lan
 
 *The needle threads the line; the quill drills the anchor; the wire stays unbroken —
 each voice signed, spoken, and able to speak.*
+
+
+---
+
+## 6. Amendment A — 2026-09-19 (operator response, same-day)
+
+### A.1 Resolved: D1 — Spynel is an entry point, and the entry point shall not matter
+
+Operator ruling: *"Spynel has no agent brain of its own — DARKXSIDE this is where I ride;
+however I can also do the same with you here in CLI. That is the goal: the entry point
+should not matter."*
+
+- **Doctrine (entry-point agnosticism):** PMOVES.AI agents are the brains; Spynel, CLI,
+  room shells, acpx, Discord — all are interchangeable saddles. An operator riding
+  Spynel-to-PMOVES-Agent-Zero and the same operator in a plain CLI session with
+  PMOVES-KIMI-KNUCKLES-B850 must be the same identity with the same memory, provenance,
+  and authority.
+- **"PMOVES.AI should not be BLAME"** — the Blame! reference taken as architecture:
+  like the megastructure's authority, PMOVES.AI identity is diffuse by design; no single
+  entry point, model, or human is the blame-line (or the single point of failure). Scale
+  apt: entry points multiply, the lattice holds.
+- **Registry consequence:** Spynel is catalogued as **entry-point/client tooling** in
+  the Registry's plugin/client surface (alongside acpx), NOT as an agent. The registry
+  harness lane (W1-1) registers what entry points *drive* (Agent Zero verified first).
+  A future registry schema may want a `clients` section — filed as a note for the
+  Registry lane, not a blocker.
+
+### A.2 New constellation members — the PMOVES OS forks (verified via org sweep, 38 forks)
+
+Named by operator; all confirmed `fork=true` under POWERFULMOVES:
+
+| Repo | Upstream lineage | Role in the whole |
+|---|---|---|
+| `PMOVES-omarchy` | ChrisTitusTech/omarchy (Arch/Hyprland) | **Danger Room host-OS candidate** — Linux x86_64 workstation image with /dev/kvm for Firecracker; also a PMOVES-branded dev desktop |
+| `PMOVES-apps.grapheneos.org` | GrapheneOS/apps.grapheneos.org | Static app-catalog front-end — hostable on PMOVES-Danger-infra |
+| `PMOVES-Vanadium` | GrapheneOS/Vanadium (Chromium hard-fork) | Hardened browser — mobile fleet browsing policy |
+| `Pmoves-platform_prebuilts_qemu-kernel` | GrapheneOS/AOSP prebuilts | Mobile-OS build lane (kernel) |
+| `Pmoves-kernel_common-6.12` | GrapheneOS kernel_common 6.12 | Mobile-OS build lane (kernel common) |
+| `PMOVES-Darkmatter`, `PMOVES-warp`, `PMOVES-cloud` | (infra/tooling lineage) | Danger-infra hosting/tooling surface — to be classified in the lane |
+
+Hosting targets per directive: **PMOVES-Danger-infra** (static + service hosting),
+**PMOVES-E2B-Danger-Room** (sandbox host OS images / templates), **PMOVES-E2B-Danger-Room-Desktop** (the streamed desktop the operator rides).
+
+**New lane W2-4 — OS constellation hosting (effort M):** Omarchy → danger-room host
+image build (base E2B template + PMOVES launcher set + CHIT carry pre-baked); GrapheneOS
+site → static host on danger-infra; Vanadium/kernels → build lane scoped with the mobile
+fleet in mind. Depends on W2-1 (host) for the Omarchy image; the static site can start
+immediately on danger-infra.
+
+### A.3 Correction accepted: persona pipeline runs on THIS node
+
+Operator correction to recon §1b: the persona pipeline is **not** spark-only — a
+knuckles leg is required. Concretely:
+
+**New lane W1-5 — persona pipeline (knuckles leg) (effort M):** run the CONCH
+persona-enrichment pipeline on knuckles (CPU-heavy batch fits the node's MOF capacity
+class): playlist/transcript ingestion → persona consumption events → shape traces →
+persona profile enrichment, with cipher (knuckles-kimi scope, post W0-2) as the memory
+organ and the third-ref loop (#3002/#3010) as the contract. Deliverable: the persona
+pipeline runnable end-to-end on knuckles via make targets, feeding `persona.room.livingdoc`.
+
+### A.4 Amended decision table
+
+| Decision | State |
+|---|---|
+| D1 Spynel | **RESOLVED** — entry-point tooling; entry-point agnosticism is doctrine (A.1) |
+| D2 Danger Room host | Open — cloud-interim recommendation stands until host lane lands (A.2 makes Omarchy the target host image) |
+| D3 Archon adapter | Open — unchanged |
+| D4 Personas | **Amended** — 8 seeds remain the documented truth; expansion happens by RUNNING the pipeline (W1-5 knuckles leg + existing spark leg), not by renumbering the target |
+
+*Amendment signed: PMOVES-KIMI-KNUCKLES-B850, 2026-09-19. The wire holds; the entry
+point changes nothing about who is speaking.*
