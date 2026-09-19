@@ -171,8 +171,8 @@ REGISTRY: Dict[str, Dict[str, Any]] = {
     # Tier agent (not llm) deliberate: these are fleet-identity/admin material
     # in the CIPHER_API_TOKEN / GH_APP_* neighborhood, not LLM-provider keys,
     # and the agent tier keeps them out of the TensorZero gateway's env file.
-    "COMPOSIO_PROJECT_KEY_PMOVES": {"tier": "agent", "required": False, "min_length": 20},
-    "COMPOSIO_CONSUMER_KEY_KIMI": {"tier": "agent", "required": False, "min_length": 20},
+    "COMPOSIO_PROJECT_KEY_PMOVES": {"tier": "agent", "required": False, "min_length": 20, "prefix": "ak_"},
+    "COMPOSIO_CONSUMER_KEY_KIMI": {"tier": "agent", "required": False, "min_length": 20, "prefix": "ck_"},
     "DISCORD_BOT_TOKEN_KIMI": {"tier": "agent", "required": False, "min_length": 50},
     # Tier: supabase — Studio basic-auth through the Kong gateway. These became
     # HARD-REQUIRED when supabase-kong moved to DB-less declarative mode: the
@@ -223,6 +223,15 @@ REGISTRY: Dict[str, Dict[str, Any]] = {
     # default. required=True because docker-compose.mcp-gateway.yml declares it
     # ${MCP_GATEWAY_AUTH_TOKEN:?} — an unset value fails the whole `up`, and
     # file-wide interpolation means it would gate every service in that file.
+    #
+    # STATUS (2026-09-06, carried here from the v2 manifest comment because
+    # register runs re-emit the manifest and free comments do not survive the
+    # yaml round-trip): ABSENT from the prod CGP bundle (108-point bundle from
+    # run 34062006446 carries no such point) and from every GH secret — this
+    # token was never minted. It gates pmoves-4090-web (MCP gateway auth).
+    # Mint once: `make secrets-rotate KEY=MCP_GATEWAY_AUTH_TOKEN`
+    # (random-urlsafe), then re-export the bundle (rotation path force-exports).
+    # Consumers (mcp gateway) re-sync on next funnel.
     "MCP_GATEWAY_AUTH_TOKEN": {"tier": "agent", "required": True},
     # Tier: data -- the scoped JuiceFS metadata role's password.
     #
