@@ -499,3 +499,67 @@ round-trip message (outbound send → inbound poll → NATS → Creator render) 
 
 *Amendment A.10 signed: PMOVES-KIMI-KNUCKLES-B850, 2026-09-19 — the lattice does not hand-roll what
 the ecosystem already carries; PMOVES.AI rides the Composio wire, and the wire rides provenance.*
+
+### A.11 Operator-routed refinements — Composio key model, ClawZ plugin lane, deepseek-harness admin surface (2026-09-19)
+
+*The operator answered the A.10 checklist with three rulings and a docs pointer. This amendment
+records them against the authoritative Composio KB
+([Consumer and Developer Project Boundaries](https://docs.composio.dev/kb/guide/consumer-project-boundaries-and-auth-selection),
+last verified 2026-08-17).*
+
+**1. Corrected key-type model (this replaces the loose "API key" language everywhere):**
+
+| Key | Shape | Surface | Privilege |
+|---|---|---|---|
+| User API key | `uak_...` | developer (CLI, dashboard user) | the logged-in member's identity |
+| Project API key | `ak_...` | developer project (`pmoves_ai`) | **privileged project secret** — treat like a signing card |
+| Consumer key | `ck_...` | For You / Connect MCP clients | one per AI client; `x-consumer-api-key` header |
+
+- **Two disjoint surfaces:** developer-project auth configs / connected accounts do NOT appear in
+  the consumer project and vice versa. The Connect MCP client (`openclaw`, future `kimi-knuckles`)
+  consumes the **consumer** surface.
+- **Connections are member-scoped:** whoever authorizes a connection owns it; another member's
+  `ck_` resolves to *their* accounts. For a **fleet-shared bot identity** the paths are
+  (a) enter the bot token as a **customer-owned auth config** (Composio-managed OAuth does not
+  cover bot tokens — the *Manage Auth* flow takes the token), or (b) **SHARED** connection pinned
+  into sessions by connected-account ID with an explicit ACL (deny-by-default, never implicit).
+  Path (a) is the v1 choice: one operator-owned bot auth, every client uses it.
+- **Rotation discipline:** regenerating a `ck_` immediately invalidates the old one — every MCP
+  client config must be updated in the same motion (fleet rollout note: the chit label IS the
+  single source; clients read from the funnel).
+
+**2. ClawZ lane ruling (operator): the OpenClaw plugin pattern IS the way.** Documented pattern:
+`openclaw plugins install @composio/openclaw-plugin` + the dashboard key. The Kimi-harness
+lane (this node) keeps the `.kimi/mcp.json` MCP-client route — same Connect endpoint, different
+client keys; entry-point agnosticism (D1) means each harness rides its own documented road.
+- **PMOVES-ClawZ repo measured + corrected on knuckles:** the checkout was detached at the June-15
+  upstream-sync snapshot on `main`; the real working line is **`PMOVES.AI-Edition-Hardened`**
+  (18,427 commits ahead of `main`), and its tip `913b53ad808` is exactly the PMOVES.AI gitlink.
+  Checkout is now aligned to the hardened branch (matches the gitlink — zero drift). Other nodes
+  carrying a stale detached ClawZ checkout: same one-command fix.
+
+**3. deepseek-harness endowment extended (operator): administer the Composio surface.** Per A.9
+the factory builds operational agents; the operator names the next endowment: the
+**deepseek-harness agent handles the Composio service and surface** — it can admin and create new
+toolkits — *"like composio cipher, able to reconfigure tools for the job."* Concretely, its
+operation set gains: auth-config CRUD (bot tokens, OAuth apps), toolkit enablement per client,
+connected-account lifecycle (member-scoped vs SHARED/pinned ACL), and per-job tool scoping — the
+Composio-side analog of what cipher does for fleet memory. High blast radius: every admin act is
+CHIT-signed and lands in the ledger, same as GitHub-App token minting today.
+
+**4. Bot-token item, scoped plainly (operator: "should be done through composio — there is a
+Discord API SDK as well"):** everything *around* the token is Composio-mediated — the auth config,
+the per-client enablement, validation (`DISCORDBOT_TEST_AUTH`), and the Discord API surface
+itself (167 tools incl. application management). One hard boundary: **Discord exposes no
+bot-token mint endpoint in its API** — minting/resetting the token for app
+`1524575292188922007` is a Developer Portal act (operator, 60 seconds), then everything else
+flows through Composio.
+
+**5. Re-login mechanics (recorded for the fleet):** revoked `uak_` cleared via `composio logout`;
+fresh pending session minted via `composio login --no-browser` (TUI renders the URL
+one-character-per-line under `script`/`TERM=dumb` — parse the char column, don't fight the box);
+completion via `composio login --key <cliKey-uuid> --poll` (up to 10 min window). Post-completion:
+`composio whoami` verifies against v3 and `--org pmoves_ai -y` pins the org.
+
+*Amendment A.11 signed: PMOVES-KIMI-KNUCKLES-B850, 2026-09-19 — the keys have shapes, the shapes
+have homes, and the factory learns to reconfigure the toolbox itself.*
