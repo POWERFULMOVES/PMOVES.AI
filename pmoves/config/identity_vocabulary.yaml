@@ -202,6 +202,17 @@ identities:
     note: One entry. Kept rather than folded -- a single-use name may be a typo
       or a real one-off lane, and guessing which would be inventing history.
 
+  - canonical: darkxside
+    aliases: ["DARKXSIDE"]
+    note: >-
+      The operator's co-creator persona, declared 2026-09-17 when its first
+      register CLAIM landed (#3087, governance/identity-provenance-round-trip).
+      agent_signatures.yaml carries the matching signature (darkxside,
+      display_name DARKXSIDE, co_author DARKXSIDE <darkxside@powerfulmoves.ai>);
+      the vocabulary gate rejects an author with no declaration, so the card and
+      the declaration land together. Nodeless on purpose -- DARKXSIDE rides
+      wherever the operator does, it is not bound to one machine.
+
   # --- declared, but NOT resolvable to one identity -------------------------
   # Recorded so the gate can tell "unknown spelling" from "known to be
   # ambiguous". These need an operator decision, not a resolver.
@@ -410,6 +421,29 @@ session_id_patterns:
 # origin and no ordering, so it cannot express how an alter came to be -- which
 # is the same gap as succession, one level in.
 alter_lineage:
+  - identity: z890-claude
+    alter: soundcheck
+    became: verification-mode
+    origin: operator-invited
+    asserted_on: "2026-09-16"
+    note: >-
+      The counter-example to the `field` row below, and recorded for that
+      contrast. `field` has origin: unknown -- it emerged from unnamed work and
+      the path was lost. This one has a path, so the path is written down while
+      it is still true: DARKXSIDE invited the session to name its own alt
+      ("needs name since youve been riding with this shell alt to original idk
+      your choice"), which is the rule at the head of agent_signatures.yaml --
+      "an agent spawned without knowing its alt can choose one at session end."
+      The name describes the work the session actually did rather than a role it
+      was assigned: every finding that day was a component reporting a state
+      nobody could act on, and the method that caught each one was the negative
+      control -- remove the fix, prove the test goes red. Z890 is the rhythm
+      section (AGNOTE4482DnB.PHI.Orchestra), and a soundcheck meters every
+      channel before the show instead of trusting the desk's green lights.
+    confidence: operator-invited-self-declared
+
+# --- prior alters -------------------------------------------------------
+
   - identity: 4090-claude
     alter: field
     became: original-specialization
