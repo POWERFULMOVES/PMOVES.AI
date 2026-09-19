@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import importlib.util
+import re
 import sys
 from pathlib import Path
 
@@ -11,6 +12,43 @@ import yaml
 REPO_ROOT = Path(__file__).resolve().parents[2]
 LAUNCHER = REPO_ROOT / "pmoves" / "scripts" / "claude-pmoves.sh"
 WIN_LAUNCHER = REPO_ROOT / "pmoves" / "scripts" / "windows" / "claude-pmoves.bat"
+# The launchers no longer carry identity resolution inline: #3094 extracted it
+# into the shared fragment pm-node-identity.sh (the same shape pm-python.sh and
+# pm-cipher-identity.sh set). These tests grep launcher TEXT for the invariants
+# -- "resolves", "fails open audibly", "reads the resolver's output variable"
+# -- so the text they read must be the SOURCE CHAIN, launcher plus every file
+# it sources, or extraction hollows the invariant while the test stays green.
+_SOURCE_RE = re.compile(r'^\s*(?:source|\.)\s+("?)([^"\'\s]+)\1')
+
+def _sourced_files(text: str) -> list[Path]:
+    files: list[Path] = []
+    for line in text.splitlines():
+        match = _SOURCE_RE.match(line)
+        if not match:
+            continue
+        source = match.group(2)
+        # $ROOT is the repo root the launchers resolve at runtime; the fragment
+        # lives beside them, so $ROOT/pmoves/scripts/x.sh == LAUNCHER.parent/x.sh.
+        source = source.replace("$ROOT", str(LAUNCHER.parent))
+        source = source.replace("${ROOT}", str(LAUNCHER.parent))
+        if "$" in source or not source.endswith(".sh"):
+            continue
+        candidate = Path(source)
+        if not candidate.is_file():
+            candidate = LAUNCHER.parent / Path(source).name
+        if candidate.is_file():
+            files.append(candidate)
+    return files
+
+def _launcher_text(launcher: Path) -> str:
+    """The launcher plus, recursively, everything it sources."""
+    text = launcher.read_text(encoding="utf-8")
+    seen = {launcher}
+    for frag in _sourced_files(text):
+        if frag not in seen:
+            seen.add(frag)
+            text += "\n" + frag.read_text(encoding="utf-8")
+    return text
 
 
 def _module():
@@ -265,7 +303,7 @@ def test_both_launchers_invoke_the_resolver(launcher):
                          ids=["posix", "windows"])
 def test_both_launchers_fail_open_audibly(launcher):
     """Losing the identity must never cost the launch, or be silent."""
-    text = launcher.read_text(encoding="utf-8")
+    text = _launcher_text(launcher)
     assert "launching without it" in text, f"{launcher.name}: no audible fallback"
 
 
@@ -279,7 +317,7 @@ def test_no_launcher_clears_the_operator_override_before_resolving():
     collide again.
     """
     for launcher in (LAUNCHER, WIN_LAUNCHER):
-        text = launcher.read_text(encoding="utf-8")
+        text = _launcher_text(launcher)
         assert 'PMOVES_NODE_IDENTITY=""' not in text, launcher.name
         assert 'set "PMOVES_NODE_IDENTITY="' not in text, launcher.name
         assert "PMOVES_RESOLVED_IDENTITY" in text, (
@@ -312,3 +350,129 @@ def test_the_windows_launcher_has_no_parenthesised_block_around_the_reason():
         "the reason must be echoed quoted -- its parentheses are load-bearing "
         "text, not syntax"
     )
+
+
+# ---------------------------------------------------------------------------
+# CIPHER AGENT IDS — the second namespace.
+#
+# `default_identity` answers "which registered agent am I". Cipher answers to a
+# DIFFERENT spelling, from signing_identity_cards.yaml, and refuses the registry
+# one under token enforcement. The two differ on every node (claude_b850 vs
+# b850-claude), and because cipher_identity.py tests whatever id it is handed
+# against the active card set, feeding it the registry spelling produced a false
+# `signing card: no` on every node — a wrong answer that read as a finding.
+# ---------------------------------------------------------------------------
+CARDS_PATH = REPO_ROOT / "pmoves" / "config" / "signing_identity_cards.yaml"
+
+
+def _active_card_ids() -> set[str]:
+    doc = yaml.safe_load(CARDS_PATH.read_text(encoding="utf-8"))
+    cards = doc["cards"] if isinstance(doc, dict) and "cards" in doc else doc
+    return {
+        (card.get("h") or {}).get("agent_id", "").strip()
+        for card in cards
+        if isinstance(card, dict) and card.get("active")
+    } - {""}
+
+
+def _vocabulary() -> list[dict]:
+    doc = yaml.safe_load((REPO_ROOT / "pmoves" / "configs" / "node-vocabulary.yaml").read_text(encoding="utf-8"))
+    return doc.get("nodes") or []
+
+
+def test_every_declared_cipher_agent_id_names_an_active_card():
+    """A declared id that names no active card is a runtime 403 waiting to happen.
+
+    This is the whole reason the mapping is declared rather than derived: a
+    declaration can be checked. Revoke a card and CI says so; derive the id from
+    a string transform and the first anyone hears is a refused cipher call.
+    """
+    active = _active_card_ids()
+    assert active, f"no active cards parsed from {CARDS_PATH}"
+    declared = {
+        (node["canonical"], harness): agent_id
+        for node in _vocabulary()
+        for harness, agent_id in (node.get("cipher_agent_id") or {}).items()
+    }
+    assert declared, "node-vocabulary.yaml declares no cipher_agent_id at all"
+    orphans = {k: v for k, v in declared.items() if v not in active}
+    assert not orphans, f"declared cipher agent ids with no active signing card: {orphans}"
+
+
+def test_a_cipher_agent_id_is_never_the_registry_identity():
+    """If the two ever coincide, someone has copied the wrong column."""
+    for node in _vocabulary():
+        registry = node.get("default_identity") or {}
+        for harness, agent_id in (node.get("cipher_agent_id") or {}).items():
+            assert agent_id != registry.get(harness), (
+                f"{node['canonical']}/{harness}: cipher_agent_id equals the registry "
+                f"identity {agent_id!r}; cipher refuses the registry spelling"
+            )
+
+
+def test_an_undeclared_harness_gets_a_reason_not_a_guess():
+    """crush's registry identity is crush_glm52 and its card is plain `crush`.
+
+    The `claude_<x>` -> `<x>-claude` transform that fits all four claude-code
+    nodes yields `glm52-crush` here, which is no card at all. So the resolver
+    must return nothing and SAY SO, not derive.
+    """
+    module = _module()
+    vocab = module.load_vocabulary()
+    agent_id, why = module.resolve_cipher_agent_id("crush", "knuckles", vocab=vocab, env={})
+    assert agent_id is None, f"invented a cipher agentId for crush: {agent_id!r}"
+    assert "crush" in why and "declare" in why, why
+    assert "glm52" not in why
+
+
+def test_an_unknown_node_yields_no_cipher_agent_id():
+    module = _module()
+    vocab = module.load_vocabulary()
+    for node in (None, "", "a-node-that-is-not-declared"):
+        agent_id, why = module.resolve_cipher_agent_id("claude-code", node, vocab=vocab, env={})
+        assert agent_id is None, (node, agent_id)
+        assert why, node
+
+
+def test_the_operator_may_override_the_cipher_agent_id():
+    """Same contract as PMOVES_NODE_IDENTITY: the operator is allowed to know better."""
+    module = _module()
+    vocab = module.load_vocabulary()
+    agent_id, why = module.resolve_cipher_agent_id(
+        "claude-code", "knuckles", vocab=vocab, env={"PMOVES_CIPHER_AGENT_ID": "someone-else"},
+    )
+    assert agent_id == "someone-else"
+    assert "PMOVES_CIPHER_AGENT_ID" in why
+
+
+def test_every_claude_code_node_declares_a_cipher_agent_id():
+    """Partial coverage here is the failure mode: a node with a registry identity
+    but no agentId gets a session that cannot call cipher at all."""
+    missing = [
+        node["canonical"]
+        for node in _vocabulary()
+        if (node.get("default_identity") or {}).get("claude-code")
+        and not (node.get("cipher_agent_id") or {}).get("claude-code")
+    ]
+    assert not missing, f"claude-code nodes with an identity but no cipher agentId: {missing}"
+
+
+def test_the_shell_output_always_carries_the_cipher_fields():
+    """Empty-with-a-reason, never absent: a launcher that greps for the variable
+    must not read a stale value from its parent environment."""
+    import os
+    import subprocess
+
+    env = dict(os.environ, PMOVES_NODE_ID="pmoves-5090")
+    env.pop("PMOVES_NODE_IDENTITY", None)
+    env.pop("PMOVES_CIPHER_AGENT_ID", None)
+    for harness in ("claude-code", "crush", "a-harness-that-does-not-exist"):
+        proc = subprocess.run(
+            [sys.executable, str(REPO_ROOT / "pmoves" / "tools" / "node_identity.py"),
+             "--harness", harness, "--shell"],
+            capture_output=True, text=True, env=env, timeout=60,
+        )
+        assert proc.returncode == 0, (harness, proc.stderr)
+        keys = {line.split("=", 1)[0] for line in proc.stdout.splitlines()}
+        assert "PMOVES_CIPHER_AGENT_ID" in keys, (harness, proc.stdout)
+        assert "PMOVES_CIPHER_AGENT_WHY" in keys, (harness, proc.stdout)
