@@ -1,0 +1,350 @@
+{
+  "files": [
+    {
+      "bytes": 3928,
+      "executable": true,
+      "managed_by": "generator",
+      "relpath": "deploy/provision/install-pmoves-mini-command.sh",
+      "sha256": "09b312e314e00d3b1b168a37dec39c78e62f9c832cb2198e80deddf90cbf8c8a"
+    },
+    {
+      "bytes": 3738,
+      "executable": false,
+      "managed_by": "generator",
+      "relpath": "deploy/provision/install-pmoves-mini-command.ps1",
+      "sha256": "f60746ecb04b3931e564c1ed69fac24456f789cfb10520e7ce90a965960ec379"
+    },
+    {
+      "bytes": 6675,
+      "executable": true,
+      "managed_by": "generator",
+      "relpath": "deploy/provision/pmoves-mini.sh",
+      "sha256": "683126dd8b2635bbc0afd7442c81a86680ea82996bcd38f86c34efa5bfe7bee6"
+    },
+    {
+      "bytes": 5286,
+      "executable": false,
+      "managed_by": "generator",
+      "relpath": "deploy/provision/pmoves-mini.ps1",
+      "sha256": "c6c70895f764c0fdfef056de3adee9c457b5178b43b12a5bb6680f0ce4659744"
+    },
+    {
+      "bytes": 748,
+      "executable": false,
+      "managed_by": "generator",
+      "relpath": "deploy/provision/pmoves-mini.cmd",
+      "sha256": "c43dc281de4edaa5853e12f5c3b8d3c6de7911ba13b76844f1c055db16049e45"
+    },
+    {
+      "bytes": 1796,
+      "executable": true,
+      "managed_by": "generator",
+      "relpath": "deploy/provision/claude-pmoves-4090.sh",
+      "sha256": "4b3f898b506bd94a8b6ac2d24a007491af3b55dad32caf7867346cfb6e40ca5d"
+    },
+    {
+      "bytes": 1157,
+      "executable": false,
+      "managed_by": "generator",
+      "relpath": "deploy/provision/claude-pmoves-4090.ps1",
+      "sha256": "d66051c429b56fe57bba3f981f0d4b32d8a36b1d1e03514bec97570f6f99d886"
+    },
+    {
+      "bytes": 780,
+      "executable": false,
+      "managed_by": "generator",
+      "relpath": "deploy/provision/claude-pmoves-4090.cmd",
+      "sha256": "675f9de19080a8aabe1e8672e4f80a9d77a4f7865c6444c3e50cde6b0edeb459"
+    },
+    {
+      "bytes": 1634,
+      "executable": true,
+      "managed_by": "generator",
+      "relpath": "deploy/provision/claude-pmoves-b850.sh",
+      "sha256": "70ef5a54ede1f503c20aa2951ba9a20b975b2d140f0f8ddc641b3c1b13033ffd"
+    },
+    {
+      "bytes": 1157,
+      "executable": false,
+      "managed_by": "generator",
+      "relpath": "deploy/provision/claude-pmoves-b850.ps1",
+      "sha256": "61be987bdc89017acdea8efc8a730d24a35cf15b94a5a7ede2169f0aa56d22fd"
+    },
+    {
+      "bytes": 780,
+      "executable": false,
+      "managed_by": "generator",
+      "relpath": "deploy/provision/claude-pmoves-b850.cmd",
+      "sha256": "4cd895c0501a5c7d45ec231aa2d482a98bddd919b4b41d19b22476abc1348810"
+    },
+    {
+      "bytes": 1461,
+      "executable": true,
+      "managed_by": "generator",
+      "relpath": "deploy/provision/claude-pmoves-5090.sh",
+      "sha256": "a5e7b2e032271e6e5da036ce538feab6e920d594c1698c5e35219c21683d71d0"
+    },
+    {
+      "bytes": 1136,
+      "executable": false,
+      "managed_by": "generator",
+      "relpath": "deploy/provision/claude-pmoves-5090.ps1",
+      "sha256": "447d9f005744ffa44e563aca8831aed26887e64d2fe58e7cbcf3af22a1a8e204"
+    },
+    {
+      "bytes": 773,
+      "executable": false,
+      "managed_by": "generator",
+      "relpath": "deploy/provision/claude-pmoves-5090.cmd",
+      "sha256": "1f801032ef40ebe8248a75d25ba7d183b752d0c1f1b05961460559bfbd4c4ca7"
+    },
+    {
+      "bytes": 1466,
+      "executable": true,
+      "managed_by": "generator",
+      "relpath": "deploy/provision/claude-pmoves-z890.sh",
+      "sha256": "69728f5dd41e682f03863442574d55e6dcf5bb72424d6d395512a26781a6c1d3"
+    },
+    {
+      "bytes": 1136,
+      "executable": false,
+      "managed_by": "generator",
+      "relpath": "deploy/provision/claude-pmoves-z890.ps1",
+      "sha256": "d7825969babbddc9300f225d65b75c1db1d8a030a33cb51b8124d1125953a040"
+    },
+    {
+      "bytes": 773,
+      "executable": false,
+      "managed_by": "generator",
+      "relpath": "deploy/provision/claude-pmoves-z890.cmd",
+      "sha256": "c5e208572b40632e173d899f81a0a7e4b8c4a4f96d6bcef87fedd7c43f8d0049"
+    },
+    {
+      "bytes": 3915,
+      "executable": true,
+      "managed_by": "generator",
+      "relpath": "deploy/provision/install-codex-pmoves-command.sh",
+      "sha256": "6a84916b1b58940c82977b1a6829cba3d173c43a9b68720be6fb5bc11c58ea97"
+    },
+    {
+      "bytes": 3722,
+      "executable": false,
+      "managed_by": "generator",
+      "relpath": "deploy/provision/install-codex-pmoves-command.ps1",
+      "sha256": "f300fd6ffee92e8bbbfd64eee3729cdf5f0606ed6024798ff6e139350adbe3d6"
+    },
+    {
+      "bytes": 6655,
+      "executable": true,
+      "managed_by": "generator",
+      "relpath": "deploy/provision/codex-pmoves.sh",
+      "sha256": "41560c150158807c7b6029e814090165b08e767ec0228ac9550d19f1383ae441"
+    },
+    {
+      "bytes": 5238,
+      "executable": false,
+      "managed_by": "generator",
+      "relpath": "deploy/provision/codex-pmoves.ps1",
+      "sha256": "06655f5924cf79a21de486f05e11b53e27bcd83dbf00056a229bf4b6ab8afd65"
+    },
+    {
+      "bytes": 744,
+      "executable": false,
+      "managed_by": "generator",
+      "relpath": "deploy/provision/codex-pmoves.cmd",
+      "sha256": "3339c0cc9e72d2c36bed9fc2050bd558ac32135dc5b62f7cd78e50ae20dee4ed"
+    },
+    {
+      "bytes": 4172,
+      "executable": true,
+      "managed_by": "generator",
+      "relpath": "deploy/provision/install-kilo-pmoves-command.sh",
+      "sha256": "a9ea4d95a480249c072f278846f49f039a27ba882a08dcef460035b1662a09b5"
+    },
+    {
+      "bytes": 4180,
+      "executable": false,
+      "managed_by": "generator",
+      "relpath": "deploy/provision/install-kilo-pmoves-command.ps1",
+      "sha256": "1f262f30f62dcffc44fcca5df5f9edd7f2c6bf413daf222836f4bc89b610e586"
+    },
+    {
+      "bytes": 7004,
+      "executable": true,
+      "managed_by": "generator",
+      "relpath": "deploy/provision/kilo-pmoves.sh",
+      "sha256": "be08d48c8be01e023a5933fb47e662efd5791b0fe3028ebc5425f55bc9ef9177"
+    },
+    {
+      "bytes": 5553,
+      "executable": false,
+      "managed_by": "generator",
+      "relpath": "deploy/provision/kilo-pmoves.ps1",
+      "sha256": "326f3a5e21e9399bd51bd4540a30a20181943ed470d7f3a0cb8a1762119c040f"
+    },
+    {
+      "bytes": 741,
+      "executable": false,
+      "managed_by": "generator",
+      "relpath": "deploy/provision/kilo-pmoves.cmd",
+      "sha256": "4d44b2f512bab15fdaadd29e596d5ab86dfec1c82528a5723d0bf5191909122f"
+    },
+    {
+      "bytes": 1527,
+      "executable": true,
+      "managed_by": "generator",
+      "relpath": "deploy/provision/kilo-pmoves-kilocode_glm.sh",
+      "sha256": "8d7913d24e4129dfcdc502a511c3350733947be370c3ed7a3e2d6ec6498323d0"
+    },
+    {
+      "bytes": 1137,
+      "executable": false,
+      "managed_by": "generator",
+      "relpath": "deploy/provision/kilo-pmoves-kilocode_glm.ps1",
+      "sha256": "aef9f2c30d70390a05f947292357444e05457f90714318d94367aa1173b11f33"
+    },
+    {
+      "bytes": 785,
+      "executable": false,
+      "managed_by": "generator",
+      "relpath": "deploy/provision/kilo-pmoves-kilocode_glm.cmd",
+      "sha256": "b72155fe02c65b489228c5ac45ca2dadd00040719849c5695d4f91b9507c02c2"
+    },
+    {
+      "bytes": 1728,
+      "executable": true,
+      "managed_by": "generator",
+      "relpath": "deploy/provision/kilo-pmoves-kiloclaw.sh",
+      "sha256": "ff697a08c98a4900a0eb1dd23889c6f50b952d41736d5143bbc62b024c414b4f"
+    },
+    {
+      "bytes": 1125,
+      "executable": false,
+      "managed_by": "generator",
+      "relpath": "deploy/provision/kilo-pmoves-kiloclaw.ps1",
+      "sha256": "2acdc419ff295c7c2ae958a9bc208f4d1247a5225be35cef8c6da2eaa0b58601"
+    },
+    {
+      "bytes": 777,
+      "executable": false,
+      "managed_by": "generator",
+      "relpath": "deploy/provision/kilo-pmoves-kiloclaw.cmd",
+      "sha256": "13d0bae6a1a3bb8737b8244bb92c86f49827713dbab498cc3d75cc181373b6b9"
+    },
+    {
+      "bytes": 3925,
+      "executable": true,
+      "managed_by": "generator",
+      "relpath": "deploy/provision/install-kimi-pmoves-command.sh",
+      "sha256": "6b82b5a83f78a857f661d46712299de8137d0afe07634b267f1728a1ff2e7ad8"
+    },
+    {
+      "bytes": 3735,
+      "executable": false,
+      "managed_by": "generator",
+      "relpath": "deploy/provision/install-kimi-pmoves-command.ps1",
+      "sha256": "0e1f511ec3276b516dea5776b5072cbaf7833e77e0b8f74753015f9f1ba96aa3"
+    },
+    {
+      "bytes": 6657,
+      "executable": true,
+      "managed_by": "generator",
+      "relpath": "deploy/provision/kimi-pmoves.sh",
+      "sha256": "461947de14451ebff73252adb48ea3eb3138bed80ad3fe8ac669e066bc86e1b5"
+    },
+    {
+      "bytes": 5245,
+      "executable": false,
+      "managed_by": "generator",
+      "relpath": "deploy/provision/kimi-pmoves.ps1",
+      "sha256": "41fbbac30ecdfb9934124442c92f5e548c526543a5e27fc60af545b0c2227619"
+    },
+    {
+      "bytes": 741,
+      "executable": false,
+      "managed_by": "generator",
+      "relpath": "deploy/provision/kimi-pmoves.cmd",
+      "sha256": "af7958d42e237bdce5f5b89633ed89408a1448befdc988694c2835dc1f6af6c1"
+    },
+    {
+      "bytes": 1522,
+      "executable": true,
+      "managed_by": "generator",
+      "relpath": "deploy/provision/crush-pmoves-glm52.sh",
+      "sha256": "5a36f0c4bd50a814fd278a7f753544f029924f1ada717ec045ab1e349b3270e5"
+    },
+    {
+      "bytes": 1149,
+      "executable": false,
+      "managed_by": "generator",
+      "relpath": "deploy/provision/crush-pmoves-glm52.ps1",
+      "sha256": "ddc7947c48c7f0674623379656de5ded0c5e65e6cddd10be829d95ce3a022f44"
+    },
+    {
+      "bytes": 780,
+      "executable": false,
+      "managed_by": "generator",
+      "relpath": "deploy/provision/crush-pmoves-glm52.cmd",
+      "sha256": "6e38429d29a5e725544248f90b62e186a4c683b254febf2b7720b775830039a0"
+    },
+    {
+      "bytes": 1469,
+      "executable": true,
+      "managed_by": "generator",
+      "relpath": "deploy/provision/crush-pmoves-crush.sh",
+      "sha256": "e2c151f8fa57c850b19768d9d1940f257a9c43a055683afd01ae657155305cdd"
+    },
+    {
+      "bytes": 1116,
+      "executable": false,
+      "managed_by": "generator",
+      "relpath": "deploy/provision/crush-pmoves-crush.ps1",
+      "sha256": "415473a6f8875c25758c7a59007d90a795972ced3bb30ad84726f3af9cb8f35c"
+    },
+    {
+      "bytes": 773,
+      "executable": false,
+      "managed_by": "generator",
+      "relpath": "deploy/provision/crush-pmoves-crush.cmd",
+      "sha256": "18fc3abe8a2373baee572367af3e6505136378c668dbfbbee5b40b001858e0de"
+    },
+    {
+      "bytes": 3949,
+      "executable": true,
+      "managed_by": "generator",
+      "relpath": "deploy/provision/install-hermes-pmoves-command.sh",
+      "sha256": "a63f2e5d3ce803b55821a82e9aa423aec053b9865a14108579dd5fc4b209c515"
+    },
+    {
+      "bytes": 3753,
+      "executable": false,
+      "managed_by": "generator",
+      "relpath": "deploy/provision/install-hermes-pmoves-command.ps1",
+      "sha256": "c25995e084fcf7f6efe19ceb9d805f67ed8d967a6b8dfd175f0f2194b4191d86"
+    },
+    {
+      "bytes": 6713,
+      "executable": true,
+      "managed_by": "generator",
+      "relpath": "deploy/provision/hermes-pmoves.sh",
+      "sha256": "cfe34a7a3fae6355a04f0b9d0133fdbd8ed0e742d200fdf6e6ab0fb954a17ee6"
+    },
+    {
+      "bytes": 5302,
+      "executable": false,
+      "managed_by": "generator",
+      "relpath": "deploy/provision/hermes-pmoves.ps1",
+      "sha256": "41eaff9220c9d25e434412413d03727d0550cc5dd17ec01ef34da85830679628"
+    },
+    {
+      "bytes": 747,
+      "executable": false,
+      "managed_by": "generator",
+      "relpath": "deploy/provision/hermes-pmoves.cmd",
+      "sha256": "6b8f8d9f0df4bad899636324d21c2a27a197296d1936a2b52be6a619a59e49c4"
+    }
+  ],
+  "generator_version": "1.0.0",
+  "identity_count": 8,
+  "tool_count": 7
+}
