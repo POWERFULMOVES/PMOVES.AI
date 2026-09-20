@@ -422,6 +422,17 @@ def main(argv: list[str] | None = None) -> int:
 
     findings, guarded, unreachable, unparseable, total = analyse(workflows)
 
+    # Checked BEFORE the empty-tree return: a workflow the gate cannot read is a
+    # hole in coverage at any sample size, and it must be NAMED. Ordering this
+    # after the total==0 return meant a tree whose only workflow was unparseable
+    # reported "found nothing to check" and never said which file it choked on.
+    if unparseable:
+        for f in sorted(unparseable):
+            print(f"UNPARSEABLE:  {f}")
+        print(f"\n{len(unparseable)} workflow(s) could not be parsed, so their "
+              f"self-hosted jobs were never examined.")
+        return 1
+
     if total == 0:
         # An empty result reads the same whether the input was clean or absent.
         print(f"COULD-NOT-MEASURE: no self-hosted job found under {workflows} — "
@@ -435,8 +446,6 @@ def main(argv: list[str] | None = None) -> int:
         for u in sorted(unreachable):
             print(f"NOT-REACHABLE: {u}")
 
-    for f in sorted(unparseable):
-        print(f"UNPARSEABLE:  {f}")
     for f in sorted(findings):
         print(f"UNGUARDED:    {f}")
 
@@ -445,10 +454,10 @@ def main(argv: list[str] | None = None) -> int:
     print(
         f"\n{total} self-hosted job(s) examined: "
         f"{len(guarded)} guarded, {len(unreachable)} not fork-reachable, "
-        f"{len(findings)} UNGUARDED, {len(unparseable)} unparseable."
+        f"{len(findings)} UNGUARDED."
     )
 
-    if findings or unparseable:
+    if findings:
         print(
             "\n::error::A self-hosted job is reachable from a fork's pull request "
             "without a fork guard. Fork PR code would execute on fleet hardware. "
