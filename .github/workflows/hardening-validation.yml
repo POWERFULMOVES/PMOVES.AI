@@ -10,6 +10,14 @@ on:
       - '.github/workflows/hardening-validation.yml'
       - '.github/workflows/integrations-ghcr.matrix.json'
       - 'pmoves/integrations/archon'
+      # Inputs of the secrets-hardening audit job below. Before it was wired in
+      # (finding L4) the script ran only when a human typed `make secrets-audit`.
+      - 'pmoves/tools/secrets_hardening_audit.py'
+      - 'pmoves/chit/**'
+      - 'pmoves/configs/hardening_ratchet/**'
+      - 'pmoves/tools/compose_hardening_ratchet.py'
+      - 'pmoves/scripts/validate-hardening.sh'
+      - '.gitignore'
   pull_request:
     branches: [main, PMOVES.AI-Edition-Hardened-Integrations, PMOVES.AI-Edition-Hardened]
     paths:
@@ -19,6 +27,14 @@ on:
       - '.github/workflows/hardening-validation.yml'
       - '.github/workflows/integrations-ghcr.matrix.json'
       - 'pmoves/integrations/archon'
+      # Inputs of the secrets-hardening audit job below. Before it was wired in
+      # (finding L4) the script ran only when a human typed `make secrets-audit`.
+      - 'pmoves/tools/secrets_hardening_audit.py'
+      - 'pmoves/chit/**'
+      - 'pmoves/configs/hardening_ratchet/**'
+      - 'pmoves/tools/compose_hardening_ratchet.py'
+      - 'pmoves/scripts/validate-hardening.sh'
+      - '.gitignore'
   workflow_dispatch:
 
 concurrency:
@@ -48,10 +64,18 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
+      - name: Install PyYAML
+        run: |
+          # The overlay is parsed, not grepped. The tool refuses to fall back to
+          # grep if the parser is missing -- it exits 3 (COULD NOT MEASURE), not
+          # 0 -- so an absent dependency is a red job rather than a false pass.
+          python3 -m pip install --quiet "PyYAML>=6,<7"
+
       - name: Run hardening validation
         id: hardening-check
         run: |
           echo "Running Docker hardening validation..."
+          # Exit 0 = clean, 1 = new/stale findings, 3 = could not measure.
           ./pmoves/scripts/validate-hardening.sh
         continue-on-error: false
 
@@ -118,25 +142,21 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
-      - name: Check USER directive
-        run: |
-          echo "Checking ${{ matrix.dockerfile }} for USER directive..."
-          if grep -q "^USER " "${{ matrix.dockerfile }}"; then
-            user=$(grep "^USER " "${{ matrix.dockerfile }}" | head -1)
-            echo "✓ Found: $user"
-            # Check if user is not root
-            uid=$(echo "$user" | awk '{print $2}')
-            if [[ "$uid" != "0" && "$uid" != "root" ]]; then
-            echo "✓ Non-root user configured"
-            else
-            echo "✗ WARNING: Running as root"
-            exit 1
-            fi
-          else
-            echo "✗ ERROR: No USER directive found"
-            exit 1
-          fi
-
+      # The `Check USER directive` step was deleted here (finding M1). It ran
+      # `grep "^USER " "$f" | head -1`, judging the FIRST directive, while
+      # Docker's reference is explicit that USER applies "for the remainder
+      # of the current stage" (https://docs.docker.com/reference/dockerfile/#user).
+      # pmoves/tools/hardening_ratchet.py takes users[-1] for exactly that
+      # reason, judges all 102 tracked Dockerfiles rather than the 7 in this
+      # matrix, and is the REQUIRED `hardening-validation` context in
+      # merge-gate.yml. Two checks disagreeing about what "the user" means,
+      # with the vendor-correct one being the only one that blocks, is worse
+      # than one check. Fixing this step would have produced a duplicate.
+      #
+      # The two steps below print and never assert: this job cannot fail. That
+      # is deliberate for now -- their subject is 7 of 102 Dockerfiles and the
+      # authority is the ratchet. The `summary` job names each result
+      # individually so a reader is not left to infer it from a green tick.
       - name: Check for multi-stage build
         run: |
           echo "Checking ${{ matrix.dockerfile }} for multi-stage build..."
@@ -165,172 +185,6 @@ jobs:
           if grep -q "^ADD " "${{ matrix.dockerfile }}"; then
             echo "⚠ Uses ADD (consider COPY for better security)"
           fi
-
-  # ============================================================================
-  # Docker Security Checks
-  # ============================================================================
-  docker-bench:
-    name: Docker Bench Security
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-
-    steps:
-      - name: Harden Runner
-        uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c
-        with:
-          egress-policy: audit
-
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-
-      # ---- GitHub-hosted Linux runner checks ----
-      - name: Check Docker daemon security config
-        shell: bash
-        run: |
-          echo "=== Docker Daemon Security Checks ==="
-          echo ""
-
-          # 1. Docker daemon reachable
-          if ! docker info > /dev/null 2>&1; then
-            echo "✗ Docker daemon not reachable"
-            exit 1
-          fi
-          echo "✓ Docker daemon reachable"
-
-          # 2. Check rootless/user namespace isolation posture
-          SECURITY_OPTIONS=$(docker info --format '{{json .SecurityOptions}}' 2>/dev/null || echo '[]')
-          if printf '%s' "$SECURITY_OPTIONS" | grep -qi 'name=rootless'; then
-            echo "✓ Rootless Docker enabled"
-          elif printf '%s' "$SECURITY_OPTIONS" | grep -qi 'name=userns'; then
-            echo "✓ User namespace remap enabled"
-          else
-            echo "ℹ Rootless/userns-remap not detected (runner compatibility decision)"
-          fi
-
-          # 3. Image provenance policy lives in CI and deploy refs, not daemon flags
-          echo "ℹ Image signing is enforced via cosign in the GHCR publish workflow."
-          echo "ℹ Prefer digest-pinned image refs in deployment manifests when practical."
-
-          # 4. Check default runtime
-          RUNTIME=$(docker info --format '{{.DefaultRuntime}}' 2>/dev/null || echo "unknown")
-          echo "ℹ Default runtime: $RUNTIME"
-
-          # 5. Check live-restore (daemon resilience)
-          LIVE_RESTORE=$(docker info --format '{{.LiveRestoreEnabled}}' 2>/dev/null || echo "unknown")
-          if [ "$LIVE_RESTORE" = "true" ]; then
-            echo "✓ Live restore enabled"
-          else
-            echo "ℹ Live restore disabled (daemon config — not CI-fixable)"
-          fi
-
-          # 6. Check no containers running as privileged
-          # Exclude BuildKit builders (always privileged by design) and CI runners
-          PRIV_CONTAINERS=$(docker ps -q 2>/dev/null | xargs -r docker inspect --format '{{.Name}} {{.HostConfig.Privileged}}' 2>/dev/null | grep "true" | grep -v "buildx_buildkit_\|github-runner" || true)
-          if [ -n "$PRIV_CONTAINERS" ]; then
-            echo "⚠ Privileged containers found (review required):"
-            echo "$PRIV_CONTAINERS"
-          else
-            echo "✓ No unexpected privileged containers running"
-          fi
-          # Always report BuildKit builders separately (informational)
-          BUILDKIT_PRIV=$(docker ps -q 2>/dev/null | xargs -r docker inspect --format '{{.Name}} {{.HostConfig.Privileged}}' 2>/dev/null | grep "true" | grep "buildx_buildkit_" || true)
-          if [ -n "$BUILDKIT_PRIV" ]; then
-            echo "ℹ BuildKit builders (privileged by design): $(echo "$BUILDKIT_PRIV" | wc -l | tr -d ' ')"
-          fi
-
-          # 6. Check no containers with pid=host
-          PID_HOST=$(docker ps -q 2>/dev/null | xargs -r docker inspect --format '{{.Name}} {{.HostConfig.PidMode}}' 2>/dev/null | grep "host" || true)
-          if [ -n "$PID_HOST" ]; then
-            echo "⚠ Containers with PID host mode:"
-            echo "$PID_HOST"
-          else
-            echo "✓ No containers using PID host mode"
-          fi
-
-          # 7. Check no containers with net=host
-          NET_HOST=$(docker ps -q 2>/dev/null | xargs -r docker inspect --format '{{.Name}} {{.HostConfig.NetworkMode}}' 2>/dev/null | grep "host" || true)
-          if [ -n "$NET_HOST" ]; then
-            echo "⚠ Containers with host network mode:"
-            echo "$NET_HOST"
-          else
-            echo "✓ No containers using host network mode"
-          fi
-
-          echo ""
-          echo "=== Docker Security Checks Complete ==="
-
-      - name: Validate compose hardening directives
-        shell: bash
-        run: |
-          echo "=== Compose Hardening Directive Checks ==="
-          echo ""
-
-          # Check all compose files for security directives
-          for f in pmoves/docker-compose.yml pmoves/docker-compose.*.yml; do
-            [ -f "$f" ] || continue
-            BASENAME=$(basename "$f")
-
-            # Check for cap_drop: ALL pattern
-            CAP_DROP_COUNT=$(grep -c "cap_drop:" "$f" 2>/dev/null || echo 0)
-
-            if [ "$CAP_DROP_COUNT" -gt 0 ]; then
-              echo "✓ $BASENAME: cap_drop directives found ($CAP_DROP_COUNT)"
-            elif echo "$BASENAME" | grep -qE "(agentgym|external|remote|open-notebook|supabase|jellyfin|vps)"; then
-              echo "ℹ $BASENAME: override file (inherits from base)"
-            else
-              echo "⚠ $BASENAME: no cap_drop directives"
-            fi
-
-            # Check for security_opt: no-new-privileges
-            NO_NEW_PRIV=$(grep -c "no-new-privileges" "$f" 2>/dev/null || echo 0)
-            if [ "$NO_NEW_PRIV" -gt 0 ]; then
-              echo "✓ $BASENAME: no-new-privileges found ($NO_NEW_PRIV)"
-            elif echo "$BASENAME" | grep -qE "(agentgym|external|remote|open-notebook|supabase|jellyfin|vps)"; then
-              : # override files inherit
-            else
-              echo "⚠ $BASENAME: no no-new-privileges directives"
-            fi
-          done
-
-          echo ""
-          echo "=== Compose Hardening Complete ==="
-
-      # ---- Linux-only: Full CIS Docker Bench ----
-      # Requires bare-metal or VM runner with Docker socket + /var/lib/docker access.
-      # Containerized runners (DinD) lack host PID/net/volume access and will hang.
-      - name: Run CIS Docker Bench (Linux bare-metal only)
-        if: runner.os == 'Linux'
-        timeout-minutes: 5
-        shell: bash
-        run: |
-          echo "=== CIS Docker Community Edition Benchmark ==="
-
-          # Skip on containerized runners — DinD can't bind-mount /var/lib/docker
-          if [ -f /.dockerenv ] || grep -qsm1 'docker\|containerd' /proc/1/cgroup 2>/dev/null; then
-            echo "ℹ Skipping CIS Docker Bench: running inside a container (DinD unsupported)"
-            exit 0
-          fi
-
-          # Verify host paths exist before attempting mount
-          if [ ! -d /var/lib/docker ]; then
-            echo "ℹ Skipping CIS Docker Bench: /var/lib/docker not accessible"
-            exit 0
-          fi
-
-          # Install docker-bench-security if not available
-          if ! command -v docker-bench-security &> /dev/null; then
-            docker run --rm -v /usr/local/bin:/target docker-bench-security:latest \
-              cp /docker-bench-security /target/ 2>/dev/null || {
-              curl -fsSL https://github.com/docker/docker-bench-security/releases/latest/download/docker-bench-security.sh -o /tmp/dbs.sh &&
-              chmod +x /tmp/dbs.sh && /tmp/dbs.sh
-            }
-          fi
-
-          docker run --rm --net host --pid host --cap-add audit_control \
-            -v /var/lib/docker:/var/lib/docker:ro \
-            -v /usr/lib/systemd:/usr/lib/systemd:ro \
-            docker-bench-security:latest \
-            check --check "CIS Docker Community Edition Benchmark v2.0.0 - level 1" || true
 
   # ============================================================================
   # Compose File Validation
@@ -469,37 +323,154 @@ jobs:
             echo "⚠ No secrets found in hardened compose"
           fi
 
+      # Relocated here when the `docker-bench` job was deleted (finding M4).
+      # That job ran `docker info` / `docker ps` against the ephemeral
+      # GitHub-hosted runner's daemon -- a host PMOVES does not operate --
+      # and could not exit non-zero on any finding. This step was the only
+      # one in it whose SUBJECT was this repository, so it moves rather than
+      # dies. It is still advisory by design: it counts directive presence
+      # per file, and the coverage question it gestures at (28 of 111 base
+      # services carry a hardened override; 4 of 111 declare
+      # no-new-privileges) is findings H3 and L3, a separate lane. Do not
+      # read a clean run of this step as coverage.
+      - name: Validate compose hardening directives
+        shell: bash
+        run: |
+          echo "=== Compose Hardening Directive Checks ==="
+          echo ""
+
+          # Check all compose files for security directives
+          for f in pmoves/docker-compose.yml pmoves/docker-compose.*.yml; do
+            [ -f "$f" ] || continue
+            BASENAME=$(basename "$f")
+
+            # Check for cap_drop: ALL pattern
+            CAP_DROP_COUNT=$(grep -c "cap_drop:" "$f" 2>/dev/null || echo 0)
+
+            if [ "$CAP_DROP_COUNT" -gt 0 ]; then
+              echo "✓ $BASENAME: cap_drop directives found ($CAP_DROP_COUNT)"
+            elif echo "$BASENAME" | grep -qE "(agentgym|external|remote|open-notebook|supabase|jellyfin|vps)"; then
+              echo "ℹ $BASENAME: override file (inherits from base)"
+            else
+              echo "⚠ $BASENAME: no cap_drop directives"
+            fi
+
+            # Check for security_opt: no-new-privileges
+            NO_NEW_PRIV=$(grep -c "no-new-privileges" "$f" 2>/dev/null || echo 0)
+            if [ "$NO_NEW_PRIV" -gt 0 ]; then
+              echo "✓ $BASENAME: no-new-privileges found ($NO_NEW_PRIV)"
+            elif echo "$BASENAME" | grep -qE "(agentgym|external|remote|open-notebook|supabase|jellyfin|vps)"; then
+              : # override files inherit
+            else
+              echo "⚠ $BASENAME: no no-new-privileges directives"
+            fi
+          done
+
+          echo ""
+          echo "=== Compose Hardening Complete ==="
+
+  # ============================================================================
+  # Secrets Hardening Audit
+  # ============================================================================
+  # Finding L4: pmoves/tools/secrets_hardening_audit.py is 456 lines, its
+  # findings are cited as authoritative by pmoves/mk/codex.mk:360, and the
+  # script path appeared in ZERO workflows -- it ran only when someone
+  # remembered `make -C pmoves secrets-audit`. It exits 0 on a clean tree
+  # (measured on this branch, 2026-09-20: "Secrets hardening audit: PASS",
+  # exit 0), so wiring it in does not turn the workflow red on arrival.
+  #
+  # It is NOT added to merge-gate.yml, where `merge-decision` aggregates every
+  # job's result and IS a required context. Putting it there would promote it
+  # to blocking in the same change that first made it run, which is the one
+  # sequencing this lane must not do.
+  secrets-audit:
+    name: Secrets Hardening Audit
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+
+      - name: Run the secrets hardening audit
+        run: |
+          # Called directly, not through `make`: make collapses every nonzero
+          # exit to 2, which would make a findings exit indistinguishable from
+          # a could-not-measure one.
+          python3 pmoves/tools/secrets_hardening_audit.py
+
   # ============================================================================
   # Summary Job
   # ============================================================================
   summary:
     name: Validation Summary
     runs-on: ubuntu-latest
-    needs: [validate-hardening, validate-dockerfiles, validate-compose]
+    # EVERY job in this file must be listed here. `docker-bench` used to be
+    # absent, so the only aggregating job in the workflow did not even read it.
+    needs: [validate-hardening, validate-dockerfiles, validate-compose, secrets-audit]
     if: always()
 
     steps:
       - name: Generate Summary
+        id: summarise
+        env:
+          # Through the environment, not interpolated into the script body:
+          # https://docs.github.com/en/actions/reference/security/secure-use#use-an-intermediate-environment-variable
+          R_HARDENING: ${{ needs.validate-hardening.result }}
+          R_DOCKERFILES: ${{ needs.validate-dockerfiles.result }}
+          R_COMPOSE: ${{ needs.validate-compose.result }}
+          R_SECRETS: ${{ needs.secrets-audit.result }}
         run: |
-          echo "# Docker Hardening Validation Summary" > summary.md
-          echo "" >> summary.md
-          echo "## Job Results" >> summary.md
-          echo "" >> summary.md
-          echo "- Hardening Patterns: ${{ needs.validate-hardening.result }}" >> summary.md
-          echo "- Dockerfiles: ${{ needs.validate-dockerfiles.result }}" >> summary.md
-          echo "- Compose Files: ${{ needs.validate-compose.result }}" >> summary.md
-          echo "" >> summary.md
-          echo "## Next Steps" >> summary.md
-          echo "" >> summary.md
-          if [[ "${{ needs.validate-hardening.result }}" == "success" ]] && \
-             [[ "${{ needs.validate-dockerfiles.result }}" == "success" ]] && \
-             [[ "${{ needs.validate-compose.result }}" == "success" ]]; then
-            echo "✓ All validations passed!" >> summary.md
+          set -uo pipefail
+
+          # A `needs.*.result` is one of success / failure / cancelled /
+          # skipped. Only `success` is a pass. `skipped` in particular is the
+          # bucket that makes a broken instrument look fixed -- it reads as
+          # "nothing wrong" while meaning "never measured" -- so it is named
+          # explicitly and is NOT forgiven here. No job in this file carries an
+          # `if:` or a `needs:`, so a skip means something unexpected happened
+          # and silence would be the wrong answer.
+          failed=0
+          {
+            echo "# Docker Hardening Validation Summary"
+            echo ""
+            echo "## Job Results"
+            echo ""
+          } > summary.md
+
+          for pair in \
+            "Hardening Patterns=${R_HARDENING}" \
+            "Dockerfiles=${R_DOCKERFILES}" \
+            "Compose Files=${R_COMPOSE}" \
+            "Secrets Hardening Audit=${R_SECRETS}"; do
+            label="${pair%%=*}"
+            result="${pair#*=}"
+            echo "- ${label}: ${result}" >> summary.md
+            if [ "$result" != "success" ]; then
+              failed=$((failed + 1))
+              # Named individually. "Some validations failed" told a reader
+              # which file to open and nothing else.
+              echo "::error::${label} did not succeed (result: ${result})"
+            fi
+          done
+
+          {
+            echo ""
+            echo "## Next Steps"
+            echo ""
+          } >> summary.md
+          if [ "$failed" -eq 0 ]; then
+            echo "All validations passed." >> summary.md
           else
-            echo "⚠ Some validations failed. Please review the logs above." >> summary.md
+            echo "${failed} job(s) did not succeed. See the annotations above." >> summary.md
           fi
 
           cat summary.md
+          echo "failed=${failed}" >> "$GITHUB_OUTPUT"
 
       - name: Upload summary
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
@@ -507,3 +478,17 @@ jobs:
           name: validation-summary
           path: summary.md
           retention-days: 90
+
+      - name: Carry the outcome
+        # The defect this closes: the job wrote "Some validations failed" into
+        # an artifact and exited 0 regardless. An aggregator that reports an
+        # outcome it does not carry is a green tick over a red run.
+        #
+        # This does NOT promote anything to blocking. No context from this
+        # workflow appears in pmoves/configs/branch_protection/pmoves_standard.json;
+        # the required `hardening-validation` context is the merge-gate.yml job
+        # of the same name. Promotion is an operator policy decision.
+        if: steps.summarise.outputs.failed != '0'
+        run: |
+          echo "Validation summary reports ${{ steps.summarise.outputs.failed }} job(s) not successful."
+          exit 1
