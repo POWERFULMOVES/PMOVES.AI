@@ -39,11 +39,11 @@ on:
 
 # HAND-MAINTAINED COUNT (1 of 3). The gate-job count appears literally in three
 # places that nothing keeps in step: here, in the no-skip rationale inside
-# merge-decision, and in merge-decision's final "all ten gates" message. Adding
+# merge-decision, and in merge-decision's final "all eleven gates" message. Adding
 # a job means `needs:`, the `for r in` loop, AND all three of these. Miss the loop
 # and the aggregator passes while ignoring a gate.
 #
-# All ten jobs are read-only: checkout, install, run a make target or a python
+# All eleven jobs are read-only: checkout, install, run a make target or a python
 # script, and report. Verified before setting this -- no `gh pr`/`gh api`, no
 # github-script, no comment or label writes, and the ghcr/"packages" hits in this
 # file are all prose in comments, not registry pulls. So contents:read is the
@@ -205,6 +205,81 @@ jobs:
       # ls-files`, so it needs the checkout and nothing else.
       - name: Check container hardening (ratchet)
         run: python pmoves/tools/hardening_ratchet.py
+
+  # The COMPOSE-OVERLAY hardening ratchet, promoted here from advisory-only.
+  #
+  # Read this name against `hardening-validation` directly above, because the
+  # two are easy to confuse and that confusion is how the gap survived. THAT job
+  # runs pmoves/tools/hardening_ratchet.py and judges the 99 tracked
+  # DOCKERFILES. THIS job runs pmoves/tools/compose_hardening_ratchet.py and
+  # judges the 28 SERVICES in pmoves/docker-compose.hardened.yml against five
+  # runtime properties (user, read_only, cap_drop, no-new-privileges, resource
+  # limits). Two ratchets, two subjects, two tools. A third name,
+  # `validate-compose`, lives in hardening-validation.yml and is something else
+  # again -- so this job is named for what it READS, not for what it sits near.
+  #
+  # Why it is re-implemented here instead of aggregated: the check already ran,
+  # in hardening-validation.yml, on every PR -- and blocked nothing, because
+  # `needs:` cannot reference a job in another workflow file, so merge-decision
+  # could never depend on it. Before this commit, merge-gate.yml contained zero
+  # occurrences of compose_hardening/compose-hardening. An unenforced check that
+  # fires on every PR reads, from the checks list, exactly like an enforced one.
+  # The advisory copy stays where it is; it also uploads the report artifact.
+  #
+  # SAFE TO PROMOTE, measured on this exact tree before the promotion landed:
+  #   $ ./pmoves/scripts/validate-hardening.sh
+  #   28 services x 5 properties = 140 evaluated; 112 passed + 28 findings = 140
+  #   Findings: 28 (28 baselined, 0 new)                              exit 0
+  # All 28 findings are the single NO_RESOURCE_LIMITS property; user, read_only,
+  # cap_drop and no-new-privileges are 28/28 clean. Whether resource limits
+  # SHOULD be required on those 28 services is an open policy question and is
+  # NOT decided here. Promotion blocks nothing that exists today. It blocks the
+  # next regression.
+  #
+  # No `if:` and no path filter, deliberately. A job that SKIPS satisfies a
+  # required check under GitHub's own semantics -- success, skipped and neutral
+  # all satisfy it -- so a path-filtered gate is an unenforced gate on every PR
+  # that happens not to touch the path. That is the same fail-open shape as an
+  # advisory check wearing an enforced name. merge-decision's loop below treats
+  # a skip as a failure for the same reason.
+  compose-hardening-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      # PyYAML is a hard requirement, not a convenience. The tool parses the
+      # overlay and deliberately refuses a grep fallback -- a missing import
+      # raises CouldNotMeasure and exits 3, so an absent dependency is a red job
+      # rather than a false pass. Same pin hardening-validation.yml uses.
+      - name: Install PyYAML
+        run: python -m pip install --quiet "PyYAML>=6,<7"
+      - name: Check compose overlay hardening (ratchet)
+        # Exit 0 = clean, 1 = new finding and/or stale baseline entry, 3 = COULD
+        # NOT MEASURE. Invoked directly rather than through a make target: make
+        # collapses every nonzero exit to 2, which would render 1 and 3 -- a real
+        # regression and a check that never ran -- indistinguishable here.
+        #
+        # set +e because the default shell is `bash -e`, which would abort the
+        # step before the annotation is written. The exit code is preserved and
+        # re-raised, so the job's result still comes from the tool.
+        run: |
+          set +e
+          ./pmoves/scripts/validate-hardening.sh
+          rc=$?
+          set -e
+          if [ "$rc" -eq 3 ]; then
+            echo "::error::COULD NOT MEASURE the compose hardening ratchet (exit 3). This is NOT a pass -- the check did not run at all. The reason is printed above; fix that rather than treating the job as flaky."
+            exit "$rc"
+          fi
+          if [ "$rc" -ne 0 ]; then
+            echo "::error::Compose overlay hardening regressed (exit $rc). Either a service in pmoves/docker-compose.hardened.yml lost a required property (user / read_only / cap_drop: ALL / no-new-privileges / resource limits), or a baselined gap was fixed without being removed from pmoves/configs/hardening_ratchet/_compose_known_gaps.yaml. Restore the property on the service -- do NOT add a new baseline entry to make this green."
+            exit "$rc"
+          fi
 
   # A SHA-pinned action that does not exist fails the workflow during SETUP —
   # before runs-on resolves, before any step logs, before any annotation. The
@@ -380,7 +455,7 @@ jobs:
     # Reads nothing and writes nothing - it only inspects `needs` results.
     permissions: {}
     needs: [python-tests, docker-build-validation, compose-split-drift-check,
-            hardening-validation, action-pin-validation,
+            hardening-validation, compose-hardening-check, action-pin-validation,
             agent-registry-check, dep-matrix-check, agent-zero-pin-check,
             suppression-marker-check, fork-guard-check]
     runs-on: ubuntu-latest
@@ -393,6 +468,7 @@ jobs:
           echo "  docker-build-validation: ${{ needs.docker-build-validation.result }}"
           echo "  compose-split-drift-check: ${{ needs.compose-split-drift-check.result }}"
           echo "  hardening-validation: ${{ needs.hardening-validation.result }}"
+          echo "  compose-hardening-check: ${{ needs.compose-hardening-check.result }}"
           echo "  action-pin-validation: ${{ needs.action-pin-validation.result }}"
           echo "  agent-registry-check: ${{ needs.agent-registry-check.result }}"
           echo "  dep-matrix-check: ${{ needs.dep-matrix-check.result }}"
@@ -408,11 +484,11 @@ jobs:
           # an instrument that reports fine without having measured anything.
           #
           # HAND-MAINTAINED COUNT (2 of 3). The other two are the `permissions`
-          # comment at the top of this file and the "all ten gates" message at
+          # comment at the top of this file and the "all eleven gates" message at
           # the end of this step. The authority is the `for r in` loop below, not
           # any of these three numbers.
           #
-          # None of the ten jobs carries an `if:` or a path filter, so they always
+          # None of the eleven jobs carries an `if:` or a path filter, so they always
           # run — a skip is not a legitimate state here, and if one ever appears it
           # is itself worth failing on rather than passing silently.
           failed=0
@@ -420,6 +496,7 @@ jobs:
                    "docker-build-validation:${{ needs.docker-build-validation.result }}" \
                    "compose-split-drift-check:${{ needs.compose-split-drift-check.result }}" \
                    "hardening-validation:${{ needs.hardening-validation.result }}" \
+                   "compose-hardening-check:${{ needs.compose-hardening-check.result }}" \
                    "action-pin-validation:${{ needs.action-pin-validation.result }}" \
                    "agent-registry-check:${{ needs.agent-registry-check.result }}" \
                    "dep-matrix-check:${{ needs.dep-matrix-check.result }}" \
@@ -439,4 +516,4 @@ jobs:
           # comment at the top of this file and the no-skip rationale above. This
           # line is cosmetic — the loop above is what decides — but a stale number
           # here is how a reader learns to distrust the other two.
-          echo "Merge gate PASSED — all ten gates reported success"
+          echo "Merge gate PASSED — all eleven gates reported success"
