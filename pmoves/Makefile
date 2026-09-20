@@ -2227,8 +2227,16 @@ up-archon-native: ## Build+start native Archon 0.6.0 (TS/SQLite) standalone on :
 down-archon-native: ## Stop native Archon stack
 	@$(ARCHON_NATIVE_DC) down
 
-archon-native-health: ## Check native Archon 0.6.0 health (:3090)
-	@curl -sf http://localhost:$(ARCHON_NATIVE_PORT)/api/health && echo " ✔ archon 0.6.0 healthy" || (echo "✗ archon unhealthy" && exit 1)
+archon-native-health: ## Check native Archon health (:3090) - validates the JSON body, not the status
+# A STATUS-ONLY PROBE FALSE-POSITIVES HERE, which the SITREP already warns about:
+# Archon's SPA catch-all answers 200 for ANY path (measured 2026-09-17:
+# /api/definitely-not-a-route -> 200). `curl -sf` only inspects the status, so if
+# the API died and the SPA still served, this target printed "healthy" over HTML.
+#
+# It also hardcoded the version in its own success line -- the service reports
+# 0.8.0 while this said 0.6.0, so the message asserted a fact it never read.
+# Report what the service actually returns.
+	@curl -sf http://localhost:$(ARCHON_NATIVE_PORT)/api/health 2>/dev/null | $(PYTHON) -c "import sys,json;d=json.load(sys.stdin);assert d.get('status')=='ok',d;print(' ✔ archon '+str(d.get('version','?'))+' healthy (adapter='+str(d.get('adapter','?'))+', workflows='+str(d.get('runningWorkflows','?'))+')')" || (echo "✗ archon unhealthy (no JSON health body - SPA catch-all or API down)" && exit 1)
 
 # -------- Consciousness Taxonomy Loaders ----------
 .PHONY: load-consciousness-neo4j harvest-consciousness
@@ -5849,6 +5857,10 @@ CIPHER_MINT_DEFAULT_SCOPES := memory:read,memory:write,reasoning:read,reasoning:
 cipher-mint-token: ## Mint a per-agent cipher token (requires an ACTIVE signing card): AGENT=z890-claude [SCOPES=...]
 	@if [ -z "$(AGENT)" ]; then echo "Usage: make -C pmoves cipher-mint-token AGENT=z890-claude [SCOPES='memory:read,memory:write']"; exit 1; fi
 	@$(PYTHON) $(CURDIR)/scripts/mint_cipher_token.py --agent "$(AGENT)" --scopes "$(or $(SCOPES),$(CIPHER_MINT_DEFAULT_SCOPES))"
+
+cipher-revoke-token: ## Retire an agent's cipher tokens (sets revoked_at; auth.ts already rejects them): AGENT=z890-claude [TOKEN_UUID=... DRY_RUN=1]
+	@if [ -z "$(AGENT)" ]; then echo "Usage: make -C pmoves cipher-revoke-token AGENT=z890-claude [TOKEN_UUID=<one> DRY_RUN=1]"; exit 1; fi
+	@$(PYTHON) $(CURDIR)/scripts/revoke_cipher_token.py --agent "$(AGENT)" $(if $(TOKEN_UUID),--token-uuid "$(TOKEN_UUID)",) $(if $(DRY_RUN),--dry-run,)
 
 .PHONY: beats-analyze beats-hyperdim beats-pipeline
 beats-analyze: ## Re-run DARKXSIDE sonic fingerprint analysis (librosa + ffmpeg lavfi)
