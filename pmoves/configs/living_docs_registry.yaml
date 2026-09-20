@@ -115,6 +115,11 @@ tracked:
     severity: P2
     description: "RFC — structured policy for the damage-control guard: parse over regex, pydantic at EGRESS not ingress, provenance contract, DangerRoom validation. Registers itself under the contract it proposes, so the proposal is subject to its own rule (2026-09-18)"
 
+  - path: pmoves/docs/architecture/FORK_PROMOTION_LANES.md
+    freshness_days: 90
+    severity: P2
+    description: "Lane board for the stalled fork-promotion evolution: gate correctness before distribution, a live service running as root, secrets devolution against the 90/100 parent limit, compose rebuild on forked images, branch-topology repair, and kiloclaw mid-migration recovery (2026-09-20)"
+
   - path: pmoves/docs/architecture/DETERMINISTIC_HARDENING_RATCHET_RFC.md
     freshness_days: 180
     severity: P2
