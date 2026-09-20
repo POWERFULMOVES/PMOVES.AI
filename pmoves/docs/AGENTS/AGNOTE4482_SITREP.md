@@ -4,14 +4,47 @@ GRAPHITI_MARK: `PHI-4482-SITREP::QUICK-ORIENTATION`
 
 > **For:** Any agent dropping into a PMOVES session cold (fresh start, VS Code restart, new node, Husk walk-in).
 > **Rule:** Read this FIRST. It's pointers, not content. Follow the links.
-> **Last refreshed:** 2026-09-10 (crush-spark refresh — archon-native era)
+> **Last refreshed:** 2026-09-10 (crush-spark refresh - archon-native era) · **2026-09-18 addendum:** 4090 rebase lane (see below)
+
+---
+
+## 2026-09-20 submodule integrity survey (PMOVES-4090-ZAI.CLAW)
+
+**Active lane**: `chore/4090zai-register-and-sitrep` - claimed under **`PMOVES-4090-ZAI.CLAW`** (TTL 72h). First row under that signature deliberately: the 4090 node had been filing as three variants (`4090-claude`, `4090-CLAUDE-OPUS-5 (field)`, `CLAUDE-OPUS-5 (4090)`), which left the collision register unable to tell the claws on that node apart - the condition it exists to prevent.
+
+**Closed**: `wip/4090-rebased-2026-09-18` and `fix/secrets-manifest-env-shared-routing`, both RELEASED through the sanctioned road; their work landed in #3104 / #3105 and the #2938 squash.
+
+**Fixed**: the `PMOVES-n8n` submodule could not resolve its own pin. `.gitmodules` named `PMOVES-n8n.git` while the gitlink pinned `92267e98`, which exists only in `PMOVES-n8n-FlooS`. Cause is a rename history, not a bad pin: repo names are case-insensitive-unique, so `PMOVES-n8n` and `PMOVES-N8N` are the SAME name - the flows repo was renamed to `PMOVES-n8n-FlooS`, then `PMOVES-N8N-Auto` was renamed to `PMOVES-N8N` and case-insensitively re-claimed `PMOVES-n8n`. The url was repointed rather than the pin moved (**PR #3115**). Still owed: `fork-sync.yml` calls `PMOVES-n8n-FlooS` a fork of n8n-io/n8n while the registry lists it `_first_party`.
+
+**Measured**: `PMOVES-supabase`'s pending sync branch (`sync/upstream-2026-08-07-31156502195`, from workflow run 31156502195) is **15 ahead / 0 behind** `PMOVES.AI-Edition-Hardened` (`10451c28`) and merges **clean** - `git merge-tree` rc=0, zero conflicted files. The 15 commits are upstream currency (Studio scoped-PAT work, docs, marketing, UI fixes). The lane is frozen only because **PR #20 has sat open since 2026-08-07** and trips the workflow's own "skip if an open sync PR exists" guard. Two older `sync/*` branches (`-0609`) linger unmerged as well.
+
+**Open**: who owns PR #20 (the GitHub connector refuses it with "access to pull request is restricted by lockdown mode" for that repo, so its checks are unread), the merge-vs-regenerate call, the three hardcoded fork lists that disagree (`fork-sync.yml` carries 28 entries and never reads `fork_registry.json`'s 72 - 7 forks marked `sync:true` are unsyncable, 4 marked `sync:false` are synced anyway), the three missing scoped gates, and the P1 gate-parity pass across Wealth / ToKenism-Multi / DoX. Note the operator's framing to keep: **branding a branch `PMOVES.AI-Edition-Hardened` does not make it hardened** - the gate set needs defining once and applying per repo instead of being inherited from upstream by accident.
+
+---
+
+## 2026-09-18 4090 rebase lane (local drift replayed onto main)
+
+**Active lane**: `wip/4090-rebased-2026-09-18` - claimed by `4090-claude` (TTL 72h; filed through `make -C pmoves register-claim`). Based on main `c7e1d5de6`.
+
+**Why it exists**: the 4090 WIP branch (`wip/local-drift-4090-2026-09-15`) sat **190 commits behind main** with 40+ drifted submodule gitlinks, so conclusions drawn from it were unreliable in both directions. The original working tree is untouched; the replay runs in a separate worktree.
+
+**Replayed onto current main** (3 commits):
+- cipher per-agent mint token scopes - the inline `$(or $(SCOPES), ...)` default split on commas, so every agent minted without an explicit `SCOPES=` got `memory:read` alone: no write, no reasoning, no session
+- `provision-cipher` failing on every Git Bash node
+- commit-message heredoc masking in the Bash damage-control guard, replayed onto the guard as rewritten by #3034 (which still ended the mask with a strip-based terminator rule for every heredoc, dash or not)
+
+**Dropped, verified not lost**: the `TS_Z890` env commit. Main ships `TS_Z890=` **empty on purpose** - fleet endpoints are loopback in compose by default and tailnet addresses are not committed (`feedback_no_topology_in_commits`). Replaying it would have reverted a documented decision.
+
+**Precondition for what remains**: the rest of the drop-list review needs a **fresh local checkout**. A 190-behind tree is what this lane exists to clean up; re-deriving those conclusions from it would repeat the error.
+
+**Cold-start note**: `AGNOTE4482.md` § *PMOVES.AI Brand & Vision* now carries the brand/vision registration and the **AGInTZ awareness ledger** (porous rows, claim-before-edit, no touching others' rows).
 
 ---
 
 ## 2026-09-10 convergence snapshot (crush-spark)
 
 - **Archon is native-only**: the Python-Archon surface retired (#2943); Archon 0.6.0
-  REST is live on `:3090` (JSON `/api/health` — the SPA catch-all makes status-only
+  REST is live on `:3090` (JSON `/api/health` - the SPA catch-all makes status-only
   probes false-positive). MCP roster entry removed; `archon-native-health`,
   `up-archon-native`, `archon-rest-policy-smoke` are the targets.
 - **Third-ref persona loop live**: `persona.consumption.recorded.v1` → Supabase
@@ -20,7 +53,7 @@ GRAPHITI_MARK: `PHI-4482-SITREP::QUICK-ORIENTATION`
   webhook is the human-side producer). #3002/#3010.
 - **H3 V3 proven on GB10**: ComfyUI + sageattn (sm_121) render path verified;
   archive in `pmoves/tools/comfyui/`. Models live on the 4T external.
-- **Fleet merge friction**: shared GraphQL budget races — REST-first tooling +
+- **Fleet merge friction**: shared GraphQL budget races - REST-first tooling +
   window-watcher merges are the pattern (see FlOO$ lane docs).
 - Register discipline: RELEASE rows via `make register-release`; identity
   vocabulary gates register authors (`pmoves/config/identity_vocabulary.yaml`).
@@ -50,47 +83,47 @@ Example: `feat/w3-discord-classrooms`, `fix/1287-runner-loop`
 **Forbidden**: `feature/` (use `feat/`), `pr/` (branches ≠ PRs), `p1/`-`p7/` (use workstream ID).
 
 
-## Latest Lane (2026-07-14 → 2026-07-19) — Mavis-5090
+## Latest Lane (2026-07-14 → 2026-07-19) - Mavis-5090
 
-**Active lane**: `WEBSITE_AS_AGENT_CANVAS` v0.1 + v0.2 — **MERGED into main 2026-07-18**.
+**Active lane**: `WEBSITE_AS_AGENT_CANVAS` v0.1 + v0.2 - **MERGED into main 2026-07-18**.
 
 **What it was**: the "CF Pages is a canvas PMOVES agents paint on" reframe (DARKXSIDE, 2026-07-15). Every community PMOVES visits gets a living, A2UI-rendered, agent-composed CF Pages tenant. Substrate: HTML5 Web Components (no framework, framework-agnostic). The review-trim cycle is operator-gated: every thread becomes a LEARNINGS.md entry before any code moves.
 
 **Where the work is on main**:
-- **PR #2132** (5,509 additions, 65 files) — A2UI v0.1 + Fordham Hill tenant: spec + 7 components (`<pm-space-agent-card>` `<pm-project-card>` `<pm-metric-tile>` `<pm-timeline>` `<pm-voice-clip>` `<pm-image>` `<pm-quote-block>`) + `compose_tenant_page()` Python tool (19/19 tests) + Fordham Hill tenant page composed and ready to deploy (CF Pages deploy not yet run — operator call)
-- **PR #2133** (1,056 additions, 18 files) — A2UI v0.2 design: `<pm-haptic>` v0.1 + rev-3 spec reconciliation of the v0.2 ballot contract (squash-merged as #2157)
-- **PR #2134** (3,046 additions, 34 files) — A2UI v0.2 implementation: `<pm-toast>` + `<pm-ballot>` (stateful, unsigned demo receipts — `chit-stub:` placeholder signature, nonce-commitment still TODO per rev-3 §5.4) + St. Maarten tenant (2nd) + v0.2 event wire + CF Pages deploy target + review-style scaffolding (LEARNINGS template + a2ui trail hook + meta-doc)
+- **PR #2132** (5,509 additions, 65 files) - A2UI v0.1 + Fordham Hill tenant: spec + 7 components (`<pm-space-agent-card>` `<pm-project-card>` `<pm-metric-tile>` `<pm-timeline>` `<pm-voice-clip>` `<pm-image>` `<pm-quote-block>`) + `compose_tenant_page()` Python tool (19/19 tests) + Fordham Hill tenant page composed and ready to deploy (CF Pages deploy not yet run - operator call)
+- **PR #2133** (1,056 additions, 18 files) - A2UI v0.2 design: `<pm-haptic>` v0.1 + rev-3 spec reconciliation of the v0.2 ballot contract (squash-merged as #2157)
+- **PR #2134** (3,046 additions, 34 files) - A2UI v0.2 implementation: `<pm-toast>` + `<pm-ballot>` (stateful, unsigned demo receipts - `chit-stub:` placeholder signature, nonce-commitment still TODO per rev-3 §5.4) + St. Maarten tenant (2nd) + v0.2 event wire + CF Pages deploy target + review-style scaffolding (LEARNINGS template + a2ui trail hook + meta-doc)
 - **PR closeout record**: `pmoves/docs/logs/pr_open/PR_closeout_a2ui.body.md`
 - **Trim LEARNINGS** (per-PR, written by 5090-CLAUDE): `pmoves/docs/logs/pr_trim_213{2,3,4}_LEARNINGS.md` (9 + 9 + 6 entries; four-bucket structure: missed-signal / fix-pattern / wrong-suggestion / already-addressed)
 - **A2UI v0.1 spec**: `pmoves/contracts/a2ui-v0.1.md`
 - **A2UI v0.2 ballot spec (rev-3)**: `pmoves/contracts/a2ui-v0.2-ballot.md`
 
 **What was added post-merge (in main, not the original 3-PR stack)**:
-- `5ce2ae6c5` `docs(fordham): ballot prior art + A2UI reconciliation — HMAC cannot sign a contested ballot (#2154)` (B850-CLAUDE) — Ed25519 critique of the symmetric HMAC plan; voting-systems prior art (Helios, BeleniosRF, etc.); the substantive A2UI/ballot cross-lane work
-- `e65e9bb29` `fix(governance): reconcile Fordham contracts and evidence (#2164)` (Shaela Bello / 5090-CLAUDE) — Fordham governance bylaws, voter identity, key custody
-- `529422343` `docs(agnote): A2UI stack landed — merge train + restack record` (Shaela Bello / 5090-CLAUDE) — the AGNOTE row that closes the A2UI lane
-- `pmoves/docs/pilots/fordham-hill/` directory — 8 sub-docs (capacity, wealth, tokenism, governance bylaws, economic verification, room agents, ballot prior art, voter identity/key custody)
-- `pmoves/docs/CATACLYSM_CROSSLINKS.md` — L4 vision ⇄ L3 implementation bridge, crystallized via a 9-agent fan-out
+- `5ce2ae6c5` `docs(fordham): ballot prior art + A2UI reconciliation - HMAC cannot sign a contested ballot (#2154)` (B850-CLAUDE) - Ed25519 critique of the symmetric HMAC plan; voting-systems prior art (Helios, BeleniosRF, etc.); the substantive A2UI/ballot cross-lane work
+- `e65e9bb29` `fix(governance): reconcile Fordham contracts and evidence (#2164)` (Shaela Bello / 5090-CLAUDE) - Fordham governance bylaws, voter identity, key custody
+- `529422343` `docs(agnote): A2UI stack landed - merge train + restack record` (Shaela Bello / 5090-CLAUDE) - the AGNOTE row that closes the A2UI lane
+- `pmoves/docs/pilots/fordham-hill/` directory - 8 sub-docs (capacity, wealth, tokenism, governance bylaws, economic verification, room agents, ballot prior art, voter identity/key custody)
+- `pmoves/docs/CATACLYSM_CROSSLINKS.md` - L4 vision ⇄ L3 implementation bridge, crystallized via a 9-agent fan-out
 
 **What is OPEN (post-merge, not blocking anything except CF Pages deploy)**:
-- **Fordham-resident-legitimacy** — the `fordham-hill.json` fixture ships 2 attributed quotes ("Pilot resident, Fordham Hill" + "Pilot co-organizer") with no recorded consent or provenance. **Deploy-gate, not merge-gate** — the merge landed, the public CF Pages deploy waits on the answer. Documented as a post-merge addendum in `pr_trim_2132_LEARNINGS.md` §"Post-merge addendum (2026-07-19, Mavis-5090)".
-- **CodeQL on `<pm-ballot>`** — triaged false-positive (the `xss-through-dom` query doesn't model hand-rolled escapers). Required checks all green. The v0.3 follow-up is to rebuild receipt + tally DOM with `createTextNode` / `textContent` so the query passes structurally.
+- **Fordham-resident-legitimacy** - the `fordham-hill.json` fixture ships 2 attributed quotes ("Pilot resident, Fordham Hill" + "Pilot co-organizer") with no recorded consent or provenance. **Deploy-gate, not merge-gate** - the merge landed, the public CF Pages deploy waits on the answer. Documented as a post-merge addendum in `pr_trim_2132_LEARNINGS.md` §"Post-merge addendum (2026-07-19, Mavis-5090)".
+- **CodeQL on `<pm-ballot>`** - triaged false-positive (the `xss-through-dom` query doesn't model hand-rolled escapers). Required checks all green. The v0.3 follow-up is to rebuild receipt + tally DOM with `createTextNode` / `textContent` so the query passes structurally.
 - **v0.3 spec additions** (parking lot): identity verification, multi-ballot pages, delegation, ranked choice, two-factor audit, recurring ballots.
 - **HMAC → Ed25519 migration** for the tenant signing card (per #2154).
 - **CF Pages deploy target** is ready (`make -C pmoves deploy-tenant TENANT=fordham-hill`) but **not yet run** (operator call).
-- **KiloCode is bringing up n8n** — when ready, switch the pr_review_watcher.py to `--mode nats` (B-mode). Same CLI, different transport.
+- **KiloCode is bringing up n8n** - when ready, switch the pr_review_watcher.py to `--mode nats` (B-mode). Same CLI, different transport.
 
 **Three-body for the lane**:
-- Delivery = Mavis-5090 (this lane, MiniMax token plan) — content + 16 commits ahead of main, all merged
-- Trim = 5090-CLAUDE (peer-CLAUDE on this node, Claude Code Max plan) — applied the fixes, wrote the LEARNINGS, ran the merge train, closed the AGNOTE row
-- Cross-lane review = B850-CLAUDE (Knuckles, GLM coding plan) — CHIT review, Fordham + ballot reconciliation, Ed25519 critique
+- Delivery = Mavis-5090 (this lane, MiniMax token plan) - content + 16 commits ahead of main, all merged
+- Trim = 5090-CLAUDE (peer-CLAUDE on this node, Claude Code Max plan) - applied the fixes, wrote the LEARNINGS, ran the merge train, closed the AGNOTE row
+- Cross-lane review = B850-CLAUDE (Knuckles, GLM coding plan) - CHIT review, Fordham + ballot reconciliation, Ed25519 critique
 - Control = DARKXSIDE (operator at all 5 gates; final merge authorization; Fordham-resident-legitimacy answer)
 - Memory = AGNOTE trail (12+ Mavis-5090 rows + 5090-CLAUDE A2UI Stack Landed + B850-CLAUDE Fordham + ballot + AGNOTE 2026-07-19 Mavis-5090 closeout)
 
 **Coding-plan policy** (DARKXSIDE 2026-07-16): no direct API calls. Route through `gh` CLI, `nats` CLI / `nats-py`, Ollama Pro, `make -C pmoves sign-trail`. The 7 coding plans: MiniMax (Mavis-5090), GLM (KiloCode / B850-CLAUDE), Kimi, Ollama Pro, Alibaba/Qwen, Claude Code Max (5090-CLAUDE), ChatGPT Business.
 
 **Mavis-5090 cron repurposed** (cron_id `4cb5492c-1c76-4675-8571-de44cd78fd99`):
-- Was: every 30 min, watch PR review activity on #2132/#2133/#2134 (now MERGED — watch over)
+- Was: every 30 min, watch PR review activity on #2132/#2133/#2134 (now MERGED - watch over)
 - Now: every 45 min, watch the post-merge follow-up lane (v0.3 pm-ballot CodeQL rebuild + Fordham-resident-legitimacy + LEARNINGS addendum question)
 - Tool: `pmoves/tools/pr_review_watcher.py` (modes: notifications / pr-watch / nats). A-mode = HTTP ETag, no polling. B-mode = NATS subscription, zero polling.
 

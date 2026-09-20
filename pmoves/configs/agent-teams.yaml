@@ -36,6 +36,7 @@ teams:
     # The session role every node's launcher starts in; orchestration is the
     # team its CLI identities (claude_b850, claude_4090, ...) already sit in.
     - node_steward
+    - kimi_knuckles      # Kimi Code CLI identity on B850/Knuckles (PMOVES-KIMI-KNUCKLES-B850)
   implementation:
     name: Implementation
     description: Blueprint-first coding and delivery agents
