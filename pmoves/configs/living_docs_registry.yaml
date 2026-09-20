@@ -115,6 +115,11 @@ tracked:
     severity: P2
     description: "RFC — structured policy for the damage-control guard: parse over regex, pydantic at EGRESS not ingress, provenance contract, DangerRoom validation. Registers itself under the contract it proposes, so the proposal is subject to its own rule (2026-09-18)"
 
+  - path: pmoves/docs/architecture/DETERMINISTIC_HARDENING_RATCHET_RFC.md
+    freshness_days: 180
+    severity: P2
+    description: "RFC — deterministic hardening ratchet across the fork fleet: derive the sync list from the registry instead of a hardcoded heredoc, bind every list to the OBSERVED default branch, and make hardened-default forks self-gate on their own runners. Measured 2026-09-20: 41 forks default to hardened, zero run a hardening gate"
+
   # ── Service docs (a2ui-renderer) ──────────────────────────────────────
   - path: pmoves/services/a2ui-renderer/README.md
     freshness_days: 30
