@@ -41,7 +41,7 @@ else
 SECRETS_FUNNEL_BOOT_USER_TARGET :=
 endif
 
-.PHONY: codex-config codex-audit codex-parity-check codex-parity-check-strict codex-home codex-health-quick secrets-audit tooling-audit tooling-audit-strict chit-export chit-manifest-sync chit-manifest-check secrets-local-hydrate secrets-runtime-hydrate secrets-funnel-sync secrets-funnel secrets-ensure-generated secrets-ensure-check secrets-rotate secrets-untrack a0-plugins-check a0-plugins-check-remote
+.PHONY: codex-config codex-audit codex-parity-check codex-parity-check-strict codex-home codex-health-quick secrets-audit compose-hardening compose-hardening-write-baseline tooling-audit tooling-audit-strict chit-export chit-manifest-sync chit-manifest-check secrets-local-hydrate secrets-runtime-hydrate secrets-funnel-sync secrets-funnel secrets-ensure-generated secrets-ensure-check secrets-rotate secrets-untrack a0-plugins-check a0-plugins-check-remote
 codex-config: ## Install repo-pinned Codex config into ~/.codex/config.toml
 	@pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/codex_apply_config.ps1
 
@@ -66,8 +66,14 @@ codex-home: ## Show Codex operator docs for PMOVES agent workflows
 codex-health-quick: ## Fast Codex-oriented health check for core agent services
 	@$(CODEX_PY) scripts/codex_health_quick.py
 
-secrets-audit: ## Run secrets hardening audit (CHIT paths, sync workflow, export hygiene)
+secrets-audit: ## Run secrets hardening audit (CHIT paths, sync workflow, export hygiene). Also runs in CI as the `Secrets Hardening Audit` job in .github/workflows/hardening-validation.yml — until 2026-09-20 this target was the ONLY way it ever ran (finding L4).
 	@$(CODEX_PY) tools/secrets_hardening_audit.py
+
+compose-hardening: ## Ratchet pmoves/docker-compose.hardened.yml against its baseline (exit 1 = new/stale finding, exit 3 = COULD NOT MEASURE — and `make` collapses BOTH to 2, so call the tool directly when the distinction matters)
+	@$(CODEX_PY) tools/compose_hardening_ratchet.py $(if $(SERVICE),$(SERVICE),)
+
+compose-hardening-write-baseline: ## Re-record the current compose-hardening findings as the baseline. The list may shrink and must never silently grow — adding an entry should require saying why in the PR.
+	@$(CODEX_PY) tools/compose_hardening_ratchet.py --write-baseline
 
 action-pin-audit: ## Verify every SHA-pinned GitHub Action resolves (exit 3 = API unreachable, NOT a pass)
 	@$(CODEX_PY) tools/action_pin_audit.py
