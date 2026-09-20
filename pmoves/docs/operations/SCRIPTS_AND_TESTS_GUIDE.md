@@ -103,7 +103,25 @@ The task tracker parses tasks from the roadmap markdown file:
 
 ### Purpose
 
-Bash script to validate Docker Compose services against PMOVES.AI security hardening requirements. Ensures all services follow security best practices for production deployment.
+Validates the services in `pmoves/docker-compose.hardened.yml` against
+PMOVES.AI security hardening requirements.
+
+Since 2026-09-20 it is a thin wrapper over
+`pmoves/tools/compose_hardening_ratchet.py`. What changed, and why it matters
+when reading this page: the previous implementation grepped the overlay, scored
+every requirement as a *warning*, and exited 0 on all of them — `112 passed,
+43 warnings, 0 errors`. It could only fail on the literal string `user: "0:0"`,
+it validated three entries from the top-level `secrets:` block as if they were
+services, and a `user:` that was a name rather than `uid:gid` incremented no
+counter at all. Findings H2 and M5 in
+`pmoves/docs/audit/HARDENING_VENDOR_RECONCILE_2026-09-20.md`.
+
+Findings now **ratchet** against
+`pmoves/configs/hardening_ratchet/_compose_known_gaps.yaml`: a recorded gap does
+not fail, a NEW one does, and a recorded gap that has since been fixed fails as
+STALE so the list can only shrink. Same semantics as `hardening_ratchet.py`.
+
+It is **not** a required status check. Promoting it is an operator decision.
 
 ### Validation Checks
 
@@ -123,8 +141,16 @@ The script validates the following security controls:
 # Validate all services in hardened compose file
 ./pmoves/scripts/validate-hardening.sh
 
-# Validate a specific service
-./pmoves/scripts/validate-hardening.sh flute-gateway
+# Validate a specific service (must be declared in the hardened overlay —
+# a name that is not there is exit 3, COULD NOT MEASURE, not a pass)
+./pmoves/scripts/validate-hardening.sh extract-worker
+
+# Or through make (note: make collapses every nonzero exit to 2)
+make -C pmoves compose-hardening
+make -C pmoves compose-hardening SERVICE=extract-worker
+
+# Re-record the baseline after fixing services
+make -C pmoves compose-hardening-write-baseline
 
 # Make script executable
 chmod +x pmoves/scripts/validate-hardening.sh
@@ -134,26 +160,38 @@ chmod +x pmoves/scripts/validate-hardening.sh
 
 | Code | Meaning |
 |------|---------|
-| `0` | All checks passed (or warnings only) |
-| `1` | One or more checks failed |
+| `0` | Clean — every finding is already in the baseline |
+| `1` | A NEW finding, and/or a STALE baseline entry that is now compliant |
+| `3` | **COULD NOT MEASURE** — no YAML parser, the overlay is missing or unparseable, a named service is not declared, or the per-service verdict count did not reconcile. Never the same thing as `0`. |
 
 ### Output Format
 
+Measured on `main` at 2026-09-20 (28 services, all of them missing
+`deploy.resources.limits`, all 28 baselined):
+
 ```
-PMOVES.AI Docker Hardening Validation
-======================================
+PMOVES.AI compose hardening ratchet
+===================================
 [INFO] Checking: pmoves/docker-compose.hardened.yml
 
-[INFO] Validating: flute-gateway
-[PASS] Non-root user: 65532:65532
-[PASS] Read-only filesystem
-[PASS] All capabilities dropped
-[PASS] No-new-privileges enabled
-[PASS] Resource limits defined
+[INFO] Validating: extract-worker
+  [PASS] user: user: 65532:65532
+  [PASS] read_only: read_only: true
+  [PASS] cap_drop: cap_drop: [ALL]
+  [PASS] no_new_privileges: security_opt: no-new-privileges:true
+  [BASELINED] NO_RESOURCE_LIMITS: no deploy.resources.limits
 
-======================================
-Summary: 5 passed, 0 warnings, 0 errors
+...
+
+===================================
+Summary: 28 services x 5 properties = 140 evaluated; 112 passed + 28 findings = 140
+Findings: 28 (28 baselined, 0 new)
 ```
+
+The `Summary:` line is printed as an equation on purpose. `passed + findings`
+must equal `services x properties`; if it does not, the tool exits 3 rather
+than print a tidy, smaller total. The old three-number line could not
+distinguish "all subjects evaluated" from "one fell through a branch".
 
 ### Security Requirements Reference
 

@@ -388,13 +388,14 @@ def main(argv: List[str] | None = None) -> int:
     baseline_path = Path(args.baseline)
 
     try:
-        services = load_services(compose_path)
+        all_services = load_services(compose_path)
+        services = all_services
         if args.service:
-            if args.service not in services:
+            if args.service not in all_services:
                 raise CouldNotMeasure(
                     f"service {args.service!r} is not declared in {compose_path}"
                 )
-            services = {args.service: services[args.service]}
+            services = {args.service: all_services[args.service]}
         records = evaluate(services)
         reconcile(services, records)
         reasons, kinds = _parse_baseline(baseline_path)
@@ -406,14 +407,26 @@ def main(argv: List[str] | None = None) -> int:
     baseline = set(reasons)
     new = sorted(found - baseline)
 
-    # A baselined ident can be absent from `found` for two unrelated reasons.
-    # If the service IS declared here, it was fixed -> STALE -> fail, so the
-    # baseline cannot rot into an allowlist. If the service is not declared
-    # here at all (a targeted run, or an overlay that dropped it), the entry
-    # says nothing about this tree -> report, do not fail.
-    declared = set(services)
+    # A baselined ident can be absent from `found` for THREE unrelated
+    # reasons, and collapsing them is how a ratchet either rots into an
+    # allowlist or screams about services it was never asked to look at:
+    #
+    #   evaluated here and now compliant -> STALE -> fail. Without this the
+    #       baseline becomes permanent and the count never goes down.
+    #   declared in the overlay but outside a targeted run -> out of scope.
+    #       Saying "not in this file" about a service that IS in the file
+    #       would be the same wrong-subject defect this tool exists to fix.
+    #   not declared in the overlay at all -> report, do not fail. A baseline
+    #       shared across branches must survive a tree that dropped a service.
+    declared = set(all_services)
+    evaluated = set(services)
     absent = sorted(baseline - found)
-    stale = [i for i in absent if i.split("|", 1)[-1] in declared]
+    stale = [i for i in absent if i.split("|", 1)[-1] in evaluated]
+    out_of_scope = [
+        i
+        for i in absent
+        if i.split("|", 1)[-1] in declared and i.split("|", 1)[-1] not in evaluated
+    ]
     not_in_file = [i for i in absent if i.split("|", 1)[-1] not in declared]
 
     passed = [r for r in records if not r["ident"]]
@@ -437,6 +450,7 @@ def main(argv: List[str] | None = None) -> int:
                     "baselined": len(baselined),
                     "new": new,
                     "stale": stale,
+                    "out_of_scope": out_of_scope,
                     "not_in_file": not_in_file,
                     "records": records,
                 },
@@ -480,6 +494,12 @@ def main(argv: List[str] | None = None) -> int:
         print("STALE (baselined, now compliant - remove from the baseline):")
         for ident in stale:
             print(f"  - {ident}")
+    if out_of_scope:
+        print("")
+        print(
+            f"OUT OF SCOPE ({len(out_of_scope)} baselined entr(ies) for services "
+            "this targeted run did not evaluate)"
+        )
     if not_in_file:
         print("")
         print(f"NOT IN THIS FILE ({len(not_in_file)}, reported, not failing):")

@@ -257,3 +257,38 @@ def test_the_shipped_baseline_has_no_new_and_no_stale_entries(capsys):
     assert out["stale"] == []
     assert out["passed"] + out["findings"] == out["evaluated"]
     assert code == chr_mod.EXIT_CLEAN
+
+
+def test_a_targeted_run_on_an_undeclared_service_is_could_not_measure(fixture_overlay):
+    """The old script's answer to this was `0 passed, 0 warnings, 0 errors`,
+    exit 0 -- a clean pass for a subject it never looked at. It is also the
+    example invocation in pmoves/docs/operations/SCRIPTS_AND_TESTS_GUIDE.md,
+    whose named service is not in the overlay at all.
+    """
+    code = chr_mod.main(["--file", str(fixture_overlay), "svc-does-not-exist"])
+    assert code == chr_mod.EXIT_CANNOT_MEASURE
+
+
+def test_a_targeted_run_does_not_call_other_services_missing(capsys, fixture_overlay, tmp_path):
+    """Out-of-scope is its own bucket.
+
+    Reporting "NOT IN THIS FILE" for a service that IS in the file would be
+    the wrong-subject defect this tool exists to remove, re-entering through
+    the baseline.
+    """
+    baseline = _baseline(
+        tmp_path,
+        ["NO_USER|svc-no-user", "USER_NOT_NUMERIC|svc-named-user", "ROOT_USER|svc-root-user"],
+    )
+    code, out = _run(
+        capsys, "--file", str(fixture_overlay), "--baseline", str(baseline), "svc-good"
+    )
+    assert code == chr_mod.EXIT_CLEAN
+    assert out["services"] == 1
+    assert out["not_in_file"] == []
+    assert out["stale"] == []
+    assert sorted(out["out_of_scope"]) == [
+        "NO_USER|svc-no-user",
+        "ROOT_USER|svc-root-user",
+        "USER_NOT_NUMERIC|svc-named-user",
+    ]
