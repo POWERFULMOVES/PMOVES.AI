@@ -123,9 +123,13 @@ identities:
     node: "4090"
     note: >-
       The 4090's SECOND peer, and a separate identity from `4090-claude`
-      above -- not a spelling of it. Operator-declared 2026-09-20: the node
-      hosts a Z.AI **autoclaw** harness running `glm-5.3-flash` alongside the
-      Claude Code harness running opus. Aliasing this under `4090-claude`
+      above -- not a spelling of it. Operator-declared 2026-09-20: this is
+      `glm-5.3-flash` riding a Z.AI **autoclaw** harness and wearing this
+      identity on node 4090, alongside opus riding Claude Code and wearing
+      `4090-claude`. Read in the direction this file's own doctrine sets --
+      "the identity a model puts on will align with the model and be tuned
+      by the harness" -- the model is the rider, so two models on two
+      harnesses are two peers. Aliasing this under `4090-claude`
       would declare a Z.AI agent and a Claude agent to be one identity --
       the same conflation this file refuses when it declines to fold
       `claude-opus` into any node CLAUDE. One entry so far (the
@@ -413,7 +417,8 @@ models:
   - canonical: glm-5.3-flash
     aliases: ["glm-5.3-flash", "GLM-5.3-Flash"]
     note: >-
-      The model behind `4090-claw` (operator, 2026-09-20). Bare `glm-5.3` is
+      The model that rides the `autoclaw` harness wearing the `4090-claw`
+      identity (operator, 2026-09-20). Bare `glm-5.3` is
       deliberately NOT an alias: `provider_catalog.yaml` carries
       `chat_zai_glm53` with `model_name: "glm-5.3"` as a distinct model, so
       folding the two would be the `GLM via qwen3-coder` mistake in reverse --
@@ -534,11 +539,15 @@ harnesses:
   - canonical: autoclaw
     aliases: ["autoclaw", "Z.AI autoclaw", "zai-autoclaw"]
     note: >-
-      The Z.AI autoclaw harness on the 4090 (operator, 2026-09-20), worn by
-      the `4090-claw` identity. Separate from `crush` and `kilocode` for the
-      same reason those are separate from each other -- what the identity
-      typed into, not who typed. Like `glm-5.3-flash` above, declared ahead
-      of its first parenthetical rather than after the gate reports it.
+      The Z.AI autoclaw harness on the 4090 (operator, 2026-09-20). A harness
+      wears nothing: `glm-5.3-flash` rides this harness and wears the
+      `4090-claw` identity, which the harness then TUNES -- the direction the
+      doctrine note below states ("the identity a model puts on ... tuned by
+      the harness") and the reason the parser is called `wearing()`.
+      Separate from `crush` and `kilocode` for the same reason those are
+      separate from each other -- what was typed into, not who typed. Like
+      `glm-5.3-flash` above, declared ahead of its first parenthetical
+      rather than after the gate reports it.
   - canonical: kilocode
     aliases: ["kilocode"]
 
