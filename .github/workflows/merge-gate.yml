@@ -39,11 +39,11 @@ on:
 
 # HAND-MAINTAINED COUNT (1 of 3). The gate-job count appears literally in three
 # places that nothing keeps in step: here, in the no-skip rationale inside
-# merge-decision, and in merge-decision's final "all nine gates" message. Adding
+# merge-decision, and in merge-decision's final "all ten gates" message. Adding
 # a job means `needs:`, the `for r in` loop, AND all three of these. Miss the loop
 # and the aggregator passes while ignoring a gate.
 #
-# All nine jobs are read-only: checkout, install, run a make target or a python
+# All ten jobs are read-only: checkout, install, run a make target or a python
 # script, and report. Verified before setting this -- no `gh pr`/`gh api`, no
 # github-script, no comment or label writes, and the ghcr/"packages" hits in this
 # file are all prose in comments, not registry pulls. So contents:read is the
@@ -344,13 +344,45 @@ jobs:
       - name: Check our lock against the fork's declared pins
         run: make -C pmoves agent-zero-pin-check
 
+  # Six workflows guard their self-hosted jobs against fork PRs, in three
+  # mutually incompatible spellings, and not one asserted the invariant. So the
+  # seventh case shipped unguarded: submodule-smoke.yml's `smoke-test` runs on
+  # `[self-hosted, Linux, X64, ai-lab]` -- physical fleet hardware -- on a
+  # `pull_request` trigger, which checks out the PR's OWN code, gated only by a
+  # PR label. Labelling a fork's PR would have run untrusted code on a fleet node.
+  #
+  # A convention protects only the files whoever wrote it remembered. This job is
+  # what makes the eighth case a PR failure instead of another silent one.
+  #
+  # No pytest step: pytest_ratchet.py rglobs every test_*.py in the repo, so the
+  # gate's own 29-case suite is already run by `python-tests` above. Running it
+  # here too would just be a second copy of the same result.
+  fork-guard-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      # pyyaml only. The gate PARSES `runs-on` per job rather than grepping:
+      # `grep -l self-hosted` over this directory matches 22 files, while parsing
+      # finds 30 self-hosted jobs in 14. A grep-based version would be a check
+      # that cannot do what its name implies.
+      - name: Install pyyaml
+        run: python -m pip install --quiet pyyaml
+      - name: Assert every fork-reachable self-hosted job has a fork guard
+        run: python pmoves/tools/validate_fork_guards.py
+
   merge-decision:
     # Reads nothing and writes nothing - it only inspects `needs` results.
     permissions: {}
     needs: [python-tests, docker-build-validation, compose-split-drift-check,
             hardening-validation, action-pin-validation,
             agent-registry-check, dep-matrix-check, agent-zero-pin-check,
-            suppression-marker-check]
+            suppression-marker-check, fork-guard-check]
     runs-on: ubuntu-latest
     if: always()
     steps:
@@ -366,6 +398,7 @@ jobs:
           echo "  dep-matrix-check: ${{ needs.dep-matrix-check.result }}"
           echo "  agent-zero-pin-check: ${{ needs.agent-zero-pin-check.result }}"
           echo "  suppression-marker-check: ${{ needs.suppression-marker-check.result }}"
+          echo "  fork-guard-check: ${{ needs.fork-guard-check.result }}"
           # REQUIRE success — do not merely reject "failure".
           #
           # A needs.<job>.result is one of success | failure | cancelled | skipped.
@@ -375,11 +408,11 @@ jobs:
           # an instrument that reports fine without having measured anything.
           #
           # HAND-MAINTAINED COUNT (2 of 3). The other two are the `permissions`
-          # comment at the top of this file and the "all nine gates" message at
+          # comment at the top of this file and the "all ten gates" message at
           # the end of this step. The authority is the `for r in` loop below, not
           # any of these three numbers.
           #
-          # None of the nine jobs carries an `if:` or a path filter, so they always
+          # None of the ten jobs carries an `if:` or a path filter, so they always
           # run — a skip is not a legitimate state here, and if one ever appears it
           # is itself worth failing on rather than passing silently.
           failed=0
@@ -391,7 +424,8 @@ jobs:
                    "agent-registry-check:${{ needs.agent-registry-check.result }}" \
                    "dep-matrix-check:${{ needs.dep-matrix-check.result }}" \
                    "agent-zero-pin-check:${{ needs.agent-zero-pin-check.result }}" \
-                   "suppression-marker-check:${{ needs.suppression-marker-check.result }}"; do
+                   "suppression-marker-check:${{ needs.suppression-marker-check.result }}" \
+                   "fork-guard-check:${{ needs.fork-guard-check.result }}"; do
             job="${r%%:*}"; res="${r#*:}"
             if [[ "$res" != "success" ]]; then
               echo "::error::Merge gate FAILED — $job did not succeed (result: ${res:-<empty>})"
@@ -405,4 +439,4 @@ jobs:
           # comment at the top of this file and the no-skip rationale above. This
           # line is cosmetic — the loop above is what decides — but a stale number
           # here is how a reader learns to distrust the other two.
-          echo "Merge gate PASSED — all nine gates reported success"
+          echo "Merge gate PASSED — all ten gates reported success"
