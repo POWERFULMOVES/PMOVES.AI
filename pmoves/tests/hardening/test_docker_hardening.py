@@ -130,6 +130,50 @@ def hardened_services_data(compose_data) -> Dict[str, dict]:
     return compose_data.get("hardened", {})
 
 
+def _merge_service(base: dict, overlay: dict) -> dict:
+    """Compose's mapping-merge rule: mappings recurse, anything else is replaced."""
+    if isinstance(base, dict) and isinstance(overlay, dict):
+        merged = dict(base)
+        for key, value in overlay.items():
+            merged[key] = _merge_service(merged[key], value) if key in merged else value
+        return merged
+    return overlay
+
+
+@pytest.fixture(scope="session")
+def merged_services_data(compose_data) -> Dict[str, dict]:
+    """The hardened services AS DEPLOYED: docker-compose.yml, then the overlay.
+
+    Use this ONLY for properties the overlay does not carry. Four of the five
+    hardening properties -- user, read_only, cap_drop, security_opt -- are
+    declared in the overlay itself, and asserting those against the merged
+    config would weaken them: a base value would satisfy a test whose whole
+    point is that the OVERLAY hardens the service.
+
+    `deploy.resources.limits` is the exception, and it is why this exists.
+    docker-compose.hardened.yml is a security-only overlay by design and
+    carries no `deploy:` key for anybody, because `$(DC)` always stacks it on
+    docker-compose.yml, which supplies sizing at merge time. TestResourceLimits
+    therefore asserted a property against a file that was never meant to hold
+    it, and produced 54 failures for limits that demonstrably existed --
+    measured live on B850 (Docker 29.8.1 / Compose v5.5.1) while every one of
+    them was red: extract-worker Memory=536870912 NanoCpus=1000000000, archon
+    Memory=2147483648 NanoCpus=2000000000, ffmpeg-whisper Memory=8589934592
+    NanoCpus=4000000000.
+
+    The subject set is deliberately the OVERLAY's, not the union. A service
+    absent from the overlay is still absent here, so the skip bucket does not
+    move: widening the subjects would silently change what these tests measure
+    on top of changing where they read it from.
+    """
+    hardened = compose_data.get("hardened", {})
+    main = compose_data.get("main", {})
+    return {
+        name: _merge_service(main.get(name, {}), body or {})
+        for name, body in hardened.items()
+    }
+
+
 # =============================================================================
 # Helper Functions
 # =============================================================================
@@ -345,12 +389,22 @@ class TestNoNewPrivileges:
 # =============================================================================
 
 class TestResourceLimits:
-    """Tests that services have resource limits defined."""
+    """Tests that services have resource limits defined.
+
+    The ONLY class in this file that reads the MERGED config rather than the
+    hardened overlay alone, because `deploy.resources.limits` is the only one
+    of the five hardening properties the overlay does not declare.
+    """
 
     @pytest.mark.parametrize("service", HARDENED_SERVICES)
-    def test_service_has_memory_limit(self, service, hardened_services_data):
+    def test_service_has_memory_limit(self, service, merged_services_data):
         """Test that service has memory limit defined."""
-        config = get_service_config(service, {"hardened": hardened_services_data})
+        # Merged, not overlay-only: sizing lives in docker-compose.yml. See
+        # the merged_services_data fixture for why, and why the other SIX
+        # get_service_config call sites in this file must NOT follow -- they
+        # assert user / read_only / cap_drop / security_opt / tmpfs, every one
+        # of which the overlay does declare.
+        config = get_service_config(service, {"hardened": merged_services_data})
         if config is None:
             pytest.skip(f"Service {service} not in hardened compose")
 
@@ -370,9 +424,14 @@ class TestResourceLimits:
             pytest.fail(f"Service {service} has no memory limit defined")
 
     @pytest.mark.parametrize("service", HARDENED_SERVICES)
-    def test_service_has_cpu_limit(self, service, hardened_services_data):
+    def test_service_has_cpu_limit(self, service, merged_services_data):
         """Test that service has CPU limit defined."""
-        config = get_service_config(service, {"hardened": hardened_services_data})
+        # Merged, not overlay-only: sizing lives in docker-compose.yml. See
+        # the merged_services_data fixture for why, and why the other SIX
+        # get_service_config call sites in this file must NOT follow -- they
+        # assert user / read_only / cap_drop / security_opt / tmpfs, every one
+        # of which the overlay does declare.
+        config = get_service_config(service, {"hardened": merged_services_data})
         if config is None:
             pytest.skip(f"Service {service} not in hardened compose")
 

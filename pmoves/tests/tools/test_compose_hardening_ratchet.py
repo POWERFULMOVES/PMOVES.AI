@@ -15,6 +15,16 @@ output:
      in rather than only that the totals look clean -- a bucket meaning "not
      applicable" is exactly what made the old instrument look fixed.
 
+  3. The tool read the overlay ALONE, so every service came back
+     NO_RESOURCE_LIMITS -- a property the overlay carries for nobody, because
+     sizing is declared in the base stack and merged at deploy time. All 28
+     findings were FALSE. Fixing that by widening what is read can trivially
+     produce a check that never fires, so the control for it is POSITIVE:
+     `test_removing_a_real_base_limit_still_fails_and_names_the_service`
+     strips a limit that only the base declares and requires the tool to flag
+     that service BY NAME and exit 1. If that test ever passes-by-being-green,
+     the fix has become blindness wearing the costume of a repair.
+
 The fixtures are written to tmp_path, not to the real overlay: a test that
 asserts against `pmoves/docker-compose.hardened.yml` changes its verdict every
 time someone hardens a service, which is the opposite of a control.
@@ -68,8 +78,29 @@ def _baseline(tmp_path: Path, entries) -> Path:
 
 
 def _run(capsys, *argv) -> tuple[int, dict]:
+    """Run the tool, keeping tmp_path fixtures isolated from the real tree.
+
+    A run that names its own `--file` gets `--no-base` unless it asked for a
+    base, because the default base is the repository's six-file STACK_FILES
+    chain. Merging that into a four-service fixture would make a unit test's
+    verdict depend on the working tree -- the exact coupling this file's
+    docstring refuses. `_run(capsys)` with no argv still exercises the real
+    overlay against the real base, which is what the shipped-tree test wants.
+    """
+    argv = list(argv)
+    if "--file" in argv and not {"--base", "--no-base"} & set(argv):
+        argv.append("--no-base")
     code = chr_mod.main(["--json", *argv])
     return code, json.loads(capsys.readouterr().out)
+
+
+# A service block carrying every hardening property EXCEPT sizing -- the shape
+# the real overlay actually has, since `deploy:` lives in the base.
+OVERLAY_ONLY_BLOCK = """
+    read_only: true
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+"""
 
 
 @pytest.fixture()
@@ -292,3 +323,213 @@ def test_a_targeted_run_does_not_call_other_services_missing(capsys, fixture_ove
         "ROOT_USER|svc-root-user",
         "USER_NOT_NUMERIC|svc-named-user",
     ]
+
+
+# =============================================================================
+# Merged-config scope. The overlay says WHO is judged; the base stack it is
+# deployed on says WHAT is read.
+# =============================================================================
+
+
+def _split_fixture(tmp_path: Path) -> tuple[Path, Path]:
+    """An overlay with no sizing and a base that has it -- the real shape.
+
+    The base also declares a service the overlay does not, because the real
+    base declares 111 services against the overlay's 28 and the merge must not
+    let those extras become subjects.
+    """
+    overlay = _overlay(
+        tmp_path,
+        f"""services:
+  svc-a:
+    user: "65532:65532"{OVERLAY_ONLY_BLOCK}  svc-b:
+    user: "65532:65532"{OVERLAY_ONLY_BLOCK}""",
+    )
+    base = tmp_path / "docker-compose.yml"
+    base.write_text(
+        """services:
+  svc-a:
+    image: example/a
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+  svc-b:
+    image: example/b
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 1G
+  svc-not-hardened:
+    image: example/c
+""",
+        encoding="utf-8",
+    )
+    return overlay, base
+
+
+def test_a_property_declared_only_in_the_base_is_found(capsys, tmp_path):
+    """The defect itself: 28 services flagged for limits they demonstrably had.
+
+    Live on B850 while every one of them was a 'finding' --
+    extract-worker Memory=536870912, archon Memory=2147483648,
+    ffmpeg-whisper Memory=8589934592.
+    """
+    overlay, base = _split_fixture(tmp_path)
+    code, out = _run(
+        capsys,
+        "--file",
+        str(overlay),
+        "--base",
+        str(base),
+        "--baseline",
+        str(_baseline(tmp_path, [])),
+    )
+    assert code == chr_mod.EXIT_CLEAN
+    limits = [r for r in out["records"] if r["property"] == "resource_limits"]
+    assert len(limits) == 2
+    assert {r["kind"] for r in limits} == {"PASS"}
+
+
+def test_the_same_overlay_read_alone_reports_the_false_finding(capsys, tmp_path):
+    """The before/after pair, in one assertion rather than two runs of prose.
+
+    Identical overlay. `--no-base` is the pre-2026-09-21 scope, and it produces
+    the false NO_RESOURCE_LIMITS for both services -- which is why the fix is
+    scope and not a verdict change.
+    """
+    overlay, _ = _split_fixture(tmp_path)
+    code, out = _run(
+        capsys, "--file", str(overlay), "--baseline", str(_baseline(tmp_path, []))
+    )
+    assert code == chr_mod.EXIT_FINDINGS
+    assert sorted(out["new"]) == ["NO_RESOURCE_LIMITS|svc-a", "NO_RESOURCE_LIMITS|svc-b"]
+
+
+def test_removing_a_real_base_limit_still_fails_and_names_the_service(capsys, tmp_path):
+    """POSITIVE CONTROL. The one test this whole change stands or falls on.
+
+    Broadening scope to clear 28 false findings can trivially produce a check
+    that never fires, and a check that never fires is indistinguishable from a
+    clean tree in every summary line the tool prints. So: take a limit that
+    ONLY the base declares, remove it, and require the tool to still exit 1 and
+    to name the service -- not merely to go red, which a stale baseline entry
+    would also do.
+    """
+    overlay, base = _split_fixture(tmp_path)
+    sabotaged = base.read_text(encoding="utf-8").replace(
+        """  svc-b:
+    image: example/b
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 1G
+""",
+        """  svc-b:
+    image: example/b
+""",
+    )
+    assert "svc-b" in sabotaged and 'memory: 1G' not in sabotaged
+    base.write_text(sabotaged, encoding="utf-8")
+
+    code, out = _run(
+        capsys,
+        "--file",
+        str(overlay),
+        "--base",
+        str(base),
+        "--baseline",
+        str(_baseline(tmp_path, [])),
+    )
+    assert code == chr_mod.EXIT_FINDINGS
+    assert out["new"] == ["NO_RESOURCE_LIMITS|svc-b"]
+    verdict = next(
+        r
+        for r in out["records"]
+        if r["service"] == "svc-b" and r["property"] == "resource_limits"
+    )
+    assert verdict["kind"] == "NO_RESOURCE_LIMITS"
+    # svc-a is untouched: the control moved ONE service between buckets, it did
+    # not turn the whole run red.
+    assert out["passed"] + out["findings"] == out["evaluated"]
+    assert out["findings"] == 1
+
+
+def test_the_merge_does_not_enlarge_the_denominator(capsys, tmp_path):
+    """The base declares services the overlay does not. They are NOT subjects.
+
+    Widening the subject set would not be a fix for a false negative, it would
+    be a different check under the same name -- and it would put the gate's
+    denominator at the mercy of any file added to STACK_FILES.
+    """
+    overlay, base = _split_fixture(tmp_path)
+    code, out = _run(
+        capsys,
+        "--file",
+        str(overlay),
+        "--base",
+        str(base),
+        "--baseline",
+        str(_baseline(tmp_path, [])),
+    )
+    assert code == chr_mod.EXIT_CLEAN
+    assert out["services"] == 2
+    assert out["evaluated"] == 2 * len(chr_mod.PROPERTIES)
+    assert not any(r["service"] == "svc-not-hardened" for r in out["records"])
+
+
+def test_a_missing_base_file_is_could_not_measure_not_a_pass(tmp_path):
+    """Fail closed. A base that cannot be read must not resolve to 'absent'.
+
+    Silently skipping an unreadable input is how a property comes back unfound
+    and reads as a finding, or how a whole stack goes unread and reads clean.
+    """
+    overlay, _ = _split_fixture(tmp_path)
+    code = chr_mod.main(
+        ["--file", str(overlay), "--base", str(tmp_path / "gone.yml")]
+    )
+    assert code == chr_mod.EXIT_CANNOT_MEASURE
+    assert code != chr_mod.EXIT_CLEAN
+
+
+def test_an_overlay_value_wins_over_the_base(capsys, tmp_path):
+    """Merge direction. A base that runs as root must not survive the overlay."""
+    overlay, base = _split_fixture(tmp_path)
+    base.write_text(
+        base.read_text(encoding="utf-8").replace(
+            "  svc-a:\n    image: example/a\n",
+            '  svc-a:\n    image: example/a\n    user: "0:0"\n    read_only: false\n',
+        ),
+        encoding="utf-8",
+    )
+    code, out = _run(
+        capsys,
+        "--file",
+        str(overlay),
+        "--base",
+        str(base),
+        "--baseline",
+        str(_baseline(tmp_path, [])),
+    )
+    assert code == chr_mod.EXIT_CLEAN
+    svc_a = {r["property"]: r["kind"] for r in out["records"] if r["service"] == "svc-a"}
+    assert svc_a["user"] == "PASS"
+    assert svc_a["read_only"] == "PASS"
+
+
+def test_the_shipped_overlay_resolves_every_service_against_the_real_base(capsys):
+    """The tree as committed, at the real scope the gate runs at.
+
+    Named separately from the baseline test because they can fail for opposite
+    reasons: that one goes red if the baseline rots, this one goes red if the
+    merged resolution stops finding what the deployed stack actually declares.
+    """
+    code, out = _run(capsys)
+    assert code == chr_mod.EXIT_CLEAN
+    assert out["base"], "the gate must not be running at --no-base scope"
+    limits = [r for r in out["records"] if r["property"] == "resource_limits"]
+    assert len(limits) == out["services"]
+    assert {r["kind"] for r in limits} == {"PASS"}
