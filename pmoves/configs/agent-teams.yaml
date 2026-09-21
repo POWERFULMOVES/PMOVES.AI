@@ -16,6 +16,7 @@ teams:
     - claude_4090
     - claude_b850
     - crush_glm52
+    - crush_spark       # crush-harness identity on the SPARK node (declared in agent_registry topology.team: orchestration)
     - claude_5090       # Claude Code CLI identity on the 5090 (primary workhorse)
     - claude_z890       # Claude Code CLI identity on the Z890 (infra coordinator)
     - agent_zero
