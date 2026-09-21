@@ -66,7 +66,18 @@ def _normalize_path(path: str) -> str:
     gate works from any cwd; absolute paths outside the repo root are
     returned as-is and can never match a matrix entry.
     """
-    p = Path(path)
+    # Separators are normalized BEFORE Path(), not after. Path() is
+    # platform-dependent: on Windows a backslash is a separator and
+    # as_posix() converts it, but on Linux it is an ordinary filename
+    # character, so 'pmoves\docker-compose.core.yml' stayed one
+    # component and matched nothing. That is why
+    # test_gate_matches_windows_style_input passed on a Windows
+    # developer machine and failed on the Linux CI runner.
+    #
+    # The intent was already here twice -- the ValueError branch below
+    # and _matrix_owns_path's overlay comparison both replace() -- just
+    # not on the path every call takes.
+    p = Path(path.replace("\\", "/"))
     if p.is_absolute():
         try:
             p = p.resolve().relative_to(REPO_ROOT)

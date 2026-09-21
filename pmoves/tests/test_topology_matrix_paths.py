@@ -168,6 +168,27 @@ def test_gate_matches_windows_style_input(builder, checker, fake_repo):
     assert checker._matrix_owns_path(matrix, "pmoves\\docker-compose.core.yml")
 
 
+def test_windows_style_input_also_normalizes_under_posix_semantics(checker, monkeypatch):
+    """The test above cannot fail on Windows, which is how this bug shipped.
+
+    `Path()` is platform-dependent: on Windows a backslash IS a separator and
+    `as_posix()` converts it, so that assertion passes whether or not the code
+    normalizes. On Linux a backslash is an ordinary filename character, so the
+    path stayed one component and matched nothing -- green on the developer's
+    machine, red on the CI runner.
+
+    Forcing PurePosixPath reproduces the runner's semantics on any host, so the
+    fix is guarded everywhere instead of only where it was already safe.
+    """
+    from pathlib import PurePosixPath
+
+    monkeypatch.setattr(checker, "Path", PurePosixPath)
+    assert (
+        checker._normalize_path("pmoves\\docker-compose.core.yml")
+        == "pmoves/docker-compose.core.yml"
+    )
+
+
 def test_gate_finds_owner_via_guard_paths(builder, checker, fake_repo):
     matrix = _build_matrix(builder, fake_repo)
     assert checker._matrix_owns_path(matrix, "PMOVES-Delta/Dockerfile") == ["delta-sub"]
