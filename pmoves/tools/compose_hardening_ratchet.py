@@ -66,6 +66,51 @@ The file is parsed as YAML, not grepped. It carries Compose's `!override` and
 `!reset` tags, which `yaml.safe_load` refuses outright, so unknown tags are
 passed through rather than ignored -- see `_loader`.
 
+What is READ, and why it is not one file (2026-09-21)
+-----------------------------------------------------
+The WHO and the WHAT come from different files, deliberately:
+
+  WHO is judged   the services declared in `docker-compose.hardened.yml` (28).
+                  Unchanged. The overlay IS the list of services this repo has
+                  committed to hardening, and that list is the denominator.
+  WHAT is judged  those services AS DEPLOYED -- the base stack merged with the
+                  overlay -- not the overlay's own text.
+
+Until 2026-09-21 this tool read the overlay alone, and every one of its 28
+`NO_RESOURCE_LIMITS` findings was FALSE. `docker-compose.hardened.yml` is a
+security-only overlay BY DESIGN: it carries no `deploy:` key for any service,
+because the Makefile's `$(DC)` always stacks it on the base stack, which
+supplies sizing at merge time. The tool was asserting a property against a file
+that was never meant to hold it. Measured live on B850 (Docker 29.8.1 /
+Compose v5.5.1) while all 28 were reported as findings:
+
+    extract-worker   Memory=536870912   NanoCpus=1000000000
+    archon           Memory=2147483648  NanoCpus=2000000000
+    ffmpeg-whisper   Memory=8589934592  NanoCpus=4000000000
+
+The limits existed, were correct, and were enforced. Compose v2 enforces
+`deploy.resources.limits` outside Swarm, so the check asserts the RIGHT key --
+the defect was SCOPE.
+
+THIS IS A SEMANTIC CHANGE, not only a bug fix, and a future reader should meet
+it as one. The question moved from
+
+    "is the hardened OVERLAY complete?"   every property declared in one file
+
+to
+
+    "is the DEPLOYED config hardened?"    every property, wherever in the
+                                          merged stack it is declared
+
+Both are legitimate. The second is the one that matters operationally and the
+one the docker-inspect evidence above speaks to. Its cost is that a property
+may now be satisfied from a file other than the overlay, so broadening scope
+could in principle produce a check that never fires. BLINDNESS, not the false
+negative, is therefore the failure mode to guard, and the guard is a positive
+control in pmoves/tests/tools/test_compose_hardening_ratchet.py: strip a real
+`deploy.resources.limits` out of the base and the tool must still name that
+service and exit 1.
+
 Ratchet semantics -- identical to pmoves/tools/hardening_ratchet.py:
 
   new findings    not in the baseline                     -> fail
@@ -77,12 +122,13 @@ Ratchet semantics -- identical to pmoves/tools/hardening_ratchet.py:
 Stale entries fail on purpose: without that a baseline rots into a permanent
 allowlist. The list may shrink and must never quietly grow.
 
-THIS TOOL IS NOT A REQUIRED STATUS CHECK. It runs in
-`.github/workflows/hardening-validation.yml`, which contributes no context to
-`pmoves/configs/branch_protection/pmoves_standard.json`. Promoting it is a
-policy decision for the operator, and must not be taken merely because the
-tool is now able to fail -- being able to fail is what makes that decision
-possible, not a substitute for it.
+THIS TOOL IS A BLOCKING STATUS CHECK as of PR #3131 (2026-09-20). It runs as
+`compose-hardening-check` in `.github/workflows/merge-gate.yml` and feeds
+`merge-decision`'s result loop, so a nonzero exit here stops every PR in the
+repository. It was advisory until the operator promoted it, in that order --
+repair, measure 0-new, then promote -- and the consequence of the promotion is
+that a wrong answer from this file is now a fleet-wide outage rather than a
+red advisory line. Change it accordingly.
 
 Run:   python pmoves/tools/compose_hardening_ratchet.py
        python pmoves/tools/compose_hardening_ratchet.py flute-gateway
@@ -107,6 +153,24 @@ from typing import Dict, List, Tuple
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PMOVES = REPO_ROOT / "pmoves"
 COMPOSE = PMOVES / "docker-compose.hardened.yml"
+
+# The stack the overlay is deployed ON. Transcribed from `STACK_FILES ?=` in
+# pmoves/Makefile -- the list `$(DC)` hands to `docker compose` -- because every
+# hardened bring-up is `$(DC) -f docker-compose.hardened.yml ...` (Makefile
+# up-agents / up-workers / up-media).
+#
+# Order is base-first and it matters: a later file overrides only the keys it
+# declares. docker-compose.archon.submodule.yml redeclares `archon` with no
+# `deploy:` at all, and that does NOT remove the limits docker-compose.yml gave
+# it -- confirmed against the running container (archon Memory=2147483648).
+BASE_COMPOSE = (
+    PMOVES / "docker-compose.yml",
+    PMOVES / "docker-compose.comfyui.yml",
+    PMOVES / "docker-compose.ultimate-tts-studio.yml",
+    PMOVES / "docker-compose.archon.submodule.yml",
+    PMOVES / "docker-compose.apps.yml",
+    PMOVES / "docker-compose.activepieces.yml",
+)
 BASELINE = PMOVES / "configs" / "hardening_ratchet" / "_compose_known_gaps.yaml"
 
 EXIT_CLEAN = 0
@@ -186,6 +250,59 @@ def load_services(path: Path = COMPOSE) -> Dict[str, dict]:
     if not isinstance(services, dict):
         raise CouldNotMeasure(f"{path} declares a non-mapping `services:`")
     return {name: (body or {}) for name, body in services.items()}
+
+
+def _merge(base, overlay):
+    """Compose's mapping-merge rule, restricted to what this tool reads.
+
+    Mappings merge recursively; anything else the overlay declares replaces the
+    base. Compose APPENDS sequences rather than replacing them, which this does
+    not do -- and here it cannot matter, because every sequence the real overlay
+    declares (`cap_drop`, `security_opt`, `tmpfs`) is tagged `!override`, whose
+    documented meaning IS replace. Where it could matter, replacing is the
+    STRICTER reading: it can only drop a value the base contributed, never
+    invent one, so the error direction is a visible finding rather than a
+    silent pass.
+
+    `!reset` needs no special case for the same reason. `_loader` passes an
+    unknown tag through as its (empty) value, and an empty value reads as
+    ABSENT to every verdict below -- which is exactly what `!reset` means.
+    """
+    if isinstance(base, dict) and isinstance(overlay, dict):
+        merged = dict(base)
+        for key, value in overlay.items():
+            merged[key] = _merge(merged[key], value) if key in merged else value
+        return merged
+    return overlay
+
+
+def load_merged_services(
+    overlay: Path = COMPOSE, base: Tuple[Path, ...] = BASE_COMPOSE
+) -> Dict[str, dict]:
+    """Return each OVERLAY service as it is deployed: base stack, then overlay.
+
+    The subject set stays the overlay's. Merging must not enlarge the
+    denominator -- a base file declares 111 services and the overlay 28, and
+    quietly judging 111 would not be a fix for a false negative, it would be a
+    different check wearing the same name.
+
+    A base file that is missing is COULD NOT MEASURE, not a skip. Dropping an
+    input silently is how a property comes back unfound and reads as a finding,
+    or how a whole stack goes unread and reads as a pass.
+    """
+    subjects = load_services(overlay)
+    stacked: Dict[str, dict] = {}
+    for path in base:
+        if not path.is_file():
+            raise CouldNotMeasure(
+                f"base compose file not found: {path}. The overlay cannot be "
+                "resolved against the stack it is deployed on, and judging it "
+                "alone would reproduce the scope defect this resolution exists "
+                "to fix."
+            )
+        for name, body in load_services(path).items():
+            stacked[name] = _merge(stacked.get(name, {}), body)
+    return {name: _merge(stacked.get(name, {}), body) for name, body in subjects.items()}
 
 
 # ---------------------------------------------------------------------------
@@ -376,6 +493,25 @@ def main(argv: List[str] | None = None) -> int:
     ap.add_argument("service", nargs="?", help="evaluate a single service only")
     ap.add_argument("--json", action="store_true", help="machine-readable output")
     ap.add_argument("--file", default=str(COMPOSE), help="compose overlay to read")
+    ap.add_argument(
+        "--base",
+        action="append",
+        metavar="PATH",
+        help=(
+            "compose file the overlay is stacked ON, base-first; repeatable. "
+            "Defaults to the Makefile's STACK_FILES chain."
+        ),
+    )
+    ap.add_argument(
+        "--no-base",
+        action="store_true",
+        help=(
+            "judge the overlay in isolation. This is the pre-2026-09-21 "
+            "behaviour and it reports every service as NO_RESOURCE_LIMITS, "
+            "because the overlay never carried sizing. Kept for diffing the "
+            "two scopes, NOT for gating."
+        ),
+    )
     ap.add_argument("--baseline", default=str(BASELINE), help="baseline file to read/write")
     ap.add_argument(
         "--write-baseline",
@@ -386,9 +522,15 @@ def main(argv: List[str] | None = None) -> int:
 
     compose_path = Path(args.file)
     baseline_path = Path(args.baseline)
+    if args.no_base:
+        base_paths: Tuple[Path, ...] = ()
+    elif args.base:
+        base_paths = tuple(Path(p) for p in args.base)
+    else:
+        base_paths = BASE_COMPOSE
 
     try:
-        all_services = load_services(compose_path)
+        all_services = load_merged_services(compose_path, base_paths)
         services = all_services
         if args.service:
             if args.service not in all_services:
@@ -442,6 +584,7 @@ def main(argv: List[str] | None = None) -> int:
             json.dumps(
                 {
                     "compose": str(compose_path),
+                    "base": [str(p) for p in base_paths],
                     "services": len(services),
                     "properties": len(PROPERTIES),
                     "evaluated": len(records),
@@ -463,6 +606,12 @@ def main(argv: List[str] | None = None) -> int:
     print("PMOVES.AI compose hardening ratchet")
     print("===================================")
     print(f"[INFO] Checking: {compose_path}")
+    if base_paths:
+        print("[INFO] Merged onto (base-first):")
+        for path in base_paths:
+            print(f"         {path}")
+    else:
+        print("[INFO] Merged onto: NOTHING -- overlay judged in isolation (--no-base)")
     print("")
     for name in sorted(services):
         print(f"[INFO] Validating: {name}")
