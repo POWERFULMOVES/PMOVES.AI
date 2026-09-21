@@ -123,6 +123,22 @@ request.
 *Consequence:* research summaries cite weak or fabricated sources as
 most-relevant. This is the canonical prompt-and-parse anti-pattern. **HIGH.**
 
+**T1.4 — Prosodic boundary detection** · `pmoves/services/flute-gateway/prosodic/boundary_detector.py:20-67`
+Regex on trailing punctuation plus a 40-word `PHRASE_STARTERS` keyword set
+classifies each word boundary into five ordered levels — SENTENCE(4) > CLAUSE(3)
+> PHRASE(2) > BREATH(1) > NONE(0) — feeding `BPM_MAP` (60/90/120/80/150), which
+drives the entire CGP v0.2 prosodic packet published to `tokenism.prosodic.bpm.v1`.
+→ **Score.** This is the cleanest fit in the whole survey: the ordered ladder
+already exists as the `BoundaryType` enum, and Score is explicitly permitted to
+land *between* levels rather than snapping to one of five buckets.
+*Batching note:* today this is a per-word loop. The correct shape is **one
+request** — full utterance as `state`, one Score question per boundary. That is
+simultaneously cheaper and better, because each judgment then sees full sentence
+context instead of the trailing token plus next word, so sentence-opening
+`"However,"` and mid-clause `"however"` stop collapsing into the same bucket.
+*Consequence:* wrong pause length and BPM for the entire utterance — and CGP,
+Hyperdim beat-sync and A2UI animation timing all read it as ground truth. **HIGH.**
+
 ### Tier 2 — high value, larger blast radius (stage behind a flag + shadow-compare)
 
 **T2.1 — Persona publish gate** · `pmoves/services/consciousness-service/cgp_mapper.py:196-254`
@@ -174,6 +190,15 @@ history"; **code keeps the combination weights.**
 *Consequence:* steers where every persona's evolutionary search converges.
 **HIGH.**
 
+**T2.6 — Breath insertion** · `pmoves/services/flute-gateway/prosodic/types.py:74-81` + `audio_processor.py:233,243`
+`rng.random() < breath_prob` against a fixed per-boundary table
+(SENTENCE=0.35, CLAUSE=0.15, BREATH=0.90, PHRASE/NONE=0.0) — a coin flip with
+zero sensitivity to syllable run length, speaking rate or persona.
+→ **Noul**, conditioned on the actual utterance rather than a table indexed only
+by boundary type.
+*Consequence:* over- or under-breathing reads as mechanical or asthmatic. Low
+stakes per instance, but it runs on every synthesis call. **MEDIUM.**
+
 ### Tier 3 — real fits, low consequence (do only if convenient)
 
 | Site | Mechanism | Note |
@@ -186,6 +211,37 @@ history"; **code keeps the combination weights.**
 | `pmoves/tools/chit_verify.py:200` | `SequenceMatcher(...).ratio()` for CGP↔corpus fidelity | **Gates nothing today** — flagged so it is not later built into another magic-threshold gate |
 | `query.py:80` | `fuzz.token_set_ratio` lexical fallback | Fallback path only |
 | `projection-validator.ts:393-435` | ±15/±10 hand-weighted ranking | Trades one hand-tuned scheme for another; SPECULATIVE |
+
+### Tier 4 — missing entirely: documented but unimplemented
+
+Two skills document judgment behaviour that **does not exist in code.** These are
+not brittle mechanisms to replace; they are absent capabilities that a Choice or
+Score call would genuinely deliver.
+
+**T4.1 — `tts:express` "automatic engine selection based on intent."**
+`.claude/commands/tts/express.md:22-27` is: parse `--intent` flag (default
+`narrate`) → dict lookup against `pmoves/configs/tts-engine-expressions.yaml`.
+No text→intent classifier exists anywhere in `flute-gateway` or
+`cast-tts-gateway`. "Automatic" means only *the engine follows from the intent
+you typed.* A **Choice** over the nine intents (narrate / emote / dramatic /
+clone / multilingual / podcast / persona / agent / bpm_sync) inferred from
+freeform text would make the documented behaviour true. The engine lookup itself
+is a correct deterministic config lookup and should stay. **HIGH** — the sharpest
+gap on this scope.
+
+**T4.2 — `shift-from-bpm` text→BPM auto-detect.**
+`SKILL.md` documents piping `analyze_beats --text "..." --output-json` into
+`bpm_encoder`. `pmoves/tools/analyze_beats.py` is 823 lines of **audio-file**
+fingerprinting and clustering (ffprobe / ffmpeg / librosa / CLAP → KMeans) with
+three commands — `analyze`, `groups`, `status`. It accepts neither `--text` nor
+`--output-json`, and operates on a folder of audio files, not a string. **The
+documented pipeline does not exist.** The only real text→BPM path is the
+deterministic `boundary_detector` → `BPM_MAP` chain in T1.4.
+
+Note the family these belong to: they are the mirror image of a check that cannot
+pass. A documented capability with nothing behind it does not fail loudly — it
+reads as a working feature. Both should be fixed by either implementing the
+judgment or correcting the doc, independent of any TypeSafe decision.
 
 ---
 
@@ -214,6 +270,9 @@ payment, validate a signature, or count a vote.
 - `pmoves/services/creator-operator/router.py` — capacity/VRAM/caps-subset constraint match. Exact registry lookup, not semantics.
 - `comfy-watcher` extension allowlist + content-hash dedup; `extract-worker` chunk IDs; `channel-monitor` dedup by ID; ASR segment boundaries (model output, not code judgment); Qdrant/embedding calls and RRF's rank math itself; all env-var validation.
 - `Pmoves-pretext` — pure canvas text-layout/measurement, arithmetic only. No semantic decisions exist to convert.
+- `cast-tts-gateway/fallback.py` — multi-provider retry chain (Flute → Ultimate-TTS → …), try/except-and-advance. No classification.
+- `a2ui-renderer` `src/index.ts`, `A2UIComposition.tsx` — `el.type` dispatch (`bar_chart`/`text`/`heading`/`glyph`/`geometry_mesh`) and format→codec branching are typed-schema switches over author-supplied CGP fields, not inference from freeform content. `pretextLayout.ts` is canvas font-metric math.
+- `persona-bind` / `BEATS_VOICE` — explicit user-set env var → fixed persona preset table. Not inference.
 
 ---
 
@@ -292,6 +351,12 @@ regardless of whether any TypeSafe work proceeds.
 5. **`agentgym-rl-coordinator/coordinator/training.py:228,237`** computes
    `mean_reward = 0.5 + (epoch/total)*0.3`, commented "Simulated improvement."
    Demo code; ensure nothing downstream treats it as a real signal.
+6. **`tts:express` documents an inference step that does not exist.** The skill
+   advertises "automatic engine selection based on intent"; the implementation is
+   a flag parse and a dict lookup. See T4.1.
+7. **`shift-from-bpm` documents a CLI surface that does not exist.** It pipes
+   `analyze_beats --text ... --output-json`; that tool has no such flags and
+   consumes audio files. See T4.2.
 
 ---
 
@@ -303,7 +368,7 @@ regardless of whether any TypeSafe work proceeds.
 | CHIT tooling · claim register · living-docs | several / ~30 | **2 fits, mostly non-fits** |
 | ToKenism-Multi · EVO · consciousness | 157 `.ts`/`.py` + 41 service files | 6 points, large non-fit list |
 | YT · creator · comfy · pretext · provenance | ~30 | 2 fits + 1 supporting |
-| Flute-gateway · prosody/CGP/BPM · A2UI · hyperdim | **in flight** | **pending — §9 to follow** |
+| Flute-gateway · prosody/CGP/BPM · A2UI · hyperdim | ~25 | 2 fits + 2 documented-but-missing |
 
 **Known gaps, stated rather than papered over:**
 - `pmoves-yt/yt.py` re-exports from `pmoves_yt_service`, **not vendored in this
@@ -314,6 +379,12 @@ regardless of whether any TypeSafe work proceeds.
   though the same keep-deterministic argument likely applies.
 - `pmoves/services/comfyui/` is a Dockerfile and one example workflow — no
   service code exists to scan.
+- **Hyperdim is UNKNOWN, not absent.** `Pmoves-hyperdimensions/` is unpopulated
+  locally (0 files), so `hyperdim:render/animate/export` have no inspectable
+  implementation to judge. Recorded as unverifiable rather than as a non-fit —
+  that distinction has cost this fleet real time before.
+- `a2ui-nats-bridge/bridge.py` confirmed present but not inspected in detail;
+  scout time went to the higher-signal prosody surface.
 
 **The CHIT result is itself a finding.** A scope built out of signing, access
 control and register parsing returned almost entirely non-fits. That is the
@@ -322,6 +393,13 @@ re-litigates it: CHIT is where TypeSafe should *not* go.
 
 ---
 
-## 9. Prosody / voice / render
+## 9. Scope completion
 
-*Pending — scout in flight at time of writing. This section will be appended.*
+All five scopes are complete; prosody findings are merged inline above rather
+than isolated in an appendix (T1.4, T2.6, T4.1, T4.2, plus non-fits in §4 and
+gaps in §8).
+
+The prosody sweep contributed the one structural addition to this analysis:
+**Tier 4.** The other four scopes found brittle mechanisms to replace. Prosody
+found documented capabilities with no implementation behind them — a different
+defect, needing a different fix, and invisible by exactly the same mechanism.
