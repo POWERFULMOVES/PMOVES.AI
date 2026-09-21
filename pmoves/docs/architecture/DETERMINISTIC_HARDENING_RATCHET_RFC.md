@@ -244,7 +244,11 @@ on:
     branches: [PMOVES.AI-Edition-Hardened]
 jobs:
   harden:
-    uses: POWERFULMOVES/PMOVES.AI/.github/workflows/_hardening-ratchet.yml@main
+    # A TAG, never @main. §5.2 #5 explains why: a caller pinned at a moving ref
+    # means one commit here changes gate behaviour in 41 repos on their next
+    # run, with no staging ring. This snippet is the thing an implementer
+    # copies, so it must BE the mitigation rather than describe it.
+    uses: POWERFULMOVES/PMOVES.AI/.github/workflows/_hardening-ratchet.yml@v1
     secrets: inherit
 ```
 
