@@ -1,96 +1,78 @@
 """No committed NATS credentials anywhere in tracked source.
 
-The pre-existing guard (test_bpm_encoder_nats.TestNatsClientNoHardcodedDefault)
-checks exactly ONE module's DEFAULT_NATS_URL. The credential pattern lives in
-112 .py files and 24 yml/sh files, so that guard reported green over a surface
-it never looked at.
+History of this guard, because it is instructive:
 
-This guard is generated FROM the pattern over the tracked corpus, so it cannot
-go stale as files are added.
+1. The original guard (test_bpm_encoder_nats.TestNatsClientNoHardcodedDefault)
+   checked exactly ONE module's DEFAULT_NATS_URL. It was green while 194
+   occurrences sat in 140 files.
+2. The first version of THIS guard scoped itself to ``pmoves/**`` and matched
+   only the credential-inside-a-URL form. Review found it blind to 48 further
+   occurrences in 32 files outside pmoves/, and to 16 in bare-assignment form --
+   reproducing the exact failure it was written to replace.
+
+So: the corpus is the whole tracked repo, both credential shapes are matched,
+and the corpus control asserts a floor PER GLOB, because a union floor passes
+even when one glob silently breaks.
 """
 
 import re
 import subprocess
 from pathlib import Path
 
-import pytest
-
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
-# A credential embedded in a nats:// URL: scheme, user, password, host.
-CREDENTIAL = re.compile(r"nats://([A-Za-z0-9_.-]+):([A-Za-z0-9_.-]+)@")
+# Shape 1: credential embedded in a nats:// URL.
+URL_CREDENTIAL = re.compile(r"nats://([A-Za-z0-9_.-]+):([A-Za-z0-9_.-]+)@")
+# Shape 2: the password alone -- the directly usable form, and the one the
+# first version of this guard could not see at all.
+BARE_CREDENTIAL = re.compile(r"NATS_PASSWORD(?::-|=)([A-Za-z0-9_.-]+)")
 
-# The credential that actually leaked. In TEST files this is the only pair we
-# flag, because a test that exercises redaction or URL parsing MUST contain a
-# credential-shaped string to be meaningful -- stripping it silently converts
-# the test into one that cannot fail. (A sweep in this lane did exactly that to
-# two flute-gateway redaction controls before this rule existed.)
-LEAKED_CREDENTIAL = ("nats", "pmoves")
+LEAKED_PASSWORD = "pmoves"
 
-# Obvious documentation placeholders. These SHOULD stay -- they teach the URL
-# shape without shipping a secret. Keyed on the user:password pair.
-PLACEHOLDERS = {
-    ("user", "pass"),
-    ("u", "p"),
-    ("USER", "PASS"),
-    ("username", "password"),
+# Documentation placeholders. These SHOULD stay: they teach the URL shape
+# without shipping a secret.
+PLACEHOLDERS = {("user", "pass"), ("u", "p"), ("USER", "PASS"), ("username", "password")}
+
+# Synthetic fixtures that redaction/parsing tests MUST contain to mean anything.
+# Deliberately a narrow allowlist of passwords, not "any credential in a test
+# file" -- that broader rule would hide the NEXT real credential forever.
+SYNTHETIC_TEST_PASSWORDS = {"secret", "secret123", "p4ss", "s3cr3t", "pw", "hunter2"}
+
+# Per-glob floors. A union floor cannot detect one glob breaking.
+SEARCH_GLOBS = {
+    "**/*.py": 1200,
+    "**/*.yaml": 200,
+    "**/*.yml": 50,
+    "**/*.sh": 150,
+    "**/*.example": 1,
 }
 
-# KNOWN, ENUMERATED EXCEPTIONS -- deliberately visible, not silently excluded.
+# ROTATION BACKLOG -- the remaining exposure, enumerated so it stays countable.
 #
-# These are NOT source defaults. They are live config (compose, agent profiles,
-# TAC trees, the CHIT manifest) where deleting the credential would break
-# authenticated connections rather than harden them. They need the opposite
-# fix: replace the literal with an env reference (${NATS_URL}) sourced from the
-# secrets funnel, AND rotate the credential, since it has been public.
-#
-# That is an operator-sequenced change, not a mechanical one. Listing them here
-# keeps the remaining exposure countable instead of invisible -- shrinking this
-# list is the follow-up lane.
-KNOWN_CONFIG_EXCEPTIONS = {
-    "pmoves/chit/secrets_manifest_v2.yaml",
-    "pmoves/configs/agent-profiles/coder_claw.yaml",
-    "pmoves/configs/agent-profiles/minimax_claw.yaml",
-    "pmoves/configs/agent-profiles/minimax_edition.yaml",
-    "pmoves/configs/agent-profiles/nemoclaw.yaml",
-    "pmoves/configs/agent-profiles/nemotron_claw.yaml",
-    "pmoves/configs/agent-profiles/rocm_claw.yaml",
-    "pmoves/configs/agent-profiles/spark_claw.yaml",
-    "pmoves/configs/skill-pairings.yaml",
-    "pmoves/configs/tac_trees/agent-zero-customization.tac.yaml",
-    "pmoves/configs/tac_trees/cast-gateway.tac.yaml",
-    "pmoves/configs/tac_trees/dox-intelligence.tac.yaml",
-    "pmoves/configs/tac_trees/n8n.tac.yaml",
-    "pmoves/configs/tac_trees/networking-defense-in-depth.tac.yaml",
-    "pmoves/configs/tac_trees/node-z890-coordinator.tac.yaml",
-    "pmoves/configs/tac_trees/security-posture.tac.yaml",
-    "pmoves/docker-compose/hf-mcp-server.yml",
-    "pmoves/scripts/fleet/fleet-audit-watcher.sh",
-    "pmoves/scripts/nats/init_streams.sh",
-    "pmoves/scripts/nats/setup_geometry_streams.sh",
-    "pmoves/scripts/proxmox/pmoves-bootstrap.sh",
-    "pmoves/services/agent-zero/.mprocs.yaml",
-    "pmoves/services/agentgym-rl-coordinator/docker-compose.yml",
-    "pmoves/services/cast-tts-gateway/docker-compose.yml",
-}
-
-SEARCH_GLOBS = [
-    "pmoves/**/*.py",
-    "pmoves/**/*.yml",
-    "pmoves/**/*.yaml",
-    "pmoves/**/*.sh",
-]
+# Every path listed still contains the leaked credential. They are docs, skills,
+# kilo commands, TAC trees, agent profiles, compose files and the CHIT manifest.
+# Deleting the value from live config would break authenticated connections, and
+# deleting it from documentation does not un-publish it. The credential has been
+# public, so ONLY ROTATION closes this. This file is the work item for that
+# rotation and should shrink to empty afterwards.
+ROTATION_BACKLOG = set(
+    (Path(__file__).with_name("nats_rotation_backlog.txt")).read_text().split()
+)
 
 
-def _tracked_files():
+def _tracked(glob: str):
     out = subprocess.run(
-        ["git", "ls-files", "--", *SEARCH_GLOBS],
-        cwd=REPO_ROOT,
-        capture_output=True,
-        text=True,
-        check=True,
+        ["git", "ls-files", "--", glob],
+        cwd=REPO_ROOT, capture_output=True, text=True, check=True,
     )
     return [line for line in out.stdout.splitlines() if line]
+
+
+def _all_tracked():
+    seen = []
+    for glob in SEARCH_GLOBS:
+        seen.extend(_tracked(glob))
+    return sorted(set(seen))
 
 
 def _is_test_file(rel: str) -> bool:
@@ -105,43 +87,59 @@ def _is_test_file(rel: str) -> bool:
 
 def _offenders():
     hits = []
-    for rel in _tracked_files():
-        path = REPO_ROOT / rel
+    for rel in _all_tracked():
+        if rel in ROTATION_BACKLOG:
+            continue
         try:
-            text = path.read_text(encoding="utf-8", errors="replace")
+            text = (REPO_ROOT / rel).read_text(encoding="utf-8", errors="replace")
         except OSError:
             continue
         for lineno, line in enumerate(text.splitlines(), 1):
-            for match in CREDENTIAL.finditer(line):
-                if (match.group(1), match.group(2)) in PLACEHOLDERS:
+            for m in URL_CREDENTIAL.finditer(line):
+                pair = (m.group(1), m.group(2))
+                if pair in PLACEHOLDERS:
                     continue
-                if rel in KNOWN_CONFIG_EXCEPTIONS:
+                if _is_test_file(rel) and m.group(2) in SYNTHETIC_TEST_PASSWORDS:
                     continue
-                pair = (match.group(1), match.group(2))
-                if _is_test_file(rel) and pair != LEAKED_CREDENTIAL:
-                    # Synthetic fixture feeding a redaction/parsing test.
-                    continue
-                hits.append(f"{rel}:{lineno}: {match.group(0)}")
+                hits.append(f"{rel}:{lineno}: {m.group(0)}")
+            for m in BARE_CREDENTIAL.finditer(line):
+                if m.group(1) == LEAKED_PASSWORD:
+                    hits.append(f"{rel}:{lineno}: NATS_PASSWORD={m.group(1)}")
     return hits
 
 
-def test_the_corpus_is_not_empty():
-    """Control: an empty corpus would make the real test below pass vacuously.
+def test_each_glob_matches_files():
+    """Control: a silently broken glob makes the guard scan nothing and pass.
 
-    Production change that would make this fail: a broken glob or a wrong
-    REPO_ROOT, which would otherwise report 'no offenders' for the wrong reason.
+    Production change that would make this fail: a typo'd glob or a wrong
+    REPO_ROOT -- neither of which a union-total floor would catch.
     """
-    files = _tracked_files()
-    assert len(files) > 500, f"corpus looks wrong: only {len(files)} tracked files matched"
+    for glob, floor in SEARCH_GLOBS.items():
+        count = len(_tracked(glob))
+        assert count >= floor, f"glob {glob!r} matched {count} files, expected >= {floor}"
 
 
-def test_no_committed_nats_credentials_in_tracked_source():
-    """Production change that would make this fail: reintroducing a real
-    user:password pair into any nats:// URL in tracked source."""
+def test_no_committed_nats_credentials_outside_the_rotation_backlog():
+    """Production change that would make this fail: introducing the leaked
+    credential into any tracked file not already in the rotation backlog."""
     offenders = _offenders()
     assert not offenders, (
-        f"{len(offenders)} committed NATS credential(s) found "
-        f"(corpus: {len(_tracked_files())} tracked files):\n  "
+        f"{len(offenders)} committed NATS credential(s) outside the backlog "
+        f"(corpus: {len(_all_tracked())} tracked files):\n  "
         + "\n  ".join(offenders[:25])
         + ("\n  ..." if len(offenders) > 25 else "")
     )
+
+
+def test_rotation_backlog_has_no_stale_entries():
+    """The backlog must shrink, not rot. A listed path that no longer contains
+    the credential is a stale exemption hiding future regressions."""
+    stale = []
+    for rel in sorted(ROTATION_BACKLOG):
+        path = REPO_ROOT / rel
+        if not path.exists():
+            stale.append(f"{rel} (file gone)")
+            continue
+        if LEAKED_PASSWORD not in path.read_text(encoding="utf-8", errors="replace"):
+            stale.append(f"{rel} (credential already removed)")
+    assert not stale, "stale rotation-backlog entries:\n  " + "\n  ".join(stale)

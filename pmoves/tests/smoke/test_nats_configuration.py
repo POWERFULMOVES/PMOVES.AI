@@ -333,7 +333,7 @@ def test_no_hardcoded_nats_urls_in_compose() -> None:
         assert not hardcoded, (
             f"Found hardcoded NATS_URL in docker-compose.yml:\n"
             + "\n".join(hardcoded)
-            + "\nUse ${NATS_URL:-nats://nats:4222} instead."
+            + "\nUse ${NATS_URL:?NATS_URL must come from the secrets funnel} instead."
         )
 
 
