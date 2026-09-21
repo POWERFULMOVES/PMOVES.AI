@@ -69,6 +69,11 @@ class Node:
     # node-vocabulary.yaml, never derived; see that file's header for the
     # harnesses deliberately left out.
     cipher_agent_id: dict[str, str] = field(default_factory=dict)
+    # What a session ANNOUNCES. Distinct again from both of the above: the
+    # registry key is what node_identity validates, the card is what cipher
+    # accepts, and this is what the operator reads. Declared per node, never
+    # derived -- deriving it from either of the others is how the drift began.
+    display_identity: dict[str, str] = field(default_factory=dict)
 
     @property
     def is_machine(self) -> bool:
@@ -90,6 +95,7 @@ def load_vocabulary(path: Path | None = None) -> dict[str, Node]:
             aliases=tuple(str(a) for a in (entry.get("aliases") or [canonical])),
             default_identity=dict(entry.get("default_identity") or {}),
             cipher_agent_id=dict(entry.get("cipher_agent_id") or {}),
+            display_identity=dict(entry.get("display_identity") or {}),
         )
         for alias in (*node.aliases, canonical):
             key = _norm(alias)

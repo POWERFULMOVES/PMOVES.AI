@@ -79,10 +79,28 @@ LAUNCHER="$ROOT/deploy/provision/claude-pmoves.sh"
 # Falls back to delivery-agent if the steward definition is absent, so a node on
 # an older checkout keeps working rather than launching with --agent pointed at
 # nothing.
+# EXPLICIT "no agent" is a first-class choice, not a missing file.
+#
+# Every agent definition SUBTRACTS from the roster this launcher just
+# assembled: `tools:` is an allowlist and `disallowedTools: mcp__<server>`
+# removes a whole server. A session that needs the FULL roster -- every cipher
+# tool included -- must be able to start with no agent at all.
+#
+# Before this branch existed, PMOVES_DEFAULT_AGENT=none failed the file check
+# below and fell through to delivery-agent, so "neither steward nor delivery"
+# was unreachable AND asking for no body handed back the one body holding
+# Write/Edit. That is the opposite of the request, arrived at silently.
 DEFAULT_AGENT="${PMOVES_DEFAULT_AGENT:-node-steward}"
-if [ ! -f "$ROOT/.claude/agents/$DEFAULT_AGENT.md" ]; then
-  DEFAULT_AGENT="delivery-agent"
-fi
+case "${DEFAULT_AGENT,,}" in
+  none|no|off|"") DEFAULT_AGENT="" ;;
+  *)
+    # A NAMED agent that does not exist still falls back, so an older checkout
+    # keeps working rather than launching with --agent pointed at nothing.
+    if [ ! -f "$ROOT/.claude/agents/$DEFAULT_AGENT.md" ]; then
+      DEFAULT_AGENT="delivery-agent"
+    fi
+    ;;
+esac
 # Only treat $1 as an agent NAME if it is not a flag. The previous form,
 # AGENT="${1:-delivery-agent}", consumed anything: `claude-pmoves --print ping`
 # silently launched with `--agent --print`, which claude rejects or misreads.
@@ -136,7 +154,30 @@ if [ "${PM_IDENT_OK:-0}" = "1" ]; then
   # Put it where the session can actually READ it. Exported variables do not
   # reach the model's context; an appended system prompt does. This is the
   # difference between the identity existing and the identity working.
-  pm_ident_append "You are running on PMOVES node '${PMOVES_NODE}'. Your registered identity in pmoves/config/agent_registry.yaml is '${PMOVES_NODE_IDENTITY}'. Disclose it at session start rather than rediscovering it. Your selected role for this session is the '${AGENT}' agent."
+  # ANNOUNCED NAME vs REGISTRY KEY vs SIGNING CARD -- three spellings, one body.
+  # The sentence used to lead with the registry key, so that was the only one a
+  # session ever said, and the other two surfaced later as contradictions.
+  # display_identity in node-vocabulary.yaml declares the operator-facing one;
+  # fail-open to the registry key when a node declares none.
+  PMOVES_NODE_DISPLAY=""
+  if [ ${#IDENT_PY[@]} -gt 0 ]; then
+    PMOVES_NODE_DISPLAY="$("${IDENT_PY[@]}" -c "
+import sys
+sys.path.insert(0, '$ROOT')
+try:
+    from pmoves.tools import node_identity as ni
+    v = ni.load_vocabulary()
+    n = v.get(ni._norm('${PMOVES_NODE}'))
+    print((n.display_identity or {}).get('claude-code', '') if n else '')
+except Exception:
+    print('')
+" 2>/dev/null)"
+  fi
+  if [ -n "$PMOVES_NODE_DISPLAY" ]; then
+    pm_ident_append "You are ${PMOVES_NODE_DISPLAY}, running on PMOVES node '${PMOVES_NODE}'. Say that name when you identify yourself. Your registered identity in pmoves/config/agent_registry.yaml is '${PMOVES_NODE_IDENTITY}' -- that is the key the registry validates, not what you announce. Disclose both at session start rather than rediscovering them.${AGENT:+ Your selected role for this session is the '${AGENT}' agent.}"
+  else
+    pm_ident_append "You are running on PMOVES node '${PMOVES_NODE}'. Your registered identity in pmoves/config/agent_registry.yaml is '${PMOVES_NODE_IDENTITY}'. Disclose it at session start rather than rediscovering it.${AGENT:+ Your selected role for this session is the '${AGENT}' agent.}"
+  fi
 fi
 
 # CIPHER — persistent memory. Same reasoning as the identity block above: the
@@ -256,9 +297,13 @@ if [ ! -f "$LAUNCHER" ]; then
   # Degrade to the pre-delegation behavior rather than failing: the agent still
   # loads, MCP creds do not. Warn so the missing half is visible, not silent.
   echo "[claude-pmoves] WARN: $LAUNCHER not found — launching without env.shared or the MCP roster." >&2
-  exec claude --agent "$AGENT" ${IDENTITY_ARGS[@]+"${IDENTITY_ARGS[@]}"} "$@"
+  AGENT_ARGS=()
+  [ -n "$AGENT" ] && AGENT_ARGS=(--agent "$AGENT")
+  exec claude ${AGENT_ARGS[@]+"${AGENT_ARGS[@]}"} ${IDENTITY_ARGS[@]+"${IDENTITY_ARGS[@]}"} "$@"
 fi
 
 # The launcher forwards "$@" straight to claude after --mcp-config=, so --agent
 # rides through unchanged.
-exec bash "$LAUNCHER" --agent "$AGENT" ${IDENTITY_ARGS[@]+"${IDENTITY_ARGS[@]}"} "$@"
+AGENT_ARGS=()
+[ -n "$AGENT" ] && AGENT_ARGS=(--agent "$AGENT")
+exec bash "$LAUNCHER" ${AGENT_ARGS[@]+"${AGENT_ARGS[@]}"} ${IDENTITY_ARGS[@]+"${IDENTITY_ARGS[@]}"} "$@"

@@ -97,6 +97,14 @@ nodes:
   default_identity:
     claude-code: claude_b850
     crush: crush_glm52
+  # What a session SAYS it is. Distinct from default_identity, which is the
+  # registry KEY node_identity.py validates against (agent_registry.yaml:193),
+  # and from the signing card (`b850-claude`, signing_identity_cards.yaml) that
+  # cipher requires. Three spellings for one body is drift; this field makes the
+  # operator-facing one explicit instead of leaving it to whichever surface
+  # printed last.
+  display_identity:
+    claude-code: PMOVES-B850-CLAUDE
     kimi: kimi_knuckles
   cipher_agent_id:
     claude-code: b850-claude
