@@ -403,3 +403,70 @@ The prosody sweep contributed the one structural addition to this analysis:
 **Tier 4.** The other four scopes found brittle mechanisms to replace. Prosody
 found documented capabilities with no implementation behind them — a different
 defect, needing a different fix, and invisible by exactly the same mechanism.
+
+---
+
+## 10. The local sibling: Needle 3
+
+TypeSafe is a hosted API (`api.typesafe.ai`, bearer key, ~100ms + network). This
+fleet's standing position is that **cloud plans orchestrate and local models are
+worker siblings**, so the obvious question is whether a local model can hold the
+same role. One can, and it is closer than expected.
+
+**`Cactus-Compute/needle3`** — Apache-2.0, 121M params, CQ2-bit (2.125 bits/weight),
+**a single 35 MB `needle3.cact` file**, with a sub-1 MB engine per platform
+(`linux-x86_64`, `wasm`, `wasm-component`, arm64, even `linux-mipsel`). Not
+present in any local store on Knuckles as of 2026-09-20.
+
+### Why it is a real analog, not a superficial one
+
+| TypeSafe System One | Needle 3 |
+|---|---|
+| Typed primitives, output constrained to author-defined options | Byte-level **decode grammar compiled from your schemas** constrains every token; output is guaranteed to parse |
+| `confidence` from distribution shape | **"every response carries a calibrated confidence score from a learned head"** |
+| >0.9 automate / <0.5 escalate to human | Vendor guide *"Leveraging Needle's confidence"* — routing on **act, confirm or refuse** |
+| No-match outcome so the model need not force a pick | *"ask for something no tool covers and you get an empty list, not a guess"* |
+| Choice over enumerated options | *"extraction generalises to classification"* via enums |
+| — | Also returns **text embeddings** from the same model (`needle_embed`) |
+
+### Where it fits better than the hosted API
+
+- **T4.1 (`tts:express` intent selection)** is Needle's stated core competency
+  almost verbatim: *"given the functions your app exposes, Needle picks the right
+  ones and fills every argument from what the user said."* That is exactly
+  intent-plus-parameters selection, and it removes the API-key and network
+  dependency from the voice path entirely.
+- **T1.4 (prosodic boundary detection)** is latency-sensitive and on the synthesis
+  path. On-device inference from a 35 MB file beats a network round trip.
+- **Retrieval (T2.2/T2.3)** sits in front of a waiting agent, where the hosted
+  API's ~100ms + network is the binding constraint. Local changes that maths.
+
+### Where it does NOT substitute — state this before anyone plans on it
+
+- **No documented per-option probability distribution.** TypeSafe returns
+  `probabilities` across every option and derives `confidence` from its shape.
+  Needle documents a single calibrated confidence per response. For anything that
+  consumes the *distribution* rather than the winner, these are not equivalent.
+- **No documented ordered-level Score with between-level positioning.** TypeSafe
+  Score explicitly lands between levels on a 2–10 rung ladder. Needle reaches
+  classification through enum extraction, which is categorical. T1.4 specifically
+  wanted the between-level behaviour — verify before assuming.
+- **Published benchmarks are tool-calling exact-match and extraction micro-F1,
+  not calibration.** The confidence head is claimed calibrated; the benchmark
+  chart does not measure calibration. That is the property this whole analysis
+  depends on, so it must be measured locally before trust.
+- It **trades away general chat capacity** by design, and context is shared
+  between tool schemas, system prompt and conversation — `needle_init` fails when
+  the static prefix does not fit.
+
+### Recommended posture
+
+Evaluate both against the **same** shadow harness from §6. The harness is
+model-agnostic by construction: dual-path, log both verdicts plus confidence,
+compare later. Running hosted Jev and local Needle 3 through one rig on the same
+traffic produces the only comparison that matters — **on PMOVES data, not on
+either vendor's benchmark** — and it satisfies the no-hardcoded-models position
+by making the choice a registry entry rather than an import.
+
+Canonical repo is `Cactus-Compute/needle3`. Four mirrors exist on the Hub with
+identical tags and 0–157 downloads; do not pull those.
