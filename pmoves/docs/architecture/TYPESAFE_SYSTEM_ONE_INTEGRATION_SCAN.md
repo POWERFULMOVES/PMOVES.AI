@@ -470,3 +470,109 @@ by making the choice a registry entry rather than an import.
 
 Canonical repo is `Cactus-Compute/needle3`. Four mirrors exist on the Hub with
 identical tags and 0–157 downloads; do not pull those.
+
+---
+
+## 11. The open-Jev landscape — and two corrections to §3
+
+An open ecosystem reproducing Jev's *shape* appeared on the Hub between
+17 and 21 Sep 2026. It is days old and small (0–920 downloads), but two entries
+are documented well enough to plan against, and one of them changes conclusions
+above.
+
+### Lineage, as the community records it
+
+1. **TypeSafe** shipped Jev and named the category — models returning typed
+   probabilistic decisions instead of text.
+2. **TheoLeeCJ** open-sourced the *mechanism* as **SemIf**, originally released
+   as **OpenJev**: read option logits straight out of a **frozen** open model.
+3. Others port that onto different bases (Bonsai low-bit, Qwen3.5, gemma, ModernBERT-ja).
+
+Rung 2 is the one that matters most here: **SemIf-style decisions need no new
+model at all.** Build a lettered multiple-choice prompt, run one forward pass,
+softmax over just the option-letter tokens. That works against models this fleet
+already holds locally — `qwen3-coder:30b`, `gemma-2-27b-it-GGUF`. *Open question,
+not yet measured: whether Ollama's API exposes per-token logprobs. llama.cpp does.*
+
+### The three local shapes
+
+| | `com-kotobalabs/open-jev-deberta-v3-large` | `Cactus-Compute/needle3` | SemIf-style logprob reading |
+|---|---|---|---|
+| Mechanism | purpose-trained encoder, one forward pass | on-device tool-caller + extractor | prompt + softmax over option-letter tokens |
+| Primitives | **Choice ≤255 / Score 2–10 ordered / Noul** — the exact TypeSafe set | tool-call, structured extraction, embedding | Choice-shaped only (≤26 options) |
+| Distribution | **full, per question** | not documented | over option letters |
+| Calibration | **measured** — see below | claimed, not benchmarked | none |
+| Context | **512 total; state capped at 256 tokens** | schema + prompt + history share context | the base model's |
+| Footprint | deberta-v3-large | **35 MB single file** | whatever you already run |
+| Licence | Apache-2.0 | Apache-2.0 | MIT code |
+
+### What open-jev-deberta actually measured
+
+Public gold labels only — banking77, SST-5, BoolQ. 18,000 states / 42,000
+questions, 1 epoch, one H100, ≈ $0.25.
+
+| | accuracy | Brier | ECE |
+|---|---|---|---|
+| in-domain | 0.854 | 0.213 | **0.022** |
+| banking77 intent (77 options) | 0.916 | | |
+| **OOD** (new instructions, new option sets) | **0.690** | 0.399 | 0.035 |
+| OOD — negated boolq noul | **0.83** | | |
+| OOD — sst5 on **new level sets** | **0.45** (majority 0.26) | | |
+
+Three seeds: in-domain 0.847 ± 0.005, OOD 0.678 ± 0.012. The authors state the
+gap plainly — *"it reads the question only partly"* — and note confidence is
+over-confident by ~0.03 on OOD and must be re-calibrated on your data.
+
+### Correction 1 — T1.4 is the WORST local fit, not the best
+
+Against the hosted API, prosodic boundary detection remains the cleanest Score
+fit in this survey. Against **open-jev-deberta specifically, it is the worst
+one**, because T1.4 requires a brand-new ordered level set (SENTENCE / CLAUSE /
+PHRASE / BREATH / NONE) — and *score on unseen level sets is this model's
+measured weakest axis*: **0.45 against a 0.26 majority baseline.**
+
+The hosted-vs-local choice is therefore **not** a swap of one provider for
+another. It changes which integration points are viable.
+
+### Correction 2 — the 256-token state cap excludes most of Tier 1–2
+
+TypeSafe was measured on a ~54,000-character document. open-jev-deberta caps
+state at **256 tokens**. Hi-RAG chunks (T2.3), provenance-gate content bodies
+(T1.1) and DeepResearch sources (T1.3) all exceed that. Those are hosted-API
+candidates or SemIf-on-a-long-context-model candidates — not deberta candidates.
+
+### What survives — and it is the pilot
+
+**T1.2, channel-monitor, gets stronger.** A video title sits comfortably inside
+256 tokens; the judgment is a Noul; and the model's *best measured OOD axis is
+negated noul at 0.83.* The pilot choice in §6 holds under local substitution,
+which is exactly what a pilot should do.
+
+### The warning to carry into any of this
+
+From the Bonsai port's own limitations, and it is the best single artifact in
+this whole scan:
+
+> `label_mass` is not confidence in correctness. It reports how much probability
+> mass landed on the option letters, meaning you got *an* answer, not a right one.
+> Bonsai 1 8B answers *"does a spider have two legs?"* with `true` at **0.998**
+> confidence and `label_mass` **0.9997**.
+
+That is precisely the defect family §0 describes — a number that looks like a
+measurement and is an artifact — reappearing inside the proposed cure. If PMOVES
+adopts SemIf-style logprob reading and treats `label_mass` as confidence, we
+rebuild the same silent failure in a new place with a more respectable name.
+**Distribution concentration over the options you supplied is not correctness.**
+
+Scale is worth noting too: on WANLI-256 (chance 33.3%), Bonsai 1.7B scores 52.0%
+and Bonsai 2 27B scores 74.6%. A 0.25 GB decision model is not a small version of
+a good one.
+
+### Also present, unread
+
+`Meanblock/JEV-CPU` (Qwen3-0.6B, zero-shot), `mobarmg/jev-schema-scorer-deberta-v3-large`
+(schema-conditioned candidate scoring), `ZefanCai/Open-Jev-9B` / `-2B` (Qwen3.5
+LoRA, non-generative), `vagmi/jev-lite` (gemma-4 QLoRA, tagged `typesafe`,
+`calibration`), `chaoliangUNSW/Jev-Style-Qwen3.5-2B-Decision-{GGUF,MLX}`,
+`argos1111/modernbert-ja-310m-jev` (Japanese). All created within the last four
+days; none evaluated here.
