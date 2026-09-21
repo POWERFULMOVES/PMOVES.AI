@@ -57,6 +57,20 @@ cases = [
      f"{CM}<<'EOF'\nexample:\n    EOF\nstill message\nEOF\n{CAT}{P}", True),
     ("<<- : an indented terminator DOES end the mask (tab-strip form)",
      f"{CM}<<-'EOF'\n\tmessage body\n\tEOF\n{CAT}{P}", True),
+
+    # --- a heredoc token INSIDE the message must not open a second mask ---
+    # finditer ran over the ORIGINAL command, so `<<'MSG'` written in the
+    # message body registered as a new heredoc start. Its delimiter never
+    # appears at column 0 afterwards, so body_end fell through to len(out) and
+    # the mask swallowed the REST OF THE COMMAND -- hiding real operations from
+    # every downstream scan. Fails OPEN, and the trigger is a commit message
+    # that merely documents the heredoc pattern, which this repo writes often.
+    ("inner heredoc token in the body must not mask the trailing op",
+     f"{CM}<<'EOF'\ndoc: use {CM}<<'MSG' for bodies\nEOF\n{CAT}{P}", True),
+    ("two inner tokens, still must not swallow the trailing op",
+     f"{CM}<<'EOF'\nfirst {CM}<<'A'\nsecond {CM}<<'B'\nEOF\n{CAT}{P}", True),
+    ("inner token must not break the legitimate masking case either",
+     f"{CM}<<'EOF'\ndoc: use {CM}<<'MSG' when naming {P}\nEOF", False),
 ]
 
 failures = []
