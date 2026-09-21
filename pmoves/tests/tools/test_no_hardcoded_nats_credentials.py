@@ -20,6 +20,13 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 # A credential embedded in a nats:// URL: scheme, user, password, host.
 CREDENTIAL = re.compile(r"nats://([A-Za-z0-9_.-]+):([A-Za-z0-9_.-]+)@")
 
+# The credential that actually leaked. In TEST files this is the only pair we
+# flag, because a test that exercises redaction or URL parsing MUST contain a
+# credential-shaped string to be meaningful -- stripping it silently converts
+# the test into one that cannot fail. (A sweep in this lane did exactly that to
+# two flute-gateway redaction controls before this rule existed.)
+LEAKED_CREDENTIAL = ("nats", "pmoves")
+
 # Obvious documentation placeholders. These SHOULD stay -- they teach the URL
 # shape without shipping a secret. Keyed on the user:password pair.
 PLACEHOLDERS = {
@@ -86,6 +93,16 @@ def _tracked_files():
     return [line for line in out.stdout.splitlines() if line]
 
 
+def _is_test_file(rel: str) -> bool:
+    name = rel.rsplit("/", 1)[-1]
+    return (
+        "/tests/" in rel
+        or rel.startswith("pmoves/tests/")
+        or name.startswith("test_")
+        or name == "conftest.py"
+    )
+
+
 def _offenders():
     hits = []
     for rel in _tracked_files():
@@ -99,6 +116,10 @@ def _offenders():
                 if (match.group(1), match.group(2)) in PLACEHOLDERS:
                     continue
                 if rel in KNOWN_CONFIG_EXCEPTIONS:
+                    continue
+                pair = (match.group(1), match.group(2))
+                if _is_test_file(rel) and pair != LEAKED_CREDENTIAL:
+                    # Synthetic fixture feeding a redaction/parsing test.
                     continue
                 hits.append(f"{rel}:{lineno}: {match.group(0)}")
     return hits

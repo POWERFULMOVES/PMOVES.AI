@@ -60,7 +60,7 @@ def test_load_secret_default(main_mod, monkeypatch):
     assert main_mod._load_secret("TEST_SAB", "def") == "def"
 
 def test_redact_url_with_creds(main_mod):
-    url = "nats://nats:4222"
+    url = "nats://nats:secret@nats:4222"
     assert "secret" not in main_mod._redact_url(url)
 
 def test_redact_url_no_creds(main_mod):

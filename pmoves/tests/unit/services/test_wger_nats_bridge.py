@@ -47,7 +47,7 @@ def test_load_secret_default(main_mod, monkeypatch):
     assert main_mod._load_secret("TEST_KEY", "default") == "default"
 
 def test_redact_url_with_password(main_mod):
-    url = "nats://nats:4222"
+    url = "nats://nats:secret@nats:4222"
     redacted = main_mod._redact_url(url)
     assert "secret" not in redacted
     assert "***" in redacted

@@ -74,7 +74,7 @@ def test_embed_audio_small_upload_still_ok(monkeypatch):
 
 def test_redact_url_strips_credentials():
     # credentials must never survive into a log line
-    out = _redact_url("nats://nats.internal:4222")
+    out = _redact_url("nats://user:s3cr3t@nats.internal:4222")
     assert "s3cr3t" not in out and "user" not in out
     assert "nats.internal:4222" in out
 

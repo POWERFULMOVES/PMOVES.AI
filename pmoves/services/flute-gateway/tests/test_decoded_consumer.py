@@ -23,7 +23,7 @@ def test_validate_missing_control_plane():
     assert _validate_decoded_packet(payload) is False
 
 def test_redact_url_with_password():
-    url = "nats://nats:4222"
+    url = "nats://nats:secret123@nats:4222"
     redacted = _redact_url(url)
     assert "secret123" not in redacted
     assert "***" in redacted
@@ -41,7 +41,7 @@ def test_redact_url_token_only():
     assert "nats:4222" in redacted
 
 def test_redact_url_user_and_password():
-    url = "nats://nats:4222"
+    url = "nats://user:p4ss@nats:4222"
     redacted = _redact_url(url)
     assert "p4ss" not in redacted
     assert "user" not in redacted

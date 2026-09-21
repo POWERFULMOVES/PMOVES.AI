@@ -93,7 +93,7 @@ def test_redact_url_strips_userinfo():
     from pmoves.services.common import nats_client as nc_mod
 
     assert (
-        nc_mod._redact_url("nats://nats.example:4222")
+        nc_mod._redact_url("nats://pmoves:secret@nats.example:4222")
         == "nats://nats.example:4222"
     )
     assert nc_mod._redact_url("nats://nats.example:4222") == "nats://nats.example:4222"
