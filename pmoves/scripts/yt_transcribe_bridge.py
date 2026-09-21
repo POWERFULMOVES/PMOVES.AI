@@ -23,7 +23,7 @@ import requests
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 log = logging.getLogger("yt-bridge")
 
-NATS_URL = os.environ.get("NATS_URL", "nats://nats:pmoves@nats:4222")
+NATS_URL = os.environ.get("NATS_URL", "nats://nats:4222")
 TRANSCRIBE_URL = os.environ.get("TRANSCRIBE_BACKEND_URL", "http://localhost:8077/yt/transcript")
 YT_INFO_URL = os.environ.get("YT_INFO_URL", "http://localhost:8077/yt/info")
 

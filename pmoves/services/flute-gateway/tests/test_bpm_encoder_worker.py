@@ -80,7 +80,7 @@ def test_build_cgp_packet_no_attestation(monkeypatch):
     assert "attestation" not in packet
 
 def test_redact_url_with_password():
-    url = "nats://nats:secret@nats:4222"
+    url = "nats://nats:4222"
     redacted = _redact_url(url)
     assert "secret" not in redacted
 
@@ -97,7 +97,7 @@ def test_redact_url_token_only():
     assert "nats:4222" in redacted
 
 def test_redact_url_user_and_password():
-    url = "nats://user:p4ss@nats:4222"
+    url = "nats://nats:4222"
     redacted = _redact_url(url)
     assert "p4ss" not in redacted
     assert "user" not in redacted

@@ -350,7 +350,7 @@ async def publish_hook(
         )
 
     url = nats_url or os.environ.get(
-        "NATS_URL", "nats://nats:pmoves@nats:4222"
+        "NATS_URL", "nats://nats:4222"
     )
 
     try:

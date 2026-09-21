@@ -72,7 +72,7 @@ class CacheSettings(BaseSettings):
     # --- Tokenism Attribution ---
     tokenism_enabled: bool = Field(default=True, description="Publish cache-hit cost savings to Tokenism")
     nats_url: str = Field(
-        default="nats://nats:pmoves@nats:4222",
+        default="nats://nats:4222",
         description="NATS URL for Tokenism attribution events",
     )
 

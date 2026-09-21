@@ -10,7 +10,7 @@ Default subjects:
   - agent.response.v1
 
 Config via env:
-  - NATS_URL (default: nats://nats:pmoves@nats:4222; prod: CHIT-managed)
+  - NATS_URL (default: nats://nats:4222; prod: CHIT-managed)
   - VOICE_FOLLOW_SUBJECTS (comma-separated)
   - VOICE_SPEAKER_URL (default: http://127.0.0.1:8120)
   - VOICE_SPEAKER_MODE (stream|batch, default: stream)
@@ -39,7 +39,7 @@ def _resolve_nats_url() -> str:
     """
     Host-run default should connect to the published NATS port.
 
-    env.shared often sets NATS_URL=nats://nats:pmoves@nats:4222 (valid inside Docker, invalid on host).
+    env.shared often sets NATS_URL=nats://nats:4222 (valid inside Docker, invalid on host).
     Also, localhost may resolve to ::1 first on some systems while NATS only binds IPv4.
     """
     explicit = os.getenv("VOICE_FOLLOW_NATS_URL")
@@ -53,12 +53,12 @@ def _resolve_nats_url() -> str:
         # host-published IPv4 port. `nats:4222` only resolves inside compose;
         # `localhost` may resolve to ::1 first while NATS binds IPv4 only.
         if nats_url.startswith("nats://nats:") or nats_url.startswith("tls://nats:"):
-            return "nats://nats:pmoves@127.0.0.1:4222"
+            return "nats://127.0.0.1:4222"
         if nats_url.startswith("nats://localhost:") or nats_url.startswith("tls://localhost:"):
             return nats_url.replace("://localhost:", "://127.0.0.1:", 1)
         return nats_url
 
-    return "nats://nats:pmoves@127.0.0.1:4222"
+    return "nats://127.0.0.1:4222"
 
 
 def _extract_text(payload: Dict[str, Any]) -> Optional[str]:

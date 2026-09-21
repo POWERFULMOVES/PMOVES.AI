@@ -41,7 +41,7 @@ def _redact_url(url: str) -> str:
 
 
 # Configuration
-NATS_URL = os.environ.get("NATS_URL", "nats://nats:pmoves@nats:4222")
+NATS_URL = os.environ.get("NATS_URL", "nats://nats:4222")
 NATS_USER = os.environ.get("NATS_USER", "")
 NATS_PASS = os.environ.get("NATS_PASS", "")
 NATS_ENABLED = os.environ.get("NATS_ENABLED", "true").lower() == "true"

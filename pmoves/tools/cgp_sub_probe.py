@@ -18,7 +18,7 @@ import nats
 
 async def main() -> None:
     """Connect to NATS and print CGP + voice events for 10 seconds."""
-    url = os.environ.get("NATS_URL", "nats://nats:pmoves@nats:4222")
+    url = os.environ.get("NATS_URL", "nats://nats:4222")
     nc = await nats.connect(url)
     print(f"Connected to NATS: {url}")
     msgs = []

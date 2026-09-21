@@ -35,7 +35,7 @@ class NodeRegistry:
 
     def __init__(
         self,
-        nats_url: str = "nats://nats:pmoves@nats:4222",
+        nats_url: str = "nats://nats:4222",
         storage: Optional[InMemoryNodeStore] = None,
         stale_threshold_seconds: int = 60,
         cleanup_interval_seconds: int = 300,
@@ -391,7 +391,7 @@ class NodeRegistry:
 
 
 async def run_registry(
-    nats_url: str = "nats://nats:pmoves@nats:4222",
+    nats_url: str = "nats://nats:4222",
     supabase_url: Optional[str] = None,
     supabase_key: Optional[str] = None,
 ):
@@ -438,7 +438,7 @@ async def run_registry(
 
 
 async def run_with_api(
-    nats_url: str = "nats://nats:pmoves@nats:4222",
+    nats_url: str = "nats://nats:4222",
     api_host: str = "0.0.0.0",
     api_port: int = 8082,
     supabase_url: Optional[str] = None,
@@ -506,7 +506,7 @@ if __name__ == "__main__":
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     )
 
-    nats_url = os.environ.get("NATS_URL", "nats://nats:pmoves@nats:4222")
+    nats_url = os.environ.get("NATS_URL", "nats://nats:4222")
     supabase_url = os.environ.get("SUPABASE_URL")
     supabase_key = os.environ.get("SUPABASE_SERVICE_KEY")
 

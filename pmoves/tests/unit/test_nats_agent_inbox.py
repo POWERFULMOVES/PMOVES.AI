@@ -34,6 +34,6 @@ def test_inbox_path_sanitizes_agent_id(tmp_path):
 def test_resolve_host_nats_url_rewrites_docker_dns(monkeypatch):
     monkeypatch.delenv("PMOVES_NATS_NO_HOST_REWRITE", raising=False)
     assert (
-        nats_agent_inbox.resolve_host_nats_url("nats://nats:pmoves@nats:4222")
-        == "nats://nats:pmoves@127.0.0.1:4222"
+        nats_agent_inbox.resolve_host_nats_url("nats://nats:4222")
+        == "nats://127.0.0.1:4222"
     )
