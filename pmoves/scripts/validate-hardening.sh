@@ -25,7 +25,18 @@
 # pmoves/docs/audit/HARDENING_VENDOR_RECONCILE_2026-09-20.md and the module
 # docstring of the tool.
 #
-# NOT a required status check. Making it one is an operator policy decision.
+# REQUIRED STATUS CHECK. This runs in two places: advisorily in
+# .github/workflows/hardening-validation.yml (which also uploads the report
+# artifact), and BLOCKING as the `compose-hardening-check` job in
+# .github/workflows/merge-gate.yml, which merge-decision aggregates. It had to
+# be re-implemented there rather than aggregated from hardening-validation.yml
+# because `needs:` cannot reference a job in another workflow file -- so until
+# then this script fired on every PR and blocked nothing.
+#
+# Promoted when the tree measured 28 findings, 0 new, exit 0, so promotion
+# blocked nothing that existed and blocks the next regression. If you are
+# reading this because the gate went red: restore the property on the service.
+# Adding a baseline entry to make it green re-opens the ratchet.
 
 set -euo pipefail
 

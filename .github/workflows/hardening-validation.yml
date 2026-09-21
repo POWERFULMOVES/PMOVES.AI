@@ -76,6 +76,14 @@ jobs:
         run: |
           echo "Running Docker hardening validation..."
           # Exit 0 = clean, 1 = new/stale findings, 3 = could not measure.
+          #
+          # This copy is ADVISORY and is kept for the report artifact below.
+          # The BLOCKING copy is the `compose-hardening-check` job in
+          # merge-gate.yml, which merge-decision aggregates. It is duplicated
+          # rather than aggregated because `needs:` cannot reference a job in
+          # another workflow file -- so a required check could never depend on
+          # this job, and for as long as this was the only copy the script
+          # fired on every PR and blocked nothing.
           ./pmoves/scripts/validate-hardening.sh
         continue-on-error: false
 
