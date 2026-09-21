@@ -523,7 +523,7 @@ Three seeds: in-domain 0.847 ± 0.005, OOD 0.678 ± 0.012. The authors state the
 gap plainly — *"it reads the question only partly"* — and note confidence is
 over-confident by ~0.03 on OOD and must be re-calibrated on your data.
 
-### Correction 1 — T1.4 is the WORST local fit, not the best
+### Correction 1 — T1.4 is the worst fit *for deberta specifically*
 
 Against the hosted API, prosodic boundary detection remains the cleanest Score
 fit in this survey. Against **open-jev-deberta specifically, it is the worst
@@ -534,7 +534,7 @@ measured weakest axis*: **0.45 against a 0.26 majority baseline.**
 The hosted-vs-local choice is therefore **not** a swap of one provider for
 another. It changes which integration points are viable.
 
-### Correction 2 — the 256-token state cap excludes most of Tier 1–2
+### Correction 2 — deberta's 256-token state cap excludes most of Tier 1–2
 
 TypeSafe was measured on a ~54,000-character document. open-jev-deberta caps
 state at **256 tokens**. Hi-RAG chunks (T2.3), provenance-gate content bodies
@@ -576,3 +576,135 @@ LoRA, non-generative), `vagmi/jev-lite` (gemma-4 QLoRA, tagged `typesafe`,
 `calibration`), `chaoliangUNSW/Jev-Style-Qwen3.5-2B-Decision-{GGUF,MLX}`,
 `argos1111/modernbert-ja-310m-jev` (Japanese). All created within the last four
 days; none evaluated here.
+
+---
+
+## 12. Laya — the open reproduction that actually leads
+
+`convaiinnovations/laya` is the serious open alternative, and it is the most
+attended model in this entire scan: **1,450 likes, trending score 1,417**, against
+needle3's 138 and open-jev-deberta's 42. Published **18 Sep 2026 — three days
+after TypeSafe released Jev on 15 Sep.** Apache-2.0, tagged `commercial-use`.
+
+### Three checkpoints, one repo, one router
+
+| Checkpoint | Backbone | Params | Context | Best at |
+|---|---|---|---|---|
+| `laya` (root) | ModernBERT-large | 421M | 512 | English, guardrails, email triage |
+| `laya-multilingual` | mmBERT-base | 322M | **1024 (up to 8k)** | 100+ languages, ~2.2× faster |
+| `laya-typed-decisions` | ModernBERT-large | 421M | 1024 | the typed-decisions workflows (0.766 acc) |
+
+`pip install laya`. The request shape is **the TypeSafe shape** — `state` plus a
+map of `choice` / `score` / `noul` questions each carrying `criteria`. Every
+question in a call is answered in **one forward pass**. Options are scored at
+their own `[MASK]` token and softmaxed within the question, so **the answer space
+is defined at request time and new schemas need no retraining.**
+
+### RLCD — calibration as a training objective, not a tag
+
+Reinforcement Learning for Calibrated Decisions: the policy reports a
+distribution, exploration adds zero-mean Gaussian noise to the logits, and the
+reward is a **strictly proper scoring rule** (log + spherical, plus **ranked
+probability score for ordinal questions**). Expected reward is maximised only by
+reporting honest probabilities. REINFORCE with a group-mean baseline.
+
+That last clause matters for us: RPS on ordinal questions is exactly the
+objective a Score ladder needs.
+
+### Speed — this inverts the roadmap
+
+| questions/call | `laya` | `laya-multilingual` |
+|---|---|---|
+| 1 | 39.5 ms | **32.8 ms** |
+| 10 | 158.6 ms | **72.3 ms** (7.2 ms/q) |
+| 50 | 771 ms | **337 ms** (6.8 ms/q) |
+
+103–332 questions/sec batched on **one T4**. Third parties have measured hosted
+Jev at **236–276 ms p50**, so Laya answers a single question roughly **6–8×
+faster than the hosted API** — locally.
+
+### Reported against Jev (read the caveat)
+
+| Benchmark | Jev 1.13.0 | Laya (routed) |
+|---|---|---|
+| typed-decisions, 2,000 | 0.727 | **0.766** |
+| AG News (4 labels) | 0.910 | **0.950** |
+| DAIR Emotion (6 labels) | 0.480 | **0.595** |
+
+**Caveat, stated by Laya's own authors:** the Jev figures are *third-party
+published, never measured by them* (no API access); sample sizes and prompts
+differ. This is not a controlled comparison and must not be cited as one.
+
+### THE WARNING — the same defect, a second time, inside the cure
+
+> The English checkpoint collapses on non-Latin scripts. **Khmer scores 0.000
+> accuracy at 0.952 confidence.** Because the model stays confident while being
+> wrong, **confidence gating cannot save you.**
+
+This is the second appearance of §0's defect family *inside the proposed remedy*
+— after the Bonsai spider (`true` at 0.998 for "does a spider have two legs?").
+Name it plainly:
+
+> **Calibrated in-distribution is not correct out-of-distribution. A confidence
+> score cannot report that the input was outside what the model can read.**
+
+Laya's own fix is the right one and is the doctrine this document already argues
+for: **a deterministic guard in code, in front of the model.** They detect script
+in **<0.5 ms of pure Python before the forward pass** and route accordingly.
+Policy stays in code; the model only judges what it can actually read.
+
+### Operational landmine
+
+Default `Router(max_loaded=1)` rebuilds a checkpoint on **every language switch**
+— measured at **7.4 s median on CPU, 10.3 s on T4**. Use `Router(preload=True)`,
+or pin a single checkpoint. Alternating-language traffic on the default settings
+would look like a hang, not a misconfiguration.
+
+### What this does to §3
+
+1. **Correction 2 is largely undone.** 1024 tokens (up to 8k on multilingual) vs
+   deberta's 256-token state cap re-opens **T1.1** (provenance-gate bodies) and
+   **T1.3** (DeepResearch sources) to local substitution.
+2. **T1.1 gets substantially stronger.** The scan's finding was that the
+   ratio-based formula *structurally punishes terse-but-dense and non-English
+   text*. A 100+ language decision model addresses that directly — provided the
+   script guard is wired, per the warning above.
+3. **Correction 1 does not apply to Laya.** T1.4 needs between-level positioning
+   on a new ordered ladder; Laya's `score` returns exactly that (`1.84 / 2.0` in
+   its own example) and RLCD trains ordinal questions against ranked probability
+   score. The deberta weakness is a deberta weakness.
+4. **The latency sort in §5 inverts.** That section ranked interactive-path
+   candidates last because ~100 ms + network was the binding constraint. At
+   32.8 ms local — faster than the hosted API — **T2.2 (cipher) and T2.3 (Hi-RAG)
+   become more viable locally than hosted**, not less.
+
+### Ports already available (ecosystem is 3 days old)
+
+GGUF: `mys/laya-multilingual-GGUF` (1.3K dl), `mys/laya-GGUF` (374),
+`Weidows/laya-multilingual-GGUF` (249), `mys/laya-typed-decisions-GGUF` (215),
+`fr0stbit3/laya-gguf` (187) · ONNX incl. **onnxruntime-web / WebGPU**
+(`mizchi`, `Mattepiu`, `sevenreasons` fp16, `tozp`) · CoreML + ANE + MLX
+(`aac6fef`) · **LiteRT/TFLite Android** (`litert-community`) · FP8 (`Weidows`) ·
+AXERA ax650 NPU · vision (`thaitea/laya-vision-smolvlm-256m`) · browser agent
+(`ShaunSpark/laya-mind2web-browser-agent`).
+
+Benchmarks and fine-tuning data already exist: `pngwn/open-jev-laya-bench`,
+`Luni/laya-jev-benchmark`, `cjdd3b/extra-laya-bench-ft-data`,
+`syvai/danish-dynaword-laya`.
+
+**Adoption caveat, stated honestly:** the parent repos report **0 downloads**
+against 1,450 likes, while the GGUF ports report hundreds to 1.3K. Attention is
+real; measured pull-through is concentrated in the ports. Nothing here has been
+run on this fleet — every number above is vendor- or third-party-reported.
+
+### Revised recommendation
+
+Evaluate **Laya first** among local options — it matches the primitive set
+exactly, trains calibration as the objective, is faster than the hosted API, and
+covers the languages PMOVES content actually contains. Keep needle3 for the
+tool-calling and on-device extraction role (T4.1), where its 35 MB footprint and
+schema-grammar are the better fit. Treat open-jev-deberta as the reference
+implementation with the most honest published error bars, not as the candidate.
+
+The §6 shadow harness remains the gate. Nothing above substitutes for measuring
+on PMOVES traffic.
