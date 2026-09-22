@@ -53,7 +53,8 @@ Full Known Roads catalog lives in `.claude/PATTERNS.md § Known Roads`. When a d
 
 | Server | Transport | Purpose |
 |--------|-----------|---------|
-| `pmoves-cipher` | SSE `http://localhost:8105/mcp/sse` | Persistent agent memory lookups + writes |
+| `pmoves-cipher` | SSE `http://${TS_Z890}:8105/mcp/sse` | Persistent agent memory lookups + writes (fleet entry; needs `TS_Z890` resolved by the launcher) |
+| `pmoves-cipher-local` | SSE `http://localhost:8105/mcp/sse` | Same cipher memory via the node's loopback publish — no tailnet dependency (mirrors `.claude/mcp.json`) |
 | `agent-zero` | HTTP `http://localhost:8080/mcp` | Agent Zero orchestrator |
 | `docker` | stdio `mcp/docker` | Container inspection via local Docker socket |
 | `pmoves-docker-gateway` | SSE `http://localhost:8090/sse` | Full Docker MCP Toolkit gateway (botz-gateway bridge); start with `make -C pmoves mcp-toolkit-gateway-start` |

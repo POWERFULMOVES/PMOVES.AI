@@ -37,6 +37,12 @@ if [ -f "$PROJECT_ROOT/pmoves/scripts/pm-node-identity.sh" ]; then
   . "$PROJECT_ROOT/pmoves/scripts/pm-node-identity.sh"
   pm_node_identity "$PROJECT_ROOT" kilo kilo-pmoves || true
   echo "${PM_IDENT_LINE}" >&2
+  if [ -f "$PROJECT_ROOT/pmoves/scripts/pm-cipher-token-bind.sh" ]; then
+    # shellcheck source=./pm-cipher-token-bind.sh
+    . "$PROJECT_ROOT/pmoves/scripts/pm-cipher-token-bind.sh"
+    pm_cipher_token_bind "$PROJECT_ROOT" "${PM_IDENT_CIPHER_ID:-}" || true
+    echo "[kilo-pmoves] ${PM_CARRY_BIND_LINE}" >&2
+  fi
   if [ -f "$PROJECT_ROOT/pmoves/scripts/pm-cipher-identity.sh" ]; then
     # shellcheck source=./pm-cipher-identity.sh
     . "$PROJECT_ROOT/pmoves/scripts/pm-cipher-identity.sh"

@@ -35,6 +35,22 @@ if [ -f "$PROJECT_ROOT/pmoves/scripts/pm-node-identity.sh" ]; then
   . "$PROJECT_ROOT/pmoves/scripts/pm-node-identity.sh"
   pm_node_identity "$PROJECT_ROOT" kimi kimi-pmoves || true
   echo "${PM_IDENT_LINE}" >&2
+  # CIPHER TOKEN BIND + TS_ RESOLUTION. .kimi/mcp.json addresses cipher as
+  # ${TS_Z890} and authenticates with ${CIPHER_API_TOKEN}; this launcher loads
+  # neither, so every reference went out literal and cipher never connected.
+  # Bind the minted per-agent token for the declared agentId BEFORE the carry
+  # measurement so the verdict reports the post-bind reality.
+  TS_HELPER="$PROJECT_ROOT/pmoves/scripts/tailscale-node-ips.sh"
+  if [ -f "$TS_HELPER" ]; then
+    # shellcheck source=./tailscale-node-ips.sh
+    . "$TS_HELPER"
+  fi
+  if [ -f "$PROJECT_ROOT/pmoves/scripts/pm-cipher-token-bind.sh" ]; then
+    # shellcheck source=./pm-cipher-token-bind.sh
+    . "$PROJECT_ROOT/pmoves/scripts/pm-cipher-token-bind.sh"
+    pm_cipher_token_bind "$PROJECT_ROOT" "${PM_IDENT_CIPHER_ID:-}" || true
+    echo "[kimi-pmoves] ${PM_CARRY_BIND_LINE}" >&2
+  fi
   if [ -f "$PROJECT_ROOT/pmoves/scripts/pm-cipher-identity.sh" ]; then
     # shellcheck source=./pm-cipher-identity.sh
     . "$PROJECT_ROOT/pmoves/scripts/pm-cipher-identity.sh"
