@@ -31,6 +31,7 @@ DB_PORT="${DB_PORT:-5432}"
 # received it via the secrets pipeline can just run with META_ROLE=juicefs_meta and no
 # explicit DB_PASS. Neither is ever inlined on a command line: both arrive via the
 # environment and are handed to JuiceFS as META_PASSWORD, so they never appear in `ps`.
+DB_PASS_EXPLICIT="${DB_PASS:+set}"
 DB_PASS="${DB_PASS:-${JUICEFS_META_PASSWORD:-}}"
 # Metadata DSN role. Default supabase_admin for back-compat. Switch to juicefs_meta once
 # the scoped role is applied (make -C pmoves supabase-bootstrap) and granted LOGIN with a
@@ -39,6 +40,14 @@ DB_PASS="${DB_PASS:-${JUICEFS_META_PASSWORD:-}}"
 # shrinks the cross-node auth surface from a full superuser to DML on one schema (the point
 # of the whole lane). DB_PASS must be that role's password when META_ROLE=juicefs_meta.
 META_ROLE="${META_ROLE:-supabase_admin}"
+# Pairing rule (B850 2026-09-22): the fallback credential IS juicefs_meta's
+# password. When DB_PASS arrived via that fallback and no role was named, the
+# role must match the credential — supabase_admin + JUICEFS_META_PASSWORD
+# always fails auth, and before this fix the failed preflight probe died
+# silently (2>/dev/null + set -e pipefail) with zero diagnostics.
+if [ -z "$DB_PASS_EXPLICIT" ] && [ -n "${JUICEFS_META_PASSWORD:-}" ] && [ -z "${META_ROLE_EXPLICIT:-}" ] && [ -z "${META_ROLE:-}" ]; then
+    META_ROLE=juicefs_meta
+fi
 MOUNT_POINT="${MOUNT_POINT:-$HOME/pmoves-fs}"
 DATA_DIR="${DATA_DIR:-$HOME/.local/share/juicefs-data}"
 # Escape hatch for the storage preflight, e.g. when deliberately standing up a
@@ -59,7 +68,22 @@ echo "Mount: $MOUNT_POINT"
 echo ""
 
 # Create directories
-mkdir -p "$MOUNT_POINT" "$DATA_DIR"
+mkdir -p "$DATA_DIR" 2>/dev/null || true
+mkdir -p "$MOUNT_POINT" 2>/dev/null || true
+
+# Stale-endpoint guard (B850 2026-09-22): a killed mount container leaves the
+# FUSE endpoint dead ("Transport endpoint is not connected"). User-level
+# fusermount cannot clear container-created mounts (absent from /etc/mtab),
+# and docker then fails with a confusing "mkdir: file exists". Detect early,
+# try fusermount, and fail with the exact root fix instead.
+if [ -d "$MOUNT_POINT" ] && ! ls "$MOUNT_POINT" >/dev/null 2>&1; then
+    fusermount -uz "$MOUNT_POINT" 2>/dev/null || true
+    if ! ls "$MOUNT_POINT" >/dev/null 2>&1; then
+        echo "ERROR: $MOUNT_POINT is a stale FUSE endpoint (dead mount container)."
+        echo "  Fix: sudo umount -l $MOUNT_POINT   — then re-run this target."
+        exit 1
+    fi
+fi
 
 # Pull JuiceFS image
 docker pull juicedata/mount:ce-v1.3.0
@@ -75,11 +99,21 @@ META_URL="postgres://${META_ROLE}@${JUICEFS_HOST}:${DB_PORT}/postgres?search_pat
 # no remote mount can read them — you would get a filesystem that lists correctly and
 # errors on every open, which is far harder to debug than an upfront refusal.
 echo "Preflight: checking the volume's storage backend ..."
-STORAGE="$(META_PASSWORD="$DB_PASS" docker run --rm --network host \
+# The probe's stderr used to be swallowed (2>/dev/null inside the container) and
+# a probe failure killed the script under `set -euo pipefail` BEFORE the
+# "Storage backend:" line printed — a silent death with zero diagnostics
+# (measured on B850 2026-09-22 across three separate failure modes). Capture
+# both streams, print the error on failure (password redacted), keep parsing.
+PREFLIGHT_OUT="$(META_PASSWORD="$DB_PASS" docker run --rm --network "${JUICEFS_NETWORK:-host}" \
     -e META_PASSWORD \
     --entrypoint sh juicedata/mount:ce-v1.3.0 \
-    -c "juicefs status \"$META_URL\" 2>/dev/null" \
-    | sed -n 's/.*"Storage"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)"
+    -c "juicefs status \"$META_URL\" 2>&1" || true)"
+STORAGE="$(printf '%s\n' "$PREFLIGHT_OUT" | sed -n 's/.*"Storage"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)"
+if [ -z "$STORAGE" ]; then
+    echo "ERROR: storage preflight probe produced no Storage field. Probe output (credential redacted):"
+    printf '%s\n' "$PREFLIGHT_OUT" | grep -v -- "$DB_PASS" | sed 's/^/  | /' >&2
+    exit 1
+fi
 
 echo "  Storage backend: ${STORAGE:-<unreadable>}"
 if [ "$STORAGE" = "file" ] && [ "$ALLOW_FILE_STORAGE" != "1" ]; then
@@ -112,7 +146,7 @@ echo "Starting JuiceFS mount..."
 META_PASSWORD="$DB_PASS" docker run -d \
     --name juicefs-mount \
     --restart unless-stopped \
-    --network host \
+    --network "${JUICEFS_NETWORK:-host}" \
     --privileged \
     --entrypoint sh \
     -e META_PASSWORD \
