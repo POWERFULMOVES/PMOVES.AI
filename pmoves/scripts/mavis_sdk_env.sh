@@ -80,9 +80,29 @@
 # ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
-# Resolve this file's directory once, so it works when sourced from any CWD.
+# Default log path resolution.  The launcher scripts that source this helper
+# always cd to the repo root before sourcing (see the REPO-ROOT RESOLUTION
+# section in deploy/provision/<cli>-pmoves.sh), so the CWD is the load-bearing
+# signal for "where is the repo root".  We resolve PMOVES_REPO_ROOT from
+# CWD with an explicit override hook:
+#   * $PMOVES_REPO_ROOT                     - absolute path (operator override)
+#   * $PMOVES_MAVIS_SDK_LOG_PATH            - absolute path to the audit JSONL
+#   * $PMOVES_MAVIS_SDK_LOG_DIR             - absolute path to the audit dir
+#                                             (rare; use the LOG_PATH hook
+#                                             instead unless you want the
+#                                             default basename in a custom dir)
+#
+# The PowerShell twin's path resolution lives at mavis_sdk_env.ps1 just
+# above `Strip-MavisSdkEnvFor`; the two MUST encode the same default shape
+# (`<repo_root>/pmoves/data/chit/mavis_sdk_env.log`) -- the bash/ps1 twin
+# drift ratchet at test_pmoves_launcher_generator.py pins this.
 # ---------------------------------------------------------------------------
-_MAVIS_SDK_ENV_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+: "${PMOVES_REPO_ROOT:=$(pwd)}"
+export PMOVES_REPO_ROOT
+: "${PMOVES_MAVIS_SDK_LOG_DIR:=$PMOVES_REPO_ROOT/pmoves/data/chit}"
+PMOVES_MAVIS_SDK_LOG_DIR="${PMOVES_MAVIS_SDK_LOG_DIR%/}"
+: "${PMOVES_MAVIS_SDK_LOG_PATH:=$PMOVES_MAVIS_SDK_LOG_DIR/mavis_sdk_env.log}"
+export PMOVES_MAVIS_SDK_LOG_DIR PMOVES_MAVIS_SDK_LOG_PATH
 
 # ---------------------------------------------------------------------------
 # Registry: Mavis SDK env vars (the env block of ~/.claude/settings.json).
@@ -279,7 +299,42 @@ mavis_sdk_strip_env_for() {
     one_line="$(printf '%s' "$stripped" | tr '\n' ' ')"
     echo "[mavis-sdk] stripped $n_stripped Mavis SDK vars from $cli env: $one_line" >&2
     echo "[mavis-sdk]   preserved under PMOVES_MAVIS_SDK_<NAME>; original vars unset." >&2
-  else
+  fi
+
+  # --- AUDIT LOG APPEND -------------------------------------------------------
+  # Persist one JSONL line per call so the audit trail survives shell exit.
+  # Operators inspecting later can run:
+  #   python pmoves/tools/mavis_sdk_audit.py --last 10
+  #   python pmoves/tools/mavis_sdk_audit.py --cli claude --since 1h
+  # Default path is `<repo_root>/pmoves/data/chit/mavis_sdk_env.log`
+  # (gitignored like `lanes.jsonl`); override via PMOVES_MAVIS_SDK_LOG_PATH.
+  # Append-only, best-effort: if the log path can't be written, we don't
+  # fail the launcher (the in-shell prefixed copies + WARN line still work
+  # for one-shot checks).
+  # ---------------------------------------------------------------------------
+  local log_path="${PMOVES_MAVIS_SDK_LOG_PATH:-${PMOVES_MAVIS_SDK_LOG_DIR}/mavis_sdk_env.log}"
+  local log_dir
+  log_dir="$(dirname "$log_path")"
+  mkdir -p "$log_dir" 2>/dev/null || true
+  # JSONL: one line per call, with the operator's hostname + PID for grep.
+  # The names field is space-joined (the same shape as the WARN line) so an
+  # operator copying the line into a downstream filter still works.
+  local log_names
+  log_names="${one_line:-}"
+  if [ -z "$log_names" ]; then
+    log_names="<none>"
+  fi
+  {
+    printf '{"ts":"%s","host":"%s","pid":%d,"cli":"%s","stripped_count":%d,"stripped_names":"%s","all_consumed":%s}\n' \
+      "$(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || echo 1970-01-01T00:00:00Z)" \
+      "${HOSTNAME:-unknown}" \
+      "$$" \
+      "$cli" \
+      "${n_stripped:-0}" \
+      "$log_names" \
+      "$([ "$all_pass" = "1" ] && echo true || echo false)"
+  } >> "$log_path" 2>/dev/null || true
+  if [ -z "$stripped" ]; then
     PMOVES_MAVIS_SDK_STRIPPED=""
     unset PMOVES_MAVIS_SDK_STRIPPED 2>/dev/null || true
   fi

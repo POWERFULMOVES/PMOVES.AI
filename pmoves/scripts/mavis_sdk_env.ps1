@@ -197,4 +197,41 @@ function Strip-MavisSdkEnvFor {
         [System.Environment]::SetEnvironmentVariable('PMOVES_MAVIS_SDK_STRIPPED', $null)
     }
     [System.Environment]::SetEnvironmentVariable('PMOVES_MAVIS_SDK_CLI', $CliName)
+
+    # --- AUDIT LOG APPEND -------------------------------------------------------
+    # Persist one JSONL line per call so the audit trail survives shell exit.
+    # Mirror of the bash twin's audit append at pmoves/scripts/mavis_sdk_env.sh
+    # (audit-log lane).  PowerShell AppendAllText with FileMode.Append + a
+    # best-effort try/catch -- if the path can't be written (read-only FS,
+    # missing permission), the launcher's in-shell prefixed copies + WARN
+    # line are still operative for one-shot checks.
+    #
+    # Default path: $PMOVES_REPO_ROOT/pmoves/data/chit/mavis_sdk_env.log
+    # (matches the bash twin's default; the bash/ps1 twin drift ratchet at
+    # test_pmoves_launcher_generator.py pins the two defaults in step).
+    # ---------------------------------------------------------------------------
+    try {
+        $repo_root = $env:PMOVES_REPO_ROOT
+        if (-not $repo_root) {
+            $repo_root = Split-Path -Parent (Split-Path -Parent $PSCommandPath)
+        }
+        $default_log_dir = Join-Path $repo_root 'pmoves\data\chit'
+        $log_dir = if ($env:PMOVES_MAVIS_SDK_LOG_DIR) { $env:PMOVES_MAVIS_SDK_LOG_DIR } else { $default_log_dir }
+        $log_path = if ($env:PMOVES_MAVIS_SDK_LOG_PATH) { $env:PMOVES_MAVIS_SDK_LOG_PATH }
+                    else { Join-Path $log_dir 'mavis_sdk_env.log' }
+        if (-not (Test-Path $log_dir)) { New-Item -ItemType Directory -Force -Path $log_dir | Out-Null }
+        $ts = (Get-Date -AsUTC).ToString('yyyy-MM-ddTHH:mm:ssZ')
+        $host_name = $env:COMPUTERNAME
+        if (-not $host_name) { $host_name = 'unknown' }
+        $pid_local = $PID
+        $names_one_line = ($stripped -join ' ')
+        if (-not $names_one_line) { $names_one_line = '<none>' }
+        $all_consumed_str = if ($allPass) { 'true' } else { 'false' }
+        $line = ('{"ts":"{0}","host":"{1}","pid":{2},"cli":"{3}","stripped_count":{4},"stripped_names":"{5}","all_consumed":{6}}' -f `
+            $ts, $host_name, $pid_local, $CliName, $stripped.Count, $names_one_line, $all_consumed_str)
+        Add-Content -Path $log_path -Value $line -Encoding UTF8
+    } catch {
+        # Best-effort audit; never fail the launcher over a log write.
+        Write-Warning "[mavis-sdk] audit-log append failed (non-fatal): $_"
+    }
 }

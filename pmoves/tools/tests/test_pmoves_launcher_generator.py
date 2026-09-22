@@ -340,6 +340,66 @@ class TestGeneratorRegistryDriven(unittest.TestCase):
                 f"PowerShell helper WARN phrase missing: {phrase!r}",
             )
 
+    def test_mavis_sdk_audit_log_default_path_matches_across_twins(self):
+        # Lane C ratchet: the bash + PowerShell twin helpers' DEFAULT audit-log
+        # path MUST resolve to the same location.  Drift here means operators
+        # inspecting the audit log from one platform can't find the lines
+        # written by the other platform -- the trail is split.
+        # The contract: default = `<repo_root>/pmoves/data/chit/mavis_sdk_env.log`,
+        # overridable via $PMOVES_MAVIS_SDK_LOG_PATH / $PMOVES_MAVIS_SDK_LOG_DIR
+        # and the PowerShell equivalents.
+        bash_helper = REPO_ROOT / "pmoves" / "scripts" / "mavis_sdk_env.sh"
+        ps1_helper = REPO_ROOT / "pmoves" / "scripts" / "mavis_sdk_env.ps1"
+        bash_body = bash_helper.read_text(encoding="utf-8")
+        ps1_body = ps1_helper.read_text(encoding="utf-8")
+
+        # Both must reference the canonical basename + default directory.
+        for canon in (
+            "mavis_sdk_env.log",       # canonical basename
+            "pmoves/data/chit",        # canonical default directory
+            "PMOVES_MAVIS_SDK_LOG_PATH",  # canonical override env-var name
+        ):
+            self.assertIn(
+                canon, bash_body,
+                f"bash helper missing canonical audit-log token {canon!r}",
+            )
+            self.assertIn(
+                canon, ps1_body,
+                f"PowerShell helper missing canonical audit-log token {canon!r} "
+                f"-- twin drift (lane C audit-log consistency)",
+            )
+
+        # Both must encode the JSONL line shape via the canonical fields:
+        # ts, host, pid, cli, stripped_count, stripped_names, all_consumed.
+        # A drift here means operators piping to a downstream filter see
+        # different fields per platform.
+        for field in (
+            '"ts"', '"host"', '"pid"', '"cli"',
+            '"stripped_count"', '"stripped_names"', '"all_consumed"',
+        ):
+            self.assertIn(
+                field, bash_body,
+                f"bash helper JSONL field missing: {field}",
+            )
+            self.assertIn(
+                field, ps1_body,
+                f"PowerShell helper JSONL field missing: {field} "
+                f"-- twin drift on JSONL shape",
+            )
+
+        # Both must include the PMOVES_MAVIS_SDK_LOG_DIR override hook (so
+        # operators can redirect the audit dir independently of the file).
+        self.assertIn(
+            "PMOVES_MAVIS_SDK_LOG_DIR",
+            bash_body,
+            "bash helper missing PMOVES_MAVIS_SDK_LOG_DIR override hook",
+        )
+        self.assertIn(
+            "PMOVES_MAVIS_SDK_LOG_DIR",
+            ps1_body,
+            "PowerShell helper missing PMOVES_MAVIS_SDK_LOG_DIR override hook",
+        )
+
     def test_every_emitted_ps1_parses(self):
         # pwsh parser; skip when pwsh isn't installed (CI portability).
         if not _has_pwsh():
