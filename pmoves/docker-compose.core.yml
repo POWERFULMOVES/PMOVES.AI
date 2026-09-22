@@ -921,7 +921,10 @@ services:
     # Pinned 2025-02-04: Latest stable from Supabase
     # Matches upstream. Dashboard UI only - no data path and nothing depends on it,
     # so this is the lowest-risk half of the L2 currency slice.
-    image: supabase/studio:2026.08.03-sha-022b374
+    # 2026.08.03-sha-022b374 was pruned from Docker Hub (weekly tags churn) —
+    # any node without it cached could never bootstrap. Repinned to the
+    # running-known-good on B850, verified present upstream 2026-09-22.
+    image: supabase/studio:2026.06.03-sha-0bca601
     restart: unless-stopped
     profiles:
     - supabase-local
@@ -1194,7 +1197,10 @@ services:
     # 2025-09-07 is the newest tag on hub.docker.com/r/minio/minio.
     # ⚠️ MinIO Community Edition is EOL/archived (Feb 2026); this tag is the
     # ceiling. Migration to SeaweedFS/Garage/Enterprise is the durable fix.
-    image: ${MINIO_IMAGE:-minio/minio:RELEASE.2025-09-07T16-13-09Z}
+    # 2026-09-22: Docker Hub deleted the minio/minio repository outright
+    # (404 on the tags API). The identical release survives on Quay — same
+    # tag, verified present — so the default registry moved there.
+    image: ${MINIO_IMAGE:-quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z}
     # Only data-tier service without a restart policy — every Docker Desktop
     # restart left MinIO dead (Exited 255) until manually started, which is
     # how it sat down for 9 days and silently blocked the YT pipeline.
