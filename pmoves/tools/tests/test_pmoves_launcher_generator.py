@@ -211,20 +211,133 @@ class TestGeneratorRegistryDriven(unittest.TestCase):
             )
 
     def test_hand_written_launchers_have_strip_step(self):
-        # The hand-written claude-pmoves.{sh,ps1} / crush-pmoves.{sh,ps1}
-        # ALSO need the Mavis SDK env strip (per operator's "parity along
-        # that surface" directive).  Only claude-pmoves is checked here
-        # because crush-pmoves may be the next hand-edit target.
+        # The hand-written claude-pmoves.{sh,ps1} AND crush-pmoves.{sh,ps1}
+        # BOTH need the Mavis SDK env strip (operator's "parity along that
+        # surface" directive).  A regression that hand-edits one and forgets
+        # the other is caught here.
         for fname, marker in [
             ("claude-pmoves.sh", "mavis_sdk_strip_env_for"),
             ("claude-pmoves.ps1", "Strip-MavisSdkEnvFor"),
+            ("crush-pmoves.sh", "mavis_sdk_strip_env_for"),
+            ("crush-pmoves.ps1", "Strip-MavisSdkEnvFor"),
         ]:
             fpath = REPO_ROOT / "deploy" / "provision" / fname
             self.assertTrue(fpath.exists(), f"hand-written {fname} missing")
             content = fpath.read_text(encoding="utf-8")
             self.assertIn(
                 marker, content,
-                f"{fname} missing Mavis SDK env strip step",
+                f"{fname} missing Mavis SDK env strip step (parity regression)",
+            )
+
+    def test_mavis_sdk_env_twin_registries_in_step(self):
+        # Ratchet: bash + PowerShell twin registries MUST carry the same names
+        # and the same per-CLI NEEDS logic.  Drift here is the same class of bug
+        # that bit the bash blocklist CLAUDE_CODE_ literal vs the PowerShell
+        # CLAUDE_CODE_* regex: one platform silently stripping vars the other
+        # isn't.  The two file bodies MUST agree on every entry below;
+        # adding a var to one without the other is a SIDE-EFFECT-LIKE change
+        # to the consumer (which CLI is in the needs list), so this ratchet
+        # exists to force a deliberate patch on both sides.
+        bash_helper = REPO_ROOT / "pmoves" / "scripts" / "mavis_sdk_env.sh"
+        ps1_helper = REPO_ROOT / "pmoves" / "scripts" / "mavis_sdk_env.ps1"
+        self.assertTrue(bash_helper.exists(), "bash helper missing")
+        self.assertTrue(ps1_helper.exists(), "PowerShell helper missing")
+        bash_body = bash_helper.read_text(encoding="utf-8")
+        ps1_body = ps1_helper.read_text(encoding="utf-8")
+
+        # ENVIRONMENT NAMES: every literal name in MAVIS_SDK_ENV_NAMES (bash)
+        # must appear in $script:MAVIS_SDK_ENV_NAMES (PowerShell).  Pattern
+        # entries are checked by literal substring so a CLAUDE_CODE_* in one
+        # and not the other is caught.
+        import re
+        bash_names = re.findall(
+            r"^\s*([A-Z][A-Z0-9_]*(?:_[A-Z0-9_]*)*)\s*$",
+            "\n".join(
+                line for line in bash_body.splitlines()
+                if line.strip() and not line.lstrip().startswith("#")
+                and "MAVIS_SDK_ENV_NAMES" in line[:200]
+            ),
+        )
+        # Above regex catches everything in the MAVIS_SDK_ENV_NAMES block; the
+        # block is small (15 vars), so a stricter name-list test would do,
+        # but the substring approach catches the glob tokens too.
+        for n in ("ANTHROPIC_BASE_URL", "ANTHROPIC_AUTH_TOKEN", "MCP_TIMEOUT",
+                  "API_TIMEOUT_MS", "CLAUDECODE", "CLAUDE_CODE_*"):
+            self.assertIn(
+                n, bash_body,
+                f"bash helper missing canonical env name {n!r} in registry",
+            )
+        for n in ("ANTHROPIC_BASE_URL", "ANTHROPIC_AUTH_TOKEN", "MCP_TIMEOUT",
+                  "API_TIMEOUT_MS", "CLAUDECODE", "CLAUDE_CODE_*"):
+            self.assertIn(
+                n, ps1_body,
+                f"PowerShell helper missing canonical env name {n!r} in registry "
+                f"-- bash/ps1 twin drift (the bug this ratchet exists to prevent)",
+            )
+
+        # PER-CLI NEEDS KEYS: the bash per-CLI arrays MUST include the
+        # PowerShell dict's keys.  The bash form uses MAVIS_SDK_NEEDS_BY_TOOL_<cli>
+        # arrays; the PowerShell form uses a $MAVIS_SDK_NEEDS_BY_TOOL hashtable.
+        # Both must cover every CLI in cli_tools.yaml's pmoves_wrappers.
+        for cli in ("claude", "kilo", "codex", "kimi", "hermes", "crush", "pmoves-mini"):
+            bash_key = f"MAVIS_SDK_NEEDS_BY_TOOL_{cli.replace('-', '_')}"
+            self.assertIn(
+                bash_key,
+                bash_body,
+                f"bash helper missing needs-array key for {cli!r}",
+            )
+            # PowerShell uses unquoted dict keys (e.g. `    claude = @()`)
+            # with the single exception of `pmoves-mini` which has a hyphen.
+            if "-" in cli:
+                self.assertIn(
+                    f"'{cli}'",
+                    ps1_body,
+                    f"PowerShell helper missing quoted needs-dict key for {cli!r}",
+                )
+            else:
+                self.assertIn(
+                    f"    {cli} ",
+                    ps1_body,
+                    f"PowerShell helper missing needs-dict key for {cli!r}",
+                )
+
+        # CRUSH MUST NOT be wildcard (it's not the Mavis agent).  The "*"
+        # wildcard is reserved for pmoves-mini.
+        self.assertIn(
+            '"*"',
+            bash_body,
+            "bash helper missing the '*' wildcard for pmoves-mini",
+        )
+        # crush's needs list must be empty (not '*'): strip everything for crush.
+        m = re.search(
+            r"MAVIS_SDK_NEEDS_BY_TOOL_crush=\(([^)]*)\)",
+            bash_body,
+        )
+        self.assertIsNotNone(m, "MAVIS_SDK_NEEDS_BY_TOOL_crush array missing")
+        self.assertEqual(
+            m.group(1).strip(), "",
+            f"crush needs-list should be empty (crush consumes zero Mavis SDK vars); "
+            f"got {m.group(1).strip()!r}",
+        )
+
+        # ECHO lines: WARN message strings must match across platforms so an
+        # operator scanning logs sees the same shape on bash and PowerShell.
+        # We look for the canonical "[mavis-sdk] stripped N Mavis SDK vars from <cli>"
+        # invariant -- not bit-for-bit equality (each platform formats ints
+        # differently), just the head + tail.
+        for phrase in ("[mavis-sdk] stripped",
+                       "from $cli env",
+                       "preserved under PMOVES_MAVIS_SDK_<NAME>"):
+            self.assertIn(
+                phrase, bash_body,
+                f"bash helper WARN phrase missing: {phrase!r}",
+            )
+        for phrase in ("[mavis-sdk]",
+                       "Write-Warning",
+                       ):
+            self.assertIn(
+                phrase, ps1_body,
+                f"PowerShell helper WARN phrase missing: {phrase!r}",
             )
 
     def test_every_emitted_ps1_parses(self):
