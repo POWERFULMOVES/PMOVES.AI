@@ -180,6 +180,22 @@ fi
 # be indistinguishable to anything reading it.
 export PMOVES_LAUNCHER_SESSION
 
+# CIPHER TOKEN BIND — AFTER env.shared, BEFORE the roster is normalized.
+#
+# env.shared carries the node bootstrap CIPHER_API_TOKEN (auth.ts files every
+# bootstrap write under 'bootstrap'); sourcing it above just clobbered any
+# per-agent token the outer delegate bound. Re-bind from pmoves/.env.local so
+# the roster normalization below expands ${CIPHER_API_TOKEN} into the minted
+# per-agent bearer for THIS session's declared cipher agentId. The outer
+# delegate exported PM_IDENT_CIPHER_ID; when this script is called directly
+# (no agent named) the bind reports "no declared agentId" and changes nothing.
+if [ -f "$ROOT/pmoves/scripts/pm-cipher-token-bind.sh" ]; then
+  # shellcheck source=../../pmoves/scripts/pm-cipher-token-bind.sh
+  . "$ROOT/pmoves/scripts/pm-cipher-token-bind.sh"
+  pm_cipher_token_bind "$ROOT" "${PM_IDENT_CIPHER_ID:-}" || true
+  echo "[claude-pmoves] ${PM_CARRY_BIND_LINE}" >&2
+fi
+
 # Resolve ${TS_<NODE>} for the cross-node MCP servers in the roster.
 #
 # .claude/mcp.json addresses cipher, agent-zero and archon as ${TS_Z890}. That
