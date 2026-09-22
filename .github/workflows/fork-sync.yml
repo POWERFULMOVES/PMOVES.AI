@@ -40,6 +40,59 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      # ONE derivation, consumed twice. The App-token scope and the sync list
+      # are the same set by definition: a fork this workflow syncs is a fork the
+      # token must reach. They used to be two hand-maintained lists with a
+      # comment asking the reader to keep them equal, which is the shape this
+      # whole change exists to remove -- and the first revision of it de-hardcoded
+      # only the sync list, leaving the token scoped to 28 while the loop
+      # iterated 31. The 7 newly-included forks would have 403'd on clone.
+      #
+      # Fails CLOSED: a malformed registry exits non-zero here, before a token is
+      # minted, rather than silently yielding an empty list that would make the
+      # whole run a no-op reported as success.
+      - name: Derive fork list from the registry
+        id: forks
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - > /tmp/forkrows <<'PYEOF'
+          import json, sys
+          with open("pmoves/config/fork_registry.json", encoding="utf-8") as fh:
+              reg = json.load(fh)
+          forks = reg.get("forks")
+          if not forks:
+              sys.exit("fork_registry.json has no 'forks' key -- refusing to sync 0 forks")
+          rows, skipped = [], []
+          for name, e in forks.items():
+              if e.get("sync") is not True:
+                  continue
+              upstream = e.get("upstream") or ""
+              if not upstream:
+                  # A registry defect, not a fork to sync. Reported on STDERR so
+                  # it reaches the workflow log: stdout is captured, and a
+                  # pipe-less line fed to the `IFS='|' read` loop is discarded
+                  # by its own empty-field guard -- silently, which is the
+                  # opposite of the "skip loudly" this is meant to be.
+                  skipped.append(name)
+                  continue
+              rows.append("%s|%s|%s" % (upstream, name, e.get("branch") or ""))
+          for name in skipped:
+              print("SKIP %s: sync:true but no upstream recorded" % name, file=sys.stderr)
+          if not rows:
+              sys.exit("no sync:true forks with an upstream -- refusing to sync 0 forks")
+          print("\n".join(rows))
+          PYEOF
+          {
+            echo "rows<<FORKROWS"
+            cat /tmp/forkrows
+            echo "FORKROWS"
+            echo "repos<<FORKREPOS"
+            cut -d'|' -f2 /tmp/forkrows
+            echo "FORKREPOS"
+          } >> "$GITHUB_OUTPUT"
+          echo "derived $(wc -l < /tmp/forkrows) forks from fork_registry.json"
+
       - uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         id: app-token
         with:
@@ -48,38 +101,17 @@ jobs:
           # Without owner, the minted token is scoped to THIS repo only, so
           # branch creation / merges on the fork repos 403. owner + repositories
           # mints a token scoped to EXACTLY the forks this workflow syncs
-          # (least privilege — not every repo the app is installed on). Keep this
-          # list in sync with the FORKS string in the "Sync forks" step below.
+          # (least privilege — not every repo the app is installed on).
+          #
+          # This used to say "keep this list in sync with the FORKS string
+          # below". It is no longer a list and there is nothing to keep in sync:
+          # both sides read the same derived output. An instruction to a human
+          # to hold two lists equal is the defect, not the remedy.
           owner: ${{ github.repository_owner }}
-          repositories: |
-            PMOVES-ClawZ
-            PMOVES-Creator
-            PMOVES-supabase
-            PMOVES-tensorzero
-            PMOVES-Wealth
-            PMOVES-a0-plugins
-            PMOVES-Archon
-            PMOVES-Open-Notebook
-            PMOVES-hermes-agent
-            PMOVES-headscale
-            PMOVES-E2B-Danger-Room
-            PMOVES-A2UI
-            Pmoves-Health-wger
-            PMOVES-E2b-Spells
-            PMOVES-E2B-Danger-Room-Desktop
-            PMOVES-FinceptTerminal
-            PMOVES-Agent-Zero
-            PMOVES-BotZ-gateway
-            Pmoves-hyperdimensions
-            PMOVES-llama-throughput-lab
-            PMOVES-Pinokio-Ultimate-TTS-Studio
-            pmoves-e2b-mcp-server
-            PMOVES-ClawRouter
-            PMOVES-AgentGym
-            PMOVES-Jellyfin
-            PMOVES-n8n
-            PMOVES.YT
-            PMOVES-crush
+          # DERIVED from pmoves/config/fork_registry.json by the step
+          # above -- the same source the sync loop reads, so the token
+          # scope and the fork list cannot drift apart again.
+          repositories: ${{ steps.forks.outputs.repos }}
 
       - name: Discover forks
         env:
@@ -136,36 +168,15 @@ jobs:
           SYNC_BRANCH="sync/upstream-$(date +%Y-%m-%d)-${GITHUB_RUN_ID}"
 
           # Fork list: upstream_owner/upstream_repo|fork_name|fork_branch_override
-          FORKS="
-          openclaw/openclaw|PMOVES-ClawZ|
-          Comfy-Org/ComfyUI|PMOVES-Creator|
-          supabase/supabase|PMOVES-supabase|PMOVES.AI-Edition-Hardened
-          tensorzero/tensorzero|PMOVES-tensorzero|
-          firefly-iii/firefly-iii|PMOVES-Wealth|
-          agent0ai/a0-plugins|PMOVES-a0-plugins|
-          coleam00/Archon|PMOVES-Archon|
-          lfnovo/open-notebook|PMOVES-Open-Notebook|
-          NousResearch/hermes-agent|PMOVES-hermes-agent|
-          juanfont/headscale|PMOVES-headscale|
-          e2b-dev/E2B|PMOVES-E2B-Danger-Room|
-          google/A2UI|PMOVES-A2UI|
-          wger-project/wger|Pmoves-Health-wger|
-          e2b-dev/e2b-cookbook|PMOVES-E2b-Spells|
-          e2b-dev/desktop|PMOVES-E2B-Danger-Room-Desktop|
-          Fincept-Corporation/FinceptTerminal|PMOVES-FinceptTerminal|
-          agent0ai/agent-zero|PMOVES-Agent-Zero|
-          microsoft/mcp-gateway|PMOVES-BotZ-gateway|
-          MaxRobinsonTheGreat/hyperdimensions|Pmoves-hyperdimensions|
-          alexziskind1/llama-throughput-lab|PMOVES-llama-throughput-lab|
-          pinokiofactory/Ultimate-TTS-Studio|PMOVES-Pinokio-Ultimate-TTS-Studio|
-          e2b-dev/mcp-server|pmoves-e2b-mcp-server|
-          BlockRunAI/ClawRouter|PMOVES-ClawRouter|
-          WooooDyy/AgentGym|PMOVES-AgentGym|
-          jellyfin/jellyfin|PMOVES-Jellyfin|PMOVES.AI-Edition-Hardened
-          n8n-io/n8n|PMOVES-n8n|PMOVES.AI-Edition-Hardened
-          yt-dlp/yt-dlp|PMOVES.YT|PMOVES.AI-Edition-Hardened
-          charmbracelet/crush|PMOVES-crush|
-          "
+          #
+          # Derived once, in the "Derive fork list" step, and consumed here AND
+          # by the App-token scope. Deriving it twice would reintroduce exactly
+          # the drift this change removes -- two computations of "the same" set
+          # is the same defect as two hand-maintained lists, just harder to see.
+          FORKS=$(cat <<'FORKS_EOF'
+          ${{ steps.forks.outputs.rows }}
+          FORKS_EOF
+          )
 
           # Process substitution (`< <(...)`) instead of `echo | grep | while`
           # — the pipeline form runs the `while` in a subshell, so any
