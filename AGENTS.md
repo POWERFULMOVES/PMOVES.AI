@@ -363,6 +363,12 @@ Never use Evolution Echo as evidence that the current turn's new preference or c
 <!-- PMOVES-EXT: skills_constellation -->
 ## Skills Constellation
 
+**Canonical home (operator 2026-09-19): skills live in the
+[`PMOVES-skills`](https://github.com/POWERFULMOVES/PMOVES-skills) fork** — the
+package submodule below is that repo's seat in this tree; runtime install
+directories (e.g. the autoclaw-managed skills path) are discovery targets, not
+sources.
+
 POWERFULMOVES forks of upstream agent-skill repositories live under [`skills/`](skills/) — see [`skills/README.md`](skills/README.md) for the full map. Five forks are tracked here: `PMOVES-skills` (the skills **package** — [vercel-labs/skills](https://github.com/vercel-labs/skills), tracking `PMOVES.AI-Edition-Hardened`), `PMOVES-awesome-agent-skills`, `pmoves-fork-repository-skill`, `PMOVES-agent-sandbox-skill`, `Pmoves-claude-d3js-skill`. The skill **sources** — Anthropic's `Pmoves-Claude-skills` and MiniMax's `Pmoves-Minimax-skills` — are nested under `PMOVES-skills/sources/`, so use `--recursive` when populating. (`Pmoves-skills` was the Anthropic fork's old name; it was renamed to `Pmoves-Claude-skills` and the vacated name now resolves to the package fork, so that submodule entry was removed.) New external skill forks still require per-URL Bash-tool authorization (singleton add) — see `skills/README.md` for the procedure.
 
 

@@ -37,7 +37,13 @@ on:
     branches: [main, PMOVES.AI-Edition-Hardened]
     types: [opened, synchronize, reopened]
 
-# All eight jobs are read-only: checkout, install, run a make target or a python
+# HAND-MAINTAINED COUNT (1 of 3). The gate-job count appears literally in three
+# places that nothing keeps in step: here, in the no-skip rationale inside
+# merge-decision, and in merge-decision's final "all eleven gates" message. Adding
+# a job means `needs:`, the `for r in` loop, AND all three of these. Miss the loop
+# and the aggregator passes while ignoring a gate.
+#
+# All eleven jobs are read-only: checkout, install, run a make target or a python
 # script, and report. Verified before setting this -- no `gh pr`/`gh api`, no
 # github-script, no comment or label writes, and the ghcr/"packages" hits in this
 # file are all prose in comments, not registry pulls. So contents:read is the
@@ -106,6 +112,77 @@ jobs:
       # ran it. Two manifests were failing schema validation invisibly.
       - name: Validate every room manifest against the schema and catalog
         run: make -C pmoves room-manifest-check
+  # The split overlays (docker-compose.{base,core,agents,media,ui,workers,apps,
+  # juicefs}.yml) are GENERATED from docker-compose.yml. A drift gate for them
+  # already exists -- the `Validate Compose Files` job in
+  # hardening-validation.yml -- and it has no authority:
+  #
+  #   * That workflow is `paths:`-filtered on pmoves/docker-compose*.yml, so on a
+  #     PR that touches no compose file the job does not run AT ALL. Measured: it
+  #     is absent from all 23 checks reported on PR #3102.
+  #   * main's required contexts are python-tests, hardening-validation, verify
+  #     and submodule-gitlink-gate, with enforce_admins false. The drift job is
+  #     not among them, so it blocks nothing even when it does run -- PR #3082
+  #     merged while it was red.
+  #
+  # Requiring `Validate Compose Files` directly is NOT the fix: a path-filtered
+  # workflow can never safely be a required context, because a skipped workflow
+  # leaves its check Pending and the PR waits forever. This file's `on:` block
+  # already records that exact defect costing `PMOVES.AI-Edition-Hardened` every
+  # merge since 2026-03-17. So the check lives HERE, in a workflow with no path
+  # filter, aggregated by merge-decision -- the same reasoning as
+  # agent-zero-pin-check below.
+  #
+  # Unlike the room-manifest smoke path above, this is its own job rather than
+  # another step on docker-build-validation. Deliberate: it adds no required
+  # context (merge-decision remains the only one), and while the compose source
+  # drift on main is unrepaired this failure needs to be legible by NAME in the
+  # checks list rather than surfacing as a red `docker-build-validation`.
+  compose-split-drift-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      # Installed via the official script rather than a marketplace action, as the
+      # sibling jobs do. The make target renders through
+      # `uv run --no-project --with ruamel.yaml==0.19.1`, and that ruamel pin is
+      # what keeps the CI render byte-identical to a local one -- an unpinned
+      # ruamel would report drift that is only a formatting difference.
+      - name: Install uv
+        run: |
+          set -euo pipefail
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      # The same make target a human runs. It regenerates the overlays in place
+      # and fails on `git status --porcelain` output -- porcelain rather than
+      # `git diff --exit-code`, because diff exits 0 for untracked files, so a PR
+      # that DELETED a generated overlay would regenerate it as untracked and
+      # pass a diff-based gate.
+      - name: Check split overlays are in sync with the compose source
+        # The bare make target fails with a plain-text ERROR line, which reaches
+        # the log but leaves the check summary reading only "Process completed
+        # with exit code 2" (measured on this job's first run). A blocking gate
+        # has to say WHY where the author actually looks -- and above all has to
+        # say what NOT to do: `compose-split` would make this green by DELETING
+        # the hand-edits that were never ported into the source. The sibling
+        # check in hardening-validation.yml annotates for the same reason.
+        #
+        # set +e because the default shell is `bash -e`, which would abort the
+        # step before the annotation is written. The make exit code is preserved.
+        run: |
+          set +e
+          make -C pmoves compose-split-check
+          rc=$?
+          set -e
+          if [ "$rc" -ne 0 ]; then
+            echo "::error::Split overlays are out of sync with pmoves/docker-compose.yml (see the ERROR line and file list above). Do NOT run 'make -C pmoves compose-split' to clear this: the overlays carry hand-edits that were never ported into the source monolith, so regenerating DELETES live config. Port the edits into pmoves/docker-compose.yml first, then regenerate."
+            exit "$rc"
+          fi
 
   # Ratcheted: judges ALL 99 tracked Dockerfiles (previously globbed
   # pmoves/services/*/Dockerfile, which sees 76 of them and misses 10 of the 12
@@ -128,6 +205,81 @@ jobs:
       # ls-files`, so it needs the checkout and nothing else.
       - name: Check container hardening (ratchet)
         run: python pmoves/tools/hardening_ratchet.py
+
+  # The COMPOSE-OVERLAY hardening ratchet, promoted here from advisory-only.
+  #
+  # Read this name against `hardening-validation` directly above, because the
+  # two are easy to confuse and that confusion is how the gap survived. THAT job
+  # runs pmoves/tools/hardening_ratchet.py and judges the 99 tracked
+  # DOCKERFILES. THIS job runs pmoves/tools/compose_hardening_ratchet.py and
+  # judges the 28 SERVICES in pmoves/docker-compose.hardened.yml against five
+  # runtime properties (user, read_only, cap_drop, no-new-privileges, resource
+  # limits). Two ratchets, two subjects, two tools. A third name,
+  # `validate-compose`, lives in hardening-validation.yml and is something else
+  # again -- so this job is named for what it READS, not for what it sits near.
+  #
+  # Why it is re-implemented here instead of aggregated: the check already ran,
+  # in hardening-validation.yml, on every PR -- and blocked nothing, because
+  # `needs:` cannot reference a job in another workflow file, so merge-decision
+  # could never depend on it. Before this commit, merge-gate.yml contained zero
+  # occurrences of compose_hardening/compose-hardening. An unenforced check that
+  # fires on every PR reads, from the checks list, exactly like an enforced one.
+  # The advisory copy stays where it is; it also uploads the report artifact.
+  #
+  # SAFE TO PROMOTE, measured on this exact tree before the promotion landed:
+  #   $ ./pmoves/scripts/validate-hardening.sh
+  #   28 services x 5 properties = 140 evaluated; 112 passed + 28 findings = 140
+  #   Findings: 28 (28 baselined, 0 new)                              exit 0
+  # All 28 findings are the single NO_RESOURCE_LIMITS property; user, read_only,
+  # cap_drop and no-new-privileges are 28/28 clean. Whether resource limits
+  # SHOULD be required on those 28 services is an open policy question and is
+  # NOT decided here. Promotion blocks nothing that exists today. It blocks the
+  # next regression.
+  #
+  # No `if:` and no path filter, deliberately. A job that SKIPS satisfies a
+  # required check under GitHub's own semantics -- success, skipped and neutral
+  # all satisfy it -- so a path-filtered gate is an unenforced gate on every PR
+  # that happens not to touch the path. That is the same fail-open shape as an
+  # advisory check wearing an enforced name. merge-decision's loop below treats
+  # a skip as a failure for the same reason.
+  compose-hardening-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      # PyYAML is a hard requirement, not a convenience. The tool parses the
+      # overlay and deliberately refuses a grep fallback -- a missing import
+      # raises CouldNotMeasure and exits 3, so an absent dependency is a red job
+      # rather than a false pass. Same pin hardening-validation.yml uses.
+      - name: Install PyYAML
+        run: python -m pip install --quiet "PyYAML>=6,<7"
+      - name: Check compose overlay hardening (ratchet)
+        # Exit 0 = clean, 1 = new finding and/or stale baseline entry, 3 = COULD
+        # NOT MEASURE. Invoked directly rather than through a make target: make
+        # collapses every nonzero exit to 2, which would render 1 and 3 -- a real
+        # regression and a check that never ran -- indistinguishable here.
+        #
+        # set +e because the default shell is `bash -e`, which would abort the
+        # step before the annotation is written. The exit code is preserved and
+        # re-raised, so the job's result still comes from the tool.
+        run: |
+          set +e
+          ./pmoves/scripts/validate-hardening.sh
+          rc=$?
+          set -e
+          if [ "$rc" -eq 3 ]; then
+            echo "::error::COULD NOT MEASURE the compose hardening ratchet (exit 3). This is NOT a pass -- the check did not run at all. The reason is printed above; fix that rather than treating the job as flaky."
+            exit "$rc"
+          fi
+          if [ "$rc" -ne 0 ]; then
+            echo "::error::Compose overlay hardening regressed (exit $rc). Either a service in pmoves/docker-compose.hardened.yml lost a required property (user / read_only / cap_drop: ALL / no-new-privileges / resource limits), or a baselined gap was fixed without being removed from pmoves/configs/hardening_ratchet/_compose_known_gaps.yaml. Restore the property on the service -- do NOT add a new baseline entry to make this green."
+            exit "$rc"
+          fi
 
   # A SHA-pinned action that does not exist fails the workflow during SETUP —
   # before runs-on resolves, before any step logs, before any annotation. The
@@ -267,12 +419,45 @@ jobs:
       - name: Check our lock against the fork's declared pins
         run: make -C pmoves agent-zero-pin-check
 
+  # Six workflows guard their self-hosted jobs against fork PRs, in three
+  # mutually incompatible spellings, and not one asserted the invariant. So the
+  # seventh case shipped unguarded: submodule-smoke.yml's `smoke-test` runs on
+  # `[self-hosted, Linux, X64, ai-lab]` -- physical fleet hardware -- on a
+  # `pull_request` trigger, which checks out the PR's OWN code, gated only by a
+  # PR label. Labelling a fork's PR would have run untrusted code on a fleet node.
+  #
+  # A convention protects only the files whoever wrote it remembered. This job is
+  # what makes the eighth case a PR failure instead of another silent one.
+  #
+  # No pytest step: pytest_ratchet.py rglobs every test_*.py in the repo, so the
+  # gate's own 29-case suite is already run by `python-tests` above. Running it
+  # here too would just be a second copy of the same result.
+  fork-guard-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      # pyyaml only. The gate PARSES `runs-on` per job rather than grepping:
+      # `grep -l self-hosted` over this directory matches 22 files, while parsing
+      # finds 30 self-hosted jobs in 14. A grep-based version would be a check
+      # that cannot do what its name implies.
+      - name: Install pyyaml
+        run: python -m pip install --quiet pyyaml
+      - name: Assert every fork-reachable self-hosted job has a fork guard
+        run: python pmoves/tools/validate_fork_guards.py
+
   merge-decision:
     # Reads nothing and writes nothing - it only inspects `needs` results.
     permissions: {}
-    needs: [python-tests, docker-build-validation, hardening-validation, action-pin-validation,
+    needs: [python-tests, docker-build-validation, compose-split-drift-check,
+            hardening-validation, compose-hardening-check, action-pin-validation,
             agent-registry-check, dep-matrix-check, agent-zero-pin-check,
-            suppression-marker-check]
+            suppression-marker-check, fork-guard-check]
     runs-on: ubuntu-latest
     if: always()
     steps:
@@ -281,12 +466,15 @@ jobs:
           echo "Merge gate evaluation:"
           echo "  python-tests: ${{ needs.python-tests.result }}"
           echo "  docker-build-validation: ${{ needs.docker-build-validation.result }}"
+          echo "  compose-split-drift-check: ${{ needs.compose-split-drift-check.result }}"
           echo "  hardening-validation: ${{ needs.hardening-validation.result }}"
+          echo "  compose-hardening-check: ${{ needs.compose-hardening-check.result }}"
           echo "  action-pin-validation: ${{ needs.action-pin-validation.result }}"
           echo "  agent-registry-check: ${{ needs.agent-registry-check.result }}"
           echo "  dep-matrix-check: ${{ needs.dep-matrix-check.result }}"
           echo "  agent-zero-pin-check: ${{ needs.agent-zero-pin-check.result }}"
           echo "  suppression-marker-check: ${{ needs.suppression-marker-check.result }}"
+          echo "  fork-guard-check: ${{ needs.fork-guard-check.result }}"
           # REQUIRE success — do not merely reject "failure".
           #
           # A needs.<job>.result is one of success | failure | cancelled | skipped.
@@ -295,18 +483,26 @@ jobs:
           # shape this PR exists to remove, reproduced in the gate meant to close it:
           # an instrument that reports fine without having measured anything.
           #
-          # None of the eight jobs carries an `if:` or a path filter, so they always
+          # HAND-MAINTAINED COUNT (2 of 3). The other two are the `permissions`
+          # comment at the top of this file and the "all eleven gates" message at
+          # the end of this step. The authority is the `for r in` loop below, not
+          # any of these three numbers.
+          #
+          # None of the eleven jobs carries an `if:` or a path filter, so they always
           # run — a skip is not a legitimate state here, and if one ever appears it
           # is itself worth failing on rather than passing silently.
           failed=0
           for r in "python-tests:${{ needs.python-tests.result }}" \
                    "docker-build-validation:${{ needs.docker-build-validation.result }}" \
+                   "compose-split-drift-check:${{ needs.compose-split-drift-check.result }}" \
                    "hardening-validation:${{ needs.hardening-validation.result }}" \
+                   "compose-hardening-check:${{ needs.compose-hardening-check.result }}" \
                    "action-pin-validation:${{ needs.action-pin-validation.result }}" \
                    "agent-registry-check:${{ needs.agent-registry-check.result }}" \
                    "dep-matrix-check:${{ needs.dep-matrix-check.result }}" \
                    "agent-zero-pin-check:${{ needs.agent-zero-pin-check.result }}" \
-                   "suppression-marker-check:${{ needs.suppression-marker-check.result }}"; do
+                   "suppression-marker-check:${{ needs.suppression-marker-check.result }}" \
+                   "fork-guard-check:${{ needs.fork-guard-check.result }}"; do
             job="${r%%:*}"; res="${r#*:}"
             if [[ "$res" != "success" ]]; then
               echo "::error::Merge gate FAILED — $job did not succeed (result: ${res:-<empty>})"
@@ -316,4 +512,8 @@ jobs:
           if [[ "$failed" -ne 0 ]]; then
             exit 1
           fi
-          echo "Merge gate PASSED — all eight gates reported success"
+          # HAND-MAINTAINED COUNT (3 of 3). The other two are the `permissions`
+          # comment at the top of this file and the no-skip rationale above. This
+          # line is cosmetic — the loop above is what decides — but a stale number
+          # here is how a reader learns to distrust the other two.
+          echo "Merge gate PASSED — all eleven gates reported success"

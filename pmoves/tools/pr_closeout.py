@@ -778,6 +778,18 @@ def _print_report(report: CloseoutReport) -> None:
         _print_console("Unchecked tasks:")
         for task in report.unchecked_tasks:
             _print_console(f"  - {task}")
+    if report.advisory_failures:
+        # Itemised, not just counted. Blockers, threads and tasks were each
+        # listed by name while advisory failures were a bare number on the
+        # summary line -- so the one category the operator is being asked to
+        # WAIVE was the one they could not see without re-reading the run. A
+        # count is not a disclosure.
+        _print_console("Allowed advisory failures (waived by --allow-advisory-failure):")
+        for detail in report.advisory_failures:
+            name = detail.get("name") or "unnamed-check"
+            state = detail.get("state") or "UNKNOWN"
+            url = detail.get("url") or ""
+            _print_console(f"  - {name} ({state}){(' ' + url) if url else ''}")
 
 
 def _write_json(report: CloseoutReport, path: str) -> None:
