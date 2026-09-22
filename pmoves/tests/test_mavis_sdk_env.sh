@@ -173,6 +173,100 @@ scenario_unknown_cli_strips_body() {
 }
 
 # ---------------------------------------------------------------------------
+# Audit log file scenario: every call lands one JSONL line with the
+# documented shape.  The scenario uses a unique $PMOVES_MAVIS_SDK_LOG_PATH
+# inside the scratch tempdir so the test is hermetic (no risk of
+# appending to the operator's real audit trail).
+# ---------------------------------------------------------------------------
+
+scenario_audit_log_records_strip_body() {
+  source "$HELPER"
+  local log_dir="$SCENARIO_RESULTS_DIR/audit_log/strip"
+  mkdir -p "$log_dir"
+  export PMOVES_MAVIS_SDK_LOG_PATH="$log_dir/audit.jsonl"
+  rm -f "$PMOVES_MAVIS_SDK_LOG_PATH"
+  export ANTHROPIC_BASE_URL="https://api.minimax.io/anthropic"
+  export ANTHROPIC_AUTH_TOKEN="sk-cp-fake"
+  export ANTHROPIC_MODEL="MiniMax-M3"
+  export MCP_TIMEOUT="120000"
+  mavis_sdk_strip_env_for "claude"
+  # Audit file must exist after one call
+  assert_in "$(ls -1 "$log_dir" 2>/dev/null || true)" "audit.jsonl" "audit file emitted"
+  # One JSONL line
+  local line_count
+  line_count="$(wc -l < "$PMOVES_MAVIS_SDK_LOG_PATH" 2>/dev/null || echo 0)"
+  assert_equal "$line_count" "1" "exactly one JSONL line emitted"
+  # Shape: required fields present
+  local first_line
+  first_line="$(head -1 "$PMOVES_MAVIS_SDK_LOG_PATH")"
+  assert_in "$first_line" '"ts"'        "JSONL has ts"
+  assert_in "$first_line" '"host"'      "JSONL has host"
+  assert_in "$first_line" '"pid"'       "JSONL has pid"
+  assert_in "$first_line" '"cli"'       "JSONL has cli"
+  assert_in "$first_line" '"stripped_count"'  "JSONL has stripped_count"
+  assert_in "$first_line" '"stripped_names"'  "JSONL has stripped_names"
+  assert_in "$first_line" '"all_consumed"'    "JSONL has all_consumed"
+  assert_in "$first_line" '"cli":"claude"'    "JSONL has correct cli value"
+  # claude NEEDS ANTHROPIC_BASE_URL + ANTHROPIC_AUTH_TOKEN (kept) but NOT
+  # ANTHROPIC_MODEL + MCP_TIMEOUT (stripped).  stripped_count must be 2, names
+  # must contain exactly the two stripped vars (order-stable: sorted by the
+  # bash helper before being joined).
+  assert_in "$first_line" '"stripped_count":2' "JSONL has correct stripped_count for claude"
+  assert_in "$first_line" 'ANTHROPIC_MODEL'  "JSONL includes ANTHROPIC_MODEL in stripped_names"
+  assert_in "$first_line" 'MCP_TIMEOUT'      "JSONL includes MCP_TIMEOUT in stripped_names"
+  # Sanity: claude-needs vars are still set (kept, not stripped); non-needs
+  # vars are preserved under the prefix AND unset from the live env.
+  assert_equal "${ANTHROPIC_BASE_URL:-<unset>}" "https://api.minimax.io/anthropic" "ANTHROPIC_BASE_URL kept (claude needs it)"
+  assert_equal "${ANTHROPIC_AUTH_TOKEN:-<unset>}" "sk-cp-fake"                     "ANTHROPIC_AUTH_TOKEN kept (claude needs it)"
+  assert_equal "${ANTHROPIC_MODEL:-<unset>}" "<unset>" "ANTHROPIC_MODEL stripped"
+  assert_equal "${PMOVES_MAVIS_SDK_ANTHROPIC_MODEL:-<unset>}" "MiniMax-M3" "ANTHROPIC_MODEL preserved under prefix"
+  assert_equal "${PMOVES_MAVIS_SDK_MCP_TIMEOUT:-<unset>}"   "120000"     "MCP_TIMEOUT preserved under prefix"
+}
+
+scenario_audit_log_records_passthrough_body() {
+  # When pmoves-mini (all_consumed=true) is stripped, the audit line must
+  # carry all_consumed=true and stripped_count=0.
+  source "$HELPER"
+  local log_dir="$SCENARIO_RESULTS_DIR/audit_log/passthrough"
+  mkdir -p "$log_dir"
+  export PMOVES_MAVIS_SDK_LOG_PATH="$log_dir/audit.jsonl"
+  rm -f "$PMOVES_MAVIS_SDK_LOG_PATH"
+  export ANTHROPIC_BASE_URL="https://api.minimax.io/anthropic"
+  export ANTHROPIC_MODEL="MiniMax-M3"
+  mavis_sdk_strip_env_for "pmoves-mini"
+  local first_line
+  first_line="$(head -1 "$PMOVES_MAVIS_SDK_LOG_PATH" 2>/dev/null)"
+  assert_in "$first_line" '"all_consumed":true'  "JSONL records all_consumed=true for pmoves-mini"
+  assert_in "$first_line" '"cli":"pmoves-mini"'  "JSONL records cli=pmoves-mini"
+  assert_in "$first_line" '"stripped_count":0'  "JSONL records stripped_count=0 for passthrough"
+}
+
+scenario_audit_log_best_effort_no_throw_body() {
+  # If PMOVES_MAVIS_SDK_LOG_PATH points to a path the process can't write
+  # (a parent that is a regular file, not a directory), the strip helper
+  # must still succeed.  This is the contract: the audit append is
+  # best-effort, NEVER a launch blocker.
+  source "$HELPER"
+  local bad_log_parent="$SCENARIO_RESULTS_DIR/audit_log"
+  mkdir -p "$bad_log_parent"
+  # Create a regular file at the level where we'd want a directory, then
+  # try to redirect into it as if it were a directory.
+  local file_obstruction="$bad_log_parent/file-obstruction"
+  : > "$file_obstruction"
+  export PMOVES_MAVIS_SDK_LOG_PATH="$file_obstruction/will-fail/here.log"
+  export ANTHROPIC_BASE_URL="https://api.minimax.io/anthropic"
+  # Strip must NOT throw / crash / return non-zero just because log write failed.
+  if mavis_sdk_strip_env_for "kilo"; then
+    PASS=$((PASS + 1))
+  else
+    echo "    FAIL: mavis_sdk_strip_env_for 'kilo' returned non-zero despite log write failure" >&2
+    FAIL=$((FAIL + 1))
+  fi
+  assert_equal "${PMOVES_MAVIS_SDK_ANTHROPIC_BASE_URL:-<unset>}" "https://api.minimax.io/anthropic" "prefixed copy preserved despite log write failure"
+  rm -f "$file_obstruction"
+}
+
+# ---------------------------------------------------------------------------
 # Run all scenarios; aggregate pass/fail count.
 # ---------------------------------------------------------------------------
 echo "[scenario] kilo strips everything"
@@ -185,6 +279,12 @@ echo "[scenario] CLAUDE_CODE_* glob matches live var"
 run_scenario glob_pattern scenario_glob_pattern_body
 echo "[scenario] unknown CLI name strips everything (safe default)"
 run_scenario unknown_cli scenario_unknown_cli_strips_body
+echo "[scenario] audit log records one JSONL line per call (claude strip)"
+run_scenario audit_strip scenario_audit_log_records_strip_body
+echo "[scenario] audit log records all_consumed=true for pmoves-mini passthrough"
+run_scenario audit_passthrough scenario_audit_log_records_passthrough_body
+echo "[scenario] audit log write failure must NOT fail the strip call"
+run_scenario audit_best_effort scenario_audit_log_best_effort_no_throw_body
 
 echo "--------------------------------------------------"
 # Aggregate from per-scenario result files.
