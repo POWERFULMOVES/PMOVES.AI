@@ -100,8 +100,8 @@ not expand `${VAR}` in mcp.json by itself; the launcher's normaliser does.
 **2. Pick your `agentId`.** Use the **signing-card spelling**
 (`h.agent_id` in `pmoves/config/signing_identity_cards.yaml`, e.g.
 `b850-claude`, `z890-claude`, `4090-claude`), not the agent-registry key
-(`claude_b850`). `agentId` is required on every tool call. Never send `*`: it
-is refused under a token on REST, and under enforce on MCP.
+(`claude_b850`). `agentId` is required on every tool call. With a token,
+omitting it or sending `*` is refused in every mode, on MCP and REST alike.
 
 ```bash
 make -C pmoves cipher-identity AGENT=<card id>     # RUN: reads no secret, sends nothing
@@ -132,7 +132,7 @@ bearer:
 - **MCP:** runs in **advisory** mode (`CIPHER_MCP_ENFORCE` unset, the default).
   Your call succeeds, and the write is filed under the `agentId` you
   **declared**. Cipher also logs one line:
-  `pmoves-mcp-auth: ADVISORY … token-agent='bootstrap' declared-agent='<you>'`.
+  `pmoves-mcp-auth: ADVISORY (…) {…"tokenAgent":"bootstrap","declaredAgent":"<you>"…}`.
   That line is the migration signal, not an error. Attribution is
   **self-asserted** until you hold a per-agent token.
 - **REST:** does NOT behave this way. A bootstrap bearer plus your own
