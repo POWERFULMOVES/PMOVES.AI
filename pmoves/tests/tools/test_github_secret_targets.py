@@ -231,10 +231,10 @@ def test_apply_manifest_v2_accepts_a_mapping_target(tmp_path):
         ),
         encoding="utf-8",
     )
-    # Synthetic values only. POSTGRES_PASSWORD is passed so the common-credential
-    # sync takes its explicit branch: its os.environ fallback raises NameError
-    # (`os` is never imported in pmoves/chit/__init__.py) -- a separate defect,
-    # out of scope here. No env.tier-* file exists under tmp_path to write to.
+    # Synthetic values only. POSTGRES_PASSWORD keeps the common-credential sync
+    # on its explicit branch, off the os.environ fallback (covered by
+    # tests/unit/test_chit_sync_common_credentials.py). No env.tier-* file
+    # exists under tmp_path to write to.
     result = apply_manifest_v2(
         {"PLAIN_KEY": "synthetic-a", "N8N_API_KEY": "synthetic-b", "POSTGRES_PASSWORD": "synthetic-c"},
         manifest,
