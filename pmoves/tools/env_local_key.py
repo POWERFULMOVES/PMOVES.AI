@@ -214,8 +214,11 @@ def _read_value(stdin, key: str) -> bytes:
     return text.encode("utf-8")
 
 
-def _row(key: str, action: str, **extra: object) -> dict:
-    row = {
+def _row(key: str, action: str, **extra: object) -> dict[str, object]:
+    # Explicitly dict[str, object]: the literal below is all-str, so a checker
+    # infers dict[str, str] and flags the update with int/None/bool lengths.
+    # At runtime it is a plain dict and json.dumps serialises those correctly.
+    row: dict[str, object] = {
         "ts": _dt.datetime.now(_dt.timezone.utc).isoformat(timespec="seconds"),
         "host": socket.gethostname(),
         "key": key,
