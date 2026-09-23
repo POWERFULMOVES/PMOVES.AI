@@ -16,6 +16,12 @@ by that twice in one week:
     #21 + installer #20). Neither commit touches `auth.ts`, so all nine
     citations re-verified at the same lines and only PIN moved. This is the
     boring case this test exists to keep boring.
+  * #3152 bumped the pin — `c88b009a2` -> `95a866b6` (fork PR #27, per-request
+    MCP identity + CIPHER_MCP_ENFORCE). It touches `mcp-sse.ts`,
+    `rest-server.ts` and the pmoves README, not `auth.ts`; all nine citations
+    re-verified at the same lines. NOTE: `95a866b6` is the head of an UNMERGED
+    fork PR at the time of pinning — if #27 is squash-merged the SHA changes and
+    this PIN must follow the merge commit.
 
 Re-numbering by hand each time is not a fix; it is the same manual step failing
 again on a schedule. This test makes the citation machine-checkable in three
@@ -42,7 +48,7 @@ AUTH_TS = REPO_ROOT / SUBMODULE / "src" / "pmoves" / "auth.ts"
 
 # The commit these line numbers were read at. Advancing the gitlink without
 # updating this constant is the drift this file exists to catch.
-PIN = "c88b009a227b99329937a79fb782f16aff77e1aa"
+PIN = "95a866b64f59decb7293c475f0841df2e7f528c6"
 
 # line -> a fragment that must appear on it. Keep in sync with the tables in
 # TAC_CIPHER.md, cipher_identity.py and the cipher-memory SKILL.
