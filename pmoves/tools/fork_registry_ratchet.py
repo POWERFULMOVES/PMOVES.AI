@@ -221,12 +221,31 @@ def main() -> int:
         "total": total,
         "problems": problems,
         "coverage_cross_check": coverage_checked,
+        # The comment above says BRANCH_MISSING_BUDGET "may only be lowered --
+        # lower it whenever one of those four gets triaged". It was computed and
+        # then dropped on the floor: absent from this payload and from the
+        # human output, so nothing ever told an operator the count had fallen
+        # and the budget could come down. A ratchet whose current value is
+        # invisible cannot be ratcheted; it just sits at its initial number.
+        "branch_missing": branch_missing,
+        "branch_missing_budget": BRANCH_MISSING_BUDGET,
     }
 
     if args.json:
         print(json.dumps(payload, indent=2))
     else:
         print(f"fork-registry ratchet: {coverage} decided")
+        if branch_missing < BRANCH_MISSING_BUDGET:
+            print(
+                f"  branch coverage: {branch_missing} missing, budget "
+                f"{BRANCH_MISSING_BUDGET} — LOWER BRANCH_MISSING_BUDGET to "
+                f"{branch_missing}"
+            )
+        else:
+            print(
+                f"  branch coverage: {branch_missing} missing "
+                f"(budget {BRANCH_MISSING_BUDGET})"
+            )
         if problems:
             print(f"  {len(problems)} problem(s):")
             for p in problems:
