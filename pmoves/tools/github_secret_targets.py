@@ -68,12 +68,18 @@ class MalformedTarget(ValueError):
     """A `github_secret` target that is neither form. Never silently skipped."""
 
 
-def normalize(target: Any) -> Optional[Dict[str, Any]]:
+def normalize(target: Any, strict: bool = False) -> Optional[Dict[str, Any]]:
     """One manifest target -> ``{name, repo, env, routed}``, or None.
 
     None means the target carries no GitHub secret (a file or Docker target),
     matching the old ``target.get("github_secret")`` truthiness test. ``routed``
     is False for the string form, whose repo/env are the caller's to choose.
+
+    Bare YAML scalars that are not strings (``github_secret: 42``, ``yes``)
+    pass through UNCHANGED as the name, as they did before this module
+    existed: the drift check and apply_manifest_v2 took them as they came, and
+    adding a raise there would turn a quirk into an outage. Only the push
+    emitter, which hands names to gh, validates -- it passes ``strict=True``.
     """
     if not isinstance(target, dict):
         return None
@@ -81,6 +87,8 @@ def normalize(target: Any) -> Optional[Dict[str, Any]]:
     if not value:
         return None
     if isinstance(value, str):
+        return {"name": value, "repo": DEFAULT_REPO, "env": None, "routed": False}
+    if isinstance(value, (int, float)) and not strict:  # bool is an int
         return {"name": value, "repo": DEFAULT_REPO, "env": None, "routed": False}
     if not isinstance(value, dict):
         raise MalformedTarget(
@@ -142,7 +150,7 @@ def routes(
     seen = set()
     for entry in entries:
         for target in entry.get("targets") or []:
-            route = normalize(target)
+            route = normalize(target, strict=True)
             if route is None:
                 continue
             if route["routed"]:

@@ -95,12 +95,31 @@ def test_non_github_targets_are_none(target):
         ({"name": "A", "repo": "O/R", "env": "a%2Fb"}, "env"),
         ({"name": "A", "repo": "O/R", "env": "Prod env"}, "env"),
         (["A"], "name or a mapping"),
-        (42, "name or a mapping"),
     ],
 )
 def test_malformed_targets_raise_with_a_clear_error(value, needle):
     with pytest.raises(gst.MalformedTarget, match=needle):
         gst.normalize({"github_secret": value})
+
+
+@pytest.mark.parametrize("value", [42, 1.5, True])
+def test_bare_non_string_scalars_pass_through_unchanged(value):
+    """As before this module: the readers took `github_secret: 42` as it came.
+    No new raise outside the emitter."""
+    assert gst.normalize({"github_secret": value}) == {
+        "name": value, "repo": "POWERFULMOVES/PMOVES.AI", "env": None, "routed": False,
+    }
+
+
+def test_strict_mode_rejects_non_string_scalars():
+    with pytest.raises(gst.MalformedTarget, match="name or a mapping"):
+        gst.normalize({"github_secret": 42}, strict=True)
+
+
+def test_the_emitter_rejects_a_non_string_name(tmp_path, capsys):
+    m = _manifest(tmp_path, [[{"github_secret": 42}]])
+    assert gst.main(["routes", "--manifest", str(m)]) == 2
+    assert capsys.readouterr().out == ""
 
 
 # ---------------------------------------------------------------------------
@@ -224,3 +243,33 @@ def test_apply_manifest_v2_accepts_a_mapping_target(tmp_path):
     assert result["github_secrets"] == 2
     written = json.loads((tmp_path / "data" / "chit" / "github_secrets.json").read_text(encoding="utf-8"))
     assert set(written) == {"PMOVES_PLAIN_KEY", "PMOVES_N8N_API_KEY"}
+
+
+def _two_target_manifest(tmp_path: Path, routed: bool) -> Path:
+    manifest = tmp_path / "chit" / "m.yaml"
+    manifest.parent.mkdir(exist_ok=True)
+    targets = [{"github_secret": "PLAIN_KEY"}]
+    if routed:
+        targets.append({"github_secret": {"name": "PLAIN_KEY", "repo": "O/R"}})
+    manifest.write_text(
+        yaml.safe_dump({"entries": [{"source": {"label": "PLAIN_KEY"}, "targets": targets}]}),
+        encoding="utf-8",
+    )
+    return manifest
+
+
+def test_apply_manifest_v2_without_the_tools_module_keeps_bare_names_working(tmp_path, monkeypatch):
+    """Images that copy only chit/ lack pmoves/tools/github_secret_targets.py.
+    A module-level or unguarded import made apply_manifest_v2 raise
+    ModuleNotFoundError there; bare names must behave exactly as before."""
+    if str(REPO_ROOT) not in sys.path:
+        sys.path.insert(0, str(REPO_ROOT))
+    from pmoves.chit import apply_manifest_v2
+
+    monkeypatch.setitem(sys.modules, "pmoves.tools.github_secret_targets", None)  # import -> ImportError
+    secrets = {"PLAIN_KEY": "synthetic-a", "POSTGRES_PASSWORD": "synthetic-c"}
+    result = apply_manifest_v2(secrets, _two_target_manifest(tmp_path, routed=False), base_dir=tmp_path)
+    assert result["github_secrets"] == 1
+
+    with pytest.raises(ValueError, match="github_secret_targets"):
+        apply_manifest_v2(secrets, _two_target_manifest(tmp_path, routed=True), base_dir=tmp_path)

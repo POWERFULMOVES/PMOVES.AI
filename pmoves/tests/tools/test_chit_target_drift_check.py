@@ -222,3 +222,14 @@ def test_the_string_form_output_is_unchanged(tmp_path, capsys):
         "            deliberate\n"
         "\nOK — every github_secret target names its own entry's label.\n"
     )
+
+
+def test_a_bare_numeric_name_passes_through_as_before(tmp_path, capsys):
+    """`github_secret: 42` was str()'d and compared, never refused. The
+    normalizer must not turn that into an unmeasured run."""
+    entry = {"id": "n", "source": {"label": "LABEL"}, "targets": [{"github_secret": 42}]}
+    rc = _run(tmp_path, [entry], argv=["--json"])
+    payload = json.loads(capsys.readouterr().out)
+    assert rc == 1, payload
+    assert payload["undeclared"] == [{"entry": "n", "label": "LABEL", "github_secret": "42"}]
+
