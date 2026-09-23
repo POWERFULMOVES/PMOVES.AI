@@ -43,6 +43,19 @@ require_root() {
   fi
 }
 
+# The operator account that owns the bringup venv and the /opt/pmoves checkout.
+# Required UP FRONT: a plain root login has no SUDO_USER, and the previous
+# behaviour (skip the venv with a WARN, then fail verification on it) meant a
+# root run always exited 1 after doing most of the work.
+require_operator_user() {
+  if [[ -z "${SUDO_USER:-}" || "${SUDO_USER}" == "root" ]] || ! id "${SUDO_USER}" &>/dev/null; then
+    echo "[b850-bootstrap] ERROR: run via sudo from the operator's non-root account: sudo bash $0" >&2
+    echo "[b850-bootstrap]        From a root shell, name the operator explicitly: SUDO_USER=<user> bash $0" >&2
+    exit 1
+  fi
+  OPERATOR_USER="${SUDO_USER}"
+}
+
 # ------------------------------------------------------------------
 # System packages
 # ------------------------------------------------------------------
@@ -105,7 +118,7 @@ install_docker() {
   fi
 
   # Add users to docker group
-  for user in "${SUDO_USER:-}" pmoves; do
+  for user in "${OPERATOR_USER}" pmoves; do
     [[ -z "$user" ]] && continue
     if id "$user" &>/dev/null; then
       usermod -aG docker "$user" && log "Added $user to docker group"
@@ -207,17 +220,13 @@ install_uv() {
 # Delegates to the Known Road `make -C pmoves venv-bringup`, which creates the
 # canonical, gitignored pmoves/.venv-pmoves with pmoves/tools/bringup/
 # requirements.txt. Runs as the invoking (sudo) user so the venv is not
-# root-owned inside a user checkout. glances is NOT installed system-wide.
+# root-owned inside a user checkout (OPERATOR_USER, see
+# require_operator_user). glances is NOT installed system-wide.
 install_pmoves_venv() {
   log_section "Creating PMOVES bringup venv (make -C pmoves venv-bringup)"
 
-  if [[ -z "${SUDO_USER:-}" || "${SUDO_USER}" == "root" ]]; then
-    log "WARN: no non-root SUDO_USER; skipping venv. Run as your user afterwards:"
-    log "      make -C ${REPO_ROOT}/pmoves venv-bringup"
-    return 0
-  fi
-
-  sudo -u "${SUDO_USER}" -H env PATH="/usr/local/bin:${PATH}" \
+  # OPERATOR_USER is guaranteed by require_operator_user.
+  sudo -u "${OPERATOR_USER}" -H env PATH="/usr/local/bin:${PATH}" \
     make -C "${REPO_ROOT}/pmoves" venv-bringup
 
   log "PMOVES bringup venv ready at ${BRINGUP_VENV}"
@@ -345,7 +354,7 @@ verify_installation() {
   fi
 
   log "Checking docker group membership:"
-  for user in "${SUDO_USER:-}" pmoves; do
+  for user in "${OPERATOR_USER}" pmoves; do
     [[ -z "$user" ]] && continue
     if id "$user" &>/dev/null; then
       if groups "$user" 2>/dev/null | grep -q docker; then
@@ -411,6 +420,7 @@ print_summary() {
 # ------------------------------------------------------------------
 main() {
   require_root
+  require_operator_user
   install_system_packages
   install_docker
   install_uv
