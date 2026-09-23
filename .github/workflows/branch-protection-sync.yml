@@ -149,13 +149,27 @@ jobs:
             echo "### Repo resolution (.gitmodules -> GitHub canonical name)"
             echo ""
           } >> "$GITHUB_STEP_SUMMARY"
+          # ZERO-INPUT GUARD. A missing or empty forks.tsv makes the loop below
+          # run zero times with bad=0, and the step would pass VACUOUSLY -- the
+          # silent dark-out this step exists to prevent. Count the input first
+          # (outside process substitution, whose failure `-e` cannot see) and
+          # require every row to resolve.
+          if [ ! -s forks.tsv ]; then
+            echo "::error title=branch-protection-sync: no input::forks.tsv is missing or empty; nothing was resolved (input=0 resolved=0). The derive step produced no repos."
+            echo "- NO INPUT: forks.tsv missing or empty (input=0 resolved=0)" >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          repos=$(cut -f1 forks.tsv | sort -u | sed '/^[[:space:]]*$/d')
+          n=$(printf '%s\n' "$repos" | sed '/^$/d' | wc -l)
           while read -r repo; do
             [ -z "$repo" ] && continue
             want="${OWNER}/${repo}"
             # `if !` form: Actions runs `bash -e`, so a bare failing assignment
             # would abort here before the repo could be named.
             if ! full=$(gh api "repos/${want}" --jq .full_name 2>/tmp/resolve_err) || [ -z "$full" ]; then
-              msg=$(head -1 /tmp/resolve_err)
+              # Single line, capped at 160 (parity with the main loop): an
+              # annotation must not be split or flooded by an error body.
+              msg=$(head -1 /tmp/resolve_err | tr -d '\r' | tr '\n' ' ' | cut -c1-160)
               echo "::error title=branch-protection-sync: unresolvable repo::${want} (from .gitmodules) does not exist or is not in the App installation: ${msg}"
               echo "- MISSING: \`${want}\` — ${msg}" >> "$GITHUB_STEP_SUMMARY"
               bad=$((bad+1)); continue
@@ -170,12 +184,17 @@ jobs:
               echo "- RENAMED: \`${want}\` -> \`${full}\`" >> "$GITHUB_STEP_SUMMARY"
               bad=$((bad+1))
             fi
-          done < <(cut -f1 forks.tsv | sort -u)
-          echo "resolved=${ok} drifted=${bad}"
+          done <<< "$repos"
+          echo "input=${n} resolved=${ok} drifted=${bad}"
           echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "resolved=${ok} drifted=${bad}" >> "$GITHUB_STEP_SUMMARY"
+          echo "input=${n} resolved=${ok} drifted=${bad}" >> "$GITHUB_STEP_SUMMARY"
           if [ "$bad" -gt 0 ]; then
             echo "::error::${bad} repo name(s) derived from .gitmodules do not resolve to themselves; the scoped token mint would fail opaquely. Fix .gitmodules (see errors above)."
+            exit 1
+          fi
+          # Positive proof, not absence of errors: every input row resolved.
+          if [ "$n" -eq 0 ] || [ "$ok" -ne "$n" ]; then
+            echo "::error title=branch-protection-sync: incomplete resolution::input=${n} resolved=${ok}; refusing to mint on a partial or empty repo set."
             exit 1
           fi
 
@@ -435,9 +454,22 @@ jobs:
           echo "Legend: ~ would-change  . no-change  + applied  = skipped(protected)  s skipped(needs-pro)  ? unreadable(could not read/parse — NOT written)  ! failed"
           if [ "$UNREADABLE" -gt 0 ]; then
             echo "::warning title=branch-protection-sync::${UNREADABLE} branch(es) could not be measured; see the UNREADABLE rows."
-            # Exit-code doctrine: 3 = could-not-measure. Live runs only, so the
-            # push/schedule audit keeps its annotations without going red on a
-            # transient 5xx; a live write that could not see its target is red.
-            if [ "$DRY_RUN" != "true" ]; then exit 3; fi
+          fi
+          # Exit-code doctrine (0 clean / 1 findings / 3 could-not-measure).
+          # Dry runs always exit 0: they write nothing, and the push/schedule
+          # audit keeps its annotations without going red on a transient 5xx.
+          # Live runs, by precedence:
+          #   any FAILED PUT            -> 1  (a write was attempted and did not
+          #                                    land: branches left unprotected)
+          #   else any UNREADABLE       -> 3  (could not see the target; not written)
+          #   else                      -> 0
+          # FAILED outranks UNREADABLE because it is a measured failure, not an
+          # unmeasured one.
+          if [ "$DRY_RUN" != "true" ]; then
+            if [ "$FAILED" -gt 0 ]; then
+              echo "::error title=branch-protection-sync::${FAILED} PUT(s) failed (unreadable=${UNREADABLE}); exiting 1."
+              exit 1
+            fi
+            if [ "$UNREADABLE" -gt 0 ]; then exit 3; fi
           fi
           exit 0
