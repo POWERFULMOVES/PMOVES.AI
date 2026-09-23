@@ -40,6 +40,12 @@ if [ -f "$REPO_ROOT/pmoves/scripts/pm-node-identity.sh" ]; then
   . "$REPO_ROOT/pmoves/scripts/pm-node-identity.sh"
   pm_node_identity "$REPO_ROOT" hermes hermes-pmoves || true
   echo "${PM_IDENT_LINE}" >&2
+  if [ -f "$REPO_ROOT/pmoves/scripts/pm-cipher-token-bind.sh" ]; then
+    # shellcheck source=./pm-cipher-token-bind.sh
+    . "$REPO_ROOT/pmoves/scripts/pm-cipher-token-bind.sh"
+    pm_cipher_token_bind "$REPO_ROOT" "${PM_IDENT_CIPHER_ID:-}" || true
+    echo "[hermes-pmoves] ${PM_CARRY_BIND_LINE}" >&2
+  fi
   if [ -f "$REPO_ROOT/pmoves/scripts/pm-cipher-identity.sh" ]; then
     # shellcheck source=./pm-cipher-identity.sh
     . "$REPO_ROOT/pmoves/scripts/pm-cipher-identity.sh"
