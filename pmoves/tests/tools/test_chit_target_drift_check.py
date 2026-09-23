@@ -154,3 +154,71 @@ def test_the_real_manifest_has_exactly_the_two_known_divergences():
         ("minimax_token_plan_api_key", "MINIMAX_API_KEY"),
         ("service_password_postgres", "SERVICE_PASSWORD_POSTGRES"),
     }, f"github_secret drift changed: {found}"
+
+
+# ---------------------------------------------------------------------------
+# The mapping form: {github_secret: {name, repo, env}}. The label is compared
+# to `name`; repo and env are routing, not identity.
+# ---------------------------------------------------------------------------
+
+
+def _routed_entry(eid: str, label: str, value):
+    return {
+        "id": eid,
+        "source": {"label": label},
+        "targets": [{"file": ".env.generated", "key": label}, {"github_secret": value}],
+    }
+
+
+def test_a_routed_target_is_compared_by_name(tmp_path, capsys):
+    """Before the normalizer, str() of the mapping was compared to the label,
+    so every routed target read as an undeclared divergence."""
+    rc = _run(
+        tmp_path,
+        [
+            _routed_entry("n8n", "N8N_API_KEY",
+                          {"name": "N8N_API_KEY", "repo": "POWERFULMOVES/PMOVES-N8N", "env": "Prod"}),
+            _routed_entry("r", "R_KEY", {"name": "R_KEY", "repo": "POWERFULMOVES/PMOVES-N8N"}),
+        ],
+        argv=["--json"],
+    )
+    payload = json.loads(capsys.readouterr().out)
+    assert rc == 0, payload
+    assert payload["with_github_target"] == 2 and payload["diverged"] == 0
+
+
+def test_a_routed_misroute_still_fails_and_reports_the_name(tmp_path, capsys):
+    """Negative control: routing must not launder a wrong name."""
+    rc = _run(
+        tmp_path,
+        [_routed_entry("m", "MINIMAX_TOKEN_PLAN_API_KEY",
+                       {"name": "MINIMAX_API_KEY", "repo": "POWERFULMOVES/PMOVES-N8N"})],
+        argv=["--json"],
+    )
+    assert rc == 1
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["undeclared"] == [
+        {"entry": "m", "label": "MINIMAX_TOKEN_PLAN_API_KEY", "github_secret": "MINIMAX_API_KEY"}
+    ]
+
+
+def test_a_malformed_routed_target_is_unmeasured(tmp_path, capsys):
+    rc = _run(tmp_path, [_routed_entry("bad", "A_KEY", {"repo": "POWERFULMOVES/PMOVES-N8N"})])
+    assert rc == 3
+    assert "name" in capsys.readouterr().err
+
+
+def test_the_string_form_output_is_unchanged(tmp_path, capsys):
+    """The text report for a string-only manifest, pinned verbatim."""
+    rc = _run(
+        tmp_path,
+        [_entry("ok", "K", "K"), _entry("alias", "L", "L_ALIAS")],
+        [{"entry": "alias", "github_secret": "L_ALIAS", "reason": "deliberate"}],
+    )
+    assert rc == 0
+    assert capsys.readouterr().out == (
+        "2 entries, 2 with a github_secret target, 1 diverging from their label.\n"
+        "  accepted  alias: L -> L_ALIAS\n"
+        "            deliberate\n"
+        "\nOK — every github_secret target names its own entry's label.\n"
+    )
