@@ -335,7 +335,21 @@ secrets-rotate: ## Rotate ONE secret in env.shared then re-funnel. Usage: make s
 	@# env.tier-llm again -- the exact regression this guard was added for, on a
 	@# path the guard did not cover. A gate that only reports the edge misses
 	@# everything that is already over it.
-	@if [ -f "$(CHIT_EXPORT_PATH).provenance" ]; then \
+	@# THREE states, not two. The else-branch below used to absorb two of them:
+	@# a bundle with no marker (genuinely a local export) AND no bundle at all.
+	@# On a fresh node's first rotate it therefore announced that "this CHIT
+	@# bundle is a LOCAL export" and that prod-only keys were "absent from every
+	@# tier file the funnel just regenerated" -- diagnosing the provenance of a
+	@# bundle that does not exist. Absence of a marker is not evidence about a
+	@# file; it is only evidence about the marker. Test the bundle first.
+	@if [ ! -f "$(CHIT_EXPORT_PATH)" ]; then \
+	  echo "⚠ no CHIT bundle at $(CHIT_EXPORT_PATH) — nothing to judge the"; \
+	  echo "  provenance of. chit-export below will create one locally, which"; \
+	  echo "  means it starts WITHOUT the prod-only keys that"; \
+	  echo "  sync-secrets-local.yml delivers. If this node needs them, pull"; \
+	  echo "  first rather than rotating into a bundle that never had them:"; \
+	  echo "    PMOVES_NODE=<node> make -C pmoves secrets-pull"; \
+	elif [ -f "$(CHIT_EXPORT_PATH).provenance" ]; then \
 	  echo "⚠ rotation replaced the CI-pulled CHIT bundle with a local export."; \
 	  echo "  Prod-only keys delivered by sync-secrets-local.yml are NOT in"; \
 	  echo "  env.shared and are now absent from the bundle. Re-pull before the"; \
