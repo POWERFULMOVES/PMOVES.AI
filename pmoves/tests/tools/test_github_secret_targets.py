@@ -90,6 +90,10 @@ def test_non_github_targets_are_none(target):
         ({"name": "A", "repository": "POWERFULMOVES/X"}, "unknown key"),
         ({"name": "A", "repo": "O/R", "env": "Prod/../secrets"}, "env"),
         ({"name": "has space"}, "name"),
+        ({"name": "A", "repo": "O/R", "env": ".."}, "env"),
+        ({"name": "A", "repo": "O/R", "env": "Prod.v2"}, "env"),
+        ({"name": "A", "repo": "O/R", "env": "a%2Fb"}, "env"),
+        ({"name": "A", "repo": "O/R", "env": "Prod env"}, "env"),
         (["A"], "name or a mapping"),
         (42, "name or a mapping"),
     ],
@@ -148,6 +152,32 @@ def test_a_malformed_target_fails_the_emitter(tmp_path, capsys):
     assert gst.main(["routes", "--manifest", str(m)]) == 2
     captured = capsys.readouterr()
     assert captured.out == "" and "name" in captured.err
+
+
+def test_the_emitter_writes_utf8_and_lf_on_every_platform(tmp_path):
+    """Run as the push script runs it: a subprocess whose stdout/stderr are
+    pipes. On Windows those default to cp1252 + CRLF, so a character outside
+    cp1252 in an error message crashed the emitter (exit 1, a traceback)
+    instead of reporting it (exit 2)."""
+    import subprocess
+
+    m = _manifest(tmp_path, [[{"github_secret": {"name": "\u540d", "repo": "O/R"}}], [{"github_secret": "OK"}]])
+    env = {k: v for k, v in __import__("os").environ.items() if k not in ("PYTHONIOENCODING", "PYTHONUTF8")}
+    env["PYTHONUTF8"] = "0"
+    bad = subprocess.run(
+        [sys.executable, str(MODULE), "routes", "--manifest", str(m)],
+        capture_output=True, env=env, timeout=60,
+    )
+    assert bad.returncode == 2, bad.stderr
+    assert "\u540d" in bad.stderr.decode("utf-8")
+
+    ok_manifest = _manifest(tmp_path, [[{"github_secret": "OK"}]])
+    good = subprocess.run(
+        [sys.executable, str(MODULE), "routes", "--manifest", str(ok_manifest)],
+        capture_output=True, env=env, timeout=60,
+    )
+    assert good.returncode == 0
+    assert good.stdout == b"OK\tPOWERFULMOVES/PMOVES.AI\t\n"
 
 
 def test_an_unreadable_manifest_fails_the_emitter(tmp_path):

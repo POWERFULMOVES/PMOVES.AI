@@ -100,6 +100,7 @@ import subprocess
 import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
+from urllib.parse import quote
 
 import yaml
 
@@ -203,7 +204,9 @@ def present_secret_names(repo: str, environment: Optional[str] = None) -> Set[st
     """Secret NAMES in one scope. --paginate: the API pages at 30, and a
     truncated read would under-report usage and over-report absences."""
     if environment:
-        endpoint = f"repos/{repo}/environments/{environment}/secrets"
+        # Quoted: an environment name is a path segment, and `--env` is free
+        # text from the command line.
+        endpoint = f"repos/{repo}/environments/{quote(environment, safe='')}/secrets"
     else:
         endpoint = f"repos/{repo}/actions/secrets"
     out = _gh("api", "--paginate", endpoint, "--jq", ".secrets[].name")

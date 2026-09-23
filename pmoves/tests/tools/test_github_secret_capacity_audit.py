@@ -151,6 +151,15 @@ def test_the_environment_scope_is_addressed_separately(monkeypatch, tmp_path):
     assert seen == ["repos/POWERFULMOVES/PMOVES.AI/environments/Prod/secrets"]
 
 
+def test_an_environment_name_is_url_quoted_in_the_api_path(monkeypatch, tmp_path):
+    """`--env` is free text and lands in a path segment; a space or a slash
+    must not re-shape the endpoint."""
+    seen: List[str] = []
+    _scopes(monkeypatch, {None: [], "Prod env": ["A"]}, record=seen)
+    aud.main(["--manifest", str(_manifest(tmp_path, ["A"])), "--env", "Prod env"])
+    assert seen == ["repos/POWERFULMOVES/PMOVES.AI/environments/Prod%20env/secrets"]
+
+
 def test_a_single_scope_read_declares_its_own_assumption(monkeypatch, tmp_path, capsys):
     """`--env X` asserts the funnel targets X. Absence is only true if it does,
     so the output has to say which assumption it rests on."""

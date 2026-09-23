@@ -57,9 +57,11 @@ _MAPPING_KEYS = frozenset({"name", "repo", "env"})
 # GitHub's own rule for secret names.
 _SECRET_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 _REPO = re.compile(r"^[A-Za-z0-9-]+/[A-Za-z0-9._-]+$")
-# Environment names go into an API path and a TSV line, so nothing that can
-# re-shape either: no slash, query, fragment, tab or newline.
-_ENV = re.compile(r"^[^/?#\t\r\n]+$")
+# Environment names go into an API path, a TSV line and a gh argv. GitHub
+# allows more than this, but anything beyond letters, digits, `_` and `-` can
+# re-shape one of those (`/`, `.`/`..`, `%`, spaces, tabs, newlines), so a
+# routed env is held to the safe set and the rest is a MalformedTarget.
+_ENV = re.compile(r"^[A-Za-z0-9_-]+$")
 
 
 class MalformedTarget(ValueError):
@@ -161,6 +163,13 @@ def main(argv: Optional[List[str]] = None) -> int:
     emit.add_argument("--default-repo", default=DEFAULT_REPO)
     emit.add_argument("--default-env", default="")
     args = parser.parse_args(argv)
+
+    # The push script reads this as UTF-8 TSV. Left to the platform default a
+    # Windows pipe is cp1252 with CRLF: a non-cp1252 character in an error
+    # message raises instead of reporting, and every line gains a \r.
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8", errors="replace", newline="\n")
 
     try:
         found = routes(load_entries(args.manifest), args.default_repo, args.default_env)
