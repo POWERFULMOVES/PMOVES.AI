@@ -199,6 +199,7 @@ start_services() {
 # ------------------------------------------------------------------
 health_checks() {
   log_section "Health Checks"
+  local failed=0
 
   # Check llama-server
   if systemctl is-active --quiet llama-server.service; then
@@ -208,6 +209,7 @@ health_checks() {
     fi
   else
     log "✗ llama-server is not running"
+    failed=1
   fi
 
   # Check rocm-smi exporter
@@ -215,6 +217,7 @@ health_checks() {
     log "✓ rocm-smi-exporter is running"
   else
     log "✗ rocm-smi-exporter is not running"
+    failed=1
   fi
 
   # Check socket
@@ -222,16 +225,20 @@ health_checks() {
     log "✓ rocm-smi-http socket is listening"
   else
     log "✗ rocm-smi-http socket is not listening"
+    failed=1
   fi
 
   # Check GPU metrics endpoint
   if command -v curl >/dev/null 2>&1; then
-    if curl -s http://127.0.0.1:9835/ >/dev/null 2>&1; then
+    if curl -sf http://127.0.0.1:9835/ >/dev/null 2>&1; then
       log "✓ GPU metrics endpoint is responding"
     else
       log "✗ GPU metrics endpoint is not responding"
+      failed=1
     fi
   fi
+
+  return "$failed"
 }
 
 # ------------------------------------------------------------------
@@ -259,8 +266,15 @@ main() {
   verify_gpu
   deploy_model
   start_services
-  health_checks
+  # Print the summary either way, but exit non-zero if any health check
+  # failed (it used to log the failures and still exit 0).
+  local rc=0
+  health_checks || rc=1
   print_summary
+  if [[ $rc -ne 0 ]]; then
+    log "One or more health checks FAILED (see above)"
+  fi
+  return "$rc"
 }
 
 main "$@"

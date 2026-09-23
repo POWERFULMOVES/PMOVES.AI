@@ -503,7 +503,9 @@ install_rdna4_stack() {
 
     local extra_flags=()
     local gpu_count
-    gpu_count="$(lspci -nn 2>/dev/null | grep -iE 'amd.*radeon.*(navi 48|9070|9700)' | wc -l || echo 0)"
+    # `|| gpu_count=0` outside the substitution: under pipefail, `|| echo 0`
+    # inside it appended a second "0" line when grep matched nothing.
+    gpu_count="$(lspci -nn 2>/dev/null | grep -iE 'amd.*radeon.*(navi 48|9070|9700)' | wc -l)" || gpu_count=0
     if [ "${gpu_count:-0}" -ge 2 ]; then
         log_info "Detected ${gpu_count} R9700-class GPUs — enabling --dual-gpu"
         extra_flags+=("--dual-gpu")

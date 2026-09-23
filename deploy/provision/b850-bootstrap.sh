@@ -94,18 +94,36 @@ install_system_packages() {
 # ------------------------------------------------------------------
 # Docker
 # ------------------------------------------------------------------
+# Docker group membership for the operator (and the pmoves service user if it
+# exists). Run on EVERY path, including when Docker was already installed --
+# it used to be skipped by the early return, leaving a pre-existing Docker
+# unusable without sudo for the operator.
+add_docker_group_members() {
+  local user
+  for user in "${OPERATOR_USER}" pmoves; do
+    if id "$user" &>/dev/null && getent group docker >/dev/null 2>&1; then
+      usermod -aG docker "$user" && log "Ensured $user is in the docker group"
+    fi
+  done
+}
+
 install_docker() {
   if command -v docker >/dev/null 2>&1; then
     local docker_version
     docker_version="$(docker --version 2>/dev/null || echo 'unknown')"
     if docker compose version >/dev/null 2>&1; then
       log "Docker already installed: $docker_version"
+      add_docker_group_members
       return 0
     fi
   fi
 
   log_section "Installing Docker CE"
+  # Vendor convenience installer piped to sh, kept deliberately (review #3167
+  # P3): it is Docker's documented route. Pin a distro repo instead if you
+  # need a reviewed, reproducible install.
   curl -fsSL https://get.docker.com | sh
+  add_docker_group_members
 
   # Verify Docker installation
   if ! command -v docker >/dev/null 2>&1; then
@@ -118,13 +136,6 @@ install_docker() {
     log "WARN: docker compose v2 plugin not found"
   fi
 
-  # Add users to docker group
-  for user in "${OPERATOR_USER}" pmoves; do
-    [[ -z "$user" ]] && continue
-    if id "$user" &>/dev/null; then
-      usermod -aG docker "$user" && log "Added $user to docker group"
-    fi
-  done
 
   systemctl enable --now docker
   log "Docker installed: $(docker --version)"
