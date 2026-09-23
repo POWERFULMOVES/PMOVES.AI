@@ -59,7 +59,11 @@ wrong one. Bare names keep the rules above, against ``--repo``.
 Every repo the manifest names is read, not only PMOVES.AI. Per repo: absent and
 orphans as above, where "declared" means declared FOR THAT REPO -- so a name
 routed away from PMOVES.AI whose old copy still sits there reads as an orphan,
-which is exactly the headroom the routing was meant to free. A pinned
+which is exactly the headroom the routing was meant to free. The same holds
+INSIDE one repo: a routed name found in a scope it is not pinned to (moved from
+env:Prod to env:PMOVES, old copy left behind) is a STALE COPY -- declared for
+the repo, so never an orphan, yet still occupying a slot. It is reported and
+fails the audit; without it Prod stays full while the audit exits 0. A pinned
 environment that does not exist makes its names absent (a measurement), while a
 repo that cannot be read at all is Unmeasured. A pinned scope declared past the
 ceiling is reported, and routed names do not count toward the single-scope
@@ -261,6 +265,20 @@ def _audit_repo(
     for scope, names in pinned.items():
         absent |= {name for name in names if name not in present.get(scope, set())}
 
+    # A routed name belongs ONLY in the scope(s) it is pinned to. A copy
+    # anywhere else in this repo is stale -- unless the same name is also a
+    # bare name here, which may legitimately live in any scope.
+    pinned_to: Dict[str, Set[Optional[str]]] = {}
+    for scope, names in pinned.items():
+        for name in names:
+            pinned_to.setdefault(name, set()).add(scope)
+    stale = [
+        {"name": name, "scope": _scope_label(scope)}
+        for scope in scopes
+        for name in sorted(present[scope])
+        if name in pinned_to and name not in unrouted and scope not in pinned_to[name]
+    ]
+
     declared = set(unrouted).union(*pinned.values())
     return {
         "repo": repo,
@@ -271,6 +289,7 @@ def _audit_repo(
         "per_scope": per_scope,
         "absent": sorted(absent),
         "orphans": sorted(union - declared),
+        "stale_copies": stale,
     }
 
 
@@ -326,7 +345,11 @@ def audit(
         and not main_report["orphans"]
         and single_scope_overflow == 0
         and not routed_overflow
-        and all(not r["absent"] and not r["orphans"] for r in other_repos)
+        and not main_report["stale_copies"]
+        and all(
+            not r["absent"] and not r["orphans"] and not r["stale_copies"]
+            for r in other_repos
+        )
     )
     return {
         "repo": repo,
@@ -341,6 +364,7 @@ def audit(
         "orphans": main_report["orphans"],
         "ok": ok,
         "missing_scopes": main_report["missing_scopes"],
+        "stale_copies": main_report["stale_copies"],
         "routed_overflow": routed_overflow,
         "other_repos": other_repos,
     }
@@ -390,6 +414,16 @@ def _print_findings(report: Dict[str, Any]) -> None:
             print(f"    {name}", file=sys.stderr)
         if len(report["orphans"]) > 20:
             print(f"    ... {len(report['orphans']) - 20} more", file=sys.stderr)
+    if report["stale_copies"]:
+        print(
+            f"  stale copies ({len(report['stale_copies'])}): routed names also present in a\n"
+            f"    scope they are not pinned to -- reclaimable headroom",
+            file=sys.stderr,
+        )
+        for row in report["stale_copies"][:20]:
+            print(f"    {row['name']}  {row['scope']}", file=sys.stderr)
+        if len(report["stale_copies"]) > 20:
+            print(f"    ... {len(report['stale_copies']) - 20} more", file=sys.stderr)
 
 
 def main(argv: Optional[List[str]] = None) -> int:

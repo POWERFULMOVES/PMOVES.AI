@@ -398,6 +398,35 @@ def test_a_name_routed_away_but_still_in_pmoves_ai_is_an_orphan_there(monkeypatc
     assert payload["orphans"] == ["N8N_API_KEY"]
 
 
+def test_a_routed_names_copy_in_another_scope_of_its_repo_is_stale(monkeypatch, tmp_path, capsys):
+    """Moved from env:Prod to env:PMOVES, old copy left in Prod. The name is
+    declared for the repo, so it is no orphan -- and without this finding the
+    audit exited 0 while Prod stayed full."""
+    _repos(monkeypatch, {MAIN: {None: ["A"], "Prod": ["N"], "PMOVES": ["N"]}})
+    m = _targets_manifest(tmp_path, ["A", {"name": "N", "repo": MAIN, "env": "PMOVES"}])
+    assert aud.main(["--manifest", str(m), "--json"]) == 1
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["stale_copies"] == [{"name": "N", "scope": "env:Prod"}]
+    assert payload["orphans"] == [] and payload["absent"] == []
+
+
+def test_a_stale_copy_is_reported_in_the_text_output(monkeypatch, tmp_path, capsys):
+    _repos(monkeypatch, {MAIN: {None: ["A"]}, N8N: {None: ["N"], "Prod": ["N"]}})
+    m = _targets_manifest(tmp_path, ["A", {"name": "N", "repo": N8N, "env": "Prod"}])
+    assert aud.main(["--manifest", str(m)]) == 1
+    err = capsys.readouterr().err
+    assert "stale copies (1)" in err and "N  (repository)" in err
+
+
+def test_a_bare_name_in_the_same_repo_is_not_stale(monkeypatch, tmp_path, capsys):
+    """Negative control: declared bare AND pinned in one repo, the bare form
+    may live in any scope, so its other copies are not stale."""
+    _repos(monkeypatch, {MAIN: {None: ["N"], "PMOVES": ["N"]}})
+    m = _targets_manifest(tmp_path, ["N", {"name": "N", "repo": MAIN, "env": "PMOVES"}])
+    assert aud.main(["--manifest", str(m), "--json"]) == 0
+    assert json.loads(capsys.readouterr().out)["stale_copies"] == []
+
+
 def test_the_same_name_in_two_repos_is_measured_in_both(monkeypatch, tmp_path, capsys):
     """One CHIT source pushed to several repos is the design."""
     _repos(monkeypatch, {MAIN: {None: ["K"]}, N8N: {None: []}})
