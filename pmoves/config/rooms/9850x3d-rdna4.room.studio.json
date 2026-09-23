@@ -1,0 +1,34 @@
+{
+  "id": "9850x3d-rdna4-studio",
+  "name": "B850 RDNA4 Studio",
+  "node_id": "pmoves-b850",
+  "class": "studio",
+  "hardware": {
+    "cpu": "AMD Ryzen 9850X3D (8C / 3D V-Cache)",
+    "gpus": ["Radeon AI Pro R9700", "Radeon AI Pro R9700"],
+    "vram_gb": 64,
+    "arch": "amd64",
+    "gpu_target": "gfx1201"
+  },
+  "services": [
+    "llama-server",
+    "rocm-smi-exporter",
+    "mesh-agent",
+    "fleet-agent"
+  ],
+  "inference_backend": "llama.cpp-hip",
+  "entrypoints": {
+    "llama_api": "http://localhost:8080/v1",
+    "rocm_metrics": "http://localhost:9835/metrics"
+  },
+  "capabilities": [
+    "dual-gpu-inference",
+    "rdna4-kernel-support",
+    "openai-compatible-api"
+  ],
+  "model_targets": [
+    "gemma-4-31b-q4km",
+    "gemma-4-26b-a4b-dual"
+  ],
+  "tags": ["amd64", "rdna4", "gfx1201", "dual-gpu", "workstation"]
+}
