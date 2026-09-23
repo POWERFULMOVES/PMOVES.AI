@@ -35,6 +35,7 @@ from known_roads import (  # noqa: E402
     evaluate_known_road,
     known_road_hint,
     record_use,
+    set_hook_input,
 )
 
 
@@ -873,6 +874,8 @@ def main() -> None:
     except Exception as e:
         print(f"Error reading input: {e}", file=sys.stderr)
         sys.exit(1)
+    # Attribution (not authentication) for any Known Road row this call records.
+    set_hook_input(input_data)
 
     tool_name = input_data.get("tool_name", "")
     tool_input = input_data.get("tool_input", {})
