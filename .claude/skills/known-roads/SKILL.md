@@ -131,6 +131,40 @@ out you did not.
    `known_roads.py`, agreed with the operator — a change to the policy, made
    deliberately and in the open.
 
+## The trail row
+
+Each line of `.claude/hooks/damage-control/known-roads.jsonl` is one JSON object,
+written by `known_roads._record()` with sorted keys. There are two row shapes:
+rows written before `5bae26814`, and rows written with no hook input, carry only
+the always-present fields.
+
+| Field | Present | Meaning |
+|---|---|---|
+| `ts` `tool` `file` `domain` `reason` | always | when (UTC), which tool, which path, which road, which provable reason |
+| `agent` | always | a **registered body** (runtime name, e.g. `delivery-agent`) when one acted; otherwise the **node value** (see below). Mixed by design, so don't group on it alone |
+| `node` | only when `agent` is a body | the node value that `agent` would have held without attribution |
+| `agent_instance` | when the hook carried `agent_id` | per-instance id of the subagent (≤64 chars). Absent for a main thread, including one started with `--agent` |
+| `unregistered_agent_type` | when the hook carried an `agent_type` that is not in the registry | the raw type (≤128 chars). Kept visible, never promoted to `agent` |
+| `session` | always | `CLAUDE_SESSION_ID`, else `SESSION_ID`, else the hook's `session_id`, else `unknown` |
+| `note` | optional | how the use was observed (e.g. after the fact by the PostToolUse effect check) |
+
+**Node value.** It is `AGENT_ID`, else `PMOVES_NODE_ID`, else `unknown`. `AGENT_ID`
+is **ambiguous**: every value in the trail so far is a node id, but other tools use
+the same variable for an agent name (`pmoves/tools/pr_hedge_trim.py` defaults it to
+`claude-code-cli`; `persona-bind/bind.sh` to `4090-claude`). If a harness exports
+`AGENT_ID=<agent name>`, that name is recorded as the node. Treat `node` as "the
+identity the environment claimed", not as a verified host.
+
+**Grouping.** To group rows by node, use `node if present else agent`. To group
+by body, use `agent` only on rows that carry `node`. A row without `node` names
+no registered body.
+
+**Attribution, not authentication.** `agent_type` is the definition the harness
+loaded. It is not a credential. It is certified as a body only when it exactly
+matches an `agent_registry.yaml` `agents:` key under the registry's own rule
+(runtime name = key with `_` → `-`). An unreadable registry certifies nothing.
+Nothing in the guard reads these fields to allow or deny.
+
 ## Verifying a guard change
 
 If you are changing damage-control itself, both directions must be proven, and

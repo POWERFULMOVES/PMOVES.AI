@@ -473,6 +473,8 @@ def main() -> None:
         print("EFFECT-CHECK COULD-NOT-MEASURE: unreadable hook input: %s" % exc,
               file=sys.stderr)
         sys.exit(0)
+    # Attribution (not authentication) for any Known Road row this call records.
+    known_roads.set_hook_input(payload)
     sys.exit(run(payload))
 
 

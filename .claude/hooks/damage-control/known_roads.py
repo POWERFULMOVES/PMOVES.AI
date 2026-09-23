@@ -222,6 +222,121 @@ def _trail_path() -> Path:
     return _project_dir() / ".claude" / "hooks" / "damage-control" / "known-roads.jsonl"
 
 
+# --- Actor attribution: which BODY took the road ----------------------------
+#
+# Before this, every row's `agent` was AGENT_ID or PMOVES_NODE_ID or "unknown",
+# so a delivery-agent subagent, a code-review subagent and the steward that
+# spawned them all recorded as the node (or as "unknown" where no env was set).
+#
+# Measured against claude 2.1.280 with a throwaway PreToolUse hook that dumped
+# its stdin (scratch settings via `claude --print --settings`), 2026-09-23:
+#   parent session, no --agent  -> no `agent_type`, no `agent_id`
+#   subagent (Agent tool)       -> `agent_type: <frontmatter name>`,
+#                                  `agent_id: <per-instance hex>`
+#   main thread with --agent X  -> `agent_type: X`, no `agent_id`
+# `session_id` is present in all three, while CLAUDE_SESSION_ID was unset in the
+# hook env -- which is why every existing row reads `"session": "unknown"`.
+#
+# The hook callers hand their parsed stdin to set_hook_input(); _record() reads
+# it back. ATTRIBUTION, NOT AUTHENTICATION: `agent_type` is the definition the
+# harness loaded, not a credential. It is only recorded as a registered body when
+# its kebab name maps onto an agent_registry.yaml key by the registry's own rule
+# (validate_agent_registry.py: runtime spelling = key.replace("_", "-")). An
+# unregistered type is still recorded, under `unregistered_agent_type`, so an
+# anonymous subagent taking a road is visible rather than folded into the node.
+
+_HOOK_INPUT: Dict[str, object] = {}
+_REGISTRY_KEYS: "set[str] | None" = None
+
+
+def set_hook_input(data: object) -> None:
+    """Remember the hook's parsed stdin so trail rows can attribute the actor.
+
+    Callers pass whatever json.load(sys.stdin) returned; anything that is not a
+    dict is ignored. Never raises -- attribution must not be able to break a guard.
+    """
+    global _HOOK_INPUT
+    _HOOK_INPUT = dict(data) if isinstance(data, dict) else {}
+
+
+def _registry_path() -> Path:
+    return _project_dir() / "pmoves" / "config" / "agent_registry.yaml"
+
+
+def _registry_keys() -> "set[str]":
+    """Keys under `agents:` in agent_registry.yaml. Empty set when unreadable.
+
+    An unreadable registry means no body can be CERTIFIED as registered, so every
+    agent_type falls through to `unregistered_agent_type` -- fail toward
+    under-claiming, never toward naming a body we could not check.
+    """
+    global _REGISTRY_KEYS
+    if _REGISTRY_KEYS is not None:
+        return _REGISTRY_KEYS
+    keys: "set[str]" = set()
+    try:
+        import yaml  # the guard callers already depend on PyYAML
+
+        doc = yaml.safe_load(_registry_path().read_text(encoding="utf-8")) or {}
+        agents = doc.get("agents") if isinstance(doc, dict) else None
+        if isinstance(agents, dict):
+            keys = {str(k) for k in agents}
+    except Exception:  # noqa: BLE001 -- unreadable/unparseable -> certify nothing
+        keys = set()
+    _REGISTRY_KEYS = keys
+    return keys
+
+
+def _registered_body(agent_type: str) -> str:
+    """The registered runtime name for a hook `agent_type`, or "" if unregistered.
+
+    Exact match only -- no strip(), no case folding. The harness emits the
+    frontmatter name verbatim, so anything that needs normalising to match was
+    not produced by the harness and is not certified.
+    """
+    name = agent_type
+    if not name or not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", name):
+        return ""
+    return name if name.replace("-", "_") in _registry_keys() else ""
+
+
+def _actor_fields() -> Dict[str, str]:
+    """`agent` / `session` plus optional attribution fields for one trail row.
+
+    `agent` keeps its old value (AGENT_ID, else PMOVES_NODE_ID, else "unknown")
+    unless a REGISTERED body is acting, in which case the body takes `agent` and
+    the old value moves to `node`, so node attribution is never lost.
+
+    The node value is AMBIGUOUS: AGENT_ID is also used by other tools for an
+    agent name, and whatever it holds is recorded as the node. Row schema and
+    grouping rule (`node if present else agent`):
+    .claude/skills/known-roads/SKILL.md § The trail row.
+    """
+    node = os.environ.get("AGENT_ID") or os.environ.get("PMOVES_NODE_ID") or "unknown"
+    raw_type = _HOOK_INPUT.get("agent_type")
+    raw_type = raw_type if isinstance(raw_type, str) else ""
+    hook_session = _HOOK_INPUT.get("session_id")
+    fields: Dict[str, str] = {
+        "agent": node,
+        "session": (
+            os.environ.get("CLAUDE_SESSION_ID")
+            or os.environ.get("SESSION_ID")
+            or (hook_session if isinstance(hook_session, str) and hook_session else "")
+            or "unknown"
+        ),
+    }
+    body = _registered_body(raw_type) if raw_type else ""
+    if body:
+        fields["agent"] = body
+        fields["node"] = node
+    elif raw_type:
+        fields["unregistered_agent_type"] = raw_type[:128]
+    instance = _HOOK_INPUT.get("agent_id")
+    if isinstance(instance, str) and instance:
+        fields["agent_instance"] = instance[:64]
+    return fields
+
+
 def _record(tool: str, file_path: str, domain: str, reason: str,
             note: str = "") -> bool:
     """Append one provable trail line. Returns False if it could not be written.
@@ -231,6 +346,10 @@ def _record(tool: str, file_path: str, domain: str, reason: str,
     rows carrying a note already exist in the trail. The PostToolUse effect check
     uses it to distinguish a use it observed AFTER the fact (the command text
     never named the path) from a grant consulted BEFORE the write.
+
+    Actor fields come from _actor_fields(); `node`, `agent_instance` and
+    `unregistered_agent_type` are additive and omitted when they do not apply,
+    so a row written outside any hook is byte-identical in shape to before.
     """
     entry = {
         "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
@@ -238,18 +357,21 @@ def _record(tool: str, file_path: str, domain: str, reason: str,
         "file": os.path.normpath(file_path).replace("\\", "/"),
         "domain": domain,
         "reason": reason,
-        "agent": os.environ.get("AGENT_ID") or os.environ.get("PMOVES_NODE_ID") or "unknown",
-        "session": os.environ.get("CLAUDE_SESSION_ID") or os.environ.get("SESSION_ID") or "unknown",
     }
-    if note:
-        entry["note"] = note
     try:
+        # Inside the try: attribution runs on the grant path, and a PreToolUse
+        # hook that crashes is non-blocking -- an escaped exception here would
+        # turn this fail-closed bypass into fail-OPEN. Any failure to build or
+        # write the row is "could not be recorded", so the caller denies.
+        entry.update(_actor_fields())
+        if note:
+            entry["note"] = note
         path = _trail_path()
         path.parent.mkdir(parents=True, exist_ok=True)
         with open(path, "a", encoding="utf-8") as fh:
             fh.write(json.dumps(entry, sort_keys=True) + "\n")
         return True
-    except OSError:
+    except Exception:  # noqa: BLE001 -- surfaced by the caller as a denial
         return False
 
 
