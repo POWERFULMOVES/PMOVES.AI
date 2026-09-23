@@ -106,7 +106,7 @@
 - Approve the Prod environment on each `sync-secrets-local.yml` run.
 - Approve any VPS change (kvm2 / kvm4-1 / kvm4-2) separately; `vps-deployer` via Hostinger MCP, never raw SSH.
 
-## 6. Open questions
-1. Is `tag:mcp` the right ACL shape, or should it wait for the planned grants migration (`FLEET_ACCESS_NATS_HUB.md:52-57`)?
-2. Phase B owner choice: is Claude's roster the right owner for Cloudflare OAuth, given that the other harnesses outnumber it?
-3. Should kvm4-1 still host a fleet gateway front (08-27 plan), or is per-node + sidecars enough on its own?
+## 6. Decisions (founder, 2026-09-23)
+1. **Tailnet access rule: self-hosted.** We self-host and hold forks of every repo needed to do it, so the access rule lives in our own policy source (`configs/tailscale-acl-policy.json`, applied by `deploy-tailscale-acl.yml`, with the PMOVES-Tailscale and PMOVES-Headscale forks as the control plane), not in a hosted default. `tag:mcp` + a tested grant is the proposed shape, pending review.
+2. **Cloudflare OAuth: self-hosted.** The Cloudflare MCP servers run from our forks with a static API token from the CHIT funnel, not through Cloudflare's hosted OAuth endpoints. That removes the second OAuth login entirely: auth becomes one static secret, hydrated once (Phase B collapses into Phase A2's funnel path). The same applies to any other hosted OAuth MCP we hold a fork of.
+3. **kvm4-1 keeps a fleet gateway, for always-on.** Per-node hosting (Phase D) follows capacity and power (nodes can sleep; see the dynamic-fleet principle). The KVM gateway is the **always-on** front: it keeps a fleet MCP surface up when on-prem nodes are off. It's deployed via `vps-deployer`, one step at a time with operator approval, bound to the tailnet (never `0.0.0.0` on a public VPS). This restores the 08-27 plan's kvm4-1 role alongside per-node hosting.
