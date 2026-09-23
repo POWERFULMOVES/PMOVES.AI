@@ -70,7 +70,7 @@ make -C pmoves cipher-identity AGENT=z890-claude
 
 Reads no secret, sends nothing, prints one of three verdicts. It exists because
 the answer is not what a session assumes. `Pmoves-cipher/src/pmoves/auth.ts:46`
-forks on a seven-character prefix (line numbers at submodule pin `750878ab`,
+forks on a seven-character prefix (line numbers at submodule pin `36b28d0f`,
 re-verified unchanged from `975e02e6` by #3103 and #3152; the gitlink on `main`):
 
 | your `CIPHER_API_TOKEN` | auth.ts path | your writes are filed under |
