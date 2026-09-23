@@ -342,6 +342,8 @@ jobs:
             reviews_now="none"
             if [ "$rc" -eq 0 ]; then
               # Parse everything up front; any failure -> UNREADABLE, never a
+              # (rsc deliberately has no jq -e: null is its VALID answer for a
+              # branch without required checks, and -e treats null as failure)
               # silent empty value (set +e above means jq failures do not abort).
               if ! printf '%s' "$cur" | jq -e 'type == "object"' >/dev/null 2>&1 \
                  || ! parsed=$(printf '%s' "$cur" | jq -er '[
@@ -350,7 +352,8 @@ jobs:
                       (.allow_deletions.enabled | tostring),
                       (if .required_pull_request_reviews then (.required_pull_request_reviews.required_approving_review_count // 0 | tostring) else "none" end)
                     ] | join("\t")' 2>/dev/null) \
-                 || ! rsc=$(printf '%s' "$cur" | jq -ec 'if .required_status_checks then {strict: .required_status_checks.strict, contexts: .required_status_checks.contexts} else null end' 2>/dev/null) \
+                 || ! rsc=$(printf '%s' "$cur" | jq -c 'if .required_status_checks then {strict: .required_status_checks.strict, contexts: .required_status_checks.contexts} else null end' 2>/dev/null) \
+                 || [ -z "$rsc" ] \
                  || ! now=$(printf '%s' "$cur" | normalize 2>/dev/null) || [ -z "$now" ]; then
                 unreadable "$rb" "HTTP 200 but the protection response did not parse as expected"
                 continue
