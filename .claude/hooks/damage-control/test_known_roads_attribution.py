@@ -212,6 +212,42 @@ def main() -> int:
     check("live registry: delivery-agent certified", row.get("agent") == "delivery-agent", row)
     _use_registry(_FIXTURE_REGISTRY)
 
+    # 6b. Attribution failure fails CLOSED. A raise while building the actor
+    #     fields must read as "could not be recorded" (False), never escape: a
+    #     crashing PreToolUse hook is non-blocking, so an escaped exception on
+    #     the grant path would fail OPEN.
+    real_actor = KR._actor_fields
+
+    def boom():
+        raise RuntimeError("attribution exploded")
+
+    KR._actor_fields = boom
+    if _TRAIL.exists():
+        _TRAIL.unlink()
+    old_road = os.environ.get("KNOWN_ROAD")
+    try:
+        try:
+            got = KR._record("Edit", "pmoves/example.txt", "testdomain", "brief:x.md")
+            raised = None
+        except Exception as exc:  # noqa: BLE001
+            got, raised = None, exc
+        check("_actor_fields raising: _record does not raise", raised is None, raised)
+        check("_actor_fields raising: _record returns False", got is False, got)
+        check("_actor_fields raising: no row written", not _TRAIL.exists())
+        # End to end: a VALID grant on an in-domain file is denied, with the reason.
+        KR._grant_file = lambda: _TMP / "no-file-grant"
+        os.environ["KNOWN_ROAD"] = "compose:pr:3155"
+        compose = "pmoves/docker-" + "compose.yml"
+        allowed, detail = KR.evaluate_known_road("Edit", compose, compose)
+        check("_actor_fields raising: valid grant is DENIED (fail-closed)",
+              allowed is False and "could not be recorded" in detail, (allowed, detail))
+    finally:
+        KR._actor_fields = real_actor
+        if old_road is None:
+            os.environ.pop("KNOWN_ROAD", None)
+        else:
+            os.environ["KNOWN_ROAD"] = old_road
+
     # 7. Wiring: every hook that can record a trail row hands its stdin over
     #    BEFORE any early exit. A non-matching tool_name takes the earliest exit.
     seen = []

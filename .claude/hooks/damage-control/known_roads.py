@@ -353,16 +353,20 @@ def _record(tool: str, file_path: str, domain: str, reason: str,
         "domain": domain,
         "reason": reason,
     }
-    entry.update(_actor_fields())
-    if note:
-        entry["note"] = note
     try:
+        # Inside the try: attribution runs on the grant path, and a PreToolUse
+        # hook that crashes is non-blocking -- an escaped exception here would
+        # turn this fail-closed bypass into fail-OPEN. Any failure to build or
+        # write the row is "could not be recorded", so the caller denies.
+        entry.update(_actor_fields())
+        if note:
+            entry["note"] = note
         path = _trail_path()
         path.parent.mkdir(parents=True, exist_ok=True)
         with open(path, "a", encoding="utf-8") as fh:
             fh.write(json.dumps(entry, sort_keys=True) + "\n")
         return True
-    except OSError:
+    except Exception:  # noqa: BLE001 -- surfaced by the caller as a denial
         return False
 
 
