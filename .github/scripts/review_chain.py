@@ -245,7 +245,7 @@ def run_spark_tier(result: TierResult, *, prompt: str, diff: str) -> TierResult:
         return result
     if status != 200 or not isinstance(resp, dict):
         result.outcome = FAILED
-        result.detail = f"review call returned HTTP {status}" + ("" if isinstance(resp, dict) else " with a non-JSON body")
+        result.detail = f"review call returned HTTP {status}" + (" with a non-JSON body" if status == 200 else "")
         result.model = health_model
         return result
     result.model = str(resp.get("model") or "")
@@ -349,7 +349,9 @@ def run_chain(prompt: str, diff: str) -> tuple[list[TierResult], TierResult | No
 
 
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    # Not __doc__: it is None under `python -OO` / PYTHONOPTIMIZE=2, and a
+    # crash here would read downstream as "no reviewer" rather than a bug.
+    ap = argparse.ArgumentParser(description="Fleet PR review fallback chain (kilo -> spark -> kilo-alt).")
     ap.add_argument("--prompt", default="/tmp/kilo-review-prompt.md")
     ap.add_argument("--diff", default="/tmp/kilo-review.diff")
     ap.add_argument("--comment", default="/tmp/review-comment.md")
