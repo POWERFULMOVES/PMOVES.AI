@@ -42,6 +42,21 @@ require_root() {
 # ------------------------------------------------------------------
 # GPU Verification
 # ------------------------------------------------------------------
+# jq parses the rocm-smi JSON. rdna4-gpu-install.sh does not install it, so
+# ensure it here rather than let its absence read as "no GPUs".
+ensure_jq() {
+  command -v jq >/dev/null 2>&1 && return 0
+  log "jq missing; installing it"
+  DEBIAN_FRONTEND=noninteractive apt-get install -y -qq jq >/dev/null 2>&1 || true
+  if ! command -v jq >/dev/null 2>&1; then
+    echo "[rdna4-post] COULD-NOT-MEASURE: jq missing and could not be installed (apt-get install jq)" >&2
+    exit 3
+  fi
+}
+
+# Exit codes (fleet doctrine): 1 = a finding -- ROCm is absent, or rocm-smi
+# RAN and reported zero GPUs; 3 = could not measure -- rocm-smi errored or its
+# output did not parse. The two used to collapse into "No GPUs detected".
 verify_gpu() {
   log_section "Verifying GPU detection"
 
@@ -49,23 +64,32 @@ verify_gpu() {
     echo "[rdna4-post] ERROR: rocm-smi not found - ROCm not installed?" >&2
     exit 1
   fi
+  ensure_jq
 
   log "Running rocm-smi..."
-  rocm-smi || {
-    echo "[rdna4-post] ERROR: rocm-smi failed - AMDGPU driver may not be loaded" >&2
-    echo "[rdna4-post] Ensure you have rebooted after rdna4-gpu-install.sh" >&2
-    exit 1
-  }
+  rocm-smi || true   # human-readable table only; the gate is the JSON below
+
+  local smi_json
+  if ! smi_json="$(rocm-smi --showid --json 2>/dev/null)"; then
+    echo "[rdna4-post] COULD-NOT-MEASURE: 'rocm-smi --showid --json' failed" >&2
+    echo "[rdna4-post] Is the amdgpu driver loaded? Reboot after rdna4-gpu-install.sh." >&2
+    exit 3
+  fi
+  # Some rocm-smi builds print warning lines before the JSON document; drop
+  # everything before the first '{'. No '{' at all leaves an empty string,
+  # which fails the parse below (could-not-measure), not "0 GPUs".
+  smi_json="${smi_json#"${smi_json%%\{*}"}"
 
   local gpu_count
-  # `|| gpu_count=0` rather than `|| echo 0` inside the substitution: under
-  # pipefail the latter appends a second "0" line to whatever was captured.
-  gpu_count="$(rocm-smi --showid --json 2>/dev/null | jq 'length' 2>/dev/null)" || gpu_count=0
-  gpu_count="${gpu_count:-0}"
-  log "Detected $gpu_count GPU(s)"
+  if ! gpu_count="$(jq -er 'if type == "object" then [keys[] | select(startswith("card"))] | length else error("not a JSON object") end' <<<"$smi_json" 2>/dev/null)" \
+     || [[ ! "$gpu_count" =~ ^[0-9]+$ ]]; then
+    echo "[rdna4-post] COULD-NOT-MEASURE: rocm-smi --showid --json output did not parse as the expected object of card* entries" >&2
+    exit 3
+  fi
+  log "Detected $gpu_count GPU(s) (rocm-smi card* entries)"
 
-  if [[ "$gpu_count" -eq 0 ]]; then
-    echo "[rdna4-post] ERROR: No GPUs detected via rocm-smi" >&2
+  if (( gpu_count == 0 )); then
+    echo "[rdna4-post] ERROR: rocm-smi ran and reported 0 GPUs" >&2
     exit 1
   fi
 
@@ -91,7 +115,12 @@ deploy_model() {
 
   mkdir -p "${LLAMA_MODELS_DIR}"
 
-  # Install hf CLI if needed (new Hugging Face CLI, replaces huggingface-cli)
+  # Install hf CLI if needed (new Hugging Face CLI, replaces huggingface-cli).
+  # KNOWN, left as-is deliberately (review #3167 P3): this pipes the vendor's
+  # installer to bash as root, so hf lands under root's ~/.local/bin, and it
+  # does not reuse an hf already present in the operator's bringup venv
+  # (pmoves/.venv-pmoves) because root's PATH does not include it. Set PATH
+  # to include an existing hf before running if you want to avoid the install.
   if ! command -v hf >/dev/null 2>&1; then
     log "Installing hf CLI (Hugging Face)..."
     curl -LsSf https://hf.co/cli/install.sh | bash
@@ -140,7 +169,8 @@ start_services() {
     local max_wait=30
     local waited=0
     while [[ $waited -lt $max_wait ]]; do
-      if curl -s "http://127.0.0.1:${LLAMA_SERVER_PORT}/v1/models" >/dev/null 2>&1; then
+      # -f: an HTTP error (e.g. 503 while the model loads) is NOT ready.
+      if curl -sf "http://127.0.0.1:${LLAMA_SERVER_PORT}/v1/models" >/dev/null 2>&1; then
         log "llama-server is ready"
         break
       fi
