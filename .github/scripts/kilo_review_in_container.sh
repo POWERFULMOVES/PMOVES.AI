@@ -15,11 +15,14 @@
 #   KILO_IGNORE_OVERRIDE          non-empty -> fallback tier: ignore the
 #                                 override, walk the preference list
 #
-# Exit codes:
-#   0  review written to stdout (emptiness is judged by the caller)
-#   1  resolution error (dead override, no preference in catalog) or kilo failure
-#   3  could-not-measure: the catalog query returned 0 ids
-#   4  fallback tier only: every catalog-valid preference was already tried
+# Exit codes: 0 = review written to stdout (validity is judged by the
+# caller); anything else = failure. Tier STATUS is NOT an exit code (kilo's
+# own exit codes would collide with any code reserved here): it is a
+# `KILO_TIER_STATUS=<status>` marker line on stderr, which the host wrapper
+# copies into its meta file:
+#   catalog-empty  could-not-measure: the catalog query returned 0 ids
+#   no-candidate   fallback tier only: every catalog-valid preference was
+#                  already tried
 #
 # Ids are CLI ids: `<provider>/<gateway-id>`, i.e. `kilo/z-ai/glm-5.2`. A
 # prefix-less override that exists as `kilo/<id>` is repaired with a warning
@@ -39,7 +42,8 @@ kilo models kilo 2>/dev/null | grep -E '^kilo/' | sort -u > "$CATALOG" || true
 n=$(wc -l < "$CATALOG")
 if [ "$n" -eq 0 ]; then
   echo "::error::kilo model catalog query ('kilo models kilo') returned 0 ids - cannot validate any model (could-not-measure)" >&2
-  exit 3
+  echo "KILO_TIER_STATUS=catalog-empty" >&2
+  exit 1
 fi
 echo "::notice::kilo catalog: ${n} ids (kilo/*) from @kilocode/cli@${KILO_CLI_VERSION}" >&2
 
@@ -78,7 +82,8 @@ else
   if [ -z "$MODEL" ]; then
     if [ -n "${KILO_IGNORE_OVERRIDE:-}" ]; then
       echo "::notice::no untried catalog-valid model left in KILO_REVIEW_MODEL_PREFERENCES (already tried: '${KILO_EXCLUDE_MODELS:-}')" >&2
-      exit 4
+      echo "KILO_TIER_STATUS=no-candidate" >&2
+      exit 1
     fi
     echo "::error::no model in KILO_REVIEW_MODEL_PREFERENCES ('${KILO_REVIEW_MODEL_PREFERENCES:-}') is in the live kilo catalog (${n} ids). Set KILO_REVIEW_MODEL or update the preference list." >&2
     suggest
