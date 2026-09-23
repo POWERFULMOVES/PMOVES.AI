@@ -195,31 +195,56 @@ install_uv() {
 
   log "Detected architecture: $(uname -m) → $uv_arch"
 
-  # Download and install uv to /usr/local/bin (system-wide)
+  local uv_install_dir="${UV_INSTALL_DIR:-/usr/local/bin}"
+  local uv_asset="uv-${uv_arch}.tar.gz"
+  local uv_url="https://github.com/astral-sh/uv/releases/download/${UV_VERSION}/${uv_asset}"
   local uv_tmp
   uv_tmp="$(mktemp -d)"
-  cd "$uv_tmp"
-
-  local uv_url
-  uv_url="https://github.com/astral-sh/uv/releases/download/${UV_VERSION}/uv-${uv_arch}.tar.gz"
 
   log "Downloading uv ${UV_VERSION} from $uv_url"
-  curl -LsSf "$uv_url" -o uv.tar.gz
+  if ! curl -fLsS "$uv_url" -o "${uv_tmp}/${uv_asset}"; then
+    log "ERROR: uv download failed: $uv_url"
+    rm -rf -- "$uv_tmp"
+    return 1
+  fi
 
-  log "Extracting uv"
-  tar xzf uv.tar.gz
+  # Integrity: uv publishes <asset>.sha256 beside every release asset. Fail
+  # CLOSED on a missing or malformed checksum, or on a mismatch. The checksum
+  # is same-origin, so this catches truncation, corruption and proxy/mirror
+  # tampering -- not a compromised upstream release.
+  if ! curl -fLsS "${uv_url}.sha256" -o "${uv_tmp}/${uv_asset}.sha256"; then
+    log "ERROR: uv checksum unavailable (${uv_url}.sha256); refusing to install an unverified binary"
+    rm -rf -- "$uv_tmp"
+    return 1
+  fi
+  local uv_expected uv_actual
+  uv_expected="$(awk 'NR==1 {print $1}' "${uv_tmp}/${uv_asset}.sha256")"
+  if [[ ! "$uv_expected" =~ ^[0-9a-f]{64}$ ]]; then
+    log "ERROR: uv checksum file is malformed; refusing to install"
+    rm -rf -- "$uv_tmp"
+    return 1
+  fi
+  uv_actual="$(sha256sum "${uv_tmp}/${uv_asset}" | awk '{print $1}')"
+  if [[ "$uv_actual" != "$uv_expected" ]]; then
+    log "ERROR: uv checksum MISMATCH (expected ${uv_expected}, got ${uv_actual}); refusing to install"
+    rm -rf -- "$uv_tmp"
+    return 1
+  fi
+  log "uv checksum verified (sha256 ${uv_expected})"
 
-  log "Installing binaries"
-  mv "${uv_arch}/uv" /usr/local/bin/
-  mv "${uv_arch}/uvx" /usr/local/bin/ || true
+  # The archive's top-level directory is uv-<triple>/, not <triple>/ (listed
+  # with tar tzf on the 0.6.0 x86_64 and aarch64 assets: uv-<triple>/uv and
+  # uv-<triple>/uvx).
+  tar xzf "${uv_tmp}/${uv_asset}" -C "$uv_tmp"
+  install -d -m 0755 "$uv_install_dir"
+  install -m 0755 "${uv_tmp}/uv-${uv_arch}/uv" "${uv_install_dir}/uv"
+  if [[ -f "${uv_tmp}/uv-${uv_arch}/uvx" ]]; then
+    install -m 0755 "${uv_tmp}/uv-${uv_arch}/uvx" "${uv_install_dir}/uvx"
+  fi
+  rm -rf -- "$uv_tmp"
 
-  cd - >/dev/null
-  rm -rf "$uv_tmp"
-
-  # Verify installation
-  if command -v uv >/dev/null 2>&1; then
-    log "uv installed: $(uv --version)"
-    log "uv location: $(which uv)"
+  if [[ -x "${uv_install_dir}/uv" ]]; then
+    log "uv installed: ${uv_install_dir}/uv ($("${uv_install_dir}/uv" --version 2>/dev/null || echo "${UV_VERSION}"))"
   else
     log "ERROR: uv installation failed"
     return 1
