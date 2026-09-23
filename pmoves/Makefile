@@ -1,5 +1,27 @@
 # PMOVES top-level Makefile
 
+unexport KEY
+# ^ MUST STAY THE FIRST DIRECTIVE, above every include and every $(shell ...).
+# A command-line KEY (`make env-local-unset KEY=...`) is exported by default,
+# and GNU make EXPANDS an exported variable each time it builds a child
+# environment, so text like KEY='$(shell touch X)' executes:
+#   * make 4.3: children are recipes only. Measured 2026-09-23: with the
+#     unexport at the END of the file, recipe export expanded it and X was
+#     created; the directive closed it.
+#   * make >= 4.4: `$(shell ...)` ALSO receives exported variables. Two
+#     parse-time $(shell) calls (mk/a2ui-deploy.mk via the includes below, and
+#     one in this file) ran BEFORE an end-of-file unexport, so X was still
+#     created on 4.4.1 (independent review of #3164, container repro).
+# Make has no target-scoped unexport, and a directive only affects expansion
+# AFTER it is read -- so the only placement that holds on both versions is
+# here. tests/tools/test_env_local_key.py asserts the ordering structurally,
+# because CI runs 4.3 and cannot observe the 4.4 behaviour.
+# Other KEY users are unaffected: mk/codex.mk and mk/provider.mk interpolate
+# $(KEY) into recipe text, which does not depend on export. The one script with
+# an inherited-KEY shape, scripts/fleet/rustdesk-enroll.sh:65
+# (KEY="${KEY:-...}"), is not a victim: line 46 resets KEY="" first, and no make
+# target invokes it. Sub-makes still get KEY via MAKEFLAGS, unexpanded.
+
 # Many targets rely on bashisms (heredocs, arrays, $'...' quoting).
 # On Windows, force Git Bash to avoid cmd.exe fallback for bash-style recipes.
 ifeq ($(OS),Windows_NT)
@@ -6060,3 +6082,53 @@ sandbox-runbook: ## Print the self-host runbook path + the owning node
 	@echo "             pmoves/scripts/probe_danger_room_host.sh   (Linux/WSL2 half)"
 	@echo "vendor docs: PMOVES-Danger-infra/DEV-LOCAL.md  (local bare metal)"
 	@echo "             PMOVES-Danger-infra/self-host.md  (GCP)"
+
+# -------- Node-local env overlay: ONE key at a time (Known Road) ----------
+# THE SANCTIONED EDIT PATH for pmoves/.env.local, the node-local overlay that
+# scripts/with-env.sh loads after the generated tier files. Nothing generates
+# it, so before these targets every change was a hand edit with no record --
+# which is how CIPHER_DB_SERVICE_KEY=${SERVICE_ROLE_KEY} reached a fleet node
+# (copied from the df0218537 commit message) with no record of when or by whom.
+#
+# OPERATOR-RUN. Agents keep ZERO access to the file; the damage-control
+# zero-access rule is unchanged. The tool never prints or audits a value: it
+# reports key, action, whether a line existed and old/new value LENGTH, backs
+# the file up to <file>.bak-<UTC ts> (0600) before any change, writes
+# atomically preserving the mode and every other line, refuses a duplicated or
+# malformed key, and appends a row to data/audit/env_local_edits.jsonl
+# (git-ignored, node-local).
+#
+# KEY TRAVELS BY ENVIRONMENT, never as a shell word, and `$(value KEY)` stops
+# make from expanding anything inside it -- the register targets above learned
+# both lessons the hard way. The case-guard below is a courtesy; the tool
+# re-validates ^[A-Z][A-Z0-9_]*$ itself.
+#
+# `$(value KEY)` ALONE IS NOT ENOUGH: a command-line KEY is exported, and an
+# exported variable is expanded whenever a child environment is built. The
+# `unexport KEY` that closes this is at the TOP of this file -- see the
+# comment there for the make-version semantics and why position matters.
+#
+# env-local-set takes the value from a NO-ECHO prompt (the tool's getpass on
+# the controlling terminal) or from piped stdin -- never argv, so it is not in
+# shell history or `ps`. make's recipe shell is /bin/sh, which has no
+# `read -s`; getpass does the same without the value becoming a shell variable.
+#
+# make collapses every nonzero exit to 2 -- read the printed `result=` line
+# (done / noop / present / absent / refused / could-not-measure).
+.PHONY: env-local-has env-local-set env-local-unset
+env-local-has env-local-set env-local-unset: export ENV_LOCAL_KEY_NAME = $(value KEY)
+ENV_LOCAL_KEY_GUARD = case "$$ENV_LOCAL_KEY_NAME" in ""|[!A-Z]*|*[!A-Z0-9_]*) \
+	echo "usage: make $@ KEY=NAME   (NAME must match ^[A-Z][A-Z0-9_]*$$; the value is never an argument)" >&2; \
+	exit 2;; esac
+
+env-local-has: ## Operator: is KEY present in pmoves/.env.local? Prints no value (KEY=NAME)
+	@$(ENV_LOCAL_KEY_GUARD)
+	@$(PYTHON) tools/env_local_key.py has "$$ENV_LOCAL_KEY_NAME"
+
+env-local-set: ## Operator: set KEY in pmoves/.env.local; value from a no-echo prompt or stdin, never argv (KEY=NAME)
+	@$(ENV_LOCAL_KEY_GUARD)
+	@$(PYTHON) tools/env_local_key.py set "$$ENV_LOCAL_KEY_NAME"
+
+env-local-unset: ## Operator: remove the single KEY line from pmoves/.env.local, with backup + audit row (KEY=NAME)
+	@$(ENV_LOCAL_KEY_GUARD)
+	@$(PYTHON) tools/env_local_key.py unset "$$ENV_LOCAL_KEY_NAME"
