@@ -422,10 +422,10 @@
       "branch": "master",
       "reason": "untriaged - backfilled by the .gitmodules coverage cross-check. Promoting to sync: true also widens the App-token scope (Workflows:write on the fork), so it is a deliberate, reviewable act rather than a default"
     },
-    "PMOVES-N8N-Auto": {
+    "PMOVES-N8N": {
       "upstream": "n8n-io/n8n",
-      "sync": false,
-      "reason": "automation fork of n8n-io/n8n; self-hosted n8n lane (pmoves-n8n skill); tracks PMOVES.AI-Edition-Hardened per .gitmodules; sync deferred until next tracked release",
+      "sync": true,
+      "reason": "FULL source fork of n8n-io/n8n - the n8n repo that syncs from upstream (operator, 2026-09-23). Auto-sync on cron into the consumable branch PMOVES.AI-Edition-Hardened; fork-sync.yml already carried it (as the case-alias PMOVES-n8n) while this entry said sync:false, so this records existing behaviour rather than widening scope. RENAMED PMOVES-N8N-Auto -> PMOVES-N8N (GitHub id 1356127122); REST redirects the old name but the App token mint does not follow renames (branch-protection-sync failed from 2026-09-20 on it); PMOVES-n8n is this same repo case-insensitively, not a redirect. Submodule name/path stay PMOVES-N8N-Auto; only the .gitmodules url changed. NOT the workflows repo: that is PMOVES-n8n-FlooS (_first_party, submodule path PMOVES-n8n)",
       "branch": "PMOVES.AI-Edition-Hardened"
     },
     "PMOVES-nats-server": {
@@ -522,7 +522,7 @@
     "PMOVES-DoX",
     "pmoves-hirag-mcp",
     "Pmoves-Jellyfin-AI-Media-Stack",
-    "PMOVES-n8n",
+    "PMOVES-n8n-FlooS",
     "PMOVES-space-agent",
     "PMOVES-ToKenism-Multi",
     "PMOVES-transcribe-and-fetch"

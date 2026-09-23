@@ -441,8 +441,8 @@ Activation paths and cross-references live in `skills/README.md`.
 
 ### PMOVES-n8n
 - **Path:** `PMOVES-n8n/`
-- **Repository:** https://github.com/POWERFULMOVES/PMOVES-n8n.git
-- **Branch:** `main`
+- **Repository:** https://github.com/POWERFULMOVES/PMOVES-n8n-FlooS.git (first-party workflows + a thin runtime Dockerfile `FROM n8nio/n8n`; no upstream sync). The full n8n source fork is `POWERFULMOVES/PMOVES-N8N` at path `PMOVES-N8N-Auto/`.
+- **Branch:** `PMOVES.AI-Edition-Hardened`
 - **Purpose:** n8n workflow automation for PMOVES.AI platform
 - **Key Workflows:**
   - `echo_publisher.json` - Discord echo publishing

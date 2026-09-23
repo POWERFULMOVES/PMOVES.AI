@@ -226,7 +226,7 @@ All PMOVES services are organized as Git submodules in `.gitmodules` (repo root)
 |-----------|---------|--------|--------|--------------|
 | **Pmoves-Health-wger** | github.com/POWERFULMOVES/Pmoves-Health-wger | Hardened | Not initialized | `git submodule update --init Pmoves-Health-wger` |
 | **PMOVES-Wealth** | github.com/POWERFULMOVES/PMOVES-Wealth | Hardened | Not initialized | `git submodule update --init PMOVES-Wealth` |
-| **PMOVES-n8n** | github.com/POWERFULMOVES/PMOVES-n8n | Hardened | Not initialized | BPM workflow engine |
+| **PMOVES-n8n** | github.com/POWERFULMOVES/PMOVES-n8n-FlooS | Hardened | Not initialized | BPM workflow engine |
 | **PMOVES-MAI-UI** | github.com/POWERFULMOVES/PMOVES-MAI-UI | main | Not initialized | Practice web UI |
 | **Pmoves-Jellyfin-AI-Media-Stack** | github.com/POWERFULMOVES/Pmoves-Jellyfin-AI-Media-Stack | Hardened | Not initialized | Patient education media |
 | **PMOVES-supabase** | github.com/POWERFULMOVES/PMOVES-supabase | Hardened | Not initialized | Patient data backend |
