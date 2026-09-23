@@ -362,6 +362,72 @@ create_pmoves_user() {
 PMOVES_DIR="${PMOVES_DIR:-/opt/pmoves}"
 PMOVES_REPO_URL="${PMOVES_REPO_URL:-https://github.com/POWERFULMOVES/PMOVES.AI.git}"
 
+# ------------------------------------------------------------------
+# /opt/pmoves pre-flight -- runs BEFORE any installation step
+# ------------------------------------------------------------------
+# setup_pmoves_workdir needs PMOVES_DIR to be absent, empty, or already a git
+# checkout. Anything else used to be discovered only at the END (a "not
+# touching it" WARN, then a failed verify, exit 1) after every package had
+# been installed. Fail early instead, and NEVER move or delete it here: the
+# operator decides.
+#
+# The legacy layout is recognised by name: the pre-checkout bootstrap created
+# bin/ data/ etc/ lib/ logs/ + profile.yaml (owned by the pmoves user). A
+# directory whose top-level entries are all from that set, with no .git, is
+# reported as LEGACY with the exact migration command.
+PMOVES_LEGACY_ENTRIES=(bin data etc lib logs profile.yaml)
+
+pmoves_dir_is_legacy() {
+  local entry name known found=0
+  for entry in "${PMOVES_DIR}"/* "${PMOVES_DIR}"/.[!.]* "${PMOVES_DIR}"/..?*; do
+    [[ -e "$entry" || -L "$entry" ]] || continue
+    name="${entry##*/}"
+    found=1
+    known=0
+    local legacy
+    for legacy in "${PMOVES_LEGACY_ENTRIES[@]}"; do
+      [[ "$name" == "$legacy" ]] && known=1 && break
+    done
+    [[ $known -eq 1 ]] || return 1
+  done
+  [[ $found -eq 1 ]]
+}
+
+preflight_pmoves_dir() {
+  [[ -d "${PMOVES_DIR}" ]] || return 0
+  [[ -d "${PMOVES_DIR}/.git" ]] && return 0
+  [[ -z "$(ls -A "${PMOVES_DIR}" 2>/dev/null)" ]] && return 0
+
+  local ts
+  ts="$(date -u +%Y%m%dT%H%M%SZ)"
+  if pmoves_dir_is_legacy; then
+    cat >&2 <<EOF
+[dgx-spark] ERROR: ${PMOVES_DIR} has the LEGACY pre-checkout layout
+[dgx-spark]        (bin/ data/ etc/ lib/ logs/ profile.yaml, no .git).
+[dgx-spark]        This script now expects ${PMOVES_DIR} to be a PMOVES.AI git
+[dgx-spark]        checkout owned by ${OPERATOR_USER}. Nothing has been changed.
+[dgx-spark]
+[dgx-spark] Migrate (moves, never deletes), then re-run:
+[dgx-spark]   sudo mv ${PMOVES_DIR} ${PMOVES_DIR}.legacy-${ts}
+[dgx-spark]   sudo bash $0
+[dgx-spark] The re-run clones the checkout and writes a fresh profile.yaml.
+[dgx-spark] To keep the OLD profile instead, after the re-run:
+[dgx-spark]   sudo install -m 0644 -o ${OPERATOR_USER} -g ${OPERATOR_GROUP} ${PMOVES_DIR}.legacy-${ts}/profile.yaml ${PMOVES_DIR}/profile.yaml
+[dgx-spark] Check ${PMOVES_DIR}.legacy-${ts}/data before removing the legacy tree.
+EOF
+  else
+    cat >&2 <<EOF
+[dgx-spark] ERROR: ${PMOVES_DIR} exists, is not empty, and is not a git checkout
+[dgx-spark]        (and is not the known legacy layout). Nothing has been changed.
+[dgx-spark] Move it aside and re-run, e.g.:
+[dgx-spark]   sudo mv ${PMOVES_DIR} ${PMOVES_DIR}.aside-${ts}
+[dgx-spark]   sudo bash $0
+[dgx-spark] or point the bootstrap elsewhere: PMOVES_DIR=/path sudo -E bash $0
+EOF
+  fi
+  exit 1
+}
+
 setup_pmoves_workdir() {
   log_section "Setting up ${PMOVES_DIR} (PMOVES.AI checkout owned by ${OPERATOR_USER})"
 
@@ -522,6 +588,7 @@ print_summary() {
 main() {
   require_root
   require_operator_user
+  preflight_pmoves_dir
   verify_architecture
   install_system_packages
   install_docker

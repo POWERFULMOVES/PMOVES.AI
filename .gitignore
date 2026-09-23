@@ -381,3 +381,10 @@ pmoves/tools/comfyui/_input/
 # output - generated in any working checkout, never committable content.
 /data/
 /tests/test_data/
+
+# Provisioner node state written INTO the /opt/pmoves checkout root:
+# profile.yaml (hardware profile contract: deploy/provision/{b850,dgx-spark}-
+# bootstrap.sh, z890/common/00-glances-profile.sh) and .node-config
+# (hostinger-kvm-setup.sh). Rooted so a same-named file elsewhere is unaffected.
+/profile.yaml
+/.node-config

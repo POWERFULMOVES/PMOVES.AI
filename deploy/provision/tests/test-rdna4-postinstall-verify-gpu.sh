@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Harness for verify_gpu() in rdna4-postinstall.sh.
+# Harness for verify_gpu() and health_checks() in rdna4-postinstall.sh.
 #
 # Extracts ONLY ensure_jq + verify_gpu and runs them with rocm-smi (and, for
 # one case, jq) stubbed. Nothing on the host is touched. Asserts the exit-code
@@ -65,6 +65,64 @@ check fail     3
 check garbage  3
 check array    3
 check nojq     3
+
+# ---- health_checks: configured-not-started vs a failed start -------------
+#   nomodel  : no default.gguf, exporter+socket up  -> rc 0, "CONFIGURED, NOT STARTED"
+#   running  : model, service active, /v1/models ok -> rc 0
+#   inactive : model, service NOT active            -> rc 1, "FAILED to start"
+#   noanswer : model, active, /v1/models fails      -> rc 1
+#   exporter : no model, exporter down              -> rc 1
+HC_WORK="$(mktemp -d)"
+hc() {
+  local mode="$1" models="$HC_WORK/$1"
+  mkdir -p "$models"
+  [[ "$mode" == nomodel || "$mode" == exporter ]] || echo gguf > "$models/default.gguf"
+  (
+    log() { echo "$*"; }
+    log_section() { :; }
+    systemctl() {
+      [[ "${1:-}" == "is-active" ]] || return 0
+      local unit="${*: -1}"
+      case "$unit" in
+        llama-server.service) [[ "$mode" != inactive ]] ;;
+        rocm-smi-exporter.service) [[ "$mode" != exporter ]] ;;
+        *) return 0 ;;
+      esac
+    }
+    curl() {
+      local a url=""
+      for a in "$@"; do [[ "$a" == http* ]] && url="$a"; done
+      [[ "$url" == *"/v1/models" && "$mode" == noanswer ]] && return 22
+      return 0
+    }
+    # shellcheck disable=SC2034  # read by the eval'd health_checks
+    LLAMA_MODELS_DIR="$models"
+    # shellcheck disable=SC2034
+    LLAMA_SERVER_PORT=8080
+    eval "$(awk '/^health_checks\(\) \{/,/^\}/' "$SCRIPT")"
+    set -euo pipefail
+    health_checks
+  ) > "$HC_WORK/out" 2>&1
+  echo "$?"
+}
+hc_check() {
+  local mode="$1" want="$2" must="$3" got
+  got="$(hc "$mode")"
+  if [[ "$got" == "$want" ]] && { [[ -z "$must" ]] || grep -qF -- "$must" "$HC_WORK/out"; }; then
+    echo "PASS  health_checks $mode -> rc $got"
+  else
+    echo "FAIL  health_checks $mode: want rc $want${must:+ + '$must'}, got $got"
+    sed 's/^/        /' "$HC_WORK/out"
+    fails=$((fails + 1))
+  fi
+}
+hc_check nomodel  0 "CONFIGURED, NOT STARTED"
+hc_check running  0 "running and answering"
+hc_check inactive 1 "FAILED to start"
+hc_check noanswer 1 "FAILED to start"
+hc_check exporter 1 "rocm-smi-exporter is not running"
+find "$HC_WORK" -mindepth 1 -delete 2>/dev/null
+rmdir "$HC_WORK" 2>/dev/null || true
 
 echo "---"
 if [[ $fails -eq 0 ]]; then echo "ALL PASS"; exit 0; fi

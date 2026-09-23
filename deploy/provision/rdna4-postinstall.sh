@@ -47,7 +47,8 @@ require_root() {
 ensure_jq() {
   command -v jq >/dev/null 2>&1 && return 0
   log "jq missing; installing it"
-  DEBIAN_FRONTEND=noninteractive apt-get install -y -qq jq >/dev/null 2>&1 || true
+  { DEBIAN_FRONTEND=noninteractive apt-get update -qq \
+      && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq jq; } >/dev/null 2>&1 || true
   if ! command -v jq >/dev/null 2>&1; then
     echo "[rdna4-post] COULD-NOT-MEASURE: jq missing and could not be installed (apt-get install jq)" >&2
     exit 3
@@ -201,14 +202,21 @@ health_checks() {
   log_section "Health Checks"
   local failed=0
 
-  # Check llama-server
-  if systemctl is-active --quiet llama-server.service; then
-    log "✓ llama-server is running"
-    if command -v curl >/dev/null 2>&1; then
-      curl -s "http://127.0.0.1:${LLAMA_SERVER_PORT}/v1/models" | head -20 || true
-    fi
+  # Check llama-server. Three states, not two:
+  #   no model file          -> CONFIGURED, NOT STARTED: expected without
+  #                             --model-pull; reported, not a failure;
+  #   model + active + ready -> pass;
+  #   model but not active, or not answering -> a failed start (non-zero).
+  if [[ ! -e "${LLAMA_MODELS_DIR}/default.gguf" ]]; then
+    log "- llama-server: CONFIGURED, NOT STARTED (no ${LLAMA_MODELS_DIR}/default.gguf)."
+    log "  Expected without --model-pull. Re-run with --model-pull, or place a"
+    log "  GGUF at that path and: systemctl start llama-server"
+  elif systemctl is-active --quiet llama-server.service \
+       && curl -sf "http://127.0.0.1:${LLAMA_SERVER_PORT}/v1/models" >/dev/null 2>&1; then
+    log "✓ llama-server is running and answering /v1/models"
   else
-    log "✗ llama-server is not running"
+    log "✗ llama-server FAILED to start or is not answering (model present)"
+    log "  journalctl -u llama-server -n 50"
     failed=1
   fi
 

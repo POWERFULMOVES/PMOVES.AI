@@ -10,6 +10,12 @@
 #   missing   .sha256 download fails (HTTP 404)  -> refuses, nothing installed
 #   malformed .sha256 is not a 64-hex digest     -> refuses, nothing installed
 #
+# WARNING -- positive-control (PROV_DIR) mode: the PRE-FIX install_uv has no
+# UV_INSTALL_DIR and writes to /usr/local/bin. Run PROV_DIR mode ONLY inside a
+# disposable container; the harness refuses it elsewhere unless
+# ALLOW_HOST_PROV_DIR=1 is set explicitly. The default mode (current code)
+# writes only to a temp dir.
+#
 # Needs network access to github.com. Exit codes: 0 all pass, 1 a case
 # failed, 3 could not measure (no network / missing tool).
 set -uo pipefail
@@ -19,6 +25,12 @@ SELF_DIR="$(CDPATH='' cd -P -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 # revision extracted with git show) as a positive control.
 PROV="${PROV_DIR:-$(CDPATH='' cd -P -- "$SELF_DIR/.." && pwd)}"
 UV_VERSION_UNDER_TEST="${UV_VERSION_UNDER_TEST:-0.6.0}"
+
+in_container() { [[ -f /.dockerenv || -f /run/.containerenv ]] || grep -qaE 'docker|containerd|podman|lxc' /proc/1/cgroup 2>/dev/null; }
+if [[ -n "${PROV_DIR:-}" ]] && ! in_container && [[ "${ALLOW_HOST_PROV_DIR:-0}" != "1" ]]; then
+  echo "COULD-NOT-MEASURE: PROV_DIR (pre-fix) mode can write to /usr/local/bin; run it in a disposable container"
+  exit 3
+fi
 
 for t in curl tar sha256sum awk install mktemp; do
   command -v "$t" >/dev/null 2>&1 || { echo "COULD-NOT-MEASURE: $t missing"; exit 3; }
