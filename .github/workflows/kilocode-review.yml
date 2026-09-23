@@ -4,9 +4,21 @@
 # dead fleet-wide since 2026-08-23) with the fleet's own reviewer: the Kilo
 # CLI (KiloCode coding plan) on a self-hosted runner.
 #
-# Model options per lane need:
-#   KILO_REVIEW_MODEL (repo variable, default: z-ai/glm-4.5 — catalog-exact)
-#   KILOCODE_API_KEY  (repo secret — coding-plan key; NOT checked in)
+# Model selection — resolved against the LIVE catalog every run, never trusted:
+#   KILO_REVIEW_MODEL             (repo variable, optional) explicit override.
+#   KILO_REVIEW_MODEL_PREFERENCES (repo variable, optional) space-separated,
+#                                 ordered fallback list used when no override.
+#   KILOCODE_API_KEY              (repo secret — coding-plan key; NOT checked in)
+#
+# Ids are CLI ids: `<provider>/<gateway-id>`, i.e. `kilo/z-ai/glm-5.2`. The
+# gateway's own ids (`z-ai/glm-5.2`, what `api.kilo.ai/api/gateway/models`
+# and the CLI's "Did you mean" list print) have NO provider prefix, and the CLI
+# parses `z-ai/glm-4.5` as provider `z-ai` -> "Model not found". That is how
+# this lane died twice (#3080). The resolver queries `kilo models kilo` inside
+# the same container, with the same key, before reviewing: a dead override is
+# a named ::error:: with valid alternatives, not a silent failure; a
+# prefix-less override that exists as `kilo/<id>` is repaired with a warning.
+# An empty catalog exits 3 (could-not-measure), never a guess.
 #
 # Runner requirements (kvm4 lane, label: kvm4):
 #   - docker (present), network egress to api.kilo.ai (present — pulls work)
@@ -84,36 +96,110 @@ jobs:
           echo "diff lines: $(wc -l < /tmp/kilo-review.diff)"
 
       - name: Run kilocode review
+        id: review
         env:
           KILOCODE_API_KEY: ${{ secrets.KILOCODE_API_KEY }}
           KILO_API_KEY: ${{ secrets.KILOCODE_API_KEY }}  # same JWT — this is the var that unlocks the kilo/* model catalog
           KILO_REVIEW_MODEL: ${{ vars.KILO_REVIEW_MODEL }}
+          # Ordered preference, validated against the live catalog (first hit
+          # wins). Only consulted when KILO_REVIEW_MODEL is unset. Override the
+          # whole list with the KILO_REVIEW_MODEL_PREFERENCES repo variable.
+          KILO_REVIEW_MODEL_PREFERENCES: ${{ vars.KILO_REVIEW_MODEL_PREFERENCES || 'kilo/z-ai/glm-5.2 kilo/z-ai/glm-5.3 kilo/z-ai/glm-5.1 kilo/moonshotai/kimi-k2.7-code kilo/qwen/qwen3-coder-next' }}
         run: |
           set -euo pipefail
-          MODEL="${KILO_REVIEW_MODEL:-z-ai/glm-4.5}"
+          # Runs INSIDE the container: install, query the catalog, resolve and
+          # validate the model, then review. Status goes to stderr as
+          # ::error::/::warning::/::notice:: lines + a KILO_RESOLVED_MODEL=
+          # marker; the host replays them below (workflow commands are only
+          # parsed from the runner's own log, not from a redirected file).
+          cat > /tmp/kilo-review-run.sh << 'SHEOF'
+          set -euo pipefail
+          npm install -g @kilocode/cli@7.6.2 >/dev/null 2>&1
+          mkdir -p ~/.config/kilo && cd ~/.config/kilo
+          npm init -y >/dev/null 2>&1
+          npm install --no-audit --no-fund @kilocode/plugin@7.6.2 >/dev/null 2>&1
+          kilo models kilo 2>/dev/null | grep -E '^kilo/' | sort -u > /tmp/kilo-catalog.txt || true
+          n=$(wc -l < /tmp/kilo-catalog.txt)
+          if [ "$n" -eq 0 ]; then
+            echo "::error::kilo model catalog query ('kilo models kilo') returned 0 ids - cannot validate any model (could-not-measure)" >&2
+            exit 3
+          fi
+          echo "::notice::kilo catalog: ${n} ids (kilo/*) from @kilocode/cli@7.6.2" >&2
+          in_catalog() { grep -Fxq -- "$1" /tmp/kilo-catalog.txt; }
+          suggest() {
+            echo "valid ids in the live catalog (sample):" >&2
+            { for p in ${KILO_REVIEW_MODEL_PREFERENCES:-}; do in_catalog "$p" && echo "$p"; done
+              grep -E '^kilo/(z-ai|moonshotai|qwen|deepseek|minimax)/' /tmp/kilo-catalog.txt | grep -v ':free$' | tail -n 8
+            } | awk '!seen[$0]++' | head -n 12 | sed 's/^/  /' >&2 || true
+          }
+          MODEL=""
+          if [ -n "${KILO_REVIEW_MODEL:-}" ]; then
+            cand="${KILO_REVIEW_MODEL}"
+            if ! in_catalog "$cand" && in_catalog "kilo/${cand}"; then
+              echo "::warning::KILO_REVIEW_MODEL='${cand}' is a gateway id without the CLI provider prefix; using 'kilo/${cand}'. Set the repo variable to 'kilo/${cand}'." >&2
+              cand="kilo/${cand}"
+            fi
+            if ! in_catalog "$cand"; then
+              echo "::error::KILO_REVIEW_MODEL='${KILO_REVIEW_MODEL}' is not in the live kilo catalog (${n} ids). Update the repo variable (gh variable set KILO_REVIEW_MODEL) or delete it to use the preference list." >&2
+              suggest
+              exit 1
+            fi
+            MODEL="$cand"
+            echo "::notice::kilo review model: ${MODEL} (from KILO_REVIEW_MODEL, validated against catalog)" >&2
+          else
+            for cand in ${KILO_REVIEW_MODEL_PREFERENCES:-}; do
+              if in_catalog "$cand"; then MODEL="$cand"; break; fi
+              echo "::warning::preferred model '${cand}' is not in the live kilo catalog; trying next" >&2
+            done
+            if [ -z "$MODEL" ]; then
+              echo "::error::no model in KILO_REVIEW_MODEL_PREFERENCES ('${KILO_REVIEW_MODEL_PREFERENCES:-}') is in the live kilo catalog (${n} ids). Set KILO_REVIEW_MODEL or update the preference list." >&2
+              suggest
+              exit 1
+            fi
+            echo "::notice::kilo review model: ${MODEL} (first catalog hit in preference list)" >&2
+          fi
+          echo "KILO_RESOLVED_MODEL=${MODEL}" >&2
+          printf '{"model": "%s"}' "${MODEL}" > ~/.config/kilo/kilo.json
+          cd /tmp
+          kilo run --auto "$(cat /tmp/kilo-review-prompt.md)"
+          SHEOF
+          rc=0
           sudo -n docker run --rm \
             -e KILOCODE_API_KEY="${KILOCODE_API_KEY}" \
             -e KILO_API_KEY="${KILO_API_KEY}" \
-            -e KILOCODE_DEFAULT_MODEL="${MODEL}" \
+            -e KILO_REVIEW_MODEL="${KILO_REVIEW_MODEL}" \
+            -e KILO_REVIEW_MODEL_PREFERENCES="${KILO_REVIEW_MODEL_PREFERENCES}" \
             -v /tmp/kilo-review.diff:/tmp/kilo-review.diff:ro \
             -v /tmp/kilo-review-prompt.md:/tmp/kilo-review-prompt.md:ro \
+            -v /tmp/kilo-review-run.sh:/tmp/kilo-review-run.sh:ro \
             -w /tmp \
-            node:22-slim bash -c "npm install -g @kilocode/cli@7.6.2 >/dev/null 2>&1 && mkdir -p ~/.config/kilo && cd ~/.config/kilo && npm init -y >/dev/null 2>&1 && npm install --no-audit --no-fund @kilocode/plugin@7.6.2 >/dev/null 2>&1 && printf '{\"model\": \"%s\"}' \"${MODEL}\" > ~/.config/kilo/kilo.json && kilo run --auto \"\$(cat /tmp/kilo-review-prompt.md)\"" \
-            > /tmp/kilo-review-out.md 2>/tmp/kilo-review-err.log || {
-              echo "::warning::kilo review run failed — see step log"
-              tail -20 /tmp/kilo-review-err.log || true
-              exit 1
-            }
+            node:22-slim bash /tmp/kilo-review-run.sh \
+            > /tmp/kilo-review-out.md 2>/tmp/kilo-review-err.log || rc=$?
+          # Replay the resolver's annotations into the runner log.
+          grep -E '^(::(error|warning|notice)::|  kilo/|valid ids)' /tmp/kilo-review-err.log || true
+          MODEL="$(sed -n 's/^KILO_RESOLVED_MODEL=//p' /tmp/kilo-review-err.log | tail -n 1)"
+          echo "model=${MODEL}" >> "$GITHUB_OUTPUT"
+          if [ "$rc" -ne 0 ]; then
+            echo "::error::kilo review run failed (exit ${rc}, model '${MODEL:-unresolved}') - last 20 stderr lines follow"
+            tail -20 /tmp/kilo-review-err.log || true
+            exit "$rc"
+          fi
+          if [ ! -s /tmp/kilo-review-out.md ]; then
+            echo "::error::kilo review with model '${MODEL}' exited 0 but produced no review output"
+            tail -20 /tmp/kilo-review-err.log || true
+            exit 1
+          fi
           head -c 400 /tmp/kilo-review-out.md
 
       - name: Post review comment
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
+          KILO_MODEL_USED: ${{ steps.review.outputs.model }}
         run: |
           set -euo pipefail
           {
-            echo "## Fleet review: kilocode (${KILO_REVIEW_MODEL:-z-ai/glm-4.5})"
+            echo "## Fleet review: kilocode (${KILO_MODEL_USED})"
             echo
             cat /tmp/kilo-review-out.md
             echo
