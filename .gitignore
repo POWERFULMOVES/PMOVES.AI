@@ -164,6 +164,10 @@ pmoves/data/agent-zero/logs/
 pmoves/data/open-notebook/surreal_data/
 # Generated at launch by crush-pmoves — per-node runtime state, never committed
 pmoves/data/identity/node-identity.md
+# Node-local operator audit logs (e.g. env_local_edits.jsonl from
+# `make -C pmoves env-local-{set,unset}`). They hold key NAMES and hostnames,
+# never values -- but key names per node are topology, so they stay local.
+pmoves/data/audit/
 
 # =============================================================================
 # Docker

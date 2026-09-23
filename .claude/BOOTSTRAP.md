@@ -28,6 +28,7 @@ Missing items are not failures — they are operational facts. Disclose them. Ne
 | CHIT-sign provenance | `make -C pmoves sign-trail SUMMARY=... AGENT=...` |
 | Refresh living docs | `make -C pmoves docs-reconcile` |
 | Cipher memory for any agent / drop-in model | `PATTERNS.md` § Known Road — Cipher memory (roster entry, `agentId`, token, triage) |
+| One key in `pmoves/.env.local` (operator-run; agents zero-access) | `make -C pmoves env-local-{has,set,unset} KEY=NAME` |
 | Run the provider-verifier static gate | `python pmoves/tools/provider_verifier_gate.py` (no API calls; 6 checks; FAIL blocks merge via merge-gate) |
 | Run the provider-verifier full conformance | `cd Pmoves-MiniMax-Provider-Verifier && python verify.py --providers <file> --output-dir /tmp/run` (operator-only, requires real API keys from `env.shared`) |
 
