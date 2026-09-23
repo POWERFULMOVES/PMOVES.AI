@@ -288,8 +288,8 @@ declared `agentId`, and scope checks were skipped. The REST path
 **What counts as a violation.** With a token present, each of these is one. It
 mirrors the REST path, plus scopes:
 
-- no `agentId` on the call
-- `agentId: "*"` on `search` or `reasoning_patterns`
+- no `agentId` on the call (refused in every mode; see below)
+- `agentId: "*"` on any tool (refused in every mode; see below)
 - `agentId` ≠ the token's agent
 - a missing per-tool scope. `admin` satisfies any scope. Scope per tool:
 
