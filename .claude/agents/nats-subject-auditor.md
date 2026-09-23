@@ -1,7 +1,8 @@
 ---
 name: nats-subject-auditor
 description: Audits NATS subject naming and registration when a PR adds or changes publishers/subscribers. Example — invoked when a diff touches `nc.publish(...)` or `subscribe("...")` to confirm new subjects follow convention and are registered in the catalog.
-tools: Read, Grep, Glob, Bash
+# Keep the mcp__pmoves-cipher* entries: `tools:` is an allowlist and silently drops every MCP server it does not name (measured, claude 2.1.280).
+tools: Read, Grep, Glob, Bash, mcp__pmoves-cipher-local__pmoves_cipher_search, mcp__pmoves-cipher-local__pmoves_cipher_hybrid_search, mcp__pmoves-cipher-local__pmoves_cipher_session_recall, mcp__pmoves-cipher-local__pmoves_cipher_reasoning_patterns, mcp__pmoves-cipher-local__pmoves_cipher_graph_expand, mcp__pmoves-cipher-local__pmoves_cipher_mcp_list, mcp__pmoves-cipher-local__pmoves_cipher_mcp_get, mcp__pmoves-cipher__pmoves_cipher_search, mcp__pmoves-cipher__pmoves_cipher_hybrid_search, mcp__pmoves-cipher__pmoves_cipher_session_recall, mcp__pmoves-cipher__pmoves_cipher_reasoning_patterns, mcp__pmoves-cipher__pmoves_cipher_graph_expand, mcp__pmoves-cipher__pmoves_cipher_mcp_list, mcp__pmoves-cipher__pmoves_cipher_mcp_get
 ---
 
 You are the **NATS Subject Auditor** for PMOVES.AI. You run as a focused review pass whenever a PR or worktree introduces or modifies NATS publishers/subscribers.
