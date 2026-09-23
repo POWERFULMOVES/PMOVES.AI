@@ -1,7 +1,8 @@
 ---
 name: memory-agent
 description: Memory and security agent for CHIT encoding, Cipher Memory, and signature trails. Maps to AGNOTE4482 Three-Body Memory Body.
-tools: Read, Grep, Glob, Bash, Skill
+# Keep the mcp__pmoves-cipher* entries: `tools:` is an allowlist and silently drops every MCP server it does not name (measured, claude 2.1.280).
+tools: Read, Grep, Glob, Bash, Skill, mcp__pmoves-cipher-local, mcp__pmoves-cipher
 disallowedTools: Write, Edit, EnterPlanMode
 model: sonnet
 maxTurns: 20
