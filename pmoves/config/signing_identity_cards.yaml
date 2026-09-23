@@ -503,9 +503,14 @@ cards:
   # node_steward in agent_registry.yaml): an active body card would carry its
   # OWN key, distinct from b850-claude's, so it is a different signer.
   #
-  # h.role is `agent` because the card schema enumerates operator/agent/
-  # runner/service-account and nothing else; the Three-Body seat lives in
-  # agent_registry.yaml (`three_body`) and in `notes` below, not in h.
+  # h.role is `agent`. signing-card.v1.schema.json enumerates h.role as
+  # operator/agent/runner/service-account, but that enum is NOT enforced on
+  # this file: it already carries `evaluator`, `ci-bot`, `community_steward`
+  # and `creator_steward`, which fail it (audit_naming_drift.py validates only
+  # when jsonschema is installed). `agent` is chosen because it is inside the
+  # schema's enum AND is what these bodies are, not because nothing else can
+  # appear here. The Three-Body seat lives in agent_registry.yaml
+  # (`three_body`) and in `notes` below, not in h.
 - card_id: "00000000-0000-4000-8000-000000000052"
   issued_at: "2026-09-23T00:00:00Z"
   active: false
