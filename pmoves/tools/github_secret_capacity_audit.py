@@ -69,8 +69,14 @@ repo that cannot be read at all is Unmeasured. A pinned scope declared past the
 ceiling is reported, and routed names do not count toward the single-scope
 overflow, since a push run never writes them to the caller's scope.
 
-``--env X`` still asserts where BARE names live and skips discovery; pinned
-scopes are read as well, since they need no assertion.
+``--env X`` still asserts where BARE names live, and a manifest with only bare
+names still skips discovery under it. Pinned scopes need no assertion: when
+there are any, the repo's environments are listed so that a pinned environment
+that does not exist is reported absent under ``--env`` exactly as without it.
+
+Repo and environment names match case-insensitively, as GitHub's do: a
+mapping pinned to ``powerfulmoves/pmoves.ai`` env ``prod`` IS env:Prod of
+POWERFULMOVES/PMOVES.AI, not a second repo with a missing environment.
 
 Names only. The GitHub API never returns secret VALUES and neither does this.
 
@@ -222,6 +228,11 @@ def _scope_order(scope: Optional[str]):
     return (scope is not None, scope or "")
 
 
+def _fold(scope: Optional[str]) -> Optional[str]:
+    """GitHub compares environment names case-insensitively; so does this."""
+    return None if scope is None else scope.casefold()
+
+
 def _audit_repo(
     repo: str,
     unrouted: Set[str],
@@ -235,15 +246,31 @@ def _audit_repo(
     (every scope, or just `environment`). `pinned` maps a scope to the routed
     names the manifest put there; each is looked for in that scope alone.
     """
-    missing: List[Optional[str]] = []
+    discovered = discover_scopes(repo) if environment is None or pinned else None
     if environment is None:
-        scopes = discover_scopes(repo)
-        missing = [s for s in sorted(pinned, key=_scope_order) if s not in scopes]
+        scopes = list(discovered or [])
     else:
         scopes = [environment] if takes_unrouted else []
     unrouted_scopes = list(scopes)
+
+    # Resolve each pinned scope to the spelling GitHub reports, merging case
+    # variants. One GitHub does not have is MISSING: its names are absent -- a
+    # measurement, not a failure to measure -- with or without --env.
+    canonical = {_fold(s): s for s in (discovered or [])}
+    canonical.update({_fold(s): s for s in scopes})
+    resolved: Dict[Optional[str], Set[str]] = {}
+    missing: List[Optional[str]] = []
+    missing_names: Set[str] = set()
     for scope in sorted(pinned, key=_scope_order):
-        if scope not in scopes and scope not in missing:
+        if _fold(scope) in canonical:
+            resolved.setdefault(canonical[_fold(scope)], set()).update(pinned[scope])
+        else:
+            if _fold(scope) not in {_fold(m) for m in missing}:
+                missing.append(scope)
+            missing_names |= pinned[scope]
+    pinned = resolved
+    for scope in sorted(pinned, key=_scope_order):
+        if scope not in scopes:
             scopes.append(scope)
 
     per_scope: List[Dict[str, Any]] = []
@@ -267,6 +294,7 @@ def _audit_repo(
     absent = {name for name in unrouted if name not in reachable}
     for scope, names in pinned.items():
         absent |= {name for name in names if name not in present.get(scope, set())}
+    absent |= missing_names
 
     # A routed name belongs ONLY in the scope(s) it is pinned to. A copy
     # anywhere else in this repo is stale -- unless the same name is also a
@@ -275,6 +303,9 @@ def _audit_repo(
     for scope, names in pinned.items():
         for name in names:
             pinned_to.setdefault(name, set()).add(scope)
+    for name in missing_names:
+        # Pinned only to a scope that does not exist: every copy is elsewhere.
+        pinned_to.setdefault(name, set())
     stale = [
         {"name": name, "scope": _scope_label(scope)}
         for scope in scopes
@@ -282,7 +313,7 @@ def _audit_repo(
         if name in pinned_to and name not in unrouted and scope not in pinned_to[name]
     ]
 
-    declared = set(unrouted).union(*pinned.values())
+    declared = set(unrouted).union(missing_names, *pinned.values())
     return {
         "repo": repo,
         "scopes_read": [_scope_label(s) for s in scopes],
@@ -306,19 +337,24 @@ def audit(
     # Bare names go wherever the caller pushes them: `repo`, one scope per run.
     # Routed names go where the manifest pins them, repo AND scope.
     unrouted = {r["name"] for r in routes if not r["routed"]}
+    # Keyed by the case-folded repo (GitHub's own matching); `display` keeps
+    # the first spelling the manifest used.
     pinned: Dict[str, Dict[Optional[str], Set[str]]] = {}
+    display: Dict[str, str] = {}
     for r in routes:
         if r["routed"]:
-            pinned.setdefault(r["repo"], {}).setdefault(r["env"], set()).add(r["name"])
+            key = r["repo"].casefold()
+            display.setdefault(key, r["repo"])
+            pinned.setdefault(key, {}).setdefault(r["env"], set()).add(r["name"])
 
     # `--env X` asserts "the funnel targets X". Absence is only true under that
     # assertion, so it is carried into the report and stated in the output.
     assumed_single_scope = environment is not None
-    main_report = _audit_repo(repo, unrouted, pinned.get(repo, {}), environment, True)
+    main_report = _audit_repo(repo, unrouted, pinned.get(repo.casefold(), {}), environment, True)
     other_repos = [
-        _audit_repo(other, set(), pinned[other], environment, False)
+        _audit_repo(display[other], set(), pinned[other], environment, False)
         for other in sorted(pinned)
-        if other != repo
+        if other != repo.casefold()
     ]
 
     # The funnel writes ONE scope per run (push-gh-secrets.sh --env), so more
@@ -331,13 +367,18 @@ def audit(
     # A pinned scope has no such escape: every name routed to it must fit.
     routed_overflow: List[Dict[str, Any]] = []
     for pinned_repo in sorted(pinned):
-        for scope in sorted(pinned[pinned_repo], key=_scope_order):
-            count = len(pinned[pinned_repo][scope])
+        by_scope: Dict[Optional[str], Set[str]] = {}
+        spelling: Dict[Optional[str], Optional[str]] = {}
+        for scope, names in pinned[pinned_repo].items():
+            spelling.setdefault(_fold(scope), scope)
+            by_scope.setdefault(_fold(scope), set()).update(names)
+        for folded in sorted(by_scope, key=_scope_order):
+            count = len(by_scope[folded])
             if count > SECRET_LIMIT:
                 routed_overflow.append(
                     {
-                        "repo": pinned_repo,
-                        "scope": _scope_label(scope),
+                        "repo": display[pinned_repo],
+                        "scope": _scope_label(spelling[folded]),
                         "declared": count,
                         "over": count - SECRET_LIMIT,
                     }

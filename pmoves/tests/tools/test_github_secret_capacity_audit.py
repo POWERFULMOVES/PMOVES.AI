@@ -466,13 +466,41 @@ def test_a_pinned_scope_declared_past_the_ceiling_is_reported(monkeypatch, tmp_p
 
 
 def test_env_narrowing_still_reads_the_pinned_scopes(monkeypatch, tmp_path):
-    """`--env X` asserts where UNROUTED names go and skips discovery. Routed
-    names carry their own scope, so that scope is read without discovery too."""
+    """`--env X` asserts where UNROUTED names go, so the main repo is read in X
+    alone with no discovery. A repo with pinned scopes lists its environments
+    (to resolve them) and reads only the pinned ones."""
     seen: List[str] = []
     _repos(monkeypatch, {MAIN: {None: [], "Prod": ["A"]}, N8N: {None: [], "Prod": ["N"]}}, record=seen)
     m = _targets_manifest(tmp_path, ["A", {"name": "N", "repo": N8N, "env": "Prod"}])
     assert aud.main(["--manifest", str(m), "--env", "Prod"]) == 0
-    assert seen == [f"repos/{MAIN}/environments/Prod/secrets", f"repos/{N8N}/environments/Prod/secrets"]
+    assert seen == [
+        f"repos/{MAIN}/environments/Prod/secrets",
+        f"repos/{N8N}/environments",
+        f"repos/{N8N}/environments/Prod/secrets",
+    ]
+
+
+def test_a_missing_pinned_environment_under_env_is_absent_not_unmeasured(monkeypatch, tmp_path, capsys):
+    """Same verdict with or without --env: it used to read the nonexistent
+    environment directly, get a 404, and exit 3."""
+    _repos(monkeypatch, {MAIN: {None: [], "Prod": ["A"]}, N8N: {None: []}})
+    m = _targets_manifest(tmp_path, ["A", {"name": "N", "repo": N8N, "env": "Prod"}])
+    assert aud.main(["--manifest", str(m), "--env", "Prod", "--json"]) == 1
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["other_repos"][0]["absent"] == ["N"]
+    assert payload["other_repos"][0]["missing_scopes"] == ["env:Prod"]
+
+
+def test_repo_and_env_match_case_insensitively(monkeypatch, tmp_path, capsys):
+    """GitHub matches both case-insensitively. A mapping spelled
+    `powerfulmoves/pmoves.ai` / `prod` is env:Prod of the main repo -- not a
+    second repo with a missing environment."""
+    _repos(monkeypatch, {MAIN: {None: ["A"], "Prod": ["N"]}})
+    m = _targets_manifest(tmp_path, ["A", {"name": "N", "repo": MAIN.lower(), "env": "prod"}])
+    rc = aud.main(["--manifest", str(m), "--json"])
+    payload = json.loads(capsys.readouterr().out)
+    assert rc == 0, payload
+    assert payload["other_repos"] == [] and payload["missing_scopes"] == []
 
 
 def test_a_pinned_environment_that_does_not_exist_is_absent_not_unmeasured(monkeypatch, tmp_path, capsys):
