@@ -481,6 +481,8 @@ def apply_manifest_v2(
     """
     import yaml
 
+    from pmoves.tools.github_secret_targets import normalize as normalize_github_target
+
     if base_dir is None:
         base_dir = manifest_path.parent.parent
 
@@ -534,9 +536,11 @@ def apply_manifest_v2(
                         tier_files[tier] = []
                     tier_files[tier].append(label)
 
-            if "github_secret" in target:
-                gh_label = target["github_secret"]
-                github_secrets[gh_label] = value
+            # A bare name or a routed {name, repo, env} mapping; this sync file
+            # is keyed by name only. Malformed mappings raise (a ValueError).
+            gh_route = normalize_github_target(target)
+            if gh_route:
+                github_secrets[gh_route["name"]] = value
 
             if "docker_secret" in target:
                 docker_name = target["docker_secret"]

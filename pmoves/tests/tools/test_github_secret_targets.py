@@ -1,0 +1,191 @@
+"""Tests for the one definition of a manifest `github_secret` target.
+
+Two forms: the bare string (unrouted -- repo and scope are the caller's choice
+at push time) and the mapping ``{name, repo, env}`` (routed -- the manifest pins
+the repo, and the environment or the repository scope). Every reader goes
+through `normalize`, so these pin the format itself; the readers' own tests
+cover what each does with it.
+
+Also covers `apply_manifest_v2`, the one reader outside `pmoves/tools/`: it used
+the target as a dict key, so a mapping target raised TypeError (unhashable)
+and took the whole funnel apply down with it.
+"""
+
+from __future__ import annotations
+
+import importlib.util
+import json
+import sys
+from pathlib import Path
+
+import pytest
+import yaml
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
+MODULE = REPO_ROOT / "pmoves" / "tools" / "github_secret_targets.py"
+
+spec = importlib.util.spec_from_file_location("github_secret_targets", MODULE)
+assert spec and spec.loader
+gst = importlib.util.module_from_spec(spec)
+sys.modules["github_secret_targets"] = gst
+spec.loader.exec_module(gst)
+
+
+# ---------------------------------------------------------------------------
+# normalize
+# ---------------------------------------------------------------------------
+
+
+def test_the_string_form_is_unrouted_on_the_default_repo():
+    assert gst.normalize({"github_secret": "N8N_API_KEY"}) == {
+        "name": "N8N_API_KEY",
+        "repo": "POWERFULMOVES/PMOVES.AI",
+        "env": None,
+        "routed": False,
+    }
+
+
+def test_a_mapping_without_env_is_routed_to_the_repository_scope():
+    got = gst.normalize(
+        {"github_secret": {"name": "N8N_API_KEY", "repo": "POWERFULMOVES/PMOVES-N8N"}}
+    )
+    assert got == {
+        "name": "N8N_API_KEY",
+        "repo": "POWERFULMOVES/PMOVES-N8N",
+        "env": None,
+        "routed": True,
+    }
+
+
+def test_a_mapping_with_env_is_routed_to_that_environment():
+    got = gst.normalize(
+        {"github_secret": {"name": "N8N_API_KEY", "repo": "POWERFULMOVES/PMOVES-N8N", "env": "Prod"}}
+    )
+    assert got["repo"] == "POWERFULMOVES/PMOVES-N8N" and got["env"] == "Prod"
+
+
+def test_a_mapping_without_repo_defaults_to_pmoves_ai():
+    got = gst.normalize({"github_secret": {"name": "A_KEY", "env": "Prod"}})
+    assert got["repo"] == "POWERFULMOVES/PMOVES.AI" and got["routed"] is True
+
+
+@pytest.mark.parametrize(
+    "target",
+    [{"file": ".env.generated", "key": "A"}, {"docker_secret": "a"}, {"github_secret": ""}, "not-a-dict"],
+)
+def test_non_github_targets_are_none(target):
+    assert gst.normalize(target) is None
+
+
+@pytest.mark.parametrize(
+    "value, needle",
+    [
+        ({"repo": "POWERFULMOVES/PMOVES-N8N"}, "name"),
+        ({"name": "A", "repo": "PMOVES-N8N"}, "OWNER/REPO"),
+        ({"name": "A", "repository": "POWERFULMOVES/X"}, "unknown key"),
+        ({"name": "A", "env": "Prod/../secrets"}, "env"),
+        ({"name": "has space"}, "name"),
+        (["A"], "name or a mapping"),
+        (42, "name or a mapping"),
+    ],
+)
+def test_malformed_targets_raise_with_a_clear_error(value, needle):
+    with pytest.raises(gst.MalformedTarget, match=needle):
+        gst.normalize({"github_secret": value})
+
+
+# ---------------------------------------------------------------------------
+# routes (the push script's emitter)
+# ---------------------------------------------------------------------------
+
+
+def _manifest(tmp_path: Path, targets_per_entry) -> Path:
+    path = tmp_path / "m.yaml"
+    path.write_text(
+        yaml.safe_dump(
+            {"secrets": [{"id": f"e{i}", "targets": t} for i, t in enumerate(targets_per_entry)]}
+        ),
+        encoding="utf-8",
+    )
+    return path
+
+
+def test_unrouted_names_take_the_callers_repo_and_env_routed_keep_their_own(tmp_path, capsys):
+    m = _manifest(
+        tmp_path,
+        [
+            [{"github_secret": "PLAIN"}],
+            [
+                {"github_secret": "N8N_API_KEY"},
+                {"github_secret": {"name": "N8N_API_KEY", "repo": "POWERFULMOVES/PMOVES-N8N", "env": "Prod"}},
+            ],
+            [{"github_secret": {"name": "REPO_ONLY", "repo": "POWERFULMOVES/PMOVES-N8N"}}],
+        ],
+    )
+    rc = gst.main(["routes", "--manifest", str(m), "--default-repo", "O/R", "--default-env", "Dev"])
+    assert rc == 0
+    assert capsys.readouterr().out.splitlines() == [
+        "PLAIN\tO/R\tDev",
+        "N8N_API_KEY\tO/R\tDev",
+        "N8N_API_KEY\tPOWERFULMOVES/PMOVES-N8N\tProd",
+        "REPO_ONLY\tPOWERFULMOVES/PMOVES-N8N\t",
+    ]
+
+
+def test_duplicate_routes_are_emitted_once(tmp_path, capsys):
+    m = _manifest(tmp_path, [[{"github_secret": "A"}], [{"github_secret": "A"}]])
+    assert gst.main(["routes", "--manifest", str(m)]) == 0
+    assert capsys.readouterr().out.splitlines() == ["A\tPOWERFULMOVES/PMOVES.AI\t"]
+
+
+def test_a_malformed_target_fails_the_emitter(tmp_path, capsys):
+    m = _manifest(tmp_path, [[{"github_secret": {"repo": "O/R"}}]])
+    assert gst.main(["routes", "--manifest", str(m)]) == 2
+    captured = capsys.readouterr()
+    assert captured.out == "" and "name" in captured.err
+
+
+def test_an_unreadable_manifest_fails_the_emitter(tmp_path):
+    assert gst.main(["routes", "--manifest", str(tmp_path / "absent.yaml")]) == 2
+
+
+# ---------------------------------------------------------------------------
+# apply_manifest_v2 -- the reader in pmoves/chit
+# ---------------------------------------------------------------------------
+
+
+def test_apply_manifest_v2_accepts_a_mapping_target(tmp_path):
+    if str(REPO_ROOT) not in sys.path:
+        sys.path.insert(0, str(REPO_ROOT))
+    from pmoves.chit import apply_manifest_v2
+
+    manifest = tmp_path / "chit" / "m.yaml"
+    manifest.parent.mkdir()
+    manifest.write_text(
+        yaml.safe_dump(
+            {
+                "entries": [
+                    {"source": {"label": "PLAIN_KEY"}, "targets": [{"github_secret": "PLAIN_KEY"}]},
+                    {
+                        "source": {"label": "N8N_API_KEY"},
+                        "targets": [
+                            {"github_secret": {"name": "N8N_API_KEY", "repo": "POWERFULMOVES/PMOVES-N8N"}}
+                        ],
+                    },
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    # Synthetic values only. POSTGRES_PASSWORD is passed so the common-credential
+    # sync takes its explicit branch: its os.environ fallback raises NameError
+    # (`os` is never imported in pmoves/chit/__init__.py) -- a separate defect,
+    # out of scope here. No env.tier-* file exists under tmp_path to write to.
+    result = apply_manifest_v2(
+        {"PLAIN_KEY": "synthetic-a", "N8N_API_KEY": "synthetic-b", "POSTGRES_PASSWORD": "synthetic-c"},
+        manifest,
+        base_dir=tmp_path,
+    )
+    assert result["github_secrets"] == 2
+    written = json.loads((tmp_path / "data" / "chit" / "github_secrets.json").read_text(encoding="utf-8"))
+    assert set(written) == {"PMOVES_PLAIN_KEY", "PMOVES_N8N_API_KEY"}
