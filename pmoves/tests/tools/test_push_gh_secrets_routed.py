@@ -215,6 +215,27 @@ def test_a_malformed_manifest_stops_before_gh(rig):
     assert _log(rig, "gh_argv.log") == ""
 
 
+def test_a_repo_less_mapping_reaches_no_repo_at_all(rig):
+    """The fork case: a mapping without `repo` must not be pushed anywhere --
+    not to PMOVES.AI, and not to the operator's --repo either."""
+    bad = rig["tmp"] / "repo_less.yaml"
+    bad.write_text(
+        yaml.safe_dump(
+            {
+                "secrets": [
+                    {"id": "plain", "targets": [{"github_secret": "PLAIN"}]},
+                    {"id": "x", "targets": [{"github_secret": {"name": "N8N_API_KEY", "env": "Prod"}}]},
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    proc = _run(rig, "--routed", "--repo", "FORK/REPO", "--manifest", bad.as_posix())
+    assert proc.returncode != 0
+    assert "repo" in proc.stderr
+    assert _log(rig, "gh_argv.log") == "", "nothing may reach gh"
+
+
 def test_routed_refuses_ghcr_bootstrap(rig):
     proc = _run(rig, "--routed", "--ghcr-bootstrap", "--dry-run", "--repo", "O/R")
     assert proc.returncode != 0

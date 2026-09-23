@@ -64,9 +64,14 @@ def test_a_mapping_with_env_is_routed_to_that_environment():
     assert got["repo"] == "POWERFULMOVES/PMOVES-N8N" and got["env"] == "Prod"
 
 
-def test_a_mapping_without_repo_defaults_to_pmoves_ai():
-    got = gst.normalize({"github_secret": {"name": "A_KEY", "env": "Prod"}})
-    assert got["repo"] == "POWERFULMOVES/PMOVES.AI" and got["routed"] is True
+def test_a_mapping_without_repo_is_malformed():
+    """Fail closed. A repo-less mapping used to default to PMOVES.AI while the
+    push ran with the operator's --repo, so a fork run overwrote canonical
+    secrets. Only the bare name may follow the caller's repo."""
+    with pytest.raises(gst.MalformedTarget, match="repo"):
+        gst.normalize({"github_secret": {"name": "A_KEY", "env": "Prod"}})
+    with pytest.raises(gst.MalformedTarget, match="repo"):
+        gst.normalize({"github_secret": {"name": "A_KEY"}})
 
 
 @pytest.mark.parametrize(
@@ -83,7 +88,7 @@ def test_non_github_targets_are_none(target):
         ({"repo": "POWERFULMOVES/PMOVES-N8N"}, "name"),
         ({"name": "A", "repo": "PMOVES-N8N"}, "OWNER/REPO"),
         ({"name": "A", "repository": "POWERFULMOVES/X"}, "unknown key"),
-        ({"name": "A", "env": "Prod/../secrets"}, "env"),
+        ({"name": "A", "repo": "O/R", "env": "Prod/../secrets"}, "env"),
         ({"name": "has space"}, "name"),
         (["A"], "name or a mapping"),
         (42, "name or a mapping"),

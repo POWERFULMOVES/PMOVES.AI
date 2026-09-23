@@ -17,9 +17,12 @@ agree on the difference:
 
   * string form -- UNROUTED. The repo and the scope are the CALLER's choice at
     push time (`push-gh-secrets.sh --repo/--env`); PMOVES.AI when unstated.
-  * mapping form -- ROUTED. The manifest pins the scope: ``env`` names an
-    environment, and its absence means the repository scope. ``repo`` defaults
-    to PMOVES.AI.
+  * mapping form -- ROUTED. The manifest pins the repo AND the scope: ``env``
+    names an environment, and its absence means the repository scope. ``repo``
+    is REQUIRED. A default would be read against the caller's ``--repo``: with
+    PMOVES.AI hard-wired, ``--routed --repo FORK/REPO`` pushed the fork's values
+    over canonical PMOVES.AI secrets under a normal-looking log line. Only the
+    bare name follows the caller's repo, so a mapping must say where it goes.
 
 A name may appear under several targets. The same value pushed to several
 repos is the design: one CHIT source, so nodes never run different secrets.
@@ -90,7 +93,12 @@ def normalize(target: Any) -> Optional[Dict[str, Any]]:
     name = value.get("name")
     if not isinstance(name, str) or not _SECRET_NAME.match(name):
         raise MalformedTarget(f"github_secret mapping needs a valid `name`, got {name!r}")
-    repo = value.get("repo", DEFAULT_REPO)
+    if "repo" not in value:
+        raise MalformedTarget(
+            f"github_secret {name}: a mapping must name its `repo` (OWNER/REPO); "
+            f"only a bare name follows the caller's --repo"
+        )
+    repo = value["repo"]
     if not isinstance(repo, str) or not _REPO.match(repo):
         raise MalformedTarget(
             f"github_secret {name}: `repo` must be OWNER/REPO, got {repo!r}"
