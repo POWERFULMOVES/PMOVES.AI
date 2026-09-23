@@ -53,7 +53,7 @@ Full Known Roads catalog lives in `.claude/PATTERNS.md § Known Roads`. When a d
 
 | Server | Transport | Purpose |
 |--------|-----------|---------|
-| `pmoves-cipher` | SSE `http://${TS_Z890}:8105/mcp/sse` | Persistent agent memory lookups + writes (fleet entry; needs `TS_Z890` resolved by the launcher) |
+| `pmoves-cipher` | SSE, fleet entry (URL as configured in `.kimi/mcp.json`; service host and port in `.claude/CATALOG.md` § Cipher Memory) | Persistent agent memory lookups + writes on the fleet's cipher node; the launcher resolves the node address |
 | `pmoves-cipher-local` | SSE `http://localhost:8105/mcp/sse` | Same cipher memory via the node's loopback publish — no tailnet dependency (mirrors `.claude/mcp.json`) |
 | `agent-zero` | HTTP `http://localhost:8080/mcp` | Agent Zero orchestrator |
 | `docker` | stdio `mcp/docker` | Container inspection via local Docker socket |
