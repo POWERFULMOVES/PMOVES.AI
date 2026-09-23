@@ -657,25 +657,40 @@ emit_provision_beacon() {
 # Flare env file is /opt/pmoves/.env.local (setup_flare_config), and the runner
 # unit is either github-runner-pmoves-<node> (hardened installer) or the
 # actions.runner.* unit svc.sh generates (fallback path).
+#
+# Checks mirror what each step INTENDS for the node type: install_docker and
+# install_runner deliberately skip pve-member / pve-member-fresh (containers and
+# runners live inside PVE guests), so those checks report "skipped (by design)"
+# there instead of pass or fail. PMOVES_WORKDIR exists so the verify harness
+# (deploy/provision/tests/test-hostinger-verify.sh) can point it at a temp dir.
 verify_installation() {
     log_section "Verifying Installation"
 
     local failed=0
+    local workdir="${PMOVES_WORKDIR:-/opt/pmoves}"
+    local pve_member=0
+    case "$NODE_TYPE" in
+        pve-member|pve-member-fresh) pve_member=1 ;;
+    esac
 
     # Check Docker
     log_info "Checking Docker installation:"
-    if command -v docker >/dev/null 2>&1; then
-        log_info "  ✓ Docker installed: $(docker --version 2>/dev/null | head -1)"
+    if [ "$pve_member" -eq 1 ]; then
+        log_info "  - Docker + Compose: skipped (by design: $NODE_TYPE runs containers inside VMs/LXCs)"
     else
-        log_error "  ✗ Docker NOT found"
-        failed=1
-    fi
+        if command -v docker >/dev/null 2>&1; then
+            log_info "  ✓ Docker installed: $(docker --version 2>/dev/null | head -1)"
+        else
+            log_error "  ✗ Docker NOT found"
+            failed=1
+        fi
 
-    if docker compose version >/dev/null 2>&1; then
-        log_info "  ✓ Docker Compose: $(docker compose version 2>/dev/null | head -1)"
-    else
-        log_error "  ✗ Docker Compose NOT found"
-        failed=1
+        if docker compose version >/dev/null 2>&1; then
+            log_info "  ✓ Docker Compose: $(docker compose version 2>/dev/null | head -1)"
+        else
+            log_error "  ✗ Docker Compose NOT found"
+            failed=1
+        fi
     fi
 
     # Check Tailscale
@@ -692,7 +707,9 @@ verify_installation() {
 
     # Check GitHub Actions runner (either unit naming scheme)
     log_info "Checking GitHub Actions runner:"
-    if systemctl list-unit-files "github-runner-pmoves-${NODE_TYPE}.service" 'actions.runner.*.service' >/dev/null 2>&1; then
+    if [ "$pve_member" -eq 1 ]; then
+        log_info "  - Actions runner: skipped (by design: runners live inside PVE VMs)"
+    elif systemctl list-unit-files "github-runner-pmoves-${NODE_TYPE}.service" 'actions.runner.*.service' >/dev/null 2>&1; then
         if systemctl is-active --quiet "github-runner-pmoves-${NODE_TYPE}.service" 2>/dev/null \
            || systemctl is-active --quiet 'actions.runner.*.service' 2>/dev/null; then
             log_info "  ✓ Actions runner service running"
@@ -704,17 +721,17 @@ verify_installation() {
     fi
 
     # Check /opt/pmoves work directory (a PMOVES.AI clone — see setup_workdir)
-    log_info "Checking /opt/pmoves work directory:"
-    if [ -d /opt/pmoves/.git ]; then
-        log_info "  ✓ /opt/pmoves is a PMOVES.AI checkout"
+    log_info "Checking ${workdir} work directory:"
+    if [ -d "${workdir}/.git" ]; then
+        log_info "  ✓ ${workdir} is a PMOVES.AI checkout"
     else
-        log_error "  ✗ /opt/pmoves checkout NOT found"
+        log_error "  ✗ ${workdir} checkout NOT found"
         failed=1
     fi
 
     # Check PMOVES.Flare config (written by setup_flare_config)
     log_info "Checking PMOVES.Flare config:"
-    local env_file="/opt/pmoves/.env.local"
+    local env_file="${workdir}/.env.local"
     if [ -f "$env_file" ]; then
         if grep -q "^MODEL_NAMESPACE=pmoves" "$env_file" 2>/dev/null; then
             log_info "  ✓ MODEL_NAMESPACE=pmoves configured"
@@ -836,8 +853,12 @@ main() {
     install_pve_member_prep
     setup_flare_config
     # Verify BEFORE the beacon: announcing a provision that then fails its own
-    # verification would publish a false green.
-    verify_installation
+    # verification would publish a false green. Explicit exit rather than
+    # relying on set -e alone, so the gate survives a future `set +e`.
+    if ! verify_installation; then
+        log_error "Verification failed; NOT emitting the provision beacon."
+        exit 1
+    fi
     emit_provision_beacon
     show_summary
 }
