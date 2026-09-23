@@ -313,7 +313,45 @@ def test_positive_control_audit_assertion_catches_a_value_in_the_row(tmp_path):
 
 # ---------------------------------------------------------- make targets ---
 
-needs_make = pytest.mark.skipif(shutil.which("make") is None, reason="make not installed")
+def _is_gnu_make() -> bool:
+    if shutil.which("make") is None:
+        return False
+    out = subprocess.run(["make", "--version"], capture_output=True, text=True).stdout
+    return out.startswith("GNU Make")
+
+
+needs_make = pytest.mark.skipif(not _is_gnu_make(), reason="GNU make not installed")
+
+
+def test_unexport_key_precedes_every_include_and_shell_call():
+    """P1 (#3164 review): on make >= 4.4, `$(shell ...)` also receives exported
+    variables, so any parse-time $(shell) or include read BEFORE `unexport
+    KEY` can execute a command-line KEY payload. CI runs make 4.3 and cannot
+    observe that, so the ordering is asserted structurally instead."""
+    lines = (PMOVES / "Makefile").read_text().splitlines()
+    code = [(i, ln) for i, ln in enumerate(lines) if not ln.lstrip().startswith("#")]
+    unexport = [i for i, ln in code if ln.strip() == "unexport KEY"]
+    assert len(unexport) == 1, f"expected exactly one `unexport KEY`, found {len(unexport)}"
+    risky = [i for i, ln in code
+             if ln.lstrip().startswith(("include ", "-include ", "sinclude "))
+             or "$(shell" in ln]
+    assert risky, "structural check found no include/$(shell) lines -- parser is broken"
+    assert unexport[0] < min(risky), (
+        f"`unexport KEY` at line {unexport[0] + 1} comes after line {min(risky) + 1}: "
+        f"{lines[min(risky)].strip()!r}")
+
+
+def test_positive_control_structural_check_catches_an_end_of_file_unexport(tmp_path):
+    """The ordering assertion must fail on the layout the review rejected."""
+    src = (PMOVES / "Makefile").read_text().replace("\nunexport KEY\n", "\n", 1)
+    variant = src + "\nunexport KEY\n"
+    lines = variant.splitlines()
+    code = [(i, ln) for i, ln in enumerate(lines) if not ln.lstrip().startswith("#")]
+    unexport = [i for i, ln in code if ln.strip() == "unexport KEY"]
+    risky = [i for i, ln in code
+             if ln.lstrip().startswith(("include ", "-include ", "sinclude "))
+             or "$(shell" in ln]
+    assert unexport and risky and unexport[0] > min(risky)
 
 
 def _make(tmp_path: Path, target: str, key: str, stdin: str = "") -> subprocess.CompletedProcess:
