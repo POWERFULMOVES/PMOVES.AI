@@ -53,6 +53,7 @@ require_operator_user() {
     exit 1
   fi
   OPERATOR_USER="${SUDO_USER}"
+  OPERATOR_GROUP="$(id -gn "${OPERATOR_USER}")"
 }
 
 # ------------------------------------------------------------------
@@ -324,17 +325,46 @@ create_pmoves_user() {
 }
 
 # ------------------------------------------------------------------
-# Create /opt/pmoves directory structure
+# /opt/pmoves work directory -- ONE layout across the provisioners
 # ------------------------------------------------------------------
-create_pmoves_structure() {
-  log_section "Creating /opt/pmoves structure"
+# /opt/pmoves is a PMOVES.AI git checkout owned by the operator, the same
+# layout hostinger-kvm-setup.sh (setup_workdir) creates and that
+# rdna4-gpu-install.sh expects (/opt/pmoves/pmoves/tools/sign_trail.py).
+# /opt/pmoves/profile.yaml sits at the checkout root: that path is the
+# established hardware-profile contract (deploy/provision/z890/common/*,
+# pmoves/Makefile).
+#
+# Ownership is changed ONLY on the directory this function creates, never
+# recursively and never on re-runs: an existing checkout is left exactly as
+# found. A non-empty directory that is not a checkout is reported, not
+# modified (git clone into it would fail anyway).
+PMOVES_DIR="${PMOVES_DIR:-/opt/pmoves}"
+PMOVES_REPO_URL="${PMOVES_REPO_URL:-https://github.com/POWERFULMOVES/PMOVES.AI.git}"
 
-  mkdir -p /opt/pmoves/{bin,lib,etc,logs,data}
-  chown -R pmoves:pmoves /opt/pmoves
+setup_pmoves_workdir() {
+  log_section "Setting up ${PMOVES_DIR} (PMOVES.AI checkout owned by ${OPERATOR_USER})"
 
-  # Create profile.yaml for DGX Spark
-  if [[ ! -f /opt/pmoves/profile.yaml ]]; then
-    cat >/opt/pmoves/profile.yaml <<'EOF'
+  if [[ -d "${PMOVES_DIR}/.git" ]]; then
+    log "${PMOVES_DIR} is already a git checkout; leaving contents and ownership as found"
+  elif [[ -d "${PMOVES_DIR}" ]] && [[ -n "$(ls -A "${PMOVES_DIR}" 2>/dev/null)" ]]; then
+    log "WARN: ${PMOVES_DIR} exists, is not empty and is not a git checkout; not touching it"
+    return 0
+  else
+    if [[ ! -d "${PMOVES_DIR}" ]]; then
+      install -d -m 0755 -o "${OPERATOR_USER}" -g "${OPERATOR_GROUP}" "${PMOVES_DIR}"
+    elif [[ "$(stat -c %U "${PMOVES_DIR}")" != "${OPERATOR_USER}" ]]; then
+      # Existing EMPTY directory with the wrong owner: fix that one inode only.
+      chown "${OPERATOR_USER}:${OPERATOR_GROUP}" "${PMOVES_DIR}"
+    fi
+    log "Cloning PMOVES.AI into ${PMOVES_DIR} as ${OPERATOR_USER}"
+    sudo -u "${OPERATOR_USER}" -H git clone --depth 1 "${PMOVES_REPO_URL}" "${PMOVES_DIR}"
+  fi
+
+  # Hardware profile, written once (never overwritten), owned by the operator.
+  if [[ ! -f "${PMOVES_DIR}/profile.yaml" ]]; then
+    local profile_tmp
+    profile_tmp="$(mktemp)"
+    cat >"${profile_tmp}" <<'EOF'
 node_id: pmoves-gb10-spark
 node_name: DGX Spark (Grace Blackwell)
 distro: "ubuntu"
@@ -349,10 +379,10 @@ hardware:
   compute_capability: "11.0"
   cuda_version: "13.0"
 EOF
-    chown pmoves:pmoves /opt/pmoves/profile.yaml
+    install -m 0644 -o "${OPERATOR_USER}" -g "${OPERATOR_GROUP}" "${profile_tmp}" "${PMOVES_DIR}/profile.yaml"
+    rm -f -- "${profile_tmp}"
+    log "Wrote ${PMOVES_DIR}/profile.yaml"
   fi
-
-  log "/opt/pmoves structure created"
 }
 
 # ------------------------------------------------------------------
@@ -412,12 +442,17 @@ verify_installation() {
     fi
   done
 
-  log "Checking /opt/pmoves structure:"
-  if [[ -d /opt/pmoves ]]; then
-    log "  ✓ /opt/pmoves exists"
-    [[ -f /opt/pmoves/profile.yaml ]] && log "  ✓ profile.yaml exists"
+  log "Checking ${PMOVES_DIR} (PMOVES.AI checkout):"
+  if [[ -d "${PMOVES_DIR}/.git" ]]; then
+    log "  ✓ ${PMOVES_DIR} is a git checkout"
   else
-    log "  ✗ /opt/pmoves NOT found"
+    log "  ✗ ${PMOVES_DIR} is NOT a git checkout"
+    failed=1
+  fi
+  if [[ -f "${PMOVES_DIR}/profile.yaml" ]]; then
+    log "  ✓ ${PMOVES_DIR}/profile.yaml exists"
+  else
+    log "  ✗ ${PMOVES_DIR}/profile.yaml NOT found"
     failed=1
   fi
 
@@ -445,15 +480,18 @@ print_summary() {
   log "  ✓ uv (Python package manager)"
   log "  ✓ gh CLI"
   log "  ✓ Ollama (ARM64 with CUDA-on-ARM)"
-  log "  ✓ pmoves user + /opt/pmoves structure"
+  log "  ✓ pmoves service user; ${PMOVES_DIR} checkout (owned by ${OPERATOR_USER}) + profile.yaml"
   log "==========================================="
   log ""
   log "Next steps:"
   log "  1. Log out and back in for docker group to take effect"
   log "  2. Test GPU access: docker run --rm --gpus all nvidia/cuda:13.0.0-base-ubuntu24.04 nvidia-smi"
-  log "  3. Clone PMOVES.AI: git clone https://github.com/POWERFULMOVES/PMOVES.AI /opt/pmoves/PMOVES.AI"
-  log "  4. Run secrets funnel: cd /opt/pmoves/PMOVES.AI && make -C pmoves secrets-funnel"
-  log "  5. Bringup venv (glances etc., NOT apt): make -C pmoves venv-bringup"
+  log "  3. PMOVES.AI is checked out at ${PMOVES_DIR} (owned by ${OPERATOR_USER}); as that user:"
+  log "     make -C ${PMOVES_DIR}/pmoves secrets-funnel"
+  log "  4. Bringup venv (glances etc., NOT apt), as ${OPERATOR_USER}:"
+  log "     make -C ${PMOVES_DIR}/pmoves venv-bringup"
+  log "     (b850-bootstrap runs this step itself; here it stays manual until the"
+  log "      full service requirements are validated on arm64)"
   log ""
 }
 
@@ -471,7 +509,7 @@ main() {
   install_gh_cli
   install_ollama
   create_pmoves_user
-  create_pmoves_structure
+  setup_pmoves_workdir
   verify_installation
   print_summary
 }
