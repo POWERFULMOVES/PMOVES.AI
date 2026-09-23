@@ -254,3 +254,18 @@ def test_without_routed_the_env_file_is_pushed_as_before(rig):
         "DRY-RUN: would set REPO_ONLY in O/R (env Dev)",
     ]
     _assert_no_values(proc.stdout, proc.stderr)
+
+
+@pytest.mark.parametrize("mode", [["--routed"], ["--all"]], ids=["routed", "default"])
+def test_a_crlf_env_file_does_not_push_a_carriage_return(rig, mode):
+    """An env file saved with CRLF endings used to push `value<CR>`: the key
+    parsed clean, the value kept the carriage return, and GitHub stored it."""
+    rig["env_file"].write_bytes(
+        b"".join(f"{k}={v}\r\n".encode("utf-8") for k, v in VALUES.items())
+    )
+    proc = _run(rig, *mode, "--repo", "O/R", "--manifest", rig["manifest"].as_posix())
+    assert proc.returncode == 0, proc.stderr
+    pushed = (rig["tmp"] / "gh_stdin.log").read_bytes()
+    assert pushed, "nothing was pushed"
+    assert b"\r" not in pushed, pushed
+    assert set(pushed.decode("utf-8").splitlines()) == set(VALUES.values())

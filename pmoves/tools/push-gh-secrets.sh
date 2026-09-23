@@ -136,6 +136,7 @@ push_routed() {
     [[ "$line" != *"="* ]] && continue
     key=${line%%=*}
     val=${line#*=}
+    val=${val%$'\r'}  # CRLF env file: never push the carriage return
     key=${key//[$'\t ']/}
     [[ -z "$key" ]] && continue
     [[ -n "${values[$key]+set}" ]] || values[$key]="$val"
@@ -207,7 +208,8 @@ lookup_value() {
   local line
   line=$(grep -E "^${key}=" "$ENV_FILE" | tail -n 1 || true)
   if [[ -n "$line" ]]; then
-    printf '%s' "${line#*=}"
+    line=${line#*=}
+    printf '%s' "${line%$'\r'}"
     return 0
   fi
   return 1
@@ -236,6 +238,7 @@ while IFS= read -r line; do
   fi
   key=${line%%=*}
   val=${line#*=}
+  val=${val%$'\r'}  # CRLF env file: never push the carriage return
   key=${key//[$'\t ']/}
   [[ -z "$key" ]] && continue
   if ! should_include "$key"; then
