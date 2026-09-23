@@ -77,7 +77,7 @@ jobs:
             PMOVES-ClawRouter
             PMOVES-AgentGym
             PMOVES-Jellyfin
-            PMOVES-n8n
+            PMOVES-N8N
             PMOVES.YT
             PMOVES-crush
 
@@ -135,6 +135,12 @@ jobs:
           # leftover sync/* branches from earlier runs).
           SYNC_BRANCH="sync/upstream-$(date +%Y-%m-%d)-${GITHUB_RUN_ID}"
 
+          # n8n: the n8n-io/n8n entry syncs PMOVES-N8N, the FULL source fork
+          # (submodule path PMOVES-N8N-Auto; repo renamed from PMOVES-N8N-Auto).
+          # It used to read PMOVES-n8n, which GitHub resolves case-insensitively
+          # to the same repo, so it always synced the fork, but it read as the
+          # PMOVES-n8n submodule PATH, which is PMOVES-n8n-FlooS (first-party
+          # workflows, no upstream). FlooS is deliberately absent from FORKS.
           # Fork list: upstream_owner/upstream_repo|fork_name|fork_branch_override
           FORKS="
           openclaw/openclaw|PMOVES-ClawZ|
@@ -162,7 +168,7 @@ jobs:
           BlockRunAI/ClawRouter|PMOVES-ClawRouter|
           WooooDyy/AgentGym|PMOVES-AgentGym|
           jellyfin/jellyfin|PMOVES-Jellyfin|PMOVES.AI-Edition-Hardened
-          n8n-io/n8n|PMOVES-n8n|PMOVES.AI-Edition-Hardened
+          n8n-io/n8n|PMOVES-N8N|PMOVES.AI-Edition-Hardened
           yt-dlp/yt-dlp|PMOVES.YT|PMOVES.AI-Edition-Hardened
           charmbracelet/crush|PMOVES-crush|
           "

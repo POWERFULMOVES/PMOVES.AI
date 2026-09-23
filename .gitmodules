@@ -462,7 +462,7 @@
 	shallow = true
 [submodule "PMOVES-N8N-Auto"]
 	path = PMOVES-N8N-Auto
-	url = https://github.com/POWERFULMOVES/PMOVES-N8N-Auto.git
+	url = https://github.com/POWERFULMOVES/PMOVES-N8N.git
 	branch = PMOVES.AI-Edition-Hardened
 	shallow = true
 [submodule "PMOVES-A0-codex-docker"]
