@@ -66,7 +66,7 @@ After `make -C pmoves up-cipher`: image rebuilt, **`streamable` = 1**, `/health`
 ### Reconciliation: grounded against source, 2026-09-09
 
 **Provenance rule applied here:** every claim below cites the file and line it
-came from, at submodule pin `975e02e6` (later `c88b009a2` — #3103 re-pinned, then `95a866b6` — #3152;
+came from, at submodule pin `975e02e6` (later `c88b009a2` — #3103 re-pinned, then `09aee936` — #3152;
 `auth.ts` is unchanged between the two, so every line number below still holds)
 or superproject `origin/main`. An earlier
 revision of this section proposed three remedies and cited nothing; it was
@@ -212,7 +212,7 @@ still had to be fixed by hand.
 | 2 | `e24f1323` | Re-verified against the gitlink `main` actually carried. Correct — until #19 merged. |
 | 3 | `975e02e6` | #19 merged (`Accept-Profile: pmoves_core`) and the gitlink promoted. The same three inserted lines moved the same four citations again: `e24f1323:79` → `975e02e6:82`, and `e24f1323:103` → `975e02e6:106`. The prefix fork at `:44`/`:46`/`:49`/`:54`/`:60` sits above the insertion and never moved. |
 | 4 | `c88b009a2` | #3103 bumped the pin for cipher build fix #21 + installer #20. Neither commit touches `auth.ts`; all nine citations re-verified at the same lines and only the pin constant moved. The quiet bump this test exists to keep quiet. |
-| 5 | `95a866b6` | #3152 pinned the head of fork PR #27 (per-request MCP identity, `CIPHER_MCP_ENFORCE`). It changes `mcp-sse.ts`/`rest-server.ts`, not `auth.ts`; all nine citations unchanged. The pin is an **unmerged** fork PR head — if #27 is squash-merged, re-pin to the merge commit and move `PIN` with it. |
+| 5 | `09aee936` | #3152 pinned the head of fork PR #27 (per-request MCP identity, `CIPHER_MCP_ENFORCE`). It changes `mcp-sse.ts`/`rest-server.ts`, not `auth.ts`; all nine citations unchanged. The pin is an **unmerged** fork PR head — if #27 is squash-merged, re-pin to the merge commit and move `PIN` with it. |
 
 Re-numbering by hand on each pin bump is not a fix; it is the same manual step
 failing again on a schedule. `pmoves/tests/tools/test_auth_citations_resolve.py`
