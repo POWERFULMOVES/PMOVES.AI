@@ -46,6 +46,10 @@ _GH_STUB = """#!/bin/sh
 # Record argv (one call per line) and stdin (the value) separately, so a test
 # can prove the value arrived on stdin and nowhere else.
 printf '%s\\n' "$*" >> "$GH_ARGV_LOG"
+if [ -n "${GH_FAIL_NAME:-}" ] && [ "$3" = "$GH_FAIL_NAME" ]; then
+  cat > /dev/null
+  exit 1
+fi
 if [ "$1" = "secret" ]; then
   cat >> "$GH_STDIN_LOG"
   printf '\\n' >> "$GH_STDIN_LOG"
@@ -284,3 +288,27 @@ def test_routed_finds_python_through_pm_python(rig):
     assert proc.returncode != 0
     assert "PMOVES_PYTHON" in proc.stderr
     assert _log(rig, "gh_argv.log") == ""
+
+
+def test_routed_refuses_all(rig):
+    proc = _run(rig, "--routed", "--all", "--repo", "O/R", "--manifest", rig["manifest"].as_posix())
+    assert proc.returncode != 0
+    assert "--all" in proc.stderr
+    assert _log(rig, "gh_argv.log") == ""
+
+
+def test_a_gh_failure_mid_run_reports_what_was_and_was_not_pushed(rig):
+    """Stop at the first failure, and say -- by name only -- which routes
+    landed and which did not."""
+    rig["env"]["GH_FAIL_NAME"] = "N8N_API_KEY"
+    proc = _run(rig, "--routed", "--repo", "O/R", "--manifest", rig["manifest"].as_posix())
+    assert proc.returncode != 0
+    err = proc.stderr
+    pushed, _, not_pushed = err.partition("Not pushed")
+    assert "Pushed before the failure (1):" in pushed and "PLAIN -> O/R" in pushed
+    assert "N8N_API_KEY -> O/R" in not_pushed
+    assert f"N8N_API_KEY -> {N8N} (env Prod)" in not_pushed
+    assert f"REPO_ONLY -> {N8N}" in not_pushed
+    # Only PLAIN and the failed call reached gh; nothing after the failure.
+    assert len(_log(rig, "gh_argv.log").splitlines()) == 2
+    _assert_no_values(proc.stdout, err)

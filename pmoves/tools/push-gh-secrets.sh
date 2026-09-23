@@ -74,6 +74,12 @@ if [[ $ROUTED -eq 1 && $GHCR_BOOTSTRAP -eq 1 ]]; then
   echo "--routed and --ghcr-bootstrap are separate runs; pass one." >&2
   exit 1
 fi
+if [[ $ROUTED -eq 1 && $PUSH_ALL -eq 1 ]]; then
+  # --all means "every key in the env file, ignoring the manifest"; --routed
+  # pushes exactly the manifest's routes. Refuse rather than guess which.
+  echo "--routed pushes the manifest's routes; --all (ignore the manifest) contradicts it." >&2
+  exit 1
+fi
 
 if [[ ! -f "$ENV_FILE" ]]; then
   echo "Env file not found: $ENV_FILE" >&2
@@ -143,9 +149,12 @@ push_routed() {
     [[ -n "${values[$key]+set}" ]] || values[$key]="$val"
   done < "$ENV_FILE"
 
-  local name repo env wanted k
+  local name repo env wanted k i j n r e
   local env_args=()
-  while IFS=$'\t' read -r name repo env; do
+  local -a lines=() pushed=()
+  mapfile -t lines <<< "$routes"
+  for ((i = 0; i < ${#lines[@]}; i++)); do
+    IFS=$'\t' read -r name repo env <<< "${lines[$i]}"
     [[ -z "$name" ]] && continue
     if [[ -n "$ONLY_KEYS" ]]; then
       wanted=0
@@ -163,10 +172,24 @@ push_routed() {
     if [[ $DRY_RUN -eq 1 ]]; then
       echo "DRY-RUN: would set $name in $repo${env:+ (env $env)}"
     else
-      printf '%s' "${values[$name]}" | gh secret set "$name" --repo "$repo" --app actions "${env_args[@]}" >/dev/null
+      if ! printf '%s' "${values[$name]}" | gh secret set "$name" --repo "$repo" --app actions "${env_args[@]}" >/dev/null; then
+        # Names only. A partial run must say exactly where it stopped, or the
+        # operator cannot tell which repos now hold the new value.
+        echo "gh failed setting $name in $repo${env:+ (env $env)}; stopping." >&2
+        echo "Pushed before the failure (${#pushed[@]}):" >&2
+        for r in "${pushed[@]}"; do echo "  $r" >&2; done
+        echo "Not pushed (the failed route and every route after it):" >&2
+        for ((j = i; j < ${#lines[@]}; j++)); do
+          IFS=$'\t' read -r n r e <<< "${lines[$j]}"
+          [[ -z "$n" ]] && continue
+          echo "  $n -> $r${e:+ (env $e)}" >&2
+        done
+        exit 1
+      fi
+      pushed+=("$name -> $repo${env:+ (env $env)}")
       echo "Set $name in $repo${env:+ (env $env)}"
     fi
-  done <<< "$routes"
+  done
 }
 
 if [[ $ROUTED -eq 1 ]]; then
