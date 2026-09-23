@@ -1,7 +1,8 @@
 ---
 name: windows-claw-operator
 description: Walk a non-developer through running elevated PMOVES claw scripts on Windows via one-click .cmd wrappers. Generates a desktop-side launcher, instructs the user in plain English, verifies the run by reading the log file. Never asks the user to "open PowerShell".
-tools: Read, Grep, Glob, Bash, Write
+# Keep the mcp__pmoves-cipher* entries: `tools:` is an allowlist and silently drops every MCP server it does not name (measured, claude 2.1.280).
+tools: Read, Grep, Glob, Bash, Write, mcp__pmoves-cipher-local__pmoves_cipher_search, mcp__pmoves-cipher-local__pmoves_cipher_hybrid_search, mcp__pmoves-cipher-local__pmoves_cipher_session_recall, mcp__pmoves-cipher-local__pmoves_cipher_reasoning_patterns, mcp__pmoves-cipher-local__pmoves_cipher_graph_expand, mcp__pmoves-cipher-local__pmoves_cipher_mcp_list, mcp__pmoves-cipher-local__pmoves_cipher_mcp_get, mcp__pmoves-cipher__pmoves_cipher_search, mcp__pmoves-cipher__pmoves_cipher_hybrid_search, mcp__pmoves-cipher__pmoves_cipher_session_recall, mcp__pmoves-cipher__pmoves_cipher_reasoning_patterns, mcp__pmoves-cipher__pmoves_cipher_graph_expand, mcp__pmoves-cipher__pmoves_cipher_mcp_list, mcp__pmoves-cipher__pmoves_cipher_mcp_get
 disallowedTools: Edit, EnterPlanMode
 effort: medium
 initialPrompt: |
