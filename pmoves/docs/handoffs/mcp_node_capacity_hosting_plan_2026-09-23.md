@@ -14,7 +14,8 @@
 2. **Expose through the PMOVES-Tailscale fork + ScaleTail sidecars**, not by widening `*_BIND` to `0.0.0.0`.
 3. **One auth path per server.** An operator should never authorize the same account twice.
 4. **No change may break MCP loading for any other harness**: claude, crush, kilocode, kimi, opencode, hermes, agent-zero.
-5. **Nodes don't run different secrets.** Every bundle comes from the same repo-level GitHub secrets. B850 is the *default* producer, not the only one.
+5. **Cipher is for ALL AGInTZ.** Shared memory is not any one agent's or node's service. Every harness and every drop-in model must reach it. It is in scope here and first in line.
+6. **Nodes don't run different secrets.** Every bundle comes from the same repo-level GitHub secrets. B850 is the *default* producer, not the only one.
 
 ## 1. Measured state (2026-09-23, fresh main `caf03801f`)
 
@@ -29,6 +30,7 @@
 | F7 | ScaleTail is a fork entry only (`fork_registry.json:503`). The "RustDesk ScaleTail sidecar" is `network_mode: host` with no tailscale container, so **no ScaleTail sidecar exists in the fleet yet**. | `deploy/docker-stacks/rustdesk-selfhosted.yml:24,45` |
 | F8 | Nothing selects which services a node runs from its capacity. `compose_overrides` in profiles is only echoed. | `pmoves/tools/profile_loader.py`; `mini_cli.py:1086` |
 | F9 | The generator takes one global `--endpoint local\|fleet`. Only Spark's crush configurator does "prefer local if hosted". | `mcp_config_generator.py:375,393,457`; `crush_configurator.py:655-680` |
+| F0 | **Five of seven harnesses have no working Cipher path.** `pmoves-cipher` (fleet, `${TS_Z890}:8105`, no `clients` = all) is unreachable from every node but Z890, because Cipher binds loopback. `pmoves-cipher-local` (`localhost:8105`) is limited to `clients: [hermes, claude]`, so crush, kilocode, kimi, opencode and agent-zero get only the dead fleet entry. | `mcp_inventory.json` (cipher entries); `mcp_config_generator.py:67-70` (`clients: None` = all) |
 | F10 | `AIRTABLE_API_KEY` / `TAVILY_API_KEY` are absent from the prod bundle too. `TENSORZERO_CLICKHOUSE_USER` masks as `CLIC...HERE`, which looks like a template placeholder. | `secrets-funnel-from-prod` + `docker-mcp-secrets-hydrate` output |
 
 ## 2. Target shape
@@ -46,6 +48,12 @@
 
 ## 3. Phases (each one is its own PR or approval)
 
+### Phase A0 — Cipher for every AGInTZ (first)
+- **A0.1** `pmoves-cipher-local`: widen `clients` to every harness (crush, kilocode, kimi, opencode, agent-zero added to hermes + claude). Each harness then reaches Cipher on any node that hosts it. This only adds entries, so no harness loses anything.
+- **A0.2** Identity: each harness passes its own `agentId` with a per-agent token (`make -C pmoves cipher-identity`), not the shared bootstrap token. This needs the per-request auth fix in the Cipher fork (`fix/cipher-mcp-per-request-auth`, advisory by default) and the launcher token binding (PR 3143). Those two PRs are the *code* that other lanes are editing; this plan depends on them and does not duplicate them. Coordinate by register NOTE; the *availability* goal belongs to every agent.
+- **A0.3** Cross-node: Cipher is the **ScaleTail pilot** (Phase C) alongside flute, so nodes that don't host Cipher reach it by tailnet name instead of the dead `${TS_Z890}` URL. `.claude/context/cipher.md:60-64`'s `CIPHER_BIND` route stays the fallback, because it leaves the bearer as the only control.
+- **A0.4** Drop-in models: one documented Known Road from "I am a new harness or model" to working store + search: which roster entry connects, which agentId to pass, how to get a token, and how to tell a roster failure from a service failure.
+
 ### Phase A — stop the damage (small PRs, zero cross-harness risk)
 - **A1** `mcp-toolkit-4090.mk`: port 8089 → 8090 and set `PMOVES_MCP_PROFILE_ID=pmoves_4090_web`. 4090-only file. *Check first:* nothing else consumes 8089 (`port-audit`).
 - **A2** Gateway token (F3): the inventory sends `${MCP_GATEWAY_AUTH_TOKEN}`; the listener **reads** the funnel value and fails closed when it is unset, instead of minting its own. The token gets a manifest entry (operator: the manifest is guard-protected). Affects hermes + kilocode only; both currently send the wrong token, so this can only fix them.
@@ -56,7 +64,7 @@
 - Document "which client owns which OAuth" as a table in `MCP_TOOLKIT.md`, and have `mcp-bootstrap-check` fail on any account wired in two places.
 
 ### Phase C — ScaleTail pilot (one service, per the posture doc step 3)
-- **Pilot service: flute-gateway**. It's small, has an existing `X-API-Key`, and is the server the founder asked for.
+- **Pilot services: Cipher and flute-gateway.** Cipher because every agent needs it (A0.3); flute because it's small, has an existing `X-API-Key`, and the founder asked for it.
 - A compose overlay `docker-compose.ts-sidecar.flute.yml`: `ts-flute` sidecar with an ephemeral tagged auth key from the funnel (`TS_AUTHKEY_FLUTE`), `--advertise-tags=tag:pmoves,tag:mcp`, and flute on `network_mode: service:ts-flute`.
 - ACL (`configs/tailscale-acl-policy.json`): add `tag:mcp` to tagOwners, a grant `tag:pmoves → tag:mcp:8055`, and a test case, all applied by `deploy-tailscale-acl.yml`, never by hand.
 - Prerequisite: fork-sync PMOVES-Tailscale (about 5 months behind per `TAILSCALE_FLEET_POSTURE.md:24-26`).
@@ -75,7 +83,7 @@
 - `make -C pmoves mcp-bootstrap-check` for **all** clients, not just `claude`.
 - Diff the rendered config per client before and after. Any server that disappears from a harness is a stop.
 - `audit-layers-static` (the gates a change trips, not a hand-picked subset).
-- Cipher is **out of scope**: B850-CLAUDE owns `fix/cipher-mcp-per-request-auth` and `fix/cipher-agent-token-handoff`. Phase D must not change cipher entries until those land; coordinate by register NOTE.
+- Cipher availability is **in scope for every harness** (Phase A0). The files being edited in open PRs (the Cipher fork's `mcp-sse.ts`/`rest-server.ts`, the launchers in PR 3143) are sequenced after those PRs rather than edited in parallel, and coordinated by register NOTE.
 
 ## 5. Operator actions (agents can't do these)
 - Add `AIRTABLE_API_KEY`, `TAVILY_API_KEY` and `MCP_GATEWAY_AUTH_TOKEN` to the secrets manifest and GitHub secrets, and check `TENSORZERO_CLICKHOUSE_USER`.
