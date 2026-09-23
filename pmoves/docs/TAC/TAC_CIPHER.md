@@ -66,7 +66,7 @@ After `make -C pmoves up-cipher`: image rebuilt, **`streamable` = 1**, `/health`
 ### Reconciliation: grounded against source, 2026-09-09
 
 **Provenance rule applied here:** every claim below cites the file and line it
-came from, at submodule pin `975e02e6` (later `c88b009a2` — #3103 re-pinned, then `7ac00b1b` — #3152;
+came from, at submodule pin `975e02e6` (later `c88b009a2` — #3103 re-pinned, then `750878ab` — #3152;
 `auth.ts` is unchanged across all of them, so every line number below still holds)
 or superproject `origin/main`. An earlier
 revision of this section proposed three remedies and cited nothing; it was
@@ -212,7 +212,7 @@ still had to be fixed by hand.
 | 2 | `e24f1323` | Re-verified against the gitlink `main` actually carried. Correct — until #19 merged. |
 | 3 | `975e02e6` | #19 merged (`Accept-Profile: pmoves_core`) and the gitlink promoted. The same three inserted lines moved the same four citations again: `e24f1323:79` → `975e02e6:82`, and `e24f1323:103` → `975e02e6:106`. The prefix fork at `:44`/`:46`/`:49`/`:54`/`:60` sits above the insertion and never moved. |
 | 4 | `c88b009a2` | #3103 bumped the pin for cipher build fix #21 + installer #20. Neither commit touches `auth.ts`; all nine citations re-verified at the same lines and only the pin constant moved. The quiet bump this test exists to keep quiet. |
-| 5 | `7ac00b1b` | #3152 pinned the head of fork PR #27 (per-request MCP identity, `CIPHER_MCP_ENFORCE`). It changes `mcp-sse.ts`/`rest-server.ts`, not `auth.ts`; all nine citations unchanged. The pin is an **unmerged** fork PR head — if #27 is squash-merged, re-pin to the merge commit and move `PIN` with it. |
+| 5 | `750878ab` | #3152 pinned the head of fork PR #27 (per-request MCP identity, `CIPHER_MCP_ENFORCE`). It changes `mcp-sse.ts`/`rest-server.ts`, not `auth.ts`; all nine citations unchanged. The pin is an **unmerged** fork PR head — if #27 is squash-merged, re-pin to the merge commit and move `PIN` with it. |
 
 Re-numbering by hand on each pin bump is not a fix; it is the same manual step
 failing again on a schedule. `pmoves/tests/tools/test_auth_citations_resolve.py`
@@ -264,7 +264,7 @@ Two findings fall out of the card gate and are recorded rather than fixed:
 **Known Road for connecting any agent or drop-in model:** `.claude/PATTERNS.md`
 § "Known Road — Cipher memory for any agent or drop-in model".
 
-**Defect closed (#3152, fork PR POWERFULMOVES/Pmoves-cipher#27, pin `7ac00b1b`).**
+**Defect closed (#3152, fork PR POWERFULMOVES/Pmoves-cipher#27, pin `750878ab`).**
 `rest-server.ts:58` mounted `createMcpSseRouter(memoryManager, nats)` with no
 auth argument, so the router's identity defaulted to `{}` (`mcp-sse.ts:48` @
 `c88b009a`). `/mcp/sse` passed that construction-time `{}` to every session, and
@@ -331,7 +331,7 @@ written to stderr of `cipher-api`, and every line is one JSON object:
 | `pmoves-mcp-auth: WARN unrecognised CIPHER_MCP_ENFORCE=…` | the flag value is in neither list; mode stays advisory |
 | `pmoves-mcp-auth: ADVISORY (CIPHER_MCP_ENFORCE off, accepted) {kind, tool, scope, tokenAgent, declaredAgent, reason, outcome, suppressedSinceLast}` | a tolerated violation: declared-name mismatch, missing scope, or a `/messages` poster problem |
 | `pmoves-mcp-auth: REFUSED {…, outcome:"refused"}` | every refusal. That covers an omitted `agentId` or `*` in any mode, any violation under enforce, and a refused `/messages` POST. It is logged before the error is returned. |
-| `pmoves-mcp-auth: ADVISORY-SUMMARY {cause, suppressed…}` | `interval`: suppressed repeats of one key, flushed by an unref()'d timer once the interval elapses. `cap`: pending counts flushed before the 1000-key map clears. `budget`: lines dropped over the per-interval budget. |
+| `pmoves-mcp-auth: ADVISORY-SUMMARY {cause, suppressed…}` | `interval`: suppressed repeats of one key, flushed by an unref()'d timeout when they fall due. `cap` / `pool-cap`: pending counts flushed before the 1000-entry key or pool map clears. `budget`: one token's lines over its budget, with that pool's `tokenAgent`, `outcome` and a top-20 (tokenAgent, kind, tool) breakdown. |
 
 Rules that keep the trail complete, bounded and unforgeable:
 
@@ -342,9 +342,16 @@ Rules that keep the trail complete, bounded and unforgeable:
   missing scope, token-agent, declared-agent) per
   `CIPHER_MCP_ADVISORY_INTERVAL_MS` (default 60000). A read-to-write escalation
   under the same declared agent is therefore a new line.
-- **Budget.** At most `CIPHER_MCP_ADVISORY_BUDGET` (default 200)
-  first-occurrence lines are written per interval, so a caller that cycles its
-  declared agent cannot flood the log.
+- **Budget, per caller.** At most `CIPHER_MCP_ADVISORY_BUDGET` (default 200)
+  first-occurrence lines are written per interval **per (outcome, token
+  agent)**. On `/mcp/messages` the token agent is the poster's. The rule is that
+  a suppression mechanism may only suppress lines from the caller producing the
+  volume. A token that floods by cycling its declared agent drowns only its own
+  ADVISORY lines. Its REFUSED lines, and every other token's lines, are still
+  written, because REFUSED and ADVISORY never share a pool.
+- **Interval floor.** `CIPHER_MCP_ADVISORY_INTERVAL_MS` is clamped to at least
+  1000 ms, with a `pmoves-mcp-auth: WARN` line. Below that, the budget window
+  would reset on almost every call and stop bounding anything.
 
 **Why advisory is the default.** Today most agents on a node share the
 bootstrap `CIPHER_API_TOKEN`, which resolves to agentId `bootstrap` (see §Agent

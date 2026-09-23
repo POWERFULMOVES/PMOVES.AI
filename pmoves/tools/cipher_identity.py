@@ -21,7 +21,7 @@ context. A session also already knows whether cipher is reachable
     is not the identity its memories are filed under.
 
 Grounded in `Pmoves-cipher/src/pmoves/auth.ts` at submodule pin `975e02e6`
-(re-pinned `c88b009a2` by #3103 and `7ac00b1b` by #3152; `auth.ts` is unchanged
+(re-pinned `c88b009a2` by #3103 and `750878ab` by #3152; `auth.ts` is unchanged
 across all three, so every line number below still holds) -- the gitlink PMOVES.AI `main` actually
 carries. The pin matters: at the time these numbers were read, this node's
 submodule working tree sat on `fix/per-agent-token-profile-header` (the head of
