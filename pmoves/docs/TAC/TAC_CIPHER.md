@@ -407,6 +407,51 @@ construction-time-`auth` function, so in production they never fire without
 enforcement test needs that flag set, because it asserts refusal while the
 default is advisory. Details: POWERFULMOVES/Pmoves-cipher#27 comments.
 
+## `CIPHER_DB_SERVICE_KEY` — steer it through the Known Road, never by hand
+
+**What the knob is.** `auth.ts resolveToken` presents a Supabase service key to
+PostgREST (through Kong) on every `cipher_<uuid>` bearer lookup. Commit
+`df0218537` added `CIPHER_DB_SERVICE_KEY` as a compose override for that key,
+set per node in `pmoves/.env.local` (loaded by `scripts/with-env.sh`). Unset,
+the container presents the default `SUPABASE_SERVICE_KEY`.
+
+**Where the knob lives today.** Only on unmerged branches:
+`origin/fix/cipher-agent-token-handoff` (PR #3143) and
+`origin/feat/cipher-identity-bind`, in `pmoves/docker-compose.yml` and
+`docker-compose.agents.yml`. `git grep CIPHER_DB_SERVICE_KEY` on `origin/main`
+(`dfb5421ef`) returns 0 hits, so a compose built from main does not read the
+override. It takes effect only when a node brings cipher up from one of those
+branches.
+
+**Measured 2026-09-23 on B850 (by the steward; recorded here, not re-run by
+this change):** the default `SUPABASE_SERVICE_KEY` returns **200** through Kong.
+Both copies of the `SERVICE_ROLE_KEY` value return **401**. `df0218537`'s
+message recommended `CIPHER_DB_SERVICE_KEY=${SERVICE_ROLE_KEY}` from a
+2026-09-22 measurement, when PostgREST was rejecting the `SUPABASE_*` pair.
+That recipe is now **wrong** on B850: a cipher brought up with the line in place
+presents a key Kong rejects, and every per-agent token lookup fails.
+
+**How the line got there, and why that matters.** Someone hand-copied the
+recipe from the commit message into the node's `.env.local`. There was no
+tool, no audit row and no `known-roads.jsonl` entry, so nobody could say
+when it was placed or by whom. The operator's rule: it is removed the same
+way it should have been placed, on a road.
+
+**The road (OPERATOR-run; agents have zero access to the file):**
+
+```bash
+make -C pmoves env-local-has   KEY=CIPHER_DB_SERVICE_KEY   # present? prints no value
+make -C pmoves env-local-unset KEY=CIPHER_DB_SERVICE_KEY   # removes the one line, 0600 backup, audit row
+```
+
+Run the unset **before the next `make -C pmoves up-cipher`** on any node that
+followed the `df0218537` recipe. To steer the key deliberately later (for
+example, if a node's PostgREST really does validate only the legacy pair),
+re-measure first, then run `make -C pmoves env-local-set
+KEY=CIPHER_DB_SERVICE_KEY`. It prompts for the value without echoing it and
+never takes it as an argument. Full road: `.claude/PATTERNS.md` § Known Road —
+node-local env overlay keys.
+
 ## ⚠️ Architectural Fork — PMOVES vs Upstream
 
 The PMOVES fork of `campfirein/byterover-cli` (formerly "Cipher") is **798 commits ahead / 3097 commits behind** upstream `main`. The "ahead" commits are stale upstream code from before the rewrite, NOT PMOVES work. Only **6 commits on fork `main`** + **2 parallel on `PMOVES.AI-Edition-Hardened`** are genuine PMOVES additions.

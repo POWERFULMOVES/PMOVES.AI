@@ -62,6 +62,7 @@ PMOVES uses a Known Roads model: every dangerous-but-necessary operation has a c
 | Kong port bind silent-fail | `docker events --filter container=X` — check OOM FIRST | — |
 | Bootstrap a node onto the Docker MCP Toolkit (per-node MCP surface) | `make -C pmoves mcp-toolkit-bootstrap` + `mcp-toolkit-connect` — **run ON the node**, no raw-SSH sidestep | runbook `pmoves/docs/runbooks/MCP_TOOLKIT_NODE_BOOTSTRAP.md`; agent `fleet-node-deployer` |
 | Give an agent / drop-in model cipher memory (store + search) | § Known Road — Cipher memory for any agent or drop-in model (below) | `pmoves-cipher-memory` |
+| Add / change / remove ONE key in `pmoves/.env.local` (**operator-run**; agents stay zero-access) | `make -C pmoves env-local-{has,set,unset} KEY=NAME` — § Known Road — node-local env overlay keys (below) | — |
 
 **`volume-reset SERVICE` values:** `neo4j`, `tensorzero-clickhouse`, `meilisearch`, `qdrant`, `minio`, `supabase-db`, `nats`.
 
@@ -74,6 +75,66 @@ PMOVES uses a Known Roads model: every dangerous-but-necessary operation has a c
 **When raw commands are appropriate:** only when the user explicitly directs. The `ask` prompt surfaces to user for approval.
 
 If a rebuild manifest arrives as raw `docker compose build ...`, translate to the nearest Known Road whenever possible. Use raw build only when no dedicated target exists yet, and still return to the Make-target bring-up path.
+
+## Known Road — node-local env overlay keys (`pmoves/.env.local`)
+
+**What it's for.** `pmoves/.env.local` is the node-local overlay that
+`scripts/with-env.sh` loads after the generated tier files. Nothing generates
+it, so every change used to be a hand edit with no record. That is how
+`CIPHER_DB_SERVICE_KEY=${SERVICE_ROLE_KEY}` reached B850: someone copied it from
+a recipe in commit `df0218537` and it left no trail. It now points at a key
+Kong rejects (see `pmoves/docs/TAC/TAC_CIPHER.md` § `CIPHER_DB_SERVICE_KEY`).
+Operator rule (2026-09-23): a key comes out the same way it should have gone
+in, on this road.
+
+**Who runs it: the OPERATOR.** Agents keep **zero access** to the file. The
+damage-control zero-access rule for `.env*` is unchanged, and this road does
+not open it. An agent that needs a key changed names the key and the reason
+and hands the command to the operator. It does not read, source, symlink or
+`$VAR`-path its way to the file.
+
+```bash
+make -C pmoves env-local-has   KEY=NAME   # present / absent, plus the old value LENGTH
+make -C pmoves env-local-unset KEY=NAME   # remove the single NAME line
+make -C pmoves env-local-set   KEY=NAME   # value from a no-echo prompt, or piped stdin
+```
+
+**Removing the stale Cipher line (B850, and any node that followed the
+`df0218537` recipe), before the next `up-cipher`:**
+
+```bash
+make -C pmoves env-local-unset KEY=CIPHER_DB_SERVICE_KEY
+```
+
+**Guarantees** (`pmoves/tools/env_local_key.py`, stdlib only, 40 tests):
+- **Refuses:** any key that does not match `^[A-Z][A-Z0-9_]*$` (without echoing
+  the rejected text), a key that appears more than once (reports the count),
+  and an empty or multi-line value. A value given as an argument is a usage
+  error. `set` reads stdin only, so the value never appears in shell history
+  or `ps`.
+- **Never prints a value.** Output is `result=`, key, action, whether a line
+  existed, the old/new value length, the backup name and the resolved path.
+- **Before any change**, it copies the file to `<file>.bak-<UTC ts>` with mode
+  0600. That name is covered by the `.env.*` ignore rule. The write is atomic
+  (temp file, fsync, rename), keeps the file's mode, and keeps every other
+  line byte-for-byte, CRLF and comments included.
+- **Audit:** one JSONL row per set/unset in
+  `pmoves/data/audit/env_local_edits.jsonl`. The row holds `ts, host, key,
+  action, old_len, new_len, operator, line_existed, changed, backup`, and
+  never the value. The log is **git-ignored on purpose**: a tracked,
+  per-node list of key names in a public repo is a topology decision for the
+  operator, not a side effect of this tool.
+- **Exit codes:** 0 done or present / 1 refused or absent / 2 usage /
+  3 could-not-measure. `make` collapses every nonzero exit to 2, so read the
+  `result=` line.
+- **Make hygiene:** KEY travels by environment via `$(value KEY)`. The
+  Makefile carries a file-scope `unexport KEY`. Without it, GNU make expands a
+  command-line `KEY='$(shell ...)'` while exporting it to the recipe, and the
+  command runs before any guard (measured 2026-09-23). A positive-control test
+  proves the directive is load-bearing.
+
+Sibling road for the GENERATED file: `make -C pmoves secrets-rotate KEY=...`
+rotates one key in `env.shared` and re-funnels (`pmoves/mk/codex.mk`).
 
 ## Known Road — Cipher memory for any agent or drop-in model
 
