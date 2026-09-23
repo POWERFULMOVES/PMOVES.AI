@@ -98,6 +98,7 @@ def _load_tool_module(path: Path = TOOL):
     always pass --file under tmp_path; the tool also refuses its default path
     while PYTEST_CURRENT_TEST is set."""
     spec = importlib.util.spec_from_file_location(f"env_local_key_{id(path)}", path)
+    assert spec is not None and spec.loader is not None, f"cannot load {path}"
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
@@ -394,6 +395,71 @@ def test_audit_failure_after_write_is_applied_unaudited_not_could_not_measure(
     assert f.read_bytes() != ORIGINAL          # the edit DID land
     assert len(_backups(tmp_path)) == 1
     assert SECRET not in out.out + out.err
+
+
+@pytest.mark.parametrize("action,stdin", [("unset", None), ("set", SECRET)])
+def test_failure_after_write_and_audit_says_applied_not_nothing_changed(
+        tmp_path, capsys, monkeypatch, action, stdin):
+    """The fallback OSError handler must not say "nothing changed" once the
+    edit has landed -- e.g. `_report` hitting a broken stdout pipe."""
+    mod = _load_tool_module()
+    real_report = mod._report
+
+    def broken_pipe(**fields):
+        if fields.get("result") == "done":
+            raise BrokenPipeError(32, "Broken pipe")
+        return real_report(**fields)
+
+    monkeypatch.setattr(mod, "_report", broken_pipe)
+    f = _write(tmp_path)
+    rc = mod.main(["--file", str(f), "--audit-log", str(tmp_path / "audit" / "edits.jsonl"),
+                   action, "TARGET_KEY"], stdin=io.StringIO(stdin or ""))
+    err = capsys.readouterr().err
+    assert rc == 4
+    assert "result=APPLIED " in err and "audited=yes" in err and "BrokenPipeError" in err
+    assert "nothing changed" not in err and "could-not-measure" not in err
+    assert f.read_bytes() != ORIGINAL and len(_audit_rows(tmp_path)) == 1
+    assert SECRET not in err
+
+
+def test_positive_control_same_oserror_before_write_is_nothing_changed(
+        tmp_path, capsys, monkeypatch):
+    """The same OSError raised BEFORE the write must still read as
+    could-not-measure: the applied flag, not the exception type, decides."""
+    mod = _load_tool_module()
+
+    def broken_backup(path, data):
+        raise BrokenPipeError(32, "Broken pipe")
+
+    monkeypatch.setattr(mod, "_backup", broken_backup)
+    f = _write(tmp_path)
+    rc = mod.main(["--file", str(f), "--audit-log", str(tmp_path / "audit" / "edits.jsonl"),
+                   "unset", "TARGET_KEY"])
+    err = capsys.readouterr().err
+    assert rc == 3 and "nothing changed" in err and "result=APPLIED" not in err
+    assert f.read_bytes() == ORIGINAL
+
+
+def test_lost_group_on_fchown_permission_error_warns_by_name(tmp_path, capsys, monkeypatch):
+    mod = _load_tool_module()
+
+    def denied(fd, uid, gid):
+        raise PermissionError(1, "Operation not permitted")
+
+    monkeypatch.setattr(mod.os, "fchown", denied)
+    target = tmp_path / "overlay.txt"
+    target.write_bytes(ORIGINAL)
+    foreign_gid = os.getegid() + 1   # any gid other than ours
+    mod._atomic_write(target, b"X=1\n", 0o600, (os.geteuid(), foreign_gid))
+    err = capsys.readouterr().err
+    assert "WARNING: could not preserve owner/group" in err
+    try:
+        import grp
+        expected = grp.getgrgid(foreign_gid).gr_name
+    except KeyError:
+        expected = str(foreign_gid)
+    assert f"group={expected}" in err
+    assert target.read_bytes() == b"X=1\n"
 
 
 # --------------------------------------------------- P2b: symlinks write through ---

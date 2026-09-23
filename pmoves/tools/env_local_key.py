@@ -97,6 +97,8 @@ FILE_ENV = "ENV_LOCAL_KEY_FILE"
 AUDIT_ENV = "ENV_LOCAL_KEY_AUDIT"
 
 REDACTED = "<redacted: not present>"
+# Per-invocation: has the edit landed, and has its audit row? Reset by main().
+_STATE: dict[str, object] = {"applied": None, "backup": None, "audited": False}
 RISKY_VALUE = ("$(", "${", "`")
 
 EXIT_OK = 0
@@ -212,6 +214,23 @@ def _backup(path: Path, data: bytes) -> Path:
     raise Unmeasurable("could not allocate a unique backup name")
 
 
+def _warn_lost_owner(owner: tuple[int, int]) -> None:
+    """fchown was not permitted: the replaced file takes this process's
+    uid/gid. Say which group was lost (names only, never a value)."""
+    uid, gid = owner
+    if gid == os.getegid() and uid == os.geteuid():
+        return  # nothing lost
+    try:
+        import grp
+        group = grp.getgrgid(gid).gr_name
+    except (ImportError, KeyError):
+        group = str(gid)
+    print(f"env-local-key: WARNING: could not preserve owner/group (uid={uid} "
+          f"group={group}); the file is now owned by uid={os.geteuid()} "
+          f"gid={os.getegid()}. Re-apply with chgrp if another account reads it.",
+          file=sys.stderr)
+
+
 def _atomic_write(path: Path, data: bytes, mode: int,
                   owner: tuple[int, int] | None) -> None:
     # `<name>.tmp-*` so the leftover of a crash still matches the `.env.*`
@@ -223,7 +242,7 @@ def _atomic_write(path: Path, data: bytes, mode: int,
             try:
                 os.fchown(fd, *owner)
             except PermissionError:
-                pass  # not root: the file is ours already, same as mkstemp gave
+                _warn_lost_owner(owner)
         with os.fdopen(fd, "wb") as fh:
             fh.write(data)
             fh.flush()
@@ -349,10 +368,15 @@ def _commit(target: Path, via: Path | None, new: bytes, data: bytes | None,
     except BaseException:
         audit.close()  # the file is unchanged: os.replace never ran
         raise
+    # From here on the edit HAS landed; main's fallback handler reads this so
+    # a later failure (e.g. a broken stdout pipe in _report) is never
+    # reported as "nothing changed".
+    _STATE.update(applied=str(target), backup=bak_name, audited=False)
     row["backup"] = bak_name
     report.update(backup=bak_name, file=target, via=via, audit=audit.path)
     try:
         audit.append(row)
+        _STATE["audited"] = True
     except OSError as exc:
         report["result"] = "APPLIED-UNAUDITED"
         _report(**report)
@@ -472,7 +496,21 @@ def _is_default_file(path: Path) -> bool:
     return os.path.realpath(path) == os.path.realpath(DEFAULT_FILE)
 
 
+def _report_applied(action: str, exc: BaseException) -> int:
+    """The fallback path AFTER the write: say APPLIED, never "nothing changed".
+    stderr first -- stdout may be the thing that just broke."""
+    line = (f"env-local-key: result=APPLIED action={action} file={_STATE['applied']} "
+            f"backup={_STATE['backup']} audited={'yes' if _STATE['audited'] else 'NO'} "
+            f"error={exc.__class__.__name__}: the edit LANDED; only the reporting failed")
+    try:
+        print(line, file=sys.stderr)
+    except OSError:
+        pass
+    return EXIT_APPLIED_UNAUDITED
+
+
 def main(argv: list[str] | None = None, stdin=None) -> int:
+    _STATE.update(applied=None, backup=None, audited=False)
     args = build_parser().parse_args(argv)
     stdin = stdin if stdin is not None else sys.stdin
     key = args.key
@@ -506,8 +544,8 @@ def main(argv: list[str] | None = None, stdin=None) -> int:
               f"reason={exc}; nothing changed", file=sys.stderr)
         return EXIT_UNMEASURABLE
     except OSError as exc:
-        # Only reachable before _commit's write (it handles its own audit
-        # failure), so nothing was changed.
+        if _STATE["applied"]:
+            return _report_applied(args.cmd, exc)
         print(f"env-local-key: result=could-not-measure key={REDACTED} action={args.cmd} "
               f"reason={exc.__class__.__name__}; nothing changed", file=sys.stderr)
         return EXIT_UNMEASURABLE

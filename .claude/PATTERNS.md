@@ -106,7 +106,7 @@ recipe), before the next `up-cipher`:**
 make -C pmoves env-local-unset KEY=CIPHER_DB_SERVICE_KEY
 ```
 
-**Guarantees** (`pmoves/tools/env_local_key.py`, stdlib only, 65 tests):
+**Guarantees** (`pmoves/tools/env_local_key.py`, stdlib only, 69 tests):
 - **Definitions follow the loader.** `with-env.sh` loads only unindented
   `KEY=` lines. `export KEY=` and indented forms are **inert**: `has` reports
   them as `inert=N`, and `set`/`unset` refuse while one exists. Resolve those
@@ -167,6 +167,30 @@ make -C pmoves env-local-unset KEY=CIPHER_DB_SERVICE_KEY
 - **Tests never reach the real file.** The make-target helper asserts that the
   resolved override is under `tmp_path` before it invokes make. The tool also
   refuses its default path whenever `PYTEST_CURRENT_TEST` is set.
+- **A failure after the write is reported as APPLIED.** If anything fails once
+  the edit has landed (for example, a broken stdout pipe while reporting), the
+  tool prints `result=APPLIED ... audited=yes|NO` on stderr and exits 4. It
+  never says "nothing changed" for an edit that happened.
+
+**Known limits** (accepted, stated here so nobody has to rediscover them):
+- **`set` of an absent key cannot tell a pasted value from a real new key.** If
+  an all-caps value is pasted into `KEY=` and matches no line, `set` treats it
+  as a new key name. It echoes that name and audits it, and writes it as a new
+  line. `unset` and `has` redact an absent key; `set` cannot, because creating
+  a new key is its job. Check the key name before running `set`.
+- **A refused edit can leave an empty audit file.** The log is opened (and
+  created, 0600) before the change so that an unwritable log refuses the edit.
+  A later refusal, such as an empty value, therefore leaves a 0-byte 0600
+  `env_local_edits.jsonl`. It holds nothing.
+- **The group can be lost.** When the process may not `fchown` (not root, and
+  the file belonged to another group), the replaced file takes this process's
+  uid/gid. The tool prints a WARNING that names the lost group, and never a
+  value. Re-apply it with `chgrp` if another account reads the file.
+- **The pytest guard covers the overlay path, not the audit-log path.** A test
+  that forgets `--audit-log` or `ENV_LOCAL_KEY_AUDIT` would append rows (names
+  and lengths, never values) to the node's real
+  `pmoves/data/audit/env_local_edits.jsonl`. Every test in this suite sets it
+  explicitly.
 
 Sibling road for the GENERATED file: `make -C pmoves secrets-rotate KEY=...`
 rotates one key in `env.shared` and re-funnels (`pmoves/mk/codex.mk`).
