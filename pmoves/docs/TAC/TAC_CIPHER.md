@@ -67,7 +67,7 @@ After `make -C pmoves up-cipher`: image rebuilt, **`streamable` = 1**, `/health`
 
 **Provenance rule applied here:** every claim below cites the file and line it
 came from, at submodule pin `975e02e6` (later `c88b009a2` — #3103 re-pinned, then `09aee936` — #3152;
-`auth.ts` is unchanged between the two, so every line number below still holds)
+`auth.ts` is unchanged across all of them, so every line number below still holds)
 or superproject `origin/main`. An earlier
 revision of this section proposed three remedies and cited nothing; it was
 reasoning from THIS runbook, which was itself stale. A runbook with no provenance
@@ -258,6 +258,112 @@ Two findings fall out of the card gate and are recorded rather than fixed:
    reports that state (`minted token in use, but ... has no active signing card`)
    but nothing revokes it. Revocation lives in `cipher_agent_tokens.revoked_at`
    and no tool writes that column.
+
+## MCP identity enforcement — `CIPHER_MCP_ENFORCE` (advisory → enforce)
+
+**Known Road for connecting any agent or drop-in model:** `.claude/PATTERNS.md`
+§ "Known Road — Cipher memory for any agent or drop-in model".
+
+**Defect closed (#3152, fork PR POWERFULMOVES/Pmoves-cipher#27, pin `09aee936`).**
+`rest-server.ts:58` mounted `createMcpSseRouter(memoryManager, nats)` with no
+auth argument, so the router's identity defaulted to `{}` (`mcp-sse.ts:48` @
+`c88b009a`). `/mcp/sse` passed that construction-time `{}` to every session, and
+`POST /mcp` passed nothing, so `assertAgentId` (`mcp-sse.ts:99-107`) never
+fired on the MCP path. Any valid bearer could store or search under any
+declared `agentId`, and scope checks were skipped. The REST path
+(`memory-routes.ts:13-27`) always checked each request.
+
+**What the fix does:**
+
+- It reads identity **per request** from what the auth middleware resolved
+  (`req.agentId` / `req.scopes`).
+- A legacy SSE session **binds** the identity of whoever opened `GET /mcp/sse`.
+  `POST /mcp/messages` for that session runs as that agent. A POST whose own
+  token identity differs from the session owner's is a violation.
+- `POST /mcp` (streamable-http) binds each request's own identity.
+- The router no longer accepts a construction-time identity. The router is
+  shared by every caller, so passing a constant identity at the mount would be
+  wrong, and the parameter that invited that fix is gone.
+
+**What counts as a violation.** With a token present, each of these is one. It
+mirrors the REST path, plus scopes:
+
+- no `agentId` on the call
+- `agentId: "*"` on `search` or `reasoning_patterns`
+- `agentId` ≠ the token's agent
+- a missing per-tool scope. `admin` satisfies any scope. Scope per tool:
+
+  | Tools | Required scope |
+  |---|---|
+  | `store` | `memory:write` |
+  | `search`, `hybrid_search`, `graph_expand` | `memory:read` |
+  | `store_reasoning` | `reasoning:write` |
+  | `reasoning_patterns` | `reasoning:read` |
+  | `session_save` | `session:write` |
+  | `session_recall` | `session:read` |
+  | `mcp_list`, `mcp_get` | none (no `mcp:*` scope is minted) |
+
+With no token (dev-skip, server `CIPHER_API_TOKEN` unset), nothing is checked
+in either mode.
+
+| `CIPHER_MCP_ENFORCE` | on a violation |
+|---|---|
+| unset / `false` — **default, advisory** | the call proceeds. One stderr line: `pmoves-mcp-auth: ADVISORY (CIPHER_MCP_ENFORCE off, accepted) tool=… token-agent='…' declared-agent='…' reason="…"` |
+| `true` / `1` / `yes` / `on` / `enforce` | refused. A tool call gets McpError `-32003` with `data.httpStatus: 403` and message `Forbidden: …` (the REST path's wording). A mismatched `/messages` POST gets HTTP 403. |
+
+**Why advisory is the default.** Today most agents on a node share the
+bootstrap `CIPHER_API_TOKEN`, which resolves to agentId `bootstrap` (see §Agent
+Identity Carry). They declare their own signing-card id on each call. In
+enforce mode every such call is a mismatch and would be refused. That includes
+Agent Zero's `cipher` MCP entry (`docker-compose.yml`
+`A0_SET_mcp_servers` → `Bearer ${CIPHER_API_TOKEN}`) and every Claude Code /
+Crush / Hermes session using the fleet roster. Turning enforcement on before
+per-agent tokens are minted would cut every one of them off from memory. The
+operator requirement is that drop-in models must not have to fight for the
+memory layer, so advisory is the only safe default.
+
+**What advisory means for attribution.** In advisory mode a write is filed under
+the `agentId` the caller *declared*, not under the token's agent. So attribution
+is self-asserted, exactly as before this change. The difference is that each
+disagreement now leaves a line in the cipher container's log. Read those lines
+as the list of agents that still need a per-agent token.
+
+**The path from advisory to enforce:**
+
+1. **Watch.** No Make target reads cipher's log (`logs-*` has only
+   `logs-cloudflare`). The read-only route is the container log, filtered for
+   `pmoves-mcp-auth: ADVISORY`, e.g. `docker logs pmoves-cipher-api-1 2>&1 | grep 'pmoves-mcp-auth: ADVISORY'`.
+   Collect the distinct `declared-agent` values. **UNVERIFIED:** I did not run
+   this, and the running image predates this change, so it prints no such lines
+   until `make -C pmoves up-cipher` rebuilds from the new pin.
+2. **Card each one.** Every declared id needs an ACTIVE card in
+   `pmoves/config/signing_identity_cards.yaml`. Check with
+   `make -C pmoves cipher-identity AGENT=<id>`.
+3. **Mint per-agent tokens.** Run `make -C pmoves cipher-mint-token AGENT=<id>`
+   for each agent, and deliver the tokens through the CHIT pipeline
+   (`secrets-funnel`). Operator step; not run here.
+4. **Confirm the carry.** For each agent, `cipher-identity` should report
+   `cipher mode per-agent`.
+5. **Watch again.** The `ADVISORY` lines should stop.
+6. **Enforce.** Set `CIPHER_MCP_ENFORCE=true` for the cipher container, then
+   `make -C pmoves up-cipher`. Prerequisite, NOT DONE: the `cipher-api`
+   compose stanza does not pass `CIPHER_MCP_ENFORCE` through yet. That compose
+   file is protected, so adding the passthrough needs a `KNOWN_ROAD` grant.
+   Until then, enforce mode can only be reached by editing the stanza.
+
+**Asymmetry to know about.** The REST path (`/api/memory`) refuses mismatches
+**unconditionally**, has **no scope check**, and ignores `CIPHER_MCP_ENFORCE`.
+The two paths agree only in enforce mode, and even then they disagree on scopes.
+REST is not relaxed here: weakening a check that already refuses would be a
+security regression.
+
+**Stacked fork PRs #22 → #25 → #26** add the same per-tool scope table and
+refuse an omitted `agentId`, but they do it inside the old
+construction-time-`auth` function, so in production they never fire without
+#27. They conflict with #27 in `mcp-sse.ts` only. A trial merge that resolves
+`mcp-sse.ts` to #27's side passes 65/65 with `CIPHER_MCP_ENFORCE=true`. #26's
+enforcement test needs that flag set, because it asserts refusal while the
+default is advisory. Details: POWERFULMOVES/Pmoves-cipher#27 comments.
 
 ## ⚠️ Architectural Fork — PMOVES vs Upstream
 
