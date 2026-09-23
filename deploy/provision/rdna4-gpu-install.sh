@@ -61,7 +61,9 @@ ROCM_VERSION="${ROCM_VERSION:-7.1}"
 # Field note (B850 bring-up, Ubuntu 24.04 noble): AMDGPU_VERSION=25.35 was
 # confirmed working there; other published streams include 30.10/30.20/30.30.
 AMDGPU_VERSION="${AMDGPU_VERSION:-latest}"
-LLAMA_CPP_PIN="a6e76c64dd525a1bd7726fa1d1145954cef375a8"
+# Commit of the gfx1201 fork to build. Overridable; set to empty
+# (LLAMA_CPP_PIN=) to track the fork's tip instead -- see build_llama_cpp.
+LLAMA_CPP_PIN="${LLAMA_CPP_PIN-a6e76c64dd525a1bd7726fa1d1145954cef375a8}"
 LLAMA_CPP_REPO="${LLAMA_CPP_REPO:-https://github.com/tlee933/llama.cpp-rdna4-gfx1201}"
 LLAMA_CPP_DIR="${LLAMA_CPP_DIR:-/opt/llama.cpp-rdna4}"
 LLAMA_SERVER_PORT="${LLAMA_SERVER_PORT:-8080}"
@@ -132,7 +134,7 @@ install_rocm() {
 
   install -d -m 0755 /etc/apt/keyrings
   curl -fsSL https://repo.radeon.com/rocm/rocm.gpg.key \
-    | gpg --dearmor -o /etc/apt/keyrings/rocm.gpg
+    | gpg --batch --yes --dearmor -o /etc/apt/keyrings/rocm.gpg
 
   cat >/etc/apt/sources.list.d/rocm.list <<EOF
 deb [arch=amd64 signed-by=/etc/apt/keyrings/rocm.gpg] https://repo.radeon.com/rocm/apt/${ROCM_VERSION} noble main
@@ -174,14 +176,38 @@ EOF
 # ------------------------------------------------------------------
 # Build llama.cpp with gfx1201 kernels
 # ------------------------------------------------------------------
+# git against the llama.cpp tree. This script runs as root, but after the first
+# provision the tree is owned by the `llama` service user, and git >= 2.35.2
+# refuses to operate on a repo owned by someone else ("dubious ownership"),
+# which under set -e aborted every re-run. The exception is scoped to exactly
+# this directory via -c (command-line scope is honoured for safe.directory);
+# it never touches global/system git config.
+git_llama() {
+  git -c safe.directory="${LLAMA_CPP_DIR}" -C "${LLAMA_CPP_DIR}" "$@"
+}
+
 build_llama_cpp() {
-  if [[ -x "${LLAMA_CPP_DIR}/build/bin/llama-server" ]]; then
-    log "llama.cpp already built at ${LLAMA_CPP_DIR}; rebuilding to catch upstream fixes"
-    git -C "${LLAMA_CPP_DIR}" fetch --depth 1 origin
-    git -C "${LLAMA_CPP_DIR}" reset --hard origin/HEAD
+  if [[ -d "${LLAMA_CPP_DIR}/.git" ]]; then
+    log "llama.cpp checkout exists at ${LLAMA_CPP_DIR}; refreshing"
   else
     log "Cloning llama.cpp RDNA4 fork"
-    git clone --depth 1 "${LLAMA_CPP_REPO}" "${LLAMA_CPP_DIR}" && git -C "${LLAMA_CPP_DIR}" checkout "${LLAMA_CPP_PIN}"
+    git clone --depth 1 "${LLAMA_CPP_REPO}" "${LLAMA_CPP_DIR}"
+  fi
+
+  # Source selection. LLAMA_CPP_PIN (default: the commit above) is honoured on
+  # EVERY run: fetch that exact commit and check it out detached. Previously a
+  # re-run did `reset --hard origin/HEAD`, silently replacing the pin with the
+  # fork's moving tip, and a fresh `clone --depth 1` + `checkout <pin>` only
+  # worked while the pin happened to BE the tip. Set LLAMA_CPP_PIN= (empty) to
+  # deliberately track the fork's default-branch tip instead.
+  if [[ -n "${LLAMA_CPP_PIN}" ]]; then
+    log "Checking out pinned llama.cpp commit ${LLAMA_CPP_PIN}"
+    git_llama fetch --depth 1 origin "${LLAMA_CPP_PIN}"
+    git_llama checkout -q -f --detach "${LLAMA_CPP_PIN}"
+  else
+    log "LLAMA_CPP_PIN is empty; tracking the fork's default-branch tip"
+    git_llama fetch --depth 1 origin
+    git_llama reset -q --hard origin/HEAD
   fi
 
   log "Building llama.cpp with HIP target ${GPU_TARGETS}"
