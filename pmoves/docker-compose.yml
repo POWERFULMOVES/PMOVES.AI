@@ -4071,6 +4071,24 @@ services:
     - NODE_ENV=production
     - NATS_URL=${NATS_URL}
     - CIPHER_API_TOKEN=${CIPHER_API_TOKEN:-}
+    # Per-agent token resolution (auth.ts resolveToken) presents this key to
+    # PostgREST on every cipher_<uuid> bearer lookup. env.shared carries TWO
+    # JWT key pairs (legacy ANON_KEY/SERVICE_ROLE_KEY and newer
+    # SUPABASE_ANON_KEY/SUPABASE_SERVICE_KEY); the running postgrest validates
+    # only the pair it was configured with (measured 2026-09-22 on B850:
+    # PGRST301 on the SUPABASE_* pair, legacy pair verifies). Default keeps
+    # current behavior; a node whose postgrest accepts only the other pair
+    # steers with CIPHER_DB_SERVICE_KEY=<the key postgrest accepts> in
+    # pmoves/.env.local (loaded by with-env.sh into the compose process env).
+    - SUPABASE_SERVICE_KEY=${CIPHER_DB_SERVICE_KEY:-${SUPABASE_SERVICE_KEY:-}}
+    # MCP per-request identity (Pmoves-cipher 36b28d0f, src/pmoves/mcp-sse.ts).
+    # Empty by default = ADVISORY: '' is in ADVISORY_VALUES (recognised, no
+    # WARN), and envNumber() treats '' as unset, so the interval/budget fall
+    # back to 60000ms / 200 with no clamp WARN. Set CIPHER_MCP_ENFORCE=true in
+    # pmoves/.env.local to refuse identity mismatches instead of logging them.
+    - CIPHER_MCP_ENFORCE=${CIPHER_MCP_ENFORCE:-}
+    - CIPHER_MCP_ADVISORY_INTERVAL_MS=${CIPHER_MCP_ADVISORY_INTERVAL_MS:-}
+    - CIPHER_MCP_ADVISORY_BUDGET=${CIPHER_MCP_ADVISORY_BUDGET:-}
     - PMOVES_STORAGE_DIR=/data/cipher
     - PMOVES_PORT=8105
     - PMOVES_HOST=0.0.0.0

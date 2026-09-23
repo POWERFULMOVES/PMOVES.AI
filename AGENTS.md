@@ -35,6 +35,7 @@ Damage-control hooks block raw `docker`, `netsh`, `tailscale`, and `gh workflow`
 | `tailscale status` (leaks raw IPs) | `make -C pmoves fleet-status` |
 | `gh workflow run sync-secrets-local` | `make -C pmoves secrets-sync-trigger` |
 | raw `-f docker-compose.<overlay>.yml up` | `make -C pmoves overlay-up-<tier>` (see layering trap below) |
+| hand-editing a key in `pmoves/.env.local` | **operator-run** `make -C pmoves env-local-{has,set,unset} KEY=NAME` (backup + audit, never prints values; agents stay zero-access — `.claude/PATTERNS.md` § node-local env overlay keys) |
 
 Use raw commands **only** when the user explicitly directs.
 
