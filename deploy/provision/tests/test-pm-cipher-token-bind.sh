@@ -93,6 +93,40 @@ envv="$(printf '%s\n' "$out" | sed -n 's/^ENV=//p')"
 [ -z "$envv" ] && ok "non cipher_-prefixed value refused" || bad "bound a non-cipher value"
 printf '%s\n' "$out" | grep -q 'not a cipher_-prefixed token' && ok "refusal reason is loud" || bad "refusal reason missing"
 
+# --- 7. key match is a FIXED string, not a regex ------------------------------
+# agentId 'a.b-claude' -> key CIPHER_TOKEN_A.B_CLAUDE. Under the old
+# `grep -E "^${key}="` the '.' matched any char, so CIPHER_TOKEN_AXB_CLAUDE
+# (a different agent's token) was bound. Must be a loud miss instead.
+printf 'CIPHER_TOKEN_AXB_CLAUDE=%s\n' "$FAKE_TOKEN" > "$FIXTURE/pmoves/.env.local"
+out="$(run_bind a.b-claude)"
+envv="$(printf '%s\n' "$out" | sed -n 's/^ENV=//p')"
+[ -z "$envv" ] && ok "regex metachar in agentId does not match another key" || bad "'.' in key matched CIPHER_TOKEN_AXB_CLAUDE"
+
+# --- 8. a longer key sharing the prefix is not matched -----------------------
+printf 'CIPHER_TOKEN_B850_CLAUDE_OLD=%s\n' "$FAKE_TOKEN" > "$FIXTURE/pmoves/.env.local"
+out="$(run_bind b850-claude)"
+envv="$(printf '%s\n' "$out" | sed -n 's/^ENV=//p')"
+[ -z "$envv" ] && ok "prefix-sharing key (_OLD) not matched" || bad "matched CIPHER_TOKEN_B850_CLAUDE_OLD"
+
+# --- 9. trailing ' # comment' is stripped ------------------------------------
+printf 'CIPHER_TOKEN_B850_CLAUDE=%s   # minted 2026-09-23\n' "$FAKE_TOKEN" > "$FIXTURE/pmoves/.env.local"
+out="$(run_bind b850-claude)"
+envv="$(printf '%s\n' "$out" | sed -n 's/^ENV=//p')"
+[ "$envv" = "$FAKE_TOKEN" ] && ok "trailing ' # comment' stripped" || bad "comment not stripped: got '${envv}'"
+
+# --- 10. quoted value followed by a comment ----------------------------------
+printf 'CIPHER_TOKEN_B850_CLAUDE="%s" # note\n' "$FAKE_TOKEN" > "$FIXTURE/pmoves/.env.local"
+out="$(run_bind b850-claude)"
+envv="$(printf '%s\n' "$out" | sed -n 's/^ENV=//p')"
+[ "$envv" = "$FAKE_TOKEN" ] && ok "quoted value + comment binds the bare token" || bad "quoted+comment: got '${envv}'"
+
+# --- 11. malformed value ('#' with no space is part of the value) refused ----
+printf 'CIPHER_TOKEN_B850_CLAUDE=%s#note\n' "$FAKE_TOKEN" > "$FIXTURE/pmoves/.env.local"
+out="$(run_bind b850-claude)"
+envv="$(printf '%s\n' "$out" | sed -n 's/^ENV=//p')"
+[ -z "$envv" ] && ok "malformed cipher_ value refused" || bad "bound a malformed value"
+printf '%s\n' "$out" | grep -q 'not a well-formed' && ok "malformed refusal is loud" || bad "malformed refusal reason missing"
+
 echo
 printf 'pm-cipher-token-bind: %d passed, %d failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

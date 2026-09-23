@@ -90,11 +90,18 @@ pm_cipher_token_bind() {
     return 1
   fi
 
-  # Targeted, non-evaluating read: first ^KEY= match only, quotes stripped,
-  # whitespace-trimmed. Never a shell expansion of the value.
+  # Targeted, non-evaluating read: first line whose name is EXACTLY $key.
+  # Fixed-string field compare, not a regex: an agentId carrying `.`, `+` or
+  # `*` would otherwise be interpreted as ERE metacharacters. Then: a trailing
+  # ` # comment` is dropped (whitespace-then-#, the env_file rule; a `#` with
+  # no whitespace before it stays part of the value, as compose reads it),
+  # whitespace trimmed, one layer of matching quotes stripped. Never a shell
+  # expansion of the value.
   local line
-  line="$(grep -m1 -E "^${key}=" "$envf" 2>/dev/null)" || line=""
+  line="$(awk -F= -v k="$key" '$1 == k { print; exit }' "$envf" 2>/dev/null)" || line=""
   local tok="${line#*=}"
+  tok="${tok%%[[:space:]]#*}"
+  tok="${tok#"${tok%%[![:space:]]*}"}"; tok="${tok%"${tok##*[![:space:]]}"}"
   tok="${tok#\"}"; tok="${tok%\"}"
   tok="${tok#\'}"; tok="${tok%\'}"
   tok="${tok#"${tok%%[![:space:]]*}"}"; tok="${tok%"${tok##*[![:space:]]}"}"
@@ -103,7 +110,14 @@ pm_cipher_token_bind() {
     PM_CARRY_BIND_LINE="cipher token=unbound — ${key} not in ${envf} (mint: make -C pmoves cipher-mint-token AGENT=${agent})"
     return 1
   fi
+  # Shape check: minted bearers are `cipher_<uuid4 hex>` (mint_cipher_token.py).
+  # Anything else after the prefix -- a leftover `#note`, a space, a `$` -- is a
+  # malformed value, and exporting it would present a bearer that cannot match.
   case "$tok" in
+    cipher_*[!0-9A-Za-z-]*|cipher_)
+      PM_CARRY_BIND_LINE="cipher token=unbound — ${key} in ${envf} is not a well-formed cipher_<hex> token (refusing to bind it)"
+      return 1
+      ;;
     cipher_*) : ;;
     *)
       PM_CARRY_BIND_LINE="cipher token=unbound — ${key} in ${envf} is not a cipher_-prefixed token (refusing to bind it)"
