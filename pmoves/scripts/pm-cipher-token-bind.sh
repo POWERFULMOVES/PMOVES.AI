@@ -57,6 +57,18 @@
 # respected and reported — the carry measurement downstream still verifies
 # that whatever is carried resolves to the declared agent.
 #
+# SCOPE OF THAT GUARANTEE: it holds at the moment this function runs. A
+# launcher that loads env.shared AFTER the explicit token arrived overwrites
+# it with the node bootstrap bearer before the bind can see it, and then only
+# a CIPHER_TOKEN_<AGENT> key in pmoves/.env.local restores a per-agent token.
+# Measured 2026-09-23: deploy/provision/claude-pmoves.sh (the claude inner
+# launcher) is such a launcher -- an exported cipher_ token with no .env.local
+# key reached `claude` as the bootstrap bearer. The fix (capture before
+# env.shared, restore before the re-bind) is ready but that file is
+# guard-protected (launcher domain); until it lands, use the .env.local key.
+# The five non-claude launchers load nothing after the bind that can
+# overwrite it (deploy/provision/tests/test-launcher-cipher-token-survives.sh).
+#
 # ALWAYS LOUD ON SKIP, same rule as pm-cipher-identity.sh: a session that
 # silently kept bootstrap is the exact defect this fragment exists to end.
 
