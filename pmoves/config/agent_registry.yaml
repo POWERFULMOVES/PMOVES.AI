@@ -100,6 +100,12 @@ role_classes:
 # Optional per-agent key: `role_class: planner|worker|reviewer` on any
 # entry below or in .claude/agents/*.md frontmatter. Absence = unclassified
 # (legacy), never an error.
+#
+# Optional per-agent key: `skills:` -- lane skills the identity must load
+# before working its program lane (fork-sync/landing program, 2026-09-23).
+# Skill packs live per harness (Hermes profile skills/devops/*, .claude/ for
+# Claude sessions); this records the LANE requirement, not a filesystem path.
+# Absence means no lane-mandated skill, never an error.
 
 # Agent entries
 agents:
@@ -283,6 +289,11 @@ agents:
       - L2
       - L4
     evolution_stage: stage_1
+    # Fork-sync/landing program lane (2026-09-23): voice/TTS hardware
+    # implementation on this node. "Primary workhorse" is execution, the
+    # worker role_class -- the only role_class that writes production changes.
+    role_class: worker
+    skills: [pmoves-node-edition-services]
     # `5090-claude` was ALREADY in external_contributors -- the signing roster,
     # referenced outside this repo. The attribution half has existed all along;
     # this adds the operational half and points back at it rather than moving it.
@@ -315,6 +326,12 @@ agents:
       - L2
       - L4
     evolution_stage: stage_1
+    # Fork-sync/landing program lane (2026-09-23): voice/TTS hardware
+    # implementation, infrastructure bring-up on this node. "Infrastructure
+    # coordinator" names the node's execution domain, not decomposition or
+    # gating, so of the trio only worker fits; flagged borderline in PR.
+    role_class: worker
+    skills: [pmoves-node-edition-services]
     # `z890-claude` was ALREADY in external_contributors -- the signing roster,
     # referenced outside this repo. The attribution half has existed all along;
     # this adds the operational half and points back at it rather than moving it.
@@ -379,6 +396,9 @@ agents:
     layers: [L0, L2, L4]
     evolution_stage: stage_2
     role_class: worker
+    # Fork-sync/landing program lane (2026-09-23): fork-sync porting
+    # implementation -- registry-first before any dispatcher/launch tooling.
+    skills: [pmoves-registry-first]
     signature: "kilocode"
     nats:
       publishes:
@@ -418,6 +438,9 @@ agents:
     layers: [L0, L2, L4]
     evolution_stage: stage_2
     role_class: worker
+    # Fork-sync/landing program lane (2026-09-23): fork-sync porting
+    # implementation -- registry-first before any dispatcher/launch tooling.
+    skills: [pmoves-registry-first]
     signature: "kilocode"   # same lineage as kilocode_glm (▲ emerald alter)
     nats:
       publishes:
@@ -817,6 +840,12 @@ agents:
     health: null
     layers: [L0, L2, L4]
     evolution_stage: stage_1
+    # Fork-sync/landing program lane (2026-09-23): spec review + onboarding
+    # decomposition. Its own description -- "planning agent -- decomposes
+    # tasks into skill chains" -- is role_classes.planner verbatim: read-heavy,
+    # produces no production edits.
+    role_class: planner
+    skills: [pmoves-fork-onboarding]
     signature: "botz-architect"
     nats:
       publishes: ["botz.plan.created.v1"]
@@ -869,6 +898,12 @@ agents:
     health: null
     layers: [L0, L2, L4]
     evolution_stage: stage_1
+    # Fork-sync/landing program lane (2026-09-23): post-merge verification.
+    # Its own description -- "validation agent -- reviews plans and output"
+    # -- is role_classes.reviewer: verifies and gates, never edits what it
+    # reviews.
+    role_class: reviewer
+    skills: [sdlc-review]
     signature: "botz-auditor"
     nats:
       publishes: ["botz.audit.completed.v1"]
@@ -2942,6 +2977,12 @@ agents:
     health: "/api/health"
     layers: [L0, L1, L2, L4]
     evolution_stage: stage_1
+    # Fork-sync/landing program lane (2026-09-23): orchestrator. role_class
+    # deliberately NOT set here: the program assigns planner+reviewer (dual,
+    # unrepresentable in this single-valued key) while .claude/agents/
+    # hermes-agent.md declares worker -- listed under 'Needs operator input'
+    # in the lane PR rather than guessed. Skills below are the lane protocol.
+    skills: [pmoves-lane-register]
     signature: "hermes-agent"
     nats:
       publishes:
