@@ -1,8 +1,17 @@
 """`push-gh-secrets.sh --routed`: each manifest route goes to its own repo/env.
 
 `gh` is replaced by a stub first on PATH that records its argv and its stdin,
-so nothing reaches GitHub. Every value below is synthetic. The properties under
-test:
+so nothing reaches GitHub. Every value below is synthetic.
+
+THE STUB GUARD. A stub that is silently skipped means the REAL gh runs against
+real repos -- which has happened: a stub directory prepended as `C:/...` was
+split at the drive colon by bash, the stub never resolved, and a review probe
+reached PMOVES.AI env:Prod. So every invocation goes through `_GUARD`, which
+puts the stub on PATH as a POSIX path from INSIDE bash and refuses to start the
+script (exit 97) unless `command -v gh` is exactly that stub. The test process's
+own PATH is never touched.
+
+The properties under test:
 
   * a routed name lands in the repo -- and the environment, or the repository
     scope -- its mapping pins; an unrouted name takes --repo/--env as today;
@@ -43,6 +52,21 @@ if [ "$1" = "secret" ]; then
 fi
 exit 0
 """
+
+# Runs in bash ahead of the script. cygpath exists only under Git Bash/MSYS; on
+# Linux the path is already POSIX.
+_GUARD = r"""
+stub_dir="$(cygpath -u "$STUB_DIR" 2>/dev/null || printf '%s' "$STUB_DIR")"
+PATH="$stub_dir:$PATH"
+export PATH
+resolved="$(command -v gh || true)"
+if [ "$resolved" != "$stub_dir/gh" ]; then
+  echo "STUB GUARD: gh resolves to '$resolved', not the stub; refusing to run" >&2
+  exit 97
+fi
+exec bash "$@"
+"""
+GUARD_EXIT = 97
 
 VALUES = {
     "PLAIN": "synthval-plain-111",
@@ -85,7 +109,7 @@ def rig(tmp_path):
     )
 
     env = dict(os.environ)
-    env["PATH"] = f"{bindir}{os.pathsep}{env['PATH']}"
+    env["STUB_DIR"] = str(bindir)
     env["PYTHON"] = sys.executable
     env["GH_ARGV_LOG"] = str(tmp_path / "gh_argv.log")
     env["GH_STDIN_LOG"] = str(tmp_path / "gh_stdin.log")
@@ -94,16 +118,36 @@ def rig(tmp_path):
     return {"tmp": tmp_path, "env": env, "env_file": env_file, "manifest": manifest}
 
 
-def _run(rig, *args):
+def _guarded(env, cwd, *argv):
     return subprocess.run(
-        [BASH, SCRIPT.as_posix(), "-f", rig["env_file"].as_posix(), *args],
-        env=rig["env"],
-        cwd=str(rig["tmp"]),
+        [BASH, "-c", _GUARD, "stub-guard", *argv],
+        env=env,
+        cwd=cwd,
         capture_output=True,
         text=True,
         encoding="utf-8",
         timeout=120,
     )
+
+
+def _run(rig, *args):
+    proc = _guarded(rig["env"], str(rig["tmp"]), SCRIPT.as_posix(), "-f", rig["env_file"].as_posix(), *args)
+    if proc.returncode == GUARD_EXIT:
+        pytest.fail(f"stub gh not first on PATH; script NOT run: {proc.stderr}")
+    return proc
+
+
+def test_the_stub_guard_refuses_when_the_stub_does_not_resolve(tmp_path):
+    """Negative control: the guard must be able to say NO. With the stub
+    directory empty, `gh` resolves elsewhere (or nowhere) and the script must
+    not start."""
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    marker = tmp_path / "ran"
+    env = {**os.environ, "STUB_DIR": str(empty)}
+    proc = _guarded(env, str(tmp_path), "-c", f"touch '{marker.as_posix()}'")
+    assert proc.returncode == GUARD_EXIT, proc.stderr
+    assert not marker.exists()
 
 
 def _log(rig, name):
