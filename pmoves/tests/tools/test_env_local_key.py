@@ -15,6 +15,8 @@ helpers to fail against them.
 
 from __future__ import annotations
 
+import importlib.util
+import io
 import json
 import os
 import shutil
@@ -29,6 +31,9 @@ PMOVES = Path(__file__).resolve().parents[2]
 TOOL = PMOVES / "tools" / "env_local_key.py"
 
 SECRET = "S3cr3t-VALUE-9f2c-do-not-print"
+# The real overlay's basename, used ONLY to name temp files and to ask git's
+# ignore engine about names. Never joined to a real pmoves/ directory.
+DEFAULT_NAME = ".env.local"
 
 ORIGINAL = (
     b"# node-local overlay (test fixture)\n"
@@ -88,6 +93,16 @@ def assert_value_not_in_audit(tmp_path: Path, value: str) -> None:
     assert value not in raw, "value leaked into the audit log"
 
 
+def _load_tool_module(path: Path = TOOL):
+    """In-process import, for seams a subprocess cannot patch. Callers must
+    always pass --file under tmp_path; the tool also refuses its default path
+    while PYTEST_CURRENT_TEST is set."""
+    spec = importlib.util.spec_from_file_location(f"env_local_key_{id(path)}", path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
 # ------------------------------------------------------------------ unset ---
 
 def test_unset_removes_exactly_one_line_and_keeps_the_rest_byte_identical(tmp_path):
@@ -101,15 +116,24 @@ def test_unset_removes_exactly_one_line_and_keeps_the_rest_byte_identical(tmp_pa
     assert_value_not_in_output(proc, "old-value-xyz")
 
 
-def test_unset_absent_key_is_a_noop_without_backup(tmp_path):
+def test_unset_absent_key_is_a_noop_without_backup_audit_or_echo(tmp_path):
+    # P3: an all-caps VALUE pasted as KEY passes the key regex; if it matches
+    # no line it must be neither echoed nor audited.
     f = _write(tmp_path)
-    proc = _run(TOOL, tmp_path, "unset", "NOT_THERE")
+    proc = _run(TOOL, tmp_path, "unset", "PASTED_VALUE_LOOKS_LIKE_A_KEY")
     assert proc.returncode == 0
-    assert "result=noop" in proc.stdout
+    assert "result=noop" in proc.stdout and "<redacted: not present>" in proc.stdout
+    assert_value_not_in_output(proc, "PASTED_VALUE_LOOKS_LIKE_A_KEY")
     assert f.read_bytes() == ORIGINAL
     assert _backups(tmp_path) == []
-    (row,) = _audit_rows(tmp_path)
-    assert row["changed"] is False and row["line_existed"] is False
+    assert _audit_rows(tmp_path) == []
+
+
+def test_has_absent_key_is_redacted(tmp_path):
+    _write(tmp_path)
+    proc = _run(TOOL, tmp_path, "has", "PASTED_VALUE_LOOKS_LIKE_A_KEY")
+    assert proc.returncode == 1 and "result=absent" in proc.stdout
+    assert_value_not_in_output(proc, "PASTED_VALUE_LOOKS_LIKE_A_KEY")
 
 
 def test_unset_missing_file_is_could_not_measure(tmp_path):
@@ -127,15 +151,58 @@ def test_commented_line_is_not_a_definition(tmp_path):
 # ------------------------------------------------------ refusals (guards) ---
 
 def test_duplicate_key_is_refused_with_count_and_nothing_changes(tmp_path):
-    data = ORIGINAL + b"\nTARGET_KEY=second\nexport TARGET_KEY=third\n"
+    data = ORIGINAL + b"\nTARGET_KEY=second\n"
     f = _write(tmp_path, data)
     for args, stdin in ((("unset", "TARGET_KEY"), None), (("set", "TARGET_KEY"), SECRET)):
         proc = _run(TOOL, tmp_path, *args, stdin=stdin)
         assert proc.returncode == 1, (args, proc.stdout, proc.stderr)
-        assert "appears 3 times" in proc.stderr
+        assert "defined 2 times" in proc.stderr
         assert f.read_bytes() == data
     assert _backups(tmp_path) == []
     assert _audit_rows(tmp_path) == []
+
+
+@pytest.mark.parametrize("inert_line", [b"export TARGET_KEY=third\n",
+                                        b"  TARGET_KEY=indented\n",
+                                        b"\texport TARGET_KEY=both\n"])
+def test_inert_forms_follow_the_loader_and_block_set_and_unset(tmp_path, inert_line):
+    """P2c: with-env.sh loads only unindented `KEY=` lines. Inert forms are
+    reported separately and make set/unset refuse (this REPLACES the old
+    behaviour, which counted them as definitions and kept `export `)."""
+    data = ORIGINAL + b"\n" + inert_line
+    f = _write(tmp_path, data)
+    has = _run(TOOL, tmp_path, "has", "TARGET_KEY")
+    assert has.returncode == 0 and "count=1" in has.stdout and "inert=1" in has.stdout
+    for args, stdin in ((("unset", "TARGET_KEY"), None), (("set", "TARGET_KEY"), SECRET)):
+        proc = _run(TOOL, tmp_path, *args, stdin=stdin)
+        assert proc.returncode == 1 and "inert form" in proc.stderr, proc.stderr
+        assert f.read_bytes() == data
+    assert _backups(tmp_path) == [] and _audit_rows(tmp_path) == []
+
+
+def test_only_an_inert_form_reads_as_absent_but_is_named(tmp_path):
+    f = _write(tmp_path, b"export ONLY_EXPORTED=x\nB=2\n")
+    has = _run(TOOL, tmp_path, "has", "ONLY_EXPORTED")
+    assert has.returncode == 1 and "result=absent" in has.stdout and "inert=1" in has.stdout
+    proc = _run(TOOL, tmp_path, "set", "ONLY_EXPORTED", stdin=SECRET)
+    assert proc.returncode == 1 and "inert form" in proc.stderr
+    assert f.read_bytes() == b"export ONLY_EXPORTED=x\nB=2\n"
+
+
+class _MustNotRead:
+    def isatty(self):
+        return False
+
+    def read(self):
+        raise AssertionError("the value was requested before the duplicate check")
+
+
+def test_duplicates_are_refused_before_the_value_is_requested(tmp_path, capsys):
+    mod = _load_tool_module()
+    f = _write(tmp_path, ORIGINAL + b"\nTARGET_KEY=second\n")
+    rc = mod.main(["--file", str(f), "--audit-log", str(tmp_path / "a.jsonl"),
+                   "set", "TARGET_KEY"], stdin=_MustNotRead())
+    assert rc == 1 and "defined 2 times" in capsys.readouterr().err
 
 
 @pytest.mark.parametrize("bad", [
@@ -190,11 +257,48 @@ def test_set_appends_new_key_after_a_file_without_trailing_newline(tmp_path):
     assert f.read_bytes() == ORIGINAL + b"\nNEW_KEY=" + SECRET.encode() + b"\n"
 
 
-def test_set_preserves_crlf_and_export_prefix(tmp_path):
-    f = _write(tmp_path, b"export WINDOWS_LINE=x\r\nB=2\n")
+def test_set_preserves_crlf(tmp_path):
+    f = _write(tmp_path, b"WINDOWS_LINE=x\r\nB=2\n")
     proc = _run(TOOL, tmp_path, "set", "WINDOWS_LINE", stdin=SECRET)
     assert proc.returncode == 0
-    assert f.read_bytes() == b"export WINDOWS_LINE=" + SECRET.encode() + b"\r\nB=2\n"
+    assert f.read_bytes() == b"WINDOWS_LINE=" + SECRET.encode() + b"\r\nB=2\n"
+
+
+def test_lines_split_on_newline_only(tmp_path):
+    # bytes.splitlines() would split on \x0c / \x85 and act on a fragment.
+    data = b"FORM=a\x0cb\x85c\nTARGET_KEY=v\x0bw\nZ=1\n"
+    f = _write(tmp_path, data)
+    assert _run(TOOL, tmp_path, "unset", "TARGET_KEY").returncode == 0
+    assert f.read_bytes() == b"FORM=a\x0cb\x85c\nZ=1\n"
+
+
+def test_identical_set_is_a_noop(tmp_path):
+    f = _write(tmp_path)
+    proc = _run(TOOL, tmp_path, "set", "TARGET_KEY", stdin="old-value-xyz")
+    assert proc.returncode == 0 and "result=noop" in proc.stdout and "changed=no" in proc.stdout
+    assert f.read_bytes() == ORIGINAL
+    assert _backups(tmp_path) == [] and _audit_rows(tmp_path) == []
+
+
+@pytest.mark.parametrize("risky", ["${OTHER}", "$(id)", "a`id`b"])
+def test_expandable_value_warns_without_echo(tmp_path, risky):
+    _write(tmp_path)
+    proc = _run(TOOL, tmp_path, "set", "TARGET_KEY", stdin=risky)
+    assert proc.returncode == 0 and "WARNING" in proc.stderr
+    assert_value_not_in_output(proc, risky)
+
+
+def test_non_utf8_value_is_could_not_measure(tmp_path):
+    f = _write(tmp_path)
+    env = {k: v for k, v in os.environ.items() if not k.startswith("ENV_LOCAL_KEY_")}
+    proc = subprocess.run(
+        [sys.executable, str(TOOL), "--file", str(f), "--audit-log",
+         str(tmp_path / "audit" / "edits.jsonl"), "set", "TARGET_KEY"],
+        input=b"\xff\xfe\xfd", capture_output=True, env={**env, "PYTHONIOENCODING": "utf-8"},
+        timeout=30)
+    assert proc.returncode == 3, proc.stderr
+    assert b"not valid UTF-8" in proc.stderr and b"Traceback" not in proc.stderr
+    assert f.read_bytes() == ORIGINAL
 
 
 def test_set_creates_missing_file_at_0600(tmp_path):
@@ -248,6 +352,144 @@ def test_audit_rows_carry_lengths_and_never_the_value(tmp_path):
         "unset", len(SECRET), None)
     audit = tmp_path / "audit" / "edits.jsonl"
     assert stat.S_IMODE(audit.stat().st_mode) == 0o600
+
+
+# ------------------------------------------------ P2a: audit must not fail quiet ---
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root ignores directory permissions")
+@pytest.mark.parametrize("action,stdin", [("unset", None), ("set", SECRET)])
+def test_unwritable_audit_log_refuses_before_any_change(tmp_path, action, stdin):
+    f = _write(tmp_path)
+    locked = tmp_path / "locked"
+    locked.mkdir(mode=0o500)
+    try:
+        proc = subprocess.run(
+            [sys.executable, str(TOOL), "--file", str(f), "--audit-log",
+             str(locked / "sub" / "edits.jsonl"), action, "TARGET_KEY"],
+            input=stdin or "", capture_output=True, text=True, timeout=30)
+    finally:
+        locked.chmod(0o700)
+    assert proc.returncode == 1 and "audit log not writable" in proc.stderr, proc.stderr
+    assert f.read_bytes() == ORIGINAL
+    assert _backups(tmp_path) == []
+
+
+@pytest.mark.parametrize("action,stdin", [("unset", None), ("set", SECRET)])
+def test_audit_failure_after_write_is_applied_unaudited_not_could_not_measure(
+        tmp_path, capsys, monkeypatch, action, stdin):
+    mod = _load_tool_module()
+
+    def boom(self, row):
+        self.close()
+        raise OSError(28, "No space left on device")
+
+    monkeypatch.setattr(mod._AuditLog, "append", boom)
+    f = _write(tmp_path)
+    rc = mod.main(["--file", str(f), "--audit-log", str(tmp_path / "audit" / "e.jsonl"),
+                   action, "TARGET_KEY"], stdin=io.StringIO(stdin or ""))
+    out = capsys.readouterr()
+    assert rc == 4
+    assert "result=APPLIED-UNAUDITED" in out.out and "APPLIED-UNAUDITED" in out.err
+    assert "could-not-measure" not in out.out + out.err
+    assert f.read_bytes() != ORIGINAL          # the edit DID land
+    assert len(_backups(tmp_path)) == 1
+    assert SECRET not in out.out + out.err
+
+
+# --------------------------------------------------- P2b: symlinks write through ---
+
+@pytest.mark.parametrize("action,stdin", [("unset", None), ("set", SECRET)])
+def test_symlink_is_written_through_to_its_target(tmp_path, action, stdin):
+    real_dir = tmp_path / "real"
+    real_dir.mkdir()
+    target = real_dir / "overlay.txt"
+    target.write_bytes(ORIGINAL)
+    target.chmod(0o640)
+    link = tmp_path / "overlay.txt"
+    link.symlink_to(target)
+    proc = _run(TOOL, tmp_path, action, "TARGET_KEY", stdin=stdin)
+    assert proc.returncode == 0, proc.stderr
+    assert link.is_symlink() and link.resolve() == target.resolve()
+    assert target.read_bytes() != ORIGINAL
+    assert stat.S_IMODE(target.stat().st_mode) == 0o640
+    assert len(list(real_dir.glob("overlay.txt.bak-*"))) == 1   # next to the target
+    assert _backups(tmp_path) == []
+    assert f"file={target.resolve()}" in proc.stdout and f"via={link}" in proc.stdout
+
+
+def test_dangling_symlink_is_refused(tmp_path):
+    link = tmp_path / "overlay.txt"
+    link.symlink_to(tmp_path / "missing-target")
+    proc = _run(TOOL, tmp_path, "set", "TARGET_KEY", stdin=SECRET)
+    assert proc.returncode == 1 and "dangling symlink" in proc.stderr
+    assert not (tmp_path / "missing-target").exists() and link.is_symlink()
+
+
+# ---------------------------------------- P2d/P3: default path, temp and ignore ---
+
+def _fake_install(tmp_path: Path) -> tuple[Path, Path]:
+    """A copy of the tool whose DEFAULT_FILE is a FAKE overlay in tmp_path."""
+    tools = tmp_path / "pmoves" / "tools"
+    tools.mkdir(parents=True)
+    copy = tools / TOOL.name
+    copy.write_text(TOOL.read_text())
+    fake_default = tmp_path / "pmoves" / DEFAULT_NAME
+    fake_default.write_bytes(ORIGINAL)
+    return copy, fake_default
+
+
+def test_tool_refuses_its_default_path_under_pytest(tmp_path):
+    copy, fake_default = _fake_install(tmp_path)
+    env = {k: v for k, v in os.environ.items() if not k.startswith("ENV_LOCAL_KEY_")}
+    env["PYTEST_CURRENT_TEST"] = "guard-check"
+    proc = subprocess.run([sys.executable, str(copy), "--audit-log",
+                           str(tmp_path / "a.jsonl"), "unset", "TARGET_KEY"],
+                          capture_output=True, text=True, env=env, timeout=30)
+    assert proc.returncode == 1 and "off limits under pytest" in proc.stderr
+    assert fake_default.read_bytes() == ORIGINAL
+
+
+def test_positive_control_default_path_guard_is_what_refused(tmp_path):
+    """Same call without PYTEST_CURRENT_TEST acts on the (fake) default, so
+    the refusal above came from the guard, not from something else."""
+    copy, fake_default = _fake_install(tmp_path)
+    env = {k: v for k, v in os.environ.items()
+           if not k.startswith("ENV_LOCAL_KEY_") and k != "PYTEST_CURRENT_TEST"}
+    proc = subprocess.run([sys.executable, str(copy), "--audit-log",
+                           str(tmp_path / "a.jsonl"), "unset", "TARGET_KEY"],
+                          capture_output=True, text=True, env=env, timeout=30)
+    assert proc.returncode == 0, proc.stderr
+    assert fake_default.read_bytes() != ORIGINAL
+
+
+def test_temp_file_is_named_to_match_the_env_ignore(tmp_path, monkeypatch):
+    mod = _load_tool_module()
+    seen = []
+    real_replace = os.replace
+
+    def spy(src, dst):
+        seen.append(Path(src).name)
+        return real_replace(src, dst)
+
+    monkeypatch.setattr(mod.os, "replace", spy)
+    target = tmp_path / DEFAULT_NAME   # a TEMP file that shares the real name
+    target.write_bytes(ORIGINAL)
+    mod._atomic_write(target, b"X=1\n", 0o600, None)
+    assert seen and seen[0].startswith(DEFAULT_NAME + ".tmp-")
+
+
+def test_backup_temp_and_audit_names_are_git_ignored():
+    """Asks git's ignore engine about NAMES only (--no-index; the paths need
+    not exist and nothing is opened)."""
+    names = [f"pmoves/{DEFAULT_NAME}.bak-20260923T000000Z",
+             f"pmoves/{DEFAULT_NAME}.bak-20260923T000000Z-1",
+             f"pmoves/{DEFAULT_NAME}.tmp-abc123",
+             "pmoves/data/audit/env_local_edits.jsonl"]
+    repo = PMOVES.parent
+    for name in names:
+        proc = subprocess.run(["git", "-C", str(repo), "check-ignore", "--no-index", "-q", name],
+                              capture_output=True, timeout=30)
+        assert proc.returncode == 0, f"not git-ignored: {name}"
 
 
 # -------------------------------------------------------------------- has ---
@@ -359,6 +601,14 @@ def _make(tmp_path: Path, target: str, key: str, stdin: str = "") -> subprocess.
     env["ENV_LOCAL_KEY_FILE"] = str(tmp_path / "overlay.txt")
     env["ENV_LOCAL_KEY_AUDIT"] = str(tmp_path / "audit" / "edits.jsonl")
     env.pop("KEY", None)
+    # P2d HARD PRE-RUN GUARD: the make targets pass no --file, so the ONLY
+    # thing between this test and the real overlay is the override. Resolve
+    # what the tool will act on and refuse to invoke make unless it is ours.
+    tmp_root = Path(os.path.realpath(tmp_path))
+    for var in ("ENV_LOCAL_KEY_FILE", "ENV_LOCAL_KEY_AUDIT"):
+        acted_on = Path(os.path.realpath(env[var]))
+        assert tmp_root in acted_on.parents, f"{var} escapes tmp_path: {acted_on}"
+    assert env.get("PYTEST_CURRENT_TEST"), "tool-side default-path guard would be off"
     return subprocess.run(
         ["make", "-s", "-C", str(PMOVES), target, f"KEY={key}"],
         input=stdin, capture_output=True, text=True, env=env, timeout=60,
