@@ -4081,6 +4081,14 @@ services:
     # steers with CIPHER_DB_SERVICE_KEY=<the key postgrest accepts> in
     # pmoves/.env.local (loaded by with-env.sh into the compose process env).
     - SUPABASE_SERVICE_KEY=${CIPHER_DB_SERVICE_KEY:-${SUPABASE_SERVICE_KEY:-}}
+    # MCP per-request identity (Pmoves-cipher 36b28d0f, src/pmoves/mcp-sse.ts).
+    # Empty by default = ADVISORY: '' is in ADVISORY_VALUES (recognised, no
+    # WARN), and envNumber() treats '' as unset, so the interval/budget fall
+    # back to 60000ms / 200 with no clamp WARN. Set CIPHER_MCP_ENFORCE=true in
+    # pmoves/.env.local to refuse identity mismatches instead of logging them.
+    - CIPHER_MCP_ENFORCE=${CIPHER_MCP_ENFORCE:-}
+    - CIPHER_MCP_ADVISORY_INTERVAL_MS=${CIPHER_MCP_ADVISORY_INTERVAL_MS:-}
+    - CIPHER_MCP_ADVISORY_BUDGET=${CIPHER_MCP_ADVISORY_BUDGET:-}
     - PMOVES_STORAGE_DIR=/data/cipher
     - PMOVES_PORT=8105
     - PMOVES_HOST=0.0.0.0
