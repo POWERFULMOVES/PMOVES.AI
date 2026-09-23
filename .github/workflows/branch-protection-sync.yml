@@ -106,6 +106,79 @@ jobs:
             echo "__EOF__"
           } >> "$GITHUB_OUTPUT"
 
+      # PRE-MINT RESOLUTION. The scoped mint below takes ONE repository list and
+      # fails the whole job if ANY name is not an installation repo, with an error
+      # that names none of them ("at least one repository that does not exist or
+      # is not accessible to the parent installation"). That is how a single
+      # rename (PMOVES-N8N-Auto -> PMOVES-N8N) took this audit dark for all 80
+      # forks from 2026-09-20 on (runs 35503913554, 35599311111).
+      #
+      # So first mint an installation-wide token that can only READ METADATA, and
+      # resolve every derived name through REST. REST follows renames/transfers,
+      # so `.full_name` reveals the canonical name the scoped mint needs.
+      #
+      # POLICY: FAIL and NAME every renamed / missing repo. Do NOT substitute the
+      # redirect target. Reasons:
+      #   1. .gitmodules is the single source for this workflow AND for every
+      #      `git submodule update` clone; substituting here would hide a stale url
+      #      that is still broken (or silently redirected) everywhere else.
+      #   2. A redirect is not a stable identity. GitHub names are
+      #      case-insensitive and a vacated name can be re-claimed: PMOVES-n8n now
+      #      resolves to the fork formerly called PMOVES-N8N-Auto, not the flows
+      #      repo it named before (#3115). Following redirects would have pointed
+      #      branch-protection writes at a repo .gitmodules never named.
+      #   3. This job has admin:write downstream; its target set should be exactly
+      #      what a reviewed .gitmodules says, never what a redirect implies.
+      # Case-only differences are reported as notices, not failures (names are
+      # case-insensitive, so the scoped mint accepts them).
+      - uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3
+        id: probe-token
+        with:
+          client-id: ${{ secrets.GH_APP_CLIENT_ID }}
+          private-key: ${{ secrets.GH_APP_SEC }}
+          owner: ${{ github.repository_owner }}
+          permission-metadata: read
+
+      - name: Resolve derived repos to canonical names (fail naming any drift)
+        env:
+          GH_TOKEN: ${{ steps.probe-token.outputs.token }}
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          bad=0; ok=0
+          {
+            echo "### Repo resolution (.gitmodules -> GitHub canonical name)"
+            echo ""
+          } >> "$GITHUB_STEP_SUMMARY"
+          while read -r repo; do
+            [ -z "$repo" ] && continue
+            want="${OWNER}/${repo}"
+            # `if !` form: Actions runs `bash -e`, so a bare failing assignment
+            # would abort here before the repo could be named.
+            if ! full=$(gh api "repos/${want}" --jq .full_name 2>/tmp/resolve_err) || [ -z "$full" ]; then
+              msg=$(head -1 /tmp/resolve_err)
+              echo "::error title=branch-protection-sync: unresolvable repo::${want} (from .gitmodules) does not exist or is not in the App installation: ${msg}"
+              echo "- MISSING: \`${want}\` — ${msg}" >> "$GITHUB_STEP_SUMMARY"
+              bad=$((bad+1)); continue
+            fi
+            if [ "$full" = "$want" ]; then
+              ok=$((ok+1))
+            elif [ "${full,,}" = "${want,,}" ]; then
+              echo "::notice title=branch-protection-sync: case-only difference::${want} is canonically ${full}"
+              ok=$((ok+1))
+            else
+              echo "::error title=branch-protection-sync: renamed repo::${want} (from .gitmodules) now resolves to ${full}. Repoint the submodule url in .gitmodules and the fork_registry.json key."
+              echo "- RENAMED: \`${want}\` -> \`${full}\`" >> "$GITHUB_STEP_SUMMARY"
+              bad=$((bad+1))
+            fi
+          done < <(cut -f1 forks.tsv | sort -u)
+          echo "resolved=${ok} drifted=${bad}"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "resolved=${ok} drifted=${bad}" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$bad" -gt 0 ]; then
+            echo "::error::${bad} repo name(s) derived from .gitmodules do not resolve to themselves; the scoped token mint would fail opaquely. Fix .gitmodules (see errors above)."
+            exit 1
+          fi
+
       # Mint INLINE in this job (not via _app-token.yml) on purpose: the token is
       # consumed in the SAME job as the API calls, sidestepping the cross-job
       # output-token auto-revoke nuance of the reusable (branch-protection-sync
@@ -177,7 +250,48 @@ jobs:
             }'
           }
 
-          APPLIED=0; SKIPPED=0; FAILED=0
+          # Normalize a GET .../protection response into the SAME shape policy()
+          # emits, so current vs intended can be diffed field by field. A PUT
+          # replaces the whole object, so fields policy() omits (code-owner
+          # reviews, last-push approval, lock/block) are reset to false — they are
+          # included here so a would-be downgrade shows up as a change.
+          normalize() {
+            jq -c '{
+              required_status_checks: (if .required_status_checks then {strict: .required_status_checks.strict, contexts: .required_status_checks.contexts} else null end),
+              enforce_admins: (.enforce_admins.enabled // false),
+              required_pull_request_reviews: (if .required_pull_request_reviews then {
+                required_approving_review_count: (.required_pull_request_reviews.required_approving_review_count // 0),
+                dismiss_stale_reviews: (.required_pull_request_reviews.dismiss_stale_reviews // false),
+                require_code_owner_reviews: (.required_pull_request_reviews.require_code_owner_reviews // false),
+                require_last_push_approval: (.required_pull_request_reviews.require_last_push_approval // false)
+              } else null end),
+              restrictions: (if .restrictions then "set" else null end),
+              allow_force_pushes: (.allow_force_pushes.enabled // false),
+              allow_deletions: (.allow_deletions.enabled // false),
+              required_conversation_resolution: (.required_conversation_resolution.enabled // false),
+              required_linear_history: (.required_linear_history.enabled // false),
+              lock_branch: (.lock_branch.enabled // false),
+              block_creations: (.block_creations.enabled // false)
+            }'
+          }
+          # Intended state in normalized shape (policy() + the reset defaults).
+          intended() {
+            policy "$1" | jq -c '. + {
+              required_pull_request_reviews: (.required_pull_request_reviews + {require_code_owner_reviews: false, require_last_push_approval: false}),
+              lock_branch: false, block_creations: false
+            }'
+          }
+
+          if [ "$DRY_RUN" = "true" ]; then
+            {
+              echo "### Dry run — current vs intended (required_reviews=${REQUIRED_REVIEWS:-0})"
+              echo ""
+              echo "| repo@branch | state | reviews current | reviews intended | would change |"
+              echo "|---|---|---|---|---|"
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          APPLIED=0; SKIPPED=0; FAILED=0; WOULD=0; NOOP=0; UNREADABLE=0
           while IFS="$(printf '\t')" read repo branch; do
             [ -z "$repo" ] && continue
 
@@ -187,27 +301,57 @@ jobs:
             cur=$(gh api "repos/${OWNER}/${repo}/branches/${branch}/protection" 2>/tmp/bp_err)
             rc=$?
             rsc="null"
+            reviews_now="none"
             if [ "$rc" -eq 0 ]; then
               checks=$(printf '%s' "$cur" | jq -r '.required_status_checks.contexts | length // 0' 2>/dev/null)
               force=$(printf '%s'  "$cur" | jq -r '.allow_force_pushes.enabled' 2>/dev/null)
               del=$(printf '%s'    "$cur" | jq -r '.allow_deletions.enabled' 2>/dev/null)
-              state="protected[checks=${checks} force=${force} del=${del}]"
+              reviews_now=$(printf '%s' "$cur" | jq -r 'if .required_pull_request_reviews then (.required_pull_request_reviews.required_approving_review_count // 0 | tostring) else "none" end' 2>/dev/null)
+              state="protected[checks=${checks} force=${force} del=${del} reviews=${reviews_now}]"
               # Preserve existing required checks verbatim.
               rsc=$(printf '%s' "$cur" | jq -c 'if .required_status_checks then {strict: .required_status_checks.strict, contexts: .required_status_checks.contexts} else null end' 2>/dev/null)
               [ -z "$rsc" ] && rsc="null"
             elif grep -qiE 'Upgrade to GitHub Pro|make this repository public' /tmp/bp_err; then
               echo "  s ${repo}@${branch}: SKIP — needs GitHub Pro (private repo) or public visibility"
+              [ "$DRY_RUN" = "true" ] && echo "| ${repo}@${branch} | needs-pro (skip) | – | – | no |" >> "$GITHUB_STEP_SUMMARY"
               SKIPPED=$((SKIPPED+1)); continue
-            else
+            elif grep -qi 'Branch not protected' /tmp/bp_err; then
               state="UNPROTECTED"
+            else
+              # 404 branch-missing, 403, 5xx: we could NOT read the state. Do not
+              # report it as UNPROTECTED — that is a claim we have no evidence for.
+              err=$(tr '\n' ' ' < /tmp/bp_err | cut -c1-160)
+              echo "  ? ${repo}@${branch}: UNREADABLE — ${err}"
+              [ "$DRY_RUN" = "true" ] && echo "| ${repo}@${branch} | UNREADABLE: ${err} | ? | ${REQUIRED_REVIEWS:-0} | unknown |" >> "$GITHUB_STEP_SUMMARY"
+              UNREADABLE=$((UNREADABLE+1)); continue
             fi
 
             if [ "$ONLY_UNPROTECTED" = "true" ] && [ "$state" != "UNPROTECTED" ]; then
               echo "  = ${repo}@${branch}: ${state} (skip, already protected)"
+              [ "$DRY_RUN" = "true" ] && echo "| ${repo}@${branch} | ${state} (skip) | ${reviews_now} | – | no |" >> "$GITHUB_STEP_SUMMARY"
               SKIPPED=$((SKIPPED+1)); continue
             fi
             if [ "$DRY_RUN" = "true" ]; then
-              echo "  ~ ${repo}@${branch}: ${state} -> WOULD apply (preserve checks=${rsc})"
+              want=$(intended "$rsc")
+              if [ "$state" = "UNPROTECTED" ]; then
+                changed="(all — unprotected)"
+              else
+                now=$(printf '%s' "$cur" | normalize)
+                # Name review sub-fields individually: the count and
+                # last-push-approval are separate decisions for the operator.
+                changed=$(jq -rn --argjson a "$now" --argjson b "$want" '[$b | keys[] as $k |
+                  if $k == "required_pull_request_reviews" and ($a[$k] | type) == "object" then
+                    ($b[$k] | keys[] as $j | select($a[$k][$j] != $b[$k][$j]) | "reviews." + $j)
+                  else select($a[$k] != $b[$k]) | $k end] | join(",")')
+              fi
+              if [ -z "$changed" ]; then
+                echo "  . ${repo}@${branch}: ${state} -> no change"
+                NOOP=$((NOOP+1)); verdict="no"
+              else
+                echo "  ~ ${repo}@${branch}: ${state} -> WOULD change [${changed}] reviews ${reviews_now}->${REQUIRED_REVIEWS:-0} (preserve checks=${rsc})"
+                WOULD=$((WOULD+1)); verdict="yes: ${changed}"
+              fi
+              echo "| ${repo}@${branch} | ${state} | ${reviews_now} | ${REQUIRED_REVIEWS:-0} | ${verdict} |" >> "$GITHUB_STEP_SUMMARY"
               continue
             fi
 
@@ -231,5 +375,10 @@ jobs:
 
           echo ""
           echo "Done. dry_run=${DRY_RUN} only_unprotected=${ONLY_UNPROTECTED} reviews=${REQUIRED_REVIEWS}"
-          [ "$DRY_RUN" != "true" ] && echo "applied=${APPLIED} skipped=${SKIPPED} failed=${FAILED}"
-          echo "Legend: ~ would-apply  + applied  = skipped(protected)  s skipped(needs-pro)  ! failed"
+          if [ "$DRY_RUN" = "true" ]; then
+            echo "would_change=${WOULD} no_change=${NOOP} skipped=${SKIPPED} unreadable=${UNREADABLE}"
+            { echo ""; echo "would_change=${WOULD} no_change=${NOOP} skipped=${SKIPPED} unreadable=${UNREADABLE}"; } >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "applied=${APPLIED} skipped=${SKIPPED} failed=${FAILED} unreadable=${UNREADABLE}"
+          fi
+          echo "Legend: ~ would-change  . no-change  + applied  = skipped(protected)  s skipped(needs-pro)  ? unreadable(404 branch-missing / 403 / other — NOT written)  ! failed"
