@@ -114,6 +114,7 @@ jobs:
           # parsed from the runner's own log, not from a redirected file).
           cat > /tmp/kilo-review-run.sh << 'SHEOF'
           set -euo pipefail
+          set -f  # preference list is word-split on purpose; never glob-expanded
           npm install -g @kilocode/cli@7.6.2 >/dev/null 2>&1
           mkdir -p ~/.config/kilo && cd ~/.config/kilo
           npm init -y >/dev/null 2>&1
