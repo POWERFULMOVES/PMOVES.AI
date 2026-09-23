@@ -61,6 +61,7 @@ PMOVES uses a Known Roads model: every dangerous-but-necessary operation has a c
 | Supabase crash-loop diagnosis | `pmoves/docs/operations/SUPABASE_OPERATIONS.md` | — |
 | Kong port bind silent-fail | `docker events --filter container=X` — check OOM FIRST | — |
 | Bootstrap a node onto the Docker MCP Toolkit (per-node MCP surface) | `make -C pmoves mcp-toolkit-bootstrap` + `mcp-toolkit-connect` — **run ON the node**, no raw-SSH sidestep | runbook `pmoves/docs/runbooks/MCP_TOOLKIT_NODE_BOOTSTRAP.md`; agent `fleet-node-deployer` |
+| Give an agent / drop-in model cipher memory (store + search) | § Known Road — Cipher memory for any agent or drop-in model (below) | `pmoves-cipher-memory` |
 
 **`volume-reset SERVICE` values:** `neo4j`, `tensorzero-clickhouse`, `meilisearch`, `qdrant`, `minio`, `supabase-db`, `nats`.
 
@@ -73,6 +74,91 @@ PMOVES uses a Known Roads model: every dangerous-but-necessary operation has a c
 **When raw commands are appropriate:** only when the user explicitly directs. The `ask` prompt surfaces to user for approval.
 
 If a rebuild manifest arrives as raw `docker compose build ...`, translate to the nearest Known Road whenever possible. Use raw build only when no dedicated target exists yet, and still return to the Make-target bring-up path.
+
+## Known Road — Cipher memory for any agent or drop-in model
+
+This takes a harness or model with no PMOVES context from zero to a working
+store + search. Each command below is marked RUN (executed on B850, 2026-09-23,
+output summarised) or UNVERIFIED. The service-side behaviour is documented in
+`pmoves/docs/TAC/TAC_CIPHER.md` § MCP identity enforcement.
+
+**1. Pick the endpoint.** The service is `cipher-api` on port 8105. Only
+`/health` is unauthenticated. Every other path returns 401 without a bearer,
+including paths that do not exist, so an unauthenticated 401 tells you nothing.
+
+| Your client | Use |
+|---|---|
+| Claude Code / Crush via the fleet roster (`.claude/mcp.json`) | server **`pmoves-cipher-local`** (`http://localhost:8105/mcp/sse`). This entry connects today. |
+| Same roster, other node's cipher | server `pmoves-cipher` (`http://${TS_Z890}:8105/mcp/sse`). It is refused or times out unless the serving node published beyond loopback: compose binds `"${CIPHER_BIND:-127.0.0.1}:8105:8105"`. The fix is setting `CIPHER_BIND` on the serving node, which is an operator decision. Do not delete the entry. |
+| New MCP harness (Hermes, Kimi, A0-style, a drop-in model's agent loop) | **streamable-http `POST http://localhost:8105/mcp`**, which is stateless and cannot hit the legacy "Unknown session" 400. Agent Zero uses this. |
+| No MCP at all | REST: `POST /api/memory` `{agentId, content, category?, tags?}` and `GET /api/memory/search?q=&agentId=&limit=`. REST **always** refuses an `agentId` that differs from the token's agent (403), whatever `CIPHER_MCP_ENFORCE` says. |
+
+Every call needs the header `Authorization: Bearer ${CIPHER_API_TOKEN}`. Start
+Claude Code through `claude-pmoves` so the variable is present. Claude Code does
+not expand `${VAR}` in mcp.json by itself; the launcher's normaliser does.
+
+**2. Pick your `agentId`.** Use the **signing-card spelling**
+(`h.agent_id` in `pmoves/config/signing_identity_cards.yaml`, e.g.
+`b850-claude`, `z890-claude`, `4090-claude`), not the agent-registry key
+(`claude_b850`). `agentId` is required on every tool call. Never send `*`: it
+is refused under a token on REST, and under enforce on MCP.
+
+```bash
+make -C pmoves cipher-identity AGENT=<card id>     # RUN: reads no secret, sends nothing
+```
+
+RUN on B850: `AGENT=b850-claude` → `signing card yes`,
+`cipher mode bootstrap`, `writes land as bootstrap`. The exit code is 1 when
+the carry is not intact. That is the correct result on a node that shares the
+bootstrap token. An uncarded id such as `drop-in-model-x` → `signing card no`.
+
+**3. A brand-new agent or model.**
+
+- **Signing card.** There is **no Make target to create one.** A card is a
+  reviewed edit to `signing_identity_cards.yaml`, made by the operator per
+  `pmoves/docs/operations/SIGNING_IDENTITY_CARDS.md` § "How to issue a new
+  card", with `h.agent_id` as the spelling you will pass. Until the card lands,
+  the model still works; see step 4.
+- **Per-agent token.** Run
+  `make -C pmoves cipher-mint-token AGENT=<card id>`. It requires an ACTIVE
+  card, and its default scopes are memory, reasoning and session read+write.
+  Deliver the token through the CHIT pipeline (`secrets-funnel`), never by
+  pasting it. **UNVERIFIED:** not run, because minting is a live write. The
+  target exists at `pmoves/Makefile` `cipher-mint-token:`.
+
+**4. What works before you have a per-agent token.** With the node's bootstrap
+bearer:
+
+- **MCP:** runs in **advisory** mode (`CIPHER_MCP_ENFORCE` unset, the default).
+  Your call succeeds, and the write is filed under the `agentId` you
+  **declared**. Cipher also logs one line:
+  `pmoves-mcp-auth: ADVISORY … token-agent='bootstrap' declared-agent='<you>'`.
+  That line is the migration signal, not an error. Attribution is
+  **self-asserted** until you hold a per-agent token.
+- **REST:** does NOT behave this way. A bootstrap bearer plus your own
+  `agentId` is a 403 on REST. So a model without MCP needs a per-agent token,
+  or must declare `agentId: "bootstrap"` (which files its memory under the
+  shared bootstrap identity).
+- **After enforcement is turned on:** MCP behaves like REST. Mint the token
+  before that day.
+
+**5. Prove it.** Store, then search, with the same `agentId`, from the new
+harness. **UNVERIFIED in this session:** it would be a live write to
+production memory. It was measured earlier via `pmoves-cipher-local`
+(store + search work). For a write-free first check, a session that has the
+MCP tools can call `pmoves_cipher_mcp_list` with your `agentId`.
+
+**Triage when there is no memory. Check three terms, in this order:**
+
+| Term | Command | What it tells you |
+|---|---|---|
+| **Roster**: did this session get the env and the servers? | `make -C pmoves session-check` (RUN: 18 servers declared; cipher entries resolved; `hostinger` and `supabase-db` unresolvable; exit 0) | Reads no secrets. `x` = literal `${VAR}` goes on the wire; `!` = empty bearer. Remedy: relaunch via `claude-pmoves`. |
+| **Agent definition**: may THIS agent call the tools? | read the agent's frontmatter in `.claude/agents/<name>.md` | `tools:` is an **allowlist**, and it fails closed silently. A subagent whose `tools:` omits `mcp__pmoves-cipher-local__*` has no cipher tools even when the roster is healthy. `disallowedTools: mcp__<server>` denies a whole server. Measured: `memory-agent` and `delivery-agent` both list `tools:` without any cipher MCP entry. |
+| **Service**: is cipher up and reachable on the URL the roster names? | `make -C pmoves cipher-health` (RUN: 200 `cipher-pmoves-shim`) and `python3 pmoves/tools/cipher_preflight.py` (RUN: `pmoves-cipher` DOWN timed out; `pmoves-cipher-local` OK 200; exit 0) | `/health` is 200 in every auth posture, so health alone cannot prove your bearer works. Preflight probes each roster URL. |
+
+If the roster, the agent definition and the service are all healthy and calls
+still fail, the cause is the token. A 403 whose error names the token's agent
+means your `agentId` disagrees with your token: go back to step 2.
 
 ## Known Roads — Protected-File Edits via `KNOWN_ROAD`
 
