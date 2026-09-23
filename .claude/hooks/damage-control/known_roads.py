@@ -306,6 +306,11 @@ def _actor_fields() -> Dict[str, str]:
     `agent` keeps its old value (AGENT_ID, else PMOVES_NODE_ID, else "unknown")
     unless a REGISTERED body is acting, in which case the body takes `agent` and
     the old value moves to `node`, so node attribution is never lost.
+
+    The node value is AMBIGUOUS: AGENT_ID is also used by other tools for an
+    agent name, and whatever it holds is recorded as the node. Row schema and
+    grouping rule (`node if present else agent`):
+    .claude/skills/known-roads/SKILL.md § The trail row.
     """
     node = os.environ.get("AGENT_ID") or os.environ.get("PMOVES_NODE_ID") or "unknown"
     raw_type = _HOOK_INPUT.get("agent_type")
