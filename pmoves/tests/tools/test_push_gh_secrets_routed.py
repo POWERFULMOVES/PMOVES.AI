@@ -110,7 +110,11 @@ def rig(tmp_path):
 
     env = dict(os.environ)
     env["STUB_DIR"] = str(bindir)
-    env["PYTHON"] = sys.executable
+    # The script finds python through pmoves/scripts/pm-python.sh; pin it to
+    # this interpreter (which has PyYAML). PMOVES_PYTHON is word-split, so a
+    # path with a space is left to discovery instead.
+    if " " not in sys.executable:
+        env["PMOVES_PYTHON"] = sys.executable
     env["GH_ARGV_LOG"] = str(tmp_path / "gh_argv.log")
     env["GH_STDIN_LOG"] = str(tmp_path / "gh_stdin.log")
     for name in VALUES:
@@ -269,3 +273,14 @@ def test_a_crlf_env_file_does_not_push_a_carriage_return(rig, mode):
     assert pushed, "nothing was pushed"
     assert b"\r" not in pushed, pushed
     assert set(pushed.decode("utf-8").splitlines()) == set(VALUES.values())
+
+
+def test_routed_finds_python_through_pm_python(rig):
+    """The shared discovery is used, so its PMOVES_PYTHON pin is honoured: a
+    pin naming no interpreter stops the run instead of falling through to a
+    bare `python3` (the Windows Store stub on Windows nodes)."""
+    rig["env"]["PMOVES_PYTHON"] = (rig["tmp"] / "no-such-python").as_posix()
+    proc = _run(rig, "--routed", "--repo", "O/R", "--manifest", rig["manifest"].as_posix())
+    assert proc.returncode != 0
+    assert "PMOVES_PYTHON" in proc.stderr
+    assert _log(rig, "gh_argv.log") == ""

@@ -106,12 +106,13 @@ fi
 # script never parses the manifest itself. Names and routes are printed; values
 # only ever travel on gh's stdin.
 push_routed() {
-  local py="${PYTHON:-}"
-  if [[ -z "$py" ]]; then
-    py="$(command -v python3 2>/dev/null || command -v python 2>/dev/null || true)"
-  fi
-  if [[ -z "$py" ]]; then
-    echo "python not found; --routed needs it to read the manifest." >&2
+  # The ONE python discovery (canonical venv, then platform launchers; the
+  # Windows Store `python3` stub is not a usable interpreter). PMOVES_PYTHON
+  # pins it. PyYAML is required to read the manifest.
+  # shellcheck source=../scripts/pm-python.sh
+  . "$(dirname "${BASH_SOURCE[0]}")/../scripts/pm-python.sh"
+  if ! pm_pick_python yaml; then
+    echo "No python with PyYAML found (pin one with PMOVES_PYTHON); --routed needs it to read the manifest." >&2
     exit 1
   fi
   local emitter
@@ -121,7 +122,7 @@ push_routed() {
     emit_args+=(--manifest "$MANIFEST")
   fi
   local routes
-  if ! routes="$("$py" "$emitter" "${emit_args[@]}")"; then
+  if ! routes="$("${PM_PY[@]}" "$emitter" "${emit_args[@]}")"; then
     echo "Could not read github_secret routes from the manifest; nothing pushed." >&2
     exit 1
   fi
