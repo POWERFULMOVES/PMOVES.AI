@@ -282,18 +282,56 @@ jobs:
             }'
           }
 
-          if [ "$DRY_RUN" = "true" ]; then
-            {
+          # Field-level diff over the UNION of keys in current and intended,
+          # so a field present on only one side is still reported. Review
+          # sub-fields are named individually (count and last-push approval are
+          # separate operator decisions). -e: jq exits non-zero on bad input.
+          fielddiff() {
+            jq -ern --argjson a "$1" --argjson b "$2" '
+              def ks($x; $y): (($x // {}) | keys) + (($y // {}) | keys) | unique;
+              [ ks($a; $b)[] as $k |
+                if $k == "required_pull_request_reviews"
+                   and ($a[$k] | type) == "object" and ($b[$k] | type) == "object" then
+                  (ks($a[$k]; $b[$k])[] as $j | select($a[$k][$j] != $b[$k][$j]) | "reviews." + $j)
+                else select($a[$k] != $b[$k]) | $k end
+              ] | join(",")'
+          }
+
+          # Markdown-table cell: a literal | would split the column.
+          md() { printf '%s' "$1" | tr '\n' ' ' | sed 's/|/\\|/g'; }
+
+          # COULD-NOT-MEASURE is never silent. A branch whose state we could not
+          # read or parse is annotated (warning in a dry run, error in a live
+          # run), logged, tabled and counted, and is NEVER written: a PUT built
+          # from an unparsed response would null out its existing required
+          # checks. A live run with any unreadable branch exits 3.
+          unreadable() {
+            local rb="$1" why="$2"
+            if [ "$DRY_RUN" = "true" ]; then
+              echo "::warning title=branch-protection-sync: UNREADABLE::${rb}: ${why}"
+            else
+              echo "::error title=branch-protection-sync: UNREADABLE::${rb}: ${why} (not written)"
+            fi
+            echo "  ? ${rb}: UNREADABLE — ${why}"
+            echo "| $(md "$rb") | UNREADABLE: $(md "$why") | ? | ${REQUIRED_REVIEWS:-0} | unknown |" >> "$GITHUB_STEP_SUMMARY"
+            UNREADABLE=$((UNREADABLE+1))
+          }
+
+          {
+            if [ "$DRY_RUN" = "true" ]; then
               echo "### Dry run — current vs intended (required_reviews=${REQUIRED_REVIEWS:-0})"
-              echo ""
-              echo "| repo@branch | state | reviews current | reviews intended | would change |"
-              echo "|---|---|---|---|---|"
-            } >> "$GITHUB_STEP_SUMMARY"
-          fi
+            else
+              echo "### Live run (required_reviews=${REQUIRED_REVIEWS:-0})"
+            fi
+            echo ""
+            echo "| repo@branch | state | reviews current | reviews intended | would change |"
+            echo "|---|---|---|---|---|"
+          } >> "$GITHUB_STEP_SUMMARY"
 
           APPLIED=0; SKIPPED=0; FAILED=0; WOULD=0; NOOP=0; UNREADABLE=0
-          while IFS="$(printf '\t')" read repo branch; do
+          while IFS="$(printf '\t')" read -r repo branch; do
             [ -z "$repo" ] && continue
+            rb="${repo}@${branch}"
 
             # State detection via EXIT CODE — gh api prints the 404/403 error JSON
             # to stdout, so testing output-emptiness mis-reads every branch as
@@ -303,65 +341,74 @@ jobs:
             rsc="null"
             reviews_now="none"
             if [ "$rc" -eq 0 ]; then
-              checks=$(printf '%s' "$cur" | jq -r '.required_status_checks.contexts | length // 0' 2>/dev/null)
-              force=$(printf '%s'  "$cur" | jq -r '.allow_force_pushes.enabled' 2>/dev/null)
-              del=$(printf '%s'    "$cur" | jq -r '.allow_deletions.enabled' 2>/dev/null)
-              reviews_now=$(printf '%s' "$cur" | jq -r 'if .required_pull_request_reviews then (.required_pull_request_reviews.required_approving_review_count // 0 | tostring) else "none" end' 2>/dev/null)
+              # Parse everything up front; any failure -> UNREADABLE, never a
+              # silent empty value (set +e above means jq failures do not abort).
+              if ! printf '%s' "$cur" | jq -e 'type == "object"' >/dev/null 2>&1 \
+                 || ! parsed=$(printf '%s' "$cur" | jq -er '[
+                      (.required_status_checks.contexts // [] | length | tostring),
+                      (.allow_force_pushes.enabled | tostring),
+                      (.allow_deletions.enabled | tostring),
+                      (if .required_pull_request_reviews then (.required_pull_request_reviews.required_approving_review_count // 0 | tostring) else "none" end)
+                    ] | join("\t")' 2>/dev/null) \
+                 || ! rsc=$(printf '%s' "$cur" | jq -ec 'if .required_status_checks then {strict: .required_status_checks.strict, contexts: .required_status_checks.contexts} else null end' 2>/dev/null) \
+                 || ! now=$(printf '%s' "$cur" | normalize 2>/dev/null) || [ -z "$now" ]; then
+                unreadable "$rb" "HTTP 200 but the protection response did not parse as expected"
+                continue
+              fi
+              IFS="$(printf '\t')" read -r checks force del reviews_now <<< "$parsed"
               state="protected[checks=${checks} force=${force} del=${del} reviews=${reviews_now}]"
-              # Preserve existing required checks verbatim.
-              rsc=$(printf '%s' "$cur" | jq -c 'if .required_status_checks then {strict: .required_status_checks.strict, contexts: .required_status_checks.contexts} else null end' 2>/dev/null)
-              [ -z "$rsc" ] && rsc="null"
             elif grep -qiE 'Upgrade to GitHub Pro|make this repository public' /tmp/bp_err; then
-              echo "  s ${repo}@${branch}: SKIP — needs GitHub Pro (private repo) or public visibility"
-              [ "$DRY_RUN" = "true" ] && echo "| ${repo}@${branch} | needs-pro (skip) | – | – | no |" >> "$GITHUB_STEP_SUMMARY"
+              echo "  s ${rb}: SKIP — needs GitHub Pro (private repo) or public visibility"
+              echo "| $(md "$rb") | needs-pro (skip) | – | – | no |" >> "$GITHUB_STEP_SUMMARY"
               SKIPPED=$((SKIPPED+1)); continue
             elif grep -qi 'Branch not protected' /tmp/bp_err; then
               state="UNPROTECTED"
             else
               # 404 branch-missing, 403, 5xx: we could NOT read the state. Do not
               # report it as UNPROTECTED — that is a claim we have no evidence for.
-              err=$(tr '\n' ' ' < /tmp/bp_err | cut -c1-160)
-              echo "  ? ${repo}@${branch}: UNREADABLE — ${err}"
-              [ "$DRY_RUN" = "true" ] && echo "| ${repo}@${branch} | UNREADABLE: ${err} | ? | ${REQUIRED_REVIEWS:-0} | unknown |" >> "$GITHUB_STEP_SUMMARY"
-              UNREADABLE=$((UNREADABLE+1)); continue
+              unreadable "$rb" "$(tr '\n' ' ' < /tmp/bp_err | cut -c1-160)"
+              continue
             fi
 
             if [ "$ONLY_UNPROTECTED" = "true" ] && [ "$state" != "UNPROTECTED" ]; then
-              echo "  = ${repo}@${branch}: ${state} (skip, already protected)"
-              [ "$DRY_RUN" = "true" ] && echo "| ${repo}@${branch} | ${state} (skip) | ${reviews_now} | – | no |" >> "$GITHUB_STEP_SUMMARY"
+              echo "  = ${rb}: ${state} (skip, already protected)"
+              echo "| $(md "$rb") | $(md "$state") (skip) | ${reviews_now} | – | no |" >> "$GITHUB_STEP_SUMMARY"
               SKIPPED=$((SKIPPED+1)); continue
             fi
+
+            if ! want=$(intended "$rsc" 2>/dev/null) || [ -z "$want" ]; then
+              unreadable "$rb" "could not build the intended policy from preserved checks=${rsc}"
+              continue
+            fi
+            if [ "$state" = "UNPROTECTED" ]; then
+              changed="(all — unprotected)"
+            elif ! changed=$(fielddiff "$now" "$want" 2>/dev/null); then
+              unreadable "$rb" "field diff failed (current vs intended did not compare)"
+              continue
+            fi
+
             if [ "$DRY_RUN" = "true" ]; then
-              want=$(intended "$rsc")
-              if [ "$state" = "UNPROTECTED" ]; then
-                changed="(all — unprotected)"
-              else
-                now=$(printf '%s' "$cur" | normalize)
-                # Name review sub-fields individually: the count and
-                # last-push-approval are separate decisions for the operator.
-                changed=$(jq -rn --argjson a "$now" --argjson b "$want" '[$b | keys[] as $k |
-                  if $k == "required_pull_request_reviews" and ($a[$k] | type) == "object" then
-                    ($b[$k] | keys[] as $j | select($a[$k][$j] != $b[$k][$j]) | "reviews." + $j)
-                  else select($a[$k] != $b[$k]) | $k end] | join(",")')
-              fi
               if [ -z "$changed" ]; then
-                echo "  . ${repo}@${branch}: ${state} -> no change"
+                echo "  . ${rb}: ${state} -> no change"
                 NOOP=$((NOOP+1)); verdict="no"
               else
-                echo "  ~ ${repo}@${branch}: ${state} -> WOULD change [${changed}] reviews ${reviews_now}->${REQUIRED_REVIEWS:-0} (preserve checks=${rsc})"
+                echo "  ~ ${rb}: ${state} -> WOULD change [${changed}] reviews ${reviews_now}->${REQUIRED_REVIEWS:-0} (preserve checks=${rsc})"
                 WOULD=$((WOULD+1)); verdict="yes: ${changed}"
               fi
-              echo "| ${repo}@${branch} | ${state} | ${reviews_now} | ${REQUIRED_REVIEWS:-0} | ${verdict} |" >> "$GITHUB_STEP_SUMMARY"
+              echo "| $(md "$rb") | $(md "$state") | ${reviews_now} | ${REQUIRED_REVIEWS:-0} | $(md "$verdict") |" >> "$GITHUB_STEP_SUMMARY"
               continue
             fi
 
             out=$(policy "$rsc" | gh api -X PUT "repos/${OWNER}/${repo}/branches/${branch}/protection" --input - 2>&1)
             if [ $? -eq 0 ]; then
-              echo "  + ${repo}@${branch}: applied (checks preserved=${rsc})"
+              echo "  + ${rb}: applied (checks preserved=${rsc})"
+              echo "| $(md "$rb") | $(md "$state") | ${reviews_now} | ${REQUIRED_REVIEWS:-0} | applied: $(md "${changed:-no field change}") |" >> "$GITHUB_STEP_SUMMARY"
               APPLIED=$((APPLIED+1))
             else
-              echo "  ! ${repo}@${branch}: FAILED"; FAILED=$((FAILED+1))
+              echo "  ! ${rb}: FAILED"; FAILED=$((FAILED+1))
               echo "$out" | head -3 | sed 's/^/      /'
+              echo "::error title=branch-protection-sync: PUT failed::${rb}: $(printf '%s' "$out" | head -1 | cut -c1-160)"
+              echo "| $(md "$rb") | $(md "$state") | ${reviews_now} | ${REQUIRED_REVIEWS:-0} | FAILED: $(md "$(printf '%s' "$out" | head -1 | cut -c1-120)") |" >> "$GITHUB_STEP_SUMMARY"
               case "$out" in
                 *"Upgrade to GitHub Pro"*|*"make this repository public"*)
                   echo "      -> needs GitHub Pro (private repo) or public visibility." ;;
@@ -376,9 +423,18 @@ jobs:
           echo ""
           echo "Done. dry_run=${DRY_RUN} only_unprotected=${ONLY_UNPROTECTED} reviews=${REQUIRED_REVIEWS}"
           if [ "$DRY_RUN" = "true" ]; then
-            echo "would_change=${WOULD} no_change=${NOOP} skipped=${SKIPPED} unreadable=${UNREADABLE}"
-            { echo ""; echo "would_change=${WOULD} no_change=${NOOP} skipped=${SKIPPED} unreadable=${UNREADABLE}"; } >> "$GITHUB_STEP_SUMMARY"
+            totals="would_change=${WOULD} no_change=${NOOP} skipped=${SKIPPED} unreadable=${UNREADABLE}"
           else
-            echo "applied=${APPLIED} skipped=${SKIPPED} failed=${FAILED} unreadable=${UNREADABLE}"
+            totals="applied=${APPLIED} skipped=${SKIPPED} failed=${FAILED} unreadable=${UNREADABLE}"
           fi
-          echo "Legend: ~ would-change  . no-change  + applied  = skipped(protected)  s skipped(needs-pro)  ? unreadable(404 branch-missing / 403 / other — NOT written)  ! failed"
+          echo "$totals"
+          { echo ""; echo "$totals"; } >> "$GITHUB_STEP_SUMMARY"
+          echo "Legend: ~ would-change  . no-change  + applied  = skipped(protected)  s skipped(needs-pro)  ? unreadable(could not read/parse — NOT written)  ! failed"
+          if [ "$UNREADABLE" -gt 0 ]; then
+            echo "::warning title=branch-protection-sync::${UNREADABLE} branch(es) could not be measured; see the UNREADABLE rows."
+            # Exit-code doctrine: 3 = could-not-measure. Live runs only, so the
+            # push/schedule audit keeps its annotations without going red on a
+            # transient 5xx; a live write that could not see its target is red.
+            if [ "$DRY_RUN" != "true" ]; then exit 3; fi
+          fi
+          exit 0
