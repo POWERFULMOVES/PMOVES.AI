@@ -79,6 +79,21 @@
 - The producer is any node with a `self-hosted, ai-lab, <node>` runner (`sync-secrets-local.yml:71`). The 4090 has none; that is the only thing stopping it from producing its own bundle.
 - Change `pull_chit_bundle.sh` to fall back across *registered* producers (from the runner list) instead of hard-defaulting to `b850`, and update `test_chit_provenance_check.py:221-226` to match.
 
+### Phase F — secrets scoped to the repo that uses them (forks run standalone)
+**Measured 2026-09-23** (`make -C pmoves gh-secret-capacity-audit` + GitHub API, names only):
+- PMOVES.AI `env:Prod` is **100/100, at the GitHub cap**, and repository scope is 90/100. The manifest declares 169 secrets; 133 exist; **32 exist that nothing declares**. This is why `AIRTABLE_API_KEY`, `TAVILY_API_KEY` and `MCP_GATEWAY_AUTH_TOKEN` cannot be added: there is no room.
+- **Every fork checked holds zero secrets of its own**: PMOVES-N8N, PMOVES-n8n-FlooS, PMOVES-Open-Notebook, PMOVES-Jellyfin, PMOVES-supabase, PMOVES-tensorzero, PMOVES-Agent-Zero, Pmoves-cipher. None can run CI or deploy on its own.
+- Service-specific secrets sitting in the PMOVES.AI scopes today (Prod + repo): open-notebook 15, supabase 14, hostinger 11, bots 9, tailscale 6, jellyfin 4, agent-zero 3, tensorzero 3, n8n 2, wger 2.
+
+**Target:** a secret lives in the scope of the repo that consumes it. n8n secrets and settings go on the n8n fork, Jellyfin's on the Jellyfin fork, and so on. PMOVES.AI keeps only what crosses services: fleet CI, the CHIT/bundle keys, the tailnet and the LLM providers. Every fork then runs standalone, with its own secrets, its own `.env.example`, and a compose file that doesn't need the parent repo. The same key can be pushed to more than one repo from the one CHIT source, so the rule "nodes don't run different secrets" still holds.
+
+**Steps:**
+1. **Reconcile first, then move.** Declare or retire the 32 undeclared secrets. Retiring undeclared or duplicate ones is headroom that costs nothing.
+2. **Manifest routing** (operator: the manifest is guard-protected): let a key's `github_secret` target name a **repo** (e.g. `POWERFULMOVES/PMOVES-N8N`) as well as a PMOVES.AI scope. Extend `gh-secret-capacity-audit` to measure each fork's scope, not just PMOVES.AI's three.
+3. **Pilot on n8n** (2 secrets, the smallest real case): route both to the n8n fork, confirm the fork's workflow reads them, then remove them from `env:Prod`.
+4. **Standalone check per fork:** the fork's CI goes green using only its own secrets, and `docker compose up` works from the fork checkout alone, without PMOVES.AI.
+5. Move the larger groups in order: open-notebook, supabase, jellyfin, then the rest. Re-run the audit after each move so the published headroom figures come from a fresh measurement.
+
 ## 4. Cross-harness safety checks (run for every phase)
 - `make -C pmoves mcp-bootstrap-check` for **all** clients, not just `claude`.
 - Diff the rendered config per client before and after. Any server that disappears from a harness is a stop.
@@ -86,7 +101,8 @@
 - Cipher availability is **in scope for every harness** (Phase A0). The files being edited in open PRs (the Cipher fork's `mcp-sse.ts`/`rest-server.ts`, the launchers in PR 3143) are sequenced after those PRs rather than edited in parallel, and coordinated by register NOTE.
 
 ## 5. Operator actions (agents can't do these)
-- Add `AIRTABLE_API_KEY`, `TAVILY_API_KEY` and `MCP_GATEWAY_AUTH_TOKEN` to the secrets manifest and GitHub secrets, and check `TENSORZERO_CLICKHOUSE_USER`.
+- Add `AIRTABLE_API_KEY`, `TAVILY_API_KEY` and `MCP_GATEWAY_AUTH_TOKEN` to the secrets manifest. They can't go in `env:Prod` until Phase F frees room (it's at 100/100). Check `TENSORZERO_CLICKHOUSE_USER`.
+- Phase F manifest routing: per-repo `github_secret` targets.
 - Approve the Prod environment on each `sync-secrets-local.yml` run.
 - Approve any VPS change (kvm2 / kvm4-1 / kvm4-2) separately; `vps-deployer` via Hostinger MCP, never raw SSH.
 
