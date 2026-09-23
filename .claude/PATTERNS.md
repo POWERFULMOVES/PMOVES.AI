@@ -62,6 +62,7 @@ PMOVES uses a Known Roads model: every dangerous-but-necessary operation has a c
 | Kong port bind silent-fail | `docker events --filter container=X` — check OOM FIRST | — |
 | Bootstrap a node onto the Docker MCP Toolkit (per-node MCP surface) | `make -C pmoves mcp-toolkit-bootstrap` + `mcp-toolkit-connect` — **run ON the node**, no raw-SSH sidestep | runbook `pmoves/docs/runbooks/MCP_TOOLKIT_NODE_BOOTSTRAP.md`; agent `fleet-node-deployer` |
 | Give an agent / drop-in model cipher memory (store + search) | § Known Road — Cipher memory for any agent or drop-in model (below) | `pmoves-cipher-memory` |
+| Add / change / remove ONE key in `pmoves/.env.local` (**operator-run**; agents stay zero-access) | `make -C pmoves env-local-{has,set,unset} KEY=NAME` — § Known Road — node-local env overlay keys (below) | — |
 
 **`volume-reset SERVICE` values:** `neo4j`, `tensorzero-clickhouse`, `meilisearch`, `qdrant`, `minio`, `supabase-db`, `nats`.
 
@@ -74,6 +75,125 @@ PMOVES uses a Known Roads model: every dangerous-but-necessary operation has a c
 **When raw commands are appropriate:** only when the user explicitly directs. The `ask` prompt surfaces to user for approval.
 
 If a rebuild manifest arrives as raw `docker compose build ...`, translate to the nearest Known Road whenever possible. Use raw build only when no dedicated target exists yet, and still return to the Make-target bring-up path.
+
+## Known Road — node-local env overlay keys (`pmoves/.env.local`)
+
+**What it's for.** `pmoves/.env.local` is the node-local overlay that
+`scripts/with-env.sh` loads after the generated tier files. Nothing generates
+it, so every change used to be a hand edit with no record. That is how
+`CIPHER_DB_SERVICE_KEY=${SERVICE_ROLE_KEY}` reached a fleet node: someone copied it from
+a recipe in commit `df0218537` and it left no trail. It now points at a key
+Kong rejects (see `pmoves/docs/TAC/TAC_CIPHER.md` § `CIPHER_DB_SERVICE_KEY`).
+Operator rule (2026-09-23): a key comes out the same way it should have gone
+in, on this road.
+
+**Who runs it: the OPERATOR.** Agents keep **zero access** to the file. The
+damage-control zero-access rule for `.env*` is unchanged, and this road does
+not open it. An agent that needs a key changed names the key and the reason
+and hands the command to the operator. It does not read, source, symlink or
+`$VAR`-path its way to the file.
+
+```bash
+make -C pmoves env-local-has   KEY=NAME   # present / absent, plus the old value LENGTH
+make -C pmoves env-local-unset KEY=NAME   # remove the single NAME line
+make -C pmoves env-local-set   KEY=NAME   # value from a no-echo prompt, or piped stdin
+```
+
+**Removing the stale Cipher line (any node that followed the `df0218537`
+recipe), before the next `up-cipher`:**
+
+```bash
+make -C pmoves env-local-unset KEY=CIPHER_DB_SERVICE_KEY
+```
+
+**Guarantees** (`pmoves/tools/env_local_key.py`, stdlib only, 69 tests):
+- **Definitions follow the loader.** `with-env.sh` loads only unindented
+  `KEY=` lines. `export KEY=` and indented forms are **inert**: `has` reports
+  them as `inert=N`, and `set`/`unset` refuse while one exists. Resolve those
+  by hand-review first.
+- **Refuses:**
+  - a key that does not match `^[A-Z][A-Z0-9_]*$` (without echoing the text);
+  - a key defined more than once (reports the count);
+  - an inert form of the key;
+  - an empty or multi-line value;
+  - a dangling symlink;
+  - an audit log it cannot open. It opens the log BEFORE any change.
+
+  Duplicates and inert forms are checked before the value is requested. A
+  value given as an argument is a usage error. `set` reads stdin only, so
+  the value never appears in shell history or `ps`.
+- **Never prints a value.** Output is `result=`, key, action, whether a line
+  existed, `inert=`, the old/new value length, the backup name and the
+  resolved path (`via=` names a symlink it wrote through). A key that matches
+  no line prints as `<redacted: not present>` and leaves no audit row,
+  because it may be a pasted value.
+- **Values are written verbatim, unquoted.** `with-env.sh` sources values
+  containing `${` raw, so the tool WARNS (without echoing) on `$(`, `${` or a
+  backtick. An identical `set` is a no-op (`changed=no`, no backup, no row).
+- **Before any change**, it copies the file to `<file>.bak-<UTC ts>` with mode
+  0600, next to the real target when the path is a symlink. The write is
+  atomic: temp `<name>.tmp-*` in the same directory, fsync, rename. It keeps
+  the file's mode (and owner when permitted), and keeps every other line
+  byte-for-byte. Lines are split on `\n` only. A test asserts the backup, temp
+  and audit names with `git check-ignore`.
+- **Backups do not expire.** Nothing prunes them automatically. The operator
+  lists them with `ls -l pmoves/.env.local.bak-*` and removes old ones with
+  `find pmoves -maxdepth 1 -name '.env.local.bak-*' -mtime +30 -delete`
+  (adjust the age). Each backup is a full copy of the overlay, secrets
+  included.
+- **Audit:** one fsync'd JSONL row per applied set/unset in
+  `pmoves/data/audit/env_local_edits.jsonl`. The row holds `ts, host, key,
+  action, old_len, new_len, operator, line_existed, changed, backup`, and
+  never the value. The log is **git-ignored on purpose**: a tracked,
+  per-node list of key names in a public repo is a topology decision for the
+  operator, not a side effect of this tool.
+- **Exit codes:**
+  - 0 done, noop or present;
+  - 1 refused or absent;
+  - 2 usage;
+  - 3 could-not-measure, and **nothing changed**;
+  - 4 **`APPLIED-UNAUDITED`**: the edit landed but its row did not, so record
+    it by hand.
+
+  `make` collapses every nonzero exit to 2, so read the `result=` line.
+- **Make hygiene.** KEY travels by environment via `$(value KEY)`, and
+  `unexport KEY` is the **first directive** in `pmoves/Makefile`, above every
+  include and `$(shell ...)`. A command-line KEY is exported, and GNU make
+  expands exported variables whenever it builds a child environment. On 4.3
+  that means recipes only. On 4.4 and later it also includes parse-time
+  `$(shell ...)` calls, so an unexport placed later in the file is too late.
+  A structural test asserts the ordering, because CI's 4.3 cannot observe the
+  4.4 path. A positive control proves the directive is load-bearing on 4.3.
+- **Tests never reach the real file.** The make-target helper asserts that the
+  resolved override is under `tmp_path` before it invokes make. The tool also
+  refuses its default path whenever `PYTEST_CURRENT_TEST` is set.
+- **A failure after the write is reported as APPLIED.** If anything fails once
+  the edit has landed (for example, a broken stdout pipe while reporting), the
+  tool prints `result=APPLIED ... audited=yes|NO` on stderr and exits 4. It
+  never says "nothing changed" for an edit that happened.
+
+**Known limits** (accepted, stated here so nobody has to rediscover them):
+- **`set` of an absent key cannot tell a pasted value from a real new key.** If
+  an all-caps value is pasted into `KEY=` and matches no line, `set` treats it
+  as a new key name. It echoes that name and audits it, and writes it as a new
+  line. `unset` and `has` redact an absent key; `set` cannot, because creating
+  a new key is its job. Check the key name before running `set`.
+- **A refused edit can leave an empty audit file.** The log is opened (and
+  created, 0600) before the change so that an unwritable log refuses the edit.
+  A later refusal, such as an empty value, therefore leaves a 0-byte 0600
+  `env_local_edits.jsonl`. It holds nothing.
+- **The group can be lost.** When the process may not `fchown` (not root, and
+  the file belonged to another group), the replaced file takes this process's
+  uid/gid. The tool prints a WARNING that names the lost group, and never a
+  value. Re-apply it with `chgrp` if another account reads the file.
+- **The pytest guard covers the overlay path, not the audit-log path.** A test
+  that forgets `--audit-log` or `ENV_LOCAL_KEY_AUDIT` would append rows (names
+  and lengths, never values) to the node's real
+  `pmoves/data/audit/env_local_edits.jsonl`. Every test in this suite sets it
+  explicitly.
+
+Sibling road for the GENERATED file: `make -C pmoves secrets-rotate KEY=...`
+rotates one key in `env.shared` and re-funnels (`pmoves/mk/codex.mk`).
 
 ## Known Road — Cipher memory for any agent or drop-in model
 
