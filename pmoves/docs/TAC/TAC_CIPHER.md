@@ -416,19 +416,19 @@ set per node in `pmoves/.env.local` (loaded by `scripts/with-env.sh`). Unset,
 the container presents the default `SUPABASE_SERVICE_KEY`.
 
 **Where the knob lives today.** Only on unmerged branches:
-`origin/fix/cipher-agent-token-handoff` (PR #3143) and
-`origin/feat/cipher-identity-bind`, in `pmoves/docker-compose.yml` and
-`docker-compose.agents.yml`. `git grep CIPHER_DB_SERVICE_KEY` on `origin/main`
+`origin/fix/cipher-agent-token-handoff` (PR #3143),
+`origin/feat/cipher-identity-bind` and `origin/wip/mcp-project-roster`, in
+`pmoves/docker-compose.yml` and `docker-compose.agents.yml` on each. `git grep CIPHER_DB_SERVICE_KEY` on `origin/main`
 (`dfb5421ef`) returns 0 hits, so a compose built from main does not read the
 override. It takes effect only when a node brings cipher up from one of those
 branches.
 
-**Measured 2026-09-23 on B850 (by the steward; recorded here, not re-run by
-this change):** the default `SUPABASE_SERVICE_KEY` returns **200** through Kong.
+**Measured 2026-09-23 on one fleet node (by the steward; recorded here, not
+re-run by this change):** the default `SUPABASE_SERVICE_KEY` returns **200** through Kong.
 Both copies of the `SERVICE_ROLE_KEY` value return **401**. `df0218537`'s
 message recommended `CIPHER_DB_SERVICE_KEY=${SERVICE_ROLE_KEY}` from a
 2026-09-22 measurement, when PostgREST was rejecting the `SUPABASE_*` pair.
-That recipe is now **wrong** on B850: a cipher brought up with the line in place
+That recipe is now **wrong** on that node: a cipher brought up with the line in place
 presents a key Kong rejects, and every per-agent token lookup fails.
 
 **How the line got there, and why that matters.** Someone hand-copied the

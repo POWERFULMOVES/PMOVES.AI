@@ -81,7 +81,7 @@ If a rebuild manifest arrives as raw `docker compose build ...`, translate to th
 **What it's for.** `pmoves/.env.local` is the node-local overlay that
 `scripts/with-env.sh` loads after the generated tier files. Nothing generates
 it, so every change used to be a hand edit with no record. That is how
-`CIPHER_DB_SERVICE_KEY=${SERVICE_ROLE_KEY}` reached B850: someone copied it from
+`CIPHER_DB_SERVICE_KEY=${SERVICE_ROLE_KEY}` reached a fleet node: someone copied it from
 a recipe in commit `df0218537` and it left no trail. It now points at a key
 Kong rejects (see `pmoves/docs/TAC/TAC_CIPHER.md` § `CIPHER_DB_SERVICE_KEY`).
 Operator rule (2026-09-23): a key comes out the same way it should have gone
@@ -99,39 +99,74 @@ make -C pmoves env-local-unset KEY=NAME   # remove the single NAME line
 make -C pmoves env-local-set   KEY=NAME   # value from a no-echo prompt, or piped stdin
 ```
 
-**Removing the stale Cipher line (B850, and any node that followed the
-`df0218537` recipe), before the next `up-cipher`:**
+**Removing the stale Cipher line (any node that followed the `df0218537`
+recipe), before the next `up-cipher`:**
 
 ```bash
 make -C pmoves env-local-unset KEY=CIPHER_DB_SERVICE_KEY
 ```
 
-**Guarantees** (`pmoves/tools/env_local_key.py`, stdlib only, 40 tests):
-- **Refuses:** any key that does not match `^[A-Z][A-Z0-9_]*$` (without echoing
-  the rejected text), a key that appears more than once (reports the count),
-  and an empty or multi-line value. A value given as an argument is a usage
-  error. `set` reads stdin only, so the value never appears in shell history
-  or `ps`.
+**Guarantees** (`pmoves/tools/env_local_key.py`, stdlib only, 65 tests):
+- **Definitions follow the loader.** `with-env.sh` loads only unindented
+  `KEY=` lines. `export KEY=` and indented forms are **inert**: `has` reports
+  them as `inert=N`, and `set`/`unset` refuse while one exists. Resolve those
+  by hand-review first.
+- **Refuses:**
+  - a key that does not match `^[A-Z][A-Z0-9_]*$` (without echoing the text);
+  - a key defined more than once (reports the count);
+  - an inert form of the key;
+  - an empty or multi-line value;
+  - a dangling symlink;
+  - an audit log it cannot open. It opens the log BEFORE any change.
+
+  Duplicates and inert forms are checked before the value is requested. A
+  value given as an argument is a usage error. `set` reads stdin only, so
+  the value never appears in shell history or `ps`.
 - **Never prints a value.** Output is `result=`, key, action, whether a line
-  existed, the old/new value length, the backup name and the resolved path.
+  existed, `inert=`, the old/new value length, the backup name and the
+  resolved path (`via=` names a symlink it wrote through). A key that matches
+  no line prints as `<redacted: not present>` and leaves no audit row,
+  because it may be a pasted value.
+- **Values are written verbatim, unquoted.** `with-env.sh` sources values
+  containing `${` raw, so the tool WARNS (without echoing) on `$(`, `${` or a
+  backtick. An identical `set` is a no-op (`changed=no`, no backup, no row).
 - **Before any change**, it copies the file to `<file>.bak-<UTC ts>` with mode
-  0600. That name is covered by the `.env.*` ignore rule. The write is atomic
-  (temp file, fsync, rename), keeps the file's mode, and keeps every other
-  line byte-for-byte, CRLF and comments included.
-- **Audit:** one JSONL row per set/unset in
+  0600, next to the real target when the path is a symlink. The write is
+  atomic: temp `<name>.tmp-*` in the same directory, fsync, rename. It keeps
+  the file's mode (and owner when permitted), and keeps every other line
+  byte-for-byte. Lines are split on `\n` only. A test asserts the backup, temp
+  and audit names with `git check-ignore`.
+- **Backups do not expire.** Nothing prunes them automatically. The operator
+  lists them with `ls -l pmoves/.env.local.bak-*` and removes old ones with
+  `find pmoves -maxdepth 1 -name '.env.local.bak-*' -mtime +30 -delete`
+  (adjust the age). Each backup is a full copy of the overlay, secrets
+  included.
+- **Audit:** one fsync'd JSONL row per applied set/unset in
   `pmoves/data/audit/env_local_edits.jsonl`. The row holds `ts, host, key,
   action, old_len, new_len, operator, line_existed, changed, backup`, and
   never the value. The log is **git-ignored on purpose**: a tracked,
   per-node list of key names in a public repo is a topology decision for the
   operator, not a side effect of this tool.
-- **Exit codes:** 0 done or present / 1 refused or absent / 2 usage /
-  3 could-not-measure. `make` collapses every nonzero exit to 2, so read the
-  `result=` line.
-- **Make hygiene:** KEY travels by environment via `$(value KEY)`. The
-  Makefile carries a file-scope `unexport KEY`. Without it, GNU make expands a
-  command-line `KEY='$(shell ...)'` while exporting it to the recipe, and the
-  command runs before any guard (measured 2026-09-23). A positive-control test
-  proves the directive is load-bearing.
+- **Exit codes:**
+  - 0 done, noop or present;
+  - 1 refused or absent;
+  - 2 usage;
+  - 3 could-not-measure, and **nothing changed**;
+  - 4 **`APPLIED-UNAUDITED`**: the edit landed but its row did not, so record
+    it by hand.
+
+  `make` collapses every nonzero exit to 2, so read the `result=` line.
+- **Make hygiene.** KEY travels by environment via `$(value KEY)`, and
+  `unexport KEY` is the **first directive** in `pmoves/Makefile`, above every
+  include and `$(shell ...)`. A command-line KEY is exported, and GNU make
+  expands exported variables whenever it builds a child environment. On 4.3
+  that means recipes only. On 4.4 and later it also includes parse-time
+  `$(shell ...)` calls, so an unexport placed later in the file is too late.
+  A structural test asserts the ordering, because CI's 4.3 cannot observe the
+  4.4 path. A positive control proves the directive is load-bearing on 4.3.
+- **Tests never reach the real file.** The make-target helper asserts that the
+  resolved override is under `tmp_path` before it invokes make. The tool also
+  refuses its default path whenever `PYTEST_CURRENT_TEST` is set.
 
 Sibling road for the GENERATED file: `make -C pmoves secrets-rotate KEY=...`
 rotates one key in `env.shared` and re-funnels (`pmoves/mk/codex.mk`).
