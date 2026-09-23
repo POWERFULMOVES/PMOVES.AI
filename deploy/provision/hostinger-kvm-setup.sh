@@ -1,6 +1,15 @@
 #!/bin/bash
 # Hostinger KVM Provisioning Script
 #
+# OFFICIAL SOURCES:
+#   - Docker: https://docs.docker.com/engine/install/ubuntu/ (via https://get.docker.com)
+#   - Docker Compose: https://github.com/docker/compose/releases (v2.27.0)
+#   - Tailscale: https://tailscale.com/download/linux/ (via https://tailscale.com/install.sh)
+#   - GitHub Actions Runner: https://github.com/actions/runner (v2.332.0)
+#   - GitHub CLI: https://cli.github.com/manual/installation_linux
+#   - PMOVES.AI: https://github.com/POWERFULMOVES/PMOVES.AI
+#   - Internal docs: pmoves/docs/infrastructure/docker_proxmox_integration.md
+#
 # Single script to provision a fresh Hostinger KVM as a PMOVES.AI node:
 #   1. System update + hardening (ufw, fail2ban, sshd)
 #   2. Docker + Docker Compose v2
@@ -642,6 +651,91 @@ emit_provision_beacon() {
     fi
 }
 
+# Installation verification.
+# Ported from an uncommitted B850 working tree and corrected against this
+# script's own layout: /opt/pmoves is a PMOVES.AI clone (setup_workdir), the
+# Flare env file is /opt/pmoves/.env.local (setup_flare_config), and the runner
+# unit is either github-runner-pmoves-<node> (hardened installer) or the
+# actions.runner.* unit svc.sh generates (fallback path).
+verify_installation() {
+    log_section "Verifying Installation"
+
+    local failed=0
+
+    # Check Docker
+    log_info "Checking Docker installation:"
+    if command -v docker >/dev/null 2>&1; then
+        log_info "  ✓ Docker installed: $(docker --version 2>/dev/null | head -1)"
+    else
+        log_error "  ✗ Docker NOT found"
+        failed=1
+    fi
+
+    if docker compose version >/dev/null 2>&1; then
+        log_info "  ✓ Docker Compose: $(docker compose version 2>/dev/null | head -1)"
+    else
+        log_error "  ✗ Docker Compose NOT found"
+        failed=1
+    fi
+
+    # Check Tailscale
+    log_info "Checking Tailscale:"
+    if command -v tailscale >/dev/null 2>&1; then
+        if tailscale status &>/dev/null; then
+            log_info "  ✓ Tailscale installed and connected"
+        else
+            log_warn "  ⚠ Tailscale installed but not connected (run: tailscale up)"
+        fi
+    else
+        log_warn "  ⚠ Tailscale not found"
+    fi
+
+    # Check GitHub Actions runner (either unit naming scheme)
+    log_info "Checking GitHub Actions runner:"
+    if systemctl list-unit-files "github-runner-pmoves-${NODE_TYPE}.service" 'actions.runner.*.service' >/dev/null 2>&1; then
+        if systemctl is-active --quiet "github-runner-pmoves-${NODE_TYPE}.service" 2>/dev/null \
+           || systemctl is-active --quiet 'actions.runner.*.service' 2>/dev/null; then
+            log_info "  ✓ Actions runner service running"
+        else
+            log_warn "  ⚠ Actions runner service registered but not active"
+        fi
+    else
+        log_warn "  ⚠ Actions runner unit not registered"
+    fi
+
+    # Check /opt/pmoves work directory (a PMOVES.AI clone — see setup_workdir)
+    log_info "Checking /opt/pmoves work directory:"
+    if [ -d /opt/pmoves/.git ]; then
+        log_info "  ✓ /opt/pmoves is a PMOVES.AI checkout"
+    else
+        log_error "  ✗ /opt/pmoves checkout NOT found"
+        failed=1
+    fi
+
+    # Check PMOVES.Flare config (written by setup_flare_config)
+    log_info "Checking PMOVES.Flare config:"
+    local env_file="/opt/pmoves/.env.local"
+    if [ -f "$env_file" ]; then
+        if grep -q "^MODEL_NAMESPACE=pmoves" "$env_file" 2>/dev/null; then
+            log_info "  ✓ MODEL_NAMESPACE=pmoves configured"
+        else
+            log_warn "  ⚠ MODEL_NAMESPACE not set in $env_file"
+        fi
+    else
+        log_warn "  ⚠ .env.local not found at $env_file"
+    fi
+
+    if [ "$failed" -eq 1 ]; then
+        log_warn ""
+        log_warn "⚠ Some components failed verification. Check output above."
+        return 1
+    fi
+
+    log_info ""
+    log_info "✓ All critical components verified successfully"
+    return 0
+}
+
 # Show summary
 show_summary() {
     log_section "========================================="
@@ -741,6 +835,9 @@ main() {
     install_dgx_spark_overlay
     install_pve_member_prep
     setup_flare_config
+    # Verify BEFORE the beacon: announcing a provision that then fails its own
+    # verification would publish a false green.
+    verify_installation
     emit_provision_beacon
     show_summary
 }
