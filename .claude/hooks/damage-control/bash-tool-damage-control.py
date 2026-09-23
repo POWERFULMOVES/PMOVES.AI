@@ -670,7 +670,21 @@ def _mask_git_commit_heredocs(command: str) -> str:
     message must name a protected path.
     """
     out = command
+    # End of the last body masked. finditer walks the ORIGINAL command, so a
+    # `<<'DELIM'` written INSIDE a message body still yields a match -- and
+    # because that inner delimiter never appears at column 0 afterwards, the
+    # terminator search below falls through to len(out) and masks the REST OF
+    # THE COMMAND, hiding real operations from every downstream scan.
+    #
+    # That fails OPEN, and the trigger is a commit message that merely
+    # DOCUMENTS the heredoc pattern -- which is exactly the kind of message
+    # this repo writes, so it opens during ordinary work rather than only
+    # under attack. A match starting inside an already-masked span is message
+    # text, not shell syntax, and must be skipped.
+    masked_until = 0
     for m in _GIT_COMMIT_HEREDOC_START.finditer(command):
+        if m.start() < masked_until:
+            continue
         dash, delim = m.group(1), m.group(3)
         body_start = m.end()
         # Match the shell exactly. `<<-EOF` strips leading tabs, so an indented
@@ -691,6 +705,7 @@ def _mask_git_commit_heredocs(command: str) -> str:
         # matches, which were computed against the original string.
         masked = "".join("\n" if ch == "\n" else " " for ch in span)
         out = out[:body_start] + masked + out[body_end:]
+        masked_until = body_end
     return out
 
 
