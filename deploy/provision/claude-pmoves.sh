@@ -102,6 +102,15 @@ else
   echo "[claude-pmoves] WARN: mavis_sdk_env.sh not found at $ROOT/pmoves/scripts/ -- Mavis SDK env may bleed into the launched session." >&2
 fi
 
+# Capture an explicit per-agent cipher token BEFORE env.shared can overwrite
+# it: an operator export, or the token the outer delegate already bound. The
+# node bootstrap bearer is not cipher_-prefixed, so it is never captured here.
+# Restored just before the re-bind below; deliberately NOT exported.
+PM_CIPHER_PRE_ENV_TOKEN=""
+case "${CIPHER_API_TOKEN:-}" in
+  cipher_*) PM_CIPHER_PRE_ENV_TOKEN="$CIPHER_API_TOKEN" ;;
+esac
+
 if [ -f "$ENVF" ]; then
   # Blocklist: vars that control Claude SDK/session behavior and should NEVER be
   # sourced by the launcher. These are user's personal billing/config, not fleet MCP creds.
@@ -189,6 +198,14 @@ export PMOVES_LAUNCHER_SESSION
 # per-agent bearer for THIS session's declared cipher agentId. The outer
 # delegate exported PM_IDENT_CIPHER_ID; when this script is called directly
 # (no agent named) the bind reports "no declared agentId" and changes nothing.
+#
+# An explicit cipher_ token that arrived in this script's env (captured above,
+# before env.shared) is restored first, so the fragment's "explicit env token
+# wins" rule holds for the FINAL session and not only until env.shared loads.
+if [ -n "$PM_CIPHER_PRE_ENV_TOKEN" ]; then
+  export CIPHER_API_TOKEN="$PM_CIPHER_PRE_ENV_TOKEN"
+fi
+unset PM_CIPHER_PRE_ENV_TOKEN
 if [ -f "$ROOT/pmoves/scripts/pm-cipher-token-bind.sh" ]; then
   # shellcheck source=../../pmoves/scripts/pm-cipher-token-bind.sh
   . "$ROOT/pmoves/scripts/pm-cipher-token-bind.sh"

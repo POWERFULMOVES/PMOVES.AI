@@ -21,8 +21,8 @@
 # ---------------------------------------------------------------------------
 set -uo pipefail
 
-SELF_DIR="$(CDPATH= cd -P -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-REPO="$(CDPATH= cd -P -- "$SELF_DIR/../../.." && pwd)"
+SELF_DIR="$(CDPATH='' cd -P -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+REPO="$(CDPATH='' cd -P -- "$SELF_DIR/../../.." && pwd)"
 
 pass=0; fail=0
 ok()  { printf '  PASS  %s\n' "$1"; pass=$((pass+1)); }
