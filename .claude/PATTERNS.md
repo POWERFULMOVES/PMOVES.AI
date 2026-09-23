@@ -96,6 +96,11 @@ including paths that do not exist, so an unauthenticated 401 tells you nothing.
 Every call needs the header `Authorization: Bearer ${CIPHER_API_TOKEN}`. Start
 Claude Code through `claude-pmoves` so the variable is present. Claude Code does
 not expand `${VAR}` in mcp.json by itself; the launcher's normaliser does.
+A Claude Code session **not** started via `claude-pmoves` (a dispatched
+`claude -p`, an IDE session) reads only the repo-root `.mcp.json`, so it has no
+PMOVES servers at all: run `make -C pmoves mcp-roster` once to publish the
+normalized roster there (gitignored, mode 0600), and
+`make -C pmoves mcp-roster-check` to confirm. UNVERIFIED end-to-end.
 
 **2. Pick your `agentId`.** Use the **signing-card spelling**
 (`h.agent_id` in `pmoves/config/signing_identity_cards.yaml`, e.g.

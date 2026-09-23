@@ -5850,6 +5850,19 @@ cipher-mint-token: ## Mint a per-agent cipher token (requires an ACTIVE signing 
 	@if [ -z "$(AGENT)" ]; then echo "Usage: make -C pmoves cipher-mint-token AGENT=z890-claude [SCOPES='memory:read,memory:write']"; exit 1; fi
 	@$(PYTHON) $(CURDIR)/scripts/mint_cipher_token.py --agent "$(AGENT)" --scopes "$(or $(SCOPES),$(CIPHER_MINT_DEFAULT_SCOPES))"
 
+# Claude Code reads MCP servers from the repo-root .mcp.json, never from
+# .claude/mcp.json; only claude-pmoves passes --mcp-config. A session started
+# any other way gets no PMOVES servers (cipher included) until this publishes
+# the normalized roster to .mcp.json (gitignored, mode 0600: it carries bearers).
+# Exit codes are the script's own and pass straight through: 0 published /
+# present, 1 missing or normalizer failure.
+.PHONY: mcp-roster mcp-roster-check
+mcp-roster: ## Publish the PMOVES MCP roster to repo-root .mcp.json for sessions NOT started via claude-pmoves
+	@bash $(CURDIR)/scripts/mcp-project-roster.sh
+
+mcp-roster-check: ## Is repo-root .mcp.json present, and which cipher entries does it carry? (read-only)
+	@bash $(CURDIR)/scripts/mcp-project-roster.sh --check
+
 .PHONY: beats-analyze beats-hyperdim beats-pipeline
 beats-analyze: ## Re-run DARKXSIDE sonic fingerprint analysis (librosa + ffmpeg lavfi)
 	@echo "[beats] Running sonic fingerprint analysis (glaze mode)..."
