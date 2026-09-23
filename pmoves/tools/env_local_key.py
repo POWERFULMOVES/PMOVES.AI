@@ -71,6 +71,11 @@ KEY_RE = re.compile(r"^[A-Z][A-Z0-9_]*$")
 PMOVES_DIR = Path(__file__).resolve().parent.parent
 DEFAULT_FILE = PMOVES_DIR / ".env.local"
 DEFAULT_AUDIT = PMOVES_DIR / "data" / "audit" / "env_local_edits.jsonl"
+# Overrides for tests that drive the MAKE TARGETS (which pass no --file). The
+# resolved path is always printed, so a stray override cannot redirect an
+# operator's edit silently.
+FILE_ENV = "ENV_LOCAL_KEY_FILE"
+AUDIT_ENV = "ENV_LOCAL_KEY_AUDIT"
 
 EXIT_OK = 0
 EXIT_REFUSED = 1
@@ -189,9 +194,12 @@ def _report(**fields: object) -> None:
     print("env-local-key: " + " ".join(parts))
 
 
-def _read_value(stdin) -> bytes:
+def _read_value(stdin, key: str) -> bytes:
     if stdin.isatty():
-        text = getpass.getpass("value (hidden): ")
+        # No-echo prompt on the controlling terminal. This is what `read -s`
+        # would do, without the value ever becoming a shell variable -- and
+        # make's recipe shell is /bin/sh, where `read -s` does not exist.
+        text = getpass.getpass(f"value for {key} (hidden, not echoed): ")
     else:
         text = stdin.read()
     # Strip exactly one trailing newline (a piped `echo` or a heredoc).
@@ -225,7 +233,7 @@ def cmd_has(path: Path, key: str) -> int:
     idx = _find(data.splitlines(keepends=True), key)
     if len(idx) > 1:
         _report(result="refused", key=key, action="has", line_existed=True,
-                count=len(idx), file=path.name)
+                count=len(idx), file=path)
         print(f"env-local-key: refused: {key} appears {len(idx)} times",
               file=sys.stderr)
         return EXIT_REFUSED
@@ -233,7 +241,7 @@ def cmd_has(path: Path, key: str) -> int:
     _report(result="present" if present else "absent", key=key, action="has",
             line_existed=present, count=len(idx),
             old_len=_value_len(data.splitlines(keepends=True)[idx[0]]) if present else None,
-            file=path.name)
+            file=path)
     return EXIT_OK if present else EXIT_REFUSED
 
 
@@ -249,7 +257,7 @@ def cmd_unset(path: Path, key: str, audit_path: Path) -> int:
         _audit(audit_path, _row(key, "unset", old_len=None, new_len=None,
                                 line_existed=False, changed=False, backup=None))
         _report(result="noop", key=key, action="unset", line_existed=False,
-                old_len=None, new_len=None, changed=False, file=path.name,
+                old_len=None, new_len=None, changed=False, file=path,
                 audit=audit_path)
         return EXIT_OK
     i = idx[0]
@@ -262,13 +270,13 @@ def cmd_unset(path: Path, key: str, audit_path: Path) -> int:
                             line_existed=True, changed=True, backup=bak.name))
     _report(result="done", key=key, action="unset", line_existed=True,
             old_len=old_len, new_len=None, changed=True, backup=bak.name,
-            file=path.name, audit=audit_path)
+            file=path, audit=audit_path)
     return EXIT_OK
 
 
 def cmd_set(path: Path, key: str, audit_path: Path, stdin) -> int:
     data = _read(path)
-    value = _read_value(stdin)
+    value = _read_value(stdin, key)
     new_line_body = key.encode() + b"=" + value
     bak_name = None
     if data is None:
@@ -302,7 +310,7 @@ def cmd_set(path: Path, key: str, audit_path: Path, stdin) -> int:
                             line_existed=existed, changed=True, backup=bak_name))
     _report(result="done", key=key, action="set", line_existed=existed,
             old_len=old_len, new_len=new_len, changed=True, backup=bak_name,
-            file=path.name, audit=audit_path)
+            file=path, audit=audit_path)
     return EXIT_OK
 
 
@@ -311,10 +319,12 @@ def build_parser() -> argparse.ArgumentParser:
         prog="env_local_key.py",
         description="Set/unset/test ONE key in the node-local env overlay. "
                     "Never prints values. Operator-run.")
-    p.add_argument("--file", type=Path, default=DEFAULT_FILE,
+    p.add_argument("--file", type=Path,
+                   default=Path(os.environ[FILE_ENV]) if os.environ.get(FILE_ENV) else DEFAULT_FILE,
                    help="file to edit (default: the pmoves node-local overlay). "
                         "Tests pass a temp file here.")
-    p.add_argument("--audit-log", type=Path, default=DEFAULT_AUDIT,
+    p.add_argument("--audit-log", type=Path,
+                   default=Path(os.environ[AUDIT_ENV]) if os.environ.get(AUDIT_ENV) else DEFAULT_AUDIT,
                    help="local, git-ignored JSONL audit log")
     sub = p.add_subparsers(dest="cmd", required=True)
     for name, helptext in (("set", "set KEY; value is read from stdin"),

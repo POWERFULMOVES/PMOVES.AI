@@ -6060,3 +6060,60 @@ sandbox-runbook: ## Print the self-host runbook path + the owning node
 	@echo "             pmoves/scripts/probe_danger_room_host.sh   (Linux/WSL2 half)"
 	@echo "vendor docs: PMOVES-Danger-infra/DEV-LOCAL.md  (local bare metal)"
 	@echo "             PMOVES-Danger-infra/self-host.md  (GCP)"
+
+# -------- Node-local env overlay: ONE key at a time (Known Road) ----------
+# THE SANCTIONED EDIT PATH for pmoves/.env.local, the node-local overlay that
+# scripts/with-env.sh loads after the generated tier files. Nothing generates
+# it, so before these targets every change was a hand edit with no record --
+# which is how CIPHER_DB_SERVICE_KEY=${SERVICE_ROLE_KEY} reached B850 (copied
+# from the df0218537 commit message) and why nobody could say when or by whom.
+#
+# OPERATOR-RUN. Agents keep ZERO access to the file; the damage-control
+# zero-access rule is unchanged. The tool never prints or audits a value: it
+# reports key, action, whether a line existed and old/new value LENGTH, backs
+# the file up to <file>.bak-<UTC ts> (0600) before any change, writes
+# atomically preserving the mode and every other line, refuses a duplicated or
+# malformed key, and appends a row to data/audit/env_local_edits.jsonl
+# (git-ignored, node-local).
+#
+# KEY TRAVELS BY ENVIRONMENT, never as a shell word, and `$(value KEY)` stops
+# make from expanding anything inside it -- the register targets above learned
+# both lessons the hard way. The case-guard below is a courtesy; the tool
+# re-validates ^[A-Z][A-Z0-9_]*$ itself.
+#
+# `$(value KEY)` ALONE WAS NOT ENOUGH, measured 2026-09-23: GNU make exports
+# every command-line variable into each recipe's environment and EXPANDS it to
+# do so, so `make env-local-has KEY='$(shell touch X)'` created X before the
+# guard refused the key. `unexport KEY` below closes that (re-measured: X not
+# created, the guard sees the raw text and refuses). It is file-scope because
+# make has no target-scoped unexport. Audited safe for the other KEY users:
+# mk/codex.mk and mk/provider.mk interpolate $(KEY) into the recipe text, which
+# does not depend on export, and every script under scripts/ that uses $KEY
+# assigns it itself before reading it. Sub-makes still receive KEY through
+# MAKEFLAGS, which carries it unexpanded.
+unexport KEY
+#
+# env-local-set takes the value from a NO-ECHO prompt (the tool's getpass on
+# the controlling terminal) or from piped stdin -- never argv, so it is not in
+# shell history or `ps`. make's recipe shell is /bin/sh, which has no
+# `read -s`; getpass does the same without the value becoming a shell variable.
+#
+# make collapses every nonzero exit to 2 -- read the printed `result=` line
+# (done / noop / present / absent / refused / could-not-measure).
+.PHONY: env-local-has env-local-set env-local-unset
+env-local-has env-local-set env-local-unset: export ENV_LOCAL_KEY_NAME = $(value KEY)
+ENV_LOCAL_KEY_GUARD = case "$$ENV_LOCAL_KEY_NAME" in ""|[!A-Z]*|*[!A-Z0-9_]*) \
+	echo "usage: make $@ KEY=NAME   (NAME must match ^[A-Z][A-Z0-9_]*$$; the value is never an argument)" >&2; \
+	exit 2;; esac
+
+env-local-has: ## Operator: is KEY present in pmoves/.env.local? Prints no value (KEY=NAME)
+	@$(ENV_LOCAL_KEY_GUARD)
+	@$(PYTHON) tools/env_local_key.py has "$$ENV_LOCAL_KEY_NAME"
+
+env-local-set: ## Operator: set KEY in pmoves/.env.local; value from a no-echo prompt or stdin, never argv (KEY=NAME)
+	@$(ENV_LOCAL_KEY_GUARD)
+	@$(PYTHON) tools/env_local_key.py set "$$ENV_LOCAL_KEY_NAME"
+
+env-local-unset: ## Operator: remove the single KEY line from pmoves/.env.local, with backup + audit row (KEY=NAME)
+	@$(ENV_LOCAL_KEY_GUARD)
+	@$(PYTHON) tools/env_local_key.py unset "$$ENV_LOCAL_KEY_NAME"
