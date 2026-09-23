@@ -1,5 +1,27 @@
 # PMOVES top-level Makefile
 
+unexport KEY
+# ^ MUST STAY THE FIRST DIRECTIVE, above every include and every $(shell ...).
+# A command-line KEY (`make env-local-unset KEY=...`) is exported by default,
+# and GNU make EXPANDS an exported variable each time it builds a child
+# environment, so text like KEY='$(shell touch X)' executes:
+#   * make 4.3: children are recipes only. Measured 2026-09-23: with the
+#     unexport at the END of the file, recipe export expanded it and X was
+#     created; the directive closed it.
+#   * make >= 4.4: `$(shell ...)` ALSO receives exported variables. Two
+#     parse-time $(shell) calls (mk/a2ui-deploy.mk via the includes below, and
+#     one in this file) ran BEFORE an end-of-file unexport, so X was still
+#     created on 4.4.1 (independent review of #3164, container repro).
+# Make has no target-scoped unexport, and a directive only affects expansion
+# AFTER it is read -- so the only placement that holds on both versions is
+# here. tests/tools/test_env_local_key.py asserts the ordering structurally,
+# because CI runs 4.3 and cannot observe the 4.4 behaviour.
+# Other KEY users are unaffected: mk/codex.mk and mk/provider.mk interpolate
+# $(KEY) into recipe text, which does not depend on export. The one script with
+# an inherited-KEY shape, scripts/fleet/rustdesk-enroll.sh:65
+# (KEY="${KEY:-...}"), is not a victim: line 46 resets KEY="" first, and no make
+# target invokes it. Sub-makes still get KEY via MAKEFLAGS, unexpanded.
+
 # Many targets rely on bashisms (heredocs, arrays, $'...' quoting).
 # On Windows, force Git Bash to avoid cmd.exe fallback for bash-style recipes.
 ifeq ($(OS),Windows_NT)
@@ -6065,8 +6087,8 @@ sandbox-runbook: ## Print the self-host runbook path + the owning node
 # THE SANCTIONED EDIT PATH for pmoves/.env.local, the node-local overlay that
 # scripts/with-env.sh loads after the generated tier files. Nothing generates
 # it, so before these targets every change was a hand edit with no record --
-# which is how CIPHER_DB_SERVICE_KEY=${SERVICE_ROLE_KEY} reached B850 (copied
-# from the df0218537 commit message) and why nobody could say when or by whom.
+# which is how CIPHER_DB_SERVICE_KEY=${SERVICE_ROLE_KEY} reached a fleet node
+# (copied from the df0218537 commit message) with no record of when or by whom.
 #
 # OPERATOR-RUN. Agents keep ZERO access to the file; the damage-control
 # zero-access rule is unchanged. The tool never prints or audits a value: it
@@ -6081,17 +6103,10 @@ sandbox-runbook: ## Print the self-host runbook path + the owning node
 # both lessons the hard way. The case-guard below is a courtesy; the tool
 # re-validates ^[A-Z][A-Z0-9_]*$ itself.
 #
-# `$(value KEY)` ALONE WAS NOT ENOUGH, measured 2026-09-23: GNU make exports
-# every command-line variable into each recipe's environment and EXPANDS it to
-# do so, so `make env-local-has KEY='$(shell touch X)'` created X before the
-# guard refused the key. `unexport KEY` below closes that (re-measured: X not
-# created, the guard sees the raw text and refuses). It is file-scope because
-# make has no target-scoped unexport. Audited safe for the other KEY users:
-# mk/codex.mk and mk/provider.mk interpolate $(KEY) into the recipe text, which
-# does not depend on export, and every script under scripts/ that uses $KEY
-# assigns it itself before reading it. Sub-makes still receive KEY through
-# MAKEFLAGS, which carries it unexpanded.
-unexport KEY
+# `$(value KEY)` ALONE IS NOT ENOUGH: a command-line KEY is exported, and an
+# exported variable is expanded whenever a child environment is built. The
+# `unexport KEY` that closes this is at the TOP of this file -- see the
+# comment there for the make-version semantics and why position matters.
 #
 # env-local-set takes the value from a NO-ECHO prompt (the tool's getpass on
 # the controlling terminal) or from piped stdin -- never argv, so it is not in
