@@ -66,7 +66,7 @@ After `make -C pmoves up-cipher`: image rebuilt, **`streamable` = 1**, `/health`
 ### Reconciliation: grounded against source, 2026-09-09
 
 **Provenance rule applied here:** every claim below cites the file and line it
-came from, at submodule pin `975e02e6` (later `c88b009a2` — #3103 re-pinned, then `09aee936` — #3152;
+came from, at submodule pin `975e02e6` (later `c88b009a2` — #3103 re-pinned, then `102d277e` — #3152;
 `auth.ts` is unchanged across all of them, so every line number below still holds)
 or superproject `origin/main`. An earlier
 revision of this section proposed three remedies and cited nothing; it was
@@ -212,7 +212,7 @@ still had to be fixed by hand.
 | 2 | `e24f1323` | Re-verified against the gitlink `main` actually carried. Correct — until #19 merged. |
 | 3 | `975e02e6` | #19 merged (`Accept-Profile: pmoves_core`) and the gitlink promoted. The same three inserted lines moved the same four citations again: `e24f1323:79` → `975e02e6:82`, and `e24f1323:103` → `975e02e6:106`. The prefix fork at `:44`/`:46`/`:49`/`:54`/`:60` sits above the insertion and never moved. |
 | 4 | `c88b009a2` | #3103 bumped the pin for cipher build fix #21 + installer #20. Neither commit touches `auth.ts`; all nine citations re-verified at the same lines and only the pin constant moved. The quiet bump this test exists to keep quiet. |
-| 5 | `09aee936` | #3152 pinned the head of fork PR #27 (per-request MCP identity, `CIPHER_MCP_ENFORCE`). It changes `mcp-sse.ts`/`rest-server.ts`, not `auth.ts`; all nine citations unchanged. The pin is an **unmerged** fork PR head — if #27 is squash-merged, re-pin to the merge commit and move `PIN` with it. |
+| 5 | `102d277e` | #3152 pinned the head of fork PR #27 (per-request MCP identity, `CIPHER_MCP_ENFORCE`). It changes `mcp-sse.ts`/`rest-server.ts`, not `auth.ts`; all nine citations unchanged. The pin is an **unmerged** fork PR head — if #27 is squash-merged, re-pin to the merge commit and move `PIN` with it. |
 
 Re-numbering by hand on each pin bump is not a fix; it is the same manual step
 failing again on a schedule. `pmoves/tests/tools/test_auth_citations_resolve.py`
@@ -264,7 +264,7 @@ Two findings fall out of the card gate and are recorded rather than fixed:
 **Known Road for connecting any agent or drop-in model:** `.claude/PATTERNS.md`
 § "Known Road — Cipher memory for any agent or drop-in model".
 
-**Defect closed (#3152, fork PR POWERFULMOVES/Pmoves-cipher#27, pin `09aee936`).**
+**Defect closed (#3152, fork PR POWERFULMOVES/Pmoves-cipher#27, pin `102d277e`).**
 `rest-server.ts:58` mounted `createMcpSseRouter(memoryManager, nats)` with no
 auth argument, so the router's identity defaulted to `{}` (`mcp-sse.ts:48` @
 `c88b009a`). `/mcp/sse` passed that construction-time `{}` to every session, and
@@ -306,10 +306,16 @@ mirrors the REST path, plus scopes:
 With no token (dev-skip, server `CIPHER_API_TOKEN` unset), nothing is checked
 in either mode.
 
-| `CIPHER_MCP_ENFORCE` | on a violation |
+**Always refused when a token is present, whatever the flag says** (review
+F3, steward decision): an omitted `agentId`, and `agentId: "*"`. REST refuses
+both too. In advisory mode an omitted `agentId` used to reach
+`sidecar.search(agentId=undefined)`, which is an unscoped cross-agent read.
+
+| `CIPHER_MCP_ENFORCE` | declared-name mismatch, missing scope, or a `/messages` poster that is a different agent or holds fewer scopes than the session opener |
 |---|---|
-| unset / `false` — **default, advisory** | the call proceeds. One stderr line: `pmoves-mcp-auth: ADVISORY (CIPHER_MCP_ENFORCE off, accepted) tool=… token-agent='…' declared-agent='…' reason="…"` |
-| `true` / `1` / `yes` / `on` / `enforce` | refused. A tool call gets McpError `-32003` with `data.httpStatus: 403` and message `Forbidden: …` (the REST path's wording). A mismatched `/messages` POST gets HTTP 403. |
+| unset, or `false` / `0` / `no` / `off` / `advisory` (**default, advisory**) | The call proceeds. Cipher writes one stderr line containing a single JSON object: `pmoves-mcp-auth: ADVISORY (CIPHER_MCP_ENFORCE off, accepted) {"kind":…,"tokenAgent":…,"declaredAgent":…,"reason":…,"suppressedSinceLast":n}`. Caller-supplied values are JSON-escaped, so they cannot forge a line. Lines are deduped per (kind, token-agent, declared-agent) per `CIPHER_MCP_ADVISORY_INTERVAL_MS` (default 60000). |
+| `true` / `1` / `yes` / `on` / `enforce` | Refused. A tool call gets McpError `-32003` with `data.httpStatus: 403` and message `Forbidden: …` (the REST path's wording). A `/messages` POST gets HTTP 403. |
+| anything else (`enabled`, `strict`, `2`, a quoted `"true"`) | Stays **advisory** and logs `pmoves-mcp-auth: WARN unrecognised CIPHER_MCP_ENFORCE=…` once. At startup the router logs `pmoves-mcp-auth: mode=…`, which is the line to check after flipping the flag. |
 
 **Why advisory is the default.** Today most agents on a node share the
 bootstrap `CIPHER_API_TOKEN`, which resolves to agentId `bootstrap` (see §Agent
@@ -333,7 +339,7 @@ as the list of agents that still need a per-agent token.
 1. **Watch.** No Make target reads cipher's log (`logs-*` has only
    `logs-cloudflare`). The read-only route is the container log, filtered for
    `pmoves-mcp-auth: ADVISORY`, e.g. `docker logs pmoves-cipher-api-1 2>&1 | grep 'pmoves-mcp-auth: ADVISORY'`.
-   Collect the distinct `declared-agent` values. **UNVERIFIED:** I did not run
+   Collect the distinct `declaredAgent` values (one JSON object per line). **UNVERIFIED:** I did not run
    this, and the running image predates this change, so it prints no such lines
    until `make -C pmoves up-cipher` rebuilds from the new pin.
 2. **Card each one.** Every declared id needs an ACTIVE card in
