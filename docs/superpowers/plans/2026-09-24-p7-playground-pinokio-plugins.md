@@ -25,7 +25,7 @@
 | P9 | `pmoves-codex` runs upstream `@openai/codex@latest` with PMOVES env only, so it gets no node identity or Cipher binding. It also defaults `PMOVES_NATS_URL` to a URL with embedded credentials | fork `pmoves-codex/pinokio.js:23,43` |
 | P10 | The installed `~/pinokio/plugin/pmoves-crush` is not a git checkout, and its files match neither tracked copy (installed pinokio.js `69276f264537…`, start.js `ad038cdba55e…`; PMOVES-crush `pbnj/pinokio/api/pmoves-crush` @ `d82c07e2`: pinokio.js `d25776482a05…`, start.js `169b3ff767c2…`) | `sha256sum`; `gh api repos/POWERFULMOVES/PMOVES-crush/contents/...` |
 | P11 | No Pinokio plugin or launcher script has ever run on this node | `ls ~/pinokio/logs/api ~/pinokio/logs/dev` → absent |
-| P12 | Current editor failure mode: 10 VS Code sessions ended by the OOM killer between 2026-09-22 and 2026-09-24. Agents are children of the editor (`claude ← bash ← code-insiders(ptyHost) ← code-insiders`), so every kill ended every agent lane | `journalctl -k \| grep 'Killed process'`; `~/.config/Code - Insiders/logs/*/main.log` "crashed with code 15 and reason 'killed'"; process ancestry |
+| P12 | Current editor failure mode: the kernel OOM killer killed code-insiders processes 16 times across two boots between 2026-09-22 00:03 and 2026-09-24 14:31 (15 in boot -1, 1 in boot 0). The same window also saw kills of the deb code (1), chrome (5), docker (1) and docker-buildx (1), so container builds are exposed too. 9 VS Code session logs in that window end with "crashed with code 15 and reason 'killed'". Agents are children of the editor (claude ← bash ← code-insiders(ptyHost) ← code-insiders), so each session loss ended every agent lane. | per boot, because journalctl -k reads only the current boot: `for b in -1 0; do journalctl -b $b -k --since 2026-09-22 \| grep -oE 'Killed process [0-9]+ \([a-z-]+\)'; done`; session logs: `grep -l "reason 'killed'" ~/.config/Code\ -\ Insiders/logs/2026092[2-4]*/main.log`; process ancestry |
 | P13 | Snap update hold works (`code-insiders` held at rev 2558 while 2560 is pending), so updates are not the crash cause | `snap list`; `snap refresh --list` |
 | P14 | Plugin schema: `path: "plugin"` is required for standalone plugins. `launch_type` is inferred (`shell.run` → terminal, `exec`/`app.launch` → desktop). `run` is required. `install`/`uninstall`/`update`/`installed` are optional | `~/pinokio/prototype/PINOKIO.md:2855-2875` |
 | P15 | `PINOKIO.md` is byte-identical to the live https://desktop.pinokio.co/docs/ (Last-Modified 2026-09-05), which is built from `pinokiocomputer/home` `docs/README.md` @ `2d8d87d9e` (2026-09-02). The fork `POWERFULMOVES/Pmoves-program.pinokio.computer` is stale (upstream last commit 2025-06-06, no plugin chapter) | `cmp`; `gh api` commit queries |
@@ -52,7 +52,7 @@
 2. **Windows node:** plugins must pick bash through `shell: "{{kernel.path('bin/miniconda/Library/bin/bash.exe')}}"` (P8/P9 pattern), and wrappers must have a `.ps1` path. Pinned by Task 2.1 step 1 (the win32 branch is required by the test).
 3. **Wrapper missing or repo elsewhere:** the plugin must fail visibly in its menu (the `pmoves-crush` pattern, installed `pinokio.js:37-43`), not error in a shell. Pinned by Task 2.1 step 1.
 4. **Two sources for one plugin** (upstream `plugin/code/claude` next to `pmoves-claude`, or a loose `plugin/pmoves-crush` next to `plugin/code/pmoves-crush`): the provenance tool must flag the loose copy. Pinned by Task 1.1 test `test_loose_plugin_is_untracked`.
-5. **Memory:** a portable VS Code per room multiplies Electron memory. On Linux each room runs under `systemd-run --user --scope -p MemoryMax=`, and the Windows gap is documented. Pinned by Task 2.2 step 1.
+5. **Memory:** a portable VS Code per room multiplies Electron memory. On Linux each room runs under `systemd-run --user --scope -p MemoryMax=`, and the Windows gap is documented. Pinned by Task 2.2 step 1. The OOM killer has also killed docker and docker-buildx on this node (P12), so image builds must not run while an editor's memory is unbounded.
 
 ## Operator Decisions (gates; each task below names the decision it depends on)
 
@@ -431,6 +431,23 @@ test("menu fails visibly when the wrapper is missing", async () => {
   assert.strictEqual(items.length, 1)
   assert.match(items[0].text, /wrapper not found/)
 })
+
+test("fallback path reaches PINOKIO_HOME/api/PMOVES.AI from plugin/code/pmoves-claude", async () => {
+  const fs = require("fs"), os = require("os"), path = require("path")
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), "pinokio-home-"))
+  const pluginDir = path.join(home, "plugin", "code", "pmoves-claude")
+  fs.mkdirSync(pluginDir, { recursive: true })
+  fs.copyFileSync(path.join(__dirname, "..", "pmoves-claude", "pinokio.js"), path.join(pluginDir, "pinokio.js"))
+  const scripts = path.join(home, "api", "PMOVES.AI", "pmoves", "scripts")
+  fs.mkdirSync(scripts, { recursive: true })
+  fs.writeFileSync(path.join(scripts, "claude-pmoves.sh"), "#!/bin/sh\n")
+  delete process.env.PMOVES_REPO
+  const installed = require(path.join(pluginDir, "pinokio.js"))
+  const items = await installed.menu({ path }, {})
+  assert.strictEqual(items[0].text, "Start PMOVES Claude")
+  const tpl = installed.run[1].params.message
+  assert.ok(tpl.includes("path.resolve(cwd, '../../../api/PMOVES.AI')"), "template depth matches the installed layout")
+})
 ```
 - [ ] **Step 2: Run to verify it fails.** `node --test test/pmoves-claude.test.js` → expected `Cannot find module '../pmoves-claude/pinokio.js'`.
 - [ ] **Step 3: Implement** `pmoves-claude/pinokio.js`:
@@ -487,7 +504,8 @@ module.exports = {
 }
 ```
 Note on the path: the fork is installed at `PINOKIO_HOME/plugin/code`, so this subfolder is `PINOKIO_HOME/plugin/code/pmoves-claude`. Three `..` segments reach `PINOKIO_HOME`, and `api/PMOVES.AI` is appended from there. Verify this against a real install in Step 5; do not assume it.
-- [ ] **Step 4: Run tests to verify they pass.** `node --test test/` → all pass.
+Depth check: the three .. segments are correct only because the fork is installed at plugin/code; the fourth test pins this by building that layout in a temp dir. A standalone install at plugin/pmoves-claude would need two. An independent verifier raised this on 2026-09-24; it was resolved by the layout, and the missing test was added.
+- [ ] **Step 4: Run tests to verify they pass.** `node --test test/*.test.js` → all 4 pass. (A bare directory argument, `node --test test/`, is resolved as a module on Node 24 and fails with MODULE_NOT_FOUND. Verified 2026-09-24.)
 - [ ] **Step 5: Install from the fork and launch through Pinokio** (runbook; operator or steward):
 ```bash
 PT="$HOME/pinokio/bin/npm/bin/pterm"
