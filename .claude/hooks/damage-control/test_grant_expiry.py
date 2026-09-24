@@ -266,7 +266,9 @@ def main():
           and not api[0]["GH_CONFIG_DIR"].startswith(user_cfg), api and api[0].get("GH_CONFIG_DIR"))
     check("... with GH_HOST scrubbed and the host pinned to github.com",
           len(api) == 1 and "GH_HOST" not in api[0]
-          and "--hostname" in api_args[0] and "github.com" in api_args[0], api_args)
+          and "--hostname" in api_args[0]
+          and api_args[0][api_args[0].index("--hostname") + 1] == "github.com",
+          api_args)
     check("... authenticated by the token fetched first (no HTTP in that step)",
           len(api) == 1 and api[0].get("GH_TOKEN") == "tok"
           and seen[0][0][:2] == ["auth", "token"], [a for a, _ in seen])
