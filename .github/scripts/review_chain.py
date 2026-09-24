@@ -251,7 +251,8 @@ _NUMBERED_HEADING = re.compile(r"\d+\.\s")
 _VERDICT_MARKER = re.compile(
     r"^[ \t>]*(?:#{1,6}[ \t]*)?(?:[*_]{1,2})?(?:\d+\.[ \t]*)?(?:[*_]{1,2})?VERDICT\b(?:[*_]{1,2})?",
     re.IGNORECASE | re.MULTILINE)
-_VERDICT_LINE_LEAD = re.compile(r"^[\s:*#_>|\-\u2013\u2014]+")
+_VERDICT_LINE_LEAD = re.compile(r"^[\s:*#_>|`\-\u2013\u2014]+")
+_VERDICT_FIRST_WORD = re.compile(r"^(approved?|request[ _-]changes)(?![A-Za-z_-])", re.IGNORECASE)
 _NORM_WS = re.compile(r"\s+")
 
 
@@ -318,6 +319,10 @@ def review_validity(text: str, template: list[str] | None = None) -> tuple[bool,
                for m in _VERDICT_TOKEN.findall(line)}
     if not classes:
         return False, "no APPROVE / REQUEST_CHANGES verdict after the VERDICT marker (truncated?)"
+    # The verdict must be the FIRST word (markdown emphasis allowed): "I cannot
+    # approve anything I have not read" names a token but is not a verdict.
+    if not _VERDICT_FIRST_WORD.match(line):
+        return False, "the verdict line does not START with APPROVE / REQUEST_CHANGES"
     if len(classes) > 1:
         return False, "both APPROVE and REQUEST_CHANGES on the verdict line"
     return True, "review produced"
@@ -597,6 +602,16 @@ def emit(line: str) -> None:
     print(_REDACT.secrets_only(line), flush=True)
 
 
+def untrusted_lines(text: str) -> str:
+    """Prefix EVERY line of untrusted (model) text before it reaches stdout.
+
+    The runner parses workflow commands at the start of a log line, so a
+    model that prints `::stop-commands::x` or `::warning ...::` would
+    otherwise drive the runner. No prefixed line can start with `::`.
+    """
+    return "\n".join("| " + line for line in text.splitlines()) or "| "
+
+
 def scrub(result: TierResult) -> TierResult:
     """Redact the VALUE parts of a tier result, once, before any output."""
     result.detail = _REDACT(result.detail)
@@ -606,7 +621,7 @@ def scrub(result: TierResult) -> TierResult:
         # cannot be diagnosed (live #3169 @ 29b244614). Log its tail, redacted.
         tail = _REDACT(result.rejected.strip())[-REJECTED_LOG_CHARS:]
         print(f"::group::tier {result.index} {result.name}: rejected output (last {len(tail)} chars)", flush=True)
-        print(_REDACT.secrets_only(tail), flush=True)
+        print(untrusted_lines(_REDACT.secrets_only(tail)), flush=True)
         print("::endgroup::", flush=True)
         result.rejected = ""
     result.model = sanitize_model(_REDACT.strict(result.model))
@@ -711,9 +726,11 @@ def main(argv: list[str] | None = None) -> int:
     # Not __doc__: it is None under `python -OO` / PYTHONOPTIMIZE=2, and a
     # crash here would read downstream as "no reviewer" rather than a bug.
     ap = argparse.ArgumentParser(description="Fleet PR review fallback chain (kilo -> spark -> kilo-alt).")
-    ap.add_argument("--prompt", default="/tmp/kilo-review-prompt.md")
-    ap.add_argument("--diff", default="/tmp/kilo-review.diff")
-    ap.add_argument("--comment", default="/tmp/review-comment.md")
+    # Required, no /tmp defaults: the workflow passes $RUNNER_TEMP paths
+    # (emptied per job), so a stale file from an earlier run is never read.
+    ap.add_argument("--prompt", required=True)
+    ap.add_argument("--diff", required=True)
+    ap.add_argument("--comment", required=True)
     args = ap.parse_args(argv)
 
     try:

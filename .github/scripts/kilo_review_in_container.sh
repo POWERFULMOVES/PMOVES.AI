@@ -31,7 +31,9 @@ set -euo pipefail
 set -f  # preference list is word-split on purpose; never glob-expanded
 
 KILO_CLI_VERSION="${KILO_CLI_VERSION:-7.6.2}"
-REVIEW_PROMPT="${REVIEW_PROMPT:-/tmp/kilo-review-prompt.md}"
+# Container-internal mount targets (see kilo_review_tier.sh); the prompt
+# tells the model to read the diff at /review/kilo-review.diff.
+REVIEW_PROMPT="${REVIEW_PROMPT:-/review/kilo-review-prompt.md}"
 CATALOG="${KILO_CATALOG_FILE:-/tmp/kilo-catalog.txt}"
 
 npm install -g "@kilocode/cli@${KILO_CLI_VERSION}" >/dev/null 2>&1

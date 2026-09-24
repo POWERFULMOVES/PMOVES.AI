@@ -755,11 +755,12 @@ def _real_prompt(tmp_path: Path) -> str:
     stubbed, and /tmp redirected into tmp_path) so the template the tests use
     is the template CI builds -- it cannot drift."""
     step = next(s for s in _job()["steps"] if s.get("name") == "Build review prompt + diff")
-    script = step["run"].replace("/tmp/", f"{tmp_path}/")
+    script = step["run"]
     bindir = tmp_path / "gitbin"
     bindir.mkdir(exist_ok=True)
     _exe(bindir / "git", "#!/usr/bin/env bash\necho 'diff --git a/x b/x'\n")
     env = {**os.environ, "PATH": f"{bindir}:{os.environ['PATH']}", "GITHUB_BASE_REF": "main",
+           "RUNNER_TEMP": str(tmp_path),
            "PR_NUMBER": "3169", "PR_TITLE": "feat(ci): fleet review fallback chain", "PR_BODY": "body text"}
     subprocess.run(["bash", "-c", script], env=env, check=True, capture_output=True, timeout=30)
     return (tmp_path / "kilo-review-prompt.md").read_text()
@@ -942,3 +943,70 @@ def test_live_comment_file_is_per_job_not_tmp():
     text = _WORKFLOW.read_text()
     assert "/tmp/review-comment.md" not in text
     assert text.count('"${RUNNER_TEMP}/review-comment.md"') == 3
+
+
+# ----------------------------------------- final P3s (re-confirmation) --
+
+REAL_GLM53_APPROVE = (_FIXTURES / "kilo_review_pr3169_glm53_approve.md").read_text()
+
+
+def test_final_p3_1_model_text_cannot_inject_workflow_commands(tmp_path):
+    junk = ("not a review\n::warning title=x::y\n::stop-commands::zzz\n"
+            "::error::fake failure\nand some more words to pass the length check")
+    r = _junk_run(tmp_path, junk, "review this")
+    lines = r["stdout"].splitlines()
+    assert "| ::stop-commands::zzz" in lines and "| ::warning title=x::y" in lines
+    ours = ("::group::", "::endgroup::", "::warning::review tier", "::warning::fleet review",
+            "::notice::fleet review", "::error::NO-REVIEWER-AVAILABLE")
+    stray = [ln for ln in lines if ln.startswith("::") and not ln.startswith(ours)]
+    assert stray == [], stray
+    assert not any(ln.startswith(("::stop-commands", "::warning title", "::error::fake")) for ln in lines)
+
+
+def test_final_p3_1_wrapper_prefixes_kilo_stderr_and_replays_only_resolver_lines(tier_env):
+    env, tmp_path, _ = tier_env
+    sudo = tmp_path / "bin" / "sudo"
+    sudo.write_text(sudo.read_text().replace(
+        '  fail)  echo "KILO_RESOLVED_MODEL=kilo/z-ai/glm-5.2" >&2; echo "boom" >&2; exit 1 ;;',
+        '  fail)  echo "KILO_RESOLVED_MODEL=kilo/z-ai/glm-5.2" >&2; echo "::stop-commands::zzz" >&2;'
+        ' echo "::warning::injected" >&2; echo "KILO_TIER_STATUS=no-candidate" >&2; exit 1 ;;'))
+    p, out, meta = _tier(env, tmp_path, "fail")
+    lines = p.stdout.splitlines()
+    assert "| ::stop-commands::zzz" in lines and "| ::warning::injected" in lines
+    assert not any(ln.startswith(("::stop-commands", "::warning::injected")) for ln in lines)
+    assert "status" not in meta, "a status printed by the model after the resolver must be ignored"
+    assert meta["reason"] == "kilo run failed (exit 1)"
+
+
+@pytest.mark.parametrize("line,ok", [
+    ("3. VERDICT: I cannot approve anything I have not read.", False),
+    ("3. VERDICT: Not approved - request changes", False),
+    ("3. VERDICT: APPROVED - bounded and tested", True),
+    ("3. VERDICT: **REQUEST_CHANGES** - exit 2 is remapped", True),
+    ("3. VERDICT: `APPROVE` - fine", True),
+    ("## 3. VERDICT\n\n**APPROVE** - fine", True),
+    ("## 3. VERDICT\n\nI would approve this.", False),
+])
+def test_final_p3_2_verdict_must_be_the_first_word(tmp_path, line, ok):
+    review = "1. CORRECTNESS\n- the chain bounds every tier\n2. SECURITY / TOPOLOGY\n- clean\n" + line + "\n"
+    r = _junk_run(tmp_path, review, _real_prompt(tmp_path))
+    assert (r["rc"] == 0) is ok, r["summary"]
+
+
+@pytest.mark.parametrize("fixture", ["kilo_review_pr3169.md", "kilo_review_pr3169_glm53_approve.md"])
+def test_final_p3_2_real_reviews_stay_ok(tmp_path, fixture):
+    r = _junk_run(tmp_path, (_FIXTURES / fixture).read_text(), _real_prompt(tmp_path))
+    assert r["rc"] == 0, r["summary"]
+
+
+def test_final_p3_3_no_fixed_tmp_kilo_review_paths_remain():
+    offenders = []
+    for path in (_WORKFLOW, _CHAIN, _IN_CONTAINER, _SCRIPTS / "kilo_review_tier.sh"):
+        for n, line in enumerate(path.read_text().splitlines(), 1):
+            if re.search(r"/tmp/kilo-review(?!-env\.)", line):
+                offenders.append(f"{path.name}:{n}: {line.strip()}")
+    assert offenders == []
+    text = _WORKFLOW.read_text()
+    assert '"${RUNNER_TEMP}/kilo-review.diff"' in text and '"${RUNNER_TEMP}/kilo-review-prompt.md"' in text
+    assert "Review the diff at /review/kilo-review.diff" in text, "the prompt names the container mount target"
+    assert "/review/kilo-review.diff:ro" in (_SCRIPTS / "kilo_review_tier.sh").read_text()
