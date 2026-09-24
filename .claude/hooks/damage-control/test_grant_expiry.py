@@ -84,6 +84,7 @@ def reset(grant_env=None, grant_file=None, file_age=0.0):
     """A fresh 'hook process': no calls, no memo, no trail, no cache, no grant."""
     CALLS.clear()
     KR._MEMO.clear()
+    KR._GIT_TRACKS_MEMO.clear()
     for p in (_TRAIL, _GRANT, _CACHE):
         if p.exists():
             p.unlink()
@@ -127,8 +128,12 @@ MERGED_PR = body(3101, "closed", merged=True, merged_at="2026-09-20T15:05:08Z",
 CLOSED_PR = body(3102, "closed", merged=False, closed_at="2026-09-21T10:00:00Z")
 OPEN_ISSUE = body(42, "open", pr=False)
 CLOSED_ISSUE = body(43, "closed", closed_at="2026-09-01T00:00:00Z", pr=False)
+ISSUE_THAT_IS_A_PR = json.dumps({"number": 3101, "state": "closed", "closed_at": None,
+                                 "pull_request": {"url": "x"}})
+PR_ENDPOINT_ISSUE_BODY = body(44, "open", pr=False)
 FIXTURES = {"/pulls/3200": OPEN_PR, "/pulls/3101": MERGED_PR, "/pulls/3102": CLOSED_PR,
-            "/issues/42": OPEN_ISSUE, "/issues/43": CLOSED_ISSUE}
+            "/issues/42": OPEN_ISSUE, "/issues/43": CLOSED_ISSUE,
+            "/issues/3101": ISSUE_THAT_IS_A_PR, "/pulls/44": PR_ENDPOINT_ISSUE_BODY}
 
 
 def main():
@@ -172,25 +177,99 @@ def main():
     check("an unverifiable grant refuses", not ok, detail)
     check("... with the distinct 'grant not verifiable' message and the cause",
           "grant not verifiable" in detail and "HTTP 502" in detail, detail)
-    check("... naming the offline override", KR.OFFLINE_SUFFIX in detail, detail)
+    check("... pointing the operator at the override WITHOUT spelling its syntax",
+          "offline override" in detail and "SKILL.md" in detail
+          and KR.OFFLINE_SUFFIX not in detail, detail)
 
-    # The REAL seam, from a fresh copy of the module (KR's is replaced), with gh
-    # unreachable: no network is touched because there is no binary to run.
-    old_path = os.environ.get("PATH", "")
+    # The REAL seam, from a fresh copy of the module (KR's is replaced). It must
+    # never reach the network from a test, so every case below either points
+    # KNOWN_ROAD_GH somewhere that cannot run, or replaces the trusted-location
+    # list with paths that do not exist.
     spec = importlib.util.spec_from_file_location("kr_pristine", HERE / "known_roads.py")
     pristine = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(pristine)
-    try:
-        os.environ["PATH"] = str(_TMP / "no-bin-here")
+
+    def seam(**env):
+        saved = {k: os.environ.get(k) for k in env}
+        os.environ.update({k: v for k, v in env.items() if v is not None})
         try:
             pristine._gh_api_raw("repos/x/y/pulls/1")
-            got = "no exception"
+            return "no exception"
         except pristine.GrantUnverifiable as exc:
-            got = str(exc)
+            return str(exc)
+        finally:
+            for k, v in saved.items():
+                if v is None:
+                    os.environ.pop(k, None)
+                else:
+                    os.environ[k] = v
+
+    got = seam(KNOWN_ROAD_GH=str(_TMP / "no-gh-here" / "gh"))
+    check("an override naming no binary refuses (no fallback to PATH)",
+          got.startswith("no gh in a trusted location"), got)
+    got = seam(KNOWN_ROAD_GH="gh")
+    check("a RELATIVE override refuses", "must be an absolute path" in got, got)
+
+    # F2: a shim `gh` first on PATH (agent-writable ~/.local/bin in the measured
+    # case) that answers "open" and leaves a marker if it is ever executed.
+    shim_dir = _TMP / "shim-bin"
+    shim_dir.mkdir()
+    shim_dir.chmod(0o755)   # not group-writable: exercise the OWNER test, not the mode test
+    marker = _TMP / "shim-ran"
+    shim = shim_dir / "gh"
+    shim.write_text("#!/bin/sh\ntouch '%s'\necho '{\"number\": 1, \"state\": \"open\", "
+                    "\"merged\": false}'\n" % marker, encoding="utf-8")
+    shim.chmod(0o755)
+    old_path, old_trusted = os.environ.get("PATH", ""), pristine._TRUSTED_GH_POSIX
+    try:
+        os.environ["PATH"] = str(shim_dir) + os.pathsep + old_path
+        pristine._TRUSTED_GH_POSIX = (str(_TMP / "no-system-gh" / "gh"),)
+        got = seam()
     finally:
         os.environ["PATH"] = old_path
-    check("the real seam with no gh on PATH raises GrantUnverifiable",
-          got == "gh CLI not found on PATH", got)
+        pristine._TRUSTED_GH_POSIX = old_trusted
+    check("a shim gh FIRST ON PATH is ignored: refused as unverifiable",
+          got.startswith("no gh in a trusted location"), got)
+    check("... and the shim was never executed", not marker.exists())
+    got = seam(KNOWN_ROAD_GH=str(shim))
+    check("the same shim named explicitly is refused: user-owned is not trusted",
+          "is not trusted" in got and "current user" in got, got)
+    check("... and still never executed", not marker.exists())
+
+    # The second door: gh's own config (~/.config/gh, agent-writable) can re-route
+    # its HTTP (`http_unix_socket`, `api_host`) -- measured to make a merged PR
+    # read "open". The API call must run with a FRESH config dir and a scrubbed env.
+    seen = []
+
+    def fake_run(gh, args, env):
+        seen.append((list(args), dict(env)))
+        return "tok" if args[:2] == ["auth", "token"] else '{"ok": 1}'
+    old_run, old_find = pristine._run_gh, pristine._trusted_gh
+    saved_host = os.environ.get("GH_HOST")
+    try:
+        pristine._run_gh, pristine._trusted_gh = fake_run, (lambda: "/usr/bin/gh")
+        os.environ["GH_HOST"] = "liar.example"
+        for k in ("GH_TOKEN", "GITHUB_TOKEN"):
+            os.environ.pop(k, None)
+        pristine._gh_api_raw("repos/x/y/pulls/1")
+    finally:
+        pristine._run_gh, pristine._trusted_gh = old_run, old_find
+        if saved_host is None:
+            os.environ.pop("GH_HOST", None)
+        else:
+            os.environ["GH_HOST"] = saved_host
+    api = [e for a, e in seen if a and a[0] == "api"]
+    api_args = [a for a, _e in seen if a and a[0] == "api"]
+    user_cfg = os.path.expanduser("~/.config/gh")
+    check("the API call runs with a fresh GH_CONFIG_DIR, not the user's",
+          len(api) == 1 and api[0].get("GH_CONFIG_DIR")
+          and not api[0]["GH_CONFIG_DIR"].startswith(user_cfg), api and api[0].get("GH_CONFIG_DIR"))
+    check("... with GH_HOST scrubbed and the host pinned to github.com",
+          len(api) == 1 and "GH_HOST" not in api[0]
+          and "--hostname" in api_args[0] and "github.com" in api_args[0], api_args)
+    check("... authenticated by the token fetched first (no HTTP in that step)",
+          len(api) == 1 and api[0].get("GH_TOKEN") == "tok"
+          and seen[0][0][:2] == ["auth", "token"], [a for a, _ in seen])
 
     print("-- malformed API responses refuse --")
     bad = {
@@ -201,6 +280,7 @@ def main():
         "unknown state": body(3200, "draft", merged=False),
         "merged not a bool": body(3200, "closed", merged="yes"),
         "open AND merged": body(3200, "open", merged=True),
+        "200k-deep nesting (RecursionError)": "[" * 200000,
     }
     for label, raw in bad.items():
         serve({"/pulls/3200": raw})
@@ -305,12 +385,29 @@ def main():
         ok, detail = evaluate()
         check("an UNTRACKED brief refuses", not ok and "not tracked by git" in detail, detail)
         subprocess.run(["git", "-C", str(repo), "add", "--", str(brief)], check=True)
+        KR._GIT_TRACKS_MEMO.clear()   # the next tool call is a new hook process
         ok, detail = evaluate()
         r = rows()
         check("the same brief once `git add`ed allows", ok, detail)
         check("... recording grant_state=handoff-present",
               len(r) == 1 and r[0].get("grant_state") == "handoff-present", r)
         check("... with no API call", CALLS == [], CALLS)
+        git_calls = []
+        real_uncached = KR._git_tracks_uncached
+
+        def counting(rel):
+            git_calls.append(rel)
+            return real_uncached(rel)
+        KR._git_tracks_uncached = counting
+        try:
+            KR._GIT_TRACKS_MEMO.clear()
+            evaluate()
+            evaluate()
+            evaluate()
+        finally:
+            KR._git_tracks_uncached = real_uncached
+        check("the git-tracked check runs once per hook process, not once per path",
+              len(git_calls) == 1, git_calls)
     finally:
         os.environ["CLAUDE_PROJECT_DIR"] = str(TREE)
 
@@ -356,6 +453,50 @@ def main():
     gap_blocked, _a, _r = dc.check_command("echo '{}' > " + cache_rel, cfg)
     print("  info  directory-prefixed Bash write to the cache blocked=%s "
           "(known gap when False)" % gap_blocked)
+
+    print("-- F1: a poisoned cache or grant is a miss / no grant, never a crash --")
+    serve(FIXTURES)
+    poisons = {
+        "checked: 10**400 (OverflowError)":
+            ('{"POWERFULMOVES/PMOVES.AI#pr:3101": {"state": "open", "checked": 1'
+             + "0" * 400 + '}}').encode(),
+        "200k-deep [ (RecursionError)": b"[" * 200000,
+        "not UTF-8": b"\xff\xfe\x00garbage",
+    }
+    for label, raw in poisons.items():
+        reset(grant_env="compose:pr:3101")
+        _CACHE.write_bytes(raw)
+        try:
+            ok, detail = evaluate()
+            outcome = (ok, detail)
+        except Exception as exc:  # noqa: BLE001
+            outcome = ("RAISED", type(exc).__name__)
+        check("poisoned cache (%s) is a miss: the real state is fetched and the "
+              "merged grant refused" % label,
+              outcome[0] is False and "MERGED" in outcome[1], outcome)
+
+    reset()
+    _GRANT.write_bytes(b"compose:pr:3200\xff\n")
+    try:
+        outcome = evaluate()
+    except Exception as exc:  # noqa: BLE001
+        outcome = ("RAISED", type(exc).__name__)
+    check("a non-UTF-8 grant file grants nothing (and does not raise)",
+          outcome == (False, ""), outcome)
+    st = KR.grant_status()
+    check("... and status says why", "not valid UTF-8" in str(st["detail"]), st)
+
+    print("-- P3c: a grant names its referent by its real kind --")
+    reset(grant_env="compose:issue:3101")
+    ok, detail = evaluate()
+    check("issue:N that is actually a PR is refused, naming pr:N",
+          not ok and "is a pull request" in detail and "pr:3101" in detail, detail)
+    check("... as its own refusal, not 'cannot look'",
+          "grant refused" in detail and "not verifiable" not in detail, detail)
+    reset(grant_env="compose:pr:44")
+    ok, detail = evaluate()
+    check("pr:N whose body is an issue's (no `merged`) is refused",
+          not ok and "merged=None" in detail, detail)
 
     print("-- POSITIVE CONTROL: the pre-fix guard honours the stale grant --")
     blob = subprocess.run(

@@ -32,7 +32,6 @@ from __future__ import annotations
 import json
 import os
 import re
-import shutil
 import subprocess
 import tempfile
 import time
@@ -237,8 +236,22 @@ def _reason_is_provable(reason: str) -> Tuple[bool, str]:
     return True, ""
 
 
+_GIT_TRACKS_MEMO: Dict[Tuple[str, str], Tuple[bool, str]] = {}
+
+
 def _git_tracks(rel: str) -> Tuple[bool, str]:
-    """(tracked, detail) for a repo-relative path. Fails closed on any error."""
+    """(tracked, detail) for a repo-relative path. Fails closed on any error.
+
+    Memoised per process (one hook call), like the GitHub lookup: the effect
+    check evaluates every changed path, and a handoff grant would otherwise pay
+    one git subprocess per path."""
+    key = (str(_project_dir()), rel)
+    if key not in _GIT_TRACKS_MEMO:
+        _GIT_TRACKS_MEMO[key] = _git_tracks_uncached(rel)
+    return _GIT_TRACKS_MEMO[key]
+
+
+def _git_tracks_uncached(rel: str) -> Tuple[bool, str]:
     try:
         proc = subprocess.run(
             ["git", "-C", str(_project_dir()), "ls-files", "--error-unmatch", "--", rel],
@@ -309,6 +322,10 @@ class GrantUnverifiable(Exception):
     """The referent's state could not be established. Always a refusal."""
 
 
+class GrantWrongKind(GrantUnverifiable):
+    """The referent exists but is the other kind (issue:N names a PR, or vice versa)."""
+
+
 # Per-PROCESS memo of every outcome, failures included. A hook process lives for
 # one tool call, so this cannot make an answer outlive the call; what it prevents
 # is the effect check (one process, N changed paths) paying N timeouts during a
@@ -323,31 +340,109 @@ def _cache_path() -> Path:
     return _project_dir() / ".claude" / "hooks" / "damage-control" / ".grant-state-cache.json"
 
 
+# WHICH gh, and WHAT it reads (review of #3174, F2, confirmed). `shutil.which`
+# walks PATH, and on this fleet PATH starts with ~/.local/bin -- agent-writable.
+# A shim `gh` there answering {"state":"open"} revived a merged PR's grant. So gh
+# is taken ONLY from system locations, and the binary and its directory must not
+# be writable by the user the hook runs as. Same class, second door: gh reads
+# ~/.config/gh/config.yml (also agent-writable), whose `http_unix_socket` and
+# `api_host` keys re-route its HTTP. The API call therefore runs with a fresh,
+# empty GH_CONFIG_DIR; the token is fetched first with `gh auth token`, which
+# makes no HTTP request. A tampered token can only change WHO asks github.com,
+# never what github.com answers.
+#
+# KNOWN_ROAD_GH: an operator-set ABSOLUTE path, for hosts whose gh lives
+# elsewhere. It is read from the hook's environment (fixed at launch, like
+# KNOWN_ROAD), passes the same ownership test, and replaces the search -- so a
+# bad value refuses rather than falling back to PATH.
+#
+# macOS/Homebrew: /opt/homebrew/bin is owned by the user, so it FAILS the
+# ownership test and grants refuse as unverifiable there; use `!offline` or a
+# root-owned gh. Windows: only %ProgramFiles%\GitHub CLI\gh.exe is searched, and
+# the ownership test is POSIX-only (os.access on Windows sees only the read-only
+# attribute) -- stated, not claimed.
+_TRUSTED_GH_POSIX = ("/usr/bin/gh", "/usr/local/bin/gh", "/opt/homebrew/bin/gh", "/bin/gh")
+_GH_ENV_DROP = ("GH_HOST", "GH_ENTERPRISE_TOKEN", "GITHUB_ENTERPRISE_TOKEN", "GH_REPO",
+                "GH_CONFIG_DIR", "GH_DEBUG", "GH_PATH")
+
+
+def _untrusted_reason(path: str) -> str:
+    """"" when `path` cannot be modified by the user this hook runs as."""
+    try:
+        st = os.stat(path)
+    except OSError as exc:
+        return f"cannot stat {path}: {exc.__class__.__name__}"
+    if os.name == "nt":
+        return "" if not os.access(path, os.W_OK) else f"{path} is writable"
+    if st.st_mode & 0o022:
+        return f"{path} is group/world-writable"
+    uid = os.getuid()
+    if uid != 0 and (st.st_uid == uid or os.access(path, os.W_OK)):
+        return f"{path} is owned by or writable by the current user"
+    return ""
+
+
+def _trusted_gh() -> str:
+    """Absolute path of a gh the current user cannot replace. Raises otherwise."""
+    override = os.environ.get("KNOWN_ROAD_GH", "").strip()
+    if override:
+        if not os.path.isabs(override):
+            raise GrantUnverifiable("KNOWN_ROAD_GH must be an absolute path")
+        candidates: Tuple[str, ...] = (override,)
+    elif os.name == "nt":
+        candidates = (os.path.join(os.environ.get("ProgramFiles", r"C:\Program Files"),
+                                   "GitHub CLI", "gh.exe"),)
+    else:
+        candidates = _TRUSTED_GH_POSIX
+    for cand in candidates:
+        if not os.path.isfile(cand):
+            continue
+        real = os.path.realpath(cand)
+        for target in (os.path.dirname(cand), real, os.path.dirname(real)):
+            why = _untrusted_reason(target)
+            if why:
+                raise GrantUnverifiable(f"gh at {cand} is not trusted: {why}")
+        return real
+    raise GrantUnverifiable(
+        "no gh in a trusted location (" + ", ".join(candidates) + "); PATH is not "
+        "searched because it is agent-writable")
+
+
+def _run_gh(gh: str, args, env: Dict[str, str]) -> str:
+    try:
+        proc = subprocess.run(
+            [gh] + list(args), capture_output=True, text=True,
+            timeout=GH_TIMEOUT_SECONDS, stdin=subprocess.DEVNULL, env=env,
+        )
+    except subprocess.TimeoutExpired:
+        raise GrantUnverifiable(f"gh {args[0]} timed out after {GH_TIMEOUT_SECONDS}s")
+    except OSError as exc:
+        raise GrantUnverifiable(f"gh could not be run: {exc.__class__.__name__}")
+    if proc.returncode != 0:
+        lines = (proc.stderr or proc.stdout or "").strip().splitlines()
+        first = lines[0][:200] if lines else "no output"
+        raise GrantUnverifiable(f"gh {args[0]} exited {proc.returncode}: {first}")
+    return proc.stdout
+
+
 def _gh_api_raw(api_path: str) -> str:
     """stdout of `gh api <api_path>`. Raises GrantUnverifiable on any failure.
 
     The single network seam: tests replace THIS, never the parsing below it, so a
     malformed-response test exercises the real parser.
     """
-    gh = shutil.which("gh")
-    if not gh:
-        raise GrantUnverifiable("gh CLI not found on PATH")
-    env = dict(os.environ, GH_PROMPT_DISABLED="1", GH_NO_UPDATE_NOTIFIER="1",
-               NO_COLOR="1")
-    try:
-        proc = subprocess.run(
-            [gh, "api", api_path], capture_output=True, text=True,
-            timeout=GH_TIMEOUT_SECONDS, stdin=subprocess.DEVNULL, env=env,
-        )
-    except subprocess.TimeoutExpired:
-        raise GrantUnverifiable(f"gh api timed out after {GH_TIMEOUT_SECONDS}s")
-    except OSError as exc:
-        raise GrantUnverifiable(f"gh could not be run: {exc}")
-    if proc.returncode != 0:
-        lines = (proc.stderr or proc.stdout or "").strip().splitlines()
-        first = lines[0][:200] if lines else "no output"
-        raise GrantUnverifiable(f"gh api {api_path} exited {proc.returncode}: {first}")
-    return proc.stdout
+    gh = _trusted_gh()
+    env = {k: v for k, v in os.environ.items() if k not in _GH_ENV_DROP}
+    env.update(GH_PROMPT_DISABLED="1", GH_NO_UPDATE_NOTIFIER="1", NO_COLOR="1")
+    token = os.environ.get("GH_TOKEN", "").strip() or os.environ.get("GITHUB_TOKEN", "").strip()
+    if not token:
+        token = _run_gh(gh, ["auth", "token", "--hostname", "github.com"], env).strip()
+    if not token:
+        raise GrantUnverifiable("gh auth token returned nothing")
+    with tempfile.TemporaryDirectory(prefix="kr-gh-") as cfg:
+        call_env = dict(env, GH_CONFIG_DIR=cfg, GH_TOKEN=token)
+        call_env.pop("GITHUB_TOKEN", None)
+        return _run_gh(gh, ["api", "--hostname", "github.com", api_path], call_env)
 
 
 def _parse_state(kind: str, number: int, raw: str) -> Dict[str, str]:
@@ -359,8 +454,8 @@ def _parse_state(kind: str, number: int, raw: str) -> Dict[str, str]:
     """
     try:
         doc = json.loads(raw)
-    except ValueError:
-        raise GrantUnverifiable("malformed API response: not JSON")
+    except Exception:  # noqa: BLE001 -- ValueError, and RecursionError on deep nesting
+        raise GrantUnverifiable("malformed API response: not parseable JSON")
     if not isinstance(doc, dict):
         raise GrantUnverifiable("malformed API response: not a JSON object")
     if doc.get("number") != number:
@@ -370,6 +465,8 @@ def _parse_state(kind: str, number: int, raw: str) -> Dict[str, str]:
     if state not in ("open", "closed"):
         raise GrantUnverifiable(f"malformed API response: state={state!r}")
     if kind == "pr":
+        # /pulls/N answers 404 for a plain issue (that surfaces as a gh error);
+        # a body without the PR-only `merged` key is refused below either way.
         merged = doc.get("merged")
         if not isinstance(merged, bool):
             raise GrantUnverifiable(f"malformed API response: merged={merged!r}")
@@ -378,6 +475,11 @@ def _parse_state(kind: str, number: int, raw: str) -> Dict[str, str]:
         label = "merged" if merged else state
         when = doc.get("merged_at") if merged else doc.get("closed_at")
     else:
+        # /issues/N answers for pull requests too (they are issues with a
+        # `pull_request` key). A grant must name its referent by its real kind.
+        if "pull_request" in doc:
+            raise GrantWrongKind(
+                f"issue #{number} is a pull request; the grant must name it pr:{number}")
         label = state
         when = doc.get("closed_at")
     return {"state": label, "at": when if isinstance(when, str) else ""}
@@ -388,15 +490,27 @@ def _cache_key(kind: str, number: int) -> str:
 
 
 def _cache_load() -> Dict[str, object]:
+    """The cache document, or {} -- for ANY failure (review of #3174, F1: a
+    200k-deep `[` body raised RecursionError, which is not a ValueError)."""
     try:
         doc = json.loads(_cache_path().read_text(encoding="utf-8"))
-    except (OSError, ValueError):
+    except Exception:  # noqa: BLE001 -- a bad cache is a miss, never a crash
         return {}
     return doc if isinstance(doc, dict) else {}
 
 
 def _cache_get(key: str, now: float) -> Optional[Dict[str, str]]:
-    """A fresh, well-formed cache entry, else None (-> ask the API)."""
+    """A fresh, well-formed cache entry, else None (-> ask the API).
+
+    Any exception is a miss: `checked: 10**400` made `now - checked` raise
+    OverflowError, the hook exited 1, and PreToolUse treats 1 as non-blocking."""
+    try:
+        return _cache_get_unchecked(key, now)
+    except Exception:  # noqa: BLE001 -- a bad cache is a miss, never a crash
+        return None
+
+
+def _cache_get_unchecked(key: str, now: float) -> Optional[Dict[str, str]]:
     entry = _cache_load().get(key)
     if not isinstance(entry, dict):
         return None
@@ -481,7 +595,7 @@ def _check_grant(raw_reason: str, source: str,
     `reason` is returned with any `!offline` suffix removed, so trail rows keep
     grouping by the bare reason. `grant_state` is one of:
       open | offline-override | handoff-present     (ok)
-      merged | closed | unverifiable | stale | unprovable   (refused)
+      merged | closed | unverifiable | wrong-kind | stale | unprovable   (refused)
     """
     reason, offline = _split_offline(raw_reason)
     # Form before referent: a malformed grant is refused for its form, before
@@ -515,12 +629,15 @@ def _check_grant(raw_reason: str, source: str,
     kind, number = reason.split(":", 1)
     try:
         st = _referent_state(kind, int(number))
+    except GrantWrongKind as exc:
+        return False, reason, f"grant refused: {exc}", "wrong-kind"
     except GrantUnverifiable as exc:
+        # Deliberately does NOT spell out the override syntax: this text is read
+        # by the agent that was refused, and the override is the operator's call.
         return False, reason, (
             f"grant not verifiable: {exc}. The guard refuses when it cannot look. "
-            f"For deliberate offline work the operator may append '{OFFLINE_SUFFIX}' "
-            f"to the grant (e.g. compose:{reason}{OFFLINE_SUFFIX}); the use is "
-            "recorded as an offline override"), "unverifiable"
+            "An operator may record an offline override; see "
+            ".claude/skills/known-roads/SKILL.md"), "unverifiable"
     if st["state"] == "open":
         return True, reason, "", "open"
     label = "PR" if kind == "pr" else "issue"
@@ -724,6 +841,11 @@ def _read_grant() -> Tuple[str, str, Optional[float]]:
                 line = line.strip()
                 if line and not line.startswith("#"):
                     return line, "file", mtime
+    except UnicodeDecodeError:
+        # Pre-existing crash (review of #3174): a non-UTF-8 grant escaped as an
+        # exception. An unreadable grant GRANTS NOTHING -- the readOnly rules then
+        # block as if no grant existed -- and status tools can still say why.
+        return "", "file-unreadable", None
     except OSError:
         pass
     return "", "", None
@@ -752,6 +874,10 @@ def grant_status() -> Dict[str, object]:
     out: Dict[str, object] = {"raw": raw, "source": source, "mtime": mtime,
                               "domain": "", "reason": "", "ok": False,
                               "detail": "", "grant_state": ""}
+    if source == "file-unreadable":
+        out["detail"] = ("grant file is not valid UTF-8 and grants nothing; rewrite "
+                         ".claude/hooks/damage-control/.known-road-active")
+        return out
     if not raw:
         return out
     if ":" not in raw:
