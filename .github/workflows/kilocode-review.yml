@@ -7,10 +7,14 @@
 # runner.
 #
 # Reviewer chain (.github/scripts/review_chain.py), first non-empty review wins:
-#   tier 1  kilo-primary    Kilo CLI, model resolved against the live catalog
-#   tier 2  spark-local     Spark local-model reviewer, only if its health
-#                           probe answers ready. Endpoint + token come from the
-#                           SPARK_REVIEW_URL / SPARK_REVIEW_TOKEN secrets.
+#   tier 1  spark-local     Spark local-model reviewer, FIRST when online: only
+#                           if configured AND its health probe answers ready
+#                           (operator: "if the Spark node is online then it
+#                           should be running PR reviews"). Endpoint + token
+#                           come from the SPARK_REVIEW_URL / SPARK_REVIEW_TOKEN
+#                           secrets. Not configured -> skipped with no network
+#                           call; offline -> at most the 5s probe.
+#   tier 2  kilo-primary    Kilo CLI, model resolved against the live catalog
 #   tier 3  kilo-alternate  Kilo CLI with the next untried catalog-valid model
 # The posted comment's header names the tier + model that actually produced
 # it; the job summary lists every tier and its outcome. If every tier fails
@@ -113,20 +117,20 @@ jobs:
           } > "${RUNNER_TEMP}/kilo-review-prompt.md"
           echo "diff lines: $(wc -l < "${RUNNER_TEMP}/kilo-review.diff")"
 
-      - name: Review chain (kilo-primary -> spark-local -> kilo-alternate)
+      - name: Review chain (spark-local when online -> kilo-primary -> kilo-alternate)
         id: chain
         env:
           KILOCODE_API_KEY: ${{ secrets.KILOCODE_API_KEY }}
           KILO_API_KEY: ${{ secrets.KILOCODE_API_KEY }}  # same JWT — this is the var that unlocks the kilo/* model catalog
           KILO_REVIEW_MODEL: ${{ vars.KILO_REVIEW_MODEL }}
           # Ordered preference, validated against the live catalog (first hit
-          # wins). Tier 1 uses it only when KILO_REVIEW_MODEL is unset; tier 3
-          # (kilo-alternate) always walks it, skipping the model tier 1 tried.
+          # wins). Tier 2 uses it only when KILO_REVIEW_MODEL is unset; tier 3
+          # (kilo-alternate) always walks it, skipping the model tier 2 tried.
           # Override the whole list with the KILO_REVIEW_MODEL_PREFERENCES
           # repo variable.
           KILO_REVIEW_MODEL_PREFERENCES: ${{ vars.KILO_REVIEW_MODEL_PREFERENCES || 'kilo/z-ai/glm-5.2 kilo/z-ai/glm-5.3 kilo/z-ai/glm-5.1 kilo/moonshotai/kimi-k2.7-code kilo/qwen/qwen3-coder-next' }}
           KILO_TIER_TIMEOUT: '720'
-          # Tier 2. Both are SECRETS: the endpoint is tailnet topology and this
+          # Tier 1. Both are SECRETS: the endpoint is tailnet topology and this
           # repo is public (a variable would print in the log). Unset URL ->
           # the tier records `not-configured`, which is distinct from
           # `offline` (configured, health probe did not answer ready). The URL

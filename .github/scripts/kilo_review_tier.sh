@@ -19,7 +19,7 @@
 # Every container carries the label pmoves.kilo-review=<run id>, so the
 # workflow's always() cleanup step can remove it after a job cancel/timeout.
 #
-# Called by review_chain.py for tier 1 (kilo-primary) and tier 3
+# Called by review_chain.py for tier 2 (kilo-primary) and tier 3
 # (kilo-alternate, with KILO_IGNORE_OVERRIDE=1 and KILO_EXCLUDE_MODELS set).
 set -euo pipefail
 
@@ -57,6 +57,25 @@ chmod 0644 "$run_script"
   printf 'KILO_IGNORE_OVERRIDE=%s\n' "${KILO_IGNORE_OVERRIDE:-}"
 } > "$env_file"
 name="kilo-review-${GITHUB_RUN_ID:-local}-${GITHUB_RUN_ATTEMPT:-0}-$$"
+
+# Untrusted text (kilo's stderr, i.e. what the MODEL printed) is scrubbed of
+# every credential literal and the Spark endpoint before it reaches the public
+# log, then prefixed so no line can start a workflow command. Bash `${x//"$p"/}`
+# with a QUOTED pattern is a literal match: no sed metacharacter hazards.
+scrub_untrusted() {
+  local spark_url="${SPARK_REVIEW_URL:-}" netloc="" host="" line s
+  if [ -n "$spark_url" ]; then
+    netloc="${spark_url#*://}"; netloc="${netloc%%/*}"
+    host="${netloc##*@}"; host="${host%:*}"; host="${host#[}"; host="${host%]}"
+  fi
+  while IFS= read -r line || [ -n "$line" ]; do
+    for s in "${KILOCODE_API_KEY:-}" "${KILO_API_KEY:-}" "${SPARK_REVIEW_TOKEN:-}" \
+             "$spark_url" "${spark_url%/}" "$netloc" "$host"; do
+      [ -n "$s" ] && line="${line//"$s"/<redacted>}"
+    done
+    printf '| %s\n' "$line"
+  done
+}
 
 rc=0
 timeout --kill-after=15 "$tier_timeout" \
@@ -99,8 +118,8 @@ elif [ "$rc" -ne 0 ]; then
   echo "reason=kilo run failed (exit ${rc})" >> "$meta"
 fi
 if [ "$rc" -ne 0 ] || [ ! -s "$out" ]; then
-  echo "::group::kilo stderr (last 20 lines, exit ${rc}; untrusted, prefixed)"
-  tail -n 20 "$err_log" | sed 's/^/| /' || true
+  echo "::group::kilo stderr (last 20 lines, exit ${rc}; untrusted: redacted + prefixed)"
+  tail -n 20 "$err_log" | scrub_untrusted || true
   echo "::endgroup::"
 fi
 exit "$rc"

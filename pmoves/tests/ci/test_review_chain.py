@@ -207,27 +207,31 @@ def _header(comment: str) -> str:
 # ------------------------------------------------------------------ chain --
 
 
-def test_primary_ok_stops_at_tier_1(tmp_path, spark):
-    r = _run_chain(tmp_path, primary="ok:kilo/z-ai/glm-5.2", alt="ok:kilo/z-ai/glm-5.3", spark_url=spark.url)
+def test_spark_not_configured_kilo_primary_reviews_without_a_fallback_warning(tmp_path):
+    r = _run_chain(tmp_path, primary="ok:kilo/z-ai/glm-5.2", alt="ok:kilo/z-ai/glm-5.3", spark_url=None)
     assert r["rc"] == 0, r["stdout"] + r["stderr"]
     assert _header(r["comment"]) == "## Fleet review: kilocode (kilo/z-ai/glm-5.2)"
-    assert "tier 1/3 `kilo-primary`" in r["comment"]
+    assert "tier 2/3 `kilo-primary`" in r["comment"]
     assert "reviewed by kilo/z-ai/glm-5.2" in r["comment"]
-    assert r["outputs"]["state"] == "REVIEWED" and r["outputs"]["tier"] == "1"
-    assert spark.requests == [], "spark must not be probed when the primary reviewed"
+    assert r["outputs"]["state"] == "REVIEWED" and r["outputs"]["tier"] == "2"
     assert [c[0] for c in r["kilo_calls"]] == ["primary"]
-    assert "| 2 | `spark-local` | - | **not-reached** |" in r["summary"]
+    assert "| 1 | `spark-local` | - | **not-configured** |" in r["summary"]
+    assert "| 3 | `kilo-alternate` | - | **not-reached** |" in r["summary"]
+    # an unconfigured Spark is not a failure, so kilo-primary is not a "fallback"
+    assert "::notice::fleet review produced by tier 2 kilo-primary" in r["stdout"]
+    assert "FALLBACK" not in r["stdout"]
 
 
-def test_primary_empty_falls_to_spark(tmp_path, spark):
-    r = _run_chain(tmp_path, primary="empty:kilo/z-ai/glm-5.2", alt="ok:kilo/z-ai/glm-5.3", spark_url=spark.url)
+def test_spark_online_reviews_first_and_kilo_never_runs(tmp_path, spark):
+    """Operator direction: if the Spark node is online it runs the review."""
+    r = _run_chain(tmp_path, primary="ok:kilo/z-ai/glm-5.2", alt="ok:kilo/z-ai/glm-5.3", spark_url=spark.url)
     assert r["rc"] == 0, r["stdout"] + r["stderr"]
     assert _header(r["comment"]) == "## Fleet review: spark-local (spark/local-model)"
-    assert "tier 2/3 `spark-local`" in r["comment"]
-    assert "fell back after tier 1 `kilo-primary`: empty" in r["comment"]
+    assert "tier 1/3 `spark-local`" in r["comment"] and "fell back" not in r["comment"]
     assert "SPARK REVIEW BODY" in r["comment"]
-    assert r["outputs"]["reviewer"] == "spark-local" and r["outputs"]["model"] == "spark/local-model"
-    assert [c[0] for c in r["kilo_calls"]] == ["primary"], "tier 3 must not run once spark reviewed"
+    assert r["outputs"]["tier"] == "1" and r["outputs"]["reviewer"] == "spark-local"
+    assert r["outputs"]["model"] == "spark/local-model"
+    assert r["kilo_calls"] == [], "kilo must not run when Spark reviewed"
     # health probe first, then an authenticated review call carrying the contract
     assert [(m, p) for m, p, _, _ in spark.requests] == [("GET", "/healthz"), ("POST", "/v1/review")]
     _, _, body, auth = spark.requests[1]
@@ -235,7 +239,19 @@ def test_primary_empty_falls_to_spark(tmp_path, spark):
     assert body["contract"] == "pmoves.review.v1"
     assert body["pr"] == 42 and body["repo"] == "owner/repo" and body["head_sha"] == "abc123"
     assert body["prompt"] == "review this" and "+hello" in body["diff"]
-    assert "| 1 | `kilo-primary` | `kilo/z-ai/glm-5.2` | **empty** |" in r["summary"]
+    assert "::notice::fleet review produced by tier 1 spark-local" in r["stdout"]
+
+
+def test_spark_offline_falls_through_within_the_probe_deadline(tmp_path, spark):
+    spark.health_delay = 10
+    t0 = time.monotonic()
+    r = _run_chain(tmp_path, primary="ok:kilo/z-ai/glm-5.2", alt="ok:b", spark_url=spark.url,
+                   extra_env={"SPARK_PROBE_TIMEOUT": "1"})
+    assert time.monotonic() - t0 < 6, "an offline Spark may cost at most the probe deadline"
+    assert "| 1 | `spark-local` | - | **offline** |" in r["summary"]
+    assert _header(r["comment"]) == "## Fleet review: kilocode (kilo/z-ai/glm-5.2)"
+    assert "fell back after tier 1 `spark-local`: offline" in r["comment"]
+    assert "::warning::fleet review produced by FALLBACK tier 2 kilo-primary" in r["stdout"]
 
 
 def test_primary_empty_spark_offline_falls_to_alternate(tmp_path):
@@ -244,7 +260,7 @@ def test_primary_empty_spark_offline_falls_to_alternate(tmp_path):
     assert r["rc"] == 0, r["stdout"] + r["stderr"]
     assert _header(r["comment"]) == "## Fleet review: kilocode-alternate (kilo/z-ai/glm-5.3)"
     assert "tier 3/3 `kilo-alternate`" in r["comment"]
-    assert "tier 2 `spark-local`: offline" in r["comment"]
+    assert "tier 1 `spark-local`: offline" in r["comment"]
     # the alternate tier ran in fallback mode and was told which model was already tried
     assert r["kilo_calls"] == [["primary", ""], ["alt", "kilo/z-ai/glm-5.2"]]
     assert "**offline**" in r["summary"]
@@ -253,7 +269,7 @@ def test_primary_empty_spark_offline_falls_to_alternate(tmp_path):
 def test_spark_not_configured_is_distinct_from_offline(tmp_path):
     r = _run_chain(tmp_path, primary="fail:kilo/z-ai/glm-5.2", alt="ok:kilo/z-ai/glm-5.3", spark_url=None)
     assert r["rc"] == 0
-    assert "| 2 | `spark-local` | - | **not-configured** | SPARK_REVIEW_URL is not set |" in r["summary"]
+    assert "| 1 | `spark-local` | - | **not-configured** | SPARK_REVIEW_URL is not set |" in r["summary"]
     assert "offline" not in r["summary"]
     assert _header(r["comment"]) == "## Fleet review: kilocode-alternate (kilo/z-ai/glm-5.3)"
 
@@ -273,7 +289,7 @@ def test_spark_not_ready_is_offline(tmp_path, spark):
 def test_spark_unparseable_or_wrong_health_is_offline(tmp_path, spark, health):
     spark.health = health
     r = _run_chain(tmp_path, primary="empty:a", alt="ok:b", spark_url=spark.url)
-    assert "| 2 | `spark-local` | - | **offline** |" in r["summary"]
+    assert "| 1 | `spark-local` | - | **offline** |" in r["summary"]
 
 
 def test_spark_ready_without_token_is_misconfigured(tmp_path, spark):
@@ -292,7 +308,7 @@ def test_spark_response_without_model_is_a_contract_failure(tmp_path, spark):
 def test_spark_empty_review_is_empty(tmp_path, spark):
     spark.review = (200, {"review": "  ", "model": "spark/local-model"})
     r = _run_chain(tmp_path, primary="empty:a", alt="ok:b", spark_url=spark.url)
-    assert "| 2 | `spark-local` | `spark/local-model` | **empty** |" in r["summary"]
+    assert "| 1 | `spark-local` | `spark/local-model` | **empty** |" in r["summary"]
 
 
 def test_all_fail_is_no_reviewer_available_nonzero(tmp_path, spark):
@@ -302,8 +318,8 @@ def test_all_fail_is_no_reviewer_available_nonzero(tmp_path, spark):
     assert r["outputs"]["state"] == "NO-REVIEWER-AVAILABLE"
     assert _header(r["comment"]) == "## Fleet review: NO-REVIEWER-AVAILABLE"
     assert "has NOT been reviewed" in r["comment"]
-    for needle in ("| 1 | `kilo-primary` | `kilo/z-ai/glm-5.2` | **empty** |",
-                   "| 2 | `spark-local` | `spark/local-model` | **failed** | review call returned HTTP 500 |",
+    for needle in ("| 2 | `kilo-primary` | `kilo/z-ai/glm-5.2` | **empty** |",
+                   "| 1 | `spark-local` | `spark/local-model` | **failed** | review call returned HTTP 500 |",
                    "| 3 | `kilo-alternate` | - | **unavailable** |"):
         assert needle in r["comment"] and needle in r["summary"]
     assert "::error::NO-REVIEWER-AVAILABLE" in r["stdout"]
@@ -313,7 +329,7 @@ def test_catalog_unavailable_skips_alternate(tmp_path):
     r = _run_chain(tmp_path, primary="catalog-empty", alt="ok:never", spark_url=None)
     assert r["rc"] == 3
     assert [c[0] for c in r["kilo_calls"]] == ["primary"], "no second kilo run against a dead catalog"
-    assert "skipped: the kilo catalog was unavailable in tier 1" in r["summary"]
+    assert "skipped: the kilo catalog was unavailable in tier 2" in r["summary"]
 
 
 def test_spark_endpoint_never_leaks_into_outputs(tmp_path):
@@ -562,7 +578,7 @@ def test_p1_spark_redirect_on_review_is_refused_and_token_not_forwarded(tmp_path
         spark.review = (302, {}, {"Location": other.url + "/v1/review"})
         r = _run_chain(tmp_path, primary="empty:a", alt="no-candidate", spark_url=spark.url)
         assert other.requests == [], "the redirect target must receive NO request"
-        assert "| 2 | `spark-local` | `spark/local-model` | **misconfigured** | review call answered a redirect (HTTP 302)" in r["summary"]
+        assert "| 1 | `spark-local` | `spark/local-model` | **misconfigured** | review call answered a redirect (HTTP 302)" in r["summary"]
         assert r["rc"] == 3 and r["outputs"]["state"] == "NO-REVIEWER-AVAILABLE"
     finally:
         other.close()
@@ -583,7 +599,7 @@ def test_p1_http_url_refused_without_explicit_opt_in(tmp_path, spark):
     r = _run_chain(tmp_path, primary="empty:a", alt="ok:b", spark_url=spark.url,
                    extra_env={"SPARK_REVIEW_ALLOW_HTTP": None})
     assert spark.requests == [], "no request (and no token) over plain http"
-    assert "| 2 | `spark-local` | - | **misconfigured** | SPARK_REVIEW_URL is http://" in r["summary"]
+    assert "| 1 | `spark-local` | - | **misconfigured** | SPARK_REVIEW_URL is http://" in r["summary"]
 
 
 def test_p1_http_opt_in_warns_loudly(tmp_path, spark):
@@ -634,7 +650,7 @@ def test_p2a_host_in_an_error_message_is_redacted_everywhere(tmp_path, monkeypat
     for name, text in channels.items():
         for needle in (host, "spark-node", "8443"):
             assert needle.lower() not in text.lower(), f"{needle!r} leaked into {name}"
-    assert "::warning::review tier 2 spark-local: offline" in channels["log"]
+    assert "::warning::review tier 1 spark-local: offline" in channels["log"]
 
 
 def test_p2a_host_echoed_by_the_server_is_redacted(tmp_path, spark):
@@ -659,7 +675,7 @@ def test_p2b_output_that_is_not_a_review_is_invalid_and_falls_through(tmp_path, 
     r = _run_chain(tmp_path, primary="junk:kilo/z-ai/glm-5.2", alt="ok:kilo/z-ai/glm-5.3", spark_url=None,
                    extra_env={"STUB_JUNK_TEXT": junk})
     assert r["rc"] == 0
-    assert "| 1 | `kilo-primary` | `kilo/z-ai/glm-5.2` | **invalid** | output is not a review: " + why in r["summary"]
+    assert "| 2 | `kilo-primary` | `kilo/z-ai/glm-5.2` | **invalid** | output is not a review: " + why in r["summary"]
     assert _header(r["comment"]) == "## Fleet review: kilocode-alternate (kilo/z-ai/glm-5.3)"
 
 
@@ -674,7 +690,7 @@ def test_p2b_heading_style_verdict_from_the_live_kilo_review_is_valid(tmp_path, 
 def test_p2b_spark_invalid_review_falls_through(tmp_path, spark):
     spark.review = (200, {"review": "ok", "model": "spark/local-model"})
     r = _run_chain(tmp_path, primary="empty:a", alt="ok:b", spark_url=spark.url)
-    assert "| 2 | `spark-local` | `spark/local-model` | **invalid** |" in r["summary"]
+    assert "| 1 | `spark-local` | `spark/local-model` | **invalid** |" in r["summary"]
 
 
 def test_p2c_kilo_key_in_a_review_is_redacted_before_posting(tmp_path):
@@ -712,7 +728,7 @@ def test_p3c_wall_clock_deadline_on_the_probe(tmp_path, spark):
     r = _run_chain(tmp_path, primary="empty:a", alt="ok:b", spark_url=spark.url,
                    extra_env={"SPARK_PROBE_TIMEOUT": "1"})
     assert time.monotonic() - t0 < 4
-    assert "| 2 | `spark-local` | - | **offline** | health probe did not answer ready within 1s (TimeoutError" in r["summary"]
+    assert "| 1 | `spark-local` | - | **offline** | health probe did not answer ready within 1s (TimeoutError" in r["summary"]
 
 
 def test_p3c_budget_skips_tier_3_when_it_cannot_finish(tmp_path):
@@ -794,7 +810,7 @@ def test_confirm_p2b_echo_error_refusal_and_double_verdict_are_invalid(tmp_path,
     }[shape]
     r = _junk_run(tmp_path, junk, prompt)
     assert r["rc"] == 3 and r["outputs"]["state"] == "NO-REVIEWER-AVAILABLE", r["summary"]
-    assert "| 1 | `kilo-primary` | `kilo/z-ai/glm-5.2` | **invalid** |" in r["summary"]
+    assert "| 2 | `kilo-primary` | `kilo/z-ai/glm-5.2` | **invalid** |" in r["summary"]
 
 
 def test_confirm_p2b_the_real_3169_kilo_review_stays_ok(tmp_path):
@@ -809,10 +825,10 @@ def test_confirm_p2b_the_real_3169_kilo_review_stays_ok(tmp_path):
 def test_confirm_p2a_host_labels_never_corrupt_structure(tmp_path, host):
     r = _run_chain(tmp_path, primary="ok:kilo/z-ai/glm-5.2", alt="ok:b", spark_url=f"https://{host}:8443")
     assert r["rc"] == 0
-    assert r["outputs"] == {"state": "REVIEWED", "tier": "1", "reviewer": "kilo-primary",
+    assert r["outputs"] == {"state": "REVIEWED", "tier": "2", "reviewer": "kilo-primary",
                             "model": "kilo/z-ai/glm-5.2", "rc": "0"}
     assert _header(r["comment"]) == "## Fleet review: kilocode (kilo/z-ai/glm-5.2)"
-    assert r["comment"].startswith("<!-- fleet-review-chain state=REVIEWED tier=1 reviewer=kilo-primary -->")
+    assert r["comment"].startswith("<!-- fleet-review-chain state=REVIEWED tier=2 reviewer=kilo-primary -->")
     assert "## Fleet review chain: REVIEWED" in r["summary"]
 
 
@@ -824,7 +840,7 @@ def test_confirm_p2a_host_still_redacted_in_error_text(tmp_path, host):
                        "STUB_REASON": f"TLS: certificate is not valid for '{host}' port 8443 ({host.split('.')[0]})"})
     assert r["rc"] == 0 and r["outputs"]["state"] == "REVIEWED"
     assert _header(r["comment"]) == "## Fleet review: kilocode-alternate (kilo/z-ai/glm-5.3)"
-    row = next(line for line in r["summary"].splitlines() if line.startswith("| 1 |"))
+    row = next(line for line in r["summary"].splitlines() if line.startswith("| 2 |"))
     assert host not in row and "8443" not in row and f"({host.split('.')[0]})" not in row
     assert "certificate is not valid for '<redacted>' port <redacted> (<redacted>)" in row
     for text in (r["comment"], r["stdout"]):
@@ -932,7 +948,7 @@ def test_live_no_verdict_section_line_is_invalid(tmp_path):
 def test_live_rejected_output_is_logged_redacted_for_diagnosis(tmp_path):
     junk = "not a review at all, but it prints the key " + KILO_KEY + " and keeps going for a while longer"
     r = _junk_run(tmp_path, junk, "review this")
-    assert "::group::tier 1 kilo-primary: rejected output" in r["stdout"]
+    assert "::group::tier 2 kilo-primary: rejected output" in r["stdout"]
     assert "prints the key <redacted> and keeps going" in r["stdout"]
     assert KILO_KEY not in r["stdout"] and KILO_KEY not in r["comment"]
 
@@ -1010,3 +1026,32 @@ def test_final_p3_3_no_fixed_tmp_kilo_review_paths_remain():
     assert '"${RUNNER_TEMP}/kilo-review.diff"' in text and '"${RUNNER_TEMP}/kilo-review-prompt.md"' in text
     assert "Review the diff at /review/kilo-review.diff" in text, "the prompt names the container mount target"
     assert "/review/kilo-review.diff:ro" in (_SCRIPTS / "kilo_review_tier.sh").read_text()
+
+
+# ------------------------------------------------- final commit: order + scrub --
+
+
+def test_final_stderr_tail_is_scrubbed_of_key_token_and_host(tier_env):
+    env, tmp_path, _ = tier_env
+    host = "spark-node.example-tailnet.internal"
+    token = "tok-" + "7" * 32
+    sudo = tmp_path / "bin" / "sudo"
+    sudo.write_text(sudo.read_text().replace(
+        '  fail)  echo "KILO_RESOLVED_MODEL=kilo/z-ai/glm-5.2" >&2; echo "boom" >&2; exit 1 ;;',
+        '  fail)  echo "KILO_RESOLVED_MODEL=kilo/z-ai/glm-5.2" >&2;'
+        ' echo "leaked key: $KILOCODE_API_KEY" >&2; echo "token=$SPARK_REVIEW_TOKEN at $SPARK_REVIEW_URL" >&2;'
+        f' echo "::warning::host {host}" >&2; exit 1 ;;'))
+    p, out, meta = _tier(env, tmp_path, "fail", KILOCODE_API_KEY=KILO_KEY, KILO_API_KEY=KILO_KEY,
+                         SPARK_REVIEW_TOKEN=token, SPARK_REVIEW_URL=f"https://{host}:8443/review")
+    lines = p.stdout.splitlines()
+    assert "| leaked key: <redacted>" in lines
+    assert "| token=<redacted> at <redacted>" in lines
+    assert "| ::warning::host <redacted>" in lines, "scrubbed AND still prefixed"
+    for secret in (KILO_KEY, token, host):
+        assert secret not in p.stdout
+
+
+def test_final_workflow_and_docs_name_spark_first():
+    text = _WORKFLOW.read_text()
+    assert "#   tier 1  spark-local" in text and "#   tier 2  kilo-primary" in text
+    assert "Review chain (spark-local when online -> kilo-primary -> kilo-alternate)" in text

@@ -4,10 +4,14 @@
 Tries reviewers in order and stops at the first one that produces a VALID
 review (see "Review validity" below):
 
-  tier 1  kilo-primary    Kilo CLI, model resolved against the live catalog
-  tier 2  spark-local     Spark local-model reviewer, ONLY if its health probe
-                          answers ready (endpoint from the SPARK_REVIEW_URL
-                          secret -- never a literal host in this repo)
+  tier 1  spark-local     Spark local-model reviewer, FIRST when online:
+                          only if SPARK_REVIEW_URL is configured AND its
+                          health probe answers ready. Not configured -> no
+                          network at all; offline -> at most the probe
+                          deadline (5s) before falling through. Operator
+                          direction: "if the Spark node is online then it
+                          should be running PR reviews".
+  tier 2  kilo-primary    Kilo CLI, model resolved against the live catalog
   tier 3  kilo-alternate  Kilo CLI again, with the next untried catalog-valid
                           model from the preference list
 
@@ -65,8 +69,8 @@ lane, NOT here:
   WALL-CLOCK deadline covering DNS, connect and body.
 
 Time budget (defaults; the job's timeout-minutes is 45 = 2700s):
-  tier 1  KILO_TIER_TIMEOUT 720 + 15 kill-after              =  735s
-  tier 2  SPARK_PROBE_TIMEOUT 5 + SPARK_REVIEW_TIMEOUT 480   =  485s
+  tier 1  SPARK_PROBE_TIMEOUT 5 + SPARK_REVIEW_TIMEOUT 480   =  485s
+  tier 2  KILO_TIER_TIMEOUT 720 + 15 kill-after              =  735s
   tier 3  720 + 15                                           =  735s
   worst case                                                 = 1955s (32.6 min)
   REVIEW_CHAIN_BUDGET (2100s) skips tier 3 if it could not finish inside the
@@ -651,7 +655,7 @@ def render_comment(results: list[TierResult], winner: TierResult | None) -> str:
             "",
             table,
             "",
-            "_ lane: fleet-review chain (self-hosted kvm4) - kilo-primary -> spark-local -> kilo-alternate _",
+            "_ lane: fleet-review chain (self-hosted kvm4) - spark-local (when online) -> kilo-primary -> kilo-alternate _",
         ]) + "\n"
     review = winner.review.strip()
     if len(review) > MAX_REVIEW_CHARS:
@@ -671,7 +675,7 @@ def render_comment(results: list[TierResult], winner: TierResult | None) -> str:
     ]
     if earlier:
         parts += ["<details><summary>reviewer chain</summary>", "", table, "", "</details>", ""]
-    parts.append("_ lane: fleet-review chain (self-hosted kvm4) - kilo-primary -> spark-local -> kilo-alternate _")
+    parts.append("_ lane: fleet-review chain (self-hosted kvm4) - spark-local (when online) -> kilo-primary -> kilo-alternate _")
     return "\n".join(parts) + "\n"
 
 
@@ -688,27 +692,27 @@ def run_chain(prompt: str, diff: str) -> tuple[list[TierResult], TierResult | No
     started = time.monotonic()
     budget = _env_float("REVIEW_CHAIN_BUDGET", 2100)
     results = [
-        TierResult(1, "kilo-primary", "kilocode"),
-        TierResult(2, "spark-local", "spark-local"),
+        TierResult(1, "spark-local", "spark-local"),
+        TierResult(2, "kilo-primary", "kilocode"),
         TierResult(3, "kilo-alternate", "kilocode-alternate"),
     ]
-    primary, spark, alternate = results
-
-    scrub(run_kilo_tier(primary, exclude=[], fallback=False))
-    if primary.outcome == OK:
-        return results, primary
-    emit(f"::warning::review tier 1 kilo-primary: {primary.outcome} - {primary.detail}; trying spark-local")
+    spark, primary, alternate = results
 
     scrub(run_spark_tier(spark, prompt=prompt, diff=diff))
     if spark.outcome == OK:
         return results, spark
-    emit(f"::warning::review tier 2 spark-local: {spark.outcome} - {spark.detail}; trying kilo-alternate")
+    emit(f"::warning::review tier 1 spark-local: {spark.outcome} - {spark.detail}; trying kilo-primary")
+
+    scrub(run_kilo_tier(primary, exclude=[], fallback=False))
+    if primary.outcome == OK:
+        return results, primary
+    emit(f"::warning::review tier 2 kilo-primary: {primary.outcome} - {primary.detail}; trying kilo-alternate")
 
     needed = _env_float("KILO_TIER_TIMEOUT", 720) + 15
     elapsed = time.monotonic() - started
     if primary.status == "catalog-empty":
         alternate.outcome = UNAVAILABLE
-        alternate.detail = "skipped: the kilo catalog was unavailable in tier 1"
+        alternate.detail = "skipped: the kilo catalog was unavailable in tier 2"
     elif elapsed + needed > budget:
         alternate.outcome = UNAVAILABLE
         alternate.detail = (f"skipped: {elapsed:.0f}s used, the tier needs up to {needed:.0f}s, "
@@ -764,10 +768,13 @@ def main(argv: list[str] | None = None) -> int:
     for r in results:
         emit(f"review tier {r.index} {r.name}: {r.outcome}" + (f" [{r.model}]" if r.model else "") + f" - {r.detail}")
     if winner:
-        if winner.index > 1:
+        # A tier that was merely not configured is not a failure: with no
+        # Spark endpoint, kilo-primary IS the first reviewer and not a fallback.
+        failed_before = [r for r in results if r.index < winner.index and r.outcome != NOT_CONFIGURED]
+        if failed_before:
             emit(f"::warning::fleet review produced by FALLBACK tier {winner.index} {winner.name} ({winner.model})")
         else:
-            emit(f"::notice::fleet review produced by tier 1 kilo-primary ({winner.model})")
+            emit(f"::notice::fleet review produced by tier {winner.index} {winner.name} ({winner.model})")
     else:
         emit(f"::error::{NO_REVIEWER}: every review tier failed or was unavailable - see the job summary")
     return rc
