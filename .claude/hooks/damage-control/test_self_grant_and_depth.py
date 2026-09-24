@@ -41,8 +41,11 @@ count and grant-file presence are asserted unchanged at the end.
 Fixture strings are assembled from parts so this file's own text cannot trip a
 guard that reads it.
 """
+import importlib.util
 import json
 import os
+import random
+import time
 import shutil
 import subprocess
 import sys
@@ -233,6 +236,96 @@ def cases(root):
     return out
 
 
+def in_process_checks(root):
+    """G5: the matcher itself must never raise and must stay fast.
+
+    Until the fail-closed entry-point wrapper (#3174) lands, ANY exception in the
+    Bash guard is a non-blocking rc=1 -- the command it should refuse runs. So
+    this does not rely on a wrapper: it calls check_command directly on hostile
+    input and treats an exception as a failure. Also re-asserts that malformed
+    commands naming the grant state or a nested protected file are BLOCKED.
+    """
+    failures = []
+    os.environ["CLAUDE_PROJECT_DIR"] = str(root)
+    os.environ.pop("KNOWN_ROAD", None)
+    sys.path.insert(0, str(root / REL_DC))
+    spec = importlib.util.spec_from_file_location("dc_g5", root / REL_DC / "bash-tool-damage-control.py")
+    dc = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(dc)
+    kr = sys.modules["known_roads"]
+    kr._trail_path = lambda: root / "g5-trail.jsonl"
+    kr._grant_file = lambda: root / "g5-no-grant"
+    cfg = dc.load_config()
+
+    def verdict(cmd):
+        b, a, _ = dc.check_command(cmd, cfg)
+        return "block" if b else ("ask" if a else "allow")
+
+    D = REL_DC + "/"
+    malformed = [
+        f"echo x > '{D}{GRANT}",
+        f"echo x > \"{D}{CACHE}",
+        f"{V_TOUCH} \"{D}{GRANT}",
+        "echo x > 'a/b/poetry.lock",
+        f"{V_CP} /tmp/a \"a/b/c/Dockerfile",
+        "echo x > \"$(cat 'a/b/x.lock",
+    ]
+    for cmd in malformed:
+        try:
+            got = verdict(cmd)
+        except Exception as exc:  # noqa: BLE001 -- the point is to catch it
+            got = f"RAISED {exc!r}"
+        if got != "block":
+            failures.append(("G5 malformed", cmd, got))
+
+    # Hostile sizes for every template this change added or widened. The 22 s
+    # stall this file's neighbours guard against came from stacked greedy scans.
+    big = [
+        V_CP + " " + "a/" * 2500 + " x",
+        V_TOUCH + " " + "a " * 2500,
+        V_SED + " " + "-e x " * 1000 + " f",
+        "perl " + "-w " * 1500 + " f",
+        V_LN + " " + "-s " * 1500 + " x",
+        "sudo " + V_INST + " " + "-m " * 1500 + " x",
+        "echo > " + "a/" * 2500,
+        "echo x | " + V_TEE + " " + "x-a " * 1200,
+        "dd " + "if=x " * 1000,
+        "cat > /tmp/n.md <<'EOF'\n" + ("see > a/b/c and cp x y/z/ then touch q\n" * 130) + "EOF",
+        "echo " + "known-road " * 600,
+    ]
+    for cmd in big:
+        t0 = time.perf_counter()
+        try:
+            verdict(cmd)
+            err = ""
+        except Exception as exc:  # noqa: BLE001
+            err = repr(exc)
+        dt = time.perf_counter() - t0
+        if err or dt > 2.0:
+            failures.append(("G5 size", cmd[:60], err or f"{dt:.2f}s (limit 2.0s)"))
+
+    # Random shell-ish input: the matcher must return a verdict, never raise.
+    rng = random.Random(3176)
+    alphabet = ["echo", "x", ">", ">>", ">|", "|", ";", "&&", "'", '"', "$(", ")", "`",
+                "\n", "\t", "\\", "-a", "-i", "of=", V_TEE, V_TOUCH, V_CP, V_MV, V_LN,
+                V_INST, V_SED, "perl", "dd", "a/b/", "./", "/", "**", "*", "?", "[",
+                "poetry.lock", "Dockerfile", GRANT, CACHE, "known-road-", D, "<<'EOF'",
+                "EOF", "~", "pmoves/services/", "config/", "{", "}", "=", "#"]
+    raised = 0
+    for _ in range(3000):
+        cmd = " ".join(rng.choice(alphabet) for _ in range(rng.randint(1, 18)))
+        try:
+            verdict(cmd)
+        except Exception as exc:  # noqa: BLE001
+            raised += 1
+            if raised <= 5:
+                failures.append(("G5 fuzz", cmd[:80], repr(exc)))
+    trail = root / "g5-trail.jsonl"
+    if trail.exists():
+        failures.append(("G5", "in-process run recorded a Known Road use", trail.read_text()[:200]))
+    return failures
+
+
 def main(argv):
     ref = None
     if len(argv) >= 2 and argv[0] == "--ref":
@@ -264,6 +357,10 @@ def main(argv):
             # The temp project must never gain a grant file.
             if (root / REL_DC / GRANT).exists() or (root / REL_DC / CACHE).exists():
                 failures.append((group, label, cmd, ["no grant file"], "grant file appeared", ""))
+        g5 = in_process_checks(root)
+        results["G5"] = [0 if g5 else 1, len(g5)]
+        for group, cmd, got in g5:
+            failures.append((group, "in-process", cmd, ["block / no raise / fast"], str(got), ""))
     finally:
         shutil.rmtree(root, ignore_errors=True)
 
