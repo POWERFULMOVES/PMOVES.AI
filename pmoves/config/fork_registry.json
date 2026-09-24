@@ -68,8 +68,8 @@
     },
     "PMOVES-headscale": {
       "upstream": "juanfont/headscale",
-      "sync": true,
-      "reason": "auto-sync on cron; default upstream branch",
+      "sync": false,
+      "reason": "Folded duplicate AND corrected: this repo was declared twice - once under this URL-derived name on the boilerplate auto-sync-on-cron reason, and once as PMOVES-Headscale claiming sync=false because no PMOVES hardening layer was identified. Kept the URL-derived key because fork_registry_ratchet keys on submodule URLs casefolded. THE FOLDED PREMISE WAS WRONG: the hardened branch does carry a PMOVES delta (pmoves/docker-compose.hostinger.yml, config.yaml, acl.yaml, env.example, deploy-checklist.md) that exists on hardened ONLY, while the gitlink pinned main. sync=false stands, but for the correct reason: an auto-sync must not run while that delta is un-upstreamed. The gitlink is re-pinned to the hardened head in this same change.",
       "branch": "PMOVES.AI-Edition-Hardened"
     },
     "PMOVES-E2B-Danger-Room": {
@@ -261,12 +261,6 @@
       "branch": "PMOVES.AI-Edition-Hardened",
       "reason": "new fork 2026-08-20 for the Pinokio gepeto script generator, to be wired as a Pinokio api/ app with SKILL.md. sync:false until first use is proven; promoting also widens App-token scope on the fork"
     },
-    "PMOVES-Headscale": {
-      "upstream": "juanfont/headscale",
-      "sync": false,
-      "branch": "PMOVES.AI-Edition-Hardened",
-      "reason": "submodule tracks PMOVES.AI-Edition-Hardened; sync=false until triaged (no PMOVES hardening layer identified)"
-    },
     "PMOVES-HiRAG": {
       "upstream": "hhy-huang/HiRAG",
       "sync": false,
@@ -324,8 +318,8 @@
     "pmoves-pipecat": {
       "upstream": "pipecat-ai/pipecat",
       "sync": false,
-      "branch": "main",
-      "reason": "untriaged - backfilled by the .gitmodules coverage cross-check. Promoting to sync: true also widens the App-token scope (Workflows:write on the fork), so it is a deliberate, reviewable act rather than a default"
+      "branch": "PMOVES.AI-Edition-Hardened",
+      "reason": "Folded duplicate of PMOVES-Pipecat - same repo, case-insensitive-unique on GitHub. Kept the URL-derived key because fork_registry_ratchet keys on submodule URLs casefolded, and took the hardened branch from the folded entry because it matches the .gitmodules pin; the duplicate said main, which no PMOVES consumer tracks. sync=false: used as reference, no PMOVES overlay."
     },
     "Pmoves-pretext": {
       "upstream": "chenglou/pretext",
@@ -369,12 +363,6 @@
       "branch": "PMOVES.AI-Edition-Hardened",
       "reason": "untriaged - backfilled by the .gitmodules coverage cross-check. Promoting to sync: true also widens the App-token scope (Workflows:write on the fork), so it is a deliberate, reviewable act rather than a default"
     },
-    "PMOVES-Pipecat": {
-      "upstream": "pipecat-ai/pipecat",
-      "sync": false,
-      "branch": "PMOVES.AI-Edition-Hardened",
-      "reason": "submodule tracks PMOVES.AI-Edition-Hardened; sync=false until triaged (used as reference, no PMOVES overlay)"
-    },
     "PMOVES-Spark-VSS": {
       "upstream": "NVIDIA-AI-Blueprints/video-search-and-summarization",
       "sync": false,
@@ -385,7 +373,7 @@
       "upstream": "charmbracelet/keygen",
       "sync": false,
       "branch": "PMOVES.AI-Edition-Hardened",
-      "reason": "untriaged - backfilled by the .gitmodules coverage cross-check. Promoting to sync: true also widens the App-token scope (Workflows:write on the fork), so it is a deliberate, reviewable act rather than a default"
+      "reason": "PMOVES fork of charmbracelet/keygen carrying the signing-card CLI (cmd/keygen-cli, merged as PR #1 on 2026-08-21) plus a PMOVES-owned CI gate. sync:false because the delta is a PMOVES-authored CLI rather than an upstream hardening patch that sync would preserve, because an auto-merge across cmd/keygen-cli is exactly the clobber this registry exists to prevent, and because promoting to sync:true widens the App-token scope (Workflows:write) - a deliberate, reviewable act rather than a default. Upstream is a small, slow-moving library, so deliberate bumps are cheap. Triage note: the hardened branch was byte-identical to master (1302da9) until the CLI landed, which is why a pinned-but-ungated fork still read as hardened."
     },
     "PMOVES-mcp-gateway": {
       "upstream": "docker/mcp-gateway",
