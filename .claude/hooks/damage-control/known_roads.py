@@ -459,13 +459,15 @@ def _check_grant(raw_reason: str, source: str,
       merged | closed | unverifiable | stale | unprovable   (refused)
     """
     reason, offline = _split_offline(raw_reason)
-    provable, detail = _reason_is_provable(reason)
-    if not provable:
-        return False, reason, detail, "unprovable"
+    # Form before referent: a malformed grant is refused for its form, before
+    # anything (a file, git, the network) is consulted about its referent.
     if offline and reason.startswith("handoff:"):
         return False, reason, (
             f"'{OFFLINE_SUFFIX}' applies only to pr:/issue: reasons -- a handoff "
             "is checked locally and never needs the network"), "unprovable"
+    provable, detail = _reason_is_provable(reason)
+    if not provable:
+        return False, reason, detail, "unprovable"
 
     if source == "file" and mtime is not None:
         age = time.time() - mtime
