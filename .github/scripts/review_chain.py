@@ -99,6 +99,7 @@ MAX_REVIEW_CHARS = 60000  # GitHub caps a comment body at 65536 chars
 MIN_REVIEW_CHARS = 80
 VERDICT_WINDOW = 200
 MODEL_MAX_CHARS = 120
+REJECTED_LOG_CHARS = 800
 
 OK = "ok"
 EMPTY = "empty"
@@ -121,6 +122,7 @@ class TierResult:
     detail: str = ""
     review: str = ""
     status: str = ""
+    rejected: str = ""  # an `invalid` output, kept (redacted) for the log only
 
 
 # ---------------------------------------------------------------- hygiene --
@@ -246,6 +248,9 @@ TEMPLATE_MIN_CHARS = 30
 _VERDICT_TOKEN = re.compile(
     r"(?<![A-Za-z_-])(approved?|request[ _-]changes)(?![A-Za-z_-])", re.IGNORECASE)
 _NUMBERED_HEADING = re.compile(r"\d+\.\s")
+_VERDICT_MARKER = re.compile(
+    r"^[ \t>]*(?:#{1,6}[ \t]*)?(?:[*_]{1,2})?(?:\d+\.[ \t]*)?(?:[*_]{1,2})?VERDICT\b(?:[*_]{1,2})?",
+    re.IGNORECASE | re.MULTILINE)
 _VERDICT_LINE_LEAD = re.compile(r"^[\s:*#_>|\-\u2013\u2014]+")
 _NORM_WS = re.compile(r"\s+")
 
@@ -298,9 +303,17 @@ def review_validity(text: str, template: list[str] | None = None) -> tuple[bool,
     missing = [m for m in ("CORRECTNESS", "SECURITY", "VERDICT") if m not in upper]
     if missing:
         return False, "missing required section(s): " + ", ".join(missing)
+    # The verdict SECTION is the last line that STARTS with the VERDICT marker
+    # ("3. VERDICT: ...", "## 3. VERDICT", "**VERDICT**: ..."), not the last
+    # occurrence of the word: a review of a PR about verdicts mentions the
+    # word in its explanation, and the old last-occurrence rule then found no
+    # verdict after it (live: #3169 @ 29b244614, both kilo tiers `invalid`).
+    markers = list(_VERDICT_MARKER.finditer(body))
+    if not markers:
+        return False, "no VERDICT section line (e.g. '3. VERDICT: APPROVE')"
     # Only the VERDICT LINE is read, so prose further down ("I would approve
     # once fixed") cannot turn a clear verdict into "both".
-    line = verdict_line(body[upper.rindex("VERDICT") + len("VERDICT"):][:VERDICT_WINDOW])
+    line = verdict_line(body[markers[-1].end():][:VERDICT_WINDOW])
     classes = {"approve" if m.lower().startswith("approve") else "request_changes"
                for m in _VERDICT_TOKEN.findall(line)}
     if not classes:
@@ -346,6 +359,7 @@ def _accept(result: TierResult, review: str) -> TierResult:
         result.detail = f"produced no review output (model '{result.model or 'unresolved'}')"
     else:
         result.outcome, result.detail = INVALID, f"output is not a review: {why}"
+        result.rejected = review
     return result
 
 
@@ -587,6 +601,14 @@ def scrub(result: TierResult) -> TierResult:
     """Redact the VALUE parts of a tier result, once, before any output."""
     result.detail = _REDACT(result.detail)
     result.review = _REDACT(result.review)
+    if result.rejected:
+        # An invalid output is never posted, but without it a false rejection
+        # cannot be diagnosed (live #3169 @ 29b244614). Log its tail, redacted.
+        tail = _REDACT(result.rejected.strip())[-REJECTED_LOG_CHARS:]
+        print(f"::group::tier {result.index} {result.name}: rejected output (last {len(tail)} chars)", flush=True)
+        print(_REDACT.secrets_only(tail), flush=True)
+        print("::endgroup::", flush=True)
+        result.rejected = ""
     result.model = sanitize_model(_REDACT.strict(result.model))
     return result
 

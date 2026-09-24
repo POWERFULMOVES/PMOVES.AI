@@ -147,13 +147,17 @@ jobs:
           # the job summary and a state= output, and the final step turns
           # NO-REVIEWER-AVAILABLE (rc 3, could-not-measure) into a red job
           # AFTER the comment saying so has been posted.
+          # The comment lives in RUNNER_TEMP (emptied per job), NOT /tmp: on a
+          # persistent self-hosted runner a /tmp file from an EARLIER run
+          # would be posted onto this PR if the chain died before writing
+          # (found by the lane's own tier-3 review of #3169).
           rc=0
           python3 .github/scripts/review_chain.py \
             --prompt /tmp/kilo-review-prompt.md \
             --diff /tmp/kilo-review.diff \
-            --comment /tmp/review-comment.md || rc=$?
+            --comment "${RUNNER_TEMP}/review-comment.md" || rc=$?
           echo "chain_rc=${rc}" >> "$GITHUB_OUTPUT"
-          if [ ! -s /tmp/review-comment.md ]; then
+          if [ ! -s "${RUNNER_TEMP}/review-comment.md" ]; then
             echo "::error::review chain wrote no comment (exit ${rc})"
           fi
 
@@ -164,14 +168,14 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           set -euo pipefail
-          if [ ! -s /tmp/review-comment.md ]; then
+          if [ ! -s "${RUNNER_TEMP}/review-comment.md" ]; then
             echo "::error::no review comment to post"
             exit 1
           fi
           python3 - "$PR_NUMBER" << 'PYEOF'
           import json, os, sys, urllib.request
           pr = sys.argv[1]
-          body = open("/tmp/review-comment.md").read()
+          body = open(os.path.join(os.environ["RUNNER_TEMP"], "review-comment.md")).read()
           req = urllib.request.Request(
               f"https://api.github.com/repos/{os.environ['GITHUB_REPOSITORY']}/issues/{pr}/comments",
               data=json.dumps({"body": body}).encode(),

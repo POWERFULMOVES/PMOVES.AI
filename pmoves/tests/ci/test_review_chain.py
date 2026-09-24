@@ -901,3 +901,44 @@ def test_round3_real_style_reviews_are_ok(tmp_path, review):
     r = _junk_run(tmp_path, review, prompt)
     assert r["rc"] == 0, r["summary"]
     assert _header(r["comment"]) == "## Fleet review: kilocode (kilo/z-ai/glm-5.2)"
+
+
+# ---------------------- live #3169 @ 29b244614: both kilo tiers `invalid` --
+
+
+@pytest.mark.parametrize("review", [
+    # the verdict's own explanation mentions the word VERDICT
+    "1. CORRECTNESS\n- validity rules look right\n2. SECURITY / TOPOLOGY\n- clean\n"
+    "3. VERDICT: APPROVE - the VERDICT-line parser handles headings\n",
+    # a later paragraph mentions the VERDICT marker (the last OCCURRENCE is not the section)
+    "## 1. CORRECTNESS\n- the chain reads the VERDICT line only\n## 2. SECURITY / TOPOLOGY\n- clean\n"
+    "## 3. VERDICT\n\n**REQUEST_CHANGES** - exit 2 is remapped\n\n"
+    "Note: the review validator scans text after the last VERDICT marker; that is fine here.\n",
+    "**1. CORRECTNESS**\n- fine\n**2. SECURITY / TOPOLOGY**\n- clean\n**3. VERDICT**: APPROVED - bounded\n",
+])
+def test_live_verdict_word_in_explanation_does_not_hide_the_verdict(tmp_path, review):
+    r = _junk_run(tmp_path, review, _real_prompt(tmp_path))
+    assert r["rc"] == 0, r["summary"]
+
+
+def test_live_no_verdict_section_line_is_invalid(tmp_path):
+    junk = ("1. CORRECTNESS\n- fine\n2. SECURITY / TOPOLOGY\n- clean\n"
+            "My overall verdict is that this APPROVE decision is up to you.\n")
+    r = _junk_run(tmp_path, junk, "review this")
+    assert "**invalid** | output is not a review: no VERDICT section line" in r["summary"]
+
+
+def test_live_rejected_output_is_logged_redacted_for_diagnosis(tmp_path):
+    junk = "not a review at all, but it prints the key " + KILO_KEY + " and keeps going for a while longer"
+    r = _junk_run(tmp_path, junk, "review this")
+    assert "::group::tier 1 kilo-primary: rejected output" in r["stdout"]
+    assert "prints the key <redacted> and keeps going" in r["stdout"]
+    assert KILO_KEY not in r["stdout"] and KILO_KEY not in r["comment"]
+
+
+def test_live_comment_file_is_per_job_not_tmp():
+    """A /tmp comment file on a persistent runner could post an EARLIER run's
+    review onto this PR if the chain died before writing (tier-3 finding)."""
+    text = _WORKFLOW.read_text()
+    assert "/tmp/review-comment.md" not in text
+    assert text.count('"${RUNNER_TEMP}/review-comment.md"') == 3
