@@ -868,3 +868,36 @@ def test_confirm_p3_cleanup_sweeps_this_runs_env_files_with_a_timeout(tier_env, 
     _tier(env, tmp_path, "ok", GITHUB_RUN_ID="4242")
     _, path, *_ = envfacts.read_text().splitlines()
     assert Path(path).name.startswith("kilo-review-env.4242."), "the sweep pattern must match the real file name"
+
+
+# --------------------------------------------- round-3 confirmation (P3) --
+
+
+def test_round3_heading_lines_are_not_in_the_echo_set(tmp_path):
+    mod = _load_chain()
+    prompt = _real_prompt(tmp_path)
+    template = mod.template_lines(prompt)
+    assert "2. security / topology (explicitly say 'clean' if nothing found)" not in template
+    assert not any(line[:1].isdigit() and line[1:3] == ". " for line in template)
+    assert "approve or request_changes" in template, "the choice phrase stays"
+    assert any(line.startswith("you are the pmoves fleet pr reviewer") for line in template), "the preamble stays"
+
+
+@pytest.mark.parametrize("review", [
+    # copies the numbered headings verbatim, as the prompt tells it to
+    "1. CORRECTNESS\n- the retry budget is enforced before tier 3\n"
+    "2. SECURITY / TOPOLOGY (explicitly say 'clean' if nothing found)\n- clean\n"
+    "3. VERDICT: APPROVE - one line why: bounded and tested\n",
+    "## 1. CORRECTNESS\n- fine, the chain stops at the first valid review\n## 2. SECURITY / TOPOLOGY\n- clean\n"
+    "## 3. VERDICT: APPROVED - no findings\n",
+    "1. CORRECTNESS\n- the redirect path is refused\n2. SECURITY / TOPOLOGY\n- clean\n"
+    "3. VERDICT: request changes - the probe timeout is unbounded\n",
+    # a clear verdict, with prose below it that mentions the other word
+    "1. CORRECTNESS\n- bug in the exit mapping\n2. SECURITY / TOPOLOGY\n- clean\n3. VERDICT\n\n"
+    "**REQUEST_CHANGES** - exit 2 maps to 3\n\nI would approve once that is fixed.\n",
+])
+def test_round3_real_style_reviews_are_ok(tmp_path, review):
+    prompt = _real_prompt(tmp_path)
+    r = _junk_run(tmp_path, review, prompt)
+    assert r["rc"] == 0, r["summary"]
+    assert _header(r["comment"]) == "## Fleet review: kilocode (kilo/z-ai/glm-5.2)"

@@ -34,10 +34,14 @@ review).
 Review validity: at least MIN_REVIEW_CHARS of text that does NOT echo the
 prompt template (its instruction lines are derived from the prompt file at run
 time, plus the literal choice phrase "APPROVE or REQUEST_CHANGES"), contains
-the three section markers (CORRECTNESS, SECURITY, VERDICT), and has EXACTLY
-ONE of APPROVE / REQUEST_CHANGES (upper case, as a token) within
-VERDICT_WINDOW chars after the last VERDICT marker -- both, or neither, is
-invalid. The verdict may sit on the marker line
+the three section markers (CORRECTNESS, SECURITY, VERDICT), and whose
+VERDICT LINE -- the rest of the last VERDICT marker's line, or the next
+non-empty line under a heading -- names EXACTLY ONE verdict class: approve
+(APPROVE / APPROVED) or request-changes (REQUEST_CHANGES / REQUEST CHANGES /
+REQUEST-CHANGES), case-insensitive whole words. Both classes, or neither, is
+invalid. The numbered section headings the prompt tells the model to write
+("2. SECURITY / TOPOLOGY (explicitly say 'clean' ...)") are NOT part of the
+echo set: a real review copies them. The verdict may sit on the marker line
 ("3. VERDICT: APPROVE") or under a "## 3. VERDICT" heading on the next line --
 the live Kilo review on #3169 used the latter, so a strict `VERDICT:` line
 match would have rejected a real, good review.
@@ -239,7 +243,10 @@ def sanitize_model(raw: object) -> str:
 
 PROMPT_BODY_MARKER = "--- PR BODY"
 TEMPLATE_MIN_CHARS = 30
-_VERDICT_TOKEN = re.compile(r"(?<![A-Za-z_])(APPROVE|REQUEST_CHANGES)(?![A-Za-z_])")
+_VERDICT_TOKEN = re.compile(
+    r"(?<![A-Za-z_-])(approved?|request[ _-]changes)(?![A-Za-z_-])", re.IGNORECASE)
+_NUMBERED_HEADING = re.compile(r"\d+\.\s")
+_VERDICT_LINE_LEAD = re.compile(r"^[\s:*#_>|\-\u2013\u2014]+")
 _NORM_WS = re.compile(r"\s+")
 
 
@@ -253,9 +260,13 @@ def template_lines(prompt: str) -> list[str]:
     Derived at run time FROM the prompt file, so the echo check cannot drift
     from the template: every line before the PR-body marker that is long
     enough to be distinctive, except the `PR #n: <title>` line (the title is
-    PR content a real review may legitimately quote). The marker line itself
-    is included, and so is the literal choice phrase `APPROVE or
-    REQUEST_CHANGES` (a real review picks one; only an echo names both).
+    PR content a real review may legitimately quote) and the NUMBERED
+    section headings (`1. ...`, `2. ...`, `3. ...`), which the prompt
+    instructs the model to copy -- a real review that reproduces a heading
+    verbatim must not be rejected as an echo. The marker line itself is
+    included, and so is the literal choice phrase `APPROVE or
+    REQUEST_CHANGES` (a real review picks one; only an echo names both), so
+    the one numbered line that carries it is still caught.
     """
     out = ["approve or request_changes"]
     for line in prompt.splitlines():
@@ -263,7 +274,9 @@ def template_lines(prompt: str) -> list[str]:
         if stripped.startswith(PROMPT_BODY_MARKER):
             out.append(_norm(stripped))
             break
-        if len(stripped) >= TEMPLATE_MIN_CHARS and not re.match(r"PR #\d+:", stripped):
+        if re.match(r"PR #\d+:", stripped) or _NUMBERED_HEADING.match(stripped):
+            continue
+        if len(stripped) >= TEMPLATE_MIN_CHARS:
             out.append(_norm(stripped))
     return out
 
@@ -285,15 +298,26 @@ def review_validity(text: str, template: list[str] | None = None) -> tuple[bool,
     missing = [m for m in ("CORRECTNESS", "SECURITY", "VERDICT") if m not in upper]
     if missing:
         return False, "missing required section(s): " + ", ".join(missing)
-    # Case-sensitive on the original text: prose like "I would approve" is not
-    # a verdict token. Exactly ONE distinct verdict must follow the marker.
-    tail = body[upper.rindex("VERDICT") + len("VERDICT"):][:VERDICT_WINDOW]
-    verdicts = set(_VERDICT_TOKEN.findall(tail))
-    if not verdicts:
+    # Only the VERDICT LINE is read, so prose further down ("I would approve
+    # once fixed") cannot turn a clear verdict into "both".
+    line = verdict_line(body[upper.rindex("VERDICT") + len("VERDICT"):][:VERDICT_WINDOW])
+    classes = {"approve" if m.lower().startswith("approve") else "request_changes"
+               for m in _VERDICT_TOKEN.findall(line)}
+    if not classes:
         return False, "no APPROVE / REQUEST_CHANGES verdict after the VERDICT marker (truncated?)"
-    if len(verdicts) > 1:
-        return False, "both APPROVE and REQUEST_CHANGES after the VERDICT marker"
+    if len(classes) > 1:
+        return False, "both APPROVE and REQUEST_CHANGES on the verdict line"
     return True, "review produced"
+
+
+def verdict_line(after_marker: str) -> str:
+    """The rest of the marker's line, or -- when that is only punctuation, as
+    under a `## 3. VERDICT` heading -- the next non-empty line."""
+    for raw in after_marker.splitlines():
+        content = _VERDICT_LINE_LEAD.sub("", raw).strip()
+        if content:
+            return content
+    return ""
 
 
 def _env_float(name: str, default: float) -> float:
