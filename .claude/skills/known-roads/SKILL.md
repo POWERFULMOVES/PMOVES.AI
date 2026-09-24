@@ -116,7 +116,7 @@ still live every time it is used:
 
 | Bound | Rule | Refusal says |
 |---|---|---|
-| referent | `pr:N` / `issue:N` must be **OPEN** on `POWERFULMOVES/PMOVES.AI` (`gh api`, 5 s timeout). Merged or closed → void | `grant VOID: PR #N ... is MERGED at <time>` |
+| referent | `pr:N` / `issue:N` must be **OPEN** on `POWERFULMOVES/PMOVES.AI` (`gh api`, 8 s timeout, at most one lookup per hook call). Merged or closed → void | `grant VOID: PR #N ... is MERGED at <time>` |
 | verifiable | no `gh`, no network, auth failure, timeout, or a malformed API body → **refused**, never assumed open | `grant not verifiable: <cause>` |
 | age | a **file** grant older than **24 h** is void whatever the PR state; so is a future-dated one | `grant file is N.Nh old (limit 24h)` |
 | env grant | has no mtime: it lives as long as the session launched with it. In a settings file's `env` it would ride every session and only the referent bound would limit it — which is why that is forbidden | — |
