@@ -918,4 +918,6 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    # Exit 0 or 2 only -- an uncaught exception must never exit open. See fail_closed.py.
+    from fail_closed import run_fail_closed  # noqa: E402
+    run_fail_closed(main, "PreToolUse")

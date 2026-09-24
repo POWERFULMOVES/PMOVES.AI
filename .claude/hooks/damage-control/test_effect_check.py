@@ -29,7 +29,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 GUARD_FILES = [
     "patterns.yaml", "path_scope.py", "known_roads.py",
-    "bash-tool-damage-control.py", "effect_check.py",
+    "bash-tool-damage-control.py", "effect_check.py", "fail_closed.py",
 ]
 
 failures = []
