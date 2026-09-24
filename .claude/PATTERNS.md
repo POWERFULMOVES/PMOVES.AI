@@ -304,7 +304,9 @@ Set it in the shell that launches Claude Code, or in `.claude/settings.json` `en
 
 **Provability guarantees:**
 - A bare value (`1`, `true`, arbitrary string) is **not** a Known Road — the edit stays blocked.
-- `handoff:` reasons are checked against the filesystem; a missing brief is rejected.
+- `handoff:` reasons are checked against the filesystem and git; a missing or untracked brief is rejected.
+- **A grant expires when its PR/issue closes, or after 24 h.** `pr:N`/`issue:N` is honoured only while N is OPEN on `POWERFULMOVES/PMOVES.AI` (checked via `gh api`; merged/closed → `grant VOID`). If the state cannot be checked the grant is **refused** (`grant not verifiable: …`), never assumed. A file grant (`.known-road-active`) older than 24 h is void regardless of PR state. Successful lookups are cached 120 s. Measured motive: a stale `compose:pr:3101` (merged 09-20) silently authorised compose edits for PR #3143.
+- **Offline:** append `!offline` to a `pr:`/`issue:` grant (`compose:pr:3200!offline`). It skips only the PR-state check (not the age limit) and each use is recorded as `grant_state: offline-override`.
 - Every granted bypass appends a line to `.claude/hooks/damage-control/known-roads.jsonl` — append-only, git-tracked (`merge=union`), machine-parseable. **Fail-closed:** if the trail line cannot be written, the bypass is denied (an unrecorded bypass is not provable).
 - Scope is narrow: `compose:` opens *only* `pmoves/docker-compose*.yml`. Migrations, contracts, secrets stay blocked regardless.
 
