@@ -34,6 +34,7 @@ from known_roads import (  # noqa: E402
     active_grant_verified,
     evaluate_known_road,
     known_road_hint,
+    record_use,
     set_hook_input,
 )
 
@@ -191,13 +192,29 @@ WRITE_PATTERNS = [
     (r'\bdd\s+' + _ARGS + r'\bof={path}', "write"),
     # ln and install write their LAST operand; earlier operands are sources, and
     # a bare `ln -s /usr/bin/python3` (one operand) links INTO the cwd.
-    (_CMD_POS + r'ln\s+(?:-\S+\s+)*\S+\s+(?:' + _ARGS + r'\s)?{path}' + _LAST_OPERAND, "link"),
-    (_CMD_POS + r'install\s+(?:-\S+\s+)*\S+\s+(?:' + _ARGS + r'\s)?{path}' + _LAST_OPERAND, "install"),
+    # The flag star is POSSESSIVE (`*+`, Py3.11+): on a non-match the plain star
+    # gave back one `-x ` token at a time and retried the whole {path} tail per
+    # token -- `ln -s -s ...` x1500 measured 5.3s in a BLOCKING PreToolUse hook
+    # (G5). Possessive refuses to give back; a true match never needed it to,
+    # because a protected path is never itself a flag token.
+    (_CMD_POS + r'ln\s+(?:-\S+\s+)*+\S+\s+(?:' + _ARGS + r'\s)?{path}' + _LAST_OPERAND, "link"),
+    (_CMD_POS + r'install\s+(?:-\S+\s+)*+\S+\s+(?:' + _ARGS + r'\s)?{path}' + _LAST_OPERAND, "install"),
+    # A write target computed by command substitution hides the real path from
+    # the plain template: `echo x > "$(cat 'a/b/poetry.lock')"` writes wherever
+    # that file says. Fail closed -- a substitution in the target position that
+    # mentions a protected path blocks, resolvable or not. `[^;&|>]*` cannot
+    # cross a separator, so a substitution in a LATER command (after ; & |) is
+    # not smuggled in. Cost: the rare redirect-first form
+    # `echo > notes.md "$(cat poetry.lock)"` blocks too; that is the fail-closed
+    # direction this guard is built to err in.
+    (r'>\|?\s*[^;&|>]*(?:\$\(|`)[^)`]*{path}', "write"),
 ]
 
 APPEND_PATTERNS = [
     (r'>>\s*{path}', "append"),
     (r'\btee\s+(?:' + _ARGS + r'\s)?' + _TEE_APPEND_FLAG + r'.*{path}', "append"),
+    # Substitution-hiding an append target -- see the matching write template.
+    (r'>>\s*[^;&|>]*(?:\$\(|`)[^)`]*{path}', "append"),
 ]
 
 EDIT_PATTERNS = [
