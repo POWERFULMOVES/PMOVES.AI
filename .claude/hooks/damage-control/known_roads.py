@@ -294,12 +294,26 @@ GRANT_FUTURE_SKEW_SECONDS = 300
 # days the stale pr:3101 grant ran. Only a SUCCESSFUL lookup is cached; failures
 # are retried on the next call, so fixing the network needs no cache flush.
 STATE_CACHE_TTL_SECONDS = 120
-GH_TIMEOUT_SECONDS = 5
+# 8s, measured: `gh api` for one PR on B850 took 0.82-4.46s over six runs
+# (gh itself starts in 0.02s; the spread is the API round trip). A 5s timeout
+# refused real calls in that tail. The hook's own timeout is 15s
+# (.claude/settings.json), and _MEMO below caps a hook process at ONE lookup per
+# referent, so 8s + interpreter start-up stays inside it. If the harness killed
+# the hook instead, a PreToolUse error is non-blocking -- the guard would fail
+# OPEN -- which is why this must stay well under the hook timeout.
+GH_TIMEOUT_SECONDS = 8
 OFFLINE_SUFFIX = "!offline"
 
 
 class GrantUnverifiable(Exception):
     """The referent's state could not be established. Always a refusal."""
+
+
+# Per-PROCESS memo of every outcome, failures included. A hook process lives for
+# one tool call, so this cannot make an answer outlive the call; what it prevents
+# is the effect check (one process, N changed paths) paying N timeouts during a
+# GitHub stall and being killed by the harness before it can report.
+_MEMO: Dict[str, object] = {}
 
 
 def _cache_path() -> Path:
@@ -432,13 +446,24 @@ def _referent_state(kind: str, number: int) -> Dict[str, str]:
     """
     now = time.time()
     key = _cache_key(kind, number)
+    memo = _MEMO.get(key)
+    if isinstance(memo, GrantUnverifiable):
+        raise memo
+    if isinstance(memo, dict):
+        return dict(memo)
     hit = _cache_get(key, now)
     if hit is not None:
         hit["cached"] = "yes"
+        _MEMO[key] = dict(hit)
         return hit
     endpoint = "pulls" if kind == "pr" else "issues"
-    result = _parse_state(kind, number,
-                          _gh_api_raw(f"repos/{CANONICAL_REPO}/{endpoint}/{number}"))
+    try:
+        result = _parse_state(kind, number,
+                              _gh_api_raw(f"repos/{CANONICAL_REPO}/{endpoint}/{number}"))
+    except GrantUnverifiable as exc:
+        _MEMO[key] = exc
+        raise
+    _MEMO[key] = dict(result)
     _cache_put(key, result, now)
     return result
 

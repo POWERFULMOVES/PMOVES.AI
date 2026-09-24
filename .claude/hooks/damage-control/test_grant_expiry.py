@@ -81,7 +81,9 @@ def serve(responses):
 
 
 def reset(grant_env=None, grant_file=None, file_age=0.0):
+    """A fresh 'hook process': no calls, no memo, no trail, no cache, no grant."""
     CALLS.clear()
+    KR._MEMO.clear()
     for p in (_TRAIL, _GRANT, _CACHE):
         if p.exists():
             p.unlink()
@@ -248,12 +250,15 @@ def main():
     serve(FIXTURES)
     reset(grant_env="compose:pr:3200")
     evaluate()
+    KR._MEMO.clear()          # a NEW hook process: only the on-disk cache can answer
     evaluate()
-    check("a cache hit avoids the second lookup", len(CALLS) == 1, CALLS)
+    check("an on-disk cache hit avoids the second lookup (across processes)",
+          len(CALLS) == 1, CALLS)
     doc = json.loads(_CACHE.read_text(encoding="utf-8"))
     key = "POWERFULMOVES/PMOVES.AI#pr:3200"
     doc[key]["checked"] = time.time() - KR.STATE_CACHE_TTL_SECONDS - 1
     _CACHE.write_text(json.dumps(doc), encoding="utf-8")
+    KR._MEMO.clear()          # a new hook process
     evaluate()
     check("an entry older than the TTL is re-checked", len(CALLS) == 2, CALLS)
 
@@ -268,9 +273,14 @@ def main():
     serve({"/pulls/3200": KR.GrantUnverifiable("timed out")})
     reset(grant_env="compose:pr:3200")
     evaluate()
+    evaluate()
+    evaluate()
+    check("within ONE hook process a failed lookup is not repeated (effect check "
+          "with N paths pays one timeout, not N)", len(CALLS) == 1, CALLS)
+    KR._MEMO.clear()          # the next tool call is a new hook process
     serve(FIXTURES)
     ok, _ = evaluate()
-    check("a FAILED lookup is not cached: the next call asks again and allows",
+    check("a FAILED lookup is not cached on disk: the next process asks again and allows",
           ok and len(CALLS) == 2, CALLS)
 
     print("-- the lookup only runs when the grant is relevant --")
