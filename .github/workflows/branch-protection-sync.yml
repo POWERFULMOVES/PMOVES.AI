@@ -256,24 +256,47 @@ jobs:
           #     requiring an un-greenable fork-secret check would permanently block).
           # Built with jq (not a heredoc) so the body is always valid JSON and
           # $rsc is injected as real JSON, not interpolated text.
+          #
+          # ONE BODY, THREE USES. policy() is the ONLY description of the target
+          # state: the dry run diffs the current state against it, the live run
+          # PUTs it byte-for-byte, and the read-back verifies the owned fields of
+          # it. There is deliberately no second "intended()" shape any more.
+          #
+          # WHY: until 2026-09-23 policy() omitted require_last_push_approval and
+          # require_code_owner_reviews (and lock_branch/block_creations), while a
+          # separate intended() set them false. A GitHub PUT KEEPS the existing
+          # value of an omitted field, so the dry run predicted a change the
+          # write never made — measured by read-back after live run 35898033986:
+          # 40 hardened branches kept require_last_push_approval=true, which
+          # BLOCKS every solo-operator merge even at 0 required reviews.
+          # So: every field this policy owns is SENT, explicitly.
+          #
+          # The key set of policy() must equal the key set of normalize() below
+          # (tests/test_branch_protection_sync_policy.py pins this), so no owned
+          # field can be predicted without being written, or written unverified.
           policy() {
             jq -cn --argjson rsc "${1:-null}" --argjson rev "${REQUIRED_REVIEWS:-0}" '{
               required_status_checks: $rsc,
               enforce_admins: false,
-              required_pull_request_reviews: {required_approving_review_count: $rev, dismiss_stale_reviews: true},
+              required_pull_request_reviews: {
+                required_approving_review_count: $rev,
+                dismiss_stale_reviews: true,
+                require_code_owner_reviews: false,
+                require_last_push_approval: false
+              },
               restrictions: null,
               allow_force_pushes: false,
               allow_deletions: false,
               required_conversation_resolution: true,
-              required_linear_history: false
+              required_linear_history: false,
+              lock_branch: false,
+              block_creations: false
             }'
           }
 
           # Normalize a GET .../protection response into the SAME shape policy()
-          # emits, so current vs intended can be diffed field by field. A PUT
-          # replaces the whole object, so fields policy() omits (code-owner
-          # reviews, last-push approval, lock/block) are reset to false — they are
-          # included here so a would-be downgrade shows up as a change.
+          # emits, so current (dry run) and read-back (live run) compare against
+          # the sent body field by field.
           normalize() {
             jq -c '{
               required_status_checks: (if .required_status_checks then {strict: .required_status_checks.strict, contexts: .required_status_checks.contexts} else null end),
@@ -293,15 +316,8 @@ jobs:
               block_creations: (.block_creations.enabled // false)
             }'
           }
-          # Intended state in normalized shape (policy() + the reset defaults).
-          intended() {
-            policy "$1" | jq -c '. + {
-              required_pull_request_reviews: (.required_pull_request_reviews + {require_code_owner_reviews: false, require_last_push_approval: false}),
-              lock_branch: false, block_creations: false
-            }'
-          }
 
-          # Field-level diff over the UNION of keys in current and intended,
+          # Field-level diff over the UNION of keys in current and the policy() body,
           # so a field present on only one side is still reported. Review
           # sub-fields are named individually (count and last-push approval are
           # separate operator decisions). -e: jq exits non-zero on bad input.
@@ -316,6 +332,29 @@ jobs:
               ] | join(",")'
           }
 
+          # Read-back verification: compare the SENT body ($1) with the
+          # normalized post-PUT state ($2) on the fields the body owns, and name
+          # every field that did not land as "field=sent->observed". Empty
+          # output means every owned field landed. Iterates the BODY's keys, not
+          # the union, so a field GitHub adds on its own is not a finding.
+          owned_mismatch() {
+            jq -ern --argjson want "$1" --argjson got "$2" '
+              def fmt($v): ($v | tojson);
+              [ ($want | keys)[] as $k |
+                if $k == "required_pull_request_reviews" and ($want[$k] | type) == "object" then
+                  ( if ($got[$k] | type) != "object" then
+                      "reviews=" + fmt($want[$k]) + "->" + fmt($got[$k])
+                    else
+                      ($want[$k] | keys)[] as $j
+                      | select($want[$k][$j] != $got[$k][$j])
+                      | "reviews." + $j + "=" + fmt($want[$k][$j]) + "->" + fmt($got[$k][$j])
+                    end )
+                else
+                  select($want[$k] != $got[$k]) | $k + "=" + fmt($want[$k]) + "->" + fmt($got[$k])
+                end
+              ] | join(",")'
+          }
+
           # Markdown-table cell: a literal | would split the column.
           md() { printf '%s' "$1" | tr '\n' ' ' | sed 's/|/\\|/g'; }
 
@@ -323,13 +362,15 @@ jobs:
           # read or parse is annotated (warning in a dry run, error in a live
           # run), logged, tabled and counted, and is NEVER written: a PUT built
           # from an unparsed response would null out its existing required
-          # checks. A live run with any unreadable branch exits 3.
+          # checks. A live run with any unreadable branch exits 3. The optional
+          # third argument overrides the "(not written)" note for the one case
+          # where a write WAS issued but its read-back could not be seen.
           unreadable() {
-            local rb="$1" why="$2"
+            local rb="$1" why="$2" note="${3:-not written}"
             if [ "$DRY_RUN" = "true" ]; then
               echo "::warning title=branch-protection-sync: UNREADABLE::${rb}: ${why}"
             else
-              echo "::error title=branch-protection-sync: UNREADABLE::${rb}: ${why} (not written)"
+              echo "::error title=branch-protection-sync: UNREADABLE::${rb}: ${why} (${note})"
             fi
             echo "  ? ${rb}: UNREADABLE — ${why}"
             echo "| $(md "$rb") | UNREADABLE: $(md "$why") | ? | ${REQUIRED_REVIEWS:-0} | unknown |" >> "$GITHUB_STEP_SUMMARY"
@@ -398,7 +439,8 @@ jobs:
               SKIPPED=$((SKIPPED+1)); continue
             fi
 
-            if ! want=$(intended "$rsc" 2>/dev/null) || [ -z "$want" ]; then
+            # $want is the EXACT body the live run PUTs (see policy()).
+            if ! want=$(policy "$rsc" 2>/dev/null) || [ -z "$want" ]; then
               unreadable "$rb" "could not build the intended policy from preserved checks=${rsc}"
               continue
             fi
@@ -421,12 +463,8 @@ jobs:
               continue
             fi
 
-            out=$(policy "$rsc" | gh api -X PUT "repos/${OWNER}/${repo}/branches/${branch}/protection" --input - 2>&1)
-            if [ $? -eq 0 ]; then
-              echo "  + ${rb}: applied (checks preserved=${rsc})"
-              echo "| $(md "$rb") | $(md "$state") | ${reviews_now} | ${REQUIRED_REVIEWS:-0} | applied: $(md "${changed:-no field change}") |" >> "$GITHUB_STEP_SUMMARY"
-              APPLIED=$((APPLIED+1))
-            else
+            out=$(printf '%s' "$want" | gh api -X PUT "repos/${OWNER}/${repo}/branches/${branch}/protection" --input - 2>&1)
+            if [ $? -ne 0 ]; then
               echo "  ! ${rb}: FAILED"; FAILED=$((FAILED+1))
               echo "$out" | head -3 | sed 's/^/      /'
               echo "::error title=branch-protection-sync: PUT failed::${rb}: $(printf '%s' "$out" | head -1 | cut -c1-160)"
@@ -439,7 +477,33 @@ jobs:
                 *404*|*"Branch not found"*)
                   echo "      -> 404: tracked branch '${branch}' missing on ${repo} (fix .gitmodules)." ;;
               esac
+              continue
             fi
+
+            # READ BACK. A 2xx PUT is not proof the policy landed: GitHub keeps
+            # the old value of any field the body omits, which is exactly how
+            # require_last_push_approval survived live run 35898033986. Re-GET
+            # the protection and compare every owned field with what was sent.
+            back=$(gh api "repos/${OWNER}/${repo}/branches/${branch}/protection" 2>/tmp/bp_err)
+            if [ $? -ne 0 ] || ! got=$(printf '%s' "$back" | normalize 2>/dev/null) || [ -z "$got" ]; then
+              # The write was issued but its result cannot be seen: that is
+              # could-not-measure, not success. Never counted as APPLIED.
+              unreadable "$rb" "PUT returned 2xx but the read-back failed: $(tr '\n' ' ' < /tmp/bp_err | cut -c1-120)" "written, result unverified"
+              continue
+            fi
+            if ! mismatch=$(owned_mismatch "$want" "$got" 2>/dev/null); then
+              unreadable "$rb" "PUT returned 2xx but the read-back did not compare against the sent body" "written, result unverified"
+              continue
+            fi
+            if [ -n "$mismatch" ]; then
+              echo "  ! ${rb}: FAILED read-back — did not land: ${mismatch}"; FAILED=$((FAILED+1))
+              echo "::error title=branch-protection-sync: read-back mismatch::${rb}: PUT 2xx but owned field(s) did not land: ${mismatch}"
+              echo "| $(md "$rb") | $(md "$state") | ${reviews_now} | ${REQUIRED_REVIEWS:-0} | FAILED read-back: $(md "$mismatch") |" >> "$GITHUB_STEP_SUMMARY"
+              continue
+            fi
+            echo "  + ${rb}: applied + verified (checks preserved=${rsc})"
+            echo "| $(md "$rb") | $(md "$state") | ${reviews_now} | ${REQUIRED_REVIEWS:-0} | applied+verified: $(md "${changed:-no field change}") |" >> "$GITHUB_STEP_SUMMARY"
+            APPLIED=$((APPLIED+1))
           done < forks.tsv
 
           echo ""
@@ -451,7 +515,7 @@ jobs:
           fi
           echo "$totals"
           { echo ""; echo "$totals"; } >> "$GITHUB_STEP_SUMMARY"
-          echo "Legend: ~ would-change  . no-change  + applied  = skipped(protected)  s skipped(needs-pro)  ? unreadable(could not read/parse — NOT written)  ! failed"
+          echo "Legend: ~ would-change  . no-change  + applied  = skipped(protected)  s skipped(needs-pro)  ? unreadable(could not read/parse — NOT written; or written but read-back unseen)  ! failed(PUT refused, or read-back shows an owned field did not land)"
           if [ "$UNREADABLE" -gt 0 ]; then
             echo "::warning title=branch-protection-sync::${UNREADABLE} branch(es) could not be measured; see the UNREADABLE rows."
           fi
@@ -459,15 +523,17 @@ jobs:
           # Dry runs always exit 0: they write nothing, and the push/schedule
           # audit keeps its annotations without going red on a transient 5xx.
           # Live runs, by precedence:
-          #   any FAILED PUT            -> 1  (a write was attempted and did not
-          #                                    land: branches left unprotected)
-          #   else any UNREADABLE       -> 3  (could not see the target; not written)
+          #   any FAILED                -> 1  (a PUT was refused, OR it returned
+          #                                    2xx and the read-back shows an
+          #                                    owned field did not land)
+          #   else any UNREADABLE       -> 3  (could not see the target, or could
+          #                                    not see the result of a write)
           #   else                      -> 0
           # FAILED outranks UNREADABLE because it is a measured failure, not an
           # unmeasured one.
           if [ "$DRY_RUN" != "true" ]; then
             if [ "$FAILED" -gt 0 ]; then
-              echo "::error title=branch-protection-sync::${FAILED} PUT(s) failed (unreadable=${UNREADABLE}); exiting 1."
+              echo "::error title=branch-protection-sync::${FAILED} branch(es) failed (PUT refused or read-back mismatch; unreadable=${UNREADABLE}); exiting 1."
               exit 1
             fi
             if [ "$UNREADABLE" -gt 0 ]; then exit 3; fi
