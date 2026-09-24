@@ -40,7 +40,9 @@ label="pmoves.kilo-review=${GITHUB_RUN_ID:-local}"
 umask 077
 run_script="$(mktemp /tmp/kilo-review-run.XXXXXX.sh)"
 err_log="$(mktemp /tmp/kilo-review-err.XXXXXX.log)"
-env_file="$(mktemp /tmp/kilo-review-env.XXXXXX)"
+# The run id is in the name so the workflow's always() sweep removes only
+# THIS run's files if the wrapper is SIGKILLed before its trap runs.
+env_file="$(mktemp "/tmp/kilo-review-env.${GITHUB_RUN_ID:-local}.XXXXXX")"
 trap 'rm -f "$run_script" "$err_log" "$env_file"' EXIT
 cp "$here/kilo_review_in_container.sh" "$run_script"
 chmod 0644 "$run_script"

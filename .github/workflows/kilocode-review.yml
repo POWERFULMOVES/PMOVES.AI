@@ -195,8 +195,9 @@ jobs:
             exit 3
           fi
 
-      - name: Remove kilo review containers (cancel / timeout safety net)
+      - name: Remove kilo review containers + credential files (cancel / timeout safety net)
         if: always()
+        timeout-minutes: 2
         run: |
           # Each tier labels its container pmoves.kilo-review=<run id>. A job
           # cancel or timeout can kill the tier wrapper before its own
@@ -207,3 +208,7 @@ jobs:
             # shellcheck disable=SC2086  # word-split the id list on purpose
             sudo -n docker rm -f $ids >/dev/null || echo "::warning::could not remove kilo review container(s)"
           fi
+          # A SIGKILLed tier wrapper never runs its EXIT trap, leaving the
+          # 0600 env file (it holds the Kilo key) in /tmp. Sweep this run's
+          # files, owned by the runner user only.
+          find /tmp -maxdepth 1 -type f -user "$(id -u)" -name "kilo-review-env.${GITHUB_RUN_ID}.*" -print -delete || true

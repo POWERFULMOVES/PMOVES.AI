@@ -64,6 +64,9 @@ if kind == "junk":
 if kind == "empty":
     open(out, "w").write("   \n")
     sys.exit(0)
+if kind == "failhost":
+    with open(meta, "a") as m:
+        m.write("reason=" + os.environ["STUB_REASON"] + "\n")
 sys.exit(1)
 '''
 
@@ -143,10 +146,11 @@ def _closed_port_url() -> str:
 
 
 def _run_chain(tmp_path: Path, *, primary: str, alt: str, spark_url: str | None,
-               spark_token: str | None = "test-token", extra_env: dict | None = None) -> dict:
+               spark_token: str | None = "test-token", extra_env: dict | None = None,
+               prompt_text: str = "review this") -> dict:
     stub = tmp_path / "stub_kilo.py"
     stub.write_text(STUB_KILO)
-    (tmp_path / "prompt.md").write_text("review this")
+    (tmp_path / "prompt.md").write_text(prompt_text)
     (tmp_path / "pr.diff").write_text("diff --git a/x b/x\n+hello\n")
     summary, output, log = tmp_path / "summary.md", tmp_path / "output.txt", tmp_path / "kilo.log"
     for p in (summary, output, log):
@@ -738,3 +742,129 @@ def test_kilo_finding_malformed_http_does_not_abort_the_chain(tmp_path, spark):
     assert r["rc"] == 0, r["stderr"]
     assert "**offline**" in r["summary"]
     assert _header(r["comment"]) == "## Fleet review: kilocode-alternate (b)"
+
+
+# ------------------------------------------- confirmation pass @ 8651d1b61 --
+
+_FIXTURES = Path(__file__).resolve().parent / "fixtures"
+REAL_KILO_REVIEW = (_FIXTURES / "kilo_review_pr3169.md").read_text()
+
+
+def _real_prompt(tmp_path: Path) -> str:
+    """Run the workflow's OWN 'Build review prompt + diff' step (with `git`
+    stubbed, and /tmp redirected into tmp_path) so the template the tests use
+    is the template CI builds -- it cannot drift."""
+    step = next(s for s in _job()["steps"] if s.get("name") == "Build review prompt + diff")
+    script = step["run"].replace("/tmp/", f"{tmp_path}/")
+    bindir = tmp_path / "gitbin"
+    bindir.mkdir(exist_ok=True)
+    _exe(bindir / "git", "#!/usr/bin/env bash\necho 'diff --git a/x b/x'\n")
+    env = {**os.environ, "PATH": f"{bindir}:{os.environ['PATH']}", "GITHUB_BASE_REF": "main",
+           "PR_NUMBER": "3169", "PR_TITLE": "feat(ci): fleet review fallback chain", "PR_BODY": "body text"}
+    subprocess.run(["bash", "-c", script], env=env, check=True, capture_output=True, timeout=30)
+    return (tmp_path / "kilo-review-prompt.md").read_text()
+
+
+def _junk_run(tmp_path, junk, prompt):
+    return _run_chain(tmp_path, primary="junk:kilo/z-ai/glm-5.2", alt="no-candidate", spark_url=None,
+                      extra_env={"STUB_JUNK_TEXT": junk}, prompt_text=prompt)
+
+
+def test_confirm_p2b_real_prompt_contains_every_marker(tmp_path):
+    """Why an echo passed before: the template itself satisfies the old rule."""
+    prompt = _real_prompt(tmp_path)
+    for marker in ("1. CORRECTNESS", "2. SECURITY / TOPOLOGY", "3. VERDICT: APPROVE or REQUEST_CHANGES"):
+        assert marker in prompt
+
+
+@pytest.mark.parametrize("shape", ["verbatim", "error-page", "refusal-phrase", "refusal-both", "both-verdicts"])
+def test_confirm_p2b_echo_error_refusal_and_double_verdict_are_invalid(tmp_path, shape):
+    prompt = _real_prompt(tmp_path)
+    junk = {
+        "verbatim": prompt,
+        "error-page": "<html><body><h1>502 Bad Gateway</h1><pre>upstream rejected the request:\n"
+                      + prompt + "</pre></body></html>",
+        "refusal-phrase": "I'm sorry, but I can't produce the CORRECTNESS / SECURITY / VERDICT review for this "
+                          "change; please choose APPROVE or REQUEST_CHANGES yourself.",
+        "refusal-both": "I cannot comply with this request. CORRECTNESS, SECURITY and a VERDICT such as "
+                        "APPROVE / REQUEST_CHANGES are not something I am able to provide here.",
+        "both-verdicts": "1. CORRECTNESS\n- the loop is bounded\n2. SECURITY / TOPOLOGY\n- clean\n"
+                         "3. VERDICT: APPROVE - or maybe REQUEST_CHANGES, hard to say\n",
+    }[shape]
+    r = _junk_run(tmp_path, junk, prompt)
+    assert r["rc"] == 3 and r["outputs"]["state"] == "NO-REVIEWER-AVAILABLE", r["summary"]
+    assert "| 1 | `kilo-primary` | `kilo/z-ai/glm-5.2` | **invalid** |" in r["summary"]
+
+
+def test_confirm_p2b_the_real_3169_kilo_review_stays_ok(tmp_path):
+    prompt = _real_prompt(tmp_path)
+    r = _junk_run(tmp_path, REAL_KILO_REVIEW, prompt)
+    assert r["rc"] == 0, r["summary"]
+    assert _header(r["comment"]) == "## Fleet review: kilocode (kilo/z-ai/glm-5.2)"
+    assert "**REQUEST_CHANGES**" in r["comment"]
+
+
+@pytest.mark.parametrize("host", ["review.example", "kilo.example", "spark.example"])
+def test_confirm_p2a_host_labels_never_corrupt_structure(tmp_path, host):
+    r = _run_chain(tmp_path, primary="ok:kilo/z-ai/glm-5.2", alt="ok:b", spark_url=f"https://{host}:8443")
+    assert r["rc"] == 0
+    assert r["outputs"] == {"state": "REVIEWED", "tier": "1", "reviewer": "kilo-primary",
+                            "model": "kilo/z-ai/glm-5.2", "rc": "0"}
+    assert _header(r["comment"]) == "## Fleet review: kilocode (kilo/z-ai/glm-5.2)"
+    assert r["comment"].startswith("<!-- fleet-review-chain state=REVIEWED tier=1 reviewer=kilo-primary -->")
+    assert "## Fleet review chain: REVIEWED" in r["summary"]
+
+
+@pytest.mark.parametrize("host", ["review.example", "kilo.example", "spark.example"])
+def test_confirm_p2a_host_still_redacted_in_error_text(tmp_path, host):
+    r = _run_chain(tmp_path, primary="failhost:kilo/z-ai/glm-5.2", alt="ok:kilo/z-ai/glm-5.3",
+                   spark_url=f"http://{host}:8443", extra_env={
+                       "SPARK_REVIEW_ALLOW_HTTP": None,
+                       "STUB_REASON": f"TLS: certificate is not valid for '{host}' port 8443 ({host.split('.')[0]})"})
+    assert r["rc"] == 0 and r["outputs"]["state"] == "REVIEWED"
+    assert _header(r["comment"]) == "## Fleet review: kilocode-alternate (kilo/z-ai/glm-5.3)"
+    row = next(line for line in r["summary"].splitlines() if line.startswith("| 1 |"))
+    assert host not in row and "8443" not in row and f"({host.split('.')[0]})" not in row
+    assert "certificate is not valid for '<redacted>' port <redacted> (<redacted>)" in row
+    for text in (r["comment"], r["stdout"]):
+        assert host not in text
+
+
+def test_confirm_p3_suffix_and_short_labels_are_whole_token_redacted():
+    mod = _load_chain()
+    red = mod.Redactor(url="https://ab.tail1234.ts.net:8443")
+    out = red("host ab and ab.tail1234.ts.net and tail1234.ts.net; lab and abc stay")
+    assert out == "host <redacted> and <redacted> and <redacted>; lab and abc stay"
+
+
+def test_confirm_p3_ipv6_matched_by_value():
+    mod = _load_chain()
+    red = mod.Redactor(url="https://[fd7a:115c:a1e0::1]:8443/")
+    for form in ("fd7a:115c:a1e0::1", "FD7A:115C:A1E0::1", "fd7a:115c:a1e0:0:0:0:0:1",
+                 "fd7a:115c:a1e0:0000:0000:0000:0000:0001"):
+        assert red(f"connect to {form} failed") == "connect to <redacted> failed", form
+    assert red("fd7a:115c:a1e0::2 is another host") == "fd7a:115c:a1e0::2 is another host"
+
+
+def test_confirm_p3_environment_proxy_never_sees_the_token(tmp_path, spark):
+    proxy = _SparkStub()
+    try:
+        r = _run_chain(tmp_path, primary="empty:a", alt="no-candidate", spark_url=spark.url,
+                       extra_env={"HTTP_PROXY": proxy.url, "http_proxy": proxy.url,
+                                  "HTTPS_PROXY": proxy.url, "https_proxy": proxy.url,
+                                  "NO_PROXY": "", "no_proxy": ""})
+        assert proxy.requests == [], "the environment proxy must receive nothing"
+        assert [m for m, *_ in spark.requests] == ["GET", "POST"]
+        assert r["outputs"]["reviewer"] == "spark-local"
+    finally:
+        proxy.close()
+
+
+def test_confirm_p3_cleanup_sweeps_this_runs_env_files_with_a_timeout(tier_env, envfacts):
+    last = _job()["steps"][-1]
+    assert last["if"] == "always()" and last["timeout-minutes"] <= 5
+    assert '-name "kilo-review-env.${GITHUB_RUN_ID}.*"' in last["run"] and '-user "$(id -u)"' in last["run"]
+    env, tmp_path, _ = tier_env
+    _tier(env, tmp_path, "ok", GITHUB_RUN_ID="4242")
+    _, path, *_ = envfacts.read_text().splitlines()
+    assert Path(path).name.startswith("kilo-review-env.4242."), "the sweep pattern must match the real file name"

@@ -11,8 +11,9 @@ review (see "Review validity" below):
   tier 3  kilo-alternate  Kilo CLI again, with the next untried catalog-valid
                           model from the preference list
 
-Outputs (all written, whatever happens), every one passed through the
-redactor (Spark URL, host, port, token; Kilo key):
+Outputs (all written, whatever happens). Values -- tier details, review
+bodies, model ids -- are redacted once, before rendering (Spark URL, host, IP,
+port, token; Kilo key); keys and markers are never redacted:
   --comment FILE   the PR comment body. Its header names the tier and model
                    that ACTUALLY produced the review.
   $GITHUB_STEP_SUMMARY  a table of every tier tried and its outcome.
@@ -30,10 +31,13 @@ is `misconfigured` (http:// without opt-in, a redirect, no token), `failed`
 (the review call broke), `empty` (nothing) or `invalid` (text that is not a
 review).
 
-Review validity: at least MIN_REVIEW_CHARS of text containing the three
-section markers the prompt asks for (CORRECTNESS, SECURITY, VERDICT) and an
-allowed verdict (APPROVE / REQUEST_CHANGES) within VERDICT_WINDOW chars after
-the last VERDICT marker. The verdict may sit on the marker line
+Review validity: at least MIN_REVIEW_CHARS of text that does NOT echo the
+prompt template (its instruction lines are derived from the prompt file at run
+time, plus the literal choice phrase "APPROVE or REQUEST_CHANGES"), contains
+the three section markers (CORRECTNESS, SECURITY, VERDICT), and has EXACTLY
+ONE of APPROVE / REQUEST_CHANGES (upper case, as a token) within
+VERDICT_WINDOW chars after the last VERDICT marker -- both, or neither, is
+invalid. The verdict may sit on the marker line
 ("3. VERDICT: APPROVE") or under a "## 3. VERDICT" heading on the next line --
 the live Kilo review on #3169 used the latter, so a strict `VERDICT:` line
 match would have rejected a real, good review.
@@ -68,6 +72,7 @@ from __future__ import annotations
 
 import argparse
 import dataclasses
+import ipaddress
 import json
 import os
 import re
@@ -117,43 +122,98 @@ class TierResult:
 # ---------------------------------------------------------------- hygiene --
 
 
-class Redactor:
-    """Strip secrets and topology from every string we emit.
+_TOKEN_EDGE_L = r"(?<![A-Za-z0-9_-])"
+_TOKEN_EDGE_R = r"(?![A-Za-z0-9_-])"
+_IPV6_CANDIDATE = re.compile(r"(?<![0-9A-Fa-f:])[0-9A-Fa-f]{0,4}(?::[0-9A-Fa-f]{0,4}){2,7}(?:%[\w.]+)?(?![0-9A-Fa-f:])")
+SECRET_MIN_WHOLESALE = 8
 
-    Built from SPARK_REVIEW_URL (full URL, netloc, bare host or IP, the host's
-    first DNS label, port) plus secret values (Spark token, Kilo key).
-    Case-insensitive; over-redaction is the safe failure.
+
+class Redactor:
+    """Strip secrets and topology from VALUES (never from keys or markers).
+
+    Two layers, because redacting structure is its own failure: a host
+    `review.<x>` once turned `state=REVIEWED` into `state=<redacted>ED` and
+    failed a real review (#3169 confirmation pass).
+
+    * secrets (Spark token, Kilo key): substring match -- a secret is never a
+      word, and may be embedded in anything.
+    * topology from SPARK_REVIEW_URL: full URL, netloc, host, IP (IPv6
+      matched by VALUE via ipaddress, so any textual form is caught), the
+      first DNS label, the domain suffix after it, and the port -- all
+      matched as WHOLE TOKENS, never as substrings of other words.
+
+    `__call__` is the full scrub for free text (tier details, review bodies).
+    `strict` drops the first-label / suffix / port rules; it is for model ids,
+    where a bare label like `kilo` is also a legitimate provider prefix.
+    `secrets_only` is the belt applied to whole output channels: it can only
+    touch strings >= SECRET_MIN_WHOLESALE chars, so it cannot eat a marker.
     """
 
     def __init__(self, *, url: str = "", secrets: tuple[str, ...] = ()) -> None:
-        literals: set[str] = {s for s in secrets if s}
-        self._port_re: re.Pattern[str] | None = None
+        self._secrets = sorted({s for s in secrets if s}, key=len, reverse=True)
+        self._strict: list[re.Pattern[str]] = []
+        self._loose: list[re.Pattern[str]] = []
+        self._ip = None
         url = url.strip()
-        if url:
-            literals |= {url, url.rstrip("/")}
-            host, netloc, port = "", "", None
+        if not url:
+            return
+        host, netloc, port = "", "", None
+        try:
+            parts = urllib.parse.urlsplit(url)
+            host, netloc, port = (parts.hostname or ""), parts.netloc, parts.port
+        except ValueError:
+            pass
+
+        def tok(literal: str) -> re.Pattern[str]:
+            return re.compile(_TOKEN_EDGE_L + re.escape(literal) + _TOKEN_EDGE_R, re.IGNORECASE)
+
+        literals = {url, url.rstrip("/"), netloc}
+        try:
+            self._ip = ipaddress.ip_address(host.split("%", 1)[0]) if host else None
+        except ValueError:
+            self._ip = None
+        if host:
+            literals.add(host)
+        if self._ip is not None:
+            literals |= {str(self._ip), self._ip.exploded}
+        for lit in sorted((x for x in literals if x), key=len, reverse=True):
+            self._strict.append(re.compile(re.escape(lit), re.IGNORECASE) if "/" in lit else tok(lit))
+        if host and self._ip is None:
+            labels = host.split(".")
+            if len(labels) > 1:
+                self._loose.append(tok(".".join(labels[1:])))  # e.g. <tailnet>.ts.net
+            self._loose.append(tok(labels[0]))                  # any length, whole token only
+        if port:
+            self._loose.append(re.compile(rf"(?<![\w.]){port}(?!\w)"))
+
+    def secrets_only(self, text: str) -> str:
+        for s in self._secrets:
+            if len(s) >= SECRET_MIN_WHOLESALE:
+                text = text.replace(s, "<redacted>")
+        return text
+
+    def _ipv6(self, text: str) -> str:
+        if self._ip is None or self._ip.version != 6:
+            return text
+
+        def repl(m: re.Match[str]) -> str:
             try:
-                parts = urllib.parse.urlsplit(url)
-                host, netloc = parts.hostname or "", parts.netloc
-                port = parts.port
+                return "<redacted>" if ipaddress.ip_address(m.group(0).split("%", 1)[0]) == self._ip else m.group(0)
             except ValueError:
-                pass
-            if netloc:
-                literals.add(netloc)
-            if host:
-                literals.add(host)
-                first = host.split(".")[0]
-                if len(first) >= 4 and not first.isdigit():
-                    literals.add(first)
-            if port:
-                self._port_re = re.compile(rf"(?<![\w.]){port}(?!\w)")
-        self._literals = sorted(literals, key=len, reverse=True)
+                return m.group(0)
+        return _IPV6_CANDIDATE.sub(repl, text)
+
+    def strict(self, text: str) -> str:
+        for s in self._secrets:
+            text = text.replace(s, "<redacted>")
+        for pat in self._strict:
+            text = pat.sub("<redacted>", text)
+        return self._ipv6(text)
 
     def __call__(self, text: str) -> str:
-        for s in self._literals:
-            text = re.sub(re.escape(s), "<redacted>", text, flags=re.IGNORECASE)
-        if self._port_re is not None:
-            text = self._port_re.sub("<redacted>", text)
+        text = self.strict(text)
+        for pat in self._loose:
+            text = pat.sub("<redacted>", text)
         return text
 
 
@@ -177,19 +237,62 @@ def sanitize_model(raw: object) -> str:
     return text.replace("`", "'").strip()[:MODEL_MAX_CHARS]
 
 
-def review_validity(text: str) -> tuple[bool, str]:
+PROMPT_BODY_MARKER = "--- PR BODY"
+TEMPLATE_MIN_CHARS = 30
+_VERDICT_TOKEN = re.compile(r"(?<![A-Za-z_])(APPROVE|REQUEST_CHANGES)(?![A-Za-z_])")
+_NORM_WS = re.compile(r"\s+")
+
+
+def _norm(text: str) -> str:
+    return _NORM_WS.sub(" ", text).strip().lower()
+
+
+def template_lines(prompt: str) -> list[str]:
+    """The instruction lines of the prompt the workflow built.
+
+    Derived at run time FROM the prompt file, so the echo check cannot drift
+    from the template: every line before the PR-body marker that is long
+    enough to be distinctive, except the `PR #n: <title>` line (the title is
+    PR content a real review may legitimately quote). The marker line itself
+    is included, and so is the literal choice phrase `APPROVE or
+    REQUEST_CHANGES` (a real review picks one; only an echo names both).
+    """
+    out = ["approve or request_changes"]
+    for line in prompt.splitlines():
+        stripped = line.strip()
+        if stripped.startswith(PROMPT_BODY_MARKER):
+            out.append(_norm(stripped))
+            break
+        if len(stripped) >= TEMPLATE_MIN_CHARS and not re.match(r"PR #\d+:", stripped):
+            out.append(_norm(stripped))
+    return out
+
+
+_TEMPLATE: list[str] = ["approve or request_changes"]
+
+
+def review_validity(text: str, template: list[str] | None = None) -> tuple[bool, str]:
     body = (text or "").strip()
     if not body:
         return False, "empty"
     if len(body) < MIN_REVIEW_CHARS:
         return False, f"only {len(body)} chars (minimum {MIN_REVIEW_CHARS})"
+    normed = _norm(body)
+    for line in (template if template is not None else _TEMPLATE):
+        if line and line in normed:
+            return False, "echoes the prompt template (" + (line[:40] + "...") + ")"
     upper = body.upper()
     missing = [m for m in ("CORRECTNESS", "SECURITY", "VERDICT") if m not in upper]
     if missing:
         return False, "missing required section(s): " + ", ".join(missing)
-    tail = upper[upper.rindex("VERDICT") + len("VERDICT"):][:VERDICT_WINDOW]
-    if not re.search(r"(?<![A-Z_])(APPROVE|REQUEST_CHANGES)(?![A-Z_])", tail):
+    # Case-sensitive on the original text: prose like "I would approve" is not
+    # a verdict token. Exactly ONE distinct verdict must follow the marker.
+    tail = body[upper.rindex("VERDICT") + len("VERDICT"):][:VERDICT_WINDOW]
+    verdicts = set(_VERDICT_TOKEN.findall(tail))
+    if not verdicts:
         return False, "no APPROVE / REQUEST_CHANGES verdict after the VERDICT marker (truncated?)"
+    if len(verdicts) > 1:
+        return False, "both APPROVE and REQUEST_CHANGES after the VERDICT marker"
     return True, "review produced"
 
 
@@ -285,7 +388,9 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
         raise _RedirectRefused(code)
 
 
-_OPENER = urllib.request.build_opener(_NoRedirect)
+# ProxyHandler({}): environment proxies (HTTP(S)_PROXY) must never see the
+# bearer token -- the request goes to the configured origin or nowhere.
+_OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}), _NoRedirect)
 
 
 def _opener_open(req: urllib.request.Request, timeout: float):
@@ -449,7 +554,17 @@ _REDACT = Redactor()
 
 
 def emit(line: str) -> None:
-    print(_REDACT(line), flush=True)
+    """Lines are built from already-scrubbed values; only the secrets belt
+    runs over the whole line (it cannot touch a marker)."""
+    print(_REDACT.secrets_only(line), flush=True)
+
+
+def scrub(result: TierResult) -> TierResult:
+    """Redact the VALUE parts of a tier result, once, before any output."""
+    result.detail = _REDACT(result.detail)
+    result.review = _REDACT(result.review)
+    result.model = sanitize_model(_REDACT.strict(result.model))
+    return result
 
 
 def _row(r: TierResult) -> str:
@@ -503,10 +618,12 @@ def _append(path_env: str, text: str) -> None:
     path = os.environ.get(path_env)
     if path:
         with open(path, "a", encoding="utf-8") as fh:
-            fh.write(_REDACT(text))
+            fh.write(_REDACT.secrets_only(text))
 
 
 def run_chain(prompt: str, diff: str) -> tuple[list[TierResult], TierResult | None]:
+    global _TEMPLATE
+    _TEMPLATE = template_lines(prompt)
     started = time.monotonic()
     budget = _env_float("REVIEW_CHAIN_BUDGET", 2100)
     results = [
@@ -516,12 +633,12 @@ def run_chain(prompt: str, diff: str) -> tuple[list[TierResult], TierResult | No
     ]
     primary, spark, alternate = results
 
-    run_kilo_tier(primary, exclude=[], fallback=False)
+    scrub(run_kilo_tier(primary, exclude=[], fallback=False))
     if primary.outcome == OK:
         return results, primary
     emit(f"::warning::review tier 1 kilo-primary: {primary.outcome} - {primary.detail}; trying spark-local")
 
-    run_spark_tier(spark, prompt=prompt, diff=diff)
+    scrub(run_spark_tier(spark, prompt=prompt, diff=diff))
     if spark.outcome == OK:
         return results, spark
     emit(f"::warning::review tier 2 spark-local: {spark.outcome} - {spark.detail}; trying kilo-alternate")
@@ -536,7 +653,7 @@ def run_chain(prompt: str, diff: str) -> tuple[list[TierResult], TierResult | No
         alternate.detail = (f"skipped: {elapsed:.0f}s used, the tier needs up to {needed:.0f}s, "
                             f"REVIEW_CHAIN_BUDGET is {budget:.0f}s")
     else:
-        run_kilo_tier(alternate, exclude=[primary.model] if primary.model else [], fallback=True)
+        scrub(run_kilo_tier(alternate, exclude=[primary.model] if primary.model else [], fallback=True))
     if alternate.outcome == OK:
         return results, alternate
     return results, None
@@ -557,11 +674,13 @@ def main(argv: list[str] | None = None) -> int:
         prompt = Path(args.prompt).read_text(errors="replace")
         diff = Path(args.diff).read_text(errors="replace")
     except OSError as exc:
-        emit(f"::error::review chain: cannot read inputs ({exc})")
+        emit(f"::error::review chain: cannot read inputs ({_REDACT(str(exc))})")
         return 2
 
     results, winner = run_chain(prompt, diff)
-    Path(args.comment).write_text(_REDACT(render_comment(results, winner)), encoding="utf-8")
+    # Built from scrubbed values; only the secrets belt runs over the whole
+    # comment, so markers and headers can never be redacted.
+    Path(args.comment).write_text(_REDACT.secrets_only(render_comment(results, winner)), encoding="utf-8")
 
     state = "REVIEWED" if winner else NO_REVIEWER
     rc = 0 if winner else 3
