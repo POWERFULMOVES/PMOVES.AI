@@ -253,3 +253,5 @@
 {"agent": "pmoves-b850", "domain": "compose", "file": "pmoves/docker-compose.agents.yml", "reason": "pr:3101", "session": "unknown", "tool": "Edit", "ts": "2026-09-23T16:07:54Z"}
 {"agent": "pmoves-b850", "domain": "launcher", "file": "deploy/provision/claude-pmoves.sh", "reason": "pr:3143", "session": "unknown", "tool": "Edit", "ts": "2026-09-23T17:23:39Z"}
 {"agent": "pmoves-b850", "domain": "launcher", "file": "deploy/provision/claude-pmoves.sh", "reason": "pr:3143", "session": "unknown", "tool": "Edit", "ts": "2026-09-23T17:23:46Z"}
+{"agent": "delivery-agent", "agent_instance": "aa687da3d5429fc88", "domain": "dockerfile", "file": "pmoves/services/agent-zero/Dockerfile", "node": "pmoves-b850", "reason": "pr:3171", "session": "e84696c5-0c81-4cdb-888a-3c961d74c080", "tool": "Edit", "ts": "2026-09-24T00:16:42Z"}
+{"agent": "delivery-agent", "agent_instance": "aa687da3d5429fc88", "domain": "dockerfile", "file": "pmoves/services/agent-zero/Dockerfile.multiarch", "node": "pmoves-b850", "reason": "pr:3171", "session": "e84696c5-0c81-4cdb-888a-3c961d74c080", "tool": "Edit", "ts": "2026-09-24T00:16:44Z"}
