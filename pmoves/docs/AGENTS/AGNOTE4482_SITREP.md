@@ -4,7 +4,17 @@ GRAPHITI_MARK: `PHI-4482-SITREP::QUICK-ORIENTATION`
 
 > **For:** Any agent dropping into a PMOVES session cold (fresh start, VS Code restart, new node, Husk walk-in).
 > **Rule:** Read this FIRST. It's pointers, not content. Follow the links.
-> **Last refreshed:** 2026-09-10 (crush-spark refresh - archon-native era) · **2026-09-18 addendum:** 4090 rebase lane (see below)
+> **Last refreshed:** 2026-09-10 (crush-spark refresh - archon-native era) · **2026-09-18 addendum:** 4090 rebase lane (see below) · **2026-09-24 addendum:** EM-FLASH registration + merge-wave receipt (see below)
+
+---
+
+## 2026-09-24 EM-FLASH registration + merge-wave receipt (elder-melchor)
+
+**Active lane**: `docs/register-emflash-identity-4090-alias` — claimed under **`EM-FLASH (hermes)`** (TTL 72h). Operator-declared 2026-09-24: EM-FLASH is the elder-melchor AGInT — `glm-5.3-flash` riding the hermes (MOA) harness — and the operator's alt for agent/team configuration and fleet automation. Registration surfaces in this lane: `identity_vocabulary.yaml` (`em-flash` identity + `hermes` harness entry), the AGInTZ awareness-ledger row in AGNOTE4482.md, and this lane's CLAIM row.
+
+**Also in this lane**: the `PMOVES-4090-CLAUDE` umbrella alias — operator-declared 2026-09-24, the AGInT for 4090-Claude and ALL its alts and variants, whose own full registration is still pending. Aliased to `4090-claude` so the two rows carrying that signature on the MCP-hosting draft (#3168) resolve instead of reding the identity gate; fold into their own canonical when their registration lands.
+
+**Merge wave 2026-09-24** (operator: approved): Pmoves-cipher #24 (pr-validation enablement — the fork gate that never ran since the 07-13 re-fork), #23 (installer reconcile), #26 (scope+ownership stack) merged; #22/#25 closed contained by #26 (compare 0-ahead/behind proofs). Superproject squash-merged: #3165 (rdna4 room rescue), #3114 (CI test deps), #3107 (compose split overlay), #3095 (kilo ratchet), #3079 (NATS exporter), #2907 (runbooks round 2), #3129 (ffmpeg-whisper arch gate), #3089 (topology paths), #3160 (hermes-agent gitlink → 8493c4f73, post-#17), #3102 (B850 register closeout — rebased clean onto post-wave main, 293 claim/identity tests green). #3118 closed superseded: bump target 18bd4f5b81 predates the Hardened tip 511f6118fd; a fresh supabase pointer bump belongs to the next submodule-pointer lane. PMOVES-supabase fork PR #20 remains the fork's own blocker (2026-09-20 survey entry above still accurate).
 
 ---
 

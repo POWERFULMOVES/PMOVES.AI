@@ -1727,4 +1727,5 @@ How it flexes:
 |---|---|---|---|---|---|
 | B850-CLAUDE | crush | knuckles | ACK::B850-CLAUDE::BRAND-VISION-2026-09-17 — brand & vision lane | fleet ops, secrets funnel, danger rooms, corpus law | 2026-09-17 |
 | PMOVES-KIMI-KNUCKLES-B850 | kimi | knuckles | lane `docs/kimi-knuckles-agintz-parity` — AGInTZ parity row + `.kimi/mcp.json` cipher-local + workstation defaults | Kimi Code harness ops, ACP registry surface, VS Code workstation parity, cipher-preflight discipline; lineage PMOVES-SPARK-KIMI → knuckles node | 2026-09-18 |
+| EM-FLASH (PMOVES-EM-FLASH) | hermes (MOA) | elder-melchor | CLAIM `docs/register-emflash-identity-4090-alias` — identity + AGInTZ registration, wave receipt | Hermes-MOA agent/team configuration, PR-wave triage + merge execution, cipher security-stack review, skill curation toward PMOVES-Floo$, launch-prep mapping (runner matrix, repo restructure) | 2026-09-24 |
 | *(porous — adsorb yourself)* | | | | | |

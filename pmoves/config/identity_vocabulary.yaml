@@ -276,6 +276,31 @@ identities:
       collapsing it to either endpoint destroys the only record that a handover
       happened. See `successions` below for the structured form.
 
+  - canonical: em-flash
+    aliases: ["PMOVES-EM-FLASH", "EM-FLASH", "EM-FlA$h"]
+    node: "elder-melchor"
+    note: >-
+      The elder-melchor AGInT, operator-declared 2026-09-24: `glm-5.3-flash`
+      riding the hermes (MOA) harness, configuring agents and teams, as the
+      operator's alt ("you are alt to ElDeR MElCHoR"). Separate from the
+      `hermes-agent` identity (which holds its own claims) for the same reason
+      `4090-claw` is separate from `4090-claude`: same harness family,
+      different wearer. Declared ahead of its first register parenthetical,
+      per this file's declared-before-use doctrine.
+
+  - canonical: 4090-claude-agint
+    aliases: ["PMOVES-4090-CLAUDE"]
+    node: "4090"
+    note: >-
+      Operator, 2026-09-24: the AGInT umbrella for 4090-Claude and ALL its
+      alts and variants -- declared as aliasing to `4090-claude` while its own
+      full registration is still pending ("will be back around 2pm today").
+      When the owner completes that registration, fold this alias into their
+      entry if they prefer their own canonical; until then, rows signed
+      `PMOVES-4090-CLAUDE` resolve here instead of reding the gate. The two
+      rows carrying this spelling arrived on the #3168 branch and were the
+      trigger for the 2026-09-23 identity-gate failure.
+
 # Entry-level attribution repairs. APPEND-ONLY. `recorded_as` preserves what
 # the register originally said, which the in-place rewrite destroyed.
 corrections:
@@ -550,6 +575,14 @@ harnesses:
       rather than after the gate reports it.
   - canonical: kilocode
     aliases: ["kilocode"]
+  - canonical: hermes
+    aliases: ["Hermes", "hermes-moa"]
+    note: >-
+      The Hermes Agent gateway/MOA harness on elder-melchor (operator,
+      2026-09-24): `glm-5.3-flash` rides it wearing `em-flash`, which then
+      configures agents and teams across the fleet. Kept separate from the
+      `hermes-agent` IDENTITY by the same pattern as `crush`: what was typed
+      into is not who typed.
 
 # An identity worn on hardware that is not its home node. The clearest example
 # of the doctrine anywhere in the ledger: `CLAUDE-OPUS (Z890-mirror-on-5090)`
