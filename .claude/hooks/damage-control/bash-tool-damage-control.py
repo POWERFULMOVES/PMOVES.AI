@@ -34,7 +34,6 @@ from known_roads import (  # noqa: E402
     active_grant_verified,
     evaluate_known_road,
     known_road_hint,
-    record_use,
     set_hook_input,
 )
 
@@ -59,26 +58,155 @@ def glob_to_regex(glob_pattern: str) -> str:
             result += char
     return result
 
+
+# ----------------------------------------------------------------------------
+# PATH REGEX WITH DEPTH (gitignore-like), used BESIDE glob_to_regex, never
+# instead of it.
+# ----------------------------------------------------------------------------
+# glob_to_regex maps `*` to `[^\s/]*`, and the verb-adjacent templates below
+# (`>\s*{path}`, `>>\s*{path}`, `cp ... \s+{path}`) put the path IMMEDIATELY
+# after the verb. Together that meant a protected name was matched only as the
+# FIRST path component. Measured on origin/main 2026-09-23: none of the 17 glob
+# readOnly entries matched `a/b/<name>`, `**/Dockerfile` reached exactly one
+# level, and literal entries had the same shape -- `cp x <abs repo>/pmoves/
+# contracts/schemas/z.schema.json` and `echo x > ./pmoves/services/s/config/a`
+# exited 0, as did every prefixed write of the Known Road grant file.
+#
+# The semantics here are gitignore's, adapted to command text:
+#   *   one path segment          **  any number of segments (incl. zero)
+#   a pattern with no slash matches the BASENAME at any depth
+#   a relative pattern with a slash matches at any depth too -- the guard cannot
+#     know the command's working directory, and an absolute path into the repo
+#     must match, so this mirrors path_scope.token_matches_entry
+#   the match must END at a path boundary, so `Dockerfile` does not reach
+#     `Dockerfile_notes.txt` and `*.lock` does not reach `x.lock.md`
+#   an optional opening quote is accepted: `> "a/b/poetry.lock"` is the same write
+#
+# MONOTONIC BY CONSTRUCTION: check_path_patterns tries the ORIGINAL regex first
+# and this one only in addition, so nothing the original matched stops matching.
+# The end anchor therefore narrows only what THIS regex adds. That is also why
+# the original's unanchored over-match (`Dockerfile` reaching `Dockerfilex` as a
+# bare first component) is left alone: removing it would let through commands
+# the guard refuses today, and that is a separate, adjudicated change.
+_SEG_CHAR = r"[^\s/'\"<>|;&()`]"        # one character inside a path segment
+_ANY_PATH_CHAR = r"[^\s'\"<>|;&()`]"    # one character of a path, `/` included
+_PATH_END = r"(?=$|[/\s'\"<>|;&()`])"   # the match stops at a component boundary
+_DIR_END = r"(?:/|(?=$|[\s'\"<>|;&()`]))"
+_OPT_QUOTE = r"['\"]?"
+_ANY_PREFIX = r"(?:" + _ANY_PATH_CHAR + r"*/)?"
+
+
+def _is_anchored_entry(path: str) -> bool:
+    return path.startswith("/") or path.startswith("~")
+
+
+def _glob_body_regex(glob_pattern: str) -> str:
+    """The body of a glob with gitignore segment semantics (no prefix, no end)."""
+    out = ""
+    i = 0
+    n = len(glob_pattern)
+    while i < n:
+        ch = glob_pattern[i]
+        if glob_pattern.startswith("**/", i):
+            out += r"(?:" + _ANY_PATH_CHAR + r"*/)?"
+            i += 3
+            continue
+        if glob_pattern.startswith("**", i):
+            out += _ANY_PATH_CHAR + "*"
+            i += 2
+            continue
+        if ch == "*":
+            out += _SEG_CHAR + "*"
+        elif ch == "?":
+            out += _SEG_CHAR
+        else:
+            out += re.escape(ch)
+        i += 1
+    return out
+
+
+def path_depth_regex(path: str) -> str:
+    """Regex for `path` as a command TARGET at any depth -- see the block above.
+
+    Only ever used as an ADDITIONAL alternative to the original matcher.
+    """
+    is_dir = path.endswith("/") and len(path) > 1
+    core = path[:-1] if is_dir else path
+    if is_glob_pattern(core):
+        body = _glob_body_regex(core)
+    else:
+        body = re.escape(core)
+    if _is_anchored_entry(path):
+        prefix = ""
+    elif core.startswith("**/"):
+        prefix = ""                       # the body already reaches any depth
+    else:
+        prefix = _ANY_PREFIX
+    return _OPT_QUOTE + prefix + body + (_DIR_END if is_dir else _PATH_END)
+
+
+def _is_depth_adjacent(template: str) -> bool:
+    """Does {path} follow something OTHER than an unbounded `.*` / `[^'"]*`?
+
+    Those two already absorb a directory prefix, so the depth regex adds nothing
+    there -- and inside the interpreter templates it would stack a second greedy
+    path scan onto `[^'"]*`, which is the super-linear shape that once stalled
+    every Bash call for 22 s (see INTERPRETER WRITE PATTERNS).
+    """
+    before = template.split("{path}", 1)[0]
+    return not (before.endswith(".*") or before.endswith("[^'\\\"]*")
+                or before.endswith("[^'\"]*"))
+
+
 # ============================================================================
 # OPERATION PATTERNS - Edit these to customize what operations are blocked
 # ============================================================================
 # {path} will be replaced with the escaped path at runtime
+#
+# ADJACENCY. A template whose {path} follows an unbounded `.*` already reaches
+# any depth, because `.*` absorbs the directory prefix. A template whose {path}
+# follows `\s*` / `\s+` / `=` does not, so check_path_patterns ALSO tries the
+# depth regex (path_depth_regex) in those templates -- see _is_depth_adjacent.
+
+# A `tee` append flag as a whole TOKEN: -a, -ai, -ia, --append. The first
+# revision used the lookahead `(?!.*-a)`, which rejected the write template for
+# any command containing the two bytes "-a" ANYWHERE after tee -- `x-api.json`,
+# `road-active` -- and the append template then needed "-a" BEFORE the path, so
+# `tee pmoves/contracts/schemas/x-api.schema.json` matched neither and exited 0.
+_TEE_APPEND_FLAG = r"(?:-[A-Za-z]*a[A-Za-z]*|--append)(?=\s|$)"
+# The arguments of ONE simple command: a separator ends them.
+_ARGS = r"[^\n;&|]*"
+# Command position for verbs whose name is also an ordinary word (install, ln).
+_CMD_POS = r"(?:^|[\n;&|(`]\s*|\$\(\s*|\bsudo\s+|\bxargs\s+(?:-\S+\s+)*)"
+# End of the simple command, so {path} is the LAST operand (the destination).
+_LAST_OPERAND = r"\s*(?=$|[\n;&|)`])"
 
 # Operations blocked for READ-ONLY paths (all modifications)
 WRITE_PATTERNS = [
-    (r'>\s*{path}', "write"),
-    (r'\btee\s+(?!.*-a).*{path}', "write"),
+    (r'>\|?\s*{path}', "write"),
+    (r'\btee\s+(?!(?:' + _ARGS + r'\s)?' + _TEE_APPEND_FLAG + r').*{path}', "write"),
+    # touch creates or re-stamps every operand.
+    (r'\btouch\s+(?:' + _ARGS + r'\s)?{path}', "touch"),
+    # dd writes exactly the file named by of=.
+    (r'\bdd\s+' + _ARGS + r'\bof={path}', "write"),
+    # ln and install write their LAST operand; earlier operands are sources, and
+    # a bare `ln -s /usr/bin/python3` (one operand) links INTO the cwd.
+    (_CMD_POS + r'ln\s+(?:-\S+\s+)*\S+\s+(?:' + _ARGS + r'\s)?{path}' + _LAST_OPERAND, "link"),
+    (_CMD_POS + r'install\s+(?:-\S+\s+)*\S+\s+(?:' + _ARGS + r'\s)?{path}' + _LAST_OPERAND, "install"),
 ]
 
 APPEND_PATTERNS = [
     (r'>>\s*{path}', "append"),
-    (r'\btee\s+-a\s+.*{path}', "append"),
-    (r'\btee\s+.*-a.*{path}', "append"),
+    (r'\btee\s+(?:' + _ARGS + r'\s)?' + _TEE_APPEND_FLAG + r'.*{path}', "append"),
 ]
 
 EDIT_PATTERNS = [
     (r'\bsed\s+-i.*{path}', "edit"),
+    # -i anywhere in the flags (`sed -E -i`, `sed --in-place`), not only first.
+    (r'\bsed[ \t]+(?:[^\s;&|]+[ \t]+)*?(?:-[A-Za-z]*i[A-Za-z.]*|--in-place\S*)[ \t].*{path}', "edit"),
     (r'\bperl\s+-[^\s]*i.*{path}', "edit"),
+    # lowercase letters only before the i, so `-Ilib` (include path) is not -i.
+    (r'\bperl[ \t]+(?:-\S+[ \t]+)*?-[a-z]*i\S*[ \t].*{path}', "edit"),
     (r'\bawk\s+-i\s+inplace.*{path}', "edit"),
 ]
 
@@ -404,6 +532,23 @@ def check_path_patterns(
                 print(f"WARNING: Invalid regex for literal path pattern ({operation}, {path}): {e}", file=sys.stderr)
                 continue
 
+    # Depth: in a verb-ADJACENT template the original regex matches the protected
+    # name only as the first path component. Try the depth regex there too --
+    # AFTER the original, and only in addition to it, so this can only add
+    # matches. See path_depth_regex.
+    depth_regex = path_depth_regex(path)
+    depth_flags = re.IGNORECASE if is_glob_pattern(path) else 0
+    for pattern_template, operation in patterns:
+        if not _is_depth_adjacent(pattern_template):
+            continue
+        filled = pattern_template.replace("{path}", depth_regex)
+        try:
+            if re.search(filled, command, depth_flags):
+                return _verdict(operation)
+        except re.error as e:
+            print(f"WARNING: Invalid depth regex ({operation}, {path}): {e}", file=sys.stderr)
+            continue
+
     return False, ""
 
 
@@ -556,6 +701,83 @@ def strip_heredoc_bodies(command: str) -> str:
         pos = newline + 1 + offset
 
 
+# ----------------------------------------------------------------------------
+# GRANT STATE: the files that AUTHORIZE this guard's own bypasses
+# ----------------------------------------------------------------------------
+# `.known-road-active` opens a readOnly domain; `.grant-state-cache.json` (PR
+# #3174) decides whether a pr:/issue: grant is still LIVE, so a forged entry
+# revives a dead grant. An agent that can write either can authorize itself,
+# which defeats the half of the Known Roads model that says a HUMAN authorizes.
+#
+# Measured on origin/main 2026-09-23: the Bash guard refused only the bare file
+# name. Every prefixed form -- `.claude/hooks/damage-control/<grant>`, `./`, an
+# absolute path -- and `touch`, `tee`, `cp`, `ln`, `install`, `dd of=` exited 0.
+# Both files are git-ignored, so the PostToolUse effect check cannot see a write
+# to them either: PreToolUse is the only line, and it was open.
+#
+# WHY A NAME RULE AND NOT MORE VERB TEMPLATES. Every other rule here keys on a
+# write verb and then looks for the path. For these two files the question is
+# the reverse: is there ANY way this command writes them? A verb list answers
+# that with "the verbs someone thought of" -- this repo has shipped that shape
+# repeatedly. So the rule keys on the NAME, anywhere in the command, and the
+# only exemption is a closed list of pure reads, whole-command anchored:
+#
+#   refused  any command that names either file (or a stem of one, so
+#            `.known-road-$(echo active)` and `.known-road-act*` are caught),
+#            whatever the verb, prefix, quoting or redirection
+#   allowed  cat / head / tail / ls / stat / wc / file / test / [ / grep, on ONE
+#            line, with no redirection, pipe, chaining, substitution or
+#            expansion character anywhere in the command
+#
+# The read exemption only lets a command past THIS rule; every later rule still
+# runs on it. A git-commit heredoc is masked first, as for every path rule, so a
+# commit message may name these files.
+#
+# Runs FIRST in check_command, before the command-shape patterns: one of those
+# returns `ask`, and an operator approving an unrelated prompt must not approve a
+# self-grant riding in the same command. A pure block, so running it first can
+# only refuse more.
+#
+# RESIDUAL, stated not papered over: a name assembled so that NO stem survives
+# (quote-splitting inside every stem, variable concatenation, an interpreter
+# building the string), a script file that is then executed, and an opaque verb
+# writing the whole directory (rsync, tar -x) are not text-visible. The opaque
+# verbs still `ask`; the rest needs interpretation, not matching.
+_GRANT_STATE_NAME = re.compile(r"known-road-|road-active|grant-state-cache", re.IGNORECASE)
+_GRANT_STATE_PURE_READ = re.compile(
+    r"^[ \t]*(?:cat|head|tail|ls|stat|wc|file|test|\[|grep|egrep|fgrep)"
+    r"(?:[ \t]+[^\s;&|<>`$(){}\\]+)*[ \t]*$"
+)
+_GRANT_STATE_NOTE = (
+    "Blocked: this command names the Known Road grant file or the grant-state "
+    "cache (.known-road" "-active / .grant-state" "-cache.json). Those files "
+    "AUTHORIZE this guard's own bypasses, so no Bash command may write, create, "
+    "copy, move, link, truncate or delete them, with any path prefix or verb. A "
+    "text matcher cannot prove a command only reads, so the only exemption is a "
+    "bare one-line read (cat/head/tail/ls/stat/wc/file/test/grep) with no "
+    "redirection, pipe, chaining or expansion. NO KNOWN ROAD OPENS THIS: a grant "
+    "cannot authorize writing the grant. To see the active grant: "
+    "`python3 .claude/skills/known-roads/roads.py status`. To write prose that "
+    "names these files, use the Write/Edit tool (they check the target path, not "
+    "the content) or a quoted-heredoc `git commit -F -` message. The grant is "
+    "operator-written, out of band."
+)
+
+
+def check_grant_state_files(command: str, path_scan: str) -> Tuple[bool, str]:
+    """(blocked, reason) for any Bash command that names the grant state.
+
+    `path_scan` is the command with git-commit heredoc bodies masked. Pure regex
+    over text -- no lexing -- so a command that cannot be lexed (unbalanced
+    quotes) is still refused rather than failing open.
+    """
+    if not _GRANT_STATE_NAME.search(path_scan):
+        return False, ""
+    if "\n" not in command and _GRANT_STATE_PURE_READ.match(command):
+        return False, ""
+    return True, _GRANT_STATE_NOTE
+
+
 def check_opaque_write_verbs(
     command: str, config: Dict[str, Any]
 ) -> Tuple[bool, bool, str]:
@@ -565,12 +787,28 @@ def check_opaque_write_verbs(
     allow into an `ask` and nothing else. It cannot relax a single existing
     block -- every one of them has already returned by the time this is reached.
 
-    A provable Known Road grant allows and RECORDS. `active_grant()` asserts less
-    than `evaluate_known_road()` -- it says a grant is open, not that it covers
-    this file -- which is the honest reading here, because there is no file to
-    check the domain predicate against. That weaker assertion is acceptable only
-    because this gate never sees a NAMED protected path: any command that named
-    one was decided above.
+    A KNOWN ROAD GRANT DOES NOT COVER AN OPAQUE WRITE. It used to: a provable
+    grant allowed and recorded, on the strength of `active_grant()` -- which
+    says SOME grant is open, not that it covers what this command writes. So an
+    agent's `tar -x` passed silently under an operator's unrelated `dockerfile:`
+    grant (live trail row 2026-09-24T00:24:01Z, recorded as `<opaque-verb:tar
+    extract>` -- a row that names no file and therefore proves nothing).
+
+    Why not "allow when the grant's domain covers the targets"? Because the
+    targets are exactly what this gate cannot know. A grant is a per-FILE domain
+    predicate plus a provable reason (evaluate_known_road); with no file there is
+    nothing to evaluate. Deriving targets would mean reading the diff or archive
+    here, and that is time-of-check/time-of-use by construction: the same command
+    can write the patch it then applies (`cat > x.patch <<EOF ... EOF; git apply
+    x.patch`), so what PreToolUse reads is not what runs. The one opaque verb
+    whose target IS named -- `dd of=` -- is now decided by the path rules, per
+    file, before this gate is reached.
+
+    So a grant changes only the MESSAGE: the operator who opened it is told it
+    does not cover this, and asked -- the same verdict as with no grant. After
+    an approval, the PostToolUse effect check still records every protected path
+    that actually changed against the grant, per file, which is the honest
+    record this gate could never produce.
     """
     stripped = strip_heredoc_bodies(command)
     for item in config.get("opaqueWriteVerbs", []) or []:
@@ -719,6 +957,12 @@ def check_command(command: str, config: Dict[str, Any]) -> Tuple[bool, bool, str
     # not read as touching one. Placed after the destructive-pattern gate (step 1)
     # and before every path rule, so masking can only narrow what they see.
     path_scan = _mask_git_commit_heredocs(command)
+
+    # 0. The grant state is unwritable from Bash in ANY form -- before every other
+    # rule, including the `ask` shapes below. See check_grant_state_files.
+    grant_blocked, grant_reason = check_grant_state_files(command, path_scan)
+    if grant_blocked:
+        return True, False, grant_reason
 
     # 1. Check against patterns from YAML (may block or ask)
     for item in patterns:
