@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 import sys
 from pathlib import Path
 
@@ -169,31 +170,43 @@ def cmd_reason(args) -> int:
         return 2
     rc = 0
     for reason in args:
-        provable, detail = kr._reason_is_provable(reason)
-        if provable:
-            print(f"  PROVABLE      {reason}")
+        # The same verdict the guard reaches: form, referent, and LIVENESS (an
+        # open PR/issue, via the GitHub API). Age does not apply to a bare reason.
+        ok, bare, detail, state = kr._check_grant(reason, "", None)
+        if ok:
+            print(f"  PROVABLE      {reason}   [{state}]")
         else:
-            print(f"  NOT PROVABLE  {reason}\n                {detail}")
+            print(f"  NOT PROVABLE  {reason}   [{state}]\n                {detail}")
             rc = 1
     return rc
 
 
 def cmd_status(_args) -> int:
-    grant = kr._active_grant()
+    st = kr.grant_status()
     env = os.environ.get("KNOWN_ROAD", "").strip()
     grant_file = kr._grant_file()
     print(f"KNOWN_ROAD env var : {env or '(unset)'}")
     print(f"file grant         : {grant_file}")
     print(f"                     {'present' if grant_file.is_file() else 'absent'}")
-    print(f"active grant       : {grant or '(none)'}")
-    if not grant:
+    print(f"active grant       : {st['raw'] or '(none)'}")
+    if not st["raw"]:
         print("\nNo road is open. Domains: " + kr.known_road_domains())
         return 0
-    domain, _, reason = grant.partition(":")
-    provable, detail = kr._reason_is_provable(reason)
-    print(f"  domain  : {domain}"
-          f"{'' if domain in kr.DOMAIN_PATTERNS else '   <- NOT a known domain'}")
-    print(f"  reason  : {reason}  ->  {'provable' if provable else 'NOT provable: ' + detail}")
+    print(f"  source  : {st['source']}")
+    if st["mtime"] is not None:
+        age_h = (time.time() - float(st["mtime"])) / 3600
+        print(f"  age     : {age_h:.1f}h (file grants void after "
+              f"{kr.GRANT_MAX_AGE_SECONDS // 3600}h)")
+    else:
+        print("  age     : n/a (env grant -- lives as long as the session it was "
+              "launched with)")
+    print(f"  domain  : {st['domain']}"
+          f"{'' if st['domain'] in kr.DOMAIN_PATTERNS else '   <- NOT a known domain'}")
+    print(f"  reason  : {st['reason']}")
+    verdict = "HONOURED" if st["ok"] else "NOT honoured"
+    print(f"  verdict : {verdict} [{st['grant_state'] or 'n/a'}]")
+    if st["detail"]:
+        print(f"            {st['detail']}")
     return 0
 
 

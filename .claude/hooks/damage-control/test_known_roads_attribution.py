@@ -54,6 +54,22 @@ _TRAIL = _TMP / "known-roads.jsonl"
 _REAL_REGISTRY = HERE.parents[2] / "pmoves" / "config" / "agent_registry.yaml"
 KR._trail_path = lambda: _TRAIL
 
+# Grant LIVENESS is not what this suite tests (test_grant_expiry.py does), and a
+# test must never reach the network. known_roads now asks GitHub whether a pr:/
+# issue: grant's referent is still open; replace that one seam with a fixture
+# that declares every referent OPEN, and keep the state cache out of the tree.
+# The numbers below are real and mostly merged -- that is the point of the stub.
+def _referent_open(api_path):
+    number = int(api_path.rsplit("/", 1)[1])
+    body = {"number": number, "state": "open", "closed_at": None}
+    if "/pulls/" in api_path:
+        body.update(merged=False, merged_at=None)
+    return json.dumps(body)
+
+
+KR._gh_api_raw = _referent_open
+KR._cache_path = lambda: Path(tempfile.mkdtemp(prefix="kr-cache-")) / "cache.json"
+
 # A fixture registry rather than the live one, so the result cannot drift with
 # registry edits: one registered body, and `researcher` deliberately absent.
 _FIXTURE_REGISTRY = _TMP / "agent_registry.yaml"
