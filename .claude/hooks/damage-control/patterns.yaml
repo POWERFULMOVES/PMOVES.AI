@@ -1148,6 +1148,12 @@ readOnlyPaths:
   # damage-control hook still READS it internally; only agent tool WRITES are
   # blocked.
   - "*.known-road-active"
+  # Its companion: the GitHub-state cache that decides whether a pr:/issue: grant
+  # is still LIVE (known_roads.py "Grant liveness"). A forged `open` entry would
+  # revive a merged PR's grant for the cache TTL, and could be re-forged forever,
+  # so it gets the same protection as the grant it qualifies. Only the hook writes
+  # it, from Python, never through an agent tool.
+  - "*.grant-state-cache.json"
 
   # ---------------------------------------------------------------------------
   # DOCKERFILES - Require Known Road grant for edits (service Dockerfiles

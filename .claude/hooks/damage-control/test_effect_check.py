@@ -23,6 +23,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -192,6 +193,14 @@ def main():
         # ------------------------------------------------------------------
         grant = root / ".claude/hooks/damage-control/.known-road-active"
         grant.write_text("compose:pr:3034\n", encoding="utf-8")
+        # The hook runs as a SUBPROCESS, so the GitHub lookup that decides whether
+        # pr:3034 is still open cannot be patched in-process, and a test must not
+        # reach the network. Seed the state cache the guard consults first -- the
+        # same file, key and shape it writes itself.
+        (root / ".claude/hooks/damage-control/.grant-state-cache.json").write_text(
+            json.dumps({"POWERFULMOVES/PMOVES.AI#pr:3034":
+                        {"state": "open", "at": "", "checked": time.time()}}),
+            encoding="utf-8")
         rows_before = len(trail_rows(root))
         prc, applied_cmd, perr = apply_diff(
             root, rel, "services:\n  demo:\n    image: alpine:3.20\n")
@@ -211,6 +220,8 @@ def main():
                   row.get("file", "").endswith(rel), row)
             check("the row carries the grant domain and reason",
                   (row.get("domain"), row.get("reason")) == ("compose", "pr:3034"), row)
+            check("the row records how the grant was verified",
+                  (row.get("grant_state"), row.get("grant_source")) == ("open", "file"), row)
 
         # ------------------------------------------------------------------
         # PROPORTIONALITY. A noDeletePath allows read/write/edit and refuses only

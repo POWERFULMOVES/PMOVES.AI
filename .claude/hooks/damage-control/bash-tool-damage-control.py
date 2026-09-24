@@ -31,7 +31,7 @@ import yaml
 sys.path.insert(0, str(Path(__file__).parent))
 import path_scope  # noqa: E402
 from known_roads import (  # noqa: E402
-    active_grant,
+    active_grant_verified,
     evaluate_known_road,
     known_road_hint,
     record_use,
@@ -590,19 +590,26 @@ def check_opaque_write_verbs(
 
         verb = item.get("verb", "?")
         why = item.get("reason", "writes targets not named in the command")
-        domain, reason, provable = active_grant()
+        domain, reason, provable, void_detail, state, source = active_grant_verified()
         if provable:
             record_use(
                 "Bash(opaque-verb)", f"<opaque-verb:{verb}>", domain, reason,
                 note=f"{verb} — target not derivable from command text",
+                grant_state=state, grant_source=source,
             )
             return False, False, ""
+        # A grant that is present but void (merged PR, aged-out file, cannot be
+        # verified) must SAY so here: otherwise the operator sees a generic
+        # prompt and approves on the belief that their grant is still covering it.
+        void_note = (f" A Known Road grant is present but NOT honoured: {void_detail}."
+                     if void_detail else "")
         return False, True, (
             f"OPAQUE WRITE: `{verb}` {why}. The damage-control guard matches "
             "command TEXT, so it cannot tell whether this touches a protected "
             "path — no path rule applies to a target the command never names. "
             "Approve only if you know what it writes. Any protected path it does "
             "change will be reported afterwards by the PostToolUse effect check."
+            + void_note
         )
     return False, False, ""
 

@@ -7,12 +7,18 @@ blanket on/off flag, it must carry a *provable reason* tied to the specific chan
 
   <domain>  one of the keys in DOMAIN_PATTERNS — which readOnlyPath class is opened
   <reason>  why, in a form the hook can verify:
-              handoff:<filename>  the brief at pmoves/docs/handoffs/<filename> must exist
-              pr:<number>         references a tracked pull request
-              issue:<number>      references a tracked issue
+              handoff:<filename>  the brief at pmoves/docs/handoffs/<filename> must
+                                  exist AND be tracked by git
+              pr:<number>         a pull request that is still OPEN
+              issue:<number>      an issue that is still OPEN
+            optionally suffixed `!offline` (pr:/issue: only) — see OFFLINE_SUFFIX
 
 Every granted bypass is appended to known-roads.jsonl (append-only, git-tracked,
 machine-parseable). A bypass that cannot be recorded is not provable, so it is denied.
+
+A grant EXPIRES. Well-formed is not enough: a `pr:`/`issue:` grant is honoured only
+while that PR/issue is OPEN on the canonical repo, and a file grant only while the
+file is younger than GRANT_MAX_AGE_SECONDS. See "Grant liveness" below.
 
 The mechanism is domain-general: `compose` is the first domain, but the parse,
 provability, and trail-logging logic is shared. Open a new readOnlyPath class by
@@ -26,9 +32,12 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
+import subprocess
+import tempfile
 import time
 from pathlib import Path
-from typing import Callable, Dict, Tuple
+from typing import Callable, Dict, Optional, Tuple
 
 
 def _is_compose_target(normalized_fwd: str) -> bool:
@@ -212,10 +221,288 @@ def _reason_is_provable(reason: str) -> Tuple[bool, str]:
         name = reason.split(":", 1)[1]
         if ".." in name:
             return False, f"handoff reference '{name}' must be a bare filename"
-        brief = _project_dir() / "pmoves" / "docs" / "handoffs" / name
+        rel = f"pmoves/docs/handoffs/{name}"
+        brief = _project_dir() / rel
         if not brief.is_file():
-            return False, f"handoff brief not found: pmoves/docs/handoffs/{name}"
+            return False, f"handoff brief not found: {rel}"
+        # Existence alone let a brief written seconds ago, by the same session
+        # that wants the road, serve as its own authority. A referent has to be
+        # something a reviewer can see, so it must be in git (the index is
+        # enough: an operator can `git add` a fresh brief without committing).
+        if brief.is_symlink():
+            return False, f"handoff brief is a symlink, not a brief: {rel}"
+        tracked, why = _git_tracks(rel)
+        if not tracked:
+            return False, f"handoff brief is not tracked by git ({why}): {rel}"
     return True, ""
+
+
+def _git_tracks(rel: str) -> Tuple[bool, str]:
+    """(tracked, detail) for a repo-relative path. Fails closed on any error."""
+    try:
+        proc = subprocess.run(
+            ["git", "-C", str(_project_dir()), "ls-files", "--error-unmatch", "--", rel],
+            capture_output=True, text=True, timeout=GH_TIMEOUT_SECONDS,
+            stdin=subprocess.DEVNULL,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return False, f"git could not be run: {exc.__class__.__name__}"
+    if proc.returncode != 0:
+        return False, "untracked"
+    return True, ""
+
+
+# --- Grant liveness: a grant expires with the job it was issued for ----------
+#
+# MEASURED DEFECT (2026-09-23). A reason was "provable" by regex alone, so a grant
+# never expired. `compose:pr:3101` stayed in .known-road-active after PR #3101
+# merged on 2026-09-20 and silently authorised compose edits made for PR #3143
+# three days later -- rows that name the wrong PR, which is the one thing the
+# trail exists to get right. The earlier pr:2656 rows (see trail_states.py) are
+# the same shape. The operator's direction: nothing expired the grant when its PR
+# merged; make it.
+#
+# Three bounds, each closing a different way a grant outlives its job:
+#
+#   1. REFERENT STATE. `pr:N` / `issue:N` is honoured only while N is OPEN on
+#      CANONICAL_REPO. Merged or closed -> VOID. Cannot be checked -> REFUSED
+#      ("grant not verifiable"), because a guard that allows when it cannot look
+#      is a guard that allows whenever the network is down.
+#   2. AGE. A FILE grant older than GRANT_MAX_AGE_SECONDS is void whatever the PR
+#      state: a long-lived PR must not turn a one-job grant into an ambient one.
+#      A file mtime in the future is void too, or `touch -d 2099` would be a
+#      permanent grant.
+#   3. The env grant (KNOWN_ROAD) has no mtime. It is read from the hook's own
+#      environment, which the harness fixes at launch, so it lives exactly as long
+#      as the session that was launched with it -- UNLESS it is placed in a
+#      settings file's `env`, in which case it rides every session and only
+#      bound 1 limits it. PATTERNS.md says never to do that; this is why.
+#
+# OFFLINE. `!offline` appended to a pr:/issue: grant skips bound 1 only (never
+# bound 2), and the trail row says `grant_state: offline-override`. A per-GRANT
+# suffix, not a KNOWN_ROAD_OFFLINE=1 env switch: an env switch is an ambient
+# flag that would exempt every grant for the life of the session, which is the
+# on/off shape Known Roads was built to replace; the suffix is written by the
+# same operator act that opens the grant, is visible in it, and dies with it.
+
+CANONICAL_REPO = "POWERFULMOVES/PMOVES.AI"
+GRANT_MAX_AGE_SECONDS = 24 * 3600
+GRANT_FUTURE_SKEW_SECONDS = 300
+# 120s: long enough that a burst of edits in one job (11 edits to one compose file
+# is the largest burst in the trail) costs ONE API call instead of one per edit;
+# short enough that a merge takes effect within two minutes, against the three
+# days the stale pr:3101 grant ran. Only a SUCCESSFUL lookup is cached; failures
+# are retried on the next call, so fixing the network needs no cache flush.
+STATE_CACHE_TTL_SECONDS = 120
+GH_TIMEOUT_SECONDS = 5
+OFFLINE_SUFFIX = "!offline"
+
+
+class GrantUnverifiable(Exception):
+    """The referent's state could not be established. Always a refusal."""
+
+
+def _cache_path() -> Path:
+    """Git-ignored, and readOnly in patterns.yaml: a forged `open` entry would
+    revive a merged PR's grant, so agents may not write it any more than they
+    may write .known-road-active. Only this module writes it (not a tool call)."""
+    return _project_dir() / ".claude" / "hooks" / "damage-control" / ".grant-state-cache.json"
+
+
+def _gh_api_raw(api_path: str) -> str:
+    """stdout of `gh api <api_path>`. Raises GrantUnverifiable on any failure.
+
+    The single network seam: tests replace THIS, never the parsing below it, so a
+    malformed-response test exercises the real parser.
+    """
+    gh = shutil.which("gh")
+    if not gh:
+        raise GrantUnverifiable("gh CLI not found on PATH")
+    env = dict(os.environ, GH_PROMPT_DISABLED="1", GH_NO_UPDATE_NOTIFIER="1",
+               NO_COLOR="1")
+    try:
+        proc = subprocess.run(
+            [gh, "api", api_path], capture_output=True, text=True,
+            timeout=GH_TIMEOUT_SECONDS, stdin=subprocess.DEVNULL, env=env,
+        )
+    except subprocess.TimeoutExpired:
+        raise GrantUnverifiable(f"gh api timed out after {GH_TIMEOUT_SECONDS}s")
+    except OSError as exc:
+        raise GrantUnverifiable(f"gh could not be run: {exc}")
+    if proc.returncode != 0:
+        lines = (proc.stderr or proc.stdout or "").strip().splitlines()
+        first = lines[0][:200] if lines else "no output"
+        raise GrantUnverifiable(f"gh api {api_path} exited {proc.returncode}: {first}")
+    return proc.stdout
+
+
+def _parse_state(kind: str, number: int, raw: str) -> Dict[str, str]:
+    """{"state": open|closed|merged, "at": iso-or-""} from a GitHub API body.
+
+    Anything that is not exactly the documented shape is GrantUnverifiable: a
+    parser that guesses turns a changed API, an HTML error page, or a proxy's
+    login screen into a verdict.
+    """
+    try:
+        doc = json.loads(raw)
+    except ValueError:
+        raise GrantUnverifiable("malformed API response: not JSON")
+    if not isinstance(doc, dict):
+        raise GrantUnverifiable("malformed API response: not a JSON object")
+    if doc.get("number") != number:
+        raise GrantUnverifiable(
+            f"malformed API response: asked for #{number}, got number={doc.get('number')!r}")
+    state = doc.get("state")
+    if state not in ("open", "closed"):
+        raise GrantUnverifiable(f"malformed API response: state={state!r}")
+    if kind == "pr":
+        merged = doc.get("merged")
+        if not isinstance(merged, bool):
+            raise GrantUnverifiable(f"malformed API response: merged={merged!r}")
+        if merged and state == "open":
+            raise GrantUnverifiable("malformed API response: open AND merged")
+        label = "merged" if merged else state
+        when = doc.get("merged_at") if merged else doc.get("closed_at")
+    else:
+        label = state
+        when = doc.get("closed_at")
+    return {"state": label, "at": when if isinstance(when, str) else ""}
+
+
+def _cache_key(kind: str, number: int) -> str:
+    return f"{CANONICAL_REPO}#{kind}:{number}"
+
+
+def _cache_load() -> Dict[str, object]:
+    try:
+        doc = json.loads(_cache_path().read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return doc if isinstance(doc, dict) else {}
+
+
+def _cache_get(key: str, now: float) -> Optional[Dict[str, str]]:
+    """A fresh, well-formed cache entry, else None (-> ask the API)."""
+    entry = _cache_load().get(key)
+    if not isinstance(entry, dict):
+        return None
+    checked = entry.get("checked")
+    if isinstance(checked, bool) or not isinstance(checked, (int, float)):
+        return None
+    # A future-dated entry is not fresh, it is wrong: refuse to extend its life.
+    if not 0 <= now - checked <= STATE_CACHE_TTL_SECONDS:
+        return None
+    state = entry.get("state")
+    if state not in ("open", "closed", "merged"):
+        return None
+    at = entry.get("at")
+    return {"state": state, "at": at if isinstance(at, str) else ""}
+
+
+def _cache_put(key: str, result: Dict[str, str], now: float) -> None:
+    """Best effort. A cache that cannot be written costs one API call per use; it
+    can never change a verdict, which is why failing here is not reported."""
+    try:
+        doc = {k: v for k, v in _cache_load().items()
+               if isinstance(v, dict) and isinstance(v.get("checked"), (int, float))
+               and 0 <= now - v["checked"] <= STATE_CACHE_TTL_SECONDS}
+        doc[key] = {"state": result["state"], "at": result.get("at", ""),
+                    "checked": now}
+        path = _cache_path()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        fd, tmp = tempfile.mkstemp(dir=str(path.parent), prefix=".grant-state-cache.",
+                                   suffix=".tmp")
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as fh:
+                json.dump(doc, fh, sort_keys=True)
+            os.replace(tmp, path)
+        finally:
+            if os.path.exists(tmp):
+                os.unlink(tmp)
+    except Exception:  # noqa: BLE001 -- see docstring: latency only, never a verdict
+        pass
+
+
+def _referent_state(kind: str, number: int) -> Dict[str, str]:
+    """State of pr/issue `number` on CANONICAL_REPO, via the cache or the API.
+
+    CANONICAL_REPO, not `git remote get-url origin`: a grant's number means the
+    canonical tracker's number, and a clone whose origin is a fork would resolve
+    it against the wrong repository. It also saves a git subprocess per check.
+    """
+    now = time.time()
+    key = _cache_key(kind, number)
+    hit = _cache_get(key, now)
+    if hit is not None:
+        hit["cached"] = "yes"
+        return hit
+    endpoint = "pulls" if kind == "pr" else "issues"
+    result = _parse_state(kind, number,
+                          _gh_api_raw(f"repos/{CANONICAL_REPO}/{endpoint}/{number}"))
+    _cache_put(key, result, now)
+    return result
+
+
+def _split_offline(reason: str) -> Tuple[str, bool]:
+    if reason.endswith(OFFLINE_SUFFIX):
+        return reason[: -len(OFFLINE_SUFFIX)].strip(), True
+    return reason, False
+
+
+def _check_grant(raw_reason: str, source: str,
+                 mtime: Optional[float]) -> Tuple[bool, str, str, str]:
+    """Full verdict on a grant's reason. Returns (ok, reason, detail, grant_state).
+
+    `reason` is returned with any `!offline` suffix removed, so trail rows keep
+    grouping by the bare reason. `grant_state` is one of:
+      open | offline-override | handoff-present     (ok)
+      merged | closed | unverifiable | stale | unprovable   (refused)
+    """
+    reason, offline = _split_offline(raw_reason)
+    provable, detail = _reason_is_provable(reason)
+    if not provable:
+        return False, reason, detail, "unprovable"
+    if offline and reason.startswith("handoff:"):
+        return False, reason, (
+            f"'{OFFLINE_SUFFIX}' applies only to pr:/issue: reasons -- a handoff "
+            "is checked locally and never needs the network"), "unprovable"
+
+    if source == "file" and mtime is not None:
+        age = time.time() - mtime
+        if age > GRANT_MAX_AGE_SECONDS:
+            return False, reason, (
+                f"grant file is {age / 3600:.1f}h old (limit "
+                f"{GRANT_MAX_AGE_SECONDS // 3600}h) -- a grant is for one job. "
+                "Clear .claude/hooks/damage-control/.known-road-active, or rewrite it "
+                "for the job in hand"), "stale"
+        if age < -GRANT_FUTURE_SKEW_SECONDS:
+            return False, reason, (
+                "grant file mtime is in the future -- a future-dated grant would "
+                "never age out. Rewrite .known-road-active"), "stale"
+
+    if reason.startswith("handoff:"):
+        return True, reason, "", "handoff-present"
+    if offline:
+        return True, reason, "", "offline-override"
+
+    kind, number = reason.split(":", 1)
+    try:
+        st = _referent_state(kind, int(number))
+    except GrantUnverifiable as exc:
+        return False, reason, (
+            f"grant not verifiable: {exc}. The guard refuses when it cannot look. "
+            f"For deliberate offline work the operator may append '{OFFLINE_SUFFIX}' "
+            f"to the grant (e.g. compose:{reason}{OFFLINE_SUFFIX}); the use is "
+            "recorded as an offline override"), "unverifiable"
+    if st["state"] == "open":
+        return True, reason, "", "open"
+    label = "PR" if kind == "pr" else "issue"
+    when = f" at {st['at']}" if st.get("at") else ""
+    return False, reason, (
+        f"grant VOID: {label} #{number} on {CANONICAL_REPO} is {st['state'].upper()}"
+        f"{when}, so the job it authorised is over. Clear "
+        ".claude/hooks/damage-control/.known-road-active (or unset KNOWN_ROAD), or "
+        "replace it with a reason for the work in hand"), st["state"]
 
 
 def _trail_path() -> Path:
@@ -338,7 +625,7 @@ def _actor_fields() -> Dict[str, str]:
 
 
 def _record(tool: str, file_path: str, domain: str, reason: str,
-            note: str = "") -> bool:
+            note: str = "", grant_state: str = "", grant_source: str = "") -> bool:
     """Append one provable trail line. Returns False if it could not be written.
 
     `note` is free text describing HOW the use was observed. It is optional and
@@ -350,6 +637,12 @@ def _record(tool: str, file_path: str, domain: str, reason: str,
     Actor fields come from _actor_fields(); `node`, `agent_instance` and
     `unregistered_agent_type` are additive and omitted when they do not apply,
     so a row written outside any hook is byte-identical in shape to before.
+
+    `grant_state` (open | offline-override | handoff-present) and `grant_source`
+    (env | file) say HOW the grant was verified at the moment of use. Additive and
+    omitted when empty, like `note`. Only honoured grants are recorded, so a
+    refused state (merged, closed, stale, unverifiable) never appears in a row --
+    the trail is a log of roads TAKEN.
     """
     entry = {
         "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
@@ -366,6 +659,10 @@ def _record(tool: str, file_path: str, domain: str, reason: str,
         entry.update(_actor_fields())
         if note:
             entry["note"] = note
+        if grant_state:
+            entry["grant_state"] = grant_state
+        if grant_source:
+            entry["grant_source"] = grant_source
         path = _trail_path()
         path.parent.mkdir(parents=True, exist_ok=True)
         with open(path, "a", encoding="utf-8") as fh:
@@ -382,6 +679,29 @@ def _grant_file() -> Path:
     return _project_dir() / ".claude" / "hooks" / "damage-control" / ".known-road-active"
 
 
+def _read_grant() -> Tuple[str, str, Optional[float]]:
+    """(raw_grant, source, mtime) -- source is "env", "file" or "".
+
+    KNOWN_ROAD env var first, else the file grant. `mtime` is the file grant's
+    modification time (None for an env grant, which has none -- see "Grant
+    liveness" for how its age is bounded instead).
+    """
+    env = os.environ.get("KNOWN_ROAD", "").strip()
+    if env:
+        return env, "env", None
+    try:
+        gf = _grant_file()
+        if gf.is_file():
+            mtime = gf.stat().st_mtime
+            for line in gf.read_text(encoding="utf-8").splitlines():
+                line = line.strip()
+                if line and not line.startswith("#"):
+                    return line, "file", mtime
+    except OSError:
+        pass
+    return "", "", None
+
+
 def _active_grant() -> str:
     """The active Known Road grant: KNOWN_ROAD env var first, else the file grant.
 
@@ -389,27 +709,46 @@ def _active_grant() -> str:
     in some clients, so a file grant (operator-written, e.g.
     `echo 'schema:handoff:x.md' > .claude/hooks/damage-control/.known-road-active`)
     is honored as an equivalent, operator-controlled authorization. The SAME rules
-    apply downstream: the domain predicate must match AND the reason must be provable,
-    and every granted use records to known-roads.jsonl."""
-    env = os.environ.get("KNOWN_ROAD", "").strip()
-    if env:
-        return env
-    try:
-        gf = _grant_file()
-        if gf.is_file():
-            for line in gf.read_text(encoding="utf-8").splitlines():
-                line = line.strip()
-                if line and not line.startswith("#"):
-                    return line
-    except OSError:
-        pass
-    return ""
+    apply downstream: the domain predicate must match AND the reason must be provable
+    AND live (see "Grant liveness"), and every granted use records to
+    known-roads.jsonl."""
+    return _read_grant()[0]
+
+
+def grant_status() -> Dict[str, object]:
+    """Everything known about the grant in force, verified. For status displays.
+
+    Keys: raw, source, mtime, domain, reason, ok, detail, grant_state. Performs
+    the same liveness check the guard does (so it may call the GitHub API).
+    """
+    raw, source, mtime = _read_grant()
+    out: Dict[str, object] = {"raw": raw, "source": source, "mtime": mtime,
+                              "domain": "", "reason": "", "ok": False,
+                              "detail": "", "grant_state": ""}
+    if not raw:
+        return out
+    if ":" not in raw:
+        out["detail"] = f"grant '{raw}' is not <domain>:<reason>"
+        return out
+    domain, raw_reason = raw.split(":", 1)
+    domain = domain.strip().lower()
+    out["domain"] = domain
+    if domain not in DOMAIN_PATTERNS:
+        out["reason"] = raw_reason.strip()
+        out["detail"] = f"unknown domain '{domain}' (known: {known_road_domains()})"
+        return out
+    ok, reason, detail, state = _check_grant(raw_reason.strip(), source, mtime)
+    out.update(reason=reason, ok=ok, detail=detail, grant_state=state)
+    return out
 
 
 def active_grant() -> Tuple[str, str, bool]:
     """(domain, reason, provable) for the grant currently in force.
 
-    ("", "", False) when none is active.
+    ("", "", False) when none is active. `provable` now means provable AND live:
+    a well-formed grant whose PR has merged, or whose file has aged out, is False.
+    `reason` has any `!offline` suffix removed. For the verification outcome and
+    the refusal detail, use active_grant_verified().
 
     Public because the opaque-write tripwire in the Bash guard has to decide with
     NO TARGET PATH IN HAND: it fires on a verb that can write a path the command
@@ -420,24 +759,27 @@ def active_grant() -> Tuple[str, str, bool]:
     therefore never be used to allow an operation on a NAMED protected path; that
     decision stays with evaluate_known_road.
     """
-    raw = _active_grant()
-    if not raw or ":" not in raw:
-        return "", "", False
-    domain, reason = raw.split(":", 1)
-    domain = domain.strip().lower()
-    reason = reason.strip()
-    if domain not in DOMAIN_PATTERNS:
-        return domain, reason, False
-    provable, _detail = _reason_is_provable(reason)
-    return domain, reason, provable
+    domain, reason, ok, _detail, _state, _source = active_grant_verified()
+    return domain, reason, ok
+
+
+def active_grant_verified() -> Tuple[str, str, bool, str, str, str]:
+    """(domain, reason, ok, detail, grant_state, grant_source) -- active_grant()
+    plus the verification outcome, so a caller can record it and explain a refusal.
+    Same caveat as active_grant(): never the basis for allowing a NAMED path."""
+    st = grant_status()
+    if not st["raw"] or not st["domain"]:
+        return "", "", False, str(st["detail"]), "", ""
+    return (str(st["domain"]), str(st["reason"]), bool(st["ok"]), str(st["detail"]),
+            str(st["grant_state"]), str(st["source"]))
 
 
 def record_use(tool: str, file_path: str, domain: str, reason: str,
-               note: str = "") -> bool:
+               note: str = "", grant_state: str = "", grant_source: str = "") -> bool:
     """Append one row to the trail. Public entry point for callers that have
     already made their own authorization decision (the opaque-write tripwire,
     the PostToolUse effect check). Returns False if it could not be written."""
-    return _record(tool, file_path, domain, reason, note)
+    return _record(tool, file_path, domain, reason, note, grant_state, grant_source)
 
 
 def evaluate_known_road(tool: str, file_path: str, normalized_fwd: str,
@@ -447,16 +789,21 @@ def evaluate_known_road(tool: str, file_path: str, normalized_fwd: str,
     Returns (allowed, detail):
       (True,  detail)  bypass granted — caller should allow the operation
       (False, "")      no grant applies here — caller proceeds with normal checks
-      (False, detail)  the file IS in the declared domain but the Known Road is invalid —
-                       caller should block, surfacing `detail` as the reason
+      (False, detail)  the file IS in the declared domain but the Known Road is invalid
+                       (unprovable, expired, or unverifiable) — caller should block,
+                       surfacing `detail` as the reason
+
+    The liveness check (and so any GitHub API call) happens only AFTER the domain
+    predicate matches: a grant costs nothing on a call that touches no path in
+    its domain.
     """
-    raw = _active_grant()
+    raw, source, mtime = _read_grant()
     if not raw or ":" not in raw:
         return False, ""
 
-    domain, reason = raw.split(":", 1)
+    domain, raw_reason = raw.split(":", 1)
     domain = domain.strip().lower()
-    reason = reason.strip()
+    raw_reason = raw_reason.strip()
 
     predicate = DOMAIN_PATTERNS.get(domain)
     if predicate is None or not predicate(normalized_fwd):
@@ -464,19 +811,23 @@ def evaluate_known_road(tool: str, file_path: str, normalized_fwd: str,
         # Not applicable — let the normal readOnlyPath rules decide.
         return False, ""
 
-    # The file IS in the declared domain. From here a malformed or unprovable
-    # reason is a hard block — the operator asked for a bypass on this exact file.
-    provable, detail = _reason_is_provable(reason)
-    if not provable:
-        return False, f"Known Road reason not provable — {detail}"
+    # The file IS in the declared domain. From here a malformed, unprovable or
+    # expired reason is a hard block — the operator asked for a bypass on this
+    # exact file, and the bypass they asked for is not one we can honour.
+    ok, reason, detail, state = _check_grant(raw_reason, source, mtime)
+    if not ok:
+        if state == "unprovable":
+            return False, f"Known Road reason not provable — {detail}"
+        return False, f"Known Road grant {domain}:{raw_reason} refused — {detail}"
 
-    if not _record(tool, file_path, domain, reason, note):
+    if not _record(tool, file_path, domain, reason, note, state, source):
         return False, (
             "Known Road bypass could not be recorded to known-roads.jsonl — "
             "an unprovable bypass is denied (fail-closed)"
         )
 
-    return True, f"Known Road {domain}:{reason} (recorded to known-roads.jsonl)"
+    return True, (f"Known Road {domain}:{reason} [{state}] "
+                  "(recorded to known-roads.jsonl)")
 
 
 def known_road_hint(normalized_fwd: str) -> str:
