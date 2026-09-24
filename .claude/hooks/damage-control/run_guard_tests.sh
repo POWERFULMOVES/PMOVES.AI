@@ -23,12 +23,13 @@
 # `test-damage-control.py` (hyphen) is deliberately NOT matched: it is an
 # interactive/CLI harness that takes arguments, not a self-contained suite.
 #
-# Exit: 0 all passed · 1 a test failed or the suite shrank
+# Exit: 0 all passed · 1 a test failed or the suite shrank · 3 could not measure
+#       (a file grant is open in the tree under test)
 set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Ratchet floor. Raise it when the suite grows; never lower it.
-MIN_TESTS="${MIN_TESTS:-10}"
+MIN_TESTS="${MIN_TESTS:-14}"
 PY="${PYTHON:-python3}"
 
 shopt -s nullglob
@@ -48,6 +49,32 @@ if [ "${#TESTS[@]}" -lt "$MIN_TESTS" ]; then
   exit 1
 fi
 
+# ONE TREE, NO GRANT. Measured 2026-09-23: the suite ran with CLAUDE_PROJECT_DIR
+# inherited from the session (the MAIN checkout) while this driver sat in a
+# worktree. An operator opened `dockerfile:pr:3171` in the main checkout mid-run;
+# test_proportionality.py (which isolates nothing) resolved the grant file and the
+# trail through CLAUDE_PROJECT_DIR, so its Dockerfile corpus was GRANTED -- six
+# controls "failed" -- and six synthetic rows landed in the main checkout's
+# tracked trail. This driver's row count below read before=255 after=255, because
+# it counted THIS tree's trail, not the one the tests wrote. Seven test files
+# isolate neither the trail nor the grant, so the fix lives here, once:
+#   * every test runs with CLAUDE_PROJECT_DIR pinned to THIS tree, so the trail
+#     counted below is the trail the tests write;
+#   * KNOWN_ROAD is stripped from every test's environment;
+#   * an open FILE grant in this tree cannot be stripped without touching an
+#     operator's file, so the run refuses: exit 3, could not measure.
+TREE="$(cd "$HERE/../../.." && pwd)"
+GRANT_FILE="$HERE/.known-road-active"
+if [ -e "$GRANT_FILE" ]; then
+  echo
+  echo "COULD-NOT-MEASURE: a Known Road grant is open in the tree under test:"
+  echo "      $GRANT_FILE"
+  echo "      It would open protected domains in the test corpus (verdicts depend on"
+  echo "      it) and append synthetic rows to the tracked trail. Run the suite in a"
+  echo "      worktree with no grant. The grant was not read or changed."
+  exit 3
+fi
+
 # The guard's audit trail is git-TRACKED, and a granted operation APPENDS to it.
 # A test corpus that trips a granted domain therefore writes synthetic rows into a
 # provenance record whose whole job is answering "who authorized this edit, and
@@ -64,7 +91,7 @@ printf '%-34s %4s  %s\n' "TEST FILE" "RC" "LAST LINE"
 printf '%-34s %4s  %s\n' "----------------------------------" "----" "---------"
 for t in "${TESTS[@]}"; do
   name="$(basename "$t")"
-  out="$("$PY" "$t" 2>&1)"; rc=$?
+  out="$(env -u KNOWN_ROAD CLAUDE_PROJECT_DIR="$TREE" "$PY" "$t" 2>&1)"; rc=$?
   executed=$((executed + 1))
   last="$(printf '%s\n' "$out" | grep -v '^[[:space:]]*$' | tail -1)"
   printf '%-34s %4d  %s\n' "$name" "$rc" "${last:0:90}"
