@@ -58,6 +58,8 @@ markers = [
     "unit: Isolated unit test - no I/O, no live service",
     "requires(capability): documents the node capability a test assumes; no runner hook consumes it",
     "dependency: pytest-dependency ordering marker; inert (so dependents RUN, not auto-skip) without that plugin",
+    "kilo: kilo-binary-path ratchet (test-gap ratchet slice, AGNOTE 2026-09-16)",
+    "mavis_cli: mavis-CLI subprocess timeout ratchet (test-gap ratchet slice, AGNOTE 2026-09-16)",
 ]
 
 # Async test mode

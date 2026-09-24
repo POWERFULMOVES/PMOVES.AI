@@ -108,10 +108,54 @@ echo '<domain>:<reason>' > .claude/hooks/damage-control/.known-road-active   # f
 
 Reason forms, exactly three: `pr:<number>`, `issue:<number>`,
 `handoff:<filename>` — and for `handoff:`, the brief must actually exist at
-`pmoves/docs/handoffs/<filename>`. That is the point: a reason a hook can check.
+`pmoves/docs/handoffs/<filename>` **and be tracked by git** (`git add` is
+enough). That is the point: a reason a hook can check.
+
+**A grant expires.** Well-formed is not enough; the guard checks the grant is
+still live every time it is used:
+
+| Bound | Rule | Refusal says |
+|---|---|---|
+| referent | `pr:N` / `issue:N` must be **OPEN** on `POWERFULMOVES/PMOVES.AI` (`gh api`, 8 s timeout, at most one lookup per hook call). Merged or closed → void | `grant VOID: PR #N ... is MERGED at <time>` |
+| verifiable | no trusted `gh`, no network, auth failure, timeout, or a malformed API body → **refused**, never assumed open | `grant not verifiable: <cause>` |
+| kind | `issue:N` that is really a PR (or `pr:N` that is an issue) → refused | `grant refused: issue #N is a pull request; ... pr:N` |
+| age | a **file** grant older than **24 h** is void whatever the PR state; so is a future-dated one | `grant file is N.Nh old (limit 24h)` |
+| env grant | has no mtime: it lives as long as the session launched with it. In a settings file's `env` it would ride every session and only the referent bound would limit it — which is why that is forbidden | — |
+
+**Which `gh`.** Never the one on `PATH` (it starts with agent-writable
+`~/.local/bin`; a shim there answering "open" revived a merged grant). Only
+`/usr/bin`, `/usr/local/bin`, `/opt/homebrew/bin`, `/bin` (Windows:
+`%ProgramFiles%\GitHub CLI\gh.exe`), and the binary and its directory must not
+be writable by the hook's user. On Homebrew that directory is user-owned, so
+grants refuse there; use a root-owned gh or the offline override. An operator can
+set `KNOWN_ROAD_GH=/abs/path/gh` in the launching environment; it passes the same
+test and replaces the search. The API call runs with a fresh, empty
+`GH_CONFIG_DIR` (gh's own config can re-route its HTTP via `http_unix_socket`,
+measured), authenticated by a token fetched first with `gh auth token`.
+
+**The hooks fail closed.** Every damage-control hook exits 0 or 2 only
+(`fail_closed.py`). For PreToolUse any other code is non-blocking, so a crash used
+to let the call through; now an unexpected error prints `SECURITY:
+damage-control guard error, refusing: <Type> at <file:line>` and blocks. The
+PostToolUse effect check cannot block a command that already ran, so it exits 2
+with `EFFECT-CHECK GUARD ERROR ... NOT checked` instead. That is its loudest
+channel, and it feeds the model. A corrupt cache or a non-UTF-8 grant file is not
+an error: the cache counts as a miss, and the grant grants nothing.
+
+Only a **successful** lookup is cached (120 s, `.grant-state-cache.json`,
+git-ignored and readOnly), so a merge takes effect within two minutes and a burst
+of edits costs one API call. The lookup runs only when a command actually touches
+a path in the grant's domain; ordinary Bash calls pay nothing.
+
+**Offline work.** Append `!offline` to a `pr:`/`issue:` grant
+(`compose:pr:3200!offline`). It skips the referent check only — never the age
+limit — and every use is recorded as `grant_state: offline-override`. It is a
+per-grant suffix, not an env switch, so it cannot become ambient: it is written by
+the same act that opens the grant and dies with it.
 
 Close the road when you are done. `roads.py status` is how the next session finds
-out you did not.
+out you did not — it now shows the grant's source, age and live verdict, and
+`roads.py reason pr:<n>` gives the same verdict the guard would.
 
 ## Rules
 
@@ -136,7 +180,8 @@ out you did not.
 Each line of `.claude/hooks/damage-control/known-roads.jsonl` is one JSON object,
 written by `known_roads._record()` with sorted keys. There are two row shapes:
 rows written before `5bae26814`, and rows written with no hook input, carry only
-the always-present fields.
+the always-present fields. A row's `reason` never carries the `!offline` suffix — it is
+stripped so rows group by the bare reason; `grant_state` says it was used.
 
 | Field | Present | Meaning |
 |---|---|---|
@@ -147,6 +192,8 @@ the always-present fields.
 | `unregistered_agent_type` | when the hook carried an `agent_type` that is not in the registry | the raw type (≤128 chars). Kept visible, never promoted to `agent` |
 | `session` | always | `CLAUDE_SESSION_ID`, else `SESSION_ID`, else the hook's `session_id`, else `unknown` |
 | `note` | optional | how the use was observed (e.g. after the fact by the PostToolUse effect check) |
+| `grant_state` | rows written after grant expiry landed | how the grant was verified at the moment of use: `open` (PR/issue checked open), `offline-override` (`!offline`, not checked), `handoff-present` (brief exists and is tracked). Refused states (`merged`, `closed`, `stale`, `unverifiable`) never appear: the trail records roads TAKEN, and a refusal is reported in the hook's message instead |
+| `grant_source` | with `grant_state` | `env` (KNOWN_ROAD) or `file` (`.known-road-active`) |
 
 **Node value.** It is `AGENT_ID`, else `PMOVES_NODE_ID`, else `unknown`. `AGENT_ID`
 is **ambiguous**: every value in the trail so far is a node id, but other tools use
@@ -175,7 +222,7 @@ nonzero exit to 2, so call them directly:
 cd .claude/hooks/damage-control
 for t in test_gitlock_allowlist.py test_interpreter_writes.py test_insight_edits.py \
          test_dockerfile_domain.py test_topic_domain.py test_proportionality.py \
-         test_bash_known_roads.py; do
+         test_bash_known_roads.py test_grant_expiry.py test_fail_closed.py; do
   python3 "$t" >/dev/null 2>&1; echo "rc=$? $t"
 done
 ```

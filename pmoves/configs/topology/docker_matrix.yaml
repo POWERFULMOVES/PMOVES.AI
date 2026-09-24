@@ -27,129 +27,129 @@ known_road_domains:
 
 overlays:
   - name: a0-elder-melchor
-    canonical_path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.a0-elder-melchor.yml
+    canonical_path: pmoves/docker-compose.a0-elder-melchor.yml
   - name: activepieces
-    canonical_path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.activepieces.yml
+    canonical_path: pmoves/docker-compose.activepieces.yml
   - name: agentgym
-    canonical_path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.agentgym.yml
+    canonical_path: pmoves/docker-compose.agentgym.yml
   - name: agents
-    canonical_path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.agents.yml
+    canonical_path: pmoves/docker-compose.agents.yml
   - name: agents.images
-    canonical_path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.agents.images.yml
+    canonical_path: pmoves/docker-compose.agents.images.yml
   - name: agents.integrations
-    canonical_path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.agents.integrations.yml
+    canonical_path: pmoves/docker-compose.agents.integrations.yml
   - name: alertmanager
-    canonical_path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.alertmanager.yml
+    canonical_path: pmoves/docker-compose.alertmanager.yml
   - name: amd
-    canonical_path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.amd.yml
+    canonical_path: pmoves/docker-compose.amd.yml
   - name: amd-voice
-    canonical_path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.amd-voice.yml
+    canonical_path: pmoves/docker-compose.amd-voice.yml
   - name: apps
-    canonical_path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.apps.yml
+    canonical_path: pmoves/docker-compose.apps.yml
   - name: archon.submodule
-    canonical_path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.archon.submodule.yml
+    canonical_path: pmoves/docker-compose.archon.submodule.yml
   - name: arm64.override
-    canonical_path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.arm64.override.yml
+    canonical_path: pmoves/docker-compose.arm64.override.yml
   - name: base
-    canonical_path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.base.yml
+    canonical_path: pmoves/docker-compose.base.yml
   - name: cache
-    canonical_path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.cache.yml
+    canonical_path: pmoves/docker-compose.cache.yml
   - name: chit-tour
-    canonical_path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.chit-tour.yml
+    canonical_path: pmoves/docker-compose.chit-tour.yml
   - name: comfyui
-    canonical_path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.comfyui.yml
+    canonical_path: pmoves/docker-compose.comfyui.yml
   - name: core
-    canonical_path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.core.yml
+    canonical_path: pmoves/docker-compose.core.yml
   - name: darkxside-sidecar
-    canonical_path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.darkxside-sidecar.yml
+    canonical_path: pmoves/docker-compose.darkxside-sidecar.yml
   - name: elder-melchor
-    canonical_path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.elder-melchor.yml
+    canonical_path: pmoves/docker-compose.elder-melchor.yml
   - name: external
-    canonical_path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.external.yml
+    canonical_path: pmoves/docker-compose.external.yml
   - name: gpu
-    canonical_path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.gpu.yml
+    canonical_path: pmoves/docker-compose.gpu.yml
   - name: gpu-4090
-    canonical_path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.gpu-4090.yml
+    canonical_path: pmoves/docker-compose.gpu-4090.yml
   - name: gpu-image
-    canonical_path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.gpu-image.yml
+    canonical_path: pmoves/docker-compose.gpu-image.yml
   - name: hardened
-    canonical_path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.hardened.yml
+    canonical_path: pmoves/docker-compose.hardened.yml
   - name: integrations.images
-    canonical_path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.integrations.images.yml
+    canonical_path: pmoves/docker-compose.integrations.images.yml
   - name: jellyfin-ai
-    canonical_path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.jellyfin-ai.yml
+    canonical_path: pmoves/docker-compose.jellyfin-ai.yml
   - name: jellyfin.hosts
-    canonical_path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.jellyfin.hosts.yml
+    canonical_path: pmoves/docker-compose.jellyfin.hosts.yml
   - name: jetson-edge.override
-    canonical_path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.jetson-edge.override.yml
+    canonical_path: pmoves/docker-compose.jetson-edge.override.yml
   - name: juicefs-mount
-    canonical_path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.juicefs-mount.yml
+    canonical_path: pmoves/docker-compose.juicefs-mount.yml
   - name: laptop-4090.override
-    canonical_path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.laptop-4090.override.yml
+    canonical_path: pmoves/docker-compose.laptop-4090.override.yml
   - name: main
-    canonical_path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+    canonical_path: pmoves/docker-compose.yml
   - name: mcp-gateway
-    canonical_path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.mcp-gateway.yml
+    canonical_path: pmoves/docker-compose.mcp-gateway.yml
   - name: media
-    canonical_path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.media.yml
+    canonical_path: pmoves/docker-compose.media.yml
   - name: n8n
-    canonical_path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.n8n.yml
+    canonical_path: pmoves/docker-compose.n8n.yml
   - name: n8n.postgres
-    canonical_path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.n8n.postgres.yml
+    canonical_path: pmoves/docker-compose.n8n.postgres.yml
   - name: open-notebook
-    canonical_path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.open-notebook.yml
+    canonical_path: pmoves/docker-compose.open-notebook.yml
   - name: persona
-    canonical_path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.persona.yml
+    canonical_path: pmoves/docker-compose.persona.yml
   - name: remote
-    canonical_path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.remote.yml
+    canonical_path: pmoves/docker-compose.remote.yml
   - name: rocm.override
-    canonical_path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.rocm.override.yml
+    canonical_path: pmoves/docker-compose.rocm.override.yml
   - name: rustdesk
-    canonical_path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.rustdesk.yml
+    canonical_path: pmoves/docker-compose.rustdesk.yml
   - name: spark-sidecar
-    canonical_path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.spark-sidecar.yml
+    canonical_path: pmoves/docker-compose.spark-sidecar.yml
   - name: sso
-    canonical_path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.sso.yml
+    canonical_path: pmoves/docker-compose.sso.yml
   - name: tailscale
-    canonical_path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.tailscale.yml
+    canonical_path: pmoves/docker-compose.tailscale.yml
   - name: tracing
-    canonical_path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.tracing.yml
+    canonical_path: pmoves/docker-compose.tracing.yml
   - name: traefik
-    canonical_path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.traefik.yml
+    canonical_path: pmoves/docker-compose.traefik.yml
   - name: ui
-    canonical_path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.ui.yml
+    canonical_path: pmoves/docker-compose.ui.yml
   - name: ultimate-tts-studio
-    canonical_path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.ultimate-tts-studio.yml
+    canonical_path: pmoves/docker-compose.ultimate-tts-studio.yml
   - name: voice
-    canonical_path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.voice.yml
+    canonical_path: pmoves/docker-compose.voice.yml
   - name: vps.override
-    canonical_path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.vps.override.yml
+    canonical_path: pmoves/docker-compose.vps.override.yml
   - name: workers
-    canonical_path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.workers.yml
+    canonical_path: pmoves/docker-compose.workers.yml
   - name: yt-cookies
-    canonical_path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yt-cookies.yml
+    canonical_path: pmoves/docker-compose.yt-cookies.yml
   - name: yt-egress
-    canonical_path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yt-egress.yml
+    canonical_path: pmoves/docker-compose.yt-egress.yml
   - name: yt-media
-    canonical_path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yt-media.yml
+    canonical_path: pmoves/docker-compose.yt-media.yml
   - name: z890
-    canonical_path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.z890.yml
+    canonical_path: pmoves/docker-compose.z890.yml
   - name: z890.override
-    canonical_path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.z890.override.yml
+    canonical_path: pmoves/docker-compose.z890.override.yml
 
 services:
   - name: a0-elder-melchor
-    directory: pmoves\services\a0-elder-melchor
-    dockerfile: pmoves\services\a0-elder-melchor\Dockerfile
+    directory: pmoves/services/a0-elder-melchor
+    dockerfile: pmoves/services/a0-elder-melchor/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: a0-elder-melchor
         compose_key: a0-elder-melchor
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.a0-elder-melchor.yml
+          - pmoves/docker-compose.a0-elder-melchor.yml
     guard_paths: []
     known_road_domains:
       - compose
@@ -167,11 +167,11 @@ services:
       - overlay: agents
         compose_key: a2ui-nats-bridge
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.agents.yml
+          - pmoves/docker-compose.agents.yml
       - overlay: main
         compose_key: a2ui-nats-bridge
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+          - pmoves/docker-compose.yml
     guard_paths: []
     known_road_domains:
       - compose
@@ -179,21 +179,21 @@ services:
       - schema
       - topic
   - name: a2ui-renderer
-    directory: pmoves\services\a2ui-renderer
-    dockerfile: pmoves\services\a2ui-renderer\Dockerfile
+    directory: pmoves/services/a2ui-renderer
+    dockerfile: pmoves/services/a2ui-renderer/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: core
         compose_key: a2ui-renderer
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.core.yml
+          - pmoves/docker-compose.core.yml
       - overlay: main
         compose_key: a2ui-renderer
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+          - pmoves/docker-compose.yml
     guard_paths: []
     known_road_domains:
       - compose
@@ -211,31 +211,31 @@ services:
       - overlay: agents.images
         compose_key: agent-zero
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.agents.images.yml
+          - pmoves/docker-compose.agents.images.yml
       - overlay: agents.integrations
         compose_key: agent-zero
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.agents.integrations.yml
+          - pmoves/docker-compose.agents.integrations.yml
       - overlay: agents
         compose_key: agent-zero
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.agents.yml
+          - pmoves/docker-compose.agents.yml
       - overlay: arm64.override
         compose_key: agent-zero
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.arm64.override.yml
+          - pmoves/docker-compose.arm64.override.yml
       - overlay: hardened
         compose_key: agent-zero
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.hardened.yml
+          - pmoves/docker-compose.hardened.yml
       - overlay: vps.override
         compose_key: agent-zero
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.vps.override.yml
+          - pmoves/docker-compose.vps.override.yml
       - overlay: main
         compose_key: agent-zero
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+          - pmoves/docker-compose.yml
     guard_paths:
       - PMOVES-Agent-Zero/.env
       - PMOVES-Agent-Zero/Dockerfile
@@ -247,17 +247,17 @@ services:
       - schema
       - topic
   - name: agentgym-rl-coordinator
-    directory: pmoves\services\agentgym-rl-coordinator
-    dockerfile: pmoves\services\agentgym-rl-coordinator\Dockerfile
+    directory: pmoves/services/agentgym-rl-coordinator
+    dockerfile: pmoves/services/agentgym-rl-coordinator/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: agentgym
         compose_key: agentgym-rl-coordinator
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.agentgym.yml
+          - pmoves/docker-compose.agentgym.yml
     guard_paths: []
     known_road_domains:
       - compose
@@ -265,17 +265,17 @@ services:
       - schema
       - topic
   - name: alertmanager-discord-bridge
-    directory: pmoves\services\alertmanager-discord-bridge
-    dockerfile: pmoves\services\alertmanager-discord-bridge\Dockerfile
+    directory: pmoves/services/alertmanager-discord-bridge
+    dockerfile: pmoves/services/alertmanager-discord-bridge/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: alertmanager
         compose_key: alertmanager-discord-bridge
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.alertmanager.yml
+          - pmoves/docker-compose.alertmanager.yml
     guard_paths: []
     known_road_domains:
       - compose
@@ -283,12 +283,12 @@ services:
       - schema
       - topic
   - name: analysis-echo
-    directory: pmoves\services\analysis-echo
-    dockerfile: pmoves\services\analysis-echo\Dockerfile
+    directory: pmoves/services/analysis-echo
+    dockerfile: pmoves/services/analysis-echo/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays: []
     # NOTE: no compose overlay declares this service
     guard_paths: []
@@ -308,35 +308,35 @@ services:
       - overlay: agents.images
         compose_key: archon
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.agents.images.yml
+          - pmoves/docker-compose.agents.images.yml
       - overlay: agents.integrations
         compose_key: archon
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.agents.integrations.yml
+          - pmoves/docker-compose.agents.integrations.yml
       - overlay: agents
         compose_key: archon
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.agents.yml
+          - pmoves/docker-compose.agents.yml
       - overlay: archon.submodule
         compose_key: archon
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.archon.submodule.yml
+          - pmoves/docker-compose.archon.submodule.yml
       - overlay: arm64.override
         compose_key: archon
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.arm64.override.yml
+          - pmoves/docker-compose.arm64.override.yml
       - overlay: hardened
         compose_key: archon
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.hardened.yml
+          - pmoves/docker-compose.hardened.yml
       - overlay: vps.override
         compose_key: archon
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.vps.override.yml
+          - pmoves/docker-compose.vps.override.yml
       - overlay: main
         compose_key: archon
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+          - pmoves/docker-compose.yml
     guard_paths:
       - PMOVES-Archon/.env
       - PMOVES-Archon/Dockerfile
@@ -349,12 +349,12 @@ services:
       - schema
       - topic
   - name: audio-reprocess
-    directory: pmoves\services\audio-reprocess
-    dockerfile: pmoves\services\audio-reprocess\Dockerfile
+    directory: pmoves/services/audio-reprocess
+    dockerfile: pmoves/services/audio-reprocess/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays: []
     # NOTE: no compose overlay declares this service
     guard_paths: []
@@ -374,11 +374,11 @@ services:
       - overlay: apps
         compose_key: botz-gateway
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.apps.yml
+          - pmoves/docker-compose.apps.yml
       - overlay: main
         compose_key: botz-gateway
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+          - pmoves/docker-compose.yml
     guard_paths:
       - PMOVES-BotZ-gateway/.env
       - PMOVES-BotZ-gateway/Dockerfile.pmoves
@@ -389,21 +389,21 @@ services:
       - schema
       - topic
   - name: cast-tts-gateway
-    directory: pmoves\services\cast-tts-gateway
-    dockerfile: pmoves\services\cast-tts-gateway\Dockerfile
+    directory: pmoves/services/cast-tts-gateway
+    dockerfile: pmoves/services/cast-tts-gateway/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: media
         compose_key: cast-tts-gateway
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.media.yml
+          - pmoves/docker-compose.media.yml
       - overlay: main
         compose_key: cast-tts-gateway
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+          - pmoves/docker-compose.yml
     guard_paths: []
     known_road_domains:
       - compose
@@ -411,29 +411,29 @@ services:
       - schema
       - topic
   - name: channel-monitor
-    directory: pmoves\services\channel-monitor
-    dockerfile: pmoves\services\channel-monitor\Dockerfile
+    directory: pmoves/services/channel-monitor
+    dockerfile: pmoves/services/channel-monitor/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: arm64.override
         compose_key: channel-monitor
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.arm64.override.yml
+          - pmoves/docker-compose.arm64.override.yml
       - overlay: hardened
         compose_key: channel-monitor
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.hardened.yml
+          - pmoves/docker-compose.hardened.yml
       - overlay: workers
         compose_key: channel-monitor
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.workers.yml
+          - pmoves/docker-compose.workers.yml
       - overlay: main
         compose_key: channel-monitor
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+          - pmoves/docker-compose.yml
     guard_paths: []
     known_road_domains:
       - compose
@@ -441,12 +441,12 @@ services:
       - schema
       - topic
   - name: chat-relay
-    directory: pmoves\services\chat-relay
-    dockerfile: pmoves\services\chat-relay\Dockerfile
+    directory: pmoves/services/chat-relay
+    dockerfile: pmoves/services/chat-relay/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays: []
     # NOTE: no compose overlay declares this service
     guard_paths: []
@@ -466,11 +466,11 @@ services:
       - overlay: agents
         compose_key: cipher-api
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.agents.yml
+          - pmoves/docker-compose.agents.yml
       - overlay: main
         compose_key: cipher-api
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+          - pmoves/docker-compose.yml
     guard_paths:
       - Pmoves-cipher/Dockerfile.pmoves
       - Pmoves-cipher/PMOVES.AI_INTEGRATION.md
@@ -484,21 +484,21 @@ services:
       - schema
       - topic
   - name: clap-embed
-    directory: pmoves\services\clap-embed
-    dockerfile: pmoves\services\clap-embed\Dockerfile
+    directory: pmoves/services/clap-embed
+    dockerfile: pmoves/services/clap-embed/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: core
         compose_key: clap-embed
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.core.yml
+          - pmoves/docker-compose.core.yml
       - overlay: main
         compose_key: clap-embed
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+          - pmoves/docker-compose.yml
     guard_paths: []
     known_road_domains:
       - compose
@@ -506,21 +506,21 @@ services:
       - schema
       - topic
   - name: clip-embed
-    directory: pmoves\services\clip-embed
-    dockerfile: pmoves\services\clip-embed\Dockerfile
+    directory: pmoves/services/clip-embed
+    dockerfile: pmoves/services/clip-embed/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: core
         compose_key: clip-embed
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.core.yml
+          - pmoves/docker-compose.core.yml
       - overlay: main
         compose_key: clip-embed
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+          - pmoves/docker-compose.yml
     guard_paths: []
     known_road_domains:
       - compose
@@ -528,25 +528,25 @@ services:
       - schema
       - topic
   - name: comfy-watcher
-    directory: pmoves\services\comfy-watcher
-    dockerfile: pmoves\services\comfy-watcher\Dockerfile
+    directory: pmoves/services/comfy-watcher
+    dockerfile: pmoves/services/comfy-watcher/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: hardened
         compose_key: comfy-watcher
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.hardened.yml
+          - pmoves/docker-compose.hardened.yml
       - overlay: media
         compose_key: comfy-watcher
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.media.yml
+          - pmoves/docker-compose.media.yml
       - overlay: main
         compose_key: comfy-watcher
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+          - pmoves/docker-compose.yml
     guard_paths: []
     known_road_domains:
       - compose
@@ -554,21 +554,21 @@ services:
       - schema
       - topic
   - name: comfyui
-    directory: pmoves\services\comfyui
-    dockerfile: pmoves\services\comfyui\Dockerfile
+    directory: pmoves/services/comfyui
+    dockerfile: pmoves/services/comfyui/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: comfyui
         compose_key: comfyui
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.comfyui.yml
+          - pmoves/docker-compose.comfyui.yml
       - overlay: vps.override
         compose_key: comfyui
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.vps.override.yml
+          - pmoves/docker-compose.vps.override.yml
     guard_paths: []
     known_road_domains:
       - compose
@@ -576,21 +576,21 @@ services:
       - schema
       - topic
   - name: consciousness-service
-    directory: pmoves\services\consciousness-service
-    dockerfile: pmoves\services\consciousness-service\Dockerfile
+    directory: pmoves/services/consciousness-service
+    dockerfile: pmoves/services/consciousness-service/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: agents
         compose_key: consciousness-service
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.agents.yml
+          - pmoves/docker-compose.agents.yml
       - overlay: main
         compose_key: consciousness-service
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+          - pmoves/docker-compose.yml
     guard_paths: []
     known_road_domains:
       - compose
@@ -598,17 +598,17 @@ services:
       - schema
       - topic
   - name: container-agent
-    directory: pmoves\services\container-agent
-    dockerfile: pmoves\services\container-agent\Dockerfile
+    directory: pmoves/services/container-agent
+    dockerfile: pmoves/services/container-agent/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: z890
         compose_key: container-agent
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.z890.yml
+          - pmoves/docker-compose.z890.yml
     guard_paths: []
     known_road_domains:
       - compose
@@ -616,12 +616,12 @@ services:
       - schema
       - topic
   - name: content-provenance-gate
-    directory: pmoves\services\content-provenance-gate
-    dockerfile: pmoves\services\content-provenance-gate\Dockerfile
+    directory: pmoves/services/content-provenance-gate
+    dockerfile: pmoves/services/content-provenance-gate/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays: []
     # NOTE: no compose overlay declares this service
     guard_paths: []
@@ -631,29 +631,29 @@ services:
       - schema
       - topic
   - name: deepresearch
-    directory: pmoves\services\deepresearch
-    dockerfile: pmoves\services\deepresearch\Dockerfile
+    directory: pmoves/services/deepresearch
+    dockerfile: pmoves/services/deepresearch/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: agents.images
         compose_key: deepresearch
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.agents.images.yml
+          - pmoves/docker-compose.agents.images.yml
       - overlay: hardened
         compose_key: deepresearch
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.hardened.yml
+          - pmoves/docker-compose.hardened.yml
       - overlay: workers
         compose_key: deepresearch
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.workers.yml
+          - pmoves/docker-compose.workers.yml
       - overlay: main
         compose_key: deepresearch
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+          - pmoves/docker-compose.yml
     guard_paths: []
     known_road_domains:
       - compose
@@ -661,21 +661,21 @@ services:
       - schema
       - topic
   - name: evo-controller
-    directory: pmoves\services\evo-controller
-    dockerfile: pmoves\services\evo-controller\Dockerfile
+    directory: pmoves/services/evo-controller
+    dockerfile: pmoves/services/evo-controller/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: agents
         compose_key: evo-controller
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.agents.yml
+          - pmoves/docker-compose.agents.yml
       - overlay: main
         compose_key: evo-controller
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+          - pmoves/docker-compose.yml
     guard_paths: []
     known_road_domains:
       - compose
@@ -683,25 +683,25 @@ services:
       - schema
       - topic
   - name: extract-worker
-    directory: pmoves\services\extract-worker
-    dockerfile: pmoves\services\extract-worker\Dockerfile
+    directory: pmoves/services/extract-worker
+    dockerfile: pmoves/services/extract-worker/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: hardened
         compose_key: extract-worker
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.hardened.yml
+          - pmoves/docker-compose.hardened.yml
       - overlay: workers
         compose_key: extract-worker
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.workers.yml
+          - pmoves/docker-compose.workers.yml
       - overlay: main
         compose_key: extract-worker
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+          - pmoves/docker-compose.yml
     guard_paths: []
     known_road_domains:
       - compose
@@ -709,37 +709,37 @@ services:
       - schema
       - topic
   - name: ffmpeg-whisper
-    directory: pmoves\services\ffmpeg-whisper
-    dockerfile: pmoves\services\ffmpeg-whisper\Dockerfile
+    directory: pmoves/services/ffmpeg-whisper
+    dockerfile: pmoves/services/ffmpeg-whisper/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: amd
         compose_key: ffmpeg-whisper
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.amd.yml
+          - pmoves/docker-compose.amd.yml
       - overlay: arm64.override
         compose_key: ffmpeg-whisper
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.arm64.override.yml
+          - pmoves/docker-compose.arm64.override.yml
       - overlay: hardened
         compose_key: ffmpeg-whisper
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.hardened.yml
+          - pmoves/docker-compose.hardened.yml
       - overlay: media
         compose_key: ffmpeg-whisper
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.media.yml
+          - pmoves/docker-compose.media.yml
       - overlay: vps.override
         compose_key: ffmpeg-whisper
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.vps.override.yml
+          - pmoves/docker-compose.vps.override.yml
       - overlay: main
         compose_key: ffmpeg-whisper
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+          - pmoves/docker-compose.yml
     guard_paths: []
     known_road_domains:
       - compose
@@ -747,21 +747,21 @@ services:
       - schema
       - topic
   - name: fleet-sentinel
-    directory: pmoves\services\fleet_sentinel
-    dockerfile: pmoves\services\fleet_sentinel\Dockerfile
+    directory: pmoves/services/fleet_sentinel
+    dockerfile: pmoves/services/fleet_sentinel/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: agents
         compose_key: fleet-sentinel
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.agents.yml
+          - pmoves/docker-compose.agents.yml
       - overlay: main
         compose_key: fleet-sentinel
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+          - pmoves/docker-compose.yml
     guard_paths: []
     known_road_domains:
       - compose
@@ -769,25 +769,25 @@ services:
       - schema
       - topic
   - name: flute-gateway
-    directory: pmoves\services\flute-gateway
-    dockerfile: pmoves\services\flute-gateway\Dockerfile
+    directory: pmoves/services/flute-gateway
+    dockerfile: pmoves/services/flute-gateway/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: amd-voice
         compose_key: flute-gateway
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.amd-voice.yml
+          - pmoves/docker-compose.amd-voice.yml
       - overlay: media
         compose_key: flute-gateway
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.media.yml
+          - pmoves/docker-compose.media.yml
       - overlay: main
         compose_key: flute-gateway
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+          - pmoves/docker-compose.yml
     guard_paths: []
     known_road_domains:
       - compose
@@ -795,69 +795,69 @@ services:
       - schema
       - topic
   - name: gateway
-    directory: pmoves\services\gateway
-    dockerfile: pmoves\services\gateway\Dockerfile
+    directory: pmoves/services/gateway
+    dockerfile: pmoves/services/gateway/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: agents
         compose_key: hi-rag-gateway
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.agents.yml
+          - pmoves/docker-compose.agents.yml
       - overlay: amd-voice
         compose_key: flute-gateway
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.amd-voice.yml
+          - pmoves/docker-compose.amd-voice.yml
       - overlay: apps
         compose_key: botz-gateway
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.apps.yml
+          - pmoves/docker-compose.apps.yml
       - overlay: core
         compose_key: tensorzero-gateway
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.core.yml
+          - pmoves/docker-compose.core.yml
       - overlay: jellyfin-ai
         compose_key: jellyfin-api-gateway
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.jellyfin-ai.yml
+          - pmoves/docker-compose.jellyfin-ai.yml
       - overlay: mcp-gateway
         compose_key: mcp-gateway
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.mcp-gateway.yml
+          - pmoves/docker-compose.mcp-gateway.yml
       - overlay: media
         compose_key: flute-gateway
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.media.yml
+          - pmoves/docker-compose.media.yml
       - overlay: media
         compose_key: cast-tts-gateway
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.media.yml
+          - pmoves/docker-compose.media.yml
       - overlay: vps.override
         compose_key: tensorzero-gateway
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.vps.override.yml
+          - pmoves/docker-compose.vps.override.yml
       - overlay: main
         compose_key: hi-rag-gateway
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+          - pmoves/docker-compose.yml
       - overlay: main
         compose_key: botz-gateway
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+          - pmoves/docker-compose.yml
       - overlay: main
         compose_key: tensorzero-gateway
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+          - pmoves/docker-compose.yml
       - overlay: main
         compose_key: flute-gateway
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+          - pmoves/docker-compose.yml
       - overlay: main
         compose_key: cast-tts-gateway
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+          - pmoves/docker-compose.yml
     guard_paths: []
     known_road_domains:
       - compose
@@ -865,25 +865,25 @@ services:
       - schema
       - topic
   - name: gateway-agent
-    directory: pmoves\services\gateway-agent
-    dockerfile: pmoves\services\gateway-agent\Dockerfile
+    directory: pmoves/services/gateway-agent
+    dockerfile: pmoves/services/gateway-agent/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: agents
         compose_key: gateway-agent
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.agents.yml
+          - pmoves/docker-compose.agents.yml
       - overlay: vps.override
         compose_key: gateway-agent
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.vps.override.yml
+          - pmoves/docker-compose.vps.override.yml
       - overlay: main
         compose_key: gateway-agent
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+          - pmoves/docker-compose.yml
     guard_paths: []
     known_road_domains:
       - compose
@@ -891,21 +891,21 @@ services:
       - schema
       - topic
   - name: github-branch-cleanup
-    directory: pmoves\services\github-branch-cleanup
-    dockerfile: pmoves\services\github-branch-cleanup\Dockerfile
+    directory: pmoves/services/github-branch-cleanup
+    dockerfile: pmoves/services/github-branch-cleanup/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: workers
         compose_key: github-branch-cleanup
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.workers.yml
+          - pmoves/docker-compose.workers.yml
       - overlay: main
         compose_key: github-branch-cleanup
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+          - pmoves/docker-compose.yml
     guard_paths: []
     known_road_domains:
       - compose
@@ -913,21 +913,21 @@ services:
       - schema
       - topic
   - name: github-crossrepo-pr
-    directory: pmoves\services\github-crossrepo-pr
-    dockerfile: pmoves\services\github-crossrepo-pr\Dockerfile
+    directory: pmoves/services/github-crossrepo-pr
+    dockerfile: pmoves/services/github-crossrepo-pr/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: workers
         compose_key: github-crossrepo-pr
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.workers.yml
+          - pmoves/docker-compose.workers.yml
       - overlay: main
         compose_key: github-crossrepo-pr
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+          - pmoves/docker-compose.yml
     guard_paths: []
     known_road_domains:
       - compose
@@ -935,21 +935,21 @@ services:
       - schema
       - topic
   - name: github-issue-triage
-    directory: pmoves\services\github-issue-triage
-    dockerfile: pmoves\services\github-issue-triage\Dockerfile
+    directory: pmoves/services/github-issue-triage
+    dockerfile: pmoves/services/github-issue-triage/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: workers
         compose_key: github-issue-triage
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.workers.yml
+          - pmoves/docker-compose.workers.yml
       - overlay: main
         compose_key: github-issue-triage
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+          - pmoves/docker-compose.yml
     guard_paths: []
     known_road_domains:
       - compose
@@ -957,21 +957,21 @@ services:
       - schema
       - topic
   - name: github-runner-ctl
-    directory: pmoves\services\github-runner-ctl
-    dockerfile: pmoves\services\github-runner-ctl\Dockerfile
+    directory: pmoves/services/github-runner-ctl
+    dockerfile: pmoves/services/github-runner-ctl/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: workers
         compose_key: github-runner-ctl
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.workers.yml
+          - pmoves/docker-compose.workers.yml
       - overlay: main
         compose_key: github-runner-ctl
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+          - pmoves/docker-compose.yml
     guard_paths: []
     known_road_domains:
       - compose
@@ -979,25 +979,25 @@ services:
       - schema
       - topic
   - name: gpu-orchestrator
-    directory: pmoves\services\gpu-orchestrator
-    dockerfile: pmoves\services\gpu-orchestrator\Dockerfile
+    directory: pmoves/services/gpu-orchestrator
+    dockerfile: pmoves/services/gpu-orchestrator/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: gpu-4090
         compose_key: gpu-orchestrator
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.gpu-4090.yml
+          - pmoves/docker-compose.gpu-4090.yml
       - overlay: media
         compose_key: gpu-orchestrator
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.media.yml
+          - pmoves/docker-compose.media.yml
       - overlay: main
         compose_key: gpu-orchestrator
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+          - pmoves/docker-compose.yml
     guard_paths: []
     known_road_domains:
       - compose
@@ -1005,12 +1005,12 @@ services:
       - schema
       - topic
   - name: graph-linker
-    directory: pmoves\services\graph-linker
-    dockerfile: pmoves\services\graph-linker\Dockerfile
+    directory: pmoves/services/graph-linker
+    dockerfile: pmoves/services/graph-linker/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays: []
     # NOTE: no compose overlay declares this service
     guard_paths: []
@@ -1020,25 +1020,25 @@ services:
       - schema
       - topic
   - name: grayjay-plugin-host
-    directory: pmoves\services\grayjay-plugin-host
-    dockerfile: pmoves\services\grayjay-plugin-host\Dockerfile
+    directory: pmoves/services/grayjay-plugin-host
+    dockerfile: pmoves/services/grayjay-plugin-host/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: hardened
         compose_key: grayjay-plugin-host
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.hardened.yml
+          - pmoves/docker-compose.hardened.yml
       - overlay: ui
         compose_key: grayjay-plugin-host
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.ui.yml
+          - pmoves/docker-compose.ui.yml
       - overlay: main
         compose_key: grayjay-plugin-host
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+          - pmoves/docker-compose.yml
     guard_paths: []
     known_road_domains:
       - compose
@@ -1046,21 +1046,21 @@ services:
       - schema
       - topic
   - name: hf-agent
-    directory: pmoves\services\hf-agent
-    dockerfile: pmoves\services\hf-agent\Dockerfile
+    directory: pmoves/services/hf-agent
+    dockerfile: pmoves/services/hf-agent/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: agents
         compose_key: hf-agent
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.agents.yml
+          - pmoves/docker-compose.agents.yml
       - overlay: main
         compose_key: hf-agent
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+          - pmoves/docker-compose.yml
     guard_paths: []
     known_road_domains:
       - compose
@@ -1068,21 +1068,21 @@ services:
       - schema
       - topic
   - name: hf-mcp-server
-    directory: pmoves\services\hf-mcp-server
-    dockerfile: pmoves\services\hf-mcp-server\Dockerfile
+    directory: pmoves/services/hf-mcp-server
+    dockerfile: pmoves/services/hf-mcp-server/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: agents
         compose_key: hf-mcp-server
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.agents.yml
+          - pmoves/docker-compose.agents.yml
       - overlay: main
         compose_key: hf-mcp-server
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+          - pmoves/docker-compose.yml
     guard_paths: []
     known_road_domains:
       - compose
@@ -1090,21 +1090,21 @@ services:
       - schema
       - topic
   - name: hf-research-agent
-    directory: pmoves\services\hf-research-agent
-    dockerfile: pmoves\services\hf-research-agent\Dockerfile
+    directory: pmoves/services/hf-research-agent
+    dockerfile: pmoves/services/hf-research-agent/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: agents
         compose_key: hf-research-agent
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.agents.yml
+          - pmoves/docker-compose.agents.yml
       - overlay: main
         compose_key: hf-research-agent
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+          - pmoves/docker-compose.yml
     guard_paths: []
     known_road_domains:
       - compose
@@ -1112,21 +1112,21 @@ services:
       - schema
       - topic
   - name: hi-rag-gateway
-    directory: pmoves\services\hi-rag-gateway
-    dockerfile: pmoves\services\hi-rag-gateway\Dockerfile
+    directory: pmoves/services/hi-rag-gateway
+    dockerfile: pmoves/services/hi-rag-gateway/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: agents
         compose_key: hi-rag-gateway
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.agents.yml
+          - pmoves/docker-compose.agents.yml
       - overlay: main
         compose_key: hi-rag-gateway
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+          - pmoves/docker-compose.yml
     guard_paths: []
     known_road_domains:
       - compose
@@ -1134,29 +1134,29 @@ services:
       - schema
       - topic
   - name: hi-rag-gateway-v2
-    directory: pmoves\services\hi-rag-gateway-v2
-    dockerfile: pmoves\services\hi-rag-gateway-v2\Dockerfile
+    directory: pmoves/services/hi-rag-gateway-v2
+    dockerfile: pmoves/services/hi-rag-gateway-v2/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: agents
         compose_key: hi-rag-gateway-v2
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.agents.yml
+          - pmoves/docker-compose.agents.yml
       - overlay: hardened
         compose_key: hi-rag-gateway-v2
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.hardened.yml
+          - pmoves/docker-compose.hardened.yml
       - overlay: vps.override
         compose_key: hi-rag-gateway-v2
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.vps.override.yml
+          - pmoves/docker-compose.vps.override.yml
       - overlay: main
         compose_key: hi-rag-gateway-v2
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+          - pmoves/docker-compose.yml
     guard_paths: []
     known_road_domains:
       - compose
@@ -1164,25 +1164,25 @@ services:
       - schema
       - topic
   - name: invidious-companion-proxy
-    directory: pmoves\services\invidious-companion-proxy
-    dockerfile: pmoves\services\invidious-companion-proxy\Dockerfile
+    directory: pmoves/services/invidious-companion-proxy
+    dockerfile: pmoves/services/invidious-companion-proxy/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: hardened
         compose_key: invidious-companion-proxy
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.hardened.yml
+          - pmoves/docker-compose.hardened.yml
       - overlay: ui
         compose_key: invidious-companion-proxy
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.ui.yml
+          - pmoves/docker-compose.ui.yml
       - overlay: main
         compose_key: invidious-companion-proxy
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+          - pmoves/docker-compose.yml
     guard_paths: []
     known_road_domains:
       - compose
@@ -1190,29 +1190,29 @@ services:
       - schema
       - topic
   - name: jellyfin-bridge
-    directory: pmoves\services\jellyfin-bridge
-    dockerfile: pmoves\services\jellyfin-bridge\Dockerfile
+    directory: pmoves/services/jellyfin-bridge
+    dockerfile: pmoves/services/jellyfin-bridge/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: gpu
         compose_key: jellyfin-bridge
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.gpu.yml
+          - pmoves/docker-compose.gpu.yml
       - overlay: hardened
         compose_key: jellyfin-bridge
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.hardened.yml
+          - pmoves/docker-compose.hardened.yml
       - overlay: media
         compose_key: jellyfin-bridge
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.media.yml
+          - pmoves/docker-compose.media.yml
       - overlay: main
         compose_key: jellyfin-bridge
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+          - pmoves/docker-compose.yml
     guard_paths: []
     known_road_domains:
       - compose
@@ -1220,25 +1220,25 @@ services:
       - schema
       - topic
   - name: langextract
-    directory: pmoves\services\langextract
-    dockerfile: pmoves\services\langextract\Dockerfile
+    directory: pmoves/services/langextract
+    dockerfile: pmoves/services/langextract/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: hardened
         compose_key: langextract
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.hardened.yml
+          - pmoves/docker-compose.hardened.yml
       - overlay: workers
         compose_key: langextract
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.workers.yml
+          - pmoves/docker-compose.workers.yml
       - overlay: main
         compose_key: langextract
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+          - pmoves/docker-compose.yml
     guard_paths: []
     known_road_domains:
       - compose
@@ -1246,25 +1246,25 @@ services:
       - schema
       - topic
   - name: mai-ui-agent
-    directory: pmoves\services\mai-ui-agent
-    dockerfile: pmoves\services\mai-ui-agent\Dockerfile
+    directory: pmoves/services/mai-ui-agent
+    dockerfile: pmoves/services/mai-ui-agent/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: agents
         compose_key: mai-ui-agent
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.agents.yml
+          - pmoves/docker-compose.agents.yml
       - overlay: arm64.override
         compose_key: mai-ui-agent
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.arm64.override.yml
+          - pmoves/docker-compose.arm64.override.yml
       - overlay: main
         compose_key: mai-ui-agent
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+          - pmoves/docker-compose.yml
     guard_paths: []
     known_road_domains:
       - compose
@@ -1272,29 +1272,29 @@ services:
       - schema
       - topic
   - name: media-audio
-    directory: pmoves\services\media-audio
-    dockerfile: pmoves\services\media-audio\Dockerfile
+    directory: pmoves/services/media-audio
+    dockerfile: pmoves/services/media-audio/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: hardened
         compose_key: media-audio
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.hardened.yml
+          - pmoves/docker-compose.hardened.yml
       - overlay: media
         compose_key: media-audio
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.media.yml
+          - pmoves/docker-compose.media.yml
       - overlay: vps.override
         compose_key: media-audio
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.vps.override.yml
+          - pmoves/docker-compose.vps.override.yml
       - overlay: main
         compose_key: media-audio
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+          - pmoves/docker-compose.yml
     guard_paths: []
     known_road_domains:
       - compose
@@ -1302,33 +1302,33 @@ services:
       - schema
       - topic
   - name: media-video
-    directory: pmoves\services\media-video
-    dockerfile: pmoves\services\media-video\Dockerfile
+    directory: pmoves/services/media-video
+    dockerfile: pmoves/services/media-video/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: gpu
         compose_key: media-video
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.gpu.yml
+          - pmoves/docker-compose.gpu.yml
       - overlay: hardened
         compose_key: media-video
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.hardened.yml
+          - pmoves/docker-compose.hardened.yml
       - overlay: media
         compose_key: media-video
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.media.yml
+          - pmoves/docker-compose.media.yml
       - overlay: vps.override
         compose_key: media-video
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.vps.override.yml
+          - pmoves/docker-compose.vps.override.yml
       - overlay: main
         compose_key: media-video
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+          - pmoves/docker-compose.yml
     guard_paths: []
     known_road_domains:
       - compose
@@ -1336,41 +1336,41 @@ services:
       - schema
       - topic
   - name: mesh-agent
-    directory: pmoves\services\mesh-agent
-    dockerfile: pmoves\services\mesh-agent\Dockerfile
+    directory: pmoves/services/mesh-agent
+    dockerfile: pmoves/services/mesh-agent/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: agents
         compose_key: mesh-agent
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.agents.yml
+          - pmoves/docker-compose.agents.yml
       - overlay: hardened
         compose_key: mesh-agent
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.hardened.yml
+          - pmoves/docker-compose.hardened.yml
       - overlay: jetson-edge.override
         compose_key: mesh-agent
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.jetson-edge.override.yml
+          - pmoves/docker-compose.jetson-edge.override.yml
       - overlay: vps.override
         compose_key: mesh-agent
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.vps.override.yml
+          - pmoves/docker-compose.vps.override.yml
       - overlay: main
         compose_key: mesh-agent
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+          - pmoves/docker-compose.yml
       - overlay: z890.override
         compose_key: mesh-agent
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.z890.override.yml
+          - pmoves/docker-compose.z890.override.yml
       - overlay: z890
         compose_key: mesh-agent
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.z890.yml
+          - pmoves/docker-compose.z890.yml
     guard_paths: []
     known_road_domains:
       - compose
@@ -1378,12 +1378,12 @@ services:
       - schema
       - topic
   - name: mesh-exposure
-    directory: pmoves\services\mesh_exposure
-    dockerfile: pmoves\services\mesh_exposure\Dockerfile
+    directory: pmoves/services/mesh_exposure
+    dockerfile: pmoves/services/mesh_exposure/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays: []
     # NOTE: no compose overlay declares this service
     guard_paths: []
@@ -1393,12 +1393,12 @@ services:
       - schema
       - topic
   - name: model-fitness-bridge
-    directory: pmoves\services\model-fitness-bridge
-    dockerfile: pmoves\services\model-fitness-bridge\Dockerfile
+    directory: pmoves/services/model-fitness-bridge
+    dockerfile: pmoves/services/model-fitness-bridge/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays: []
     # NOTE: no compose overlay declares this service
     guard_paths: []
@@ -1408,21 +1408,21 @@ services:
       - schema
       - topic
   - name: model-registry
-    directory: pmoves\services\model-registry
-    dockerfile: pmoves\services\model-registry\Dockerfile
+    directory: pmoves/services/model-registry
+    dockerfile: pmoves/services/model-registry/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: workers
         compose_key: model-registry
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.workers.yml
+          - pmoves/docker-compose.workers.yml
       - overlay: main
         compose_key: model-registry
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+          - pmoves/docker-compose.yml
     guard_paths: []
     known_road_domains:
       - compose
@@ -1430,12 +1430,12 @@ services:
       - schema
       - topic
   - name: nats-echo
-    directory: pmoves\services\nats-echo
-    dockerfile: pmoves\services\nats-echo\Dockerfile
+    directory: pmoves/services/nats-echo
+    dockerfile: pmoves/services/nats-echo/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays: []
     # NOTE: no compose overlay declares this service
     guard_paths: []
@@ -1445,21 +1445,21 @@ services:
       - schema
       - topic
   - name: nats-event-bus
-    directory: pmoves\services\nats_event_bus
-    dockerfile: pmoves\services\nats_event_bus\Dockerfile
+    directory: pmoves/services/nats_event_bus
+    dockerfile: pmoves/services/nats_event_bus/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: apps
         compose_key: nats_event_bus
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.apps.yml
+          - pmoves/docker-compose.apps.yml
       - overlay: main
         compose_key: nats_event_bus
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+          - pmoves/docker-compose.yml
     guard_paths: []
     known_road_domains:
       - compose
@@ -1467,21 +1467,21 @@ services:
       - schema
       - topic
   - name: notebook-mcp
-    directory: pmoves\services\notebook-mcp
-    dockerfile: pmoves\services\notebook-mcp\Dockerfile
+    directory: pmoves/services/notebook-mcp
+    dockerfile: pmoves/services/notebook-mcp/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: agents
         compose_key: notebook-mcp
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.agents.yml
+          - pmoves/docker-compose.agents.yml
       - overlay: main
         compose_key: notebook-mcp
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+          - pmoves/docker-compose.yml
     guard_paths: []
     known_road_domains:
       - compose
@@ -1489,25 +1489,25 @@ services:
       - schema
       - topic
   - name: notebook-sync
-    directory: pmoves\services\notebook-sync
-    dockerfile: pmoves\services\notebook-sync\Dockerfile
+    directory: pmoves/services/notebook-sync
+    dockerfile: pmoves/services/notebook-sync/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: hardened
         compose_key: notebook-sync
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.hardened.yml
+          - pmoves/docker-compose.hardened.yml
       - overlay: workers
         compose_key: notebook-sync
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.workers.yml
+          - pmoves/docker-compose.workers.yml
       - overlay: main
         compose_key: notebook-sync
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+          - pmoves/docker-compose.yml
     guard_paths: []
     known_road_domains:
       - compose
@@ -1515,21 +1515,21 @@ services:
       - schema
       - topic
   - name: notebooklm-agent
-    directory: pmoves\services\notebooklm-agent
-    dockerfile: pmoves\services\notebooklm-agent\Dockerfile
+    directory: pmoves/services/notebooklm-agent
+    dockerfile: pmoves/services/notebooklm-agent/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: agents
         compose_key: notebooklm-agent
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.agents.yml
+          - pmoves/docker-compose.agents.yml
       - overlay: main
         compose_key: notebooklm-agent
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+          - pmoves/docker-compose.yml
     guard_paths: []
     known_road_domains:
       - compose
@@ -1537,12 +1537,12 @@ services:
       - schema
       - topic
   - name: owner-presence
-    directory: pmoves\services\owner-presence
-    dockerfile: pmoves\services\owner-presence\Dockerfile
+    directory: pmoves/services/owner-presence
+    dockerfile: pmoves/services/owner-presence/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays: []
     # NOTE: no compose overlay declares this service
     guard_paths: []
@@ -1552,25 +1552,25 @@ services:
       - schema
       - topic
   - name: p7-room-orchestrator
-    directory: pmoves\services\p7-room-orchestrator
-    dockerfile: pmoves\services\p7-room-orchestrator\Dockerfile
+    directory: pmoves/services/p7-room-orchestrator
+    dockerfile: pmoves/services/p7-room-orchestrator/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: agents
         compose_key: p7-room-orchestrator
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.agents.yml
+          - pmoves/docker-compose.agents.yml
       - overlay: hardened
         compose_key: p7-room-orchestrator
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.hardened.yml
+          - pmoves/docker-compose.hardened.yml
       - overlay: main
         compose_key: p7-room-orchestrator
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+          - pmoves/docker-compose.yml
     guard_paths: []
     known_road_domains:
       - compose
@@ -1578,25 +1578,25 @@ services:
       - schema
       - topic
   - name: pdf-ingest
-    directory: pmoves\services\pdf-ingest
-    dockerfile: pmoves\services\pdf-ingest\Dockerfile
+    directory: pmoves/services/pdf-ingest
+    dockerfile: pmoves/services/pdf-ingest/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: hardened
         compose_key: pdf-ingest
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.hardened.yml
+          - pmoves/docker-compose.hardened.yml
       - overlay: workers
         compose_key: pdf-ingest
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.workers.yml
+          - pmoves/docker-compose.workers.yml
       - overlay: main
         compose_key: pdf-ingest
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+          - pmoves/docker-compose.yml
     guard_paths: []
     known_road_domains:
       - compose
@@ -1604,21 +1604,21 @@ services:
       - schema
       - topic
   - name: persona-thirdref
-    directory: pmoves\services\persona-thirdref
-    dockerfile: pmoves\services\persona-thirdref\Dockerfile
+    directory: pmoves/services/persona-thirdref
+    dockerfile: pmoves/services/persona-thirdref/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: workers
         compose_key: persona-thirdref
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.workers.yml
+          - pmoves/docker-compose.workers.yml
       - overlay: main
         compose_key: persona-thirdref
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+          - pmoves/docker-compose.yml
     guard_paths: []
     known_road_domains:
       - compose
@@ -1626,21 +1626,21 @@ services:
       - schema
       - topic
   - name: pinokio-bridge
-    directory: pmoves\services\pinokio_bridge
-    dockerfile: pmoves\services\pinokio_bridge\Dockerfile
+    directory: pmoves/services/pinokio_bridge
+    dockerfile: pmoves/services/pinokio_bridge/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: apps
         compose_key: pinokio_bridge
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.apps.yml
+          - pmoves/docker-compose.apps.yml
       - overlay: main
         compose_key: pinokio_bridge
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+          - pmoves/docker-compose.yml
     guard_paths: []
     known_road_domains:
       - compose
@@ -1663,45 +1663,45 @@ services:
       - schema
       - topic
   - name: pmoves-yt
-    directory: pmoves\services\pmoves-yt
-    dockerfile: pmoves\services\pmoves-yt\Dockerfile
+    directory: pmoves/services/pmoves-yt
+    dockerfile: pmoves/services/pmoves-yt/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: apps
         compose_key: pmoves-yt
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.apps.yml
+          - pmoves/docker-compose.apps.yml
       - overlay: arm64.override
         compose_key: pmoves-yt
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.arm64.override.yml
+          - pmoves/docker-compose.arm64.override.yml
       - overlay: hardened
         compose_key: pmoves-yt
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.hardened.yml
+          - pmoves/docker-compose.hardened.yml
       - overlay: integrations.images
         compose_key: pmoves-yt
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.integrations.images.yml
+          - pmoves/docker-compose.integrations.images.yml
       - overlay: main
         compose_key: pmoves-yt
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+          - pmoves/docker-compose.yml
       - overlay: yt-cookies
         compose_key: pmoves-yt
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yt-cookies.yml
+          - pmoves/docker-compose.yt-cookies.yml
       - overlay: yt-egress
         compose_key: pmoves-yt
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yt-egress.yml
+          - pmoves/docker-compose.yt-egress.yml
       - overlay: yt-media
         compose_key: pmoves-yt
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yt-media.yml
+          - pmoves/docker-compose.yt-media.yml
     guard_paths: []
     known_road_domains:
       - compose
@@ -1709,25 +1709,25 @@ services:
       - schema
       - topic
   - name: presign
-    directory: pmoves\services\presign
-    dockerfile: pmoves\services\presign\Dockerfile
+    directory: pmoves/services/presign
+    dockerfile: pmoves/services/presign/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: hardened
         compose_key: presign
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.hardened.yml
+          - pmoves/docker-compose.hardened.yml
       - overlay: workers
         compose_key: presign
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.workers.yml
+          - pmoves/docker-compose.workers.yml
       - overlay: main
         compose_key: presign
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+          - pmoves/docker-compose.yml
     guard_paths: []
     known_road_domains:
       - compose
@@ -1735,12 +1735,12 @@ services:
       - schema
       - topic
   - name: publisher
-    directory: pmoves\services\publisher
-    dockerfile: pmoves\services\publisher\Dockerfile
+    directory: pmoves/services/publisher
+    dockerfile: pmoves/services/publisher/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays: []
     # NOTE: no compose overlay declares this service
     guard_paths: []
@@ -1750,25 +1750,25 @@ services:
       - schema
       - topic
   - name: publisher-discord
-    directory: pmoves\services\publisher-discord
-    dockerfile: pmoves\services\publisher-discord\Dockerfile
+    directory: pmoves/services/publisher-discord
+    dockerfile: pmoves/services/publisher-discord/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: hardened
         compose_key: publisher-discord
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.hardened.yml
+          - pmoves/docker-compose.hardened.yml
       - overlay: workers
         compose_key: publisher-discord
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.workers.yml
+          - pmoves/docker-compose.workers.yml
       - overlay: main
         compose_key: publisher-discord
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+          - pmoves/docker-compose.yml
     guard_paths: []
     known_road_domains:
       - compose
@@ -1776,25 +1776,25 @@ services:
       - schema
       - topic
   - name: render-webhook
-    directory: pmoves\services\render-webhook
-    dockerfile: pmoves\services\render-webhook\Dockerfile
+    directory: pmoves/services/render-webhook
+    dockerfile: pmoves/services/render-webhook/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: hardened
         compose_key: render-webhook
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.hardened.yml
+          - pmoves/docker-compose.hardened.yml
       - overlay: workers
         compose_key: render-webhook
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.workers.yml
+          - pmoves/docker-compose.workers.yml
       - overlay: main
         compose_key: render-webhook
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+          - pmoves/docker-compose.yml
     guard_paths: []
     known_road_domains:
       - compose
@@ -1802,12 +1802,12 @@ services:
       - schema
       - topic
   - name: replay-compressor
-    directory: pmoves\services\replay-compressor
-    dockerfile: pmoves\services\replay-compressor\Dockerfile
+    directory: pmoves/services/replay-compressor
+    dockerfile: pmoves/services/replay-compressor/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays: []
     # NOTE: no compose overlay declares this service
     guard_paths: []
@@ -1817,25 +1817,25 @@ services:
       - schema
       - topic
   - name: retrieval-eval
-    directory: pmoves\services\retrieval-eval
-    dockerfile: pmoves\services\retrieval-eval\Dockerfile
+    directory: pmoves/services/retrieval-eval
+    dockerfile: pmoves/services/retrieval-eval/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: hardened
         compose_key: retrieval-eval
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.hardened.yml
+          - pmoves/docker-compose.hardened.yml
       - overlay: workers
         compose_key: retrieval-eval
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.workers.yml
+          - pmoves/docker-compose.workers.yml
       - overlay: main
         compose_key: retrieval-eval
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+          - pmoves/docker-compose.yml
     guard_paths: []
     known_road_domains:
       - compose
@@ -1843,17 +1843,17 @@ services:
       - schema
       - topic
   - name: semantic-cache
-    directory: pmoves\services\semantic-cache
-    dockerfile: pmoves\services\semantic-cache\Dockerfile
+    directory: pmoves/services/semantic-cache
+    dockerfile: pmoves/services/semantic-cache/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: cache
         compose_key: semantic-cache
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.cache.yml
+          - pmoves/docker-compose.cache.yml
     guard_paths: []
     known_road_domains:
       - compose
@@ -1861,21 +1861,21 @@ services:
       - schema
       - topic
   - name: session-context-worker
-    directory: pmoves\services\session-context-worker
-    dockerfile: pmoves\services\session-context-worker\Dockerfile
+    directory: pmoves/services/session-context-worker
+    dockerfile: pmoves/services/session-context-worker/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: workers
         compose_key: session-context-worker
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.workers.yml
+          - pmoves/docker-compose.workers.yml
       - overlay: main
         compose_key: session-context-worker
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+          - pmoves/docker-compose.yml
     guard_paths: []
     known_road_domains:
       - compose
@@ -1883,12 +1883,12 @@ services:
       - schema
       - topic
   - name: shape-attestation-bridge
-    directory: pmoves\services\shape-attestation-bridge
-    dockerfile: pmoves\services\shape-attestation-bridge\Dockerfile
+    directory: pmoves/services/shape-attestation-bridge
+    dockerfile: pmoves/services/shape-attestation-bridge/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays: []
     # NOTE: no compose overlay declares this service
     guard_paths: []
@@ -1898,21 +1898,21 @@ services:
       - schema
       - topic
   - name: spark-shape-worker
-    directory: pmoves\services\spark-shape-worker
-    dockerfile: pmoves\services\spark-shape-worker\Dockerfile
+    directory: pmoves/services/spark-shape-worker
+    dockerfile: pmoves/services/spark-shape-worker/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: workers
         compose_key: spark-shape-worker
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.workers.yml
+          - pmoves/docker-compose.workers.yml
       - overlay: main
         compose_key: spark-shape-worker
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+          - pmoves/docker-compose.yml
     guard_paths: []
     known_road_domains:
       - compose
@@ -1920,17 +1920,17 @@ services:
       - schema
       - topic
   - name: sso-auth
-    directory: pmoves\services\sso-auth
-    dockerfile: pmoves\services\sso-auth\Dockerfile
+    directory: pmoves/services/sso-auth
+    dockerfile: pmoves/services/sso-auth/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: sso
         compose_key: sso-auth
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.sso.yml
+          - pmoves/docker-compose.sso.yml
     guard_paths: []
     known_road_domains:
       - compose
@@ -1938,29 +1938,29 @@ services:
       - schema
       - topic
   - name: supaserch
-    directory: pmoves\services\supaserch
-    dockerfile: pmoves\services\supaserch\Dockerfile
+    directory: pmoves/services/supaserch
+    dockerfile: pmoves/services/supaserch/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: agents.images
         compose_key: supaserch
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.agents.images.yml
+          - pmoves/docker-compose.agents.images.yml
       - overlay: hardened
         compose_key: supaserch
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.hardened.yml
+          - pmoves/docker-compose.hardened.yml
       - overlay: workers
         compose_key: supaserch
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.workers.yml
+          - pmoves/docker-compose.workers.yml
       - overlay: main
         compose_key: supaserch
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+          - pmoves/docker-compose.yml
     guard_paths: []
     known_road_domains:
       - compose
@@ -1968,12 +1968,12 @@ services:
       - schema
       - topic
   - name: token-stub
-    directory: pmoves\services\token-stub
-    dockerfile: pmoves\services\token-stub\Dockerfile
+    directory: pmoves/services/token-stub
+    dockerfile: pmoves/services/token-stub/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays: []
     # NOTE: no compose overlay declares this service
     guard_paths: []
@@ -1983,21 +1983,21 @@ services:
       - schema
       - topic
   - name: tokenism-simulator
-    directory: pmoves\services\tokenism-simulator
-    dockerfile: pmoves\services\tokenism-simulator\Dockerfile
+    directory: pmoves/services/tokenism-simulator
+    dockerfile: pmoves/services/tokenism-simulator/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: ui
         compose_key: tokenism-simulator
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.ui.yml
+          - pmoves/docker-compose.ui.yml
       - overlay: main
         compose_key: tokenism-simulator
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+          - pmoves/docker-compose.yml
     guard_paths: []
     known_road_domains:
       - compose
@@ -2005,12 +2005,12 @@ services:
       - schema
       - topic
   - name: vibevoice-realtime
-    directory: pmoves\services\vibevoice-realtime
-    dockerfile: pmoves\services\vibevoice-realtime\Dockerfile
+    directory: pmoves/services/vibevoice-realtime
+    dockerfile: pmoves/services/vibevoice-realtime/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays: []
     # NOTE: no compose overlay declares this service
     guard_paths: []
@@ -2020,21 +2020,21 @@ services:
       - schema
       - topic
   - name: voice-relay
-    directory: pmoves\services\voice-relay
-    dockerfile: pmoves\services\voice-relay\Dockerfile
+    directory: pmoves/services/voice-relay
+    dockerfile: pmoves/services/voice-relay/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: media
         compose_key: voice-relay
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.media.yml
+          - pmoves/docker-compose.media.yml
       - overlay: main
         compose_key: voice-relay
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+          - pmoves/docker-compose.yml
     guard_paths: []
     known_road_domains:
       - compose
@@ -2042,12 +2042,12 @@ services:
       - schema
       - topic
   - name: voice-sampler
-    directory: pmoves\services\voice-sampler
-    dockerfile: pmoves\services\voice-sampler\Dockerfile
+    directory: pmoves/services/voice-sampler
+    dockerfile: pmoves/services/voice-sampler/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays: []
     # NOTE: no compose overlay declares this service
     guard_paths: []
@@ -2057,12 +2057,12 @@ services:
       - schema
       - topic
   - name: watch-folder-router
-    directory: pmoves\services\watch-folder-router
-    dockerfile: pmoves\services\watch-folder-router\Dockerfile
+    directory: pmoves/services/watch-folder-router
+    dockerfile: pmoves/services/watch-folder-router/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays: []
     # NOTE: no compose overlay declares this service
     guard_paths: []
@@ -2072,21 +2072,21 @@ services:
       - schema
       - topic
   - name: wealth-mcp
-    directory: pmoves\services\wealth-mcp
-    dockerfile: pmoves\services\wealth-mcp\Dockerfile
+    directory: pmoves/services/wealth-mcp
+    dockerfile: pmoves/services/wealth-mcp/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: agents
         compose_key: wealth-mcp
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.agents.yml
+          - pmoves/docker-compose.agents.yml
       - overlay: main
         compose_key: wealth-mcp
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+          - pmoves/docker-compose.yml
     guard_paths: []
     known_road_domains:
       - compose
@@ -2094,21 +2094,21 @@ services:
       - schema
       - topic
   - name: wger-nats-bridge
-    directory: pmoves\services\wger-nats-bridge
-    dockerfile: pmoves\services\wger-nats-bridge\Dockerfile
+    directory: pmoves/services/wger-nats-bridge
+    dockerfile: pmoves/services/wger-nats-bridge/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: apps
         compose_key: wger-nats-bridge
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.apps.yml
+          - pmoves/docker-compose.apps.yml
       - overlay: main
         compose_key: wger-nats-bridge
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+          - pmoves/docker-compose.yml
     guard_paths: []
     known_road_domains:
       - compose
@@ -2116,17 +2116,17 @@ services:
       - schema
       - topic
   - name: yt-cookie-refresher
-    directory: pmoves\services\yt-cookie-refresher
-    dockerfile: pmoves\services\yt-cookie-refresher\Dockerfile
+    directory: pmoves/services/yt-cookie-refresher
+    dockerfile: pmoves/services/yt-cookie-refresher/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: yt-cookies
         compose_key: yt-cookie-refresher
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yt-cookies.yml
+          - pmoves/docker-compose.yt-cookies.yml
     guard_paths: []
     known_road_domains:
       - compose
@@ -2134,17 +2134,17 @@ services:
       - schema
       - topic
   - name: yt-cookie-writer
-    directory: pmoves\services\yt-cookie-writer
-    dockerfile: pmoves\services\yt-cookie-writer\Dockerfile
+    directory: pmoves/services/yt-cookie-writer
+    dockerfile: pmoves/services/yt-cookie-writer/Dockerfile
     dockerfile_variants:
       - Dockerfile
     roots:
-      - pmoves\services
+      - pmoves/services
     overlays:
       - overlay: yt-cookies
         compose_key: yt-cookie-writer
         paths:
-          - C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yt-cookies.yml
+          - pmoves/docker-compose.yt-cookies.yml
     guard_paths: []
     known_road_domains:
       - compose
@@ -2159,991 +2159,991 @@ services:
 unmapped_compose_keys:
   - overlay: a0-elder-melchor
     compose_key: a0-elder-instruments
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.a0-elder-melchor.yml
+    path: pmoves/docker-compose.a0-elder-melchor.yml
   - overlay: a0-elder-melchor
     compose_key: a0-elder-knowledge
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.a0-elder-melchor.yml
+    path: pmoves/docker-compose.a0-elder-melchor.yml
   - overlay: a0-elder-melchor
     compose_key: a0-elder-memory
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.a0-elder-melchor.yml
+    path: pmoves/docker-compose.a0-elder-melchor.yml
   - overlay: a0-elder-melchor
     compose_key: a0-elder-workdir
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.a0-elder-melchor.yml
+    path: pmoves/docker-compose.a0-elder-melchor.yml
   - overlay: a0-elder-melchor
     compose_key: cap_drop
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.a0-elder-melchor.yml
+    path: pmoves/docker-compose.a0-elder-melchor.yml
   - overlay: a0-elder-melchor
     compose_key: env_file
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.a0-elder-melchor.yml
+    path: pmoves/docker-compose.a0-elder-melchor.yml
   - overlay: a0-elder-melchor
     compose_key: group_add
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.a0-elder-melchor.yml
+    path: pmoves/docker-compose.a0-elder-melchor.yml
   - overlay: a0-elder-melchor
     compose_key: pmoves_app
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.a0-elder-melchor.yml
+    path: pmoves/docker-compose.a0-elder-melchor.yml
   - overlay: a0-elder-melchor
     compose_key: pmoves_bus
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.a0-elder-melchor.yml
+    path: pmoves/docker-compose.a0-elder-melchor.yml
   - overlay: a0-elder-melchor
     compose_key: pmoves_external
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.a0-elder-melchor.yml
+    path: pmoves/docker-compose.a0-elder-melchor.yml
   - overlay: a0-elder-melchor
     compose_key: security_opt
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.a0-elder-melchor.yml
+    path: pmoves/docker-compose.a0-elder-melchor.yml
   - overlay: activepieces
     compose_key: activepieces-app
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.activepieces.yml
+    path: pmoves/docker-compose.activepieces.yml
   - overlay: activepieces
     compose_key: activepieces-postgres
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.activepieces.yml
+    path: pmoves/docker-compose.activepieces.yml
   - overlay: activepieces
     compose_key: activepieces-redis
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.activepieces.yml
+    path: pmoves/docker-compose.activepieces.yml
   - overlay: activepieces
     compose_key: activepieces-worker
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.activepieces.yml
+    path: pmoves/docker-compose.activepieces.yml
   - overlay: agentgym
     compose_key: agentgym-env-pmoves
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.agentgym.yml
+    path: pmoves/docker-compose.agentgym.yml
   - overlay: agentgym
     compose_key: agentgym-logs
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.agentgym.yml
+    path: pmoves/docker-compose.agentgym.yml
   - overlay: agentgym
     compose_key: agentgym-models
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.agentgym.yml
+    path: pmoves/docker-compose.agentgym.yml
   - overlay: agentgym
     compose_key: agentgym-task-cache
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.agentgym.yml
+    path: pmoves/docker-compose.agentgym.yml
   - overlay: agentgym
     compose_key: api_tier
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.agentgym.yml
+    path: pmoves/docker-compose.agentgym.yml
   - overlay: agentgym
     compose_key: app_tier
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.agentgym.yml
+    path: pmoves/docker-compose.agentgym.yml
   - overlay: agentgym
     compose_key: data_tier
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.agentgym.yml
+    path: pmoves/docker-compose.agentgym.yml
   - overlay: agentgym
     compose_key: env_file
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.agentgym.yml
+    path: pmoves/docker-compose.agentgym.yml
   - overlay: agentgym
     compose_key: monitoring_tier
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.agentgym.yml
+    path: pmoves/docker-compose.agentgym.yml
   - overlay: agents
     compose_key: env_file
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.agents.yml
+    path: pmoves/docker-compose.agents.yml
   - overlay: agents
     compose_key: group_add
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.agents.yml
+    path: pmoves/docker-compose.agents.yml
   - overlay: agents
     compose_key: hi-rag-gateway-gpu
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.agents.yml
+    path: pmoves/docker-compose.agents.yml
   - overlay: agents
     compose_key: hi-rag-gateway-v2-gpu
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.agents.yml
+    path: pmoves/docker-compose.agents.yml
   - overlay: agents
     compose_key: nats-echo-req
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.agents.yml
+    path: pmoves/docker-compose.agents.yml
   - overlay: agents
     compose_key: nats-echo-res
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.agents.yml
+    path: pmoves/docker-compose.agents.yml
   - overlay: alertmanager
     compose_key: alertmanager
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.alertmanager.yml
+    path: pmoves/docker-compose.alertmanager.yml
   - overlay: alertmanager
     compose_key: alertmanager-data
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.alertmanager.yml
+    path: pmoves/docker-compose.alertmanager.yml
   - overlay: amd-voice
     compose_key: group_add
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.amd-voice.yml
+    path: pmoves/docker-compose.amd-voice.yml
   - overlay: amd-voice
     compose_key: security_opt
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.amd-voice.yml
+    path: pmoves/docker-compose.amd-voice.yml
   - overlay: amd-voice
     compose_key: ultimate-tts-studio
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.amd-voice.yml
+    path: pmoves/docker-compose.amd-voice.yml
   - overlay: apps
     compose_key: wger
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.apps.yml
+    path: pmoves/docker-compose.apps.yml
   - overlay: apps
     compose_key: wger-db
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.apps.yml
+    path: pmoves/docker-compose.apps.yml
   - overlay: base
     compose_key: cap_drop
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.base.yml
+    path: pmoves/docker-compose.base.yml
   - overlay: base
     compose_key: cataclysm
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.base.yml
+    path: pmoves/docker-compose.base.yml
   - overlay: base
     compose_key: env_file
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.base.yml
+    path: pmoves/docker-compose.base.yml
   - overlay: base
     compose_key: nats_resolver_preload
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.base.yml
+    path: pmoves/docker-compose.base.yml
   - overlay: base
     compose_key: options
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.base.yml
+    path: pmoves/docker-compose.base.yml
   - overlay: base
     compose_key: pmoves
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.base.yml
+    path: pmoves/docker-compose.base.yml
   - overlay: base
     compose_key: pmoves_api
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.base.yml
+    path: pmoves/docker-compose.base.yml
   - overlay: base
     compose_key: pmoves_app
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.base.yml
+    path: pmoves/docker-compose.base.yml
   - overlay: base
     compose_key: pmoves_bus
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.base.yml
+    path: pmoves/docker-compose.base.yml
   - overlay: base
     compose_key: pmoves_data
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.base.yml
+    path: pmoves/docker-compose.base.yml
   - overlay: base
     compose_key: pmoves_db_egress
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.base.yml
+    path: pmoves/docker-compose.base.yml
   - overlay: base
     compose_key: pmoves_external
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.base.yml
+    path: pmoves/docker-compose.base.yml
   - overlay: base
     compose_key: pmoves_monitoring
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.base.yml
+    path: pmoves/docker-compose.base.yml
   - overlay: base
     compose_key: pmoves_public
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.base.yml
+    path: pmoves/docker-compose.base.yml
   - overlay: base
     compose_key: security_opt
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.base.yml
+    path: pmoves/docker-compose.base.yml
   - overlay: base
     compose_key: tmpfs
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.base.yml
+    path: pmoves/docker-compose.base.yml
   - overlay: cache
     compose_key: cap_drop
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.cache.yml
+    path: pmoves/docker-compose.cache.yml
   - overlay: cache
     compose_key: security_opt
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.cache.yml
+    path: pmoves/docker-compose.cache.yml
   - overlay: chit-tour
     compose_key: chit-tour
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.chit-tour.yml
+    path: pmoves/docker-compose.chit-tour.yml
   - overlay: chit-tour
     compose_key: pmoves_external
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.chit-tour.yml
+    path: pmoves/docker-compose.chit-tour.yml
   - overlay: chit-tour
     compose_key: tmpfs
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.chit-tour.yml
+    path: pmoves/docker-compose.chit-tour.yml
   - overlay: comfyui
     compose_key: api_tier
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.comfyui.yml
+    path: pmoves/docker-compose.comfyui.yml
   - overlay: comfyui
     compose_key: data_tier
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.comfyui.yml
+    path: pmoves/docker-compose.comfyui.yml
   - overlay: comfyui
     compose_key: external_tier
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.comfyui.yml
+    path: pmoves/docker-compose.comfyui.yml
   - overlay: core
     compose_key: archon-postgres
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.core.yml
+    path: pmoves/docker-compose.core.yml
   - overlay: core
     compose_key: cap_drop
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.core.yml
+    path: pmoves/docker-compose.core.yml
   - overlay: core
     compose_key: cloudflared
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.core.yml
+    path: pmoves/docker-compose.core.yml
   - overlay: core
     compose_key: env_file
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.core.yml
+    path: pmoves/docker-compose.core.yml
   - overlay: core
     compose_key: invidious-db
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.core.yml
+    path: pmoves/docker-compose.core.yml
   - overlay: core
     compose_key: meilisearch
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.core.yml
+    path: pmoves/docker-compose.core.yml
   - overlay: core
     compose_key: minio
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.core.yml
+    path: pmoves/docker-compose.core.yml
   - overlay: core
     compose_key: nats
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.core.yml
+    path: pmoves/docker-compose.core.yml
   - overlay: core
     compose_key: nats-hub
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.core.yml
+    path: pmoves/docker-compose.core.yml
   - overlay: core
     compose_key: nats-init
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.core.yml
+    path: pmoves/docker-compose.core.yml
   - overlay: core
     compose_key: neo4j
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.core.yml
+    path: pmoves/docker-compose.core.yml
   - overlay: core
     compose_key: p7
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.core.yml
+    path: pmoves/docker-compose.core.yml
   - overlay: core
     compose_key: qdrant
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.core.yml
+    path: pmoves/docker-compose.core.yml
   - overlay: core
     compose_key: supabase-analytics
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.core.yml
+    path: pmoves/docker-compose.core.yml
   - overlay: core
     compose_key: supabase-db
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.core.yml
+    path: pmoves/docker-compose.core.yml
   - overlay: core
     compose_key: supabase-edge-functions
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.core.yml
+    path: pmoves/docker-compose.core.yml
   - overlay: core
     compose_key: supabase-gotrue
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.core.yml
+    path: pmoves/docker-compose.core.yml
   - overlay: core
     compose_key: supabase-imgproxy
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.core.yml
+    path: pmoves/docker-compose.core.yml
   - overlay: core
     compose_key: supabase-kong
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.core.yml
+    path: pmoves/docker-compose.core.yml
   - overlay: core
     compose_key: supabase-meta
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.core.yml
+    path: pmoves/docker-compose.core.yml
   - overlay: core
     compose_key: supabase-pooler
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.core.yml
+    path: pmoves/docker-compose.core.yml
   - overlay: core
     compose_key: supabase-postgrest
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.core.yml
+    path: pmoves/docker-compose.core.yml
   - overlay: core
     compose_key: supabase-realtime
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.core.yml
+    path: pmoves/docker-compose.core.yml
   - overlay: core
     compose_key: supabase-storage
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.core.yml
+    path: pmoves/docker-compose.core.yml
   - overlay: core
     compose_key: supabase-studio
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.core.yml
+    path: pmoves/docker-compose.core.yml
   - overlay: core
     compose_key: supabase-vector
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.core.yml
+    path: pmoves/docker-compose.core.yml
   - overlay: core
     compose_key: tensorzero-clickhouse
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.core.yml
+    path: pmoves/docker-compose.core.yml
   - overlay: core
     compose_key: tensorzero-ui
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.core.yml
+    path: pmoves/docker-compose.core.yml
   - overlay: core
     compose_key: tmpfs
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.core.yml
+    path: pmoves/docker-compose.core.yml
   - overlay: darkxside-sidecar
     compose_key: agent-zero-darkxside
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.darkxside-sidecar.yml
+    path: pmoves/docker-compose.darkxside-sidecar.yml
   - overlay: darkxside-sidecar
     compose_key: cap_drop
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.darkxside-sidecar.yml
+    path: pmoves/docker-compose.darkxside-sidecar.yml
   - overlay: darkxside-sidecar
     compose_key: env_file
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.darkxside-sidecar.yml
+    path: pmoves/docker-compose.darkxside-sidecar.yml
   - overlay: darkxside-sidecar
     compose_key: pmoves-net
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.darkxside-sidecar.yml
+    path: pmoves/docker-compose.darkxside-sidecar.yml
   - overlay: darkxside-sidecar
     compose_key: pmoves_app
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.darkxside-sidecar.yml
+    path: pmoves/docker-compose.darkxside-sidecar.yml
   - overlay: darkxside-sidecar
     compose_key: pmoves_bus
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.darkxside-sidecar.yml
+    path: pmoves/docker-compose.darkxside-sidecar.yml
   - overlay: darkxside-sidecar
     compose_key: pmoves_external
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.darkxside-sidecar.yml
+    path: pmoves/docker-compose.darkxside-sidecar.yml
   - overlay: darkxside-sidecar
     compose_key: security_opt
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.darkxside-sidecar.yml
+    path: pmoves/docker-compose.darkxside-sidecar.yml
   - overlay: elder-melchor
     compose_key: nats
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.elder-melchor.yml
+    path: pmoves/docker-compose.elder-melchor.yml
   - overlay: elder-melchor
     compose_key: neo4j
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.elder-melchor.yml
+    path: pmoves/docker-compose.elder-melchor.yml
   - overlay: external
     compose_key: cap_drop
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.external.yml
+    path: pmoves/docker-compose.external.yml
   - overlay: external
     compose_key: firefly
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.external.yml
+    path: pmoves/docker-compose.external.yml
   - overlay: external
     compose_key: firefly-storage
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.external.yml
+    path: pmoves/docker-compose.external.yml
   - overlay: external
     compose_key: jellyfin-ext
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.external.yml
+    path: pmoves/docker-compose.external.yml
   - overlay: external
     compose_key: open-notebook-ext
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.external.yml
+    path: pmoves/docker-compose.external.yml
   - overlay: external
     compose_key: open-notebook-surrealdb-ext
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.external.yml
+    path: pmoves/docker-compose.external.yml
   - overlay: external
     compose_key: pmoves_app
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.external.yml
+    path: pmoves/docker-compose.external.yml
   - overlay: external
     compose_key: pmoves_external
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.external.yml
+    path: pmoves/docker-compose.external.yml
   - overlay: external
     compose_key: security_opt
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.external.yml
+    path: pmoves/docker-compose.external.yml
   - overlay: external
     compose_key: tmpfs
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.external.yml
+    path: pmoves/docker-compose.external.yml
   - overlay: external
     compose_key: wger
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.external.yml
+    path: pmoves/docker-compose.external.yml
   - overlay: external
     compose_key: wger-media
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.external.yml
+    path: pmoves/docker-compose.external.yml
   - overlay: external
     compose_key: wger-nginx
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.external.yml
+    path: pmoves/docker-compose.external.yml
   - overlay: external
     compose_key: wger-static
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.external.yml
+    path: pmoves/docker-compose.external.yml
   - overlay: gpu-4090
     compose_key: pmoves-ollama
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.gpu-4090.yml
+    path: pmoves/docker-compose.gpu-4090.yml
   - overlay: gpu-image
     compose_key: env_file
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.gpu-image.yml
+    path: pmoves/docker-compose.gpu-image.yml
   - overlay: gpu-image
     compose_key: hi-rag-gateway-v2-gpu
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.gpu-image.yml
+    path: pmoves/docker-compose.gpu-image.yml
   - overlay: gpu-image
     compose_key: pmoves
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.gpu-image.yml
+    path: pmoves/docker-compose.gpu-image.yml
   - overlay: hardened
     compose_key: hi-rag-gateway-gpu
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.hardened.yml
+    path: pmoves/docker-compose.hardened.yml
   - overlay: hardened
     compose_key: hi-rag-gateway-v2-gpu
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.hardened.yml
+    path: pmoves/docker-compose.hardened.yml
   - overlay: hardened
     compose_key: nats-echo-req
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.hardened.yml
+    path: pmoves/docker-compose.hardened.yml
   - overlay: hardened
     compose_key: nats-echo-res
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.hardened.yml
+    path: pmoves/docker-compose.hardened.yml
   - overlay: hardened
     compose_key: p7_control_token
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.hardened.yml
+    path: pmoves/docker-compose.hardened.yml
   - overlay: hardened
     compose_key: security_opt
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.hardened.yml
+    path: pmoves/docker-compose.hardened.yml
   - overlay: hardened
     compose_key: supabase_jwt_secret
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.hardened.yml
+    path: pmoves/docker-compose.hardened.yml
   - overlay: hardened
     compose_key: supabase_service_role_key
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.hardened.yml
+    path: pmoves/docker-compose.hardened.yml
   - overlay: hardened
     compose_key: tmpfs
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.hardened.yml
+    path: pmoves/docker-compose.hardened.yml
   - overlay: jellyfin-ai
     compose_key: env_file
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.jellyfin-ai.yml
+    path: pmoves/docker-compose.jellyfin-ai.yml
   - overlay: jellyfin-ai
     compose_key: group_add
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.jellyfin-ai.yml
+    path: pmoves/docker-compose.jellyfin-ai.yml
   - overlay: jellyfin-ai
     compose_key: jellyfin
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.jellyfin-ai.yml
+    path: pmoves/docker-compose.jellyfin-ai.yml
   - overlay: jellyfin-ai
     compose_key: jellyfin-audio-processor
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.jellyfin-ai.yml
+    path: pmoves/docker-compose.jellyfin-ai.yml
   - overlay: jellyfin-ai
     compose_key: jellyfin-dashboard
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.jellyfin-ai.yml
+    path: pmoves/docker-compose.jellyfin-ai.yml
   - overlay: jellyfin-ai
     compose_key: jellyfin-neo4j
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.jellyfin-ai.yml
+    path: pmoves/docker-compose.jellyfin-ai.yml
   - overlay: jellyfin-ai
     compose_key: jellyfin-nvenc
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.jellyfin-ai.yml
+    path: pmoves/docker-compose.jellyfin-ai.yml
   - overlay: jellyfin-ai
     compose_key: jellyfin-qwen-audio
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.jellyfin-ai.yml
+    path: pmoves/docker-compose.jellyfin-ai.yml
   - overlay: jellyfin-ai
     compose_key: jellyfin-redis
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.jellyfin-ai.yml
+    path: pmoves/docker-compose.jellyfin-ai.yml
   - overlay: jellyfin-ai
     compose_key: jellyfin-vaapi
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.jellyfin-ai.yml
+    path: pmoves/docker-compose.jellyfin-ai.yml
   - overlay: jellyfin-ai
     compose_key: pmoves
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.jellyfin-ai.yml
+    path: pmoves/docker-compose.jellyfin-ai.yml
   - overlay: jellyfin-ai
     compose_key: pmoves_api
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.jellyfin-ai.yml
+    path: pmoves/docker-compose.jellyfin-ai.yml
   - overlay: jellyfin-ai
     compose_key: pmoves_app
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.jellyfin-ai.yml
+    path: pmoves/docker-compose.jellyfin-ai.yml
   - overlay: jellyfin-ai
     compose_key: pmoves_data
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.jellyfin-ai.yml
+    path: pmoves/docker-compose.jellyfin-ai.yml
   - overlay: jellyfin.hosts
     compose_key: jellyfin-ext
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.jellyfin.hosts.yml
+    path: pmoves/docker-compose.jellyfin.hosts.yml
   - overlay: jetson-edge.override
     compose_key: nats-leaf
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.jetson-edge.override.yml
+    path: pmoves/docker-compose.jetson-edge.override.yml
   - overlay: jetson-edge.override
     compose_key: ollama-edge
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.jetson-edge.override.yml
+    path: pmoves/docker-compose.jetson-edge.override.yml
   - overlay: jetson-edge.override
     compose_key: pmoves_bus
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.jetson-edge.override.yml
+    path: pmoves/docker-compose.jetson-edge.override.yml
   - overlay: jetson-edge.override
     compose_key: whisper-edge
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.jetson-edge.override.yml
+    path: pmoves/docker-compose.jetson-edge.override.yml
   - overlay: juicefs-mount
     compose_key: juicefs-media
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.juicefs-mount.yml
+    path: pmoves/docker-compose.juicefs-mount.yml
   - overlay: juicefs-mount
     compose_key: juicefs-mount
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.juicefs-mount.yml
+    path: pmoves/docker-compose.juicefs-mount.yml
   - overlay: laptop-4090.override
     compose_key: jellyfin-nvenc
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.laptop-4090.override.yml
+    path: pmoves/docker-compose.laptop-4090.override.yml
   - overlay: laptop-4090.override
     compose_key: jellyfin-qwen-audio
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.laptop-4090.override.yml
+    path: pmoves/docker-compose.laptop-4090.override.yml
   - overlay: main
     compose_key: archon-postgres
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+    path: pmoves/docker-compose.yml
   - overlay: main
     compose_key: bgutil-pot-provider
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+    path: pmoves/docker-compose.yml
   - overlay: main
     compose_key: cap_drop
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+    path: pmoves/docker-compose.yml
   - overlay: main
     compose_key: cataclysm
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+    path: pmoves/docker-compose.yml
   - overlay: main
     compose_key: cloudflared
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+    path: pmoves/docker-compose.yml
   - overlay: main
     compose_key: env_file
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+    path: pmoves/docker-compose.yml
   - overlay: main
     compose_key: github-branch-naming
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+    path: pmoves/docker-compose.yml
   - overlay: main
     compose_key: github-crossrepo-sync
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+    path: pmoves/docker-compose.yml
   - overlay: main
     compose_key: grayjay-server
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+    path: pmoves/docker-compose.yml
   - overlay: main
     compose_key: group_add
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+    path: pmoves/docker-compose.yml
   - overlay: main
     compose_key: hi-rag-gateway-gpu
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+    path: pmoves/docker-compose.yml
   - overlay: main
     compose_key: hi-rag-gateway-v2-gpu
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+    path: pmoves/docker-compose.yml
   - overlay: main
     compose_key: invidious
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+    path: pmoves/docker-compose.yml
   - overlay: main
     compose_key: invidious-companion
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+    path: pmoves/docker-compose.yml
   - overlay: main
     compose_key: invidious-db
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+    path: pmoves/docker-compose.yml
   - overlay: main
     compose_key: llama-throughput-lab
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+    path: pmoves/docker-compose.yml
   - overlay: main
     compose_key: meilisearch
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+    path: pmoves/docker-compose.yml
   - overlay: main
     compose_key: minio
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+    path: pmoves/docker-compose.yml
   - overlay: main
     compose_key: nats
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+    path: pmoves/docker-compose.yml
   - overlay: main
     compose_key: nats-echo-req
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+    path: pmoves/docker-compose.yml
   - overlay: main
     compose_key: nats-echo-res
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+    path: pmoves/docker-compose.yml
   - overlay: main
     compose_key: nats-hub
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+    path: pmoves/docker-compose.yml
   - overlay: main
     compose_key: nats-init
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+    path: pmoves/docker-compose.yml
   - overlay: main
     compose_key: nats_resolver_preload
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+    path: pmoves/docker-compose.yml
   - overlay: main
     compose_key: neo4j
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+    path: pmoves/docker-compose.yml
   - overlay: main
     compose_key: nvidia-nim
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+    path: pmoves/docker-compose.yml
   - overlay: main
     compose_key: openroom
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+    path: pmoves/docker-compose.yml
   - overlay: main
     compose_key: options
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+    path: pmoves/docker-compose.yml
   - overlay: main
     compose_key: p7
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+    path: pmoves/docker-compose.yml
   - overlay: main
     compose_key: pmoves
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+    path: pmoves/docker-compose.yml
   - overlay: main
     compose_key: pmoves-ollama
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+    path: pmoves/docker-compose.yml
   - overlay: main
     compose_key: pmoves-ui
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+    path: pmoves/docker-compose.yml
   - overlay: main
     compose_key: pmoves_api
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+    path: pmoves/docker-compose.yml
   - overlay: main
     compose_key: pmoves_app
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+    path: pmoves/docker-compose.yml
   - overlay: main
     compose_key: pmoves_bus
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+    path: pmoves/docker-compose.yml
   - overlay: main
     compose_key: pmoves_data
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+    path: pmoves/docker-compose.yml
   - overlay: main
     compose_key: pmoves_db_egress
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+    path: pmoves/docker-compose.yml
   - overlay: main
     compose_key: pmoves_external
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+    path: pmoves/docker-compose.yml
   - overlay: main
     compose_key: pmoves_monitoring
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+    path: pmoves/docker-compose.yml
   - overlay: main
     compose_key: pmoves_public
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+    path: pmoves/docker-compose.yml
   - overlay: main
     compose_key: qdrant
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+    path: pmoves/docker-compose.yml
   - overlay: main
     compose_key: security_opt
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+    path: pmoves/docker-compose.yml
   - overlay: main
     compose_key: supabase-analytics
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+    path: pmoves/docker-compose.yml
   - overlay: main
     compose_key: supabase-db
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+    path: pmoves/docker-compose.yml
   - overlay: main
     compose_key: supabase-edge-functions
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+    path: pmoves/docker-compose.yml
   - overlay: main
     compose_key: supabase-gotrue
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+    path: pmoves/docker-compose.yml
   - overlay: main
     compose_key: supabase-imgproxy
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+    path: pmoves/docker-compose.yml
   - overlay: main
     compose_key: supabase-kong
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+    path: pmoves/docker-compose.yml
   - overlay: main
     compose_key: supabase-meta
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+    path: pmoves/docker-compose.yml
   - overlay: main
     compose_key: supabase-pooler
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+    path: pmoves/docker-compose.yml
   - overlay: main
     compose_key: supabase-postgrest
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+    path: pmoves/docker-compose.yml
   - overlay: main
     compose_key: supabase-realtime
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+    path: pmoves/docker-compose.yml
   - overlay: main
     compose_key: supabase-storage
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+    path: pmoves/docker-compose.yml
   - overlay: main
     compose_key: supabase-studio
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+    path: pmoves/docker-compose.yml
   - overlay: main
     compose_key: supabase-vector
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+    path: pmoves/docker-compose.yml
   - overlay: main
     compose_key: tensorzero-clickhouse
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+    path: pmoves/docker-compose.yml
   - overlay: main
     compose_key: tensorzero-ui
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+    path: pmoves/docker-compose.yml
   - overlay: main
     compose_key: tmpfs
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+    path: pmoves/docker-compose.yml
   - overlay: main
     compose_key: tokenism-ui
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+    path: pmoves/docker-compose.yml
   - overlay: main
     compose_key: transcribe-backend
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+    path: pmoves/docker-compose.yml
   - overlay: main
     compose_key: transcribe-frontend
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+    path: pmoves/docker-compose.yml
   - overlay: main
     compose_key: ultimate-tts-studio
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+    path: pmoves/docker-compose.yml
   - overlay: main
     compose_key: wger
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+    path: pmoves/docker-compose.yml
   - overlay: main
     compose_key: wger-db
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yml
+    path: pmoves/docker-compose.yml
   - overlay: mcp-gateway
     compose_key: pmoves_api
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.mcp-gateway.yml
+    path: pmoves/docker-compose.mcp-gateway.yml
   - overlay: mcp-gateway
     compose_key: pmoves_app
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.mcp-gateway.yml
+    path: pmoves/docker-compose.mcp-gateway.yml
   - overlay: mcp-gateway
     compose_key: pmoves_bus
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.mcp-gateway.yml
+    path: pmoves/docker-compose.mcp-gateway.yml
   - overlay: mcp-gateway
     compose_key: pmoves_pmoves_app
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.mcp-gateway.yml
+    path: pmoves/docker-compose.mcp-gateway.yml
   - overlay: media
     compose_key: bgutil-pot-provider
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.media.yml
+    path: pmoves/docker-compose.media.yml
   - overlay: media
     compose_key: cap_drop
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.media.yml
+    path: pmoves/docker-compose.media.yml
   - overlay: media
     compose_key: env_file
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.media.yml
+    path: pmoves/docker-compose.media.yml
   - overlay: media
     compose_key: llama-throughput-lab
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.media.yml
+    path: pmoves/docker-compose.media.yml
   - overlay: media
     compose_key: nvidia-nim
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.media.yml
+    path: pmoves/docker-compose.media.yml
   - overlay: media
     compose_key: pmoves-ollama
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.media.yml
+    path: pmoves/docker-compose.media.yml
   - overlay: media
     compose_key: tmpfs
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.media.yml
+    path: pmoves/docker-compose.media.yml
   - overlay: media
     compose_key: transcribe-backend
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.media.yml
+    path: pmoves/docker-compose.media.yml
   - overlay: media
     compose_key: transcribe-frontend
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.media.yml
+    path: pmoves/docker-compose.media.yml
   - overlay: media
     compose_key: ultimate-tts-studio
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.media.yml
+    path: pmoves/docker-compose.media.yml
   - overlay: n8n
     compose_key: env_file
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.n8n.yml
+    path: pmoves/docker-compose.n8n.yml
   - overlay: n8n
     compose_key: n8n
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.n8n.yml
+    path: pmoves/docker-compose.n8n.yml
   - overlay: n8n
     compose_key: n8n-runners
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.n8n.yml
+    path: pmoves/docker-compose.n8n.yml
   - overlay: n8n.postgres
     compose_key: env_file
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.n8n.postgres.yml
+    path: pmoves/docker-compose.n8n.postgres.yml
   - overlay: n8n.postgres
     compose_key: n8n
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.n8n.postgres.yml
+    path: pmoves/docker-compose.n8n.postgres.yml
   - overlay: n8n.postgres
     compose_key: n8n-db
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.n8n.postgres.yml
+    path: pmoves/docker-compose.n8n.postgres.yml
   - overlay: open-notebook
     compose_key: cataclysm
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.open-notebook.yml
+    path: pmoves/docker-compose.open-notebook.yml
   - overlay: open-notebook
     compose_key: env_file
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.open-notebook.yml
+    path: pmoves/docker-compose.open-notebook.yml
   - overlay: open-notebook
     compose_key: open-notebook
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.open-notebook.yml
+    path: pmoves/docker-compose.open-notebook.yml
   - overlay: open-notebook
     compose_key: open-notebook-surrealdb
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.open-notebook.yml
+    path: pmoves/docker-compose.open-notebook.yml
   - overlay: open-notebook
     compose_key: pmoves
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.open-notebook.yml
+    path: pmoves/docker-compose.open-notebook.yml
   - overlay: open-notebook
     compose_key: pmoves_api
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.open-notebook.yml
+    path: pmoves/docker-compose.open-notebook.yml
   - overlay: open-notebook
     compose_key: pmoves_app
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.open-notebook.yml
+    path: pmoves/docker-compose.open-notebook.yml
   - overlay: persona
     compose_key: persona-room
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.persona.yml
+    path: pmoves/docker-compose.persona.yml
   - overlay: persona
     compose_key: pmoves_external
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.persona.yml
+    path: pmoves/docker-compose.persona.yml
   - overlay: persona
     compose_key: tmpfs
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.persona.yml
+    path: pmoves/docker-compose.persona.yml
   - overlay: remote
     compose_key: env_file
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.remote.yml
+    path: pmoves/docker-compose.remote.yml
   - overlay: remote
     compose_key: headscale
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.remote.yml
+    path: pmoves/docker-compose.remote.yml
   - overlay: remote
     compose_key: headscale-agent
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.remote.yml
+    path: pmoves/docker-compose.remote.yml
   - overlay: remote
     compose_key: headscale-agent-state
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.remote.yml
+    path: pmoves/docker-compose.remote.yml
   - overlay: remote
     compose_key: headscale-data
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.remote.yml
+    path: pmoves/docker-compose.remote.yml
   - overlay: remote
     compose_key: pmoves_api
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.remote.yml
+    path: pmoves/docker-compose.remote.yml
   - overlay: remote
     compose_key: pmoves_app
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.remote.yml
+    path: pmoves/docker-compose.remote.yml
   - overlay: remote
     compose_key: pmoves_monitoring
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.remote.yml
+    path: pmoves/docker-compose.remote.yml
   - overlay: remote
     compose_key: rustdesk-data
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.remote.yml
+    path: pmoves/docker-compose.remote.yml
   - overlay: remote
     compose_key: rustdesk-hbbr
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.remote.yml
+    path: pmoves/docker-compose.remote.yml
   - overlay: remote
     compose_key: rustdesk-hbbs
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.remote.yml
+    path: pmoves/docker-compose.remote.yml
   - overlay: rocm.override
     compose_key: device-metrics-exporter
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.rocm.override.yml
+    path: pmoves/docker-compose.rocm.override.yml
   - overlay: rocm.override
     compose_key: pmoves_monitoring
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.rocm.override.yml
+    path: pmoves/docker-compose.rocm.override.yml
   - overlay: rustdesk
     compose_key: hbbr
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.rustdesk.yml
+    path: pmoves/docker-compose.rustdesk.yml
   - overlay: rustdesk
     compose_key: hbbs
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.rustdesk.yml
+    path: pmoves/docker-compose.rustdesk.yml
   - overlay: rustdesk
     compose_key: pmoves
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.rustdesk.yml
+    path: pmoves/docker-compose.rustdesk.yml
   - overlay: spark-sidecar
     compose_key: agent-zero-spark
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.spark-sidecar.yml
+    path: pmoves/docker-compose.spark-sidecar.yml
   - overlay: spark-sidecar
     compose_key: cap_drop
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.spark-sidecar.yml
+    path: pmoves/docker-compose.spark-sidecar.yml
   - overlay: spark-sidecar
     compose_key: env_file
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.spark-sidecar.yml
+    path: pmoves/docker-compose.spark-sidecar.yml
   - overlay: spark-sidecar
     compose_key: pmoves-ollama
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.spark-sidecar.yml
+    path: pmoves/docker-compose.spark-sidecar.yml
   - overlay: spark-sidecar
     compose_key: pmoves-ollama-models
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.spark-sidecar.yml
+    path: pmoves/docker-compose.spark-sidecar.yml
   - overlay: spark-sidecar
     compose_key: security_opt
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.spark-sidecar.yml
+    path: pmoves/docker-compose.spark-sidecar.yml
   - overlay: spark-sidecar
     compose_key: spark_net
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.spark-sidecar.yml
+    path: pmoves/docker-compose.spark-sidecar.yml
   - overlay: tailscale
     compose_key: env_file
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.tailscale.yml
+    path: pmoves/docker-compose.tailscale.yml
   - overlay: tailscale
     compose_key: tailscale
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.tailscale.yml
+    path: pmoves/docker-compose.tailscale.yml
   - overlay: tailscale
     compose_key: tailscale-state
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.tailscale.yml
+    path: pmoves/docker-compose.tailscale.yml
   - overlay: tracing
     compose_key: jaeger
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.tracing.yml
+    path: pmoves/docker-compose.tracing.yml
   - overlay: tracing
     compose_key: otel-collector
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.tracing.yml
+    path: pmoves/docker-compose.tracing.yml
   - overlay: tracing
     compose_key: security_opt
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.tracing.yml
+    path: pmoves/docker-compose.tracing.yml
   - overlay: tracing
     compose_key: tmpfs
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.tracing.yml
+    path: pmoves/docker-compose.tracing.yml
   - overlay: traefik
     compose_key: traefik
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.traefik.yml
+    path: pmoves/docker-compose.traefik.yml
   - overlay: ui
     compose_key: env_file
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.ui.yml
+    path: pmoves/docker-compose.ui.yml
   - overlay: ui
     compose_key: grayjay-server
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.ui.yml
+    path: pmoves/docker-compose.ui.yml
   - overlay: ui
     compose_key: invidious
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.ui.yml
+    path: pmoves/docker-compose.ui.yml
   - overlay: ui
     compose_key: invidious-companion
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.ui.yml
+    path: pmoves/docker-compose.ui.yml
   - overlay: ui
     compose_key: openroom
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.ui.yml
+    path: pmoves/docker-compose.ui.yml
   - overlay: ui
     compose_key: pmoves-ui
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.ui.yml
+    path: pmoves/docker-compose.ui.yml
   - overlay: ui
     compose_key: tokenism-ui
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.ui.yml
+    path: pmoves/docker-compose.ui.yml
   - overlay: ultimate-tts-studio
     compose_key: ultimate-tts-studio
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.ultimate-tts-studio.yml
+    path: pmoves/docker-compose.ultimate-tts-studio.yml
   - overlay: voice
     compose_key: api_tier
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.voice.yml
+    path: pmoves/docker-compose.voice.yml
   - overlay: voice
     compose_key: vibevoice
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.voice.yml
+    path: pmoves/docker-compose.voice.yml
   - overlay: vps.override
     compose_key: hi-rag-gateway-v2-gpu
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.vps.override.yml
+    path: pmoves/docker-compose.vps.override.yml
   - overlay: vps.override
     compose_key: letsencrypt
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.vps.override.yml
+    path: pmoves/docker-compose.vps.override.yml
   - overlay: vps.override
     compose_key: meili-data
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.vps.override.yml
+    path: pmoves/docker-compose.vps.override.yml
   - overlay: vps.override
     compose_key: meilisearch
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.vps.override.yml
+    path: pmoves/docker-compose.vps.override.yml
   - overlay: vps.override
     compose_key: nats
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.vps.override.yml
+    path: pmoves/docker-compose.vps.override.yml
   - overlay: vps.override
     compose_key: nats-data
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.vps.override.yml
+    path: pmoves/docker-compose.vps.override.yml
   - overlay: vps.override
     compose_key: neo4j
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.vps.override.yml
+    path: pmoves/docker-compose.vps.override.yml
   - overlay: vps.override
     compose_key: neo4j-data
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.vps.override.yml
+    path: pmoves/docker-compose.vps.override.yml
   - overlay: vps.override
     compose_key: nginx
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.vps.override.yml
+    path: pmoves/docker-compose.vps.override.yml
   - overlay: vps.override
     compose_key: ollama
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.vps.override.yml
+    path: pmoves/docker-compose.vps.override.yml
   - overlay: vps.override
     compose_key: pmoves-net
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.vps.override.yml
+    path: pmoves/docker-compose.vps.override.yml
   - overlay: vps.override
     compose_key: pmoves_api
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.vps.override.yml
+    path: pmoves/docker-compose.vps.override.yml
   - overlay: vps.override
     compose_key: qdrant
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.vps.override.yml
+    path: pmoves/docker-compose.vps.override.yml
   - overlay: vps.override
     compose_key: qdrant-data
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.vps.override.yml
+    path: pmoves/docker-compose.vps.override.yml
   - overlay: vps.override
     compose_key: resources
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.vps.override.yml
+    path: pmoves/docker-compose.vps.override.yml
   - overlay: vps.override
     compose_key: supabase-analytics
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.vps.override.yml
+    path: pmoves/docker-compose.vps.override.yml
   - overlay: vps.override
     compose_key: supabase-db
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.vps.override.yml
+    path: pmoves/docker-compose.vps.override.yml
   - overlay: vps.override
     compose_key: supabase-db-data
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.vps.override.yml
+    path: pmoves/docker-compose.vps.override.yml
   - overlay: vps.override
     compose_key: supabase-edge-functions
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.vps.override.yml
+    path: pmoves/docker-compose.vps.override.yml
   - overlay: vps.override
     compose_key: supabase-gotrue
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.vps.override.yml
+    path: pmoves/docker-compose.vps.override.yml
   - overlay: vps.override
     compose_key: supabase-imgproxy
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.vps.override.yml
+    path: pmoves/docker-compose.vps.override.yml
   - overlay: vps.override
     compose_key: supabase-kong
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.vps.override.yml
+    path: pmoves/docker-compose.vps.override.yml
   - overlay: vps.override
     compose_key: supabase-meta
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.vps.override.yml
+    path: pmoves/docker-compose.vps.override.yml
   - overlay: vps.override
     compose_key: supabase-pooler
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.vps.override.yml
+    path: pmoves/docker-compose.vps.override.yml
   - overlay: vps.override
     compose_key: supabase-postgrest
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.vps.override.yml
+    path: pmoves/docker-compose.vps.override.yml
   - overlay: vps.override
     compose_key: supabase-realtime
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.vps.override.yml
+    path: pmoves/docker-compose.vps.override.yml
   - overlay: vps.override
     compose_key: supabase-storage
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.vps.override.yml
+    path: pmoves/docker-compose.vps.override.yml
   - overlay: vps.override
     compose_key: supabase-vector
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.vps.override.yml
+    path: pmoves/docker-compose.vps.override.yml
   - overlay: vps.override
     compose_key: supabase-vector-data
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.vps.override.yml
+    path: pmoves/docker-compose.vps.override.yml
   - overlay: vps.override
     compose_key: ultimate-tts-studio
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.vps.override.yml
+    path: pmoves/docker-compose.vps.override.yml
   - overlay: vps.override
     compose_key: vllm
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.vps.override.yml
+    path: pmoves/docker-compose.vps.override.yml
   - overlay: workers
     compose_key: github-branch-naming
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.workers.yml
+    path: pmoves/docker-compose.workers.yml
   - overlay: workers
     compose_key: github-crossrepo-sync
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.workers.yml
+    path: pmoves/docker-compose.workers.yml
   - overlay: yt-cookies
     compose_key: yt-cookies-vol
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yt-cookies.yml
+    path: pmoves/docker-compose.yt-cookies.yml
   - overlay: yt-egress
     compose_key: bgutil-pot-provider
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yt-egress.yml
+    path: pmoves/docker-compose.yt-egress.yml
   - overlay: yt-egress
     compose_key: invidious
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yt-egress.yml
+    path: pmoves/docker-compose.yt-egress.yml
   - overlay: yt-egress
     compose_key: invidious-companion
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yt-egress.yml
+    path: pmoves/docker-compose.yt-egress.yml
   - overlay: yt-egress
     compose_key: tailscale-yt-egress
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yt-egress.yml
+    path: pmoves/docker-compose.yt-egress.yml
   - overlay: yt-egress
     compose_key: tailscale-yt-egress-state
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.yt-egress.yml
+    path: pmoves/docker-compose.yt-egress.yml
   - overlay: z890
     compose_key: env_file
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.z890.yml
+    path: pmoves/docker-compose.z890.yml
   - overlay: z890
     compose_key: nats-leaf
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.z890.yml
+    path: pmoves/docker-compose.z890.yml
   - overlay: z890
     compose_key: pmoves-ollama
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.z890.yml
+    path: pmoves/docker-compose.z890.yml
   - overlay: z890
     compose_key: tmpfs
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.z890.yml
+    path: pmoves/docker-compose.z890.yml
   - overlay: z890
     compose_key: z890_net
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.z890.yml
+    path: pmoves/docker-compose.z890.yml
   - overlay: z890.override
     compose_key: pmoves-ollama
-    path: C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docker-compose.z890.override.yml
+    path: pmoves/docker-compose.z890.override.yml
