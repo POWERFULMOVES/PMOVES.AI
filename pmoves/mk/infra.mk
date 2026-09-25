@@ -445,6 +445,11 @@ gha-runner-4090-preflight: ## Validate Docker Hub auth + Tailscale DNS + GitHub 
 	@echo "=== Preflight complete ==="
 
 gha-runner-4090-up: gha-runner-4090-preflight ## Start 2 parallel ai-lab Docker runners on the 4090 laptop
+	@# Pull first -- same stale-cached-image failure as gha-runner-up (2026-09
+	@# incident: deprecated bundled runner v2.335.1 crash-looped on B850).
+	@RUNNER_ACCESS_TOKEN= docker compose -p $(RUNNER_PROJECT_4090) -f $(RUNNER_COMPOSE_4090) pull || { \
+	  echo "  ✗ FAIL: runner image pull failed; the cached image may bundle a deprecated runner."; \
+	  exit 1; }
 	@_pat="$(call _runner_pat)"; \
 	RUNNER_ACCESS_TOKEN=$$_pat docker compose -p $(RUNNER_PROJECT_4090) -f $(RUNNER_COMPOSE_4090) up -d
 
@@ -477,6 +482,20 @@ gha-runner-up: ## Start cross-node ai-lab Docker runners (RUNNER_NODE=z890|4090|
 	@echo "Pre-creating host config dirs (user-owned) for the runner bind mount..."
 	@mkdir -p "$$HOME/.config/pmoves/chit" "$$HOME/.config/pmoves/secrets" && \
 	  chmod 700 "$$HOME/.config/pmoves" "$$HOME/.config/pmoves/chit" "$$HOME/.config/pmoves/secrets"
+	@# Always PULL before `up -d`. 2026-09 incident: the B850 runners ran a
+	@# myoung34/github-runner:ubuntu-jammy image cached since 2026-07-10, whose
+	@# bundled runner (v2.335.1) GitHub had deprecated ("Runner version v2.335.1
+	@# is deprecated and cannot receive messages"). With auto-update disabled in
+	@# the image, the containers crash-looped ~5600 times each and never took a
+	@# job, so sync-secrets-local.yml could not produce CHIT bundles for the
+	@# consumer nodes (4090/5090). `up -d` alone never refreshes a cached tag.
+	@echo "Pulling the runner image (a stale cached image may carry a deprecated runner)..."
+	@RUNNER_NODE=$(RUNNER_NODE) docker compose -p $(RUNNER_PROJECT) -f $(RUNNER_COMPOSE) pull || { \
+	  echo "  ✗ FAIL: runner image pull failed. Refusing to start on the cached image:"; \
+	  echo "    it may bundle a runner version GitHub has deprecated, which crash-loops"; \
+	  echo "    with 'Runner version vX is deprecated and cannot receive messages'."; \
+	  echo "    Fix registry/network access, then re-run this target."; \
+	  exit 1; }
 	@echo "Resolving runner credential for node '$(RUNNER_NODE)'..."
 	@_pat="$(call _runner_pat)"; \
 	if [ -n "$$_pat" ] && GH_TOKEN="$$_pat" gh api repos/POWERFULMOVES/PMOVES.AI/actions/runners >/dev/null 2>&1; then \
