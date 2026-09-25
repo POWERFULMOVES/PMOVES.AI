@@ -77,7 +77,7 @@
 |------|------|----------------|-------|
 | `pmoves/tools/pinokio_plugin_provenance.py` | PMOVES.AI | Classify each installed plugin as fork / upstream / dirty / untracked / unmeasured | 1 |
 | `pmoves/tools/tests/test_pinokio_plugin_provenance.py` | PMOVES.AI | unittest suite for the above | 1 |
-| `pmoves/mk/pinokio.mk` + `include mk/pinokio.mk` in `pmoves/Makefile` | PMOVES.AI | `pinokio-plugin-provenance`, `pinokio-plugins-install` targets | 1 |
+| `pmoves/mk/pinokio.mk` + `include mk/pinokio.mk` in `pmoves/Makefile` | PMOVES.AI | `pinokio-plugin-provenance` target | 1 |
 | `pinokio/pinokio.js` | PMOVES-registry | App launcher "PMOVES Registry": top-level `plugins` array + menu listing the bundled plugins (P23) | 2 |
 | `pinokio/plugins/pmoves-*/pinokio.js` | PMOVES-registry | One terminal plugin per PMOVES harness wrapper; `pmoves-crush` replaces the loose `plugin/pmoves-crush` (P10) | 2 |
 | `pinokio/test/*.test.js` | PMOVES-registry | node:test suite for the launcher and plugins | 2 |
@@ -654,21 +654,21 @@ Open Pinokio's `/plugins` page (the P21 method) and confirm "PMOVES Claude" is l
 
 ---
 
-## Phase 3 (outline, detailed plan after G1 = Phase 2 merged): generate plugins from the source of truth
+## Phase 3 (outline, detailed plan after G1 = Phase 2 merged): generate sidecars and plugins from the source of truth
 
-- Add a `pinokio_plugin` renderer to `pmoves_launcher_generator.py` that emits `pmoves-<family>/pinokio.js` for every `cli_tools.yaml` `pmoves_wrappers` entry (claude, crush, kilo, codex, kimi, hermes) into a checkout of the code fork, reusing the `CliTool` / `NodeIdentity` model (P17).
-- Add a drift check: the rendered output is compared with the fork's committed files, in the same style as `launchers.manifest.json`'s sha256 inventory.
-- Hand-written Phase 2 plugins become the generator's golden fixtures.
+- Add two renderers to `pmoves_launcher_generator.py`, reusing the `CliTool` / `NodeIdentity` model (P17): (a) `registry_sidecar` emits `pmoves/sidecars/<id>.json` and (b) `registry_plugin` emits `pinokio/plugins/pmoves-<harness>/pinokio.js` plus the `PLUGINS` list in `pinokio/pinokio.js`, both into a checkout of PMOVES-registry, from `cli_tools.yaml` `pmoves_wrappers` + `agent_registry.yaml`.
+- Add a drift check: the rendered output is compared with PMOVES-registry's committed files, in the same style as `launchers.manifest.json`'s sha256 inventory.
+- Phase 2's hand-written files become the generator's golden fixtures.
 
-## Phase 4 (outline, after G2 = Phase 3 green): PMOVES-registry + Spynel
+## Phase 4 (outline, after G2 = Phase 3 green): ACP entries in PMOVES-registry + Spynel
 
-- The generator emits `pmoves-<family>/agent.json` into PMOVES-registry, per the upstream `agent.schema.json` (`distribution.npx|binary|uvx`). `acp_registry_map.py` links each one, so the `linked` count goes above the current 1.
-- Fix the dead `spynel` bridge. Restore, or supersede with a documented reason, `TAC_ACP_REGISTRY.md` (P18).
-- Spynel: establish from Spynel's own docs how it discovers ACP agents (P19 found no registry key), then point it at PMOVES-registry. `make -C pmoves acp-launcher-probe` must PASS for every PMOVES entry.
+- Add PMOVES entries to PMOVES-registry, per the upstream `agent.schema.json` (P24), only for harnesses with an ACP server: kimi (`kimi acp`), kilo (`kilo acp`), agent-zero (`a0 acp`), and claude via `@agentclientprotocol/claude-agent-acp` with PMOVES env (P27). Each entry's sidecar gets its `acp` value. `acp_registry_map.py` links each one, so the `linked` count goes above the current 1 (P18). Crush joins when lane `feat/crush-acp-server` lands.
+- Add a registry + sidecar loader to PMOVES-spynel, so its harness catalog comes from PMOVES-registry instead of the compiled-in list (P26), keeping the custom `acp` slot as the fallback. Restore, or supersede with a documented reason, `TAC_ACP_REGISTRY.md` (P18).
+- `make -C pmoves acp-launcher-probe` must PASS for every PMOVES entry.
 
 ## Phase 5 (outline, after G3): P7 rooms bind plugin sets
 
-- Room manifest overlay `plugins: [pmoves-claude, pmoves-vscode, …]` (schema bump in `room.manifest.v1`), selected per `ROOMS_ON_A_STAGE.md`.
+- Room manifest overlay `plugins: [pmoves-claude, pmoves-crush, …]` (schema bump in `room.manifest.v1`), selected per `ROOMS_ON_A_STAGE.md`.
 - P7 publishes `p7.nats.launch` / `p7.nats.session` when a plugin session starts or stops (P20: reserved today). Verify with a live `nats sub 'p7.nats.>'` capture during a launch.
 - Closes P2 ("Route P7 launcher through room/stage selection").
 
@@ -677,9 +677,12 @@ Open Pinokio's `/plugins` page (the P21 method) and confirm "PMOVES Claude" is l
 - PMOVES-pinokio PR #11 (8.2.0 sync) → then D4 (install the fork build) → PR #12 (fleet console, spec §3 moves 1-2).
 - `fleet_sentinel` deploy (spec §4) → `/registry.json` feeds PR #12's menu.
 - D3: fork `pinokiocomputer/home` to pin the docs source (P15).
+- Lane feat/crush-acp-server (register PR #3183): ACP v1 stdio server in PMOVES-crush (P27).
+- A0 2.13 bring-up with the a0 ACP connector (lane chore/a0-archon-sync-bringup; build waits for >10G available memory, P12/P28).
 
 ## Self-Review (done at authoring)
 
-- Spec coverage: §3 moves 1-2 → Parallel tracks (PR #12). §3 move 3 (self-heal in launcher) → deferred to PR #12's successor; not covered here, called out. §Sequencing 1 (.vscode) → partially covered (Task 2.4 credentials; Task 2.2 settings seed). The remaining §1 gaps (schemas, tasks, launch, mcp.json) are NOT in this plan and stay open in the spec. P2 → Phase 5.
+- Spec coverage: §3 moves 1-2 → Parallel tracks (PR #12). §3 move 3 (self-heal in launcher) → deferred to PR #12's successor; not covered here, called out. §Sequencing 1 (.vscode) → partially covered (Task 2.4 credentials; Task 2.3 settings seed). The remaining §1 gaps (schemas, tasks, launch, mcp.json) are NOT in this plan and stay open in the spec. P2 → Phase 5.
 - Placeholders: Phases 3-5 are deliberately outlines, gated on measurements; Phases 0-2 carry full steps.
+- Revision 2026-09-25: the POWERFULMOVES/code subfolder approach (old Phase 2) is retracted per D2, because Pinokio 8.2 does not load nested collections (P21). Task 1.1 still classifies `plugin/code` so a leftover checkout is reported, not silently trusted. Task 1.1 is kept byte-identical in this revision, so its `pinokio.mk` still defines `PINOKIO_CODE_FORK`/`PINOKIO_CODE_BRANCH` (code-fork variables no target uses); the implementer drops those two lines. The tool scans only `PINOKIO_HOME/plugin` (Task 1.1 `main`), so registry-bundled plugins, which install under `api/` (P23), are outside its coverage; that gap is stated here, not closed.
 - Type consistency: `PluginReport`, `classify`, `resolve_pinokio_home`, `main` are used identically in Task 1.1 tests and implementation.
