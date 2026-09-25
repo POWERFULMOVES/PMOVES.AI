@@ -195,13 +195,17 @@ def main() -> int:
     ap.add_argument("--bundle", default=None)
     ap.add_argument("--node", default=os.environ.get("PMOVES_NODE", "5090"))
     # The DISPATCH target is the producer, not this node. Pattern-B nodes
-    # (Z890, the default 5090) are consumers with no self-hosted runner, and
-    # sync-secrets-local.yml schedules on one -- so `-f targets=z890` names a
-    # job that cannot be picked up. pull_chit_bundle.sh:27 already carries the
-    # distinction as PMOVES_BUNDLE_PRODUCER (default b850); same default here so
-    # the two roads cannot disagree.
+    # (Z890, 4090, the default 5090) are consumers: Z890 has no runner, and
+    # 4090/5090 have Windows runners that sync-secrets-local.yml refuses
+    # (PRODUCER_TARGETS) because its bash steps cannot run under WSL there.
+    # pull_chit_bundle.sh carries the same ordered list as
+    # PMOVES_BUNDLE_PRODUCERS (default spark,b850; legacy singular
+    # PMOVES_BUNDLE_PRODUCER still honoured); same resolution here so the two
+    # roads cannot disagree.
     ap.add_argument("--producer",
-                    default=os.environ.get("PMOVES_BUNDLE_PRODUCER", "b850"))
+                    default=os.environ.get("PMOVES_BUNDLE_PRODUCERS")
+                    or os.environ.get("PMOVES_BUNDLE_PRODUCER")
+                    or "spark,b850")
     ap.add_argument("--offline", action="store_true", help="skip the artifact query")
     ap.add_argument("--strict", action="store_true",
                     help="exit non-zero when the bundle is a local export")
