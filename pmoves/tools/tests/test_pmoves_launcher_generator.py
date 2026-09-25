@@ -400,6 +400,57 @@ class TestGeneratorRegistryDriven(unittest.TestCase):
             "PowerShell helper missing PMOVES_MAVIS_SDK_LOG_DIR override hook",
         )
 
+    def test_claude_pmoves_emits_backend_flag_help_block(self):
+        """Regression pin: both claude-pmoves.{sh,ps1} twins surface the
+        --backend={auto|anthropic|minimax} flag + PMOVES_CLAUDE_BACKEND env var +
+        `pmoves-mini claude-backend` persistent-switch hint. Drift here would
+        mean an operator who greps one twin cannot find the same surface in the
+        other — the same class of bug the Mavis SDK env twin registry ratchet
+        was added for (see LEARNINGS file, branch-protection pair-review lesson
+        #12).
+
+        Pin set is intentionally minimal: a flag string, an env-var name, a
+        substring hint, and the three backend values. Adding more pins here
+        means more drift to track; this is the floor.
+        """
+        bash_path = REPO_ROOT / "deploy" / "provision" / "claude-pmoves.sh"
+        ps1_path = REPO_ROOT / "deploy" / "provision" / "claude-pmoves.ps1"
+        # Hand-written files (`managed=hand`); the generator does NOT emit them.
+        # The body content is what carries the slice, not the plan entry.
+        self.assertTrue(bash_path.exists(), f"missing hand-written {bash_path}")
+        self.assertTrue(ps1_path.exists(), f"missing hand-written {ps1_path}")
+        bash_body = bash_path.read_text(encoding="utf-8")
+        ps1_body = ps1_path.read_text(encoding="utf-8")
+
+        # 1. Flag surface (--backend=)
+        self.assertIn("--backend=", bash_body, "bash twin missing --backend= flag")
+        self.assertIn("--backend=", ps1_body, "ps1 twin missing --backend= flag")
+
+        # 2. Env-var surface (PMOVES_CLAUDE_BACKEND)
+        self.assertIn(
+            "PMOVES_CLAUDE_BACKEND", bash_body, "bash twin missing PMOVES_CLAUDE_BACKEND"
+        )
+        self.assertIn(
+            "PMOVES_CLAUDE_BACKEND", ps1_body, "ps1 twin missing PMOVES_CLAUDE_BACKEND"
+        )
+
+        # 3. Persistent-switch hint (pmoves-mini claude-backend)
+        self.assertIn(
+            "pmoves-mini claude-backend",
+            bash_body,
+            "bash twin missing persistent-switch hint",
+        )
+        self.assertIn(
+            "pmoves-mini claude-backend",
+            ps1_body,
+            "ps1 twin missing persistent-switch hint",
+        )
+
+        # 4. All three backend values appear in BOTH help blocks
+        for v in ("auto", "anthropic", "minimax"):
+            self.assertIn(v, bash_body, f"bash twin help block missing backend {v}")
+            self.assertIn(v, ps1_body, f"ps1 twin help block missing backend {v}")
+
     def test_every_emitted_ps1_parses(self):
         # pwsh parser; skip when pwsh isn't installed (CI portability).
         if not _has_pwsh():
