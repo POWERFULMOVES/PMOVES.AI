@@ -4,7 +4,7 @@
 
 **Goal:** Agent sessions on a PMOVES node run under Pinokio, not inside an editor, and use PMOVES-customized harness plugins and a PMOVES-customized VS Code. Every installed plugin must be reproducible from a tracked git ref.
 
-**Architecture:** Pinokio is the agent runtime layer. Terminal plugins (`shell.run`) own the agent sessions. A desktop plugin (`exec`) opens a pinned, portable VS Code per room. All PMOVES plugins live as subfolders of the POWERFULMOVES/code fork, which is installed as `PINOKIO_HOME/plugin/code`. That fork is rendered from the same source of truth as the existing launcher generator, `pmoves/configs/cli_tools.yaml` + `pmoves/config/agent_registry.yaml`. P7 rooms then choose which plugin set a room runs.
+**Architecture:** Pinokio owns the interactive agent sessions through PMOVES harness plugins bundled in PMOVES-registry (installed into Pinokio as an app, with PMOVES metadata in sidecar files and everything rendered from `pmoves/configs/cli_tools.yaml` + `pmoves/config/agent_registry.yaml`), while Spynel drives the same harnesses over ACP from the same registry.
 
 **Tech Stack:** Pinokio 8.2.0 (plugin schema per `PINOKIO.md` "Building a plugin"), pterm 0.0.25, Python 3 stdlib + unittest, GNU make, bash; VS Code portable build; the ACP registry (PMOVES-registry fork).
 
@@ -47,7 +47,7 @@
 ## Global Constraints
 
 - Plugin shape mirrors `~/pinokio/prototype/system/examples/plugin_installable_agent/pinokio.js`: metadata in the root `pinokio.js`, no separate `pinokio.json`, no `install.js`/`start.js`/`reset.js`/`update.js`, and `run` targets `{{args.cwd}}` (SPEC.md Structure Rules).
-- Never edit upstream checkouts. `pinokiocomputer/code` customizations go to `POWERFULMOVES/code` branch `PMOVES.AI-Edition-Hardened`, and app changes go to `POWERFULMOVES/PMOVES-pinokio`.
+- Never edit upstream checkouts. PMOVES harness plugins go to `POWERFULMOVES/PMOVES-registry` (D2), with PMOVES metadata in sidecars so upstream entry dirs stay byte-identical (D5). App changes go to `POWERFULMOVES/PMOVES-pinokio`.
 - Every plugin installed on a node must resolve to a tracked git ref. A hand-copied plugin is a finding (see P10).
 - No absolute paths or hardcoded binaries in scripts: use `{{which('x')}}`, `{{kernel.path(...)}}`, `{{args.cwd}}` (gepeto "shell.run API").
 - No credentials in committed files. `nats://nats:pmoves@…` defaults (P9, and `.vscode/settings.json` `terminal.integrated.env.*`) become `{{envs.PMOVES_NATS_URL}}` with no credentialed default.
@@ -58,17 +58,18 @@
 ## Review Focus
 
 1. **Pinokio itself dies:** moving sessions from the editor to Pinokio makes Pinokio the new single point of failure. The expected behaviour is that agent sessions survive an editor crash, and that a Pinokio crash is documented, not silent. Pinned by Task 0.2 step 5.
-2. **Windows node:** plugins must pick bash through `shell: "{{kernel.path('bin/miniconda/Library/bin/bash.exe')}}"` (P8/P9 pattern), and wrappers must have a `.ps1` path. Pinned by Task 2.1 step 1 (the win32 branch is required by the test).
+2. **Windows node:** plugins must pick bash through `shell: "{{kernel.path('bin/miniforge/Library/bin/bash.exe')}}"` (the 8.2 built-in pattern, P22), and wrappers must have a `.ps1` path. Pinned by Task 2.1 step 1 (the win32 branch is required by the test).
 3. **Wrapper missing or repo elsewhere:** the plugin must fail visibly in its menu (the `pmoves-crush` pattern, installed `pinokio.js:37-43`), not error in a shell. Pinned by Task 2.1 step 1.
-4. **Two sources for one plugin** (upstream `plugin/code/claude` next to `pmoves-claude`, or a loose `plugin/pmoves-crush` next to `plugin/code/pmoves-crush`): the provenance tool must flag the loose copy. Pinned by Task 1.1 test `test_loose_plugin_is_untracked`.
-5. **Memory:** a portable VS Code per room multiplies Electron memory. On Linux each room runs under `systemd-run --user --scope -p MemoryMax=`, and the Windows gap is documented. Pinned by Task 2.2 step 1. The OOM killer has also killed docker and docker-buildx on this node (P12), so image builds must not run while an editor's memory is unbounded.
+4. **Two sources for one plugin** (a loose `plugin/pmoves-crush` or `plugin/code` next to the registry-bundled plugin): the provenance tool must flag the loose copy. Pinned by Task 1.1 test `test_loose_plugin_is_untracked`.
+5. **Memory:** a portable VS Code per room multiplies Electron memory. On Linux each room runs under `systemd-run --user --scope -p MemoryMax=`, and the Windows gap is documented. Pinned by Task 2.3. Pinokio's own Caddy is a second unbounded consumer (P28), pinned by Task 0.3. The OOM killer has also killed docker and docker-buildx on this node (P12), so image builds must not run while an editor's memory is unbounded.
 
 ## Operator Decisions (gates; each task below names the decision it depends on)
 
-- **D1: VS Code channel for the portable build.** Default: Insiders (current usage). Alternative: Stable.
-- **D2: Plugin names and home.** Default: subfolders `pmoves-claude`, `pmoves-vscode`, `pmoves-crush` of the POWERFULMOVES/code fork, following the `pmoves-codex` precedent (P8).
+- **D1 (open): IDE set.** VS Code is present (deb Stable 1.138 = what Pinokio's built-in vscode plugin opens via which('code'); snap Insiders = the OOM-killed one). The Antigravity IDE is downloaded (~/Downloads/Antigravity.tar.gz) but not installed; the Antigravity CLI (agy) is installed and covered by the built-in antigravity-cli plugin. Cursor has a built-in plugin but is not installed. Open question: which IDEs get PMOVES desktop plugins, and installed or portable-pinned builds.
+- **D2 (decided 2026-09-25):** plugins are bundled in PMOVES-registry (the harness target for all AGInTZ), declared by a launcher at PMOVES-registry/pinokio/pinokio.js. The earlier proposal of subfolders in the POWERFULMOVES/code fork is RETRACTED: Pinokio 8.2 does not load nested collections (P21).
 - **D3: Docs pin.** Default: fork `pinokiocomputer/home` as `POWERFULMOVES/PMOVES-pinokio-home`, so the docs source (P15) is pinned. `Pmoves-program.pinokio.computer` is left stale.
 - **D4: Pinokio build.** Default: keep the upstream 8.2.0 .deb (P6) through Phase 2, and switch to the PMOVES-pinokio build after PR #11 merges.
+- **D5 (decided 2026-09-25):** PMOVES metadata lives in sidecar files at PMOVES-registry/pmoves/sidecars/<id>.json, never inside upstream entry dirs, so weekly upstream syncs stay conflict-free.
 
 ## File Structure
 
@@ -77,11 +78,14 @@
 | `pmoves/tools/pinokio_plugin_provenance.py` | PMOVES.AI | Classify each installed plugin as fork / upstream / dirty / untracked / unmeasured | 1 |
 | `pmoves/tools/tests/test_pinokio_plugin_provenance.py` | PMOVES.AI | unittest suite for the above | 1 |
 | `pmoves/mk/pinokio.mk` + `include mk/pinokio.mk` in `pmoves/Makefile` | PMOVES.AI | `pinokio-plugin-provenance`, `pinokio-plugins-install` targets | 1 |
-| `pmoves-claude/pinokio.js`, `pmoves-claude/icon.svg` | POWERFULMOVES/code | Terminal plugin → `pmoves/scripts/claude-pmoves.sh` | 2 |
-| `pmoves-crush/pinokio.js` | POWERFULMOVES/code | Replaces the loose `plugin/pmoves-crush` (P10) | 2 |
-| `pmoves-vscode/pinokio.js` | POWERFULMOVES/code | Installable desktop plugin: portable VS Code, one data dir per room | 2 |
-| `pmoves/tools/pmoves_launcher_generator.py` (renderer `pinokio_plugin`) | PMOVES.AI | Emit fork subfolders from cli_tools.yaml | 3 |
-| PMOVES-registry `pmoves-*/agent.json` | PMOVES-registry | ACP entries for PMOVES harnesses | 4 |
+| `pinokio/pinokio.js` | PMOVES-registry | App launcher "PMOVES Registry": top-level `plugins` array + menu listing the bundled plugins (P23) | 2 |
+| `pinokio/plugins/pmoves-*/pinokio.js` | PMOVES-registry | One terminal plugin per PMOVES harness wrapper; `pmoves-crush` replaces the loose `plugin/pmoves-crush` (P10) | 2 |
+| `pinokio/test/*.test.js` | PMOVES-registry | node:test suite for the launcher and plugins | 2 |
+| `pmoves/sidecars/*.json` | PMOVES-registry | PMOVES metadata per harness, outside upstream entry dirs (D5) | 2 |
+| `pmoves/sidecar.schema.json` | PMOVES-registry | JSON Schema for the sidecars | 2 |
+| `pmoves/tools/pmoves_launcher_generator.py` (renderers `registry_sidecar`, `registry_plugin`) | PMOVES.AI | Emit sidecars and registry-bundled plugins from cli_tools.yaml + agent_registry.yaml | 3 |
+| PMOVES-registry `pmoves-*/agent.json` | PMOVES-registry | ACP entries for PMOVES harnesses that have an ACP server | 4 |
+| PMOVES-spynel registry + sidecar loader | PMOVES-spynel | Harness catalog from PMOVES-registry instead of the compiled-in list (P26) | 4 |
 | room manifest `plugins:` overlay + `p7` publisher | PMOVES.AI | Room → plugin set; `p7.nats.launch/session` | 5 |
 
 Phases 3-5 are outlines. Each gets its own detailed plan once the gate before it passes, because their design depends on what Phase 0 measures (YAGNI).
@@ -127,6 +131,54 @@ p=$(pgrep -n -f 'charmland/crush'); while [ "$p" -gt 1 ]; do ps -o comm=,pid=,ar
 - [ ] **Step 6: Record the evidence.** Run `make -C pmoves register-note` with the three ancestry captures, and store the result in Cipher (category `decision`, tags `p7-playground`, `pinokio`, `process-model`).
 
 **Gate G0:** if Step 4's session dies with the editor, STOP. The premise is false and the plan must be revised before Phase 1.
+
+### Task 0.3: Diagnose the Caddy reload loop (P28) before relying on Pinokio
+
+- [ ] **Step 1: Start Pinokio outside any editor's process tree**, as a transient user unit, then verify it answers:
+```bash
+systemd-run --user --unit=pinokio-app --collect /opt/Pinokio/pinokio
+curl -s -m3 http://127.0.0.1:42000/pinokio/home     # expect JSON with "path"
+```
+- [ ] **Step 2: Count config reloads over 60 seconds.** Print both counts beside the rate.
+```bash
+L="$HOME/pinokio/logs/caddy.log"
+a=$(grep -c '"uri":"/load"' "$L"); sleep 60; b=$(grep -c '"uri":"/load"' "$L")
+echo "caddy /load requests in 60s: $((b-a)) (before=$a after=$b)"   # P28 measured ~23/min
+```
+- [ ] **Step 3: Watch Caddy's RSS** for five minutes:
+```bash
+for i in 1 2 3 4 5; do ps -C caddy -o pid=,rss= | awk '{printf "caddy pid %s RSS %.2fG\n",$1,$2/1048576}'; sleep 60; done
+```
+- [ ] **Step 4: Test the worktree hypothesis (P29).** Stop Pinokio (`systemctl --user stop pinokio-app`), run Task 0.4, then repeat Steps 1-3. Record the reload rate and RSS slope before and after. If the rate does not change, the worktrees are not the cause, and that result is recorded too.
+- [ ] **Step 5: Record the result.** Run `make -C pmoves register-note` with both reload counts, the RSS samples, and the before/after comparison, and store it in Cipher (category `diagnosis`, tags `p7-playground`, `pinokio`, `caddy`). If the rate stays high, stop Pinokio with `systemctl --user stop pinokio-app`.
+
+**Gate:** do not run long agent sessions under Pinokio until the reload rate is understood.
+
+### Task 0.4: Move agent worktrees out of `PINOKIO_HOME/api` (P29)
+
+- [ ] **Step 1: List the worktrees Pinokio sees as apps.**
+```bash
+R="$HOME/pinokio/api/PMOVES.AI"
+git -C "$R" worktree list --porcelain | awk '/^worktree /{print $2}' | grep "^$HOME/pinokio/api/pmoves-" | tee /tmp/p29-worktrees.txt | wc -l
+```
+- [ ] **Step 2: Classify each one as merged/unmerged and clean/dirty.**
+```bash
+git -C "$R" fetch -q origin main
+while read -r w; do
+  dirty=$(git -C "$w" status --porcelain | wc -l)
+  if git -C "$R" merge-base --is-ancestor "$(git -C "$w" rev-parse HEAD)" origin/main; then merged=yes; else merged=no; fi
+  echo "$w dirty=$dirty merged=$merged"
+done < /tmp/p29-worktrees.txt | tee /tmp/p29-classified.txt
+```
+A squash-merged branch is not an ancestor of `origin/main`, so it classifies as `merged=no` and is moved rather than removed. That is the safe direction.
+- [ ] **Step 3: Remove merged and clean worktrees; move all others.**
+```bash
+mkdir -p "$HOME/pmoves-worktrees"
+awk '$2=="dirty=0" && $3=="merged=yes"{print $1}' /tmp/p29-classified.txt | while read -r w; do git -C "$R" worktree remove "$w"; done
+awk '!($2=="dirty=0" && $3=="merged=yes"){print $1}' /tmp/p29-classified.txt | while read -r w; do git -C "$R" worktree move "$w" "$HOME/pmoves-worktrees/$(basename "$w")"; done
+```
+Never delete an unmerged or dirty worktree, and never add `--force`. If git refuses because a worktree has populated submodules ("working trees containing submodules cannot be moved or removed"), leave it in place, list it in the Task 0.3 register NOTE, and ask its owner.
+- [ ] **Step 4: Verify.** `git -C "$R" worktree list | grep -c "$HOME/pinokio/api/pmoves-"` prints the count of refused worktrees from Step 3 (0 if none), and `pterm search pmoves` no longer lists the moved ones.
 
 ---
 
@@ -393,111 +445,164 @@ git commit -m "feat(pinokio): plugin provenance check — a hand-copied plugin i
 git -C "$HOME/pinokio/api/PMOVES.AI" show "$(git -C "$HOME/pinokio/api/PMOVES.AI/PMOVES-crush" rev-parse HEAD 2>/dev/null || echo d82c07e2):pbnj/pinokio/api/pmoves-crush/start.js" > /tmp/tracked-start.js 2>/dev/null || gh api "repos/POWERFULMOVES/PMOVES-crush/contents/pbnj/pinokio/api/pmoves-crush/start.js?ref=d82c07e2" --jq .content | base64 -d > /tmp/tracked-start.js
 diff -u /tmp/tracked-start.js "$HOME/pinokio/plugin/pmoves-crush/start.js"
 ```
-- [ ] **Step 2: Decide which copy is canonical.** Each hunk the installed copy adds must be carried into Task 2.3's fork subfolder or dropped with a stated reason in the PR body. Nothing is deleted from the node until Task 2.3 is installed and the provenance tool reports `fork` for it.
+- [ ] **Step 2: Decide which copy is canonical.** The canonical crush plugin lands as `PMOVES-registry/pinokio/plugins/pmoves-crush/pinokio.js` (Task 2.2). Each hunk the installed copy adds must be carried into that file or dropped with a stated reason in the PR body. One hunk is dropped already: the installed `menu` calls `kernel.path.resolve(...)`, but `kernel.path` is a function (`pinokiod/kernel/index.js:550-552`, extracted from `/opt/Pinokio/resources/app.asar`), so that call throws. Nothing is deleted from the node until the registry plugin is installed and shows on Pinokio's `/plugins` page (P21 method).
 
 ---
 
-## Phase 2: PMOVES plugins in the POWERFULMOVES/code fork (depends on G0, D1, D2)
+## Phase 2: PMOVES harness plugins bundled in PMOVES-registry (depends on G0, D2, D5)
 
-Work in a clone of `POWERFULMOVES/code` on a branch off `PMOVES.AI-Edition-Hardened`. Follow gepeto's six steps. Example lock-in: `~/pinokio/prototype/system/examples/plugin_installable_agent/pinokio.js`. The fork precedent for PMOVES env is `pmoves-codex/pinokio.js`.
+Work in a clone of `POWERFULMOVES/PMOVES-registry` on branch `feat/pinokio-harness-plugins` off `main`. Follow gepeto's six steps. Example lock-in: `~/pinokio/prototype/system/examples/plugin_installable_agent/pinokio.js` for plugin shape, and `~/pinokio/api/hermes-agent.pinokio.git/pinokio.js:9-11` + `plugins/no-gateway/pinokio.js` for the app-bundled layout (P23). The new top-level `pinokio/` and `pmoves/` directories hold no `agent.json`, so the registry build skips them (`.github/workflows/build_registry.py:664-672` prints "has no agent.json, skipping"; `verify_agents.py:961-967` skips silently). Upstream entry dirs are never edited (D5).
 
-### Task 2.1: `pmoves-claude` terminal plugin
+### Task 2.1: Registry launcher + one plugin (`pmoves-claude`)
 
-**Files:** Create `pmoves-claude/pinokio.js`, `pmoves-claude/icon.svg` (copy `pmoves-codex/icon.svg`), and `test/pmoves-claude.test.js` (node:test, no dependencies).
+**Files (PMOVES-registry):** Create `pinokio/pinokio.js`, `pinokio/icon.png` (copy of PMOVES.AI `PMOVES-pinokio/assets/icon.png`), `pinokio/plugins/pmoves-claude/pinokio.js`, and `pinokio/test/plugins.test.js` (node:test, no dependencies).
 
-- [ ] **Step 1: Write the failing test** (`test/pmoves-claude.test.js`):
+- [ ] **Step 1: Write the failing test** (`pinokio/test/plugins.test.js`):
 ```javascript
 const test = require("node:test")
 const assert = require("node:assert")
-const plugin = require("../pmoves-claude/pinokio.js")
+const fs = require("fs")
+const os = require("os")
+const path = require("path")
 
-test("metadata follows the installable-plugin example", () => {
-  assert.strictEqual(plugin.version, "7.0")
-  assert.strictEqual(plugin.title, "PMOVES Claude")
-  assert.ok(typeof plugin.menu === "function", "fail-visible menu required (Review Focus 3)")
+const ROOT = path.resolve(__dirname, "..")   // PMOVES-registry/pinokio
+const launcher = require(path.join(ROOT, "pinokio.js"))
+const pluginDirs = fs.readdirSync(path.join(ROOT, "plugins"))
+  .filter(d => fs.existsSync(path.join(ROOT, "plugins", d, "pinokio.js")))
+const WRAPPER_MSG = "bash \"{{envs.PMOVES_REPO || kernel.path('api/PMOVES.AI')}}/pmoves/scripts/claude-pmoves.sh\""
+
+test("launcher plugins array lists exactly the plugin dirs that exist", () => {
+  const listed = [...launcher.plugins].sort()
+  const onDisk = pluginDirs.map(d => `plugins/${d}/pinokio.js`).sort()
+  assert.ok(onDisk.length >= 1, "at least one bundled plugin on disk")
+  assert.deepStrictEqual(listed, onDisk, `listed=${listed.length} onDisk=${onDisk.length}`)
 })
 
-test("run targets the caller folder on both platforms", () => {
-  const run = plugin.run
-  assert.strictEqual(run.length, 2)
-  const win = run.find(s => String(s.when).includes("=== 'win32'"))
-  const nix = run.find(s => String(s.when).includes("!== 'win32'"))
-  assert.ok(win && nix, "win32 and non-win32 branches (Review Focus 2)")
-  for (const s of run) {
-    assert.strictEqual(s.method, "shell.run")
-    assert.strictEqual(s.params.path, "{{args.cwd}}")
-    assert.strictEqual(s.params.input, true)
-    assert.ok(!/nats:\/\/[^@{]+@/.test(JSON.stringify(s.params)), "no credentialed NATS URL")
+test("launcher metadata follows the example", () => {
+  assert.strictEqual(launcher.version, "7.0")
+  assert.strictEqual(launcher.title, "PMOVES Registry")
+  assert.strictEqual(typeof launcher.menu, "function", "fail-visible menu required (Review Focus 3)")
+})
+
+for (const dir of pluginDirs) {
+  const file = path.join(ROOT, "plugins", dir, "pinokio.js")
+  const plugin = require(file)
+
+  test(`${dir}: run targets the caller folder on win32 and non-win32`, () => {
+    const win = plugin.run.find(s => String(s.when).includes("=== 'win32'"))
+    const nix = plugin.run.find(s => String(s.when).includes("!== 'win32'"))
+    assert.ok(win && nix, "win32 and non-win32 branches (Review Focus 2)")
+    for (const s of plugin.run) {
+      assert.strictEqual(s.method, "shell.run")
+      assert.strictEqual(s.params.path, "{{args.cwd}}")
+      assert.strictEqual(s.params.input, true)
+    }
+    assert.strictEqual(win.params.shell, "{{kernel.path('bin/miniforge/Library/bin/bash.exe')}}")
+  })
+
+  test(`${dir}: bundled plugin, not standalone`, () => {
+    assert.strictEqual(plugin.path, undefined, "PINOKIO.md:2861: bundled app plugins do not need path")
+  })
+
+  test(`${dir}: no credentialed NATS URL`, () => {
+    assert.doesNotMatch(fs.readFileSync(file, "utf8"), /nats:\/\/[^@{$\s"']+:[^@\s"']+@/)
+  })
+}
+
+test("pmoves-claude runs the PMOVES wrapper, not upstream npx", () => {
+  const plugin = require(path.join(ROOT, "plugins", "pmoves-claude", "pinokio.js"))
+  for (const s of plugin.run) {
+    assert.strictEqual(s.params.message, WRAPPER_MSG)
+    assert.doesNotMatch(JSON.stringify(s.params), /@anthropic-ai\/claude-code|dangerously-skip-permissions/)
   }
-  assert.match(win.params.shell, /bash\.exe/)
 })
 
-test("menu fails visibly when the wrapper is missing", async () => {
-  const kernel = { path: require("path") }
+test("launcher menu fails visibly when the wrapper is missing", async () => {
   process.env.PMOVES_REPO = "/definitely/not/a/repo"
-  const items = await plugin.menu(kernel, {})
-  delete process.env.PMOVES_REPO
-  assert.strictEqual(items.length, 1)
-  assert.match(items[0].text, /wrapper not found/)
+  try {
+    const items = await launcher.menu({ path: (...a) => path.resolve("/unused", ...a) }, {})
+    assert.strictEqual(items.length, launcher.plugins.length, `items=${items.length} plugins=${launcher.plugins.length}`)
+    for (const item of items) assert.match(item.text, /wrapper not found/)
+    assert.match(items[0].description, /\/definitely\/not\/a\/repo\/pmoves\/scripts\/claude-pmoves\.sh/)
+  } finally {
+    delete process.env.PMOVES_REPO
+  }
 })
 
-test("fallback path reaches PINOKIO_HOME/api/PMOVES.AI from plugin/code/pmoves-claude", async () => {
-  const fs = require("fs"), os = require("os"), path = require("path")
+test("launcher menu falls back to kernel.path('api', 'PMOVES.AI') when PMOVES_REPO is unset", async () => {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), "pinokio-home-"))
-  const pluginDir = path.join(home, "plugin", "code", "pmoves-claude")
-  fs.mkdirSync(pluginDir, { recursive: true })
-  fs.copyFileSync(path.join(__dirname, "..", "pmoves-claude", "pinokio.js"), path.join(pluginDir, "pinokio.js"))
   const scripts = path.join(home, "api", "PMOVES.AI", "pmoves", "scripts")
   fs.mkdirSync(scripts, { recursive: true })
   fs.writeFileSync(path.join(scripts, "claude-pmoves.sh"), "#!/bin/sh\n")
   delete process.env.PMOVES_REPO
-  const installed = require(path.join(pluginDir, "pinokio.js"))
-  const items = await installed.menu({ path }, {})
-  assert.strictEqual(items[0].text, "Start PMOVES Claude")
-  const tpl = installed.run[1].params.message
-  assert.ok(tpl.includes("path.resolve(cwd, '../../../api/PMOVES.AI')"), "template depth matches the installed layout")
+  const items = await launcher.menu({ path: (...a) => path.resolve(home, ...a) }, {})
+  assert.strictEqual(items[0].text, "PMOVES Claude: ready")
 })
 ```
-- [ ] **Step 2: Run to verify it fails.** `node --test test/pmoves-claude.test.js` → expected `Cannot find module '../pmoves-claude/pinokio.js'`.
-- [ ] **Step 3: Implement** `pmoves-claude/pinokio.js`:
+- [ ] **Step 2: Run to verify it fails.** `node --test pinokio/test/*.test.js` → expected `Cannot find module '.../pinokio/pinokio.js'`. (A bare directory argument is resolved as a module on Node 24 and fails with MODULE_NOT_FOUND; always pass the glob.)
+- [ ] **Step 3: Implement the launcher** `pinokio/pinokio.js`:
 ```javascript
-// PMOVES Claude: Pinokio terminal plugin. Runs pmoves/scripts/claude-pmoves.sh
-// (node identity, Cipher agentId binding, MCP roster, node-steward default)
-// in the caller's folder. Plan: PMOVES.AI docs/superpowers/plans/2026-09-24-p7-playground-pinokio-plugins.md
+// PMOVES Registry: Pinokio app launcher that bundles the PMOVES harness plugins.
+// Plugins are declared in `plugins` (PINOKIO.md:2246-2251) and appear on /plugins.
+// Plan: PMOVES.AI docs/superpowers/plans/2026-09-24-p7-playground-pinokio-plugins.md
 const path = require("path")
 const fs = require("fs")
 
-const repoOf = () => process.env.PMOVES_REPO || path.resolve(__dirname, "../../../api/PMOVES.AI")
-const wrapperOf = () => path.resolve(repoOf(), "pmoves/scripts/claude-pmoves.sh")
+const PLUGINS = [
+  { dir: "pmoves-claude", title: "PMOVES Claude", wrapper: "pmoves/scripts/claude-pmoves.sh" }
+]
 
 module.exports = {
   version: "7.0",
-  title: "PMOVES Claude",
-  icon: "icon.svg",
-  description: "Claude Code with PMOVES node identity, Cipher binding and MCP roster.",
-  link: "https://github.com/POWERFULMOVES/PMOVES.AI",
+  title: "PMOVES Registry",
+  icon: "icon.png",
+  description: "PMOVES harness plugins for every AGInTZ harness, plus the PMOVES ACP registry.",
+  link: "https://github.com/POWERFULMOVES/PMOVES-registry",
+  plugins: PLUGINS.map(p => `plugins/${p.dir}/pinokio.js`),
   menu: async (kernel, info) => {
-    const wrapper = wrapperOf()
-    if (!fs.existsSync(wrapper)) {
-      return [{
-        icon: "fa-solid fa-triangle-exclamation",
-        text: "PMOVES Claude wrapper not found",
-        description: `Expected ${wrapper}. Set PMOVES_REPO or clone PMOVES.AI to PINOKIO_HOME/api/PMOVES.AI.`
-      }]
-    }
-    return [{ icon: "fa-solid fa-terminal", text: "Start PMOVES Claude", href: "pinokio.js" }]
-  },
+    // kernel.path is a function resolving against PINOKIO_HOME (pinokiod kernel/index.js:550-552).
+    const repo = process.env.PMOVES_REPO || kernel.path("api", "PMOVES.AI")
+    return PLUGINS.map(p => {
+      const wrapper = path.resolve(repo, p.wrapper)
+      if (!fs.existsSync(wrapper)) {
+        return {
+          icon: "fa-solid fa-triangle-exclamation",
+          text: `${p.title}: wrapper not found`,
+          description: `Expected ${wrapper}. Set PMOVES_REPO or clone PMOVES.AI to PINOKIO_HOME/api/PMOVES.AI.`
+        }
+      }
+      return {
+        icon: "fa-solid fa-terminal",
+        text: `${p.title}: ready`,
+        description: `Runs ${wrapper}. Start it in any folder from Pinokio's Plugins page.`
+      }
+    })
+  }
+}
+```
+- [ ] **Step 4: Implement the plugin** `pinokio/plugins/pmoves-claude/pinokio.js` (shape of the built-in `system/plugin/claude/pinokio.js`, P22, with the upstream `npx` replaced by the PMOVES wrapper):
+```javascript
+// PMOVES Claude: bundled Pinokio terminal plugin. Runs pmoves/scripts/claude-pmoves.sh
+// (node identity, Cipher agentId binding, MCP roster, damage-control) in the caller's folder.
+module.exports = {
+  version: "7.0",
+  title: "PMOVES Claude",
+  icon: "../../icon.png",
+  description: "Claude Code with PMOVES node identity, Cipher binding and damage-control.",
+  link: "https://github.com/POWERFULMOVES/PMOVES.AI",
+  launch_type: "terminal",
   run: [{
     when: "{{platform === 'win32'}}",
     id: "run",
     method: "shell.run",
     params: {
-      shell: "{{kernel.path('bin/miniconda/Library/bin/bash.exe')}}",
+      shell: "{{kernel.path('bin/miniforge/Library/bin/bash.exe')}}",
       conda: { skip: true },
       env: { PMOVES_PINOKIO_PLUGIN: "pmoves-claude" },
-      message: "bash \"${PMOVES_REPO:-{{path.resolve(cwd, '../../../api/PMOVES.AI')}}}/pmoves/scripts/claude-pmoves.sh\"",
+      message: "bash \"{{envs.PMOVES_REPO || kernel.path('api/PMOVES.AI')}}/pmoves/scripts/claude-pmoves.sh\"",
       path: "{{args.cwd}}",
-      input: true
+      input: true,
+      buffer: 1024
     }
   }, {
     when: "{{platform !== 'win32'}}",
@@ -505,41 +610,47 @@ module.exports = {
     method: "shell.run",
     params: {
       env: { PMOVES_PINOKIO_PLUGIN: "pmoves-claude" },
-      message: "bash \"${PMOVES_REPO:-{{path.resolve(cwd, '../../../api/PMOVES.AI')}}}/pmoves/scripts/claude-pmoves.sh\"",
+      message: "bash \"{{envs.PMOVES_REPO || kernel.path('api/PMOVES.AI')}}/pmoves/scripts/claude-pmoves.sh\"",
       path: "{{args.cwd}}",
-      input: true
+      input: true,
+      buffer: 1024
     }
   }]
 }
 ```
-Note on the path: the fork is installed at `PINOKIO_HOME/plugin/code`, so this subfolder is `PINOKIO_HOME/plugin/code/pmoves-claude`. Three `..` segments reach `PINOKIO_HOME`, and `api/PMOVES.AI` is appended from there. Verify this against a real install in Step 5; do not assume it.
-Depth check: the three .. segments are correct only because the fork is installed at plugin/code; the fourth test pins this by building that layout in a temp dir. A standalone install at plugin/pmoves-claude would need two. An independent verifier raised this on 2026-09-24; it was resolved by the layout, and the missing test was added.
-- [ ] **Step 4: Run tests to verify they pass.** `node --test test/*.test.js` → all 4 pass. (A bare directory argument, `node --test test/`, is resolved as a module on Node 24 and fails with MODULE_NOT_FOUND. Verified 2026-09-24.)
-- [ ] **Step 5: Install from the fork and launch through Pinokio** (runbook; operator or steward):
+The repo path comes from `PMOVES_REPO` or `kernel.path('api/PMOVES.AI')` (`PINOKIO.md:8077`), never from a chain of `..` segments, so it does not depend on where the registry launcher is installed.
+- [ ] **Step 5: Run tests to verify they pass.** `node --test pinokio/test/*.test.js` → all pass; record the test count beside the result.
+- [ ] **Step 6: Install into Pinokio and launch** (runbook; operator or steward, after Task 0.3's gate):
 ```bash
 PT="$HOME/pinokio/bin/npm/bin/pterm"
-mv "$HOME/pinokio/plugin/code" "$HOME/pinokio/plugin/code.upstream-$(date +%F)"   # keep, do not delete
-"$PT" download https://github.com/POWERFULMOVES/code.git code --branch=<your-feature-branch>   # PTERM.md §download :270-303; switch to PMOVES.AI-Edition-Hardened after merge
-python3 "$HOME/pinokio/api/PMOVES.AI/pmoves/tools/pinokio_plugin_provenance.py"         # expect: fork code
-"$PT" start "$HOME/pinokio/plugin/code/pmoves-claude/pinokio.js" -- --cwd="$HOME/pinokio/api/PMOVES.AI"
+"$PT" download https://github.com/POWERFULMOVES/PMOVES-registry.git   # PTERM.md §download; use --branch=feat/pinokio-harness-plugins before merge
 ```
-Expected: Claude Code starts with the claude-pmoves banner (`identity=… cipher=…` lines), and the Task 0.2 Step 3 ancestry shows Pinokio as the ancestor.
-- [ ] **Step 6: Commit** `pmoves-claude/` and `test/` to the fork branch, and open a PR against `PMOVES.AI-Edition-Hardened`.
+Open Pinokio's `/plugins` page (the P21 method) and confirm "PMOVES Claude" is listed next to the built-ins. Start it in `~/pinokio/api/PMOVES.AI`. Expected: Claude Code starts with the claude-pmoves banner (`identity=… cipher=…` lines), and the Task 0.2 Step 3 ancestry (with `pgrep -n -f claude-pmoves`) reaches the Pinokio process and contains no `code-insiders`. The win32 branch is proven here only by the unit test; claim Windows support after a run on a Windows node, and report COULD-NOT-MEASURE until then.
+- [ ] **Step 7: Commit** `pinokio/` to `feat/pinokio-harness-plugins` and open a PR against PMOVES-registry `main`.
 
-### Task 2.2: `pmoves-vscode` installable desktop plugin (depends on D1)
+### Task 2.2: Sidecar schema + remaining harness plugins
 
-- [ ] **Step 1: Write the failing test** `test/pmoves-vscode.test.js`: assert `path === "plugin"` is ABSENT (bundled subfolder, per PINOKIO.md:2861 "Bundled app plugins do not need this field"); assert that `install` pins an exact version (the URL contains no `latest`); assert `installed` is an async function; assert that `run` on Linux wraps the binary in `systemd-run --user --scope -p MemoryMax=` (Review Focus 5); assert `run` passes `--user-data-dir` and `--extensions-dir` under a per-room folder derived from `{{args.room || 'default'}}`; assert `launch_type === "desktop"`.
-- [ ] **Step 2: Implement** by mirroring the Installable Plugins example (`PINOKIO.md` "Installable Plugins", the `install` + `installed` pattern). `install` uses `fs.download` of the pinned portable archive for `{{platform}}`/`{{arch}}`, extracts it into `{{dirname}}/dist`, and creates `{{dirname}}/dist/data` (portable mode). `run` uses `exec` with the pinned binary and per-room dirs `{{dirname}}/rooms/{{args.room || 'default'}}/{user-data,extensions}`. The version pin and download URL are recorded in the PR body together with the D1 decision.
-- [ ] **Step 3: Seed per-room settings** from PMOVES.AI `.vscode/settings.json` minus the credentialed `terminal.integrated.env.*` NATS_URL (Global Constraints), plus an extension manifest that includes the theme the settings reference (`zhuangtongfa.material-theme`, missing on both installs at measurement time).
-- [ ] **Step 4: Test, install, launch** as in Task 2.1 Steps 4-5; then kill the VS Code window and re-run Task 0.2 Step 3 on a `pmoves-claude` session to confirm it survives.
+**Files (PMOVES-registry):** Create `pmoves/sidecar.schema.json`, `pmoves/sidecars/<id>.json` (one per harness), `pinokio/test/sidecars.test.js`, and `pinokio/plugins/pmoves-{crush,kilo,codex,kimi,hermes}/pinokio.js`; extend `PLUGINS` in `pinokio/pinokio.js`.
 
-### Task 2.3: Move `pmoves-crush` into the fork
+- [ ] **Step 1: Write the schema** `pmoves/sidecar.schema.json` (JSON Schema draft 2020-12, `additionalProperties: false`). Required fields:
+  - `id`: the registry entry id when one exists (e.g. `kimi`, `kilo`), otherwise `pmoves-<harness>`.
+  - `pmoves_wrapper`: path relative to the PMOVES.AI root, pattern `^pmoves/scripts/[A-Za-z0-9._-]+$` (e.g. `pmoves/scripts/crush-pmoves`).
+  - `tui`: `true`.
+  - `acp`: `{"command": string, "args": [string]}` or `null`.
+  - `cipher_agent_id_source`: const `"signing_identity_cards.yaml"`.
+  - `node_affinity`: array of node names, copied from `pmoves/config/agent_registry.yaml` in PMOVES.AI.
+- [ ] **Step 2: Write the failing test** `pinokio/test/sidecars.test.js`: every `pmoves/sidecars/*.json` validates against the schema (a small stdlib validator for the six fields above, no dependencies); every sidecar's `pmoves_wrapper` equals the `script` of one `pmoves_wrappers` entry in PMOVES.AI `pmoves/configs/cli_tools.yaml` (claude-pmoves `pmoves/scripts/claude-pmoves.sh`, crush-pmoves `pmoves/scripts/crush-pmoves`, kilo-pmoves `pmoves/scripts/kilo-pmoves.sh`, codex-pmoves `pmoves/scripts/codex-pmoves.sh`, kimi-pmoves `pmoves/scripts/kimi-pmoves.sh`, hermes-pmoves `pmoves/scripts/hermes-pmoves`), held as a fixture list in the test; every plugin dir has a sidecar and every sidecar has a plugin dir; no sidecar file sits inside an upstream entry dir (`git ls-files '*/agent.json'` dirs contain no `pmoves` file). Print the sidecar and plugin counts beside the result.
+- [ ] **Step 3: Write the sidecars.** `acp` values follow P27: kimi `{"command":"kimi","args":["acp"]}`, kilo `{"command":"kilo","args":["acp"]}`; claude, codex and hermes `null` until Phase 4 measures an ACP server for them; crush `null` until lane `feat/crush-acp-server` lands.
+- [ ] **Step 4: Write the five plugins** as copies of `pmoves-claude/pinokio.js` with the title, `PMOVES_PINOKIO_PLUGIN` value and wrapper path changed, and add each to `PLUGINS`. Crush's plugin ships now as a TUI. It is the canonical `PMOVES-registry/pinokio/plugins/pmoves-crush/pinokio.js` that Task 1.2 reconciles against.
+- [ ] **Step 5: Run** `node --test pinokio/test/*.test.js` → all pass (the launcher-lists-every-dir test now covers 6 plugins). Re-run Task 2.1 Step 6 with `pterm download` of the branch, confirm all six on `/plugins`, then move the loose `~/pinokio/plugin/pmoves-crush` aside (do not delete it) and confirm `pinokio-plugin-provenance` returns 0.
 
-- [ ] Port the canonical copy decided in Task 1.2 to `pmoves-crush/pinokio.js` in the fork (plugin shape per Global Constraints: fold `start.js` into `run`). Test it the same way as Task 2.1. After install, move the loose `~/pinokio/plugin/pmoves-crush` aside (do not delete it) and confirm `pinokio-plugin-provenance` returns 0.
+### Task 2.3: IDE desktop plugins (depends on D1)
+
+- [ ] Only after D1 is decided. For each chosen IDE (VS Code and/or Antigravity), add `pinokio/plugins/pmoves-<ide>/pinokio.js` mirroring the built-in vscode plugin (`/opt/Pinokio/resources/app.asar.unpacked/node_modules/pinokiod/system/plugin/vscode/pinokio.js`): an `exec` step guarded by `when: "{{which('code')}}"` for VS Code (for Antigravity, the binary name is read from the installed build, not assumed) with `path: "{{args.cwd}}"`, followed by `process.wait`. On Linux the `exec` message wraps the binary in `systemd-run --user --scope -p MemoryMax=4G` (Review Focus 5; 4G is the 2.2 GB deb-code RSS from Task 0.1 Step 1, doubled and rounded down), and the PR body records the measured RSS beside the D1 decision. If D1 picks portable-pinned builds, add `install` + `installed` per `PINOKIO.md` "Installable Plugins" with an exact version pin (no `latest`). Seed per-room settings from PMOVES.AI `.vscode/settings.json` minus the credentialed `terminal.integrated.env.*` NATS_URL. Test with the same node:test file, whose per-plugin loop then branches on type: terminal plugins keep the `shell.run` assertions, and for desktop plugins it asserts that the first `run` step has `method === "exec"`, that `process.wait` follows it, and that `launch_type` is absent or `"desktop"`. Install as in Task 2.1 Step 6, then close the IDE window and re-run Task 0.2 Step 3 on a `pmoves-claude` session to confirm it survives.
 
 ### Task 2.4: Remove credentialed NATS defaults
 
-- [ ] In the fork, `pmoves-codex/pinokio.js:23,43` becomes `"{{envs.PMOVES_NATS_URL || ''}}"`. In PMOVES.AI, `.vscode/settings.json` `terminal.integrated.env.{windows,linux}.NATS_URL` becomes `"${env:NATS_URL}"`. Test: `git grep -nE 'nats://[^@{$ ]+:[^@ ]+@' -- .vscode pmoves-codex` returns nothing.
+- [ ] In PMOVES.AI, `.vscode/settings.json` `terminal.integrated.env.{windows,linux}.NATS_URL` becomes `"${env:NATS_URL}"`. Test: `git grep -nE 'nats://[^@{$ ]+:[^@ ]+@' -- .vscode` returns nothing. (The POWERFULMOVES/code fork's `pmoves-codex` is out of scope: Pinokio 8.2 does not load it, P21.)
 
 ---
 
