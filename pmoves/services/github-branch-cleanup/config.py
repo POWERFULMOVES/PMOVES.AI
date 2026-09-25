@@ -12,7 +12,7 @@ class Config:
     """Configuration settings for branch cleanup service."""
 
     # NATS Configuration
-    NATS_URL: str = os.getenv("NATS_URL", "nats://nats:pmoves@nats:4222")
+    NATS_URL: str = os.getenv("NATS_URL", "nats://nats:4222")
 
     # Service Configuration
     SERVICE_PORT: int = int(os.getenv("SERVICE_PORT", "8100"))

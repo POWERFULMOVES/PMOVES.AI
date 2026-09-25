@@ -52,7 +52,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Environment variables
-NATS_URL = os.getenv("NATS_URL", "nats://nats:pmoves@nats:4222")
+NATS_URL = os.getenv("NATS_URL", "nats://nats:4222")
 SERVICE_PORT = int(os.getenv("SERVICE_PORT", "8104"))
 DRY_RUN = os.getenv("DRY_RUN", "true").lower() == "true"
 AGENTZERO_MCP_URL = os.getenv("AGENTZERO_MCP_URL", "http://agent-zero:8080/mcp/command")

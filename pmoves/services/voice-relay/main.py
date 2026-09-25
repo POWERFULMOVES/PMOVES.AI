@@ -37,7 +37,7 @@ except ImportError:
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
-NATS_URL = get_secret("NATS_URL", "nats://nats:pmoves@nats:4222") or "nats://nats:pmoves@nats:4222"
+NATS_URL = get_secret("NATS_URL", "nats://nats:4222") or "nats://nats:4222"
 NATS_URL_REDACTED = re.sub(r"://[^@]+@", "://***@", NATS_URL)
 INPUT_SUBJECT = os.getenv("VOICE_RELAY_INPUT_SUBJECT", "agentzero.task.result.v1")
 OUTPUT_SUBJECT = os.getenv("VOICE_RELAY_OUTPUT_SUBJECT", "voice.agent.response.v1")

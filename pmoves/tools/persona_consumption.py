@@ -12,7 +12,7 @@ Usage:
   python3 -m pmoves.tools.persona_consumption \
       --user darkxside --kind beat --item "808 Low.m4a"
 
-Env: NATS_URL (default nats://nats:pmoves@nats:4222). Events fail loudly —
+Env: NATS_URL (default nats://nats:4222). Events fail loudly —
 a dropped consumption event is lost grounding signal, not a convenience.
 """
 
@@ -73,7 +73,7 @@ def main(argv: list[str] | None = None) -> int:
 
     event = build_event(args)
     try:
-        asyncio.run(publish(event, os.environ.get("NATS_URL", "nats://nats:pmoves@nats:4222")))
+        asyncio.run(publish(event, os.environ.get("NATS_URL", "nats://nats:4222")))
     except Exception as exc:  # noqa: BLE001 — surface, never swallow
         print(f"publish failed: {exc}", file=sys.stderr)
         return 1

@@ -38,7 +38,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Environment variables
-NATS_URL = os.getenv("NATS_URL", "nats://nats:pmoves@nats:4222")
+NATS_URL = os.getenv("NATS_URL", "nats://nats:4222")
 HIRAG_URL = os.getenv("HIRAG_URL", "http://hi-rag-gateway-v2:8086")
 LABEL_CONFIDENCE_THRESHOLD = float(os.getenv("LABEL_CONFIDENCE_THRESHOLD", "0.7"))
 INDEX_HISTORICAL_ISSUES = os.getenv("INDEX_HISTORICAL_ISSUES", "true").lower() == "true"

@@ -24,7 +24,7 @@ from aiohttp import web
 
 CA_PORT = int(os.environ.get("CA_PORT", "8111"))
 NODE_NAME = os.environ.get("NODE_NAME", socket.gethostname())
-NATS_URL = os.environ.get("NATS_URL", "nats://nats:pmoves@nats-leaf:4222")
+NATS_URL = os.environ.get("NATS_URL", "nats://nats-leaf:4222")
 
 # ── Service Catalog ─────────────────────────────────────────────────────────
 # Services reachable from containers on this node's Docker bridge network.

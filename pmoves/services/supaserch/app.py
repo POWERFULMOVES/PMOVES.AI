@@ -512,7 +512,7 @@ async def _handle_nats_message(msg: Msg) -> None:
 
 
 async def _connect_nats() -> None:
-    url = os.getenv("NATS_URL", "nats://nats:pmoves@nats:4222")
+    url = os.getenv("NATS_URL", "nats://nats:4222")
     nc = NATS()
     try:
         await nc.connect(url)

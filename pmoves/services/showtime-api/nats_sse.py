@@ -22,7 +22,7 @@ SSE_MESSAGES_DROPPED = Counter(
     "SSE messages dropped due to full queue",
 )
 
-NATS_URL = os.environ.get("NATS_URL", "nats://nats:pmoves@localhost:4222")
+NATS_URL = os.environ.get("NATS_URL", "nats://localhost:4222")
 
 # Subjects to subscribe to for the SSE stream
 SSE_SUBJECTS = [

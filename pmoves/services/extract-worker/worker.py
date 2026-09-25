@@ -33,7 +33,7 @@ EMBEDDING_BACKEND = os.environ.get("EMBEDDING_BACKEND", "sentence-transformers")
 # ── CHIT / NATS CGP publishing ───────────────────────────────────────────────
 logger = logging.getLogger("pmoves.extract-worker")
 
-NATS_URL = os.environ.get("NATS_URL", "nats://nats:pmoves@nats:4222")
+NATS_URL = os.environ.get("NATS_URL", "nats://nats:4222")
 CGP_PUBLISH_ENABLED = os.environ.get(
     "EXTRACT_WORKER_CGP_PUBLISH", "true"
 ).lower() in ("1", "true", "yes")

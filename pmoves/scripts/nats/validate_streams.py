@@ -15,7 +15,7 @@ Usage:
     make nats-streams-validate
 
     # Or manually
-    nats -s nats://nats:pmoves@nats:4222 stream ls -n > /tmp/streams.txt
+    nats -s "$NATS_URL" stream ls -n > /tmp/streams.txt
     uv run --script validate_streams.py /tmp/streams.txt
 
     # Exit codes:
@@ -88,7 +88,7 @@ def main(argv: list[str]) -> int:
     if len(argv) < 2:
         print("ERROR: usage: validate_streams.py <path-to-stream-ls-output>", file=sys.stderr)
         print(
-            "  Capture output: nats -s nats://nats:pmoves@nats:4222 stream ls -n > streams.txt",
+            "  Capture output: nats -s \"$NATS_URL\" stream ls -n > streams.txt",
             file=sys.stderr,
         )
         return 1

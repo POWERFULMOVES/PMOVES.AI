@@ -19,7 +19,7 @@ async def publish_cookies_refreshed(
     error: str = "",
 ) -> None:
     """Publish ingest.cookies.refreshed.v1 event to NATS."""
-    nats_url = os.environ.get("NATS_URL", "nats://nats:pmoves@nats:4222")
+    nats_url = os.environ.get("NATS_URL", "nats://nats:4222")
 
     try:
         nc = await nats.connect(nats_url)

@@ -189,9 +189,9 @@ def nats_url() -> str:
 
     Prefers the NATS_URL environment variable (useful for CI overrides);
     otherwise falls back to the production-authenticated default used
-    throughout PMOVES.AI (``nats://nats:pmoves@nats:4222``).
+    throughout PMOVES.AI (``nats://nats:4222``).
     """
-    return os.environ.get("NATS_URL", "nats://nats:pmoves@nats:4222")
+    return os.environ.get("NATS_URL", "nats://nats:4222")
 
 
 @pytest.fixture(scope="session")

@@ -9,7 +9,7 @@ NATS Subjects:
   - agent.response.v1 (fallback)
 
 Config via env:
-  - CAST_FOLLOW_NATS_URL (default: nats://nats:pmoves@nats:4222; prod: CHIT-managed)
+  - CAST_FOLLOW_NATS_URL (default: nats://nats:4222; prod: CHIT-managed)
   - CAST_TTS_GATEWAY_URL (default: http://localhost:8060)
   - CAST_DEFAULT_DEVICE (default: None → auto-select)
   - CAST_FOLLOW_VOICE (default: default)
@@ -33,6 +33,7 @@ import argparse
 import asyncio
 import json
 import os
+from urllib.parse import urlsplit, urlunsplit
 import sys
 from datetime import datetime
 from typing import Any, Dict, Optional
@@ -45,6 +46,16 @@ def _env(name: str, default: str) -> str:
     """Get environment variable with default."""
     v = os.getenv(name)
     return v.strip() if v else default
+
+
+def _rewrite_host_preserving_userinfo(url: str, hostport: str) -> str:
+    """Swap the host:port of a nats:// URL, keeping any user:password intact."""
+    parts = urlsplit(url)
+    netloc = parts.netloc
+    userinfo = ""
+    if "@" in netloc:
+        userinfo = netloc.rsplit("@", 1)[0] + "@"
+    return urlunsplit((parts.scheme, userinfo + hostport, parts.path, parts.query, parts.fragment))
 
 
 def _resolve_nats_url() -> str:
@@ -64,12 +75,15 @@ def _resolve_nats_url() -> str:
         # host-published IPv4 port. `nats:4222` only resolves inside compose;
         # `localhost` may resolve to ::1 first while NATS binds IPv4 only.
         if nats_url.startswith("nats://nats:") or nats_url.startswith("tls://nats:"):
-            return "nats://nats:pmoves@127.0.0.1:4222"
+            # Rewrite the HOST only. The supplied userinfo must survive: the
+            # broker runs authenticated, so dropping it here turns an
+            # operator-provided credential into an Authorization Violation.
+            return _rewrite_host_preserving_userinfo(nats_url, "127.0.0.1:4222")
         if nats_url.startswith("nats://localhost:") or nats_url.startswith("tls://localhost:"):
             return nats_url.replace("://localhost:", "://127.0.0.1:", 1)
         return nats_url
 
-    return "nats://nats:pmoves@127.0.0.1:4222"
+    return "nats://127.0.0.1:4222"
 
 
 def _extract_text(payload: Dict[str, Any]) -> Optional[str]:
