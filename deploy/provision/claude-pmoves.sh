@@ -15,6 +15,83 @@
 set -u
 
 # ---------------------------------------------------------------------------
+# --backend= flag — switch between Anthropic-direct and MiniMax-routed Claude
+# Code for THIS launch without touching ~/.claude/settings.json. Persistent
+# switching lives at `pmoves-mini claude-backend {show,set,backup,restore}`.
+#
+# Accepted values:
+#   auto       (default) — detect hijack via $ANTHROPIC_BASE_URL; strip iff
+#                          the host is not api.anthropic.com. Lets a clean
+#                          host pass through with no churn.
+#   anthropic  — force Anthropic-direct routing; strip the Mavis SDK set
+#                unconditionally. One-shot override regardless of persistent
+#                state.
+#   minimax    — preserve whatever the Mavis SDK / settings.json has set.
+#                Used to test the MiniMax routing on demand.
+#
+# Env-var equivalent: PMOVES_CLAUDE_BACKEND={auto|anthropic|minimax}.
+#
+# The flag is parsed BEFORE the symlink-walk + ROOT resolution so `--help`
+# can be honoured even when the launcher cannot find the repo (the launched
+# `claude` does not need ROOT for help).
+#
+# Kept in step with deploy/provision/claude-pmoves.ps1: see `claude_backend_apply`
+# below and TwinParityTests in pmoves/tools/tests/test_pmoves_launcher_generator.py.
+# ---------------------------------------------------------------------------
+PMOVES_CLAUDE_BACKEND="${PMOVES_CLAUDE_BACKEND:-}"
+PMOVES_CLAUDE_BACKEND_REST=()
+__pmoves_claude_backend_parse=0
+for __arg in "$@"; do
+  if [ "$__pmoves_claude_backend_parse" -eq 1 ]; then
+    PMOVES_CLAUDE_BACKEND="$__arg"
+    __pmoves_claude_backend_parse=0
+    continue
+  fi
+  case "$__arg" in
+    --backend=*)
+      PMOVES_CLAUDE_BACKEND="${__arg#--backend=}"
+      ;;
+    --backend)
+      __pmoves_claude_backend_parse=1
+      ;;
+    --help|-h)
+      cat <<'USAGE' >&2
+claude-pmoves.sh — launch Claude Code with PMOVES env + MCP roster.
+
+Usage: claude-pmoves.sh [--backend={auto|anthropic|minimax}] [claude-args...]
+
+  --backend=auto       (default) detect hijack via $ANTHROPIC_BASE_URL
+  --backend=anthropic  force Anthropic-direct routing for this launch
+  --backend=minimax    preserve the Mavis SDK / settings.json hijack
+
+Persistent switching (writes ~/.claude/settings.json):
+  pmoves-mini claude-backend show
+  pmoves-mini claude-backend set anthropic
+  pmoves-mini claude-backend set minimax
+  pmoves-mini claude-backend backup
+  pmoves-mini claude-backend restore <file>
+USAGE
+      exit 0
+      ;;
+    *)
+      PMOVES_CLAUDE_BACKEND_REST+=("$__arg")
+      ;;
+  esac
+done
+# Lowercase + validate. Empty stays empty (= default auto on the apply side).
+PMOVES_CLAUDE_BACKEND="$(printf '%s' "$PMOVES_CLAUDE_BACKEND" | tr '[:upper:]' '[:lower:]')"
+case "$PMOVES_CLAUDE_BACKEND" in
+  ""|auto|anthropic|minimax) ;;
+  *)
+    echo "[claude-pmoves] ERROR: --backend=$PMOVES_CLAUDE_BACKEND invalid; expected one of auto, anthropic, minimax." >&2
+    exit 2
+    ;;
+esac
+# Rebuild "$@" from the residual args (so the launched claude gets them, not the flag).
+set -- "${PMOVES_CLAUDE_BACKEND_REST[@]}"
+unset PMOVES_CLAUDE_BACKEND_REST __pmoves_claude_backend_parse __arg
+
+# ---------------------------------------------------------------------------
 # REPO-ROOT RESOLUTION — keep byte-identical across the three launchers that
 # carry it (this file, crush-pmoves.sh, pmoves/scripts/claude-pmoves.sh).
 # Enforced by deploy/provision/tests/test-launcher-root-resolution.sh, which
@@ -101,6 +178,56 @@ if [ -f "$ROOT/pmoves/scripts/mavis_sdk_env.sh" ]; then
 else
   echo "[claude-pmoves] WARN: mavis_sdk_env.sh not found at $ROOT/pmoves/scripts/ -- Mavis SDK env may bleed into the launched session." >&2
 fi
+
+# ---------------------------------------------------------------------------
+# Claude Code backend selector — strip the Mavis-SDK hijack when --backend=
+# (or $PMOVES_CLAUDE_BACKEND) says so. Called AFTER mavis_sdk_strip_env_for so
+# the NEEDS-list preservation there runs first; this is the OVERRIDE layer.
+#
+# The python module is the source of truth — bash just `eval`s its stdout and
+# forwards stderr (which carries the WARN when something was actually stripped).
+# PowerShell twin does the same via `Invoke-Expression`. Kept in step with the
+# ps1 by:
+#   1. TwinParityTests in pmoves/tools/tests/test_pmoves_launcher_generator.py
+#   2. The pinned `--backend=` flag surface
+#   3. The pinned `PMOVES_CLAUDE_BACKEND` env-var name
+#   4. The pinned `stripped Mavis SDK hijack` WARN phrase
+#
+# If python or the tool is missing, we fall through with a WARN — the Mavis
+# SDK env-strip above has already done its partial work, and `claude` will
+# inherit whatever the parent shell set. The user can still fix the persistent
+# state with `pmoves-mini claude-backend set anthropic`.
+# ---------------------------------------------------------------------------
+claude_backend_apply() {
+  local _apply_backend="${PMOVES_CLAUDE_BACKEND:-auto}"
+  local _pm_py=()
+  # Reuse pm-python.sh's ladder — same precedence rules as the normalizer.
+  # shellcheck source=../../pmoves/scripts/pm-python.sh
+  if [ -f "$ROOT/pmoves/scripts/pm-python.sh" ]; then
+    . "$ROOT/pmoves/scripts/pm-python.sh"
+  fi
+  if ! pm_pick_python "" 2>/dev/null; then
+    echo "[claude-pmoves] WARN: no python interpreter; claude_backend_apply skipped (PMOVES_CLAUDE_BACKEND=$_apply_backend)." >&2
+    return 0
+  fi
+  local _apply_out _apply_rc=0
+  _apply_out="$(cd "$ROOT" && "${PM_PY[@]}" pmoves/tools/claude_backend.py apply \
+                  --backend "$_apply_backend" --label "claude-pmoves.sh")" || _apply_rc=$?
+  if [ "$_apply_rc" -ne 0 ]; then
+    echo "[claude-pmoves] WARN: claude_backend.py apply exited $_apply_rc; skipping the strip." >&2
+    return 0
+  fi
+  if [ -n "$_apply_out" ]; then
+    # The python module emits `unset NAME` and `export NAME=value` lines.
+    # Eval inside a subshell so a parse error here does not abort the launcher.
+    # Errors would be the worst kind: a launch that does not actually launch.
+    if ! (eval "$_apply_out") 2>/dev/null; then
+      echo "[claude-pmoves] WARN: claude_backend_apply eval produced an error; launching with the Mavis SDK env intact." >&2
+    fi
+  fi
+}
+claude_backend_apply
+unset -f claude_backend_apply
 
 if [ -f "$ENVF" ]; then
   # Blocklist: vars that control Claude SDK/session behavior and should NEVER be

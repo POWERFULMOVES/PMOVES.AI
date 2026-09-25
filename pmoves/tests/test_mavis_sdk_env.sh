@@ -29,6 +29,22 @@ if [ ! -f "$HELPER" ]; then
   exit 2
 fi
 
+# Locate a python interpreter. Mirrors pm-python.sh's ladder in compressed
+# form — enough to drive `pmoves/tools/claude_backend.py apply` for the new
+# claude-backend scenario.  PMOVES_PYTHON (verbatim path) always wins.
+PYTHON_BIN="${PMOVES_PYTHON:-}"
+if [ -z "$PYTHON_BIN" ]; then
+  for c in python3 python py; do
+    if command -v "$c" >/dev/null 2>&1; then
+      PYTHON_BIN="$c"
+      break
+    fi
+  done
+fi
+if [ -z "$PYTHON_BIN" ]; then
+  echo "WARN: no python interpreter found; claude-backend scenario will be skipped." >&2
+fi
+
 PASS=0
 FAIL=0
 
@@ -266,6 +282,99 @@ scenario_audit_log_best_effort_no_throw_body() {
   rm -f "$file_obstruction"
 }
 
+scenario_claude_backend_auto_strips_minimax_hijack_body() {
+  # End-to-end: claude-pmoves --backend=auto against a hijacked env must
+  # restore Anthropic routing AND emit the WARN that tells the operator
+  # what happened (so they can fix the persistent state with
+  # `pmoves-mini claude-backend set anthropic`).
+  #
+  # Invokes pmoves/tools/claude_backend.py apply directly (the bash launcher
+  # does the same thing via `claude_backend_apply`); the python module is the
+  # source of truth. PowerShell twin does the same with a different syntax;
+  # pinned by TwinParityTests in test_claude_backend.py.
+  local repo_root
+  repo_root="$(cd "$HERE/../.." && pwd)"
+  local apply="$repo_root/pmoves/tools/claude_backend.py"
+  local log_dir="$SCENARIO_RESULTS_DIR/claude_backend_audit"
+  mkdir -p "$log_dir"
+  export PMOVES_MAVIS_SDK_LOG_PATH="$log_dir/audit.jsonl"
+
+  # Hijacked env as the Mavis SDK / settings.json would set on the operator's
+  # host post-2026-09-10.
+  export ANTHROPIC_BASE_URL="https://api.minimax.chat/v1"
+  export ANTHROPIC_MODEL="MiniMax-M3[1m]"
+  export ANTHROPIC_DEFAULT_SONNET_MODEL="MiniMax-M2.7"
+  export CLAUDE_CODE_AUTO_COMPACT_WINDOW="1000000"
+  export ANTHROPIC_AUTH_TOKEN="sk-test-fake-token"   # Mavis SDK injects this too
+
+  local out err rc
+  out="$("$PYTHON_BIN" "$apply" apply --backend auto --label claude-pmoves.sh 2> /tmp/cb_apply.err)" \
+    && rc=0 || rc=$?
+  err="$(cat /tmp/cb_apply.err)"
+
+  # Apply must succeed even when the audit-write path is best-effort.
+  if [ "$rc" -eq 0 ]; then
+    PASS=$((PASS + 1))
+  else
+    echo "    FAIL: claude_backend.py apply exited $rc" >&2
+    FAIL=$((FAIL + 1))
+  fi
+
+  # The python module emits `unset NAME` and `export NAME=value` lines on stdout
+  # for the launcher to `eval`. ANTHROPIC_BASE_URL must be in the unset set.
+  assert_in "$out" "unset ANTHROPIC_BASE_URL" "stdout emits unset ANTHROPIC_BASE_URL"
+  assert_in "$out" "unset ANTHROPIC_MODEL" "stdout emits unset ANTHROPIC_MODEL"
+  assert_in "$out" "unset ANTHROPIC_DEFAULT_SONNET_MODEL" "stdout emits unset ANTHROPIC_DEFAULT_SONNET_MODEL"
+  assert_in "$out" "unset ANTHROPIC_AUTH_TOKEN" "stdout emits unset ANTHROPIC_AUTH_TOKEN"
+  assert_in "$out" "unset CLAUDE_CODE_AUTO_COMPACT_WINDOW" "stdout emits unset CLAUDE_CODE_AUTO_COMPACT_WINDOW"
+
+  # Prefixed-copy preserves original values for inspection (mirrors the
+  # PMOVES_MAVIS_SDK_<NAME> pattern from the Mavis-SDK env-strip lane).
+  assert_in "$out" "export PMOVES_CLAUDE_BACKEND_STRIPPED_ANTHROPIC_BASE_URL=" \
+    "stdout emits prefixed-copy export for ANTHROPIC_BASE_URL"
+  assert_in "$out" "https://api.minimax.chat/v1" \
+    "prefixed copy preserves the original ANTHROPIC_BASE_URL value"
+  assert_in "$out" "export PMOVES_CLAUDE_BACKEND_STRIPPED_ANTHROPIC_MODEL=" \
+    "stdout emits prefixed-copy export for ANTHROPIC_MODEL"
+
+  # The WARN goes to stderr; must contain the pinned phrase so a grep on the
+  # launch output surfaces what was caught. Mirrors the bash WARN line in
+  # claude-pmoves.sh + the WARN_PHRASE constant in claude_backend.py.
+  assert_in "$err" "stripped Mavis SDK hijack" "WARN phrase emitted on stderr"
+  assert_in "$err" "claude-pmoves" "WARN carries the --label"
+
+  # eval the stdout: ANTHROPIC_BASE_URL must end up unset in this shell.
+  eval "$out" >/dev/null 2>&1
+  assert_equal "${ANTHROPIC_BASE_URL:-<unset>}" "<unset>" "ANTHROPIC_BASE_URL unset after eval"
+  assert_equal "${ANTHROPIC_MODEL:-<unset>}" "<unset>" "ANTHROPIC_MODEL unset after eval"
+  assert_equal "${PMOVES_CLAUDE_BACKEND_STRIPPED_ANTHROPIC_BASE_URL:-<unset>}" \
+    "https://api.minimax.chat/v1" \
+    "PMOVES_CLAUDE_BACKEND_STRIPPED_ANTHROPIC_BASE_URL preserved after eval"
+
+  # The audit log must have one JSONL line with backend=auto, cli=claude.
+  # Note: cli comes from the python module's `_audit_append(cli_name=...)`
+  # default which is 'claude'; the apply path also overrides the label in the
+  # WARN, so we pin both: the JSONL cli=claude (which is the audit-log convention
+  # from PR #3149) and the label=claude-pmoves.sh (used in the WARN only).
+  # The audit JSONL uses json.dumps default separators (`, ` + `: `), matching
+  # the PMOVES_MAVIS_SDK_* convention.
+  local audit_line
+  audit_line="$(head -1 "$log_dir/audit.jsonl" 2>/dev/null || true)"
+  assert_in "$audit_line" '"backend": "auto"' "audit JSONL records backend=auto"
+  assert_in "$audit_line" '"cli": "claude"' "audit JSONL records cli=claude"
+
+  # Cleanup the env so a follow-up scenario isn't poisoned by leftover state.
+  unset ANTHROPIC_BASE_URL ANTHROPIC_MODEL ANTHROPIC_DEFAULT_SONNET_MODEL
+  unset ANTHROPIC_AUTH_TOKEN CLAUDE_CODE_AUTO_COMPACT_WINDOW
+  unset PMOVES_CLAUDE_BACKEND_STRIPPED_ANTHROPIC_BASE_URL \
+        PMOVES_CLAUDE_BACKEND_STRIPPED_ANTHROPIC_MODEL \
+        PMOVES_CLAUDE_BACKEND_STRIPPED_ANTHROPIC_DEFAULT_SONNET_MODEL \
+        PMOVES_CLAUDE_BACKEND_STRIPPED_ANTHROPIC_AUTH_TOKEN \
+        PMOVES_CLAUDE_BACKEND_STRIPPED_CLAUDE_CODE_AUTO_COMPACT_WINDOW
+  unset PMOVES_MAVIS_SDK_LOG_PATH
+  rm -f /tmp/cb_apply.err
+}
+
 # ---------------------------------------------------------------------------
 # Run all scenarios; aggregate pass/fail count.
 # ---------------------------------------------------------------------------
@@ -285,6 +394,12 @@ echo "[scenario] audit log records all_consumed=true for pmoves-mini passthrough
 run_scenario audit_passthrough scenario_audit_log_records_passthrough_body
 echo "[scenario] audit log write failure must NOT fail the strip call"
 run_scenario audit_best_effort scenario_audit_log_best_effort_no_throw_body
+echo "[scenario] claude-backend apply auto strips a hijacked Mavis SDK env"
+if [ -n "$PYTHON_BIN" ]; then
+  run_scenario claude_backend_auto scenario_claude_backend_auto_strips_minimax_hijack_body
+else
+  echo "    SKIP: no python interpreter"
+fi
 
 echo "--------------------------------------------------"
 # Aggregate from per-scenario result files.
