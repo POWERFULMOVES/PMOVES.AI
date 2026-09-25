@@ -1,6 +1,7 @@
 # IDE / Harness / Pinokio Fleet Console Integration Plan
 
 **Status:** PROPOSAL (2026-09-03) — from the delegated repo audit (file:line citations throughout).
+**Execution plan (2026-09-24):** [docs/superpowers/plans/2026-09-24-p7-playground-pinokio-plugins.md](../../../docs/superpowers/plans/2026-09-24-p7-playground-pinokio-plugins.md) — provenance-backed plan + runbook; §3 "Pinokio mirror" is Phases 1-3 there, and §Sequencing step 4 is tracked as PMOVES-pinokio PR #12.
 Operator directive: VS Code (and KiloCode-class harnesses) need proper PMOVES.AI plugin/extension/MCP
 config so nodes run with slick integration; PMOVES-pinokio mirrors + enhances this as the user-facing
 launcher for services AND cli harnesses/agents; services should launch, autonetwork-scan, dispatch,
