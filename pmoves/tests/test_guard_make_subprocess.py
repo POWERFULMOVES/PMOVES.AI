@@ -358,6 +358,19 @@ def test_recorder_records_are_nul_separated_and_survive_awkward_args(stub_tool_p
     assert stub_tool_path.calls("docker") == [["docker"]]
 
 
+def test_a_behaviour_stub_still_records_first_and_is_still_a_stub_dir(tmp_path):
+    env = guard.build_stub_env(
+        tmp_path / "b", stub_make=False,
+        behaviours={"docker": 'if [ "$1" = "ps" ]; then echo fake-neo4j; exit 0; fi\nexit 7'},
+    )
+    assert guard.is_stub_dir(str(env.stub_dir))
+    ps = subprocess.run(["docker", "ps"], env=env, capture_output=True, text=True)
+    other = subprocess.run(["docker", "info"], env=env, capture_output=True, text=True)
+    assert (ps.returncode, ps.stdout) == (0, "fake-neo4j\n")
+    assert other.returncode == 7
+    assert env.calls("docker") == [["docker", "ps"], ["docker", "info"]]
+
+
 def test_stub_docker_path_fixture_leaves_make_unstubbed(stub_docker_path):
     stub_dir = stub_docker_path.stub_dir
     assert (stub_dir / "docker").is_file() and (stub_dir / "docker-compose").is_file()

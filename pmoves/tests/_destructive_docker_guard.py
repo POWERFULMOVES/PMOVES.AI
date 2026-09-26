@@ -763,13 +763,17 @@ class StubEnv(dict):
         return [r for r in rows if tool is None or (r and r[0] == tool)]
 
 
-def _recorder(name: str, log: Path) -> str:
+def _recorder(name: str, log: Path, behaviour: str | None = None) -> str:
+    """The record line ALWAYS runs first; an optional behaviour snippet (bash)
+    may then print canned output or choose an exit code. It must not call a
+    real tool: the stub is still the thing PATH resolves `name` to."""
+    shebang = "#!/bin/sh" if behaviour is None else "#!/usr/bin/env bash"
     return (
-        "#!/bin/sh\n"
-        f"{RECORDER_HEADER}: records argv, exits 0,\n"
-        "# never reaches a daemon.\n"
+        f"{shebang}\n"
+        f"{RECORDER_HEADER}: records argv, never reaches a daemon.\n"
         f"printf '%s\\000' \"$(($# + 1))\" {shlex.quote(name)} \"$@\" >> {shlex.quote(str(log))}\n"
-        "exit 0\n"
+        + (behaviour.rstrip("\n") + "\n" if behaviour else "")
+        + "exit 0\n"
     )
 
 
@@ -779,6 +783,7 @@ def build_stub_env(
     stub_make: bool = True,
     extra: Iterable[str] = (),
     base_env: dict[str, str] | None = None,
+    behaviours: dict[str, str] | None = None,
 ) -> StubEnv:
     """Create a stub tool dir in `directory` and return an env with it FIRST on PATH.
 
@@ -786,14 +791,19 @@ def build_stub_env(
     ``stub_make=False``: the real make is found further down PATH and runs its
     recipes; docker/docker-compose/supabase still resolve to recorders. Read
     the module docstring for what that second form does NOT cover.
+    ``behaviours``: per-tool bash snippets run AFTER the record line, for
+    tests that need canned output (e.g. a fake ``docker ps``). A behaviour for
+    a tool not otherwise stubbed adds that tool.
     """
+    behaviours = dict(behaviours or {})
     stub_dir = Path(os.path.realpath(os.fspath(directory)))
     stub_dir.mkdir(parents=True, exist_ok=True)
     log = stub_dir / STUB_LOG_NAME
     names = list(STUB_TOOLS) + (sorted(MAKE_NAMES) if stub_make else []) + list(extra)
+    names += [n for n in behaviours if n not in names]
     for name in names:
         tool = stub_dir / name
-        tool.write_text(_recorder(name, log))
+        tool.write_text(_recorder(name, log, behaviours.get(name)))
         tool.chmod(0o755)
     (stub_dir / STUB_MARKER).write_text("pmoves test stub dir: see pmoves/tests/_destructive_docker_guard.py\n")
     env = StubEnv(os.environ if base_env is None else base_env)
