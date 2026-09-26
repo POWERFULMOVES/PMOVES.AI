@@ -125,6 +125,34 @@ if [ -f "$ENVF" ]; then
   # Kept in step with deploy/provision/claude-pmoves.ps1:25-31.
   blocklist='^(ANTHROPIC_API_KEY|ANTHROPIC_AUTH_TOKEN|ANTHROPIC_BASE_URL|CLAUDECODE|CLAUDE_CODE_.+|CLAUDE_SESSION_.+)$'
 
+  # Explicitly strip blocklisted vars from the PARENT env before exec claude.
+  # The blocklist above filters env.shared (the file being sourced), but the
+  # parent shell may have set ANTHROPIC_API_KEY via $PROFILE, env.tier-llm,
+  # or a prior session export. Without this unset, the child process inherits
+  # them on the way to exec claude and the auth-precedence warning fires
+  # ("claude.ai connectors disabled because ANTHROPIC_API_KEY takes precedence").
+  # The .ps1 twin performs the same sweep — keep them byte-identical.
+  _cleared=()
+  for _blocked_var in ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN ANTHROPIC_BASE_URL; do
+    if [ -n "${!_blocked_var+x}" ]; then
+      _cleared+=("$_blocked_var")
+      unset "$_blocked_var"
+    fi
+  done
+  for _pattern in 'CLAUDECODE' 'CLAUDE_CODE_' 'CLAUDE_SESSION_'; do
+    # compgen returns names of defined vars; filter to those matching the prefix.
+    while IFS= read -r _var; do
+      [ -z "$_var" ] && continue
+      if [ -n "${!_var+x}" ]; then
+        _cleared+=("$_var")
+        unset "$_var"
+      fi
+    done < <(compgen -A variable "${_pattern}" 2>/dev/null || true)
+  done
+  if [ "${#_cleared[@]}" -gt 0 ]; then
+    echo "[claude-pmoves] cleared auth vars from parent env: ${_cleared[*]}" >&2
+  fi
+
   # env.shared is Docker Compose env_file format: unquoted values, and some are
   # ALIAS lines like SUPABASE_SERVICE_ROLE_KEY=${SERVICE_ROLE_KEY}. Two hazards:
   #   1. We can't `source` it raw — unquoted values break `. file`.
