@@ -142,12 +142,6 @@ def test_no_container_name_is_could_not_measure_not_a_guess(tmp_path):
     assert proc.stdout == ""
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="awaits KNOWN_ROAD compose:pr:3193: container_name is not declared in "
-    "docker-compose.yml yet. strict=True makes this FAIL the moment it is, so the "
-    "marker cannot outlive the change it waits for.",
-)
 def test_the_real_compose_names_the_live_container():
     """The name the live Knuckles container already has, so Phase 1b keeps it."""
     assert neo4j_container.container_name() == "pmoves-neo4j"
