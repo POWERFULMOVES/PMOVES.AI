@@ -24,6 +24,7 @@ import os
 import re
 import shutil
 import subprocess
+import uuid
 import sys
 from pathlib import Path
 
@@ -353,10 +354,13 @@ def test_the_stub_bin_meets_the_make_spawn_guard_contract(tmp_path):
     # The recorder records, proven with a READ-ONLY argv: the session guard
     # (#3190) refuses spawning `docker-compose up` with no project, stub or
     # not, and must not be worked around.
+    # A throwaway project is pinned, per #3190's static rule: every compose command
+    # a test spawns carries -p, even to a recorder.
     log = tmp_path / "docker.log"
-    subprocess.run([str(b / "docker-compose"), "ps"],
+    project = f"pmoves-test-{uuid.uuid4().hex[:12]}"
+    subprocess.run([str(b / "docker-compose"), "-p", project, "ps"],
                    env={**os.environ, "STUB_LOG": str(log)}, check=True)
     recorded = [ln.split() for ln in log.read_text().splitlines()]
-    assert recorded == [["compose", "ps"]], recorded
+    assert recorded == [["compose", "-p", project, "ps"]], recorded
     # ...and a mutating call, in exactly the shape the recorder writes, is flagged.
     assert _neo4j_mutations([["compose", "up", "-d", "neo4j"]]) != []
