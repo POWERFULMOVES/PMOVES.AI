@@ -24,7 +24,12 @@ fi
 
 # Configuration
 BACKUP_DIR="backups"
-CONTAINER_NAME="pmoves-neo4j-1"
+# Single source: services.neo4j.container_name in docker-compose.yml. This
+# used to be a literal "pmoves-neo4j-1" that matched no running container.
+CONTAINER_NAME="$(python3 "$SCRIPT_DIR/neo4j_container.py")" || {
+    echo "[ERROR] could not determine the Neo4j container name (see above)" >&2
+    exit 3
+}
 RETENTION_DAYS=${1:-7}
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 BACKUP_FILE="neo4j_${TIMESTAMP}.dump"
@@ -51,17 +56,13 @@ log_error() {
 # Create backup directory
 mkdir -p "$BACKUP_DIR"
 
-# Check if Neo4j container is running
+# Check that Neo4j is running. A backup NEVER starts Neo4j: when the name did
+# not match, the old fallback started a SECOND Neo4j on the data volume the
+# running one held (see neo4j_container.py). Start it deliberately instead.
 log_info "Checking Neo4j container status..."
-if ! docker ps --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"; then
-    log_warn "Neo4j container not running. Attempting to start..."
-    docker compose -f pmoves/docker-compose.yml --profile neo4j-local up -d neo4j
-    sleep 10
-fi
-
-# Verify container is running
-if ! docker ps --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"; then
-    log_error "Neo4j container failed to start"
+if ! docker ps --format '{{.Names}}' | grep -qx "${CONTAINER_NAME}"; then
+    log_error "Neo4j container '${CONTAINER_NAME}' is not running; not starting one from a backup script."
+    log_error "Start it with: make -C pmoves up-data-tier DATA_SERVICES=neo4j"
     exit 1
 fi
 

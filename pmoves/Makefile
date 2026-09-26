@@ -5555,12 +5555,13 @@ neo4j-backup: ## Backup Neo4j database to backups/ with timestamp
 	@timestamp=$$(date +%Y%m%d_%H%M%S); \
 	backup_dir="backups"; \
 	mkdir -p "$$backup_dir"; \
-	container_name=$$($(DC) ps -q neo4j 2>/dev/null | head -1); \
-	if [ -z "$$container_name" ]; then \
-		echo "⚠️  Neo4j container not running. Starting neo4j..."; \
-		$(MAKE) --no-print-directory neo4j-local-up; \
-		sleep 10; \
-		container_name=$$($(DC) ps -q neo4j 2>/dev/null | head -1); \
+	container_name=$$($(PYTHON) $(CURDIR)/scripts/neo4j_container.py) || exit 3; \
+	if ! docker ps --format '{{.Names}}' | grep -qx "$$container_name"; then \
+		echo "❌ Neo4j container '$$container_name' is not running; a backup does not start one."; \
+		echo "   (It used to: '$(DC) ps -q neo4j' cannot see an out-of-compose container, so the"; \
+		echo "   fallback started a SECOND Neo4j on the volume the running one held.)"; \
+		echo "   Start it deliberately: make -C pmoves up-data-tier DATA_SERVICES=neo4j"; \
+		exit 1; \
 	fi; \
 	if [ -n "$$container_name" ]; then \
 		if docker exec $$container_name neo4j-admin database dump \
@@ -5576,7 +5577,8 @@ neo4j-backup: ## Backup Neo4j database to backups/ with timestamp
 			docker cp $$container_name:/backups/neo4j_$${timestamp}.cypher "$$backup_dir/neo4j_$${timestamp}.cypher" 2>/dev/null && \
 				echo "✅ Backup created: $$backup_dir/neo4j_$${timestamp}.cypher" && \
 				ls -lh "$$backup_dir/neo4j_$${timestamp}.cypher"; \
-		else \; echo "❌ Backup failed - neither dump nor cypher export succeeded"; \
+		else \
+			echo "❌ Backup failed - neither dump nor cypher export succeeded"; \
 			exit 1; \
 		fi; \
 	else \
@@ -5598,6 +5600,18 @@ neo4j-restore: ## Restore Neo4j from backup (usage: make neo4j-restore BACKUP=ba
 		echo "❌ Error: Backup file not found: $(BACKUP)"; \
 		exit 1; \
 	fi
+	@# Refuse while the container of that name is NOT compose-managed. The steps
+	@# below stop and remove only the COMPOSE service; an out-of-compose container
+	@# keeps running on pmoves_neo4j-data, the volume rm then fails silently, and a
+	@# compose Neo4j is started beside it. Migrate it under compose first (the
+	@# Phase 1b runbook in PR ops/knuckles-neo4j-from-fork).
+	@name=$$($(PYTHON) $(CURDIR)/scripts/neo4j_container.py) || exit 3; \
+	if docker inspect "$$name" >/dev/null 2>&1 && \
+	   [ -z "$$(docker inspect -f '{{index .Config.Labels "com.docker.compose.project"}}' "$$name")" ]; then \
+		echo "❌ '$$name' exists but is not managed by compose; refusing to restore over it."; \
+		echo "   Bring Neo4j under compose first, then re-run neo4j-restore."; \
+		exit 1; \
+	fi
 	@echo "→ Restoring Neo4j from $(BACKUP)..."
 	@echo "⚠️  This will STOP Neo4j, DELETE existing data, and restore from backup"
 	@echo "Press Ctrl+C to cancel, or wait 5 seconds to continue..."
@@ -5607,8 +5621,8 @@ neo4j-restore: ## Restore Neo4j from backup (usage: make neo4j-restore BACKUP=ba
 	@echo "→ Starting fresh Neo4j..."
 	@$(MAKE) --no-print-directory neo4j-local-up
 	@sleep 15
-	@container_name=$$($(DC) ps -q neo4j 2>/dev/null | head -1); \
-	if [ -n "$$container_name" ]; then \
+	@container_name=$$($(PYTHON) $(CURDIR)/scripts/neo4j_container.py) || exit 3; \
+	if docker ps --format '{{.Names}}' | grep -qx "$$container_name"; then \
 		docker cp "$(BACKUP)" $$container_name:/backups/neo4j.dump; \
 		docker exec $$container_name neo4j-admin database load \
 			--from=/backups/neo4j.dump \
