@@ -181,6 +181,48 @@ REFUSED_UNSTUBBED = [
     b"make up",
     # the exec-wrapper shape also exposes docker, not only make
     ["bash", "scripts/with-env.sh", "docker", "compose", "down"],
+    # #3195 review P2: shapes the first cut of the parser allowed
+    "cd pmoves\nmake up-core-capable",
+    "true\ndocker compose down",
+    "FOO=1 make up",
+    "FOO=1 BAR=2 make up",
+    "exec make up",
+    "exec -a x make up",
+    "if true; then make up; fi",
+    "if make up; then true; fi",
+    "while true; do make up; done",
+    "{ make up; }",
+    "! make up",
+    "!make up",
+    "`make up`",
+    "echo `make up`",
+    'echo "$(make up)"',
+    "diff <(make -n up) x",
+    "case x in a) make up;; esac",
+    "> log make up",
+    "echo x | xargs make",
+    "xargs -n 1 -I {} make {}",
+    "time make up",
+    "time -p make up",
+    "command make up",
+    "eval make up",
+    "eval 'make up'",
+    "nohup make up &",
+    "setsid -f make up",
+    "stdbuf -oL make up",
+    "ionice -c 3 make up",
+    "busybox make up",
+    "busybox sh -c 'make up'",
+    "doas make up",
+    "env -S 'make up'",
+    ["xargs", "make"],
+    ["nohup", "make", "up"],
+    ["MAKE.EXE", "up"],
+    ["C:\\tools\\Make.Exe", "up"],
+    # #3195 review P3: wrappers after an exec-wrapper script
+    ["bash", "scripts/with-env.sh", "env", "X=1", "make", "up"],
+    ["./with-env.sh", "sudo", "make", "up"],
+    ["bash", "scripts/with-env.sh", "nohup", "docker", "compose", "down"],
 ]
 
 ALLOWED_UNSTUBBED = [
@@ -196,6 +238,13 @@ ALLOWED_UNSTUBBED = [
     ["make", "--help"],
     ["cmake", "--build", "."],  # cmake is not make
     ["makepkg", "-s"],
+    ["/usr/bin/make", "--version"],  # info-only applies path-qualified too
+    "command -v make",  # a lookup: nothing runs
+    "command -V make",
+    "git commit -m 'fix `make up`'",  # single-quoted: literal, never executes
+    "git commit -m 'line one\nmake up'",  # a newline INSIDE quotes is not a separator
+    "echo 'make up'",
+    "printf '%s' 'x; make up'",
 ]
 
 
@@ -252,6 +301,38 @@ def test_relative_stub_dir_is_refused(stub, monkeypatch):
     assert guard.check_command(["make", "up"], env)
 
 
+def test_stub_dir_missing_the_supabase_stub_is_refused(stub):
+    (stub.stub_dir / "supabase").unlink()
+    assert guard.check_command(["make", "up"], stub)
+
+
+def test_symlinked_docker_in_a_marked_dir_is_refused(stub):
+    """A marker plus a symlink to a real binary must not license make."""
+    docker = stub.stub_dir / "docker"
+    docker.unlink()
+    docker.symlink_to("/bin/true")
+    assert guard.check_command(["make", "up"], stub)
+
+
+def test_hand_written_stub_without_the_recorder_header_is_refused(stub):
+    docker = stub.stub_dir / "docker"
+    docker.write_text("#!/bin/sh\nexec /usr/bin/docker \"$@\"\n")
+    docker.chmod(0o755)
+    assert guard.check_command(["make", "up"], stub)
+
+
+def test_executable_make_on_the_string_path_is_refused():
+    # shell=True: executable replaces /bin/sh -> [/usr/bin/make, -c, "up"]
+    assert guard.check_command("up", executable="/usr/bin/make", shell=True)
+    # shell=False: a bare program string, executable is what runs
+    assert guard.check_command("up", executable="/usr/bin/make")
+    assert guard.check_command("true", executable="/bin/sh", shell=True) is None
+
+
+def test_executable_bash_with_shell_true_judges_the_payload():
+    assert guard.check_command("make up", executable="/bin/bash", shell=True)
+
+
 def test_existing_docker_rules_are_unchanged_by_a_stub_env(stub):
     # The stub PATH licenses make only; a direct compose call is judged as before.
     assert guard.check_command(["docker", "compose", "down"], stub)
@@ -267,6 +348,14 @@ def test_stub_tool_path_fixture_records_make_and_never_runs_a_recipe(stub_tool_p
     # Real make would fail on the missing -C dir; the recorder exits 0.
     assert proc.returncode == 0, proc.stderr
     assert stub_tool_path.calls("make") == [["make", "-n", "-C", "/nonexistent-dir", "up"]]
+
+
+def test_recorder_records_are_nul_separated_and_survive_awkward_args(stub_tool_path):
+    awkward = ["a\tb", "line1\nline2", "", "up"]
+    subprocess.run(["make", *awkward], env=stub_tool_path, check=True)
+    subprocess.run(["docker"], env=stub_tool_path, check=True)
+    assert stub_tool_path.calls() == [["make", *awkward], ["docker"]]
+    assert stub_tool_path.calls("docker") == [["docker"]]
 
 
 def test_stub_docker_path_fixture_leaves_make_unstubbed(stub_docker_path):

@@ -54,17 +54,20 @@ And because pmoves/docker-compose.yml sets top-level ``name: pmoves``, any
 compose call such a line reaches addresses the LIVE project from any directory.
 
 So every spawn of ``make``/``gmake`` is refused -- as argv[0] (or the
-``executable=``), after a ``sudo``/``env``/``nice``/``timeout`` wrapper, as
-any command in a shell ``-c`` payload or ``shell=True`` string, and as the
-first argument of an exec-wrapper script (``bash scripts/with-env.sh make ...``,
+``executable=``, on the list AND the string path), after any wrapper the
+parser knows (see "How a command is found" below), as any command in a shell
+``-c`` payload or ``shell=True`` string, and as the first argument (after
+wrappers) of an exec-wrapper script (``bash scripts/with-env.sh make ...``,
 ``./with-env.sh make ...``, the fleet's canonical loader shape) -- UNLESS the
 PATH that make's child processes will search starts with a STUB DIRECTORY:
 
 * the PATH is the call's ``env["PATH"]`` when ``env=`` is given (``os.defpath``
   if that env has no PATH), else ``os.environ["PATH"]``;
 * its FIRST entry must be an absolute directory that contains the marker file
-  ``.pmoves-test-stub`` AND executable ``docker`` and ``docker-compose``
-  stubs. :func:`build_stub_env` (the ``stub_tool_path`` / ``stub_docker_path``
+  ``.pmoves-test-stub`` AND recorder stubs for ``docker``, ``docker-compose``
+  and ``supabase``: regular, non-symlink, executable files carrying the
+  recorder header line. A marker dir holding a symlink to a real binary, or a
+  hand-written stub without the header, is not a stub dir. :func:`build_stub_env` (the ``stub_tool_path`` / ``stub_docker_path``
   fixtures in pmoves/tests/conftest.py) is the sanctioned way to make one;
 * a path-qualified program (``/usr/bin/make``) bypasses PATH lookup for make
   itself, so it is only accepted when it lives IN such a stub directory.
@@ -77,18 +80,39 @@ path, resets PATH, or talks to the daemon socket from Python bypasses it.
 Before using it, read the target's recipe chain.
 
 ``make --version`` / ``-v`` / ``--help`` / ``-h`` as the ONLY argument are
-allowed unstubbed: make exits before reading any makefile. An ``env PATH=...``
+allowed unstubbed, path-qualified or not: make exits before reading any
+makefile. An ``env PATH=...``
 wrapper in argv is not honoured as the effective PATH; pass ``env=`` instead.
 The exec-wrapper rule also applies to docker: ``bash with-env.sh docker compose
 down`` is judged as ``docker compose down``.
 
-What counts as a docker call, to avoid false positives on text that merely
-mentions docker: ``docker``/``docker-compose`` must be the COMMAND -- the first
-token, or the first token after a ``sudo``/``env``/``nice``/``timeout``
-wrapper. A whitespace-bearing argument is only parsed as a command when it is
-the ``-c`` payload of a known shell (``sh bash dash zsh ksh``). So
-``git commit -m 'fix docker compose down'`` and ``rg 'docker compose down'`` are
-allowed, while ``bash -c 'docker compose down'`` is refused.
+How a command is found (applies to docker, docker-compose and make alike), to
+avoid false positives on text that merely mentions them: the name must be the
+COMMAND of a shell segment.
+
+* Segments are split on ``;`` ``&`` ``&&`` ``|`` ``||`` ``(`` ``)`` and on
+  NEWLINES (a backslash-newline is a continuation). Before #3195's review a
+  newline was swallowed as whitespace, so ``"true\ndocker compose down"`` was
+  allowed; that hole dated from #3190.
+* Leading ``NAME=value`` assignments, shell keywords (``if then else elif fi do
+  done while until { } ! esac``, and ``!cmd``), and a leading redirection with
+  its target are skipped.
+* Wrappers and their options are skipped: ``sudo doas env nice timeout exec time
+  command nohup setsid stdbuf ionice xargs busybox``. ``env -S 'text'`` is split
+  into argv. ``command -v/-V NAME`` is a lookup and runs nothing. ``eval ARGS``
+  is re-parsed as shell text.
+* Command substitutions -- backticks, ``$(...)``, ``<(...)``, ``>(...)`` -- are
+  judged as commands of their own, including inside double quotes (where they
+  still execute). Single-quoted text is literal and never parsed.
+* A whitespace-bearing argv element is only parsed as shell text when it is the
+  ``-c`` payload of a known shell (``sh bash dash zsh ksh ash mksh fish``) or
+  the ``args[0]`` of a ``shell=True`` list.
+* ``.exe`` names are case-folded (``MAKE.EXE`` is make).
+
+So ``git commit -m 'fix docker compose down'``, ``rg 'docker compose down'``
+and ``echo make up`` are allowed, while ``bash -c 'docker compose down'``,
+``"cd pmoves\nmake up"``, ``FOO=1 make up``, ``{ make up; }`` and
+``echo "$(make up)"`` are refused.
 
 A refusal raises :class:`DestructiveDockerCallBlocked`, a ``BaseException``
 subclass, so the ``except Exception: pytest.skip(...)`` pattern common in this
@@ -104,6 +128,18 @@ Scope, stated so nobody reads more coverage into this than it has:
   refusal still fails the test but does not stop the session.
 * It only sees spawns made by THIS Python process. A test that launches a shell
   or Python script which in turn runs ``docker compose down`` is not covered.
+* It wraps ``subprocess.Popen.__init__`` and ``os.system`` only. ``os.exec*``,
+  ``os.spawn*``, ``os.posix_spawn``/``posix_spawnp`` and ``pty.spawn`` are
+  NOT wrapped. (``os.popen`` goes through Popen and is covered.)
+* Shell shapes the parser still cannot see, stated explicitly: variable or
+  alias indirection (``M=make; $M up``, a function defined earlier in the
+  string and called by name), ANSI-C quoting (``$'make'``), a script fed on
+  stdin (``subprocess.run(["bash"], input="make up")``, ``bash -s``, heredocs),
+  ``find -exec``/``parallel``/``watch``/``script -c``/``su -c``/``flock``/
+  ``chroot``/``unshare``/``nsenter``/``runuser``/``systemd-run``/``taskset``/
+  ``chrt``/``numactl``/``strace`` and any other wrapper not in the list above,
+  and ``python -c`` code that spawns on its own. These are refused only if the
+  spawned child is itself one of the covered forms.
 * It does not interpret ``make`` targets (``make down``); it refuses make
   wholesale unless the stub PATH rule above holds, and it cannot see a make
   that a spawned script runs internally (other than the exec-wrapper shape).
@@ -160,7 +196,7 @@ _DOCKER_VALUE_OPTS = frozenset(
     {"-H", "--host", "-c", "--context", "--config", "-l", "--log-level", "--tlscacert", "--tlscert", "--tlskey"}
 )
 
-_SHELLS = frozenset({"sh", "bash", "dash", "zsh", "ksh"})
+_SHELLS = frozenset({"sh", "bash", "dash", "zsh", "ksh", "ash", "mksh", "fish"})
 
 # The narrow `docker exec` allowlist (see _exec_verdict).
 _EXEC_OK_FLAGS = frozenset({"-i", "-t", "-T", "-it", "-ti", "--interactive", "--tty"})
@@ -170,21 +206,43 @@ _SELECT_RE = re.compile(r"(?i)select\b")
 _INTO_RE = re.compile(r"(?i)\binto\b")
 
 # Wrappers after which the next command token is the real command, with the
-# options of each that consume a value.
+# options of each that consume a value. `command -v/-V` only LOOKS UP a name
+# and is handled in _strip_wrappers; `eval` re-parses its arguments as shell
+# text and is handled in _argv_verdict.
 _WRAPPERS: dict[str, frozenset[str]] = {
     "sudo": frozenset({"-u", "-g", "-C", "-D", "-h", "-p", "-r", "-t", "-T", "-U"}),
+    "doas": frozenset({"-u", "-C"}),
     "env": frozenset({"-u", "--unset", "-C", "--chdir", "-S", "--split-string"}),
     "nice": frozenset({"-n", "--adjustment"}),
     "timeout": frozenset({"-s", "--signal", "-k", "--kill-after"}),
+    "exec": frozenset({"-a"}),
+    "time": frozenset({"-o", "--output", "-f", "--format"}),
+    "command": frozenset(),
+    "nohup": frozenset(),
+    "setsid": frozenset(),
+    "stdbuf": frozenset({"-i", "-o", "-e"}),
+    "ionice": frozenset({"-c", "--class", "-n", "--classdata", "-p", "--pid", "-P", "--pgid", "-u", "--uid"}),
+    "xargs": frozenset({
+        "-a", "--arg-file", "-d", "--delimiter", "-E", "-I", "-L", "--max-lines",
+        "-n", "--max-args", "-P", "--max-procs", "-s", "--max-chars", "--process-slot-var",
+    }),
+    "busybox": frozenset(),
 }
 
-_SHELL_SEPARATORS = frozenset({";", "&", "&&", "|", "||", "(", ")", "\n"})
+# Shell reserved words that can precede a command in the same segment
+# (`if make up; then ...`, `{ make up; }`, `! make up`, `do make; done`).
+_SHELL_KEYWORDS = frozenset(
+    {"if", "then", "else", "elif", "fi", "do", "done", "while", "until", "{", "}", "!", "esac"}
+)
+_ASSIGNMENT_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
+_PUNCT = frozenset(";&|()<>")
+_SEPARATOR_CHARS = frozenset(";&|()")
 
 # make: refused unless the effective PATH starts with a marked stub dir.
 MAKE_NAMES = frozenset({"make", "gmake"})
 STUB_MARKER = ".pmoves-test-stub"
-# A stub dir must shadow these, or it is not a stub dir.
-STUB_REQUIRED = ("docker", "docker-compose")
+# A stub dir must shadow these with RECORDERS, or it is not a stub dir.
+STUB_REQUIRED = ("docker", "docker-compose", "supabase")
 # make exits on these before reading any makefile.
 _MAKE_INFO_ONLY = frozenset({"--version", "-v", "--help", "-h"})
 # A command that, as an exec-wrapper script's first argument, the script runs
@@ -205,22 +263,85 @@ class DestructiveDockerCallBlocked(BaseException):
     """
 
 
+class DestructiveDockerCallBlocked(BaseException):
+    """Raised instead of spawning a docker call that could touch a live project.
+
+    BaseException on purpose: ``except Exception`` must not swallow it.
+    """
+
+
 def _basename(token: str) -> str:
     name = token.replace("\\", "/").rsplit("/", 1)[-1]
-    return name[:-4] if name.lower().endswith(".exe") else name
+    # Windows resolves names case-insensitively, so `MAKE.EXE` is make.
+    return name[:-4].lower() if name.lower().endswith(".exe") else name
+
+
+def _substitutions(command: str) -> list[str]:
+    """Bodies of `...`, $(...), <(...) and >(...) outside single quotes.
+
+    They execute wherever they appear, including inside double quotes, so they
+    are judged as commands of their own. Single-quoted text is literal.
+    """
+    out: list[str] = []
+    i, n = 0, len(command)
+    in_single = in_double = False
+    while i < n:
+        c = command[i]
+        if in_single:
+            if c == "'":
+                in_single = False
+            i += 1
+            continue
+        if c == "\\":
+            i += 2
+            continue
+        if c == "'" and not in_double:
+            in_single = True
+        elif c == '"':
+            in_double = not in_double
+        elif c == "`":
+            j = command.find("`", i + 1)
+            j = n if j == -1 else j
+            out.append(command[i + 1 : j])
+            i = j + 1
+            continue
+        elif c in "$<>" and command[i + 1 : i + 2] == "(":
+            depth, j = 1, i + 2
+            while j < n and depth:
+                if command[j] == "(":
+                    depth += 1
+                elif command[j] == ")":
+                    depth -= 1
+                j += 1
+            out.append(command[i + 2 : j - 1] if depth == 0 else command[i + 2 :])
+            i = j
+            continue
+        i += 1
+    return out
+
+
+def _is_separator(tok: str) -> bool:
+    return bool(tok) and set(tok) <= _PUNCT and bool(set(tok) & _SEPARATOR_CHARS)
 
 
 def _split_shell(command: str) -> list[list[str]]:
-    """Split a shell command string into per-command token lists."""
+    """Split a shell command string into per-command token lists.
+
+    Newlines separate commands exactly like `;` (a backslash-newline is a line
+    continuation). Doing that before tokenising is safe: a newline inside
+    quotes becomes a `;` inside the same quoted token, which is still one word.
+    """
+    text = command.replace("\\\r\n", " ").replace("\\\n", " ")
+    text = text.replace("\r\n", "\n").replace("\n", " ; ")
     try:
-        lexer = shlex.shlex(command, posix=True, punctuation_chars=True)
+        lexer = shlex.shlex(text, posix=True, punctuation_chars=True)
         lexer.whitespace_split = True
         tokens = list(lexer)
     except ValueError:
-        tokens = command.split()
+        tokens = text.split()
     segments: list[list[str]] = [[]]
     for tok in tokens:
-        if tok in _SHELL_SEPARATORS or (tok and set(tok) <= set(";&|()")):
+        if _is_separator(tok):
             segments.append([])
         else:
             segments[-1].append(tok)
@@ -228,10 +349,25 @@ def _split_shell(command: str) -> list[list[str]]:
 
 
 def _strip_wrappers(tokens: Sequence[str]) -> list[str]:
-    """Drop leading sudo/env/nice/timeout wrappers; return the real command argv."""
+    """Drop what can precede the real command; return the real command argv.
+
+    Leading `NAME=value` assignments, shell keywords (`if`, `then`, `{`, `!`,
+    `do`, ...), leading redirections, and the wrappers in _WRAPPERS with their
+    options. `command -v/-V NAME` returns [] (a lookup, nothing runs).
+    """
     toks = list(tokens)
     while toks:
-        name = _basename(toks[0])
+        head = toks[0]
+        if _ASSIGNMENT_RE.match(head) or head in _SHELL_KEYWORDS:
+            toks = toks[1:]
+            continue
+        if head.startswith("!") and len(head) > 1:
+            toks = [head[1:], *toks[1:]]
+            continue
+        if set(head) <= set("<>"):  # `> log make up`: drop the redirect and its target
+            toks = toks[2:]
+            continue
+        name = _basename(head)
         if name not in _WRAPPERS:
             return toks
         value_opts = _WRAPPERS[name]
@@ -241,6 +377,12 @@ def _strip_wrappers(tokens: Sequence[str]) -> list[str]:
             if tok == "--":
                 i += 1
                 break
+            if name == "command" and tok in ("-v", "-V"):
+                return []
+            if name == "env" and tok in ("-S", "--split-string") and i + 1 < len(toks):
+                # env -S 'make up': the value is itself split into argv.
+                toks = [*toks[:i], *shlex.split(toks[i + 1]), *toks[i + 2 :]]
+                continue
             if tok in value_opts:
                 i += 2
                 continue
@@ -416,16 +558,28 @@ def _docker_verdict(rest: Sequence[str]) -> str | None:
     )
 
 
+def _is_recorder(path: str) -> bool:
+    """A regular, non-symlink, executable file carrying the recorder header.
+
+    A symlink to /usr/bin/docker, or any other real binary, is not a stub.
+    """
+    try:
+        if os.path.islink(path) or not os.path.isfile(path) or not os.access(path, os.X_OK):
+            return False
+        with open(path, "rb") as fh:
+            return RECORDER_HEADER.encode() in fh.read(4096)
+    except OSError:
+        return False
+
+
 def is_stub_dir(directory: str) -> bool:
-    """True if `directory` is an absolute dir holding the marker and the docker stubs."""
+    """True if `directory` is an absolute dir holding the marker and recorder stubs
+    for every tool in STUB_REQUIRED (docker, docker-compose, supabase)."""
     if not directory or not os.path.isabs(directory):
         return False
     if not os.path.isfile(os.path.join(directory, STUB_MARKER)):
         return False
-    return all(
-        os.path.isfile(os.path.join(directory, name)) and os.access(os.path.join(directory, name), os.X_OK)
-        for name in STUB_REQUIRED
-    )
+    return all(_is_recorder(os.path.join(directory, name)) for name in STUB_REQUIRED)
 
 
 def _first_path_entry(path_value: str | None) -> str:
@@ -470,10 +624,16 @@ def _argv_verdict(tokens: Sequence[str], depth: int = 0, path_value: str | None 
         return _compose_verdict(toks[1:], "docker-compose")
     if head in MAKE_NAMES:
         return _make_verdict(toks, path_value)
-    if head.endswith(".sh") and len(toks) > 1 and _basename(toks[1]) in _EXEC_WRAPPED and depth < 4:
-        # `./scripts/with-env.sh make up`: the script execs its arguments.
-        return _argv_verdict(toks[1:], depth + 1, path_value)
-    if head in _SHELLS and depth < 4:
+    if head == "eval" and depth < 6:
+        return _shell_verdict(" ".join(toks[1:]), depth + 1, path_value)
+    if head.endswith(".sh") and depth < 6:
+        # `./scripts/with-env.sh make up`: the script execs its arguments,
+        # including through a wrapper (`with-env.sh env X=1 make up`).
+        rest = _strip_wrappers(toks[1:])
+        if rest and _basename(rest[0]) in _EXEC_WRAPPED:
+            return _argv_verdict(rest, depth + 1, path_value)
+        return None
+    if head in _SHELLS and depth < 6:
         for idx, tok in enumerate(toks[1:], start=1):
             if tok.startswith("-") and not tok.startswith("--") and "c" in tok[1:]:
                 if idx + 1 < len(toks):
@@ -485,13 +645,20 @@ def _argv_verdict(tokens: Sequence[str], depth: int = 0, path_value: str | None 
                 # `bash script.sh`: a script, not a -c payload. Its first
                 # argument is still judged when it names a guarded command
                 # (`bash scripts/with-env.sh make up`).
-                if idx + 1 < len(toks) and _basename(toks[idx + 1]) in _EXEC_WRAPPED:
-                    return _argv_verdict(toks[idx + 1 :], depth + 1, path_value)
+                rest = _strip_wrappers(toks[idx + 1 :])
+                if rest and _basename(rest[0]) in _EXEC_WRAPPED:
+                    return _argv_verdict(rest, depth + 1, path_value)
                 return None
     return None
 
 
 def _shell_verdict(command: str, depth: int = 0, path_value: str | None = None) -> str | None:
+    if depth > 6:
+        return None
+    for body in _substitutions(command):
+        reason = _shell_verdict(body, depth + 1, path_value)
+        if reason:
+            return reason
     for seg in _split_shell(command):
         reason = _argv_verdict(seg, depth, path_value)
         if reason:
@@ -525,8 +692,17 @@ def check_command(args: Any, env: Any = None, *, executable: Any = None, shell: 
     path_value = _env_path(env)
     if isinstance(args, (bytes, bytearray)):
         args = bytes(args).decode("utf-8", "replace")
+    exe = None
+    if executable is not None:
+        exe = os.fsdecode(executable) if isinstance(executable, (bytes, os.PathLike)) else str(executable)
     if isinstance(args, (str, os.PathLike)):
-        return _shell_verdict(os.fspath(args), 0, path_value)
+        text = os.fspath(args)
+        reason = _shell_verdict(text, 0, path_value)
+        if reason is None and exe is not None:
+            # shell=True: `executable` replaces /bin/sh and runs [exe, "-c", text];
+            # otherwise it is the program that runs.
+            reason = _argv_verdict([exe, "-c", text] if shell else [exe], 0, path_value)
+        return reason
     if not isinstance(args, Iterable):
         return None
     tokens = [(os.fsdecode(a) if isinstance(a, (bytes, os.PathLike)) else str(a)) for a in args]
@@ -536,10 +712,11 @@ def check_command(args: Any, env: Any = None, *, executable: Any = None, shell: 
     if reason is None and shell:
         # Popen runs [/bin/sh, "-c", args[0], *args[1:]]: args[0] is shell text.
         reason = _shell_verdict(tokens[0], 0, path_value)
-    if reason is None and executable is not None:
+    if reason is None and exe is not None:
         # `executable=` replaces the program that actually runs; argv[0] stays.
-        exe = os.fsdecode(executable) if isinstance(executable, (bytes, os.PathLike)) else str(executable)
-        reason = _argv_verdict([exe, *tokens[1:]], 0, path_value)
+        # With shell=True it replaces the shell: [exe, "-c", args[0], ...].
+        argv = [exe, "-c", *tokens] if shell else [exe, *tokens[1:]]
+        reason = _argv_verdict(argv, 0, path_value)
     return reason
 
 
@@ -555,6 +732,7 @@ def _spawn_context(a: tuple, kw: dict) -> tuple[Any, Any, bool]:
 # ---------------------------------------------------------------------------
 STUB_TOOLS = ("docker", "docker-compose", "supabase")
 STUB_LOG_NAME = "stub-calls.log"
+RECORDER_HEADER = "# pmoves test stub (pmoves/tests/_destructive_docker_guard.py)"
 
 
 class StubEnv(dict):
@@ -568,19 +746,29 @@ class StubEnv(dict):
     log: Path
 
     def calls(self, tool: str | None = None) -> list[list[str]]:
+        """Records are NUL-separated fields: argc, then argc fields (tool, args...).
+
+        Written by ONE printf per call, so args may hold tabs, newlines or be
+        empty, and concurrent recorders (make -j) do not interleave fields.
+        """
         if not self.log.exists():
             return []
-        rows = [line.split("\t") for line in self.log.read_text().splitlines() if line]
-        return [r for r in rows if tool is None or r[0] == tool]
+        fields = self.log.read_bytes().decode("utf-8", "surrogateescape").split("\0")
+        rows: list[list[str]] = []
+        i = 0
+        while i < len(fields) - 1:
+            count = int(fields[i])
+            rows.append(fields[i + 1 : i + 1 + count])
+            i += 1 + count
+        return [r for r in rows if tool is None or (r and r[0] == tool)]
 
 
 def _recorder(name: str, log: Path) -> str:
     return (
         "#!/bin/sh\n"
-        "# pmoves test stub (pmoves/tests/_destructive_docker_guard.py): records argv, exits 0,\n"
+        f"{RECORDER_HEADER}: records argv, exits 0,\n"
         "# never reaches a daemon.\n"
-        f"{{ printf '%s' {shlex.quote(name)}; for a in \"$@\"; do printf '\\t%s' \"$a\"; done; "
-        f"printf '\\n'; }} >> {shlex.quote(str(log))}\n"
+        f"printf '%s\\000' \"$(($# + 1))\" {shlex.quote(name)} \"$@\" >> {shlex.quote(str(log))}\n"
         "exit 0\n"
     )
 
