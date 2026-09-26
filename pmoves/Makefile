@@ -155,6 +155,40 @@ ifneq ("$(wildcard env.tier-supabase.urlencoded)","")
   COMPOSE_ENV_FILES += --env-file env.tier-supabase.urlencoded
 endif
 
+# NEO4J_BIND pass-through (option B, lane ops/knuckles-neo4j-agint-networks).
+# The node-local file is deliberately NOT on COMPOSE_ENV_FILES under
+# SUPABASE_RUNTIME=compose (above), so a NEO4J_BIND set there with
+# `make env-local-set` was silently ignored and Neo4j published on 0.0.0.0.
+# Read ONLY that one key (parsed, never sourced; no other key, no command
+# substitution) and export it into every recipe's environment, which is how
+# it reaches every $(DC) call. COMPOSE_ENV_FILES is untouched.
+#
+# Precedence (first wins):
+#   1. `make NEO4J_BIND=...`          (command line)
+#   2. NEO4J_BIND exported by the caller's environment
+#   3. the NEO4J_BIND= line of $(NODE_LOCAL_ENV_FILE)
+#   4. compose's own default (${NEO4J_BIND:-0.0.0.0})
+# A malformed value from ANY source stops make here rather than reaching
+# compose. The value is never echoed: it lives only in the variable.
+NODE_LOCAL_ENV_FILE ?= .env.local
+ifeq ($(origin NEO4J_BIND),undefined)
+  ifneq ("$(wildcard $(NODE_LOCAL_ENV_FILE))","")
+    NEO4J_BIND_FROM_FILE := $(shell $(PYTHON) $(CURDIR)/scripts/neo4j_bind_from_env_file.py "$(NODE_LOCAL_ENV_FILE)")
+    ifneq ($(.SHELLSTATUS),0)
+      $(error NEO4J_BIND in $(NODE_LOCAL_ENV_FILE) is malformed or unreadable (see above); refusing to pass it to compose)
+    endif
+    ifneq ($(NEO4J_BIND_FROM_FILE),)
+      export NEO4J_BIND := $(NEO4J_BIND_FROM_FILE)
+    endif
+  endif
+else ifneq ($(strip $(NEO4J_BIND)),)
+  NEO4J_BIND_CHECKED := $(shell NEO4J_BIND_CHECK='$(NEO4J_BIND)' $(PYTHON) $(CURDIR)/scripts/neo4j_bind_from_env_file.py --check)
+  ifneq ($(.SHELLSTATUS),0)
+    $(error NEO4J_BIND ($(origin NEO4J_BIND)) is malformed; refusing to pass it to compose)
+  endif
+  export NEO4J_BIND := $(NEO4J_BIND_CHECKED)
+endif
+
 # -------- Service Discovery Helper ----------
 # Resolve service URL using PMOVES service discovery (hybrid support)
 # Supports docked (NATS/Supabase) and standalone (Docker DNS) modes
