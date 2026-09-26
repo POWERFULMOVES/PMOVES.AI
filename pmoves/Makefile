@@ -1569,8 +1569,29 @@ reset-data-tier: ## DANGEROUS: stop data tier and wipe its volumes, then recreat
 	@echo "✅ Data tier reset with current env.tier-data credentials"
 
 .PHONY: up-minio
+# Pre-check (read-only): the minio image is a LOCAL source build that no registry
+# serves (see minio-build-src below). Resolve the image the way compose will, via
+# `config --images` (shell MINIO_IMAGE > --env-file > compose default), and if it is
+# the local -src build but not present, stop with the fix instead of letting compose
+# attempt a pull that can only fail. A registry MINIO_IMAGE override is never blocked.
+# COUPLING: the check compares against MINIO_SRC_TAG, which must equal the compose
+# MINIO_IMAGE default. If they drift, the check WARNs and skips instead of guarding.
 up-minio: ## Start MinIO object storage (port 9000) + Presign
 	@echo "📦 Starting MinIO..."
+	@img=$$($(DC) config --images minio 2>/dev/null | head -n1); \
+	 if [ -z "$$img" ]; then \
+	   echo "WARN: could not resolve the minio image via 'docker compose config'; image pre-check SKIPPED" >&2; \
+	 elif [ "$$img" = "$(MINIO_SRC_TAG)" ]; then \
+	   if ! docker image inspect "$$img" >/dev/null 2>&1; then \
+	     echo "ERROR: minio image $$img is not present on this node. It is built locally, not pulled:" >&2; \
+	     echo "         make -C pmoves minio-build-src" >&2; \
+	     echo "       or, if upstream is still cached here (docker image inspect minio/minio:$(MINIO_SRC_RELEASE)):" >&2; \
+	     echo "         MINIO_IMAGE=minio/minio:$(MINIO_SRC_RELEASE) make -C pmoves up-minio" >&2; \
+	     exit 1; \
+	   fi; \
+	 else \
+	   case "$$img" in *-src) echo "WARN: minio resolves to $$img but MINIO_SRC_TAG=$(MINIO_SRC_TAG); the two have drifted, image pre-check SKIPPED" >&2;; esac; \
+	 fi
 	@$(DC) up -d --force-recreate minio presign
 	@timeout 60 bash -c 'until curl -sf http://localhost:9000/minio/health/live; do sleep 2; done' || echo "⚠️ MinIO may still be starting"
 	@echo "✅ MinIO ready at http://localhost:9000 (console :9001)"
