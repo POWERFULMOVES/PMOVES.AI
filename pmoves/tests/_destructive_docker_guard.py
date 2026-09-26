@@ -41,6 +41,47 @@ through) and ``os.system``, and REFUSES TO SPAWN:
   (``SELECT pg_terminate_backend(...)``, ``SELECT nextval(...)``); this is a
   read-mostly allowance for two smoke checks, not a SQL sandbox.
 
+``make`` / ``gmake`` (follow-up to #3190). A test that spawns make reaches the
+daemon through the RECIPES, which this guard never sees: a recipe's
+``docker compose`` runs in make's own child shell, not in this Python process.
+``make -n`` is NOT a safe dry run either. GNU make still EXECUTES every recipe
+line that contains ``$(MAKE)`` (or starts with ``+``) under ``-n``, so that the
+sub-make can print its own plan -- and the whole line runs, including anything
+after ``&&``/``;`` on it. ``up-core-capable`` -> ``up-core-hardened`` ->
+``supa-start`` is one such chain in pmoves/Makefile, whose nested compose call
+runs under ``-n``. Parse-time ``$(shell ...)`` also runs on every invocation.
+And because pmoves/docker-compose.yml sets top-level ``name: pmoves``, any
+compose call such a line reaches addresses the LIVE project from any directory.
+
+So every spawn of ``make``/``gmake`` is refused -- as argv[0] (or the
+``executable=``), after a ``sudo``/``env``/``nice``/``timeout`` wrapper, as
+any command in a shell ``-c`` payload or ``shell=True`` string, and as the
+first argument of an exec-wrapper script (``bash scripts/with-env.sh make ...``,
+``./with-env.sh make ...``, the fleet's canonical loader shape) -- UNLESS the
+PATH that make's child processes will search starts with a STUB DIRECTORY:
+
+* the PATH is the call's ``env["PATH"]`` when ``env=`` is given (``os.defpath``
+  if that env has no PATH), else ``os.environ["PATH"]``;
+* its FIRST entry must be an absolute directory that contains the marker file
+  ``.pmoves-test-stub`` AND executable ``docker`` and ``docker-compose``
+  stubs. :func:`build_stub_env` (the ``stub_tool_path`` / ``stub_docker_path``
+  fixtures in pmoves/tests/conftest.py) is the sanctioned way to make one;
+* a path-qualified program (``/usr/bin/make``) bypasses PATH lookup for make
+  itself, so it is only accepted when it lives IN such a stub directory.
+
+With ``stub_tool_path`` make itself is a recorder: no recipe runs at all. With
+``stub_docker_path`` the real make runs, but every ``docker``/``docker-compose``/
+``supabase`` a recipe resolves through PATH lands in a recorder. That second
+form is NOT a sandbox: a recipe that calls ``/usr/bin/docker`` by absolute
+path, resets PATH, or talks to the daemon socket from Python bypasses it.
+Before using it, read the target's recipe chain.
+
+``make --version`` / ``-v`` / ``--help`` / ``-h`` as the ONLY argument are
+allowed unstubbed: make exits before reading any makefile. An ``env PATH=...``
+wrapper in argv is not honoured as the effective PATH; pass ``env=`` instead.
+The exec-wrapper rule also applies to docker: ``bash with-env.sh docker compose
+down`` is judged as ``docker compose down``.
+
 What counts as a docker call, to avoid false positives on text that merely
 mentions docker: ``docker``/``docker-compose`` must be the COMMAND -- the first
 token, or the first token after a ``sudo``/``env``/``nice``/``timeout``
@@ -63,7 +104,9 @@ Scope, stated so nobody reads more coverage into this than it has:
   refusal still fails the test but does not stop the session.
 * It only sees spawns made by THIS Python process. A test that launches a shell
   or Python script which in turn runs ``docker compose down`` is not covered.
-* It does not interpret ``make`` targets (``make down``).
+* It does not interpret ``make`` targets (``make down``); it refuses make
+  wholesale unless the stub PATH rule above holds, and it cannot see a make
+  that a spawned script runs internally (other than the exec-wrapper shape).
 * It permits ``up`` under a ``pmoves-test-*`` project because that cannot
   remove live containers, but docker-compose.yml's fixed-name networks
   (``pmoves_data``, ``pmoves_app``, ...) and published host ports are shared with
@@ -76,6 +119,7 @@ import os
 import re
 import shlex
 import subprocess
+from pathlib import Path
 from typing import Any, Iterable, Sequence
 
 TEST_PROJECT_RE = re.compile(r"^pmoves-test-[0-9a-f]{8}$")
@@ -135,6 +179,23 @@ _WRAPPERS: dict[str, frozenset[str]] = {
 }
 
 _SHELL_SEPARATORS = frozenset({";", "&", "&&", "|", "||", "(", ")", "\n"})
+
+# make: refused unless the effective PATH starts with a marked stub dir.
+MAKE_NAMES = frozenset({"make", "gmake"})
+STUB_MARKER = ".pmoves-test-stub"
+# A stub dir must shadow these, or it is not a stub dir.
+STUB_REQUIRED = ("docker", "docker-compose")
+# make exits on these before reading any makefile.
+_MAKE_INFO_ONLY = frozenset({"--version", "-v", "--help", "-h"})
+# A command that, as an exec-wrapper script's first argument, the script runs
+# (`bash scripts/with-env.sh make up` -- with-env.sh ends in `exec "$@"`).
+_EXEC_WRAPPED = MAKE_NAMES | {"docker", "docker-compose"}
+
+# Popen.__init__ positional parameters after `args`, up to `env`.
+_POPEN_POSITIONAL = (
+    "bufsize", "executable", "stdin", "stdout", "stderr",
+    "preexec_fn", "close_fds", "shell", "cwd", "env",
+)
 
 
 class DestructiveDockerCallBlocked(BaseException):
@@ -355,7 +416,50 @@ def _docker_verdict(rest: Sequence[str]) -> str | None:
     )
 
 
-def _argv_verdict(tokens: Sequence[str], depth: int = 0) -> str | None:
+def is_stub_dir(directory: str) -> bool:
+    """True if `directory` is an absolute dir holding the marker and the docker stubs."""
+    if not directory or not os.path.isabs(directory):
+        return False
+    if not os.path.isfile(os.path.join(directory, STUB_MARKER)):
+        return False
+    return all(
+        os.path.isfile(os.path.join(directory, name)) and os.access(os.path.join(directory, name), os.X_OK)
+        for name in STUB_REQUIRED
+    )
+
+
+def _first_path_entry(path_value: str | None) -> str:
+    if path_value is None:
+        path_value = os.environ.get("PATH", os.defpath)
+    return path_value.split(os.pathsep)[0]
+
+
+def _make_verdict(toks: Sequence[str], path_value: str | None) -> str | None:
+    """`toks` is a make argv (toks[0] is make/gmake, possibly path-qualified)."""
+    if len(toks) == 2 and toks[1] in _MAKE_INFO_ONLY:
+        return None
+    program = toks[0]
+    shown = " ".join(toks)
+    why = (
+        f"`{shown}`: make runs its recipes' docker/compose calls where this guard cannot "
+        "see them, and executes every recipe line containing $(MAKE) even under -n; "
+        "pmoves/docker-compose.yml's `name: pmoves` makes any compose call they reach "
+        "address the LIVE project. Spawn make only with the `stub_tool_path` or "
+        "`stub_docker_path` fixture (pmoves/tests/conftest.py), whose env puts a stub "
+        f"dir holding `{STUB_MARKER}` first on PATH"
+    )
+    if "/" in program or "\\" in program:
+        where = os.path.dirname(program)
+        if os.path.isabs(program) and is_stub_dir(where):
+            return None
+        return why + f" (a path-qualified make must live in a stub dir; {where!r} is not one)."
+    first = _first_path_entry(path_value)
+    if is_stub_dir(first):
+        return None
+    return why + f" (first PATH entry {first!r} is not a stub dir)."
+
+
+def _argv_verdict(tokens: Sequence[str], depth: int = 0, path_value: str | None = None) -> str | None:
     toks = _strip_wrappers(tokens)
     if not toks:
         return None
@@ -364,41 +468,151 @@ def _argv_verdict(tokens: Sequence[str], depth: int = 0) -> str | None:
         return _docker_verdict(toks[1:])
     if head == "docker-compose":
         return _compose_verdict(toks[1:], "docker-compose")
+    if head in MAKE_NAMES:
+        return _make_verdict(toks, path_value)
+    if head.endswith(".sh") and len(toks) > 1 and _basename(toks[1]) in _EXEC_WRAPPED and depth < 4:
+        # `./scripts/with-env.sh make up`: the script execs its arguments.
+        return _argv_verdict(toks[1:], depth + 1, path_value)
     if head in _SHELLS and depth < 4:
         for idx, tok in enumerate(toks[1:], start=1):
             if tok.startswith("-") and not tok.startswith("--") and "c" in tok[1:]:
                 if idx + 1 < len(toks):
-                    return _shell_verdict(toks[idx + 1], depth + 1)
+                    return _shell_verdict(toks[idx + 1], depth + 1, path_value)
                 return None
             if tok in ("-o", "+o", "-O", "+O"):
                 continue  # its value is skipped by the check below
             if not tok.startswith(("-", "+")) and toks[idx - 1] not in ("-o", "+o", "-O", "+O"):
-                return None  # `bash script.sh`: a script, not a -c payload
+                # `bash script.sh`: a script, not a -c payload. Its first
+                # argument is still judged when it names a guarded command
+                # (`bash scripts/with-env.sh make up`).
+                if idx + 1 < len(toks) and _basename(toks[idx + 1]) in _EXEC_WRAPPED:
+                    return _argv_verdict(toks[idx + 1 :], depth + 1, path_value)
+                return None
     return None
 
 
-def _shell_verdict(command: str, depth: int = 0) -> str | None:
+def _shell_verdict(command: str, depth: int = 0, path_value: str | None = None) -> str | None:
     for seg in _split_shell(command):
-        reason = _argv_verdict(seg, depth)
+        reason = _argv_verdict(seg, depth, path_value)
         if reason:
             return reason
     return None
 
 
-def check_command(args: Any) -> str | None:
-    """Return a refusal reason if spawning ``args`` would be a forbidden docker call.
+def _env_path(env: Any) -> str | None:
+    """The PATH a child spawned with `env=` will search; None means os.environ's."""
+    if env is None:
+        return None
+    try:
+        value = env.get("PATH")
+        if value is None:
+            value = env.get(b"PATH")
+    except (AttributeError, TypeError):
+        return None
+    if value is None:
+        return os.defpath
+    return os.fsdecode(value)
+
+
+def check_command(args: Any, env: Any = None, *, executable: Any = None, shell: bool = False) -> str | None:
+    """Return a refusal reason if spawning ``args`` would be a forbidden call.
 
     Accepts what ``subprocess.Popen`` accepts: a string (shell form, or a bare
-    program name) or a sequence of str/bytes/PathLike.
+    program name) or a sequence of str/bytes/PathLike. ``env``, ``executable``
+    and ``shell`` are the matching Popen arguments; ``env`` decides which PATH
+    a spawned make is judged against (see the module docstring).
     """
+    path_value = _env_path(env)
     if isinstance(args, (bytes, bytearray)):
         args = bytes(args).decode("utf-8", "replace")
     if isinstance(args, (str, os.PathLike)):
-        return _shell_verdict(os.fspath(args))
+        return _shell_verdict(os.fspath(args), 0, path_value)
     if not isinstance(args, Iterable):
         return None
     tokens = [(os.fsdecode(a) if isinstance(a, (bytes, os.PathLike)) else str(a)) for a in args]
-    return _argv_verdict(tokens)
+    if not tokens:
+        return None
+    reason = _argv_verdict(tokens, 0, path_value)
+    if reason is None and shell:
+        # Popen runs [/bin/sh, "-c", args[0], *args[1:]]: args[0] is shell text.
+        reason = _shell_verdict(tokens[0], 0, path_value)
+    if reason is None and executable is not None:
+        # `executable=` replaces the program that actually runs; argv[0] stays.
+        exe = os.fsdecode(executable) if isinstance(executable, (bytes, os.PathLike)) else str(executable)
+        reason = _argv_verdict([exe, *tokens[1:]], 0, path_value)
+    return reason
+
+
+def _spawn_context(a: tuple, kw: dict) -> tuple[Any, Any, bool]:
+    """(env, executable, shell) from Popen.__init__'s positional + keyword args."""
+    bound = dict(zip(_POPEN_POSITIONAL, a))
+    bound.update(kw)
+    return bound.get("env"), bound.get("executable"), bool(bound.get("shell", False))
+
+
+# ---------------------------------------------------------------------------
+# Stub tool directory: the sanctioned way for a test to spawn make
+# ---------------------------------------------------------------------------
+STUB_TOOLS = ("docker", "docker-compose", "supabase")
+STUB_LOG_NAME = "stub-calls.log"
+
+
+class StubEnv(dict):
+    """An env dict whose PATH starts with a marked stub dir.
+
+    ``stub_dir`` holds the recorders, ``log`` the file they append to, and
+    :meth:`calls` parses it into ``[[tool, arg1, ...], ...]``.
+    """
+
+    stub_dir: Path
+    log: Path
+
+    def calls(self, tool: str | None = None) -> list[list[str]]:
+        if not self.log.exists():
+            return []
+        rows = [line.split("\t") for line in self.log.read_text().splitlines() if line]
+        return [r for r in rows if tool is None or r[0] == tool]
+
+
+def _recorder(name: str, log: Path) -> str:
+    return (
+        "#!/bin/sh\n"
+        "# pmoves test stub (pmoves/tests/_destructive_docker_guard.py): records argv, exits 0,\n"
+        "# never reaches a daemon.\n"
+        f"{{ printf '%s' {shlex.quote(name)}; for a in \"$@\"; do printf '\\t%s' \"$a\"; done; "
+        f"printf '\\n'; }} >> {shlex.quote(str(log))}\n"
+        "exit 0\n"
+    )
+
+
+def build_stub_env(
+    directory: str | os.PathLike[str],
+    *,
+    stub_make: bool = True,
+    extra: Iterable[str] = (),
+    base_env: dict[str, str] | None = None,
+) -> StubEnv:
+    """Create a stub tool dir in `directory` and return an env with it FIRST on PATH.
+
+    ``stub_make=True``: make/gmake are recorders too, so no recipe runs.
+    ``stub_make=False``: the real make is found further down PATH and runs its
+    recipes; docker/docker-compose/supabase still resolve to recorders. Read
+    the module docstring for what that second form does NOT cover.
+    """
+    stub_dir = Path(os.path.realpath(os.fspath(directory)))
+    stub_dir.mkdir(parents=True, exist_ok=True)
+    log = stub_dir / STUB_LOG_NAME
+    names = list(STUB_TOOLS) + (sorted(MAKE_NAMES) if stub_make else []) + list(extra)
+    for name in names:
+        tool = stub_dir / name
+        tool.write_text(_recorder(name, log))
+        tool.chmod(0o755)
+    (stub_dir / STUB_MARKER).write_text("pmoves test stub dir: see pmoves/tests/_destructive_docker_guard.py\n")
+    env = StubEnv(os.environ if base_env is None else base_env)
+    env["PATH"] = os.pathsep.join([str(stub_dir), env.get("PATH", os.defpath)])
+    env.stub_dir = stub_dir
+    env.log = log
+    return env
 
 
 # ---------------------------------------------------------------------------
@@ -424,7 +638,8 @@ def install() -> None:
     orig_system = os.system
 
     def guarded_init(self, args, *a, **kw):  # type: ignore[no-untyped-def]
-        reason = check_command(args)
+        env, executable, shell = _spawn_context(a, kw)
+        reason = check_command(args, env, executable=executable, shell=shell)
         if reason:
             _refuse(reason)
         return orig_init(self, args, *a, **kw)
