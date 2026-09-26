@@ -1575,6 +1575,25 @@ up-minio: ## Start MinIO object storage (port 9000) + Presign
 	@timeout 60 bash -c 'until curl -sf http://localhost:9000/minio/health/live; do sleep 2; done' || echo "⚠️ MinIO may still be starting"
 	@echo "✅ MinIO ready at http://localhost:9000 (console :9001)"
 
+# MinIO RELEASE.2025-09-07T16-13-09Z built from source. Every published copy of
+# this release is gone (docker.io 401 / quay.io 401 / ghcr.io 403 / dl.min.io 410),
+# so the image is rebuilt from the archived GitHub tag — the EXACT release the
+# data in pmoves_minio-data was written by. See docker/minio-src/README.md.
+# Interim only: Garage is the planned substrate (JUICEFS_OBJECT_STORE_MIGRATION.md §0.8).
+MINIO_SRC_TAG ?= pmoves/minio:RELEASE.2025-09-07T16-13-09Z-src
+# The Go build of minio peaks at several GB; refuse to start below this much
+# MemAvailable rather than push a node into OOM mid-build.
+MINIO_BUILD_MIN_MEM_MB ?= 6144
+
+.PHONY: minio-build-src
+minio-build-src: ## Build MinIO RELEASE.2025-09-07T16-13-09Z (+ mc) from source -> $(MINIO_SRC_TAG)
+	@avail=$$(awk '/^MemAvailable:/{print int($$2/1024)}' /proc/meminfo 2>/dev/null); \
+	 if [ -n "$$avail" ] && [ "$$avail" -lt "$(MINIO_BUILD_MIN_MEM_MB)" ]; then \
+	   echo "ERROR: MemAvailable $${avail}MB < MINIO_BUILD_MIN_MEM_MB=$(MINIO_BUILD_MIN_MEM_MB)MB; free memory or override" >&2; exit 1; \
+	 fi
+	docker build -t "$(MINIO_SRC_TAG)" -f docker/minio-src/Dockerfile docker/minio-src
+	@docker run --rm "$(MINIO_SRC_TAG)" --version
+
 .PHONY: up-bus
 up-bus: ## Start message bus (NATS)
 	@echo "📨 Starting message bus (NATS)..."
