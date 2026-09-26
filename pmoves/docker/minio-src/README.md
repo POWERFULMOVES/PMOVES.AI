@@ -5,8 +5,44 @@ This is an interim bridge that brings MinIO back on its **original** volume
 planned object substrate; see `docs/architecture/JUICEFS_OBJECT_STORE_MIGRATION.md` §0.8.
 
 ```bash
-make -C pmoves minio-build-src      # -> pmoves/minio:RELEASE.2025-09-07T16-13-09Z-src
+make -C pmoves minio-build-src      # -> ghcr.io/powerfulmoves/pmoves-minio:RELEASE.2025-09-07T16-13-09Z-src
 ```
+
+## Every node that runs minio must build it
+
+The image is built **locally**. It is not published to any registry, so the
+compose default only works on a node that has run `make -C pmoves minio-build-src`.
+The build needs about 6 GB of free memory on a Linux host.
+
+- **A node that has not built it** falls through to a pull of
+  `ghcr.io/powerfulmoves/pmoves-minio:…-src`. That pull fails closed against our
+  own org namespace, so a third-party image can never be substituted. The fix is
+  to run `minio-build-src`.
+- **A node that still has upstream `minio/minio:RELEASE.2025-09-07T16-13-09Z`
+  cached** can keep using it by setting the override:
+  `MINIO_IMAGE=minio/minio:RELEASE.2025-09-07T16-13-09Z make -C pmoves up-minio`.
+  It is the same release. Check with `docker image inspect minio/minio:RELEASE.2025-09-07T16-13-09Z`.
+
+The tag is set in two places that must match: `MINIO_SRC_TAG` in `pmoves/Makefile`
+and the `MINIO_IMAGE` default of the `minio` service in `docker-compose.yml`
+(the generated `docker-compose.core.yml` follows `docker-compose.yml`).
+
+## Build-provenance exception
+
+This build does not follow `docs/operations/COMPOSE_BUILD_PROVENANCE.md`, which
+asks for a fork submodule or a digest-pinned published image. It is a deliberate,
+interim exception:
+
+- upstream `minio/minio` is archived;
+- no registry still serves the release;
+- the service is to be replaced by Garage.
+
+The SHA checks in the Dockerfile stand in for the submodule's gitlink pin.
+`tools/compose_provenance_audit.py` does **not** see this exception. The audit
+only scans services with a `build:` stanza (`image_only_excluded`), and `minio`
+has only `image:`. Adding `minio` to `configs/compose_provenance_baseline.json`
+would therefore fail the audit as a STALE BASELINE entry, so this README is the
+record of the exception.
 
 ## Why a source build
 
