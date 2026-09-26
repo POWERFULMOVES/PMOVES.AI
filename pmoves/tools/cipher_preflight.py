@@ -500,6 +500,16 @@ def probe(
         row["error"] = f"HTTP {exc.code}"
         if exc.code in (401, 403):
             row["verdict"] = "unauthorized"
+        elif exc.code == 503:
+            # Pmoves-cipher answers 503 when its per-agent token LOOKUP fails
+            # (service key refused by Kong, PostgREST down, timeout). The
+            # credential was never judged, so this must not read as a refusal:
+            # re-minting a good token was the wrong fix it used to invite.
+            row["verdict"] = "http_error"
+            row["error"] = (
+                "HTTP 503 — Cipher could not check the credential "
+                "(token lookup backend failed); the credential was NOT judged"
+            )
         elif 300 <= exc.code < 400:
             # Declined by _NoRedirect. Say so, and say the token stayed put.
             row["verdict"] = "redirect"
@@ -754,20 +764,39 @@ def _run(args: argparse.Namespace) -> int:
     if verdict["ok"]:
         return 0
 
+    if any(r.get("status") == 503 for r in verdict["endpoints"]):
+        # Printed ahead of either summary: a 401 on one endpoint must not hide
+        # a 503 on another.
+        print(
+            "Cipher HTTP 503: it could not look the token up, so the token was\n"
+            "  NOT judged. Do not re-mint. Check /health `per_agent_auth` and\n"
+            "  `docker logs pmoves-cipher-api-1 2>&1 | grep pmoves-auth`; the\n"
+            "  usual cause is a service key Kong refuses, cleared by fixing the\n"
+            "  key and recreating with `make -C pmoves up-cipher-nobuild`.",
+            file=sys.stderr,
+        )
+
     if verdict["unauthorized"]:
         # The service is UP. Saying "no memory" here is the false negative that
         # cost three sessions their memory layer.
         lines = [
             "Cipher ANSWERED but did not accept the credential (HTTP 401/403).",
             "  The service is UP — this is an access problem, not an outage.",
-            "  Do not restart Cipher; bind its token.",
+            "  Restarting Cipher will not fix a wrong token; bind the right one.",
         ]
         if verdict["missing_env"]:
             names = ", ".join(verdict["missing_env"])
             lines.append(f"  Unresolved in the roster: {names} (set and re-launch).")
         else:
+            # Not "it is stale or wrong": a shim older than the lookup-failure
+            # fix also answers 401 when ITS OWN service key is refused, and on
+            # 2026-09-26 that read as a revoked token while the row was active.
             lines.append(
-                "  A credential WAS presented and refused — it is stale or wrong."
+                "  A credential WAS presented and refused. Before re-minting, rule\n"
+                "  out the backend: an older Cipher shim also answers 401 when its\n"
+                "  OWN Supabase service key is refused. Any hit from\n"
+                "  `docker logs pmoves-cipher-api-1 2>&1 | grep 'token lookup returned'`\n"
+                "  means the token was never judged."
             )
         if verdict.get("env_note"):
             # A 401 read against a FAILED overlay is a different finding: the

@@ -543,7 +543,7 @@ def _row_text(monkeypatch, tmp_path, capsys, status: int) -> str:
     return capsys.readouterr().err
 
 
-@pytest.mark.parametrize("status", [404, 500, 502])
+@pytest.mark.parametrize("status", [404, 500, 502, 503])
 def test_a_non_auth_finding_does_not_trip_the_launchers_unauthorized_arm(
     monkeypatch, tmp_path, capsys, status
 ):
@@ -1075,3 +1075,66 @@ def test_expanded_url_never_reaches_the_printed_row(monkeypatch):
     assert "100.64.0.9" not in row["url"], f"resolved address leaked into the row: {row['url']}"
     assert "${TS_Z890}" in row["url"], f"row should keep the literal: {row['url']}"
     assert "100.64.0.9" not in str(row), f"resolved address leaked somewhere in the row: {row}"
+
+
+# ---------------------------------------------------------------------------
+# A 503 is a lookup failure, not a refusal (Pmoves-cipher lookup-failure fix).
+#
+# On 2026-09-26 the shim's own Supabase service key was refused by Kong, and
+# the shim answered every per-agent bearer with 401 "invalid or revoked
+# token". A session read that as revocation while its row was active. The
+# fork now answers such failures with 503; these pin what the operator is
+# told in each case.
+# ---------------------------------------------------------------------------
+
+
+def test_a_503_says_the_credential_was_not_judged(monkeypatch, tmp_path, capsys):
+    err = _row_text(monkeypatch, tmp_path, capsys, 503)
+    assert "NOT judged" in err
+    assert "Do not re-mint" in err
+    assert "revoked" not in err.lower()
+    assert "stale or wrong" not in err
+
+
+def test_a_401_does_not_assert_the_token_is_bad(monkeypatch, tmp_path, capsys):
+    """A 401 from an older shim can be the shim's own key being refused."""
+    err = _row_text(monkeypatch, tmp_path, capsys, 401)
+    assert "cipher UNAUTHORIZED" in err
+    assert "stale or wrong" not in err
+    assert "token lookup returned" in err, "the backend rule-out step must be named"
+
+
+def test_a_503_next_to_a_401_is_still_reported(monkeypatch, tmp_path, capsys):
+    """The unauthorized summary returns early; it must not swallow the 503."""
+    monkeypatch.setenv("CIPHER_API_TOKEN", SENTINEL)
+
+    def fake(req, *a, **k):
+        code = 401 if "fleet" in req.full_url else 503
+        raise urllib.error.HTTPError(req.full_url, code, "x", None, None)
+
+    monkeypatch.setattr(cp, "_urlopen", fake)
+    roster = _roster(
+        tmp_path,
+        {
+            "pmoves-cipher": {
+                "url": "http://fleet.example:8105/mcp/sse",
+                "headers": {"Authorization": "Bearer ${CIPHER_API_TOKEN}"},
+            },
+            "pmoves-cipher-local": {
+                "url": "http://localhost:8105/mcp/sse",
+                "headers": {"Authorization": "Bearer ${CIPHER_API_TOKEN}"},
+            },
+        },
+    )
+    assert cp.main(["--roster", str(roster)]) == 1
+    err = capsys.readouterr().err
+    assert "cipher UNAUTHORIZED" in err
+    assert "NOT judged" in err
+    assert SENTINEL not in err
+
+
+def test_the_launcher_does_not_equate_401_with_revocation():
+    text = (REPO_ROOT / "pmoves" / "scripts" / "claude-pmoves.sh").read_text()
+    assert "A 401 is NOT proof the token is revoked" in text
+    assert "token lookup returned" in text
+    assert "HTTP 503 in particular" in text
