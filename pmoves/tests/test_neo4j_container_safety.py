@@ -77,10 +77,17 @@ def _tree(tmp_path: Path, script: str) -> Path:
     shutil.copy2(SCRIPTS / script, root / "scripts" / script)
     shutil.copy2(HELPER, root / "scripts" / "neo4j_container.py")
     (root / "docker-compose.yml").write_text(FAKE_COMPOSE)
-    bin_dir = tmp_path / "bin"
+    # An ABSOLUTE dir, placed FIRST on PATH by every caller, holding the
+    # `.pmoves-test-stub` marker plus executable `docker` and `docker-compose`
+    # recorders: the stub-dir contract the conftest docker guard checks before it
+    # lets a test spawn make (make runs $(MAKE) recipe lines even under -n).
+    bin_dir = (tmp_path / "bin").resolve()
     bin_dir.mkdir()
+    (bin_dir / ".pmoves-test-stub").write_text("neo4j safety tests: recorders only, see STUB_DOCKER\n")
     for name, body in {
         "docker": STUB_DOCKER,
+        # v1 CLI: recorded as `compose <args>` so _neo4j_mutations sees it too.
+        "docker-compose": "#!/usr/bin/env bash\nprintf 'compose %s\\n' \"$*\" >> \"$STUB_LOG\"\nexit 0\n",
         "curl": "#!/usr/bin/env bash\nexit 0\n",
         "sleep": "#!/usr/bin/env bash\nexit 0\n",
     }.items():
@@ -328,3 +335,22 @@ def test_make_neo4j_restore_volume_removal_is_never_swallowed():
     assert "|| true" not in block
     assert "exit 1" in block and "exit 3" in block
     assert "2>/dev/null" not in block and "2>&1 >/dev/null" in block
+
+
+def test_the_stub_bin_meets_the_make_spawn_guard_contract(tmp_path):
+    """Absolute, marked, and holding executable docker + docker-compose recorders.
+
+    The conftest guard (#3194) refuses a make spawn unless the FIRST PATH entry
+    is such a dir. Checked here directly, so this file stays compatible whether
+    or not that guard is present in the tree it runs in.
+    """
+    _tree(tmp_path, "backup-neo4j.sh")
+    b = tmp_path / "bin"
+    assert b.is_absolute()
+    assert (b / ".pmoves-test-stub").is_file()
+    for name in ("docker", "docker-compose"):
+        assert os.access(b / name, os.X_OK), name
+    log = tmp_path / "docker.log"
+    subprocess.run([str(b / "docker-compose"), "up", "-d", "neo4j"],
+                   env={**os.environ, "STUB_LOG": str(log)}, check=True)
+    assert _neo4j_mutations([ln.split() for ln in log.read_text().splitlines()]) != []
