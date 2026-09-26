@@ -6,7 +6,7 @@ set -euo pipefail
 
 usage() {
   cat <<'EOF'
-push-gh-secrets.sh [-f env_file] [-r owner/repo] [--env ENV] [--only key1,key2] [--all] [--manifest path] [--dry-run] [--ghcr-bootstrap]
+push-gh-secrets.sh [-f env_file] [-r owner/repo] [--env ENV] [--only key1,key2] [--all] [--manifest path] [--dry-run] [--ghcr-bootstrap] [--routed]
 
 NOTE: GHCR auth now prefers the PMOVES.AI GitHub App (GH_APP_ID + GH_APP_SEC secrets).
       The --ghcr-bootstrap flag is a fallback for environments without a configured App.
@@ -24,6 +24,11 @@ Options:
       --ghcr-fallback-token-from KEY
                                     Fallback token key to read (default: GH_PAT_PUBLISH)
       --ghcr-username-from KEY      Username key to read (default: GHCR_USERNAME)
+      --routed   Push each github_secret target of the v2 CHIT manifest to its
+                 own repo/env (--manifest overrides the v2 default). A routed
+                 target {name, repo, env} goes where it says; a bare name goes
+                 to --repo/--env. Values come from the env file; names with no
+                 value there are skipped. Honors --only and --dry-run.
 
 Examples:
   ./pmoves/tools/push-gh-secrets.sh --repo POWERFULMOVES/PMOVES.AI --env Dev
@@ -43,6 +48,8 @@ GHCR_BOOTSTRAP=0
 GHCR_TOKEN_FROM="GHCR_TOKEN"
 GHCR_FALLBACK_TOKEN_FROM="GH_PAT_PUBLISH"
 GHCR_USERNAME_FROM="GHCR_USERNAME"
+ROUTED=0
+MANIFEST_SET=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -50,17 +57,29 @@ while [[ $# -gt 0 ]]; do
     -r|--repo) GH_REPO="$2"; shift 2;;
     --env) GH_ENV="$2"; shift 2;;
     --only) ONLY_KEYS="$2"; shift 2;;
-    --manifest) MANIFEST="$2"; shift 2;;
+    --manifest) MANIFEST="$2"; MANIFEST_SET=1; shift 2;;
     --all) PUSH_ALL=1; shift;;
     --dry-run) DRY_RUN=1; shift;;
     --ghcr-bootstrap) GHCR_BOOTSTRAP=1; shift;;
     --ghcr-token-from) GHCR_TOKEN_FROM="$2"; shift 2;;
     --ghcr-fallback-token-from) GHCR_FALLBACK_TOKEN_FROM="$2"; shift 2;;
     --ghcr-username-from) GHCR_USERNAME_FROM="$2"; shift 2;;
+    --routed) ROUTED=1; shift;;
     -h|--help) usage; exit 0;;
     *) echo "Unknown option: $1" >&2; usage; exit 1;;
   esac
 done
+
+if [[ $ROUTED -eq 1 && $GHCR_BOOTSTRAP -eq 1 ]]; then
+  echo "--routed and --ghcr-bootstrap are separate runs; pass one." >&2
+  exit 1
+fi
+if [[ $ROUTED -eq 1 && $PUSH_ALL -eq 1 ]]; then
+  # --all means "every key in the env file, ignoring the manifest"; --routed
+  # pushes exactly the manifest's routes. Refuse rather than guess which.
+  echo "--routed pushes the manifest's routes; --all (ignore the manifest) contradicts it." >&2
+  exit 1
+fi
 
 if [[ ! -f "$ENV_FILE" ]]; then
   echo "Env file not found: $ENV_FILE" >&2
@@ -86,6 +105,96 @@ fi
 
 if [[ -n "$ONLY_KEYS" ]]; then
   IFS=',' read -r -a ONLY_ARR <<< "$ONLY_KEYS"
+fi
+
+# --routed: one push per manifest route (name, repo, env). The routes come from
+# github_secret_targets.py, the one definition of the target format, so this
+# script never parses the manifest itself. Names and routes are printed; values
+# only ever travel on gh's stdin.
+push_routed() {
+  # The ONE python discovery (canonical venv, then platform launchers; the
+  # Windows Store `python3` stub is not a usable interpreter). PMOVES_PYTHON
+  # pins it. PyYAML is required to read the manifest.
+  # shellcheck source=../scripts/pm-python.sh
+  . "$(dirname "${BASH_SOURCE[0]}")/../scripts/pm-python.sh"
+  if ! pm_pick_python yaml; then
+    echo "No python with PyYAML found (pin one with PMOVES_PYTHON); --routed needs it to read the manifest." >&2
+    exit 1
+  fi
+  local emitter
+  emitter="$(dirname "${BASH_SOURCE[0]}")/github_secret_targets.py"
+  local emit_args=(routes --default-repo "$GH_REPO" --default-env "$GH_ENV")
+  if [[ $MANIFEST_SET -eq 1 ]]; then
+    emit_args+=(--manifest "$MANIFEST")
+  fi
+  local routes
+  if ! routes="$("${PM_PY[@]}" "$emitter" "${emit_args[@]}")"; then
+    echo "Could not read github_secret routes from the manifest; nothing pushed." >&2
+    exit 1
+  fi
+  routes="${routes//$'\r'/}"
+
+  # Same parse as the default mode below: first occurrence of a key wins.
+  local -A values=()
+  local line key val
+  while IFS= read -r line; do
+    [[ -z "$line" ]] && continue
+    [[ "$line" =~ ^[[:space:]]*# ]] && continue
+    [[ "$line" != *"="* ]] && continue
+    key=${line%%=*}
+    val=${line#*=}
+    val=${val%$'\r'}  # CRLF env file: never push the carriage return
+    key=${key//[$'\t ']/}
+    [[ -z "$key" ]] && continue
+    [[ -n "${values[$key]+set}" ]] || values[$key]="$val"
+  done < "$ENV_FILE"
+
+  local name repo env wanted k i j n r e
+  local env_args=()
+  local -a lines=() pushed=()
+  mapfile -t lines <<< "$routes"
+  for ((i = 0; i < ${#lines[@]}; i++)); do
+    IFS=$'\t' read -r name repo env <<< "${lines[$i]}"
+    [[ -z "$name" ]] && continue
+    if [[ -n "$ONLY_KEYS" ]]; then
+      wanted=0
+      for k in "${ONLY_ARR[@]}"; do
+        if [[ "$k" == "$name" ]]; then wanted=1; fi
+      done
+      [[ $wanted -eq 1 ]] || continue
+    fi
+    if [[ -z "${values[$name]+set}" ]]; then
+      echo "Skip $name for $repo${env:+ (env $env)}: no value in $ENV_FILE" >&2
+      continue
+    fi
+    env_args=()
+    if [[ -n "$env" ]]; then env_args=(--env "$env"); fi
+    if [[ $DRY_RUN -eq 1 ]]; then
+      echo "DRY-RUN: would set $name in $repo${env:+ (env $env)}"
+    else
+      if ! printf '%s' "${values[$name]}" | gh secret set "$name" --repo "$repo" --app actions "${env_args[@]}" >/dev/null; then
+        # Names only. A partial run must say exactly where it stopped, or the
+        # operator cannot tell which repos now hold the new value.
+        echo "gh failed setting $name in $repo${env:+ (env $env)}; stopping." >&2
+        echo "Pushed before the failure (${#pushed[@]}):" >&2
+        for r in "${pushed[@]}"; do echo "  $r" >&2; done
+        echo "Not pushed (the failed route and every route after it):" >&2
+        for ((j = i; j < ${#lines[@]}; j++)); do
+          IFS=$'\t' read -r n r e <<< "${lines[$j]}"
+          [[ -z "$n" ]] && continue
+          echo "  $n -> $r${e:+ (env $e)}" >&2
+        done
+        exit 1
+      fi
+      pushed+=("$name -> $repo${env:+ (env $env)}")
+      echo "Set $name in $repo${env:+ (env $env)}"
+    fi
+  done
+}
+
+if [[ $ROUTED -eq 1 ]]; then
+  push_routed
+  exit 0
 fi
 
 # Initialize empty array to avoid unbound variable errors under set -u
@@ -123,7 +232,8 @@ lookup_value() {
   local line
   line=$(grep -E "^${key}=" "$ENV_FILE" | tail -n 1 || true)
   if [[ -n "$line" ]]; then
-    printf '%s' "${line#*=}"
+    line=${line#*=}
+    printf '%s' "${line%$'\r'}"
     return 0
   fi
   return 1
@@ -152,6 +262,7 @@ while IFS= read -r line; do
   fi
   key=${line%%=*}
   val=${line#*=}
+  val=${val%$'\r'}  # CRLF env file: never push the carriage return
   key=${key//[$'\t ']/}
   [[ -z "$key" ]] && continue
   if ! should_include "$key"; then

@@ -151,6 +151,15 @@ def test_the_environment_scope_is_addressed_separately(monkeypatch, tmp_path):
     assert seen == ["repos/POWERFULMOVES/PMOVES.AI/environments/Prod/secrets"]
 
 
+def test_an_environment_name_is_url_quoted_in_the_api_path(monkeypatch, tmp_path):
+    """`--env` is free text and lands in a path segment; a space or a slash
+    must not re-shape the endpoint."""
+    seen: List[str] = []
+    _scopes(monkeypatch, {None: [], "Prod env": ["A"]}, record=seen)
+    aud.main(["--manifest", str(_manifest(tmp_path, ["A"])), "--env", "Prod env"])
+    assert seen == ["repos/POWERFULMOVES/PMOVES.AI/environments/Prod%20env/secrets"]
+
+
 def test_a_single_scope_read_declares_its_own_assumption(monkeypatch, tmp_path, capsys):
     """`--env X` asserts the funnel targets X. Absence is only true if it does,
     so the output has to say which assumption it rests on."""
@@ -278,3 +287,241 @@ def test_json_mode_distinguishes_unmeasured_from_clean(monkeypatch, tmp_path, ca
     aud.main(["--manifest", str(_manifest(tmp_path, ["A"])), "--json"])
     payload = json.loads(capsys.readouterr().out)
     assert payload["measured"] is False
+
+
+# ---------------------------------------------------------------------------
+# The string form, pinned verbatim. Routing was added beside it; a manifest
+# that uses only bare names must read exactly as it did.
+# ---------------------------------------------------------------------------
+
+
+def test_the_string_form_text_report_is_unchanged(monkeypatch, tmp_path, capsys):
+    _scopes(monkeypatch, {None: ["A", "STRAY"], "Prod": ["B"], "PMOVES": []})
+    assert aud.main(["--manifest", str(_manifest(tmp_path, ["A", "B", "C"]))]) == 1
+    captured = capsys.readouterr()
+    assert captured.out == (
+        "repo: POWERFULMOVES/PMOVES.AI\n"
+        "  (repository)               2/100  headroom  98\n"
+        "  env:Prod                   1/100  headroom  99\n"
+        "  env:PMOVES                 0/100  headroom 100\n"
+        "  declared 3  present across all scopes 3\n"
+    )
+    assert captured.err == (
+        "  absent (1): declared, present in NO scope read\n"
+        "    C\n"
+        "  orphans (1): present, declared nowhere --\n"
+        "    unmanaged by the funnel; reconciling these is free headroom\n"
+        "    STRAY\n"
+    )
+
+
+# ---------------------------------------------------------------------------
+# The mapping form: {github_secret: {name, repo, env}}. A routed name is
+# measured in the repo -- and the scope -- the manifest pins it to.
+# ---------------------------------------------------------------------------
+
+N8N = "POWERFULMOVES/PMOVES-N8N"
+MAIN = "POWERFULMOVES/PMOVES.AI"
+
+
+def _targets_manifest(tmp_path: Path, values) -> Path:
+    """One entry per `github_secret` value -- a bare name or a mapping."""
+    path = tmp_path / "secrets_manifest_v2.yaml"
+    path.write_text(
+        yaml.safe_dump(
+            {"secrets": [{"id": f"e{i}", "targets": [{"github_secret": v}]} for i, v in enumerate(values)]}
+        ),
+        encoding="utf-8",
+    )
+    return path
+
+
+def _repos(monkeypatch, repos: Dict[str, Dict[Optional[str], List[str]]], record=None):
+    """Stub `gh` for several repos. Keys: repo, then scope (None = repository)."""
+
+    def fake(*args, **kwargs):
+        endpoint = args[2]
+        if record is not None:
+            record.append(endpoint)
+        repo = "/".join(endpoint.split("/")[1:3])
+        scopes = repos.get(repo)
+        if scopes is None:
+            raise aud.Unmeasured(f"gh api {endpoint} failed: 404")
+        if endpoint.endswith("/environments"):
+            return "".join(f"{name}\n" for name in scopes if name is not None)
+        if "/environments/" in endpoint:
+            env = endpoint.split("/environments/")[1].split("/")[0]
+            if env not in scopes:
+                raise aud.Unmeasured(f"gh api {endpoint} failed: 404")
+            return "".join(f"{name}\n" for name in scopes[env])
+        return "".join(f"{name}\n" for name in scopes.get(None, []))
+
+    monkeypatch.setattr(aud, "_gh", fake)
+
+
+def test_a_routed_name_is_measured_in_its_own_repo(monkeypatch, tmp_path, capsys):
+    seen: List[str] = []
+    _repos(
+        monkeypatch,
+        {MAIN: {None: ["A"]}, N8N: {None: [], "Prod": ["N8N_API_KEY"]}},
+        record=seen,
+    )
+    m = _targets_manifest(tmp_path, ["A", {"name": "N8N_API_KEY", "repo": N8N, "env": "Prod"}])
+    rc = aud.main(["--manifest", str(m), "--json"])
+    payload = json.loads(capsys.readouterr().out)
+    assert rc == 0, payload
+    assert f"repos/{N8N}/environments/Prod/secrets" in seen
+    others = {r["repo"]: r for r in payload["other_repos"]}
+    assert set(others) == {N8N}
+    assert others[N8N]["absent"] == [] and others[N8N]["orphans"] == []
+
+
+def test_a_routed_name_in_the_wrong_scope_is_absent(monkeypatch, tmp_path, capsys):
+    """Pinned to env:Prod but sitting in the repository scope. For an unrouted
+    name either would do; for a routed one the manifest said WHERE."""
+    _repos(monkeypatch, {MAIN: {None: ["A"]}, N8N: {None: ["N8N_API_KEY"], "Prod": []}})
+    m = _targets_manifest(tmp_path, ["A", {"name": "N8N_API_KEY", "repo": N8N, "env": "Prod"}])
+    assert aud.main(["--manifest", str(m)]) == 1
+    captured = capsys.readouterr()
+    assert f"repo: {N8N}" in captured.out
+    assert "absent (1)" in captured.err and "N8N_API_KEY" in captured.err
+
+
+def test_a_repo_scoped_mapping_means_the_repository_scope(monkeypatch, tmp_path, capsys):
+    _repos(monkeypatch, {MAIN: {None: ["A"]}, N8N: {None: [], "Prod": ["R_KEY"]}})
+    m = _targets_manifest(tmp_path, ["A", {"name": "R_KEY", "repo": N8N}])
+    assert aud.main(["--manifest", str(m)]) == 1
+    assert "R_KEY" in capsys.readouterr().err
+
+
+def test_a_name_routed_away_but_still_in_pmoves_ai_is_an_orphan_there(monkeypatch, tmp_path, capsys):
+    """The migration signal: once N8N_API_KEY is routed to PMOVES-N8N, its old
+    copy in PMOVES.AI's Prod is unmanaged, and deleting it is the headroom."""
+    _repos(
+        monkeypatch,
+        {MAIN: {None: ["A"], "Prod": ["N8N_API_KEY"]}, N8N: {None: [], "Prod": ["N8N_API_KEY"]}},
+    )
+    m = _targets_manifest(tmp_path, ["A", {"name": "N8N_API_KEY", "repo": N8N, "env": "Prod"}])
+    assert aud.main(["--manifest", str(m), "--json"]) == 1
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["orphans"] == ["N8N_API_KEY"]
+
+
+def test_a_routed_names_copy_in_another_scope_of_its_repo_is_stale(monkeypatch, tmp_path, capsys):
+    """Moved from env:Prod to env:PMOVES, old copy left in Prod. The name is
+    declared for the repo, so it is no orphan -- and without this finding the
+    audit exited 0 while Prod stayed full."""
+    _repos(monkeypatch, {MAIN: {None: ["A"], "Prod": ["N"], "PMOVES": ["N"]}})
+    m = _targets_manifest(tmp_path, ["A", {"name": "N", "repo": MAIN, "env": "PMOVES"}])
+    assert aud.main(["--manifest", str(m), "--json"]) == 1
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["stale_copies"] == [{"name": "N", "scope": "env:Prod"}]
+    assert payload["orphans"] == [] and payload["absent"] == []
+
+
+def test_a_stale_copy_is_reported_in_the_text_output(monkeypatch, tmp_path, capsys):
+    _repos(monkeypatch, {MAIN: {None: ["A"]}, N8N: {None: ["N"], "Prod": ["N"]}})
+    m = _targets_manifest(tmp_path, ["A", {"name": "N", "repo": N8N, "env": "Prod"}])
+    assert aud.main(["--manifest", str(m)]) == 1
+    err = capsys.readouterr().err
+    assert "stale copies (1)" in err and "N  (repository)" in err
+
+
+def test_a_bare_name_in_the_same_repo_is_not_stale(monkeypatch, tmp_path, capsys):
+    """Negative control: declared bare AND pinned in one repo, the bare form
+    may live in any scope, so its other copies are not stale."""
+    _repos(monkeypatch, {MAIN: {None: ["N"], "PMOVES": ["N"]}})
+    m = _targets_manifest(tmp_path, ["N", {"name": "N", "repo": MAIN, "env": "PMOVES"}])
+    assert aud.main(["--manifest", str(m), "--json"]) == 0
+    assert json.loads(capsys.readouterr().out)["stale_copies"] == []
+
+
+def test_the_same_name_in_two_repos_is_measured_in_both(monkeypatch, tmp_path, capsys):
+    """One CHIT source pushed to several repos is the design."""
+    _repos(monkeypatch, {MAIN: {None: ["K"]}, N8N: {None: []}})
+    m = _targets_manifest(tmp_path, ["K", {"name": "K", "repo": N8N}])
+    assert aud.main(["--manifest", str(m), "--json"]) == 1
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["absent"] == []
+    assert payload["other_repos"][0]["absent"] == ["K"]
+
+
+def test_routed_names_do_not_count_toward_the_single_scope_overflow(monkeypatch, tmp_path, capsys):
+    """Only unrouted names share the one scope a push run writes. Routing names
+    elsewhere is precisely how the overflow is relieved."""
+    plain = [f"S{i:03d}" for i in range(aud.SECRET_LIMIT)]
+    routed = [f"R{i}" for i in range(5)]
+    _repos(monkeypatch, {MAIN: {None: plain}, N8N: {None: routed}})
+    m = _targets_manifest(tmp_path, plain + [{"name": r, "repo": N8N} for r in routed])
+    assert aud.main(["--manifest", str(m)]) == 0
+    assert "OVERFLOW" not in capsys.readouterr().err
+
+
+def test_a_pinned_scope_declared_past_the_ceiling_is_reported(monkeypatch, tmp_path, capsys):
+    routed = [f"R{i:03d}" for i in range(aud.SECRET_LIMIT + 1)]
+    _repos(monkeypatch, {MAIN: {None: ["A"]}, N8N: {None: [], "Prod": routed[: aud.SECRET_LIMIT]}})
+    m = _targets_manifest(tmp_path, ["A"] + [{"name": r, "repo": N8N, "env": "Prod"} for r in routed])
+    assert aud.main(["--manifest", str(m)]) == 1
+    assert f"{N8N} env:Prod declares {aud.SECRET_LIMIT + 1}" in capsys.readouterr().err
+
+
+def test_env_narrowing_still_reads_the_pinned_scopes(monkeypatch, tmp_path):
+    """`--env X` asserts where UNROUTED names go, so the main repo is read in X
+    alone with no discovery. A repo with pinned scopes lists its environments
+    (to resolve them) and reads only the pinned ones."""
+    seen: List[str] = []
+    _repos(monkeypatch, {MAIN: {None: [], "Prod": ["A"]}, N8N: {None: [], "Prod": ["N"]}}, record=seen)
+    m = _targets_manifest(tmp_path, ["A", {"name": "N", "repo": N8N, "env": "Prod"}])
+    assert aud.main(["--manifest", str(m), "--env", "Prod"]) == 0
+    assert seen == [
+        f"repos/{MAIN}/environments/Prod/secrets",
+        f"repos/{N8N}/environments",
+        f"repos/{N8N}/environments/Prod/secrets",
+    ]
+
+
+def test_a_missing_pinned_environment_under_env_is_absent_not_unmeasured(monkeypatch, tmp_path, capsys):
+    """Same verdict with or without --env: it used to read the nonexistent
+    environment directly, get a 404, and exit 3."""
+    _repos(monkeypatch, {MAIN: {None: [], "Prod": ["A"]}, N8N: {None: []}})
+    m = _targets_manifest(tmp_path, ["A", {"name": "N", "repo": N8N, "env": "Prod"}])
+    assert aud.main(["--manifest", str(m), "--env", "Prod", "--json"]) == 1
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["other_repos"][0]["absent"] == ["N"]
+    assert payload["other_repos"][0]["missing_scopes"] == ["env:Prod"]
+
+
+def test_repo_and_env_match_case_insensitively(monkeypatch, tmp_path, capsys):
+    """GitHub matches both case-insensitively. A mapping spelled
+    `powerfulmoves/pmoves.ai` / `prod` is env:Prod of the main repo -- not a
+    second repo with a missing environment."""
+    _repos(monkeypatch, {MAIN: {None: ["A"], "Prod": ["N"]}})
+    m = _targets_manifest(tmp_path, ["A", {"name": "N", "repo": MAIN.lower(), "env": "prod"}])
+    rc = aud.main(["--manifest", str(m), "--json"])
+    payload = json.loads(capsys.readouterr().out)
+    assert rc == 0, payload
+    assert payload["other_repos"] == [] and payload["missing_scopes"] == []
+
+
+def test_a_pinned_environment_that_does_not_exist_is_absent_not_unmeasured(monkeypatch, tmp_path, capsys):
+    """Discovery succeeded and the environment is not there: every name pinned
+    to it is absent. That is a measurement, not a failure to measure."""
+    _repos(monkeypatch, {MAIN: {None: ["A"]}, N8N: {None: []}})
+    m = _targets_manifest(tmp_path, ["A", {"name": "N", "repo": N8N, "env": "Prod"}])
+    assert aud.main(["--manifest", str(m), "--json"]) == 1
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["other_repos"][0]["absent"] == ["N"]
+    assert payload["other_repos"][0]["missing_scopes"] == ["env:Prod"]
+
+
+def test_an_unreadable_routed_repo_is_unmeasured(monkeypatch, tmp_path):
+    _repos(monkeypatch, {MAIN: {None: ["A"]}})
+    m = _targets_manifest(tmp_path, ["A", {"name": "N", "repo": N8N}])
+    assert aud.main(["--manifest", str(m)]) == 3
+
+
+def test_a_malformed_routed_target_is_unmeasured(monkeypatch, tmp_path, capsys):
+    _repos(monkeypatch, {MAIN: {None: ["A"]}})
+    m = _targets_manifest(tmp_path, ["A", {"repo": N8N}])
+    assert aud.main(["--manifest", str(m)]) == 3
+    assert "name" in capsys.readouterr().err
