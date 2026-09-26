@@ -42,6 +42,12 @@ printf '%s\n' "$*" >> "$STUB_LOG"
 if [ "$1" = "ps" ]; then
   for n in $FAKE_RUNNING; do echo "$n"; done
 fi
+if [ "$1" = "volume" ] && [ "$2" = "inspect" ]; then
+  [ "${FAKE_VOLUME_EXISTS:-0}" = "1" ] && exit 0 || exit 1
+fi
+if [ "$1" = "volume" ] && [ "$2" = "rm" ]; then
+  [ "${FAKE_VOLUME_RM_FAILS:-0}" = "1" ] && exit 1 || exit 0
+fi
 exit 0
 """
 
@@ -218,13 +224,42 @@ def test_the_mutation_detector_sees_every_form():
         assert _neo4j_mutations([call]) == [], call
 
 
-def test_make_neo4j_restore_volume_removal_fails_closed():
-    """A removal that failed (volume held by another Neo4j) used to be swallowed,
-    and the recipe went on to start and load over that volume."""
-    r = _recipe("neo4j-restore")
-    vol_lines = [ln for ln in r.splitlines()
-                 if "pmoves_neo4j-data" in ln and not ln.strip().startswith(("@#", "#", "@echo", "echo"))]
-    assert vol_lines, "restore no longer touches the volume -- update this test"
-    for ln in vol_lines:
-        assert not ln.rstrip().endswith("|| true"), ln
-        assert "exit 1" in ln, ln
+def _restore_volume_block() -> str:
+    """The recipe lines of neo4j-restore that clear pmoves_neo4j-data."""
+    lines = _recipe("neo4j-restore").splitlines()
+    i = next(n for n, ln in enumerate(lines) if "volume inspect pmoves_neo4j-data" in ln)
+    j = next(n for n in range(i, len(lines)) if lines[n].strip() == "fi")
+    return "\n".join(lines[i:j + 1])
+
+
+@pytest.mark.skipif(shutil.which("make") is None, reason="make not installed")
+@pytest.mark.parametrize("exists,rm_fails,want_rc,want_rm", [
+    ("0", "0", 0, False),  # absent: nothing to clear, and not an error
+    ("1", "0", 0, True),   # present and removable
+    ("1", "1", 1, True),   # present but held by another Neo4j: fail CLOSED
+])
+def test_make_neo4j_restore_volume_step(tmp_path, exists, rm_fails, want_rc, want_rm):
+    """Run the recipe's own volume block (extracted verbatim) against the stub.
+
+    It used to swallow a failed removal (`2>/dev/null || true`) and go on to
+    start and load over a volume another Neo4j still held.
+    """
+    _tree(tmp_path, "backup-neo4j.sh")  # for bin/ stubs
+    mk = tmp_path / "Makefile"
+    mk.write_text("t:\n" + _restore_volume_block() + "\n")
+    log = tmp_path / "docker.log"
+    env = dict(os.environ)
+    env.update(PATH=f"{tmp_path / 'bin'}:{env['PATH']}", STUB_LOG=str(log),
+               FAKE_VOLUME_EXISTS=exists, FAKE_VOLUME_RM_FAILS=rm_fails)
+    proc = subprocess.run(["make", "-s", "-f", str(mk), "t"], capture_output=True, text=True,
+                          timeout=60, env=env)
+    assert (proc.returncode == 0) == (want_rc == 0), proc.stdout + proc.stderr
+    calls = [ln.split() for ln in log.read_text().splitlines()] if log.exists() else []
+    removed = any(c[:2] == ["volume", "rm"] for c in calls)
+    assert removed == want_rm, calls
+
+
+def test_make_neo4j_restore_volume_removal_is_never_swallowed():
+    block = _restore_volume_block()
+    assert "|| true" not in block
+    assert "exit 1" in block
