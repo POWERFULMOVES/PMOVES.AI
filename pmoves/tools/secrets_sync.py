@@ -7,11 +7,12 @@ import sys
 from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Mapping, Sequence
+from typing import Dict, Iterable, List, Mapping, Sequence
 
 import yaml
 
 from pmoves.chit.codec import decode_secret_map, load_cgp
+from pmoves.tools import node_local_keys as _node_local
 from pmoves.tools.secret_shape import inspect_value
 from pmoves.tools.secrets_self_generated import fill_self_generated, SELF_GENERATED, _SUPABASE_JWT_KEYS
 
@@ -164,6 +165,8 @@ def build_outputs(
     *,
     strict: bool = True,
     rejected_out: Dict[str, set] | None = None,
+    node_local: Mapping[str, str | None] | None = None,
+    ts_self: "_node_local.Resolver | None" = None,
 ) -> tuple[Dict[str, Dict[str, str]], List[str]]:
     """Materialise per-file outputs.
 
@@ -172,13 +175,37 @@ def build_outputs(
     keys explicitly: merge reads the existing file and updates it, so simply
     omitting a key leaves the previous -- rejected -- value in place. Optional
     rather than a third return value so existing callers keep working.
+
+    ``node_local`` (default: pmoves/config/node_local_keys.yaml) names labels
+    that are THIS node's topology, not credentials (#3188 review P1). They are
+    never taken from the bundle, never counted missing, and never put in
+    ``rejected_out`` -- so a funnel run can neither overwrite nor delete a
+    node's own NATS_URL / SUPABASE_URL / POSTGRES_DB. A label with a template is
+    rendered for this node (``ts_self`` resolves ``${TS_SELF}``); if any
+    placeholder is unresolved the key is skipped and a WARNING names it.
     """
+    if node_local is None:
+        node_local = _node_local.load_node_local()
+    if ts_self is None:
+        ts_self = _node_local.cached(_node_local.resolve_ts_self)
     outputs: Dict[str, Dict[str, str]] = defaultdict(dict)
     missing: List[str] = []
     too_short: List[str] = []
     shape_withheld: List[str] = []
     shape_warnings: List[str] = []
+    node_local_unrendered: List[str] = []
     for entry in entries:
+        if entry.label in node_local:
+            template = node_local[entry.label]
+            if template is None:
+                continue  # node-local, no template: the funnel leaves it alone
+            rendered, why = _node_local.render(template, secrets, ts_self)
+            if rendered is None:
+                node_local_unrendered.append(f"{entry.label} ({why})")
+                continue
+            for target in entry.targets:
+                outputs[target.file][target.key] = rendered
+            continue
         # Honor legacy aliases: an operator may supply a deprecated name (e.g.
         # MCP_SERVER_TOKEN) that maps to a canonical label. Emit the canonical
         # target keys from whichever alias carries a USABLE value.
@@ -271,6 +298,18 @@ def build_outputs(
             continue
         for target in entry.targets:
             outputs[target.file][target.key] = value
+    if node_local_unrendered:
+        print(
+            "WARNING: node-local key(s) NOT written -- existing tier values left "
+            "untouched: "
+            + "; ".join(sorted(node_local_unrendered))
+            + ". These are this node's own service addresses "
+            "(pmoves/config/node_local_keys.yaml); they are rendered from the "
+            "node's Tailscale name, never taken from the bundle, and an address "
+            "with an empty host (e.g. nats://:4222) would look configured while "
+            "being broken. Fix the named input and re-run the funnel.",
+            file=sys.stderr,
+        )
     if too_short:
         print(
             "WARNING: withheld "
@@ -354,11 +393,32 @@ def _drop_multiline(relative: str, values: Mapping[str, str]) -> Dict[str, str]:
     return safe
 
 
+def _read_env_lines(env_path: Path) -> tuple[Dict[str, str], List[str]]:
+    """``({key: value}, comment_lines)`` from an existing generated env file."""
+    existing: Dict[str, str] = {}
+    comments: List[str] = []
+    for raw_line in env_path.read_text().splitlines():
+        stripped = raw_line.strip()
+        if not stripped or stripped.startswith("#"):
+            comments.append(raw_line)
+            continue
+        if "=" in stripped:
+            k, v = stripped.split("=", 1)
+            # Defensive: ignore lines from an already-corrupt file (a prior
+            # multi-line value leaves continuation lines whose "key" is not a
+            # valid env identifier) so the corruption is not propagated.
+            if not k.isidentifier():
+                continue
+            existing[k] = v
+    return existing, comments
+
+
 def write_env_files(
     outputs: Mapping[str, Mapping[str, str]],
     *,
     merge: bool = False,
     remove: Mapping[str, set] | None = None,
+    preserve: Iterable[str] | None = None,
 ) -> None:
     """Write env files. ``remove`` names keys to DELETE in merge mode.
 
@@ -368,7 +428,14 @@ def write_env_files(
     live for Compose. `--merge` is the funnel default (SECRETS_SYNC_FLAGS), so
     without this the withholding above would have changed nothing on any node
     that had already been funnelled once.
+
+    ``preserve`` (default: the node-local labels) names keys the funnel must
+    never delete: they survive ``remove`` in merge mode, and in full
+    regeneration an existing value is carried over unless ``outputs`` supplies
+    a new one. Without that, a plain ``generate`` (no --merge) would erase a
+    node's own NATS_URL simply because the bundle does not carry it.
     """
+    preserve = set(_node_local.load_node_local() if preserve is None else preserve)
     header = "# Auto-generated by pmoves.tools.secrets_sync. Do not edit.\n"
     for relative in sorted(set(outputs) | set(remove or {})):
         values = dict(outputs.get(relative, {}))
@@ -378,31 +445,25 @@ def write_env_files(
 
         if merge and env_path.exists():
             # Selective rotation: read existing, update only specified keys
-            existing: Dict[str, str] = {}
-            comments: List[str] = []
-            for raw_line in env_path.read_text().splitlines():
-                stripped = raw_line.strip()
-                if not stripped or stripped.startswith("#"):
-                    comments.append(raw_line)
-                    continue
-                if "=" in stripped:
-                    k, v = stripped.split("=", 1)
-                    # Defensive: ignore lines from an already-corrupt file (a prior
-                    # multi-line value leaves continuation lines whose "key" is not a
-                    # valid env identifier) so the corruption is not propagated.
-                    if not k.isidentifier():
-                        continue
-                    existing[k] = v
+            existing, comments = _read_env_lines(env_path)
             # Merge: new values override existing for specified keys
             existing.update(values)
             for key in (remove or {}).get(relative, ()):  # rejected -> absent
+                if key in preserve:
+                    continue  # node-local: never deleted by the funnel
                 existing.pop(key, None)
             lines = comments + [""]
             for key in sorted(existing):
                 lines.append(f"{key}={existing[key]}")
             env_path.write_text("\n".join(lines) + "\n")
         else:
-            # Full regeneration (original behavior)
+            # Full regeneration (original behavior), except node-local keys
+            # already in the file are carried over rather than erased.
+            if env_path.exists() and preserve:
+                prior, _ = _read_env_lines(env_path)
+                for key in preserve:
+                    if key in prior and key not in values:
+                        values[key] = prior[key]
             lines_out = [header]
             for key in sorted(values):
                 lines_out.append(f"{key}={values[key]}\n")

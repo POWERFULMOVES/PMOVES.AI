@@ -13,6 +13,12 @@ Every node is a full copy of PMOVES.AI, so the map must cover the FULL
 repository + deployment-environment secret name set. The only exceptions are
 listed in ``EXCEPTIONS`` with a reason.
 
+The step builds the bundle from an explicit ALLOWLIST -- the env: keys it
+declares, via ``declared_env_keys()`` below -- not from ``os.environ`` minus a
+prefix skip list. The skip list both dropped a mapped secret
+(CI_GHCR_NAMESPACE, prefix ``CI``) and let runner variables (HOSTNAME, LABELS,
+``_``, proxies) into every node's bundle (#3188 review P2).
+
 This tool works on NAMES only. It never reads a secret value: ``gh secret list``
 returns names and timestamps, and ``--bundle`` reads only the ``label`` field of
 each bundle point.
@@ -36,8 +42,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Set, Tuple
 
-import yaml
-
 REPO_ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW = REPO_ROOT / ".github" / "workflows" / "sync-secrets-local.yml"
 STEP_NAME = "Sync Secrets to Local"
@@ -60,19 +64,24 @@ EXCEPTIONS: Dict[str, str] = {
     ),
 }
 
-# Mapped labels that the step's auto-discovery drops because they start with a
-# skip prefix. Listed so the gap stays visible; any NEW collision is a finding.
-KNOWN_PREFIX_COLLISIONS: Dict[str, str] = {
-    "CI_GHCR_NAMESPACE": (
-        "Starts with the 'CI' skip prefix, so the row is mapped but dropped before "
-        "the bundle is written. Narrowing the prefix is operator-pending."
-    ),
-}
+# Node-local topology (#3188 review P1). Registered in GitHub Prod, but a Prod
+# address is wrong on every node: each node resolves these to its OWN services
+# via its Tailscale name (pmoves/config/node_local_keys.yaml, the one
+# declaration; a test pins this tuple to it). The workflow must carry NO row
+# for them -- a row is reported as a finding.
+NODE_LOCAL_REASON = "node-local topology, resolved per node via TS_<NODE>"
+NODE_LOCAL: Tuple[str, ...] = (
+    "NATS_URL", "NATS_URL_TAILNET", "SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_URL",
+    "POSTGRES_HOSTNAME", "POSTGRES_DB", "OLLAMA_BASE_URL", "OPENAI_COMPATIBLE_BASE_URL",
+)
+EXCEPTIONS.update({name: NODE_LOCAL_REASON for name in NODE_LOCAL})
+
+# Declared env rows that are not bundle material: OUTPUT_FORMAT is a workflow
+# input that selects the log format.
+NON_SECRET_ROWS = frozenset({"OUTPUT_FORMAT"})
 
 _SECRET_REF = re.compile(r"secrets\.([A-Za-z_][A-Za-z0-9_]*)")
-_SKIP_PREFIXES = re.compile(r"skip_prefixes\s*=\s*\((.*?)\n\s*\)", re.S)
-_SKIP_EXACT = re.compile(r"skip_exact\s*=\s*\{(.*?)\}", re.S)
-_QUOTED = re.compile(r"'([^']*)'")
+_KEY_LINE = re.compile(r"^(\s*)([A-Za-z_][A-Za-z0-9_]*):")
 
 
 class CouldNotMeasure(RuntimeError):
@@ -84,8 +93,6 @@ class BundleMap:
     """Labels written to the bundle and the GitHub secrets each one reads."""
 
     rows: Dict[str, Set[str]]
-    skip_prefixes: Tuple[str, ...]
-    skip_exact: Set[str]
     environment: Optional[str]
 
     @property
@@ -100,14 +107,13 @@ class BundleMap:
 class Report:
     registered: Set[str]
     uncovered: List[str] = field(default_factory=list)
-    new_prefix_collisions: List[str] = field(default_factory=list)
-    known_prefix_collisions: List[str] = field(default_factory=list)
+    node_local_mapped: List[str] = field(default_factory=list)
     mapped_not_registered: List[str] = field(default_factory=list)
     not_in_bundle: Optional[List[str]] = None
 
     @property
     def findings(self) -> bool:
-        return bool(self.uncovered or self.new_prefix_collisions or self.not_in_bundle)
+        return bool(self.uncovered or self.node_local_mapped or self.not_in_bundle)
 
 
 def _find_step(doc: dict) -> Tuple[dict, dict]:
@@ -118,8 +124,55 @@ def _find_step(doc: dict) -> Tuple[dict, dict]:
     raise CouldNotMeasure(f"step {STEP_NAME!r} not found in {WORKFLOW.name}")
 
 
+def declared_env_keys(path: Path = WORKFLOW) -> Set[str]:
+    """Names declared in the step's ``env:`` block -- stdlib only.
+
+    The workflow step itself calls this to build its allowlist, and the runner
+    Python there is not guaranteed to have PyYAML. It reads key NAMES by
+    indentation only; ``test_secrets_bundle_map_gap`` pins it to the YAML
+    parse in ``load_map``. Raises ``CouldNotMeasure`` if the block is not
+    found or is empty, so a caller can fail closed.
+    """
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError as exc:
+        raise CouldNotMeasure(f"cannot read {path}: {exc}") from exc
+    marker = re.compile(r"^(\s*)-\s+name:\s*" + re.escape(STEP_NAME) + r"\s*$")
+    keys: Set[str] = set()
+    i = 0
+    while i < len(lines):
+        m = marker.match(lines[i])
+        i += 1
+        if not m:
+            continue
+        step_indent = len(m.group(1)) + 2
+        env_indent = key_indent = None
+        for line in lines[i:]:
+            if not line.strip() or line.lstrip().startswith("#"):
+                continue
+            km = _KEY_LINE.match(line)
+            indent = len(line) - len(line.lstrip())
+            if env_indent is None:
+                if indent < step_indent or line.lstrip().startswith("- "):
+                    break
+                if km and indent == step_indent and km.group(2) == "env":
+                    env_indent = indent
+                continue
+            if indent <= env_indent:
+                break
+            if km and (key_indent is None or indent == key_indent):
+                key_indent = indent
+                keys.add(km.group(2))
+        break
+    if not keys:
+        raise CouldNotMeasure(f"no env: keys found for step {STEP_NAME!r} in {path}")
+    return keys
+
+
 def load_map(path: Path = WORKFLOW) -> BundleMap:
-    """Parse the step's env: block, skip lists and job environment."""
+    """Parse the step's env: block and job environment."""
+    import yaml  # lazy: declared_env_keys() must stay stdlib-only
+
     try:
         text = path.read_text(encoding="utf-8")
         doc = yaml.safe_load(text)
@@ -128,17 +181,10 @@ def load_map(path: Path = WORKFLOW) -> BundleMap:
     job, step = _find_step(doc)
     env = step.get("env") or {}
     rows = {str(k): set(_SECRET_REF.findall(str(v))) for k, v in env.items()}
-    script = str(step.get("run") or "")
-    m = _SKIP_PREFIXES.search(script)
-    if not m:
-        raise CouldNotMeasure("skip_prefixes tuple not found in the step script")
-    prefixes = tuple(_QUOTED.findall(m.group(1)))
-    e = _SKIP_EXACT.search(script)
-    exact = set(_QUOTED.findall(e.group(1))) if e else set()
     environment = job.get("environment")
     if isinstance(environment, dict):
         environment = environment.get("name")
-    return BundleMap(rows, prefixes, exact, environment)
+    return BundleMap(rows, environment)
 
 
 def _gh_names(extra: Sequence[str]) -> Set[str]:
@@ -183,22 +229,14 @@ def bundle_labels(path: Path) -> Set[str]:
 def analyse(bmap: BundleMap, registered: Set[str], bundle: Optional[Set[str]] = None) -> Report:
     rep = Report(registered=registered)
     rep.uncovered = sorted(registered - bmap.sources - set(EXCEPTIONS))
-    # Only rows that read a secret matter; OUTPUT_FORMAT (a workflow input) is
-    # meant to be skipped.
-    colliding = sorted(
-        label
-        for label, refs in bmap.rows.items()
-        if refs and (label in bmap.skip_exact or label.startswith(bmap.skip_prefixes))
-    )
-    rep.known_prefix_collisions = [c for c in colliding if c in KNOWN_PREFIX_COLLISIONS]
-    rep.new_prefix_collisions = [c for c in colliding if c not in KNOWN_PREFIX_COLLISIONS]
+    rep.node_local_mapped = sorted(set(NODE_LOCAL) & set(bmap.rows))
     rep.mapped_not_registered = sorted(bmap.sources - registered)
     if bundle is not None:
         # A row whose source is registered should produce a bundle label.
         expected = {
             label
             for label, refs in bmap.rows.items()
-            if refs & registered and label not in KNOWN_PREFIX_COLLISIONS
+            if refs & registered
         }
         rep.not_in_bundle = sorted(expected - bundle)
     return rep
@@ -213,10 +251,9 @@ def _print(rep: Report, bmap: BundleMap, scopes: Dict[str, Set[str]], bundle: Op
     for n in rep.uncovered:
         print(f"  - {n}")
     print(f"exceptions honoured: {sorted(set(EXCEPTIONS) & rep.registered)}")
-    if rep.new_prefix_collisions:
-        print(f"NEW skip-prefix collisions (mapped but dropped): {rep.new_prefix_collisions}")
-    if rep.known_prefix_collisions:
-        print(f"known skip-prefix collisions (still dropped): {rep.known_prefix_collisions}")
+    if rep.node_local_mapped:
+        print(f"node-local labels carried by the map (must not be; {NODE_LOCAL_REASON}): "
+              f"{rep.node_local_mapped}")
     if rep.mapped_not_registered:
         print(f"info: map reads names GitHub does not hold ({len(rep.mapped_not_registered)}): "
               f"{rep.mapped_not_registered}")

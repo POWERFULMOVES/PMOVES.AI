@@ -34,6 +34,7 @@ from pmoves.tools._secrets_common import (
 # reimplemented, so the writer (--clear) and the reader (hydrate) can never
 # drift apart on the file's format.
 from pmoves.scripts.bootstrap_env import read_cleared_keys
+from pmoves.tools.node_local_keys import load_node_local
 
 DEFAULT_ENV_SHARED = PROJECT_ROOT / "env.shared"
 
@@ -87,6 +88,7 @@ def hydrate(
     dry_run: bool = False,
     force: bool = False,
     cleared_keys_path: Path | None = None,
+    node_local_keys: Sequence[str] | None = None,
 ) -> Dict[str, str]:
     """Overlay local.env values into env.shared for empty/placeholder keys.
 
@@ -103,15 +105,23 @@ def hydrate(
     stale local value on the next `secrets-funnel` run, silently undoing the
     clear. force= exists to push a rotated GH Secret over a stale local value,
     which is a different intent from "this key is supposed to be empty".
+
+    Node-local labels (pmoves/config/node_local_keys.yaml: NATS_URL,
+    SUPABASE_URL, POSTGRES_DB, ...) are likewise NEVER overlaid, not even under
+    force. They name this node's own services; a local.env value for one came
+    from somewhere else (GitHub Prod, a runner) and would repoint the node.
     """
     local_values = _parse_env(local_env_path)
     shared_values = _parse_env(env_shared_path)
     cleared = set(read_cleared_keys(cleared_keys_path))
+    node_local = set(load_node_local() if node_local_keys is None else node_local_keys)
 
     updates: Dict[str, str] = {}
     for key, local_val in sorted(local_values.items()):
         if key in cleared:
             continue  # Deliberately empty — see secrets_cleared.yaml
+        if key in node_local:
+            continue  # This node's topology, never another node's value
         if is_placeholder(local_val):
             continue  # Don't overlay empty local values
         current = shared_values.get(key, "")

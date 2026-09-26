@@ -14,26 +14,34 @@ e.g. in CI with the default token. Names only -- no value is ever read.
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
+import sys
+import textwrap
 
 import pytest
 
 from pmoves.tools import secrets_bundle_map_gap as gap
 
 # Rows added 2026-09-26 (plus #2888's COMPOSIO_API_KEY). Deleting any of them
-# re-opens the gap for that name on every node.
+# re-opens the gap for that name on every node. The eight node-local address
+# labels are deliberately NOT here: see test_node_local_labels_are_not_mapped.
 ROWS_ADDED = {
     "ACTIVEPIECES_API_KEY", "CF_AI_GATEWAY_TOKEN", "CF_SSH_PUB", "CI_GHCR_NAMESPACE",
     "GHCR_APP_CLIENT_ID", "GHCR_APP_SEC", "GH_DARKXSIDE", "GH_PAT_PUBLISH",
-    "N8N_API_KEY", "N8N_RUNNERS_AUTH_TOKEN", "NATS_URL", "NATS_URL_TAILNET",
+    "N8N_API_KEY", "N8N_RUNNERS_AUTH_TOKEN",
     "NEXT_PUBLIC_BACKEND_API_KEY", "NEXT_PUBLIC_SUPABASE_ANON_KEY",
-    "NEXT_PUBLIC_SUPABASE_URL", "NGC_KEY", "OLLAMA_BASE_URL",
-    "OPENAI_COMPATIBLE_BASE_URL", "POSTGRES_DB", "POSTGRES_HOSTNAME",
+    "NGC_KEY",
     "SERVICE_PASSWORD_ADMIN", "SERVICE_PASSWORD_POSTGRES", "SERVICE_USER_ADMIN",
-    "SUPABASE_KEY", "SUPABASE_URL", "SURREAL_PASS", "SURREAL_USER",
+    "SUPABASE_KEY", "SURREAL_PASS", "SURREAL_USER",
     "TAILSCALE_WEBHOOK", "TELEGRAM_BOT_NAME", "TS_TAILNET",
     "COMPOSIO_API_KEY",
+}
+
+NODE_LOCAL = {
+    "NATS_URL", "NATS_URL_TAILNET", "SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_URL",
+    "POSTGRES_HOSTNAME", "POSTGRES_DB", "OLLAMA_BASE_URL", "OPENAI_COMPATIBLE_BASE_URL",
 }
 
 
@@ -45,9 +53,87 @@ def bmap():
 def test_map_parses_from_the_real_workflow(bmap):
     # Guards the parser: a silently empty map would make every check vacuous.
     assert len(bmap.rows) >= 130, len(bmap.rows)
-    assert len(bmap.sources) >= 130, len(bmap.sources)
-    assert bmap.skip_prefixes, "skip_prefixes not parsed"
+    assert len(bmap.sources) >= 125, len(bmap.sources)
     assert (bmap.environment or "").lower() == "prod"
+
+
+def test_stdlib_allowlist_parser_matches_yaml(bmap):
+    # The workflow step builds its allowlist with declared_env_keys() (runner
+    # Python may lack PyYAML). It must agree with the YAML parse exactly.
+    assert gap.declared_env_keys() == set(bmap.rows)
+
+
+def test_node_local_labels_are_not_mapped(bmap):
+    # #3188 review P1: Prod's addresses must not ship to any node.
+    assert set(gap.NODE_LOCAL) == NODE_LOCAL
+    assert not NODE_LOCAL & set(bmap.rows), sorted(NODE_LOCAL & set(bmap.rows))
+    for name in NODE_LOCAL:
+        assert gap.EXCEPTIONS[name] == gap.NODE_LOCAL_REASON
+    rep = gap.analyse(bmap, NODE_LOCAL | {"COMPOSIO_API_KEY"})
+    assert rep.uncovered == [] and not rep.findings
+
+
+def test_node_local_row_is_a_finding(bmap):
+    fake = gap.BundleMap(dict(bmap.rows, NATS_URL={"NATS_URL"}), bmap.environment)
+    rep = gap.analyse(fake, {"NATS_URL"})
+    assert rep.node_local_mapped == ["NATS_URL"] and rep.findings
+
+
+def test_node_local_tuple_matches_the_declaration():
+    from pmoves.tools.node_local_keys import load_node_local
+
+    assert set(load_node_local()) == set(gap.NODE_LOCAL)
+
+
+def test_builder_is_an_allowlist_not_an_environ_walk():
+    text = gap.WORKFLOW.read_text(encoding="utf-8")
+    assert "skip_prefixes" not in text
+    assert "for name in sorted(os.environ)" not in text
+    assert "declared_env_keys(workflow) - NON_SECRET_ROWS" in text
+
+
+def _builder_script() -> str:
+    import yaml
+
+    doc = yaml.safe_load(gap.WORKFLOW.read_text(encoding="utf-8"))
+    _, step = gap._find_step(doc)
+    body = step["run"].split("<< 'PYTHON_SCRIPT'\n", 1)[1].rsplit("PYTHON_SCRIPT", 1)[0]
+    return textwrap.dedent(body)
+
+
+def test_builder_bundles_declared_rows_only(tmp_path):
+    """Run the step's real Python in a scratch workspace with fake values.
+
+    Declared rows land (including CI_GHCR_NAMESPACE, which the old 'CI' skip
+    prefix dropped); runner variables and node-local names do not.
+    """
+    wf = tmp_path / ".github" / "workflows" / "sync-secrets-local.yml"
+    wf.parent.mkdir(parents=True)
+    wf.write_text(gap.WORKFLOW.read_text(encoding="utf-8"), encoding="utf-8")
+    script = tmp_path / "builder.py"
+    script.write_text(_builder_script(), encoding="utf-8")
+    env = {
+        "PATH": os.environ.get("PATH", ""),
+        "PYTHONPATH": str(gap.REPO_ROOT),
+        "GITHUB_WORKSPACE": str(tmp_path),
+        "COMPOSIO_API_KEY": "fake-composio-value",
+        "CI_GHCR_NAMESPACE": "fake-namespace",
+        "ANTHROPIC_API_KEY": "",
+        # Runner leakage the old os.environ walk let through:
+        "HOSTNAME": "runner-container-id",
+        "LABELS": "self-hosted,linux",
+        "_": "/usr/bin/python3",
+        "http_proxy": "http://fake-proxy",
+        # Node-local: no row, so never bundled even when present:
+        "SUPABASE_URL": "http://fake-prod-supabase",
+    }
+    out = subprocess.run([sys.executable, str(script)], env=env, cwd=tmp_path,
+                         capture_output=True, text=True, timeout=120)
+    assert out.returncode == 0, out.stderr[-2000:]
+    bundled = set(gap.bundle_labels(tmp_path / "pmoves" / "data" / "chit" / "env.cgp.json"))
+    assert bundled == {"COMPOSIO_API_KEY", "CI_GHCR_NAMESPACE"}, bundled
+    local_env = (tmp_path / "pmoves" / "secrets" / "local.env").read_text()
+    assert {ln.split("=", 1)[0] for ln in local_env.splitlines()} == bundled
 
 
 def test_rows_added_are_present_and_self_named(bmap):
@@ -65,15 +151,6 @@ def test_anthropic_label_kept_but_reads_no_secret(bmap):
     assert "ANTHROPIC_API_KEY" in bmap.rows
     assert bmap.rows["ANTHROPIC_API_KEY"] == set()
     assert "ANTHROPIC_API_KEY" in gap.EXCEPTIONS
-
-
-def test_no_new_skip_prefix_collisions(bmap):
-    rep = gap.analyse(bmap, bmap.sources)
-    assert rep.new_prefix_collisions == [], (
-        "a mapped secret row is dropped by the step's skip_prefixes: "
-        f"{rep.new_prefix_collisions}"
-    )
-    assert rep.known_prefix_collisions == ["CI_GHCR_NAMESPACE"]
 
 
 def test_analyse_flags_unmapped_and_honours_exceptions(bmap):
@@ -125,6 +202,9 @@ def test_live_full_coverage(bmap):
     except gap.CouldNotMeasure as exc:
         pytest.skip(f"COULD-NOT-MEASURE: {exc}")
     registered = set().union(*scopes.values())
+    if not registered:
+        # An empty listing must not read as "fully covered".
+        pytest.skip("COULD-NOT-MEASURE: gh listed zero secret names")
     rep = gap.analyse(bmap, registered)
     sizes = {k: len(v) for k, v in scopes.items()}
     assert rep.uncovered == [], f"inputs {sizes}; unmapped GitHub secrets: {rep.uncovered}"

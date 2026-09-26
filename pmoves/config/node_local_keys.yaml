@@ -1,0 +1,91 @@
+# Node-local topology labels: NEVER funnelled from the CHIT bundle.
+#
+# Every PMOVES node is a full copy of the stack and runs its OWN services.
+# Operator direction, 2026-09-26: "there are tailscale names for each node it
+# should point to TS_B850". The labels below are addresses (or, for POSTGRES_DB,
+# a database name) of THIS node's services, not credentials, so a value that
+# arrives in the bundle (GitHub Prod, or another node's chit-export) is wrong by
+# construction. PR #3188 first mapped them into the bundle; review P1 on that PR
+# showed one secrets-funnel would then point Knuckles' agents at Prod NATS.
+#
+# Readers (one declaration, three consumers):
+#   pmoves/tools/secrets_sync.py            never writes these from the bundle
+#       and never deletes them. When `template` is set it renders it for this
+#       node; if any placeholder cannot be resolved the key is NOT written, the
+#       existing tier value is left untouched, and a WARNING names the key.
+#   pmoves/tools/secrets_local_hydrate.py   never overlays them, even --force.
+#   pmoves/tools/secrets_bundle_map_gap.py  lists them in EXCEPTIONS (and a
+#       test pins that list to this file).
+#
+# Why this file and not `node_local: true` on each entry in
+# pmoves/chit/secrets_manifest.yaml: that manifest is a zero-access path for
+# agents (damage-control, no Known Road), so an agent cannot add the attribute.
+# Moving these declarations into the manifest is an operator step.
+#
+# Template grammar: `${VAR}` placeholders only. NEVER a literal address, IP,
+# hostname-to-IP mapping, or credential (public repo; no-topology-in-commits).
+#   ${TS_SELF}  this node's Tailscale address. Resolved at sync time ON the node
+#               by pmoves/tools/node_local_keys.py: node identity
+#               (pmoves/tools/node_identity.py) -> the node's tailnet hostname
+#               (`reach` in pmoves/configs/node-vocabulary.yaml) -> TS_<NODE>
+#               via the case table in pmoves/scripts/tailscale-node-ips.sh ->
+#               value from the environment or by sourcing that same helper.
+#               No second `tailscale status` parser exists.
+#   ${OTHER}    any other name resolves from the decoded bundle, then the
+#               process environment. Empty counts as unresolved.
+#
+# `template: null` means node-local with NO rendering: the funnel leaves the key
+# alone. That is used wherever the repo does not prove a reachable port/scheme
+# for a tailnet address. `evidence` records what was measured (repo defaults
+# only, never guessed).
+keys:
+  NATS_URL:
+    template: "nats://${NATS_USER}:${NATS_PASSWORD}@${TS_SELF}:4222"
+    evidence: >-
+      Scheme and port from the compose client default
+      `${NATS_URL:-nats://<user>:<pass>@nats:4222}` (8 sites). The server
+      publishes `${NATS_BIND:-0.0.0.0}:${NATS_PORT:-4222}:4222`
+      (docker-compose.core.yml), so the port is reachable on the tailnet
+      address by default. The server always starts with --user/--pass
+      (${NATS_USER}/${NATS_PASSWORD}), so a URL without credentials would be an
+      Authorization Violation; the credentials are referenced by NAME only.
+  NATS_URL_TAILNET:
+    template: null
+    evidence: >-
+      No compose default of its own, and no node-side consumer: the only reader
+      is .github/workflows/branch-trail-emit.yml, where it is the CI runner's
+      publish target. Whether that target is a shared hub is not declared
+      anywhere, so none is invented here.
+  SUPABASE_URL:
+    template: null
+    evidence: >-
+      Client default `${SUPABASE_URL:-http://supabase-kong:8000}` (13 sites),
+      but Kong publishes `${KONG_PROXY_BIND:-127.0.0.1}:...:8000`: loopback by
+      default, so `http://${TS_SELF}:8000` would be refused unless the node sets
+      KONG_PROXY_BIND. Rendering it would look configured and be broken.
+  NEXT_PUBLIC_SUPABASE_URL:
+    template: null
+    evidence: >-
+      Default `${NEXT_PUBLIC_SUPABASE_URL:-http://localhost:8000}`
+      (docker-compose.ui.yml); same loopback Kong binding as SUPABASE_URL.
+  POSTGRES_HOSTNAME:
+    template: null
+    evidence: No default anywhere in compose or code; no port to take.
+  OLLAMA_BASE_URL:
+    template: null
+    evidence: >-
+      Client default `${OLLAMA_BASE_URL:-http://pmoves-ollama:11434}` is the
+      CONTAINER port; the host publishes `${OLLAMA_HOST_PORT:-11435}`
+      (docker-compose.media.yml, docker-compose.z890.yml) while spark-sidecar
+      binds 127.0.0.1:11434. The tailnet port is ambiguous, so not guessed.
+  OPENAI_COMPATIBLE_BASE_URL:
+    template: null
+    evidence: >-
+      Default is empty (`os.getenv("OPENAI_COMPATIBLE_BASE_URL", "")` in
+      services/common/config.py; services/common/tensorzero.py derives it).
+  POSTGRES_DB:
+    template: null
+    evidence: >-
+      A database NAME, not an address. Defaults differ by stack
+      (`${POSTGRES_DB:-${SUPABASE_DB_NAME:-postgres}}` vs `${POSTGRES_DB:-pmoves}`),
+      so it is node-local and never written or deleted by the funnel.
