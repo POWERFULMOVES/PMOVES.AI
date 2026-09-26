@@ -5605,9 +5605,18 @@ neo4j-restore: ## Restore Neo4j from backup (usage: make neo4j-restore BACKUP=ba
 	@# keeps running on pmoves_neo4j-data, the volume rm then fails silently, and a
 	@# compose Neo4j is started beside it. Migrate it under compose first (the
 	@# Phase 1b runbook in PR ops/knuckles-neo4j-from-fork).
+	@# Only an explicit "No such container" means absent. Any other inspect
+	@# failure (daemon down, permission, wrong context) is could-not-measure (3),
+	@# never "absent": treating an error as absent is how a guard waves through
+	@# exactly the case it exists to stop.
 	@name=$$($(PYTHON) $(CURDIR)/scripts/neo4j_container.py) || exit 3; \
-	if docker inspect --type container "$$name" >/dev/null 2>&1 && \
-	   [ -z "$$(docker inspect --type container -f '{{index .Config.Labels "com.docker.compose.project"}}' "$$name")" ]; then \
+	label=$$(docker inspect --type container -f '{{index .Config.Labels "com.docker.compose.project"}}' "$$name" 2>&1); rc=$$?; \
+	if [ $$rc -ne 0 ]; then \
+		if printf '%s' "$$label" | grep -qi 'no such container'; then :; else \
+			echo "❌ could not inspect container '$$name' (not a clean 'no such container'): $$label"; \
+			exit 3; \
+		fi; \
+	elif [ -z "$$label" ]; then \
 		echo "❌ '$$name' exists but is not managed by compose; refusing to restore over it."; \
 		echo "   Bring Neo4j under compose first, then re-run neo4j-restore."; \
 		exit 1; \
@@ -5617,13 +5626,19 @@ neo4j-restore: ## Restore Neo4j from backup (usage: make neo4j-restore BACKUP=ba
 	@echo "Press Ctrl+C to cancel, or wait 5 seconds to continue..."
 	@sleep 5
 	@$(MAKE) --no-print-directory neo4j-local-down
-	@# Absent is fine (nothing to clear). Present but not removable fails CLOSED:
-	@# this used to swallow the failure (2>/dev/null || true) and go on to start
-	@# and load over a volume another Neo4j still held.
-	@if docker volume inspect pmoves_neo4j-data >/dev/null 2>&1; then \
+	@# Absent (an explicit "no such volume") is fine: nothing to clear. Present
+	@# but not removable fails CLOSED (1): this used to swallow the failure
+	@# (2>/dev/null || true) and go on to start and load over a volume another
+	@# Neo4j still held. Any OTHER inspect failure is could-not-measure (3), so an
+	@# error is never read as "absent" and the removal still refuses on every error.
+	@err=$$(docker volume inspect pmoves_neo4j-data 2>&1 >/dev/null); rc=$$?; \
+	if [ $$rc -eq 0 ]; then \
 		docker volume rm pmoves_neo4j-data || { echo "❌ could not remove pmoves_neo4j-data (still in use?): refusing to start and load over a volume another Neo4j may hold."; exit 1; }; \
-	else \
+	elif printf '%s' "$$err" | grep -qi 'no such volume'; then \
 		echo "→ pmoves_neo4j-data absent; nothing to remove."; \
+	else \
+		echo "❌ could not determine whether pmoves_neo4j-data exists: $$err"; \
+		exit 3; \
 	fi
 	@echo "→ Starting fresh Neo4j..."
 	@$(MAKE) --no-print-directory neo4j-local-up
