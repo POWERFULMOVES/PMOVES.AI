@@ -39,6 +39,7 @@ def _fresh_guard() -> ModuleType:
 guard = _fresh_guard()
 
 BLOCKED = [
+    # compose without an argv-named throwaway project
     ["docker", "compose", "down"],
     ["docker", "compose", "up", "-d"],
     ["docker", "compose", "-p", "pmoves", "down"],
@@ -49,35 +50,69 @@ BLOCKED = [
     ["docker", "compose", "-p", "pmoves-test-0123abcd9", "down"],
     ["docker", "compose", "-f", "docker-compose.yml", "restart"],
     ["docker", "compose", "frobnicate"],  # unknown subcommand => mutating
+    ["docker", "compose", "exec", "supabase-db", "psql"],  # not read-only
+    ["docker", "compose", "run", "--rm", "worker"],
+    ["docker", "compose", "cp", "x:/a", "/b"],
+    ["docker", "compose", "pull"],
+    ["docker", "compose", "build"],
     ["docker", "--context", "default", "compose", "down"],
     ["/usr/bin/docker", "compose", "kill"],
     ["docker-compose", "down"],
+    # down -v is refused even for a throwaway project
+    ["docker", "compose", "-p", T, "down", "-v"],
+    ["docker", "compose", "-p", T, "down", "--volumes"],
+    ["docker", "compose", "-p", T, "down", "--remove-orphans", "-tv"],
+    ["docker-compose", "-p", T, "down", "--volumes=true"],
+    # wrappers
     ["sudo", "docker", "compose", "stop"],
+    ["sudo", "-u", "root", "docker", "compose", "down"],
     ["env", "COMPOSE_PROJECT_NAME=" + T, "docker", "compose", "down"],  # env is not argv
+    ["env", "-u", "X", "docker", "compose", "stop"],
+    ["nice", "-n", "5", "docker", "compose", "down"],
+    ["timeout", "30", "docker", "compose", "down"],
+    ["timeout", "-s", "KILL", "30", "docker", "rm", "-f", "x"],
+    # shell -c payloads
     ["bash", "-c", "cd pmoves && docker compose down"],
+    ["bash", "-lc", "docker compose down"],
+    ["bash", "-o", "pipefail", "-c", "docker compose down"],
+    ["/bin/sh", "-c", "docker rm -f pmoves-nats-1"],
+    # plain docker outside the read-only allowlist
     ["docker", "rm", "-f", "pmoves-agent-zero-1"],
+    ["docker", "rm", "-f", f"{T}-web-1"],  # no test-name exception any more
     ["docker", "stop", "supabase-db"],
     ["docker", "kill", "pmoves-nats-1"],
+    ["docker", "pause", "pmoves-nats-1"],
+    ["docker", "update", "--restart=no", "pmoves-nats-1"],
+    ["docker", "rmi", "pmoves/agent-zero"],
+    ["docker", "exec", "supabase-db", "pg_isready"],  # exec is not read-only
     ["docker", "container", "rm", "pmoves-nats-1"],
     ["docker", "network", "rm", "pmoves_app"],
+    ["docker", "network", "prune", "-f"],
     ["docker", "volume", "rm", "pmoves_supabase-data"],
     ["docker", "volume", "prune", "-f"],
-    ["docker", "container", "prune", "-f"],
+    ["docker", "image", "prune", "-af"],
+    ["docker", "builder", "prune", "-af"],
     ["docker", "system", "prune", "-af"],
-    ["docker", "rm", "-f", f"{T}-web-1", "pmoves-agent-zero-1"],  # one live target poisons the call
-    ["docker", "stop", "-t", "10", f"{T}-web-1"],  # unknown value-option: fail-closed
+    # shell strings
     "docker compose down",
     "cd pmoves; docker compose down --remove-orphans",
     "true && docker-compose rm -f",
+    "sudo docker compose down",
+    "bash -c 'docker compose down'",
     b"docker compose down",
 ]
 
 ALLOWED = [
     ["docker", "info"],
+    ["docker", "--version"],
     ["docker", "ps", "--format", "{{.Names}}"],
     ["docker", "inspect", "pmoves-nats-1"],
-    ["docker", "exec", "supabase-db", "pg_isready"],
-    ["docker", "network", "ls"],
+    ["docker", "images"],
+    ["docker", "logs", "pmoves-nats-1"],
+    ["docker", "network", "ls", "--filter", "name=pmoves"],
+    ["docker", "network", "inspect", "pmoves_app"],
+    ["docker", "volume", "ls"],
+    ["docker", "volume", "inspect", "pmoves_supabase-data"],
     ["docker", "compose", "config"],
     ["docker", "compose", "ps"],
     ["docker", "compose", "-f", "docker-compose.yml", "config", "--services"],
@@ -86,10 +121,20 @@ ALLOWED = [
     ["docker", "compose", "--project-name", T, "up", "-d"],
     ["docker", "compose", f"--project-name={T}", "stop"],
     ["docker-compose", "-p", T, "down"],
-    ["docker", "rm", "-f", f"{T}-web-1"],
+    ["sudo", "docker", "ps"],
     ["git", "status"],
     ["grep", "-n", "docker", "Makefile"],
     ["python3", "-c", "print(1)"],
+    ["python3", "-c", "print('docker compose down')"],  # python -c is not a shell
+    ["bash", "scripts/some_script.sh", "docker compose down"],  # a script arg, not a -c payload
+    # false positives the review called out: text that merely mentions docker
+    ["git", "commit", "-m", "fix docker compose down"],
+    "git commit -m 'fix docker compose down'",
+    ["rg", "-n", "docker compose down", "Makefile"],
+    "rg -n 'docker compose down' Makefile",
+    ["grep", "-rn", "docker", "rm", "."],
+    "grep -rn docker rm .",
+    "echo docker compose down",
     "echo hello",
     f"docker compose -p {T} down",
 ]
@@ -100,7 +145,7 @@ def test_blocked(argv):
     assert guard.check_command(argv), f"should be refused: {argv!r}"
 
 
-@pytest.mark.parametrize("argv", ALLOWED, ids=lambda a: a if isinstance(a, str) else " ".join(a))
+@pytest.mark.parametrize("argv", ALLOWED, ids=lambda a: a if isinstance(a, str) else " ".join(map(str, a)))
 def test_allowed(argv):
     assert guard.check_command(argv) is None, f"should be allowed: {argv!r} -> {guard.check_command(argv)}"
 

@@ -37,9 +37,11 @@ for _compose_tag in ("!override", "!reset"):
 # ---------------------------------------------------------------------------
 # Destructive-docker guard (incident 2026-09-26). Installed at conftest import,
 # i.e. before any test module under pmoves/tests is imported, so no test can
-# spawn `docker compose down` (or rm/stop/kill/prune) against a project that is
-# not an argv-named `pmoves-test-<8 hex>` throwaway. See the module docstring
-# for exactly what it covers and what it does not.
+# spawn a mutating `docker compose` call against a project that is not an
+# argv-named `pmoves-test-<8 hex>` throwaway, `down -v` at all, or any plain
+# docker verb outside a read-only allowlist. The wrapper is process-global; the
+# session-stop hook below is directory-scoped. See the module docstring for
+# exactly what it covers and what it does not.
 # ---------------------------------------------------------------------------
 DOCKER_GUARD_MODULE = "pmoves_tests_destructive_docker_guard"
 
