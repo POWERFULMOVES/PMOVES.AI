@@ -173,6 +173,9 @@ fi
 CIPHER_TOOL="$ROOT/pmoves/tools/cipher_preflight.py"
 if [ -f "$CIPHER_TOOL" ] && [ ${#IDENT_PY[@]} -gt 0 ]; then
   CIPHER_OUT=""
+  # Absolute bound for the auth-log rule-out below: a relative --since is
+  # evaluated when the command is RUN, possibly long after this probe.
+  CIPHER_PROBE_SINCE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   set +e
   CIPHER_OUT="$("${IDENT_PY[@]}" "$CIPHER_TOOL" 2>&1)"
   cipher_rc=$?
@@ -203,11 +206,11 @@ if [ -f "$CIPHER_TOOL" ] && [ ${#IDENT_PY[@]} -gt 0 ]; then
       case "$CIPHER_OUT" in
         *"cipher UNAUTHORIZED"*)
           echo "[claude-pmoves] cipher=UNAUTHORIZED (exit 1) — service is UP, credential not accepted" >&2
-          pm_ident_append "Cipher ANSWERED this session but refused the credential (preflight exit 1, verdict unauthorized), so persistent memory is not usable right now. The service is UP -- this is an access problem, not an outage, so do NOT report Cipher as down. A 401 is NOT proof the token is revoked: a Cipher shim older than the lookup-failure fix also answers 401 when its OWN Supabase service key is refused, and every agent on the node then fails at once. Before asking for a re-mint, check \`docker logs pmoves-cipher-api-1 2>&1 | grep 'token lookup returned'\` -- any hit means the token was never judged and the fix is the service key, not the token. Use the file-based auto-memory directory meanwhile and say which of the two it is. Remedy when the token itself is wrong: bind CIPHER_API_TOKEN into the roster. Recovery: pmoves/docs/operations/MCP_TOOLKIT.md."
+          pm_ident_append "Cipher ANSWERED this session but refused the credential (preflight exit 1, verdict unauthorized), so persistent memory is not usable right now. The service is UP -- this is an access problem, not an outage, so do NOT report Cipher as down. A 401 is NOT proof the token is revoked: a Cipher shim older than the lookup-failure fix also answers 401 when its OWN Supabase service key is missing or refused or its lookup times out, and every agent on the node then fails at once. Before asking for a re-mint, check \`docker logs --since ${CIPHER_PROBE_SINCE} pmoves-cipher-api-1 2>&1 | grep pmoves-auth\` -- any hit means the token was never judged and the fix is the backend, not the token. Use the file-based auto-memory directory meanwhile and say which of the two it is. Remedy when the token itself is wrong: bind CIPHER_API_TOKEN into the roster. Recovery: pmoves/docs/operations/MCP_TOOLKIT.md."
           ;;
         *)
           echo "[claude-pmoves] cipher=ANSWERED-UNUSABLE (exit 1) — something is listening; see the status below" >&2
-          pm_ident_append "Cipher ANSWERED this session but not usably (preflight exit 1, and NOT a 401/403 -- read the status printed above, e.g. an HTTP error or a refused redirect), so persistent memory is not usable right now. Something IS listening on that endpoint, so do NOT report Cipher as simply down, and do NOT assume the credential is at fault -- the preflight would have said unauthorized if it were. An HTTP 503 in particular means Cipher could not LOOK the token up (backend fault, usually a service key Kong refuses): the token was not judged, so do not ask for a re-mint. Use the file-based auto-memory directory meanwhile and say which of the two it is. Recovery: pmoves/docs/operations/MCP_TOOLKIT.md."
+          pm_ident_append "Cipher ANSWERED this session but not usably (preflight exit 1, and NOT a 401/403 -- read the status printed above, e.g. an HTTP error or a refused redirect), so persistent memory is not usable right now. Something IS listening on that endpoint, so do NOT report Cipher as simply down, and do NOT assume the credential is at fault -- the preflight would have said unauthorized if it were. An HTTP 503 in particular means the token was not judged (a proxy, Kong, startup, or after the fork fix a lookup backend failure), so do not ask for a re-mint. Use the file-based auto-memory directory meanwhile and say which of the two it is. Recovery: pmoves/docs/operations/MCP_TOOLKIT.md."
           ;;
       esac
       printf '%s\n' "$CIPHER_OUT" >&2

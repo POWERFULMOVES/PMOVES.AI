@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import re
 import socket
 import sys
 import urllib.error
@@ -50,6 +51,9 @@ def _no_real_env_file(tmp_path_factory, monkeypatch):
     """
     absent = tmp_path_factory.mktemp("no-env") / "env.shared.absent"
     monkeypatch.setenv("PMOVES_ENV_SHARED", str(absent))
+    # Same class: an operator shell that exports TS_Z890 expanded the
+    # `${TS_Z890}` roster entry and sent two tests to the network guard.
+    monkeypatch.delenv("TS_Z890", raising=False)
 
 
 def _env_file(tmp_path: Path, body: str) -> Path:
@@ -1090,18 +1094,73 @@ def test_expanded_url_never_reaches_the_printed_row(monkeypatch):
 
 def test_a_503_says_the_credential_was_not_judged(monkeypatch, tmp_path, capsys):
     err = _row_text(monkeypatch, tmp_path, capsys, 503)
-    assert "NOT judged" in err
-    assert "Do not re-mint" in err
+    assert "not judged" in err
+    assert "do not re-mint" in err
     assert "revoked" not in err.lower()
     assert "stale or wrong" not in err
 
 
+def test_a_503_does_not_claim_which_layer_failed(monkeypatch, tmp_path, capsys):
+    """Until the pin carries the fork fix, the shim's auth never emits 503.
+
+    So a 503 today is a proxy, Kong or a starting container; the banner must
+    not assert a token-lookup backend failure it cannot know about.
+    """
+    err = _row_text(monkeypatch, tmp_path, capsys, 503)
+    assert "backend failed" not in err
+    assert "could not look the token up" not in err
+    assert "a proxy, Kong, startup" in err
+
+
 def test_a_401_does_not_assert_the_token_is_bad(monkeypatch, tmp_path, capsys):
-    """A 401 from an older shim can be the shim's own key being refused."""
+    """A 401 from an older shim can be the shim's own backend failing."""
     err = _row_text(monkeypatch, tmp_path, capsys, 401)
     assert "cipher UNAUTHORIZED" in err
     assert "stale or wrong" not in err
-    assert "token lookup returned" in err, "the backend rule-out step must be named"
+    assert "grep pmoves-auth" in err, "the backend rule-out step must be named"
+
+
+_LOG_CMD = re.compile(
+    r"docker logs (?:--since (\S+) )?pmoves-cipher-api-1 2>&1 \| grep "
+    r"(?:'([^']+)'|([^`'\s]+))"
+)
+
+
+def _grep_pattern(m: "re.Match[str]") -> str:
+    """The pattern the printed command greps for, quoted or not."""
+    return m.group(2) or m.group(3)
+
+# The three backend-failure lines auth.ts logs at pin 36b28d0f (L56, L78, L89),
+# each answered there with the same 401 a revoked token gets. Copied verbatim.
+PIN_BACKEND_FAILURE_LOGS = [
+    "pmoves-auth: SUPABASE_SERVICE_KEY not set — cannot resolve per-agent tokens",
+    "pmoves-auth: Supabase token lookup returned 401",
+    "pmoves-auth: token resolution failed — TimeoutError: The operation was aborted due to timeout",
+]
+
+
+@pytest.mark.parametrize("status", [401, 503])
+@pytest.mark.parametrize("log_line", PIN_BACKEND_FAILURE_LOGS)
+def test_the_rule_out_command_catches_every_backend_failure(
+    monkeypatch, tmp_path, capsys, status, log_line
+):
+    err = _row_text(monkeypatch, tmp_path, capsys, status)
+    m = _LOG_CMD.search(err)
+    assert m, "no docker-logs rule-out command in the output"
+    assert re.search(_grep_pattern(m), log_line), f"grep {_grep_pattern(m)!r} misses {log_line!r}"
+
+
+@pytest.mark.parametrize("status", [401, 503])
+def test_the_rule_out_command_is_bounded_by_the_probe_start(
+    monkeypatch, tmp_path, capsys, status
+):
+    """An old incident's log line must not explain today's 401."""
+    err = _row_text(monkeypatch, tmp_path, capsys, status)
+    m = _LOG_CMD.search(err)
+    assert m and m.group(1), "the log check must carry --since"
+    assert re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ", m.group(1)), (
+        "an ABSOLUTE bound; a relative one is evaluated when the command is run"
+    )
 
 
 def test_a_503_next_to_a_401_is_still_reported(monkeypatch, tmp_path, capsys):
@@ -1129,12 +1188,17 @@ def test_a_503_next_to_a_401_is_still_reported(monkeypatch, tmp_path, capsys):
     assert cp.main(["--roster", str(roster)]) == 1
     err = capsys.readouterr().err
     assert "cipher UNAUTHORIZED" in err
-    assert "NOT judged" in err
+    assert "not judged" in err
     assert SENTINEL not in err
 
 
 def test_the_launcher_does_not_equate_401_with_revocation():
     text = (REPO_ROOT / "pmoves" / "scripts" / "claude-pmoves.sh").read_text()
     assert "A 401 is NOT proof the token is revoked" in text
-    assert "token lookup returned" in text
     assert "HTTP 503 in particular" in text
+    m = _LOG_CMD.search(text.replace("\\`", "`"))
+    assert m, "the launcher must name the log rule-out command"
+    assert m.group(1) == "${CIPHER_PROBE_SINCE}", "bounded by the probe start"
+    assert 'CIPHER_PROBE_SINCE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"' in text
+    for line in PIN_BACKEND_FAILURE_LOGS:
+        assert re.search(_grep_pattern(m), line)
