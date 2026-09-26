@@ -84,16 +84,18 @@ def _run(tmp_path: Path, script: str, running: str) -> tuple[int, list[list[str]
 
 
 def _neo4j_mutations(calls: list[list[str]]) -> list[list[str]]:
-    """docker calls that would remove, start or compose-up a Neo4j."""
+    """docker calls that would remove, (re)start or compose-up a Neo4j, or drop a volume."""
     bad = []
     for c in calls:
         if not c:
             continue
-        if c[0] == "rm" and any("neo4j" in a for a in c):
+        verb = c[1:2] if c[0] == "container" else c[:1]   # `docker container rm` == `docker rm`
+        touches_neo4j = any("neo4j" in a for a in c)
+        if verb and verb[0] in ("rm", "run", "start", "restart", "create") and touches_neo4j:
             bad.append(c)
-        elif c[0] == "run" and any("neo4j" in a for a in c):
+        elif c[0] == "volume" and c[1:2] == ["rm"]:
             bad.append(c)
-        elif c[0] == "compose" and "up" in c:
+        elif c[0] == "compose" and any(v in c for v in ("up", "start", "restart", "run", "create")):
             bad.append(c)
     return bad
 
@@ -181,15 +183,39 @@ def test_make_neo4j_restore_refuses_over_an_out_of_compose_container():
 
 
 @pytest.mark.skipif(shutil.which("make") is None, reason="make not installed")
-def test_make_n_neo4j_backup_renders_no_start():
-    """Dry run of the real target (it has no nested make, so -n executes nothing)."""
+def test_make_n_neo4j_backup_renders_no_start(tmp_path):
+    """Dry run of the real target, with the stub docker FIRST on PATH.
+
+    A line containing $(MAKE) executes even under -n -- that is how the OLD
+    recipe ran for real in this suite's failing-before control. The target has
+    no nested make today, but if one comes back, every docker call it makes
+    lands in the stub's log instead of the live daemon, and is asserted on.
+    """
+    _tree(tmp_path, "backup-neo4j.sh")  # only for its bin/ of stubs
+    log = tmp_path / "docker.log"
+    env = dict(os.environ)
+    env.update(PATH=f"{tmp_path / 'bin'}:{env['PATH']}", STUB_LOG=str(log), FAKE_RUNNING="")
     proc = subprocess.run(
         ["make", "-s", "-n", "-C", str(PMOVES), "neo4j-backup"],
-        capture_output=True, text=True, timeout=120,
+        capture_output=True, text=True, timeout=120, env=env,
     )
     assert proc.returncode == 0, proc.stderr[-400:]
     assert "neo4j-local-up" not in proc.stdout
     assert "up -d neo4j" not in proc.stdout
+    calls = [ln.split() for ln in log.read_text().splitlines()] if log.exists() else []
+    assert _neo4j_mutations(calls) == [], calls
+
+
+def test_the_mutation_detector_sees_every_form():
+    """NEGATIVE CONTROL for the detector every test here relies on."""
+    for call in (["rm", "-f", "pmoves-neo4j"], ["container", "rm", "pmoves-neo4j"],
+                 ["start", "pmoves-neo4j"], ["restart", "pmoves-neo4j"],
+                 ["run", "--name", "pmoves-neo4j", "neo4j:x"], ["volume", "rm", "pmoves_neo4j-data"],
+                 ["compose", "-f", "x.yml", "up", "-d", "neo4j"]):
+        assert _neo4j_mutations([call]) == [call], call
+    for call in (["ps", "--format", "{{.Names}}"], ["exec", "pmoves-neo4j", "true"],
+                 ["inspect", "--type", "container", "pmoves-neo4j"], ["network", "create", "pmoves-net"]):
+        assert _neo4j_mutations([call]) == [], call
 
 
 def test_make_neo4j_restore_volume_removal_fails_closed():

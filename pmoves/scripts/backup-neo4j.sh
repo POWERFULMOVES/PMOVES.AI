@@ -60,7 +60,7 @@ mkdir -p "$BACKUP_DIR"
 # not match, the old fallback started a SECOND Neo4j on the data volume the
 # running one held (see neo4j_container.py). Start it deliberately instead.
 log_info "Checking Neo4j container status..."
-if ! docker ps --format '{{.Names}}' | grep -qx "${CONTAINER_NAME}"; then
+if ! docker ps --format '{{.Names}}' | grep -qxF "${CONTAINER_NAME}"; then
     log_error "Neo4j container '${CONTAINER_NAME}' is not running; not starting one from a backup script."
     log_error "Start it with: make -C pmoves up-data-tier DATA_SERVICES=neo4j"
     exit 1

@@ -27,7 +27,7 @@ NEO4J_CONTAINER="$(python3 "$SCRIPT_DIR/neo4j_container.py")" || {
   echo "❌ could not determine the Neo4j container name (see above)" >&2
   exit 3
 }
-if docker ps --format '{{.Names}}' | grep -qx "$NEO4J_CONTAINER"; then
+if docker ps --format '{{.Names}}' | grep -qxF "$NEO4J_CONTAINER"; then
   echo "Neo4j already running as $NEO4J_CONTAINER; leaving it untouched."
 else
   echo "❌ Neo4j ($NEO4J_CONTAINER) is not running, and this script does not start it." >&2

@@ -5556,7 +5556,7 @@ neo4j-backup: ## Backup Neo4j database to backups/ with timestamp
 	backup_dir="backups"; \
 	mkdir -p "$$backup_dir"; \
 	container_name=$$($(PYTHON) $(CURDIR)/scripts/neo4j_container.py) || exit 3; \
-	if ! docker ps --format '{{.Names}}' | grep -qx "$$container_name"; then \
+	if ! docker ps --format '{{.Names}}' | grep -qxF "$$container_name"; then \
 		echo "❌ Neo4j container '$$container_name' is not running; a backup does not start one."; \
 		echo "   (It used to: '$(DC) ps -q neo4j' cannot see an out-of-compose container, so the"; \
 		echo "   fallback started a SECOND Neo4j on the volume the running one held.)"; \
@@ -5606,8 +5606,8 @@ neo4j-restore: ## Restore Neo4j from backup (usage: make neo4j-restore BACKUP=ba
 	@# compose Neo4j is started beside it. Migrate it under compose first (the
 	@# Phase 1b runbook in PR ops/knuckles-neo4j-from-fork).
 	@name=$$($(PYTHON) $(CURDIR)/scripts/neo4j_container.py) || exit 3; \
-	if docker inspect "$$name" >/dev/null 2>&1 && \
-	   [ -z "$$(docker inspect -f '{{index .Config.Labels "com.docker.compose.project"}}' "$$name")" ]; then \
+	if docker inspect --type container "$$name" >/dev/null 2>&1 && \
+	   [ -z "$$(docker inspect --type container -f '{{index .Config.Labels "com.docker.compose.project"}}' "$$name")" ]; then \
 		echo "❌ '$$name' exists but is not managed by compose; refusing to restore over it."; \
 		echo "   Bring Neo4j under compose first, then re-run neo4j-restore."; \
 		exit 1; \
@@ -5623,7 +5623,7 @@ neo4j-restore: ## Restore Neo4j from backup (usage: make neo4j-restore BACKUP=ba
 	@$(MAKE) --no-print-directory neo4j-local-up
 	@sleep 15
 	@container_name=$$($(PYTHON) $(CURDIR)/scripts/neo4j_container.py) || exit 3; \
-	if docker ps --format '{{.Names}}' | grep -qx "$$container_name"; then \
+	if docker ps --format '{{.Names}}' | grep -qxF "$$container_name"; then \
 		docker cp "$(BACKUP)" $$container_name:/backups/neo4j.dump; \
 		docker exec $$container_name neo4j-admin database load \
 			--from=/backups/neo4j.dump \
