@@ -1,8 +1,9 @@
 """Regression: the ``fresh_deployment`` fixture must never address the live project.
 
-Incident 2026-09-26: the fixture ran ``docker compose down`` with
-``cwd=pmoves`` and no ``-p``, so compose picked the default project name
-``pmoves`` -- the live stack -- and removed its 19 default-profile containers.
+Incident 2026-09-26: the fixture ran ``docker compose down`` against
+pmoves/docker-compose.yml with no ``-p``. That file's top-level ``name: pmoves``
+selects the live stack's project from any directory, so the call removed its 19
+default-profile containers. The fixture now makes no compose calls at all.
 
 These tests drive the fixture function directly and NEVER reach Docker:
 
@@ -130,15 +131,6 @@ def _drive(module: ModuleType) -> Any:
     return value
 
 
-def _project_of(argv: list[str]) -> str | None:
-    for i, tok in enumerate(argv):
-        if tok in ("-p", "--project-name") and i + 1 < len(argv):
-            return argv[i + 1]
-        if tok.startswith("--project-name="):
-            return tok.split("=", 1)[1]
-    return None
-
-
 # ---------------------------------------------------------------------------
 # Opt-in gate
 # ---------------------------------------------------------------------------
@@ -171,37 +163,24 @@ def test_compose_project_name_env_naming_live_project_is_refused(monkeypatch, re
 
 
 # ---------------------------------------------------------------------------
-# With the opt-in: every compose call is pinned to a throwaway project
+# With the opt-in: no compose call at all, only a read-only `docker info`
 # ---------------------------------------------------------------------------
-def test_opt_in_every_compose_call_names_a_throwaway_project(monkeypatch, recorder, fixture_module):
+def test_opt_in_makes_no_compose_calls_and_yields_a_throwaway_name(monkeypatch, recorder, fixture_module):
     monkeypatch.setenv("PMOVES_DESTRUCTIVE_TESTS", "1")
     monkeypatch.delenv("COMPOSE_PROJECT_NAME", raising=False)
 
     yielded = _drive(fixture_module)
 
+    # Any compose call, even one pinned with `-p`, is out: the fixture creates
+    # nothing to clean up, and older compose removes the fixed-name networks
+    # (pmoves_data, pmoves_app, ...) by name on `down`.
     compose = recorder.compose_calls
-    assert compose, f"expected the fixture to run compose; recorded: {recorder.calls}"
-    projects = set()
-    for call in compose:
-        argv = call["argv"]
-        assert "-p" in argv, f"compose call without -p in argv: {argv}"
-        project = _project_of(argv)
-        assert project is not None and THROWAWAY_RE.match(project), f"bad project in {argv}"
-        assert LIVE_PROJECT not in argv, f"bare live project name in argv: {argv}"
-        env = call["env"]
-        assert env is not None and env.get("COMPOSE_PROJECT_NAME") == project, (
-            f"subprocess env must carry the same throwaway COMPOSE_PROJECT_NAME: {argv}"
-        )
-        projects.add(project)
-
-    assert len(projects) == 1, f"one throwaway project per module, got {projects}"
-    assert yielded == next(iter(projects))
-    subcommands = [c["argv"][c["argv"].index(_project_of(c["argv"])) + 1] for c in compose]
-    assert "down" in subcommands, "teardown must clean up its own throwaway project"
-    assert "up" not in subcommands, "container_name pins mean a throwaway `up` is not isolated"
-
-    non_compose = [a for a in recorder.docker_calls if a not in [c["argv"] for c in compose]]
-    assert non_compose == [["docker", "info"]], f"unexpected non-compose docker calls: {non_compose}"
+    assert compose == [], f"the fixture must make no compose calls; recorded: {[c['argv'] for c in compose]}"
+    assert recorder.docker_calls == [["docker", "info"]], (
+        f"only the read-only availability probe is allowed: {recorder.docker_calls}"
+    )
+    assert isinstance(yielded, str) and THROWAWAY_RE.match(yielded), yielded
+    assert yielded != LIVE_PROJECT
 
 
 def test_each_module_run_gets_a_distinct_throwaway_project(monkeypatch, recorder, fixture_module):
@@ -218,6 +197,18 @@ def test_each_module_run_gets_a_distinct_throwaway_project(monkeypatch, recorder
 def test_compose_argv_refuses_anything_but_a_throwaway_name(fixture_module, bad):
     with pytest.raises(RuntimeError):
         fixture_module.compose_argv(bad, "down")
+
+
+@pytest.mark.parametrize("flag", ["-v", "--volumes", "--volumes=true"])
+def test_compose_argv_refuses_down_with_volumes(fixture_module, flag):
+    with pytest.raises(RuntimeError, match="volumes"):
+        fixture_module.compose_argv(fixture_module.throwaway_project_name(), "down", flag)
+
+
+def test_compose_argv_pins_the_throwaway_project(fixture_module):
+    project = fixture_module.throwaway_project_name()
+    argv = fixture_module.compose_argv(project, "down", "--remove-orphans")
+    assert argv == ["docker", "compose", "-p", project, "down", "--remove-orphans"]
 
 
 def test_throwaway_name_shape(fixture_module):

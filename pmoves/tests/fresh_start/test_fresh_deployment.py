@@ -31,26 +31,31 @@ sys.path.insert(0, str(REPO_ROOT))
 # ---------------------------------------------------------------------------
 # Destructive-fixture isolation (incident 2026-09-26)
 #
-# `fresh_deployment` used to run `docker compose down` with cwd=PMOVES_DIR and
-# no project name. Compose derives the default project name from the cwd's
-# basename -- `pmoves` -- which is also the LIVE stack's project name, so a
-# full-suite run from any checkout or worktree removed every default-profile
-# container of the running stack, then failed to bring it back at teardown
-# because `up -d` had no env files.
+# `fresh_deployment` used to run `docker compose down` (setup) and
+# `docker compose up -d` (teardown) with cwd=PMOVES_DIR and no `-p`. Those calls
+# load pmoves/docker-compose.yml, whose top-level `name: pmoves` sets the
+# project name -- the LIVE stack's project -- regardless of the directory the
+# call is made from. A full-suite run from worktrees therefore removed all 19
+# default-profile containers of the running stack, and the teardown `up -d`
+# failed without env files.
 #
-# The fixture is now fail-closed:
-#   * it does nothing (skips) unless PMOVES_DESTRUCTIVE_TESTS=1 is set, and it
-#     checks that BEFORE touching Docker at all (not even `docker info`);
-#   * it refuses if COMPOSE_PROJECT_NAME in the environment names the live
-#     project;
-#   * every compose call carries `-p pmoves-test-<8 hex>` in argv, and the
-#     subprocess env's COMPOSE_PROJECT_NAME is overwritten with the same
-#     throwaway name, so neither the cwd nor the caller's env can select `pmoves`.
+# The fixture now makes NO compose calls at all. Nothing in this module needs a
+# fresh stack: the health tests probe whatever is already listening. A
+# throwaway-project `down` would be pure risk -- the fixture creates nothing to
+# clean up, and docker-compose.yml declares fixed-name networks (pmoves_data,
+# pmoves_public, pmoves_api, pmoves_app, pmoves_bus, pmoves_monitoring, ...)
+# that older compose versions remove BY NAME. It never runs `up` either: those
+# fixed-name networks and the published host ports are shared with the live
+# stack whatever `-p` says.
 #
-# It never runs `up`: docker-compose.yml pins `container_name:` on many
-# services, so a throwaway project name does NOT isolate an `up` from the live
-# containers. Teardown is a `down --remove-orphans` scoped to the throwaway
-# project (no `-v`).
+# What remains is fail-closed:
+#   * skip unless PMOVES_DESTRUCTIVE_TESTS=1, checked BEFORE touching Docker
+#     at all (not even `docker info`);
+#   * refuse if COMPOSE_PROJECT_NAME in the environment names the live project;
+#   * yield a throwaway `pmoves-test-<8 hex>` project name, and `compose_argv()`
+#     for any future caller: it puts `-p <that name>` in argv and refuses the
+#     live name and `down -v/--volumes`. Note `-p` overrides `name:`; a call
+#     without it does not.
 # ---------------------------------------------------------------------------
 DESTRUCTIVE_OPT_IN_ENV = "PMOVES_DESTRUCTIVE_TESTS"
 LIVE_PROJECT_NAME = "pmoves"
@@ -66,13 +71,17 @@ def throwaway_project_name() -> str:
 def compose_argv(project: str, *args: str) -> list[str]:
     """Build a `docker compose` argv pinned to a throwaway project.
 
-    Raises instead of returning an argv that could address the live project.
+    Raises instead of returning an argv that could address the live project
+    (`-p` is required because docker-compose.yml's `name: pmoves` wins
+    otherwise) or delete volumes.
     """
     if project.strip().lower() == LIVE_PROJECT_NAME or not TEST_PROJECT_RE.match(project):
         raise RuntimeError(
             f"refusing docker compose with project {project!r}: only "
             f"{TEST_PROJECT_RE.pattern} is allowed from tests"
         )
+    if "down" in args and any(a in ("-v", "--volumes") or a.startswith("--volumes=") for a in args):
+        raise RuntimeError("refusing `docker compose down -v/--volumes` from tests")
     return ["docker", "compose", "-p", project, *args]
 
 
@@ -111,51 +120,21 @@ def docker_available():
 
 @pytest.fixture(scope="module")
 def fresh_deployment():
-    """Destructive, opt-in: a clean compose project for the module.
+    """Opt-in gate for the service-health tests; makes no compose calls.
 
     Deliberately does NOT depend on the ``docker_available`` fixture, because
     that would run ``docker info`` before the opt-in gate. The gate comes first;
-    Docker is only contacted after it passes.
+    the only Docker contact after it is the read-only ``docker info``.
 
-    Yields the throwaway project name.
+    Yields a throwaway project name for any test that needs one (build its
+    argv with ``compose_argv``).
     """
     reason = destructive_refusal()
     if reason:
         pytest.skip(reason)
     if not _docker_is_available():
         pytest.skip("Docker is not running or not available")
-
-    project = throwaway_project_name()
-    env = {**os.environ, "COMPOSE_PROJECT_NAME": project}
-
-    # Clear anything a previous run left in THIS throwaway project only.
-    result = subprocess.run(
-        compose_argv(project, "ps", "--format", "{{.Name}}"),
-        cwd=PMOVES_DIR,
-        env=env,
-        capture_output=True,
-        text=True,
-    )
-    if [line for line in result.stdout.strip().split("\n") if line]:
-        subprocess.run(
-            compose_argv(project, "down", "--remove-orphans"),
-            cwd=PMOVES_DIR,
-            env=env,
-            capture_output=True,
-            timeout=120,
-        )
-
-    yield project
-
-    # Remove whatever the module created in the throwaway project. No `up`,
-    # no `-v`: see the block comment above.
-    subprocess.run(
-        compose_argv(project, "down", "--remove-orphans"),
-        cwd=PMOVES_DIR,
-        env=env,
-        capture_output=True,
-        timeout=120,
-    )
+    yield throwaway_project_name()
 
 
 class TestDatabaseMigrations:
