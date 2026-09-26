@@ -220,9 +220,13 @@ def test_the_producer_command_appears_only_when_pulling_cannot_work(
 def test_the_dispatch_target_is_the_producer_not_this_node(tmp_path, monkeypatch, capsys):
     """Pattern-B nodes are CONSUMERS with no self-hosted runner, and
     sync-secrets-local.yml schedules on one -- so `-f targets=z890` names a job
-    nothing can pick up. pull_chit_bundle.sh:27 already draws the distinction as
-    PMOVES_BUNDLE_PRODUCER (default b850); the same default is used here so the
-    two roads cannot disagree about who can produce."""
+    nothing can pick up. pull_chit_bundle.sh draws the distinction as the
+    ordered PMOVES_BUNDLE_PRODUCERS list (default spark,b850 -- the Linux
+    runners; 4090/5090 are Windows consumers the workflow refuses); the same
+    default is used here so the two roads cannot disagree about who can
+    produce."""
+    monkeypatch.delenv("PMOVES_BUNDLE_PRODUCERS", raising=False)
+    monkeypatch.delenv("PMOVES_BUNDLE_PRODUCER", raising=False)
     b = _bundle(tmp_path)
     monkeypatch.setattr(
         cpc, "recovery_window",
@@ -232,7 +236,7 @@ def test_the_dispatch_target_is_the_producer_not_this_node(tmp_path, monkeypatch
     monkeypatch.setattr("sys.argv", ["x", "--bundle", str(b), "--node", "z890"])
     cpc.main()
     out = capsys.readouterr().out
-    assert "TARGETS=b850" in out
+    assert "TARGETS=spark,b850" in out
     assert "TARGETS=z890" not in out, "dispatched at a node with no runner"
 
 
@@ -241,6 +245,8 @@ def test_an_absent_bundle_still_reports_recoverability(tmp_path, monkeypatch, ca
     told to run a command that will fail. An earlier version returned before
     checking, so `secrets-pull` was the only instruction offered even when the
     artifact behind it had expired."""
+    monkeypatch.delenv("PMOVES_BUNDLE_PRODUCERS", raising=False)
+    monkeypatch.delenv("PMOVES_BUNDLE_PRODUCER", raising=False)
     monkeypatch.setattr(
         cpc, "recovery_window",
         lambda node, offline: "EXPIRED -- newest run 1 has no unexpired chit-bundle-*",
@@ -252,7 +258,7 @@ def test_an_absent_bundle_still_reports_recoverability(tmp_path, monkeypatch, ca
     out = capsys.readouterr().out
     assert "recovery" in out
     assert "will fail as things stand" in out
-    assert "TARGETS=b850" in out
+    assert "TARGETS=spark,b850" in out
 
 
 def test_an_absent_bundle_does_not_cry_wolf_when_a_pull_would_work(
@@ -319,3 +325,32 @@ def test_the_dispatch_is_a_known_road_not_a_raw_gh_call(tmp_path, monkeypatch, c
     printed = capsys.readouterr().out
     assert "make -C pmoves secrets-sync-trigger" in printed
     assert "gh workflow run" not in printed
+
+
+@pytest.mark.parametrize(
+    "env,expected",
+    [
+        ({}, "spark,b850"),
+        ({"PMOVES_BUNDLE_PRODUCERS": "b850"}, "b850"),
+        # Legacy singular override still honoured when the list is unset --
+        # same precedence as pull_chit_bundle.sh.
+        ({"PMOVES_BUNDLE_PRODUCER": "spark"}, "spark"),
+        ({"PMOVES_BUNDLE_PRODUCERS": "b850,spark", "PMOVES_BUNDLE_PRODUCER": "x"}, "b850,spark"),
+    ],
+)
+def test_the_producer_resolution_matches_the_puller(tmp_path, monkeypatch, capsys, env, expected):
+    monkeypatch.delenv("PMOVES_BUNDLE_PRODUCERS", raising=False)
+    monkeypatch.delenv("PMOVES_BUNDLE_PRODUCER", raising=False)
+    for k, v in env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setattr(
+        cpc, "recovery_window",
+        lambda node, offline: "EXPIRED -- newest run 1 has no unexpired chit-bundle-*",
+    )
+    monkeypatch.setattr(
+        "sys.argv", ["x", "--bundle", str(tmp_path / "gone.json"), "--node", "5090"]
+    )
+    cpc.main()
+    out = capsys.readouterr().out
+    assert "secrets-sync-trigger TARGETS=%s\n" % expected in out
+    assert "TARGETS=5090" not in out, "dispatched at a Windows consumer"
