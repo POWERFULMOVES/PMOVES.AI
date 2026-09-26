@@ -350,7 +350,13 @@ def test_the_stub_bin_meets_the_make_spawn_guard_contract(tmp_path):
     assert (b / ".pmoves-test-stub").is_file()
     for name in ("docker", "docker-compose"):
         assert os.access(b / name, os.X_OK), name
+    # The recorder records, proven with a READ-ONLY argv: the session guard
+    # (#3190) refuses spawning `docker-compose up` with no project, stub or
+    # not, and must not be worked around.
     log = tmp_path / "docker.log"
-    subprocess.run([str(b / "docker-compose"), "up", "-d", "neo4j"],
+    subprocess.run([str(b / "docker-compose"), "ps"],
                    env={**os.environ, "STUB_LOG": str(log)}, check=True)
-    assert _neo4j_mutations([ln.split() for ln in log.read_text().splitlines()]) != []
+    recorded = [ln.split() for ln in log.read_text().splitlines()]
+    assert recorded == [["compose", "ps"]], recorded
+    # ...and a mutating call, in exactly the shape the recorder writes, is flagged.
+    assert _neo4j_mutations([["compose", "up", "-d", "neo4j"]]) != []
