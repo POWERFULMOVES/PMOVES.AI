@@ -58,6 +58,7 @@ if [ "$1" = "inspect" ] && [ "$2" = "--type" ] && [ "$3" = "container" ]; then
   case "${FAKE_CONTAINER:-absent}" in
     compose) echo "pmoves"; exit 0 ;;
     stray)   echo ""; exit 0 ;;
+    stray-warn) echo ""; echo "WARNING: Plugin \"/usr/libexec/docker/cli-plugins/docker-x\" is not valid" >&2; exit 0 ;;
     absent)  echo "Error response from daemon: No such container: ${@: -1}" >&2; exit 1 ;;
     *)       daemon_down ;;
   esac
@@ -319,6 +320,7 @@ def test_make_neo4j_restore_volume_step(tmp_path, volume, rm_fails, want_rc, wan
     ("absent", 0),    # explicit "No such container": nothing to protect
     ("compose", 0),   # compose-managed: the restore may proceed
     ("stray", 1),     # exists outside compose: refuse
+    ("stray-warn", 1),  # same, with a CLI warning on stderr: still refuse (label is stdout only)
     ("error", 3),     # daemon unreachable: could-not-measure, never "absent"
 ])
 def test_make_neo4j_restore_guard(tmp_path, container, want_rc):

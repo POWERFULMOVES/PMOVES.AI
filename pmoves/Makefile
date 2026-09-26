@@ -5605,15 +5605,19 @@ neo4j-restore: ## Restore Neo4j from backup (usage: make neo4j-restore BACKUP=ba
 	@# keeps running on pmoves_neo4j-data, the volume rm then fails silently, and a
 	@# compose Neo4j is started beside it. Migrate it under compose first (the
 	@# Phase 1b runbook in PR ops/knuckles-neo4j-from-fork).
+	@# The label is read from STDOUT only: a CLI warning on stderr must never make
+	@# an unlabelled (stray) container look compose-managed.
 	@# Only an explicit "No such container" means absent. Any other inspect
 	@# failure (daemon down, permission, wrong context) is could-not-measure (3),
 	@# never "absent": treating an error as absent is how a guard waves through
 	@# exactly the case it exists to stop.
 	@name=$$($(PYTHON) $(CURDIR)/scripts/neo4j_container.py) || exit 3; \
-	label=$$(docker inspect --type container -f '{{index .Config.Labels "com.docker.compose.project"}}' "$$name" 2>&1); rc=$$?; \
+	errf=$$(mktemp); \
+	label=$$(docker inspect --type container -f '{{index .Config.Labels "com.docker.compose.project"}}' "$$name" 2>"$$errf"); rc=$$?; \
+	err=$$(cat "$$errf"); unlink "$$errf"; \
 	if [ $$rc -ne 0 ]; then \
-		if printf '%s' "$$label" | grep -qi 'no such container'; then :; else \
-			echo "❌ could not inspect container '$$name' (not a clean 'no such container'): $$label"; \
+		if printf '%s' "$$err" | grep -qi 'no such container'; then :; else \
+			echo "❌ could not inspect container '$$name' (not a clean 'no such container'): $$err"; \
 			exit 3; \
 		fi; \
 	elif [ -z "$$label" ]; then \
