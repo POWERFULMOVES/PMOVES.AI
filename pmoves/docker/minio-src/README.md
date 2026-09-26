@@ -82,14 +82,21 @@ tag object `d6541ea280b73a834b64d4097e21f2be77676104`, commit
 
 ## Build plan (`Dockerfile`)
 
-1. **minio-build** (`golang:1.24.2`): shallow-clone the tag and verify both SHAs.
+Base images are pinned by multi-arch index digest:
+
+- `golang:1.24.13@sha256:d2d2bc1c84f7e60d7d2438a3836ae7d0c847f4888464e7ec9ba3a1339a1ee804`.
+  This is the latest 1.24.x. The tag's `toolchain go1.24.2` is a minimum, so the
+  newer toolchain is used as-is and brings the 1.24.x stdlib security fixes.
+- `alpine:3.22.6@sha256:5291449c3df73caf6ed85e649dec1b9e818b39a5d8c871e97afc13e9cd5e8fa8`.
+
+1. **minio-build** (`golang:1.24.13`): shallow-clone the tag and verify both SHAs.
    Then build the way the upstream Makefile `build` target does:
    `CGO_ENABLED=0 go build -tags kqueue -trimpath -ldflags "$(MINIO_RELEASE=RELEASE go run buildscripts/gen-ldflags.go 2025-09-07T16:13:09Z)"`.
    The version argument and `MINIO_RELEASE=RELEASE` reproduce the official
    `ReleaseTag=RELEASE.2025-09-07T16-13-09Z`. Without them, `gen-ldflags` stamps
    `DEVELOPMENT.<commit-time>`.
-2. **mc-build** (`golang:1.24.2`): the same steps for `mc`.
-3. **runtime** (`alpine:3.22` + `ca-certificates curl`):
+2. **mc-build** (`golang:1.24.13`): the same steps for `mc`.
+3. **runtime** (`alpine:3.22.6` + `ca-certificates curl`):
    - `/bin/sh` is included because the compose healthcheck is `CMD-SHELL`. `curl` is included because that healthcheck runs `curl -fsS http://localhost:9000/minio/health/live`.
    - The container runs as root, like the upstream image, so volume ownership is unchanged.
    - `ENTRYPOINT ["/usr/bin/minio"]`, so the compose `command: server /data --console-address ":9001"` works unchanged.

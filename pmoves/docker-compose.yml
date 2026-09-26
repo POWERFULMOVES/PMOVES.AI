@@ -1639,11 +1639,16 @@ services:
     # ghcr.io/minio/minio 403, dl.min.io archive 410 Gone. So the default is a
     # LOCAL image built from the archived GitHub tag, with the tag-object and
     # commit SHAs verified: run `make -C pmoves minio-build-src` first
-    # (docker/minio-src/). It is not on any registry. If it has not been built,
-    # compose falls back to a pull, which will fail.
+    # (docker/minio-src/). It is not published to any registry. The tag lives in
+    # OUR org namespace (ghcr.io/powerfulmoves), so an unbuilt node that falls
+    # through to a pull FAILS CLOSED against our own org (anonymous HEAD = 403)
+    # instead of pulling a third party's image from an unowned namespace. `make
+    # up-minio` checks for the image first and names the fix. A node that still
+    # has upstream cached may set MINIO_IMAGE=minio/minio:RELEASE.2025-09-07T16-13-09Z.
+    # COUPLING: must equal MINIO_SRC_TAG in pmoves/Makefile.
     # ⚠️ INTERIM: MinIO Community Edition is EOL/archived. Garage is the planned
     # object substrate (docs/architecture/JUICEFS_OBJECT_STORE_MIGRATION.md §0.8).
-    image: ${MINIO_IMAGE:-pmoves/minio:RELEASE.2025-09-07T16-13-09Z-src}
+    image: ${MINIO_IMAGE:-ghcr.io/powerfulmoves/pmoves-minio:RELEASE.2025-09-07T16-13-09Z-src}
     # Only data-tier service without a restart policy — every Docker Desktop
     # restart left MinIO dead (Exited 255) until manually started, which is
     # how it sat down for 9 days and silently blocked the YT pipeline.
