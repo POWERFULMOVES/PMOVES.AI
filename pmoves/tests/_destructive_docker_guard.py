@@ -30,7 +30,16 @@ through) and ``os.system``, and REFUSES TO SPAWN:
   ``container ls|inspect|logs``, ``image ls|inspect``). So ``rm``, ``stop``,
   ``kill``, ``pause``, ``update``, ``rmi``, ``image prune``, ``builder prune``
   and ``exec`` are refused by default. ``exec`` is not read-only: it runs an
-  arbitrary process inside a live container.
+  arbitrary process inside a live container. The ONLY exec shapes allowed are
+  ``docker exec [-i|-t|-T] <container> pg_isready [flags]`` and
+  ``docker exec [-i|-t|-T] <container> psql [conn flags] -c "<sql>"`` where
+  ``<sql>`` is a single plain SELECT: it starts with SELECT, has no ``;``
+  except one optional trailing ``;``, no backslash meta-command and no
+  ``INTO``. ``sh -c``, ``bash``, ``psql -f``, several ``-c`` and any other exec
+  flag (``-u``, ``-e``, ``-w``, ``--privileged``) are refused. Residual risk
+  stated plainly: a SELECT can still call a side-effecting function
+  (``SELECT pg_terminate_backend(...)``, ``SELECT nextval(...)``); this is a
+  read-mostly allowance for two smoke checks, not a SQL sandbox.
 
 What counts as a docker call, to avoid false positives on text that merely
 mentions docker: ``docker``/``docker-compose`` must be the COMMAND -- the first
@@ -108,6 +117,13 @@ _DOCKER_VALUE_OPTS = frozenset(
 )
 
 _SHELLS = frozenset({"sh", "bash", "dash", "zsh", "ksh"})
+
+# The narrow `docker exec` allowlist (see _exec_verdict).
+_EXEC_OK_FLAGS = frozenset({"-i", "-t", "-T", "-it", "-ti", "--interactive", "--tty"})
+_PSQL_CONN_VALUE_OPTS = frozenset({"-U", "--username", "-d", "--dbname", "-h", "--host", "-p", "--port"})
+_PSQL_CONN_FLAGS = frozenset({"-w", "--no-password", "-W", "--password"})
+_SELECT_RE = re.compile(r"(?i)select\b")
+_INTO_RE = re.compile(r"(?i)\binto\b")
 
 # Wrappers after which the next command token is the real command, with the
 # options of each that consume a value.
@@ -232,6 +248,81 @@ def _compose_verdict(rest: Sequence[str], label: str) -> str | None:
     )
 
 
+def select_only_sql_problem(sql: str) -> str | None:
+    """Why `sql` is not a single plain SELECT, or None if it is.
+
+    Single statement: after stripping, it must start with SELECT
+    (case-insensitive, as a word), contain no `;` except one optional trailing
+    `;`, contain no backslash (psql meta-commands such as `\\!` run shell
+    commands), and contain no INTO (`SELECT ... INTO t` creates a table).
+    """
+    s = sql.strip()
+    if not _SELECT_RE.match(s):
+        return "does not start with SELECT"
+    body = s[:-1] if s.endswith(";") else s
+    if ";" in body:
+        return "contains more than one statement"
+    if "\\" in s:
+        return "contains a psql backslash meta-command"
+    if _INTO_RE.search(s):
+        return "uses SELECT ... INTO, which creates a table"
+    return None
+
+
+def _exec_verdict(tail: Sequence[str]) -> str | None:
+    """`docker exec` is refused except two exact read-only shapes.
+
+    * ``docker exec [-i|-t|-T ...] <container> pg_isready [pg_isready flags]``
+    * ``docker exec [-i|-t|-T ...] <container> psql [conn flags] -c "<SELECT>"``
+      with exactly one ``-c``/``--command``, no ``-f``, no other options or
+      positional arguments, and SQL accepted by :func:`select_only_sql_problem`.
+
+    Everything else through exec -- ``sh -c``, ``bash``, ``psql -f``, a second
+    ``-c``, ``-u root``, ``-e``, arbitrary binaries -- is refused.
+    """
+    shown = " ".join(["docker", "exec", *tail])
+    refuse = f"`{shown}`: docker exec is refused in tests except `pg_isready` or `psql -c '<single SELECT>'`"
+    i = 0
+    while i < len(tail) and tail[i].startswith("-"):
+        if tail[i] not in _EXEC_OK_FLAGS:
+            return refuse + f" (exec flag {tail[i]!r} is not allowed)."
+        i += 1
+    if i + 1 >= len(tail):
+        return refuse + "."
+    command = _basename(tail[i + 1])
+    args = list(tail[i + 2 :])
+    if command == "pg_isready":
+        return None
+    if command != "psql":
+        return refuse + "."
+    sql: list[str] = []
+    j = 0
+    while j < len(args):
+        tok = args[j]
+        if tok in ("-c", "--command"):
+            if j + 1 >= len(args):
+                return refuse + " (-c without SQL)."
+            sql.append(args[j + 1])
+            j += 2
+        elif tok.startswith("--command="):
+            sql.append(tok.split("=", 1)[1])
+            j += 1
+        elif tok in _PSQL_CONN_VALUE_OPTS:
+            j += 2
+        elif tok.startswith("--") and tok.split("=", 1)[0] in _PSQL_CONN_VALUE_OPTS:
+            j += 1
+        elif tok in _PSQL_CONN_FLAGS:
+            j += 1
+        else:
+            return refuse + f" (psql argument {tok!r} is not a connection flag or -c)."
+    if len(sql) != 1:
+        return refuse + f" (exactly one -c is required, got {len(sql)})."
+    problem = select_only_sql_problem(sql[0])
+    if problem:
+        return refuse + f" (SQL {problem})."
+    return None
+
+
 def _docker_verdict(rest: Sequence[str]) -> str | None:
     """Check the tokens after `docker`."""
     i = 0
@@ -252,6 +343,8 @@ def _docker_verdict(rest: Sequence[str]) -> str | None:
         return _compose_verdict(tail, "docker compose")
     if sub in DOCKER_READ_ONLY_TOP:
         return None
+    if sub == "exec":
+        return _exec_verdict(tail)
     verb = next((t for t in tail if not t.startswith("-")), None)
     if sub in DOCKER_READ_ONLY_PAIRS and verb in DOCKER_READ_ONLY_PAIRS[sub]:
         return None

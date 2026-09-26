@@ -84,7 +84,25 @@ BLOCKED = [
     ["docker", "pause", "pmoves-nats-1"],
     ["docker", "update", "--restart=no", "pmoves-nats-1"],
     ["docker", "rmi", "pmoves/agent-zero"],
-    ["docker", "exec", "supabase-db", "pg_isready"],  # exec is not read-only
+    # docker exec: everything outside the two exact read-only shapes
+    ["docker", "exec", "supabase-db", "psql", "-U", "pmoves", "-c", "SELECT 1; DROP TABLE x"],
+    ["docker", "exec", "supabase-db", "psql", "-U", "pmoves", "-c", "DELETE FROM x"],
+    ["docker", "exec", "supabase-db", "psql", "-U", "pmoves", "-f", "x.sql"],
+    ["docker", "exec", "db", "sh", "-c", "pg_isready"],
+    ["docker", "exec", "db", "rm", "-rf", "/"],
+    ["docker", "exec", "db", "bash"],
+    ["docker", "exec", "-u", "root", "db", "pg_isready"],  # only -i/-t/-T exec flags
+    ["docker", "exec", "-e", "X=1", "db", "pg_isready"],
+    ["docker", "exec", "db", "psql", "-c", "SELECT 1", "-c", "SELECT 2"],  # two -c
+    ["docker", "exec", "db", "psql", "-U", "pmoves"],  # no -c: interactive
+    ["docker", "exec", "db", "psql", "-c", "SELECT 1;;"],
+    ["docker", "exec", "db", "psql", "-c", "SELECT 1 \\! id"],  # meta-command
+    ["docker", "exec", "db", "psql", "-c", "\\copy t to '/tmp/x'"],
+    ["docker", "exec", "db", "psql", "-c", "SELECT * INTO backup FROM t"],  # creates a table
+    ["docker", "exec", "db", "psql", "-c", "WITH d AS (DELETE FROM t RETURNING *) SELECT 1"],
+    ["docker", "exec", "db", "psql", "-c", "SELECTX 1"],
+    ["docker", "exec", "db", "psql", "pmoves", "-c", "SELECT 1"],  # positional arg
+    ["docker", "exec", "db"],
     ["docker", "container", "rm", "pmoves-nats-1"],
     ["docker", "network", "rm", "pmoves_app"],
     ["docker", "network", "prune", "-f"],
@@ -103,6 +121,18 @@ BLOCKED = [
 ]
 
 ALLOWED = [
+    # The two smoke call sites, verbatim argv shapes:
+    # smoke/test_supabase_realtime_tenant.py:193
+    ["docker", "exec", "supabase-db", "psql", "-U", "pmoves", "-d", "pmoves",
+     "-c", "SELECT schema_name FROM information_schema.schemata WHERE schema_name = '_realtime';"],
+    # smoke/test_supabase_selfhosted.py:104 (container resolved at runtime)
+    ["docker", "exec", "supabase-db", "pg_isready", "-U", "pmoves"],
+    ["docker", "exec", "pmoves-supabase-db-1", "pg_isready", "-U", "pmoves"],
+    # the rest of the narrow exec allowance
+    ["docker", "exec", "-i", "db", "pg_isready"],
+    ["docker", "exec", "-it", "db", "psql", "-h", "localhost", "-p", "5432", "-U", "pmoves", "-c", "select 1"],
+    ["docker", "exec", "db", "psql", "--username=pmoves", "--command=SELECT now();"],
+    ["docker", "exec", "db", "psql", "-w", "-c", "  SELECT count(*) FROM t  "],
     ["docker", "info"],
     ["docker", "--version"],
     ["docker", "ps", "--format", "{{.Names}}"],
