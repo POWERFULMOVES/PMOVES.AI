@@ -1130,17 +1130,33 @@ def _grep_pattern(m: "re.Match[str]") -> str:
     """The pattern the printed command greps for, quoted or not."""
     return m.group(2) or m.group(3)
 
-# The three backend-failure lines auth.ts logs at pin 36b28d0f (L56, L78, L89),
-# each answered there with the same 401 a revoked token gets. Copied verbatim.
-PIN_BACKEND_FAILURE_LOGS = [
+# Backend-failure lines the shim logs, verbatim. BOTH generations matter: the
+# rule-out is run against whatever image is deployed, and a node keeps the old
+# image until it is rebuilt.
+#
+# Pre-#28 (pin 36b28d0f auth.ts:56/:78/:89). Each was answered with the same
+# 401 a revoked token gets, which is the case the rule-out exists for.
+PRE_FIX_BACKEND_FAILURE_LOGS = [
     "pmoves-auth: SUPABASE_SERVICE_KEY not set — cannot resolve per-agent tokens",
     "pmoves-auth: Supabase token lookup returned 401",
     "pmoves-auth: token resolution failed — TimeoutError: The operation was aborted due to timeout",
 ]
+# Pin a0ee2314 (auth.ts:117/:137/:145/:160/:170), with `${reason}` resolved as
+# the code builds it. test_auth_citations_resolve.py derives these from the
+# pinned SOURCE and checks the same grep against it; this list keeps the
+# printed-command tests readable without a populated submodule.
+PIN_BACKEND_FAILURE_LOGS = [
+    "pmoves-auth: SUPABASE_SERVICE_KEY not set — cannot resolve per-agent tokens",
+    "pmoves-auth: Supabase token lookup returned HTTP 401",
+    "pmoves-auth: Supabase token lookup returned a non-array body",
+    "pmoves-auth: Supabase token lookup returned a row with no agent_id",
+    "pmoves-auth: token resolution failed — TimeoutError: The operation was aborted due to timeout",
+]
+ALL_BACKEND_FAILURE_LOGS = PRE_FIX_BACKEND_FAILURE_LOGS + PIN_BACKEND_FAILURE_LOGS
 
 
 @pytest.mark.parametrize("status", [401, 503])
-@pytest.mark.parametrize("log_line", PIN_BACKEND_FAILURE_LOGS)
+@pytest.mark.parametrize("log_line", ALL_BACKEND_FAILURE_LOGS)
 def test_the_rule_out_command_catches_every_backend_failure(
     monkeypatch, tmp_path, capsys, status, log_line
 ):
@@ -1200,5 +1216,5 @@ def test_the_launcher_does_not_equate_401_with_revocation():
     assert m, "the launcher must name the log rule-out command"
     assert m.group(1) == "${CIPHER_PROBE_SINCE}", "bounded by the probe start"
     assert 'CIPHER_PROBE_SINCE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"' in text
-    for line in PIN_BACKEND_FAILURE_LOGS:
+    for line in ALL_BACKEND_FAILURE_LOGS:
         assert re.search(_grep_pattern(m), line)

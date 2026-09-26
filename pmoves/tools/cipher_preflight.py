@@ -620,11 +620,14 @@ def check(
     }
 
 
-# Every backend failure the pinned shim logs starts with "pmoves-auth:" --
-# "Supabase token lookup returned <n>", "SUPABASE_SERVICE_KEY not set" and
-# "token resolution failed" (timeout, DNS, network) -- and at that pin each is
-# answered with the same 401 a revoked token gets. Grep the prefix, not one
-# message. Bounded by the probe's own start time: a relative window like
+# Every backend failure the shim logs starts with "pmoves-auth:". Before
+# Pmoves-cipher #28 there were three ("Supabase token lookup returned <n>",
+# "SUPABASE_SERVICE_KEY not set", "token resolution failed"), each answered
+# with the same 401 a revoked token gets; from #28 (pin a0ee2314) there are
+# five, the lookup ones built from a `reason` variable, and they answer 503.
+# A node keeps the old image until rebuilt, so grep the prefix, which covers
+# both generations, not one message
+# (tests/tools/test_auth_citations_resolve.py checks it against the pinned source). Bounded by the probe's own start time: a relative window like
 # `--since 10m` is evaluated when the operator RUNS the command, possibly long
 # after the probe, and an unbounded one lets an old incident explain today's
 # 401.
