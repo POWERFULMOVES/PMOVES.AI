@@ -288,4 +288,11 @@ def test_conftest_teardown_hook_stops_the_session_after_a_violation(request):
         conftest.pytest_runtest_teardown(item, None)
     finally:
         session_guard.VIOLATIONS.pop()
-    assert "synthetic violation" in item.session.shouldstop
+    # `shouldstop` starts as False and pytest reads any truthy value as "stop";
+    # the hook must replace it with the refusal message, not merely a flag.
+    stop_reason = item.session.shouldstop
+    assert isinstance(stop_reason, str), f"shouldstop was not set to a message: {stop_reason!r}"
+    assert stop_reason.startswith(
+        "destructive docker call blocked by pmoves/tests/_destructive_docker_guard.py: "
+    ), stop_reason
+    assert stop_reason.endswith("synthetic violation for this test"), stop_reason
