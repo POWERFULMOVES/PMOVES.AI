@@ -102,6 +102,7 @@ import os
 import re
 import socket
 import sys
+import time
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -500,6 +501,17 @@ def probe(
         row["error"] = f"HTTP {exc.code}"
         if exc.code in (401, 403):
             row["verdict"] = "unauthorized"
+        elif exc.code == 503:
+            # A 503 means the credential was never judged. Until the pinned
+            # shim carries the Pmoves-cipher lookup-failure fix, auth never
+            # emits 503 itself, so do not claim which layer answered (a proxy,
+            # Kong, a starting container, or -- after that fix -- a failed
+            # token lookup). Re-minting was the wrong fix it used to invite.
+            row["verdict"] = "http_error"
+            row["error"] = (
+                "HTTP 503 — the token was not judged (a proxy, Kong, startup, "
+                "or after the fork fix a lookup backend failure); do not re-mint"
+            )
         elif 300 <= exc.code < 400:
             # Declined by _NoRedirect. Say so, and say the token stayed put.
             row["verdict"] = "redirect"
@@ -569,6 +581,8 @@ def check(
     else:
         environ = dict(os.environ)
 
+    # Floor to the second so the probe's own log line is always inside it.
+    probe_since = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     rows = []
     for cand in candidates:
         result = probe(cand["url"], cand.get("headers"), environ=environ)
@@ -590,6 +604,7 @@ def check(
             if name not in missing_env:
                 missing_env.append(name)
     return {
+        "probe_since": probe_since,
         "endpoints": rows,
         "reachable": [r["name"] for r in reachable],
         "answered": [r["name"] for r in answered],
@@ -603,6 +618,22 @@ def check(
         "env_file": str(env_file or default_env_file()) if use_env_file else None,
         "env_note": env_note,
     }
+
+
+# Every backend failure the pinned shim logs starts with "pmoves-auth:" --
+# "Supabase token lookup returned <n>", "SUPABASE_SERVICE_KEY not set" and
+# "token resolution failed" (timeout, DNS, network) -- and at that pin each is
+# answered with the same 401 a revoked token gets. Grep the prefix, not one
+# message. Bounded by the probe's own start time: a relative window like
+# `--since 10m` is evaluated when the operator RUNS the command, possibly long
+# after the probe, and an unbounded one lets an old incident explain today's
+# 401.
+AUTH_LOG_GREP = "pmoves-auth"
+
+
+def auth_log_command(since: Optional[str]) -> str:
+    bound = f"--since {since} " if since else ""
+    return f"docker logs {bound}pmoves-cipher-api-1 2>&1 | grep {AUTH_LOG_GREP}"
 
 
 def exit_code(verdict: Dict[str, Any]) -> int:
@@ -754,20 +785,40 @@ def _run(args: argparse.Namespace) -> int:
     if verdict["ok"]:
         return 0
 
+    if any(r.get("status") == 503 for r in verdict["endpoints"]):
+        # Printed ahead of either summary: a 401 on one endpoint must not hide
+        # a 503 on another.
+        print(
+            "Cipher HTTP 503: the token was not judged (a proxy, Kong, startup,\n"
+            "  or after the fork fix a lookup backend failure); do not re-mint.\n"
+            "  Check /health `per_agent_auth` (after the fork fix) and\n"
+            f"  `{auth_log_command(verdict.get('probe_since'))}`.\n"
+            "  A refused service key is cleared by fixing the key and recreating\n"
+            "  with `make -C pmoves up-cipher-nobuild`.",
+            file=sys.stderr,
+        )
+
     if verdict["unauthorized"]:
         # The service is UP. Saying "no memory" here is the false negative that
         # cost three sessions their memory layer.
         lines = [
             "Cipher ANSWERED but did not accept the credential (HTTP 401/403).",
             "  The service is UP — this is an access problem, not an outage.",
-            "  Do not restart Cipher; bind its token.",
+            "  Restarting Cipher will not fix a wrong token; bind the right one.",
         ]
         if verdict["missing_env"]:
             names = ", ".join(verdict["missing_env"])
             lines.append(f"  Unresolved in the roster: {names} (set and re-launch).")
         else:
+            # Not "it is stale or wrong": a shim older than the lookup-failure
+            # fix also answers 401 when ITS OWN service key is refused, and on
+            # 2026-09-26 that read as a revoked token while the row was active.
             lines.append(
-                "  A credential WAS presented and refused — it is stale or wrong."
+                "  A credential WAS presented and refused. Before re-minting, rule\n"
+                "  out the backend: an older Cipher shim also answers 401 when its\n"
+                "  service key is missing or refused, or its lookup times out. Any\n"
+                f"  hit from `{auth_log_command(verdict.get('probe_since'))}`\n"
+                "  means the token was never judged."
             )
         if verdict.get("env_note"):
             # A 401 read against a FAILED overlay is a different finding: the
