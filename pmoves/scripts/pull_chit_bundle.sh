@@ -33,7 +33,23 @@ NODE="${PMOVES_NODE:-5090}"
 # (4090/5090 have Windows runners but are consumers -- dispatching
 # targets=5090 fails fast by design.) PMOVES_BUNDLE_PRODUCER (singular) is the
 # legacy override and is still honoured when the list is unset.
-PRODUCERS="${PMOVES_BUNDLE_PRODUCERS:-${PMOVES_BUNDLE_PRODUCER:-spark,b850}}"
+#
+# Enrolling a new Linux producer = add its label in THREE places: this
+# KNOWN_PRODUCERS, PRODUCER_TARGETS in sync-secrets-local.yml, and
+# KNOWN_PRODUCERS in pmoves/tools/chit_provenance_check.py.
+# pmoves/tests/test_secrets_funnel_producers.py::test_the_producer_lists_cannot_drift
+# fails if they disagree.
+KNOWN_PRODUCERS="spark,b850"
+PRODUCERS="${PMOVES_BUNDLE_PRODUCERS:-${PMOVES_BUNDLE_PRODUCER:-$KNOWN_PRODUCERS}}"
+# A stale override (e.g. PMOVES_BUNDLE_PRODUCER=5090) would print a dispatch
+# hint the workflow refuses. Warn -- non-fatal, stderr -- and carry on.
+for _p in ${PRODUCERS//,/ }; do
+  case ",$KNOWN_PRODUCERS," in
+    *",$_p,"*) ;;
+    *) echo "⚠ producer label '$_p' is not a known Linux producer ($KNOWN_PRODUCERS); sync-secrets-local.yml will refuse targets=$_p" >&2 ;;
+  esac
+done
+unset _p
 
 # Canonical bundle path — mirrors mk/codex.mk CHIT_EXPORT_PATH resolution.
 if [ -n "${CHIT_EXPORT_PATH:-}" ]; then
@@ -77,7 +93,15 @@ if [ -z "$ARTIFACT" ]; then
 fi
 
 TMP="$(mktemp -d)"
-cleanup() { command rm -r -f -- "$TMP"; }
+STAGE=""
+PROV_STAGE=""
+# Remove the download dir AND any staged copy left by a failure between
+# staging and the rename (set -e aborts there), so no partial bundle lingers.
+cleanup() {
+  command rm -r -f -- "$TMP"
+  if [ -n "$STAGE" ] && [ -e "$STAGE" ]; then command rm -- "$STAGE" || true; fi
+  if [ -n "$PROV_STAGE" ] && [ -e "$PROV_STAGE" ]; then command rm -- "$PROV_STAGE" || true; fi
+}
 trap cleanup EXIT
 echo "→ Downloading $ARTIFACT from run $RUN_ID"
 gh run download "$RUN_ID" --repo "$REPO" --name "$ARTIFACT" --dir "$TMP"
@@ -96,10 +120,13 @@ if not isinstance(data, dict) or not data:
 PYEOF
 
 mkdir -p "$DEST_DIR"
-# Owner-only perms, atomic replace: stage next to the destination, chmod,
-# then move over any old bundle (matches the workflow's 0600 install).
+# Owner-only perms, atomic replace: stage next to the destination, then move
+# over any old bundle (matches the workflow's 0600 install). The stage is
+# CREATED 0600 under umask 077: CGP is an encoding, not encryption, so a
+# cp-then-chmod would leave cleartext world-readable (umask 022 -> 0644) for
+# the gap between the two. The chmod stays as belt-and-braces.
 STAGE="$DEST.tmp.$$"
-cp "$BUNDLE" "$STAGE"
+(umask 077; cp "$BUNDLE" "$STAGE")
 chmod 600 "$STAGE"
 # -f: on a producer node the runner (root) may own the old bundle; without -f
 # mv PROMPTS on a tty before replacing a read-only file.
@@ -131,11 +158,11 @@ mv -f -- "$STAGE" "$DEST"
 # needs write permission on the (user-owned) directory, so it replaces it;
 # -f because mv would otherwise PROMPT on a tty for a read-only destination.
 PROV_STAGE="$DEST.provenance.tmp.$$"
-if printf '%s\n' \
+if (umask 077; printf '%s\n' \
      "source=ci" \
      "artifact=$ARTIFACT" \
      "installed_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-     > "$PROV_STAGE" 2>/dev/null \
+     > "$PROV_STAGE") 2>/dev/null \
    && chmod 600 "$PROV_STAGE" 2>/dev/null \
    && mv -f -- "$PROV_STAGE" "$DEST.provenance" 2>/dev/null; then
   :

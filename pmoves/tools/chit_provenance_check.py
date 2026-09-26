@@ -50,6 +50,12 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 PMOVES = REPO_ROOT / "pmoves"
 
 WORKFLOW = "sync-secrets-local.yml"
+# Linux runners that can PRODUCE a bundle. Enrolling a new producer = add its
+# label in THREE places: this constant, PRODUCER_TARGETS in
+# .github/workflows/sync-secrets-local.yml, and KNOWN_PRODUCERS in
+# pmoves/scripts/pull_chit_bundle.sh. Enforced by
+# pmoves/tests/test_secrets_funnel_producers.py::test_the_producer_lists_cannot_drift
+KNOWN_PRODUCERS = "spark,b850"
 # Same override the puller honours (pull_chit_bundle.sh:21). Hard-coding it
 # meant a node with PMOVES_REPO set would have its artifact checked against
 # upstream while `secrets-pull` queried the fork -- so the check could report
@@ -205,12 +211,21 @@ def main() -> int:
     ap.add_argument("--producer",
                     default=os.environ.get("PMOVES_BUNDLE_PRODUCERS")
                     or os.environ.get("PMOVES_BUNDLE_PRODUCER")
-                    or "spark,b850")
+                    or KNOWN_PRODUCERS)
     ap.add_argument("--offline", action="store_true", help="skip the artifact query")
     ap.add_argument("--strict", action="store_true",
                     help="exit non-zero when the bundle is a local export")
     ap.add_argument("--max-names", type=int, default=12)
     args = ap.parse_args()
+
+    # A stale override (e.g. PMOVES_BUNDLE_PRODUCER=5090) would print a dispatch
+    # hint the workflow refuses. Warn on stderr; non-fatal, like the puller.
+    _known = KNOWN_PRODUCERS.split(",")
+    for _p in [p.strip() for p in args.producer.split(",") if p.strip()]:
+        if _p not in _known:
+            print("WARN producer label %r is not a known Linux producer (%s); "
+                  "sync-secrets-local.yml will refuse targets=%s"
+                  % (_p, KNOWN_PRODUCERS, _p), file=sys.stderr)
 
     try:
         sys.stdout.reconfigure(errors="replace")  # type: ignore[attr-defined]

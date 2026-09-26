@@ -354,3 +354,24 @@ def test_the_producer_resolution_matches_the_puller(tmp_path, monkeypatch, capsy
     out = capsys.readouterr().out
     assert "secrets-sync-trigger TARGETS=%s\n" % expected in out
     assert "TARGETS=5090" not in out, "dispatched at a Windows consumer"
+
+
+@pytest.mark.parametrize("env,warns", [
+    ({}, False),
+    ({"PMOVES_BUNDLE_PRODUCER": "5090"}, True),
+    ({"PMOVES_BUNDLE_PRODUCERS": "spark,4090"}, True),
+    ({"PMOVES_BUNDLE_PRODUCERS": "b850"}, False),
+])
+def test_an_unknown_producer_label_warns_but_does_not_fail(tmp_path, monkeypatch, capsys, env, warns):
+    monkeypatch.delenv("PMOVES_BUNDLE_PRODUCERS", raising=False)
+    monkeypatch.delenv("PMOVES_BUNDLE_PRODUCER", raising=False)
+    for k, v in env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setattr(cpc, "recovery_window", lambda node, offline: "not checked (--offline)")
+    monkeypatch.setattr(
+        "sys.argv", ["x", "--bundle", str(tmp_path / "gone.json"), "--node", "5090"]
+    )
+    rc = cpc.main()
+    captured = capsys.readouterr()
+    assert ("not a known Linux producer" in captured.err) is warns
+    assert rc == 0, "the warning must stay non-fatal"

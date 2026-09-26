@@ -25,6 +25,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
 import stat
 import subprocess
 import sys
@@ -72,8 +73,16 @@ def _stub_bin(tmp_path: Path, *, run_id: str, artifact: str) -> Path:
     return bindir
 
 
-def _run_pull(tmp_path: Path, extra_env: dict | None = None, **stub) -> subprocess.CompletedProcess:
+def _write_exec(path: Path, body: str) -> None:
+    path.write_text(body, encoding="utf-8")
+    path.chmod(path.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+
+
+def _run_pull(tmp_path: Path, extra_env: dict | None = None, *, umask: int | None = None,
+              extra_stubs: dict | None = None, **stub) -> subprocess.CompletedProcess:
     bindir = _stub_bin(tmp_path, **stub)
+    for name, body in (extra_stubs or {}).items():
+        _write_exec(bindir / name, body)
     env = {
         k: v for k, v in os.environ.items()
         if k not in {"PMOVES_BUNDLE_PRODUCERS", "PMOVES_BUNDLE_PRODUCER",
@@ -83,8 +92,9 @@ def _run_pull(tmp_path: Path, extra_env: dict | None = None, **stub) -> subproce
     env["CHIT_EXPORT_PATH"] = str(tmp_path / "cfg" / "chit" / "env.cgp.json")
     env["PMOVES_NODE"] = "b850"
     env.update(extra_env or {})
+    preexec = (lambda: os.umask(umask)) if umask is not None else None
     return subprocess.run(["bash", str(_PULL)], env=env, capture_output=True,
-                          text=True, timeout=60)
+                          text=True, timeout=60, preexec_fn=preexec)
 
 
 @pytest.mark.parametrize("stub", [
@@ -144,7 +154,8 @@ def _workflow() -> dict:
     return yaml.safe_load(_WORKFLOW.read_text(encoding="utf-8"))
 
 
-def _run_resolve_targets(tmp_path: Path, targets: str) -> tuple[subprocess.CompletedProcess, str]:
+def _run_resolve_targets(tmp_path: Path, targets: str,
+                         producers: str | None = None) -> tuple[subprocess.CompletedProcess, str]:
     wf = _workflow()
     step = next(s for s in wf["jobs"]["resolve-targets"]["steps"] if s.get("id") == "set")
     script = step["run"].replace("${{ runner.debug }}", "0")
@@ -152,7 +163,8 @@ def _run_resolve_targets(tmp_path: Path, targets: str) -> tuple[subprocess.Compl
     out = tmp_path / "github_output"
     out.write_text("", encoding="utf-8")
     env = {**os.environ, "INPUT_TARGETS": targets,
-           "PRODUCER_TARGETS": wf["env"]["PRODUCER_TARGETS"],
+           "PRODUCER_TARGETS": (wf["env"]["PRODUCER_TARGETS"]
+                                if producers is None else producers),
            "GITHUB_OUTPUT": str(out)}
     r = subprocess.run(["bash", "-c", script], env=env, capture_output=True,
                        text=True, timeout=60)
@@ -197,12 +209,129 @@ def test_the_first_matrix_step_fails_fast_on_windows():
 def test_the_producer_lists_cannot_drift():
     """Workflow allowlist, puller default and provenance-check default are the
     same ordered list. If one moves alone, a hint names a target the
-    workflow refuses."""
+    workflow refuses. Enrolling a new Linux producer means editing all three."""
     wf_list = _workflow()["env"]["PRODUCER_TARGETS"]
     pull_src = _PULL.read_text(encoding="utf-8")
-    m = re.search(r'PRODUCERS="\$\{PMOVES_BUNDLE_PRODUCERS:-\$\{PMOVES_BUNDLE_PRODUCER:-([^}]*)\}\}"',
-                  pull_src)
-    assert m, "pull_chit_bundle.sh no longer declares the PRODUCERS default"
-    check_src = _CHECK.read_text(encoding="utf-8")
-    assert f'or "{wf_list}")' in check_src
-    assert m.group(1) == wf_list == "spark,b850"
+    m = re.search(r'^KNOWN_PRODUCERS="([^"]*)"$', pull_src, re.M)
+    assert m, "pull_chit_bundle.sh no longer declares KNOWN_PRODUCERS"
+    assert ('PRODUCERS="${PMOVES_BUNDLE_PRODUCERS:-${PMOVES_BUNDLE_PRODUCER:-$KNOWN_PRODUCERS}}"'
+            in pull_src), "the puller default no longer derives from KNOWN_PRODUCERS"
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("_cpc_drift", _CHECK)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    assert "or KNOWN_PRODUCERS)" in _CHECK.read_text(encoding="utf-8")
+    assert m.group(1) == wf_list == mod.KNOWN_PRODUCERS == "spark,b850"
+
+
+# --------------------------------------------------------------------------
+# Review round 1 (#3186): stage perms, cleanup, dedupe, fail-closed, warnings
+# --------------------------------------------------------------------------
+
+_linux_stat = pytest.mark.skipif(
+    not sys.platform.startswith("linux") or (hasattr(os, "geteuid") and os.geteuid() == 0),
+    reason="uses GNU stat -c; root ignores modes")
+
+
+@_linux_stat
+def test_stage_files_are_created_0600_even_under_umask_022(tmp_path):
+    """A stubbed chmod records each stage file's mode BEFORE it changes it,
+    i.e. the mode it was created with. Under umask 022 a plain cp creates
+    0644 -- briefly world-readable cleartext, since CGP is not encryption."""
+    real_chmod = shutil.which("chmod")
+    log = tmp_path / "chmod.log"
+    stub = (f'#!/usr/bin/env bash\n'
+            f'for a in "$@"; do case "$a" in *.tmp.*) '
+            f'printf "%s %s\\n" "$a" "$(stat -c %a -- "$a")" >> "{log}";; esac; done\n'
+            f'exec "{real_chmod}" "$@"\n')
+    r = _run_pull(tmp_path, umask=0o022, extra_stubs={"chmod": stub},
+                  run_id="123", artifact="chit-bundle-b850-123")
+    assert r.returncode == 0, r.stdout + r.stderr
+    seen = [ln.rsplit(" ", 1) for ln in log.read_text(encoding="utf-8").splitlines()]
+    names = {Path(p).name.split(".tmp.")[0] for p, _ in seen}
+    assert names == {"env.cgp.json", "env.cgp.json.provenance"}, seen
+    assert all(mode == "600" for _, mode in seen), seen
+
+
+def test_a_failed_rename_leaves_no_stage_file(tmp_path):
+    """mv of the bundle fails -> set -e aborts -> the EXIT trap must remove
+    the staged copy, and the old bundle must be untouched."""
+    dest = tmp_path / "cfg" / "chit" / "env.cgp.json"
+    dest.parent.mkdir(parents=True)
+    dest.write_text('{"old": 1}', encoding="utf-8")
+    r = _run_pull(tmp_path, extra_stubs={"mv": "#!/usr/bin/env bash\nexit 1\n"},
+                  run_id="123", artifact="chit-bundle-b850-123")
+    assert r.returncode != 0
+    assert not list(dest.parent.glob("*.tmp.*")), list(dest.parent.iterdir())
+    assert dest.read_text(encoding="utf-8") == '{"old": 1}'
+    assert _SECRET_SENTINEL not in r.stdout + r.stderr
+
+
+def test_duplicate_targets_schedule_one_job(tmp_path):
+    r, out = _run_resolve_targets(tmp_path, "b850,b850")
+    assert r.returncode == 0, r.stderr
+    assert out.strip() == 'matrix={"target": ["b850"]}'
+    r, out = _run_resolve_targets(tmp_path, "b850,spark,b850")
+    assert out.strip() == 'matrix={"target": ["b850", "spark"]}'
+
+
+@pytest.mark.parametrize("producers", ["", ",,", " ", "spark;id", "SPARK", "spark b850"])
+def test_an_unreadable_allowlist_fails_closed(tmp_path, producers):
+    r, out = _run_resolve_targets(tmp_path, "spark", producers=producers)
+    assert r.returncode != 0
+    assert out == "", "a matrix was emitted without a readable allowlist"
+
+
+@pytest.mark.parametrize("env", [
+    {"PMOVES_BUNDLE_PRODUCER": "5090"},
+    {"PMOVES_BUNDLE_PRODUCERS": "spark,4090"},
+])
+def test_the_puller_warns_on_an_unknown_producer_label(tmp_path, env):
+    r = _run_pull(tmp_path, env, run_id="", artifact="")
+    assert "is not a known Linux producer" in r.stderr
+    bad = (env.get("PMOVES_BUNDLE_PRODUCERS") or env["PMOVES_BUNDLE_PRODUCER"]).split(",")[-1]
+    assert f"'{bad}'" in r.stderr
+    # Non-fatal: the script still reaches its normal recovery hint.
+    assert "gh workflow run" in r.stdout
+
+
+def test_the_puller_is_silent_for_known_producers(tmp_path):
+    r = _run_pull(tmp_path, run_id="", artifact="")
+    assert "not a known Linux producer" not in r.stderr
+
+
+# --------------------------------------------------------------------------
+# infra.mk gha-runner-up: pull before up, RUNNER_SKIP_PULL escape hatch
+# --------------------------------------------------------------------------
+
+@pytest.mark.skipif(shutil.which("make") is None, reason="make not installed")
+@pytest.mark.parametrize("skip", ["", "1"])
+def test_gha_runner_up_pulls_first_or_skips_on_request(tmp_path, skip):
+    """Stub docker (pull fails) and gh (no credential), so nothing real is
+    touched. Without the hatch the target must stop at the failed pull and
+    name RUNNER_SKIP_PULL; with it, it must not pull and must warn."""
+    bindir = tmp_path / "bin"
+    bindir.mkdir()
+    log = tmp_path / "docker.log"
+    _write_exec(bindir / "docker",
+                f'#!/usr/bin/env bash\necho "$*" >> "{log}"\n'
+                'case "$*" in *" pull"*) exit 1;; esac\nexit 0\n')
+    _write_exec(bindir / "gh", "#!/usr/bin/env bash\nexit 1\n")
+    (tmp_path / "home").mkdir()
+    env = {**os.environ, "PATH": f"{bindir}{os.pathsep}{os.environ.get('PATH', '')}",
+           "HOME": str(tmp_path / "home"), "GITHUB_PAT": ""}
+    r = subprocess.run(
+        ["make", "-f", "mk/infra.mk", "gha-runner-up", "RUNNER_NODE=stubnode",
+         f"RUNNER_SKIP_PULL={skip}"],
+        cwd=_ROOT / "pmoves", env=env, capture_output=True, text=True, timeout=60)
+    calls = log.read_text(encoding="utf-8") if log.exists() else ""
+    assert r.returncode != 0  # stub gh never yields a credential
+    assert " up " not in calls + " ", calls
+    if skip:
+        assert " pull" not in calls
+        assert "RUNNER_SKIP_PULL=1: starting on the CACHED image" in r.stdout
+    else:
+        assert calls.strip().endswith("pull")
+        assert "runner image pull failed" in r.stdout
+        assert "RUNNER_SKIP_PULL=1" in r.stdout
+        assert "Resolving runner credential" not in r.stdout, "continued past a failed pull"
