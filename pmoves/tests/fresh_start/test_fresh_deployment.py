@@ -8,9 +8,11 @@ These tests may be destructive and should be run in a test environment.
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 import sys
 import time
+import uuid
 from pathlib import Path
 
 import pytest
@@ -26,61 +28,134 @@ PMOVES_DIR = REPO_ROOT / "pmoves"
 sys.path.insert(0, str(REPO_ROOT))
 
 
+# ---------------------------------------------------------------------------
+# Destructive-fixture isolation (incident 2026-09-26)
+#
+# `fresh_deployment` used to run `docker compose down` with cwd=PMOVES_DIR and
+# no project name. Compose derives the default project name from the cwd's
+# basename -- `pmoves` -- which is also the LIVE stack's project name, so a
+# full-suite run from any checkout or worktree removed every default-profile
+# container of the running stack, then failed to bring it back at teardown
+# because `up -d` had no env files.
+#
+# The fixture is now fail-closed:
+#   * it does nothing (skips) unless PMOVES_DESTRUCTIVE_TESTS=1 is set, and it
+#     checks that BEFORE touching Docker at all (not even `docker info`);
+#   * it refuses if COMPOSE_PROJECT_NAME in the environment names the live
+#     project;
+#   * every compose call carries `-p pmoves-test-<8 hex>` in argv, and the
+#     subprocess env's COMPOSE_PROJECT_NAME is overwritten with the same
+#     throwaway name, so neither the cwd nor the caller's env can select `pmoves`.
+#
+# It never runs `up`: docker-compose.yml pins `container_name:` on many
+# services, so a throwaway project name does NOT isolate an `up` from the live
+# containers. Teardown is a `down --remove-orphans` scoped to the throwaway
+# project (no `-v`).
+# ---------------------------------------------------------------------------
+DESTRUCTIVE_OPT_IN_ENV = "PMOVES_DESTRUCTIVE_TESTS"
+LIVE_PROJECT_NAME = "pmoves"
+TEST_PROJECT_PREFIX = "pmoves-test-"
+TEST_PROJECT_RE = re.compile(r"^pmoves-test-[0-9a-f]{8}$")
+
+
+def throwaway_project_name() -> str:
+    """Return a fresh `pmoves-test-<8 hex>` compose project name."""
+    return f"{TEST_PROJECT_PREFIX}{uuid.uuid4().hex[:8]}"
+
+
+def compose_argv(project: str, *args: str) -> list[str]:
+    """Build a `docker compose` argv pinned to a throwaway project.
+
+    Raises instead of returning an argv that could address the live project.
+    """
+    if project.strip().lower() == LIVE_PROJECT_NAME or not TEST_PROJECT_RE.match(project):
+        raise RuntimeError(
+            f"refusing docker compose with project {project!r}: only "
+            f"{TEST_PROJECT_RE.pattern} is allowed from tests"
+        )
+    return ["docker", "compose", "-p", project, *args]
+
+
+def destructive_refusal(env: dict[str, str] | None = None) -> str | None:
+    """Return why the destructive fixture must not run, or None if it may."""
+    env = os.environ if env is None else env
+    if env.get(DESTRUCTIVE_OPT_IN_ENV) != "1":
+        return (
+            f"fresh_deployment is destructive and opt-in only: set "
+            f"{DESTRUCTIVE_OPT_IN_ENV}=1 to run it (it will use a throwaway "
+            f"'{TEST_PROJECT_PREFIX}<hex>' compose project, never '{LIVE_PROJECT_NAME}')"
+        )
+    if env.get("COMPOSE_PROJECT_NAME", "").strip().lower() == LIVE_PROJECT_NAME:
+        return (
+            f"COMPOSE_PROJECT_NAME={LIVE_PROJECT_NAME!r} is the live stack's project; "
+            "refusing to run the destructive fixture with it in the environment"
+        )
+    return None
+
+
+def _docker_is_available() -> bool:
+    try:
+        result = subprocess.run(["docker", "info"], capture_output=True, timeout=10)
+    except Exception:
+        return False
+    return result.returncode == 0
+
+
 @pytest.fixture(scope="module")
 def docker_available():
-    """Check if Docker is available."""
-    try:
-        result = subprocess.run(
-            ["docker", "info"],
-            capture_output=True,
-            timeout=10,
-        )
-        if result.returncode != 0:
-            pytest.skip("Docker is not running")
-        return True
-    except Exception:
-        pytest.skip("Docker is not available")
+    """Check if Docker is available (read-only `docker info`)."""
+    if not _docker_is_available():
+        pytest.skip("Docker is not running or not available")
+    return True
 
 
 @pytest.fixture(scope="module")
-def fresh_deployment(docker_available):
-    """
-    Start services from clean state.
+def fresh_deployment():
+    """Destructive, opt-in: a clean compose project for the module.
 
-    This fixture is destructive - it stops existing services and
-    rebuilds from scratch. Use with caution.
-    """
-    if not docker_available:
-        return
+    Deliberately does NOT depend on the ``docker_available`` fixture, because
+    that would run ``docker info`` before the opt-in gate. The gate comes first;
+    Docker is only contacted after it passes.
 
-    # Save current state
+    Yields the throwaway project name.
+    """
+    reason = destructive_refusal()
+    if reason:
+        pytest.skip(reason)
+    if not _docker_is_available():
+        pytest.skip("Docker is not running or not available")
+
+    project = throwaway_project_name()
+    env = {**os.environ, "COMPOSE_PROJECT_NAME": project}
+
+    # Clear anything a previous run left in THIS throwaway project only.
     result = subprocess.run(
-        ["docker", "compose", "ps", "--format", "{{.Name}}"],
+        compose_argv(project, "ps", "--format", "{{.Name}}"),
         cwd=PMOVES_DIR,
+        env=env,
         capture_output=True,
         text=True,
     )
-    existing_services = [line for line in result.stdout.strip().split("\n") if line]
-
-    # Stop existing services
-    if existing_services:
+    if [line for line in result.stdout.strip().split("\n") if line]:
         subprocess.run(
-            ["docker", "compose", "down"],
+            compose_argv(project, "down", "--remove-orphans"),
             cwd=PMOVES_DIR,
+            env=env,
             capture_output=True,
             timeout=120,
         )
 
-    yield
+    yield project
 
-    # Cleanup: restart services that were running
-    if existing_services:
-        subprocess.run(
-            ["docker", "compose", "up", "-d"],
-            cwd=PMOVES_DIR,
-            capture_output=True,
-            timeout=300,
-        )
+    # Remove whatever the module created in the throwaway project. No `up`,
+    # no `-v`: see the block comment above.
+    subprocess.run(
+        compose_argv(project, "down", "--remove-orphans"),
+        cwd=PMOVES_DIR,
+        env=env,
+        capture_output=True,
+        timeout=120,
+    )
 
 
 class TestDatabaseMigrations:
