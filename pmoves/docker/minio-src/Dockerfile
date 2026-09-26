@@ -1,5 +1,3 @@
-# syntax=docker/dockerfile:1
-#
 # MinIO server RELEASE.2025-09-07T16-13-09Z, built from source.
 #
 # Why this exists: every published copy of this release is gone.
@@ -12,15 +10,22 @@
 # EXACT release the data in pmoves_minio-data was written by (no backend-format
 # migration risk from a newer/older binary). This is an INTERIM bridge: Garage is
 # the planned object substrate (docs/architecture/JUICEFS_OBJECT_STORE_MIGRATION.md
-# section 0.8). See README.md in this directory.
+# section 0.8). This is a deliberate exception to COMPOSE_BUILD_PROVENANCE.md; the
+# reason and the audit's blind spot are recorded in README.md in this directory,
+# section "Build-provenance exception".
 #
 # Build: make -C pmoves minio-build-src
 #
 # The release tag is ANNOTATED: the tag object and the commit it peels to are
 # different SHAs. After a --branch clone HEAD is the commit, so both are checked.
+#
+# Base images are pinned by multi-arch index digest (re-resolved 2026-09-26).
+# golang 1.24.13 is the latest 1.24.x; the tag's go.mod asks for `go 1.24.0` /
+# `toolchain go1.24.2`, which is a MINIMUM, so the newer local toolchain is used
+# as-is (no download) and picks up the 1.24.x stdlib security fixes.
 
-ARG GO_IMAGE=golang:1.24.2
-ARG RUNTIME_IMAGE=alpine:3.22
+ARG GO_IMAGE=golang:1.24.13@sha256:d2d2bc1c84f7e60d7d2438a3836ae7d0c847f4888464e7ec9ba3a1339a1ee804
+ARG RUNTIME_IMAGE=alpine:3.22.6@sha256:5291449c3df73caf6ed85e649dec1b9e818b39a5d8c871e97afc13e9cd5e8fa8
 
 # ---------------------------------------------------------------- minio server
 FROM ${GO_IMAGE} AS minio-build
