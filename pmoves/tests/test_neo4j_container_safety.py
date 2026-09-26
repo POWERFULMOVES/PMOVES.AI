@@ -114,6 +114,12 @@ def test_no_container_name_is_could_not_measure_not_a_guess(tmp_path):
     assert proc.stdout == ""
 
 
+@pytest.mark.xfail(
+    strict=True,
+    reason="awaits KNOWN_ROAD compose:pr:<this PR>: container_name is not declared in "
+    "docker-compose.yml yet. strict=True makes this FAIL the moment it is, so the "
+    "marker cannot outlive the change it waits for.",
+)
 def test_the_real_compose_names_the_live_container():
     """The name the live Knuckles container already has, so Phase 1b keeps it."""
     assert neo4j_container.container_name() == "pmoves-neo4j"
@@ -184,3 +190,15 @@ def test_make_n_neo4j_backup_renders_no_start():
     assert proc.returncode == 0, proc.stderr[-400:]
     assert "neo4j-local-up" not in proc.stdout
     assert "up -d neo4j" not in proc.stdout
+
+
+def test_make_neo4j_restore_volume_removal_fails_closed():
+    """A removal that failed (volume held by another Neo4j) used to be swallowed,
+    and the recipe went on to start and load over that volume."""
+    r = _recipe("neo4j-restore")
+    vol_lines = [ln for ln in r.splitlines()
+                 if "pmoves_neo4j-data" in ln and not ln.strip().startswith(("@#", "#", "@echo", "echo"))]
+    assert vol_lines, "restore no longer touches the volume -- update this test"
+    for ln in vol_lines:
+        assert not ln.rstrip().endswith("|| true"), ln
+        assert "exit 1" in ln, ln
