@@ -206,12 +206,15 @@ Every item in this subsection is **COULD-NOT-MEASURE** until someone tries it on
 | Setting | Value | Why |
 |---|---|---|
 | `--storage` | `s3` | Garage is a generic S3 target |
-| `--bucket` | `http://<ENDPOINT_KVM>:3900/juicefs` | Path-style. JuiceFS uses path-style for non-AWS endpoints by default (`defaultPathStyle()`, `JFS_S3_VHOST_STYLE` unset) |
+| `--bucket` | `http://<ENDPOINT>:3900/juicefs` | Path-style. JuiceFS uses path-style for non-AWS endpoints by default (`defaultPathStyle()`, `JFS_S3_VHOST_STYLE` unset) |
 | Region | Garage `s3_region = "us-east-1"` | Garage rejects any other region with `AuthorizationHeaderMalformed` (`src/api/common/signature/payload.rs:415`). JuiceFS sends `AWS_REGION`, else `us-east-1`. Matching on the server removes a per-client env var that every mount node would otherwise need. Alternative: keep `garage` and set `AWS_REGION=garage` on every client |
 | TLS | none on the S3 port. Tailnet transport only | Garage's S3 API has no TLS |
-| `<ENDPOINT_KVM>` | **Operator decision D2** | The bucket URL is recorded in metadata and must resolve identically on **every** client (parent §0.2) |
+| `<ENDPOINT>` | **Operator decision D2** (reopened by the fleet-wide layout; see below) | The bucket URL is recorded in metadata and must resolve identically on **every** client (parent §0.2) |
 
-- **Endpoint failover** is metadata-only: `juicefs config "$META" --bucket http://<other-kvm>:3900/juicefs`.
+- **Endpoint failover** is metadata-only: `juicefs config "$META" --bucket http://<other-node>:3900/juicefs`. It is a separate, gated drill (§3 Step e), not part of the node-down test.
+- **D2 options (not decided):**
+  - **(i) One tier-1 node's tailnet name** is recorded as the endpoint, with failover through `juicefs config --bucket`. Spark being down on 2026-09-27 shows that the chosen node can be the one that is down.
+  - **(ii) A name that resolves on each client to that client's own local Garage.** The earlier objection to this, that per-client gateways "spread `rpc_secret` to every lab node", no longer applies: in the fleet-wide layout every storage node already holds `rpc_secret`. Whether one name can resolve per node, and resolve inside Docker bridge networks, is COULD-NOT-MEASURE.
 - **Unverified:** whether containers on a Docker bridge network (`pmoves_data`) resolve MagicDNS names. Gate A tests this.
 
 ### 1.5 Names
@@ -226,9 +229,9 @@ Every item in this subsection is **COULD-NOT-MEASURE** until someone tries it on
 
 | CHIT label | Delivered to | Docker secret | Shape (validate at delivery, not just presence) | Manifest check possible |
 |---|---|---|---|---|
-| `GARAGE_RPC_SECRET` | 3 KVMs | `pmoves_garage_rpc_secret` | 64 hex | `min_length: 64` |
-| `GARAGE_ADMIN_TOKEN` | 3 KVMs + operator | `pmoves_garage_admin_token` | base64 of 32 bytes (44 chars) | `min_length: 44` |
-| `GARAGE_METRICS_TOKEN` | 3 KVMs + Prometheus | `pmoves_garage_metrics_token` | base64 of 32 bytes (44 chars) | `min_length: 44` |
+| `GARAGE_RPC_SECRET` | every storage node (§1.1) | `pmoves_garage_rpc_secret` | 64 hex | `min_length: 64` |
+| `GARAGE_ADMIN_TOKEN` | every storage node + operator | `pmoves_garage_admin_token` | base64 of 32 bytes (44 chars) | `min_length: 44` |
+| `GARAGE_METRICS_TOKEN` | every storage node + Prometheus | `pmoves_garage_metrics_token` | base64 of 32 bytes (44 chars) | `min_length: 44` |
 | `JUICEFS_GARAGE_ACCESS_KEY` | the migration context (Knuckles, operator) | — | `GK` + 24 hex (26 chars) | `prefix: GK`, `min_length: 26` |
 | `JUICEFS_GARAGE_SECRET_KEY` | the migration context, **and later the D1 metadata move** (§2). It must stay deliverable after this plan closes | — | 64 hex | `min_length: 64` |
 
@@ -236,7 +239,12 @@ Every item in this subsection is **COULD-NOT-MEASURE** until someone tries it on
 - **What the manifest can enforce:** only `min_length` and `prefix`. Hex format, base64 format and exact length are **not enforced**. A value of 26 or more characters that starts with `GK` passes, even if it is not hex or is too long. At intake, the operator checks length and character class by hand, without printing the value (the E2B truncation precedent).
 - **Why the secret key outlives this plan:** `juicefs dump` omits the storage secret key unless `--keep-secret-key` is passed. After `juicefs load` into the replicated cluster (D1, §2), the Garage secret has to be re-injected with `juicefs config --secret-key`. So `JUICEFS_GARAGE_SECRET_KEY` cannot be treated as migration-only.
 
-**Delivery vehicle to the KVMs: unconfirmed (G2, COULD-NOT-MEASURE).** "Delivered to 3 KVMs" has no confirmed route today. `.github/workflows/sync-secrets-local.yml` runs on `[self-hosted, ai-lab, <target>]`, with default target `spark`. Target labels must match `[a-z0-9][a-z0-9-]*`, and no KVM runner carrying the `ai-lab` label is known. kvm2 hosts a CI runner, but its labels were not verified. G2 must name the mechanism for **each** KVM before any `GARAGE_*` secret is delivered. That could be a KVM runner label added to the workflow, or an operator-run delivery on the KVM over a non-logged channel. Until then, KVM delivery is COULD-NOT-MEASURE, not assumed.
+**Delivery vehicle to the storage nodes: unconfirmed (G2, COULD-NOT-MEASURE).** No confirmed route exists today for delivering the `GARAGE_*` labels to the KVMs, and none is verified for the Windows nodes.
+- `.github/workflows/sync-secrets-local.yml` runs on `[self-hosted, ai-lab, <target>]`, with default target `spark`. Target labels must match `[a-z0-9][a-z0-9-]*`.
+- No KVM runner carrying the `ai-lab` label is known. kvm2 hosts a CI runner, but its labels were not verified.
+- G2 must name the mechanism for **each** storage node before any `GARAGE_*` secret is delivered. That could be a runner label added to the workflow, or an operator-run delivery on the node over a non-logged channel. Until then, per-node delivery is COULD-NOT-MEASURE, not assumed.
+
+**Bundle producer: never Spark alone.** Spark and b850 (Knuckles) are the secrets-bundle producers, and the workflow's default target is `spark`. Spark was **down** on 2026-09-27. If Garage secret delivery is routed through the bundle, **b850 is the named fallback producer**. A delivery path that works only when Spark is up fails G2.
 
 **Mount nodes do NOT need the Garage key.** JuiceFS stores storage credentials in the volume's format record in the metadata DB, so anyone who can read `juicefs_meta` has this key. That is why it is bucket-scoped.
 
@@ -267,7 +275,7 @@ Every item in this subsection is **COULD-NOT-MEASURE** until someone tries it on
   - The MinIO credential used as the sync source gets the same treatment when the MinIO `juicefs` role is retired.
 - **Shell history.** Never type a credential at a prompt that records history. Prefer the funnel-backed env-file fill in §3. If a value must be typed, first turn history off with `set +o history`, or set `HISTCONTROL=ignorespace` and begin the line with a space.
 
-## 2. Metadata engine: decision input (**D1, the first operator gate**)
+## 2. Metadata engine: **D1 DECIDED: replicated Postgres** (operator)
 
 The data move (§3) and the metadata move are **orthogonal**:
 - `juicefs dump | load` does not touch objects.
@@ -275,26 +283,46 @@ The data move (§3) and the metadata move are **orthogonal**:
 
 **Availability is decided by where metadata lives:**
 
-| Metadata at | Knuckles down | KVMs down | Matches §0.8? |
+| Metadata at | Knuckles down | Tier 1 (KVMs) down | Matches §0.8? |
 |---|---|---|---|
-| Supabase PG on Knuckles (today) | **Everyone** loses `pmoves-media`, including KVM Jellyfin | Everyone loses it (no object store) | **No.** This is the inverse of the accepted asymmetry |
-| Replicated PG on the KVMs | KVM Jellyfin keeps working | Lab loses it (accepted) | **Yes** |
+| Supabase PG on Knuckles (today, until the follow-on move) | **Everyone** loses `pmoves-media`, including KVM Jellyfin | Depends on where the replicas sit (§1.2) | **No.** This is the inverse of the accepted asymmetry |
+| **Replicated PG on tier 1 (DECIDED)** | KVM Jellyfin keeps working, **if** the Garage partitions it reads keep quorum without Knuckles (§1.2) | Lab loses it (accepted) | **Yes** |
 
-| Criterion | A. Keep Supabase PG (Knuckles) | **B. Replicated PG on KVMs** (evaluate first, per §0.5) | C. TiKV / etcd |
+**What D1 fixes, and what it leaves to the follow-on plan:**
+
+1. **Sequencing.** The data move (this runbook) comes first; the metadata move comes second. That means two freezes, each with its own rollback. **Never combine them.** Each change must be separately reversible, and neither rollback may depend on the other change having succeeded.
+2. **Scope.** The metadata move is a **separate follow-on plan**. It is not written here. This section records only the constraints that plan inherits.
+3. **Freeze.** `juicefs dump` is not snapshot-consistent. The dump/load freeze stops **all** mounts and gateways on `pmoves-media` (the same c1 discipline as §3, including the stale-session rule).
+4. **Secret key.** `juicefs dump` omits the storage secret key unless `--keep-secret-key` is passed. Do not pass it, because that writes the Garage secret into the dump file.
+   - After `juicefs load` into the replicated cluster, re-inject the key with `juicefs config --secret-key`, through the §3 env-file route.
+   - So `JUICEFS_GARAGE_SECRET_KEY` must **stay deliverable** after this plan closes (§1.6).
+5. **One writable endpoint.**
+   - A pgx multi-host DSN with `target_session_attrs=read-write` passes through JuiceFS's `newSQLMeta` (JuiceFS `pkg/meta/sql.go:405-451`, per the #3200 review).
+   - **Failover behaviour is COULD-NOT-MEASURE.** JuiceFS defaults `max_life_time=0`, so pooled connections are never recycled and can stay pinned to a demoted primary.
+   - **Sandbox test before adoption:**
+     - Set `max_life_time` in the meta URL.
+     - Kill the primary while a mount is writing.
+     - Observe whether writes resume on the new primary, and how long that takes.
+   - Run it in a sandbox (`make -C pmoves sandbox-preflight`, then `sandbox-create`), never against the live metadata. If the sandbox is unavailable, the result is COULD-NOT-MEASURE; it is not a pass.
+   - The fallback, if the DSN route fails, is a single endpoint in front of the cluster (HAProxy or a VIP) that follows the leader.
+6. **HA manager: Patroni, preferred over repmgr with manual promote.** `pmoves/docs/operations/rto-rpo-targets.md:86` says: "Never run two writable primaries. If read-replicas/HA are added, use a fencing token / single-writer election (e.g., Patroni) — never accept two primaries." A manual promote has no fencing, so it cannot meet that rule.
+   - Patroni's DCS quorum (for example etcd) must tolerate one tier-1 node being down. Spark was down on 2026-09-27, so this is a real case, not a hypothetical. The follow-on plan sizes this.
+7. **RAM.** PG takes ~1-2 GB per node. Measured available RAM: kvm2 5G, kvm4-1 11G, kvm4-2 12G (§1.1). kvm4-2 is over-subscribed per its profile. Garage also runs on the same nodes.
+8. **PR #2728 (MERGED 2026-08-25).** It publishes `supabase-db` tailnet-bound, so remote nodes can mount while metadata is on Knuckles.
+   - Under D1, #2728 is the **interim** path. It stays in use until the metadata move lands.
+   - After the move, JuiceFS no longer needs a tailnet-exposed `supabase-db`. The follow-on plan must **retire that exposure**, unless another consumer depends on it. Which other consumers use it is COULD-NOT-MEASURE here.
+   - The old advice not to merge #2728 on momentum is moot, because it merged.
+
+**The evaluation record (why B):**
+
+| Criterion | A. Keep Supabase PG (Knuckles) | **B. Replicated PG on tier 1: DECIDED** | C. TiKV / etcd |
 |---|---|---|---|
 | Engine migration | none | none (still Postgres) | yes, new engine |
-| Metadata move | none | `juicefs dump --binary` → `juicefs load`, with a write freeze (dump has no snapshot consistency; secrets are omitted unless `--keep-secret-key`) | same |
-| HA | none (single `supabase-db`) | Primary + streaming standby: Patroni + etcd on the 3 KVMs, or repmgr with manual promote | native |
-| One writable endpoint | n/a | pgx multi-host DSN with `target_session_attrs=read-write`: **COULD-NOT-MEASURE** whether JuiceFS's URL handling passes it through (JuiceFS 1.3 uses pgx v5.7.3). Test in a sandbox. Fallback: HAProxy or a VIP | native |
-| KVM RAM | 0 | PG ~1-2 GB per node. kvm4-2 is over-subscribed; kvm2 has 8 GB | TiKV is heavy on 8-16 GB nodes |
+| Metadata move | none | `juicefs dump --binary` → `juicefs load`, all mounts frozen | same |
+| HA | none (single `supabase-db`) | Primary + streaming standby under Patroni (fencing) | native |
+| One writable endpoint | n/a | Multi-host DSN passes through. Failover is COULD-NOT-MEASURE (item 5) | native |
 | Coupling | Shares `supabase-db` with the app | Dedicated | Dedicated |
-| Remote mounts | Need `supabase-db` tailnet exposure (PR #2728, which points at Knuckles) | KVM tailnet endpoint | KVM endpoint |
-
-**Recommendation:** B.
-- Run it as its own plan, after §3, so each change has its own rollback.
-- If B is chosen, do not merge PR #2728 on momentum.
-
-**This is an operator decision.**
+| Remote mounts | `supabase-db` tailnet exposure (#2728, merged) | Tier-1 tailnet endpoint | Tier-1 endpoint |
 
 ## 3. Migration runbook
 
@@ -348,12 +376,12 @@ garage bucket allow --read --write juicefs --key juicefs-pmoves-media
 - `garage bucket info juicefs` lists the key with RW.
 - Functional test from Knuckles **inside `pmoves_data`**, which also proves MagicDNS resolution:
   ```bash
-  jfs 'juicefs objbench --storage s3 --access-key "$DST_AK" --secret-key "$DST_SK" http://<ENDPOINT_KVM>:3900/juicefs'
+  jfs 'juicefs objbench --storage s3 --access-key "$DST_AK" --secret-key "$DST_SK" http://<ENDPOINT>:3900/juicefs'
   ```
   Every functional test must pass, **including list** (the #3199 failure mode).
 - **Sync URL parse proven before pass 1.** A dry run with the exact Step (b) URLs lists both sides and copies nothing:
   ```bash
-  jfs 'juicefs sync --dry --no-https "minio://$SRC_AK:$SRC_SK@minio:9000/juicefs/pmoves-media/" "minio://$DST_AK:$DST_SK@<ENDPOINT_KVM>:3900/juicefs/pmoves-media/"'
+  jfs 'juicefs sync --dry --no-https "minio://$SRC_AK:$SRC_SK@minio:9000/juicefs/pmoves-media/" "minio://$DST_AK:$DST_SK@<ENDPOINT>:3900/juicefs/pmoves-media/"'
   ```
   It must exit 0 and report the MinIO keys as pending copies. A `NoSuchBucket` error naming the host means the URL was parsed virtual-host style (P1-2 of the #3200 review). STOP.
 - **External port probe (§1.3, required):** 3900, 3901 and 3903 are refused or time out on every KVM's public address, probed from a host outside the tailnet. All three ports on all three nodes; one open port fails Gate A.
@@ -364,7 +392,7 @@ garage bucket allow --read --write juicefs --key juicefs-pmoves-media
 # pass 1: live, throttled. Incremental on re-run, NOT resumable (see below)
 jfs 'juicefs sync --no-https --threads 8 --bwlimit <Mbps> \
      "minio://$SRC_AK:$SRC_SK@minio:9000/juicefs/pmoves-media/" \
-     "minio://$DST_AK:$DST_SK@<ENDPOINT_KVM>:3900/juicefs/pmoves-media/"'
+     "minio://$DST_AK:$DST_SK@<ENDPOINT>:3900/juicefs/pmoves-media/"'
 # pass 2 (still before the freeze): re-read and checksum every object on both sides
 jfs 'juicefs sync --no-https --check-all --threads 8 "minio://...same src..." "minio://...same dst..."'
 ```
@@ -372,7 +400,7 @@ jfs 'juicefs sync --no-https --check-all --threads 8 "minio://...same src..." "m
 - **No checkpoint flag.** `--enable-checkpoint` does not exist in the pinned `juicedata/mount:ce-v1.3.0`; it first appears in v1.4.x (v1.4.1 `cmd/sync.go:241`). An interrupted pass 1 is simply re-run. Sync skips keys that already exist on the destination with a matching size, so a re-run re-lists both sides and copies only what is missing or differs. It does not resume mid-object and it re-pays the listing cost. The image is not bumped to v1.4.x for this one flag: every other step, and the live mount, run on ce-v1.3.0.
 - **Scheme for the Garage side is `minio://`, never `s3://`.** For `s3://` URLs, JuiceFS sync's `isS3PathType` treats only localhost, IPv4 literals and AWS hosts as path-style. For any other host, such as a MagicDNS name like `pmoves-kvm4-1`, it takes the bucket from the hostname, and every request goes to the wrong bucket. `minio://` is always path-style.
 - **`--no-https` on every sync.** Both endpoints are plain HTTP: MinIO on `pmoves_data`, and Garage's S3 port, which has no TLS (§1.4). The flag applies to both sides of the call. Whether sync would fall back to HTTP by itself for an `s3://` endpoint (`supportHTTPS`) is **COULD-NOT-MEASURE**; the plan does not depend on it.
-- The `juicefs config --bucket http://<ENDPOINT_KVM>:3900/juicefs` form in c3 and §1.4 is a different parser (the object-store URL of a formatted volume, path-style for non-AWS endpoints). It is correct as written.
+- The `juicefs config --bucket http://<ENDPOINT>:3900/juicefs` form in c3 and §1.4 is a different parser (the object-store URL of a formatted volume, path-style for non-AWS endpoints). It is correct as written.
 
 **Gate B:**
 - Pass 2 (`--check-all`) reports **0 failed**. This full verification runs here, before the freeze, never inside it.
@@ -386,7 +414,7 @@ jfs 'juicefs sync --no-https --check-all --threads 8 "minio://...same src..." "m
 |---|---|---|
 | c1 | Stop every writer: `juicefs-mount` on each mounting node, plus any gateway on `pmoves-media` | `jfs 'juicefs status "$META"'` shows no active Sessions |
 | c2 | Final delta only: `jfs 'juicefs sync --no-https --check-new --threads 8 "minio://...same src..." "minio://...same dst..."'`. `--check-new` checksums only the objects it copies now; everything else was verified by Gate B's `--check-all`. **Never `--check-all` inside the freeze**: it re-reads every object on both sides | 0 failed |
-| c3 | Switch (`juicefs config` put/get/deletes a `testing/` object; do **not** pass `--force`): `jfs 'juicefs config "$META" --storage s3 --bucket http://<ENDPOINT_KVM>:3900/juicefs --access-key "$DST_AK" --secret-key "$DST_SK" --yes'` | exit 0 |
+| c3 | Switch (`juicefs config` put/get/deletes a `testing/` object; do **not** pass `--force`): `jfs 'juicefs config "$META" --storage s3 --bucket http://<ENDPOINT>:3900/juicefs --access-key "$DST_AK" --secret-key "$DST_SK" --yes'` | exit 0 |
 | c4 | `jfs 'juicefs status "$META"'`, then `jfs 'juicefs fsck "$META"'` | `Storage: s3`, the Garage bucket URL, fsck exit 0 and 0 missing blocks |
 | c5 | Remount: `make -C pmoves juicefs-mount-local JUICEFS_DATA_DIR=/mnt/pmoves-nvme1/juicefs-data`, then `make -C pmoves juicefs-mount-status` | Mount up; content dirs listed |
 | c6 | Verify data | The 3 sample `sha256sum`s match Step 0. A write, `sync`, read-back works. `juicefs gc` (no `--delete`) reports **non-zero** scanned objects; zero is the #3199 false-clean signature |
@@ -397,7 +425,7 @@ jfs 'juicefs sync --no-https --check-all --threads 8 "minio://...same src..." "m
 
 ```bash
 # freeze as in c1, then carry back anything written since cutover (no deletes):
-jfs 'juicefs sync --no-https --check-new "minio://...garage...@<ENDPOINT_KVM>:3900/juicefs/pmoves-media/" "minio://...minio...@minio:9000/juicefs/pmoves-media/"'
+jfs 'juicefs sync --no-https --check-new "minio://...garage...@<ENDPOINT>:3900/juicefs/pmoves-media/" "minio://...minio...@minio:9000/juicefs/pmoves-media/"'
 jfs 'juicefs config "$META" --storage minio --bucket http://minio:9000/juicefs --access-key "$SRC_AK" --secret-key "$SRC_SK" --yes'
 jfs 'juicefs fsck "$META"'
 ```
@@ -459,7 +487,7 @@ jfs 'juicefs fsck "$META"'
 | kvm4-2 over-subscribed | OOM kills Garage | Resolve per its profile before G3 |
 | Egress / uplink | Pass 1 saturates Knuckles' uplink. Each `--check-all` pass costs ~85 GB of endpoint-KVM egress | `--bwlimit`, off-hours. An interrupted pass is re-run (incremental by size, not resumable). `--check-all` only outside the freeze |
 | Single S3 endpoint (D2) | Endpoint KVM down: S3 API down even though Garage has quorum | Metadata-only `juicefs config --bucket` failover |
-| MagicDNS inside Docker bridge networks | The mount can't resolve `<ENDPOINT_KVM>`: the same lists-then-fails shape as §0.2 | Gate A runs objbench inside `pmoves_data` |
+| MagicDNS inside Docker bridge networks | The mount can't resolve `<ENDPOINT>`: the same lists-then-fails shape as §0.2 | Gate A runs objbench inside `pmoves_data` |
 | Credential funnel | Truncated or mis-shaped key (the E2B precedent). A secret printed into a transcript | Shape checks (§1.6). `key create` output goes to the intake file only. Complete the 4-place route |
 | Keys stored in metadata | Anyone with `juicefs_meta` read access has the Garage key | Bucket-scoped key, no owner rights. Rotate with `juicefs config --access-key/--secret-key` |
 | `.env`-based guards | Node shape lives in gitignored `pmoves/.env.local`: `JUICEFS_NAME=pmoves-media`, `JUICEFS_NETWORK=pmoves_data` (there only so the mount resolves `minio`), `META_ROLE`, `DATA_DIR`. An empty exported shell var shadows the env files | Re-decide `JUICEFS_NETWORK` after cutover: metadata needs `supabase-db`, Garage needs MagicDNS. Verify with `env -u` |
