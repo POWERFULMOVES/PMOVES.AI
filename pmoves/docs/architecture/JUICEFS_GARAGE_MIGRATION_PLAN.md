@@ -215,7 +215,7 @@ Every item in this subsection is **COULD-NOT-MEASURE** until someone tries it on
 - **D2 options (not decided):**
   - **(i) One tier-1 node's tailnet name** is recorded as the endpoint, with failover through `juicefs config --bucket`. Spark being down on 2026-09-27 shows that the chosen node can be the one that is down.
   - **(ii) A name that resolves on each client to that client's own local Garage.** The earlier objection to this, that per-client gateways "spread `rpc_secret` to every lab node", no longer applies: in the fleet-wide layout every storage node already holds `rpc_secret`. Whether one name can resolve per node, and resolve inside Docker bridge networks, is COULD-NOT-MEASURE.
-- **Unverified:** whether containers on a Docker bridge network (`pmoves_data`) resolve MagicDNS names. Gate A tests this.
+- **COULD-NOT-MEASURE:** whether containers on a Docker bridge network (`pmoves_data`) resolve MagicDNS names. Gate A tests this.
 
 ### 1.5 Names
 
@@ -259,7 +259,7 @@ Every item in this subsection is **COULD-NOT-MEASURE** until someone tries it on
 | Command | Hazard | Handling |
 |---|---|---|
 | `garage key create` | **Prints the secret key to stdout** (`print_key_info`) | Operator context only. Redirect stdout to a `umask 077` intake file, feed that file to the funnel, then `shred -u` it. Never run it in an agent session |
-| `garage key import --yes <GK..> <secret>` | Secret on argv | Alternative when the funnel generates the key. Run it on the KVM, not over a logged channel |
+| `garage key import --yes <GK..> <secret>` | Secret on argv | Alternative when the funnel generates the key. Run it on a storage node, not over a logged channel. The exact Garage v2 `key import` syntax is **COULD-NOT-MEASURE**; check it against the v2.4.1 CLI help before use |
 | `garage key info --show-secret` | Prints the secret | Do not use |
 | `juicefs config --secret-key` | Does not read `SECRET_KEY` from env (v1.3.0 `cmd/config.go`), so the secret is on argv | Pass it in through the `jfs()` env file (§3) and expand it inside `sh -c`. It is then in the juicefs process argv for the seconds the call runs |
 | `juicefs sync minio://AK:SK@...` | juicefs sync 1.3.0 reads object-store credentials **only from the URL**. There are no `SRC_*`/`DST_*` env vars in JuiceFS. The `SRC_AK`-style names in §3 are plain shell variables, expanded by `sh -c` inside the container | URL-encode `/` as `%2F` in the URL form. The exposure is stated below; it cannot be avoided with 1.3.0 |

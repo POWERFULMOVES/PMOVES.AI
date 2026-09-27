@@ -123,9 +123,11 @@ Both are materially larger than this spec.
 ### 0.7 Consequences for work in flight
 
 - **PR #2728** (Step 4: multi-home `supabase-db` onto `pmoves_external`, publish
-  the DB port tailnet-bound) assumes **b850 stays the metadata host**. If
-  metadata moves to a KVM, that PR is pointed the wrong way and should not merge
-  on momentum. It is not wrong today — it is scoped to a topology under review.
+  the DB port tailnet-bound) **MERGED 2026-08-25**. Under D1 (replicated
+  Postgres, decided; see `JUICEFS_GARAGE_MIGRATION_PLAN.md` §2) it is the
+  **interim** remote-mount path while metadata stays on b850. After the
+  metadata move, JuiceFS no longer needs the tailnet `supabase-db` exposure, and
+  the follow-on plan should retire it unless another consumer depends on it.
 - The `pmoves-media` volume needs a **reformat or a bucket-URL correction**
   regardless of the engine decision; §0.2 blocks every remote mount on its own.
 - The cross-node preflight should gain a **bucket-URL reachability check** to
@@ -149,6 +151,8 @@ Still open, and now the *first* question rather than a foregone one:
 - **Metadata engine.** §0.5's correction means replicated Postgres is a live
   candidate, not a disqualified one — and it is the only candidate requiring no
   engine migration. Evaluate it before TiKV.
+  **DECIDED later (2026-09-27): replicated Postgres (D1).** See
+  `JUICEFS_GARAGE_MIGRATION_PLAN.md` §2.
 
 ### 0.9 What this revision still does NOT decide
 
@@ -158,11 +162,14 @@ now satisfy. §4.1 stays below, unedited, as the record of what was decided in
 June and why — the reasoning was sound for a single-node stack and should not be
 retconned.
 
-**Next (2026-09-26):** the Garage data-backend move now has a plan and runbook:
-[`JUICEFS_GARAGE_MIGRATION_PLAN.md`](JUICEFS_GARAGE_MIGRATION_PLAN.md). It covers
-RF=3 on the three KVMs, a verified gate at every step, rollback to the untouched
-MinIO bucket, and soak before the interim MinIO bridge (#3192) is retired. The
-metadata engine remains open and is that plan's first operator gate (D1).
+**Next (2026-09-26, updated 2026-09-27):** the Garage data-backend move now has a
+plan and runbook: [`JUICEFS_GARAGE_MIGRATION_PLAN.md`](JUICEFS_GARAGE_MIGRATION_PLAN.md).
+Operator direction broadened §0.8 to a **fleet-wide** Garage mesh: every capable
+node is a storage node and a JuiceFS client. The tiers are decided: tier 1
+(always-on) is the KVMs plus Spark, and tier 2 is 5090, Z890, Knuckles and 4090.
+The plan uses RF=3, gates every step, rolls back to MinIO, and soaks before the
+interim MinIO bridge (#3192) retires. The metadata engine is **decided: replicated
+Postgres (D1)**. It moves under a separate follow-on plan, after the data move.
 
 ---
 
