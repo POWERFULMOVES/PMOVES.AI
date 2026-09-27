@@ -5,8 +5,8 @@
 # Safe cleanup: images + build cache + stale workspaces.
 # NEVER prunes volumes (fleet data is co-hosted).
 #
-# Install:
-#   sudo cp docker-fleet-cleanup.sh /usr/local/bin/
+# Install (preferred: sudo make -C pmoves docker-fleet-cleanup-install):
+#   sudo cp docker-fleet-cleanup.sh pmoves-buildx-cap.sh /usr/local/bin/
 #   sudo cp docker-fleet-cleanup.{service,timer} /etc/systemd/system/
 #   sudo systemctl enable --now docker-fleet-cleanup.timer
 #
@@ -31,6 +31,22 @@ docker container prune -f 2>/dev/null || true
 log "Pruning build cache..."
 docker builder prune -af 2>/dev/null || true
 
+# Phase 2a: Bound the SHARED CI builder (pmoves-shared) to its cap.
+# Its cache lives in buildx_buildkit_pmoves-shared0_state, which exists between
+# jobs with no builder attached, so `docker builder prune` above cannot reach it
+# (measured 2026-09-27: 139.5GB / 146.4GB on the KVMs against a 30GB cap).
+# pmoves-buildx-cap.sh is the one implementation; `make docker-fleet-cleanup-install`
+# installs it beside this script. It must run BEFORE Phase 2b, and Phase 2b must
+# not sweep its volume: the shared cache is bounded, never deleted.
+SHARED_STATE_VOLUME="buildx_buildkit_pmoves-shared0_state"
+CAP_SCRIPT="$(dirname "$(readlink -f "$0")")/pmoves-buildx-cap.sh"
+if [ -f "$CAP_SCRIPT" ]; then
+    log "Bounding shared buildx builder..."
+    bash "$CAP_SCRIPT" || log "WARNING: pmoves-buildx-cap.sh exited $? (shared builder NOT bounded)"
+else
+    log "WARNING: $CAP_SCRIPT missing (re-run: sudo make docker-fleet-cleanup-install); shared builder NOT bounded"
+fi
+
 # Phase 2b: Reclaim inactive buildx builders + orphaned state volumes.
 # `docker builder prune` clears cache INSIDE builders but leaves the builders —
 # and their buildx_buildkit_*_state volumes — standing, which is where the
@@ -42,6 +58,7 @@ docker builder prune -af 2>/dev/null || true
 log "Reclaiming inactive buildx builders + orphaned state volumes..."
 docker buildx rm --all-inactive --force 2>/dev/null || true
 docker volume ls -q --filter dangling=true --filter name=buildx_buildkit_ 2>/dev/null \
+  | grep -vxF "$SHARED_STATE_VOLUME" \
   | while read -r v; do docker volume rm "$v" 2>/dev/null || true; done || true
 
 # Phase 3: Unused images older than 72h

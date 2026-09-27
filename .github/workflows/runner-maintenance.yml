@@ -158,3 +158,32 @@ jobs:
           echo "Disk after cleanup:"
           df -h
           docker system df || true
+
+      # ---------------------------------------------------------------
+      # Bound the SHARED builder (pmoves-shared). Nothing above reaches it:
+      # between jobs the builder does not exist (setup-buildx removes it at
+      # post and keeps its state volume), `docker builder prune` only reaches
+      # the DEFAULT builder, and the reclaim loop matches only the old per-run
+      # `buildx_buildkit_builder-*` names. Measured 2026-09-27: the state volume
+      # `buildx_buildkit_pmoves-shared0_state` was 139.5GB on kvm4-1 and 146.4GB
+      # on kvm4-2 while this workflow succeeded every night.
+      #
+      # The script re-attaches the builder by name (same node, so it mounts the
+      # kept volume), prunes it to the cap, and detaches with --keep-state. It
+      # never removes the volume and never prunes with --all.
+      #
+      # Safe on a runner: a runner executes one job at a time, so while this job
+      # holds the runner no build on it can be using the builder. b850 has TWO
+      # runners on one daemon, so the script also skips when the builder
+      # container is already running (a build on the other runner).
+      # ---------------------------------------------------------------
+      - name: Check out cap script
+        if: ${{ github.event.inputs.runner_label == '' || github.event.inputs.runner_label == matrix.label }}
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          sparse-checkout: deploy/provision
+          persist-credentials: false
+
+      - name: Bound shared buildx builder to the cap
+        if: ${{ github.event.inputs.runner_label == '' || github.event.inputs.runner_label == matrix.label }}
+        run: bash deploy/provision/pmoves-buildx-cap.sh

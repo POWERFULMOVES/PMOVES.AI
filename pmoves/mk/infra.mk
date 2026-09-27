@@ -114,6 +114,8 @@ cleanup-parity-check: ## Assert the 3 Docker-cleanup implementations have not dr
 # Prevents BuildKit cache accumulation (root cause of 148GB disk-full events).
 # NEVER prunes volumes (fleet data is co-hosted).
 CLEANUP_SCRIPT := ../deploy/provision/docker-fleet-cleanup.sh
+# Called by CLEANUP_SCRIPT from its own directory (bounds the shared CI builder).
+CLEANUP_CAP_SCRIPT := ../deploy/provision/pmoves-buildx-cap.sh
 CLEANUP_SERVICE := ../deploy/provision/docker-fleet-cleanup.service
 CLEANUP_TIMER := ../deploy/provision/docker-fleet-cleanup.timer
 
@@ -199,6 +201,8 @@ docker-fleet-cleanup-install: ## Install daily Docker cleanup systemd timer (run
 	fi
 	@cp $(CLEANUP_SCRIPT) /usr/local/bin/docker-fleet-cleanup.sh
 	@chmod +x /usr/local/bin/docker-fleet-cleanup.sh
+	@cp $(CLEANUP_CAP_SCRIPT) /usr/local/bin/pmoves-buildx-cap.sh
+	@chmod +x /usr/local/bin/pmoves-buildx-cap.sh
 	@cp $(CLEANUP_SERVICE) /etc/systemd/system/
 	@cp $(CLEANUP_TIMER) /etc/systemd/system/
 	@systemctl daemon-reload
