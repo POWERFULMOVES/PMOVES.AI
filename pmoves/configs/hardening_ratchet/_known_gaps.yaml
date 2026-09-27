@@ -15,6 +15,17 @@ known_gaps:
   - "NO_USER|.github/runners/Dockerfile"
   - "NO_USER|pmoves-nats-mcp/Dockerfile"
   - "NO_USER|pmoves/compose/n8n/Dockerfile"
+  - entry: "NO_USER|pmoves/docker/minio-src/Dockerfile"
+    kind: deliberate
+    reason: >-
+      Interim source build of minio RELEASE.2025-09-07T16-13-09Z (#3192) that
+      restores MinIO on its ORIGINAL volume. Upstream minio/minio ran as root,
+      so every file in pmoves_minio-data is root-owned (measured 2026-09-26:
+      /data, .minio.sys and the juicefs bucket are uid 0, and 0 non-root
+      entries at depth 2). A non-root USER would lose write access to the
+      data it exists to serve, or would need a chown of the 85 GB volume.
+      Matching upstream is the point of the bridge. Garage replaces it
+      (JUICEFS_OBJECT_STORE_MIGRATION.md section 0.8), which retires this entry.
   - "NO_USER|pmoves/docker/pmoves-4090-web/Dockerfile"
   - entry: "NO_USER|pmoves/docs/PMOVES.AI PLANS/Enhanced Media Stack with Advanced AudioVideo Analysis/Dockerfile"
     kind: not-deployed

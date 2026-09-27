@@ -51,6 +51,35 @@ if (Test-Path $envf) {
         'CLAUDECODE', 'CLAUDE_CODE_*', 'CLAUDE_SESSION_*'
     ) -replace '\*', '.*'
 
+    # Strip blocklisted vars from PARENT env before exec claude. The blocklist
+    # above filters env.shared (the file being sourced), but the parent shell
+    # may have set ANTHROPIC_API_KEY via $PROFILE, env.tier-llm, or a prior
+    # session export. Without this unset, the child process inherits them on
+    # the way to exec claude and the auth-precedence warning fires
+    # ("claude.ai connectors disabled because ANTHROPIC_API_KEY takes
+    # precedence"). The .sh twin performs the same sweep — keep them
+    # byte-identical.
+    $cleared = @()
+    foreach ($var in @('ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_BASE_URL')) {
+        if (Test-Path "Env:$var") {
+            $cleared += $var
+            [Environment]::SetEnvironmentVariable($var, $null, 'Process')
+        }
+    }
+    # PowerShell: enumerate process env, match prefix patterns, unset matches.
+    $processEnv = [Environment]::GetEnvironmentVariables('Process')
+    foreach ($prefix in @('CLAUDECODE', 'CLAUDE_CODE_', 'CLAUDE_SESSION_')) {
+        foreach ($key in @($processEnv.Keys)) {
+            if ($key -like "${prefix}*") {
+                $cleared += $key
+                [Environment]::SetEnvironmentVariable($key, $null, 'Process')
+            }
+        }
+    }
+    if ($cleared.Count -gt 0) {
+        Write-Host "[claude-pmoves] cleared auth vars from parent env: $($cleared -join ' ')" -ForegroundColor Yellow
+    }
+
     # Pass 1: read KEY=VALUE verbatim into an ordered map, skipping blocklisted keys.
     # Values are NOT set into the environment yet — env.shared has ALIAS lines like
     # SUPABASE_SERVICE_ROLE_KEY=${SERVICE_ROLE_KEY}; exporting them verbatim leaks

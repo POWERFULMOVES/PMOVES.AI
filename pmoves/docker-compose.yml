@@ -1577,7 +1577,13 @@ services:
   neo4j:
     # Graceful stop: Page-cache flush and checkpoint on shutdown.
     stop_grace_period: 60s
-    image: neo4j:5.26.22
+    # = the digest the live Knuckles graph runs today (5.26.30, a multi-arch
+    #   index Docker Hub still serves), so moving under compose changes no store
+    #   version. neo4j:5-community now means 5.26.31. (#3193)
+    image: neo4j:5.26.30-community@sha256:037cf5756f0135cbfd66b739b6df7c7c4bb100f9ce11602f6f9538e17e02c74d
+    # The name the live container already has, and the single name source read
+    # by scripts/neo4j_container.py (backup, restore, start-cipher-stack).
+    container_name: pmoves-neo4j
     env_file:
     - env.tier-data
     cap_drop:
@@ -1595,6 +1601,15 @@ services:
     environment:
     - NEO4J_AUTH=neo4j/${NEO4J_PASSWORD:?Set NEO4J_PASSWORD in env.tier-data}
     - NEO4J_dbms_security_allow__csv__import__from__file__urls=true
+    # Deny LOAD CSV (http/https) to EVERY address, checked AFTER name resolution:
+    # defense in depth even on internal-only networks (it also stops Cypher from
+    # reaching the host gateway, the LAN, or other containers). Verified on the
+    # pinned 5.26.30 Community image (#3201): strict validation recognises the
+    # key, and LOAD CSV of an IP literal or a resolvable hostname fails with
+    # "access to ... is blocked via the configuration property
+    # internal.dbms.cypher_ip_blocklist" (a plain connection error without it).
+    # `internal.*` = unsupported by Neo4j; the digest pin keeps it stable.
+    - NEO4J_internal_dbms_cypher__ip__blocklist=0.0.0.0/0,::/0
     - NEO4J_server_config_strict__validation_enabled=false
     # APOC extensions with safe procedure allowlist
     - NEO4J_apoc_export_file_enabled=true
@@ -1606,15 +1621,30 @@ services:
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
-    - PMOVES_NETWORKS=pmoves_data
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_data,pmoves_graph_front
     ports:
     - ${NEO4J_BIND:-0.0.0.0}:${NEO4J_HTTP_PORT:-7474}:7474
     - ${NEO4J_BIND:-0.0.0.0}:${NEO4J_BOLT_PORT:-7687}:7687
     volumes:
     - neo4j-data:/data
     - ./neo4j/cypher:/cypher:ro
+    # Every AGInT that uses the graph must reach it (#3196). Measured consumers:
+    # agent-zero's seeded Neo4j MCP (bolt://neo4j:7687, from the agent-zero
+    # container: api/app/bus/external), archon (app/bus), cipher-api and the
+    # hi-rag gateways (data, plus bus). The alias on each network keeps one name.
     networks:
-    - pmoves_data
+      pmoves_app:
+        aliases:
+        - neo4j
+      pmoves_bus:
+        aliases:
+        - neo4j
+      pmoves_data:
+        aliases:
+        - neo4j
+      # Internal link to the tailnet forwarder only (#3201). No alias needed:
+      # compose registers the service name `neo4j` on every network it joins.
+      pmoves_graph_front:
     healthcheck:
       test:
       - CMD-SHELL
@@ -1632,15 +1662,23 @@ services:
     # Graceful stop: Completes in-flight PUTs before exit.
     stop_grace_period: 30s
     <<: *tier-data-hardened
-    # Pin = the LAST community RELEASE tag MinIO published to Docker Hub
-    # (RELEASE.2025-09-07T16-13-09Z, 2025-09-07). The prior pin
-    # RELEASE.2025-12-20T04-58-37Z was a phantom — a December date AFTER MinIO
-    # stopped publishing minio/minio community images, so it 404s on the registry
-    # ("not found") and broke every data-tier bring-up. Verified 2026-06-22:
-    # 2025-09-07 is the newest tag on hub.docker.com/r/minio/minio.
-    # ⚠️ MinIO Community Edition is EOL/archived (Feb 2026); this tag is the
-    # ceiling. Migration to SeaweedFS/Garage/Enterprise is the durable fix.
-    image: ${MINIO_IMAGE:-minio/minio:RELEASE.2025-09-07T16-13-09Z}
+    # Pin = RELEASE.2025-09-07T16-13-09Z, the last community release and the one
+    # the data in pmoves_minio-data was written by. Every published copy is now
+    # gone (measured 2026-09-26): docker.io/minio/minio 401 (repo deleted),
+    # quay.io/minio/minio 401 anonymously (public-quay control = 200),
+    # ghcr.io/minio/minio 403, dl.min.io archive 410 Gone. So the default is a
+    # LOCAL image built from the archived GitHub tag, with the tag-object and
+    # commit SHAs verified: run `make -C pmoves minio-build-src` first
+    # (docker/minio-src/). It is not published to any registry. The tag lives in
+    # OUR org namespace (ghcr.io/powerfulmoves), so an unbuilt node that falls
+    # through to a pull FAILS CLOSED against our own org (anonymous HEAD = 403)
+    # instead of pulling a third party's image from an unowned namespace. `make
+    # up-minio` checks for the image first and names the fix. A node that still
+    # has upstream cached may set MINIO_IMAGE=minio/minio:RELEASE.2025-09-07T16-13-09Z.
+    # COUPLING: must equal MINIO_SRC_TAG in pmoves/Makefile.
+    # ⚠️ INTERIM: MinIO Community Edition is EOL/archived. Garage is the planned
+    # object substrate (docs/architecture/JUICEFS_OBJECT_STORE_MIGRATION.md §0.8).
+    image: ${MINIO_IMAGE:-ghcr.io/powerfulmoves/pmoves-minio:RELEASE.2025-09-07T16-13-09Z-src}
     # Only data-tier service without a restart policy — every Docker Desktop
     # restart left MinIO dead (Exited 255) until manually started, which is
     # how it sat down for 9 days and silently blocked the YT pipeline.
@@ -6407,6 +6445,19 @@ networks:
       config:
       - subnet: 172.30.4.0/24
         gateway: 172.30.4.1
+  # Graph front (#3201, option A): the ONLY link between the tailnet forwarder
+  # (docker-compose.neo4j-tailnet.yml) and neo4j. Internal, and joined by exactly
+  # those two, so a compromised forwarder reaches Neo4j and nothing else on the
+  # data tier (least privilege; it is deliberately NOT on pmoves_data).
+  # Subnet 172.30.9.0/24 is permanent (DOCKER_NETWORK_HARDENING Rule 2).
+  pmoves_graph_front:
+    <<: *network-internal-only
+    name: pmoves_graph_front
+    ipam:
+      driver: default
+      config:
+      - subnet: 172.30.9.0/24
+        gateway: 172.30.9.1
   # Host-reachable tier. Kong proxy/admin and PostgREST attach here; the
   # services still default to 127.0.0.1 host binds for safer standalone
   # operation. Being internal:false this is ALSO egress-capable -- see the
