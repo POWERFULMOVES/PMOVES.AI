@@ -263,6 +263,10 @@ launchers-manifest: ## Print the launcher inventory (registry-driven)
 launchers-clean: ## Remove only generator-emitted files (leaves hand-written launchers intact)
 	@echo "Re-run 'make launchers-regen' to restore generator-emitted launchers."
 
+.PHONY: launcher-self-check
+launcher-self-check: ## Run the launcher auth-sanitize guard test (deploy/provision tests are not wired into CI)
+	@bash ../deploy/provision/tests/test-launcher-auth-sanitize.sh
+
 # -------- Standard Makefile targets ----------
 .PHONY: all
 all: help ## Default target - show help
