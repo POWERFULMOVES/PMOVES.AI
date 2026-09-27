@@ -246,3 +246,47 @@ def test_an_ipv6_zone_id_is_refused(tmp_path):
     rc, out, rec = _make(tmp_path, "NEO4J_BIND=fe80::1%eth0\n", *RENDER)
     assert rc != 0 and "malformed" in out and "eth0" not in out
     assert rec == ""
+
+
+# --- unexport NEO4J_BIND: make >= 4.4 hands exported vars to $(shell) ----------
+
+def _unexport_and_risky(lines: list[str]) -> tuple[list[int], list[int]]:
+    code = [(i, ln) for i, ln in enumerate(lines) if not ln.lstrip().startswith("#")]
+    unexport = [i for i, ln in code if ln.strip() == "unexport NEO4J_BIND"]
+    risky = [i for i, ln in code
+             if ln.lstrip().startswith(("include ", "-include ", "sinclude "))
+             or "$(shell" in ln]
+    return unexport, risky
+
+
+def test_unexport_neo4j_bind_precedes_every_include_and_shell_call():
+    """On make >= 4.4 a command-line NEO4J_BIND is exported and $(shell ...)
+    receives -- and EXPANDS -- exported variables, so a payload could run at the
+    first parse-time $(shell) before the validator. This node and CI run make
+    4.3 and cannot observe that; the ordering is asserted structurally, as for
+    KEY (tests/tools/test_env_local_key.py)."""
+    lines = (PMOVES / "Makefile").read_text().splitlines()
+    unexport, risky = _unexport_and_risky(lines)
+    assert len(unexport) == 1, f"expected exactly one `unexport NEO4J_BIND`, found {len(unexport)}"
+    assert risky, "structural check found no include/$(shell) lines -- parser is broken"
+    assert unexport[0] < min(risky), (
+        f"`unexport NEO4J_BIND` at line {unexport[0] + 1} comes after line {min(risky) + 1}: "
+        f"{lines[min(risky)].strip()!r}")
+
+
+def test_positive_control_the_ordering_check_catches_a_late_unexport():
+    src = (PMOVES / "Makefile").read_text().replace("\nunexport NEO4J_BIND\n", "\n", 1)
+    unexport, risky = _unexport_and_risky((src + "\nunexport NEO4J_BIND\n").splitlines())
+    assert unexport and risky and unexport[0] > min(risky)
+
+
+def test_only_the_validated_value_is_re_exported(tmp_path):
+    """`unexport` stops the caller's raw variable reaching children; the block
+    re-exports the CHECKED value. An exported-but-empty caller value with no
+    file now reaches compose as unset, not as an empty string."""
+    rc, out, rec = _make(tmp_path, None, *RENDER, extra_env={"NEO4J_BIND": ""})
+    assert rc == 0, out
+    assert _bind_seen(rec) == "<unset>"
+    rc, out, rec = _make(tmp_path / "v6", None, *RENDER, extra_env={"NEO4J_BIND": FAKE_V6})
+    assert rc == 0, out
+    assert _bind_seen(rec) == f"[{FAKE_V6}]", "the checked, normalised value -- not the raw one"

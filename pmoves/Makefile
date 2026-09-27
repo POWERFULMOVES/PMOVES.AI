@@ -22,6 +22,18 @@ unexport KEY
 # (KEY="${KEY:-...}"), is not a victim: line 46 resets KEY="" first, and no make
 # target invokes it. Sub-makes still get KEY via MAKEFLAGS, unexpanded.
 
+unexport NEO4J_BIND
+# ^ Same mechanism as KEY above, and it must sit in the same place: above every
+# include and every $(shell ...). A command-line NEO4J_BIND is exported by
+# default, and on make >= 4.4 $(shell ...) receives exported variables,
+# EXPANDING them into the child env -- so NEO4J_BIND='$(shell touch X)' would
+# run during the first parse-time $(shell) (e.g. the NEO4J_BIND block's own
+# mktemp), before the validator ever sees it. The NEO4J_BIND block below reads
+# the raw text with $(value NEO4J_BIND) (unaffected by this) and re-exports ONLY
+# the validated value with `override export NEO4J_BIND := ...`.
+# REASONED, not measured on make 4.4: this node and CI run make 4.3.
+# tests/test_neo4j_bind_passthrough.py asserts the ordering structurally.
+
 # Many targets rely on bashisms (heredocs, arrays, $'...' quoting).
 # On Windows, force Git Bash to avoid cmd.exe fallback for bash-style recipes.
 ifeq ($(OS),Windows_NT)
