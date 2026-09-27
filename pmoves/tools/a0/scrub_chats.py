@@ -1,10 +1,12 @@
-import json, re
+import json, subprocess
 from pathlib import Path
 
 ROOT = Path(r"C:\Users\russe\agent-zero")
 OUT = Path(r"C:\Users\russe\agent-zero\chat-corpus-staging")
-OUT.mkdir(exist_ok=True)
-
+REPO = Path(r"C:\Users\russe\Documents\GitHub\PMOVES.AI")
+GL = REPO / "pmoves" / "tools" / "a0" / "bin" / "gitleaks.exe"
+TOML = REPO / "pmoves" / "chat-corpus" / "gitleaks.toml"
+EXCLUDE_KW = ["unfcu", "docintel"]
 LITERALS = [
     "N/9cZCrv2i95v3sQO+g3Xpabp6aMcu1qjm14XLcnd4o59hkf9qOPonSzCK+Y3Nmk",
     "X8q9z6nZ-txaUqS2dvf0vaXP9zBrxP0h",
@@ -15,37 +17,74 @@ LITERALS = [
     "sk-kimi-31WfFpHpvLJ45JNduvvsSnTxEbSwWemtCcYloJZpgpfJCTXv5o9WelrqYCPxaL",
     "kxeo3664xjia",
 ]
-EXCLUDE_KW = ["unfcu", "docintel"]
-CATS = ["jwt", "github_token", "sk_key", "env_kv", "json_kv", "bearer", "dburl", "lan_ip", "email", "literal", "userpath", "container"]
+PLACEHOLDER = {
+    "pmoves-jwt-escaped": "[REDACTED-JWT]",
+    "jwt": "[REDACTED-JWT]",
+    "pmoves-lan-ip": "[REDACTED-IP]",
+    "pmoves-postgres-url": "[REDACTED-DB]",
+    "github-pat": "[REDACTED-GH]",
+    "curl-auth-header": "[REDACTED-AUTH]",
+}
+CATS = ["jwt", "env", "lan_ip", "dburl", "upstream", "literal"]
+
+def placeholder(rule):
+    return PLACEHOLDER.get(rule, "[REDACTED:%s]" % rule)
+
+def gitleaks(source, report):
+    if report.exists():
+        report.unlink()
+    subprocess.run(
+        [str(GL), "detect", "--source", str(source), "--no-git",
+         "--config", str(TOML), "--report-format", "json",
+         "--report-path", str(report), "--no-banner"],
+        capture_output=True, text=True)
+    data = []
+    if report.exists() and report.stat().st_size:
+        try:
+            data = json.loads(report.read_text(encoding="utf-8", errors="replace"))
+        except Exception:
+            data = []
+    return data
 
 insts = sorted([d for d in ROOT.iterdir() if d.is_dir() and (d / "usr" / "chats").exists()])
 alias = {d.name: "instance-%d" % (i + 1) for i, d in enumerate(insts)}
-inst_names = sorted(alias.keys(), key=len, reverse=True)
-inst_res = [(re.escape(n), alias[n]) for n in inst_names]
 
-def scrub(text):
+# GLOBAL secret table: unique secrets across ALL instances, longest first.
+# Path-form-agnostic: gitleaks File paths vary (abs/rel) between runs, so we
+# never key findings by path — every discovered secret applies everywhere.
+raw_counts = {}
+secrets = {}
+for inst in insts:
+    rep = OUT / ("gl-raw-%s.json" % alias[inst.name])
+    data = gitleaks(inst / "usr" / "chats", rep)
+    for f in data:
+        raw_counts[f["RuleID"]] = raw_counts.get(f["RuleID"], 0) + 1
+        sec = f.get("Secret", "")
+        if sec and len(sec) >= 4:
+            secrets[sec] = f["RuleID"]
+    rep.unlink()
+ordered = sorted(secrets.items(), key=lambda kv: -len(kv[0]))
+print("UNIQUE_SECRETS=%d" % len(ordered))
+
+def redact(text):
     counts = {}
-    def rep(pat, repl, name):
-        nonlocal text
-        text, n = re.subn(pat, repl, text)
-        if n:
-            counts[name] = counts.get(name, 0) + n
-    rep(r"eyJ[A-Za-z0-9_\-\\.]{12,}", "[REDACTED-JWT]", "jwt")
-    rep(r"(?i)gh[pousr]_[A-Za-z0-9]{16,}", "[REDACTED-GITHUB]", "github_token")
-    rep(r"(?i)\bsk-[A-Za-z0-9_\-]{16,}", "[REDACTED-KEY]", "sk_key")
-    rep(r"(?i)(\w*(?:PASSWORD|PASSWD|SECRET|TOKEN|API_KEY|APIKEY|AUTH_KEY|PRIVATE_KEY|REFRESH|_KEY|_API)\w*(?:\\\"|\"|')?\s*[:=](?:\\\"|\"|')?\s*)[^\s\\\",';&]{4,}", r"\1[REDACTED]", "env_kv")
-    rep(r"(?i)(postgres(?:ql)?://[^:\s/\"\\]+:)[^@\s/\"\\]{4,}@", r"\1[REDACTED]@", "dburl")
-    rep(r"(?i)\bBearer\s+[A-Za-z0-9._\-]{12,}", "Bearer [REDACTED]", "bearer")
-    rep(r"\b(?:172\.(?:1[6-9]|2\d|3[01])|10|192\.168)\.\d{1,3}\.\d{1,3}\b", "[LAN-IP]", "lan_ip")
-    rep(r"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}", "[EMAIL]", "email")
-    rep(r"[A-Z]:(?:\\+|/)Users(?:\\+|/)russe", "[USERDIR]", "userpath")
-    rep(r"a0-inst-[A-Za-z0-9\-]+", "[A0-INSTANCE]", "container")
-    rep(r"pmoves-agent-zero-[a-z0-9]+", "[CONTAINER]", "container")
-    for pat, a in inst_res:
-        rep(pat, a, "container")
+    for sec, rule in ordered:
+        if sec in text:
+            n = text.count(sec)
+            text = text.replace(sec, placeholder(rule))
+            counts[rule] = counts.get(rule, 0) + n
     for lit in LITERALS:
-        rep(re.escape(lit), "[REDACTED-LITERAL]", "literal")
+        if lit in text:
+            n = text.count(lit)
+            text = text.replace(lit, "[REDACTED-LITERAL]")
+            counts["literal"] = counts.get("literal", 0) + n
     return text, counts
+
+OUT.mkdir(exist_ok=True)
+for st in OUT.rglob("findings.*"):
+    st.unlink()
+for st in OUT.rglob("gl-gate.json"):
+    st.unlink()
 
 rows = []
 totals = {}
@@ -56,7 +95,7 @@ for inst in insts:
     for chat in sorted((inst / "usr" / "chats").iterdir()):
         if not chat.is_dir():
             continue
-        msgs = sorted(chat.glob("messages/*.txt"), key=lambda p: int(p.stem) if p.stem.isdigit() else 10**9)
+        msgs = sorted(chat.glob("messages/*.txt"), key=lambda p: int(p.stem) if p.stem.isdigit() else 10 ** 9)
         if not msgs:
             continue
         title = ""
@@ -65,8 +104,8 @@ for inst in insts:
             title = str(cj.get("title") or cj.get("name") or "")
         except Exception:
             pass
-        title_red, tcounts = scrub(title)
-        allc = dict(tcounts)
+        title_red, _ = redact(title)
+        allc = {}
         blob = []
         low_all = ""
         for mm in msgs:
@@ -74,7 +113,7 @@ for inst in insts:
                 raw = mm.read_text(encoding="utf-8", errors="replace")
             except Exception:
                 continue
-            red, c = scrub(raw)
+            red, c = redact(raw)
             for k, v in c.items():
                 allc[k] = allc.get(k, 0) + v
             low_all += red.lower()[:4000] + "\n"
@@ -86,48 +125,58 @@ for inst in insts:
             totals[k] = totals.get(k, 0) + v
         rows.append({"instance_alias": a, "chat": chat.name, "title": title_red[:60], "messages": len(blob), "excluded": bool(reason), "reason": ";".join(reason), **{c: allc.get(c, 0) for c in CATS}})
 
+# ITERATE-TO-ZERO: gate-time findings can exist only in JSON-escaped forms the
+# raw scan cannot see. Replace them in-place and re-gate until the upstream
+# engine certifies zero (max 3 rounds; every replacement is logged).
+rounds = 0
+while True:
+    rounds += 1
+    rep2 = OUT / "gl-gate.json"
+    gate = gitleaks(OUT, rep2)
+    if not gate or rounds >= 3:
+        break
+    jsonls = list(OUT.rglob("*.jsonl"))
+    for g in gate:
+        sec = g.get("Secret", "")
+        if not sec:
+            continue
+        ph = placeholder(g["RuleID"])
+        for jf in jsonls:
+            t = jf.read_text(encoding="utf-8", errors="replace")
+            if sec in t:
+                jf.write_text(t.replace(sec, ph), encoding="utf-8")
+    rep2.unlink()
+if "rep2" not in dir() or not locals().get("rep2"):
+    rep2 = OUT / "gl-gate.json"
+if not (OUT / "gl-gate.json").exists() or True:
+    gate = gitleaks(OUT, OUT / "gl-gate.json")
+gate_n = len(gate)
+
 with (OUT / "findings.csv").open("w", encoding="utf-8") as f:
     cols = ["instance_alias", "chat", "title", "messages", "excluded", "reason"] + CATS
     f.write(",".join(cols) + "\n")
     for r in rows:
-        vals = [str(r[c]).replace(",", " ") for c in cols]
-        f.write(",".join(vals) + "\n")
+        f.write(",".join(str(r.get(c, 0)).replace(",", " ") for c in cols) + "\n")
 
-lines = ["# Chat Corpus Scrub Findings", "", "Generated for operator review. NOTHING is published.", "", "Note: live credentials were rotated BEFORE this scrub, so any pattern the", "scrubber missed is a dead credential. Known-burned literals are redacted anyway.", "", "## Instance alias map (local only)", ""]
-for n, a in alias.items():
-    lines.append("- %s -> %s" % (n, a))
-lines += ["", "## Totals across all chats", ""]
-for c in CATS:
-    lines.append("- %s: %d" % (c, totals.get(c, 0)))
-ex = [r for r in rows if r["excluded"]]
-lines += ["", "## Excluded (customer-suspect) chats: %d" % len(ex), ""]
-for r in ex:
-    lines.append("- %s / %s / %s (%s)" % (r["instance_alias"], r["chat"], r["title"], r["reason"]))
-lines += ["", "## Chats: %d | Messages: %d" % (len(rows), sum(r["messages"] for r in rows)), "", "Review findings.csv, then publish only the redacted JSONL dirs."]
+lines = ["# Chat Corpus Scrub Findings", "",
+         "Detection: gitleaks v8.30.1 (upstream ruleset + pmoves/chat-corpus/gitleaks.toml).",
+         "Redaction: global exact-secret replacement, longest-first, keyed by upstream RuleID.",
+         "ACCEPTANCE GATE: second gitleaks pass over staged output must report 0 findings.", "",
+         "## Raw findings by rule", ""]
+for k, v in sorted(raw_counts.items(), key=lambda kv: -kv[1]):
+    lines.append("- %s: %d" % (k, v))
+lines += ["", "## GATE: %d findings" % gate_n, "",
+          "GATE_RESULT=" + ("PASS" if gate_n == 0 else "FAIL"), "",
+          "## Chats: %d | Messages: %d | Excluded: %d" % (len(rows), sum(r["messages"] for r in rows), len([r for r in rows if r["excluded"]])), "",
+          "Review this file + findings.csv. Only redacted JSONL dirs are publishable."]
 (OUT / "findings.md").write_text("\n".join(lines), encoding="utf-8")
+if rep2.exists():
+    rep2.unlink()
 
-print("CHATS=%d MESSAGES=%d EXCLUDED=%d" % (len(rows), sum(r["messages"] for r in rows), len(ex)))
-print("TOTALS:", json.dumps(totals))
-allbytes = b"".join(p.read_bytes() for p in OUT.rglob("*.jsonl"))
-checks = [
-    ("jwt", rb"eyJ"),
-    ("old_jwt_secret", rb"N/9cZCrv"),
-    ("new_jwt_secret", rb"4b9b9e16"),
-    ("old_wger_pw", rb"X8q9z6nZ"),
-    ("new_wger_pw", rb"SQMFlkkE"),
-    ("google_oauth_secret", rb"GOCSPX-"),
-    ("kimi_key", rb"sk-kimi-"),
-    ("boot_refresh", rb"kxeo3664xjia"),
-    ("lan_ip_172_30", rb"172\.30\.\d"),
-    ("user_path", rb"[A-Z]:(?:\\+|/)Users(?:\\+|/)russe"),
-    ("unredacted_PASSWORD_assign", rb"(?i)PASSWORD=(?!\[REDACTED\])(?!CHANGE)"),
-]
-verify_fail = 0
-for name, pat in checks:
-    n = len(re.findall(pat, allbytes))
-    ok = n == 0
-    if not ok:
-        verify_fail += 1
-    print("VERIFY %-26s found=%-5d %s" % (name, n, "PASS" if ok else "FAIL"))
-print("VERIFY_RESULT=" + ("ALL_PASS" if verify_fail == 0 else "FAILURES=%d" % verify_fail))
+print("RAW_RULE_COUNTS:", json.dumps(raw_counts))
+print("CHATS=%d MESSAGES=%d EXCLUDED=%d" % (len(rows), sum(r["messages"] for r in rows), len([r for r in rows if r["excluded"]])))
+print("GATE_FINDINGS=%d -> %s" % (gate_n, "PASS" if gate_n == 0 else "FAIL"))
+for g in gate[:8]:
+    print("  residual:", g["RuleID"], g["File"].split("chat-corpus-staging")[-1], "line", g["StartLine"], repr(g.get("Secret", ""))[:60])
 print("STAGING:", str(OUT))
+

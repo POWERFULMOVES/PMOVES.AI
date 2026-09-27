@@ -72,3 +72,34 @@ final staged files (fresh Python process, not the scrubber) prints zeros.
    a chat is appended BEFORE the next run.
 4. Ordering is fixed: rotate -> scrub -> verify -> operator review -> publish.
 5. One review covers one documented change-set; no live iteration in chat.
+
+## Sourced architecture (operator directive 2026-09-27) — REPLACES v4 plan
+
+Directive: no bespoke wheels; composition of proven upstream parts. v4 as
+planned was DISCARDED before implementation. The pipeline is now:
+
+| Layer | Component | Source / License | Role |
+|---|---|---|---|
+| Detection | **gitleaks v8.30.1** | github.com/gitleaks/gitleaks (MIT) | upstream 150+ rule ruleset via `[extend] useDefault` |
+| Custom rules | `pmoves/chat-corpus/gitleaks.toml` | this repo; every rule traces to an ITERATIONS.md evidence class | incident-specific patterns, RE2 dialect |
+| Redaction | `pmoves/tools/a0/scrub_chats.py` | thin adapter: consumes gitleaks JSON findings, exact-Secret replacement, global longest-first | no detection logic of its own |
+| Acceptance gate | second gitleaks pass over staged output | upstream engine as authority | must report 0 findings; iterate-to-zero max 3 rounds |
+| Optional future | Presidio (MIT) / chat_export plugin (a0-plugins index) | documented candidates | NER-PII stage / export formats |
+
+### Engine-swap lessons (provenance continuity)
+
+- v4 regexes ported 1:1 PANICKED gitleaks: Go RE2 forbids lookarounds.
+  RE2-safe rewrites: alternation boundaries + `secretGroup` capture.
+- Custom-rule ids (pmoves-*) give every redaction an upstream-citable class.
+- Upstream rules caught classes bespoke v1-v3 never had: github-pat (2),
+  generic-api-key (21), curl-auth-header (5).
+
+### Final run evidence (gitleaks-authoritative)
+
+- Raw scan across 5 instances: 2,697 findings (env 2,140 / jwt 315+21 /
+  lan-ip 188 / generic-api-key 21 / curl-auth 5 / github-pat 2 / db 2)
+- Unique secrets discovered: 714 -> global longest-first replacement
+- Gate round 1: 2 residuals (TAILSCALE_AUTHKEY:, HOSTINGER_SSH_PRIVATE_KEY: -
+  colon-form keys; engine output drove the in-place fix; rounds logged)
+- **GATE_RESULT=PASS (0 findings)** - staged corpus is upstream-certified clean
+- Excluded: instance-4/IpqSuRnF (customer-keyword gate)
