@@ -63,10 +63,12 @@ STUBS = {
         "Socket(s):               1\n"
         "OUT\n"
     ),
+    # No display device: see test_vga_compatible_is_not_amd for why a VGA line
+    # cannot be used here yet.
     "lspci": (
         "#!/bin/sh\n"
-        "echo '00:02.0 VGA compatible controller [0300]: "
-        "Cirrus Logic GD 5446 [1013:00b8]'\n"
+        "echo '00:03.0 Ethernet controller [0200]: "
+        "Red Hat, Inc. Virtio network device [1af4:1000]'\n"
     ),
     "lsblk": (
         "#!/bin/sh\n"
@@ -108,7 +110,7 @@ def _host_ram_gb() -> int:
     raise AssertionError("no MemTotal in /proc/meminfo")
 
 
-def _hermetic_run(tmp_path: Path, *, with_docker: bool, args=("--json",)):
+def _hermetic_run(tmp_path: Path, *, with_docker: bool, args=("--json",), lspci=None):
     if not Path("/proc/meminfo").is_file():
         pytest.skip("needs Linux /proc/meminfo")
     bindir = tmp_path / "bin"
@@ -120,6 +122,8 @@ def _hermetic_run(tmp_path: Path, *, with_docker: bool, args=("--json",)):
         (bindir / tool).symlink_to(real)
     (bindir / "python3").symlink_to(sys.executable)
     stubs = dict(STUBS)
+    if lspci is not None:
+        stubs["lspci"] = f"#!/bin/sh\necho '{lspci}'\n"
     if with_docker:
         stubs["docker"] = PRESENCE_STUB
         stubs["tailscale"] = PRESENCE_STUB
@@ -150,7 +154,7 @@ def test_json_mode_exits_zero_with_schema(tmp_path, with_docker):
     assert data["ram_gb"] == _host_ram_gb()
     assert data["cpu"]["cores_logical"] == 4
     assert data["disks"] == [{"name": "sda", "size_gb": 200, "rotational": True}]
-    assert data["gpus"] == []  # Cirrus Logic VGA matches no vendor filter
+    assert data["gpus"] == []
     assert data["unifi_topology"] is None
     assert data["platform_hints"]["has_docker"] is with_docker
     assert data["platform_hints"]["has_tailscale"] is with_docker
@@ -160,3 +164,20 @@ def test_suggest_mode_exits_zero(tmp_path):
     r = _hermetic_run(tmp_path, with_docker=False, args=("--suggest",))
     assert r.returncode == 0, f"rc={r.returncode} stderr={r.stderr!r}"
     assert r.stdout.strip()
+
+
+@pytest.mark.xfail(strict=True, reason=(
+    "KNOWN, out of scope for the errexit fix: the AMD filter "
+    "`vga.*(amd|radeon|ati)` matches the 'ati' inside 'compATIble', so every "
+    "'VGA compatible controller' line -- a KVM's Cirrus/bochs adapter, an Intel "
+    "iGPU, an NVIDIA card without nvidia-smi -- is also counted as an AMD GPU."
+))
+def test_vga_compatible_is_not_amd(tmp_path):
+    r = _hermetic_run(
+        tmp_path, with_docker=True,
+        lspci="00:02.0 VGA compatible controller [0300]: "
+              "Cirrus Logic GD 5446 [1013:00b8]",
+    )
+    assert r.returncode == 0, f"rc={r.returncode} stderr={r.stderr!r}"
+    vendors = [g["vendor"] for g in json.loads(r.stdout)["gpus"]]
+    assert "amd" not in vendors, vendors
