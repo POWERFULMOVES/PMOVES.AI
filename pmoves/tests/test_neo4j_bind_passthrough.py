@@ -6,8 +6,9 @@ $(DC) directly, so `make env-local-set KEY=NEO4J_BIND` was silently ignored and
 Neo4j published on 0.0.0.0. The Makefile now reads ONLY that key (parsed, never
 sourced) and exports it into every recipe's environment.
 
-make is spawned only with a stub dir FIRST on PATH (#3190/#3194 guard contract):
-its `docker` records, it never runs. The real compose render is a separate,
+make is spawned only with the guard's own stub dir FIRST on PATH
+(build_stub_env from _destructive_docker_guard.py, #3195): docker,
+docker-compose and supabase are recorders, and the real make runs its recipes. The real compose render is a separate,
 direct, read-only `docker compose config` on a temp file holding the REAL
 neo4j `ports` lines. Every address here is FAKE, and NODE_LOCAL_ENV_FILE points
 at a pytest temp fixture -- never at the node's real file.
@@ -18,6 +19,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -32,36 +34,52 @@ FAKE_SUPABASE = "http://fake-supabase.invalid"
 
 pytestmark = pytest.mark.skipif(shutil.which("make") is None, reason="make not installed")
 
-RECORDER = r"""#!/usr/bin/env bash
-printf 'NEO4J_BIND=%s SUPABASE_URL=%s argv=%s\n' "${NEO4J_BIND-<unset>}" "${SUPABASE_URL-<unset>}" "$*" >> "$STUB_LOG"
-exit 0
+DOCKER_GUARD_FILE = Path(__file__).with_name("_destructive_docker_guard.py")
+DOCKER_GUARD_MODULE = "pmoves_tests_destructive_docker_guard"  # conftest's name
+
+
+def _docker_guard():
+    """The guard instance conftest registered, or a fresh load of the same file."""
+    if DOCKER_GUARD_MODULE in sys.modules:
+        return sys.modules[DOCKER_GUARD_MODULE]
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(DOCKER_GUARD_MODULE, DOCKER_GUARD_FILE)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[DOCKER_GUARD_MODULE] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+# Runs after the recorder's own argv record (build_stub_env behaviours): what
+# ENVIRONMENT a compose call received, which the argv record cannot show.
+ENV_BEHAVIOUR = r"""
+printf 'NEO4J_BIND=%s SUPABASE_URL=%s\n' "${NEO4J_BIND-<unset>}" "${SUPABASE_URL-<unset>}" >> "$NEO4J_BIND_ENV_LOG"
 """
 
 
-def _stub_bin(tmp_path: Path) -> Path:
-    b = (tmp_path / "bin").resolve()
-    b.mkdir()
-    (b / ".pmoves-test-stub").write_text("neo4j bind pass-through tests: recorders only\n")
-    for name in ("docker", "docker-compose"):
-        (b / name).write_text(RECORDER)
-        (b / name).chmod(0o755)
-    return b
-
-
 def _make(tmp_path: Path, env_file_body: str | None, *make_args: str, extra_env: dict | None = None):
-    """Run make with the stub dir first; return (rc, stdout+stderr, recorded compose env)."""
-    b = _stub_bin(tmp_path)
+    """Run make with the guard's stub dir first; return (rc, stdout+stderr, recorded compose env).
+
+    `recorded` is empty if no docker/docker-compose recorder ran at all.
+    """
     node_local = tmp_path / "node_local_fixture.txt"
     if env_file_body is not None:
         node_local.write_text(env_file_body)
-    log = tmp_path / "stub.log"
-    env = {k: v for k, v in os.environ.items() if k not in ("NEO4J_BIND", "SUPABASE_URL")}
-    env.update(PATH=f"{b}:{env['PATH']}", STUB_LOG=str(log), **(extra_env or {}))
+    base = {k: v for k, v in os.environ.items() if k not in ("NEO4J_BIND", "SUPABASE_URL")}
+    stub = _docker_guard().build_stub_env(
+        tmp_path / "bin", stub_make=False, base_env=base,
+        behaviours={"docker": ENV_BEHAVIOUR, "docker-compose": ENV_BEHAVIOUR},
+    )
+    env_log = tmp_path / "compose-env.log"
+    env = dict(stub)
+    env.update(NEO4J_BIND_ENV_LOG=str(env_log), **(extra_env or {}))
     proc = subprocess.run(
         ["make", "-s", "-C", str(PMOVES), f"NODE_LOCAL_ENV_FILE={node_local}", *make_args],
         capture_output=True, text=True, timeout=120, env=env,
     )
-    recorded = log.read_text() if log.exists() else ""
+    recorded = env_log.read_text() if env_log.exists() else ""
+    ran = [row for row in stub.calls() if row and row[0] in ("docker", "docker-compose")]
+    assert bool(ran) == bool(recorded), (ran, recorded)
     return proc.returncode, proc.stdout + proc.stderr, recorded
 
 
