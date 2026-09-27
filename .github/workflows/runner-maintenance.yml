@@ -175,7 +175,7 @@ jobs:
       # Safe on a runner: a runner executes one job at a time, so while this job
       # holds the runner no build on it can be using the builder. b850 has TWO
       # runners on one daemon, so the script also skips when the builder
-      # container is already running (a build on the other runner).
+      # container is running AND another Runner.Worker is active on the host.
       # ---------------------------------------------------------------
       - name: Check out cap script
         if: ${{ github.event.inputs.runner_label == '' || github.event.inputs.runner_label == matrix.label }}

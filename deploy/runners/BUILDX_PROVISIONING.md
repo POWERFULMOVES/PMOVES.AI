@@ -14,7 +14,8 @@ that is:
 |---|---|---|
 | **Reused** across runs | `name: pmoves-shared` | setup-buildx reuses a builder that already exists with that name — no fresh `docker-container` builder (and no new `buildx_buildkit_*_state` volume) per run. |
 | **State-preserving** | `keep-state: true` | setup-buildx removes the builder at the end of the job but keeps its state volume `buildx_buildkit_pmoves-shared0_state`, so the next job starts warm. |
-| **GC-configured** | `buildkitd-config-inline` gc policy (`maxUsedSpace`/`reservedSpace`/`keepDuration`) | BuildKit GC runs while the daemon is up. On its own this did **not** hold the cap (below). |
+| **GC-configured** | `buildkitd-config-inline`: an age-out rule plus an `all = true` catch-all (`maxUsedSpace`/`reservedSpace`/`minFreeSpace`) | BuildKit GCs ~1s after the daemon starts and after builds (at most once a minute). Before the catch-all it did **not** hold the cap (below). |
+| **Config actually applied** | action step `--preflight` | setup-buildx reuses an already-registered builder **without** re-applying the inline config, so a leftover one is detached (`--keep-state`) first. |
 | **Bounded** | [`deploy/provision/pmoves-buildx-cap.sh`](../provision/pmoves-buildx-cap.sh) | An explicit `docker buildx prune --builder pmoves-shared` to the cap: in every build job right after attach, and nightly between jobs. |
 
 ### Why the GC policy alone was not enough (measured 2026-09-27)
@@ -30,9 +31,34 @@ builder, and every nightly prune missed it:
 - `fleet-docker-cleanup.yml` and `deploy/provision/docker-fleet-cleanup.sh` had the
   same limitation.
 
-Why the in-daemon GC did not keep it under 30GB during jobs was not measured. One
-unverified hypothesis: `keepDuration` in the same policy restricts it to records
-older than 168h, so anything used in the last week is never eligible.
+**Why the in-daemon GC never trimmed it.** The builder did parse the config:
+BuildKit v0.31.2 logged `GC Policy rule#0: All: false / Keep Duration: 168h /
+Reserved Space: 5GiB / Max Used Space: 30GiB`. With the builder re-attached on
+kvm4-2, `docker buildx du` reported Total 155.5GB and Reclaimable 155.5GB, so
+nothing had leaked outside BuildKit's view. The config simply never selected
+anything to delete. From the source (moby/buildkit v0.32.2):
+
+- An inline `[[worker.oci.gcpolicy]]` list **replaces** the default list
+  (`DefaultGCPolicy`, `cmd/buildkitd/config/gcpolicy.go`), whose last rule is an
+  `All: true` catch-all. Ours had only one rule.
+- `pruneOnce` (`cache/manager.go`) skips every record with `lastUsedAt` inside
+  `keepDuration`. With `168h`, anything used in the last week is never eligible,
+  and a builder in daily use touches most of its cache every week.
+- With `all = false` it also skips internal, frontend and shared records.
+
+The fix adds a second rule, `all = true` with no `keepDuration`, capped at
+`maxUsedSpace` and with a `minFreeSpace` floor (default `20%`, BuildKit's own
+default). This is the same shape as the default list's last rule.
+
+**Reuse hazard (observed on kvm4-2 2026-09-27).** If a builder named
+`pmoves-shared` is already registered on the runner (left by a failed job or an
+operator), setup-buildx-action reuses it and does **not** re-apply
+`buildkitd-config-inline`, so it runs BuildKit's bare default policy. The action's
+first step (`pmoves-buildx-cap.sh --preflight`) detaches it with `--keep-state`
+so setup-buildx recreates it with the config. If the builder is running and
+another `Runner.Worker` is active on the host (b850), it may be in use. In that
+case the step reuses it only if `docker buildx inspect` shows an `All: true`
+rule, and otherwise fails the job with the command to run once the builder is idle.
 
 ### The model now
 
@@ -42,8 +68,8 @@ holds the default cap (`DEFAULT_CAP`, 30GB) and the action reads its
 
 | Where | When | What |
 |---|---|---|
-| `pmoves-buildx` action | every build job, right after setup-buildx | `--attached`: prune the live builder to the cap. Non-fatal; a failure is a `::warning::`. |
-| `runner-maintenance.yml` | nightly 03:00 UTC, per host | re-attach `pmoves-shared` by name (node `pmoves-shared0`, so it mounts the kept volume), prune to the cap, `buildx rm --keep-state`. |
+| `pmoves-buildx` action | every build job: `--preflight` before setup-buildx, `--attached` right after | preflight as above; then prune the live builder to the cap (`--all`). The prune is non-fatal; a failure is a `::warning::`. |
+| `runner-maintenance.yml` | nightly 03:00 UTC, per host | re-attach `pmoves-shared` by name (node `pmoves-shared0`, so it mounts the kept volume), `buildx prune --all` to the cap, `buildx rm --keep-state`. |
 | `fleet-docker-cleanup.yml` | nightly, per host | same script. |
 | `docker-fleet-cleanup.sh` (systemd timer) | daily, where installed | same script, installed beside it by `make -C pmoves docker-fleet-cleanup-install`; its orphan-volume sweep excludes the shared volume. |
 
@@ -53,10 +79,13 @@ callers. Pruning at attach bounds the volume to the cap plus at most one job's
 growth, with no caller changes, and it runs even when the previous job was
 cancelled.
 
-Invariants: the script **never** removes the state volume and never prunes with
-`--all`. It skips a builder whose container is already running (b850 runs two
-runners on one daemon; a systemd timer ignores runners entirely), because
-detaching it would kill an in-flight build. Exit codes: 0 bounded / nothing to do,
+Invariants: the script **never** removes the state volume and never uses
+`buildx rm` without `--keep-state`. The prune uses `--all` because without it
+BuildKit skips internal/frontend/shared records and the cap would not count the
+whole volume. It skips a builder whose container is running while another
+`Runner.Worker` is active on the host (b850 runs two runners on one daemon; a
+systemd timer is not a job at all), because detaching it would kill an
+in-flight build. Exit codes: 0 bounded / nothing to do,
 1 prune or attach failed, 3 docker unavailable.
 
 **Safety net:** `runner-maintenance.yml` still reclaims leftover per-run
@@ -79,6 +108,7 @@ and the on-attach prune use it):
   with:
     max-used-space: "50GB"   # default: DEFAULT_CAP in deploy/provision/pmoves-buildx-cap.sh
     reserved-space: "8GB"    # default 5GB
+    min-free-space: "25%"    # default 20% (catch-all rule)
 ```
 
 The nightly jobs use the script default; set `PMOVES_BUILDX_CAP` in their

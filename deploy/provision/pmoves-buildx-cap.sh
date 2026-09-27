@@ -20,12 +20,22 @@
 # docker-container driver mounts the kept state volume), prunes it to the cap,
 # and detaches it again with --keep-state.
 #
-# It NEVER removes the state volume and never prunes with --all: the warm cache
-# below the cap is the point of the shared builder.
+# It NEVER removes the state volume: the warm cache below the cap is the point
+# of the shared builder. The prune uses --all because BuildKit's prune skips
+# internal/frontend/shared records without it (moby/buildkit v0.32.2
+# cache/manager.go pruneOnce: `if !opt.all { ... continue }`), and the cap has
+# to count every byte in the volume.
 #
 # Modes:
 #   (default)      maintenance: re-attach if the state volume exists, prune, detach.
 #   --attached     the builder already exists in this job (the action): prune only.
+#   --preflight    before setup-buildx (the action): a builder already REGISTERED
+#                  under this name is reused by setup-buildx-action WITHOUT
+#                  re-applying buildkitd-config-inline (observed on kvm4-2
+#                  2026-09-27: it ran with the bare default GC policy). Detach it
+#                  with --keep-state so setup-buildx recreates it with the
+#                  config; if another job on this host may be using it, keep it
+#                  only if its GC policy has the `All: true` catch-all, else fail.
 #   --print-cap    print the effective cap and exit (the action reads its GC
 #                  maxUsedSpace default from here, so the cap has ONE source).
 #
@@ -48,6 +58,7 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --attached)  MODE="attached" ;;
     --print-cap) MODE="print-cap" ;;
+    --preflight) MODE="preflight" ;;
     --builder)   BUILDER="${2:?--builder needs a value}"; shift ;;
     --cap)       CAP="${2:?--cap needs a value}"; shift ;;
     *) echo "unknown argument: $1" >&2; exit 2 ;;
@@ -76,20 +87,58 @@ fi
 usage() { docker buildx du --builder "$BUILDER" 2>/dev/null | tail -n 1; }
 
 prune() {
-  # buildx >= 0.17 deprecates --keep-storage (it now maps to --reserved-space,
-  # a floor, not a ceiling); --max-used-space is the ceiling. Older buildx on a
-  # runner only has --keep-storage, whose old meaning IS the ceiling.
+  # buildx >= 0.17 deprecates --keep-storage (it now maps to --reserved-space);
+  # --max-used-space is its replacement. For a one-shot prune both are a ceiling
+  # (buildkit cache/manager.go calculateKeepBytes: keep = max(maxUsed, reserved)),
+  # so use the new flag where it exists and the old one on older buildx.
   local flag="--keep-storage"
   if docker buildx prune --help 2>/dev/null | grep -q -- '--max-used-space'; then
     flag="--max-used-space"
   fi
   log "before: $(usage)"
-  if ! docker buildx prune --builder "$BUILDER" "$flag" "$CAP" --force; then
+  if ! docker buildx prune --builder "$BUILDER" --all "$flag" "$CAP" --force; then
     log "ERROR: prune of builder $BUILDER failed"
     return 1
   fi
   log "after:  $(usage)"
 }
+
+running() { [ -n "$(docker ps -q --filter "name=^${CONTAINER}\$" --filter status=running 2>/dev/null)" ]; }
+
+# Is some OTHER CI job on this host possibly building on the builder? A running
+# builder container alone does not say (a failed job or an operator can leave
+# one running). Count Runner.Worker processes, minus our own when we are a job:
+# b850 runs two runners on one daemon; a systemd timer is not a job at all.
+in_use_elsewhere() {
+  running || return 1
+  local workers self=0
+  workers="$(pgrep -f -c 'Runner.Worker' 2>/dev/null)" || true
+  [ "${GITHUB_ACTIONS:-}" = "true" ] && self=1
+  [ "${workers:-0}" -gt "$self" ]
+}
+
+if [ "$MODE" = "preflight" ]; then
+  if ! docker buildx inspect "$BUILDER" >/dev/null 2>&1; then
+    log "no registered builder $BUILDER; setup-buildx will create it with the config"
+    exit 0
+  fi
+  if in_use_elsewhere; then
+    if docker buildx inspect "$BUILDER" 2>/dev/null | grep -Eq '^[[:space:]]*All:[[:space:]]*true'; then
+      log "registered $BUILDER is in use by another job and has the All:true GC rule; reusing"
+      exit 0
+    fi
+    log "ERROR: registered $BUILDER lacks the All:true GC catch-all and another job may be using it;"
+    log "       refusing to reuse an unbounded builder. Remove it when idle:"
+    log "       docker buildx rm --keep-state $BUILDER"
+    exit 1
+  fi
+  log "detaching pre-registered $BUILDER (state kept) so setup-buildx re-applies the GC config"
+  if ! docker buildx rm --keep-state "$BUILDER"; then
+    log "ERROR: could not detach $BUILDER"
+    exit 1
+  fi
+  exit 0
+fi
 
 if [ "$MODE" = "attached" ]; then
   log "bounding in-job builder $BUILDER to $CAP"
@@ -103,11 +152,10 @@ if ! docker volume inspect "$VOLUME" >/dev/null 2>&1; then
   exit 0
 fi
 
-# A running builder container means a build may be in flight (b850 has two
-# runners on one daemon; a systemd timer ignores the runner entirely). Detaching
-# it would kill that build, so leave it: the in-job --attached prune bounds it.
-if [ -n "$(docker ps -q --filter "name=^${CONTAINER}\$" --filter status=running 2>/dev/null)" ]; then
-  log "builder container $CONTAINER is running (a build may be in flight); skipped"
+# Detaching a builder another job is building on would kill that build, so
+# leave it: that job's own --attached prune bounds it.
+if in_use_elsewhere; then
+  log "builder container $CONTAINER is running and another CI job is active on this host; skipped"
   exit 0
 fi
 
