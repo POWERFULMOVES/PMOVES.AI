@@ -300,3 +300,12 @@ def test_the_steward_is_the_identity_not_its_subordinate():
     assert "it is admin over this role" not in body
     assert "You are directed by **this node's CLI identity**" not in body
     assert "You are this node's Claude identity" in body
+
+
+def test_the_initial_prompt_does_not_frame_the_session_as_a_role_apart():
+    """The frontmatter initialPrompt is the first instruction the session reads."""
+    front = STEWARD.read_text(encoding="utf-8").split("\n---\n", 1)[0]
+    meta = yaml.safe_load(front.lstrip("-\n"))
+    prompt = " ".join(meta["initialPrompt"].split())
+    assert "You are the steward for THIS node" not in prompt
+    assert prompt.index("You are this node's Claude identity") < prompt.index("steward")
