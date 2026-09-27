@@ -1577,7 +1577,13 @@ services:
   neo4j:
     # Graceful stop: Page-cache flush and checkpoint on shutdown.
     stop_grace_period: 60s
-    image: neo4j:5.26.22
+    # = the digest the live Knuckles graph runs today (5.26.30, a multi-arch
+    #   index Docker Hub still serves), so moving under compose changes no store
+    #   version. neo4j:5-community now means 5.26.31. (#3193)
+    image: neo4j:5.26.30-community@sha256:037cf5756f0135cbfd66b739b6df7c7c4bb100f9ce11602f6f9538e17e02c74d
+    # The name the live container already has, and the single name source read
+    # by scripts/neo4j_container.py (backup, restore, start-cipher-stack).
+    container_name: pmoves-neo4j
     env_file:
     - env.tier-data
     cap_drop:
@@ -1614,7 +1620,9 @@ services:
     - neo4j-data:/data
     - ./neo4j/cypher:/cypher:ro
     networks:
-    - pmoves_data
+      pmoves_data:
+        aliases:
+        - neo4j   # every explicit bolt://neo4j:7687 consumer is on pmoves_data (#3193)
     healthcheck:
       test:
       - CMD-SHELL

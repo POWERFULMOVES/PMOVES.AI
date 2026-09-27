@@ -34,6 +34,48 @@ for _compose_tag in ("!override", "!reset"):
     _yaml.FullLoader.add_constructor(_compose_tag, _compose_override_tag)
 
 
+# ---------------------------------------------------------------------------
+# Destructive-docker guard (incident 2026-09-26). Installed at conftest import,
+# i.e. before any test module under pmoves/tests is imported, so no test can
+# spawn a mutating `docker compose` call against a project that is not an
+# argv-named `pmoves-test-<8 hex>` throwaway, `down -v` at all, or any plain
+# docker verb outside a read-only allowlist. The wrapper is process-global; the
+# session-stop hook below is directory-scoped. See the module docstring for
+# exactly what it covers and what it does not.
+# ---------------------------------------------------------------------------
+DOCKER_GUARD_MODULE = "pmoves_tests_destructive_docker_guard"
+
+
+def _load_docker_guard() -> ModuleType:
+    if DOCKER_GUARD_MODULE in sys.modules:
+        return sys.modules[DOCKER_GUARD_MODULE]
+    spec = importlib.util.spec_from_file_location(
+        DOCKER_GUARD_MODULE, Path(__file__).with_name("_destructive_docker_guard.py")
+    )
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[DOCKER_GUARD_MODULE] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+_DOCKER_GUARD = _load_docker_guard()
+_DOCKER_GUARD.install()
+
+
+def pytest_runtest_teardown(item, nextitem) -> None:
+    """Stop the whole session after any test tripped the docker guard.
+
+    The guard already refused the spawn; this makes the refusal impossible to
+    overlook in a long run (and stops later tests repeating the attempt).
+    """
+    if _DOCKER_GUARD.VIOLATIONS:
+        item.session.shouldstop = (
+            "destructive docker call blocked by pmoves/tests/_destructive_docker_guard.py: "
+            + _DOCKER_GUARD.VIOLATIONS[0]
+        )
+
+
 @pytest.fixture(scope="session", autouse=True)
 def _ensure_repo_on_path() -> None:
     """Ensure the repository root is importable during tests."""
