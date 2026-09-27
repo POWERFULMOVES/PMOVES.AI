@@ -173,12 +173,13 @@ def test_positive_control_an_internal_create_site_is_caught():
 
 # --- #3201 option A: neo4j stays internal-only; the forwarder fronts it ------
 
-NEO4J_NETWORKS = {"pmoves_app", "pmoves_bus", "pmoves_data"}
+NEO4J_NETWORKS = {"pmoves_app", "pmoves_bus", "pmoves_data", "pmoves_graph_front"}
 
 
 def test_neo4j_joins_only_internal_networks_and_no_new_ones():
     """DOCKER_NETWORK_HARDENING Rule 1: a data service never joins an egress-capable
-    network (pmoves_external). Option A keeps neo4j on exactly app/bus/data."""
+    network (pmoves_external). Option A keeps neo4j on exactly app/bus/data plus the
+    graph front to its tailnet forwarder -- every one of them internal."""
     nets = SERVICES["neo4j"]["networks"]
     assert nets == NEO4J_NETWORKS, f"neo4j networks changed: {sorted(nets)}"
     assert all(NETWORKS[n] for n in nets), "every neo4j network must be internal"
@@ -186,3 +187,11 @@ def test_neo4j_joins_only_internal_networks_and_no_new_ones():
 
 def test_neo4j_does_not_share_another_containers_netns():
     assert SERVICES["neo4j"]["network_mode"] is None
+
+
+def test_the_graph_front_is_internal_and_neo4j_is_its_only_stack_member():
+    """Least privilege: in the default stack only neo4j joins pmoves_graph_front;
+    the forwarder joins it from its own overlay (docker-compose.neo4j-tailnet.yml)."""
+    assert NETWORKS.get("pmoves_graph_front") is True
+    members = sorted(n for n, s in SERVICES.items() if "pmoves_graph_front" in s["networks"])
+    assert members == ["neo4j"], members

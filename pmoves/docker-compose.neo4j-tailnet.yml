@@ -1,0 +1,81 @@
+# docker-compose.neo4j-tailnet.yml — tailnet forwarder that fronts Neo4j (#3201)
+# ============================================================================
+# Operator decision (#3201, option A): Neo4j stays INTERNAL-ONLY (pmoves_app /
+# pmoves_bus / pmoves_data: no egress, no host port). Fleet AGInTs reach its bolt
+# port over the tailnet through THIS forwarder, per DOCKER_NETWORK_HARDENING
+# Rule 5 ("There is no 'publish without egress.' Front it with a gateway").
+#
+# Usage (an overlay, not in STACK_FILES; same shape as docker-compose.yt-egress.yml):
+#   make -C pmoves up-neo4j-tailnet      # preflight + start the forwarder
+#   make -C pmoves neo4j-tailnet-status  # tailscale status + serve status
+#   make -C pmoves down-neo4j-tailnet    # stop and remove the forwarder
+#
+# How it forwards (verified against the Tailscale source, see #3201):
+#   * TS_DEST_IP is NOT usable here: containerboot refuses it with TS_USERSPACE
+#     ("TS_DEST_IP is not supported with TS_USERSPACE", measured on this image).
+#   * `tailscale serve --tcp` via the CLI only accepts localhost targets, but a
+#     ServeConfig applied through TS_SERVE_CONFIG dials its TCPForward target
+#     with the container's own network stack (ipn/ipnlocal/serve.go: SystemDial),
+#     so `neo4j:7687` resolves via Docker DNS on pmoves_graph_front. Only bolt (7687) is
+#     forwarded; the 7474 browser UI is not needed by fleet AGInTs.
+#   * Userspace mode, no TUN, and NO capabilities: measured to start with
+#     cap_drop ALL + no-new-privileges.
+#
+# Networks (least privilege):
+#   * pmoves_graph_front (internal, 172.30.9.0/24): joined ONLY by neo4j and this
+#     forwarder, so a compromised forwarder reaches Neo4j and nothing else on the
+#     data tier. It is deliberately NOT on pmoves_data (Postgres, Qdrant, Meili…).
+#   * pmoves_external (egress-capable): the Tailscale control plane + DERP need
+#     outbound internet. This is DOCKER_NETWORK_HARDENING's documented
+#     dual-attach pattern for a service that needs an internal network plus
+#     internet (agent-zero, archon, hi-rag-gateway-v2, flute-gateway). Rule 1
+#     keeps DATA services off pmoves_external; this is a gateway, not a data
+#     store. Neo4j does not share this container's netns (no network_mode).
+#
+# Operator steps (not done by this file): TAILSCALE_AUTHKEY via the secrets
+# funnel, authorised for tag:neo4j; and a tailnet grant from the fleet tag to
+# tag:neo4j on tcp:7687. See #3201.
+
+services:
+  neo4j-tailnet:
+    image: tailscale/tailscale:stable@sha256:c507f3a2a6ab1cabd8d809b98edeb41edbd5c3fb6ad9632ffd098b4c7d0b4065
+    container_name: pmoves-neo4j-tailnet
+    restart: unless-stopped
+    environment:
+      # Fail at compose parse time if unset: an empty key leaves the forwarder
+      # running but never on the tailnet (same guard as yt-egress).
+      - TS_AUTHKEY=${TAILSCALE_AUTHKEY:?TAILSCALE_AUTHKEY must be set for neo4j-tailnet (run make -C pmoves secrets-funnel)}
+      - TS_USERSPACE=true
+      - TS_HOSTNAME=${NEO4J_TAILNET_HOSTNAME:-pmoves-neo4j}
+      - TS_STATE_DIR=/var/lib/tailscale
+      # Keep Docker DNS: the forward target `neo4j` must resolve on pmoves_data.
+      - TS_ACCEPT_DNS=false
+      - TS_EXTRA_ARGS=--advertise-tags=tag:neo4j
+      - TS_SERVE_CONFIG=/config/serve.json
+    volumes:
+      - neo4j-tailnet-state:/var/lib/tailscale
+      - ./config/tailscale/neo4j-tailnet-serve.json:/config/serve.json:ro
+    networks:
+      - pmoves_graph_front
+      - pmoves_external
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    depends_on:
+      neo4j:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "tailscale", "status", "--peers=false"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+
+volumes:
+  neo4j-tailnet-state:
