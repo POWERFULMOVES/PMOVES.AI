@@ -118,6 +118,20 @@ BLOCKED = [
     "sudo docker compose down",
     "bash -c 'docker compose down'",
     b"docker compose down",
+    # #3195 review P2: newlines were swallowed as whitespace (a #3190 hole),
+    # and assignments / keywords / wrappers / substitutions hid the command
+    "true\ndocker compose down",
+    "cd pmoves\ndocker compose down",
+    "FOO=1 docker compose down",
+    "if true; then docker compose down; fi",
+    "{ docker rm -f pmoves-nats-1; }",
+    "`docker compose down`",
+    'echo "$(docker compose down)"',
+    "eval 'docker compose down'",
+    "exec docker compose down",
+    "echo pmoves-nats-1 | xargs docker rm -f",
+    "nohup docker compose down",
+    ["xargs", "docker", "rm", "-f"],
 ]
 
 ALLOWED = [
