@@ -80,6 +80,7 @@ All nodes have a tier.
   - None of the three has a separate data disk or an attached Hostinger volume. The only way to add disk is a plan upgrade: KVM 8 has 400 GB, 8 vCPU and 32 GB RAM.
   - All three are in Hostinger `data_center_id` 17 (Hostinger REST, read-only, 2026-09-27). Their zones are node-level failure domains, not site-level ones. A data-center outage takes all three, which is the §0.6 "VPS down" case that §0.8 accepted.
   - `tailscale ping` between every KVM pair is direct, at 1-5 ms (survey, 2026-09-27).
+  - **kvm4-1 accepted NO inbound tailnet connection** to a listening test port. Clients on kvm4-2 and Knuckles timed out (peer session, 2026-09-27). The cause is **COULD-NOT-MEASURE**; it was not investigated. Garage RPC on 3901 must accept inbound connections from every peer, so this is a **G0 / Gate A BLOCKER for kvm4-1 as a Garage node**.
 - kvm4-2's profile says it is **over-subscribed**: "resolve before adding data-plane services here".
 
 **Hostinger 7-day metrics** (peer session, read-only, 336 samples per node, 2026-09-27):
@@ -90,14 +91,14 @@ All nodes have a tier.
 | kvm4-1 | ~21 GB | **+35 GiB** | Full in about a week at this rate |
 | kvm4-2 | ~38 GB (dipped to ~19) | **+64 GiB** | Rebooted around 2026-09-23 |
 
-- **Disk.** Something writes 5-9 GiB/day on the kvm4s, and the writer is unidentified. Until it is identified and space is reclaimed, KVM declared capacity is **tiny**, and it may shrink before this plan runs. Identifying the writer is an ops item **owned outside this plan**. It feeds D3.
-- **Network.** Peak 30-minute throughput is ≤ 39 Mbit/s against a ~300 Mbit/s port, and monthly transfer is ~5% of the allowance. These are averages, so they are a **floor for usage, not a measure of capacity**. Bandwidth is not the binding constraint (D8).
+- **Disk.** The kvm4s grow 5-9 GiB/day. The writer is now identified as **BuildKit build cache** (the HARD CAUTION below). Until the cache is capped or pruned through the build-cache road, KVM declared capacity is **tiny**, and it may shrink before this plan runs. That ops item is **owned outside this plan**. It feeds D3.
+- **Network.** Peak 30-minute throughput is ≤ 39 Mbit/s against a ~300 Mbit/s port, and monthly transfer is ~5% of the allowance. These are averages, so they are a **floor for usage, not a measure of capacity**. The iperf3 measurements (§3 Time and bandwidth, D8) show that the binding constraint is **Knuckles' uplink**, at ~18 Mbit/s, not the KVM ports.
 - These metrics differ slightly from the shell survey above (for example kvm4-1 at 15G vs ~21G). They were taken at different times, on a disk that is filling.
 
-> **HARD CAUTION: "unused" docker volumes are not garbage.** "Unused" means only "not attached to a running container". The ~140G on kvm4-1 and the ~146G on kvm4-2 (the data-storage node) may be real stores: an old Postgres, an old MinIO, possibly JuiceFS data. **Never prune.**
-> - Before any volume is removed, it is identified one by one: owner, contents, last write, and whether any backup or migration depends on it.
-> - Each removal needs explicit operator confirmation that names the volume.
-> - This is **G0 item "identify KVM docker volumes before declaring capacity"** (§5). Until it passes, the KVM capacity declarations use **free now**, not "free if cleared".
+> **HARD CAUTION: reclaim build cache, never delete volumes.** The kvm4s' growth and their "unused" space have been identified (peer session, read-only, 2026-09-27). It is **one** volume: the BuildKit state volume `buildx_buildkit_pmoves-shared0_state`, ~140 GB on kvm4-1 and ~146 GB on kvm4-2. The other "unused" volumes are empty. No MinIO, JuiceFS or PGDATA store is among them.
+> - Space is reclaimed **through the build-cache road**: a builder GC cap, or `buildx prune`, run by the builder's owner. It is **not** reclaimed by deleting a docker volume, and never by a blanket prune.
+> - That ops item is **owned outside this plan**. This plan only consumes the result.
+> - This is the **G0 item "KVM build cache reclaimed through the build-cache road before declaring capacity"** (§5). Until it passes, the KVM capacity declarations use **free now**, not "free if cleared".
 
 **Spark (tier 1) and the tier-2 nodes:**
 
@@ -157,12 +158,12 @@ df -hT / /var/lib 2>/dev/null; lsblk -o NAME,SIZE,TYPE,FSTYPE,MOUNTPOINT; free -
 | Tier-1 declared `-c` (G1 half-of-free) | kvm2 | kvm4-1 | kvm4-2 | Spark | KVM total |
 |---|---|---|---|---|---|
 | Today ("free now") | ~39G | ~7G | ~15G | COULD-NOT-MEASURE (down) | ~61G |
-| After volume cleanup (G0 identification and operator confirmation first) | ~39G | ~75G | ~90G | COULD-NOT-MEASURE | ~204G |
+| After build-cache reclaim (G0; through the build-cache road, never volume deletion) | ~39G | ~75G | ~90G | COULD-NOT-MEASURE | ~204G |
 
 - **The tension.** The volume needs ~85 GB × 3 = ~255 GB of replica space, before growth.
-  - **Today** the KVMs can hold at most ~61G of that, about a quarter. Spark's share is unknown while it is down. Most quorum-bearing replicas would sit on tier 2. That is the opposite of the decided tiering, and it persists until the KVM volumes are identified and, only with confirmation, cleaned up, or until Spark's capacity is measured and declared.
-  - **Zone grouping today, KVMs only** (Spark excluded while down): usable U ≤ ~23 GB, by the formula above over zones {kvm2 39, kvm4-1 7, kvm4-2 15, lab large}. That is **below the ~85 GB needed**, so zone grouping is not an option until cleanup or until Spark adds capacity.
-  - **After cleanup, KVMs only:** zone grouping gives U ≤ ~102 GB. That fits ~85 GB with thin headroom for growth. Spark raises the bound by an amount that cannot be computed until its free space is measured.
+  - **Today** the KVMs can hold at most ~61G of that, about a quarter. Spark's share is unknown while it is down. Most quorum-bearing replicas would sit on tier 2. That is the opposite of the decided tiering, and it persists until the KVM build cache is reclaimed through the build-cache road, or until Spark's capacity is measured and declared.
+  - **Zone grouping today, KVMs only** (Spark excluded while down): usable U ≤ ~23 GB, by the formula above over zones {kvm2 39, kvm4-1 7, kvm4-2 15, lab large}. That is **below the ~85 GB needed**, so zone grouping is not an option until the build cache is reclaimed or Spark adds capacity.
+  - **After build-cache reclaim, KVMs only:** zone grouping gives U ≤ ~102 GB. That fits ~85 GB with thin headroom for growth. Spark raises the bound by an amount that cannot be computed until its free space is measured.
   - One-zone-per-node with capacity weighting fits the data today, because tier 2 supplies the capacity. It trades away the quorum guarantee for as long as tier 1 stays small.
 - **Tier-2 availability hazards (named, not decided).**
   - Desktops and Windows nodes sleep, take update reboots, and may not start Docker Desktop until someone logs in.
@@ -225,9 +226,13 @@ Every item in this subsection is **COULD-NOT-MEASURE** until someone tries it on
 
 - **Endpoint failover** is metadata-only: `juicefs config "$META" --bucket http://<other-node>:3900/juicefs`. It is a separate, gated drill (§3 Step e), not part of the node-down test.
 - **D2 options (not decided):**
-  - **(i) One tier-1 node's tailnet name** is recorded as the endpoint, with failover through `juicefs config --bucket`. Spark being down on 2026-09-27 shows that the chosen node can be the one that is down.
+  - **(i) One tier-1 node's tailnet IPv4** (not its MagicDNS name, which does not resolve in the bridge) is recorded as the endpoint, with failover through `juicefs config --bucket`. Spark being down on 2026-09-27 shows that the chosen node can be the one that is down.
   - **(ii) A name that resolves on each client to that client's own local Garage.** The earlier objection to this, that per-client gateways "spread `rpc_secret` to every lab node", no longer applies: in the fleet-wide layout every storage node already holds `rpc_secret`. Whether one name can resolve per node, and resolve inside Docker bridge networks, is COULD-NOT-MEASURE.
-- **COULD-NOT-MEASURE:** whether containers on a Docker bridge network (`pmoves_data`) resolve MagicDNS names. Gate A tests this.
+- **MagicDNS does NOT resolve inside a Docker bridge network (measured, peer session, 2026-09-27).** Clients had to use `tailscale ip -4`. So every runbook container on `pmoves_data` (the `jfs()` helper, and the mount) must address Garage in one of two ways:
+  - **(a) The endpoint's tailnet IPv4, resolved on the host.** This is the plan's default. Set `ENDPOINT="$(tailscale ip -4 <endpoint-node>)"` on the host before any `jfs` call. The container keeps `pmoves_data`, so `minio` and `supabase-db` still resolve.
+  - **(b) Host networking.** Then the container loses the `pmoves_data` names (`minio`, `supabase-db`).
+- Gate A records which of the two is used. With (a), the bucket URL stored in metadata (c3) is a tailnet IP. A node's tailnet IP is stable unless the node is re-registered, and a re-registration then needs a `juicefs config --bucket` change.
+- D2 option (ii), a per-node name, now needs a name that resolves inside the bridge. MagicDNS cannot be that name.
 
 ### 1.5 Names
 
@@ -413,7 +418,9 @@ garage bucket allow --read --write juicefs --key juicefs-pmoves-media
 - The applied layout's "Effective capacity (replication factor 3)" covers ~85 GB plus growth.
 - `garage layout show` prints **"Zone redundancy: maximum"** and **"Partitions are replicated 3 times on at least 3 distinct zones"** (review N2).
 - `garage bucket info juicefs` lists the key with RW.
-- Functional test from Knuckles **inside `pmoves_data`**, which also proves MagicDNS resolution:
+- **Addressing choice recorded:** (a) the tailnet IPv4 resolved on the host, or (b) host networking (§1.4; MagicDNS does not resolve inside the bridge, measured). `<ENDPOINT>` below is the tailnet IPv4 under (a).
+- **kvm4-1 inbound reachability (BLOCKER):** before kvm4-1 joins the layout, a connection from kvm4-2 and from Knuckles to kvm4-1:3901 over the tailnet must succeed. On 2026-09-27 a test port timed out, cause COULD-NOT-MEASURE. If it still fails, kvm4-1 stays out of the first cut.
+- Functional test from Knuckles **inside `pmoves_data`**, addressing Garage by tailnet IP:
   ```bash
   jfs dst 'juicefs objbench --storage s3 --access-key "$DST_AK" --secret-key "$DST_SK" http://<ENDPOINT>:3900/juicefs'
   ```
@@ -501,32 +508,33 @@ jfs meta 'juicefs gc "$META"'     # NO --delete; now scans MinIO
 | kvm4-2 | 139-249 ms | 915 ms |
 
 - **KVM↔KVM RTT: measured.** `tailscale ping` between every pair is direct, at 1-5 ms (KVM shell survey, root, read-only, 2026-09-27).
-- **Throughput: COULD-NOT-MEASURE.** iperf3 is **not installed** on any KVM (same survey). The operator has not yet chosen a method: installing iperf3, running a containerised iperf3, or a timed copy. Until one is chosen and run, every duration below is an estimate over an assumed link speed.
-- **What to measure once a method is chosen.** One-shot runs that leave nothing persistent:
-  - Knuckles → each KVM, both directions: pass 1 and check-all.
-  - **Every KVM pair**, both directions: kvm2↔kvm4-1, kvm2↔kvm4-2, kvm4-1↔kvm4-2. This is Garage replication traffic.
-  - Each tier-2 node's downlink (replicas arriving) and uplink (blocks served back). Replicas placed on tier 2 cross residential links.
-- The earlier "without iperf3" fallback piped data over SSH. It is removed, because §1.1 records that SSH from Knuckles is refused.
+- **Throughput: MEASURED** (operator-approved containerised iperf3, single stream, 2026-09-27):
 
-```bash
-# with iperf3 available (installed or containerised), per pair A<->B:
-# on B:   iperf3 -s -1
-# on A:   iperf3 -c <B tailnet name> -t 20 ; iperf3 -c <B tailnet name> -t 20 -R
-```
+| Path | Throughput |
+|---|---|
+| kvm4-1 → kvm2 | 383 Mbit/s |
+| kvm2 → kvm4-2 | 345 Mbit/s |
+| Knuckles → kvm2 | **19 Mbit/s** |
+| Knuckles → kvm4-2 | **18 Mbit/s** |
+
+- **The binding constraint is Knuckles' uplink,** at ~18 Mbit/s, because the source MinIO is on Knuckles. KVM↔KVM replication runs at roughly 20× that rate.
+- **Not measured:**
+  - The reverse direction (KVM → Knuckles), which `--check-all` reads use. Its time below assumes it is similar.
+  - The kvm4-1 inbound path. It is blocked; see §1.1.
+  - Tier-2 residential links.
+- The earlier "without iperf3" fallback piped data over SSH. It is removed, because §1.1 records that SSH from Knuckles is refused.
 
 **Estimate:** 85 GB = 680,000 Mbit. It crosses Knuckles' uplink **once**, into the endpoint node. Garage then replicates between the storage nodes in the layout.
 
-| Sustained link | Pass 1 (Knuckles uplink → endpoint KVM) | Each `--check-all` pass (endpoint KVM egress → Knuckles) |
+| Link | Pass 1 (Knuckles uplink → endpoint) | Each `--check-all` pass (storage nodes → Knuckles) |
 |---|---|---|
-| 10 Mbit/s | ~18.9 h | ~18.9 h |
-| 50 Mbit/s | ~3.8 h | ~3.8 h |
-| 100 Mbit/s | ~1.9 h | ~1.9 h |
-| 500 Mbit/s | ~23 min | ~23 min |
+| **~18 Mbit/s (measured Knuckles uplink)** | **~10.5 h** | **~10.5 h** (reverse direction assumed similar; not measured) |
+| 100 Mbit/s (hypothetical only) | ~1.9 h | ~1.9 h |
 
 - **`--check-all` is not free.** It re-reads every object on both sides. The MinIO side is local. The Garage side is ~85 GB read back to Knuckles per pass. That is egress from the endpoint **and from other storage nodes**, because reads can pull blocks from any replica holder.
-- **Budget two `--check-all` passes:** Gate B's pass 2, plus one re-run if pass 2 is interrupted or reports failures. That is ~85 GB of extra KVM egress each, about 1.9 h each at 100 Mbit/s. The c2 delta (`--check-new`) re-reads only what it copies.
+- **Budget two `--check-all` passes:** Gate B's pass 2, plus one re-run if pass 2 is interrupted or reports failures. That is ~85 GB of extra egress each, about **10.5 h** each at the measured ~18 Mbit/s. The c2 delta (`--check-new`) re-reads only what it copies.
 - **Traffic, total:** ~85 GB inbound to the endpoint node, ~170 GB of replication between storage nodes, and ~85-170 GB of check-all egress from the storage nodes. The KVM share is small against the 8-16 TB monthly caps. Replication to tier-2 nodes lands on residential **downlinks**, which have no measured throughput.
-- **Wall clock before the freeze** ≈ pass 1 + one or two check-all passes. At 100 Mbit/s that is ~3.8-5.7 h. None of it is inside the freeze.
+- **Wall clock before the freeze** ≈ pass 1 + one or two check-all passes. At the measured ~18 Mbit/s that is **~21-31.5 h**. None of it is inside the freeze. Pass 1 saturates Knuckles' residential uplink for ~10.5 h unless `--bwlimit` is set below the line rate, which makes it longer still.
 
 ## 4. Risks
 
@@ -534,16 +542,17 @@ jfs meta 'juicefs gc "$META"'     # NO --delete; now scans MinIO
 |---|---|---|
 | Metadata stays on Knuckles until the D1 follow-on lands | Knuckles down means KVM Jellyfin down too. This is the inverse of §0.8 | D1 is decided (§2). Run the follow-on plan after this one. Do not call KVM viewing highly available until it lands |
 | A tier-1 node is down (Spark, 2026-09-27) | "Always-on" is a class, not a guarantee. A down tier-1 node plus one more failure stops the partitions they share (§1.2) | Soak and node-down tests start from `garage status`. Spark is never a sole secrets producer (§1.6) |
-| Tier-2 replicas carry quorum | Under one zone per node, desktops that sleep or reboot hold quorum-bearing replicas. That is worst today, while tier 1 can declare only ~61G | Capacity weighting (applied). Zone grouping (OPEN, D7). KVM volume identification, then cleanup only with operator confirmation (G0) |
+| Tier-2 replicas carry quorum | Under one zone per node, desktops that sleep or reboot hold quorum-bearing replicas. That is worst today, while tier 1 can declare only ~61G | Capacity weighting (applied). Zone grouping (OPEN, D7). KVM build-cache reclaim through the build-cache road (G0; owned outside this plan) |
 | Asymmetric availability (accepted, §0.8) | Region or VPS down: the lab loses `pmoves-media` entirely. It fails; it does not degrade (§0.6) | Accepted. The cache helps bandwidth, not availability |
-| KVM disk | Free now: kvm2 78G, kvm4-1 15G, kvm4-2 31G (survey, 2026-09-27). ~286G sits in "unused" docker volumes on the kvm4s. Snapshots need up to 4× metadata size | Declare capacity from **free now** (D3). **Never prune.** Identify each volume and get operator confirmation per volume first (§1.1 HARD caution, G0) |
+| KVM disk | Free now: kvm2 78G, kvm4-1 15G, kvm4-2 31G (survey, 2026-09-27). ~286G is BuildKit state (`buildx_buildkit_pmoves-shared0_state`) on the kvm4s. Snapshots need up to 4× metadata size | Declare capacity from **free now** (D3). Reclaim through the build-cache road (a GC cap, or `buildx prune`), never by deleting volumes (§1.1 HARD caution, G0) |
 | kvm4-2 over-subscribed | OOM kills Garage | Resolve per its profile before G3 |
 | Egress / uplink | Pass 1 saturates Knuckles' uplink. Each `--check-all` pass costs ~85 GB of endpoint-KVM egress | `--bwlimit`, off-hours. An interrupted pass is re-run (incremental by size, not resumable). `--check-all` only outside the freeze |
 | Single S3 endpoint (D2) | Endpoint node down: the S3 API is down even though Garage has quorum | Metadata-only `juicefs config --bucket` failover, rehearsed as its own gated drill (G6a). D2 option (ii) is also available |
-| MagicDNS inside Docker bridge networks | The mount can't resolve `<ENDPOINT>`: the same lists-then-fails shape as §0.2 | Gate A runs objbench inside `pmoves_data` |
+| MagicDNS inside Docker bridge networks | **Measured: it does not resolve.** A name-based `<ENDPOINT>` fails inside `pmoves_data`, the same lists-then-fails shape as §0.2 | Use the tailnet IPv4 resolved on the host, or host networking (§1.4). The choice is recorded in Gate A |
+| kvm4-1 inbound tailnet | No inbound tailnet connection accepted (measured); cause COULD-NOT-MEASURE. Garage RPC 3901 would be unreachable | G0 / Gate A BLOCKER: kvm4-1 stays out of the layout until inbound 3901 works |
 | Credential funnel | Truncated or mis-shaped key (the E2B precedent). A secret printed into a transcript | Shape checks (§1.6). `key create` output goes to the intake file only. Complete the 4-place route |
 | Keys stored in metadata | Anyone with `juicefs_meta` read access has the Garage key | Bucket-scoped key, no owner rights. Rotate with `juicefs config --access-key/--secret-key` |
-| `.env`-based guards | Node shape lives in gitignored `pmoves/.env.local`: `JUICEFS_NAME=pmoves-media`, `JUICEFS_NETWORK=pmoves_data` (there only so the mount resolves `minio`), `META_ROLE`, `DATA_DIR`. An empty exported shell var shadows the env files | Re-decide `JUICEFS_NETWORK` after cutover: metadata needs `supabase-db`, Garage needs MagicDNS. Verify with `env -u` |
+| `.env`-based guards | Node shape lives in gitignored `pmoves/.env.local`: `JUICEFS_NAME=pmoves-media`, `JUICEFS_NETWORK=pmoves_data` (there only so the mount resolves `minio`), `META_ROLE`, `DATA_DIR`. An empty exported shell var shadows the env files | Re-decide `JUICEFS_NETWORK` after cutover: metadata needs `supabase-db`, Garage needs its tailnet IP (MagicDNS does not resolve in the bridge). Verify with `env -u` |
 | Cross-node preflight gap | `juicefs-cross-node-setup.sh` refuses only `Storage: file` and never checks that the bucket URL resolves | Follow-up (parent §0.7): a bucket-URL reachability check |
 | Garage version drift | Mixed versions in the cluster | Digest pin. Upgrade per Garage `operations/upgrading.md` |
 
@@ -552,10 +561,10 @@ jfs meta 'juicefs gc "$META"'     # NO --delete; now scans MinIO
 | Gate | Condition | Owner |
 |---|---|---|
 | **D1** | **DECIDED: replicated Postgres** (§2). Sequencing: this data move first, then the metadata move under its own follow-on plan | operator (done) |
-| G0 | This plan merged. The #3192 bridge live, so MinIO is readable. **#3150 merged** (the durable mount and data-dir override that c5 relies on; OPEN today). Step 0 baseline recorded, including the live mount shape. **Identify KVM docker volumes before declaring capacity:** each "unused" volume on kvm4-1 and kvm4-2 identified, and any removal confirmed by the operator per volume. Never prune | operator |
+| G0 | This plan merged. The #3192 bridge live, so MinIO is readable. **#3150 merged** (the durable mount and data-dir override that c5 relies on; OPEN today). Step 0 baseline recorded, including the live mount shape. **KVM build cache reclaimed through the build-cache road before declaring capacity:** the space is `buildx_buildkit_pmoves-shared0_state`, reclaimed with a GC cap or `buildx prune` by its owner, outside this plan. Never by volume deletion. **kvm4-1 BLOCKER:** inbound tailnet connections to kvm4-1 must work (3901 reachable from every peer), or kvm4-1 stays out of the first cut | operator |
 | G1 | D3: each first-cut storage node has measured free space and a declared capacity of at most half of it, recorded in its profile. The applied layout's effective capacity covers ~85 GB plus growth, and `garage layout show` prints "Zone redundancy: maximum" and "Partitions are replicated 3 times on at least 3 distinct zones" | operator |
 | G2 | D2, D4-D7 decided. Funnel labels (§1.6) delivered to every first-cut storage node and shape-checked, with a named delivery vehicle per node (COULD-NOT-MEASURE today). The route does not depend on Spark alone; b850 is the fallback producer | operator |
-| G3 | Garage up. Gate A passed, including list, the MagicDNS-in-container check, the `--dry` sync parse check, and the **external probe of 3900/3901/3903** on every storage node's public address (who probes is OPEN — OPERATOR) | delivery + operator |
+| G3 | Garage up. Gate A passed, including list, the recorded addressing choice (tailnet IP or host networking), the kvm4-1 inbound check, the `--dry` sync parse check, and the **external probe of 3900/3901/3903** on every storage node's public address (who probes is OPEN — OPERATOR) | delivery + operator |
 | G4 | Gate B passed: `--check-all`, 0 failed | delivery |
 | G5 | Cutover window agreed. Step (c) gates passed | operator |
 | G6 | N-day soak passed, including the node-down test on a non-endpoint node. MinIO's `juicefs` role retired | operator |
@@ -578,9 +587,9 @@ jfs meta 'juicefs gc "$META"'     # NO --delete; now scans MinIO
 | Tiers | Availability tiers (§1.1) | **DECIDED:** tier 1 (always-on) = kvm2, kvm4-1, kvm4-2, Spark. Tier 2 (desktop) = 5090, Z890, Knuckles, 4090 |
 | Topology | Fleet-wide Garage mesh (§1.0) | **DECIDED:** every capable node is a storage node and a JuiceFS client. NATS stays off the mesh |
 | D2 | What the recorded bucket URL names (§1.4) | OPEN: (i) one tier-1 node with `juicefs config --bucket` failover, or (ii) a per-node local name |
-| D3 | Per-node capacity declarations for each fleet node (§1.1) | **OPEN — per-node capacity declarations for each fleet node.** KVM declared capacity stays **tiny** until an unknown writer (5-9 GiB/day on the kvm4s) is identified and space is reclaimed. That ops item is owned outside this plan. Every other node is COULD-NOT-MEASURE |
+| D3 | Per-node capacity declarations for each fleet node (§1.1) | **OPEN — per-node capacity declarations for each fleet node.** KVM declared capacity stays **tiny** until the BuildKit build cache (`buildx_buildkit_pmoves-shared0_state`, 5-9 GiB/day on the kvm4s) is capped or pruned through the build-cache road. That ops item is owned outside this plan. Every other node is COULD-NOT-MEASURE |
 | D4 | Soak length N | Recommendation: ≥ 14 days, including the non-endpoint node-down test and the separate failover drill |
 | D5 | Garage ports tailnet-only | Recommendation: yes. `tailscale0` only, with S3/admin bound to the tailnet address (§1.3). The external probe is a required gate; who runs it is **OPEN — OPERATOR** |
 | D6 | Known Road grants for the compose, funnel and egress edits | Recommendation: grant per PR, as in the table above |
-| D7 | Zone grouping (all tier-2 nodes in one `lab` zone) vs one zone per node (§1.2) | **OPEN — OPERATOR.** Not viable today: usable ≤ ~23 GB until the KVM volumes are cleaned up or Spark is measured |
-| D8 | Throughput measurement method (§3 Time and bandwidth) | **OPEN — OPERATOR:** install iperf3, run a containerised iperf3, or a timed copy. Hostinger 7-day metrics say bandwidth is **not** the binding constraint (peak 30-minute average ≤ 39 Mbit/s on a ~300 Mbit/s port). iperf3 would still give real capacity, not an average floor |
+| D7 | Zone grouping (all tier-2 nodes in one `lab` zone) vs one zone per node (§1.2) | **OPEN — OPERATOR.** Not viable today: usable ≤ ~23 GB until the KVM build cache is reclaimed or Spark is measured |
+| D8 | Throughput | **MEASURED** (containerised iperf3, 2026-09-27): KVM↔KVM 345-383 Mbit/s. Knuckles → KVM 18-19 Mbit/s, which is the binding constraint: ~10.5 h per full 85 GB pass |
