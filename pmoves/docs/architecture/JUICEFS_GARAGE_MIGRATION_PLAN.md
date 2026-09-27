@@ -136,13 +136,19 @@ metrics_token_file = "/run/secrets/pmoves_garage_metrics_token"
 
 ### 1.6 Secrets funnel (labels only; values never in git, argv logs or transcripts)
 
-| CHIT label | Delivered to | Shape (validate at delivery, not just presence) |
-|---|---|---|
-| `GARAGE_RPC_SECRET` | 3 KVMs, docker secret `garage_rpc_secret` | 64 hex |
-| `GARAGE_ADMIN_TOKEN` | 3 KVMs + operator | base64 of 32 bytes |
-| `GARAGE_METRICS_TOKEN` | 3 KVMs + Prometheus | base64 of 32 bytes |
-| `JUICEFS_GARAGE_ACCESS_KEY` | the migration context only | `GK` + 24 hex (26 chars) |
-| `JUICEFS_GARAGE_SECRET_KEY` | the migration context only | 64 hex |
+| CHIT label | Delivered to | Docker secret | Shape (validate at delivery, not just presence) | Manifest check possible |
+|---|---|---|---|---|
+| `GARAGE_RPC_SECRET` | 3 KVMs | `pmoves_garage_rpc_secret` | 64 hex | `min_length: 64` |
+| `GARAGE_ADMIN_TOKEN` | 3 KVMs + operator | `pmoves_garage_admin_token` | base64 of 32 bytes (44 chars) | `min_length: 44` |
+| `GARAGE_METRICS_TOKEN` | 3 KVMs + Prometheus | `pmoves_garage_metrics_token` | base64 of 32 bytes (44 chars) | `min_length: 44` |
+| `JUICEFS_GARAGE_ACCESS_KEY` | the migration context (Knuckles, operator) | — | `GK` + 24 hex (26 chars) | `prefix: GK`, `min_length: 26` |
+| `JUICEFS_GARAGE_SECRET_KEY` | the migration context, **and later the D1 metadata move** (§2). It must stay deliverable after this plan closes | — | 64 hex | `min_length: 64` |
+
+- **Secret names** follow the manifest's existing docker-secret convention: a `pmoves_` prefix, as in `pmoves_juicefs_meta_password` (`pmoves/chit/secrets_manifest_v2.yaml:239`). The `garage.toml` paths in §1.3 use the same names.
+- **What the manifest can enforce:** only `min_length` and `prefix`. Hex format, base64 format and exact length are **not enforced**. A value of 26 or more characters that starts with `GK` passes, even if it is not hex or is too long. At intake, the operator checks length and character class by hand, without printing the value (the E2B truncation precedent).
+- **Why the secret key outlives this plan:** `juicefs dump` omits the storage secret key unless `--keep-secret-key` is passed. After `juicefs load` into the replicated cluster (D1, §2), the Garage secret has to be re-injected with `juicefs config --secret-key`. So `JUICEFS_GARAGE_SECRET_KEY` cannot be treated as migration-only.
+
+**Delivery vehicle to the KVMs: unconfirmed (G2, COULD-NOT-MEASURE).** "Delivered to 3 KVMs" has no confirmed route today. `.github/workflows/sync-secrets-local.yml` runs on `[self-hosted, ai-lab, <target>]`, with default target `spark`. Target labels must match `[a-z0-9][a-z0-9-]*`, and no KVM runner carrying the `ai-lab` label is known. kvm2 hosts a CI runner, but its labels were not verified. G2 must name the mechanism for **each** KVM before any `GARAGE_*` secret is delivered. That could be a KVM runner label added to the workflow, or an operator-run delivery on the KVM over a non-logged channel. Until then, KVM delivery is COULD-NOT-MEASURE, not assumed.
 
 **Mount nodes do NOT need the Garage key.** JuiceFS stores storage credentials in the volume's format record in the metadata DB, so anyone who can read `juicefs_meta` has this key. That is why it is bucket-scoped.
 
@@ -159,8 +165,19 @@ metrics_token_file = "/run/secrets/pmoves_garage_metrics_token"
 | `garage key create` | **Prints the secret key to stdout** (`print_key_info`) | Operator context only. Redirect stdout to a `umask 077` intake file, feed that file to the funnel, then `shred -u` it. Never run it in an agent session |
 | `garage key import --yes <GK..> <secret>` | Secret on argv | Alternative when the funnel generates the key. Run it on the KVM, not over a logged channel |
 | `garage key info --show-secret` | Prints the secret | Do not use |
-| `juicefs config --secret-key` | Does not read `SECRET_KEY` from env (v1.3.0 `cmd/config.go`), so the secret is on argv | Pass it via `-e` into a `--rm` container and expand it inside `sh -c`. It is then only in the container's argv for seconds, not in `docker inspect` or shell history |
-| `juicefs sync minio://USER:PASS@...` | Credentials in the URL (argv) | Same `-e` plus in-container expansion. URL-encode `/` as `%2F` |
+| `juicefs config --secret-key` | Does not read `SECRET_KEY` from env (v1.3.0 `cmd/config.go`), so the secret is on argv | Pass it in through the `jfs()` env file (§3) and expand it inside `sh -c`. It is then in the juicefs process argv for the seconds the call runs |
+| `juicefs sync minio://AK:SK@...` | juicefs sync 1.3.0 reads object-store credentials **only from the URL**. There are no `SRC_*`/`DST_*` env vars in JuiceFS. The `SRC_AK`-style names in §3 are plain shell variables, expanded by `sh -c` inside the container | URL-encode `/` as `%2F` in the URL form. The exposure is stated below; it cannot be avoided with 1.3.0 |
+
+**Real exposure window (do not understate it):**
+- **Container environment.** Anything passed with `-e` or `--env-file` is stored in the container's recorded config, in its environment list. It is readable through `docker inspect` by anyone with Docker socket access, for the **whole lifetime of the container**. With `--rm`, that lifetime is the call: seconds for `status`, `config` and `fsck`, and **hours** for a sync pass.
+- **Process argv.** Container processes are host processes. For the whole of every sync pass, the expanded `minio://AK:SK@...` URLs sit in the juicefs argv, readable by host `ps` and `/proc/<pid>/cmdline`. That is hours per pass. Any collector that records process command lines will capture them.
+- **Mitigations:**
+  - Run sync passes only on Knuckles, in the operator context.
+  - Confirm that no cmdline-recording collector runs during the passes.
+  - Pass each call only the credential sets it needs (the §3 `jfs()` helper takes the set names).
+  - If command-line capture cannot be ruled out, rotate the Garage key after the soak: create a new key, switch with `juicefs config --access-key/--secret-key`, then delete the old key.
+  - The MinIO credential used as the sync source gets the same treatment when the MinIO `juicefs` role is retired.
+- **Shell history.** Never type a credential at a prompt that records history. Prefer the funnel-backed env-file fill in §3. If a value must be typed, first turn history off with `set +o history`, or set `HISTCONTROL=ignorespace` and begin the line with a space.
 
 ## 2. Metadata engine: decision input (**D1, the first operator gate**)
 
