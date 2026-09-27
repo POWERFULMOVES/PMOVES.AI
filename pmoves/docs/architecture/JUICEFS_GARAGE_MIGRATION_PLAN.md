@@ -468,7 +468,9 @@ jfs meta 'juicefs gc "$META"'     # NO --delete; now scans MinIO
 
 | Phase | Action | Gate |
 |---|---|---|
-| Soak, N days (**D4**) | Daily `juicefs fsck` (read-only), `garage status`, `garage stats`. Stop one KVM once, deliberately | 0 fsck errors. 3 healthy nodes. Reads **and writes** continue with one node down (RF=3) |
+| Soak, N days (**D4**) | Daily `juicefs fsck` (read-only), `garage status`, `garage stats` | 0 fsck errors. Every storage node in the layout HEALTHY, or its absence explained. Spark down counts as an absence |
+| Node-down test (once, deliberate) | Stop **one** storage node that is **NOT the S3 endpoint** (D2). First confirm with `garage status` that every other storage node is up; with Spark already down, a second stop is a two-node failure, which is a different test. Run it once on a tier-1 node and once on a tier-2 node | Reads **and writes** continue from every client (RF=3: one replica per partition lost) |
+| Endpoint-failover drill (separate, gated: G6a) | In an agreed window, and with a c1-style freeze: `jfs meta 'juicefs config "$META" --bucket http://<other-node>:3900/juicefs'`, remount through the c5 target, run c6, then switch back the same way | Every step exits 0. c6 passes on both the failover endpoint and the restored one. Never combined with the node-down test |
 | Retire | JuiceFS no longer uses `minio:9000/juicefs`. MinIO itself stays up for `assets`/`outputs`/`pmoves-comfyui` until the parent §9 consumer migration | Operator sign-off |
 | What "retire" means | Bucket `juicefs` data is **kept** and volume `pmoves_minio-data` is **kept** | — |
 | Delete | Only on a separate, explicit operator instruction naming `pmoves_minio-data`. Never `down -v` | — |
@@ -483,17 +485,21 @@ jfs meta 'juicefs gc "$META"'     # NO --delete; now scans MinIO
 | kvm4-1 | 51-112 ms | 457 ms |
 | kvm4-2 | 139-249 ms | 915 ms |
 
-- **KVM↔KVM RTT:** COULD-NOT-MEASURE from Knuckles.
-- **Throughput:** COULD-NOT-MEASURE (no SSH). Operator commands, one-shot and leaving nothing persistent:
+- **KVM↔KVM RTT: measured.** `tailscale ping` between every pair is direct, at 1-5 ms (KVM shell survey, root, read-only, 2026-09-27).
+- **Throughput: COULD-NOT-MEASURE.** iperf3 is **not installed** on any KVM (same survey). The operator has not yet chosen a method: installing iperf3, running a containerised iperf3, or a timed copy. Until one is chosen and run, every duration below is an estimate over an assumed link speed.
+- **What to measure once a method is chosen.** One-shot runs that leave nothing persistent:
+  - Knuckles → each KVM, both directions: pass 1 and check-all.
+  - **Every KVM pair**, both directions: kvm2↔kvm4-1, kvm2↔kvm4-2, kvm4-1↔kvm4-2. This is Garage replication traffic.
+  - Each tier-2 node's uplink. Replicas placed on tier 2 cross residential links.
+- The earlier "without iperf3" fallback piped data over SSH. It is removed, because §1.1 records that SSH from Knuckles is refused.
 
 ```bash
-# on a KVM:          iperf3 -s -1
-# on Knuckles:       iperf3 -c pmoves-kvm4-1 -t 20 ; iperf3 -c pmoves-kvm4-1 -t 20 -R
-# without iperf3:    dd if=/dev/zero bs=1M count=256 | ssh <user>@pmoves-kvm4-1 'cat >/dev/null'
-# on each KVM, KVM<->KVM RTT:  tailscale ping -c 3 pmoves-kvm2 ; tailscale ping -c 3 pmoves-kvm4-1 ; tailscale ping -c 3 pmoves-kvm4-2
+# with iperf3 available (installed or containerised), per pair A<->B:
+# on B:   iperf3 -s -1
+# on A:   iperf3 -c <B tailnet name> -t 20 ; iperf3 -c <B tailnet name> -t 20 -R
 ```
 
-**Estimate:** 85 GB = 680,000 Mbit. It crosses Knuckles' uplink **once**; Garage then replicates KVM↔KVM.
+**Estimate:** 85 GB = 680,000 Mbit. It crosses Knuckles' uplink **once**, into the endpoint node. Garage then replicates between the storage nodes in the layout.
 
 | Sustained link | Pass 1 (Knuckles uplink → endpoint KVM) | Each `--check-all` pass (endpoint KVM egress → Knuckles) |
 |---|---|---|
@@ -504,19 +510,21 @@ jfs meta 'juicefs gc "$META"'     # NO --delete; now scans MinIO
 
 - **`--check-all` is not free.** It re-reads every object on both sides. The MinIO side is local. The Garage side is ~85 GB of **egress from the endpoint KVM** back to Knuckles per pass.
 - **Budget two `--check-all` passes:** Gate B's pass 2, plus one re-run if pass 2 is interrupted or reports failures. That is ~85 GB of extra KVM egress each, about 1.9 h each at 100 Mbit/s. The c2 delta (`--check-new`) re-reads only what it copies.
-- **KVM traffic, total:** ~85 GB inbound to the endpoint node, ~170 GB of replication between KVMs, and ~85-170 GB of check-all egress. That is small against the 8-16 TB monthly caps.
+- **Traffic, total:** ~85 GB inbound to the endpoint node, ~170 GB of replication between storage nodes, and ~85-170 GB of check-all egress from the endpoint. The KVM share is small against the 8-16 TB monthly caps. Replication to tier-2 nodes crosses residential uplinks, which have no measured throughput.
 - **Wall clock before the freeze** ≈ pass 1 + one or two check-all passes. At 100 Mbit/s that is ~3.8-5.7 h. None of it is inside the freeze.
 
 ## 4. Risks
 
 | Risk | Impact | Mitigation |
 |---|---|---|
-| Metadata stays on Knuckles (D1 not taken) | Knuckles down means KVM Jellyfin down too. This is the inverse of §0.8 | Take D1 next. Do not call KVM viewing highly available until then |
+| Metadata stays on Knuckles until the D1 follow-on lands | Knuckles down means KVM Jellyfin down too. This is the inverse of §0.8 | D1 is decided (§2). Run the follow-on plan after this one. Do not call KVM viewing highly available until it lands |
+| A tier-1 node is down (Spark, 2026-09-27) | "Always-on" is a class, not a guarantee. A down tier-1 node plus one more failure stops the partitions they share (§1.2) | Soak and node-down tests start from `garage status`. Spark is never a sole secrets producer (§1.6) |
+| Tier-2 replicas carry quorum | Under one zone per node, desktops that sleep or reboot hold quorum-bearing replicas. That is worst today, while tier 1 can declare only ~61G | Capacity weighting (applied). Zone grouping (OPEN, D7). KVM volume identification, then cleanup only with operator confirmation (G0) |
 | Asymmetric availability (accepted, §0.8) | Region or VPS down: the lab loses `pmoves-media` entirely. It fails; it does not degrade (§0.6) | Accepted. The cache helps bandwidth, not availability |
-| KVM disk | RF=3 needs a full copy per node. kvm2 is 100 GB **total** (Hostinger REST, 2026-09-27), and it has CI-runner pressure. The kvm4s are 200 GB total each. Snapshots need up to 4× metadata size | RF=3 as specified is **infeasible** (§1.1 D3). The operator chooses (a) KVM 8 upgrade, (b) RF=2 on the kvm4s, or (c) add a disk-bearing node, before G1 |
+| KVM disk | Free now: kvm2 78G, kvm4-1 15G, kvm4-2 31G (survey, 2026-09-27). ~286G sits in "unused" docker volumes on the kvm4s. Snapshots need up to 4× metadata size | Declare capacity from **free now** (D3). **Never prune.** Identify each volume and get operator confirmation per volume first (§1.1 HARD caution, G0) |
 | kvm4-2 over-subscribed | OOM kills Garage | Resolve per its profile before G3 |
 | Egress / uplink | Pass 1 saturates Knuckles' uplink. Each `--check-all` pass costs ~85 GB of endpoint-KVM egress | `--bwlimit`, off-hours. An interrupted pass is re-run (incremental by size, not resumable). `--check-all` only outside the freeze |
-| Single S3 endpoint (D2) | Endpoint KVM down: S3 API down even though Garage has quorum | Metadata-only `juicefs config --bucket` failover |
+| Single S3 endpoint (D2) | Endpoint node down: the S3 API is down even though Garage has quorum | Metadata-only `juicefs config --bucket` failover, rehearsed as its own gated drill (G6a). D2 option (ii) is also available |
 | MagicDNS inside Docker bridge networks | The mount can't resolve `<ENDPOINT>`: the same lists-then-fails shape as §0.2 | Gate A runs objbench inside `pmoves_data` |
 | Credential funnel | Truncated or mis-shaped key (the E2B precedent). A secret printed into a transcript | Shape checks (§1.6). `key create` output goes to the intake file only. Complete the 4-place route |
 | Keys stored in metadata | Anyone with `juicefs_meta` read access has the Garage key | Bucket-scoped key, no owner rights. Rotate with `juicefs config --access-key/--secret-key` |
@@ -528,31 +536,36 @@ jfs meta 'juicefs gc "$META"'     # NO --delete; now scans MinIO
 
 | Gate | Condition | Owner |
 |---|---|---|
-| **D1** | Metadata engine decided (§2). This is the first gate; it sets the order of everything else | operator |
-| G0 | This plan merged. The #3192 bridge live, so MinIO is readable. Step 0 baseline recorded | operator |
-| G1 | D3 decided (§1.1: option a, b or c). Free space after the OS measured on every storage node (the peer shell survey is pending), with ≥ 2× the data free on each | operator |
-| G2 | D2-D6 decided. Funnel labels (§1.6) delivered and shape-checked | operator |
-| G3 | Garage up. Gate A passed, including list, the MagicDNS-in-container check, the `--dry` sync parse check, and the **external probe of 3900/3901/3903** on every KVM (OPEN — OPERATOR) | delivery + operator |
+| **D1** | **DECIDED: replicated Postgres** (§2). Sequencing: this data move first, then the metadata move under its own follow-on plan | operator (done) |
+| G0 | This plan merged. The #3192 bridge live, so MinIO is readable. **#3150 merged** (the durable mount and data-dir override that c5 relies on; OPEN today). Step 0 baseline recorded, including the live mount shape. **Identify KVM docker volumes before declaring capacity:** each "unused" volume on kvm4-1 and kvm4-2 identified, and any removal confirmed by the operator per volume. Never prune | operator |
+| G1 | D3: each first-cut storage node has measured free space and a declared capacity of at most half of it, recorded in its profile. The applied layout's effective capacity covers ~85 GB plus growth | operator |
+| G2 | D2, D4-D7 decided. Funnel labels (§1.6) delivered to every first-cut storage node and shape-checked, with a named delivery vehicle per node (COULD-NOT-MEASURE today). The route does not depend on Spark alone; b850 is the fallback producer | operator |
+| G3 | Garage up. Gate A passed, including list, the MagicDNS-in-container check, the `--dry` sync parse check, and the **external probe of 3900/3901/3903** on every storage node's public address (who probes is OPEN — OPERATOR) | delivery + operator |
 | G4 | Gate B passed: `--check-all`, 0 failed | delivery |
 | G5 | Cutover window agreed. Step (c) gates passed | operator |
-| G6 | N-day soak passed, including the node-down test. MinIO's `juicefs` role retired | operator |
+| G6 | N-day soak passed, including the node-down test on a non-endpoint node. MinIO's `juicefs` role retired | operator |
+| G6a | Endpoint-failover drill (Step e) passed, as a separate gated step | operator |
 
 **Known Road grants needed later.** Check each path first with `python3 .claude/skills/known-roads/roads.py check <path>`.
 
 | Change | Road |
 |---|---|
-| New Garage compose file for the KVMs; any `pmoves/docker-compose*.yml` or overlay edit | `compose:pr:<N>` |
+| New Garage compose file for the storage nodes (Linux host-network variant and Windows sidecar variant); any `pmoves/docker-compose*.yml` or overlay edit | `compose:pr:<N>` |
 | Funnel manifests and `.github/workflows/sync-secrets-local.yml` | funnel road, per path check |
 | `pmoves/mk/egress.mk` or the `JUICEFS_NETWORK` handling for the post-cutover mount | per path check |
-| `juicefs config` on the live volume; stopping mounts; KVM firewall | operator action, not an agent action |
+| `juicefs config` on the live volume; stopping mounts; firewall on any storage node; removal of any KVM docker volume | operator action, not an agent action |
 
-### Open operator decisions
+### Operator decisions
 
-| # | Decision | Recommendation |
+| # | Decision | Status |
 |---|---|---|
-| **D1** | Metadata engine (§2). **First gate** | B, replicated Postgres on the KVMs, as its own plan after §3 |
-| D2 | Which KVM serves the recorded bucket URL | The largest healthy node with the lowest measured RTT. Fail over with `juicefs config --bucket`. Not per-client Garage gateways, which would spread `rpc_secret` to every lab node |
-| D3 | Capacity: RF=3 as specified is **infeasible** on 100/200/200 GB total disk (§1.1) | **OPEN — OPERATOR.** Options (a) KVM 8 upgrade (kvm2 only or all three), (b) RF=2 on the two kvm4s (read-only while one is down), (c) add a disk-bearing node such as Knuckles or the 5090. No recommendation made |
-| D4 | Soak length N | ≥ 14 days, including one deliberate node-down |
-| D5 | Garage ports tailnet-only | Yes: `tailscale0` only, S3/admin bound to the tailnet address (§1.3). The external probe is a required gate; who runs it is **OPEN — OPERATOR** |
-| D6 | Known Road grants for the compose, funnel and egress edits | Grant per PR, as in the table above |
+| **D1** | Metadata engine (§2) | **DECIDED: replicated Postgres**, Patroni preferred. A separate follow-on plan, run after this one |
+| Tiers | Availability tiers (§1.1) | **DECIDED:** tier 1 (always-on) = kvm2, kvm4-1, kvm4-2, Spark. Tier 2 (desktop) = 5090, Z890, Knuckles, 4090 |
+| Topology | Fleet-wide Garage mesh (§1.0) | **DECIDED:** every capable node is a storage node and a JuiceFS client. NATS stays off the mesh |
+| D2 | What the recorded bucket URL names (§1.4) | OPEN: (i) one tier-1 node with `juicefs config --bucket` failover, or (ii) a per-node local name |
+| D3 | Per-node capacity declarations for each fleet node (§1.1) | **OPEN — per-node capacity declarations for each fleet node.** KVM free now: 78G / 15G / 31G. Every other node is COULD-NOT-MEASURE |
+| D4 | Soak length N | Recommendation: ≥ 14 days, including the non-endpoint node-down test and the separate failover drill |
+| D5 | Garage ports tailnet-only | Recommendation: yes. `tailscale0` only, with S3/admin bound to the tailnet address (§1.3). The external probe is a required gate; who runs it is **OPEN — OPERATOR** |
+| D6 | Known Road grants for the compose, funnel and egress edits | Recommendation: grant per PR, as in the table above |
+| D7 | Zone grouping (all tier-2 nodes in one `lab` zone) vs one zone per node (§1.2) | **OPEN — OPERATOR.** Not viable today: usable ≤ ~23 GB until the KVM volumes are cleaned up or Spark is measured |
+| D8 | Throughput measurement method (§3 Time and bandwidth) | **OPEN — OPERATOR:** install iperf3, run a containerised iperf3, or a timed copy |
