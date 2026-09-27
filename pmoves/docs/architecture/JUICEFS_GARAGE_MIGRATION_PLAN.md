@@ -31,24 +31,42 @@ The 85 vs 76 GB gap is unexplained. It could be trash, leaked objects, auto-back
 
 ### 1.1 Nodes
 
-| Node | Garage zone | Capacity (`-c`) | vCPU / RAM | Monthly BW cap | Note |
-|---|---|---|---|---|---|
-| `pmoves-kvm2` | `kvm2` | **COULD-NOT-MEASURE** | 2 / 8 GB | 8 TB | Recorded disk values conflict: 100, 200 or 400 GB. Hosts a CI runner with recurring disk pressure |
-| `pmoves-kvm4-1` | `kvm4-1` | **COULD-NOT-MEASURE** | 4 / 16 GB | 16 TB | Recorded disk: 200 or 400 GB |
-| `pmoves-kvm4-2` | `kvm4-2` | **COULD-NOT-MEASURE** | 4 / 16 GB | 16 TB | Profile says it is **over-subscribed**: "resolve before adding data-plane services here" |
+| Node | Garage zone | Plan | Total disk | vCPU / RAM | Monthly BW cap | Free after OS + existing data | Note |
+|---|---|---|---|---|---|---|---|
+| `pmoves-kvm2` | `kvm2` | KVM 2 | **100 GB** | 2 / 8 GB | 8 TB | **pending** (peer shell survey running) | Hosts a CI runner with recurring disk pressure |
+| `pmoves-kvm4-1` | `kvm4-1` | KVM 4 | **200 GB** | 4 / 16 GB | 16 TB | **pending** | — |
+| `pmoves-kvm4-2` | `kvm4-2` | KVM 4 | **200 GB** | 4 / 16 GB | 16 TB | **pending** | Profile says it is **over-subscribed**: "resolve before adding data-plane services here" |
 
-- vCPU, RAM and bandwidth caps are Hostinger-reported, from `pilots/fordham-hill/06-pilot-observation.md`.
-- Conflicting disk records: `research/KVM_HOSTINGER_NETWORK_REPORT.md`, `docs/architecture/kvm-exit-node-hosting-strategy.md`, `pmoves/docs/context/Visionary AI_ Global Network, Local Power.md`.
-- **Why capacity is unmeasured:** Tailscale SSH from Knuckles was refused ("tailnet policy does not permit you to SSH as user pmoves-knuckles" on kvm2/kvm4-1, "Host key verification failed" on kvm4-2). No other user was tried.
+- **Source for plan, disk, vCPU and RAM:** Hostinger REST, read-only, 2026-09-27. These were read-only GETs, and every one returned HTTP 200. The measurement supersedes the conflicting recorded values of 100, 200 and 400 GB, which came from `research/KVM_HOSTINGER_NETWORK_REPORT.md`, `docs/architecture/kvm-exit-node-hosting-strategy.md` and `pmoves/docs/context/Visionary AI_ Global Network, Local Power.md`.
+- Bandwidth caps are Hostinger-reported, from `pilots/fordham-hill/06-pilot-observation.md`.
+- **Same data center.** All three are in Hostinger `data_center_id` 17 (Hostinger REST, read-only, 2026-09-27).
+- **No extra volumes.** None of the three has an attached volume. The only way to add disk is a plan upgrade: KVM 8 has 400 GB, 8 vCPU and 32 GB RAM.
+- **Free space is still unmeasured.** Tailscale SSH from Knuckles was refused ("tailnet policy does not permit you to SSH as user pmoves-knuckles" on kvm2 and kvm4-1, and "Host key verification failed" on kvm4-2). No other user was tried. A peer's shell survey is running. Until it lands, "free after OS" is pending.
+
+#### D3 capacity: RF=3 as specified is INFEASIBLE (**OPEN — OPERATOR**)
+
+- RF=3 on three nodes puts a **full copy on every node** (§1.2). That is ~85 GB of data, plus growth, plus Garage metadata, plus metadata snapshots of up to 4× the metadata size.
+- **kvm2 is the hard blocker.** Its 100 GB is *total* disk. The OS, the CI runner and its existing data must fit in it too, so it cannot also hold ~85 GB plus growth. G1 (≥ 2× the data free) fails before any shell survey result.
+- The kvm4s have 200 GB total each. That total must also hold the OS and the node's existing data, and kvm4-2 is already over-subscribed. Whether they clear G1's 2× headroom depends on the pending free-space survey.
+
+The options are listed here; the plan does **not** choose between them. This is an operator decision.
+
+| Option | What changes | Consequence |
+|---|---|---|
+| **(a) Upgrade to KVM 8** (400 GB / 8 vCPU / 32 GB): kvm2 only, or all three | Plan cost. The RF=3 topology in §1.2-§1.3 stands | Removes the kvm2 blocker. If only kvm2 is upgraded, usable capacity is still bounded by the kvm4s' free space |
+| **(b) RF=2 on the two kvm4s** | `replication_factor = 2`, two zones, and kvm2 drops out of the layout | Per the Garage docs quorum table (§1.2), the cluster becomes **read-only** while one of the two nodes is down. Writes stop. That breaks "no single node offline stops operators" for writes. RF cannot be changed safely later |
+| **(c) Add a node that has disk** (e.g. Knuckles or the 5090) to the Garage layout | A 4th zone, with a lab node holding data | Usable capacity is still limited by the smallest node's capacity in the layout. A lab node that holds replicas also works against the §0.8 asymmetry: KVM-side availability then partly depends on lab hardware. The asymmetry section would need to be re-read against this |
+
+Until D3 is decided, the node table's `-c` values and the §1.3 `replication_factor` are **not** deploy-ready.
 
 **Operator measurement (read-only), on each KVM:**
 ```bash
 df -hT / /var/lib 2>/dev/null; lsblk -o NAME,SIZE,TYPE,FSTYPE,MOUNTPOINT; free -g; docker system df
 ```
 
-**Zones:** one zone per node. The Hostinger report places all three in one region (US-East), so the zones are node-level failure domains, not site-level. A regional outage takes all three. That is the §0.6 "VPS down" case, which §0.8 accepted.
+**Zones:** one zone per node. All three are in the same Hostinger data center (`data_center_id` 17, Hostinger REST, read-only, 2026-09-27), so the zones are node-level failure domains, not site-level. A data-center outage takes all three. That is the §0.6 "VPS down" case, which §0.8 accepted.
 
-### 1.2 Replication factor: **3**
+### 1.2 Replication factor: **3** (the requirement; infeasible on today's disks, see D3 in §1.1)
 
 Quorums are from Garage v2.4.1 `reference-manual/configuration.md`:
 
@@ -71,26 +89,29 @@ metadata_dir       = "/var/lib/garage/meta"
 data_dir           = "/var/lib/garage/data"
 db_engine          = "lmdb"
 metadata_auto_snapshot_interval = "6h"
-metadata_snapshots_dir = "/var/lib/garage/data/snapshots"   # snapshots need up to 4x meta size
+metadata_snapshots_dir = "/var/lib/garage/snapshots"   # sibling of data_dir, not inside it; up to 4x meta size
 
-rpc_bind_addr   = "[::]:3901"
+rpc_bind_addr   = "[::]:3901"                          # peers dial rpc_public_addr; firewall-gated below
 rpc_public_addr = "<this node's tailnet address, rendered at deploy>:3901"
-rpc_secret_file = "/run/secrets/garage_rpc_secret"
+rpc_secret_file = "/run/secrets/pmoves_garage_rpc_secret"
 
 [s3_api]
-api_bind_addr = "[::]:3900"
+api_bind_addr = "<this node's tailnet address>:3900"   # never [::]: the KVMs are public exit nodes
 s3_region     = "us-east-1"          # see 1.4: matches JuiceFS's default region
 
 [admin]
-api_bind_addr      = "[::]:3903"
-admin_token_file   = "/run/secrets/garage_admin_token"
-metrics_token_file = "/run/secrets/garage_metrics_token"
+api_bind_addr      = "<this node's tailnet address>:3903"
+admin_token_file   = "/run/secrets/pmoves_garage_admin_token"
+metrics_token_file = "/run/secrets/pmoves_garage_metrics_token"
 ```
 
 - **Image:** `dxflrs/garage:v2.4.1` (latest, 2026-09-08). Pin it by digest at deploy time, per F-07.
 - **Network:** host networking, per Garage's `cookbook/real-world.md`.
+- **Snapshots dir:** `/var/lib/garage/snapshots` is a sibling of `data_dir`. It must not sit inside `data_dir`, which Garage manages as its block store.
+- **Bind addresses:** the S3 and admin APIs bind to the node's tailnet address, so they are not listening on the public interface at all. A bind to a tailnet address fails if `tailscaled` is not up when Garage starts. The deploy must order Garage after Tailscale, or rely on a restart policy. RPC stays on `[::]`, because peers reach it at `rpc_public_addr`. It is protected by the firewall rule and the gate below.
 - **Firewall (required, because the KVMs are public exit nodes):** allow 3900/3901/3903 on `tailscale0` only.
-- **Firewall gate:** from outside the tailnet, `nc -zv <public addr> 3900` is refused.
+- **Hostinger firewall today (Hostinger REST, read-only, 2026-09-27):** no Hostinger firewall rule mentions 3900, 3901 or 3903, and no drop rules exist. The API does not expose the default policy. So whether these ports are closed on the public addresses is **COULD-NOT-MEASURE** from the API.
+- **External port-probe gate (REQUIRED; OPEN — OPERATOR):** before Gate A passes, probe **all three ports (3900, 3901, 3903) on every KVM's public address from a host outside the tailnet**. Every probe must be refused or time out. One open port fails the gate. A probe from inside the tailnet proves nothing, because tailnet traffic is allowed by design. Who runs the probe, and from which outside host, is an operator decision.
 
 ### 1.4 S3 endpoint as JuiceFS sees it
 
@@ -230,7 +251,7 @@ garage bucket allow --read --write juicefs --key juicefs-pmoves-media
   jfs 'juicefs sync --dry --no-https "minio://$SRC_AK:$SRC_SK@minio:9000/juicefs/pmoves-media/" "minio://$DST_AK:$DST_SK@<ENDPOINT_KVM>:3900/juicefs/pmoves-media/"'
   ```
   It must exit 0 and report the MinIO keys as pending copies. A `NoSuchBucket` error naming the host means the URL was parsed virtual-host style (P1-2 of the #3200 review). STOP.
-- 3900/3901/3903 are closed on the public interfaces.
+- **External port probe (§1.3, required):** 3900, 3901 and 3903 are refused or time out on every KVM's public address, probed from a host outside the tailnet. All three ports on all three nodes; one open port fails Gate A.
 
 ### Step (b): Copy MinIO → Garage (volume stays live on MinIO)
 
@@ -329,7 +350,7 @@ jfs 'juicefs fsck "$META"'
 |---|---|---|
 | Metadata stays on Knuckles (D1 not taken) | Knuckles down means KVM Jellyfin down too. This is the inverse of §0.8 | Take D1 next. Do not call KVM viewing highly available until then |
 | Asymmetric availability (accepted, §0.8) | Region or VPS down: the lab loses `pmoves-media` entirely. It fails; it does not degrade (§0.6) | Accepted. The cache helps bandwidth, not availability |
-| KVM disk | RF=3 needs a full copy per node. kvm2 may be 100 GB with CI-runner pressure. Snapshots need up to 4× metadata size | G1: measured free space ≥ 2× the data on every node. If kvm2 fails G1, **re-decide RF (D3)** before building |
+| KVM disk | RF=3 needs a full copy per node. kvm2 is 100 GB **total** (Hostinger REST, 2026-09-27), and it has CI-runner pressure. The kvm4s are 200 GB total each. Snapshots need up to 4× metadata size | RF=3 as specified is **infeasible** (§1.1 D3). The operator chooses (a) KVM 8 upgrade, (b) RF=2 on the kvm4s, or (c) add a disk-bearing node, before G1 |
 | kvm4-2 over-subscribed | OOM kills Garage | Resolve per its profile before G3 |
 | Egress / uplink | Pass 1 saturates Knuckles' uplink. Each `--check-all` pass costs ~85 GB of endpoint-KVM egress | `--bwlimit`, off-hours. An interrupted pass is re-run (incremental by size, not resumable). `--check-all` only outside the freeze |
 | Single S3 endpoint (D2) | Endpoint KVM down: S3 API down even though Garage has quorum | Metadata-only `juicefs config --bucket` failover |
@@ -346,9 +367,9 @@ jfs 'juicefs fsck "$META"'
 |---|---|---|
 | **D1** | Metadata engine decided (§2). This is the first gate; it sets the order of everything else | operator |
 | G0 | This plan merged. The #3192 bridge live, so MinIO is readable. Step 0 baseline recorded | operator |
-| G1 | KVM capacity measured (§1.1) with ≥ 2× the data free on each storage node | operator |
+| G1 | D3 decided (§1.1: option a, b or c). Free space after the OS measured on every storage node (the peer shell survey is pending), with ≥ 2× the data free on each | operator |
 | G2 | D2-D6 decided. Funnel labels (§1.6) delivered and shape-checked | operator |
-| G3 | Garage up. Gate A passed, including list and the MagicDNS-in-container check | delivery + operator |
+| G3 | Garage up. Gate A passed, including list, the MagicDNS-in-container check, the `--dry` sync parse check, and the **external probe of 3900/3901/3903** on every KVM (OPEN — OPERATOR) | delivery + operator |
 | G4 | Gate B passed: `--check-all`, 0 failed | delivery |
 | G5 | Cutover window agreed. Step (c) gates passed | operator |
 | G6 | N-day soak passed, including the node-down test. MinIO's `juicefs` role retired | operator |
@@ -368,7 +389,7 @@ jfs 'juicefs fsck "$META"'
 |---|---|---|
 | **D1** | Metadata engine (§2). **First gate** | B, replicated Postgres on the KVMs, as its own plan after §3 |
 | D2 | Which KVM serves the recorded bucket URL | The largest healthy node with the lowest measured RTT. Fail over with `juicefs config --bucket`. Not per-client Garage gateways, which would spread `rpc_secret` to every lab node |
-| D3 | Capacity and headroom per KVM; whether kvm2 stores data | Measure first (§1.1). RF=3 needs all 3 nodes storing |
+| D3 | Capacity: RF=3 as specified is **infeasible** on 100/200/200 GB total disk (§1.1) | **OPEN — OPERATOR.** Options (a) KVM 8 upgrade (kvm2 only or all three), (b) RF=2 on the two kvm4s (read-only while one is down), (c) add a disk-bearing node such as Knuckles or the 5090. No recommendation made |
 | D4 | Soak length N | ≥ 14 days, including one deliberate node-down |
-| D5 | Garage ports tailnet-only | Yes: `tailscale0` only |
+| D5 | Garage ports tailnet-only | Yes: `tailscale0` only, S3/admin bound to the tailnet address (§1.3). The external probe is a required gate; who runs it is **OPEN — OPERATOR** |
 | D6 | Known Road grants for the compose, funnel and egress edits | Grant per PR, as in the table above |
