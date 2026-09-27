@@ -3,14 +3,14 @@
 **Status:** PLAN ONLY (2026-09-26). Nothing here has been executed. Every step in §3 is operator-gated.
 **Lane:** `feat/juicefs-garage-migration`, owner B850-CLAUDE-FUNNEL (Knuckles), register PR #3198.
 **Replaces:** the interim MinIO bridge (PR #3192, `pmoves/docker/minio-src/README.md`).
-**Decided upstream:** `JUICEFS_OBJECT_STORE_MIGRATION.md` §0.8: Garage, self-hosted on the KVMs. Asymmetric availability accepted.
+**Decided upstream:** `JUICEFS_OBJECT_STORE_MIGRATION.md` §0.8: Garage, self-hosted; asymmetric availability accepted. Broadened by operator direction (2026-09-27) to a **fleet-wide** Garage mesh with decided availability tiers (§1.0, §1.1). **D1 decided: replicated Postgres** (§2).
 **Why not Supabase S3:** PR #3199, §12 of the same doc. JuiceFS cannot LIST through storage-api, so `gc`, `fsck` and `destroy` see nothing.
 
 ## 0. Scope
 
 | In scope | Out of scope |
 |---|---|
-| Move the **object data** of JuiceFS `pmoves-media` from MinIO bucket `juicefs` to a Garage bucket on the 3 KVMs | The metadata engine move. It is an input here (§2, gate D1) and gets its own plan |
+| Move the **object data** of JuiceFS `pmoves-media` from MinIO bucket `juicefs` to a Garage bucket on the fleet-wide Garage cluster (§1) | The metadata engine move. D1 is decided (replicated Postgres, §2); the move gets its own follow-on plan |
 | `juicefs config` switch of the volume's storage, plus rollback | MinIO's **other** buckets (`assets`, `outputs`, `pmoves-comfyui`) and their ~10 S3 consumers (parent §3/§5/§9) |
 | Retiring MinIO's **`juicefs` bucket role** after a soak | Deleting `pmoves_minio-data`. Only an explicit operator deletion does that |
 
@@ -27,60 +27,137 @@
 
 The 85 vs 76 GB gap is unexplained. It could be trash, leaked objects, auto-backups or MinIO overhead. Step 0 measures it before anything is copied.
 
-## 1. Target topology
+## 1. Target topology: a fleet-wide Garage mesh
 
-### 1.1 Nodes
+### 1.0 Operator direction, and the prior art it aligns with
 
-| Node | Garage zone | Plan | Total disk | vCPU / RAM | Monthly BW cap | Free after OS + existing data | Note |
-|---|---|---|---|---|---|---|---|
-| `pmoves-kvm2` | `kvm2` | KVM 2 | **100 GB** | 2 / 8 GB | 8 TB | **pending** (peer shell survey running) | Hosts a CI runner with recurring disk pressure |
-| `pmoves-kvm4-1` | `kvm4-1` | KVM 4 | **200 GB** | 4 / 16 GB | 16 TB | **pending** | — |
-| `pmoves-kvm4-2` | `kvm4-2` | KVM 4 | **200 GB** | 4 / 16 GB | 16 TB | **pending** | Profile says it is **over-subscribed**: "resolve before adding data-plane services here" |
+**Operator direction (2026-09-27):** "each node should be able to run file share; it will happen across the mesh. This is the point: Google Drive is on each; we are looking for our own."
 
-- **Source for plan, disk, vCPU and RAM:** Hostinger REST, read-only, 2026-09-27. These were read-only GETs, and every one returned HTTP 200. The measurement supersedes the conflicting recorded values of 100, 200 and 400 GB, which came from `research/KVM_HOSTINGER_NETWORK_REPORT.md`, `docs/architecture/kvm-exit-node-hosting-strategy.md` and `pmoves/docs/context/Visionary AI_ Global Network, Local Power.md`.
-- Bandwidth caps are Hostinger-reported, from `pilots/fordham-hill/06-pilot-observation.md`.
-- **Same data center.** All three are in Hostinger `data_center_id` 17 (Hostinger REST, read-only, 2026-09-27).
-- **No extra volumes.** None of the three has an attached volume. The only way to add disk is a plan upgrade: KVM 8 has 400 GB, 8 vCPU and 32 GB RAM.
-- **Free space is still unmeasured.** Tailscale SSH from Knuckles was refused ("tailnet policy does not permit you to SSH as user pmoves-knuckles" on kvm2 and kvm4-1, and "Host key verification failed" on kvm4-2). No other user was tried. A peer's shell survey is running. Until it lands, "free after OS" is pending.
+- **The Garage cluster is fleet-wide.** Every capable PMOVES node is both a Garage storage node and a JuiceFS client over the Tailscale mesh. That covers Knuckles/B850, 5090, 4090, Z890, Spark and the three KVMs.
+- **What runs on the mesh.** File sharing is an application on the mesh, and that is allowed. NATS stays off the mesh, and this plan routes nothing else through it.
+- **Relation to parent §0.8.** This broadens "Garage, self-hosted on the KVMs". The KVMs stay in the layout as the always-on tier (§1.2), and the lab nodes join them.
+- **The migration itself (§3) is unchanged:** sync, then `juicefs config --storage`, then gates and rollback. Only the target layout changes.
+  - The first cut can start from whichever nodes are ready. The rest join later through layout changes (`garage layout assign`, then `garage layout apply --version N+1`).
+  - Garage moves partitions on its own after each apply. Its algorithm "prioritizes moving less data between nodes over achieving equal distribution of load" (Garage v2.4.1 `operations/layout.md`, "Understanding unexpected layout calculations").
 
-#### D3 capacity: RF=3 as specified is INFEASIBLE (**OPEN — OPERATOR**)
+**Prior art.** This plan builds on these earlier decisions; it does not replace them.
 
-- RF=3 on three nodes puts a **full copy on every node** (§1.2). That is ~85 GB of data, plus growth, plus Garage metadata, plus metadata snapshots of up to 4× the metadata size.
-- **kvm2 is the hard blocker.** Its 100 GB is *total* disk. The OS, the CI runner and its existing data must fit in it too, so it cannot also hold ~85 GB plus growth. G1 (≥ 2× the data free) fails before any shell survey result.
-- The kvm4s have 200 GB total each. That total must also hold the OS and the node's existing data, and kvm4-2 is already over-subscribed. Whether they clear G1's 2× headroom depends on the pending free-space survey.
+| Source | What it already settled |
+|---|---|
+| `pmoves/docs/architecture/UNIVERSAL_MEDIA_ARCHITECTURE.md` (2026-07-28) | "Every node (5090, Z890, Knuckles, KVM4-2, SPARK) sees the same content library". Layer 2 is a JuiceFS POSIX mount "shared across mesh". Data backend "MinIO (Phase 1-2) → Garage/SeaweedFS (Phase 5)". Gaps it lists: no `tag:storage`, and no disk-capacity tracking ("profiles have `storage: \"NVMe SSD\"` labels, no sizes"). Phase 7 adds `pmoves_core.node_storage_status` for capacity planning |
+| `pmoves/docs/handoffs/MEDIA_DATA_ARCHITECTURE_PLAN.md` | Mode B: one JuiceFS POSIX mount, fleet-wide. Storage services behind a Tailscale sidecar with `tag:storage`. Step 5: "Replace EOL MinIO backend (Garage/SeaweedFS/external S3) — consumers insulated" |
+| `pmoves/docs/architecture/FLEET_ACCESS_NATS_HUB.md` §4 (lines 80-115) | Storage services get a Tailscale sidecar (`network_mode: service:ts-...`, ephemeral `tag:storage` key). "NATS is *not* co-located with inference or storage concerns" (line 68) |
+| PR #2288 (merged) | JuiceFS Phase 1 POSIX mount, the cross-node recipe, and a Tailscale `tag:storage` ACL. The presence of `tag:storage` in the live ACL was not re-verified by this lane |
+| `juicefs-cross-node-setup` (`pmoves/mk/egress.mk:318`) | The canonical client-mount road for a node that does not host metadata (`META_ROLE=juicefs_meta`) |
+| Parent §0.4 | Garage's design target is "multi-sites (eg. datacenters, offices, households) interconnected through regular Internet connections". Reference deployments: 9 nodes / 3 sites, and 15 nodes / 3 sites |
 
-The options are listed here; the plan does **not** choose between them. This is an operator decision.
+### 1.1 Nodes and availability tiers
 
-| Option | What changes | Consequence |
+**Tiers: DECIDED by the operator (2026-09-27): "always-on nodes carry more of the load."**
+
+| Tier | Nodes | Status |
 |---|---|---|
-| **(a) Upgrade to KVM 8** (400 GB / 8 vCPU / 32 GB): kvm2 only, or all three | Plan cost. The RF=3 topology in §1.2-§1.3 stands | Removes the kvm2 blocker. If only kvm2 is upgraded, usable capacity is still bounded by the kvm4s' free space |
-| **(b) RF=2 on the two kvm4s** | `replication_factor = 2`, two zones, and kvm2 drops out of the layout | Per the Garage docs quorum table (§1.2), the cluster becomes **read-only** while one of the two nodes is down. Writes stop. That breaks "no single node offline stops operators" for writes. RF cannot be changed safely later |
-| **(c) Add a node that has disk** (e.g. Knuckles or the 5090) to the Garage layout | A 4th zone, with a lab node holding data | Usable capacity is still limited by the smallest node's capacity in the layout. A lab node that holds replicas also works against the §0.8 asymmetry: KVM-side availability then partly depends on lab hardware. The asymmetry section would need to be re-read against this |
+| **1: always-on** | `pmoves-kvm2`, `pmoves-kvm4-1`, `pmoves-kvm4-2`, Spark | DECIDED |
+| **2: desktop** | 5090, Z890, Knuckles (B850), 4090 | DECIDED |
 
-Until D3 is decided, the node table's `-c` values and the §1.3 `replication_factor` are **not** deploy-ready.
+All nodes have a tier.
 
-**Operator measurement (read-only), on each KVM:**
+**"Always-on" is a class, not a guarantee.** On 2026-09-27, when the tiers were decided, **Spark was DOWN**. A tier-1 node can be unavailable, and this is a live example of the plan's own availability risk. None of the layout or quorum reasoning in §1.2 assumes that every tier-1 node is up.
+
+**Tier 1 (KVMs), measured:**
+
+| Node | Plan / total disk | Root fs | Free now | Unused docker volumes | Free if cleared | RAM total / avail | vCPU | BW cap / month |
+|---|---|---|---|---|---|---|---|---|
+| `pmoves-kvm2` | KVM 2 / 100 GB | ext4 96G, 19% used | **78G** | ~0 | ~78G | 7G / 5G | 2 | 8 TB |
+| `pmoves-kvm4-1` | KVM 4 / 200 GB | ext4 193G, 93% used | **15G** | 139.5G (15 of 21 volumes unused) | ~150G | 15G / 11G | 4 | 16 TB |
+| `pmoves-kvm4-2` | KVM 4 / 200 GB | ext4 193G, 85% used | **31G** | 146.4G (0 of 3 volumes in use) + 3.6G images | ~180G | 15G / 12G | 4 | 16 TB |
+
+- **Sources:**
+  - Plan, total disk, vCPU and RAM come from the Hostinger REST API (read-only GETs, 2026-09-27, all HTTP 200). They supersede the conflicting recorded values of 100, 200 and 400 GB in `research/KVM_HOSTINGER_NETWORK_REPORT.md`, `docs/architecture/kvm-exit-node-hosting-strategy.md` and `pmoves/docs/context/Visionary AI_ Global Network, Local Power.md`.
+  - Root fs, free space, docker volumes and RAM available come from the KVM shell survey: run as root, read-only, 2026-09-27, nothing changed.
+  - Bandwidth caps are Hostinger-reported, from `pilots/fordham-hill/06-pilot-observation.md`.
+- **Topology facts:**
+  - None of the three has a separate data disk or an attached Hostinger volume. The only way to add disk is a plan upgrade: KVM 8 has 400 GB, 8 vCPU and 32 GB RAM.
+  - All three are in Hostinger `data_center_id` 17 (Hostinger REST, read-only, 2026-09-27). Their zones are node-level failure domains, not site-level ones. A data-center outage takes all three, which is the §0.6 "VPS down" case that §0.8 accepted.
+  - `tailscale ping` between every KVM pair is direct, at 1-5 ms (survey, 2026-09-27).
+- kvm4-2's profile says it is **over-subscribed**: "resolve before adding data-plane services here".
+
+> **HARD CAUTION: "unused" docker volumes are not garbage.** "Unused" means only "not attached to a running container". The ~140G on kvm4-1 and the ~146G on kvm4-2 (the data-storage node) may be real stores: an old Postgres, an old MinIO, possibly JuiceFS data. **Never prune.**
+> - Before any volume is removed, it is identified one by one: owner, contents, last write, and whether any backup or migration depends on it.
+> - Each removal needs explicit operator confirmation that names the volume.
+> - This is **G0 item "identify KVM docker volumes before declaring capacity"** (§5). Until it passes, the KVM capacity declarations use **free now**, not "free if cleared".
+
+**Spark (tier 1) and the tier-2 nodes:**
+
+| Node | Tier | OS (profile) | Free disk for Garage | Note |
+|---|---|---|---|---|
+| Spark | 1 | DGX OS 7.5.0, arm64 (`dgx-spark-grace-blackwell.yaml:21,29`) | **COULD-NOT-MEASURE** (the node is down) | **DOWN on 2026-09-27.** arm64: whether the pinned `dxflrs/garage:v2.4.1` digest has an arm64 variant is COULD-NOT-MEASURE. Spark is also a secrets-bundle producer (§1.6) |
+| Knuckles / B850 | 2 | linux (`workstation-9850x3d-dual-r9700.yaml:29`) | **COULD-NOT-MEASURE** | Hosts `supabase-db` and MinIO today. The NVMe1 seat is in #3150. It is the other secrets-bundle producer |
+| Z890 | 2 | not recorded in `z890-coordinator.yaml` | **COULD-NOT-MEASURE** | — |
+| 5090 | 2 | windows (`workstation_5090.yaml:32`) | **COULD-NOT-MEASURE** | Windows: see §1.3a |
+| 4090 | 2 | not recorded in `laptop-4090.yaml` | **COULD-NOT-MEASURE** | Laptop. If it runs Windows, §1.3a applies |
+
+**D3: OPEN — per-node capacity declarations for each fleet node.**
+- Each node is its own zone by default (§1.2 covers the one exception under consideration). Each node declares its own `-c`.
+- The declaration is bounded by that node's measured free space, minus headroom (G1).
+- Record each declaration in the node's profile under `pmoves/config/profiles/`. `UNIVERSAL_MEDIA_ARCHITECTURE.md` already names the missing sizes there as a gap.
+- The KVM sizes are one input among many, not a blocker. The earlier verdict, "a 3-KVM RF=3 cluster caps at the smallest node", described a KVM-only layout. That layout is no longer the plan.
+
+**Operator measurement (read-only) for every node that has not been surveyed:**
 ```bash
 df -hT / /var/lib 2>/dev/null; lsblk -o NAME,SIZE,TYPE,FSTYPE,MOUNTPOINT; free -g; docker system df
 ```
 
-**Zones:** one zone per node. All three are in the same Hostinger data center (`data_center_id` 17, Hostinger REST, read-only, 2026-09-27), so the zones are node-level failure domains, not site-level. A data-center outage takes all three. That is the §0.6 "VPS down" case, which §0.8 accepted.
+### 1.2 Replication, capacity and how the layout expresses the tiers
 
-### 1.2 Replication factor: **3** (the requirement; infeasible on today's disks, see D3 in §1.1)
+**Replication:** RF=3, `consistency_mode = "consistent"`, one zone per node by default. Quorums are from Garage v2.4.1 `reference-manual/configuration.md` (quorum table):
 
-Quorums are from Garage v2.4.1 `reference-manual/configuration.md`:
+| `replication_factor` (consistent mode) | Write / read quorum | One replica of a partition down |
+|---|---|---|
+| 2 | 2 / 1 | **read-only** for that partition (writes fail) |
+| **3** | 2 / 2 | **reads and writes continue** |
 
-| `replication_factor` (consistent mode) | Write / read quorum | One KVM down | Usable capacity (3 nodes) |
-|---|---|---|---|
-| 2 | 2 / 1 | **read-only** (writes fail) | ~1.5 × node size |
-| **3** | 2 / 2 | **reads and writes continue** | = smallest node's `-c` |
+- RF=3 is the only consistent setting in which one node offline stops neither reads nor writes.
+- RF cannot be changed safely later: that needs a layout rebuild and a full rebalance (same doc). So choose it once.
 
-- RF=3 is the only setting that meets "no single node offline stops operators" for writes.
-- The cost is that each KVM holds a **full copy**: ~85 GB + growth + Garage metadata + snapshots.
-- RF cannot be changed safely later (Garage docs: it needs a layout rebuild and full rebalance), so choose it once.
-- Keep `consistency_mode = "consistent"`.
+**Capacity semantics** (corrects the earlier "usable = smallest node's `-c`"):
+- **What the Garage docs say.** Garage "will **always** store the three copies of your data on nodes at different locations", and usable capacity is bounded by what each zone can hold (`cookbook/real-world.md`, the 4-node, 3-location example: 1.5 TB usable out of 6.5 TB raw). In `operations/layout.md` Example 1, adding a node to one zone adds nothing, because "the two other zones still need to store a full copy of everything".
+- **Exactly 3 zones at RF=3:** every zone holds a full copy, and usable capacity equals the smallest zone's capacity.
+- **N > 3 zones of mixed sizes:** usable capacity is the largest U for which the per-zone sum of min(zone capacity, U) is at least 3U. When no zone exceeds a third of the total, that is roughly sum ÷ 3.
+  - This formula is **derived here** from the docs' "different zones" rule. It is not stated in that form in the v2.4.1 docs.
+  - **Gate:** read the authoritative figure from `garage layout show` before `layout apply`. The docs show it printing "Usable capacity / total cluster capacity" and "Effective capacity (replication factor 3)".
 
-### 1.3 `garage.toml` (same on all 3; no secret values in the file)
+**How the layout expresses the decided tiers.** A Garage layout has only three per-node inputs: role (storage with a capacity, or gateway with none), zone, and capacity. Tags are labels (`operations/layout.md`, `cookbook/real-world.md` "Best practices"). **There is no availability, priority or preference attribute.** So "always-on carries more of the load" has to be expressed through the two levers below.
+
+1. **Capacity weighting: applied, and it implements the decision.**
+   - Tier-1 nodes declare as much capacity as their headroom allows. Tier-2 nodes declare less.
+   - The algorithm assigns partitions in proportion to declared capacity, so tier 1 holds a larger share of the replicas.
+   - Example 1 in `operations/layout.md` shows the docs' own use of this lever: halve a node's declared capacity to force data off it.
+   - **Limit:** weighting shifts proportions. It **cannot guarantee** that a partition keeps 2 replicas on tier 1. Under one zone per node, some partitions will have 2 or 3 replicas on tier-2 nodes. When those nodes sleep or reboot, that partition loses its 2-of-2 read quorum and its write quorum, for **every** client, including KVM Jellyfin. The layout cannot express "prefer tier 1 for quorum" by itself.
+2. **Zone grouping: the strongest structural lever. OPEN — OPERATOR, because it departs from "one zone per node".**
+   - Give each tier-1 node its own zone (kvm2, kvm4-1, kvm4-2, spark), and put **all tier-2 nodes in one shared zone** (e.g. `lab`).
+   - With replicas "on at least 3 distinct zones" (`garage layout show` output in `operations/layout.md`), each partition then has at most one replica in `lab`. At least two of every partition's replicas sit on tier 1.
+   - **What this does NOT guarantee:** quorum survives all of tier 2 going down **only while that partition's tier-1 replicas are up**. With Spark down (as on 2026-09-27), every partition whose replicas are {spark, one KVM, lab} runs on a single live replica if `lab` is also down. With consistent RF=3 that means **no reads and no writes** for those partitions. Two tier-1 failures, or one tier-1 failure plus the `lab` zone, stop some partitions whatever the layout is.
+   - The cost is that the tier-1 zones must together hold **two copies of everything**.
+
+**What today's measured free space allows.** The figures below are arithmetic on the §1.1 survey, with G1's headroom rule applied: declared capacity ≤ half of measured free space. They are not measurements, and tier-2 capacity is COULD-NOT-MEASURE.
+
+| Tier-1 declared `-c` (G1 half-of-free) | kvm2 | kvm4-1 | kvm4-2 | Spark | KVM total |
+|---|---|---|---|---|---|
+| Today ("free now") | ~39G | ~7G | ~15G | COULD-NOT-MEASURE (down) | ~61G |
+| After volume cleanup (G0 identification and operator confirmation first) | ~39G | ~75G | ~90G | COULD-NOT-MEASURE | ~204G |
+
+- **The tension.** The volume needs ~85 GB × 3 = ~255 GB of replica space, before growth.
+  - **Today** the KVMs can hold at most ~61G of that, about a quarter. Spark's share is unknown while it is down. Most quorum-bearing replicas would sit on tier 2. That is the opposite of the decided tiering, and it persists until the KVM volumes are identified and, only with confirmation, cleaned up, or until Spark's capacity is measured and declared.
+  - **Zone grouping today, KVMs only** (Spark excluded while down): usable U ≤ ~23 GB, by the formula above over zones {kvm2 39, kvm4-1 7, kvm4-2 15, lab large}. That is **below the ~85 GB needed**, so zone grouping is not an option until cleanup or until Spark adds capacity.
+  - **After cleanup, KVMs only:** zone grouping gives U ≤ ~102 GB. That fits ~85 GB with thin headroom for growth. Spark raises the bound by an amount that cannot be computed until its free space is measured.
+  - One-zone-per-node with capacity weighting fits the data today, because tier 2 supplies the capacity. It trades away the quorum guarantee for as long as tier 1 stays small.
+- **Tier-2 availability hazards (named, not decided).**
+  - Desktops and Windows nodes sleep, take update reboots, and may not start Docker Desktop until someone logs in.
+  - Which tier-2 nodes are actually up 24/7 is COULD-NOT-MEASURE, because no profile records uptime.
+  - A tier-2 node that holds replicas also works against the §0.8 asymmetry ("operators keep viewing when the lab is down"). This plan names that; it does not resolve it.
+
+### 1.3 `garage.toml` (same on every storage node; no secret values in the file)
 
 ```toml
 replication_factor = 3
@@ -109,9 +186,20 @@ metrics_token_file = "/run/secrets/pmoves_garage_metrics_token"
 - **Network:** host networking, per Garage's `cookbook/real-world.md`.
 - **Snapshots dir:** `/var/lib/garage/snapshots` is a sibling of `data_dir`. It must not sit inside `data_dir`, which Garage manages as its block store.
 - **Bind addresses:** the S3 and admin APIs bind to the node's tailnet address, so they are not listening on the public interface at all. A bind to a tailnet address fails if `tailscaled` is not up when Garage starts. The deploy must order Garage after Tailscale, or rely on a restart policy. RPC stays on `[::]`, because peers reach it at `rpc_public_addr`. It is protected by the firewall rule and the gate below.
-- **Firewall (required, because the KVMs are public exit nodes):** allow 3900/3901/3903 on `tailscale0` only.
+- **Firewall (required on every storage node, and critical on the KVMs because they are public exit nodes):** allow 3900/3901/3903 on `tailscale0` only. Tier-2 nodes sit behind residential NAT, but the same rule applies. No port-forward for 3900/3901/3903 may exist on any router in front of them.
 - **Hostinger firewall today (Hostinger REST, read-only, 2026-09-27):** no Hostinger firewall rule mentions 3900, 3901 or 3903, and no drop rules exist. The API does not expose the default policy. So whether these ports are closed on the public addresses is **COULD-NOT-MEASURE** from the API.
 - **External port-probe gate (REQUIRED; OPEN — OPERATOR):** before Gate A passes, probe **all three ports (3900, 3901, 3903) on every KVM's public address from a host outside the tailnet**. Every probe must be refused or time out. One open port fails the gate. A probe from inside the tailnet proves nothing, because tailnet traffic is allowed by design. Who runs the probe, and from which outside host, is an operator decision.
+
+### 1.3a Garage on Windows nodes (5090; the 4090 if it runs Windows)
+
+Every item in this subsection is **COULD-NOT-MEASURE** until someone tries it on the node.
+
+- **Runtime.** A Linux container under Docker Desktop (WSL2 backend), using the same `dxflrs/garage` digest pin as the Linux nodes.
+- **Secrets.** `pmoves_garage_rpc_secret` and the admin and metrics tokens are delivered by the funnel, as for any node. The funnel's Windows delivery route for these labels is unverified. It is the same gap as KVM delivery (§1.6, G2).
+- **Networking.** Garage's cookbook uses host networking, and §1.3 binds to the node's tailnet address. Inside Docker Desktop's VM, neither the host's tailnet interface nor host networking can be assumed.
+  - Prior-art fit: the **Tailscale sidecar** pattern (`FLEET_ACCESS_NATS_HUB.md` §4). The Garage container gets its own tailnet identity with `tag:storage`, and `rpc_public_addr` is the sidecar's tailnet address.
+- **Disk.** Keep `metadata_dir` (LMDB) on a volume inside the Docker Desktop VM, not on a bind-mounted Windows drive. LMDB behaviour over the Windows-to-WSL file share is unverified. The VM disk's size cap bounds the node's declared capacity.
+- **Availability.** Docker Desktop normally starts at user login, not at boot. That is a tier-2 availability hazard (§1.2).
 
 ### 1.4 S3 endpoint as JuiceFS sees it
 
