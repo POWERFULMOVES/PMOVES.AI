@@ -56,7 +56,16 @@ fi
 # *_state volumes whose builder is already gone (name-filtered to
 # buildx_buildkit_, so it can never touch a pmoves_* data volume).
 log "Reclaiming inactive buildx builders + orphaned state volumes..."
+#
+# --all-inactive removes builders WITHOUT keeping state, so it must never see a
+# registered pmoves-shared: that would delete the shared cache the script above
+# just bounded. pmoves-buildx-cap.sh always detaches it, but if that detach
+# failed the builder is still registered here, so this phase is skipped then.
+if docker buildx inspect pmoves-shared >/dev/null 2>&1; then
+    log "WARNING: pmoves-shared still registered; skipping --all-inactive so its state is not deleted"
+else
 docker buildx rm --all-inactive --force 2>/dev/null || true
+fi
 docker volume ls -q --filter dangling=true --filter name=buildx_buildkit_ 2>/dev/null \
   | grep -vxF "$SHARED_STATE_VOLUME" \
   | while read -r v; do docker volume rm "$v" 2>/dev/null || true; done || true

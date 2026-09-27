@@ -95,11 +95,25 @@ cancelled.
 Invariants: the script **never** removes the state volume and never uses
 `buildx rm` without `--keep-state`. The prune uses `--all` because without it
 BuildKit skips internal/frontend/shared records and the cap would not count the
-whole volume. It skips a builder whose container is running while another
-`Runner.Worker` is active on the host (b850 runs two runners on one daemon; a
-systemd timer is not a job at all), because detaching it would kill an
-in-flight build. Exit codes: 0 bounded / nothing to do,
-1 prune or attach failed, 3 docker unavailable.
+whole volume. Every mode holds a host-wide `flock`
+(`/run/lock/pmoves-buildx-cap.lock`). Maintenance and preflight also refuse to
+detach anything while another `Runner.Worker` is active on the host (b850 runs two
+runners on one daemon; a systemd timer is not a job at all), whatever state the
+builder container is in, because another job may be between its preflight and
+setup-buildx. This fails closed: if pgrep is missing, errors, or gives a
+non-numeric answer, another job is assumed to be active. The maintenance re-attach
+boots with BuildKit's default GC policy rather than the action's config. Its
+startup GC may drop records ours would keep (sources unused for 48h), so the
+cache can come back colder; the explicit prune enforces the cap. The next job
+recreates the builder with the action's config. `docker-fleet-cleanup.sh` skips its
+`buildx rm --all-inactive` phase while `pmoves-shared` is still registered, since
+that command does not keep state. Exit codes: 0 bounded / nothing to do,
+1 prune or attach failed or refused, 2 usage error, 3 docker or the lock
+unavailable.
+
+**Pre-existing, for the b850 runner owner:** setup-buildx-action's own end-of-job
+cleanup (`buildx rm --keep-state`) can remove the shared builder while the other
+b850 runner's job is still building on it. This PR does not change that.
 
 **Safety net:** `runner-maintenance.yml` still reclaims leftover per-run
 `buildx_buildkit_builder-*` builders and their state volumes, for any left by the

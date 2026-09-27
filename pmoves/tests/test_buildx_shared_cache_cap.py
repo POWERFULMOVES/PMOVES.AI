@@ -20,7 +20,10 @@ records argv.
 """
 from __future__ import annotations
 
+import fcntl
+import os
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -89,6 +92,21 @@ def test_install_target_ships_the_script_beside_the_cleanup() -> None:
     mk = INFRA_MK.read_text()
     assert "CLEANUP_CAP_SCRIPT := ../deploy/provision/pmoves-buildx-cap.sh" in mk
     assert "cp $(CLEANUP_CAP_SCRIPT) /usr/local/bin/pmoves-buildx-cap.sh" in mk
+
+
+def test_systemd_cleanup_never_runs_all_inactive_over_the_shared_builder() -> None:
+    # --all-inactive does not keep state: it would delete the shared cache if a
+    # failed detach left pmoves-shared registered.
+    code = _code(FLEET_SH)
+    guard = code.index("docker buildx inspect pmoves-shared")
+    reclaim = code.index("docker buildx rm --all-inactive")
+    assert guard < reclaim
+    between = code[guard:reclaim]
+    assert "else" in between and "fi" not in between.split("else", 1)[0]
+
+
+def test_runner_maintenance_comment_matches_the_prune() -> None:
+    assert "never prunes with --all" not in RUNNER_MAINT.read_text()
 
 
 def test_action_preflights_then_trims_the_named_builder() -> None:
@@ -190,13 +208,27 @@ exit 0
 """
 
 
-def _run(tmp_path: Path, *args: str, **fake: str):
-    stub = _docker_guard().build_stub_env(
-        tmp_path / "bin", stub_make=True, behaviours={"docker": STUB_DOCKER, "pgrep": STUB_PGREP},
-    )
+def _run(tmp_path: Path, *args: str, pgrep: str | None = STUB_PGREP, **fake: str):
+    """Run the script with stub docker (and stub pgrep, or NO pgrep at all)."""
+    behaviours = {"docker": STUB_DOCKER}
+    if pgrep is not None:
+        behaviours["pgrep"] = pgrep
+    stub = _docker_guard().build_stub_env(tmp_path / "bin", stub_make=True, behaviours=behaviours)
     env = dict(stub)
+    if pgrep is None:
+        # PATH = stubs + only the real tools the script needs, so pgrep is absent.
+        tools = tmp_path / "tools"
+        tools.mkdir(exist_ok=True)
+        for name in ("bash", "flock", "grep", "tail"):
+            real = shutil.which(name)
+            assert real, name
+            link = tools / name
+            if not link.exists():
+                link.symlink_to(real)
+        env["PATH"] = os.pathsep.join([str(stub.stub_dir), str(tools)])
     env.pop("PMOVES_BUILDX_CAP", None)
     env.pop("GITHUB_ACTIONS", None)  # the suite itself may run inside Actions
+    env["PMOVES_BUILDX_CAP_LOCK"] = str(tmp_path / "cap.lock")
     env.update(fake)
     proc = subprocess.run(
         ["bash", str(SCRIPT), *args], env=env, capture_output=True, text=True, timeout=60,
@@ -255,16 +287,21 @@ def test_no_volume_means_nothing_to_do(tmp_path: Path) -> None:
     assert _mutations(calls) == []
 
 
-def test_running_builder_with_another_job_active_is_left_alone(tmp_path: Path) -> None:
-    # Inside a maintenance job: our own Runner.Worker plus one more.
-    rc, calls, out = _run(tmp_path, FAKE_RUNNING="1", FAKE_WORKERS="2", GITHUB_ACTIONS="true")
+@pytest.mark.parametrize("running", ["0", "1"])
+def test_another_job_active_means_hands_off_whatever_the_container_state(tmp_path: Path, running: str) -> None:
+    # Inside a maintenance job: our own Runner.Worker plus one more. With the
+    # container NOT running the other job may be between its preflight and
+    # setup-buildx, about to create the builder: re-attaching and detaching it
+    # then would pull it out from under that job (the #3203 review race).
+    rc, calls, out = _run(tmp_path, FAKE_RUNNING=running, FAKE_WORKERS="2", GITHUB_ACTIONS="true")
     assert rc == 0, out
     assert _mutations(calls) == [], "detaching a builder in use kills an in-flight build"
     assert "skipped" in out
 
 
-def test_systemd_timer_skips_while_any_job_is_active(tmp_path: Path) -> None:
-    rc, calls, out = _run(tmp_path, FAKE_RUNNING="1", FAKE_WORKERS="1")
+@pytest.mark.parametrize("running", ["0", "1"])
+def test_systemd_timer_skips_while_any_job_is_active(tmp_path: Path, running: str) -> None:
+    rc, calls, out = _run(tmp_path, FAKE_RUNNING=running, FAKE_WORKERS="1")
     assert rc == 0, out
     assert _mutations(calls) == []
 
@@ -331,9 +368,68 @@ def test_preflight_fails_loudly_on_an_in_use_builder_without_the_catch_all(tmp_p
                           GITHUB_ACTIONS="true", FAKE_WORKERS="2")
     assert rc == 1, out
     assert _mutations(calls) == []
-    assert "All:true" in out and "docker buildx rm --keep-state pmoves-shared" in out
+    assert "has no all=true catch-all" in out and "docker buildx rm --keep-state pmoves-shared" in out
 
 
 def test_preflight_detach_failure_fails(tmp_path: Path) -> None:
     rc, calls, out = _run(tmp_path, "--preflight", FAKE_REGISTERED="1", FAKE_RM_RC="1")
     assert rc == 1, out
+
+
+def test_preflight_leaves_a_stopped_builder_alone_while_another_job_is_active(tmp_path: Path) -> None:
+    rc, calls, out = _run(tmp_path, "--preflight", FAKE_REGISTERED="1", FAKE_RUNNING="0",
+                          FAKE_ALL_TRUE="1", GITHUB_ACTIONS="true", FAKE_WORKERS="2")
+    assert rc == 0, out
+    assert _mutations(calls) == []
+
+
+# ── fail closed: pgrep missing, failing or unparseable means "another job" ────
+
+PGREP_ERROR = "echo 'pgrep: bad option' >&2\nexit 2\n"
+PGREP_GARBAGE = "echo 'not-a-number'\nexit 0\n"
+
+
+@pytest.mark.parametrize("pgrep", [None, PGREP_ERROR, PGREP_GARBAGE], ids=["missing", "error", "garbage"])
+def test_maintenance_fails_closed_when_pgrep_cannot_answer(tmp_path: Path, pgrep) -> None:
+    rc, calls, out = _run(tmp_path, pgrep=pgrep, FAKE_RUNNING="0")
+    assert rc == 0, out
+    assert _mutations(calls) == [], "an unknown job count must never read as zero"
+    assert "assuming another job is active" in out and "skipped" in out
+
+
+@pytest.mark.parametrize("pgrep", [None, PGREP_ERROR, PGREP_GARBAGE], ids=["missing", "error", "garbage"])
+def test_preflight_fails_closed_when_pgrep_cannot_answer(tmp_path: Path, pgrep) -> None:
+    rc, calls, out = _run(tmp_path, "--preflight", pgrep=pgrep, FAKE_REGISTERED="1", GITHUB_ACTIONS="true")
+    assert rc == 1, out
+    assert _mutations(calls) == []
+
+
+# ── host-wide lock: every mode, and never proceeds without it ─────────────────
+
+@pytest.mark.parametrize("mode", [[], ["--attached"], ["--preflight"]], ids=["maintenance", "attached", "preflight"])
+def test_every_mode_waits_for_the_host_lock(tmp_path: Path, mode: list[str]) -> None:
+    lock = tmp_path / "cap.lock"
+    with open(lock, "w") as held:
+        fcntl.flock(held, fcntl.LOCK_EX)  # another invocation holds it
+        rc, calls, out = _run(tmp_path, *mode, FAKE_REGISTERED="1", PMOVES_BUILDX_CAP_LOCK_WAIT="1")
+    assert rc == 3, out
+    assert calls == [], "nothing may touch docker without the host lock"
+    assert "timed out waiting for host lock" in out
+
+
+def test_lock_released_after_a_run(tmp_path: Path) -> None:
+    rc, _, out = _run(tmp_path)
+    assert rc == 0, out
+    with open(tmp_path / "cap.lock") as f:
+        fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)  # raises if still held
+
+
+def test_unopenable_lock_is_could_not_measure(tmp_path: Path) -> None:
+    rc, calls, out = _run(tmp_path, PMOVES_BUILDX_CAP_LOCK=str(tmp_path / "no-such-dir" / "cap.lock"))
+    assert rc == 3, out
+    assert calls == []
+
+
+def test_usage_error_is_exit_2(tmp_path: Path) -> None:
+    rc, calls, _ = _run(tmp_path, "--bogus")
+    assert (rc, calls) == (2, [])

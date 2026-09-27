@@ -41,9 +41,26 @@
 #
 # Options: --builder NAME (default pmoves-shared), --cap SIZE.
 # Env:     PMOVES_BUILDX_CAP overrides the default cap.
+#          PMOVES_BUILDX_CAP_LOCK / _LOCK_WAIT override the host-wide lock file
+#          and how long to wait for it (seconds, default 900).
 #
-# Exit: 0 bounded or nothing to do, 1 prune/attach failed, 3 could not measure
-#       (docker unavailable).
+# Concurrency: every mode holds a host-wide flock, so two invocations (b850's
+# two runners, a runner job and the systemd timer) never interleave. The lock
+# does not cover setup-buildx itself, so maintenance and preflight also refuse
+# to detach anything while another CI job is active on the host, and they FAIL
+# CLOSED: if pgrep is missing or its answer cannot be parsed, another job is
+# assumed to be active.
+#
+# The maintenance re-attach does NOT pass the action's buildkitd config, so the
+# short-lived builder boots with BuildKit's DEFAULT GC policy (DefaultGCPolicy,
+# moby/buildkit cmd/buildkitd/config/gcpolicy.go). Its startup GC may drop
+# records ours would keep (e.g. local/cachemount/git sources unused for 48h),
+# so the cache can come back colder; its own cap (min(80% disk, 100GB)) is
+# looser than ours, so the explicit prune below is what enforces the cap. The
+# next CI job recreates the builder with the action's config.
+#
+# Exit: 0 bounded or nothing to do, 1 prune/attach failed or refused,
+#       2 usage error, 3 could not measure (docker or the lock unavailable).
 
 set -uo pipefail
 
@@ -79,6 +96,20 @@ VOLUME="${CONTAINER}_state"
 
 log() { echo "[pmoves-buildx-cap] $*"; }
 
+# Opened READ-ONLY: flock works on any fd, and whichever user creates the file
+# first (root's timer or the runner user) the others can still read it, where
+# a write open of a 0644 file owned by someone else would fail.
+LOCK="${PMOVES_BUILDX_CAP_LOCK:-/run/lock/pmoves-buildx-cap.lock}"
+[ -e "$LOCK" ] || : 2>/dev/null >>"$LOCK"
+if ! command -v flock >/dev/null 2>&1 || ! exec 9<"$LOCK"; then
+  log "COULD-NOT-MEASURE: cannot open host lock $LOCK (or flock missing)"
+  exit 3
+fi
+if ! flock -w "${PMOVES_BUILDX_CAP_LOCK_WAIT:-900}" 9; then
+  log "COULD-NOT-MEASURE: timed out waiting for host lock $LOCK"
+  exit 3
+fi
+
 if ! docker info >/dev/null 2>&1; then
   log "COULD-NOT-MEASURE: docker daemon unavailable"
   exit 3
@@ -103,18 +134,22 @@ prune() {
   log "after:  $(usage)"
 }
 
-running() { [ -n "$(docker ps -q --filter "name=^${CONTAINER}\$" --filter status=running 2>/dev/null)" ]; }
-
-# Is some OTHER CI job on this host possibly building on the builder? A running
-# builder container alone does not say (a failed job or an operator can leave
-# one running). Count Runner.Worker processes, minus our own when we are a job:
-# b850 runs two runners on one daemon; a systemd timer is not a job at all.
-in_use_elsewhere() {
-  running || return 1
-  local workers self=0
-  workers="$(pgrep -f -c 'Runner.Worker' 2>/dev/null)" || true
+# Is any OTHER CI job active on this host? Container state alone does not say:
+# another job may be between its preflight and setup-buildx, about to create
+# the builder. Count Runner.Worker processes, minus our own when we are a job
+# (b850 runs two runners on one daemon; a systemd timer is not a job at all).
+# Fail closed: no pgrep, a pgrep error (exit >1) or a non-numeric answer all
+# mean "another job may be active".
+other_jobs_active() {
+  local workers rc self=0
+  command -v pgrep >/dev/null 2>&1 || { log "pgrep unavailable; assuming another job is active"; return 0; }
+  workers="$(pgrep -f -c 'Runner.Worker' 2>/dev/null)"; rc=$?
+  if [ "$rc" -gt 1 ] || ! [[ "$workers" =~ ^[0-9]+$ ]]; then
+    log "pgrep gave no usable count (exit $rc); assuming another job is active"
+    return 0
+  fi
   [ "${GITHUB_ACTIONS:-}" = "true" ] && self=1
-  [ "${workers:-0}" -gt "$self" ]
+  [ "$workers" -gt "$self" ]
 }
 
 if [ "$MODE" = "preflight" ]; then
@@ -122,13 +157,13 @@ if [ "$MODE" = "preflight" ]; then
     log "no registered builder $BUILDER; setup-buildx will create it with the config"
     exit 0
   fi
-  if in_use_elsewhere; then
+  if other_jobs_active; then
     if docker buildx inspect "$BUILDER" 2>/dev/null | grep -Eq '^[[:space:]]*All:[[:space:]]*true'; then
-      log "registered $BUILDER is in use by another job and has the All:true GC rule; reusing"
+      log "registered $BUILDER may be in use by another job and has an all=true catch-all GC rule; reusing"
       exit 0
     fi
-    log "ERROR: registered $BUILDER lacks the All:true GC catch-all and another job may be using it;"
-    log "       refusing to reuse an unbounded builder. Remove it when idle:"
+    log "ERROR: registered $BUILDER has no all=true catch-all GC rule and another job may be using it;"
+    log "       refusing to reuse a builder its GC cannot bound. Remove it when idle:"
     log "       docker buildx rm --keep-state $BUILDER"
     exit 1
   fi
@@ -152,10 +187,10 @@ if ! docker volume inspect "$VOLUME" >/dev/null 2>&1; then
   exit 0
 fi
 
-# Detaching a builder another job is building on would kill that build, so
-# leave it: that job's own --attached prune bounds it.
-if in_use_elsewhere; then
-  log "builder container $CONTAINER is running and another CI job is active on this host; skipped"
+# Detaching a builder another job is building on (or is about to create) would
+# kill that build, so leave it: that job's own --attached prune bounds it.
+if other_jobs_active; then
+  log "another CI job is active on this host; skipped"
   exit 0
 fi
 

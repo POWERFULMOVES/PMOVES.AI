@@ -170,12 +170,14 @@ jobs:
       #
       # The script re-attaches the builder by name (same node, so it mounts the
       # kept volume), prunes it to the cap, and detaches with --keep-state. It
-      # never removes the volume and never prunes with --all.
+      # never removes the volume; it prunes with --all so internal/frontend
+      # records count toward the cap too.
       #
       # Safe on a runner: a runner executes one job at a time, so while this job
       # holds the runner no build on it can be using the builder. b850 has TWO
-      # runners on one daemon, so the script also skips when the builder
-      # container is running AND another Runner.Worker is active on the host.
+      # runners on one daemon, so the script also holds a host-wide flock and
+      # skips whenever another Runner.Worker is active on the host (failing
+      # closed if pgrep cannot answer).
       # ---------------------------------------------------------------
       - name: Check out cap script
         if: ${{ github.event.inputs.runner_label == '' || github.event.inputs.runner_label == matrix.label }}
