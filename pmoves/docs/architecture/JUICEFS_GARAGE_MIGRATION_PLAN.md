@@ -225,21 +225,31 @@ garage bucket allow --read --write juicefs --key juicefs-pmoves-media
   jfs 'juicefs objbench --storage s3 --access-key "$DST_AK" --secret-key "$DST_SK" http://<ENDPOINT_KVM>:3900/juicefs'
   ```
   Every functional test must pass, **including list** (the #3199 failure mode).
+- **Sync URL parse proven before pass 1.** A dry run with the exact Step (b) URLs lists both sides and copies nothing:
+  ```bash
+  jfs 'juicefs sync --dry --no-https "minio://$SRC_AK:$SRC_SK@minio:9000/juicefs/pmoves-media/" "minio://$DST_AK:$DST_SK@<ENDPOINT_KVM>:3900/juicefs/pmoves-media/"'
+  ```
+  It must exit 0 and report the MinIO keys as pending copies. A `NoSuchBucket` error naming the host means the URL was parsed virtual-host style (P1-2 of the #3200 review). STOP.
 - 3900/3901/3903 are closed on the public interfaces.
 
 ### Step (b): Copy MinIO → Garage (volume stays live on MinIO)
 
 ```bash
-# pass 1: live, incremental, resumable, throttled
-jfs 'juicefs sync --threads 8 --bwlimit <Mbps> --enable-checkpoint \
+# pass 1: live, throttled. Incremental on re-run, NOT resumable (see below)
+jfs 'juicefs sync --no-https --threads 8 --bwlimit <Mbps> \
      "minio://$SRC_AK:$SRC_SK@minio:9000/juicefs/pmoves-media/" \
-     "s3://$DST_AK:$DST_SK@<ENDPOINT_KVM>:3900/juicefs/pmoves-media/"'
-# pass 2: byte-by-byte verification of every object (copies any delta)
-jfs 'juicefs sync --check-all --threads 8 "minio://...same..." "s3://...same..."'
+     "minio://$DST_AK:$DST_SK@<ENDPOINT_KVM>:3900/juicefs/pmoves-media/"'
+# pass 2 (still before the freeze): re-read and checksum every object on both sides
+jfs 'juicefs sync --no-https --check-all --threads 8 "minio://...same src..." "minio://...same dst..."'
 ```
 
+- **No checkpoint flag.** `--enable-checkpoint` does not exist in the pinned `juicedata/mount:ce-v1.3.0`; it first appears in v1.4.x (v1.4.1 `cmd/sync.go:241`). An interrupted pass 1 is simply re-run. Sync skips keys that already exist on the destination with a matching size, so a re-run re-lists both sides and copies only what is missing or differs. It does not resume mid-object and it re-pays the listing cost. The image is not bumped to v1.4.x for this one flag: every other step, and the live mount, run on ce-v1.3.0.
+- **Scheme for the Garage side is `minio://`, never `s3://`.** For `s3://` URLs, JuiceFS sync's `isS3PathType` treats only localhost, IPv4 literals and AWS hosts as path-style. For any other host, such as a MagicDNS name like `pmoves-kvm4-1`, it takes the bucket from the hostname, and every request goes to the wrong bucket. `minio://` is always path-style.
+- **`--no-https` on every sync.** Both endpoints are plain HTTP: MinIO on `pmoves_data`, and Garage's S3 port, which has no TLS (§1.4). The flag applies to both sides of the call. Whether sync would fall back to HTTP by itself for an `s3://` endpoint (`supportHTTPS`) is **COULD-NOT-MEASURE**; the plan does not depend on it.
+- The `juicefs config --bucket http://<ENDPOINT_KVM>:3900/juicefs` form in c3 and §1.4 is a different parser (the object-store URL of a formatted volume, path-style for non-AWS endpoints). It is correct as written.
+
 **Gate B:**
-- Pass 2 reports **0 failed**.
+- Pass 2 (`--check-all`) reports **0 failed**. This full verification runs here, before the freeze, never inside it.
 - Object count and bytes in `garage bucket info juicefs` are ≥ the Step 0 figures.
 - `garage stats` shows no resync backlog.
 - `--delete-src` and `--delete-dst` are never used.
@@ -249,19 +259,19 @@ jfs 'juicefs sync --check-all --threads 8 "minio://...same..." "s3://...same..."
 | # | Action | Gate |
 |---|---|---|
 | c1 | Stop every writer: `juicefs-mount` on each mounting node, plus any gateway on `pmoves-media` | `jfs 'juicefs status "$META"'` shows no active Sessions |
-| c2 | Final delta: rerun pass 2 (`--check-all`) | 0 failed |
+| c2 | Final delta only: `jfs 'juicefs sync --no-https --check-new --threads 8 "minio://...same src..." "minio://...same dst..."'`. `--check-new` checksums only the objects it copies now; everything else was verified by Gate B's `--check-all`. **Never `--check-all` inside the freeze**: it re-reads every object on both sides | 0 failed |
 | c3 | Switch (`juicefs config` put/get/deletes a `testing/` object; do **not** pass `--force`): `jfs 'juicefs config "$META" --storage s3 --bucket http://<ENDPOINT_KVM>:3900/juicefs --access-key "$DST_AK" --secret-key "$DST_SK" --yes'` | exit 0 |
 | c4 | `jfs 'juicefs status "$META"'`, then `jfs 'juicefs fsck "$META"'` | `Storage: s3`, the Garage bucket URL, fsck exit 0 and 0 missing blocks |
 | c5 | Remount: `make -C pmoves juicefs-mount-local JUICEFS_DATA_DIR=/mnt/pmoves-nvme1/juicefs-data`, then `make -C pmoves juicefs-mount-status` | Mount up; content dirs listed |
 | c6 | Verify data | The 3 sample `sha256sum`s match Step 0. A write, `sync`, read-back works. `juicefs gc` (no `--delete`) reports **non-zero** scanned objects; zero is the #3199 false-clean signature |
 
-The freeze lasts only c1-c5. That is minutes if pass 2 ran just before.
+**Freeze length** = the c2 delta (a full listing of both sides, plus a copy of whatever was written since Gate B) + c3-c5. The listing cost scales with object count, which Step 0 records. So the freeze is **COULD-NOT-MEASURE** until Step 0 runs. Pass 1 and the `--check-all` pass stay **outside** the freeze. Run Gate B as close to the window as practical, so the delta is small.
 
 ### Step (d): Rollback (MinIO's `juicefs` bucket is never modified after Step 0)
 
 ```bash
 # freeze as in c1, then carry back anything written since cutover (no deletes):
-jfs 'juicefs sync --check-new "s3://...garage.../juicefs/pmoves-media/" "minio://...minio.../juicefs/pmoves-media/"'
+jfs 'juicefs sync --no-https --check-new "minio://...garage...@<ENDPOINT_KVM>:3900/juicefs/pmoves-media/" "minio://...minio...@minio:9000/juicefs/pmoves-media/"'
 jfs 'juicefs config "$META" --storage minio --bucket http://minio:9000/juicefs --access-key "$SRC_AK" --secret-key "$SRC_SK" --yes'
 jfs 'juicefs fsck "$META"'
 ```
@@ -301,14 +311,17 @@ jfs 'juicefs fsck "$META"'
 
 **Estimate:** 85 GB = 680,000 Mbit. It crosses Knuckles' uplink **once**; Garage then replicates KVM↔KVM.
 
-| Sustained uplink | Pass 1 duration |
-|---|---|
-| 10 Mbit/s | ~18.9 h |
-| 50 Mbit/s | ~3.8 h |
-| 100 Mbit/s | ~1.9 h |
-| 500 Mbit/s | ~23 min |
+| Sustained link | Pass 1 (Knuckles uplink → endpoint KVM) | Each `--check-all` pass (endpoint KVM egress → Knuckles) |
+|---|---|---|
+| 10 Mbit/s | ~18.9 h | ~18.9 h |
+| 50 Mbit/s | ~3.8 h | ~3.8 h |
+| 100 Mbit/s | ~1.9 h | ~1.9 h |
+| 500 Mbit/s | ~23 min | ~23 min |
 
-- **KVM traffic:** ~85 GB inbound to the endpoint node plus ~170 GB of replication. That is small against the 8-16 TB monthly caps.
+- **`--check-all` is not free.** It re-reads every object on both sides. The MinIO side is local. The Garage side is ~85 GB of **egress from the endpoint KVM** back to Knuckles per pass.
+- **Budget two `--check-all` passes:** Gate B's pass 2, plus one re-run if pass 2 is interrupted or reports failures. That is ~85 GB of extra KVM egress each, about 1.9 h each at 100 Mbit/s. The c2 delta (`--check-new`) re-reads only what it copies.
+- **KVM traffic, total:** ~85 GB inbound to the endpoint node, ~170 GB of replication between KVMs, and ~85-170 GB of check-all egress. That is small against the 8-16 TB monthly caps.
+- **Wall clock before the freeze** ≈ pass 1 + one or two check-all passes. At 100 Mbit/s that is ~3.8-5.7 h. None of it is inside the freeze.
 
 ## 4. Risks
 
@@ -318,7 +331,7 @@ jfs 'juicefs fsck "$META"'
 | Asymmetric availability (accepted, §0.8) | Region or VPS down: the lab loses `pmoves-media` entirely. It fails; it does not degrade (§0.6) | Accepted. The cache helps bandwidth, not availability |
 | KVM disk | RF=3 needs a full copy per node. kvm2 may be 100 GB with CI-runner pressure. Snapshots need up to 4× metadata size | G1: measured free space ≥ 2× the data on every node. If kvm2 fails G1, **re-decide RF (D3)** before building |
 | kvm4-2 over-subscribed | OOM kills Garage | Resolve per its profile before G3 |
-| Egress / uplink | Pass 1 saturates Knuckles' uplink | `--bwlimit`, off-hours, `--enable-checkpoint` |
+| Egress / uplink | Pass 1 saturates Knuckles' uplink. Each `--check-all` pass costs ~85 GB of endpoint-KVM egress | `--bwlimit`, off-hours. An interrupted pass is re-run (incremental by size, not resumable). `--check-all` only outside the freeze |
 | Single S3 endpoint (D2) | Endpoint KVM down: S3 API down even though Garage has quorum | Metadata-only `juicefs config --bucket` failover |
 | MagicDNS inside Docker bridge networks | The mount can't resolve `<ENDPOINT_KVM>`: the same lists-then-fails shape as §0.2 | Gate A runs objbench inside `pmoves_data` |
 | Credential funnel | Truncated or mis-shaped key (the E2B precedent). A secret printed into a transcript | Shape checks (§1.6). `key create` output goes to the intake file only. Complete the 4-place route |
