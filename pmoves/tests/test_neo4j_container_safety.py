@@ -17,6 +17,12 @@ path disagreed about its name, and each one's fallback was destructive:
 The name now has ONE source (`services.neo4j.container_name`, read by
 scripts/neo4j_container.py). These tests run the real scripts against a stub
 `docker` that only records its argv; nothing touches a real container.
+
+The stubs come from build_stub_env (pmoves/tests/_destructive_docker_guard.py),
+the one helper that defines a stub dir, so the session guard's make-spawn
+contract (marker + header-carrying recorders for docker, docker-compose and
+supabase, first on PATH) holds by construction. `docker` gets a behaviour
+snippet (canned `ps`/`inspect` answers) that runs AFTER its record line.
 """
 from __future__ import annotations
 
@@ -37,10 +43,26 @@ HELPER = SCRIPTS / "neo4j_container.py"
 sys.path.insert(0, str(SCRIPTS))
 import neo4j_container  # noqa: E402
 
+DOCKER_GUARD_FILE = Path(__file__).with_name("_destructive_docker_guard.py")
+DOCKER_GUARD_MODULE = "pmoves_tests_destructive_docker_guard"  # conftest's name
+
+
+def _docker_guard():
+    """The guard instance conftest registered, or a fresh load of the same file."""
+    if DOCKER_GUARD_MODULE in sys.modules:
+        return sys.modules[DOCKER_GUARD_MODULE]
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(DOCKER_GUARD_MODULE, DOCKER_GUARD_FILE)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[DOCKER_GUARD_MODULE] = module
+    spec.loader.exec_module(module)
+    return module
+
+
 FAKE_COMPOSE = "services:\n  neo4j:\n    image: neo4j:x\n    container_name: fake-neo4j\n"
 
-STUB_DOCKER = r"""#!/usr/bin/env bash
-printf '%s\n' "$*" >> "$STUB_LOG"
+# Runs after the recorder's own record line (build_stub_env behaviours).
+STUB_DOCKER_BEHAVIOUR = r"""
 if [ "$1" = "ps" ]; then
   for n in $FAKE_RUNNING; do echo "$n"; done
 fi
@@ -67,52 +89,49 @@ fi
 if [ "$1" = "volume" ] && [ "$2" = "rm" ]; then
   [ "${FAKE_VOLUME_RM_FAILS:-0}" = "1" ] && exit 1 || exit 0
 fi
-exit 0
 """
 
 
-def _tree(tmp_path: Path, script: str) -> Path:
-    """A throwaway pmoves/ with the real script + helper and a fake compose."""
+def _tree(tmp_path: Path, script: str):
+    """A throwaway pmoves/ with the real script + helper and a fake compose,
+    plus the stub env whose PATH starts with the recorders' dir."""
     root = tmp_path / "pmoves"
     (root / "scripts").mkdir(parents=True)
     shutil.copy2(SCRIPTS / script, root / "scripts" / script)
     shutil.copy2(HELPER, root / "scripts" / "neo4j_container.py")
     (root / "docker-compose.yml").write_text(FAKE_COMPOSE)
-    # An ABSOLUTE dir, placed FIRST on PATH by every caller, holding the
-    # `.pmoves-test-stub` marker plus executable `docker` and `docker-compose`
-    # recorders: the stub-dir contract the conftest docker guard checks before it
-    # lets a test spawn make (make runs $(MAKE) recipe lines even under -n).
-    bin_dir = (tmp_path / "bin").resolve()
-    bin_dir.mkdir()
-    (bin_dir / ".pmoves-test-stub").write_text("neo4j safety tests: recorders only, see STUB_DOCKER\n")
-    for name, body in {
-        "docker": STUB_DOCKER,
-        # v1 CLI: recorded as `compose <args>` so _neo4j_mutations sees it too.
-        "docker-compose": "#!/usr/bin/env bash\nprintf 'compose %s\\n' \"$*\" >> \"$STUB_LOG\"\nexit 0\n",
-        "curl": "#!/usr/bin/env bash\nexit 0\n",
-        "sleep": "#!/usr/bin/env bash\nexit 0\n",
-    }.items():
-        f = bin_dir / name
-        f.write_text(body)
-        f.chmod(0o755)
-    return root
+    stub = _docker_guard().build_stub_env(
+        tmp_path / "bin", stub_make=False, extra=("curl", "sleep"),
+        behaviours={"docker": STUB_DOCKER_BEHAVIOUR},
+    )
+    return root, stub
+
+
+def _docker_calls(stub) -> list[list[str]]:
+    """docker AND docker-compose calls from the recorder log, in call order.
+
+    `docker <args>` is returned as `<args>`; the v1 CLI `docker-compose <args>`
+    as `compose <args>`, the shape `docker compose` also takes, so
+    _neo4j_mutations sees both.
+    """
+    calls = []
+    for row in stub.calls():
+        if row[0] == "docker":
+            calls.append(row[1:])
+        elif row[0] == "docker-compose":
+            calls.append(["compose", *row[1:]])
+    return calls
 
 
 def _run(tmp_path: Path, script: str, running: str) -> tuple[int, list[list[str]], str]:
-    root = _tree(tmp_path, script)
-    log = tmp_path / "docker.log"
-    env = dict(os.environ)
-    env.update(
-        PATH=f"{tmp_path / 'bin'}:{env['PATH']}",
-        STUB_LOG=str(log),
-        FAKE_RUNNING=running,
-    )
+    root, stub = _tree(tmp_path, script)
+    env = dict(stub)
+    env.update(FAKE_RUNNING=running)
     proc = subprocess.run(
         ["bash", str(root / "scripts" / script)],
         cwd=tmp_path, env=env, capture_output=True, text=True, timeout=60,
     )
-    calls = [ln.split() for ln in log.read_text().splitlines()] if log.exists() else []
-    return proc.returncode, calls, proc.stdout + proc.stderr
+    return proc.returncode, _docker_calls(stub), proc.stdout + proc.stderr
 
 
 def _neo4j_mutations(calls: list[list[str]]) -> list[list[str]]:
@@ -219,10 +238,9 @@ def test_make_n_neo4j_backup_renders_no_start(tmp_path):
     no nested make today, but if one comes back, every docker call it makes
     lands in the stub's log instead of the live daemon, and is asserted on.
     """
-    _tree(tmp_path, "backup-neo4j.sh")  # only for its bin/ of stubs
-    log = tmp_path / "docker.log"
-    env = dict(os.environ)
-    env.update(PATH=f"{tmp_path / 'bin'}:{env['PATH']}", STUB_LOG=str(log), FAKE_RUNNING="")
+    _, stub = _tree(tmp_path, "backup-neo4j.sh")  # only for its stub env
+    env = dict(stub)
+    env.update(FAKE_RUNNING="")
     proc = subprocess.run(
         ["make", "-s", "-n", "-C", str(PMOVES), "neo4j-backup"],
         capture_output=True, text=True, timeout=120, env=env,
@@ -230,7 +248,7 @@ def test_make_n_neo4j_backup_renders_no_start(tmp_path):
     assert proc.returncode == 0, proc.stderr[-400:]
     assert "neo4j-local-up" not in proc.stdout
     assert "up -d neo4j" not in proc.stdout
-    calls = [ln.split() for ln in log.read_text().splitlines()] if log.exists() else []
+    calls = _docker_calls(stub)
     assert _neo4j_mutations(calls) == [], calls
 
 
@@ -266,14 +284,13 @@ def _restore_guard_block() -> str:
 
 def _run_block(tmp_path: Path, block: str, **fake) -> tuple[int, list[list[str]], str]:
     """Run recipe lines, verbatim, in a temp Makefile with the REAL Makefile's shell."""
-    root = _tree(tmp_path, "backup-neo4j.sh")  # pmoves/ with the helper + a fake compose; bin/ stubs
+    root, stub = _tree(tmp_path, "backup-neo4j.sh")  # pmoves/ with the helper + a fake compose; stub env
     (root / "Makefile").write_text("SHELL := bash\nt:\n" + block + "\n")
-    log = tmp_path / "docker.log"
-    env = dict(os.environ)
-    env.update(PATH=f"{tmp_path / 'bin'}:{env['PATH']}", STUB_LOG=str(log), **fake)
+    env = dict(stub)
+    env.update(**fake)
     proc = subprocess.run(["make", "-s", "-C", str(root), "t", "PYTHON=python3"],
                           capture_output=True, text=True, timeout=60, env=env)
-    calls = [ln.split() for ln in log.read_text().splitlines()] if log.exists() else []
+    calls = _docker_calls(stub)
     out = proc.stdout + proc.stderr
     # make collapses every non-zero recipe exit to 2, so 1 (refused) and 3
     # (could not measure) are only visible in its "Error N" line.
@@ -339,28 +356,28 @@ def test_make_neo4j_restore_volume_removal_is_never_swallowed():
 
 
 def test_the_stub_bin_meets_the_make_spawn_guard_contract(tmp_path):
-    """Absolute, marked, and holding executable docker + docker-compose recorders.
+    """The stub dir satisfies the guard's own is_stub_dir(), checked directly.
 
-    The conftest guard (#3194) refuses a make spawn unless the FIRST PATH entry
-    is such a dir. Checked here directly, so this file stays compatible whether
-    or not that guard is present in the tree it runs in.
+    The conftest guard refuses a make spawn unless the FIRST PATH entry is such
+    a dir (marker + header-carrying docker, docker-compose and supabase
+    recorders). Asserted here on the guard's predicate itself rather than on a
+    restatement of it, so the two cannot drift.
     """
-    _tree(tmp_path, "backup-neo4j.sh")
-    b = tmp_path / "bin"
+    guard = _docker_guard()
+    _, stub = _tree(tmp_path, "backup-neo4j.sh")
+    b = stub.stub_dir
     assert b.is_absolute()
-    assert (b / ".pmoves-test-stub").is_file()
-    for name in ("docker", "docker-compose"):
-        assert os.access(b / name, os.X_OK), name
+    assert stub["PATH"].split(os.pathsep)[0] == str(b)
+    assert guard.is_stub_dir(str(b)), sorted(p.name for p in b.iterdir())
+    assert guard.check_command(["make", "-n", "neo4j-backup"], stub) is None
     # The recorder records, proven with a READ-ONLY argv: the session guard
     # (#3190) refuses spawning `docker-compose up` with no project, stub or
     # not, and must not be worked around.
     # A throwaway project is pinned, per #3190's static rule: every compose command
     # a test spawns carries -p, even to a recorder.
-    log = tmp_path / "docker.log"
     project = f"pmoves-test-{uuid.uuid4().hex[:12]}"
-    subprocess.run([str(b / "docker-compose"), "-p", project, "ps"],
-                   env={**os.environ, "STUB_LOG": str(log)}, check=True)
-    recorded = [ln.split() for ln in log.read_text().splitlines()]
+    subprocess.run([str(b / "docker-compose"), "-p", project, "ps"], env=dict(stub), check=True)
+    recorded = _docker_calls(stub)
     assert recorded == [["compose", "-p", project, "ps"]], recorded
-    # ...and a mutating call, in exactly the shape the recorder writes, is flagged.
+    # ...and a mutating call, in exactly the shape _docker_calls returns, is flagged.
     assert _neo4j_mutations([["compose", "up", "-d", "neo4j"]]) != []
