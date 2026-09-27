@@ -82,6 +82,18 @@ All nodes have a tier.
   - `tailscale ping` between every KVM pair is direct, at 1-5 ms (survey, 2026-09-27).
 - kvm4-2's profile says it is **over-subscribed**: "resolve before adding data-plane services here".
 
+**Hostinger 7-day metrics** (peer session, read-only, 336 samples per node, 2026-09-27):
+
+| Node | Free disk | 7-day growth | Note |
+|---|---|---|---|
+| kvm2 | ~82 GB | — | — |
+| kvm4-1 | ~21 GB | **+35 GiB** | Full in about a week at this rate |
+| kvm4-2 | ~38 GB (dipped to ~19) | **+64 GiB** | Rebooted around 2026-09-23 |
+
+- **Disk.** Something writes 5-9 GiB/day on the kvm4s, and the writer is unidentified. Until it is identified and space is reclaimed, KVM declared capacity is **tiny**, and it may shrink before this plan runs. Identifying the writer is an ops item **owned outside this plan**. It feeds D3.
+- **Network.** Peak 30-minute throughput is ≤ 39 Mbit/s against a ~300 Mbit/s port, and monthly transfer is ~5% of the allowance. These are averages, so they are a **floor for usage, not a measure of capacity**. Bandwidth is not the binding constraint (D8).
+- These metrics differ slightly from the shell survey above (for example kvm4-1 at 15G vs ~21G). They were taken at different times, on a disk that is filling.
+
 > **HARD CAUTION: "unused" docker volumes are not garbage.** "Unused" means only "not attached to a running container". The ~140G on kvm4-1 and the ~146G on kvm4-2 (the data-storage node) may be real stores: an old Postgres, an old MinIO, possibly JuiceFS data. **Never prune.**
 > - Before any volume is removed, it is identified one by one: owner, contents, last write, and whether any backup or migration depends on it.
 > - Each removal needs explicit operator confirmation that names the volume.
@@ -127,16 +139,16 @@ df -hT / /var/lib 2>/dev/null; lsblk -o NAME,SIZE,TYPE,FSTYPE,MOUNTPOINT; free -
   - This formula is **derived here** from the docs' "different zones" rule. It is not stated in that form in the v2.4.1 docs.
   - **Gate:** read the authoritative figure from `garage layout show` before `layout apply`. The docs show it printing "Usable capacity / total cluster capacity" and "Effective capacity (replication factor 3)".
 
-**How the layout expresses the decided tiers.** A Garage layout has only three per-node inputs: role (storage with a capacity, or gateway with none), zone, and capacity. Tags are labels (`operations/layout.md`, `cookbook/real-world.md` "Best practices"). **There is no availability, priority or preference attribute.** So "always-on carries more of the load" has to be expressed through the two levers below.
+**How the layout expresses the decided tiers.** A Garage layout has only three per-node inputs: role (storage with a capacity, or gateway with none), zone, and capacity. Tags are labels (`operations/layout.md`, `cookbook/real-world.md` "Best practices"). **There is no per-node availability, priority or preference attribute.** There is one cluster-level parameter, zone redundancy (`garage layout config -r`), and the "distinct zones" guarantee below depends on it staying `maximum` (review N2). So "always-on carries more of the load" has to be expressed through the two levers below.
 
 1. **Capacity weighting: applied, and it implements the decision.**
    - Tier-1 nodes declare as much capacity as their headroom allows. Tier-2 nodes declare less.
-   - The algorithm assigns partitions in proportion to declared capacity, so tier 1 holds a larger share of the replicas.
+   - Each node's share of partitions is **bounded by** its declared capacity, so tier 1 can hold a larger share of the replicas. The share is not strictly proportional: the algorithm first maximizes usable capacity, then minimizes data movement (`operations/layout.md` L99).
    - Example 1 in `operations/layout.md` shows the docs' own use of this lever: halve a node's declared capacity to force data off it.
    - **Limit:** weighting shifts proportions. It **cannot guarantee** that a partition keeps 2 replicas on tier 1. Under one zone per node, some partitions will have 2 or 3 replicas on tier-2 nodes. When those nodes sleep or reboot, that partition loses its 2-of-2 read quorum and its write quorum, for **every** client, including KVM Jellyfin. The layout cannot express "prefer tier 1 for quorum" by itself.
 2. **Zone grouping: the strongest structural lever. OPEN — OPERATOR, because it departs from "one zone per node".**
    - Give each tier-1 node its own zone (kvm2, kvm4-1, kvm4-2, spark), and put **all tier-2 nodes in one shared zone** (e.g. `lab`).
-   - With replicas "on at least 3 distinct zones" (`garage layout show` output in `operations/layout.md`), each partition then has at most one replica in `lab`. At least two of every partition's replicas sit on tier 1.
+   - With replicas "on at least 3 distinct zones" (`garage layout show` output in `operations/layout.md`), each partition then has at most one replica in `lab`. This holds **only while zone redundancy is `maximum`**, which Gate A and G1 check. At least two of every partition's replicas sit on tier 1.
    - **What this does NOT guarantee:** quorum survives all of tier 2 going down **only while that partition's tier-1 replicas are up**. With Spark down (as on 2026-09-27), every partition whose replicas are {spark, one KVM, lab} runs on a single live replica if `lab` is also down. With consistent RF=3 that means **no reads and no writes** for those partitions. Two tier-1 failures, or one tier-1 failure plus the `lab` zone, stop some partitions whatever the layout is.
    - The cost is that the tier-1 zones must together hold **two copies of everything**.
 
@@ -262,11 +274,11 @@ Every item in this subsection is **COULD-NOT-MEASURE** until someone tries it on
 | `garage key import --yes <GK..> <secret>` | Secret on argv | Alternative when the funnel generates the key. Run it on a storage node, not over a logged channel. The exact Garage v2 `key import` syntax is **COULD-NOT-MEASURE**; check it against the v2.4.1 CLI help before use |
 | `garage key info --show-secret` | Prints the secret | Do not use |
 | `juicefs config --secret-key` | Does not read `SECRET_KEY` from env (v1.3.0 `cmd/config.go`), so the secret is on argv | Pass it in through the `jfs()` env file (§3) and expand it inside `sh -c`. It is then in the juicefs process argv for the seconds the call runs |
-| `juicefs sync minio://AK:SK@...` | juicefs sync 1.3.0 reads object-store credentials **only from the URL**. There are no `SRC_*`/`DST_*` env vars in JuiceFS. The `SRC_AK`-style names in §3 are plain shell variables, expanded by `sh -c` inside the container | URL-encode `/` as `%2F` in the URL form. The exposure is stated below; it cannot be avoided with 1.3.0 |
+| `juicefs sync minio://AK:SK@...` | There are no `SRC_*`/`DST_*` env vars in JuiceFS. The `SRC_AK`-style names in §3 are plain shell variables, expanded by `sh -c` inside the container. **However,** a `minio://` URL **without userinfo** falls back to `MINIO_ACCESS_KEY` / `MINIO_SECRET_KEY` from the environment (JuiceFS `pkg/object/minio.go:71-76`). That fallback is one set of variables, so it covers **one side** of a sync | The Garage side uses the env fallback: its URL has no userinfo, and the key comes from the `dst` env file. Only the MinIO credential stays in argv, URL-encoded (`/` as `%2F`). The Garage key outlives this plan (D1 re-injection), so it is the credential to keep out of argv |
 
 **Real exposure window (do not understate it):**
 - **Container environment.** Anything passed with `-e` or `--env-file` is stored in the container's recorded config, in its environment list. It is readable through `docker inspect` by anyone with Docker socket access, for the **whole lifetime of the container**. With `--rm`, that lifetime is the call: seconds for `status`, `config` and `fsck`, and **hours** for a sync pass.
-- **Process argv.** Container processes are host processes. For the whole of every sync pass, the expanded `minio://AK:SK@...` URLs sit in the juicefs argv, readable by host `ps` and `/proc/<pid>/cmdline`. That is hours per pass. Any collector that records process command lines will capture them.
+- **Process argv.** Container processes are host processes. For the whole of every sync pass, the expanded **MinIO** URL (`minio://AK:SK@minio:9000/...`) sits in the juicefs argv, readable by host `ps` and `/proc/<pid>/cmdline`. The Garage key does not, because it reaches sync through the env fallback (N1); it stays only in the container's environment list. That is hours per pass. Any collector that records process command lines will capture them.
 - **Mitigations:**
   - Run sync passes only on Knuckles, in the operator context.
   - Confirm that no cmdline-recording collector runs during the passes.
@@ -336,7 +348,7 @@ The data move (§3) and the metadata move are **orthogonal**:
 | Set | File contents (variable names) | Funnel source | Used by |
 |---|---|---|---|
 | `meta` | `META_PASSWORD` | `JUICEFS_META_PASSWORD` | status, gc, fsck, config |
-| `dst` | `DST_AK`, `DST_SK` | `JUICEFS_GARAGE_ACCESS_KEY`, `JUICEFS_GARAGE_SECRET_KEY` | objbench, sync, config (cutover) |
+| `dst` | `DST_AK`, `DST_SK`, **and the same two values again as `MINIO_ACCESS_KEY`, `MINIO_SECRET_KEY`** | `JUICEFS_GARAGE_ACCESS_KEY`, `JUICEFS_GARAGE_SECRET_KEY` | objbench and config (cutover) through `DST_*`. Sync through the `MINIO_*` env fallback: the Garage URL carries **no userinfo** (review N1) |
 | `src` | `SRC_AK`, `SRC_SK`, raw values | The MinIO credential the volume was formatted with. The manifest carries both `MINIO_ROOT_USER`/`MINIO_ROOT_PASSWORD` and `MINIO_ACCESS_KEY`/`MINIO_SECRET_KEY`; which pair this volume uses is recorded at Step 0 (COULD-NOT-MEASURE here) | config (rollback) |
 | `srcurl` | `SRC_AK`, `SRC_SK`, **URL-encoded** (`/` as `%2F`) | same | sync (the URL form) |
 
@@ -387,7 +399,9 @@ garage layout assign <id-kvm2>   -z kvm2   -c <declared>G -t kvm2
 garage layout assign <id-kvm4-1> -z kvm4-1 -c <declared>G -t kvm4-1
 garage layout assign <id-kvm4-2> -z kvm4-2 -c <declared>G -t kvm4-2
 garage layout assign <id-node>   -z <zone> -c <declared>G -t <node>   # Spark, and each tier-2 node, when ready
-garage layout show                                 # read BEFORE applying: "Usable capacity" / "Effective capacity" >= ~85 GB + growth
+garage layout show                                 # read BEFORE applying: "Usable capacity" / "Effective capacity" >= ~85 GB + growth,
+                                                   # "Zone redundancy: maximum", "Partitions are replicated 3 times on at least 3 distinct zones"
+# NEVER run `garage layout config -r` (zone redundancy): lowering it voids the one-replica-per-zone reasoning in §1.2
 garage layout apply --version 1
 garage bucket create juicefs
 (umask 077; garage key create juicefs-pmoves-media > "$INTAKE")   # hazard, §1.6
@@ -397,6 +411,7 @@ garage bucket allow --read --write juicefs --key juicefs-pmoves-media
 **Gate A:**
 - `garage status` shows every first-cut node HEALTHY in its declared zone, with the layout at version 1. The first cut needs at least 3 zones for RF=3.
 - The applied layout's "Effective capacity (replication factor 3)" covers ~85 GB plus growth.
+- `garage layout show` prints **"Zone redundancy: maximum"** and **"Partitions are replicated 3 times on at least 3 distinct zones"** (review N2).
 - `garage bucket info juicefs` lists the key with RW.
 - Functional test from Knuckles **inside `pmoves_data`**, which also proves MagicDNS resolution:
   ```bash
@@ -405,9 +420,9 @@ garage bucket allow --read --write juicefs --key juicefs-pmoves-media
   Every functional test must pass, **including list** (the #3199 failure mode).
 - **Sync URL parse proven before pass 1.** A dry run with the exact Step (b) URLs lists both sides and copies nothing:
   ```bash
-  jfs srcurl,dst 'juicefs sync --dry --no-https "minio://$SRC_AK:$SRC_SK@minio:9000/juicefs/pmoves-media/" "minio://$DST_AK:$DST_SK@<ENDPOINT>:3900/juicefs/pmoves-media/"'
+  jfs srcurl,dst 'juicefs sync --dry --no-https "minio://$SRC_AK:$SRC_SK@minio:9000/juicefs/pmoves-media/" "minio://<ENDPOINT>:3900/juicefs/pmoves-media/"'
   ```
-  It must exit 0 and report the MinIO keys as pending copies. A `NoSuchBucket` error naming the host means the URL was parsed virtual-host style (P1-2 of the #3200 review). STOP.
+  This is the exact Step (b) form: MinIO userinfo in the URL, and no userinfo on the Garage URL, whose key comes from `MINIO_ACCESS_KEY`/`MINIO_SECRET_KEY` in the `dst` env file. It must exit 0 and report the MinIO keys as pending copies. An auth error on the Garage side means the env fallback did not engage. STOP. A `NoSuchBucket` error naming the host means the URL was parsed virtual-host style (P1-2 of the #3200 review). STOP.
 - **External port probe (§1.3, required):** 3900, 3901 and 3903 are refused or time out on every storage node's public address (every KVM; each tier-2 node's router address), probed from a host outside the tailnet. All three ports on every node; one open port fails Gate A.
 
 ### Step (b): Copy MinIO → Garage (volume stays live on MinIO)
@@ -416,7 +431,7 @@ garage bucket allow --read --write juicefs --key juicefs-pmoves-media
 # pass 1: live, throttled. Incremental on re-run, NOT resumable (see below)
 jfs srcurl,dst 'juicefs sync --no-https --threads 8 --bwlimit <Mbps> \
      "minio://$SRC_AK:$SRC_SK@minio:9000/juicefs/pmoves-media/" \
-     "minio://$DST_AK:$DST_SK@<ENDPOINT>:3900/juicefs/pmoves-media/"'
+     "minio://<ENDPOINT>:3900/juicefs/pmoves-media/"'
 # pass 2 (still before the freeze): re-read and checksum every object on both sides
 jfs srcurl,dst 'juicefs sync --no-https --check-all --threads 8 "minio://...same src..." "minio://...same dst..."'
 ```
@@ -440,7 +455,7 @@ jfs srcurl,dst 'juicefs sync --no-https --check-all --threads 8 "minio://...same
 | c2 | Final delta only: `jfs srcurl,dst 'juicefs sync --no-https --check-new --threads 8 "minio://...same src..." "minio://...same dst..."'`. `--check-new` checksums only the objects it copies now; everything else was verified by Gate B's `--check-all`. **Never `--check-all` inside the freeze**: it re-reads every object on both sides | 0 failed |
 | c3 | Switch (`juicefs config` put/get/deletes a `testing/` object; do **not** pass `--force`): `jfs meta,dst 'juicefs config "$META" --storage s3 --bucket http://<ENDPOINT>:3900/juicefs --access-key "$DST_AK" --secret-key "$DST_SK" --yes'` | exit 0 |
 | c4 | `jfs meta 'juicefs status "$META"'`, then `jfs meta 'juicefs fsck "$META"'` | `Storage: s3`, the Garage bucket URL, fsck exit 0 and 0 missing blocks |
-| c5 | Remount **each** mounting node through the **same make target and env shape that created its live mount** (Step 0 record). On main, the `pmoves_data` / `juicefs_meta` shape is the `juicefs-cross-node-setup` path (`META_ROLE=juicefs_meta`). **Not** `juicefs-mount-local`: on main it uses `--network host` with `supabase_admin` and ignores `JUICEFS_DATA_DIR` (`pmoves/mk/egress.mk:376-402`). The data-dir override lands only with #3150, which is OPEN, so #3150 is a G0 precondition. Then `make -C pmoves juicefs-mount-status` | Mount up; content dirs listed. `jfs meta 'juicefs status "$META"'` sessions show the **expected host and mount point** for every node. The mount container's recorded command line shows the expected role (`juicefs_meta@`) and network (`pmoves_data`), matching Step 0 |
+| c5 | Remount **each** mounting node through the **same make target and env shape that created its live mount** (Step 0 record). With #3150, the `pmoves_data` / `juicefs_meta` shape is the one its durable-mount path creates; use the target #3150 names for it. On main, neither road reproduces that shape: `juicefs-mount-local` uses `--network host` with `supabase_admin` and ignores `JUICEFS_DATA_DIR` (`pmoves/mk/egress.mk:376-402`), and `juicefs-cross-node-setup.sh` also uses `--network host` (lines 78 and 115) (review N4). The data-dir override lands only with #3150, which is OPEN, so #3150 is a G0 precondition. Then `make -C pmoves juicefs-mount-status` | Mount up; content dirs listed. `jfs meta 'juicefs status "$META"'` sessions show the **expected host and mount point** for every node. The mount container's recorded command line shows the expected role (`juicefs_meta@`) and network (`pmoves_data`), matching Step 0 |
 | c6 | Verify data | The 3 sample `sha256sum`s match Step 0. A write, `sync`, read-back works. `juicefs gc` (no `--delete`) reports **non-zero** scanned objects; zero is the #3199 false-clean signature |
 
 **Freeze length** = the c2 delta (a full listing of both sides, plus a copy of whatever was written since Gate B) + c3-c5. The listing cost scales with object count, which Step 0 records. So the freeze is **COULD-NOT-MEASURE** until Step 0 runs. Pass 1 and the `--check-all` pass stay **outside** the freeze. Run Gate B as close to the window as practical, so the delta is small.
@@ -449,7 +464,7 @@ jfs srcurl,dst 'juicefs sync --no-https --check-all --threads 8 "minio://...same
 
 ```bash
 # freeze as in c1, then carry back anything written since cutover (no deletes):
-jfs srcurl,dst 'juicefs sync --no-https --check-new "minio://...garage...@<ENDPOINT>:3900/juicefs/pmoves-media/" "minio://...minio...@minio:9000/juicefs/pmoves-media/"'
+jfs srcurl,dst 'juicefs sync --no-https --check-new "minio://<ENDPOINT>:3900/juicefs/pmoves-media/" "minio://...minio...@minio:9000/juicefs/pmoves-media/"'
 jfs meta,src 'juicefs config "$META" --storage minio --bucket http://minio:9000/juicefs --access-key "$SRC_AK" --secret-key "$SRC_SK" --yes'
 jfs meta 'juicefs fsck "$META"'
 jfs meta 'juicefs gc "$META"'     # NO --delete; now scans MinIO
@@ -490,7 +505,7 @@ jfs meta 'juicefs gc "$META"'     # NO --delete; now scans MinIO
 - **What to measure once a method is chosen.** One-shot runs that leave nothing persistent:
   - Knuckles → each KVM, both directions: pass 1 and check-all.
   - **Every KVM pair**, both directions: kvm2↔kvm4-1, kvm2↔kvm4-2, kvm4-1↔kvm4-2. This is Garage replication traffic.
-  - Each tier-2 node's uplink. Replicas placed on tier 2 cross residential links.
+  - Each tier-2 node's downlink (replicas arriving) and uplink (blocks served back). Replicas placed on tier 2 cross residential links.
 - The earlier "without iperf3" fallback piped data over SSH. It is removed, because §1.1 records that SSH from Knuckles is refused.
 
 ```bash
@@ -508,9 +523,9 @@ jfs meta 'juicefs gc "$META"'     # NO --delete; now scans MinIO
 | 100 Mbit/s | ~1.9 h | ~1.9 h |
 | 500 Mbit/s | ~23 min | ~23 min |
 
-- **`--check-all` is not free.** It re-reads every object on both sides. The MinIO side is local. The Garage side is ~85 GB of **egress from the endpoint KVM** back to Knuckles per pass.
+- **`--check-all` is not free.** It re-reads every object on both sides. The MinIO side is local. The Garage side is ~85 GB read back to Knuckles per pass. That is egress from the endpoint **and from other storage nodes**, because reads can pull blocks from any replica holder.
 - **Budget two `--check-all` passes:** Gate B's pass 2, plus one re-run if pass 2 is interrupted or reports failures. That is ~85 GB of extra KVM egress each, about 1.9 h each at 100 Mbit/s. The c2 delta (`--check-new`) re-reads only what it copies.
-- **Traffic, total:** ~85 GB inbound to the endpoint node, ~170 GB of replication between storage nodes, and ~85-170 GB of check-all egress from the endpoint. The KVM share is small against the 8-16 TB monthly caps. Replication to tier-2 nodes crosses residential uplinks, which have no measured throughput.
+- **Traffic, total:** ~85 GB inbound to the endpoint node, ~170 GB of replication between storage nodes, and ~85-170 GB of check-all egress from the storage nodes. The KVM share is small against the 8-16 TB monthly caps. Replication to tier-2 nodes lands on residential **downlinks**, which have no measured throughput.
 - **Wall clock before the freeze** ≈ pass 1 + one or two check-all passes. At 100 Mbit/s that is ~3.8-5.7 h. None of it is inside the freeze.
 
 ## 4. Risks
@@ -538,7 +553,7 @@ jfs meta 'juicefs gc "$META"'     # NO --delete; now scans MinIO
 |---|---|---|
 | **D1** | **DECIDED: replicated Postgres** (§2). Sequencing: this data move first, then the metadata move under its own follow-on plan | operator (done) |
 | G0 | This plan merged. The #3192 bridge live, so MinIO is readable. **#3150 merged** (the durable mount and data-dir override that c5 relies on; OPEN today). Step 0 baseline recorded, including the live mount shape. **Identify KVM docker volumes before declaring capacity:** each "unused" volume on kvm4-1 and kvm4-2 identified, and any removal confirmed by the operator per volume. Never prune | operator |
-| G1 | D3: each first-cut storage node has measured free space and a declared capacity of at most half of it, recorded in its profile. The applied layout's effective capacity covers ~85 GB plus growth | operator |
+| G1 | D3: each first-cut storage node has measured free space and a declared capacity of at most half of it, recorded in its profile. The applied layout's effective capacity covers ~85 GB plus growth, and `garage layout show` prints "Zone redundancy: maximum" and "Partitions are replicated 3 times on at least 3 distinct zones" | operator |
 | G2 | D2, D4-D7 decided. Funnel labels (§1.6) delivered to every first-cut storage node and shape-checked, with a named delivery vehicle per node (COULD-NOT-MEASURE today). The route does not depend on Spark alone; b850 is the fallback producer | operator |
 | G3 | Garage up. Gate A passed, including list, the MagicDNS-in-container check, the `--dry` sync parse check, and the **external probe of 3900/3901/3903** on every storage node's public address (who probes is OPEN — OPERATOR) | delivery + operator |
 | G4 | Gate B passed: `--check-all`, 0 failed | delivery |
@@ -563,9 +578,9 @@ jfs meta 'juicefs gc "$META"'     # NO --delete; now scans MinIO
 | Tiers | Availability tiers (§1.1) | **DECIDED:** tier 1 (always-on) = kvm2, kvm4-1, kvm4-2, Spark. Tier 2 (desktop) = 5090, Z890, Knuckles, 4090 |
 | Topology | Fleet-wide Garage mesh (§1.0) | **DECIDED:** every capable node is a storage node and a JuiceFS client. NATS stays off the mesh |
 | D2 | What the recorded bucket URL names (§1.4) | OPEN: (i) one tier-1 node with `juicefs config --bucket` failover, or (ii) a per-node local name |
-| D3 | Per-node capacity declarations for each fleet node (§1.1) | **OPEN — per-node capacity declarations for each fleet node.** KVM free now: 78G / 15G / 31G. Every other node is COULD-NOT-MEASURE |
+| D3 | Per-node capacity declarations for each fleet node (§1.1) | **OPEN — per-node capacity declarations for each fleet node.** KVM declared capacity stays **tiny** until an unknown writer (5-9 GiB/day on the kvm4s) is identified and space is reclaimed. That ops item is owned outside this plan. Every other node is COULD-NOT-MEASURE |
 | D4 | Soak length N | Recommendation: ≥ 14 days, including the non-endpoint node-down test and the separate failover drill |
 | D5 | Garage ports tailnet-only | Recommendation: yes. `tailscale0` only, with S3/admin bound to the tailnet address (§1.3). The external probe is a required gate; who runs it is **OPEN — OPERATOR** |
 | D6 | Known Road grants for the compose, funnel and egress edits | Recommendation: grant per PR, as in the table above |
 | D7 | Zone grouping (all tier-2 nodes in one `lab` zone) vs one zone per node (§1.2) | **OPEN — OPERATOR.** Not viable today: usable ≤ ~23 GB until the KVM volumes are cleaned up or Spark is measured |
-| D8 | Throughput measurement method (§3 Time and bandwidth) | **OPEN — OPERATOR:** install iperf3, run a containerised iperf3, or a timed copy |
+| D8 | Throughput measurement method (§3 Time and bandwidth) | **OPEN — OPERATOR:** install iperf3, run a containerised iperf3, or a timed copy. Hostinger 7-day metrics say bandwidth is **not** the binding constraint (peak 30-minute average ≤ 39 Mbit/s on a ~300 Mbit/s port). iperf3 would still give real capacity, not an average floor |
