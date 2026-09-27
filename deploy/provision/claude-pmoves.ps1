@@ -480,7 +480,42 @@ if (Test-Path -LiteralPath $identTool) {
                 }
                 Write-Host "[claude-pmoves] $carryLine"
 
-                $identityArgs = @('--append-system-prompt', "You are running on PMOVES node '$nodeName'. Your registered identity in pmoves/config/agent_registry.yaml is '$nodeIdent'. Disclose it at session start rather than rediscovering it, and file claim-register rows under it. Cipher memory carry for this session -- $carryLine.")
+                # ---------------------------------------------------------
+                # WHO THE SESSION IS -- mirrors pmoves/scripts/claude-pmoves.sh.
+                # Operator direction 2026-09-27: the session must wake up AS
+                # the node identity (e.g. Z890-CLAUDE), doing the steward job,
+                # not as a role that speaks of that identity in the third
+                # person. The name and the register owner string come from
+                # identity_vocabulary.yaml's declared register_form via the
+                # resolver (PMOVES_IDENTITY_NAME / PMOVES_REGISTER_FORM). The
+                # old line also told the session to "file claim-register rows
+                # under" the REGISTRY key (claude_z890), which is not the
+                # owner string the register uses.
+                #
+                # FAIL-OPEN, LOUDLY, as the POSIX twin: no declared name falls
+                # back to the registry-key sentence and warns with the reason.
+                # ---------------------------------------------------------
+                $identName = $ident['PMOVES_IDENTITY_NAME']
+                $identForm = $ident['PMOVES_REGISTER_FORM']
+                $identCard = $ident['PMOVES_CIPHER_AGENT_ID']
+                # The role arrives in $args as `--agent <name>` (claude-pmoves.cmd
+                # forwards it); this script never chose it, so read it back.
+                $roleName = $null
+                for ($ai = 0; $ai -lt ($args.Count - 1); $ai++) {
+                    if ($args[$ai] -eq '--agent') { $roleName = $args[$ai + 1]; break }
+                }
+                if ($identName -and $identForm) {
+                    $cardPart = if ($identCard) { ", signing card $identCard" } else { '' }
+                    $rolePart = if ($roleName) { "the '$roleName' role" } else { 'the role this session was launched with' }
+                    $identText = "You are $identName, the Claude Code agent for PMOVES node '$nodeName' (registry key $nodeIdent in pmoves/config/agent_registry.yaml$cardPart). You sign the claim register as '$identForm'. This session you are doing the job of ${rolePart}: the role is the work you are doing, not a second party -- speak as $identName, in the first person, and never describe $identName as someone who directs you. Disclose this at session start rather than rediscovering it. If another live session on this node already signs as '$identForm', do not share that owner string: pmoves/config/identity_vocabulary.yaml requires a second session on one node to use a distinct BASE identity, launched with PMOVES_REGISTER_IDENTITY set to it."
+                    Write-Host "[claude-pmoves] name=$identName register=$identForm"
+                } else {
+                    $rw = $ident['PMOVES_REGISTER_WHY']
+                    if ($rw) { $rw = $rw.Replace("'\''", "'") } else { $rw = 'no reason given' }
+                    Write-Warning "[claude-pmoves] identity name unresolved, falling back to the registry key: $rw"
+                    $identText = "You are running on PMOVES node '$nodeName'. Your registered identity in pmoves/config/agent_registry.yaml is '$nodeIdent'. Disclose it at session start rather than rediscovering it."
+                }
+                $identityArgs = @('--append-system-prompt', "$identText Cipher memory carry for this session -- $carryLine.")
             } else {
                 $w = $ident['PMOVES_IDENTITY_WHY']
                 if (-not $w) { $w = 'no reason given' }
