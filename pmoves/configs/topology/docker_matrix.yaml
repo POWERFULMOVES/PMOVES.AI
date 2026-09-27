@@ -96,6 +96,8 @@ overlays:
     canonical_path: pmoves/docker-compose.n8n.yml
   - name: n8n.postgres
     canonical_path: pmoves/docker-compose.n8n.postgres.yml
+  - name: neo4j-tailnet
+    canonical_path: pmoves/docker-compose.neo4j-tailnet.yml
   - name: open-notebook
     canonical_path: pmoves/docker-compose.open-notebook.yml
   - name: persona
@@ -2305,6 +2307,9 @@ unmapped_compose_keys:
     compose_key: pmoves_external
     path: pmoves/docker-compose.base.yml
   - overlay: base
+    compose_key: pmoves_graph_front
+    path: pmoves/docker-compose.base.yml
+  - overlay: base
     compose_key: pmoves_monitoring
     path: pmoves/docker-compose.base.yml
   - overlay: base
@@ -2722,6 +2727,9 @@ unmapped_compose_keys:
     compose_key: pmoves_external
     path: pmoves/docker-compose.yml
   - overlay: main
+    compose_key: pmoves_graph_front
+    path: pmoves/docker-compose.yml
+  - overlay: main
     compose_key: pmoves_monitoring
     path: pmoves/docker-compose.yml
   - overlay: main
@@ -2859,6 +2867,18 @@ unmapped_compose_keys:
   - overlay: n8n.postgres
     compose_key: n8n-db
     path: pmoves/docker-compose.n8n.postgres.yml
+  - overlay: neo4j-tailnet
+    compose_key: cap_drop
+    path: pmoves/docker-compose.neo4j-tailnet.yml
+  - overlay: neo4j-tailnet
+    compose_key: graphfront-tailnet-state
+    path: pmoves/docker-compose.neo4j-tailnet.yml
+  - overlay: neo4j-tailnet
+    compose_key: neo4j-tailnet
+    path: pmoves/docker-compose.neo4j-tailnet.yml
+  - overlay: neo4j-tailnet
+    compose_key: security_opt
+    path: pmoves/docker-compose.neo4j-tailnet.yml
   - overlay: open-notebook
     compose_key: cataclysm
     path: pmoves/docker-compose.open-notebook.yml
