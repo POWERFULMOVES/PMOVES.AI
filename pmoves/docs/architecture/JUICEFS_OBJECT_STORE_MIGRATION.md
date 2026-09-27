@@ -158,6 +158,12 @@ now satisfy. §4.1 stays below, unedited, as the record of what was decided in
 June and why — the reasoning was sound for a single-node stack and should not be
 retconned.
 
+**Next (2026-09-26):** the Garage data-backend move now has a plan and runbook:
+[`JUICEFS_GARAGE_MIGRATION_PLAN.md`](JUICEFS_GARAGE_MIGRATION_PLAN.md). It covers
+RF=3 on the three KVMs, a verified gate at every step, rollback to the untouched
+MinIO bucket, and soak before the interim MinIO bridge (#3192) is retired. The
+metadata engine remains open and is that plan's first operator gate (D1).
+
 ---
 
 ## 1. Problem
