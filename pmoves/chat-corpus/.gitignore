@@ -2,4 +2,5 @@
 !/.gitignore
 !/README.md
 !/CORPUS_SCHEMA.md
+!/ITERATIONS.md
 !/manifest.template.json
