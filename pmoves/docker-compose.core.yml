@@ -1155,6 +1155,15 @@ services:
     environment:
     - NEO4J_AUTH=neo4j/${NEO4J_PASSWORD:?Set NEO4J_PASSWORD in env.tier-data}
     - NEO4J_dbms_security_allow__csv__import__from__file__urls=true
+    # Deny LOAD CSV (http/https) to EVERY address, checked AFTER name resolution.
+    # Neo4j now sits on pmoves_external (non-internal, below), so without this a
+    # Cypher query could make it fetch from anywhere it can route to. Verified on
+    # the pinned 5.26.30 Community image (#3201): strict validation recognises
+    # the key, and LOAD CSV of an IP literal or a resolvable hostname fails with
+    # "access to ... is blocked via the configuration property
+    # internal.dbms.cypher_ip_blocklist" (vs a plain connection error without
+    # it). `internal.*` = unsupported by Neo4j; the digest pin keeps it stable.
+    - NEO4J_internal_dbms_cypher__ip__blocklist=0.0.0.0/0,::/0
     - NEO4J_server_config_strict__validation_enabled=false
     # APOC extensions with safe procedure allowlist
     - NEO4J_apoc_export_file_enabled=true
@@ -1189,8 +1198,9 @@ services:
         - neo4j
       # Non-internal, so Docker can PUBLISH 7474/7687 on ${NEO4J_BIND} (the
       # tailnet address): it publishes nothing for a container on internal-only
-      # networks. Same as cipher-api. No alias here: every Neo4j consumer
-      # already shares app/bus/data with it (#3201).
+      # networks. Same as cipher-api. No explicit alias is needed here: compose
+      # already registers the service name `neo4j` (and container_name) on every
+      # network the service joins, this one included (#3201).
       pmoves_external:
     healthcheck:
       test:
