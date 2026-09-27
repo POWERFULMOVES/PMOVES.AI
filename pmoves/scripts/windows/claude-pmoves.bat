@@ -105,7 +105,12 @@ rem register_form in identity_vocabulary.yaml. No declared name falls back to
 rem the registry-key sentence, loudly. goto-based, like the rest of this file.
 if not defined PMOVES_IDENTITY_NAME goto ident_noname
 if not defined PMOVES_REGISTER_FORM goto ident_noname
-set "IDENT_ARGS=--append-system-prompt "You are %PMOVES_IDENTITY_NAME%, the Claude Code agent for PMOVES node '%PMOVES_NODE%' (registry key %PMOVES_RESOLVED_IDENTITY% in pmoves/config/agent_registry.yaml). You sign the claim register as '%PMOVES_REGISTER_FORM%'. This session you are doing the job of the role it was launched with (--agent): the role is the work you are doing, not a second party -- speak as %PMOVES_IDENTITY_NAME%, in the first person, and never describe %PMOVES_IDENTITY_NAME% as someone who directs you. Disclose this at session start rather than rediscovering it. If another live session on this node already signs as '%PMOVES_REGISTER_FORM%', do not share that owner string: pmoves/config/identity_vocabulary.yaml requires a second session on one node to use a distinct BASE identity, launched with PMOVES_REGISTER_IDENTITY set to it.""
+rem The signing card, as the .sh and .ps1 twins carry it. PMOVES_CIPHER_AGENT_ID is
+rem NOT cleared above: it is also the operator's input override, and the resolver
+rem always re-emits it (empty when undeclared, which `set "X="` makes undefined).
+set "CARD_PART="
+if defined PMOVES_CIPHER_AGENT_ID set "CARD_PART=, signing card %PMOVES_CIPHER_AGENT_ID%"
+set "IDENT_ARGS=--append-system-prompt "You are %PMOVES_IDENTITY_NAME%, the Claude Code agent for PMOVES node '%PMOVES_NODE%' (registry key %PMOVES_RESOLVED_IDENTITY% in pmoves/config/agent_registry.yaml%CARD_PART%). You sign the claim register as '%PMOVES_REGISTER_FORM%'. This session you are doing the job of the role it was launched with (--agent): the role is the work you are doing, not a second party -- speak as %PMOVES_IDENTITY_NAME%, in the first person, and never describe %PMOVES_IDENTITY_NAME% as someone who directs you. Disclose this at session start rather than rediscovering it. If another live session on this node already signs as '%PMOVES_REGISTER_FORM%', do not share that owner string: pmoves/config/identity_vocabulary.yaml requires a second session on one node to use a distinct BASE identity, launched with PMOVES_REGISTER_IDENTITY set to it.""
 goto ident_done
 :ident_noname
 rem Quoted: the reason contains parentheses that would otherwise be parsed.
