@@ -46,6 +46,19 @@ anything to delete. From the source (moby/buildkit v0.32.2):
   and a builder in daily use touches most of its cache every week.
 - With `all = false` it also skips internal, frontend and shared records.
 
+The Docker docs say the same: custom `[[worker.oci.gcpolicy]]` blocks replace
+the defaults, and `all = true` "will allow any cache records to be pruned
+(otherwise some are excluded)"
+([garbage-collection](https://docs.docker.com/build/cache/garbage-collection/));
+the [buildkitd.toml example](https://docs.docker.com/build/buildkit/toml-configuration/)
+ends its gcpolicy set with an `all = true` rule. GC timing is not documented
+("runs periodically"), so the explicit prunes below are the primary control and
+the GC rules are the backstop. The prune flags follow the
+[`buildx prune` reference](https://docs.docker.com/reference/cli/docker/buildx/prune/):
+`--max-used-space` is the cap, `--reserved-space` a minimum, `-a/--all` includes
+internal/frontend records. On buildx older than 0.17 (no `--max-used-space`) the
+script falls back to `--keep-storage`, whose meaning there is the same ceiling.
+
 The fix adds a second rule, `all = true` with no `keepDuration`, capped at
 `maxUsedSpace` and with a `minFreeSpace` floor (default `20%`, BuildKit's own
 default). This is the same shape as the default list's last rule.
