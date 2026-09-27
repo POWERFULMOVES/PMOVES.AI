@@ -22,6 +22,18 @@ unexport KEY
 # (KEY="${KEY:-...}"), is not a victim: line 46 resets KEY="" first, and no make
 # target invokes it. Sub-makes still get KEY via MAKEFLAGS, unexpanded.
 
+unexport NEO4J_BIND
+# ^ Same mechanism as KEY above, and it must sit in the same place: above every
+# include and every $(shell ...). A command-line NEO4J_BIND is exported by
+# default, and on make >= 4.4 $(shell ...) receives exported variables,
+# EXPANDING them into the child env -- so NEO4J_BIND='$(shell touch X)' would
+# run during the first parse-time $(shell) (e.g. the NEO4J_BIND block's own
+# mktemp), before the validator ever sees it. The NEO4J_BIND block below reads
+# the raw text with $(value NEO4J_BIND) (unaffected by this) and re-exports ONLY
+# the validated value with `override export NEO4J_BIND := ...`.
+# REASONED, not measured on make 4.4: this node and CI run make 4.3.
+# tests/test_neo4j_bind_passthrough.py asserts the ordering structurally.
+
 # Many targets rely on bashisms (heredocs, arrays, $'...' quoting).
 # On Windows, force Git Bash to avoid cmd.exe fallback for bash-style recipes.
 ifeq ($(OS),Windows_NT)
@@ -153,6 +165,57 @@ ifneq ("$(wildcard env.supa.runtime)","")
 endif
 ifneq ("$(wildcard env.tier-supabase.urlencoded)","")
   COMPOSE_ENV_FILES += --env-file env.tier-supabase.urlencoded
+endif
+
+# NEO4J_BIND pass-through (option B, #3196).
+# The node-local file is deliberately NOT on COMPOSE_ENV_FILES under
+# SUPABASE_RUNTIME=compose (above), so a NEO4J_BIND set there with
+# `make env-local-set` was silently ignored and Neo4j published on 0.0.0.0.
+# Read ONLY that one key (parsed, never sourced; no other key, no command
+# substitution) and export it into every recipe's environment, which is how
+# it reaches every $(DC) call. COMPOSE_ENV_FILES is untouched.
+#
+# Precedence (first NON-EMPTY wins; an empty value counts as unset):
+#   1. `make NEO4J_BIND=...`          (command line)
+#   2. NEO4J_BIND exported by the caller's environment
+#   3. the NEO4J_BIND= line of $(NODE_LOCAL_ENV_FILE)
+#   4. compose's own default (${NEO4J_BIND:-0.0.0.0})
+# A malformed value from ANY source stops make here, value withheld, rather
+# than reaching compose. A caller's value is taken RAW with $(value ...), never
+# expanded, and reaches the checker through a file written by $(file ...),
+# never through a $(shell ...) string: a quote or an embedded make function in
+# it can neither break the command nor run.
+# Escape hatch for a malformed node-local value: pass a valid one on the
+# command line (`make NEO4J_BIND=127.0.0.1 ...`, which is checked and wins),
+# or point elsewhere (`make NODE_LOCAL_ENV_FILE=/dev/null ...`).
+# Needs GNU make >= 4.2 ($(.SHELLSTATUS)); older make fails closed below.
+NODE_LOCAL_ENV_FILE ?= .env.local
+NEO4J_BIND_HELPER = $(PYTHON) $(CURDIR)/scripts/neo4j_bind_from_env_file.py
+NEO4J_BIND_CALLER := $(if $(filter-out undefined,$(origin NEO4J_BIND)),$(strip $(value NEO4J_BIND)))
+ifneq ($(NEO4J_BIND_CALLER),)
+  NEO4J_BIND_TMP := $(shell mktemp)
+  $(file >$(NEO4J_BIND_TMP),$(NEO4J_BIND_CALLER))
+  NEO4J_BIND_OK := $(shell $(NEO4J_BIND_HELPER) --check-file "$(NEO4J_BIND_TMP)")
+  NEO4J_BIND_RC := $(.SHELLSTATUS)
+  ifeq ($(NEO4J_BIND_RC),)
+    $(error NEO4J_BIND is set but this make cannot validate it (needs GNU make >= 4.2 for .SHELLSTATUS); refusing)
+  endif
+  ifneq ($(NEO4J_BIND_RC),0)
+    $(error NEO4J_BIND ($(origin NEO4J_BIND)) is malformed; refusing to pass it to compose)
+  endif
+  override export NEO4J_BIND := $(NEO4J_BIND_OK)
+else ifneq ("$(wildcard $(NODE_LOCAL_ENV_FILE))","")
+  NEO4J_BIND_FROM_FILE := $(shell $(NEO4J_BIND_HELPER) "$(NODE_LOCAL_ENV_FILE)")
+  NEO4J_BIND_RC := $(.SHELLSTATUS)
+  ifeq ($(NEO4J_BIND_RC),)
+    $(error the node-local file exists but this make cannot validate NEO4J_BIND (needs GNU make >= 4.2 for .SHELLSTATUS); pass NODE_LOCAL_ENV_FILE=/dev/null to skip it)
+  endif
+  ifneq ($(NEO4J_BIND_RC),0)
+    $(error NEO4J_BIND in the node-local file is malformed or unreadable (see above); refusing. Escape: make NEO4J_BIND=<valid address> ... or NODE_LOCAL_ENV_FILE=/dev/null)
+  endif
+  ifneq ($(NEO4J_BIND_FROM_FILE),)
+    override export NEO4J_BIND := $(NEO4J_BIND_FROM_FILE)
+  endif
 endif
 
 # -------- Service Discovery Helper ----------
@@ -2681,9 +2744,22 @@ STACK_FILES ?= \
 AMD_OVERLAY := -f docker-compose.amd.yml
 WHISPER_NODE_OVERLAY ?=
 
+# Agent sessions export CIPHER_API_TOKEN as their OWN per-agent bearer
+# (cipher_<uuid>, bound by the launcher). Compose interpolation takes the shell
+# over --env-file, so any `up` from such a session baked that bearer into
+# cipher-api as the deployment-wide bootstrap token (every env-file bootstrap
+# caller then got 401; auth.ts never treats a cipher_ value as bootstrap, so
+# the bootstrap path is simply dead) and into Agent Zero's cipher MCP header
+# (A0 then acts as that agent). Measured on Knuckles 2026-09-26. A cipher_
+# value is never a valid bootstrap token, so drop it for compose only and let
+# the env files answer; any other exported value is an operator override and
+# is left alone. Only emitted when that shape is exported, so DC stays
+# shell-agnostic everywhere else.
+CIPHER_TOKEN_SHADOW_GUARD := $(if $(filter cipher_%,$(CIPHER_API_TOKEN)),env -u CIPHER_API_TOKEN)
+
 # Keep DC shell-agnostic for Windows/WSL/Linux. Targets that need sourced env
 # should prefix with $(LOAD_ENV_SHARED); explicitly in the recipe.
-DC := docker compose -p $(PROJECT) --project-directory $(CURDIR) $(COMPOSE_ENV_FILES) $(STACK_FILES)
+DC := $(CIPHER_TOKEN_SHADOW_GUARD) docker compose -p $(PROJECT) --project-directory $(CURDIR) $(COMPOSE_ENV_FILES) $(STACK_FILES)
 N8N_DC := docker compose -p $(PROJECT) --project-directory $(CURDIR) $(COMPOSE_ENV_FILES) -f docker-compose.yml -f docker-compose.n8n.yml $(N8N_DB_STACK_FILE)
 EXTERNAL_DC := docker compose -p $(PROJECT) --project-directory $(CURDIR) $(COMPOSE_ENV_FILES) -f docker-compose.external.yml
 MCP_GATEWAY_DC := docker compose -p $(PROJECT) --project-directory $(CURDIR) $(COMPOSE_ENV_FILES) -f docker-compose.mcp-gateway.yml
@@ -5542,12 +5618,13 @@ neo4j-backup: ## Backup Neo4j database to backups/ with timestamp
 	@timestamp=$$(date +%Y%m%d_%H%M%S); \
 	backup_dir="backups"; \
 	mkdir -p "$$backup_dir"; \
-	container_name=$$($(DC) ps -q neo4j 2>/dev/null | head -1); \
-	if [ -z "$$container_name" ]; then \
-		echo "⚠️  Neo4j container not running. Starting neo4j..."; \
-		$(MAKE) --no-print-directory neo4j-local-up; \
-		sleep 10; \
-		container_name=$$($(DC) ps -q neo4j 2>/dev/null | head -1); \
+	container_name=$$($(PYTHON) $(CURDIR)/scripts/neo4j_container.py) || exit 3; \
+	if ! docker ps --format '{{.Names}}' | grep -qxF "$$container_name"; then \
+		echo "❌ Neo4j container '$$container_name' is not running; a backup does not start one."; \
+		echo "   (It used to: '$(DC) ps -q neo4j' cannot see an out-of-compose container, so the"; \
+		echo "   fallback started a SECOND Neo4j on the volume the running one held.)"; \
+		echo "   Start it deliberately: make -C pmoves up-data-tier DATA_SERVICES=neo4j"; \
+		exit 1; \
 	fi; \
 	if [ -n "$$container_name" ]; then \
 		if docker exec $$container_name neo4j-admin database dump \
@@ -5563,7 +5640,8 @@ neo4j-backup: ## Backup Neo4j database to backups/ with timestamp
 			docker cp $$container_name:/backups/neo4j_$${timestamp}.cypher "$$backup_dir/neo4j_$${timestamp}.cypher" 2>/dev/null && \
 				echo "✅ Backup created: $$backup_dir/neo4j_$${timestamp}.cypher" && \
 				ls -lh "$$backup_dir/neo4j_$${timestamp}.cypher"; \
-		else \; echo "❌ Backup failed - neither dump nor cypher export succeeded"; \
+		else \
+			echo "❌ Backup failed - neither dump nor cypher export succeeded"; \
 			exit 1; \
 		fi; \
 	else \
@@ -5585,17 +5663,55 @@ neo4j-restore: ## Restore Neo4j from backup (usage: make neo4j-restore BACKUP=ba
 		echo "❌ Error: Backup file not found: $(BACKUP)"; \
 		exit 1; \
 	fi
+	@# Refuse while the container of that name is NOT compose-managed. The steps
+	@# below stop and remove only the COMPOSE service; an out-of-compose container
+	@# keeps running on pmoves_neo4j-data, the volume rm then fails silently, and a
+	@# compose Neo4j is started beside it. Migrate it under compose first (the
+	@# Phase 1b runbook in PR ops/knuckles-neo4j-from-fork).
+	@# The label is read from STDOUT only: a CLI warning on stderr must never make
+	@# an unlabelled (stray) container look compose-managed.
+	@# Only an explicit "No such container" means absent. Any other inspect
+	@# failure (daemon down, permission, wrong context) is could-not-measure (3),
+	@# never "absent": treating an error as absent is how a guard waves through
+	@# exactly the case it exists to stop.
+	@name=$$($(PYTHON) $(CURDIR)/scripts/neo4j_container.py) || exit 3; \
+	errf=$$(mktemp); \
+	label=$$(docker inspect --type container -f '{{index .Config.Labels "com.docker.compose.project"}}' "$$name" 2>"$$errf"); rc=$$?; \
+	err=$$(cat "$$errf"); unlink "$$errf"; \
+	if [ $$rc -ne 0 ]; then \
+		if printf '%s' "$$err" | grep -qi 'no such container'; then :; else \
+			echo "❌ could not inspect container '$$name' (not a clean 'no such container'): $$err"; \
+			exit 3; \
+		fi; \
+	elif [ -z "$$label" ]; then \
+		echo "❌ '$$name' exists but is not managed by compose; refusing to restore over it."; \
+		echo "   Bring Neo4j under compose first, then re-run neo4j-restore."; \
+		exit 1; \
+	fi
 	@echo "→ Restoring Neo4j from $(BACKUP)..."
 	@echo "⚠️  This will STOP Neo4j, DELETE existing data, and restore from backup"
 	@echo "Press Ctrl+C to cancel, or wait 5 seconds to continue..."
 	@sleep 5
 	@$(MAKE) --no-print-directory neo4j-local-down
-	@docker volume rm pmoves_neo4j-data 2>/dev/null || true
+	@# Absent (an explicit "no such volume") is fine: nothing to clear. Present
+	@# but not removable fails CLOSED (1): this used to swallow the failure
+	@# (2>/dev/null || true) and go on to start and load over a volume another
+	@# Neo4j still held. Any OTHER inspect failure is could-not-measure (3), so an
+	@# error is never read as "absent" and the removal still refuses on every error.
+	@err=$$(docker volume inspect pmoves_neo4j-data 2>&1 >/dev/null); rc=$$?; \
+	if [ $$rc -eq 0 ]; then \
+		docker volume rm pmoves_neo4j-data || { echo "❌ could not remove pmoves_neo4j-data (still in use?): refusing to start and load over a volume another Neo4j may hold."; exit 1; }; \
+	elif printf '%s' "$$err" | grep -qi 'no such volume'; then \
+		echo "→ pmoves_neo4j-data absent; nothing to remove."; \
+	else \
+		echo "❌ could not determine whether pmoves_neo4j-data exists: $$err"; \
+		exit 3; \
+	fi
 	@echo "→ Starting fresh Neo4j..."
 	@$(MAKE) --no-print-directory neo4j-local-up
 	@sleep 15
-	@container_name=$$($(DC) ps -q neo4j 2>/dev/null | head -1); \
-	if [ -n "$$container_name" ]; then \
+	@container_name=$$($(PYTHON) $(CURDIR)/scripts/neo4j_container.py) || exit 3; \
+	if docker ps --format '{{.Names}}' | grep -qxF "$$container_name"; then \
 		docker cp "$(BACKUP)" $$container_name:/backups/neo4j.dump; \
 		docker exec $$container_name neo4j-admin database load \
 			--from=/backups/neo4j.dump \

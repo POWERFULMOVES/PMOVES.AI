@@ -27,8 +27,6 @@ from __future__ import annotations
 import asyncio
 import importlib.util
 import inspect
-import os
-import stat
 import sys
 from pathlib import Path
 
@@ -155,23 +153,14 @@ def _fake_checkout(tmp_path: Path) -> Path:
     return make_dir
 
 
-def _stub_bin(tmp_path: Path, name: str, body: str) -> Path:
-    binv = tmp_path / "bin"
-    binv.mkdir(exist_ok=True)
-    p = binv / name
-    p.write_text(body)
-    p.chmod(p.stat().st_mode | stat.S_IEXEC)
-    return binv
-
-
-def test_known_road_restart_runs_both_steps(mod, monkeypatch, tmp_path):
+def test_known_road_restart_runs_both_steps(mod, monkeypatch, tmp_path, stub_tool_path):
     _fake_checkout(tmp_path)
-    log = tmp_path / "make.log"
-    # A stub `make` that records its argv and succeeds.
-    binv = _stub_bin(tmp_path, "make", f'#!/bin/sh\necho "$@" >> {log}\nexit 0\n')
-    # `docker` need only exist for the capability probe.
-    _stub_bin(tmp_path, "docker", "#!/bin/sh\nexit 0\n")
-    monkeypatch.setenv("PATH", f"{binv}:{os.environ['PATH']}")
+    # stub_tool_path: `make` (and `docker`, which need only exist for the
+    # capability probe) are recorders that log argv and exit 0. The sentinel
+    # spawns `bash <checkout>/scripts/with-env.sh make ...` with the inherited
+    # environment, and the session guard refuses that make unless PATH starts
+    # with the fixture's marked stub dir.
+    monkeypatch.setenv("PATH", stub_tool_path["PATH"])
 
     capable, reason = mod.self_heal_capability()
     assert capable, reason
@@ -189,9 +178,8 @@ def test_known_road_restart_runs_both_steps(mod, monkeypatch, tmp_path):
         "the up-<slug> step did not run -- returncode was read before communicate()"
     )
     assert action["exit"] == 0
-    recorded = log.read_text().splitlines()
-    assert any("secrets-funnel" in line for line in recorded)
-    assert any("up-p7" in line for line in recorded)
+    recorded = [call[1:] for call in stub_tool_path.calls("make")]
+    assert [argv[-1] for argv in recorded] == ["secrets-funnel", "up-p7"], recorded
 
 
 def test_known_road_restart_defers_when_make_absent(mod, monkeypatch, tmp_path):
