@@ -82,17 +82,46 @@
 # is a fact about signing, not about who they are. Widening the fold here would
 # have made the gate quieter and less true.
 
+# REGISTER_FORM -- the name a session IS, declared and never derived.
+# ---------------------------------------------------------------------
+# `register_form` is the exact owner string an identity signs the claim
+# register with, and its BASE (the part before any parenthetical) is the name
+# the fleet calls it by. claude-pmoves reads it through
+# `pmoves/tools/node_identity.py` so a session wakes up AS that name -- "You
+# are B850-CLAUDE" -- instead of being told only a registry key (claude_b850)
+# and a role, and then speaking of its own identity in the third person.
+#
+# DECLARED, NOT DERIVED, because the forms do not share a rule. Measured over
+# the register 2026-09-27 (most-used CLAIM/RELEASE spelling per identity):
+#   B850-CLAUDE (Knuckles)  98 CLAIM / 104 RELEASE  (NODE_PROFILES/B850-CLAUDE.md:10)
+#   4090-CLAUDE              6 CLAIM /   7 RELEASE  (NODE_PROFILES/4090-CLAUDE.md:14)
+#   5090-CLAUDE             10 CLAIM /   9 RELEASE
+#   Z890-CLAUDE             26 CLAIM /  34 RELEASE
+# Only Knuckles carries a node parenthetical, so "BASE (<Node>)" would invent
+# three forms nobody signs with. An identity with no register_form is left
+# unnamed by the launcher, which says so and falls back to the registry key.
+#
+# THE SECOND-SESSION RULE ABOVE HOLDS: a second steward session on one node
+# names its own identity (PMOVES_REGISTER_IDENTITY=B850-CLAUDE-FUNNEL), and the
+# resolver refuses one declared for a different node rather than handing it the
+# primary's name. pmoves/tests/test_launcher_wakes_as_identity.py asserts that
+# every register_form folds back to its own canonical under
+# identity_lineage.canonical_identity -- so the collision gate attributes what a
+# session signs to the identity the launcher told it it was.
+
 version: 1
 
 identities:
   - canonical: 5090-claude
     aliases: ["5090-CLAUDE", "claude_5090"]
     node: "5090"
+    register_form: "5090-CLAUDE"
     note: Primary workhorse lane. 51 entries across 8 spellings.
 
   - canonical: z890-claude
     aliases: ["Z890-CLAUDE", "claude_z890"]
     node: z890
+    register_form: "Z890-CLAUDE"
     note: >-
       44 entries. Six of them were later reattributed to b850-claude as
       MIS-SIGNED, not as succession -- see `corrections` below. The distinction
@@ -101,6 +130,7 @@ identities:
   - canonical: b850-claude
     aliases: ["B850-CLAUDE", "claude_b850"]
     node: knuckles
+    register_form: "B850-CLAUDE (Knuckles)"
     note: >-
       34 entries. `NODE_PROFILES/B850-CLAUDE.md:10` declares the canonical
       register form `B850-CLAUDE (Knuckles)`; four spellings are in use.
@@ -118,6 +148,7 @@ identities:
   - canonical: b850-claude-funnel
     aliases: ["B850-CLAUDE-FUNNEL"]
     node: knuckles
+    register_form: "B850-CLAUDE-FUNNEL (Knuckles)"
     note: >-
       0 entries at declaration (2026-09-26). The peer steward session
       pmoves-ai-7d on Knuckles; register form `B850-CLAUDE-FUNNEL (Knuckles)`.
@@ -128,6 +159,7 @@ identities:
     # wearing(), so neither is erased. See the doctrine note below.
     aliases: ["4090-CLAUDE", "4090-claude", "4090-CLAUDE-OPUS-5", "claude_4090"]
     node: "4090"
+    register_form: "4090-CLAUDE"
     note: >-
       32 entries across NINE spellings, the widest drift of any identity --
       including `4090-CLAUDE (field)`, `4090-claude (field, voice-binding

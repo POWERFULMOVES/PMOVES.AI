@@ -71,6 +71,9 @@ rem this file, not by reading it. The tool answers under PMOVES_RESOLVED_IDENTIT
 set "PMOVES_NODE="
 set "PMOVES_RESOLVED_IDENTITY="
 set "PMOVES_IDENTITY_WHY="
+set "PMOVES_IDENTITY_NAME="
+set "PMOVES_REGISTER_FORM="
+set "PMOVES_REGISTER_WHY="
 set "IDENT_ARGS="
 set "IDENT_TOOL=%REPO_ROOT%\pmoves\tools\node_identity.py"
 if not exist "%IDENT_TOOL%" goto ident_absent
@@ -95,6 +98,23 @@ echo "[claude-pmoves] identity unresolved: %PMOVES_IDENTITY_WHY%" 1>&2
 goto ident_done
 :ident_bound
 echo [claude-pmoves] node=%PMOVES_NODE% identity=%PMOVES_RESOLVED_IDENTITY% agent=%DEFAULT_AGENT% 1>&2
+rem WHO THE SESSION IS -- parity with pmoves/scripts/claude-pmoves.sh. Operator
+rem direction 2026-09-27: the session wakes up AS the node identity, doing the
+rem steward job. The name and register owner string come from the declared
+rem register_form in identity_vocabulary.yaml. No declared name falls back to
+rem the registry-key sentence, loudly. goto-based, like the rest of this file.
+if not defined PMOVES_IDENTITY_NAME goto ident_noname
+if not defined PMOVES_REGISTER_FORM goto ident_noname
+rem The signing card, as the .sh and .ps1 twins carry it. PMOVES_CIPHER_AGENT_ID is
+rem NOT cleared above: it is also the operator's input override, and the resolver
+rem always re-emits it (empty when undeclared, which `set "X="` makes undefined).
+set "CARD_PART="
+if defined PMOVES_CIPHER_AGENT_ID set "CARD_PART=, signing card %PMOVES_CIPHER_AGENT_ID%"
+set "IDENT_ARGS=--append-system-prompt "You are %PMOVES_IDENTITY_NAME%, the Claude Code agent for PMOVES node '%PMOVES_NODE%' (registry key %PMOVES_RESOLVED_IDENTITY% in pmoves/config/agent_registry.yaml%CARD_PART%). You sign the claim register as '%PMOVES_REGISTER_FORM%'. This session you are doing the job of the role it was launched with (--agent): the role is the work you are doing, not a second party -- speak as %PMOVES_IDENTITY_NAME%, in the first person, and never describe %PMOVES_IDENTITY_NAME% as someone who directs you. Disclose this at session start rather than rediscovering it. If another live session on this node already signs as '%PMOVES_REGISTER_FORM%', do not share that owner string: pmoves/config/identity_vocabulary.yaml requires a second session on one node to use a distinct BASE identity, launched with PMOVES_REGISTER_IDENTITY set to it.""
+goto ident_done
+:ident_noname
+rem Quoted: the reason contains parentheses that would otherwise be parsed.
+echo "[claude-pmoves] identity name unresolved, falling back to the registry key: %PMOVES_REGISTER_WHY%" 1>&2
 set "IDENT_ARGS=--append-system-prompt "You are running on PMOVES node '%PMOVES_NODE%'. Your registered identity in pmoves/config/agent_registry.yaml is '%PMOVES_RESOLVED_IDENTITY%'. Disclose it at session start rather than rediscovering it.""
 :ident_done
 
