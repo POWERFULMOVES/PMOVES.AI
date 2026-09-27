@@ -155,7 +155,7 @@ ifneq ("$(wildcard env.tier-supabase.urlencoded)","")
   COMPOSE_ENV_FILES += --env-file env.tier-supabase.urlencoded
 endif
 
-# NEO4J_BIND pass-through (option B, lane ops/knuckles-neo4j-agint-networks).
+# NEO4J_BIND pass-through (option B, #3196).
 # The node-local file is deliberately NOT on COMPOSE_ENV_FILES under
 # SUPABASE_RUNTIME=compose (above), so a NEO4J_BIND set there with
 # `make env-local-set` was silently ignored and Neo4j published on 0.0.0.0.
@@ -163,30 +163,47 @@ endif
 # substitution) and export it into every recipe's environment, which is how
 # it reaches every $(DC) call. COMPOSE_ENV_FILES is untouched.
 #
-# Precedence (first wins):
+# Precedence (first NON-EMPTY wins; an empty value counts as unset):
 #   1. `make NEO4J_BIND=...`          (command line)
 #   2. NEO4J_BIND exported by the caller's environment
 #   3. the NEO4J_BIND= line of $(NODE_LOCAL_ENV_FILE)
 #   4. compose's own default (${NEO4J_BIND:-0.0.0.0})
-# A malformed value from ANY source stops make here rather than reaching
-# compose. The value is never echoed: it lives only in the variable.
+# A malformed value from ANY source stops make here, value withheld, rather
+# than reaching compose. A caller's value is taken RAW with $(value ...), never
+# expanded, and reaches the checker through a file written by $(file ...),
+# never through a $(shell ...) string: a quote or an embedded make function in
+# it can neither break the command nor run.
+# Escape hatch for a malformed node-local value: pass a valid one on the
+# command line (`make NEO4J_BIND=127.0.0.1 ...`, which is checked and wins),
+# or point elsewhere (`make NODE_LOCAL_ENV_FILE=/dev/null ...`).
+# Needs GNU make >= 4.2 ($(.SHELLSTATUS)); older make fails closed below.
 NODE_LOCAL_ENV_FILE ?= .env.local
-ifeq ($(origin NEO4J_BIND),undefined)
-  ifneq ("$(wildcard $(NODE_LOCAL_ENV_FILE))","")
-    NEO4J_BIND_FROM_FILE := $(shell $(PYTHON) $(CURDIR)/scripts/neo4j_bind_from_env_file.py "$(NODE_LOCAL_ENV_FILE)")
-    ifneq ($(.SHELLSTATUS),0)
-      $(error NEO4J_BIND in $(NODE_LOCAL_ENV_FILE) is malformed or unreadable (see above); refusing to pass it to compose)
-    endif
-    ifneq ($(NEO4J_BIND_FROM_FILE),)
-      export NEO4J_BIND := $(NEO4J_BIND_FROM_FILE)
-    endif
+NEO4J_BIND_HELPER = $(PYTHON) $(CURDIR)/scripts/neo4j_bind_from_env_file.py
+NEO4J_BIND_CALLER := $(if $(filter-out undefined,$(origin NEO4J_BIND)),$(strip $(value NEO4J_BIND)))
+ifneq ($(NEO4J_BIND_CALLER),)
+  NEO4J_BIND_TMP := $(shell mktemp)
+  $(file >$(NEO4J_BIND_TMP),$(NEO4J_BIND_CALLER))
+  NEO4J_BIND_OK := $(shell $(NEO4J_BIND_HELPER) --check-file "$(NEO4J_BIND_TMP)")
+  NEO4J_BIND_RC := $(.SHELLSTATUS)
+  ifeq ($(NEO4J_BIND_RC),)
+    $(error NEO4J_BIND is set but this make cannot validate it (needs GNU make >= 4.2 for .SHELLSTATUS); refusing)
   endif
-else ifneq ($(strip $(NEO4J_BIND)),)
-  NEO4J_BIND_CHECKED := $(shell NEO4J_BIND_CHECK='$(NEO4J_BIND)' $(PYTHON) $(CURDIR)/scripts/neo4j_bind_from_env_file.py --check)
-  ifneq ($(.SHELLSTATUS),0)
+  ifneq ($(NEO4J_BIND_RC),0)
     $(error NEO4J_BIND ($(origin NEO4J_BIND)) is malformed; refusing to pass it to compose)
   endif
-  export NEO4J_BIND := $(NEO4J_BIND_CHECKED)
+  override export NEO4J_BIND := $(NEO4J_BIND_OK)
+else ifneq ("$(wildcard $(NODE_LOCAL_ENV_FILE))","")
+  NEO4J_BIND_FROM_FILE := $(shell $(NEO4J_BIND_HELPER) "$(NODE_LOCAL_ENV_FILE)")
+  NEO4J_BIND_RC := $(.SHELLSTATUS)
+  ifeq ($(NEO4J_BIND_RC),)
+    $(error the node-local file exists but this make cannot validate NEO4J_BIND (needs GNU make >= 4.2 for .SHELLSTATUS); pass NODE_LOCAL_ENV_FILE=/dev/null to skip it)
+  endif
+  ifneq ($(NEO4J_BIND_RC),0)
+    $(error NEO4J_BIND in the node-local file is malformed or unreadable (see above); refusing. Escape: make NEO4J_BIND=<valid address> ... or NODE_LOCAL_ENV_FILE=/dev/null)
+  endif
+  ifneq ($(NEO4J_BIND_FROM_FILE),)
+    override export NEO4J_BIND := $(NEO4J_BIND_FROM_FILE)
+  endif
 endif
 
 # -------- Service Discovery Helper ----------

@@ -57,13 +57,15 @@ printf 'NEO4J_BIND=%s SUPABASE_URL=%s\n' "${NEO4J_BIND-<unset>}" "${SUPABASE_URL
 """
 
 
-def _make(tmp_path: Path, env_file_body: str | None, *make_args: str, extra_env: dict | None = None):
+def _make(tmp_path: Path, env_file_body: str | bytes | None, *make_args: str, extra_env: dict | None = None):
     """Run make with the guard's stub dir first; return (rc, stdout+stderr, recorded compose env).
 
     `recorded` is empty if no docker/docker-compose recorder ran at all.
     """
     node_local = tmp_path / "node_local_fixture.txt"
-    if env_file_body is not None:
+    if isinstance(env_file_body, bytes):
+        node_local.write_bytes(env_file_body)
+    elif env_file_body is not None:
         node_local.write_text(env_file_body)
     base = {k: v for k, v in os.environ.items() if k not in ("NEO4J_BIND", "SUPABASE_URL")}
     stub = _docker_guard().build_stub_env(
@@ -148,7 +150,7 @@ def test_command_line_wins_over_env_and_file(tmp_path):
     rc, out, rec = _make(tmp_path, f"NEO4J_BIND={FAKE_V4}\n", f"NEO4J_BIND={FAKE_V6}", *RENDER,
                          extra_env={"NEO4J_BIND": FAKE_V4_ENV})
     assert rc == 0, out
-    assert FAKE_V6 in _bind_seen(rec)
+    assert _bind_seen(rec) == f"[{FAKE_V6}]", "a command-line IPv6 is bracketed (override export)"
 
 
 def test_malformed_caller_env_is_refused_too(tmp_path):
@@ -186,3 +188,61 @@ def test_real_compose_binds_7474_and_7687_to_the_value(tmp_path, bind, want):
     ports = json.loads(proc.stdout)["services"]["neo4j"]["ports"]
     got = {str(p["target"]): p.get("host_ip") for p in ports}
     assert got == {"7474": want, "7687": want}, got
+
+
+# --- review of #3196: empty means unset; no expansion, no interpolation --------
+
+def test_an_empty_caller_env_falls_through_to_the_file(tmp_path):
+    """An exported-but-empty NEO4J_BIND used to be exported as-is, rendering 0.0.0.0."""
+    rc, out, rec = _make(tmp_path, f"NEO4J_BIND={FAKE_V4}\n", *RENDER, extra_env={"NEO4J_BIND": ""})
+    assert rc == 0, out
+    assert _bind_seen(rec) == FAKE_V4
+
+
+def test_an_empty_command_line_falls_through_to_the_file(tmp_path):
+    rc, out, rec = _make(tmp_path, f"NEO4J_BIND={FAKE_V4}\n", "NEO4J_BIND=", *RENDER)
+    assert rc == 0, out
+    assert _bind_seen(rec) == FAKE_V4
+
+
+def _hostile_values(sentinel: Path) -> list[str]:
+    return [
+        f"{FAKE_V4}'",                                    # a quote that would close a shell string
+        f"{FAKE_V4}'; touch {sentinel}; echo '",          # ...and inject after it
+        f"$(shell touch {sentinel})",                     # a make function, if ever expanded
+        f"{FAKE_V4}$(shell touch {sentinel})",
+    ]
+
+
+@pytest.mark.parametrize("via", ["env", "command-line"])
+@pytest.mark.parametrize("which", range(4))
+def test_a_hostile_caller_value_is_refused_and_nothing_runs(tmp_path, via, which):
+    sentinel = tmp_path / "SENTINEL-must-not-exist"
+    value = _hostile_values(sentinel)[which]
+    if via == "env":
+        rc, out, rec = _make(tmp_path, None, *RENDER, extra_env={"NEO4J_BIND": value})
+    else:
+        rc, out, rec = _make(tmp_path, None, f"NEO4J_BIND={value}", *RENDER)
+    assert rc != 0, out
+    assert "malformed" in out
+    assert not sentinel.exists(), "part of the value was executed"
+    assert rec == "", "compose must not run with a refused value"
+
+
+def test_a_malformed_file_can_be_escaped_from_the_command_line(tmp_path):
+    rc, out, rec = _make(tmp_path, "NEO4J_BIND=not-an-ip\n", f"NEO4J_BIND={FAKE_V4}", *RENDER)
+    assert rc == 0, out
+    assert _bind_seen(rec) == FAKE_V4
+
+
+def test_an_encoding_error_is_reported_as_one(tmp_path):
+    rc, out, rec = _make(tmp_path, b"NEO4J_BIND=10.9.9.9\xff\xfe\n", *RENDER)
+    assert rc != 0
+    assert "encoding" in out and "UTF-8" in out
+    assert rec == ""
+
+
+def test_an_ipv6_zone_id_is_refused(tmp_path):
+    rc, out, rec = _make(tmp_path, "NEO4J_BIND=fe80::1%eth0\n", *RENDER)
+    assert rc != 0 and "malformed" in out and "eth0" not in out
+    assert rec == ""
