@@ -252,7 +252,10 @@ def bundle_labels(path: Path) -> Set[str]:
 def analyse(bmap: BundleMap, registered: Set[str], bundle: Optional[Set[str]] = None) -> Report:
     rep = Report(registered=registered)
     rep.uncovered = sorted(registered - bmap.sources - set(EXCEPTIONS))
-    rep.must_not_map_mapped = sorted(set(MUST_NOT_MAP) & set(bmap.rows))
+    # Check the secret REFS as well as the row labels: a row such as
+    # ``POSTGRES_PASSWORD: ${{ secrets.SERVICE_PASSWORD_POSTGRES }}`` ships a
+    # must-not-map value under another label.
+    rep.must_not_map_mapped = sorted(set(MUST_NOT_MAP) & (set(bmap.rows) | bmap.sources))
     rep.mapped_not_registered = sorted(bmap.sources - registered)
     if bundle is not None:
         # A row whose source is registered should produce a bundle label.

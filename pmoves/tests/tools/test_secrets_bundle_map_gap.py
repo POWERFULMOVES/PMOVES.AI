@@ -97,6 +97,15 @@ def test_must_not_map_row_is_a_finding(bmap, name):
     assert rep.must_not_map_mapped == [name] and rep.findings
 
 
+def test_must_not_map_secret_under_another_label_is_a_finding(bmap):
+    # The label is innocuous; the secret it reads is not (#3188 re-review P3).
+    fake = gap.BundleMap(
+        dict(bmap.rows, POSTGRES_PASSWORD={"SERVICE_PASSWORD_POSTGRES"}), bmap.environment
+    )
+    rep = gap.analyse(fake, {"SERVICE_PASSWORD_POSTGRES"})
+    assert rep.must_not_map_mapped == ["SERVICE_PASSWORD_POSTGRES"] and rep.findings
+
+
 def test_builder_is_an_allowlist_not_an_environ_walk():
     text = gap.WORKFLOW.read_text(encoding="utf-8")
     assert "skip_prefixes" not in text
