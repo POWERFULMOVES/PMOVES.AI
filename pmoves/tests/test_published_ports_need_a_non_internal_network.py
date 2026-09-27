@@ -14,7 +14,19 @@ cipher-api, minio and presign (each also on a non-internal network) published.
 The stack is the Makefile's default STACK_FILES, parsed from the YAML directly
 (no docker, no env files), merged by service name as compose does for these keys:
 ports append; networks union; network_mode wins. A service with no `networks:`
-key is on the project default network, which is not internal.
+key is on the project default network, which is not internal. Network keys are
+resolved to their real `name:`.
+
+A network declared `external: true` (pmoves_external, pmoves_db_egress) is not
+created by compose, so compose never says whether it is internal: that is fixed
+where the Makefile/mk CREATE it (`docker network create ...`). Its internal flag
+is therefore read from those create sites, and EXTERNAL_NON_INTERNAL pins the two
+that must stay non-internal -- the ones every published service relies on.
+
+Scope, stated rather than implied: only the default STACK_FILES are scanned;
+other overlays (per-node, vps, elder-melchor, …) are not, and compose's
+`!reset`/`!override` merge tags are not modelled (yaml.safe_load would refuse
+them; none of the scanned files uses them today).
 
 KNOWN_VIOLATORS are the services that already break the rule on main. They are
 recorded, not silently passed: each is xfail(strict=True), so FIXING one turns
@@ -51,13 +63,43 @@ def _stack_files() -> list[str]:
     return re.findall(r"-f (\S+)", m.group(1))
 
 
+# Must stay non-internal: created outside compose (external: true), and the only
+# route by which a service on internal networks can publish a port.
+EXTERNAL_NON_INTERNAL = frozenset({"pmoves_external", "pmoves_db_egress"})
+
+_CREATE = re.compile(r"docker network create\b([^\n|;&]*)")
+
+
+def _create_sites() -> dict[str, list[str]]:
+    """{real network name: [the flag text of each `docker network create` for it]}."""
+    sites: dict[str, list[str]] = {}
+    for f in [PMOVES / "Makefile", *sorted((PMOVES / "mk").glob("*.mk"))]:
+        for m in _CREATE.finditer(f.read_text()):
+            words = m.group(1).split()
+            names = [w for w in words if not w.startswith("-") and not w.startswith(">")
+                     and not w[0].isdigit() and w not in ("bridge",)]
+            if names:
+                sites.setdefault(names[-1].strip('"'), []).append(m.group(1))
+    return sites
+
+
+CREATE_SITES = _create_sites()
+
+
 def _stack() -> tuple[dict, dict]:
     services: dict[str, dict] = {}
-    networks: dict[str, bool] = {}
+    networks: dict[str, bool] = {}   # keyed by the compose KEY services reference
     for f in _stack_files():
         doc = yaml.safe_load((PMOVES / f).read_text()) or {}
-        for name, spec in (doc.get("networks") or {}).items():
-            networks[name] = bool((spec or {}).get("internal"))
+        for key, spec in (doc.get("networks") or {}).items():
+            spec = spec or {}
+            real = spec.get("name") or key
+            if spec.get("external"):
+                sites = CREATE_SITES.get(real)
+                assert sites, f"external network {real!r} has no `docker network create` site to check"
+                networks[key] = any("--internal" in s for s in sites)
+            else:
+                networks[key] = bool(spec.get("internal"))
         for name, sv in (doc.get("services") or {}).items():
             sv = sv or {}
             cur = services.setdefault(name, {"ports": [], "networks": set(), "network_mode": None})
@@ -105,3 +147,19 @@ def test_known_violators_is_not_stale():
     must shrink the list, not leave a dead entry that no case exercises."""
     stale = sorted(KNOWN_VIOLATORS - set(PUBLISHED))
     assert not stale, f"KNOWN_VIOLATORS names services that no longer publish in the stack: {stale}"
+
+
+@pytest.mark.parametrize("name", sorted(EXTERNAL_NON_INTERNAL))
+def test_external_networks_are_created_without_internal(name):
+    """P2-A (#3201 review): every Makefile/mk site that CREATES this network must
+    omit --internal, or every service relying on it silently loses its ports."""
+    sites = CREATE_SITES.get(name)
+    assert sites, f"no `docker network create ... {name}` site found -- parser or Makefile changed"
+    bad = [s.strip() for s in sites if "--internal" in s]
+    assert not bad, f"{name} is created with --internal at: {bad}"
+
+
+def test_positive_control_an_internal_create_site_is_caught():
+    fake = "docker network create --driver bridge --internal pmoves_external"
+    m = _CREATE.search(fake)
+    assert m and "--internal" in m.group(1)
