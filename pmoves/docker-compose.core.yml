@@ -1155,6 +1155,15 @@ services:
     environment:
     - NEO4J_AUTH=neo4j/${NEO4J_PASSWORD:?Set NEO4J_PASSWORD in env.tier-data}
     - NEO4J_dbms_security_allow__csv__import__from__file__urls=true
+    # Deny LOAD CSV (http/https) to EVERY address, checked AFTER name resolution:
+    # defense in depth even on internal-only networks (it also stops Cypher from
+    # reaching the host gateway, the LAN, or other containers). Verified on the
+    # pinned 5.26.30 Community image (#3201): strict validation recognises the
+    # key, and LOAD CSV of an IP literal or a resolvable hostname fails with
+    # "access to ... is blocked via the configuration property
+    # internal.dbms.cypher_ip_blocklist" (a plain connection error without it).
+    # `internal.*` = unsupported by Neo4j; the digest pin keeps it stable.
+    - NEO4J_internal_dbms_cypher__ip__blocklist=0.0.0.0/0,::/0
     - NEO4J_server_config_strict__validation_enabled=false
     # APOC extensions with safe procedure allowlist
     - NEO4J_apoc_export_file_enabled=true
