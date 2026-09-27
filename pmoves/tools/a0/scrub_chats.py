@@ -7,16 +7,12 @@ REPO = Path(r"C:\Users\russe\Documents\GitHub\PMOVES.AI")
 GL = REPO / "pmoves" / "tools" / "a0" / "bin" / "gitleaks.exe"
 TOML = REPO / "pmoves" / "chat-corpus" / "gitleaks.toml"
 EXCLUDE_KW = ["unfcu", "docintel"]
-LITERALS = [
-    "N/9cZCrv2i95v3sQO+g3Xpabp6aMcu1qjm14XLcnd4o59hkf9qOPonSzCK+Y3Nmk",
-    "X8q9z6nZ-txaUqS2dvf0vaXP9zBrxP0h",
-    "super-secret-jwt-token-with-at-least-32-characters-long",
-    "SQMFlkkE1r14D8mJpqAd42rY",
-    "4b9b9e169b1c4f8891c94fddcdd5181e9684a4830ba64855b48798e4de4e1dc948e47e",
-    "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",
-    "sk-kimi-31WfFpHpvLJ45JNduvvsSnTxEbSwWemtCcYloJZpgpfJCTXv5o9WelrqYCPxaL",
-    "kxeo3664xjia",
-]
+# Burned-secret literals are NOT committed (CodeQL: clear-text secrets in
+# source). They load from a local, gitignored burn-list file maintained beside
+# the staging corpus - the same pattern gitleaks uses for baselines.
+# Source provenance: pmoves/chat-corpus/ITERATIONS.md incident findings.
+BURN_LIST = Path(r"C:\Users\russe\agent-zero\chat-corpus-staging\burn-literals.local")
+LITERALS = [line for line in (BURN_LIST.read_text(encoding="utf-8", errors="replace").splitlines() if BURN_LIST.exists() else []) if line.strip()]
 PLACEHOLDER = {
     "pmoves-jwt-escaped": "[REDACTED-JWT]",
     "jwt": "[REDACTED-JWT]",
@@ -179,4 +175,5 @@ print("GATE_FINDINGS=%d -> %s" % (gate_n, "PASS" if gate_n == 0 else "FAIL"))
 for g in gate[:8]:
     print("  residual:", g["RuleID"], g["File"].split("chat-corpus-staging")[-1], "line", g["StartLine"], repr(g.get("Secret", ""))[:60])
 print("STAGING:", str(OUT))
+
 
