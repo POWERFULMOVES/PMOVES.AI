@@ -1632,11 +1632,72 @@ reset-data-tier: ## DANGEROUS: stop data tier and wipe its volumes, then recreat
 	@echo "✅ Data tier reset with current env.tier-data credentials"
 
 .PHONY: up-minio
+# Pre-check (read-only): the minio image is a LOCAL source build that no registry
+# serves (see minio-build-src below). Resolve the image the way compose will, via
+# `config --images` (shell MINIO_IMAGE > --env-file > compose default), and if it is
+# the local -src build but not present, stop with the fix instead of letting compose
+# attempt a pull that can only fail. A registry MINIO_IMAGE override is never blocked.
+# COUPLING: the check compares against MINIO_SRC_TAG, which must equal the compose
+# MINIO_IMAGE default. If they drift, the check WARNs and skips instead of guarding.
 up-minio: ## Start MinIO object storage (port 9000) + Presign
 	@echo "📦 Starting MinIO..."
+	@img=$$($(DC) config --images minio 2>/dev/null | head -n1); \
+	 if [ -z "$$img" ]; then \
+	   echo "WARN: could not resolve the minio image via 'docker compose config'; image pre-check SKIPPED" >&2; \
+	 elif [ "$$img" = "$(MINIO_SRC_TAG)" ]; then \
+	   if ! docker image inspect "$$img" >/dev/null 2>&1; then \
+	     echo "ERROR: minio image $$img is not present on this node. It is built locally, not pulled:" >&2; \
+	     echo "         make -C pmoves minio-build-src" >&2; \
+	     echo "       or, if upstream is still cached here (docker image inspect minio/minio:$(MINIO_SRC_RELEASE)):" >&2; \
+	     echo "         MINIO_IMAGE=minio/minio:$(MINIO_SRC_RELEASE) make -C pmoves up-minio" >&2; \
+	     exit 1; \
+	   fi; \
+	 else \
+	   case "$$img" in *-src) echo "WARN: minio resolves to $$img but MINIO_SRC_TAG=$(MINIO_SRC_TAG); the two have drifted, image pre-check SKIPPED" >&2;; esac; \
+	 fi
 	@$(DC) up -d --force-recreate minio presign
 	@timeout 60 bash -c 'until curl -sf http://localhost:9000/minio/health/live; do sleep 2; done' || echo "⚠️ MinIO may still be starting"
 	@echo "✅ MinIO ready at http://localhost:9000 (console :9001)"
+
+# MinIO RELEASE.2025-09-07T16-13-09Z built from source. Every published copy of
+# this release is gone (docker.io 401 / quay.io 401 / ghcr.io 403 / dl.min.io 410),
+# so the image is rebuilt from the archived GitHub tag — the EXACT release the
+# data in pmoves_minio-data was written by. See docker/minio-src/README.md.
+# Interim only: Garage is the planned substrate (JUICEFS_OBJECT_STORE_MIGRATION.md §0.8).
+#
+# The tag lives in OUR registry namespace (ghcr.io/powerfulmoves) even though it is
+# built locally: an unbuilt node that falls through to a pull then fails closed
+# against our own org, instead of pulling whatever a third party publishes under
+# an unowned docker.io namespace.
+#
+# COUPLING: this value MUST equal the MINIO_IMAGE default of the `minio` service in
+# docker-compose.yml (and the generated docker-compose.core.yml). Change them together.
+MINIO_SRC_TAG ?= ghcr.io/powerfulmoves/pmoves-minio:RELEASE.2025-09-07T16-13-09Z-src
+MINIO_SRC_RELEASE := RELEASE.2025-09-07T16-13-09Z
+# The Go build of minio peaks at several GB; refuse to start below this much
+# MemAvailable rather than push a node into OOM mid-build.
+# LIMITS: the gate reads /proc/meminfo, so it only works on a Linux host
+# (macOS/Windows get a WARN and no gate). It measures the HOST, not the builder VM,
+# and BuildKit runs the minio and mc stages IN PARALLEL, so peak use is
+# roughly both Go builds at once.
+MINIO_BUILD_MIN_MEM_MB ?= 6144
+
+.PHONY: minio-build-src
+minio-build-src: ## Build MinIO RELEASE.2025-09-07T16-13-09Z (+ mc) from source -> $(MINIO_SRC_TAG)
+	@min="$(MINIO_BUILD_MIN_MEM_MB)"; \
+	 avail=$$(awk '/^MemAvailable:/{print int($$2/1024)}' /proc/meminfo 2>/dev/null); \
+	 case "$$min" in ''|*[!0-9]*) echo "WARN: MINIO_BUILD_MIN_MEM_MB='$$min' is not a number; memory gate SKIPPED" >&2; min="";; esac; \
+	 case "$$avail" in ''|*[!0-9]*) echo "WARN: MemAvailable not measurable (no Linux /proc/meminfo); memory gate SKIPPED" >&2; avail="";; esac; \
+	 if [ -n "$$min" ] && [ -n "$$avail" ] && [ "$$avail" -lt "$$min" ]; then \
+	   echo "ERROR: MemAvailable $${avail}MB < MINIO_BUILD_MIN_MEM_MB=$${min}MB; free memory or override" >&2; exit 1; \
+	 fi
+	docker build -t "$(MINIO_SRC_TAG)" -f docker/minio-src/Dockerfile docker/minio-src
+	@echo "→ smoke: minio --version reports $(MINIO_SRC_RELEASE)"
+	@docker run --rm "$(MINIO_SRC_TAG)" --version | tee /dev/stderr | grep -qF "minio version $(MINIO_SRC_RELEASE)" \
+	  || { echo "ERROR: $(MINIO_SRC_TAG) does not report $(MINIO_SRC_RELEASE)" >&2; exit 1; }
+	@echo "→ smoke: mc and curl present (brand-defaults/backup use mc; the healthcheck uses curl)"
+	@docker run --rm --entrypoint mc "$(MINIO_SRC_TAG)" --version | head -1
+	@docker run --rm --entrypoint curl "$(MINIO_SRC_TAG)" --version | head -1
 
 .PHONY: up-bus
 up-bus: ## Start message bus (NATS)

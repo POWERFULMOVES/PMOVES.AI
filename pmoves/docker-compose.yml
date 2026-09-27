@@ -1650,15 +1650,23 @@ services:
     # Graceful stop: Completes in-flight PUTs before exit.
     stop_grace_period: 30s
     <<: *tier-data-hardened
-    # Pin = the LAST community RELEASE tag MinIO published to Docker Hub
-    # (RELEASE.2025-09-07T16-13-09Z, 2025-09-07). The prior pin
-    # RELEASE.2025-12-20T04-58-37Z was a phantom — a December date AFTER MinIO
-    # stopped publishing minio/minio community images, so it 404s on the registry
-    # ("not found") and broke every data-tier bring-up. Verified 2026-06-22:
-    # 2025-09-07 is the newest tag on hub.docker.com/r/minio/minio.
-    # ⚠️ MinIO Community Edition is EOL/archived (Feb 2026); this tag is the
-    # ceiling. Migration to SeaweedFS/Garage/Enterprise is the durable fix.
-    image: ${MINIO_IMAGE:-minio/minio:RELEASE.2025-09-07T16-13-09Z}
+    # Pin = RELEASE.2025-09-07T16-13-09Z, the last community release and the one
+    # the data in pmoves_minio-data was written by. Every published copy is now
+    # gone (measured 2026-09-26): docker.io/minio/minio 401 (repo deleted),
+    # quay.io/minio/minio 401 anonymously (public-quay control = 200),
+    # ghcr.io/minio/minio 403, dl.min.io archive 410 Gone. So the default is a
+    # LOCAL image built from the archived GitHub tag, with the tag-object and
+    # commit SHAs verified: run `make -C pmoves minio-build-src` first
+    # (docker/minio-src/). It is not published to any registry. The tag lives in
+    # OUR org namespace (ghcr.io/powerfulmoves), so an unbuilt node that falls
+    # through to a pull FAILS CLOSED against our own org (anonymous HEAD = 403)
+    # instead of pulling a third party's image from an unowned namespace. `make
+    # up-minio` checks for the image first and names the fix. A node that still
+    # has upstream cached may set MINIO_IMAGE=minio/minio:RELEASE.2025-09-07T16-13-09Z.
+    # COUPLING: must equal MINIO_SRC_TAG in pmoves/Makefile.
+    # ⚠️ INTERIM: MinIO Community Edition is EOL/archived. Garage is the planned
+    # object substrate (docs/architecture/JUICEFS_OBJECT_STORE_MIGRATION.md §0.8).
+    image: ${MINIO_IMAGE:-ghcr.io/powerfulmoves/pmoves-minio:RELEASE.2025-09-07T16-13-09Z-src}
     # Only data-tier service without a restart policy — every Docker Desktop
     # restart left MinIO dead (Exited 255) until manually started, which is
     # how it sat down for 9 days and silently blocked the YT pipeline.
