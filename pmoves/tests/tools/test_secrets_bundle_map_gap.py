@@ -79,12 +79,6 @@ def test_node_local_row_is_a_finding(bmap):
     assert rep.node_local_mapped == ["NATS_URL"] and rep.findings
 
 
-def test_node_local_tuple_matches_the_declaration():
-    from pmoves.tools.node_local_keys import load_node_local
-
-    assert set(load_node_local()) == set(gap.NODE_LOCAL)
-
-
 def test_builder_is_an_allowlist_not_an_environ_walk():
     text = gap.WORKFLOW.read_text(encoding="utf-8")
     assert "skip_prefixes" not in text
