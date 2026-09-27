@@ -100,6 +100,16 @@ def _resolve(node_id: str, **extra: str) -> dict[str, str]:
     return out
 
 
+def _symlinks_supported(tmp_path: Path) -> bool:
+    probe = tmp_path / ".symlink-probe"
+    try:
+        probe.symlink_to(tmp_path)
+    except (OSError, NotImplementedError):
+        return False
+    probe.unlink()
+    return True
+
+
 def _bash() -> str:
     found = shutil.which("bash")
     if not found:
@@ -113,6 +123,8 @@ def _fake_root(tmp_path: Path) -> Path:
     `deploy/provision` is absent, which takes the launcher's direct
     `exec claude` path -- the one whose argv the stub can read.
     """
+    if not _symlinks_supported(tmp_path):
+        pytest.skip("symlinks unsupported here (e.g. Windows without developer mode)")
     root = tmp_path / "root"
     (root / "pmoves").mkdir(parents=True)
     (root / ".claude").mkdir()
@@ -309,3 +321,121 @@ def test_the_initial_prompt_does_not_frame_the_session_as_a_role_apart():
     prompt = " ".join(meta["initialPrompt"].split())
     assert "You are the steward for THIS node" not in prompt
     assert prompt.index("You are this node's Claude identity") < prompt.index("steward")
+
+
+
+# ---------------------------------------------------------------------------
+# 5. Undeclared values through each Windows twin's OWN parser.
+#
+# Review concern (#3205): an undeclared name is emitted as `''` in --shell form.
+# If a twin kept that literal two-character string, `$identName -and ...` (.ps1)
+# or `if not defined` (.bat) would be TRUE and the session would be told
+# "You are ''" -- a silent fail-open. pwsh is absent on the POSIX hosts this runs
+# on, so each parser is re-implemented here from the text it actually contains,
+# and the text is asserted, so a change to either parser breaks this test.
+# ---------------------------------------------------------------------------
+
+PS1_PARSE_RE = "^([A-Z_]+)='(.*)'$"
+
+
+def _resolver_raw(fmt: str, **extra: str) -> list[str]:
+    proc = subprocess.run(
+        [sys.executable, str(TOOLS / "node_identity.py"), "--harness", "claude-code",
+         "--format", fmt],
+        capture_output=True, text=True, env=_clean_env("knuckles", **extra), timeout=60,
+    )
+    assert proc.returncode == 0, proc.stderr
+    return proc.stdout.splitlines()
+
+
+def _ps1_parse(lines: list[str]) -> dict[str, str]:
+    # PowerShell -match is case-INSENSITIVE by default; `.` excludes newline in .NET.
+    rx = re.compile(PS1_PARSE_RE, re.IGNORECASE)
+    out: dict[str, str] = {}
+    for line in lines:
+        m = rx.match(line)
+        if m:
+            out[m.group(1)] = m.group(2)
+    return out
+
+
+def _bat_parse(lines: list[str]) -> dict[str, str]:
+    # for /f "tokens=1,* delims==" then set "%%A=%%B": token 1 is the text before
+    # the first '=', token 2 the remainder after it; `set "X="` UNDEFINES X, so an
+    # empty remainder leaves the variable not defined.
+    out: dict[str, str] = {}
+    for line in lines:
+        if not line or line.startswith(";"):
+            continue
+        key, _, rest = line.lstrip("=").partition("=")
+        if rest.lstrip("="):
+            out[key] = rest.lstrip("=")
+    return out
+
+
+def test_the_twins_parsers_are_the_ones_simulated():
+    ps1 = PS1.read_text(encoding="utf-8")
+    assert f'$line -match "{PS1_PARSE_RE}"' in ps1
+    assert "$identOut = & $identPy[0] @identArgv" in ps1 and "'--shell')" in ps1
+    bat = (REPO_ROOT / "pmoves" / "scripts" / "windows" / "claude-pmoves.bat").read_text(encoding="utf-8")
+    assert '"usebackq tokens=1,* delims=="' in bat and "--format cmd" in bat
+    assert 'do set "%%A=%%B"' in bat
+    assert "if not defined PMOVES_IDENTITY_NAME goto ident_noname" in bat
+    assert "if ($identName -and $identForm)" in ps1
+
+
+def test_an_undeclared_name_takes_the_fallback_in_the_ps1_parser():
+    parsed = _ps1_parse(_resolver_raw("shell", PMOVES_REGISTER_IDENTITY="NO-SUCH-IDENTITY"))
+    assert parsed["PMOVES_RESOLVED_IDENTITY"] == "claude_b850"     # the parse worked
+    assert parsed["PMOVES_IDENTITY_NAME"] == ""                     # not the literal ''
+    assert parsed["PMOVES_REGISTER_FORM"] == ""
+    assert not (parsed["PMOVES_IDENTITY_NAME"] and parsed["PMOVES_REGISTER_FORM"])
+    # The WHY: outer quotes stripped by the regex, embedded '\'' restored by the
+    # .ps1's Replace -- so the warning reads as prose.
+    why = parsed["PMOVES_REGISTER_WHY"].replace("'\\''", "'")
+    assert not why.startswith("'") and "'NO-SUCH-IDENTITY'" in why, why
+
+
+def test_an_undeclared_name_takes_the_fallback_in_the_bat_parser():
+    parsed = _bat_parse(_resolver_raw("cmd", PMOVES_REGISTER_IDENTITY="NO-SUCH-IDENTITY"))
+    assert parsed.get("PMOVES_RESOLVED_IDENTITY") == "claude_b850"
+    assert "PMOVES_IDENTITY_NAME" not in parsed      # `if not defined` -> ident_noname
+    assert "PMOVES_REGISTER_FORM" not in parsed
+
+
+def test_a_declared_name_takes_the_bound_branch_in_both_parsers():
+    ps1 = _ps1_parse(_resolver_raw("shell"))
+    bat = _bat_parse(_resolver_raw("cmd"))
+    for parsed in (ps1, bat):
+        assert parsed["PMOVES_IDENTITY_NAME"] == "B850-CLAUDE"
+        assert parsed["PMOVES_REGISTER_FORM"] == "B850-CLAUDE (Knuckles)"
+        assert parsed["PMOVES_CIPHER_AGENT_ID"] == "b850-claude"
+
+
+def test_every_prompt_twin_carries_the_signing_card():
+    bat = (REPO_ROOT / "pmoves" / "scripts" / "windows" / "claude-pmoves.bat").read_text(encoding="utf-8")
+    assert "signing card %PMOVES_CIPHER_AGENT_ID%" in bat and "%CARD_PART%" in bat
+    assert "signing card $identCard" in PS1.read_text(encoding="utf-8")
+    assert "signing card ${PM_IDENT_CIPHER_ID}" in LAUNCHER.read_text(encoding="utf-8")
+
+
+# ---------------------------------------------------------------------------
+# 6. node_identity's fold must agree with the collision gate's.
+#
+# Not imported: identity_lineage already loads node_identity by path
+# (identity_lineage.py ~L692), so the reverse import would make the pair
+# circular. Pinned here over every alias instead, plus the shapes the fold exists
+# for (case, inner whitespace, the unicode arrow).
+# ---------------------------------------------------------------------------
+
+def test_the_register_fold_agrees_with_identity_lineage_over_every_alias():
+    doc = yaml.safe_load(IDENTITY_VOCAB.read_text(encoding="utf-8"))
+    samples = []
+    for entry in doc["identities"]:
+        for alias in (*(entry.get("aliases") or []), entry["canonical"], entry.get("register_form")):
+            if alias:
+                samples += [str(alias), f"  {str(alias).lower()}  ", str(alias).replace("-", " -  ")]
+    samples += ["Z890->5090-CLAUDE (opus 4.7 1M)", "Z890→5090-CLAUDE (opus 4.7 1M)"]
+    assert len(samples) > 100, len(samples)
+    for sample in samples:
+        assert node_identity._fold_identity(sample) == identity_lineage._norm(sample), sample
