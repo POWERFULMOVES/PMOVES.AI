@@ -22,6 +22,7 @@ No network, no real credential: ``gh`` is a stub on PATH.
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import os
 import re
@@ -30,6 +31,7 @@ import stat
 import subprocess
 import sys
 import textwrap
+import uuid
 from pathlib import Path
 
 import pytest
@@ -304,34 +306,49 @@ def test_the_puller_is_silent_for_known_producers(tmp_path):
 # infra.mk gha-runner-up: pull before up, RUNNER_SKIP_PULL escape hatch
 # --------------------------------------------------------------------------
 
+def _fresh_guard():
+    """Load the guard module fresh (test_guard_make_subprocess.py's idiom)."""
+    spec = importlib.util.spec_from_file_location(
+        f"_guard_sfp_{uuid.uuid4().hex[:8]}",
+        Path(__file__).with_name("_destructive_docker_guard.py"))
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+@pytest.mark.skipif(os.name == "nt", reason="stub tool dir uses POSIX sh recorders")
 @pytest.mark.skipif(shutil.which("make") is None, reason="make not installed")
 @pytest.mark.parametrize("skip", ["", "1"])
 def test_gha_runner_up_pulls_first_or_skips_on_request(tmp_path, skip):
-    """Stub docker (pull fails) and gh (no credential), so nothing real is
-    touched. Without the hatch the target must stop at the failed pull and
-    name RUNNER_SKIP_PULL; with it, it must not pull and must warn."""
-    bindir = tmp_path / "bin"
-    bindir.mkdir()
-    log = tmp_path / "docker.log"
-    _write_exec(bindir / "docker",
-                f'#!/usr/bin/env bash\necho "$*" >> "{log}"\n'
-                'case "$*" in *" pull"*) exit 1;; esac\nexit 0\n')
-    _write_exec(bindir / "gh", "#!/usr/bin/env bash\nexit 1\n")
+    """The REAL make runs `gha-runner-up` (the same target operators run) under
+    the session guard, so its PATH must start with a MARKED stub dir -- an
+    unmarked one is exactly what the guard refuses (the #3186 regression this
+    test's first cut shipped). build_stub_env(stub_make=False, behaviours=...)
+    is the sanctioned shape: real make resolves past the stub dir, the docker
+    recorder's behaviour stub fails `pull`, the gh recorder refuses every
+    credential, and nothing real is touched. Without the hatch the target must
+    stop at the failed pull and name RUNNER_SKIP_PULL; with it, it must not
+    pull and must warn."""
+    env = _fresh_guard().build_stub_env(
+        tmp_path / "stub-tools", stub_make=False,
+        behaviours={"docker": 'case "$*" in *" pull"*) exit 1;; esac\nexit 0',
+                    "gh": "exit 1"})
+    env["HOME"] = str(tmp_path / "home")
+    env["GITHUB_PAT"] = ""
     (tmp_path / "home").mkdir()
-    env = {**os.environ, "PATH": f"{bindir}{os.pathsep}{os.environ.get('PATH', '')}",
-           "HOME": str(tmp_path / "home"), "GITHUB_PAT": ""}
     r = subprocess.run(
         ["make", "-f", "mk/infra.mk", "gha-runner-up", "RUNNER_NODE=stubnode",
          f"RUNNER_SKIP_PULL={skip}"],
         cwd=_ROOT / "pmoves", env=env, capture_output=True, text=True, timeout=60)
-    calls = log.read_text(encoding="utf-8") if log.exists() else ""
+    calls = env.calls("docker")
     assert r.returncode != 0  # stub gh never yields a credential
-    assert " up " not in calls + " ", calls
+    assert not any("up" in call[1:] for call in calls), calls
     if skip:
-        assert " pull" not in calls
+        assert not any("pull" in call[1:] for call in calls), calls
         assert "RUNNER_SKIP_PULL=1: starting on the CACHED image" in r.stdout
     else:
-        assert calls.strip().endswith("pull")
+        assert calls and calls[-1][-1] == "pull", calls
         assert "runner image pull failed" in r.stdout
         assert "RUNNER_SKIP_PULL=1" in r.stdout
         assert "Resolving runner credential" not in r.stdout, "continued past a failed pull"

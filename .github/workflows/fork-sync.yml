@@ -80,6 +80,8 @@ jobs:
             PMOVES-N8N
             PMOVES.YT
             PMOVES-crush
+            PMOVES-spynel
+            PMOVES-registry
 
       - name: Discover forks
         env:
@@ -171,6 +173,8 @@ jobs:
           n8n-io/n8n|PMOVES-N8N|PMOVES.AI-Edition-Hardened
           yt-dlp/yt-dlp|PMOVES.YT|PMOVES.AI-Edition-Hardened
           charmbracelet/crush|PMOVES-crush|
+          agent0ai/spynel|PMOVES-spynel|PMOVES.AI-Edition-Hardened
+          agentclientprotocol/registry|PMOVES-registry|
           "
 
           # Process substitution (`< <(...)`) instead of `echo | grep | while`
