@@ -64,17 +64,40 @@ EXCEPTIONS: Dict[str, str] = {
     ),
 }
 
-# Node-local topology (#3188 review P1). Registered in GitHub Prod, but a Prod
-# address is wrong on every node: each node resolves these to its OWN services
-# via its Tailscale name (pmoves/config/node_local_keys.yaml, the one
-# declaration; a test pins this tuple to it). The workflow must carry NO row
-# for them -- a row is reported as a finding.
-NODE_LOCAL_REASON = "node-local topology, resolved per node via TS_<NODE>"
+# Node-local topology (#3188 review P1). Registered in GitHub Prod, but each
+# names a service ADDRESS, and a Prod address is wrong on every node. The
+# funnel does not write them (main never shipped them either); each node keeps
+# its own value. This literal tuple is the one declaration. The workflow must
+# carry NO row for them -- a row is reported as a finding.
+NODE_LOCAL_REASON = "node-local service address; a Prod value is wrong on every node"
 NODE_LOCAL: Tuple[str, ...] = (
     "NATS_URL", "NATS_URL_TAILNET", "SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_URL",
     "POSTGRES_HOSTNAME", "POSTGRES_DB", "OLLAMA_BASE_URL", "OPENAI_COMPATIBLE_BASE_URL",
 )
 EXCEPTIONS.update({name: NODE_LOCAL_REASON for name in NODE_LOCAL})
+
+# Self-generated or DB-init values (#3188 review P2). NEXT_PUBLIC_SUPABASE_ANON_KEY
+# is derived per node from SUPABASE_JWT_SECRET (secrets_self_generated.py
+# _SUPABASE_JWT_KEYS); a Prod value would arrive first and never be overwritten.
+# The SERVICE_* names alias POSTGRES_PASSWORD / POSTGRES_USER, which must match
+# the node's already-initialised database. Main did not ship them. Like
+# NODE_LOCAL, a workflow row for one is reported as a finding until the
+# operator signs off against the manifest and moves it out of this group.
+DB_INIT_LOCAL_REASON = (
+    "self-generated or DB-init values that must match each node's local database; "
+    "operator sign-off against the manifest required before mapping"
+)
+DB_INIT_LOCAL: Tuple[str, ...] = (
+    "NEXT_PUBLIC_SUPABASE_ANON_KEY",
+    "SERVICE_PASSWORD_POSTGRES", "SERVICE_PASSWORD_ADMIN", "SERVICE_USER_ADMIN",
+)
+EXCEPTIONS.update({name: DB_INIT_LOCAL_REASON for name in DB_INIT_LOCAL})
+
+# Names that must have NO workflow row, with the reason reported for each.
+MUST_NOT_MAP: Dict[str, str] = {
+    **{name: NODE_LOCAL_REASON for name in NODE_LOCAL},
+    **{name: DB_INIT_LOCAL_REASON for name in DB_INIT_LOCAL},
+}
 
 # Declared env rows that are not bundle material: OUTPUT_FORMAT is a workflow
 # input that selects the log format.
@@ -107,13 +130,13 @@ class BundleMap:
 class Report:
     registered: Set[str]
     uncovered: List[str] = field(default_factory=list)
-    node_local_mapped: List[str] = field(default_factory=list)
+    must_not_map_mapped: List[str] = field(default_factory=list)
     mapped_not_registered: List[str] = field(default_factory=list)
     not_in_bundle: Optional[List[str]] = None
 
     @property
     def findings(self) -> bool:
-        return bool(self.uncovered or self.node_local_mapped or self.not_in_bundle)
+        return bool(self.uncovered or self.must_not_map_mapped or self.not_in_bundle)
 
 
 def _find_step(doc: dict) -> Tuple[dict, dict]:
@@ -229,7 +252,7 @@ def bundle_labels(path: Path) -> Set[str]:
 def analyse(bmap: BundleMap, registered: Set[str], bundle: Optional[Set[str]] = None) -> Report:
     rep = Report(registered=registered)
     rep.uncovered = sorted(registered - bmap.sources - set(EXCEPTIONS))
-    rep.node_local_mapped = sorted(set(NODE_LOCAL) & set(bmap.rows))
+    rep.must_not_map_mapped = sorted(set(MUST_NOT_MAP) & set(bmap.rows))
     rep.mapped_not_registered = sorted(bmap.sources - registered)
     if bundle is not None:
         # A row whose source is registered should produce a bundle label.
@@ -251,9 +274,8 @@ def _print(rep: Report, bmap: BundleMap, scopes: Dict[str, Set[str]], bundle: Op
     for n in rep.uncovered:
         print(f"  - {n}")
     print(f"exceptions honoured: {sorted(set(EXCEPTIONS) & rep.registered)}")
-    if rep.node_local_mapped:
-        print(f"node-local labels carried by the map (must not be; {NODE_LOCAL_REASON}): "
-              f"{rep.node_local_mapped}")
+    for name in rep.must_not_map_mapped:
+        print(f"map carries a row it must not: {name} ({MUST_NOT_MAP[name]})")
     if rep.mapped_not_registered:
         print(f"info: map reads names GitHub does not hold ({len(rep.mapped_not_registered)}): "
               f"{rep.mapped_not_registered}")

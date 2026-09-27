@@ -26,14 +26,14 @@ from pmoves.tools import secrets_bundle_map_gap as gap
 
 # Rows added 2026-09-26 (plus #2888's COMPOSIO_API_KEY). Deleting any of them
 # re-opens the gap for that name on every node. The eight node-local address
-# labels are deliberately NOT here: see test_node_local_labels_are_not_mapped.
+# labels and the four DB-init names are deliberately NOT here: see
+# test_must_not_map_names_have_no_row.
 ROWS_ADDED = {
     "ACTIVEPIECES_API_KEY", "CF_AI_GATEWAY_TOKEN", "CF_SSH_PUB", "CI_GHCR_NAMESPACE",
     "GHCR_APP_CLIENT_ID", "GHCR_APP_SEC", "GH_DARKXSIDE", "GH_PAT_PUBLISH",
     "N8N_API_KEY", "N8N_RUNNERS_AUTH_TOKEN",
-    "NEXT_PUBLIC_BACKEND_API_KEY", "NEXT_PUBLIC_SUPABASE_ANON_KEY",
+    "NEXT_PUBLIC_BACKEND_API_KEY",
     "NGC_KEY",
-    "SERVICE_PASSWORD_ADMIN", "SERVICE_PASSWORD_POSTGRES", "SERVICE_USER_ADMIN",
     "SUPABASE_KEY", "SURREAL_PASS", "SURREAL_USER",
     "TAILSCALE_WEBHOOK", "TELEGRAM_BOT_NAME", "TS_TAILNET",
     "COMPOSIO_API_KEY",
@@ -44,6 +44,13 @@ NODE_LOCAL = {
     "POSTGRES_HOSTNAME", "POSTGRES_DB", "OLLAMA_BASE_URL", "OPENAI_COMPATIBLE_BASE_URL",
 }
 
+# Self-generated / DB-init values: main never shipped them, and mapping one
+# needs operator sign-off against the manifest (#3188 review P2).
+DB_INIT_LOCAL = {
+    "NEXT_PUBLIC_SUPABASE_ANON_KEY",
+    "SERVICE_PASSWORD_POSTGRES", "SERVICE_PASSWORD_ADMIN", "SERVICE_USER_ADMIN",
+}
+
 
 @pytest.fixture(scope="module")
 def bmap():
@@ -52,8 +59,8 @@ def bmap():
 
 def test_map_parses_from_the_real_workflow(bmap):
     # Guards the parser: a silently empty map would make every check vacuous.
-    assert len(bmap.rows) >= 130, len(bmap.rows)
-    assert len(bmap.sources) >= 125, len(bmap.sources)
+    assert len(bmap.rows) >= 125, len(bmap.rows)
+    assert len(bmap.sources) >= 120, len(bmap.sources)
     assert (bmap.environment or "").lower() == "prod"
 
 
@@ -63,20 +70,31 @@ def test_stdlib_allowlist_parser_matches_yaml(bmap):
     assert gap.declared_env_keys() == set(bmap.rows)
 
 
-def test_node_local_labels_are_not_mapped(bmap):
-    # #3188 review P1: Prod's addresses must not ship to any node.
+def test_must_not_map_names_have_no_row(bmap):
+    # #3188 review P1 (addresses) and P2 (self-generated / DB-init values).
     assert set(gap.NODE_LOCAL) == NODE_LOCAL
-    assert not NODE_LOCAL & set(bmap.rows), sorted(NODE_LOCAL & set(bmap.rows))
+    assert set(gap.DB_INIT_LOCAL) == DB_INIT_LOCAL
+    assert set(gap.MUST_NOT_MAP) == NODE_LOCAL | DB_INIT_LOCAL
+    forbidden = (NODE_LOCAL | DB_INIT_LOCAL) & set(bmap.rows)
+    assert not forbidden, sorted(forbidden)
     for name in NODE_LOCAL:
         assert gap.EXCEPTIONS[name] == gap.NODE_LOCAL_REASON
-    rep = gap.analyse(bmap, NODE_LOCAL | {"COMPOSIO_API_KEY"})
-    assert rep.uncovered == [] and not rep.findings
+    for name in DB_INIT_LOCAL:
+        assert gap.EXCEPTIONS[name] == gap.DB_INIT_LOCAL_REASON
 
 
-def test_node_local_row_is_a_finding(bmap):
-    fake = gap.BundleMap(dict(bmap.rows, NATS_URL={"NATS_URL"}), bmap.environment)
-    rep = gap.analyse(fake, {"NATS_URL"})
-    assert rep.node_local_mapped == ["NATS_URL"] and rep.findings
+def test_must_not_map_names_are_known_exceptions_not_findings(bmap):
+    # Registered in GitHub but deliberately unmapped: reported as exceptions.
+    rep = gap.analyse(bmap, NODE_LOCAL | DB_INIT_LOCAL | {"COMPOSIO_API_KEY"})
+    assert rep.uncovered == [] and rep.must_not_map_mapped == []
+    assert not rep.findings
+
+
+@pytest.mark.parametrize("name", ["NATS_URL", "NEXT_PUBLIC_SUPABASE_ANON_KEY", "SERVICE_PASSWORD_POSTGRES"])
+def test_must_not_map_row_is_a_finding(bmap, name):
+    fake = gap.BundleMap(dict(bmap.rows, **{name: {name}}), bmap.environment)
+    rep = gap.analyse(fake, {name})
+    assert rep.must_not_map_mapped == [name] and rep.findings
 
 
 def test_builder_is_an_allowlist_not_an_environ_walk():
@@ -99,7 +117,8 @@ def test_builder_bundles_declared_rows_only(tmp_path):
     """Run the step's real Python in a scratch workspace with fake values.
 
     Declared rows land (including CI_GHCR_NAMESPACE, which the old 'CI' skip
-    prefix dropped); runner variables and node-local names do not.
+    prefix dropped); runner variables, node-local addresses and DB-init names
+    do not.
     """
     wf = tmp_path / ".github" / "workflows" / "sync-secrets-local.yml"
     wf.parent.mkdir(parents=True)
@@ -120,6 +139,8 @@ def test_builder_bundles_declared_rows_only(tmp_path):
         "http_proxy": "http://fake-proxy",
         # Node-local: no row, so never bundled even when present:
         "SUPABASE_URL": "http://fake-prod-supabase",
+        # DB-init: no row, so never bundled even when present:
+        "SERVICE_PASSWORD_POSTGRES": "fake-db-password",
     }
     out = subprocess.run([sys.executable, str(script)], env=env, cwd=tmp_path,
                          capture_output=True, text=True, timeout=120)
