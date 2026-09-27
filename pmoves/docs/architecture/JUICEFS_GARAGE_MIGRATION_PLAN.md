@@ -328,22 +328,40 @@ The data move (§3) and the metadata move are **orthogonal**:
 
 **Conventions:**
 - Run from Knuckles, in the operator context.
-- `META_PASSWORD` comes from the funnel (`JUICEFS_META_PASSWORD`). `SRC_*` are the MinIO credentials and `DST_*` are `JUICEFS_GARAGE_*`, exported in this shell only and never echoed.
 - A failed gate means STOP.
 - Exit-code doctrine: 0 clean / 1 findings / 3 could-not-measure. Call the tools directly, because `make` collapses exit codes.
 
+**Credentials: one env file per credential set, and each call gets only the sets it needs** (review P2-2; the exposure window is in §1.6).
+
+| Set | File contents (variable names) | Funnel source | Used by |
+|---|---|---|---|
+| `meta` | `META_PASSWORD` | `JUICEFS_META_PASSWORD` | status, gc, fsck, config |
+| `dst` | `DST_AK`, `DST_SK` | `JUICEFS_GARAGE_ACCESS_KEY`, `JUICEFS_GARAGE_SECRET_KEY` | objbench, sync, config (cutover) |
+| `src` | `SRC_AK`, `SRC_SK`, raw values | The MinIO credential the volume was formatted with. The manifest carries both `MINIO_ROOT_USER`/`MINIO_ROOT_PASSWORD` and `MINIO_ACCESS_KEY`/`MINIO_SECRET_KEY`; which pair this volume uses is recorded at Step 0 (COULD-NOT-MEASURE here) | config (rollback) |
+| `srcurl` | `SRC_AK`, `SRC_SK`, **URL-encoded** (`/` as `%2F`) | same | sync (the URL form) |
+
 ```bash
 JFS_IMG=juicedata/mount:ce-v1.3.0
-META='postgres://juicefs_meta@supabase-db:5432/postgres?search_path=juicefs_meta&sslmode=disable'
-jfs() { docker run --rm --network pmoves_data -e META="$META" -e META_PASSWORD \
-          -e SRC_AK -e SRC_SK -e DST_AK -e DST_SK "$JFS_IMG" sh -c "$*"; }
+META='postgres://juicefs_meta@supabase-db:5432/postgres?search_path=juicefs_meta&sslmode=disable'   # no password in it
+JFS_ENV=/dev/shm/jfs-migration                                                  # tmpfs, removed at the end
+# jfs <sets> '<command>'   <sets> is a comma list, e.g.  meta | dst | srcurl,dst | meta,dst | meta,src
+jfs() { local f a=(); for f in ${1//,/ }; do a+=(--env-file "$JFS_ENV/$f"); done; shift
+        docker run --rm --network pmoves_data -e META="$META" "${a[@]}" "$JFS_IMG" sh -c "$*"; }
 ```
+
+**Filling the files.**
+- Turn history off first: `set +o history`. Or set `HISTCONTROL=ignorespace` and begin each line with a space.
+- Write each file inside a `( umask 077; ... )` subshell, straight from the funnel. The canonical loader resolves a label with `bash pmoves/scripts/with-env.sh printenv <LABEL>`, inside a command substitution that feeds a `printf` redirected into the file. `printf` is a shell builtin, so the value never appears in a process argv.
+- Never `echo` a value, and never type one at a history-recording prompt.
+- At the end of the session, `shred -u` every file in `$JFS_ENV` and remove the directory.
 
 ### Step 0: Baseline (read-only)
 
 ```bash
-jfs 'juicefs status "$META"'      # record UUID, Storage=minio, Bucket, BlockSize, Sessions
-jfs 'juicefs gc "$META"'          # NO --delete: reports leaked/pending objects only
+jfs meta 'juicefs status "$META"'      # record UUID, Storage=minio, Bucket, BlockSize, Sessions (host, mount point)
+jfs meta 'juicefs gc "$META"'          # NO --delete: reports leaked/pending objects only
+# live mount shape on EACH mounting node (never print the container's environment list):
+docker inspect juicefs-mount --format '{{.HostConfig.NetworkMode}} {{json .Config.Entrypoint}} {{json .Config.Cmd}}'
 # object inventory via mc inside the minio container (mc ships in the #3192 image; alias as `make backup` uses):
 docker exec pmoves-minio-1 mc ls <alias>/juicefs/
 docker exec pmoves-minio-1 mc du --recursive <alias>/juicefs/pmoves-media/
@@ -354,17 +372,22 @@ docker exec pmoves-minio-1 mc du --recursive <alias>/juicefs/pmoves-media/
 - Object count and bytes are recorded, and the 85 vs 76 GB gap is explained.
 - `sha256sum` of 3 sample files is recorded.
 - A metadata backup exists: `juicefs dump --binary` to NVMe1, plus a `pg_dump -n juicefs_meta` via its Known Road.
+- **Live mount shape recorded, per mounting node:** the network (`pmoves_data` expected), the meta role in the recorded command line (`juicefs_meta@` expected), the cache dir, and **which make target created the mount**. c5 must reproduce exactly this shape.
+- The MinIO credential pair the volume uses is identified by label, for the `src`/`srcurl` files.
 
 ### Step (a): Stand up Garage, bucket, key
 
 ```bash
-# each KVM (deploy under a Known Road grant, §5): host net, secrets from the funnel
-garage node id                                     # collect 3 ids
-garage node connect <id>@<peer tailnet addr>:3901  # from one node, for the other two
-garage layout assign <id-kvm2>   -z kvm2   -c <measured>G -t kvm2
-garage layout assign <id-kvm4-1> -z kvm4-1 -c <measured>G -t kvm4-1
-garage layout assign <id-kvm4-2> -z kvm4-2 -c <measured>G -t kvm4-2
-garage layout show                                 # read before applying
+# each first-cut storage node (deploy under a Known Road grant, §5): secrets from the funnel
+garage node id                                     # collect one id per node
+garage node connect <id>@<peer tailnet addr>:3901  # from one node, for each of the others
+# one assign per node: zone per §1.2 (own zone by default; `lab` only if zone grouping is chosen),
+# capacity = that node's D3 declaration (§1.1), tag = node name. Tier 1 declares as much as its headroom allows.
+garage layout assign <id-kvm2>   -z kvm2   -c <declared>G -t kvm2
+garage layout assign <id-kvm4-1> -z kvm4-1 -c <declared>G -t kvm4-1
+garage layout assign <id-kvm4-2> -z kvm4-2 -c <declared>G -t kvm4-2
+garage layout assign <id-node>   -z <zone> -c <declared>G -t <node>   # Spark, and each tier-2 node, when ready
+garage layout show                                 # read BEFORE applying: "Usable capacity" / "Effective capacity" >= ~85 GB + growth
 garage layout apply --version 1
 garage bucket create juicefs
 (umask 077; garage key create juicefs-pmoves-media > "$INTAKE")   # hazard, §1.6
@@ -372,29 +395,30 @@ garage bucket allow --read --write juicefs --key juicefs-pmoves-media
 ```
 
 **Gate A:**
-- `garage status` shows 3 HEALTHY nodes and 3 zones, with the layout at version 1.
+- `garage status` shows every first-cut node HEALTHY in its declared zone, with the layout at version 1. The first cut needs at least 3 zones for RF=3.
+- The applied layout's "Effective capacity (replication factor 3)" covers ~85 GB plus growth.
 - `garage bucket info juicefs` lists the key with RW.
 - Functional test from Knuckles **inside `pmoves_data`**, which also proves MagicDNS resolution:
   ```bash
-  jfs 'juicefs objbench --storage s3 --access-key "$DST_AK" --secret-key "$DST_SK" http://<ENDPOINT>:3900/juicefs'
+  jfs dst 'juicefs objbench --storage s3 --access-key "$DST_AK" --secret-key "$DST_SK" http://<ENDPOINT>:3900/juicefs'
   ```
   Every functional test must pass, **including list** (the #3199 failure mode).
 - **Sync URL parse proven before pass 1.** A dry run with the exact Step (b) URLs lists both sides and copies nothing:
   ```bash
-  jfs 'juicefs sync --dry --no-https "minio://$SRC_AK:$SRC_SK@minio:9000/juicefs/pmoves-media/" "minio://$DST_AK:$DST_SK@<ENDPOINT>:3900/juicefs/pmoves-media/"'
+  jfs srcurl,dst 'juicefs sync --dry --no-https "minio://$SRC_AK:$SRC_SK@minio:9000/juicefs/pmoves-media/" "minio://$DST_AK:$DST_SK@<ENDPOINT>:3900/juicefs/pmoves-media/"'
   ```
   It must exit 0 and report the MinIO keys as pending copies. A `NoSuchBucket` error naming the host means the URL was parsed virtual-host style (P1-2 of the #3200 review). STOP.
-- **External port probe (§1.3, required):** 3900, 3901 and 3903 are refused or time out on every KVM's public address, probed from a host outside the tailnet. All three ports on all three nodes; one open port fails Gate A.
+- **External port probe (§1.3, required):** 3900, 3901 and 3903 are refused or time out on every storage node's public address (every KVM; each tier-2 node's router address), probed from a host outside the tailnet. All three ports on every node; one open port fails Gate A.
 
 ### Step (b): Copy MinIO → Garage (volume stays live on MinIO)
 
 ```bash
 # pass 1: live, throttled. Incremental on re-run, NOT resumable (see below)
-jfs 'juicefs sync --no-https --threads 8 --bwlimit <Mbps> \
+jfs srcurl,dst 'juicefs sync --no-https --threads 8 --bwlimit <Mbps> \
      "minio://$SRC_AK:$SRC_SK@minio:9000/juicefs/pmoves-media/" \
      "minio://$DST_AK:$DST_SK@<ENDPOINT>:3900/juicefs/pmoves-media/"'
 # pass 2 (still before the freeze): re-read and checksum every object on both sides
-jfs 'juicefs sync --no-https --check-all --threads 8 "minio://...same src..." "minio://...same dst..."'
+jfs srcurl,dst 'juicefs sync --no-https --check-all --threads 8 "minio://...same src..." "minio://...same dst..."'
 ```
 
 - **No checkpoint flag.** `--enable-checkpoint` does not exist in the pinned `juicedata/mount:ce-v1.3.0`; it first appears in v1.4.x (v1.4.1 `cmd/sync.go:241`). An interrupted pass 1 is simply re-run. Sync skips keys that already exist on the destination with a matching size, so a re-run re-lists both sides and copies only what is missing or differs. It does not resume mid-object and it re-pays the listing cost. The image is not bumped to v1.4.x for this one flag: every other step, and the live mount, run on ce-v1.3.0.
@@ -412,25 +436,31 @@ jfs 'juicefs sync --no-https --check-all --threads 8 "minio://...same src..." "m
 
 | # | Action | Gate |
 |---|---|---|
-| c1 | Stop every writer: `juicefs-mount` on each mounting node, plus any gateway on `pmoves-media` | `jfs 'juicefs status "$META"'` shows no active Sessions |
-| c2 | Final delta only: `jfs 'juicefs sync --no-https --check-new --threads 8 "minio://...same src..." "minio://...same dst..."'`. `--check-new` checksums only the objects it copies now; everything else was verified by Gate B's `--check-all`. **Never `--check-all` inside the freeze**: it re-reads every object on both sides | 0 failed |
-| c3 | Switch (`juicefs config` put/get/deletes a `testing/` object; do **not** pass `--force`): `jfs 'juicefs config "$META" --storage s3 --bucket http://<ENDPOINT>:3900/juicefs --access-key "$DST_AK" --secret-key "$DST_SK" --yes'` | exit 0 |
-| c4 | `jfs 'juicefs status "$META"'`, then `jfs 'juicefs fsck "$META"'` | `Storage: s3`, the Garage bucket URL, fsck exit 0 and 0 missing blocks |
-| c5 | Remount: `make -C pmoves juicefs-mount-local JUICEFS_DATA_DIR=/mnt/pmoves-nvme1/juicefs-data`, then `make -C pmoves juicefs-mount-status` | Mount up; content dirs listed |
+| c1 | Stop every writer: `juicefs-mount` on each mounting node, plus any gateway on `pmoves-media` | `jfs meta 'juicefs status "$META"'` shows no active Sessions. **A crashed client's session lingers** until it expires. Confirm that the listed host and process are really gone, and wait for expiry, or clean up stale sessions only through a JuiceFS-supported path. **Never force through** with a session listed |
+| c2 | Final delta only: `jfs srcurl,dst 'juicefs sync --no-https --check-new --threads 8 "minio://...same src..." "minio://...same dst..."'`. `--check-new` checksums only the objects it copies now; everything else was verified by Gate B's `--check-all`. **Never `--check-all` inside the freeze**: it re-reads every object on both sides | 0 failed |
+| c3 | Switch (`juicefs config` put/get/deletes a `testing/` object; do **not** pass `--force`): `jfs meta,dst 'juicefs config "$META" --storage s3 --bucket http://<ENDPOINT>:3900/juicefs --access-key "$DST_AK" --secret-key "$DST_SK" --yes'` | exit 0 |
+| c4 | `jfs meta 'juicefs status "$META"'`, then `jfs meta 'juicefs fsck "$META"'` | `Storage: s3`, the Garage bucket URL, fsck exit 0 and 0 missing blocks |
+| c5 | Remount **each** mounting node through the **same make target and env shape that created its live mount** (Step 0 record). On main, the `pmoves_data` / `juicefs_meta` shape is the `juicefs-cross-node-setup` path (`META_ROLE=juicefs_meta`). **Not** `juicefs-mount-local`: on main it uses `--network host` with `supabase_admin` and ignores `JUICEFS_DATA_DIR` (`pmoves/mk/egress.mk:376-402`). The data-dir override lands only with #3150, which is OPEN, so #3150 is a G0 precondition. Then `make -C pmoves juicefs-mount-status` | Mount up; content dirs listed. `jfs meta 'juicefs status "$META"'` sessions show the **expected host and mount point** for every node. The mount container's recorded command line shows the expected role (`juicefs_meta@`) and network (`pmoves_data`), matching Step 0 |
 | c6 | Verify data | The 3 sample `sha256sum`s match Step 0. A write, `sync`, read-back works. `juicefs gc` (no `--delete`) reports **non-zero** scanned objects; zero is the #3199 false-clean signature |
 
 **Freeze length** = the c2 delta (a full listing of both sides, plus a copy of whatever was written since Gate B) + c3-c5. The listing cost scales with object count, which Step 0 records. So the freeze is **COULD-NOT-MEASURE** until Step 0 runs. Pass 1 and the `--check-all` pass stay **outside** the freeze. Run Gate B as close to the window as practical, so the delta is small.
 
-### Step (d): Rollback (MinIO's `juicefs` bucket is never modified after Step 0)
+### Step (d): Rollback (MinIO's `juicefs` bucket receives no writes after c1, except this carry-back)
 
 ```bash
 # freeze as in c1, then carry back anything written since cutover (no deletes):
-jfs 'juicefs sync --no-https --check-new "minio://...garage...@<ENDPOINT>:3900/juicefs/pmoves-media/" "minio://...minio...@minio:9000/juicefs/pmoves-media/"'
-jfs 'juicefs config "$META" --storage minio --bucket http://minio:9000/juicefs --access-key "$SRC_AK" --secret-key "$SRC_SK" --yes'
-jfs 'juicefs fsck "$META"'
+jfs srcurl,dst 'juicefs sync --no-https --check-new "minio://...garage...@<ENDPOINT>:3900/juicefs/pmoves-media/" "minio://...minio...@minio:9000/juicefs/pmoves-media/"'
+jfs meta,src 'juicefs config "$META" --storage minio --bucket http://minio:9000/juicefs --access-key "$SRC_AK" --secret-key "$SRC_SK" --yes'
+jfs meta 'juicefs fsck "$META"'
+jfs meta 'juicefs gc "$META"'     # NO --delete; now scans MinIO
 ```
 
-**Gate D:** `Storage: minio`, fsck is clean, and after remount the write/read test passes.
+**Gate D:**
+- `Storage: minio`, and fsck is clean.
+- `juicefs gc` with no delete flag, now running against MinIO, reports a **non-zero** count of scanned objects. Zero is the #3199 false-clean signature.
+- After a remount (the same c5 target and shape), the write/read test passes.
+
+**The invariant, stated exactly.** MinIO's `juicefs` bucket takes live writes until c1, and pass 1 and pass 2 run while it is still live. From c1 on, nothing writes to it except this rollback's carry-back, which never deletes. "Unmodified after Step 0" was false.
 
 **Precondition for the whole soak:** MinIO stays running and the `-src` image stays present, because the #3192 `up-minio` pre-check refuses to start without it.
 
