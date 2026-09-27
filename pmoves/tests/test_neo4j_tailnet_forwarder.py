@@ -17,9 +17,14 @@ without the key.)
 from __future__ import annotations
 
 import json
+import os
 import re
+import shutil
+import subprocess
+import sys
 from pathlib import Path
 
+import pytest
 import yaml
 
 PMOVES = Path(__file__).resolve().parents[1]
@@ -76,3 +81,69 @@ def test_the_make_targets_never_nest_make():
     assert not [ln for ln in recipes if "$(MAKE)" in ln], "a recipe nests make (it runs even under -n)"
     for target in ("up-neo4j-tailnet", "neo4j-tailnet-status", "down-neo4j-tailnet"):
         assert re.search(rf"^{target}:", text, re.M), target
+
+
+
+# --- #3201 review P2: the forwarder must never recreate Neo4j implicitly -----
+
+def _recipe(target: str) -> str:
+    text = (PMOVES / "mk" / "neo4j-tailnet.mk").read_text()
+    start = text.index(f"\n{target}:")
+    end = text.find("\n\n", start + 1)
+    return text[start:end if end != -1 else len(text)]
+
+
+def test_up_uses_no_deps_and_a_graph_front_preflight():
+    r = _recipe("up-neo4j-tailnet")
+    assert "up -d --no-deps neo4j-tailnet" in r
+    assert "pmoves_graph_front" in r and "REFUSING" in r
+    assert r.index("pmoves_graph_front") < r.index("up -d --no-deps"), "preflight must precede the up"
+
+
+def test_the_state_volume_cannot_be_wiped_by_volume_reset_neo4j():
+    vols = yaml.safe_load(OVERLAY.read_text())["volumes"]
+    for name in vols:
+        full = f"pmoves_{name}"
+        assert not re.search(r"(^pmoves_.*neo4j|neo4j$)", full), full
+
+
+def _docker_guard():
+    name = "pmoves_tests_destructive_docker_guard"
+    if name in sys.modules:
+        return sys.modules[name]
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(name, Path(__file__).with_name("_destructive_docker_guard.py"))
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules[name] = mod
+    spec.loader.exec_module(mod)
+    return mod
+
+
+INSPECT_BEHAVIOUR = r"""
+if [ "$1" = "inspect" ]; then
+  echo "$FAKE_NEO4J_NETWORKS"
+  exit 0
+fi
+"""
+
+
+@pytest.mark.skipif(shutil.which("make") is None, reason="make not installed")
+@pytest.mark.parametrize("nets,refuses", [
+    ("pmoves_app pmoves_bus pmoves_data ", True),                       # before the gated recreate
+    ("pmoves_app pmoves_bus pmoves_data pmoves_graph_front ", False),   # after it
+])
+def test_up_refuses_until_neo4j_is_on_the_graph_front(tmp_path, nets, refuses):
+    stub = _docker_guard().build_stub_env(tmp_path / "bin", stub_make=False,
+                                          behaviours={"docker": INSPECT_BEHAVIOUR})
+    env = dict(stub)
+    env["FAKE_NEO4J_NETWORKS"] = nets
+    proc = subprocess.run(["make", "-s", "-C", str(PMOVES), "up-neo4j-tailnet"],
+                          capture_output=True, text=True, timeout=120, env=env)
+    calls = [row for row in stub.calls() if row and row[0] == "docker"]
+    ups = [row for row in calls if "up" in row]
+    if refuses:
+        assert proc.returncode != 0 and "REFUSING" in (proc.stdout + proc.stderr)
+        assert ups == [], ups
+    else:
+        assert ups, calls
+        assert all("--no-deps" in row for row in ups), ups

@@ -75,11 +75,20 @@ EXTERNAL_NON_INTERNAL = frozenset({"pmoves_external", "pmoves_db_egress"})
 _CREATE = re.compile(r"docker network create\b([^\n|;&]*)")
 
 
-def _create_sites() -> dict[str, list[str]]:
+def _join_continuations(text: str) -> str:
+    """Join backslash-continued lines, as make and the shell both do, so a
+    `docker network create` whose --internal sits on a continuation line is
+    read as one command."""
+    return re.sub(r"\\\n[ \t]*", " ", text)
+
+
+def _create_sites(texts: list[str] | None = None) -> dict[str, list[str]]:
     """{real network name: [the flag text of each `docker network create` for it]}."""
+    if texts is None:
+        texts = [f.read_text() for f in [PMOVES / "Makefile", *sorted((PMOVES / "mk").glob("*.mk"))]]
     sites: dict[str, list[str]] = {}
-    for f in [PMOVES / "Makefile", *sorted((PMOVES / "mk").glob("*.mk"))]:
-        for m in _CREATE.finditer(f.read_text()):
+    for text in texts:
+        for m in _CREATE.finditer(_join_continuations(text)):
             words = m.group(1).split()
             names = [w for w in words if not w.startswith("-") and not w.startswith(">")
                      and not w[0].isdigit() and w not in ("bridge",)]
@@ -195,3 +204,13 @@ def test_the_graph_front_is_internal_and_neo4j_is_its_only_stack_member():
     assert NETWORKS.get("pmoves_graph_front") is True
     members = sorted(n for n, s in SERVICES.items() if "pmoves_graph_front" in s["networks"])
     assert members == ["neo4j"], members
+
+
+
+def test_a_continuation_line_internal_flag_is_caught():
+    """P3 (#3201 review): --internal on a backslash-continued line must count."""
+    text = ("net:\n\t@docker network create --driver bridge \\\n"
+            "\t\t--internal --subnet 10.0.0.0/24 \\\n\t\tpmoves_external\n")
+    sites = _create_sites([text])
+    assert sites.get("pmoves_external"), sites
+    assert any("--internal" in x for x in sites["pmoves_external"]), sites
