@@ -42,9 +42,14 @@ import yaml
 
 PMOVES = Path(__file__).resolve().parents[1]
 
-# Measured 2026-09-27 on origin/main f9d8a8228. neo4j is deliberately NOT here:
-# it is the service this change fixes (it joins pmoves_external, like cipher-api).
+# Measured 2026-09-27 on origin/main f9d8a8228.
+# neo4j is here BY DESIGN (#3201, operator option A): it stays internal-only
+# (app/bus/data; no egress, no host port) and is reached over the tailnet through
+# the neo4j-tailnet forwarder (docker-compose.neo4j-tailnet.yml), per
+# DOCKER_NETWORK_HARDENING Rule 5 ("gateway-front it"). Its `ports:` stay only to
+# carry ${NEO4J_BIND}; on internal-only networks they are inert.
 KNOWN_VIOLATORS = frozenset({
+    "neo4j",
     "a2ui-nats-bridge", "a2ui-renderer", "consciousness-service", "gateway-agent",
     "gpu-orchestrator", "grayjay-plugin-host", "grayjay-server", "hf-research-agent",
     "invidious-companion-proxy", "langextract", "llama-throughput-lab", "meilisearch",
@@ -163,3 +168,21 @@ def test_positive_control_an_internal_create_site_is_caught():
     fake = "docker network create --driver bridge --internal pmoves_external"
     m = _CREATE.search(fake)
     assert m and "--internal" in m.group(1)
+
+
+
+# --- #3201 option A: neo4j stays internal-only; the forwarder fronts it ------
+
+NEO4J_NETWORKS = {"pmoves_app", "pmoves_bus", "pmoves_data"}
+
+
+def test_neo4j_joins_only_internal_networks_and_no_new_ones():
+    """DOCKER_NETWORK_HARDENING Rule 1: a data service never joins an egress-capable
+    network (pmoves_external). Option A keeps neo4j on exactly app/bus/data."""
+    nets = SERVICES["neo4j"]["networks"]
+    assert nets == NEO4J_NETWORKS, f"neo4j networks changed: {sorted(nets)}"
+    assert all(NETWORKS[n] for n in nets), "every neo4j network must be internal"
+
+
+def test_neo4j_does_not_share_another_containers_netns():
+    assert SERVICES["neo4j"]["network_mode"] is None
