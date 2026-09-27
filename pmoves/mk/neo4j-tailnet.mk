@@ -13,10 +13,16 @@ NEO4J_TAILNET_COMPOSE := docker-compose.neo4j-tailnet.yml
 .PHONY: up-neo4j-tailnet neo4j-tailnet-status down-neo4j-tailnet
 
 up-neo4j-tailnet: ## Start the tailnet forwarder that fronts Neo4j (tcp:7687 -> neo4j:7687); never recreates Neo4j
-	@# Preflight 1 (names only): the live pmoves-neo4j must already be on the graph front.
-	@nets=$$(docker inspect --type container -f '{{range $$k, $$v := .NetworkSettings.Networks}}{{$$k}} {{end}}' pmoves-neo4j 2>/dev/null) || { \
-		echo "[neo4j-tailnet] REFUSING: container pmoves-neo4j not found; bring Neo4j up first." >&2; exit 1; }; \
-	case " $$nets " in \
+	@# Preflight 1 (state + network names only; never addresses): the live
+	@# pmoves-neo4j must be RUNNING (--no-deps will not start it, and a forwarder
+	@# in front of a stopped Neo4j fronts nothing) and already on the graph front.
+	@out=$$(docker inspect --type container -f '{{.State.Running}} {{range $$k, $$v := .NetworkSettings.Networks}}{{$$k}} {{end}}' pmoves-neo4j 2>/dev/null) || { \
+		echo "[neo4j-tailnet] REFUSING: could not inspect pmoves-neo4j (missing, or daemon/permission error); nothing started." >&2; exit 1; }; \
+	case "$$out" in \
+		"true "*) ;; \
+		*) echo "[neo4j-tailnet] REFUSING: pmoves-neo4j is not running; start it first (#3201 runbook)." >&2; exit 1;; \
+	esac; \
+	case " $$out " in \
 		*" pmoves_graph_front "*) ;; \
 		*) echo "[neo4j-tailnet] REFUSING: pmoves-neo4j is not attached to pmoves_graph_front." >&2; \
 		   echo "  Recreate Neo4j first, as its own gated step (#3201 runbook), then re-run this." >&2; exit 1;; \

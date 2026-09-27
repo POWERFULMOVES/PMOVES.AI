@@ -121,28 +121,32 @@ def _docker_guard():
 
 INSPECT_BEHAVIOUR = r"""
 if [ "$1" = "inspect" ]; then
-  echo "$FAKE_NEO4J_NETWORKS"
-  exit 0
+  [ -n "$FAKE_NEO4J_INSPECT" ] && echo "$FAKE_NEO4J_INSPECT"
+  exit "${FAKE_INSPECT_RC:-0}"
 fi
 """
 
 
 @pytest.mark.skipif(shutil.which("make") is None, reason="make not installed")
-@pytest.mark.parametrize("nets,refuses", [
-    ("pmoves_app pmoves_bus pmoves_data ", True),                       # before the gated recreate
-    ("pmoves_app pmoves_bus pmoves_data pmoves_graph_front ", False),   # after it
+@pytest.mark.parametrize("inspect,rc,refusal", [
+    ("true pmoves_app pmoves_bus pmoves_data ", 0, "not attached to pmoves_graph_front"),  # before the gated recreate
+    ("true pmoves_app pmoves_bus pmoves_data pmoves_graph_front ", 0, None),               # after it
+    ("false pmoves_app pmoves_bus pmoves_data pmoves_graph_front ", 0, "not running"),      # recreated, but stopped
+    ("", 1, "could not inspect"),                                                          # missing / daemon / permission
 ])
-def test_up_refuses_until_neo4j_is_on_the_graph_front(tmp_path, nets, refuses):
+def test_up_refuses_until_neo4j_is_running_on_the_graph_front(tmp_path, inspect, rc, refusal):
     stub = _docker_guard().build_stub_env(tmp_path / "bin", stub_make=False,
                                           behaviours={"docker": INSPECT_BEHAVIOUR})
     env = dict(stub)
-    env["FAKE_NEO4J_NETWORKS"] = nets
+    env["FAKE_NEO4J_INSPECT"] = inspect
+    env["FAKE_INSPECT_RC"] = str(rc)
     proc = subprocess.run(["make", "-s", "-C", str(PMOVES), "up-neo4j-tailnet"],
                           capture_output=True, text=True, timeout=120, env=env)
     calls = [row for row in stub.calls() if row and row[0] == "docker"]
     ups = [row for row in calls if "up" in row]
-    if refuses:
-        assert proc.returncode != 0 and "REFUSING" in (proc.stdout + proc.stderr)
+    if refusal:
+        out = proc.stdout + proc.stderr
+        assert proc.returncode != 0 and "REFUSING" in out and refusal in out, out
         assert ups == [], ups
     else:
         assert ups, calls
