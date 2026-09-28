@@ -5,11 +5,15 @@ on:
     branches: [main, PMOVES.AI-Edition-Hardened]
     paths:
       - 'pmoves/ui/**'
+      # lib/rooms.ts loads ../config/rooms at test time, so a room manifest
+      # change must run these tests (#3165 broke rooms.test.ts unobserved).
+      - 'pmoves/config/rooms/**'
       - '.github/workflows/ui-tests.yml'
   pull_request:
     branches: [main, PMOVES.AI-Edition-Hardened]
     paths:
       - 'pmoves/ui/**'
+      - 'pmoves/config/rooms/**'
       - '.github/workflows/ui-tests.yml'
   workflow_dispatch:
 
