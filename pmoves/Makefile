@@ -1,5 +1,39 @@
 # PMOVES top-level Makefile
 
+unexport KEY
+# ^ MUST STAY THE FIRST DIRECTIVE, above every include and every $(shell ...).
+# A command-line KEY (`make env-local-unset KEY=...`) is exported by default,
+# and GNU make EXPANDS an exported variable each time it builds a child
+# environment, so text like KEY='$(shell touch X)' executes:
+#   * make 4.3: children are recipes only. Measured 2026-09-23: with the
+#     unexport at the END of the file, recipe export expanded it and X was
+#     created; the directive closed it.
+#   * make >= 4.4: `$(shell ...)` ALSO receives exported variables. Two
+#     parse-time $(shell) calls (mk/a2ui-deploy.mk via the includes below, and
+#     one in this file) ran BEFORE an end-of-file unexport, so X was still
+#     created on 4.4.1 (independent review of #3164, container repro).
+# Make has no target-scoped unexport, and a directive only affects expansion
+# AFTER it is read -- so the only placement that holds on both versions is
+# here. tests/tools/test_env_local_key.py asserts the ordering structurally,
+# because CI runs 4.3 and cannot observe the 4.4 behaviour.
+# Other KEY users are unaffected: mk/codex.mk and mk/provider.mk interpolate
+# $(KEY) into recipe text, which does not depend on export. The one script with
+# an inherited-KEY shape, scripts/fleet/rustdesk-enroll.sh:65
+# (KEY="${KEY:-...}"), is not a victim: line 46 resets KEY="" first, and no make
+# target invokes it. Sub-makes still get KEY via MAKEFLAGS, unexpanded.
+
+unexport NEO4J_BIND
+# ^ Same mechanism as KEY above, and it must sit in the same place: above every
+# include and every $(shell ...). A command-line NEO4J_BIND is exported by
+# default, and on make >= 4.4 $(shell ...) receives exported variables,
+# EXPANDING them into the child env -- so NEO4J_BIND='$(shell touch X)' would
+# run during the first parse-time $(shell) (e.g. the NEO4J_BIND block's own
+# mktemp), before the validator ever sees it. The NEO4J_BIND block below reads
+# the raw text with $(value NEO4J_BIND) (unaffected by this) and re-exports ONLY
+# the validated value with `override export NEO4J_BIND := ...`.
+# REASONED, not measured on make 4.4: this node and CI run make 4.3.
+# tests/test_neo4j_bind_passthrough.py asserts the ordering structurally.
+
 # Many targets rely on bashisms (heredocs, arrays, $'...' quoting).
 # On Windows, force Git Bash to avoid cmd.exe fallback for bash-style recipes.
 ifeq ($(OS),Windows_NT)
@@ -133,6 +167,57 @@ ifneq ("$(wildcard env.tier-supabase.urlencoded)","")
   COMPOSE_ENV_FILES += --env-file env.tier-supabase.urlencoded
 endif
 
+# NEO4J_BIND pass-through (option B, #3196).
+# The node-local file is deliberately NOT on COMPOSE_ENV_FILES under
+# SUPABASE_RUNTIME=compose (above), so a NEO4J_BIND set there with
+# `make env-local-set` was silently ignored and Neo4j published on 0.0.0.0.
+# Read ONLY that one key (parsed, never sourced; no other key, no command
+# substitution) and export it into every recipe's environment, which is how
+# it reaches every $(DC) call. COMPOSE_ENV_FILES is untouched.
+#
+# Precedence (first NON-EMPTY wins; an empty value counts as unset):
+#   1. `make NEO4J_BIND=...`          (command line)
+#   2. NEO4J_BIND exported by the caller's environment
+#   3. the NEO4J_BIND= line of $(NODE_LOCAL_ENV_FILE)
+#   4. compose's own default (${NEO4J_BIND:-0.0.0.0})
+# A malformed value from ANY source stops make here, value withheld, rather
+# than reaching compose. A caller's value is taken RAW with $(value ...), never
+# expanded, and reaches the checker through a file written by $(file ...),
+# never through a $(shell ...) string: a quote or an embedded make function in
+# it can neither break the command nor run.
+# Escape hatch for a malformed node-local value: pass a valid one on the
+# command line (`make NEO4J_BIND=127.0.0.1 ...`, which is checked and wins),
+# or point elsewhere (`make NODE_LOCAL_ENV_FILE=/dev/null ...`).
+# Needs GNU make >= 4.2 ($(.SHELLSTATUS)); older make fails closed below.
+NODE_LOCAL_ENV_FILE ?= .env.local
+NEO4J_BIND_HELPER = $(PYTHON) $(CURDIR)/scripts/neo4j_bind_from_env_file.py
+NEO4J_BIND_CALLER := $(if $(filter-out undefined,$(origin NEO4J_BIND)),$(strip $(value NEO4J_BIND)))
+ifneq ($(NEO4J_BIND_CALLER),)
+  NEO4J_BIND_TMP := $(shell mktemp)
+  $(file >$(NEO4J_BIND_TMP),$(NEO4J_BIND_CALLER))
+  NEO4J_BIND_OK := $(shell $(NEO4J_BIND_HELPER) --check-file "$(NEO4J_BIND_TMP)")
+  NEO4J_BIND_RC := $(.SHELLSTATUS)
+  ifeq ($(NEO4J_BIND_RC),)
+    $(error NEO4J_BIND is set but this make cannot validate it (needs GNU make >= 4.2 for .SHELLSTATUS); refusing)
+  endif
+  ifneq ($(NEO4J_BIND_RC),0)
+    $(error NEO4J_BIND ($(origin NEO4J_BIND)) is malformed; refusing to pass it to compose)
+  endif
+  override export NEO4J_BIND := $(NEO4J_BIND_OK)
+else ifneq ("$(wildcard $(NODE_LOCAL_ENV_FILE))","")
+  NEO4J_BIND_FROM_FILE := $(shell $(NEO4J_BIND_HELPER) "$(NODE_LOCAL_ENV_FILE)")
+  NEO4J_BIND_RC := $(.SHELLSTATUS)
+  ifeq ($(NEO4J_BIND_RC),)
+    $(error the node-local file exists but this make cannot validate NEO4J_BIND (needs GNU make >= 4.2 for .SHELLSTATUS); pass NODE_LOCAL_ENV_FILE=/dev/null to skip it)
+  endif
+  ifneq ($(NEO4J_BIND_RC),0)
+    $(error NEO4J_BIND in the node-local file is malformed or unreadable (see above); refusing. Escape: make NEO4J_BIND=<valid address> ... or NODE_LOCAL_ENV_FILE=/dev/null)
+  endif
+  ifneq ($(NEO4J_BIND_FROM_FILE),)
+    override export NEO4J_BIND := $(NEO4J_BIND_FROM_FILE)
+  endif
+endif
+
 # -------- Service Discovery Helper ----------
 # Resolve service URL using PMOVES service discovery (hybrid support)
 # Supports docked (NATS/Supabase) and standalone (Docker DNS) modes
@@ -178,6 +263,10 @@ launchers-manifest: ## Print the launcher inventory (registry-driven)
 launchers-clean: ## Remove only generator-emitted files (leaves hand-written launchers intact)
 	@echo "Re-run 'make launchers-regen' to restore generator-emitted launchers."
 
+.PHONY: launcher-self-check
+launcher-self-check: ## Run the launcher auth-sanitize guard test (deploy/provision tests are not wired into CI)
+	@bash ../deploy/provision/tests/test-launcher-auth-sanitize.sh
+
 # -------- Standard Makefile targets ----------
 .PHONY: all
 all: help ## Default target - show help
@@ -220,6 +309,7 @@ include mk/amd-rdna4.mk
 include mk/hf.mk
 include mk/provider.mk
 include mk/egress.mk
+include mk/neo4j-tailnet.mk
 include mk/a2ui-deploy.mk
 include mk/yt-cookies.mk
 include mk/mcp-toolkit.mk
@@ -1547,11 +1637,72 @@ reset-data-tier: ## DANGEROUS: stop data tier and wipe its volumes, then recreat
 	@echo "✅ Data tier reset with current env.tier-data credentials"
 
 .PHONY: up-minio
+# Pre-check (read-only): the minio image is a LOCAL source build that no registry
+# serves (see minio-build-src below). Resolve the image the way compose will, via
+# `config --images` (shell MINIO_IMAGE > --env-file > compose default), and if it is
+# the local -src build but not present, stop with the fix instead of letting compose
+# attempt a pull that can only fail. A registry MINIO_IMAGE override is never blocked.
+# COUPLING: the check compares against MINIO_SRC_TAG, which must equal the compose
+# MINIO_IMAGE default. If they drift, the check WARNs and skips instead of guarding.
 up-minio: ## Start MinIO object storage (port 9000) + Presign
 	@echo "📦 Starting MinIO..."
+	@img=$$($(DC) config --images minio 2>/dev/null | head -n1); \
+	 if [ -z "$$img" ]; then \
+	   echo "WARN: could not resolve the minio image via 'docker compose config'; image pre-check SKIPPED" >&2; \
+	 elif [ "$$img" = "$(MINIO_SRC_TAG)" ]; then \
+	   if ! docker image inspect "$$img" >/dev/null 2>&1; then \
+	     echo "ERROR: minio image $$img is not present on this node. It is built locally, not pulled:" >&2; \
+	     echo "         make -C pmoves minio-build-src" >&2; \
+	     echo "       or, if upstream is still cached here (docker image inspect minio/minio:$(MINIO_SRC_RELEASE)):" >&2; \
+	     echo "         MINIO_IMAGE=minio/minio:$(MINIO_SRC_RELEASE) make -C pmoves up-minio" >&2; \
+	     exit 1; \
+	   fi; \
+	 else \
+	   case "$$img" in *-src) echo "WARN: minio resolves to $$img but MINIO_SRC_TAG=$(MINIO_SRC_TAG); the two have drifted, image pre-check SKIPPED" >&2;; esac; \
+	 fi
 	@$(DC) up -d --force-recreate minio presign
 	@timeout 60 bash -c 'until curl -sf http://localhost:9000/minio/health/live; do sleep 2; done' || echo "⚠️ MinIO may still be starting"
 	@echo "✅ MinIO ready at http://localhost:9000 (console :9001)"
+
+# MinIO RELEASE.2025-09-07T16-13-09Z built from source. Every published copy of
+# this release is gone (docker.io 401 / quay.io 401 / ghcr.io 403 / dl.min.io 410),
+# so the image is rebuilt from the archived GitHub tag — the EXACT release the
+# data in pmoves_minio-data was written by. See docker/minio-src/README.md.
+# Interim only: Garage is the planned substrate (JUICEFS_OBJECT_STORE_MIGRATION.md §0.8).
+#
+# The tag lives in OUR registry namespace (ghcr.io/powerfulmoves) even though it is
+# built locally: an unbuilt node that falls through to a pull then fails closed
+# against our own org, instead of pulling whatever a third party publishes under
+# an unowned docker.io namespace.
+#
+# COUPLING: this value MUST equal the MINIO_IMAGE default of the `minio` service in
+# docker-compose.yml (and the generated docker-compose.core.yml). Change them together.
+MINIO_SRC_TAG ?= ghcr.io/powerfulmoves/pmoves-minio:RELEASE.2025-09-07T16-13-09Z-src
+MINIO_SRC_RELEASE := RELEASE.2025-09-07T16-13-09Z
+# The Go build of minio peaks at several GB; refuse to start below this much
+# MemAvailable rather than push a node into OOM mid-build.
+# LIMITS: the gate reads /proc/meminfo, so it only works on a Linux host
+# (macOS/Windows get a WARN and no gate). It measures the HOST, not the builder VM,
+# and BuildKit runs the minio and mc stages IN PARALLEL, so peak use is
+# roughly both Go builds at once.
+MINIO_BUILD_MIN_MEM_MB ?= 6144
+
+.PHONY: minio-build-src
+minio-build-src: ## Build MinIO RELEASE.2025-09-07T16-13-09Z (+ mc) from source -> $(MINIO_SRC_TAG)
+	@min="$(MINIO_BUILD_MIN_MEM_MB)"; \
+	 avail=$$(awk '/^MemAvailable:/{print int($$2/1024)}' /proc/meminfo 2>/dev/null); \
+	 case "$$min" in ''|*[!0-9]*) echo "WARN: MINIO_BUILD_MIN_MEM_MB='$$min' is not a number; memory gate SKIPPED" >&2; min="";; esac; \
+	 case "$$avail" in ''|*[!0-9]*) echo "WARN: MemAvailable not measurable (no Linux /proc/meminfo); memory gate SKIPPED" >&2; avail="";; esac; \
+	 if [ -n "$$min" ] && [ -n "$$avail" ] && [ "$$avail" -lt "$$min" ]; then \
+	   echo "ERROR: MemAvailable $${avail}MB < MINIO_BUILD_MIN_MEM_MB=$${min}MB; free memory or override" >&2; exit 1; \
+	 fi
+	docker build -t "$(MINIO_SRC_TAG)" -f docker/minio-src/Dockerfile docker/minio-src
+	@echo "→ smoke: minio --version reports $(MINIO_SRC_RELEASE)"
+	@docker run --rm "$(MINIO_SRC_TAG)" --version | tee /dev/stderr | grep -qF "minio version $(MINIO_SRC_RELEASE)" \
+	  || { echo "ERROR: $(MINIO_SRC_TAG) does not report $(MINIO_SRC_RELEASE)" >&2; exit 1; }
+	@echo "→ smoke: mc and curl present (brand-defaults/backup use mc; the healthcheck uses curl)"
+	@docker run --rm --entrypoint mc "$(MINIO_SRC_TAG)" --version | head -1
+	@docker run --rm --entrypoint curl "$(MINIO_SRC_TAG)" --version | head -1
 
 .PHONY: up-bus
 up-bus: ## Start message bus (NATS)
@@ -2659,9 +2810,22 @@ STACK_FILES ?= \
 AMD_OVERLAY := -f docker-compose.amd.yml
 WHISPER_NODE_OVERLAY ?=
 
+# Agent sessions export CIPHER_API_TOKEN as their OWN per-agent bearer
+# (cipher_<uuid>, bound by the launcher). Compose interpolation takes the shell
+# over --env-file, so any `up` from such a session baked that bearer into
+# cipher-api as the deployment-wide bootstrap token (every env-file bootstrap
+# caller then got 401; auth.ts never treats a cipher_ value as bootstrap, so
+# the bootstrap path is simply dead) and into Agent Zero's cipher MCP header
+# (A0 then acts as that agent). Measured on Knuckles 2026-09-26. A cipher_
+# value is never a valid bootstrap token, so drop it for compose only and let
+# the env files answer; any other exported value is an operator override and
+# is left alone. Only emitted when that shape is exported, so DC stays
+# shell-agnostic everywhere else.
+CIPHER_TOKEN_SHADOW_GUARD := $(if $(filter cipher_%,$(CIPHER_API_TOKEN)),env -u CIPHER_API_TOKEN)
+
 # Keep DC shell-agnostic for Windows/WSL/Linux. Targets that need sourced env
 # should prefix with $(LOAD_ENV_SHARED); explicitly in the recipe.
-DC := docker compose -p $(PROJECT) --project-directory $(CURDIR) $(COMPOSE_ENV_FILES) $(STACK_FILES)
+DC := $(CIPHER_TOKEN_SHADOW_GUARD) docker compose -p $(PROJECT) --project-directory $(CURDIR) $(COMPOSE_ENV_FILES) $(STACK_FILES)
 N8N_DC := docker compose -p $(PROJECT) --project-directory $(CURDIR) $(COMPOSE_ENV_FILES) -f docker-compose.yml -f docker-compose.n8n.yml $(N8N_DB_STACK_FILE)
 EXTERNAL_DC := docker compose -p $(PROJECT) --project-directory $(CURDIR) $(COMPOSE_ENV_FILES) -f docker-compose.external.yml
 MCP_GATEWAY_DC := docker compose -p $(PROJECT) --project-directory $(CURDIR) $(COMPOSE_ENV_FILES) -f docker-compose.mcp-gateway.yml
@@ -5520,12 +5684,13 @@ neo4j-backup: ## Backup Neo4j database to backups/ with timestamp
 	@timestamp=$$(date +%Y%m%d_%H%M%S); \
 	backup_dir="backups"; \
 	mkdir -p "$$backup_dir"; \
-	container_name=$$($(DC) ps -q neo4j 2>/dev/null | head -1); \
-	if [ -z "$$container_name" ]; then \
-		echo "⚠️  Neo4j container not running. Starting neo4j..."; \
-		$(MAKE) --no-print-directory neo4j-local-up; \
-		sleep 10; \
-		container_name=$$($(DC) ps -q neo4j 2>/dev/null | head -1); \
+	container_name=$$($(PYTHON) $(CURDIR)/scripts/neo4j_container.py) || exit 3; \
+	if ! docker ps --format '{{.Names}}' | grep -qxF "$$container_name"; then \
+		echo "❌ Neo4j container '$$container_name' is not running; a backup does not start one."; \
+		echo "   (It used to: '$(DC) ps -q neo4j' cannot see an out-of-compose container, so the"; \
+		echo "   fallback started a SECOND Neo4j on the volume the running one held.)"; \
+		echo "   Start it deliberately: make -C pmoves up-data-tier DATA_SERVICES=neo4j"; \
+		exit 1; \
 	fi; \
 	if [ -n "$$container_name" ]; then \
 		if docker exec $$container_name neo4j-admin database dump \
@@ -5541,7 +5706,8 @@ neo4j-backup: ## Backup Neo4j database to backups/ with timestamp
 			docker cp $$container_name:/backups/neo4j_$${timestamp}.cypher "$$backup_dir/neo4j_$${timestamp}.cypher" 2>/dev/null && \
 				echo "✅ Backup created: $$backup_dir/neo4j_$${timestamp}.cypher" && \
 				ls -lh "$$backup_dir/neo4j_$${timestamp}.cypher"; \
-		else \; echo "❌ Backup failed - neither dump nor cypher export succeeded"; \
+		else \
+			echo "❌ Backup failed - neither dump nor cypher export succeeded"; \
 			exit 1; \
 		fi; \
 	else \
@@ -5563,17 +5729,55 @@ neo4j-restore: ## Restore Neo4j from backup (usage: make neo4j-restore BACKUP=ba
 		echo "❌ Error: Backup file not found: $(BACKUP)"; \
 		exit 1; \
 	fi
+	@# Refuse while the container of that name is NOT compose-managed. The steps
+	@# below stop and remove only the COMPOSE service; an out-of-compose container
+	@# keeps running on pmoves_neo4j-data, the volume rm then fails silently, and a
+	@# compose Neo4j is started beside it. Migrate it under compose first (the
+	@# Phase 1b runbook in PR ops/knuckles-neo4j-from-fork).
+	@# The label is read from STDOUT only: a CLI warning on stderr must never make
+	@# an unlabelled (stray) container look compose-managed.
+	@# Only an explicit "No such container" means absent. Any other inspect
+	@# failure (daemon down, permission, wrong context) is could-not-measure (3),
+	@# never "absent": treating an error as absent is how a guard waves through
+	@# exactly the case it exists to stop.
+	@name=$$($(PYTHON) $(CURDIR)/scripts/neo4j_container.py) || exit 3; \
+	errf=$$(mktemp); \
+	label=$$(docker inspect --type container -f '{{index .Config.Labels "com.docker.compose.project"}}' "$$name" 2>"$$errf"); rc=$$?; \
+	err=$$(cat "$$errf"); unlink "$$errf"; \
+	if [ $$rc -ne 0 ]; then \
+		if printf '%s' "$$err" | grep -qi 'no such container'; then :; else \
+			echo "❌ could not inspect container '$$name' (not a clean 'no such container'): $$err"; \
+			exit 3; \
+		fi; \
+	elif [ -z "$$label" ]; then \
+		echo "❌ '$$name' exists but is not managed by compose; refusing to restore over it."; \
+		echo "   Bring Neo4j under compose first, then re-run neo4j-restore."; \
+		exit 1; \
+	fi
 	@echo "→ Restoring Neo4j from $(BACKUP)..."
 	@echo "⚠️  This will STOP Neo4j, DELETE existing data, and restore from backup"
 	@echo "Press Ctrl+C to cancel, or wait 5 seconds to continue..."
 	@sleep 5
 	@$(MAKE) --no-print-directory neo4j-local-down
-	@docker volume rm pmoves_neo4j-data 2>/dev/null || true
+	@# Absent (an explicit "no such volume") is fine: nothing to clear. Present
+	@# but not removable fails CLOSED (1): this used to swallow the failure
+	@# (2>/dev/null || true) and go on to start and load over a volume another
+	@# Neo4j still held. Any OTHER inspect failure is could-not-measure (3), so an
+	@# error is never read as "absent" and the removal still refuses on every error.
+	@err=$$(docker volume inspect pmoves_neo4j-data 2>&1 >/dev/null); rc=$$?; \
+	if [ $$rc -eq 0 ]; then \
+		docker volume rm pmoves_neo4j-data || { echo "❌ could not remove pmoves_neo4j-data (still in use?): refusing to start and load over a volume another Neo4j may hold."; exit 1; }; \
+	elif printf '%s' "$$err" | grep -qi 'no such volume'; then \
+		echo "→ pmoves_neo4j-data absent; nothing to remove."; \
+	else \
+		echo "❌ could not determine whether pmoves_neo4j-data exists: $$err"; \
+		exit 3; \
+	fi
 	@echo "→ Starting fresh Neo4j..."
 	@$(MAKE) --no-print-directory neo4j-local-up
 	@sleep 15
-	@container_name=$$($(DC) ps -q neo4j 2>/dev/null | head -1); \
-	if [ -n "$$container_name" ]; then \
+	@container_name=$$($(PYTHON) $(CURDIR)/scripts/neo4j_container.py) || exit 3; \
+	if docker ps --format '{{.Names}}' | grep -qxF "$$container_name"; then \
 		docker cp "$(BACKUP)" $$container_name:/backups/neo4j.dump; \
 		docker exec $$container_name neo4j-admin database load \
 			--from=/backups/neo4j.dump \
@@ -6060,3 +6264,53 @@ sandbox-runbook: ## Print the self-host runbook path + the owning node
 	@echo "             pmoves/scripts/probe_danger_room_host.sh   (Linux/WSL2 half)"
 	@echo "vendor docs: PMOVES-Danger-infra/DEV-LOCAL.md  (local bare metal)"
 	@echo "             PMOVES-Danger-infra/self-host.md  (GCP)"
+
+# -------- Node-local env overlay: ONE key at a time (Known Road) ----------
+# THE SANCTIONED EDIT PATH for pmoves/.env.local, the node-local overlay that
+# scripts/with-env.sh loads after the generated tier files. Nothing generates
+# it, so before these targets every change was a hand edit with no record --
+# which is how CIPHER_DB_SERVICE_KEY=${SERVICE_ROLE_KEY} reached a fleet node
+# (copied from the df0218537 commit message) with no record of when or by whom.
+#
+# OPERATOR-RUN. Agents keep ZERO access to the file; the damage-control
+# zero-access rule is unchanged. The tool never prints or audits a value: it
+# reports key, action, whether a line existed and old/new value LENGTH, backs
+# the file up to <file>.bak-<UTC ts> (0600) before any change, writes
+# atomically preserving the mode and every other line, refuses a duplicated or
+# malformed key, and appends a row to data/audit/env_local_edits.jsonl
+# (git-ignored, node-local).
+#
+# KEY TRAVELS BY ENVIRONMENT, never as a shell word, and `$(value KEY)` stops
+# make from expanding anything inside it -- the register targets above learned
+# both lessons the hard way. The case-guard below is a courtesy; the tool
+# re-validates ^[A-Z][A-Z0-9_]*$ itself.
+#
+# `$(value KEY)` ALONE IS NOT ENOUGH: a command-line KEY is exported, and an
+# exported variable is expanded whenever a child environment is built. The
+# `unexport KEY` that closes this is at the TOP of this file -- see the
+# comment there for the make-version semantics and why position matters.
+#
+# env-local-set takes the value from a NO-ECHO prompt (the tool's getpass on
+# the controlling terminal) or from piped stdin -- never argv, so it is not in
+# shell history or `ps`. make's recipe shell is /bin/sh, which has no
+# `read -s`; getpass does the same without the value becoming a shell variable.
+#
+# make collapses every nonzero exit to 2 -- read the printed `result=` line
+# (done / noop / present / absent / refused / could-not-measure).
+.PHONY: env-local-has env-local-set env-local-unset
+env-local-has env-local-set env-local-unset: export ENV_LOCAL_KEY_NAME = $(value KEY)
+ENV_LOCAL_KEY_GUARD = case "$$ENV_LOCAL_KEY_NAME" in ""|[!A-Z]*|*[!A-Z0-9_]*) \
+	echo "usage: make $@ KEY=NAME   (NAME must match ^[A-Z][A-Z0-9_]*$$; the value is never an argument)" >&2; \
+	exit 2;; esac
+
+env-local-has: ## Operator: is KEY present in pmoves/.env.local? Prints no value (KEY=NAME)
+	@$(ENV_LOCAL_KEY_GUARD)
+	@$(PYTHON) tools/env_local_key.py has "$$ENV_LOCAL_KEY_NAME"
+
+env-local-set: ## Operator: set KEY in pmoves/.env.local; value from a no-echo prompt or stdin, never argv (KEY=NAME)
+	@$(ENV_LOCAL_KEY_GUARD)
+	@$(PYTHON) tools/env_local_key.py set "$$ENV_LOCAL_KEY_NAME"
+
+env-local-unset: ## Operator: remove the single KEY line from pmoves/.env.local, with backup + audit row (KEY=NAME)
+	@$(ENV_LOCAL_KEY_GUARD)
+	@$(PYTHON) tools/env_local_key.py unset "$$ENV_LOCAL_KEY_NAME"

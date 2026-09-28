@@ -53,6 +53,27 @@
       "env": {
         "PYTHONPATH": "${workspaceFolder}"
       }
+    },
+    {
+      "name": "Kimi Code: PMOVES session (kimi-pmoves)",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "make -C pmoves kimi-pmoves",
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "name": "ClawZ: gateway up",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "make -C pmoves clawz-up && make -C pmoves clawz-logs",
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "name": "Pinokio 8: creator-collab runtime",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "make -C pmoves up-pinokio",
+      "cwd": "${workspaceFolder}"
     }
   ]
 }

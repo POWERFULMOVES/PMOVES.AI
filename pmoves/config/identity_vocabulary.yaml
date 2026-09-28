@@ -82,17 +82,46 @@
 # is a fact about signing, not about who they are. Widening the fold here would
 # have made the gate quieter and less true.
 
+# REGISTER_FORM -- the name a session IS, declared and never derived.
+# ---------------------------------------------------------------------
+# `register_form` is the exact owner string an identity signs the claim
+# register with, and its BASE (the part before any parenthetical) is the name
+# the fleet calls it by. claude-pmoves reads it through
+# `pmoves/tools/node_identity.py` so a session wakes up AS that name -- "You
+# are B850-CLAUDE" -- instead of being told only a registry key (claude_b850)
+# and a role, and then speaking of its own identity in the third person.
+#
+# DECLARED, NOT DERIVED, because the forms do not share a rule. Measured over
+# the register 2026-09-27 (most-used CLAIM/RELEASE spelling per identity):
+#   B850-CLAUDE (Knuckles)  98 CLAIM / 104 RELEASE  (NODE_PROFILES/B850-CLAUDE.md:10)
+#   4090-CLAUDE              6 CLAIM /   7 RELEASE  (NODE_PROFILES/4090-CLAUDE.md:14)
+#   5090-CLAUDE             10 CLAIM /   9 RELEASE
+#   Z890-CLAUDE             26 CLAIM /  34 RELEASE
+# Only Knuckles carries a node parenthetical, so "BASE (<Node>)" would invent
+# three forms nobody signs with. An identity with no register_form is left
+# unnamed by the launcher, which says so and falls back to the registry key.
+#
+# THE SECOND-SESSION RULE ABOVE HOLDS: a second steward session on one node
+# names its own identity (PMOVES_REGISTER_IDENTITY=B850-CLAUDE-FUNNEL), and the
+# resolver refuses one declared for a different node rather than handing it the
+# primary's name. pmoves/tests/test_launcher_wakes_as_identity.py asserts that
+# every register_form folds back to its own canonical under
+# identity_lineage.canonical_identity -- so the collision gate attributes what a
+# session signs to the identity the launcher told it it was.
+
 version: 1
 
 identities:
   - canonical: 5090-claude
     aliases: ["5090-CLAUDE", "claude_5090"]
     node: "5090"
+    register_form: "5090-CLAUDE"
     note: Primary workhorse lane. 51 entries across 8 spellings.
 
   - canonical: z890-claude
     aliases: ["Z890-CLAUDE", "claude_z890"]
     node: z890
+    register_form: "Z890-CLAUDE"
     note: >-
       44 entries. Six of them were later reattributed to b850-claude as
       MIS-SIGNED, not as succession -- see `corrections` below. The distinction
@@ -101,9 +130,28 @@ identities:
   - canonical: b850-claude
     aliases: ["B850-CLAUDE", "claude_b850"]
     node: knuckles
+    register_form: "B850-CLAUDE (Knuckles)"
     note: >-
       34 entries. `NODE_PROFILES/B850-CLAUDE.md:10` declares the canonical
       register form `B850-CLAUDE (Knuckles)`; four spellings are in use.
+
+  # A SECOND STEWARD SESSION ON THE SAME NODE NEEDS ITS OWN IDENTITY.
+  # canonical_identity() strips the parenthetical before matching, so any
+  # `B850-CLAUDE (<suffix>)` folds to b850-claude: on 2026-09-26 two concurrent
+  # Knuckles steward sessions (the primary, and pmoves-ai-7d running the
+  # secrets-funnel / MinIO lanes) signed the same owner string and could not be
+  # told apart -- the collision gate saw one identity, and a bare RELEASE by
+  # one closed the other's lanes. A distinct BASE (not a distinct suffix) is
+  # the only spelling the resolver keeps separate. Existing rows are NOT
+  # reattributed: whatever either session signed as `B850-CLAUDE (...)` stays
+  # b850-claude; this identity applies from its first use forward.
+  - canonical: b850-claude-funnel
+    aliases: ["B850-CLAUDE-FUNNEL"]
+    node: knuckles
+    register_form: "B850-CLAUDE-FUNNEL (Knuckles)"
+    note: >-
+      0 entries at declaration (2026-09-26). The peer steward session
+      pmoves-ai-7d on Knuckles; register form `B850-CLAUDE-FUNNEL (Knuckles)`.
 
   - canonical: 4090-claude
     # `4090-CLAUDE-OPUS-5`: the identity signing with its model appended.
@@ -111,12 +159,36 @@ identities:
     # wearing(), so neither is erased. See the doctrine note below.
     aliases: ["4090-CLAUDE", "4090-claude", "4090-CLAUDE-OPUS-5", "claude_4090"]
     node: "4090"
+    register_form: "4090-CLAUDE"
     note: >-
       32 entries across NINE spellings, the widest drift of any identity --
       including `4090-CLAUDE (field)`, `4090-claude (field, voice-binding
       lane)` and `4090-CLAUDE (pr-trim, opus-5)`. `agent_signatures.yaml:216`
       declares `4090-field` as a formal ALTER, so some of that drift is a real
       distinction the register had no field for.
+
+  - canonical: 4090-claw
+    aliases: ["PMOVES-4090-ZAI.CLAW", "4090-CLAW"]
+    node: "4090"
+    note: >-
+      The 4090's SECOND peer, and a separate identity from `4090-claude`
+      above -- not a spelling of it. Operator-declared 2026-09-20: this is
+      `glm-5.3-flash` riding a Z.AI **autoclaw** harness and wearing this
+      identity on node 4090, alongside opus riding Claude Code and wearing
+      `4090-claude`. Read in the direction this file's own doctrine sets --
+      "the identity a model puts on will align with the model and be tuned
+      by the harness" -- the model is the rider, so two models on two
+      harnesses are two peers. Aliasing this under `4090-claude`
+      would declare a Z.AI agent and a Claude agent to be one identity --
+      the same conflation this file refuses when it declines to fold
+      `claude-opus` into any node CLAUDE. One entry so far (the
+      `2026-09-20T00:49:58Z` CLAIM on `chore/4090zai-register-and-sitrep`,
+      arriving via #3115), whose own scope line records that "4090 node
+      signatures were fragmented across three variants" -- so this spelling
+      was invented to STOP sharing 4090-claude's lane, and folding it back
+      would undo that on the way in. No `agent_registry.yaml` or
+      `agent_signatures.yaml` entry exists for it yet; when one lands, add
+      its key here as an alias per the `claude_b850` doctrine above.
 
   - canonical: kiloclaw
     aliases: ["KILOCLAW"]
@@ -155,6 +227,18 @@ identities:
     aliases: ["SPARK-KIMI", "KIMI-SPARK"]
     node: spark
     note: 32 entries under two orderings of the same two words.
+
+  - canonical: knuckles-kimi
+    aliases: ["PMOVES-KIMI-KNUCKLES-B850", "kimi_knuckles"]
+    node: knuckles
+    note: >-
+      2026-09-19 Composio/Discord lane (PRs #3108/#3109/#3110/#3113).
+      Canonical register form PMOVES-KIMI-KNUCKLES-B850 (the OWNER= field);
+      agent_registry.yaml key kimi_knuckles; card
+      00000000-0000-4000-8000-000000000051; lineage PMOVES-SPARK-KIMI.
+      The (opus 9) parenthetical on its rows is a harness-profile
+      mis-stamp -- the model is kimi-k2, not an opus. It is left
+      unclassified rather than aliased into a model it is not.
 
   - canonical: crush
     aliases: ["CRUSH", "CRUSH-GLM52", "CRUSH-SPARK (KIMI)"]
@@ -379,6 +463,17 @@ models:
       answering; the route belongs in the harness field once one exists.
   - canonical: minimax-m3
     aliases: ["MiniMax-M3", "minimax"]
+  - canonical: glm-5.3-flash
+    aliases: ["glm-5.3-flash", "GLM-5.3-Flash"]
+    note: >-
+      The model that rides the `autoclaw` harness wearing the `4090-claw`
+      identity (operator, 2026-09-20). Bare `glm-5.3` is
+      deliberately NOT an alias: `provider_catalog.yaml` carries
+      `chat_zai_glm53` with `model_name: "glm-5.3"` as a distinct model, so
+      folding the two would be the `GLM via qwen3-coder` mistake in reverse --
+      naming a different model rather than a route. Declared ahead of its
+      first use: no register parenthetical carries this token yet, so today
+      it resolves nothing and prevents the report when one does.
   - canonical: kimi-k2
     aliases: ["KIMI", "kimi-k2"]
     note: >-
@@ -490,6 +585,18 @@ harnesses:
       the other is what they typed into.
   - canonical: claude-code
     aliases: ["claude-code"]
+  - canonical: autoclaw
+    aliases: ["autoclaw", "Z.AI autoclaw", "zai-autoclaw"]
+    note: >-
+      The Z.AI autoclaw harness on the 4090 (operator, 2026-09-20). A harness
+      wears nothing: `glm-5.3-flash` rides this harness and wears the
+      `4090-claw` identity, which the harness then TUNES -- the direction the
+      doctrine note below states ("the identity a model puts on ... tuned by
+      the harness") and the reason the parser is called `wearing()`.
+      Separate from `crush` and `kilocode` for the same reason those are
+      separate from each other -- what was typed into, not who typed. Like
+      `glm-5.3-flash` above, declared ahead of its first parenthetical
+      rather than after the gate reports it.
   - canonical: kilocode
     aliases: ["kilocode"]
 
