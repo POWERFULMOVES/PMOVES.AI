@@ -141,7 +141,7 @@ def _rest(path: str, *extra: str) -> Any:
     return _run_json(["gh", "api", path, *extra])
 
 
-def _rest_pages(path: str) -> List[Any]:
+def _rest_pages(path: str) -> list[Any]:
     """Every page of a paginated REST endpoint, as a list of page payloads.
 
     `--paginate` ALONE emits one JSON value PER PAGE, concatenated, and
