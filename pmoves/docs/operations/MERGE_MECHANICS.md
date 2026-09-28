@@ -142,7 +142,7 @@ So once the queue is on:
 | road | command | what happens |
 |---|---|---|
 | admin (unchanged) | `make -C pmoves pr-closeout-merge PR=N EXPECTED_HEAD=sha CONFIRM='MERGE #N @ sha'` | audit, then `gh pr merge --admin` -- **bypasses the queue**, merges directly. Still demands the branch be up to date (the audit blocks `BEHIND`), so the serial train of section 4 still applies to this road. |
-| queue (new) | `make -C pmoves pr-closeout-queue PR=N EXPECTED_HEAD=sha CONFIRM='MERGE #N @ sha'` | same audit **without** the admin review bypass, `BEHIND` not a blocker (the queue re-tests on the latest base), then `gh pr merge --auto --match-head-commit sha` with no method (the queue's method applies). Refuses if no `merge_queue` rule is active on the base; refuses `--queue` with `--admin`; confirms the enqueue via GraphQL `mergeQueueEntry` / `autoMergeRequest`. |
+| queue (new) | `make -C pmoves pr-closeout-queue PR=N EXPECTED_HEAD=sha CONFIRM='MERGE #N @ sha'` | same audit **without** the admin review bypass, `BEHIND` not a blocker (the queue re-tests on the latest base), then `gh pr merge --auto --match-head-commit sha` with no method (the queue's method applies). Refuses if no `merge_queue` rule is active on the base (paginated rules read); refuses `--queue` with `--admin`; reads the queue state BEFORE acting (unreadable = refuse). Success is a GraphQL `mergeQueueEntry` and nothing else. "Auto-merge armed, not queued" is a FAILURE -- the audit already required green checks, so something outside it is blocking -- and the arming is undone with `gh pr merge --disable-auto`. An auto-merge armed before the command is reported, not counted, and left alone; an existing queue entry is reported and no command runs. |
 
 **The catch, stated up front.** The queue road requires an **approved** PR -- the
 queue enforces the ruleset's `pull_request` rule before it accepts an entry, and
@@ -151,9 +151,27 @@ authored by `POWERFULMOVES` sit at `REVIEW_REQUIRED` with no approval arriving.
 So for those PRs the queue changes nothing: the admin road remains the fast path,
 serial train included. The queue pays off for PRs that do get an approving review.
 
+**A non-admin, non-queue merge does not merge on a queue branch.** Per
+`gh pr merge --help`, on a branch that requires a queue a plain `gh pr merge`
+enqueues the PR (checks green) or arms auto-merge (checks pending) -- it never
+merges directly. That is exactly what `pr-closeout.yml` does when dispatched with
+`action=merge` and `admin_review_bypass=false`. The closeout therefore refuses a
+direct non-admin merge BEFORE mutating when a `merge_queue` rule is active, and
+if one slips through anyway (rule added mid-flight) it fails naming what
+happened -- "ENQUEUED, not merged" or "auto-merge ARMED, not merged" -- instead
+of the generic "without a confirmed MERGED state".
+
 **`pr-closeout.yml` (the dispatch workflow)** was not changed: it still offers
 audit / direct merge with an optional admin bypass. Use the make target for the
 queue road.
+
+**Queue branches reach `push`/`create`/`delete` workflows.** Each queue entry is a
+real branch (`gh-readonly-queue/main/pr-N-<sha>`) holding approved-but-unmerged
+PR code. Any self-hosted or secret-using job on `push` (unless branch-filtered
+away from it), `create`, `delete` (these two take no branch filters) or
+`workflow_run` must exclude it. `branch-trail-emit.yml` did not, and was fixed
+before STEP 2; `pmoves/tools/validate_fork_guards.py` (run by `merge-gate`'s
+`fork-guard-check`) now fails the PR for any new one.
 
 ## Two gotchas that cost real time
 
