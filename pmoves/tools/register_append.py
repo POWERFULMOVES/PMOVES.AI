@@ -60,6 +60,7 @@ import contextlib
 import errno
 import hashlib
 import importlib.util
+import json
 import re
 import os
 import subprocess
@@ -954,12 +955,21 @@ def append_note(row: str, gate, register: Path | None = None) -> int:
 #
 # What it may drop, and nothing else:
 #
-#   ON-MAIN   the byte-identical line already exists on the target ref
-#   RE-FILED  a row on the ref with the SAME kind, SAME owner (exact string) and
-#             SAME header branch whose text says `first filed at <this row's
-#             timestamp>` -- the marker the re-filing convention writes
+#   ON-MAIN   a byte-identical LEDGER ROW already exists on the target ref
+#             (prose lines on the ref do not count -- a row quoted in the docs
+#             is not a live row)
+#   RE-FILED  a ledger row on the ref with the SAME kind, SAME owner (exact
+#             string) and SAME header branch whose text says `first filed at
+#             <this row's timestamp>` -- the marker the re-filing convention
+#             writes. The header branch is read only when the row carries the
+#             ` · scope:` separator; without it the row is KEEP.
 #   KEEP      everything else, including every non-ledger line. Never dropped,
 #             never guessed about. A timestamp one second off is KEEP.
+#
+# BYTES, NOT TEXT. The register is classified and written as bytes, split on
+# b"\n" only. Text is decoded (surrogateescape, lossless) solely to MATCH, and
+# nothing decoded is ever written back: a KEEP line carrying a stray \xff byte,
+# or a U+2028 inside a scope, round-trips byte-exact and stays one row.
 #
 # The sequence when KEEP is non-empty and main changed the register:
 #
@@ -967,11 +977,18 @@ def append_note(row: str, gate, register: Path | None = None) -> int:
 #   git pull --ff-only --no-recurse-submodules
 #   make -C pmoves register-sync REAPPLY=<sidecar> APPLY=1  # KEEP back onto the tail
 #
-# When KEEP is empty, `make -C pmoves register-sync APPLY=1` then the pull is
-# enough. Every mode is a DRY RUN unless APPLY=1 / --apply. It never fetches:
-# the target ref is whatever the local ref says, and its sha is printed so the
-# reader knows which main was compared. Exit: 0 done (or dry run), 3 refused /
-# could not measure -- never 1, which in this tool means "the lane is held".
+# REAPPLY IS NO WEAKER THAN register-claim. It accepts only a `.keep.md` this
+# tool wrote under the sidecar directory, whose sha256 matches the manifest
+# written beside it; every non-blank line must be a well-formed ledger row; the
+# rows are re-classified against the CURRENT register and the ref (anything now
+# ON-MAIN or RE-FILED is skipped and reported); a bare RELEASE is refused; and
+# CLAIM rows face the gate's own collision verdict against the current open
+# lanes. All-or-nothing: one refused row appends none.
+#
+# Every mode is a DRY RUN unless APPLY=1 / --apply. It never fetches: the target
+# ref is whatever the local ref says, and its sha is printed. Exit: 0 done (or
+# dry run); 1 reapply refused because a lane is held by another owner (this
+# tool's meaning of 1 everywhere); 3 refused / could not measure.
 
 REGISTER_REL = "pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md"
 SYNC_SIDECAR_REL = "pmoves/data/register-sync"
@@ -981,14 +998,22 @@ _SYNC_ROW_RE = re.compile(
     r"^\s*[-*]\s+`(?P<ts>[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:]{8}Z)`\s+"
     r"(?P<kind>[A-Z]+)\s+`(?P<owner>[^`]+)`")
 _SYNC_BRANCH_RE = re.compile(r"branch:\s*`([^`]+)`")
+_SCOPE_SEP = " · scope:"
 
 
 class SyncRefused(RuntimeError):
     """The sync could not establish what it would change. Exit 3, never 1."""
 
 
+class SyncLaneHeld(SyncRefused):
+    """A reapplied CLAIM names a lane another owner holds. Exit 1, as register-claim."""
+
+
 def _git(repo: Path, *args: str) -> bytes:
-    proc = subprocess.run(["git", "-C", str(repo), *args], capture_output=True)
+    try:
+        proc = subprocess.run(["git", "-C", str(repo), *args], capture_output=True)
+    except OSError as exc:
+        raise SyncRefused(f"git could not be run ({exc})") from exc
     if proc.returncode != 0:
         raise SyncRefused(
             f"`git {' '.join(args)}` failed (rc {proc.returncode}): "
@@ -996,57 +1021,94 @@ def _git(repo: Path, *args: str) -> bytes:
     return proc.stdout
 
 
-def _row_key(line: str):
+def _split_lines(data: bytes) -> list[bytes]:
+    """Lines split on b"\\n" ONLY, each keeping its terminator. Never str.splitlines,
+    which also splits on U+2028, \\x0c, \\x1c.. and would tear one row in two."""
+    if not data:
+        return []
+    parts = data.split(b"\n")
+    lines = [p + b"\n" for p in parts[:-1]]
+    if parts[-1]:
+        lines.append(parts[-1])
+    return lines
+
+
+def _as_text(line: bytes) -> str:
+    """For MATCHING only. surrogateescape is lossless; nothing decoded is written."""
+    return line.rstrip(b"\n").decode("utf-8", "surrogateescape")
+
+
+def _row_key(text: str):
     """(ts, kind, owner, header-branch) of a ledger row, or None.
 
     The branch is read from the HEADER only -- the fields before ` · scope:` --
-    because a scope routinely names other branches, and matching one of those
-    would be a guess.
+    because a scope routinely names other branches. A row with no separator has
+    no readable header, so its branch is None and it cannot be RE-FILED.
     """
-    m = _SYNC_ROW_RE.match(line)
+    m = _SYNC_ROW_RE.match(text)
     if not m:
         return None
-    header = line.split(" · scope:", 1)[0]
-    b = _SYNC_BRANCH_RE.search(header)
-    return m.group("ts"), m.group("kind"), m.group("owner"), (b.group(1) if b else None)
+    branch = None
+    if _SCOPE_SEP in text:
+        b = _SYNC_BRANCH_RE.search(text.split(_SCOPE_SEP, 1)[0])
+        branch = b.group(1) if b else None
+    return m.group("ts"), m.group("kind"), m.group("owner"), branch
 
 
-def classify_uncommitted(lines: list[str], ref_text: str) -> list[tuple[str, str]]:
-    """Class of each uncommitted line against the ref's register text."""
-    ref_lines = ref_text.split("\n")
-    ref_set = set(ref_lines)
-    ref_keys = [(_row_key(r), r) for r in ref_lines]
+def classify_uncommitted(lines: list[bytes], *ref_blobs: bytes) -> list[tuple[str, bytes]]:
+    """Class of each uncommitted line against the LEDGER ROWS of the given blobs."""
+    ref_rows = [t for blob in ref_blobs for t in map(_as_text, _split_lines(blob))
+                if _SYNC_ROW_RE.match(t)]
+    ref_set = set(ref_rows)
+    ref_keys = [(_row_key(r), r) for r in ref_rows]
     out = []
     for line in lines:
-        body = line.rstrip("\n")
-        key = _row_key(body)
+        text = _as_text(line)
+        key = _row_key(text)
         if key is None:
             out.append((KEEP, line))          # not a ledger row: never guessed about
             continue
-        if body in ref_set:
+        if text in ref_set:
             out.append((ON_MAIN, line))
             continue
         ts, kind, owner, branch = key
         markers = (f"first filed at {ts}", f"first filed at `{ts}`")
         refiled = branch is not None and any(
-            rk is not None and rk[1] == kind and rk[2] == owner and rk[3] == branch
+            rk[1] == kind and rk[2] == owner and rk[3] == branch
             and any(mk in r for mk in markers)
             for rk, r in ref_keys)
         out.append((RE_FILED if refiled else KEEP, line))
     return out
 
 
+def _snapshot(repo: Path, ref: str) -> dict:
+    """HEAD sha, ref sha, and both blobs -- read together so they can be compared."""
+    head_sha = _git(repo, "rev-parse", "HEAD").decode().strip()
+    ref_sha = _git(repo, "rev-parse", "--verify", f"{ref}^{{commit}}").decode().strip()
+    return {
+        "head_sha": head_sha, "ref_sha": ref_sha,
+        "head": _git(repo, "cat-file", "blob", f"{head_sha}:{REGISTER_REL}"),
+        "ref_blob": _git(repo, "cat-file", "blob", f"{ref_sha}:{REGISTER_REL}"),
+    }
+
+
 def _sync_measure(repo: Path, ref: str) -> dict:
-    """Read HEAD, the working tree and the ref; refuse anything not a pure append."""
+    """Read HEAD, the index, the working tree and the ref; refuse anything not a
+    pure append over HEAD."""
     register = repo / REGISTER_REL
     if not register.is_file():
         raise SyncRefused(f"no register at {register}")
-    head_sha = _git(repo, "rev-parse", "HEAD").decode().strip()
-    ref_sha = _git(repo, "rev-parse", "--verify", f"{ref}^{{commit}}").decode().strip()
-    head = _git(repo, "cat-file", "blob", f"HEAD:{REGISTER_REL}")
-    ref_text = _git(repo, "cat-file", "blob", f"{ref_sha}:{REGISTER_REL}").decode(
-        "utf-8", "replace")
-    work = register.read_bytes()
+    snap = _snapshot(repo, ref)
+    # THE INDEX TOO. A staged change to the register blocks the pull exactly as
+    # a working-tree one does, and restoring the working file would not clear it.
+    staged = subprocess.run(
+        ["git", "-C", str(repo), "diff", "--cached", "--quiet", "HEAD", "--", REGISTER_REL],
+        capture_output=True)
+    if staged.returncode != 0:
+        raise SyncRefused(
+            "the register's INDEX differs from HEAD (a staged change). This tool "
+            "only repairs the working tree; nothing was classified or written")
+    head, work = snap["head"], register.read_bytes()
     # A PURE APPEND: HEAD's bytes are a prefix, and HEAD's last line was already
     # complete (otherwise the first "appended" byte modifies an existing line).
     if not work.startswith(head) or (head and not head.endswith(b"\n")
@@ -1055,21 +1117,21 @@ def _sync_measure(repo: Path, ref: str) -> dict:
             "the working register is not HEAD plus appended lines -- the diff "
             "removes or modifies at least one line. This tool only recovers a "
             "pure append; nothing was classified and nothing was written")
-    lines = work[len(head):].decode("utf-8", "replace").splitlines(keepends=True)
-    return {
-        "register": register, "head": head, "work": work,
-        "work_hash": hashlib.sha256(work).hexdigest(),
-        "head_sha": head_sha, "head_lines": head.count(b"\n"),
-        "ref": ref, "ref_sha": ref_sha, "ref_lines": ref_text.count("\n"),
-        "lines": lines, "classes": classify_uncommitted(lines, ref_text),
-    }
+    lines = _split_lines(work[len(head):])
+    return dict(snap, register=register, work=work, ref=ref,
+                work_hash=hashlib.sha256(work).hexdigest(),
+                head_lines=head.count(b"\n"), ref_lines=snap["ref_blob"].count(b"\n"),
+                lines=lines, classes=classify_uncommitted(lines, snap["ref_blob"]))
+
+
+def _show(line: bytes) -> str:
+    return line.rstrip(b"\n").decode("utf-8", "replace")[:120]
 
 
 def _sync_report(m: dict) -> dict:
     """Print BOTH input sizes beside the result, and each row's class."""
     print(f"register-sync: register  {m['register']}")
-    print(f"register-sync: HEAD      {m['head_sha']}  "
-          f"({m['head_lines']} lines committed)")
+    print(f"register-sync: HEAD      {m['head_sha']}  ({m['head_lines']} lines committed)")
     print(f"register-sync: ref       {m['ref']} = {m['ref_sha']}  "
           f"({m['ref_lines']} lines; NOT fetched by this tool)")
     print(f"register-sync: INPUT     {len(m['lines'])} uncommitted line(s) "
@@ -1081,7 +1143,7 @@ def _sync_report(m: dict) -> dict:
               "register equals HEAD); that is not an empty result.")
         return counts
     for cls, line in m["classes"]:
-        print(f"  {cls:<8} {line.rstrip(chr(10))[:120]}")
+        print(f"  {cls:<8} {_show(line)}")
     print(f"register-sync: RESULT    {counts[ON_MAIN]} ON-MAIN, "
           f"{counts[RE_FILED]} RE-FILED, {counts[KEEP]} KEEP "
           f"(of {len(m['lines'])} input)")
@@ -1103,10 +1165,23 @@ def _sidecar_dir(repo: Path) -> Path:
 
 
 def _write_exclusive(path: Path, data: bytes) -> None:
-    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
+    try:
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
+    except FileExistsError as exc:
+        raise SyncRefused(f"sidecar {path} already exists; nothing on the "
+                          "register was written. Re-run the sync") from exc
     try:
         os.write(fd, data)
         os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
+def _append_bytes(register: Path, data: bytes) -> None:
+    """The O_APPEND primitive, on BYTES, so nothing is re-encoded on the way out."""
+    fd = os.open(register, os.O_WRONLY | os.O_APPEND)
+    try:
+        os.write(fd, data)
     finally:
         os.close(fd)
 
@@ -1116,51 +1191,75 @@ def sync_register(repo: Path, ref: str, apply: bool, hold: bool) -> int:
     _sync_report(m)
     if not m["lines"]:
         return EXIT_OK
-    keep = "".join(line for cls, line in m["classes"] if cls == KEEP)
-    dropped = "".join(line for cls, line in m["classes"] if cls != KEEP)
-    n_keep, n_drop = len(keep.splitlines()), len(dropped.splitlines())
+    keep = b"".join(line for cls, line in m["classes"] if cls == KEEP)
+    dropped = b"".join(line for cls, line in m["classes"] if cls != KEEP)
+    n_keep, n_drop = len(_split_lines(keep)), len(_split_lines(dropped))
     if not apply:
         print(f"register-sync: DRY RUN - would restore the register to HEAD, drop "
               f"{n_drop} line(s), and {'HOLD' if hold else 're-append'} {n_keep} "
               "KEEP line(s). Nothing written. Re-run with APPLY=1 (or --apply).")
         return EXIT_OK
 
-    # (i) SIDECARS FIRST. Nothing on the register moves until the rows it keeps
-    # -- and the rows it drops, as a recovery copy -- exist where git cannot
-    # commit them.
-    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     side = _sidecar_dir(repo)
-    keep_path, drop_path = side / f"{stamp}.keep.md", side / f"{stamp}.dropped.md"
-    _write_exclusive(keep_path, keep.encode("utf-8"))
-    _write_exclusive(drop_path, dropped.encode("utf-8"))
-    print(f"register-sync: KEEP rows saved to    {keep_path}")
-    print(f"register-sync: dropped rows saved to {drop_path} (recovery copy)")
-
     register = m["register"]
     with register_lock(register):
-        # (ii) A CONCURRENT WRITER between classification and now voids the
-        # classification. Refuse rather than drop a row nobody classified.
+        # A CONCURRENT WRITER -- to the register, HEAD or the ref -- between
+        # classification and now voids the classification. Re-read all three
+        # under the lock and refuse rather than drop a row nobody classified.
         if hashlib.sha256(register.read_bytes()).hexdigest() != m["work_hash"]:
             raise SyncRefused(
                 "the register changed after it was classified (a concurrent "
-                "writer). The register was NOT written; this run's sidecars are "
-                f"in {side}. Re-run the sync")
-        # (iii) Restore IN PLACE -- same inode, so a waiter on register_lock
-        # still holds a lock on the file it will write -- then put KEEP back
-        # through the same O_APPEND primitive every sanctioned write uses.
-        fd = os.open(register, os.O_WRONLY | os.O_TRUNC)
-        try:
-            os.write(fd, m["head"])
-        finally:
-            os.close(fd)
-        if keep and not hold:
-            append_row(keep, register)
+                "writer). Nothing was written. Re-run the sync")
+        again = _snapshot(repo, ref)
+        if (again["head_sha"], again["ref_sha"]) != (m["head_sha"], m["ref_sha"]):
+            raise SyncRefused(
+                "HEAD or the ref moved after classification. Nothing was "
+                "written. Re-run the sync")
 
-    expected = m["head"] + (b"" if hold else keep.encode("utf-8"))
-    if register.read_bytes() != expected:
-        raise SyncRefused(
-            "post-write check failed: the register is not HEAD"
-            f"{'' if hold else ' + KEEP'} byte-for-byte. KEEP is in {keep_path}")
+        # SIDECARS FIRST: KEEP, the dropped lines, and a FULL PRE-IMAGE of the
+        # register, plus a manifest that pins the KEEP file's hash for reapply.
+        # Nothing on the register moves until all four are on disk.
+        stamp = (datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+                 + f"-{os.getpid()}")
+        keep_path = side / f"{stamp}.keep.md"
+        pre_path = side / f"{stamp}.preimage.md"
+        _write_exclusive(pre_path, m["work"])
+        _write_exclusive(side / f"{stamp}.dropped.md", dropped)
+        _write_exclusive(keep_path, keep)
+        _write_exclusive(side / f"{stamp}.manifest.json", json.dumps({
+            "keep": keep_path.name, "keep_sha256": hashlib.sha256(keep).hexdigest(),
+            "preimage_sha256": m["work_hash"], "head": m["head_sha"],
+            "ref": ref, "ref_sha": m["ref_sha"], "mode": "hold" if hold else "apply",
+        }, indent=2).encode("utf-8"))
+        print(f"register-sync: KEEP rows saved to    {keep_path}")
+        print(f"register-sync: full pre-image saved  {pre_path}")
+
+        # FTRUNCATE TO HEAD'S LENGTH, never rewrite HEAD: the prefix is already
+        # verified byte-equal to HEAD, so cutting the tail cannot tear it. Same
+        # inode, so a waiter on register_lock still locks the file it will write.
+        expected = m["head"] + (b"" if hold else keep)
+        try:
+            fd = os.open(register, os.O_WRONLY)
+            try:
+                os.ftruncate(fd, len(m["head"]))
+            finally:
+                os.close(fd)
+            if keep and not hold:
+                _append_bytes(register, keep)
+            after = register.read_bytes()      # verified UNDER the lock
+        except Exception as exc:  # noqa: BLE001 -- the message must stay true
+            raise SyncRefused(
+                f"PARTIAL APPLY - the register WAS modified and then failed "
+                f"({type(exc).__name__}: {exc}). HEAD's bytes are intact (the "
+                f"register was only truncated to HEAD's length); the full "
+                f"original is in {pre_path} and KEEP is in {keep_path}. Recover "
+                f"with `make -C pmoves register-sync REAPPLY={keep_path} APPLY=1` "
+                "once the register is back at HEAD") from exc
+        if after != expected:
+            raise SyncRefused(
+                "PARTIAL APPLY - post-write check failed: the register is not "
+                f"HEAD{'' if hold else ' + KEEP'} byte-for-byte. The full original "
+                f"is in {pre_path}; KEEP is in {keep_path}")
     print(f"register-sync: APPLIED - the working diff vs HEAD now adds "
           f"{0 if hold else n_keep} line(s) and removes 0; {n_drop} dropped"
           f"{f', {n_keep} KEEP held in the sidecar' if hold else ''}.")
@@ -1170,38 +1269,91 @@ def sync_register(repo: Path, ref: str, apply: bool, hold: bool) -> int:
     return EXIT_OK
 
 
-def reapply_sidecar(repo: Path, sidecar: Path, apply: bool) -> int:
-    """Append a --hold sidecar's lines to the register's current tail.
+def _verified_sidecar(repo: Path, sidecar: Path) -> bytes:
+    """The KEEP bytes of a sidecar THIS TOOL wrote, unedited -- or a refusal."""
+    root = os.path.realpath(repo / SYNC_SIDECAR_REL)
+    real = os.path.realpath(sidecar)
+    if os.path.dirname(real) != root or not real.endswith(".keep.md"):
+        raise SyncRefused(
+            f"{sidecar} is not a `.keep.md` sidecar in {SYNC_SIDECAR_REL}/. "
+            "REAPPLY only accepts files this tool wrote")
+    if not os.path.isfile(real):
+        raise SyncRefused(f"no sidecar at {sidecar}")
+    manifest = Path(real[: -len(".keep.md")] + ".manifest.json")
+    try:
+        meta = json.loads(manifest.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise SyncRefused(f"no readable manifest beside {sidecar} ({exc}); "
+                          "refusing an unpinned sidecar") from exc
+    data = Path(real).read_bytes()
+    if meta.get("keep") != os.path.basename(real) or \
+            meta.get("keep_sha256") != hashlib.sha256(data).hexdigest():
+        raise SyncRefused(
+            f"{sidecar} does not match its manifest (edited since it was "
+            "written?). Refusing to append rows nobody classified")
+    return data
 
-    Idempotent: a non-blank line already present byte-for-byte is not appended
-    twice, so a second --reapply (or one after main absorbed the row) is safe.
-    """
+
+def reapply_sidecar(repo: Path, sidecar: Path, ref: str, apply: bool) -> int:
+    """Append a HOLD sidecar's rows to the tail -- through the same checks as a CLAIM."""
     register = repo / REGISTER_REL
     if not register.is_file():
         raise SyncRefused(f"no register at {register}")
-    if not sidecar.is_file():
-        raise SyncRefused(f"no sidecar at {sidecar}")
-    rows = sidecar.read_text(encoding="utf-8").splitlines(keepends=True)
-    print(f"register-sync: INPUT     {len(rows)} line(s) in {sidecar}")
+    data = _verified_sidecar(repo, sidecar)
+    lines = [ln for ln in _split_lines(data) if ln.strip()]
+    print(f"register-sync: INPUT     {len(_split_lines(data))} line(s) in {sidecar} "
+          f"({len(lines)} non-blank)")
+    bad = [ln for ln in lines if _row_key(_as_text(ln)) is None]
+    if bad:
+        raise SyncRefused(
+            f"{len(bad)} non-blank line(s) are not ledger rows (first: "
+            f"{_show(bad[0])!r}). REAPPLY appends rows only")
+    for ln in lines:
+        _ts, kind, _owner, branch = _row_key(_as_text(ln))
+        if kind == "RELEASE" and branch is None:
+            raise SyncRefused(
+                f"a bare RELEASE names no lane and would close EVERY lane its "
+                f"owner holds: {_show(ln)!r}. File it with "
+                "`make -C pmoves register-release` if that is intended")
+
+    try:
+        gate = _load_gate()
+    except Exception as exc:  # noqa: BLE001 -- report, never guess
+        raise SyncRefused(f"the collision gate could not be loaded ({exc})") from exc
+
     with register_lock(register):
-        present = set(register.read_text(encoding="utf-8",
-                                         errors="replace").split("\n"))
-        todo = []
-        for line in rows:
-            body = line.rstrip("\n")
-            if body.strip() and body in present:
-                print(f"  PRESENT  {body[:120]}")
-            else:
-                print(f"  APPEND   {body[:120]}")
-                todo.append(line if line.endswith("\n") else line + "\n")
+        current = register.read_bytes()
+        snap = _snapshot(repo, ref)
+        classes = classify_uncommitted(lines, current, snap["ref_blob"])
+        todo = [ln for cls, ln in classes if cls == KEEP]
+        for cls, ln in classes:
+            print(f"  {('APPEND' if cls == KEEP else 'SKIP ' + cls):<16} {_show(ln)}")
+        payload = b"".join(ln if ln.endswith(b"\n") else ln + b"\n" for ln in todo)
+        if todo:
+            try:
+                verdict = gate.evaluate_claims(
+                    payload.decode("utf-8", "surrogateescape"),
+                    gate.open_claims_in(current.decode("utf-8", "replace")))
+            except Exception as exc:  # noqa: BLE001
+                raise SyncRefused(f"the collision gate raised {type(exc).__name__}: "
+                                  f"{exc}; nothing was appended") from exc
+            if verdict.collisions:
+                held = "; ".join(f"`{lane}` held by `{other}` (line {n})"
+                                 for lane, other, n in verdict.collisions)
+                raise SyncLaneHeld(f"a reapplied CLAIM names a lane another owner "
+                                   f"holds: {held}. Nothing was appended")
+            if verdict.one_sided or verdict.unreadable_co_owners or verdict.unkeyed:
+                raise SyncRefused("a reapplied CLAIM is a unilateral co-owner "
+                                  "declaration, has unreadable co-owners, or names "
+                                  "no lane. Nothing was appended")
         print(f"register-sync: RESULT    {len(todo)} to append, "
-              f"{len(rows) - len(todo)} already present")
+              f"{len(lines) - len(todo)} skipped (now on the ref or the register)")
         if not apply:
             print("register-sync: DRY RUN - nothing written. Re-run with APPLY=1.")
             return EXIT_OK
-        if todo:
-            append_row("".join(todo), register)
-    print(f"register-sync: APPLIED - appended {len(todo)} line(s).")
+        if payload:
+            _append_bytes(register, payload)
+    print(f"register-sync: APPLIED - appended {len(todo)} row(s).")
     return EXIT_OK
 
 
@@ -1213,16 +1365,26 @@ def _warn_if_invisible(register: Path) -> None:
     merges is invisible to every other node -- and, left uncommitted on a `main`
     checkout, it later blocks that checkout's own pull (the 2026-09-28 stuck
     root checkout: 8 such rows).
+
+    NEVER RAISES. It runs AFTER a successful append; an exception here (git
+    missing) would turn a written row into exit 3, and a retry would file it
+    twice.
     """
-    proc = subprocess.run(
-        ["git", "-C", str(register.parent), "symbolic-ref", "-q", "--short", "HEAD"],
-        capture_output=True, text=True)
-    if proc.returncode != 0:
-        in_repo = subprocess.run(
-            ["git", "-C", str(register.parent), "rev-parse", "--git-dir"],
-            capture_output=True).returncode == 0
-        if not in_repo:
-            return          # not a checkout at all: nothing to be invisible from
+    try:
+        proc = subprocess.run(
+            ["git", "-C", str(register.parent), "symbolic-ref", "-q", "--short", "HEAD"],
+            capture_output=True, text=True)
+        if proc.returncode != 0:
+            in_repo = subprocess.run(
+                ["git", "-C", str(register.parent), "rev-parse", "--git-dir"],
+                capture_output=True).returncode == 0
+            if not in_repo:
+                return      # not a checkout at all: nothing to be invisible from
+    except OSError as exc:
+        print(f"register-append: note - the row WAS appended, but git could not be "
+              f"run ({exc}) to check whether this checkout is on main.",
+              file=sys.stderr)
+        return
     branch = proc.stdout.strip() if proc.returncode == 0 else None
     if branch is None or branch == "main":
         where = "a DETACHED HEAD" if branch is None else "`main`"
@@ -1361,8 +1523,11 @@ def _dispatch(argv: list[str] | None = None) -> int:
                 if args.hold:
                     raise SyncRefused("--hold and --reapply are opposite halves "
                                       "of the sequence; name one")
-                return reapply_sidecar(repo, Path(args.reapply), args.apply)
+                return reapply_sidecar(repo, Path(args.reapply), args.ref, args.apply)
             return sync_register(repo, args.ref, args.apply, args.hold)
+        except SyncLaneHeld as exc:
+            print(f"register-sync: refusing - {exc}.", file=sys.stderr)
+            return EXIT_REFUSED
         except SyncRefused as exc:
             print(f"register-sync: NOT MEASURED - {exc}.", file=sys.stderr)
             return EXIT_UNMEASURED

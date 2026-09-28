@@ -605,8 +605,16 @@ register-docs: ## Insert prose into the register without touching ledger rows (A
 #
 # Every value travels by ENVIRONMENT, for the reason spelled out above
 # register-claim: nothing here ever becomes a shell word.
-register-sync: export REGISTER_SYNC_APPLY = $(APPLY)
-register-sync: export REGISTER_SYNC_HOLD = $(HOLD)
+# APPLY and HOLD are honoured ONLY from the command line: make imports the
+# ambient environment as variables, so an `APPLY=1` exported in some shell
+# would otherwise silently turn every dry run into a write. REPO is pinned
+# BLANK: the tool targets its own checkout, and an ambient REGISTER_SYNC_REPO
+# would redirect it to another checkout's register in a command that never
+# names that register (so no hook could see it). `ARGS=--repo=...` stays
+# possible and is visible in the command text.
+register-sync: export REGISTER_SYNC_APPLY = $(if $(filter command line,$(origin APPLY)),$(APPLY),)
+register-sync: export REGISTER_SYNC_HOLD = $(if $(filter command line,$(origin HOLD)),$(HOLD),)
+register-sync: export REGISTER_SYNC_REPO =
 register-sync: export REGISTER_SYNC_REAPPLY = $(REAPPLY)
 register-sync: export REGISTER_SYNC_REF = $(REF)
 register-sync: ## Drop uncommitted register rows main already has, keep the rest ([APPLY=1] [HOLD=1] [REAPPLY=sidecar] [REF=origin/main]) -- 0 done / 3 refused

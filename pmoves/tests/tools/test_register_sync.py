@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import hashlib
 import importlib.util
+import json
 import os
 import subprocess
 import sys
@@ -151,6 +152,7 @@ def test_empty_input_is_distinguishable_from_an_empty_result(tmp_path):
     (STALE_A.replace("`infra/storage`", "`infra/storage-2`"), "different branch"),
     (STALE_A.replace(" CLAIM ", " RELEASE "), "different kind"),
     (STALE_A.replace(" branch: `infra/storage`", ""), "no header branch"),
+    (STALE_A.replace(" · scope:", " scope:"), "no ` · scope:` separator: header unreadable"),
 ])
 def test_keep_is_never_dropped_on_a_near_miss(tmp_path, stale, why):
     repo = _make_repo(tmp_path)
@@ -206,12 +208,10 @@ def test_refuses_on_a_concurrent_write(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(tool, "register_lock", racing_lock)
     with pytest.raises(tool.SyncRefused, match="concurrent"):
         tool.sync_register(repo, "upstream", apply=True, hold=False)
-    # Nothing on the register moved, the late row survives, and the KEEP rows
-    # were already safe in the sidecar before the refusal.
+    # Nothing on the register moved and the late row survives. The refusal
+    # happens under the lock BEFORE any sidecar is written, so none exists.
     assert reg.read_bytes() == (BASE + STALE + KEEP_ROWS + late).encode()
-    sidecars = sorted((repo / "pmoves" / "data" / "register-sync").iterdir())
-    keep = [p for p in sidecars if p.name.endswith(".keep.md")]
-    assert keep and keep[0].read_bytes() == KEEP_ROWS.encode()
+    assert not list((repo / "pmoves" / "data" / "register-sync").glob("*.keep.md"))
 
 
 # --- apply / hold / reapply --------------------------------------------------
@@ -232,6 +232,9 @@ def test_apply_leaves_the_working_diff_equal_to_keep(tmp_path):
     dropped = next(side.glob("*.dropped.md"))
     assert keep.read_bytes() == KEEP_ROWS.encode()
     assert dropped.read_bytes() == STALE.encode()
+    pre = next(side.glob("*.preimage.md"))
+    assert pre.read_bytes() == (BASE + STALE + KEEP_ROWS).encode()   # full pre-image
+    assert next(side.glob("*.manifest.json")).is_file()
     # The sidecars are invisible to git: only the register shows as modified.
     assert _git(repo, "status", "--porcelain").splitlines() == [f" M {REG_REL}"]
 
@@ -264,7 +267,7 @@ def test_hold_then_pull_then_reapply_round_trips_byte_exact(tmp_path):
     assert reg.read_bytes() == (UPSTREAM + KEEP_ROWS).encode()
 
     again = _sync(repo, "--reapply", str(keep), "--apply")    # idempotent
-    assert again.returncode == 0 and "0 to append, 2 already present" in again.stdout
+    assert again.returncode == 0 and "0 to append, 2 skipped" in again.stdout
     assert hashlib.sha256(reg.read_bytes()).digest() == hashlib.sha256(
         (UPSTREAM + KEEP_ROWS).encode()).digest()
 
@@ -302,3 +305,163 @@ def test_an_append_on_a_detached_head_warns(tmp_path, monkeypatch, capsys):
 def test_an_append_on_a_feature_branch_does_not_warn(tmp_path, monkeypatch, capsys):
     err = _note_on(tmp_path, monkeypatch, capsys, ("-b", "fix/something"))
     assert "WARNING" not in err
+
+
+# --- [P1] REAPPLY is no weaker than register-claim ---------------------------
+
+def _held_sidecar(tmp_path):
+    """A repo after HOLD: register at HEAD, a genuine KEEP sidecar + manifest."""
+    repo = _make_repo(tmp_path)
+    _dirty(repo, STALE + KEEP_ROWS)
+    r = _sync(repo, "--apply", "--hold")
+    assert r.returncode == 0, r.stderr
+    side = repo / "pmoves" / "data" / "register-sync"
+    return repo, next(side.glob("*.keep.md"))
+
+
+def _forge(keep: Path, rows: str) -> None:
+    """Rewrite a sidecar AND its manifest consistently -- the strongest forger,
+    so the row-level checks are tested on their own, not hidden behind the hash."""
+    keep.write_bytes(rows.encode())
+    man = keep.with_name(keep.name[: -len(".keep.md")] + ".manifest.json")
+    meta = json.loads(man.read_text())
+    meta["keep_sha256"] = hashlib.sha256(rows.encode()).hexdigest()
+    man.write_text(json.dumps(meta))
+
+
+def test_reapply_refuses_a_file_outside_the_sidecar_directory(tmp_path):
+    repo, _keep = _held_sidecar(tmp_path)
+    forged = tmp_path / "forged.keep.md"
+    forged.write_text(KEEP_A)
+    before = (repo / REG_REL).read_bytes()
+    r = _sync(repo, "--reapply", str(forged), "--apply")
+    assert r.returncode == 3 and "only accepts files this tool wrote" in r.stderr
+    assert (repo / REG_REL).read_bytes() == before
+
+
+def test_reapply_refuses_an_edited_sidecar(tmp_path):
+    repo, keep = _held_sidecar(tmp_path)
+    keep.write_bytes(keep.read_bytes() + KEEP_A.replace("11:38:08Z", "11:38:09Z").encode())
+    before = (repo / REG_REL).read_bytes()
+    r = _sync(repo, "--reapply", str(keep), "--apply")
+    assert r.returncode == 3 and "does not match its manifest" in r.stderr
+    assert (repo / REG_REL).read_bytes() == before
+
+
+def test_reapply_refuses_a_sidecar_with_no_manifest(tmp_path):
+    repo, keep = _held_sidecar(tmp_path)
+    planted = keep.with_name("planted.keep.md")
+    planted.write_text(KEEP_A)
+    r = _sync(repo, "--reapply", str(planted), "--apply")
+    assert r.returncode == 3 and "manifest" in r.stderr
+
+
+INTRUDER = ("- `2026-09-28T01:00:00Z` CLAIM `INTRUDER` branch: `ci/held` · "
+            "**TTL 24h** · scope: take the lane.\n")
+HOLDER = ("- `2026-09-28T00:30:00Z` CLAIM `B850-CLAUDE (Knuckles)` branch: "
+          "`ci/held` · **TTL 72h** · scope: mine.\n")
+
+
+@pytest.mark.parametrize("rows, rc, needle", [
+    (INTRUDER, 1, "another owner"),
+    ("- `2026-09-28T01:00:00Z` RELEASE `INTRUDER` · scope: close everything.\n", 3,
+     "bare RELEASE"),
+    (KEEP_A + "this line is prose, not a ledger row\n", 3, "not ledger rows"),
+])
+def test_reapply_refuses_the_forged_file_probe(tmp_path, rows, rc, needle):
+    """The reviewer's probe, with a CONSISTENT manifest: intruder CLAIM on a held
+    lane, a bare RELEASE, a non-row line. All-or-nothing: nothing appended."""
+    repo, keep = _held_sidecar(tmp_path)
+    reg = repo / REG_REL
+    _dirty(repo, HOLDER)                     # another owner now holds `ci/held`
+    before = reg.read_bytes()
+    _forge(keep, rows)
+    r = _sync(repo, "--reapply", str(keep), "--apply")
+    assert r.returncode == rc, (r.stdout, r.stderr)
+    assert needle in r.stderr
+    assert reg.read_bytes() == before
+
+
+def test_reapply_skips_rows_main_re_filed_during_the_pull(tmp_path):
+    repo, keep = _held_sidecar(tmp_path)
+    reg = repo / REG_REL
+    refile = ("- `2026-09-28T02:00:00Z` CLAIM `B850-CLAUDE (Knuckles)` branch: "
+              "`feat/crush-acp` · **TTL 24h** · scope: RE-FILED: first filed at "
+              "2026-09-27T11:38:08Z.\n")
+    _git(repo, "checkout", "-q", "upstream")
+    with open(reg, "a", encoding="utf-8") as fh:
+        fh.write(refile)
+    _git(repo, "commit", "-q", "-am", "main re-files the crush lane")
+    _git(repo, "checkout", "-q", "main")
+    _git(repo, "merge", "--ff-only", "-q", "upstream")
+    r = _sync(repo, "--reapply", str(keep), "--apply")
+    assert r.returncode == 0, r.stderr
+    assert "SKIP RE-FILED" in r.stdout and "1 to append, 1 skipped" in r.stdout
+    assert reg.read_bytes() == (UPSTREAM + refile + KEEP_B).encode()
+
+
+# --- [P2] a failure mid-apply is reported truthfully -------------------------
+
+def test_a_failure_after_the_truncate_is_reported_as_partial(tmp_path, monkeypatch):
+    tool = _load_tool()
+    repo = _make_repo(tmp_path)
+    reg = _dirty(repo, STALE + KEEP_ROWS)
+    original = reg.read_bytes()
+
+    def boom(register, data):
+        raise OSError(28, "No space left on device")
+
+    monkeypatch.setattr(tool, "_append_bytes", boom)
+    with pytest.raises(tool.SyncRefused) as exc:
+        tool.sync_register(repo, "upstream", apply=True, hold=False)
+    msg = str(exc.value)
+    assert "PARTIAL APPLY" in msg and "WAS modified" in msg and ".preimage.md" in msg
+    assert reg.read_bytes() == BASE.encode()           # HEAD intact, not torn
+    pre = next((repo / "pmoves" / "data" / "register-sync").glob("*.preimage.md"))
+    assert pre.read_bytes() == original
+
+
+# --- [P2] bytes, not text ----------------------------------------------------
+
+def test_a_non_utf8_byte_in_a_keep_row_round_trips_byte_exact(tmp_path):
+    repo = _make_repo(tmp_path)
+    reg = repo / REG_REL
+    odd = KEEP_A.encode().replace(b"bridge.", b"bridge \xff.")
+    with open(reg, "ab") as fh:
+        fh.write(STALE_A.encode() + odd)
+    r = _sync(repo, "--apply")
+    assert r.returncode == 0, r.stderr
+    assert "0 ON-MAIN, 1 RE-FILED, 1 KEEP" in r.stdout
+    assert reg.read_bytes() == BASE.encode() + odd
+
+
+def test_a_line_separator_inside_a_scope_stays_one_row(tmp_path):
+    repo = _make_repo(tmp_path)
+    stale = STALE_A.replace("reconcile storage.", "reconcile storage.")
+    _dirty(repo, stale)
+    r = _sync(repo)
+    assert r.returncode == 0, r.stderr
+    assert "INPUT     1 uncommitted line(s)" in r.stdout
+    assert "0 ON-MAIN, 1 RE-FILED, 0 KEEP (of 1 input)" in r.stdout
+
+
+# --- [P3] -------------------------------------------------------------------
+
+def test_a_staged_register_change_is_refused(tmp_path):
+    repo = _make_repo(tmp_path)
+    reg = _dirty(repo, STALE)
+    _git(repo, "add", REG_REL)
+    r = _sync(repo, "--apply")
+    assert r.returncode == 3 and "INDEX differs from HEAD" in r.stderr
+    assert reg.read_bytes() == (BASE + STALE).encode()
+
+
+def test_a_missing_git_cannot_turn_a_written_row_into_a_failure(tmp_path, monkeypatch, capsys):
+    tool = _load_tool()
+
+    def no_git(*a, **k):
+        raise FileNotFoundError(2, "No such file or directory: 'git'")
+
+    monkeypatch.setattr(tool.subprocess, "run", no_git)
+    tool._warn_if_invisible(tmp_path / "reg.md")        # must not raise
+    assert "WAS appended" in capsys.readouterr().err
