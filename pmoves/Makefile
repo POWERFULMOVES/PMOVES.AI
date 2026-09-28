@@ -2436,10 +2436,14 @@ export ARCHON_CHANNEL_REPO ARCHON_CHANNEL ARCHON_SMOKE_TIMEOUT
 # UNGATED builds never wear the channel tag. Compose's archon service carries
 # both `build:` and `image: ${ARCHON_IMAGE:-...:current}`, so any `--build` (or
 # `build`) of archon would otherwise tag the raw submodule tree as :current on
-# this node. Every recipe that BUILDS archon prefixes this; the shell value
-# outranks the --env-file value (compose precedence).
+# this node. Every target that BUILDS archon gets a target-specific EXPORT of
+# ARCHON_IMAGE (below); the recipe lines themselves stay byte-identical, so the
+# $(DC) shape (and the CIPHER_TOKEN_SHADOW_GUARD it starts with) is untouched.
+# The exported shell value outranks the --env-file value (compose precedence);
+# `override` also beats an ARCHON_IMAGE given on the make command line.
 ARCHON_LOCAL_BUILD_IMAGE ?= pmoves-archon:local-build
-ARCHON_UNGATED := ARCHON_IMAGE=$(ARCHON_LOCAL_BUILD_IMAGE)
+ARCHON_BUILD_TARGETS := up-agents-stack archon-rebuild build-agents-integrations
+$(ARCHON_BUILD_TARGETS): export override ARCHON_IMAGE = $(ARCHON_LOCAL_BUILD_IMAGE)
 # Resolver exit codes: 1 = hardened fork lacks the release (sync it), 3 = could not measure.
 ARCHON_RESOLVE_OR_EXPLAIN = out=$$($(UPSTREAM_TRACK) archon) || { rc=$$?; printf '%s\n' "$$out"; \
 	if [ $$rc -eq 1 ]; then echo "✖ refusing: the hardened fork does not contain the latest upstream release (sync it first)"; \
@@ -4109,7 +4113,7 @@ up-jellyfin:
 # instead, use archon-release-latest + up-a0-archon-scoped.
 .PHONY: up-agents up-agents-stack
 up-agents-stack: cipher-build-pin-check ## Start Agents (NATS, Agent Zero, Archon (TS) + its Postgres, Cipher Memory, etc.)
-	@$(ARCHON_UNGATED) $(DC) --profile agents up -d --build nats agent-zero archon-postgres archon mesh-agent deepresearch publisher-discord cipher-api
+	@$(DC) --profile agents up -d --build nats agent-zero archon-postgres archon mesh-agent deepresearch publisher-discord cipher-api
 	@$(MAKE) --no-print-directory qdrant-provision-cipher || rc=$$?; 	rc=$${rc:-0}; if [ $$rc -ne 0 ] && [ $$rc -ne 2 ]; then echo "qdrant-provision-cipher failed (exit $$rc)"; exit $$rc; fi
 
 .PHONY: up-notebooklm
@@ -4433,7 +4437,7 @@ archon-rest-policy-smoke: ## Probe a CLI REST table with anon key (non-fatal on 
 
 .PHONY: archon-rebuild
 archon-rebuild: ## Rebuild Archon image with vendor update (set ARCHON_GIT_REF/REMOTE as needed)
-	@$(ARCHON_UNGATED) $(DC) build --no-cache archon
+	@$(DC) build --no-cache archon
 	@echo "✔ Archon image rebuilt"
 
 .PHONY: deepresearch-health
@@ -4643,7 +4647,7 @@ agents-integrations-pull: ## Pull latest from your forks
 	@cd "$(INTEGRATIONS_WORKSPACE)/PMOVES-Archon" && git fetch --all && git pull --rebase || true
 
 build-agents-integrations: ## Build agent images from your forks
-	@$(ARCHON_UNGATED) $(DC) -f docker-compose.agents.integrations.yml --profile agents build agent-zero archon
+	@$(DC) -f docker-compose.agents.integrations.yml --profile agents build agent-zero archon
 
 
 up-agents-integrations: ## Start agents using your forks (builds from $(INTEGRATIONS_WORKSPACE))

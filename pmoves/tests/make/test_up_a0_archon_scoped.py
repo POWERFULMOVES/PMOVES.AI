@@ -104,25 +104,76 @@ def _recipe_lines():
     return [l for l in MAKEFILE.read_text().splitlines() if l.startswith("\t")]
 
 
-def test_every_recipe_that_builds_archon_uses_the_local_build_tag():
+def _archon_build_targets(text: str) -> set[str]:
+    """Targets whose recipe BUILDS archon through $(DC)."""
     import re
-    builds = [
-        l for l in _recipe_lines()
-        if "$(DC)" in l and "archon" in l and re.search(r"(--build\b|\sbuild\s)", l)
-    ]
-    assert len(builds) >= 3, builds  # up-agents-stack, archon-rebuild, build-agents-integrations
-    for l in builds:
-        assert "$(ARCHON_UNGATED)" in l, l
+    found, target = set(), None
+    for line in text.splitlines():
+        m = re.match(r"^([A-Za-z0-9_.-]+):(?!=)", line)
+        if m:
+            target = m.group(1)
+        elif line.startswith("\t") and target and "$(DC)" in line and "archon" in line \
+                and re.search(r"(--build\b|\sbuild\s)", line):
+            found.add(target)
+    return found
 
 
-@pytest.mark.parametrize("target", ["archon-rebuild", "build-agents-integrations"])
-def test_build_recipes_render_a_non_channel_tag(stub_docker_path, target):
-    env = dict(stub_docker_path)
-    env.pop("CIPHER_API_TOKEN", None)
-    env.pop("ARCHON_IMAGE", None)
-    r = subprocess.run(["make", "-n", "--no-print-directory", "-C", str(PMOVES), target],
+def _exported_build_targets(text: str) -> set[str]:
+    import re
+    m = re.search(r"^ARCHON_BUILD_TARGETS\s*:=\s*(.+)$", text, re.M)
+    ok = re.search(r"^\$\(ARCHON_BUILD_TARGETS\):\s*export override ARCHON_IMAGE = \$\(ARCHON_LOCAL_BUILD_IMAGE\)$", text, re.M)
+    return set(m.group(1).split()) if (m and ok) else set()
+
+
+def test_every_target_that_builds_archon_exports_the_local_build_tag():
+    text = MAKEFILE.read_text()
+    builds = _archon_build_targets(text)
+    assert {"up-agents-stack", "archon-rebuild", "build-agents-integrations"} <= builds, builds
+    assert builds <= _exported_build_targets(text), builds - _exported_build_targets(text)
+
+
+def test_recipe_lines_carry_no_image_prefix_in_front_of_dc():
+    # The cipher-token guard pins the rendered $(DC) shape; the image must come
+    # from a target-specific export, never a line prefix.
+    for l in _recipe_lines():
+        if "$(DC)" in l:
+            assert "ARCHON_IMAGE=" not in l.split("$(DC)")[0], l
+
+
+PROBE = ["--eval", 'zz-probe: ; +@echo "AI=[$$ARCHON_IMAGE]"']
+
+
+def _probe(env, target, *extra):
+    env = dict(env)
+    for k in ("CIPHER_API_TOKEN", "ARCHON_IMAGE", "SERVICES", "DRY_RUN"):
+        env.pop(k, None)
+    r = subprocess.run(["make", "-k", "-n", "-s", "--no-print-directory", "-C", str(PMOVES), *PROBE,
+                        "--eval", f"{target}: zz-probe", target, *extra],
                        env=env, capture_output=True, text=True, timeout=120)
-    assert r.returncode == 0, r.stderr
-    build = [l for l in r.stdout.splitlines() if " build " in l]
-    assert build and all("ARCHON_IMAGE=pmoves-archon:local-build" in l for l in build)
-    assert ":current" not in r.stdout
+    return sorted({l for l in r.stdout.splitlines() if l.startswith("AI=")})
+
+
+@pytest.mark.parametrize("target", ["up-agents-stack", "archon-rebuild", "build-agents-integrations"])
+def test_build_targets_run_with_the_local_build_image(stub_docker_path, target):
+    assert _probe(stub_docker_path, target) == ["AI=[pmoves-archon:local-build]"]
+
+
+def test_command_line_current_cannot_reach_a_build(stub_docker_path):
+    got = _probe(stub_docker_path, "archon-rebuild", "ARCHON_IMAGE=ghcr.io/powerfulmoves/pmoves-archon:current")
+    assert got == ["AI=[pmoves-archon:local-build]"]
+
+
+@pytest.mark.parametrize("target", ["up-a0-archon-scoped", "archon-follow", "cipher-build-pin-check", "qdrant-provision-cipher"])
+def test_the_export_does_not_leak_into_non_build_paths(stub_docker_path, target):
+    assert _probe(stub_docker_path, target) == ["AI=[]"]
+
+
+def test_build_recipes_render_no_channel_tag(stub_docker_path):
+    env = dict(stub_docker_path)
+    for k in ("CIPHER_API_TOKEN", "ARCHON_IMAGE"):
+        env.pop(k, None)
+    for target in ("archon-rebuild", "build-agents-integrations"):
+        r = subprocess.run(["make", "-n", "--no-print-directory", "-C", str(PMOVES), target],
+                           env=env, capture_output=True, text=True, timeout=120)
+        assert r.returncode == 0, r.stderr
+        assert ":current" not in r.stdout
