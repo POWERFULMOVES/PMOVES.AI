@@ -257,7 +257,10 @@ def render_phase2(doc: dict) -> str:
         L.append(f"- Default run ({_cell(run['command'])}): **{run['passed']} passed / {run['skipped']} skipped / "
                  f"{run['failed']} failed**" + (f", flaky {run['flaky']}" if run.get("flaky") else "")
                  + (f", rc {run['rc']}" if run.get("rc") is not None else "") + f", of {run['total']}. "
-                 "Skipped = the fixme tests above (the @backend tests are not in this run).")
+                 f"Skipped = the {suite['fixme']} fixme tests below"
+                 + (f" plus {run['skipped'] - suite['fixme']} runtime `test.skip` (not a fixme; see the run report)"
+                    if run["skipped"] > suite["fixme"] else "")
+                 + "; the @backend tests are not in this run.")
     L += ["", "### Every fixme in the default run", "", "| where | test | category | issue | reason |",
           "|---|---|---|---|---|"]
     for f in suite["fixme_tests"]:

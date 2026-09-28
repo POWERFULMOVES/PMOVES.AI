@@ -75,8 +75,17 @@
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
       "inspection": null,
-      "phase2a_disposition": "updated",
-      "phase2a_issue": null
+      "phase2a_disposition": "updated-to-current",
+      "phase2a_issue": null,
+      "phase2a_prior": "updated",
+      "phase2a_reason_category": null,
+      "phase2a_reason": null,
+      "phase2a_current": {
+        "where": "e2e/archon-prompts.spec.ts:136",
+        "describe": "Archon Prompts - List View",
+        "title": "displays prompts list with search",
+        "renamed": true
+      }
     },
     {
       "n": 2,
@@ -144,8 +153,17 @@
       "mechanical_stale": "n",
       "mechanical_action": "mock-backend",
       "inspection": null,
-      "phase2a_disposition": "updated (mechanical said mock-backend; form fields renamed: Prompt name / Prompt body)",
-      "phase2a_issue": null
+      "phase2a_disposition": "updated-to-current",
+      "phase2a_issue": null,
+      "phase2a_prior": "updated (mechanical said mock-backend; form fields renamed: Prompt name / Prompt body)",
+      "phase2a_reason_category": null,
+      "phase2a_reason": null,
+      "phase2a_current": {
+        "where": "e2e/archon-prompts.spec.ts:207",
+        "describe": "Archon Prompts - Create",
+        "title": "shows create form with required fields",
+        "renamed": true
+      }
     },
     {
       "n": 3,
@@ -204,8 +222,17 @@
       "mechanical_stale": "n",
       "mechanical_action": "mock-backend",
       "inspection": null,
-      "phase2a_disposition": "mocked",
-      "phase2a_issue": null
+      "phase2a_disposition": "updated-to-current",
+      "phase2a_issue": null,
+      "phase2a_prior": "mocked",
+      "phase2a_reason_category": null,
+      "phase2a_reason": null,
+      "phase2a_current": {
+        "where": "e2e/chat.spec.ts:78",
+        "describe": "Agent Zero Chat",
+        "title": "sends message and displays in chat history",
+        "renamed": false
+      }
     },
     {
       "n": 4,
@@ -269,8 +296,17 @@
       "mechanical_stale": "n",
       "mechanical_action": "mock-backend",
       "inspection": null,
-      "phase2a_disposition": "mocked+updated (loading state is the Sending... button, not role=status)",
-      "phase2a_issue": null
+      "phase2a_disposition": "updated-to-current",
+      "phase2a_issue": null,
+      "phase2a_prior": "mocked+updated (loading state is the Sending... button, not role=status)",
+      "phase2a_reason_category": null,
+      "phase2a_reason": null,
+      "phase2a_current": {
+        "where": "e2e/chat.spec.ts:89",
+        "describe": "Agent Zero Chat",
+        "title": "displays loading state while agent processes",
+        "renamed": false
+      }
     },
     {
       "n": 5,
@@ -333,8 +369,17 @@
       "mechanical_stale": "n",
       "mechanical_action": "mock-backend",
       "inspection": "by design the input is cleared only when send succeeds (app/dashboard/chat/page.tsx:220-222 'Only clear input after successful send'); /api/chat/send fails without Supabase",
-      "phase2a_disposition": "mocked",
-      "phase2a_issue": null
+      "phase2a_disposition": "updated-to-current",
+      "phase2a_issue": null,
+      "phase2a_prior": "mocked",
+      "phase2a_reason_category": null,
+      "phase2a_reason": null,
+      "phase2a_current": {
+        "where": "e2e/chat.spec.ts:140",
+        "describe": "Agent Zero Chat",
+        "title": "clears input after sending",
+        "renamed": false
+      }
     },
     {
       "n": 6,
@@ -393,8 +438,17 @@
       "mechanical_stale": "n",
       "mechanical_action": "mock-backend",
       "inspection": null,
-      "phase2a_disposition": "mocked",
-      "phase2a_issue": null
+      "phase2a_disposition": "updated-to-current",
+      "phase2a_issue": null,
+      "phase2a_prior": "mocked",
+      "phase2a_reason_category": null,
+      "phase2a_reason": null,
+      "phase2a_current": {
+        "where": "e2e/chat.spec.ts:165",
+        "describe": "Agent Zero Chat",
+        "title": "handles Enter key to send message",
+        "renamed": false
+      }
     },
     {
       "n": 7,
@@ -457,8 +511,12 @@
       "mechanical_stale": "n",
       "mechanical_action": "mock-backend",
       "inspection": "message field is a single-line <input id=chatMessage> (app/dashboard/chat/page.tsx:350), which cannot hold a newline; git log --all -S'<textarea' -- app/dashboard/chat is empty, so it was never multi-line",
-      "phase2a_disposition": "deleted (multi-line input never existed)",
-      "phase2a_issue": null
+      "phase2a_disposition": "deleted",
+      "phase2a_issue": null,
+      "phase2a_prior": "deleted (multi-line input never existed)",
+      "phase2a_reason_category": null,
+      "phase2a_reason": null,
+      "phase2a_current": null
     },
     {
       "n": 8,
@@ -508,8 +566,17 @@
       "mechanical_stale": "n",
       "mechanical_action": "mock-backend",
       "inspection": "chat page renders an unnamed AGENT selector <select> (app/dashboard/chat/page.tsx:339; options Agent Zero/Archon/...) and no model combobox or settings button; the controls are static, so the JWT alert is not the cause",
-      "phase2a_disposition": "rewritten (agent selector, not model selector)",
-      "phase2a_issue": null
+      "phase2a_disposition": "updated-to-current",
+      "phase2a_issue": null,
+      "phase2a_prior": "rewritten (agent selector, not model selector)",
+      "phase2a_reason_category": null,
+      "phase2a_reason": null,
+      "phase2a_current": {
+        "where": "e2e/chat.spec.ts:224",
+        "describe": "Agent Zero Chat - Settings",
+        "title": "provides access to agent selection",
+        "renamed": true
+      }
     },
     {
       "n": 9,
@@ -563,8 +630,16 @@
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
       "inspection": null,
-      "phase2a_disposition": "fixme",
-      "phase2a_issue": 3224
+      "phase2a_disposition": "updated-to-current",
+      "phase2a_issue": null,
+      "phase2a_reason_category": null,
+      "phase2a_reason": null,
+      "phase2a_current": {
+        "where": "e2e/ingestion.spec.ts:186",
+        "describe": "Enhanced Video Approval",
+        "title": "should load ingestion queue with initial state",
+        "renamed": false
+      }
     },
     {
       "n": 10,
@@ -618,8 +693,16 @@
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
       "inspection": null,
-      "phase2a_disposition": "fixme",
-      "phase2a_issue": 3224
+      "phase2a_disposition": "updated-to-current",
+      "phase2a_issue": null,
+      "phase2a_reason_category": null,
+      "phase2a_reason": null,
+      "phase2a_current": {
+        "where": "e2e/ingestion.spec.ts:237",
+        "describe": "Enhanced Video Approval",
+        "title": "should show \"select all visible\" button",
+        "renamed": false
+      }
     },
     {
       "n": 11,
@@ -673,8 +756,16 @@
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
       "inspection": null,
-      "phase2a_disposition": "fixme",
-      "phase2a_issue": 3224
+      "phase2a_disposition": "updated-to-current",
+      "phase2a_issue": null,
+      "phase2a_reason_category": null,
+      "phase2a_reason": null,
+      "phase2a_current": {
+        "where": "e2e/ingestion.spec.ts:243",
+        "describe": "Enhanced Video Approval",
+        "title": "should show \"select pending\" button",
+        "renamed": false
+      }
     },
     {
       "n": 12,
@@ -728,8 +819,16 @@
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
       "inspection": null,
-      "phase2a_disposition": "fixme",
-      "phase2a_issue": 3224
+      "phase2a_disposition": "updated-to-current",
+      "phase2a_issue": null,
+      "phase2a_reason_category": null,
+      "phase2a_reason": null,
+      "phase2a_current": {
+        "where": "e2e/ingestion.spec.ts:249",
+        "describe": "Enhanced Video Approval",
+        "title": "should select all visible items",
+        "renamed": false
+      }
     },
     {
       "n": 13,
@@ -783,8 +882,16 @@
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
       "inspection": null,
-      "phase2a_disposition": "fixme",
-      "phase2a_issue": 3224
+      "phase2a_disposition": "updated-to-current",
+      "phase2a_issue": null,
+      "phase2a_reason_category": null,
+      "phase2a_reason": null,
+      "phase2a_current": {
+        "where": "e2e/ingestion.spec.ts:266",
+        "describe": "Enhanced Video Approval",
+        "title": "should select only pending items",
+        "renamed": false
+      }
     },
     {
       "n": 14,
@@ -838,8 +945,16 @@
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
       "inspection": null,
-      "phase2a_disposition": "fixme",
-      "phase2a_issue": 3224
+      "phase2a_disposition": "updated-to-current",
+      "phase2a_issue": null,
+      "phase2a_reason_category": null,
+      "phase2a_reason": null,
+      "phase2a_current": {
+        "where": "e2e/ingestion.spec.ts:297",
+        "describe": "Enhanced Video Approval",
+        "title": "should clear selection",
+        "renamed": false
+      }
     },
     {
       "n": 15,
@@ -893,8 +1008,16 @@
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
       "inspection": null,
-      "phase2a_disposition": "fixme",
-      "phase2a_issue": 3224
+      "phase2a_disposition": "updated-to-current",
+      "phase2a_issue": null,
+      "phase2a_reason_category": null,
+      "phase2a_reason": null,
+      "phase2a_current": {
+        "where": "e2e/ingestion.spec.ts:320",
+        "describe": "Enhanced Video Approval",
+        "title": "should bulk approve with priority",
+        "renamed": false
+      }
     },
     {
       "n": 16,
@@ -948,8 +1071,16 @@
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
       "inspection": null,
-      "phase2a_disposition": "fixme",
-      "phase2a_issue": 3224
+      "phase2a_disposition": "updated-to-current",
+      "phase2a_issue": null,
+      "phase2a_reason_category": null,
+      "phase2a_reason": null,
+      "phase2a_current": {
+        "where": "e2e/ingestion.spec.ts:347",
+        "describe": "Enhanced Video Approval",
+        "title": "should use default priority of 5",
+        "renamed": false
+      }
     },
     {
       "n": 17,
@@ -1003,8 +1134,16 @@
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
       "inspection": null,
-      "phase2a_disposition": "fixme",
-      "phase2a_issue": 3224
+      "phase2a_disposition": "updated-to-current",
+      "phase2a_issue": null,
+      "phase2a_reason_category": null,
+      "phase2a_reason": null,
+      "phase2a_current": {
+        "where": "e2e/ingestion.spec.ts:385",
+        "describe": "Enhanced Video Approval",
+        "title": "should disable approve when processing",
+        "renamed": false
+      }
     },
     {
       "n": 18,
@@ -1058,8 +1197,16 @@
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
       "inspection": null,
-      "phase2a_disposition": "fixme",
-      "phase2a_issue": 3224
+      "phase2a_disposition": "updated-to-current",
+      "phase2a_issue": null,
+      "phase2a_reason_category": null,
+      "phase2a_reason": null,
+      "phase2a_current": {
+        "where": "e2e/ingestion.spec.ts:405",
+        "describe": "Enhanced Video Approval",
+        "title": "should bulk reject with reason",
+        "renamed": false
+      }
     },
     {
       "n": 19,
@@ -1113,8 +1260,16 @@
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
       "inspection": null,
-      "phase2a_disposition": "fixme",
-      "phase2a_issue": 3224
+      "phase2a_disposition": "updated-to-current",
+      "phase2a_issue": null,
+      "phase2a_reason_category": null,
+      "phase2a_reason": null,
+      "phase2a_current": {
+        "where": "e2e/ingestion.spec.ts:431",
+        "describe": "Enhanced Video Approval",
+        "title": "should use default rejection reason",
+        "renamed": false
+      }
     },
     {
       "n": 20,
@@ -1168,8 +1323,16 @@
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
       "inspection": null,
-      "phase2a_disposition": "fixme",
-      "phase2a_issue": 3224
+      "phase2a_disposition": "updated-to-current",
+      "phase2a_issue": null,
+      "phase2a_reason_category": null,
+      "phase2a_reason": null,
+      "phase2a_current": {
+        "where": "e2e/ingestion.spec.ts:450",
+        "describe": "Enhanced Video Approval",
+        "title": "should pre-fill quick rejection reasons",
+        "renamed": false
+      }
     },
     {
       "n": 21,
@@ -1223,8 +1386,16 @@
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
       "inspection": null,
-      "phase2a_disposition": "fixme",
-      "phase2a_issue": 3224
+      "phase2a_disposition": "updated-to-current",
+      "phase2a_issue": null,
+      "phase2a_reason_category": null,
+      "phase2a_reason": null,
+      "phase2a_current": {
+        "where": "e2e/ingestion.spec.ts:466",
+        "describe": "Enhanced Video Approval",
+        "title": "should set reason when quick reason clicked",
+        "renamed": false
+      }
     },
     {
       "n": 22,
@@ -1278,8 +1449,16 @@
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
       "inspection": null,
-      "phase2a_disposition": "fixme",
-      "phase2a_issue": 3224
+      "phase2a_disposition": "updated-to-current",
+      "phase2a_issue": null,
+      "phase2a_reason_category": null,
+      "phase2a_reason": null,
+      "phase2a_current": {
+        "where": "e2e/ingestion.spec.ts:482",
+        "describe": "Enhanced Video Approval",
+        "title": "should show character count for rejection reason",
+        "renamed": false
+      }
     },
     {
       "n": 23,
@@ -1333,8 +1512,16 @@
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
       "inspection": null,
-      "phase2a_disposition": "fixme",
-      "phase2a_issue": 3224
+      "phase2a_disposition": "updated-to-current",
+      "phase2a_issue": null,
+      "phase2a_reason_category": null,
+      "phase2a_reason": null,
+      "phase2a_current": {
+        "where": "e2e/ingestion.spec.ts:497",
+        "describe": "Enhanced Video Approval",
+        "title": "should enforce max length of 500 for rejection reason",
+        "renamed": false
+      }
     },
     {
       "n": 24,
@@ -1388,8 +1575,16 @@
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
       "inspection": null,
-      "phase2a_disposition": "fixme",
-      "phase2a_issue": 3224
+      "phase2a_disposition": "updated-to-current",
+      "phase2a_issue": null,
+      "phase2a_reason_category": null,
+      "phase2a_reason": null,
+      "phase2a_current": {
+        "where": "e2e/ingestion.spec.ts:514",
+        "describe": "Enhanced Video Approval",
+        "title": "should export selected to CSV",
+        "renamed": false
+      }
     },
     {
       "n": 25,
@@ -1443,8 +1638,16 @@
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
       "inspection": null,
-      "phase2a_disposition": "fixme",
-      "phase2a_issue": 3224
+      "phase2a_disposition": "updated-to-current",
+      "phase2a_issue": null,
+      "phase2a_reason_category": null,
+      "phase2a_reason": null,
+      "phase2a_current": {
+        "where": "e2e/ingestion.spec.ts:535",
+        "describe": "Enhanced Video Approval",
+        "title": "should open approval rules config",
+        "renamed": false
+      }
     },
     {
       "n": 26,
@@ -1498,8 +1701,16 @@
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
       "inspection": null,
-      "phase2a_disposition": "fixme",
-      "phase2a_issue": 3224
+      "phase2a_disposition": "updated-to-current",
+      "phase2a_issue": null,
+      "phase2a_reason_category": null,
+      "phase2a_reason": null,
+      "phase2a_current": {
+        "where": "e2e/ingestion.spec.ts:545",
+        "describe": "Enhanced Video Approval",
+        "title": "should list all rules with enable/disable toggle",
+        "renamed": false
+      }
     },
     {
       "n": 27,
@@ -1553,8 +1764,16 @@
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
       "inspection": null,
-      "phase2a_disposition": "fixme",
-      "phase2a_issue": 3224
+      "phase2a_disposition": "updated-to-current",
+      "phase2a_issue": null,
+      "phase2a_reason_category": null,
+      "phase2a_reason": null,
+      "phase2a_current": {
+        "where": "e2e/ingestion.spec.ts:565",
+        "describe": "Enhanced Video Approval",
+        "title": "should open create rule modal",
+        "renamed": false
+      }
     },
     {
       "n": 28,
@@ -1608,8 +1827,16 @@
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
       "inspection": null,
-      "phase2a_disposition": "fixme",
-      "phase2a_issue": 3224
+      "phase2a_disposition": "updated-to-current",
+      "phase2a_issue": null,
+      "phase2a_reason_category": null,
+      "phase2a_reason": null,
+      "phase2a_current": {
+        "where": "e2e/ingestion.spec.ts:576",
+        "describe": "Enhanced Video Approval",
+        "title": "should validate rule name is required",
+        "renamed": false
+      }
     },
     {
       "n": 29,
@@ -1663,8 +1890,16 @@
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
       "inspection": null,
-      "phase2a_disposition": "fixme",
-      "phase2a_issue": 3224
+      "phase2a_disposition": "updated-to-current",
+      "phase2a_issue": null,
+      "phase2a_reason_category": null,
+      "phase2a_reason": null,
+      "phase2a_current": {
+        "where": "e2e/ingestion.spec.ts:592",
+        "describe": "Enhanced Video Approval",
+        "title": "should create rule with conditions",
+        "renamed": false
+      }
     },
     {
       "n": 30,
@@ -1718,8 +1953,16 @@
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
       "inspection": null,
-      "phase2a_disposition": "fixme",
-      "phase2a_issue": 3224
+      "phase2a_disposition": "updated-to-current",
+      "phase2a_issue": null,
+      "phase2a_reason_category": null,
+      "phase2a_reason": null,
+      "phase2a_current": {
+        "where": "e2e/ingestion.spec.ts:615",
+        "describe": "Enhanced Video Approval",
+        "title": "should edit existing rule",
+        "renamed": false
+      }
     },
     {
       "n": 31,
@@ -1773,8 +2016,16 @@
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
       "inspection": null,
-      "phase2a_disposition": "fixme",
-      "phase2a_issue": 3224
+      "phase2a_disposition": "updated-to-current",
+      "phase2a_issue": null,
+      "phase2a_reason_category": null,
+      "phase2a_reason": null,
+      "phase2a_current": {
+        "where": "e2e/ingestion.spec.ts:637",
+        "describe": "Enhanced Video Approval",
+        "title": "should delete rule after confirmation",
+        "renamed": false
+      }
     },
     {
       "n": 32,
@@ -1828,8 +2079,16 @@
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
       "inspection": null,
-      "phase2a_disposition": "fixme",
-      "phase2a_issue": 3224
+      "phase2a_disposition": "updated-to-current",
+      "phase2a_issue": null,
+      "phase2a_reason_category": null,
+      "phase2a_reason": null,
+      "phase2a_current": {
+        "where": "e2e/ingestion.spec.ts:659",
+        "describe": "Enhanced Video Approval",
+        "title": "should format condition summary correctly",
+        "renamed": false
+      }
     },
     {
       "n": 33,
@@ -1884,7 +2143,15 @@
       "mechanical_action": "update-to-current",
       "inspection": null,
       "phase2a_disposition": "fixme",
-      "phase2a_issue": 3224
+      "phase2a_issue": null,
+      "phase2a_reason_category": "unwired",
+      "phase2a_reason": "UI unwired: rule-test action not rendered (page.tsx:380-386 passes no onTestRule; button gated at ApprovalRulesConfig.tsx:529)",
+      "phase2a_current": {
+        "where": "e2e/ingestion.spec.ts:679",
+        "describe": "Enhanced Video Approval",
+        "title": "should test rule against pending items",
+        "renamed": false
+      }
     },
     {
       "n": 34,
@@ -1939,7 +2206,15 @@
       "mechanical_action": "update-to-current",
       "inspection": null,
       "phase2a_disposition": "fixme",
-      "phase2a_issue": 3224
+      "phase2a_issue": null,
+      "phase2a_reason_category": "unwired",
+      "phase2a_reason": "UI unwired: execution log not rendered (page.tsx:380-386 passes no onFetchLog; \"View Log\" gated at ApprovalRulesConfig.tsx:284)",
+      "phase2a_current": {
+        "where": "e2e/ingestion.spec.ts:692",
+        "describe": "Enhanced Video Approval",
+        "title": "should show execution log modal",
+        "renamed": false
+      }
     },
     {
       "n": 35,
@@ -1993,8 +2268,16 @@
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
       "inspection": null,
-      "phase2a_disposition": "fixme",
-      "phase2a_issue": 3224
+      "phase2a_disposition": "updated-to-current",
+      "phase2a_issue": null,
+      "phase2a_reason_category": null,
+      "phase2a_reason": null,
+      "phase2a_current": {
+        "where": "e2e/ingestion.spec.ts:705",
+        "describe": "Enhanced Video Approval",
+        "title": "should save a rule with a source type condition",
+        "renamed": true
+      }
     },
     {
       "n": 36,
@@ -2048,8 +2331,16 @@
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
       "inspection": null,
-      "phase2a_disposition": "fixme",
-      "phase2a_issue": 3224
+      "phase2a_disposition": "updated-to-current",
+      "phase2a_issue": null,
+      "phase2a_reason_category": null,
+      "phase2a_reason": null,
+      "phase2a_current": {
+        "where": "e2e/ingestion.spec.ts:722",
+        "describe": "Enhanced Video Approval",
+        "title": "should save a rule with a channel contains condition",
+        "renamed": true
+      }
     },
     {
       "n": 37,
@@ -2103,8 +2394,16 @@
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
       "inspection": null,
-      "phase2a_disposition": "fixme",
-      "phase2a_issue": 3224
+      "phase2a_disposition": "updated-to-current",
+      "phase2a_issue": null,
+      "phase2a_reason_category": null,
+      "phase2a_reason": null,
+      "phase2a_current": {
+        "where": "e2e/ingestion.spec.ts:739",
+        "describe": "Enhanced Video Approval",
+        "title": "should save a rule with a title contains condition",
+        "renamed": true
+      }
     },
     {
       "n": 38,
@@ -2158,8 +2457,16 @@
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
       "inspection": null,
-      "phase2a_disposition": "fixme",
-      "phase2a_issue": 3224
+      "phase2a_disposition": "updated-to-current",
+      "phase2a_issue": null,
+      "phase2a_reason_category": null,
+      "phase2a_reason": null,
+      "phase2a_current": {
+        "where": "e2e/ingestion.spec.ts:756",
+        "describe": "Enhanced Video Approval",
+        "title": "should save a rule with a duration range condition",
+        "renamed": true
+      }
     },
     {
       "n": 39,
@@ -2213,8 +2520,16 @@
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
       "inspection": null,
-      "phase2a_disposition": "fixme",
-      "phase2a_issue": 3224
+      "phase2a_disposition": "updated-to-current",
+      "phase2a_issue": null,
+      "phase2a_reason_category": null,
+      "phase2a_reason": null,
+      "phase2a_current": {
+        "where": "e2e/ingestion.spec.ts:772",
+        "describe": "Enhanced Video Approval",
+        "title": "should set priority for auto-approve rules",
+        "renamed": false
+      }
     },
     {
       "n": 40,
@@ -2269,7 +2584,15 @@
       "mechanical_action": "update-to-current",
       "inspection": null,
       "phase2a_disposition": "fixme",
-      "phase2a_issue": 3224
+      "phase2a_issue": null,
+      "phase2a_reason_category": "behaviour-mismatch",
+      "phase2a_reason": "behaviour mismatch: no Escape handling. The rules panel is inline (page.tsx:379-387), and the rule editor closes only via overlay click or Cancel (ApprovalRulesConfig.tsx:384, :589-595); no keydown handler exists",
+      "phase2a_current": {
+        "where": "e2e/ingestion.spec.ts:794",
+        "describe": "Enhanced Video Approval",
+        "title": "should close modals on escape key",
+        "renamed": false
+      }
     },
     {
       "n": 41,
@@ -2323,8 +2646,16 @@
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
       "inspection": null,
-      "phase2a_disposition": "fixme",
-      "phase2a_issue": 3224
+      "phase2a_disposition": "updated-to-current",
+      "phase2a_issue": null,
+      "phase2a_reason_category": null,
+      "phase2a_reason": null,
+      "phase2a_current": {
+        "where": "e2e/ingestion.spec.ts:805",
+        "describe": "Enhanced Video Approval",
+        "title": "should close modals on overlay click",
+        "renamed": false
+      }
     },
     {
       "n": 42,
@@ -2378,8 +2709,16 @@
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
       "inspection": null,
-      "phase2a_disposition": "fixme",
-      "phase2a_issue": 3224
+      "phase2a_disposition": "updated-to-current",
+      "phase2a_issue": null,
+      "phase2a_reason_category": null,
+      "phase2a_reason": null,
+      "phase2a_current": {
+        "where": "e2e/ingestion.spec.ts:820",
+        "describe": "Enhanced Video Approval",
+        "title": "should show pending count when some selected are pending",
+        "renamed": false
+      }
     },
     {
       "n": 43,
@@ -2433,8 +2772,16 @@
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
       "inspection": null,
-      "phase2a_disposition": "fixme",
-      "phase2a_issue": 3224
+      "phase2a_disposition": "updated-to-current",
+      "phase2a_issue": null,
+      "phase2a_reason_category": null,
+      "phase2a_reason": null,
+      "phase2a_current": {
+        "where": "e2e/ingestion.spec.ts:848",
+        "describe": "Enhanced Video Approval",
+        "title": "should filter queue by status",
+        "renamed": false
+      }
     },
     {
       "n": 44,
@@ -2490,8 +2837,16 @@
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
       "inspection": null,
-      "phase2a_disposition": "fixme",
-      "phase2a_issue": 3227
+      "phase2a_disposition": "updated-to-current",
+      "phase2a_issue": null,
+      "phase2a_reason_category": null,
+      "phase2a_reason": null,
+      "phase2a_current": {
+        "where": "e2e/jellyfin.spec.ts:117",
+        "describe": "Jellyfin Integration",
+        "title": "should load Jellyfin page with initial state",
+        "renamed": false
+      }
     },
     {
       "n": 45,
@@ -2547,8 +2902,16 @@
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
       "inspection": null,
-      "phase2a_disposition": "fixme",
-      "phase2a_issue": 3227
+      "phase2a_disposition": "updated-to-current",
+      "phase2a_issue": null,
+      "phase2a_reason_category": null,
+      "phase2a_reason": null,
+      "phase2a_current": {
+        "where": "e2e/jellyfin.spec.ts:136",
+        "describe": "Jellyfin Integration",
+        "title": "should display sync status",
+        "renamed": false
+      }
     },
     {
       "n": 46,
@@ -2604,8 +2967,16 @@
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
       "inspection": null,
-      "phase2a_disposition": "fixme",
-      "phase2a_issue": 3227
+      "phase2a_disposition": "updated-to-current",
+      "phase2a_issue": null,
+      "phase2a_reason_category": null,
+      "phase2a_reason": null,
+      "phase2a_current": {
+        "where": "e2e/jellyfin.spec.ts:154",
+        "describe": "Jellyfin Integration",
+        "title": "should trigger sync operation",
+        "renamed": false
+      }
     },
     {
       "n": 47,
@@ -2661,8 +3032,16 @@
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
       "inspection": null,
-      "phase2a_disposition": "fixme",
-      "phase2a_issue": 3227
+      "phase2a_disposition": "updated-to-current",
+      "phase2a_issue": null,
+      "phase2a_reason_category": null,
+      "phase2a_reason": null,
+      "phase2a_current": {
+        "where": "e2e/jellyfin.spec.ts:173",
+        "describe": "Jellyfin Integration",
+        "title": "should handle sync when already in progress",
+        "renamed": false
+      }
     },
     {
       "n": 48,
@@ -2718,8 +3097,16 @@
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
       "inspection": null,
-      "phase2a_disposition": "fixme",
-      "phase2a_issue": 3227
+      "phase2a_disposition": "updated-to-current",
+      "phase2a_issue": null,
+      "phase2a_reason_category": null,
+      "phase2a_reason": null,
+      "phase2a_current": {
+        "where": "e2e/jellyfin.spec.ts:190",
+        "describe": "Jellyfin Integration",
+        "title": "should browse media library",
+        "renamed": false
+      }
     },
     {
       "n": 49,
@@ -2775,8 +3162,16 @@
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
       "inspection": null,
-      "phase2a_disposition": "fixme",
-      "phase2a_issue": 3227
+      "phase2a_disposition": "updated-to-current",
+      "phase2a_issue": null,
+      "phase2a_reason_category": null,
+      "phase2a_reason": null,
+      "phase2a_current": {
+        "where": "e2e/jellyfin.spec.ts:210",
+        "describe": "Jellyfin Integration",
+        "title": "should search media library",
+        "renamed": false
+      }
     },
     {
       "n": 50,
@@ -2833,7 +3228,15 @@
       "mechanical_action": "update-to-current",
       "inspection": null,
       "phase2a_disposition": "fixme",
-      "phase2a_issue": 3227
+      "phase2a_issue": null,
+      "phase2a_reason_category": "unwired",
+      "phase2a_reason": "UI unwired: media type filter not rendered (jellyfin/page.tsx:117-133 has only a text search; jellyfinSearch's mediaType option, lib/api/jellyfin.ts:128-145, is never passed by page.tsx:50)",
+      "phase2a_current": {
+        "where": "e2e/jellyfin.spec.ts:225",
+        "describe": "Jellyfin Integration",
+        "title": "should filter media by type",
+        "renamed": false
+      }
     },
     {
       "n": 51,
@@ -2889,8 +3292,16 @@
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
       "inspection": null,
-      "phase2a_disposition": "fixme",
-      "phase2a_issue": 3227
+      "phase2a_disposition": "updated-to-current",
+      "phase2a_issue": null,
+      "phase2a_reason_category": null,
+      "phase2a_reason": null,
+      "phase2a_current": {
+        "where": "e2e/jellyfin.spec.ts:269",
+        "describe": "Jellyfin Integration",
+        "title": "should display media items in responsive grid",
+        "renamed": false
+      }
     },
     {
       "n": 52,
@@ -2947,7 +3358,15 @@
       "mechanical_action": "update-to-current",
       "inspection": null,
       "phase2a_disposition": "fixme",
-      "phase2a_issue": 3227
+      "phase2a_issue": null,
+      "phase2a_reason_category": "unwired",
+      "phase2a_reason": "UI unwired: BackfillControls not rendered (components/jellyfin/BackfillControls.tsx is imported only by BackfillControls.test.tsx; jellyfin/page.tsx renders only SyncStatus's one-click \"Run Backfill\", SyncStatus.tsx:161-177)",
+      "phase2a_current": {
+        "where": "e2e/jellyfin.spec.ts:300",
+        "describe": "Jellyfin Integration",
+        "title": "should trigger backfill with default options",
+        "renamed": false
+      }
     },
     {
       "n": 53,
@@ -3004,7 +3423,15 @@
       "mechanical_action": "update-to-current",
       "inspection": null,
       "phase2a_disposition": "fixme",
-      "phase2a_issue": 3227
+      "phase2a_issue": null,
+      "phase2a_reason_category": "unwired",
+      "phase2a_reason": "UI unwired: BackfillControls not rendered (components/jellyfin/BackfillControls.tsx is imported only by BackfillControls.test.tsx; jellyfin/page.tsx renders only SyncStatus's one-click \"Run Backfill\", SyncStatus.tsx:161-177)",
+      "phase2a_current": {
+        "where": "e2e/jellyfin.spec.ts:318",
+        "describe": "Jellyfin Integration",
+        "title": "should trigger backfill with custom options",
+        "renamed": false
+      }
     },
     {
       "n": 54,
@@ -3061,7 +3488,15 @@
       "mechanical_action": "update-to-current",
       "inspection": null,
       "phase2a_disposition": "fixme",
-      "phase2a_issue": 3227
+      "phase2a_issue": null,
+      "phase2a_reason_category": "unwired",
+      "phase2a_reason": "UI unwired: BackfillControls not rendered (components/jellyfin/BackfillControls.tsx is imported only by BackfillControls.test.tsx; jellyfin/page.tsx renders only SyncStatus's one-click \"Run Backfill\", SyncStatus.tsx:161-177)",
+      "phase2a_current": {
+        "where": "e2e/jellyfin.spec.ts:339",
+        "describe": "Jellyfin Integration",
+        "title": "should validate backfill batch size (1-1000)",
+        "renamed": false
+      }
     },
     {
       "n": 55,
@@ -3118,7 +3553,15 @@
       "mechanical_action": "update-to-current",
       "inspection": null,
       "phase2a_disposition": "fixme",
-      "phase2a_issue": 3227
+      "phase2a_issue": null,
+      "phase2a_reason_category": "unwired",
+      "phase2a_reason": "UI unwired: BackfillControls not rendered (components/jellyfin/BackfillControls.tsx is imported only by BackfillControls.test.tsx; jellyfin/page.tsx renders only SyncStatus's one-click \"Run Backfill\", SyncStatus.tsx:161-177)",
+      "phase2a_current": {
+        "where": "e2e/jellyfin.spec.ts:358",
+        "describe": "Jellyfin Integration",
+        "title": "should validate backfill priority (1-10)",
+        "renamed": false
+      }
     },
     {
       "n": 56,
@@ -3175,7 +3618,15 @@
       "mechanical_action": "update-to-current",
       "inspection": null,
       "phase2a_disposition": "fixme",
-      "phase2a_issue": 3227
+      "phase2a_issue": null,
+      "phase2a_reason_category": "unwired",
+      "phase2a_reason": "UI unwired: BackfillControls not rendered (components/jellyfin/BackfillControls.tsx is imported only by BackfillControls.test.tsx; jellyfin/page.tsx renders only SyncStatus's one-click \"Run Backfill\", SyncStatus.tsx:161-177)",
+      "phase2a_current": {
+        "where": "e2e/jellyfin.spec.ts:377",
+        "describe": "Jellyfin Integration",
+        "title": "should cancel backfill operation",
+        "renamed": false
+      }
     },
     {
       "n": 57,
@@ -3231,8 +3682,16 @@
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
       "inspection": null,
-      "phase2a_disposition": "fixme",
-      "phase2a_issue": 3227
+      "phase2a_disposition": "updated-to-current",
+      "phase2a_issue": null,
+      "phase2a_reason_category": null,
+      "phase2a_reason": null,
+      "phase2a_current": {
+        "where": "e2e/jellyfin.spec.ts:422",
+        "describe": "Jellyfin Integration",
+        "title": "should show relative time for last sync",
+        "renamed": false
+      }
     },
     {
       "n": 58,
@@ -3288,8 +3747,16 @@
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
       "inspection": null,
-      "phase2a_disposition": "fixme",
-      "phase2a_issue": 3227
+      "phase2a_disposition": "updated-to-current",
+      "phase2a_issue": null,
+      "phase2a_reason_category": null,
+      "phase2a_reason": null,
+      "phase2a_current": {
+        "where": "e2e/jellyfin.spec.ts:434",
+        "describe": "Jellyfin Integration",
+        "title": "should refresh sync status manually",
+        "renamed": false
+      }
     },
     {
       "n": 59,
@@ -3345,8 +3812,16 @@
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
       "inspection": null,
-      "phase2a_disposition": "fixme",
-      "phase2a_issue": 3227
+      "phase2a_disposition": "updated-to-current",
+      "phase2a_issue": null,
+      "phase2a_reason_category": null,
+      "phase2a_reason": null,
+      "phase2a_current": {
+        "where": "e2e/jellyfin.spec.ts:501",
+        "describe": "Jellyfin Integration",
+        "title": "should show \"no results\" when filter matches nothing",
+        "renamed": false
+      }
     },
     {
       "n": 60,
@@ -3402,8 +3877,16 @@
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
       "inspection": null,
-      "phase2a_disposition": "fixme",
-      "phase2a_issue": 3227
+      "phase2a_disposition": "updated-to-current",
+      "phase2a_issue": null,
+      "phase2a_reason_category": null,
+      "phase2a_reason": null,
+      "phase2a_current": {
+        "where": "e2e/jellyfin.spec.ts:516",
+        "describe": "Jellyfin Integration",
+        "title": "should handle service unavailable gracefully",
+        "renamed": false
+      }
     },
     {
       "n": 61,
@@ -3441,8 +3924,17 @@
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
       "inspection": null,
-      "phase2a_disposition": "updated (assert 401 auth contract)",
-      "phase2a_issue": null
+      "phase2a_disposition": "tagged-backend",
+      "phase2a_issue": null,
+      "phase2a_prior": "updated (assert 401 auth contract)",
+      "phase2a_reason_category": null,
+      "phase2a_reason": null,
+      "phase2a_current": {
+        "where": "e2e/notebook.spec.ts:105",
+        "describe": "Notebook API (authenticated)",
+        "title": "notebook sources API returns valid shape",
+        "renamed": false
+      }
     },
     {
       "n": 62,
@@ -3480,8 +3972,17 @@
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
       "inspection": null,
-      "phase2a_disposition": "updated (assert 401 auth contract)",
-      "phase2a_issue": null
+      "phase2a_disposition": "tagged-backend",
+      "phase2a_issue": null,
+      "phase2a_prior": "updated (assert 401 auth contract)",
+      "phase2a_reason_category": null,
+      "phase2a_reason": null,
+      "phase2a_current": {
+        "where": "e2e/notebook.spec.ts:127",
+        "describe": "Notebook API (authenticated)",
+        "title": "notebook runtime API returns valid shape",
+        "renamed": false
+      }
     },
     {
       "n": 63,
@@ -3519,8 +4020,17 @@
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
       "inspection": null,
-      "phase2a_disposition": "updated (alias==canonical, both 401)",
-      "phase2a_issue": null
+      "phase2a_disposition": "tagged-backend",
+      "phase2a_issue": null,
+      "phase2a_prior": "updated (alias==canonical, both 401)",
+      "phase2a_reason_category": null,
+      "phase2a_reason": null,
+      "phase2a_current": {
+        "where": "e2e/notebook.spec.ts:139",
+        "describe": "Notebook API (authenticated)",
+        "title": "health/all alias resolves same as health-all",
+        "renamed": false
+      }
     },
     {
       "n": 64,
@@ -3576,8 +4086,16 @@
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
       "inspection": null,
-      "phase2a_disposition": "fixme",
-      "phase2a_issue": 3226
+      "phase2a_disposition": "updated-to-current",
+      "phase2a_issue": null,
+      "phase2a_reason_category": null,
+      "phase2a_reason": null,
+      "phase2a_current": {
+        "where": "e2e/research.spec.ts:110",
+        "describe": "Deep Research Dashboard",
+        "title": "should load research page with initial state",
+        "renamed": false
+      }
     },
     {
       "n": 65,
@@ -3638,7 +4156,15 @@
       "mechanical_action": "update-to-current",
       "inspection": null,
       "phase2a_disposition": "fixme",
-      "phase2a_issue": 3226
+      "phase2a_issue": 3226,
+      "phase2a_reason_category": "behaviour-mismatch",
+      "phase2a_reason": "behaviour mismatch: built submit flow shows no task-started message and does not clear the query \u2014 page.tsx:89-101 handleInitiate only refreshes the task list; TaskInitiationForm.tsx handleSubmit keeps the query. Operator to decide whether to build the confirmation + reset. Tracked in #3226",
+      "phase2a_current": {
+        "where": "e2e/research.spec.ts:122",
+        "describe": "Deep Research Dashboard",
+        "title": "should initiate research task with default options",
+        "renamed": false
+      }
     },
     {
       "n": 66,
@@ -3694,8 +4220,16 @@
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
       "inspection": null,
-      "phase2a_disposition": "fixme",
-      "phase2a_issue": 3226
+      "phase2a_disposition": "updated-to-current",
+      "phase2a_issue": null,
+      "phase2a_reason_category": null,
+      "phase2a_reason": null,
+      "phase2a_current": {
+        "where": "e2e/research.spec.ts:136",
+        "describe": "Deep Research Dashboard",
+        "title": "should validate non-empty query",
+        "renamed": false
+      }
     },
     {
       "n": 67,
@@ -3755,8 +4289,16 @@
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
       "inspection": null,
-      "phase2a_disposition": "fixme",
-      "phase2a_issue": 3226
+      "phase2a_disposition": "updated-to-current",
+      "phase2a_issue": null,
+      "phase2a_reason_category": null,
+      "phase2a_reason": null,
+      "phase2a_current": {
+        "where": "e2e/research.spec.ts:147",
+        "describe": "Deep Research Dashboard",
+        "title": "should show character count for query",
+        "renamed": false
+      }
     },
     {
       "n": 68,
@@ -3816,8 +4358,16 @@
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
       "inspection": null,
-      "phase2a_disposition": "fixme",
-      "phase2a_issue": 3226
+      "phase2a_disposition": "updated-to-current",
+      "phase2a_issue": null,
+      "phase2a_reason_category": null,
+      "phase2a_reason": null,
+      "phase2a_current": {
+        "where": "e2e/research.spec.ts:157",
+        "describe": "Deep Research Dashboard",
+        "title": "should enforce max query length (1000)",
+        "renamed": false
+      }
     },
     {
       "n": 69,
@@ -3873,8 +4423,16 @@
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
       "inspection": null,
-      "phase2a_disposition": "fixme",
-      "phase2a_issue": 3226
+      "phase2a_disposition": "updated-to-current",
+      "phase2a_issue": null,
+      "phase2a_reason_category": null,
+      "phase2a_reason": null,
+      "phase2a_current": {
+        "where": "e2e/research.spec.ts:168",
+        "describe": "Deep Research Dashboard",
+        "title": "should expand/collapse options panel",
+        "renamed": false
+      }
     },
     {
       "n": 70,
@@ -3930,8 +4488,16 @@
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
       "inspection": null,
-      "phase2a_disposition": "fixme",
-      "phase2a_issue": 3226
+      "phase2a_disposition": "updated-to-current",
+      "phase2a_issue": null,
+      "phase2a_reason_category": null,
+      "phase2a_reason": null,
+      "phase2a_current": {
+        "where": "e2e/research.spec.ts:186",
+        "describe": "Deep Research Dashboard",
+        "title": "should select research mode",
+        "renamed": false
+      }
     },
     {
       "n": 71,
@@ -3987,8 +4553,16 @@
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
       "inspection": null,
-      "phase2a_disposition": "fixme",
-      "phase2a_issue": 3226
+      "phase2a_disposition": "updated-to-current",
+      "phase2a_issue": null,
+      "phase2a_reason_category": null,
+      "phase2a_reason": null,
+      "phase2a_current": {
+        "where": "e2e/research.spec.ts:197",
+        "describe": "Deep Research Dashboard",
+        "title": "should update max iterations slider",
+        "renamed": false
+      }
     },
     {
       "n": 72,
@@ -4044,8 +4618,16 @@
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
       "inspection": null,
-      "phase2a_disposition": "fixme",
-      "phase2a_issue": 3226
+      "phase2a_disposition": "updated-to-current",
+      "phase2a_issue": null,
+      "phase2a_reason_category": null,
+      "phase2a_reason": null,
+      "phase2a_current": {
+        "where": "e2e/research.spec.ts:212",
+        "describe": "Deep Research Dashboard",
+        "title": "should enforce max iterations range (3-30)",
+        "renamed": false
+      }
     },
     {
       "n": 73,
@@ -4101,8 +4683,16 @@
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
       "inspection": null,
-      "phase2a_disposition": "fixme",
-      "phase2a_issue": 3226
+      "phase2a_disposition": "updated-to-current",
+      "phase2a_issue": null,
+      "phase2a_reason_category": null,
+      "phase2a_reason": null,
+      "phase2a_current": {
+        "where": "e2e/research.spec.ts:234",
+        "describe": "Deep Research Dashboard",
+        "title": "should update priority slider",
+        "renamed": false
+      }
     },
     {
       "n": 74,
@@ -4158,8 +4748,16 @@
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
       "inspection": null,
-      "phase2a_disposition": "fixme",
-      "phase2a_issue": 3226
+      "phase2a_disposition": "updated-to-current",
+      "phase2a_issue": null,
+      "phase2a_reason_category": null,
+      "phase2a_reason": null,
+      "phase2a_current": {
+        "where": "e2e/research.spec.ts:249",
+        "describe": "Deep Research Dashboard",
+        "title": "should enforce priority range (1-10)",
+        "renamed": false
+      }
     },
     {
       "n": 75,
@@ -4216,7 +4814,15 @@
       "mechanical_action": "update-to-current",
       "inspection": null,
       "phase2a_disposition": "fixme",
-      "phase2a_issue": 3226
+      "phase2a_issue": 3226,
+      "phase2a_reason_category": "unwired",
+      "phase2a_reason": "UI unwired: TaskInitiationForm notebook select not rendered (TaskInitiationForm.tsx:180 renders it only when notebooks.length > 0; page.tsx:200-203 passes no notebooks prop). Tracked in #3226",
+      "phase2a_current": {
+        "where": "e2e/research.spec.ts:272",
+        "describe": "Deep Research Dashboard",
+        "title": "should select notebook from dropdown",
+        "renamed": false
+      }
     },
     {
       "n": 76,
@@ -4272,8 +4878,16 @@
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
       "inspection": null,
-      "phase2a_disposition": "fixme",
-      "phase2a_issue": 3226
+      "phase2a_disposition": "updated-to-current",
+      "phase2a_issue": null,
+      "phase2a_reason_category": null,
+      "phase2a_reason": null,
+      "phase2a_current": {
+        "where": "e2e/research.spec.ts:286",
+        "describe": "Deep Research Dashboard",
+        "title": "should list tasks with status filter",
+        "renamed": false
+      }
     },
     {
       "n": 77,
@@ -4330,7 +4944,15 @@
       "mechanical_action": "update-to-current",
       "inspection": null,
       "phase2a_disposition": "fixme",
-      "phase2a_issue": 3226
+      "phase2a_issue": 3226,
+      "phase2a_reason_category": "unwired",
+      "phase2a_reason": "UI unwired: mode filter not rendered (ResearchTaskList.tsx:94-107 renders only the status filter; lib/api/research.ts listResearchTasks accepts `mode` but no UI passes it). Tracked in #3226",
+      "phase2a_current": {
+        "where": "e2e/research.spec.ts:304",
+        "describe": "Deep Research Dashboard",
+        "title": "should filter tasks by mode",
+        "renamed": false
+      }
     },
     {
       "n": 78,
@@ -4387,7 +5009,15 @@
       "mechanical_action": "update-to-current",
       "inspection": null,
       "phase2a_disposition": "fixme",
-      "phase2a_issue": 3226
+      "phase2a_issue": 3226,
+      "phase2a_reason_category": "unwired",
+      "phase2a_reason": "UI unwired: task multi-select not rendered on /dashboard/research (ResearchTaskList.tsx has no checkboxes or selection controls; \"Select All Visible\" exists only in components/ingestion/BulkApprovalActions.tsx:130). Tracked in #3226",
+      "phase2a_current": {
+        "where": "e2e/research.spec.ts:316",
+        "describe": "Deep Research Dashboard",
+        "title": "should select all visible tasks",
+        "renamed": false
+      }
     },
     {
       "n": 79,
@@ -4444,7 +5074,15 @@
       "mechanical_action": "update-to-current",
       "inspection": null,
       "phase2a_disposition": "fixme",
-      "phase2a_issue": 3226
+      "phase2a_issue": 3226,
+      "phase2a_reason_category": "unwired",
+      "phase2a_reason": "UI unwired: task multi-select not rendered on /dashboard/research (ResearchTaskList.tsx has no selection controls; \"Select Pending\" exists only in components/ingestion/BulkApprovalActions.tsx:133). Tracked in #3226",
+      "phase2a_current": {
+        "where": "e2e/research.spec.ts:331",
+        "describe": "Deep Research Dashboard",
+        "title": "should select only pending tasks",
+        "renamed": false
+      }
     },
     {
       "n": 80,
@@ -4501,7 +5139,15 @@
       "mechanical_action": "update-to-current",
       "inspection": null,
       "phase2a_disposition": "fixme",
-      "phase2a_issue": 3226
+      "phase2a_issue": 3226,
+      "phase2a_reason_category": "unwired",
+      "phase2a_reason": "UI unwired: task multi-select not rendered on /dashboard/research (ResearchTaskList.tsx has no selection controls; clear-selection exists only in components/ingestion/BulkApprovalActions.tsx). Tracked in #3226",
+      "phase2a_current": {
+        "where": "e2e/research.spec.ts:343",
+        "describe": "Deep Research Dashboard",
+        "title": "should clear task selection",
+        "renamed": false
+      }
     },
     {
       "n": 81,
@@ -4557,8 +5203,16 @@
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
       "inspection": null,
-      "phase2a_disposition": "fixme",
-      "phase2a_issue": 3226
+      "phase2a_disposition": "updated-to-current",
+      "phase2a_issue": null,
+      "phase2a_reason_category": null,
+      "phase2a_reason": null,
+      "phase2a_current": {
+        "where": "e2e/research.spec.ts:361",
+        "describe": "Deep Research Dashboard",
+        "title": "should refresh task list",
+        "renamed": false
+      }
     },
     {
       "n": 82,
@@ -4612,8 +5266,16 @@
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
       "inspection": null,
-      "phase2a_disposition": "fixme",
-      "phase2a_issue": 3225
+      "phase2a_disposition": "updated-to-current",
+      "phase2a_issue": null,
+      "phase2a_reason_category": null,
+      "phase2a_reason": null,
+      "phase2a_current": {
+        "where": "e2e/search.spec.ts:96",
+        "describe": "Search Interface",
+        "title": "should load search page with initial state",
+        "renamed": false
+      }
     },
     {
       "n": 83,
@@ -4667,8 +5329,16 @@
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
       "inspection": null,
-      "phase2a_disposition": "fixme",
-      "phase2a_issue": 3225
+      "phase2a_disposition": "updated-to-current",
+      "phase2a_issue": null,
+      "phase2a_reason_category": null,
+      "phase2a_reason": null,
+      "phase2a_current": {
+        "where": "e2e/search.spec.ts:112",
+        "describe": "Search Interface",
+        "title": "should search and display results",
+        "renamed": false
+      }
     },
     {
       "n": 84,
@@ -4722,8 +5392,16 @@
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
       "inspection": null,
-      "phase2a_disposition": "fixme",
-      "phase2a_issue": 3225
+      "phase2a_disposition": "updated-to-current",
+      "phase2a_issue": null,
+      "phase2a_reason_category": null,
+      "phase2a_reason": null,
+      "phase2a_current": {
+        "where": "e2e/search.spec.ts:125",
+        "describe": "Search Interface",
+        "title": "should use keyboard shortcut (Cmd+K) to focus search",
+        "renamed": false
+      }
     },
     {
       "n": 85,
@@ -4777,8 +5455,16 @@
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
       "inspection": null,
-      "phase2a_disposition": "fixme",
-      "phase2a_issue": 3225
+      "phase2a_disposition": "updated-to-current",
+      "phase2a_issue": null,
+      "phase2a_reason_category": null,
+      "phase2a_reason": null,
+      "phase2a_current": {
+        "where": "e2e/search.spec.ts:133",
+        "describe": "Search Interface",
+        "title": "should use keyboard shortcut (Ctrl+K) to focus search",
+        "renamed": false
+      }
     },
     {
       "n": 86,
@@ -4832,8 +5518,16 @@
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
       "inspection": null,
-      "phase2a_disposition": "fixme",
-      "phase2a_issue": 3225
+      "phase2a_disposition": "updated-to-current",
+      "phase2a_issue": null,
+      "phase2a_reason_category": null,
+      "phase2a_reason": null,
+      "phase2a_current": {
+        "where": "e2e/search.spec.ts:141",
+        "describe": "Search Interface",
+        "title": "should filter by source type",
+        "renamed": false
+      }
     },
     {
       "n": 87,
@@ -4887,8 +5581,16 @@
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
       "inspection": null,
-      "phase2a_disposition": "fixme",
-      "phase2a_issue": 3225
+      "phase2a_disposition": "updated-to-current",
+      "phase2a_issue": null,
+      "phase2a_reason_category": null,
+      "phase2a_reason": null,
+      "phase2a_current": {
+        "where": "e2e/search.spec.ts:159",
+        "describe": "Search Interface",
+        "title": "should filter by date range",
+        "renamed": false
+      }
     },
     {
       "n": 88,
@@ -4942,8 +5644,16 @@
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
       "inspection": null,
-      "phase2a_disposition": "fixme",
-      "phase2a_issue": 3225
+      "phase2a_disposition": "updated-to-current",
+      "phase2a_issue": null,
+      "phase2a_reason_category": null,
+      "phase2a_reason": null,
+      "phase2a_current": {
+        "where": "e2e/search.spec.ts:179",
+        "describe": "Search Interface",
+        "title": "should filter by minimum score",
+        "renamed": false
+      }
     },
     {
       "n": 89,
@@ -4997,8 +5707,16 @@
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
       "inspection": null,
-      "phase2a_disposition": "fixme",
-      "phase2a_issue": 3225
+      "phase2a_disposition": "updated-to-current",
+      "phase2a_issue": null,
+      "phase2a_reason_category": null,
+      "phase2a_reason": null,
+      "phase2a_current": {
+        "where": "e2e/search.spec.ts:194",
+        "describe": "Search Interface",
+        "title": "should clear all filters",
+        "renamed": false
+      }
     },
     {
       "n": 90,
@@ -5052,8 +5770,16 @@
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
       "inspection": null,
-      "phase2a_disposition": "fixme",
-      "phase2a_issue": 3225
+      "phase2a_disposition": "updated-to-current",
+      "phase2a_issue": null,
+      "phase2a_reason_category": null,
+      "phase2a_reason": null,
+      "phase2a_current": {
+        "where": "e2e/search.spec.ts:211",
+        "describe": "Search Interface",
+        "title": "should display active filter count",
+        "renamed": false
+      }
     },
     {
       "n": 91,
@@ -5107,8 +5833,16 @@
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
       "inspection": null,
-      "phase2a_disposition": "fixme",
-      "phase2a_issue": 3225
+      "phase2a_disposition": "updated-to-current",
+      "phase2a_issue": null,
+      "phase2a_reason_category": null,
+      "phase2a_reason": null,
+      "phase2a_current": {
+        "where": "e2e/search.spec.ts:226",
+        "describe": "Search Interface",
+        "title": "should expand and collapse search results",
+        "renamed": false
+      }
     },
     {
       "n": 92,
@@ -5162,8 +5896,16 @@
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
       "inspection": null,
-      "phase2a_disposition": "fixme",
-      "phase2a_issue": 3225
+      "phase2a_disposition": "updated-to-current",
+      "phase2a_issue": null,
+      "phase2a_reason_category": null,
+      "phase2a_reason": null,
+      "phase2a_current": {
+        "where": "e2e/search.spec.ts:247",
+        "describe": "Search Interface",
+        "title": "should copy result to clipboard",
+        "renamed": false
+      }
     },
     {
       "n": 93,
@@ -5218,7 +5960,15 @@
       "mechanical_action": "update-to-current",
       "inspection": null,
       "phase2a_disposition": "fixme",
-      "phase2a_issue": 3225
+      "phase2a_issue": 3232,
+      "phase2a_reason_category": "bug",
+      "phase2a_reason": "REAL UI BUG #3232: exportToNotebook (lib/api/hirag.ts:269-277) is a TODO stub that returns ok without calling any API, so the \"Exported to notebook\" toast reports a success that never happened. Passing this test would certify the stub. The body is kept: it becomes a real check once the export is wired (add an assertion on the outgoing notebook request then).",
+      "phase2a_current": {
+        "where": "e2e/search.spec.ts:271",
+        "describe": "Search Interface",
+        "title": "should export result to notebook",
+        "renamed": false
+      }
     },
     {
       "n": 94,
@@ -5272,8 +6022,16 @@
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
       "inspection": null,
-      "phase2a_disposition": "fixme",
-      "phase2a_issue": 3225
+      "phase2a_disposition": "updated-to-current",
+      "phase2a_issue": null,
+      "phase2a_reason_category": null,
+      "phase2a_reason": null,
+      "phase2a_current": {
+        "where": "e2e/search.spec.ts:287",
+        "describe": "Search Interface",
+        "title": "should show empty state for no results",
+        "renamed": false
+      }
     },
     {
       "n": 95,
@@ -5327,8 +6085,16 @@
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
       "inspection": null,
-      "phase2a_disposition": "fixme",
-      "phase2a_issue": 3225
+      "phase2a_disposition": "updated-to-current",
+      "phase2a_issue": null,
+      "phase2a_reason_category": null,
+      "phase2a_reason": null,
+      "phase2a_current": {
+        "where": "e2e/search.spec.ts:298",
+        "describe": "Search Interface",
+        "title": "should show loading state during search",
+        "renamed": false
+      }
     },
     {
       "n": 96,
@@ -5382,8 +6148,16 @@
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
       "inspection": null,
-      "phase2a_disposition": "fixme",
-      "phase2a_issue": 3225
+      "phase2a_disposition": "updated-to-current",
+      "phase2a_issue": null,
+      "phase2a_reason_category": null,
+      "phase2a_reason": null,
+      "phase2a_current": {
+        "where": "e2e/search.spec.ts:312",
+        "describe": "Search Interface",
+        "title": "should display score badges with correct colors",
+        "renamed": false
+      }
     },
     {
       "n": 97,
@@ -5437,8 +6211,16 @@
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
       "inspection": null,
-      "phase2a_disposition": "fixme",
-      "phase2a_issue": 3225
+      "phase2a_disposition": "updated-to-current",
+      "phase2a_issue": null,
+      "phase2a_reason_category": null,
+      "phase2a_reason": null,
+      "phase2a_current": {
+        "where": "e2e/search.spec.ts:338",
+        "describe": "Search Interface",
+        "title": "should display correct source type icons",
+        "renamed": false
+      }
     },
     {
       "n": 98,
@@ -5492,8 +6274,16 @@
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
       "inspection": null,
-      "phase2a_disposition": "fixme",
-      "phase2a_issue": 3225
+      "phase2a_disposition": "updated-to-current",
+      "phase2a_issue": null,
+      "phase2a_reason_category": null,
+      "phase2a_reason": null,
+      "phase2a_current": {
+        "where": "e2e/search.spec.ts:352",
+        "describe": "Search Interface",
+        "title": "should show search history",
+        "renamed": false
+      }
     },
     {
       "n": 99,
@@ -5547,8 +6337,16 @@
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
       "inspection": null,
-      "phase2a_disposition": "fixme",
-      "phase2a_issue": 3225
+      "phase2a_disposition": "updated-to-current",
+      "phase2a_issue": null,
+      "phase2a_reason_category": null,
+      "phase2a_reason": null,
+      "phase2a_current": {
+        "where": "e2e/search.spec.ts:364",
+        "describe": "Search Interface",
+        "title": "should clear search history",
+        "renamed": false
+      }
     },
     {
       "n": 100,
@@ -5602,8 +6400,16 @@
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
       "inspection": null,
-      "phase2a_disposition": "fixme",
-      "phase2a_issue": 3225
+      "phase2a_disposition": "updated-to-current",
+      "phase2a_issue": null,
+      "phase2a_reason_category": null,
+      "phase2a_reason": null,
+      "phase2a_current": {
+        "where": "e2e/search.spec.ts:379",
+        "describe": "Search Interface",
+        "title": "should handle error state gracefully",
+        "renamed": false
+      }
     },
     {
       "n": 101,
@@ -5657,8 +6463,16 @@
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
       "inspection": null,
-      "phase2a_disposition": "fixme",
-      "phase2a_issue": 3225
+      "phase2a_disposition": "updated-to-current",
+      "phase2a_issue": null,
+      "phase2a_reason_category": null,
+      "phase2a_reason": null,
+      "phase2a_current": {
+        "where": "e2e/search.spec.ts:392",
+        "describe": "Search Interface",
+        "title": "should validate minimum score input (0-100)",
+        "renamed": false
+      }
     },
     {
       "n": 102,
@@ -5713,7 +6527,15 @@
       "mechanical_action": "update-to-current",
       "inspection": null,
       "phase2a_disposition": "fixme",
-      "phase2a_issue": 3225
+      "phase2a_issue": 3225,
+      "phase2a_reason_category": "behaviour-mismatch",
+      "phase2a_reason": "behaviour mismatch: SearchFilters.tsx:130-156 renders two independent date inputs with no end>=start validation and no date-validation-error element (and no Apply button); needs an operator decision on whether to build validation. Tracked in #3225",
+      "phase2a_current": {
+        "where": "e2e/search.spec.ts:410",
+        "describe": "Search Interface",
+        "title": "should validate date range (end >= start)",
+        "renamed": false
+      }
     },
     {
       "n": 103,
@@ -5767,8 +6589,16 @@
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
       "inspection": null,
-      "phase2a_disposition": "fixme",
-      "phase2a_issue": 3225
+      "phase2a_disposition": "updated-to-current",
+      "phase2a_issue": null,
+      "phase2a_reason_category": null,
+      "phase2a_reason": null,
+      "phase2a_current": {
+        "where": "e2e/search.spec.ts:422",
+        "describe": "Search Interface",
+        "title": "should prevent empty query submission",
+        "renamed": false
+      }
     },
     {
       "n": 104,
@@ -5822,8 +6652,16 @@
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
       "inspection": null,
-      "phase2a_disposition": "fixme",
-      "phase2a_issue": 3225
+      "phase2a_disposition": "updated-to-current",
+      "phase2a_issue": null,
+      "phase2a_reason_category": null,
+      "phase2a_reason": null,
+      "phase2a_current": {
+        "where": "e2e/search.spec.ts:436",
+        "describe": "Search Interface",
+        "title": "should rerun search from history item",
+        "renamed": false
+      }
     },
     {
       "n": 105,
@@ -5888,8 +6726,17 @@
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
       "inspection": null,
-      "phase2a_disposition": "updated (dashboard -> /dashboard/services, slug, per-branch assertions, testids)",
-      "phase2a_issue": null
+      "phase2a_disposition": "updated-to-current",
+      "phase2a_issue": null,
+      "phase2a_prior": "updated (dashboard -> /dashboard/services, slug, per-branch assertions, testids)",
+      "phase2a_reason_category": null,
+      "phase2a_reason": null,
+      "phase2a_current": {
+        "where": "e2e/services-health.spec.ts:36",
+        "describe": "Services Health Dashboard",
+        "title": "displays health dashboard with all core services",
+        "renamed": false
+      }
     },
     {
       "n": 106,
@@ -5935,8 +6782,17 @@
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
       "inspection": null,
-      "phase2a_disposition": "updated (dashboard -> /dashboard/services, slug, per-branch assertions, testids)",
-      "phase2a_issue": null
+      "phase2a_disposition": "updated-to-current",
+      "phase2a_issue": null,
+      "phase2a_prior": "updated (dashboard -> /dashboard/services, slug, per-branch assertions, testids)",
+      "phase2a_reason_category": null,
+      "phase2a_reason": null,
+      "phase2a_current": {
+        "where": "e2e/services-health.spec.ts:45",
+        "describe": "Services Health Dashboard",
+        "title": "shows health status indicators (healthy/unhealthy/degraded)",
+        "renamed": false
+      }
     },
     {
       "n": 107,
@@ -6000,8 +6856,17 @@
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
       "inspection": "slug 'hirag-v2' is not in lib/services.ts or lib/serviceCatalog.ts (404); nearest current slug is 'hi-rag-gateway-v2' (lib/serviceCatalog.ts:514)",
-      "phase2a_disposition": "updated (dashboard -> /dashboard/services, slug, per-branch assertions, testids)",
-      "phase2a_issue": null
+      "phase2a_disposition": "updated-to-current",
+      "phase2a_issue": null,
+      "phase2a_prior": "updated (dashboard -> /dashboard/services, slug, per-branch assertions, testids)",
+      "phase2a_reason_category": null,
+      "phase2a_reason": null,
+      "phase2a_current": {
+        "where": "e2e/services-health.spec.ts:105",
+        "describe": "Individual Service Health \u203a Hi-RAG v2",
+        "title": "shows service health details",
+        "renamed": false
+      }
     },
     {
       "n": 108,
@@ -6047,8 +6912,17 @@
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
       "inspection": "page renders the markdown Service Guide branch; the <dl> the spec looks for exists only in CatalogFallback (app/dashboard/services/[service]/page.tsx:61); no backend involved",
-      "phase2a_disposition": "updated (dashboard -> /dashboard/services, slug, per-branch assertions, testids)",
-      "phase2a_issue": null
+      "phase2a_disposition": "updated-to-current",
+      "phase2a_issue": null,
+      "phase2a_prior": "updated (dashboard -> /dashboard/services, slug, per-branch assertions, testids)",
+      "phase2a_reason_category": null,
+      "phase2a_reason": null,
+      "phase2a_current": {
+        "where": "e2e/services-health.spec.ts:126",
+        "describe": "Individual Service Health \u203a Hi-RAG v2",
+        "title": "shows service-specific metrics",
+        "renamed": false
+      }
     },
     {
       "n": 109,
@@ -6112,8 +6986,17 @@
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
       "inspection": null,
-      "phase2a_disposition": "updated (dashboard -> /dashboard/services, slug, per-branch assertions, testids)",
-      "phase2a_issue": null
+      "phase2a_disposition": "updated-to-current",
+      "phase2a_issue": null,
+      "phase2a_prior": "updated (dashboard -> /dashboard/services, slug, per-branch assertions, testids)",
+      "phase2a_reason_category": null,
+      "phase2a_reason": null,
+      "phase2a_current": {
+        "where": "e2e/services-health.spec.ts:105",
+        "describe": "Individual Service Health \u203a Agent Zero",
+        "title": "shows service health details",
+        "renamed": false
+      }
     },
     {
       "n": 110,
@@ -6171,8 +7054,17 @@
       "mechanical_stale": "unknown",
       "mechanical_action": "real-regression-investigate",
       "inspection": "service page is a server component rendering the markdown Service Guide (no client fetch); the first <code> is the slug ('agent-zero'), the spec assumes it is a URL",
-      "phase2a_disposition": "updated (dashboard -> /dashboard/services, slug, per-branch assertions, testids)",
-      "phase2a_issue": null
+      "phase2a_disposition": "updated-to-current",
+      "phase2a_issue": null,
+      "phase2a_prior": "updated (dashboard -> /dashboard/services, slug, per-branch assertions, testids)",
+      "phase2a_reason_category": null,
+      "phase2a_reason": null,
+      "phase2a_current": {
+        "where": "e2e/services-health.spec.ts:113",
+        "describe": "Individual Service Health \u203a Agent Zero",
+        "title": "displays service endpoint information",
+        "renamed": false
+      }
     },
     {
       "n": 111,
@@ -6218,8 +7110,17 @@
       "mechanical_stale": "unknown",
       "mechanical_action": "real-regression-investigate",
       "inspection": "page renders the markdown Service Guide branch; the <dl> the spec looks for exists only in CatalogFallback (app/dashboard/services/[service]/page.tsx:61); no backend involved",
-      "phase2a_disposition": "updated (dashboard -> /dashboard/services, slug, per-branch assertions, testids)",
-      "phase2a_issue": null
+      "phase2a_disposition": "updated-to-current",
+      "phase2a_issue": null,
+      "phase2a_prior": "updated (dashboard -> /dashboard/services, slug, per-branch assertions, testids)",
+      "phase2a_reason_category": null,
+      "phase2a_reason": null,
+      "phase2a_current": {
+        "where": "e2e/services-health.spec.ts:126",
+        "describe": "Individual Service Health \u203a Agent Zero",
+        "title": "shows service-specific metrics",
+        "renamed": false
+      }
     },
     {
       "n": 112,
@@ -6292,8 +7193,17 @@
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
       "inspection": null,
-      "phase2a_disposition": "updated (dashboard -> /dashboard/services, slug, per-branch assertions, testids)",
-      "phase2a_issue": null
+      "phase2a_disposition": "updated-to-current",
+      "phase2a_issue": null,
+      "phase2a_prior": "updated (dashboard -> /dashboard/services, slug, per-branch assertions, testids)",
+      "phase2a_reason_category": null,
+      "phase2a_reason": null,
+      "phase2a_current": {
+        "where": "e2e/services-health.spec.ts:105",
+        "describe": "Individual Service Health \u203a Archon",
+        "title": "shows service health details",
+        "renamed": false
+      }
     },
     {
       "n": 113,
@@ -6355,8 +7265,17 @@
       "mechanical_stale": "unknown",
       "mechanical_action": "real-regression-investigate",
       "inspection": "service page is a server component rendering the markdown Service Guide (no client fetch); the first <code> is the slug ('agent-zero'), the spec assumes it is a URL",
-      "phase2a_disposition": "updated (dashboard -> /dashboard/services, slug, per-branch assertions, testids)",
-      "phase2a_issue": null
+      "phase2a_disposition": "updated-to-current",
+      "phase2a_issue": null,
+      "phase2a_prior": "updated (dashboard -> /dashboard/services, slug, per-branch assertions, testids)",
+      "phase2a_reason_category": null,
+      "phase2a_reason": null,
+      "phase2a_current": {
+        "where": "e2e/services-health.spec.ts:113",
+        "describe": "Individual Service Health \u203a Archon",
+        "title": "displays service endpoint information",
+        "renamed": false
+      }
     },
     {
       "n": 114,
@@ -6406,8 +7325,17 @@
       "mechanical_stale": "unknown",
       "mechanical_action": "real-regression-investigate",
       "inspection": "page renders the markdown Service Guide branch; the <dl> the spec looks for exists only in CatalogFallback (app/dashboard/services/[service]/page.tsx:61); no backend involved",
-      "phase2a_disposition": "updated (dashboard -> /dashboard/services, slug, per-branch assertions, testids)",
-      "phase2a_issue": null
+      "phase2a_disposition": "updated-to-current",
+      "phase2a_issue": null,
+      "phase2a_prior": "updated (dashboard -> /dashboard/services, slug, per-branch assertions, testids)",
+      "phase2a_reason_category": null,
+      "phase2a_reason": null,
+      "phase2a_current": {
+        "where": "e2e/services-health.spec.ts:126",
+        "describe": "Individual Service Health \u203a Archon",
+        "title": "shows service-specific metrics",
+        "renamed": false
+      }
     },
     {
       "n": 115,
@@ -6446,7 +7374,15 @@
       "mechanical_action": "tag-backend",
       "inspection": null,
       "phase2a_disposition": "tagged-backend",
-      "phase2a_issue": null
+      "phase2a_issue": null,
+      "phase2a_reason_category": null,
+      "phase2a_reason": null,
+      "phase2a_current": {
+        "where": "e2e/services-health.spec.ts:146",
+        "describe": "Health API Endpoints",
+        "title": "base health endpoint returns JSON response",
+        "renamed": false
+      }
     },
     {
       "n": 116,
@@ -6485,7 +7421,15 @@
       "mechanical_action": "tag-backend",
       "inspection": null,
       "phase2a_disposition": "tagged-backend",
-      "phase2a_issue": null
+      "phase2a_issue": null,
+      "phase2a_reason_category": null,
+      "phase2a_reason": null,
+      "phase2a_current": {
+        "where": "e2e/services-health.spec.ts:156",
+        "describe": "Health API Endpoints",
+        "title": "health endpoint includes database check",
+        "renamed": false
+      }
     },
     {
       "n": 117,
@@ -6523,8 +7467,17 @@
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
       "inspection": null,
-      "phase2a_disposition": "updated (assert 401 auth contract)",
-      "phase2a_issue": null
+      "phase2a_disposition": "tagged-backend",
+      "phase2a_issue": null,
+      "phase2a_prior": "updated (assert 401 auth contract)",
+      "phase2a_reason_category": null,
+      "phase2a_reason": null,
+      "phase2a_current": {
+        "where": "e2e/services-health.spec.ts:217",
+        "describe": "Health API Endpoints \u203a authenticated",
+        "title": "health-all endpoint returns service list",
+        "renamed": false
+      }
     },
     {
       "n": 118,
@@ -6562,8 +7515,17 @@
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
       "inspection": null,
-      "phase2a_disposition": "updated (assert 401 auth contract)",
-      "phase2a_issue": null
+      "phase2a_disposition": "tagged-backend",
+      "phase2a_issue": null,
+      "phase2a_prior": "updated (assert 401 auth contract)",
+      "phase2a_reason_category": null,
+      "phase2a_reason": null,
+      "phase2a_current": {
+        "where": "e2e/services-health.spec.ts:227",
+        "describe": "Health API Endpoints \u203a authenticated",
+        "title": "boot-jwt health endpoint returns token status",
+        "renamed": false
+      }
     },
     {
       "n": 119,
@@ -6618,8 +7580,17 @@
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
       "inspection": null,
-      "phase2a_disposition": "rewritten (feature removed in cbf69c3fe; asserts no boot JWT on window)",
-      "phase2a_issue": null
+      "phase2a_disposition": "updated-to-current",
+      "phase2a_issue": null,
+      "phase2a_prior": "rewritten (feature removed in cbf69c3fe; asserts no boot JWT on window)",
+      "phase2a_reason_category": null,
+      "phase2a_reason": null,
+      "phase2a_current": {
+        "where": "e2e/supabase-auth.spec.ts:8",
+        "describe": "Supabase boot session",
+        "title": "boot JWT is never exposed on window",
+        "renamed": true
+      }
     },
     {
       "n": 120,
@@ -6655,7 +7626,15 @@
       "mechanical_action": "tag-backend",
       "inspection": null,
       "phase2a_disposition": "tagged-backend",
-      "phase2a_issue": null
+      "phase2a_issue": null,
+      "phase2a_reason_category": null,
+      "phase2a_reason": null,
+      "phase2a_current": {
+        "where": "e2e/videos-realtime.spec.ts:50",
+        "describe": "Videos Realtime",
+        "title": "inserts row and appears in UI",
+        "renamed": false
+      }
     }
   ],
   "phase2a": {
@@ -6688,12 +7667,286 @@
       "e2e/supabase-auth.spec.ts::browser client uses boot JWT when provided": "boot JWT is never exposed on window"
     },
     "local_default_run": {
-      "command": "npm run test:e2e (CI env, CI=1, no backend)",
-      "total": 182,
-      "passed": 88,
-      "skipped": 94,
+      "command": "CI=1 npx playwright test --grep-invert @backend (== npm run test:e2e, no backend)",
+      "total": 191,
+      "passed": 156,
+      "skipped": 35,
       "failed": 0,
+      "flaky": 0,
       "rc": 0
+    },
+    "derived_by": "pmoves/ui/scripts/e2e_reconcile_dispositions.py",
+    "annotations": {
+      "never-in-ui-source": "`never-in-ui-source` (phase 1, `selector_checks[].ui_history`) means the TESTID/TEXT STRING the spec looked for was absent from UI source on every ref. It does NOT mean the feature was absent: most of those features were built and rendered under other selectors, and phase 2 updated those specs to the real selectors."
+    },
+    "row_dispositions": {
+      "updated-to-current": 94,
+      "fixme": 17,
+      "tagged-backend": 8,
+      "deleted": 1
+    },
+    "row_fixme_categories": {
+      "unwired": 13,
+      "behaviour-mismatch": 3,
+      "bug": 1
+    },
+    "suite": {
+      "tests": 199,
+      "backend_tagged": 8,
+      "default_run_tests": 191,
+      "fixme": 34,
+      "fixme_categories": {
+        "unwired": 16,
+        "not-built": 8,
+        "behaviour-mismatch": 7,
+        "bug": 3
+      },
+      "issues_referenced": [
+        3225,
+        3226,
+        3228,
+        3232
+      ],
+      "fixme_tests": [
+        {
+          "where": "e2e/archon-prompts.spec.ts:166",
+          "title": "filters prompts by category",
+          "category": "not-built",
+          "issue": null,
+          "reason": "FEATURE NOT BUILT: prompts have no category. ArchonPrompt has no category field (lib/archonPrompts.ts:3-10) and app/dashboard/archon-prompts/page.tsx:271-580 renders no category control. The old body was guarded by `if (count > 0)` and could never fail. The body states the intended behaviour so it fails loudly once un-fixme'd."
+        },
+        {
+          "where": "e2e/archon-prompts.spec.ts:341",
+          "title": "shows delete confirmation",
+          "category": "not-built",
+          "issue": null,
+          "reason": "FEATURE NOT BUILT: there is no delete confirmation. handleDelete (app/dashboard/archon-prompts/page.tsx:236-254) removes the row and calls DELETE immediately, and the page renders no dialog. The old body was guarded by `if (count > 0)` against a /dashboard/archon-prompts/test-prompt route that does not exist, so it could never fail."
+        },
+        {
+          "where": "e2e/archon-prompts.spec.ts:351",
+          "title": "cancels delete on confirmation cancel",
+          "category": "not-built",
+          "issue": null,
+          "reason": "FEATURE NOT BUILT: there is no delete confirmation to cancel (handleDelete, app/dashboard/archon-prompts/page.tsx:236-254, deletes immediately). Old body was guarded by `if (count > 0)` against a nonexistent detail route."
+        },
+        {
+          "where": "e2e/archon-prompts.spec.ts:364",
+          "title": "shows execute button on prompt detail",
+          "category": "not-built",
+          "issue": null,
+          "reason": "FEATURE NOT BUILT: prompts cannot be executed from the UI. app/dashboard/archon-prompts/ holds only page.tsx (no detail route), the row actions are Edit/Delete only (page.tsx:395-407), and app/api/archon-prompts/[id]/route.ts exports only PATCH and DELETE. Old body was guarded."
+        },
+        {
+          "where": "e2e/archon-prompts.spec.ts:371",
+          "title": "shows variable input form for template variables",
+          "category": "not-built",
+          "issue": null,
+          "reason": "FEATURE NOT BUILT: no execute flow, so no template-variable form (see the test above; the {{topic}} placeholder in a prompt body is stored verbatim and never parsed by the page)."
+        },
+        {
+          "where": "e2e/chat.spec.ts:126",
+          "title": "supports markdown in responses",
+          "category": "not-built",
+          "issue": null,
+          "reason": "FEATURE NOT BUILT. The chat page renders message content as plain text (<div className=\"text-sm whitespace-pre-wrap\">{m.content}</div> in app/dashboard/chat/page.tsx); there is no markdown renderer, so a markdown list reply never becomes list items. The old body was vacuous (`if (count > 0)`), so it could never fail. No tracking issue yet."
+        },
+        {
+          "where": "e2e/chat.spec.ts:237",
+          "title": "allows clearing chat history",
+          "category": "not-built",
+          "issue": null,
+          "reason": "FEATURE NOT BUILT. app/dashboard/chat/page.tsx has no clear-history control (no \"clear\" button, and /api/chat/* has no delete route the page calls). The old body was vacuous (`if (count > 0)` with no assertion), so it could never fail. No tracking issue yet. The body states the intended behaviour so it fails loudly once un-fixme'd against a real control."
+        },
+        {
+          "where": "e2e/ingestion.spec.ts:679",
+          "title": "should test rule against pending items",
+          "category": "unwired",
+          "issue": null,
+          "reason": "UI unwired: rule-test action not rendered (page.tsx:380-386 passes no onTestRule; button gated at ApprovalRulesConfig.tsx:529)"
+        },
+        {
+          "where": "e2e/ingestion.spec.ts:692",
+          "title": "should show execution log modal",
+          "category": "unwired",
+          "issue": null,
+          "reason": "UI unwired: execution log not rendered (page.tsx:380-386 passes no onFetchLog; \"View Log\" gated at ApprovalRulesConfig.tsx:284)"
+        },
+        {
+          "where": "e2e/ingestion.spec.ts:794",
+          "title": "should close modals on escape key",
+          "category": "behaviour-mismatch",
+          "issue": null,
+          "reason": "behaviour mismatch: no Escape handling. The rules panel is inline (page.tsx:379-387), and the rule editor closes only via overlay click or Cancel (ApprovalRulesConfig.tsx:384, :589-595); no keydown handler exists"
+        },
+        {
+          "where": "e2e/jellyfin.spec.ts:130",
+          "title": "should render backfill options controls",
+          "category": "unwired",
+          "issue": null,
+          "reason": "UI unwired: BackfillControls not rendered (components/jellyfin/BackfillControls.tsx is imported only by BackfillControls.test.tsx; jellyfin/page.tsx renders only SyncStatus's one-click \"Run Backfill\", SyncStatus.tsx:161-177)"
+        },
+        {
+          "where": "e2e/jellyfin.spec.ts:225",
+          "title": "should filter media by type",
+          "category": "unwired",
+          "issue": null,
+          "reason": "UI unwired: media type filter not rendered (jellyfin/page.tsx:117-133 has only a text search; jellyfinSearch's mediaType option, lib/api/jellyfin.ts:128-145, is never passed by page.tsx:50)"
+        },
+        {
+          "where": "e2e/jellyfin.spec.ts:286",
+          "title": "should link video to Jellyfin item",
+          "category": "unwired",
+          "issue": null,
+          "reason": "UI unwired: no link-to-Jellyfin flow is rendered. The ingestion queue rows offer only Reject/Approve (app/dashboard/ingestion-queue/page.tsx:550-567); the Jellyfin page's \"Link\" button only logs (app/dashboard/jellyfin/page.tsx:148-153); JellyfinMediaBrowser's \"Link Video\" needs onLink, which page.tsx:161 never passes"
+        },
+        {
+          "where": "e2e/jellyfin.spec.ts:300",
+          "title": "should trigger backfill with default options",
+          "category": "unwired",
+          "issue": null,
+          "reason": "UI unwired: BackfillControls not rendered (components/jellyfin/BackfillControls.tsx is imported only by BackfillControls.test.tsx; jellyfin/page.tsx renders only SyncStatus's one-click \"Run Backfill\", SyncStatus.tsx:161-177)"
+        },
+        {
+          "where": "e2e/jellyfin.spec.ts:318",
+          "title": "should trigger backfill with custom options",
+          "category": "unwired",
+          "issue": null,
+          "reason": "UI unwired: BackfillControls not rendered (components/jellyfin/BackfillControls.tsx is imported only by BackfillControls.test.tsx; jellyfin/page.tsx renders only SyncStatus's one-click \"Run Backfill\", SyncStatus.tsx:161-177)"
+        },
+        {
+          "where": "e2e/jellyfin.spec.ts:339",
+          "title": "should validate backfill batch size (1-1000)",
+          "category": "unwired",
+          "issue": null,
+          "reason": "UI unwired: BackfillControls not rendered (components/jellyfin/BackfillControls.tsx is imported only by BackfillControls.test.tsx; jellyfin/page.tsx renders only SyncStatus's one-click \"Run Backfill\", SyncStatus.tsx:161-177)"
+        },
+        {
+          "where": "e2e/jellyfin.spec.ts:358",
+          "title": "should validate backfill priority (1-10)",
+          "category": "unwired",
+          "issue": null,
+          "reason": "UI unwired: BackfillControls not rendered (components/jellyfin/BackfillControls.tsx is imported only by BackfillControls.test.tsx; jellyfin/page.tsx renders only SyncStatus's one-click \"Run Backfill\", SyncStatus.tsx:161-177)"
+        },
+        {
+          "where": "e2e/jellyfin.spec.ts:377",
+          "title": "should cancel backfill operation",
+          "category": "unwired",
+          "issue": null,
+          "reason": "UI unwired: BackfillControls not rendered (components/jellyfin/BackfillControls.tsx is imported only by BackfillControls.test.tsx; jellyfin/page.tsx renders only SyncStatus's one-click \"Run Backfill\", SyncStatus.tsx:161-177)"
+        },
+        {
+          "where": "e2e/jellyfin.spec.ts:449",
+          "title": "should show loading state while refreshing sync status",
+          "category": "behaviour-mismatch",
+          "issue": null,
+          "reason": "behaviour mismatch: Refresh has no loading state (SyncStatus.tsx:78-85 renders no data-loading/busy state; onRefresh is fire-and-forget, page.tsx:25-30)"
+        },
+        {
+          "where": "e2e/jellyfin.spec.ts:483",
+          "title": "should close media details on escape key",
+          "category": "behaviour-mismatch",
+          "issue": null,
+          "reason": "behaviour mismatch: no Escape handling; media details close only via the close button (JellyfinMediaBrowser.tsx:189-197), and the component registers no keydown handler"
+        },
+        {
+          "where": "e2e/jellyfin.spec.ts:533",
+          "title": "should generate playback URL",
+          "category": "unwired",
+          "issue": null,
+          "reason": "UI unwired: the \"Playback URL\" button renders only when onPlaybackUrl is passed (JellyfinMediaBrowser.tsx:162-169), and app/dashboard/jellyfin/page.tsx:161 passes none; getJellyfinPlaybackUrl (lib/api/jellyfin.ts:284) is never called by the page"
+        },
+        {
+          "where": "e2e/research.spec.ts:122",
+          "title": "should initiate research task with default options",
+          "category": "behaviour-mismatch",
+          "issue": 3226,
+          "reason": "behaviour mismatch: built submit flow shows no task-started message and does not clear the query \u2014 page.tsx:89-101 handleInitiate only refreshes the task list; TaskInitiationForm.tsx handleSubmit keeps the query. Operator to decide whether to build the confirmation + reset. Tracked in #3226"
+        },
+        {
+          "where": "e2e/research.spec.ts:272",
+          "title": "should select notebook from dropdown",
+          "category": "unwired",
+          "issue": 3226,
+          "reason": "UI unwired: TaskInitiationForm notebook select not rendered (TaskInitiationForm.tsx:180 renders it only when notebooks.length > 0; page.tsx:200-203 passes no notebooks prop). Tracked in #3226"
+        },
+        {
+          "where": "e2e/research.spec.ts:304",
+          "title": "should filter tasks by mode",
+          "category": "unwired",
+          "issue": 3226,
+          "reason": "UI unwired: mode filter not rendered (ResearchTaskList.tsx:94-107 renders only the status filter; lib/api/research.ts listResearchTasks accepts `mode` but no UI passes it). Tracked in #3226"
+        },
+        {
+          "where": "e2e/research.spec.ts:316",
+          "title": "should select all visible tasks",
+          "category": "unwired",
+          "issue": 3226,
+          "reason": "UI unwired: task multi-select not rendered on /dashboard/research (ResearchTaskList.tsx has no checkboxes or selection controls; \"Select All Visible\" exists only in components/ingestion/BulkApprovalActions.tsx:130). Tracked in #3226"
+        },
+        {
+          "where": "e2e/research.spec.ts:331",
+          "title": "should select only pending tasks",
+          "category": "unwired",
+          "issue": 3226,
+          "reason": "UI unwired: task multi-select not rendered on /dashboard/research (ResearchTaskList.tsx has no selection controls; \"Select Pending\" exists only in components/ingestion/BulkApprovalActions.tsx:133). Tracked in #3226"
+        },
+        {
+          "where": "e2e/research.spec.ts:343",
+          "title": "should clear task selection",
+          "category": "unwired",
+          "issue": 3226,
+          "reason": "UI unwired: task multi-select not rendered on /dashboard/research (ResearchTaskList.tsx has no selection controls; clear-selection exists only in components/ingestion/BulkApprovalActions.tsx). Tracked in #3226"
+        },
+        {
+          "where": "e2e/research.spec.ts:510",
+          "title": "should format duration correctly",
+          "category": "behaviour-mismatch",
+          "issue": 3226,
+          "reason": "behaviour mismatch: duration units disagree across the contract \u2014 lib/api/research.ts:81 documents ResearchResult.duration as SECONDS, ResearchResults.tsx:49-55 formatDuration treats it as MILLISECONDS (150 renders \"0s\"), and services/deepresearch/worker.py:381 emits `duration_ms`. Operator to pick the unit. Tracked in #3226"
+        },
+        {
+          "where": "e2e/research.spec.ts:563",
+          "title": "should handle 425 error (still in progress)",
+          "category": "behaviour-mismatch",
+          "issue": 3226,
+          "reason": "behaviour mismatch: lib/api/research.ts:302-303 maps HTTP 425 to \"Research still in progress\", but page.tsx:107-112 handleSelectTask drops the error (only result.ok is handled), so no in-progress message is ever shown; the task-in-progress-message element does not exist. Tracked in #3226"
+        },
+        {
+          "where": "e2e/search.spec.ts:271",
+          "title": "should export result to notebook",
+          "category": "bug",
+          "issue": 3232,
+          "reason": "REAL UI BUG #3232: exportToNotebook (lib/api/hirag.ts:269-277) is a TODO stub that returns ok without calling any API, so the \"Exported to notebook\" toast reports a success that never happened. Passing this test would certify the stub. The body is kept: it becomes a real check once the export is wired (add an assertion on the outgoing notebook request then)."
+        },
+        {
+          "where": "e2e/search.spec.ts:410",
+          "title": "should validate date range (end >= start)",
+          "category": "behaviour-mismatch",
+          "issue": 3225,
+          "reason": "behaviour mismatch: SearchFilters.tsx:130-156 renders two independent date inputs with no end>=start validation and no date-validation-error element (and no Apply button); needs an operator decision on whether to build validation. Tracked in #3225"
+        },
+        {
+          "where": "e2e/services-health.spec.ts:91",
+          "title": "provides refresh/recheck functionality",
+          "category": "bug",
+          "issue": 3228,
+          "reason": "REAL UI BUG, not a stale test. Refresh stays disabled (\"Refreshing...\") forever because useServiceHealth never clears isPolling; tracked in #3228"
+        },
+        {
+          "where": "e2e/services-health.spec.ts:263",
+          "title": "handles degraded service state gracefully",
+          "category": "not-built",
+          "issue": null,
+          "reason": "FEATURE NOT BUILT: there is no degraded health state. ServiceHealthStatus is 'healthy' | 'unhealthy' | 'unknown' | 'checking' (lib/serviceHealth.ts:9) and ServiceHealthIndicator has no degraded style (components/services/ServiceHealthIndicator.tsx:33-38), so a degraded service falls into the \"unknown\" count. The body states the intended behaviour."
+        },
+        {
+          "where": "e2e/services-health.spec.ts:286",
+          "title": "provides retry mechanism for failed checks",
+          "category": "bug",
+          "issue": 3228,
+          "reason": "REAL UI BUG #3228. The Refresh button is the retry mechanism, but it stays disabled (\"Refreshing...\") forever: useServiceHealth sets isPolling true on mount and never clears it (lib/useServiceHealth.ts:106), and SystemStatsBar disables the button while isChecking (components/hub/SystemStatsBar.tsx:117)."
+        }
+      ]
     }
   }
 }
