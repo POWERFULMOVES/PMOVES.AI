@@ -68,6 +68,7 @@ export default defineConfig({
   fullyParallel: false,
   workers: 1,
   retries: 0,
+  forbidOnly: !!process.env.CI,
   reporter: process.env.CI ? [['list'], ['html', { open: 'never', outputFolder: 'playwright-report-launcher' }]] : 'list',
   outputDir: 'test-results-launcher',
   webServer: [
@@ -78,14 +79,19 @@ export default defineConfig({
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
   },
+  // Each project selects its own test with `grep`, so nothing is skipped under
+  // this config: a green run means both assertions ran, and a renamed test
+  // makes Playwright fail with "No tests found" instead of passing vacuously.
   projects: [
     {
       name: 'launcher-real-catalog',
+      grep: /real catalog:/,
       use: { ...devices['Desktop Chrome'], baseURL: `http://${HOST}:${REAL_PORT}` },
       metadata: { launcherCatalog: 'real', roomDir: REAL_ROOM_DIR },
     },
     {
       name: 'launcher-fixture-catalog',
+      grep: /negative fixture:/,
       use: { ...devices['Desktop Chrome'], baseURL: `http://${HOST}:${FIXTURE_PORT}` },
       metadata: { launcherCatalog: 'fixture', roomDir: FIXTURE_ROOM_DIR },
     },
