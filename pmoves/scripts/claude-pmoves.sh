@@ -122,6 +122,37 @@ fi
 pm_node_identity "$ROOT" claude-code claude-pmoves || true
 IDENT_PY=(${PM_IDENT_PY[@]+"${PM_IDENT_PY[@]}"})
 echo "${PM_IDENT_LINE}" >&2
+# WHO THE SESSION IS -- the FIRST block of the prompt, and in the first person.
+#
+# Operator direction 2026-09-27: "ensure that B850-CLAUDE is what claude-pmoves
+# wakes up." The previous sentence named only the registry key and put the role
+# last ("Your registered identity ... is 'claude_b850' ... Your selected role for
+# this session is the 'node-steward' agent"), and node-steward.md described
+# "this node's CLI identity" as the party directing it. So the session woke up
+# AS the role and spoke of B850-CLAUDE in the third person. The name the fleet
+# uses and the owner string it signs the register with now come from
+# identity_vocabulary.yaml's declared register_form (resolve_register_name);
+# the role is stated as the job, after the name.
+#
+# FIRST because the model reads the prompt top-down and every later block (the
+# cipher agentId, memory status, carry verdict) is a fact ABOUT this identity.
+#
+# FAIL-OPEN, LOUDLY. An undeclared register_form, an invalid
+# PMOVES_REGISTER_IDENTITY, or a resolver that emitted nothing falls back to the
+# registry-key sentence and prints why on stderr -- never to a guessed name.
+if [ "${PM_IDENT_OK:-0}" = "1" ]; then
+  # Put it where the session can actually READ it. Exported variables do not
+  # reach the model's context; an appended system prompt does. This is the
+  # difference between the identity existing and the identity working.
+  if [ -n "${PM_IDENT_DISPLAY:-}" ] && [ -n "${PM_IDENT_REGISTER_FORM:-}" ]; then
+    _card="${PM_IDENT_CIPHER_ID:+, signing card ${PM_IDENT_CIPHER_ID}}"
+    pm_ident_append "You are ${PM_IDENT_DISPLAY}, the Claude Code agent for PMOVES node '${PMOVES_NODE}' (registry key ${PMOVES_NODE_IDENTITY} in pmoves/config/agent_registry.yaml${_card}). You sign the claim register as '${PM_IDENT_REGISTER_FORM}'. This session you are doing the job of the '${AGENT}' role: the role is the work you are doing, not a second party -- speak as ${PM_IDENT_DISPLAY}, in the first person, and never describe ${PM_IDENT_DISPLAY} as someone who directs you. Disclose this at session start rather than rediscovering it. If another live session on this node already signs as '${PM_IDENT_REGISTER_FORM}', do not share that owner string: pmoves/config/identity_vocabulary.yaml requires a second session on one node to use a distinct BASE identity, launched with PMOVES_REGISTER_IDENTITY set to it."
+    unset _card
+  else
+    echo "[claude-pmoves] identity name unresolved, falling back to the registry key: ${PM_IDENT_DISPLAY_WHY:-no reason given}" >&2
+    pm_ident_append "You are running on PMOVES node '${PMOVES_NODE}'. Your registered identity in pmoves/config/agent_registry.yaml is '${PMOVES_NODE_IDENTITY}'. Disclose it at session start rather than rediscovering it. Your selected role for this session is the '${AGENT}' agent."
+  fi
+fi
 # Cipher refuses every call without an `agentId`, and refuses a wrong one under
 # token enforcement, so a session that is not told the spelling cannot use
 # persistent memory at all. It rides in the same accumulated prompt -- a fourth
@@ -130,13 +161,6 @@ if [ -n "${PM_IDENT_CIPHER_ID:-}" ]; then
   pm_ident_append "When calling the Cipher MCP tools, pass agentId '${PM_IDENT_CIPHER_ID}'. It is REQUIRED on every call and is the signing-card spelling from pmoves/config/signing_identity_cards.yaml -- not your registry identity, which cipher refuses."
 else
   pm_ident_append "You have NO declared Cipher agentId this session. Cipher requires one on every call, so declare it per call and say that you are doing so. Reason: ${PM_IDENT_CIPHER_WHY:-not measured}"
-fi
-
-if [ "${PM_IDENT_OK:-0}" = "1" ]; then
-  # Put it where the session can actually READ it. Exported variables do not
-  # reach the model's context; an appended system prompt does. This is the
-  # difference between the identity existing and the identity working.
-  pm_ident_append "You are running on PMOVES node '${PMOVES_NODE}'. Your registered identity in pmoves/config/agent_registry.yaml is '${PMOVES_NODE_IDENTITY}'. Disclose it at session start rather than rediscovering it. Your selected role for this session is the '${AGENT}' agent."
 fi
 
 # CIPHER TOKEN BIND — the handoff the carry check could only report as missing.

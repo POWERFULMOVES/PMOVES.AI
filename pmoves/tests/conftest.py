@@ -76,6 +76,33 @@ def pytest_runtest_teardown(item, nextitem) -> None:
         )
 
 
+# The guard refuses any make/gmake spawn unless the PATH it will search starts
+# with a marked stub dir (make runs $(MAKE) recipe lines even under -n). These
+# two fixtures are the sanctioned way to make one. Both return an env dict to
+# pass as `env=`; `.calls()` returns what the recorders saw.
+def _require_posix_stubs() -> None:
+    if os.name == "nt":
+        pytest.skip("stub tool dir uses POSIX sh recorders")
+
+
+@pytest.fixture
+def stub_tool_path(tmp_path_factory):
+    """make/gmake/docker/docker-compose/supabase are all recorders: no recipe runs."""
+    _require_posix_stubs()
+    return _DOCKER_GUARD.build_stub_env(tmp_path_factory.mktemp("stub-tools"), stub_make=True)
+
+
+@pytest.fixture
+def stub_docker_path(tmp_path_factory):
+    """The REAL make runs; docker/docker-compose/supabase resolve to recorders.
+
+    Not a sandbox: read the target's recipe chain first (see the guard's
+    module docstring for what a recipe can still reach).
+    """
+    _require_posix_stubs()
+    return _DOCKER_GUARD.build_stub_env(tmp_path_factory.mktemp("stub-docker"), stub_make=False)
+
+
 @pytest.fixture(scope="session", autouse=True)
 def _ensure_repo_on_path() -> None:
     """Ensure the repository root is importable during tests."""

@@ -662,8 +662,13 @@ def test_positive_control_structural_check_catches_an_end_of_file_unexport(tmp_p
     assert unexport and risky and unexport[0] > min(risky)
 
 
-def _make(tmp_path: Path, target: str, key: str, stdin: str = "") -> subprocess.CompletedProcess:
-    env = dict(os.environ)
+def _make(stub_env: dict, tmp_path: Path, target: str, key: str,
+          stdin: str = "") -> subprocess.CompletedProcess:
+    # stub_docker_path: the real make runs (the recipes are what is under test)
+    # but docker/compose/supabase resolve to recorders. These three recipes call
+    # only $(PYTHON) tools/env_local_key.py; the session guard refuses any make
+    # spawn whose PATH does not start with such a stub dir.
+    env = dict(stub_env)
     env["ENV_LOCAL_KEY_FILE"] = str(tmp_path / "overlay.txt")
     env["ENV_LOCAL_KEY_AUDIT"] = str(tmp_path / "audit" / "edits.jsonl")
     env.pop("KEY", None)
@@ -682,13 +687,13 @@ def _make(tmp_path: Path, target: str, key: str, stdin: str = "") -> subprocess.
 
 
 @needs_make
-def test_make_unset_and_set_round_trip_on_a_temp_file(tmp_path):
+def test_make_unset_and_set_round_trip_on_a_temp_file(stub_docker_path, tmp_path):
     f = _write(tmp_path)
-    proc = _make(tmp_path, "env-local-set", "TARGET_KEY", stdin=SECRET + "\n")
+    proc = _make(stub_docker_path, tmp_path, "env-local-set", "TARGET_KEY", stdin=SECRET + "\n")
     assert proc.returncode == 0, proc.stderr
     assert_value_not_in_output(proc, SECRET)
     assert str(f) in proc.stdout  # the resolved path is always shown
-    proc = _make(tmp_path, "env-local-unset", "TARGET_KEY")
+    proc = _make(stub_docker_path, tmp_path, "env-local-unset", "TARGET_KEY")
     assert proc.returncode == 0, proc.stderr
     assert f.read_bytes() == ORIGINAL.replace(b"TARGET_KEY=old-value-xyz\n", b"", 1)
     assert len(_backups(tmp_path)) == 2
@@ -697,16 +702,16 @@ def test_make_unset_and_set_round_trip_on_a_temp_file(tmp_path):
 @needs_make
 @pytest.mark.parametrize("payload", ["$(shell touch {canary})", "`touch {canary}`",
                                      "$$(touch {canary})"])
-def test_make_key_is_never_expanded_or_executed(tmp_path, payload):
+def test_make_key_is_never_expanded_or_executed(stub_docker_path, tmp_path, payload):
     _write(tmp_path)
     canary = tmp_path / "CANARY"
-    proc = _make(tmp_path, "env-local-has", payload.format(canary=canary))
+    proc = _make(stub_docker_path, tmp_path, "env-local-has", payload.format(canary=canary))
     assert proc.returncode != 0
     assert not canary.exists(), f"KEY payload executed: {payload}"
 
 
 @needs_make
-def test_positive_control_unexport_key_is_load_bearing(tmp_path):
+def test_positive_control_unexport_key_is_load_bearing(stub_docker_path, tmp_path):
     """Without `unexport KEY`, make expands a command-line KEY while exporting
     it to the recipe environment -- so the canary test above must be able to
     see an execution. Built from a throwaway copy of the Makefile, never by
@@ -717,7 +722,7 @@ def test_positive_control_unexport_key_is_load_bearing(tmp_path):
     variant.write_text(src.replace("\nunexport KEY\n", "\n", 1))
     _write(tmp_path)
     canary = tmp_path / "CANARY"
-    env = dict(os.environ)
+    env = dict(stub_docker_path)
     env["ENV_LOCAL_KEY_FILE"] = str(tmp_path / "overlay.txt")
     env["ENV_LOCAL_KEY_AUDIT"] = str(tmp_path / "audit" / "edits.jsonl")
     subprocess.run(

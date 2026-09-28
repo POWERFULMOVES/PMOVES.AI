@@ -123,9 +123,11 @@ Both are materially larger than this spec.
 ### 0.7 Consequences for work in flight
 
 - **PR #2728** (Step 4: multi-home `supabase-db` onto `pmoves_external`, publish
-  the DB port tailnet-bound) assumes **b850 stays the metadata host**. If
-  metadata moves to a KVM, that PR is pointed the wrong way and should not merge
-  on momentum. It is not wrong today — it is scoped to a topology under review.
+  the DB port tailnet-bound) **MERGED 2026-08-25**. Under D1 (replicated
+  Postgres, decided; see `JUICEFS_GARAGE_MIGRATION_PLAN.md` §2) it is the
+  **interim** remote-mount path while metadata stays on b850. After the
+  metadata move, JuiceFS no longer needs the tailnet `supabase-db` exposure, and
+  the follow-on plan should retire it unless another consumer depends on it.
 - The `pmoves-media` volume needs a **reformat or a bucket-URL correction**
   regardless of the engine decision; §0.2 blocks every remote mount on its own.
 - The cross-node preflight should gain a **bucket-URL reachability check** to
@@ -149,6 +151,8 @@ Still open, and now the *first* question rather than a foregone one:
 - **Metadata engine.** §0.5's correction means replicated Postgres is a live
   candidate, not a disqualified one — and it is the only candidate requiring no
   engine migration. Evaluate it before TiKV.
+  **DECIDED later (2026-09-27): replicated Postgres (D1).** See
+  `JUICEFS_GARAGE_MIGRATION_PLAN.md` §2.
 
 ### 0.9 What this revision still does NOT decide
 
@@ -157,6 +161,15 @@ with the evidence needed to choose, and names the requirement each choice must
 now satisfy. §4.1 stays below, unedited, as the record of what was decided in
 June and why — the reasoning was sound for a single-node stack and should not be
 retconned.
+
+**Next (2026-09-26, updated 2026-09-27):** the Garage data-backend move now has a
+plan and runbook: [`JUICEFS_GARAGE_MIGRATION_PLAN.md`](JUICEFS_GARAGE_MIGRATION_PLAN.md).
+Operator direction broadened §0.8 to a **fleet-wide** Garage mesh: every capable
+node is a storage node and a JuiceFS client. The tiers are decided: tier 1
+(always-on) is the KVMs plus Spark, and tier 2 is 5090, Z890, Knuckles and 4090.
+The plan uses RF=3, gates every step, rolls back to MinIO, and soaks before the
+interim MinIO bridge (#3192) retires. The metadata engine is **decided: replicated
+Postgres (D1)**. It moves under a separate follow-on plan, after the data move.
 
 ---
 
@@ -244,3 +257,70 @@ Keep MinIO (last-real-tag pin from #1862) **available behind a profile/flag** th
 - Naming: keep `minio:9000` DNS (drop-in) vs new `juicefs-gateway` endpoint var.
 - Presigned-URL semantics parity (expiry, signature) between MinIO and the JuiceFS gateway.
 - Capacity/quota + backup cadence for the JuiceFS volume.
+
+## 12. ADDENDUM 2026-09-26: Supabase Storage S3 as the JuiceFS object store (measured spike)
+
+**Question:** can Supabase Storage's S3 protocol endpoint replace Garage as the JuiceFS data backend?
+**Answer, measured on B850/Knuckles:** it works for reads and writes, but not as a production backend.
+JuiceFS cannot list objects through it, so `gc`, `fsck` and `destroy` silently see nothing.
+It also brings back the single-node `file` store that §0.4 rejects.
+**Recommendation: stay with Garage.**
+
+**Setup (all throwaway, all removed afterwards):** `supabase/storage-api:v1.60.4` with
+`STORAGE_BACKEND=file` and `FILE_SIZE_LIMIT=50MB`. The S3 protocol is on by default
+(`S3_PROTOCOL_ENABLED` is unset, which the code reads as enabled). Region enforcement is off,
+so the region value does not matter. The volume ran in `juicedata/mount:ce-v1.3.0` with a sqlite
+metadata file in scratch and bucket `juicefs-spike-20260926`. The running compose sets **no
+`S3_PROTOCOL_ACCESS_KEY_ID/SECRET`**, so only session-token auth is available: access key =
+tenant id, secret = anon key, session token = a service-role JWT. That grants full RLS bypass,
+and JuiceFS stores it in its format config.
+
+**Addressing blocker.** JuiceFS keeps only the first path segment of the endpoint as the bucket
+and drops the rest (`.../storage/v1/s3/<b>` became `s3://127.0.0.1:8000/storage/`, then 401).
+The Kong route `/storage/v1/s3` is therefore unusable. The only form that worked was to point
+straight at storage-api with `--bucket http://supabase-storage:5000/s3` and give the volume the
+same name as the Supabase bucket. Object I/O works that way. **LIST does not**, because
+`GET /s3?list-type=2` is served as ListBuckets. Results:
+`juicefs gc` scanned 0 objects while 264 existed. `fsck` found 0 blocks and still exited clean.
+`destroy` logged "Deleted 0 objects", returned rc=0 and left 265 orphan rows.
+A path-rewriting proxy would not fix this, because SigV4 signs the path. Fixing it needs either a
+proxy that re-signs every request, or an upstream change in JuiceFS or storage-api.
+
+**Bench** (`juicefs bench -p 4 --big-file-size 256M --small-file-count 100`, `--cache-size 0`, so every read hits the backend):
+
+| Item | Value |
+|---|---|
+| Write big file | 250.9 MiB/s |
+| Read big file | 284.2 MiB/s |
+| Write small file (128 KiB) | 362 files/s (11.05 ms/file) |
+| Read small file | 1157 files/s |
+| Stat | 107,045 files/s (metadata only; sqlite, not the backend) |
+| Put / Get object latency | 128.9 / 181.2 ms/op (656 ops each) |
+| Errors or unsupported ops during bench | none |
+
+A separate `dd` wrote 256 MiB at 287 MB/s. **The storage-api container sat at 100% CPU
+(one Node core) for the whole bench**, which makes it the ceiling. Memory went from 160 to
+283 MiB against a 512 MiB limit. supabase-db peaked at 26% CPU.
+
+**Postgres cost:** every JuiceFS block becomes one `storage.objects` row. A persisted write of
+256 MiB plus 200 files of 128 KiB added **265 rows / 294.6 MB**, which is about 962 rows/GiB for
+that mix. The floor is 256 rows/GiB for large files (4 MiB blocks) and the ceiling is 8,192 rows/GiB
+for 128 KiB files. After that write, `storage.objects` (5 indexes) was 776 kB total. That is only
+indicative, because the table was otherwise empty. The JuiceFS metadata already lives on `supabase-db`
+(§4.1), so this option puts both the file-system index *and* the object index on one Postgres.
+
+**Replication:** none. "Dual-write" exists only as docs (`SUPABASE_DISTRIBUTED.md`,
+`DOCKING_ARCHITECTURE.md`). In `pmoves/scripts/deploy/deploy.sh` the dual-write case is a log line
+plus a comment, and no sync worker exists in `pmoves/services`. Even the design only syncs table
+rows, so a copied `storage.objects` row would not bring its bytes, which sit on the
+`pmoves_supabase-storage-data` volume.
+
+**Other compatibility note:** batch DeleteObjects from boto3 1.43 fails with
+`InvalidRequest: must have required property 'Body'`. Single DeleteObject works, and JuiceFS uses
+that for normal deletes.
+
+**Caveats:** single node, n=1 run, small dataset (about 1.35 GB written in total). There was no
+side-by-side benchmark against MinIO or Garage (COULD-NOT-MEASURE), and JuiceFS publishes no
+comparable figures. MinIO is a documented JuiceFS target (`--storage minio`); Garage is used as a
+generic path-style `s3` target. The throughput numbers are from local loopback on NVMe, so they
+say nothing about WAN performance, which is Garage's intended use.
