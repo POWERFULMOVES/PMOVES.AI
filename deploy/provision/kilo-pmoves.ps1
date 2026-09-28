@@ -30,7 +30,9 @@ if (Test-Path $envf) {
     # These control the kilo SDK itself, not MCP creds -- sourcing them would
     # clobber session state or force API billing.
     $blocklist = @(
-        # (no blocklist entries -- this CLI sources every var from env.shared)
+        'KILOCODE_API_KEY',
+        'KILO_*',
+        'OPENCODE_*'
     ) -replace '\*', '.*'
 
     # Mavis SDK env strip -- dot-source pmoves/scripts/mavis_sdk_env.ps1
@@ -67,12 +69,13 @@ if (Test-Path $envf) {
         $changed = $false
         foreach ($k in @($vars.Keys)) {
             $curKey = $k
-            $resolved = [regex]::Replace($vars[$k], '\\$\\{([A-Za-z_][A-Za-z0-9_]*)(?::-([^}]*))?\\}', {
+            $varPat = '\$' + [char]123 + '([A-Za-z_][A-Za-z0-9_]*)(?::-([^' + [char]125 + ']*))?' + [char]125
+            $resolved = [regex]::Replace($vars[$k], $varPat, {
                 param($m)
                 $name = $m.Groups[1].Value
                 $repl = $null
                 if ($name -ne $curKey) {
-                    if ($vars.Contains($name) -and $vars[$name] -ne '' -and $vars[$name] -notmatch '\\$\\{') {
+                    if ($vars.Contains($name) -and $vars[$name] -ne '' -and $vars[$name] -notmatch $varPat) {
                         $repl = $vars[$name]
                     } else {
                         $envv = [Environment]::GetEnvironmentVariable($name)
@@ -99,7 +102,11 @@ if (Test-Path $envf) {
 [Environment]::SetEnvironmentVariable('PMOVES_LAUNCHER_SESSION', $script:launcherSession, 'Process')
 
 # --- NAME BRIDGES (mirror bash twin) ----------------------------------------
-# (no name bridges for this CLI)
+# Mirror crush-pmoves.ps1 -- alias bridge for upstream-vs-PMOVES env names.
+if (-not $env:ZAI_API_KEY -and $env:Z_AI_API_KEY) {
+    [Environment]::SetEnvironmentVariable('ZAI_API_KEY', $env:Z_AI_API_KEY, 'Process')
+    Write-Host "[{tool.launcher_basename}] ZAI_API_KEY <- Z_AI_API_KEY (upstream/PMOVES name bridge)"
+}
 
 # --- LAUNCH ---------------------------------------------------------------
 & kilo @args

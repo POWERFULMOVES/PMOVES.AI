@@ -1,0 +1,184 @@
+{
+  "room_id": "9850x3d-rdna4.room.studio",
+  "version": "1.0.0",
+  "stage": "rehearsal",
+  "display_name": "B850 RDNA4 Studio",
+  "description": "Local-inference studio for the b850-rdna4 alter: llama.cpp built for HIP (ROCm, gfx1201) on AMD Radeon AI Pro R9700 GPUs, serving an OpenAI-compatible API. Recovered from a 2026-07-01 B850 stash, where it existed as an uncataloged, pre-contract file, and converted to room.manifest.v1. Stage is rehearsal and nothing here claims a live surface: the node profile's 2026-08-14 probe records llama-server not running and only ONE of the two installed R9700 cards enumerating, so hardware_requirements declares the single-card floor (32 GB), not the 64 GB dual-card target. Ports, the inference fork, and dual-GPU flags belong to the node profile (pmoves/config/profiles/workstation-9850x3d-dual-r9700.yaml), not to this room. Model choice is resolved by the dynamic model registry and is deliberately not pinned here. hardware_requirements cannot express an AMD target: gpu_arch is an NVIDIA-only enum, so the RDNA4 / gfx1201 requirement is recorded in persona.resonance and this description only, and a scheduler reading the block alone could not tell this room from a 32 GB NVIDIA room. policies.publish.allowed_subjects is a ceiling, not a topology claim: claude_b850 declares nats.publishes: [], and room.session.updated.v1 is P7's emission. See ROOM_MANIFEST_CONTRACT.md § Publish Policy.",
+  "agent_id": "b850-claude",
+  "alter": "b850-rdna4",
+  "room_type": "builder",
+  "owner_mode": "alter",
+  "shell": {
+    "theme": {
+      "theme_id": "rdna4-studio",
+      "accent_color": "#DC2626",
+      "skin": "terminal-dark",
+      "icon": "chip"
+    },
+    "layout": {
+      "default_route": "/dashboard/notebook/runtime",
+      "panels": [
+        {
+          "panel_id": "inference-chat",
+          "kind": "chat",
+          "position": "left",
+          "size": 24,
+          "pinned": true
+        },
+        {
+          "panel_id": "rocm-controls",
+          "kind": "controls",
+          "position": "center",
+          "size": 50,
+          "pinned": true
+        },
+        {
+          "panel_id": "inference-notebook",
+          "kind": "notebook",
+          "position": "right",
+          "size": 26,
+          "pinned": true
+        }
+      ]
+    }
+  },
+  "apps": [
+    {
+      "app_id": "gpu-inference-console",
+      "kind": "dashboard",
+      "route": "/dashboard/gpu",
+      "provider": "pmoves-ui",
+      "action_namespace": "gpu",
+      "capabilities": [
+        "dual-gpu-inference",
+        "rdna4-kernel-support",
+        "openai-compatible-api",
+        "inference-health",
+        "model-status"
+      ],
+      "pinned": true,
+      "status": "planned"
+    },
+    {
+      "app_id": "notebook-workbench",
+      "kind": "notebook",
+      "route": "/notebook-workbench",
+      "provider": "pmoves-notebook-workbench",
+      "action_namespace": "notebook",
+      "capabilities": ["threads", "entries", "snapshots", "runbooks"],
+      "pinned": true,
+      "status": "active"
+    }
+  ],
+  "notebook": {
+    "provider": "open-notebook",
+    "workspace_ref": "b850-rdna4",
+    "thread_ref": "inference-sessions",
+    "default_page": "inference-runbook",
+    "sync": {
+      "mode": "authoritative",
+      "writeback_targets": ["entries", "pages", "threads"],
+      "artifact_prefix": "rooms/b850-rdna4"
+    }
+  },
+  "persona": {
+    "signature_ref": "b850-claude",
+    "voice": "analytical",
+    "glyph": "⌬",
+    "resonance": ["amd64", "rdna4", "gfx1201", "dual-gpu", "workstation"]
+  },
+  "skill_bindings": [
+    {
+      "binding_id": "rdna4-inference-audit",
+      "skill_id": "bringup-audit",
+      "room_id": "9850x3d-rdna4.room.studio",
+      "display_name": "RDNA4 Inference Audit",
+      "intent": ["gpu", "rocm", "inference", "health"],
+      "activation": {
+        "invocation_mode": "workflow",
+        "trigger_phrases": ["audit rdna4 status", "check rocm inference health", "verify llama-server"],
+        "requires_selection": false
+      },
+      "surface": {
+        "app_id": "gpu-inference-console",
+        "target": "toolbar",
+        "route": "/dashboard/gpu"
+      },
+      "execution": {
+        "mode": "workflow",
+        "run_as": "worker",
+        "stream": "events",
+        "max_steps": 6
+      },
+      "context": {
+        "sources": ["room-state", "open-apps", "persona", "user-intent"],
+        "include_last_turns": 3,
+        "notebook_writeback": true,
+        "artifact_types": ["text", "json"]
+      },
+      "outputs": [
+        {
+          "target": "room-state",
+          "delivery": "replace",
+          "path": "gpu/rdna4-inference-audit",
+          "artifact_type": "json"
+        },
+        {
+          "target": "notebook-page",
+          "delivery": "append",
+          "path": "pages/rdna4-audits",
+          "artifact_type": "text"
+        }
+      ],
+      "guardrails": {
+        "require_approval": false,
+        "max_runtime_sec": 300,
+        "fail_open": true,
+        "one_active_run": true
+      },
+      "enabled": true,
+      "tags": ["gpu", "rocm", "rdna4", "audit"]
+    }
+  ],
+  "hardware_requirements": {
+    "gpu": true,
+    "min_vram_mb": 32000,
+    "cpu_arch": ["x86_64"]
+  },
+  "team_refs": ["infra", "observability"],
+  "service_refs": ["mesh-agent"],
+  "launcher_refs": [
+    "rdna4-rocm-status",
+    "rdna4-gpu-status",
+    "rdna4-llamacpp-status",
+    "rdna4-llamacpp-up"
+  ],
+  "policies": {
+    "model_routing": "native",
+    "publish": {
+      "allow_nats_emit": true,
+      "allow_external_publish": false,
+      "allowed_subjects": ["room.session.updated.v1"]
+    },
+    "memory": {
+      "graphiti": true,
+      "notebook_writeback": true,
+      "chit_handoff": false
+    }
+  },
+  "telemetry": {
+    "graphiti_phase": "RDNA4 Studio",
+    "room_events_subject": "room.session.updated.v1",
+    "healthcheck_route": "/api/health"
+  },
+  "provenance": {
+    "source": "pmoves/config/rooms/catalog.json",
+    "updated_at": "2026-09-23T00:00:00Z",
+    "related_docs": [
+      "pmoves/docs/ROOM_MANIFEST_CONTRACT.md",
+      "pmoves/config/profiles/workstation-9850x3d-dual-r9700.yaml",
+      "pmoves/docs/P7_SKILL_B850.md",
+      "pmoves/mk/amd-rdna4.mk"
+    ]
+  }
+}

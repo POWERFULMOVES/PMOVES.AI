@@ -112,54 +112,72 @@ fi
 # losing it must never cost you the launch. Losing it SILENTLY is the defect
 # this file keeps having to fix, so the reason is always printed.
 # ---------------------------------------------------------------------------
-IDENTITY_ARGS=()
-IDENT_TOOL="$ROOT/pmoves/tools/node_identity.py"
-# Shared discovery (pm-python.sh), not a scalar `python`: on hosts where only
-# python3 exists, or where python lacks PyYAML while .venv-pmoves has it, the
-# scalar form silently never ran the resolver and sessions launched unbound —
-# the exact gap #2763 fixed for crush-pmoves, which this launcher then still
-# carried (pair-review finding on #2769).
-# shellcheck source=./pm-python.sh
-. "$ROOT/pmoves/scripts/pm-python.sh"
-IDENT_PY=()
-if [ -f "$IDENT_TOOL" ] && pm_pick_python yaml; then
-  IDENT_PY=("${PM_PY[@]}")
-fi
-# The resolver reads the process env, but this launcher runs BEFORE the harness
-# loads .claude/settings.local.json. So a node whose HOSTNAME collides — the 5090,
-# whose POWERFULMOVES casefolds onto the `powerfulmoves` org vocabulary entry
-# (kind=unresolved) — resolves to nothing and fail-opens to an unbound session,
-# even though its identity is declared in settings.local.json's env block. Read
-# PMOVES_NODE_ID from that SAME block so declaring it once binds both the launcher
-# and the session. A shell env value still wins if already set (kept parity with
-# claude-pmoves.bat; node_identity.py invocation below is unchanged).
-if [ -z "${PMOVES_NODE_ID:-}" ] && [ ${#IDENT_PY[@]} -gt 0 ] && [ -f "$ROOT/.claude/settings.local.json" ]; then
-  _sid="$("${IDENT_PY[@]}" -c 'import json,sys;print((json.load(open(sys.argv[1])).get("env") or {}).get("PMOVES_NODE_ID","") or "")' "$ROOT/.claude/settings.local.json" 2>/dev/null || true)"
-  [ -n "$_sid" ] && export PMOVES_NODE_ID="$_sid"
-  unset _sid
-fi
-if [ -f "$IDENT_TOOL" ] && [ ${#IDENT_PY[@]} -gt 0 ]; then
-  if IDENT_OUT="$("${IDENT_PY[@]}" "$IDENT_TOOL" --harness claude-code --shell 2>/dev/null)"; then
-    # The tool emits PMOVES_RESOLVED_IDENTITY, not PMOVES_NODE_IDENTITY: the
-    # latter is the operator's INPUT override, and a resolver that answers under
-    # the same name it reads cannot be called twice safely.
-    eval "$IDENT_OUT"
-    PMOVES_NODE_IDENTITY="${PMOVES_RESOLVED_IDENTITY:-}"
-    export PMOVES_NODE PMOVES_NODE_IDENTITY
-    if [ -n "${PMOVES_NODE_IDENTITY:-}" ]; then
-      echo "[claude-pmoves] node=${PMOVES_NODE} identity=${PMOVES_NODE_IDENTITY} agent=${AGENT}" >&2
-      # Put it where the session can actually READ it. Exported variables do
-      # not reach the model's context; an appended system prompt does. This is
-      # the difference between the identity existing and the identity working.
-      IDENTITY_ARGS=(--append-system-prompt "You are running on PMOVES node '${PMOVES_NODE}'. Your registered identity in pmoves/config/agent_registry.yaml is '${PMOVES_NODE_IDENTITY}'. Disclose it at session start rather than rediscovering it. Your selected role for this session is the '${AGENT}' agent.")
-    else
-      echo "[claude-pmoves] node=${PMOVES_NODE:-unknown} identity=unresolved: ${PMOVES_IDENTITY_WHY:-no reason given}" >&2
-    fi
+# Resolution moved to the shared fragment (2026-09-16). It was ~35 lines here and
+# again in crush-pmoves, and nowhere in the other seven launchers -- the same
+# shape pm-python.sh and pm-cipher-identity.sh were extracted for. The behaviour
+# is unchanged: same tool, same --harness, same settings.local.json read, same
+# fail-open-loudly rule. See pmoves/scripts/pm-node-identity.sh.
+# shellcheck source=./pm-node-identity.sh
+. "$ROOT/pmoves/scripts/pm-node-identity.sh"
+pm_node_identity "$ROOT" claude-code claude-pmoves || true
+IDENT_PY=(${PM_IDENT_PY[@]+"${PM_IDENT_PY[@]}"})
+echo "${PM_IDENT_LINE}" >&2
+# WHO THE SESSION IS -- the FIRST block of the prompt, and in the first person.
+#
+# Operator direction 2026-09-27: "ensure that B850-CLAUDE is what claude-pmoves
+# wakes up." The previous sentence named only the registry key and put the role
+# last ("Your registered identity ... is 'claude_b850' ... Your selected role for
+# this session is the 'node-steward' agent"), and node-steward.md described
+# "this node's CLI identity" as the party directing it. So the session woke up
+# AS the role and spoke of B850-CLAUDE in the third person. The name the fleet
+# uses and the owner string it signs the register with now come from
+# identity_vocabulary.yaml's declared register_form (resolve_register_name);
+# the role is stated as the job, after the name.
+#
+# FIRST because the model reads the prompt top-down and every later block (the
+# cipher agentId, memory status, carry verdict) is a fact ABOUT this identity.
+#
+# FAIL-OPEN, LOUDLY. An undeclared register_form, an invalid
+# PMOVES_REGISTER_IDENTITY, or a resolver that emitted nothing falls back to the
+# registry-key sentence and prints why on stderr -- never to a guessed name.
+if [ "${PM_IDENT_OK:-0}" = "1" ]; then
+  # Put it where the session can actually READ it. Exported variables do not
+  # reach the model's context; an appended system prompt does. This is the
+  # difference between the identity existing and the identity working.
+  if [ -n "${PM_IDENT_DISPLAY:-}" ] && [ -n "${PM_IDENT_REGISTER_FORM:-}" ]; then
+    _card="${PM_IDENT_CIPHER_ID:+, signing card ${PM_IDENT_CIPHER_ID}}"
+    pm_ident_append "You are ${PM_IDENT_DISPLAY}, the Claude Code agent for PMOVES node '${PMOVES_NODE}' (registry key ${PMOVES_NODE_IDENTITY} in pmoves/config/agent_registry.yaml${_card}). You sign the claim register as '${PM_IDENT_REGISTER_FORM}'. This session you are doing the job of the '${AGENT}' role: the role is the work you are doing, not a second party -- speak as ${PM_IDENT_DISPLAY}, in the first person, and never describe ${PM_IDENT_DISPLAY} as someone who directs you. Disclose this at session start rather than rediscovering it. If another live session on this node already signs as '${PM_IDENT_REGISTER_FORM}', do not share that owner string: pmoves/config/identity_vocabulary.yaml requires a second session on one node to use a distinct BASE identity, launched with PMOVES_REGISTER_IDENTITY set to it."
+    unset _card
   else
-    echo "[claude-pmoves] node identity: $IDENT_TOOL failed; launching without it." >&2
+    echo "[claude-pmoves] identity name unresolved, falling back to the registry key: ${PM_IDENT_DISPLAY_WHY:-no reason given}" >&2
+    pm_ident_append "You are running on PMOVES node '${PMOVES_NODE}'. Your registered identity in pmoves/config/agent_registry.yaml is '${PMOVES_NODE_IDENTITY}'. Disclose it at session start rather than rediscovering it. Your selected role for this session is the '${AGENT}' agent."
   fi
-elif [ -f "$IDENT_TOOL" ]; then
-  echo "[claude-pmoves] node identity: no usable python found (tried .venv-pmoves, python3, py -3, python — yaml required); launching without it." >&2
+fi
+# Cipher refuses every call without an `agentId`, and refuses a wrong one under
+# token enforcement, so a session that is not told the spelling cannot use
+# persistent memory at all. It rides in the same accumulated prompt -- a fourth
+# flag would have cancelled the three above it.
+if [ -n "${PM_IDENT_CIPHER_ID:-}" ]; then
+  pm_ident_append "When calling the Cipher MCP tools, pass agentId '${PM_IDENT_CIPHER_ID}'. It is REQUIRED on every call and is the signing-card spelling from pmoves/config/signing_identity_cards.yaml -- not your registry identity, which cipher refuses."
+else
+  pm_ident_append "You have NO declared Cipher agentId this session. Cipher requires one on every call, so declare it per call and say that you are doing so. Reason: ${PM_IDENT_CIPHER_WHY:-not measured}"
+fi
+
+# CIPHER TOKEN BIND — the handoff the carry check could only report as missing.
+#
+# pm-cipher-identity.sh measures which agent_id writes will carry; until the
+# minted per-agent token is bound into the session env, the answer stays
+# 'bootstrap' no matter what the model declares. Bind BEFORE the preflight and
+# the carry measurement so both report the post-bind reality, and export the
+# agentId so the inner launcher (deploy/provision/claude-pmoves.sh) can re-bind
+# after it sources env.shared — which would otherwise clobber this with the
+# node bootstrap token before the roster is normalized.
+if [ -f "$ROOT/pmoves/scripts/pm-cipher-token-bind.sh" ]; then
+  # shellcheck source=./pm-cipher-token-bind.sh
+  . "$ROOT/pmoves/scripts/pm-cipher-token-bind.sh"
+  pm_cipher_token_bind "$ROOT" "${PM_IDENT_CIPHER_ID:-}" || true
+  echo "[claude-pmoves] ${PM_CARRY_BIND_LINE}" >&2
+  export PM_IDENT_CIPHER_ID
 fi
 
 # CIPHER — persistent memory. Same reasoning as the identity block above: the
@@ -179,6 +197,9 @@ fi
 CIPHER_TOOL="$ROOT/pmoves/tools/cipher_preflight.py"
 if [ -f "$CIPHER_TOOL" ] && [ ${#IDENT_PY[@]} -gt 0 ]; then
   CIPHER_OUT=""
+  # Absolute bound for the auth-log rule-out below: a relative --since is
+  # evaluated when the command is RUN, possibly long after this probe.
+  CIPHER_PROBE_SINCE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   set +e
   CIPHER_OUT="$("${IDENT_PY[@]}" "$CIPHER_TOOL" 2>&1)"
   cipher_rc=$?
@@ -187,7 +208,7 @@ if [ -f "$CIPHER_TOOL" ] && [ ${#IDENT_PY[@]} -gt 0 ]; then
     0)
       CIPHER_WHICH="$(printf '%s\n' "$CIPHER_OUT" | awk '/^cipher OK/ {print $3; exit}')"
       echo "[claude-pmoves] cipher=up (${CIPHER_WHICH:-unknown endpoint})" >&2
-      IDENTITY_ARGS+=(--append-system-prompt "Persistent memory IS available this session via the Cipher MCP server '${CIPHER_WHICH:-unknown}'. Use it for recall and for writes; do not fall back to the auto-memory directory while it is up.")
+      pm_ident_append "Persistent memory IS available this session via the Cipher MCP server '${CIPHER_WHICH:-unknown}'. Use it for recall and for writes; do not fall back to the auto-memory directory while it is up."
       ;;
     1)
       # FINDINGS: something ANSWERED and was not usable. Cipher is UP either
@@ -209,11 +230,11 @@ if [ -f "$CIPHER_TOOL" ] && [ ${#IDENT_PY[@]} -gt 0 ]; then
       case "$CIPHER_OUT" in
         *"cipher UNAUTHORIZED"*)
           echo "[claude-pmoves] cipher=UNAUTHORIZED (exit 1) — service is UP, credential not accepted" >&2
-          IDENTITY_ARGS+=(--append-system-prompt "Cipher ANSWERED this session but refused the credential (preflight exit 1, verdict unauthorized), so persistent memory is not usable right now. The service is UP -- this is an access problem, not an outage, so do NOT report Cipher as down and do not restart it. Use the file-based auto-memory directory meanwhile and say which of the two it is. Remedy: bind CIPHER_API_TOKEN into the roster. Recovery: pmoves/docs/operations/MCP_TOOLKIT.md.")
+          pm_ident_append "Cipher ANSWERED this session but refused the credential (preflight exit 1, verdict unauthorized), so persistent memory is not usable right now. The service is UP -- this is an access problem, not an outage, so do NOT report Cipher as down. A 401 is NOT proof the token is revoked: a Cipher shim older than the lookup-failure fix also answers 401 when its OWN Supabase service key is missing or refused or its lookup times out, and every agent on the node then fails at once. Before asking for a re-mint, check \`docker logs --since ${CIPHER_PROBE_SINCE} pmoves-cipher-api-1 2>&1 | grep pmoves-auth\` -- any hit means the token was never judged and the fix is the backend, not the token. Use the file-based auto-memory directory meanwhile and say which of the two it is. Remedy when the token itself is wrong: bind CIPHER_API_TOKEN into the roster. Recovery: pmoves/docs/operations/MCP_TOOLKIT.md."
           ;;
         *)
           echo "[claude-pmoves] cipher=ANSWERED-UNUSABLE (exit 1) — something is listening; see the status below" >&2
-          IDENTITY_ARGS+=(--append-system-prompt "Cipher ANSWERED this session but not usably (preflight exit 1, and NOT a 401/403 -- read the status printed above, e.g. an HTTP error or a refused redirect), so persistent memory is not usable right now. Something IS listening on that endpoint, so do NOT report Cipher as simply down, and do NOT assume the credential is at fault -- the preflight would have said unauthorized if it were. Use the file-based auto-memory directory meanwhile and say which of the two it is. Recovery: pmoves/docs/operations/MCP_TOOLKIT.md.")
+          pm_ident_append "Cipher ANSWERED this session but not usably (preflight exit 1, and NOT a 401/403 -- read the status printed above, e.g. an HTTP error or a refused redirect), so persistent memory is not usable right now. Something IS listening on that endpoint, so do NOT report Cipher as simply down, and do NOT assume the credential is at fault -- the preflight would have said unauthorized if it were. An HTTP 503 in particular means the token was not judged (a proxy, Kong, startup, or after the fork fix a lookup backend failure), so do not ask for a re-mint. Use the file-based auto-memory directory meanwhile and say which of the two it is. Recovery: pmoves/docs/operations/MCP_TOOLKIT.md."
           ;;
       esac
       printf '%s\n' "$CIPHER_OUT" >&2
@@ -230,7 +251,7 @@ if [ -f "$CIPHER_TOOL" ] && [ ${#IDENT_PY[@]} -gt 0 ]; then
       # contacted nothing.
       echo "[claude-pmoves] cipher=DOWN (exit ${cipher_rc}) — session has no persistent memory" >&2
       printf '%s\n' "$CIPHER_OUT" >&2
-      IDENTITY_ARGS+=(--append-system-prompt "Cipher is NOT reachable this session (preflight exit ${cipher_rc}), so you have NO persistent memory. Say so at session start rather than recalling nothing silently, and use the file-based auto-memory directory instead. Recovery: pmoves/docs/operations/MCP_TOOLKIT.md.")
+      pm_ident_append "Cipher is NOT reachable this session (preflight exit ${cipher_rc}), so you have NO persistent memory. Say so at session start rather than recalling nothing silently, and use the file-based auto-memory directory instead. Recovery: pmoves/docs/operations/MCP_TOOLKIT.md."
       ;;
   esac
 fi
@@ -254,13 +275,26 @@ fi
 # that file's header for why (same reason pm-python.sh exists).
 # shellcheck source=./pm-cipher-identity.sh
 . "$ROOT/pmoves/scripts/pm-cipher-identity.sh"
-pm_cipher_identity "$ROOT" "${PMOVES_NODE_IDENTITY:-}" ${IDENT_PY[@]+"${IDENT_PY[@]}"} || true
+# PM_IDENT_CIPHER_ID, not PMOVES_NODE_IDENTITY: cipher keys on the signing-card
+# spelling, and handing it the registry one made this very check report `signing
+# card: no` on every node. It falls back to the registry identity where no
+# agentId is declared, so nothing that measures today stops measuring.
+pm_cipher_identity "$ROOT" "${PM_IDENT_CIPHER_ID:-${PMOVES_NODE_IDENTITY:-}}" ${IDENT_PY[@]+"${IDENT_PY[@]}"} || true
 # Printed on EVERY path, including the ones that could not measure: a node with
 # no PyYAML must not look identical to a node whose carry is fine.
 echo "[claude-pmoves] ${PM_CARRY_LINE}" >&2
 if [ -n "${PM_CARRY_PROMPT:-}" ]; then
-  IDENTITY_ARGS+=(--append-system-prompt "$PM_CARRY_PROMPT")
+  pm_ident_append "$PM_CARRY_PROMPT"
 fi
+
+# ONE FLAG, COMPOSED ONCE. Every block above called pm_ident_append, which
+# concatenates; none of them pushed a flag of its own. `claude
+# --append-system-prompt` keeps only its LAST occurrence, so the multi-flag form
+# this file used to build handed the model the cipher-carry sentence and
+# silently discarded the node identity resolved a hundred lines earlier. See
+# pm-node-identity.sh for the measurement.
+pm_ident_prompt_args
+IDENTITY_ARGS=(${PM_IDENT_PROMPT_ARGS[@]+"${PM_IDENT_PROMPT_ARGS[@]}"})
 
 if [ ! -f "$LAUNCHER" ]; then
   # Degrade to the pre-delegation behavior rather than failing: the agent still

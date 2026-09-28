@@ -201,10 +201,31 @@ def test_installed_command_gap_is_recorded():
             "rather than assumed closed."
         )
 
-    # The gap as it stands. Stated, not silent.
+    # The gap as it stands, per launcher. Stated, not silent.
+    #
+    # UPDATED 2026-09-16: claude-pmoves.ps1 now carries. Windows enters through
+    # claude-pmoves.cmd -> .ps1 with no delegate layer, so that file must do
+    # BOTH halves itself. It cannot source the bash fragment, so it mirrors the
+    # CONTRACT instead -- same tool (pmoves/tools/cipher_identity.py), same
+    # verdict fields, same always-loud rule. This is the "PowerShell parity
+    # check" the failure message above asks for; the .sh placeholder stays,
+    # because deploy/provision/claude-pmoves.sh still has neither half (its
+    # identity comes from the pmoves/scripts delegate).
     for name, path in present.items():
         text = _read(path)
-        assert "node_identity" not in text, (
+        resolves = "node_identity" in text
+        carries = "cipher_identity" in text or _sources_fragment(text)
+        if name.endswith(".ps1"):
+            assert not (resolves and not carries), (
+                f"{name} gained identity resolution without the carry — that is "
+                "the exact half-wired state this whole lane exists to prevent"
+            )
+            assert not (carries and not resolves), (
+                f"{name} carries an identity it never resolved — the carry would "
+                "report on an empty agent id"
+            )
+            continue
+        assert not resolves, (
             f"{name} gained identity resolution without the carry — that is the "
             "exact half-wired state this whole lane exists to prevent"
         )

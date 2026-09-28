@@ -228,6 +228,14 @@ claude_backend_apply() {
 }
 claude_backend_apply
 unset -f claude_backend_apply
+# Capture an explicit per-agent cipher token BEFORE env.shared can overwrite
+# it: an operator export, or the token the outer delegate already bound. The
+# node bootstrap bearer is not cipher_-prefixed, so it is never captured here.
+# Restored just before the re-bind below; deliberately NOT exported.
+PM_CIPHER_PRE_ENV_TOKEN=""
+case "${CIPHER_API_TOKEN:-}" in
+  cipher_*) PM_CIPHER_PRE_ENV_TOKEN="$CIPHER_API_TOKEN" ;;
+esac
 
 if [ -f "$ENVF" ]; then
   # Blocklist: vars that control Claude SDK/session behavior and should NEVER be
@@ -242,6 +250,34 @@ if [ -f "$ENVF" ]; then
   # at least one char after the prefix) matches the same set as the ps1.
   # Kept in step with deploy/provision/claude-pmoves.ps1:25-31.
   blocklist='^(ANTHROPIC_API_KEY|ANTHROPIC_AUTH_TOKEN|ANTHROPIC_BASE_URL|CLAUDECODE|CLAUDE_CODE_.+|CLAUDE_SESSION_.+)$'
+
+  # Explicitly strip blocklisted vars from the PARENT env before exec claude.
+  # The blocklist above filters env.shared (the file being sourced), but the
+  # parent shell may have set ANTHROPIC_API_KEY via $PROFILE, env.tier-llm,
+  # or a prior session export. Without this unset, the child process inherits
+  # them on the way to exec claude and the auth-precedence warning fires
+  # ("claude.ai connectors disabled because ANTHROPIC_API_KEY takes precedence").
+  # The .ps1 twin performs the same sweep — keep them byte-identical.
+  _cleared=()
+  for _blocked_var in ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN ANTHROPIC_BASE_URL; do
+    if [ -n "${!_blocked_var+x}" ]; then
+      _cleared+=("$_blocked_var")
+      unset "$_blocked_var"
+    fi
+  done
+  for _pattern in 'CLAUDECODE' 'CLAUDE_CODE_' 'CLAUDE_SESSION_'; do
+    # compgen returns names of defined vars; filter to those matching the prefix.
+    while IFS= read -r _var; do
+      [ -z "$_var" ] && continue
+      if [ -n "${!_var+x}" ]; then
+        _cleared+=("$_var")
+        unset "$_var"
+      fi
+    done < <(compgen -A variable "${_pattern}" 2>/dev/null || true)
+  done
+  if [ "${#_cleared[@]}" -gt 0 ]; then
+    echo "[claude-pmoves] cleared auth vars from parent env: ${_cleared[*]}" >&2
+  fi
 
   # env.shared is Docker Compose env_file format: unquoted values, and some are
   # ALIAS lines like SUPABASE_SERVICE_ROLE_KEY=${SERVICE_ROLE_KEY}. Two hazards:
@@ -306,6 +342,30 @@ fi
 # "never ran" are different faults with different remedies and would otherwise
 # be indistinguishable to anything reading it.
 export PMOVES_LAUNCHER_SESSION
+
+# CIPHER TOKEN BIND — AFTER env.shared, BEFORE the roster is normalized.
+#
+# env.shared carries the node bootstrap CIPHER_API_TOKEN (auth.ts files every
+# bootstrap write under 'bootstrap'); sourcing it above just clobbered any
+# per-agent token the outer delegate bound. Re-bind from pmoves/.env.local so
+# the roster normalization below expands ${CIPHER_API_TOKEN} into the minted
+# per-agent bearer for THIS session's declared cipher agentId. The outer
+# delegate exported PM_IDENT_CIPHER_ID; when this script is called directly
+# (no agent named) the bind reports "no declared agentId" and changes nothing.
+#
+# An explicit cipher_ token that arrived in this script's env (captured above,
+# before env.shared) is restored first, so the fragment's "explicit env token
+# wins" rule holds for the FINAL session and not only until env.shared loads.
+if [ -n "$PM_CIPHER_PRE_ENV_TOKEN" ]; then
+  export CIPHER_API_TOKEN="$PM_CIPHER_PRE_ENV_TOKEN"
+fi
+unset PM_CIPHER_PRE_ENV_TOKEN
+if [ -f "$ROOT/pmoves/scripts/pm-cipher-token-bind.sh" ]; then
+  # shellcheck source=../../pmoves/scripts/pm-cipher-token-bind.sh
+  . "$ROOT/pmoves/scripts/pm-cipher-token-bind.sh"
+  pm_cipher_token_bind "$ROOT" "${PM_IDENT_CIPHER_ID:-}" || true
+  echo "[claude-pmoves] ${PM_CARRY_BIND_LINE}" >&2
+fi
 
 # Resolve ${TS_<NODE>} for the cross-node MCP servers in the roster.
 #

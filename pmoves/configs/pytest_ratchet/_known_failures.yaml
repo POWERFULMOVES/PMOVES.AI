@@ -58,7 +58,7 @@
 # and surfaced 127 findings that had never once been reported, taking this file
 # from 124 entries to 250. The bulk of them:
 #
-#     54  tests.hardening.test_docker_hardening.TestResourceLimits
+#     54  tests.hardening.test_docker_hardening.TestResourceLimits  (GONE -- see below)
 #     10  tests.integration.test_pr483_critical_path
 #      7  tests.hardening.test_docker_hardening.TestNonRootUser
 #      7  tests.fresh_start.test_env_layout.TestTierFilesExist
@@ -76,6 +76,39 @@
 # Two files hang locally but not in CI (test_a2ui_bridge_integration.py,
 # test_tokenism_simulator.py) -- they reach for services that exist on a dev node
 # and not on a runner. Only test_voice_relay_e2e.py hangs in both.
+#
+# ── 2026-09-21: the 54 TestResourceLimits entries are GONE, and none of them
+#    was a real failure ──────────────────────────────────────────────────────
+# They were the single largest group in this file, and every one was FALSE.
+#
+# TestResourceLimits asserted `deploy.resources.limits` against
+# pmoves/docker-compose.hardened.yml. That file is a security-only overlay BY
+# DESIGN: it carries no `deploy:` key for any service, because the Makefile's
+# $(DC) always stacks it on docker-compose.yml, which supplies sizing at merge
+# time. The tests were asserting a property against a file that was never meant
+# to hold it. Measured live on B850 (Docker 29.8.1 / Compose v5.5.1) while all
+# 54 sat here as baselined failures:
+#
+#     extract-worker   Memory=536870912   NanoCpus=1000000000
+#     archon           Memory=2147483648  NanoCpus=2000000000
+#     ffmpeg-whisper   Memory=8589934592  NanoCpus=4000000000
+#
+# The limits existed, were correct, and were enforced. The tests now read the
+# merged config for that one property and all 54 pass.
+#
+# THE PART WORTH KEEPING, because it is about this file and not about compose:
+# these 54 arrived in the batch of 127 the timed-out-chunk repair surfaced, and
+# they were recorded with a count and no diagnosis. The note above says of that
+# batch "Every one is a real failing test that was already failing." For these
+# 54 that sentence was wrong, and nothing in this file could have shown it --
+# a baselined entry records THAT a test fails, never WHY, so a whole class of
+# false failure can sit here indefinitely looking like honest debt. Baselining
+# is what makes a failure visible; it is not what makes it understood, and the
+# gap between those two is exactly 54 entries wide here.
+#
+# So: when a group this size lands at once, write down what it MEANS, the way
+# the python-multipart note above does. That note is why 57 entries could be
+# removed in one motion instead of being re-derived.
 #
 # Regenerate: make -C pmoves python-tests-baseline
 known_failures:
@@ -183,60 +216,6 @@ known_failures:
   - "FAIL|tests.hardening.test_docker_hardening.TestNonRootUser|test_service_has_user_directive[nats-init]"
   - "FAIL|tests.hardening.test_docker_hardening.TestNonRootUser|test_service_has_user_directive[tokenism-simulator]"
   - "FAIL|tests.hardening.test_docker_hardening.TestNonRootUser|test_service_has_user_directive[tokenism-ui]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_cpu_limit[agent-zero]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_cpu_limit[archon]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_cpu_limit[channel-monitor]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_cpu_limit[comfy-watcher]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_cpu_limit[deepresearch]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_cpu_limit[extract-worker]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_cpu_limit[ffmpeg-whisper]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_cpu_limit[grayjay-plugin-host]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_cpu_limit[hi-rag-gateway-gpu]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_cpu_limit[hi-rag-gateway-v2-gpu]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_cpu_limit[hi-rag-gateway-v2]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_cpu_limit[invidious-companion-proxy]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_cpu_limit[jellyfin-bridge]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_cpu_limit[langextract]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_cpu_limit[media-audio]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_cpu_limit[media-video]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_cpu_limit[mesh-agent]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_cpu_limit[nats-echo-req]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_cpu_limit[nats-echo-res]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_cpu_limit[notebook-sync]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_cpu_limit[pdf-ingest]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_cpu_limit[pmoves-yt]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_cpu_limit[presign]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_cpu_limit[publisher-discord]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_cpu_limit[render-webhook]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_cpu_limit[retrieval-eval]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_cpu_limit[supaserch]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_memory_limit[agent-zero]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_memory_limit[archon]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_memory_limit[channel-monitor]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_memory_limit[comfy-watcher]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_memory_limit[deepresearch]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_memory_limit[extract-worker]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_memory_limit[ffmpeg-whisper]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_memory_limit[grayjay-plugin-host]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_memory_limit[hi-rag-gateway-gpu]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_memory_limit[hi-rag-gateway-v2-gpu]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_memory_limit[hi-rag-gateway-v2]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_memory_limit[invidious-companion-proxy]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_memory_limit[jellyfin-bridge]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_memory_limit[langextract]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_memory_limit[media-audio]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_memory_limit[media-video]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_memory_limit[mesh-agent]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_memory_limit[nats-echo-req]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_memory_limit[nats-echo-res]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_memory_limit[notebook-sync]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_memory_limit[pdf-ingest]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_memory_limit[pmoves-yt]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_memory_limit[presign]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_memory_limit[publisher-discord]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_memory_limit[render-webhook]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_memory_limit[retrieval-eval]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_memory_limit[supaserch]"
   - "FAIL|tests.hardening.test_docker_hardening.TestSecretsManagement|test_github_runner_uses_secrets"
   - "FAIL|tests.hardening.test_docker_hardening.TestValidationScriptIntegration|test_validation_script_checks_flute_gateway"
   - "FAIL|tests.integration.test_gateway_agent_integration.TestEndToEndWorkflows|test_category_browse_workflow"

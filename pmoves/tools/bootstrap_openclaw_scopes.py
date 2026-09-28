@@ -76,11 +76,14 @@ def canonical_scope_mcp_servers(tier: str, endpoint: str) -> Dict[str, Any]:
     sys.path.insert(0, str(REPO_ROOT / "pmoves" / "tools"))
     from mcp_config_generator import generate_for_client
 
+    # Tracked-config generation: never resolve the OS environment, so ${VAR}
+    # placeholders survive into the committed scope files (issue #2985).
     rendered = generate_for_client(
         "opencode",
         inventory=load_inventory(),
         endpoint=endpoint,
         context={},
+        allow_os_environ=False,
     )
     allowed = TIER_KEYS.get(tier, TIER_KEYS["edge"])
     return {k: v for k, v in rendered["mcpServers"].items() if k in allowed}

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
 
 import pytest
@@ -187,7 +186,12 @@ def test_deep_merge_args_replaces_list() -> None:
 
 def test_endpoint_fleet_resolves_fleet_urls(sample_inventory: Path) -> None:
     inventory = gen.load_inventory(sample_inventory)
-    rendered = gen.generate_for_client("opencode", inventory=inventory, endpoint="fleet")
+    # Tracked mode: this test asserts placeholder preservation, which only
+    # holds when the OS environment is not consulted (issue #2985 family —
+    # without this, any node exporting TS_Z890 renders a literal tailnet IP).
+    rendered = gen.generate_for_client(
+        "opencode", inventory=inventory, endpoint="fleet", allow_os_environ=False
+    )
     assert rendered["mcpServers"]["pmoves-cipher"]["url"] == "http://${TS_Z890}:8105/api/mcp/sse"
     assert rendered["mcpServers"]["agent-zero"]["url"] == "http://${TS_Z890}:8080/mcp"
 

@@ -1,7 +1,8 @@
 ---
 name: archon-qa-agent
 description: QA gate inserted between Archon `archon.mint.agent.v1` and `archon.mint.confirmed.v1` to validate a newly-minted agent manifest. Example — invoked when Archon mints a new subagent and needs schema + integration validation before confirming.
-tools: Read, Grep, Glob, Bash
+# Keep the mcp__pmoves-cipher* entries: `tools:` is an allowlist and silently drops every MCP server it does not name (measured, claude 2.1.280).
+tools: Read, Grep, Glob, Bash, mcp__pmoves-cipher-local__pmoves_cipher_search, mcp__pmoves-cipher-local__pmoves_cipher_hybrid_search, mcp__pmoves-cipher-local__pmoves_cipher_session_recall, mcp__pmoves-cipher-local__pmoves_cipher_reasoning_patterns, mcp__pmoves-cipher-local__pmoves_cipher_graph_expand, mcp__pmoves-cipher-local__pmoves_cipher_mcp_list, mcp__pmoves-cipher-local__pmoves_cipher_mcp_get, mcp__pmoves-cipher__pmoves_cipher_search, mcp__pmoves-cipher__pmoves_cipher_hybrid_search, mcp__pmoves-cipher__pmoves_cipher_session_recall, mcp__pmoves-cipher__pmoves_cipher_reasoning_patterns, mcp__pmoves-cipher__pmoves_cipher_graph_expand, mcp__pmoves-cipher__pmoves_cipher_mcp_list, mcp__pmoves-cipher__pmoves_cipher_mcp_get
 ---
 
 You are the **Archon QA Agent** for PMOVES.AI. You sit on the Archon mint pipeline as a blocking validator. You decide whether a freshly-minted agent manifest may be confirmed.

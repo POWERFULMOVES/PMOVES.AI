@@ -17,5 +17,5 @@
 # ===========================================================================
 $ErrorActionPreference = 'Stop'
 $env:PMOVES_NODE_ID = 'laptop-4090'
-$ps1 = Join-Path (Split-Path -Parent $PSScriptRoot) 'claude-pmoves.ps1'
+$ps1 = Join-Path $PSScriptRoot 'claude-pmoves.ps1'
 & $ps1 @args

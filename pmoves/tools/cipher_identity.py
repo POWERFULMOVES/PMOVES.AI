@@ -20,22 +20,27 @@ context. A session also already knows whether cipher is reachable
     the identity the session believes it has
     is not the identity its memories are filed under.
 
-Grounded in `Pmoves-cipher/src/pmoves/auth.ts` at submodule pin `975e02e6` --
-the gitlink PMOVES.AI `main` actually carries. The pin matters: this node's
-submodule working tree sits on `fix/per-agent-token-profile-header` (the head of
+Grounded in `Pmoves-cipher/src/pmoves/auth.ts` at submodule pin `a0ee2314`
+(#3189, fork PR #28, which rewrote `resolveToken()`; the numbers below were
+re-resolved there from `975e02e6`/`c88b009a2`/`36b28d0f`, across which
+`auth.ts` had been unchanged) -- the gitlink PMOVES.AI `main` actually
+carries. The pin matters: at the time these numbers were read, this node's
+submodule working tree sat on `fix/per-agent-token-profile-header` (the head of
 unmerged fork PR #19), which adds three lines at :67 and shifts every citation
 below it. Line numbers read off a working tree are not line numbers of what the
 fleet runs.
 
 `resolveToken()` forks on ONE character sequence:
 
-    auth.ts:44-52   token does NOT start with "cipher_"  -> compared against the
+    auth.ts:93-102  token does NOT start with "cipher_"  -> compared against the
                     CIPHER_API_TOKEN env var; on match the request is attributed
                     to agentId "bootstrap". No Supabase lookup happens at all.
-    auth.ts:54-91   token DOES start with "cipher_"      -> the uuid is looked up
+    auth.ts:104-176 token DOES start with "cipher_"      -> the uuid is looked up
                     in pmoves_core.cipher_agent_tokens and the request is
                     attributed to THAT row's agent_id -- the minted agent.
-    auth.ts:106-109 no Bearer at all, server token unset -> agentId undefined,
+                    (A malformed tail is rejected before the lookup; a failed
+                    lookup is 503 "not judged", never a verdict.)
+    auth.ts:191-194 no Bearer at all, server token unset -> agentId undefined,
                     "advisory" mode: the caller self-declares in tool args.
 
 So bootstrap is not an agent and never was. It is the single-token launch path,
@@ -73,11 +78,11 @@ from shlex import quote
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CARDS = REPO_ROOT / "pmoves" / "config" / "signing_identity_cards.yaml"
 
-# auth.ts:46 + auth.ts:60 -- `token.startsWith("cipher_")` then `token.slice(7)`.
+# auth.ts:95 + auth.ts:105 -- `token.startsWith("cipher_")` then `token.slice(7)`.
 # The prefix is the entire discriminator between bootstrap and per-agent mode.
 MINTED_PREFIX = "cipher_"
 
-# auth.ts:49 -- the literal agentId a non-prefixed token resolves to.
+# auth.ts:98 -- the literal agentId a non-prefixed token resolves to.
 BOOTSTRAP_AGENT = "bootstrap"
 
 MODE_PER_AGENT = "per-agent"
@@ -114,6 +119,38 @@ def load_active_card_agents(cards_path: Path = CARDS) -> tuple[set, str | None]:
             agents.add(agent.strip())
     return agents, None
 
+
+def _fold(agent: str) -> str:
+    """Fold an author spelling to its canonical identity, or return it unchanged.
+
+    WHY THIS EXISTS: node_identity.py answers with the agent_registry KEY
+    (`claude_z890`), and signing_identity_cards.yaml is written with the
+    canonical identity (`z890-claude`). Comparing the two as raw strings made
+    this tool report the OPPOSITE verdict for one identity depending on which
+    spelling it was handed:
+
+        --agent claude_z890   -> signing card: no
+        --agent z890-claude   -> signing card: yes
+
+    Measured on Z890 2026-09-16. A carry that says "no signing card" when the
+    card exists is worse than no carry: it is a confident wrong answer about
+    whether an agent's memories are its own, and every launcher prints it.
+
+    identity_vocabulary.yaml already declares `claude_z890` as an alias -- that
+    fold was added precisely so "the registry key IS a spelling of the
+    identity". This routes through the same resolver the register uses, so the
+    two cannot disagree.
+
+    Degrades to identity, never raises: an undeclared spelling or an absent
+    vocabulary leaves the input alone and the carded verdict is then measured on
+    the literal string, which is the pre-existing behaviour.
+    """
+    try:
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        from identity_lineage import canonical_identity  # local tool, no deps
+        return canonical_identity(agent) or agent
+    except Exception:  # noqa: BLE001 - a fold failure must not cost the verdict
+        return agent
 
 def classify_token(token: str | None) -> str:
     """Map a bearer to one of auth.ts's three modes.
@@ -155,7 +192,10 @@ def resolve(agent, environ=None, cards_path: Path = CARDS) -> dict:
     if card_err:
         row["carded"] = "unknown"
     else:
-        row["carded"] = "yes" if agent in active else "no"
+        # Compare on the CANONICAL spelling; see _fold's docstring for the
+        # measured false "no" this prevents.
+        folded = _fold(agent)
+        row["carded"] = "yes" if (agent in active or folded in active) else "no"
 
     if mode == MODE_PER_AGENT:
         # The bearer is a minted token. Which agent it resolves to lives in
@@ -178,13 +218,13 @@ def resolve(agent, environ=None, cards_path: Path = CARDS) -> dict:
         row["why"] = (
             "bearer has no 'cipher_' prefix, so auth.ts takes the single-token path "
             "and files every write under '" + BOOTSTRAP_AGENT + "', not '" + agent + "' "
-            "(auth.ts:44-52). bootstrap is the launcher, and nothing has been launched."
+            "(auth.ts:93-102). bootstrap is the launcher, and nothing has been launched."
         )
     else:  # MODE_ADVISORY
         row["effective_id"] = ""
         row["why"] = (
             "no CIPHER_API_TOKEN visible to this process: either the session is in "
-            "advisory mode (auth.ts:106-109, agentId self-declared per call) or the "
+            "advisory mode (auth.ts:191-194, agentId self-declared per call) or the "
             "token is injected downstream and simply not readable from here"
         )
 

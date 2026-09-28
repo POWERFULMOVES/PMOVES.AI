@@ -106,6 +106,34 @@ def test_launcher_resolves_and_writes_the_context_file():
     )
 
 
+def _resolves_python_via_shared_helper(launcher_text: str, repo_root) -> bool:
+    """Does the launcher reach a yaml-probed pm_pick_python, directly or via the
+    ONE fragment that owns resolution?
+
+    THIRD VERSION. The first asserted `"pm-python.sh" in launcher_text`, which
+    tested WHERE the helper was sourced rather than THAT it was, and broke when
+    resolution moved into pm-node-identity.sh. The second recursed into every
+    sourced pm-*.sh looking for the same two strings -- and a negative control
+    proved it useless: with the yaml probe deleted from the resolution fragment
+    it still returned True, because pm-cipher-identity.sh MENTIONS both strings
+    in its header prose. It was matching a comment in a sibling file.
+
+    Resolution lives in exactly one place now, so name it. A string search over
+    "any file this sources" is not a property test; it is a wider net for the
+    same category error.
+    """
+    from pathlib import Path
+
+    def _probes(text: str) -> bool:
+        return "pm-python.sh" in text and "pm_pick_python yaml" in text
+
+    if _probes(launcher_text):
+        return True  # still resolves inline; fine, the negative guards below apply
+
+    frag = Path(repo_root) / "pmoves" / "scripts" / "pm-node-identity.sh"
+    return frag.is_file() and _probes(frag.read_text(encoding="utf-8"))
+
+
 def test_launcher_writes_even_on_failure():
     """Every branch writes the file — silence is the defect being fixed."""
     text = LAUNCHER.read_text(encoding="utf-8")
@@ -154,9 +182,10 @@ def test_the_shared_helper_exists_and_is_sourceable():
 
 def test_claude_launcher_uses_the_helper_not_a_scalar_python():
     text = LAUNCHER.read_text(encoding="utf-8")
-    assert "pm-python.sh" in text and "pm_pick_python yaml" in text, (
+    assert _resolves_python_via_shared_helper(text, REPO_ROOT), (
         "claude-pmoves must resolve its interpreter through the shared helper "
-        "with a yaml probe (the resolver imports pyyaml)"
+        "with a yaml probe (the resolver imports pyyaml) -- directly or via a "
+        "pm-*.sh fragment it sources"
     )
     assert 'IDENT_PY="${PMOVES_PYTHON:-python}"' not in text, (
         "the scalar form is back: on hosts where only python3 exists or python "
@@ -173,7 +202,7 @@ def test_provision_launcher_uses_the_helper_for_the_normalizer():
 
 def test_crush_launcher_dropped_its_inline_chain():
     text = LAUNCHER.read_text(encoding="utf-8")  # crush-pmoves is LAUNCHER here
-    assert "pm-python.sh" in text and "pm_pick_python yaml" in text
+    assert _resolves_python_via_shared_helper(text, REPO_ROOT)
     assert '.venv-pmoves/bin/python" ]; then' not in text, (
         "the inline chain is back — it was one of the three conventions the "
         "helper replaced"

@@ -31,7 +31,7 @@ import argparse
 import os
 import socket
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -40,6 +40,9 @@ import yaml
 REPO_ROOT = Path(__file__).resolve().parents[2]
 VOCABULARY_PATH = REPO_ROOT / "pmoves" / "configs" / "node-vocabulary.yaml"
 REGISTRY_PATH = REPO_ROOT / "pmoves" / "config" / "agent_registry.yaml"
+# The register-identity vocabulary: who an agent IS in the claim register, as
+# opposed to which registry key it is (above) or which cipher card it signs with.
+IDENTITY_VOCABULARY_PATH = REPO_ROOT / "pmoves" / "config" / "identity_vocabulary.yaml"
 
 # Values declared in the vocabulary that are known NOT to be a single machine.
 # Identity never binds to one of these; they are declared so the gate can tell
@@ -63,6 +66,12 @@ class Node:
     reach: str | None
     aliases: tuple[str, ...]
     default_identity: dict[str, str]
+    # The SIGNING-CARD spelling cipher requires as `agentId`, per harness. It is
+    # NOT default_identity: those are registry spellings (claude_b850) and
+    # cipher answers 403 to them -- the card is b850-claude. Declared per node in
+    # node-vocabulary.yaml, never derived; see that file's header for the
+    # harnesses deliberately left out.
+    cipher_agent_id: dict[str, str] = field(default_factory=dict)
 
     @property
     def is_machine(self) -> bool:
@@ -83,6 +92,7 @@ def load_vocabulary(path: Path | None = None) -> dict[str, Node]:
             reach=entry.get("reach"),
             aliases=tuple(str(a) for a in (entry.get("aliases") or [canonical])),
             default_identity=dict(entry.get("default_identity") or {}),
+            cipher_agent_id=dict(entry.get("cipher_agent_id") or {}),
         )
         for alias in (*node.aliases, canonical):
             key = _norm(alias)
@@ -242,6 +252,152 @@ def _shell_quote(value: str) -> str:
     return "'" + value.replace("'", "'\\''") + "'"
 
 
+def resolve_cipher_agent_id(
+    harness: str,
+    node: str | None,
+    vocab: dict[str, Node] | None = None,
+    env: dict[str, str] | None = None,
+) -> tuple[str | None, str]:
+    """Resolve (cipher agentId, explanation) for `harness` on `node`.
+
+    SEPARATE FROM resolve_identity BY DESIGN. That function answers "which
+    registered agent am I", and it works; this one answers "what must I put in
+    cipher's `agentId` field", which is a different namespace that happens to
+    name the same agent. Folding them together would make one wrong answer look
+    like the other -- and the registry spelling IS the wrong answer here, which
+    is how it survived: every launcher passed claude_b850 to the carry check and
+    read a false `signing card: no` back.
+
+    None is returned whenever the answer is not DECLARED. There is a tempting
+    transform -- claude_<x> -> <x>-claude holds for all four claude-code nodes --
+    and it is wrong for the fifth harness on the first node it meets: knuckles'
+    crush identity is crush_glm52 and its card is plain `crush`. A session told
+    to declare its own agentId is better off than one told a spelling cipher
+    refuses.
+
+    PMOVES_CIPHER_AGENT_ID overrides, matching how PMOVES_NODE_IDENTITY works
+    for the registry identity: the operator is allowed to know better.
+    """
+    env = os.environ if env is None else env
+
+    override = (env.get("PMOVES_CIPHER_AGENT_ID") or "").strip()
+    if override:
+        return override, f"cipher agentId {override!r} set by PMOVES_CIPHER_AGENT_ID"
+
+    if not node:
+        return None, "no cipher agentId: the node itself is unidentified"
+
+    vocab = load_vocabulary() if vocab is None else vocab
+    entry = vocab.get(_norm(node))
+    if entry is None:
+        return None, f"no cipher agentId: {node!r} is not in the node vocabulary"
+
+    declared = (entry.cipher_agent_id.get(harness) or "").strip()
+    if not declared:
+        return None, (
+            f"no cipher agentId declared for harness {harness!r} on {entry.canonical!r}. "
+            "Cipher requires one on every call, so declare it per call or add it to "
+            "node-vocabulary.yaml -- it is NOT the registry identity, and it is not "
+            "derivable from it."
+        )
+    return declared, f"cipher agentId {declared!r} declared for {harness!r} on {entry.canonical!r}"
+
+
+def _fold_identity(raw: Any) -> str:
+    """Same fold identity_lineage._norm applies to author strings, so a name
+    this resolver hands a session is looked up exactly as the collision gate
+    will look it up when the session signs with it."""
+    text = str(raw).strip().replace("\u2192", "->")
+    return " ".join(text.split()).casefold()
+
+
+def resolve_register_name(
+    registry_identity: str | None,
+    node: str | None,
+    vocab: dict[str, Node] | None = None,
+    env: dict[str, str] | None = None,
+    path: Path | None = None,
+) -> tuple[str | None, str | None, str]:
+    """Resolve (name, register_form, explanation) for the identity a session IS.
+
+    THE THIRD NAMESPACE. resolve_identity answers "which registry key"
+    (claude_b850); resolve_cipher_agent_id answers "which cipher card"
+    (b850-claude). Neither is the name the fleet uses for the agent --
+    `B850-CLAUDE`, signing the register as `B850-CLAUDE (Knuckles)` -- and a
+    launcher that only knows those two told its session "your registered
+    identity is claude_b850 ... your selected role is node-steward". The session
+    then woke up as the ROLE and spoke of B850-CLAUDE in the third person as the
+    party directing it. Operator direction 2026-09-27: the session must wake up
+    AS the identity, doing the steward job.
+
+    DECLARED ONLY. `register_form` is read from identity_vocabulary.yaml and
+    `name` is its base (the part before any parenthetical). There is no
+    transform from claude_b850 that yields `B850-CLAUDE (Knuckles)` while
+    yielding the bare `Z890-CLAUDE` the z890 actually signs with, so none is
+    attempted: an identity without a register_form returns None with the reason.
+
+    THE SECOND-SESSION RULE. identity_vocabulary.yaml requires a second steward
+    session on one node to use a distinct BASE identity. PMOVES_REGISTER_IDENTITY
+    names it (e.g. B850-CLAUDE-FUNNEL). It must resolve in the vocabulary, be
+    declared for THIS node, and carry a register_form -- otherwise None, never a
+    fallback to the primary's name, because falling back is exactly how two
+    sessions end up signing one owner string.
+    """
+    env = os.environ if env is None else env
+    path = path or IDENTITY_VOCABULARY_PATH
+
+    if not node:
+        return None, None, "no register name: the node itself is unidentified"
+    try:
+        with open(path, encoding="utf-8") as handle:
+            doc = yaml.safe_load(handle) or {}
+    except (OSError, yaml.YAMLError) as exc:
+        return None, None, f"no register name: cannot read {path.name} ({exc})"
+
+    index: dict[str, dict] = {}
+    for entry in doc.get("identities") or []:
+        if not isinstance(entry, dict) or "canonical" not in entry:
+            continue
+        for alias in (*(entry.get("aliases") or []), entry["canonical"]):
+            index.setdefault(_fold_identity(alias), entry)
+
+    override = (env.get("PMOVES_REGISTER_IDENTITY") or "").strip()
+    wanted = override or (registry_identity or "")
+    source = "PMOVES_REGISTER_IDENTITY" if override else f"registry identity {registry_identity!r}"
+    if not wanted:
+        return None, None, "no register name: no registry identity resolved to look up"
+
+    entry = index.get(_fold_identity(wanted))
+    if entry is None:
+        return None, None, (
+            f"no register name: {wanted!r} ({source}) is not an identity or alias "
+            f"in {path.name}"
+        )
+    canonical = str(entry["canonical"])
+
+    vocab = vocab if vocab is not None else load_vocabulary()
+    entry_node = canonical_node(entry.get("node"), vocab)
+    if entry_node != canonical_node(node, vocab):
+        return None, None, (
+            f"no register name: identity {canonical!r} ({source}) is declared for "
+            f"node {entry.get('node')!r}, not {node!r}. Refusing to name a session "
+            f"after another node's identity."
+        )
+
+    form = str(entry.get("register_form") or "").strip()
+    if not form:
+        return None, None, (
+            f"no register name: identity {canonical!r} ({source}) has no "
+            f"register_form in {path.name}. Declare the exact owner string it signs "
+            f"the register with; it is not derived."
+        )
+    name = form.split("(", 1)[0].strip()
+    return name, form, (
+        f"register name {name!r} (signs as {form!r}) from {path.name}: "
+        f"{canonical}.register_form via {source}"
+    )
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument(
@@ -264,6 +420,13 @@ def main(argv: list[str] | None = None) -> int:
 
     fmt = args.format or ("shell" if args.shell else "human")
     node, identity, why = resolve_identity(args.harness)
+    cipher_id, cipher_why = resolve_cipher_agent_id(args.harness, node)
+    # Only looked up for a BOUND identity: naming a session whose registry
+    # identity did not resolve would put a name on an unbound session.
+    if identity:
+        reg_name, reg_form, reg_why = resolve_register_name(identity, node)
+    else:
+        reg_name, reg_form, reg_why = None, None, "no register name: identity unresolved"
 
     if fmt in ("shell", "cmd"):
         # Always emit both, empty when unresolved: a consumer that tests for
@@ -279,9 +442,21 @@ def main(argv: list[str] | None = None) -> int:
         print(f"PMOVES_NODE={quote(node or '')}")
         print(f"PMOVES_RESOLVED_IDENTITY={quote(identity or '')}")
         print(f"PMOVES_IDENTITY_WHY={quote(why)}")
+        # Emitted on every path, empty when undeclared, with its own reason:
+        # "cipher wants an agentId and I do not have one" and "cipher wants an
+        # agentId and here it is" must not look alike to the launcher.
+        print(f"PMOVES_CIPHER_AGENT_ID={quote(cipher_id or '')}")
+        print(f"PMOVES_CIPHER_AGENT_WHY={quote(cipher_why)}")
+        # The name the session IS, and the owner string it signs with. Empty
+        # with a reason when undeclared, like the cipher pair above.
+        print(f"PMOVES_IDENTITY_NAME={quote(reg_name or '')}")
+        print(f"PMOVES_REGISTER_FORM={quote(reg_form or '')}")
+        print(f"PMOVES_REGISTER_WHY={quote(reg_why)}")
         return 0
 
     print(why)
+    print(cipher_why)
+    print(reg_why)
     return 0 if identity else 1
 
 

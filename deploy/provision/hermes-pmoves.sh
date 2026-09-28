@@ -89,7 +89,7 @@ fi
 # bearing lines through for shell expansion), then source it auto-export.
 ENVF="${PMOVES_ENV_SHARED:-$ROOT/pmoves/env.shared}"
 if [ -f "$ENVF" ]; then
-  blocklist='^$NEVER_MATCH$'
+  blocklist='^(HERMES_API_KEY|OPENAI_API_KEY|ANTHROPIC_API_KEY|HERMES_.*)$'
   set +H 2>/dev/null || true
   tmpf=$(mktemp)
   n=0

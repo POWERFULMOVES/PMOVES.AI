@@ -20,6 +20,21 @@
     <section>
       <h2>Service Endpoints</h2>
       <p class="section-desc">Configure URLs for each PMOVES.AI service.</p>
+      <div class="field" id="fleet-host-field">
+        <label for="fleet-host">Fleet host (Tailscale MagicDNS)</label>
+        <div class="input-row">
+          <input type="text" id="fleet-host" placeholder="pmoves-z890  (or localhost)">
+          <button class="test-btn" id="apply-host-btn">Apply to all</button>
+        </div>
+        <p class="section-desc">
+          <code>localhost</code> only reaches services on this machine. To use this
+          browser as a <strong>fleet</strong> client, enter the node's MagicDNS name
+          and press Apply &mdash; every endpoint below is rewritten to that host,
+          keeping each service's port. Access is authenticated by Tailscale device
+          identity; per-service tokens below still apply. The node must be on your
+          tailnet and sharing the service ports.
+        </p>
+      </div>
       <div class="field-grid" id="endpoints-grid">
         <div class="field" data-service="tensorzero">
           <label>TensorZero (LLM Gateway)</label>

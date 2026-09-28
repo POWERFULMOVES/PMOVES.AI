@@ -408,7 +408,7 @@ def main(argv: list[str]) -> int:
 
     # Harness keys the launchers actually request (verified by grepping the
     # --harness invocations in pmoves/scripts/claude-pmoves.sh and crush-pmoves).
-    _LAUNCHER_HARNESSES = frozenset({"claude-code", "crush"})
+    _LAUNCHER_HARNESSES = frozenset({"claude-code", "crush", "kimi"})
 
     # 5. Vocabulary default_identity -> registry/teams coupling --------------
     # `node-vocabulary.yaml` declares WHO a session on a node is:

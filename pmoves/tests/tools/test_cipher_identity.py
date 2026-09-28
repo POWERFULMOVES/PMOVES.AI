@@ -1,14 +1,16 @@
 """Tests for pmoves/tools/cipher_identity.py.
 
 Every assertion here is pinned to a line of `Pmoves-cipher/src/pmoves/auth.ts`
-at submodule pin `975e02e6` -- the gitlink `main` carries, NOT this node's
+at submodule pin `a0ee2314` (re-resolved by #3189 after fork PR #28 rewrote
+`resolveToken()`; unchanged from `975e02e6` until then) -- the
+gitlink `main` carries, NOT this node's
 submodule working tree, which sits on an unmerged fork PR branch. The whole tool
 is a claim about what that file does with a bearer:
 
-  auth.ts:46   if (!token.startsWith('cipher_')) { ... }
-  auth.ts:49   return {agentId: 'bootstrap', ...}
-  auth.ts:60   const uuidHex = token.slice(7)
-  auth.ts:106  if (!legacyToken && skipIfUnset) { req.agentId = undefined }
+  auth.ts:95   if (!token.startsWith('cipher_')) { ... }
+  auth.ts:98   return {agentId: 'bootstrap', kind: 'resolved', ...}
+  auth.ts:105  const uuidHex = token.slice(7)
+  auth.ts:191  if (!legacyToken && skipIfUnset) { req.agentId = undefined }
 
 If cipher's auth changes, these tests should fail loudly rather than let the
 launcher keep announcing an identity carry that no longer exists.
@@ -53,21 +55,21 @@ def _cards(tmp_path: Path, entries) -> Path:
 # ---------------------------------------------------------------------------
 
 def test_minted_prefix_selects_per_agent_mode():
-    # auth.ts:46 takes the Supabase branch only when the prefix is present.
+    # auth.ts:95 takes the Supabase branch only when the prefix is present.
     assert ci.classify_token("cipher_0123456789abcdef") == ci.MODE_PER_AGENT
 
 
 def test_token_without_prefix_is_bootstrap_not_per_agent():
     # NEGATIVE CONTROL for the above: if classify_token ignored the prefix and
     # returned per-agent for any non-empty token, the test above would still
-    # pass. This one pins the other side of auth.ts:46.
+    # pass. This one pins the other side of auth.ts:95.
     assert ci.classify_token("cipher-0123") == ci.MODE_BOOTSTRAP
     assert ci.classify_token("ciphe_0123") == ci.MODE_BOOTSTRAP
     assert ci.classify_token("CIPHER_0123") == ci.MODE_BOOTSTRAP  # JS startsWith is case-sensitive
 
 
 def test_absent_token_is_advisory():
-    # auth.ts:106-108 — no bearer and no server token means agentId undefined.
+    # auth.ts:191-193 — no bearer and no server token means agentId undefined.
     assert ci.classify_token(None) == ci.MODE_ADVISORY
     assert ci.classify_token("") == ci.MODE_ADVISORY
 

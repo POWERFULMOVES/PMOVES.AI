@@ -30,7 +30,9 @@ if (Test-Path $envf) {
     # These control the codex SDK itself, not MCP creds -- sourcing them would
     # clobber session state or force API billing.
     $blocklist = @(
-        # (no blocklist entries -- this CLI sources every var from env.shared)
+        'OPENAI_API_KEY',
+        'OPENAI_BASE_URL',
+        'CODEX_*'
     ) -replace '\*', '.*'
 
     # Mavis SDK env strip -- dot-source pmoves/scripts/mavis_sdk_env.ps1
@@ -67,12 +69,13 @@ if (Test-Path $envf) {
         $changed = $false
         foreach ($k in @($vars.Keys)) {
             $curKey = $k
-            $resolved = [regex]::Replace($vars[$k], '\\$\\{([A-Za-z_][A-Za-z0-9_]*)(?::-([^}]*))?\\}', {
+            $varPat = '\$' + [char]123 + '([A-Za-z_][A-Za-z0-9_]*)(?::-([^' + [char]125 + ']*))?' + [char]125
+            $resolved = [regex]::Replace($vars[$k], $varPat, {
                 param($m)
                 $name = $m.Groups[1].Value
                 $repl = $null
                 if ($name -ne $curKey) {
-                    if ($vars.Contains($name) -and $vars[$name] -ne '' -and $vars[$name] -notmatch '\\$\\{') {
+                    if ($vars.Contains($name) -and $vars[$name] -ne '' -and $vars[$name] -notmatch $varPat) {
                         $repl = $vars[$name]
                     } else {
                         $envv = [Environment]::GetEnvironmentVariable($name)

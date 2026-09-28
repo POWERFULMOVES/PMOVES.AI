@@ -80,29 +80,17 @@
 # ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
-# Default log path resolution.  The launcher scripts that source this helper
-# always cd to the repo root before sourcing (see the REPO-ROOT RESOLUTION
-# section in deploy/provision/<cli>-pmoves.sh), so the CWD is the load-bearing
-# signal for "where is the repo root".  We resolve PMOVES_REPO_ROOT from
-# CWD with an explicit override hook:
-#   * $PMOVES_REPO_ROOT                     - absolute path (operator override)
-#   * $PMOVES_MAVIS_SDK_LOG_PATH            - absolute path to the audit JSONL
-#   * $PMOVES_MAVIS_SDK_LOG_DIR             - absolute path to the audit dir
-#                                             (rare; use the LOG_PATH hook
-#                                             instead unless you want the
-#                                             default basename in a custom dir)
-#
-# The PowerShell twin's path resolution lives at mavis_sdk_env.ps1 just
-# above `Strip-MavisSdkEnvFor`; the two MUST encode the same default shape
-# (`<repo_root>/pmoves/data/chit/mavis_sdk_env.log`) -- the bash/ps1 twin
-# drift ratchet at test_pmoves_launcher_generator.py pins this.
+# Resolve this file's directory once, so it works when sourced from any CWD.
 # ---------------------------------------------------------------------------
+_MAVIS_SDK_ENV_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+
 : "${PMOVES_REPO_ROOT:=$(pwd)}"
 export PMOVES_REPO_ROOT
 : "${PMOVES_MAVIS_SDK_LOG_DIR:=$PMOVES_REPO_ROOT/pmoves/data/chit}"
 PMOVES_MAVIS_SDK_LOG_DIR="${PMOVES_MAVIS_SDK_LOG_DIR%/}"
 : "${PMOVES_MAVIS_SDK_LOG_PATH:=$PMOVES_MAVIS_SDK_LOG_DIR/mavis_sdk_env.log}"
 export PMOVES_MAVIS_SDK_LOG_DIR PMOVES_MAVIS_SDK_LOG_PATH
+
 
 # ---------------------------------------------------------------------------
 # Registry: Mavis SDK env vars (the env block of ~/.claude/settings.json).
@@ -299,6 +287,9 @@ mavis_sdk_strip_env_for() {
     one_line="$(printf '%s' "$stripped" | tr '\n' ' ')"
     echo "[mavis-sdk] stripped $n_stripped Mavis SDK vars from $cli env: $one_line" >&2
     echo "[mavis-sdk]   preserved under PMOVES_MAVIS_SDK_<NAME>; original vars unset." >&2
+  else
+    PMOVES_MAVIS_SDK_STRIPPED=""
+    unset PMOVES_MAVIS_SDK_STRIPPED 2>/dev/null || true
   fi
 
   # --- AUDIT LOG APPEND -------------------------------------------------------
@@ -334,10 +325,7 @@ mavis_sdk_strip_env_for() {
       "$log_names" \
       "$([ "$all_pass" = "1" ] && echo true || echo false)"
   } >> "$log_path" 2>/dev/null || true
-  if [ -z "$stripped" ]; then
-    PMOVES_MAVIS_SDK_STRIPPED=""
-    unset PMOVES_MAVIS_SDK_STRIPPED 2>/dev/null || true
-  fi
+
 
   # Marker for downstream "this session was scrubbed" assertions.
   PMOVES_MAVIS_SDK_CLI="$cli"
