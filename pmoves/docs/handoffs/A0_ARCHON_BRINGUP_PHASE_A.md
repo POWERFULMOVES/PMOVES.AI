@@ -88,3 +88,65 @@ Unscoped closure (informational): additionally **recreates `pmoves-archon-postgr
 `nats-init`, `tensorzero-gateway`, `tensorzero-clickhouse`. No `supabase-*` in either plan.
 
 `make up-a0-archon-scoped [DRY_RUN=1]` (added in this branch) is that scoped line as a Known Road.
+
+## 6. Phase A2 — follow upstream releases (operator redirect, 2026-09-28)
+
+Operator intent: images follow upstream releases; pinning a harness is a fool's errand. Target at the
+time of writing: Archon upstream `v0.11.1` (2026-09-25), Agent Zero upstream `v2.13` (2026-09-23).
+
+### Design (implemented in `pmoves/Makefile` + `pmoves/tools/upstream_release_track.py`)
+
+1. **Resolve** `gh api repos/<upstream>/releases/latest` -> tag -> commit; compare it with the fork's
+   `PMOVES.AI-Edition-Hardened` head. Exit 0 = hardened contains the release, 1 = it does not (sync
+   the fork first), 3 = could not measure. Every emitted value is pattern-validated (targets eval it).
+2. **Build** (`archon-build-latest`) from the fork commit that contains the release, via a git
+   build context at the exact sha (no local submodule state involved). Tag
+   `<version>-pmoves.<sha8>`, labels carry release tag/sha and fork sha. Refuses on exit 1.
+3. **Gate** (`archon-promote-current IMAGE=...`): throwaway container, `--network none`, no ports, no
+   volumes; `/api/health` must report JSON `status: ok`. Pass -> retag `:current`. Fail -> `:current`
+   untouched, logs printed, non-zero exit. `archon-release-latest` chains resolve -> build -> gate.
+4. **A0**: `a0-release-resolve` (resolver side). Build side road-gated, see below.
+
+### Fork sync result: BLOCKED (not merged, nothing pushed to the fork)
+
+- Hardened `8d135dab` is `diverged` from `v0.11.1`: the fork tracks upstream `dev` lineage (57 behind
+  dev, 59 PMOVES commits ahead) while release tags sit on upstream `main` (squash line). Merging the tag
+  directly = 193 conflicts (the same code arriving by two histories) — wrong road.
+- Right road: merge upstream `dev` at `3d8e4e90` (upstream's own "Merge branch 'main' into dev",
+  2026-09-25 — the first dev commit whose history contains `v0.11.1`; 53 commits). 4 conflicts:
+
+| File | Nature | Proposed resolution |
+|---|---|---|
+| `bun.lock` | lock drift (claude-agent-sdk 0.3.251 -> 0.3.282, pi-* 0.84 -> 0.87, ...) | regenerate `bun install --lockfile-only`; keep fork overrides (e.g. `axios ^1.17.0`) |
+| `packages/core/src/db/bundled-schema.generated.ts` | generated | regenerate from the auto-merged `migrations/000_combined.sql` |
+| `packages/isolation/src/pr-state.ts` | **SECURITY**: fork CodeQL fix `isGitHubRemote()` (host parse, not substring; c1c3b22b) vs upstream `PrLookup` refactor | keep BOTH: upstream types + fork `isGitHubRemote`; the auto-merged call site already uses `isGitHubRemote` |
+| `packages/isolation/src/providers/worktree.ts` | fork deleted orphaned `applyGitIdentity` (90ea8372); upstream re-added a caller | take upstream side including the method |
+
+The scripted resolution was refused by the harness safety classifier as a possible security
+weakening (pr-state.ts is the hardening). Per the brief, stopped here: **a human resolves pr-state.ts**,
+then the remaining three are mechanical.
+
+### Persistence outside argv (road-gated / operator-owned)
+
+- `ARCHON_API_PORT=8092` exists only because the running `pmoves-mcp-gateway` predates its move to
+  host 8189. The durable fix is to recreate the gateway from current compose (separate approval); Archon's
+  default 8091 then needs no override. Node-local alternative: `.env.local` (operator-written; it only
+  enters compose when `SUPABASE_RUNTIME!=compose` or `INCLUDE_ENV_LOCAL_IN_COMPOSE=1`).
+- Image channel: compose `archon.image` defaults to `…:pmoves-latest`, and `env.shared.example:129`
+  sets the same explicitly (so the generated env file overrides any compose default). Moving to
+  `…:current` needs (a) compose — `KNOWN_ROAD=compose:<reason>`, not minted — and (b) the example +
+  secrets-funnel regen. Only safe fleet-wide once CI also publishes a gated `:current` to GHCR
+  (otherwise nodes without a local `:current` fail to pull).
+- A0 release-exact build: `services/agent-zero/Dockerfile` clones a named branch; needs
+  `AGENT_ZERO_SHA` build arg + post-clone `git rev-parse HEAD` assertion — `KNOWN_ROAD=dockerfile:<reason>`,
+  not minted.
+
+### Automation (proposed, not implemented)
+
+`.github/workflows/` is delete-protected only, but automation must wait for the manual Archon sync.
+Shape: a scheduled + `repository_dispatch` workflow runs the resolver per component; exit 1 -> dispatch
+`fork-sync.yml` for that fork (or open an issue when it conflicts); exit 0 and no GHCR image for that
+version -> dispatch `integrations-ghcr.yml` for the component with a version tag, then smoke and
+publish `:current`. `integrations-ghcr.matrix.json` builds archon from the branch name today, not
+the resolved sha — that entry would take the resolver's `FORK_SHA`. `agent-zero-upstream-check.yml`
+already watches A0 upstream daily and is the natural host for the A0 half.
