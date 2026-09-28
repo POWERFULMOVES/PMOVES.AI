@@ -361,10 +361,13 @@ on the head, nothing is posted and the run verifies and exits 0.
    and read that env could approve its own PR (6.2). Instead:
    - store it as a file readable only by the control body's OS user on the one
      host where the road runs, e.g. `~/.config/pmoves-control/token`, mode
-     `0600`, and point `PMOVES_CONTROL_TOKEN_FILE` at it. The tool refuses a
-     token file that is not a regular file, not owned by the invoking user, or
-     accessible to group/others (POSIX; on Windows the ACL is the operator's
-     job);
+     `0600` (or `0400`), and point `PMOVES_CONTROL_TOKEN_FILE` at it. The tool
+     opens it with `O_NOFOLLOW` (a symlink is refused) and checks the **open**
+     descriptor with `fstat`: a regular file, owned by the invoking user, no
+     group/other bits (POSIX; on Windows the ACL is the operator's job). The
+     file holds exactly the token, optionally followed by one newline; any
+     other whitespace, a second line, or a control character is refused (rc 1)
+     without echoing the content;
    - keep the master copy with the operator's break-glass secrets (outside the
      repo and outside the CHIT tier bundle);
    - `PMOVES_CONTROL_TOKEN` is accepted for a single supervised invocation,

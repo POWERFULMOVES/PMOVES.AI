@@ -587,6 +587,54 @@ def test_token_file_readable_by_others_is_refused(gh: FakeGitHub, config: Path, 
     assert gh.requests == []
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX symlinks and modes")
+@pytest.mark.parametrize("target_mode", [0o600, 0o644])
+def test_token_file_symlink_is_refused(gh: FakeGitHub, config: Path, tmp_path: Path, target_mode: int, capsys: pytest.CaptureFixture[str]) -> None:
+    real = _token_file(tmp_path, target_mode)
+    link = tmp_path / "link.token"
+    link.symlink_to(real)
+    assert run(config, env={"PMOVES_CONTROL_TOKEN_FILE": str(link)}) == 1
+    assert "symlink" in capsys.readouterr().err
+    assert gh.requests == []
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX mode bits")
+@pytest.mark.parametrize(
+    "content",
+    [TOKEN + "\n\n", TOKEN + "\r\n", " " + TOKEN, TOKEN + " \n", TOKEN[:10] + "\n" + TOKEN[10:], TOKEN + "\t", TOKEN + "\x00"],
+    ids=["two-newlines", "crlf", "leading-space", "trailing-space", "two-lines", "tab", "nul"],
+)
+def test_token_file_with_extra_whitespace_is_refused_without_echoing(
+    gh: FakeGitHub, config: Path, tmp_path: Path, content: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    tf = _token_file(tmp_path, 0o600, content=content)
+    assert run(config, env={"PMOVES_CONTROL_TOKEN_FILE": str(tf)}) == 1
+    out = capsys.readouterr()
+    assert "no whitespace" in out.err and "content not shown" in out.err
+    assert TOKEN[:10] not in out.out + out.err
+    assert gh.requests == []
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX mode bits")
+def test_token_file_without_trailing_newline_is_fine(gh: FakeGitHub, config: Path, tmp_path: Path) -> None:
+    tf = _token_file(tmp_path, 0o600, content=TOKEN)
+    assert run(config, env={"PMOVES_CONTROL_TOKEN_FILE": str(tf)}) == 0
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX mode bits")
+def test_token_file_0400_is_accepted(gh: FakeGitHub, config: Path, tmp_path: Path) -> None:
+    tf = _token_file(tmp_path, 0o400)
+    assert run(config, env={"PMOVES_CONTROL_TOKEN_FILE": str(tf)}) == 0
+
+
+@pytest.mark.parametrize("value", [TOKEN + "\n", "a b", TOKEN + "\r"])
+def test_env_token_with_whitespace_is_refused_without_echoing(gh: FakeGitHub, config: Path, value: str, capsys: pytest.CaptureFixture[str]) -> None:
+    assert run(config, env={"PMOVES_CONTROL_TOKEN": value}) == 1
+    out = capsys.readouterr()
+    assert "content not shown" in out.err and TOKEN[:10] not in out.out + out.err
+    assert gh.requests == []
+
+
 def test_token_file_and_env_together_is_usage_error(gh: FakeGitHub, config: Path, tmp_path: Path) -> None:
     tf = _token_file(tmp_path, 0o600)
     assert run(config, env={"PMOVES_CONTROL_TOKEN_FILE": str(tf), "PMOVES_CONTROL_TOKEN": TOKEN}) == 2

@@ -290,36 +290,70 @@ def load_settings(config_path: Path, env: dict[str, str], repo_override: str = "
     return settings
 
 
+def validate_token_text(value: str, source: str) -> str:
+    """Accept exactly one token with no whitespace. Messages never echo content."""
+    if not value:
+        raise Outcome(EXIT_UNMEASURED, f"{source} is empty")
+    if any(ch.isspace() for ch in value) or not value.isprintable():
+        raise Outcome(
+            EXIT_REFUSED,
+            f"{source} must hold exactly one token with no whitespace, newlines or control "
+            "characters (one trailing newline in a file is allowed); content not shown",
+        )
+    return value
+
+
 def read_token_file(path: str) -> str:
     """Read the token from a restricted file (the preferred delivery path).
 
-    Refuses a file that is not a regular file, is not owned by the current
-    user, or is readable/writable by group or others. POSIX only: on Windows
-    the mode bits carry no such meaning, so the check is skipped there and the
-    file's ACL is the operator's responsibility.
+    Opened with O_NOFOLLOW (a symlink is refused) and then checked with fstat
+    on the OPEN descriptor, so the checked file is the read file (no TOCTOU):
+    a regular file, owned by the invoking user, mode 0600 or stricter. POSIX
+    only for the owner/mode checks: on Windows those bits carry no such meaning,
+    so the file's ACL is the operator's responsibility (symlinks are still
+    refused there via os.path.islink, best effort).
     """
+    nofollow = getattr(os, "O_NOFOLLOW", 0)
+    if not nofollow and os.path.islink(path):
+        raise Outcome(EXIT_REFUSED, f"{TOKEN_FILE_ENV} is a symlink; point it at the file itself")
     try:
-        st = os.stat(path)
+        fd = os.open(path, os.O_RDONLY | nofollow | getattr(os, "O_CLOEXEC", 0))
     except OSError as exc:
-        raise Outcome(EXIT_UNMEASURED, f"cannot stat {TOKEN_FILE_ENV}: {type(exc).__name__}") from None
-    if not stat.S_ISREG(st.st_mode):
-        raise Outcome(EXIT_REFUSED, f"{TOKEN_FILE_ENV} is not a regular file")
-    if os.name != "nt":
-        if st.st_uid != os.getuid():
-            raise Outcome(EXIT_REFUSED, f"{TOKEN_FILE_ENV} is not owned by the current user")
-        if st.st_mode & 0o077:
-            raise Outcome(
-                EXIT_REFUSED,
-                f"{TOKEN_FILE_ENV} is accessible to group/others (mode {oct(st.st_mode & 0o777)}); chmod 600 it",
-            )
+        if os.path.islink(path):
+            raise Outcome(EXIT_REFUSED, f"{TOKEN_FILE_ENV} is a symlink; point it at the file itself") from None
+        raise Outcome(EXIT_UNMEASURED, f"cannot open {TOKEN_FILE_ENV}: {type(exc).__name__}") from None
     try:
-        with open(path, encoding="utf-8") as handle:
-            value = handle.read().strip()
-    except (OSError, UnicodeDecodeError) as exc:
+        st = os.fstat(fd)
+        if not stat.S_ISREG(st.st_mode):
+            raise Outcome(EXIT_REFUSED, f"{TOKEN_FILE_ENV} is not a regular file")
+        if os.name != "nt":
+            if st.st_uid != os.getuid():
+                raise Outcome(EXIT_REFUSED, f"{TOKEN_FILE_ENV} is not owned by the current user")
+            if st.st_mode & 0o077:
+                raise Outcome(
+                    EXIT_REFUSED,
+                    f"{TOKEN_FILE_ENV} is accessible to group/others (mode {oct(st.st_mode & 0o777)}); "
+                    "chmod 600 it",
+                )
+        chunks: list[bytes] = []
+        while True:
+            chunk = os.read(fd, 4096)
+            if not chunk:
+                break
+            chunks.append(chunk)
+            if sum(len(c) for c in chunks) > 16384:
+                raise Outcome(EXIT_REFUSED, f"{TOKEN_FILE_ENV} is too large to be a token; content not shown")
+    except OSError as exc:
         raise Outcome(EXIT_UNMEASURED, f"cannot read {TOKEN_FILE_ENV}: {type(exc).__name__}") from None
-    if not value:
-        raise Outcome(EXIT_UNMEASURED, f"{TOKEN_FILE_ENV} is empty")
-    return value
+    finally:
+        os.close(fd)
+    try:
+        text = b"".join(chunks).decode("utf-8")
+    except UnicodeDecodeError:
+        raise Outcome(EXIT_REFUSED, f"{TOKEN_FILE_ENV} is not valid UTF-8; content not shown") from None
+    if text.endswith("\n"):
+        text = text[:-1]  # exactly one trailing newline; anything else is refused below
+    return validate_token_text(text, TOKEN_FILE_ENV)
 
 
 def _read(action: str, fn: Callable[[], Any]) -> Any:
@@ -601,6 +635,8 @@ def main(argv: list[str] | None = None, env: dict[str, str] | None = None) -> in
             if token.strip():
                 raise Outcome(EXIT_USAGE, f"set only one of {TOKEN_FILE_ENV} and {TOKEN_ENV}")
             token = read_token_file(token_file)
+        elif token:
+            token = validate_token_text(token, TOKEN_ENV)
         if not token.strip():
             raise Outcome(
                 EXIT_UNMEASURED, f"no token: set {TOKEN_FILE_ENV} (preferred) or {TOKEN_ENV}; cannot approve"
