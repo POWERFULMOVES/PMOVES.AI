@@ -116,7 +116,7 @@ export function SyncStatus({
 
             {/* Errors */}
             <div className={STAT_CARD_CLASSES}>
-              <div className={`${STAT_VALUE_CLASSES} ${STAT_COLORS.errors} ${hasErrors ? "animate-pulse" : ""}`}>
+              <div data-testid="sync-error-count" className={`${STAT_VALUE_CLASSES} ${STAT_COLORS.errors} ${hasErrors ? "animate-pulse" : ""}`}>
                 {status.errors}
               </div>
               <div className={STAT_LABEL_CLASSES}>Errors</div>

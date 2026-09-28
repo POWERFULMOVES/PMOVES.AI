@@ -195,49 +195,42 @@ test.describe('Enhanced Video Approval', () => {
   test('should display queue items with correct status', async ({ page }) => {
     // Check for queue items
     const queueItems = page.locator('[data-testid="queue-item"]');
-    const count = await queueItems.count();
+    await expect(queueItems).toHaveCount(pendingIds.length);
+    await expect(queueItems.first()).toBeVisible();
 
-    // Items might not exist if queue is empty
-    if (count > 0) {
-      await expect(queueItems.first()).toBeVisible();
-
-      // Check for status badges
-      const statusBadges = page.locator('[data-testid="status-badge"]');
-      await expect(statusBadges.first()).toBeVisible();
-    }
+    // Check for status badges (default filter is "pending", page.tsx:67)
+    const statusBadges = page.locator('[data-testid="status-badge"]');
+    await expect(statusBadges).toHaveCount(pendingIds.length);
+    await expect(statusBadges.first()).toHaveText('pending');
   });
 
   test('should select single item', async ({ page }) => {
     const queueItems = page.locator('[data-testid="queue-item"]');
-    const count = await queueItems.count();
+    await expect(queueItems).toHaveCount(pendingIds.length);
 
-    if (count > 0) {
-      // Click checkbox on first item
-      await page.check('[data-testid="select-item-0"]');
+    // Click checkbox on first item
+    await page.check('[data-testid="select-item-0"]');
 
-      // Checkbox should be checked
-      await expect(page.locator('[data-testid="select-item-0"]')).toBeChecked();
+    // Checkbox should be checked
+    await expect(page.locator('[data-testid="select-item-0"]')).toBeChecked();
 
-      // Bulk actions bar should appear
-      await expect(page.locator('[data-testid="bulk-actions-bar"]')).toBeVisible();
-    }
+    // Bulk actions bar should appear
+    await expect(page.locator('[data-testid="bulk-actions-bar"]')).toBeVisible();
   });
 
   test('should bulk select multiple items', async ({ page }) => {
     const queueItems = page.locator('[data-testid="queue-item"]');
-    const count = await queueItems.count();
+    await expect(queueItems).toHaveCount(2);
 
-    if (count >= 2) {
-      // Select multiple items
-      await page.check('[data-testid="select-item-0"]');
-      await page.check('[data-testid="select-item-1"]');
+    // Select multiple items
+    await page.check('[data-testid="select-item-0"]');
+    await page.check('[data-testid="select-item-1"]');
 
-      // Bulk actions bar should be visible
-      await expect(page.locator('[data-testid="bulk-actions-bar"]')).toBeVisible();
+    // Bulk actions bar should be visible
+    await expect(page.locator('[data-testid="bulk-actions-bar"]')).toBeVisible();
 
-      // Should show correct count
-      await expect(page.locator('[data-testid="selected-count"]')).toContainText('2');
-    }
+    // Should show correct count
+    await expect(page.locator('[data-testid="selected-count"]')).toContainText('2 items selected');
   });
 
   // BUILT: BulkApprovalActions.tsx:125-131, shown once a row is selected (:104-107)
@@ -264,9 +257,8 @@ test.describe('Enhanced Video Approval', () => {
 
     for (let i = 0; i < count; i++) {
       const checkbox = checkboxes.nth(i);
-      if (await checkbox.isVisible()) {
-        await expect(checkbox).toBeChecked();
-      }
+      await expect(checkbox).toBeVisible();
+      await expect(checkbox).toBeChecked();
     }
   });
 
@@ -368,22 +360,25 @@ test.describe('Enhanced Video Approval', () => {
   test('should not approve non-pending items', async ({ page }) => {
     // This test checks that non-pending items are excluded from bulk approval
 
-    // First, find all items (including non-pending)
+    // Show all items (including non-pending)
+    await page.selectOption('[data-testid="queue-status-filter"]', 'all');
     const allItems = page.locator('[data-testid="queue-item"]');
-    const _allCount = await allItems.count();
+    await expect(allItems).toHaveCount(FIXTURE.length);
 
-    if (_allCount > 0) {
-      // Select all visible (the bar and its controls render once a row is selected)
-      await page.check('[data-testid="select-item-0"]');
-      await page.click('[data-testid="select-all-visible"]');
+    // Select all visible (the bar and its controls render once a row is selected)
+    await page.check('[data-testid="select-item-0"]');
+    await page.click('[data-testid="select-all-visible"]');
+    await expect(page.locator('[data-testid="selected-count"]')).toContainText(`${FIXTURE.length} items selected`);
 
-      // Check approve button for count of pending items
-      const approveButton = page.locator('[data-testid="bulk-approve-button"]');
-      const buttonText = await approveButton.textContent();
+    // Approve button counts pending items only (BulkApprovalActions.tsx:59, :159)
+    const approveButton = page.locator('[data-testid="bulk-approve-button"]');
+    await expect(approveButton).toHaveText(`Approve (${pendingIds.length})`);
 
-      // Should show count of pending items only
-      expect(buttonText).toMatch(/\(\d+\)/);
-    }
+    // And approving sends only the pending ids
+    await approveButton.click();
+    await page.click('[data-testid="confirm-bulk-approve"]');
+    await expect.poll(() => mock.rpcCalls.length).toBe(pendingIds.length);
+    expect(mock.rpcCalls.map((c) => c.body.p_id).sort()).toEqual([...pendingIds].sort());
   });
 
   // BUILT: approve button disabled + "Processing..." while processing (BulkApprovalActions.tsx:156-159, page.tsx:229/242)
@@ -682,46 +677,26 @@ test.describe('Enhanced Video Approval', () => {
 
   // fixme: UI unwired: rule-test action not rendered (page.tsx:380-386 passes no onTestRule; button gated at ApprovalRulesConfig.tsx:529)
   test.fixme('should test rule against pending items', async ({ page }) => {
-    // Open approval rules
-    await page.click('[data-testid="approval-rules-button"]');
+    await openNewRuleEditor(page);
+    await page.fill('#rule-name', 'Testable Rule');
+    await saveRuleAndExpectListed(page, 'Testable Rule');
 
-    // Wait for panel
-    await expect(page.locator('[data-testid="approval-rules-panel"]')).toBeVisible({ timeout: 5000 });
+    // Click test rule button
+    await page.click('[data-testid="test-rule-0"]');
 
-    // Check if rules exist
-    const ruleItems = page.locator('[data-testid="approval-rule-item"]');
-    const count = await ruleItems.count();
-
-    if (count > 0) {
-      // Click test rule button
-      const testButton = page.locator('[data-testid="test-rule-0"]');
-
-      if (await testButton.isVisible({ timeout: 1000 })) {
-        await testButton.click();
-
-        // Should show test results
-        await expect(page.locator('[data-testid="rule-test-results"]')).toBeVisible({ timeout: 5000 });
-      }
-    }
+    // Should show test results
+    await expect(page.locator('[data-testid="rule-test-results"]')).toBeVisible({ timeout: 5000 });
   });
 
   // fixme: UI unwired: execution log not rendered (page.tsx:380-386 passes no onFetchLog; "View Log" gated at ApprovalRulesConfig.tsx:284)
   test.fixme('should show execution log modal', async ({ page }) => {
-    // Open approval rules
-    await page.click('[data-testid="approval-rules-button"]');
+    await openRulesPanel(page);
 
-    // Wait for panel
-    await expect(page.locator('[data-testid="approval-rules-panel"]')).toBeVisible({ timeout: 5000 });
+    // Open the execution log
+    await page.click('[data-testid="view-execution-log"]');
 
-    // Check for execution log button
-    const logButton = page.locator('[data-testid="view-execution-log"]');
-
-    if (await logButton.isVisible({ timeout: 1000 })) {
-      await logButton.click();
-
-      // Should show execution log modal
-      await expect(page.locator('[data-testid="execution-log-modal"]')).toBeVisible({ timeout: 5000 });
-    }
+    // Should show execution log modal
+    await expect(page.locator('[data-testid="execution-log-modal"]')).toBeVisible({ timeout: 5000 });
   });
 
   // BUILT: source type select ApprovalRulesConfig.tsx:461-471
@@ -851,15 +826,14 @@ test.describe('Enhanced Video Approval', () => {
 
   test('should display singular "item" when one selected', async ({ page }) => {
     const queueItems = page.locator('[data-testid="queue-item"]');
-    const count = await queueItems.count();
+    await expect(queueItems).toHaveCount(pendingIds.length);
 
-    if (count > 0) {
-      // Select just one item
-      await page.check('[data-testid="select-item-0"]');
+    // Select just one item
+    await page.check('[data-testid="select-item-0"]');
 
-      // Should say "1 item selected" not "1 items selected"
-      await expect(page.locator('[data-testid="selected-count"]')).toContainText('1 item selected');
-    }
+    // Should say "1 item selected" not "1 items selected"
+    await expect(page.locator('[data-testid="selected-count"]')).toContainText('1 item selected');
+    await expect(page.locator('[data-testid="selected-count"]')).not.toContainText('1 items');
   });
 
   // BUILT: status select page.tsx:414-426 drives fetchIngestionQueue status filter (:92-96)

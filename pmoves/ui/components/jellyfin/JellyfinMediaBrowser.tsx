@@ -104,6 +104,7 @@ export function JellyfinMediaBrowser({
           <div
             key={item.id}
             data-testid="media-item"
+            data-selected={selectedItem?.id === item.id ? "true" : "false"}
             className={`${CARD_CLASSES} ${selectedItem?.id === item.id ? "ring-2 ring-blue-500" : ""}`}
             onClick={() => setSelectedItem(item)}
           >
@@ -117,7 +118,7 @@ export function JellyfinMediaBrowser({
                 loading="lazy"
               />
             ) : (
-              <div className={IMAGE_PLACEHOLDER_CLASSES}>
+              <div data-testid="media-image-placeholder" className={IMAGE_PLACEHOLDER_CLASSES}>
                 <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 4v16M17 4v16M3 8h4m10 0h4M3 12h18M3 16h4m10 0h4M4 20h16a1 1 0 001-1V5a1 1 0 00-1-1H4a1 1 0 00-1 1v14a1 1 0 001 1z" />
                 </svg>
@@ -127,7 +128,7 @@ export function JellyfinMediaBrowser({
             {/* Title and type */}
             <h3 className="font-medium text-sm line-clamp-2">{item.name}</h3>
             <p className="text-xs text-neutral-500 mt-1">
-              <span className={`inline-block px-2 py-0.5 rounded ${getItemTypeBadge(item.type)}`}>
+              <span data-testid="media-badge" data-type={item.type} className={`inline-block px-2 py-0.5 rounded ${getItemTypeBadge(item.type)}`}>
                 {item.type}
               </span>
               {item.seriesName && (

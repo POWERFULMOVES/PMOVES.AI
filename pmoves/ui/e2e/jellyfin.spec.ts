@@ -233,33 +233,36 @@ test.describe('Jellyfin Integration', () => {
     await expect(page.locator('[data-testid="media-browser"]')).toBeVisible();
   });
 
+  // BUILT: type badge JellyfinMediaBrowser.tsx:129-131, colours from getItemTypeBadge :51-59
   test('should display correct badge for each media type', async ({ page }) => {
-    // Wait for media items to load
-    await page.waitForTimeout(1000);
+    await searchLibrary(page, 'test');
+    await expect(page.locator('[data-testid="media-item"]')).toHaveCount(LIBRARY.length);
 
     // Check for different media type badges
     const movieBadge = page.locator('[data-testid="media-badge"][data-type="Movie"]');
     const seriesBadge = page.locator('[data-testid="media-badge"][data-type="Series"]');
     const episodeBadge = page.locator('[data-testid="media-badge"][data-type="Episode"]');
 
-    // At least check that the badges exist in the DOM
-    const totalBadges = await movieBadge.count() + await seriesBadge.count() + await episodeBadge.count();
-    expect(totalBadges).toBeGreaterThanOrEqual(0);
+    await expect(movieBadge).toHaveCount(1);
+    await expect(seriesBadge).toHaveCount(1);
+    await expect(episodeBadge).toHaveCount(1);
+    await expect(movieBadge).toHaveText('Movie');
+    await expect(movieBadge).toHaveClass(/bg-purple-100/);
+    await expect(seriesBadge).toHaveClass(/bg-blue-100/);
+    await expect(episodeBadge).toHaveClass(/bg-green-100/);
   });
 
+  // BUILT: placeholder when an item has no imageUrl, JellyfinMediaBrowser.tsx:110-124.
+  // Note: the component has no onError fallback, so a URL that fails to load is NOT replaced;
+  // this asserts the built behaviour (missing image -> placeholder).
   test('should show placeholder when image fails to load', async ({ page }) => {
-    // This test checks for placeholder images when actual images fail
+    await searchLibrary(page, 'test');
     const mediaItems = page.locator('[data-testid="media-item"]');
-    const itemCount = await mediaItems.count();
+    await expect(mediaItems).toHaveCount(LIBRARY.length);
 
-    if (itemCount > 0) {
-      // Check for placeholder images
-      const placeholders = page.locator('[data-testid="media-image-placeholder"]');
-      await placeholders.count();
-
-      // All items should have either an image or a placeholder
-      expect(itemCount).toBeGreaterThanOrEqual(0);
-    }
+    // The fixture items carry no imageUrl, so each renders the placeholder
+    await expect(page.locator('[data-testid="media-image-placeholder"]')).toHaveCount(LIBRARY.length);
+    await expect(mediaItems.locator('img')).toHaveCount(0);
   });
 
   // BUILT: grid JellyfinMediaBrowser.tsx:102 (rendered once there are results)
@@ -277,46 +280,20 @@ test.describe('Jellyfin Integration', () => {
     expect(className).toMatch(/grid-cols-/);
   });
 
-  test('should link video to Jellyfin item', async ({ page }) => {
-    // This test requires having videos in the ingestion queue
-    // Navigate to ingestion queue first
+  // fixme: UI unwired: no link-to-Jellyfin flow is rendered. The ingestion queue rows offer only Reject/Approve
+  // (app/dashboard/ingestion-queue/page.tsx:550-567); the Jellyfin page's "Link" button only logs
+  // (app/dashboard/jellyfin/page.tsx:148-153); JellyfinMediaBrowser's "Link Video" needs onLink, which page.tsx:161 never passes
+  test.fixme('should link video to Jellyfin item', async ({ page }) => {
     await page.goto('/dashboard/ingestion-queue');
     await page.waitForLoadState('networkidle');
 
-    // Check if there are items to link
     const queueItems = page.locator('[data-testid="queue-item"]');
-    const _itemCount = await queueItems.count();
-
-    if (_itemCount > 0) {
-      // Click first item
-      await queueItems.first().click();
-
-      // Click "Link to Jellyfin" button
-      const linkButton = page.locator('[data-testid="link-jellyfin-button"]');
-      if (await linkButton.isVisible({ timeout: 2000 })) {
-        await linkButton.click();
-
-        // Should open Jellyfin media browser modal
-        await expect(page.locator('[data-testid="jellyfin-link-modal"]')).toBeVisible({ timeout: 5000 });
-
-        // Select a Jellyfin item (if available)
-        const jellyfinItems = page.locator('[data-testid="jellyfin-select-item"]');
-        const jellyfinCount = await jellyfinItems.count();
-
-        if (jellyfinCount > 0) {
-          await jellyfinItems.first().click();
-
-          // Confirm link
-          await page.click('[data-testid="confirm-link"]');
-
-          // Should show success message
-          await expect(page.locator('[data-testid="link-success-toast"]')).toBeVisible({ timeout: 5000 });
-        } else {
-          // Close modal if no items
-          await page.click('[data-testid="close-modal"]');
-        }
-      }
-    }
+    await queueItems.first().click();
+    await page.click('[data-testid="link-jellyfin-button"]');
+    await expect(page.locator('[data-testid="jellyfin-link-modal"]')).toBeVisible({ timeout: 5000 });
+    await page.locator('[data-testid="jellyfin-select-item"]').first().click();
+    await page.click('[data-testid="confirm-link"]');
+    await expect(page.locator('[data-testid="link-success-toast"]')).toBeVisible({ timeout: 5000 });
   });
 
   // fixme: UI unwired: BackfillControls not rendered (components/jellyfin/BackfillControls.tsx is imported only by BackfillControls.test.tsx; jellyfin/page.tsx renders only SyncStatus's one-click "Run Backfill", SyncStatus.tsx:161-177)
@@ -374,11 +351,7 @@ test.describe('Jellyfin Integration', () => {
 
     // Should show validation error
     const validationError = page.locator('[data-testid="backfill-validation-error"]');
-    const hasError = await validationError.isVisible({ timeout: 1000 }).catch(() => false);
-
-    if (hasError) {
-      await expect(validationError).toBeVisible();
-    }
+    await expect(validationError).toBeVisible();
   });
 
   // fixme: UI unwired: BackfillControls not rendered (components/jellyfin/BackfillControls.tsx is imported only by BackfillControls.test.tsx; jellyfin/page.tsx renders only SyncStatus's one-click "Run Backfill", SyncStatus.tsx:161-177)
@@ -397,11 +370,7 @@ test.describe('Jellyfin Integration', () => {
 
     // Should show validation error
     const validationError = page.locator('[data-testid="priority-validation-error"]');
-    const hasError = await validationError.isVisible({ timeout: 1000 }).catch(() => false);
-
-    if (hasError) {
-      await expect(validationError).toBeVisible();
-    }
+    await expect(validationError).toBeVisible();
   });
 
   // fixme: UI unwired: BackfillControls not rendered (components/jellyfin/BackfillControls.tsx is imported only by BackfillControls.test.tsx; jellyfin/page.tsx renders only SyncStatus's one-click "Run Backfill", SyncStatus.tsx:161-177)
@@ -433,18 +402,20 @@ test.describe('Jellyfin Integration', () => {
     await expect(page.locator('[data-testid="backfill-progress"]')).not.toBeVisible({ timeout: 5000 });
   });
 
+  // BUILT: Errors stat SyncStatus.tsx:116-122 and error details :126-132
   test('should display error count when errors exist', async ({ page }) => {
-    // Check sync status for error count
+    // No errors initially
+    await expect(page.locator('[data-testid="sync-error-count"]')).toHaveText('0');
+
+    // Bridge now reports errors; refresh status
+    mock.status = { ...mock.status, errors: 3 };
+    await page.click('[data-testid="refresh-status-button"]');
+
     const errorCount = page.locator('[data-testid="sync-error-count"]');
-
-    // If there are errors, it should be visible
-    const hasErrors = await errorCount.isVisible({ timeout: 2000 }).catch(() => false);
-
-    if (hasErrors) {
-      await expect(errorCount).toBeVisible();
-      const count = await errorCount.textContent();
-      expect(parseInt(count || '0')).toBeGreaterThan(0);
-    }
+    await expect(errorCount).toHaveText('3');
+    const count = await errorCount.textContent();
+    expect(parseInt(count || '0')).toBeGreaterThan(0);
+    await expect(page.locator('[data-testid="sync-status"]')).toContainText('3 error(s) detected');
   });
 
   // BUILT: formatTimeAgo (lib/timeUtils.ts:13-32) rendered at SyncStatus.tsx:75-77
@@ -486,42 +457,44 @@ test.describe('Jellyfin Integration', () => {
     await expect(page.locator('[data-testid="refresh-status-button"]')).not.toHaveAttribute('data-loading', 'true', { timeout: 5000 });
   });
 
+  // BUILT: selection ring JellyfinMediaBrowser.tsx:106 (ring-2 ring-blue-500), exposed as data-selected
   test('should highlight selected media item', async ({ page }) => {
-    // Wait for media items to load
-    await page.waitForTimeout(1000);
-
+    await searchLibrary(page, 'test');
     const mediaItems = page.locator('[data-testid="media-item"]');
-    const itemCount = await mediaItems.count();
+    await expect(mediaItems).toHaveCount(LIBRARY.length);
+    await expect(page.locator('[data-testid="media-item"][data-selected="true"]')).toHaveCount(0);
 
-    if (itemCount > 0) {
-      // Click first item
-      await mediaItems.first().click();
+    // Click first item
+    await mediaItems.first().click();
 
-      // Should have selected class
-      await expect(mediaItems.first()).toHaveClass(/selected/);
-    }
+    // Only the clicked item is highlighted
+    await expect(mediaItems.first()).toHaveAttribute('data-selected', 'true');
+    await expect(mediaItems.first()).toHaveClass(/ring-2/);
+    await expect(page.locator('[data-testid="media-item"][data-selected="true"]')).toHaveCount(1);
+
+    // Selecting another item moves the highlight
+    await mediaItems.nth(1).click();
+    await expect(mediaItems.nth(1)).toHaveAttribute('data-selected', 'true');
+    await expect(mediaItems.first()).toHaveAttribute('data-selected', 'false');
   });
 
-  test('should close media details on escape key', async ({ page }) => {
-    // Wait for media items to load
-    await page.waitForTimeout(1000);
-
+  // fixme: behaviour mismatch: no Escape handling; media details close only via the close button
+  // (JellyfinMediaBrowser.tsx:189-197), and the component registers no keydown handler
+  test.fixme('should close media details on escape key', async ({ page }) => {
+    await searchLibrary(page, 'test');
     const mediaItems = page.locator('[data-testid="media-item"]');
-    const itemCount = await mediaItems.count();
 
-    if (itemCount > 0) {
-      // Click item to show details
-      await mediaItems.first().click();
+    // Click item to show details
+    await mediaItems.first().click();
 
-      // Details should be visible
-      await expect(page.locator('[data-testid="media-details"]')).toBeVisible();
+    // Details should be visible
+    await expect(page.locator('[data-testid="media-details"]')).toBeVisible();
 
-      // Press escape
-      await page.keyboard.press('Escape');
+    // Press escape
+    await page.keyboard.press('Escape');
 
-      // Details should close
-      await expect(page.locator('[data-testid="media-details"]')).not.toBeVisible();
-    }
+    // Details should close
+    await expect(page.locator('[data-testid="media-details"]')).not.toBeVisible();
   });
 
   // BUILT: empty state JellyfinMediaBrowser.tsx:69-77 (after a search returns no items, page.tsx:51-52)
@@ -554,31 +527,20 @@ test.describe('Jellyfin Integration', () => {
     await expect(page.locator('[data-testid="sync-now-button"]')).toContainText('Sync Now');
   });
 
-  test('should generate playback URL', async ({ page }) => {
-    // Wait for media items to load
-    await page.waitForTimeout(1000);
-
+  // fixme: UI unwired: the "Playback URL" button renders only when onPlaybackUrl is passed
+  // (JellyfinMediaBrowser.tsx:162-169), and app/dashboard/jellyfin/page.tsx:161 passes none; getJellyfinPlaybackUrl
+  // (lib/api/jellyfin.ts:284) is never called by the page
+  test.fixme('should generate playback URL', async ({ page }) => {
+    await searchLibrary(page, 'test');
     const mediaItems = page.locator('[data-testid="media-item"]');
-    const itemCount = await mediaItems.count();
 
-    if (itemCount > 0) {
-      // Click item to show details
-      await mediaItems.first().click();
+    // Click item to show details
+    await mediaItems.first().click();
 
-      // Check for playback button
-      const playbackButton = page.locator('[data-testid="play-media-button"]');
+    // Check for playback button
+    await page.click('[data-testid="play-media-button"]');
 
-      if (await playbackButton.isVisible({ timeout: 2000 })) {
-        await playbackButton.click();
-
-        // Should open playback URL or show success
-        const playbackSuccess = page.locator('[data-testid="playback-url-generated"]');
-        const hasSuccess = await playbackSuccess.isVisible({ timeout: 2000 }).catch(() => false);
-
-        if (hasSuccess) {
-          await expect(playbackSuccess).toBeVisible();
-        }
-      }
-    }
+    // Should open playback URL or show success
+    await expect(page.locator('[data-testid="playback-url-generated"]')).toBeVisible({ timeout: 2000 });
   });
 });
