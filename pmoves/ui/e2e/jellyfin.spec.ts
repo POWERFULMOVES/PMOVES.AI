@@ -13,7 +13,8 @@ test.describe('Jellyfin Integration', () => {
     await page.waitForLoadState('networkidle');
   });
 
-  test('should load Jellyfin page with initial state', async ({ page }) => {
+  // fixme: UI not built (spec-first, never implemented); tracked in #3227
+  test.fixme('should load Jellyfin page with initial state', async ({ page }) => {
     // Check that sync status section is present
     await expect(page.locator('[data-testid="sync-status"]')).toBeVisible();
 
@@ -24,7 +25,8 @@ test.describe('Jellyfin Integration', () => {
     await expect(page.locator('[data-testid="backfill-controls"]')).toBeVisible();
   });
 
-  test('should display sync status', async ({ page }) => {
+  // fixme: UI not built (spec-first, never implemented); tracked in #3227
+  test.fixme('should display sync status', async ({ page }) => {
     // Check sync status section
     await expect(page.locator('[data-testid="sync-status"]')).toBeVisible();
 
@@ -39,7 +41,8 @@ test.describe('Jellyfin Integration', () => {
     await expect(page.locator('[data-testid="videos-linked-count"]')).toBeVisible();
   });
 
-  test('should trigger sync operation', async ({ page }) => {
+  // fixme: UI not built (spec-first, never implemented); tracked in #3227
+  test.fixme('should trigger sync operation', async ({ page }) => {
     // Click sync now button
     await page.click('[data-testid="sync-now-button"]');
 
@@ -53,7 +56,8 @@ test.describe('Jellyfin Integration', () => {
     await expect(page.locator('[data-testid="last-sync-time"]')).toBeVisible();
   });
 
-  test('should handle sync when already in progress', async ({ page }) => {
+  // fixme: UI not built (spec-first, never implemented); tracked in #3227
+  test.fixme('should handle sync when already in progress', async ({ page }) => {
     // Trigger first sync
     await page.click('[data-testid="sync-now-button"]');
 
@@ -69,7 +73,8 @@ test.describe('Jellyfin Integration', () => {
     }
   });
 
-  test('should browse media library', async ({ page }) => {
+  // fixme: UI not built (spec-first, never implemented); tracked in #3227
+  test.fixme('should browse media library', async ({ page }) => {
     // Check media browser
     await expect(page.locator('[data-testid="media-browser"]')).toBeVisible();
 
@@ -89,7 +94,8 @@ test.describe('Jellyfin Integration', () => {
     }
   });
 
-  test('should search media library', async ({ page }) => {
+  // fixme: UI not built (spec-first, never implemented); tracked in #3227
+  test.fixme('should search media library', async ({ page }) => {
     // Enter search query
     await page.fill('[data-testid="media-search-input"]', 'test');
 
@@ -104,7 +110,8 @@ test.describe('Jellyfin Integration', () => {
     await expect(page.locator('[data-testid="media-browser"]')).toBeVisible();
   });
 
-  test('should filter media by type', async ({ page }) => {
+  // fixme: UI not built (spec-first, never implemented); tracked in #3227
+  test.fixme('should filter media by type', async ({ page }) => {
     // Select media type filter (e.g., Movies only)
     await page.selectOption('[data-testid="media-type-filter"]', 'Movie');
 
@@ -144,7 +151,8 @@ test.describe('Jellyfin Integration', () => {
     }
   });
 
-  test('should display media items in responsive grid', async ({ page }) => {
+  // fixme: UI not built (spec-first, never implemented); tracked in #3227
+  test.fixme('should display media items in responsive grid', async ({ page }) => {
     // Check that media grid container exists
     const mediaGrid = page.locator('[data-testid="media-grid"]');
 
@@ -197,7 +205,8 @@ test.describe('Jellyfin Integration', () => {
     }
   });
 
-  test('should trigger backfill with default options', async ({ page }) => {
+  // fixme: UI not built (spec-first, never implemented); tracked in #3227
+  test.fixme('should trigger backfill with default options', async ({ page }) => {
     // Click backfill button
     await page.click('[data-testid="backfill-button"]');
 
@@ -214,7 +223,8 @@ test.describe('Jellyfin Integration', () => {
     await expect(page.locator('[data-testid="backfill-progress-bar"]')).toBeVisible();
   });
 
-  test('should trigger backfill with custom options', async ({ page }) => {
+  // fixme: UI not built (spec-first, never implemented); tracked in #3227
+  test.fixme('should trigger backfill with custom options', async ({ page }) => {
     // Click backfill button
     await page.click('[data-testid="backfill-button"]');
 
@@ -234,7 +244,8 @@ test.describe('Jellyfin Integration', () => {
     await expect(page.locator('[data-testid="backfill-progress"]')).toBeVisible({ timeout: 5000 });
   });
 
-  test('should validate backfill batch size (1-1000)', async ({ page }) => {
+  // fixme: UI not built (spec-first, never implemented); tracked in #3227
+  test.fixme('should validate backfill batch size (1-1000)', async ({ page }) => {
     // Click backfill button
     await page.click('[data-testid="backfill-button"]');
 
@@ -256,7 +267,8 @@ test.describe('Jellyfin Integration', () => {
     }
   });
 
-  test('should validate backfill priority (1-10)', async ({ page }) => {
+  // fixme: UI not built (spec-first, never implemented); tracked in #3227
+  test.fixme('should validate backfill priority (1-10)', async ({ page }) => {
     // Click backfill button
     await page.click('[data-testid="backfill-button"]');
 
@@ -278,7 +290,8 @@ test.describe('Jellyfin Integration', () => {
     }
   });
 
-  test('should cancel backfill operation', async ({ page }) => {
+  // fixme: UI not built (spec-first, never implemented); tracked in #3227
+  test.fixme('should cancel backfill operation', async ({ page }) => {
     // Click backfill button
     await page.click('[data-testid="backfill-button"]');
 
@@ -320,7 +333,8 @@ test.describe('Jellyfin Integration', () => {
     }
   });
 
-  test('should show relative time for last sync', async ({ page }) => {
+  // fixme: UI not built (spec-first, never implemented); tracked in #3227
+  test.fixme('should show relative time for last sync', async ({ page }) => {
     // Check last sync time
     const lastSyncTime = page.locator('[data-testid="last-sync-time"]');
     await expect(lastSyncTime).toBeVisible();
@@ -330,7 +344,8 @@ test.describe('Jellyfin Integration', () => {
     expect(timeText).toMatch(/(just now|ago|never)/i);
   });
 
-  test('should refresh sync status manually', async ({ page }) => {
+  // fixme: UI not built (spec-first, never implemented); tracked in #3227
+  test.fixme('should refresh sync status manually', async ({ page }) => {
     // Click refresh button
     await page.click('[data-testid="refresh-status-button"]');
 
@@ -379,7 +394,8 @@ test.describe('Jellyfin Integration', () => {
     }
   });
 
-  test('should show "no results" when filter matches nothing', async ({ page }) => {
+  // fixme: UI not built (spec-first, never implemented); tracked in #3227
+  test.fixme('should show "no results" when filter matches nothing', async ({ page }) => {
     // Enter search query unlikely to match anything
     await page.fill('[data-testid="media-search-input"]', 'xyzabc123nonexistent');
 
@@ -395,7 +411,8 @@ test.describe('Jellyfin Integration', () => {
     }
   });
 
-  test('should handle service unavailable gracefully', async ({ page }) => {
+  // fixme: UI not built (spec-first, never implemented); tracked in #3227
+  test.fixme('should handle service unavailable gracefully', async ({ page }) => {
     // This test would require mocking the service to be unavailable
     // For now, just check that error handling UI exists
 

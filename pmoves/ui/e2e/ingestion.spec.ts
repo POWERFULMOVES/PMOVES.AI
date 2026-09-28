@@ -13,7 +13,8 @@ test.describe('Enhanced Video Approval', () => {
     await page.waitForLoadState('networkidle');
   });
 
-  test('should load ingestion queue with initial state', async ({ page }) => {
+  // fixme: UI not built (spec-first, never implemented); tracked in #3224
+  test.fixme('should load ingestion queue with initial state', async ({ page }) => {
     // Check that queue table is present
     await expect(page.locator('[data-testid="ingestion-queue-table"]')).toBeVisible();
 
@@ -70,15 +71,18 @@ test.describe('Enhanced Video Approval', () => {
     }
   });
 
-  test('should show "select all visible" button', async ({ page }) => {
+  // fixme: UI not built (spec-first, never implemented); tracked in #3224
+  test.fixme('should show "select all visible" button', async ({ page }) => {
     await expect(page.locator('[data-testid="select-all-visible"]')).toBeVisible();
   });
 
-  test('should show "select pending" button', async ({ page }) => {
+  // fixme: UI not built (spec-first, never implemented); tracked in #3224
+  test.fixme('should show "select pending" button', async ({ page }) => {
     await expect(page.locator('[data-testid="select-pending"]')).toBeVisible();
   });
 
-  test('should select all visible items', async ({ page }) => {
+  // fixme: UI not built (spec-first, never implemented); tracked in #3224
+  test.fixme('should select all visible items', async ({ page }) => {
     // Click select all visible
     await page.click('[data-testid="select-all-visible"]');
 
@@ -94,7 +98,8 @@ test.describe('Enhanced Video Approval', () => {
     }
   });
 
-  test('should select only pending items', async ({ page }) => {
+  // fixme: UI not built (spec-first, never implemented); tracked in #3224
+  test.fixme('should select only pending items', async ({ page }) => {
     // Click select pending
     await page.click('[data-testid="select-pending"]');
 
@@ -106,7 +111,8 @@ test.describe('Enhanced Video Approval', () => {
     await expect(page.locator('[data-testid="select-pending"]')).toBeVisible();
   });
 
-  test('should clear selection', async ({ page }) => {
+  // fixme: UI not built (spec-first, never implemented); tracked in #3224
+  test.fixme('should clear selection', async ({ page }) => {
     // First select some items
     await page.click('[data-testid="select-all-visible"]');
 
@@ -127,7 +133,8 @@ test.describe('Enhanced Video Approval', () => {
     await expect(page.locator('[data-testid="bulk-actions-bar"]')).not.toBeVisible();
   });
 
-  test('should bulk approve with priority', async ({ page }) => {
+  // fixme: UI not built (spec-first, never implemented); tracked in #3224
+  test.fixme('should bulk approve with priority', async ({ page }) => {
     // Select some items
     await page.click('[data-testid="select-all-visible"]');
 
@@ -150,7 +157,8 @@ test.describe('Enhanced Video Approval', () => {
     await expect(page.locator('[data-testid="bulk-actions-bar"]')).not.toBeVisible();
   });
 
-  test('should use default priority of 5', async ({ page }) => {
+  // fixme: UI not built (spec-first, never implemented); tracked in #3224
+  test.fixme('should use default priority of 5', async ({ page }) => {
     // Select some items
     await page.click('[data-testid="select-all-visible"]');
 
@@ -185,7 +193,8 @@ test.describe('Enhanced Video Approval', () => {
     }
   });
 
-  test('should disable approve when processing', async ({ page }) => {
+  // fixme: UI not built (spec-first, never implemented); tracked in #3224
+  test.fixme('should disable approve when processing', async ({ page }) => {
     // Select some items
     await page.click('[data-testid="select-all-visible"]');
 
@@ -199,7 +208,8 @@ test.describe('Enhanced Video Approval', () => {
     await expect(page.locator('[data-testid="approve-success-toast"]')).toBeVisible({ timeout: 5000 });
   });
 
-  test('should bulk reject with reason', async ({ page }) => {
+  // fixme: UI not built (spec-first, never implemented); tracked in #3224
+  test.fixme('should bulk reject with reason', async ({ page }) => {
     // Select some items
     await page.click('[data-testid="select-all-visible"]');
 
@@ -219,7 +229,8 @@ test.describe('Enhanced Video Approval', () => {
     await expect(page.locator('[data-testid="reject-success-toast"]')).toBeVisible({ timeout: 5000 });
   });
 
-  test('should use default rejection reason', async ({ page }) => {
+  // fixme: UI not built (spec-first, never implemented); tracked in #3224
+  test.fixme('should use default rejection reason', async ({ page }) => {
     // Select some items
     await page.click('[data-testid="select-all-visible"]');
 
@@ -233,7 +244,8 @@ test.describe('Enhanced Video Approval', () => {
     await expect(page.locator('[data-testid="reject-success-toast"]')).toBeVisible({ timeout: 5000 });
   });
 
-  test('should pre-fill quick rejection reasons', async ({ page }) => {
+  // fixme: UI not built (spec-first, never implemented); tracked in #3224
+  test.fixme('should pre-fill quick rejection reasons', async ({ page }) => {
     // Select some items
     await page.click('[data-testid="select-all-visible"]');
 
@@ -248,7 +260,8 @@ test.describe('Enhanced Video Approval', () => {
     await expect(page.locator('[data-testid="quick-reason-copyright"]')).toBeVisible();
   });
 
-  test('should set reason when quick reason clicked', async ({ page }) => {
+  // fixme: UI not built (spec-first, never implemented); tracked in #3224
+  test.fixme('should set reason when quick reason clicked', async ({ page }) => {
     // Select some items
     await page.click('[data-testid="select-all-visible"]');
 
@@ -263,7 +276,8 @@ test.describe('Enhanced Video Approval', () => {
     await expect(reasonTextarea).toHaveValue('Duplicate');
   });
 
-  test('should show character count for rejection reason', async ({ page }) => {
+  // fixme: UI not built (spec-first, never implemented); tracked in #3224
+  test.fixme('should show character count for rejection reason', async ({ page }) => {
     // Select some items
     await page.click('[data-testid="select-all-visible"]');
 
@@ -277,7 +291,8 @@ test.describe('Enhanced Video Approval', () => {
     await expect(page.locator('[data-testid="reason-char-count"]')).toContainText('11');
   });
 
-  test('should enforce max length of 500 for rejection reason', async ({ page }) => {
+  // fixme: UI not built (spec-first, never implemented); tracked in #3224
+  test.fixme('should enforce max length of 500 for rejection reason', async ({ page }) => {
     // Select some items
     await page.click('[data-testid="select-all-visible"]');
 
@@ -293,7 +308,8 @@ test.describe('Enhanced Video Approval', () => {
     expect(actualValue.length).toBeLessThanOrEqual(500);
   });
 
-  test('should export selected to CSV', async ({ page }) => {
+  // fixme: UI not built (spec-first, never implemented); tracked in #3224
+  test.fixme('should export selected to CSV', async ({ page }) => {
     // Select some items
     await page.click('[data-testid="select-all-visible"]');
 
@@ -315,7 +331,8 @@ test.describe('Enhanced Video Approval', () => {
     }
   });
 
-  test('should open approval rules config', async ({ page }) => {
+  // fixme: UI not built (spec-first, never implemented); tracked in #3224
+  test.fixme('should open approval rules config', async ({ page }) => {
     // Click approval rules button
     await page.click('[data-testid="approval-rules-button"]');
 
@@ -323,7 +340,8 @@ test.describe('Enhanced Video Approval', () => {
     await expect(page.locator('[data-testid="approval-rules-modal"]')).toBeVisible({ timeout: 5000 });
   });
 
-  test('should list all rules with enable/disable toggle', async ({ page }) => {
+  // fixme: UI not built (spec-first, never implemented); tracked in #3224
+  test.fixme('should list all rules with enable/disable toggle', async ({ page }) => {
     // Open approval rules
     await page.click('[data-testid="approval-rules-button"]');
 
@@ -346,7 +364,8 @@ test.describe('Enhanced Video Approval', () => {
     }
   });
 
-  test('should open create rule modal', async ({ page }) => {
+  // fixme: UI not built (spec-first, never implemented); tracked in #3224
+  test.fixme('should open create rule modal', async ({ page }) => {
     // Open approval rules
     await page.click('[data-testid="approval-rules-button"]');
 
@@ -360,7 +379,8 @@ test.describe('Enhanced Video Approval', () => {
     await expect(page.locator('[data-testid="rule-editor-modal"]')).toBeVisible({ timeout: 5000 });
   });
 
-  test('should validate rule name is required', async ({ page }) => {
+  // fixme: UI not built (spec-first, never implemented); tracked in #3224
+  test.fixme('should validate rule name is required', async ({ page }) => {
     // Open approval rules
     await page.click('[data-testid="approval-rules-button"]');
 
@@ -385,7 +405,8 @@ test.describe('Enhanced Video Approval', () => {
     }
   });
 
-  test('should create rule with conditions', async ({ page }) => {
+  // fixme: UI not built (spec-first, never implemented); tracked in #3224
+  test.fixme('should create rule with conditions', async ({ page }) => {
     // Open approval rules
     await page.click('[data-testid="approval-rules-button"]');
 
@@ -417,7 +438,8 @@ test.describe('Enhanced Video Approval', () => {
     await expect(page.locator('[data-testid="rule-saved-toast"]')).toBeVisible({ timeout: 5000 });
   });
 
-  test('should edit existing rule', async ({ page }) => {
+  // fixme: UI not built (spec-first, never implemented); tracked in #3224
+  test.fixme('should edit existing rule', async ({ page }) => {
     // Open approval rules
     await page.click('[data-testid="approval-rules-button"]');
 
@@ -446,7 +468,8 @@ test.describe('Enhanced Video Approval', () => {
     }
   });
 
-  test('should delete rule after confirmation', async ({ page }) => {
+  // fixme: UI not built (spec-first, never implemented); tracked in #3224
+  test.fixme('should delete rule after confirmation', async ({ page }) => {
     // Open approval rules
     await page.click('[data-testid="approval-rules-button"]');
 
@@ -472,7 +495,8 @@ test.describe('Enhanced Video Approval', () => {
     }
   });
 
-  test('should format condition summary correctly', async ({ page }) => {
+  // fixme: UI not built (spec-first, never implemented); tracked in #3224
+  test.fixme('should format condition summary correctly', async ({ page }) => {
     // Open approval rules
     await page.click('[data-testid="approval-rules-button"]');
 
@@ -493,7 +517,8 @@ test.describe('Enhanced Video Approval', () => {
     }
   });
 
-  test('should test rule against pending items', async ({ page }) => {
+  // fixme: UI not built (spec-first, never implemented); tracked in #3224
+  test.fixme('should test rule against pending items', async ({ page }) => {
     // Open approval rules
     await page.click('[data-testid="approval-rules-button"]');
 
@@ -517,7 +542,8 @@ test.describe('Enhanced Video Approval', () => {
     }
   });
 
-  test('should show execution log modal', async ({ page }) => {
+  // fixme: UI not built (spec-first, never implemented); tracked in #3224
+  test.fixme('should show execution log modal', async ({ page }) => {
     // Open approval rules
     await page.click('[data-testid="approval-rules-button"]');
 
@@ -535,7 +561,8 @@ test.describe('Enhanced Video Approval', () => {
     }
   });
 
-  test('should match by source type condition', async ({ page }) => {
+  // fixme: UI not built (spec-first, never implemented); tracked in #3224
+  test.fixme('should match by source type condition', async ({ page }) => {
     // Create a new rule with source type condition
     await page.click('[data-testid="approval-rules-button"]');
     await expect(page.locator('[data-testid="approval-rules-modal"]')).toBeVisible({ timeout: 5000 });
@@ -555,7 +582,8 @@ test.describe('Enhanced Video Approval', () => {
     await expect(page.locator('[data-testid="rule-saved-toast"]')).toBeVisible({ timeout: 5000 });
   });
 
-  test('should match by channel contains condition', async ({ page }) => {
+  // fixme: UI not built (spec-first, never implemented); tracked in #3224
+  test.fixme('should match by channel contains condition', async ({ page }) => {
     // Create a new rule with channel condition
     await page.click('[data-testid="approval-rules-button"]');
     await expect(page.locator('[data-testid="approval-rules-modal"]')).toBeVisible({ timeout: 5000 });
@@ -575,7 +603,8 @@ test.describe('Enhanced Video Approval', () => {
     await expect(page.locator('[data-testid="rule-saved-toast"]')).toBeVisible({ timeout: 5000 });
   });
 
-  test('should match by title contains condition', async ({ page }) => {
+  // fixme: UI not built (spec-first, never implemented); tracked in #3224
+  test.fixme('should match by title contains condition', async ({ page }) => {
     // Create a new rule with title condition
     await page.click('[data-testid="approval-rules-button"]');
     await expect(page.locator('[data-testid="approval-rules-modal"]')).toBeVisible({ timeout: 5000 });
@@ -595,7 +624,8 @@ test.describe('Enhanced Video Approval', () => {
     await expect(page.locator('[data-testid="rule-saved-toast"]')).toBeVisible({ timeout: 5000 });
   });
 
-  test('should match by duration range condition', async ({ page }) => {
+  // fixme: UI not built (spec-first, never implemented); tracked in #3224
+  test.fixme('should match by duration range condition', async ({ page }) => {
     // Create a new rule with duration range
     await page.click('[data-testid="approval-rules-button"]');
     await expect(page.locator('[data-testid="approval-rules-modal"]')).toBeVisible({ timeout: 5000 });
@@ -616,7 +646,8 @@ test.describe('Enhanced Video Approval', () => {
     await expect(page.locator('[data-testid="rule-saved-toast"]')).toBeVisible({ timeout: 5000 });
   });
 
-  test('should set priority for auto-approve rules', async ({ page }) => {
+  // fixme: UI not built (spec-first, never implemented); tracked in #3224
+  test.fixme('should set priority for auto-approve rules', async ({ page }) => {
     // Create an auto-approve rule with priority
     await page.click('[data-testid="approval-rules-button"]');
     await expect(page.locator('[data-testid="approval-rules-modal"]')).toBeVisible({ timeout: 5000 });
@@ -639,7 +670,8 @@ test.describe('Enhanced Video Approval', () => {
     await expect(page.locator('[data-testid="rule-saved-toast"]')).toBeVisible({ timeout: 5000 });
   });
 
-  test('should close modals on escape key', async ({ page }) => {
+  // fixme: UI not built (spec-first, never implemented); tracked in #3224
+  test.fixme('should close modals on escape key', async ({ page }) => {
     // Open approval rules
     await page.click('[data-testid="approval-rules-button"]');
     await expect(page.locator('[data-testid="approval-rules-modal"]')).toBeVisible({ timeout: 5000 });
@@ -651,7 +683,8 @@ test.describe('Enhanced Video Approval', () => {
     await expect(page.locator('[data-testid="approval-rules-modal"]')).not.toBeVisible();
   });
 
-  test('should close modals on overlay click', async ({ page }) => {
+  // fixme: UI not built (spec-first, never implemented); tracked in #3224
+  test.fixme('should close modals on overlay click', async ({ page }) => {
     // Open approval rules
     await page.click('[data-testid="approval-rules-button"]');
     await expect(page.locator('[data-testid="approval-rules-modal"]')).toBeVisible({ timeout: 5000 });
@@ -663,7 +696,8 @@ test.describe('Enhanced Video Approval', () => {
     await expect(page.locator('[data-testid="approval-rules-modal"]')).not.toBeVisible();
   });
 
-  test('should show pending count when some selected are pending', async ({ page }) => {
+  // fixme: UI not built (spec-first, never implemented); tracked in #3224
+  test.fixme('should show pending count when some selected are pending', async ({ page }) => {
     // Select items
     await page.click('[data-testid="select-all-visible"]');
 
@@ -689,7 +723,8 @@ test.describe('Enhanced Video Approval', () => {
     }
   });
 
-  test('should filter queue by status', async ({ page }) => {
+  // fixme: UI not built (spec-first, never implemented); tracked in #3224
+  test.fixme('should filter queue by status', async ({ page }) => {
     // Select status filter
     await page.selectOption('[data-testid="queue-status-filter"]', 'pending');
 

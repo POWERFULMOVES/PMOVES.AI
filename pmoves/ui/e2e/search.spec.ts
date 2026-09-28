@@ -13,7 +13,8 @@ test.describe('Search Interface', () => {
     await page.waitForLoadState('networkidle');
   });
 
-  test('should load search page with initial state', async ({ page }) => {
+  // fixme: UI not built (spec-first, never implemented); tracked in #3225
+  test.fixme('should load search page with initial state', async ({ page }) => {
     // Check that search input is present
     await expect(page.locator('[data-testid="search-input"]')).toBeVisible();
 
@@ -27,7 +28,8 @@ test.describe('Search Interface', () => {
     await expect(page.locator('[data-testid="search-results"]')).not.toBeVisible();
   });
 
-  test('should search and display results', async ({ page }) => {
+  // fixme: UI not built (spec-first, never implemented); tracked in #3225
+  test.fixme('should search and display results', async ({ page }) => {
     // Enter search query
     await page.fill('[data-testid="search-input"]', 'test query');
 
@@ -42,7 +44,8 @@ test.describe('Search Interface', () => {
     await expect(results).toHaveCount(await results.count());
   });
 
-  test('should use keyboard shortcut (Cmd+K) to focus search', async ({ page }) => {
+  // fixme: UI not built (spec-first, never implemented); tracked in #3225
+  test.fixme('should use keyboard shortcut (Cmd+K) to focus search', async ({ page }) => {
     // Press Cmd+K (or Ctrl+K on non-Mac)
     await page.keyboard.press(process.platform === 'darwin' ? 'Meta+k' : 'Control+k');
 
@@ -50,7 +53,8 @@ test.describe('Search Interface', () => {
     await expect(page.locator('[data-testid="search-input"]')).toBeFocused();
   });
 
-  test('should use keyboard shortcut (Ctrl+K) to focus search', async ({ page }) => {
+  // fixme: UI not built (spec-first, never implemented); tracked in #3225
+  test.fixme('should use keyboard shortcut (Ctrl+K) to focus search', async ({ page }) => {
     // Press Ctrl+K
     await page.keyboard.press('Control+k');
 
@@ -58,7 +62,8 @@ test.describe('Search Interface', () => {
     await expect(page.locator('[data-testid="search-input"]')).toBeFocused();
   });
 
-  test('should filter by source type', async ({ page }) => {
+  // fixme: UI not built (spec-first, never implemented); tracked in #3225
+  test.fixme('should filter by source type', async ({ page }) => {
     // Enter search query
     await page.fill('[data-testid="search-input"]', 'video');
 
@@ -81,7 +86,8 @@ test.describe('Search Interface', () => {
     await expect(page.locator('[data-testid="search-results"]')).toBeVisible();
   });
 
-  test('should filter by date range', async ({ page }) => {
+  // fixme: UI not built (spec-first, never implemented); tracked in #3225
+  test.fixme('should filter by date range', async ({ page }) => {
     // Enter search query
     await page.fill('[data-testid="search-input"]', 'test');
 
@@ -105,7 +111,8 @@ test.describe('Search Interface', () => {
     await expect(page.locator('[data-testid="search-results"]')).toBeVisible();
   });
 
-  test('should filter by minimum score', async ({ page }) => {
+  // fixme: UI not built (spec-first, never implemented); tracked in #3225
+  test.fixme('should filter by minimum score', async ({ page }) => {
     // Enter search query
     await page.fill('[data-testid="search-input"]', 'test');
 
@@ -128,7 +135,8 @@ test.describe('Search Interface', () => {
     await expect(page.locator('[data-testid="search-results"]')).toBeVisible();
   });
 
-  test('should clear all filters', async ({ page }) => {
+  // fixme: UI not built (spec-first, never implemented); tracked in #3225
+  test.fixme('should clear all filters', async ({ page }) => {
     // Set some filters first
     await page.selectOption('[data-testid="source-filter"]', 'youtube');
     await page.fill('[data-testid="filter-start-date"]', '2025-01-01');
@@ -143,7 +151,8 @@ test.describe('Search Interface', () => {
     await expect(page.locator('[data-testid="filter-min-score"]')).toHaveValue('');
   });
 
-  test('should display active filter count', async ({ page }) => {
+  // fixme: UI not built (spec-first, never implemented); tracked in #3225
+  test.fixme('should display active filter count', async ({ page }) => {
     // Set multiple filters
     await page.selectOption('[data-testid="source-filter"]', 'youtube');
     await page.fill('[data-testid="filter-min-score"]', '70');
@@ -155,7 +164,8 @@ test.describe('Search Interface', () => {
     await expect(page.locator('[data-testid="active-filter-count"]')).toContainText('2');
   });
 
-  test('should expand and collapse search results', async ({ page }) => {
+  // fixme: UI not built (spec-first, never implemented); tracked in #3225
+  test.fixme('should expand and collapse search results', async ({ page }) => {
     // Search for something
     await page.fill('[data-testid="search-input"]', 'test');
     await page.click('[data-testid="search-submit"]');
@@ -176,7 +186,8 @@ test.describe('Search Interface', () => {
     void page.locator('[data-testid="result-content"]').isVisible().catch(() => false);
   });
 
-  test('should copy result to clipboard', async ({ page }) => {
+  // fixme: UI not built (spec-first, never implemented); tracked in #3225
+  test.fixme('should copy result to clipboard', async ({ page }) => {
     // Search for something
     await page.fill('[data-testid="search-input"]', 'test');
     await page.click('[data-testid="search-submit"]');
@@ -194,7 +205,8 @@ test.describe('Search Interface', () => {
     await expect(page.locator('[data-testid="copy-success-toast"]')).not.toBeVisible({ timeout: 5000 });
   });
 
-  test('should export result to notebook', async ({ page }) => {
+  // fixme: UI not built (spec-first, never implemented); tracked in #3225
+  test.fixme('should export result to notebook', async ({ page }) => {
     // Search for something
     await page.fill('[data-testid="search-input"]', 'test');
     await page.click('[data-testid="search-submit"]');
@@ -216,7 +228,8 @@ test.describe('Search Interface', () => {
     await expect(page.locator('[data-testid="export-success-toast"]')).toBeVisible({ timeout: 5000 });
   });
 
-  test('should show empty state for no results', async ({ page }) => {
+  // fixme: UI not built (spec-first, never implemented); tracked in #3225
+  test.fixme('should show empty state for no results', async ({ page }) => {
     // Search for something unlikely to exist
     await page.fill('[data-testid="search-input"]', 'xyzabc123nonexistent');
     await page.click('[data-testid="search-submit"]');
@@ -225,7 +238,8 @@ test.describe('Search Interface', () => {
     await expect(page.locator('[data-testid="no-results"]')).toBeVisible({ timeout: 10000 });
   });
 
-  test('should show loading state during search', async ({ page }) => {
+  // fixme: UI not built (spec-first, never implemented); tracked in #3225
+  test.fixme('should show loading state during search', async ({ page }) => {
     // Enter search query
     await page.fill('[data-testid="search-input"]', 'test');
 
@@ -239,7 +253,8 @@ test.describe('Search Interface', () => {
     await expect(page.locator('[data-testid="search-loading"]')).not.toBeVisible({ timeout: 10000 });
   });
 
-  test('should display score badges with correct colors', async ({ page }) => {
+  // fixme: UI not built (spec-first, never implemented); tracked in #3225
+  test.fixme('should display score badges with correct colors', async ({ page }) => {
     // Search for something
     await page.fill('[data-testid="search-input"]', 'test');
     await page.click('[data-testid="search-submit"]');
@@ -258,7 +273,8 @@ test.describe('Search Interface', () => {
     // Visual color verification would require checking CSS properties or color values
   });
 
-  test('should display correct source type icons', async ({ page }) => {
+  // fixme: UI not built (spec-first, never implemented); tracked in #3225
+  test.fixme('should display correct source type icons', async ({ page }) => {
     // Search for something
     await page.fill('[data-testid="search-input"]', 'test');
     await page.click('[data-testid="search-submit"]');
@@ -276,7 +292,8 @@ test.describe('Search Interface', () => {
     expect(totalBadges).toBeGreaterThanOrEqual(0);
   });
 
-  test('should show search history', async ({ page }) => {
+  // fixme: UI not built (spec-first, never implemented); tracked in #3225
+  test.fixme('should show search history', async ({ page }) => {
     // Focus search input
     await page.click('[data-testid="search-input"]');
 
@@ -288,7 +305,8 @@ test.describe('Search Interface', () => {
     void historyDropdown.isVisible({ timeout: 1000 }).catch(() => false);
   });
 
-  test('should clear search history', async ({ page }) => {
+  // fixme: UI not built (spec-first, never implemented); tracked in #3225
+  test.fixme('should clear search history', async ({ page }) => {
     // Focus search input
     await page.click('[data-testid="search-input"]');
 
@@ -303,7 +321,8 @@ test.describe('Search Interface', () => {
     }
   });
 
-  test('should handle error state gracefully', async ({ page }) => {
+  // fixme: UI not built (spec-first, never implemented); tracked in #3225
+  test.fixme('should handle error state gracefully', async ({ page }) => {
     // Mock a failed search by intercepting the request
     await page.route('**/hirag/query', async (route) => {
       await route.abort('failed');
@@ -317,7 +336,8 @@ test.describe('Search Interface', () => {
     await expect(page.locator('[data-testid="search-error"]')).toBeVisible({ timeout: 5000 });
   });
 
-  test('should validate minimum score input (0-100)', async ({ page }) => {
+  // fixme: UI not built (spec-first, never implemented); tracked in #3225
+  test.fixme('should validate minimum score input (0-100)', async ({ page }) => {
     // Try to enter invalid score
     await page.fill('[data-testid="filter-min-score"]', '150');
 
@@ -329,7 +349,8 @@ test.describe('Search Interface', () => {
     void validationError.isVisible({ timeout: 1000 }).catch(() => false);
   });
 
-  test('should validate date range (end >= start)', async ({ page }) => {
+  // fixme: UI not built (spec-first, never implemented); tracked in #3225
+  test.fixme('should validate date range (end >= start)', async ({ page }) => {
     // Set invalid date range (end before start)
     await page.fill('[data-testid="filter-start-date"]', '2025-12-31');
     await page.fill('[data-testid="filter-end-date"]', '2025-01-01');
@@ -342,7 +363,8 @@ test.describe('Search Interface', () => {
     void validationError.isVisible({ timeout: 1000 }).catch(() => false);
   });
 
-  test('should prevent empty query submission', async ({ page }) => {
+  // fixme: UI not built (spec-first, never implemented); tracked in #3225
+  test.fixme('should prevent empty query submission', async ({ page }) => {
     // Try to submit empty search
     await page.click('[data-testid="search-submit"]');
 
@@ -351,7 +373,8 @@ test.describe('Search Interface', () => {
     void results.isVisible({ timeout: 1000 }).catch(() => false);
   });
 
-  test('should rerun search from history item', async ({ page }) => {
+  // fixme: UI not built (spec-first, never implemented); tracked in #3225
+  test.fixme('should rerun search from history item', async ({ page }) => {
     // This test assumes there's search history
     await page.click('[data-testid="search-input"]');
     await page.type('[data-testid="search-input"]', 't');

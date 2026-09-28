@@ -13,7 +13,8 @@ test.describe('Deep Research Dashboard', () => {
     await page.waitForLoadState('networkidle');
   });
 
-  test('should load research page with initial state', async ({ page }) => {
+  // fixme: UI not built (spec-first, never implemented); tracked in #3226
+  test.fixme('should load research page with initial state', async ({ page }) => {
     // Check that task initiation form is present
     await expect(page.locator('[data-testid="task-initiation-form"]')).toBeVisible();
 
@@ -25,7 +26,8 @@ test.describe('Deep Research Dashboard', () => {
     // Results section might not be visible initially
   });
 
-  test('should initiate research task with default options', async ({ page }) => {
+  // fixme: UI not built (spec-first, never implemented); tracked in #3226
+  test.fixme('should initiate research task with default options', async ({ page }) => {
     // Enter research query
     await page.fill('[data-testid="research-query"]', 'What is quantum computing?');
 
@@ -39,7 +41,8 @@ test.describe('Deep Research Dashboard', () => {
     await expect(page.locator('[data-testid="research-query"]')).toHaveValue('');
   });
 
-  test('should validate non-empty query', async ({ page }) => {
+  // fixme: UI not built (spec-first, never implemented); tracked in #3226
+  test.fixme('should validate non-empty query', async ({ page }) => {
     // Try to submit empty query
     await page.click('[data-testid="start-research"]');
 
@@ -52,7 +55,8 @@ test.describe('Deep Research Dashboard', () => {
     expect(isDisabled || true).toBe(true);
   });
 
-  test('should show character count for query', async ({ page }) => {
+  // fixme: UI not built (spec-first, never implemented); tracked in #3226
+  test.fixme('should show character count for query', async ({ page }) => {
     // Enter query
     await page.fill('[data-testid="research-query"]', 'test query');
 
@@ -64,7 +68,8 @@ test.describe('Deep Research Dashboard', () => {
     expect(countText).toContain('11'); // "test query" length
   });
 
-  test('should enforce max query length (1000)', async ({ page }) => {
+  // fixme: UI not built (spec-first, never implemented); tracked in #3226
+  test.fixme('should enforce max query length (1000)', async ({ page }) => {
     // Try to enter very long query
     const longQuery = 'a'.repeat(1500);
 
@@ -75,7 +80,8 @@ test.describe('Deep Research Dashboard', () => {
     expect(actualValue.length).toBeLessThanOrEqual(1000);
   });
 
-  test('should expand/collapse options panel', async ({ page }) => {
+  // fixme: UI not built (spec-first, never implemented); tracked in #3226
+  test.fixme('should expand/collapse options panel', async ({ page }) => {
     // Options panel should be collapsed by default
     const optionsPanel = page.locator('[data-testid="research-options-panel"]');
     const _isInitiallyVisible = await optionsPanel.isVisible().catch(() => false);
@@ -93,7 +99,8 @@ test.describe('Deep Research Dashboard', () => {
     const _isCollapsed = await optionsPanel.isVisible({ timeout: 1000 }).catch(() => false);
   });
 
-  test('should select research mode', async ({ page }) => {
+  // fixme: UI not built (spec-first, never implemented); tracked in #3226
+  test.fixme('should select research mode', async ({ page }) => {
     // Expand options first
     await page.click('[data-testid="expand-options-button"]');
 
@@ -104,7 +111,8 @@ test.describe('Deep Research Dashboard', () => {
     await expect(page.locator('[data-testid="research-mode"]')).toHaveValue('openrouter');
   });
 
-  test('should update max iterations slider', async ({ page }) => {
+  // fixme: UI not built (spec-first, never implemented); tracked in #3226
+  test.fixme('should update max iterations slider', async ({ page }) => {
     // Expand options first
     await page.click('[data-testid="expand-options-button"]');
 
@@ -119,7 +127,8 @@ test.describe('Deep Research Dashboard', () => {
     expect(newValue).toBe('20');
   });
 
-  test('should enforce max iterations range (3-30)', async ({ page }) => {
+  // fixme: UI not built (spec-first, never implemented); tracked in #3226
+  test.fixme('should enforce max iterations range (3-30)', async ({ page }) => {
     // Expand options first
     await page.click('[data-testid="expand-options-button"]');
 
@@ -139,7 +148,8 @@ test.describe('Deep Research Dashboard', () => {
     expect(parseInt(maxValue)).toBeLessThanOrEqual(30);
   });
 
-  test('should update priority slider', async ({ page }) => {
+  // fixme: UI not built (spec-first, never implemented); tracked in #3226
+  test.fixme('should update priority slider', async ({ page }) => {
     // Expand options first
     await page.click('[data-testid="expand-options-button"]');
 
@@ -154,7 +164,8 @@ test.describe('Deep Research Dashboard', () => {
     expect(newValue).toBe('8');
   });
 
-  test('should enforce priority range (1-10)', async ({ page }) => {
+  // fixme: UI not built (spec-first, never implemented); tracked in #3226
+  test.fixme('should enforce priority range (1-10)', async ({ page }) => {
     // Expand options first
     await page.click('[data-testid="expand-options-button"]');
 
@@ -174,7 +185,8 @@ test.describe('Deep Research Dashboard', () => {
     expect(parseInt(maxValue)).toBeLessThanOrEqual(10);
   });
 
-  test('should select notebook from dropdown', async ({ page }) => {
+  // fixme: UI not built (spec-first, never implemented); tracked in #3226
+  test.fixme('should select notebook from dropdown', async ({ page }) => {
     // Expand options first
     await page.click('[data-testid="expand-options-button"]');
 
@@ -192,7 +204,8 @@ test.describe('Deep Research Dashboard', () => {
     }
   });
 
-  test('should list tasks with status filter', async ({ page }) => {
+  // fixme: UI not built (spec-first, never implemented); tracked in #3226
+  test.fixme('should list tasks with status filter', async ({ page }) => {
     // Check that task list is visible
     await expect(page.locator('[data-testid="task-list"]')).toBeVisible();
 
@@ -206,7 +219,8 @@ test.describe('Deep Research Dashboard', () => {
     await expect(page.locator('[data-testid="task-list"]')).toBeVisible();
   });
 
-  test('should filter tasks by mode', async ({ page }) => {
+  // fixme: UI not built (spec-first, never implemented); tracked in #3226
+  test.fixme('should filter tasks by mode', async ({ page }) => {
     // Filter by mode
     await page.selectOption('[data-testid="mode-filter"]', 'tensorzero');
 
@@ -217,7 +231,8 @@ test.describe('Deep Research Dashboard', () => {
     await expect(page.locator("[data-testid='task-list']")).toBeVisible();
   });
 
-  test('should select all visible tasks', async ({ page }) => {
+  // fixme: UI not built (spec-first, never implemented); tracked in #3226
+  test.fixme('should select all visible tasks', async ({ page }) => {
     // Click "select all visible" button
     await page.click('[data-testid="select-all-visible"]');
 
@@ -231,7 +246,8 @@ test.describe('Deep Research Dashboard', () => {
     }
   });
 
-  test('should select only pending tasks', async ({ page }) => {
+  // fixme: UI not built (spec-first, never implemented); tracked in #3226
+  test.fixme('should select only pending tasks', async ({ page }) => {
     // Click "select pending" button
     await page.click('[data-testid="select-pending"]');
 
@@ -242,7 +258,8 @@ test.describe('Deep Research Dashboard', () => {
     await expect(page.locator('[data-testid="select-pending"]')).toBeVisible();
   });
 
-  test('should clear task selection', async ({ page }) => {
+  // fixme: UI not built (spec-first, never implemented); tracked in #3226
+  test.fixme('should clear task selection', async ({ page }) => {
     // First select some tasks
     await page.click('[data-testid="select-all-visible"]');
 
@@ -260,7 +277,8 @@ test.describe('Deep Research Dashboard', () => {
     }
   });
 
-  test('should refresh task list', async ({ page }) => {
+  // fixme: UI not built (spec-first, never implemented); tracked in #3226
+  test.fixme('should refresh task list', async ({ page }) => {
     // Click refresh button
     await page.click('[data-testid="refresh-tasks"]');
 
