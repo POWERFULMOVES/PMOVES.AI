@@ -167,7 +167,7 @@ def norm(name: str) -> str:
 
 # A ref name is interpolated into git argv and into URLs, so it is validated
 # BEFORE either. Stricter than git-check-ref-format on purpose: no leading `-`
-# (option injection into git), no `..`, no `@{`, no `^`/`~`/`:`/`?`/`*`/`[`/`\\`,
+# (option injection into git), no `..`, no `@{`, no `^`/`~`/`:`/`?`/`*`/`[`/`\`,
 # no whitespace or control characters, no leading/trailing `/` or `.`.
 _REF_NAME = re.compile(r"^(?![-./])(?!.*\.\.)(?!.*//)(?!.*@\{)[A-Za-z0-9._/+-]{1,200}(?<![./])$")
 _SHA = re.compile(r"^[0-9a-f]{40}$")
