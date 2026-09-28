@@ -1,0 +1,23 @@
+// Repo side: HuJSON with comments and trailing commas.
+{
+  "tagOwners": {
+    "tag:pmoves": ["autogroup:admin"], // owners
+  },
+  /* block comment */
+  "acls": [
+    {"action": "accept", "src": ["tag:pmoves"], "dst": ["tag:pmoves:*"]},
+  ],
+  "ssh": [
+    {
+      "action": "accept",
+      "src": ["tag:pmoves"],
+      "dst": ["tag:pmoves"],
+      "users": ["autogroup:nonroot"],
+    },
+  ],
+  "sshTests": [
+    {"src": "tag:pmoves", "dst": ["tag:pmoves"], "accept": ["autogroup:nonroot"], "deny": ["root"]},
+  ],
+  "derpMap": {"OmitDefaultRegions": false, "privateKey": "repo-side-placeholder"},
+  "note": "https://example.invalid/a//b, not a comment,]",
+}

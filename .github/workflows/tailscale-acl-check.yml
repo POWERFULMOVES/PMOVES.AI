@@ -1,0 +1,155 @@
+# Tailscale ACL — READ-ONLY checks (server-side test + live drift)
+#
+# Companion to deploy-tailscale-acl.yml (which owns `apply`). Nothing in this file
+# can change the tailnet: gitops-acl-action `test` calls the policy VALIDATE
+# endpoint, and the drift job is a single GET of the live policy.
+#
+# Why a separate file: deploy-tailscale-acl.yml's push trigger lists its own path,
+# so editing it and merging would fire `apply` and overwrite whatever is live. A
+# new workflow file lands without touching the tailnet.
+#
+#   pull_request (same repo) → `test`       : Tailscale validates the policy and runs
+#                                             its tests/sshTests server-side.
+#   pull_request (same repo) → `drift-pr`   : live vs PR head. Strict if the PR leaves
+#                                             the policy untouched; report-only (a
+#                                             preview of what apply WOULD change) if
+#                                             the PR edits it.
+#   pull_request (fork)      → `fork-notice`: secrets are withheld from forks, so the
+#                                             two jobs above are SKIPPED (shown as
+#                                             skipped, never as passed) with a notice.
+#   schedule / dispatch      → `drift`      : main's policy vs live, via the Prod
+#                                             environment secrets. Fails on drift.
+#                                             Prod only admits protected branches, so a
+#                                             dispatch on a feature branch is refused
+#                                             by GitHub, not silently run without creds.
+#
+# Credentials: repo-level TAILSCALE_APIKEY for PR jobs; Prod TAILSCALE_API_KEY
+# (falls back to TAILSCALE_APIKEY) + TS_TAILNET for the scheduled job. An OAuth
+# client (TS_OAUTH_CLIENT_ID/TS_OAUTH_SECRET, scope policy_file:read) is preferred
+# and used when present. With no TS_TAILNET the API default "-" (the credential's
+# own tailnet) is used.
+#
+# Exit codes of the drift tool: 0 no drift / 1 drift / 3 could-not-measure. The
+# workflow fails on 1 AND 3 but labels them differently, so an expired key is never
+# mistaken for "no drift".
+
+name: Tailscale ACL (read-only checks)
+
+on:
+  pull_request:
+    paths:
+      - 'pmoves/configs/tailscale-acl-policy.json'
+      - 'pmoves/tools/tailscale_acl_drift.py'
+      - 'pmoves/tests/test_tailscale_acl_drift.py'
+      - '.github/workflows/tailscale-acl-check.yml'
+  schedule:
+    - cron: '17 6 * * *'  # daily 06:17 UTC
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tailscale-acl-check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  fork-notice:
+    name: policy checks skipped (fork PR)
+    if: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Explain the skip
+        run: |
+          msg="Fork PR: GitHub withholds secrets, so the Tailscale server-side policy test and the live drift check did NOT run. This PR's policy is UNVERIFIED; a maintainer must re-run from a same-repo branch."
+          echo "::notice title=Tailscale policy NOT validated::$msg"
+          { echo "## Tailscale policy checks skipped"; echo; echo "$msg"; } >> "$GITHUB_STEP_SUMMARY"
+
+  test:
+    name: validate policy (tailscale test)
+    if: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Require a credential (fail loudly, never pass without testing)
+        env:
+          HAS_KEY: ${{ secrets.TAILSCALE_APIKEY != '' }}
+          HAS_OAUTH: ${{ secrets.TS_OAUTH_CLIENT_ID != '' && secrets.TS_OAUTH_SECRET != '' }}
+        run: |
+          if [ "$HAS_KEY" != "true" ] && [ "$HAS_OAUTH" != "true" ]; then
+            echo "::error title=No Tailscale credential::Neither TAILSCALE_APIKEY nor TS_OAUTH_CLIENT_ID+TS_OAUTH_SECRET is available to this job; the policy was NOT tested."
+            exit 3
+          fi
+      - name: Tailscale server-side validate + tests (read-only)
+        uses: tailscale/gitops-acl-action@5a4a17f5708e9bf96f4ee915a95e9f83c2eebe1a # v1.5.2
+        with:
+          tailnet: ${{ secrets.TS_TAILNET || '-' }}
+          # Exactly one auth mode: OAuth when both halves exist, else the API key.
+          # (The action errors if api-key and oauth-secret are both non-empty.)
+          oauth-client-id: ${{ secrets.TS_OAUTH_SECRET != '' && secrets.TS_OAUTH_CLIENT_ID || '' }}
+          oauth-secret: ${{ secrets.TS_OAUTH_CLIENT_ID != '' && secrets.TS_OAUTH_SECRET || '' }}
+          api-key: ${{ (secrets.TS_OAUTH_CLIENT_ID == '' || secrets.TS_OAUTH_SECRET == '') && secrets.TAILSCALE_APIKEY || '' }}
+          policy-file: ./pmoves/configs/tailscale-acl-policy.json
+          action: test
+
+  drift-pr:
+    name: live drift (PR head vs tailnet)
+    if: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Unit tests for the drift tool
+        run: |
+          python3 -m pip install --quiet 'pytest>=8'
+          python3 -m pytest pmoves/tests/test_tailscale_acl_drift.py -q -p no:cacheprovider --noconftest --rootdir=. -c /dev/null
+      - name: Compare PR policy with the live tailnet policy
+        env:
+          TS_OAUTH_CLIENT_ID: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          TS_OAUTH_SECRET: ${{ secrets.TS_OAUTH_SECRET }}
+          TAILSCALE_APIKEY: ${{ secrets.TAILSCALE_APIKEY }}
+          TS_TAILNET: ${{ secrets.TS_TAILNET }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          mode=""
+          if ! git diff --quiet "$BASE_SHA" HEAD -- pmoves/configs/tailscale-acl-policy.json; then
+            mode="--report-only"
+            echo "::notice::This PR edits the policy; drift below is a PREVIEW of what apply would change."
+          fi
+          set +e
+          python3 pmoves/tools/tailscale_acl_drift.py $mode
+          rc=$?
+          set -e
+          case "$rc" in
+            0) ;;
+            1) echo "::error title=Tailnet policy drift::The live policy differs from the repo (see diff above).";;
+            3) echo "::error title=Could not measure drift::Credential missing/expired or lacks policy read scope (see log).";;
+          esac
+          exit "$rc"
+
+  drift:
+    name: live drift (main vs tailnet)
+    if: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    environment: Prod
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Compare repo policy with the live tailnet policy
+        env:
+          TS_OAUTH_CLIENT_ID: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          TS_OAUTH_SECRET: ${{ secrets.TS_OAUTH_SECRET }}
+          TAILSCALE_API_KEY: ${{ secrets.TAILSCALE_API_KEY }}
+          TAILSCALE_APIKEY: ${{ secrets.TAILSCALE_APIKEY }}
+          TS_TAILNET: ${{ secrets.TS_TAILNET }}
+        run: |
+          set +e
+          python3 pmoves/tools/tailscale_acl_drift.py
+          rc=$?
+          set -e
+          case "$rc" in
+            0) ;;
+            1) echo "::error title=Tailnet policy drift::The live policy differs from main. Operator decides: re-apply the repo, or adopt the live change into the repo.";;
+            3) echo "::error title=Could not measure drift::Credential missing/expired or lacks policy read scope (see log).";;
+          esac
+          exit "$rc"

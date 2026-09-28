@@ -1,0 +1,218 @@
+"""Tests for pmoves/tools/tailscale_acl_drift.py (read-only tailnet policy drift).
+
+No test touches the network: the live side is either a fixture file
+(--live-file) or a monkeypatched urlopen.
+"""
+
+from __future__ import annotations
+
+import io
+import json
+import sys
+import urllib.error
+from pathlib import Path
+
+import pytest
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(REPO_ROOT / "pmoves" / "tools"))
+
+import tailscale_acl_drift as tad  # noqa: E402
+
+FIX = Path(__file__).resolve().parent / "fixtures" / "tailscale_acl"
+REPO_FIXTURE = FIX / "repo_policy.hujson"
+REAL_POLICY = REPO_ROOT / "pmoves" / "configs" / "tailscale-acl-policy.json"
+
+CRED_VARS = (
+    "TS_OAUTH_CLIENT_ID",
+    "TS_OAUTH_SECRET",
+    "TS_API_KEY",
+    "TAILSCALE_API_KEY",
+    "TAILSCALE_APIKEY",
+    "TS_TAILNET",
+    "TAILSCALE_TAILNET",
+    "GITHUB_STEP_SUMMARY",
+)
+
+
+@pytest.fixture(autouse=True)
+def _clean_env(monkeypatch):
+    for var in CRED_VARS:
+        monkeypatch.delenv(var, raising=False)
+
+
+# --------------------------------------------------------------- HuJSON parsing
+def test_strip_preserves_slashes_and_commas_inside_strings():
+    text = '{"u": "https://x//y", "v": "a,]", // c\n "w": [1,2,], /* z */}'
+    assert json.loads(tad.strip_hujson(text)) == {"u": "https://x//y", "v": "a,]", "w": [1, 2]}
+
+
+def test_strip_handles_escaped_quote():
+    text = '{"q": "he said \\"//not a comment\\"", }'
+    assert json.loads(tad.strip_hujson(text)) == {"q": 'he said "//not a comment"'}
+
+
+def test_unterminated_block_comment_is_could_not_measure():
+    with pytest.raises(tad.CouldNotMeasure):
+        tad.parse_policy('{"a": 1 /* never closed', "x")
+
+
+def test_real_repo_policy_parses_and_has_ssh_rule():
+    policy = tad.parse_policy(REAL_POLICY.read_text(encoding="utf-8"), "repo")
+    rule = policy["ssh"][0]
+    assert rule["src"] == ["tag:pmoves"] and rule["dst"] == ["tag:pmoves"]
+    assert rule["users"] == ["autogroup:nonroot"]
+
+
+def test_real_repo_policy_round_trip_is_not_drift():
+    """A live copy that is the same policy minus comments/whitespace is NOT drift."""
+    policy = tad.parse_policy(REAL_POLICY.read_text(encoding="utf-8"), "repo")
+    reserialised = json.loads(json.dumps(policy, separators=(",", ":")))
+    drifted, _ = tad.compare(policy, reserialised, "repo", "live")
+    assert drifted is False
+
+
+# --------------------------------------------------------------- compare / CLI
+def test_identical_fixture_exits_zero(capsys):
+    rc = tad.run(["--policy-file", str(REPO_FIXTURE), "--live-file", str(FIX / "live_identical.json")])
+    out = capsys.readouterr().out
+    assert rc == tad.EXIT_CLEAN
+    assert "OK: no drift" in out
+
+
+def test_drifted_fixture_exits_one_and_names_ssh(capsys):
+    rc = tad.run(["--policy-file", str(REPO_FIXTURE), "--live-file", str(FIX / "live_drifted.hujson")])
+    out = capsys.readouterr().out
+    assert rc == tad.EXIT_DRIFT
+    assert "  - ssh: changed" in out
+    assert "  - sshTests: repo-only" in out
+    assert '-        "autogroup:nonroot"' in out
+    assert '+        "pmoves"' in out
+    # Unchanged sections are not listed as drifted.
+    assert "  - acls:" not in out
+
+
+def test_report_only_prints_drift_but_exits_zero(capsys):
+    rc = tad.run(
+        [
+            "--policy-file",
+            str(REPO_FIXTURE),
+            "--live-file",
+            str(FIX / "live_drifted.hujson"),
+            "--report-only",
+        ]
+    )
+    assert rc == tad.EXIT_CLEAN
+    assert "DRIFT:" in capsys.readouterr().out
+
+
+def test_redacted_values_never_printed(capsys):
+    tad.run(["--policy-file", str(REPO_FIXTURE), "--live-file", str(FIX / "live_drifted.hujson")])
+    out = capsys.readouterr().out
+    assert "repo-side-placeholder" not in out
+
+
+def test_drift_only_in_redacted_field_is_still_drift_but_value_withheld(capsys):
+    rc = tad.run(["--policy-file", str(REPO_FIXTURE), "--live-file", str(FIX / "live_secret_drift.json")])
+    out = capsys.readouterr().out
+    assert rc == tad.EXIT_DRIFT
+    assert "derpMap: changed" in out
+    assert "ONLY inside redacted" in out
+    assert "LIVE-SIDE-DIFFERENT-VALUE" not in out
+    assert "repo-side-placeholder" not in out
+
+
+def test_missing_policy_file_is_could_not_measure(tmp_path, capsys):
+    rc = tad.run(["--policy-file", str(tmp_path / "nope.json"), "--live-file", str(REPO_FIXTURE)])
+    assert rc == tad.EXIT_UNMEASURED
+    assert "COULD-NOT-MEASURE" in capsys.readouterr().err
+
+
+def test_step_summary_written(tmp_path, monkeypatch):
+    summary = tmp_path / "summary.md"
+    monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(summary))
+    tad.run(["--policy-file", str(REPO_FIXTURE), "--live-file", str(FIX / "live_drifted.hujson")])
+    assert "Tailscale policy drift" in summary.read_text()
+
+
+def test_save_live_is_redacted(tmp_path):
+    out = tmp_path / "live.json"
+    tad.run(
+        [
+            "--policy-file",
+            str(REPO_FIXTURE),
+            "--live-file",
+            str(FIX / "live_identical.json"),
+            "--save-live",
+            str(out),
+        ]
+    )
+    saved = json.loads(out.read_text())
+    assert saved["derpMap"]["privateKey"] == tad.REDACTED
+
+
+# --------------------------------------------------------------- live fetch (mocked)
+class _Resp(io.BytesIO):
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+
+def test_no_credentials_is_could_not_measure(capsys):
+    rc = tad.run(["--policy-file", str(REPO_FIXTURE)])
+    assert rc == tad.EXIT_UNMEASURED
+    assert "no credential" in capsys.readouterr().err
+
+
+def test_api_key_fetch_is_a_single_get_and_never_prints_key(monkeypatch, capsys):
+    secret = "tskey-api-FAKEFAKEFAKE-notreal"
+    monkeypatch.setenv("TAILSCALE_API_KEY", secret)
+    seen = []
+
+    def fake_urlopen(req, timeout=30):
+        seen.append((req.get_method(), req.full_url, req.headers.get("Accept")))
+        return _Resp((FIX / "live_identical.json").read_bytes())
+
+    monkeypatch.setattr(tad.urllib.request, "urlopen", fake_urlopen)
+    rc = tad.run(["--policy-file", str(REPO_FIXTURE)])
+    captured = capsys.readouterr()
+    assert rc == tad.EXIT_CLEAN
+    assert seen == [("GET", f"{tad.API_BASE}/tailnet/-/acl", "application/hujson")]
+    assert secret not in captured.out + captured.err
+
+
+def test_oauth_exchanges_then_gets_with_bearer(monkeypatch):
+    monkeypatch.setenv("TS_OAUTH_CLIENT_ID", "cid")
+    monkeypatch.setenv("TS_OAUTH_SECRET", "csecret")
+    monkeypatch.setenv("TS_TAILNET", "example.com")
+    calls = []
+
+    def fake_urlopen(req, timeout=30):
+        calls.append((req.get_method(), req.full_url, req.headers.get("Authorization")))
+        if req.full_url.endswith("/oauth/token"):
+            return _Resp(json.dumps({"access_token": "tok123"}).encode())
+        return _Resp((FIX / "live_drifted.hujson").read_bytes())
+
+    monkeypatch.setattr(tad.urllib.request, "urlopen", fake_urlopen)
+    rc = tad.run(["--policy-file", str(REPO_FIXTURE)])
+    assert rc == tad.EXIT_DRIFT
+    assert calls[0][:2] == ("POST", f"{tad.API_BASE}/oauth/token")
+    assert calls[1] == ("GET", f"{tad.API_BASE}/tailnet/example.com/acl", "Bearer tok123")
+    # Read-only: exactly one token exchange and one GET, nothing else.
+    assert len(calls) == 2
+
+
+@pytest.mark.parametrize("code,needle", [(401, "READ scope"), (403, "READ scope"), (404, "not found")])
+def test_http_errors_are_could_not_measure_with_hint(monkeypatch, capsys, code, needle):
+    monkeypatch.setenv("TS_API_KEY", "tskey-api-x")
+
+    def fake_urlopen(req, timeout=30):
+        raise urllib.error.HTTPError(req.full_url, code, "err", {}, None)
+
+    monkeypatch.setattr(tad.urllib.request, "urlopen", fake_urlopen)
+    rc = tad.run(["--policy-file", str(REPO_FIXTURE)])
+    err = capsys.readouterr().err
+    assert rc == tad.EXIT_UNMEASURED
+    assert f"HTTP {code}" in err and needle in err
