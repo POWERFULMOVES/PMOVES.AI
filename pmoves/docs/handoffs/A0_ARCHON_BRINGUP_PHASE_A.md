@@ -150,3 +150,58 @@ version -> dispatch `integrations-ghcr.yml` for the component with a version tag
 publish `:current`. `integrations-ghcr.matrix.json` builds archon from the branch name today, not
 the resolved sha — that entry would take the resolver's `FORK_SHA`. `agent-zero-upstream-check.yml`
 already watches A0 upstream daily and is the natural host for the A0 half.
+
+## 7. Closing the "ARCHON_IMAGE only in argv" gap (operator, 2026-09-28)
+
+Landed on this branch:
+- `.github/workflows/archon-release-track.yml`: runs on a schedule, on `workflow_dispatch` (with a `dry_run` option) and on `repository_dispatch: archon-upstream-release`.
+  - It runs the resolver first.
+  - rc 1: opens or updates an issue. fork-sync has no per-fork selector, and its `ahead_max=20` guard skips this fork as MANUAL, so fork-sync cannot do the sync.
+  - rc 3: the job fails.
+  - rc 0: builds `<version>-pmoves.<sha8>` for amd64 and arm64 from the exact resolved fork sha, pushes it, and then runs `pmoves/tools/archon_release_channel.sh promote` (the node gate) on the amd64 variant. Only after the gate passes does it copy the manifest to `:current`. On failure, `:current` is untouched and the job fails.
+- `integrations-ghcr`: the archon matrix entry has `"resolve": "archon"`, so the build job checks out the resolver's `FORK_SHA` instead of the branch name. This is the `:pmoves-latest` lane.
+- `pmoves/env.shared.example`: `ARCHON_IMAGE=ghcr.io/powerfulmoves/pmoves-archon:current`, with a comment that pinning a sha is for rollback only.
+
+Waiting on the compose road (`KNOWN_ROAD=compose:<reason>`, grant naming pr:3214). This is the exact patch; it is not applied:
+
+```diff
+--- a/pmoves/docker-compose.yml
++++ b/pmoves/docker-compose.yml
+@@ -3790,7 +3790,7 @@
+     build:
+       context: ../PMOVES-Archon
+       dockerfile: Dockerfile
+-    image: ${ARCHON_IMAGE:-ghcr.io/powerfulmoves/pmoves-archon:pmoves-latest}
++    image: ${ARCHON_IMAGE:-ghcr.io/powerfulmoves/pmoves-archon:current}
+     # No container_name: keep the compose-default `${PROJECT}-archon-1` name that
+     # `wait-agents` and the REST policy probe (Makefile) inspect by that exact name.
+     hostname: archon
+--- a/pmoves/docker-compose.agents.yml
++++ b/pmoves/docker-compose.agents.yml
+@@ -271,7 +271,7 @@
+     build:
+       context: ../PMOVES-Archon
+       dockerfile: Dockerfile
+-    image: ${ARCHON_IMAGE:-ghcr.io/powerfulmoves/pmoves-archon:pmoves-latest}
++    image: ${ARCHON_IMAGE:-ghcr.io/powerfulmoves/pmoves-archon:current}
+     # No container_name: keep the compose-default `${PROJECT}-archon-1` name that
+     # `wait-agents` and the REST policy probe (Makefile) inspect by that exact name.
+     hostname: archon
+--- a/pmoves/docker-compose.agents.images.yml
++++ b/pmoves/docker-compose.agents.images.yml
+@@ -9,7 +9,7 @@
+       - ./chit:/app/pmoves/chit:ro
+   archon:
+     build: null
+-    image: ${ARCHON_IMAGE:-ghcr.io/powerfulmoves/pmoves-archon:pmoves-latest}
++    image: ${ARCHON_IMAGE:-ghcr.io/powerfulmoves/pmoves-archon:current}
+   deepresearch:
+     build: null
+   supaserch:
+```
+
+**Ordering after merge:** dispatch `archon-release-track.yml` once, so GHCR has `:current` before any node recreates Archon with the new default. Until that run succeeds, a node that pulls `:current` gets "manifest unknown". The fork must also contain the latest release first; until then the workflow's rc-1 path only opens the issue. The interim image stays `:b850-8d135dab` / `:pmoves-latest`.
+
+**Agent Zero:** not a clean fit without the Dockerfile road. Both `services/agent-zero/Dockerfile` and `Dockerfile.multiarch` (which `agent-zero-upstream-check.yml` builds) clone `--branch ${AGENT_ZERO_REF}`, and `git clone --branch` cannot take a sha. The ref JSON the Dockerfile ADDs lives only in the discarded `upstream` stage, so nothing in the final image proves which commit was built.
+- Building from the resolved sha needs an `AGENT_ZERO_SHA` build arg plus a `git fetch <sha> && git checkout && test "$(git rev-parse HEAD)" = "$AGENT_ZERO_SHA"` assertion in both Dockerfiles. That is road `KNOWN_ROAD=dockerfile:<reason>`, not minted.
+- Everything downstream of that (the `/healthz` gate and `:current`) mirrors the Archon workflow and becomes a copy once the road is open.
