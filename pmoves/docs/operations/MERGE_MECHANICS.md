@@ -240,9 +240,15 @@ on the head, nothing is posted and the run verifies and exits 0.
 
 ### 6.4 Stale approvals and the head-moved race
 
-- `dismiss_stale_reviews_on_push: true` is on in the ruleset, so **any new
-  push dismisses the approval** (A5). Each new head needs a new control
-  verdict and a new run.
+- `dismiss_stale_reviews_on_push: true` is on in the ruleset, so the approval is
+  dismissed whenever the PR's diff changes (A5): a new push, **Update branch**,
+  or **another PR merging into `main`** that moves the merge base. Each new
+  head needs a new control verdict and a new run.
+- Because `strict` is also on (section 4), the order is fixed:
+  **update branch → checks green → control verdict → approve → merge
+  immediately.** Approving before updating wastes the approval, and any merge
+  to `main` in between dismisses it again. In a serial train, approve only the
+  PR at the front.
 - Race: if the head moves between the tool's last check and the POST,
   `commit_id` pinning attaches the review to the commit that was reviewed, not
   the new head (A4). Such an approval must not be relied on: it is either
@@ -296,19 +302,23 @@ on the head, nothing is posted and the run verifies and exits 0.
 
 ### 6.6 GitHub behaviours this road assumes
 
-Everything the road relies on from GitHub is listed here, and only here. Items
-marked *unverified* are being checked against current GitHub docs; correct this
-table (and the tool only if a behaviour differs) when a finding lands.
+Everything the road relies on from GitHub is listed here, and only here.
+Checked 2026-09-28 against docs.github.com, the REST OpenAPI description and the
+GraphQL schema (research pass relayed by B850-CLAUDE; the quoted passages were
+re-read by the delivery body). Correct this table, and the tool only if a
+behaviour differs, when a finding lands.
 
-| id | assumption | status |
-|---|---|---|
-| A1 | An `APPROVED` review by a non-author collaborator with write access counts toward `required_approving_review_count`. | unverified |
-| A2 | A code owner's approval satisfies `require_code_owner_review` only when that owner is listed on the last matching pattern of each changed file and has write access. | unverified |
-| A3 | A fine-grained PAT with Pull requests: Read and write can `GET /user`, read the PR, list issue comments and reviews, and create a review — **and can be scoped to a repo owned by another personal account**. The last clause is the most doubtful; if it fails, the fallback is a classic PAT (`public_repo`, since the repo is public) on an account that has access to nothing else, which can also push branches. | unverified |
-| A4 | `commit_id` in the create-review payload pins the review to that commit even when the head has moved. | unverified |
-| A5 | `dismiss_stale_reviews_on_push: true` dismisses approvals when new reviewable commits are pushed, and an approval on a non-head commit does not satisfy the rule for the new head. | unverified |
-| A6 | The ruleset also sets `require_extra_approval_for_unattributed_changes: true`; its effect on PRs whose commits carry `Co-Authored-By` trailers or are pushed by a different account is not known. It may demand an approval beyond this one. | unverified |
-| A7 | An author's approval of their own PR does not count (observed: `reviewDecision` stays `REVIEW_REQUIRED`). | observed, section 1 |
+| id | assumption | status | source |
+|---|---|---|---|
+| A1 | An `APPROVED` review from an account with write access counts toward `required_approving_review_count`. Authors cannot approve their own PRs. | **verified** | rulesets "Require a pull request before merging"; "Approving a pull request with required reviews" |
+| A2 | Code-owner review is satisfied only by an owner named in CODEOWNERS who has **explicit write access** ("Users and teams must have explicit `write` access to the repository"), and the owner is taken from the last matching pattern. A GitHub App cannot be a code owner — undocumented, but the `@username` / `@org/team-name` syntax has no form for an App. | **verified** (App exclusion: inferred from syntax) | "About code owners" |
+| A3 | A fine-grained PAT **cannot** be used on a repository where its user is only a collaborator (listed limitation: "Using fine-grained personal access token to contribute to repositories where the user is an outside or repository collaborator"). The road therefore uses a **classic PAT with `public_repo`** (the repo is public). That scope also lets the account push branches — see A8. | **resolved — fine-grained is not an option** | "Managing your personal access tokens", limitations |
+| A4 | `commit_id` in the create-review payload attaches the review to that sha; when omitted it defaults to the latest commit. Whether an APPROVE on a **non-head** sha counts toward the rule is **not documented**. The tool therefore keeps the post-verify head re-read and treats a moved head as failure. | **weak** — documented default only | REST "Create a review for a pull request" |
+| A5 | `dismiss_stale_reviews_on_push: true` dismisses an approval whenever the PR's diff changes from the approved state — a push to the branch, **Update branch**, or **a related PR merging into the target branch** (a merge-base change). | **verified, broader than first assumed** | "About protected branches" / rulesets note on merge base |
+| A6 | The ruleset sets `require_extra_approval_for_unattributed_changes: true`. Its effect is not documented in the pages checked; it may demand an approval beyond this one. | **unknown** | — |
+| A7 | An author's approval of their own PR does not count. | **verified** (A1) and observed, section 1 | as A1 |
+| A8 | `require_last_push_approval` is `false` today. If it is ever enabled, an approval only counts when it comes from someone other than the last pusher, so the machine user must **never push** to a PR branch. It must never push today either (6.5 step 3). | **verified** (setting semantics); live value read from ruleset 10887588 | "About protected branches" |
+| A9 | Merge queues are available only in repositories **owned by an organization** ("Pull request merge queues are available in any public repository owned by an organization…"). `POWERFULMOVES/PMOVES.AI` is owned by a personal account, and the research pass read `mergeQueue(branch:"main")` as null. | **verified — no merge queue on this repo** | "Managing a merge queue" page header |
 
 ### 6.7 Combining with the queue road
 
