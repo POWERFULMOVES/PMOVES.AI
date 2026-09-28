@@ -35,6 +35,18 @@ async function withTasks(page: Page, tasks: unknown[] = TASKS) {
   await page.waitForLoadState('networkidle');
 }
 
+/**
+ * Assign a raw value to a range input the way a script would. Playwright's fill()
+ * refuses out-of-range values on type=range ("Malformed value") because the browser
+ * sanitises them, so assign directly and let the browser apply min/max clamping.
+ */
+async function setRangeValue(page: Page, testId: string, value: string) {
+  return page.locator(`[data-testid="${testId}"]`).evaluate((el, v) => {
+    (el as HTMLInputElement).value = v;
+    return (el as HTMLInputElement).value;
+  }, value);
+}
+
 async function expandOptions(page: Page) {
   await page.click('[data-testid="expand-options-button"]');
   await expect(page.locator('[data-testid="research-options-panel"]')).toBeVisible();
@@ -161,18 +173,20 @@ test.describe('Deep Research Dashboard', () => {
 
     // Try to set value below minimum
     const slider = page.locator('[data-testid="max-iterations-slider"]');
-    await slider.fill('1');
+    await expect(slider).toHaveAttribute('min', '3');
+    await expect(slider).toHaveAttribute('max', '30');
+    await setRangeValue(page, 'max-iterations-slider', '1');
 
     // Should clamp to minimum
     const actualValue = await slider.inputValue();
-    expect(parseInt(actualValue)).toBeGreaterThanOrEqual(3);
+    expect(parseInt(actualValue)).toBe(3);
 
     // Try to set value above maximum
-    await slider.fill('50');
+    await setRangeValue(page, 'max-iterations-slider', '50');
 
     // Should clamp to maximum
     const maxValue = await slider.inputValue();
-    expect(parseInt(maxValue)).toBeLessThanOrEqual(30);
+    expect(parseInt(maxValue)).toBe(30);
   });
 
   test('should update priority slider', async ({ page }) => {
@@ -196,18 +210,20 @@ test.describe('Deep Research Dashboard', () => {
 
     // Try to set value below minimum
     const slider = page.locator('[data-testid="priority-slider"]');
-    await slider.fill('0');
+    await expect(slider).toHaveAttribute('min', '1');
+    await expect(slider).toHaveAttribute('max', '10');
+    await setRangeValue(page, 'priority-slider', '0');
 
     // Should clamp to minimum
     const actualValue = await slider.inputValue();
-    expect(parseInt(actualValue)).toBeGreaterThanOrEqual(1);
+    expect(parseInt(actualValue)).toBe(1);
 
     // Try to set value above maximum
-    await slider.fill('15');
+    await setRangeValue(page, 'priority-slider', '15');
 
     // Should clamp to maximum
     const maxValue = await slider.inputValue();
-    expect(parseInt(maxValue)).toBeLessThanOrEqual(10);
+    expect(parseInt(maxValue)).toBe(10);
   });
 
   // fixme: UI unwired: TaskInitiationForm notebook select not rendered (TaskInitiationForm.tsx:180 renders it only when notebooks.length > 0; page.tsx:200-203 passes no notebooks prop). Tracked in #3226
