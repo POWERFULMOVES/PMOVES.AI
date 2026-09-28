@@ -183,8 +183,14 @@ audit trail shows and what `pr-closeout-audit` accepts, not the merge flag.
    (`pmoves/tools/control_verdict.py`):
 
    ```
-   <!-- pmoves-control-verdict: v=1 verdict=APPROVE head=<40-hex> reviewer=<body> -->
+   [HTML-comment open] pmoves-control-verdict: v=1 verdict=APPROVE head=<40-hex> reviewer=<body> [HTML-comment close]
    ```
+
+   (The shape above is deliberately written *without* the real `<!--` / `-->`
+   delimiters, so that copying this document into a PR comment cannot create a
+   marker. With the delimiters, a template like this — `<40-hex>` is not a
+   sha — would be a **malformed** marker: it makes the comment ambiguous,
+   which refuses and withdraws a standing approval.)
 
    Generate it rather than typing it:
    `python3 pmoves/tools/control_verdict.py format --verdict APPROVE --head <sha> --reviewer B850-CLAUDE`.
@@ -204,7 +210,11 @@ audit trail shows and what `pr-closeout-audit` accepts, not the merge flag.
    Markdown-context detection can be wrong; this way a mistake can only make an
    approval *not count*, never hide a block. Consequence: **do not quote a
    `REQUEST_CHANGES` marker as an example** in a comment on the PR — it is a
-   block. Quoting an `APPROVE` in code is harmless.
+   block. A *well-formed* `APPROVE` quoted in code or mid-line simply does not
+   count — but that is the only harmless case: a quoted **template**, a
+   truncated sha, or any other malformed marker makes the comment
+   **ambiguous**, which refuses and withdraws a standing approval, wherever it
+   appears. Do not paste marker examples into PR comments at all.
 3. The operator (or control body) runs:
 
    ```bash

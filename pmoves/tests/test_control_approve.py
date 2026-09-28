@@ -1133,6 +1133,16 @@ def test_docstring_lists_every_verdict_label() -> None:
         assert label in line, label
 
 
+def test_operator_docs_contain_no_parseable_marker_candidate() -> None:
+    # Copying the docs into a PR comment must never create a (malformed) marker.
+    root = TOOLS.parents[1]
+    for path in (
+        TOOLS.parent / "docs" / "operations" / "MERGE_MECHANICS.md",
+        root / ".claude" / "skills" / "pmoves-pr-merge" / "SKILL.md",
+    ):
+        assert control_verdict.CANDIDATE_RE.search(path.read_text(encoding="utf-8")) is None, path
+
+
 def test_config_ships_without_a_hardcoded_login() -> None:
     import yaml
 
