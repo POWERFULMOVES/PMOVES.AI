@@ -1,0 +1,25 @@
+# Control approval road -- configuration for pmoves/tools/control_approve.py.
+# Full design, trust model and operator setup:
+#   pmoves/docs/operations/MERGE_MECHANICS.md  (section "5. The approval road")
+#
+# No login is hard-coded in the tool. Everything identity-shaped lives here and
+# can be overridden per invocation by environment variables.
+version: 1
+
+repo: POWERFULMOVES/PMOVES.AI
+base: main
+
+# GitHub login of the PMOVES.AI-branded machine user whose token submits the
+# APPROVE review. Left EMPTY until the operator has created the account; the
+# tool refuses (exit 3, COULD-NOT-MEASURE) while it is empty.
+# Documented example only (do not rely on it existing): pmoves-ai-control
+# The tool verifies at runtime, via the token's GET /user, that the token
+# belongs to exactly this login.
+# Override: PMOVES_CONTROL_LOGIN
+approver_login: ""
+
+# Accounts whose PR comments may carry a pmoves-control-verdict marker.
+# A marker proves a verdict was RECORDED by one of these accounts -- not who
+# performed the review. Override (comma-separated): PMOVES_CONTROL_MARKER_AUTHORS
+marker_authors:
+  - POWERFULMOVES
