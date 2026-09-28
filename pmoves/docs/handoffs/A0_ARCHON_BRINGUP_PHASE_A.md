@@ -60,6 +60,31 @@ Archon has the same class of gap in reverse: compose builds whatever is on disk 
 carries ~500 MB of untracked dirs (`external/`, `pmoves_multi_agent_pro_pack/`) that enter the
 `COPY . .` web-build stage context (not the final image).
 
-## 4. Builds / dry-run
+## 4. Builds (from this worktree: origin/main b21c60b3d + pins)
 
-See the lane report (image ids, dry-run plan, phase-B commands).
+| Image | Id | Source |
+|---|---|---|
+| `ghcr.io/powerfulmoves/pmoves-archon:b850-8d135dab` | `b521cbb347d8` | `PMOVES-Archon@8d135dab` (clean submodule checkout), `--build-arg USE_LOCAL_VENDOR=1` as in the submodule overlay |
+| `pmoves-agent-zero:b850-3290759a` = `:latest` | `463bc2a05097` | `pmoves/services/agent-zero/Dockerfile`, context `pmoves/`; clone of `PMOVES.AI-Edition-v2.13` whose head was `3290759a` (ls-remote before and after) |
+| `ghcr.io/powerfulmoves/pmoves-archon:rollback-py-20260729` | `06727ac67412` | tag only — preserves the running Python image so it cannot be pruned once dangling |
+
+Native health: `packages/server/src/routes/api.ts` `/api/health` returns JSON `status: 'ok'`, which the
+compose healthcheck's status-word grep accepts. Entrypoint `docker-entrypoint.sh` -> `bun run start`.
+
+## 5. Dry-run (root checkout compose, CIPHER_API_TOKEN unset)
+
+Scoped (`--no-deps --no-build --pull never`, `ARCHON_IMAGE=...:b850-8d135dab ARCHON_API_PORT=8092`):
+
+```
+ Container pmoves-agent-zero-1 Creating
+ Container pmoves-archon-1 Recreate
+ Container pmoves-agent-zero-1 Created
+ Container pmoves-archon-1 Recreated
+ Container ae2caf9b06e4_pmoves-archon-1 Starting / Started
+ Container pmoves-agent-zero-1 Starting / Started
+```
+
+Unscoped closure (informational): additionally **recreates `pmoves-archon-postgres`** and creates
+`nats-init`, `tensorzero-gateway`, `tensorzero-clickhouse`. No `supabase-*` in either plan.
+
+`make up-a0-archon-scoped [DRY_RUN=1]` (added in this branch) is that scoped line as a Known Road.
