@@ -15,11 +15,11 @@
       "sha256": "f60746ecb04b3931e564c1ed69fac24456f789cfb10520e7ce90a965960ec379"
     },
     {
-      "bytes": 6675,
+      "bytes": 7559,
       "executable": true,
       "managed_by": "generator",
       "relpath": "deploy/provision/pmoves-mini.sh",
-      "sha256": "683126dd8b2635bbc0afd7442c81a86680ea82996bcd38f86c34efa5bfe7bee6"
+      "sha256": "9e467652d8519678c0f2481d88af2a00fe45c89f9eed83f1ead27fe50b20082b"
     },
     {
       "bytes": 5286,
@@ -134,11 +134,11 @@
       "sha256": "f300fd6ffee92e8bbbfd64eee3729cdf5f0606ed6024798ff6e139350adbe3d6"
     },
     {
-      "bytes": 6655,
+      "bytes": 7541,
       "executable": true,
       "managed_by": "generator",
       "relpath": "deploy/provision/codex-pmoves.sh",
-      "sha256": "41560c150158807c7b6029e814090165b08e767ec0228ac9550d19f1383ae441"
+      "sha256": "b1200d1db51d52a962a2b794a212f5781cdcf392c6d5eab2daedb9463ebefeb9"
     },
     {
       "bytes": 5238,
@@ -169,11 +169,11 @@
       "sha256": "1f262f30f62dcffc44fcca5df5f9edd7f2c6bf413daf222836f4bc89b610e586"
     },
     {
-      "bytes": 7004,
+      "bytes": 7888,
       "executable": true,
       "managed_by": "generator",
       "relpath": "deploy/provision/kilo-pmoves.sh",
-      "sha256": "be08d48c8be01e023a5933fb47e662efd5791b0fe3028ebc5425f55bc9ef9177"
+      "sha256": "2277d387c46cde78c56aa9aee5305515a996e8aae6fcba142b303e427ade3469"
     },
     {
       "bytes": 5553,
@@ -246,11 +246,11 @@
       "sha256": "bb52a515003bce449857edba6e61c6e38fc27b7d4a41b0556bc91fbe70882b5a"
     },
     {
-      "bytes": 6657,
+      "bytes": 7541,
       "executable": true,
       "managed_by": "generator",
       "relpath": "deploy/provision/kimi-pmoves.sh",
-      "sha256": "461947de14451ebff73252adb48ea3eb3138bed80ad3fe8ac669e066bc86e1b5"
+      "sha256": "827e8f5a40612cfe0795dc064b4b7b6a0b9dfcb68077a796a41d7ea0282ad842"
     },
     {
       "bytes": 5245,
@@ -344,11 +344,11 @@
       "sha256": "c25995e084fcf7f6efe19ceb9d805f67ed8d967a6b8dfd175f0f2194b4191d86"
     },
     {
-      "bytes": 6713,
+      "bytes": 7601,
       "executable": true,
       "managed_by": "generator",
       "relpath": "deploy/provision/hermes-pmoves.sh",
-      "sha256": "cfe34a7a3fae6355a04f0b9d0133fdbd8ed0e742d200fdf6e6ab0fb954a17ee6"
+      "sha256": "50607d39057d48ee8bdf12cd8daec8ea8b8b4ee515d36cf51dc366f756d346f0"
     },
     {
       "bytes": 5302,

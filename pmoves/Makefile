@@ -3325,7 +3325,7 @@ notebook-logs: ## Follow logs for the Open Notebook service
 
 notebook-seed-models: ## Seed Open Notebook models based on provider keys from the environment
 	@echo "Seeding Open Notebook providers..."
-	@bash -c 'set -a; [ -f "$(ENV_SHARED_FILE)" ] && . "$(ENV_SHARED_FILE)"; set +a; exec $(PYTHON) scripts/open_notebook_seed.py'
+	@bash -c 'set -a; [ -f "$(ENV_SHARED_FILE)" ] && . "$(ENV_SHARED_FILE)"; set +a; . scripts/pm-ca-bundle.sh && pm_ca_bundle_normalize; exec $(PYTHON) scripts/open_notebook_seed.py'
 
 .PHONY: notebook-workbench-smoke
 notebook-workbench-smoke: ensure-env-shared ## Lint the Notebook Workbench bundle and verify Supabase connectivity
