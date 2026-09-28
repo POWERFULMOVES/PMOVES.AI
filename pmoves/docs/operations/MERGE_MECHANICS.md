@@ -111,6 +111,50 @@ gh pr update-branch N  ->  wait for checks  ->  verify green  ->  merge  ->  nex
 
 One CI cycle per PR. Budget for that; it is not a stall.
 
+(Queue status as of 2026-09-28: the workflows are queue-ready -- see section 5 --
+but the `merge_queue` rule is NOT yet on the ruleset. Until it is, this section is
+still how `main` merges.)
+
+## 5. The merge queue and the closeout
+
+**Workflows (done, 2026-09-28).** Under a queue, GitHub re-runs the required
+checks on a temporary `gh-readonly-queue/main/...` ref with the `merge_group`
+event. A required context whose workflow has no `merge_group` trigger never reports
+there, and the queue waits on it forever. Every required context now has one:
+
+| context | workflow | job |
+|---|---|---|
+| `python-tests` | `merge-gate.yml` | `python-tests` |
+| `hardening-validation` | `merge-gate.yml` | `hardening-validation` |
+| `merge-decision` | `merge-gate.yml` | `merge-decision` (aggregates all eleven merge-gate jobs, all in the same file) |
+| `verify` | `chit-contract.yml` | `verify` (`verify-attestation.yml`'s job is named `verify-slsa-attestation`, so it cannot collide) |
+| `submodule-gitlink-gate` | `submodule-gitlink-gate.yml` | `gitlink-gate` (`name: submodule-gitlink-gate`) |
+
+Advisory workflows (UI Tests, Kilocode review, Claude review, Codex parity,
+CodeQL, ...) deliberately do NOT run in the queue: a check that is not required
+does not block it, and review bots have nothing to review on a queue ref. CodeQL
+still runs on the post-merge `push` to `main`.
+
+**Two roads, and `--admin` picks the old one.** `gh pr merge --help` states it
+plainly: *"To bypass a merge queue and merge directly, pass the `--admin` flag."*
+So once the queue is on:
+
+| road | command | what happens |
+|---|---|---|
+| admin (unchanged) | `make -C pmoves pr-closeout-merge PR=N EXPECTED_HEAD=sha CONFIRM='MERGE #N @ sha'` | audit, then `gh pr merge --admin` -- **bypasses the queue**, merges directly. Still demands the branch be up to date (the audit blocks `BEHIND`), so the serial train of section 4 still applies to this road. |
+| queue (new) | `make -C pmoves pr-closeout-queue PR=N EXPECTED_HEAD=sha CONFIRM='MERGE #N @ sha'` | same audit **without** the admin review bypass, `BEHIND` not a blocker (the queue re-tests on the latest base), then `gh pr merge --auto --match-head-commit sha` with no method (the queue's method applies). Refuses if no `merge_queue` rule is active on the base; refuses `--queue` with `--admin`; confirms the enqueue via GraphQL `mergeQueueEntry` / `autoMergeRequest`. |
+
+**The catch, stated up front.** The queue road requires an **approved** PR -- the
+queue enforces the ruleset's `pull_request` rule before it accepts an entry, and
+the closeout does not relax it in queue mode. Section 1 records that PRs
+authored by `POWERFULMOVES` sit at `REVIEW_REQUIRED` with no approval arriving.
+So for those PRs the queue changes nothing: the admin road remains the fast path,
+serial train included. The queue pays off for PRs that do get an approving review.
+
+**`pr-closeout.yml` (the dispatch workflow)** was not changed: it still offers
+audit / direct merge with an optional admin bypass. Use the make target for the
+queue road.
+
 ## Two gotchas that cost real time
 
 **Poll on `.status == "COMPLETED"`, not on a non-empty `.conclusion`.** A re-run that
@@ -139,14 +183,14 @@ side lost lines, look again.
 
 ## Known spec/live drift
 
-`pmoves/configs/branch_protection/pmoves_standard.json` declares **five** required
-contexts including `merge-decision`. Live protection has **four**, and no
-`merge-decision`. Repository **rulesets** carry zero status checks.
-
-`merge-decision` and `verifier-gate` both report on every non-draft PR and were green
-across the entire 2026-08-21 queue, but neither is enforced. Making them required is
-an operator action — see the drift note above before assuming the spec file describes
-reality.
+**Re-measured 2026-09-28** (`gh api repos/POWERFULMOVES/PMOVES.AI/rulesets/10887588`,
+`.../branches/main/protection`). The 2026-08-21 note here -- "rulesets carry zero
+status checks, `merge-decision` not enforced" -- no longer holds. The `[ main ]`
+ruleset now requires all **five** contexts in
+`pmoves/configs/branch_protection/pmoves_standard.json`, including
+`merge-decision`. Classic protection still lists four (no `merge-decision`);
+most-restrictive-wins, so all five are enforced. `verifier-gate` is not required
+by either layer.
 
 ## See also
 
