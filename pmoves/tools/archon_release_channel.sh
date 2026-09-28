@@ -6,6 +6,14 @@
 #
 #   archon_release_channel.sh build     needs FORK FORK_SHA RELEASE_TAG RELEASE_SHA RELEASE_VERSION
 #   archon_release_channel.sh promote   needs IMAGE FORK_SHA RELEASE_TAG RELEASE_VERSION
+#   archon_release_channel.sh verify-current IMAGE
+#       Tells gated from ungated. If IMAGE is a :<channel> tag it must be a
+#       local image carrying the pmoves.upstream.release label (every gated
+#       image has it; compose/`docker build` of the submodule never does).
+#       Exit 0 ok (or not a channel tag), 3 refuse: an unlabelled :current is an
+#       ungated build wearing the channel name, and running it would be a lie.
+#
+# IMAGE may be digest-pinned (repo@sha256:<64 hex>); label checks are identical.
 #
 # build uses the HANDED values as-is (it does not re-resolve): the caller
 # resolved once, and the build context is pinned to FORK_SHA, so what is built
@@ -42,11 +50,15 @@ need() {
 
 WORD='[A-Za-z0-9._-]{1,64}'
 SHA='[0-9a-f]{40}'
-IMG='[A-Za-z0-9._/:-]{1,200}'
+IMG='[A-Za-z0-9._/:-]{1,200}(@sha256:[0-9a-f]{64})?'
 
 need ARCHON_CHANNEL_REPO "$REPO" '[A-Za-z0-9._/:-]{1,200}'
 need ARCHON_CHANNEL "$CHANNEL" "$WORD"
 need ARCHON_SMOKE_TIMEOUT "$TIMEOUT" '[0-9]{1,4}'
+need ARCHON_SMOKE_INTERVAL "$INTERVAL" '[0-9]{1,3}(\.[0-9]{1,2})?'
+
+tmo=""
+command -v timeout >/dev/null 2>&1 && tmo="timeout 15"
 
 cmd="${1:-}"
 case "$cmd" in
@@ -66,6 +78,21 @@ build)
     --label "pmoves.upstream.release.sha=$RELEASE_SHA" \
     -t "$tag" "https://github.com/$FORK.git#$FORK_SHA"
   echo "✔ built $tag (not yet :$CHANNEL)"
+  ;;
+verify-current)
+  img="${2:-${IMAGE:-}}"
+  need IMAGE "$img" "$IMG"
+  case "$img" in
+    *":$CHANNEL") ;;
+    *) echo "✔ $img is not the :$CHANNEL channel tag; no gate label required"; exit 0 ;;
+  esac
+  $tmo "$DOCKER" image inspect "$img" >/dev/null 2>&1 \
+    || die 3 "$img is not present locally (follow the channel first: make archon-follow)"
+  rel=$($tmo "$DOCKER" image inspect -f '{{index .Config.Labels "pmoves.upstream.release"}}' "$img" 2>/dev/null || true)
+  case "$rel" in
+    ""|"<no value>") die 3 "$img carries no pmoves.upstream.release label: an UNGATED build is wearing the :$CHANNEL tag. Refusing. Re-follow the gated channel (make archon-follow) or name a pinned image." ;;
+  esac
+  echo "✔ $img is gated ($rel)"
   ;;
 promote)
   need IMAGE "${IMAGE:-}" "$IMG"
@@ -91,20 +118,18 @@ promote)
     fi
   }
   # dash does not run the EXIT trap on a signal, so trap the signals too.
-  trap 'cleanup' EXIT
-  trap 'cleanup; exit 130' INT TERM
+  trap 'cleanup; rm "$logf" 2>/dev/null || true' EXIT
+  trap 'cleanup; rm "$logf" 2>/dev/null || true; exit 130' INT TERM
 
   cid=$("$DOCKER" run -d --pull never --network none \
     -e PORT=3090 -e HOST=127.0.0.1 \
     -e CLAUDE_CODE_OAUTH_TOKEN=boot-gate-placeholder-not-a-credential \
     "$IMAGE")
 
-  tmo=""
-  command -v timeout >/dev/null 2>&1 && tmo="timeout 15"
   deadline=$(( $(date +%s) + TIMEOUT ))
   verdict="timeout after ${TIMEOUT}s"
   while [ "$(date +%s)" -lt "$deadline" ]; do
-    running=$("$DOCKER" inspect -f '{{.State.Running}}' "$cid" 2>/dev/null || echo false)
+    running=$($tmo "$DOCKER" inspect -f '{{.State.Running}}' "$cid" 2>/dev/null || echo false)
     if [ "$running" != "true" ]; then verdict="container exited"; break; fi
     body=$($tmo "$DOCKER" exec "$cid" curl -fsS --max-time 5 http://127.0.0.1:3090/api/health 2>/dev/null || true)
     parsed=$(printf '%s' "$body" | python3 -c '
@@ -141,6 +166,6 @@ except Exception:
   echo "✔ $REPO:$CHANNEL → $IMAGE ($RELEASE_TAG; previous: $prev)"
   ;;
 *)
-  die 2 "usage: $0 build|promote (values via environment)"
+  die 2 "usage: $0 build|promote|verify-current [IMAGE] (values via environment)"
   ;;
 esac

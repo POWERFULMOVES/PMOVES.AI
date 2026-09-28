@@ -2433,6 +2433,13 @@ ARCHON_CHANNEL_REPO ?= ghcr.io/powerfulmoves/pmoves-archon
 ARCHON_CHANNEL ?= current
 ARCHON_SMOKE_TIMEOUT ?= 180
 export ARCHON_CHANNEL_REPO ARCHON_CHANNEL ARCHON_SMOKE_TIMEOUT
+# UNGATED builds never wear the channel tag. Compose's archon service carries
+# both `build:` and `image: ${ARCHON_IMAGE:-...:current}`, so any `--build` (or
+# `build`) of archon would otherwise tag the raw submodule tree as :current on
+# this node. Every recipe that BUILDS archon prefixes this; the shell value
+# outranks the --env-file value (compose precedence).
+ARCHON_LOCAL_BUILD_IMAGE ?= pmoves-archon:local-build
+ARCHON_UNGATED := ARCHON_IMAGE=$(ARCHON_LOCAL_BUILD_IMAGE)
 # Resolver exit codes: 1 = hardened fork lacks the release (sync it), 3 = could not measure.
 ARCHON_RESOLVE_OR_EXPLAIN = out=$$($(UPSTREAM_TRACK) archon) || { rc=$$?; printf '%s\n' "$$out"; \
 	if [ $$rc -eq 1 ]; then echo "✖ refusing: the hardened fork does not contain the latest upstream release (sync it first)"; \
@@ -2494,11 +2501,35 @@ A0_ARCHON_UP = $(DC) --profile agents $(if $(A0_ARCHON_DRY),--dry-run) up -d --n
 # -V: its state lives in bind mounts and nothing measured calls for renewal.
 # Consequence (open, not solved here): /home/appuser is an EMPTY tmpfs on every
 # start, so gh and any Claude/gh credentials the old volume carried are absent.
+#
+# Preflight (gated vs ungated): before recreating archon, the image compose
+# resolves is checked by `archon_release_channel.sh verify-current`. A :current
+# tag WITHOUT the pmoves.upstream.release label is an ungated build wearing the
+# channel name -> refused (tool exit 3; make reports 2).
+#
+# WHICH ROAD:
+#   make archon-follow          ONLINE: pull the gated GHCR :current, verify, recreate.
+#                               This is how a node follows new releases.
+#   make up-a0-archon-scoped    OFFLINE: --pull never; recreate from whatever is
+#                               already local (still label-verified). Also the
+#                               road for a pinned rollback: ARCHON_IMAGE=<repo>:<ver>-pmoves.<sha8>
 .PHONY: up-a0-archon-scoped
 up-a0-archon-scoped: ## Recreate ONLY archon and/or agent-zero from prebuilt images (SERVICES=archon|agent-zero; DRY_RUN=1 for plan; archon gets --force-recreate -V)
 	$(if $(A0_ARCHON_BAD),$(error up-a0-archon-scoped: SERVICES may only name: $(A0_ARCHON_ALLOWED) (refused: $(A0_ARCHON_BAD))))
-	$(if $(filter archon,$(A0_ARCHON_PICK)),@$(A0_ARCHON_UP) --force-recreate --renew-anon-volumes archon)
+	@set -e; case " $(A0_ARCHON_PICK) " in *" archon "*) \
+		img=$$($(DC) --profile agents config --images archon 2>/dev/null | head -n 1); \
+		if [ -z "$$img" ]; then echo "✖ COULD-NOT-MEASURE: compose did not resolve the archon image"; exit 3; fi; \
+		$(ARCHON_CHANNEL_TOOL) verify-current "$$img"; \
+		$(A0_ARCHON_UP) --force-recreate --renew-anon-volumes archon;; \
+	esac
 	$(if $(filter agent-zero,$(A0_ARCHON_PICK)),@$(A0_ARCHON_UP) agent-zero)
+
+.PHONY: archon-follow
+archon-follow: ## ONLINE: pull the gated GHCR :current, verify its gate label, then recreate archon (use this to follow releases)
+	@set -e; img="$$ARCHON_CHANNEL_REPO:$$ARCHON_CHANNEL"; \
+		docker pull "$$img"; \
+		$(ARCHON_CHANNEL_TOOL) verify-current "$$img"
+	@$(MAKE) --no-print-directory up-a0-archon-scoped SERVICES=archon ARCHON_IMAGE="$$ARCHON_CHANNEL_REPO:$$ARCHON_CHANNEL"
 
 # -------- Consciousness Taxonomy Loaders ----------
 .PHONY: load-consciousness-neo4j harvest-consciousness
@@ -4078,7 +4109,7 @@ up-jellyfin:
 # instead, use archon-release-latest + up-a0-archon-scoped.
 .PHONY: up-agents up-agents-stack
 up-agents-stack: cipher-build-pin-check ## Start Agents (NATS, Agent Zero, Archon (TS) + its Postgres, Cipher Memory, etc.)
-	@$(DC) --profile agents up -d --build nats agent-zero archon-postgres archon mesh-agent deepresearch publisher-discord cipher-api
+	@$(ARCHON_UNGATED) $(DC) --profile agents up -d --build nats agent-zero archon-postgres archon mesh-agent deepresearch publisher-discord cipher-api
 	@$(MAKE) --no-print-directory qdrant-provision-cipher || rc=$$?; 	rc=$${rc:-0}; if [ $$rc -ne 0 ] && [ $$rc -ne 2 ]; then echo "qdrant-provision-cipher failed (exit $$rc)"; exit $$rc; fi
 
 .PHONY: up-notebooklm
@@ -4402,7 +4433,7 @@ archon-rest-policy-smoke: ## Probe a CLI REST table with anon key (non-fatal on 
 
 .PHONY: archon-rebuild
 archon-rebuild: ## Rebuild Archon image with vendor update (set ARCHON_GIT_REF/REMOTE as needed)
-	@$(DC) build --no-cache archon
+	@$(ARCHON_UNGATED) $(DC) build --no-cache archon
 	@echo "✔ Archon image rebuilt"
 
 .PHONY: deepresearch-health
@@ -4612,7 +4643,7 @@ agents-integrations-pull: ## Pull latest from your forks
 	@cd "$(INTEGRATIONS_WORKSPACE)/PMOVES-Archon" && git fetch --all && git pull --rebase || true
 
 build-agents-integrations: ## Build agent images from your forks
-	@$(DC) -f docker-compose.agents.integrations.yml --profile agents build agent-zero archon
+	@$(ARCHON_UNGATED) $(DC) -f docker-compose.agents.integrations.yml --profile agents build agent-zero archon
 
 
 up-agents-integrations: ## Start agents using your forks (builds from $(INTEGRATIONS_WORKSPACE))

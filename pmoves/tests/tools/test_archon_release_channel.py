@@ -22,7 +22,10 @@ case "$1" in
   image)
     # image inspect [-f FMT] REF
     ref=$(eval echo \${$#})
-    case "$ref" in *:current) [ -n "${FAKE_HAS_CURRENT:-}" ] || exit 1; echo sha256:prev; exit 0;; esac
+    case "$ref" in *:current)
+      [ -n "${FAKE_HAS_CURRENT:-}" ] || exit 1
+      case "$*" in *pmoves.upstream.release*) echo "${FAKE_CURRENT_REL:-<no value>}";; *) echo sha256:prev;; esac
+      exit 0;; esac
     [ -n "${FAKE_IMAGE_MISSING:-}" ] && exit 1
     case "$*" in
       *org.opencontainers.image.revision*) echo "${FAKE_REV}";;
@@ -57,8 +60,9 @@ def env(tmp_path):
     return e, log
 
 
-def run(e):
-    return subprocess.run(["sh", str(TOOL), "promote"], env=e, capture_output=True, text=True, timeout=30)
+def run(e, *args):
+    args = args or ("promote",)
+    return subprocess.run(["sh", str(TOOL), *args], env=e, capture_output=True, text=True, timeout=30)
 
 
 def tagged(log):
@@ -128,4 +132,49 @@ def test_rejects_malformed_values(env, name, val):
     e[name] = val
     r = run(e)
     assert r.returncode == 2 and "rejected" in r.stderr
+    assert log.read_text() == ""
+
+
+DIGEST = "ghcr.io/powerfulmoves/pmoves-archon@sha256:" + "d" * 64
+CURRENT = "ghcr.io/powerfulmoves/pmoves-archon:current"
+
+
+def test_promote_accepts_a_digest_pinned_image_with_label_checks_intact(env):
+    e, log = env
+    e["IMAGE"] = DIGEST
+    r = run(e)
+    assert r.returncode == 0, r.stderr
+    assert f"tag {DIGEST} {CURRENT}" in log.read_text()
+    e2 = dict(e, FAKE_REV="c" * 40)
+    log.write_text("")
+    r2 = run(e2)
+    assert r2.returncode == 2 and "revision label" in r2.stderr
+
+
+@pytest.mark.parametrize("has,rel,rc,needle", [
+    ("1", "v0.11.1", 0, "is gated"),
+    ("1", "", 3, "UNGATED build"),
+    ("1", "<no value>", 3, "UNGATED build"),
+    ("", "v0.11.1", 3, "not present locally"),
+])
+def test_verify_current_tells_gated_from_ungated(env, has, rel, rc, needle):
+    e, _ = env
+    e.update(FAKE_HAS_CURRENT=has, FAKE_CURRENT_REL=rel)
+    r = run(e, "verify-current", CURRENT)
+    assert r.returncode == rc, (r.stdout, r.stderr)
+    assert needle in (r.stdout + r.stderr)
+
+
+def test_verify_current_ignores_non_channel_tags(env):
+    e, log = env
+    r = run(e, "verify-current", "pmoves-archon:local-build")
+    assert r.returncode == 0 and "not the :current channel tag" in r.stdout
+    assert log.read_text() == ""
+
+
+def test_bad_smoke_interval_is_rejected(env):
+    e, log = env
+    e["ARCHON_SMOKE_INTERVAL"] = "1;id"
+    r = run(e)
+    assert r.returncode == 2 and "ARCHON_SMOKE_INTERVAL" in r.stderr
     assert log.read_text() == ""
