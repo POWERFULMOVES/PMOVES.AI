@@ -88,7 +88,10 @@ def test_every_guard_atom_in_the_tool_has_a_case_here():
 
 
 def test_event_name_exclusion_guards_when_it_covers_every_fork_trigger():
-    body = _job("github.event_name != 'pull_request'", on="[push, pull_request]")
+    # push is branch-filtered so the merge-queue invariant (tested below) is not
+    # what this case measures: an unfiltered push now reaches queue branches.
+    body = _job("github.event_name != 'pull_request'",
+                on="{push: {branches: [main]}, pull_request: {}}")
     assert _run({"w.yml": body}).returncode == 0
 
 
@@ -105,7 +108,9 @@ def test_guard_propagates_through_needs():
 
 
 def test_job_not_triggered_by_pull_request_is_not_a_finding():
-    body = _job(None, on="[push, workflow_dispatch]")
+    # Branch-filtered push: an UNFILTERED push is merge-queue reachable, which
+    # is its own finding (see the merge-queue section below).
+    body = _job(None, on="{push: {branches: [main]}, workflow_dispatch: {}}")
     r = _run({"w.yml": body})
     assert r.returncode == 0
     assert "NOT-REACHABLE" in r.stdout
@@ -231,6 +236,131 @@ def test_unparseable_workflow_fails_rather_than_being_skipped():
               "bad.yml": "name: T\n  this: is: not: valid: yaml\n:::\n"})
     assert r.returncode == 1
     assert "UNPARSEABLE" in r.stdout
+
+
+# --------------------------------------------------------------------------- #
+# Merge-queue reachability. A queue branch (gh-readonly-queue/main/pr-N-<sha>)
+# holds approved-but-unmerged PR code, so push/create/delete/workflow_run jobs
+# that are self-hosted or read secrets must exclude it.
+# --------------------------------------------------------------------------- #
+def _secret_job(on: str, cond: str | None = None, runs_on: str = "ubuntu-latest") -> str:
+    if_line = f"    if: {cond}\n" if cond is not None else ""
+    return (
+        f"name: Q\non: {on}\njobs:\n  j:\n    runs-on: {runs_on}\n{if_line}"
+        "    steps:\n      - run: echo hi\n        env:\n"
+        "          K: ${{ secrets.SOME_KEY }}\n"
+    )
+
+
+def test_control_main_branch_trail_emit_is_queue_exposed():
+    """Failing-before control: the branch-trail-emit.yml on origin/main (before
+    the #3234 fix) must be flagged. Read via `git show`, never by reverting."""
+    proc = subprocess.run(
+        ["git", "-C", str(REPO_ROOT), "show",
+         "8360b7f91:.github/workflows/branch-trail-emit.yml"],
+        capture_output=True, text=True,
+    )
+    if proc.returncode != 0:
+        pytest.skip(f"pre-fix blob unavailable: {proc.stderr.strip()[:120]}")
+    r = _run({"branch-trail-emit.yml": proc.stdout})
+    assert r.returncode == 1, r.stdout
+    assert "QUEUE-EXPOSED: branch-trail-emit.yml" in r.stdout
+    assert "['create', 'delete', 'push']" in r.stdout
+
+
+def test_fixed_branch_trail_emit_is_not_queue_exposed():
+    body = (REPO_ROOT / ".github/workflows/branch-trail-emit.yml").read_text()
+    r = _run({"branch-trail-emit.yml": body})
+    assert r.returncode == 0, r.stdout
+    assert "0 EXPOSED" in r.stdout
+
+
+@pytest.mark.parametrize("on", [
+    "[push]",
+    "{push: {branches-ignore: [main]}}",
+    "{push: {branches: ['**']}}",
+    "{push: {paths: ['x/**']}}",
+    "[create]",
+    "[delete]",
+    "{workflow_run: {workflows: [X], types: [completed]}}",
+])
+def test_queue_reachable_triggers_are_findings(on):
+    r = _run({"w.yml": _secret_job(on)})
+    assert r.returncode == 1, f"{on}:\n{r.stdout}"
+    assert "QUEUE-EXPOSED" in r.stdout
+
+
+@pytest.mark.parametrize("on", [
+    "{push: {branches: [main]}}",
+    "{push: {branches: ['*']}}",  # `*` does not cross `/`
+    "{push: {branches-ignore: [main, 'gh-readonly-queue/**']}}",
+    "{push: {tags: ['v*']}}",
+    "{push: {branches: ['**', '!gh-readonly-queue/**']}}",
+    "{workflow_run: {workflows: [X], branches: [main]}}",
+    "[pull_request]",
+])
+def test_filters_that_exclude_the_queue_are_not_findings(on):
+    r = _run({"w.yml": _secret_job(on)})
+    assert "QUEUE-EXPOSED" not in r.stdout, f"{on}:\n{r.stdout}"
+
+
+def test_github_token_alone_is_out_of_scope():
+    body = ("name: Q\non: [push]\njobs:\n  j:\n    runs-on: ubuntu-latest\n"
+            "    steps:\n      - run: echo hi\n        env:\n"
+            "          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}\n")
+    assert "QUEUE-EXPOSED" not in _run({"w.yml": body}).stdout
+
+
+def test_self_hosted_without_secrets_is_in_scope():
+    body = _job(None, on="[create]")
+    r = _run({"w.yml": body})
+    assert r.returncode == 1 and "QUEUE-EXPOSED" in r.stdout
+
+
+@pytest.mark.parametrize("on,cond", [
+    ("[create]", "${{ !startsWith(github.ref, 'refs/heads/gh-readonly-queue/') }}"),
+    ("[create]", "${{ !startsWith(github.event.ref, 'gh-readonly-queue/') }}"),
+    ("[delete]", "${{ !startsWith(github.event.ref, 'gh-readonly-queue/') }}"),
+    ("[push]", "${{ !startsWith(github.ref, 'refs/heads/gh-readonly-queue/') }}"),
+    ("[push]", "github.ref == 'refs/heads/main'"),
+    ("[push, workflow_dispatch]", "github.event_name == 'workflow_dispatch'"),
+    ("[push]", "github.event_name != 'push'"),
+    ("{workflow_run: {workflows: [X]}}",
+     "${{ !startsWith(github.event.workflow_run.head_branch, 'gh-readonly-queue/') }}"),
+    ("[create, delete]",
+     "${{ (a || b) && !startsWith(github.event.ref, 'gh-readonly-queue/') }}"),
+])
+def test_queue_exclusion_spellings_pass(on, cond):
+    r = _run({"w.yml": _secret_job(on, cond)})
+    assert "QUEUE-EXPOSED" not in r.stdout, f"{on} / {cond}:\n{r.stdout}"
+
+
+@pytest.mark.parametrize("on,cond", [
+    # github.ref is the DEFAULT branch on delete: this proves nothing there.
+    ("[delete]", "${{ !startsWith(github.ref, 'refs/heads/gh-readonly-queue/') }}"),
+    # the short-name form never matches a push's full ref
+    ("[push]", "${{ !startsWith(github.event.ref, 'gh-readonly-queue/') }}"),
+    # an exclusion under a top-level OR does not exclude
+    ("[create]", "${{ x || !startsWith(github.event.ref, 'gh-readonly-queue/') }}"),
+    # the create exclusion does not cover delete
+    ("[create, delete]", "${{ !startsWith(github.ref, 'refs/heads/gh-readonly-queue/') }}"),
+    ("[push]", "github.event_name == 'push'"),
+])
+def test_non_excluding_conditions_are_findings(on, cond):
+    r = _run({"w.yml": _secret_job(on, cond)})
+    assert "QUEUE-EXPOSED" in r.stdout, f"{on} / {cond}:\n{r.stdout}"
+
+
+def test_queue_exclusion_propagates_through_needs():
+    body = (
+        "name: Q\non: [create]\njobs:\n"
+        "  gate:\n    runs-on: ubuntu-latest\n"
+        "    if: ${{ !startsWith(github.event.ref, 'gh-readonly-queue/') }}\n"
+        "    steps:\n      - run: echo hi\n"
+        "  sh:\n    needs: gate\n    runs-on: [self-hosted, Linux]\n"
+        "    steps:\n      - run: echo hi\n"
+    )
+    assert "QUEUE-EXPOSED" not in _run({"w.yml": body}).stdout
 
 
 # --------------------------------------------------------------------------- #
