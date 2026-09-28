@@ -587,6 +587,39 @@ register-docs: ## Insert prose into the register without touching ledger rows (A
 	fi
 	@$(REGISTER_PYTHON) tools/register_append.py docs $(ARGS)
 
+.PHONY: register-sync
+# THE RECOVERY ROAD. A checkout whose register carries uncommitted appended rows
+# cannot fast-forward, and the collision gate (correctly) refuses every shell
+# route that could drop a row -- while every other register-* road only
+# appends. So a stuck checkout had no sanctioned way out (measured 2026-09-28:
+# the root checkout, 21 behind main, 8 uncommitted rows). This drops ONLY rows
+# the target ref already carries (byte-identical, or re-filed with a
+# `first filed at <ts>` marker by the same owner on the same lane) and keeps
+# every other line byte-exact. DRY RUN unless APPLY=1. Never fetches.
+#
+#   make -C pmoves register-sync                      # classify, write nothing
+#   make -C pmoves register-sync APPLY=1              # drop, re-append KEEP
+#   make -C pmoves register-sync HOLD=1 APPLY=1       # drop, HOLD KEEP in a sidecar
+#   git pull --ff-only --no-recurse-submodules
+#   make -C pmoves register-sync REAPPLY=<sidecar> APPLY=1
+#
+# Every value travels by ENVIRONMENT, for the reason spelled out above
+# register-claim: nothing here ever becomes a shell word.
+# APPLY and HOLD are honoured ONLY from the command line: make imports the
+# ambient environment as variables, so an `APPLY=1` exported in some shell
+# would otherwise silently turn every dry run into a write. REPO is pinned
+# BLANK: the tool targets its own checkout, and an ambient REGISTER_SYNC_REPO
+# would redirect it to another checkout's register in a command that never
+# names that register (so no hook could see it). `ARGS=--repo=...` stays
+# possible and is visible in the command text.
+register-sync: export REGISTER_SYNC_APPLY = $(if $(filter command line,$(origin APPLY)),$(APPLY),)
+register-sync: export REGISTER_SYNC_HOLD = $(if $(filter command line,$(origin HOLD)),$(HOLD),)
+register-sync: export REGISTER_SYNC_REPO =
+register-sync: export REGISTER_SYNC_REAPPLY = $(REAPPLY)
+register-sync: export REGISTER_SYNC_REF = $(REF)
+register-sync: ## Drop uncommitted register rows main already has, keep the rest ([APPLY=1] [HOLD=1] [REAPPLY=sidecar] [REF=origin/main]) -- 0 done / 3 refused
+	@$(REGISTER_PYTHON) tools/register_append.py sync $(ARGS)
+
 .PHONY: register-status
 # THE SANCTIONED READ PATH. #2879 closed the shell write-hole correctly and left
 # the register with no way to ASK: every path its refusal named was a write, and
