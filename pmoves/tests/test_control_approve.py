@@ -15,6 +15,7 @@ import re
 import sys
 import threading
 import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
 from typing import Any
@@ -114,7 +115,10 @@ class FakeGitHub:
         headers = {k.lower(): v for k, v in req.header_items()}
         data = req.data.decode() if req.data else ""
         self.requests.append({"method": method, "url": url, "headers": headers, "data": data})
-        path = url.split("api.github.com", 1)[-1]
+        parts = urllib.parse.urlsplit(url)
+        if parts.scheme != "https" or parts.hostname != "api.github.com" or parts.port is not None:
+            raise AssertionError(f"request left the pinned API host: {url}")
+        path = parts.path + (f"?{parts.query}" if parts.query else "")
         if self.redirect_on and self.redirect_on in path:
             raise urllib.error.HTTPError(url, 302, "redirect refused (Found)", {"Location": "https://evil.example/x"}, io.BytesIO(b""))
         if self.link_override and "/comments" in path and method == "GET":
@@ -1027,13 +1031,18 @@ def test_head_moves_between_post_and_verify_is_refused(gh: FakeGitHub, config: P
         '<https://evil.example/repos/OWNER/REPO/issues/42/comments?page=2>; rel="next"',
         '<http://api.github.com/repos/OWNER/REPO/issues/42/comments?page=2>; rel="next"',
         '<https://api.github.com.evil.example/x?page=2>; rel="next"',
+        '<//evil.example/repos/OWNER/REPO/issues/42/comments?page=2>; rel="next"',
+        '<https://user@api.github.com/repos/OWNER/REPO/issues/42/comments?page=2>; rel="next"',
+        '<https://api.github.com:8443/repos/OWNER/REPO/issues/42/comments?page=2>; rel="next"',
     ],
-    ids=["other-host", "plain-http", "suffix-host"],
+    ids=["other-host", "plain-http", "suffix-host", "scheme-relative", "userinfo", "other-port"],
 )
 def test_link_urls_off_the_pinned_host_are_refused(gh: FakeGitHub, config: Path, link: str) -> None:
     gh.link_override = link
     assert run(config) == 3
-    assert all(r["url"].startswith("https://api.github.com/") for r in gh.requests)
+    for r in gh.requests:
+        parts = urllib.parse.urlsplit(r["url"])
+        assert (parts.scheme, parts.hostname, parts.port, parts.username) == ("https", "api.github.com", None, None)
     assert gh.posts() == []
 
 
@@ -1076,7 +1085,10 @@ def test_real_opener_refuses_redirects_without_forwarding_the_token() -> None:
     seen.clear()
     with pytest.raises(Exception):
         stock.open(urllib.request.Request("https://api.github.com/user", headers={"Authorization": "Bearer x"}))
-    assert any(u.startswith("https://evil.example") for u, _ in seen)
+    assert any(
+        urllib.parse.urlsplit(u).scheme == "https" and urllib.parse.urlsplit(u).hostname == "evil.example"
+        for u, _ in seen
+    )
 
 
 RC_LATER = [comment(1, marker()), comment(2, marker("REQUEST_CHANGES"))]

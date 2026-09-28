@@ -179,9 +179,12 @@ class GitHubClient:
         self._opener = opener if opener is not None else _build_opener()
 
     def _url(self, path: str) -> str:
-        if "://" in path:
-            # Absolute URLs only arrive via Link headers: pin them to our host.
-            parts = urllib.parse.urlsplit(path)
+        parts = urllib.parse.urlsplit(path)
+        if parts.scheme or parts.netloc:
+            # Absolute (or scheme-relative "//host/...") URLs only arrive via
+            # Link headers: pin them to our host by PARSED comparison -- scheme
+            # must be https and the whole netloc (host, port, no userinfo) must
+            # equal the configured one. Never a substring/prefix check.
             if parts.scheme != "https" or parts.netloc.lower() != self._netloc:
                 raise ApiUnreachable(
                     f"refusing to send the token to {parts.scheme}://{parts.netloc} "
