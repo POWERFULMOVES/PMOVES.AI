@@ -220,6 +220,7 @@ test.describe('Agent Zero Chat - Settings', () => {
     await page.goto('/dashboard/chat');
   });
 
+  // renamed-from: provides access to model selection
   test('provides access to agent selection', async ({ page }) => {
     // Current UI: a target-agent selector (not a model selector / settings button).
     const agentSelect = page.getByTestId('chat-agent-select');

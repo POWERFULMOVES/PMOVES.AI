@@ -4,6 +4,7 @@ test.describe('Supabase boot session', () => {
   // Rewritten 2026-09-28 (lane test/e2e-reconcile-open-jev). The original test waited for
   // window.__PMOVES_SUPABASE_BOOT, which cbf69c3fe (2026-08-06, cookie-based SSR auth) removed.
   // The current contract is the security half of the old test: nothing about the boot JWT is on window.
+  // renamed-from: browser client uses boot JWT when provided
   test('boot JWT is never exposed on window', async ({ page }) => {
     await page.goto('/test-supabase');
     await expect(page.getByRole('heading', { name: 'Supabase diagnostics' })).toBeVisible();
