@@ -31,6 +31,23 @@ async function mockChatBackend(page: Page, sendDelayMs = 0) {
   });
 }
 
+/** An agent-authored message whose content is a two-item markdown list. */
+function agentMarkdownReply() {
+  return {
+    id: 101,
+    owner_id: 'e2e-owner',
+    role: 'agent',
+    agent: 'Agent Zero',
+    agent_id: 'agent-zero',
+    avatar_url: null,
+    content: '- first item\n- second item',
+    message_type: 'text',
+    session_id: null,
+    metadata: null,
+    created_at: new Date().toISOString(),
+  };
+}
+
 /**
  * E2E Tests for Agent Zero Chat Interface
  *
@@ -82,20 +99,42 @@ test.describe('Agent Zero Chat', () => {
     await expect(sendButton).toBeDisabled();
   });
 
-  test('supports markdown in responses', async ({ page }) => {
-    // Send a message that should trigger a formatted response
-    await page.getByPlaceholder(/message/i).fill('Format this as a list');
-    await page.getByRole('button', { name: /send/i }).click();
+  test('displays agent replies from the message feed verbatim', async ({ page }) => {
+    // Serve an agent reply (routes registered later take precedence over the beforeEach mock)
+    await page.route('**/api/chat/messages*', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ items: [agentMarkdownReply()] }),
+      })
+    );
+    await page.reload();
 
-    // Wait for response (may be mocked in test environment)
-    await page.waitForTimeout(2000);
+    // Content renders in a whitespace-pre-wrap block (app/dashboard/chat/page.tsx), so the markdown
+    // source, including its line break, reaches the page as-is under the agent's name.
+    const reply = page.getByText('- first item', { exact: false });
+    await expect(reply).toBeVisible();
+    await expect(reply).toContainText('- second item');
+    // The author label is the <span> above the content ({m.agent || m.role})
+    await expect(page.locator('span').filter({ hasText: /^Agent Zero$/ })).toBeVisible();
+  });
 
-    // Check for markdown-rendered elements
-    const hasListItems = await page.locator('li, ul, ol').count() > 0;
-    // This is a soft assertion since response content varies
-    if (hasListItems) {
-      await expect(page.locator('li').first()).toBeVisible();
-    }
+  // fixme: FEATURE NOT BUILT. The chat page renders message content as plain text
+  // (<div className="text-sm whitespace-pre-wrap">{m.content}</div> in app/dashboard/chat/page.tsx);
+  // there is no markdown renderer, so a markdown list reply never becomes list items. The old body
+  // was vacuous (`if (count > 0)`), so it could never fail. No tracking issue yet.
+  test.fixme('supports markdown in responses', async ({ page }) => {
+    await page.route('**/api/chat/messages*', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ items: [agentMarkdownReply()] }),
+      })
+    );
+    await page.reload();
+
+    await expect(page.getByRole('listitem').filter({ hasText: 'first item' })).toBeVisible();
+    await expect(page.getByRole('listitem').filter({ hasText: 'second item' })).toBeVisible();
   });
 
   test('clears input after sending', async ({ page }) => {
@@ -174,18 +213,18 @@ test.describe('Agent Zero Chat - Settings', () => {
     await expect(agentSelect).toHaveValue('archon');
   });
 
-  test('allows clearing chat history', async ({ page }) => {
-    // Look for clear history button
-    const clearButton = page.getByRole('button', { name: /clear/i, exact: false });
+  // fixme: FEATURE NOT BUILT. app/dashboard/chat/page.tsx has no clear-history control (no
+  // "clear" button, and /api/chat/* has no delete route the page calls). The old body was vacuous
+  // (`if (count > 0)` with no assertion), so it could never fail. No tracking issue yet.
+  // The body states the intended behaviour so it fails loudly once un-fixme'd against a real control.
+  test.fixme('allows clearing chat history', async ({ page }) => {
+    const clearButton = page.getByRole('button', { name: /clear/i });
+    await expect(clearButton).toBeVisible();
+    await clearButton.click();
 
-    if ((await clearButton.count()) > 0) {
-      await clearButton.first().click();
+    const confirm = page.getByRole('button', { name: /confirm/i });
+    if (await confirm.isVisible()) await confirm.click();
 
-      // Verify confirmation or action
-      const hasConfirm = await page.getByRole('button', { name: /confirm/i }).count() > 0;
-      if (hasConfirm) {
-        await page.getByRole('button', { name: /confirm/i }).click();
-      }
-    }
+    await expect(page.getByText(/no messages yet/i)).toBeVisible();
   });
 });

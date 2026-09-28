@@ -69,14 +69,21 @@ test.describe('Services Health Dashboard', () => {
   });
 
   test('shows last check timestamp', async ({ page }) => {
-    await page.waitForTimeout(2000);
+    // SystemStatsBar renders "Updated <n>s ago" only once useServiceHealth has a successful
+    // /api/services-hub response carrying health.services (lib/useServiceHealth.ts sets lastUpdate
+    // there). Seed that response so the assertion is deterministic without a backend.
+    await page.route('**/api/services-hub*', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          health: { services: [{ slug: 'agent-zero', status: 'healthy', responseTime: 12 }] },
+        }),
+      })
+    );
+    await page.reload();
 
-    // Look for timestamp display
-    const timestampElement = page.locator('text=/last check|updated|refreshed/i');
-
-    if ((await timestampElement.count()) > 0) {
-      await expect(timestampElement.first()).toBeVisible();
-    }
+    await expect(page.getByText(/^Updated \d+(s|m|h) ago$/)).toBeVisible();
   });
 
   // fixme: REAL UI BUG, not a stale test. Refresh stays disabled ("Refreshing...") forever because
@@ -165,7 +172,10 @@ test.describe('Health API Endpoints', () => {
   });
 
   // health-all and health/boot-jwt require an authenticated owner since #969 (authenticateRequest).
-  test('health-all endpoint returns service list', async ({ page }) => {
+  // The default run has no session, so these two tests cover ONLY the auth gate. The success
+  // shapes are asserted by the ORIGINAL tests (same names as on main), restored in the
+  // 'authenticated' @backend describe block below.
+  test('health-all endpoint refuses unauthenticated requests', async ({ page }) => {
     const response = await page.request.get('/api/health-all?simple=true');
 
     // Unauthenticated: refused with 401 and a JSON error, no service list leaked
@@ -185,13 +195,51 @@ test.describe('Health API Endpoints', () => {
     expect(body.service).toBe('presign-health');
   });
 
-  test('boot-jwt health endpoint returns token status', async ({ page }) => {
+  test('boot-jwt health endpoint refuses unauthenticated requests', async ({ page }) => {
     const response = await page.request.get('/api/health/boot-jwt');
 
     expect(response.status()).toBe(401);
     const body = await response.json();
     expect(typeof body.error).toBe('string');
     expect(body).not.toHaveProperty('hasToken');
+  });
+
+  /**
+   * Success shapes of the owner-gated routes, restored from origin/main with their original names
+   * and assertions. Needs a live stack AND a session: auth comes from the E2E_AUTH_TOKEN
+   * environment variable (a Supabase-issued access token, i.e. a JWT with a `sub` claim), sent as
+   * `Authorization: Bearer`, which authenticateRequest() reads first. Without it these SKIP with
+   * that message; none passes vacuously and none fails for want of credentials.
+   *
+   *   E2E_AUTH_TOKEN=<access token> npm run test:e2e:backend
+   */
+  test.describe('authenticated', { tag: '@backend' }, () => {
+    const token = process.env.E2E_AUTH_TOKEN;
+    test.skip(
+      !token,
+      'E2E_AUTH_TOKEN is not set: owner-gated routes need a Supabase access token (Bearer JWT with a sub claim)'
+    );
+    const headers = () => ({ Authorization: `Bearer ${token}` });
+
+    test('health-all endpoint returns service list', async ({ page }) => {
+      const response = await page.request.get('/api/health-all?simple=true', { headers: headers() });
+
+      expect(response.status()).toBe(200);
+
+      const body = await response.json();
+      expect(body).toHaveProperty('services');
+      expect(Array.isArray(body.services)).toBe(true);
+    });
+
+    test('boot-jwt health endpoint returns token status', async ({ page }) => {
+      const response = await page.request.get('/api/health/boot-jwt', { headers: headers() });
+
+      expect(response.status()).toBe(200);
+
+      const body = await response.json();
+      expect(body).toHaveProperty('hasToken');
+      expect(typeof body.hasToken).toBe('boolean');
+    });
   });
 });
 
