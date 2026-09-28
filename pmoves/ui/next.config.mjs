@@ -5,6 +5,11 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Default '.next' is unchanged for dev, build, and the Docker image.
+  // PMOVES_UI_DIST_DIR exists only so playwright.launcher.config.ts can run two
+  // dev servers (real room catalog + negative fixture catalog) side by side:
+  // Next 16 refuses a second `next dev` that shares a distDir.
+  distDir: process.env.PMOVES_UI_DIST_DIR || '.next',
   output: 'standalone',
   reactStrictMode: true,
   outputFileTracingRoot: __dirname,

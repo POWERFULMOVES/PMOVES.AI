@@ -11,7 +11,8 @@
     "typecheck": "node scripts/with-env.mjs tsc --noEmit",
     "test": "node scripts/with-env.mjs jest",
     "smoke:upload-events": "node scripts/with-env.mjs jest upload-events-table.test.tsx",
-    "test:e2e": "node scripts/with-env.mjs playwright test"
+    "test:e2e": "node scripts/with-env.mjs playwright test",
+    "test:e2e:launcher": "playwright test -c playwright.launcher.config.ts"
   },
   "dependencies": {
     "@monaco-editor/react": "^4.7.0",
