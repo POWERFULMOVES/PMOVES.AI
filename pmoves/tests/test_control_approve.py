@@ -608,6 +608,21 @@ def test_marker_by_unallowed_author_refused(gh: FakeGitHub, config: Path) -> Non
     assert gh.posts() == []
 
 
+def test_pr_author_different_from_marker_author_approves(gh: FakeGitHub, config: Path) -> None:
+    # The common test shape has POWERFULMOVES in both roles; the road must not
+    # depend on that. A PR by someone else, verdict recorded by the allowlist.
+    gh.pr["user"]["login"] = "outside-contributor"
+    assert run(config) == 0
+    assert len(gh.posts()) == 1
+
+
+def test_pr_author_cannot_record_a_verdict_unless_allowlisted(gh: FakeGitHub, config: Path) -> None:
+    gh.pr["user"]["login"] = "outside-contributor"
+    gh.comments = [comment(1, marker(), author="outside-contributor")]
+    assert run(config) == 1
+    assert gh.posts() == []
+
+
 def test_marker_author_allowlist_env_override(gh: FakeGitHub, config: Path) -> None:
     gh.comments = [comment(1, marker(), author="control-recorder")]
     env = {"PMOVES_CONTROL_TOKEN": TOKEN, "PMOVES_CONTROL_MARKER_AUTHORS": "control-recorder"}
