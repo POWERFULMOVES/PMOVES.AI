@@ -1,4 +1,4 @@
-.PHONY: launcher-check launcher-install session-check env-bootstrap-lite env-setup env-check preflight flight-check flight-check-retro preflight-retro showtime bringup-showtime smoke-showtime showtime-links showtime-links-open showtime-links-strict submodule-integrity submodule-layer-validate submodule-layer-validate-one submodule-layer-validate-all submodule-layer-validate-all-strict submodule-layer-validate-strict submodule-branch-policy-check audit-layers audit-layers-static audit-layers-runtime ci-runners-check ci-runners-check-strict ci-runners-map ci-runners-map-strict ci-runners-lockdown ci-runners-lockdown-strict ci-runners-local-cert-up ci-runners-local-cert-down ci-runners-local-cert-status ci-queue-sitrep ci-queue-drain-nonpr ci-queue-drain-nonpr-apply skill-registry-validate runner-labels-check runner-labels-refresh auth-alignment auth-alignment-strict topology-chit-gate topology-chit-gate-strict pr-monitor pr-monitor-strict pr-monitor-chit-packet pr-trim-analyze pr-trim-resolve pr-trim-report pr-trim floos-status floos-pr-monitor-validate floos-pr-monitor-resolve floos-pr-monitor-run-dry chit-flow-pr-monitor chit-flow-pr-monitor-strict ports-resolve sign-trail naming-drift-check naming-drift-strict docker-hub-inject showtime-update
+.PHONY: launcher-check launcher-install session-check env-bootstrap-lite env-setup env-check preflight flight-check flight-check-retro preflight-retro showtime bringup-showtime smoke-showtime showtime-links showtime-links-open showtime-links-strict submodule-integrity submodule-layer-validate submodule-layer-validate-one submodule-layer-validate-all submodule-layer-validate-all-strict submodule-layer-validate-strict submodule-branch-policy-check audit-layers audit-layers-static audit-layers-runtime ci-runners-check ci-runners-check-strict ci-runners-map ci-runners-map-strict ci-runners-lockdown ci-runners-lockdown-strict ci-runners-local-cert-up ci-runners-local-cert-down ci-runners-local-cert-status ci-queue-sitrep ci-queue-drain-nonpr ci-queue-drain-nonpr-apply skill-registry-validate runner-labels-check runner-labels-refresh auth-alignment auth-alignment-strict topology-chit-gate topology-chit-gate-strict pr-monitor pr-monitor-strict pr-monitor-chit-packet pr-trim-analyze pr-trim-resolve pr-trim-report pr-trim pr-control-approve floos-status floos-pr-monitor-validate floos-pr-monitor-resolve floos-pr-monitor-run-dry chit-flow-pr-monitor chit-flow-pr-monitor-strict ports-resolve sign-trail naming-drift-check naming-drift-strict docker-hub-inject showtime-update
 
 # Force UTF-8 output on Windows (cp1252 chokes on Unicode/emoji in pr-trim et al.)
 export PYTHONIOENCODING ?= utf-8
@@ -467,6 +467,23 @@ pr-closeout-merge: ## Audit + guarded admin squash merge (PR=N EXPECTED_HEAD=sha
 		--admin-author "$${PR_ADMIN_AUTHOR:-POWERFULMOVES}" \
 		--confirm "$$CONFIRM" \
 		$${ALLOW_ADVISORY_FAILURE:+--allow-advisory-failure "$$ALLOW_ADVISORY_FAILURE"} \
+		$(ARGS)
+
+# Approval road (docs/operations/MERGE_MECHANICS.md section 6). The machine
+# user's token is read by the tool itself from PMOVES_CONTROL_TOKEN_FILE (a
+# restricted 0600 file; never the shared env tiers) or PMOVES_CONTROL_TOKEN; it is
+# never a make variable or an argv element. make collapses nonzero exits to 2,
+# so read the final "VERDICT: ... rc=N" line for 1 (refused) vs 3 (unmeasured).
+pr-control-approve: ## Control-road APPROVE review after a recorded verdict (PR=N EXPECTED_HEAD=sha CONFIRM='APPROVE #N @ sha' [DRY_RUN=1])
+	@test -n "$${PR:-}" || { echo "ERROR: PR is required"; exit 2; }
+	@test -n "$${EXPECTED_HEAD:-}" || { echo "ERROR: EXPECTED_HEAD is required"; exit 2; }
+	@test -n "$${CONFIRM:-}" || { echo "ERROR: CONFIRM is required"; exit 2; }
+	@$(PRECHECK_PY) tools/control_approve.py \
+		--pr "$$PR" \
+		--expected-head "$$EXPECTED_HEAD" \
+		--confirm "$$CONFIRM" \
+		$${PR_CONTROL_REPO:+--repo "$$PR_CONTROL_REPO"} \
+		$${DRY_RUN:+--dry-run} \
 		$(ARGS)
 
 floos-status: ## Show FlOO$ pairing status

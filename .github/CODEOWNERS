@@ -38,7 +38,7 @@
 /pmoves/monitoring/ @powerfulmoves
 
 # Documentation
-/docs/ @powerfulmoves @claudedev
+/docs/ @powerfulmoves
 
 # Git configuration files
 .gitignore @powerfulmoves
