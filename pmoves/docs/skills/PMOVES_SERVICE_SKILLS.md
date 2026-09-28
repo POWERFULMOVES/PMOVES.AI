@@ -8,7 +8,7 @@ context, and failure modes — the distilled output of a live session.
 
 | Skill | Service | Key facts encoded |
 |-------|---------|-------------------|
-| `pmoves-n8n` | n8n self-hosted fabric | 3-layer split: **PMOVES-n8n = the RUNTIME source fork** (compose builds pmoves/n8n:2.1.5-runtime from it at docker-compose.n8n.yml:17-20 + mounts its workflows; fork-sync maps n8n-io/n8n → PMOVES-n8n) / **PMOVES-N8N-Auto = an upstream MIRROR of n8n-io/n8n master** kept for reference/patch-carrying, NOT what the runtime builds / runtime compose :5678. Workflows-as-code live in PMOVES-n8n |
+| `pmoves-n8n` | n8n self-hosted fabric | 3-layer split: **path PMOVES-n8n = repo PMOVES-n8n-FlooS, first-party workflows** (no upstream). Compose builds pmoves/n8n:2.1.5-runtime from its thin `compose/n8n/Dockerfile` (`FROM n8nio/n8n`, the official image) at docker-compose.n8n.yml:17-20 and mounts its workflows. **Path PMOVES-N8N-Auto = repo PMOVES-N8N, the FULL source fork of n8n-io/n8n**, synced from upstream by fork-sync (n8n-io/n8n → PMOVES-N8N). It is not what the runtime builds today. Runtime compose :5678. Workflows-as-code live in PMOVES-n8n (FlooS) |
 | `pmoves-activepieces` | ActivePieces companion | standalone stack 0.86.3 :8087, flows-as-code git-sync (EE) vs export→commit→import (CE), phase-2 main-compose follow-up |
 | `pmoves-e2b-danger-room` | E2B sandboxes | SDK usage, Terraform self-host path (e2b-dev/infra, AWS/GCP), Danger-Room microVM pattern, sibling repos map |
 | `pmoves-mcp-gateway` | Docker MCP gateway fork | gateway pattern, secret management, OAuth flows, fleet profile usage (pmoves_5090_web), sync via merge-upstream |

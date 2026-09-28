@@ -37,6 +37,11 @@ teams:
     # team its CLI identities (claude_b850, claude_4090, ...) already sit in.
     - node_steward
     - kimi_knuckles      # Kimi Code CLI identity on B850/Knuckles (PMOVES-KIMI-KNUCKLES-B850)
+    # Village Rule review/governance/memory bodies a node_steward spawns. They
+    # sit with the steward that directs them; there is no governance team.
+    - code_review
+    - control_agent
+    - memory_agent
   implementation:
     name: Implementation
     description: Blueprint-first coding and delivery agents
@@ -49,6 +54,7 @@ teams:
     - agents
     agents:
     - kilocode_glm
+    - delivery_agent     # AGNOTE4482 Delivery Body (.claude/agents/delivery-agent.md)
   research:
     name: Research & Knowledge
     description: RAG, search, embedding, document processing

@@ -532,6 +532,159 @@ agents:
       own domain is administration of that node. Definition and rationale live in
       .claude/agents/node-steward.md.
 
+  # ---- Village Rule bodies (AGNOTE4482 Three-Body) ----------------------------
+  # The four session roles a node_steward spawns to do claimed work. Like
+  # node_steward they are ROLES loaded from `.claude/agents/<kebab-key>.md`, not
+  # node identities and not services. They were missing from this file entirely
+  # (2026-09-23, operator: "ensure your AGInTZ delivery-agent and code-review have
+  # registered names and voices approved for Known Roads"), so the one file
+  # .claude/CLAUDE.md calls the taxonomy's source of truth could not name the
+  # bodies the Village Rule depends on, and Known Roads recorded their actions as
+  # the node or as "unknown".
+  #
+  # The key -> file mapping is deterministic, not a lookup: validate_agent_registry
+  # derives the runtime spelling as `snake.replace("_", "-")`, and that spelling is
+  # the `.claude/agents/*.md` filename and the `name:` in its frontmatter.
+  # `three_body` reuses the vocabulary of the role_classes block above; it is set
+  # per entry because memory_agent has a Three-Body seat but no role_class.
+  #
+  # SIGNATURE: like node_steward these carry no `signature:`, for a related but
+  # distinct reason. The key that signs is held by a MACHINE, so a body's signing
+  # card is per node (`b850-delivery-agent`, ...) while one registry row spans
+  # every node -- there is no single card to point at. The B850 cards are seeded
+  # H-half-only and INACTIVE in signing_identity_cards.yaml; the operator issues
+  # keys per pmoves/docs/operations/SIGNING_IDENTITY_CARDS.md. Until a card is
+  # active a body's work is signed by its node identity (b850-claude on
+  # Knuckles), exactly as today, so no signer gains a second resolvable name.
+  delivery_agent:
+    name: "Delivery Body"
+    class: specialized
+    primary_type: agent
+    secondary_type: worker
+    # No listening socket. A subagent session role spawned through the Agent
+    # tool (`subagent_type: delivery-agent`), never a service.
+    port: null
+    health: null
+    layers: [L0, L2, L4]
+    evolution_stage: stage_1
+    # role_classes.worker verbatim: "Implements the plan: code, fixes, docs,
+    # deploys. The only role_class that writes production changes." The
+    # frontmatter of .claude/agents/delivery-agent.md already declares
+    # `role_class: worker`, and it is the only one of these four bodies granted
+    # Write/Edit, so this row records what the definition enforces.
+    role_class: worker
+    three_body: delivery
+    agent_definition: .claude/agents/delivery-agent.md
+    # Deliberately empty. The body publishes nothing to NATS itself; its trail
+    # goes through `/chit:sign-trail` (the pmoves-chit-sign skill), not a
+    # subject of its own. Declaring subjects it does not publish is #2734.
+    nats:
+      publishes: []
+      subscribes: []
+    topology:
+      # `any`, following node_steward: every node's steward can spawn it.
+      node_affinity: [any]
+      team: implementation
+      ci_runner: null
+      compose_profile: null
+    description: >-
+      AGNOTE4482 Delivery Body. Executes code changes inside a lane a steward has
+      already CLAIMED in AGNOTE4482PHI.t1.md; hands off by CHIT reference, never
+      plaintext secrets. Loads .claude/agents/delivery-agent.md.
+
+  code_review:
+    name: "Code Review Body"
+    class: specialized
+    primary_type: agent
+    secondary_type: worker
+    # No listening socket. A read-only subagent session role.
+    port: null
+    health: null
+    layers: [L0, L2, L4]
+    evolution_stage: stage_1
+    # role_classes.reviewer: "Verifies and gates ... Never edits what it
+    # reviews." .claude/agents/code-review.md withholds Write, Edit and Agent,
+    # so that is enforced. Its frontmatter does NOT declare `role_class`; per
+    # the note under role_classes, absence there means unclassified, never an
+    # error, and this row is where the classification is recorded.
+    role_class: reviewer
+    # Post-work face of the Control Body: line-by-line correctness findings that
+    # feed a control_agent ACK. Distinct from control_agent, which sequences
+    # merges and signs off; this body only reports.
+    three_body: control
+    agent_definition: .claude/agents/code-review.md
+    nats:
+      publishes: []
+      subscribes: []
+    topology:
+      node_affinity: [any]
+      team: orchestration
+      ci_runner: null
+      compose_profile: null
+    description: >-
+      Deep code-correctness reviewer for non-trivial diffs (bugs, security,
+      error handling, types), run after a delivery push and before a control
+      ACK. Not CHIT audit (chit-compliance-reviewer) and not merge governance
+      (control_agent). Loads .claude/agents/code-review.md.
+
+  control_agent:
+    name: "Control Body"
+    class: specialized
+    primary_type: agent
+    secondary_type: worker
+    # No listening socket. A read-only subagent session role.
+    port: null
+    health: null
+    layers: [L0, L2, L4]
+    evolution_stage: stage_1
+    # role_classes.reviewer; .claude/agents/control-agent.md already declares
+    # `role_class: reviewer` and withholds Write/Edit.
+    role_class: reviewer
+    three_body: control
+    agent_definition: .claude/agents/control-agent.md
+    nats:
+      publishes: []
+      subscribes: []
+    topology:
+      node_affinity: [any]
+      team: orchestration
+      ci_runner: null
+      compose_profile: null
+    description: >-
+      AGNOTE4482 Control Body. PR review, merge sequencing, risk controls and
+      Village Rule signoff; cannot edit what it reviews. Loads
+      .claude/agents/control-agent.md.
+
+  memory_agent:
+    name: "Memory Body"
+    class: specialized
+    primary_type: agent
+    secondary_type: data
+    # No listening socket. A subagent session role; Cipher is reached through
+    # the cipher MCP server and skills, not through a port this role owns.
+    port: null
+    health: null
+    layers: [L0, L2, L4]
+    evolution_stage: stage_1
+    # Deliberately no `role_class`. The role_classes block says so directly:
+    # "the Memory Body is orthogonal (cross-cutting CHIT/Cipher custody, not a
+    # workflow role)". Inventing a fourth role_class here would contradict the
+    # block this key is read against.
+    three_body: memory
+    agent_definition: .claude/agents/memory-agent.md
+    nats:
+      publishes: []
+      subscribes: []
+    topology:
+      node_affinity: [any]
+      team: orchestration
+      ci_runner: null
+      compose_profile: null
+    description: >-
+      AGNOTE4482 Memory Body. CHIT encoding, Cipher Memory store/search and
+      signature trails across sessions; no file edits. Loads
+      .claude/agents/memory-agent.md.
+
   space_agent:
     name: "PMOVES Space-Agent"
     class: standard

@@ -20,7 +20,7 @@
 # not belong here. Version-pin only to fix a specific defect, and say which.
 
 # --- Additions: imported by PMOVES code, absent from upstream ---
-httpx
+# httpx: provided by upstream (httpx[socks]==0.28.1 as of v2.13); do not redeclare
 jsonschema
 nats-py              # NATS bus integration
 python-jose[cryptography]==3.5.0

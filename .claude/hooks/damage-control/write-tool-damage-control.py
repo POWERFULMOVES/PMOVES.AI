@@ -25,7 +25,7 @@ import yaml
 
 # Known Roads — contextualized, provable bypass for readOnlyPath domains.
 sys.path.insert(0, str(Path(__file__).parent))
-from known_roads import evaluate_known_road, known_road_hint  # noqa: E402
+from known_roads import evaluate_known_road, known_road_hint, set_hook_input  # noqa: E402
 
 
 def is_glob_pattern(pattern: str) -> bool:
@@ -186,6 +186,8 @@ def main() -> None:
     except json.JSONDecodeError as e:
         print(f"Error: Invalid JSON input: {e}", file=sys.stderr)
         sys.exit(1)
+    # Attribution (not authentication) for any Known Road row this call records.
+    set_hook_input(input_data)
 
     tool_name = input_data.get("tool_name", "")
     tool_input = input_data.get("tool_input", {})
@@ -225,4 +227,6 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    # Exit 0 or 2 only -- an uncaught exception must never exit open. See fail_closed.py.
+    from fail_closed import run_fail_closed  # noqa: E402
+    run_fail_closed(main, "PreToolUse")

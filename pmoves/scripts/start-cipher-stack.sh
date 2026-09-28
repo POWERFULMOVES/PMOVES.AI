@@ -16,20 +16,25 @@ echo "=== Starting minimal Cipher stack for Elder-Melchor ==="
 # Create network if needed
 docker network create pmoves-net 2>/dev/null || true
 
-# Start Neo4j
+# Neo4j: this script no longer removes or starts it.
+# It used to force-remove any container named pmoves-neo4j and `docker run` a
+# replacement with NO data volume. Run on a node whose live graph ran under
+# that name (Knuckles, 2026-09), that deletes the running database's container
+# and brings up an empty graph in its place. Neo4j is started by compose, on
+# the named volume pmoves_neo4j-data, and this script only checks it is there.
 echo "--- Neo4j ---"
-docker rm -f pmoves-neo4j 2>/dev/null || true
-docker run -d --name pmoves-neo4j \
-  --network pmoves-net \
-  -e NEO4J_AUTH=neo4j/pmoves2026 \
-  -e NEO4J_PLUGINS='["apoc"]' \
-  -e NEO4J_server_memory_heap_initial__size=512m \
-  -e NEO4J_server_memory_heap_max__size=1G \
-  -e NEO4J_server_memory_pagecache_size=512m \
-  -p 7474:7474 -p 7687:7687 \
-  --memory 2g \
-  neo4j:5.26.22 2>&1
-echo "Neo4j starting on bolt://localhost:7687 (web UI: http://localhost:7474)"
+NEO4J_CONTAINER="$(python3 "$SCRIPT_DIR/neo4j_container.py")" || {
+  echo "❌ could not determine the Neo4j container name (see above)" >&2
+  exit 3
+}
+if docker ps --format '{{.Names}}' | grep -qxF "$NEO4J_CONTAINER"; then
+  echo "Neo4j already running as $NEO4J_CONTAINER; leaving it untouched."
+else
+  echo "❌ Neo4j ($NEO4J_CONTAINER) is not running, and this script does not start it." >&2
+  echo "   Start it under compose, on its named volume:" >&2
+  echo "     make -C pmoves up-data-tier DATA_SERVICES=neo4j" >&2
+  exit 1
+fi
 
 # Start NATS
 echo "--- NATS ---"
@@ -62,7 +67,7 @@ if [ "$NEO4J_OK" = "yes" ] && [ "$NATS_OK" = "yes" ]; then
   echo "   To verify: hermes mcp test pmoves-cipher-local"
 else
   echo "❌ Services not ready. Check docker logs:"
-  echo "   docker logs pmoves-neo4j"
+  echo "   docker logs $NEO4J_CONTAINER"
   echo "   docker logs pmoves-nats"
   exit 1
 fi
