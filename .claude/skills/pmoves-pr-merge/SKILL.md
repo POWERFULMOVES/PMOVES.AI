@@ -177,10 +177,12 @@ git -C <worktree> diff origin/main --stat   # expect +N / -0 on append-only file
   holds uncommitted work. It reverts the whole file. Commit first, then experiment.
 - Do not measure anything from a stale worktree. Read at `origin/main`.
 
-## Approval road (genuine approvals, no bypass)
+## Approval road (a genuine approval; the merge still uses `--admin`)
 
-Once the control machine user exists, a PR can carry a real approval instead of
-leaning on the review half of the bypass: the control body records a
+Once the control machine user exists, a PR can carry a real approval. It counts
+toward the approving-review requirement; it satisfies code-owner review only
+after the CODEOWNERS follow-up; and `pr-closeout-merge` still passes `--admin`,
+so the merge remains a bypass. Flow: the control body records a
 `pmoves-control-verdict` marker comment for the exact head it reviewed, then
 
 ```bash

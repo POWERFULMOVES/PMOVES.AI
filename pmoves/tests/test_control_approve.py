@@ -820,6 +820,20 @@ def test_make_recipe_never_passes_the_token() -> None:
     assert "TOKEN" not in recipe
 
 
+def test_docs_do_not_overclaim_what_the_approval_buys() -> None:
+    root = TOOLS.parents[1]
+    skill = (root / ".claude" / "skills" / "pmoves-pr-merge" / "SKILL.md").read_text(encoding="utf-8")
+    doc = (TOOLS.parent / "docs" / "operations" / "MERGE_MECHANICS.md").read_text(encoding="utf-8")
+    tool_doc = control_approve.__doc__ or (TOOLS / "control_approve.py").read_text(encoding="utf-8")
+    assert "no bypass" not in skill.lower()
+    assert "reviewDecision should now be APPROVED" not in doc
+    assert "actually met rather than bypassed" not in doc
+    assert "genuinely satisfies" not in tool_doc
+    # the code-owner caveat is stated wherever the approval is described
+    for text in (skill, doc, tool_doc):
+        assert "CODEOWNERS" in text
+
+
 def test_config_ships_without_a_hardcoded_login() -> None:
     import yaml
 

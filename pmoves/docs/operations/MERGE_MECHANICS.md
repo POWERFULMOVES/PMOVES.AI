@@ -160,7 +160,13 @@ answer until the operator completes 6.5.
 `@powerfulmoves` is the author of our PRs, so its own approval does not count
 (A7). The only way through today is the admin bypass (sections 1-2). The
 approval road supplies a second, legitimate approver without weakening any
-rule, so the review requirement is actually met rather than bypassed.
+rule. What that meets, precisely:
+
+- the **approving-review count** — as soon as the machine user exists (A1);
+- **code-owner review — only after the CODEOWNERS follow-up** (6.5 step 6)
+  co-lists the machine user on every `@powerfulmoves` line. Until then
+  `reviewDecision` stays `REVIEW_REQUIRED` even with the approval, because the
+  only code owner is the author (A2, A7).
 
 **What it does not buy (yet).** It does not unlock a merge queue: GitHub offers
 merge queues only on organization-owned repositories, and this one is owned by
@@ -379,7 +385,7 @@ closeout targets, in the strict-mode order from 6.4:
 ```bash
 gh pr update-branch N                                             # only if BEHIND; then wait for green
 make -C pmoves pr-control-approve  PR=N EXPECTED_HEAD=sha CONFIRM='APPROVE #N @ sha'
-make -C pmoves pr-closeout-audit   PR=N EXPECTED_HEAD=sha      # reviewDecision should now be APPROVED
+make -C pmoves pr-closeout-audit   PR=N EXPECTED_HEAD=sha      # APPROVED only once the CODEOWNERS follow-up has landed
 make -C pmoves pr-closeout-merge   PR=N EXPECTED_HEAD=sha CONFIRM='MERGE #N @ sha'   # immediately
 ```
 
@@ -387,8 +393,10 @@ Use the **same sha** in the last three. Anything that changes the diff in
 between — a push, Update branch, or another PR merging into `main` — dismisses
 the approval (A5) and the sequence restarts from a new verdict.
 
-Be precise about what the approval changes: `reviewDecision` becomes
-`APPROVED`, so `pr-closeout-audit` passes without `ADMIN_REVIEW_BYPASS`; but
+Be precise about what the approval changes. **Once the CODEOWNERS follow-up
+has landed**, `reviewDecision` becomes `APPROVED`, so `pr-closeout-audit`
+passes without `ADMIN_REVIEW_BYPASS`; before it, the audit still needs
+`ADMIN_REVIEW_BYPASS`. Either way
 `pr-closeout-merge` still passes `--admin` and is still the bypass (section 2).
 Merging an approved PR *without* the bypass needs a guarded non-admin mode on
 `pr_closeout.py` (head pin, full audit, `--match-head-commit`, no `--admin`) —
