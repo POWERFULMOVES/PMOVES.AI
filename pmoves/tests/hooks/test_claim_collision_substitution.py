@@ -151,3 +151,48 @@ def test_the_sanctioned_write_path_is_untouched():
     """The make targets must keep working, or the fix trades one deadlock for another."""
     verdict, why = _verdict("make -C pmoves register-status")
     assert verdict == ALLOW, why[:400]
+
+
+# --- register-sync: a DELIBERATE widening of the sanctioned make targets ------
+#
+# Operator-requested 2026-09-28 (fix/register-sync-road). These run with the
+# repository root as the command's cwd, because `-C pmoves` is resolved against
+# it; `_verdict` above sends no cwd, so a bare `make -C pmoves ...` is judged
+# from wherever pytest happens to run.
+#
+# FAILING-BEFORE, measured on the pre-change hook: the bare
+# `make -C pmoves register-sync` was ALREADY allowed (rc 0) -- the hook only
+# judges segments that NAME the register, and the bare form names nothing. The
+# behavioural refusal is the register-naming form (the same shape as the
+# hook's own `make -C /tmp/evil register-status ARGS=<register>` example):
+# rc 2, "`make` is only recognised here for the register-* targets".
+
+def _verdict_in_repo(cmd: str) -> tuple:
+    payload = json.dumps({"tool_name": "Bash", "cwd": str(REPO_ROOT),
+                          "tool_input": {"command": cmd}})
+    proc = subprocess.run(
+        [sys.executable, str(HOOK)], input=payload,
+        capture_output=True, text=True, timeout=120,
+    )
+    text = (proc.stdout + proc.stderr).strip()
+    return (ALLOW if proc.returncode == 0 else BLOCK), text
+
+
+def test_register_sync_is_a_sanctioned_make_target():
+    verdict, why = _verdict_in_repo(f"make -C pmoves register-sync ARGS={REG}")
+    assert verdict == ALLOW, why[:400]
+    verdict, why = _verdict_in_repo("make -C pmoves register-sync APPLY=1")
+    assert verdict == ALLOW, why[:400]
+
+
+@pytest.mark.parametrize("cmd", [
+    f"make -C /tmp/x register-sync ARGS={REG}",
+    f"make -f /tmp/evil.mk -C pmoves register-sync ARGS={REG}",
+    f"make register-sync ARGS={REG}",
+    f"make -C pmoves register-synchronise ARGS={REG}",
+    f"git checkout -- {REG}",
+    f"git restore --source=HEAD {REG}",
+])
+def test_register_sync_did_not_relax_anything_else(cmd):
+    verdict, why = _verdict_in_repo(cmd)
+    assert verdict == BLOCK, f"{cmd!r} was allowed:\n{why[:400]}"

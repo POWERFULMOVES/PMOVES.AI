@@ -347,7 +347,20 @@ COPY pmoves/services/ffmpeg-whisper/requirements.lock ./requirements.lock
 # CTranslate2 built from source for aarch64, or a torch-native ASR provider;
 # neither is in this change.
 RUN pip install --no-cache-dir uv && \
-    if [ "$(uname -m)" = "aarch64" ]; then \
+    # NOT gated on aarch64. It was, and that is why x86_64 could not build:
+    # the guard protected the FIX while the thing it compensates for -- the
+    # --extra-index-url below -- stayed ungated on every architecture. SPARK
+    # (aarch64) took this branch and built; Z890 (x86_64) skipped it, was still
+    # offered the cu128 index, resolved torchaudio to a cu128 wheel, and failed
+    # the lock's plain-PyPI hash check. Measured 2026-09-20: nine ingests, nine
+    # 502s, because the container was never created.
+    #
+    # Both in-repo reference installers do this unconditionally per GPU vendor,
+    # never per architecture: pmoves/docs/ARTSTUFF/realtime/torch.js (Pinokio)
+    # and pmoves/creator/installers/*-AUTO_INSTALL-RUNPOD.sh. Torch from the
+    # CUDA index must be installed FROM THAT INDEX ALONE and BEFORE the locked
+    # resolve -- never blended into a hash-checked resolve via a second index.
+    if true; then \
       # Preinstall the full torch trio from the cu128 index. The lock pins
       # plain-PyPI hashes; the cu128 wheels (what GB10/Jetson actually need)
       # carry different hashes, so torchaudio must be satisfied BEFORE the

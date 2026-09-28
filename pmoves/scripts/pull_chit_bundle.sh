@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
 # Pattern B consumer: install the newest CI CHIT bundle at the canonical
-# user-scoped path so runnerless nodes never juggle run IDs or paths.
+# user-scoped path so consumer nodes never juggle run IDs or paths.
+#
+# Producers vs consumers: only the LINUX ai-lab runners (spark, b850) can run
+# sync-secrets-local.yml. The 4090 and 5090 DO have online Windows runners,
+# but they are consumers: the workflow's `shell: bash` steps run under WSL
+# bash there and die on the mangled Windows script path, so the workflow now
+# refuses those targets. Windows nodes run THIS script instead.
 #
 #   make -C pmoves secrets-pull                # this script
 #   make -C pmoves secrets-funnel-from-prod    # pull + materialize tier files
@@ -21,10 +27,29 @@ set -euo pipefail
 REPO="${PMOVES_REPO:-POWERFULMOVES/PMOVES.AI}"
 WORKFLOW="sync-secrets-local.yml"
 NODE="${PMOVES_NODE:-5090}"
-# Producer target for recovery dispatch hints: must be a runner-backed label.
-# (targets=<node> requires a runner labeled <node>; runnerless nodes like the
-# default 5090 can never schedule their own producer run.)
-PRODUCER="${PMOVES_BUNDLE_PRODUCER:-b850}"
+# Ordered producer targets for recovery dispatch hints. Must be LINUX
+# runner-backed labels and must stay in step with PRODUCER_TARGETS in
+# .github/workflows/sync-secrets-local.yml, which rejects any other target.
+# (4090/5090 have Windows runners but are consumers -- dispatching
+# targets=5090 fails fast by design.) PMOVES_BUNDLE_PRODUCER (singular) is the
+# legacy override and is still honoured when the list is unset.
+#
+# Enrolling a new Linux producer = add its label in THREE places: this
+# KNOWN_PRODUCERS, PRODUCER_TARGETS in sync-secrets-local.yml, and
+# KNOWN_PRODUCERS in pmoves/tools/chit_provenance_check.py.
+# pmoves/tests/test_secrets_funnel_producers.py::test_the_producer_lists_cannot_drift
+# fails if they disagree.
+KNOWN_PRODUCERS="spark,b850"
+PRODUCERS="${PMOVES_BUNDLE_PRODUCERS:-${PMOVES_BUNDLE_PRODUCER:-$KNOWN_PRODUCERS}}"
+# A stale override (e.g. PMOVES_BUNDLE_PRODUCER=5090) would print a dispatch
+# hint the workflow refuses. Warn -- non-fatal, stderr -- and carry on.
+for _p in ${PRODUCERS//,/ }; do
+  case ",$KNOWN_PRODUCERS," in
+    *",$_p,"*) ;;
+    *) echo "⚠ producer label '$_p' is not a known Linux producer ($KNOWN_PRODUCERS); sync-secrets-local.yml will refuse targets=$_p" >&2 ;;
+  esac
+done
+unset _p
 
 # Canonical bundle path — mirrors mk/codex.mk CHIT_EXPORT_PATH resolution.
 if [ -n "${CHIT_EXPORT_PATH:-}" ]; then
@@ -52,8 +77,8 @@ if [ -s "$GH_ERR" ] && { [ -z "$RUN_ID" ] || [ "$RUN_ID" = "null" ]; }; then
 fi
 command rm -- "$GH_ERR"
 if [ -z "$RUN_ID" ] || [ "$RUN_ID" = "null" ]; then
-  echo "❌ No successful $WORKFLOW run found. Dispatch one on a runner-backed target:"
-  echo "   gh workflow run $WORKFLOW --ref main -f targets=$PRODUCER"
+  echo "❌ No successful $WORKFLOW run found. Dispatch one on the Linux producers ($PRODUCERS):"
+  echo "   gh workflow run $WORKFLOW --ref main -f targets=$PRODUCERS"
   exit 1
 fi
 
@@ -62,12 +87,21 @@ ARTIFACT="$(gh api "repos/$REPO/actions/runs/$RUN_ID/artifacts" \
         | (map(select(.name|startswith(\"chit-bundle-$NODE-\"))) + .) | .[0].name // empty")"
 if [ -z "$ARTIFACT" ]; then
   echo "❌ Run $RUN_ID has no unexpired chit-bundle-* artifact (retention is 1 day)."
-  echo "   Dispatch a fresh run: gh workflow run $WORKFLOW --ref main -f targets=$PRODUCER"
+  echo "   Dispatch a fresh run on the Linux producers ($PRODUCERS):"
+  echo "   gh workflow run $WORKFLOW --ref main -f targets=$PRODUCERS"
   exit 1
 fi
 
 TMP="$(mktemp -d)"
-cleanup() { command rm -r -f -- "$TMP"; }
+STAGE=""
+PROV_STAGE=""
+# Remove the download dir AND any staged copy left by a failure between
+# staging and the rename (set -e aborts there), so no partial bundle lingers.
+cleanup() {
+  command rm -r -f -- "$TMP"
+  if [ -n "$STAGE" ] && [ -e "$STAGE" ]; then command rm -- "$STAGE" || true; fi
+  if [ -n "$PROV_STAGE" ] && [ -e "$PROV_STAGE" ]; then command rm -- "$PROV_STAGE" || true; fi
+}
 trap cleanup EXIT
 echo "→ Downloading $ARTIFACT from run $RUN_ID"
 gh run download "$RUN_ID" --repo "$REPO" --name "$ARTIFACT" --dir "$TMP"
@@ -86,12 +120,17 @@ if not isinstance(data, dict) or not data:
 PYEOF
 
 mkdir -p "$DEST_DIR"
-# Owner-only perms, atomic replace: stage next to the destination, chmod,
-# then move over any old bundle (matches the workflow's 0600 install).
+# Owner-only perms, atomic replace: stage next to the destination, then move
+# over any old bundle (matches the workflow's 0600 install). The stage is
+# CREATED 0600 under umask 077: CGP is an encoding, not encryption, so a
+# cp-then-chmod would leave cleartext world-readable (umask 022 -> 0644) for
+# the gap between the two. The chmod stays as belt-and-braces.
 STAGE="$DEST.tmp.$$"
-cp "$BUNDLE" "$STAGE"
+(umask 077; cp "$BUNDLE" "$STAGE")
 chmod 600 "$STAGE"
-mv "$STAGE" "$DEST"
+# -f: on a producer node the runner (root) may own the old bundle; without -f
+# mv PROMPTS on a tty before replacing a read-only file.
+mv -f -- "$STAGE" "$DEST"
 
 # PROVENANCE MARKER -- who wrote this bundle.
 #
@@ -110,12 +149,27 @@ mv "$STAGE" "$DEST"
 # Nothing warned, because a producer and a consumer shared one path with no way
 # to tell the two apart. This marker is that way: chit-export reads it and
 # refuses rather than clobbering a bundle it did not produce.
-printf '%s\n' \
-  "source=ci" \
-  "artifact=$ARTIFACT" \
-  "installed_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-  > "$DEST.provenance" 2>/dev/null || true
-chmod 600 "$DEST.provenance" 2>/dev/null || true
+#
+# Stage-and-rename, like the bundle above. On a PRODUCER node the runner
+# container (root) stamps this same marker through its bind mount, leaving it
+# root-owned 0600; a direct `> "$DEST.provenance"` from the operator then fails
+# with "Permission denied" (measured on B850, 2026-09-25) and the marker keeps
+# naming the runner's artifact instead of the one just installed. A rename only
+# needs write permission on the (user-owned) directory, so it replaces it;
+# -f because mv would otherwise PROMPT on a tty for a read-only destination.
+PROV_STAGE="$DEST.provenance.tmp.$$"
+if (umask 077; printf '%s\n' \
+     "source=ci" \
+     "artifact=$ARTIFACT" \
+     "installed_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+     > "$PROV_STAGE") 2>/dev/null \
+   && chmod 600 "$PROV_STAGE" 2>/dev/null \
+   && mv -f -- "$PROV_STAGE" "$DEST.provenance" 2>/dev/null; then
+  :
+else
+  if [ -e "$PROV_STAGE" ]; then command rm -- "$PROV_STAGE" 2>/dev/null || true; fi
+  echo "⚠ Could not write the provenance marker $DEST.provenance -- chit-export may not recognise this bundle as CI-pulled."
+fi
 
 echo "✔ CHIT bundle installed at $DEST (artifact: $ARTIFACT, mode 0600)"
 echo "  Next: make -C pmoves secrets-funnel-sync-from-bundle (or the one-shot secrets-funnel-from-prod)"

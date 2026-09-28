@@ -203,7 +203,7 @@
 
 [submodule "PMOVES-n8n"]
 	path = PMOVES-n8n
-	url = https://github.com/POWERFULMOVES/PMOVES-n8n.git
+	url = https://github.com/POWERFULMOVES/PMOVES-n8n-FlooS.git
 	branch = PMOVES.AI-Edition-Hardened
 
 [submodule "PMOVES-crush"]
@@ -462,7 +462,7 @@
 	shallow = true
 [submodule "PMOVES-N8N-Auto"]
 	path = PMOVES-N8N-Auto
-	url = https://github.com/POWERFULMOVES/PMOVES-N8N-Auto.git
+	url = https://github.com/POWERFULMOVES/PMOVES-N8N.git
 	branch = PMOVES.AI-Edition-Hardened
 	shallow = true
 [submodule "PMOVES-A0-codex-docker"]
@@ -473,3 +473,13 @@
 	path = PMOVES-KeYlOkODe
 	url = https://github.com/POWERFULMOVES/PMOVES-KeYlOkODe.git
 	branch = main
+[submodule "PMOVES-registry"]
+	path = PMOVES-registry
+	url = https://github.com/POWERFULMOVES/PMOVES-registry.git
+	branch = main
+	ignore = all
+[submodule "PMOVES-spynel"]
+	path = PMOVES-spynel
+	url = https://github.com/POWERFULMOVES/PMOVES-spynel.git
+	branch = PMOVES.AI-Edition-Hardened
+	ignore = all

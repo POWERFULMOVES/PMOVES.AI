@@ -164,6 +164,10 @@ pmoves/data/agent-zero/logs/
 pmoves/data/open-notebook/surreal_data/
 # Generated at launch by crush-pmoves — per-node runtime state, never committed
 pmoves/data/identity/node-identity.md
+# Node-local operator audit logs (e.g. env_local_edits.jsonl from
+# `make -C pmoves env-local-{set,unset}`). They hold key NAMES and hostnames,
+# never values -- but key names per node are topology, so they stay local.
+pmoves/data/audit/
 
 # =============================================================================
 # Docker
@@ -320,6 +324,8 @@ website/hyperdim/
 
 # Known Roads live file-grant (operator-written, never commit)
 .claude/hooks/damage-control/.known-road-active
+.claude/hooks/damage-control/.grant-state-cache.json
+.claude/hooks/damage-control/.grant-state-cache.*.tmp
 .claude/hooks/damage-control/.effect-state.json
 pmoves/docs/logs/village_gate_latest.json
 crush.json
@@ -381,3 +387,10 @@ pmoves/tools/comfyui/_input/
 # output - generated in any working checkout, never committable content.
 /data/
 /tests/test_data/
+
+# Provisioner node state written INTO the /opt/pmoves checkout root:
+# profile.yaml (hardware profile contract: deploy/provision/{b850,dgx-spark}-
+# bootstrap.sh, z890/common/00-glances-profile.sh) and .node-config
+# (hostinger-kvm-setup.sh). Rooted so a same-named file elsewhere is unaffected.
+/profile.yaml
+/.node-config

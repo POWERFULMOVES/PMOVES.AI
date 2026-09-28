@@ -50,6 +50,12 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 PMOVES = REPO_ROOT / "pmoves"
 
 WORKFLOW = "sync-secrets-local.yml"
+# Linux runners that can PRODUCE a bundle. Enrolling a new producer = add its
+# label in THREE places: this constant, PRODUCER_TARGETS in
+# .github/workflows/sync-secrets-local.yml, and KNOWN_PRODUCERS in
+# pmoves/scripts/pull_chit_bundle.sh. Enforced by
+# pmoves/tests/test_secrets_funnel_producers.py::test_the_producer_lists_cannot_drift
+KNOWN_PRODUCERS = "spark,b850"
 # Same override the puller honours (pull_chit_bundle.sh:21). Hard-coding it
 # meant a node with PMOVES_REPO set would have its artifact checked against
 # upstream while `secrets-pull` queried the fork -- so the check could report
@@ -195,18 +201,31 @@ def main() -> int:
     ap.add_argument("--bundle", default=None)
     ap.add_argument("--node", default=os.environ.get("PMOVES_NODE", "5090"))
     # The DISPATCH target is the producer, not this node. Pattern-B nodes
-    # (Z890, the default 5090) are consumers with no self-hosted runner, and
-    # sync-secrets-local.yml schedules on one -- so `-f targets=z890` names a
-    # job that cannot be picked up. pull_chit_bundle.sh:27 already carries the
-    # distinction as PMOVES_BUNDLE_PRODUCER (default b850); same default here so
-    # the two roads cannot disagree.
+    # (Z890, 4090, the default 5090) are consumers: Z890 has no runner, and
+    # 4090/5090 have Windows runners that sync-secrets-local.yml refuses
+    # (PRODUCER_TARGETS) because its bash steps cannot run under WSL there.
+    # pull_chit_bundle.sh carries the same ordered list as
+    # PMOVES_BUNDLE_PRODUCERS (default spark,b850; legacy singular
+    # PMOVES_BUNDLE_PRODUCER still honoured); same resolution here so the two
+    # roads cannot disagree.
     ap.add_argument("--producer",
-                    default=os.environ.get("PMOVES_BUNDLE_PRODUCER", "b850"))
+                    default=os.environ.get("PMOVES_BUNDLE_PRODUCERS")
+                    or os.environ.get("PMOVES_BUNDLE_PRODUCER")
+                    or KNOWN_PRODUCERS)
     ap.add_argument("--offline", action="store_true", help="skip the artifact query")
     ap.add_argument("--strict", action="store_true",
                     help="exit non-zero when the bundle is a local export")
     ap.add_argument("--max-names", type=int, default=12)
     args = ap.parse_args()
+
+    # A stale override (e.g. PMOVES_BUNDLE_PRODUCER=5090) would print a dispatch
+    # hint the workflow refuses. Warn on stderr; non-fatal, like the puller.
+    _known = KNOWN_PRODUCERS.split(",")
+    for _p in [p.strip() for p in args.producer.split(",") if p.strip()]:
+        if _p not in _known:
+            print("WARN producer label %r is not a known Linux producer (%s); "
+                  "sync-secrets-local.yml will refuse targets=%s"
+                  % (_p, KNOWN_PRODUCERS, _p), file=sys.stderr)
 
     try:
         sys.stdout.reconfigure(errors="replace")  # type: ignore[attr-defined]

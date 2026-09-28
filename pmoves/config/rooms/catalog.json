@@ -181,6 +181,18 @@
       "current_stage": "rehearsal",
       "stage_source": "manifest stage field (new room, no P7 session yet)",
       "stage_verified_at": "2026-09-05T00:00:00Z"
+    },
+    {
+      "room_id": "9850x3d-rdna4.room.studio",
+      "agent_id": "b850-claude",
+      "alter": "b850-rdna4",
+      "display_name": "B850 RDNA4 Studio",
+      "stage": "rehearsal",
+      "manifest": "9850x3d-rdna4.room.studio.json",
+      "summary": "Local-inference studio: llama.cpp HIP backend on AMD RDNA4 (Radeon AI Pro R9700, gfx1201) serving an OpenAI-compatible API. Recovered from a 2026-07-01 B850 stash and converted to room.manifest.v1. Stage: rehearsal - llama-server is not running and only one of two R9700 cards enumerates (profile probe 2026-08-14).",
+      "current_stage": "rehearsal",
+      "stage_source": "manifest stage field (recovered room, no P7 session yet)",
+      "stage_verified_at": "2026-09-23T00:00:00Z"
     }
   ]
 }

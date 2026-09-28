@@ -77,8 +77,10 @@ if trail is not None and annotations is not None:
     check("at least the 250 rows measured on 2026-09-12", len(trail) >= 250, len(trail))
     check("156 synthetic-corpus", tally.get("synthetic-corpus") == 156, tally)
     check("11 genuine-stale-reason", tally.get("genuine-stale-reason") == 11, tally)
+    # 2026-09-23: two PR #3143 compose Edits recorded under a stale pr:3101 grant.
+    check("2 genuine-stale-grant", tally.get("genuine-stale-grant") == 2, tally)
     check("every other row is current",
-          tally.get("current") == len(trail) - 167, tally)
+          tally.get("current") == len(trail) - 167 - 2, tally)
     check("167 rows carry reason pr:2656 in total",
           sum(1 for r in trail if r.get("reason") == "pr:2656") == 167)
 
