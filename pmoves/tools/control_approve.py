@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Submit a genuine GitHub APPROVE review after a recorded control verdict.
 
-The approval road (MERGE_MECHANICS.md section 5): the control body reviews a
+The approval road (MERGE_MECHANICS.md section 6): the control body reviews a
 PR independently and records a ``pmoves-control-verdict`` marker comment for
 the exact head it reviewed (see ``control_verdict.py``). This tool then lets a
 PMOVES.AI-branded machine user -- never the PR author -- submit an APPROVE
@@ -35,7 +35,7 @@ an ``Authorization`` request header via urllib. It is never an argv element,
 never printed, and every message is passed through ``_redact`` as a backstop.
 
 GitHub behaviours this relies on are tagged A1..A7 and listed in ONE place:
-MERGE_MECHANICS.md "5.6 GitHub behaviours this road assumes".
+MERGE_MECHANICS.md "6.6 GitHub behaviours this road assumes".
 """
 
 from __future__ import annotations

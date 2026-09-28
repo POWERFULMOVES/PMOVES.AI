@@ -177,8 +177,23 @@ git -C <worktree> diff origin/main --stat   # expect +N / -0 on append-only file
   holds uncommitted work. It reverts the whole file. Commit first, then experiment.
 - Do not measure anything from a stale worktree. Read at `origin/main`.
 
+## Approval road (genuine approvals, no bypass)
+
+Once the control machine user exists, a PR can carry a real approval instead of
+leaning on the review half of the bypass: the control body records a
+`pmoves-control-verdict` marker comment for the exact head it reviewed, then
+
+```bash
+make -C pmoves pr-control-approve PR=<N> EXPECTED_HEAD=<full-sha> CONFIRM='APPROVE #<N> @ <full-sha>'
+```
+
+submits an APPROVE review pinned to that sha (token from `PMOVES_CONTROL_TOKEN`,
+never argv). Until the operator creates the account it reports
+`COULD-NOT-MEASURE rc=3`. Any push dismisses the approval. Setup, trust model,
+refusal matrix and the GitHub assumptions: `MERGE_MECHANICS.md` section 6.
+
 ## Related
 
 - `pmoves/docs/operations/MERGE_MECHANICS.md` — the protection settings and why
-  `--auto` never fires here
+  `--auto` never fires here; section 6 is the approval road
 - `.claude/PATTERNS.md` § Blank Is Not Absent — the sibling hazard class

@@ -1,6 +1,6 @@
 # Control approval road -- configuration for pmoves/tools/control_approve.py.
 # Full design, trust model and operator setup:
-#   pmoves/docs/operations/MERGE_MECHANICS.md  (section "5. The approval road")
+#   pmoves/docs/operations/MERGE_MECHANICS.md  (section "6. The approval road")
 #
 # No login is hard-coded in the tool. Everything identity-shaped lives here and
 # can be overridden per invocation by environment variables.

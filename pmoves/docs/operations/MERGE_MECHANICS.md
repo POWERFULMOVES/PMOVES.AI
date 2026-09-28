@@ -148,6 +148,187 @@ across the entire 2026-08-21 queue, but neither is enforced. Making them require
 an operator action — see the drift note above before assuming the spec file describes
 reality.
 
+## 6. The approval road — genuine approvals from a control machine user
+
+**Status 2026-09-28: built, not live.** The tool, make target, config and tests
+exist; the machine user does not yet, so every run today ends
+`COULD-NOT-MEASURE rc=3` ("approver login not configured"). That is the correct
+answer until the operator completes 6.5.
+
+**Why.** The `[ main ]` ruleset (id 10887588) requires one approving review
+*and* code-owner review. CODEOWNERS names `@powerfulmoves` on 33 patterns, and
+`@powerfulmoves` is the author of our PRs, so its own approval does not count
+(A7). The only way through today is the admin bypass (sections 1-2). A merge
+queue (section 5, the queue road from PR #3234) needs a PR that is *already
+approved*, so without a second, legitimate approver the queue never helps our
+own PRs. The approval road supplies that approver without weakening any rule.
+
+### 6.1 How it works
+
+1. The **control body** (Three-Body control seat, e.g. B850-CLAUDE) performs an
+   independent review of the PR at an exact head.
+2. It records the outcome as a PR comment carrying one marker
+   (`pmoves/tools/control_verdict.py`):
+
+   ```
+   <!-- pmoves-control-verdict: v=1 verdict=APPROVE head=<40-hex> reviewer=<body> -->
+   ```
+
+   Generate it rather than typing it:
+   `python3 pmoves/tools/control_verdict.py format --verdict APPROVE --head <sha> --reviewer B850-CLAUDE`.
+   `verdict=REQUEST_CHANGES` records a block. Never edit a verdict comment;
+   post a new one (an edited marker is refused).
+3. The operator (or control body) runs:
+
+   ```bash
+   make -C pmoves pr-control-approve PR=<N> EXPECTED_HEAD=<full-sha> CONFIRM='APPROVE #<N> @ <full-sha>'
+   # DRY_RUN=1 runs every check and posts nothing
+   ```
+
+   with `PMOVES_CONTROL_TOKEN` in the environment (delivered by the secrets
+   funnel — never typed on a command line; the make recipe never mentions it).
+4. `tools/control_approve.py` checks everything in 6.3, then submits
+   `POST /repos/{o}/{r}/pulls/{n}/reviews` with `event=APPROVE` and
+   `commit_id=EXPECTED_HEAD`, and a body linking the verdict comment. The token
+   travels only in an `Authorization` header (urllib; no subprocess, no argv).
+5. It **reads the reviews back** and exits 0 only when an `APPROVED` review by
+   the configured approver on exactly `EXPECTED_HEAD` exists and the head has
+   not moved.
+
+The last output line is always `VERDICT: <APPROVED|REFUSED|COULD-NOT-MEASURE> rc=<n>`,
+because `make` collapses every nonzero exit to 2.
+
+### 6.2 Trust model — what the marker proves, and what it does not
+
+- The marker proves that an account on the `marker_authors` allowlist
+  (`pmoves/configs/control_approval.yaml`, default `POWERFULMOVES`, the account
+  that posts our review comments) **recorded** a verdict for an exact commit.
+- It does **not** prove who performed the review or how carefully. The
+  allowlisted account is the same account that authors the PRs; independence
+  rests on the Three-Body process (a control body that did not deliver the
+  change), not on anything this parser can check. The `reviewer=` field is
+  self-reported.
+- The approval is attributable: it is submitted by a separate machine user
+  whose token is used only after the checks, is pinned to one commit, and links
+  the verdict it relied on. Anyone auditing a merge can follow the review body
+  to the verdict comment.
+- The token holder can still approve by hand outside this tool. The tool is a
+  guarded road, not a technical lock; keep the token only where the road runs.
+
+### 6.3 Refusal matrix
+
+| rc | condition |
+|---|---|
+| 2 | `EXPECTED_HEAD` not the full 40-char lowercase sha |
+| 1 | `CONFIRM` is not exactly `APPROVE #<N> @ <EXPECTED_HEAD>` (checked before any request) |
+| 3 | approver login not configured; config unreadable; `PMOVES_CONTROL_TOKEN` missing |
+| 3 | any GitHub read fails (network, 401/403/5xx) — never read as a pass |
+| 1 | token's `GET /user` login is not the configured approver login |
+| 1 | PR closed, merged, draft, or base is not `main` |
+| 1 | PR head is not `EXPECTED_HEAD` (checked at start **and** immediately before the POST) |
+| 1 | approving account is the PR author |
+| 1 | no allowlisted `APPROVE` marker for exactly this head; latest allowlisted marker for the head is `REQUEST_CHANGES`; marker only from a non-allowlisted account; marker comment edited; a malformed allowlisted marker posted after the approve (ambiguous) |
+| 1 | GitHub rejects the review (e.g. 422) |
+| 3 | POST outcome unknown (network error after sending) — read the reviews before retrying |
+| 1 | post-verify: no `APPROVED` review by the approver on `EXPECTED_HEAD` |
+| 1 | post-verify: head moved while approving |
+| 0 | approval read back from GitHub on the pinned commit |
+
+Markers for other heads are ignored (a verdict on an old head neither approves
+nor blocks the new one). If an `APPROVED` review by the approver already exists
+on the head, nothing is posted and the run verifies and exits 0.
+
+### 6.4 Stale approvals and the head-moved race
+
+- `dismiss_stale_reviews_on_push: true` is on in the ruleset, so **any new
+  push dismisses the approval** (A5). Each new head needs a new control
+  verdict and a new run.
+- Race: if the head moves between the tool's last check and the POST,
+  `commit_id` pinning attaches the review to the commit that was reviewed, not
+  the new head (A4). Such an approval must not be relied on: it is either
+  dismissed by the push or recorded against a non-head commit. The tool re-reads
+  the head after verifying and exits 1 with "head moved" in that case.
+
+### 6.5 Operator setup (one time)
+
+1. **Create the machine user** (a separate GitHub account; GitHub's terms allow
+   one free machine account per person). The login is configuration, not code —
+   `pmoves-ai-control` is the documented example only. Branding:
+   - Display name: **PMOVES.AI Control**
+   - Avatar: the PMOVES.AI logo
+   - Bio: e.g. *"PMOVES.AI control body — records approvals after an independent
+     Village Rule control-body review. Automated; not a person."*
+   - Enable 2FA; store its recovery codes with the operator's other break-glass
+     material.
+2. **Grant Write, not Admin.** Invite it as a collaborator on
+   `POWERFULMOVES/PMOVES.AI`. This repo is owned by a personal account, and
+   collaborators on personal repositories receive write access with no admin
+   role, so the account is not in the ruleset's bypass list (which is the
+   admin repository role) and cannot bypass.
+3. **Token.** Preferred: a fine-grained PAT owned by the machine user, scoped to
+   this one repository, permission **Pull requests: Read and write** (Metadata:
+   Read is added automatically), with an expiry and a calendar rotation.
+   **See A3 below**: fine-grained PATs may be unable to target a repository
+   owned by a *different personal account*; if the token cannot see the repo,
+   the tool reports `COULD-NOT-MEASURE` on the first read. Do not silently fall
+   back to a broader token — decide it explicitly and record the decision.
+4. **Store it as a secret** through the CHIT secrets funnel as
+   `PMOVES_CONTROL_TOKEN` (`/deploy:secrets-funnel`). Never paste it into an
+   env file by hand, a chat, or a command line.
+5. **Configure the login**: set `approver_login` in
+   `pmoves/configs/control_approval.yaml` (or `PMOVES_CONTROL_LOGIN`). The tool
+   verifies at runtime that the token's `GET /user` login equals it.
+6. **CODEOWNERS (follow-up PR, only after the account exists and has accepted
+   the invitation** — an owner without write access makes the line invalid).
+   Code-owner review uses the *last matching pattern*, so the machine user must
+   be co-listed on **every** line that names `@powerfulmoves`, not added once:
+
+   ```bash
+   LOGIN=pmoves-ai-control   # the configured approver_login
+   sed -i -E "/^[^#].*@powerfulmoves/ s/\$/ @${LOGIN}/" .github/CODEOWNERS
+   git diff --stat .github/CODEOWNERS   # expect 33 lines changed, comment lines untouched
+   ```
+
+   Then check GitHub's CODEOWNERS error view (the file page on github.com
+   flags unknown owners). Paths no pattern matches have no code owner, so only
+   the single approving review applies to them.
+7. Dry-run on a real PR: `DRY_RUN=1 make -C pmoves pr-control-approve ...`.
+
+### 6.6 GitHub behaviours this road assumes
+
+Everything the road relies on from GitHub is listed here, and only here. Items
+marked *unverified* are being checked against current GitHub docs; correct this
+table (and the tool only if a behaviour differs) when a finding lands.
+
+| id | assumption | status |
+|---|---|---|
+| A1 | An `APPROVED` review by a non-author collaborator with write access counts toward `required_approving_review_count`. | unverified |
+| A2 | A code owner's approval satisfies `require_code_owner_review` only when that owner is listed on the last matching pattern of each changed file and has write access. | unverified |
+| A3 | A fine-grained PAT with Pull requests: Read and write can `GET /user`, read the PR, list issue comments and reviews, and create a review — **and can be scoped to a repo owned by another personal account**. The last clause is the most doubtful; if it fails, the fallback is a classic PAT (`public_repo`, since the repo is public) on an account that has access to nothing else, which can also push branches. | unverified |
+| A4 | `commit_id` in the create-review payload pins the review to that commit even when the head has moved. | unverified |
+| A5 | `dismiss_stale_reviews_on_push: true` dismisses approvals when new reviewable commits are pushed, and an approval on a non-head commit does not satisfy the rule for the new head. | unverified |
+| A6 | The ruleset also sets `require_extra_approval_for_unattributed_changes: true`; its effect on PRs whose commits carry `Co-Authored-By` trailers or are pushed by a different account is not known. It may demand an approval beyond this one. | unverified |
+| A7 | An author's approval of their own PR does not count (observed: `reviewDecision` stays `REVIEW_REQUIRED`). | observed, section 1 |
+
+### 6.7 Combining with the queue road
+
+The approval road only produces the approval. Merging stays on the guarded
+closeout targets:
+
+```bash
+make -C pmoves pr-control-approve  PR=N EXPECTED_HEAD=sha CONFIRM='APPROVE #N @ sha'
+make -C pmoves pr-closeout-audit   PR=N EXPECTED_HEAD=sha      # reviewDecision should now be APPROVED
+make -C pmoves pr-closeout-queue   PR=N EXPECTED_HEAD=sha CONFIRM='MERGE #N @ sha'   # queue road, PR #3234
+```
+
+Use the **same sha** in all three. If anything is pushed in between, the
+approval is dismissed (A5) and the sequence restarts from a new verdict. Until
+the queue is enabled (PR #3234 STEP 2), `pr-closeout-merge` remains the path.
+Be precise about what the approval changes there: `reviewDecision` becomes
+`APPROVED`, so `pr-closeout-audit` passes without `ADMIN_REVIEW_BYPASS`; but
+`pr-closeout-merge` still passes `--admin` and is still the bypass (section 2).
+Only the queue road merges without it.
+
 ## See also
 
 - `.claude/skills/pmoves-pr-merge/SKILL.md` — the operational checklist
