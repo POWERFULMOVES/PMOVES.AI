@@ -328,6 +328,18 @@ def test_edited_approve_marker_refused() -> None:
     assert not s.approved and "edited" in s.reason
 
 
+@pytest.mark.parametrize("field", ["updated_at", "created_at"])
+@pytest.mark.parametrize("value", ["", None, "missing"])
+def test_missing_or_empty_timestamps_count_as_edited(field: str, value: Any) -> None:
+    c = comment(1, marker())
+    if value == "missing":
+        del c[field]
+    else:
+        c[field] = value
+    s = sel([c])
+    assert not s.approved and "edited" in s.reason
+
+
 def test_malformed_trusted_marker_after_approve_is_ambiguous() -> None:
     bad = f"<!-- pmoves-control-verdict: v=1 verdict=REQUEST_CHANGES head={H.upper()} reviewer=x -->"
     s = sel([comment(1, marker()), comment(2, bad)])

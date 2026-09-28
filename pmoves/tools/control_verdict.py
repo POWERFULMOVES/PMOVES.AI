@@ -109,7 +109,8 @@ class Selection:
 
 
 def _is_edited(created_at: str, updated_at: str) -> bool:
-    return bool(updated_at) and updated_at != created_at
+    # Fail closed: a missing/empty timestamp cannot show the comment is unedited.
+    return not created_at or not updated_at or updated_at != created_at
 
 
 def format_marker(verdict: str, head: str, reviewer: str) -> str:
