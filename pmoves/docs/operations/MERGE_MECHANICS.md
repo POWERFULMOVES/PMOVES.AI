@@ -373,6 +373,15 @@ on the head, nothing is posted and the run verifies and exits 0.
    - `PMOVES_CONTROL_TOKEN` is accepted for a single supervised invocation,
      never exported into a profile or an env tier. Never paste the token into a
      chat or a command line.
+   **Direction (follow-up, not built):** the approver stays a *machine user*,
+   because a GitHub App cannot be a code owner (A2). What should change later
+   is where its token comes from: a **GitHub App user-to-server token** issued
+   to the machine user — it expires after 8 hours and comes with a refresh
+   token valid for 6 months that renews on use, so rotation becomes
+   programmatic instead of a calendar reminder for a classic PAT. The
+   **token-file path stays the interface**: a small refresher writes the
+   current token into the same `0600` file, and `control_approve.py` does not
+   change. Until that exists, the classic `public_repo` PAT above is the road.
 5. **Configure the login**: set `approver_login` in
    `pmoves/configs/control_approval.yaml` (or `PMOVES_CONTROL_LOGIN`). The tool
    verifies at runtime that the token's `GET /user` login equals it.
