@@ -997,6 +997,15 @@ def test_success_reads_the_verdict_three_times(gh: FakeGitHub, config: Path) -> 
     assert sum(1 for r in gh.requests if "/comments" in r["url"]) == 3
 
 
+def test_post_body_links_the_marker_read_two_selected(gh: FakeGitHub, config: Path) -> None:
+    newer = comment(3, marker(reviewer="B850-CLAUDE-2"))
+    gh.comment_script = [list(APPROVE_ONLY), APPROVE_ONLY + [newer], APPROVE_ONLY + [newer]]
+    assert run(config) == 0
+    body = json.loads(gh.posts()[0]["data"])["body"]
+    assert "issuecomment-3" in body and "reviewer=B850-CLAUDE-2" in body
+    assert "issuecomment-1" not in body
+
+
 def test_request_changes_landing_before_the_post_prevents_it(gh: FakeGitHub, config: Path) -> None:
     gh.comment_script = [APPROVE_ONLY, RC_LATER]
     assert run(config) == 1

@@ -544,6 +544,9 @@ def approve(
         again = current_verdict("re-read PR comments before approving")
         if not again.approved or again.chosen is None:
             refuse(again, prefix="control verdict changed before approving")
+        assert again.chosen is not None and again.chosen_verdict is not None
+        # Link the verdict THIS read selected (a newer APPROVE may have landed).
+        marker, marker_verdict = again.chosen, again.chosen_verdict
         body = (
             f"Approved via the PMOVES.AI control approval road for `{expected_head}`.\n\n"
             f"Control verdict: {marker.url} (reviewer={marker_verdict.reviewer}, "
