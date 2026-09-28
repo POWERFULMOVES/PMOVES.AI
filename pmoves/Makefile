@@ -2428,45 +2428,36 @@ archon-native-health: ## Check native (TS) Archon health on :3090 — asserts th
 # (no network, no ports, no volumes). On failure :current stays on the previous
 # release and the target exits non-zero loudly. Currency without silent breakage.
 UPSTREAM_TRACK := $(PYTHON) $(CURDIR)/tools/upstream_release_track.py
+ARCHON_CHANNEL_TOOL := $(CURDIR)/tools/archon_release_channel.sh
 ARCHON_CHANNEL_REPO ?= ghcr.io/powerfulmoves/pmoves-archon
 ARCHON_CHANNEL ?= current
-ARCHON_SMOKE_TRIES ?= 40
+ARCHON_SMOKE_TIMEOUT ?= 180
+export ARCHON_CHANNEL_REPO ARCHON_CHANNEL ARCHON_SMOKE_TIMEOUT
+# Resolver exit codes: 1 = hardened fork lacks the release (sync it), 3 = could not measure.
+ARCHON_RESOLVE_OR_EXPLAIN = out=$$($(UPSTREAM_TRACK) archon) || { rc=$$?; printf '%s\n' "$$out"; \
+	if [ $$rc -eq 1 ]; then echo "✖ refusing: the hardened fork does not contain the latest upstream release (sync it first)"; \
+	else echo "✖ COULD-NOT-MEASURE: release resolution failed (rc=$$rc)"; fi; exit $$rc; }; eval "$$out"
 
 .PHONY: archon-release-resolve archon-build-latest archon-promote-current archon-release-latest
-archon-release-resolve: ## Print the newest upstream Archon release and whether the hardened fork contains it (exit 1 = sync needed)
+archon-release-resolve: ## Print the newest upstream Archon release and whether the hardened fork contains it (exit 1 = sync needed, 3 = could not measure)
 	@$(UPSTREAM_TRACK) archon
 
-archon-build-latest: ## Build Archon from the hardened fork commit that contains the newest upstream release; tags <version>-pmoves.<sha8>
-	@set -e; out=$$($(UPSTREAM_TRACK) archon) || { rc=$$?; echo "$$out"; echo "✖ refusing to build: hardened fork does not contain the latest upstream release (rc=$$rc)"; exit $$rc; }; \
-	eval "$$out"; tag="$(ARCHON_CHANNEL_REPO):$$RELEASE_VERSION-pmoves.$$FORK_SHA8"; \
-	echo "→ building Archon $$RELEASE_TAG from $$FORK@$$FORK_SHA8 → $$tag"; \
-	docker build --build-arg USE_LOCAL_VENDOR=1 \
-		--label org.opencontainers.image.revision=$$FORK_SHA \
-		--label org.opencontainers.image.version=$$RELEASE_VERSION \
-		--label pmoves.upstream.release=$$RELEASE_TAG \
-		--label pmoves.upstream.release.sha=$$RELEASE_SHA \
-		-t "$$tag" "https://github.com/$$FORK.git#$$FORK_SHA"; \
-	echo "✔ built $$tag (not yet :$(ARCHON_CHANNEL); run archon-promote-current IMAGE=$$tag)"
+archon-build-latest: ## Resolve once, then build Archon from the exact hardened fork sha that contains the release; tags <version>-pmoves.<sha8>
+	@set -e; $(ARCHON_RESOLVE_OR_EXPLAIN); \
+	FORK="$$FORK" FORK_SHA="$$FORK_SHA" RELEASE_TAG="$$RELEASE_TAG" RELEASE_SHA="$$RELEASE_SHA" RELEASE_VERSION="$$RELEASE_VERSION" \
+		$(ARCHON_CHANNEL_TOOL) build
 
-archon-promote-current: ## Health-smoke IMAGE in a throwaway container; on pass retag it :current, on fail keep the old :current
-	@test -n "$(IMAGE)" || { echo "usage: make archon-promote-current IMAGE=<repo:tag>"; exit 2; }
-	@set -e; cid=$$(docker run -d --rm --network none -e PORT=3090 -e HOST=127.0.0.1 \
-		-e CLAUDE_CODE_OAUTH_TOKEN=boot-gate-placeholder-not-a-credential "$(IMAGE)"); \
-	trap 'docker stop "$$cid" >/dev/null 2>&1 || true' EXIT; ok=0; \
-	for i in $$(seq 1 $(ARCHON_SMOKE_TRIES)); do \
-		if docker exec "$$cid" curl -fsS http://127.0.0.1:3090/api/health 2>/dev/null \
-			| grep -qE '"status"[[:space:]]*:[[:space:]]*"ok"'; then ok=1; break; fi; sleep 3; done; \
-	if [ $$ok -ne 1 ]; then \
-		echo "✖✖ GATE FAILED: $(IMAGE) did not report status ok on /api/health. $(ARCHON_CHANNEL_REPO):$(ARCHON_CHANNEL) left unchanged."; \
-		docker logs --tail 30 "$$cid" 2>&1 || true; exit 1; fi; \
-	prev=$$(docker image inspect -f '{{.Id}}' "$(ARCHON_CHANNEL_REPO):$(ARCHON_CHANNEL)" 2>/dev/null || echo none); \
-	docker tag "$(IMAGE)" "$(ARCHON_CHANNEL_REPO):$(ARCHON_CHANNEL)"; \
-	echo "✔ $(ARCHON_CHANNEL_REPO):$(ARCHON_CHANNEL) → $(IMAGE) (previous: $$prev)"
+# Values (IMAGE, FORK_SHA, RELEASE_TAG, RELEASE_VERSION) are read from the
+# environment by the tool -- command-line make variables are exported -- and
+# never spliced into recipe text.
+archon-promote-current: ## Gate IMAGE into :current (needs IMAGE FORK_SHA RELEASE_TAG RELEASE_VERSION; refuses mismatched labels; SQLite smoke only -- Postgres migrations NOT covered)
+	@$(ARCHON_CHANNEL_TOOL) promote
 
-archon-release-latest: ## Resolve → build → gate → promote :current, in one road
-	@set -e; out=$$($(UPSTREAM_TRACK) archon) || { rc=$$?; echo "$$out"; exit $$rc; }; eval "$$out"; \
-	$(MAKE) --no-print-directory archon-build-latest; \
-	$(MAKE) --no-print-directory archon-promote-current IMAGE="$(ARCHON_CHANNEL_REPO):$$RELEASE_VERSION-pmoves.$$FORK_SHA8"
+archon-release-latest: ## Resolve ONCE → build that sha → gate → promote :current (SQLite smoke only; Postgres migrations NOT covered)
+	@set -e; $(ARCHON_RESOLVE_OR_EXPLAIN); \
+	export FORK FORK_SHA RELEASE_TAG RELEASE_SHA RELEASE_VERSION; \
+	$(ARCHON_CHANNEL_TOOL) build; \
+	IMAGE="$(ARCHON_CHANNEL_REPO):$$RELEASE_VERSION-pmoves.$$FORK_SHA8" $(ARCHON_CHANNEL_TOOL) promote
 
 # Agent Zero: the resolver side is here. The build side cannot be made
 # release-exact from the Makefile: services/agent-zero/Dockerfile clones a NAMED
@@ -2486,9 +2477,15 @@ a0-release-resolve: ## Print the newest upstream Agent Zero release and whether 
 # so it is the compose default pmoves-agent-zero:latest).
 # SERVICES narrows it (e.g. SERVICES=archon). DRY_RUN=1 prints the plan.
 A0_ARCHON_SERVICES ?= archon agent-zero
+A0_ARCHON_ALLOWED := archon agent-zero
+# Raw text via $(value): a command-line SERVICES='$(shell ...)' must not expand.
+A0_ARCHON_PICK := $(strip $(or $(value SERVICES),$(A0_ARCHON_SERVICES)))
+A0_ARCHON_BAD := $(filter-out $(A0_ARCHON_ALLOWED),$(A0_ARCHON_PICK))
+A0_ARCHON_DRY := $(filter-out 0 false no off,$(strip $(value DRY_RUN)))
 .PHONY: up-a0-archon-scoped
-up-a0-archon-scoped: ## Recreate ONLY archon + agent-zero from prebuilt images (DRY_RUN=1 for plan, SERVICES=archon to narrow)
-	@$(DC) --profile agents $(if $(DRY_RUN),--dry-run) up -d --no-deps --no-build --pull never $(or $(SERVICES),$(A0_ARCHON_SERVICES))
+up-a0-archon-scoped: ## Recreate ONLY archon and/or agent-zero from prebuilt images (SERVICES=archon|agent-zero; DRY_RUN=1 for plan)
+	$(if $(A0_ARCHON_BAD),$(error up-a0-archon-scoped: SERVICES may only name: $(A0_ARCHON_ALLOWED) (refused: $(A0_ARCHON_BAD))))
+	@$(DC) --profile agents $(if $(A0_ARCHON_DRY),--dry-run) up -d --no-deps --no-build --pull never $(A0_ARCHON_PICK)
 
 # -------- Consciousness Taxonomy Loaders ----------
 .PHONY: load-consciousness-neo4j harvest-consciousness

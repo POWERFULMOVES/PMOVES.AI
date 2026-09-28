@@ -39,8 +39,15 @@ COMPONENTS = {
     },
 }
 
-SAFE = re.compile(r"^[A-Za-z0-9._/-]{1,128}$")
-SHA = re.compile(r"^[0-9a-f]{40}$")
+# fullmatch everywhere: `$` in re.match also accepts a trailing newline.
+SAFE = re.compile(r"[A-Za-z0-9._/-]{1,128}")
+TAG = re.compile(r"[A-Za-z0-9._-]{1,64}")  # no '/': the tag is spliced into an API path
+SHA = re.compile(r"[0-9a-f]{40}")
+
+
+def is_safe(val: str, pattern: re.Pattern = SAFE) -> bool:
+    """Charset match AND no leading '-' (option injection) AND no '..' (path walk)."""
+    return bool(pattern.fullmatch(val)) and not val.startswith("-") and ".." not in val
 
 
 class CouldNotMeasure(Exception):
@@ -63,12 +70,12 @@ def gh(path: str, jq: str) -> str:
 def resolve(component: str) -> dict:
     cfg = COMPONENTS[component]
     tag = gh(f"repos/{cfg['upstream']}/releases/latest", ".tag_name")
-    if not SAFE.match(tag):
+    if not is_safe(tag, TAG):
         raise CouldNotMeasure(f"unexpected release tag {tag!r}")
     tag_sha = gh(f"repos/{cfg['upstream']}/commits/{tag}", ".sha")
     fork_sha = gh(f"repos/{cfg['fork']}/git/ref/heads/{cfg['branch']}", ".object.sha")
     for name, val in (("tag_sha", tag_sha), ("fork_sha", fork_sha)):
-        if not SHA.match(val):
+        if not SHA.fullmatch(val):
             raise CouldNotMeasure(f"unexpected {name} {val!r}")
     # Forks share the upstream object network, so the fork can compare against
     # the release commit. "ahead"/"identical" == the branch contains the release.
@@ -108,7 +115,7 @@ def main() -> int:
         print(json.dumps(info, indent=2))
     else:
         for key, val in info.items():
-            if not SAFE.match(val):
+            if not is_safe(val):
                 print(f"COULD-NOT-MEASURE: unsafe value for {key}", file=sys.stderr)
                 return 3
             print(f"{key}={val}")

@@ -65,3 +65,9 @@ def test_missing_gh_is_could_not_measure(monkeypatch, capsys):
     monkeypatch.setattr(urt.shutil, "which", lambda _: None)
     monkeypatch.setattr(sys, "argv", ["x", "agent-zero"])
     assert urt.main() == 3
+
+
+@pytest.mark.parametrize("tag", ["-v1", "v1..2", "v1/../x", "v1\n"])
+def test_tag_rejects_leading_dash_dotdot_slash_newline(monkeypatch, capsys, tag):
+    got, out = _run(monkeypatch, capsys, tag=tag)
+    assert got == 3 and out.out == ""
