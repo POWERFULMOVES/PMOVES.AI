@@ -10,8 +10,10 @@ from __future__ import annotations
 import http.client
 import io
 import json
+import os
 import re
 import sys
+import threading
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -616,6 +618,27 @@ def test_token_file_with_extra_whitespace_is_refused_without_echoing(
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="POSIX mode bits")
+@pytest.mark.skipif(not hasattr(os, "mkfifo"), reason="POSIX FIFOs")
+def test_token_file_fifo_is_refused_without_hanging(gh: FakeGitHub, config: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    fifo = tmp_path / "token.fifo"
+    os.mkfifo(fifo, 0o600)
+    result: dict[str, int] = {}
+    worker = threading.Thread(
+        target=lambda: result.update(rc=run(config, env={"PMOVES_CONTROL_TOKEN_FILE": str(fifo)})),
+        daemon=True,
+    )
+    worker.start()
+    worker.join(timeout=5)
+    if worker.is_alive():
+        # unblock the stuck open() so the daemon thread can finish, then fail
+        with open(fifo, "w", encoding="utf-8"):
+            pass
+        pytest.fail("opening a FIFO token file hung (no O_NONBLOCK)")
+    assert result["rc"] == 1
+    assert "not a regular file" in capsys.readouterr().err
+    assert gh.requests == []
+
+
 def test_token_file_without_trailing_newline_is_fine(gh: FakeGitHub, config: Path, tmp_path: Path) -> None:
     tf = _token_file(tmp_path, 0o600, content=TOKEN)
     assert run(config, env={"PMOVES_CONTROL_TOKEN_FILE": str(tf)}) == 0

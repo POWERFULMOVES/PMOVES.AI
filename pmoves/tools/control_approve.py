@@ -307,7 +307,8 @@ def validate_token_text(value: str, source: str) -> str:
 def read_token_file(path: str) -> str:
     """Read the token from a restricted file (the preferred delivery path).
 
-    Opened with O_NOFOLLOW (a symlink is refused) and then checked with fstat
+    Opened with O_NOFOLLOW (a symlink is refused) and O_NONBLOCK (a FIFO
+    cannot hang the open), and then checked with fstat
     on the OPEN descriptor, so the checked file is the read file (no TOCTOU):
     a regular file, owned by the invoking user, mode 0600 or stricter. POSIX
     only for the owner/mode checks: on Windows those bits carry no such meaning,
@@ -318,7 +319,13 @@ def read_token_file(path: str) -> str:
     if not nofollow and os.path.islink(path):
         raise Outcome(EXIT_REFUSED, f"{TOKEN_FILE_ENV} is a symlink; point it at the file itself")
     try:
-        fd = os.open(path, os.O_RDONLY | nofollow | getattr(os, "O_CLOEXEC", 0))
+        # O_NONBLOCK: opening a FIFO read-only would otherwise block until a
+        # writer appears (a hang, not a refusal). fstat below then refuses it.
+        # On a regular file O_NONBLOCK has no effect on reads.
+        fd = os.open(
+            path,
+            os.O_RDONLY | nofollow | getattr(os, "O_NONBLOCK", 0) | getattr(os, "O_CLOEXEC", 0),
+        )
     except OSError as exc:
         if os.path.islink(path):
             raise Outcome(EXIT_REFUSED, f"{TOKEN_FILE_ENV} is a symlink; point it at the file itself") from None
