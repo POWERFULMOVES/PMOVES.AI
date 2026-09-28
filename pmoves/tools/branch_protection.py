@@ -202,6 +202,10 @@ VALID_RULESET_RULE_TYPES = frozenset({
     "file_path_restriction", "max_file_size", "max_file_path_length", "workflow_restrictions",
     "metadata_restrictions", "update_restrictions", "tag_name_pattern",
     "branch_name_pattern", "creation_time_limit",
+    # Merge queue (#3234). Documented as the `merge_queue` repository rule
+    # (REST "repository-rule-merge-queue"); UNVERIFIED by a live write, like
+    # the rest -- the STEP 2 PUT in MERGE_MECHANICS.md section 5 is that write.
+    "merge_queue",
 })
 
 

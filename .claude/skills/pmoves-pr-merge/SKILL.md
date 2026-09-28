@@ -16,6 +16,13 @@ make -C pmoves pr-closeout-merge \
   CONFIRM='MERGE #<N> @ <full-sha>'
 ```
 
+**Merge queue.** Once a `merge_queue` rule is on `main`, `--admin` *bypasses* the
+queue (`gh pr merge --help`), so the target above still merges directly. For an
+**approved** PR, `make -C pmoves pr-closeout-queue` (same variables) runs the same
+audit without the admin bypass, tolerates `BEHIND`, and enqueues via
+`gh pr merge --auto`. It refuses while no queue rule is active. Details:
+MERGE_MECHANICS.md section 5.
+
 ### Say what this is: it IS the admin bypass
 
 `pr-closeout-merge` passes **`--admin --admin-author`** (`pmoves/mk/preflight.mk`,

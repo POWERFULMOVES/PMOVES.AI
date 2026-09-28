@@ -469,6 +469,24 @@ pr-closeout-merge: ## Audit + guarded admin squash merge (PR=N EXPECTED_HEAD=sha
 		$${ALLOW_ADVISORY_FAILURE:+--allow-advisory-failure "$$ALLOW_ADVISORY_FAILURE"} \
 		$(ARGS)
 
+# Merge-queue road. Same audit, no admin bypass: the PR must be APPROVED, and it
+# is handed to main's merge queue (`gh pr merge --auto`) instead of merged
+# directly. Refuses when no merge_queue rule is active. See MERGE_MECHANICS.md.
+pr-closeout-queue: ## Audit + enqueue an APPROVED PR in main's merge queue (PR=N EXPECTED_HEAD=sha CONFIRM='MERGE #N @ sha')
+	@test -n "$${PR:-}" || { echo "ERROR: PR is required"; exit 2; }
+	@test -n "$${EXPECTED_HEAD:-}" || { echo "ERROR: EXPECTED_HEAD is required"; exit 2; }
+	@test -n "$${CONFIRM:-}" || { echo "ERROR: CONFIRM is required"; exit 2; }
+	@$(PRECHECK_PY) tools/pr_closeout.py \
+		--repo "$${PR_CLOSEOUT_REPO:-POWERFULMOVES/PMOVES.AI}" \
+		merge \
+		--pr "$$PR" \
+		--expected-head "$$EXPECTED_HEAD" \
+		--base "$${PR_CLOSEOUT_BASE:-main}" \
+		--queue \
+		--confirm "$$CONFIRM" \
+		$${ALLOW_ADVISORY_FAILURE:+--allow-advisory-failure "$$ALLOW_ADVISORY_FAILURE"} \
+		$(ARGS)
+
 floos-status: ## Show FlOO$ pairing status
 	@PYTHONPATH="$(CURDIR)/.." $(PRECHECK_PY) -m pmoves.tools.chit.floos_resolver status $(ARGS)
 

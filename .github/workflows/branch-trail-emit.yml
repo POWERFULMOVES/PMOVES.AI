@@ -17,6 +17,13 @@ on:
   push:
     branches-ignore:
       - main
+      # Merge-queue branches. The queue pushes a `gh-readonly-queue/main/pr-N-<sha>`
+      # branch per entry, holding approved-but-UNMERGED PR code (a fork's
+      # included). This job executes .github/scripts/branch_trail_ci.py FROM THAT
+      # CHECKOUT, on a tailnet self-hosted runner, with the CHIT signing secrets
+      # and the tailnet NATS URL in its env. Queue branches are ephemeral CI
+      # plumbing, not lifecycle events, so there is nothing to trail.
+      - 'gh-readonly-queue/**'
   pull_request:
     types: [opened, closed]
   delete:
@@ -32,7 +39,28 @@ jobs:
   emit:
     # Block fork PRs from running on the tailnet-connected self-hosted runner
     # to prevent untrusted code execution (RCE via pull_request from forks).
-    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork == false }}
+    #
+    # Merge-queue exclusion. `create` and `delete` accept NO branch filters, so
+    # the `branches-ignore` above cannot stop them; the job `if` has to.
+    #   create: github.ref = refs/heads/<branch> (the created ref), and
+    #           github.event.ref = <branch> (short name). The create run
+    #           executes the NEW branch's code -- the exposure.
+    #   delete: github.ref = the DEFAULT branch, so it cannot identify the
+    #           deleted ref; github.event.ref = <branch> (short name) can.
+    #           (Delete runs default-branch code; excluded anyway -- a queue
+    #           entry's teardown is not a lifecycle event either.)
+    #   push:   github.ref = github.event.ref = refs/heads/<branch>; also
+    #           filtered above, checked here as a second layer.
+    # For pull_request, github.event.ref is absent and startsWith(null, ..) is
+    # false, so the fork guard stays the only operative clause there.
+    # Enforced by pmoves/tools/validate_fork_guards.py (merge-queue reachability).
+    if: >-
+      ${{
+        (github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork == false)
+        && !startsWith(github.ref, 'refs/heads/gh-readonly-queue/')
+        && !startsWith(github.event.ref, 'gh-readonly-queue/')
+        && !startsWith(github.event.ref, 'refs/heads/gh-readonly-queue/')
+      }}
     name: emit lifecycle trail
     # Fleet-wide: any online tailnet Linux self-hosted runner may emit the trail.
     # The previous `[self-hosted, ai-lab, X64]` required an intersection no online

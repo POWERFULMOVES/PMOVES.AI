@@ -17,6 +17,15 @@ on:
     branches:
       - main
       - PMOVES.AI-Edition-Hardened
+  # Merge queue: main requires the `verify` context, which is THIS workflow's
+  # `verify` job. Under a queue the required checks run on a
+  # `gh-readonly-queue/main/...` ref with the `merge_group` event; without this
+  # trigger `verify` never reports there and the queue stalls. `paths:` filters
+  # do not apply to merge_group, and the change detection below is given a
+  # merge_group branch so it diffs the queue entry rather than falling back to
+  # the full scan. Concurrency needs no change: `github.ref` is unique per entry.
+  merge_group:
+    types: [checks_requested]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -53,10 +62,13 @@ jobs:
           set -euo pipefail
 
           run_checks=true
-          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+          # merge_group carries no `pull_request` payload; its range is
+          # merge_group.base_sha..head_sha (head_sha = the queue's merge commit).
+          # Any other event keeps the fail-safe full scan (run_checks=true).
+          if [[ "${{ github.event_name }}" == "pull_request" || "${{ github.event_name }}" == "merge_group" ]]; then
             run_checks=false
-            base="${{ github.event.pull_request.base.sha }}"
-            head="${{ github.event.pull_request.head.sha }}"
+            base="${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}"
+            head="${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha }}"
 
             if ! merge_base="$(git merge-base "$base" "$head")"; then
               echo "Unable to find pull request merge base; running CHIT checks fail-safe."

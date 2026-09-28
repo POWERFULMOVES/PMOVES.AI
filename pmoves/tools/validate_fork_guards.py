@@ -41,6 +41,29 @@ create, delete -- cannot be initiated by a fork, so those jobs are reported as
 NOT-REACHABLE rather than silently skipped: "I checked and it is out of reach" and
 "I did not look" are different claims.
 
+Merge-queue reachability (second invariant)
+-------------------------------------------
+A merge queue pushes a `gh-readonly-queue/main/pr-N-<sha>` branch per entry,
+holding approved-but-UNMERGED PR code -- a fork's included. So `push`, `create`,
+`delete` and `workflow_run` are fork-REACHABLE once the queue is on, whenever
+their filters match such a branch (`create`/`delete` take no filters at all).
+Any job on those triggers that runs self-hosted OR reads a secret other than
+GITHUB_TOKEN must exclude the queue: a `branches`/`branches-ignore` filter that
+does not match `gh-readonly-queue/**`, or an `if` that rules it out. The ref the
+`if` must test differs per event, and the gate checks the right one:
+
+    push          github.ref / github.event.ref      refs/heads/gh-readonly-queue/
+    create        github.ref                         refs/heads/gh-readonly-queue/
+                  github.event.ref (short name)      gh-readonly-queue/
+    delete        github.event.ref (short name)      gh-readonly-queue/
+                  (github.ref is the DEFAULT branch on delete -- it proves nothing)
+    workflow_run  github.event.workflow_run.head_branch  gh-readonly-queue/
+
+`github.event_name == '<another event>'` and `github.ref == 'refs/heads/<x>'`
+also exclude. Found by review of #3234: branch-trail-emit.yml ran
+branch_trail_ci.py from the checked-out tree, self-hosted, with the CHIT signing
+secrets, on `push: branches-ignore: [main]` + `create` + `delete`.
+
 `workflow_call` is followed. A reusable workflow with a self-hosted job is
 reachable if any CALLER is pull_request-triggered. Currently zero such callers
 exist; the traversal is here so the eighth case cannot arrive through that door.
@@ -407,8 +430,233 @@ def analyse(workflows: Path):
     return findings, guarded, unreachable, unparseable, total_self_hosted
 
 
+# --------------------------------------------------------------------------- #
+# merge-queue reachability
+# --------------------------------------------------------------------------- #
+# A representative queue branch. Filters are evaluated against it exactly as
+# GitHub would, so `branches: ['**']` and `branches-ignore: [main]` both count
+# as reaching it while `branches: [main]` does not.
+QUEUE_BRANCH = "gh-readonly-queue/main/pr-1-" + "0" * 40
+QUEUE_TRIGGERS = ("push", "create", "delete", "workflow_run")
+
+_SECRET_REF = re.compile(r"secrets\.(?!GITHUB_TOKEN\b)[A-Za-z_]")
+
+# (ref expression, prefix it must be tested against) that exclude the queue, per
+# trigger. Normalised form: whitespace stripped, single quotes.
+_QUEUE_PREFIX_ATOMS = {
+    "push": (("github.ref", "refs/heads/"), ("github.event.ref", "refs/heads/")),
+    "create": (("github.ref", "refs/heads/"), ("github.event.ref", "")),
+    "delete": (("github.event.ref", ""),),
+    "workflow_run": (("github.event.workflow_run.head_branch", ""),),
+}
+_QUEUE_EQ_REF = {
+    "push": ("github.ref", "github.event.ref"),
+    "create": ("github.ref",),
+    "delete": (),
+    "workflow_run": ("github.event.workflow_run.head_branch",),
+}
+
+
+def _glob_re(pattern: str) -> re.Pattern[str]:
+    """GitHub filter glob: `**` crosses `/`, `*` does not, `?` is one char."""
+    out, i = [], 0
+    while i < len(pattern):
+        if pattern.startswith("**", i):
+            out.append(".*")
+            i += 2
+        elif pattern[i] == "*":
+            out.append("[^/]*")
+            i += 1
+        elif pattern[i] == "?":
+            out.append(".")
+            i += 1
+        else:
+            out.append(re.escape(pattern[i]))
+            i += 1
+    return re.compile("^" + "".join(out) + "$")
+
+
+def _filter_matches(patterns, ref: str) -> bool:
+    """Ordered patterns, `!` negates, last match wins (GitHub's semantics)."""
+    if isinstance(patterns, str):
+        patterns = [patterns]
+    hit = False
+    for p in patterns or []:
+        p = str(p)
+        if p.startswith("!"):
+            if _glob_re(p[1:]).match(ref):
+                hit = False
+        elif _glob_re(p).match(ref):
+            hit = True
+    return hit
+
+
+def _on_mapping(doc: dict) -> dict:
+    on = doc.get("on", doc.get(True))
+    if isinstance(on, str):
+        return {on: None}
+    if isinstance(on, list):
+        return {str(k): None for k in on}
+    return on if isinstance(on, dict) else {}
+
+
+def queue_triggers(doc: dict) -> set[str]:
+    """Triggers a merge-queue branch would fire, given the workflow's filters."""
+    out: set[str] = set()
+    for trig, cfg in _on_mapping(doc).items():
+        if trig not in QUEUE_TRIGGERS:
+            continue
+        cfg = cfg if isinstance(cfg, dict) else {}
+        if trig in ("create", "delete"):
+            out.add(trig)  # no filters exist for these events
+            continue
+        if "branches" in cfg:
+            if _filter_matches(cfg["branches"], QUEUE_BRANCH):
+                out.add(trig)
+        elif "branches-ignore" in cfg:
+            if not _filter_matches(cfg["branches-ignore"], QUEUE_BRANCH):
+                out.add(trig)
+        elif trig == "push" and ("tags" in cfg or "tags-ignore" in cfg):
+            continue  # a tags-only push filter never fires for a branch
+        else:
+            out.add(trig)
+    return out
+
+
+def _outer_parens_wrap(expr: str) -> bool:
+    if not (expr.startswith("(") and expr.endswith(")")):
+        return False
+    depth, in_str = 0, False
+    for i, ch in enumerate(expr):
+        if ch == "'":
+            in_str = not in_str
+        elif not in_str and ch == "(":
+            depth += 1
+        elif not in_str and ch == ")":
+            depth -= 1
+            if depth == 0 and i != len(expr) - 1:
+                return False
+    return True
+
+
+def _queue_atom_excludes(atom: str, trigger: str) -> bool:
+    for ref, prefix in _QUEUE_PREFIX_ATOMS[trigger]:
+        want = re.escape(ref) + r",'" + re.escape(prefix) + r"gh-readonly-queue/?'\)$"
+        if re.match(r"^!startsWith\(" + want, atom):
+            return True
+    m = re.match(r"^github\.event_name==('[a-z_]+')$", atom) or re.match(
+        r"^('[a-z_]+')==github\.event_name$", atom)
+    if m and m.group(1).strip("'") != trigger:
+        return True
+    m = re.match(r"^github\.event_name!='([a-z_]+)'$", atom)
+    if m and m.group(1) == trigger:
+        return True
+    for ref in _QUEUE_EQ_REF[trigger]:
+        m = re.match(r"^" + re.escape(ref) + r"=='([^']*)'$", atom)
+        if m:
+            value = m.group(1)
+            short = value[len("refs/heads/"):] if value.startswith("refs/heads/") else value
+            if not short.startswith("gh-readonly-queue/"):
+                return True
+    return False
+
+
+def _queue_excludes(expr: str, trigger: str) -> bool:
+    """Structural: every top-level disjunct must have an excluding conjunct."""
+    disjuncts = _split_top_level(expr, "||")
+    if not disjuncts:
+        return False
+    for d in disjuncts:
+        ok = False
+        for conj in _split_top_level(d, "&&"):
+            while _outer_parens_wrap(conj):
+                conj = conj[1:-1]
+            nested = len(_split_top_level(conj, "||")) > 1 or len(
+                _split_top_level(conj, "&&")) > 1
+            if (_queue_excludes(conj, trigger) if nested
+                    else _queue_atom_excludes(conj, trigger)):
+                ok = True
+                break
+        if not ok:
+            return False
+    return True
+
+
+def condition_excludes_queue(cond, trigger: str) -> bool:
+    if cond is None:
+        return False
+    expr = _normalise(cond)
+    return bool(expr) and _queue_excludes(expr, trigger)
+
+
+def _queue_safe(job_name: str, jobs: dict, trigger: str,
+                seen: frozenset[str] = frozenset()) -> bool:
+    if job_name in seen:
+        return False
+    job = jobs.get(job_name)
+    if not isinstance(job, dict):
+        return False
+    if condition_excludes_queue(job.get("if"), trigger):
+        return True
+    own = job.get("if")
+    if isinstance(own, str) and STATUS_FUNCS.search(own):
+        return False
+    return any(_queue_safe(dep, jobs, trigger, seen | {job_name})
+               for dep in _needs(job))
+
+
+def _uses_secrets(job: dict, doc: dict) -> bool:
+    if job.get("secrets") == "inherit":
+        return True
+    blob = yaml.safe_dump(job) + yaml.safe_dump(doc.get("env") or {})
+    return bool(_SECRET_REF.search(blob))
+
+
+def analyse_queue(workflows: Path):
+    """Returns (findings, examined): exposed jobs, and how many were in scope."""
+    findings: list[str] = []
+    examined = 0
+    for wf in sorted(workflows.glob("*.yml")) + sorted(workflows.glob("*.yaml")):
+        text = wf.read_text(encoding="utf-8", errors="replace")
+        try:
+            doc = yaml.safe_load(text)
+        except yaml.YAMLError:
+            continue  # reported as UNPARSEABLE by analyse()
+        if not isinstance(doc, dict):
+            continue
+        reach = queue_triggers(doc)
+        jobs = doc.get("jobs")
+        if not reach or not isinstance(jobs, dict):
+            continue
+        for job_name, job in jobs.items():
+            if not isinstance(job, dict) or _is_disabled(job):
+                continue
+            labels = _runs_on_labels(job.get("runs-on")) or []
+            self_hosted = any("self-hosted" in l for l in labels)
+            secrets = _uses_secrets(job, doc)
+            if not (self_hosted or secrets):
+                continue
+            examined += 1
+            open_on = sorted(t for t in reach
+                             if not _queue_safe(str(job_name), jobs, t))
+            if open_on:
+                why = " + ".join(x for x, on in (("self-hosted", self_hosted),
+                                                  ("secrets", secrets)) if on)
+                findings.append(
+                    f"{wf.name}:{_job_line(text, str(job_name))} ({job_name}): "
+                    f"{why}, fired by a merge-queue branch via {open_on} with no "
+                    f"gh-readonly-queue exclusion — if: {job.get('if')!r}"
+                )
+    return findings, examined
+
+
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    # `__doc__` is None under `python -OO` (docstrings stripped). The description
+    # is cosmetic, so fall back rather than crash: an AttributeError exits 1,
+    # which a caller would read as FINDINGS from a gate that never measured.
+    ap = argparse.ArgumentParser(
+        description=(__doc__ or "Fork-guard and merge-queue reachability gate.")
+        .splitlines()[0])
     ap.add_argument("--workflows", default=str(WORKFLOWS),
                     help="workflow directory to scan")
     ap.add_argument("--quiet", action="store_true",
@@ -421,6 +669,7 @@ def main(argv: list[str] | None = None) -> int:
         return 3
 
     findings, guarded, unreachable, unparseable, total = analyse(workflows)
+    queue_findings, queue_examined = analyse_queue(workflows)
 
     # Checked BEFORE the empty-tree return: a workflow the gate cannot read is a
     # hole in coverage at any sample size, and it must be NAMED. Ordering this
@@ -433,8 +682,10 @@ def main(argv: list[str] | None = None) -> int:
               f"self-hosted jobs were never examined.")
         return 1
 
-    if total == 0:
+    if total == 0 and queue_examined == 0:
         # An empty result reads the same whether the input was clean or absent.
+        # Both scopes must be empty: a tree with no self-hosted job can still
+        # hold a secret-using job a merge-queue branch would fire.
         print(f"COULD-NOT-MEASURE: no self-hosted job found under {workflows} — "
               f"a zero here means the scan found nothing to check, not that "
               f"everything passed", file=sys.stderr)
@@ -457,6 +708,22 @@ def main(argv: list[str] | None = None) -> int:
         f"{len(findings)} UNGUARDED."
     )
 
+    for f in sorted(queue_findings):
+        print(f"QUEUE-EXPOSED: {f}")
+    print(
+        f"{queue_examined} self-hosted/secret-using job(s) in workflows a "
+        f"merge-queue branch can trigger (push/create/delete/workflow_run): "
+        f"{len(queue_findings)} EXPOSED."
+    )
+    if queue_findings:
+        print(
+            "\n::error::A self-hosted or secret-using job would run on a "
+            "merge-queue branch (gh-readonly-queue/**), which holds "
+            "approved-but-unmerged PR code. Exclude it: add 'gh-readonly-queue/**' "
+            "to branches-ignore, and for create/delete (no filters) add "
+            "`!startsWith(github.event.ref, 'gh-readonly-queue/')` to the job `if`."
+        )
+
     if findings:
         print(
             "\n::error::A self-hosted job is reachable from a fork's pull request "
@@ -467,7 +734,10 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 1
 
-    print("OK: every fork-reachable self-hosted job has a fork guard.")
+    if queue_findings:
+        return 1
+    print("OK: every fork-reachable self-hosted job has a fork guard, and no "
+          "self-hosted or secret-using job is reachable from a merge-queue branch.")
     return 0
 
 

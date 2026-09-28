@@ -36,6 +36,18 @@ on:
     # how anything is checked.
     branches: [main, PMOVES.AI-Edition-Hardened]
     types: [opened, synchronize, reopened]
+  # Merge queue. Under a queue GitHub re-runs the required checks on a temporary
+  # `gh-readonly-queue/main/...` ref with the `merge_group` event, and a required
+  # context whose workflow has no `merge_group` trigger never reports there --
+  # the queue then waits on it forever. Three of main's five required contexts
+  # (python-tests, hardening-validation, merge-decision) come from this file.
+  #
+  # Audited for pull_request-only assumptions before adding this: no job reads
+  # `github.event.pull_request.*`, `github.base_ref`/`head_ref`, or gates on
+  # `github.event_name`, and every job checks out the default ref, which under
+  # merge_group IS the queue's merge commit. So the jobs run unchanged.
+  merge_group:
+    types: [checks_requested]
 
 # HAND-MAINTAINED COUNT (1 of 3). The gate-job count appears literally in three
 # places that nothing keeps in step: here, in the no-skip rationale inside
