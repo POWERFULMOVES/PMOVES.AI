@@ -218,6 +218,16 @@ because `make` collapses every nonzero exit to 2.
   rests on the Three-Body process (a control body that did not deliver the
   change), not on anything this parser can check. The `reviewer=` field is
   self-reported.
+- **Edits and deletions.** Anyone with write access can edit or delete a
+  comment while it keeps its original author. The tool therefore refuses when
+  the winning marker was edited, and treats an edit to **any** allowlisted
+  comment posted after it as ambiguous (the edit may have removed a later
+  `REQUEST_CHANGES`); the remedy is a fresh verdict comment. **A deleted
+  comment cannot be detected**: the comments API returns no tombstone, so an
+  `APPROVE` → `REQUEST_CHANGES` → *delete the RC* sequence would read as
+  approved. Mitigations: the RC run dismisses the approval at the time it is
+  posted (6.1 step 2), and deletions are visible in the PR's timeline and the
+  repository audit trail, not in anything this tool reads.
 - The approval is attributable: it is submitted by a separate machine user
   whose token is used only after the checks, is pinned to one commit, and links
   the verdict it relied on. Anyone auditing a merge can follow the review body

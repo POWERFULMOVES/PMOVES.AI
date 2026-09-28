@@ -35,6 +35,9 @@ Selection rules (``select_verdict``):
 * the winner must be APPROVE and its comment must be unedited
   (``updated_at == created_at``) -- others with write access can edit a
   comment while it keeps its original author;
+* ANY comment by an allowlisted author posted after the winner that has been
+  edited makes the result ambiguous: the edit may have removed a later
+  REQUEST_CHANGES. Deleted comments are invisible and cannot be detected;
 * a malformed marker from an allowlisted author posted AFTER the winner makes
   the result ambiguous, and ambiguity refuses.
 """
@@ -92,7 +95,7 @@ class MarkerComment:
 
     @property
     def edited(self) -> bool:
-        return bool(self.updated_at) and self.updated_at != self.created_at
+        return _is_edited(self.created_at, self.updated_at)
 
 
 @dataclass
@@ -103,6 +106,10 @@ class Selection:
     ignored_other_heads: int = 0
     ignored_untrusted: list[str] = field(default_factory=list)
     malformed: list[MarkerComment] = field(default_factory=list)
+
+
+def _is_edited(created_at: str, updated_at: str) -> bool:
+    return bool(updated_at) and updated_at != created_at
 
 
 def format_marker(verdict: str, head: str, reviewer: str) -> str:
@@ -179,6 +186,7 @@ def select_verdict(
 ) -> Selection:
     """Decide whether the recorded control verdict approves ``head``."""
     allowed = {a.strip().lower() for a in allowed_authors if a and a.strip()}
+    comments = list(comments)
     markers = sorted(
         (m for m in (parse_comment(c) for c in comments) if m is not None),
         key=_order_key,
@@ -247,6 +255,27 @@ def select_verdict(
             f"the APPROVE marker ({first.url or first.comment_id}: {first.malformed_reason})"
         )
         return selection
+
+    # An edit to ANY later comment by an allowed author may have removed or
+    # rewritten a REQUEST_CHANGES (e.g. APPROVE c1, REQUEST_CHANGES c2, then c2
+    # edited to drop the marker or point it at another head). The current body
+    # cannot tell us what it said, so any such edit is ambiguous. Remedy: post a
+    # fresh verdict. Deletions leave no trace in the comments API (see
+    # MERGE_MECHANICS.md 6.2).
+    for raw in comments:
+        author = str((raw.get("user") or {}).get("login") or "")
+        if author.lower() not in allowed:
+            continue
+        key = (str(raw.get("created_at") or ""), int(raw.get("id") or 0))
+        if key <= _order_key(latest):
+            continue
+        if _is_edited(str(raw.get("created_at") or ""), str(raw.get("updated_at") or "")):
+            selection.reason = (
+                "ambiguous: a comment by an allowed author posted after the APPROVE marker was "
+                f"edited ({raw.get('html_url') or raw.get('id')}); it may have withdrawn the "
+                "verdict -- post a fresh verdict comment"
+            )
+            return selection
 
     selection.approved = True
     selection.reason = (

@@ -335,6 +335,29 @@ def test_malformed_trusted_marker_after_approve_is_ambiguous() -> None:
     assert sel([comment(1, bad), comment(2, marker())]).approved
 
 
+@pytest.mark.parametrize(
+    "edited_body",
+    ["withdrawn remark, marker removed", marker("REQUEST_CHANGES", head=H2), marker("APPROVE")],
+    ids=["marker-removed", "moved-to-other-head", "rewritten-to-approve"],
+)
+def test_edit_of_a_later_allowed_comment_is_ambiguous(edited_body: str) -> None:
+    # APPROVE c1, REQUEST_CHANGES c2, then c2 edited: must not revive the approval.
+    c2 = comment(2, edited_body, updated="2026-09-28T13:00:00Z")
+    s = sel([comment(1, marker()), c2])
+    # refused either as ambiguous (later edited comment) or as an edited winner
+    assert not s.approved and "edited" in s.reason
+
+
+def test_edit_of_a_later_untrusted_comment_is_ignored() -> None:
+    later = comment(2, "drive-by note", author="drive-by", updated="2026-09-28T13:00:00Z")
+    assert sel([comment(1, marker()), later]).approved
+
+
+def test_edit_of_an_earlier_comment_does_not_block_a_fresh_verdict() -> None:
+    earlier = comment(1, "old note", updated="2026-09-28T13:00:00Z")
+    assert sel([earlier, comment(2, marker())]).approved
+
+
 def test_empty_allowlist_refuses() -> None:
     assert not control_verdict.select_verdict([comment(1, marker())], H, []).approved
 
