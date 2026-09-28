@@ -182,7 +182,11 @@ audit trail shows and what `pr-closeout-audit` accepts, not the merge flag.
 
    Generate it rather than typing it:
    `python3 pmoves/tools/control_verdict.py format --verdict APPROVE --head <sha> --reviewer B850-CLAUDE`.
-   `verdict=REQUEST_CHANGES` records a block. Never edit a verdict comment;
+   `verdict=REQUEST_CHANGES` records a block — but a comment alone changes
+   nothing on GitHub. **Run `pr-control-approve` after posting it**: the run
+   dismisses any APPROVED review the machine user already gave on that head
+   (read back to confirm), then exits 1. If the dismissal fails or cannot be
+   confirmed it exits 3 and says the approval still stands. Never edit a verdict comment;
    post a new one (an edited marker is refused).
 3. The operator (or control body) runs:
 
@@ -228,14 +232,17 @@ because `make` collapses every nonzero exit to 2.
 | 2 | `EXPECTED_HEAD` not the full 40-char lowercase sha |
 | 1 | `CONFIRM` is not exactly `APPROVE #<N> @ <EXPECTED_HEAD>` (checked before any request) |
 | 3 | approver login not configured; config unreadable; `PMOVES_CONTROL_TOKEN` missing |
-| 3 | any GitHub read fails (network, 401/403/5xx) — never read as a pass |
+| 3 | any GitHub read fails (network, 401/403/5xx, a non-JSON or truncated body) — never read as a pass |
+| 3 | any unexpected error — the run still ends with the `VERDICT` line |
 | 1 | token's `GET /user` login is not the configured approver login |
 | 1 | PR closed, merged, draft, or base is not `main` |
 | 1 | PR head is not `EXPECTED_HEAD` (checked at start **and** immediately before the POST) |
 | 1 | approving account is the PR author |
-| 1 | no allowlisted `APPROVE` marker for exactly this head; latest allowlisted marker for the head is `REQUEST_CHANGES`; marker only from a non-allowlisted account; marker comment edited; a malformed allowlisted marker posted after the approve (ambiguous) |
-| 1 | GitHub rejects the review (e.g. 422) |
-| 3 | POST outcome unknown (network error after sending) — read the reviews before retrying |
+| 1 | latest allowlisted marker for the head is `REQUEST_CHANGES` — after **dismissing** any standing APPROVED review by the approver on that head |
+| 3 | …and that dismissal failed or could not be confirmed (the approval may still count) |
+| 1 | no allowlisted `APPROVE` marker for exactly this head; marker only from a non-allowlisted account; marker comment edited; a malformed allowlisted marker posted after the approve (ambiguous) |
+| 1 | GitHub rejects the review with a **4xx** (e.g. 422) |
+| 3 | POST outcome unknown: **5xx**, network error, or a bad/partial body — a 502/504 can arrive after GitHub stored the review, so read the reviews before retrying |
 | 1 | post-verify: no `APPROVED` review by the approver on `EXPECTED_HEAD` |
 | 1 | post-verify: head moved while approving |
 | 0 | approval read back from GitHub on the pinned commit |
@@ -344,6 +351,7 @@ behaviour differs, when a finding lands.
 | A6 | The ruleset sets `require_extra_approval_for_unattributed_changes: true`. Its effect is not documented in the pages checked; it may demand an approval beyond this one. | **unknown** | — |
 | A7 | An author's approval of their own PR does not count. | **verified** (A1) and observed, section 1 | as A1 |
 | A8 | `require_last_push_approval` is `false` today. If it is ever enabled, an approval only counts when it comes from someone other than the last pusher, so the machine user must **never push** to a PR branch. It must never push today either (6.5 step 3). | **verified** (setting semantics); live value read from ruleset 10887588 | "About protected branches" |
+| A10 | The machine user (write access) can dismiss its own review via `PUT /pulls/{n}/reviews/{id}/dismissals`, since the ruleset does not restrict who may dismiss. The tool confirms each dismissal by reading the review back, so a wrong assumption surfaces as `COULD-NOT-MEASURE`, never as a silent standing approval. | unverified | REST "Dismiss a review for a pull request" |
 | A9 | Merge queues are available only in repositories **owned by an organization** ("Pull request merge queues are available in any public repository owned by an organization…"). `POWERFULMOVES/PMOVES.AI` is owned by a personal account, and the research pass read `mergeQueue(branch:"main")` as null. | **verified — no merge queue on this repo** | "Managing a merge queue" page header |
 
 ### 6.7 Combining with the merge targets (no merge queue here)

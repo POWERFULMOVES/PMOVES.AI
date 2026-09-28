@@ -92,6 +92,7 @@ class FakeGitHub:
         self.reviews: list[dict[str, Any]] = []
         self.post_mode = "ok"  # ok | reject | unreachable | vanish | stored-then-502
         self.post_status = 502
+        self.dismiss_mode = "ok"  # ok | forbidden | ignore (answers 200, changes nothing)
         self.fail: dict[str, Any] = {}  # path-substring -> HTTPError code or "unreachable"
         self.page_size: int | None = None
         self.requests: list[dict[str, Any]] = []
@@ -129,6 +130,15 @@ class FakeGitHub:
             return self._paged(self.comments, path)
         if method == "GET" and path.startswith(f"/repos/{REPO}/pulls/{PR}/reviews"):
             return self._paged(self.reviews, path)
+        m_dismiss = re.fullmatch(rf"/repos/{REPO}/pulls/{PR}/reviews/(\d+)/dismissals", path)
+        if method == "PUT" and m_dismiss:
+            if self.dismiss_mode == "forbidden":
+                raise urllib.error.HTTPError(url, 403, "Forbidden", {}, io.BytesIO(b"{}"))
+            rid = int(m_dismiss.group(1))
+            for r in self.reviews:
+                if r["id"] == rid and self.dismiss_mode == "ok":
+                    r["state"] = "DISMISSED"
+            return _Resp({"id": rid, "state": "DISMISSED"})
         if method == "POST" and path == f"/repos/{REPO}/pulls/{PR}/reviews":
             body = json.loads(data)
             if self.post_mode == "stored-then-502":
@@ -451,6 +461,52 @@ def test_latest_request_changes_refused(gh: FakeGitHub, config: Path) -> None:
     gh.comments.append(comment(2, marker("REQUEST_CHANGES")))
     assert run(config) == 1
     assert gh.posts() == []
+
+
+def _standing(gh: FakeGitHub, rid: int = 77, head: str = H) -> None:
+    gh.reviews.append({"id": rid, "user": {"login": APPROVER}, "state": "APPROVED", "commit_id": head, "submitted_at": "2026-09-28T09:30:00Z"})
+
+
+def test_request_changes_dismisses_standing_approval(gh: FakeGitHub, config: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    _standing(gh)
+    gh.comments.append(comment(2, marker("REQUEST_CHANGES")))
+    assert run(config) == 1
+    puts = [r for r in gh.requests if r["method"] == "PUT"]
+    assert len(puts) == 1 and puts[0]["url"].endswith(f"/pulls/{PR}/reviews/77/dismissals")
+    assert json.loads(puts[0]["data"])["event"] == "DISMISS"
+    assert gh.reviews[0]["state"] == "DISMISSED"
+    assert "dismissed standing approval(s) [77]" in capsys.readouterr().err
+    assert gh.posts() == []
+
+
+def test_request_changes_without_standing_approval_refuses_without_dismissing(gh: FakeGitHub, config: Path) -> None:
+    _standing(gh, head=H2)  # an approval on another commit is not touched
+    gh.comments.append(comment(2, marker("REQUEST_CHANGES")))
+    assert run(config) == 1
+    assert [r for r in gh.requests if r["method"] == "PUT"] == []
+
+
+@pytest.mark.parametrize("mode", ["forbidden", "ignore"])
+def test_request_changes_dismissal_failure_is_could_not_measure(gh: FakeGitHub, config: Path, mode: str, capsys: pytest.CaptureFixture[str]) -> None:
+    _standing(gh)
+    gh.dismiss_mode = mode
+    gh.comments.append(comment(2, marker("REQUEST_CHANGES")))
+    assert run(config) == 3
+    assert "77" in capsys.readouterr().err
+
+
+def test_request_changes_reviews_unreadable_is_could_not_measure(gh: FakeGitHub, config: Path) -> None:
+    gh.comments.append(comment(2, marker("REQUEST_CHANGES")))
+    gh.fail["/reviews"] = 502
+    assert run(config) == 3
+
+
+def test_request_changes_dry_run_does_not_dismiss(gh: FakeGitHub, config: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    _standing(gh)
+    gh.comments.append(comment(2, marker("REQUEST_CHANGES")))
+    assert run(config, extra=["--dry-run"]) == 1
+    assert [r for r in gh.requests if r["method"] == "PUT"] == []
+    assert "would dismiss" in capsys.readouterr().err
 
 
 def test_marker_by_unallowed_author_refused(gh: FakeGitHub, config: Path) -> None:

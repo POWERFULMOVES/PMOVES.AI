@@ -21,8 +21,11 @@ Refusal matrix (every row exits non-zero with an honest message):
   exit 1  PR closed / merged / draft / base != configured base
   exit 1  PR head != EXPECTED_HEAD (checked twice: before and just before POST)
   exit 1  approving account == PR author
-  exit 1  no allowlisted APPROVE marker for exactly this head, latest is
-          REQUEST_CHANGES, marker edited, or ambiguous (control_verdict.py)
+  exit 1  no allowlisted APPROVE marker for exactly this head, marker
+          edited, or ambiguous (control_verdict.py)
+  exit 1  latest verdict is REQUEST_CHANGES -- any standing APPROVED review by
+          the approver on the head is DISMISSED first (verified by read-back)
+  exit 3  ...and that dismissal failed or could not be verified
   exit 1  POST rejected by GitHub with a 4xx (e.g. 422)
   exit 3  POST outcome unknown: 5xx, network error, bad/partial body
   exit 1  post-verify: no APPROVED review by the approver on EXPECTED_HEAD
@@ -272,6 +275,64 @@ def _approver_reviews_on(reviews: list[dict[str, Any]], approver: str, head: str
     return sorted(mine, key=lambda r: (str(r.get("submitted_at") or ""), int(r.get("id") or 0)))
 
 
+def _withdraw_standing_approvals(
+    client: GitHubClient,
+    pr_path: str,
+    approver: str,
+    head: str,
+    why: str,
+    dry_run: bool,
+) -> str:
+    """Dismiss every standing APPROVED review by ``approver`` on ``head``.
+
+    Returns a note for the refusal message. Any failure to establish that no
+    approval stands is COULD-NOT-MEASURE: a REQUEST_CHANGES verdict with an
+    approval still counting is exactly the state an operator must not miss.
+    """
+    reviews = _read(
+        "list reviews to find a standing approval (one may still count)",
+        lambda: client.get_pages(f"{pr_path}/reviews"),
+    )
+    standing = [
+        int(r.get("id") or 0)
+        for r in _approver_reviews_on(reviews, approver, head)
+        if str(r.get("state") or "") == "APPROVED"
+    ]
+    if not standing:
+        return f"no standing approval by {approver} on {head}"
+    if dry_run:
+        return f"dry-run: would dismiss standing approval(s) {standing} by {approver}"
+    for review_id in standing:
+        try:
+            client.request(
+                "PUT",
+                f"{pr_path}/reviews/{review_id}/dismissals",
+                {"message": f"Withdrawn by the PMOVES.AI control road: {why}", "event": "DISMISS"},
+            )
+        except (ApiError, ApiUnreachable) as exc:
+            raise Outcome(
+                EXIT_UNMEASURED,
+                f"{why}, but APPROVED review {review_id} by {approver} STILL STANDS on {head} and could "
+                f"not be dismissed ({exc}); dismiss it by hand before anything merges",
+            ) from None
+    after = _read(
+        "read reviews back after dismissing (an approval may still stand)",
+        lambda: client.get_pages(f"{pr_path}/reviews"),
+    )
+    still = [
+        int(r.get("id") or 0)
+        for r in after
+        if int(r.get("id") or 0) in standing and str(r.get("state") or "") == "APPROVED"
+    ]
+    if still:
+        raise Outcome(
+            EXIT_UNMEASURED,
+            f"{why}; dismissal was requested but review(s) {still} still read APPROVED; "
+            "dismiss by hand before anything merges",
+        )
+    return f"dismissed standing approval(s) {standing} by {approver}"
+
+
 def approve(
     *,
     pr_number: int,
@@ -310,7 +371,16 @@ def approve(
     )
     selection = control_verdict.select_verdict(comments, expected_head, settings.marker_authors)
     if not selection.approved or selection.chosen is None:
-        raise Outcome(EXIT_REFUSED, f"control verdict: {selection.reason}")
+        reason = f"control verdict: {selection.reason}"
+        chosen = selection.chosen
+        if chosen is not None and chosen.verdict is not None and chosen.verdict.verdict == "REQUEST_CHANGES":
+            # A REQUEST_CHANGES verdict must withdraw an approval this road already
+            # gave, not merely stop future runs (review round 1, P2-3).
+            reason += "; " + _withdraw_standing_approvals(
+                client, pr_path, token_login, expected_head,
+                f"control verdict REQUEST_CHANGES ({chosen.url or chosen.comment_id})", dry_run,
+            )
+        raise Outcome(EXIT_REFUSED, reason)
     marker = selection.chosen
     emit(f"control verdict: {selection.reason} ({marker.url})")
 
