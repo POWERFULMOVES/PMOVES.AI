@@ -207,7 +207,9 @@ audit trail shows and what `pr-closeout-audit` accepts, not the merge flag.
 4. `tools/control_approve.py` checks everything in 6.3, then submits
    `POST /repos/{o}/{r}/pulls/{n}/reviews` with `event=APPROVE` and
    `commit_id=EXPECTED_HEAD`, and a body linking the verdict comment. The token
-   travels only in an `Authorization` header (urllib; no subprocess, no argv).
+   travels only in an `Authorization` header (urllib; no subprocess, no argv),
+   only over https to the configured API host: redirects are refused (urllib
+   would forward the header) and pagination links to any other host are refused.
 5. It **reads the reviews back** and exits 0 only when an `APPROVED` review by
    the configured approver on exactly `EXPECTED_HEAD` exists and the head has
    not moved.
@@ -257,9 +259,11 @@ because `make` collapses every nonzero exit to 2.
 
 | rc | condition |
 |---|---|
-| 2 | `EXPECTED_HEAD` not the full 40-char lowercase sha |
+| 2 | `EXPECTED_HEAD` not the full 40-char lowercase sha; `--api-base` not an https URL with a host; both token sources set |
 | 1 | `CONFIRM` is not exactly `APPROVE #<N> @ <EXPECTED_HEAD>` (checked before any request) |
-| 3 | approver login not configured; config unreadable; `PMOVES_CONTROL_TOKEN` missing |
+| 3 | approver login not configured; config unreadable; no token (neither `PMOVES_CONTROL_TOKEN_FILE` nor `PMOVES_CONTROL_TOKEN`); token file missing or empty |
+| 1 | token file not a regular file, not owned by the invoking user, or group/other accessible (POSIX) |
+| 3 | a redirect, or a pagination link to another scheme/host — the token is never forwarded |
 | 3 | any GitHub read fails (network, 401/403/5xx, a non-JSON or truncated body) — never read as a pass |
 | 3 | any unexpected error — the run still ends with the `VERDICT` line |
 | 1 | token's `GET /user` login is not the configured approver login |
