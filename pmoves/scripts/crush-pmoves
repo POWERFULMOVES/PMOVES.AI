@@ -43,6 +43,12 @@ IDENTITY_FILE="$REPO_ROOT/pmoves/data/identity/node-identity.md"
 pm_node_identity "$REPO_ROOT" crush crush-pmoves || true
 IDENT_PY=(${PM_IDENT_PY[@]+"${PM_IDENT_PY[@]}"})
 echo "${PM_IDENT_LINE}" >&2
+if [ -f "$REPO_ROOT/pmoves/scripts/pm-cipher-token-bind.sh" ]; then
+  # shellcheck source=./pm-cipher-token-bind.sh
+  . "$REPO_ROOT/pmoves/scripts/pm-cipher-token-bind.sh"
+  pm_cipher_token_bind "$REPO_ROOT" "${PM_IDENT_CIPHER_ID:-}" || true
+  echo "[crush-pmoves] ${PM_CARRY_BIND_LINE}" >&2
+fi
 mkdir -p "$(dirname "$IDENTITY_FILE")"
 
 # EVERY BRANCH WRITES. crush reads its context from this file, so a path that

@@ -155,6 +155,7 @@ export function SearchBar({
             onFocus={() => setShowHistory(true)}
             placeholder={placeholder}
             aria-label="Search knowledge base"
+            data-testid="search-input"
             className={`${INPUT_BASE_CLASSES} ${INPUT_DISABLED_CLASSES}`}
             disabled={loading}
             autoComplete="off"
@@ -169,12 +170,13 @@ export function SearchBar({
 
           {/* Search history dropdown */}
           {showHistory && history.length > 0 && (
-            <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-neutral-200 rounded-md shadow-lg z-50">
+            <div data-testid="search-history-dropdown" className="absolute top-full left-0 right-0 mt-1 bg-white border border-neutral-200 rounded-md shadow-lg z-50">
               <div className="p-2 border-b border-neutral-100 flex items-center justify-between">
                 <span className="text-xs font-medium text-neutral-500">Recent Searches</span>
                 <button
                   type="button"
                   onClick={clearHistory}
+                  data-testid="clear-search-history"
                   className="text-xs text-blue-600 hover:text-blue-800"
                 >
                   Clear
@@ -186,6 +188,7 @@ export function SearchBar({
                     <button
                       type="button"
                       onClick={() => handleHistoryClick(item)}
+                      data-testid="search-history-item"
                       className="w-full text-left px-3 py-2 text-sm hover:bg-neutral-50 transition"
                     >
                       <span className="block truncate">{item.query}</span>
@@ -230,11 +233,12 @@ export function SearchBar({
 
         <button
           type="submit"
+          data-testid="search-submit"
           disabled={loading || !query.trim()}
           className={`${BUTTON_BASE_CLASSES} ${BUTTON_ENABLED_CLASSES} ${BUTTON_DISABLED_CLASSES}`}
         >
           {loading ? (
-            <span className="flex items-center gap-2">
+            <span data-testid="search-loading" className="flex items-center gap-2">
               <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
                 <circle
                   className="opacity-25"

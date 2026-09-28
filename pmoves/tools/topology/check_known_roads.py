@@ -38,6 +38,8 @@ MATRIX_PATH = (
     Path(__file__).resolve().parents[2] / "configs" / "topology" / "docker_matrix.yaml"
 )
 
+REPO_ROOT = MATRIX_PATH.parents[3]
+
 REFERENCE_PATTERNS = [
     re.compile(r"^pr:\d+$"),
     re.compile(r"^issue:\d+$"),
@@ -55,36 +57,73 @@ def _load_matrix() -> dict:
         return yaml.safe_load(fh) or {}
 
 
+def _normalize_path(path: str) -> str:
+    """Repo-relative POSIX form of a caller-supplied path.
+
+    Matrix entries are repo-relative POSIX strings (see
+    build_docker_matrix.py), so the gate only ever compares like with
+    like. Absolute paths under the repo root are relativized so the
+    gate works from any cwd; absolute paths outside the repo root are
+    returned as-is and can never match a matrix entry.
+    """
+    # Separators are normalized BEFORE Path(), not after. Path() is
+    # platform-dependent: on Windows a backslash is a separator and
+    # as_posix() converts it, but on Linux it is an ordinary filename
+    # character, so 'pmoves\docker-compose.core.yml' stayed one
+    # component and matched nothing. That is why
+    # test_gate_matches_windows_style_input passed on a Windows
+    # developer machine and failed on the Linux CI runner.
+    #
+    # The intent was already here twice -- the ValueError branch below
+    # and _matrix_owns_path's overlay comparison both replace() -- just
+    # not on the path every call takes.
+    p = Path(path.replace("\\", "/"))
+    if p.is_absolute():
+        try:
+            p = p.resolve().relative_to(REPO_ROOT)
+        except ValueError:
+            return path.replace("\\", "/")
+    posix = p.as_posix()
+    if posix.startswith("./"):
+        posix = posix[2:]
+    return posix
+
+
 def _matrix_owns_path(matrix: dict, path: str) -> list:
     """Match a path to the services that own it.
 
-    Single lookup rule: each service has a `paths` set under each of
-    its overlays (Source A) or under its declared `guard_paths` list
-    (Source C, submodule-resident services). The gate passes iff the
-    lookup path is a member of one of those sets (after path normalization).
+    Single lookup rule: each service carries an `overlays` list (Source A)
+    whose entries hold `paths` — the repo-relative compose files that
+    declare the service — plus an optional `guard_paths` list (Source C,
+    submodule-resident services) of exact paths the gate accepts. The
+    gate passes iff the lookup path matches one of those entries (after
+    path normalization).
 
     No fuzzy substring matches, no directory-shape inference, no
-    overlay-file-prefix checks. Exact-set membership only — the
-    operator's design rule: matrix is the canonical source, gate is
-    exact. If the gate refuses a path the operator expects to pass,
-    the right fix is to add the path to the matrix's `guard_paths`,
-    not to soften the gate.
+    overlay-file-prefix checks. The matrix is the canonical source, the
+    gate is exact. If the gate refuses a path the operator expects to
+    pass, the right fix is to add the path to the matrix's
+    `guard_paths`, not to soften the gate.
     """
-    path = path.replace("\\", "/")
-    if path.startswith("./"):
-        path = path[2:]
+    path = _normalize_path(path)
 
     owners: list = []
     for svc in matrix.get("services", []):
-        # Source A: paths under each overlay
-        for _ov_name, ov_path in svc.get("paths", {}).items():
-            normalized = ov_path.replace("\\", "/")
-            if normalized == path or path.startswith(normalized):
-                owners.append(svc["name"])
+        # Source A: paths under each overlay entry
+        found = False
+        for ov_entry in svc.get("overlays") or []:
+            for ov_path in ov_entry.get("paths") or []:
+                normalized = str(ov_path).replace("\\", "/")
+                if normalized == path or path.startswith(normalized):
+                    owners.append(svc["name"])
+                    found = True
+                    break
+            if found:
                 break
-        else:
+        if not found:
             # Source C: explicit guard_paths set (added by Source C in build)
-            if path in svc.get("guard_paths", set()):
+            guards = {str(g).replace("\\", "/") for g in svc.get("guard_paths") or []}
+            if path in guards:
                 owners.append(svc["name"])
     return owners
 

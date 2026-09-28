@@ -1,0 +1,41 @@
+# Baselined compose-hardening gaps - compose_hardening_ratchet.py
+#
+# Each entry is a (property, service) pair that does not meet the hardening
+# property named, for a service declared in pmoves/docker-compose.hardened.yml
+# and resolved against the base stack it is deployed on. They are recorded so
+# the check can be ENFORCED today without turning the gate red in a single
+# step. They are NOT approved, and none of them is 'expected'.
+#
+# The list may shrink and must never silently grow. A service that is fixed but
+# still listed here fails the gate as a STALE entry, so the count only goes down.
+#
+# ── 2026-09-21: 28 -> 0. Every entry was a FALSE finding. ───────────────────
+# This file held exactly 28 entries and all 28 were `NO_RESOURCE_LIMITS`, one
+# per hardened service. None of them was real.
+#
+# The tool read pmoves/docker-compose.hardened.yml ALONE. That file is a
+# security-only overlay by design and carries no `deploy:` key for any service,
+# because `$(DC)` always stacks it on the base stack, which supplies sizing at
+# merge time. So the check asserted a property against a file that was never
+# meant to hold it, and the baseline recorded 28 services as lacking limits
+# they demonstrably had. Measured live on B850 (Docker 29.8.1 / Compose v5.5.1)
+# while these entries were sitting here:
+#
+#     extract-worker   Memory=536870912   NanoCpus=1000000000
+#     archon           Memory=2147483648  NanoCpus=2000000000
+#     ffmpeg-whisper   Memory=8589934592  NanoCpus=4000000000
+#
+# The tool now resolves each overlay service against the base stack before
+# judging it, so all 28 report PASS and the entries are gone. The denominator
+# did not move: 28 services x 5 properties = 140 evaluated, before and after.
+# What moved is the bucket -- 112 PASS + 28 NO_RESOURCE_LIMITS became 140 PASS.
+#
+# Worth keeping in view, because an empty baseline is the easiest thing in this
+# repo to mistake for an unplugged instrument: 0 entries here means every
+# hardened service meets every property, NOT that nothing was checked. The
+# check prints its own equation on every run, and the positive control in
+# pmoves/tests/tools/test_compose_hardening_ratchet.py proves the tool still
+# fails, by name, when a limit is actually removed from the base.
+#
+# Regenerate: python pmoves/tools/compose_hardening_ratchet.py --write-baseline
+known_gaps: []

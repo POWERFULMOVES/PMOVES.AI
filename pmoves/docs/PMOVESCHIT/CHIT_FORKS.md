@@ -115,7 +115,7 @@ artifact:
         (memory-routes.ts:24) prepends the category string to the
         user-supplied tags. The Zod error message is misleading — it
         reports the schema's own max(10), not the combined count.
-    - file: Pmoves-cipher/src/pmoves/auth.ts:46,49
+    - file: Pmoves-cipher/src/pmoves/auth.ts:95,98
       subject: "per-agent token mode — the `cipher_` bearer prefix"
       upstream_default: "no token->agent resolution at all"
       pmoves_choice: |
@@ -252,11 +252,11 @@ because it is evidently easy to do while writing the document that forbids it.
 
 | field | value | how it was derived |
 |---|---|---|
-| `pmoves_fork_commit` | `975e02e6` | the gitlink `main` carries at amendment time; promoted in this same PR so record, gitlink and citations cannot disagree. Re-pinned to `c88b009a2` by #3103 — `auth.ts` untouched, citations re-verified at the same lines. |
+| `pmoves_fork_commit` | `975e02e6` | the gitlink `main` carries at amendment time; promoted in this same PR so record, gitlink and citations cannot disagree. Re-pinned to `c88b009a2` by #3103 — `auth.ts` untouched, citations re-verified at the same lines. Re-pinned to `a0ee2314` by #3189 (fork PR #28 rewrote `resolveToken()`): `:46,49` → `:95,98`. |
 | `pinned_commit` | `1052ac1a` | parent of `389ce722`, the first commit touching `src/pmoves/` — the last upstream state before the overlay |
 
 **Also added:** an override row for the per-agent token mode
-(`src/pmoves/auth.ts:46,49`). It was unrecorded, and it is the contract two lanes
+(`src/pmoves/auth.ts:95,98` at `a0ee2314`). It was unrecorded, and it is the contract two lanes
 on two nodes were independently building on.
 
 **Not changed:** the `signing_card` fields, which stay `5090-claude`. This

@@ -1,6 +1,6 @@
 ---
 name: pmoves-pr-merge
-description: Merge a PMOVES.AI pull request into main through the guarded closeout target — head pinning, fail-closed auditing, and the serial train under strict mode. Use when landing any PR, draining a PR queue, or when a PR shows BLOCKED/BEHIND and the reason is not obvious.
+description: Merge a PMOVES.AI pull request into main through the guarded closeout target — which IS the repository's admin bypass, carrying a fail-closed preflight (head pinning, an audit over every check, author restriction) rather than being an alternative to a bypass. Covers the serial train under strict mode and the standing ruleset bypass. Use when landing any PR, draining a PR queue, or when a PR shows BLOCKED/BEHIND and the reason is not obvious.
 ---
 
 # PMOVES PR merge
@@ -16,21 +16,62 @@ make -C pmoves pr-closeout-merge \
   CONFIRM='MERGE #<N> @ <full-sha>'
 ```
 
-**Not `gh pr merge --admin`.** That is a Known Roads bypass — the same rule that
-covers raw `docker` and raw `ssh` covers raw `gh`. `pr-closeout-merge` wraps
-`tools/pr_closeout.py`, which is **fail-closed**, and gives you things a bare
-merge cannot:
+### Say what this is: it IS the admin bypass
 
-- **Head pinning.** `EXPECTED_HEAD` must match the PR's current head, so you
-  cannot merge a commit you did not review. A push that lands between your review
-  and your merge aborts instead of sailing through.
+`pr-closeout-merge` passes **`--admin --admin-author`** (`pmoves/mk/preflight.mk`,
+the `pr-closeout-merge` recipe) and `tools/pr_closeout.py` appends `--admin` to
+the `gh pr merge` it runs. **This target is the repository's admin bypass.** It
+is not an alternative to one.
+
+What it is instead of is an *unaudited* bypass. The difference is a fail-closed
+**preflight** that runs before the same privileged merge, not a lesser privilege:
+
+- **Head pinning.** `EXPECTED_HEAD` must match the PR's current head, and the
+  merge itself passes `--match-head-commit`. A push landing between your review
+  and your merge aborts the merge rather than sailing through it.
 - **Rejects draft PRs, the wrong base, and `CHANGES_REQUESTED`.**
-- **Audits every Actions check**, not just the six required contexts — with
-  `ALLOW_ADVISORY_FAILURE` as the explicit, named escape for advisory ones.
-- **Restricts the admin bypass to the expected author** (`PR_ADMIN_AUTHOR`,
+- **Audits EVERY Actions check**, not only the five required contexts
+  (`merge-decision`, `python-tests`, `hardening-validation`, `verify`,
+  `submodule-gitlink-gate` — `pmoves/configs/branch_protection/pmoves_standard.json`),
+  with `ALLOW_ADVISORY_FAILURE` as the explicit, named escape for advisory ones.
+  Waived advisory failures are listed by name, state and run URL, not only
+  counted.
+- **Restricts the admin bypass to one expected author** (`PR_ADMIN_AUTHOR`,
   default `POWERFULMOVES`) rather than applying it to anything.
 - **Requires `CONFIRM`** to spell out the PR number and the exact sha, so a
   mis-typed number cannot merge the wrong PR.
+
+Two things the audit does NOT do, so you do not read more into a green line
+than is there:
+
+- A check whose conclusion is **`SKIPPED` counts as a pass** (`PASS_CONCLUSIONS`
+  in `pr_closeout.py`). That mirrors GitHub's own treatment of skipped required
+  checks, and it means "all checks green" can include checks that never ran —
+  a path filter that did not match looks identical to a check that succeeded.
+- It audits the PR. It does not audit the ruleset (below).
+
+### The `[ main ]` ruleset already grants a standing bypass
+
+Measured read-only on 2026-09-20,
+`gh api repos/POWERFULMOVES/PMOVES.AI/rulesets/10887588`:
+
+```json
+{"id":10887588,"name":"[ main ]",
+ "bypass_actors":[{"actor_id":5,"actor_type":"RepositoryRole","bypass_mode":"always"}]}
+```
+
+`bypass_mode: always` is **repo-wide and covers all five required contexts**. It
+is not hardening-specific, and it applies to direct pushes to `main` as well as
+to pull requests. So the guard rails above are the preflight a *cooperating*
+operator runs; they are not what stops an admin merging without them.
+
+**The operator has directed a change to `bypass_mode: pull_request`** — admin
+may bypass on a PR, but not on a direct push to `main`. That API call was
+**denied in a steward session by the auto-mode permission classifier as
+[Security Weaken]**, despite the change tightening the bypass rather than
+loosening it. It therefore remains with the operator. Recorded here so the next
+agent does not spend a session rediscovering the denial. Do not retry it from an
+agent session; escalate.
 
 Audit without merging — safe any time, and the right first move on any PR you did
 not just build:
@@ -127,8 +168,10 @@ git -C <worktree> diff origin/main --stat   # expect +N / -0 on append-only file
 
 ## Do not
 
-- Do not use `gh pr merge --admin`. It bypasses head pinning, the draft/base
-  checks, the full-check audit, and the author restriction — all at once.
+- Do not use a bare `gh pr merge --admin`. Not because admin is forbidden —
+  `pr-closeout-merge` uses it — but because the bare form drops head pinning,
+  the draft/base checks, the full-check audit and the author restriction, all
+  at once. Same privilege, no preflight.
 - Do not merge with unresolved threads — see [[pmoves-pair-review]] / `/pr-trim`.
 - Do not `git checkout -- <file>` to undo a temporary edit in a file that also
   holds uncommitted work. It reverts the whole file. Commit first, then experiment.
