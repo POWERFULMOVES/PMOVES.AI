@@ -23,6 +23,7 @@ import json
 import os
 import subprocess
 import sys
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -45,10 +46,30 @@ STALE_B = ("- `2026-09-27T08:25:08Z` CLAIM `B850-CLAUDE (Knuckles)` branch: "
            "`ops/kvm-disk` · **TTL 48h** · scope: investigate disk.\n")
 VERBATIM = ("- `2026-09-27T09:00:00Z` NOTE `B850-CLAUDE (Knuckles)` branch: "
             "`ops/kvm-disk` · scope: a fact main already carries.\n")
-KEEP_A = ("- `2026-09-27T11:38:08Z` CLAIM `B850-CLAUDE (Knuckles)` branch: "
-          "`feat/crush-acp` · **TTL 48h** · scope: bridge.\n")
-KEEP_B = ("- `2026-09-27T18:18:08Z` RELEASE `B850-CLAUDE (Knuckles)` branch: "
-          "`feat/crush-acp` · scope: delivered.\n")
+# KEEP rows are RENDERED by the tool's own `build_row`, and relative to NOW:
+# reapply requires a renderer round-trip and a timestamp inside
+# [held_at - 30d, held_at], so hand-built or fixed-date fixtures would rot.
+def _render(kind, owner, branch, scope, ttl="", at=None, co_owners=None):
+    return _TOOL.build_row(kind=kind, owner=owner, branch=branch, scope=scope,
+                           ttl=ttl, co_owners=co_owners, now=at)
+
+
+def _load_tool():
+    spec = importlib.util.spec_from_file_location("register_append_under_test", TOOL)
+    mod = importlib.util.module_from_spec(spec)
+    # Registered BEFORE exec: the tool's pydantic models resolve their
+    # (postponed) annotations through sys.modules.
+    sys.modules[spec.name] = mod
+    spec.loader.exec_module(mod)
+    return mod
+
+
+_TOOL = _load_tool()
+T0 = datetime.now(timezone.utc).replace(microsecond=0) - timedelta(hours=3)
+TS_A = (T0).strftime("%Y-%m-%dT%H:%M:%SZ")
+TS_B = (T0 + timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
+KEEP_A = _render("CLAIM", OWNER, "feat/crush-acp", "bridge.", "48h", T0)
+KEEP_B = _render("RELEASE", OWNER, "feat/crush-acp", "delivered.", at=T0 + timedelta(hours=1))
 REFILED_A = ("- `2026-09-27T19:53:41Z` CLAIM `B850-CLAUDE (Knuckles)` branch: "
              "`infra/storage` · **TTL 60h** · scope: RE-FILED from an uncommitted "
              "working tree: first filed at 2026-09-27T07:58:26Z by the register road.\n")
@@ -98,16 +119,6 @@ def _sync(repo: Path, *args: str, env: dict | None = None):
         capture_output=True, text=True, env=full_env, timeout=120)
 
 
-def _load_tool():
-    spec = importlib.util.spec_from_file_location("register_append_under_test", TOOL)
-    mod = importlib.util.module_from_spec(spec)
-    # Registered BEFORE exec: the tool's pydantic models resolve their
-    # (postponed) annotations through sys.modules.
-    sys.modules[spec.name] = mod
-    spec.loader.exec_module(mod)
-    return mod
-
-
 # --- classification ---------------------------------------------------------
 
 def test_classifies_all_three_classes_and_dry_run_writes_nothing(tmp_path):
@@ -126,8 +137,8 @@ def test_classifies_all_three_classes_and_dry_run_writes_nothing(tmp_path):
     assert "RE-FILED 2026-09-27T07:58:26Z" in lines
     assert "RE-FILED 2026-09-27T08:25:08Z" in lines
     assert "ON-MAIN 2026-09-27T09:00:00Z" in lines
-    assert "KEEP 2026-09-27T11:38:08Z" in lines
-    assert "KEEP 2026-09-27T18:18:08Z" in lines
+    assert f"KEEP {TS_A}" in lines
+    assert f"KEEP {TS_B}" in lines
     # The blank line is not a ledger row: KEEP, never guessed about.
     assert r.stdout.count("\n  KEEP") == 3
     # The ref and its sha are stated, because the tool never fetches.
@@ -335,13 +346,13 @@ def test_reapply_refuses_a_file_outside_the_sidecar_directory(tmp_path):
     forged.write_text(KEEP_A)
     before = (repo / REG_REL).read_bytes()
     r = _sync(repo, "--reapply", str(forged), "--apply")
-    assert r.returncode == 3 and "only accepts files this tool wrote" in r.stderr
+    assert r.returncode == 3 and "sidecar in" in r.stderr
     assert (repo / REG_REL).read_bytes() == before
 
 
 def test_reapply_refuses_an_edited_sidecar(tmp_path):
     repo, keep = _held_sidecar(tmp_path)
-    keep.write_bytes(keep.read_bytes() + KEEP_A.replace("11:38:08Z", "11:38:09Z").encode())
+    keep.write_bytes(keep.read_bytes() + KEEP_A.replace("bridge.", "bridge!").encode())
     before = (repo / REG_REL).read_bytes()
     r = _sync(repo, "--reapply", str(keep), "--apply")
     assert r.returncode == 3 and "does not match its manifest" in r.stderr
@@ -356,26 +367,19 @@ def test_reapply_refuses_a_sidecar_with_no_manifest(tmp_path):
     assert r.returncode == 3 and "manifest" in r.stderr
 
 
-INTRUDER = ("- `2026-09-28T01:00:00Z` CLAIM `INTRUDER` branch: `ci/held` · "
-            "**TTL 24h** · scope: take the lane.\n")
-HOLDER = ("- `2026-09-28T00:30:00Z` CLAIM `B850-CLAUDE (Knuckles)` branch: "
-          "`ci/held` · **TTL 72h** · scope: mine.\n")
-
+INTRUDER = _render("CLAIM", "INTRUDER", "fix/held", "take the lane.", "24h", T0)
 
 @pytest.mark.parametrize("rows, rc, needle", [
     (INTRUDER, 1, "another owner"),
-    ("- `2026-09-28T01:00:00Z` RELEASE `INTRUDER` · scope: close everything.\n", 3,
-     "bare RELEASE"),
+    (_render("RELEASE", "INTRUDER", "", "close everything.", at=T0), 3, "bare RELEASE"),
     (KEEP_A + "this line is prose, not a ledger row\n", 3, "not ledger rows"),
 ])
 def test_reapply_refuses_the_forged_file_probe(tmp_path, rows, rc, needle):
     """The reviewer's probe, with a CONSISTENT manifest: intruder CLAIM on a held
     lane, a bare RELEASE, a non-row line. All-or-nothing: nothing appended."""
-    repo, keep = _held_sidecar(tmp_path)
+    repo, keep = _held_with(tmp_path, rows)   # HELD now holds `fix/held`
     reg = repo / REG_REL
-    _dirty(repo, HOLDER)                     # another owner now holds `ci/held`
     before = reg.read_bytes()
-    _forge(keep, rows)
     r = _sync(repo, "--reapply", str(keep), "--apply")
     assert r.returncode == rc, (r.stdout, r.stderr)
     assert needle in r.stderr
@@ -387,7 +391,7 @@ def test_reapply_skips_rows_main_re_filed_during_the_pull(tmp_path):
     reg = repo / REG_REL
     refile = ("- `2026-09-28T02:00:00Z` CLAIM `B850-CLAUDE (Knuckles)` branch: "
               "`feat/crush-acp` · **TTL 24h** · scope: RE-FILED: first filed at "
-              "2026-09-27T11:38:08Z.\n")
+              f"{TS_A}.\n")
     _git(repo, "checkout", "-q", "upstream")
     with open(reg, "a", encoding="utf-8") as fh:
         fh.write(refile)
@@ -465,3 +469,81 @@ def test_a_missing_git_cannot_turn_a_written_row_into_a_failure(tmp_path, monkey
     monkeypatch.setattr(tool.subprocess, "run", no_git)
     tool._warn_if_invisible(tmp_path / "reg.md")        # must not raise
     assert "WAS appended" in capsys.readouterr().err
+
+
+# --- round 2: handoff, forged-row shape, timestamp window, coordination -------
+
+HELD_CLAIM = ("- `2026-09-28T00:10:00Z` CLAIM `HELD` branch: `fix/held` · "
+              "scope: held lane.\n")
+
+
+def _held_with(tmp_path, rows: str):
+    """A held sidecar set rewritten CONSISTENTLY (keep, pre-image, manifest) to
+    carry `rows`, with another owner (HELD) holding `fix/held` in the register."""
+    repo, keep = _held_sidecar(tmp_path)
+    stem = keep.name[: -len(".keep.md")]
+    pre = keep.with_name(stem + ".preimage.md")
+    pre.write_bytes(pre.read_bytes() + rows.encode())
+    _forge(keep, rows)
+    man = keep.with_name(stem + ".manifest.json")
+    meta = json.loads(man.read_text())
+    meta["preimage_sha256"] = hashlib.sha256(pre.read_bytes()).hexdigest()
+    man.write_text(json.dumps(meta))
+    _dirty(repo, HELD_CLAIM)
+    return repo, keep
+
+
+def test_a_handoff_held_across_the_pull_reapplies(tmp_path):
+    rel = _render("RELEASE", "HELD", "fix/held", "handing off.", at=T0)
+    nxt = _render("CLAIM", "NEXT", "fix/held", "taking over.", "24h", T0 + timedelta(minutes=1))
+    repo, keep = _held_with(tmp_path, rel + nxt)
+    r = _sync(repo, "--reapply", str(keep), "--apply")
+    assert r.returncode == 0, (r.stdout, r.stderr)
+    assert (repo / REG_REL).read_bytes().endswith((rel + nxt).encode())
+
+
+def test_the_claim_alone_still_collides(tmp_path):
+    nxt = _render("CLAIM", "NEXT", "fix/held", "taking over.", "24h", T0)
+    repo, keep = _held_with(tmp_path, nxt)
+    before = (repo / REG_REL).read_bytes()
+    r = _sync(repo, "--reapply", str(keep), "--apply")
+    assert r.returncode == 1 and "held by `HELD`" in r.stderr
+    assert (repo / REG_REL).read_bytes() == before
+
+
+@pytest.mark.parametrize("rows, needle", [
+    (_render("CLAIM", "X", "a/b", "backdated.", "99999h",
+             datetime(2020, 1, 1, tzinfo=timezone.utc)), "outside the window"),
+    (_render("CLAIM", "X", "a/b", "from the future.", "24h",
+             datetime.now(timezone.utc) + timedelta(days=1)), "outside the window"),
+    ("- `2026-09-28T00:00:00Z` CORRECTION `X` branch: `a/b` · scope: rewrite history.\n",
+     "not reapplied"),
+    ("- `2026-09-28T00:00:00Z` CLAIM `X` branch: `a/b` · **TTL 24h** · scope: hand-built.\n",
+     "not a row the append roads render"),
+])
+def test_reapply_refuses_rows_the_append_roads_would_not_emit(tmp_path, rows, needle):
+    repo, keep = _held_with(tmp_path, rows)
+    before = (repo / REG_REL).read_bytes()
+    r = _sync(repo, "--reapply", str(keep), "--apply")
+    assert r.returncode == 3, (r.stdout, r.stderr)
+    assert needle in r.stderr
+    assert (repo / REG_REL).read_bytes() == before
+
+
+def test_a_row_missing_from_the_pre_image_is_refused(tmp_path):
+    repo, keep = _held_sidecar(tmp_path)
+    extra = _render("NOTE", OWNER, "", "not in the pre-image.", at=T0)
+    _forge(keep, extra)                       # keep + manifest, pre-image untouched
+    r = _sync(repo, "--reapply", str(keep), "--apply")
+    assert r.returncode == 3 and "not in the recorded pre-image" in r.stderr
+
+
+def test_i_have_coordinated_passes_through_to_reapply(tmp_path):
+    nxt = _render("CLAIM", "NEXT", "fix/held", "joining.", "24h", T0,
+                  co_owners=["HELD:incumbent"])
+    repo, keep = _held_with(tmp_path, nxt)
+    r = _sync(repo, "--reapply", str(keep), "--apply")
+    assert r.returncode == 1 and "--i-have-coordinated" in r.stderr, (r.stdout, r.stderr)
+    r = _sync(repo, "--reapply", str(keep), "--apply", "--i-have-coordinated")
+    assert r.returncode == 0, (r.stdout, r.stderr)
+    assert (repo / REG_REL).read_bytes().endswith(nxt.encode())

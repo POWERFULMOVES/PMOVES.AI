@@ -977,13 +977,18 @@ def append_note(row: str, gate, register: Path | None = None) -> int:
 #   git pull --ff-only --no-recurse-submodules
 #   make -C pmoves register-sync REAPPLY=<sidecar> APPLY=1  # KEEP back onto the tail
 #
-# REAPPLY IS NO WEAKER THAN register-claim. It accepts only a `.keep.md` this
-# tool wrote under the sidecar directory, whose sha256 matches the manifest
-# written beside it; every non-blank line must be a well-formed ledger row; the
-# rows are re-classified against the CURRENT register and the ref (anything now
-# ON-MAIN or RE-FILED is skipped and reported); a bare RELEASE is refused; and
-# CLAIM rows face the gate's own collision verdict against the current open
-# lanes. All-or-nothing: one refused row appends none.
+# REAPPLY FACES THE SAME ROW CHECKS AS register-claim. What the manifest proves
+# is INTEGRITY, NOT AUTHORSHIP: the `.keep.md` must sit under the sidecar
+# directory and match the sha256 in its manifest, and the pre-image must match
+# too -- but anyone who can write that directory can write a consistent set.
+# So every row is ALSO checked on its own: it must be a CLAIM, RELEASE or NOTE
+# that round-trips byte-identically through `build_row` (the renderer the append
+# roads use) and passes the expansion-residue check; its timestamp must lie in
+# [held_at - 30d, held_at]; it must be a line of the pre-image; a bare RELEASE
+# is refused; rows now ON-MAIN or RE-FILED are skipped; and CLAIMs face the
+# gate's collision verdict SEQUENTIALLY (a RELEASE earlier in the payload frees
+# its lane for a later CLAIM), with --i-have-coordinated as on register-claim.
+# All-or-nothing. `register-postdate-check` remains the timestamp backstop.
 #
 # Every mode is a DRY RUN unless APPLY=1 / --apply. It never fetches: the target
 # ref is whatever the local ref says, and its sha is printed. Exit: 0 done (or
@@ -1230,6 +1235,7 @@ def sync_register(repo: Path, ref: str, apply: bool, hold: bool) -> int:
             "keep": keep_path.name, "keep_sha256": hashlib.sha256(keep).hexdigest(),
             "preimage_sha256": m["work_hash"], "head": m["head_sha"],
             "ref": ref, "ref_sha": m["ref_sha"], "mode": "hold" if hold else "apply",
+            "held_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         }, indent=2).encode("utf-8"))
         print(f"register-sync: KEEP rows saved to    {keep_path}")
         print(f"register-sync: full pre-image saved  {pre_path}")
@@ -1269,19 +1275,34 @@ def sync_register(repo: Path, ref: str, apply: bool, hold: bool) -> int:
     return EXIT_OK
 
 
-def _verified_sidecar(repo: Path, sidecar: Path) -> bytes:
-    """The KEEP bytes of a sidecar THIS TOOL wrote, unedited -- or a refusal."""
+REAPPLY_KINDS = ("CLAIM", "RELEASE", "NOTE")      # what the append roads emit
+REAPPLY_MAX_AGE = timedelta(days=30)
+REAPPLY_CLOCK_SKEW = timedelta(minutes=5)
+_TS_FMT = "%Y-%m-%dT%H:%M:%SZ"
+
+
+def _verified_sidecar(repo: Path, sidecar: Path) -> tuple[bytes, dict, bytes]:
+    """(KEEP bytes, manifest, pre-image bytes) of an INTACT sidecar set -- or a refusal.
+
+    INTEGRITY, NOT AUTHORSHIP. This proves the `.keep.md`, its manifest and its
+    pre-image are mutually consistent and live under the gitignored sidecar
+    directory. It does NOT prove this tool wrote them: anyone who can write that
+    directory can write a consistent set. Authorship-shaped guarantees come from
+    the row checks in `reapply_sidecar` (renderer round-trip, kinds, timestamp
+    window, collision gate), and `make -C pmoves register-postdate-check` remains
+    the backstop for timestamps.
+    """
     root = os.path.realpath(repo / SYNC_SIDECAR_REL)
     real = os.path.realpath(sidecar)
     if os.path.dirname(real) != root or not real.endswith(".keep.md"):
         raise SyncRefused(
             f"{sidecar} is not a `.keep.md` sidecar in {SYNC_SIDECAR_REL}/. "
-            "REAPPLY only accepts files this tool wrote")
+            "REAPPLY only accepts sidecar sets under that directory")
     if not os.path.isfile(real):
         raise SyncRefused(f"no sidecar at {sidecar}")
-    manifest = Path(real[: -len(".keep.md")] + ".manifest.json")
+    stem = real[: -len(".keep.md")]
     try:
-        meta = json.loads(manifest.read_text(encoding="utf-8"))
+        meta = json.loads(Path(stem + ".manifest.json").read_text(encoding="utf-8"))
     except (OSError, ValueError) as exc:
         raise SyncRefused(f"no readable manifest beside {sidecar} ({exc}); "
                           "refusing an unpinned sidecar") from exc
@@ -1291,15 +1312,88 @@ def _verified_sidecar(repo: Path, sidecar: Path) -> bytes:
         raise SyncRefused(
             f"{sidecar} does not match its manifest (edited since it was "
             "written?). Refusing to append rows nobody classified")
-    return data
+    try:
+        pre = Path(stem + ".preimage.md").read_bytes()
+    except OSError as exc:
+        raise SyncRefused(f"no pre-image beside {sidecar} ({exc})") from exc
+    if meta.get("preimage_sha256") != hashlib.sha256(pre).hexdigest():
+        raise SyncRefused(f"the pre-image beside {sidecar} does not match its manifest")
+    return data, meta, pre
 
 
-def reapply_sidecar(repo: Path, sidecar: Path, ref: str, apply: bool) -> int:
+def _parse_rendered(text: str):
+    """Split a row back into build_row's arguments, or None. Fail-closed: any
+    field this does not recognise returns None, and the caller refuses."""
+    head_m = re.match(r"^- `([0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:]{8}Z)` ([A-Z]+) `([^`]+)`",
+                      text)
+    if not head_m or _SCOPE_SEP not in text:
+        return None
+    header, scope = text.split(_SCOPE_SEP, 1)
+    rest = header[head_m.end():]
+    out = {"ts": head_m.group(1), "kind": head_m.group(2), "owner": head_m.group(3),
+           "branch": "", "ttl": "", "co_owners": [], "scope": scope.lstrip(" ")}
+    if not rest:
+        return out
+    if not rest.startswith(" "):
+        return None
+    for field in rest[1:].split(" · "):
+        m = re.fullmatch(r"branch: `([^`]+)`", field)
+        if m:
+            out["branch"] = m.group(1)
+            continue
+        m = re.fullmatch(r"\*\*TTL (\S+) \(expires `[^`]+`\)\*\*", field)
+        if m:
+            out["ttl"] = m.group(1)
+            continue
+        if field.startswith("co-owners: "):
+            for ident, note in re.findall(r"`([^`]+)`(?: \(([^()]*)\))?",
+                                          field[len("co-owners: "):]):
+                out["co_owners"].append(f"{ident}:{note}" if note else ident)
+            continue
+        return None
+    return out
+
+
+def _assert_round_trips(line: bytes) -> dict:
+    """The row must be exactly what the claim/release/note roads would render.
+
+    Parsed, re-rendered with `build_row` at the row's own timestamp, and compared
+    byte-for-byte; the scope also faces `assert_prose_clean`, the expansion-
+    residue check every append road applies. This is what stops a sidecar from
+    carrying arbitrary kinds or hand-built text past the renderer.
+    """
+    try:
+        text = line.rstrip(b"\n").decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise SyncRefused(f"a reapplied row is not UTF-8 ({exc}); the append "
+                          "roads never emit that") from exc
+    parsed = _parse_rendered(text)
+    if parsed is None:
+        raise SyncRefused(f"not a row the append roads render: {text[:120]!r}")
+    if parsed["kind"] not in REAPPLY_KINDS:
+        raise SyncRefused(f"kind `{parsed['kind']}` is not reapplied (only "
+                          f"{', '.join(REAPPLY_KINDS)}): {text[:120]!r}")
+    try:
+        assert_prose_clean(parsed["scope"])
+        rendered = build_row(
+            kind=parsed["kind"], owner=parsed["owner"], branch=parsed["branch"],
+            scope=parsed["scope"], ttl=parsed["ttl"], co_owners=parsed["co_owners"],
+            now=datetime.strptime(parsed["ts"], _TS_FMT).replace(tzinfo=timezone.utc))
+    except ValueError as exc:
+        raise SyncRefused(f"row refused by the renderer ({exc}): {text[:120]!r}") from exc
+    if rendered.rstrip("\n") != text:
+        raise SyncRefused(f"row does not round-trip through the renderer "
+                          f"(hand-built or edited?): {text[:120]!r}")
+    return parsed
+
+
+def reapply_sidecar(repo: Path, sidecar: Path, ref: str, apply: bool,
+                    coordinated: bool = False) -> int:
     """Append a HOLD sidecar's rows to the tail -- through the same checks as a CLAIM."""
     register = repo / REGISTER_REL
     if not register.is_file():
         raise SyncRefused(f"no register at {register}")
-    data = _verified_sidecar(repo, sidecar)
+    data, meta, pre = _verified_sidecar(repo, sidecar)
     lines = [ln for ln in _split_lines(data) if ln.strip()]
     print(f"register-sync: INPUT     {len(_split_lines(data))} line(s) in {sidecar} "
           f"({len(lines)} non-blank)")
@@ -1308,9 +1402,34 @@ def reapply_sidecar(repo: Path, sidecar: Path, ref: str, apply: bool) -> int:
         raise SyncRefused(
             f"{len(bad)} non-blank line(s) are not ledger rows (first: "
             f"{_show(bad[0])!r}). REAPPLY appends rows only")
+
+    # THE TIMESTAMP WINDOW. A row cannot be later than the moment it was held
+    # (and that moment cannot be in the future), nor older than
+    # REAPPLY_MAX_AGE before it -- an uncommitted row older than that is stale
+    # and belongs back on register-claim, which reads the clock itself. The
+    # held time comes from the manifest, so this bounds an honest sidecar and
+    # a careless forger, not a determined one; register-postdate-check is the
+    # backstop. Every row must also be a line of the recorded pre-image.
+    try:
+        held_at = datetime.strptime(meta.get("held_at", ""), _TS_FMT).replace(
+            tzinfo=timezone.utc)
+    except ValueError as exc:
+        raise SyncRefused("the manifest records no valid `held_at`") from exc
+    if held_at > datetime.now(timezone.utc) + REAPPLY_CLOCK_SKEW:
+        raise SyncRefused(f"the manifest's held_at {meta['held_at']} is in the future")
+    pre_lines = set(_split_lines(pre))
     for ln in lines:
-        _ts, kind, _owner, branch = _row_key(_as_text(ln))
-        if kind == "RELEASE" and branch is None:
+        parsed = _assert_round_trips(ln)
+        ts = datetime.strptime(parsed["ts"], _TS_FMT).replace(tzinfo=timezone.utc)
+        if ts > held_at or ts < held_at - REAPPLY_MAX_AGE:
+            raise SyncRefused(
+                f"row timestamp {parsed['ts']} is outside the window "
+                f"[{(held_at - REAPPLY_MAX_AGE).strftime(_TS_FMT)}, "
+                f"{meta['held_at']}] (held time minus {REAPPLY_MAX_AGE.days}d, "
+                "held time)")
+        if (ln if ln.endswith(b"\n") else ln + b"\n") not in pre_lines:
+            raise SyncRefused(f"row is not in the recorded pre-image: {_show(ln)!r}")
+        if parsed["kind"] == "RELEASE" and not parsed["branch"]:
             raise SyncRefused(
                 f"a bare RELEASE names no lane and would close EVERY lane its "
                 f"owner holds: {_show(ln)!r}. File it with "
@@ -1325,27 +1444,46 @@ def reapply_sidecar(repo: Path, sidecar: Path, ref: str, apply: bool) -> int:
         current = register.read_bytes()
         snap = _snapshot(repo, ref)
         classes = classify_uncommitted(lines, current, snap["ref_blob"])
-        todo = [ln for cls, ln in classes if cls == KEEP]
+        todo = [ln if ln.endswith(b"\n") else ln + b"\n"
+                for cls, ln in classes if cls == KEEP]
         for cls, ln in classes:
             print(f"  {('APPEND' if cls == KEEP else 'SKIP ' + cls):<16} {_show(ln)}")
-        payload = b"".join(ln if ln.endswith(b"\n") else ln + b"\n" for ln in todo)
-        if todo:
-            try:
-                verdict = gate.evaluate_claims(
-                    payload.decode("utf-8", "surrogateescape"),
-                    gate.open_claims_in(current.decode("utf-8", "replace")))
-            except Exception as exc:  # noqa: BLE001
-                raise SyncRefused(f"the collision gate raised {type(exc).__name__}: "
-                                  f"{exc}; nothing was appended") from exc
-            if verdict.collisions:
-                held = "; ".join(f"`{lane}` held by `{other}` (line {n})"
-                                 for lane, other, n in verdict.collisions)
-                raise SyncLaneHeld(f"a reapplied CLAIM names a lane another owner "
-                                   f"holds: {held}. Nothing was appended")
-            if verdict.one_sided or verdict.unreadable_co_owners or verdict.unkeyed:
-                raise SyncRefused("a reapplied CLAIM is a unilateral co-owner "
-                                  "declaration, has unreadable co-owners, or names "
-                                  "no lane. Nothing was appended")
+        # SEQUENTIAL, exactly as the ledger reads: each CLAIM is judged against
+        # the lanes open in the current register PLUS the payload rows before
+        # it, so a lane-scoped RELEASE earlier in the payload frees that lane
+        # (and only that lane) for a later CLAIM -- a handoff held across a
+        # pull reapplies instead of stranding every KEEP row.
+        ledger = current.decode("utf-8", "replace")
+        if ledger and not ledger.endswith("\n"):
+            ledger += "\n"
+        for ln in todo:
+            row = ln.decode("utf-8")
+            if _row_key(row.rstrip("\n"))[1] == "CLAIM":
+                try:
+                    verdict = gate.evaluate_claims(row, gate.open_claims_in(ledger))
+                except Exception as exc:  # noqa: BLE001
+                    raise SyncRefused(f"the collision gate raised {type(exc).__name__}: "
+                                      f"{exc}; nothing was appended") from exc
+                if verdict.collisions:
+                    held = "; ".join(f"`{lane}` held by `{other}` (line {n})"
+                                     for lane, other, n in verdict.collisions)
+                    raise SyncLaneHeld(f"a reapplied CLAIM names a lane another "
+                                       f"owner holds: {held}. Nothing was appended")
+                for lane, other, n in verdict.shared:
+                    print(f"register-sync: SHARED LANE - `{lane}` is held by `{other}` "
+                          f"(line {n}), whose row declares this claimant. Allowing.",
+                          file=sys.stderr)
+                if verdict.one_sided and not coordinated:
+                    raise SyncLaneHeld(
+                        "a reapplied CLAIM shares a lane only by its OWN co-owner "
+                        "declaration; the incumbent has not named it back. Re-run "
+                        "with ARGS=--i-have-coordinated if you have coordinated. "
+                        "Nothing was appended")
+                if verdict.unreadable_co_owners or verdict.unkeyed:
+                    raise SyncRefused("a reapplied CLAIM has unreadable co-owners or "
+                                      "names no lane. Nothing was appended")
+            ledger += row
+        payload = b"".join(todo)
         print(f"register-sync: RESULT    {len(todo)} to append, "
               f"{len(lines) - len(todo)} skipped (now on the ref or the register)")
         if not apply:
@@ -1523,7 +1661,8 @@ def _dispatch(argv: list[str] | None = None) -> int:
                 if args.hold:
                     raise SyncRefused("--hold and --reapply are opposite halves "
                                       "of the sequence; name one")
-                return reapply_sidecar(repo, Path(args.reapply), args.ref, args.apply)
+                return reapply_sidecar(repo, Path(args.reapply), args.ref, args.apply,
+                                       coordinated=args.i_have_coordinated)
             return sync_register(repo, args.ref, args.apply, args.hold)
         except SyncLaneHeld as exc:
             print(f"register-sync: refusing - {exc}.", file=sys.stderr)
