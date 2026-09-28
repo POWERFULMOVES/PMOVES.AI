@@ -2414,6 +2414,16 @@ down-archon-native: ## Stop native Archon stack
 archon-native-health: ## Check native Archon 0.6.0 health (:3090)
 	@curl -sf http://localhost:$(ARCHON_NATIVE_PORT)/api/health && echo " ✔ archon 0.6.0 healthy" || (echo "✗ archon unhealthy" && exit 1)
 
+# Scoped bring-up of the in-compose Archon 0.6.0 + Agent Zero from PREBUILT local
+# images. --no-deps: the depends_on closure otherwise recreates archon-postgres
+# and creates nats-init, tensorzero-gateway and tensorzero-clickhouse (measured
+# on B850 2026-09-28). --no-build/--pull never: use exactly the image the
+# operator built and named (ARCHON_IMAGE=...; agent-zero has no image key, so it
+# is the compose default pmoves-agent-zero:latest). DRY_RUN=1 prints the plan.
+.PHONY: up-a0-archon-scoped
+up-a0-archon-scoped: ## Recreate ONLY archon + agent-zero from prebuilt images (DRY_RUN=1 for plan)
+	@$(DC) --profile agents $(if $(DRY_RUN),--dry-run) up -d --no-deps --no-build --pull never archon agent-zero
+
 # -------- Consciousness Taxonomy Loaders ----------
 .PHONY: load-consciousness-neo4j harvest-consciousness
 
