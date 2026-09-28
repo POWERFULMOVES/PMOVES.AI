@@ -200,7 +200,15 @@ Waiting on the compose road (`KNOWN_ROAD=compose:<reason>`, grant naming pr:3214
    supaserch:
 ```
 
-**Ordering after merge:** dispatch `archon-release-track.yml` once, so GHCR has `:current` before any node recreates Archon with the new default. Until that run succeeds, a node that pulls `:current` gets "manifest unknown". The fork must also contain the latest release first; until then the workflow's rc-1 path only opens the issue. The interim image stays `:b850-8d135dab` / `:pmoves-latest`.
+**Ordering after merge:** dispatch `archon-release-track.yml` once, so GHCR has a gated `:current` before any node recreates Archon with the new default. The fork must also contain the latest release first; until then the workflow's rc-1 path only opens the issue. The interim image stays `:b850-8d135dab` / `:pmoves-latest`.
+
+*Corrected after the round-2 review.* An earlier version of this note said that a node pulling `:current` before GHCR has it gets "manifest unknown". That holds **only for the `docker-compose.agents.images.yml` overlay** (`build: null`). The base compose and `agents.yml` keep `build: ../PMOVES-Archon` beside the image, so there a missing `:current` was silently **built** from the submodule tree and tagged `:current`, with no gate. Two changes now block that:
+1. Every recipe that builds archon runs with `ARCHON_IMAGE=pmoves-archon:local-build`, so an ungated build never carries the channel tag.
+2. `up-a0-archon-scoped` refuses a `:current` image without the `pmoves.upstream.release` label (`archon_release_channel.sh verify-current`, exit 3).
+
+To follow the gated channel, use `make archon-follow`, which pulls, verifies, then recreates. `up-a0-archon-scoped` is the offline path (`--pull never`) and the pinned-rollback path.
+
+**Residual (not blocked):** a plain `up` that includes archon, with no local `:current` present, still builds and tags `:current`, because compose's `build:` + `image:` pairing does that. That covers raw `docker compose up archon` and these make roads, which `up` archon without `--build`: `up-agents`, `up-agents-hardened`, `up-agents-published`, `up-agents-ui` and `up-agents-integrations`. Prefixing them with the local-build tag would stop them running the gated `:current` at all, so they are left alone. Closing it needs a compose change (a separate image name for `build:`, or `pull_policy`) and therefore the compose road.
 
 **Agent Zero:** not a clean fit without the Dockerfile road. Both `services/agent-zero/Dockerfile` and `Dockerfile.multiarch` (which `agent-zero-upstream-check.yml` builds) clone `--branch ${AGENT_ZERO_REF}`, and `git clone --branch` cannot take a sha. The ref JSON the Dockerfile ADDs lives only in the discarded `upstream` stage, so nothing in the final image proves which commit was built.
 - Building from the resolved sha needs an `AGENT_ZERO_SHA` build arg plus a `git fetch <sha> && git checkout && test "$(git rev-parse HEAD)" = "$AGENT_ZERO_SHA"` assertion in both Dockerfiles. That is road `KNOWN_ROAD=dockerfile:<reason>`, not minted.

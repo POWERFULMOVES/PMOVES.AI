@@ -57,7 +57,7 @@ jobs:
       compare: ${{ steps.r.outputs.compare }}
     steps:
       - name: Harden Runner
-        uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c
+        uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2
         with:
           egress-policy: audit
 
@@ -69,16 +69,20 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # GitHub runs `bash -eo pipefail`; the resolver's non-zero exit is DATA
+          # here (1 = sync needed), so errexit must be off for the capture.
+          set +e
           set -uo pipefail
           out="$(python3 pmoves/tools/upstream_release_track.py archon)"
           rc=$?
           printf '%s\n' "$out"
-          echo "rc=$rc" >> "$GITHUB_OUTPUT"
-          [ "$rc" -eq 3 ] && { echo "::error::COULD-NOT-MEASURE: release resolution failed"; exit 0; }
+          # rc is written exactly ONCE, at the end (or via cnm on the way out).
+          cnm() { echo "::error::COULD-NOT-MEASURE: $1"; echo "rc=3" >> "$GITHUB_OUTPUT"; exit 0; }
+          [ "$rc" -eq 3 ] && cnm "release resolution failed"
           # Re-validate before anything reaches GITHUB_OUTPUT (the resolver
           # already validates; this is the second fence, not the first).
           get() { printf '%s\n' "$out" | sed -n "s/^$1=//p"; }
-          chk() { printf '%s' "$2" | grep -Eqx -- "$3" || { echo "::error::bad $1"; echo "rc=3" >> "$GITHUB_OUTPUT"; exit 0; }; }
+          chk() { printf '%s' "$2" | grep -Eqx -- "$3" || cnm "bad $1"; }
           tag="$(get RELEASE_TAG)";     chk RELEASE_TAG "$tag" '[A-Za-z0-9._-]{1,64}'
           ver="$(get RELEASE_VERSION)"; chk RELEASE_VERSION "$ver" '[A-Za-z0-9._-]{1,64}'
           rsha="$(get RELEASE_SHA)";    chk RELEASE_SHA "$rsha" '[0-9a-f]{40}'
@@ -88,6 +92,7 @@ jobs:
           {
             echo "release_tag=$tag"; echo "release_version=$ver"; echo "release_sha=$rsha"
             echo "fork=$fork"; echo "fork_sha=$fsha"; echo "fork_sha8=${fsha:0:8}"; echo "compare=$cmp"
+            echo "rc=$rc"
           } >> "$GITHUB_OUTPUT"
           {
             echo "### Archon release track"
@@ -118,7 +123,7 @@ jobs:
       contents: read
       issues: write
     steps:
-      - name: Open or update the sync issue
+      - name: Open or update the sync issue (stable title; comment only on change)
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
@@ -127,21 +132,29 @@ jobs:
           CMP: ${{ needs.resolve.outputs.compare }}
         run: |
           set -euo pipefail
-          title="Archon: hardened fork lacks upstream ${TAG} (sync needed)"
-          body="POWERFULMOVES/PMOVES-Archon PMOVES.AI-Edition-Hardened (${FSHA8}) does not contain coleam00/Archon ${TAG} (compare: ${CMP}).
+          # STABLE title (no tag in it): one issue tracks "fork behind upstream"
+          # across releases. A machine marker carries the state; we comment only
+          # when that state (release tag or fork sha) changes.
+          title="Archon: hardened fork lacks the latest upstream release (sync needed)"
+          marker="<!-- archon-release-track: ${TAG} ${FSHA8} -->"
+          text="POWERFULMOVES/PMOVES-Archon PMOVES.AI-Edition-Hardened (${FSHA8}) does not contain coleam00/Archon ${TAG} (compare: ${CMP}).
 
-          fork-sync.yml cannot do this one (no per-fork selector; the ahead guard skips this fork as MANUAL). Use the fleet-fork-sync manual road (Step 4): merge the upstream dev commit that first contains ${TAG}, resolve conflicts preserving PMOVES hardening, merge-commit the fork PR (never squash).
+          fork-sync.yml cannot do this one (no per-fork selector; the ahead guard skips this fork as MANUAL). Use the fleet-fork-sync manual road (Step 4): merge the upstream dev commit that first contains ${TAG}, resolve conflicts preserving PMOVES hardening, merge-commit the fork PR (never squash). The next archon-release-track run then builds, gates and publishes :current.
 
-          Once merged, the next run of archon-release-track builds, gates and publishes :current.
-
-          Opened by .github/workflows/archon-release-track.yml run ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          Run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}
+          ${marker}"
           existing="$(gh issue list --state open --search "in:title \"${title}\"" --json number,title --jq ".[] | select(.title == \"${title}\") | .number" | head -1)"
-          if [ -n "$existing" ]; then
-            gh issue comment "$existing" --body "Still unsynced as of run ${GITHUB_RUN_ID} (fork ${FSHA8}, compare ${CMP})."
-            echo "::warning::Archon fork still lacks ${TAG}; updated issue #${existing}"
+          if [ -z "$existing" ]; then
+            gh issue create --title "$title" --body "$text"
+            echo "::warning::Archon fork lacks ${TAG}; opened the sync issue"
+            exit 0
+          fi
+          last="$( { gh issue view "$existing" --json body --jq .body; gh issue view "$existing" --json comments --jq '.comments[].body'; } | grep -o '<!-- archon-release-track: [^>]* -->' | tail -1 || true)"
+          if [ "$last" = "$marker" ]; then
+            echo "Unchanged since last report (${TAG} ${FSHA8}); issue #${existing} left as is."
           else
-            gh issue create --title "$title" --body "$body"
-            echo "::warning::Archon fork lacks ${TAG}; opened an issue"
+            gh issue comment "$existing" --body "$text"
+            echo "::warning::Archon fork state changed (${TAG} ${FSHA8}); commented on #${existing}"
           fi
 
   build-gate-publish:
@@ -162,7 +175,7 @@ jobs:
       CANDIDATE: ghcr.io/powerfulmoves/pmoves-archon:${{ needs.resolve.outputs.release_version }}-pmoves.${{ needs.resolve.outputs.fork_sha8 }}
     steps:
       - name: Harden Runner
-        uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c
+        uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2
         with:
           egress-policy: audit
 
@@ -212,23 +225,36 @@ jobs:
             --label "pmoves.upstream.release.sha=$RELEASE_SHA" \
             -t "$CANDIDATE" --push "https://github.com/$FORK.git#$FORK_SHA"
 
+      - name: Record the candidate digest (gate and publish bind to it, not the tag)
+        id: digest
+        if: steps.state.outputs.done != 'true'
+        run: |
+          set -euo pipefail
+          d="$(docker buildx imagetools inspect "$CANDIDATE" --format '{{json .Manifest}}' | python3 -c 'import json,sys; print(json.load(sys.stdin)["digest"])')"
+          printf '%s' "$d" | grep -Eqx 'sha256:[0-9a-f]{64}' || { echo "::error::could not read the candidate digest"; exit 1; }
+          echo "ref=$IMAGE_REPO@$d" >> "$GITHUB_OUTPUT"
+          echo "- candidate \`$CANDIDATE\` = \`$d\`" >> "$GITHUB_STEP_SUMMARY"
+
       - name: Gate (same script nodes run) - SQLite boot + /api/health + version
         if: steps.state.outputs.done != 'true'
         env:
+          PINNED: ${{ steps.digest.outputs.ref }}
           ARCHON_CHANNEL_REPO: ghcr.io/powerfulmoves/pmoves-archon
           ARCHON_CHANNEL: current
           ARCHON_SMOKE_TIMEOUT: '240'
         run: |
           set -euo pipefail
-          docker pull --platform linux/amd64 "$CANDIDATE"
-          IMAGE="$CANDIDATE" sh pmoves/tools/archon_release_channel.sh promote
+          docker pull --platform linux/amd64 "$PINNED"
+          IMAGE="$PINNED" sh pmoves/tools/archon_release_channel.sh promote
 
-      - name: Publish :current (multi-arch manifest copy, only after the gate passed)
+      - name: Publish :current (the gated DIGEST, multi-arch, only after the gate passed)
         if: steps.state.outputs.done != 'true'
+        env:
+          PINNED: ${{ steps.digest.outputs.ref }}
         run: |
           set -euo pipefail
-          docker buildx imagetools create -t "$IMAGE_REPO:$CHANNEL" "$CANDIDATE"
-          echo "- ✔ \`$IMAGE_REPO:$CHANNEL\` → \`$CANDIDATE\` ($RELEASE_TAG)" >> "$GITHUB_STEP_SUMMARY"
+          docker buildx imagetools create -t "$IMAGE_REPO:$CHANNEL" "$PINNED"
+          echo "- ✔ \`$IMAGE_REPO:$CHANNEL\` → \`$PINNED\` ($RELEASE_TAG, \`$CANDIDATE\`)" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Report gate failure loudly
         if: failure()
