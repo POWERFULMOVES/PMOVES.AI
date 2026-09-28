@@ -36,9 +36,12 @@ const SCORE_COLOR_CLASSES = [
   "text-red-600",    // < 0.5
 ];
 
+// Lower bound of each band above, in the same order; anything below the last is red.
+const SCORE_BAND_MINIMUMS = [0.9, 0.8, 0.7, 0.6, 0.5];
+
 function getScoreColor(score: number): string {
-  const index = Math.min(Math.floor(score * 5), 5);
-  return SCORE_COLOR_CLASSES[Math.max(0, 5 - index)];
+  const index = SCORE_BAND_MINIMUMS.findIndex((min) => score >= min);
+  return SCORE_COLOR_CLASSES[index === -1 ? SCORE_COLOR_CLASSES.length - 1 : index];
 }
 
 interface SearchResultsProps {

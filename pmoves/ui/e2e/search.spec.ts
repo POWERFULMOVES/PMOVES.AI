@@ -320,8 +320,8 @@ test.describe('Search Interface', () => {
     await expect(scoreBadges.nth(2)).toHaveText('40%');
   });
 
-  // fixme: behaviour mismatch: SearchResults.tsx:39-42 getScoreColor bands by floor(score*5), so a 40% score renders text-yellow-600 (red only below 20%), while its own SCORE_COLOR_CLASSES comments (:30-37) and this spec say scores < 50% are red. Operator to decide which is intended. Tracked in #3225
-  test.fixme('should colour low scores (< 50%) red', async ({ page }) => {
+  // Operator decision 2026-09-28: below 50% is red (SearchResults.tsx getScoreColor bands).
+  test('should colour low scores (< 50%) red', async ({ page }) => {
     await mockHiragQuery(page);
     await runSearch(page);
     await expect(page.locator('[data-testid="search-results"]')).toBeVisible({ timeout: 10000 });
