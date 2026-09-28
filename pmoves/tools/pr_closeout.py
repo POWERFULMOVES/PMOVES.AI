@@ -555,6 +555,7 @@ def evaluate_closeout(
     expected_admin_author: str = "",
     allowed_advisory_failures: Iterable[str] = (),
     threads_unmeasured: str = "",
+    queue_mode: bool = False,
 ) -> CloseoutReport:
     """Evaluate a PR snapshot without mutating GitHub state.
 
@@ -562,6 +563,15 @@ def evaluate_closeout(
     could not be READ (GraphQL unavailable, and REST does not expose it). It
     becomes a blocker in its own right, because an unread thread set is not an
     empty one.
+
+    ``queue_mode`` means the PR will be handed to the base branch's merge
+    queue, not merged directly. The ONLY gate it relaxes is ``BEHIND``: the
+    queue re-runs the required checks on a merge commit built on the latest
+    base (plus every PR queued ahead), so up-to-dateness is the queue's job,
+    and demanding it here would reintroduce the serial train the queue exists
+    to remove. Every other gate -- approval, threads, checks, head pin -- is
+    unchanged, and it cannot be combined with the admin bypass (``main``
+    refuses that pairing).
     """
 
     head_sha = str(pr.get("headRefOid") or "")
@@ -623,7 +633,8 @@ def evaluate_closeout(
         )
 
     if report.merge_state_status == "BEHIND":
-        _append_blocker(report.blockers, "branch is behind the current base")
+        if not queue_mode:
+            _append_blocker(report.blockers, "branch is behind the current base")
     elif report.merge_state_status in {"DIRTY", "UNKNOWN", "DRAFT"}:
         _append_blocker(
             report.blockers,
@@ -718,6 +729,7 @@ def audit_pr(
     allow_admin_review_bypass: bool = False,
     expected_admin_author: str = "",
     allowed_advisory_failures: Iterable[str] = (),
+    queue_mode: bool = False,
 ) -> CloseoutReport:
     pr = _fetch_pr(repo, number)
     required_checks = _fetch_required_checks(repo, number, str(pr.get("headRefOid") or ""))
@@ -742,6 +754,7 @@ def audit_pr(
         expected_admin_author=expected_admin_author,
         allowed_advisory_failures=allowed_advisory_failures,
         threads_unmeasured=threads_unmeasured,
+        queue_mode=queue_mode,
     )
 
 
@@ -801,12 +814,111 @@ def _write_json(report: CloseoutReport, path: str) -> None:
         handle.write(payload)
 
 
+def _merge_queue_active(repo: str, base: str) -> bool:
+    """True when a `merge_queue` rule is ACTIVE on ``base``.
+
+    Read from `GET /repos/{repo}/rules/branches/{base}`, which returns the rules
+    that currently apply to that branch from every ruleset layer. Without a
+    queue, `gh pr merge --auto` does not enqueue anything -- it only arms
+    auto-merge, which under this repo's review rule waits forever -- so queue
+    mode refuses rather than leaving a PR silently parked.
+    """
+    rules = _rest(f"repos/{repo}/rules/branches/{base}")
+    if not isinstance(rules, list):
+        return False
+    return any(
+        isinstance(rule, dict) and rule.get("type") == "merge_queue" for rule in rules
+    )
+
+
+def _queue_state(repo: str, number: int) -> dict[str, Any]:
+    """PR state plus its merge-queue entry and auto-merge request.
+
+    GraphQL only: `gh pr view --json` exposes no merge-queue field, and REST has
+    no merge-queue endpoint. If GraphQL is unavailable the caller reports the
+    enqueue as UNCONFIRMED; it is never assumed to have worked.
+    """
+    owner, _, name = repo.partition("/")
+    payload = _run_json(
+        [
+            "gh",
+            "api",
+            "graphql",
+            "-F",
+            f"owner={owner}",
+            "-F",
+            f"name={name}",
+            "-F",
+            f"number={number}",
+            "-f",
+            "query=query($owner:String!,$name:String!,$number:Int!){"
+            "repository(owner:$owner,name:$name){pullRequest(number:$number){"
+            "state url mergeQueueEntry{state position} "
+            "autoMergeRequest{enabledAt}}}}",
+        ]
+    )
+    pr = (((payload or {}).get("data") or {}).get("repository") or {}).get(
+        "pullRequest"
+    )
+    if not isinstance(pr, dict):
+        raise RuntimeError("could not read the PR's merge-queue state")
+    return pr
+
+
+def _enqueue(report: CloseoutReport) -> dict[str, Any]:
+    """Hand an audited PR to the base branch's merge queue.
+
+    `gh pr merge --auto` on a queue-required branch "adds the pull request to the
+    merge queue" when required checks have passed, and arms auto-merge (which
+    enqueues it later) when they have not -- per `gh pr merge --help`, which
+    also notes no merge strategy is needed: the queue's own method applies.
+    `--admin` is deliberately absent: the same help text says it BYPASSES the
+    queue, which is the existing direct path, not this one.
+    """
+    if not _merge_queue_active(report.repo, report.base):
+        raise RuntimeError(
+            f"no merge_queue rule is active on {report.base}; --queue would only "
+            "arm auto-merge. Use the admin path or enable the queue first."
+        )
+    _run(
+        [
+            "gh",
+            "pr",
+            "merge",
+            str(report.pr_number),
+            "--repo",
+            report.repo,
+            "--auto",
+            "--match-head-commit",
+            report.head_sha,
+        ]
+    )
+    try:
+        state = _queue_state(report.repo, report.pr_number)
+    except RuntimeError as exc:
+        raise RuntimeError(
+            "enqueue command returned, but the queue state is UNCONFIRMED "
+            f"(could not read it: {exc}). Check the PR before retrying."
+        ) from exc
+    if not (
+        str(state.get("state")) == "MERGED"
+        or state.get("mergeQueueEntry")
+        or state.get("autoMergeRequest")
+    ):
+        raise RuntimeError(
+            "enqueue command returned without a merge-queue entry, an armed "
+            "auto-merge, or a MERGED state"
+        )
+    return state
+
+
 def _merge(
     report: CloseoutReport,
     *,
     method: str,
     admin: bool,
     confirmation: str,
+    queue: bool = False,
 ) -> dict[str, Any]:
     expected_confirmation = f"MERGE #{report.pr_number} @ {report.head_sha}"
     if confirmation != expected_confirmation:
@@ -815,6 +927,12 @@ def _merge(
         )
     if not report.ready:
         raise RuntimeError("refusing merge because the closeout audit is blocked")
+    if queue and admin:
+        # `gh pr merge --admin` bypasses a merge queue outright, so the pair
+        # would silently mean "direct admin merge". Refuse the ambiguity.
+        raise RuntimeError("--queue and --admin are mutually exclusive")
+    if queue:
+        return _enqueue(report)
 
     command = [
         "gh",
@@ -894,6 +1012,11 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="allow REVIEW_REQUIRED/BLOCKED when all non-review gates pass",
     )
+    audit.add_argument(
+        "--queue",
+        action="store_true",
+        help="audit as `merge --queue` would (BEHIND is not a blocker)",
+    )
 
     merge = sub.add_parser("merge", help="audit and merge an exact PR head")
     _add_common_args(merge)
@@ -906,6 +1029,15 @@ def main(argv: list[str] | None = None) -> int:
         "--admin",
         action="store_true",
         help="use the repository's sanctioned admin merge path",
+    )
+    merge.add_argument(
+        "--queue",
+        action="store_true",
+        help=(
+            "hand the audited PR to the base branch's merge queue "
+            "(`gh pr merge --auto`) instead of merging directly; refuses when "
+            "no merge_queue rule is active, and cannot be combined with --admin"
+        ),
     )
     merge.add_argument(
         "--confirm",
@@ -923,6 +1055,12 @@ def main(argv: list[str] | None = None) -> int:
     )
     if admin_bypass and not args.admin_author:
         parser.error("admin review bypass requires --admin-author")
+    queue_mode = bool(getattr(args, "queue", False))
+    if queue_mode and admin_bypass:
+        # --admin bypasses a merge queue (gh pr merge --help), and the review
+        # bypass would let an unapproved PR through an audit whose result the
+        # queue then cannot honour. Queue mode is the approved-PR road only.
+        parser.error("--queue cannot be combined with --admin/--admin-review-bypass")
     report = audit_pr(
         repo,
         args.pr,
@@ -931,6 +1069,7 @@ def main(argv: list[str] | None = None) -> int:
         allow_admin_review_bypass=admin_bypass,
         expected_admin_author=args.admin_author,
         allowed_advisory_failures=args.allow_advisory_failure,
+        queue_mode=queue_mode,
     )
     _print_report(report)
     if args.json_out:
@@ -947,10 +1086,20 @@ def main(argv: list[str] | None = None) -> int:
             method=args.method,
             admin=args.admin,
             confirmation=args.confirm,
+            queue=queue_mode,
         )
     except RuntimeError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1
+    if queue_mode and str(merged.get("state")) != "MERGED":
+        entry = merged.get("mergeQueueEntry") or {}
+        where = (
+            f"in the merge queue (state {entry.get('state')}, position {entry.get('position')})"
+            if entry
+            else "auto-merge armed; it enters the queue when required checks pass"
+        )
+        print(f"Queued PR #{report.pr_number} @ {report.head_sha}: {where}")
+        return 0
     print(
         f"Merged PR #{report.pr_number}: "
         f"{(merged.get('mergeCommit') or {}).get('oid', 'unknown')}"

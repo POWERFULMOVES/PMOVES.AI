@@ -529,3 +529,126 @@ def test_the_paginated_call_asks_gh_to_slurp(monkeypatch):
     pr_closeout._rest_pages("repos/o/r/pulls/1/reviews")
     assert "--slurp" in seen["argv"], seen["argv"]
     assert "--paginate" in seen["argv"], seen["argv"]
+
+
+# --- merge-queue mode -----------------------------------------------------------
+#
+# `gh pr merge --admin` BYPASSES a merge queue (gh pr merge --help), so the admin
+# road stays direct. `--queue` is the approved-PR road: it relaxes ONLY the BEHIND
+# gate (the queue re-tests on the latest base), never approval, and must refuse
+# when the base has no active merge_queue rule instead of silently arming an
+# auto-merge that waits forever.
+
+
+def _approved_behind(**overrides: object) -> dict[str, object]:
+    return _pr(mergeStateStatus="BEHIND", reviewDecision="APPROVED", **overrides)
+
+
+def test_behind_blocks_direct_merge_but_not_queue_mode() -> None:
+    direct = _evaluate(pr=_approved_behind(), admin=False)
+    assert "branch is behind the current base" in direct.blockers
+
+    queued = pr_closeout.evaluate_closeout(
+        _approved_behind(),
+        _required(),
+        [],
+        repo="POWERFULMOVES/PMOVES.AI",
+        expected_head_sha="a" * 40,
+        allowed_advisory_failures=("CodeRabbit",),
+        queue_mode=True,
+    )
+    assert queued.ready, queued.blockers
+
+
+def test_queue_mode_still_requires_approval() -> None:
+    report = pr_closeout.evaluate_closeout(
+        _pr(mergeStateStatus="BEHIND"),  # REVIEW_REQUIRED
+        _required(),
+        [],
+        repo="POWERFULMOVES/PMOVES.AI",
+        expected_head_sha="a" * 40,
+        allowed_advisory_failures=("CodeRabbit",),
+        queue_mode=True,
+    )
+    assert "review decision is REVIEW_REQUIRED" in report.blockers
+
+
+def _queue_report() -> "pr_closeout.CloseoutReport":
+    return pr_closeout.evaluate_closeout(
+        _pr(mergeStateStatus="CLEAN", reviewDecision="APPROVED"),
+        _required(),
+        [],
+        repo="POWERFULMOVES/PMOVES.AI",
+        expected_head_sha="a" * 40,
+        allowed_advisory_failures=("CodeRabbit",),
+        queue_mode=True,
+    )
+
+
+def test_queue_refuses_when_no_merge_queue_rule(monkeypatch) -> None:
+    calls: list[list[str]] = []
+    monkeypatch.setattr(pr_closeout, "_rest", lambda path, *a: [{"type": "deletion"}])
+    monkeypatch.setattr(pr_closeout, "_run", lambda cmd, **k: calls.append(cmd))
+    report = _queue_report()
+    with pytest.raises(RuntimeError, match="no merge_queue rule"):
+        pr_closeout._merge(
+            report, method="squash", admin=False, queue=True,
+            confirmation=f"MERGE #42 @ {'a' * 40}",
+        )
+    assert calls == []
+
+
+def test_queue_enqueues_with_auto_and_head_pin_never_admin(monkeypatch) -> None:
+    calls: list[list[str]] = []
+    monkeypatch.setattr(pr_closeout, "_rest", lambda path, *a: [{"type": "merge_queue"}])
+    monkeypatch.setattr(pr_closeout, "_run", lambda cmd, **k: calls.append(cmd))
+    monkeypatch.setattr(
+        pr_closeout,
+        "_queue_state",
+        lambda repo, n: {"state": "OPEN", "mergeQueueEntry": {"state": "QUEUED", "position": 1}},
+    )
+    report = _queue_report()
+    result = pr_closeout._merge(
+        report, method="squash", admin=False, queue=True,
+        confirmation=f"MERGE #42 @ {'a' * 40}",
+    )
+    assert result["mergeQueueEntry"]["state"] == "QUEUED"
+    assert len(calls) == 1
+    cmd = calls[0]
+    assert cmd[:4] == ["gh", "pr", "merge", "42"]
+    assert "--auto" in cmd and "--admin" not in cmd
+    assert cmd[cmd.index("--match-head-commit") + 1] == "a" * 40
+    # The queue's configured method applies; passing one would be ignored noise.
+    assert not {"--squash", "--merge", "--rebase"} & set(cmd)
+
+
+def test_queue_unconfirmed_enqueue_is_an_error(monkeypatch) -> None:
+    monkeypatch.setattr(pr_closeout, "_rest", lambda path, *a: [{"type": "merge_queue"}])
+    monkeypatch.setattr(pr_closeout, "_run", lambda cmd, **k: None)
+    monkeypatch.setattr(
+        pr_closeout, "_queue_state",
+        lambda repo, n: {"state": "OPEN", "mergeQueueEntry": None, "autoMergeRequest": None},
+    )
+    with pytest.raises(RuntimeError, match="without a merge-queue entry"):
+        pr_closeout._merge(
+            _queue_report(), method="squash", admin=False, queue=True,
+            confirmation=f"MERGE #42 @ {'a' * 40}",
+        )
+
+
+def test_queue_and_admin_are_mutually_exclusive() -> None:
+    with pytest.raises(RuntimeError, match="mutually exclusive"):
+        pr_closeout._merge(
+            _queue_report(), method="squash", admin=True, queue=True,
+            confirmation=f"MERGE #42 @ {'a' * 40}",
+        )
+
+
+def test_cli_rejects_queue_with_admin() -> None:
+    with pytest.raises(SystemExit) as exc:
+        pr_closeout.main([
+            "--repo", "POWERFULMOVES/PMOVES.AI", "merge", "--pr", "42",
+            "--expected-head", "a" * 40, "--confirm", "x",
+            "--queue", "--admin", "--admin-author", "POWERFULMOVES",
+        ])
+    assert exc.value.code == 2
