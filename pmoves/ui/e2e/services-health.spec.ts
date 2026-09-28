@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 
 /**
  * E2E Tests for Service Health Validation
@@ -69,30 +69,32 @@ test.describe('Services Health Dashboard', () => {
   });
 
   test('shows last check timestamp', async ({ page }) => {
-    await page.waitForTimeout(2000);
+    // SystemStatsBar renders "Updated <n>s ago" only once useServiceHealth has a successful
+    // /api/services-hub response carrying health.services (lib/useServiceHealth.ts sets lastUpdate
+    // there). Seed that response so the assertion is deterministic without a backend.
+    await page.route('**/api/services-hub*', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          health: { services: [{ slug: 'agent-zero', status: 'healthy', responseTime: 12 }] },
+        }),
+      })
+    );
+    await page.reload();
 
-    // Look for timestamp display
-    const timestampElement = page.locator('text=/last check|updated|refreshed/i');
-
-    if ((await timestampElement.count()) > 0) {
-      await expect(timestampElement.first()).toBeVisible();
-    }
+    await expect(page.getByText(/^Updated \d+(s|m|h) ago$/)).toBeVisible();
   });
 
   // fixme: REAL UI BUG, not a stale test. Refresh stays disabled ("Refreshing...") forever because
   // useServiceHealth never clears isPolling; tracked in #3228
   test.fixme('provides refresh/recheck functionality', async ({ page }) => {
-    // Look for refresh button
-    const refreshButton = page.getByRole('button', { name: /refresh|recheck|reload/i });
-
-    if ((await refreshButton.count()) > 0) {
-      await refreshButton.first().click();
-
-      // Verify loading indicator appears
-      await page.waitForTimeout(500);
-
-      // This is a soft assertion - loading state may be brief
-    }
+    // Once #3228 is fixed the button must settle back to an enabled "Refresh" after the first check,
+    // and a click must show the in-flight state.
+    const refreshButton = page.getByRole('button', { name: /^refresh$/i });
+    await expect(refreshButton).toBeEnabled();
+    await refreshButton.click();
+    await expect(page.getByRole('button', { name: /refreshing/i })).toBeVisible();
   });
 });
 
@@ -157,15 +159,16 @@ test.describe('Health API Endpoints', () => {
     expect(response.status()).toBeLessThan(500);
 
     const body = await response.json();
-    // New implementation includes checks object
-    if (body.checks) {
-      expect(body.checks).toHaveProperty('database');
-      expect(body.checks.database).toHaveProperty('status');
-    }
+    // app/api/health/route.ts always returns checks.database (it probes Supabase)
+    expect(body).toHaveProperty('checks.database.status');
+    expect(body.checks.database.status).toMatch(/healthy|unhealthy/);
   });
 
   // health-all and health/boot-jwt require an authenticated owner since #969 (authenticateRequest).
-  test('health-all endpoint returns service list', async ({ page }) => {
+  // The default run has no session, so these two tests cover ONLY the auth gate. The success
+  // shapes are asserted by the ORIGINAL tests (same names as on main), restored in the
+  // 'authenticated' @backend describe block below.
+  test('health-all endpoint refuses unauthenticated requests', async ({ page }) => {
     const response = await page.request.get('/api/health-all?simple=true');
 
     // Unauthenticated: refused with 401 and a JSON error, no service list leaked
@@ -185,7 +188,7 @@ test.describe('Health API Endpoints', () => {
     expect(body.service).toBe('presign-health');
   });
 
-  test('boot-jwt health endpoint returns token status', async ({ page }) => {
+  test('boot-jwt health endpoint refuses unauthenticated requests', async ({ page }) => {
     const response = await page.request.get('/api/health/boot-jwt');
 
     expect(response.status()).toBe(401);
@@ -193,20 +196,77 @@ test.describe('Health API Endpoints', () => {
     expect(typeof body.error).toBe('string');
     expect(body).not.toHaveProperty('hasToken');
   });
+
+  /**
+   * Success shapes of the owner-gated routes, restored from origin/main with their original names
+   * and assertions. Needs a live stack AND a session: auth comes from the E2E_AUTH_TOKEN
+   * environment variable (a Supabase-issued access token, i.e. a JWT with a `sub` claim), sent as
+   * `Authorization: Bearer`, which authenticateRequest() reads first. Without it these SKIP with
+   * that message; none passes vacuously and none fails for want of credentials.
+   *
+   *   E2E_AUTH_TOKEN=<access token> npm run test:e2e:backend
+   */
+  test.describe('authenticated', { tag: '@backend' }, () => {
+    const token = process.env.E2E_AUTH_TOKEN;
+    test.skip(
+      !token,
+      'E2E_AUTH_TOKEN is not set: owner-gated routes need a Supabase access token (Bearer JWT with a sub claim)'
+    );
+    const headers = () => ({ Authorization: `Bearer ${token}` });
+
+    test('health-all endpoint returns service list', async ({ page }) => {
+      const response = await page.request.get('/api/health-all?simple=true', { headers: headers() });
+
+      expect(response.status()).toBe(200);
+
+      const body = await response.json();
+      expect(body).toHaveProperty('services');
+      expect(Array.isArray(body.services)).toBe(true);
+    });
+
+    test('boot-jwt health endpoint returns token status', async ({ page }) => {
+      const response = await page.request.get('/api/health/boot-jwt', { headers: headers() });
+
+      expect(response.status()).toBe(200);
+
+      const body = await response.json();
+      expect(body).toHaveProperty('hasToken');
+      expect(typeof body.hasToken).toBe('boolean');
+    });
+  });
 });
 
+/**
+ * Serve a fixed /api/services-hub health payload (the only fetch useServiceHealth makes), so the
+ * services dashboard renders deterministic health state without a backend.
+ */
+async function mockServicesHub(
+  page: Page,
+  services: Array<{ slug: string; status: string; responseTime?: number }>
+) {
+  await page.route('**/api/services-hub*', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ health: { services } }),
+    })
+  );
+}
+
+// Retargeted 2026-09-28 from /dashboard/services/health, which has never existed (it renders 404),
+// to /dashboard/services, where health monitoring actually lives.
 test.describe('Health Error Handling', () => {
-  test('handles degraded service state gracefully', async ({ page }) => {
-    // Navigate to health page
-    await page.goto('/dashboard/services/health');
-    await page.waitForTimeout(2000);
+  // fixme: FEATURE NOT BUILT: there is no degraded health state. ServiceHealthStatus is
+  // 'healthy' | 'unhealthy' | 'unknown' | 'checking' (lib/serviceHealth.ts:9) and
+  // ServiceHealthIndicator has no degraded style (components/services/ServiceHealthIndicator.tsx:33-38),
+  // so a degraded service falls into the "unknown" count. The body states the intended behaviour.
+  test.fixme('handles degraded service state gracefully', async ({ page }) => {
+    await mockServicesHub(page, [{ slug: 'prometheus', status: 'degraded', responseTime: 900 }]);
+    await page.goto('/dashboard/services');
 
-    // Check for degraded status display (may not always be present)
-    const degradedIndicator = page.locator('[class*="degraded"], [class*="warning"]');
-
-    if ((await degradedIndicator.count()) > 0) {
-      await expect(degradedIndicator.first()).toBeVisible();
-    }
+    const indicator = page.locator('[data-testid="service-health-indicator"][data-status="degraded"]');
+    await expect(indicator).toBeVisible();
+    await expect(page.getByText(/1 degraded/)).toBeVisible();
   });
 
   test('shows error messages for failed health checks', async ({ page }) => {
@@ -219,64 +279,73 @@ test.describe('Health Error Handling', () => {
     expect(body).toHaveProperty('status');
   });
 
-  test('provides retry mechanism for failed checks', async ({ page }) => {
-    await page.goto('/dashboard/services/health');
+  // fixme: REAL UI BUG #3228. The Refresh button is the retry mechanism, but it stays disabled
+  // ("Refreshing...") forever: useServiceHealth sets isPolling true on mount and never clears it
+  // (lib/useServiceHealth.ts:106), and SystemStatsBar disables the button while isChecking
+  // (components/hub/SystemStatsBar.tsx:117).
+  test.fixme('provides retry mechanism for failed checks', async ({ page }) => {
+    await mockServicesHub(page, [{ slug: 'postgres', status: 'unhealthy' }]);
+    await page.goto('/dashboard/services');
 
-    // Look for retry/recheck buttons
-    const retryButton = page.getByRole('button', { name: /retry|recheck|refresh/i });
-
-    if ((await retryButton.count()) > 0) {
-      await expect(retryButton.first()).toBeVisible();
-      await retryButton.first().click();
-
-      // Verify page updates after retry
-      await page.waitForTimeout(1000);
-    }
+    const refresh = page.getByRole('button', { name: /^refresh$/i });
+    await expect(refresh).toBeEnabled();
+    const recheck = page.waitForRequest('**/api/services-hub*');
+    await refresh.click();
+    await recheck;
   });
 });
 
 test.describe('Health Display - UI/UX', () => {
-  test.beforeEach(async ({ page }) => {
-    await page.goto('/dashboard/services/health');
-  });
-
   test('uses color coding for health status', async ({ page }) => {
-    await page.waitForTimeout(2000);
+    await mockServicesHub(page, [
+      { slug: 'prometheus', status: 'healthy', responseTime: 10 },
+      { slug: 'postgres', status: 'unhealthy' },
+    ]);
+    await page.goto('/dashboard/services');
 
-    // Look for color-coded status indicators
-    // These are commonly implemented with CSS classes
-    const hasColorCoding =
-      (await page.locator('[class*="green"], [class*="red"], [class*="yellow"]').count()) > 0 ||
-      (await page.locator('[style*="color"]').count()) > 0;
-
-    // This is a soft assertion - depends on implementation
-    if (hasColorCoding) {
-      const statusIndicator = page.locator('[class*="status"]').first();
-      await expect(statusIndicator).toBeVisible();
-    }
+    const byStatus = (s: string) =>
+      page.locator(`[data-testid="service-health-indicator"][data-status="${s}"]`);
+    // Each state maps to its own colour class (components/services/ServiceHealthIndicator.tsx:33-38)
+    await expect(byStatus('healthy').first()).toHaveClass(/bg-cata-forest/);
+    await expect(byStatus('unhealthy').first()).toHaveClass(/bg-cata-ember/);
+    await expect(byStatus('unknown').first()).toHaveClass(/bg-ink-muted/);
   });
 
   test('displays service count summary', async ({ page }) => {
-    await page.waitForTimeout(2000);
+    await mockServicesHub(page, [
+      { slug: 'prometheus', status: 'healthy', responseTime: 10 },
+      { slug: 'grafana', status: 'healthy', responseTime: 12 },
+      { slug: 'postgres', status: 'unhealthy' },
+    ]);
+    await page.goto('/dashboard/services');
 
-    // Look for summary text (e.g., "5/7 services healthy")
-    const summaryText = page.getByText(/\d+\/\d+.*services/i);
+    const summary = page.getByLabel('System health status');
+    await expect(summary.getByText('2 healthy', { exact: true })).toBeVisible();
+    await expect(summary.getByText('1 down', { exact: true })).toBeVisible();
 
-    if ((await summaryText.count()) > 0) {
-      await expect(summaryText.first()).toBeVisible();
-    }
+    // unknown = total - healthy - down, where total is the whole catalog
+    const totalText = await summary.getByText(/^of \d+ services$/).textContent();
+    const total = Number(totalText?.match(/\d+/)?.[0]);
+    expect(total).toBeGreaterThan(3);
+    await expect(summary.getByText(`${total - 3} unknown`, { exact: true })).toBeVisible();
   });
 
   test('groups services by category or tier', async ({ page }) => {
-    await page.waitForTimeout(2000);
+    await page.goto('/dashboard/services');
 
-    // Look for category/section headings
-    const headings = page.locator('h2, h3, [class*="category"], [class*="group"]');
-    const hasGrouping = await headings.count() > 1; // More than main heading
+    const cards = page.locator('a.card-brutal');
+    await expect(cards.first()).toBeVisible();
+    const allCount = await cards.count();
 
-    // Soft assertion - grouping may not always be present
-    if (hasGrouping) {
-      await expect(headings.nth(1)).toBeVisible();
-    }
+    await page.getByRole('button', { name: 'Filter by Database' }).click();
+    await expect(page.getByRole('button', { name: 'Filter by Database' })).toHaveAttribute('aria-pressed', 'true');
+
+    // The filter narrows the grid, and every remaining card is tagged with the chosen category
+    await expect.poll(() => cards.count()).toBeLessThan(allCount);
+    const categories = await cards.evaluateAll((els) =>
+      els.map((el) => el.querySelector('span')?.textContent?.trim())
+    );
+    expect(categories.length).toBeGreaterThan(0);
+    for (const c of categories) expect(c).toBe('database');
   });
 });

@@ -125,13 +125,19 @@ jobs:
     permissions:
       contents: read
     # E2E was non-blocking because 120/186 tests failed. Triage (PR #3223,
-    # pmoves/ui/e2e/RECONCILE-2026-09-28.md) found only 8 needed a backend:
-    # the other 112 were stale specs, 93 of them for UI that was never built.
-    # Those are now test.fixme (issues #3224-#3227), the stale ones follow the
-    # current UI, chat uses page.route mocks, and @backend tests are excluded
-    # by `npm run test:e2e` (run them against a live stack with
-    # `npm run test:e2e:backend`). The default run is green; drop
-    # continue-on-error in a follow-up once CI confirms it.
+    # pmoves/ui/e2e/RECONCILE-2026-09-28.md): most failures were stale specs,
+    # 93 of them for UI that was never built (now test.fixme, issues
+    # #3224-#3227); the stale ones follow the current UI and chat uses
+    # page.route mocks.
+    # WHAT THIS JOB DOES NOT COVER: it runs `npm run test:e2e`, which excludes
+    # every @backend test, and no CI job runs them. So there is no live backend
+    # here: owner-gated API routes (health-all, health/boot-jwt, notebook/*)
+    # are checked ONLY for their unauthenticated 401, and their success shapes
+    # are verified nowhere in CI. Those live in @backend tests that need a live
+    # stack plus E2E_AUTH_TOKEN (they skip without it):
+    # `E2E_AUTH_TOKEN=... npm run test:e2e:backend`.
+    # The default run is green; drop continue-on-error in a follow-up once CI
+    # confirms it.
     continue-on-error: true
     steps:
       # NOTE: disable-file-monitoring prevents the armour agent from killing
