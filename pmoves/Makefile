@@ -2388,7 +2388,7 @@ verify-all: ## Full verify: bring-up (parallel waits), then retro preflight + mo
 	-@$(MAKE) --no-print-directory model-readiness
 	@echo "OK Verify-all sequence executed. Review console + Grafana."
 
-# Native Archon 0.6.0: TS/SQLite-native, runs from its OWN compose + own env file.
+# Native Archon (TypeScript since upstream 0.6.0; release-tracked below): TS/SQLite-native, runs from its OWN compose + own env file.
 # 0.6.0 upstream rewrote Python -> TypeScript and does NOT use Supabase — it uses
 # SQLite by default (~/.archon), or its own Postgres via Archon's `--profile
 # with-db`. The server self-allocates port 3090 and IGNORES the compose PORT (PORT
@@ -2403,16 +2403,137 @@ ARCHON_NATIVE_DC := PORT=$(ARCHON_NATIVE_PORT) docker compose \
 	--project-directory $(ARCHON_NATIVE_DIR) -f $(ARCHON_NATIVE_DIR)/docker-compose.yml
 
 .PHONY: up-archon-native down-archon-native archon-native-health
-up-archon-native: ## Build+start native Archon 0.6.0 (TS/SQLite) standalone on :3090
+up-archon-native: ## Build+start standalone native Archon (TS/SQLite, its own compose) on :3090
 	@test -f "$(ARCHON_NATIVE_DIR)/.env" || { echo "ERROR: Archon env file missing. Seed it first: cp $(ARCHON_NATIVE_DIR)/.env.example $(ARCHON_NATIVE_DIR)/.env"; exit 1; }
 	@$(ARCHON_NATIVE_DC) up --build -d app
-	@echo "✔ Archon 0.6.0 native starting → http://localhost:$(ARCHON_NATIVE_PORT)/api/health"
+	@echo "✔ Archon native (standalone) starting → http://localhost:$(ARCHON_NATIVE_PORT)/api/health"
 
 down-archon-native: ## Stop native Archon stack
 	@$(ARCHON_NATIVE_DC) down
 
-archon-native-health: ## Check native Archon 0.6.0 health (:3090)
-	@curl -sf http://localhost:$(ARCHON_NATIVE_PORT)/api/health && echo " ✔ archon 0.6.0 healthy" || (echo "✗ archon unhealthy" && exit 1)
+archon-native-health: ## Check native (TS) Archon health on :3090 — asserts the JSON status, not just HTTP 200
+	@# The SPA catch-all answers 200 for unknown paths, so a status-only probe is
+	@# a check that cannot fail. Assert the JSON status word, same as compose.
+	@curl -fsS http://localhost:$(ARCHON_NATIVE_PORT)/api/health | grep -qE '"status"[[:space:]]*:[[:space:]]*"(healthy|ok|ready|up)"' \
+		&& echo " ✔ archon healthy" || (echo "✗ archon unhealthy" && exit 1)
+
+# -------- Release tracking: Archon + Agent Zero follow UPSTREAM RELEASES --------
+# No hand-bumped pins. tools/upstream_release_track.py resolves the newest
+# upstream release (gh api .../releases/latest) and refuses (exit 1) unless the
+# fork's PMOVES.AI-Edition-Hardened branch already CONTAINS it -- a missing sync
+# is a finding, not something to paper over by building a stale tree.
+#
+# Channel: a node runs `<image>:current`. A freshly built release only becomes
+# :current after it boots and answers its health smoke in a throwaway container
+# (no network, no ports, no volumes). On failure :current stays on the previous
+# release and the target exits non-zero loudly. Currency without silent breakage.
+UPSTREAM_TRACK := $(PYTHON) $(CURDIR)/tools/upstream_release_track.py
+ARCHON_CHANNEL_TOOL := $(CURDIR)/tools/archon_release_channel.sh
+ARCHON_CHANNEL_REPO ?= ghcr.io/powerfulmoves/pmoves-archon
+ARCHON_CHANNEL ?= current
+ARCHON_SMOKE_TIMEOUT ?= 180
+export ARCHON_CHANNEL_REPO ARCHON_CHANNEL ARCHON_SMOKE_TIMEOUT
+# UNGATED builds never wear the channel tag. Compose's archon service carries
+# both `build:` and `image: ${ARCHON_IMAGE:-...:current}`, so any `--build` (or
+# `build`) of archon would otherwise tag the raw submodule tree as :current on
+# this node. Every target that BUILDS archon gets a target-specific EXPORT of
+# ARCHON_IMAGE (below); the recipe lines themselves stay byte-identical, so the
+# $(DC) shape (and the CIPHER_TOKEN_SHADOW_GUARD it starts with) is untouched.
+# The exported shell value outranks the --env-file value (compose precedence);
+# `override` also beats an ARCHON_IMAGE given on the make command line.
+ARCHON_LOCAL_BUILD_IMAGE ?= pmoves-archon:local-build
+ARCHON_BUILD_TARGETS := up-agents-stack archon-rebuild build-agents-integrations
+$(ARCHON_BUILD_TARGETS): export override ARCHON_IMAGE = $(ARCHON_LOCAL_BUILD_IMAGE)
+# Resolver exit codes: 1 = hardened fork lacks the release (sync it), 3 = could not measure.
+ARCHON_RESOLVE_OR_EXPLAIN = out=$$($(UPSTREAM_TRACK) archon) || { rc=$$?; printf '%s\n' "$$out"; \
+	if [ $$rc -eq 1 ]; then echo "✖ refusing: the hardened fork does not contain the latest upstream release (sync it first)"; \
+	else echo "✖ COULD-NOT-MEASURE: release resolution failed (rc=$$rc)"; fi; exit $$rc; }; eval "$$out"
+
+.PHONY: archon-release-resolve archon-build-latest archon-promote-current archon-release-latest
+archon-release-resolve: ## Print the newest upstream Archon release and whether the hardened fork contains it (exit 1 = sync needed, 3 = could not measure)
+	@$(UPSTREAM_TRACK) archon
+
+archon-build-latest: ## Resolve once, then build Archon from the exact hardened fork sha that contains the release; tags <version>-pmoves.<sha8>
+	@set -e; $(ARCHON_RESOLVE_OR_EXPLAIN); \
+	FORK="$$FORK" FORK_SHA="$$FORK_SHA" RELEASE_TAG="$$RELEASE_TAG" RELEASE_SHA="$$RELEASE_SHA" RELEASE_VERSION="$$RELEASE_VERSION" \
+		$(ARCHON_CHANNEL_TOOL) build
+
+# Values (IMAGE, FORK_SHA, RELEASE_TAG, RELEASE_VERSION) are read from the
+# environment by the tool -- command-line make variables are exported -- and
+# never spliced into recipe text.
+archon-promote-current: ## Gate IMAGE into :current (needs IMAGE FORK_SHA RELEASE_TAG RELEASE_VERSION; refuses mismatched labels; SQLite smoke only -- Postgres migrations NOT covered)
+	@$(ARCHON_CHANNEL_TOOL) promote
+
+archon-release-latest: ## Resolve ONCE → build that sha → gate → promote :current (SQLite smoke only; Postgres migrations NOT covered)
+	@set -e; $(ARCHON_RESOLVE_OR_EXPLAIN); \
+	export FORK FORK_SHA RELEASE_TAG RELEASE_SHA RELEASE_VERSION; \
+	$(ARCHON_CHANNEL_TOOL) build; \
+	IMAGE="$(ARCHON_CHANNEL_REPO):$$RELEASE_VERSION-pmoves.$$FORK_SHA8" $(ARCHON_CHANNEL_TOOL) promote
+
+# Agent Zero: the resolver side is here. The build side cannot be made
+# release-exact from the Makefile: services/agent-zero/Dockerfile clones a NAMED
+# BRANCH (AGENT_ZERO_REF) and nothing asserts the clone's commit. Closing that
+# needs AGENT_ZERO_SHA as a build arg plus a `git rev-parse HEAD` assertion after
+# the clone -- a Dockerfile edit, road KNOWN_ROAD=dockerfile:<reason>. Until
+# then a0-release-resolve reports what a build WOULD get; it cannot prove it.
+.PHONY: a0-release-resolve
+a0-release-resolve: ## Print the newest upstream Agent Zero release and whether the hardened fork contains it (exit 1 = sync needed)
+	@$(UPSTREAM_TRACK) agent-zero
+
+# Scoped bring-up of the in-compose Archon (TS) + Agent Zero from PREBUILT local
+# images. --no-deps: the depends_on closure otherwise recreates archon-postgres
+# and creates nats-init, tensorzero-gateway and tensorzero-clickhouse (measured
+# on B850 2026-09-28). --no-build/--pull never: use exactly the image already on
+# the node (ARCHON_IMAGE, e.g. the gated :current; agent-zero has no image key,
+# so it is the compose default pmoves-agent-zero:latest).
+# SERVICES narrows it (e.g. SERVICES=archon). DRY_RUN=1 prints the plan.
+A0_ARCHON_SERVICES ?= archon agent-zero
+A0_ARCHON_ALLOWED := archon agent-zero
+# Raw text via $(value): a command-line SERVICES='$(shell ...)' must not expand.
+A0_ARCHON_PICK := $(strip $(or $(value SERVICES),$(A0_ARCHON_SERVICES)))
+A0_ARCHON_BAD := $(filter-out $(A0_ARCHON_ALLOWED),$(A0_ARCHON_PICK))
+A0_ARCHON_DRY := $(filter-out 0 false no off,$(strip $(value DRY_RUN)))
+# Recursive (=), not :=, because DC is (re)defined further down this file.
+A0_ARCHON_UP = $(DC) --profile agents $(if $(A0_ARCHON_DRY),--dry-run) up -d --no-deps --no-build --pull never
+# archon ALWAYS gets --force-recreate --renew-anon-volumes. Measured on B850
+# 2026-09-28: recreating the retired Python archon container as the native TS
+# image crash-looped, because compose carried the old container's NAMED volume
+# (pmoves_archon-user-home) over the tmpfs docker-compose.yml now declares at
+# /home/appuser (archon service, `- type: tmpfs` / `target: /home/appuser`,
+# ~line 3911). -V + --force-recreate made HostConfig.Mounts show the tmpfs again
+# and the service came up healthy. agent-zero is recreated separately WITHOUT
+# -V: its state lives in bind mounts and nothing measured calls for renewal.
+# Consequence (open, not solved here): /home/appuser is an EMPTY tmpfs on every
+# start, so gh and any Claude/gh credentials the old volume carried are absent.
+#
+# Preflight (gated vs ungated): before recreating archon, the image compose
+# resolves is checked by `archon_release_channel.sh verify-current`. A :current
+# tag WITHOUT the pmoves.upstream.release label is an ungated build wearing the
+# channel name -> refused (tool exit 3; make reports 2).
+#
+# WHICH ROAD:
+#   make archon-follow          ONLINE: pull the gated GHCR :current, verify, recreate.
+#                               This is how a node follows new releases.
+#   make up-a0-archon-scoped    OFFLINE: --pull never; recreate from whatever is
+#                               already local (still label-verified). Also the
+#                               road for a pinned rollback: ARCHON_IMAGE=<repo>:<ver>-pmoves.<sha8>
+.PHONY: up-a0-archon-scoped
+up-a0-archon-scoped: ## Recreate ONLY archon and/or agent-zero from prebuilt images (SERVICES=archon|agent-zero; DRY_RUN=1 for plan; archon gets --force-recreate -V)
+	$(if $(A0_ARCHON_BAD),$(error up-a0-archon-scoped: SERVICES may only name: $(A0_ARCHON_ALLOWED) (refused: $(A0_ARCHON_BAD))))
+	@set -e; case " $(A0_ARCHON_PICK) " in *" archon "*) \
+		img=$$($(DC) --profile agents config --images archon 2>/dev/null | head -n 1); \
+		if [ -z "$$img" ]; then echo "✖ COULD-NOT-MEASURE: compose did not resolve the archon image"; exit 3; fi; \
+		$(ARCHON_CHANNEL_TOOL) verify-current "$$img"; \
+		$(A0_ARCHON_UP) --force-recreate --renew-anon-volumes archon;; \
+	esac
+	$(if $(filter agent-zero,$(A0_ARCHON_PICK)),@$(A0_ARCHON_UP) agent-zero)
+
+.PHONY: archon-follow
+archon-follow: ## ONLINE: pull the gated GHCR :current, verify its gate label, then recreate archon (use this to follow releases)
+	@set -e; img="$$ARCHON_CHANNEL_REPO:$$ARCHON_CHANNEL"; \
+		docker pull "$$img"; \
+		$(ARCHON_CHANNEL_TOOL) verify-current "$$img"
+	@$(MAKE) --no-print-directory up-a0-archon-scoped SERVICES=archon ARCHON_IMAGE="$$ARCHON_CHANNEL_REPO:$$ARCHON_CHANNEL"
 
 # -------- Consciousness Taxonomy Loaders ----------
 .PHONY: load-consciousness-neo4j harvest-consciousness
@@ -3983,14 +4104,15 @@ ui-test-all: ## Run all UI tests (lint, typecheck, unit, E2E)
 up-jellyfin:
 	@$(DC) up -d jellyfin-bridge
 
-# Bring up agents stack (NATS, Agent Zero, Mesh Agent) and publisher-discord.
-# NOTE: `archon` is intentionally omitted here — the in-compose `archon` service is
-# the pre-0.6.0 Python wrapper (imports server.main), which the 0.6.0 TS rewrite
-# broke (crash-loops). Archon 0.6.0 runs standalone via `make up-archon-native`
-# (:3090). Re-integrating a first-class 0.6.0 archon service into this compose is
-# the tracked "#5 Archon integration" follow-up.
+# Bring up the agents stack: NATS, Agent Zero, Archon (TS, upstream 0.x) + its
+# dedicated archon-postgres, mesh-agent, deepresearch, publisher-discord, cipher-api.
+# The in-compose `archon` service has been the first-class TS Archon since #2259
+# (the Python wrapper is retired, #2943); `up-archon-native` is the separate
+# standalone (SQLite, own compose) path. `--build` here rebuilds archon from
+# whatever is on disk in ../PMOVES-Archon; to run the gated upstream release
+# instead, use archon-release-latest + up-a0-archon-scoped.
 .PHONY: up-agents up-agents-stack
-up-agents-stack: cipher-build-pin-check ## Start Agents (NATS, Agent Zero, Archon 0.6.0 + its Postgres, Cipher Memory, etc.)
+up-agents-stack: cipher-build-pin-check ## Start Agents (NATS, Agent Zero, Archon (TS) + its Postgres, Cipher Memory, etc.)
 	@$(DC) --profile agents up -d --build nats agent-zero archon-postgres archon mesh-agent deepresearch publisher-discord cipher-api
 	@$(MAKE) --no-print-directory qdrant-provision-cipher || rc=$$?; 	rc=$${rc:-0}; if [ $$rc -ne 0 ] && [ $$rc -ne 2 ]; then echo "qdrant-provision-cipher failed (exit $$rc)"; exit $$rc; fi
 
