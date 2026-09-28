@@ -257,9 +257,23 @@ on the head, nothing is posted and the run verifies and exits 0.
 
 ### 6.5 Operator setup (one time)
 
-1. **Create the machine user** (a separate GitHub account; GitHub's terms allow
-   one free machine account per person). The login is configuration, not code —
-   `pmoves-ai-control` is the documented example only. Branding:
+1. **Choose the machine user** — two options; the login is configuration, not
+   code, either way.
+   - **(a) Create a new account.** GitHub's terms permit one free machine
+     account per person ("You may maintain no more than one free machine account
+     in addition to your free Personal Account"), set up and owned by a human
+     who is responsible for it. `pmoves-ai-control` is the documented example
+     login only.
+   - **(b) Rebrand and reuse `PMOVESAI`.** It is already a collaborator with
+     **write** access (read 2026-09-28 via
+     `GET /repos/POWERFULMOVES/PMOVES.AI/collaborators/PMOVESAI/permission`), so
+     step 2 is already done. Change its profile, not its login. Before choosing
+     it, inventory what else it can reach: a classic `public_repo` token
+     (step 3) acts on **every** public repository the account can write to,
+     including repos it owns; and any tokens it already holds keep working.
+     Option (a) starts with an account that can reach nothing else.
+
+   Branding for either:
    - Display name: **PMOVES.AI Control**
    - Avatar: the PMOVES.AI logo
    - Bio: e.g. *"PMOVES.AI control body — records approvals after an independent
@@ -270,14 +284,20 @@ on the head, nothing is posted and the run verifies and exits 0.
    `POWERFULMOVES/PMOVES.AI`. This repo is owned by a personal account, and
    collaborators on personal repositories receive write access with no admin
    role, so the account is not in the ruleset's bypass list (which is the
-   admin repository role) and cannot bypass.
-3. **Token.** Preferred: a fine-grained PAT owned by the machine user, scoped to
-   this one repository, permission **Pull requests: Read and write** (Metadata:
-   Read is added automatically), with an expiry and a calendar rotation.
-   **See A3 below**: fine-grained PATs may be unable to target a repository
-   owned by a *different personal account*; if the token cannot see the repo,
-   the tool reports `COULD-NOT-MEASURE` on the first read. Do not silently fall
-   back to a broader token — decide it explicitly and record the decision.
+   admin repository role) and cannot bypass. Code owners need this **explicit**
+   write access (A2).
+3. **Token: a classic PAT with only the `public_repo` scope**, created by the
+   machine user, with an expiry and a calendar rotation. A fine-grained PAT is
+   **not** an option here: GitHub does not let a fine-grained token act on a
+   repository where its user is only a collaborator (A3). Be clear about what
+   `public_repo` grants: write to every public repository the account can
+   write to — it **can push branches**, not just review. Rules that follow:
+   - the machine user **never pushes** to any branch of this repo. Its only
+     writes are reviews. If `require_last_push_approval` is ever enabled, a push
+     by this account would also stop its approval from counting (A8);
+   - the token lives only in the secrets funnel (step 4) and only where the road
+     runs;
+   - give the account access to nothing else (a reason to prefer option 1a).
 4. **Store it as a secret** through the CHIT secrets funnel as
    `PMOVES_CONTROL_TOKEN` (`/deploy:secrets-funnel`). Never paste it into an
    env file by hand, a chat, or a command line.
