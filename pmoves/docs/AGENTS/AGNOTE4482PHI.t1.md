@@ -441,6 +441,27 @@ were being read as a CLAIM or a RELEASE**, so no lane changed hands. `REVIEW`,
 `UPDATE`, `HANDOFF` and `CORRECTION` rows carry the same latent hazard and are
 deliberately *not* in the inert set — widening it owes its own measurement.
 
+**Recovering a checkout whose register has uncommitted rows** (`make -C pmoves register-sync`).
+A row appended on a `main` checkout and never committed is invisible to the
+fleet, and it later blocks that checkout's `git pull`. The append tools now warn
+when this happens. `git checkout` on the register is refused, so this is the
+sanctioned way out. It is a dry run unless `APPLY=1`, and it never fetches.
+It drops only uncommitted lines the target ref (default `origin/main`) already
+carries: either byte-identical, or re-filed by the same owner on the same lane
+with `first filed at <original timestamp>` in the text. Every other line is
+KEEP and is preserved byte-exact.
+
+    make -C pmoves register-sync                              # classify only
+    make -C pmoves register-sync HOLD=1 APPLY=1               # register -> HEAD, KEEP held in a sidecar
+    git pull --ff-only --no-recurse-submodules
+    make -C pmoves register-sync REAPPLY=<sidecar> APPLY=1    # KEEP back onto the tail
+
+When nothing is KEEP, `APPLY=1` without `HOLD=1` followed by the pull is enough.
+Sidecars are written under the gitignored `pmoves/data/register-sync/` together
+with a recovery copy of the dropped lines. The tool refuses with exit 3 if the
+working register is not HEAD plus a pure append, or if the register changed
+between classification and the write.
+
 **Known limitations, named rather than discovered.**
 
 - The gate cannot tell a prose edit from a row edit inside an opaque shell
