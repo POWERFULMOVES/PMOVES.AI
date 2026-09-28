@@ -201,8 +201,9 @@ audit trail shows and what `pr-closeout-audit` accepts, not the merge flag.
    # DRY_RUN=1 runs every check, writes nothing, and ends VERDICT: DRY-RUN-WOULD-APPROVE rc=0
    ```
 
-   with `PMOVES_CONTROL_TOKEN` in the environment (delivered by the secrets
-   funnel — never typed on a command line; the make recipe never mentions it).
+   with `PMOVES_CONTROL_TOKEN_FILE` pointing at the restricted token file
+   (6.5 step 4; `PMOVES_CONTROL_TOKEN` for a one-off supervised run). The
+   token is never typed on a command line, and the make recipe never mentions it.
 4. `tools/control_approve.py` checks everything in 6.3, then submits
    `POST /repos/{o}/{r}/pulls/{n}/reviews` with `event=APPROVE` and
    `commit_id=EXPECTED_HEAD`, and a body linking the verdict comment. The token
@@ -240,6 +241,17 @@ because `make` collapses every nonzero exit to 2.
   to the verdict comment.
 - The token holder can still approve by hand outside this tool. The tool is a
   guarded road, not a technical lock; keep the token only where the road runs.
+- **Residual design risk (disclosed): the marker author can be the PR
+  author.** `POWERFULMOVES` both authors our PRs and is the allowlisted
+  verdict recorder, so nothing in the marker separates "a control body
+  reviewed this" from "the author said so". The separation therefore rests on
+  **who can run the tool with the token**. If the token reached the shared env
+  tiers, any delivery body could record a verdict on its own PR and approve
+  it — the road would be self-serve. Hence the restricted delivery path in
+  6.5 step 4, which is a requirement of this design, not a hardening extra.
+  A purpose-built GitHub App as a pull-request-only bypass actor is under
+  docs review as an alternative; the verdict parser (`control_verdict.py`) is
+  independent of the actor and carries over.
 
 ### 6.3 Refusal matrix
 
@@ -326,12 +338,25 @@ on the head, nothing is posted and the run verifies and exits 0.
    - the machine user **never pushes** to any branch of this repo. Its only
      writes are reviews. If `require_last_push_approval` is ever enabled, a push
      by this account would also stop its approval from counting (A8);
-   - the token lives only in the secrets funnel (step 4) and only where the road
+   - the token lives only on the restricted path (step 4) and only where the road
      runs;
    - give the account access to nothing else (a reason to prefer option 1a).
-4. **Store it as a secret** through the CHIT secrets funnel as
-   `PMOVES_CONTROL_TOKEN` (`/deploy:secrets-funnel`). Never paste it into an
-   env file by hand, a chat, or a command line.
+4. **Deliver it on a restricted path — NOT through the shared env tiers.**
+   The secrets funnel's tier files (`env.shared`, `env.tier-*`) are loaded by
+   every service and every delivery body's shell. A token there makes the road
+   **self-serve**: any body that can post a comment as the allowlisted account
+   and read that env could approve its own PR (6.2). Instead:
+   - store it as a file readable only by the control body's OS user on the one
+     host where the road runs, e.g. `~/.config/pmoves-control/token`, mode
+     `0600`, and point `PMOVES_CONTROL_TOKEN_FILE` at it. The tool refuses a
+     token file that is not a regular file, not owned by the invoking user, or
+     accessible to group/others (POSIX; on Windows the ACL is the operator's
+     job);
+   - keep the master copy with the operator's break-glass secrets (outside the
+     repo and outside the CHIT tier bundle);
+   - `PMOVES_CONTROL_TOKEN` is accepted for a single supervised invocation,
+     never exported into a profile or an env tier. Never paste the token into a
+     chat or a command line.
 5. **Configure the login**: set `approver_login` in
    `pmoves/configs/control_approval.yaml` (or `PMOVES_CONTROL_LOGIN`). The tool
    verifies at runtime that the token's `GET /user` login equals it.

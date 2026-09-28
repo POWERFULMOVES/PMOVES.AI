@@ -470,7 +470,8 @@ pr-closeout-merge: ## Audit + guarded admin squash merge (PR=N EXPECTED_HEAD=sha
 		$(ARGS)
 
 # Approval road (docs/operations/MERGE_MECHANICS.md section 6). The machine
-# user's token is read from PMOVES_CONTROL_TOKEN by the tool itself; it is
+# user's token is read by the tool itself from PMOVES_CONTROL_TOKEN_FILE (a
+# restricted 0600 file; never the shared env tiers) or PMOVES_CONTROL_TOKEN; it is
 # never a make variable or an argv element. make collapses nonzero exits to 2,
 # so read the final "VERDICT: ... rc=N" line for 1 (refused) vs 3 (unmeasured).
 pr-control-approve: ## Control-road APPROVE review after a recorded verdict (PR=N EXPECTED_HEAD=sha CONFIRM='APPROVE #N @ sha' [DRY_RUN=1])

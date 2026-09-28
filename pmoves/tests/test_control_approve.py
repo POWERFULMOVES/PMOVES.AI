@@ -497,6 +497,48 @@ def test_missing_token_is_could_not_measure(gh: FakeGitHub, config: Path, capsys
     assert gh.requests == []
 
 
+def _token_file(tmp_path: Path, mode: int, content: str = TOKEN + "\n") -> Path:
+    path = tmp_path / "control.token"
+    path.write_text(content, encoding="utf-8")
+    path.chmod(mode)
+    return path
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX mode bits")
+def test_token_file_0600_is_used(gh: FakeGitHub, config: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    tf = _token_file(tmp_path, 0o600)
+    assert run(config, env={"PMOVES_CONTROL_TOKEN_FILE": str(tf)}) == 0
+    out = capsys.readouterr()
+    assert_token_hygiene(gh, out.out + out.err)
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX mode bits")
+@pytest.mark.parametrize("mode", [0o640, 0o604, 0o660, 0o644])
+def test_token_file_readable_by_others_is_refused(gh: FakeGitHub, config: Path, tmp_path: Path, mode: int) -> None:
+    tf = _token_file(tmp_path, mode)
+    assert run(config, env={"PMOVES_CONTROL_TOKEN_FILE": str(tf)}) == 1
+    assert gh.requests == []
+
+
+def test_token_file_and_env_together_is_usage_error(gh: FakeGitHub, config: Path, tmp_path: Path) -> None:
+    tf = _token_file(tmp_path, 0o600)
+    assert run(config, env={"PMOVES_CONTROL_TOKEN_FILE": str(tf), "PMOVES_CONTROL_TOKEN": TOKEN}) == 2
+    assert gh.requests == []
+
+
+@pytest.mark.parametrize("kind", ["missing", "empty", "directory"])
+def test_token_file_unusable(gh: FakeGitHub, config: Path, tmp_path: Path, kind: str) -> None:
+    if kind == "missing":
+        path = tmp_path / "nope"
+    elif kind == "empty":
+        path = _token_file(tmp_path, 0o600, content="  \n")
+    else:
+        path = tmp_path / "dir"
+        path.mkdir(mode=0o700)
+    assert run(config, env={"PMOVES_CONTROL_TOKEN_FILE": str(path)}) in (1, 3)
+    assert gh.requests == []
+
+
 def test_unconfigured_approver_is_could_not_measure(gh: FakeGitHub, tmp_path: Path) -> None:
     cfg = tmp_path / "c.yaml"
     cfg.write_text(f"repo: {REPO}\napprover_login: \"\"\nmarker_authors: [{AUTHOR}]\n", encoding="utf-8")

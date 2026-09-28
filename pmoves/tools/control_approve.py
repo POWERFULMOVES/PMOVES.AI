@@ -45,7 +45,12 @@ Refusal matrix (every row exits non-zero with an honest message):
 ``make`` collapses every nonzero exit to 2, so the last line of output is
 always a structured ``VERDICT: <APPROVED|REFUSED|COULD-NOT-MEASURE> rc=<n>``.
 
-Token handling: the token is read from the environment and only ever placed in
+Token delivery: preferably PMOVES_CONTROL_TOKEN_FILE, a 0600 file owned by the
+invoking user (checked); PMOVES_CONTROL_TOKEN is accepted for one-off
+invocations. It must NOT be delivered through the shared env tiers: anything
+every delivery body loads would make the road self-serve (MERGE_MECHANICS 6.2).
+
+Token handling: the token is read from that file or variable and only ever placed in
 an ``Authorization`` request header via urllib, over https, to the configured
 API host only: redirects are refused (urllib would forward the header) and
 pagination Link URLs on any other scheme or host are refused. It is never an argv element,
@@ -62,6 +67,7 @@ import http.client
 import json
 import os
 import re
+import stat
 import sys
 import urllib.error
 import urllib.parse
@@ -75,6 +81,7 @@ import control_verdict  # noqa: E402
 
 API_BASE = "https://api.github.com"
 TOKEN_ENV = "PMOVES_CONTROL_TOKEN"
+TOKEN_FILE_ENV = "PMOVES_CONTROL_TOKEN_FILE"
 LOGIN_ENV = "PMOVES_CONTROL_LOGIN"
 MARKER_AUTHORS_ENV = "PMOVES_CONTROL_MARKER_AUTHORS"
 DEFAULT_CONFIG = Path(__file__).resolve().parents[1] / "configs" / "control_approval.yaml"
@@ -279,6 +286,38 @@ def load_settings(config_path: Path, env: dict[str, str], repo_override: str = "
     if not settings.marker_authors:
         raise Outcome(EXIT_UNMEASURED, "no marker_authors configured")
     return settings
+
+
+def read_token_file(path: str) -> str:
+    """Read the token from a restricted file (the preferred delivery path).
+
+    Refuses a file that is not a regular file, is not owned by the current
+    user, or is readable/writable by group or others. POSIX only: on Windows
+    the mode bits carry no such meaning, so the check is skipped there and the
+    file's ACL is the operator's responsibility.
+    """
+    try:
+        st = os.stat(path)
+    except OSError as exc:
+        raise Outcome(EXIT_UNMEASURED, f"cannot stat {TOKEN_FILE_ENV}: {type(exc).__name__}") from None
+    if not stat.S_ISREG(st.st_mode):
+        raise Outcome(EXIT_REFUSED, f"{TOKEN_FILE_ENV} is not a regular file")
+    if os.name != "nt":
+        if st.st_uid != os.getuid():
+            raise Outcome(EXIT_REFUSED, f"{TOKEN_FILE_ENV} is not owned by the current user")
+        if st.st_mode & 0o077:
+            raise Outcome(
+                EXIT_REFUSED,
+                f"{TOKEN_FILE_ENV} is accessible to group/others (mode {oct(st.st_mode & 0o777)}); chmod 600 it",
+            )
+    try:
+        with open(path, encoding="utf-8") as handle:
+            value = handle.read().strip()
+    except (OSError, UnicodeDecodeError) as exc:
+        raise Outcome(EXIT_UNMEASURED, f"cannot read {TOKEN_FILE_ENV}: {type(exc).__name__}") from None
+    if not value:
+        raise Outcome(EXIT_UNMEASURED, f"{TOKEN_FILE_ENV} is empty")
+    return value
 
 
 def _read(action: str, fn: Callable[[], Any]) -> Any:
@@ -555,8 +594,15 @@ def main(argv: list[str] | None = None, env: dict[str, str] | None = None) -> in
         if not HEAD_RE.match(args.expected_head or ""):
             raise Outcome(EXIT_USAGE, "EXPECTED_HEAD must be the full 40-character lowercase commit sha")
         settings = load_settings(Path(args.config), env, args.repo, args.base)
+        token_file = env.get(TOKEN_FILE_ENV, "").strip()
+        if token_file:
+            if token.strip():
+                raise Outcome(EXIT_USAGE, f"set only one of {TOKEN_FILE_ENV} and {TOKEN_ENV}")
+            token = read_token_file(token_file)
         if not token.strip():
-            raise Outcome(EXIT_UNMEASURED, f"{TOKEN_ENV} is not set; cannot approve")
+            raise Outcome(
+                EXIT_UNMEASURED, f"no token: set {TOKEN_FILE_ENV} (preferred) or {TOKEN_ENV}; cannot approve"
+            )
         client = GitHubClient(token.strip(), api_base=args.api_base)
         code = approve(
             pr_number=args.pr,

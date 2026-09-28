@@ -189,8 +189,8 @@ so the merge remains a bypass. Flow: the control body records a
 make -C pmoves pr-control-approve PR=<N> EXPECTED_HEAD=<full-sha> CONFIRM='APPROVE #<N> @ <full-sha>'
 ```
 
-submits an APPROVE review pinned to that sha (token from `PMOVES_CONTROL_TOKEN`,
-never argv). Until the operator creates the account it reports
+submits an APPROVE review pinned to that sha (token from a restricted `0600` file
+named by `PMOVES_CONTROL_TOKEN_FILE` — never the shared env tiers, never argv). Until the operator creates the account it reports
 `COULD-NOT-MEASURE rc=3`. Any change to the diff dismisses the approval — a
 push, Update branch, or another PR merging into main — so approve only the PR
 at the front of the train, right before merging. There is no merge queue on
