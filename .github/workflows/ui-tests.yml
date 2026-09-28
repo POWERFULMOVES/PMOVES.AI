@@ -50,6 +50,12 @@ jobs:
         working-directory: pmoves/ui
         run: npm run lint
 
+      # No tracked AGENTS.md / CLAUDE.md may carry the block `next dev`
+      # generates (agentRules); hand-written ones are fine.
+      - name: No Next.js generated agent rules committed
+        working-directory: pmoves/ui
+        run: npm run check:agent-rules
+
   typecheck:
     name: Type Check (TypeScript)
     runs-on: ubuntu-latest

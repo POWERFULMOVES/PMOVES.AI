@@ -10,10 +10,13 @@ const nextConfig = {
   // dev servers (real room catalog + negative fixture catalog) side by side:
   // Next 16 refuses a second `next dev` that shares a distDir.
   distDir: process.env.PMOVES_UI_DIST_DIR || '.next',
-  // Next 16 writes AGENTS.md and CLAUDE.md into this folder on every `next dev`
-  // start. Those files carry vendor instructions that coding-agent sessions
-  // (Claude Code included) then load as project instructions. This is the
-  // documented opt-out (next/dist/docs/01-app/02-guides/ai-agents.md).
+  // The repo follows the AGENTS.md convention (per-directory AGENTS.md files
+  // are hand-written and allowed), so we stop Next from generating its own
+  // copy instead of ignoring the filename. Next 16 otherwise writes AGENTS.md
+  // and CLAUDE.md here on `next dev`, carrying vendor instructions that
+  // coding-agent sessions load as project instructions. Documented opt-out:
+  // next/dist/docs/01-app/02-guides/ai-agents.md. scripts/check-agent-rules.mjs
+  // (ui-tests lint job) fails if a generated block is ever committed.
   agentRules: false,
   output: 'standalone',
   reactStrictMode: true,
