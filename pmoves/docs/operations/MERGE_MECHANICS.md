@@ -264,6 +264,16 @@ because `make` collapses every nonzero exit to 2.
   to the verdict comment.
 - The token holder can still approve by hand outside this tool. The tool is a
   guarded road, not a technical lock; keep the token only where the road runs.
+- **Generate markers only with `control_verdict.py format`, and never
+  HTML-escape them.** The parser only recognises the literal `<!--` opener.
+  An escaped marker (`&lt;!--`), one with a zero-width character inside, or
+  one using look-alike characters (a Unicode dash, a Cyrillic letter) is
+  **invisible** to it — not malformed, simply absent. For an `APPROVE` that is
+  merely a missed approval; for a `REQUEST_CHANGES` it means **the block is not
+  recorded** and an earlier `APPROVE` still wins. Posting through
+  `gh pr comment --body-file` with the `format` output keeps the bytes exact;
+  check the rendered comment shows nothing (a real marker is an invisible HTML
+  comment — if the text is visible, it was escaped).
 - **Residual design risk (disclosed): the marker author can be the PR
   author.** `POWERFULMOVES` both authors our PRs and is the allowlisted
   verdict recorder, so nothing in the marker separates "a control body

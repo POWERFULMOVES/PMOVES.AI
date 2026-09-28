@@ -375,6 +375,25 @@ def test_own_line_approve_outside_fences_counts(body: Any) -> None:
     assert sel([comment(1, body())]).approved
 
 
+@pytest.mark.parametrize(
+    "disguise",
+    [
+        lambda m: m.replace("<!--", "&lt;!--"),
+        lambda m: m.replace("pmoves-control", "pmoves\u200b-control"),
+        lambda m: m.replace("pmoves-control", "pmoves\u2010control"),
+        lambda m: m.replace("<!--", "<!\u2014"),
+    ],
+    ids=["html-escaped", "zero-width", "unicode-hyphen", "em-dash"],
+)
+def test_escaped_or_lookalike_markers_are_invisible(disguise: Any) -> None:
+    # Documented limitation (MERGE_MECHANICS 6.2): such a REQUEST_CHANGES is
+    # NOT recorded, and an earlier APPROVE still wins. This pins the behaviour
+    # the doc warns about, so a change to it is a deliberate decision.
+    rc = disguise(marker("REQUEST_CHANGES"))
+    assert control_verdict.parse_body(rc) is None
+    assert sel([comment(1, marker()), comment(2, rc)]).approved
+
+
 def test_approve_and_request_changes_in_one_comment_is_a_block() -> None:
     s = sel([comment(1, marker() + "\n" + marker("REQUEST_CHANGES"))])
     assert not s.approved and s.kind == "request_changes"
