@@ -3,35 +3,143 @@
    Tests end-to-end Jellyfin Bridge workflows
    ═══════════════════════════════════════════════════════════════════════════ */
 
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
+
+/*
+ * Backend-free: the page talks to the Jellyfin Bridge through lib/api/jellyfin.ts
+ * (`${bridge}/jellyfin/*`, default http://localhost:8093). Every /jellyfin/* request,
+ * whatever host it targets, is fulfilled here; a live bridge is never contacted.
+ * The Supabase origin is also mocked for the cross-page ingestion-queue test.
+ *
+ * Reconciled 2026-09-28 against the BUILT UI: SyncStatus is rendered at
+ * app/dashboard/jellyfin/page.tsx:104 and JellyfinMediaBrowser at :161. The media
+ * browser shows SEARCH RESULTS (page.tsx:50-52 -> :161), so library items appear
+ * after a search is submitted (form submit, page.tsx:117), not on page load.
+ * BackfillControls (batch size / priority / progress / cancel) is NOT rendered
+ * anywhere; those tests stay fixme.
+ */
+
+type SyncStatusInfo = {
+  status: string;
+  lastSync: string | null;
+  videosLinked: number;
+  pendingBackfill: number;
+  errors: number;
+};
+
+const LIBRARY = [
+  { id: 'jf-movie-1', name: 'Test Movie', type: 'Movie', productionYear: 2020 },
+  { id: 'jf-series-1', name: 'Test Series', type: 'Series', productionYear: 2021 },
+  { id: 'jf-episode-1', name: 'Test Episode', type: 'Episode', seriesName: 'Test Series', seasonNumber: 1, episodeNumber: '2' },
+];
+
+interface BridgeMock {
+  status: SyncStatusInfo;
+  syncStatusRequests: number;
+  syncRequests: number;
+  searchQueries: string[];
+  /** Delay (ms) on POST /jellyfin/sync so the in-flight state is observable. */
+  syncDelayMs: number;
+  /** HTTP status for POST /jellyfin/sync (200 = ok). */
+  syncHttpStatus: number;
+}
+
+async function mockBackends(page: Page): Promise<BridgeMock> {
+  const mock: BridgeMock = {
+    status: {
+      status: 'idle',
+      lastSync: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+      videosLinked: 12,
+      pendingBackfill: 3,
+      errors: 0,
+    },
+    syncStatusRequests: 0,
+    syncRequests: 0,
+    searchQueries: [],
+    syncDelayMs: 0,
+    syncHttpStatus: 200,
+  };
+
+  // Supabase (used by the ingestion-queue page in the link test): empty queue, silent realtime.
+  await page.routeWebSocket(/127\.0\.0\.1:54321/, () => {});
+  await page.route('http://127.0.0.1:54321/**', (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: '[]' })
+  );
+
+  await page.route((url) => url.pathname.startsWith('/jellyfin/'), async (route) => {
+    const req = route.request();
+    const url = new URL(req.url());
+    const json = (status: number, body: unknown) =>
+      route.fulfill({ status, contentType: 'application/json', headers: { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*' }, body: JSON.stringify(body) });
+
+    if (req.method() === 'OPTIONS') return json(204, {});
+    if (url.pathname === '/jellyfin/sync-status') {
+      mock.syncStatusRequests += 1;
+      return json(200, mock.status);
+    }
+    if (url.pathname === '/jellyfin/sync' && req.method() === 'POST') {
+      mock.syncRequests += 1;
+      if (mock.syncDelayMs) await new Promise((r) => setTimeout(r, mock.syncDelayMs));
+      if (mock.syncHttpStatus !== 200) return json(mock.syncHttpStatus, { detail: 'unavailable' });
+      mock.status = { ...mock.status, lastSync: new Date().toISOString() };
+      return json(200, { started: true });
+    }
+    if (url.pathname === '/jellyfin/search') {
+      const q = (url.searchParams.get('query') || '').toLowerCase();
+      mock.searchQueries.push(q);
+      const items = LIBRARY.filter((i) => i.name.toLowerCase().includes(q));
+      return json(200, { items });
+    }
+    return json(404, { detail: 'not mocked' });
+  });
+
+  return mock;
+}
+
+/** Items reach the media browser via a submitted search (page.tsx:43-59, :161). */
+async function searchLibrary(page: Page, term: string) {
+  await page.fill('[data-testid="media-search-input"]', term);
+  await page.press('[data-testid="media-search-input"]', 'Enter');
+}
 
 test.describe('Jellyfin Integration', () => {
+  let mock: BridgeMock;
+
   test.beforeEach(async ({ page }) => {
+    mock = await mockBackends(page);
     // Navigate to Jellyfin dashboard
     await page.goto('/dashboard/jellyfin');
     // Wait for page to load
     await page.waitForLoadState('networkidle');
   });
 
-  // fixme: UI not built (spec-first, never implemented); tracked in #3227
-  test.fixme('should load Jellyfin page with initial state', async ({ page }) => {
+  // BUILT: SyncStatus page.tsx:104, JellyfinMediaBrowser page.tsx:161, one-click backfill SyncStatus.tsx:161-177
+  test('should load Jellyfin page with initial state', async ({ page }) => {
     // Check that sync status section is present
     await expect(page.locator('[data-testid="sync-status"]')).toBeVisible();
 
     // Check that media browser is present
     await expect(page.locator('[data-testid="media-browser"]')).toBeVisible();
 
+    // Check that the built backfill control is present (the options panel is unwired; see next test)
+    await expect(page.locator('[data-testid="backfill-button"]')).toBeVisible();
+  });
+
+  // Split from the test above: the backfill OPTIONS panel is a separate, unrendered component.
+  // fixme: UI unwired: BackfillControls not rendered (components/jellyfin/BackfillControls.tsx is imported only by BackfillControls.test.tsx; jellyfin/page.tsx renders only SyncStatus's one-click "Run Backfill", SyncStatus.tsx:161-177)
+  test.fixme('should render backfill options controls', async ({ page }) => {
     // Check that backfill controls are present
     await expect(page.locator('[data-testid="backfill-controls"]')).toBeVisible();
   });
 
-  // fixme: UI not built (spec-first, never implemented); tracked in #3227
-  test.fixme('should display sync status', async ({ page }) => {
+  // BUILT: SyncStatus.tsx:75-77 (last sync), :93-98 (videos linked), :108-114 (status)
+  test('should display sync status', async ({ page }) => {
     // Check sync status section
     await expect(page.locator('[data-testid="sync-status"]')).toBeVisible();
 
-    // Should show status indicator (connected/disconnected)
+    // Should show status indicator
     await expect(page.locator('[data-testid="connection-status"]')).toBeVisible();
+    await expect(page.locator('[data-testid="connection-status"]')).toHaveText('idle');
 
     // Should show last sync time (or "Never synced" if no sync yet)
     const lastSyncTime = page.locator('[data-testid="last-sync-time"]');
@@ -39,10 +147,13 @@ test.describe('Jellyfin Integration', () => {
 
     // Should show videos linked count
     await expect(page.locator('[data-testid="videos-linked-count"]')).toBeVisible();
+    await expect(page.locator('[data-testid="videos-linked-count"]')).toHaveText('12');
   });
 
-  // fixme: UI not built (spec-first, never implemented); tracked in #3227
-  test.fixme('should trigger sync operation', async ({ page }) => {
+  // BUILT: Sync Now SyncStatus.tsx:143-159 -> handleSync page.tsx:61-73 (refreshes status on success)
+  test('should trigger sync operation', async ({ page }) => {
+    mock.syncDelayMs = 1000;
+
     // Click sync now button
     await page.click('[data-testid="sync-now-button"]');
 
@@ -51,66 +162,66 @@ test.describe('Jellyfin Integration', () => {
 
     // Wait for sync to complete (or timeout)
     await expect(page.locator('[data-testid="sync-now-button"]')).not.toContainText('Syncing...', { timeout: 30000 });
+    expect(mock.syncRequests).toBe(1);
 
     // Sync status should be updated
     await expect(page.locator('[data-testid="last-sync-time"]')).toBeVisible();
+    await expect(page.locator('[data-testid="last-sync-time"]')).toContainText('Just now');
   });
 
-  // fixme: UI not built (spec-first, never implemented); tracked in #3227
-  test.fixme('should handle sync when already in progress', async ({ page }) => {
+  // BUILT: button disabled={syncing} SyncStatus.tsx:145 (the "disable button" branch of this test's intent)
+  test('should handle sync when already in progress', async ({ page }) => {
+    mock.syncDelayMs = 1500;
+    const syncButton = page.locator('[data-testid="sync-now-button"]');
+
     // Trigger first sync
-    await page.click('[data-testid="sync-now-button"]');
+    await syncButton.click();
 
-    // Immediately try to trigger another sync
-    await page.click('[data-testid="sync-now-button"]');
+    // A second trigger is prevented: the button is disabled while the first runs
+    await expect(syncButton).toBeDisabled();
+    await syncButton.click({ force: true });
 
-    // Should show error message or disable button
-    const errorMessage = page.locator('[data-testid="sync-already-running"]');
-    const hasError = await errorMessage.isVisible({ timeout: 2000 }).catch(() => false);
-
-    if (hasError) {
-      await expect(errorMessage).toBeVisible();
-    }
+    // Only one sync request reached the bridge
+    await expect(syncButton).toBeEnabled({ timeout: 10000 });
+    expect(mock.syncRequests).toBe(1);
   });
 
-  // fixme: UI not built (spec-first, never implemented); tracked in #3227
-  test.fixme('should browse media library', async ({ page }) => {
+  // BUILT: media cards JellyfinMediaBrowser.tsx:103-172, details :176-201
+  test('should browse media library', async ({ page }) => {
+    await searchLibrary(page, 'test');
+
     // Check media browser
     await expect(page.locator('[data-testid="media-browser"]')).toBeVisible();
 
-    // Check that media items are loaded (might be empty if nothing synced)
+    // Media items are loaded from the (mocked) library
     const mediaItems = page.locator('[data-testid="media-item"]');
-    const itemCount = await mediaItems.count();
+    await expect(mediaItems).toHaveCount(LIBRARY.length);
+    await expect(mediaItems.first()).toBeVisible();
 
-    // If items exist, check first item
-    if (itemCount > 0) {
-      await expect(mediaItems.first()).toBeVisible();
+    // Click first item
+    await mediaItems.first().click();
 
-      // Click first item
-      await mediaItems.first().click();
-
-      // Should show media details
-      await expect(page.locator('[data-testid="media-details"]')).toBeVisible();
-    }
+    // Should show media details
+    await expect(page.locator('[data-testid="media-details"]')).toBeVisible();
+    await expect(page.locator('[data-testid="media-details"]')).toContainText(LIBRARY[0].name);
   });
 
-  // fixme: UI not built (spec-first, never implemented); tracked in #3227
-  test.fixme('should search media library', async ({ page }) => {
-    // Enter search query
-    await page.fill('[data-testid="media-search-input"]', 'test');
-
-    // Wait for search results (debounced)
-    await page.waitForTimeout(500);
+  // BUILT: search form page.tsx:117-133 (submit-driven, not debounced) -> jellyfinSearch
+  test('should search media library', async ({ page }) => {
+    // Enter search query and submit
+    await searchLibrary(page, 'movie');
 
     // Check that search results are shown
     const searchResults = page.locator('[data-testid="media-item"]');
-    await searchResults.count();
+    await expect(searchResults).toHaveCount(1);
+    await expect(searchResults.first()).toContainText('Test Movie');
+    expect(mock.searchQueries).toContain('movie');
 
     // Results might be filtered or empty
     await expect(page.locator('[data-testid="media-browser"]')).toBeVisible();
   });
 
-  // fixme: UI not built (spec-first, never implemented); tracked in #3227
+  // fixme: UI unwired: media type filter not rendered (jellyfin/page.tsx:117-133 has only a text search; jellyfinSearch's mediaType option, lib/api/jellyfin.ts:128-145, is never passed by page.tsx:50)
   test.fixme('should filter media by type', async ({ page }) => {
     // Select media type filter (e.g., Movies only)
     await page.selectOption('[data-testid="media-type-filter"]', 'Movie');
@@ -151,8 +262,11 @@ test.describe('Jellyfin Integration', () => {
     }
   });
 
-  // fixme: UI not built (spec-first, never implemented); tracked in #3227
-  test.fixme('should display media items in responsive grid', async ({ page }) => {
+  // BUILT: grid JellyfinMediaBrowser.tsx:102 (rendered once there are results)
+  test('should display media items in responsive grid', async ({ page }) => {
+    await searchLibrary(page, 'test');
+    await expect(page.locator('[data-testid="media-item"]').first()).toBeVisible();
+
     // Check that media grid container exists
     const mediaGrid = page.locator('[data-testid="media-grid"]');
 
@@ -205,7 +319,7 @@ test.describe('Jellyfin Integration', () => {
     }
   });
 
-  // fixme: UI not built (spec-first, never implemented); tracked in #3227
+  // fixme: UI unwired: BackfillControls not rendered (components/jellyfin/BackfillControls.tsx is imported only by BackfillControls.test.tsx; jellyfin/page.tsx renders only SyncStatus's one-click "Run Backfill", SyncStatus.tsx:161-177)
   test.fixme('should trigger backfill with default options', async ({ page }) => {
     // Click backfill button
     await page.click('[data-testid="backfill-button"]');
@@ -223,7 +337,7 @@ test.describe('Jellyfin Integration', () => {
     await expect(page.locator('[data-testid="backfill-progress-bar"]')).toBeVisible();
   });
 
-  // fixme: UI not built (spec-first, never implemented); tracked in #3227
+  // fixme: UI unwired: BackfillControls not rendered (components/jellyfin/BackfillControls.tsx is imported only by BackfillControls.test.tsx; jellyfin/page.tsx renders only SyncStatus's one-click "Run Backfill", SyncStatus.tsx:161-177)
   test.fixme('should trigger backfill with custom options', async ({ page }) => {
     // Click backfill button
     await page.click('[data-testid="backfill-button"]');
@@ -244,7 +358,7 @@ test.describe('Jellyfin Integration', () => {
     await expect(page.locator('[data-testid="backfill-progress"]')).toBeVisible({ timeout: 5000 });
   });
 
-  // fixme: UI not built (spec-first, never implemented); tracked in #3227
+  // fixme: UI unwired: BackfillControls not rendered (components/jellyfin/BackfillControls.tsx is imported only by BackfillControls.test.tsx; jellyfin/page.tsx renders only SyncStatus's one-click "Run Backfill", SyncStatus.tsx:161-177)
   test.fixme('should validate backfill batch size (1-1000)', async ({ page }) => {
     // Click backfill button
     await page.click('[data-testid="backfill-button"]');
@@ -267,7 +381,7 @@ test.describe('Jellyfin Integration', () => {
     }
   });
 
-  // fixme: UI not built (spec-first, never implemented); tracked in #3227
+  // fixme: UI unwired: BackfillControls not rendered (components/jellyfin/BackfillControls.tsx is imported only by BackfillControls.test.tsx; jellyfin/page.tsx renders only SyncStatus's one-click "Run Backfill", SyncStatus.tsx:161-177)
   test.fixme('should validate backfill priority (1-10)', async ({ page }) => {
     // Click backfill button
     await page.click('[data-testid="backfill-button"]');
@@ -290,7 +404,7 @@ test.describe('Jellyfin Integration', () => {
     }
   });
 
-  // fixme: UI not built (spec-first, never implemented); tracked in #3227
+  // fixme: UI unwired: BackfillControls not rendered (components/jellyfin/BackfillControls.tsx is imported only by BackfillControls.test.tsx; jellyfin/page.tsx renders only SyncStatus's one-click "Run Backfill", SyncStatus.tsx:161-177)
   test.fixme('should cancel backfill operation', async ({ page }) => {
     // Click backfill button
     await page.click('[data-testid="backfill-button"]');
@@ -333,8 +447,8 @@ test.describe('Jellyfin Integration', () => {
     }
   });
 
-  // fixme: UI not built (spec-first, never implemented); tracked in #3227
-  test.fixme('should show relative time for last sync', async ({ page }) => {
+  // BUILT: formatTimeAgo (lib/timeUtils.ts:13-32) rendered at SyncStatus.tsx:75-77
+  test('should show relative time for last sync', async ({ page }) => {
     // Check last sync time
     const lastSyncTime = page.locator('[data-testid="last-sync-time"]');
     await expect(lastSyncTime).toBeVisible();
@@ -342,10 +456,26 @@ test.describe('Jellyfin Integration', () => {
     // Should show relative time (e.g., "just now", "2h ago", etc.)
     const timeText = await lastSyncTime.textContent();
     expect(timeText).toMatch(/(just now|ago|never)/i);
+    expect(timeText).toContain('2h ago');
   });
 
-  // fixme: UI not built (spec-first, never implemented); tracked in #3227
-  test.fixme('should refresh sync status manually', async ({ page }) => {
+  // BUILT: Refresh SyncStatus.tsx:78-85 -> refreshSyncStatus page.tsx:25-30
+  test('should refresh sync status manually', async ({ page }) => {
+    await expect(page.locator('[data-testid="videos-linked-count"]')).toHaveText('12');
+    const before = mock.syncStatusRequests;
+    mock.status = { ...mock.status, videosLinked: 20 };
+
+    // Click refresh button
+    await page.click('[data-testid="refresh-status-button"]');
+
+    // Status is re-fetched and the new value is shown
+    await expect.poll(() => mock.syncStatusRequests).toBeGreaterThan(before);
+    await expect(page.locator('[data-testid="videos-linked-count"]')).toHaveText('20');
+  });
+
+  // Split from the test above: the loading-state half of the original assertion.
+  // fixme: behaviour mismatch: Refresh has no loading state (SyncStatus.tsx:78-85 renders no data-loading/busy state; onRefresh is fire-and-forget, page.tsx:25-30)
+  test.fixme('should show loading state while refreshing sync status', async ({ page }) => {
     // Click refresh button
     await page.click('[data-testid="refresh-status-button"]');
 
@@ -394,38 +524,34 @@ test.describe('Jellyfin Integration', () => {
     }
   });
 
-  // fixme: UI not built (spec-first, never implemented); tracked in #3227
-  test.fixme('should show "no results" when filter matches nothing', async ({ page }) => {
-    // Enter search query unlikely to match anything
-    await page.fill('[data-testid="media-search-input"]', 'xyzabc123nonexistent');
+  // BUILT: empty state JellyfinMediaBrowser.tsx:69-77 (after a search returns no items, page.tsx:51-52)
+  test('should show "no results" when filter matches nothing', async ({ page }) => {
+    // A matching search first, so the empty state is caused by the query
+    await searchLibrary(page, 'test');
+    await expect(page.locator('[data-testid="media-item"]')).toHaveCount(LIBRARY.length);
 
-    // Wait for search
-    await page.waitForTimeout(500);
+    // Enter search query unlikely to match anything
+    await searchLibrary(page, 'xyzabc123nonexistent');
 
     // Should show no results message
     const noResults = page.locator('[data-testid="no-media-results"]');
-    const hasNoResults = await noResults.isVisible({ timeout: 1000 }).catch(() => false);
-
-    if (hasNoResults) {
-      await expect(noResults).toBeVisible();
-    }
+    await expect(noResults).toBeVisible();
+    await expect(page.locator('[data-testid="media-item"]')).toHaveCount(0);
   });
 
-  // fixme: UI not built (spec-first, never implemented); tracked in #3227
-  test.fixme('should handle service unavailable gracefully', async ({ page }) => {
-    // This test would require mocking the service to be unavailable
-    // For now, just check that error handling UI exists
+  // BUILT: sync error surfaced via AlertBanner (role=alert) SyncStatus.tsx:135-139, set by page.tsx:68-70
+  test('should handle service unavailable gracefully', async ({ page }) => {
+    mock.syncHttpStatus = 503;
 
     // Try to trigger sync
     await page.click('[data-testid="sync-now-button"]');
 
-    // If service is unavailable, should show error message
-    const serviceError = page.locator('[data-testid="service-unavailable-error"]');
-    const hasError = await serviceError.isVisible({ timeout: 5000 }).catch(() => false);
-
-    if (hasError) {
-      await expect(serviceError).toBeVisible();
-    }
+    // Service is unavailable: an error is shown inside the sync panel and the control recovers
+    const serviceError = page.locator('[data-testid="sync-status"]').getByRole('alert');
+    await expect(serviceError).toBeVisible({ timeout: 5000 });
+    await expect(serviceError).not.toHaveText('');
+    await expect(page.locator('[data-testid="sync-now-button"]')).toBeEnabled();
+    await expect(page.locator('[data-testid="sync-now-button"]')).toContainText('Sync Now');
   });
 
   test('should generate playback URL', async ({ page }) => {
