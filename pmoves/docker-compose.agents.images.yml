@@ -9,7 +9,7 @@ services:
       - ./chit:/app/pmoves/chit:ro
   archon:
     build: null
-    image: ${ARCHON_IMAGE:-ghcr.io/powerfulmoves/pmoves-archon:pmoves-latest}
+    image: ${ARCHON_IMAGE:-ghcr.io/powerfulmoves/pmoves-archon:current}
   deepresearch:
     build: null
   supaserch:
