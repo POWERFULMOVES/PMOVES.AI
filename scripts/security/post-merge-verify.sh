@@ -50,6 +50,13 @@ port_up() { timeout 2 bash -c "echo >/dev/tcp/localhost/$1" 2>/dev/null; }
 for _envf in "$REPO_ROOT/pmoves/env.shared" "$REPO_ROOT/pmoves/env.tier-data" "$REPO_ROOT/pmoves/env.tier-supabase"; do
   [[ -f "$_envf" ]] && set -a && source "$_envf" && set +a
 done
+# env.shared exports SSL_CERT_FILE= etc. EMPTY (container leak guard), which
+# breaks host python TLS; see pmoves/scripts/pm-ca-bundle.sh.
+if [[ -f "$REPO_ROOT/pmoves/scripts/pm-ca-bundle.sh" ]]; then
+  # shellcheck source=../../pmoves/scripts/pm-ca-bundle.sh
+  source "$REPO_ROOT/pmoves/scripts/pm-ca-bundle.sh"
+  pm_ca_bundle_normalize || true
+fi
 
 # ============================================================================
 # 1. Supabase RLS Verification (PR #1331)
