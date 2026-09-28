@@ -138,7 +138,25 @@ def analyse_block(b: dict) -> dict:
 def snapshot_signals(snap: str | None) -> dict:
     if snap is None:
         return {"snapshot": "absent"}
-    alerts = [a.strip().strip('"') for a in re.findall(r'- alert(?: \[[^\]]*\])*: (.+)', snap)]
+    alerts = []
+    lines = snap.splitlines()
+    for i, ln in enumerate(lines):
+        m = re.match(r"^(\s*)- alert\b[^:]*(?::\s*(.*))?$", ln)
+        if not m:
+            continue
+        if m.group(2):
+            alerts.append(m.group(2).strip().strip('"'))
+            continue
+        ind = len(m.group(1))
+        kids = []
+        for nxt in lines[i + 1:i + 6]:
+            if len(nxt) - len(nxt.lstrip()) <= ind:
+                break
+            km = re.search(r"\]: (.+)$|^\s*- text: (.+)$", nxt)
+            if km and "button" not in nxt:
+                kids.append((km.group(1) or km.group(2)).strip().strip('"'))
+        if kids:
+            alerts.append(" / ".join(kids))
     headings = re.findall(r'- heading "([^"]+)"', snap)
     sig = {
         "snapshot": "present",
@@ -146,6 +164,10 @@ def snapshot_signals(snap: str | None) -> dict:
         "headings": headings[:8],
         "is_404": bool(re.search(r'heading "404"|This page could not be found', snap)),
         "fetch_failed": bool(re.search(r"Failed to fetch|fetch failed|ECONNREFUSED|NetworkError", snap, re.I)),
+        # backend-absent markers observed in CI snapshots: an alert carrying an auth/network error,
+        # or a connection-status badge reading "error" beside the page heading
+        "backend_signal": bool(re.search(r"Failed to fetch|fetch failed|ECONNREFUSED|NetworkError|Invalid JWT|JWT|Unauthori[sz]ed|not configured", " ".join(alerts), re.I)
+                               or re.search(r'Failed to fetch|- generic \[ref=e\d+\]: error$', snap, re.M)),
         "runtime_error": bool(re.search(r"Unhandled Runtime Error|Application error|Something went wrong", snap, re.I)),
         "loading_state": bool(re.search(r'\bLoading\b', snap)),
         "chars": len(snap),
@@ -253,7 +275,7 @@ def check_term(t: dict, src: dict, snap: str | None, testid_universe: list[str])
         pat = re.compile(r"""(?:data-testid|testId|testid)["']?\s*[=:]\s*\{?\s*[`"']""" + re.escape(v) + r"""[`"']""")
     else:
         pat = re.compile(re.escape(v), re.I)
-    hits = grep_src(src, pat, visible=t["kind"] not in ("testid", "css-id", "css-class"))
+    hits = grep_src(src, pat, visible=t["kind"] not in ("testid", "css-id", "css-class", "js-global"))
     res["source"] = "found" if hits else "missing"
     res["source_hits"] = hits
     if not hits:
@@ -262,6 +284,11 @@ def check_term(t: dict, src: dict, snap: str | None, testid_universe: list[str])
             # dynamic testids built with template literals: data-testid={`foo-${id}`}
             dyn = [u for u in testid_universe if "${" in u and v.startswith(u.split("${")[0]) and u.split("${")[0]]
             cands = cands + [d for d in dyn if d not in cands]
+            # same token used as a plain id/name/htmlFor: the element exists, the spec targets the wrong attribute
+            idhits = grep_src(src, re.compile(r"""\b(?:id|name|htmlFor)=\{?["'`]""" + re.escape(v) + r"""["'`]"""), limit=2)
+            cands = [f"id/name={v}@{h}" for h in idhits] + cands
+        elif t["kind"] in ("js-global", "css-id", "css-class"):
+            cands = []
         else:
             cands = []
             words = [w for w in re.findall(r"[A-Za-z]{4,}", v)]
@@ -271,6 +298,8 @@ def check_term(t: dict, src: dict, snap: str | None, testid_universe: list[str])
         if cands:
             res["source"] = "renamed-candidate"
             res["candidates"] = [c if "@" in c or ":" in c else f"{c}@" + ",".join(grep_src(src, re.compile(re.escape(c.split('${')[0])), 1)) for c in cands][:3]
+    if res["source"] != "found" and t["kind"] in ("testid", "text", "placeholder", "label", "css-id", "js-global") and v and not t.get("regex"):
+        res["ui_history"] = ui_history(v, t["kind"])
     if snap is not None and t["kind"] in ("role", "text", "placeholder", "label"):
         if t["kind"] == "role":
             rows = re.findall(r"- " + re.escape(t["role"]) + r' "([^"]*)"', snap)
@@ -280,6 +309,22 @@ def check_term(t: dict, src: dict, snap: str | None, testid_universe: list[str])
         else:
             res["snapshot"] = "rendered" if pat.search(snap) else "not-rendered"
     return res
+
+
+_HIST: dict[str, str] = {}
+
+
+def ui_history(term: str, kind: str = "text") -> str:
+    """Did this term EVER exist in UI source on any ref? Distinguishes drift from never-implemented."""
+    key = f"{kind}:{term}"
+    if key not in _HIST:
+        # testids: match the attribute, not any string that happens to equal it (e.g. an API path)
+        sel = ["-G", r"testid.{0,8}" + re.escape(term)] if kind == "testid" else ["-S", term]
+        out = subprocess.run(["git", "log", "--all", "--format=%h %cs", *sel, "--", *SRC_DIRS],
+                             cwd=UI_ROOT, capture_output=True, text=True, check=False).stdout.split("\n")
+        out = [o for o in out if o.strip()]
+        _HIST[key] = "never-in-ui-source" if not out else f"removed-or-moved (last change {out[0]}; first {out[-1]})"
+    return _HIST[key]
 
 
 # ------------------------------------------------------------------ git dates
@@ -328,6 +373,43 @@ def route_to_dir(route: str) -> str | None:
     return str(cur.relative_to(UI_ROOT))
 
 
+# Agent inspection (B850-CLAUDE, 2026-09-28): rows the mechanical rules could not settle, each
+# with the source evidence read by hand. Applied as a separate layer; mechanical_* fields are kept.
+INSPECTION = {
+    ("e2e/chat.spec.ts", "provides access to model selection"): (
+        "y", "update-to-current",
+        "chat page renders an unnamed AGENT selector <select> (app/dashboard/chat/page.tsx:339; options Agent Zero/"
+        "Archon/...) and no model combobox or settings button; the controls are static, so the JWT alert is not the cause"),
+    ("e2e/chat.spec.ts", "allows Shift+Enter for new lines without sending"): (
+        "y", "update-to-current",
+        "message field is a single-line <input id=chatMessage> (app/dashboard/chat/page.tsx:350), which cannot hold a "
+        "newline; git log --all -S'<textarea' -- app/dashboard/chat is empty, so it was never multi-line"),
+    ("e2e/chat.spec.ts", "clears input after sending"): (
+        "n", "mock-backend",
+        "by design the input is cleared only when send succeeds (app/dashboard/chat/page.tsx:220-222 'Only clear input "
+        "after successful send'); /api/chat/send fails without Supabase"),
+    ("e2e/services-health.spec.ts", "displays service endpoint information"): (
+        "y", "update-to-current",
+        "service page is a server component rendering the markdown Service Guide (no client fetch); the first <code> "
+        "is the slug ('agent-zero'), the spec assumes it is a URL"),
+    ("e2e/services-health.spec.ts", "shows service-specific metrics"): (
+        "y", "update-to-current",
+        "page renders the markdown Service Guide branch; the <dl> the spec looks for exists only in CatalogFallback "
+        "(app/dashboard/services/[service]/page.tsx:61); no backend involved"),
+    ("e2e/services-health.spec.ts", "Hi-RAG v2"): (
+        "y", "update-to-current",
+        "slug 'hirag-v2' is not in lib/services.ts or lib/serviceCatalog.ts (404); nearest current slug is "
+        "'hi-rag-gateway-v2' (lib/serviceCatalog.ts:514)"),
+}
+
+
+def inspection_for(row: dict):
+    for (spec, needle), val in INSPECTION.items():
+        if row["spec"] == spec and needle in row["title_path"]:
+            return val
+    return None
+
+
 def decide(row: dict) -> tuple[str, str, str]:
     """(stale y/n/unknown, proposed_action, reason) — deterministic rules, documented in the MD."""
     sig = row["snapshot_signals"]
@@ -347,28 +429,35 @@ def decide(row: dict) -> tuple[str, str, str]:
     if heading_miss:
         return "y", "update-to-current", ("rendered page headings " + str(heading_miss[0]["snapshot_same_role"])
                                          + " do not match " + str(heading_miss[0]["value"]))
+    if cls == "OTHER" and any(t.get("kind") == "js-global" and t.get("source") == "missing" for t in terms):
+        g = next(t for t in terms if t.get("kind") == "js-global")
+        return "y", "update-to-current", f"waits for window.{g['value']}, absent from current source ({g.get('ui_history')})"
     if cls == "OTHER":
-        return "unknown", "real-regression-investigate" if not sig.get("fetch_failed") else "mock-backend", "unclassified failure"
+        return "unknown", "real-regression-investigate" if not sig.get("backend_signal") else "mock-backend", "unclassified failure"
     missing = [t for t in terms if t.get("source") == "missing"]
     renamed = [t for t in terms if t.get("source") == "renamed-candidate"]
     found = [t for t in terms if t.get("source") == "found"]
     not_rendered_but_found = [t for t in found if t.get("snapshot") == "not-rendered"]
+    if terms and all(t.get("test_data") for t in terms):
+        if sig.get("backend_signal"):
+            return "n", "mock-backend", "waits for spec-typed test data to round-trip; page shows backend-absent signal " + str(sig.get("alerts"))
+        return "unknown", "mock-backend", "waits for spec-typed test data to round-trip through a backend"
     if cls == "SELECTOR" and row["strict_matches"]:
         return "y", "update-to-current", "strict-mode violation: selector too broad for the current page"
     if missing and not found:
         return "y", "update-to-current", "selector/text absent from all current UI source"
     if renamed and not found:
         return "y", "update-to-current", "selector absent; near-match exists in source (renamed candidate)"
-    if found and sig.get("fetch_failed"):
-        return "n", "mock-backend", "selector exists in source; page shows fetch failure (backend absent in CI)"
+    if found and sig.get("backend_signal"):
+        return "n", "mock-backend", "selector exists in source; page shows backend-absent signal " + str(sig.get("alerts"))
     if found and not_rendered_but_found:
         return "unknown", "mock-backend", "selector exists in source but was not rendered; data-dependent render suspected"
     if cls == "ASSERTION":
-        if sig.get("fetch_failed"):
-            return "n", "mock-backend", "value mismatch on a page whose data fetch failed"
+        if sig.get("backend_signal"):
+            return "n", "mock-backend", "value mismatch on a page showing a backend-absent signal " + str(sig.get("alerts"))
         return "unknown", "real-regression-investigate", "value mismatch with no backend signal on the page"
     if found:
-        return "unknown", "mock-backend" if sig.get("fetch_failed") or sig.get("loading_state") else "real-regression-investigate", \
+        return "unknown", "mock-backend" if sig.get("backend_signal") or sig.get("loading_state") else "real-regression-investigate", \
             "selector exists in source; render condition not determined from snapshot"
     return "unknown", "real-regression-investigate", "no selector term extracted"
 
@@ -380,6 +469,7 @@ def main() -> int:
     ap.add_argument("--run-id", required=True)
     ap.add_argument("--job-id", required=True)
     ap.add_argument("--out", required=True)
+    ap.add_argument("--md", help="also render the ground-truth table as markdown")
     a = ap.parse_args()
 
     lines = clean_log(Path(a.log).read_text(errors="replace"))
@@ -403,14 +493,28 @@ def main() -> int:
             if p.exists():
                 snap = p.read_text(errors="replace")
         r["snapshot_signals"] = snapshot_signals(snap)
-        r["selector_checks"] = [check_term(t, src, snap, testid_universe) for t in selector_terms(r["locator"] or "")]
+        spec_path = f"{b['spec']}"
+        spec_cache.setdefault(spec_path, (UI_ROOT / spec_path).read_text())
+        spec_lines = spec_cache[spec_path].splitlines()
+        body_txt = "\n".join(spec_lines[max(0, b["line"] - 1):b["line"] + 40])
+        # strings the test itself types/defines are test data, not UI copy: never a staleness term
+        test_data = set(re.findall(r"""(?:fill|type)\(\s*['"`]([^'"`]+)['"`]""", body_txt)) | \
+            set(re.findall(r"""const \w+\s*=\s*['"`]([^'"`]+)['"`]""", body_txt))
+        terms = selector_terms(r["locator"] or "")
+        for g in re.findall(r"\(window as any\)\.(\w+)|window\.(__\w+)", r["failing_source"] or ""):
+            terms.append({"kind": "js-global", "value": g[0] or g[1], "regex": False})
+        checks = []
+        for t in terms:
+            if t.get("value") in test_data:
+                checks.append(dict(t, source="n/a (test data typed by the spec)", test_data=True))
+            else:
+                checks.append(check_term(t, src, snap, testid_universe))
+        r["selector_checks"] = checks
         # expected text of assertion failures is also a staleness term
         if r["class"] == "ASSERTION" and r["expected"] and re.match(r'^["/]', r["expected"]) and len(r["expected"].strip('"')) >= 3:
             ev = r["expected"]
             t = {"kind": "expected-text", "value": ev.strip('"'), "regex": ev.startswith("/")}
             r["selector_checks"].append(check_term(t, src, snap, testid_universe))
-        spec_path = f"{b['spec']}"
-        spec_cache.setdefault(spec_path, (UI_ROOT / spec_path).read_text())
         route = page_under_test(spec_cache[spec_path], b["line"])
         r["route"] = route
         r["page_dir"] = route_to_dir(route) if route else None
@@ -422,13 +526,25 @@ def main() -> int:
                 m = re.search(r"request\.get\(['\"`]([^'\"`]+)", body)
                 r["api_path"] = m.group(1) if m else None
             if r["api_path"]:
-                rf = UI_ROOT / "app" / r["api_path"].lstrip("/") / "route.ts"
+                rf = UI_ROOT / "app" / r["api_path"].split("?")[0].lstrip("/") / "route.ts"
                 if rf.exists():
                     rel = str(rf.relative_to(UI_ROOT))
                     r["api_route_file"] = rel
-                    r["api_route_has_401"] = "status: 401" in rf.read_text()
+                    body = rf.read_text()
+                    m = re.search(r"from ['\"](\.{1,2}/[^'\"]+/route)['\"]", body)
+                    if m:  # thin alias re-exporting another handler
+                        tgt = (rf.parent / (m.group(1) + ".ts")).resolve()
+                        if tgt.exists():
+                            body += tgt.read_text()
+                            r["api_route_file"] = f"{rel} -> {tgt.relative_to(UI_ROOT)}"
+                    r["api_route_has_401"] = "status: 401" in body
                     r["api_route_last_commit"] = git_date(rel)
         r["stale"], r["proposed_action"], r["reason"] = decide(r)
+        r["mechanical_stale"], r["mechanical_action"] = r["stale"], r["proposed_action"]
+        insp = inspection_for(r)
+        r["inspection"] = None
+        if insp:
+            r["stale"], r["proposed_action"], r["inspection"] = insp
         rows.append(r)
 
     out = {
@@ -441,7 +557,57 @@ def main() -> int:
     }
     Path(a.out).write_text(json.dumps(out, indent=2) + "\n")
     print(f"wrote {len(rows)} rows -> {a.out}")
+    if a.md:
+        Path(a.md).write_text(render_md(out))
+        print(f"wrote {a.md}")
     return 0
+
+
+def _cell(x) -> str:
+    return str(x).replace("|", "\\|").replace("\n", " ")
+
+
+def render_md(out: dict) -> str:
+    from collections import Counter
+    F = out["failures"]
+    L = [f"# E2E reconcile — phase 1 ground truth ({len(F)} failures)", "",
+         f"Source: UI Tests run {out['source_run']['run_id']}, job {out['source_run']['job_id']} "
+         f"({out['source_run']['failed']} failed / {out['source_run']['passed']} passed). Judged against tree "
+         f"`{out['source_tree'][:10]}`. Generated by `pmoves/ui/scripts/e2e_reconcile_triage.py`; machine-readable twin: "
+         "`RECONCILE-2026-09-28.json` (schema `pmoves.e2e_reconcile.v1`).", "",
+         "`class` is mechanical from the error text only. `stale`/`action` come from deterministic rules over the "
+         "ARIA snapshot + current source + git history; rows marked (I) were settled by agent inspection, with the "
+         "mechanical verdict kept in the JSON as `mechanical_stale`/`mechanical_action`.", "",
+         "## Counts per class", "", "| class | n |", "|---|---|"]
+    L += [f"| {k} | {v} |" for k, v in Counter(r["class"] for r in F).most_common()]
+    L += ["", "## Counts per stale / action", "", "| stale | action | n |", "|---|---|---|"]
+    L += [f"| {k[0]} | {k[1]} | {v} |" for k, v in Counter((r["stale"], r["proposed_action"]) for r in F).most_common()]
+    hist = Counter(t.get("ui_history", "")[:18] for r in F for t in r["selector_checks"] if t.get("ui_history"))
+    L += ["", f"Missing selector terms checked against UI-source history on all refs: {dict(hist)}", ""]
+    L += ["## Counts per spec", "", "| spec | failed | SELECTOR | ASSERTION | BACKEND | OTHER | stale y | stale n |",
+          "|---|---|---|---|---|---|---|---|"]
+    for spec in sorted({r["spec"] for r in F}):
+        R = [r for r in F if r["spec"] == spec]
+        c = Counter(r["class"] for r in R)
+        L.append(f"| {spec} | {len(R)} | {c['SELECTOR']} | {c['ASSERTION']} | {c['BACKEND']} | {c['OTHER']} | "
+                 f"{sum(r['stale'] == 'y' for r in R)} | {sum(r['stale'] == 'n' for r in R)} |")
+    L += ["", "## Ground truth", "", "| # | spec:line | test | class | evidence | stale | action |", "|---|---|---|---|---|---|---|"]
+    for r in F:
+        ev = []
+        for t in r["selector_checks"][:2]:
+            e = f"{t.get('kind')} `{t.get('value') or t.get('role')}` src={t.get('source')}"
+            if t.get("snapshot"):
+                e += f" dom={t['snapshot']}"
+            if t.get("ui_history"):
+                e += f" hist={t['ui_history'].split(' (')[0]}"
+            if t.get("candidates"):
+                e += f" cand={t['candidates'][0]}"
+            ev.append(e)
+        why = r["inspection"] or r["reason"]
+        mark = " (I)" if r["inspection"] else ""
+        L.append(f"| {r['n']} | {r['spec'].replace('e2e/', '')}:{r['line']} | {_cell(r['title_path'].split(' › ')[-1])} | "
+                 f"{r['class']} | {_cell('; '.join(ev) or r['error'][:90])} — {_cell(why)} | {r['stale']}{mark} | {r['proposed_action']} |")
+    return "\n".join(L) + "\n"
 
 
 if __name__ == "__main__":
