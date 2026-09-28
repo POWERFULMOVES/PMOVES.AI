@@ -718,6 +718,46 @@ def test_pr_state_refusals(gh: FakeGitHub, config: Path, mutate: Any) -> None:
     assert gh.posts() == []
 
 
+@pytest.mark.parametrize(
+    "mutate",
+    [lambda pr: pr.update(draft=True), lambda pr: pr.update(state="closed"), lambda pr: pr["base"].update(ref="develop")],
+    ids=["draft", "closed", "wrong-base"],
+)
+def test_pr_state_refusal_still_withdraws_on_request_changes(gh: FakeGitHub, config: Path, mutate: Any, capsys: pytest.CaptureFixture[str]) -> None:
+    mutate(gh.pr)
+    _standing(gh)
+    gh.comments.append(comment(2, marker("REQUEST_CHANGES")))
+    assert run(config) == 1
+    assert gh.reviews[0]["state"] == "DISMISSED"
+    assert "dismissed standing approval(s) [77]" in capsys.readouterr().err
+    assert gh.posts() == []
+
+
+def test_pr_state_refusal_keeps_approval_when_verdict_is_clean(gh: FakeGitHub, config: Path) -> None:
+    gh.pr["draft"] = True
+    _standing(gh)
+    assert run(config) == 1
+    assert gh.reviews[0]["state"] == "APPROVED"
+    assert [r for r in gh.requests if r["method"] == "PUT"] == []
+
+
+def test_pr_state_refusal_with_failed_dismissal_is_still_stands(gh: FakeGitHub, config: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    gh.pr["draft"] = True
+    _standing(gh)
+    gh.dismiss_mode = "forbidden"
+    gh.comments.append(comment(2, marker("REQUEST_CHANGES")))
+    assert run(config) == 3
+    assert "STILL STAND" in capsys.readouterr().err
+
+
+def test_merged_pr_is_refused_without_touching_reviews(gh: FakeGitHub, config: Path) -> None:
+    gh.pr.update(merged=True, merged_at="2026-09-28T00:00:00Z", state="closed")
+    _standing(gh)
+    gh.comments.append(comment(2, marker("REQUEST_CHANGES")))
+    assert run(config) == 1
+    assert [r for r in gh.requests if r["method"] != "GET"] == []
+
+
 def test_no_marker_refused(gh: FakeGitHub, config: Path) -> None:
     gh.comments = [comment(1, "looks fine to me")]
     assert run(config) == 1

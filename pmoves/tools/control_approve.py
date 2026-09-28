@@ -22,7 +22,8 @@ Refusal matrix (every row exits non-zero with an honest message):
   exit 3  any GitHub read fails (network, 5xx, auth, a redirect, a Link URL
           on another host) -- could not measure
   exit 1  token's /user login != configured approver login
-  exit 1  PR closed / merged / draft / base != configured base
+  exit 1  PR closed / merged / draft / base != configured base (unless merged,
+          the verdict is still read and the withdrawal rule still applies)
   exit 1  PR head != EXPECTED_HEAD (checked twice: before and just before POST)
   exit 1  approving account == PR author
   exit 1  no allowlisted APPROVE marker for exactly this head, marker
@@ -496,10 +497,6 @@ def approve(
         )
     emit(f"approver: {token_login} (matches configured login)")
 
-    pr = _read(f"read PR #{pr_number}", lambda: client.get(pr_path)) or {}
-    author = _check_pr(pr, settings, expected_head, token_login)
-    emit(f"PR #{pr_number}: open, base={settings.base}, head={expected_head}, author={author}")
-
     def current_verdict(action: str) -> control_verdict.Selection:
         comments = _read(
             action,
@@ -518,6 +515,33 @@ def approve(
             client, pr_path, token_login, expected_head, reason, dry_run,
         )
         raise Outcome(EXIT_REFUSED, reason)
+
+    def check_pr(pr_obj: dict[str, Any]) -> str:
+        """_check_pr, but a PR-state refusal (draft, closed, wrong base, head
+        mismatch) still applies the withdrawal rule before refusing (round 3,
+        P3-c): a REQUEST_CHANGES recorded on a draft must not leave an approval
+        standing. A merged PR is past withdrawing; author==approver cannot have
+        its own approval standing."""
+        try:
+            return _check_pr(pr_obj, settings, expected_head, token_login)
+        except Outcome as refusal:
+            merged = bool(pr_obj.get("merged") or pr_obj.get("merged_at"))
+            if refusal.code != EXIT_REFUSED or merged or "is the PR author" in refusal.message:
+                raise
+            verdict_now = current_verdict("read PR comments to decide on withdrawal")
+            if verdict_now.approved:
+                raise
+            note = _withdraw_standing_approvals(
+                client, pr_path, token_login, expected_head,
+                f"{refusal.message}; control verdict: {verdict_now.reason}", dry_run,
+            )
+            raise Outcome(
+                EXIT_REFUSED, f"{refusal.message}; control verdict: {verdict_now.reason}; {note}"
+            ) from None
+
+    pr = _read(f"read PR #{pr_number}", lambda: client.get(pr_path)) or {}
+    author = check_pr(pr)
+    emit(f"PR #{pr_number}: open, base={settings.base}, head={expected_head}, author={author}")
 
     selection = current_verdict("list PR comments")
     if not selection.approved or selection.chosen is None:
@@ -546,7 +570,7 @@ def approve(
     else:
         # Narrow the race window: re-read the head immediately before posting.
         pr_again = _read(f"re-read PR #{pr_number}", lambda: client.get(pr_path)) or {}
-        _check_pr(pr_again, settings, expected_head, token_login)
+        check_pr(pr_again)
         # ...and the verdict: a REQUEST_CHANGES may have landed since the first read.
         again = current_verdict("re-read PR comments before approving")
         if not again.approved or again.chosen is None:

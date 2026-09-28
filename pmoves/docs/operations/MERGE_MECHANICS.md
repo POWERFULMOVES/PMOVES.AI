@@ -278,7 +278,7 @@ because `make` collapses every nonzero exit to 2.
 | 3 | any GitHub read fails (network, 401/403/5xx, a non-JSON or truncated body) — never read as a pass |
 | 3 | any unexpected error — the run still ends with the `VERDICT` line |
 | 1 | token's `GET /user` login is not the configured approver login |
-| 1 | PR closed, merged, draft, or base is not `main` |
+| 1 | PR closed, merged, draft, or base is not `main` — except for a merged PR, the verdict is still read and the withdrawal rule below still applies before refusing (a `REQUEST_CHANGES` on a draft dismisses a standing approval) |
 | 1 | PR head is not `EXPECTED_HEAD` (checked at start **and** immediately before the POST) |
 | 1 | approving account is the PR author |
 | 1 | **any verdict outcome other than a clean `APPROVE` for the head**: latest allowlisted verdict is `REQUEST_CHANGES`; no allowlisted `APPROVE` for exactly this head; marker only from a non-allowlisted account; the winning comment edited; a malformed allowlisted marker, or any edited allowlisted comment, posted after it (ambiguous). In **every** such case, in any of the three reads, the run first **dismisses** any standing APPROVED review by the approver on the head and reads it back |
