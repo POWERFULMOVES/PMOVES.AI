@@ -26,6 +26,12 @@
       "manifest": "fixture.owneronly.json"
     },
     {
+      "room_id": "fixture.room.excluded",
+      "agent_id": "fixture-agent",
+      "display_name": "Fixture Excluded Public",
+      "manifest": "fixture.excluded.json"
+    },
+    {
       "room_id": "fixture.room.public",
       "agent_id": "fixture-agent",
       "display_name": "Fixture Proper Public",

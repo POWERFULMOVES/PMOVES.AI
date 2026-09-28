@@ -188,9 +188,12 @@ jobs:
           path: pmoves/ui/test-results/
           retention-days: 7
 
-  # BLOCKING, unlike e2e-tests above. The full e2e suite fails for backend
-  # reasons (no Supabase in CI) and is continue-on-error, so a real failure in
-  # it is invisible. This job runs only the backend-free launcher-visibility
+  # Fails visibly (no continue-on-error), unlike e2e-tests above; NOT a
+  # required check. Add `E2E Launcher Visibility (Playwright, backend-free)` to
+  # branch protection to make it gate merges (operator action). The full e2e
+  # suite fails for backend reasons (no Supabase in CI) and is
+  # continue-on-error, so a real failure in it is invisible. This job runs only
+  # the backend-free launcher-visibility
   # spec: the unauthenticated home page must list exactly the rooms whose
   # manifests say access.visibility === 'public' (#3165 listed a private room
   # there until #3218). It needs no service, so a red result means the rule

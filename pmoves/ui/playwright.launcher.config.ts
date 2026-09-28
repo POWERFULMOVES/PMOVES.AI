@@ -25,7 +25,11 @@ import { defineConfig, devices } from '@playwright/test';
  * port would test some other checkout's code and catalog.
  *
  * Run:  npm run test:e2e:launcher
- *       (== npx playwright test -c playwright.launcher.config.ts)
+ *   That wraps `npx playwright test -c playwright.launcher.config.ts` in
+ *   scripts/run-launcher-e2e.mjs, which restores tsconfig.json and
+ *   next-env.d.ts afterwards (next dev rewrites both for a custom distDir).
+ *   If you call playwright directly, restore them yourself:
+ *   git checkout -- tsconfig.json next-env.d.ts
  */
 
 const HOST = '127.0.0.1';

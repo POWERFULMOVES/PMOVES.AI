@@ -80,18 +80,23 @@ function roomDirFor(testInfo: TestInfo, fallback: string): string {
   return (testInfo.project.metadata?.roomDir as string | undefined) ?? fallback;
 }
 
-/** No backend: abort other origins, answer every /api/* with 503. */
-async function isolateFromBackend(page: Page, baseURL: string): Promise<string[]> {
+type BackendLog = { foreignAborted: string[]; apiStubbed: string[] };
+
+/** Third-party static assets the page may request (aborted, never served). */
+const STATIC_ASSET_HOSTS = ['fonts.googleapis.com', 'fonts.gstatic.com'];
+
+/** No backend: abort other origins, answer every /api/* with 503. Returns what it intercepted. */
+async function isolateFromBackend(page: Page, baseURL: string): Promise<BackendLog> {
   const origin = new URL(baseURL).origin;
-  const blocked: string[] = [];
+  const log: BackendLog = { foreignAborted: [], apiStubbed: [] };
   await page.route('**/*', async (route) => {
     const url = new URL(route.request().url());
     if (url.origin !== origin) {
-      blocked.push(url.href);
+      log.foreignAborted.push(url.href);
       return route.abort();
     }
     if (url.pathname.startsWith('/api/')) {
-      blocked.push(url.pathname);
+      log.apiStubbed.push(url.pathname);
       return route.fulfill({
         status: 503,
         contentType: 'application/json',
@@ -100,7 +105,30 @@ async function isolateFromBackend(page: Page, baseURL: string): Promise<string[]
     }
     return route.continue();
   });
-  return blocked;
+  return log;
+}
+
+/**
+ * The browser never reached a backend: it tried no foreign origin other than
+ * static font CSS (Supabase included), and every /api/* call was answered by
+ * the stub. Waits
+ * for the network to settle first so client-side fetches are counted. This
+ * covers the BROWSER; the server render of `/` reads only JSON from disk.
+ */
+async function expectBackendUntouched(page: Page, log: BackendLog, testInfo: TestInfo): Promise<void> {
+  await page.waitForLoadState('networkidle');
+  await testInfo.attach('backend-isolation.json', {
+    body: JSON.stringify(log, null, 2),
+    contentType: 'application/json',
+  });
+  // Static font CSS from the global stylesheet is not a backend; it is aborted
+  // like everything foreign, just not a failure. Anything else (Supabase at
+  // 127.0.0.1:54321, a service port) fails the test.
+  const backendAttempts = log.foreignAborted.filter(
+    (href) => !STATIC_ASSET_HOSTS.includes(new URL(href).hostname)
+  );
+  expect(backendAttempts, 'the home page tried to reach a backend origin').toEqual([]);
+  for (const pathname of log.apiStubbed) expect(pathname).toMatch(/^\/api\//);
 }
 
 async function renderedRoomIds(page: Page): Promise<string[]> {
@@ -139,9 +167,10 @@ test.describe('@launcher-visibility public room launcher (unauthenticated home p
       expect(hidden, `${id} must be in the catalog and not public`).toContain(id);
     }
 
-    await isolateFromBackend(page, baseURL!);
+    const backend = await isolateFromBackend(page, baseURL!);
     const rendered = await renderedRoomIds(page);
     expect(rendered).toEqual(expected);
+    await expectBackendUntouched(page, backend, testInfo);
 
     for (const id of MUST_NOT_RENDER_REAL) {
       await expect(page.locator(`[data-room-id="${id}"]`)).toHaveCount(0);
@@ -167,17 +196,20 @@ test.describe('@launcher-visibility public room launcher (unauthenticated home p
     const hidden = catalog.map((room) => room.room_id).filter((id) => !expected.includes(id));
 
     expect(expected).toEqual(PINNED_PUBLIC_FIXTURE);
-    // no access block, empty access, misspelled visibility, owner_only public
+    // no access block, empty access, misspelled visibility, owner_only public,
+    // public but exclude_from_public_catalog
     expect(hidden.sort()).toEqual([
       'fixture.room.emptyaccess',
+      'fixture.room.excluded',
       'fixture.room.noaccess',
       'fixture.room.owneronly',
       'fixture.room.typo',
     ]);
 
-    await isolateFromBackend(page, baseURL!);
+    const backend = await isolateFromBackend(page, baseURL!);
     const rendered = await renderedRoomIds(page);
     expect(rendered).toEqual(PINNED_PUBLIC_FIXTURE);
+    await expectBackendUntouched(page, backend, testInfo);
 
     const html = await rawHomeHtml(page);
     for (const id of expected) expect(html).toContain(id);
