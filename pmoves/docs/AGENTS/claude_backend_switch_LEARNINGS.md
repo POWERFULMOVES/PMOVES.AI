@@ -172,8 +172,8 @@ from Lane C) pins the contract for the SDK env-strip; the python module's
 
 The slice ships:
 - **SDK file:line** — `pmoves/tools/claude_backend.py:153-191` (apply_backend),
-  `pmoves/scripts/claude-pmoves.sh:16-104` (--backend parsing + apply invocation),
-  `pmoves/scripts/claude-pmoves.ps1:9-66` (mirror).
+  `deploy/provision/claude-pmoves.sh:16-104` (--backend parsing + apply invocation),
+  `deploy/provision/claude-pmoves.ps1:9-66` (mirror).
 - **AGNOTE row** — `pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md` RELEASE row at
   `2026-09-25T18:51:00Z`.
 - **LEARNINGS file** — this document, 4-bucket × 5-class taxonomy.
