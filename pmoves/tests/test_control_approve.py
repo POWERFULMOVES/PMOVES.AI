@@ -1053,6 +1053,14 @@ def test_docs_do_not_overclaim_what_the_approval_buys() -> None:
         assert "CODEOWNERS" in text
 
 
+def test_docstring_lists_every_verdict_label() -> None:
+    doc = control_approve.__doc__ or ""
+    labels = set(control_approve._LABEL.values()) | {control_approve.DRY_RUN_LABEL}
+    line = next(l for l in doc.splitlines() if l.startswith("``VERDICT:"))
+    for label in labels:
+        assert label in line, label
+
+
 def test_config_ships_without_a_hardcoded_login() -> None:
     import yaml
 

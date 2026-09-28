@@ -45,9 +45,10 @@ Refusal matrix (every row exits non-zero with an honest message):
           (nothing written; never printed as APPROVED)
 
 ``make`` collapses every nonzero exit to 2, so the last line of output is
-always a structured ``VERDICT: <APPROVED|REFUSED|COULD-NOT-MEASURE> rc=<n>``.
+always a structured
+``VERDICT: <APPROVED|DRY-RUN-WOULD-APPROVE|REFUSED|COULD-NOT-MEASURE> rc=<n>``.
 
-Token delivery: preferably PMOVES_CONTROL_TOKEN_FILE, a 0600 file owned by the
+Token delivery: preferably PMOVES_CONTROL_TOKEN_FILE, a 0600/0400 file owned by the
 invoking user (checked); PMOVES_CONTROL_TOKEN is accepted for one-off
 invocations. It must NOT be delivered through the shared env tiers: anything
 every delivery body loads would make the road self-serve (MERGE_MECHANICS 6.2).
