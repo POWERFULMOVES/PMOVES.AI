@@ -8,41 +8,44 @@ machine-readable marker::
     <!-- pmoves-control-verdict: v=1 verdict=APPROVE head=<40-hex> reviewer=<body> -->
 
 ``control_approve.py`` reads these markers and only then lets the machine
-user's token submit a GitHub APPROVE review.
+user's token submit a GitHub APPROVE review. This module makes no API calls:
+it works on plain comment dicts (id, user.login, created_at, updated_at,
+html_url, body), so any actor -- a machine user or a GitHub App -- can reuse it.
 
 Trust model (stated honestly, see MERGE_MECHANICS.md "Approval road"):
 a marker proves that an account on the allowlist RECORDED a verdict for an
 exact commit. It does not prove who performed the review, nor how well. The
 independence of the review rests on the Three-Body process, not on this parse.
 
-Parse rules (strict, fail-closed):
+Parse rules -- ASYMMETRIC and fail-closed (review round 2, P1):
 
-* exact shape, single spaces, ``v=1`` only;
-* ``verdict`` in {APPROVE, REQUEST_CHANGES};
-* ``head`` is exactly 40 lowercase hex characters;
-* ``reviewer`` is 1-64 chars of ``[A-Za-z0-9._-]`` starting alphanumeric;
-* the marker must stand alone on its own unindented line;
-* markers inside inline code spans or fenced code blocks are quoted examples
-  and are IGNORED (``strip_code``);
-* anything else that *looks like* a marker (case-insensitive prefix) but does
-  not match exactly is MALFORMED, and a comment carrying more than one marker
-  is MALFORMED as a whole (a comment must say one thing).
+* marker shape: exact, single spaces, ``v=1`` only; ``verdict`` in
+  {APPROVE, REQUEST_CHANGES}; ``head`` exactly 40 lowercase hex; ``reviewer``
+  1-64 chars of ``[A-Za-z0-9._-]`` starting alphanumeric;
+* a well-formed REQUEST_CHANGES marker counts ANYWHERE in the body -- inside
+  backticks, a code fence, mid-line, anywhere. A block is never hidden by
+  markdown context, because context detection can be wrong;
+* anything that *looks like* a marker (case-insensitive ``CANDIDATE_RE``) but
+  does not match the exact shape makes the comment MALFORMED (it may be a
+  mistyped block), again regardless of context;
+* an APPROVE marker counts ONLY when it stands alone on its own unindented
+  line outside a CommonMark fenced code block. A quoted APPROVE (inline code,
+  a fence, indented, mid-line) simply does not count. Fence detection can
+  therefore only ever make an APPROVE not count; it can never hide a block.
 
-Selection rules (``select_verdict``):
+Selection rules (``select_verdict``), over comments by allowlisted authors,
+ordered by (created_at, id):
 
-* markers are ordered by (comment created_at, comment id);
-* only markers for the requested head are relevant: a marker for a different
-  head is ignored;
-* only markers authored by an allowlisted account count; the LATEST such
-  marker for the head wins;
-* the winner must be APPROVE and its comment must be unedited
-  (``updated_at == created_at``) -- others with write access can edit a
-  comment while it keeps its original author;
-* ANY comment by an allowlisted author posted after the winner that has been
-  edited makes the result ambiguous: the edit may have removed a later
-  REQUEST_CHANGES. Deleted comments are invisible and cannot be detected;
-* a malformed marker from an allowlisted author posted AFTER the winner makes
-  the result ambiguous, and ambiguity refuses.
+* a comment's verdict for the head is REQUEST_CHANGES if it carries any RC for
+  that head, else APPROVE if it carries a counting APPROVE for that head;
+  markers for other heads are ignored;
+* the LATEST comment with a verdict for the head wins; it must be APPROVE,
+  unedited (``updated_at == created_at``; missing timestamps count as edited)
+  and not malformed;
+* a malformed comment, or ANY edited comment, by an allowlisted author posted
+  after the winner makes the result ambiguous (an edit may have removed a later
+  REQUEST_CHANGES). Deleted comments are invisible and cannot be detected;
+* markers from non-allowlisted accounts neither approve nor block.
 """
 
 from __future__ import annotations
@@ -89,12 +92,20 @@ class MarkerComment:
     created_at: str
     updated_at: str
     url: str
-    verdict: Verdict | None
+    verdicts: tuple[Verdict, ...]
     malformed_reason: str = ""
 
     @property
     def malformed(self) -> bool:
-        return self.verdict is None
+        return bool(self.malformed_reason)
+
+    def verdict_for(self, head: str) -> Verdict | None:
+        """REQUEST_CHANGES for ``head`` wins inside one comment; else its last APPROVE."""
+        mine = [v for v in self.verdicts if v.head == head]
+        for verdict in mine:
+            if verdict.verdict == "REQUEST_CHANGES":
+                return verdict
+        return mine[-1] if mine else None
 
     @property
     def edited(self) -> bool:
@@ -105,7 +116,9 @@ class MarkerComment:
 class Selection:
     approved: bool
     reason: str
+    kind: str = "no_marker"  # approve|request_changes|ambiguous|edited|no_marker|untrusted_only|no_allowlist
     chosen: MarkerComment | None = None
+    chosen_verdict: Verdict | None = None
     ignored_other_heads: int = 0
     ignored_untrusted: list[str] = field(default_factory=list)
     malformed: list[MarkerComment] = field(default_factory=list)
@@ -133,62 +146,77 @@ def format_marker(verdict: str, head: str, reviewer: str) -> str:
     return marker
 
 
-_FENCE_OPEN_RE = re.compile(r"^ {0,3}(`{3,}|~{3,})")
-_INLINE_CODE_RE = re.compile(r"(`+)(?!`).*?(?<!`)\1(?!`)", re.DOTALL)
+_FENCE_OPEN_RE = re.compile(r"^ {0,3}(`{3,}|~{3,})(.*)$")
+_FENCE_CLOSE_RE = re.compile(r"^ {0,3}(`{3,}|~{3,})[ \t]*$")
 
 
-def strip_code(text: str) -> str:
-    """Remove fenced code blocks and inline code spans (CommonMark-shaped).
+def fenced_lines(lines: list[str]) -> set[int]:
+    """Indexes of lines inside (or delimiting) a CommonMark fenced code block.
 
-    A marker quoted as an example -- in backticks or a ``` / ~~~ fence -- is
-    documentation, not a vote. An unclosed fence runs to the end of the body,
-    as it renders on GitHub. Indented code blocks are not stripped; they are
-    caught instead by the own-line rule in ``parse_body``.
+    Opening fence: up to 3 spaces, then 3+ backticks or tildes; a backtick
+    fence's info string may not contain a backtick (so a line starting with
+    ```inline``` code is NOT a fence). Closing fence: same character, at least
+    the opening length, nothing but spaces/tabs after it. An unclosed fence runs
+    to the end of the body. Used ONLY to decide whether an APPROVE counts, so a
+    misdetection can only make an APPROVE not count.
     """
-    kept: list[str] = []
-    fence: str | None = None
-    for line in text.splitlines(keepends=True):
+    inside: set[int] = set()
+    fence: tuple[str, int] | None = None
+    for index, line in enumerate(lines):
+        text = line.rstrip("\r")
         if fence is None:
-            opened = _FENCE_OPEN_RE.match(line)
-            if opened:
-                fence = opened.group(1)
-                continue
-            kept.append(line)
+            opened = _FENCE_OPEN_RE.match(text)
+            if opened and not (opened.group(1)[0] == "`" and "`" in opened.group(2)):
+                fence = (opened.group(1)[0], len(opened.group(1)))
+                inside.add(index)
             continue
-        closing = re.match(r"^ {0,3}(`{3,}|~{3,})\s*$", line)
-        if closing and closing.group(1)[0] == fence[0] and len(closing.group(1)) >= len(fence):
+        inside.add(index)
+        closing = _FENCE_CLOSE_RE.match(text)
+        if closing and closing.group(1)[0] == fence[0] and len(closing.group(1)) >= fence[1]:
             fence = None
-    return _INLINE_CODE_RE.sub("", "".join(kept))
+    return inside
 
 
-def parse_body(body: str) -> tuple[Verdict | None, str] | None:
-    """Parse a comment body.
+@dataclass(frozen=True)
+class ParsedBody:
+    verdicts: tuple[Verdict, ...] = ()  # every REQUEST_CHANGES + every counting APPROVE
+    malformed_reason: str = ""  # non-empty: a marker-like string that is not a marker
+    ignored_approvals: int = 0  # well-formed APPROVE markers that did not count
 
-    Returns ``None`` when the body carries no marker-like text at all,
-    ``(Verdict, "")`` for exactly one well-formed marker, and
-    ``(None, reason)`` for anything malformed or ambiguous.
-    """
-    text = strip_code(body or "")
+
+def parse_body(body: str) -> ParsedBody | None:
+    """Parse a comment body; ``None`` when it carries no marker-like text."""
+    text = body or ""
     candidates = list(CANDIDATE_RE.finditer(text))
     if not candidates:
         return None
-    if len(candidates) > 1:
-        return None, f"comment carries {len(candidates)} markers; exactly one is allowed"
-    start = candidates[0].start()
-    line_start = text.rfind("\n", 0, start) + 1
-    line_end = text.find("\n", start)
-    line = text[line_start : len(text) if line_end == -1 else line_end].rstrip()
-    match = MARKER_RE.fullmatch(line)
-    if match is None:
-        return None, "marker must stand alone on its own unindented line in the strict v=1 shape"
-    return (
-        Verdict(
-            verdict=match.group("verdict"),
-            head=match.group("head"),
-            reviewer=match.group("reviewer"),
-        ),
-        "",
-    )
+    lines = text.split("\n")
+    line_starts: list[int] = []
+    offset = 0
+    for line in lines:
+        line_starts.append(offset)
+        offset += len(line) + 1
+    fenced = fenced_lines(lines)
+
+    verdicts: list[Verdict] = []
+    malformed: list[str] = []
+    ignored = 0
+    for cand in candidates:
+        match = MARKER_RE.match(text, cand.start())
+        if match is None:
+            malformed.append("a marker-like string does not match the strict v=1 shape")
+            continue
+        verdict = Verdict(match.group("verdict"), match.group("head"), match.group("reviewer"))
+        if verdict.verdict == "REQUEST_CHANGES":
+            verdicts.append(verdict)  # a block counts wherever it appears
+            continue
+        line_no = max(i for i, start in enumerate(line_starts) if start <= cand.start())
+        own_line = MARKER_RE.fullmatch(lines[line_no].rstrip()) is not None
+        if own_line and line_no not in fenced:
+            verdicts.append(verdict)
+        else:
+            ignored += 1
+    return ParsedBody(tuple(verdicts), "; ".join(dict.fromkeys(malformed)), ignored)
 
 
 def parse_comment(comment: dict[str, Any]) -> MarkerComment | None:
@@ -196,7 +224,6 @@ def parse_comment(comment: dict[str, Any]) -> MarkerComment | None:
     parsed = parse_body(str(comment.get("body") or ""))
     if parsed is None:
         return None
-    verdict, reason = parsed
     user = comment.get("user") or {}
     return MarkerComment(
         comment_id=int(comment.get("id") or 0),
@@ -204,8 +231,8 @@ def parse_comment(comment: dict[str, Any]) -> MarkerComment | None:
         created_at=str(comment.get("created_at") or ""),
         updated_at=str(comment.get("updated_at") or ""),
         url=str(comment.get("html_url") or ""),
-        verdict=verdict,
-        malformed_reason=reason,
+        verdicts=parsed.verdicts,
+        malformed_reason=parsed.malformed_reason,
     )
 
 
@@ -213,6 +240,10 @@ def _order_key(marker: MarkerComment) -> tuple[str, int]:
     # GitHub timestamps are ISO-8601 UTC ("2026-09-28T12:00:00Z"), which sort
     # lexically; the comment id breaks ties within the same second.
     return (marker.created_at, marker.comment_id)
+
+
+def _where(marker: MarkerComment) -> str:
+    return marker.url or f"comment {marker.comment_id}"
 
 
 def select_verdict(
@@ -227,28 +258,36 @@ def select_verdict(
         (m for m in (parse_comment(c) for c in comments) if m is not None),
         key=_order_key,
     )
-    malformed = [m for m in markers if m.malformed]
-    wellformed = [m for m in markers if not m.malformed]
-
-    other_heads = [m for m in wellformed if m.verdict and m.verdict.head != head]
-    relevant = [m for m in wellformed if m.verdict and m.verdict.head == head]
-    trusted = [m for m in relevant if m.author.lower() in allowed]
-    untrusted = sorted({m.author for m in relevant if m.author.lower() not in allowed})
+    trusted = [m for m in markers if m.author.lower() in allowed]
+    untrusted = sorted({m.author for m in markers if m.author.lower() not in allowed and m.verdict_for(head)})
+    relevant = [m for m in trusted if m.verdict_for(head) is not None]
 
     selection = Selection(
         approved=False,
         reason="",
-        ignored_other_heads=len(other_heads),
+        kind="no_marker",
+        ignored_other_heads=sum(
+            1 for m in trusted for v in m.verdicts if v.head != head
+        ),
         ignored_untrusted=untrusted,
-        malformed=malformed,
+        malformed=[m for m in markers if m.malformed],
     )
 
     if not allowed:
+        selection.kind = "no_allowlist"
         selection.reason = "no allowed marker authors configured"
         return selection
 
-    if not trusted:
-        if untrusted:
+    if not relevant:
+        latest_malformed = [m for m in trusted if m.malformed]
+        if latest_malformed:
+            selection.kind = "ambiguous"
+            selection.reason = (
+                f"no control verdict for head {head}, and a malformed marker from an allowed "
+                f"author exists ({_where(latest_malformed[-1])}: {latest_malformed[-1].malformed_reason})"
+            )
+        elif untrusted:
+            selection.kind = "untrusted_only"
             selection.reason = (
                 f"verdict marker(s) for head {head} exist but none was authored by an "
                 f"allowed control identity (found authors: {', '.join(untrusted)}; "
@@ -257,47 +296,51 @@ def select_verdict(
         else:
             selection.reason = (
                 f"no control verdict marker for head {head} "
-                f"({len(other_heads)} marker(s) for other heads ignored, "
-                f"{len(malformed)} malformed)"
+                f"({selection.ignored_other_heads} marker(s) for other heads ignored)"
             )
         return selection
 
-    latest = trusted[-1]
+    latest = relevant[-1]
+    verdict = latest.verdict_for(head)
+    assert verdict is not None
     selection.chosen = latest
-    assert latest.verdict is not None
-    if latest.verdict.verdict != "APPROVE":
+    selection.chosen_verdict = verdict
+
+    if verdict.verdict != "APPROVE":
+        selection.kind = "request_changes"
+        selection.reason = f"latest control verdict for head {head} is {verdict.verdict} ({_where(latest)})"
+        return selection
+
+    if latest.malformed:
+        selection.kind = "ambiguous"
         selection.reason = (
-            f"latest control verdict for head {head} is {latest.verdict.verdict} "
-            f"({latest.url or 'comment ' + str(latest.comment_id)})"
+            f"ambiguous: the APPROVE comment also carries a malformed marker ({_where(latest)}: "
+            f"{latest.malformed_reason})"
         )
         return selection
 
     if latest.edited:
+        selection.kind = "edited"
         selection.reason = (
-            f"the APPROVE marker comment {latest.url or latest.comment_id} was edited after "
-            "posting; post a fresh verdict comment instead of editing"
+            f"the APPROVE marker comment {_where(latest)} was edited after posting "
+            "(or has no usable timestamps); post a fresh verdict comment instead of editing"
         )
         return selection
 
-    trusted_malformed_after = [
-        m
-        for m in malformed
-        if m.author.lower() in allowed and _order_key(m) > _order_key(latest)
-    ]
-    if trusted_malformed_after:
-        first = trusted_malformed_after[0]
+    later_malformed = [m for m in trusted if m.malformed and _order_key(m) > _order_key(latest)]
+    if later_malformed:
+        first = later_malformed[0]
+        selection.kind = "ambiguous"
         selection.reason = (
             "ambiguous: a malformed verdict marker from an allowed author was posted after "
-            f"the APPROVE marker ({first.url or first.comment_id}: {first.malformed_reason})"
+            f"the APPROVE marker ({_where(first)}: {first.malformed_reason})"
         )
         return selection
 
     # An edit to ANY later comment by an allowed author may have removed or
-    # rewritten a REQUEST_CHANGES (e.g. APPROVE c1, REQUEST_CHANGES c2, then c2
-    # edited to drop the marker or point it at another head). The current body
-    # cannot tell us what it said, so any such edit is ambiguous. Remedy: post a
-    # fresh verdict. Deletions leave no trace in the comments API (see
-    # MERGE_MECHANICS.md 6.2).
+    # rewritten a REQUEST_CHANGES. The current body cannot tell us what it said,
+    # so any such edit is ambiguous. Remedy: post a fresh verdict. Deletions
+    # leave no trace in the comments API (see MERGE_MECHANICS.md 6.2).
     for raw in comments:
         author = str((raw.get("user") or {}).get("login") or "")
         if author.lower() not in allowed:
@@ -306,6 +349,7 @@ def select_verdict(
         if key <= _order_key(latest):
             continue
         if _is_edited(str(raw.get("created_at") or ""), str(raw.get("updated_at") or "")):
+            selection.kind = "ambiguous"
             selection.reason = (
                 "ambiguous: a comment by an allowed author posted after the APPROVE marker was "
                 f"edited ({raw.get('html_url') or raw.get('id')}); it may have withdrawn the "
@@ -314,9 +358,8 @@ def select_verdict(
             return selection
 
     selection.approved = True
-    selection.reason = (
-        f"APPROVE by {latest.author} (reviewer={latest.verdict.reviewer}) for head {head}"
-    )
+    selection.kind = "approve"
+    selection.reason = f"APPROVE by {latest.author} (reviewer={verdict.reviewer}) for head {head}"
     return selection
 
 

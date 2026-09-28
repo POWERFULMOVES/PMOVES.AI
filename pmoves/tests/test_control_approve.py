@@ -248,9 +248,15 @@ def assert_token_hygiene(gh: FakeGitHub, out: str) -> None:
 # --------------------------------------------------------------------------
 
 
+def verdicts_of(body: str) -> tuple[Any, ...]:
+    parsed = control_verdict.parse_body(body)
+    assert parsed is not None
+    return parsed.verdicts
+
+
 def test_format_round_trips() -> None:
-    text = marker()
-    assert control_verdict.parse_body(text) == (control_verdict.Verdict("APPROVE", H, "B850-CLAUDE"), "")
+    parsed = control_verdict.parse_body(marker())
+    assert parsed == control_verdict.ParsedBody((control_verdict.Verdict("APPROVE", H, "B850-CLAUDE"),), "", 0)
 
 
 @pytest.mark.parametrize(
@@ -267,53 +273,114 @@ def test_format_round_trips() -> None:
         f"<!-- pmoves-control-verdict: v=1 verdict=APPROVE head={H} -->",
     ],
 )
-def test_strict_parse_rejects_near_misses(bad: str) -> None:
+def test_strict_parse_marks_near_misses_malformed(bad: str) -> None:
     parsed = control_verdict.parse_body(bad)
-    assert parsed is not None and parsed[0] is None and parsed[1]
+    assert parsed is not None and parsed.verdicts == () and parsed.malformed_reason
+
+
+def test_no_marker_is_none() -> None:
+    assert control_verdict.parse_body("plain review text") is None
+
+
+# -- review round 2, P1: a REQUEST_CHANGES is never hidden by markdown context --
+
+def _rc() -> str:
+    return marker("REQUEST_CHANGES")
+
+
+REVIEWER_PROBES = {
+    "stray-backtick": lambda: "see `make test\n" + _rc() + "\nand then ` again",
+    "stray-backtick-blank-line": lambda: "see `make test\n\n" + _rc() + "\n\nand then ` again",
+    "line-start-inline-triple": lambda: "```pytest -q``` fails on main\n" + _rc(),
+    "tilde-line": lambda: "~~~\n" + _rc(),
+    "tilde-line-blank-line": lambda: "~~~\n\n" + _rc() + "\n",
+    "inline-code": lambda: "the block is `" + _rc() + "`",
+    "fenced": lambda: "```\n" + _rc() + "\n```",
+    "indented": lambda: "    " + _rc(),
+}
+
+
+@pytest.mark.parametrize("probe", sorted(REVIEWER_PROBES))
+def test_request_changes_counts_in_any_markdown_context(probe: str) -> None:
+    body = REVIEWER_PROBES[probe]()
+    assert verdicts_of(body) == (control_verdict.Verdict("REQUEST_CHANGES", H, "B850-CLAUDE"),)
+    s = sel([comment(1, marker()), comment(2, body)])
+    assert s.approved is False and s.kind == "request_changes"
+
+
+@pytest.mark.parametrize("probe", sorted(REVIEWER_PROBES))
+def test_reviewer_probes_refuse_end_to_end(gh: FakeGitHub, config: Path, probe: str, capsys: pytest.CaptureFixture[str]) -> None:
+    gh.comments = [comment(1, marker()), comment(2, REVIEWER_PROBES[probe]())]
+    assert run(config) == 1
+    assert gh.posts() == []
+    assert "VERDICT: APPROVED" not in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        "`<!-- PMOVES-control-verdict: v=1 verdict=REQUEST_CHANGES -->`",
+        "```\n<!-- pmoves-control-verdict: v=1 verdict=REQUEST_CHANGES head=short -->\n```",
+    ],
+    ids=["inline", "fenced"],
+)
+def test_malformed_marker_in_code_still_makes_it_ambiguous(body: str) -> None:
+    s = sel([comment(1, marker()), comment(2, body)])
+    assert s.approved is False and s.kind == "ambiguous"
+
+
+# -- APPROVE gets the strict test: own line, outside a real fence --
 
 
 @pytest.mark.parametrize(
     "quoted",
     [
-        "the format is `" + marker("REQUEST_CHANGES") + "` in a comment",
-        "``" + marker("REQUEST_CHANGES") + "``",
-        "```\n" + marker("REQUEST_CHANGES") + "\n```",
-        "~~~md\n" + marker("REQUEST_CHANGES") + "\n~~~",
-        "````\n```\n" + marker("REQUEST_CHANGES") + "\n```\n````",
-        "```\nunclosed fence runs to the end\n" + marker("REQUEST_CHANGES"),
+        lambda: "the format is `" + marker() + "` in a comment",
+        lambda: "```\n" + marker() + "\n```",
+        lambda: "~~~md\n" + marker() + "\n~~~",
+        lambda: "````\n```\n" + marker() + "\n```\n````",
+        lambda: "````\ncode\n```\n" + marker(),  # a shorter close does not close
+        lambda: "```\n~~~\n" + marker(),  # a different char does not close
+        lambda: "```\nunclosed fence runs to the end\n" + marker(),
+        lambda: "    " + marker(),
+        lambda: "> " + marker(),
+        lambda: "text before " + marker(),
+        lambda: marker() + " trailing text",
     ],
-    ids=["inline", "double-backtick", "fence", "tilde-fence", "nested-fence", "unclosed-fence"],
+    ids=["inline", "fence", "tilde-fence", "nested-fence", "short-close", "other-char-close",
+         "unclosed-fence", "indented", "blockquote", "prefix", "suffix"],
 )
-def test_markers_in_code_are_ignored(quoted: str) -> None:
-    assert control_verdict.parse_body(quoted) is None
-    # a quoted RC example after an APPROVE does not block it...
-    assert sel([comment(1, marker()), comment(2, quoted)]).approved
-    # ...and a quoted APPROVE never approves
-    assert not sel([comment(1, quoted.replace("REQUEST_CHANGES", "APPROVE"))]).approved
-
-
-def test_real_marker_beside_a_quoted_example_counts_once() -> None:
-    body = "Verdict below; the format is `" + marker("REQUEST_CHANGES") + "`.\n\n" + marker()
-    assert control_verdict.parse_body(body) == (control_verdict.Verdict("APPROVE", H, "B850-CLAUDE"), "")
+def test_quoted_or_embedded_approve_does_not_count(quoted: Any) -> None:
+    body = quoted()
+    parsed = control_verdict.parse_body(body)
+    assert parsed is not None and parsed.verdicts == () and parsed.ignored_approvals == 1
+    assert not sel([comment(1, body)]).approved
 
 
 @pytest.mark.parametrize(
     "body",
-    ["    " + marker(), "> " + marker(), "text before " + marker(), marker() + " trailing text"],
-    ids=["indented-code", "blockquote", "prefix", "suffix"],
+    [
+        lambda: "```pytest -q``` is green\n" + marker(),  # backticks in the info string: not a fence
+        lambda: "```\ncode\n```\n" + marker(),  # closed fence, then the marker
+        lambda: "````\ncode\n`````\n" + marker(),  # a longer close closes
+        lambda: "notes\n\n" + marker() + "\n\nmore notes",
+        lambda: marker() + "\r\n",
+    ],
+    ids=["inline-triple-not-fence", "after-closed-fence", "longer-close", "surrounded", "crlf"],
 )
-def test_marker_not_alone_on_its_line_is_malformed(body: str) -> None:
-    parsed = control_verdict.parse_body(body)
-    assert parsed is not None and parsed[0] is None
+def test_own_line_approve_outside_fences_counts(body: Any) -> None:
+    assert verdicts_of(body()) == (control_verdict.Verdict("APPROVE", H, "B850-CLAUDE"),)
+    assert sel([comment(1, body())]).approved
 
 
-def test_two_markers_in_one_comment_are_malformed() -> None:
-    parsed = control_verdict.parse_body(marker() + "\n" + marker("REQUEST_CHANGES"))
-    assert parsed is not None and parsed[0] is None and "2 markers" in parsed[1]
+def test_approve_and_request_changes_in_one_comment_is_a_block() -> None:
+    s = sel([comment(1, marker() + "\n" + marker("REQUEST_CHANGES"))])
+    assert not s.approved and s.kind == "request_changes"
 
 
-def test_no_marker_is_none() -> None:
-    assert control_verdict.parse_body("plain review text") is None
+def test_quoted_approve_does_not_supersede_an_earlier_block() -> None:
+    s = sel([comment(1, marker("REQUEST_CHANGES")), comment(2, "`" + marker() + "`")])
+    assert not s.approved and s.kind == "request_changes"
 
 
 def test_cli_works_when_docstrings_are_stripped(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:

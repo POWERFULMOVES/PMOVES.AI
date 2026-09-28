@@ -465,8 +465,7 @@ def approve(
 
     def refuse(selection: control_verdict.Selection, *, withdraw_any: bool, prefix: str = "control verdict") -> None:
         reason = f"{prefix}: {selection.reason}"
-        chosen = selection.chosen
-        is_rc = chosen is not None and chosen.verdict is not None and chosen.verdict.verdict == "REQUEST_CHANGES"
+        is_rc = selection.kind == "request_changes"
         if is_rc or withdraw_any:
             # A REQUEST_CHANGES verdict must withdraw an approval this road already
             # gave, not merely stop future runs (review round 1, P2-3). After our
@@ -479,8 +478,9 @@ def approve(
     selection = current_verdict("list PR comments")
     if not selection.approved or selection.chosen is None:
         refuse(selection, withdraw_any=False)
-    assert selection.chosen is not None
+    assert selection.chosen is not None and selection.chosen_verdict is not None
     marker = selection.chosen
+    marker_verdict = selection.chosen_verdict
     emit(f"control verdict: {selection.reason} ({marker.url})")
 
     reviews = _read("list reviews", lambda: client.get_pages(f"{pr_path}/reviews"))
@@ -509,7 +509,7 @@ def approve(
             refuse(again, withdraw_any=False, prefix="control verdict changed before approving")
         body = (
             f"Approved via the PMOVES.AI control approval road for `{expected_head}`.\n\n"
-            f"Control verdict: {marker.url} (reviewer={marker.verdict.reviewer if marker.verdict else '?'}, "
+            f"Control verdict: {marker.url} (reviewer={marker_verdict.reviewer}, "
             f"recorded by {marker.author}).\n\n"
             "This approval is pinned to that commit (A4); any new push dismisses it "
             "(dismiss_stale_reviews_on_push, A5) and needs a fresh verdict."

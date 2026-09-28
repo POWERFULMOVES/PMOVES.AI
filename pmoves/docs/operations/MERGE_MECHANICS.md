@@ -194,6 +194,16 @@ audit trail shows and what `pr-closeout-audit` accepts, not the merge flag.
    (read back to confirm), then exits 1. If the dismissal fails or cannot be
    confirmed it exits 3 and says the approval still stands. Never edit a verdict comment;
    post a new one (an edited marker is refused).
+
+   **Parsing is asymmetric, on purpose.** A `REQUEST_CHANGES` marker counts
+   *anywhere* in an allowlisted comment — inside backticks, a code fence,
+   mid-line — and a marker-like string that is not exactly a marker makes the
+   comment ambiguous, also regardless of context. An `APPROVE` counts only
+   when it stands alone on its own unindented line outside a fenced code block.
+   Markdown-context detection can be wrong; this way a mistake can only make an
+   approval *not count*, never hide a block. Consequence: **do not quote a
+   `REQUEST_CHANGES` marker as an example** in a comment on the PR — it is a
+   block. Quoting an `APPROVE` in code is harmless.
 3. The operator (or control body) runs:
 
    ```bash
