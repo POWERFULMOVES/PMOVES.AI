@@ -1,32 +1,70 @@
 /* ═══════════════════════════════════════════════════════════════════════════
    Deep Research Dashboard E2E Tests
-   Tests end-to-end DeepResearch service workflows
+   Tests end-to-end DeepResearch workflows against the built /dashboard/research UI
+   (app/dashboard/research/page.tsx renders TaskInitiationForm :200 and
+   ResearchTaskList :208). The DeepResearch service is mocked with page.route —
+   never a live backend.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
+
+const CORS = { 'Access-Control-Allow-Origin': '*' };
+
+const minutesAgo = (m: number) => new Date(Date.now() - m * 60_000).toISOString();
+
+const TASKS = [
+  { id: 't-running', query: 'Running research', status: 'running', mode: 'tensorzero', createdAt: minutesAgo(5) },
+  { id: 't-completed', query: 'Completed research', status: 'completed', mode: 'openrouter', createdAt: minutesAgo(90) },
+  { id: 't-pending', query: 'Pending research', status: 'pending', mode: 'local', createdAt: minutesAgo(1) },
+];
+
+/**
+ * Backend-free mock for GET /research/tasks. Later registrations win in Playwright,
+ * so a test can call this after beforeEach's empty-list mock and reload.
+ */
+async function mockTaskList(page: Page, tasks: unknown[], delayMs = 0) {
+  await page.route('**/research/tasks?*', async (route) => {
+    if (delayMs) await new Promise((r) => setTimeout(r, delayMs));
+    await route.fulfill({ status: 200, contentType: 'application/json', headers: CORS, body: JSON.stringify({ tasks }) });
+  });
+}
+
+async function withTasks(page: Page, tasks: unknown[] = TASKS) {
+  await mockTaskList(page, tasks);
+  await page.reload();
+  await page.waitForLoadState('networkidle');
+}
+
+async function expandOptions(page: Page) {
+  await page.click('[data-testid="expand-options-button"]');
+  await expect(page.locator('[data-testid="research-options-panel"]')).toBeVisible();
+}
 
 test.describe('Deep Research Dashboard', () => {
   test.beforeEach(async ({ page }) => {
+    // Health and an empty task list are mocked so no test reaches a live DeepResearch.
+    await page.route('**/healthz', (route) =>
+      route.fulfill({ status: 200, contentType: 'application/json', headers: CORS, body: JSON.stringify({ healthy: true }) })
+    );
+    await mockTaskList(page, []);
     // Navigate to research dashboard
     await page.goto('/dashboard/research');
     // Wait for page to load
     await page.waitForLoadState('networkidle');
   });
 
-  // fixme: UI not built (spec-first, never implemented); tracked in #3226
-  test.fixme('should load research page with initial state', async ({ page }) => {
+  test('should load research page with initial state', async ({ page }) => {
     // Check that task initiation form is present
     await expect(page.locator('[data-testid="task-initiation-form"]')).toBeVisible();
 
     // Check that task list is present
     await expect(page.locator('[data-testid="task-list"]')).toBeVisible();
 
-    // Check that results section exists (might be hidden)
-    page.locator('[data-testid="research-results"]').isVisible().catch(() => false);
-    // Results section might not be visible initially
+    // Results are only rendered once a completed task is selected (page.tsx:296)
+    await expect(page.locator('[data-testid="research-results"]')).toHaveCount(0);
   });
 
-  // fixme: UI not built (spec-first, never implemented); tracked in #3226
+  // fixme: behaviour mismatch: built submit flow shows no task-started message and does not clear the query — page.tsx:89-101 handleInitiate only refreshes the task list; TaskInitiationForm.tsx handleSubmit keeps the query. Operator to decide whether to build the confirmation + reset. Tracked in #3226
   test.fixme('should initiate research task with default options', async ({ page }) => {
     // Enter research query
     await page.fill('[data-testid="research-query"]', 'What is quantum computing?');
@@ -41,50 +79,42 @@ test.describe('Deep Research Dashboard', () => {
     await expect(page.locator('[data-testid="research-query"]')).toHaveValue('');
   });
 
-  // fixme: UI not built (spec-first, never implemented); tracked in #3226
-  test.fixme('should validate non-empty query', async ({ page }) => {
-    // Try to submit empty query
-    await page.click('[data-testid="start-research"]');
-
-    // Should show validation error
-    await expect(page.locator('[data-testid="query-required-error"]')).toBeVisible({ timeout: 2000 });
-
-    // Or submit should be disabled
+  test('should validate non-empty query', async ({ page }) => {
+    // Built behaviour: submit is disabled while the query is empty/blank
+    // (TaskInitiationForm.tsx disabled={loading || !query.trim()}), no error element.
     const submitButton = page.locator('[data-testid="start-research"]');
-    const isDisabled = await submitButton.isDisabled();
-    expect(isDisabled || true).toBe(true);
+    await expect(submitButton).toBeDisabled();
+    await page.fill('[data-testid="research-query"]', '   ');
+    await expect(submitButton).toBeDisabled();
+    await page.fill('[data-testid="research-query"]', 'a real question');
+    await expect(submitButton).toBeEnabled();
   });
 
-  // fixme: UI not built (spec-first, never implemented); tracked in #3226
-  test.fixme('should show character count for query', async ({ page }) => {
+  test('should show character count for query', async ({ page }) => {
     // Enter query
     await page.fill('[data-testid="research-query"]', 'test query');
 
-    // Check character count
+    // Check character count ("test query" is 10 characters)
     const charCount = page.locator('[data-testid="query-char-count"]');
     await expect(charCount).toBeVisible();
-
-    const countText = await charCount.textContent();
-    expect(countText).toContain('11'); // "test query" length
+    await expect(charCount).toHaveText('10 / 1000');
   });
 
-  // fixme: UI not built (spec-first, never implemented); tracked in #3226
-  test.fixme('should enforce max query length (1000)', async ({ page }) => {
+  test('should enforce max query length (1000)', async ({ page }) => {
     // Try to enter very long query
     const longQuery = 'a'.repeat(1500);
 
-    // Input should be truncated or validation error shown
+    // Input should be truncated (textarea maxLength={1000})
     await page.fill('[data-testid="research-query"]', longQuery);
 
     const actualValue = await page.inputValue('[data-testid="research-query"]');
     expect(actualValue.length).toBeLessThanOrEqual(1000);
   });
 
-  // fixme: UI not built (spec-first, never implemented); tracked in #3226
-  test.fixme('should expand/collapse options panel', async ({ page }) => {
+  test('should expand/collapse options panel', async ({ page }) => {
     // Options panel should be collapsed by default
     const optionsPanel = page.locator('[data-testid="research-options-panel"]');
-    const _isInitiallyVisible = await optionsPanel.isVisible().catch(() => false);
+    await expect(optionsPanel).toBeHidden();
 
     // Click expand button
     await page.click('[data-testid="expand-options-button"]');
@@ -92,17 +122,16 @@ test.describe('Deep Research Dashboard', () => {
     // Panel should now be visible
     await expect(optionsPanel).toBeVisible({ timeout: 2000 });
 
-    // Click collapse button
+    // Click collapse button (same toggle; its test id follows the expanded state)
     await page.click('[data-testid="collapse-options-button"]');
 
-    // Panel should be hidden or collapsed
-    const _isCollapsed = await optionsPanel.isVisible({ timeout: 1000 }).catch(() => false);
+    // Panel should be hidden
+    await expect(optionsPanel).toBeHidden();
   });
 
-  // fixme: UI not built (spec-first, never implemented); tracked in #3226
-  test.fixme('should select research mode', async ({ page }) => {
+  test('should select research mode', async ({ page }) => {
     // Expand options first
-    await page.click('[data-testid="expand-options-button"]');
+    await expandOptions(page);
 
     // Select different mode
     await page.selectOption('[data-testid="research-mode"]', 'openrouter');
@@ -111,10 +140,9 @@ test.describe('Deep Research Dashboard', () => {
     await expect(page.locator('[data-testid="research-mode"]')).toHaveValue('openrouter');
   });
 
-  // fixme: UI not built (spec-first, never implemented); tracked in #3226
-  test.fixme('should update max iterations slider', async ({ page }) => {
+  test('should update max iterations slider', async ({ page }) => {
     // Expand options first
-    await page.click('[data-testid="expand-options-button"]');
+    await expandOptions(page);
 
     // Find slider
     const slider = page.locator('[data-testid="max-iterations-slider"]');
@@ -122,21 +150,20 @@ test.describe('Deep Research Dashboard', () => {
     // Update slider value
     await slider.fill('20');
 
-    // Verify new value
-    const newValue = await slider.inputValue();
-    expect(newValue).toBe('20');
+    // Verify new value (DOM and the component state reflected in the label)
+    expect(await slider.inputValue()).toBe('20');
+    await expect(page.getByText('Max Iterations: 20')).toBeVisible();
   });
 
-  // fixme: UI not built (spec-first, never implemented); tracked in #3226
-  test.fixme('should enforce max iterations range (3-30)', async ({ page }) => {
+  test('should enforce max iterations range (3-30)', async ({ page }) => {
     // Expand options first
-    await page.click('[data-testid="expand-options-button"]');
+    await expandOptions(page);
 
     // Try to set value below minimum
     const slider = page.locator('[data-testid="max-iterations-slider"]');
     await slider.fill('1');
 
-    // Should clamp to minimum or show error
+    // Should clamp to minimum
     const actualValue = await slider.inputValue();
     expect(parseInt(actualValue)).toBeGreaterThanOrEqual(3);
 
@@ -148,10 +175,9 @@ test.describe('Deep Research Dashboard', () => {
     expect(parseInt(maxValue)).toBeLessThanOrEqual(30);
   });
 
-  // fixme: UI not built (spec-first, never implemented); tracked in #3226
-  test.fixme('should update priority slider', async ({ page }) => {
+  test('should update priority slider', async ({ page }) => {
     // Expand options first
-    await page.click('[data-testid="expand-options-button"]');
+    await expandOptions(page);
 
     // Find slider
     const slider = page.locator('[data-testid="priority-slider"]');
@@ -159,15 +185,14 @@ test.describe('Deep Research Dashboard', () => {
     // Update slider value
     await slider.fill('8');
 
-    // Verify new value
-    const newValue = await slider.inputValue();
-    expect(newValue).toBe('8');
+    // Verify new value (DOM and the component state reflected in the label)
+    expect(await slider.inputValue()).toBe('8');
+    await expect(page.getByText('Priority: 8')).toBeVisible();
   });
 
-  // fixme: UI not built (spec-first, never implemented); tracked in #3226
-  test.fixme('should enforce priority range (1-10)', async ({ page }) => {
+  test('should enforce priority range (1-10)', async ({ page }) => {
     // Expand options first
-    await page.click('[data-testid="expand-options-button"]');
+    await expandOptions(page);
 
     // Try to set value below minimum
     const slider = page.locator('[data-testid="priority-slider"]');
@@ -185,41 +210,39 @@ test.describe('Deep Research Dashboard', () => {
     expect(parseInt(maxValue)).toBeLessThanOrEqual(10);
   });
 
-  // fixme: UI not built (spec-first, never implemented); tracked in #3226
+  // fixme: UI unwired: TaskInitiationForm notebook select not rendered (TaskInitiationForm.tsx:180 renders it only when notebooks.length > 0; page.tsx:200-203 passes no notebooks prop). Tracked in #3226
   test.fixme('should select notebook from dropdown', async ({ page }) => {
     // Expand options first
     await page.click('[data-testid="expand-options-button"]');
 
-    // Check if notebook selector exists
+    // Select a notebook
     const notebookSelect = page.locator('[data-testid="notebook-select"]');
-    const _exists = await notebookSelect.isVisible({ timeout: 1000 }).catch(() => false);
+    await expect(notebookSelect).toBeVisible({ timeout: 1000 });
+    await page.selectOption('[data-testid="notebook-select"]', { index: 1 });
 
-    if (_exists) {
-      // Select a notebook
-      await page.selectOption('[data-testid="notebook-select"]', { index: 0 });
-
-      // Verify selection
-      const selectedOption = await notebookSelect.inputValue();
-      expect(selectedOption).toBeTruthy();
-    }
+    // Verify selection
+    const selectedOption = await notebookSelect.inputValue();
+    expect(selectedOption).toBeTruthy();
   });
 
-  // fixme: UI not built (spec-first, never implemented); tracked in #3226
-  test.fixme('should list tasks with status filter', async ({ page }) => {
-    // Check that task list is visible
-    await expect(page.locator('[data-testid="task-list"]')).toBeVisible();
+  test('should list tasks with status filter', async ({ page }) => {
+    await withTasks(page);
 
-    // Filter by status
+    // Check that task list is visible with all mocked tasks
+    await expect(page.locator('[data-testid="task-list"]')).toBeVisible();
+    await expect(page.locator('[data-testid="task-item"]')).toHaveCount(TASKS.length);
+
+    // Filter by status (client-side filter, ResearchTaskList.tsx statusFilter)
     await page.selectOption('[data-testid="status-filter"]', 'running');
 
-    // Wait for filter to apply
-    await page.waitForTimeout(500);
-
-    // Task list should still be visible
+    // Only the running task remains
+    const items = page.locator('[data-testid="task-item"]');
+    await expect(items).toHaveCount(1);
+    await expect(items.first()).toHaveAttribute('data-status', 'running');
     await expect(page.locator('[data-testid="task-list"]')).toBeVisible();
   });
 
-  // fixme: UI not built (spec-first, never implemented); tracked in #3226
+  // fixme: UI unwired: mode filter not rendered (ResearchTaskList.tsx:94-107 renders only the status filter; lib/api/research.ts listResearchTasks accepts `mode` but no UI passes it). Tracked in #3226
   test.fixme('should filter tasks by mode', async ({ page }) => {
     // Filter by mode
     await page.selectOption('[data-testid="mode-filter"]', 'tensorzero');
@@ -231,7 +254,7 @@ test.describe('Deep Research Dashboard', () => {
     await expect(page.locator("[data-testid='task-list']")).toBeVisible();
   });
 
-  // fixme: UI not built (spec-first, never implemented); tracked in #3226
+  // fixme: UI unwired: task multi-select not rendered on /dashboard/research (ResearchTaskList.tsx has no checkboxes or selection controls; "Select All Visible" exists only in components/ingestion/BulkApprovalActions.tsx:130). Tracked in #3226
   test.fixme('should select all visible tasks', async ({ page }) => {
     // Click "select all visible" button
     await page.click('[data-testid="select-all-visible"]');
@@ -246,7 +269,7 @@ test.describe('Deep Research Dashboard', () => {
     }
   });
 
-  // fixme: UI not built (spec-first, never implemented); tracked in #3226
+  // fixme: UI unwired: task multi-select not rendered on /dashboard/research (ResearchTaskList.tsx has no selection controls; "Select Pending" exists only in components/ingestion/BulkApprovalActions.tsx:133). Tracked in #3226
   test.fixme('should select only pending tasks', async ({ page }) => {
     // Click "select pending" button
     await page.click('[data-testid="select-pending"]');
@@ -258,7 +281,7 @@ test.describe('Deep Research Dashboard', () => {
     await expect(page.locator('[data-testid="select-pending"]')).toBeVisible();
   });
 
-  // fixme: UI not built (spec-first, never implemented); tracked in #3226
+  // fixme: UI unwired: task multi-select not rendered on /dashboard/research (ResearchTaskList.tsx has no selection controls; clear-selection exists only in components/ingestion/BulkApprovalActions.tsx). Tracked in #3226
   test.fixme('should clear task selection', async ({ page }) => {
     // First select some tasks
     await page.click('[data-testid="select-all-visible"]');
@@ -277,16 +300,19 @@ test.describe('Deep Research Dashboard', () => {
     }
   });
 
-  // fixme: UI not built (spec-first, never implemented); tracked in #3226
-  test.fixme('should refresh task list', async ({ page }) => {
+  test('should refresh task list', async ({ page }) => {
+    // Slow the next list response so the refreshing state is observable
+    await mockTaskList(page, TASKS, 1000);
+
     // Click refresh button
     await page.click('[data-testid="refresh-tasks"]');
 
     // Should show loading state briefly
     await expect(page.locator('[data-testid="refresh-tasks"]')).toHaveAttribute('data-loading', 'true');
 
-    // Loading should end
+    // Loading should end and the refreshed tasks render
     await expect(page.locator('[data-testid="refresh-tasks"]')).not.toHaveAttribute('data-loading', 'true', { timeout: 5000 });
+    await expect(page.locator('[data-testid="task-item"]')).toHaveCount(TASKS.length);
   });
 
   test('should cancel running task', async ({ page }) => {

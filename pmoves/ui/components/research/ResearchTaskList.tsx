@@ -81,7 +81,7 @@ export function ResearchTaskList({
   };
 
   return (
-    <div className="rounded border border-neutral-200 bg-white p-4">
+    <div data-testid="task-list" className="rounded border border-neutral-200 bg-white p-4">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
           <h2 className="text-lg font-medium">Research Tasks</h2>
@@ -93,6 +93,7 @@ export function ResearchTaskList({
         <div className="flex items-center gap-2">
           {onStatusFilter && (
             <select
+              data-testid="status-filter"
               value={statusFilter}
               onChange={(e) => onStatusFilter(e.target.value as ResearchStatus | "all")}
               className="text-xs rounded border border-neutral-300 px-2 py-1"
@@ -107,6 +108,8 @@ export function ResearchTaskList({
 
           <button
             onClick={onRefresh}
+            data-testid="refresh-tasks"
+            data-loading={refreshing ? "true" : undefined}
             disabled={refreshing}
             className="rounded border border-neutral-300 px-3 py-1 text-sm hover:bg-neutral-50 disabled:opacity-50 transition"
             aria-label="Refresh tasks"
@@ -128,6 +131,8 @@ export function ResearchTaskList({
         {filteredTasks.map((task) => (
           <div
             key={task.id}
+            data-testid="task-item"
+            data-status={task.status}
             onClick={() => onSelect(task)}
             className={`
               p-3 rounded cursor-pointer transition border-2

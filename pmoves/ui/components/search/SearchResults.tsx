@@ -95,7 +95,7 @@ export function SearchResults({
 
   if (results.length === 0) {
     return (
-      <div className="text-center py-12">
+      <div data-testid="no-results" className="text-center py-12">
         <div className="text-4xl mb-4">🔍</div>
         <h3 className="text-lg font-medium text-neutral-700 mb-2">No results found</h3>
         <p className="text-sm text-neutral-500">
@@ -106,7 +106,7 @@ export function SearchResults({
   }
 
   return (
-    <div className="space-y-4" aria-live="polite" aria-atomic="false">
+    <div data-testid="search-results" className="space-y-4" aria-live="polite" aria-atomic="false">
       {/* Results summary */}
       <div className="flex items-center justify-between text-sm text-neutral-600">
         <div>
@@ -128,6 +128,7 @@ export function SearchResults({
           return (
             <div
               key={result.id}
+              data-testid="search-result-item"
               className="border border-neutral-200 rounded-lg bg-white hover:shadow-md transition"
             >
               <div className="p-4">
@@ -135,6 +136,8 @@ export function SearchResults({
                 <div className="flex items-start justify-between gap-3 mb-2">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span
+                      data-testid="source-badge"
+                      data-source={result.source}
                       className={`text-xs px-2 py-0.5 rounded ${SOURCE_BADGE_CLASSES[result.source]}`}
                     >
                       <span className="mr-1">{SOURCE_ICONS[result.source]}</span>
@@ -156,6 +159,7 @@ export function SearchResults({
 
                   <div className="flex items-center gap-2">
                     <span
+                      data-testid="score-badge"
                       className={`text-sm font-mono ${getScoreColor(result.score)}`}
                       title="Relevance score"
                     >
@@ -187,6 +191,7 @@ export function SearchResults({
                       {onCopy && (
                         <button
                           onClick={() => handleCopy(result.content, result.id)}
+                          data-testid="copy-result-button"
                           className={`p-1 rounded hover:bg-neutral-100 ${
                             copiedId === result.id
                               ? "text-green-600"
@@ -219,6 +224,7 @@ export function SearchResults({
                       {onExport && (
                         <button
                           onClick={() => onExport(result)}
+                          data-testid="export-notebook-button"
                           className="p-1 text-neutral-400 hover:text-blue-600 rounded hover:bg-neutral-100"
                           aria-label="Export to notebook"
                         >
@@ -247,7 +253,7 @@ export function SearchResults({
 
                 {/* Expanded details */}
                 {isExpanded && verbose && (
-                  <div className="mt-3 pt-3 border-t border-neutral-100 space-y-2">
+                  <div data-testid="result-content" className="mt-3 pt-3 border-t border-neutral-100 space-y-2">
                     {/* Metadata */}
                     <div className="text-xs text-neutral-500 space-y-1">
                       {result.metadata.video_id && (
