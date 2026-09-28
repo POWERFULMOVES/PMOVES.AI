@@ -20,9 +20,21 @@ on:
   pull_request:
     types: [opened, synchronize, reopened]
     branches: [main]
+  # Merge queue: main requires `submodule-gitlink-gate`, and under a queue the
+  # required checks run on a `gh-readonly-queue/main/...` ref with the
+  # `merge_group` event. Without this trigger the context never reports there
+  # and the queue stalls. The pull_request-only expressions below (concurrency
+  # group, base sha) are given merge_group equivalents.
+  merge_group:
+    types: [checks_requested]
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  # `github.event.pull_request.number` is EMPTY under merge_group, so every queue
+  # entry would share one group ("Submodule Gitlink Gate-") and, with
+  # cancel-in-progress, each new entry would cancel the previous entry's gate --
+  # a cancelled required check ejects that PR from the queue. `github.ref` is
+  # unique per queue entry (refs/heads/gh-readonly-queue/main/pr-N-<sha>).
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -48,12 +60,21 @@ jobs:
           fetch-depth: 1
           persist-credentials: true
 
+      # `github.event.pull_request.base.sha` does not exist under merge_group; the
+      # validator's `${1:?}` would then abort the gate with a usage error (a
+      # FAILED required check, which ejects every PR from the queue). The queue
+      # equivalent is `merge_group.base_sha` -- the commit the queue entry is
+      # built on. Its diff to HEAD also covers any PRs queued ahead of this one;
+      # re-validating their gitlinks is redundant, never wrong.
       - name: Fetch base commit (for the gitlink diff)
-        run: git fetch --depth=1 origin "${{ github.event.pull_request.base.sha }}"
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
+        run: git fetch --depth=1 origin "$BASE_SHA"
 
       - name: Validate submodule gitlinks against .gitmodules branch strategy
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
         run: |
           chmod +x .github/scripts/validate_submodule_gitlinks.sh
-          .github/scripts/validate_submodule_gitlinks.sh "${{ github.event.pull_request.base.sha }}"
+          .github/scripts/validate_submodule_gitlinks.sh "$BASE_SHA"
