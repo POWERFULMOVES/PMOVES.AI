@@ -134,9 +134,23 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-    # E2E is non-blocking: 119/186 tests fail due to missing Supabase mock
-    # layer in CI (app pages hit localhost:54321 which doesn't exist).
-    # Tests need redesign with MSW/API mocking. Track as E2E-REDESIGN.
+    # E2E was non-blocking because 120/186 tests failed. Triage (PR #3223,
+    # pmoves/ui/e2e/RECONCILE-2026-09-28.md): most failures were stale specs
+    # whose selectors (testid strings) never existed, although the features
+    # mostly did. Those specs now follow the current UI, with backends mocked
+    # by page.route. The remainder are test.fixme with a file:line reason
+    # (unwired UI, behaviour mismatch, bugs #3228/#3232, not built); the
+    # per-test dispositions are regenerated from the specs by
+    # pmoves/ui/scripts/e2e_reconcile_dispositions.py.
+    # WHAT THIS JOB DOES NOT COVER: it runs `npm run test:e2e`, which excludes
+    # every @backend test, and no CI job runs them. So there is no live backend
+    # here: owner-gated API routes (health-all, health/boot-jwt, notebook/*)
+    # are checked ONLY for their unauthenticated 401, and their success shapes
+    # are verified nowhere in CI. Those live in @backend tests that need a live
+    # stack plus E2E_AUTH_TOKEN (they skip without it):
+    # `E2E_AUTH_TOKEN=... npm run test:e2e:backend`.
+    # The default run is green; drop continue-on-error in a follow-up once CI
+    # confirms it.
     continue-on-error: true
     steps:
       # NOTE: disable-file-monitoring prevents the armour agent from killing
