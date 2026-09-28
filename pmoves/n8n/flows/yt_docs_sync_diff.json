@@ -25,7 +25,7 @@
       {
         "parameters": {
           "method": "POST",
-          "url": "={{ $env.PMOVES_YT_BASE_URL || 'http://localhost:8091' }}/yt/docs/sync",
+          "url": "={{ $env.PMOVES_YT_BASE_URL || 'http://localhost:8077' }}/yt/docs/sync",
           "sendHeaders": true,
           "headerParameters": {
             "parameters": [

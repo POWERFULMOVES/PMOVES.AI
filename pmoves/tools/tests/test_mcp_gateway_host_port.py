@@ -88,3 +88,39 @@ def test_host_side_gateway_defaults_are_8189():
         ("pmoves/scripts/port_allocator.py", '"mcp-gateway": 8189'),
     ]:
         assert needle in (REPO / rel).read_text(encoding="utf-8"), rel
+
+
+# pmoves-yt listens on 8077 (Dockerfile CMD/EXPOSE, compose
+# ${PMOVES_YT_PORT:-8077}:8077, CATALOG). Four defaults pointed at 8091, which
+# on a node publishing Archon's alias reaches Archon instead.
+YT_WORD = re.compile(r"pmoves[-_ .]?yt|YT_BASE_URL|/yt/", re.I)
+
+
+def test_no_pmoves_yt_default_points_at_8091():
+    rows = _git_grep(r"\b8091\b")
+    assert rows, "grep returned nothing: input is empty, cannot conclude"
+    named = [r for r in rows if YT_WORD.search(r[2]) and HOST_8091.search(r[2])]
+    offenders = [f"{p}:{n}: {t.strip()[:120]}" for p, n, t in named if not HISTORICAL.search(p)]
+    print(f"8091 hit lines scanned={len(rows)} yt-named host hits={len(named)} "
+          f"non-historical offenders={len(offenders)}")
+    assert offenders == [], "\n".join(offenders)
+
+
+def test_duplicate_default_ports_are_exactly_the_known_set():
+    """Any NEW duplicate in DEFAULT_PORTS fails; resolving 8189 must edit this."""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "port_allocator", REPO / "pmoves" / "scripts" / "port_allocator.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    by_port: dict[int, set[str]] = {}
+    for svc, port in mod.DEFAULT_PORTS.items():
+        if port:
+            by_port.setdefault(port, set()).add(svc)
+    dups = {p: s for p, s in by_port.items() if len(s) > 1}
+    assert dups == {
+        5432: {"postgres", "supabase-db"},       # same service, two names
+        6333: {"qdrant", "qdrant-dashboard"},    # same service, two names
+        8189: {"mcp-gateway", "comfyui"},        # OPEN fleet decision (GB10)
+    }, dups
