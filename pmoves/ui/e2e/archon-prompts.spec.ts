@@ -19,8 +19,9 @@ test.describe('Archon Prompts - List View', () => {
   });
 
   test('displays prompts list with search and filters', async ({ page }) => {
-    // Check for main elements
-    await expect(page.getByRole('heading', { name: /prompts/i })).toBeVisible();
+    // Check for main elements (page heading is "Archon Prompt Forge")
+    await expect(page.getByTestId('archon-prompts-page')).toBeVisible();
+    await expect(page.getByRole('heading', { name: /prompt forge/i })).toBeVisible();
 
     // Search input
     const searchInput = page.getByPlaceholder(/search/i);
@@ -111,8 +112,10 @@ test.describe('Archon Prompts - Create', () => {
       await createButton.click();
 
       // Check for form fields
-      await expect(page.getByRole('textbox', { name: /name/i })).toBeVisible();
-      await expect(page.getByRole('textbox', { name: /template/i })).toBeVisible();
+      // Current form (data-testid="prompt-form"): Prompt name, Prompt body, Description
+      const form = page.getByTestId('prompt-form');
+      await expect(form.getByRole('textbox', { name: /prompt name/i })).toBeVisible();
+      await expect(form.getByRole('textbox', { name: /prompt body/i })).toBeVisible();
 
       // Category selector
       const categorySelect = page.getByRole('combobox', { name: /category/i });

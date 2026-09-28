@@ -1,4 +1,35 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
+
+/**
+ * Backend-free mock for the two routes the chat page uses: GET /api/chat/messages
+ * and POST /api/chat/send. Sent messages are echoed back by the next messages fetch,
+ * which is what the page does after a successful send. `sendDelayMs` keeps the
+ * "Sending..." state observable.
+ */
+async function mockChatBackend(page: Page, sendDelayMs = 0) {
+  const items: Array<Record<string, unknown>> = [];
+  await page.route('**/api/chat/messages*', (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ items }) })
+  );
+  await page.route('**/api/chat/send', async (route) => {
+    const body = JSON.parse(route.request().postData() || '{}');
+    items.push({
+      id: items.length + 1,
+      owner_id: 'e2e-owner',
+      role: 'user',
+      agent: null,
+      agent_id: null,
+      avatar_url: null,
+      content: body.content,
+      message_type: 'text',
+      session_id: null,
+      metadata: null,
+      created_at: new Date().toISOString(),
+    });
+    if (sendDelayMs) await new Promise((r) => setTimeout(r, sendDelayMs));
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true }) });
+  });
+}
 
 /**
  * E2E Tests for Agent Zero Chat Interface
@@ -14,6 +45,8 @@ import { test, expect } from '@playwright/test';
 
 test.describe('Agent Zero Chat', () => {
   test.beforeEach(async ({ page }) => {
+    // Chat send/list go through /api/chat/*, which needs Supabase; mock them so the suite runs without a backend.
+    await mockChatBackend(page, 1500);
     // Navigate to chat dashboard
     await page.goto('/dashboard/chat');
   });
@@ -43,8 +76,10 @@ test.describe('Agent Zero Chat', () => {
     await page.getByPlaceholder(/message/i).fill(testMessage);
     await page.getByRole('button', { name: /send/i }).click();
 
-    // Check for loading indicator
-    await expect(page.getByRole('status')).toBeVisible({ timeout: 5000 });
+    // Loading state: the send button reads "Sending..." and is disabled while the request is in flight
+    const sendButton = page.getByTestId('chat-send-button');
+    await expect(sendButton).toHaveText(/sending/i, { timeout: 5000 });
+    await expect(sendButton).toBeDisabled();
   });
 
   test('supports markdown in responses', async ({ page }) => {
@@ -98,20 +133,9 @@ test.describe('Agent Zero Chat', () => {
     await expect(page.getByText(testMessage)).toBeVisible();
   });
 
-  test('allows Shift+Enter for new lines without sending', async ({ page }) => {
-    const testMessage = 'Line 1\nLine 2';
-
-    await page.getByPlaceholder(/message/i).fill('Line 1');
-    await page.keyboard.press('Shift+Enter');
-    await page.keyboard.type('Line 2');
-
-    // Verify both lines are in input
-    await expect(page.getByPlaceholder(/message/i)).toHaveValue(testMessage);
-
-    // Message should not be sent yet
-    await expect(page.getByText(testMessage)).not.toBeVisible();
-  });
-
+  // Removed 2026-09-28 (lane test/e2e-reconcile-open-jev): 'allows Shift+Enter for new lines without sending'.
+  // The message field is a single-line <input id="chatMessage"> and has never been a <textarea>
+  // (git log --all -S'<textarea' -- app/dashboard/chat is empty), so multi-line entry is not a feature.
   test('displays agent avatar and name', async ({ page }) => {
     // Check for agent identification
     const agentName = page.getByText(/agent zero/i, { exact: false });
@@ -140,14 +164,13 @@ test.describe('Agent Zero Chat - Settings', () => {
     await page.goto('/dashboard/chat');
   });
 
-  test('provides access to model selection', async ({ page }) => {
-    // Look for model selector or settings button
-    const modelSelector = page.getByRole('combobox', { name: /model/i });
-    const settingsButton = page.getByRole('button', { name: /settings/i });
-
-    const hasControls =
-      (await modelSelector.count()) > 0 || (await settingsButton.count()) > 0;
-    expect(hasControls).toBe(true);
+  test('provides access to agent selection', async ({ page }) => {
+    // Current UI: a target-agent selector (not a model selector / settings button).
+    const agentSelect = page.getByTestId('chat-agent-select');
+    await expect(agentSelect).toBeVisible();
+    await expect(agentSelect.locator('option')).toContainText(['Agent Zero', 'Archon']);
+    await agentSelect.selectOption('archon');
+    await expect(agentSelect).toHaveValue('archon');
   });
 
   test('allows clearing chat history', async ({ page }) => {

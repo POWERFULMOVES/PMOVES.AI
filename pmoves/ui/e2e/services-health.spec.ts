@@ -13,10 +13,13 @@ import { test, expect } from '@playwright/test';
  */
 
 // Services that should have health checks
+// `title` is what the detail page renders; `view` is which branch of
+// app/dashboard/services/[service]/page.tsx serves it: 'guide' = markdown runbook
+// (lib/services.ts), 'catalog' = CatalogFallback (lib/serviceCatalog.ts).
 const CORE_SERVICES = [
-  { name: 'Hi-RAG v2', slug: 'hirag-v2', port: 8086 },
-  { name: 'Agent Zero', slug: 'agent-zero', port: 8080 },
-  { name: 'Archon', slug: 'archon', port: 8091 },
+  { name: 'Hi-RAG v2', slug: 'hi-rag-gateway-v2', title: 'Hi-RAG v2 CPU', view: 'catalog', port: 8086 },
+  { name: 'Agent Zero', slug: 'agent-zero', title: 'Agent Zero', view: 'guide', port: 8080 },
+  { name: 'Archon', slug: 'archon', title: 'Archon', view: 'guide', port: 8091 },
   { name: 'Flute Gateway', slug: 'flute-gateway', port: 8055 },
   { name: 'TensorZero', slug: 'tensorzero', port: 3030 },
   { name: 'DeepResearch', slug: 'deepresearch', port: 8098 },
@@ -24,37 +27,31 @@ const CORE_SERVICES = [
 ];
 
 test.describe('Services Health Dashboard', () => {
+  // There is no /dashboard/services/health route (it renders 404); health monitoring lives on
+  // the services dashboard itself ("Full service catalog with real-time health monitoring").
   test.beforeEach(async ({ page }) => {
-    await page.goto('/dashboard/services/health');
+    await page.goto('/dashboard/services');
   });
 
   test('displays health dashboard with all core services', async ({ page }) => {
-    // Check for health dashboard heading
-    await expect(page.getByRole('heading', { name: /health|service status/i })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Services', exact: true }).first()).toBeVisible();
 
-    // Wait for health data to load
-    await page.waitForTimeout(2000);
-
-    // Check that at least some services are displayed
-    const serviceCards = page.locator('[class*="service"], [class*="health"], tr');
-    await expect(serviceCards.first()).toBeVisible();
+    // Every service card carries a health indicator
+    const indicators = page.getByTestId('service-health-indicator');
+    await expect(indicators.first()).toBeVisible();
+    expect(await indicators.count()).toBeGreaterThan(3);
   });
 
   test('shows health status indicators (healthy/unhealthy/degraded)', async ({ page }) => {
-    await page.waitForTimeout(2000);
+    const indicators = page.getByTestId('service-health-indicator');
+    await expect(indicators.first()).toBeVisible();
 
-    // Look for status indicators
-    const healthyIndicator = page.locator('[class*="healthy"], [class*="status-ok"], [data-status="healthy"]');
-    const unhealthyIndicator = page.locator('[class*="unhealthy"], [class*="status-error"], [data-status="unhealthy"]');
-    const degradedIndicator = page.locator('[class*="degraded"], [class*="status-warning"], [data-status="degraded"]');
-
-    // At least one status indicator should be visible
-    const hasStatusIndicators =
-      (await healthyIndicator.count()) > 0 ||
-      (await unhealthyIndicator.count()) > 0 ||
-      (await degradedIndicator.count()) > 0;
-
-    expect(hasStatusIndicators).toBe(true);
+    // Each indicator exposes its state; with no backend reachable the state is 'unknown'.
+    const statuses = await indicators.evaluateAll((els) => els.map((e) => e.getAttribute('data-status')));
+    expect(statuses.length).toBeGreaterThan(0);
+    for (const s of statuses) {
+      expect(s).toMatch(/^(healthy|unhealthy|degraded|unknown|checking)$/);
+    }
   });
 
   test('provides service detail navigation', async ({ page }) => {
@@ -112,56 +109,45 @@ test.describe('Individual Service Health', () => {
       test('shows service health details', async ({ page }) => {
         await page.goto(`/dashboard/services/${service.slug}`);
 
-        // Check for service name in heading
-        await expect(page.getByRole('heading')).toBeVisible();
-
-        // Check for health status section
-        const hasHealthSection =
-          (await page.getByText(/health|status/i).count()) > 0 ||
-          (await page.locator('[class*="health"], [class*="status"]').count()) > 0;
-
-        expect(hasHealthSection).toBe(true);
+        await expect(page.getByTestId('service-title')).toHaveText(service.title ?? service.name);
+        const body = service.view === 'guide' ? 'service-guide' : 'service-catalog-fallback';
+        await expect(page.getByTestId(body)).toBeVisible();
       });
 
       test('displays service endpoint information', async ({ page }) => {
         await page.goto(`/dashboard/services/${service.slug}`);
 
-        // Look for endpoint/URL info
-        const hasEndpointInfo =
-          (await page.getByText(/http|endpoint|url|port/i).count()) > 0 ||
-          (await page.locator('code').count()) > 0;
-
-        // Soft assertion - may not always be displayed
-        if (hasEndpointInfo) {
-          const codeElement = page.locator('code').first();
-          if ((await codeElement.count()) > 0) {
-            await expect(codeElement).toContainText(/http|localhost/i);
-          }
+        if (service.view === 'catalog') {
+          // CatalogFallback lists registered endpoints (or says none are registered)
+          const fallback = page.getByTestId('service-catalog-fallback');
+          await expect(fallback.getByRole('heading', { name: 'Endpoints' })).toBeVisible();
+        } else {
+          // Runbook services render their markdown guide, which documents the endpoints
+          await expect(page.getByTestId('service-guide')).not.toBeEmpty();
         }
       });
 
       test('shows service-specific metrics', async ({ page }) => {
         await page.goto(`/dashboard/services/${service.slug}`);
 
-        // Wait for metrics to load
-        await page.waitForTimeout(1000);
-
-        // Look for metric displays
-        const metricElements = page.locator('[class*="metric"], [class*="stat"], dt');
-
-        // At least one detail element should be present
-        const hasDetails =
-          (await metricElements.count()) > 0 ||
-          (await page.locator('dl').count()) > 0;
-
-        expect(hasDetails).toBe(true);
+        if (service.view === 'catalog') {
+          // Service Overview <dl>: slug, category, profile, health check
+          const fallback = page.getByTestId('service-catalog-fallback');
+          await expect(fallback.locator('dl')).toBeVisible();
+          await expect(fallback.locator('dd').first()).toHaveText(service.slug);
+        } else {
+          await expect(page.getByTestId('service-guide')).toBeVisible();
+        }
       });
     });
   }
 });
 
 test.describe('Health API Endpoints', () => {
-  test('base health endpoint returns JSON response', async ({ page }) => {
+  // @backend tests need a live stack (Supabase reachable from the UI server); /api/health answers 503
+  // without one. Excluded from the default CI run by `--grep-invert @backend` (see package.json
+  // "test:e2e"). Run them against a live stack with: npm run test:e2e:backend
+  test('base health endpoint returns JSON response', { tag: '@backend' }, async ({ page }) => {
     const response = await page.request.get('/api/health');
 
     expect(response.status()).toBe(200);
@@ -171,7 +157,7 @@ test.describe('Health API Endpoints', () => {
     expect(body.status).toMatch(/healthy|degraded|unhealthy/);
   });
 
-  test('health endpoint includes database check', async ({ page }) => {
+  test('health endpoint includes database check', { tag: '@backend' }, async ({ page }) => {
     const response = await page.request.get('/api/health');
 
     expect(response.status()).toBeLessThan(500);
@@ -184,14 +170,15 @@ test.describe('Health API Endpoints', () => {
     }
   });
 
+  // health-all and health/boot-jwt require an authenticated owner since #969 (authenticateRequest).
   test('health-all endpoint returns service list', async ({ page }) => {
     const response = await page.request.get('/api/health-all?simple=true');
 
-    expect(response.status()).toBe(200);
-
+    // Unauthenticated: refused with 401 and a JSON error, no service list leaked
+    expect(response.status()).toBe(401);
     const body = await response.json();
-    expect(body).toHaveProperty('services');
-    expect(Array.isArray(body.services)).toBe(true);
+    expect(typeof body.error).toBe('string');
+    expect(body).not.toHaveProperty('services');
   });
 
   test('presign health endpoint returns service status', async ({ page }) => {
@@ -207,11 +194,10 @@ test.describe('Health API Endpoints', () => {
   test('boot-jwt health endpoint returns token status', async ({ page }) => {
     const response = await page.request.get('/api/health/boot-jwt');
 
-    expect(response.status()).toBe(200);
-
+    expect(response.status()).toBe(401);
     const body = await response.json();
-    expect(body).toHaveProperty('hasToken');
-    expect(typeof body.hasToken).toBe('boolean');
+    expect(typeof body.error).toBe('string');
+    expect(body).not.toHaveProperty('hasToken');
   });
 });
 

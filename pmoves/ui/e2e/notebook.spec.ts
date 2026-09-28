@@ -31,34 +31,26 @@ test.describe('Notebook dashboard', () => {
     await expect(page.getByTestId('health-indicator')).toBeVisible();
   });
 
+  // These API routes require an authenticated owner since #969 (2026-03-16, authenticateRequest /
+  // ownerFromJwt). With no session they must refuse with 401 + a JSON error, never leak data.
+  // The authenticated path needs a live Supabase-issued JWT: see the @backend note in services-health.spec.ts.
   test('notebook sources API returns valid shape', async ({ request }) => {
     const res = await request.get('/api/notebook/sources');
 
-    // Accept either success or graceful degradation (503 = not configured, 502 = upstream down)
-    expect([200, 502, 503]).toContain(res.status());
-
+    expect(res.status()).toBe(401);
     const json = await res.json();
     expect(json).toHaveProperty('items');
     expect(Array.isArray(json.items)).toBe(true);
-
-    if (res.status() === 200) {
-      expect(json).toHaveProperty('endpoint');
-    }
-    if (res.status() === 503) {
-      expect(json.error).toContain('not configured');
-    }
+    expect(json.items).toHaveLength(0);
+    expect(typeof json.error).toBe('string');
   });
 
   test('notebook runtime API returns valid shape', async ({ request }) => {
     const res = await request.get('/api/notebook/runtime');
 
-    // Accept success or graceful degradation
-    expect([200, 503]).toContain(res.status());
-
+    expect(res.status()).toBe(401);
     const json = await res.json();
-    expect(json).toHaveProperty('service', 'notebook-sync');
-    expect(json).toHaveProperty('endpoint');
-    expect(json).toHaveProperty('health');
+    expect(typeof json.error).toBe('string');
   });
 
   test('health/all alias resolves same as health-all', async ({ request }) => {
@@ -67,22 +59,11 @@ test.describe('Notebook dashboard', () => {
       request.get('/api/health-all'),
     ]);
 
-    // Both should succeed
-    expect(aliasRes.status()).toBe(200);
-    expect(canonicalRes.status()).toBe(200);
-
-    const aliasJson = await aliasRes.json();
-    const canonicalJson = await canonicalRes.json();
-
-    // Both should have the same shape (services array + percentage)
-    expect(aliasJson).toHaveProperty('services');
-    expect(canonicalJson).toHaveProperty('services');
-    expect(aliasJson).toHaveProperty('percentage');
-    expect(canonicalJson).toHaveProperty('percentage');
-
-    // Service count and percentage should match between alias and canonical
-    expect(aliasJson.services.length).toBe(canonicalJson.services.length);
-    expect(aliasJson.percentage).toBe(canonicalJson.percentage);
+    // The alias delegates to the canonical handler, so both must answer identically.
+    // Unauthenticated, that is the auth gate: 401 with the same JSON body.
+    expect(aliasRes.status()).toBe(canonicalRes.status());
+    expect(aliasRes.status()).toBe(401);
+    expect(await aliasRes.json()).toEqual(await canonicalRes.json());
   });
 
   test('Open Notebook card visible on services dashboard', async ({ page }) => {
