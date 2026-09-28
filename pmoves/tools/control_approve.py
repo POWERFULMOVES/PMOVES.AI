@@ -5,8 +5,10 @@ The approval road (MERGE_MECHANICS.md section 6): the control body reviews a
 PR independently and records a ``pmoves-control-verdict`` marker comment for
 the exact head it reviewed (see ``control_verdict.py``). This tool then lets a
 PMOVES.AI-branded machine user -- never the PR author -- submit an APPROVE
-review pinned to that same commit, so the PR can satisfy the ruleset's
-approval + code-owner requirements without an admin bypass.
+review pinned to that same commit, so the PR genuinely satisfies the ruleset's
+approval + code-owner requirements. (Merging is separate: the guarded merge
+target still passes --admin, and this personal-account repo has no merge
+queue -- see MERGE_MECHANICS.md 6.7.)
 
 Refusal matrix (every row exits non-zero with an honest message):
 

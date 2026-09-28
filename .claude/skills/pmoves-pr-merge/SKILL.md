@@ -189,8 +189,12 @@ make -C pmoves pr-control-approve PR=<N> EXPECTED_HEAD=<full-sha> CONFIRM='APPRO
 
 submits an APPROVE review pinned to that sha (token from `PMOVES_CONTROL_TOKEN`,
 never argv). Until the operator creates the account it reports
-`COULD-NOT-MEASURE rc=3`. Any push dismisses the approval. Setup, trust model,
-refusal matrix and the GitHub assumptions: `MERGE_MECHANICS.md` section 6.
+`COULD-NOT-MEASURE rc=3`. Any change to the diff dismisses the approval — a
+push, Update branch, or another PR merging into main — so approve only the PR
+at the front of the train, right before merging. There is no merge queue on
+this personal-account repo (org-only feature), and `pr-closeout-merge` still
+passes `--admin`. Setup, trust model, refusal matrix and the GitHub
+assumptions: `MERGE_MECHANICS.md` section 6.
 
 ## Related
 

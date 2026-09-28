@@ -158,10 +158,16 @@ answer until the operator completes 6.5.
 **Why.** The `[ main ]` ruleset (id 10887588) requires one approving review
 *and* code-owner review. CODEOWNERS names `@powerfulmoves` on 33 patterns, and
 `@powerfulmoves` is the author of our PRs, so its own approval does not count
-(A7). The only way through today is the admin bypass (sections 1-2). A merge
-queue (section 5, the queue road from PR #3234) needs a PR that is *already
-approved*, so without a second, legitimate approver the queue never helps our
-own PRs. The approval road supplies that approver without weakening any rule.
+(A7). The only way through today is the admin bypass (sections 1-2). The
+approval road supplies a second, legitimate approver without weakening any
+rule, so the review requirement is actually met rather than bypassed.
+
+**What it does not buy (yet).** It does not unlock a merge queue: GitHub offers
+merge queues only on organization-owned repositories, and this one is owned by
+a personal account (A9). And the guarded merge target, `pr-closeout-merge`,
+still passes `--admin`. So until there is a guarded *non-admin* merge mode, an
+approved PR is still merged through the bypass; the approval changes what the
+audit trail shows and what `pr-closeout-audit` accepts, not the merge flag.
 
 ### 6.1 How it works
 
@@ -340,24 +346,33 @@ behaviour differs, when a finding lands.
 | A8 | `require_last_push_approval` is `false` today. If it is ever enabled, an approval only counts when it comes from someone other than the last pusher, so the machine user must **never push** to a PR branch. It must never push today either (6.5 step 3). | **verified** (setting semantics); live value read from ruleset 10887588 | "About protected branches" |
 | A9 | Merge queues are available only in repositories **owned by an organization** ("Pull request merge queues are available in any public repository owned by an organization…"). `POWERFULMOVES/PMOVES.AI` is owned by a personal account, and the research pass read `mergeQueue(branch:"main")` as null. | **verified — no merge queue on this repo** | "Managing a merge queue" page header |
 
-### 6.7 Combining with the queue road
+### 6.7 Combining with the merge targets (no merge queue here)
+
+**A merge queue is not available on this repository** unless it moves to an
+organization (A9). The queue road from PR #3234 (`pr-closeout-queue`) refuses
+when no `merge_queue` rule is active on the base, so on this repo it will keep
+refusing; treat it as ready for an organization move, not as a path today.
 
 The approval road only produces the approval. Merging stays on the guarded
-closeout targets:
+closeout targets, in the strict-mode order from 6.4:
 
 ```bash
+gh pr update-branch N                                             # only if BEHIND; then wait for green
 make -C pmoves pr-control-approve  PR=N EXPECTED_HEAD=sha CONFIRM='APPROVE #N @ sha'
 make -C pmoves pr-closeout-audit   PR=N EXPECTED_HEAD=sha      # reviewDecision should now be APPROVED
-make -C pmoves pr-closeout-queue   PR=N EXPECTED_HEAD=sha CONFIRM='MERGE #N @ sha'   # queue road, PR #3234
+make -C pmoves pr-closeout-merge   PR=N EXPECTED_HEAD=sha CONFIRM='MERGE #N @ sha'   # immediately
 ```
 
-Use the **same sha** in all three. If anything is pushed in between, the
-approval is dismissed (A5) and the sequence restarts from a new verdict. Until
-the queue is enabled (PR #3234 STEP 2), `pr-closeout-merge` remains the path.
-Be precise about what the approval changes there: `reviewDecision` becomes
+Use the **same sha** in the last three. Anything that changes the diff in
+between — a push, Update branch, or another PR merging into `main` — dismisses
+the approval (A5) and the sequence restarts from a new verdict.
+
+Be precise about what the approval changes: `reviewDecision` becomes
 `APPROVED`, so `pr-closeout-audit` passes without `ADMIN_REVIEW_BYPASS`; but
 `pr-closeout-merge` still passes `--admin` and is still the bypass (section 2).
-Only the queue road merges without it.
+Merging an approved PR *without* the bypass needs a guarded non-admin mode on
+`pr_closeout.py` (head pin, full audit, `--match-head-commit`, no `--admin`) —
+a follow-up, not part of this road.
 
 ## See also
 
