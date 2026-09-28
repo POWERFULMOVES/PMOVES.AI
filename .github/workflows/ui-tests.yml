@@ -5,11 +5,15 @@ on:
     branches: [main, PMOVES.AI-Edition-Hardened]
     paths:
       - 'pmoves/ui/**'
+      # lib/rooms.ts loads ../config/rooms at test time, so a room manifest
+      # change must run these tests (#3165 broke rooms.test.ts unobserved).
+      - 'pmoves/config/rooms/**'
       - '.github/workflows/ui-tests.yml'
   pull_request:
     branches: [main, PMOVES.AI-Edition-Hardened]
     paths:
       - 'pmoves/ui/**'
+      - 'pmoves/config/rooms/**'
       - '.github/workflows/ui-tests.yml'
   workflow_dispatch:
 
@@ -45,6 +49,12 @@ jobs:
       - name: Run ESLint
         working-directory: pmoves/ui
         run: npm run lint
+
+      # No tracked AGENTS.md / CLAUDE.md may carry the block `next dev`
+      # generates (agentRules); hand-written ones are fine.
+      - name: No Next.js generated agent rules committed
+        working-directory: pmoves/ui
+        run: npm run check:agent-rules
 
   typecheck:
     name: Type Check (TypeScript)
@@ -196,6 +206,61 @@ jobs:
         with:
           name: playwright-screenshots
           path: pmoves/ui/test-results/
+          retention-days: 7
+
+  # Fails visibly (no continue-on-error), unlike e2e-tests above; NOT a
+  # required check. Add `E2E Launcher Visibility (Playwright, backend-free)` to
+  # branch protection to make it gate merges (operator action). The full e2e
+  # suite fails for backend reasons (no Supabase in CI) and is
+  # continue-on-error, so a real failure in it is invisible. This job runs only
+  # the backend-free launcher-visibility
+  # spec: the unauthenticated home page must list exactly the rooms whose
+  # manifests say access.visibility === 'public' (#3165 listed a private room
+  # there until #3218). It needs no service, so a red result means the rule
+  # broke. Triggered by pmoves/ui/** and pmoves/config/rooms/** above.
+  launcher-visibility-e2e:
+    name: E2E Launcher Visibility (Playwright, backend-free)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      # disable-file-monitoring: see the e2e-tests job (Playwright reads /proc/*/mem).
+      - name: Harden Runner
+        uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2
+        with:
+          egress-policy: audit
+          disable-file-monitoring: true
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
+        with:
+          node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: pmoves/ui/package-lock.json
+
+      - name: Install dependencies
+        working-directory: pmoves/ui
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        working-directory: pmoves/ui
+        run: npx playwright install --with-deps chromium
+
+      - name: Run launcher-visibility spec (real catalog + negative fixture)
+        working-directory: pmoves/ui
+        run: npm run test:e2e:launcher
+
+      - name: Upload launcher-visibility report
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: playwright-report-launcher
+          path: |
+            pmoves/ui/playwright-report-launcher/
+            pmoves/ui/test-results-launcher/
           retention-days: 7
 
   integration-tests:
