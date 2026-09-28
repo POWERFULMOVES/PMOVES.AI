@@ -355,3 +355,107 @@ def test_disagreeing_build_definitions_are_an_input_failure(mod, monkeypatch):
     problems = []
     assert mod.read_fork_requirements(None, problems) is None
     assert "disagree" in " ".join(problems)
+
+
+# --- review P3s on #3219 -------------------------------------------------------
+
+
+@pytest.mark.parametrize("body", [b"", b"<!DOCTYPE html><html><body>Rate limited</body></html>\n"])
+def test_zero_declarations_is_a_problem_not_clean(mod, monkeypatch, tmp_path, capsys, no_token, body):
+    """A 200 with an empty or HTML body must not become 'clean against 0'."""
+    monkeypatch.setattr(mod, "ROOT", tmp_path)
+    monkeypatch.setattr(mod, "_git", lambda args, cwd=None, timeout=None: (128, "", "fatal: offline"))
+    monkeypatch.setattr(mod.urllib.request, "urlopen", lambda req, timeout=None: _Resp(body))
+    problems = []
+    assert mod.read_fork_requirements(SHA_A, problems) is None
+    assert "0 parseable declarations" in " ".join(problems)
+
+    monkeypatch.setattr(mod.sys, "argv", ["agent_zero_pin_check.py", "--ref", SHA_A])
+    assert mod.main() == 1
+    out = capsys.readouterr().out
+    assert "INPUT MISSING" in out and "clean" not in out
+
+
+def test_zero_declarations_from_git_fetch_falls_through_not_succeeds(mod, monkeypatch, tmp_path, no_token):
+    monkeypatch.setattr(mod, "ROOT", tmp_path)
+    def fake(args, cwd=None, timeout=None):
+        return (0, "# only a comment\n", "") if "show" in args else (0, "", "")
+    monkeypatch.setattr(mod, "_git", fake)
+    monkeypatch.setattr(mod.urllib.request, "urlopen", lambda req, timeout=None: _Resp(b"starlette==1.0.1\n"))
+    causes = []
+    assert mod.fetch_fork_requirements(SHA_A, causes) == "starlette==1.0.1\n"
+    assert any(c.startswith("git fetch: 0 parseable") for c in causes)
+
+
+def test_main_floor_holds_for_any_empty_fork_text(mod, monkeypatch, capsys):
+    monkeypatch.setattr(mod, "read_fork_requirements", lambda ref, problems: "\n# nothing\n")
+    monkeypatch.setattr(mod.sys, "argv", ["agent_zero_pin_check.py"])
+    assert mod.main() == 1
+    assert "0 parseable declarations" in capsys.readouterr().out
+
+
+def test_git_child_env_scrubs_repository_selectors(mod, monkeypatch):
+    """Run from a git hook, GIT_DIR etc. would aim the throwaway fetch at the parent repo."""
+    for k in mod._GIT_SCRUB:
+        monkeypatch.setenv(k, "/parent/repo/.git")
+    monkeypatch.setenv("PMOVES_KEEP_ME", "1")
+    seen = {}
+    class _P:
+        returncode, stdout, stderr = 0, "", ""
+    def fake_run(argv, **kw):
+        seen.update(kw["env"])
+        assert "shell" not in kw
+        return _P()
+    monkeypatch.setattr(mod.subprocess, "run", fake_run)
+    assert mod._git(["version"])[0] == 0
+    assert "GIT_DIR" not in seen
+    assert not set(mod._GIT_SCRUB) & set(seen)
+    assert set(mod._GIT_SCRUB) >= {"GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_OBJECT_DIRECTORY",
+                                   "GIT_ALTERNATE_OBJECT_DIRECTORIES", "GIT_COMMON_DIR"}
+    assert seen["GIT_TERMINAL_PROMPT"] == "0" and seen["PMOVES_KEEP_ME"] == "1"
+
+
+@pytest.mark.parametrize(
+    "err",
+    [urllib.error.HTTPError("u", 403, "rate limit exceeded", {}, None),
+     urllib.error.HTTPError("u", 502, "Bad Gateway", {}, None),
+     urllib.error.URLError("[SSL: CERTIFICATE_VERIFY_FAILED]")],
+)
+def test_api_non_404_heads_error_stops_without_trying_tags(mod, monkeypatch, no_token, err):
+    """Unknown whether the BRANCH exists; clone prefers it, so a tag answer could be the wrong tree."""
+    monkeypatch.setattr(mod, "_git", _ls_remote("", rc=2, stderr="offline"))
+    seen = []
+    def fake(req, timeout=None):
+        seen.append(_url(req))
+        if "/git/ref/heads/" in _url(req):
+            raise err
+        return _Resp({"object": {"sha": SHA_C, "type": "commit"}})
+    monkeypatch.setattr(mod.urllib.request, "urlopen", fake)
+    causes = []
+    assert mod.resolve_ref_sha("v2.10.1", causes) is None
+    assert not any("/git/ref/tags/" in u for u in seen)
+    assert any(c.startswith("api heads") for c in causes)
+
+
+def test_api_heads_404_moves_on_to_tags(mod, monkeypatch, no_token):
+    monkeypatch.setattr(mod, "_git", _ls_remote("", rc=2, stderr="offline"))
+    def fake(req, timeout=None):
+        if "/git/ref/heads/" in _url(req):
+            raise urllib.error.HTTPError(_url(req), 404, "Not Found", {}, None)
+        return _Resp({"object": {"sha": SHA_C, "type": "commit"}})
+    monkeypatch.setattr(mod.urllib.request, "urlopen", fake)
+    assert mod.resolve_ref_sha("v2.10.1") == SHA_C
+
+
+@pytest.mark.parametrize("bad", ["x\n", "+x", "+refs/heads/x:refs/heads/y"])
+def test_ref_regex_is_a_fullmatch_and_refuses_force_marker(mod, monkeypatch, bad):
+    monkeypatch.setattr(mod, "_git", _no_git)
+    monkeypatch.setattr(mod.urllib.request, "urlopen", _no_http)
+    assert not mod.valid_ref_name(bad)
+    assert mod.resolve_ref_sha(bad) is None
+
+
+def test_sha_check_is_a_fullmatch(mod):
+    assert mod._is_sha(SHA_A)
+    assert not mod._is_sha(SHA_A + "\n")
+    assert not mod._is_sha(SHA_A.upper())

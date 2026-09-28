@@ -168,15 +168,29 @@ def norm(name: str) -> str:
 # A ref name is interpolated into git argv and into URLs, so it is validated
 # BEFORE either. Stricter than git-check-ref-format on purpose: no leading `-`
 # (option injection into git), no `..`, no `@{`, no `^`/`~`/`:`/`?`/`*`/`[`/`\`,
-# no whitespace or control characters, no leading/trailing `/` or `.`.
-_REF_NAME = re.compile(r"^(?![-./])(?!.*\.\.)(?!.*//)(?!.*@\{)[A-Za-z0-9._/+-]{1,200}(?<![./])$")
-_SHA = re.compile(r"^[0-9a-f]{40}$")
+# no whitespace or control characters, no leading `+` (a refspec force marker),
+# no leading/trailing `/` or `.`. Applied with fullmatch: `$` alone would accept
+# a trailing newline.
+_REF_NAME = re.compile(r"(?![-./+])(?!.*\.\.)(?!.*//)(?!.*@\{)[A-Za-z0-9._/+-]{1,200}(?<![./])")
+_SHA = re.compile(r"[0-9a-f]{40}")
 _GIT_TIMEOUT = 60
 _HTTP_TIMEOUT = 30
 
+# Repository-selecting variables a caller (e.g. a git hook) may have exported.
+# Inherited, they would point the throwaway `git init`/`git fetch` at the
+# PARENT repository instead of the temp dir.
+_GIT_SCRUB = (
+    "GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_OBJECT_DIRECTORY",
+    "GIT_ALTERNATE_OBJECT_DIRECTORIES", "GIT_COMMON_DIR",
+)
+
 
 def valid_ref_name(ref):
-    return bool(ref) and bool(_REF_NAME.match(ref)) and not ref.endswith(".lock")
+    return bool(ref) and bool(_REF_NAME.fullmatch(ref)) and not ref.endswith(".lock")
+
+
+def _is_sha(s):
+    return bool(_SHA.fullmatch(s or ""))
 
 
 def _token():
@@ -214,7 +228,8 @@ def _http_get(url):
 
 def _git(args, cwd=None, timeout=_GIT_TIMEOUT):
     """Run git with an argv list, no shell, no terminal prompt. Never raises."""
-    env = dict(os.environ, GIT_TERMINAL_PROMPT="0")
+    env = {k: v for k, v in os.environ.items() if k not in _GIT_SCRUB}
+    env["GIT_TERMINAL_PROMPT"] = "0"
     try:
         p = subprocess.run(
             ["git", *args], cwd=cwd, env=env, capture_output=True, text=True, timeout=timeout,
@@ -247,7 +262,7 @@ def _ls_remote_sha(ref, causes):
         sha = found.get(name)
         if sha is None:
             continue
-        if _SHA.match(sha):
+        if _is_sha(sha):
             return sha
         causes.append("git ls-remote: {} resolved to a non-sha {!r}".format(name, _head(sha, 60)))
         return None
@@ -256,7 +271,13 @@ def _ls_remote_sha(ref, causes):
 
 
 def _api_sha(ref, causes):
-    """FALLBACK: the REST API, authenticated when GH_TOKEN/GITHUB_TOKEN is set."""
+    """FALLBACK: the REST API, authenticated when GH_TOKEN/GITHUB_TOKEN is set.
+
+    Moves from heads/ to tags/ ONLY on a 404. Any other heads failure (rate
+    limit, 5xx, TLS, a malformed answer) means we do not know whether the
+    BRANCH exists, and `git clone --branch` prefers the branch -- so resolving
+    the tag instead could approve a tree the image does not build. Stop there.
+    """
     auth = "authenticated" if _token() else "unauthenticated"
     for kind in ("heads", "tags"):
         url = REF_API.format(kind=kind, ref=ref)
@@ -271,12 +292,14 @@ def _api_sha(ref, causes):
                 with _http_get(obj["url"]) as r:
                     obj = json.load(r)["object"]
             sha = obj.get("sha", "")
-            if obj.get("type", "commit") != "commit" or not _SHA.match(sha):
+            if obj.get("type", "commit") != "commit" or not _is_sha(sha):
                 causes.append("api {} ({}): unexpected object {!r}".format(kind, auth, _head(obj, 120)))
-                continue
+                return None
             return sha
         except Exception as e:  # noqa: BLE001 - cause is recorded, not swallowed
             causes.append("api {} ({}): {}".format(kind, auth, _http_error(e)))
+            if not (isinstance(e, urllib.error.HTTPError) and e.code == 404):
+                return None
     return None
 
 
@@ -405,9 +428,13 @@ def fetch_fork_requirements(rev, causes):
        (only for a full sha -- a local branch name could be stale);
     2. a depth-1 `git fetch` of `rev` into a throwaway bare repo (git TLS);
     3. raw.githubusercontent.com, authenticated when a token is set.
+
+    A source that answers with ZERO parseable declarations (an empty file, an
+    HTML error page served with 200) is a failed attempt, not a result: a
+    comparison against nothing reports clean.
     """
     sub = ROOT / SUBMODULE
-    if not _SHA.match(rev):
+    if not _is_sha(rev):
         causes.append("submodule: skipped ({!r} is not a full sha)".format(rev))
     elif not (sub / ".git").exists():
         # Without its own .git, `git -C` would silently walk up to the
@@ -415,9 +442,10 @@ def fetch_fork_requirements(rev, causes):
         causes.append("submodule: {} is not populated".format(SUBMODULE))
     else:
         rc, out, err = _git(["-C", str(sub), "show", "{}:requirements.txt".format(rev)])
-        if rc == 0:
+        if rc != 0:
+            causes.append("submodule: git show rc={} {}".format(rc, _head(err) or "(no stderr)"))
+        elif _has_declarations(out, "submodule", causes):
             return out
-        causes.append("submodule: git show rc={} {}".format(rc, _head(err) or "(no stderr)"))
 
     with tempfile.TemporaryDirectory(prefix="a0-pin-") as tmp:
         rc, _, err = _git(["init", "-q", "--bare", tmp])
@@ -428,17 +456,27 @@ def fetch_fork_requirements(rev, causes):
             )
         if rc == 0:
             rc, out, err = _git(["-C", tmp, "show", "FETCH_HEAD:requirements.txt"])
-            if rc == 0:
-                return out
-        causes.append("git fetch: rc={} {}".format(rc, _head(err) or "(no stderr)"))
+        if rc != 0:
+            causes.append("git fetch: rc={} {}".format(rc, _head(err) or "(no stderr)"))
+        elif _has_declarations(out, "git fetch", causes):
+            return out
 
     auth = "authenticated" if _token() else "unauthenticated"
     try:
         with _http_get(RAW.format(ref=rev)) as r:
-            return r.read().decode("utf-8")
+            text = r.read().decode("utf-8", errors="replace")
+        if _has_declarations(text, "raw https ({})".format(auth), causes):
+            return text
     except Exception as e:  # noqa: BLE001 - cause is recorded, not swallowed
         causes.append("raw https ({}): {}".format(auth, _http_error(e)))
     return None
+
+
+def _has_declarations(text, source, causes):
+    if parse_requirements(text or ""):
+        return True
+    causes.append("{}: 0 parseable declarations in {} bytes".format(source, len(text or "")))
+    return False
 
 
 def parse_requirements(text):
@@ -512,6 +550,12 @@ def main():
         return 1
 
     fork = parse_requirements(fork_raw)
+    if not fork:
+        # Floor. The fetch already refuses an empty source; this holds for any
+        # future caller too. "clean against 0 declarations" is not clean.
+        problems.append(("INPUT MISSING", "the fork's requirements.txt has 0 parseable declarations"))
+        report(problems)
+        return 1
     ours = parse_requirements(ours_txt.read_text(encoding="utf-8"))
     lock_text = ours_lock.read_text(encoding="utf-8")
     lock = parse_lock(lock_text)
