@@ -27,8 +27,10 @@ Refusal matrix (every row exits non-zero with an honest message):
   exit 1  approving account == PR author
   exit 1  no allowlisted APPROVE marker for exactly this head, marker
           edited, or ambiguous (control_verdict.py)
-  exit 1  latest verdict is REQUEST_CHANGES -- any standing APPROVED review by
-          the approver on the head is DISMISSED first (verified by read-back)
+  exit 1  ANY verdict outcome other than a clean APPROVE for the head (RC,
+          ambiguous, edited, no marker) -- in any of the three reads -- first
+          DISMISSES a standing APPROVED review by the approver on the head
+          (verified by read-back)
   exit 3  ...and that dismissal failed or could not be verified
   exit 1  POST rejected by GitHub with a 4xx (e.g. 422)
   exit 3  POST outcome unknown: 5xx, network error, bad/partial body
@@ -381,7 +383,7 @@ def _withdraw_standing_approvals(
     approval still counting is exactly the state an operator must not miss.
     """
     reviews = _read(
-        "list reviews to find a standing approval (one may still count)",
+        f"list reviews to find a standing approval by {approver} (one may STILL STAND)",
         lambda: client.get_pages(f"{pr_path}/reviews"),
     )
     standing = [
@@ -418,8 +420,8 @@ def _withdraw_standing_approvals(
     if still:
         raise Outcome(
             EXIT_UNMEASURED,
-            f"{why}; dismissal was requested but review(s) {still} still read APPROVED; "
-            "dismiss by hand before anything merges",
+            f"{why}; dismissal was requested but review(s) {still} STILL STAND (read back as "
+            "APPROVED); dismiss by hand before anything merges",
         )
     return f"dismissed standing approval(s) {standing} by {approver}"
 
@@ -463,21 +465,21 @@ def approve(
         )
         return control_verdict.select_verdict(comments, expected_head, settings.marker_authors)
 
-    def refuse(selection: control_verdict.Selection, *, withdraw_any: bool, prefix: str = "control verdict") -> None:
+    def refuse(selection: control_verdict.Selection, prefix: str = "control verdict") -> None:
+        # One rule for all three verdict reads (review round 2, P2): any outcome
+        # other than a clean APPROVE for the head -- REQUEST_CHANGES, ambiguous,
+        # malformed-after, an edited winner, an edited later comment, no marker --
+        # dismisses a standing machine-user approval on the head and reads it
+        # back. Dismissed or none standing: rc 1. Dismissal failed: rc 3.
         reason = f"{prefix}: {selection.reason}"
-        is_rc = selection.kind == "request_changes"
-        if is_rc or withdraw_any:
-            # A REQUEST_CHANGES verdict must withdraw an approval this road already
-            # gave, not merely stop future runs (review round 1, P2-3). After our
-            # own POST, ANY loss of the verdict withdraws what we just posted.
-            reason += "; " + _withdraw_standing_approvals(
-                client, pr_path, token_login, expected_head, reason, dry_run,
-            )
+        reason += "; " + _withdraw_standing_approvals(
+            client, pr_path, token_login, expected_head, reason, dry_run,
+        )
         raise Outcome(EXIT_REFUSED, reason)
 
     selection = current_verdict("list PR comments")
     if not selection.approved or selection.chosen is None:
-        refuse(selection, withdraw_any=False)
+        refuse(selection)
     assert selection.chosen is not None and selection.chosen_verdict is not None
     marker = selection.chosen
     marker_verdict = selection.chosen_verdict
@@ -506,7 +508,7 @@ def approve(
         # ...and the verdict: a REQUEST_CHANGES may have landed since the first read.
         again = current_verdict("re-read PR comments before approving")
         if not again.approved or again.chosen is None:
-            refuse(again, withdraw_any=False, prefix="control verdict changed before approving")
+            refuse(again, prefix="control verdict changed before approving")
         body = (
             f"Approved via the PMOVES.AI control approval road for `{expected_head}`.\n\n"
             f"Control verdict: {marker.url} (reviewer={marker_verdict.reviewer}, "
@@ -561,7 +563,7 @@ def approve(
         )
     final = current_verdict("re-read PR comments after approving")
     if not final.approved or final.chosen is None:
-        refuse(final, withdraw_any=True, prefix="control verdict changed while approving")
+        refuse(final, prefix="control verdict changed while approving")
     emit(f"verified: review {match[-1].get('id')} APPROVED by {token_login} on {expected_head}")
     return EXIT_OK
 

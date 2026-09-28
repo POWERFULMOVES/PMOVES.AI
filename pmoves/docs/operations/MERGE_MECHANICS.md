@@ -191,6 +191,7 @@ audit trail shows and what `pr-closeout-audit` accepts, not the merge flag.
    `verdict=REQUEST_CHANGES` records a block — but a comment alone changes
    nothing on GitHub. **Run `pr-control-approve` after posting it**: the run
    dismisses any APPROVED review the machine user already gave on that head
+   (as it does for every outcome other than a clean APPROVE)
    (read back to confirm), then exits 1. If the dismissal fails or cannot be
    confirmed it exits 3 and says the approval still stands. Never edit a verdict comment;
    post a new one (an edited marker is refused).
@@ -280,15 +281,13 @@ because `make` collapses every nonzero exit to 2.
 | 1 | PR closed, merged, draft, or base is not `main` |
 | 1 | PR head is not `EXPECTED_HEAD` (checked at start **and** immediately before the POST) |
 | 1 | approving account is the PR author |
-| 1 | latest allowlisted marker for the head is `REQUEST_CHANGES` — after **dismissing** any standing APPROVED review by the approver on that head |
-| 3 | …and that dismissal failed or could not be confirmed (the approval may still count) |
-| 1 | no allowlisted `APPROVE` marker for exactly this head; marker only from a non-allowlisted account; marker comment edited; a malformed allowlisted marker posted after the approve (ambiguous) |
+| 1 | **any verdict outcome other than a clean `APPROVE` for the head**: latest allowlisted verdict is `REQUEST_CHANGES`; no allowlisted `APPROVE` for exactly this head; marker only from a non-allowlisted account; the winning comment edited; a malformed allowlisted marker, or any edited allowlisted comment, posted after it (ambiguous). In **every** such case, in any of the three reads, the run first **dismisses** any standing APPROVED review by the approver on the head and reads it back |
+| 3 | …and that dismissal failed or could not be confirmed — the message says the approval **STILL STANDS** |
 | 1 | GitHub rejects the review with a **4xx** (e.g. 422) |
 | 3 | POST outcome unknown: **5xx**, network error, or a bad/partial body — a 502/504 can arrive after GitHub stored the review, so read the reviews before retrying |
 | 1 | post-verify: no `APPROVED` review by the approver on `EXPECTED_HEAD` |
 | 1 | post-verify: head moved while approving |
-| 1 | the verdict comments are read three times — at start, immediately before the POST, and in the post-check. A verdict lost before the POST refuses without posting; one lost after it **dismisses the approval just posted** |
-| 3 | …and that dismissal failed or could not be confirmed |
+| 1 | the verdict comments are read three times — at start, immediately before the POST, and in the post-check — and the row above applies to each read: a verdict lost before the POST refuses without posting; one lost after it dismisses the approval just posted (rc 3 "STILL STANDS" if that fails) |
 | 0 | approval read back from GitHub on the pinned commit |
 
 Markers for other heads are ignored (a verdict on an old head neither approves

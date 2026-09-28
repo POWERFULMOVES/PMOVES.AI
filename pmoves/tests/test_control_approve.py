@@ -681,6 +681,53 @@ def test_request_changes_dismisses_standing_approval(gh: FakeGitHub, config: Pat
     assert gh.posts() == []
 
 
+ROUND2_CASES = {
+    # 3b: a later RC from the allowlist that is malformed
+    "3b-malformed-later-rc": lambda: [
+        comment(1, marker()),
+        comment(2, f"<!-- pmoves-control-verdict: v=1 verdict=REQUEST_CHANGES head={H[:39]} reviewer=x -->"),
+    ],
+    # 3c: an edited later allowlisted comment (the "RC edited away" case)
+    "3c-edited-later-comment": lambda: [comment(1, marker()), comment(2, "never mind", updated="2026-09-28T13:00:00Z")],
+    # 3e: an edited APPROVE winner
+    "3e-edited-winner": lambda: [comment(1, marker(), updated="2026-09-28T13:00:00Z")],
+    "no-marker-for-head": lambda: [comment(1, marker(head=H2))],
+}
+
+
+@pytest.mark.parametrize("case", sorted(ROUND2_CASES))
+def test_every_non_approve_outcome_dismisses_a_standing_approval(gh: FakeGitHub, config: Path, case: str, capsys: pytest.CaptureFixture[str]) -> None:
+    _standing(gh)
+    gh.comments = ROUND2_CASES[case]()
+    assert run(config) == 1
+    puts = [r for r in gh.requests if r["method"] == "PUT"]
+    assert len(puts) == 1 and puts[0]["url"].endswith("/reviews/77/dismissals")
+    assert gh.reviews[0]["state"] == "DISMISSED"
+    assert "dismissed standing approval(s) [77]" in capsys.readouterr().err
+    assert gh.posts() == []
+
+
+@pytest.mark.parametrize("case", sorted(ROUND2_CASES))
+def test_every_non_approve_outcome_with_failed_dismissal_is_still_stands(gh: FakeGitHub, config: Path, case: str, capsys: pytest.CaptureFixture[str]) -> None:
+    _standing(gh)
+    gh.dismiss_mode = "forbidden"
+    gh.comments = ROUND2_CASES[case]()
+    assert run(config) == 3
+    assert "STILL STAND" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("case", sorted(ROUND2_CASES))
+def test_non_approve_on_the_pre_post_read_dismisses_too(gh: FakeGitHub, config: Path, case: str) -> None:
+    # read 1 approves; read 2 (just before the POST) sees the case: no POST, and
+    # the same withdrawal lookup runs (reviews are listed after the 2nd read).
+    gh.comment_script = [list(APPROVE_ONLY), ROUND2_CASES[case]()]
+    assert run(config) == 1
+    assert gh.posts() == []
+    urls = [r["url"] for r in gh.requests]
+    second_read = [i for i, u in enumerate(urls) if "/comments" in u][1]
+    assert any("/reviews" in u for u in urls[second_read + 1 :])
+
+
 def test_request_changes_without_standing_approval_refuses_without_dismissing(gh: FakeGitHub, config: Path) -> None:
     _standing(gh, head=H2)  # an approval on another commit is not touched
     gh.comments.append(comment(2, marker("REQUEST_CHANGES")))
