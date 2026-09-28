@@ -585,33 +585,52 @@ def _queue_report() -> "pr_closeout.CloseoutReport":
     )
 
 
+def _rules(*types: str):
+    # _rest_pages returns one payload PER PAGE; spread across two pages so a
+    # merge_queue rule on a later page is proven to be seen.
+    return lambda path: [[{"type": t} for t in types[:1]],
+                         [{"type": t} for t in types[1:]]]
+
+
+def _states(*states: dict):
+    seq = list(states)
+    return lambda repo, n: seq.pop(0)
+
+
+def _gql(pr: dict | None):
+    return {"data": {"repository": {"pullRequest": pr}}}
+
+
+CONFIRM = f"MERGE #42 @ {'a' * 40}"
+OPEN = {"state": "OPEN", "mergeQueueEntry": None, "autoMergeRequest": None}
+QUEUED = {"state": "OPEN", "mergeQueueEntry": {"state": "QUEUED", "position": 1},
+          "autoMergeRequest": None}
+ARMED = {"state": "OPEN", "mergeQueueEntry": None,
+         "autoMergeRequest": {"enabledAt": "2026-09-28T00:00:00Z"}}
+
+
 def test_queue_refuses_when_no_merge_queue_rule(monkeypatch) -> None:
     calls: list[list[str]] = []
-    monkeypatch.setattr(pr_closeout, "_rest", lambda path, *a: [{"type": "deletion"}])
+    monkeypatch.setattr(pr_closeout, "_rest_pages", _rules("deletion", "pull_request"))
     monkeypatch.setattr(pr_closeout, "_run", lambda cmd, **k: calls.append(cmd))
-    report = _queue_report()
     with pytest.raises(RuntimeError, match="no merge_queue rule"):
-        pr_closeout._merge(
-            report, method="squash", admin=False, queue=True,
-            confirmation=f"MERGE #42 @ {'a' * 40}",
-        )
+        pr_closeout._merge(_queue_report(), method="squash", admin=False,
+                           queue=True, confirmation=CONFIRM)
     assert calls == []
+
+
+def test_merge_queue_rule_on_a_later_page_is_seen(monkeypatch) -> None:
+    monkeypatch.setattr(pr_closeout, "_rest_pages", _rules("deletion", "merge_queue"))
+    assert pr_closeout._merge_queue_active("o/r", "main")
 
 
 def test_queue_enqueues_with_auto_and_head_pin_never_admin(monkeypatch) -> None:
     calls: list[list[str]] = []
-    monkeypatch.setattr(pr_closeout, "_rest", lambda path, *a: [{"type": "merge_queue"}])
+    monkeypatch.setattr(pr_closeout, "_rest_pages", _rules("deletion", "merge_queue"))
     monkeypatch.setattr(pr_closeout, "_run", lambda cmd, **k: calls.append(cmd))
-    monkeypatch.setattr(
-        pr_closeout,
-        "_queue_state",
-        lambda repo, n: {"state": "OPEN", "mergeQueueEntry": {"state": "QUEUED", "position": 1}},
-    )
-    report = _queue_report()
-    result = pr_closeout._merge(
-        report, method="squash", admin=False, queue=True,
-        confirmation=f"MERGE #42 @ {'a' * 40}",
-    )
+    monkeypatch.setattr(pr_closeout, "_queue_state", _states(OPEN, QUEUED))
+    result = pr_closeout._merge(_queue_report(), method="squash", admin=False,
+                                queue=True, confirmation=CONFIRM)
     assert result["mergeQueueEntry"]["state"] == "QUEUED"
     assert len(calls) == 1
     cmd = calls[0]
@@ -622,18 +641,133 @@ def test_queue_enqueues_with_auto_and_head_pin_never_admin(monkeypatch) -> None:
     assert not {"--squash", "--merge", "--rebase"} & set(cmd)
 
 
-def test_queue_unconfirmed_enqueue_is_an_error(monkeypatch) -> None:
-    monkeypatch.setattr(pr_closeout, "_rest", lambda path, *a: [{"type": "merge_queue"}])
+def test_armed_but_not_queued_is_disarmed_and_fails(monkeypatch) -> None:
+    calls: list[list[str]] = []
+
+    def run(cmd, **k):
+        calls.append(cmd)
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+
+    monkeypatch.setattr(pr_closeout, "_rest_pages", _rules("merge_queue"))
+    monkeypatch.setattr(pr_closeout, "_run", run)
+    monkeypatch.setattr(pr_closeout, "_queue_state", _states(OPEN, ARMED))
+    with pytest.raises(RuntimeError, match="NOT in the merge queue.*Auto-merge disarmed"):
+        pr_closeout._merge(_queue_report(), method="squash", admin=False,
+                           queue=True, confirmation=CONFIRM)
+    assert "--auto" in calls[0]
+    assert calls[1][-1] == "--disable-auto" and calls[1][3] == "42"
+
+
+def test_pre_armed_auto_merge_is_reported_not_counted_nor_disarmed(monkeypatch, capsys) -> None:
+    calls: list[list[str]] = []
+    monkeypatch.setattr(pr_closeout, "_rest_pages", _rules("merge_queue"))
+    monkeypatch.setattr(pr_closeout, "_run", lambda cmd, **k: calls.append(cmd))
+    monkeypatch.setattr(pr_closeout, "_queue_state", _states(ARMED, ARMED))
+    with pytest.raises(RuntimeError, match="already armed before this command"):
+        pr_closeout._merge(_queue_report(), method="squash", admin=False,
+                           queue=True, confirmation=CONFIRM)
+    assert "already armed" in capsys.readouterr().out
+    assert len(calls) == 1 and "--disable-auto" not in calls[0]
+
+
+def test_pre_armed_then_queued_succeeds_and_records_the_prior_arming(monkeypatch) -> None:
+    monkeypatch.setattr(pr_closeout, "_rest_pages", _rules("merge_queue"))
     monkeypatch.setattr(pr_closeout, "_run", lambda cmd, **k: None)
-    monkeypatch.setattr(
-        pr_closeout, "_queue_state",
-        lambda repo, n: {"state": "OPEN", "mergeQueueEntry": None, "autoMergeRequest": None},
-    )
+    monkeypatch.setattr(pr_closeout, "_queue_state", _states(ARMED, QUEUED))
+    result = pr_closeout._merge(_queue_report(), method="squash", admin=False,
+                                queue=True, confirmation=CONFIRM)
+    assert result["preexisting_auto_merge"] == ARMED["autoMergeRequest"]
+
+
+def test_already_queued_runs_no_command(monkeypatch) -> None:
+    calls: list[list[str]] = []
+    monkeypatch.setattr(pr_closeout, "_rest_pages", _rules("merge_queue"))
+    monkeypatch.setattr(pr_closeout, "_run", lambda cmd, **k: calls.append(cmd))
+    monkeypatch.setattr(pr_closeout, "_queue_state", _states(QUEUED))
+    result = pr_closeout._merge(_queue_report(), method="squash", admin=False,
+                                queue=True, confirmation=CONFIRM)
+    assert result["already_queued"] and calls == []
+
+
+def test_queue_neither_entry_nor_arming_is_an_error(monkeypatch) -> None:
+    monkeypatch.setattr(pr_closeout, "_rest_pages", _rules("merge_queue"))
+    monkeypatch.setattr(pr_closeout, "_run", lambda cmd, **k: None)
+    monkeypatch.setattr(pr_closeout, "_queue_state", _states(OPEN, OPEN))
     with pytest.raises(RuntimeError, match="without a merge-queue entry"):
-        pr_closeout._merge(
-            _queue_report(), method="squash", admin=False, queue=True,
-            confirmation=f"MERGE #42 @ {'a' * 40}",
-        )
+        pr_closeout._merge(_queue_report(), method="squash", admin=False,
+                           queue=True, confirmation=CONFIRM)
+
+
+def test_unreadable_pre_state_refuses_before_mutating(monkeypatch) -> None:
+    calls: list[list[str]] = []
+
+    def boom(repo, n):
+        raise RuntimeError("graphql throttled")
+
+    monkeypatch.setattr(pr_closeout, "_rest_pages", _rules("merge_queue"))
+    monkeypatch.setattr(pr_closeout, "_run", lambda cmd, **k: calls.append(cmd))
+    monkeypatch.setattr(pr_closeout, "_queue_state", boom)
+    with pytest.raises(RuntimeError, match="refusing to enqueue"):
+        pr_closeout._merge(_queue_report(), method="squash", admin=False,
+                           queue=True, confirmation=CONFIRM)
+    assert calls == []
+
+
+@pytest.mark.parametrize("payload,expected", [
+    (_gql(QUEUED), QUEUED),
+    (_gql(ARMED), ARMED),
+    (_gql(OPEN), OPEN),
+])
+def test_queue_state_parses_the_graphql_payload(monkeypatch, payload, expected) -> None:
+    seen: list[list[str]] = []
+
+    def fake(cmd, **k):
+        seen.append(cmd)
+        return payload
+
+    monkeypatch.setattr(pr_closeout, "_run_json", fake)
+    assert pr_closeout._queue_state("POWERFULMOVES/PMOVES.AI", 42) == expected
+    assert "number=42" in seen[0] and "owner=POWERFULMOVES" in seen[0]
+    assert any("mergeQueueEntry" in a and "autoMergeRequest" in a for a in seen[0])
+
+
+@pytest.mark.parametrize("payload", [None, {}, _gql(None), {"errors": [{"message": "x"}]}])
+def test_queue_state_unreadable_payload_raises(monkeypatch, payload) -> None:
+    monkeypatch.setattr(pr_closeout, "_run_json", lambda cmd, **k: payload)
+    with pytest.raises(RuntimeError, match="could not read"):
+        pr_closeout._queue_state("POWERFULMOVES/PMOVES.AI", 42)
+
+
+def test_direct_non_admin_merge_on_a_queue_branch_refuses_before_mutating(monkeypatch) -> None:
+    calls: list[list[str]] = []
+    monkeypatch.setattr(pr_closeout, "_rest_pages", _rules("merge_queue"))
+    monkeypatch.setattr(pr_closeout, "_run", lambda cmd, **k: calls.append(cmd))
+    with pytest.raises(RuntimeError, match="requires a merge queue.*ENQUEUE or ARM"):
+        pr_closeout._merge(_queue_report(), method="squash", admin=False,
+                           confirmation=CONFIRM)
+    assert calls == []
+
+
+def test_direct_merge_that_got_enqueued_names_what_happened(monkeypatch) -> None:
+    # The rule was not visible at check time (e.g. added mid-flight).
+    monkeypatch.setattr(pr_closeout, "_rest_pages", _rules("deletion"))
+    monkeypatch.setattr(pr_closeout, "_run", lambda cmd, **k: None)
+    monkeypatch.setattr(pr_closeout, "_run_json", lambda cmd, **k: {"state": "OPEN"})
+    monkeypatch.setattr(pr_closeout, "_queue_state", _states(QUEUED))
+    with pytest.raises(RuntimeError, match="ENQUEUED in the merge queue, not merged"):
+        pr_closeout._merge(_queue_report(), method="squash", admin=False,
+                           confirmation=CONFIRM)
+
+
+def test_admin_merge_skips_the_queue_rule_read(monkeypatch) -> None:
+    def no_rules(path):
+        raise AssertionError("admin path must not depend on the rules read")
+
+    monkeypatch.setattr(pr_closeout, "_rest_pages", no_rules)
+    monkeypatch.setattr(pr_closeout, "_run", lambda cmd, **k: None)
+    monkeypatch.setattr(pr_closeout, "_run_json", lambda cmd, **k: {"state": "MERGED"})
+    assert pr_closeout._merge(_queue_report(), method="squash", admin=True,
+                              confirmation=CONFIRM)["state"] == "MERGED"
 
 
 def test_queue_and_admin_are_mutually_exclusive() -> None:

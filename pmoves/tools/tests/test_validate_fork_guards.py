@@ -363,6 +363,21 @@ def test_queue_exclusion_propagates_through_needs():
     assert "QUEUE-EXPOSED" not in _run({"w.yml": body}).stdout
 
 
+def test_gate_still_measures_with_docstrings_stripped():
+    """`python -OO` makes __doc__ None; the gate must still run, not crash with
+    an exit 1 that reads as findings. Positive: a guarded tree passes (0).
+    Negative: an unguarded one still fails (1). Empty: could-not-measure (3)."""
+    def run_oo(workflows: dict[str, str]) -> subprocess.CompletedProcess:
+        with tempfile.TemporaryDirectory() as tmp:
+            for name, body in workflows.items():
+                (Path(tmp) / name).write_text(body, encoding="utf-8")
+            return subprocess.run([PYTHON, "-OO", str(TOOL), "--workflows", tmp],
+                                  capture_output=True, text=True)
+    assert run_oo({"w.yml": _job(SPELLINGS["full_name"])}).returncode == 0
+    assert run_oo({"w.yml": _job(None)}).returncode == 1
+    assert run_oo({}).returncode == 3
+
+
 # --------------------------------------------------------------------------- #
 # The invariant itself, on the real tree. This is the regression net.
 # --------------------------------------------------------------------------- #

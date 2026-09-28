@@ -823,9 +823,14 @@ def _merge_queue_active(repo: str, base: str) -> bool:
     auto-merge, which under this repo's review rule waits forever -- so queue
     mode refuses rather than leaving a PR silently parked.
     """
-    rules = _rest(f"repos/{repo}/rules/branches/{base}")
-    if not isinstance(rules, list):
-        return False
+    # Paginated: the endpoint pages at 30 rules by default, and a merge_queue
+    # rule on a later page would otherwise read as "no queue".
+    pages = _rest_pages(f"repos/{repo}/rules/branches/{base}")
+    rules = [
+        rule
+        for page in pages
+        for rule in (page if isinstance(page, list) else [page])
+    ]
     return any(
         isinstance(rule, dict) and rule.get("type") == "merge_queue" for rule in rules
     )
@@ -874,12 +879,40 @@ def _enqueue(report: CloseoutReport) -> dict[str, Any]:
     also notes no merge strategy is needed: the queue's own method applies.
     `--admin` is deliberately absent: the same help text says it BYPASSES the
     queue, which is the existing direct path, not this one.
+
+    Success is a `mergeQueueEntry` (or MERGED) and NOTHING else. The audit has
+    already required green checks, so "auto-merge armed but not queued" means
+    something outside the audit is blocking the PR -- that is disarmed (when this
+    command armed it) and reported as a failure, never as "queued later". An
+    auto-merge armed BEFORE this command is reported, not counted, and left alone.
     """
     if not _merge_queue_active(report.repo, report.base):
         raise RuntimeError(
             f"no merge_queue rule is active on {report.base}; --queue would only "
             "arm auto-merge. Use the admin path or enable the queue first."
         )
+    try:
+        before = _queue_state(report.repo, report.pr_number)
+    except RuntimeError as exc:
+        raise RuntimeError(
+            f"refusing to enqueue: could not read the PR's queue state first ({exc})"
+        ) from exc
+    pre_armed = before.get("autoMergeRequest")
+    if pre_armed:
+        print(
+            f"NOTE: auto-merge was already armed on PR #{report.pr_number} before "
+            f"this command (enabledAt {pre_armed.get('enabledAt')}); it is reported, "
+            "not counted as an enqueue."
+        )
+    if before.get("mergeQueueEntry"):
+        entry = before["mergeQueueEntry"]
+        print(
+            f"NOTE: PR #{report.pr_number} was already in the merge queue "
+            f"(state {entry.get('state')}, position {entry.get('position')}); "
+            "no command run."
+        )
+        return {**before, "preexisting_auto_merge": pre_armed, "already_queued": True}
+
     _run(
         [
             "gh",
@@ -900,16 +933,45 @@ def _enqueue(report: CloseoutReport) -> dict[str, Any]:
             "enqueue command returned, but the queue state is UNCONFIRMED "
             f"(could not read it: {exc}). Check the PR before retrying."
         ) from exc
-    if not (
-        str(state.get("state")) == "MERGED"
-        or state.get("mergeQueueEntry")
-        or state.get("autoMergeRequest")
-    ):
-        raise RuntimeError(
-            "enqueue command returned without a merge-queue entry, an armed "
-            "auto-merge, or a MERGED state"
+    if str(state.get("state")) == "MERGED" or state.get("mergeQueueEntry"):
+        return {**state, "preexisting_auto_merge": pre_armed}
+
+    if state.get("autoMergeRequest"):
+        if pre_armed:
+            raise RuntimeError(
+                "PR is NOT in the merge queue: auto-merge is armed (it was already "
+                "armed before this command, so it was left as found), yet the audit "
+                "saw every required check green -- something outside the audit is "
+                "blocking it. Inspect the PR; `gh pr merge "
+                f"{report.pr_number} --disable-auto` disarms it."
+            )
+        disarm = _run(
+            [
+                "gh",
+                "pr",
+                "merge",
+                str(report.pr_number),
+                "--repo",
+                report.repo,
+                "--disable-auto",
+            ],
+            allow_failure=True,
         )
-    return state
+        disarmed = (
+            "disarmed"
+            if disarm.returncode == 0
+            else f"DISARM FAILED ({disarm.returncode}: {disarm.stderr.strip()[:160]})"
+        )
+        raise RuntimeError(
+            "PR is NOT in the merge queue: `gh pr merge --auto` armed auto-merge "
+            "instead of enqueueing, although the audit saw every required check "
+            "green -- something outside the audit is blocking it (a check the "
+            f"audit did not see, or a ruleset condition). Auto-merge {disarmed}."
+        )
+    raise RuntimeError(
+        "enqueue command returned without a merge-queue entry, an armed "
+        "auto-merge, or a MERGED state"
+    )
 
 
 def _merge(
@@ -933,6 +995,15 @@ def _merge(
         raise RuntimeError("--queue and --admin are mutually exclusive")
     if queue:
         return _enqueue(report)
+    if not admin and _merge_queue_active(report.repo, report.base):
+        # A plain (non-admin) `gh pr merge` on a queue-required branch does not
+        # merge: it enqueues, or arms auto-merge. Refuse before mutating rather
+        # than report "without a confirmed MERGED state" afterwards.
+        raise RuntimeError(
+            f"{report.base} requires a merge queue: a non-admin direct merge would "
+            "ENQUEUE or ARM auto-merge instead of merging. Use --queue (approved "
+            "PR) or --admin (bypasses the queue)."
+        )
 
     command = [
         "gh",
@@ -962,6 +1033,23 @@ def _merge(
         ]
     )
     if not isinstance(merged, dict) or str(merged.get("state")) != "MERGED":
+        # Second layer for the queue case above (e.g. the rule appeared between
+        # the check and the merge): name what actually happened.
+        try:
+            qs = _queue_state(report.repo, report.pr_number)
+        except RuntimeError:
+            qs = {}
+        if qs.get("mergeQueueEntry"):
+            raise RuntimeError(
+                "PR was ENQUEUED in the merge queue, not merged: the base requires "
+                "a queue and this was a non-admin merge."
+            )
+        if qs.get("autoMergeRequest"):
+            raise RuntimeError(
+                "auto-merge was ARMED, not merged: the base requires a queue or "
+                f"checks are pending. `gh pr merge {report.pr_number} --disable-auto` "
+                "disarms it."
+            )
         raise RuntimeError("merge command returned without a confirmed MERGED state")
     return merged
 
@@ -1093,12 +1181,10 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     if queue_mode and str(merged.get("state")) != "MERGED":
         entry = merged.get("mergeQueueEntry") or {}
-        where = (
-            f"in the merge queue (state {entry.get('state')}, position {entry.get('position')})"
-            if entry
-            else "auto-merge armed; it enters the queue when required checks pass"
+        print(
+            f"Queued PR #{report.pr_number} @ {report.head_sha}: in the merge queue "
+            f"(state {entry.get('state')}, position {entry.get('position')})"
         )
-        print(f"Queued PR #{report.pr_number} @ {report.head_sha}: {where}")
         return 0
     print(
         f"Merged PR #{report.pr_number}: "

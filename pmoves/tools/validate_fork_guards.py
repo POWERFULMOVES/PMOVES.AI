@@ -651,7 +651,12 @@ def analyse_queue(workflows: Path):
 
 
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    # `__doc__` is None under `python -OO` (docstrings stripped). The description
+    # is cosmetic, so fall back rather than crash: an AttributeError exits 1,
+    # which a caller would read as FINDINGS from a gate that never measured.
+    ap = argparse.ArgumentParser(
+        description=(__doc__ or "Fork-guard and merge-queue reachability gate.")
+        .splitlines()[0])
     ap.add_argument("--workflows", default=str(WORKFLOWS),
                     help="workflow directory to scan")
     ap.add_argument("--quiet", action="store_true",
@@ -706,8 +711,8 @@ def main(argv: list[str] | None = None) -> int:
     for f in sorted(queue_findings):
         print(f"QUEUE-EXPOSED: {f}")
     print(
-        f"{queue_examined} self-hosted/secret-using job(s) on push/create/"
-        f"delete/workflow_run examined for merge-queue reachability: "
+        f"{queue_examined} self-hosted/secret-using job(s) in workflows a "
+        f"merge-queue branch can trigger (push/create/delete/workflow_run): "
         f"{len(queue_findings)} EXPOSED."
     )
     if queue_findings:
