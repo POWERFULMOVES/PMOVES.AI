@@ -32,6 +32,9 @@ Refusal matrix (every row exits non-zero with an honest message):
   exit 3  POST outcome unknown: 5xx, network error, bad/partial body
   exit 1  post-verify: no APPROVED review by the approver on EXPECTED_HEAD
   exit 1  post-verify: PR head moved while approving (race)
+  exit 1  the verdict comments are re-read just before the POST and again in
+          the post-check; a verdict lost before the POST refuses, and one lost
+          after it DISMISSES the approval just posted (exit 3 if that fails)
   exit 3  any unexpected error (always still ends with the VERDICT line)
   exit 0  APPROVED review by the approver on EXPECTED_HEAD read back from GitHub
 
@@ -408,22 +411,30 @@ def approve(
     author = _check_pr(pr, settings, expected_head, token_login)
     emit(f"PR #{pr_number}: open, base={settings.base}, head={expected_head}, author={author}")
 
-    comments = _read(
-        "list PR comments",
-        lambda: client.get_pages(f"/repos/{owner_repo}/issues/{pr_number}/comments"),
-    )
-    selection = control_verdict.select_verdict(comments, expected_head, settings.marker_authors)
-    if not selection.approved or selection.chosen is None:
-        reason = f"control verdict: {selection.reason}"
+    def current_verdict(action: str) -> control_verdict.Selection:
+        comments = _read(
+            action,
+            lambda: client.get_pages(f"/repos/{owner_repo}/issues/{pr_number}/comments"),
+        )
+        return control_verdict.select_verdict(comments, expected_head, settings.marker_authors)
+
+    def refuse(selection: control_verdict.Selection, *, withdraw_any: bool, prefix: str = "control verdict") -> None:
+        reason = f"{prefix}: {selection.reason}"
         chosen = selection.chosen
-        if chosen is not None and chosen.verdict is not None and chosen.verdict.verdict == "REQUEST_CHANGES":
+        is_rc = chosen is not None and chosen.verdict is not None and chosen.verdict.verdict == "REQUEST_CHANGES"
+        if is_rc or withdraw_any:
             # A REQUEST_CHANGES verdict must withdraw an approval this road already
-            # gave, not merely stop future runs (review round 1, P2-3).
+            # gave, not merely stop future runs (review round 1, P2-3). After our
+            # own POST, ANY loss of the verdict withdraws what we just posted.
             reason += "; " + _withdraw_standing_approvals(
-                client, pr_path, token_login, expected_head,
-                f"control verdict REQUEST_CHANGES ({chosen.url or chosen.comment_id})", dry_run,
+                client, pr_path, token_login, expected_head, reason, dry_run,
             )
         raise Outcome(EXIT_REFUSED, reason)
+
+    selection = current_verdict("list PR comments")
+    if not selection.approved or selection.chosen is None:
+        refuse(selection, withdraw_any=False)
+    assert selection.chosen is not None
     marker = selection.chosen
     emit(f"control verdict: {selection.reason} ({marker.url})")
 
@@ -442,6 +453,10 @@ def approve(
         # Narrow the race window: re-read the head immediately before posting.
         pr_again = _read(f"re-read PR #{pr_number}", lambda: client.get(pr_path)) or {}
         _check_pr(pr_again, settings, expected_head, token_login)
+        # ...and the verdict: a REQUEST_CHANGES may have landed since the first read.
+        again = current_verdict("re-read PR comments before approving")
+        if not again.approved or again.chosen is None:
+            refuse(again, withdraw_any=False, prefix="control verdict changed before approving")
         body = (
             f"Approved via the PMOVES.AI control approval road for `{expected_head}`.\n\n"
             f"Control verdict: {marker.url} (reviewer={marker.verdict.reviewer if marker.verdict else '?'}, "
@@ -494,6 +509,9 @@ def approve(
             f"{expected_head} (A4) and is dismissed or does not count for the new head (A5); "
             "re-review the new head",
         )
+    final = current_verdict("re-read PR comments after approving")
+    if not final.approved or final.chosen is None:
+        refuse(final, withdraw_any=True, prefix="control verdict changed while approving")
     emit(f"verified: review {match[-1].get('id')} APPROVED by {token_login} on {expected_head}")
     return EXIT_OK
 

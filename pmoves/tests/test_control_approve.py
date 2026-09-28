@@ -101,6 +101,7 @@ class FakeGitHub:
         self.page_size: int | None = None
         self.requests: list[dict[str, Any]] = []
         self.bad_body: dict[tuple[str, str], Any] = {}  # (method, path-substring) -> bytes | Exception
+        self.comment_script: list[list[dict[str, Any]]] = []  # consumed per comments GET
         self.link_override: str | None = None  # a Link header returned on the comments list
         self.redirect_on: str | None = None  # path substring answered with a 302
 
@@ -137,6 +138,8 @@ class FakeGitHub:
                 pr["head"]["sha"] = self.head_sequence.pop(0)
             return _Resp(pr)
         if method == "GET" and path.startswith(f"/repos/{REPO}/issues/{PR}/comments"):
+            if self.comment_script:
+                self.comments = self.comment_script.pop(0)
             return self._paged(self.comments, path)
         if method == "GET" and path.startswith(f"/repos/{REPO}/pulls/{PR}/reviews"):
             return self._paged(self.reviews, path)
@@ -754,6 +757,45 @@ def test_real_opener_refuses_redirects_without_forwarding_the_token() -> None:
     with pytest.raises(Exception):
         stock.open(urllib.request.Request("https://api.github.com/user", headers={"Authorization": "Bearer x"}))
     assert any(u.startswith("https://evil.example") for u, _ in seen)
+
+
+RC_LATER = [comment(1, marker()), comment(2, marker("REQUEST_CHANGES"))]
+APPROVE_ONLY = [comment(1, marker())]
+
+
+def test_success_reads_the_verdict_three_times(gh: FakeGitHub, config: Path) -> None:
+    assert run(config) == 0
+    assert sum(1 for r in gh.requests if "/comments" in r["url"]) == 3
+
+
+def test_request_changes_landing_before_the_post_prevents_it(gh: FakeGitHub, config: Path) -> None:
+    gh.comment_script = [APPROVE_ONLY, RC_LATER]
+    assert run(config) == 1
+    assert gh.posts() == []
+
+
+def test_request_changes_landing_after_the_post_dismisses_our_approval(gh: FakeGitHub, config: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    gh.comment_script = [APPROVE_ONLY, APPROVE_ONLY, RC_LATER]
+    assert run(config) == 1
+    assert len(gh.posts()) == 1
+    puts = [r for r in gh.requests if r["method"] == "PUT"]
+    assert len(puts) == 1
+    assert gh.reviews[-1]["state"] == "DISMISSED"
+    assert "changed while approving" in capsys.readouterr().err
+
+
+def test_verdict_lost_after_post_for_any_reason_dismisses(gh: FakeGitHub, config: Path) -> None:
+    edited_later = [comment(1, marker()), comment(2, "note", updated="2026-09-28T13:00:00Z")]
+    gh.comment_script = [APPROVE_ONLY, APPROVE_ONLY, edited_later]
+    assert run(config) == 1
+    assert gh.reviews[-1]["state"] == "DISMISSED"
+
+
+def test_verdict_lost_after_post_and_dismissal_fails_is_could_not_measure(gh: FakeGitHub, config: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    gh.comment_script = [APPROVE_ONLY, APPROVE_ONLY, RC_LATER]
+    gh.dismiss_mode = "forbidden"
+    assert run(config) == 3
+    assert "STILL STANDS" in capsys.readouterr().err
 
 
 def test_tool_does_not_shell_out() -> None:

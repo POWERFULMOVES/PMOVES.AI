@@ -255,6 +255,8 @@ because `make` collapses every nonzero exit to 2.
 | 3 | POST outcome unknown: **5xx**, network error, or a bad/partial body — a 502/504 can arrive after GitHub stored the review, so read the reviews before retrying |
 | 1 | post-verify: no `APPROVED` review by the approver on `EXPECTED_HEAD` |
 | 1 | post-verify: head moved while approving |
+| 1 | the verdict comments are read three times — at start, immediately before the POST, and in the post-check. A verdict lost before the POST refuses without posting; one lost after it **dismisses the approval just posted** |
+| 3 | …and that dismissal failed or could not be confirmed |
 | 0 | approval read back from GitHub on the pinned commit |
 
 Markers for other heads are ignored (a verdict on an old head neither approves
