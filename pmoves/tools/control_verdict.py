@@ -21,9 +21,12 @@ Parse rules (strict, fail-closed):
 * ``verdict`` in {APPROVE, REQUEST_CHANGES};
 * ``head`` is exactly 40 lowercase hex characters;
 * ``reviewer`` is 1-64 chars of ``[A-Za-z0-9._-]`` starting alphanumeric;
-* anything that *looks like* a marker (case-insensitive prefix) but does not
-  match exactly is MALFORMED, and a comment carrying more than one marker is
-  MALFORMED as a whole (a comment must say one thing).
+* the marker must stand alone on its own unindented line;
+* markers inside inline code spans or fenced code blocks are quoted examples
+  and are IGNORED (``strip_code``);
+* anything else that *looks like* a marker (case-insensitive prefix) but does
+  not match exactly is MALFORMED, and a comment carrying more than one marker
+  is MALFORMED as a whole (a comment must say one thing).
 
 Selection rules (``select_verdict``):
 
@@ -130,6 +133,34 @@ def format_marker(verdict: str, head: str, reviewer: str) -> str:
     return marker
 
 
+_FENCE_OPEN_RE = re.compile(r"^ {0,3}(`{3,}|~{3,})")
+_INLINE_CODE_RE = re.compile(r"(`+)(?!`).*?(?<!`)\1(?!`)", re.DOTALL)
+
+
+def strip_code(text: str) -> str:
+    """Remove fenced code blocks and inline code spans (CommonMark-shaped).
+
+    A marker quoted as an example -- in backticks or a ``` / ~~~ fence -- is
+    documentation, not a vote. An unclosed fence runs to the end of the body,
+    as it renders on GitHub. Indented code blocks are not stripped; they are
+    caught instead by the own-line rule in ``parse_body``.
+    """
+    kept: list[str] = []
+    fence: str | None = None
+    for line in text.splitlines(keepends=True):
+        if fence is None:
+            opened = _FENCE_OPEN_RE.match(line)
+            if opened:
+                fence = opened.group(1)
+                continue
+            kept.append(line)
+            continue
+        closing = re.match(r"^ {0,3}(`{3,}|~{3,})\s*$", line)
+        if closing and closing.group(1)[0] == fence[0] and len(closing.group(1)) >= len(fence):
+            fence = None
+    return _INLINE_CODE_RE.sub("", "".join(kept))
+
+
 def parse_body(body: str) -> tuple[Verdict | None, str] | None:
     """Parse a comment body.
 
@@ -137,15 +168,19 @@ def parse_body(body: str) -> tuple[Verdict | None, str] | None:
     ``(Verdict, "")`` for exactly one well-formed marker, and
     ``(None, reason)`` for anything malformed or ambiguous.
     """
-    text = body or ""
+    text = strip_code(body or "")
     candidates = list(CANDIDATE_RE.finditer(text))
     if not candidates:
         return None
     if len(candidates) > 1:
         return None, f"comment carries {len(candidates)} markers; exactly one is allowed"
-    match = MARKER_RE.match(text, candidates[0].start())
+    start = candidates[0].start()
+    line_start = text.rfind("\n", 0, start) + 1
+    line_end = text.find("\n", start)
+    line = text[line_start : len(text) if line_end == -1 else line_end].rstrip()
+    match = MARKER_RE.fullmatch(line)
     if match is None:
-        return None, "marker does not match the strict v=1 shape"
+        return None, "marker must stand alone on its own unindented line in the strict v=1 shape"
     return (
         Verdict(
             verdict=match.group("verdict"),

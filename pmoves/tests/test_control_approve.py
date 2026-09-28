@@ -259,6 +259,41 @@ def test_strict_parse_rejects_near_misses(bad: str) -> None:
     assert parsed is not None and parsed[0] is None and parsed[1]
 
 
+@pytest.mark.parametrize(
+    "quoted",
+    [
+        "the format is `" + marker("REQUEST_CHANGES") + "` in a comment",
+        "``" + marker("REQUEST_CHANGES") + "``",
+        "```\n" + marker("REQUEST_CHANGES") + "\n```",
+        "~~~md\n" + marker("REQUEST_CHANGES") + "\n~~~",
+        "````\n```\n" + marker("REQUEST_CHANGES") + "\n```\n````",
+        "```\nunclosed fence runs to the end\n" + marker("REQUEST_CHANGES"),
+    ],
+    ids=["inline", "double-backtick", "fence", "tilde-fence", "nested-fence", "unclosed-fence"],
+)
+def test_markers_in_code_are_ignored(quoted: str) -> None:
+    assert control_verdict.parse_body(quoted) is None
+    # a quoted RC example after an APPROVE does not block it...
+    assert sel([comment(1, marker()), comment(2, quoted)]).approved
+    # ...and a quoted APPROVE never approves
+    assert not sel([comment(1, quoted.replace("REQUEST_CHANGES", "APPROVE"))]).approved
+
+
+def test_real_marker_beside_a_quoted_example_counts_once() -> None:
+    body = "Verdict below; the format is `" + marker("REQUEST_CHANGES") + "`.\n\n" + marker()
+    assert control_verdict.parse_body(body) == (control_verdict.Verdict("APPROVE", H, "B850-CLAUDE"), "")
+
+
+@pytest.mark.parametrize(
+    "body",
+    ["    " + marker(), "> " + marker(), "text before " + marker(), marker() + " trailing text"],
+    ids=["indented-code", "blockquote", "prefix", "suffix"],
+)
+def test_marker_not_alone_on_its_line_is_malformed(body: str) -> None:
+    parsed = control_verdict.parse_body(body)
+    assert parsed is not None and parsed[0] is None
+
+
 def test_two_markers_in_one_comment_are_malformed() -> None:
     parsed = control_verdict.parse_body(marker() + "\n" + marker("REQUEST_CHANGES"))
     assert parsed is not None and parsed[0] is None and "2 markers" in parsed[1]
