@@ -17,6 +17,10 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
+import types
+import urllib.response
+from email.message import Message
+
 import pytest
 
 TOOLS = Path(__file__).resolve().parents[1] / "tools"
@@ -97,6 +101,8 @@ class FakeGitHub:
         self.page_size: int | None = None
         self.requests: list[dict[str, Any]] = []
         self.bad_body: dict[tuple[str, str], Any] = {}  # (method, path-substring) -> bytes | Exception
+        self.link_override: str | None = None  # a Link header returned on the comments list
+        self.redirect_on: str | None = None  # path substring answered with a 302
 
     # urlopen replacement
     def __call__(self, req: urllib.request.Request, timeout: float | None = None) -> _Resp:
@@ -106,6 +112,10 @@ class FakeGitHub:
         data = req.data.decode() if req.data else ""
         self.requests.append({"method": method, "url": url, "headers": headers, "data": data})
         path = url.split("api.github.com", 1)[-1]
+        if self.redirect_on and self.redirect_on in path:
+            raise urllib.error.HTTPError(url, 302, "redirect refused (Found)", {"Location": "https://evil.example/x"}, io.BytesIO(b""))
+        if self.link_override and "/comments" in path and method == "GET":
+            return _Resp(self.comments, {"Link": self.link_override})
         for (m, needle), bad in self.bad_body.items():
             if m == method and needle in path:
                 if method == "POST":
@@ -185,7 +195,7 @@ class FakeGitHub:
 @pytest.fixture
 def gh(monkeypatch: pytest.MonkeyPatch) -> FakeGitHub:
     fake = FakeGitHub()
-    monkeypatch.setattr(urllib.request, "urlopen", fake)
+    monkeypatch.setattr(control_approve, "_build_opener", lambda *extra: types.SimpleNamespace(open=fake))
     return fake
 
 
@@ -686,6 +696,64 @@ def test_head_moves_between_post_and_verify_is_refused(gh: FakeGitHub, config: P
 # --------------------------------------------------------------------------
 # token hygiene beyond the request layer
 # --------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "link",
+    [
+        '<https://evil.example/repos/OWNER/REPO/issues/42/comments?page=2>; rel="next"',
+        '<http://api.github.com/repos/OWNER/REPO/issues/42/comments?page=2>; rel="next"',
+        '<https://api.github.com.evil.example/x?page=2>; rel="next"',
+    ],
+    ids=["other-host", "plain-http", "suffix-host"],
+)
+def test_link_urls_off_the_pinned_host_are_refused(gh: FakeGitHub, config: Path, link: str) -> None:
+    gh.link_override = link
+    assert run(config) == 3
+    assert all(r["url"].startswith("https://api.github.com/") for r in gh.requests)
+    assert gh.posts() == []
+
+
+def test_redirect_is_could_not_measure(gh: FakeGitHub, config: Path) -> None:
+    gh.redirect_on = "/user"
+    assert run(config) == 3
+    assert len(gh.requests) == 1
+
+
+@pytest.mark.parametrize(
+    "base",
+    ["http://api.github.com", "api.github.com", "https://", "https://user:pw@api.github.com", "ftp://api.github.com"],
+)
+def test_api_base_must_be_https_with_host(gh: FakeGitHub, config: Path, base: str) -> None:
+    assert run(config, extra=["--api-base", base]) == 2
+    assert gh.requests == []
+
+
+def test_real_opener_refuses_redirects_without_forwarding_the_token() -> None:
+    """End-to-end through urllib's own handler chain: a 302 must not be followed."""
+    seen: list[tuple[str, str | None]] = []
+
+    class FakeHTTPS(urllib.request.BaseHandler):
+        handler_order = 100  # ahead of the default HTTPSHandler
+
+        def https_open(self, req: urllib.request.Request) -> Any:
+            seen.append((req.full_url, req.get_header("Authorization")))
+            headers = Message()
+            headers["Location"] = "https://evil.example/steal"
+            resp = urllib.response.addinfourl(io.BytesIO(b""), headers, req.full_url, code=302)
+            resp.msg = "Found"  # type: ignore[attr-defined]  # HTTPErrorProcessor reads .msg
+            return resp
+
+    client = control_approve.GitHubClient(TOKEN, opener=control_approve._build_opener(FakeHTTPS))
+    with pytest.raises(control_approve.ApiUnreachable, match="redirect refused"):
+        client.get("/user")
+    assert [u for u, _ in seen] == ["https://api.github.com/user"]
+    # control: urllib's DEFAULT redirect handler would have forwarded the header
+    stock = urllib.request.build_opener(FakeHTTPS)
+    seen.clear()
+    with pytest.raises(Exception):
+        stock.open(urllib.request.Request("https://api.github.com/user", headers={"Authorization": "Bearer x"}))
+    assert any(u.startswith("https://evil.example") for u, _ in seen)
 
 
 def test_tool_does_not_shell_out() -> None:

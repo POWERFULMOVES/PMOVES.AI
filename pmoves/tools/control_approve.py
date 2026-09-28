@@ -16,7 +16,9 @@ Refusal matrix (every row exits non-zero with an honest message):
   exit 1  CONFIRM != "APPROVE #<N> @ <EXPECTED_HEAD>"
   exit 3  approver login not configured / config unreadable
   exit 3  PMOVES_CONTROL_TOKEN missing
-  exit 3  any GitHub read fails (network, 5xx, auth) -- could not measure
+  exit 2  --api-base is not an https URL with a host
+  exit 3  any GitHub read fails (network, 5xx, auth, a redirect, a Link URL
+          on another host) -- could not measure
   exit 1  token's /user login != configured approver login
   exit 1  PR closed / merged / draft / base != configured base
   exit 1  PR head != EXPECTED_HEAD (checked twice: before and just before POST)
@@ -37,7 +39,9 @@ Refusal matrix (every row exits non-zero with an honest message):
 always a structured ``VERDICT: <APPROVED|REFUSED|COULD-NOT-MEASURE> rc=<n>``.
 
 Token handling: the token is read from the environment and only ever placed in
-an ``Authorization`` request header via urllib. It is never an argv element,
+an ``Authorization`` request header via urllib, over https, to the configured
+API host only: redirects are refused (urllib would forward the header) and
+pagination Link URLs on any other scheme or host are refused. It is never an argv element,
 never printed, and every message is passed through ``_redact`` as a backstop.
 
 GitHub behaviours this relies on are tagged A1..A7 and listed in ONE place:
@@ -118,17 +122,54 @@ def _redact(text: str, secret: str | None) -> str:
     return str(text)
 
 
-class GitHubClient:
-    """Minimal GitHub REST client. The token lives only in request headers."""
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Refuse every redirect.
 
-    def __init__(self, token: str, api_base: str = API_BASE, timeout: float = 30.0):
+    urllib's default handler re-sends request headers -- including
+    Authorization -- to the Location target. The GitHub REST calls made here
+    never need a redirect, so any 3xx is surfaced as an HTTPError instead.
+    """
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):  # type: ignore[override]
+        raise urllib.error.HTTPError(req.full_url, code, f"redirect refused ({msg})", headers, fp)
+
+
+def _build_opener(*extra: Any) -> Any:
+    return urllib.request.build_opener(_NoRedirect, *extra)
+
+
+def validate_api_base(api_base: str) -> tuple[str, str]:
+    """Return (base-url, lower-case host) or raise ValueError. https only, no userinfo."""
+    parts = urllib.parse.urlsplit(api_base.strip())
+    if parts.scheme != "https" or not parts.hostname or parts.username or parts.password:
+        raise ValueError(f"--api-base must be an https URL with a host, got {api_base!r}")
+    if parts.query or parts.fragment:
+        raise ValueError("--api-base must not carry a query or fragment")
+    return api_base.strip().rstrip("/"), parts.netloc.lower()
+
+
+class GitHubClient:
+    """Minimal GitHub REST client. The token lives only in request headers,
+    and is only ever sent over https to the configured API host."""
+
+    def __init__(self, token: str, api_base: str = API_BASE, timeout: float = 30.0, opener: Any = None):
         self._token = token
-        self._api_base = api_base.rstrip("/")
+        self._api_base, self._netloc = validate_api_base(api_base)
         self._timeout = timeout
+        self._opener = opener if opener is not None else _build_opener()
 
     def _url(self, path: str) -> str:
-        if path.startswith("https://"):
+        if "://" in path:
+            # Absolute URLs only arrive via Link headers: pin them to our host.
+            parts = urllib.parse.urlsplit(path)
+            if parts.scheme != "https" or parts.netloc.lower() != self._netloc:
+                raise ApiUnreachable(
+                    f"refusing to send the token to {parts.scheme}://{parts.netloc} "
+                    f"(pinned to https://{self._netloc})"
+                )
             return path
+        if not path.startswith("/"):
+            raise ApiUnreachable(f"refusing a non-absolute API path {path!r}")
         return f"{self._api_base}{path}"
 
     def request(self, method: str, path: str, body: dict[str, Any] | None = None) -> tuple[Any, dict[str, str]]:
@@ -141,11 +182,13 @@ class GitHubClient:
         if data is not None:
             req.add_header("Content-Type", "application/json")
         try:
-            with urllib.request.urlopen(req, timeout=self._timeout) as resp:
+            with self._opener.open(req, timeout=self._timeout) as resp:
                 raw = resp.read()
                 headers = {k.lower(): v for k, v in dict(resp.headers or {}).items()}
             payload = json.loads(raw.decode("utf-8")) if raw else None
         except urllib.error.HTTPError as exc:
+            if 300 <= exc.code < 400:
+                raise ApiUnreachable(f"HTTP {exc.code} redirect refused; the token is never forwarded") from None
             detail = ""
             try:
                 detail = exc.read().decode("utf-8", "replace")[:500]
@@ -475,6 +518,10 @@ def main(argv: list[str] | None = None, env: dict[str, str] | None = None) -> in
 
     code: int
     try:
+        try:
+            validate_api_base(args.api_base)
+        except ValueError as exc:
+            raise Outcome(EXIT_USAGE, str(exc)) from None
         if not HEAD_RE.match(args.expected_head or ""):
             raise Outcome(EXIT_USAGE, "EXPECTED_HEAD must be the full 40-character lowercase commit sha")
         settings = load_settings(Path(args.config), env, args.repo, args.base)
