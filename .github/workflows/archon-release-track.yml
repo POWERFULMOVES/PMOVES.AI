@@ -1,0 +1,237 @@
+name: Archon release track (gated :current)
+
+# Archon FOLLOWS upstream releases. No hand-bumped pin:
+#   1. resolve  pmoves/tools/upstream_release_track.py archon -- newest upstream
+#               release, and whether POWERFULMOVES/PMOVES-Archon's hardened branch
+#               contains it (rc 0 yes / 1 no / 3 could-not-measure).
+#   2. rc 1  -> the fork needs a sync. fork-sync.yml has no per-fork selector and
+#               its ahead guard (ahead_max=20) skips this fork as MANUAL, so an
+#               issue is opened/updated pointing at the fleet-fork-sync manual road.
+#   3. rc 0  -> build <version>-pmoves.<sha8> (amd64+arm64) from the EXACT resolved
+#               fork sha, push it, then run the SAME gate script nodes run
+#               (pmoves/tools/archon_release_channel.sh promote). Only on pass is
+#               :current moved (multi-arch manifest copy). On fail :current is
+#               untouched and the job fails.
+#   4. rc 3  -> fail loudly (never a silent pass).
+#
+# Known limits: the gate boots the amd64 variant on SQLite (compose runs
+# Postgres); arm64 is built but not smoke-tested here.
+
+on:
+  schedule:
+    - cron: '41 6 * * *'  # daily; upstream releases roughly weekly
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Resolve and report only (no build, no push, no issue)'
+        required: false
+        default: false
+        type: boolean
+  repository_dispatch:
+    types: [archon-upstream-release]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: archon-release-track
+  cancel-in-progress: false
+
+env:
+  IMAGE_REPO: ghcr.io/powerfulmoves/pmoves-archon
+  CHANNEL: current
+
+jobs:
+  resolve:
+    name: Resolve latest upstream release
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      rc: ${{ steps.r.outputs.rc }}
+      release_tag: ${{ steps.r.outputs.release_tag }}
+      release_version: ${{ steps.r.outputs.release_version }}
+      release_sha: ${{ steps.r.outputs.release_sha }}
+      fork: ${{ steps.r.outputs.fork }}
+      fork_sha: ${{ steps.r.outputs.fork_sha }}
+      fork_sha8: ${{ steps.r.outputs.fork_sha8 }}
+      compare: ${{ steps.r.outputs.compare }}
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Resolve
+        id: r
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -uo pipefail
+          out="$(python3 pmoves/tools/upstream_release_track.py archon)"
+          rc=$?
+          printf '%s\n' "$out"
+          echo "rc=$rc" >> "$GITHUB_OUTPUT"
+          [ "$rc" -eq 3 ] && { echo "::error::COULD-NOT-MEASURE: release resolution failed"; exit 0; }
+          # Re-validate before anything reaches GITHUB_OUTPUT (the resolver
+          # already validates; this is the second fence, not the first).
+          get() { printf '%s\n' "$out" | sed -n "s/^$1=//p"; }
+          chk() { printf '%s' "$2" | grep -Eqx -- "$3" || { echo "::error::bad $1"; echo "rc=3" >> "$GITHUB_OUTPUT"; exit 0; }; }
+          tag="$(get RELEASE_TAG)";     chk RELEASE_TAG "$tag" '[A-Za-z0-9._-]{1,64}'
+          ver="$(get RELEASE_VERSION)"; chk RELEASE_VERSION "$ver" '[A-Za-z0-9._-]{1,64}'
+          rsha="$(get RELEASE_SHA)";    chk RELEASE_SHA "$rsha" '[0-9a-f]{40}'
+          fork="$(get FORK)";           chk FORK "$fork" 'POWERFULMOVES/PMOVES-Archon'
+          fsha="$(get FORK_SHA)";       chk FORK_SHA "$fsha" '[0-9a-f]{40}'
+          cmp="$(get COMPARE)";         chk COMPARE "$cmp" '(ahead|identical|behind|diverged)'
+          {
+            echo "release_tag=$tag"; echo "release_version=$ver"; echo "release_sha=$rsha"
+            echo "fork=$fork"; echo "fork_sha=$fsha"; echo "fork_sha8=${fsha:0:8}"; echo "compare=$cmp"
+          } >> "$GITHUB_OUTPUT"
+          {
+            echo "### Archon release track"
+            echo "- upstream latest: \`$tag\` (\`${rsha:0:8}\`)"
+            echo "- fork hardened: \`${fsha:0:8}\` (compare: \`$cmp\`)"
+            echo "- resolver rc: \`$rc\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  could-not-measure:
+    name: Could not measure
+    needs: resolve
+    if: needs.resolve.outputs.rc == '3'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Fail loudly
+        run: |
+          echo "::error::Archon release resolution could not be measured; :current untouched."
+          exit 1
+
+  sync-needed:
+    name: Fork lacks the release (open/update issue)
+    needs: resolve
+    if: needs.resolve.outputs.rc == '1' && !(github.event_name == 'workflow_dispatch' && inputs.dry_run)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Open or update the sync issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ needs.resolve.outputs.release_tag }}
+          FSHA8: ${{ needs.resolve.outputs.fork_sha8 }}
+          CMP: ${{ needs.resolve.outputs.compare }}
+        run: |
+          set -euo pipefail
+          title="Archon: hardened fork lacks upstream ${TAG} (sync needed)"
+          body="POWERFULMOVES/PMOVES-Archon PMOVES.AI-Edition-Hardened (${FSHA8}) does not contain coleam00/Archon ${TAG} (compare: ${CMP}).
+
+          fork-sync.yml cannot do this one (no per-fork selector; the ahead guard skips this fork as MANUAL). Use the fleet-fork-sync manual road (Step 4): merge the upstream dev commit that first contains ${TAG}, resolve conflicts preserving PMOVES hardening, merge-commit the fork PR (never squash).
+
+          Once merged, the next run of archon-release-track builds, gates and publishes :current.
+
+          Opened by .github/workflows/archon-release-track.yml run ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          existing="$(gh issue list --state open --search "in:title \"${title}\"" --json number,title --jq ".[] | select(.title == \"${title}\") | .number" | head -1)"
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body "Still unsynced as of run ${GITHUB_RUN_ID} (fork ${FSHA8}, compare ${CMP})."
+            echo "::warning::Archon fork still lacks ${TAG}; updated issue #${existing}"
+          else
+            gh issue create --title "$title" --body "$body"
+            echo "::warning::Archon fork lacks ${TAG}; opened an issue"
+          fi
+
+  build-gate-publish:
+    name: Build, gate and publish :current
+    needs: resolve
+    if: needs.resolve.outputs.rc == '0' && !(github.event_name == 'workflow_dispatch' && inputs.dry_run)
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    permissions:
+      contents: read
+      packages: write
+    env:
+      FORK: ${{ needs.resolve.outputs.fork }}
+      FORK_SHA: ${{ needs.resolve.outputs.fork_sha }}
+      RELEASE_TAG: ${{ needs.resolve.outputs.release_tag }}
+      RELEASE_SHA: ${{ needs.resolve.outputs.release_sha }}
+      RELEASE_VERSION: ${{ needs.resolve.outputs.release_version }}
+      CANDIDATE: ghcr.io/powerfulmoves/pmoves-archon:${{ needs.resolve.outputs.release_version }}-pmoves.${{ needs.resolve.outputs.fork_sha8 }}
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c
+        with:
+          egress-policy: audit
+
+      - name: Checkout (gate script)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Log in to GHCR
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Is this release already :current?
+        id: state
+        run: |
+          set -euo pipefail
+          digest() { docker buildx imagetools inspect "$1" --format '{{json .Manifest}}' 2>/dev/null | python3 -c 'import json,sys; print(json.load(sys.stdin).get("digest",""))' 2>/dev/null || true; }
+          cand="$(digest "$CANDIDATE")"
+          cur="$(digest "$IMAGE_REPO:$CHANNEL")"
+          echo "candidate=${cand:-absent} current=${cur:-absent}"
+          echo "built=$([ -n "$cand" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          if [ -n "$cand" ] && [ "$cand" = "$cur" ]; then
+            echo "done=true" >> "$GITHUB_OUTPUT"
+            echo "- \`$CANDIDATE\` is already \`:$CHANNEL\`; nothing to do" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "done=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up QEMU
+        if: steps.state.outputs.done != 'true' && steps.state.outputs.built != 'true'
+        uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8 # v4
+
+      - name: Set up Buildx
+        if: steps.state.outputs.done != 'true' && steps.state.outputs.built != 'true'
+        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4
+
+      - name: Build and push the candidate (exact resolved fork sha)
+        if: steps.state.outputs.done != 'true' && steps.state.outputs.built != 'true'
+        run: |
+          set -euo pipefail
+          docker buildx build --platform linux/amd64,linux/arm64 \
+            --label "org.opencontainers.image.revision=$FORK_SHA" \
+            --label "org.opencontainers.image.version=$RELEASE_VERSION" \
+            --label "org.opencontainers.image.source=https://github.com/$FORK" \
+            --label "pmoves.upstream.release=$RELEASE_TAG" \
+            --label "pmoves.upstream.release.sha=$RELEASE_SHA" \
+            -t "$CANDIDATE" --push "https://github.com/$FORK.git#$FORK_SHA"
+
+      - name: Gate (same script nodes run) - SQLite boot + /api/health + version
+        if: steps.state.outputs.done != 'true'
+        env:
+          ARCHON_CHANNEL_REPO: ghcr.io/powerfulmoves/pmoves-archon
+          ARCHON_CHANNEL: current
+          ARCHON_SMOKE_TIMEOUT: '240'
+        run: |
+          set -euo pipefail
+          docker pull --platform linux/amd64 "$CANDIDATE"
+          IMAGE="$CANDIDATE" sh pmoves/tools/archon_release_channel.sh promote
+
+      - name: Publish :current (multi-arch manifest copy, only after the gate passed)
+        if: steps.state.outputs.done != 'true'
+        run: |
+          set -euo pipefail
+          docker buildx imagetools create -t "$IMAGE_REPO:$CHANNEL" "$CANDIDATE"
+          echo "- ✔ \`$IMAGE_REPO:$CHANNEL\` → \`$CANDIDATE\` ($RELEASE_TAG)" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Report gate failure loudly
+        if: failure()
+        run: |
+          echo "::error::Archon ${RELEASE_TAG} (${CANDIDATE}) did NOT become :${CHANNEL}. :${CHANNEL} is unchanged. See the gate step log."
+          echo "- ✖ gate/build failed for \`$CANDIDATE\`; \`:$CHANNEL\` unchanged" >> "$GITHUB_STEP_SUMMARY"
