@@ -115,8 +115,8 @@ test.describe('Agent Zero Chat', () => {
     const reply = page.getByText('- first item', { exact: false });
     await expect(reply).toBeVisible();
     await expect(reply).toContainText('- second item');
-    // The author label is the <span> above the content ({m.agent || m.role})
-    await expect(page.locator('span').filter({ hasText: /^Agent Zero$/ })).toBeVisible();
+    // The author label ({m.agent || m.role}) sits in the same message bubble as the content
+    await expect(reply.locator('..').getByText('Agent Zero', { exact: true })).toBeVisible();
   });
 
   // fixme: FEATURE NOT BUILT. The chat page renders message content as plain text
