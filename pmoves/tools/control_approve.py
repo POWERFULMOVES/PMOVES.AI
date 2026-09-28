@@ -27,6 +27,7 @@ Refusal matrix (every row exits non-zero with an honest message):
   exit 3  POST outcome unknown: 5xx, network error, bad/partial body
   exit 1  post-verify: no APPROVED review by the approver on EXPECTED_HEAD
   exit 1  post-verify: PR head moved while approving (race)
+  exit 3  any unexpected error (always still ends with the VERDICT line)
   exit 0  APPROVED review by the approver on EXPECTED_HEAD read back from GitHub
 
 ``make`` collapses every nonzero exit to 2, so the last line of output is
@@ -43,6 +44,7 @@ MERGE_MECHANICS.md "6.6 GitHub behaviours this road assumes".
 from __future__ import annotations
 
 import argparse
+import http.client
 import json
 import os
 import re
@@ -95,7 +97,8 @@ class ApiError(Exception):
 
 
 class ApiUnreachable(Exception):
-    """No HTTP answer at all (DNS, TLS, connection, timeout)."""
+    """No usable HTTP answer: DNS/TLS/connection/timeout, a truncated body
+    (http.client.IncompleteRead), or a body that is not the JSON we asked for."""
 
 
 @dataclass
@@ -138,6 +141,7 @@ class GitHubClient:
             with urllib.request.urlopen(req, timeout=self._timeout) as resp:
                 raw = resp.read()
                 headers = {k.lower(): v for k, v in dict(resp.headers or {}).items()}
+            payload = json.loads(raw.decode("utf-8")) if raw else None
         except urllib.error.HTTPError as exc:
             detail = ""
             try:
@@ -145,9 +149,10 @@ class GitHubClient:
             except Exception:  # noqa: BLE001 - detail is best-effort, status is reported
                 detail = ""
             raise ApiError(exc.code, _redact(detail or str(exc.reason), self._token)) from None
-        except (urllib.error.URLError, TimeoutError, OSError) as exc:
-            raise ApiUnreachable(_redact(str(exc), self._token)) from None
-        payload = json.loads(raw.decode("utf-8")) if raw else None
+        except (urllib.error.URLError, TimeoutError, OSError, http.client.HTTPException) as exc:
+            raise ApiUnreachable(_redact(f"{type(exc).__name__}: {exc}", self._token)) from None
+        except ValueError as exc:  # JSONDecodeError and UnicodeDecodeError are ValueErrors
+            raise ApiUnreachable(_redact(f"unparseable response body ({type(exc).__name__})", self._token)) from None
         return payload, headers
 
     def get(self, path: str) -> Any:
@@ -419,6 +424,14 @@ def main(argv: list[str] | None = None, env: dict[str, str] | None = None) -> in
         code = outcome.code
         stream = sys.stdout if code == EXIT_OK else sys.stderr
         print(_redact(f"{_LABEL.get(code, 'REFUSED')}: {outcome.message}", token), file=stream)
+    except Exception as exc:  # noqa: BLE001 - the VERDICT line must always be printed
+        # Anything unexpected (bad data shapes, a bug) is could-not-measure: it may
+        # have happened after the POST, so "refused" would be a false statement.
+        code = EXIT_UNMEASURED
+        print(
+            _redact(f"COULD-NOT-MEASURE: unexpected {type(exc).__name__}: {exc}", token),
+            file=sys.stderr,
+        )
     print(f"VERDICT: {_LABEL.get(code, 'REFUSED')} rc={code}")
     return code
 

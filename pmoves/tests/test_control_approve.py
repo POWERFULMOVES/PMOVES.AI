@@ -7,6 +7,7 @@ pagination, error mapping) is what runs.
 
 from __future__ import annotations
 
+import http.client
 import io
 import json
 import re
@@ -56,11 +57,14 @@ def comment(cid: int, body: str, author: str = AUTHOR, created: str | None = Non
 
 
 class _Resp:
-    def __init__(self, payload: Any, headers: dict[str, str] | None = None):
-        self._raw = b"" if payload is None else json.dumps(payload).encode()
+    def __init__(self, payload: Any, headers: dict[str, str] | None = None, raw: bytes | None = None, read_exc: Exception | None = None):
+        self._raw = raw if raw is not None else (b"" if payload is None else json.dumps(payload).encode())
+        self._read_exc = read_exc
         self.headers = headers or {}
 
     def read(self) -> bytes:
+        if self._read_exc is not None:
+            raise self._read_exc
         return self._raw
 
     def __enter__(self) -> "_Resp":
@@ -91,6 +95,7 @@ class FakeGitHub:
         self.fail: dict[str, Any] = {}  # path-substring -> HTTPError code or "unreachable"
         self.page_size: int | None = None
         self.requests: list[dict[str, Any]] = []
+        self.bad_body: dict[tuple[str, str], Any] = {}  # (method, path-substring) -> bytes | Exception
 
     # urlopen replacement
     def __call__(self, req: urllib.request.Request, timeout: float | None = None) -> _Resp:
@@ -100,6 +105,14 @@ class FakeGitHub:
         data = req.data.decode() if req.data else ""
         self.requests.append({"method": method, "url": url, "headers": headers, "data": data})
         path = url.split("api.github.com", 1)[-1]
+        for (m, needle), bad in self.bad_body.items():
+            if m == method and needle in path:
+                if method == "POST":
+                    self.reviews.append({"id": 9700, "user": {"login": self.login}, "state": "APPROVED",
+                                         "commit_id": json.loads(data)["commit_id"], "submitted_at": "2026-09-28T11:00:00Z"})
+                if isinstance(bad, Exception):
+                    return _Resp(None, read_exc=bad)
+                return _Resp(None, raw=bad)
         for needle, how in self.fail.items():
             if needle in path and (method == "GET"):
                 if how == "unreachable":
@@ -483,6 +496,36 @@ def test_post_5xx_is_could_not_measure_not_refused(gh: FakeGitHub, config: Path,
     assert "may have been stored" in out.err
     # the probe from review round 1: the review WAS stored despite the 5xx
     assert any(r["state"] == "APPROVED" for r in gh.reviews)
+
+
+@pytest.mark.parametrize(
+    "method,needle,bad",
+    [
+        ("GET", "/user", b"<html>not json</html>"),
+        ("GET", "/comments", b"\xff\xfe not utf-8"),
+        ("GET", "/pulls/42", http.client.IncompleteRead(b"{\"state\":")),
+        ("POST", "/reviews", b"not json"),
+        ("POST", "/reviews", http.client.IncompleteRead(b"{")),
+    ],
+    ids=["user-html", "comments-bytes", "pr-incomplete", "post-bad-json", "post-incomplete"],
+)
+def test_bad_bodies_are_could_not_measure_with_verdict_line(
+    gh: FakeGitHub, config: Path, method: str, needle: str, bad: Any, capsys: pytest.CaptureFixture[str]
+) -> None:
+    gh.bad_body[(method, needle)] = bad
+    assert run(config) == 3
+    out = capsys.readouterr()
+    assert out.out.strip().splitlines()[-1] == "VERDICT: COULD-NOT-MEASURE rc=3"
+    assert "Traceback" not in out.err
+    assert_token_hygiene(gh, out.out + out.err)
+
+
+def test_unexpected_error_still_prints_verdict_line(gh: FakeGitHub, config: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    gh.reviews.append({"id": "not-an-int", "user": {"login": APPROVER}, "state": "APPROVED", "commit_id": H})
+    assert run(config) == 3
+    out = capsys.readouterr()
+    assert out.out.strip().splitlines()[-1] == "VERDICT: COULD-NOT-MEASURE rc=3"
+    assert "unexpected ValueError" in out.err
 
 
 def test_post_unreachable_is_could_not_measure(gh: FakeGitHub, config: Path) -> None:
