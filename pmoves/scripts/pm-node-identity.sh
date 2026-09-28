@@ -30,6 +30,9 @@
 #   PM_IDENT_PY[@]   the python argv the resolver ran under ('' if none found)
 #   PM_IDENT_LINE    one line for stderr, already prefixed with <label>
 #   PM_IDENT_OK      1 when an identity resolved, 0 otherwise
+#   PM_IDENT_DISPLAY / PM_IDENT_REGISTER_FORM / PM_IDENT_DISPLAY_WHY
+#                    the name the session IS and the register owner string,
+#                    both empty when undeclared (the WHY says so)
 # and on success also PMOVES_NODE / PMOVES_NODE_IDENTITY (exported).
 #
 # <harness> is passed through to node_identity.py --harness. It is NOT cosmetic:
@@ -52,6 +55,14 @@ pm_node_identity() {
   # every call so a second resolution cannot inherit the first node's answer.
   PM_IDENT_CIPHER_ID=""
   PM_IDENT_CIPHER_WHY=""
+  # The NAME the session is (B850-CLAUDE) and the owner string it signs the
+  # register with (B850-CLAUDE (Knuckles)) -- a fourth and fifth output, from
+  # identity_vocabulary.yaml's declared register_form. Reset per call for the
+  # same reason as the cipher pair. Empty means "undeclared", and
+  # PM_IDENT_DISPLAY_WHY says why; the caller falls back LOUDLY.
+  PM_IDENT_DISPLAY=""
+  PM_IDENT_REGISTER_FORM=""
+  PM_IDENT_DISPLAY_WHY=""
 
   local tool="$root/pmoves/tools/node_identity.py"
   if [ ! -f "$tool" ]; then
@@ -124,6 +135,17 @@ pm_node_identity() {
   PM_IDENT_CIPHER_ID="${PMOVES_CIPHER_AGENT_ID:-}"
   PM_IDENT_CIPHER_WHY="${PMOVES_CIPHER_AGENT_WHY:-}"
 
+  # REGISTER NAME -- who the session IS, not which registry key or card.
+  # Without it the launcher could only say "your registered identity is
+  # claude_b850 ... your role is node-steward", and the session woke up as the
+  # role, speaking of B850-CLAUDE as a third party directing it. The resolver
+  # reads identity_vocabulary.yaml's declared register_form; see
+  # resolve_register_name in node_identity.py. NOT exported: argv material for
+  # the prompt, like PM_IDENT_PROMPT below.
+  PM_IDENT_DISPLAY="${PMOVES_IDENTITY_NAME:-}"
+  PM_IDENT_REGISTER_FORM="${PMOVES_REGISTER_FORM:-}"
+  PM_IDENT_DISPLAY_WHY="${PMOVES_REGISTER_WHY:-resolver emitted no register name}"
+
   if [ -z "${PMOVES_NODE_IDENTITY:-}" ]; then
     PM_IDENT_LINE="[$label] node=${PMOVES_NODE:-unknown} identity=unresolved: ${PMOVES_IDENTITY_WHY:-no reason given}"
     return 1
@@ -133,7 +155,7 @@ pm_node_identity() {
   # cipher_agent on the same line as the identity, for all nine launchers: the
   # two spellings differ, and a line that prints only one of them is how the
   # mismatch stayed invisible.
-  PM_IDENT_LINE="[$label] node=${PMOVES_NODE} identity=${PMOVES_NODE_IDENTITY} cipher_agent=${PM_IDENT_CIPHER_ID:-none}"
+  PM_IDENT_LINE="[$label] node=${PMOVES_NODE} identity=${PMOVES_NODE_IDENTITY} cipher_agent=${PM_IDENT_CIPHER_ID:-none} name=${PM_IDENT_DISPLAY:-unresolved}"
   return 0
 }
 

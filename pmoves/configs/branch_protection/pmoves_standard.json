@@ -79,7 +79,23 @@
   "per_repo_overrides": {
     "POWERFULMOVES/pmoves-keygen": {
       "profile": "fork",
-      "branch": "PMOVES.AI-Edition-Hardened"
+      "_note": "branch tracks .gitmodules, NOT the GitHub default: the parent pins PMOVES.AI-Edition-Hardened while this repo default is master (they were byte-identical at 1302da9 until cmd/keygen-cli landed). The required context is the repo OWN gate, keygen-gate, deliberately: the upstream charmbracelet/meta shim CANNOT be required, because its govulncheck step runs x/vuln@latest under GOTOOLCHAIN=local and that now needs go>=1.26 on a 1.25 runner - it fails on any commit in this repo, so requiring it would make keygen permanently unmergeable.",
+      "branch": "PMOVES.AI-Edition-Hardened",
+      "ruleset_overrides": {
+        "[ main ]": {
+          "rules": [
+            {
+              "type": "required_status_checks",
+              "parameters": {
+                "required_status_checks": [
+                  { "context": "keygen-gate" }
+                ],
+                "strict_required_status_checks_policy": true
+              }
+            }
+          ]
+        }
+      }
     },
     "POWERFULMOVES/PMOVES-E2B-Danger-Room": {
       "profile": "fork",

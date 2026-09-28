@@ -702,7 +702,7 @@ submodule_fleet:
 
     - submodule: "PMOVES-n8n"
       tier: "Workflow"
-      git: "https://github.com/POWERFULMOVES/PMOVES-n8n.git"
+      git: "https://github.com/POWERFULMOVES/PMOVES-n8n-FlooS.git"
       branch: "PMOVES.AI-Edition-Hardened"
       use: "BPM³ workflow automation: intake → insurance → follow-up"
       

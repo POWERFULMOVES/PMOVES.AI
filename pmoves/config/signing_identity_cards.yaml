@@ -471,3 +471,118 @@ cards:
       runtime key. Operational/visual registry half (agent_registry.yaml +
       agent_signatures.yaml entries) is a follow-up lane; the cipher chain only
       needs this card + the vocabulary declaration.
+
+  # ---- Village Rule bodies on B850/Knuckles (H half only, INACTIVE) ----
+  #
+  # The four AGNOTE4482 bodies a node_steward spawns (agent_registry.yaml:
+  # delivery_agent, code_review, control_agent, memory_agent). Seeded 2026-09-23
+  # so the bodies have a registered name, glyph, color and voice that Known
+  # Roads and trail UIs can render. NOT issued: `active: false`, every ML key
+  # field null.
+  #
+  # KEYS ARE OPERATOR-ONLY. The operator issues each key per
+  # pmoves/docs/operations/SIGNING_IDENTITY_CARDS.md ("How to issue a new card")
+  # and flips `active: true` in the same signed commit. Nothing in this lane
+  # generates, provisions or activates a key. While inactive,
+  # build_allowed_signers.py refuses to trust the card and sign_trail.py
+  # finds no active card, so the body's work keeps signing as b850-claude.
+  #
+  # PER NODE, NOT FLEET-WIDE. Every card in this file whose key is populated
+  # binds ONE key (ssh_fingerprint / ssh_allowed_signers_line), and a private
+  # key lives on one machine. A fleet-wide `delivery-agent` card would need the
+  # same private key copied to every node, and then the signature would prove
+  # "some node" -- the deployment-wide-key defect the `kid` work in
+  # SIGNING_IDENTITY_CARDS.md exists to close. So the spelling follows the node
+  # personas above, `<node>-<harness>` (`b850-claude`), with the body's runtime
+  # name (`.claude/agents/<name>.md`) in place of the harness. Only B850 is
+  # seeded: this file's own policy is "cards seeded only when an agent_id starts
+  # emitting trail entries" (missling-link card notes), and B850 is the node
+  # that runs these bodies today. Other nodes add theirs the same way.
+  #
+  # This does not give one signer two names (the objection recorded on
+  # node_steward in agent_registry.yaml): an active body card would carry its
+  # OWN key, distinct from b850-claude's, so it is a different signer.
+  #
+  # h.role is `agent`. signing-card.v1.schema.json enumerates h.role as
+  # operator/agent/runner/service-account, but that enum is NOT enforced on
+  # this file: it already carries `evaluator`, `ci-bot`, `community_steward`
+  # and `creator_steward`, which fail it (audit_naming_drift.py validates only
+  # when jsonschema is installed). `agent` is chosen because it is inside the
+  # schema's enum AND is what these bodies are, not because nothing else can
+  # appear here. The Three-Body seat lives in agent_registry.yaml
+  # (`three_body`) and in `notes` below, not in h.
+- card_id: "00000000-0000-4000-8000-000000000052"
+  issued_at: "2026-09-23T00:00:00Z"
+  active: false
+  notes: |
+    H half only, INACTIVE. B850 Delivery Body (registry: delivery_agent;
+    .claude/agents/delivery-agent.md; three_body: delivery). Operator issues
+    the key per pmoves/docs/operations/SIGNING_IDENTITY_CARDS.md.
+  ml:
+    primary_method: ssh
+    ssh_fingerprint:
+    ssh_allowed_signers_line:
+  h:
+    agent_id: "b850-delivery-agent"
+    display_name: "B850 Delivery Body"
+    glyph: "➤"          # ➤ arrowhead -- execution
+    color: "#B45309"     # amber-700
+    voice: implementation
+    role: agent
+
+- card_id: "00000000-0000-4000-8000-000000000053"
+  issued_at: "2026-09-23T00:00:00Z"
+  active: false
+  notes: |
+    H half only, INACTIVE. B850 Code Review Body (registry: code_review;
+    .claude/agents/code-review.md; three_body: control, post-work). Operator
+    issues the key per pmoves/docs/operations/SIGNING_IDENTITY_CARDS.md.
+  ml:
+    primary_method: ssh
+    ssh_fingerprint:
+    ssh_allowed_signers_line:
+  h:
+    agent_id: "b850-code-review"
+    display_name: "B850 Code Review Body"
+    glyph: "◈"          # ◈ diamond in diamond -- inspection
+    color: "#4338CA"     # indigo-700
+    voice: analytical
+    role: agent
+
+- card_id: "00000000-0000-4000-8000-000000000054"
+  issued_at: "2026-09-23T00:00:00Z"
+  active: false
+  notes: |
+    H half only, INACTIVE. B850 Control Body (registry: control_agent;
+    .claude/agents/control-agent.md; three_body: control). Operator issues
+    the key per pmoves/docs/operations/SIGNING_IDENTITY_CARDS.md.
+  ml:
+    primary_method: ssh
+    ssh_fingerprint:
+    ssh_allowed_signers_line:
+  h:
+    agent_id: "b850-control-agent"
+    display_name: "B850 Control Body"
+    glyph: "⊞"          # ⊞ squared plus -- gate
+    color: "#334155"     # slate-700
+    voice: directive
+    role: agent
+
+- card_id: "00000000-0000-4000-8000-000000000055"
+  issued_at: "2026-09-23T00:00:00Z"
+  active: false
+  notes: |
+    H half only, INACTIVE. B850 Memory Body (registry: memory_agent;
+    .claude/agents/memory-agent.md; three_body: memory). Operator issues the
+    key per pmoves/docs/operations/SIGNING_IDENTITY_CARDS.md.
+  ml:
+    primary_method: ssh
+    ssh_fingerprint:
+    ssh_allowed_signers_line:
+  h:
+    agent_id: "b850-memory-agent"
+    display_name: "B850 Memory Body"
+    glyph: "∞"          # ∞ infinity -- persistence
+    color: "#65A30D"     # lime-600
+    voice: witness
+    role: agent

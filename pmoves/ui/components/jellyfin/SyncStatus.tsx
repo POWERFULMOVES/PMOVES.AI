@@ -60,7 +60,7 @@ export function SyncStatus({
   const isHealthy = status && (status.status === "idle" || status.status === "completed");
 
   return (
-    <div className="rounded border border-neutral-200 bg-white p-4">
+    <div data-testid="sync-status" className="rounded border border-neutral-200 bg-white p-4">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
           <h2 className="text-lg font-medium">Sync Status</h2>
@@ -72,10 +72,11 @@ export function SyncStatus({
           )}
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-xs text-neutral-500">
+          <span data-testid="last-sync-time" className="text-xs text-neutral-500">
             Last: {formatTimeAgo(status?.lastSync ?? null)}
           </span>
           <button
+            data-testid="refresh-status-button"
             onClick={onRefresh}
             disabled={syncing || backfilling}
             className="rounded border border-neutral-300 px-3 py-1 text-sm hover:bg-neutral-50 disabled:opacity-50 transition"
@@ -91,7 +92,7 @@ export function SyncStatus({
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
             {/* Videos Linked */}
             <div className={STAT_CARD_CLASSES}>
-              <div className={`${STAT_VALUE_CLASSES} ${STAT_COLORS.videosLinked}`}>
+              <div data-testid="videos-linked-count" className={`${STAT_VALUE_CLASSES} ${STAT_COLORS.videosLinked}`}>
                 {status.videosLinked}
               </div>
               <div className={STAT_LABEL_CLASSES}>Videos Linked</div>
@@ -107,7 +108,7 @@ export function SyncStatus({
 
             {/* Status */}
             <div className={STAT_CARD_CLASSES}>
-              <div className={`${STAT_VALUE_CLASSES} ${STAT_COLORS.status}`}>
+              <div data-testid="connection-status" className={`${STAT_VALUE_CLASSES} ${STAT_COLORS.status}`}>
                 {status.status}
               </div>
               <div className={STAT_LABEL_CLASSES}>Status</div>
@@ -115,7 +116,7 @@ export function SyncStatus({
 
             {/* Errors */}
             <div className={STAT_CARD_CLASSES}>
-              <div className={`${STAT_VALUE_CLASSES} ${STAT_COLORS.errors} ${hasErrors ? "animate-pulse" : ""}`}>
+              <div data-testid="sync-error-count" className={`${STAT_VALUE_CLASSES} ${STAT_COLORS.errors} ${hasErrors ? "animate-pulse" : ""}`}>
                 {status.errors}
               </div>
               <div className={STAT_LABEL_CLASSES}>Errors</div>
@@ -141,6 +142,7 @@ export function SyncStatus({
           {/* Action buttons */}
           <div className="flex flex-wrap gap-2 mt-4">
             <button
+              data-testid="sync-now-button"
               onClick={handleSync}
               disabled={syncing}
               className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center gap-2"
@@ -159,6 +161,7 @@ export function SyncStatus({
             </button>
 
             <button
+              data-testid="backfill-button"
               onClick={handleBackfill}
               disabled={backfilling}
               className="rounded border border-blue-600 px-4 py-2 text-sm font-medium text-blue-600 hover:bg-blue-50 disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center gap-2"

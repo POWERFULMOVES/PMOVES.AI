@@ -398,9 +398,12 @@ jobs:
   # never gate anything is the same orphan this commit exists to remove, so it
   # lives here instead - unfiltered, aggregated, and requirable.
   #
-  # No submodule checkout needed: the tool falls back to fetching the fork's
-  # requirements.txt at the GITLINK sha over https, which keeps the comparison
-  # deterministic. Gitlink-vs-branch drift is submodule-freshness.yml's job.
+  # No submodule checkout needed: the tool resolves the AGENT_ZERO_REF that
+  # Dockerfile.multiarch builds (git ls-remote, API fallback) and fetches the
+  # fork's requirements.txt at that sha with a depth-1 git fetch. GH_TOKEN
+  # authenticates the API/raw fallbacks, which are otherwise limited to 60
+  # requests/hour per shared runner IP. Gitlink-vs-branch drift is
+  # submodule-freshness.yml's job.
   agent-zero-pin-check:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -417,6 +420,8 @@ jobs:
           curl -LsSf https://astral.sh/uv/install.sh | sh
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
       - name: Check our lock against the fork's declared pins
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: make -C pmoves agent-zero-pin-check
 
   # Six workflows guard their self-hosted jobs against fork PRs, in three

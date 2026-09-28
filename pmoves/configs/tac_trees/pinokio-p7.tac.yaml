@@ -57,6 +57,18 @@ root:
           status: done
           notes: "Upgraded 2026-03-21 — user confirmed manual Pinokio desktop upgrade complete"
 
+        - id: p7.upgrade.b850
+          task: "B850 (Knuckles) upgraded to v7.0.0+"
+          action:
+            type: manual
+            expect: "Pinokio UI shows 'Agents' tab, version >= 7.0.0"
+          # Path shown as $PINOKIO_HOME rather than the node's absolute home path
+          # (no usernames/host layout in committed files).
+          context: "$PINOKIO_HOME (Linux) — AMD RDNA4 workstation, dual R9700"
+          agent_hint: b850-claude
+          status: done
+          notes: "Confirmed 2026-05-19 — Pinokio v7.2.6 installed. Requirements: pterm v0.0.24, ffmpeg 7.0.2, py cli validated."
+
     # =========================================================================
     # Phase 2: Agent Interpreter — SKILL.md Discovery
     # =========================================================================
