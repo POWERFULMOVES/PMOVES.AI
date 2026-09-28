@@ -1,0 +1,515 @@
+"""Tests for the control approval road (control_verdict.py + control_approve.py).
+
+GitHub is never contacted: ``urllib.request.urlopen`` is replaced by an
+in-memory fake that records every request, so the real client code (headers,
+pagination, error mapping) is what runs.
+"""
+
+from __future__ import annotations
+
+import io
+import json
+import re
+import sys
+import urllib.error
+import urllib.request
+from pathlib import Path
+from typing import Any
+
+import pytest
+
+TOOLS = Path(__file__).resolve().parents[1] / "tools"
+if str(TOOLS) not in sys.path:
+    sys.path.insert(0, str(TOOLS))
+
+import control_approve  # noqa: E402
+import control_verdict  # noqa: E402
+
+TOKEN = "ghp_TESTTOKEN_never_print_me_0123456789"
+APPROVER = "acme-control"  # test fixture only; the real login comes from config
+AUTHOR = "POWERFULMOVES"
+REPO = "OWNER/REPO"
+H = "a" * 40
+H2 = "b" * 40
+PR = 42
+
+
+def marker(verdict: str = "APPROVE", head: str = H, reviewer: str = "B850-CLAUDE") -> str:
+    return control_verdict.format_marker(verdict, head, reviewer)
+
+
+def comment(cid: int, body: str, author: str = AUTHOR, created: str | None = None, updated: str | None = None) -> dict[str, Any]:
+    created = created or f"2026-09-28T10:{cid:02d}:00Z"
+    return {
+        "id": cid,
+        "body": body,
+        "user": {"login": author},
+        "created_at": created,
+        "updated_at": updated or created,
+        "html_url": f"https://github.com/{REPO}/pull/{PR}#issuecomment-{cid}",
+    }
+
+
+# --------------------------------------------------------------------------
+# Fake GitHub
+# --------------------------------------------------------------------------
+
+
+class _Resp:
+    def __init__(self, payload: Any, headers: dict[str, str] | None = None):
+        self._raw = b"" if payload is None else json.dumps(payload).encode()
+        self.headers = headers or {}
+
+    def read(self) -> bytes:
+        return self._raw
+
+    def __enter__(self) -> "_Resp":
+        return self
+
+    def __exit__(self, *exc: Any) -> None:
+        return None
+
+
+class FakeGitHub:
+    def __init__(self) -> None:
+        self.login = APPROVER
+        self.pr: dict[str, Any] = {
+            "number": PR,
+            "state": "open",
+            "merged": False,
+            "merged_at": None,
+            "draft": False,
+            "base": {"ref": "main"},
+            "head": {"sha": H},
+            "user": {"login": AUTHOR},
+        }
+        self.head_sequence: list[str] = []  # consumed per PR GET when set
+        self.comments: list[dict[str, Any]] = [comment(1, "LGTM\n" + marker())]
+        self.reviews: list[dict[str, Any]] = []
+        self.post_mode = "ok"  # ok | reject | unreachable | vanish
+        self.fail: dict[str, Any] = {}  # path-substring -> HTTPError code or "unreachable"
+        self.page_size: int | None = None
+        self.requests: list[dict[str, Any]] = []
+
+    # urlopen replacement
+    def __call__(self, req: urllib.request.Request, timeout: float | None = None) -> _Resp:
+        url = req.full_url
+        method = req.get_method()
+        headers = {k.lower(): v for k, v in req.header_items()}
+        data = req.data.decode() if req.data else ""
+        self.requests.append({"method": method, "url": url, "headers": headers, "data": data})
+        path = url.split("api.github.com", 1)[-1]
+        for needle, how in self.fail.items():
+            if needle in path and (method == "GET"):
+                if how == "unreachable":
+                    raise urllib.error.URLError("connection refused")
+                raise urllib.error.HTTPError(url, how, "err", {}, io.BytesIO(f"Bad credentials {TOKEN}".encode()))
+        if method == "GET" and path == "/user":
+            return _Resp({"login": self.login})
+        if method == "GET" and re.fullmatch(rf"/repos/{REPO}/pulls/{PR}", path):
+            pr = json.loads(json.dumps(self.pr))
+            if self.head_sequence:
+                pr["head"]["sha"] = self.head_sequence.pop(0)
+            return _Resp(pr)
+        if method == "GET" and path.startswith(f"/repos/{REPO}/issues/{PR}/comments"):
+            return self._paged(self.comments, path)
+        if method == "GET" and path.startswith(f"/repos/{REPO}/pulls/{PR}/reviews"):
+            return self._paged(self.reviews, path)
+        if method == "POST" and path == f"/repos/{REPO}/pulls/{PR}/reviews":
+            body = json.loads(data)
+            if self.post_mode == "reject":
+                raise urllib.error.HTTPError(url, 422, "Unprocessable", {}, io.BytesIO(b'{"message":"Can not approve your own pull request"}'))
+            if self.post_mode == "unreachable":
+                raise urllib.error.URLError("reset by peer")
+            review = {
+                "id": 9000 + len(self.reviews),
+                "user": {"login": self.login},
+                "state": "APPROVED" if body["event"] == "APPROVE" else body["event"],
+                "commit_id": body["commit_id"],
+                "submitted_at": "2026-09-28T11:00:00Z",
+            }
+            if self.post_mode != "vanish":
+                self.reviews.append(review)
+            return _Resp(review)
+        raise AssertionError(f"unexpected request {method} {url}")
+
+    def _paged(self, items: list[Any], path: str) -> _Resp:
+        if not self.page_size:
+            return _Resp(items)
+        page = 1
+        m = re.search(r"[?&]page=(\d+)", path)
+        if m:
+            page = int(m.group(1))
+        start = (page - 1) * self.page_size
+        chunk = items[start : start + self.page_size]
+        headers = {}
+        if start + self.page_size < len(items):
+            base = path.split("?")[0]
+            headers["Link"] = f'<https://api.github.com{base}?per_page=100&page={page + 1}>; rel="next"'
+        return _Resp(chunk, headers)
+
+    def posts(self) -> list[dict[str, Any]]:
+        return [r for r in self.requests if r["method"] == "POST"]
+
+
+@pytest.fixture
+def gh(monkeypatch: pytest.MonkeyPatch) -> FakeGitHub:
+    fake = FakeGitHub()
+    monkeypatch.setattr(urllib.request, "urlopen", fake)
+    return fake
+
+
+@pytest.fixture
+def config(tmp_path: Path) -> Path:
+    path = tmp_path / "control_approval.yaml"
+    path.write_text(
+        f"version: 1\nrepo: {REPO}\nbase: main\napprover_login: {APPROVER}\nmarker_authors:\n  - {AUTHOR}\n",
+        encoding="utf-8",
+    )
+    return path
+
+
+def run(config: Path, *, head: str = H, confirm: str | None = None, env: dict[str, str] | None = None, extra: list[str] | None = None) -> int:
+    argv = [
+        "--pr",
+        str(PR),
+        "--expected-head",
+        head,
+        "--confirm",
+        confirm if confirm is not None else f"APPROVE #{PR} @ {head}",
+        "--config",
+        str(config),
+        *(extra or []),
+    ]
+    assert all(TOKEN not in a for a in argv)
+    environ = {"PMOVES_CONTROL_TOKEN": TOKEN}
+    if env is not None:
+        environ = env
+    return control_approve.main(argv, env=environ)
+
+
+def assert_token_hygiene(gh: FakeGitHub, out: str) -> None:
+    assert TOKEN not in out
+    for req in gh.requests:
+        assert TOKEN not in req["url"]
+        assert TOKEN not in req["data"]
+        auth = req["headers"].get("authorization", "")
+        assert auth == f"Bearer {TOKEN}"
+        for name, value in req["headers"].items():
+            if name != "authorization":
+                assert TOKEN not in value
+
+
+# --------------------------------------------------------------------------
+# control_verdict: strict parse
+# --------------------------------------------------------------------------
+
+
+def test_format_round_trips() -> None:
+    text = marker()
+    assert control_verdict.parse_body(text) == (control_verdict.Verdict("APPROVE", H, "B850-CLAUDE"), "")
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [
+        f"<!-- pmoves-control-verdict: v=1 verdict=APPROVE head={'A' * 40} reviewer=x -->",
+        f"<!-- pmoves-control-verdict: v=1 verdict=APPROVE head={'a' * 39} reviewer=x -->",
+        f"<!-- pmoves-control-verdict: v=1 verdict=APPROVE head={'a' * 41} reviewer=x -->",
+        f"<!-- pmoves-control-verdict: v=1 verdict=LGTM head={H} reviewer=x -->",
+        f"<!-- pmoves-control-verdict: v=2 verdict=APPROVE head={H} reviewer=x -->",
+        f"<!-- pmoves-control-verdict:  v=1 verdict=APPROVE head={H} reviewer=x -->",
+        f"<!-- PMOVES-control-verdict: v=1 verdict=APPROVE head={H} reviewer=x -->",
+        f"<!-- pmoves-control-verdict: v=1 verdict=APPROVE head={H} reviewer=-x -->",
+        f"<!-- pmoves-control-verdict: v=1 verdict=APPROVE head={H} -->",
+    ],
+)
+def test_strict_parse_rejects_near_misses(bad: str) -> None:
+    parsed = control_verdict.parse_body(bad)
+    assert parsed is not None and parsed[0] is None and parsed[1]
+
+
+def test_two_markers_in_one_comment_are_malformed() -> None:
+    parsed = control_verdict.parse_body(marker() + "\n" + marker("REQUEST_CHANGES"))
+    assert parsed is not None and parsed[0] is None and "2 markers" in parsed[1]
+
+
+def test_no_marker_is_none() -> None:
+    assert control_verdict.parse_body("plain review text") is None
+
+
+def test_format_validates_fields() -> None:
+    with pytest.raises(control_verdict.VerdictFormatError):
+        control_verdict.format_marker("APPROVE", H.upper(), "x")
+    with pytest.raises(control_verdict.VerdictFormatError):
+        control_verdict.format_marker("MAYBE", H, "x")
+
+
+# --------------------------------------------------------------------------
+# control_verdict: selection
+# --------------------------------------------------------------------------
+
+
+def sel(comments: list[dict[str, Any]], head: str = H) -> control_verdict.Selection:
+    return control_verdict.select_verdict(comments, head, [AUTHOR])
+
+
+def test_latest_request_changes_beats_earlier_approve() -> None:
+    s = sel([comment(1, marker()), comment(2, marker("REQUEST_CHANGES"))])
+    assert not s.approved and "REQUEST_CHANGES" in s.reason
+
+
+def test_latest_approve_beats_earlier_request_changes() -> None:
+    assert sel([comment(1, marker("REQUEST_CHANGES")), comment(2, marker())]).approved
+
+
+def test_ordering_is_by_created_at_not_list_order() -> None:
+    late_rc = comment(2, marker("REQUEST_CHANGES"), created="2026-09-28T12:00:00Z")
+    early_ok = comment(3, marker(), created="2026-09-28T09:00:00Z")
+    assert not sel([late_rc, early_ok]).approved
+
+
+def test_marker_for_other_head_is_ignored() -> None:
+    s = sel([comment(1, marker(head=H2))])
+    assert not s.approved and s.ignored_other_heads == 1 and "no control verdict marker" in s.reason
+    # and a REQUEST_CHANGES on another head does not block this head
+    assert sel([comment(1, marker()), comment(2, marker("REQUEST_CHANGES", head=H2))]).approved
+
+
+def test_untrusted_author_marker_refused_and_does_not_block() -> None:
+    s = sel([comment(1, marker(), author="drive-by")])
+    assert not s.approved and "none was authored by an allowed control identity" in s.reason
+    assert sel([comment(1, marker()), comment(2, marker("REQUEST_CHANGES"), author="drive-by")]).approved
+
+
+def test_author_allowlist_is_case_insensitive() -> None:
+    assert sel([comment(1, marker(), author="powerfulmoves")]).approved
+
+
+def test_edited_approve_marker_refused() -> None:
+    s = sel([comment(1, marker(), updated="2026-09-28T13:00:00Z")])
+    assert not s.approved and "edited" in s.reason
+
+
+def test_malformed_trusted_marker_after_approve_is_ambiguous() -> None:
+    bad = f"<!-- pmoves-control-verdict: v=1 verdict=REQUEST_CHANGES head={H.upper()} reviewer=x -->"
+    s = sel([comment(1, marker()), comment(2, bad)])
+    assert not s.approved and "ambiguous" in s.reason
+    assert sel([comment(1, bad), comment(2, marker())]).approved
+
+
+def test_empty_allowlist_refuses() -> None:
+    assert not control_verdict.select_verdict([comment(1, marker())], H, []).approved
+
+
+# --------------------------------------------------------------------------
+# control_approve: success paths
+# --------------------------------------------------------------------------
+
+
+def test_success_posts_pinned_review_and_verifies(gh: FakeGitHub, config: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    assert run(config) == 0
+    out = capsys.readouterr()
+    posts = gh.posts()
+    assert len(posts) == 1
+    body = json.loads(posts[0]["data"])
+    assert body["event"] == "APPROVE" and body["commit_id"] == H
+    assert "issuecomment-1" in body["body"]
+    assert "VERDICT: APPROVED rc=0" in out.out
+    assert_token_hygiene(gh, out.out + out.err)
+
+
+def test_already_approved_is_idempotent(gh: FakeGitHub, config: Path) -> None:
+    gh.reviews.append({"id": 7, "user": {"login": APPROVER}, "state": "APPROVED", "commit_id": H, "submitted_at": "2026-09-28T09:00:00Z"})
+    assert run(config) == 0
+    assert gh.posts() == []
+
+
+def test_dismissed_prior_approval_is_reposted(gh: FakeGitHub, config: Path) -> None:
+    gh.reviews.append({"id": 7, "user": {"login": APPROVER}, "state": "DISMISSED", "commit_id": H, "submitted_at": "2026-09-28T09:00:00Z"})
+    assert run(config) == 0
+    assert len(gh.posts()) == 1
+
+
+def test_dry_run_never_posts(gh: FakeGitHub, config: Path) -> None:
+    assert run(config, extra=["--dry-run"]) == 0
+    assert gh.posts() == []
+
+
+def test_paginated_comments_are_all_read(gh: FakeGitHub, config: Path) -> None:
+    gh.page_size = 2
+    # APPROVE on page 1; the later REQUEST_CHANGES lives on page 3. A reader that
+    # stops at page 1 would approve -- pagination is what makes this refuse.
+    gh.comments = [comment(1, marker())] + [comment(i, f"noise {i}") for i in range(2, 6)] + [comment(9, marker("REQUEST_CHANGES"))]
+    assert run(config) == 1
+    assert sum(1 for r in gh.requests if "/comments" in r["url"]) == 3
+    assert gh.posts() == []
+
+
+# --------------------------------------------------------------------------
+# control_approve: refusal matrix
+# --------------------------------------------------------------------------
+
+
+def test_confirm_mismatch_refuses_before_any_request(gh: FakeGitHub, config: Path) -> None:
+    assert run(config, confirm=f"APPROVE #{PR + 1} @ {H}") == 1
+    assert gh.requests == []
+
+
+def test_short_head_is_usage_error(gh: FakeGitHub, config: Path) -> None:
+    assert run(config, head=H[:12]) == 2
+    assert gh.requests == []
+
+
+def test_missing_token_is_could_not_measure(gh: FakeGitHub, config: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    assert run(config, env={}) == 3
+    assert "COULD-NOT-MEASURE" in capsys.readouterr().out
+    assert gh.requests == []
+
+
+def test_unconfigured_approver_is_could_not_measure(gh: FakeGitHub, tmp_path: Path) -> None:
+    cfg = tmp_path / "c.yaml"
+    cfg.write_text(f"repo: {REPO}\napprover_login: \"\"\nmarker_authors: [{AUTHOR}]\n", encoding="utf-8")
+    assert run(cfg) == 3
+    assert gh.requests == []
+
+
+def test_env_overrides_login(gh: FakeGitHub, config: Path) -> None:
+    gh.login = "other-bot"
+    assert run(config, env={"PMOVES_CONTROL_TOKEN": TOKEN, "PMOVES_CONTROL_LOGIN": "other-bot"}) == 0
+
+
+def test_token_for_wrong_account_refused(gh: FakeGitHub, config: Path) -> None:
+    gh.login = "DARKXSIDE"
+    assert run(config) == 1
+    assert gh.posts() == []
+
+
+def test_approver_equal_to_author_refused(gh: FakeGitHub, config: Path) -> None:
+    gh.pr["user"]["login"] = APPROVER.upper()
+    assert run(config) == 1
+    assert gh.posts() == []
+
+
+@pytest.mark.parametrize(
+    "mutate",
+    [
+        lambda pr: pr.update(state="closed"),
+        lambda pr: pr.update(merged=True, merged_at="2026-09-28T00:00:00Z"),
+        lambda pr: pr.update(draft=True),
+        lambda pr: pr["base"].update(ref="develop"),
+        lambda pr: pr["head"].update(sha=H2),
+    ],
+    ids=["closed", "merged", "draft", "wrong-base", "head-mismatch"],
+)
+def test_pr_state_refusals(gh: FakeGitHub, config: Path, mutate: Any) -> None:
+    mutate(gh.pr)
+    assert run(config) == 1
+    assert gh.posts() == []
+
+
+def test_no_marker_refused(gh: FakeGitHub, config: Path) -> None:
+    gh.comments = [comment(1, "looks fine to me")]
+    assert run(config) == 1
+    assert gh.posts() == []
+
+
+def test_marker_only_for_old_head_refused(gh: FakeGitHub, config: Path) -> None:
+    gh.comments = [comment(1, marker(head=H2))]
+    assert run(config) == 1
+    assert gh.posts() == []
+
+
+def test_latest_request_changes_refused(gh: FakeGitHub, config: Path) -> None:
+    gh.comments.append(comment(2, marker("REQUEST_CHANGES")))
+    assert run(config) == 1
+    assert gh.posts() == []
+
+
+def test_marker_by_unallowed_author_refused(gh: FakeGitHub, config: Path) -> None:
+    gh.comments = [comment(1, marker(), author="drive-by")]
+    assert run(config) == 1
+    assert gh.posts() == []
+
+
+def test_marker_author_allowlist_env_override(gh: FakeGitHub, config: Path) -> None:
+    gh.comments = [comment(1, marker(), author="control-recorder")]
+    env = {"PMOVES_CONTROL_TOKEN": TOKEN, "PMOVES_CONTROL_MARKER_AUTHORS": "control-recorder"}
+    assert run(config, env=env) == 0
+
+
+@pytest.mark.parametrize("how", [401, 500, "unreachable"])
+def test_read_failures_are_could_not_measure(gh: FakeGitHub, config: Path, how: Any, capsys: pytest.CaptureFixture[str]) -> None:
+    gh.fail["/user"] = how
+    assert run(config) == 3
+    out = capsys.readouterr()
+    assert "VERDICT: COULD-NOT-MEASURE rc=3" in out.out
+    # the fake error body echoes the token; it must be redacted
+    assert_token_hygiene(gh, out.out + out.err)
+
+
+def test_comment_read_failure_is_could_not_measure(gh: FakeGitHub, config: Path) -> None:
+    gh.fail["/comments"] = 403
+    assert run(config) == 3
+    assert gh.posts() == []
+
+
+def test_post_rejected_is_refused(gh: FakeGitHub, config: Path) -> None:
+    gh.post_mode = "reject"
+    assert run(config) == 1
+
+
+def test_post_unreachable_is_could_not_measure(gh: FakeGitHub, config: Path) -> None:
+    gh.post_mode = "unreachable"
+    assert run(config) == 3
+
+
+def test_post_verify_failure_is_refused(gh: FakeGitHub, config: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    gh.post_mode = "vanish"  # POST answers 200 but GitHub holds no such review
+    assert run(config) == 1
+    assert "post-verify failed" in capsys.readouterr().err
+
+
+def test_head_moves_before_post_aborts_without_posting(gh: FakeGitHub, config: Path) -> None:
+    gh.head_sequence = [H, H2]
+    assert run(config) == 1
+    assert gh.posts() == []
+
+
+def test_head_moves_between_post_and_verify_is_refused(gh: FakeGitHub, config: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    # check, pre-POST re-check, then the head moves before the final read.
+    gh.head_sequence = [H, H, H2]
+    assert run(config) == 1
+    posts = gh.posts()
+    assert len(posts) == 1
+    # commit_id pinning: the review is attached to the reviewed commit, not the new head
+    assert json.loads(posts[0]["data"])["commit_id"] == H
+    assert gh.reviews[-1]["commit_id"] == H
+    assert "head moved" in capsys.readouterr().err
+
+
+# --------------------------------------------------------------------------
+# token hygiene beyond the request layer
+# --------------------------------------------------------------------------
+
+
+def test_tool_does_not_shell_out() -> None:
+    source = (TOOLS / "control_approve.py").read_text(encoding="utf-8")
+    assert "subprocess" not in source and "os.system" not in source
+
+
+def test_make_recipe_never_passes_the_token() -> None:
+    mk = (TOOLS.parent / "mk" / "preflight.mk").read_text(encoding="utf-8")
+    recipe = mk.split("pr-control-approve:", 1)[1].split("\n\n", 1)[0]
+    assert "tools/control_approve.py" in recipe
+    assert "TOKEN" not in recipe
+
+
+def test_config_ships_without_a_hardcoded_login() -> None:
+    import yaml
+
+    cfg = yaml.safe_load((TOOLS.parent / "configs" / "control_approval.yaml").read_text(encoding="utf-8"))
+    assert cfg["approver_login"] == ""
+    source = (TOOLS / "control_approve.py").read_text(encoding="utf-8")
+    assert "pmoves-ai-control" not in source
+    assert re.search(r"pmoves-control(?![-\w])", source) is None
