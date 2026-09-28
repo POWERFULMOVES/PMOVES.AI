@@ -130,6 +130,21 @@ else
   echo "[kilo-pmoves]       run: make -C pmoves ensure-env-shared" >&2
 fi
 
+# --- HOST TLS ------------------------------------------------------------
+# env.shared carries SSL_CERT_FILE= / SSL_CERT_DIR= / REQUESTS_CA_BUNDLE= ...
+# EMPTY on purpose (a container leak guard), and the loader above EXPORTS
+# them. On the host, set-but-empty breaks python ssl and the HF Xet backend
+# (CERTIFICATE_VERIFY_FAILED). Clear the empties and point SSL_CERT_FILE at
+# the system bundle; an operator-set value is never overridden.
+if [ -f "$ROOT/pmoves/scripts/pm-ca-bundle.sh" ]; then
+  # shellcheck source=../../pmoves/scripts/pm-ca-bundle.sh
+  . "$ROOT/pmoves/scripts/pm-ca-bundle.sh"
+  pm_ca_bundle_normalize || true
+  if [ -n "${PM_CA_BUNDLE_LINE:-}" ]; then
+    echo "[kilo-pmoves] ${PM_CA_BUNDLE_LINE}" >&2
+  fi
+fi
+
 # --- NAME BRIDGES (operator-facing alias to upstream SDK name) -------------
 # Mirror crush-pmoves.sh:133-136 -- alias bridge for upstream-vs-PMOVES env names.
 # Only set when the upstream var is unset, so an explicit operator pin still wins.

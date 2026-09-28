@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2034  # PM_CA_BUNDLE_LINE is this fragment's OUTPUT, read by the caller
 # pm-ca-bundle.sh — keep HOST TLS working after env.shared is loaded.
 # ===========================================================================
 # WHY THIS EXISTS

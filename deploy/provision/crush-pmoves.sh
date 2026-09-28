@@ -120,6 +120,21 @@ else
   echo "[crush-pmoves]       run: make -C pmoves ensure-env-shared" >&2
 fi
 
+# --- HOST TLS ------------------------------------------------------------
+# env.shared carries SSL_CERT_FILE= / SSL_CERT_DIR= / REQUESTS_CA_BUNDLE= ...
+# EMPTY on purpose (a container leak guard), and the loader above EXPORTS
+# them. On the host, set-but-empty breaks python ssl and the HF Xet backend
+# (CERTIFICATE_VERIFY_FAILED). Clear the empties and point SSL_CERT_FILE at
+# the system bundle; an operator-set value is never overridden.
+if [ -f "$ROOT/pmoves/scripts/pm-ca-bundle.sh" ]; then
+  # shellcheck source=../../pmoves/scripts/pm-ca-bundle.sh
+  . "$ROOT/pmoves/scripts/pm-ca-bundle.sh"
+  pm_ca_bundle_normalize || true
+  if [ -n "${PM_CA_BUNDLE_LINE:-}" ]; then
+    echo "[crush-pmoves] ${PM_CA_BUNDLE_LINE}" >&2
+  fi
+fi
+
 # --- name bridge: PMOVES calls it Z_AI_API_KEY, Crush reads ZAI_API_KEY -------
 # Crush's own README documents the Z.ai variable as `ZAI_API_KEY`; the funnel and
 # the GitHub secret both spell it `Z_AI_API_KEY` (102 references across the repo).
