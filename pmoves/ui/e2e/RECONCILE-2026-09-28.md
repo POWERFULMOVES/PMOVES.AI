@@ -162,3 +162,20 @@ Missing selector terms checked against UI-source history on all refs: {'never-in
 | 118 | services-health.spec.ts:207 | boot-jwt health endpoint returns token status | ASSERTION | Error: expect(received).toBe(expected) // Object.is equality — /api/health/boot-jwt now returns 401 (auth gate in app/api/health/boot-jwt/route.ts, last touched 2026-03-16); spec predates it | y | update-to-current |
 | 119 | supabase-auth.spec.ts:4 | browser client uses boot JWT when provided | OTHER | js-global `__PMOVES_SUPABASE_BOOT` src=missing hist=removed-or-moved — waits for window.__PMOVES_SUPABASE_BOOT, absent from current source (removed-or-moved (last change f45b81e4e 2026-08-08; first 25af2c3d3 2025-11-04)) | y | update-to-current |
 | 120 | videos-realtime.spec.ts:48 | inserts row and appears in UI | BACKEND | Error: SUPABASE_REST_URL and SUPABASE_SERVICE_ROLE_KEY are required — test itself requires a live backend (env/network precondition) | n | tag-backend |
+
+## Local reproduction (2026-09-28, B850, no backend)
+
+`npx playwright test` with the CI env (fake Supabase at localhost:54321, nothing listening there), `CI=1`, port 4492, Playwright 1.56.1, against this tree. 8 of 8 sampled tests failed exactly as in CI (same locator / same received value):
+
+| test | CI failure | local |
+|---|---|---|
+| archon-prompts.spec.ts:21 | heading `/prompts/i` not found (page heading is "Archon Prompt Forge") | same |
+| chat.spec.ts:101 | input value "Line 1", "Line 2" lost (single-line `<input>`) | same |
+| chat.spec.ts:143 | no model combobox / settings button | same |
+| ingestion.spec.ts:16 | `data-testid="ingestion-queue-table"` not found | same |
+| notebook.spec.ts:34 | `/api/notebook/sources` returned 401 | same |
+| search.spec.ts:16 | `data-testid="search-input"` not found | same |
+| services-health.spec.ts:31 | `/dashboard/services/health` renders 404 | same |
+| supabase-auth.spec.ts:4 | `window.__PMOVES_SUPABASE_BOOT` never set (timeout) | same |
+
+The local run confirms the failures are deterministic and happen with no backend. It does not prove on its own that a spec is stale: that verdict comes from the source and history evidence in the table above.
