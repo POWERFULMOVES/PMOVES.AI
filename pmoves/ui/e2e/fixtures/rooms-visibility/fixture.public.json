@@ -1,0 +1,20 @@
+{
+  "room_id": "fixture.room.public",
+  "version": "1.0.0",
+  "display_name": "Fixture Proper Public",
+  "description": "explicit public: the ONLY room the launcher may show",
+  "agent_id": "fixture-agent",
+  "access": {
+    "visibility": "public"
+  },
+  "shell": {
+    "theme": {
+      "theme_id": "fixture"
+    },
+    "layout": {
+      "default_route": "/",
+      "panels": []
+    }
+  },
+  "apps": []
+}

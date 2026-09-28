@@ -1,0 +1,20 @@
+{
+  "room_id": "fixture.room.typo",
+  "version": "1.0.0",
+  "display_name": "Fixture Typo Visibility",
+  "description": "misspelled visibility: must NOT be public",
+  "agent_id": "fixture-agent",
+  "access": {
+    "visibility": "pubic"
+  },
+  "shell": {
+    "theme": {
+      "theme_id": "fixture"
+    },
+    "layout": {
+      "default_route": "/",
+      "panels": []
+    }
+  },
+  "apps": []
+}
