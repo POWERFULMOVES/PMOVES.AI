@@ -149,14 +149,14 @@ export function ResearchTaskList({
                   <span
                     className={`text-xs px-2 py-0.5 rounded ${STATUS_BADGE_CLASSES[task.status]} flex items-center gap-1 whitespace-nowrap`}
                   >
-                    <span>{STATUS_ICONS[task.status]}</span>
+                    <span data-testid={`status-icon-${task.status}`}>{STATUS_ICONS[task.status]}</span>
                     {task.status}
                   </span>
                   <span className="text-xs text-neutral-500">{task.mode}</span>
                 </div>
                 <p className="text-sm font-medium line-clamp-2">{task.query}</p>
                 <div className="text-xs text-neutral-500 mt-1 flex items-center gap-2">
-                  <span>{formatDate(task.createdAt)}</span>
+                  <span data-testid="task-relative-time">{formatDate(task.createdAt)}</span>
                   {task.iterations && (
                     <span>• {task.iterations} iterations</span>
                   )}
@@ -171,6 +171,7 @@ export function ResearchTaskList({
                   }}
                   className="text-xs text-red-600 hover:text-red-800 px-2 py-1 rounded hover:bg-red-50 transition"
                   aria-label="Cancel task"
+                  data-testid="cancel-task-button"
                 >
                   Cancel
                 </button>
