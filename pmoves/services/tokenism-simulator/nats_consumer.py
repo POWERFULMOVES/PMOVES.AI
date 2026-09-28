@@ -280,7 +280,7 @@ async def start_nats_consumer(nats_url: Optional[str] = None) -> None:
     raises to the caller — it owns its own error envelope.
     """
     url = nats_url or os.environ.get(
-        "NATS_URL", "nats://nats:pmoves@nats:4222"
+        "NATS_URL", "nats://nats:4222"
     )
 
     while True:
