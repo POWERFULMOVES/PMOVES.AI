@@ -700,7 +700,9 @@ test.describe('Enhanced Video Approval', () => {
   });
 
   // BUILT: source type select ApprovalRulesConfig.tsx:461-471
-  test('should match by source type condition', async ({ page }) => {
+  // renamed-from: should match by source type condition
+  // (asserts the saved rule's condition summary; the UI shows no per-item match preview)
+  test('should save a rule with a source type condition', async ({ page }) => {
     await openNewRuleEditor(page);
 
     // Enter rule name
@@ -715,7 +717,9 @@ test.describe('Enhanced Video Approval', () => {
   });
 
   // BUILT: channel input ApprovalRulesConfig.tsx:476-484
-  test('should match by channel contains condition', async ({ page }) => {
+  // renamed-from: should match by channel contains condition
+  // (asserts the saved rule's condition summary; the UI shows no per-item match preview)
+  test('should save a rule with a channel contains condition', async ({ page }) => {
     await openNewRuleEditor(page);
 
     // Enter rule name
@@ -730,7 +734,9 @@ test.describe('Enhanced Video Approval', () => {
   });
 
   // BUILT: title input ApprovalRulesConfig.tsx:489-497
-  test('should match by title contains condition', async ({ page }) => {
+  // renamed-from: should match by title contains condition
+  // (asserts the saved rule's condition summary; the UI shows no per-item match preview)
+  test('should save a rule with a title contains condition', async ({ page }) => {
     await openNewRuleEditor(page);
 
     // Enter rule name
@@ -745,7 +751,9 @@ test.describe('Enhanced Video Approval', () => {
   });
 
   // BUILT: duration inputs ApprovalRulesConfig.tsx:501-526
-  test('should match by duration range condition', async ({ page }) => {
+  // renamed-from: should match by duration range condition
+  // (asserts the saved rule's condition summary; the UI shows no per-item match preview)
+  test('should save a rule with a duration range condition', async ({ page }) => {
     await openNewRuleEditor(page);
 
     // Enter rule name

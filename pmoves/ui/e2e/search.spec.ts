@@ -264,7 +264,11 @@ test.describe('Search Interface', () => {
     await expect(toast).not.toBeVisible({ timeout: 5000 });
   });
 
-  test('should export result to notebook', async ({ page }) => {
+  // fixme: REAL UI BUG #3232: exportToNotebook (lib/api/hirag.ts:269-277) is a TODO stub that returns ok
+  // without calling any API, so the "Exported to notebook" toast reports a success that never
+  // happened. Passing this test would certify the stub. The body is kept: it becomes a real check
+  // once the export is wired (add an assertion on the outgoing notebook request then).
+  test.fixme('should export result to notebook', async ({ page }) => {
     await mockHiragQuery(page);
     await runSearch(page);
 

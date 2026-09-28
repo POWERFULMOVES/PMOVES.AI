@@ -176,13 +176,29 @@ test.describe('Agent Zero Chat', () => {
   // The message field is a single-line <input id="chatMessage"> and has never been a <textarea>
   // (git log --all -S'<textarea' -- app/dashboard/chat is empty), so multi-line entry is not a feature.
   test('displays agent avatar and name', async ({ page }) => {
-    // Check for agent identification
-    const agentName = page.getByText(/agent zero/i, { exact: false });
-    const hasAvatar = await page.locator('[class*="avatar"], img[alt*="agent"]').count() > 0;
+    // Serve one agent-authored message (routes registered later take precedence over the beforeEach mock)
+    await page.route('**/api/chat/messages*', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ items: [agentMarkdownReply()] }),
+      })
+    );
+    await page.reload();
 
-    // At least one of these should be present
-    const hasAgentIdentification = await agentName.count() > 0 || hasAvatar;
-    expect(hasAgentIdentification).toBe(true);
+    // Walk out from this message's content to its bubble and row (app/dashboard/chat/page.tsx:280-325):
+    // row > [avatar <Image alt={m.agent || m.role}>, bubble > [label {m.agent || m.role}, content]]
+    const content = page.getByText('- first item', { exact: false });
+    await expect(content).toBeVisible();
+    const bubble = content.locator('..');
+    const messageRow = bubble.locator('..');
+
+    // The name label and the avatar belong to THIS message, not the sidebar agent list
+    await expect(bubble.getByText('Agent Zero', { exact: true })).toBeVisible();
+    const avatar = messageRow.getByRole('img', { name: 'Agent Zero', exact: true });
+    await expect(avatar).toBeVisible();
+    // No avatar_url in the payload, so the agent default is used (page.tsx:287)
+    await expect(avatar).toHaveAttribute('src', /agent\.svg/);
   });
 
   test('shows error message on failed request', async ({ page }) => {
