@@ -14,7 +14,7 @@ export default function YtDlpStatus() {
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
-    const base = process.env.NEXT_PUBLIC_PMOVES_YT_BASE_URL || "http://localhost:8091";
+    const base = process.env.NEXT_PUBLIC_PMOVES_YT_BASE_URL || "http://localhost:8077";
     const supaUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
     (async () => {

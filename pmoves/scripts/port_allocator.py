@@ -52,9 +52,15 @@ DEFAULT_PORTS = {
     # side had defaulted to 8091 too, which is archon's ARCHON_API_PORT default --
     # so any node running both could not bind the gateway at all (observed on
     # SPARK 2026-08-22: archon healthy, gateway "port is already allocated").
-    # Registered here so validate_ports() will refuse a future service that
-    # claims 8189 and quietly recreates the same collision.
+    # Registered here so the collision is visible. Note validate_ports() only
+    # checks ASSIGNED ports, not these defaults; duplicate defaults are pinned by
+    # pmoves/tools/tests/test_mcp_gateway_host_port.py instead.
     "mcp-gateway": 8189,
+    # OPEN FLEET DECISION (2026-09-28): ComfyUI H3 runs on 8189 on the GB10 host
+    # (docs/PMOVES.AI PLANS/HOLOGRAPHIC_MV_RECIPE_V1.md; tools/comfyui/ui_to_api.py
+    # --server default). A node running both collides with mcp-gateway. Neither
+    # service is moved here; this entry only makes the duplicate explicit.
+    "comfyui": 8189,
     "mesh-agent": 0,  # No HTTP interface
     "service-registry": 8100,
     "p7-room-orchestrator": 8122,

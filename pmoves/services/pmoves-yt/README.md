@@ -213,7 +213,7 @@ python pmoves/services/pmoves-yt/tools/ytdlp_config_to_options.py \
   pmoves/docs/PMOVES.AI\ PLANS/PMOVES.yt/yt-dlp-config/config.txt \
   > /tmp/yt_options.json
 
-curl -sS -X POST http://localhost:8091/yt/download \
+curl -sS -X POST http://localhost:8077/yt/download \
   -H 'content-type: application/json' \
   -d @/tmp/yt_options.json | jq .
 ```

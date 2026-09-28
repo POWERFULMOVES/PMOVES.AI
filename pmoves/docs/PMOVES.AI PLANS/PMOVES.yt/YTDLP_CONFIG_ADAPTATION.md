@@ -14,10 +14,10 @@ python pmoves/services/pmoves-yt/tools/ytdlp_config_to_options.py \
   > /tmp/yt_options.json
 ```
 
-2) Use the `yt_options` in an API call to pmoves-yt (container default `http://localhost:8091` when `make -C pmoves up-yt` is running):
+2) Use the `yt_options` in an API call to pmoves-yt (container default `http://localhost:8077` when `make -C pmoves up-yt` is running):
 
 ```
-curl -sS -X POST http://localhost:8091/yt/download \
+curl -sS -X POST http://localhost:8077/yt/download \
   -H 'content-type: application/json' \
   -d @/tmp/yt_options.json | jq .
 ```

@@ -151,7 +151,7 @@ Health endpoints used for badges can be customized:
 
 - `NEXT_PUBLIC_AGENT_ZERO_HEALTH_PATH` (default `/healthz`, fallbacks to `/api/health` then `/`).
 - `NEXT_PUBLIC_ARCHON_HEALTH_PATH` (default `/healthz`, fallbacks to `/api/health` then `/`).
-- `NEXT_PUBLIC_PMOVES_YT_BASE_URL` (default `http://localhost:8091`) – PMOVES.YT base used by the yt‑dlp status tile.
+- `NEXT_PUBLIC_PMOVES_YT_BASE_URL` (default `http://localhost:8077`) – PMOVES.YT base used by the yt‑dlp status tile.
 
 Link to the consolidated rundown in `pmoves/docs/LOCAL_DEV.md` for more context on ports and dependent Make targets.
 
