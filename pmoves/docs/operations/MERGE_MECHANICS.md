@@ -192,7 +192,7 @@ audit trail shows and what `pr-closeout-audit` accepts, not the merge flag.
 
    ```bash
    make -C pmoves pr-control-approve PR=<N> EXPECTED_HEAD=<full-sha> CONFIRM='APPROVE #<N> @ <full-sha>'
-   # DRY_RUN=1 runs every check and posts nothing
+   # DRY_RUN=1 runs every check, writes nothing, and ends VERDICT: DRY-RUN-WOULD-APPROVE rc=0
    ```
 
    with `PMOVES_CONTROL_TOKEN` in the environment (delivered by the secrets
@@ -205,7 +205,7 @@ audit trail shows and what `pr-closeout-audit` accepts, not the merge flag.
    the configured approver on exactly `EXPECTED_HEAD` exists and the head has
    not moved.
 
-The last output line is always `VERDICT: <APPROVED|REFUSED|COULD-NOT-MEASURE> rc=<n>`,
+The last output line is always `VERDICT: <APPROVED|DRY-RUN-WOULD-APPROVE|REFUSED|COULD-NOT-MEASURE> rc=<n>`,
 because `make` collapses every nonzero exit to 2.
 
 ### 6.2 Trust model — what the marker proves, and what it does not

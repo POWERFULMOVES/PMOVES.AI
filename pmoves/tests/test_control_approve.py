@@ -451,9 +451,19 @@ def test_dismissed_prior_approval_is_reposted(gh: FakeGitHub, config: Path) -> N
     assert len(gh.posts()) == 1
 
 
-def test_dry_run_never_posts(gh: FakeGitHub, config: Path) -> None:
+def test_dry_run_never_posts_and_has_its_own_label(gh: FakeGitHub, config: Path, capsys: pytest.CaptureFixture[str]) -> None:
     assert run(config, extra=["--dry-run"]) == 0
     assert gh.posts() == []
+    assert [r for r in gh.requests if r["method"] != "GET"] == []
+    out = capsys.readouterr().out
+    assert out.strip().splitlines()[-1] == "VERDICT: DRY-RUN-WOULD-APPROVE rc=0"
+    assert "VERDICT: APPROVED" not in out
+
+
+def test_dry_run_with_existing_approval_is_still_labelled_dry_run(gh: FakeGitHub, config: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    gh.reviews.append({"id": 7, "user": {"login": APPROVER}, "state": "APPROVED", "commit_id": H, "submitted_at": "2026-09-28T09:00:00Z"})
+    assert run(config, extra=["--dry-run"]) == 0
+    assert capsys.readouterr().out.strip().splitlines()[-1] == "VERDICT: DRY-RUN-WOULD-APPROVE rc=0"
 
 
 def test_paginated_comments_are_all_read(gh: FakeGitHub, config: Path) -> None:

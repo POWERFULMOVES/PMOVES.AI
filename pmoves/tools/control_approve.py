@@ -37,6 +37,8 @@ Refusal matrix (every row exits non-zero with an honest message):
           after it DISMISSES the approval just posted (exit 3 if that fails)
   exit 3  any unexpected error (always still ends with the VERDICT line)
   exit 0  APPROVED review by the approver on EXPECTED_HEAD read back from GitHub
+  exit 0  --dry-run with every precondition passing: VERDICT: DRY-RUN-WOULD-APPROVE
+          (nothing written; never printed as APPROVED)
 
 ``make`` collapses every nonzero exit to 2, so the last line of output is
 always a structured ``VERDICT: <APPROVED|REFUSED|COULD-NOT-MEASURE> rc=<n>``.
@@ -77,6 +79,7 @@ DEFAULT_CONFIG = Path(__file__).resolve().parents[1] / "configs" / "control_appr
 HEAD_RE = re.compile(r"^[0-9a-f]{40}$")
 USER_AGENT = "pmoves-control-approve/1"
 
+DRY_RUN_LABEL = "DRY-RUN-WOULD-APPROVE"
 EXIT_OK = 0
 EXIT_REFUSED = 1
 EXIT_USAGE = 2
@@ -92,10 +95,11 @@ _LABEL = {
 class Outcome(Exception):
     """Terminal result carrying an exit code and an honest message."""
 
-    def __init__(self, code: int, message: str):
+    def __init__(self, code: int, message: str, label: str = ""):
         super().__init__(message)
         self.code = code
         self.message = message
+        self.label = label
 
 
 class ApiError(Exception):
@@ -442,13 +446,18 @@ def approve(
     existing = _approver_reviews_on(reviews, token_login, expected_head)
     already = bool(existing) and str(existing[-1].get("state") or "") == "APPROVED"
 
+    if dry_run:
+        state = (
+            f"an APPROVED review by {token_login} already exists on it (id {existing[-1].get('id')})"
+            if already
+            else "would POST an APPROVE review pinned to EXPECTED_HEAD"
+        )
+        raise Outcome(EXIT_OK, f"dry-run: all preconditions pass; {state}; nothing was written", label=DRY_RUN_LABEL)
+
     posted_id: int | None = None
     if already:
         posted_id = int(existing[-1].get("id") or 0)
         emit(f"an APPROVED review by {token_login} on {expected_head} already exists (id {posted_id}); not posting")
-    elif dry_run:
-        emit("dry-run: all preconditions pass; would POST an APPROVE review pinned to EXPECTED_HEAD")
-        return EXIT_OK
     else:
         # Narrow the race window: re-read the head immediately before posting.
         pr_again = _read(f"re-read PR #{pr_number}", lambda: client.get(pr_path)) or {}
@@ -535,6 +544,7 @@ def main(argv: list[str] | None = None, env: dict[str, str] | None = None) -> in
         print(_redact(line, token))
 
     code: int
+    label = ""
     try:
         try:
             validate_api_base(args.api_base)
@@ -557,8 +567,9 @@ def main(argv: list[str] | None = None, env: dict[str, str] | None = None) -> in
         )
     except Outcome as outcome:
         code = outcome.code
+        label = outcome.label
         stream = sys.stdout if code == EXIT_OK else sys.stderr
-        print(_redact(f"{_LABEL.get(code, 'REFUSED')}: {outcome.message}", token), file=stream)
+        print(_redact(f"{label or _LABEL.get(code, 'REFUSED')}: {outcome.message}", token), file=stream)
     except Exception as exc:  # noqa: BLE001 - the VERDICT line must always be printed
         # Anything unexpected (bad data shapes, a bug) is could-not-measure: it may
         # have happened after the POST, so "refused" would be a false statement.
@@ -567,7 +578,7 @@ def main(argv: list[str] | None = None, env: dict[str, str] | None = None) -> in
             _redact(f"COULD-NOT-MEASURE: unexpected {type(exc).__name__}: {exc}", token),
             file=sys.stderr,
         )
-    print(f"VERDICT: {_LABEL.get(code, 'REFUSED')} rc={code}")
+    print(f"VERDICT: {label or _LABEL.get(code, 'REFUSED')} rc={code}")
     return code
 
 
