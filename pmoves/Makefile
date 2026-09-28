@@ -2482,10 +2482,23 @@ A0_ARCHON_ALLOWED := archon agent-zero
 A0_ARCHON_PICK := $(strip $(or $(value SERVICES),$(A0_ARCHON_SERVICES)))
 A0_ARCHON_BAD := $(filter-out $(A0_ARCHON_ALLOWED),$(A0_ARCHON_PICK))
 A0_ARCHON_DRY := $(filter-out 0 false no off,$(strip $(value DRY_RUN)))
+# Recursive (=), not :=, because DC is (re)defined further down this file.
+A0_ARCHON_UP = $(DC) --profile agents $(if $(A0_ARCHON_DRY),--dry-run) up -d --no-deps --no-build --pull never
+# archon ALWAYS gets --force-recreate --renew-anon-volumes. Measured on B850
+# 2026-09-28: recreating the retired Python archon container as the native TS
+# image crash-looped, because compose carried the old container's NAMED volume
+# (pmoves_archon-user-home) over the tmpfs docker-compose.yml now declares at
+# /home/appuser (archon service, `- type: tmpfs` / `target: /home/appuser`,
+# ~line 3911). -V + --force-recreate made HostConfig.Mounts show the tmpfs again
+# and the service came up healthy. agent-zero is recreated separately WITHOUT
+# -V: its state lives in bind mounts and nothing measured calls for renewal.
+# Consequence (open, not solved here): /home/appuser is an EMPTY tmpfs on every
+# start, so gh and any Claude/gh credentials the old volume carried are absent.
 .PHONY: up-a0-archon-scoped
-up-a0-archon-scoped: ## Recreate ONLY archon and/or agent-zero from prebuilt images (SERVICES=archon|agent-zero; DRY_RUN=1 for plan)
+up-a0-archon-scoped: ## Recreate ONLY archon and/or agent-zero from prebuilt images (SERVICES=archon|agent-zero; DRY_RUN=1 for plan; archon gets --force-recreate -V)
 	$(if $(A0_ARCHON_BAD),$(error up-a0-archon-scoped: SERVICES may only name: $(A0_ARCHON_ALLOWED) (refused: $(A0_ARCHON_BAD))))
-	@$(DC) --profile agents $(if $(A0_ARCHON_DRY),--dry-run) up -d --no-deps --no-build --pull never $(A0_ARCHON_PICK)
+	$(if $(filter archon,$(A0_ARCHON_PICK)),@$(A0_ARCHON_UP) --force-recreate --renew-anon-volumes archon)
+	$(if $(filter agent-zero,$(A0_ARCHON_PICK)),@$(A0_ARCHON_UP) agent-zero)
 
 # -------- Consciousness Taxonomy Loaders ----------
 .PHONY: load-consciousness-neo4j harvest-consciousness

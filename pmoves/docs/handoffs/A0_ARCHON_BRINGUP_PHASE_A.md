@@ -205,3 +205,17 @@ Waiting on the compose road (`KNOWN_ROAD=compose:<reason>`, grant naming pr:3214
 **Agent Zero:** not a clean fit without the Dockerfile road. Both `services/agent-zero/Dockerfile` and `Dockerfile.multiarch` (which `agent-zero-upstream-check.yml` builds) clone `--branch ${AGENT_ZERO_REF}`, and `git clone --branch` cannot take a sha. The ref JSON the Dockerfile ADDs lives only in the discarded `upstream` stage, so nothing in the final image proves which commit was built.
 - Building from the resolved sha needs an `AGENT_ZERO_SHA` build arg plus a `git fetch <sha> && git checkout && test "$(git rev-parse HEAD)" = "$AGENT_ZERO_SHA"` assertion in both Dockerfiles. That is road `KNOWN_ROAD=dockerfile:<reason>`, not minted.
 - Everything downstream of that (the `/healthz` gate and `:current`) mirrors the Archon workflow and becomes a copy once the road is open.
+
+## 8. Live bring-up failure mode (measured by the live-step agent, 2026-09-28)
+
+Native Archon 0.10.1 is now up and healthy on Knuckles.
+- **First attempt crash-looped.** Recreating the retired Python `pmoves-archon-1` as the native image let compose carry the old container's **named** volume `pmoves_archon-user-home` over the tmpfs that `docker-compose.yml` now declares at `/home/appuser` (archon service, `- type: tmpfs` / `target: /home/appuser`, ~line 3911).
+- **What fixed it:** `--force-recreate --renew-anon-volumes`. Afterwards `HostConfig.Mounts` shows the tmpfs at `/home/appuser`, and the service is healthy.
+- **Now in git:** `up-a0-archon-scoped` always passes both flags for archon, and recreates agent-zero separately without `-V`. `tests/make/test_up_a0_archon_scoped.py` asserts this through `make -n`.
+  - Positive control: the pre-fix Makefile produces 0 `--renew-anon-volumes` lines; the fixed one produces 1.
+
+**Open question: credential delivery (disclosed, not solved).** `/home/appuser` is now an EMPTY tmpfs on every start. So:
+- `gh` inside Archon is unauthenticated.
+- Any Claude or gh credentials the old `archon-user-home` volume carried are no longer mounted. The volume still exists; nothing mounts it.
+
+Archon's Claude auth comes from environment variables (`CLAUDE_CODE_OAUTH_TOKEN` / `ANTHROPIC_AUTH_TOKEN`), so that path is unaffected. Anything that expected state under `~` is not. The owning road for delivering those credentials (secrets funnel into env, versus a dedicated read-only mount) is an operator decision.
