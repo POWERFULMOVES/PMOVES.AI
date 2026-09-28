@@ -23,8 +23,8 @@ Refusal matrix (every row exits non-zero with an honest message):
   exit 1  approving account == PR author
   exit 1  no allowlisted APPROVE marker for exactly this head, latest is
           REQUEST_CHANGES, marker edited, or ambiguous (control_verdict.py)
-  exit 1  POST rejected by GitHub (e.g. 422)
-  exit 3  POST outcome unknown (network error after send)
+  exit 1  POST rejected by GitHub with a 4xx (e.g. 422)
+  exit 3  POST outcome unknown: 5xx, network error, bad/partial body
   exit 1  post-verify: no APPROVED review by the approver on EXPECTED_HEAD
   exit 1  post-verify: PR head moved while approving (race)
   exit 0  APPROVED review by the approver on EXPECTED_HEAD read back from GitHub
@@ -338,11 +338,20 @@ def approve(
                 {"commit_id": expected_head, "event": "APPROVE", "body": body},
             )
         except ApiError as exc:
-            raise Outcome(EXIT_REFUSED, f"GitHub rejected the review: {exc}") from None
+            # Only a 4xx is a rejection. A 5xx (502/504 from the edge) can arrive
+            # AFTER GitHub stored the review, so its outcome is unknown.
+            if 400 <= exc.status < 500:
+                raise Outcome(EXIT_REFUSED, f"GitHub rejected the review: {exc}") from None
+            raise Outcome(
+                EXIT_UNMEASURED,
+                f"review POST outcome unknown ({exc}); the review may have been stored -- "
+                "read the PR reviews before retrying",
+            ) from None
         except ApiUnreachable as exc:
             raise Outcome(
                 EXIT_UNMEASURED,
-                f"review POST outcome unknown ({exc}); read the PR reviews before retrying",
+                f"review POST outcome unknown ({exc}); the review may have been stored -- "
+                "read the PR reviews before retrying",
             ) from None
         posted_id = int((created or {}).get("id") or 0)
         emit(f"posted review id {posted_id}")

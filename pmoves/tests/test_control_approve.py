@@ -86,7 +86,8 @@ class FakeGitHub:
         self.head_sequence: list[str] = []  # consumed per PR GET when set
         self.comments: list[dict[str, Any]] = [comment(1, "LGTM\n" + marker())]
         self.reviews: list[dict[str, Any]] = []
-        self.post_mode = "ok"  # ok | reject | unreachable | vanish
+        self.post_mode = "ok"  # ok | reject | unreachable | vanish | stored-then-502
+        self.post_status = 502
         self.fail: dict[str, Any] = {}  # path-substring -> HTTPError code or "unreachable"
         self.page_size: int | None = None
         self.requests: list[dict[str, Any]] = []
@@ -117,6 +118,12 @@ class FakeGitHub:
             return self._paged(self.reviews, path)
         if method == "POST" and path == f"/repos/{REPO}/pulls/{PR}/reviews":
             body = json.loads(data)
+            if self.post_mode == "stored-then-502":
+                self.reviews.append(
+                    {"id": 9500, "user": {"login": self.login}, "state": "APPROVED",
+                     "commit_id": body["commit_id"], "submitted_at": "2026-09-28T11:00:00Z"}
+                )
+                raise urllib.error.HTTPError(url, self.post_status, "Bad Gateway", {}, io.BytesIO(b"<html>5xx</html>"))
             if self.post_mode == "reject":
                 raise urllib.error.HTTPError(url, 422, "Unprocessable", {}, io.BytesIO(b'{"message":"Can not approve your own pull request"}'))
             if self.post_mode == "unreachable":
@@ -464,6 +471,18 @@ def test_comment_read_failure_is_could_not_measure(gh: FakeGitHub, config: Path)
 def test_post_rejected_is_refused(gh: FakeGitHub, config: Path) -> None:
     gh.post_mode = "reject"
     assert run(config) == 1
+
+
+@pytest.mark.parametrize("status", [500, 502, 504])
+def test_post_5xx_is_could_not_measure_not_refused(gh: FakeGitHub, config: Path, status: int, capsys: pytest.CaptureFixture[str]) -> None:
+    gh.post_mode = "stored-then-502"
+    gh.post_status = status
+    assert run(config) == 3
+    out = capsys.readouterr()
+    assert "VERDICT: COULD-NOT-MEASURE rc=3" in out.out
+    assert "may have been stored" in out.err
+    # the probe from review round 1: the review WAS stored despite the 5xx
+    assert any(r["state"] == "APPROVED" for r in gh.reviews)
 
 
 def test_post_unreachable_is_could_not_measure(gh: FakeGitHub, config: Path) -> None:
