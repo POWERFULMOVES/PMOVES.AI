@@ -147,15 +147,16 @@ test.describe('Agent Zero Chat', () => {
   });
 
   test('shows error message on failed request', async ({ page }) => {
-    // This test requires mocking a failed request
-    // For now, we'll check that error handling UI exists
-    const hasErrorDisplay =
-      (await page.locator('[class*="error"], [role="alert"]').count()) > 0;
+    // Make the send fail (routes registered later take precedence over the beforeEach mock)
+    await page.route('**/api/chat/send', (route) =>
+      route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ error: 'e2e simulated failure' }) })
+    );
+    await page.getByPlaceholder(/message/i).fill('This send will fail');
+    await page.getByTestId('chat-send-button').click();
 
-    // If error display exists, verify it's hidden initially
-    if (hasErrorDisplay) {
-      await expect(page.locator('[class*="error"], [role="alert"]').first()).not.toBeVisible();
-    }
+    // The page surfaces the server's error in an alert and keeps the text for a retry
+    await expect(page.getByRole('alert').filter({ hasText: 'e2e simulated failure' })).toBeVisible();
+    await expect(page.getByPlaceholder(/message/i)).toHaveValue('This send will fail');
   });
 });
 

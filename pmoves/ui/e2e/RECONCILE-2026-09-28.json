@@ -74,7 +74,9 @@
       "reason": "rendered page headings ['Archon Prompt Forge', 'Create Prompt'] do not match /prompts/i",
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "updated",
+      "phase2a_issue": null
     },
     {
       "n": 2,
@@ -141,7 +143,9 @@
       "reason": "selector exists in source; page shows backend-absent signal ['TypeError: Failed to fetch']",
       "mechanical_stale": "n",
       "mechanical_action": "mock-backend",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "updated (mechanical said mock-backend; form fields renamed: Prompt name / Prompt body)",
+      "phase2a_issue": null
     },
     {
       "n": 3,
@@ -199,7 +203,9 @@
       "reason": "waits for spec-typed test data to round-trip; page shows backend-absent signal ['Invalid JWT format']",
       "mechanical_stale": "n",
       "mechanical_action": "mock-backend",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "mocked",
+      "phase2a_issue": null
     },
     {
       "n": 4,
@@ -262,7 +268,9 @@
       "reason": "selector exists in source; page shows backend-absent signal ['Invalid JWT format']",
       "mechanical_stale": "n",
       "mechanical_action": "mock-backend",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "mocked+updated (loading state is the Sending... button, not role=status)",
+      "phase2a_issue": null
     },
     {
       "n": 5,
@@ -324,7 +332,9 @@
       "reason": "selector exists in source; page shows backend-absent signal ['Invalid JWT format']",
       "mechanical_stale": "n",
       "mechanical_action": "mock-backend",
-      "inspection": "by design the input is cleared only when send succeeds (app/dashboard/chat/page.tsx:220-222 'Only clear input after successful send'); /api/chat/send fails without Supabase"
+      "inspection": "by design the input is cleared only when send succeeds (app/dashboard/chat/page.tsx:220-222 'Only clear input after successful send'); /api/chat/send fails without Supabase",
+      "phase2a_disposition": "mocked",
+      "phase2a_issue": null
     },
     {
       "n": 6,
@@ -382,7 +392,9 @@
       "reason": "waits for spec-typed test data to round-trip; page shows backend-absent signal ['Invalid JWT format']",
       "mechanical_stale": "n",
       "mechanical_action": "mock-backend",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "mocked",
+      "phase2a_issue": null
     },
     {
       "n": 7,
@@ -444,7 +456,9 @@
       "reason": "selector exists in source; page shows backend-absent signal ['Invalid JWT format']",
       "mechanical_stale": "n",
       "mechanical_action": "mock-backend",
-      "inspection": "message field is a single-line <input id=chatMessage> (app/dashboard/chat/page.tsx:350), which cannot hold a newline; git log --all -S'<textarea' -- app/dashboard/chat is empty, so it was never multi-line"
+      "inspection": "message field is a single-line <input id=chatMessage> (app/dashboard/chat/page.tsx:350), which cannot hold a newline; git log --all -S'<textarea' -- app/dashboard/chat is empty, so it was never multi-line",
+      "phase2a_disposition": "deleted (multi-line input never existed)",
+      "phase2a_issue": null
     },
     {
       "n": 8,
@@ -493,7 +507,9 @@
       "reason": "value mismatch on a page showing a backend-absent signal ['Invalid JWT format']",
       "mechanical_stale": "n",
       "mechanical_action": "mock-backend",
-      "inspection": "chat page renders an unnamed AGENT selector <select> (app/dashboard/chat/page.tsx:339; options Agent Zero/Archon/...) and no model combobox or settings button; the controls are static, so the JWT alert is not the cause"
+      "inspection": "chat page renders an unnamed AGENT selector <select> (app/dashboard/chat/page.tsx:339; options Agent Zero/Archon/...) and no model combobox or settings button; the controls are static, so the JWT alert is not the cause",
+      "phase2a_disposition": "rewritten (agent selector, not model selector)",
+      "phase2a_issue": null
     },
     {
       "n": 9,
@@ -546,7 +562,9 @@
       "reason": "selector/text absent from all current UI source",
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "fixme",
+      "phase2a_issue": 3224
     },
     {
       "n": 10,
@@ -599,7 +617,9 @@
       "reason": "selector/text absent from all current UI source",
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "fixme",
+      "phase2a_issue": 3224
     },
     {
       "n": 11,
@@ -652,7 +672,9 @@
       "reason": "selector/text absent from all current UI source",
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "fixme",
+      "phase2a_issue": 3224
     },
     {
       "n": 12,
@@ -705,7 +727,9 @@
       "reason": "selector/text absent from all current UI source",
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "fixme",
+      "phase2a_issue": 3224
     },
     {
       "n": 13,
@@ -758,7 +782,9 @@
       "reason": "selector/text absent from all current UI source",
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "fixme",
+      "phase2a_issue": 3224
     },
     {
       "n": 14,
@@ -811,7 +837,9 @@
       "reason": "selector/text absent from all current UI source",
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "fixme",
+      "phase2a_issue": 3224
     },
     {
       "n": 15,
@@ -864,7 +892,9 @@
       "reason": "selector/text absent from all current UI source",
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "fixme",
+      "phase2a_issue": 3224
     },
     {
       "n": 16,
@@ -917,7 +947,9 @@
       "reason": "selector/text absent from all current UI source",
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "fixme",
+      "phase2a_issue": 3224
     },
     {
       "n": 17,
@@ -970,7 +1002,9 @@
       "reason": "selector/text absent from all current UI source",
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "fixme",
+      "phase2a_issue": 3224
     },
     {
       "n": 18,
@@ -1023,7 +1057,9 @@
       "reason": "selector/text absent from all current UI source",
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "fixme",
+      "phase2a_issue": 3224
     },
     {
       "n": 19,
@@ -1076,7 +1112,9 @@
       "reason": "selector/text absent from all current UI source",
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "fixme",
+      "phase2a_issue": 3224
     },
     {
       "n": 20,
@@ -1129,7 +1167,9 @@
       "reason": "selector/text absent from all current UI source",
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "fixme",
+      "phase2a_issue": 3224
     },
     {
       "n": 21,
@@ -1182,7 +1222,9 @@
       "reason": "selector/text absent from all current UI source",
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "fixme",
+      "phase2a_issue": 3224
     },
     {
       "n": 22,
@@ -1235,7 +1277,9 @@
       "reason": "selector/text absent from all current UI source",
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "fixme",
+      "phase2a_issue": 3224
     },
     {
       "n": 23,
@@ -1288,7 +1332,9 @@
       "reason": "selector/text absent from all current UI source",
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "fixme",
+      "phase2a_issue": 3224
     },
     {
       "n": 24,
@@ -1341,7 +1387,9 @@
       "reason": "selector/text absent from all current UI source",
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "fixme",
+      "phase2a_issue": 3224
     },
     {
       "n": 25,
@@ -1394,7 +1442,9 @@
       "reason": "selector/text absent from all current UI source",
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "fixme",
+      "phase2a_issue": 3224
     },
     {
       "n": 26,
@@ -1447,7 +1497,9 @@
       "reason": "selector/text absent from all current UI source",
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "fixme",
+      "phase2a_issue": 3224
     },
     {
       "n": 27,
@@ -1500,7 +1552,9 @@
       "reason": "selector/text absent from all current UI source",
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "fixme",
+      "phase2a_issue": 3224
     },
     {
       "n": 28,
@@ -1553,7 +1607,9 @@
       "reason": "selector/text absent from all current UI source",
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "fixme",
+      "phase2a_issue": 3224
     },
     {
       "n": 29,
@@ -1606,7 +1662,9 @@
       "reason": "selector/text absent from all current UI source",
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "fixme",
+      "phase2a_issue": 3224
     },
     {
       "n": 30,
@@ -1659,7 +1717,9 @@
       "reason": "selector/text absent from all current UI source",
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "fixme",
+      "phase2a_issue": 3224
     },
     {
       "n": 31,
@@ -1712,7 +1772,9 @@
       "reason": "selector/text absent from all current UI source",
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "fixme",
+      "phase2a_issue": 3224
     },
     {
       "n": 32,
@@ -1765,7 +1827,9 @@
       "reason": "selector/text absent from all current UI source",
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "fixme",
+      "phase2a_issue": 3224
     },
     {
       "n": 33,
@@ -1818,7 +1882,9 @@
       "reason": "selector/text absent from all current UI source",
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "fixme",
+      "phase2a_issue": 3224
     },
     {
       "n": 34,
@@ -1871,7 +1937,9 @@
       "reason": "selector/text absent from all current UI source",
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "fixme",
+      "phase2a_issue": 3224
     },
     {
       "n": 35,
@@ -1924,7 +1992,9 @@
       "reason": "selector/text absent from all current UI source",
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "fixme",
+      "phase2a_issue": 3224
     },
     {
       "n": 36,
@@ -1977,7 +2047,9 @@
       "reason": "selector/text absent from all current UI source",
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "fixme",
+      "phase2a_issue": 3224
     },
     {
       "n": 37,
@@ -2030,7 +2102,9 @@
       "reason": "selector/text absent from all current UI source",
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "fixme",
+      "phase2a_issue": 3224
     },
     {
       "n": 38,
@@ -2083,7 +2157,9 @@
       "reason": "selector/text absent from all current UI source",
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "fixme",
+      "phase2a_issue": 3224
     },
     {
       "n": 39,
@@ -2136,7 +2212,9 @@
       "reason": "selector/text absent from all current UI source",
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "fixme",
+      "phase2a_issue": 3224
     },
     {
       "n": 40,
@@ -2189,7 +2267,9 @@
       "reason": "selector/text absent from all current UI source",
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "fixme",
+      "phase2a_issue": 3224
     },
     {
       "n": 41,
@@ -2242,7 +2322,9 @@
       "reason": "selector/text absent from all current UI source",
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "fixme",
+      "phase2a_issue": 3224
     },
     {
       "n": 42,
@@ -2295,7 +2377,9 @@
       "reason": "selector/text absent from all current UI source",
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "fixme",
+      "phase2a_issue": 3224
     },
     {
       "n": 43,
@@ -2348,7 +2432,9 @@
       "reason": "selector/text absent from all current UI source",
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "fixme",
+      "phase2a_issue": 3224
     },
     {
       "n": 44,
@@ -2403,7 +2489,9 @@
       "reason": "selector/text absent from all current UI source",
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "fixme",
+      "phase2a_issue": 3227
     },
     {
       "n": 45,
@@ -2458,7 +2546,9 @@
       "reason": "selector/text absent from all current UI source",
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "fixme",
+      "phase2a_issue": 3227
     },
     {
       "n": 46,
@@ -2513,7 +2603,9 @@
       "reason": "selector/text absent from all current UI source",
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "fixme",
+      "phase2a_issue": 3227
     },
     {
       "n": 47,
@@ -2568,7 +2660,9 @@
       "reason": "selector/text absent from all current UI source",
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "fixme",
+      "phase2a_issue": 3227
     },
     {
       "n": 48,
@@ -2623,7 +2717,9 @@
       "reason": "selector/text absent from all current UI source",
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "fixme",
+      "phase2a_issue": 3227
     },
     {
       "n": 49,
@@ -2678,7 +2774,9 @@
       "reason": "selector/text absent from all current UI source",
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "fixme",
+      "phase2a_issue": 3227
     },
     {
       "n": 50,
@@ -2733,7 +2831,9 @@
       "reason": "selector/text absent from all current UI source",
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "fixme",
+      "phase2a_issue": 3227
     },
     {
       "n": 51,
@@ -2788,7 +2888,9 @@
       "reason": "selector/text absent from all current UI source",
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "fixme",
+      "phase2a_issue": 3227
     },
     {
       "n": 52,
@@ -2843,7 +2945,9 @@
       "reason": "selector/text absent from all current UI source",
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "fixme",
+      "phase2a_issue": 3227
     },
     {
       "n": 53,
@@ -2898,7 +3002,9 @@
       "reason": "selector/text absent from all current UI source",
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "fixme",
+      "phase2a_issue": 3227
     },
     {
       "n": 54,
@@ -2953,7 +3059,9 @@
       "reason": "selector/text absent from all current UI source",
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "fixme",
+      "phase2a_issue": 3227
     },
     {
       "n": 55,
@@ -3008,7 +3116,9 @@
       "reason": "selector/text absent from all current UI source",
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "fixme",
+      "phase2a_issue": 3227
     },
     {
       "n": 56,
@@ -3063,7 +3173,9 @@
       "reason": "selector/text absent from all current UI source",
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "fixme",
+      "phase2a_issue": 3227
     },
     {
       "n": 57,
@@ -3118,7 +3230,9 @@
       "reason": "selector/text absent from all current UI source",
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "fixme",
+      "phase2a_issue": 3227
     },
     {
       "n": 58,
@@ -3173,7 +3287,9 @@
       "reason": "selector/text absent from all current UI source",
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "fixme",
+      "phase2a_issue": 3227
     },
     {
       "n": 59,
@@ -3228,7 +3344,9 @@
       "reason": "selector/text absent from all current UI source",
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "fixme",
+      "phase2a_issue": 3227
     },
     {
       "n": 60,
@@ -3283,7 +3401,9 @@
       "reason": "selector/text absent from all current UI source",
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "fixme",
+      "phase2a_issue": 3227
     },
     {
       "n": 61,
@@ -3320,7 +3440,9 @@
       "reason": "/api/notebook/sources now returns 401 (auth gate in app/api/notebook/sources/route.ts, last touched 2026-03-14); spec predates it",
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "updated (assert 401 auth contract)",
+      "phase2a_issue": null
     },
     {
       "n": 62,
@@ -3357,7 +3479,9 @@
       "reason": "/api/notebook/runtime now returns 401 (auth gate in app/api/notebook/runtime/route.ts, last touched 2026-03-16); spec predates it",
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "updated (assert 401 auth contract)",
+      "phase2a_issue": null
     },
     {
       "n": 63,
@@ -3394,7 +3518,9 @@
       "reason": "/api/health/all now returns 401 (auth gate in app/api/health/all/route.ts -> app/api/health-all/route.ts, last touched 2026-03-05); spec predates it",
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "updated (alias==canonical, both 401)",
+      "phase2a_issue": null
     },
     {
       "n": 64,
@@ -3449,7 +3575,9 @@
       "reason": "selector/text absent from all current UI source",
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "fixme",
+      "phase2a_issue": 3226
     },
     {
       "n": 65,
@@ -3508,7 +3636,9 @@
       "reason": "selector absent; near-match exists in source (renamed candidate)",
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "fixme",
+      "phase2a_issue": 3226
     },
     {
       "n": 66,
@@ -3563,7 +3693,9 @@
       "reason": "selector/text absent from all current UI source",
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "fixme",
+      "phase2a_issue": 3226
     },
     {
       "n": 67,
@@ -3622,7 +3754,9 @@
       "reason": "selector absent; near-match exists in source (renamed candidate)",
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "fixme",
+      "phase2a_issue": 3226
     },
     {
       "n": 68,
@@ -3681,7 +3815,9 @@
       "reason": "selector absent; near-match exists in source (renamed candidate)",
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "fixme",
+      "phase2a_issue": 3226
     },
     {
       "n": 69,
@@ -3736,7 +3872,9 @@
       "reason": "selector/text absent from all current UI source",
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "fixme",
+      "phase2a_issue": 3226
     },
     {
       "n": 70,
@@ -3791,7 +3929,9 @@
       "reason": "selector/text absent from all current UI source",
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "fixme",
+      "phase2a_issue": 3226
     },
     {
       "n": 71,
@@ -3846,7 +3986,9 @@
       "reason": "selector/text absent from all current UI source",
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "fixme",
+      "phase2a_issue": 3226
     },
     {
       "n": 72,
@@ -3901,7 +4043,9 @@
       "reason": "selector/text absent from all current UI source",
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "fixme",
+      "phase2a_issue": 3226
     },
     {
       "n": 73,
@@ -3956,7 +4100,9 @@
       "reason": "selector/text absent from all current UI source",
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "fixme",
+      "phase2a_issue": 3226
     },
     {
       "n": 74,
@@ -4011,7 +4157,9 @@
       "reason": "selector/text absent from all current UI source",
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "fixme",
+      "phase2a_issue": 3226
     },
     {
       "n": 75,
@@ -4066,7 +4214,9 @@
       "reason": "selector/text absent from all current UI source",
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "fixme",
+      "phase2a_issue": 3226
     },
     {
       "n": 76,
@@ -4121,7 +4271,9 @@
       "reason": "selector/text absent from all current UI source",
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "fixme",
+      "phase2a_issue": 3226
     },
     {
       "n": 77,
@@ -4176,7 +4328,9 @@
       "reason": "selector/text absent from all current UI source",
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "fixme",
+      "phase2a_issue": 3226
     },
     {
       "n": 78,
@@ -4231,7 +4385,9 @@
       "reason": "selector/text absent from all current UI source",
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "fixme",
+      "phase2a_issue": 3226
     },
     {
       "n": 79,
@@ -4286,7 +4442,9 @@
       "reason": "selector/text absent from all current UI source",
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "fixme",
+      "phase2a_issue": 3226
     },
     {
       "n": 80,
@@ -4341,7 +4499,9 @@
       "reason": "selector/text absent from all current UI source",
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "fixme",
+      "phase2a_issue": 3226
     },
     {
       "n": 81,
@@ -4396,7 +4556,9 @@
       "reason": "selector/text absent from all current UI source",
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "fixme",
+      "phase2a_issue": 3226
     },
     {
       "n": 82,
@@ -4449,7 +4611,9 @@
       "reason": "selector/text absent from all current UI source",
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "fixme",
+      "phase2a_issue": 3225
     },
     {
       "n": 83,
@@ -4502,7 +4666,9 @@
       "reason": "selector/text absent from all current UI source",
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "fixme",
+      "phase2a_issue": 3225
     },
     {
       "n": 84,
@@ -4555,7 +4721,9 @@
       "reason": "selector/text absent from all current UI source",
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "fixme",
+      "phase2a_issue": 3225
     },
     {
       "n": 85,
@@ -4608,7 +4776,9 @@
       "reason": "selector/text absent from all current UI source",
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "fixme",
+      "phase2a_issue": 3225
     },
     {
       "n": 86,
@@ -4661,7 +4831,9 @@
       "reason": "selector/text absent from all current UI source",
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "fixme",
+      "phase2a_issue": 3225
     },
     {
       "n": 87,
@@ -4714,7 +4886,9 @@
       "reason": "selector/text absent from all current UI source",
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "fixme",
+      "phase2a_issue": 3225
     },
     {
       "n": 88,
@@ -4767,7 +4941,9 @@
       "reason": "selector/text absent from all current UI source",
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "fixme",
+      "phase2a_issue": 3225
     },
     {
       "n": 89,
@@ -4820,7 +4996,9 @@
       "reason": "selector/text absent from all current UI source",
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "fixme",
+      "phase2a_issue": 3225
     },
     {
       "n": 90,
@@ -4873,7 +5051,9 @@
       "reason": "selector/text absent from all current UI source",
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "fixme",
+      "phase2a_issue": 3225
     },
     {
       "n": 91,
@@ -4926,7 +5106,9 @@
       "reason": "selector/text absent from all current UI source",
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "fixme",
+      "phase2a_issue": 3225
     },
     {
       "n": 92,
@@ -4979,7 +5161,9 @@
       "reason": "selector/text absent from all current UI source",
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "fixme",
+      "phase2a_issue": 3225
     },
     {
       "n": 93,
@@ -5032,7 +5216,9 @@
       "reason": "selector/text absent from all current UI source",
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "fixme",
+      "phase2a_issue": 3225
     },
     {
       "n": 94,
@@ -5085,7 +5271,9 @@
       "reason": "selector/text absent from all current UI source",
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "fixme",
+      "phase2a_issue": 3225
     },
     {
       "n": 95,
@@ -5138,7 +5326,9 @@
       "reason": "selector/text absent from all current UI source",
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "fixme",
+      "phase2a_issue": 3225
     },
     {
       "n": 96,
@@ -5191,7 +5381,9 @@
       "reason": "selector/text absent from all current UI source",
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "fixme",
+      "phase2a_issue": 3225
     },
     {
       "n": 97,
@@ -5244,7 +5436,9 @@
       "reason": "selector/text absent from all current UI source",
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "fixme",
+      "phase2a_issue": 3225
     },
     {
       "n": 98,
@@ -5297,7 +5491,9 @@
       "reason": "selector/text absent from all current UI source",
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "fixme",
+      "phase2a_issue": 3225
     },
     {
       "n": 99,
@@ -5350,7 +5546,9 @@
       "reason": "selector/text absent from all current UI source",
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "fixme",
+      "phase2a_issue": 3225
     },
     {
       "n": 100,
@@ -5403,7 +5601,9 @@
       "reason": "selector/text absent from all current UI source",
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "fixme",
+      "phase2a_issue": 3225
     },
     {
       "n": 101,
@@ -5456,7 +5656,9 @@
       "reason": "selector/text absent from all current UI source",
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "fixme",
+      "phase2a_issue": 3225
     },
     {
       "n": 102,
@@ -5509,7 +5711,9 @@
       "reason": "selector/text absent from all current UI source",
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "fixme",
+      "phase2a_issue": 3225
     },
     {
       "n": 103,
@@ -5562,7 +5766,9 @@
       "reason": "selector/text absent from all current UI source",
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "fixme",
+      "phase2a_issue": 3225
     },
     {
       "n": 104,
@@ -5615,7 +5821,9 @@
       "reason": "selector/text absent from all current UI source",
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "fixme",
+      "phase2a_issue": 3225
     },
     {
       "n": 105,
@@ -5679,7 +5887,9 @@
       "reason": "page rendered Next.js 404 \u2014 route/slug no longer exists",
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "updated (dashboard -> /dashboard/services, slug, per-branch assertions, testids)",
+      "phase2a_issue": null
     },
     {
       "n": 106,
@@ -5724,7 +5934,9 @@
       "reason": "page rendered Next.js 404 \u2014 route/slug no longer exists",
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "updated (dashboard -> /dashboard/services, slug, per-branch assertions, testids)",
+      "phase2a_issue": null
     },
     {
       "n": 107,
@@ -5787,7 +5999,9 @@
       "reason": "page rendered Next.js 404 \u2014 route/slug no longer exists",
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
-      "inspection": "slug 'hirag-v2' is not in lib/services.ts or lib/serviceCatalog.ts (404); nearest current slug is 'hi-rag-gateway-v2' (lib/serviceCatalog.ts:514)"
+      "inspection": "slug 'hirag-v2' is not in lib/services.ts or lib/serviceCatalog.ts (404); nearest current slug is 'hi-rag-gateway-v2' (lib/serviceCatalog.ts:514)",
+      "phase2a_disposition": "updated (dashboard -> /dashboard/services, slug, per-branch assertions, testids)",
+      "phase2a_issue": null
     },
     {
       "n": 108,
@@ -5832,7 +6046,9 @@
       "reason": "page rendered Next.js 404 \u2014 route/slug no longer exists",
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
-      "inspection": "page renders the markdown Service Guide branch; the <dl> the spec looks for exists only in CatalogFallback (app/dashboard/services/[service]/page.tsx:61); no backend involved"
+      "inspection": "page renders the markdown Service Guide branch; the <dl> the spec looks for exists only in CatalogFallback (app/dashboard/services/[service]/page.tsx:61); no backend involved",
+      "phase2a_disposition": "updated (dashboard -> /dashboard/services, slug, per-branch assertions, testids)",
+      "phase2a_issue": null
     },
     {
       "n": 109,
@@ -5895,7 +6111,9 @@
       "reason": "strict-mode violation: selector too broad for the current page",
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "updated (dashboard -> /dashboard/services, slug, per-branch assertions, testids)",
+      "phase2a_issue": null
     },
     {
       "n": 110,
@@ -5952,7 +6170,9 @@
       "reason": "value mismatch with no backend signal on the page",
       "mechanical_stale": "unknown",
       "mechanical_action": "real-regression-investigate",
-      "inspection": "service page is a server component rendering the markdown Service Guide (no client fetch); the first <code> is the slug ('agent-zero'), the spec assumes it is a URL"
+      "inspection": "service page is a server component rendering the markdown Service Guide (no client fetch); the first <code> is the slug ('agent-zero'), the spec assumes it is a URL",
+      "phase2a_disposition": "updated (dashboard -> /dashboard/services, slug, per-branch assertions, testids)",
+      "phase2a_issue": null
     },
     {
       "n": 111,
@@ -5997,7 +6217,9 @@
       "reason": "value mismatch with no backend signal on the page",
       "mechanical_stale": "unknown",
       "mechanical_action": "real-regression-investigate",
-      "inspection": "page renders the markdown Service Guide branch; the <dl> the spec looks for exists only in CatalogFallback (app/dashboard/services/[service]/page.tsx:61); no backend involved"
+      "inspection": "page renders the markdown Service Guide branch; the <dl> the spec looks for exists only in CatalogFallback (app/dashboard/services/[service]/page.tsx:61); no backend involved",
+      "phase2a_disposition": "updated (dashboard -> /dashboard/services, slug, per-branch assertions, testids)",
+      "phase2a_issue": null
     },
     {
       "n": 112,
@@ -6069,7 +6291,9 @@
       "reason": "strict-mode violation: selector too broad for the current page",
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "updated (dashboard -> /dashboard/services, slug, per-branch assertions, testids)",
+      "phase2a_issue": null
     },
     {
       "n": 113,
@@ -6130,7 +6354,9 @@
       "reason": "value mismatch with no backend signal on the page",
       "mechanical_stale": "unknown",
       "mechanical_action": "real-regression-investigate",
-      "inspection": "service page is a server component rendering the markdown Service Guide (no client fetch); the first <code> is the slug ('agent-zero'), the spec assumes it is a URL"
+      "inspection": "service page is a server component rendering the markdown Service Guide (no client fetch); the first <code> is the slug ('agent-zero'), the spec assumes it is a URL",
+      "phase2a_disposition": "updated (dashboard -> /dashboard/services, slug, per-branch assertions, testids)",
+      "phase2a_issue": null
     },
     {
       "n": 114,
@@ -6179,7 +6405,9 @@
       "reason": "value mismatch with no backend signal on the page",
       "mechanical_stale": "unknown",
       "mechanical_action": "real-regression-investigate",
-      "inspection": "page renders the markdown Service Guide branch; the <dl> the spec looks for exists only in CatalogFallback (app/dashboard/services/[service]/page.tsx:61); no backend involved"
+      "inspection": "page renders the markdown Service Guide branch; the <dl> the spec looks for exists only in CatalogFallback (app/dashboard/services/[service]/page.tsx:61); no backend involved",
+      "phase2a_disposition": "updated (dashboard -> /dashboard/services, slug, per-branch assertions, testids)",
+      "phase2a_issue": null
     },
     {
       "n": 115,
@@ -6216,7 +6444,9 @@
       "reason": "test itself requires a live backend (env/network precondition)",
       "mechanical_stale": "n",
       "mechanical_action": "tag-backend",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "tagged-backend",
+      "phase2a_issue": null
     },
     {
       "n": 116,
@@ -6253,7 +6483,9 @@
       "reason": "test itself requires a live backend (env/network precondition)",
       "mechanical_stale": "n",
       "mechanical_action": "tag-backend",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "tagged-backend",
+      "phase2a_issue": null
     },
     {
       "n": 117,
@@ -6290,7 +6522,9 @@
       "reason": "/api/health-all?simple=true now returns 401 (auth gate in app/api/health-all/route.ts, last touched 2026-03-16); spec predates it",
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "updated (assert 401 auth contract)",
+      "phase2a_issue": null
     },
     {
       "n": 118,
@@ -6327,7 +6561,9 @@
       "reason": "/api/health/boot-jwt now returns 401 (auth gate in app/api/health/boot-jwt/route.ts, last touched 2026-03-16); spec predates it",
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "updated (assert 401 auth contract)",
+      "phase2a_issue": null
     },
     {
       "n": 119,
@@ -6381,7 +6617,9 @@
       "reason": "waits for window.__PMOVES_SUPABASE_BOOT, absent from current source (removed-or-moved (last change f45b81e4e 2026-08-08; first 25af2c3d3 2025-11-04))",
       "mechanical_stale": "y",
       "mechanical_action": "update-to-current",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "rewritten (feature removed in cbf69c3fe; asserts no boot JWT on window)",
+      "phase2a_issue": null
     },
     {
       "n": 120,
@@ -6415,7 +6653,47 @@
       "reason": "test itself requires a live backend (env/network precondition)",
       "mechanical_stale": "n",
       "mechanical_action": "tag-backend",
-      "inspection": null
+      "inspection": null,
+      "phase2a_disposition": "tagged-backend",
+      "phase2a_issue": null
     }
-  ]
+  ],
+  "phase2a": {
+    "issues": {
+      "ingestion": 3224,
+      "search": 3225,
+      "research": 3226,
+      "jellyfin": 3227,
+      "services-refresh-real-bug": 3228
+    },
+    "also_changed_previously_passing": [
+      {
+        "spec": "e2e/services-health.spec.ts",
+        "test": "provides service detail navigation",
+        "disposition": "updated (was passing only because /dashboard/services/health 404'd)"
+      },
+      {
+        "spec": "e2e/services-health.spec.ts",
+        "test": "provides refresh/recheck functionality",
+        "disposition": "fixme: REAL UI BUG #3228"
+      },
+      {
+        "spec": "e2e/chat.spec.ts",
+        "test": "shows error message on failed request",
+        "disposition": "rewritten with a failing-send route mock"
+      }
+    ],
+    "renamed_tests": {
+      "e2e/chat.spec.ts::provides access to model selection": "provides access to agent selection",
+      "e2e/supabase-auth.spec.ts::browser client uses boot JWT when provided": "boot JWT is never exposed on window"
+    },
+    "local_default_run": {
+      "command": "npm run test:e2e (CI env, CI=1, no backend)",
+      "total": 182,
+      "passed": 88,
+      "skipped": 94,
+      "failed": 0,
+      "rc": 0
+    }
+  }
 }

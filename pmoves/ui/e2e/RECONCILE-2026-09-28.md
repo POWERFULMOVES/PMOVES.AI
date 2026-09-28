@@ -179,3 +179,25 @@ Missing selector terms checked against UI-source history on all refs: {'never-in
 | supabase-auth.spec.ts:4 | `window.__PMOVES_SUPABASE_BOOT` never set (timeout) | same |
 
 The local run confirms the failures are deterministic and happen with no backend. It does not prove on its own that a spec is stale: that verdict comes from the source and history evidence in the table above.
+
+## Phase 2a: dispositions (2026-09-28)
+
+These were added to the JSON as extra fields: `phase2a_disposition` and `phase2a_issue` on each row, plus a top-level `phase2a` object. No existing keys were changed.
+
+| disposition | n | detail |
+|---|---|---|
+| fixme (UI never built) | 93 | ingestion 35 → #3224, search 23 → #3225, research 18 → #3226, jellyfin 17 → #3227 |
+| updated to current UI | 18 | services-health 12, notebook 3, archon-prompts 2, chat model→agent selector 1 |
+| mocked (`page.route` on `/api/chat/*`) | 4 | chat send, loading, clear, and Enter tests |
+| rewritten (feature removed) | 1 | supabase-auth: `__PMOVES_SUPABASE_BOOT` was removed in cbf69c3fe, so the test now asserts that no boot JWT is exposed on window |
+| deleted | 1 | chat Shift+Enter: the input was never multi-line |
+| tagged `@backend` | 3 | `/api/health` ×2 and videos-realtime. `npm run test:e2e` excludes them; run them against a live stack with `npm run test:e2e:backend` |
+
+Changes to tests that had previously passed:
+- "provides service detail navigation" is updated. It used to pass only because `/dashboard/services/health` rendered a 404.
+- "shows error message on failed request" now mocks a failing send.
+- **"provides refresh/recheck functionality" is fixme'd against #3228. This is a REAL UI BUG**: the services dashboard's Refresh button stays disabled permanently, because `useServiceHealth` sets `isPolling` true and never clears it.
+
+The UI changes add attributes only: `data-testid` on the service title, guide, and catalog fallback; `data-testid` and `data-status` on `ServiceHealthIndicator`; `data-testid` on the chat agent select and send button.
+
+**Default run, before and after.** Before (CI run 36449042803): 120 failed, 66 passed, out of 186. After (local, `npm run test:e2e`, CI env, no backend): 88 passed, 94 skipped, 0 failed, out of 182, rc=0.
