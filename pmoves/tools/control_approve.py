@@ -670,8 +670,10 @@ def main(argv: list[str] | None = None, env: dict[str, str] | None = None) -> in
             if token.strip():
                 raise Outcome(EXIT_USAGE, f"set only one of {TOKEN_FILE_ENV} and {TOKEN_ENV}")
             token = read_token_file(token_file)
-        elif token:
+        elif token.strip():
             token = validate_token_text(token, TOKEN_ENV)
+        else:
+            token = ""  # unset or whitespace-only: "no token" (rc 3), not malformed
         if not token.strip():
             raise Outcome(
                 EXIT_UNMEASURED, f"no token: set {TOKEN_FILE_ENV} (preferred) or {TOKEN_ENV}; cannot approve"

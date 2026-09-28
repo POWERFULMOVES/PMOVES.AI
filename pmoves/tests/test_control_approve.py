@@ -677,6 +677,15 @@ def test_env_token_with_whitespace_is_refused_without_echoing(gh: FakeGitHub, co
     assert gh.requests == []
 
 
+@pytest.mark.parametrize("value", ["", " ", "\n", " \t\r\n "])
+def test_blank_env_token_is_no_token(gh: FakeGitHub, config: Path, value: str, capsys: pytest.CaptureFixture[str]) -> None:
+    assert run(config, env={"PMOVES_CONTROL_TOKEN": value}) == 3
+    out = capsys.readouterr()
+    assert "no token" in out.err
+    assert out.out.strip().splitlines()[-1] == "VERDICT: COULD-NOT-MEASURE rc=3"
+    assert gh.requests == []
+
+
 def test_token_file_and_env_together_is_usage_error(gh: FakeGitHub, config: Path, tmp_path: Path) -> None:
     tf = _token_file(tmp_path, 0o600)
     assert run(config, env={"PMOVES_CONTROL_TOKEN_FILE": str(tf), "PMOVES_CONTROL_TOKEN": TOKEN}) == 2
