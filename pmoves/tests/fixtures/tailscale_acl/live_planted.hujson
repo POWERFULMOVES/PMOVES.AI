@@ -1,0 +1,19 @@
+// Live side carrying values that must NEVER reach a public log: an email in a
+// group, an IP in hosts, a tag as a value in an ssh rule, a tag as a live-only key.
+{
+  "groups": {"group:ops": ["planted.person@example.invalid"]},
+  "hosts": {"planted-host": "198.51.100.77"},
+  "tagOwners": {
+    "tag:pmoves": ["autogroup:admin"],
+    "tag:plantedkeytag": ["autogroup:admin"],
+  },
+  "acls": [{"action": "accept", "src": ["tag:pmoves"], "dst": ["tag:pmoves:*"]}],
+  "ssh": [
+    {"action": "accept", "src": ["tag:pmoves", "tag:plantedvaluetag"], "dst": ["tag:pmoves"], "users": ["autogroup:nonroot"]},
+  ],
+  "sshTests": [
+    {"src": "tag:pmoves", "dst": ["tag:pmoves"], "accept": ["autogroup:nonroot"], "deny": ["root"]},
+  ],
+  "derpMap": {"OmitDefaultRegions": 0, "privateKey": "repo-side-placeholder"},
+  "note": "https://example.invalid/a//b, not a comment,]",
+}

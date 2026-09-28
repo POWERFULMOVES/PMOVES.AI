@@ -1,0 +1,11 @@
+// Live side after a console edit: the tag->tag SSH rule was narrowed to a
+// named user list and the sshTests block was removed.
+{
+  "tagOwners": {"tag:pmoves": ["autogroup:admin"]},
+  "acls": [{"action": "accept", "src": ["tag:pmoves"], "dst": ["tag:pmoves:*"]}],
+  "ssh": [
+    {"action": "accept", "src": ["tag:pmoves"], "dst": ["tag:pmoves"], "users": ["pmoves"]},
+  ],
+  "derpMap": {"OmitDefaultRegions": false, "privateKey": "repo-side-placeholder"},
+  "note": "https://example.invalid/a//b, not a comment,]",
+}
