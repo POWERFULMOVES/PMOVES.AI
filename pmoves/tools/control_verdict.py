@@ -61,6 +61,7 @@ MARKER_RE = re.compile(
 # Anything that claims to be a marker. Case-insensitive and whitespace-lax on
 # purpose, so near-misses are reported as malformed instead of silently skipped.
 CANDIDATE_RE = re.compile(r"<!--\s*pmoves-control-verdict", re.IGNORECASE)
+CLI_DESCRIPTION = "Control-body verdict markers for the PMOVES.AI approval road."
 
 
 class VerdictFormatError(ValueError):
@@ -255,7 +256,8 @@ def select_verdict(
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__.split("\n\n", 1)[0])
+    # __doc__ is None under `python -OO`, so never derive the CLI text from it.
+    parser = argparse.ArgumentParser(description=CLI_DESCRIPTION)
     sub = parser.add_subparsers(dest="command", required=True)
     fmt = sub.add_parser("format", help="print a canonical verdict marker")
     fmt.add_argument("--verdict", required=True, choices=VERDICTS)

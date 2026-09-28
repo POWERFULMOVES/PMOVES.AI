@@ -238,6 +238,13 @@ def test_no_marker_is_none() -> None:
     assert control_verdict.parse_body("plain review text") is None
 
 
+def test_cli_works_when_docstrings_are_stripped(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    # `python -OO` sets __doc__ to None; the CLI must not depend on it.
+    monkeypatch.setattr(control_verdict, "__doc__", None)
+    assert control_verdict.main(["format", "--verdict", "APPROVE", "--head", H, "--reviewer", "B850-CLAUDE"]) == 0
+    assert capsys.readouterr().out.strip() == marker()
+
+
 def test_format_validates_fields() -> None:
     with pytest.raises(control_verdict.VerdictFormatError):
         control_verdict.format_marker("APPROVE", H.upper(), "x")
