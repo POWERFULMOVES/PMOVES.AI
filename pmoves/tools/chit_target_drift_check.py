@@ -50,6 +50,13 @@ This check does not close that hole either -- fixing a drifted target still
 needs the registry to learn how to reconcile targets. What it does is make the
 drift VISIBLE, so the next one is caught in a PR rather than in a bill.
 
+Routed targets
+--------------
+A target is either the bare name or the mapping ``{name, repo, env}`` that
+routes it to another repo or environment (github_secret_targets.py is the one
+definition of both). Only ``name`` is compared to the label: repo and env say
+where the secret goes, not which secret it is. A malformed mapping exits 3.
+
 Refusing to guess
 -----------------
 An unreadable manifest, or one with no entries, exits 3 -- same doctrine as
@@ -79,6 +86,11 @@ except ModuleNotFoundError as exc:  # pragma: no cover - dependency guard
     raise SystemExit("PyYAML is required (pip install pyyaml)") from exc
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
+from pmoves.tools.github_secret_targets import MalformedTarget, normalize  # noqa: E402
+
 # Assembled rather than written literally: the repo's damage-control guard
 # treats the manifest path as zero-access, and this tool only ever READS it.
 DEFAULT_MANIFEST = _REPO_ROOT / "pmoves" / "chit" / ("secrets_manifest" + "_v2.yaml")
@@ -118,6 +130,16 @@ def load_accepted(path: Optional[Path] = None) -> Dict[str, str]:
     return out
 
 
+def _target_name(target: Any) -> Optional[str]:
+    """The secret NAME a target writes. A routed target's repo and env are
+    where it goes, not what it is, so only `name` is compared to the label."""
+    try:
+        route = normalize(target)
+    except MalformedTarget as exc:
+        raise Unmeasured(str(exc)) from exc
+    return route["name"] if route else None
+
+
 def find_divergence(entries: List[Dict[str, Any]]) -> List[Tuple[str, str, str]]:
     """(entry_id, source_label, github_secret) where the two disagree."""
     out: List[Tuple[str, str, str]] = []
@@ -126,9 +148,7 @@ def find_divergence(entries: List[Dict[str, Any]]) -> List[Tuple[str, str, str]]
         if not label:
             continue
         for target in (entry.get("targets") or []):
-            if not isinstance(target, dict):
-                continue
-            secret = target.get("github_secret")
+            secret = _target_name(target)
             if secret and str(secret) != label:
                 out.append((str(entry.get("id") or ""), label, str(secret)))
     return sorted(out)
@@ -149,8 +169,7 @@ def audit(manifest: Optional[Path] = None, accepted: Optional[Path] = None) -> D
             undeclared.append(row)
 
     with_target = sum(
-        1 for e in entries for t in (e.get("targets") or [])
-        if isinstance(t, dict) and t.get("github_secret")
+        1 for e in entries for t in (e.get("targets") or []) if _target_name(t)
     )
     return {
         "entries": len(entries),
