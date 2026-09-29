@@ -473,3 +473,13 @@
 	path = PMOVES-KeYlOkODe
 	url = https://github.com/POWERFULMOVES/PMOVES-KeYlOkODe.git
 	branch = main
+[submodule "PMOVES-registry"]
+	path = PMOVES-registry
+	url = https://github.com/POWERFULMOVES/PMOVES-registry.git
+	branch = main
+	ignore = all
+[submodule "PMOVES-spynel"]
+	path = PMOVES-spynel
+	url = https://github.com/POWERFULMOVES/PMOVES-spynel.git
+	branch = PMOVES.AI-Edition-Hardened
+	ignore = all

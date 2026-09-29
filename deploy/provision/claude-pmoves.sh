@@ -125,6 +125,34 @@ if [ -f "$ENVF" ]; then
   # Kept in step with deploy/provision/claude-pmoves.ps1:25-31.
   blocklist='^(ANTHROPIC_API_KEY|ANTHROPIC_AUTH_TOKEN|ANTHROPIC_BASE_URL|CLAUDECODE|CLAUDE_CODE_.+|CLAUDE_SESSION_.+)$'
 
+  # Explicitly strip blocklisted vars from the PARENT env before exec claude.
+  # The blocklist above filters env.shared (the file being sourced), but the
+  # parent shell may have set ANTHROPIC_API_KEY via $PROFILE, env.tier-llm,
+  # or a prior session export. Without this unset, the child process inherits
+  # them on the way to exec claude and the auth-precedence warning fires
+  # ("claude.ai connectors disabled because ANTHROPIC_API_KEY takes precedence").
+  # The .ps1 twin performs the same sweep — keep them byte-identical.
+  _cleared=()
+  for _blocked_var in ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN ANTHROPIC_BASE_URL; do
+    if [ -n "${!_blocked_var+x}" ]; then
+      _cleared+=("$_blocked_var")
+      unset "$_blocked_var"
+    fi
+  done
+  for _pattern in 'CLAUDECODE' 'CLAUDE_CODE_' 'CLAUDE_SESSION_'; do
+    # compgen returns names of defined vars; filter to those matching the prefix.
+    while IFS= read -r _var; do
+      [ -z "$_var" ] && continue
+      if [ -n "${!_var+x}" ]; then
+        _cleared+=("$_var")
+        unset "$_var"
+      fi
+    done < <(compgen -A variable "${_pattern}" 2>/dev/null || true)
+  done
+  if [ "${#_cleared[@]}" -gt 0 ]; then
+    echo "[claude-pmoves] cleared auth vars from parent env: ${_cleared[*]}" >&2
+  fi
+
   # env.shared is Docker Compose env_file format: unquoted values, and some are
   # ALIAS lines like SUPABASE_SERVICE_ROLE_KEY=${SERVICE_ROLE_KEY}. Two hazards:
   #   1. We can't `source` it raw — unquoted values break `. file`.
@@ -172,6 +200,24 @@ else
   echo "[claude-pmoves] WARN: $ENVF not found — MCP creds may be missing." >&2
   echo "[claude-pmoves]       run: make -C pmoves ensure-env-shared" >&2
   PMOVES_LAUNCHER_SESSION="claude-pmoves.sh (env file NOT FOUND)"
+fi
+
+# --- HOST TLS ------------------------------------------------------------
+# env.shared carries SSL_CERT_FILE= / SSL_CERT_DIR= / REQUESTS_CA_BUNDLE= ...
+# EMPTY on purpose (a container leak guard), and the loader above EXPORTS
+# them. On the host, set-but-empty breaks python ssl and the HF Xet backend
+# (CERTIFICATE_VERIFY_FAILED). Clear the empties; fill in the system bundle
+# only when no CA variable is configured by a later-loaded env file.
+# See pmoves/scripts/pm-ca-bundle.sh.
+if [ -f "$ROOT/pmoves/scripts/pm-ca-bundle.sh" ]; then
+  # shellcheck source=../../pmoves/scripts/pm-ca-bundle.sh
+  . "$ROOT/pmoves/scripts/pm-ca-bundle.sh"
+  pm_ca_bundle_normalize || true
+  if [ -n "${PM_CA_BUNDLE_LINE:-}" ]; then
+    echo "[claude-pmoves] ${PM_CA_BUNDLE_LINE}" >&2
+  fi
+else
+  echo "[claude-pmoves] WARN: pmoves/scripts/pm-ca-bundle.sh missing -- host TLS not normalized." >&2
 fi
 
 # Leave a marker in the child's environment so "did this session come through

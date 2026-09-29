@@ -57,11 +57,32 @@ def main() -> int:
     parser.add_argument("--rest-url", default=os.environ.get("SUPABASE_REST_URL", "http://localhost:8000/rest/v1"))
     parser.add_argument("--service-key", default=os.environ.get("SUPABASE_SERVICE_KEY", os.environ.get("SERVICE_ROLE_KEY", "")))
     parser.add_argument(
+        "--emit",
+        choices=("fd", "file", "stdout"),
+        default="stdout",
+        help="where the minted bearer goes. stdout is the DEFAULT because "
+             "TAC_CIPHER_VILLAGE.md:86 specifies it ('-> prints token') and the "
+             "tests enforce that; fd (caller-opened) and file (0600) are the "
+             "transcript-safe options. Flipping the default is a SPEC change and "
+             "is proposed, not taken, in CIPHER_TOKEN_LANE_AUDIT_2026-09-17.md",
+    )
+    parser.add_argument(
+        "--emit-fd", type=int, default=3,
+        help="file descriptor for --emit=fd (default 3; open it in the caller)",
+    )
+    parser.add_argument(
+        "--emit-file", default="",
+        help="destination path for --emit=file (created 0600)",
+    )
+    parser.add_argument(
         "--allow-uncarded",
         action="store_true",
         help="mint for an agent that has no active signing card (records the exception loudly)",
     )
     args = parser.parse_args()
+
+    if args.emit == "file" and not args.emit_file:
+        parser.error("--emit=file requires --emit-file PATH")
 
     # The signing card is the unlock. #2935 recorded that "the signature and the
     # ledger are separate systems" as a finding; until this gate, it was also the
@@ -169,9 +190,65 @@ def main() -> int:
             )
             return 1
 
-    print(f"CIPHER_TOKEN={token}")
-    print(f"AGENT={args.agent}")
-    print(f"SCOPES={','.join(scopes)}")
+    # HANDOFF, NOT STDOUT. The bearer used to be printed here, which is the
+    # single reason this Known Road could not be run inside an agent transcript:
+    # the credential lands in the log, and a log is exactly where a credential
+    # stops being attributable to one agent.
+    #
+    # A signing card is a LIVING record of provenance -- checkable, current,
+    # deterministically maintained. A secret that has been copied into a
+    # transcript is no longer bound to the identity the card attests, so the
+    # printing was not a hygiene nit; it broke the thing the card is for.
+    #
+    # The repo already had the convention and this adopts it rather than
+    # inventing one: `make secrets-rotate` takes its value from
+    # PMOVES_ROTATE_VALUE, and cf_dns_token_provision.py:194 passes secrets
+    # "into the CHILD ENV as PMOVES_ROTATE_VALUE (never argv)". Env, never
+    # argv, never stdout -- argv is world-readable in /proc on Linux and in
+    # Get-CimInstance Win32_Process on Windows, so a value passed as a flag is
+    # readable by any process on the box for as long as the command runs.
+    #
+    # --emit=fd is the safe default for automation: the caller opens the fd, so
+    # the value never touches a filesystem path an onlooker could read later.
+    # --emit=file writes 0600. --emit=stdout is retained and must be ASKED FOR,
+    # because there are legitimate interactive uses and a flag the operator
+    # typed is a different act from a tool that leaks by default.
+    names_only = f"AGENT={args.agent}{chr(10)}SCOPES={','.join(scopes)}"
+
+    if args.emit == "stdout":
+        print(f"CIPHER_TOKEN={token}")
+        print(names_only)
+        return 0
+
+    if args.emit == "fd":
+        try:
+            with os.fdopen(os.dup(args.emit_fd), "w", closefd=True) as fh:
+                fh.write(token)
+        except OSError as exc:
+            print(
+                f"error: could not write the token to fd {args.emit_fd}: {exc}. "
+                "Open it in the caller (3>/path or a pipe) before invoking.",
+                file=sys.stderr,
+            )
+            return 1
+        print(names_only)
+        print(f"TOKEN_WRITTEN_TO=fd:{args.emit_fd}")
+        return 0
+
+    # emit == file
+    dest = Path(args.emit_file).expanduser()
+    try:
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        # Create with 0600 from the start: writing then chmod'ing leaves a
+        # window where the file is world-readable, which is the whole hazard.
+        fd = os.open(str(dest), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w") as fh:
+            fh.write(token)
+    except OSError as exc:
+        print(f"error: could not write the token to {dest}: {exc}", file=sys.stderr)
+        return 1
+    print(names_only)
+    print(f"TOKEN_WRITTEN_TO={dest}")
     return 0
 
 

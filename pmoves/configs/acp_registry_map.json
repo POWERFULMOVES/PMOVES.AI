@@ -35,25 +35,25 @@
       "name": "Claude Agent",
       "repository": "https://github.com/agentclientprotocol/claude-agent-acp",
       "status": "available",
-      "version": "0.77.0"
+      "version": "0.79.0"
     },
     "cline": {
       "name": "Cline",
       "repository": "https://github.com/cline/cline",
       "status": "available",
-      "version": "3.0.61"
+      "version": "3.0.62"
     },
     "codebuddy-code": {
       "name": "Codebuddy Code",
       "repository": null,
       "status": "available",
-      "version": "2.150.0"
+      "version": "2.154.0"
     },
     "codex-acp": {
       "name": "Codex",
       "repository": "https://github.com/agentclientprotocol/codex-acp",
       "status": "available",
-      "version": "1.11.0"
+      "version": "1.12.0"
     },
     "cortex-code": {
       "name": "Cortex Code",
@@ -73,11 +73,17 @@
       "status": "available",
       "version": "0.1.24"
     },
+    "crush-acp": {
+      "name": "Crush",
+      "repository": "https://github.com/POWERFULMOVES/PMOVES-crush",
+      "status": "available",
+      "version": "0.91.2-pmoves.2"
+    },
     "cursor": {
       "name": "Cursor",
       "repository": null,
       "status": "available",
-      "version": "2026.09.10"
+      "version": "2026.09.15"
     },
     "deepagents": {
       "name": "DeepAgents",
@@ -89,25 +95,25 @@
       "name": "Devin",
       "repository": "https://github.com/CognitionAI/devin-cli",
       "status": "available",
-      "version": "3000.10.21"
+      "version": "3000.10.31"
     },
     "dimcode": {
       "name": "DimCode",
       "repository": null,
       "status": "available",
-      "version": "0.5.2"
+      "version": "0.5.6"
     },
     "dirac": {
       "name": "Dirac",
       "repository": "https://github.com/dirac-run/dirac",
       "status": "available",
-      "version": "0.5.12"
+      "version": "0.5.13"
     },
     "factory-droid": {
       "name": "Factory Droid",
       "repository": null,
       "status": "available",
-      "version": "0.218.1"
+      "version": "0.222.0"
     },
     "fast-agent": {
       "name": "fast-agent",
@@ -119,62 +125,62 @@
       "name": "Gemini CLI",
       "repository": "https://github.com/google-gemini/gemini-cli",
       "status": "available",
-      "version": "0.59.0"
+      "version": "0.60.0"
     },
     "github-copilot": {
       "name": "GitHub Copilot",
       "repository": "https://github.com/github/copilot-language-server-release",
       "status": "available",
-      "version": "1.545.0"
+      "version": "1.547.0"
     },
     "github-copilot-cli": {
       "name": "GitHub Copilot",
       "repository": "https://github.com/github/copilot-cli",
       "status": "available",
-      "version": "1.0.83"
+      "version": "1.0.86"
     },
     "glm-acp-agent": {
       "name": "GLM Agent",
       "repository": "https://github.com/stefandevo/glm-acp-agent",
       "status": "available",
-      "version": "1.8.0"
+      "version": "1.11.0"
     },
     "goose": {
       "name": "goose",
       "repository": "https://github.com/block/goose",
       "status": "available",
-      "version": "1.50.0"
+      "version": "1.51.0"
     },
     "grok-build": {
       "name": "Grok Build",
       "repository": null,
       "status": "available",
-      "version": "1.0.30"
+      "version": "1.0.36"
     },
     "harn": {
       "name": "Harn",
       "repository": "https://github.com/burin-labs/harn",
       "status": "available",
-      "version": "0.10.135"
+      "version": "0.10.138"
     },
     "junie": {
       "name": "Junie",
       "repository": "https://github.com/JetBrains/junie-acp-release",
       "status": "available",
-      "version": "3218.3.0"
+      "version": "3331.4.0"
     },
     "kilo": {
       "name": "Kilo",
       "pmoves": "kilocode_glm",
       "repository": "https://github.com/Kilo-Org/kilocode",
       "status": "linked",
-      "version": "7.6.2"
+      "version": "7.7.5"
     },
     "kimchi": {
       "name": "Kimchi",
       "repository": "https://github.com/getkimchi/kimchi",
       "status": "available",
-      "version": "1.1.18"
+      "version": "1.1.26"
     },
     "kimi": {
       "name": "Kimi CLI",
@@ -204,13 +210,13 @@
       "name": "Nova",
       "repository": "https://github.com/Compass-Agentic-Platform/nova",
       "status": "available",
-      "version": "1.1.38"
+      "version": "1.1.44"
     },
     "opencode": {
       "name": "OpenCode",
       "repository": "https://github.com/anomalyco/opencode",
       "status": "available",
-      "version": "1.18.30"
+      "version": "1.18.31"
     },
     "pi-acp": {
       "name": "pi ACP",
@@ -234,13 +240,13 @@
       "name": "Qwen Code",
       "repository": "https://github.com/QwenLM/qwen-code",
       "status": "available",
-      "version": "0.23.3"
+      "version": "0.24.0"
     },
     "sigit": {
       "name": "siGit Code",
       "repository": "https://github.com/getsigit/sigit",
       "status": "available",
-      "version": "1.5.8"
+      "version": "1.5.10"
     },
     "stakpak": {
       "name": "Stakpak",
