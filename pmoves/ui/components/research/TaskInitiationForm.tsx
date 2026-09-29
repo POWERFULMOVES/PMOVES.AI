@@ -65,11 +65,12 @@ export function TaskInitiationForm({
   ];
 
   return (
-    <div className="rounded border border-neutral-200 bg-white p-4">
+    <div data-testid="task-initiation-form" className="rounded border border-neutral-200 bg-white p-4">
       <div className="flex items-center justify-between mb-4">
         <h3 className="font-medium">Start New Research</h3>
         <button
           onClick={() => setExpanded(!expanded)}
+          data-testid={expanded ? "collapse-options-button" : "expand-options-button"}
           type="button"
           className="text-neutral-400 hover:text-neutral-600"
           aria-label={expanded ? "Collapse" : "Expand options"}
@@ -93,6 +94,7 @@ export function TaskInitiationForm({
           </label>
           <textarea
             id="research-query"
+            data-testid="research-query"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Enter your research question..."
@@ -101,14 +103,14 @@ export function TaskInitiationForm({
             rows={3}
             maxLength={1000}
           />
-          <div className="text-xs text-neutral-500 mt-1 text-right">
+          <div data-testid="query-char-count" className="text-xs text-neutral-500 mt-1 text-right">
             {query.length} / 1000
           </div>
         </div>
 
         {/* Expanded Options */}
         {expanded && (
-          <div className="space-y-4 mb-4">
+          <div data-testid="research-options-panel" className="space-y-4 mb-4">
             {/* Mode Selection */}
             <div>
               <label htmlFor="research-mode" className="block text-sm font-medium text-neutral-700 mb-1">
@@ -116,6 +118,7 @@ export function TaskInitiationForm({
               </label>
               <select
                 id="research-mode"
+                data-testid="research-mode"
                 value={options.mode}
                 onChange={(e) => updateOption("mode", e.target.value as ResearchOptions["mode"])}
                 disabled={loading}
@@ -136,6 +139,7 @@ export function TaskInitiationForm({
               </label>
               <input
                 id="max-iterations"
+                data-testid="max-iterations-slider"
                 type="range"
                 min={3}
                 max={30}
@@ -157,6 +161,7 @@ export function TaskInitiationForm({
               </label>
               <input
                 id="priority"
+                data-testid="priority-slider"
                 type="range"
                 min={1}
                 max={10}
@@ -200,6 +205,7 @@ export function TaskInitiationForm({
         <div className="flex gap-2">
           <button
             type="submit"
+            data-testid="start-research"
             disabled={loading || !query.trim()}
             className={BUTTON_PRIMARY_CLASSES}
           >

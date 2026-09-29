@@ -49,7 +49,7 @@ processing_errors = Counter(
 
 # --- Environment configuration ---
 PORT = int(os.environ.get("MEDIA_VIDEO_PORT", "8079"))
-NATS_URL = os.environ.get("NATS_URL", "nats://nats:pmoves@nats:4222")
+NATS_URL = os.environ.get("NATS_URL", "nats://nats:4222")
 MEDIA_BACKEND = os.environ.get("MEDIA_BACKEND", "transformers").lower()
 # Detector engine, operator-selectable:
 #   "detr" (default) — facebook/detr-resnet-50, Apache-2.0, ships anywhere.

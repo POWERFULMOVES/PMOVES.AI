@@ -67,7 +67,8 @@ After `make -C pmoves up-cipher`: image rebuilt, **`streamable` = 1**, `/health`
 
 **Provenance rule applied here:** every claim below cites the file and line it
 came from, at submodule pin `975e02e6` (later `c88b009a2` — #3103 re-pinned, then `36b28d0f` — #3152;
-`auth.ts` is unchanged across all of them, so every line number below still holds)
+`auth.ts` was unchanged across those; then `a0ee2314` — #3189, fork PR #28, which DID change
+`auth.ts`, so the `auth.ts` line numbers below were re-resolved at `a0ee2314`)
 or superproject `origin/main`. An earlier
 revision of this section proposed three remedies and cited nothing; it was
 reasoning from THIS runbook, which was itself stale. A runbook with no provenance
@@ -167,16 +168,16 @@ Remedy is a mint through the pipeline, per agent, not a transport change.
 `agent_id` this session's memory writes will actually be filed under. Reads no
 secret, sends nothing over the network, exits `0` only when the carry is intact.
 
-Provenance — `Pmoves-cipher/src/pmoves/auth.ts` @ **`975e02e6`** (the gitlink on
-`main`), `resolveToken()`:
+Provenance — `Pmoves-cipher/src/pmoves/auth.ts` @ **`a0ee2314`** (the gitlink on
+`main` since #3189; re-resolved from `975e02e6`), `resolveToken()`:
 
 | line | condition | resulting `agentId` |
 |---|---|---|
-| `:46` `if (!token.startsWith('cipher_'))` | bearer lacks the prefix | `:49` **`'bootstrap'`**, six scopes, **no Supabase lookup at all** |
-| `:54`–`:60` per-agent mode | bearer is `cipher_<uuid>` | `:82`–`:84` the `agent_id` on that `pmoves_core.cipher_agent_tokens` row |
-| `:106`–`:108` | no bearer, and server `CIPHER_API_TOKEN` unset | `undefined` — advisory, the caller self-declares per call |
+| `:95` `if (!token.startsWith('cipher_'))` | bearer lacks the prefix | `:98` **`'bootstrap'`**, six scopes, **no Supabase lookup at all** |
+| `:104`–`:105` per-agent mode | bearer is `cipher_<uuid>` | `:150`–`:155` the `agent_id` on that `pmoves_core.cipher_agent_tokens` row (a malformed tail is rejected at `:112` before any lookup; a failed lookup is 503, not a verdict) |
+| `:191`–`:193` | no bearer, and server `CIPHER_API_TOKEN` unset | `undefined` — advisory, the caller self-declares per call |
 
-`auth.ts:44` labels the first row "legacy / bootstrap". It is the single-token
+`auth.ts:93` labels the first row "legacy / bootstrap". It is the single-token
 launch path, whose purpose is to hand off to a minted agent — and the handoff is
 that seven-character prefix. **Nothing in this repo checked it.**
 
@@ -212,6 +213,7 @@ still had to be fixed by hand.
 | 2 | `e24f1323` | Re-verified against the gitlink `main` actually carried. Correct — until #19 merged. |
 | 3 | `975e02e6` | #19 merged (`Accept-Profile: pmoves_core`) and the gitlink promoted. The same three inserted lines moved the same four citations again: `e24f1323:79` → `975e02e6:82`, and `e24f1323:103` → `975e02e6:106`. The prefix fork at `:44`/`:46`/`:49`/`:54`/`:60` sits above the insertion and never moved. |
 | 4 | `c88b009a2` | #3103 bumped the pin for cipher build fix #21 + installer #20. Neither commit touches `auth.ts`; all nine citations re-verified at the same lines and only the pin constant moved. The quiet bump this test exists to keep quiet. |
+| 6 | `a0ee2314` | #3189 pinned fork PR #28 (lookup failure is 503, not revocation; `UUID_RE`; empty `agent_id` fails closed), squash-merged on `PMOVES.AI-Edition-Hardened` (tree identical to reviewed head `151a6bfb`; descends from `36b28d0f`). It **rewrites `resolveToken()`**, so every citation moved: `:44`→`:93`, `:46`→`:95`, `:49`→`:98`, `:54`→`:104`, `:60`→`:105`, `:82`→`:150`, `:84`→`:155`, `:106`→`:191`, `:108`→`:193`. The first bump in this table that actually moved `auth.ts`; the test caught it in CI. |
 | 5 | `36b28d0f` | #3152 pinned fork PR #27 (per-request MCP identity, `CIPHER_MCP_ENFORCE`), merged as merge commit `36b28d0f` on `PMOVES.AI-Edition-Hardened` (second parent = reviewed head `750878ab`, identical tree). It changes `mcp-sse.ts`/`rest-server.ts`/`app.ts`, not `auth.ts`; all nine citations unchanged. |
 
 Re-numbering by hand on each pin bump is not a fix; it is the same manual step
