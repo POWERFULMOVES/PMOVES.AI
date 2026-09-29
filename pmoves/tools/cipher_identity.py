@@ -20,9 +20,10 @@ context. A session also already knows whether cipher is reachable
     the identity the session believes it has
     is not the identity its memories are filed under.
 
-Grounded in `Pmoves-cipher/src/pmoves/auth.ts` at submodule pin `975e02e6`
-(re-pinned `c88b009a2` by #3103 and `36b28d0f` by #3152; `auth.ts` is unchanged
-across all three, so every line number below still holds) -- the gitlink PMOVES.AI `main` actually
+Grounded in `Pmoves-cipher/src/pmoves/auth.ts` at submodule pin `a0ee2314`
+(#3189, fork PR #28, which rewrote `resolveToken()`; the numbers below were
+re-resolved there from `975e02e6`/`c88b009a2`/`36b28d0f`, across which
+`auth.ts` had been unchanged) -- the gitlink PMOVES.AI `main` actually
 carries. The pin matters: at the time these numbers were read, this node's
 submodule working tree sat on `fix/per-agent-token-profile-header` (the head of
 unmerged fork PR #19), which adds three lines at :67 and shifts every citation
@@ -31,13 +32,15 @@ fleet runs.
 
 `resolveToken()` forks on ONE character sequence:
 
-    auth.ts:44-52   token does NOT start with "cipher_"  -> compared against the
+    auth.ts:93-102  token does NOT start with "cipher_"  -> compared against the
                     CIPHER_API_TOKEN env var; on match the request is attributed
                     to agentId "bootstrap". No Supabase lookup happens at all.
-    auth.ts:54-91   token DOES start with "cipher_"      -> the uuid is looked up
+    auth.ts:104-176 token DOES start with "cipher_"      -> the uuid is looked up
                     in pmoves_core.cipher_agent_tokens and the request is
                     attributed to THAT row's agent_id -- the minted agent.
-    auth.ts:106-109 no Bearer at all, server token unset -> agentId undefined,
+                    (A malformed tail is rejected before the lookup; a failed
+                    lookup is 503 "not judged", never a verdict.)
+    auth.ts:191-194 no Bearer at all, server token unset -> agentId undefined,
                     "advisory" mode: the caller self-declares in tool args.
 
 So bootstrap is not an agent and never was. It is the single-token launch path,
@@ -75,11 +78,11 @@ from shlex import quote
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CARDS = REPO_ROOT / "pmoves" / "config" / "signing_identity_cards.yaml"
 
-# auth.ts:46 + auth.ts:60 -- `token.startsWith("cipher_")` then `token.slice(7)`.
+# auth.ts:95 + auth.ts:105 -- `token.startsWith("cipher_")` then `token.slice(7)`.
 # The prefix is the entire discriminator between bootstrap and per-agent mode.
 MINTED_PREFIX = "cipher_"
 
-# auth.ts:49 -- the literal agentId a non-prefixed token resolves to.
+# auth.ts:98 -- the literal agentId a non-prefixed token resolves to.
 BOOTSTRAP_AGENT = "bootstrap"
 
 MODE_PER_AGENT = "per-agent"
@@ -215,13 +218,13 @@ def resolve(agent, environ=None, cards_path: Path = CARDS) -> dict:
         row["why"] = (
             "bearer has no 'cipher_' prefix, so auth.ts takes the single-token path "
             "and files every write under '" + BOOTSTRAP_AGENT + "', not '" + agent + "' "
-            "(auth.ts:44-52). bootstrap is the launcher, and nothing has been launched."
+            "(auth.ts:93-102). bootstrap is the launcher, and nothing has been launched."
         )
     else:  # MODE_ADVISORY
         row["effective_id"] = ""
         row["why"] = (
             "no CIPHER_API_TOKEN visible to this process: either the session is in "
-            "advisory mode (auth.ts:106-109, agentId self-declared per call) or the "
+            "advisory mode (auth.ts:191-194, agentId self-declared per call) or the "
             "token is injected downstream and simply not readable from here"
         )
 

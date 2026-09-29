@@ -104,6 +104,20 @@ jobs:
           # NEVER run 'docker volume prune' — fleet data volumes are co-hosted.
           # Use 'make -C pmoves volume-reset SERVICE=<name>' for targeted resets.
 
+      # `docker builder prune` above reaches only the DEFAULT builder; the shared
+      # CI builder (pmoves-shared) holds its cache in a kept state volume that
+      # exists between jobs with no builder attached. Same script, same cap as
+      # runner-maintenance.yml and the pmoves-buildx action. Never removes the
+      # volume. Safe here for the reason given in runner-maintenance.yml.
+      - name: Check out cap script
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          sparse-checkout: deploy/provision
+          persist-credentials: false
+
+      - name: Bound shared buildx builder to the cap
+        run: bash deploy/provision/pmoves-buildx-cap.sh
+
       - name: Stale runner workspace cleanup (>3 days)
         run: |
           # Skip cleanup if any runner jobs are currently in progress.

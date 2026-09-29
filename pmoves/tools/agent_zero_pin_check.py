@@ -73,9 +73,12 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import subprocess
 import sys
+import tempfile
+import urllib.error
 import urllib.request
 from pathlib import Path
 
@@ -87,6 +90,7 @@ except ImportError:  # pragma: no cover
     raise SystemExit(1)
 
 SUBMODULE = "PMOVES-Agent-Zero"
+FORK_URL = "https://github.com/POWERFULMOVES/PMOVES-Agent-Zero.git"
 RAW = "https://raw.githubusercontent.com/POWERFULMOVES/PMOVES-Agent-Zero/{ref}/requirements.txt"
 
 # Which ref the image builds is READ from the Dockerfiles, never hard-coded.
@@ -161,25 +165,164 @@ def norm(name: str) -> str:
     return _SEPARATORS.sub("-", name).lower()
 
 
-def resolve_ref_sha(ref):
-    """Resolve a branch OR tag name to a sha, the way `git clone --branch` would.
+# A ref name is interpolated into git argv and into URLs, so it is validated
+# BEFORE either. Stricter than git-check-ref-format on purpose: no leading `-`
+# (option injection into git), no `..`, no `@{`, no `^`/`~`/`:`/`?`/`*`/`[`/`\`,
+# no whitespace or control characters, no leading `+` (a refspec force marker),
+# no leading/trailing `/` or `.`. Applied with fullmatch: `$` alone would accept
+# a trailing newline.
+_REF_NAME = re.compile(r"(?![-./+])(?!.*\.\.)(?!.*//)(?!.*@\{)[A-Za-z0-9._/+-]{1,200}(?<![./])")
+_SHA = re.compile(r"[0-9a-f]{40}")
+_GIT_TIMEOUT = 60
+_HTTP_TIMEOUT = 30
+
+# Repository-selecting variables a caller (e.g. a git hook) may have exported.
+# Inherited, they would point the throwaway `git init`/`git fetch` at the
+# PARENT repository instead of the temp dir.
+_GIT_SCRUB = (
+    "GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_OBJECT_DIRECTORY",
+    "GIT_ALTERNATE_OBJECT_DIRECTORIES", "GIT_COMMON_DIR",
+)
+
+
+def valid_ref_name(ref):
+    return bool(ref) and bool(_REF_NAME.fullmatch(ref)) and not ref.endswith(".lock")
+
+
+def _is_sha(s):
+    return bool(_SHA.fullmatch(s or ""))
+
+
+def _token():
+    """GH_TOKEN / GITHUB_TOKEN if set. Only ever placed in a request header."""
+    return os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN") or None
+
+
+def _redact(text):
+    tok = _token()
+    text = str(text)
+    return text.replace(tok, "***") if tok else text
+
+
+def _head(text, n=200):
+    text = " ".join(str(text).split())
+    return _redact(text[:n] + ("..." if len(text) > n else ""))
+
+
+def _http_error(e):
+    """The cause an exception carries, in one line. Never swallowed."""
+    if isinstance(e, urllib.error.HTTPError):
+        return "HTTP {} {}".format(e.code, _head(e.reason, 80))
+    if isinstance(e, urllib.error.URLError):
+        return "URLError: {}".format(_head(e.reason))
+    return "{}: {}".format(type(e).__name__, _head(e))
+
+
+def _http_get(url):
+    req = urllib.request.Request(url, headers={"User-Agent": "pmoves-agent-zero-pin-check"})
+    tok = _token()
+    if tok:
+        req.add_header("Authorization", "Bearer " + tok)
+    return urllib.request.urlopen(req, timeout=_HTTP_TIMEOUT)  # noqa: S310 - fixed https host
+
+
+def _git(args, cwd=None, timeout=_GIT_TIMEOUT):
+    """Run git with an argv list, no shell, no terminal prompt. Never raises."""
+    env = {k: v for k, v in os.environ.items() if k not in _GIT_SCRUB}
+    env["GIT_TERMINAL_PROMPT"] = "0"
+    try:
+        p = subprocess.run(
+            ["git", *args], cwd=cwd, env=env, capture_output=True, text=True, timeout=timeout,
+        )
+        return p.returncode, p.stdout, p.stderr
+    except subprocess.TimeoutExpired:
+        return None, "", "timed out after {}s".format(timeout)
+    except OSError as e:
+        return None, "", "{}: {}".format(type(e).__name__, e)
+
+
+def _ls_remote_sha(ref, causes):
+    """Resolve with `git ls-remote`, choosing what `git clone --branch` would.
+
+    clone looks up refs/heads/<ref> first, then refs/tags/<ref>; for an
+    annotated tag it checks out the PEELED commit (`^{}`), not the tag object.
+    """
+    heads, tag, peeled = "refs/heads/" + ref, "refs/tags/" + ref, "refs/tags/" + ref + "^{}"
+    rc, out, err = _git(["ls-remote", FORK_URL, heads, tag, peeled])
+    if rc != 0:
+        causes.append("git ls-remote: rc={} {}".format(rc, _head(err) or "(no stderr)"))
+        return None
+    # ls-remote patterns are TAIL matches; keep exact names only.
+    found = {}
+    for line in out.splitlines():
+        parts = line.split("\t")
+        if len(parts) == 2:
+            found[parts[1].strip()] = parts[0].strip()
+    for name in (heads, peeled, tag):
+        sha = found.get(name)
+        if sha is None:
+            continue
+        if _is_sha(sha):
+            return sha
+        causes.append("git ls-remote: {} resolved to a non-sha {!r}".format(name, _head(sha, 60)))
+        return None
+    causes.append("git ls-remote: rc=0 but no refs/heads/{0} or refs/tags/{0} on {1}".format(ref, FORK_URL))
+    return None
+
+
+def _api_sha(ref, causes):
+    """FALLBACK: the REST API, authenticated when GH_TOKEN/GITHUB_TOKEN is set.
+
+    Moves from heads/ to tags/ ONLY on a 404. Any other heads failure (rate
+    limit, 5xx, TLS, a malformed answer) means we do not know whether the
+    BRANCH exists, and `git clone --branch` prefers the branch -- so resolving
+    the tag instead could approve a tree the image does not build. Stop there.
+    """
+    auth = "authenticated" if _token() else "unauthenticated"
+    for kind in ("heads", "tags"):
+        url = REF_API.format(kind=kind, ref=ref)
+        try:
+            with _http_get(url) as r:
+                obj = json.load(r)["object"]
+            # An annotated tag points at a tag OBJECT; peel to the commit, as
+            # `git clone --branch` does. Bounded: tags of tags are legal.
+            for _ in range(5):
+                if obj.get("type") != "tag":
+                    break
+                with _http_get(obj["url"]) as r:
+                    obj = json.load(r)["object"]
+            sha = obj.get("sha", "")
+            if obj.get("type", "commit") != "commit" or not _is_sha(sha):
+                causes.append("api {} ({}): unexpected object {!r}".format(kind, auth, _head(obj, 120)))
+                return None
+            return sha
+        except Exception as e:  # noqa: BLE001 - cause is recorded, not swallowed
+            causes.append("api {} ({}): {}".format(kind, auth, _http_error(e)))
+            if not (isinstance(e, urllib.error.HTTPError) and e.code == 404):
+                return None
+    return None
+
+
+def resolve_ref_sha(ref, causes=None):
+    """Resolve a branch OR tag name to a commit sha, the way `git clone --branch` would.
 
     `--branch` accepts either, and the auto-bump workflow writes version TAGS, so
     resolving only heads/ would start returning None after a routine bump -- which
     (before this was fail-closed) meant falling back to the gitlink.
+
+    Primary: `git ls-remote` (git's own TLS/CA handling; no API rate limit).
+    Fallback: the REST API. Every failed attempt appends its CAUSE to `causes`;
+    an earlier version caught every exception and continued, so a missing CA
+    bundle and a rate limit both surfaced only as "could not resolve".
     """
+    if causes is None:
+        causes = []
     if not ref:
         return None
-    for kind in ("heads", "tags"):
-        try:
-            url = REF_API.format(kind=kind, ref=ref)
-            with urllib.request.urlopen(url, timeout=30) as r:  # noqa: S310 - fixed https host
-                obj = json.load(r)["object"]
-                # An annotated tag points at a tag object; deref to the commit.
-                return obj["sha"]
-        except Exception:  # noqa: BLE001
-            continue
-    return None
+    if not valid_ref_name(ref):
+        causes.append("refused ref name {!r}: not a plain branch/tag name".format(_head(ref, 80)))
+        return None
+    return _ls_remote_sha(ref, causes) or _api_sha(ref, causes)
 
 
 def gitlink_sha():
@@ -240,14 +383,16 @@ def read_fork_requirements(ref, problems):
             )
             return None
 
-        sha = resolve_ref_sha(published_ref)
+        causes = []
+        sha = resolve_ref_sha(published_ref, causes)
         if sha is None:
             problems.append(
-                "could not resolve {!r} (from {}) to a sha. Refusing to fall back "
-                "to the gitlink: the gate is read by exit status, so a quiet "
-                "downgrade to a weaker check is indistinguishable from success. "
-                "Retry, or pass --ref explicitly.".format(
-                    published_ref, PUBLISHED_DOCKERFILE.name
+                "could not resolve {!r} (from {}) to a sha. Causes: {}. Refusing "
+                "to fall back to the gitlink: the gate is read by exit status, so "
+                "a quiet downgrade to a weaker check is indistinguishable from "
+                "success. Retry, or pass --ref explicitly.".format(
+                    published_ref, PUBLISHED_DOCKERFILE.name,
+                    "; ".join(causes) or "(none recorded)",
                 )
             )
             return None
@@ -260,18 +405,78 @@ def read_fork_requirements(ref, problems):
                 "describe the shipped tree.".format(published_ref, sha[:12], gl[:12]),
                 file=sys.stderr,
             )
-    url = RAW.format(ref=sha)
-    try:
-        with urllib.request.urlopen(url, timeout=30) as r:  # noqa: S310 - fixed https host
-            return r.read().decode("utf-8")
-    except Exception as e:  # noqa: BLE001
+    elif not valid_ref_name(sha):
+        problems.append("refused --ref {!r}: not a plain sha/branch/tag name".format(_head(sha, 80)))
+        return None
+
+    causes = []
+    text = fetch_fork_requirements(sha, causes)
+    if text is None:
         problems.append(
-            "could not read the fork's requirements.txt at {} ({}). "
+            "could not read the fork's requirements.txt at {}. Causes: {}. "
             "Run `git submodule update --init {}` or pass --ref.".format(
-                sha[:12], e, SUBMODULE
+                sha[:12], "; ".join(causes) or "(none recorded)", SUBMODULE
             )
         )
-        return None
+    return text
+
+
+def fetch_fork_requirements(rev, causes):
+    """requirements.txt at `rev`, or None with every attempt's cause recorded.
+
+    1. the checked-out submodule, when it is populated AND already has `rev`
+       (only for a full sha -- a local branch name could be stale);
+    2. a depth-1 `git fetch` of `rev` into a throwaway bare repo (git TLS);
+    3. raw.githubusercontent.com, authenticated when a token is set.
+
+    A source that answers with ZERO parseable declarations (an empty file, an
+    HTML error page served with 200) is a failed attempt, not a result: a
+    comparison against nothing reports clean.
+    """
+    sub = ROOT / SUBMODULE
+    if not _is_sha(rev):
+        causes.append("submodule: skipped ({!r} is not a full sha)".format(rev))
+    elif not (sub / ".git").exists():
+        # Without its own .git, `git -C` would silently walk up to the
+        # SUPERPROJECT and answer about the wrong repository.
+        causes.append("submodule: {} is not populated".format(SUBMODULE))
+    else:
+        rc, out, err = _git(["-C", str(sub), "show", "{}:requirements.txt".format(rev)])
+        if rc != 0:
+            causes.append("submodule: git show rc={} {}".format(rc, _head(err) or "(no stderr)"))
+        elif _has_declarations(out, "submodule", causes):
+            return out
+
+    with tempfile.TemporaryDirectory(prefix="a0-pin-") as tmp:
+        rc, _, err = _git(["init", "-q", "--bare", tmp])
+        if rc == 0:
+            rc, _, err = _git(
+                ["-C", tmp, "fetch", "-q", "--depth", "1", "--no-tags", FORK_URL, rev],
+                timeout=120,
+            )
+        if rc == 0:
+            rc, out, err = _git(["-C", tmp, "show", "FETCH_HEAD:requirements.txt"])
+        if rc != 0:
+            causes.append("git fetch: rc={} {}".format(rc, _head(err) or "(no stderr)"))
+        elif _has_declarations(out, "git fetch", causes):
+            return out
+
+    auth = "authenticated" if _token() else "unauthenticated"
+    try:
+        with _http_get(RAW.format(ref=rev)) as r:
+            text = r.read().decode("utf-8", errors="replace")
+        if _has_declarations(text, "raw https ({})".format(auth), causes):
+            return text
+    except Exception as e:  # noqa: BLE001 - cause is recorded, not swallowed
+        causes.append("raw https ({}): {}".format(auth, _http_error(e)))
+    return None
+
+
+def _has_declarations(text, source, causes):
+    if parse_requirements(text or ""):
+        return True
+    causes.append("{}: 0 parseable declarations in {} bytes".format(source, len(text or "")))
+    return False
 
 
 def parse_requirements(text):
@@ -345,6 +550,12 @@ def main():
         return 1
 
     fork = parse_requirements(fork_raw)
+    if not fork:
+        # Floor. The fetch already refuses an empty source; this holds for any
+        # future caller too. "clean against 0 declarations" is not clean.
+        problems.append(("INPUT MISSING", "the fork's requirements.txt has 0 parseable declarations"))
+        report(problems)
+        return 1
     ours = parse_requirements(ours_txt.read_text(encoding="utf-8"))
     lock_text = ours_lock.read_text(encoding="utf-8")
     lock = parse_lock(lock_text)

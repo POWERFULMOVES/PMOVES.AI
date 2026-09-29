@@ -63,7 +63,7 @@ Environment variables
 | Variable                | Description                               |
 +=========================+===========================================+
 | ``NATS_URL``            | NATS server URL (default:                |
-|                         | ``nats://nats:pmoves@nats:4222``)         |
+|                         | ``nats://nats:4222``)         |
 +-------------------------+-------------------------------------------+
 | ``NATS_INVALIDATE_SUB`` | Inbound subject (default:                |
 |                         | ``cache.invalidate.*``)                   |
@@ -202,7 +202,7 @@ def _iso_now() -> str:
 class _Settings:
     """Runtime configuration loaded from environment."""
 
-    NATS_URL: str = os.getenv("NATS_URL", "nats://nats:pmoves@nats:4222")
+    NATS_URL: str = os.getenv("NATS_URL", "nats://nats:4222")
     NATS_INVALIDATE_SUB: str = os.getenv(
         "NATS_INVALIDATE_SUB", "cache.invalidate.*"
     )

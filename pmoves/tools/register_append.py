@@ -58,9 +58,12 @@ from __future__ import annotations
 import argparse
 import contextlib
 import errno
+import hashlib
 import importlib.util
+import json
 import re
 import os
+import subprocess
 import sys
 import time
 from datetime import datetime, timedelta, timezone
@@ -939,6 +942,597 @@ def append_note(row: str, gate, register: Path | None = None) -> int:
         return EXIT_OK
 
 
+# --- sync: recover a checkout whose register carries uncommitted rows --------
+#
+# THE RECOVERY ROAD. A checkout on `main` that appended rows and never committed
+# them cannot fast-forward: git refuses to overwrite the dirty register, and the
+# collision gate -- correctly -- refuses `git checkout`, interpreters and
+# compound commands on the register. Every other sanctioned road only APPENDS,
+# so no agent could drop a row, and the checkout was stuck (measured 2026-09-28:
+# 21 behind main, 8 uncommitted rows, 5 of them already re-filed on main by
+# #3205). The gate's own header: "THE DENY IS ONLY DEFENSIBLE BECAUSE A
+# SANCTIONED PATH EXISTS." This is that path.
+#
+# What it may drop, and nothing else:
+#
+#   ON-MAIN   a byte-identical LEDGER ROW already exists on the target ref
+#             (prose lines on the ref do not count -- a row quoted in the docs
+#             is not a live row)
+#   RE-FILED  a ledger row on the ref with the SAME kind, SAME owner (exact
+#             string) and SAME header branch whose text says `first filed at
+#             <this row's timestamp>` -- the marker the re-filing convention
+#             writes. The header branch is read only when the row carries the
+#             ` · scope:` separator; without it the row is KEEP.
+#   KEEP      everything else, including every non-ledger line. Never dropped,
+#             never guessed about. A timestamp one second off is KEEP.
+#
+# BYTES, NOT TEXT. The register is classified and written as bytes, split on
+# b"\n" only. Text is decoded (surrogateescape, lossless) solely to MATCH, and
+# nothing decoded is ever written back: a KEEP line carrying a stray \xff byte,
+# or a U+2028 inside a scope, round-trips byte-exact and stays one row.
+#
+# The sequence when KEEP is non-empty and main changed the register:
+#
+#   make -C pmoves register-sync HOLD=1 APPLY=1           # register -> HEAD, KEEP to sidecar
+#   git pull --ff-only --no-recurse-submodules
+#   make -C pmoves register-sync REAPPLY=<sidecar> APPLY=1  # KEEP back onto the tail
+#
+# REAPPLY FACES THE SAME ROW CHECKS AS register-claim. What the manifest proves
+# is INTEGRITY, NOT AUTHORSHIP: the `.keep.md` must sit under the sidecar
+# directory and match the sha256 in its manifest, and the pre-image must match
+# too -- but anyone who can write that directory can write a consistent set.
+# So every row is ALSO checked on its own: it must be a CLAIM, RELEASE or NOTE
+# that round-trips byte-identically through `build_row` (the renderer the append
+# roads use) and passes the expansion-residue check; its timestamp must lie in
+# [held_at - 30d, held_at]; it must be a line of the pre-image; a bare RELEASE
+# is refused; rows now ON-MAIN or RE-FILED are skipped; and CLAIMs face the
+# gate's collision verdict SEQUENTIALLY (a RELEASE earlier in the payload frees
+# its lane for a later CLAIM), with --i-have-coordinated as on register-claim.
+# All-or-nothing. `register-postdate-check` remains the timestamp backstop.
+#
+# Every mode is a DRY RUN unless APPLY=1 / --apply. It never fetches: the target
+# ref is whatever the local ref says, and its sha is printed. Exit: 0 done (or
+# dry run); 1 reapply refused because a lane is held by another owner (this
+# tool's meaning of 1 everywhere); 3 refused / could not measure.
+
+REGISTER_REL = "pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md"
+SYNC_SIDECAR_REL = "pmoves/data/register-sync"
+ON_MAIN, RE_FILED, KEEP = "ON-MAIN", "RE-FILED", "KEEP"
+
+_SYNC_ROW_RE = re.compile(
+    r"^\s*[-*]\s+`(?P<ts>[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:]{8}Z)`\s+"
+    r"(?P<kind>[A-Z]+)\s+`(?P<owner>[^`]+)`")
+_SYNC_BRANCH_RE = re.compile(r"branch:\s*`([^`]+)`")
+_SCOPE_SEP = " · scope:"
+
+
+class SyncRefused(RuntimeError):
+    """The sync could not establish what it would change. Exit 3, never 1."""
+
+
+class SyncLaneHeld(SyncRefused):
+    """A reapplied CLAIM names a lane another owner holds. Exit 1, as register-claim."""
+
+
+def _git(repo: Path, *args: str) -> bytes:
+    try:
+        proc = subprocess.run(["git", "-C", str(repo), *args], capture_output=True)
+    except OSError as exc:
+        raise SyncRefused(f"git could not be run ({exc})") from exc
+    if proc.returncode != 0:
+        raise SyncRefused(
+            f"`git {' '.join(args)}` failed (rc {proc.returncode}): "
+            f"{proc.stderr.decode('utf-8', 'replace').strip()}")
+    return proc.stdout
+
+
+def _split_lines(data: bytes) -> list[bytes]:
+    """Lines split on b"\\n" ONLY, each keeping its terminator. Never str.splitlines,
+    which also splits on U+2028, \\x0c, \\x1c.. and would tear one row in two."""
+    if not data:
+        return []
+    parts = data.split(b"\n")
+    lines = [p + b"\n" for p in parts[:-1]]
+    if parts[-1]:
+        lines.append(parts[-1])
+    return lines
+
+
+def _as_text(line: bytes) -> str:
+    """For MATCHING only. surrogateescape is lossless; nothing decoded is written."""
+    return line.rstrip(b"\n").decode("utf-8", "surrogateescape")
+
+
+def _row_key(text: str):
+    """(ts, kind, owner, header-branch) of a ledger row, or None.
+
+    The branch is read from the HEADER only -- the fields before ` · scope:` --
+    because a scope routinely names other branches. A row with no separator has
+    no readable header, so its branch is None and it cannot be RE-FILED.
+    """
+    m = _SYNC_ROW_RE.match(text)
+    if not m:
+        return None
+    branch = None
+    if _SCOPE_SEP in text:
+        b = _SYNC_BRANCH_RE.search(text.split(_SCOPE_SEP, 1)[0])
+        branch = b.group(1) if b else None
+    return m.group("ts"), m.group("kind"), m.group("owner"), branch
+
+
+def classify_uncommitted(lines: list[bytes], *ref_blobs: bytes) -> list[tuple[str, bytes]]:
+    """Class of each uncommitted line against the LEDGER ROWS of the given blobs."""
+    ref_rows = [t for blob in ref_blobs for t in map(_as_text, _split_lines(blob))
+                if _SYNC_ROW_RE.match(t)]
+    ref_set = set(ref_rows)
+    ref_keys = [(_row_key(r), r) for r in ref_rows]
+    out = []
+    for line in lines:
+        text = _as_text(line)
+        key = _row_key(text)
+        if key is None:
+            out.append((KEEP, line))          # not a ledger row: never guessed about
+            continue
+        if text in ref_set:
+            out.append((ON_MAIN, line))
+            continue
+        ts, kind, owner, branch = key
+        markers = (f"first filed at {ts}", f"first filed at `{ts}`")
+        refiled = branch is not None and any(
+            rk[1] == kind and rk[2] == owner and rk[3] == branch
+            and any(mk in r for mk in markers)
+            for rk, r in ref_keys)
+        out.append((RE_FILED if refiled else KEEP, line))
+    return out
+
+
+def _snapshot(repo: Path, ref: str) -> dict:
+    """HEAD sha, ref sha, and both blobs -- read together so they can be compared."""
+    head_sha = _git(repo, "rev-parse", "HEAD").decode().strip()
+    ref_sha = _git(repo, "rev-parse", "--verify", f"{ref}^{{commit}}").decode().strip()
+    return {
+        "head_sha": head_sha, "ref_sha": ref_sha,
+        "head": _git(repo, "cat-file", "blob", f"{head_sha}:{REGISTER_REL}"),
+        "ref_blob": _git(repo, "cat-file", "blob", f"{ref_sha}:{REGISTER_REL}"),
+    }
+
+
+def _sync_measure(repo: Path, ref: str) -> dict:
+    """Read HEAD, the index, the working tree and the ref; refuse anything not a
+    pure append over HEAD."""
+    register = repo / REGISTER_REL
+    if not register.is_file():
+        raise SyncRefused(f"no register at {register}")
+    snap = _snapshot(repo, ref)
+    # THE INDEX TOO. A staged change to the register blocks the pull exactly as
+    # a working-tree one does, and restoring the working file would not clear it.
+    staged = subprocess.run(
+        ["git", "-C", str(repo), "diff", "--cached", "--quiet", "HEAD", "--", REGISTER_REL],
+        capture_output=True)
+    if staged.returncode != 0:
+        raise SyncRefused(
+            "the register's INDEX differs from HEAD (a staged change). This tool "
+            "only repairs the working tree; nothing was classified or written")
+    head, work = snap["head"], register.read_bytes()
+    # A PURE APPEND: HEAD's bytes are a prefix, and HEAD's last line was already
+    # complete (otherwise the first "appended" byte modifies an existing line).
+    if not work.startswith(head) or (head and not head.endswith(b"\n")
+                                     and len(work) > len(head)):
+        raise SyncRefused(
+            "the working register is not HEAD plus appended lines -- the diff "
+            "removes or modifies at least one line. This tool only recovers a "
+            "pure append; nothing was classified and nothing was written")
+    lines = _split_lines(work[len(head):])
+    return dict(snap, register=register, work=work, ref=ref,
+                work_hash=hashlib.sha256(work).hexdigest(),
+                head_lines=head.count(b"\n"), ref_lines=snap["ref_blob"].count(b"\n"),
+                lines=lines, classes=classify_uncommitted(lines, snap["ref_blob"]))
+
+
+def _show(line: bytes) -> str:
+    return line.rstrip(b"\n").decode("utf-8", "replace")[:120]
+
+
+def _sync_report(m: dict) -> dict:
+    """Print BOTH input sizes beside the result, and each row's class."""
+    print(f"register-sync: register  {m['register']}")
+    print(f"register-sync: HEAD      {m['head_sha']}  ({m['head_lines']} lines committed)")
+    print(f"register-sync: ref       {m['ref']} = {m['ref_sha']}  "
+          f"({m['ref_lines']} lines; NOT fetched by this tool)")
+    print(f"register-sync: INPUT     {len(m['lines'])} uncommitted line(s) "
+          "appended after HEAD")
+    counts = {c: sum(1 for k, _ in m["classes"] if k == c)
+              for c in (ON_MAIN, RE_FILED, KEEP)}
+    if not m["lines"]:
+        print("register-sync: nothing to sync -- the INPUT is empty (the working "
+              "register equals HEAD); that is not an empty result.")
+        return counts
+    for cls, line in m["classes"]:
+        print(f"  {cls:<8} {_show(line)}")
+    print(f"register-sync: RESULT    {counts[ON_MAIN]} ON-MAIN, "
+          f"{counts[RE_FILED]} RE-FILED, {counts[KEEP]} KEEP "
+          f"(of {len(m['lines'])} input)")
+    return counts
+
+
+def _sidecar_dir(repo: Path) -> Path:
+    """The sidecar directory, only once git confirms it can never be committed."""
+    probe = f"{SYNC_SIDECAR_REL}/probe.keep.md"
+    proc = subprocess.run(["git", "-C", str(repo), "check-ignore", "-q", probe],
+                          capture_output=True)
+    if proc.returncode != 0:
+        raise SyncRefused(
+            f"{SYNC_SIDECAR_REL}/ is not gitignored in {repo}, so a sidecar "
+            "written there could be committed. Nothing was written")
+    d = repo / SYNC_SIDECAR_REL
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def _write_exclusive(path: Path, data: bytes) -> None:
+    try:
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
+    except FileExistsError as exc:
+        raise SyncRefused(f"sidecar {path} already exists; nothing on the "
+                          "register was written. Re-run the sync") from exc
+    try:
+        os.write(fd, data)
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
+def _append_bytes(register: Path, data: bytes) -> None:
+    """The O_APPEND primitive, on BYTES, so nothing is re-encoded on the way out."""
+    fd = os.open(register, os.O_WRONLY | os.O_APPEND)
+    try:
+        os.write(fd, data)
+    finally:
+        os.close(fd)
+
+
+def sync_register(repo: Path, ref: str, apply: bool, hold: bool) -> int:
+    m = _sync_measure(repo, ref)
+    _sync_report(m)
+    if not m["lines"]:
+        return EXIT_OK
+    keep = b"".join(line for cls, line in m["classes"] if cls == KEEP)
+    dropped = b"".join(line for cls, line in m["classes"] if cls != KEEP)
+    n_keep, n_drop = len(_split_lines(keep)), len(_split_lines(dropped))
+    if not apply:
+        print(f"register-sync: DRY RUN - would restore the register to HEAD, drop "
+              f"{n_drop} line(s), and {'HOLD' if hold else 're-append'} {n_keep} "
+              "KEEP line(s). Nothing written. Re-run with APPLY=1 (or --apply).")
+        return EXIT_OK
+
+    side = _sidecar_dir(repo)
+    register = m["register"]
+    with register_lock(register):
+        # A CONCURRENT WRITER -- to the register, HEAD or the ref -- between
+        # classification and now voids the classification. Re-read all three
+        # under the lock and refuse rather than drop a row nobody classified.
+        if hashlib.sha256(register.read_bytes()).hexdigest() != m["work_hash"]:
+            raise SyncRefused(
+                "the register changed after it was classified (a concurrent "
+                "writer). Nothing was written. Re-run the sync")
+        again = _snapshot(repo, ref)
+        if (again["head_sha"], again["ref_sha"]) != (m["head_sha"], m["ref_sha"]):
+            raise SyncRefused(
+                "HEAD or the ref moved after classification. Nothing was "
+                "written. Re-run the sync")
+
+        # SIDECARS FIRST: KEEP, the dropped lines, and a FULL PRE-IMAGE of the
+        # register, plus a manifest that pins the KEEP file's hash for reapply.
+        # Nothing on the register moves until all four are on disk.
+        stamp = (datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+                 + f"-{os.getpid()}")
+        keep_path = side / f"{stamp}.keep.md"
+        pre_path = side / f"{stamp}.preimage.md"
+        _write_exclusive(pre_path, m["work"])
+        _write_exclusive(side / f"{stamp}.dropped.md", dropped)
+        _write_exclusive(keep_path, keep)
+        _write_exclusive(side / f"{stamp}.manifest.json", json.dumps({
+            "keep": keep_path.name, "keep_sha256": hashlib.sha256(keep).hexdigest(),
+            "preimage_sha256": m["work_hash"], "head": m["head_sha"],
+            "ref": ref, "ref_sha": m["ref_sha"], "mode": "hold" if hold else "apply",
+            "held_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        }, indent=2).encode("utf-8"))
+        print(f"register-sync: KEEP rows saved to    {keep_path}")
+        print(f"register-sync: full pre-image saved  {pre_path}")
+
+        # FTRUNCATE TO HEAD'S LENGTH, never rewrite HEAD: the prefix is already
+        # verified byte-equal to HEAD, so cutting the tail cannot tear it. Same
+        # inode, so a waiter on register_lock still locks the file it will write.
+        expected = m["head"] + (b"" if hold else keep)
+        try:
+            fd = os.open(register, os.O_WRONLY)
+            try:
+                os.ftruncate(fd, len(m["head"]))
+            finally:
+                os.close(fd)
+            if keep and not hold:
+                _append_bytes(register, keep)
+            after = register.read_bytes()      # verified UNDER the lock
+        except Exception as exc:  # noqa: BLE001 -- the message must stay true
+            raise SyncRefused(
+                f"PARTIAL APPLY - the register WAS modified and then failed "
+                f"({type(exc).__name__}: {exc}). HEAD's bytes are intact (the "
+                f"register was only truncated to HEAD's length); the full "
+                f"original is in {pre_path} and KEEP is in {keep_path}. Recover "
+                f"with `make -C pmoves register-sync REAPPLY={keep_path} APPLY=1` "
+                "once the register is back at HEAD") from exc
+        if after != expected:
+            raise SyncRefused(
+                "PARTIAL APPLY - post-write check failed: the register is not "
+                f"HEAD{'' if hold else ' + KEEP'} byte-for-byte. The full original "
+                f"is in {pre_path}; KEEP is in {keep_path}")
+    print(f"register-sync: APPLIED - the working diff vs HEAD now adds "
+          f"{0 if hold else n_keep} line(s) and removes 0; {n_drop} dropped"
+          f"{f', {n_keep} KEEP held in the sidecar' if hold else ''}.")
+    if hold:
+        print("register-sync: next: git pull --ff-only --no-recurse-submodules, "
+              f"then make -C pmoves register-sync REAPPLY={keep_path} APPLY=1")
+    return EXIT_OK
+
+
+REAPPLY_KINDS = ("CLAIM", "RELEASE", "NOTE")      # what the append roads emit
+REAPPLY_MAX_AGE = timedelta(days=30)
+REAPPLY_CLOCK_SKEW = timedelta(minutes=5)
+_TS_FMT = "%Y-%m-%dT%H:%M:%SZ"
+
+
+def _verified_sidecar(repo: Path, sidecar: Path) -> tuple[bytes, dict, bytes]:
+    """(KEEP bytes, manifest, pre-image bytes) of an INTACT sidecar set -- or a refusal.
+
+    INTEGRITY, NOT AUTHORSHIP. This proves the `.keep.md`, its manifest and its
+    pre-image are mutually consistent and live under the gitignored sidecar
+    directory. It does NOT prove this tool wrote them: anyone who can write that
+    directory can write a consistent set. Authorship-shaped guarantees come from
+    the row checks in `reapply_sidecar` (renderer round-trip, kinds, timestamp
+    window, collision gate), and `make -C pmoves register-postdate-check` remains
+    the backstop for timestamps.
+    """
+    root = os.path.realpath(repo / SYNC_SIDECAR_REL)
+    real = os.path.realpath(sidecar)
+    if os.path.dirname(real) != root or not real.endswith(".keep.md"):
+        raise SyncRefused(
+            f"{sidecar} is not a `.keep.md` sidecar in {SYNC_SIDECAR_REL}/. "
+            "REAPPLY only accepts sidecar sets under that directory")
+    if not os.path.isfile(real):
+        raise SyncRefused(f"no sidecar at {sidecar}")
+    stem = real[: -len(".keep.md")]
+    try:
+        meta = json.loads(Path(stem + ".manifest.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise SyncRefused(f"no readable manifest beside {sidecar} ({exc}); "
+                          "refusing an unpinned sidecar") from exc
+    data = Path(real).read_bytes()
+    if meta.get("keep") != os.path.basename(real) or \
+            meta.get("keep_sha256") != hashlib.sha256(data).hexdigest():
+        raise SyncRefused(
+            f"{sidecar} does not match its manifest (edited since it was "
+            "written?). Refusing to append rows nobody classified")
+    try:
+        pre = Path(stem + ".preimage.md").read_bytes()
+    except OSError as exc:
+        raise SyncRefused(f"no pre-image beside {sidecar} ({exc})") from exc
+    if meta.get("preimage_sha256") != hashlib.sha256(pre).hexdigest():
+        raise SyncRefused(f"the pre-image beside {sidecar} does not match its manifest")
+    return data, meta, pre
+
+
+def _parse_rendered(text: str):
+    """Split a row back into build_row's arguments, or None. Fail-closed: any
+    field this does not recognise returns None, and the caller refuses."""
+    head_m = re.match(r"^- `([0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:]{8}Z)` ([A-Z]+) `([^`]+)`",
+                      text)
+    if not head_m or _SCOPE_SEP not in text:
+        return None
+    header, scope = text.split(_SCOPE_SEP, 1)
+    rest = header[head_m.end():]
+    out = {"ts": head_m.group(1), "kind": head_m.group(2), "owner": head_m.group(3),
+           "branch": "", "ttl": "", "co_owners": [], "scope": scope.lstrip(" ")}
+    if not rest:
+        return out
+    if not rest.startswith(" "):
+        return None
+    for field in rest[1:].split(" · "):
+        m = re.fullmatch(r"branch: `([^`]+)`", field)
+        if m:
+            out["branch"] = m.group(1)
+            continue
+        m = re.fullmatch(r"\*\*TTL (\S+) \(expires `[^`]+`\)\*\*", field)
+        if m:
+            out["ttl"] = m.group(1)
+            continue
+        if field.startswith("co-owners: "):
+            for ident, note in re.findall(r"`([^`]+)`(?: \(([^()]*)\))?",
+                                          field[len("co-owners: "):]):
+                out["co_owners"].append(f"{ident}:{note}" if note else ident)
+            continue
+        return None
+    return out
+
+
+def _assert_round_trips(line: bytes) -> dict:
+    """The row must be exactly what the claim/release/note roads would render.
+
+    Parsed, re-rendered with `build_row` at the row's own timestamp, and compared
+    byte-for-byte; the scope also faces `assert_prose_clean`, the expansion-
+    residue check every append road applies. This is what stops a sidecar from
+    carrying arbitrary kinds or hand-built text past the renderer.
+    """
+    try:
+        text = line.rstrip(b"\n").decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise SyncRefused(f"a reapplied row is not UTF-8 ({exc}); the append "
+                          "roads never emit that") from exc
+    parsed = _parse_rendered(text)
+    if parsed is None:
+        raise SyncRefused(f"not a row the append roads render: {text[:120]!r}")
+    if parsed["kind"] not in REAPPLY_KINDS:
+        raise SyncRefused(f"kind `{parsed['kind']}` is not reapplied (only "
+                          f"{', '.join(REAPPLY_KINDS)}): {text[:120]!r}")
+    try:
+        assert_prose_clean(parsed["scope"])
+        rendered = build_row(
+            kind=parsed["kind"], owner=parsed["owner"], branch=parsed["branch"],
+            scope=parsed["scope"], ttl=parsed["ttl"], co_owners=parsed["co_owners"],
+            now=datetime.strptime(parsed["ts"], _TS_FMT).replace(tzinfo=timezone.utc))
+    except ValueError as exc:
+        raise SyncRefused(f"row refused by the renderer ({exc}): {text[:120]!r}") from exc
+    if rendered.rstrip("\n") != text:
+        raise SyncRefused(f"row does not round-trip through the renderer "
+                          f"(hand-built or edited?): {text[:120]!r}")
+    return parsed
+
+
+def reapply_sidecar(repo: Path, sidecar: Path, ref: str, apply: bool,
+                    coordinated: bool = False) -> int:
+    """Append a HOLD sidecar's rows to the tail -- through the same checks as a CLAIM."""
+    register = repo / REGISTER_REL
+    if not register.is_file():
+        raise SyncRefused(f"no register at {register}")
+    data, meta, pre = _verified_sidecar(repo, sidecar)
+    lines = [ln for ln in _split_lines(data) if ln.strip()]
+    print(f"register-sync: INPUT     {len(_split_lines(data))} line(s) in {sidecar} "
+          f"({len(lines)} non-blank)")
+    bad = [ln for ln in lines if _row_key(_as_text(ln)) is None]
+    if bad:
+        raise SyncRefused(
+            f"{len(bad)} non-blank line(s) are not ledger rows (first: "
+            f"{_show(bad[0])!r}). REAPPLY appends rows only")
+
+    # THE TIMESTAMP WINDOW. A row cannot be later than the moment it was held
+    # (and that moment cannot be in the future), nor older than
+    # REAPPLY_MAX_AGE before it -- an uncommitted row older than that is stale
+    # and belongs back on register-claim, which reads the clock itself. The
+    # held time comes from the manifest, so this bounds an honest sidecar and
+    # a careless forger, not a determined one; register-postdate-check is the
+    # backstop. Every row must also be a line of the recorded pre-image.
+    try:
+        held_at = datetime.strptime(meta.get("held_at", ""), _TS_FMT).replace(
+            tzinfo=timezone.utc)
+    except ValueError as exc:
+        raise SyncRefused("the manifest records no valid `held_at`") from exc
+    if held_at > datetime.now(timezone.utc) + REAPPLY_CLOCK_SKEW:
+        raise SyncRefused(f"the manifest's held_at {meta['held_at']} is in the future")
+    pre_lines = set(_split_lines(pre))
+    for ln in lines:
+        parsed = _assert_round_trips(ln)
+        ts = datetime.strptime(parsed["ts"], _TS_FMT).replace(tzinfo=timezone.utc)
+        if ts > held_at or ts < held_at - REAPPLY_MAX_AGE:
+            raise SyncRefused(
+                f"row timestamp {parsed['ts']} is outside the window "
+                f"[{(held_at - REAPPLY_MAX_AGE).strftime(_TS_FMT)}, "
+                f"{meta['held_at']}] (held time minus {REAPPLY_MAX_AGE.days}d, "
+                "held time)")
+        if (ln if ln.endswith(b"\n") else ln + b"\n") not in pre_lines:
+            raise SyncRefused(f"row is not in the recorded pre-image: {_show(ln)!r}")
+        if parsed["kind"] == "RELEASE" and not parsed["branch"]:
+            raise SyncRefused(
+                f"a bare RELEASE names no lane and would close EVERY lane its "
+                f"owner holds: {_show(ln)!r}. File it with "
+                "`make -C pmoves register-release` if that is intended")
+
+    try:
+        gate = _load_gate()
+    except Exception as exc:  # noqa: BLE001 -- report, never guess
+        raise SyncRefused(f"the collision gate could not be loaded ({exc})") from exc
+
+    with register_lock(register):
+        current = register.read_bytes()
+        snap = _snapshot(repo, ref)
+        classes = classify_uncommitted(lines, current, snap["ref_blob"])
+        todo = [ln if ln.endswith(b"\n") else ln + b"\n"
+                for cls, ln in classes if cls == KEEP]
+        for cls, ln in classes:
+            print(f"  {('APPEND' if cls == KEEP else 'SKIP ' + cls):<16} {_show(ln)}")
+        # SEQUENTIAL, exactly as the ledger reads: each CLAIM is judged against
+        # the lanes open in the current register PLUS the payload rows before
+        # it, so a lane-scoped RELEASE earlier in the payload frees that lane
+        # (and only that lane) for a later CLAIM -- a handoff held across a
+        # pull reapplies instead of stranding every KEEP row.
+        ledger = current.decode("utf-8", "replace")
+        if ledger and not ledger.endswith("\n"):
+            ledger += "\n"
+        for ln in todo:
+            row = ln.decode("utf-8")
+            if _row_key(row.rstrip("\n"))[1] == "CLAIM":
+                try:
+                    verdict = gate.evaluate_claims(row, gate.open_claims_in(ledger))
+                except Exception as exc:  # noqa: BLE001
+                    raise SyncRefused(f"the collision gate raised {type(exc).__name__}: "
+                                      f"{exc}; nothing was appended") from exc
+                if verdict.collisions:
+                    held = "; ".join(f"`{lane}` held by `{other}` (line {n})"
+                                     for lane, other, n in verdict.collisions)
+                    raise SyncLaneHeld(f"a reapplied CLAIM names a lane another "
+                                       f"owner holds: {held}. Nothing was appended")
+                for lane, other, n in verdict.shared:
+                    print(f"register-sync: SHARED LANE - `{lane}` is held by `{other}` "
+                          f"(line {n}), whose row declares this claimant. Allowing.",
+                          file=sys.stderr)
+                if verdict.one_sided and not coordinated:
+                    raise SyncLaneHeld(
+                        "a reapplied CLAIM shares a lane only by its OWN co-owner "
+                        "declaration; the incumbent has not named it back. Re-run "
+                        "with ARGS=--i-have-coordinated if you have coordinated. "
+                        "Nothing was appended")
+                if verdict.unreadable_co_owners or verdict.unkeyed:
+                    raise SyncRefused("a reapplied CLAIM has unreadable co-owners or "
+                                      "names no lane. Nothing was appended")
+            ledger += row
+        payload = b"".join(todo)
+        print(f"register-sync: RESULT    {len(todo)} to append, "
+              f"{len(lines) - len(todo)} skipped (now on the ref or the register)")
+        if not apply:
+            print("register-sync: DRY RUN - nothing written. Re-run with APPLY=1.")
+            return EXIT_OK
+        if payload:
+            _append_bytes(register, payload)
+    print(f"register-sync: APPLIED - appended {len(todo)} row(s).")
+    return EXIT_OK
+
+
+def _warn_if_invisible(register: Path) -> None:
+    """A row appended on `main` (or a detached HEAD) is a row nobody else sees.
+
+    WARN, DON'T REFUSE: the append is still the right first step. But the fleet
+    reads the register from main, so a row never committed on a branch that
+    merges is invisible to every other node -- and, left uncommitted on a `main`
+    checkout, it later blocks that checkout's own pull (the 2026-09-28 stuck
+    root checkout: 8 such rows).
+
+    NEVER RAISES. It runs AFTER a successful append; an exception here (git
+    missing) would turn a written row into exit 3, and a retry would file it
+    twice.
+    """
+    try:
+        proc = subprocess.run(
+            ["git", "-C", str(register.parent), "symbolic-ref", "-q", "--short", "HEAD"],
+            capture_output=True, text=True)
+        if proc.returncode != 0:
+            in_repo = subprocess.run(
+                ["git", "-C", str(register.parent), "rev-parse", "--git-dir"],
+                capture_output=True).returncode == 0
+            if not in_repo:
+                return      # not a checkout at all: nothing to be invisible from
+    except OSError as exc:
+        print(f"register-append: note - the row WAS appended, but git could not be "
+              f"run ({exc}) to check whether this checkout is on main.",
+              file=sys.stderr)
+        return
+    branch = proc.stdout.strip() if proc.returncode == 0 else None
+    if branch is None or branch == "main":
+        where = "a DETACHED HEAD" if branch is None else "`main`"
+        print("register-append: WARNING - this checkout is on " + where + ". "
+              "The row is UNCOMMITTED and INVISIBLE fleet-wide until it is "
+              "committed on a branch that merges to main; left here it will also "
+              "block this checkout's next `git pull`. Recovery road: "
+              "`make -C pmoves register-sync`.", file=sys.stderr)
+
+
 def _print_lane_delta(before: dict, after: dict) -> None:
     """Name what moved. A refusal that does not say what it saw is a wall."""
     for owner in sorted(set(before) | set(after), key=str):
@@ -955,11 +1549,32 @@ def _dispatch(argv: list[str] | None = None) -> int:
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument("kind",
-                        choices=["claim", "release", "note", "docs", "amend"],
+                        choices=["claim", "release", "note", "docs", "amend",
+                                 "sync"],
                         help="CLAIM opens a lane, RELEASE closes it, "
                              "NOTE records a fact and transitions nothing, "
                              "docs inserts prose without touching rows, "
-                             "amend adds co-owners to YOUR OWN open row")
+                             "amend adds co-owners to YOUR OWN open row, "
+                             "sync drops uncommitted rows main already has "
+                             "(dry run unless --apply)")
+    # sync mode. Environment doors for the make target, same as every field.
+    parser.add_argument("--repo", default=os.environ.get("REGISTER_SYNC_REPO", ""),
+                        help="sync: checkout whose register to sync "
+                             "(default: this tool's own repository)")
+    parser.add_argument("--ref",
+                        default=os.environ.get("REGISTER_SYNC_REF", "") or "origin/main",
+                        help="sync: ref to classify against (default origin/main; "
+                             "NOT fetched by this tool)")
+    parser.add_argument("--apply", action="store_true",
+                        default=os.environ.get("REGISTER_SYNC_APPLY", "") in ("1", "true", "yes"),
+                        help="sync: write. Without it every sync mode is a dry run")
+    parser.add_argument("--hold", action="store_true",
+                        default=os.environ.get("REGISTER_SYNC_HOLD", "") in ("1", "true", "yes"),
+                        help="sync: restore to HEAD and HOLD the KEEP rows in the "
+                             "sidecar (then pull, then --reapply)")
+    parser.add_argument("--reapply", default=os.environ.get("REGISTER_SYNC_REAPPLY", ""),
+                        metavar="SIDECAR",
+                        help="sync: append a --hold sidecar's rows to the tail")
     parser.add_argument("--anchor",
                         default=os.environ.get("REGISTER_ANCHOR", ""),
                         help="docs mode: unique line to insert BEFORE "
@@ -1038,6 +1653,23 @@ def _dispatch(argv: list[str] | None = None) -> int:
     parser.add_argument("--dry-run", action="store_true",
                         help="render and check the row, write nothing")
     args = parser.parse_args(argv)
+
+    if args.kind == "sync":
+        repo = Path(args.repo).resolve() if args.repo else REPO_ROOT
+        try:
+            if args.reapply:
+                if args.hold:
+                    raise SyncRefused("--hold and --reapply are opposite halves "
+                                      "of the sequence; name one")
+                return reapply_sidecar(repo, Path(args.reapply), args.ref, args.apply,
+                                       coordinated=args.i_have_coordinated)
+            return sync_register(repo, args.ref, args.apply, args.hold)
+        except SyncLaneHeld as exc:
+            print(f"register-sync: refusing - {exc}.", file=sys.stderr)
+            return EXIT_REFUSED
+        except SyncRefused as exc:
+            print(f"register-sync: NOT MEASURED - {exc}.", file=sys.stderr)
+            return EXIT_UNMEASURED
 
     if args.kind == "docs":
         if not args.anchor or not args.text_file:
@@ -1184,7 +1816,10 @@ def _dispatch(argv: list[str] | None = None) -> int:
             print("register-append: dry run - rendered, not written.",
                   file=sys.stderr)
             return EXIT_OK
-        return append_note(row, gate, REGISTER)
+        rc = append_note(row, gate, REGISTER)
+        if rc == EXIT_OK:
+            _warn_if_invisible(REGISTER)
+        return rc
 
     # THE WHOLE TRANSACTION, UNDER ONE LOCK. Reading the register, deciding,
     # and appending are one operation or they are a race: two filers can both
@@ -1274,6 +1909,7 @@ def _dispatch(argv: list[str] | None = None) -> int:
         except ValueError:
             where = REGISTER
         print(f"register-append: appended to {where}", file=sys.stderr)
+        _warn_if_invisible(REGISTER)
         return EXIT_OK
 
 

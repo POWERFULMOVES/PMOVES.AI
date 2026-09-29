@@ -45,7 +45,7 @@ class ThreadSafetyTester:
     async def setup(self):
         """Initialize event bus for testing."""
         logger.info("Setting up event bus...")
-        self.bus = EventBus(nats_url="nats://nats:pmoves@nats:4222")
+        self.bus = EventBus(nats_url="nats://nats:4222")
         await self.bus.connect()
         logger.info("Event bus connected")
 
