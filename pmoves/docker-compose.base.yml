@@ -579,6 +579,19 @@ networks:
       config:
       - subnet: 172.30.4.0/24
         gateway: 172.30.4.1
+  # Graph front (#3201, option A): the ONLY link between the tailnet forwarder
+  # (docker-compose.neo4j-tailnet.yml) and neo4j. Internal, and joined by exactly
+  # those two, so a compromised forwarder reaches Neo4j and nothing else on the
+  # data tier (least privilege; it is deliberately NOT on pmoves_data).
+  # Subnet 172.30.9.0/24 is permanent (DOCKER_NETWORK_HARDENING Rule 2).
+  pmoves_graph_front:
+    <<: *network-internal-only
+    name: pmoves_graph_front
+    ipam:
+      driver: default
+      config:
+      - subnet: 172.30.9.0/24
+        gateway: 172.30.9.1
   # Host-reachable tier. Kong proxy/admin and PostgREST attach here; the
   # services still default to 127.0.0.1 host binds for safer standalone
   # operation. Being internal:false this is ALSO egress-capable -- see the

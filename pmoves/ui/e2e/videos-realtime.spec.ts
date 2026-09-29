@@ -45,7 +45,9 @@ async function insertSmokeRow() {
 }
 
 test.describe('Videos Realtime', () => {
-  test('inserts row and appears in UI', async ({ page }) => {
+  // @backend: inserts a row through Supabase REST (needs SUPABASE_REST_URL + service-role key and a
+  // live stack). Excluded from the default run; run with `npm run test:e2e:backend`.
+  test('inserts row and appears in UI', { tag: '@backend' }, async ({ page }) => {
     const base = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3001';
     const { title } = await insertSmokeRow();
 

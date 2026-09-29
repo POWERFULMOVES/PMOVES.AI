@@ -9,6 +9,7 @@ sanctioned path that only refuses is the deadlock it exists to prevent.
 from __future__ import annotations
 
 import importlib.util
+import os
 import re
 import shutil
 import subprocess
@@ -742,6 +743,38 @@ def test_the_read_modify_write_roads_take_the_lock_too(mod, monkeypatch, tmp_pat
 # --- the make road: a field value must never become a shell word -------------
 
 MAKEFILE = Path(__file__).resolve().parents[2] / "Makefile"
+DOCKER_GUARD_FILE = Path(__file__).resolve().parents[2] / "tests" / "_destructive_docker_guard.py"
+
+
+def _docker_guard():
+    """pmoves/tests' guard module: the one that defines what a stub dir is.
+
+    Reuses the instance pmoves/tests/conftest.py registered when both trees
+    are collected in one session, so there is one STUB definition, not two.
+    """
+    name = "pmoves_tests_destructive_docker_guard"
+    if name in sys.modules:
+        return sys.modules[name]
+    spec = importlib.util.spec_from_file_location(name, DOCKER_GUARD_FILE)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+@pytest.fixture
+def stub_docker_env(tmp_path_factory):
+    """The REAL make runs; docker/docker-compose/supabase resolve to recorders.
+
+    Same helper as pmoves/tests' `stub_docker_path` fixture (this directory is
+    outside that conftest). pmoves/tests' session guard refuses a make spawn
+    whose PATH does not start with such a stub dir, so without this the test
+    was refused whenever both trees were collected together, and ran unguarded
+    when run alone.
+    """
+    if os.name == "nt":
+        pytest.skip("stub tool dir uses POSIX sh recorders")
+    return _docker_guard().build_stub_env(tmp_path_factory.mktemp("stub-docker"), stub_make=False)
 REGISTER_TARGETS = ("register-claim", "register-release", "register-amend",
                     "register-docs")
 # Everything a caller supplies as CONTENT. Not ARGS, which carries flags the
@@ -815,11 +848,17 @@ def test_the_tool_declares_its_own_pep723_dependency():
 
 
 @pytest.mark.skipif(shutil.which("make") is None, reason="make not installed")
-def test_a_substitution_in_a_field_value_is_not_executed_by_make(tmp_path):
+def test_a_substitution_in_a_field_value_is_not_executed_by_make(tmp_path, stub_docker_env):
     """The behavioural half of the static check above. Runs the real target.
 
     `--dry-run`, so nothing is written to any register; the marker file is the
-    only evidence sought.
+    only evidence sought. The recipe chain, read before stubbing: parse-time
+    $(shell) probes (python/uv/date/git/hostname), a usage check, then
+    `$(REGISTER_PYTHON) tools/register_append.py claim --dry-run`, which reads
+    the register, takes an O_RDONLY flock on it and returns before
+    `append_row` (register_append.py, the `if args.dry_run:` branch of the
+    claim transaction). Nothing on it spawns docker, and the recorders are
+    asserted empty below so a future recipe change that does is caught.
     """
     marker = tmp_path / "EXECUTED"
     payload = "scope with `touch %s` inside" % marker
@@ -827,7 +866,7 @@ def test_a_substitution_in_a_field_value_is_not_executed_by_make(tmp_path):
         ["make", "-C", str(MAKEFILE.parent), "register-claim",
          "OWNER=PROBE-NODE", "BRANCH=fix/probe-lane-not-real",
          "TTL=n/a", "SCOPE=" + payload, "ARGS=--dry-run"],
-        capture_output=True, text=True, timeout=180)
+        capture_output=True, text=True, timeout=180, env=stub_docker_env)
     # ASSERTED FIRST, because a target that fell over would make the marker
     # check pass while proving nothing. The row must come out correct AND the
     # substitution must not have run -- the defect produced a correct row.
@@ -836,6 +875,8 @@ def test_a_substitution_in_a_field_value_is_not_executed_by_make(tmp_path):
         f"the row does not carry the scope verbatim:\n{r.stdout}")
     assert not marker.exists(), (
         "make executed a command substitution embedded in SCOPE")
+    assert stub_docker_env.calls() == [], (
+        f"register-claim reached docker/compose/supabase: {stub_docker_env.calls()}")
 
 
 # --- absorbed-expansion symptoms --------------------------------------------

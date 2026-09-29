@@ -1043,7 +1043,7 @@ def jellyfin_config():
 # ─────────────────────────────────────────────────────────────────────────────
 # YouTube Station Management
 # ─────────────────────────────────────────────────────────────────────────────
-NATS_URL = os.environ.get("NATS_URL", "nats://nats:pmoves@nats:4222")
+NATS_URL = os.environ.get("NATS_URL", "nats://nats:4222")
 
 STATION_REQUESTS = Counter(
     "jellyfin_bridge_station_requests_total",

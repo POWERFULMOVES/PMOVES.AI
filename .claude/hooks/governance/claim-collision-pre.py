@@ -617,8 +617,17 @@ _SANCTIONED_TOOL_REAL = frozenset(
     os.path.realpath(str(_SANCTIONED_TOOL_DIR / n)) for n in _SANCTIONED_TOOL_NAMES
 )
 _SANCTIONED_MAKE_DIR_REAL = os.path.realpath(str(REPO_ROOT_GUESS / "pmoves"))
+# `sync` ADDED 2026-09-28, DELIBERATELY, operator-requested (fix/register-sync-road).
+# It is the one sanctioned road that REMOVES lines -- and only lines the target
+# ref already carries (byte-identical, or re-filed with a `first filed at <ts>`
+# marker by the same owner on the same lane); every other line is kept
+# byte-exact, and the tool refuses anything but a pure append over HEAD. Without
+# it a `main` checkout holding uncommitted rows could never fast-forward: this
+# hook refuses `git checkout`, interpreters and compound commands on the
+# register, and every other register-* target only appends. The same `-C` /
+# `-f` directory checks below apply to it unchanged.
 _SANCTIONED_MAKE_TARGET_RE = re.compile(
-    r"^register-(claim|release|note|docs|amend|status)$")
+    r"^register-(claim|release|note|docs|amend|status|sync)$")
 # `-c`/`-e`/`-m`/`--command` anywhere alongside the tool means an interpreter
 # was asked to run something OTHER than the file named, so the file named stops
 # being evidence of what runs.
