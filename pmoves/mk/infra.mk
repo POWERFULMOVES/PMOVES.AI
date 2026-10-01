@@ -573,6 +573,17 @@ up-ollama: ## Start Ollama service (default profile, always available)
 	@echo "Ollama API: http://localhost:11434"
 	@echo "Pull models: make model-pull MODEL=qwen3:8b"
 
+# Host-native Ollama binds loopback; containers reach it through a proxy on the
+# docker gateway address. Mutating the host (systemd + ufw) is an operator step.
+.PHONY: ollama-host-bridge ollama-host-bridge-status
+ollama-host-bridge: ## Plan (dry-run) exposing HOST Ollama to containers on the docker gateway; apply with sudo (printed)
+	@bash ../deploy/provision/ollama-docker-bridge.sh --dry-run
+	@echo ""
+	@echo "Apply (operator, needs root):  sudo deploy/provision/ollama-docker-bridge.sh --apply"
+
+ollama-host-bridge-status: ## Is the host-Ollama docker bridge provisioned? (exit 1 = not)
+	@bash ../deploy/provision/ollama-docker-bridge.sh --status
+
 up-gpu-orchestrator: ## Start GPU orchestrator (gpu profile)
 	@echo "=== Starting GPU Orchestrator ==="
 	@$(DC) --profile gpu up -d gpu-orchestrator
