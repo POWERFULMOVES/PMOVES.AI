@@ -33,13 +33,16 @@ lane begins.
 
 ## Incident on record (pre-lane, same session)
 
-An unguarded `docker volume rm` deleted the five `pmoves_comfyui-*` named volumes
+A raw `docker volume rm` (blocked in Claude Code; Known Road `make -C pmoves volume-reset SERVICE=<name>`) deleted the five `pmoves_comfyui-*` named volumes
 (~60G: downloaded H3 models + any rendered outputs; outputs are **not** recoverable,
 models re-download via `pmoves/tools/comfyui/install/` Aitrepreneur installers).
 Root causes: (1) Crush sessions run **without** the Claude Code damage-control
 hooks — this harness had zero hooks configured; (2) the bash hook patterns
-deliberately exclude `docker rm` from the `rm -rf` net, and `docker volume rm`
-has no pattern of its own. Remediation is Phase 5. Videos (~79G, 13× `PXL_*.mp4`)
+deliberately exclude `docker rm` from the `rm -rf` net. Correction (2026-10-01):
+the Claude Code side DOES block the raw volume removal and routes it to the Known
+Road `make -C pmoves volume-reset SERVICE=<name>` (`.claude/hooks/pre-tool.sh:17`, since #275;
+`.claude/hooks/damage-control/patterns.yaml:306-320`). The gap was Crush alone.
+Remediation is Phase 5. Videos (~79G, 13× `PXL_*.mp4`)
 move to JuiceFS `knuckles/downloads/` (rsync --remove-source-files,
 operator-approved).
 
@@ -99,20 +102,24 @@ On B850 the mount reproduces from a plain `make juicefs-cross-node-setup
 JUICEFS_HOST=supabase-db`, verified end-to-end on 2026-09-22. That run relied
 on node-local state in the gitignored `pmoves/.env.local` (listed below,
 including `META_ROLE=juicefs_meta`), so it was **not** a zero-knowledge
-reproduction. Review of the lane PR found the original pairing rule dead (a
-default was assigned before the rule could see "no role named") and the make
-recipe defeating it a second time. Both are fixed, and the rule is now covered
-by `pmoves/tests/scripts/test_juicefs_cross_node_role_pairing.py`. A fresh
+reproduction. Review of the lane PR found the original automatic pairing rule
+dead (a default was assigned before the rule could see "no role named") and the
+make recipe defeating it a second time. Steward decision (2026-10-01): follow the
+documented precedent instead of repairing the automation, so the role is named
+explicitly. Covered by `pmoves/tests/scripts/test_juicefs_cross_node_role_pairing.py`. A fresh
 clone still needs the node shape (`JUICEFS_NETWORK`, `JUICEFS_NAME`, cache dir)
 from `.env.local`. The script hardenings:
 
-- **Role/credential pairing** (`scripts/juicefs-cross-node-setup.sh`): the
-  fallback credential IS `juicefs_meta`'s password; when it arrives via
-  `JUICEFS_META_PASSWORD` (no explicit `DB_PASS`) and no role was named (unset
-  or empty), `META_ROLE` resolves to `juicefs_meta`; a named role always wins.
-  Previously the script defaulted `supabase_admin` and the mismatched pair
-  always failed auth. The test proves the script-level rule and the recipe's
-  forwarding shape; it does not exercise a live mount.
+- **Role/credential pairing** (`scripts/juicefs-cross-node-setup.sh`): an
+  explicit `META_ROLE` always wins (empty counts as not named). The funnel
+  credential `JUICEFS_META_PASSWORD` is `juicefs_meta`'s password, so using it
+  with no role named now **fails loudly** and points at the runbook invocation
+  (`META_ROLE=juicefs_meta`, `JUICEFS_CROSS_NODE_MOUNT_RUNBOOK.md:92-102`). It is
+  never silently paired, and never with `supabase_admin`, which was the defect:
+  that mismatched pair always failed auth. An explicit `DB_PASS` with no role
+  keeps the back-compat `supabase_admin` default and prints that it did. The
+  test proves the script-level behaviour and the recipe's forwarding shape; it
+  does not exercise a live mount.
 - **Preflight diagnostics**: the storage probe used to die silently
   (`2>/dev/null` + `set -euo pipefail`) before printing anything. It now
   captures both streams, redacts the credential, and prints the real error.
@@ -146,13 +153,13 @@ from `.env.local`. The script hardenings:
     choose one. `juicefs_meta` is PMOVES's scoped role
     (`pmoves/supabase/initdb/00_3_juicefs_meta_role.sql`), and
     `JUICEFS_META_PASSWORD` is its funnel slot
-    (`JUICEFS_META_CREDENTIAL_RUNBOOK.md:21`). The *automatic* pairing (fallback
-    credential => `juicefs_meta`): **Originated:** Crush lane, 2026-09-22
-    (f2519ea67); corrected by B850-CLAUDE / nvme-3150-rebase, 2026-10-01 (no
-    upstream precedent found; checked: JuiceFS v1.3.0 metadata-engine and
-    PostgreSQL best-practices docs, and the PMOVES runbooks). The runbook's
-    explicit `META_ROLE` (`JUICEFS_CROSS_NODE_MOUNT_RUNBOOK.md:92-102`) still
-    works and always wins.
+    (`JUICEFS_META_CREDENTIAL_RUNBOOK.md:21`). Role selection follows the PMOVES
+    precedent `JUICEFS_CROSS_NODE_MOUNT_RUNBOOK.md:92-102` (name `META_ROLE`
+    explicitly). The automatic pairing the Crush lane originated on 2026-09-22
+    (f2519ea67) was removed in favour of that precedent. The fail-loud refusal
+    is Originated: B850-CLAUDE / nvme-3150-rebase, 2026-10-01 (no upstream
+    precedent; checked: JuiceFS v1.3.0 metadata-engine and PostgreSQL
+    best-practices docs, and the PMOVES JuiceFS runbooks).
   - *Redaction*: GNU grep manual, 2.1.2 Matching Control (`-F`/`--fixed-strings`:
     "Interpret patterns as fixed strings, not regular expressions"; `-v`); POSIX
     `grep -F`. <https://www.gnu.org/software/grep/manual/grep.html#Matching-Control>
@@ -249,11 +256,12 @@ the new mount is verified: `rm -rf ~/.local/share/juicefs-data`.
   (crush-pmoves parity). This lane does NOT duplicate them; the remaining local
   gap after those land is only the Crush-side damage-control hook port.
 - Port the damage-control gate to Crush hooks (`crush.json` `hooks`, see the
-  crush-hooks skill) so `docker volume rm`-class commands are pattern-checked in
-  this harness too — closing the gap this session's incident exposed.
-- Add a `docker volume rm` pattern (with Known Road pointer) to
-  `.claude/hooks/damage-control/patterns.yaml` so the Claude Code side catches it
-  as well.
+  crush-hooks skill) so the blocked volume-removal class (Known Road
+  `make -C pmoves volume-reset SERVICE=<name>`) is pattern-checked in this harness too, closing the gap this
+  session's incident exposed.
+- ~~Add a volume-removal pattern to the Claude Code guard~~: already present
+  (`.claude/hooks/damage-control/patterns.yaml:306-320`, Known Road
+  `make -C pmoves volume-reset SERVICE=<name>`), so nothing to add on that side.
 
 ### Phase 6 — Close out
 - Verify: `df -h / /mnt/pmoves-nvme1`, `make -C pmoves juicefs-mount-status`,

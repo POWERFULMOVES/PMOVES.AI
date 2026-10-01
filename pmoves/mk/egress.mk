@@ -342,9 +342,13 @@ juicefs-cross-node-setup: ## Mount JuiceFS on this node (run on remote): make ju
 	@# Empty means "not named". JFS_SETUP_* forwarding — Originated: B850-CLAUDE /
 	@# nvme-3150-rebase, 2026-10-01 (no upstream precedent found; checked: every recipe in pmoves/Makefile and pmoves/mk/*.mk that calls with-env.sh).
 	@#
-	@# DB_PASS passes as the sub-process ENVIRONMENT, not argv, and is handed to
-	@# JuiceFS via META_PASSWORD, so it never appears in `ps`. Passing it as
-	@# `make ... DB_PASS=...` does put it in make's own argv — prefer the funnel.
+	@# Exposure, precisely. The FUNNEL path keeps the credential out of every argv:
+	@# with-env.sh exports JUICEFS_META_PASSWORD into the script's environment and the
+	@# script hands it to JuiceFS as META_PASSWORD. An EXPLICIT `make ... DB_PASS=...`
+	@# does not: it is in make's own argv, and make expands $(DB_PASS) into the
+	@# recipe line, so it is also in the `sh -c` argv of this recipe's shell. Both are
+	@# visible in `ps` for the life of those processes. (Any environment is also
+	@# readable by the same user via /proc/<pid>/environ.) Prefer the funnel.
 	@#
 	@# No $(error) here: the script already fails with a better message that names
 	@# both DB_PASS and the funnel path.

@@ -3,15 +3,17 @@
 The defect
 ----------
 The funnel-delivered fallback credential, JUICEFS_META_PASSWORD, is the
-``juicefs_meta`` role's password. When DB_PASS arrives via that fallback and no
-role was named, the metadata DSN must use ``juicefs_meta``: ``supabase_admin``
-paired with juicefs_meta's password always fails auth.
+``juicefs_meta`` role's password. origin/main defaulted META_ROLE to
+``supabase_admin``, so using the funnel credential without naming a role
+paired juicefs_meta's password with supabase_admin and always failed auth.
+The first fix (#3150 @ 6e13d0f18) added an automatic pairing that was dead (the
+default ran first), and the make recipe defeated it a second time by resolving
+the fallback into DB_PASS.
 
-origin/main had no pairing at all (META_ROLE defaulted to supabase_admin). The
-first fix (#3150 @ 6e13d0f18) added a rule but assigned the default FIRST, so
-"no role named" could never be observed and the rule was dead. A second,
-independent defeat lived in mk/egress.mk: the recipe resolved the fallback into
-DB_PASS itself, so the script always saw an "explicit" DB_PASS.
+The behaviour now follows the documented precedent
+(docs/operations/JUICEFS_CROSS_NODE_MOUNT_RUNBOOK.md:92-102, pass META_ROLE
+explicitly): an explicit role always wins; the funnel credential without a role
+FAILS LOUDLY; it is never silently paired, and never with supabase_admin.
 
 How it is measured
 ------------------
@@ -64,20 +66,45 @@ def stub_env_factory():
     )
 
 
+def _run(tmp_path, stub_env_factory, **env: str):
+    stub = stub_env_factory(tmp_path / "stub", base_env={"PATH": os.environ["PATH"], "HOME": str(tmp_path)})
+    stub.update({"MOUNT_POINT": str(tmp_path / "mnt"), "DATA_DIR": str(tmp_path / "data"), **env})
+    result = subprocess.run(["bash", str(SCRIPT)], env=stub, capture_output=True, text=True, timeout=60)
+    return stub, result
+
+
 @pytest.mark.parametrize("meta_role", [None, ""], ids=["unset", "empty"])
-def test_fallback_credential_pairs_with_juicefs_meta(tmp_path, stub_env_factory, meta_role):
+def test_funnel_credential_without_a_role_fails_loudly(tmp_path, stub_env_factory, meta_role):
     env = {"JUICEFS_META_PASSWORD": "fallback-pw"}
     if meta_role is not None:
         env["META_ROLE"] = meta_role
+    stub, result = _run(tmp_path, stub_env_factory, **env)
+    out = result.stdout + result.stderr
+    assert result.returncode == 1, out
+    assert "META_ROLE=juicefs_meta" in out and "JUICEFS_CROSS_NODE_MOUNT_RUNBOOK.md:92-102" in out, out
+    # Fails before anything reaches docker: no DSN, so no silent supabase_admin.
+    assert stub.calls("docker") == [], stub.calls("docker")
+
+
+def test_forwarded_empty_role_with_funnel_credential_fails_loudly(tmp_path, stub_env_factory):
+    # What the recipe sends when the operator named nothing: empty JFS_SETUP_*.
+    env = {"JFS_SETUP_META_ROLE": "", "JFS_SETUP_DB_PASS": "", "JUICEFS_META_PASSWORD": "fallback-pw"}
+    stub, result = _run(tmp_path, stub_env_factory, **env)
+    assert result.returncode == 1 and stub.calls("docker") == []
+
+
+def test_documented_path_uses_juicefs_meta(tmp_path, stub_env_factory):
+    # The runbook invocation: META_ROLE=juicefs_meta, funnel credential, no DB_PASS.
+    env = {"JFS_SETUP_META_ROLE": "juicefs_meta", "JFS_SETUP_DB_PASS": "", "JUICEFS_META_PASSWORD": "fallback-pw"}
     assert _role(tmp_path, stub_env_factory, **env) == "juicefs_meta"
 
 
-def test_explicit_db_pass_keeps_supabase_admin_default(tmp_path, stub_env_factory):
-    assert _role(tmp_path, stub_env_factory, DB_PASS="explicit-pw", JUICEFS_META_PASSWORD="fallback-pw") == "supabase_admin"
-
-
-def test_no_credential_hint_keeps_supabase_admin_default(tmp_path, stub_env_factory):
-    assert _role(tmp_path, stub_env_factory, DB_PASS="explicit-pw") == "supabase_admin"
+def test_explicit_db_pass_without_role_keeps_default_and_says_so(tmp_path, stub_env_factory):
+    stub, result = _run(tmp_path, stub_env_factory, DB_PASS="explicit-pw")
+    assert result.returncode == 2, result.stdout + result.stderr
+    assert "back-compat default supabase_admin" in result.stdout
+    dsns = [m.group(1) for call in stub.calls("docker") for arg in call for m in [DSN_ROLE.search(arg)] if m]
+    assert set(dsns) == {"supabase_admin"}, dsns
 
 
 @pytest.mark.parametrize("role", ["supabase_admin", "juicefs_meta"])
@@ -93,17 +120,22 @@ def test_make_forwarded_role_beats_node_env_file(tmp_path, stub_env_factory):
     assert _role(tmp_path, stub_env_factory, **env) == "supabase_admin"
 
 
-def test_make_forwarding_empty_db_pass_is_not_explicit(tmp_path, stub_env_factory):
-    # What the recipe sends when the operator named nothing: empty JFS_SETUP_*.
-    env = {"JFS_SETUP_META_ROLE": "", "JFS_SETUP_DB_PASS": "", "JUICEFS_META_PASSWORD": "fallback-pw"}
-    assert _role(tmp_path, stub_env_factory, **env) == "juicefs_meta"
-
-
-def test_redaction_is_literal_not_regex(tmp_path, stub_env_factory):
+@pytest.mark.parametrize(
+    "password",
+    [
+        # BRE `ab*c` matches a, any b's, then c, so it does NOT match the literal
+        # "ab*c": a regex grep keeps the line and prints the password. This is the
+        # silent leak path (grep exits 0, nothing looks wrong).
+        "ab*c",
+        # An unbalanced bracket makes a regex grep error out ("Unmatched [") and
+        # swallow every diagnostic line instead.
+        "p.ss[w0rd*",
+    ],
+    ids=["regex-leak", "regex-error"],
+)
+def test_redaction_is_literal_not_regex(tmp_path, stub_env_factory, password):
     # A preflight with no Storage field prints the probe output with the
-    # credential's lines removed. A regex grep lets a password with BRE
-    # metacharacters fail to match its own line and print it.
-    password = "p.ss[w0rd*"
+    # credential's lines removed.
     stub = stub_env_factory(tmp_path / "stub", base_env={"PATH": os.environ["PATH"], "HOME": str(tmp_path)})
     (stub.stub_dir / "docker").write_text(
         (stub.stub_dir / "docker").read_text().replace(
@@ -111,9 +143,9 @@ def test_redaction_is_literal_not_regex(tmp_path, stub_env_factory):
             f'if [ "${{1:-}}" = run ] && [ "${{2:-}}" = --rm ]; then echo \'auth failed for {password}\'; echo \'other line\'; fi',
         )
     )
-    stub.update({"MOUNT_POINT": str(tmp_path / "mnt"), "DATA_DIR": str(tmp_path / "data"), "DB_PASS": password})
+    stub.update({"MOUNT_POINT": str(tmp_path / "mnt"), "DATA_DIR": str(tmp_path / "data"), "DB_PASS": password, "META_ROLE": "juicefs_meta"})
     result = subprocess.run(["bash", str(SCRIPT)], env=stub, capture_output=True, text=True, timeout=60)
-    assert result.returncode == 1
+    assert result.returncode == 1, result.stdout + result.stderr
     assert password not in result.stdout + result.stderr
     assert "other line" in result.stderr
 

@@ -29,8 +29,10 @@ DB_PORT="${DB_PORT:-5432}"
 # DB_PASS is the META_ROLE's password. Falls back to JUICEFS_META_PASSWORD — the funnel-
 # delivered secret (registered in chit_manifest_register.py, tier data) — so a node that
 # received it via the secrets pipeline can just run with META_ROLE=juicefs_meta and no
-# explicit DB_PASS. Neither is ever inlined on a command line: both arrive via the
-# environment and are handed to JuiceFS as META_PASSWORD, so they never appear in `ps`.
+# explicit DB_PASS. This script never inlines either on a command line: both arrive via
+# the environment and are handed to JuiceFS as META_PASSWORD. An explicit DB_PASS given
+# to `make` is still visible in `ps` upstream of here (make's argv and the recipe
+# shell's `sh -c` string; see mk/egress.mk), so prefer the funnel.
 #
 # `make juicefs-cross-node-setup` runs this under scripts/with-env.sh, which
 # re-sources the node's env files (including .env.local) OVER the caller's
@@ -51,30 +53,33 @@ DB_PASS="${DB_PASS:-${JUICEFS_META_PASSWORD:-}}"
 # shrinks the cross-node auth surface from a full superuser to DML on one schema (the point
 # of the whole lane). DB_PASS must be that role's password when META_ROLE=juicefs_meta.
 #
-# Pairing rule (B850 2026-09-22): the fallback credential IS juicefs_meta's
-# password, so when DB_PASS arrived via that fallback and no role was named, the
-# role must match the credential — supabase_admin + JUICEFS_META_PASSWORD always
-# fails auth. The rule MUST run before any default is assigned: an earlier
-# version defaulted META_ROLE first, so "no role named" could never be observed
-# and the rule was dead (pmoves/tests/scripts/test_juicefs_cross_node_role_pairing.py).
-# An empty META_ROLE counts as "not named".
-#   Provenance: to JuiceFS the role is only the DSN username, and the vendor docs
-#   say nothing about choosing one (https://github.com/juicedata/juicefs/blob/v1.3.0/docs/en/reference/how_to_set_up_metadata_engine.md,
+# Role selection follows the documented precedent: name the role explicitly.
+# docs/operations/JUICEFS_CROSS_NODE_MOUNT_RUNBOOK.md:92-102 passes
+# META_ROLE=juicefs_meta with the funnel credential. An explicit META_ROLE
+# always wins (empty counts as not named).
+#   - The funnel credential (JUICEFS_META_PASSWORD) is juicefs_meta's password
+#     (docs/operations/JUICEFS_META_CREDENTIAL_RUNBOOK.md:21), so using it without
+#     a named role FAILS LOUDLY. It is never paired silently, and never with
+#     supabase_admin: that mismatched pair always fails auth and was the defect.
+#   - An explicit DB_PASS without a role keeps the documented back-compat default,
+#     supabase_admin, and says so out loud. (pg_hba refuses supabase_admin from
+#     the tailnet, #2702, so this only works on the host itself.)
+#   Provenance: to JuiceFS the role is only the DSN username; the vendor docs do not
+#   choose one (https://github.com/juicedata/juicefs/blob/v1.3.0/docs/en/reference/how_to_set_up_metadata_engine.md,
 #   "### PostgreSQL"). juicefs_meta is PMOVES's scoped role
-#   (supabase/initdb/00_3_juicefs_meta_role.sql), and JUICEFS_META_PASSWORD is its
-#   funnel slot (docs/operations/JUICEFS_META_CREDENTIAL_RUNBOOK.md:21). Automatic
-#   pairing: Originated: Crush lane, 2026-09-22 (f2519ea67), corrected by
-#   B850-CLAUDE / nvme-3150-rebase, 2026-10-01 (no upstream precedent found;
-#   checked: JuiceFS v1.3.0 metadata-engine + PostgreSQL best-practices docs, and
-#   the PMOVES runbooks, which pass META_ROLE explicitly:
-#   docs/operations/JUICEFS_CROSS_NODE_MOUNT_RUNBOOK.md:92-102 — still honoured).
+#   (supabase/initdb/00_3_juicefs_meta_role.sql). Covered by
+#   pmoves/tests/scripts/test_juicefs_cross_node_role_pairing.py.
 META_ROLE="${JFS_SETUP_META_ROLE:-${META_ROLE:-}}"
 if [ -z "$META_ROLE" ]; then
     if [ -z "$DB_PASS_EXPLICIT" ] && [ -n "${JUICEFS_META_PASSWORD:-}" ]; then
-        META_ROLE=juicefs_meta
-    else
-        META_ROLE=supabase_admin
+        echo "ERROR: the funnel credential JUICEFS_META_PASSWORD is juicefs_meta's password, but no"
+        echo "  META_ROLE was named. Name it explicitly, as the runbook does:"
+        echo "    make -C pmoves juicefs-cross-node-setup JUICEFS_HOST=<host> META_ROLE=juicefs_meta"
+        echo "  (pmoves/docs/operations/JUICEFS_CROSS_NODE_MOUNT_RUNBOOK.md:92-102)"
+        exit 1
     fi
+    META_ROLE=supabase_admin
+    echo "NOTE: META_ROLE not set; using the back-compat default supabase_admin with the explicit DB_PASS."
 fi
 MOUNT_POINT="${MOUNT_POINT:-$HOME/pmoves-fs}"
 # JUICEFS_DATA_DIR is the name `make juicefs-mount-local` reads (mk/egress.mk:395);
