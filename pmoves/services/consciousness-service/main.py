@@ -40,7 +40,7 @@ logger = logging.getLogger(__name__)
 # Environment configuration
 SERVICE_NAME = os.environ.get("SERVICE_NAME", "consciousness-service")
 SERVICE_PORT = int(os.environ.get("SERVICE_PORT", "8106"))
-NATS_URL = os.environ.get("NATS_URL", "nats://nats:pmoves@nats:4222")
+NATS_URL = os.environ.get("NATS_URL", "nats://nats:4222")
 # Canonical key chain (CHIT_SIGNING_KEY > CHIT_PASSPHRASE) with the legacy
 # CHIT_PROD_PASSPHRASE name still honored — see chr_algorithm.get_chit_signing_key.
 CHIT_PASSPHRASE = get_chit_signing_key()
