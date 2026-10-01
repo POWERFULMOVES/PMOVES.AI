@@ -527,13 +527,23 @@ register-release: export REGISTER_BRANCH = $(BRANCH)
 register-release: export REGISTER_SCOPE = $(SCOPE)
 register-release: export REGISTER_SCOPE_VIA_FILE = $(findstring --scope-file,$(ARGS))
 register-release: export REGISTER_CO_OWNERS = $(CO_OWNER)
+# THE BATON. Lanes are shared, not locked (AGNOTE4482.md:1709-1713): a RELEASE
+# closes the named lane for every PARTICIPANT -- the signer's own rows, rows
+# whose co-owners: declare the signer, and, with BATON_FROM=, the rows of the
+# peer who holds it when that peer is not running. The release row is the
+# REGISTER part of the recorded handoff (KRISS_KROSS_ACCORD.md:12-16 also asks
+# for a Graphiti trail entry and a PR comment), and the holder re-claiming
+# supersedes it. A malformed baton closes NOTHING -- never your own lanes.
+#   make -C pmoves register-release OWNER='<you>' BRANCH=fix/x \
+#        BATON_FROM='<holder>' SCOPE='what landed, and why you are carrying it'
+register-release: export REGISTER_BATON_FROM = $(BATON_FROM)
 # BRANCH IS NOT OPTIONAL HERE, and the guard is in the python rather than in
 # this recipe on purpose: `ARGS=--all-lanes` is the sanctioned way to ask for a
 # full handoff, and a make-level `[ -z "$$REGISTER_BRANCH" ]` cannot see it. The
 # tool refuses an untargeted release with a message naming both doors -- which
 # survives `make` collapsing every nonzero recipe exit to 2, because the message
 # is the structured part, not the code.
-register-release: ## Close a lane in the claim register (OWNER= BRANCH= SCOPE= [CO_OWNER=]; ARGS=--all-lanes to close ALL your lanes)
+register-release: ## Close a lane in the claim register (OWNER= BRANCH= SCOPE= [CO_OWNER=]; ARGS=--all-lanes to close ALL your lanes; BATON_FROM=<holder> to close a PEER's lane)
 	@if [ -z "$$REGISTER_SCOPE" ] && [ -z "$$REGISTER_SCOPE_VIA_FILE" ]; then \
 		echo "usage: make register-release OWNER='B850-CLAUDE (Knuckles)' BRANCH=fix/x SCOPE='what landed'"; \
 		echo "  single-quote SCOPE for the same reason register-claim says to: an expansion absorbed into"; \
@@ -1951,7 +1961,14 @@ archon-db-setup: ## Run Archon DB migrations (complete_setup + 001-011 + TensorZ
 .PHONY: up-tensorzero
 up-tensorzero: ## Start TensorZero LLM gateway (PRIMARY MODEL PROVIDER)
 	@echo "🧠 Starting TensorZero LLM gateway..."
-	@$(DC) --profile tensorzero up -d tensorzero-clickhouse tensorzero-gateway tensorzero-ui pmoves-ollama
+	@# The gateway goes up on its own first. pmoves-ollama reserves an NVIDIA
+	@# device, so on an AMD node (Knuckles/B850: runc only) it fails with
+	@# 'could not select device driver "nvidia"' -- and bundled into one `up`
+	@# that error aborted the gateway too, leaving it Created but never started
+	@# (measured 2026-10-01). The gateway's host.docker.internal routes,
+	@# including the embedding model, do not need the container.
+	@$(DC) --profile tensorzero up -d tensorzero-clickhouse tensorzero-gateway tensorzero-ui
+	@$(DC) --profile tensorzero up -d pmoves-ollama || echo "⚠️ pmoves-ollama did not start (no NVIDIA runtime on this node?). Routes to http://pmoves-ollama:11434 will fail; host.docker.internal routes are unaffected (see deploy/provision/ollama-docker-bridge.sh)." >&2
 	@timeout 60 bash -c 'until curl -sf http://localhost:3030/metrics; do sleep 2; done' || echo "⚠️ TensorZero may still be starting"
 	@echo "✅ TensorZero ready - LLM calls available"
 	@echo "   Gateway:      http://localhost:3030"
