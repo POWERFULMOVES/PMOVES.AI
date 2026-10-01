@@ -35,6 +35,10 @@ class EventBus:
         self._lock = asyncio.Lock()
 
     @property
+    def connected(self) -> bool:
+        return self._nc is not None and bool(getattr(self._nc, "is_connected", False))
+
+    @property
     def topics(self) -> List[str]:
         return list(self._topics)
 

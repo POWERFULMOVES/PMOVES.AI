@@ -6,6 +6,11 @@ Secrets should be injected via Docker/Kubernetes secrets or .env files.
 
 from __future__ import annotations
 
+import os
+from pathlib import Path
+from typing import Any
+
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -28,11 +33,30 @@ class Settings(BaseSettings):
     # -- Neo4j ----------------------------------------------------------
     neo4j_url: str = "bolt://neo4j:7687"
     neo4j_user: str = "neo4j"
-    neo4j_password: str = "neo4j"
+    # Required, no default: a missing password fails startup (fail-closed)
+    # instead of trying a well-known credential. NEO4J_PASSWORD_FILE is
+    # honoured for Docker secrets.
+    neo4j_password: str
     neo4j_database: str = "neo4j"
     neo4j_max_connection_pool_size: int = 50
     neo4j_connection_timeout: float = 30.0
     neo4j_max_transaction_retry_time: float = 30.0
+
+    @model_validator(mode="before")
+    @classmethod
+    def _password_from_file(cls, data: Any) -> Any:
+        if isinstance(data, dict) and not data.get("neo4j_password"):
+            file_path = os.environ.get("NEO4J_PASSWORD_FILE")
+            if file_path and Path(file_path).is_file():
+                data = {**data, "neo4j_password": Path(file_path).read_text().strip()}
+        return data
+
+    @field_validator("neo4j_password")
+    @classmethod
+    def _password_not_empty(cls, value: str) -> str:
+        if not value:
+            raise ValueError("NEO4J_PASSWORD (or NEO4J_PASSWORD_FILE) must be set and non-empty")
+        return value
 
     # -- NATS -----------------------------------------------------------
     nats_url: str = "nats://nats:4222"

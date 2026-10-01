@@ -9,7 +9,12 @@ from fastapi import APIRouter, HTTPException, Query
 from neo4j import GraphDatabase
 from pydantic import BaseModel
 
-from services.common.env import get_secret
+# The image ships `pmoves.services.common` only; the bare `services.*` path
+# resolves in repo-root test contexts.
+try:
+    from pmoves.services.common.env import get_secret
+except ImportError:  # pragma: no cover - repo-root sys.path contexts
+    from services.common.env import get_secret
 
 router = APIRouter(tags=["MindMap"])
 
@@ -17,10 +22,16 @@ logger = logging.getLogger("pmoves.gateway.mindmap")
 
 NEO4J_URL = os.getenv("NEO4J_URL") or os.getenv("NEO4J_URI", "bolt://neo4j:7687")
 NEO4J_USER = os.getenv("NEO4J_USER", "neo4j")
-NEO4J_PASSWORD = get_secret("NEO4J_PASSWORD") or get_secret("NEO4J_PASS", "neo4j")
+# Fail closed: no default password. Without NEO4J_PASSWORD (or _FILE) there is
+# no driver: /mindmap answers 503, the workflow graph writer skips, and
+# /healthz reports neo4j "unconfigured". The legacy NEO4J_PASS alias is gone;
+# nothing in the repo sets it.
+NEO4J_PASSWORD = get_secret("NEO4J_PASSWORD")
 
 driver = None
-if NEO4J_URL:
+if not NEO4J_PASSWORD:
+    logger.error("NEO4J_PASSWORD not set; Neo4j mindmap disabled (no default credential)")
+elif NEO4J_URL:
     try:  # pragma: no cover - depends on external DB
         driver = GraphDatabase.driver(NEO4J_URL, auth=(NEO4J_USER, NEO4J_PASSWORD))
     except Exception as exc:  # pragma: no cover - optional dependency
