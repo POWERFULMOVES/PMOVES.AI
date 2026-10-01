@@ -44,6 +44,19 @@ from github.models import (
     QueueStatus,
 )
 
+
+def _redact_url(url: object) -> str:
+    """Return *url* with userinfo (``user:password@``) removed, for logging.
+
+    Same contract as ``services/common/nats_client.py::_redact_url``; kept
+    module-local so this file needs no cross-service import. Also handles
+    comma-separated server lists (``nats://u:p@a:4222,nats://u:p@b:4222``).
+    """
+    import re
+
+    return re.sub(r"(?<=://)[^@/\s]+@", "", str(url))
+
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -210,7 +223,7 @@ async def lifespan(app: FastAPI):
             timeout=2.0
         )
         if connected:
-            logger.info(f"NATS publisher connected to {NATS_URL}")
+            logger.info(f"NATS publisher connected to {_redact_url(NATS_URL)}")
         else:
             logger.warning("NATS connection failed, will retry in background")
     except asyncio.TimeoutError:

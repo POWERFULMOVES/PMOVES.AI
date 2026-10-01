@@ -21,6 +21,19 @@ from config import Settings
 # CHIT signing — additive, gated by env var
 from chit_signer import sign_neo4j_node, CHIT_SIGN_NEO4J
 
+
+def _redact_url(url: object) -> str:
+    """Return *url* with userinfo (``user:password@``) removed, for logging.
+
+    Same contract as ``services/common/nats_client.py::_redact_url``; kept
+    module-local so this file needs no cross-service import. Also handles
+    comma-separated server lists (``nats://u:p@a:4222,nats://u:p@b:4222``).
+    """
+    import re
+
+    return re.sub(r"(?<=://)[^@/\s]+@", "", str(url))
+
+
 logger = structlog.get_logger(__name__)
 
 
@@ -46,14 +59,14 @@ class Neo4jClient:
             self._driver.verify_connectivity()
             logger.info(
                 "neo4j.connected",
-                url=self._settings.neo4j_url,
+                url=_redact_url(self._settings.neo4j_url),
                 database=self._settings.neo4j_database,
             )
         except AuthError as exc:
             logger.error("neo4j.auth_failed", error=str(exc))
             raise
         except ServiceUnavailable as exc:
-            logger.error("neo4j.unavailable", url=self._settings.neo4j_url, error=str(exc))
+            logger.error("neo4j.unavailable", url=_redact_url(self._settings.neo4j_url), error=str(exc))
             raise
 
     async def close(self) -> None:

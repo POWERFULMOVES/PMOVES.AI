@@ -6,6 +6,19 @@ import logging
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, Optional
 
+
+def _redact_url(url: object) -> str:
+    """Return *url* with userinfo (``user:password@``) removed, for logging.
+
+    Same contract as ``services/common/nats_client.py::_redact_url``; kept
+    module-local so this file needs no cross-service import. Also handles
+    comma-separated server lists (``nats://u:p@a:4222,nats://u:p@b:4222``).
+    """
+    import re
+
+    return re.sub(r"(?<=://)[^@/\s]+@", "", str(url))
+
+
 try:
     from nats.aio.client import Client as NATS
     from nats.aio.errors import ErrConnectionClosed, ErrTimeout
@@ -76,7 +89,7 @@ class GpuNatsPublisher:
                 max_reconnect_attempts=-1,  # Unlimited
             )
             self._connected = True
-            logger.info(f"Connected to NATS at {self.nats_url}")
+            logger.info(f"Connected to NATS at {_redact_url(self.nats_url)}")
             return True
 
         except Exception as e:

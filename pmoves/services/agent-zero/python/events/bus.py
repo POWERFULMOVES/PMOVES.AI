@@ -32,7 +32,6 @@ import weakref
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, Optional, Set
-from urllib.parse import urlparse, urlunparse
 
 from nats.aio.client import Client as NATSClient
 from nats.aio.msg import Msg
@@ -41,11 +40,13 @@ logger = logging.getLogger("pmoves.agent_zero.events.bus")
 
 
 def _redact_url(url: str) -> str:
-    p = urlparse(url)
-    if not p.username:
-        return url
-    netloc = p.hostname + (f":{p.port}" if p.port else "")
-    return urlunparse(p._replace(netloc=netloc))
+    """Return *url* with userinfo removed for safe logging."""
+    # Regex, not urlparse: a comma-separated server list
+    # (nats://u:p@a:4222,nats://u:p@b:4222) made urlparse raise or skip
+    # redaction. Each "://" starts its own match, so every member is covered.
+    import re
+
+    return re.sub(r"(?<=://)[^@/\s]+@", "", str(url))
 
 
 @dataclass

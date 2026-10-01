@@ -18,6 +18,19 @@ from aiohttp import web
 # Import service components (handle hyphenated module name)
 import importlib.util
 
+
+def _redact_url(url: object) -> str:
+    """Return *url* with userinfo (``user:password@``) removed, for logging.
+
+    Same contract as ``services/common/nats_client.py::_redact_url``; kept
+    module-local so this file needs no cross-service import. Also handles
+    comma-separated server lists (``nats://u:p@a:4222,nats://u:p@b:4222``).
+    """
+    import re
+
+    return re.sub(r"(?<=://)[^@/\s]+@", "", str(url))
+
+
 spec = importlib.util.spec_from_file_location(
     "work_marshaling",
     os.path.join(os.path.dirname(__file__), "__init__.py")
@@ -264,7 +277,7 @@ async def main():
     )
 
     logger.info("Work Marshaling service starting",
-               nats_url=settings["nats_url"],
+               nats_url=_redact_url(settings["nats_url"]),
                api_port=settings["api_port"])
 
     # Create service

@@ -29,6 +29,19 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional
 
+
+def _redact_url(url: object) -> str:
+    """Return *url* with userinfo (``user:password@``) removed, for logging.
+
+    Same contract as ``services/common/nats_client.py::_redact_url``; kept
+    module-local so this file needs no cross-service import. Also handles
+    comma-separated server lists (``nats://u:p@a:4222,nats://u:p@b:4222``).
+    """
+    import re
+
+    return re.sub(r"(?<=://)[^@/\s]+@", "", str(url))
+
+
 _THIS_DIR = str(Path(__file__).resolve().parent)
 if _THIS_DIR not in sys.path:
     sys.path.insert(0, _THIS_DIR)
@@ -100,7 +113,7 @@ class NATSPublisher:
                     timeout=self._connect_timeout,
                 )
                 self._connected = True
-                LOG.info("NATS connected at %s", self._nats_url)
+                LOG.info("NATS connected at %s", _redact_url(self._nats_url))
                 return True
             except Exception as exc:
                 LOG.warning("NATS connect failed (%s); running log-only", exc)

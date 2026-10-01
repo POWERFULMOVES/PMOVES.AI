@@ -20,6 +20,19 @@ from typing import Any, Dict, Iterable, List, Literal, Optional, Tuple
 
 from fastapi import Body, FastAPI, File, Form, HTTPException, Request, UploadFile
 
+
+def _redact_url(url: object) -> str:
+    """Return *url* with userinfo (``user:password@``) removed, for logging.
+
+    Same contract as ``services/common/nats_client.py::_redact_url``; kept
+    module-local so this file needs no cross-service import. Also handles
+    comma-separated server lists (``nats://u:p@a:4222,nats://u:p@b:4222``).
+    """
+    import re
+
+    return re.sub(r"(?<=://)[^@/\s]+@", "", str(url))
+
+
 # NATS service announcement integration
 try:
     from services.common.nats_service_listener import announce_service, ServiceTier
@@ -271,7 +284,7 @@ async def lifespan(app: FastAPI):
     if NATS_CGP_AVAILABLE and (CGP_PUBLISH_ENABLED or CONTENT_RAW_PUBLISH_ENABLED):
         try:
             _nats_client = await nats_pkg.connect(NATS_URL)
-            logger.info("NATS CGP client connected to %s", NATS_URL)
+            logger.info("NATS CGP client connected to %s", _redact_url(NATS_URL))
         except Exception as e:
             logger.warning("NATS CGP client connection failed (non-fatal): %s", e)
 

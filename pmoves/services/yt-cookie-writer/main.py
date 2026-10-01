@@ -28,6 +28,19 @@ try:
 except ImportError:
     Fernet = None  # type: ignore[assignment,misc]
 
+
+def _redact_url(url: object) -> str:
+    """Return *url* with userinfo (``user:password@``) removed, for logging.
+
+    Same contract as ``services/common/nats_client.py::_redact_url``; kept
+    module-local so this file needs no cross-service import. Also handles
+    comma-separated server lists (``nats://u:p@a:4222,nats://u:p@b:4222``).
+    """
+    import re
+
+    return re.sub(r"(?<=://)[^@/\s]+@", "", str(url))
+
+
 logging.basicConfig(
     level=os.environ.get("LOG_LEVEL", "INFO"),
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -264,7 +277,7 @@ async def _on_message(msg):
 async def run() -> None:
     """Main event loop — connect to NATS, subscribe, wait."""
     nats_url = os.environ.get("NATS_URL", "nats://nats:4222")
-    logger.info(f"Connecting to NATS at {nats_url}")
+    logger.info(f"Connecting to NATS at {_redact_url(nats_url)}")
 
     nc = await nats.connect(nats_url)
     await nc.subscribe(NATS_SUBJECT, cb=_on_message)

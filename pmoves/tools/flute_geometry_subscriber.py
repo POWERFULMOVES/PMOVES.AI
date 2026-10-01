@@ -52,6 +52,19 @@ from rich.console import Console
 from rich.table import Table
 from rich.panel import Panel
 
+
+def _redact_url(url: object) -> str:
+    """Return *url* with userinfo (``user:password@``) removed, for logging.
+
+    Same contract as ``services/common/nats_client.py::_redact_url``; kept
+    module-local so this file needs no cross-service import. Also handles
+    comma-separated server lists (``nats://u:p@a:4222,nats://u:p@b:4222``).
+    """
+    import re
+
+    return re.sub(r"(?<=://)[^@/\s]+@", "", str(url))
+
+
 app = typer.Typer(
     name="flute-geometry-subscriber",
     help="Flute Geometry CGP v0.2 Packet Consumer",
@@ -345,7 +358,7 @@ async def _listen_loop(
         Panel(
             f"[bold green]Listening[/] on [cyan]{SUBJECT_CGP}[/]\n"
             f"Republishing decoded to [cyan]{SUBJECT_DECODED}[/]\n"
-            f"NATS: [dim]{nats_url}[/]\n"
+            f"NATS: [dim]{_redact_url(nats_url)}[/]\n"
             f"Press [bold]Ctrl+C[/] to stop.",
             title="Flute Geometry Subscriber",
             border_style="green",

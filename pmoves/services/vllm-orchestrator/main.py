@@ -11,7 +11,6 @@ import os
 import signal
 import sys
 from typing import Any
-from urllib.parse import urlparse, urlunparse
 
 import structlog
 from aiohttp import web
@@ -60,11 +59,13 @@ logger = structlog.get_logger(__name__)
 
 
 def _redact_url(url: str) -> str:
-    p = urlparse(url)
-    if not p.username:
-        return url
-    netloc = p.hostname + (f":{p.port}" if p.port else "")
-    return urlunparse(p._replace(netloc=netloc))
+    """Return *url* with userinfo removed for safe logging."""
+    # Regex, not urlparse: a comma-separated server list
+    # (nats://u:p@a:4222,nats://u:p@b:4222) made urlparse raise or skip
+    # redaction. Each "://" starts its own match, so every member is covered.
+    import re
+
+    return re.sub(r"(?<=://)[^@/\s]+@", "", str(url))
 
 
 # Configuration from environment

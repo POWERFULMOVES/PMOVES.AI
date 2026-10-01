@@ -20,6 +20,19 @@ from nats.aio.client import Client as NATS
 from nats.aio.msg import Msg
 from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST, REGISTRY
 
+
+def _redact_url(url: object) -> str:
+    """Return *url* with userinfo (``user:password@``) removed, for logging.
+
+    Same contract as ``services/common/nats_client.py::_redact_url``; kept
+    module-local so this file needs no cross-service import. Also handles
+    comma-separated server lists (``nats://u:p@a:4222,nats://u:p@b:4222``).
+    """
+    import re
+
+    return re.sub(r"(?<=://)[^@/\s]+@", "", str(url))
+
+
 # Prometheus metrics
 messages_received = Counter(
     'session_context_worker_messages_received_total',
@@ -373,7 +386,7 @@ async def _nats_resilience_loop() -> None:
                 disconnect_event.set()
             logger.warning(
                 f"NATS connection lost: {reason}",
-                extra={"reason": reason, "servers": [NATS_URL]}
+                extra={"reason": reason, "servers": [_redact_url(NATS_URL)]}
             )
 
         async def _disconnected_cb():
@@ -384,8 +397,8 @@ async def _nats_resilience_loop() -> None:
 
         try:
             logger.info(
-                f"Attempting NATS connection: {NATS_URL}",
-                extra={"servers": [NATS_URL], "backoff": backoff}
+                f"Attempting NATS connection: {_redact_url(NATS_URL)}",
+                extra={"servers": [_redact_url(NATS_URL)], "backoff": backoff}
             )
             await nc.connect(
                 servers=[NATS_URL],
@@ -397,7 +410,7 @@ async def _nats_resilience_loop() -> None:
         except Exception as exc:
             logger.warning(
                 f"NATS connection failed: {exc}",
-                extra={"servers": [NATS_URL], "error": str(exc), "backoff": backoff}
+                extra={"servers": [_redact_url(NATS_URL)], "error": str(exc), "backoff": backoff}
             )
             await asyncio.sleep(backoff)
             backoff = min(backoff * 2.0, 30.0)
@@ -406,7 +419,7 @@ async def _nats_resilience_loop() -> None:
         # Connection successful
         _nc = nc
         backoff = 1.0
-        logger.info(f"NATS connected: {NATS_URL}", extra={"servers": [NATS_URL]})
+        logger.info(f"NATS connected: {_redact_url(NATS_URL)}", extra={"servers": [_redact_url(NATS_URL)]})
 
         # Register subscriptions
         await _register_nats_subscriptions(nc)

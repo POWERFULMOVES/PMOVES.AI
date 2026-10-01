@@ -41,6 +41,19 @@ from hf_client import (
     parse_model_summary,
 )
 
+
+def _redact_url(url: object) -> str:
+    """Return *url* with userinfo (``user:password@``) removed, for logging.
+
+    Same contract as ``services/common/nats_client.py::_redact_url``; kept
+    module-local so this file needs no cross-service import. Also handles
+    comma-separated server lists (``nats://u:p@a:4222,nats://u:p@b:4222``).
+    """
+    import re
+
+    return re.sub(r"(?<=://)[^@/\s]+@", "", str(url))
+
+
 _HERE = Path(__file__).resolve()
 for _path in _HERE.parents:
     if not (_path / "pmoves").is_dir():
@@ -91,7 +104,7 @@ async def lifespan(app: FastAPI):
     # Startup
     logger.info("PMOVES Model Registry starting up...")
     logger.info(f"Supabase URL: {SUPABASE_URL}")
-    logger.info(f"NATS URL: {NATS_URL}")
+    logger.info(f"NATS URL: {_redact_url(NATS_URL)}")
 
     # Connect to NATS for GPU event sync + catalog change publishing
     nats_client = RegistryNatsClient(NATS_URL, supabase)
@@ -397,7 +410,7 @@ class RegistryNatsClient:
                 max_reconnect_attempts=-1,
             )
             self._connected = True
-            logger.info(f"Model Registry connected to NATS at {self.nats_url}")
+            logger.info(f"Model Registry connected to NATS at {_redact_url(self.nats_url)}")
 
             # Subscribe to GPU orchestrator events
             await self._nc.subscribe(self.SUB_MODEL_LOADED, cb=self._on_model_loaded)

@@ -17,6 +17,19 @@ import httpx
 from fastapi import Body, FastAPI, HTTPException
 from nats.aio.client import Client as NATS
 
+
+def _redact_url(url: object) -> str:
+    """Return *url* with userinfo (``user:password@``) removed, for logging.
+
+    Same contract as ``services/common/nats_client.py::_redact_url``; kept
+    module-local so this file needs no cross-service import. Also handles
+    comma-separated server lists (``nats://u:p@a:4222,nats://u:p@b:4222``).
+    """
+    import re
+
+    return re.sub(r"(?<=://)[^@/\s]+@", "", str(url))
+
+
 try:
     _services_root = Path(__file__).resolve().parents[2]
     if str(_services_root) not in sys.path:
@@ -65,7 +78,7 @@ async def lifespan(app: FastAPI):
     if YT_NATS_ENABLE and NATS_URL and (_nats_loop_task is None or _nats_loop_task.done()):
         logger.info(
             "nats_loop_start",
-            extra={"event": "nats_loop_start", "servers": [NATS_URL]},
+            extra={"event": "nats_loop_start", "servers": [_redact_url(NATS_URL)]},
         )
         _nats_loop_task = asyncio.create_task(_nats_resilience_loop())
 
@@ -385,7 +398,7 @@ async def _nats_resilience_loop() -> None:
                 extra={
                     "event": "nats_connection_lost",
                     "reason": reason,
-                    "servers": [NATS_URL],
+                    "servers": [_redact_url(NATS_URL)],
                 },
             )
 
@@ -398,7 +411,7 @@ async def _nats_resilience_loop() -> None:
         try:
             logger.info(
                 "nats_connect_attempt",
-                extra={"event": "nats_connect_attempt", "servers": [NATS_URL], "backoff": backoff},
+                extra={"event": "nats_connect_attempt", "servers": [_redact_url(NATS_URL)], "backoff": backoff},
             )
             await nc.connect(servers=[NATS_URL], disconnected_cb=_disconnected_cb, closed_cb=_closed_cb)
         except asyncio.CancelledError:
@@ -408,7 +421,7 @@ async def _nats_resilience_loop() -> None:
                 "nats_connect_failed",
                 extra={
                     "event": "nats_connect_failed",
-                    "servers": [NATS_URL],
+                    "servers": [_redact_url(NATS_URL)],
                     "error": str(exc),
                     "backoff": backoff,
                 },
@@ -422,7 +435,7 @@ async def _nats_resilience_loop() -> None:
         backoff = 1.0
         logger.info(
             "nats_connected",
-            extra={"event": "nats_connected", "servers": [NATS_URL]},
+            extra={"event": "nats_connected", "servers": [_redact_url(NATS_URL)]},
         )
         await _register_nats_subscriptions(nc)
 
@@ -1181,7 +1194,7 @@ async def _handle_claude_session_end(payload: Dict[str, Any]) -> None:
     if _nats_loop_task is None or _nats_loop_task.done():
         logger.info(
             "nats_loop_start",
-            extra={"event": "nats_loop_start", "servers": [NATS_URL]},
+            extra={"event": "nats_loop_start", "servers": [_redact_url(NATS_URL)]},
         )
         _nats_loop_task = asyncio.create_task(_nats_resilience_loop())
 

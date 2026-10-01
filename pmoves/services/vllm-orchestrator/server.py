@@ -14,6 +14,19 @@ from .config import (
     create_vllm_config,
 )
 
+
+def _redact_url(url: object) -> str:
+    """Return *url* with userinfo (``user:password@``) removed, for logging.
+
+    Same contract as ``services/common/nats_client.py::_redact_url``; kept
+    module-local so this file needs no cross-service import. Also handles
+    comma-separated server lists (``nats://u:p@a:4222,nats://u:p@b:4222``).
+    """
+    import re
+
+    return re.sub(r"(?<=://)[^@/\s]+@", "", str(url))
+
+
 logger = logging.getLogger(__name__)
 
 
@@ -55,7 +68,7 @@ class VLLMOrchestrator:
             self._nc = await nats.connect(self.nats_url)
             self._js = self._nc.jetstream()
 
-            logger.info(f"Connected to NATS at {self.nats_url}")
+            logger.info(f"Connected to NATS at {_redact_url(self.nats_url)}")
 
             # Subscribe to work requests
             await self._subscribe_work_requests()

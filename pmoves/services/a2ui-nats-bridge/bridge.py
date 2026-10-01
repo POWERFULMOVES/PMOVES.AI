@@ -30,6 +30,19 @@ import nats
 from nats.js.errors import Error as JSError
 from prometheus_client import Counter, Gauge, generate_latest
 
+
+def _redact_url(url: object) -> str:
+    """Return *url* with userinfo (``user:password@``) removed, for logging.
+
+    Same contract as ``services/common/nats_client.py::_redact_url``; kept
+    module-local so this file needs no cross-service import. Also handles
+    comma-separated server lists (``nats://u:p@a:4222,nats://u:p@b:4222``).
+    """
+    import re
+
+    return re.sub(r"(?<=://)[^@/\s]+@", "", str(url))
+
+
 # Configuration
 NATS_URL = os.getenv("NATS_URL", "nats://nats:4222")
 A2UI_WS_URL = os.getenv("A2UI_WS_URL", "ws://localhost:9223")
@@ -287,7 +300,7 @@ async def connect_nats() -> None:
 
     while retry_count < max_retries:
         try:
-            logger.info(f"Connecting to NATS at {NATS_URL}...")
+            logger.info(f"Connecting to NATS at {_redact_url(NATS_URL)}...")
             nc = await nats.connect(NATS_URL)
             js = nc.jetstream()
 

@@ -7,6 +7,19 @@ from textwrap import shorten
 from typing import Any, Dict, List
 
 
+def _redact_url(url: object) -> str:
+    """Return *url* with userinfo (``user:password@``) removed, for logging.
+
+    Same contract as ``services/common/nats_client.py::_redact_url``; kept
+    module-local so this file needs no cross-service import. Also handles
+    comma-separated server lists (``nats://u:p@a:4222,nats://u:p@b:4222``).
+    """
+    import re
+
+    return re.sub(r"(?<=://)[^@/\s]+@", "", str(url))
+
+
+
 def _collect_text(value: Any, output: List[str]) -> None:
     """Recursively collect text-like content from OpenAI-style message payloads."""
     if not value:
@@ -956,7 +969,7 @@ async def main() -> None:
 
     # Now connect to NATS
     await nc.connect(servers=[nats_url])
-    LOGGER.info("DeepResearch worker connected to NATS at %s", nats_url)
+    LOGGER.info("DeepResearch worker connected to NATS at %s", _redact_url(nats_url))
 
     async def cb(msg: Msg) -> None:
         await _handle_request(msg, runner, publisher, nc)

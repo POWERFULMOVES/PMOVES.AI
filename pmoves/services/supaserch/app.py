@@ -12,7 +12,7 @@ from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
-from urllib.parse import quote_plus, urlparse, urlunparse
+from urllib.parse import quote_plus, urlparse
 
 import httpx
 from fastapi import FastAPI, HTTPException, Query, Response
@@ -37,11 +37,13 @@ CGP_SUBJECT = os.getenv("CGP_SUBJECT", "geometry.cgp.v1")
 
 
 def _redact_url(url: str) -> str:
-    p = urlparse(url)
-    if not p.username:
-        return url
-    netloc = p.hostname + (f":{p.port}" if p.port else "")
-    return urlunparse(p._replace(netloc=netloc))
+    """Return *url* with userinfo removed for safe logging."""
+    # Regex, not urlparse: a comma-separated server list
+    # (nats://u:p@a:4222,nats://u:p@b:4222) made urlparse raise or skip
+    # redaction. Each "://" starts its own match, so every member is covered.
+    import re
+
+    return re.sub(r"(?<=://)[^@/\s]+@", "", str(url))
 
 
 # Module-level task reference for proper cleanup

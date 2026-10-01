@@ -50,6 +50,19 @@ except ImportError:
     InMemoryNodeStore = node_registry_storage.InMemoryNodeStore
 
 
+def _redact_url(url: object) -> str:
+    """Return *url* with userinfo (``user:password@``) removed, for logging.
+
+    Same contract as ``services/common/nats_client.py::_redact_url``; kept
+    module-local so this file needs no cross-service import. Also handles
+    comma-separated server lists (``nats://u:p@a:4222,nats://u:p@b:4222``).
+    """
+    import re
+
+    return re.sub(r"(?<=://)[^@/\s]+@", "", str(url))
+
+
+
 # Configure structured logging
 structlog.configure(
     processors=[
@@ -233,7 +246,7 @@ async def main():
     )
 
     logger.info("Node Registry service starting",
-               nats_url=settings["nats_url"],
+               nats_url=_redact_url(settings["nats_url"]),
                api_port=settings["api_port"])
 
     # Create service

@@ -40,6 +40,19 @@ except Exception:  # pragma: no cover - fallback for local runs without shared m
 
 from libs.langextract import extract_text
 
+
+def _redact_url(url: object) -> str:
+    """Return *url* with userinfo (``user:password@``) removed, for logging.
+
+    Same contract as ``services/common/nats_client.py::_redact_url``; kept
+    module-local so this file needs no cross-service import. Also handles
+    comma-separated server lists (``nats://u:p@a:4222,nats://u:p@b:4222``).
+    """
+    import re
+
+    return re.sub(r"(?<=://)[^@/\s]+@", "", str(url))
+
+
 logger = logging.getLogger(__name__)
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -147,7 +160,7 @@ async def _nats_connect_loop() -> None:
         async def _reconnected_cb() -> None:
             global _nc
 
-            logger.info("Reconnected to NATS at %s", NATS_URL)
+            logger.info("Reconnected to NATS at %s", _redact_url(NATS_URL))
             _nc = client
 
         async def _closed_cb() -> None:
@@ -168,12 +181,12 @@ async def _nats_connect_loop() -> None:
             await client.close()
             raise
         except Exception as exc:
-            logger.warning("Unable to connect to NATS at %s: %s", NATS_URL, exc)
+            logger.warning("Unable to connect to NATS at %s: %s", _redact_url(NATS_URL), exc)
             await asyncio.sleep(backoff)
             backoff = min(backoff * 2, 30.0)
             continue
 
-        logger.info("Connected to NATS at %s", NATS_URL)
+        logger.info("Connected to NATS at %s", _redact_url(NATS_URL))
 
         global _nc
         _nc = client

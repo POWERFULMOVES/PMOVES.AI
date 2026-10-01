@@ -46,6 +46,19 @@ from security import SecurityManager
 from auth import auth_middleware
 
 
+def _redact_url(url: object) -> str:
+    """Return *url* with userinfo (``user:password@``) removed, for logging.
+
+    Same contract as ``services/common/nats_client.py::_redact_url``; kept
+    module-local so this file needs no cross-service import. Also handles
+    comma-separated server lists (``nats://u:p@a:4222,nats://u:p@b:4222``).
+    """
+    import re
+
+    return re.sub(r"(?<=://)[^@/\s]+@", "", str(url))
+
+
+
 # Configuration
 PORT = int(os.getenv("PORT", "8060"))
 FLUTE_URL = os.getenv("FLUTE_GATEWAY_URL", "http://localhost:8055")
@@ -2097,7 +2110,7 @@ class CastTTSGateway:
         """Connect to NATS message bus."""
         try:
             self.nats_client = await nats.connect(NATS_URL)
-            print(f"Connected to NATS at {NATS_URL}")
+            print(f"Connected to NATS at {_redact_url(NATS_URL)}")
         except Exception as e:
             print(f"NATS connection failed: {e}")
 
@@ -2168,7 +2181,7 @@ class CastTTSGateway:
         print(f"Cast TTS Gateway running at http://0.0.0.0:{PORT}")
         print(f"Flute-Gateway: {FLUTE_URL}")
         print(f"Ultimate-TTS: {ULTIMATE_TTS_URL}")
-        print(f"NATS: {NATS_URL}")
+        print(f"NATS: {_redact_url(NATS_URL)}")
         print(f"Monitoring {len(devices)} device(s)")
 
         # Keep running

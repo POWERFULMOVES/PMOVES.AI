@@ -51,6 +51,19 @@ try:
 except ImportError:
     nats = None  # type: ignore
 
+
+def _redact_url(url: object) -> str:
+    """Return *url* with userinfo (``user:password@``) removed, for logging.
+
+    Same contract as ``services/common/nats_client.py::_redact_url``; kept
+    module-local so this file needs no cross-service import. Also handles
+    comma-separated server lists (``nats://u:p@a:4222,nats://u:p@b:4222``).
+    """
+    import re
+
+    return re.sub(r"(?<=://)[^@/\s]+@", "", str(url))
+
+
 # --- ShapeStore and geometry params ---
 try:
     from services.common.shape_store import ShapeStore
@@ -569,7 +582,7 @@ async def subscribe_geometry_cgp() -> None:
             )
             logger.info(
                 "NATS JetStream geometry.cgp.v1 listener started (url=%s, durable=hirag-cgp-consumer)",
-                NATS_URL,
+                _redact_url(NATS_URL),
             )
             await stop_event.wait()
             break
@@ -1008,16 +1021,16 @@ async def lifespan(app: FastAPI):
         if _geometry_swarm_task is None and NATS_URL:
             if hasattr(nats, "connect"):
                 _geometry_swarm_task = asyncio.create_task(_geometry_swarm_worker())
-                logger.info("NATS geometry.swarm.meta listener started (url=%s)", NATS_URL)
+                logger.info("NATS geometry.swarm.meta listener started (url=%s)", _redact_url(NATS_URL))
                 _content_provenance_task = asyncio.create_task(_content_provenance_worker())
-                logger.info("NATS content.hirag.accepted listener started (url=%s)", NATS_URL)
+                logger.info("NATS content.hirag.accepted listener started (url=%s)", _redact_url(NATS_URL))
             else:
                 logger.info("NATS client unavailable; geometry.swarm.meta/content.hirag.accepted listeners skipped")
 
     # CGP subscriber is independent of ShapeStore availability — start unconditionally.
     if _geometry_cgp_task is None and NATS_URL and hasattr(nats, "connect"):
         _geometry_cgp_task = asyncio.create_task(subscribe_geometry_cgp())
-        logger.info("NATS geometry.cgp.v1 auto-ingest listener started (url=%s)", NATS_URL)
+        logger.info("NATS geometry.cgp.v1 auto-ingest listener started (url=%s)", _redact_url(NATS_URL))
 
     # Pub-gate bridge — env-gated; behavior-identical when PUBLISH_GATE_BRIDGE unset.
     if (

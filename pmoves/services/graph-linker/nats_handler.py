@@ -25,6 +25,19 @@ from models import (
 )
 from neo4j_client import Neo4jClient
 
+
+def _redact_url(url: object) -> str:
+    """Return *url* with userinfo (``user:password@``) removed, for logging.
+
+    Same contract as ``services/common/nats_client.py::_redact_url``; kept
+    module-local so this file needs no cross-service import. Also handles
+    comma-separated server lists (``nats://u:p@a:4222,nats://u:p@b:4222``).
+    """
+    import re
+
+    return re.sub(r"(?<=://)[^@/\s]+@", "", str(url))
+
+
 logger = structlog.get_logger(__name__)
 
 
@@ -77,7 +90,7 @@ class NATSHandler:
                 max_reconnect_attempts=self._settings.nats_max_reconnect_attempts,
                 pending_msg_limit=self._settings.nats_pending_msg_limit,
             )
-            logger.info("nats.connected", url=self._settings.nats_url)
+            logger.info("nats.connected", url=_redact_url(self._settings.nats_url))
         except (ConnectionClosedError, NoServersError, NATSTimeoutError) as exc:
             logger.error("nats.connection_failed", error=str(exc))
             raise

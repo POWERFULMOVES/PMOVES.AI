@@ -15,6 +15,19 @@ except Exception:  # pragma: no cover - the service can operate without NATS
 
 from pmoves.services.common import events as event_utils
 
+
+def _redact_url(url: object) -> str:
+    """Return *url* with userinfo (``user:password@``) removed, for logging.
+
+    Same contract as ``services/common/nats_client.py::_redact_url``; kept
+    module-local so this file needs no cross-service import. Also handles
+    comma-separated server lists (``nats://u:p@a:4222,nats://u:p@b:4222``).
+    """
+    import re
+
+    return re.sub(r"(?<=://)[^@/\s]+@", "", str(url))
+
+
 logger = logging.getLogger("pmoves.gateway.events")
 
 
@@ -56,7 +69,7 @@ class EventBus:
             try:
                 await nc.connect(servers=[self._nats_url], allow_reconnect=True, connect_timeout=1.0)
             except Exception as exc:  # pragma: no cover - depends on runtime service availability
-                logger.warning("Unable to connect to NATS at %s: %s", self._nats_url, exc)
+                logger.warning("Unable to connect to NATS at %s: %s", _redact_url(self._nats_url), exc)
                 return
             for topic in self._topics:
                 try:
@@ -64,7 +77,7 @@ class EventBus:
                 except Exception as exc:
                     logger.warning("Failed subscribing to %s: %s", topic, exc)
             self._nc = nc
-            logger.info("Event bus connected to %s", self._nats_url)
+            logger.info("Event bus connected to %s", _redact_url(self._nats_url))
 
     async def stop(self) -> None:
         async with self._lock:

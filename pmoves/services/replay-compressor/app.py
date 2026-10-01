@@ -24,6 +24,19 @@ from botocore.client import Config
 from fastapi import FastAPI
 from nats.aio.client import Client as NATSClient
 
+
+def _redact_url(url: object) -> str:
+    """Return *url* with userinfo (``user:password@``) removed, for logging.
+
+    Same contract as ``services/common/nats_client.py::_redact_url``; kept
+    module-local so this file needs no cross-service import. Also handles
+    comma-separated server lists (``nats://u:p@a:4222,nats://u:p@b:4222``).
+    """
+    import re
+
+    return re.sub(r"(?<=://)[^@/\s]+@", "", str(url))
+
+
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
@@ -247,7 +260,7 @@ async def lifespan(app: FastAPI):
     nc_app = NATSClient()
     try:
         await nc_app.connect(NATS_URL, name="replay-compressor")
-        log.info("connected to NATS %s", NATS_URL)
+        log.info("connected to NATS %s", _redact_url(NATS_URL))
         await nc_app.subscribe(SUBJECT_ABSENT, cb=on_absent)
         await nc_app.subscribe(SUBJECT_DETECTED, cb=on_detected)
         log.info("subscribed to %s and %s", SUBJECT_ABSENT, SUBJECT_DETECTED)

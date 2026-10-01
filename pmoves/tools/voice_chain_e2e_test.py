@@ -56,6 +56,19 @@ except ImportError:
     sys.exit(2)
 
 
+def _redact_url(url: object) -> str:
+    """Return *url* with userinfo (``user:password@``) removed, for logging.
+
+    Same contract as ``services/common/nats_client.py::_redact_url``; kept
+    module-local so this file needs no cross-service import. Also handles
+    comma-separated server lists (``nats://u:p@a:4222,nats://u:p@b:4222``).
+    """
+    import re
+
+    return re.sub(r"(?<=://)[^@/\s]+@", "", str(url))
+
+
+
 INPUT_SUBJECT = "agentzero.task.result.v1"
 OUTPUT_SUBJECT = "voice.agent.response.v1"
 
@@ -111,7 +124,7 @@ async def run_test(nats_url: str, wait_seconds: float, text: str) -> int:
     publish_ts: float | None = None
     receive_ts: float | None = None
 
-    print(f"voice-chain-e2e: connecting to NATS at {nats_url}")
+    print(f"voice-chain-e2e: connecting to NATS at {_redact_url(nats_url)}")
     try:
         nc = await nats.connect(nats_url, connect_timeout=5)
     except Exception as exc:

@@ -18,7 +18,6 @@ import os
 import signal
 import sys
 from typing import Any, Dict
-from urllib.parse import urlparse, urlunparse
 
 from nats.aio.client import Client as NATS
 
@@ -53,18 +52,12 @@ def _resolve_nats_url() -> str:
 
 def _redact_url(url: str) -> str:
     """Strip credentials from URL for safe logging."""
-    try:
-        parsed = urlparse(url)
-        # Redact all user-info, not just user:password — token-only URLs
-        # (nats://TOKEN@host) put the secret in `username` with no password.
-        if parsed.username or parsed.password:
-            host = parsed.hostname or ""
-            if parsed.port:
-                host = f"{host}:{parsed.port}"
-            return urlunparse(parsed._replace(netloc=f"***@{host}"))
-    except Exception:
-        pass
-    return url
+    # Regex, not urlparse: a comma-separated server list
+    # (nats://u:p@a:4222,nats://u:p@b:4222) made urlparse raise or skip
+    # redaction. Each "://" starts its own match, so every member is covered.
+    import re
+
+    return re.sub(r"(?<=://)[^@/\s]+@", "***@", str(url))
 
 
 def _validate_decoded_packet(payload: Dict[str, Any]) -> bool:

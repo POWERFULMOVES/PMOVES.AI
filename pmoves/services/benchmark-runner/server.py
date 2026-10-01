@@ -17,6 +17,19 @@ from nats.aio.msg import Msg
 from .benchmark import BenchmarkConfig, BenchmarkRunner, BenchmarkResult
 from .comparison import BenchmarkComparator, ComparisonReport
 
+
+def _redact_url(url: object) -> str:
+    """Return *url* with userinfo (``user:password@``) removed, for logging.
+
+    Same contract as ``services/common/nats_client.py::_redact_url``; kept
+    module-local so this file needs no cross-service import. Also handles
+    comma-separated server lists (``nats://u:p@a:4222,nats://u:p@b:4222``).
+    """
+    import re
+
+    return re.sub(r"(?<=://)[^@/\s]+@", "", str(url))
+
+
 logger = logging.getLogger(__name__)
 
 # NATS subjects for benchmark coordination
@@ -91,7 +104,7 @@ class BenchmarkServer:
         )
 
         self._running = True
-        logger.info(f"Benchmark server started on {self.nats_url}")
+        logger.info(f"Benchmark server started on {_redact_url(self.nats_url)}")
         logger.info(f"Listening on: {SUBJECTS['request']}")
 
     async def stop(self):

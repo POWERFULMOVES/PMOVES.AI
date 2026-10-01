@@ -26,6 +26,19 @@ from typing import Any
 import httpx
 from fastapi import FastAPI
 
+
+def _redact_url(url: object) -> str:
+    """Return *url* with userinfo (``user:password@``) removed, for logging.
+
+    Same contract as ``services/common/nats_client.py::_redact_url``; kept
+    module-local so this file needs no cross-service import. Also handles
+    comma-separated server lists (``nats://u:p@a:4222,nats://u:p@b:4222``).
+    """
+    import re
+
+    return re.sub(r"(?<=://)[^@/\s]+@", "", str(url))
+
+
 logger = logging.getLogger("model-fitness-bridge")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
@@ -223,7 +236,7 @@ async def nats_subscriber_loop() -> None:
     while True:
         try:
             nc = await nats.connect(NATS_URL, name="model-fitness-bridge", max_reconnect_attempts=-1)
-            logger.info("NATS connected: %s", NATS_URL)
+            logger.info("NATS connected: %s", _redact_url(NATS_URL))
 
             async def message_handler(msg):
                 subject = msg.subject
@@ -349,7 +362,7 @@ async def metrics():
 async def startup():
     asyncio.create_task(nats_subscriber_loop())
     asyncio.create_task(telemetry_scrape_loop())
-    logger.info("model-fitness-bridge started — registry=%s nats=%s", MODEL_REGISTRY_URL, NATS_URL)
+    logger.info("model-fitness-bridge started — registry=%s nats=%s", MODEL_REGISTRY_URL, _redact_url(NATS_URL))
 
 
 if __name__ == "__main__":

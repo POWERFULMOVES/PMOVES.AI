@@ -26,6 +26,19 @@ from collections import deque
 from typing import Any, Deque, Dict, List, Optional, Set
 
 
+def _redact_url(url: object) -> str:
+    """Return *url* with userinfo (``user:password@``) removed, for logging.
+
+    Same contract as ``services/common/nats_client.py::_redact_url``; kept
+    module-local so this file needs no cross-service import. Also handles
+    comma-separated server lists (``nats://u:p@a:4222,nats://u:p@b:4222``).
+    """
+    import re
+
+    return re.sub(r"(?<=://)[^@/\s]+@", "", str(url))
+
+
+
 logger = logging.getLogger("nats_event_bus.state")
 
 
@@ -192,7 +205,7 @@ class NatsSubscriber:
                 )
                 self._nc = nc
                 self._connected = True
-                logger.info("nats_event_bus subscriber connected to %s", self._nats_url)
+                logger.info("nats_event_bus subscriber connected to %s", _redact_url(self._nats_url))
                 backoff = 1.0
 
                 async def handler(msg):

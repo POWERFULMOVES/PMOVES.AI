@@ -93,6 +93,19 @@ from .metrics import (
     streaming_requests_total,
 )
 
+
+def _redact_url(url: object) -> str:
+    """Return *url* with userinfo (``user:password@``) removed, for logging.
+
+    Same contract as ``services/common/nats_client.py::_redact_url``; kept
+    module-local so this file needs no cross-service import. Also handles
+    comma-separated server lists (``nats://u:p@a:4222,nats://u:p@b:4222``).
+    """
+    import re
+
+    return re.sub(r"(?<=://)[^@/\s]+@", "", str(url))
+
+
 logger = logging.getLogger(__name__)
 
 # ── Shared global clients (initialised in lifespan) ──────────────────────
@@ -175,7 +188,7 @@ async def lifespan(app: FastAPI):
                 max_reconnect_attempts=10,
             )
             asyncio.create_task(_subscribe_cache_invalidation())
-            logger.info("[lifespan] CHIT Bus NATS subscriber started: %s", settings.nats_url)
+            logger.info("[lifespan] CHIT Bus NATS subscriber started: %s", _redact_url(settings.nats_url))
         except Exception as exc:
             logger.warning("[lifespan] CHIT Bus NATS unavailable (non-blocking): %s", exc)
             _nats_client = None

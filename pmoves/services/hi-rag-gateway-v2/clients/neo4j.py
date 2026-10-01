@@ -7,6 +7,19 @@ from typing import Dict, List, Optional, Set
 
 from config import NEO4J_URL, NEO4J_USER, NEO4J_PASSWORD, NEO4J_DICT_REFRESH_SEC, NEO4J_DICT_LIMIT, logger
 
+
+def _redact_url(url: object) -> str:
+    """Return *url* with userinfo (``user:password@``) removed, for logging.
+
+    Same contract as ``services/common/nats_client.py::_redact_url``; kept
+    module-local so this file needs no cross-service import. Also handles
+    comma-separated server lists (``nats://u:p@a:4222,nats://u:p@b:4222``).
+    """
+    import re
+
+    return re.sub(r"(?<=://)[^@/\s]+@", "", str(url))
+
+
 # Lazy/optional Neo4j: allow running without the neo4j service
 driver = None
 if NEO4J_URL:
@@ -15,7 +28,7 @@ if NEO4J_URL:
         driver = GraphDatabase.driver(NEO4J_URL, auth=(NEO4J_USER, NEO4J_PASSWORD))
     except Exception:
         logging.getLogger("hirag.gateway.v2").warning(
-            "Neo4j unavailable at %s; graph features disabled", NEO4J_URL
+            "Neo4j unavailable at %s; graph features disabled", _redact_url(NEO4J_URL)
         )
         driver = None
 

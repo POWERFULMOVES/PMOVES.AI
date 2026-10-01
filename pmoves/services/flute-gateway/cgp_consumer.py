@@ -8,6 +8,19 @@ from nats.aio.client import Client as NATS
 from chit_signing import verify_cgp
 from geometry_bridge import cgp_subject
 
+
+def _redact_url(url: object) -> str:
+    """Return *url* with userinfo (``user:password@``) removed, for logging.
+
+    Same contract as ``services/common/nats_client.py::_redact_url``; kept
+    module-local so this file needs no cross-service import. Also handles
+    comma-separated server lists (``nats://u:p@a:4222,nats://u:p@b:4222``).
+    """
+    import re
+
+    return re.sub(r"(?<=://)[^@/\s]+@", "", str(url))
+
+
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
@@ -18,7 +31,7 @@ async def main():
     nats_url = os.environ.get("NATS_URL", "nats://localhost:4222")
     try:
         await nc.connect(nats_url)
-        logger.info(f"Connected to NATS at {nats_url}")
+        logger.info(f"Connected to NATS at {_redact_url(nats_url)}")
     except Exception as e:
         logger.error(f"Failed to connect to NATS: {e}")
         return

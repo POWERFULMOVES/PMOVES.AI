@@ -26,6 +26,19 @@ from nats.aio.client import Client as NATS
 import httpx
 import yaml
 
+
+def _redact_url(url: object) -> str:
+    """Return *url* with userinfo (``user:password@``) removed, for logging.
+
+    Same contract as ``services/common/nats_client.py::_redact_url``; kept
+    module-local so this file needs no cross-service import. Also handles
+    comma-separated server lists (``nats://u:p@a:4222,nats://u:p@b:4222``).
+    """
+    import re
+
+    return re.sub(r"(?<=://)[^@/\s]+@", "", str(url))
+
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("botz-gateway")
@@ -132,7 +145,7 @@ async def lifespan(app: FastAPI):
     # Connect to NATS
     try:
         nc = await nats.connect(NATS_URL)
-        logger.info(f"Connected to NATS at {NATS_URL}")
+        logger.info(f"Connected to NATS at {_redact_url(NATS_URL)}")
 
         # Subscribe to BoTZ events
         await nc.subscribe("botz.heartbeat.v1", cb=handle_heartbeat_event)

@@ -37,6 +37,19 @@ from nats.aio.msg import Msg
 from nats.errors import NoServersError, TimeoutError as NATSTimeoutError
 from nats.js.errors import NotFoundError as JSNotFoundError
 
+
+def _redact_url(url: object) -> str:
+    """Return *url* with userinfo (``user:password@``) removed, for logging.
+
+    Same contract as ``services/common/nats_client.py::_redact_url``; kept
+    module-local so this file needs no cross-service import. Also handles
+    comma-separated server lists (``nats://u:p@a:4222,nats://u:p@b:4222``).
+    """
+    import re
+
+    return re.sub(r"(?<=://)[^@/\s]+@", "", str(url))
+
+
 logger = logging.getLogger(__name__)
 
 # Subjects ------------------------------------------------------------------
@@ -203,7 +216,7 @@ async def _run_once(nats_url: str) -> None:
     """One end-to-end NATS session. Returns when the connection drops."""
     logger.info(
         "tokenism nats_consumer: connecting to NATS at %s (durable=%s, subject=%s)",
-        nats_url,
+        _redact_url(nats_url),
         DURABLE_NAME,
         CGP_SUBJECT,
     )

@@ -48,6 +48,19 @@ from pydantic import BaseModel, Field, validator
 from .config import config_path_from_env, ensure_config, save_config
 from .monitor import ChannelMonitor, build_manual_drop_raw_content
 
+
+def _redact_url(url: object) -> str:
+    """Return *url* with userinfo (``user:password@``) removed, for logging.
+
+    Same contract as ``services/common/nats_client.py::_redact_url``; kept
+    module-local so this file needs no cross-service import. Also handles
+    comma-separated server lists (``nats://u:p@a:4222,nats://u:p@b:4222``).
+    """
+    import re
+
+    return re.sub(r"(?<=://)[^@/\s]+@", "", str(url))
+
+
 try:  # pragma: no cover - optional at import time
     import nats as nats_pkg
     NATS_AVAILABLE = True
@@ -169,7 +182,7 @@ async def lifespan(app: FastAPI):
     if NATS_AVAILABLE and CONTENT_RAW_PUBLISH_ENABLED:
         try:
             _nats_client = await nats_pkg.connect(NATS_URL)
-            LOGGER.info("content.raw.v1 publisher connected to %s", NATS_URL)
+            LOGGER.info("content.raw.v1 publisher connected to %s", _redact_url(NATS_URL))
         except Exception as exc:
             LOGGER.warning("content.raw.v1 publisher connection failed (non-fatal): %s", exc)
     elif CONTENT_RAW_PUBLISH_ENABLED and not NATS_AVAILABLE:

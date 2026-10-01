@@ -22,6 +22,19 @@ from yt_dlp import YoutubeDL
 from .config import ensure_config, save_config
 from .youtube_api import AccessToken, YouTubeAPIClient, YouTubeAPIError
 
+
+def _redact_url(url: object) -> str:
+    """Return *url* with userinfo (``user:password@``) removed, for logging.
+
+    Same contract as ``services/common/nats_client.py::_redact_url``; kept
+    module-local so this file needs no cross-service import. Also handles
+    comma-separated server lists (``nats://u:p@a:4222,nats://u:p@b:4222``).
+    """
+    import re
+
+    return re.sub(r"(?<=://)[^@/\s]+@", "", str(url))
+
+
 LOGGER = logging.getLogger("channel_monitor")
 
 VALID_STATUSES = {"pending", "processing", "queued", "completed", "failed"}
@@ -748,7 +761,7 @@ class ChannelMonitor:
             try:
                 self._pool = await asyncpg.create_pool(self.database_url, min_size=1, max_size=5)
             except (asyncpg.PostgresConnectionError, OSError) as exc:
-                LOGGER.critical("Failed to connect to database at %s: %s", self.database_url, exc)
+                LOGGER.critical("Failed to connect to database at %s: %s", _redact_url(self.database_url), exc)
                 raise RuntimeError(
                     f"Database connection failed for channel-monitor. "
                     f"Check network connectivity and Supabase status. URL: {self.database_url}"

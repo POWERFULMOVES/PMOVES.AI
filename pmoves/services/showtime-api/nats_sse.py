@@ -15,6 +15,19 @@ from nats.aio.client import Client as NATS
 
 from prometheus_client import Counter
 
+
+def _redact_url(url: object) -> str:
+    """Return *url* with userinfo (``user:password@``) removed, for logging.
+
+    Same contract as ``services/common/nats_client.py::_redact_url``; kept
+    module-local so this file needs no cross-service import. Also handles
+    comma-separated server lists (``nats://u:p@a:4222,nats://u:p@b:4222``).
+    """
+    import re
+
+    return re.sub(r"(?<=://)[^@/\s]+@", "", str(url))
+
+
 logger = logging.getLogger("showtime.nats_sse")
 
 SSE_MESSAGES_DROPPED = Counter(
@@ -43,7 +56,7 @@ async def nats_event_generator() -> AsyncGenerator[str, None]:
 
     try:
         await nc.connect(NATS_URL)
-        logger.info("NATS connected for SSE bridge at %s", NATS_URL)
+        logger.info("NATS connected for SSE bridge at %s", _redact_url(NATS_URL))
     except Exception as exc:
         logger.error("NATS connection failed: %s", exc)
         yield f"event: showtime.error\ndata: {json.dumps({'error': 'NATS connection failed', 'detail': str(exc)})}\n\n"

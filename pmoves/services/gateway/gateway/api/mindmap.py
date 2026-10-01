@@ -11,6 +11,19 @@ from pydantic import BaseModel
 
 from services.common.env import get_secret
 
+
+def _redact_url(url: object) -> str:
+    """Return *url* with userinfo (``user:password@``) removed, for logging.
+
+    Same contract as ``services/common/nats_client.py::_redact_url``; kept
+    module-local so this file needs no cross-service import. Also handles
+    comma-separated server lists (``nats://u:p@a:4222,nats://u:p@b:4222``).
+    """
+    import re
+
+    return re.sub(r"(?<=://)[^@/\s]+@", "", str(url))
+
+
 router = APIRouter(tags=["MindMap"])
 
 logger = logging.getLogger("pmoves.gateway.mindmap")
@@ -24,7 +37,7 @@ if NEO4J_URL:
     try:  # pragma: no cover - depends on external DB
         driver = GraphDatabase.driver(NEO4J_URL, auth=(NEO4J_USER, NEO4J_PASSWORD))
     except Exception as exc:  # pragma: no cover - optional dependency
-        logger.warning("Neo4j unavailable at %s: %s", NEO4J_URL, exc)
+        logger.warning("Neo4j unavailable at %s: %s", _redact_url(NEO4J_URL), exc)
         driver = None
 
 

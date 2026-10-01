@@ -40,6 +40,19 @@ except ModuleNotFoundError:
     from pmoves.services.common.env import get_secret
 from pmoves.tools.chit_security import sign_cgp
 
+
+def _redact_url(url: object) -> str:
+    """Return *url* with userinfo (``user:password@``) removed, for logging.
+
+    Same contract as ``services/common/nats_client.py::_redact_url``; kept
+    module-local so this file needs no cross-service import. Also handles
+    comma-separated server lists (``nats://u:p@a:4222,nats://u:p@b:4222``).
+    """
+    import re
+
+    return re.sub(r"(?<=://)[^@/\s]+@", "", str(url))
+
+
 logger = logging.getLogger(__name__)
 
 # NATS subjects for persona optimization
@@ -203,7 +216,7 @@ class PersonaOptimizer:
             "PersonaOptimizer initialized",
             extra={
                 "supabase_url": self.supabase_url,
-                "nats_url": self.nats_url,
+                "nats_url": _redact_url(self.nats_url),
                 "max_iterations": max_iterations,
                 "population_size": population_size,
             }
@@ -251,7 +264,7 @@ class PersonaOptimizer:
         """Establish NATS connection."""
         nc = NATS()
         await nc.connect(servers=[self.nats_url])
-        logger.info(f"Connected to NATS at {self.nats_url}")
+        logger.info(f"Connected to NATS at {_redact_url(self.nats_url)}")
         return nc
 
     def _get_supabase_headers(self) -> Dict[str, str]:

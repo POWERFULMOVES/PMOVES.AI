@@ -38,6 +38,19 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 
+
+def _redact_url(url: object) -> str:
+    """Return *url* with userinfo (``user:password@``) removed, for logging.
+
+    Same contract as ``services/common/nats_client.py::_redact_url``; kept
+    module-local so this file needs no cross-service import. Also handles
+    comma-separated server lists (``nats://u:p@a:4222,nats://u:p@b:4222``).
+    """
+    import re
+
+    return re.sub(r"(?<=://)[^@/\s]+@", "", str(url))
+
+
 logger = logging.getLogger("fleet_sentinel")
 
 NATS_URL = os.environ.get("NATS_URL", "nats://nats:4222")
@@ -240,11 +253,11 @@ class FleetSentinel:
         if not ok:
             self.listener = None
             self.listener_error = f"ServiceAnnouncementListener.start() returned False ({NATS_URL})"
-            logger.error("announce listener FAILED to start (%s)", NATS_URL)
+            logger.error("announce listener FAILED to start (%s)", _redact_url(NATS_URL))
             return False
         self.listener_mode = "common"
         self.listener_error = None
-        logger.info("announce listener started (%s)", NATS_URL)
+        logger.info("announce listener started (%s)", _redact_url(NATS_URL))
         return True
 
     async def _start_raw_listener(self) -> bool:
@@ -276,12 +289,12 @@ class FleetSentinel:
             await nc.subscribe("services.announce.v1", cb=cb)
         except Exception as exc:
             self.listener_error = f"raw listener connect failed: {exc}"
-            logger.error("raw announce listener FAILED (%s): %s", NATS_URL, exc)
+            logger.error("raw announce listener FAILED (%s): %s", _redact_url(NATS_URL), exc)
             return False
         self._raw_nc = nc
         self.listener_mode = "raw"
         self.listener_error = None
-        logger.info("raw announce listener started (%s)", NATS_URL)
+        logger.info("raw announce listener started (%s)", _redact_url(NATS_URL))
         return True
 
     # -- health polling ------------------------------------------------------

@@ -37,6 +37,19 @@ from nats.aio.msg import Msg
 if TYPE_CHECKING:
     from supabase import Client as SupabaseClient
 
+
+def _redact_url(url: object) -> str:
+    """Return *url* with userinfo (``user:password@``) removed, for logging.
+
+    Same contract as ``services/common/nats_client.py::_redact_url``; kept
+    module-local so this file needs no cross-service import. Also handles
+    comma-separated server lists (``nats://u:p@a:4222,nats://u:p@b:4222``).
+    """
+    import re
+
+    return re.sub(r"(?<=://)[^@/\s]+@", "", str(url))
+
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -97,7 +110,7 @@ class ChatRelayService:
 
     async def connect(self) -> None:
         """Connect to NATS and Supabase."""
-        logger.info(f"Connecting to NATS at {self.config.nats_url}")
+        logger.info(f"Connecting to NATS at {_redact_url(self.config.nats_url)}")
 
         self.nc = await nats.connect(
             self.config.nats_url,

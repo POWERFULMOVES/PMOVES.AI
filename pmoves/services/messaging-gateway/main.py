@@ -20,6 +20,19 @@ from platforms.telegram import TelegramPlatform
 from platforms.whatsapp import WhatsAppPlatform
 
 
+def _redact_url(url: object) -> str:
+    """Return *url* with userinfo (``user:password@``) removed, for logging.
+
+    Same contract as ``services/common/nats_client.py::_redact_url``; kept
+    module-local so this file needs no cross-service import. Also handles
+    comma-separated server lists (``nats://u:p@a:4222,nats://u:p@b:4222``).
+    """
+    import re
+
+    return re.sub(r"(?<=://)[^@/\s]+@", "", str(url))
+
+
+
 YOUTUBE_CONTROL_REJECTION_LABELS = {
     "policy": "Policy issue",
     "scope": "Out of scope",
@@ -445,7 +458,7 @@ async def _nats_resilience_loop() -> None:
             logger.warning("NATS connection closed")
 
         try:
-            logger.info(f"Connecting to NATS at {NATS_URL}...")
+            logger.info(f"Connecting to NATS at {_redact_url(NATS_URL)}...")
             await nc.connect(
                 servers=[NATS_URL],
                 disconnected_cb=_disconnected_cb,

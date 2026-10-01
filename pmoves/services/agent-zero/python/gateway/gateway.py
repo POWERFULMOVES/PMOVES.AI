@@ -24,6 +24,19 @@ import sys
 from datetime import datetime
 from typing import Any, Dict, Optional
 
+
+def _redact_url(url: object) -> str:
+    """Return *url* with userinfo (``user:password@``) removed, for logging.
+
+    Same contract as ``services/common/nats_client.py::_redact_url``; kept
+    module-local so this file needs no cross-service import. Also handles
+    comma-separated server lists (``nats://u:p@a:4222,nats://u:p@b:4222``).
+    """
+    import re
+
+    return re.sub(r"(?<=://)[^@/\s]+@", "", str(url))
+
+
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -180,7 +193,7 @@ class Gateway:
         if self.config.PMOVES_DOCKED_MODE:
             logger.info("Mode: DOCKED (connected to PMOVES.AI)")
             logger.info(f"  TensorZero: {self.config.TENSORZERO_BASE_URL}")
-            logger.info(f"  NATS: {self.config.NATS_URL}")
+            logger.info(f"  NATS: {_redact_url(self.config.NATS_URL)}")
             logger.info(f"  HiRAG: {self.config.HIRAG_URL}")
 
             # Try to connect to NATS

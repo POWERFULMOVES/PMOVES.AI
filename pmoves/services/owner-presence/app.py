@@ -22,6 +22,19 @@ from typing import Any, Dict, Optional
 from fastapi import FastAPI
 from pydantic import BaseModel, Field
 
+
+def _redact_url(url: object) -> str:
+    """Return *url* with userinfo (``user:password@``) removed, for logging.
+
+    Same contract as ``services/common/nats_client.py::_redact_url``; kept
+    module-local so this file needs no cross-service import. Also handles
+    comma-separated server lists (``nats://u:p@a:4222,nats://u:p@b:4222``).
+    """
+    import re
+
+    return re.sub(r"(?<=://)[^@/\s]+@", "", str(url))
+
+
 # --------------------------------------------------------------------------- #
 # Configuration
 # --------------------------------------------------------------------------- #
@@ -110,7 +123,7 @@ class NATSManager:
             from nats.aio.client import Client as NATSClient
             self._nc = NATSClient()
             await self._nc.connect(servers=[NATS_URL])
-            LOG.info("Connected to NATS at %s", NATS_URL)
+            LOG.info("Connected to NATS at %s", _redact_url(NATS_URL))
             await self._nc.subscribe(NATS_SUBJECT_SIGNAL, cb=self._on_signal)
             LOG.info("Subscribed to %s", NATS_SUBJECT_SIGNAL)
         except Exception as exc:
