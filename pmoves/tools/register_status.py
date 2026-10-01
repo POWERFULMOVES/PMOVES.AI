@@ -359,6 +359,23 @@ def report_listing(lanes, register, now, out) -> int:
     return EXIT_CLEAN
 
 
+def report_batons(events, out, code: int) -> int:
+    """Baton rows that did NOT do what they said: refused, or a no-op lane.
+
+    A malformed baton closes nothing by design, and that is only safe if it is
+    loud -- a filer who believes a peer's lane was passed would otherwise read
+    a still-open lane as somebody else's problem. A FINDING (exit 1), never
+    allowed to mask could-not-measure (exit 3).
+    """
+    warnings = [e.warning for e in events if e.warning]
+    if not warnings:
+        return code
+    out.write(f"\nBATON ROWS THAT DID NOT DO WHAT THEY SAID ({len(warnings)})\n")
+    for line in warnings:
+        out.write(f"  {line}\n")
+    return code if code == EXIT_UNMEASURED else EXIT_FINDINGS
+
+
 def _matching(lanes, branch):
     """Every open row that names `branch`. One definition, because the report
     and the JSON have to be talking about the same rows -- a second copy of
@@ -540,6 +557,7 @@ def main(argv=None) -> int:
                              now, prose)
     else:
         code = report_listing(lanes, register, now, prose)
+        code = report_batons(gate.baton_events_in(text), prose, code)
 
     if args.json:
         json.dump(_json_payload(lanes, register, now, args.branch, verdict,

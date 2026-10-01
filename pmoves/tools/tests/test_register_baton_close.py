@@ -275,6 +275,18 @@ def test_baton_rows_round_trip_for_register_sync_reapply(mod):
     assert mod._assert_round_trips(row.encode()) == parsed
 
 
+def test_register_status_reports_a_baton_that_closed_nothing(tmp_path, capsys):
+    status = _load(TOOL.with_name("register_status.py"), "register_status_baton")
+    register = tmp_path / "register.md"
+    register.write_text("# register\n" + HELD + _release(
+        f"branch: `feat/widget` · baton-from: `{HOLDER}`"), encoding="utf-8")
+    rc = status.main(["--register", str(register), "--now", "2026-10-01T00:00:00Z"])
+    out = capsys.readouterr().out
+    assert rc == 1
+    assert "BATON ROWS THAT DID NOT DO WHAT THEY SAID (1)" in out
+    assert "closed NOTHING" in out and "authority" in out
+
+
 # ---------------------------------------------------------- monotonicity ----
 
 def test_live_register_carries_no_baton_rows_yet_so_pairing_is_unchanged(gate, tmp_path):
