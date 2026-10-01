@@ -243,8 +243,11 @@ def mod(tmp_path: Path, monkeypatch):
     monkeypatch.setattr(m, "REGISTER", register)
     # "Committed" = on origin/main. Here: the grants are committed by default;
     # individual tests narrow it.
+    # raising=False so this fixture also loads the PRE-baton tool, where the
+    # symbol does not exist -- the failing-before control then reports the
+    # writer's BEHAVIOUR rather than a fixture error.
     monkeypatch.setattr(m, "_committed_register_text",
-                        lambda: "# register\n" + GRANTED)
+                        lambda: "# register\n" + GRANTED, raising=False)
     return m
 
 
