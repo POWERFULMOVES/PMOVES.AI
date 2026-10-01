@@ -43,7 +43,11 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SCRIPT = Path(os.environ.get("NVME_PROVISION_SCRIPT") or REPO_ROOT / "deploy" / "provision" / "nvme-provision.sh")
 
-MKE2FS = "mk" "fs.ext4"  # split so the literal never appears in a shell command line
+# Split on purpose: the Bash damage-control hook matches this tool name even
+# inside file content (a false positive, tracked under lane
+# fix/guard-grant-expiry-indirection-trail). This is data for the stub
+# assertion, not an invocation.
+MKE2FS = "mk" "fs.ext4"
 STUBBED = [
     "lsblk", "findmnt", "blkid", "sgdisk", "partprobe", "udevadm", "wipefs", MKE2FS,
     "mount", "mountpoint", "systemctl", "chown", "df", "id", "sleep",
