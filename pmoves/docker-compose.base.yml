@@ -521,6 +521,7 @@ x-network-tailnet-published: &network-tailnet-published
 name: pmoves
 volumes:
   neo4j-data: {}
+  neo4j-logs: {}
   fleet-sentinel-data: {}  # fleet-sentinel action trail (jsonl) + state
   archon-data: {}          # Archon /.archon workspaces + SQLite/state (#2217)
   archon-user-home: {}     # Archon /home/appuser (Claude/gh creds, git config)
