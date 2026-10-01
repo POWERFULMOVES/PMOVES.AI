@@ -96,7 +96,7 @@ Community Edition has **exactly one** standard database (`OM/database-administra
 | Agent Zero MCP `neo4j` (`tools/seed_agent_zero_mcp.py`) | compose, running | any | none | **APOC** (neo4j/mcp refuses to start in STDIO mode without it; `get-schema` uses APOC meta); GDS optional |
 | archon | compose, running | not measured | | |
 | services/gateway (mindmap writer, `pmoves/services/gateway/gateway/api/workflow.py`) | **not in any compose file** | MERGEs `Constellation/Point/MediaRef` | none | uniqueness constraints |
-| graph-linker | **not in any compose file** | `Asset/Agent/Workflow/...` | `services/graph-linker/migrations/01_init.cypher` (applied by nothing) | |
+| graph-linker | **not in any compose file** | `Asset/Generation/Media/Topic/Namespace/KBItem/Agent/Workflow` | `services/graph-linker/migrations/01_init.cypher`, applied by graph-linker itself at startup (`app.py:83`), so the first start creates `agent_name` (section 10.1) | CHIT: since PR #3255 every write persists `chit_sig`/`chit_kid`/`chit_signed_at` and is refused without a key |
 | consciousness-service | compose | none | none | none: it has no Neo4j driver |
 | jellyfin-ai | profile | its OWN `jellyfin-neo4j` | | separate database |
 
@@ -222,3 +222,92 @@ copied in by `docker exec -e NAME`, so it is never on argv. An unset OR empty pa
 - Whether strict validation can be re-enabled.
 - Superseded history: `docs/NEO4J_SUBMODULE_PROMOTION.md` and `docs/NEO4J_SUBMODULE_INTEGRATION_COMPLETE.md` (2026-03)
   describe a PMOVES-supabase-style submodule with its own Makefile and db/. That submodule was never built; this TAC replaces them.
+
+### 10.1 `:Agent` single key: design (ops/knuckles-neo4j-chit-provenance, PR #3255). NOT applied
+
+**Decision proposed: `Agent.id` = the `agents:` key in `pmoves/config/agent_registry.yaml`** (snake_case; 111 keys on
+2026-10-01). The registry is the declared source of truth for agent identity (`.claude/CLAUDE.md`, "Agent taxonomy").
+The only uniqueness constraint on `:Agent` is the existing `agent_id` (on `Agent.id`, `tools/chit_mindmap_seed.cypher:12`).
+`name` becomes a plain display property. The signing card (`signing_identity_cards.yaml`, e.g. `b850-claude`) is a
+different axis. Link it with `(:Agent)-[:SIGNS_AS]->(:SigningCard {kid})` rather than adding a fourth key.
+
+**Seed mapping** (`tools/chit_mindmap_seed.cypher:58-73`, 16 agents):
+
+| Seed id | Registry key | Basis |
+|---|---|---|
+| `agent-zero` | `agent_zero` | exact (kebab→snake) |
+| `archon` | `archon` | exact |
+| `supaserch` | `supaserch` | exact |
+| `extract-worker` | `extract_worker` | exact |
+| `cipher-memory` | `cipher_memory` | exact |
+| `flute-gateway` | `flute_gateway` | exact |
+| `pmoves-yt` | `pmoves_yt` | exact |
+| `tensorzero` | `tensorzero` | exact |
+| `creator` | `creator` | exact (note: `fordham_creator` is a different agent) |
+| `hyperdimensions` | `hyperdimensions` | exact |
+| `mesh-agent` | `mesh_agent` | exact |
+| `hirag` | **operator** (proposed `hirag_v2`) | registry display name "Hi-RAG v2" = seed name |
+| `deepresearch` | **operator** (proposed `deep_research`) | registry display name "DeepResearch" = seed name |
+| `hf-mcp` | **operator** (proposed `hf_mcp_server`) | registry display name "HF MCP Server" = seed name |
+| `botz` | **operator** | no single match: `botz_gateway`, `botz_architect`, `botz_builder`, `botz_auditor` |
+| `tokenism` | **operator** | no registry entry. Add one (the simulator is CHIT-aware, port 8103) or drop the seed node |
+
+The three "proposed" rows match on display name only, so they are listed for the operator rather than decided here.
+
+**Writer changes (land BEFORE graph-linker is deployed):**
+- **Ordering hazard.** graph-linker applies `migrations/01_init.cypher` at startup (`app.py:83` → `neo4j_client.py`
+  `apply_migrations`), and that file creates `agent_name`. Deploying graph-linker as-is recreates the conflicting
+  constraint on the first start, and its `MERGE (ag:Agent {name:$source})` forks identities. Change its migration and
+  its Cypher in the same PR as the deploy, or before.
+- graph-linker: resolve the envelope `source` to a registry key and `MERGE (ag:Agent {id:$agent_id})`. An unresolved
+  source does not create an `:Agent`. It stays as `g.source` on the Generation, and a counter records the miss
+  ("inform, don't decide"). Delete `agent_name` from `01_init.cypher`.
+- chit seed: emit registry keys. Better: generate the Agent and NATSSubject nodes from `agent_registry.yaml` and
+  `contracts/topics.json` instead of copying them by hand.
+- graphiti `0003`: delete `agent_agent_id_unique` and match on `a.id`. Fix its non-idempotent `datetime()`-in-MERGE first (above).
+
+**Migration plan (operator, credentialed session via `with-env.sh`; nothing here has been run):**
+0. Offline dump of `neo4j` and `system` (section 7).
+1. Inventory, read-only:
+   `SHOW CONSTRAINTS YIELD name, labelsOrTypes, properties WHERE 'Agent' IN labelsOrTypes RETURN name, properties;`
+   `MATCH (a:Agent) RETURN a.id, a.name, a.agent_id, COUNT { (a)--() } AS degree ORDER BY a.id;`
+2. Duplicate prechecks. **Every query must return 0 rows/0 before step 3. Otherwise STOP and bring the output back.**
+   - Two seed ids mapping to one registry key, or a target key that already exists:
+     `UNWIND $mapping AS m OPTIONAL MATCH (a:Agent {id: m.old}) OPTIONAL MATCH (b:Agent {id: m.new}) WITH m.new AS k, count(DISTINCT a) + count(DISTINCT b) AS c WHERE c > 1 RETURN k, c;`
+   - Duplicate ids already present: `MATCH (a:Agent) WHERE a.id IS NOT NULL WITH a.id AS k, count(*) AS c WHERE c > 1 RETURN k, c;`
+   - Nodes with no `id` (written by graph-linker's `name` key or graphiti's `agent_id`): `MATCH (a:Agent) WHERE a.id IS NULL RETURN count(a);`.
+     Expected 0, because neither writer has been deployed. If it is non-zero, each one needs an explicit mapping, which
+     is a merge of two nodes and out of scope for this plan.
+3. Drop the two foreign keys: `DROP CONSTRAINT agent_name IF EXISTS;` and `DROP CONSTRAINT agent_agent_id_unique IF EXISTS;`.
+4. `agent_id`: if step 1 shows it on `Agent.id`, keep it. If it is missing, or a constraint by another name covers
+   `Agent.id`, drop that one and run `CREATE CONSTRAINT agent_id IF NOT EXISTS FOR (a:Agent) REQUIRE a.id IS UNIQUE;`.
+   That runs only after step 2 is clean, because CREATE CONSTRAINT fails on existing duplicates.
+5. Remap in ONE statement, which makes it one transaction: `UNWIND $mapping AS m MATCH (a:Agent {id: m.old}) SET a.id = m.new;`.
+   With `agent_id` live, a collision aborts the whole statement rather than half-applying it.
+6. Verify: the inventory shows exactly one `:Agent` constraint, `MATCH (a:Agent) WHERE a.id IS NULL` = 0, and every
+   `a.id` is a registry key (compare against the YAML offline).
+7. Then re-run `make -C pmoves chit-mindmap-seed` with the registry-keyed seed. Its MERGEs now match the remapped nodes.
+
+### 10.2 Signed `:SeedSet` + `graph.seed.applied.signed.v1`: design. NOT registered yet
+
+Nothing that seeds this graph is signed (rows 1-8 of the CHIT review inventory). Proposal:
+
+- **Record.** After a road applies a file, it writes `MERGE (s:SeedSet {id: $sha256_of_file_bytes}) SET s.file, s.git_sha,
+  s.applied_at, s.road, s.chit_sig, s.chit_kid, s.chit_signed_at`. The signed document is
+  `{file, sha256, git_sha, applied_at, road, applied_by}` (`applied_by` = signing-card `agent_id`), signed with
+  `sign_cgp` and no `passphrase=` argument, like graph-linker. Each seed statement also does `SET x.prov = $seed_set`, so
+  every node and edge points back to its SeedSet. Verification recomputes the file hash and calls `verify_cgp_detailed`.
+  With today's single deployment key the result is `OK_UNPINNED` (attribution, not authentication).
+- **Event.** On success the road publishes the signed record on **`graph.seed.applied.signed.v1`**. The `*.signed.v1`
+  suffix follows the `agent.graphiti.signed.v1` precedent. It does **not** publish on `chit.signed.v1`, which is a live
+  multi-consumer channel with a different `{schema,tier}` envelope (`tools/sign_trail.py:62-69`, review #2048).
+- **Fail-closed.** No key means the road exits 3 (could-not-sign) and applies nothing. An unsigned seed is opt-in and
+  must be explicit, never the silent default.
+- **Where.** A stdlib helper (`tools/neo4j_seed_sign.py`) called from `scripts/neo4j_bootstrap.sh` and the
+  `neo4j_apply_cypher` macro after a successful apply. That is Originated: no seed signer exists in the repo.
+- **Registration, which needs grants** (drafts are in the PR #3255 description):
+  - `pmoves/contracts/topics.json` entry: unprotected for edits, but its `schema` must exist first.
+  - `pmoves/contracts/schemas/graph/seed.applied.signed.v1.schema.json`: readOnlyPaths, needs `KNOWN_ROAD=schema:<reason>`.
+  - `.claude/context/nats-subjects.md` catalog entry: readOnlyPaths with **no road**, so it is an operator edit.
+  - Capture: no JetStream stream catches core publishes on this node today. Add `graph.seed.>` to a stream, or the
+    event is fire-and-forget.
