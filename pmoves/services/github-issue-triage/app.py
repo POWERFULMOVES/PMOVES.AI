@@ -39,21 +39,28 @@ except ImportError:  # image ships without services/common; copy of services/com
         if url is None:
             return ""
         text = str(url)
-        schemes = list(_re.finditer(r"(?<![A-Za-z0-9+.\-:/@%])[A-Za-z][A-Za-z0-9+.\-]*://", text))
-        if not schemes:
-            at = text.rfind("@")
-            out = "***" + text[at:] if at >= 0 else text
-        else:
-            out = text[: schemes[0].start()]
-            for i, m in enumerate(schemes):
-                end = schemes[i + 1].start() if i + 1 < len(schemes) else len(text)
-                seg = text[m.end():end]
-                at = seg.rfind("@")
-                out += m.group(0) + ("***" + seg[at:] if at >= 0 else seg)
+        spans = []
+        prev_at = -1
+        for match in _re.finditer("@", text):
+            at = match.start()
+            scheme = text.find("://", prev_at + 1, at)
+            if scheme >= 0:
+                spans.append([scheme + 3, at])
+            elif spans:
+                spans[-1][1] = at
+            else:
+                spans.append([0, at])
+            prev_at = at
+        out = []
+        pos = 0
+        for start, end in spans:
+            out.append(text[pos:start] + "***")
+            pos = end
+        out.append(text[pos:])
         return _re.sub(
-            r"(?i)([?&;](?:password|passwd|pass|pwd|secret|token|api_?key|access_token)=)[^&#\s]*",
+            r"(?i)([?&;#][\w.\-]*(?:password|passwd|pwd|pass|secret|token|api[_\-]?key|auth|signature|sig)[\w.\-]*=)[^&#;\s]*",
             r"\1***",
-            out,
+            "".join(out),
         )
 
 # Configure logging

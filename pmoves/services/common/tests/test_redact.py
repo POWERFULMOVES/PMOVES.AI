@@ -21,7 +21,7 @@ sys.path.insert(0, str(PMOVES / "tools"))
 import sync_redact_url_copies as sync  # noqa: E402
 
 # (name, input, secrets that must not survive). The first 26 rows are the
-# #3244 control review's corpus.
+# #3244 round-1 control review's corpus; r2_* rows are the round-2 corpus.
 CORPUS = [
     ("plain", "nats://alice:SYNTHsecret@nats:4222", ["SYNTH", "secret"]),
     ("pw_at", "nats://alice:SYNTH@secret@nats:4222", ["SYNTH", "secret"]),
@@ -56,9 +56,44 @@ CORPUS = [
     ("b64_mixed", "nats://svc:ab/cd#ef?gh,ij kl@nats:4222", ["ab/", "cd#", "ef?", "gh,", "ij kl"]),
     ("scheme_in_pw", "nats://alice:pw://SYNTH@nats:4222", ["SYNTH", "pw:"]),
     ("token_param", "https://api.example/x?token=SYNTHsecret&page=2", ["SYNTH", "secret"]),
+    # Round-2 control review corpus (pullrequestreview-5382143346), incl. the two
+    # fail-open shapes it found: a scheme after ':' or '/' followed by a later
+    # scheme, and a password containing a '!http://'-like run.
+    ('r2_plain', 'nats://alice:SYNTHsecret@nats:4222', ['SYNTH', 'secret']),
+    ('r2_pw_at', 'nats://alice:SYNTH@secret@nats:4222', ['SYNTH', 'secret']),
+    ('r2_pw_slash', 'nats://alice:SYNTH/secret@nats:4222', ['SYNTH', 'secret']),
+    ('r2_pw_hash', 'nats://alice:SYNTH#secret@nats:4222', ['SYNTH', 'secret']),
+    ('r2_pw_q', 'nats://alice:SYNTH?secret@nats:4222', ['SYNTH', 'secret']),
+    ('r2_pw_comma', 'nats://alice:SYNTH,secret@nats:4222', ['SYNTH', 'secret']),
+    ('r2_pw_colon', 'nats://alice:SYNTH:secret@nats:4222', ['SYNTH', 'secret']),
+    ('r2_pw_pct', 'nats://alice:SYNTH%40secret@nats:4222', ['SYNTH', 'secret']),
+    ('r2_ipv6', 'nats://alice:SYNTHsecret@[::1]:4222', ['SYNTH', 'secret']),
+    ('r2_pw_nl', 'nats://alice:SYNTH\nsecret@nats:4222', ['SYNTH', 'secret']),
+    ('r2_pw_scheme_plain', 'nats://alice:SYNTHhttp://secret@nats:4222', ['SYNTH', 'secret']),
+    ('r2_pw_scheme_bang', 'nats://alice:SYNTH!http://secret@nats:4222', ['SYNTH', 'secret']),
+    ('r2_pw_scheme_us', 'nats://alice:SYNTH_x://secret@nats:4222', ['SYNTH', 'secret']),
+    ('r2_pw_scheme_eq', 'nats://alice:SYNTH=a://secret@nats:4222', ['SYNTH', 'secret']),
+    ('r2_midsentence', 'error: connect to nats://alice:SYNTHsecret@nats:4222 failed, retry', ['SYNTH', 'secret']),
+    ('r2_mid_email', 'connect nats://a:SYNTHsecret@h failed; mail ops@example.com', ['SYNTH', 'secret']),
+    ('r2_colon_prefix_then_scheme', 'primary:nats://a:SYNTHsecret@h1 backup=nats://b:x@h2', ['SYNTH', 'secret']),
+    ('r2_slash_prefix_then_scheme', 'cfg/nats://a:SYNTHsecret@h1 nats://b:x@h2', ['SYNTH', 'secret']),
+    ('r2_alnum_prefix_then_scheme', 'URLnats://a:SYNTHsecret@h1 nats://b:x@h2', ['SYNTH', 'secret']),
+    ('r2_colon_prefix_only', 'url:nats://a:SYNTHsecret@h1', ['SYNTH', 'secret']),
+    ('r2_dict_repr', "{'url': 'nats://a:SYNTHsecret@h1', 'db': 'postgres://u:SYNTHsecret@db/x'}", ['SYNTH', 'secret']),
+    ('r2_json', '{"url":"nats://a:SYNTHsecret@h1"}', ['SYNTH', 'secret']),
+    ('r2_list', 'nats://a:SYNTHsecret@h1:4222,nats://b:SYNTHsecret@h2:4222', ['SYNTH', 'secret']),
+    ('r2_query_pw', 'postgres://db/x?user=a&password=SYNTHsecret', ['SYNTH', 'secret']),
+    ('r2_query_tok_hash', 'https://h/x#access_token=SYNTHsecret', ['SYNTH', 'secret']),
+    ('r2_query_sslpassword', 'postgres://db/x?sslpassword=SYNTHsecret', ['SYNTH', 'secret']),
+    ('r2_query_apikey_upper', 'https://h/x?API-KEY=SYNTHsecret', ['SYNTH', 'secret']),
+    ('r2_query_auth', 'https://h/x?auth=SYNTHsecret', ['SYNTH', 'secret']),
+    ('r2_no_scheme', 'alice:SYNTHsecret@nats:4222', ['SYNTH', 'secret']),
+    ('r2_no_scheme_two', 'a:SYNTHsecret@h1 b:SYNTHsecret@h2', ['SYNTH', 'secret']),
 ]
 
 CLEAN = [
+    "https://hooks.example/api/webhooks/123/abc",  # path secrets are out of scope (docstring)
+    "connect to nats://nats:4222 failed, retry",
     "nats://nats:4222",
     "nats://a:4222,nats://b:4222",
     "http://[::1]:8080/x",

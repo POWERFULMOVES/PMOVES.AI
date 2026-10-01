@@ -2,17 +2,33 @@
 
 Stdlib only, so any service can import it. Services whose image does not ship
 ``services/common`` carry an inline copy of ``redact_url`` inside an
-``except ImportError`` block; ``tests/test_redact_url_copies.py`` requires every
-copy to be AST-identical to the function below, so edit them together
+``except ImportError`` block; ``services/common/tests/test_redact.py`` requires
+every copy to be AST-identical to the function below, so edit them together
 (``python3 pmoves/tools/sync_redact_url_copies.py`` rewrites the copies).
 
-Rule: for every ``scheme://`` in the text, everything between the scheme and the
-LAST ``@`` before the next scheme becomes ``***``. With no scheme at all,
-everything before the last ``@`` becomes ``***``. The last ``@`` (not the first,
-and not whatever ``urllib.parse.urlsplit`` decides the netloc is) is what keeps
-unencoded ``/ # ? , @`` and whitespace in a password from ending the authority
-early and leaking the remainder. A path containing ``@`` is over-redacted; that is
-the accepted cost. Query parameters named like a secret are masked too.
+Rule, anchored on ``@`` rather than on scheme names:
+
+* For each ``@``, if a ``://`` occurs after the previous ``@``, everything from
+  the FIRST such ``://`` up to this ``@`` becomes ``***``.
+* If no ``://`` occurs since the previous ``@``, the previous mask is extended to
+  this ``@`` (several ``@`` inside one password), or, before any mask exists,
+  everything from the start of the text up to this ``@`` becomes ``***``.
+
+Taking the first ``://`` (not the nearest) means a password containing ``/ # ?
+, @``, whitespace or a ``scheme://``-like run cannot end the userinfo early, and
+no scheme-name heuristic can be fooled by text before the scheme. The cost is
+over-redaction: a credential-free URL followed by a credentialed one in the same
+string, or prose with an ``@`` after a URL (an email address), is masked up to
+that ``@``. Leaking is not acceptable; over-masking is.
+
+Query and fragment parameters are masked when the parameter NAME contains
+password, passwd, pwd, pass, secret, token, api-key/api_key/apikey, auth,
+signature or sig (case-insensitive, so ``sslpassword=``, ``access_token=``,
+``X-Api-Key=``, ``#access_token=`` and ``?auth=`` are all masked).
+
+Out of scope: secrets carried in the URL PATH (Discord/Slack webhook URLs, presigned
+object paths) are passed through unchanged; do not rely on ``redact_url`` for
+those -- log ``bool(url)`` or the host instead.
 """
 
 import re as _re
@@ -22,19 +38,26 @@ def redact_url(url):
     if url is None:
         return ""
     text = str(url)
-    schemes = list(_re.finditer(r"(?<![A-Za-z0-9+.\-:/@%])[A-Za-z][A-Za-z0-9+.\-]*://", text))
-    if not schemes:
-        at = text.rfind("@")
-        out = "***" + text[at:] if at >= 0 else text
-    else:
-        out = text[: schemes[0].start()]
-        for i, m in enumerate(schemes):
-            end = schemes[i + 1].start() if i + 1 < len(schemes) else len(text)
-            seg = text[m.end():end]
-            at = seg.rfind("@")
-            out += m.group(0) + ("***" + seg[at:] if at >= 0 else seg)
+    spans = []
+    prev_at = -1
+    for match in _re.finditer("@", text):
+        at = match.start()
+        scheme = text.find("://", prev_at + 1, at)
+        if scheme >= 0:
+            spans.append([scheme + 3, at])
+        elif spans:
+            spans[-1][1] = at
+        else:
+            spans.append([0, at])
+        prev_at = at
+    out = []
+    pos = 0
+    for start, end in spans:
+        out.append(text[pos:start] + "***")
+        pos = end
+    out.append(text[pos:])
     return _re.sub(
-        r"(?i)([?&;](?:password|passwd|pass|pwd|secret|token|api_?key|access_token)=)[^&#\s]*",
+        r"(?i)([?&;#][\w.\-]*(?:password|passwd|pwd|pass|secret|token|api[_\-]?key|auth|signature|sig)[\w.\-]*=)[^&#;\s]*",
         r"\1***",
-        out,
+        "".join(out),
     )
