@@ -7,9 +7,9 @@ description: >
   flow. Harness-neutral companion to the pr-monitor-graphiti-chit skill
   pairing (pmoves/configs/skill-pairings.yaml). Wraps the canonical make
   targets and adds the retry loop the GitHub API needs on flaky links
-  (measured on B850 2026-09-22: three consecutive `error connecting to
-  api.github.com` failures inside one pr-monitor run, full recovery on
-  retry — the tool itself has no retry).
+  (measured on B850 2026-09-22: 4 transient `error connecting to
+  api.github.com` deaths in one flow run, 5th attempt clean — the tool
+  itself has no retry).
 ---
 
 # pr-monitor — FlOO$ PR review flow
