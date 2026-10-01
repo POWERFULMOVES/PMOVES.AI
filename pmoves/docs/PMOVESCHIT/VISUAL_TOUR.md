@@ -540,14 +540,14 @@ From `pmoves/services/graph-linker/chit_signer.py`:
 ```python
 import sys
 sys.path.insert(0, "pmoves/services/graph-linker")  # dir name has a hyphen — not a valid module path, so add it to sys.path
-from chit_signer import sign_neo4j_node, verify_neo4j_node
+from chit_signer import sign_write, verify_write
 
-# Node signing is gated by CHIT_SIGN_NEO4J env var
-# When disabled (default), returns node unchanged
-signed_node = sign_neo4j_node(node_data)
+# Every graph-linker write is signed; no key raises ChitSigningError (no write).
+# Adds chit_sig / chit_kid / chit_signed_at, which the Cypher persists on the nodes.
+signed_params = sign_write(params)
 
-# Verification for incoming nodes
-is_valid = verify_neo4j_node(signed_node)
+# Returns a VerifyResult: OK / OK_UNPINNED / MISMATCH / UNRESOLVED_KID / NO_SIGNATURE
+result = verify_write(signed_params)
 ```
 
 **Design principle:** Signing is additive. Existing functionality is never broken when signing is off.
@@ -791,7 +791,7 @@ curl -X POST http://localhost:8086/geometry/decode/text \
 | Terminal Viz | `pmoves/tools/chit_terminal_viz.py` | Sparklines, bar charts, Poincaré disk, constellation maps — all implemented |
 | Security | `pmoves/tools/chit_security.py` | HMAC-SHA256 signing, AES-GCM anchor encryption, PBKDF2 600k iterations |
 | Security | `pmoves/tools/chit_common.py` | Canonical JSON for deterministic hashing |
-| Graph Signer | `pmoves/services/graph-linker/chit_signer.py` | Additive signing, gated by `CHIT_SIGN_NEO4J` env var |
+| Graph Signer | `pmoves/services/graph-linker/chit_signer.py` | Fail-closed signing of every Neo4j write; signature persisted as `chit_sig`/`chit_kid`/`chit_signed_at` |
 | ShapeStore | `pmoves/services/common/shape_store.py` | LRU cache, cross-modal jumps, Supabase warm, `geometry.cgp.v1` + `chit.cgp.v0.2` support |
 | Frontend | `pmoves/ui/lib/chit.ts` | CHIT manifest loading, target env file parsing |
 
@@ -815,7 +815,6 @@ POST /geometry/calibration/report → KL/JS divergence, coverage metrics
 | `CHIT_SIGNING_KEY` | (none) | Separate signing key | chit_security.py:40 |
 | `CHIT_ENCRYPTION_KEY` | (none) | Separate encryption key | chit_security.py:61 |
 | `CHIT_CODEBOOK_PATH` | tests/data/codebook.jsonl | Codebook location | chit.py:31 |
-| `CHIT_SIGN_NEO4J` | false | Gate graph signing | chit_signer.py:21 |
 
 ---
 

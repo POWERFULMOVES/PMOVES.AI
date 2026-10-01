@@ -34,9 +34,26 @@ All configuration via environment variables:
 | `NEO4J_USER` | `neo4j` | Neo4j username |
 | `NEO4J_PASSWORD` | `neo4j` | Neo4j password |
 | `NEO4J_DATABASE` | `neo4j` | Neo4j database name |
-| `NATS_URL` | `nats://nats:pmoves@nats:4222` | NATS server URL |
+| `NATS_URL` | `nats://nats:4222` | NATS server URL (credentials, if any, come from the env, never this file) |
 | `PORT` | `8090` | HTTP server port |
 | `LOG_LEVEL` | `info` | Logging level |
+| `CHIT_SIGNING_KEY` (or `_FILE`) | none — **required** | Signs every write. Without it every write is refused |
+| `CHIT_SIGNING_KEY_ID` | `chit-signing-v01` | `kid` stamped on writes (`chit_kid`) |
+
+## CHIT provenance (fail-closed)
+
+Every write is signed with `pmoves.tools.chit_security.sign_cgp` over
+`{"writer": "graph-linker", "signed_at", "params"}`, where `params` is the
+write's Cypher parameter dict. The signature is persisted on the nodes the
+write creates (Asset, Generation, Media, Topic, the HAS_TOPIC edge, Namespace,
+KBItem) as `chit_sig`, `chit_kid`, `chit_signed_at`.
+
+No key, or parameters that cannot be canonicalised, means **no write**: the
+message is dead-lettered, `graph_linker_chit_sign_failures_total{reason}` is
+incremented, and `/ready` reports `degraded` with `chit: no_key`. There is no
+unsigned dev mode. `chit_signer.verify_write()` re-verifies a write from its
+event parameters. With the deployment-wide key the result is `OK_UNPINNED`:
+the signature attributes the writer, it does not authenticate it.
 
 ## NATS Message Schemas
 
@@ -69,8 +86,9 @@ python -m pytest tests/ -v
 ## Docker
 
 ```bash
-docker build -t pmoves-graph-linker .
-docker run -e NEO4J_URL=bolt://neo4j:7687 -e NATS_URL=nats://nats:pmoves@nats:4222 pmoves-graph-linker
+# build context is pmoves/ (the image copies pmoves/tools/chit_*.py)
+docker build -f services/graph-linker/Dockerfile -t pmoves-graph-linker .
+docker run -e NEO4J_URL=bolt://neo4j:7687 -e NATS_URL=nats://nats:4222 -e CHIT_SIGNING_KEY_FILE=/run/secrets/chit_signing_key pmoves-graph-linker
 ```
 
 ## Files
