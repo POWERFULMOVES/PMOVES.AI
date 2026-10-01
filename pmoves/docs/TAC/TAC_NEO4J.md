@@ -76,7 +76,7 @@ Rows marked **pending** are prepared as ONE compose change (grant `compose:pr:<N
 | APOC export / CSV file import | enabled | `OM/security/checklist` | export off once `make neo4j-backup` no longer uses `apoc.export` |
 | strict validation | `false` | `OM/configuration/configuration-settings` (default `true`) | back to `true` after the `env_file` fix, proven in a sandbox |
 | LOAD CSV egress | `internal.dbms.cypher_ip_blocklist=0.0.0.0/0,::/0` | internal key; the documented `LOAD ON CIDR` is Enterprise-only | keep; verify after recreate. Unknown: whether it covers `apoc.load.*` |
-| `env_file: env.tier-data` | whole data tier | the entrypoint turns every `NEO4J_*` variable into a setting and does not exclude `NEO4J_PASSWORD` | removed (**pending**). It would write `PASSWORD=<plaintext>` into neo4j.conf if the funnel ever emitted that key (the template does), and it hands Neo4j MinIO, Postgres, Meili and Qdrant secrets it never uses. `NEO4J_AUTH` interpolation comes from with-env.sh, not env_file |
+| `env_file: env.tier-data` | whole data tier | the entrypoint turns every `NEO4J_*` variable into a setting and does not exclude `NEO4J_PASSWORD` | removed (**pending**). It would write `PASSWORD=<plaintext>` into neo4j.conf if the funnel ever emitted that key (the template does), and it hands Neo4j MinIO, Postgres, Meili and Qdrant secrets it never uses. `${NEO4J_PASSWORD}` in `NEO4J_AUTH` is interpolated from compose's `--env-file` layering (`COMPOSE_ENV_FILES` in pmoves/Makefile: `env.shared`, then the tier files), which `env_file:` (container environment) does not feed |
 | auth | `NEO4J_AUTH=neo4j/${NEO4J_PASSWORD:?...}` | `OM/docker/docker-compose-standalone`: `NEO4J_AUTH_FILE` via Docker secrets (recommended) | fix the `:?` text; `NEO4J_AUTH_FILE` is an operator decision (funnel change) |
 | memory | none set; 4G limit | `OM/docker/configuration`: Docker defaults are "very limited" (512M pagecache, 512M heap); `OM/performance/memory-configuration`: heap initial = max | heap and pagecache from `neo4j-admin server memory-recommendation --memory=4g` (**pending**) |
 | `/logs` | anonymous volume (orphaned on each recreate) | `OM/docker/mounting-volumes` | named `neo4j-logs` (**pending**) |
@@ -95,7 +95,7 @@ Community Edition has **exactly one** standard database (`OM/database-administra
 | cipher-api (`Pmoves-cipher/src/pmoves/graph.ts`) | compose, running | `:Memory`, `SAME_CATEGORY` | `memory_id_unique`, `memory_agent_category` | plain Cypher; graph off without `NEO4J_PASSWORD` |
 | Agent Zero MCP `neo4j` (`tools/seed_agent_zero_mcp.py`) | compose, running | any | none | **APOC** (neo4j/mcp refuses to start in STDIO mode without it; `get-schema` uses APOC meta); GDS optional |
 | archon | compose, running | not measured | | |
-| services/gateway (mindmap writer, `api/workflow.py`) | **not in any compose file** | MERGEs `Constellation/Point/MediaRef` | none | uniqueness constraints |
+| services/gateway (mindmap writer, `pmoves/services/gateway/gateway/api/workflow.py`) | **not in any compose file** | MERGEs `Constellation/Point/MediaRef` | none | uniqueness constraints |
 | graph-linker | **not in any compose file** | `Asset/Agent/Workflow/...` | `services/graph-linker/migrations/01_init.cypher` (applied by nothing) | |
 | consciousness-service | compose | none | none | none: it has no Neo4j driver |
 | jellyfin-ai | profile | its OWN `jellyfin-neo4j` | | separate database |
@@ -120,14 +120,26 @@ Known contract gaps:
 
 | Need | Road |
 |---|---|
-| start / stop / restart / logs / status | `make -C pmoves neo4j-up` / `neo4j-down` / `neo4j-restart` / `neo4j-logs` / `neo4j-status` |
+| start (never recreates; see the warning below) / stop / restart / logs / status | `make -C pmoves neo4j-up` / `neo4j-down` / `neo4j-restart` / `neo4j-logs` / `neo4j-status` |
 | constraints, alias CSV, CHIT fixture + smoke | `make -C pmoves neo4j-bootstrap` |
 | one file from `neo4j/cypher/` | `make -C pmoves neo4j-migrate VERSION=001` |
 | consciousness taxonomy | `make -C pmoves load-consciousness-neo4j` |
 | CHIT taxonomy graph | `make -C pmoves chit-mindmap-seed` |
 
-The cypher roads share one macro: the password goes to cypher-shell through its `NEO4J_PASSWORD` env var (never argv),
-and an unset password fails closed (`tests/test_neo4j_make_roads.py`).
+Every cypher road (the `neo4j-migrate` / `load-consciousness-neo4j` / `chit-mindmap-seed` macro and
+`scripts/neo4j_bootstrap.sh` behind `neo4j-bootstrap`) hands the password to cypher-shell through its `NEO4J_USERNAME` /
+`NEO4J_PASSWORD` env vars (`cypher-shell --help`: "Can also be specified using the environment variable NEO4J_PASSWORD"),
+copied in by `docker exec -e NAME`, so it is never on argv. An unset OR empty password fails closed before any docker call
+(`tests/test_neo4j_make_roads.py`, which runs them against a recording `docker` stub). Exceptions that remain:
+`neo4j-backup`, `neo4j-restore` and `neo4j-reset` (below).
+
+> **Recreate hazard until PR #3251 lands.** main's `neo4j` service still carries `env_file: env.tier-data` and
+> `0.0.0.0` host ports. A plain `docker compose up -d` recreates a container whenever its config hash changes, and one
+> rotated value in `env.tier-data` is enough. A recreate then puts Neo4j back on that config and spends #3251's one
+> planned recreate. `make neo4j-up` therefore runs `up -d --no-recreate --wait neo4j` (docker compose up:
+> `--no-recreate` "If containers already exist, don't recreate them"). **`make up-data-tier` and `make up` carry the
+> same hazard and do NOT pass `--no-recreate`.** On a node with a live graph, do not run them for Neo4j's sake until
+> #3251 has landed; start Neo4j with `make neo4j-up`.
 
 **Backup and restore (Community):**
 - There is no online backup: `neo4j-admin database backup` is Enterprise-only.
@@ -143,9 +155,13 @@ and an unset password fails closed (`tests/test_neo4j_make_roads.py`).
 
 - Auth on. `NEO4J_AUTH` only seeds a NEW store ("Setting NEO4J_AUTH does not override the existing authentication",
   `OM/docker/introduction`), so the real gate is the post-recreate authentication check.
-- The vendor entrypoint echoes `NEO4J_AUTH` to stdout when it sets the initial password, and rejects a password containing `/`.
+- The vendor entrypoint (`docker/local-package/docker-entrypoint.sh` in the fork, byte-identical to the image's `/startup`)
+  accepts `NEO4J_AUTH` only if it matches `^([^/]+)/([^/]+)/?(true)?$` (line 308), so a password containing `/` is rejected;
+  so are the password `neo4j` (line 313) and one shorter than 8 characters (line 324). On a rejected value it prints the
+  WHOLE `NEO4J_AUTH`, password included, to stdout and stderr (lines 355-356), which lands in `docker logs`. The success
+  path logs the command with the password masked (line 351, debug only). Generated passwords (`secrets.token_urlsafe`) never contain `/`.
 - Consumer fallbacks to the password `neo4j` still exist in service code: `hi-rag-gateway-v2/config.py`,
-  `graph-linker/linker.py`, `gateway/api/mindmap.py`, `tools/seed_agent_zero_mcp.py`. They should fail closed the way cipher does.
+  `graph-linker/linker.py`, `pmoves/services/gateway/gateway/api/mindmap.py`, `tools/seed_agent_zero_mcp.py`. They should fail closed the way cipher does.
 - APOC is least privilege (section 4). LOAD CSV egress is blocked. There are no host ports once the compose change lands.
 
 ## 9. Protected paths and grants
