@@ -145,8 +145,18 @@ Rules, each of which the parser enforces:
 
 What it changes in the gate: `claim-collision-pre.py` keys collisions on
 **participants** (owner ∪ declared co-owners) intersected with the lane.
-`RELEASE` pairing stays on the signing owner — a co-owner is declared as having
-*worked* the lane, not as having authority to *close* someone else's claim.
+`RELEASE` pairing covers every participant of a lane it names (corrected
+2026-10-01, `feat/register-baton-close`): the signer's own rows, rows whose
+`co-owners:` declare the signer, and a holder the release names with
+`baton-from:`. Only a real RELEASE row head that declares the lane with
+`branch:` closes anything — a REVIEW row quoting a release, an indented
+example, or prose that mentions a lane closes no one else's rows. The close is
+reversible: the holder re-CLAIMing supersedes it. Grounded in
+`AGNOTE4482.md:1699` (an awareness surface, not a claim registry) and
+`AGNOTE4482.md:1709-1713` (shared lanes are the point; rows are reversible
+adsorptions), with `KRISS_KROSS_ACCORD.md:13-16` making the release row the
+register part of a recorded handoff whose trail entry and PR comment are not
+machine-checked.
 
 **Who declared it decides what happens** (corrected 2026-09-01 after the PR
 \#2858 review; the first version of this paragraph was wrong in a way worth
