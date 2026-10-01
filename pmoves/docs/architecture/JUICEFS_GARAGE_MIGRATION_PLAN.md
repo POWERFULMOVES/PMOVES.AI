@@ -1,6 +1,6 @@
 # JuiceFS `pmoves-media`: Garage migration plan and runbook
 
-**Status:** PLAN ONLY (2026-09-26). Nothing here has been executed. Every step in §3 is operator-gated.
+**Status:** Step 0 baseline MEASURED (2026-10-01, read-only, see "Step 0 record" in §3). Steps (a)-(e) NOT executed; Step (a) is blocked on the gates listed in that record. Every step in §3 is operator-gated.
 **Lane:** `feat/juicefs-garage-migration`, owner B850-CLAUDE-FUNNEL (Knuckles), register PR #3198.
 **Replaces:** the interim MinIO bridge (PR #3192, `pmoves/docker/minio-src/README.md`).
 **Decided upstream:** `JUICEFS_OBJECT_STORE_MIGRATION.md` §0.8: Garage, self-hosted; asymmetric availability accepted. Broadened by operator direction (2026-09-27) to a **fleet-wide** Garage mesh with decided availability tiers (§1.0, §1.1). **D1 decided: replicated Postgres** (§2).
@@ -391,6 +391,66 @@ docker exec pmoves-minio-1 mc du --recursive <alias>/juicefs/pmoves-media/
 - A metadata backup exists: `juicefs dump --binary` to NVMe1, plus a `pg_dump -n juicefs_meta` via its Known Road.
 - **Live mount shape recorded, per mounting node:** the network (`pmoves_data` expected), the meta role in the recorded command line (`juicefs_meta@` expected), the cache dir, and **which make target created the mount**. c5 must reproduce exactly this shape.
 - The MinIO credential pair the volume uses is identified by label, for the `src`/`srcurl` files.
+
+#### Step 0 record (measured 2026-10-01, B850-CLAUDE on Knuckles, read-only)
+
+Nothing was written, deleted or reconfigured. Credentials were never printed: MinIO listings used an
+in-container `MC_HOST_*` alias expanded inside `sh -c`, `juicefs status` ran in the existing
+`juicefs-mount` container with its own `META_PASSWORD`, and the credential pair was identified by
+comparing 12-char sha256 prefixes, not values.
+
+| Item | Measured | How |
+|---|---|---|
+| Volume | `pmoves-media`, UUID `72fbf356-3a13-4c50-889c-e0bd703e2459`, `Storage: minio`, `Bucket: http://minio:9000/juicefs`, BlockSize 4096 KiB, Compression none, TrashDays 1 | `juicefs status` |
+| **Encryption** | **`EncryptAlgo: aes256gcm-rsa`.** Objects are client-side encrypted; the RSA key lives in the format record. Not in the plan's inputs | `juicefs status` |
+| JuiceFS used | 80,926,846,976 B (75.37 GiB), 57 inodes (20 regular files; 13 content files under `knuckles/downloads/`) | `juicefs status`, `find` on the mount |
+| Sessions | 2: the S3 gateway (`pmoves-juicefs-gateway-1`) and `juicefs-mount` at `/home/pmoves-knuckles/pmoves-fs` | `juicefs status` |
+| MinIO image | `pmoves/minio:RELEASE.2025-09-07T16-13-09Z-src`, healthy, on `pmoves_bus`, `pmoves_data`, `pmoves_external` | `docker inspect` |
+| MinIO volume | `pmoves_minio-data`, 79.4 GiB total: `juicefs/` 75.7 GiB, `assets/` 3.7 GiB, `outputs/` and `pmoves-comfyui/` 4 KiB each, `.minio.sys` 11.8 MiB | `du` on a read-only mount of the volume |
+| Bucket `juicefs` | **19,328 objects, 80,926,852,230 B.** Only prefix `pmoves-media/`. `chunks/`: 19,304 objects, 80,926,635,709 B. `meta/`: 24 objects, 216,521 B (hourly auto-backups). No other keys | `mc du --json`, `mc ls --recursive` |
+| Garage | **None.** No container, no volume | `docker ps -a`, `docker volume ls` |
+| Credential pair | The volume's access key equals `MINIO_ROOT_USER`, which equals `MINIO_ACCESS_KEY` (same value). So the `src` set is the **MinIO root** credential, not a bucket-scoped one | sha256-prefix comparison |
+| Live mount shape | network `pmoves_data`; meta `postgres://juicefs_meta@supabase-db…` (password via env); cache `/data/jfsCache` on `/mnt/pmoves-nvme1/juicefs-data`; `--cache-size 102400 --free-space-ratio 0.100`; restart `unless-stopped`; created 2026-09-22. No compose label, so it was a `docker run`; **which make target created it is COULD-NOT-MEASURE** (the B850 bring-back runbook's command emits helper-sized cache flags, not these) | `docker inspect` (env list not printed) |
+| Knuckles disk | root 147 GiB free of 916 GiB (84% used); NVMe1 `/mnt/pmoves-nvme1` 3.5 TiB free of 3.6 TiB | `df -hT` |
+| Tailnet | kvm2, kvm4-1, kvm4-2 active (direct); **Spark offline** | `tailscale status` |
+
+**The 85 vs 76 GB gap is explained: there is no gap.** "~85 GB" is the MinIO volume's 79.4 GiB
+read as decimal GB (≈85.3 GB). Of that, 3.7 GiB is the `assets` bucket. The `juicefs` bucket's
+chunk bytes (80,926,635,709) match JuiceFS `UsedSpace` (80,926,846,976) to within 0.0003%.
+The copy is therefore **80.93 GB**, not 85.
+
+**Gate 0 checksums** (recorded for c6 and for Gate B spot-checks):
+
+| Sample | sha256 |
+|---|---|
+| file `knuckles/downloads/PXL_20260808_152055294.mp4` (49,599,344 B) | `2adb728e697c83ec35ce6ef6a05a9fea91ff8d73819c9c84a5606e883c115e68` |
+| file `knuckles/downloads/PXL_20260716_151626196.mp4` (56,612,762 B) | `26d76e03a9baaf2bcd2a455ef7bb84a79a4a46881e894a3b99e4ba415bd77482` |
+| file `knuckles/downloads/PXL_20260711_011634031.mp4` (70,409,759 B) | `0393e1c618d449a42091f1158a41a6d687f749c26b34ebd636eab925116bd5f9` |
+| object `pmoves-media/chunks/0/16/16385_0_303` | `86ed552ac1a4121c2737415e4794302c40077bf748a19585b034fe4f8e7effcf` |
+| object `pmoves-media/chunks/0/25/25182_3_4194304` | `ae05835af515c6e36184f38affe8af009d9e6a9e3425485b3307ce9b623bbbce` |
+| object `pmoves-media/chunks/0/25/25788_9_4194304` | `291c01948e0621a246d0d2b0a90bddc32ea7adc97e9ef240ac6fb6aee5cdc2a7` |
+
+Object checksums are of ciphertext (the volume is encrypted), so they compare bytes 1:1 across stores.
+
+**Gate 0 items still open:** the metadata backup (`juicefs dump --binary` to NVMe1 plus
+`pg_dump -n juicefs_meta`) was not taken by this read-only pass; `juicefs gc` (no `--delete`)
+was not run.
+
+**Step (a) is blocked, as of 2026-10-01, on:**
+1. **Compose grant.** No Garage compose definition exists. It needs `compose:pr:<N>` for this
+   lane's PR. The grant active on Knuckles at measurement time named a different, already-merged PR
+   and was not used.
+2. **G2: no `GARAGE_*` / `JUICEFS_GARAGE_*` funnel labels exist.** They are absent from
+   `REGISTRY` in `pmoves/tools/chit_manifest_register.py` and from the bundle map in
+   `.github/workflows/sync-secrets-local.yml`. The manifest is a zero-access path with no Known
+   Road, so adding them is an operator action.
+3. **D2, D3 (and D7) open.** With Spark offline and kvm4-1 still a G0 blocker, a 3-zone first cut
+   is at most kvm2 + kvm4-2 + one tier-2 node. Knuckles' NVMe1 (3.5 TiB free) is the obvious
+   tier-2 candidate, but declaring it is D3.
+4. **`garage key create` is operator-context only** (§1.6). An agent session cannot complete
+   Step (a) by itself.
+5. **External port probe** (§1.3) is OPEN — OPERATOR, and is part of Gate A.
+6. **#3150 still OPEN** (G0).
 
 ### Step (a): Stand up Garage, bucket, key
 
