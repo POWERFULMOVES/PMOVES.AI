@@ -138,13 +138,18 @@ def test_neo4j_up_never_recreates_before_the_compose_reconciliation(tmp_path):
 # --- scripts/neo4j_bootstrap.sh (what neo4j-bootstrap runs) -----------------
 
 BOOTSTRAP = PMOVES / "scripts" / "neo4j_bootstrap.sh"
-# `ps` reports the container running; `exec -i` drains stdin as cypher-shell does
-# (otherwise the alias-CSV pipe dies with EPIPE under pipefail).
+CYPHER_DIR = PMOVES / "neo4j" / "cypher"
+SMOKE = CYPHER_DIR / "011_chit_geometry_smoke.cypher"
+SMOKE_OK = '"CHIT_SMOKE_OK", 1, 3, 3, 2'
+# `ps` reports the container running. `exec -i` drains stdin as cypher-shell does
+# (otherwise the alias-CSV pipe dies with EPIPE under pipefail), records it, one
+# record per exec separated by \x1e, and answers the smoke file with $STUB_SMOKE_REPLY.
 STUB_PS = ('if [ "$1" = "ps" ]; then echo pmoves-neo4j; fi\n'
-           'if [ "$1" = "exec" ]; then cat >/dev/null; fi\n')
+           'if [ "$1" = "exec" ]; then in=$(cat); printf "%s\\036" "$in" >> "$(dirname "$0")/stdin.log";\n'
+           '  case "$in" in *CHIT_SMOKE_OK*) printf "verdict, anchors, points, media_refs, modalities\\n%s\\n" "$STUB_SMOKE_REPLY";; esac; fi\n')
 
 
-def _bootstrap(tmp_path: Path, password: str | None):
+def _bootstrap(tmp_path: Path, password: str | None, smoke_reply: str = SMOKE_OK):
     stub = _docker_guard().build_stub_env(tmp_path / "bin", stub_make=False,
                                           behaviours={"docker": STUB_PS})
     env = dict(stub)
@@ -152,9 +157,15 @@ def _bootstrap(tmp_path: Path, password: str | None):
         env.pop(k, None)
     if password is not None:
         env["NEO4J_PASSWORD"] = password
+    env["STUB_SMOKE_REPLY"] = smoke_reply
     proc = subprocess.run(["bash", str(BOOTSTRAP)], env=env, capture_output=True, text=True, timeout=120)
     docker = [row[1:] for row in stub.calls() if row[0] == "docker"]
     return proc.returncode, docker, proc.stdout + proc.stderr
+
+
+def _piped(tmp_path: Path) -> list[str]:
+    log = tmp_path / "bin" / "stdin.log"
+    return log.read_text().split("\x1e")[:-1] if log.exists() else []
 
 
 @pytest.mark.parametrize("password", [None, ""], ids=["unset", "empty"])
@@ -178,3 +189,24 @@ def test_bootstrap_password_goes_by_env_never_argv(tmp_path):
         assert "-p" not in call and "--password" not in call, call
         assert all(SENTINEL not in tok for tok in call), call
     assert not any(c[:2] == ["exec", "pmoves-neo4j"] and "printenv" in c for c in docker)
+
+
+def test_bootstrap_applies_each_cypher_file_once_and_the_smoke_last(tmp_path):
+    """010 and 011 used to run twice (the glob, then again by name)."""
+    rc, docker, out = _bootstrap(tmp_path, SENTINEL)
+    assert rc == 0, out
+    piped = _piped(tmp_path)
+    files = sorted(CYPHER_DIR.glob("*.cypher"))
+    for f in files:
+        assert sum(1 for body in piped if body == f.read_text().rstrip("\n")) == 1, (f.name, len(piped))
+    assert piped[-1] == SMOKE.read_text().rstrip("\n"), "the smoke must run after the alias seed"
+    assert len(piped) == len(files) + 1  # + the alias CSV UNWIND
+
+
+@pytest.mark.parametrize("reply", ['"CHIT_SMOKE_FAIL", 0, 0, 0, 0', ""], ids=["smoke-fail", "no-output"])
+def test_bootstrap_fails_when_the_smoke_does(tmp_path, reply):
+    """011 returned ok=false and the script printed it and exited 0."""
+    rc, docker, out = _bootstrap(tmp_path, SENTINEL, smoke_reply=reply)
+    assert rc != 0, out
+    assert "CHIT geometry smoke failed" in out, out
+    assert "Neo4j bootstrap complete" not in out, out
