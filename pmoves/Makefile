@@ -310,6 +310,7 @@ include mk/hf.mk
 include mk/provider.mk
 include mk/egress.mk
 include mk/neo4j-tailnet.mk
+include mk/garage.mk
 include mk/a2ui-deploy.mk
 include mk/yt-cookies.mk
 include mk/mcp-toolkit.mk

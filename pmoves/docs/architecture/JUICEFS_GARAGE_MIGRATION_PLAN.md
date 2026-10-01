@@ -1,6 +1,6 @@
 # JuiceFS `pmoves-media`: Garage migration plan and runbook
 
-**Status:** Step 0 baseline MEASURED (2026-10-01, read-only, see "Step 0 record" in §3). Steps (a)-(e) NOT executed; Step (a) is blocked on the gates listed in that record. Every step in §3 is operator-gated.
+**Status:** Step 0 baseline MEASURED (2026-10-01, read-only, see "Step 0 record" in §3). **Phase A approved by the operator (2026-10-01)**; its agent-doable prep is done (§7). Steps (a)-(e) NOT executed; Step (a) is blocked on the operator items in §7 and the gates in the Step 0 record. Phase B (cutover, Steps c-e) is a separate go. Every step in §3 is operator-gated.
 **Lane:** `feat/juicefs-garage-migration`, owner B850-CLAUDE-FUNNEL (Knuckles), register PR #3198.
 **Replaces:** the interim MinIO bridge (PR #3192, `pmoves/docker/minio-src/README.md`).
 **Decided upstream:** `JUICEFS_OBJECT_STORE_MIGRATION.md` §0.8: Garage, self-hosted; asymmetric availability accepted. Broadened by operator direction (2026-09-27) to a **fleet-wide** Garage mesh with decided availability tiers (§1.0, §1.1). **D1 decided: replicated Postgres** (§2).
@@ -104,7 +104,7 @@ All nodes have a tier.
 
 | Node | Tier | OS (profile) | Free disk for Garage | Note |
 |---|---|---|---|---|
-| Spark | 1 | DGX OS 7.5.0, arm64 (`dgx-spark-grace-blackwell.yaml:21,29`) | **COULD-NOT-MEASURE** (the node is down) | **DOWN on 2026-09-27.** arm64: whether the pinned `dxflrs/garage:v2.4.1` digest has an arm64 variant is COULD-NOT-MEASURE. Spark is also a secrets-bundle producer (§1.6) |
+| Spark | 1 | DGX OS 7.5.0, arm64 (`dgx-spark-grace-blackwell.yaml:21,29`) | **COULD-NOT-MEASURE** (the node is down) | **DOWN on 2026-09-27.** arm64: the fork image is built for arm64 (§6.2); whether it runs well on Spark is COULD-NOT-MEASURE. Spark is also a secrets-bundle producer (§1.6) |
 | Knuckles / B850 | 2 | linux (`workstation-9850x3d-dual-r9700.yaml:29`) | **COULD-NOT-MEASURE** | Hosts `supabase-db` and MinIO today. The NVMe1 seat is in #3150. It is the other secrets-bundle producer |
 | Z890 | 2 | not recorded in `z890-coordinator.yaml` | **COULD-NOT-MEASURE** | — |
 | 5090 | 2 | windows (`workstation_5090.yaml:32`) | **COULD-NOT-MEASURE** | Windows: see §1.3a |
@@ -170,35 +170,42 @@ df -hT / /var/lib 2>/dev/null; lsblk -o NAME,SIZE,TYPE,FSTYPE,MOUNTPOINT; free -
   - Which tier-2 nodes are actually up 24/7 is COULD-NOT-MEASURE, because no profile records uptime.
   - A tier-2 node that holds replicas also works against the §0.8 asymmetry ("operators keep viewing when the lab is down"). This plan names that; it does not resolve it.
 
-### 1.3 `garage.toml` (same on every storage node; no secret values in the file)
+### 1.3 `garage.toml` (rendered per node; no secret values in the file)
+
+The tracked template is `pmoves/config/garage/garage.toml.tmpl`. `make -C pmoves garage-render GARAGE_TIER=1|2 [GARAGE_PEERS=<file>]` renders it to the gitignored `pmoves/config/garage/rendered/garage.toml` (`pmoves/tools/garage_render_config.py`, tested in `pmoves/tools/tests/test_garage_render_config.py`). The rendered shape:
 
 ```toml
-replication_factor = 3
+replication_factor = 3                                  # identical on every node (§6.1 row 3)
 consistency_mode   = "consistent"
 metadata_dir       = "/var/lib/garage/meta"
 data_dir           = "/var/lib/garage/data"
-db_engine          = "lmdb"
-metadata_auto_snapshot_interval = "6h"
 metadata_snapshots_dir = "/var/lib/garage/snapshots"   # sibling of data_dir, not inside it; up to 4x meta size
+metadata_auto_snapshot_interval = "6h"
+db_engine          = "lmdb"                             # tier 1; "sqlite" on tier 2 (operator decision, §6.1 row 15)
+compression_level  = "none"                             # ciphertext is incompressible (§6.1 row 18)
 
-rpc_bind_addr   = "[::]:3901"                          # peers dial rpc_public_addr; firewall-gated below
-rpc_public_addr = "<this node's tailnet address, rendered at deploy>:3901"
 rpc_secret_file = "/run/secrets/pmoves_garage_rpc_secret"
+rpc_bind_addr   = "<this node's tailnet IPv4>:3901"
+rpc_public_addr = "<this node's tailnet IPv4>:3901"
+bootstrap_peers = ["<node id>@<peer tailnet IPv4>:3901", ...]   # tracked membership (§6.1 row 12)
 
 [s3_api]
-api_bind_addr = "<this node's tailnet address>:3900"   # never [::]: the KVMs are public exit nodes
+api_bind_addr = "<this node's tailnet IPv4>:3900"      # never [::]: the KVMs are public exit nodes
 s3_region     = "us-east-1"          # see 1.4: matches JuiceFS's default region
 
+# no [s3_web]: 3902 is never bound (§6.1 row 8)
+
 [admin]
-api_bind_addr      = "<this node's tailnet address>:3903"
-admin_token_file   = "/run/secrets/pmoves_garage_admin_token"
-metrics_token_file = "/run/secrets/pmoves_garage_metrics_token"
+api_bind_addr         = "<this node's tailnet IPv4>:3903"
+admin_token_file      = "/run/secrets/pmoves_garage_admin_token"
+metrics_token_file    = "/run/secrets/pmoves_garage_metrics_token"
+metrics_require_token = true                            # §6.1 row 6
 ```
 
 - **Image:** ~~`dxflrs/garage:v2.4.1`~~ **superseded 2026-10-01 by operator direction:** build from the PMOVES fork `POWERFULMOVES/PMOVES-garage` (`PMOVES.AI-Edition-Hardened`, cut at upstream tag `v2.4.1`), push to GHCR, pin by digest per F-07. See §6.2 and §7.
 - **Network:** host networking, per Garage's `cookbook/real-world.md`.
 - **Snapshots dir:** `/var/lib/garage/snapshots` is a sibling of `data_dir`. It must not sit inside `data_dir`, which Garage manages as its block store.
-- **Bind addresses:** the S3 and admin APIs bind to the node's tailnet address, so they are not listening on the public interface at all. A bind to a tailnet address fails if `tailscaled` is not up when Garage starts. The deploy must order Garage after Tailscale, or rely on a restart policy. RPC stays on `[::]`, because peers reach it at `rpc_public_addr`. It is protected by the firewall rule and the gate below.
+- **Bind addresses:** S3, admin **and RPC** all bind to the node's tailnet address, so nothing listens on a public interface. (Changed 2026-10-01 from RPC on `[::]`: peers dial `rpc_public_addr`, which is the same tailnet address, and the CLI dials `rpc_public_addr` too, per v2.4.1 `src/garage/main.rs`, so nothing needs the wildcard bind.) A bind to a tailnet address fails if `tailscaled` is not up when Garage starts; the compose service relies on `restart: unless-stopped`. The renderer refuses any address outside `100.64.0.0/10`. The firewall rule and the external probe below are still required.
 - **Firewall (required on every storage node, and critical on the KVMs because they are public exit nodes):** allow 3900/3901/3903 on `tailscale0` only. Tier-2 nodes sit behind residential NAT, but the same rule applies. No port-forward for 3900/3901/3903 may exist on any router in front of them.
 - **Hostinger firewall today (Hostinger REST, read-only, 2026-09-27):** no Hostinger firewall rule mentions 3900, 3901 or 3903, and no drop rules exist. The API does not expose the default policy. So whether these ports are closed on the public addresses is **COULD-NOT-MEASURE** from the API.
 - **External port-probe gate (REQUIRED; OPEN — OPERATOR):** before Gate A passes, probe **all three ports (3900, 3901, 3903) on every KVM's public address from a host outside the tailnet**. Every probe must be refused or time out. One open port fails the gate. A probe from inside the tailnet proves nothing, because tailnet traffic is allowed by design. Who runs the probe, and from which outside host, is an operator decision.
@@ -207,7 +214,7 @@ metrics_token_file = "/run/secrets/pmoves_garage_metrics_token"
 
 Every item in this subsection is **COULD-NOT-MEASURE** until someone tries it on the node.
 
-- **Runtime.** A Linux container under Docker Desktop (WSL2 backend), using the same `dxflrs/garage` digest pin as the Linux nodes.
+- **Runtime.** A Linux container under Docker Desktop (WSL2 backend), using the same fork image digest pin as the Linux nodes (§6.2).
 - **Secrets.** `pmoves_garage_rpc_secret` and the admin and metrics tokens are delivered by the funnel, as for any node. The funnel's Windows delivery route for these labels is unverified. It is the same gap as KVM delivery (§1.6, G2).
 - **Networking.** Garage's cookbook uses host networking, and §1.3 binds to the node's tailnet address. Inside Docker Desktop's VM, neither the host's tailnet interface nor host networking can be assumed.
   - Prior-art fit: the **Tailscale sidecar** pattern (`FLEET_ACCESS_NATS_HUB.md` §4). The Garage container gets its own tailnet identity with `tag:storage`, and `rpc_public_addr` is the sidecar's tailnet address.
@@ -451,14 +458,15 @@ was not run.
    Step (a) by itself.
 5. **External port probe** (§1.3) is OPEN — OPERATOR, and is part of Gate A.
 6. **#3150 still OPEN** (G0).
-7. **No buildable image yet** (added 2026-10-01). Garage now comes from the PMOVES fork, which has no Hardened branch, no tags, and a Dockerfile that only packages a prior Nix build (§6.2, §7 items 1, 2 and 9).
+7. **No published image yet.** The fork now has tags, the Hardened branch and protection, and its CI workflow is open as `POWERFULMOVES/PMOVES-garage#1` (§6.2, §7). The digest exists only after that PR merges and the workflow runs on Hardened.
 
 ### Step (a): Stand up Garage, bucket, key
 
 ```bash
 # each first-cut storage node (deploy under a Known Road grant, §5): secrets from the funnel
-garage node id                                     # collect one id per node
-garage node connect <id>@<peer tailnet addr>:3901  # from one node, for each of the others
+# first start with no peers: make -C pmoves garage-render GARAGE_TIER=<1|2>; make -C pmoves up-garage
+garage node id                                     # collect one `<id>@<tailnet ip>:3901` per node (public keys, not secrets)
+# write all ids to a peers file, re-render every node with GARAGE_PEERS=<file>, restart (bootstrap_peers, §6.1 row 12)
 # one assign per node: zone per §1.2 (own zone by default; `lab` only if zone grouping is chosen),
 # capacity = that node's D3 declaration (§1.1), tag = node name. Tier 1 declares as much as its headroom allows.
 garage layout assign <id-kvm2>   -z kvm2   -c <declared>G -t kvm2
@@ -471,6 +479,9 @@ garage layout show                                 # read BEFORE applying: "Usab
 garage layout apply --version 1
 garage bucket create juicefs
 (umask 077; garage key create juicefs-pmoves-media > "$INTAKE")   # hazard, §1.6
+# scoped, expiring admin tokens (§6.1 row 7); each PRINTS a token, so operator context and intake file only:
+(umask 077; garage admin-token create --expires-in 30d --scope GetClusterStatus,GetBucketInfo,GetKeyInfo,ListBuckets,ListKeys migration > "$INTAKE_ADMIN")
+(umask 077; garage admin-token create --scope Metrics prometheus > "$INTAKE_METRICS")
 garage bucket allow --read --write juicefs --key juicefs-pmoves-media
 ```
 
@@ -675,7 +686,7 @@ Garage's `connect/fs/` page does not mention JuiceFS. Compatibility rests on Gat
 | 2 | Zones and capacity | Usable ≈ smallest zone at exactly 3 zones; derived formula for N>3 (§1.2) | `cookbook/real-world/` "Prerequisites": 3 copies "always" in different locations, so the 4-node example yields 1.5 TB usable; `operations/layout/` Example 1 | None. Our derivation agrees, and Gate A reads the authoritative figure from `layout show` | — |
 | 3 | `replication_factor` | 3, never changed later (§1.2) | `reference-manual/configuration/` `replication_factor`: must be identical in every node's config ("Never run a Garage cluster where that is not the case"). A change means deleting the layout files on all nodes plus a full rebalance, "not officially supported" | The plan does not require the value to match on every node | Gate A: diff the rendered `garage.toml` across nodes; `replication_factor` and `consistency_mode` must be identical |
 | 4 | `consistency_mode` | `consistent`, quorum 2/2 at RF=3 (§1.2) | `reference-manual/configuration/` `consistency_mode`: the quorum table matches (consistent, RF 3: W2/R2). `degraded` lowers the read quorum to 1 | None on the setting. The docs offer `degraded` as an outage lever: reads continue with one replica up | Name `degraded` in §1.2 as an operator-only emergency lever for the Spark-down plus `lab`-down case, with its cost (no read-after-write consistency). Do not make it the default |
-| 5 | Secret files | `rpc_secret_file`, `admin_token_file`, `metrics_token_file` under `/run/secrets/` (§1.3) | `reference-manual/configuration/` `rpc_secret`, `admin_token`, `metrics_token`, `allow_world_readable_secrets`: file forms are supported, and Garage checks secret-file permissions. Source `src/garage/secrets.rs:144`: **refuses to start if `mode & 0o077 != 0`** ("expected 0600") | **Blocker if missed.** Compose (non-swarm) secrets are bind mounts that keep the host file's mode, so a 0644 host file stops Garage at boot | Each node's secret files are 0600 (or 0400), owned by the container user (root in the upstream scratch image). Never set `allow_world_readable_secrets` or `GARAGE_ALLOW_WORLD_READABLE_SECRETS` |
+| 5 | Secret files | `rpc_secret_file`, `admin_token_file`, `metrics_token_file` under `/run/secrets/` (§1.3) | `reference-manual/configuration/` `rpc_secret`, `admin_token`, `metrics_token`, `allow_world_readable_secrets`: file forms are supported, and Garage checks secret-file permissions. Source `src/garage/secrets.rs:144`: **refuses to start if `mode & 0o077 != 0`** ("expected 0600") | **Blocker if missed.** Compose (non-swarm) secrets are bind mounts that keep the host file's mode, so a 0644 host file stops Garage at boot | Each node's secret files are 0600 (or 0400) and owned by `GARAGE_UID`. The container runs as that uid with every capability dropped: root without `CAP_DAC_OVERRIDE` could not read another uid's 0600 file. `make -C pmoves garage-preflight` stats the files (it never reads them) and checks presence, owner and mode before `up`. Never set `allow_world_readable_secrets` or `GARAGE_ALLOW_WORLD_READABLE_SECRETS` |
 | 6 | Metrics auth | `metrics_token_file` set (§1.3) | `reference-manual/configuration/` `metrics_require_token` (since v2.0.0) | Without `metrics_require_token = true`, an unset or unread token leaves `/metrics` open | Add `metrics_require_token = true` to `[admin]` |
 | 7 | Admin token | One static `admin_token_file`, full scope (§1.3, §1.6) | `reference-manual/configuration/` `admin_token`: since v2.0, dynamic admin tokens carry an **expiry and a scope**; the static token is full scope with no expiry. `reference-manual/admin-api/` shows `--scope ... CreateBucket,CreateKey,AllowBucketKey` | The plan uses only the full-scope static token | Keep the static token for bootstrap. Mint a scoped, expiring token for the migration context (Step a) and one for Prometheus |
 | 8 | Ports | 3900 S3, 3901 RPC, 3903 admin; no 3902 (§1.3) | `quick-start/` and `cookbook/real-world/` configs: 3900 S3, 3901 RPC, 3902 `[s3_web]`, 3903 admin | None. `[s3_web]` is omitted on purpose, so 3902 is not bound; the external probe covers 3900/3901/3903 | Note in §1.3 that `[s3_web]` is intentionally absent |
@@ -699,21 +710,23 @@ Garage's `connect/fs/` page does not mention JuiceFS. Compatibility rests on Gat
 
 ### 6.2 Build and pin (the fork)
 
-**Fork facts** (measured 2026-10-01 with `gh repo view`, `gh api .../branches` and `git ls-remote`):
+**Fork facts.** Measured 2026-10-01 before Phase A, then after the fork prep, using `gh repo view`, `gh api .../branches/*/protection` and `git ls-remote`.
 
-| Item | Measured |
-|---|---|
-| Repo | `POWERFULMOVES/PMOVES-garage`, created 2026-10-01T10:19Z |
-| Upstream | A GitHub fork of `deuxfleurs-org/garage`, the GitHub mirror of `git.deuxfleurs.fr/Deuxfleurs/garage` |
-| Branches | `main-v2` only. It is the default, it is unprotected, and it is identical to upstream `main-v2` (`5ad1de0b0`) |
-| Hardened branch | **None.** No `PMOVES.AI-Edition-Hardened` exists |
-| Tags | **None** (2 refs in total). Upstream has `v2.4.1` (commit `268334bd2`), and `main-v2` is 63 unreleased commits ahead of it |
+| Item | Before | After the fork prep (2026-10-01) |
+|---|---|---|
+| Repo | `POWERFULMOVES/PMOVES-garage`, a GitHub fork of `deuxfleurs-org/garage` (the GitHub mirror of `git.deuxfleurs.fr/Deuxfleurs/garage`) | unchanged |
+| Branches | `main-v2` only (the default), unprotected, identical to upstream `main-v2` (`5ad1de0b0`) | `main-v2` unchanged, plus `PMOVES.AI-Edition-Hardened` at `268334bd2` (= `v2.4.1^{commit}`) |
+| Tags | none | all 91 upstream tags pushed (no `.github/` at `v2.4.1`, so the pushes triggered nothing) |
+| Protection | none | `main-v2` and Hardened carry the fleet standard policy, the same body `branch-protection-sync.yml` `policy()` sends: PR required (0 reviews, dismiss stale), no force-push, no deletion, conversation resolution, `require_last_push_approval: false`. Read back field by field, and it matches PMOVES-registry's Hardened protection (#3206 precedent) |
+| Image CI | none | `POWERFULMOVES/PMOVES-garage#1` (open, not merged): `.github/workflows/pmoves-ghcr.yml` and `PMOVES.AI_INTEGRATION.md` |
 
-**The repo's Dockerfile does not build anything.**
-- It is `FROM scratch` plus `COPY result/bin/garage`, so it only packages the output of an earlier Nix build.
-- The upstream release pipeline (`.woodpecker/release.yaml`) runs `nix-build --attr releasePackages.${ARCH}` to make static musl binaries for amd64, i386, arm64 and armv6.
-- Building from the fork therefore needs a multi-stage Dockerfile on the hardened branch, using Nix or cargo with a musl target (`cookbook/from-source/`).
-- arm64 is an upstream release target, so Spark is buildable. Whether it runs there is still COULD-NOT-MEASURE.
+**How the image is built.** The repo's own `Dockerfile` (`FROM scratch` plus `COPY result/bin/garage`) packages a Nix build; it does not compile anything. Rather than replace it with a multi-stage Dockerfile, the fork CI runs **upstream's own release recipe**:
+- `nix-build --attr releasePackages.${ARCH} --argstr git_version <tag or sha>`, then `script/not-dynamic.sh`, then `script/test-smoke.sh` on amd64. These are the `build`, `check is static binary` and `integration tests` steps of `.woodpecker/release.yaml` at `v2.4.1`, with the substituters from `nix/nix.conf`.
+- The image is built from the upstream `Dockerfile`, unchanged, for amd64 and arm64. Both arches cross-compile on one amd64 runner, as upstream's matrix does.
+- Each arch is pushed by digest, then merged into one manifest list at `ghcr.io/powerfulmoves/pmoves-garage/garage`. Upstream uses kaniko and `manifest-tool` for this step.
+- GHCR naming and `GITHUB_TOKEN` auth follow the PMOVES fork precedent `POWERFULMOVES/PMOVES-DoX` `.github/workflows/docker-publish.yml`.
+- PR runs build without pushing. The step summary prints the manifest-list digest to pin.
+- arm64 is built, so Spark has an image. Whether Garage runs well on Spark is still COULD-NOT-MEASURE.
 
 **Pin to the release, not the branch tip.**
 - Cut `PMOVES.AI-Edition-Hardened` from tag `v2.4.1` (`268334bd2`), not from `main-v2`.
@@ -728,18 +741,26 @@ Garage's `connect/fs/` page does not mention JuiceFS. Compatibility rests on Gat
 
 ## 7. PMOVES-garage integration checklist (precedent: #3206, PMOVES-registry / PMOVES-spynel)
 
-Nothing below is done yet. Protection status comes from `python3 .claude/skills/known-roads/roads.py check <path>` (2026-10-01).
+Status as of 2026-10-01 (Phase A agent prep). Protection status comes from `python3 .claude/skills/known-roads/roads.py check <path>`.
 
-| # | Item | Path or place | Protection | Needs |
+| # | Item | Path or place | Protection | Status |
 |---|---|---|---|---|
-| 1 | Push the upstream tags to the fork; cut `PMOVES.AI-Edition-Hardened` from `v2.4.1` | fork repo | — (write to an external repo) | Operator or the fleet App token |
-| 2 | Hardened overlay: a multi-stage Dockerfile (amd64 + arm64) and `PMOVES.AI_INTEGRATION.md` | fork, hardened branch | — | A fork PR |
-| 3 | Branch protection on `main-v2` and Hardened: PR required, no force-push, no deletion, conversation resolution | GitHub API | — | Operator or App token, applied live as in #3206. `branch-protection-sync.yml` then audits it, because it derives coverage from `.gitmodules` (no file edit needed) |
-| 4 | `.gitmodules` entry: path `PMOVES-garage`, the URL, `branch = PMOVES.AI-Edition-Hardened`, `ignore = all` | `.gitmodules` | `noDeletePaths` only. Edits are allowed; **no grant needed** | This lane's PR |
-| 5 | Submodule gitlink at the Hardened commit | `PMOVES-garage` | none | This lane's PR. The pin must be an ancestor of Hardened, or the squash-merge SIDEWAYS trap applies |
-| 6 | Registry entry: `upstream: deuxfleurs-org/garage`, `sync: true`, `branch: PMOVES.AI-Edition-Hardened`, and a reason | `pmoves/config/fork_registry.json` | none | This lane's PR. Once `.gitmodules` has the entry, `fork_registry_ratchet.py` rule 4 fails without it |
-| 7 | Audit-list entry `PMOVES-garage` and the mapping `deuxfleurs-org/garage|PMOVES-garage|main-v2` | `.github/workflows/fork-sync.yml` | `noDeletePaths <- .github/`. Edits are allowed; **no grant needed** | This lane's PR. The override is `main-v2`, not Hardened (§6.2) |
-| 8 | Section and summary row | `.claude/context/submodules.md` | **`readOnlyPaths <- .claude/context/`, with no Known Road** | An operator edit, or a new domain predicate agreed with the operator |
-| 9 | GHCR build of the hardened image, with the digest recorded | fork CI or PMOVES CI | — | Follow-on work. The compose file pins the digest |
-| 10 | Compose service | `pmoves/docker-compose.garage.yml` | `readOnlyPaths`, road `compose` | The grant `compose:pr:3241` |
-| 11 | Funnel labels (§1.6) | the CHIT secrets manifest (zero-access, no road), `chit_manifest_register.py`, `sync-secrets-local.yml` | zero-access / `noDeletePaths` | Operator (G2) |
+| 1 | Push the upstream tags to the fork; cut `PMOVES.AI-Edition-Hardened` from `v2.4.1` | fork repo | — | **DONE** (§6.2) |
+| 2 | Hardened overlay: image CI (amd64 + arm64) and `PMOVES.AI_INTEGRATION.md` | fork, hardened branch | — | **PR OPEN**: `POWERFULMOVES/PMOVES-garage#1`. Not merged; operator review |
+| 3 | Branch protection on `main-v2` and Hardened | GitHub API | — | **DONE**, read back (§6.2). `branch-protection-sync.yml` audits it via `.gitmodules` |
+| 4 | `.gitmodules` entry: path `PMOVES-garage`, `branch = PMOVES.AI-Edition-Hardened`, `ignore = all` | `.gitmodules` | `noDeletePaths` only | **DONE** in #3241 |
+| 5 | Submodule gitlink at the Hardened commit | `PMOVES-garage` | none | **DONE** at `268334bd2`. That is an ancestor of Hardened after #1 merges (any merge style), so there is no SIDEWAYS drift. Advance it when the image is published |
+| 6 | Registry entry: `upstream: deuxfleurs-org/garage`, `sync: true`, `branch: PMOVES.AI-Edition-Hardened` | `pmoves/config/fork_registry.json` | none | **DONE**. `fork_registry_ratchet.py`: 83/83 decided |
+| 7 | Audit-list entry and mapping `deuxfleurs-org/garage\|PMOVES-garage\|main-v2` | `.github/workflows/fork-sync.yml` | `noDeletePaths` only | **DONE**. The override is `main-v2`, not Hardened |
+| 8 | Section and summary row | `.claude/context/submodules.md` | **`readOnlyPaths`, no Known Road** | **OPERATOR.** The patch is posted on #3241 (applies cleanly with `git apply`) |
+| 9 | GHCR build of the hardened image, digest recorded | fork CI | — | **PENDING** on item 2 merging and the first run on Hardened |
+| 10 | Compose service | `pmoves/docker-compose.garage.yml` | `readOnlyPaths`, road `compose` | **PREPARED, NOT WRITTEN.** Waits for the grant `compose:pr:3241` |
+| 10a | Config template, renderer and secret-mode preflight; make targets | `pmoves/config/garage/garage.toml.tmpl`, `pmoves/tools/garage_render_config.py`, `pmoves/mk/garage.mk` | none / `noDeletePaths` | **DONE** in #3241, with tests |
+| 11 | Funnel labels (§1.6) | the CHIT secrets manifest (zero-access, no road), `chit_manifest_register.py`, `sync-secrets-local.yml` | zero-access / `noDeletePaths` | **OPERATOR** (G2) |
+
+**Operator-only items (Phase A):**
+1. Add the `GARAGE_*` and `JUICEFS_GARAGE_*` labels to the zero-access secrets manifest, and complete the 4-place route (§1.6).
+2. Run `garage key create` and `garage admin-token create` in operator context, output to an intake file only (§1.6, Step a).
+3. Run the external port probe of 3900, 3901 and 3903 on every storage node's public address, from outside the tailnet (§1.3).
+4. Grant `compose:pr:3241` for `pmoves/docker-compose.garage.yml`.
+5. Apply the `.claude/context/submodules.md` patch (item 8).
