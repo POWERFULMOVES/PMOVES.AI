@@ -80,6 +80,9 @@ DRY=false
 # The table this script edits. Overridable so the steps can be exercised against
 # a scratch file; the default is the system table described by fstab(5).
 FSTAB="${NVME_PROVISION_FSTAB:-/etc/fstab}"
+# Where block devices appear in sysfs; overridable for the same reason. Holders
+# are read from <dir>/<name>/holders (see the blank check).
+SYSFS_BLOCK="${NVME_PROVISION_SYSFS_BLOCK:-/sys/class/block}"
 
 # Flag parsing and the --yes-really gate: Originated, Crush lane, 2026-09-22,
 # following the in-repo convention [FMT]:22-30 and :37.
@@ -184,6 +187,10 @@ fi
 PART="$(partition_path "$DEVICE" 1)"
 part_fs()    { lsblk -no FSTYPE "$1" 2>/dev/null | head -n1 || true; }
 part_label() { lsblk -no LABEL  "$1" 2>/dev/null | head -n1 || true; }
+part_partlabel() { lsblk -no PARTLABEL "$1" 2>/dev/null | head -n1 || true; }
+IS_ROOT=false
+[[ "$(id -u)" -eq 0 ]] && IS_ROOT=true
+PROBE_INCONCLUSIVE=false
 PART_COUNT="$(lsblk -no TYPE "$DEVICE" 2>/dev/null | grep -c '^part$' || true)"
 
 # --- Already provisioned? -------------------------------------------------
@@ -208,24 +215,63 @@ else
   # Originated, B850-CLAUDE / nvme-3150-rebase, 2026-10-01 (no upstream
   # precedent: the installer wipes after an interactive confirm instead,
   # [ISO]:726-729; checked [ISO], [PART], [OMA] bin/).
-  while read -r node; do
+  #   - blkid exit status (blkid(8) EXIT STATUS): 0 = found, 2 = nothing
+  #     identified OR impossible to gather information, 4 = usage/other error,
+  #     8 = ambivalent low-level result. As root, anything but 0/2 fails closed.
+  #     As non-root the probe cannot open the device (EACCES, which also exits
+  #     2), so it is NOT run, and a --dry-run reports the result as
+  #     INCONCLUSIVE rather than blank.
+  #   - In-use without a signature: a child whose lsblk(8) TYPE is not "part"
+  #     (e.g. a plain dm-crypt or dm-linear mapping), or a non-empty sysfs
+  #     "holders" directory. The kernel creates <bdev>/holders/<disk> links
+  #     when a device-mapper/md disk claims a block device (linux
+  #     block/holder.c:41-49, bd_link_disk_holder). There is no
+  #     Documentation/ABI entry for it: stable/sysfs-block does not mention
+  #     holders (checked at master, 2026-10-01).
+  # Originated, B850-CLAUDE / nvme-3150-rebase, 2026-10-01 (no upstream
+  # precedent; checked [ISO], [PART], [OMA] bin/).
+  while read -r node type; do
     [[ -n "$node" ]] || continue
+    if [[ "$node" != "$DEVICE_REAL" && "$node" != "$DEVICE" && "$type" != "part" ]]; then
+      err "$node (a ${type:-unknown} device) sits on $DEVICE, so the disk is in use. Refusing."
+    fi
+    holders=("$SYSFS_BLOCK/${node##*/}/holders/"*)
+    if [[ -e "${holders[0]}" ]]; then
+      err "$node is held by ${holders[*]##*/} (sysfs holders), so it is in use. Refusing."
+    fi
     sig="$(lsblk -dno FSTYPE "$node" 2>/dev/null || true)"
-    [[ -n "$sig" ]] || sig="$(blkid -p --no-part-details -u filesystem,raid,crypto,other -s TYPE -o value "$node" 2>/dev/null || true)"
+    if [[ -z "$sig" ]]; then
+      if $IS_ROOT; then
+        if probe="$(blkid -p --no-part-details -u filesystem,raid,crypto,other -s TYPE -o value "$node" 2>/dev/null)"; then
+          sig="$probe"
+        else
+          rc=$?
+          [[ "$rc" -eq 2 ]] || err "blkid -p could not probe $node (exit $rc). Refusing (fail closed)."
+        fi
+      else
+        PROBE_INCONCLUSIVE=true
+      fi
+    fi
     [[ -z "$sig" ]] || err "$node carries a $sig signature. This script only provisions BLANK drives; refusing."
     mp="$(lsblk -dno MOUNTPOINTS "$node" 2>/dev/null | grep -v '^$' || true)"
     [[ -z "$mp" ]] || err "$node is mounted at $mp. Refusing."
-  done < <(lsblk -nlpo NAME "$DEVICE" 2>/dev/null || true)
+  done < <(lsblk -nlpo NAME,TYPE "$DEVICE" 2>/dev/null || true)
 
   if [[ "$PART_COUNT" -gt 0 ]]; then
     # PMOVES policy, stricter than the installer (which wipes after a confirm,
     # [ISO]:726-729): refuse any partitioned drive, except exactly one partition
-    # with no filesystem, which is an interrupted earlier run.
-    # Originated, Crush lane, 2026-09-22 (PR #3150).
+    # with no filesystem whose GPT name (lsblk(8) PARTLABEL) is $LABEL. That name
+    # is what this script's own sgdisk -c sets below, so only an interrupted run
+    # OF THIS SCRIPT resumes; any other lone partition is refused.
+    # Originated, Crush lane, 2026-09-22 (PR #3150); PARTLABEL test Originated,
+    # B850-CLAUDE / nvme-3150-rebase, 2026-10-01.
     if [[ "$PART_COUNT" -ne 1 || -n "$(part_fs "$PART")" ]]; then
       err "$DEVICE already has a partition table with data. This script only provisions BLANK drives. If the partitions are yours to destroy, clear them explicitly first."
     fi
-    log "$DEVICE carries one unformatted partition (interrupted run) — resuming"
+    if [[ "$(part_partlabel "$PART")" != "$LABEL" ]]; then
+      err "$DEVICE has one partition not created by this script (GPT name '$(part_partlabel "$PART")', expected '$LABEL'). Refusing."
+    fi
+    log "$DEVICE carries one unformatted $LABEL partition (interrupted run) — resuming"
   fi
 fi
 
@@ -272,6 +318,11 @@ fi
 if $DRY; then
   log "[dry] would add to $FSTAB if absent: UUID=<uuid of $PART>  $MOUNT  ext4  defaults,nofail  0  2"
   log "[dry] would mount $MOUNT and hand it to ${SUDO_USER:-${USER:-root}}"
+  if $PROBE_INCONCLUSIVE; then
+    # Exit 3 = could not measure (0 clean / 1 findings / 3 could-not-measure).
+    log "[dry] INCONCLUSIVE: the low-level signature probe (blkid -p) needs root and did not run. lsblk shows no signature, but $DEVICE is NOT confirmed blank. Re-run the dry run with sudo."
+    exit 3
+  fi
   exit 0
 fi
 

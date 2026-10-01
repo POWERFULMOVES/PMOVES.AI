@@ -103,7 +103,7 @@ if name == "lsblk":
     else:
         rows = [dev] + devs[dev].get("children", [])
     keys = {"NAME": None, "TYPE": "type", "PKNAME": "pkname", "FSTYPE": "fstype", "LABEL": "label",
-            "SIZE": "size", "UUID": "uuid"}
+            "SIZE": "size", "UUID": "uuid", "PARTLABEL": "partlabel"}
     for r in rows:
         d = devs[r]
         if [c.upper() for c in cols] == ["MOUNTPOINTS"]:
@@ -124,6 +124,8 @@ elif name == "blkid":
     if "-p" in args:
         # low-level probe: what is ON the device, even if the udev cache
         # (lsblk FSTYPE) has not caught up ("probe_type" overrides for that case)
+        if "probe_rc" in d:  # simulate a probe error (blkid(8): 4 = error, 8 = ambivalent)
+            sys.exit(d["probe_rc"])
         found = d.get("probe_type", d.get("fstype", ""))
         if found:
             print(found)
@@ -138,7 +140,8 @@ elif name == "sgdisk":
         devs[dev]["children"] = []
     elif "-n" in args and not st.get("partition_never_appears"):
         p = part_path(dev, 1)
-        devs[p] = {"type": "part", "pkname": dev.rsplit("/", 1)[1], "fstype": "", "label": ""}
+        name = args[args.index("-c") + 1].split(":", 1)[1] if "-c" in args else ""
+        devs[p] = {"type": "part", "pkname": dev.rsplit("/", 1)[1], "fstype": "", "label": "", "partlabel": name}
         devs[dev]["children"] = [p]
     save()
 elif name == "mk" "fs.ext4":
@@ -200,13 +203,21 @@ class Harness:
         self.fstab = tmp_path / "fstab"
         self.fstab.write_text("UUID=aaaa  /  ext4  errors=remount-ro  0  1\n")
         self.mnt = str(tmp_path / "mnt" / "pmoves-nvme1")
+        self.sysfs = tmp_path / "sys-class-block"  # fictional; holders added per test
+        self.sysfs.mkdir()
+
+    def add_holder(self, node: str, holder: str):
+        d = self.sysfs / node.rsplit("/", 1)[1] / "holders"
+        d.mkdir(parents=True, exist_ok=True)
+        (d / holder).write_text("")
 
     def run(self, *flags, device="/dev/nvme9n1", yes=True, sudo_user="tester"):
         argv = ["bash", str(SCRIPT), f"--device={device}", f"--mount={self.mnt}", "--role=creator-store", *flags]
         if yes:
             argv.append("--yes-really")
         env = {"PATH": str(self.bin), "HOME": str(self.tmp), "NVME_STUB_STATE": str(self.state),
-               "NVME_STUB_LOG": str(self.log), "NVME_PROVISION_FSTAB": str(self.fstab), "USER": "root"}
+               "NVME_STUB_LOG": str(self.log), "NVME_PROVISION_FSTAB": str(self.fstab), "USER": "root",
+               "NVME_PROVISION_SYSFS_BLOCK": str(self.sysfs)}
         if sudo_user:
             env["SUDO_USER"] = sudo_user
         return subprocess.run(argv, env=env, capture_output=True, text=True, timeout=60)
@@ -414,15 +425,94 @@ def test_missing_partition_error_names_the_right_device(tmp_path):
 
 
 # --- dry run and gates ------------------------------------------------------
-def test_dry_run_changes_nothing_and_needs_no_root(tmp_path):
-    h = Harness(tmp_path, uid=1000)
+def test_dry_run_as_root_changes_nothing(tmp_path):
+    h = Harness(tmp_path)
     before = h.fstab.read_text()
     r = h.run("--dry-run", yes=False)
     assert r.returncode == 0, r.stdout + r.stderr
     assert "[dry] would run: sgdisk --zap-all /dev/nvme9n1" in r.stderr
     assert "[dry] would run: wipefs -af /dev/nvme9n1p1" in r.stderr
+    assert "INCONCLUSIVE" not in r.stdout
     assert h.destructive() == [] and h.calls("systemctl") == []
     assert h.fstab.read_text() == before
+
+
+def test_dry_run_as_non_root_is_inconclusive_not_blank(tmp_path):
+    # blkid -p needs root (EACCES, which blkid also reports as exit 2 =
+    # "nothing found"), so a non-root dry run cannot confirm the disk is blank.
+    h = Harness(tmp_path, uid=1000)
+    before = h.fstab.read_text()
+    r = h.run("--dry-run", yes=False)
+    assert r.returncode == 3, r.stdout + r.stderr
+    assert "INCONCLUSIVE" in r.stdout and "NOT confirmed blank" in r.stdout
+    assert not any(c[0] == "blkid" and "-p" in c for c in h.calls())
+    assert h.destructive() == [] and h.fstab.read_text() == before
+
+
+@pytest.mark.parametrize("rc", [4, 8])
+def test_blkid_probe_error_fails_closed_as_root(tmp_path, rc):
+    devs = base_devices()
+    devs["/dev/nvme9n1"]["probe_rc"] = rc
+    h = Harness(tmp_path, devices=devs)
+    r = h.run()
+    assert r.returncode == 1 and f"blkid -p could not probe /dev/nvme9n1 (exit {rc})" in r.stderr, r.stderr
+    assert h.destructive() == []
+
+
+# --- review P2s: lone foreign partition, in-use without a signature ---------
+def test_lone_foreign_partition_without_signature_is_refused(tmp_path):
+    devs = base_devices()
+    devs["/dev/nvme9n1"]["children"] = ["/dev/nvme9n1p1"]
+    devs["/dev/nvme9n1p1"] = _part("/dev/nvme9n1")  # no fs, no PARTLABEL
+    h = Harness(tmp_path, devices=devs)
+    r = h.run()
+    assert r.returncode == 1 and "not created by this script" in r.stderr, r.stderr
+    assert h.destructive() == []
+
+
+def test_interrupted_run_with_our_partlabel_resumes(tmp_path):
+    devs = base_devices()
+    devs["/dev/nvme9n1"]["children"] = ["/dev/nvme9n1p1"]
+    devs["/dev/nvme9n1p1"] = _part("/dev/nvme9n1")
+    devs["/dev/nvme9n1p1"]["partlabel"] = "PMOVES-NVME1"
+    h = Harness(tmp_path, devices=devs)
+    r = h.run()
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "interrupted run" in r.stdout
+    assert [c[0] for c in h.destructive()] == ["sgdisk", "sgdisk", "wipefs", MKE2FS, "mount"]
+
+
+@pytest.mark.parametrize("dm_type", ["crypt", "dm", "lvm"])
+def test_disk_with_a_device_mapper_child_is_refused(tmp_path, dm_type):
+    # e.g. plain dm-crypt (no LUKS header) or a dm-linear used by a VM: no signature anywhere.
+    devs = base_devices()
+    devs["/dev/nvme9n1"]["children"] = ["/dev/mapper/vmdisk"]
+    devs["/dev/mapper/vmdisk"] = {"type": dm_type, "pkname": "nvme9n1", "fstype": "", "label": "", "mountpoints": [""]}
+    h = Harness(tmp_path, devices=devs)
+    r = h.run()
+    assert r.returncode == 1 and "sits on /dev/nvme9n1, so the disk is in use" in r.stderr, r.stderr
+    assert h.destructive() == []
+
+
+def test_disk_with_sysfs_holders_is_refused(tmp_path):
+    # lsblk shows nothing, but the kernel records a claim in <dev>/holders.
+    h = Harness(tmp_path)
+    h.add_holder("/dev/nvme9n1", "dm-3")
+    r = h.run()
+    assert r.returncode == 1 and "is held by dm-3" in r.stderr, r.stderr
+    assert h.destructive() == []
+
+
+def test_partition_with_sysfs_holders_is_refused(tmp_path):
+    devs = base_devices()
+    devs["/dev/nvme9n1"]["children"] = ["/dev/nvme9n1p1"]
+    devs["/dev/nvme9n1p1"] = _part("/dev/nvme9n1")
+    devs["/dev/nvme9n1p1"]["partlabel"] = "PMOVES-NVME1"
+    h = Harness(tmp_path, devices=devs)
+    h.add_holder("/dev/nvme9n1p1", "dm-7")
+    r = h.run()
+    assert r.returncode == 1 and "/dev/nvme9n1p1 is held by dm-7" in r.stderr, r.stderr
+    assert h.destructive() == []
 
 
 def test_non_root_is_refused(tmp_path):

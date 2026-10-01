@@ -251,6 +251,15 @@ with every step attributed in the script header and inline:
   now takes EVERY disk under / (lsblk(8) `-s`/`--inverse`, plus the members
   sharing a btrfs root's filesystem UUID), so the second disk of an md, LVM or
   btrfs root is refused.
+- **In use without a signature, and foreign partitions (review of 9339f5f52):**
+  - a disk is refused if any child is not TYPE `part` (a plain dm-crypt or
+    dm-linear mapping), or if a sysfs `holders` entry claims it or a partition
+    (linux `block/holder.c:41-49`, bd_link_disk_holder);
+  - a lone partition resumes only if its GPT name (lsblk PARTLABEL) is the
+    script's own label;
+  - `blkid -p` exits other than 0/2 fail closed as root (blkid(8) EXIT STATUS);
+  - a non-root `--dry-run` cannot run the probe, so it says INCONCLUSIVE and
+    exits 3 instead of reporting the disk blank.
 - **Ownership on re-runs:** an already-provisioned drive is re-owned only when
   `SUDO_USER` names a user. As plain root it is left alone.
 - **Originated policy, kept:** refusing partitioned drives (except one
