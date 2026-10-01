@@ -265,7 +265,7 @@ class FleetSentinel:
         ok = bool(await self.listener.start())
         if not ok:
             self.listener = None
-            self.listener_error = f"ServiceAnnouncementListener.start() returned False ({NATS_URL})"
+            self.listener_error = f"ServiceAnnouncementListener.start() returned False ({redact_url(NATS_URL)})"
             logger.error("announce listener FAILED to start (%s)", redact_url(NATS_URL))
             return False
         self.listener_mode = "common"

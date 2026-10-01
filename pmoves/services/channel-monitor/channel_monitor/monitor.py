@@ -777,7 +777,7 @@ class ChannelMonitor:
                 LOGGER.critical("Failed to connect to database at %s: %s", redact_url(self.database_url), exc)
                 raise RuntimeError(
                     f"Database connection failed for channel-monitor. "
-                    f"Check network connectivity and Supabase status. URL: {self.database_url}"
+                    f"Check network connectivity and Supabase status. URL: {redact_url(self.database_url)}"
                 ) from exc
         await self._ensure_tables()
         await self._load_processed_videos()

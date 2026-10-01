@@ -74,6 +74,32 @@ if str(_TOOLS_DIR) not in sys.path:
 
 from voice_persona_bridge import resolve as resolve_persona  # noqa: E402
 
+try:
+    from services.common.redact import redact_url
+except ImportError:  # image ships without services/common; copy of services/common/redact.py
+    import re as _re
+
+    def redact_url(url):
+        if url is None:
+            return ""
+        text = str(url)
+        schemes = list(_re.finditer(r"(?<![A-Za-z0-9+.\-:/@%])[A-Za-z][A-Za-z0-9+.\-]*://", text))
+        if not schemes:
+            at = text.rfind("@")
+            out = "***" + text[at:] if at >= 0 else text
+        else:
+            out = text[: schemes[0].start()]
+            for i, m in enumerate(schemes):
+                end = schemes[i + 1].start() if i + 1 < len(schemes) else len(text)
+                seg = text[m.end():end]
+                at = seg.rfind("@")
+                out += m.group(0) + ("***" + seg[at:] if at >= 0 else seg)
+        return _re.sub(
+            r"(?i)([?&;](?:password|passwd|pass|pwd|secret|token|api_?key|access_token)=)[^&#\s]*",
+            r"\1***",
+            out,
+        )
+
 _PMOVES_ROOT = _TOOLS_DIR.parent
 _OUT_DIR = _PMOVES_ROOT / "out"
 
@@ -443,7 +469,7 @@ class VoiceCastOnSign:
     async def run(self, subjects: list[str]) -> None:
         self.nc = NATS()
         await self.nc.connect(self.nats_url)
-        sys.stderr.write(f"[voice-cast-on-sign] connected to {self.nats_url}\n")
+        sys.stderr.write(f"[voice-cast-on-sign] connected to {redact_url(self.nats_url)}\n")
         sys.stderr.write(f"[voice-cast-on-sign] subjects: {', '.join(subjects)}\n")
         sys.stderr.write(f"[voice-cast-on-sign] flute_gateway: {self.flute_gateway_url}\n")
         sys.stderr.write(f"[voice-cast-on-sign] kokoro_fallback: {self.kokoro_url}\n")

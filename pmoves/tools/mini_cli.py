@@ -28,6 +28,32 @@ from pmoves.tools import (
     secrets_sync,
 )
 
+try:
+    from services.common.redact import redact_url
+except ImportError:  # image ships without services/common; copy of services/common/redact.py
+    import re as _re
+
+    def redact_url(url):
+        if url is None:
+            return ""
+        text = str(url)
+        schemes = list(_re.finditer(r"(?<![A-Za-z0-9+.\-:/@%])[A-Za-z][A-Za-z0-9+.\-]*://", text))
+        if not schemes:
+            at = text.rfind("@")
+            out = "***" + text[at:] if at >= 0 else text
+        else:
+            out = text[: schemes[0].start()]
+            for i, m in enumerate(schemes):
+                end = schemes[i + 1].start() if i + 1 < len(schemes) else len(text)
+                seg = text[m.end():end]
+                at = seg.rfind("@")
+                out += m.group(0) + ("***" + seg[at:] if at >= 0 else seg)
+        return _re.sub(
+            r"(?i)([?&;](?:password|passwd|pass|pwd|secret|token|api_?key|access_token)=)[^&#\s]*",
+            r"\1***",
+            out,
+        )
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_PROVISIONING_DEST = REPO_ROOT / "CATACLYSM_STUDIOS_INC" / "PMOVES-PROVISIONS"
 ENV_SHARED = REPO_ROOT / "pmoves" / "env.shared"
@@ -1701,7 +1727,7 @@ def agent_sdk_create(
         typer.echo(f"📌 Agent ID:    {agent.agent_id}")
         typer.echo(f"🎭 Role:        {agent.role}")
         typer.echo(f"🧠 Model:       {agent.model}")
-        typer.echo(f"🔗 NATS URL:    {agent.NATS_URL}")
+        typer.echo(f"🔗 NATS URL:    {redact_url(agent.NATS_URL)}")
         typer.echo(f"🌐 TensorZero:  {agent.TENSORZERO_URL}")
         typer.echo(f"🔍 Hi-RAG:      {agent.HIRAG_URL}")
         typer.echo()

@@ -52,6 +52,32 @@ from rich.console import Console
 from rich.table import Table
 from rich.panel import Panel
 
+try:
+    from services.common.redact import redact_url
+except ImportError:  # image ships without services/common; copy of services/common/redact.py
+    import re as _re
+
+    def redact_url(url):
+        if url is None:
+            return ""
+        text = str(url)
+        schemes = list(_re.finditer(r"(?<![A-Za-z0-9+.\-:/@%])[A-Za-z][A-Za-z0-9+.\-]*://", text))
+        if not schemes:
+            at = text.rfind("@")
+            out = "***" + text[at:] if at >= 0 else text
+        else:
+            out = text[: schemes[0].start()]
+            for i, m in enumerate(schemes):
+                end = schemes[i + 1].start() if i + 1 < len(schemes) else len(text)
+                seg = text[m.end():end]
+                at = seg.rfind("@")
+                out += m.group(0) + ("***" + seg[at:] if at >= 0 else seg)
+        return _re.sub(
+            r"(?i)([?&;](?:password|passwd|pass|pwd|secret|token|api_?key|access_token)=)[^&#\s]*",
+            r"\1***",
+            out,
+        )
+
 app = typer.Typer(
     name="flute-geometry-subscriber",
     help="Flute Geometry CGP v0.2 Packet Consumer",
@@ -345,7 +371,7 @@ async def _listen_loop(
         Panel(
             f"[bold green]Listening[/] on [cyan]{SUBJECT_CGP}[/]\n"
             f"Republishing decoded to [cyan]{SUBJECT_DECODED}[/]\n"
-            f"NATS: [dim]{nats_url}[/]\n"
+            f"NATS: [dim]{redact_url(nats_url)}[/]\n"
             f"Press [bold]Ctrl+C[/] to stop.",
             title="Flute Geometry Subscriber",
             border_style="green",

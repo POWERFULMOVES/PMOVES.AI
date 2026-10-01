@@ -5,11 +5,37 @@ import signal
 
 import nats
 
+try:
+    from services.common.redact import redact_url
+except ImportError:  # image ships without services/common; copy of services/common/redact.py
+    import re as _re
+
+    def redact_url(url):
+        if url is None:
+            return ""
+        text = str(url)
+        schemes = list(_re.finditer(r"(?<![A-Za-z0-9+.\-:/@%])[A-Za-z][A-Za-z0-9+.\-]*://", text))
+        if not schemes:
+            at = text.rfind("@")
+            out = "***" + text[at:] if at >= 0 else text
+        else:
+            out = text[: schemes[0].start()]
+            for i, m in enumerate(schemes):
+                end = schemes[i + 1].start() if i + 1 < len(schemes) else len(text)
+                seg = text[m.end():end]
+                at = seg.rfind("@")
+                out += m.group(0) + ("***" + seg[at:] if at >= 0 else seg)
+        return _re.sub(
+            r"(?i)([?&;](?:password|passwd|pass|pwd|secret|token|api_?key|access_token)=)[^&#\s]*",
+            r"\1***",
+            out,
+        )
+
 
 async def main(subject: str, url: str) -> None:
     nc = nats.NATS()
     await nc.connect(url)
-    print(f"[nats-echo] connected to {url}, subscribing to '{subject}'", flush=True)
+    print(f"[nats-echo] connected to {redact_url(url)}, subscribing to '{subject}'", flush=True)
 
     async def handler(msg):
         print(

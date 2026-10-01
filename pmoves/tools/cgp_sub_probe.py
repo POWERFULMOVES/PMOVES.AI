@@ -15,12 +15,38 @@ import asyncio
 import os
 import nats
 
+try:
+    from services.common.redact import redact_url
+except ImportError:  # image ships without services/common; copy of services/common/redact.py
+    import re as _re
+
+    def redact_url(url):
+        if url is None:
+            return ""
+        text = str(url)
+        schemes = list(_re.finditer(r"(?<![A-Za-z0-9+.\-:/@%])[A-Za-z][A-Za-z0-9+.\-]*://", text))
+        if not schemes:
+            at = text.rfind("@")
+            out = "***" + text[at:] if at >= 0 else text
+        else:
+            out = text[: schemes[0].start()]
+            for i, m in enumerate(schemes):
+                end = schemes[i + 1].start() if i + 1 < len(schemes) else len(text)
+                seg = text[m.end():end]
+                at = seg.rfind("@")
+                out += m.group(0) + ("***" + seg[at:] if at >= 0 else seg)
+        return _re.sub(
+            r"(?i)([?&;](?:password|passwd|pass|pwd|secret|token|api_?key|access_token)=)[^&#\s]*",
+            r"\1***",
+            out,
+        )
+
 
 async def main() -> None:
     """Connect to NATS and print CGP + voice events for 10 seconds."""
     url = os.environ.get("NATS_URL", "nats://nats:4222")
     nc = await nats.connect(url)
-    print(f"Connected to NATS: {url}")
+    print(f"Connected to NATS: {redact_url(url)}")
     msgs = []
 
     async def handler(msg: "nats.aio.msg.Msg") -> None:

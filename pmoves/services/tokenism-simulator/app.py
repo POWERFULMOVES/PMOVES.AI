@@ -34,6 +34,32 @@ from api.simulation import simulation_bp
 from api.contracts import contracts_bp
 from nats_consumer import start_nats_consumer
 
+try:
+    from services.common.redact import redact_url
+except ImportError:  # image ships without services/common; copy of services/common/redact.py
+    import re as _re
+
+    def redact_url(url):
+        if url is None:
+            return ""
+        text = str(url)
+        schemes = list(_re.finditer(r"(?<![A-Za-z0-9+.\-:/@%])[A-Za-z][A-Za-z0-9+.\-]*://", text))
+        if not schemes:
+            at = text.rfind("@")
+            out = "***" + text[at:] if at >= 0 else text
+        else:
+            out = text[: schemes[0].start()]
+            for i, m in enumerate(schemes):
+                end = schemes[i + 1].start() if i + 1 < len(schemes) else len(text)
+                seg = text[m.end():end]
+                at = seg.rfind("@")
+                out += m.group(0) + ("***" + seg[at:] if at >= 0 else seg)
+        return _re.sub(
+            r"(?i)([?&;](?:password|passwd|pass|pwd|secret|token|api_?key|access_token)=)[^&#\s]*",
+            r"\1***",
+            out,
+        )
+
 # Configure structured logging
 structlog.configure(
     processors=[
@@ -128,9 +154,9 @@ def create_app() -> Flask:
                 'contracts': '/api/v1/contracts',
             },
             'integrations': {
-                'nats': config.nats.url,
-                'tensorzero': config.tensorzero.url,
-                'supabase': config.supabase.url,
+                'nats': redact_url(config.nats.url),
+                'tensorzero': redact_url(config.tensorzero.url),
+                'supabase': redact_url(config.supabase.url),
             },
         }, 200
 
