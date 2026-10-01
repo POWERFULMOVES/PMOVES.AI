@@ -1,18 +1,22 @@
-"""The BATON close: a peer passes or closes another AGInTZ's lane, with authority.
+"""The BATON close: a peer passes or closes another AGInTZ's lane, with VERIFIED authority.
 
 The AGInTZ are peers; a lane is a Known Road handed on like a relay baton, and
 identity on a row is attribution, not territory. Until this, a RELEASE paired
 only with the SIGNING owner's claims, so a lane whose holder had stopped
 running could not be closed by anyone.
 
-A baton row is a RELEASE carrying the holder (`baton-from:`) and the authority
-(`ruling:` or `handoff:`). It closes the holder's rows on the named lanes and
-nothing else. A malformed baton closes NOTHING -- it is never read as an
-ordinary release of the signer's own lanes.
+Two rows. The GRANT is a NOTE signed by an operator identity (or by the
+holder) naming the lane, the holder and the receiver. The BATON is a RELEASE
+by the receiver carrying `baton-from: <holder>` and citing the grant by its
+timestamp (`ruling:` for an operator grant, `handoff:` for a holder grant).
+The reader RESOLVES that reference; free text is not authority. A baton that
+fails any check closes NOTHING -- it is never read as an ordinary release of
+the signer's own lanes.
 
 EVERY LANE-STATE ASSERTION GOES THROUGH `open_claims_in()`, the gate's own
 authority, so the same assertions run unchanged against the pre-baton gate as
-a behavioural failing-before control (the row stays open; no symbol is missing).
+a behavioural failing-before control (the row stays open, or the base gate
+closes the SIGNER's lane; no symbol is missing).
 """
 
 from __future__ import annotations
@@ -32,6 +36,8 @@ LIVE_REGISTER = REPO_ROOT / "pmoves" / "docs" / "AGENTS" / "AGNOTE4482PHI.t1.md"
 # Registered identities (pmoves/config/identity_vocabulary.yaml).
 HOLDER = "CRUSH-GLM52 (Knuckles)"        # -> crush
 SIGNER = "B850-CLAUDE (Knuckles)"        # -> b850-claude
+OTHER = "B850-CLAUDE-FUNNEL (Knuckles)"  # -> b850-claude-funnel
+OPERATOR = "DARKXSIDE"                   # -> darkxside (operator identity)
 UNKNOWN = "NOBODY-XYZ (nowhere)"         # -> not in the vocabulary
 
 HELD = (
@@ -42,6 +48,16 @@ HELD = (
     f"- `2026-09-20T00:10:00Z` CLAIM `{SIGNER}` branch: `chore/mine` "
     "· scope: **the signer's own lane.**\n"
 )
+
+RULING_TS = "2026-09-30T12:00:00Z"
+HANDOFF_TS = "2026-09-30T13:00:00Z"
+# An operator grant passing BOTH holder lanes to SIGNER, and a holder grant.
+RULING = (f"- `{RULING_TS}` NOTE `{OPERATOR}` branch: `feat/widget` "
+          f"· baton-from: `{HOLDER}` · baton-to: `{SIGNER}` "
+          "· scope: ruling - also branch: `fix/sprocket`\n")
+HANDOFF = (f"- `{HANDOFF_TS}` NOTE `{HOLDER}` branch: `fix/sprocket` "
+           f"· baton-to: `{SIGNER}` · scope: handing this over\n")
+GRANTED = HELD + RULING + HANDOFF
 
 
 def _load(path: Path, name: str):
@@ -64,9 +80,13 @@ def _lanes(gate, text: str) -> dict:
     }
 
 
-def _release(fields: str, signer: str = SIGNER) -> str:
-    return (f"- `2026-10-01T00:00:00Z` RELEASE `{signer}` {fields} "
+def _release(fields: str, signer: str = SIGNER, ts: str = "2026-10-01T00:00:00Z") -> str:
+    return (f"- `{ts}` RELEASE `{signer}` {fields} "
             "· scope: **passing the baton.**\n")
+
+
+def _baton(lane: str, authority: str, holder: str = HOLDER, **kw) -> str:
+    return _release(f"branch: `{lane}` · baton-from: `{holder}` · {authority}", **kw)
 
 
 BEFORE = {"crush": ["feat/widget", "fix/sprocket"], "b850-claude": ["chore/mine"]}
@@ -74,74 +94,112 @@ BEFORE = {"crush": ["feat/widget", "fix/sprocket"], "b850-claude": ["chore/mine"
 
 # --------------------------------------------------------------- the reader --
 
-def test_baton_closes_only_the_named_lane_of_the_named_holder(gate):
-    row = _release(f"branch: `feat/widget` · baton-from: `{HOLDER}` "
-                   "· ruling: `operator 2026-10-01T12:00Z`")
-    assert _lanes(gate, HELD) == BEFORE
-    assert _lanes(gate, HELD + row) == {
+def test_baton_under_an_operator_ruling_closes_only_the_named_lane(gate):
+    row = _baton("feat/widget", f"ruling: `{RULING_TS}`")
+    assert _lanes(gate, GRANTED) == BEFORE
+    assert _lanes(gate, GRANTED + row) == {
         "crush": ["fix/sprocket"],          # the holder's OTHER lane stays held
         "b850-claude": ["chore/mine"],      # the signer's own lane is untouched
     }
 
 
-def test_handoff_is_an_authority_too(gate):
-    row = _release(f"branch: `fix/sprocket` · baton-from: `{HOLDER}` "
-                   "· handoff: `PR #3240`")
-    assert _lanes(gate, HELD + row)["crush"] == ["feat/widget"]
+def test_baton_under_the_holders_own_handoff(gate):
+    row = _baton("fix/sprocket", f"handoff: `{HANDOFF_TS}`")
+    assert _lanes(gate, GRANTED + row)["crush"] == ["feat/widget"]
 
 
-def test_baton_event_records_both_identities_and_the_authority(gate):
-    row = _release(f"branch: `feat/widget` · baton-from: `{HOLDER}` "
-                   "· ruling: `operator 2026-10-01`")
-    [event] = gate.baton_events_in(HELD + row)
+def test_baton_event_records_both_identities_and_the_grant(gate):
+    row = _baton("feat/widget", f"ruling: `{RULING_TS}`")
+    [event] = gate.baton_events_in(GRANTED + row)
     assert (event.signer, event.holder, event.holder_key) == (SIGNER, HOLDER, "crush")
-    assert event.authority == ("ruling", "operator 2026-10-01")
-    assert event.closed == {"feat/widget"} and not event.problem
+    assert event.authority == ("ruling", RULING_TS)
+    assert event.grant_line == 4 and event.closed == {"feat/widget"}
+    assert not event.problem
 
 
-def test_baton_without_authority_closes_nothing_and_never_falls_back(gate):
-    # No ruling/handoff. Read as an ordinary named release by the SIGNER it
-    # would be harmless here -- so make the fallback visible: name the
-    # signer's own lane. A fallback would close `chore/mine`.
-    row = _release(f"branch: `chore/mine` · baton-from: `{HOLDER}`")
-    assert _lanes(gate, HELD + row) == BEFORE
-    [event] = gate.baton_events_in(HELD + row)
-    assert "authority" in event.problem
+# The four refusals the reviewer named, plus the shape refusals. Each one
+# names the SIGNER's own lane `chore/mine` too wherever the grammar allows, so
+# a fallback to "ordinary release by the signer" would be visible as
+# `chore/mine` closing.
+REFUSED = {
+    "free-text authority":
+        (_baton("feat/widget", "ruling: `operator said so on 2026-10-01`"), "free text"),
+    "dangling reference":
+        (_baton("feat/widget", "ruling: `2026-09-30T23:59:59Z`"), "resolves to no"),
+    "ruling from a non-operator":
+        (_baton("fix/sprocket", f"ruling: `{HANDOFF_TS}`"), "not an operator"),
+    "handoff from someone other than the holder":
+        (_baton("feat/widget", f"handoff: `{RULING_TS}`"), "not by the holder"),
+    "grant for a different lane":
+        (_baton("chore/mine", f"handoff: `{HANDOFF_TS}`"), "does not name"),
+    "grant to a different receiver":
+        (_baton("feat/widget", f"ruling: `{RULING_TS}`", signer=OTHER), "not to this"),
+    "grant for a different holder":
+        (_baton("chore/mine", f"ruling: `{RULING_TS}`", holder=OTHER), "not of this"),
+    "no authority at all":
+        (_baton("chore/mine", "scope-less"), "no authority"),
+    "unknown holder":
+        (_baton("feat/widget", f"ruling: `{RULING_TS}`", holder=UNKNOWN),
+         "not a registered identity"),
+    "unknown signer":
+        (_baton("feat/widget", f"ruling: `{RULING_TS}`", signer=UNKNOWN),
+         "not a registered identity"),
+    "no lane":
+        (_release(f"baton-from: `{HOLDER}` · ruling: `{RULING_TS}`"), "names no lane"),
+}
 
 
-def test_baton_from_an_unknown_owner_closes_nothing(gate):
-    text = HELD + (f"- `2026-09-20T00:20:00Z` CLAIM `{UNKNOWN}` branch: `feat/ghost` "
-                   "· scope: **an unregistered holder.**\n")
-    row = _release(f"branch: `feat/ghost` · baton-from: `{UNKNOWN}` "
-                   "· ruling: `operator 2026-10-01`")
-    before = _lanes(gate, text)
-    assert _lanes(gate, text + row) == before
-    [event] = gate.baton_events_in(text + row)
-    assert "not a registered identity" in event.problem
+@pytest.mark.parametrize("case", sorted(REFUSED))
+def test_a_baton_that_fails_any_check_closes_nothing(gate, case):
+    row, _needle = REFUSED[case]
+    assert _lanes(gate, GRANTED + row) == BEFORE
 
 
-def test_baton_by_an_unknown_signer_closes_nothing(gate):
-    row = _release(f"branch: `feat/widget` · baton-from: `{HOLDER}` "
-                   "· ruling: `operator 2026-10-01`", signer=UNKNOWN)
-    assert _lanes(gate, HELD + row) == BEFORE
+@pytest.mark.parametrize("case", sorted(REFUSED))
+def test_a_refused_baton_says_why(gate, case):
+    row, needle = REFUSED[case]
+    [event] = gate.baton_events_in(GRANTED + row)
+    assert needle in event.problem and not event.closed
 
 
-def test_baton_naming_a_lane_the_holder_does_not_hold_is_a_noop_with_warning(gate):
-    row = _release(f"branch: `chore/mine` · baton-from: `{HOLDER}` "
-                   "· ruling: `operator 2026-10-01`")
-    # `chore/mine` is the SIGNER's lane, not the holder's: nothing closes.
-    assert _lanes(gate, HELD + row) == BEFORE
-    [event] = gate.baton_events_in(HELD + row)
-    assert not event.problem and not event.closed
-    assert event.not_held == {"chore/mine"}
+def test_a_grant_filed_after_the_baton_does_not_authorise_it(gate):
+    row = _baton("feat/widget", f"ruling: `{RULING_TS}`")
+    assert _lanes(gate, HELD + row + RULING) == {
+        "crush": ["feat/widget", "fix/sprocket"], "b850-claude": ["chore/mine"]}
+    [event] = gate.baton_events_in(HELD + row + RULING)
+    assert "ABOVE it" in event.problem
+
+
+def test_a_grant_stamped_after_the_baton_does_not_authorise_it(gate):
+    late = RULING.replace(RULING_TS, "2026-10-02T00:00:00Z")
+    row = _baton("feat/widget", "ruling: `2026-10-02T00:00:00Z`")
+    assert _lanes(gate, HELD + late + row) == BEFORE
+    [event] = gate.baton_events_in(HELD + late + row)
+    assert "AFTER the baton" in event.problem
+
+
+def test_two_grants_with_one_timestamp_are_ambiguous(gate):
+    row = _baton("feat/widget", f"ruling: `{RULING_TS}`")
+    assert _lanes(gate, GRANTED + RULING + row) == BEFORE
+    [event] = gate.baton_events_in(GRANTED + RULING + row)
+    assert "ambiguous" in event.problem
+
+
+def test_a_claim_row_is_not_a_grant(gate):
+    # Same timestamp as a CLAIM: only NOTE/HANDOFF rows can grant.
+    row = _baton("feat/widget", "ruling: `2026-09-20T00:00:00Z`")
+    assert _lanes(gate, GRANTED + row) == BEFORE
+
+
+def test_baton_naming_a_granted_lane_the_holder_no_longer_holds_is_a_noop(gate):
+    gone = (f"- `2026-09-30T14:00:00Z` RELEASE `{HOLDER}` branch: `feat/widget` "
+            "· scope: done\n")
+    row = _baton("feat/widget", f"ruling: `{RULING_TS}`")
+    text = GRANTED + gone + row
+    assert _lanes(gate, text) == _lanes(gate, GRANTED + gone)
+    [event] = gate.baton_events_in(text)
+    assert not event.problem and event.not_held == {"feat/widget"}
     assert "holds no open row" in event.warning
-
-
-def test_baton_naming_no_lane_closes_nothing(gate):
-    # A lane-less ordinary RELEASE closes EVERYTHING its signer holds. A
-    # lane-less baton must not -- neither the holder's lanes nor the signer's.
-    row = _release(f"baton-from: `{HOLDER}` · ruling: `operator 2026-10-01`")
-    assert _lanes(gate, HELD + row) == BEFORE
 
 
 def test_bare_release_by_a_co_owner_still_does_not_close(gate):
@@ -155,30 +213,18 @@ def test_bare_release_by_a_co_owner_still_does_not_close(gate):
 
 
 def test_a_quoted_baton_field_is_a_mention_not_a_baton(gate):
-    # Documentation of the grammar inside a ``...`` span. The row is an
-    # ordinary named release by the signer and must behave exactly as one.
     row = (f"- `2026-10-01T00:00:00Z` RELEASE `{SIGNER}` branch: `chore/mine` "
            f"· scope: **the new field reads ``baton-from: `{HOLDER}` ``.**\n")
     assert _lanes(gate, HELD + row) == {"crush": ["feat/widget", "fix/sprocket"]}
 
 
-def test_a_branch_shaped_ruling_ref_is_not_a_lane(gate):
-    row = _release(f"branch: `feat/widget` · baton-from: `{HOLDER}` "
-                   "· ruling: `docs/rulings-fix/sprocket`")
-    assert _lanes(gate, HELD + row)["crush"] == ["fix/sprocket"]
-
-
 def test_no_vocabulary_means_no_baton_not_an_ordinary_release(gate, monkeypatch):
     monkeypatch.setattr(gate, "_LINEAGE", None)
     monkeypatch.setattr(gate, "_FOLDER", None)
-    row = _release(f"branch: `chore/mine` · baton-from: `{HOLDER}` "
-                   "· ruling: `operator 2026-10-01`")
-    text = HELD + row
-    # Without the vocabulary owner strings are compared raw; the point is
-    # only that the baton row transitions NOTHING.
-    before = gate.open_claims_in(HELD)
-    assert gate.open_claims_in(text) == before
-    [event] = gate.baton_events_in(text)
+    row = _baton("chore/mine", f"ruling: `{RULING_TS}`")
+    before = gate.open_claims_in(GRANTED)
+    assert gate.open_claims_in(GRANTED + row) == before
+    [event] = gate.baton_events_in(GRANTED + row)
     assert "vocabulary is unavailable" in event.problem
 
 
@@ -186,19 +232,24 @@ def test_no_vocabulary_means_no_baton_not_an_ordinary_release(gate, monkeypatch)
 
 @pytest.fixture()
 def mod(tmp_path: Path, monkeypatch):
-    for var in ("REGISTER_BATON_FROM", "REGISTER_RULING", "REGISTER_HANDOFF",
-                "REGISTER_OWNER", "REGISTER_BRANCH", "REGISTER_SCOPE",
-                "REGISTER_SCOPE_FILE", "REGISTER_CO_OWNERS", "REGISTER_TTL"):
+    for var in ("REGISTER_BATON_FROM", "REGISTER_BATON_TO", "REGISTER_RULING",
+                "REGISTER_HANDOFF", "REGISTER_OWNER", "REGISTER_BRANCH",
+                "REGISTER_SCOPE", "REGISTER_SCOPE_FILE", "REGISTER_CO_OWNERS",
+                "REGISTER_TTL"):
         monkeypatch.delenv(var, raising=False)
     m = _load(TOOL, "register_append_baton")
-    register = tmp_path / "AGNOTE4482PHI.t1.md"
-    register.write_text("# register\n" + HELD, encoding="utf-8")
+    register = tmp_path / "register.md"
+    register.write_text("# register\n" + GRANTED, encoding="utf-8")
     monkeypatch.setattr(m, "REGISTER", register)
+    # "Committed" = on origin/main. Here: the grants are committed by default;
+    # individual tests narrow it.
+    monkeypatch.setattr(m, "_committed_register_text",
+                        lambda: "# register\n" + GRANTED)
     return m
 
 
-def _run(mod, *extra):
-    return mod.main(["release", "--owner", SIGNER, "--scope", "passing the baton",
+def _run(mod, *extra, owner=SIGNER):
+    return mod.main(["release", "--owner", owner, "--scope", "passing the baton",
                      *extra])
 
 
@@ -208,37 +259,64 @@ def _text(mod) -> str:
 
 def test_write_road_files_a_baton_that_the_gate_reads(mod, gate, capsys):
     rc = _run(mod, "--branch", "feat/widget", "--baton-from", HOLDER,
-              "--ruling", "operator 2026-10-01T12:00Z")
+              "--ruling", RULING_TS)
     assert rc == 0
     last = _text(mod).rstrip("\n").split("\n")[-1]
     assert f"RELEASE `{SIGNER}`" in last and f"baton-from: `{HOLDER}`" in last
-    assert "ruling: `operator 2026-10-01T12:00Z`" in last
+    assert f"ruling: `{RULING_TS}`" in last
     assert _lanes(gate, _text(mod))["crush"] == ["fix/sprocket"]
     assert "BATON" in capsys.readouterr().err
 
 
-@pytest.mark.parametrize("extra, needle", [
-    (("--branch", "feat/widget", "--baton-from", HOLDER), "authority"),
-    (("--branch", "feat/widget", "--ruling", "operator"), "without --baton-from"),
-    (("--branch", "feat/widget", "--baton-from", UNKNOWN, "--ruling", "op"),
-     "not a registered identity"),
-    (("--branch", "chore/mine", "--baton-from", SIGNER, "--ruling", "op"),
-     "same identity"),
-    (("--all-lanes", "--baton-from", HOLDER, "--ruling", "op"), "never bare"),
-    (("--branch", "feat/widget", "--baton-from", HOLDER, "--ruling", "op",
-      "--handoff", "PR #1"), "ONE authority"),
+@pytest.mark.parametrize("extra, needle, owner", [
+    (("--branch", "feat/widget", "--baton-from", HOLDER), "authority", SIGNER),
+    (("--branch", "feat/widget", "--baton-from", HOLDER, "--ruling",
+      "operator said so"), "free text", SIGNER),
+    (("--branch", "feat/widget", "--ruling", RULING_TS), "without --baton-from", SIGNER),
+    (("--branch", "feat/widget", "--baton-from", UNKNOWN, "--ruling", RULING_TS),
+     "not a registered identity", SIGNER),
+    (("--branch", "chore/mine", "--baton-from", SIGNER, "--ruling", RULING_TS),
+     "same identity", SIGNER),
+    (("--all-lanes", "--baton-from", HOLDER, "--ruling", RULING_TS), "never bare", SIGNER),
+    (("--branch", "feat/widget", "--baton-from", HOLDER, "--ruling", RULING_TS,
+      "--handoff", HANDOFF_TS), "ONE authority", SIGNER),
+    (("--branch", "feat/widget", "--baton-from", HOLDER, "--ruling",
+      "2026-09-30T23:59:59Z"), "resolves to no", SIGNER),
+    (("--branch", "feat/widget", "--baton-from", HOLDER, "--ruling", RULING_TS),
+     "not to this", OTHER),
+    (("--branch", "feat/widget", "--baton-from", HOLDER, "--handoff", RULING_TS),
+     "not by the holder", SIGNER),
 ])
-def test_write_road_refuses_a_malformed_baton(mod, capsys, extra, needle):
+def test_write_road_refuses_a_baton_it_cannot_verify(mod, capsys, extra, needle, owner):
     before = _text(mod)
-    assert _run(mod, *extra) == 3
+    assert _run(mod, *extra, owner=owner) == 3
     assert _text(mod) == before
     assert needle in capsys.readouterr().err
 
 
-def test_write_road_refuses_a_baton_for_a_lane_the_holder_does_not_hold(mod, capsys):
+def test_write_road_refuses_a_grant_that_is_not_committed(mod, monkeypatch, capsys):
+    monkeypatch.setattr(mod, "_committed_register_text", lambda: "# register\n" + HELD)
     before = _text(mod)
-    assert _run(mod, "--branch", "chore/mine", "--baton-from", HOLDER,
-                "--ruling", "op") == 1
+    assert _run(mod, "--branch", "feat/widget", "--baton-from", HOLDER,
+                "--ruling", RULING_TS) == 1
+    assert _text(mod) == before
+    assert "not on origin/main" in capsys.readouterr().err
+
+
+def test_write_road_is_unmeasured_when_git_cannot_answer(mod, monkeypatch, capsys):
+    monkeypatch.setattr(mod, "_committed_register_text", lambda: None)
+    assert _run(mod, "--branch", "feat/widget", "--baton-from", HOLDER,
+                "--ruling", RULING_TS) == 3
+    assert "NOT MEASURED" in capsys.readouterr().err
+
+
+def test_write_road_refuses_a_baton_for_a_lane_the_holder_no_longer_holds(mod, capsys):
+    gone = (f"- `2026-09-30T14:00:00Z` RELEASE `{HOLDER}` branch: `feat/widget` "
+            "· scope: done\n")
+    mod.REGISTER.write_text(_text(mod) + gone, encoding="utf-8")
+    before = _text(mod)
+    assert _run(mod, "--branch", "feat/widget", "--baton-from", HOLDER,
+                "--ruling", RULING_TS) == 1
     assert _text(mod) == before
     err = capsys.readouterr().err
     assert "WARNING" in err and "holds no open row" in err
@@ -247,7 +325,7 @@ def test_write_road_refuses_a_baton_for_a_lane_the_holder_does_not_hold(mod, cap
 def test_write_road_refuses_a_scope_that_would_close_a_second_held_lane(mod, capsys):
     before = _text(mod)
     rc = mod.main(["release", "--owner", SIGNER, "--branch", "feat/widget",
-                   "--baton-from", HOLDER, "--ruling", "op",
+                   "--baton-from", HOLDER, "--ruling", RULING_TS,
                    "--scope", "done; see also `fix/sprocket`"])
     assert rc == 1 and _text(mod) == before
     assert "fix/sprocket" in capsys.readouterr().err
@@ -256,7 +334,7 @@ def test_write_road_refuses_a_scope_that_would_close_a_second_held_lane(mod, cap
 def test_plain_release_whose_scope_declares_a_baton_is_refused(mod, capsys):
     before = _text(mod)
     rc = mod.main(["release", "--owner", SIGNER, "--branch", "chore/mine",
-                   "--scope", f"baton-from: `{HOLDER}` ruling: `op`"])
+                   "--scope", f"baton-from: `{HOLDER}` ruling: `{RULING_TS}`"])
     assert rc == 3 and _text(mod) == before
     assert "DECLARES a `baton-from:` field" in capsys.readouterr().err
 
@@ -267,24 +345,56 @@ def test_ordinary_release_is_unchanged(mod, gate):
     assert _lanes(gate, _text(mod)) == {"crush": ["feat/widget", "fix/sprocket"]}
 
 
+def test_note_road_files_an_operator_grant_the_reader_honours(mod, gate):
+    rc = mod.main(["note", "--owner", OPERATOR, "--branch", "fix/sprocket",
+                   "--baton-from", HOLDER, "--baton-to", OTHER,
+                   "--scope", "operator ruling: pass it on"])
+    assert rc == 0
+    grant = _text(mod).rstrip("\n").split("\n")[-1]
+    assert f"NOTE `{OPERATOR}`" in grant and f"baton-to: `{OTHER}`" in grant
+    ts = grant.split("`")[1]
+    row = _baton("fix/sprocket", f"ruling: `{ts}`", signer=OTHER,
+                 ts="2099-01-01T00:00:00Z")
+    assert _lanes(gate, _text(mod) + row)["crush"] == ["feat/widget"]
+
+
+@pytest.mark.parametrize("extra, needle, owner", [
+    (("--branch", "fix/sprocket", "--baton-from", HOLDER, "--baton-to", OTHER),
+     "neither the holder", SIGNER),
+    (("--branch", "fix/sprocket", "--baton-to", UNKNOWN), "receiver", HOLDER),
+    (("--baton-from", HOLDER, "--baton-to", OTHER), "--branch", OPERATOR),
+    (("--branch", "fix/sprocket", "--baton-from", HOLDER), "--baton-to", OPERATOR),
+    (("--branch", "fix/sprocket", "--baton-to", OTHER, "--ruling", RULING_TS),
+     "belong on the baton RELEASE", HOLDER),
+])
+def test_note_road_refuses_a_grant_no_reader_would_honour(mod, capsys, extra, needle, owner):
+    before = _text(mod)
+    assert mod.main(["note", "--owner", owner, "--scope", "grant", *extra]) == 3
+    assert _text(mod) == before
+    assert needle in capsys.readouterr().err
+
+
 def test_baton_rows_round_trip_for_register_sync_reapply(mod):
-    row = mod.build_row("RELEASE", SIGNER, "feat/widget", "passing", baton_from=HOLDER,
-                        handoff="PR #3240")
-    parsed = mod._parse_rendered(row.rstrip("\n"))
-    assert parsed["baton_from"] == HOLDER and parsed["handoff"] == "PR #3240"
-    assert mod._assert_round_trips(row.encode()) == parsed
+    for row in (
+        mod.build_row("RELEASE", SIGNER, "feat/widget", "passing", baton_from=HOLDER,
+                      handoff=HANDOFF_TS),
+        mod.build_row("NOTE", OPERATOR, "feat/widget", "grant", baton_from=HOLDER,
+                      baton_to=SIGNER),
+    ):
+        parsed = mod._parse_rendered(row.rstrip("\n"))
+        assert mod._assert_round_trips(row.encode()) == parsed
 
 
 def test_register_status_reports_a_baton_that_closed_nothing(tmp_path, capsys):
     status = _load(TOOL.with_name("register_status.py"), "register_status_baton")
     register = tmp_path / "register.md"
-    register.write_text("# register\n" + HELD + _release(
-        f"branch: `feat/widget` · baton-from: `{HOLDER}`"), encoding="utf-8")
+    register.write_text("# register\n" + GRANTED + _baton(
+        "feat/widget", "ruling: `free text`"), encoding="utf-8")
     rc = status.main(["--register", str(register), "--now", "2026-10-01T00:00:00Z"])
     out = capsys.readouterr().out
     assert rc == 1
     assert "BATON ROWS THAT DID NOT DO WHAT THEY SAID (1)" in out
-    assert "closed NOTHING" in out and "authority" in out
+    assert "closed NOTHING" in out and "free text" in out
 
 
 # ---------------------------------------------------------- monotonicity ----

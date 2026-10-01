@@ -128,6 +128,49 @@ def baton_refusal(gate, owner: str, baton_from: str) -> str:
     return ""
 
 
+def grant_refusal(gate, owner: str, baton_from: str, baton_to: str) -> str:
+    """Why a grant NOTE by `owner` is refused, or "". Identity half only.
+
+    A grant is useful only if the reader will honour it, so this refuses the
+    grants the reader would reject anyway: one signed by neither the holder nor
+    an operator identity, or naming an unregistered party.
+    """
+    problem, receiver_key = gate.baton_identity_problem(owner, baton_to)
+    if problem:
+        return problem.replace("holder", "receiver", 1)
+    signer_key = gate.canonical_owner(owner)
+    if baton_from:
+        problem, holder_key = gate.baton_identity_problem(owner, baton_from)
+        if problem:
+            return problem
+        if signer_key != holder_key and signer_key not in gate.BATON_OPERATOR_IDENTITIES:
+            return (f"`{owner}` is neither the holder `{baton_from}` nor an "
+                    "operator identity ("
+                    + ", ".join(sorted(gate.BATON_OPERATOR_IDENTITIES))
+                    + "), so no reader would honour this grant")
+    else:
+        holder_key = signer_key
+    if holder_key == receiver_key:
+        return "the receiver is the holder; there is no baton to pass"
+    return ""
+
+
+def _committed_register_text() -> str | None:
+    """The register as origin/main has it, or None if git cannot say.
+
+    NOT fetched: the caller's view of origin/main is what is checked, and the
+    refusal message says so. A grant must be MERGED -- reviewed -- before it
+    can authorise closing another peer's lane; a grant that exists only in a
+    working tree or a feature branch is invisible to the fleet.
+    """
+    try:
+        return subprocess.run(
+            ["git", "-C", str(REPO_ROOT), "show", f"origin/main:{REGISTER_REL}"],
+            capture_output=True, text=True, check=True, timeout=30).stdout
+    except (OSError, subprocess.SubprocessError):
+        return None
+
+
 def _ttl_delta(ttl: str) -> timedelta | None:
     ttl = (ttl or "").strip().lower()
     if not ttl or ttl in ("n/a", "none"):
@@ -232,19 +275,30 @@ def assert_row_shape(kind: str, owner: str, branch: str, ttl: str,
     _ttl_delta(ttl)  # raises on an unparseable TTL, before anything is rendered
 
 
-def assert_baton_shape(kind: str, branch: str, baton_from: str, ruling: str,
-                       handoff: str) -> None:
-    """A baton RELEASE carries BOTH halves -- the holder and the authority.
+# A grant reference: a ledger row timestamp, exactly as row heads write it.
+# Mirrors BATON_REF_RE in the gate; the gate's reading is the one that counts,
+# and _check_release_reading() reads every baton back through it.
+_BATON_REF_RE = re.compile(r"^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$")
 
-    Shape only; whether the holder and signer are registered peers needs the
-    identity vocabulary and is checked by `baton_refusal()`. Every refusal here
-    is a row that would otherwise have been written as something else: a
-    `ruling:` with no `baton-from:` reads as an ordinary release by the signer,
-    and a `baton-from:` with no authority closes nothing. Neither is what the
-    filer asked for, so neither is written.
+
+def assert_baton_shape(kind: str, branch: str, baton_from: str, ruling: str,
+                       handoff: str, baton_to: str = "") -> None:
+    """The shape of the two baton rows: the GRANT (a NOTE) and the BATON.
+
+    GRANT  -- NOTE  ... branch: `<lane>` · [baton-from: `<holder>` ·]
+              baton-to: `<receiver>`
+    BATON  -- RELEASE ... branch: `<lane>` · baton-from: `<holder>` ·
+              ruling|handoff: `<grant timestamp>`
+
+    Shape only. Identities, and whether the cited grant really authorises the
+    baton, need the vocabulary and the register; `baton_refusal()`,
+    `grant_refusal()` and the gate's own reading check those. Every refusal
+    here is a row that would otherwise have been written as something else: a
+    `ruling:` with no `baton-from:` reads as an ordinary release by the
+    signer, and free-text authority would let any identity close any lane.
     """
-    for field, value in (("baton-from", baton_from), ("ruling", ruling),
-                         ("handoff", handoff)):
+    for field, value in (("baton-from", baton_from), ("baton-to", baton_to),
+                         ("ruling", ruling), ("handoff", handoff)):
         assert_no_control_characters(field, value)
         if "`" in value:
             raise ValueError(f"{field} may not contain a backtick -- it is "
@@ -253,28 +307,48 @@ def assert_baton_shape(kind: str, branch: str, baton_from: str, ruling: str,
         if len(value) > LONG_TOKEN_LIMIT:
             raise ValueError(f"{field} is {len(value)} characters (limit "
                              f"{LONG_TOKEN_LIMIT})")
-    authority = [name for name, value in (("ruling", ruling),
-                                          ("handoff", handoff)) if value.strip()]
+    authority = [(name, value.strip()) for name, value in
+                 (("ruling", ruling), ("handoff", handoff)) if value.strip()]
+
+    if kind == "NOTE":
+        if authority:
+            raise ValueError("--ruling/--handoff belong on the baton RELEASE, "
+                             "not on the grant NOTE it cites")
+        if baton_from.strip() and not baton_to.strip():
+            raise ValueError("a grant NOTE must name the receiving identity: "
+                             "--baton-to (BATON_TO=)")
+        if baton_to.strip() and not branch.strip():
+            raise ValueError("a grant NOTE must name the lane it passes: "
+                             "--branch (BRANCH=)")
+        return
+    if baton_to.strip():
+        raise ValueError(f"--baton-to belongs on the grant NOTE; a {kind} does "
+                         "not grant anything")
     if not baton_from.strip():
         if authority:
             raise ValueError(
-                f"--{authority[0]} given without --baton-from. Authority with "
-                "no holder would be written as an ordinary RELEASE closing "
-                "only the signer's own lanes -- name the holder whose lane is "
-                "being passed (BATON_FROM=).")
+                f"--{authority[0][0]} given without --baton-from. Authority "
+                "with no holder would be written as an ordinary RELEASE "
+                "closing only the signer's own lanes -- name the holder whose "
+                "lane is being passed (BATON_FROM=).")
         return
     if kind != "RELEASE":
-        raise ValueError(f"--baton-from is a RELEASE field; a {kind} passes no "
-                         "lane. To pick a lane UP, file the baton RELEASE first "
-                         "and then your own CLAIM.")
+        raise ValueError(f"--baton-from on a {kind} passes no lane. To pick a "
+                         "lane UP, file the baton RELEASE first and then your "
+                         "own CLAIM.")
     if not authority:
         raise ValueError(
-            "a baton RELEASE needs its authority: --ruling <operator ruling "
-            "ref/timestamp> or --handoff <handoff ref> (RULING= / HANDOFF=). "
-            "Without it the row would close another peer's lane on nobody's "
-            "say-so. Nothing was written.")
+            "a baton RELEASE needs its authority: --ruling <timestamp of an "
+            "operator grant NOTE> or --handoff <timestamp of the holder's "
+            "grant NOTE> (RULING= / HANDOFF=). Nothing was written.")
     if len(authority) > 1:
         raise ValueError("give ONE authority, --ruling or --handoff, not both")
+    if not _BATON_REF_RE.match(authority[0][1]):
+        raise ValueError(
+            f"--{authority[0][0]} `{authority[0][1]}` is free text. Authority "
+            "is a REFERENCE: the timestamp of a committed grant NOTE, as its "
+            "row head writes it (e.g. 2026-10-01T12:00:00Z). Free text would "
+            "let any identity close any lane by asserting it.")
     if not branch.strip():
         raise ValueError(
             "a baton RELEASE must name --branch. A baton passes NAMED lanes "
@@ -521,6 +595,7 @@ def build_row(
     baton_from: str = "",
     ruling: str = "",
     handoff: str = "",
+    baton_to: str = "",
 ) -> str:
     """Render one register row. Pure, so the tests can pin the grammar.
 
@@ -534,7 +609,7 @@ def build_row(
     # pydantic is absent in validate-register-postdate.yml and on offline
     # nodes, and a row's shape must hold there too.
     assert_row_shape(kind, owner, branch, ttl, scope)
-    assert_baton_shape(kind, branch, baton_from, ruling, handoff)
+    assert_baton_shape(kind, branch, baton_from, ruling, handoff, baton_to)
 
     if RegisterRow is not None:
         try:
@@ -573,10 +648,12 @@ def build_row(
     # leg) and the holder here (whose leg it was), plus the authority.
     if baton_from.strip():
         fields.append(f"baton-from: `{baton_from.strip()}`")
-        if ruling.strip():
-            fields.append(f"ruling: `{ruling.strip()}`")
-        else:
-            fields.append(f"handoff: `{handoff.strip()}`")
+    if baton_to.strip():
+        fields.append(f"baton-to: `{baton_to.strip()}`")
+    if ruling.strip():
+        fields.append(f"ruling: `{ruling.strip()}`")
+    elif handoff.strip():
+        fields.append(f"handoff: `{handoff.strip()}`")
 
     head = f"- `{ts}` {kind} `{owner}`"
     middle = (" " + " · ".join(fields)) if fields else ""
@@ -1409,7 +1486,7 @@ def _parse_rendered(text: str):
     rest = header[head_m.end():]
     out = {"ts": head_m.group(1), "kind": head_m.group(2), "owner": head_m.group(3),
            "branch": "", "ttl": "", "co_owners": [], "scope": scope.lstrip(" "),
-           "baton_from": "", "ruling": "", "handoff": ""}
+           "baton_from": "", "baton_to": "", "ruling": "", "handoff": ""}
     if not rest:
         return out
     if not rest.startswith(" "):
@@ -1428,7 +1505,7 @@ def _parse_rendered(text: str):
                                           field[len("co-owners: "):]):
                 out["co_owners"].append(f"{ident}:{note}" if note else ident)
             continue
-        m = re.fullmatch(r"(baton-from|ruling|handoff): `([^`]+)`", field)
+        m = re.fullmatch(r"(baton-from|baton-to|ruling|handoff): `([^`]+)`", field)
         if m:
             out[m.group(1).replace("-", "_")] = m.group(2)
             continue
@@ -1462,7 +1539,7 @@ def _assert_round_trips(line: bytes) -> dict:
             scope=parsed["scope"], ttl=parsed["ttl"], co_owners=parsed["co_owners"],
             now=datetime.strptime(parsed["ts"], _TS_FMT).replace(tzinfo=timezone.utc),
             baton_from=parsed["baton_from"], ruling=parsed["ruling"],
-            handoff=parsed["handoff"])
+            handoff=parsed["handoff"], baton_to=parsed["baton_to"])
     except ValueError as exc:
         raise SyncRefused(f"row refused by the renderer ({exc}): {text[:120]!r}") from exc
     if rendered.rstrip("\n") != text:
@@ -1747,11 +1824,20 @@ def _dispatch(argv: list[str] | None = None) -> int:
                              "PEER (a registered identity), not your own. "
                              "Needs --branch and one of --ruling/--handoff. "
                              "(or set REGISTER_BATON_FROM)")
+    parser.add_argument("--baton-to",
+                        default=os.environ.get("REGISTER_BATON_TO", ""),
+                        metavar="RECEIVER",
+                        help="NOTE mode: make this note a baton GRANT to this "
+                             "registered identity. Needs --branch; an operator "
+                             "grant also needs --baton-from <holder>. "
+                             "(or set REGISTER_BATON_TO)")
     parser.add_argument("--ruling", default=os.environ.get("REGISTER_RULING", ""),
-                        help="baton authority: the operator ruling ref or "
-                             "timestamp (or set REGISTER_RULING)")
+                        help="baton authority: the TIMESTAMP of a committed "
+                             "grant NOTE signed by an operator identity "
+                             "(or set REGISTER_RULING)")
     parser.add_argument("--handoff", default=os.environ.get("REGISTER_HANDOFF", ""),
-                        help="baton authority: the holder's handoff ref "
+                        help="baton authority: the TIMESTAMP of a committed "
+                             "grant NOTE signed by the holder "
                              "(or set REGISTER_HANDOFF)")
     parser.add_argument("--dry-run", action="store_true",
                         help="render and check the row, write nothing")
@@ -1904,6 +1990,7 @@ def _dispatch(argv: list[str] | None = None) -> int:
             baton_from=args.baton_from,
             ruling=args.ruling,
             handoff=args.handoff,
+            baton_to=args.baton_to,
         )
     except ValueError as exc:
         print(f"register-append: refusing - {exc}", file=sys.stderr)
@@ -1921,6 +2008,13 @@ def _dispatch(argv: list[str] | None = None) -> int:
               f"loaded ({exc}), so this row was NOT checked against the open "
               "lanes. Refusing rather than appending unchecked.", file=sys.stderr)
         return EXIT_UNMEASURED
+
+    if args.kind == "note" and (args.baton_to or args.baton_from):
+        problem = grant_refusal(gate, args.owner, args.baton_from, args.baton_to)
+        if problem:
+            print(f"register-append: refusing - {problem}. Nothing was written.",
+                  file=sys.stderr)
+            return EXIT_UNMEASURED
 
     if args.kind == "note":
         if args.dry_run:
@@ -2061,6 +2155,23 @@ def _check_release_reading(row: str, existing: str, args, gate):
               + (event.problem if event else "no baton event") + "). "
               "Nothing was written.", file=sys.stderr)
         return EXIT_UNMEASURED
+    # COMMITTED. The reader resolved the grant in the working register; the
+    # write road additionally requires that exact row to be on origin/main,
+    # i.e. merged after review. A grant in a working tree is a claim of
+    # authority, not authority.
+    grant_row = ledger.split("\n")[event.grant_line - 1]
+    committed = _committed_register_text()
+    if committed is None:
+        print("register-append: NOT MEASURED - git could not show the register "
+              "on origin/main, so the grant could not be confirmed as "
+              "committed. Nothing was written.", file=sys.stderr)
+        return EXIT_UNMEASURED
+    if grant_row not in committed.split("\n"):
+        print(f"register-append: refusing - the grant `{event.authority[1]}` "
+              f"(line {event.grant_line}) is not on origin/main. Merge the grant "
+              "NOTE first (and `git fetch origin main`), then file the baton. "
+              "Nothing was written.", file=sys.stderr)
+        return EXIT_REFUSED
     # The reader closes every lane-shaped token on a RELEASE row, scope prose
     # included -- that is the register's long-standing convention and the
     # reader keeps it. The WRITE road is narrower: a baton closes the lane in

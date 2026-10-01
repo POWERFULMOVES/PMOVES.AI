@@ -356,27 +356,40 @@ def _row_at(text: str, pos: int) -> str:
 # path for when the peer who holds the lane is not running.
 #
 # Before this, a RELEASE paired only with the SIGNING owner's claims, so a lane
-# whose holder had stopped running could not be closed by anyone: five finished
-# or transferable lanes held by CRUSH-GLM52 and B850-CLAUDE-FUNNEL sat open
-# with nobody able to move them. A co-owner named on a RELEASE did nothing, and
-# that stays true -- see the comment in _pair_register(). Attribution is not
-# authority; the baton carries its authority explicitly instead:
+# whose holder had stopped running could not be closed by anyone. A co-owner
+# named on a RELEASE did nothing, and that stays true -- see the comment in
+# _pair_register(). Attribution is not authority.
 #
-#     RELEASE `<signer>` branch: `<lane>` · baton-from: `<holder>` ·
-#         ruling: `<operator ruling ref>`      (or handoff: `<ref>`)
+# AUTHORITY MUST BE VERIFIABLE, NOT ASSERTED. A free-text `ruling: <anything>`
+# would let any identity close any lane by typing a sentence -- the very power
+# the co-owner comment refuses to grant. So the authority is a REFERENCE to an
+# earlier ledger row that the reader resolves and checks:
 #
-# It closes <holder>'s open rows on the lanes the row names, and ONLY those
-# lanes and ONLY that holder's rows. The signer's own rows are untouched; a
-# peer picking the lane UP files its own CLAIM afterwards, which then no longer
-# collides.
+#   the GRANT (filed first, by the operator or by the holder):
+#     NOTE `<operator|holder>` branch: `<lane>` · baton-from: `<holder>` ·
+#         baton-to: `<receiver>` · scope: ...
 #
-# FAIL-CLOSED, NEVER FAIL-BROAD. A row that declares `baton-from:` and is
-# malformed -- no authority, a holder or signer the identity vocabulary does
-# not know, no lane, no vocabulary at all -- closes NOTHING. It is not read as
-# an ordinary RELEASE by the signer: a lane-less RELEASE closes every lane the
-# signer holds, and "the baton was malformed, so close all of MY lanes" is the
-# silent broadening this register has been bitten by before. The refusal is
-# recorded as a BatonEvent with its reason, so it is never silent.
+#   the BATON (filed by the receiver, citing the grant by its timestamp):
+#     RELEASE `<receiver>` branch: `<lane>` · baton-from: `<holder>` ·
+#         ruling: `<grant timestamp>`     (grant signed by an OPERATOR identity)
+#         handoff: `<grant timestamp>`    (grant signed by the HOLDER)
+#
+# The grant must be a NOTE or HANDOFF row, appear EARLIER in the register than
+# the baton and carry an earlier-or-equal timestamp, be signed by the right
+# party for the keyword, name the holder (implied when the holder signs it),
+# name THIS receiver in `baton-to:`, and name every lane the baton closes. The
+# baton then closes the holder's open rows on those lanes and nothing else --
+# never the signer's own rows.
+#
+# FAIL-CLOSED, NEVER FAIL-BROAD. A baton that fails ANY check closes NOTHING.
+# It is not read as an ordinary RELEASE by the signer: a lane-less RELEASE
+# closes every lane the signer holds, and "the baton was malformed, so close
+# all of MY lanes" is the silent broadening this register has been bitten by.
+# The refusal is recorded as a BatonEvent with its reason, so it is not silent.
+#
+# The reader can only check the text it is given. "The grant is COMMITTED" --
+# merged, so it passed review -- is checked by the write road
+# (register_append), which resolves the grant on origin/main before appending.
 # --------------------------------------------------------------------------
 
 # The marker is detected WITHOUT the identity vocabulary, on purpose. If
@@ -385,21 +398,34 @@ def _row_at(text: str, pos: int) -> str:
 # the exact fallback the paragraph above forbids.
 BATON_MARKER_RE = re.compile(r'\bbaton[-_ ]from\b\s*:', re.IGNORECASE)
 BATON_FROM_RE = re.compile(r'\bbaton[-_ ]from\b\s*:\s*`([^`]+)`', re.IGNORECASE)
+BATON_TO_RE = re.compile(r'\bbaton[-_ ]to\b\s*:\s*`([^`]+)`', re.IGNORECASE)
 BATON_AUTHORITY_RE = re.compile(r'\b(ruling|handoff)\b\s*:\s*`([^`]+)`',
                                 re.IGNORECASE)
+# A grant reference is a ledger timestamp, exactly as row heads write it.
+# Anything else is free text, and free text is not authority.
+BATON_REF_RE = re.compile(r'^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$')
+_ROW_HEAD_RE = re.compile(
+    r'^\s*[-*]\s+`([0-9]{4}-[0-9]{2}-[0-9]{2}[^`]*)`\s+([A-Za-z][A-Za-z+-]*)\s+`([^`]+)`'
+)
+# Row kinds that may carry a grant. Both transition nothing on their own.
+BATON_GRANT_KINDS = frozenset({"NOTE", "HANDOFF"})
+# Identities whose grant is a RULING. `darkxside` is the operator's declared
+# persona in identity_vocabulary.yaml; widening this set is a governance
+# change and belongs in its own reviewed diff.
+BATON_OPERATOR_IDENTITIES = frozenset({"darkxside"})
 
 
 class BatonEvent:
     """What one baton RELEASE did, or why it did nothing.
 
     `closed` is the lanes actually closed on the holder's rows; `not_held` is
-    the named lanes the holder held no open row on (a no-op for those lanes,
+    the granted lanes the holder held no open row on (a no-op for those lanes,
     reported rather than swallowed). `problem` is set when the row was refused
-    outright and closed nothing.
+    outright and closed nothing. `grant_line` is the line of the resolved grant.
     """
 
     __slots__ = ("lineno", "signer", "holder", "holder_key", "authority",
-                 "lanes", "closed", "not_held", "problem")
+                 "grant_line", "lanes", "closed", "not_held", "problem")
 
     def __init__(self, lineno, signer, holder="", authority=None):
         self.lineno = lineno
@@ -407,6 +433,7 @@ class BatonEvent:
         self.holder = holder
         self.holder_key = ""
         self.authority = authority  # (kind, ref) or None
+        self.grant_line = 0
         self.lanes = set()
         self.closed = set()
         self.not_held = set()
@@ -447,29 +474,43 @@ def baton_declared(line: str) -> bool:
     return bool(_outside_code_spans(line, BATON_MARKER_RE))
 
 
+def _one_value(line: str, regex, field: str):
+    """(value, problem) for a field that may appear at most once."""
+    values = {m.group(1).strip() for m in _outside_code_spans(line, regex)}
+    values.discard("")
+    if len(values) > 1:
+        return "", (f"names more than one `{field}:` ("
+                    + ", ".join(sorted(values)) + ")")
+    return (values.pop() if values else ""), ""
+
+
 def parse_baton(line: str):
     """(holder_as_written, (kind, ref) or None, problem) for a baton row.
 
-    `problem` is "" when the row is well-formed. Identity is NOT checked here --
-    that needs the vocabulary and is done by `baton_identity_problem()`.
+    `problem` is "" when the row is well-formed. Identity and the grant are
+    NOT checked here -- they need the vocabulary and the rows above.
     """
-    holders = [m.group(1).strip()
-               for m in _outside_code_spans(line, BATON_FROM_RE)]
-    authorities = [(m.group(1).lower(), m.group(2).strip())
-                   for m in _outside_code_spans(line, BATON_AUTHORITY_RE)]
-    authority = authorities[0] if authorities else None
-    if not holders or not holders[0]:
+    holder, problem = _one_value(line, BATON_FROM_RE, "baton-from")
+    authorities = {(m.group(1).lower(), m.group(2).strip())
+                   for m in _outside_code_spans(line, BATON_AUTHORITY_RE)}
+    authority = next(iter(authorities)) if len(authorities) == 1 else None
+    if problem:
+        return holder, authority, problem
+    if not holder:
         return "", authority, ("declares `baton-from:` but names no holder in "
                                "backticks")
-    if len(set(holders)) > 1:
-        return holders[0], authority, (
-            "names more than one `baton-from:` holder ("
-            + ", ".join(sorted(set(holders)))
-            + "); one baton row passes one holder's lanes")
-    if authority is None or not authority[1]:
-        return holders[0], None, ("carries no authority: a baton needs "
-                                  "`ruling: <ref>` or `handoff: <ref>`")
-    return holders[0], authority, ""
+    if not authorities:
+        return holder, None, ("carries no authority: a baton needs `ruling: "
+                              "<grant timestamp>` or `handoff: <grant "
+                              "timestamp>`")
+    if len(authorities) > 1:
+        return holder, None, "names more than one authority; give exactly one"
+    if not BATON_REF_RE.match(authority[1]):
+        return holder, authority, (
+            f"its {authority[0]} `{authority[1]}` is free text, not a reference. "
+            "Authority is the TIMESTAMP of an earlier NOTE/HANDOFF grant row "
+            "(e.g. `2026-10-01T12:00:00Z`), which the reader resolves and checks")
+    return holder, authority, ""
 
 
 def baton_identity_problem(signer: str, holder: str):
@@ -489,18 +530,88 @@ def baton_identity_problem(signer: str, holder: str):
     return "", holder_key
 
 
-def baton_lanes(line: str) -> set:
-    """The lanes a baton row names, with its own field VALUES removed first.
+def _strip_baton_values(line: str) -> str:
+    """The row with its baton/authority field VALUES removed.
 
-    The holder string and the ruling/handoff reference are not lanes; a ref
-    that happened to be branch-shaped (`docs/rulings/2026-10-01`) would
-    otherwise widen what the row closes.
+    The holder, receiver and grant reference are not lanes; a value that
+    happened to be branch-shaped would otherwise widen what the row closes.
     """
-    stripped = BATON_AUTHORITY_RE.sub(" ", BATON_FROM_RE.sub(" ", line))
-    return lanes_in(stripped)
+    for regex in (BATON_FROM_RE, BATON_TO_RE, BATON_AUTHORITY_RE):
+        line = regex.sub(" ", line)
+    return line
 
 
-def _apply_baton(open_claims: dict, lineno: int, line: str, signer: str):
+def baton_lanes(line: str) -> set:
+    """The lanes a baton (or grant) row names, field values excluded."""
+    return lanes_in(_strip_baton_values(line))
+
+
+def resolve_grant(earlier_lines, ref: str):
+    """(line_number, row) of the ONE grant row stamped `ref`, or (0, problem).
+
+    Only rows ABOVE the baton are searched, so a grant filed after the baton
+    can never authorise it. Two grant rows with one timestamp are ambiguous and
+    refused -- picking one would be guessing which authority was meant.
+    """
+    hits = []
+    for idx, line in enumerate(earlier_lines, start=1):
+        m = _ROW_HEAD_RE.match(line)
+        if m and m.group(1) == ref and m.group(2).upper() in BATON_GRANT_KINDS:
+            hits.append((idx, line))
+    if not hits:
+        return 0, (f"its authority `{ref}` resolves to no NOTE/HANDOFF row "
+                   "ABOVE it in the register (dangling, or filed after the "
+                   "baton)")
+    if len(hits) > 1:
+        return 0, (f"its authority `{ref}` matches {len(hits)} grant rows "
+                   f"(lines {', '.join(str(i) for i, _ in hits)}); ambiguous")
+    return hits[0]
+
+
+def grant_problem(grant: str, kind: str, signer_key: str, holder_key: str,
+                  lanes: set, baton_ts: str, ref: str) -> str:
+    """Why `grant` does not authorise this baton, or "" when it does."""
+    module = _load_lineage()
+    vocab = module.load_vocabulary()
+    head = _ROW_HEAD_RE.match(grant)
+    grantor = module.canonical_identity(head.group(3), vocab)
+    if kind == "ruling" and grantor not in BATON_OPERATOR_IDENTITIES:
+        return (f"its ruling `{ref}` is signed by `{head.group(3)}`, which is "
+                "not an operator identity ("
+                + ", ".join(sorted(BATON_OPERATOR_IDENTITIES)) + ")")
+    if kind == "handoff" and grantor != holder_key:
+        return (f"its handoff `{ref}` is signed by `{head.group(3)}`, not by "
+                "the holder whose lane it passes")
+    named_holder, problem = _one_value(grant, BATON_FROM_RE, "baton-from")
+    if problem:
+        return f"its grant `{ref}` {problem}"
+    if named_holder:
+        if module.canonical_identity(named_holder, vocab) != holder_key:
+            return (f"its grant `{ref}` passes lanes of `{named_holder}`, not "
+                    "of this baton's holder")
+    elif kind == "ruling":
+        return (f"its ruling `{ref}` names no `baton-from:` holder; an "
+                "operator grant must say whose lane it passes")
+    receiver, problem = _one_value(grant, BATON_TO_RE, "baton-to")
+    if problem:
+        return f"its grant `{ref}` {problem}"
+    if not receiver:
+        return f"its grant `{ref}` names no `baton-to:` receiving identity"
+    if module.canonical_identity(receiver, vocab) != signer_key:
+        return (f"its grant `{ref}` passes the baton to `{receiver}`, not to "
+                "this row's signer")
+    ungranted = lanes - baton_lanes(grant)
+    if ungranted:
+        return (f"its grant `{ref}` does not name "
+                + ", ".join(f"`{x}`" for x in sorted(ungranted)))
+    if baton_ts and head.group(1) > baton_ts:
+        return (f"its grant `{ref}` is stamped AFTER the baton row "
+                f"(`{baton_ts}`)")
+    return ""
+
+
+def _apply_baton(open_claims: dict, lineno: int, line: str, signer: str,
+                 earlier_lines):
     """Close the holder's open rows on the named lanes. Returns a BatonEvent."""
     holder, authority, problem = parse_baton(line)
     event = BatonEvent(lineno, signer, holder=holder, authority=authority)
@@ -511,6 +622,15 @@ def _apply_baton(open_claims: dict, lineno: int, line: str, signer: str):
         if not event.lanes:
             problem = ("names no lane. A baton passes NAMED lanes only; there is "
                        "no bare baton that closes everything a peer holds")
+    if not problem:
+        event.grant_line, grant = resolve_grant(earlier_lines, authority[1])
+        if not event.grant_line:
+            problem = grant
+    if not problem:
+        head = _ROW_HEAD_RE.match(line)
+        problem = grant_problem(grant, authority[0], canonical_owner(signer),
+                                event.holder_key, event.lanes,
+                                head.group(1) if head else "", authority[1])
     if problem:
         event.problem = problem
         return event
@@ -578,7 +698,8 @@ def _pair_register(text: str):
     """
     open_claims = {}
     batons = []
-    for lineno, line in enumerate(text.split("\n"), start=1):
+    lines = text.split("\n")
+    for lineno, line in enumerate(lines, start=1):
         if is_inert_row(line):
             # A NOTE records a fact. It opens nothing and closes nothing, and
             # this skip is what makes that true of its PROSE as well as its
@@ -600,7 +721,8 @@ def _pair_register(text: str):
             # A BATON row closes the NAMED holder's rows on the NAMED lanes and
             # nothing else -- never the signer's own, and never by falling back
             # to an ordinary release when the baton is malformed.
-            batons.append(_apply_baton(open_claims, lineno, line, m.group(1)))
+            batons.append(_apply_baton(open_claims, lineno, line, m.group(1),
+                                       lines[:lineno - 1]))
             continue
         if m:
             # Pairing stays on the SIGNING owner, deliberately. A co-owner is
