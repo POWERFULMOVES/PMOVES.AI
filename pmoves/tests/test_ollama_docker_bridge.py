@@ -103,7 +103,15 @@ PY
 """,
     "ip": """#!/usr/bin/env bash
 dev="${@: -1}"
-if [[ "$dev" == docker0 && -n "${STUB_DOCKER0:-}" ]]; then
+if [[ " $* " == *" link show "* ]]; then
+  # `ip -o link show [type bridge] dev X`: existence, and bridge-ness.
+  if [[ " $* " == *" type bridge "* ]]; then list="${STUB_BRIDGES-docker0 $STUB_BR_IFACE}"; else list="${STUB_LINKS-docker0 $STUB_BR_IFACE wlp8s0}"; fi
+  for l in $list; do [[ "$l" == "$dev" ]] && echo "9: $dev: <BROADCAST,MULTICAST,UP> mtu 1500"; done
+  exit 0
+fi
+if [[ "$dev" == wlp8s0 ]]; then
+  echo "3: wlp8s0    inet 10.123.45.50/24 brd 10.123.45.255 scope global wlp8s0"
+elif [[ "$dev" == docker0 && -n "${STUB_DOCKER0:-}" ]]; then
   echo "5: docker0    inet ${STUB_DOCKER0}/16 brd 172.17.255.255 scope global docker0"
 elif [[ -n "${STUB_BR_IFACE:-}" && "$dev" == "$STUB_BR_IFACE" && -n "${STUB_BR_ADDR:-}" ]]; then
   echo "9: $dev    inet ${STUB_BR_ADDR} brd 172.30.6.255 scope global $dev"
@@ -317,7 +325,7 @@ def test_subnet_drift_also_deletes_the_previous_rule(env):
 
 def test_rollback_reads_state_with_docker_absent(env):
     assert run(env, "--apply").returncode == 0
-    gone = {**env, "STUB_DOCKER0": "", "STUB_NET": "", "STUB_BR_ADDR": ""}
+    gone = {**env, "STUB_DOCKER0": "", "STUB_NET": "", "STUB_BR_ADDR": "", "STUB_LINKS": "", "STUB_BRIDGES": ""}
     r = run(gone, "--rollback")
     assert r.returncode == 0, r.stderr
     assert units_dir(env) == []
@@ -331,6 +339,123 @@ def test_rollback_never_rederives(env):
     Path(env["STUB_LOG"]).unlink()
     assert run(env, "--rollback").returncode == 0
     assert not [c for c in calls(env) if c.startswith("docker ")]
+
+
+def state_path(env) -> Path:
+    return Path(env["OLLAMA_BRIDGE_STATE_FILE"])
+
+
+def craft_state(env, **changes):
+    """Rewrite fields of a real applied state file, keeping its mode."""
+    p = state_path(env)
+    lines = []
+    for line in p.read_text().splitlines():
+        k, _, v = line.partition("=")
+        lines.append(f"{k}={changes.pop(k)}" if k in changes else line)
+    lines += [f"{k}={v}" for k, v in changes.items()]
+    p.write_text("\n".join(lines) + "\n")
+    p.chmod(0o600)
+
+
+def assert_untouched(env, r):
+    assert r.returncode == 2, (r.stdout, r.stderr)
+    assert units_dir(env) == ["pmoves-ollama-bridge.service", "pmoves-ollama-bridge.socket"]
+    assert state_path(env).exists()
+    mutating = [c for c in calls(env) if c.startswith(("ufw delete", "ufw allow", "systemctl disable", "systemctl daemon-reload", "systemctl enable", "systemctl stop", "systemctl restart"))]
+    assert mutating == [], mutating
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"UNIT": "ssh"},
+        {"SOCKET_FILE": "/etc/systemd/system/ssh.socket"},
+        {"SERVICE_FILE": "/etc/passwd"},
+        {"PORT": "22", "UFW_RULE": f"in on {BR} proto tcp from {SUBNET} to {GW} port 22"},
+        {"PORT": "0"},
+        {"UPSTREAM": "10.0.0.5:22"},
+        {"UPSTREAM": "127.0.0.1:22"},
+        {"BIND_IP": "0.0.0.0", "UFW_RULE": f"in on {BR} proto tcp from {SUBNET} to 0.0.0.0 port 11434"},
+        {"BIND_IP": "8.8.8.8", "UFW_RULE": f"in on {BR} proto tcp from {SUBNET} to 8.8.8.8 port 11434"},
+        {"SOURCE_CIDR": "0.0.0.0/0", "UFW_RULE": f"in on {BR} proto tcp from 0.0.0.0/0 to {GW} port 11434"},
+        {"IN_IFACE": "wlp8s0", "UFW_RULE": f"in on wlp8s0 proto tcp from {SUBNET} to {GW} port 11434"},
+        {"IN_IFACE": "eth9", "UFW_RULE": f"in on eth9 proto tcp from {SUBNET} to {GW} port 11434"},
+        {"UFW_RULE": "in on wlp8s0 proto tcp from any to any port 22"},
+        {"UNIT": ""},
+    ],
+    ids=["unit-ssh", "socket-path-ssh", "service-path-arbitrary", "port-22", "port-0", "upstream-remote", "upstream-loopback-ssh",
+         "bind-wildcard", "bind-public", "source-any", "iface-nic", "iface-absent-nondocker",
+         "rule-not-derived", "missing-key"],
+)
+def test_rollback_refuses_a_crafted_state_file(env, changes):
+    assert run(env, "--apply").returncode == 0
+    Path(env["STUB_LOG"]).unlink()
+    craft_state(env, **changes)
+    assert_untouched(env, run(env, "--rollback"))
+
+
+@pytest.mark.parametrize("target", ["file", "dir"])
+def test_rollback_refuses_a_state_file_with_loose_permissions(env, target):
+    assert run(env, "--apply").returncode == 0
+    Path(env["STUB_LOG"]).unlink()
+    (state_path(env) if target == "file" else state_path(env).parent).chmod(0o644 if target == "file" else 0o755)
+    assert_untouched(env, run(env, "--rollback"))
+
+
+def test_apply_refuses_a_crafted_previous_state(env):
+    # --apply deletes the recorded rule; a crafted record must not steer that.
+    assert run(env, "--apply").returncode == 0
+    Path(env["STUB_LOG"]).unlink()
+    craft_state(env, UFW_RULE="in on wlp8s0 proto tcp from any to any port 22")
+    assert_untouched(env, run(env, "--apply"))
+
+
+def test_apply_creates_a_0700_state_directory(env):
+    assert run(env, "--apply").returncode == 0
+    assert oct(state_path(env).parent.stat().st_mode & 0o777) == "0o700"
+
+
+def test_interface_override_must_be_a_bridge(env):
+    e = {**env, "OLLAMA_BRIDGE_IN_IFACE": "wlp8s0", "OLLAMA_BRIDGE_SOURCE_CIDR": "10.123.45.0/24"}
+    r = run(e, "--apply")
+    assert r.returncode == 2, (r.stdout, r.stderr)
+    assert "not a bridge" in r.stderr
+    assert units_dir(env) == []
+    assert not state_path(env).exists()
+
+
+def test_derived_interface_that_is_not_a_bridge_is_refused(env):
+    r = run({**env, "STUB_BRIDGES": "docker0"}, "--apply")
+    assert r.returncode == 2, (r.stdout, r.stderr)
+    assert units_dir(env) == []
+
+
+@pytest.mark.parametrize("port", ["0", "65536", "22a", "-1", " 11434", "1e3"])
+def test_port_override_is_validated(env, port):
+    r = run({**env, "OLLAMA_BRIDGE_PORT": port}, "--apply")
+    assert r.returncode == 2, (r.stdout, r.stderr)
+    assert units_dir(env) == []
+
+
+@pytest.mark.parametrize("upstream", ["10.0.0.5:11434", "0.0.0.0:11434", "localhost:11434", "127.0.0.1:0",
+                                      "127.0.0.1:11434/x", "[::1]:99999", "::1:11434", "/run/ollama.sock"])
+def test_upstream_override_is_validated(env, upstream):
+    r = run({**env, "OLLAMA_BRIDGE_UPSTREAM": upstream}, "--apply")
+    assert r.returncode == 2, (r.stdout, r.stderr)
+    assert units_dir(env) == []
+
+
+@pytest.mark.parametrize("upstream", ["127.0.0.1:11500", "[::1]:11434"])
+def test_loopback_upstream_overrides_are_accepted(env, upstream):
+    assert run({**env, "OLLAMA_BRIDGE_UPSTREAM": upstream}, "--apply").returncode == 0
+    assert f"ExecStart={env['SYSTEMD_SOCKET_PROXYD']} {upstream}" in unit(env, "service")
+
+
+@pytest.mark.parametrize("name", ["ssh", "ollama", "pmoves-x;rm"])
+def test_unit_override_outside_our_namespace_is_refused(env, name):
+    r = run({**env, "OLLAMA_BRIDGE_UNIT": name}, "--apply")
+    assert r.returncode == 2
+    assert units_dir(env) == []
 
 
 def test_rollback_with_nothing_installed_is_clean(env):

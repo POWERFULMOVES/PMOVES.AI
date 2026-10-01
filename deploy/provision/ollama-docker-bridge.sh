@@ -40,6 +40,10 @@
 # anything live, so it works with docker stopped. --apply deletes the previous
 # record's rule before adding a new one, so a changed subnet or gateway cannot
 # leave an orphaned allow behind; --status reports any orphan it finds.
+# The record is not trusted blindly: it must be root-owned, 0600, in a 0700
+# directory, and every value is re-run through the same validators as a live
+# one (unit names, port, loopback upstream, bind, source, bridge, rule) before
+# anything is touched; a crafted record is refused with exit 2.
 #
 # Vendor grounding:
 #   systemd-socket-proxyd(8) "Simple Example" — socket unit + Type=notify proxyd.
@@ -92,7 +96,8 @@ NETWORK="${OLLAMA_BRIDGE_NETWORK:-pmoves_external}"
 SYSTEMD_DIR="${SYSTEMD_DIR:-/etc/systemd/system}"
 DAEMON_JSON="${DOCKER_DAEMON_JSON:-/etc/docker/daemon.json}"
 PROXYD="${SYSTEMD_SOCKET_PROXYD:-/usr/lib/systemd/systemd-socket-proxyd}"
-STATE_FILE="${OLLAMA_BRIDGE_STATE_FILE:-/var/lib/pmoves/ollama-bridge.state}"
+# A directory of its own (0700), so its mode is ours to enforce.
+STATE_FILE="${OLLAMA_BRIDGE_STATE_FILE:-/var/lib/pmoves-ollama-bridge/state}"
 COMMENT_PREFIX="pmoves: containers -> host ollama"
 GATEWAY_SOURCE=""
 # Absolute, so the rollback hint is runnable from any cwd (make -C pmoves runs
@@ -101,6 +106,72 @@ SELF="$(readlink -f -- "$0")"
 
 could_not_measure() { echo "COULD-NOT-MEASURE: $*" >&2; exit 3; }
 refuse() { echo "refusing: $*" >&2; exit 2; }
+
+# ---- validators -----------------------------------------------------------------
+# One set, applied to overrides at startup, to live-derived values, and to every
+# value loaded from the state file. A failure refuses (exit 2) before anything
+# is touched.
+
+valid_port() { [[ "$1" =~ ^[0-9]{1,5}$ ]] && (( 10#$1 >= 1 && 10#$1 <= 65535 )); }
+
+validate_port() { valid_port "$1" || refuse "$2 '$1' is not a port number 1-65535"; }
+
+# Ollama's own listener: loopback only, nothing else.
+validate_upstream() {
+  local port=""
+  case "$1" in
+    127.0.0.1:*) port="${1#127.0.0.1:}" ;;
+    "[::1]:"*) port="${1#\[::1\]:}" ;;
+  esac
+  if [[ -z "$port" ]] || ! valid_port "$port"; then
+    refuse "$2 '$1' must be exactly 127.0.0.1:<port> or [::1]:<port>"
+  fi
+}
+
+# Our own unit namespace; never ssh.socket or any other unit.
+validate_unit() {
+  [[ "$1" =~ ^pmoves-[a-z0-9][a-z0-9-]{0,63}$ ]] || refuse "$2 '$1' is not a pmoves-* unit name"
+}
+
+# A docker bridge gateway: dotted-quad, private, unicast IPv4. Anything else
+# (0.0.0.0, "0", ::, ::ffff:0.0.0.0, loopback, multicast, public) is refused.
+validate_bind_ip() {
+  python3 - "$1" <<'PY_EOF' || refuse "$2 '$1' is not a private unicast IPv4 address: this script only exposes Ollama on the docker host-gateway, never on all interfaces, loopback or a public address"
+import ipaddress, sys
+raw = sys.argv[1]
+if len(raw.split(".")) != 4:
+    sys.exit(1)
+try:
+    ip = ipaddress.IPv4Address(raw)
+except ValueError:
+    sys.exit(1)
+bad = (ip.is_unspecified or ip.is_loopback or ip.is_multicast or ip.is_reserved
+       or ip.is_link_local or ip == ipaddress.IPv4Address("255.255.255.255"))
+sys.exit(0 if (ip.is_private and not bad) else 1)
+PY_EOF
+}
+
+validate_source_cidr() {
+  python3 - "$1" <<'PY_EOF' || refuse "$2 '$1' must be a private IPv4 network of /16 or narrower (one docker network, not a pool)"
+import ipaddress, sys
+try:
+    n = ipaddress.IPv4Network(sys.argv[1], strict=True)
+except ValueError:
+    sys.exit(1)
+sys.exit(0 if (n.is_private and n.prefixlen >= 16) else 1)
+PY_EOF
+}
+
+valid_iface_name() { [[ "$1" =~ ^[A-Za-z0-9_.-]{1,15}$ ]]; }
+iface_exists() { [[ -n "$(ip -o link show dev "$1" 2>/dev/null)" ]]; }
+# ip-link(8): "ip link show type bridge -- Shows the bridge devices." Netlink,
+# not /sys/class/net/<if>/bridge: the kernel's bridge.rst marks the bridge
+# sysfs interface deprecated.
+iface_is_bridge() { [[ -n "$(ip -o link show type bridge dev "$1" 2>/dev/null)" ]]; }
+
+validate_unit "$UNIT" "OLLAMA_BRIDGE_UNIT"
+validate_port "$PORT" "OLLAMA_BRIDGE_PORT"
+validate_upstream "$UPSTREAM" "OLLAMA_BRIDGE_UPSTREAM"
 
 # ---- live derivation (dry-run / apply / status drift check; never rollback) --
 
@@ -193,19 +264,7 @@ PY_EOF
        GATEWAY_SOURCE="docker0 (default bridge)" ;;
   esac
   [[ -n "$configured" ]] || could_not_measure "no docker host-gateway address (no --host-gateway-ip flag, no host-gateway-ips/host-gateway-ip in the daemon config, no IPv4 on docker0)."
-  python3 - "$configured" <<'PY_EOF' || refuse "bind address '$configured' is not a unicast IPv4 address: this script only exposes Ollama on the docker host-gateway, never on all interfaces or loopback"
-import ipaddress, sys
-raw = sys.argv[1]
-parts = raw.split(".")
-if len(parts) != 4:
-    sys.exit(1)
-try:
-    ip = ipaddress.IPv4Address(raw)
-except ValueError:
-    sys.exit(1)
-sys.exit(1 if (ip.is_unspecified or ip.is_loopback or ip.is_multicast
-               or ip.is_reserved or ip == ipaddress.IPv4Address("255.255.255.255")) else 0)
-PY_EOF
+  validate_bind_ip "$configured" "bind address"
   BIND_IP="$configured"
 }
 
@@ -239,15 +298,11 @@ for s in sys.argv[1].split(","):
       [[ -n "$SOURCE_CIDR" ]] || could_not_measure "network $NETWORK has no IPv4 subnet ('$subnets')."
     fi
   fi
-  python3 - "$SOURCE_CIDR" <<'PY_EOF' || refuse "source '$SOURCE_CIDR' must be a private IPv4 network of /16 or narrower (one docker network, not a pool)"
-import ipaddress, sys
-try:
-    n = ipaddress.IPv4Network(sys.argv[1], strict=True)
-except ValueError:
-    sys.exit(1)
-sys.exit(0 if (n.is_private and n.prefixlen >= 16) else 1)
-PY_EOF
-  [[ "$IN_IFACE" =~ ^[A-Za-z0-9_.-]{1,15}$ ]] || refuse "interface name '$IN_IFACE' is not a valid Linux interface name"
+  validate_source_cidr "$SOURCE_CIDR" "source"
+  valid_iface_name "$IN_IFACE" || refuse "interface name '$IN_IFACE' is not a valid Linux interface name"
+  iface_exists "$IN_IFACE" || could_not_measure "interface $IN_IFACE does not exist (does network $NETWORK exist on this host?)."
+  # Containers arrive on a docker bridge; a NIC (wlp8s0, eth0) is never right.
+  iface_is_bridge "$IN_IFACE" || refuse "interface $IN_IFACE is not a bridge (ip link show type bridge); the rule must name the consumers' docker bridge"
   # The interface must exist and be on-link for the source subnet; otherwise
   # source and interface were derived from different networks.
   local addrs=()
@@ -316,6 +371,7 @@ write_state() {
   local dir tmp k
   dir="$(dirname -- "$STATE_FILE")"
   ( umask 077; mkdir -p -- "$dir" )
+  chmod 0700 -- "$dir"
   tmp="$(umask 077; mktemp "$dir/.ollama-bridge.state.XXXXXX")"
   {
     echo "# Written by deploy/provision/ollama-docker-bridge.sh --apply; read by --rollback/--status."
@@ -329,6 +385,7 @@ write_state() {
 # Sets S_<KEY> for each key.
 read_state() {
   local k v
+  check_state_trust
   while IFS='=' read -r k v; do
     case "$k" in
       UNIT|BIND_IP|PORT|UPSTREAM|SOURCE_CIDR|IN_IFACE|SOCKET_FILE|SERVICE_FILE|UFW_RULE) printf -v "S_$k" '%s' "$v" ;;
@@ -336,8 +393,50 @@ read_state() {
   done < "$STATE_FILE"
   for k in "${STATE_KEYS[@]}"; do
     v="S_$k"
-    [[ -n "${!v}" ]] || could_not_measure "state file $STATE_FILE is missing $k; inspect it by hand."
+    [[ -n "${!v}" ]] || refuse "state file $STATE_FILE is missing $k; inspect it by hand."
   done
+  validate_state
+}
+
+# Who wrote the record? Root (or, under the non-root test switch, this user),
+# 0600, in a 0700 directory of the same owner. Otherwise it may not be ours.
+check_state_trust() {
+  local want dir
+  want=0
+  [[ -n "${PMOVES_PROVISION_ALLOW_NONROOT:-}" ]] && want="$(id -u)"
+  dir="$(dirname -- "$STATE_FILE")"
+  [[ ! -L "$STATE_FILE" ]] || refuse "state file $STATE_FILE is a symlink"
+  [[ "$(stat -c '%u %a' -- "$STATE_FILE")" == "$want 600" ]] \
+    || refuse "state file $STATE_FILE must be owned by uid $want with mode 0600 (is: $(stat -c 'uid %u mode %a' -- "$STATE_FILE"))"
+  [[ "$(stat -c '%u %a' -- "$dir")" == "$want 700" ]] \
+    || refuse "state directory $dir must be owned by uid $want with mode 0700 (is: $(stat -c 'uid %u mode %a' -- "$dir"))"
+}
+
+# Every loaded value passes the same validators as a live one, and the derived
+# fields (unit paths, rule) must be exactly what the validated parts produce:
+# a crafted record cannot name ssh.socket, port 22, another file, or a rule
+# that is not ours.
+validate_state() {
+  [[ "$S_UNIT" == "$UNIT" ]] || refuse "state UNIT '$S_UNIT' is not this script's unit '$UNIT'"
+  [[ "$S_SOCKET_FILE" == "$SYSTEMD_DIR/$UNIT.socket" ]] || refuse "state SOCKET_FILE '$S_SOCKET_FILE' is not $SYSTEMD_DIR/$UNIT.socket"
+  [[ "$S_SERVICE_FILE" == "$SYSTEMD_DIR/$UNIT.service" ]] || refuse "state SERVICE_FILE '$S_SERVICE_FILE' is not $SYSTEMD_DIR/$UNIT.service"
+  validate_port "$S_PORT" "state PORT"
+  validate_upstream "$S_UPSTREAM" "state UPSTREAM"
+  [[ "$S_PORT" == "$PORT" ]] || refuse "state PORT '$S_PORT' is not this script's port '$PORT'"
+  [[ "$S_UPSTREAM" == "$UPSTREAM" ]] || refuse "state UPSTREAM '$S_UPSTREAM' is not this script's upstream '$UPSTREAM'"
+  validate_bind_ip "$S_BIND_IP" "state BIND_IP"
+  validate_source_cidr "$S_SOURCE_CIDR" "state SOURCE_CIDR"
+  valid_iface_name "$S_IN_IFACE" || refuse "state IN_IFACE '$S_IN_IFACE' is not a valid interface name"
+  if iface_exists "$S_IN_IFACE"; then
+    iface_is_bridge "$S_IN_IFACE" || refuse "state IN_IFACE '$S_IN_IFACE' exists and is not a bridge"
+  else
+    # Docker stopped or the network removed: rollback must still work (it only
+    # deletes), but only for the name docker itself generates.
+    [[ "$S_IN_IFACE" =~ ^br-[0-9a-f]{12}$ ]] \
+      || refuse "state IN_IFACE '$S_IN_IFACE' is absent and not a docker-generated br-<id> name; cannot verify it is a bridge"
+  fi
+  [[ "$S_UFW_RULE" == "in on $S_IN_IFACE proto tcp from $S_SOURCE_CIDR to $S_BIND_IP port $S_PORT" ]] \
+    || refuse "state UFW_RULE '$S_UFW_RULE' is not the rule its own fields produce"
 }
 
 # Make the loaded state the current variables (status renders from state).
