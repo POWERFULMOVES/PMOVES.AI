@@ -58,7 +58,7 @@ DB_PASS="${DB_PASS:-${JUICEFS_META_PASSWORD:-}}"
 # META_ROLE=juicefs_meta with the funnel credential. An explicit META_ROLE
 # always wins (empty counts as not named).
 #   - The funnel credential (JUICEFS_META_PASSWORD) is juicefs_meta's password
-#     (docs/operations/JUICEFS_META_CREDENTIAL_RUNBOOK.md:21), so using it without
+#     (docs/operations/JUICEFS_META_CREDENTIAL_RUNBOOK.md:22), so using it without
 #     a named role FAILS LOUDLY. It is never paired silently, and never with
 #     supabase_admin: that mismatched pair always fails auth and was the defect.
 #   - An explicit DB_PASS without a role keeps the documented back-compat default,
@@ -117,6 +117,13 @@ mkdir -p "$MOUNT_POINT" 2>/dev/null || true
 # fusermount cannot clear container-created mounts (absent from /etc/mtab),
 # and docker then fails with a confusing "mkdir: file exists". Detect early,
 # try fusermount, and fail with the exact root fix instead.
+#   Provenance: the fix it prints, `sudo umount -l`, is the vendor's own force
+#   unmount. JuiceFS v1.3.0 docs/en/administration/troubleshooting.md:201-202
+#   ("Unmount error"): on Linux `juicefs umount --force` is translated to
+#   `umount --lazy`. Spelled out here because this host runs JuiceFS in a
+#   container and has no juicefs CLI. See also umount(8) -l/--lazy and
+#   fusermount(1) -u/-z. The /etc/mtab observation: Originated, Crush lane,
+#   2026-09-22, PR #3150, measured on Knuckles.
 if [ -d "$MOUNT_POINT" ] && ! ls "$MOUNT_POINT" >/dev/null 2>&1; then
     fusermount -uz "$MOUNT_POINT" 2>/dev/null || true
     if ! ls "$MOUNT_POINT" >/dev/null 2>&1; then
@@ -151,6 +158,12 @@ echo "Preflight: checking the volume's storage backend ..."
 # "Storage backend:" line printed — a silent death with zero diagnostics
 # (measured on B850 2026-09-22 across three separate failure modes). Capture
 # both streams, print the error on failure (password redacted), keep parsing.
+# Network: host by default. A node whose block store is a compose service name
+# (e.g. `minio`) sets JUICEFS_NETWORK to that compose network, because "User-defined
+# bridges provide automatic DNS resolution between containers" (github.com/docker/docs @ main 2026-10-01,
+# content/manuals/engine/network/drivers/bridge.md:49), whereas host networking
+# "shares the host's networking namespace" (drivers/host.md:12-13) and resolves
+# only what the host can. Same flag on the mount below.
 PREFLIGHT_OUT="$(META_PASSWORD="$DB_PASS" docker run --rm --network "${JUICEFS_NETWORK:-host}" \
     -e META_PASSWORD \
     --entrypoint sh juicedata/mount:ce-v1.3.0 \

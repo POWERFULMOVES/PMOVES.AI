@@ -155,10 +155,10 @@ from `.env.local`. The script hardenings:
     choose one. `juicefs_meta` is PMOVES's scoped role
     (`pmoves/supabase/initdb/00_3_juicefs_meta_role.sql`), and
     `JUICEFS_META_PASSWORD` is its funnel slot
-    (`JUICEFS_META_CREDENTIAL_RUNBOOK.md:21`). Role selection follows the PMOVES
+    (`JUICEFS_META_CREDENTIAL_RUNBOOK.md:22`). Role selection follows the PMOVES
     precedent `JUICEFS_CROSS_NODE_MOUNT_RUNBOOK.md:92-102` (name `META_ROLE`
     explicitly). The automatic pairing the Crush lane originated on 2026-09-22
-    (f2519ea67) was removed in favour of that precedent. The fail-loud refusal
+    (PR #3150) was removed in favour of that precedent. The fail-loud refusal
     is Originated: B850-CLAUDE / nvme-3150-rebase, 2026-10-01 (no upstream
     precedent; checked: JuiceFS v1.3.0 metadata-engine and PostgreSQL
     best-practices docs, and the PMOVES JuiceFS runbooks).
@@ -171,9 +171,22 @@ from `.env.local`. The script hardenings:
     forwarding names: **Originated:** B850-CLAUDE / nvme-3150-rebase, 2026-10-01
     (no upstream precedent found; checked: every recipe in `pmoves/Makefile` and
     `pmoves/mk/*.mk` that calls with-env.sh).
-  - *Stale-FUSE-endpoint guard and preflight output capture*: **Originated:**
-    Crush lane, 2026-09-22 (f2519ea67). Upstream precedent was not searched in
-    this pass.
+  - *Stale-FUSE-endpoint guard*: the fix it prints (`sudo umount -l`) is the
+    vendor's force unmount. JuiceFS v1.3.0
+    `docs/en/administration/troubleshooting.md:201-202` ("Unmount error"): on
+    Linux `juicefs umount --force` is translated to `umount --lazy`. It is
+    spelled out because this host runs JuiceFS in a container and has no juicefs
+    CLI. Also umount(8) `-l`, fusermount(1) `-u -z`. The observation that
+    container-created mounts are absent from `/etc/mtab`: **Originated:** Crush
+    lane, 2026-09-22, PR #3150, measured on Knuckles.
+  - *Preflight output capture*: **Originated:** Crush lane, 2026-09-22, PR #3150.
+    Upstream precedent was not searched in this pass.
+  - *`--network ${JUICEFS_NETWORK:-host}`*: Docker docs (github.com/docker/docs
+    @ main, 2026-10-01): `content/manuals/engine/network/drivers/bridge.md:49`
+    "User-defined bridges provide automatic DNS resolution between containers",
+    while host networking "shares the host's networking namespace"
+    (`drivers/host.md:12-13`). So a mount that must reach the `minio` service by
+    name joins the compose network.
   - *`DATA_DIR` must not fail silently*: Docker docs, "Bind mounts" > "Syntax":
     with `--volume`, a missing source "Docker automatically creates" as a
     directory. That it ends up root-owned follows from a rootful daemon creating
@@ -186,7 +199,8 @@ from `.env.local`. The script hardenings:
   `JUICEFS_NETWORK=pmoves_data` (host-network mounts cannot resolve the
   `minio` block store), `META_ROLE=juicefs_meta`,
   `DATA_DIR=/mnt/pmoves-nvme1/juicefs-data`.
-- **Docs verification**: upstream cache guide explicitly recommends a
+- **Docs verification**: the upstream cache guide (JuiceFS v1.3.0
+  `docs/en/guide/cache.md:232`, section "Cache directory") explicitly recommends a
   dedicated high-performance disk, never the system disk — the NVMe move is
   the documented pattern. `--cache-size` MiB semantics and `--free-space-ratio`
   confirmed; the measured bounds on NVMe1: 100 GiB cache of 3665 GiB free.

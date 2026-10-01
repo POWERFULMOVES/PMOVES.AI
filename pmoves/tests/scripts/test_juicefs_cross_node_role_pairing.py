@@ -6,7 +6,7 @@ The funnel-delivered fallback credential, JUICEFS_META_PASSWORD, is the
 ``juicefs_meta`` role's password. origin/main defaulted META_ROLE to
 ``supabase_admin``, so using the funnel credential without naming a role
 paired juicefs_meta's password with supabase_admin and always failed auth.
-The first fix (#3150 @ 6e13d0f18) added an automatic pairing that was dead (the
+The first fix (an earlier revision of PR #3150) added an automatic pairing that was dead (the
 default ran first), and the make recipe defeated it a second time by resolving
 the fallback into DB_PASS.
 

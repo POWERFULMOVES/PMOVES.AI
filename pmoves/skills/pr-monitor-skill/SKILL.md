@@ -23,7 +23,11 @@ description: >
 ## The flow (pairing: `pr-monitor-graphiti-chit`)
 
 1. **Monitor with retry.** The tool iterates every open PR; one transient
-   API error kills the whole run, so drive it with a retry wrapper:
+   API error kills the whole run, so drive it with a retry wrapper. (`gh` has no
+   built-in retry, so the wrapper is ours. Originated: Crush lane, 2026-09-22,
+   PR #3150, from a measured flaky run: 4 transient connection deaths in one
+   flow run, 5th attempt clean, per that PR's skill commit. No run ID was
+   recorded.)
 
    ```bash
    cd pmoves
