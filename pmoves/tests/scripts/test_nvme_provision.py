@@ -57,7 +57,9 @@ SAFE = ["bash", "sed", "awk", "grep", "cat", "cp", "date", "tail", "head", "read
 
 STUB = r'''#!PYTHON
 import json, os, sys
-name = os.path.basename(sys.argv[0]); args = sys.argv[1:]
+name = os.path.basename(sys.argv[0])
+# Real tools follow symlinks (/dev/disk/by-id/...), so canonicalise path args.
+args = [os.path.realpath(a) if a.startswith("/") and os.path.islink(a) else a for a in sys.argv[1:]]
 state_path = os.environ["NVME_STUB_STATE"]
 st = json.load(open(state_path))
 with open(os.environ["NVME_STUB_LOG"], "a") as log:
@@ -384,6 +386,20 @@ def test_adoption_accepts_any_spec_naming_the_same_partition(tmp_path, spec):
     assert r.returncode == 0, r.stdout + r.stderr
     assert "already provisioned" in r.stdout and "already present" in r.stdout
     assert h.destructive() == [] and h.fstab.read_text() == before
+
+
+def test_by_id_device_derives_the_real_partition_name(tmp_path):
+    # --device given as a by-id symlink to a fictional nvme disk: the partition
+    # must be /dev/nvme9n1p1, not "<by-id-name>p1" or "<by-id-name>1".
+    h = Harness(tmp_path)
+    by_id = tmp_path / "by-id" / "nvme-WD_Blue_SN5000_4TB_FAKE"
+    by_id.parent.mkdir()
+    by_id.symlink_to("/dev/nvme9n1")
+    r = h.run(device=str(by_id))
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert h.calls("wipefs")[0][-1] == "/dev/nvme9n1p1"
+    assert h.calls(MKE2FS)[0][-1] == "/dev/nvme9n1p1"
+    assert "FAKEp1" not in r.stdout + r.stderr and "FAKE1" not in r.stdout + r.stderr
 
 
 def test_rerun_as_plain_root_leaves_ownership_alone(tmp_path):

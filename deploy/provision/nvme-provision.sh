@@ -187,7 +187,9 @@ fi
 # (c) 2026 Anton Hvornum).
 [[ "$(lsblk -dno TYPE "$DEVICE" 2>/dev/null || true)" == "disk" ]] || err "Not a whole disk: $DEVICE"
 
-PART="$(partition_path "$DEVICE" 1)"
+# Derived from the RESOLVED device: a /dev/disk/by-id/... argument would
+# otherwise yield a bogus "<by-id-name>p1" or "<by-id-name>1".
+PART="$(partition_path "$DEVICE_REAL" 1)"
 part_fs()    { lsblk -no FSTYPE "$1" 2>/dev/null | head -n1 || true; }
 part_label() { lsblk -no LABEL  "$1" 2>/dev/null | head -n1 || true; }
 part_partlabel() { lsblk -no PARTLABEL "$1" 2>/dev/null | head -n1 || true; }
