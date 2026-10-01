@@ -59,7 +59,7 @@
 | # | Variant | Primary | Notes |
 |---|---------|---------|-------|
 | 16 | `ZHIPU_API_KEY` | `Z_AI_API_KEY` | Legacy name |
-| 17 | `MINIMAX_TOKEN_PLAN_API_KEY` | `MINIMAX_API_KEY` | Token plan variant |
+| 17 | `MINIMAX_TOKEN_PLAN_API_KEY` | - (distinct key) | NOT an alias of `MINIMAX_API_KEY`: the Token Plan Subscription Key "is not interchangeable with pay-as-you-go API Keys" ([platform.minimax.io/docs/token-plan/intro](https://platform.minimax.io/docs/token-plan/intro)); PMOVES issue #2748 (`pmoves/configs/chit_target_drift/_accepted.yaml`) |
 | 18 | `DASHSCOPE_API_KEY` | `ALIBABA_PRO_CODING_PLAN` | DashScope direct |
 | 19 | `OPENAI_API_KEY` | - | Not used (OpenRouter preferred) |
 | 20 | `ANTHROPIC_API_KEY` | - | Not used (Claude via TensorZero) |
