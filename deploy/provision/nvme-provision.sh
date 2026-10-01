@@ -35,8 +35,33 @@
 #   blkid(8), lsblk(8), mount(8), mountpoint(1), findmnt(8), fstab(5),
 #   systemd.mount(5), systemd-fstab-generator(8), partprobe(8), udevadm(8).
 #   "Originated" marks steps with no upstream precedent: the Crush lane
-#   (CRUSH-GLM52 under the POWERFULMOVES account, 2026-09-22, f2519ea67) or
+#   (CRUSH-GLM52 under the POWERFULMOVES account, 2026-09-22, PR #3150) or
 #   B850-CLAUDE / nvme-3150-rebase (2026-10-01), as noted per step.
+#
+# THIRD-PARTY NOTICES. Lines marked "Adapted from [ISO]/[PART]/[OMA]" are
+# derived from MIT-licensed code; those portions carry these notices:
+#   [ISO], [PART], [PHI]: Copyright (c) 2026 Anton Hvornum
+#     (omacom/omarchy-iso, LICENSE: MIT License)
+#   [OMA]: Copyright (c) David Heinemeier Hansson
+#     (omacom/omarchy, mirrored at POWERFULMOVES/PMOVES-omarchy, LICENSE: MIT)
+#   Permission is hereby granted, free of charge, to any person obtaining a
+#   copy of this software and associated documentation files (the
+#   "Software"), to deal in the Software without restriction, including
+#   without limitation the rights to use, copy, modify, merge, publish,
+#   distribute, sublicense, and/or sell copies of the Software, and to permit
+#   persons to whom the Software is furnished to do so, subject to the
+#   following conditions:
+#
+#   The above copyright notice and this permission notice shall be included
+#   in all copies or substantial portions of the Software.
+#
+#   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+#   OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+#   MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
+#   NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+#   DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+#   OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
+#   USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 set -euo pipefail
 
@@ -68,7 +93,8 @@ done
 err() { echo "[nvme-provision] ERROR: $*" >&2; exit 1; }
 log() { echo "[nvme-provision] $*"; }
 
-# Dry-run: destructive steps report what they would do instead. [ISO]:686-692
+# Dry-run: destructive steps report what they would do instead.
+# Adapted from [ISO]:686-692 (MIT, (c) 2026 Anton Hvornum).
 # ("[dry] would ..."). The run() wrapper is Originated, B850-CLAUDE / nvme-3150-rebase.
 run() {
   if $DRY; then
@@ -78,7 +104,8 @@ run() {
   fi
 }
 
-# Partition device name: copied from [PART]:20-28 (partition_path). NVMe and
+# Partition device name. Adapted from [PART]:20-28, partition_path (MIT, (c) 2026
+# Anton Hvornum). NVMe and
 # mmcblk disks take a "p" before the number (nvme1n1 -> nvme1n1p1). Never
 # predict-then-fall-back to a concatenated name such as nvme1n11.
 partition_path() {
@@ -102,11 +129,14 @@ if ! $DRY; then
 fi
 
 # --- System disk guard ----------------------------------------------------
-# Root's source with any btrfs subvolume suffix ("/dev/nvme0n1p2[/@]") stripped:
-# [OMA] bin/omarchy-system-factory-reset:58. Then walk PKNAME up to the whole
-# disk, as [ISO]:364-368 (get_root_disk) does; this covers partitions, LUKS and
-# LVM stacks. Fail closed when no disk resolves, as [FMT]:46-48 does. Refuse the
-# root disk AND anything whose name starts with it (its partitions): [FMT]:50.
+# In-repo precedent first: [FMT]:41-52 resolves root's parent via PKNAME, fails
+# closed when it cannot (:46-48), and refuses the root disk and anything named
+# under it (:50). Two extensions, because [FMT]'s single PKNAME step stops at the
+# partition under a LUKS or LVM mapper and so misses the disk:
+#   - strip a btrfs subvolume suffix ("/dev/nvme0n1p2[/@]"). Adapted from [OMA]
+#     bin/omarchy-system-factory-reset:58 (MIT, (c) David Heinemeier Hansson).
+#   - walk PKNAME until it is empty. Adapted from [ISO]:364-368, get_root_disk
+#     (MIT, (c) 2026 Anton Hvornum).
 # The 8-step bound on the walk is Originated, B850-CLAUDE / nvme-3150-rebase.
 ROOT_SRC="$(findmnt -no SOURCE / | sed 's/\[.*\]//')"
 ROOT_DISK="$(readlink -f "$ROOT_SRC" 2>/dev/null || printf '%s\n' "$ROOT_SRC")"
@@ -126,7 +156,8 @@ if lsblk -no MOUNTPOINTS "$DEVICE" 2>/dev/null | grep -qE '^/(boot|boot/efi|home
   err "$DEVICE has system-critical mountpoints. Refusing."
 fi
 
-# Target must be a whole disk: the same lsblk(8) TYPE test as [ISO]:370.
+# Target must be a whole disk: lsblk(8) TYPE. Adapted from [ISO]:370 (MIT,
+# (c) 2026 Anton Hvornum).
 [[ "$(lsblk -dno TYPE "$DEVICE" 2>/dev/null || true)" == "disk" ]] || err "Not a whole disk: $DEVICE"
 
 PART="$(partition_path "$DEVICE" 1)"
@@ -146,7 +177,7 @@ elif [[ "$PART_COUNT" -gt 0 ]]; then
   # PMOVES policy, stricter than the installer (which wipes after a confirm,
   # [ISO]:726-729): refuse any partitioned drive, except exactly one partition
   # with no filesystem, which is an interrupted earlier run.
-  # Originated, Crush lane, 2026-09-22 (f2519ea67).
+  # Originated, Crush lane, 2026-09-22 (PR #3150).
   if [[ "$PART_COUNT" -ne 1 || -n "$(part_fs "$PART")" ]]; then
     err "$DEVICE already has a partition table with data. This script only provisions BLANK drives. If the partitions are yours to destroy, clear them explicitly first."
   fi
@@ -168,7 +199,8 @@ if ! $ALREADY; then
   run udevadm settle 2>/dev/null || true
 
   if ! $DRY; then
-    # Wait for the partition node: [PART]:45-52 (wait_for_device) and [ISO]:718-724,
+    # Wait for the partition node. Adapted from [PART]:45-52, wait_for_device
+    # (MIT, (c) 2026 Anton Hvornum); see also [ISO]:718-724,
     # partprobe(8), udevadm(8) settle. Presence is read from lsblk(8) TYPE=part
     # rather than [[ -b ]], so the step can be exercised with a stubbed lsblk.
     for _ in 1 2 3 4 5 6 7 8 9 10; do
@@ -182,7 +214,8 @@ if ! $ALREADY; then
     log "Using partition device $PART"
   fi
 
-  # Clear stale signatures on the NEW partition before formatting: [ISO]:726-729,
+  # Clear stale signatures on the NEW partition before formatting. Adapted from
+  # [ISO]:726-729 (MIT, (c) 2026 Anton Hvornum);
   # wipefs(8). (Whether mke2fs alone clears them was not measured.)
   run wipefs -af "$PART"
   # ext4 with no root reserve, labelled: mke2fs(8) -F, -m, -L. -m 0 is the
@@ -231,7 +264,8 @@ fi
 # Mount this one entry: mount(8) given only a mountpoint uses its fstab line
 # (-T/--fstab names the table), unlike -a/--all, which mounts every entry and
 # would let an unrelated failure abort this run. Then check with mountpoint(1)
-# -q. Same explicit-mount-then-mountpoint shape as [ISO]:762-781.
+# -q. The explicit-mount-then-mountpoint shape is adapted from [ISO]:762-781
+# (MIT, (c) 2026 Anton Hvornum).
 if mountpoint -q "$MOUNT"; then
   log "$MOUNT already mounted"
 else
