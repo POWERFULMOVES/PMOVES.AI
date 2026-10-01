@@ -48,7 +48,12 @@ STUBS = {
     "systemctl": """#!/usr/bin/env bash
 echo "systemctl $*" >> "$STUB_LOG"
 if [[ "$1" == "is-active" ]]; then exit "${STUB_ACTIVE_RC:-3}"; fi
+if [[ "$1" == "show" ]]; then echo "${STUB_EXECSTART:-}"; fi
 exit 0
+""",
+    # The host's real dockerd must never be consulted from a test.
+    "pgrep": """#!/usr/bin/env bash
+exit 1
 """,
     # A rule store in ufw's normalized form, so `show added` is realistic.
     "ufw": """#!/usr/bin/env bash
@@ -130,6 +135,8 @@ def env(tmp_path):
     proxyd.chmod(0o755)
     systemd_dir = tmp_path / "systemd"
     systemd_dir.mkdir()
+    cmdline = tmp_path / "dockerd.cmdline"  # running dockerd, no gateway flags
+    cmdline.write_bytes(b"/usr/bin/dockerd\0-H\0fd://\0")
     return {
         **{k: v for k, v in os.environ.items() if not k.startswith("OLLAMA_BRIDGE_")},
         "PATH": f"{stub_dir}:{os.environ['PATH']}",
@@ -144,6 +151,7 @@ def env(tmp_path):
         "SYSTEMD_SOCKET_PROXYD": str(proxyd),
         "OLLAMA_BRIDGE_STATE_FILE": str(tmp_path / "state" / "ollama-bridge.state"),
         "PMOVES_PROVISION_ALLOW_NONROOT": "1",
+        "DOCKERD_PROC_CMDLINE": str(cmdline),
     }
 
 
@@ -262,7 +270,7 @@ def test_dry_run_writes_nothing_and_mutates_nothing(env):
     assert f"ListenStream={GW}:11434" in r.stdout
     assert units_dir(env) == []
     assert not Path(env["OLLAMA_BRIDGE_STATE_FILE"]).exists()
-    assert [c for c in calls(env) if not c.startswith("docker network inspect")] == []
+    assert [c for c in calls(env) if not c.startswith(("docker network inspect", "systemctl show"))] == []
 
 
 def test_apply_writes_a_0600_state_record(env):
@@ -382,6 +390,56 @@ def test_daemon_json_host_gateway_ips_array_is_read(env, daemon_json):
     r = run(env)
     assert r.returncode == 0, r.stderr
     assert "ListenStream=10.99.0.1:11434" in r.stdout
+
+
+def set_dockerd_args(env, *args):
+    Path(env["DOCKERD_PROC_CMDLINE"]).write_bytes(b"\0".join(a.encode() for a in ("/usr/bin/dockerd", *args)) + b"\0")
+
+
+@pytest.mark.parametrize("flag", [["--host-gateway-ip=10.77.0.1"], ["--host-gateway-ip", "10.77.0.1"],
+                                  ["--host-gateway-ip", "fd00::1", "--host-gateway-ip", "10.77.0.1"]],
+                         ids=["equals", "space", "v6-then-v4"])
+def test_dockerd_flag_sets_the_bind_address(env, flag):
+    set_dockerd_args(env, "-H", "fd://", *flag)
+    r = run(env)
+    assert r.returncode == 0, r.stderr
+    assert "ListenStream=10.77.0.1:11434" in r.stdout
+    assert "from dockerd --host-gateway-ip" in r.stdout
+
+
+def test_dockerd_flag_and_daemon_json_together_are_refused(env):
+    # dockerd reference, "Daemon configuration file": the daemon fails to start
+    # if an option is duplicated between the file and the flags.
+    set_dockerd_args(env, "--host-gateway-ip=10.77.0.1")
+    Path(env["DOCKER_DAEMON_JSON"]).write_text('{"host-gateway-ips": ["10.99.0.1"]}')
+    r = run(env, "--apply")
+    assert r.returncode == 2, (r.stdout, r.stderr)
+    assert "set twice" in r.stderr
+    assert units_dir(env) == []
+
+
+def test_dockerd_config_file_flag_is_followed(env, tmp_path):
+    alt = tmp_path / "alt-daemon.json"
+    alt.write_text('{"host-gateway-ips": ["10.55.0.1"]}')
+    set_dockerd_args(env, f"--config-file={alt}")
+    r = run(env)
+    assert r.returncode == 0, r.stderr
+    assert "ListenStream=10.55.0.1:11434" in r.stdout
+
+
+def test_execstart_is_read_when_dockerd_is_not_running(env):
+    e = {**env, "DOCKERD_PROC_CMDLINE": "",
+         "STUB_EXECSTART": "{ path=/usr/bin/dockerd ; argv[]=/usr/bin/dockerd -H fd:// --host-gateway-ip 10.66.0.1 ; ignore_errors=no ; start_time=[n/a] }"}
+    r = run(e)
+    assert r.returncode == 0, r.stderr
+    assert "ListenStream=10.66.0.1:11434" in r.stdout
+
+
+def test_dockerd_flag_with_only_ipv6_is_refused(env):
+    set_dockerd_args(env, "--host-gateway-ip=fd00::1")
+    r = run(env, "--apply")
+    assert r.returncode == 2
+    assert units_dir(env) == []
 
 
 def test_no_bridge_address_is_could_not_measure(env):

@@ -46,9 +46,11 @@
 #   systemd.socket(5) FreeBind= — bind before docker0 has its address at boot.
 #   systemd.unit(5) After= is ordering only; Wants= would START ollama.service
 #     with the proxy, overriding an operator who stopped it on purpose.
-#   dockerd(8) "Configure host gateway IP" — host-gateway resolves to the default
-#     bridge's IPv4 unless daemon.json sets host-gateway-ips (or the legacy
-#     host-gateway-ip); we read the same, first IPv4 wins.
+#   dockerd reference, "Configure host gateway IP" + "Daemon configuration file"
+#     (docs.docker.com/reference/cli/dockerd) — host-gateway resolves to the
+#     default bridge's IPv4 unless --host-gateway-ip (flag) or daemon.json
+#     host-gateway-ips / legacy host-gateway-ip is set; setting both fails dockerd.
+#     See derive_bind_ip.
 #   docker network inspect — .Id, .IPAM.Config[].Subnet, and the
 #     com.docker.network.bridge.name option; an unnamed bridge network's
 #     interface is br-<first 12 hex of .Id>.
@@ -62,7 +64,8 @@
 #   sudo deploy/provision/ollama-docker-bridge.sh --status   # 0 provisioned, 1 not
 #   sudo deploy/provision/ollama-docker-bridge.sh --rollback
 #
-# Overrides (all optional): OLLAMA_BRIDGE_NETWORK (default pmoves_external),
+# Overrides (all optional; DOCKER_DAEMON_JSON / DOCKERD_PROC_CMDLINE exist for
+# tests): OLLAMA_BRIDGE_NETWORK (default pmoves_external),
 # OLLAMA_BRIDGE_SOURCE_CIDR (IPv4, private, /16 or narrower),
 # OLLAMA_BRIDGE_IN_IFACE, OLLAMA_BRIDGE_PORT, OLLAMA_BRIDGE_UPSTREAM,
 # OLLAMA_BRIDGE_UNIT, OLLAMA_BRIDGE_STATE_FILE.
@@ -91,6 +94,7 @@ DAEMON_JSON="${DOCKER_DAEMON_JSON:-/etc/docker/daemon.json}"
 PROXYD="${SYSTEMD_SOCKET_PROXYD:-/usr/lib/systemd/systemd-socket-proxyd}"
 STATE_FILE="${OLLAMA_BRIDGE_STATE_FILE:-/var/lib/pmoves/ollama-bridge.state}"
 COMMENT_PREFIX="pmoves: containers -> host ollama"
+GATEWAY_SOURCE=""
 # Absolute, so the rollback hint is runnable from any cwd (make -C pmoves runs
 # this as ../deploy/...).
 SELF="$(readlink -f -- "$0")"
@@ -100,43 +104,95 @@ refuse() { echo "refusing: $*" >&2; exit 2; }
 
 # ---- live derivation (dry-run / apply / status drift check; never rollback) --
 
+# dockerd's own arguments, one per line: the RUNNING daemon first (that is the
+# configuration in effect), then the docker.service ExecStart if it is not
+# running. Empty if neither is readable.
+dockerd_args() {
+  local cmdline="${DOCKERD_PROC_CMDLINE:-}" pid
+  if [[ -z "$cmdline" ]] && pid="$(pgrep -xo dockerd 2>/dev/null)"; then
+    cmdline="/proc/$pid/cmdline"
+  fi
+  if [[ -n "$cmdline" && -r "$cmdline" ]]; then
+    tr '\0' '\n' < "$cmdline"
+    return 0
+  fi
+  systemctl show -p ExecStart --value docker.service 2>/dev/null \
+    | sed -n 's/.*argv\[\]=\([^;]*\);.*/\1/p' | head -1 | tr ' ' '\n' || true
+}
+
 # The address `host-gateway` resolves to, validated as a unicast IPv4 address.
+#
+# Sources, per the dockerd reference (docs.docker.com/reference/cli/dockerd,
+# "Configure host gateway IP" and "Daemon configuration file"):
+#   1. the --host-gateway-ip flag (repeatable) on dockerd's command line;
+#   2. daemon.json "host-gateway-ips" (array: the file uses "the plural of the
+#      flag name" for flags that allow several entries) or the legacy
+#      "host-gateway-ip" string, read from --config-file if dockerd was given
+#      one, else /etc/docker/daemon.json;
+#   3. otherwise the default bridge's IPv4 (docker0).
+# There is no precedence between 1 and 2: "The Docker daemon fails to start if
+# an option is duplicated between the file and the flags, regardless of their
+# value." Finding both means the configuration on disk is not the one dockerd
+# can run with, so we refuse rather than guess.
+#
 # An allowlist, not a denylist: anything that is not a dotted-quad unicast
 # IPv4 address (0.0.0.0, ::, ::ffff:0.0.0.0, "0", loopback, multicast) is refused.
 derive_bind_ip() {
-  local configured=""
-  if [[ -r "$DAEMON_JSON" ]]; then
-    # dockerd(8): "host-gateway-ips" (array, may mix IPv4/IPv6) is the current
-    # key; "host-gateway-ip" (single string) is kept for older daemons. If the
-    # daemon is configured but names no IPv4 address, containers do not resolve
-    # host.docker.internal to docker0 either, so falling back would be wrong.
-    configured="$(python3 - "$DAEMON_JSON" <<'PY_EOF' || true
+  local args=() verdict
+  mapfile -t args < <(dockerd_args)
+  verdict="$(python3 - "$DAEMON_JSON" "${args[@]}" <<'PY_EOF'
 import ipaddress, json, sys
+daemon_json, args = sys.argv[1], sys.argv[2:]
+flag_ips, config_file, i = [], None, 0
+while i < len(args):
+    a = args[i]
+    for name in ("--host-gateway-ip", "--config-file"):
+        if a == name and i + 1 < len(args):
+            val = args[i + 1]; i += 1
+        elif a.startswith(name + "="):
+            val = a.split("=", 1)[1]
+        else:
+            continue
+        if name == "--host-gateway-ip":
+            flag_ips.append(val)
+        else:
+            config_file = val
+        break
+    i += 1
+path = config_file or daemon_json
+json_ips = []
 try:
-    cfg = json.load(open(sys.argv[1]))
-except Exception:
+    cfg = json.load(open(path))
+    json_ips = cfg.get("host-gateway-ips") or ([cfg["host-gateway-ip"]] if cfg.get("host-gateway-ip") else [])
+except FileNotFoundError:
+    pass
+except Exception as e:
+    print("bad\tunreadable %s: %s" % (path, e)); sys.exit(0)
+if flag_ips and json_ips:
+    print("conflict\t--host-gateway-ip %s on the dockerd command line AND %s in %s" % (",".join(flag_ips), ",".join(map(str, json_ips)), path))
     sys.exit(0)
-ips = cfg.get("host-gateway-ips") or ([cfg["host-gateway-ip"]] if cfg.get("host-gateway-ip") else [])
+ips, source = (flag_ips, "dockerd --host-gateway-ip") if flag_ips else (json_ips, path)
 if not ips:
-    sys.exit(0)
+    print("none\t"); sys.exit(0)
 for ip in ips:
     try:
         if ipaddress.ip_address(ip).version == 4:
-            print(ip)
-            sys.exit(0)
+            print("ok\t%s\t%s" % (ip, source)); sys.exit(0)
     except ValueError:
         pass
-print("!" + ",".join(map(str, ips)))
+print("bad\t%s in %s contains no usable IPv4 address" % (",".join(map(str, ips)), source))
 PY_EOF
 )"
-  fi
-  if [[ "$configured" == "!"* ]]; then
-    refuse "daemon.json host-gateway configuration ${configured#!} contains no usable IPv4 address"
-  fi
-  if [[ -z "$configured" ]]; then
-    configured="$(ip -4 -o addr show dev docker0 2>/dev/null | awk '{split($4,a,"/"); print a[1]; exit}')"
-  fi
-  [[ -n "$configured" ]] || could_not_measure "no docker host-gateway address (no host-gateway-ips/host-gateway-ip in $DAEMON_JSON, no IPv4 on docker0)."
+  local kind detail configured="" src=""
+  IFS=$'\t' read -r kind detail src <<<"$verdict"
+  case "$kind" in
+    conflict) refuse "host-gateway set twice: $detail. dockerd fails to start when an option is in both the flags and the config file; remove one." ;;
+    bad) refuse "host-gateway configuration: $detail" ;;
+    ok) configured="$detail"; GATEWAY_SOURCE="$src" ;;
+    *) configured="$(ip -4 -o addr show dev docker0 2>/dev/null | awk '{split($4,a,"/"); print a[1]; exit}')"
+       GATEWAY_SOURCE="docker0 (default bridge)" ;;
+  esac
+  [[ -n "$configured" ]] || could_not_measure "no docker host-gateway address (no --host-gateway-ip flag, no host-gateway-ips/host-gateway-ip in the daemon config, no IPv4 on docker0)."
   python3 - "$configured" <<'PY_EOF' || refuse "bind address '$configured' is not a unicast IPv4 address: this script only exposes Ollama on the docker host-gateway, never on all interfaces or loopback"
 import ipaddress, sys
 raw = sys.argv[1]
@@ -336,7 +392,7 @@ require_root() {
 
 plan() {
   echo "== ollama-docker-bridge plan (mode: $MODE) =="
-  echo "bind:     $BIND_IP:$PORT  (docker host-gateway; never 0.0.0.0)"
+  echo "bind:     $BIND_IP:$PORT  (docker host-gateway from $GATEWAY_SOURCE; never 0.0.0.0)"
   echo "upstream: $UPSTREAM  (Ollama's own unit is not modified)"
   echo "source:   $SOURCE_CIDR  (network $NETWORK)"
   echo "ingress:  $IN_IFACE  (that network's bridge)"
