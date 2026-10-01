@@ -195,7 +195,7 @@ admin_token_file   = "/run/secrets/pmoves_garage_admin_token"
 metrics_token_file = "/run/secrets/pmoves_garage_metrics_token"
 ```
 
-- **Image:** `dxflrs/garage:v2.4.1` (latest, 2026-09-08). Pin it by digest at deploy time, per F-07.
+- **Image:** ~~`dxflrs/garage:v2.4.1`~~ **superseded 2026-10-01 by operator direction:** build from the PMOVES fork `POWERFULMOVES/PMOVES-garage` (`PMOVES.AI-Edition-Hardened`, cut at upstream tag `v2.4.1`), push to GHCR, pin by digest per F-07. See §6.2 and §7.
 - **Network:** host networking, per Garage's `cookbook/real-world.md`.
 - **Snapshots dir:** `/var/lib/garage/snapshots` is a sibling of `data_dir`. It must not sit inside `data_dir`, which Garage manages as its block store.
 - **Bind addresses:** the S3 and admin APIs bind to the node's tailnet address, so they are not listening on the public interface at all. A bind to a tailnet address fails if `tailscaled` is not up when Garage starts. The deploy must order Garage after Tailscale, or rely on a restart policy. RPC stays on `[::]`, because peers reach it at `rpc_public_addr`. It is protected by the firewall rule and the gate below.
@@ -276,7 +276,7 @@ Every item in this subsection is **COULD-NOT-MEASURE** until someone tries it on
 | Command | Hazard | Handling |
 |---|---|---|
 | `garage key create` | **Prints the secret key to stdout** (`print_key_info`) | Operator context only. Redirect stdout to a `umask 077` intake file, feed that file to the funnel, then `shred -u` it. Never run it in an agent session |
-| `garage key import --yes <GK..> <secret>` | Secret on argv | Alternative when the funnel generates the key. Run it on a storage node, not over a logged channel. The exact Garage v2 `key import` syntax is **COULD-NOT-MEASURE**; check it against the v2.4.1 CLI help before use |
+| `garage key import -n juicefs-pmoves-media --yes <GK..> <secret>` | Secret on argv | Alternative when the funnel generates the key. Run it on a storage node, not over a logged channel. Syntax **measured** from v2.4.1 source (`src/garage/cli/structs.rs` `KeyImportOpt`): positional `key_id secret_key`, `-n` name (default "Imported key"), `--yes`. **Without `-n`, the later `bucket allow --key juicefs-pmoves-media` does not match the key** (§6.1 row 9). An admin API `ImportKey` call keeps the secret out of argv |
 | `garage key info --show-secret` | Prints the secret | Do not use |
 | `juicefs config --secret-key` | Does not read `SECRET_KEY` from env (v1.3.0 `cmd/config.go`), so the secret is on argv | Pass it in through the `jfs()` env file (§3) and expand it inside `sh -c`. It is then in the juicefs process argv for the seconds the call runs |
 | `juicefs sync minio://AK:SK@...` | There are no `SRC_*`/`DST_*` env vars in JuiceFS. The `SRC_AK`-style names in §3 are plain shell variables, expanded by `sh -c` inside the container. **However,** a `minio://` URL **without userinfo** falls back to `MINIO_ACCESS_KEY` / `MINIO_SECRET_KEY` from the environment (JuiceFS `pkg/object/minio.go:71-76`). That fallback is one set of variables, so it covers **one side** of a sync | The Garage side uses the env fallback: its URL has no userinfo, and the key comes from the `dst` env file. Only the MinIO credential stays in argv, URL-encoded (`/` as `%2F`). The Garage key outlives this plan (D1 re-injection), so it is the credential to keep out of argv |
@@ -451,6 +451,7 @@ was not run.
    Step (a) by itself.
 5. **External port probe** (§1.3) is OPEN — OPERATOR, and is part of Gate A.
 6. **#3150 still OPEN** (G0).
+7. **No buildable image yet** (added 2026-10-01). Garage now comes from the PMOVES fork, which has no Hardened branch, no tags, and a Dockerfile that only packages a prior Nix build (§6.2, §7 items 1, 2 and 9).
 
 ### Step (a): Stand up Garage, bucket, key
 
@@ -653,3 +654,92 @@ jfs meta 'juicefs gc "$META"'     # NO --delete; now scans MinIO
 | D6 | Known Road grants for the compose, funnel and egress edits | Recommendation: grant per PR, as in the table above |
 | D7 | Zone grouping (all tier-2 nodes in one `lab` zone) vs one zone per node (§1.2) | **OPEN — OPERATOR.** Not viable today: usable ≤ ~23 GB until the KVM build cache is reclaimed or Spark is measured |
 | D8 | Throughput | **MEASURED** (containerised iperf3, 2026-09-27): KVM↔KVM 345-383 Mbit/s. Knuckles → KVM 18-19 Mbit/s, which is the binding constraint: ~10.5 h per full 85 GB pass |
+
+## 6. Reconciliation against Garage's official documentation (2026-10-01)
+
+**Method.** Every row cites the vendor page and section, relative to `https://garagehq.deuxfleurs.fr/documentation/`. The pages are the
+v2.4.1 docs: `doc/book/` at upstream tag `v2.4.1` (commit `268334bd2`), which the site serves.
+Every URL cited returned HTTP 200 on 2026-10-01. Where the docs are silent, the row cites the
+v2.4.1 source instead and says so.
+
+**Neither vendor documents this pairing.** JuiceFS's object-storage guide (`juicedata/juicefs`
+`docs/en/reference/how_to_set_up_object_storage.md`, main) does not mention Garage, and
+Garage's `connect/fs/` page does not mention JuiceFS. Compatibility rests on Gate A's
+`objbench`, list included.
+
+### 6.1 Gap table
+
+| # | Topic | Our plan | Vendor docs (page, section) | Gap | Fix |
+|---|---|---|---|---|---|
+| 1 | Minimum topology | Fleet-wide mesh, ≥3 zones in the first cut (§1.2, Gate A) | `cookbook/real-world/` "Prerequisites": at least three machines, each "directly reachable by all other machines"; a mesh VPN is acceptable | None. Tailscale fills the mesh-VPN role | — |
+| 2 | Zones and capacity | Usable ≈ smallest zone at exactly 3 zones; derived formula for N>3 (§1.2) | `cookbook/real-world/` "Prerequisites": 3 copies "always" in different locations, so the 4-node example yields 1.5 TB usable; `operations/layout/` Example 1 | None. Our derivation agrees, and Gate A reads the authoritative figure from `layout show` | — |
+| 3 | `replication_factor` | 3, never changed later (§1.2) | `reference-manual/configuration/` `replication_factor`: must be identical in every node's config ("Never run a Garage cluster where that is not the case"). A change means deleting the layout files on all nodes plus a full rebalance, "not officially supported" | The plan does not require the value to match on every node | Gate A: diff the rendered `garage.toml` across nodes; `replication_factor` and `consistency_mode` must be identical |
+| 4 | `consistency_mode` | `consistent`, quorum 2/2 at RF=3 (§1.2) | `reference-manual/configuration/` `consistency_mode`: the quorum table matches (consistent, RF 3: W2/R2). `degraded` lowers the read quorum to 1 | None on the setting. The docs offer `degraded` as an outage lever: reads continue with one replica up | Name `degraded` in §1.2 as an operator-only emergency lever for the Spark-down plus `lab`-down case, with its cost (no read-after-write consistency). Do not make it the default |
+| 5 | Secret files | `rpc_secret_file`, `admin_token_file`, `metrics_token_file` under `/run/secrets/` (§1.3) | `reference-manual/configuration/` `rpc_secret`, `admin_token`, `metrics_token`, `allow_world_readable_secrets`: file forms are supported, and Garage checks secret-file permissions. Source `src/garage/secrets.rs:144`: **refuses to start if `mode & 0o077 != 0`** ("expected 0600") | **Blocker if missed.** Compose (non-swarm) secrets are bind mounts that keep the host file's mode, so a 0644 host file stops Garage at boot | Each node's secret files are 0600 (or 0400), owned by the container user (root in the upstream scratch image). Never set `allow_world_readable_secrets` or `GARAGE_ALLOW_WORLD_READABLE_SECRETS` |
+| 6 | Metrics auth | `metrics_token_file` set (§1.3) | `reference-manual/configuration/` `metrics_require_token` (since v2.0.0) | Without `metrics_require_token = true`, an unset or unread token leaves `/metrics` open | Add `metrics_require_token = true` to `[admin]` |
+| 7 | Admin token | One static `admin_token_file`, full scope (§1.3, §1.6) | `reference-manual/configuration/` `admin_token`: since v2.0, dynamic admin tokens carry an **expiry and a scope**; the static token is full scope with no expiry. `reference-manual/admin-api/` shows `--scope ... CreateBucket,CreateKey,AllowBucketKey` | The plan uses only the full-scope static token | Keep the static token for bootstrap. Mint a scoped, expiring token for the migration context (Step a) and one for Prometheus |
+| 8 | Ports | 3900 S3, 3901 RPC, 3903 admin; no 3902 (§1.3) | `quick-start/` and `cookbook/real-world/` configs: 3900 S3, 3901 RPC, 3902 `[s3_web]`, 3903 admin | None. `[s3_web]` is omitted on purpose, so 3902 is not bound; the external probe covers 3900/3901/3903 | Note in §1.3 that `[s3_web]` is intentionally absent |
+| 9 | Key and bucket commands | `key create`, `bucket create`, `bucket allow --read --write` (Step a); `key import` syntax COULD-NOT-MEASURE (§1.6) | `quick-start/` "Creating buckets and keys": `garage key create <name>` prints `Key ID: GK` + 24 hex and the secret; then `bucket allow ... --key <name>`. Source: the key ID is GK + hex of 12 random bytes (`src/model/key_table.rs:149`). `key import` (`structs.rs` `KeyImportOpt`) takes `key_id secret_key`, `-n` name (default "Imported key") and `--yes`. It accepts any ID of ≥8 chars from `[A-Za-z0-9._-]` and any secret of ≥16 graphic chars | The plan's `key import --yes <GK..> <secret>` omits `-n`. The key would be named "Imported key", and Step (a)'s `bucket allow --key juicefs-pmoves-media` would not match it | Fixed inline in §1.6. The funnel shape check (`GK` + 24 hex) is right for `key create`. An imported key need not match it, so if the funnel generates the key, it must generate the same shape |
+| 10 | Layout commands | `layout assign <id> -z -c -t`, `layout show`, `layout apply --version 1`; never `layout config -r` (Step a) | `cookbook/real-world/` "Creating a cluster layout"; `operations/layout/`; `reference-manual/known-issues/` "Tag assignment": repeat `-t` for each tag (a comma-separated list becomes one string) | None with one tag per node | If a second tag is added, repeat `-t` |
+| 11 | Layout eviction | Node-down test; layout changes as nodes join (§1.0, Step e) | `reference-manual/known-issues/` "Layout updates might require manual intervention": with disconnected nodes, old layout versions can stay active; diagnose with `garage layout history` | The plan never mentions `layout history` | Add `garage layout history` to the Step (e) soak gate and to every layout change |
+| 12 | Node connect | `node id`, then `node connect <id>@<peer>:3901` (Step a) | `cookbook/real-world/` "Connecting nodes together": nodes discover each other transitively. `reference-manual/configuration/` `bootstrap_peers` declares peers in config | A manual connect lives in a session, not in config | Prefer `bootstrap_peers` in the rendered `garage.toml`, so membership is tracked config and not node-local state |
+| 13 | Docker networking | Host networking on Linux; Tailscale sidecar on Windows (§1.3, §1.3a) | `cookbook/real-world/` "Starting Garage using Docker": host networking, because Docker's network indirection "would prevent Garage nodes from communicating" | None on Linux. The Windows sidecar is outside the vendor's documented path | Keep §1.3a as COULD-NOT-MEASURE |
+| 14 | Filesystem for `data_dir` | Root fs on each node. The KVMs and Knuckles' NVMe1 are ext4 (§1.1, Step 0 record) | `cookbook/real-world/` "Best practices": **XFS is recommended** for data and "EXT4 is not recommended" (inode limits at large object counts). BTRFS or ZFS is preferred for metadata | Every measured candidate is ext4 | Inode pressure at this scale is small (~19k objects, ~80k 1 MiB blocks), so ext4 is acceptable for the first cut. Record it as an accepted deviation and check `df -i` in G1 |
+| 15 | `db_engine` and LMDB | `lmdb` on every node, 6h snapshots (§1.3) | `reference-manual/configuration/` `db_engine`; `cookbook/real-world/` "Best practices"; `reference-manual/known-issues/` "LMDB metadata corruption": LMDB corrupts after an unclean shutdown or power loss and is "generally not recoverable"; Sqlite is "more robust" | Tier-2 desktops sleep, reboot and lose power (§1.2), which is LMDB's failure case | Set `db_engine` per node (the database is local): `lmdb` on tier 1, **`sqlite` on tier-2 desktops**. This is an operator decision |
+| 16 | Snapshots | `metadata_snapshots_dir` as a sibling of `data_dir` (§1.3) | `reference-manual/configuration/` `metadata_snapshots_dir`: up to 4× the metadata size. `known-issues/`: prefer built-in snapshots over filesystem snapshots | None | — |
+| 17 | `block_size` | Not set (1 MiB default) | `reference-manual/configuration/` `block_size`: 1 MiB default; 10 MiB recommended for large files on fast links. `known-issues/` "Very big objects" | JuiceFS writes objects no larger than its own 4 MiB block, so each object becomes 4 Garage blocks. Links from Knuckles run at ~18 Mbit/s, which is not "fast" | Keep 1 MiB for the first cut. The setting affects only new uploads, so it can be revisited without a rewrite |
+| 18 | Compression | Not set (zstd level 1 by default) | `reference-manual/configuration/` `compression_level`: `'none'` disables zstd; the value is set per node | **The volume is `aes256gcm-rsa` encrypted** (Step 0 record), so blocks are incompressible ciphertext, and zstd spends CPU for nothing on the 2-vCPU kvm2 | `compression_level = "none"` on every node |
+| 19 | Region | `s3_region = "us-east-1"` (§1.4) | `reference-manual/configuration/` `s3_region`: other regions fail with `AuthorizationHeaderMalformed` | None | — |
+| 20 | Addressing style | Path-style, with the `minio://` scheme for sync (§1.4, Step b) | `reference-manual/configuration/` `root_domain`: "path-style requests are always enabled". `reference-manual/s3-compatibility/` "High-level features": path-style is implemented | None. No `root_domain` is needed | — |
+| 21 | S3 operations JuiceFS uses | List was the #3199 failure | `reference-manual/s3-compatibility/` "Core endpoints": ListObjects, ListObjectsV2, DeleteObject, DeleteObjects and Head/Get/PutObject are implemented, as are all "Multipart Upload endpoints" | None on paper, but neither vendor documents the pairing | Keep Gate A's `objbench` mandatory, list included |
+| 22 | Single-bucket hotspot | One bucket, `juicefs` (§1.5) | `reference-manual/known-issues/` "Buckets are not sharded": a bucket's object index lives on RF nodes "chosen at random", and "there is no way of choosing which nodes" | **The index nodes for bucket `juicefs` may be tier-2 nodes**, whatever the capacity weighting; lever 1 in §1.2 does not move them | Record this in §1.2 as a limit of lever 1. Under zone grouping (D7), at most one index replica can sit in `lab`. Index placement after `bucket create` is COULD-NOT-MEASURE (no documented command) |
+| 23 | Resync speed | Gate B: "no resync backlog" | `reference-manual/known-issues/` "Resync tranquility is conservative by default": the queue can grow faster than it clears. Tune with `garage worker set -a resync-worker-count N` and `resync-tranquility 0` | On the defaults, Gate B can stall during an 80 GB ingest | Add the worker settings to Step (b) as an operator-tunable. Read `garage stats` before declaring a backlog |
+| 24 | Node count | 8 nodes | `reference-manual/known-issues/` "Node count limitation": problems start above 10 × RF (30 nodes at RF=3) | None | — |
+| 25 | RF=1 shortcut | — | `reference-manual/known-issues/` "Metadata and data have the same replication factor": do not use RF=1 | A single-node "stand it up on Knuckles first" shortcut would break this rule, and RF cannot be changed later (row 3) | Never stand up an RF=1 or single-node cluster as a staging step for this volume |
+
+### 6.2 Build and pin (the fork)
+
+**Fork facts** (measured 2026-10-01 with `gh repo view`, `gh api .../branches` and `git ls-remote`):
+
+| Item | Measured |
+|---|---|
+| Repo | `POWERFULMOVES/PMOVES-garage`, created 2026-10-01T10:19Z |
+| Upstream | A GitHub fork of `deuxfleurs-org/garage`, the GitHub mirror of `git.deuxfleurs.fr/Deuxfleurs/garage` |
+| Branches | `main-v2` only. It is the default, it is unprotected, and it is identical to upstream `main-v2` (`5ad1de0b0`) |
+| Hardened branch | **None.** No `PMOVES.AI-Edition-Hardened` exists |
+| Tags | **None** (2 refs in total). Upstream has `v2.4.1` (commit `268334bd2`), and `main-v2` is 63 unreleased commits ahead of it |
+
+**The repo's Dockerfile does not build anything.**
+- It is `FROM scratch` plus `COPY result/bin/garage`, so it only packages the output of an earlier Nix build.
+- The upstream release pipeline (`.woodpecker/release.yaml`) runs `nix-build --attr releasePackages.${ARCH}` to make static musl binaries for amd64, i386, arm64 and armv6.
+- Building from the fork therefore needs a multi-stage Dockerfile on the hardened branch, using Nix or cargo with a musl target (`cookbook/from-source/`).
+- arm64 is an upstream release target, so Spark is buildable. Whether it runs there is still COULD-NOT-MEASURE.
+
+**Pin to the release, not the branch tip.**
+- Cut `PMOVES.AI-Edition-Hardened` from tag `v2.4.1` (`268334bd2`), not from `main-v2`.
+- The upstream tags have to be pushed to the fork first.
+
+**fork-sync conflicts with a release pin.**
+- `fork-sync.yml` merges the upstream default branch into the branch named in the third FORKS column. If that column is empty, it uses the `.gitmodules` branch.
+- With `branch = PMOVES.AI-Edition-Hardened` in `.gitmodules`, **sync would merge unreleased `main-v2` into Hardened.**
+- So the mapping must set the override to `main-v2` (`deuxfleurs-org/garage|PMOVES-garage|main-v2`). Then only the parity branch is synced, and Hardened moves only by deliberate, tag-based promotion.
+
+**Does the fork change D2/D3?** No. The endpoint choice (D2) and per-node capacity (D3) are topology decisions. The fork changes only where the binary comes from. It does add build work before Gate A: a multi-arch image, a GHCR publish, and a digest pin.
+
+## 7. PMOVES-garage integration checklist (precedent: #3206, PMOVES-registry / PMOVES-spynel)
+
+Nothing below is done yet. Protection status comes from `python3 .claude/skills/known-roads/roads.py check <path>` (2026-10-01).
+
+| # | Item | Path or place | Protection | Needs |
+|---|---|---|---|---|
+| 1 | Push the upstream tags to the fork; cut `PMOVES.AI-Edition-Hardened` from `v2.4.1` | fork repo | — (write to an external repo) | Operator or the fleet App token |
+| 2 | Hardened overlay: a multi-stage Dockerfile (amd64 + arm64) and `PMOVES.AI_INTEGRATION.md` | fork, hardened branch | — | A fork PR |
+| 3 | Branch protection on `main-v2` and Hardened: PR required, no force-push, no deletion, conversation resolution | GitHub API | — | Operator or App token, applied live as in #3206. `branch-protection-sync.yml` then audits it, because it derives coverage from `.gitmodules` (no file edit needed) |
+| 4 | `.gitmodules` entry: path `PMOVES-garage`, the URL, `branch = PMOVES.AI-Edition-Hardened`, `ignore = all` | `.gitmodules` | `noDeletePaths` only. Edits are allowed; **no grant needed** | This lane's PR |
+| 5 | Submodule gitlink at the Hardened commit | `PMOVES-garage` | none | This lane's PR. The pin must be an ancestor of Hardened, or the squash-merge SIDEWAYS trap applies |
+| 6 | Registry entry: `upstream: deuxfleurs-org/garage`, `sync: true`, `branch: PMOVES.AI-Edition-Hardened`, and a reason | `pmoves/config/fork_registry.json` | none | This lane's PR. Once `.gitmodules` has the entry, `fork_registry_ratchet.py` rule 4 fails without it |
+| 7 | Audit-list entry `PMOVES-garage` and the mapping `deuxfleurs-org/garage|PMOVES-garage|main-v2` | `.github/workflows/fork-sync.yml` | `noDeletePaths <- .github/`. Edits are allowed; **no grant needed** | This lane's PR. The override is `main-v2`, not Hardened (§6.2) |
+| 8 | Section and summary row | `.claude/context/submodules.md` | **`readOnlyPaths <- .claude/context/`, with no Known Road** | An operator edit, or a new domain predicate agreed with the operator |
+| 9 | GHCR build of the hardened image, with the digest recorded | fork CI or PMOVES CI | — | Follow-on work. The compose file pins the digest |
+| 10 | Compose service | `pmoves/docker-compose.garage.yml` | `readOnlyPaths`, road `compose` | The grant `compose:pr:3241` |
+| 11 | Funnel labels (§1.6) | the CHIT secrets manifest (zero-access, no road), `chit_manifest_register.py`, `sync-secrets-local.yml` | zero-access / `noDeletePaths` | Operator (G2) |
