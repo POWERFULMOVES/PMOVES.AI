@@ -27,9 +27,11 @@ Doctrine anchors: `pmoves/docs/operations/UNATTENDED_NODE_BOOTSTRAP.md` (bootstr
 axis; omarchy = fresh workstations / community class / "PMOVES GOES HAM"),
 `pmoves/docs/services/FLEET_TERMINAL_STRATEGY.md` (#2963), HYPERAGINTZ W2-4
 (PMOVES-omarchy = Danger-Room host-OS candidate). Fork
-`POWERFULMOVES/PMOVES-omarchy` branch `quattro` is currently a **byte-identical
-mirror of upstream** — the unattended-install answer file is the open item this
-lane begins.
+`POWERFULMOVES/PMOVES-omarchy` branch `quattro` carries no PMOVES delta, but it
+is a STALE mirror: 0 ahead / 145 behind `omacom/omarchy` (GitHub compare,
+2026-10-01). The unattended-install answer file is the open item this lane
+begins. The disk partitioner itself lives in `omacom/omarchy-iso`, which has no
+PMOVES fork.
 
 ## Incident on record (pre-lane, same session)
 
@@ -204,9 +206,32 @@ sudo bash deploy/provision/nvme-provision.sh \
   --device=/dev/nvme1n1 --mount=/mnt/pmoves-nvme1 \
   --role=creator-store --yes-really
 ```
-Script: `deploy/provision/nvme-provision.sh` (format-usb.sh conventions: refuses
-root disk, refuses partitioned devices, <2TB guard, `--yes-really` gate,
-idempotent re-runs). GPT + ext4 `PMOVES-NVME1`, fstab `nofail`, chown `$SUDO_USER`.
+Script: `deploy/provision/nvme-provision.sh`. GPT + ext4 `PMOVES-NVME1`, fstab
+`nofail` by UUID, chown `$SUDO_USER`. Reconciled 2026-10-01 against Omarchy
+(`omacom/omarchy-iso` @ 86c0778, `PMOVES-omarchy` @ 947e2fc) and the man pages,
+with every step attributed in the script header and inline:
+- **Root guard:** strips a btrfs subvolume suffix (omarchy
+  `bin/omarchy-system-factory-reset:58`), walks PKNAME to the whole disk
+  (omarchy-iso configurator:364-368), fails closed, and refuses the root disk
+  and its partitions (`deploy/provision/format-usb.sh:46-50`). The earlier digit-strip
+  missed btrfs/LUKS/LVM sources.
+- **Re-runs:** a drive already carrying one ext4 `PMOVES-NVME1` partition exits 0
+  "already provisioned". That check runs BEFORE the partitioned-device refusal;
+  the old order refused its own result, so the earlier "idempotent" claim was
+  false.
+- **Partition name** read via omarchy-iso `partition_path` (`nvme1n1p1`, never
+  `nvme1n11`).
+- **New steps:** a `wipefs -af` on the new partition before mke2fs
+  (configurator:726-729), and a `--dry-run` mode (configurator:686-692).
+- **fstab:** the entry is matched on field 2 (fstab(5)), backed up, newline-guarded,
+  then `systemctl daemon-reload` (systemd-fstab-generator(8)) and
+  `findmnt --verify`.
+- **Mount:** `mount -T <fstab> <mountpoint>` + `mountpoint -q` (mount(8),
+  mountpoint(1), configurator:762-781), never `mount -a`.
+- **Originated policy, kept:** refusing partitioned drives (except one
+  unformatted partition from an interrupted run) and the 2 TB floor.
+Covered by `pmoves/tests/scripts/test_nvme_provision.py` (stubbed tools only; no
+disk is touched).
 
 ### Phase 2 — Creator pipeline onto NVMe1 (no root needed)
 ```bash
@@ -244,7 +269,10 @@ the new mount is verified: `rm -rf ~/.local/share/juicefs-data`.
 4. **Fork work begins:** the `quattro` branch is a clean upstream mirror — the
    PMOVES unattended answer file + CHIT-aware bootstrap (secrets-funnel equivalent
    on Arch) land as PRs against `POWERFULMOVES/PMOVES-omarchy`, reviewed through
-   this lane. NVMe1 (ext4) mounts into the new OS by label; JuiceFS remounts via
+   this lane. NVMe1 (ext4) mounts into the new OS by UUID, the way Omarchy writes
+   its own fstab (omarchy-iso `orchestrator/phases_impl.py:846-857`); a factory
+   reset restores the installer's fstab, so the PMOVES layer must re-apply that
+   line. JuiceFS remounts via
    the same make path; creator pipeline data survives the OS switch untouched.
 5. Root disk becomes free for reassignment once the switch is proven (Docker
    migration lane, or full decommission of the Ubuntu seat).
