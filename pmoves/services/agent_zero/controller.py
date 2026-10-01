@@ -65,6 +65,9 @@ except ModuleNotFoundError:  # pragma: no cover - optional dependency for tests
         pass
 
 
+from services.common.nats_client import _redact_url
+
+
 try:
     from services.common.events import envelope
 except Exception:  # pragma: no cover - optional dependency for unit tests
@@ -346,7 +349,8 @@ class AgentZeroController:
             return
         if NATS is None:
             raise RuntimeError("nats-py is required to start the Agent Zero controller")
-        logger.info("Connecting to NATS at %s", self.settings.nats_url)
+        # NATS_URL carries user:password on this fleet; never log userinfo.
+        logger.info("Connecting to NATS at %s", _redact_url(self.settings.nats_url))
         self._nc = NATS()
         await self._nc.connect(servers=[self.settings.nats_url])
         if self.settings.use_jetstream:
