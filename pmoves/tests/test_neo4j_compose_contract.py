@@ -68,7 +68,8 @@ def test_apoc_file_config_key_is_spelled_right(f):
 
 @pytest.mark.parametrize("f", SPLIT)
 def test_unrestricted_is_explicit_and_never_all_of_apoc(f):
-    # explicit, so the plugin step's apoc.* default is skipped (neo4j-plugins.json)
+    # explicit: the plugin step still appends apoc.* on a fresh container, and the env
+    # loop then replaces it with this value (vendor entrypoint, add_env_setting_to_conf)
     un = _env(_svc(f)).get("NEO4J_dbms_security_procedures_unrestricted", "")
     assert un and "apoc.*" not in un.split(",")          # OM security/securing-extensions
 
@@ -103,8 +104,12 @@ def test_auth_guard_names_the_file_that_has_the_key(f):
 
 @PEND
 @pytest.mark.parametrize("f", SPLIT)
-def test_image_is_overridable_and_defaults_to_the_digest_pin(f):
-    assert _svc(f)["image"] == "${NEO4J_IMAGE:-" + VENDOR + "}"
+def test_image_is_the_literal_digest_pin(f):
+    # No ${NEO4J_IMAGE} override (#3251 review P2-a): nothing required @sha256:, so any tag
+    # could replace the stateful store's image. The source build replaces VENDOR by digest.
+    image = _svc(f)["image"]
+    assert image == VENDOR
+    assert "${" not in image and "@sha256:" in image
 
 
 @pytest.mark.parametrize("f", SPLIT)
