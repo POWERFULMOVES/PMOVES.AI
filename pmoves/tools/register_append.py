@@ -234,8 +234,10 @@ def assert_baton_shape(kind: str, branch: str, baton_from: str) -> None:
 
         RELEASE `<signer>` branch: `<lane>` · baton-from: `<holder>` · scope: ...
 
-    The row IS the recorded handoff (KRISS_KROSS_ACCORD.md:12-16): it says who
-    filed it, under which identity, and on whose behalf. Shape only -- whether
+    The row is the REGISTER part of the recorded handoff
+    (KRISS_KROSS_ACCORD.md:12-16, which also asks for a Graphiti trail entry
+    and a PR comment): it says who filed it, under which identity, and on
+    whose behalf. Shape only -- whether
     the holder holds that lane is checked against the gate's own reading.
     """
     assert_no_control_characters("baton-from", baton_from)
@@ -1714,8 +1716,8 @@ def _dispatch(argv: list[str] | None = None) -> int:
                         default=os.environ.get("REGISTER_BATON_FROM", ""),
                         metavar="HOLDER",
                         help="RELEASE mode: close this lane on the rows of "
-                             "the peer who HOLDS it -- the recorded handoff "
-                             "when that peer is not running. Needs --branch. "
+                             "the peer who HOLDS it -- the register part of the "
+                             "handoff when that peer is not running. Needs --branch. "
                              "(or set REGISTER_BATON_FROM)")
     parser.add_argument("--dry-run", action="store_true",
                         help="render and check the row, write nothing")

@@ -529,8 +529,9 @@ register-release: export REGISTER_CO_OWNERS = $(CO_OWNER)
 # THE BATON. Lanes are shared, not locked (AGNOTE4482.md:1709-1713): a RELEASE
 # closes the named lane for every PARTICIPANT -- the signer's own rows, rows
 # whose co-owners: declare the signer, and, with BATON_FROM=, the rows of the
-# peer who holds it when that peer is not running. The release row IS the
-# recorded handoff (KRISS_KROSS_ACCORD.md:12-16), and the holder re-claiming
+# peer who holds it when that peer is not running. The release row is the
+# REGISTER part of the recorded handoff (KRISS_KROSS_ACCORD.md:12-16 also asks
+# for a Graphiti trail entry and a PR comment), and the holder re-claiming
 # supersedes it. A malformed baton closes NOTHING -- never your own lanes.
 #   make -C pmoves register-release OWNER='<you>' BRANCH=fix/x \
 #        BATON_FROM='<holder>' SCOPE='what landed, and why you are carrying it'

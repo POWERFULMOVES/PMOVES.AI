@@ -352,14 +352,17 @@ def _row_at(text: str, pos: int) -> str:
 #
 # The keystone docs govern this, and they say lanes are shared, not locked:
 #
-#   pmoves/docs/AGENTS/AGNOTE4482.md:1699-1713 (AGInTZ awareness ledger):
-#     "an awareness surface, not a claim registry"; "Shared lanes are the
-#     point. Multiple idents may sign the same lane or scope"; "Rows are
-#     reversible adsorptions. Append updates, supersede your own rows ...
-#     nothing here is carved in stone."
-#   pmoves/docs/AGENTS/KRISS_KROSS_ACCORD.md:12-16: "One branch, one active
-#     owner at a time unless explicit overlay handoff is recorded", with the
-#     claim/release update in the register as part of that record.
+#   pmoves/docs/AGENTS/AGNOTE4482.md:1699: "This ledger is an awareness
+#     surface, not a claim registry".
+#   pmoves/docs/AGENTS/AGNOTE4482.md:1709-1713: "Shared lanes are the point.
+#     Multiple idents may sign the same lane or scope"; "Rows are reversible
+#     adsorptions ... nothing here is carved in stone." (Its "supersede your
+#     own rows" is about your OWN rows; the authority to close a shared row
+#     comes from "Shared lanes" plus KK:12, not from that phrase.)
+#   pmoves/docs/AGENTS/KRISS_KROSS_ACCORD.md:12: "One branch, one active owner
+#     at a time unless explicit overlay handoff is recorded". KK:13-16 says
+#     what recorded means for a cross-agent transition: a Graphiti trail
+#     entry, the claim/release update in the register, AND a PR comment.
 #
 # So a RELEASE closes the open rows of every PARTICIPANT of the lanes it names
 # (participants = owner U declared co-owners, computed per CLAIM below):
@@ -369,8 +372,10 @@ def _row_at(text: str, pos: int) -> str:
 #   * rows of a holder the release NAMES with `baton-from: <holder>` -- the
 #     peer handoff when the holder is not running.
 # Closing a row someone else opened is a reversible adsorption: the release
-# row itself is the recorded handoff (who FILED it, under which identity, on
-# whose behalf), and the owner re-CLAIMing the lane supersedes it. Nothing
+# row is the REGISTER part of the recorded handoff (who FILED it, under which
+# identity, on whose behalf) -- the trail entry and PR comment KK:13-16 also
+# asks for are not machine-checked here -- and the owner re-CLAIMing the lane
+# supersedes it. Nothing
 # here authenticates who typed a row -- a row proves only the identity it was
 # filed under. register-status shows every such close as "released by X on
 # behalf of Y" and whether Y has been heard from since; it shows, it does not
@@ -383,6 +388,22 @@ def _row_at(text: str, pos: int) -> str:
 # A BARE release (no lane) keeps its legacy meaning exactly: it closes every
 # row the SIGNER owns, and nothing of anyone else's. A release that names no
 # lane cannot say which shared lane it means.
+#
+# A PEER CLOSE IS HELD TO THE BATON PATH'S GUARDS. The legacy RELEASE reader
+# matches `RELEASE <owner>` anywhere on a line and infers lanes from prose;
+# that reading is kept EXACTLY for the signer's own rows (monotonicity). A
+# close that reaches anyone else's row -- through `co-owners:` or
+# `baton-from:` -- needs an actual RELEASE row head (column 0, outside any
+# fence) signed by that identity, and only lanes DECLARED with `branch:`.
+#
+# WHO COUNTS AS THE CO-OWNER: identities are compared after the vocabulary
+# fold (canonical_owner), the same fold that decides whose OWN rows a release
+# closes. So a co-owner declaration matches every spelling in that fold: a row
+# declaring `CRUSH-GLM52 (Knuckles)` can be closed by any identity folding to
+# `crush` (identity_vocabulary.yaml merges CRUSH, CRUSH-GLM52 and
+# CRUSH-SPARK (KIMI) as one signer). Exact-string matching was not chosen: it
+# would make a co-owner stricter than an owner, and miss the parenthetical
+# variants the fold exists for. To narrow it, split the vocabulary entry.
 #
 # FAIL-CLOSED, NEVER FAIL-BROAD, for `baton-from:` rows. A row that declares
 # `baton-from:` and is malformed -- no holder in backticks, two holders, not a
@@ -565,18 +586,23 @@ def real_row_heads(lines) -> list:
 
 
 def _close_participant_rows(open_claims, lineno, signer, signer_key, lanes,
-                            holder_key, peer_closes):
+                            holder_key, peer_closes, peer_lanes=None):
     """Close every open row on `lanes` that this release may close.
 
     A row is closed when it is the signer's own, when its participants include
     the signer (co-owners), or when its owner is the `baton-from:` holder.
+    `lanes` applies to the signer's OWN rows; `peer_lanes` (default: `lanes`)
+    to everyone else's, so the legacy reader can keep its own-row reading while
+    a peer close is held to declared lanes on a real row head.
     Returns the lanes closed on the holder's rows (empty when no holder).
     """
+    if peer_lanes is None:
+        peer_lanes = lanes
     holder_closed = set()
     for owner_key in list(open_claims):
         kept = []
         for ln, row_lanes, raw, participants in open_claims[owner_key]:
-            hit = row_lanes & lanes
+            hit = row_lanes & (lanes if owner_key == signer_key else peer_lanes)
             if owner_key == signer_key:
                 via = ""
             elif holder_key and owner_key == holder_key:
@@ -704,7 +730,7 @@ def _pair_register(text: str):
     batons = []
     peer_closes = []
     lines = text.split("\n")
-    heads = None  # computed on the first baton row only; most reads have none
+    heads = None  # computed on the first RELEASE row; read-only after that
     for lineno, line in enumerate(lines, start=1):
         if is_inert_row(line):
             # A NOTE records a fact. It opens nothing and closes nothing, and
@@ -736,12 +762,28 @@ def _pair_register(text: str):
             # Pairing is on PARTICIPANTS of the named lane, per the accords
             # (AGNOTE4482.md:1709-1713 "Shared lanes are the point ... Rows
             # are reversible adsorptions"; KRISS_KROSS_ACCORD.md:12 "unless
-            # explicit overlay handoff is recorded" -- the release row IS that
-            # record). It used to stay on the signing owner alone, a rule
-            # introduced with the co-owners field (ad63bb8c5, #2858) that cites
-            # no accord. See WHO A RELEASE CLOSES above.
+            # explicit overlay handoff is recorded" -- the release row is the
+            # register part of that record). It used to stay on the signing
+            # owner alone, a rule introduced with the co-owners field
+            # (ad63bb8c5, #2858) that cites no accord. See WHO A RELEASE
+            # CLOSES above.
             owner = canonical_owner(m.group(1))
             released = lanes_in(line)
+            # The PEER half is held to the baton path's guards: an actual
+            # RELEASE row head (column 0, outside fences) signed by the
+            # identity RELEASE_RE matched, and lanes DECLARED with `branch:`.
+            # Without them a REVIEW row quoting `RELEASE <co-owner>`, an
+            # indented example, or prose naming a lane the release is not
+            # about would close another owner's row (delta review of #3242,
+            # P2-1). The signer's OWN rows keep the legacy reading exactly.
+            if heads is None:
+                heads = real_row_heads(lines)
+            head = heads[lineno - 1]
+            peer_lanes = (declared_lanes(line)
+                          if head is not None
+                          and head.group(2).upper() == "RELEASE"
+                          and canonical_owner(head.group(3)) == owner
+                          else set())
             if not released:
                 # A BARE release closes everything that owner holds. 99 of
                 # the register's 120 RELEASE lines name no branch, so this
@@ -754,7 +796,7 @@ def _pair_register(text: str):
                 # signer's own rows and on every row that declares the
                 # signer a co-owner. Anything else stays held.
                 _close_participant_rows(open_claims, lineno, m.group(1), owner,
-                                        released, "", peer_closes)
+                                        released, "", peer_closes, peer_lanes)
     _mark_heard_from(lines, peer_closes)
     return open_claims, batons, peer_closes
 

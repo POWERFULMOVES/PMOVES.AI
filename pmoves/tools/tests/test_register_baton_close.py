@@ -1,10 +1,11 @@
 """Who a RELEASE closes, per the accords: every PARTICIPANT of the named lane.
 
-The keystone docs govern, not code comments. AGNOTE4482.md:1709-1713: the
-ledger is "an awareness surface, not a claim registry"; "Shared lanes are the
-point. Multiple idents may sign the same lane"; "Rows are reversible
+The keystone docs govern, not code comments. AGNOTE4482.md:1699: the ledger
+is "an awareness surface, not a claim registry"; :1709-1713: "Shared lanes are
+the point. Multiple idents may sign the same lane"; "Rows are reversible
 adsorptions". KRISS_KROSS_ACCORD.md:12-16: one active owner per branch "unless
-explicit overlay handoff is recorded" -- and the release row IS that record.
+explicit overlay handoff is recorded" -- the release row is the register part
+of that record (the trail entry and PR comment are not checked here).
 
 So a RELEASE naming a lane closes the open rows on it of:
   * the signer (unchanged);
@@ -141,6 +142,63 @@ def test_a_malformed_baton_closes_nothing_never_the_signers_own(gate, case, row,
     assert _lanes(gate, HELD + row) == BEFORE
     [event] = gate.baton_events_in(HELD + row)
     assert needle in event.problem and not event.closed
+
+
+# --------------------------------- P2-1: a peer close needs a real row ------
+# Delta review of #3242, P2-1. The co-owner close used to run through the
+# legacy RELEASE reader, which matches `RELEASE <x>` anywhere on a line and
+# reads lanes out of prose. Each shape below closed the PRIMARY owner's shared
+# row. Now each closes nothing of anyone else's, while the signer's OWN rows
+# keep the legacy reading exactly (here: the signer's own `feat/shared` row
+# closes, as it always has).
+
+OWN_SHARED = (f"- `2026-09-20T00:20:00Z` CLAIM `{SIGNER}` branch: `feat/shared` "
+              "· scope: **my own row on the shared lane.**\n")
+P2_1_REPROS = {
+    "a REVIEW row quoting the co-owner's release":
+        (f"- `2026-10-01T00:00:00Z` REVIEW `EM-FLASH (4090)` · scope: per RELEASE "
+         f"`{SIGNER}` on `feat/shared`, the guard lands next\n"),
+    "an indented example row":
+        (f"- `2026-10-01T00:00:00Z` NOTE `CODEX` scope: grammar example:\n"
+         f"  - `2026-10-01T00:00:00Z` RELEASE `{SIGNER}` branch `feat/shared` "
+         "· scope: example\n"),
+    "a release whose prose mentions the lane":
+        (f"- `2026-10-01T00:00:00Z` RELEASE `{SIGNER}` branch: `fix/other-thing` "
+         f"· scope: done; `{HOLDER}` keeps `feat/shared`\n"),
+}
+
+
+@pytest.mark.parametrize("case", sorted(P2_1_REPROS))
+def test_p2_1_a_non_row_or_prose_lane_closes_no_other_owners_row(gate, case):
+    text = HELD + SHARED + OWN_SHARED + P2_1_REPROS[case]
+    assert "feat/shared" in _lanes(gate, text)["crush"]
+    assert gate.peer_closes_in(text) == []
+
+
+@pytest.mark.parametrize("case", sorted(P2_1_REPROS))
+def test_p2_1_the_signers_own_legacy_reading_is_unchanged(gate, case):
+    text = HELD + SHARED + OWN_SHARED + P2_1_REPROS[case]
+    assert _lanes(gate, text)["b850-claude"] == ["chore/mine"]
+
+
+def test_p2_1_the_same_release_on_a_real_row_does_close_the_shared_row(gate):
+    # The positive control for the three repros: a real RELEASE row head that
+    # DECLARES the lane closes the co-owned row.
+    row = _release("branch: `feat/shared`")
+    text = HELD + SHARED + OWN_SHARED + row
+    assert "feat/shared" not in _lanes(gate, text)["crush"]
+    [pc] = gate.peer_closes_in(text)
+    assert (pc.owner_key, pc.via) == ("crush", "co-owner")
+
+
+def test_co_owner_match_uses_the_vocabulary_fold(gate):
+    # Documented choice (P3-3): a co-owner is matched by canonical identity,
+    # the same fold that decides an owner's own rows. CRUSH-GLM52 and CRUSH
+    # fold to `crush`, so a row declaring one is closable by the other.
+    row = (f"- `2026-09-20T00:00:00Z` CLAIM `{SIGNER}` branch: `feat/fold` "
+           "· co-owners: `CRUSH-GLM52 (Knuckles)` · scope: s\n")
+    rel = _release("branch: `feat/fold`", signer="CRUSH")
+    assert "b850-claude" not in _lanes(gate, row + rel)
 
 
 # ---------------------------------------------------- reading the rows ------
