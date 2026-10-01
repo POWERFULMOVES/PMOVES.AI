@@ -409,11 +409,15 @@ def test_selector_primary_takes_first_catalog_hit(selector_env):
 
 
 def test_selector_fallback_skips_tried_model_and_ignores_override(selector_env):
-    env, _ = selector_env
+    env, catalog = selector_env
+    catalog.write_text(catalog.read_text() + "zai-coding-plan/glm-5.3\n")
     p = _select({**env, "KILO_REVIEW_MODEL": "kilo/z-ai/glm-5.2", "KILO_IGNORE_OVERRIDE": "1",
-                 "KILO_EXCLUDE_MODELS": "kilo/z-ai/glm-5.2"})
+                 "KILO_EXCLUDE_MODELS": "kilo/z-ai/glm-5.2",
+                 "KILO_REVIEW_MODEL_PREFERENCES": env["KILO_REVIEW_MODEL_PREFERENCES"] + " zai-coding-plan/glm-5.3"})
     assert p.returncode == 0, p.stderr
-    assert "KILO_RESOLVED_MODEL=kilo/z-ai/glm-5.3" in p.stderr
+    # kilo/z-ai/glm-5.3 is untried but shares tier 2's provider (and key)
+    assert "'kilo/z-ai/glm-5.3' shares provider 'kilo'" in p.stderr
+    assert "KILO_RESOLVED_MODEL=zai-coding-plan/glm-5.3" in p.stderr
 
 
 def test_selector_fallback_exhausted_signals_no_candidate_by_marker(selector_env):
@@ -1158,3 +1162,127 @@ def test_selector_catalog_admits_only_the_configured_providers(selector_env):
     assert "preferred model 'openrouter/z-ai/glm-5.3' is not in the live kilo catalog" in p.stderr
     assert "KILO_RESOLVED_MODEL=kilo/z-ai/glm-5.3" in p.stderr
     assert "kilo catalog: 1 ids" in p.stderr
+
+
+# --------------------------------------- correlated fallback (P2-2) --
+# A provider is one key and one quota: an auth, quota or outage failure takes
+# every one of its ids down together. Tier 3 must reach a DIFFERENT provider,
+# or kilo/kilo-auto/free is unreachable in exactly the failure it exists for.
+
+def _workflow_default_preferences() -> str:
+    chain = next(s for s in _job()["steps"] if s.get("id") == "chain")
+    return chain["env"]["KILO_REVIEW_MODEL_PREFERENCES"].split("||", 1)[1].strip(" }'")
+
+
+def _failing_provider_kilo(bindir: Path, catalog: Path, failing: str) -> None:
+    """`kilo run` fails like a revoked or exhausted key for one provider."""
+    _exe(bindir / "kilo", f"""#!/usr/bin/env bash
+if [ "$1" = models ]; then cat "{catalog}"; exit 0; fi
+if [ "$1" = run ]; then
+  case "$(cat "$HOME/.config/kilo/kilo.json")" in
+    *'"model": "{failing}/'*) echo "401 Unauthorized: invalid api key" >&2; exit 1 ;;
+  esac
+  echo "REVIEW with $(cat "$HOME/.config/kilo/kilo.json")"; exit 0
+fi
+exit 9
+""")
+
+
+@pytest.mark.parametrize("plans,override,failing,expected", [
+    # today's repo state: Z.ai key only. Z.ai fails -> the free gateway model,
+    # not glm-5.3-flash on the same dead key
+    ("zai-coding-plan/glm-5.3\nzai-coding-plan/glm-5.3-flash\n", "", "zai-coding-plan",
+     "kilo/kilo-auto/free"),
+    # MiniMax key added at repo scope -> the other plan
+    ("zai-coding-plan/glm-5.3\nzai-coding-plan/glm-5.3-flash\nminimax-coding-plan/MiniMax-M3\n", "",
+     "zai-coding-plan", "minimax-coding-plan/MiniMax-M3"),
+    # KILO_REVIEW_MODEL still points at the gateway and the gateway is out of
+    # credits -> a plan, not another gateway id
+    ("zai-coding-plan/glm-5.3\nzai-coding-plan/glm-5.3-flash\n", "kilo/z-ai/glm-5.3", "kilo",
+     "zai-coding-plan/glm-5.3"),
+])
+def test_fallback_after_a_provider_failure_reaches_a_different_provider(
+        selector_env, plans, override, failing, expected):
+    env, catalog = selector_env
+    catalog.write_text(plans + "kilo/z-ai/glm-5.3\nkilo/kilo-auto/free\n")
+    _failing_provider_kilo(Path(env["PATH"].split(":", 1)[0]), catalog, failing)
+    env = {**env, "Z_AI_API_KEY": ZAI_KEY, "MINIMAX_TOKEN_PLAN_API_KEY": MM_KEY, "KILOCODE_API_KEY": KILO_KEY,
+           "KILO_REVIEW_MODEL_PREFERENCES": _workflow_default_preferences(), "KILO_REVIEW_MODEL": override}
+
+    primary = _select(env)
+    assert primary.returncode == 1, "the stubbed provider failure must fail tier 2"
+    tried = re.search(r"^KILO_RESOLVED_MODEL=(\S+)$", primary.stderr, re.M).group(1)
+    assert tried.startswith(failing + "/")
+
+    # what review_chain.py passes to tier 3
+    alt = _select({**env, "KILO_IGNORE_OVERRIDE": "1", "KILO_EXCLUDE_MODELS": tried})
+    assert alt.returncode == 0, alt.stderr
+    assert f"KILO_RESOLVED_MODEL={expected}" in alt.stderr
+    assert "REVIEW with" in alt.stdout
+
+
+def test_fallback_with_only_the_failed_provider_left_is_no_candidate(selector_env):
+    env, catalog = selector_env
+    catalog.write_text("zai-coding-plan/glm-5.3\nzai-coding-plan/glm-5.3-flash\n")
+    p = _select({**env, "Z_AI_API_KEY": ZAI_KEY, "KILO_IGNORE_OVERRIDE": "1",
+                 "KILO_EXCLUDE_MODELS": "zai-coding-plan/glm-5.3",
+                 "KILO_REVIEW_MODEL_PREFERENCES": "zai-coding-plan/glm-5.3 zai-coding-plan/glm-5.3-flash"})
+    assert p.returncode == 1
+    assert "KILO_TIER_STATUS=no-candidate" in p.stderr
+    assert "'zai-coding-plan/glm-5.3-flash' shares provider 'zai-coding-plan'" in p.stderr
+
+
+def test_workflow_default_puts_the_free_model_before_the_paid_gateway():
+    ids = _workflow_default_preferences().split()
+    assert ids.index("kilo/kilo-auto/free") < ids.index("kilo/z-ai/glm-5.3")
+
+
+# ------------------------------------- what the review agent can reach (P2-3) --
+# `kilo run --auto` approves everything not explicitly denied and reads
+# untrusted PR text. Measured with the real @kilocode/cli 7.6.2: under --auto a
+# "*": "deny" catch-all alone left bash usable; the explicit denies below
+# withdrew it, and read was refused for /proc/self/environ, the key files and
+# the config.
+
+def _run_env_kilo(bindir: Path, catalog: Path, env_dump: Path) -> None:
+    _exe(bindir / "kilo", f"""#!/usr/bin/env bash
+if [ "$1" = models ]; then cat "{catalog}"; exit 0; fi
+if [ "$1" = run ]; then env > "{env_dump}"; echo "REVIEW with $(cat "$HOME/.config/kilo/kilo.json")"; exit 0; fi
+exit 9
+""")
+
+
+def test_review_agent_gets_keys_from_files_not_its_environment(selector_env, tmp_path):
+    env, catalog = selector_env
+    catalog.write_text("zai-coding-plan/glm-5.3\nminimax-coding-plan/MiniMax-M3\nkilo/kilo-auto/free\n")
+    env_dump = tmp_path / "kilo-run-env.txt"
+    _run_env_kilo(Path(env["PATH"].split(":", 1)[0]), catalog, env_dump)
+    p = _select({**env, "Z_AI_API_KEY": ZAI_KEY, "MINIMAX_TOKEN_PLAN_API_KEY": MM_KEY,
+                 "KILOCODE_API_KEY": KILO_KEY, "KILO_API_KEY": KILO_KEY,
+                 "KILO_REVIEW_MODEL_PREFERENCES": "zai-coding-plan/glm-5.3"})
+    assert p.returncode == 0, p.stderr
+    seen = env_dump.read_text()
+    # Booleans, not `in seen`: a failure must not print the environment.
+    leaked = [k for k in (ZAI_KEY, MM_KEY, KILO_KEY) if k in seen]
+    assert not leaked, f"{len(leaked)} key value(s) reached the review agent's environment"
+    config = p.stdout.split("REVIEW with ", 1)[1]
+    assert not any(k in config for k in (ZAI_KEY, MM_KEY, KILO_KEY)), "the config names files, never keys"
+    providers = json.loads(config)["provider"]
+    keydir = Path(env["HOME"]) / ".config" / "kilo" / "keys"
+    for name, key in (("zai-coding-plan", ZAI_KEY), ("minimax-coding-plan", MM_KEY), ("kilo", KILO_KEY)):
+        assert providers[name]["options"]["apiKey"] == f"{{file:{keydir / name}}}"
+        keyfile = keydir / name
+        assert keyfile.stat().st_mode & 0o777 == 0o600
+        assert keyfile.read_text() == key
+
+
+def test_review_agent_permissions_leave_read_on_the_diff_only(selector_env):
+    env, _ = selector_env
+    p = _select(env)
+    assert p.returncode == 0, p.stderr
+    perm = json.loads(p.stdout.split("REVIEW with ", 1)[1])["permission"]
+    assert perm["*"] == "deny"
+    for tool in ("bash", "background_process", "edit", "webfetch", "websearch", "codesearch", "task", "skill"):
+        assert perm[tool] == "deny", tool
+    assert perm["read"] == {"*": "deny", "*review/kilo-review.diff": "allow"}
+    assert perm["external_directory"] == {"*": "deny", "*review/*": "allow"}

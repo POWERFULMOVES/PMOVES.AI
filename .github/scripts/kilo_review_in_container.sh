@@ -13,7 +13,12 @@
 #   KILO_EXCLUDE_MODELS           space-separated ids already tried this run
 #                                 (set by the fallback tier; skipped here)
 #   KILO_IGNORE_OVERRIDE          non-empty -> fallback tier: ignore the
-#                                 override, walk the preference list
+#                                 override, walk the preference list, and skip
+#                                 every id whose PROVIDER was already tried. A
+#                                 provider is one key and one quota, so an
+#                                 auth, quota or outage failure takes all of
+#                                 its ids down together; the fallback must
+#                                 reach a different one (#3246 review).
 #
 # Exit codes: 0 = review written to stdout (validity is judged by the
 # caller); anything else = failure. Tier STATUS is NOT an exit code (kilo's
@@ -22,7 +27,7 @@
 # copies into its meta file:
 #   catalog-empty  could-not-measure: the catalog query returned 0 ids
 #   no-candidate   fallback tier only: every catalog-valid preference was
-#                  already tried
+#                  already tried, or shares a provider with one that was
 #
 # Ids are CLI ids: `<provider>/<model>`. Two kinds of provider are active:
 #   zai-coding-plan/<m>      the operator's GLM Coding Plan, direct to
@@ -76,6 +81,11 @@ echo "::notice::kilo catalog: ${n} ids from @kilocode/cli@${KILO_CLI_VERSION} (p
 
 in_catalog() { grep -Fxq -- "$1" "$CATALOG"; }
 excluded() { case " ${KILO_EXCLUDE_MODELS:-} " in *" $1 "*) return 0 ;; esac; return 1; }
+provider_tried() {
+  local t
+  for t in ${KILO_EXCLUDE_MODELS:-}; do [ "${t%%/*}" = "${1%%/*}" ] && return 0; done
+  return 1
+}
 suggest() {
   echo "valid ids in the live catalog (sample):" >&2
   { for p in ${KILO_REVIEW_MODEL_PREFERENCES:-}; do in_catalog "$p" && echo "$p"; done
@@ -104,12 +114,16 @@ else
       echo "::notice::preferred model '${cand}' already tried this run; skipping" >&2
       continue
     fi
+    if [ -n "${KILO_IGNORE_OVERRIDE:-}" ] && provider_tried "$cand"; then
+      echo "::notice::preferred model '${cand}' shares provider '${cand%%/*}' (one key, one quota) with a model already tried this run; skipping" >&2
+      continue
+    fi
     if in_catalog "$cand"; then MODEL="$cand"; break; fi
     echo "::warning::preferred model '${cand}' is not in the live kilo catalog; trying next" >&2
   done
   if [ -z "$MODEL" ]; then
     if [ -n "${KILO_IGNORE_OVERRIDE:-}" ]; then
-      echo "::notice::no untried catalog-valid model left in KILO_REVIEW_MODEL_PREFERENCES (already tried: '${KILO_EXCLUDE_MODELS:-}')" >&2
+      echo "::notice::no catalog-valid model from an untried provider left in KILO_REVIEW_MODEL_PREFERENCES (already tried: '${KILO_EXCLUDE_MODELS:-}')" >&2
       echo "KILO_TIER_STATUS=no-candidate" >&2
       exit 1
     fi
@@ -121,6 +135,36 @@ else
 fi
 
 echo "KILO_RESOLVED_MODEL=${MODEL}" >&2
-printf '{"model": "%s", %s}' "${MODEL}" "$PROVIDERS" > ~/.config/kilo/kilo.json
+
+# What the review agent can reach. `kilo run --auto` approves every permission
+# that is not explicitly denied, and its prompt is untrusted PR text, so:
+#  - Keys come from 0600 files through {file:} (this global config is trusted
+#    config, where Kilo substitutes it) and are REMOVED from the agent's
+#    process environment below, so `env` or /proc/self/environ in any tool
+#    the agent could reach shows no key.
+#  - The ruleset leaves one tool, `read`, on the diff only. An explicit
+#    `bash: deny` is required: under --auto the `"*": "deny"` catch-all alone
+#    left bash usable.
+# Measured with @kilocode/cli 7.6.2 and a stub model that issued tool calls:
+# bash was withdrawn from the tool list; reads of /proc/self/environ, a key
+# file and this config were denied; the diff read succeeded; the provider
+# received the key from the file.
+# NOT closed: the keys still live in this container's PID 1 environment and
+# in the key files, so any future tool or permission regression that gives
+# the agent a shell or an unrestricted read reaches them again.
+keydir="$HOME/.config/kilo/keys"
+(umask 077 && mkdir -p "$keydir")
+run_providers=""
+add_provider() {  # <provider> <key value> <provider json body>
+  [ -n "$2" ] || return 0
+  (umask 077 && printf '%s' "$2" > "${keydir}/$1")
+  run_providers="${run_providers:+${run_providers}, }\"$1\": {$3\"options\": {\"apiKey\": \"{file:${keydir}/$1}\"}}"
+}
+add_provider zai-coding-plan "${Z_AI_API_KEY:-}" '"env": ["Z_AI_API_KEY"], '
+add_provider minimax-coding-plan "${MINIMAX_TOKEN_PLAN_API_KEY:-}" '"env": ["MINIMAX_TOKEN_PLAN_API_KEY"], '
+add_provider kilo "${KILO_API_KEY:-${KILOCODE_API_KEY:-}}" ''
+PERMISSION='"permission": {"*": "deny", "bash": "deny", "background_process": "deny", "edit": "deny", "webfetch": "deny", "websearch": "deny", "codesearch": "deny", "task": "deny", "skill": "deny", "read": {"*": "deny", "*review/kilo-review.diff": "allow"}, "external_directory": {"*": "deny", "*review/*": "allow"}}'
+printf '{"model": "%s", "provider": {%s}, %s}' "${MODEL}" "$run_providers" "$PERMISSION" > ~/.config/kilo/kilo.json
 cd /tmp
-kilo run --auto "$(cat "$REVIEW_PROMPT")"
+env -u Z_AI_API_KEY -u MINIMAX_TOKEN_PLAN_API_KEY -u KILOCODE_API_KEY -u KILO_API_KEY \
+  kilo run --auto "$(cat "$REVIEW_PROMPT")"

@@ -12,8 +12,9 @@ review (see "Review validity" below):
                           direction: "if the Spark node is online then it
                           should be running PR reviews".
   tier 2  kilo-primary    Kilo CLI, model resolved against the live catalog
-  tier 3  kilo-alternate  Kilo CLI again, with the next untried catalog-valid
-                          model from the preference list
+  tier 3  kilo-alternate  Kilo CLI again, with the next catalog-valid model
+                          from the preference list whose provider tier 2 did
+                          not use (one key, one quota: they fail together)
 
 Outputs (all written, whatever happens). Values -- tier details, review
 bodies, model ids -- are redacted once, before rendering (Spark URL, host, IP,

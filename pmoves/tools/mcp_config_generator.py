@@ -169,7 +169,8 @@ def _collect_servers(inventory: Dict[str, Any], client: str, endpoint: str) -> L
                 endpoint=server.get("endpoint"),
                 endpoint_prefix=server.get("endpoint_prefix"),
                 endpoint_pinned=server.get("endpoint_pinned", False),
-                disabled=server.get("disabled", False),
+                # disabled_clients emits the entry disabled for those clients only.
+                disabled=server.get("disabled", False) or client in server.get("disabled_clients", []),
             )
             if not spec.supports_client(client):
                 continue
