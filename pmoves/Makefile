@@ -527,28 +527,27 @@ register-release: export REGISTER_SCOPE = $(SCOPE)
 register-release: export REGISTER_SCOPE_VIA_FILE = $(findstring --scope-file,$(ARGS))
 register-release: export REGISTER_CO_OWNERS = $(CO_OWNER)
 # THE BATON. A peer closes or passes a lane ANOTHER registered identity holds,
-# when that peer is not running to release it. Two rows, and the authority is
-# VERIFIED, never asserted:
-#   1. the GRANT -- a NOTE by an operator identity (or by the holder), merged
-#      to main, naming the lane, the holder and the receiver:
-#        make -C pmoves register-note OWNER='DARKXSIDE' BRANCH=fix/x \
-#             BATON_FROM='CRUSH-GLM52 (Knuckles)' BATON_TO='B850-CLAUDE (Knuckles)' SCOPE='...'
-#   2. the BATON -- a RELEASE by the receiver citing the grant's TIMESTAMP:
-#        make -C pmoves register-release OWNER='B850-CLAUDE (Knuckles)' BRANCH=fix/x \
-#             BATON_FROM='CRUSH-GLM52 (Knuckles)' RULING=2026-10-01T12:00:00Z SCOPE='...'
-#      (HANDOFF=<ts> instead of RULING= when the holder signed the grant)
-# Every check failing means the row closes nothing -- never an ordinary
-# release of your own lanes.
+# when that peer is not running to release it. Two rows; the authority is a
+# REFERENCE the reader resolves, never free text:
+#   1. the GRANT -- a NOTE signed by the holder, or by an operator identity
+#      (signing_identity_cards.yaml role: operator), on main, declaring the lane:
+#        make -C pmoves register-note OWNER='<holder or operator>' BRANCH=fix/x \
+#             BATON_FROM='<holder>' BATON_TO='<receiver>' SCOPE='...'
+#   2. the BATON -- a RELEASE by the receiver citing the grant's row TIMESTAMP:
+#        make -C pmoves register-release OWNER='<receiver>' BRANCH=fix/x \
+#             BATON_FROM='<holder>' GRANT=2026-10-01T12:00:00Z SCOPE='...'
+# A grant's signer is ATTRIBUTION, not authentication: it proves a row naming
+# that signer is on main, not who typed it. Any failed check closes NOTHING --
+# never an ordinary release of your own lanes.
 register-release: export REGISTER_BATON_FROM = $(BATON_FROM)
-register-release: export REGISTER_RULING = $(RULING)
-register-release: export REGISTER_HANDOFF = $(HANDOFF)
+register-release: export REGISTER_GRANT = $(GRANT)
 # BRANCH IS NOT OPTIONAL HERE, and the guard is in the python rather than in
 # this recipe on purpose: `ARGS=--all-lanes` is the sanctioned way to ask for a
 # full handoff, and a make-level `[ -z "$$REGISTER_BRANCH" ]` cannot see it. The
 # tool refuses an untargeted release with a message naming both doors -- which
 # survives `make` collapsing every nonzero recipe exit to 2, because the message
 # is the structured part, not the code.
-register-release: ## Close a lane in the claim register (OWNER= BRANCH= SCOPE= [CO_OWNER=]; ARGS=--all-lanes to close ALL your lanes; BATON_FROM= RULING=|HANDOFF=<grant timestamp> to close a PEER's lane)
+register-release: ## Close a lane in the claim register (OWNER= BRANCH= SCOPE= [CO_OWNER=]; ARGS=--all-lanes to close ALL your lanes; BATON_FROM= GRANT=<grant timestamp> to close a PEER's lane)
 	@if [ -z "$$REGISTER_SCOPE" ] && [ -z "$$REGISTER_SCOPE_VIA_FILE" ]; then \
 		echo "usage: make register-release OWNER='B850-CLAUDE (Knuckles)' BRANCH=fix/x SCOPE='what landed'"; \
 		echo "  single-quote SCOPE for the same reason register-claim says to: an expansion absorbed into"; \

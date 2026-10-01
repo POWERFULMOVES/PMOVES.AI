@@ -449,7 +449,7 @@ def report_branch(verdict, branch, owner_given, lanes, now, out) -> int:
     return EXIT_CLEAN
 
 
-def _json_payload(lanes, register, now, branch, verdict, code):
+def _json_payload(lanes, register, now, branch, verdict, code, batons=()):
     payload = {
         "register": str(register),
         "read_at": _iso(now),
@@ -463,6 +463,10 @@ def _json_payload(lanes, register, now, branch, verdict, code):
                                   if x.expiry.state == "unmeasured"),
         },
         "exit_code": code,
+        # Every baton row read (in BRANCH= mode, those aimed at that lane), with
+        # what it closed or why it closed nothing. Without this a consumer got
+        # exit 1 from a refused baton and nothing in the payload explaining it.
+        "batons": [e.as_dict() for e in batons],
     }
     if branch:
         payload["branch"] = {
@@ -545,6 +549,7 @@ def main(argv=None) -> int:
         now = datetime.now(timezone.utc).replace(microsecond=0)
 
     lanes = collect(text, gate, append_mod, postdate_mod, now)
+    batons = gate.baton_events_in(text)
 
     # With --json the human report goes to stderr so stdout stays parseable.
     prose = sys.stderr if args.json else sys.stdout
@@ -555,13 +560,16 @@ def main(argv=None) -> int:
         verdict = probe_branch(text, args.branch, owner, gate, append_mod)
         code = report_branch(verdict, args.branch, bool(args.owner), lanes,
                              now, prose)
+        # Only batons aimed at THIS lane: a refused baton elsewhere is not a
+        # fact about whether this lane is free.
+        batons = [e for e in batons if args.branch in e.lanes]
     else:
         code = report_listing(lanes, register, now, prose)
-        code = report_batons(gate.baton_events_in(text), prose, code)
+    code = report_batons(batons, prose, code)
 
     if args.json:
         json.dump(_json_payload(lanes, register, now, args.branch, verdict,
-                                code), sys.stdout, indent=2)
+                                code, batons), sys.stdout, indent=2)
         sys.stdout.write("\n")
     return code
 
