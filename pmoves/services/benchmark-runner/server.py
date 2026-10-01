@@ -342,7 +342,7 @@ class BenchmarkServer:
         """
         return {
             "status": "running" if self._running else "stopped",
-            "nats_url": self.nats_url,
+            "nats_url": redact_url(self.nats_url),
             "active_benchmarks": len(self._active_benchmarks),
             "completed_benchmarks": len(self._benchmark_results),
             "active_ids": list(self._active_benchmarks.keys()),

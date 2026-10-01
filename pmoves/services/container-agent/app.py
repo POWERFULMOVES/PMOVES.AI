@@ -22,6 +22,14 @@ from typing import Any, Dict, Tuple
 
 from aiohttp import web
 
+try:
+    from services.common.nats_client import redact_url
+except ImportError:  # image ships without services/common
+    import re as _re
+
+    def redact_url(url):
+        return _re.sub(r"(?<=//)[^/@\s]*@", "", str(url or ""))
+
 CA_PORT = int(os.environ.get("CA_PORT", "8111"))
 NODE_NAME = os.environ.get("NODE_NAME", socket.gethostname())
 NATS_URL = os.environ.get("NATS_URL", "nats://nats-leaf:4222")
@@ -114,14 +122,14 @@ async def check_nats() -> Dict[str, Any]:
             "version": nc._server_info.get("version", ""),
             "jetstream": nc._server_info.get("jetstream", False),
             "leafnode": nc._server_info.get("leafnode", False),
-            "connected_url": str(nc.connected_url) if nc.connected_url else NATS_URL,
+            "connected_url": redact_url(nc.connected_url.geturl() if nc.connected_url else NATS_URL),
         }
         await nc.close()
         ms = round((time.monotonic() - t0) * 1000, 1)
-        return {"url": NATS_URL, "connected": True, "ms": ms, "server": info, "ok": True}
+        return {"url": redact_url(NATS_URL), "connected": True, "ms": ms, "server": info, "ok": True}
     except Exception as e:
         ms = round((time.monotonic() - t0) * 1000, 1)
-        return {"url": NATS_URL, "connected": False, "ms": ms, "error": str(e), "ok": False}
+        return {"url": redact_url(NATS_URL), "connected": False, "ms": ms, "error": str(e), "ok": False}
 
 
 def get_network_info() -> Dict[str, Any]:

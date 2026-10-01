@@ -47,6 +47,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+try:
+    from services.common.nats_client import redact_url
+except ImportError:  # image ships without services/common
+    import re as _re
+
+    def redact_url(url):
+        return _re.sub(r"(?<=//)[^/@\s]*@", "", str(url or ""))
+
 # Make repo root importable so we can pull in repo-side modules.
 _HERE = Path(__file__).resolve().parent
 _REPO = _HERE.parents[2]  # pmoves/tools/creator-collab-evidence -> PMOVES.AI
@@ -516,7 +524,7 @@ def run_fordham_e2e(actor: str = "fordham-resident-001") -> dict[str, Any]:
         "events_capture_count": len(capture),
         "events_capture_all": list(capture.keys()) == subjects_in_order,
         "nats_event_bus_url": NATS_EVENT_BUS_URL,
-        "nats_url": NATS_URL,
+        "nats_url": redact_url(NATS_URL),
     }
 
     (EVIDENCE_DIR / "summary.json").write_text(
