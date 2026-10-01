@@ -254,7 +254,7 @@ with every step attributed in the script header and inline:
 - **In use without a signature, and foreign partitions (review of 9339f5f52):**
   - a disk is refused if any child is not TYPE `part` (a plain dm-crypt or
     dm-linear mapping), or if a sysfs `holders` entry claims it or a partition
-    (linux `block/holder.c:41-49`, bd_link_disk_holder);
+    (linux `block/holder.c:41-50` at tag v7.2, bd_link_disk_holder);
   - a lone partition resumes only if its GPT name (lsblk PARTLABEL) is the
     script's own label;
   - `blkid -p` exits other than 0/2 fail closed as root (blkid(8) EXIT STATUS);

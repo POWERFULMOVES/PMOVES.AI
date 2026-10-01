@@ -303,7 +303,7 @@ def test_rerun_on_provisioned_drive_is_a_no_op(tmp_path):
     devs["/dev/nvme9n1"]["children"] = ["/dev/nvme9n1p1"]
     devs["/dev/nvme9n1p1"] = _part("/dev/nvme9n1", "ext4", "PMOVES-NVME1")
     h = Harness(tmp_path, devices=devs)
-    h.fstab.write_text(f"UUID=aaaa\t/\text4\tdefaults\t0\t1\nUUID=bbbb\t{h.mnt}\text4\tdefaults,nofail\t0\t2\n")
+    h.fstab.write_text(f"UUID=aaaa\t/\text4\tdefaults\t0\t1\nUUID=11111111-2222-3333-4444-555555555555\t{h.mnt}\text4\tdefaults,nofail\t0\t2\n")
     before = h.fstab.read_text()
     st = json.loads(h.state.read_text()); st["mounted"] = [h.mnt]; h.state.write_text(json.dumps(st))
     r = h.run()
@@ -315,12 +315,28 @@ def test_rerun_on_provisioned_drive_is_a_no_op(tmp_path):
     assert ["chown", "tester:tester", h.mnt] in h.calls("chown")  # SUDO_USER named a user
 
 
+def test_existing_fstab_line_for_another_device_is_refused(tmp_path):
+    # Adoption path: our partition is already provisioned, but fstab points a
+    # DIFFERENT UUID at the mountpoint, so another disk owns it.
+    devs = base_devices()
+    devs["/dev/nvme9n1"]["children"] = ["/dev/nvme9n1p1"]
+    devs["/dev/nvme9n1p1"] = _part("/dev/nvme9n1", "ext4", "PMOVES-NVME1")
+    h = Harness(tmp_path, devices=devs)
+    h.fstab.write_text(f"UUID=aaaa  /  ext4  defaults  0  1\nUUID=ffff-other-disk\t{h.mnt}\text4\tdefaults\t0\t2\n")
+    before = h.fstab.read_text()
+    r = h.run()
+    assert r.returncode == 1, r.stdout + r.stderr
+    assert "fstab already maps" in r.stderr and "UUID=ffff-other-disk" in r.stderr, r.stderr
+    assert h.fstab.read_text() == before and not list(tmp_path.glob("fstab.pmoves-bak.*"))
+    assert h.calls("mount") == [] and h.calls("systemctl") == [] and h.calls("chown") == []
+
+
 def test_rerun_as_plain_root_leaves_ownership_alone(tmp_path):
     devs = base_devices()
     devs["/dev/nvme9n1"]["children"] = ["/dev/nvme9n1p1"]
     devs["/dev/nvme9n1p1"] = _part("/dev/nvme9n1", "ext4", "PMOVES-NVME1", mountpoints=("/mnt/x",))
     h = Harness(tmp_path, devices=devs)
-    h.fstab.write_text(f"UUID=bbbb  {h.mnt}  ext4  defaults,nofail  0  2\n")
+    h.fstab.write_text(f"UUID=11111111-2222-3333-4444-555555555555  {h.mnt}  ext4  defaults,nofail  0  2\n")
     st = json.loads(h.state.read_text()); st["mounted"] = [h.mnt]; h.state.write_text(json.dumps(st))
     r = h.run(sudo_user=None)
     assert r.returncode == 0, r.stdout + r.stderr

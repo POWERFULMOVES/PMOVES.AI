@@ -17,6 +17,9 @@
 #     --role=creator-store --yes-really
 #   bash deploy/provision/nvme-provision.sh --device=... --mount=... \
 #     --role=creator-store --dry-run      # read-only plan; no root, no --yes-really
+#   As non-root the dry run cannot run the low-level signature probe, so it
+#   reports INCONCLUSIVE and exits 3 (could not measure); run it with sudo for a
+#   conclusive plan.
 #
 # Re-running is safe: a drive that already carries exactly one ext4 partition
 # with the expected label is reported "already provisioned" and is not
@@ -225,9 +228,9 @@ else
   #     (e.g. a plain dm-crypt or dm-linear mapping), or a non-empty sysfs
   #     "holders" directory. The kernel creates <bdev>/holders/<disk> links
   #     when a device-mapper/md disk claims a block device (linux
-  #     block/holder.c:41-49, bd_link_disk_holder). There is no
+  #     block/holder.c:41-50 at tag v7.2, bd_link_disk_holder). There is no
   #     Documentation/ABI entry for it: stable/sysfs-block does not mention
-  #     holders (checked at master, 2026-10-01).
+  #     holders (checked at v7.2 and master, 2026-10-01).
   # Originated, B850-CLAUDE / nvme-3150-rebase, 2026-10-01 (no upstream
   # precedent; checked [ISO], [PART], [OMA] bin/).
   while read -r node type; do
@@ -338,8 +341,15 @@ mkdir -p "$MOUNT"
 # Presence is tested on FIELD 2, because fstab(5) separates fields by tabs or
 # spaces. The backup, newline guard and append are Originated, B850-CLAUDE /
 # nvme-3150-rebase (no upstream precedent; checked [ISO], [PART], [PHI], [OMA]).
-if awk -v m="$MOUNT" '$1 !~ /^#/ && $2 == m {found=1} END {exit !found}' "$FSTAB"; then
-  log "fstab entry for $MOUNT already present — leaving untouched"
+# An existing line for this mountpoint must name THIS partition. Otherwise
+# another disk owns the mount: refuse without editing fstab, rather than report
+# success while something else is mounted there. Originated, B850-CLAUDE /
+# nvme-3150-rebase, 2026-10-01 (no upstream precedent; checked [ISO], [PHI]).
+EXISTING_SPEC="$(awk -v m="$MOUNT" '$1 !~ /^#/ && $2 == m {print $1; exit}' "$FSTAB")"
+if [[ -n "$EXISTING_SPEC" ]]; then
+  [[ "$EXISTING_SPEC" == "UUID=$UUID" ]] \
+    || err "fstab already maps $MOUNT to '$EXISTING_SPEC', not UUID=$UUID ($PART). Another device owns this mountpoint; refusing (fstab not edited)."
+  log "fstab entry for $MOUNT already present (UUID=$UUID) — leaving untouched"
 else
   BACKUP="$FSTAB.pmoves-bak.$(date +%Y%m%dT%H%M%S)"
   cp -a "$FSTAB" "$BACKUP"
