@@ -348,58 +348,49 @@ def _row_at(text: str, pos: int) -> str:
 
 
 # --------------------------------------------------------------------------
-# THE BATON CLOSE
+# WHO A RELEASE CLOSES -- per the accords
 #
-# The AGInTZ here are peers, and a lane is a Known Road passed on like a relay
-# baton -- identity on a row is ATTRIBUTION (who carried which leg), not
-# territory. Real-time handoff will come with ACP; this is the asynchronous
-# path for when the peer who holds the lane is not running.
+# The keystone docs govern this, and they say lanes are shared, not locked:
 #
-# Before this, a RELEASE paired only with the SIGNING owner's claims, so a lane
-# whose holder had stopped running could not be closed by anyone. A co-owner
-# named on a RELEASE did nothing, and that stays true -- see the comment in
-# _pair_register(). Attribution is not authority.
+#   pmoves/docs/AGENTS/AGNOTE4482.md:1699-1713 (AGInTZ awareness ledger):
+#     "an awareness surface, not a claim registry"; "Shared lanes are the
+#     point. Multiple idents may sign the same lane or scope"; "Rows are
+#     reversible adsorptions. Append updates, supersede your own rows ...
+#     nothing here is carved in stone."
+#   pmoves/docs/AGENTS/KRISS_KROSS_ACCORD.md:12-16: "One branch, one active
+#     owner at a time unless explicit overlay handoff is recorded", with the
+#     claim/release update in the register as part of that record.
 #
-# AUTHORITY IS A REFERENCE THE READER RESOLVES, NOT A SENTENCE IT TRUSTS. A
-# free-text authority would let any identity close any lane by typing one. So
-# closing a peer's lane takes two ledger rows:
+# So a RELEASE closes the open rows of every PARTICIPANT of the lanes it names
+# (participants = owner U declared co-owners, computed per CLAIM below):
+#   * the signer's own rows (unchanged);
+#   * rows whose `co-owners:` declare the signer -- the signer worked that
+#     lane, and its release is a release of the shared lane;
+#   * rows of a holder the release NAMES with `baton-from: <holder>` -- the
+#     peer handoff when the holder is not running.
+# Closing a row someone else opened is a reversible adsorption: the release
+# row itself is the recorded handoff (who FILED it, under which identity, on
+# whose behalf), and the owner re-CLAIMing the lane supersedes it. Nothing
+# here authenticates who typed a row -- a row proves only the identity it was
+# filed under. register-status shows every such close as "released by X on
+# behalf of Y" and whether Y has been heard from since; it shows, it does not
+# block.
 #
-#   the GRANT -- a NOTE signed by the HOLDER or by an OPERATOR identity:
-#     NOTE `<holder|operator>` branch: `<lane>` · baton-from: `<holder>` ·
-#         baton-to: `<receiver>` · scope: ...
+# Until this change, pairing stayed on the signing owner alone. That rule came
+# in with the co-owners field (ad63bb8c5, #2858) as an uncited precaution and
+# cites no accord; the accords above never required it.
 #
-#   the BATON -- a RELEASE signed by the receiver, citing the grant's timestamp:
-#     RELEASE `<receiver>` branch: `<lane>` · baton-from: `<holder>` ·
-#         grant: `<grant timestamp>` · scope: ...
+# A BARE release (no lane) keeps its legacy meaning exactly: it closes every
+# row the SIGNER owns, and nothing of anyone else's. A release that names no
+# lane cannot say which shared lane it means.
 #
-# The reader resolves `grant:` to the ONE NOTE row stamped with it among the
-# ledger rows ABOVE the baton, and requires: signed by the holder or by an
-# operator identity (signing_identity_cards.yaml `role: operator`); names the
-# holder (implied when the holder signs); names THIS receiver in `baton-to:`;
-# DECLARES every lane the baton closes with a `branch:` marker; stamped no later
-# than the baton. The baton then closes the holder's open rows on those lanes
-# and nothing else -- never the signer's own rows.
-#
-# WHAT A GRANT PROVES, AND WHAT IT DOES NOT. It proves that a row naming the
-# holder or an operator identity as its signer sits above the baton in the file
-# being read, and -- when the baton was filed through register_append -- that
-# the exact grant row was on origin/main at that moment. It does NOT prove who
-# typed the grant. A row's signer is ATTRIBUTION: any caller can file a NOTE
-# under any registered name, `canonical_identity` folds case and strips the
-# parenthetical, raw Write/Edit or heredoc appends skip the write road's
-# origin/main check, and the reader checks FILE order, not commit order. "On
-# main" means CI passed, not that a human reviewed it: register PRs are
-# routinely admin-merged with zero approvals. None of this is a regression --
-# before the baton, anyone could already file a RELEASE under the holder's own
-# name. Authenticating the signer (e.g. verifying the commit that introduced the
-# grant against signing_identity_cards.yaml `ssh_allowed_signers_line`) is an
-# open operator decision, deliberately not built here.
-#
-# FAIL-CLOSED, NEVER FAIL-BROAD. A baton that fails ANY check closes NOTHING.
-# It is never read as an ordinary RELEASE by the signer: a lane-less RELEASE
-# closes every lane the signer holds, and "the baton was malformed, so close
-# all of MY lanes" is the silent broadening this register has been bitten by.
-# The refusal is recorded as a BatonEvent with its reason, so it is not silent.
+# FAIL-CLOSED, NEVER FAIL-BROAD, for `baton-from:` rows. A row that declares
+# `baton-from:` and is malformed -- no holder in backticks, two holders, not a
+# real ledger RELEASE row, no declared lane -- closes NOTHING. It is never read
+# as an ordinary release: a lane-less ordinary RELEASE closes everything the
+# signer holds, and "the baton was malformed, so close all of MY lanes" is the
+# silent broadening this register has been bitten by. The refusal is recorded
+# as a BatonEvent with its reason, so it is not silent.
 # --------------------------------------------------------------------------
 
 # The marker is detected WITHOUT the identity vocabulary, on purpose. If
@@ -408,88 +399,44 @@ def _row_at(text: str, pos: int) -> str:
 # the exact fallback the paragraph above forbids.
 BATON_MARKER_RE = re.compile(r'\bbaton[-_ ]from\b\s*:', re.IGNORECASE)
 BATON_FROM_RE = re.compile(r'\bbaton[-_ ]from\b\s*:\s*`([^`]+)`', re.IGNORECASE)
-BATON_TO_RE = re.compile(r'\bbaton[-_ ]to\b\s*:\s*`([^`]+)`', re.IGNORECASE)
-# `grant:`, not `ruling:`/`handoff:`. `handoff` already means a Known Roads
-# reason (`handoff:<file>`, damage-control/known_roads.py:200) and a register
-# row kind; a third meaning for the same word is how a reader picks the wrong
-# one. The value is a row TIMESTAMP, the addressing identity_lineage already
-# uses for corrections (`entry: {timestamp, kind}`, identity_lineage.py:441).
-BATON_GRANT_RE = re.compile(r'\bgrant\b\s*:\s*`([^`]+)`', re.IGNORECASE)
-# A grant reference is a ledger timestamp, exactly as row heads write it.
-# Anything else is free text, and free text is not authority.
-BATON_REF_RE = re.compile(r'^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$')
 # A DECLARED lane: `branch:` WITH its colon. BRANCH_MARKER_RE makes the colon
 # optional because history wrote ``Branch `x` `` before the marker existed; a
-# grant is a new row type with no such history, and the bare word "branch"
+# baton row is a new row type with no such history, and the bare word "branch"
 # occurs in prose ("I am keeping branch `x`"). Same reasoning as the
 # `co-owners:` marker (identity_lineage.py:114): the noun alone never declares.
 DECLARED_LANE_RE = re.compile(r'(?<!`)\bbranch:\s*`([^`]+)`', re.IGNORECASE)
 # A LEDGER ROW HEAD: bullet at column 0, timestamp, kind, owner. Indented
 # bullets (a sub-bullet quoting an example inside another row) and anything in
 # a ``` fence are prose ABOUT rows, not rows. Measured on origin/main: 753 heads
-# at column 0, 2 indented, 36 fenced. Applied to batons and grants only; the
-# legacy CLAIM/RELEASE reading is unchanged.
+# at column 0, 2 indented, 36 fenced. Applied to baton rows only; the legacy
+# CLAIM/RELEASE reading is unchanged.
 _ROW_HEAD_RE = re.compile(
     r'^[-*]\s+`([0-9]{4}-[0-9]{2}-[0-9]{2}[^`]*)`\s+([A-Za-z][A-Za-z+-]*)\s+`([^`]+)`'
 )
-# The only row kind that can carry a grant. The write road emits NOTE; nothing
-# writes a HANDOFF-kind grant, so accepting one would be a door with no road.
-BATON_GRANT_KINDS = frozenset({"NOTE"})
-_SIGNING_CARDS = (Path(__file__).resolve().parents[3]
-                  / "pmoves" / "config" / "signing_identity_cards.yaml")
-_OPERATORS = _UNSET
-
-
-def baton_operator_identities() -> frozenset:
-    """Canonical identities whose grant may pass ANOTHER identity's lane.
-
-    Derived from pmoves/config/signing_identity_cards.yaml -- active cards with
-    `h.role: operator` -- the registry of record, and under CODEOWNERS where a
-    constant in this hook would not be. Today that is exactly `darkxside`.
-    If the cards cannot be read the set is EMPTY: holder grants still work,
-    operator grants are refused. Fail closed.
-    """
-    global _OPERATORS
-    if _OPERATORS is not _UNSET:
-        return _OPERATORS
-    found = set()
-    try:
-        import yaml
-        doc = yaml.safe_load(_SIGNING_CARDS.read_text(encoding="utf-8")) or {}
-        for card in doc.get("cards") or []:
-            human = (card or {}).get("h") or {}
-            if card.get("active") and human.get("role") == "operator":
-                agent = str(human.get("agent_id") or "").strip()
-                if agent:
-                    found.add(canonical_owner(agent))
-    except Exception as exc:  # noqa: BLE001 -- a guard must not die here
-        sys.stderr.write(
-            f"claim-collision-pre: signing cards unreadable ({exc}); no operator "
-            "identity is recognised, so operator baton grants are refused.\n")
-        found = set()
-    _OPERATORS = frozenset(found)
-    return _OPERATORS
+# Any row head, for "has this owner been heard from since" -- informational,
+# so it reads the register as loosely as the legacy reader does.
+_ANY_HEAD_RE = re.compile(
+    r'^\s*[-*]\s+`[0-9]{4}-[0-9]{2}-[0-9]{2}[^`]*`\s+[A-Za-z][A-Za-z+-]*\s+`([^`]+)`'
+)
 
 
 class BatonEvent:
-    """What one baton RELEASE did, or why it did nothing.
+    """What one `baton-from:` RELEASE did, or why it did nothing.
 
     `closed` is the lanes actually closed on the holder's rows; `not_held` is
-    the granted lanes the holder held no open row on (a no-op for those lanes,
+    the declared lanes the holder held no open row on (a no-op for those lanes,
     reported rather than swallowed). `problem` is set when the row was refused
-    outright and closed nothing. `grant_line` is the line of the resolved grant.
+    outright and closed nothing.
     """
 
-    __slots__ = ("lineno", "signer", "holder", "holder_key", "grant_ref",
-                 "grant_line", "lanes", "closed", "not_held", "problem")
+    __slots__ = ("lineno", "signer", "holder", "holder_key", "lanes",
+                 "closed", "not_held", "problem")
 
-    def __init__(self, lineno, signer, holder="", grant_ref=""):
+    def __init__(self, lineno, signer, holder=""):
         self.lineno = lineno
         self.signer = signer
         self.holder = holder
         self.holder_key = ""
-        self.grant_ref = grant_ref
-        self.grant_line = 0
         self.lanes = set()
         self.closed = set()
         self.not_held = set()
@@ -497,7 +444,6 @@ class BatonEvent:
 
     def as_dict(self) -> dict:
         return {"line": self.lineno, "signer": self.signer, "holder": self.holder,
-                "grant": self.grant_ref, "grant_line": self.grant_line or None,
                 "lanes": sorted(self.lanes), "closed": sorted(self.closed),
                 "not_held": sorted(self.not_held), "problem": self.problem,
                 "warning": self.warning}
@@ -516,6 +462,43 @@ class BatonEvent:
         return ""
 
 
+class PeerClose:
+    """One open row closed by a RELEASE filed under ANOTHER identity.
+
+    `via` is "baton-from" (the release named the owner) or "co-owner" (the
+    owner's row declared the signer). `heard_from` is True when the owner has
+    filed any row after the release -- the owner is back, and has seen it.
+    """
+
+    __slots__ = ("release_line", "signer", "owner_key", "owner", "claim_line",
+                 "lanes", "via", "heard_from")
+
+    def __init__(self, release_line, signer, owner_key, owner, claim_line,
+                 lanes, via):
+        self.release_line = release_line
+        self.signer = signer
+        self.owner_key = owner_key
+        self.owner = owner
+        self.claim_line = claim_line
+        self.lanes = set(lanes)
+        self.via = via
+        self.heard_from = False
+
+    def as_dict(self) -> dict:
+        return {"release_line": self.release_line, "released_by": self.signer,
+                "owner": self.owner, "claim_line": self.claim_line,
+                "lanes": sorted(self.lanes), "via": self.via,
+                "owner_heard_from_since": self.heard_from}
+
+    def __str__(self) -> str:
+        lanes = ", ".join(f"`{x}`" for x in sorted(self.lanes))
+        tail = ("" if self.heard_from
+                else f" (`{self.owner}` not heard from since)")
+        return (f"line {self.release_line}: {lanes} released by `{self.signer}` "
+                f"on behalf of owner `{self.owner}` (CLAIM line "
+                f"{self.claim_line}, via {self.via}){tail}")
+
+
 def _outside_code_spans(text: str, regex):
     """Matches of `regex` whose START is not inside a Markdown code span.
 
@@ -523,7 +506,7 @@ def _outside_code_spans(text: str, regex):
     example -- is a mention, not a declaration; this register describes its own
     fields constantly. Uses the identity module's run-length span matcher when
     it is available. Without it every match counts, which errs toward READING a
-    baton -- and an unverifiable baton closes nothing, so that error is a no-op,
+    baton -- and a malformed baton closes nothing, so that error is a no-op,
     never a broadening.
     """
     module = _load_lineage()
@@ -537,72 +520,29 @@ def baton_declared(line: str) -> bool:
     return bool(_outside_code_spans(line, BATON_MARKER_RE))
 
 
-def _one_value(line: str, regex, field: str):
-    """(value, problem) for a field that may appear at most once."""
-    values = {m.group(1).strip() for m in _outside_code_spans(line, regex)}
-    values.discard("")
-    if len(values) > 1:
-        return "", (f"names more than one `{field}:` ("
-                    + ", ".join(sorted(values)) + ")")
-    return (values.pop() if values else ""), ""
-
-
 def parse_baton(line: str):
-    """(holder_as_written, grant_ref, problem) for a baton row.
-
-    `problem` is "" when the row is well-formed. Identity and the grant are
-    NOT checked here -- they need the vocabulary and the rows above.
-    """
-    holder, problem = _one_value(line, BATON_FROM_RE, "baton-from")
-    if problem:
-        return holder, "", problem
-    if not holder:
-        return "", "", ("declares `baton-from:` but names no holder in "
-                        "backticks")
-    ref, problem = _one_value(line, BATON_GRANT_RE, "grant")
-    if problem:
-        return holder, "", problem
-    if not ref:
-        return holder, "", ("carries no authority: a baton needs `grant: "
-                            "<timestamp of the grant NOTE>`")
-    if not BATON_REF_RE.match(ref):
-        return holder, ref, (
-            f"its grant `{ref}` is free text, not a reference. Authority is the "
-            "TIMESTAMP of an earlier grant NOTE (e.g. `2026-10-01T12:00:00Z`), "
-            "which the reader resolves and checks")
-    return holder, ref, ""
-
-
-def baton_identity_problem(signer: str, holder: str):
-    """("", holder_key) when both are registered peers, else (problem, "")."""
-    module = _load_lineage()
-    if module is None:
-        return ("the identity vocabulary is unavailable, so neither the signer "
-                "nor the holder can be verified as a peer"), ""
-    vocab = module.load_vocabulary()
-    if module.canonical_identity(signer, vocab) is None:
-        return (f"the signer `{signer}` is not a registered identity in "
-                "pmoves/config/identity_vocabulary.yaml"), ""
-    holder_key = module.canonical_identity(holder, vocab)
-    if holder_key is None:
-        return (f"the holder `{holder}` is not a registered identity in "
-                "pmoves/config/identity_vocabulary.yaml"), ""
-    return "", holder_key
+    """(holder_as_written, problem) for a `baton-from:` row."""
+    holders = {m.group(1).strip() for m in _outside_code_spans(line, BATON_FROM_RE)}
+    holders.discard("")
+    if len(holders) > 1:
+        return "", ("names more than one `baton-from:` holder ("
+                    + ", ".join(sorted(holders)) + ")")
+    if not holders:
+        return "", "declares `baton-from:` but names no holder in backticks"
+    return holders.pop(), ""
 
 
 def declared_lanes(line: str) -> set:
-    """Lanes a baton or grant row DECLARES with `branch:` -- and nothing else.
+    """Lanes a `baton-from:` row DECLARES with `branch:` -- and nothing else.
 
     NOT lanes_in(). That also infers every backticked branch-shaped token in
-    the prose, so a grant reading "passing `feat/a`; I am KEEPING `fix/b`"
-    authorised a baton on `fix/b` (found in review of #3242). The legacy
-    RELEASE reading keeps lanes_in() for its history; these are new row types
-    with none. Several lanes means several `branch:` markers on the row.
-    Field values are removed first so a branch-shaped holder or reference
-    cannot become a lane.
+    the prose, so a row reading "passing `feat/a`; I am KEEPING `fix/b`" would
+    close `fix/b` too (found in review of #3242). The legacy RELEASE reading
+    keeps lanes_in() for its history; a baton row is a new row type with none.
+    Several lanes means several `branch:` markers on the row. The holder value
+    is removed first so a branch-shaped holder string cannot become a lane.
     """
-    for regex in (BATON_FROM_RE, BATON_TO_RE, BATON_GRANT_RE):
-        line = regex.sub(" ", line)
+    line = BATON_FROM_RE.sub(" ", line)
     return {m.group(1).strip()
             for m in _outside_code_spans(line, DECLARED_LANE_RE)
             if m.group(1).strip()}
@@ -624,121 +564,97 @@ def real_row_heads(lines) -> list:
     return heads
 
 
-def resolve_grant(heads, lines, before: int, ref: str):
-    """(index, row) of the ONE grant NOTE stamped `ref` above line `before`.
+def _close_participant_rows(open_claims, lineno, signer, signer_key, lanes,
+                            holder_key, peer_closes):
+    """Close every open row on `lanes` that this release may close.
 
-    Returns (-1, problem) when there is none or more than one. Only real row
-    heads ABOVE the baton are searched, so a grant filed after the baton, quoted
-    in a fence, or nested under another row can never authorise it. (ts, kind)
-    is not unique in this register (identity_lineage.py:447-449 says so for
-    corrections); two grant NOTEs with one timestamp are refused, not guessed.
+    A row is closed when it is the signer's own, when its participants include
+    the signer (co-owners), or when its owner is the `baton-from:` holder.
+    Returns the lanes closed on the holder's rows (empty when no holder).
     """
-    hits = [i for i in range(min(before, len(heads)))
-            if heads[i] is not None and heads[i].group(1) == ref
-            and heads[i].group(2).upper() in BATON_GRANT_KINDS]
-    if not hits:
-        return -1, (f"its grant `{ref}` resolves to no NOTE row ABOVE it in the "
-                    "register (dangling, filed after the baton, or only quoted "
-                    "in a fence or a nested bullet)")
-    if len(hits) > 1:
-        return -1, (f"its grant `{ref}` matches {len(hits)} NOTE rows (lines "
-                    + ", ".join(str(i + 1) for i in hits) + "); ambiguous")
-    return hits[0], lines[hits[0]]
+    holder_closed = set()
+    for owner_key in list(open_claims):
+        kept = []
+        for ln, row_lanes, raw, participants in open_claims[owner_key]:
+            hit = row_lanes & lanes
+            if owner_key == signer_key:
+                via = ""
+            elif holder_key and owner_key == holder_key:
+                via = "baton-from"
+            elif signer_key in participants:
+                via = "co-owner"
+            else:
+                hit = set()
+            if hit:
+                if owner_key == holder_key:
+                    holder_closed |= hit
+                if via:
+                    peer_closes.append(PeerClose(lineno, signer, owner_key,
+                                                 raw, ln, hit, via))
+            rest = row_lanes - hit
+            if owner_key == signer_key:
+                # The signer's own rows exactly as before this change: a row
+                # left with no lane is dropped -- INCLUDING an unkeyed claim
+                # that named no lane at all, which any named release by its
+                # owner has always closed.
+                if rest:
+                    kept.append((ln, rest, raw, participants))
+            elif rest or not hit:
+                kept.append((ln, rest if hit else row_lanes, raw, participants))
+        if kept:
+            open_claims[owner_key] = kept
+        else:
+            open_claims.pop(owner_key, None)
+    return holder_closed
 
 
-def grant_problem(grant_head, grant: str, signer_key: str, holder_key: str,
-                  lanes: set, baton_ts: str, ref: str) -> str:
-    """Why `grant` does not authorise this baton, or "" when it does."""
-    module = _load_lineage()
-    vocab = module.load_vocabulary()
-    grantor = module.canonical_identity(grant_head.group(3), vocab)
-    operators = baton_operator_identities()
-    if grantor != holder_key and grantor not in operators:
-        return (f"its grant `{ref}` is signed by `{grant_head.group(3)}`, which "
-                "is neither the holder nor an operator identity ("
-                + (", ".join(sorted(operators)) or "none readable") + ")")
-    named_holder, problem = _one_value(grant, BATON_FROM_RE, "baton-from")
-    if problem:
-        return f"its grant `{ref}` {problem}"
-    if named_holder:
-        if module.canonical_identity(named_holder, vocab) != holder_key:
-            return (f"its grant `{ref}` passes lanes of `{named_holder}`, not "
-                    "of this baton's holder")
-    elif grantor != holder_key:
-        return (f"its grant `{ref}` names no `baton-from:` holder; a grant not "
-                "signed by the holder must say whose lane it passes")
-    receiver, problem = _one_value(grant, BATON_TO_RE, "baton-to")
-    if problem:
-        return f"its grant `{ref}` {problem}"
-    if not receiver:
-        return f"its grant `{ref}` names no `baton-to:` receiving identity"
-    if module.canonical_identity(receiver, vocab) != signer_key:
-        return (f"its grant `{ref}` passes the baton to `{receiver}`, not to "
-                "this row's signer")
-    ungranted = lanes - declared_lanes(grant)
-    if ungranted:
-        return (f"its grant `{ref}` does not declare "
-                + ", ".join(f"`branch: {x}`" for x in sorted(ungranted)))
-    if grant_head.group(1) > baton_ts:
-        return (f"its grant `{ref}` is stamped AFTER the baton row "
-                f"(`{baton_ts}`)")
-    return ""
-
-
-def _apply_baton(open_claims: dict, lineno: int, line: str, lines, heads):
-    """Close the holder's open rows on the named lanes. Returns a BatonEvent."""
+def _apply_baton(open_claims, lineno, line, heads, peer_closes):
+    """A `baton-from:` RELEASE. Returns a BatonEvent; closes nothing if malformed."""
     head = heads[lineno - 1]
     signer = head.group(3) if head else (RELEASE_RE.search(line) or [None, ""])[1]
-    holder, ref, problem = parse_baton(line)
-    event = BatonEvent(lineno, signer, holder=holder, grant_ref=ref)
-    # Recorded even when the row is refused, so a reader can say WHICH lane a
-    # refused baton was aimed at (register-status's BRANCH= probe needs it).
+    holder, problem = parse_baton(line)
+    event = BatonEvent(lineno, signer, holder=holder)
     event.lanes = declared_lanes(line)
     if head is None or head.group(2).upper() != "RELEASE":
         # A REVIEW row whose prose reads `RELEASE X ... baton-from:`, a headless
-        # continuation line, a fenced or nested example: none is a baton signed
-        # by X. Without a real head there is also no timestamp to hold the
-        # grant against, so the not-later-than check could not run.
+        # continuation line, a fenced or nested example: none is a release
+        # filed by X.
         problem = ("is not a ledger RELEASE row (a baton must be its own "
                    "RELEASE row: bullet at column 0, timestamp, outside any "
                    "fence)")
-    if not problem:
-        problem, event.holder_key = baton_identity_problem(signer, holder)
-    if not problem:
-        if not event.lanes:
-            problem = ("declares no lane. A baton passes lanes NAMED with "
-                       "`branch:`; there is no bare baton that closes "
-                       "everything a peer holds")
-    if not problem:
-        idx, grant = resolve_grant(heads, lines, lineno - 1, ref)
-        if idx < 0:
-            problem = grant
-        else:
-            event.grant_line = idx + 1
-            problem = grant_problem(heads[idx], grant, canonical_owner(signer),
-                                    event.holder_key, event.lanes,
-                                    head.group(1), ref)
+    if not problem and not event.lanes:
+        problem = ("declares no lane. A baton passes lanes NAMED with "
+                   "`branch:`; there is no bare baton that closes everything "
+                   "a peer holds")
     if problem:
         event.problem = problem
         return event
-    rows = open_claims.get(event.holder_key, [])
-    held = set().union(*(r[1] for r in rows)) if rows else set()
-    event.closed = event.lanes & held
+    event.holder_key = canonical_owner(holder)
+    held = set().union(*(r[1] for r in open_claims.get(event.holder_key, [])))
+    event.closed = _close_participant_rows(
+        open_claims, lineno, signer, canonical_owner(signer), event.lanes,
+        event.holder_key, peer_closes)
     event.not_held = event.lanes - held
-    kept = [(ln, lanes - event.lanes, raw, participants)
-            for ln, lanes, raw, participants in rows
-            if lanes - event.lanes]
-    if kept:
-        open_claims[event.holder_key] = kept
-    else:
-        open_claims.pop(event.holder_key, None)
     return event
+
+
+def _mark_heard_from(lines, peer_closes) -> None:
+    """Set PeerClose.heard_from: has the owner filed any row after the release?"""
+    if not peer_closes:
+        return
+    last = {}
+    for lineno, line in enumerate(lines, start=1):
+        m = _ANY_HEAD_RE.match(line)
+        if m:
+            last[canonical_owner(m.group(1))] = lineno
+    for pc in peer_closes:
+        pc.heard_from = last.get(pc.owner_key, 0) > pc.release_line
 
 
 def open_claims_in(text: str) -> dict:
     """Map canonical owner -> LIST of (line, lanes, as-written, participants).
 
-    The open-lane half of `_pair_register()`, the register's ONE pairing
+    The open-lane part of `_pair_register()`, the register's ONE pairing
     implementation. `register_status`, `register_append` and this hook all read
     lane state through here, so there is no second pairing to drift from it.
     """
@@ -746,16 +662,17 @@ def open_claims_in(text: str) -> dict:
 
 
 def baton_events_in(text: str) -> list:
-    """Every baton RELEASE in the register, as BatonEvents, in file order.
-
-    The other half of `_pair_register()`: what each baton row closed and, for a
-    refused or no-op baton, why it closed nothing.
-    """
+    """Every `baton-from:` RELEASE in the register, as BatonEvents, in file order."""
     return _pair_register(text)[1]
 
 
+def peer_closes_in(text: str) -> list:
+    """Every open row a RELEASE closed on behalf of ANOTHER owner, in file order."""
+    return _pair_register(text)[2]
+
+
 def _pair_register(text: str):
-    """(open claims, baton events). THE pairing; every reader goes through it.
+    """(open claims, baton events, peer closes). THE pairing; every reader uses it.
 
     Open claims map canonical owner -> LIST of (line, lanes, as-written,
     participants). A LIST, not a single tuple. Keying one claim per owner
@@ -785,6 +702,7 @@ def _pair_register(text: str):
     """
     open_claims = {}
     batons = []
+    peer_closes = []
     lines = text.split("\n")
     heads = None  # computed on the first baton row only; most reads have none
     for lineno, line in enumerate(lines, start=1):
@@ -806,42 +724,39 @@ def _pair_register(text: str):
             continue
         m = RELEASE_RE.search(line)
         if m and baton_declared(line):
-            # A BATON row closes the NAMED holder's rows on the NAMED lanes and
-            # nothing else -- never the signer's own, and never by falling back
-            # to an ordinary release when the baton is malformed.
+            # A `baton-from:` row closes the NAMED holder's rows on the
+            # DECLARED lanes (plus every other participant row on them), and
+            # a malformed one closes nothing -- never an ordinary release.
             if heads is None:
                 heads = real_row_heads(lines)
-            batons.append(_apply_baton(open_claims, lineno, line, lines, heads))
+            batons.append(_apply_baton(open_claims, lineno, line, heads,
+                                       peer_closes))
             continue
         if m:
-            # Pairing stays on the SIGNING owner, deliberately. A co-owner is
-            # declared as having worked the lane, not as having authority to
-            # close someone else's claim -- letting a co-worker's RELEASE close
-            # the primary's lane would make the field a way to release work you
-            # do not own. Attribution and authority are different powers. The
-            # sanctioned way to close a peer's lane is the BATON above, which
-            # carries its authority on the row instead of inferring it.
+            # Pairing is on PARTICIPANTS of the named lane, per the accords
+            # (AGNOTE4482.md:1709-1713 "Shared lanes are the point ... Rows
+            # are reversible adsorptions"; KRISS_KROSS_ACCORD.md:12 "unless
+            # explicit overlay handoff is recorded" -- the release row IS that
+            # record). It used to stay on the signing owner alone, a rule
+            # introduced with the co-owners field (ad63bb8c5, #2858) that cites
+            # no accord. See WHO A RELEASE CLOSES above.
             owner = canonical_owner(m.group(1))
             released = lanes_in(line)
             if not released:
                 # A BARE release closes everything that owner holds. 99 of
                 # the register's 120 RELEASE lines name no branch, so this
                 # is the convention, not a guess -- a bare release is a
-                # full handoff.
+                # full handoff. It names no lane, so it reaches no one
+                # else's shared row.
                 open_claims.pop(owner, None)
             else:
-                # A release that NAMES lanes closes only those. Anything
-                # else the owner still holds stays held.
-                kept = [
-                    (ln, lanes - released, raw, participants)
-                    for ln, lanes, raw, participants in open_claims.get(owner, [])
-                    if lanes - released
-                ]
-                if kept:
-                    open_claims[owner] = kept
-                else:
-                    open_claims.pop(owner, None)
-    return open_claims, batons
+                # A release that NAMES lanes closes those lanes on the
+                # signer's own rows and on every row that declares the
+                # signer a co-owner. Anything else stays held.
+                _close_participant_rows(open_claims, lineno, m.group(1), owner,
+                                        released, "", peer_closes)
+    _mark_heard_from(lines, peer_closes)
+    return open_claims, batons, peer_closes
 
 
 # --------------------------------------------------------------------------

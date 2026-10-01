@@ -376,6 +376,24 @@ def report_batons(events, out, code: int) -> int:
     return code if code == EXIT_UNMEASURED else EXIT_FINDINGS
 
 
+def report_peer_closes(peer_closes, out, everyone: bool) -> None:
+    """Rows a release closed on behalf of ANOTHER owner. Shown, never scored.
+
+    Per the accords a release closes a shared lane for every participant
+    (AGNOTE4482.md:1709-1713, KRISS_KROSS_ACCORD.md:12), and that is a
+    reversible adsorption: the owner re-claiming supersedes it. The honest
+    record is who released it, on whose behalf, and whether the owner has been
+    heard from since. In the listing, only owners NOT heard from are shown --
+    the ones who may not know; a BRANCH= probe shows every one on that lane.
+    """
+    shown = [pc for pc in peer_closes if everyone or not pc.heard_from]
+    if not shown:
+        return
+    out.write(f"\nCLOSED ON BEHALF OF A PEER ({len(shown)})\n")
+    for pc in shown:
+        out.write(f"  {pc}\n")
+
+
 def _matching(lanes, branch):
     """Every open row that names `branch`. One definition, because the report
     and the JSON have to be talking about the same rows -- a second copy of
@@ -449,7 +467,8 @@ def report_branch(verdict, branch, owner_given, lanes, now, out) -> int:
     return EXIT_CLEAN
 
 
-def _json_payload(lanes, register, now, branch, verdict, code, batons=()):
+def _json_payload(lanes, register, now, branch, verdict, code, batons=(),
+                  peer_closes=()):
     payload = {
         "register": str(register),
         "read_at": _iso(now),
@@ -467,6 +486,9 @@ def _json_payload(lanes, register, now, branch, verdict, code, batons=()):
         # what it closed or why it closed nothing. Without this a consumer got
         # exit 1 from a refused baton and nothing in the payload explaining it.
         "batons": [e.as_dict() for e in batons],
+        # Rows closed by a release filed under ANOTHER identity -- shown, not
+        # scored (in BRANCH= mode, those on that lane).
+        "peer_closes": [pc.as_dict() for pc in peer_closes],
     }
     if branch:
         payload["branch"] = {
@@ -550,6 +572,7 @@ def main(argv=None) -> int:
 
     lanes = collect(text, gate, append_mod, postdate_mod, now)
     batons = gate.baton_events_in(text)
+    peer_closes = gate.peer_closes_in(text)
 
     # With --json the human report goes to stderr so stdout stays parseable.
     prose = sys.stderr if args.json else sys.stdout
@@ -567,14 +590,17 @@ def main(argv=None) -> int:
         # already reports as HELD; a no-op baton on a FREE lane must not turn
         # FREE into exit 1 (found in delta review of #3242).
         batons = [e for e in batons if args.branch in e.lanes]
+        peer_closes = [pc for pc in peer_closes if args.branch in pc.lanes]
         report_batons(batons, prose, code)
+        report_peer_closes(peer_closes, prose, everyone=True)
     else:
         code = report_listing(lanes, register, now, prose)
         code = report_batons(batons, prose, code)
+        report_peer_closes(peer_closes, prose, everyone=False)
 
     if args.json:
         json.dump(_json_payload(lanes, register, now, args.branch, verdict,
-                                code, batons), sys.stdout, indent=2)
+                                code, batons, peer_closes), sys.stdout, indent=2)
         sys.stdout.write("\n")
     return code
 
