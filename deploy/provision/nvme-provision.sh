@@ -52,10 +52,17 @@ log() { echo "[nvme-provision] $*"; }
 [[ $EUID -ne 0 ]] && err "Must run as root"
 [[ -b "$DEVICE" ]] || err "Not a block device: $DEVICE"
 
-ROOT_DISK=$(findmnt -n -o SOURCE / | sed 's/[0-9]*$//' | sed 's/p$//')
-case "$DEVICE" in
-  "$ROOT_DISK"|"$ROOT_DISK"*) err "$DEVICE hosts the running root filesystem ($ROOT_DISK) — refusing" ;;
-esac
+# Walk from the root filesystem's source up to the whole disk(s) backing it, so
+# btrfs subvolume sources (/dev/nvme0n1p2[/@], Omarchy's default), LVM and LUKS
+# all resolve. Stripping digits off the SOURCE string did not. Fail closed when
+# the walk finds no disk: this script destroys data.
+ROOT_SRC=$(findmnt -n -o SOURCE / | sed 's/\[.*\]$//')
+ROOT_DISKS=$(lsblk -nlsp -o NAME,TYPE "$ROOT_SRC" 2>/dev/null | awk '$2=="disk"{print $1}')
+[[ -n "$ROOT_DISKS" ]] || err "could not resolve the disk backing / (source: $ROOT_SRC) — refusing"
+DEVICE_REAL=$(readlink -f "$DEVICE")
+for disk in $ROOT_DISKS; do
+  [[ "$DEVICE_REAL" = "$(readlink -f "$disk")" ]] && err "$DEVICE hosts the running root filesystem ($disk) — refusing"
+done
 
 if lsblk -no TYPE "$DEVICE" | grep -q part; then
   # One exception: exactly one partition with NO filesystem = an interrupted
@@ -99,7 +106,7 @@ for _ in 1 2 3 4 5 6 7 8 9 10; do
 done
 if [ ! -b "$PART" ]; then
   PART="${DEVICE}1"
-  [ -b "$PART" ] || err "partition device did not appear after partitioning ($DEVICEp1) — check dmesg"
+  [ -b "$PART" ] || err "partition device did not appear after partitioning (${DEVICE}p1) — check dmesg"
 fi
 log "Using partition device $PART"
 
@@ -116,14 +123,17 @@ UUID=$(blkid -s UUID -o value "$PART")
 [[ -n "$UUID" ]] || err "could not read UUID from $PART"
 
 mkdir -p "$MOUNT"
-if grep -q " $MOUNT " /etc/fstab; then
+# Match the mount-point FIELD, not " $MOUNT " — fstab is often tab-separated.
+if awk -v m="$MOUNT" '$1 !~ /^#/ && $2 == m {found=1} END {exit !found}' /etc/fstab; then
   log "fstab entry for $MOUNT already present — leaving untouched"
 else
   echo "UUID=$UUID  $MOUNT  ext4  defaults,nofail  0  2" >> /etc/fstab
   log "added fstab entry: $MOUNT (UUID=$UUID, nofail)"
 fi
 
-mount -a
+# Mount only this entry: `mount -a` also mounts every unrelated fstab line, and
+# any one failure there would abort this script under set -e.
+findmnt -n "$MOUNT" >/dev/null || mount "$MOUNT"
 findmnt -n "$MOUNT" >/dev/null || err "$MOUNT did not mount — check fstab and dmesg"
 
 OWNER="${SUDO_USER:-$USER}"

@@ -63,38 +63,56 @@ operator-approved).
 
 ### Findings during stack bring-up (2026-09-22 ~19:00-20:00)
 
-5. **Dead image pins on main block cold bootstrap of the core overlay:**
-   - `supabase/studio:2026.08.03-sha-022b374` — pruned from Docker Hub (weekly
-     tag churn). Repinned in this lane to `2026.06.03-sha-0bca601` (the
-     running-known-good on B850, verified present upstream).
-   - `minio/minio` — **the entire Docker Hub repository is deleted** (EOL
-     executed; tags API 404s). Identical release verified live on
-     `quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z`; default registry
-     repinned in-lane. This is also why MinIO had been down on this node.
+5. **Image pins that failed to pull during bring-up:**
+   - `supabase/studio:2026.08.03-sha-022b374` failed to pull on 2026-09-22 and
+     was first read as "pruned from Docker Hub". **That was wrong:** on
+     2026-10-01 the tag resolves (`docker manifest inspect` rc=0, Hub tags API
+     200). The failed pull fits this node's known exit-node egress fault, not
+     tag deletion. The lane's downgrade to `2026.06.03-sha-0bca601` was
+     **dropped in review**; main's pin stands. (B850 still RUNS the 06.03 image
+     it already had; a recreate would move it to main's pin.)
+   - `minio/minio`: the Docker Hub repository is deleted. The lane first
+     repinned to `quay.io/minio/minio`, but main later measured Quay as 401
+     anonymously (2026-09-26) and moved to a locally built
+     `ghcr.io/powerfulmoves/pmoves-minio:RELEASE.2025-09-07T16-13-09Z-src`
+     (#3192). The rebased lane keeps **main's** pin and carries no MinIO change.
+     The Quay pin is what brought MinIO back on this node on 2026-09-22.
 6. **JuiceFS write failures were three stacked faults**, not one: (a) the
    `juicefs_meta` role password rotated in-place under the 2-day-old mount;
    (b) the block-store backend (`minio:9000` = the JuiceFS S3 gateway /
    MinIO service) was entirely down; (c) host-network mounts cannot resolve
    in-network service names. Fixes: role password reset to the canonical CHIT
-   value (verified), MinIO repinned to Quay + gateway stack restarted, mount
+   value (verified), MinIO started from the Quay image (node-local, since
+   superseded on main, see 5) + gateway stack restarted, mount
    recreated on the docker network with NVMe1 cache backing.
 7. **Supabase fork dependabot wave**: 13/15 PRs landed (admin squash under
    strict linear-history protection, operator-directed); #13 + #30 remain
    CONFLICTING after `@dependabot rebase` requests — pending dependabot's
-   rebase; close before promoting the fork gitlink.
+   rebase; close before promoting the fork gitlink. The gitlink promotion
+   (10451c28a -> 511f6118f, an 848-commit upstream sync that also changes the
+   edge-functions code bind-mounted from the root checkout) was **removed from
+   this lane in review** and belongs in its own lane.
 
 ### Durability pass — verified against JuiceFS upstream docs (2026-09-22 ~20:00)
 
-The mount now reproduces from a PLAIN `make juicefs-cross-node-setup
-JUICEFS_HOST=supabase-db` with zero session knowledge, verified end-to-end
-after three script hardenings (all in both the lane worktree and the node
-checkout, destined for the lane PR):
+On B850 the mount reproduces from a plain `make juicefs-cross-node-setup
+JUICEFS_HOST=supabase-db`, verified end-to-end on 2026-09-22. That run relied
+on node-local state in the gitignored `pmoves/.env.local` (listed below,
+including `META_ROLE=juicefs_meta`), so it was **not** a zero-knowledge
+reproduction. Review of the lane PR found the original pairing rule dead (a
+default was assigned before the rule could see "no role named") and the make
+recipe defeating it a second time. Both are fixed, and the rule is now covered
+by `pmoves/tests/scripts/test_juicefs_cross_node_role_pairing.py`. A fresh
+clone still needs the node shape (`JUICEFS_NETWORK`, `JUICEFS_NAME`, cache dir)
+from `.env.local`. The script hardenings:
 
 - **Role/credential pairing** (`scripts/juicefs-cross-node-setup.sh`): the
   fallback credential IS `juicefs_meta`'s password; when it arrives via
-  `JUICEFS_META_PASSWORD` and no role was named, `META_ROLE` now pairs
-  automatically. Previously the script defaulted `supabase_admin` and the
-  mismatched pair always failed auth.
+  `JUICEFS_META_PASSWORD` (no explicit `DB_PASS`) and no role was named (unset
+  or empty), `META_ROLE` resolves to `juicefs_meta`; a named role always wins.
+  Previously the script defaulted `supabase_admin` and the mismatched pair
+  always failed auth. The test proves the script-level rule and the recipe's
+  forwarding shape; it does not exercise a live mount.
 - **Preflight diagnostics**: the storage probe used to die silently
   (`2>/dev/null` + `set -euo pipefail`) before printing anything. It now
   captures both streams, redacts the credential, and prints the real error.
@@ -105,7 +123,12 @@ checkout, destined for the lane PR):
   docker's misleading "mkdir: file exists".
 - **Recipe env plumbing** (`mk/egress.mk`): the target dropped its forced
   `META_ROLE=supabase_admin` default and now runs the script under
-  `scripts/with-env.sh`, so node-shape vars resolve from `.env.local`.
+  `scripts/with-env.sh`, so node-shape vars resolve from `.env.local`. Because
+  with-env.sh re-sources `.env.local` over the caller's environment, values
+  named on the make command line are forwarded as `JFS_SETUP_META_ROLE` /
+  `JFS_SETUP_DB_PASS` (names no env file sets) so the node file cannot silently
+  replace them, and the recipe no longer resolves the funnel fallback into
+  `DB_PASS` itself (that made every run look like an explicit `DB_PASS`).
 - **Node shape in `pmoves/.env.local`** (gitignored, node-persistent):
   `JUICEFS_NAME=pmoves-media` (the live volume's name — the compose default
   `pmoves` fails format with "cannot update volume name"),

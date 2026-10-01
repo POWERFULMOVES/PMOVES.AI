@@ -31,6 +31,13 @@ DB_PORT="${DB_PORT:-5432}"
 # received it via the secrets pipeline can just run with META_ROLE=juicefs_meta and no
 # explicit DB_PASS. Neither is ever inlined on a command line: both arrive via the
 # environment and are handed to JuiceFS as META_PASSWORD, so they never appear in `ps`.
+#
+# `make juicefs-cross-node-setup` runs this under scripts/with-env.sh, which
+# re-sources the node's env files (including .env.local) OVER the caller's
+# environment. A META_ROLE/DB_PASS named on the make command line would be
+# silently replaced by the node file, so make forwards them as JFS_SETUP_*,
+# names no env file sets, and they win here.
+DB_PASS="${JFS_SETUP_DB_PASS:-${DB_PASS:-}}"
 DB_PASS_EXPLICIT="${DB_PASS:+set}"
 DB_PASS="${DB_PASS:-${JUICEFS_META_PASSWORD:-}}"
 # Metadata DSN role. Default supabase_admin for back-compat. Switch to juicefs_meta once
@@ -39,17 +46,26 @@ DB_PASS="${DB_PASS:-${JUICEFS_META_PASSWORD:-}}"
 # docs/handoffs/juicefs-meta-scoped-role-and-tailnet-exposure-2026-08-18.md, and it is what
 # shrinks the cross-node auth surface from a full superuser to DML on one schema (the point
 # of the whole lane). DB_PASS must be that role's password when META_ROLE=juicefs_meta.
-META_ROLE="${META_ROLE:-supabase_admin}"
+#
 # Pairing rule (B850 2026-09-22): the fallback credential IS juicefs_meta's
-# password. When DB_PASS arrived via that fallback and no role was named, the
-# role must match the credential — supabase_admin + JUICEFS_META_PASSWORD
-# always fails auth, and before this fix the failed preflight probe died
-# silently (2>/dev/null + set -e pipefail) with zero diagnostics.
-if [ -z "$DB_PASS_EXPLICIT" ] && [ -n "${JUICEFS_META_PASSWORD:-}" ] && [ -z "${META_ROLE_EXPLICIT:-}" ] && [ -z "${META_ROLE:-}" ]; then
-    META_ROLE=juicefs_meta
+# password, so when DB_PASS arrived via that fallback and no role was named, the
+# role must match the credential — supabase_admin + JUICEFS_META_PASSWORD always
+# fails auth. The rule MUST run before any default is assigned: an earlier
+# version defaulted META_ROLE first, so "no role named" could never be observed
+# and the rule was dead (pmoves/tests/scripts/test_juicefs_cross_node_role_pairing.py).
+# An empty META_ROLE counts as "not named".
+META_ROLE="${JFS_SETUP_META_ROLE:-${META_ROLE:-}}"
+if [ -z "$META_ROLE" ]; then
+    if [ -z "$DB_PASS_EXPLICIT" ] && [ -n "${JUICEFS_META_PASSWORD:-}" ]; then
+        META_ROLE=juicefs_meta
+    else
+        META_ROLE=supabase_admin
+    fi
 fi
 MOUNT_POINT="${MOUNT_POINT:-$HOME/pmoves-fs}"
-DATA_DIR="${DATA_DIR:-$HOME/.local/share/juicefs-data}"
+# JUICEFS_DATA_DIR is the name `make juicefs-mount-local` reads; accept it here
+# too so one knob moves the cache backing dir on either path.
+DATA_DIR="${DATA_DIR:-${JUICEFS_DATA_DIR:-$HOME/.local/share/juicefs-data}}"
 # Escape hatch for the storage preflight, e.g. when deliberately standing up a
 # node-local FS rather than joining the shared one.
 ALLOW_FILE_STORAGE="${ALLOW_FILE_STORAGE:-0}"
@@ -68,7 +84,10 @@ echo "Mount: $MOUNT_POINT"
 echo ""
 
 # Create directories
-mkdir -p "$DATA_DIR" 2>/dev/null || true
+# DATA_DIR must fail loudly: a silent failure here falls through to `docker -v`,
+# which creates the directory root-owned. Only MOUNT_POINT is tolerated, because a
+# stale FUSE endpoint makes mkdir fail and the guard below diagnoses it properly.
+mkdir -p "$DATA_DIR"
 mkdir -p "$MOUNT_POINT" 2>/dev/null || true
 
 # Stale-endpoint guard (B850 2026-09-22): a killed mount container leaves the
@@ -111,7 +130,7 @@ PREFLIGHT_OUT="$(META_PASSWORD="$DB_PASS" docker run --rm --network "${JUICEFS_N
 STORAGE="$(printf '%s\n' "$PREFLIGHT_OUT" | sed -n 's/.*"Storage"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)"
 if [ -z "$STORAGE" ]; then
     echo "ERROR: storage preflight probe produced no Storage field. Probe output (credential redacted):"
-    printf '%s\n' "$PREFLIGHT_OUT" | grep -v -- "$DB_PASS" | sed 's/^/  | /' >&2
+    printf '%s\n' "$PREFLIGHT_OUT" | grep -vF -- "$DB_PASS" | sed 's/^/  | /' >&2
     exit 1
 fi
 

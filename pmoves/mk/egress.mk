@@ -322,13 +322,20 @@ juicefs-cross-node-setup: ## Mount JuiceFS on this node (run on remote): make ju
 	@# REJECTS supabase_admin from the tailnet (#2702), so that default fails.
 	@#
 	@# Password precedence: explicit DB_PASS, else the funnel-delivered
-	@# JUICEFS_META_PASSWORD, resolved AT RECIPE TIME through scripts/with-env.sh —
-	@# the canonical loader (env.shared* -> tier files -> .env* overlays, mirroring
-	@# compose layering). It cannot be $$(JUICEFS_META_PASSWORD): make populates its
-	@# variables only from the environment and Makefiles, and nothing includes the
-	@# generated tier files, so a make-variable reference is empty on exactly the
-	@# nodes the funnel just delivered to. Same idiom as mk/yt-cookies.mk:18, and
-	@# the lesson infra.mk:603 already records as a prior Codex P1.
+	@# JUICEFS_META_PASSWORD. The script runs under scripts/with-env.sh — the
+	@# canonical loader (env.shared* -> tier files -> .env* overlays, mirroring
+	@# compose layering) — so the funnel value reaches it as JUICEFS_META_PASSWORD
+	@# and node shape (JUICEFS_NETWORK, DATA_DIR, ...) resolves from .env.local.
+	@# It cannot be $$(JUICEFS_META_PASSWORD): make populates its variables only
+	@# from the environment and Makefiles, and nothing includes the generated tier
+	@# files. Same idiom as mk/yt-cookies.mk:18 and the lesson at infra.mk:603.
+	@#
+	@# This recipe must NOT resolve the fallback into DB_PASS itself: an always-
+	@# non-empty DB_PASS reads as "explicit" to the script, which disables its
+	@# role/credential pairing rule. Only what the operator named on the command
+	@# line is forwarded, as JFS_SETUP_*, because with-env.sh re-sources the node's
+	@# env files over the caller's environment and would silently replace a plain
+	@# META_ROLE/DB_PASS. Empty means "not named".
 	@#
 	@# DB_PASS passes as the sub-process ENVIRONMENT, not argv, and is handed to
 	@# JuiceFS via META_PASSWORD, so it never appears in `ps`. Passing it as
@@ -336,8 +343,7 @@ juicefs-cross-node-setup: ## Mount JuiceFS on this node (run on remote): make ju
 	@#
 	@# No $(error) here: the script already fails with a better message that names
 	@# both DB_PASS and the funnel path.
-	@JUICEFS_HOST=$(JUICEFS_HOST) META_ROLE=$(META_ROLE) \
-	  DB_PASS="$(or $(DB_PASS),$$(bash scripts/with-env.sh printenv JUICEFS_META_PASSWORD 2>/dev/null || true))" \
+	@JUICEFS_HOST=$(JUICEFS_HOST) JFS_SETUP_META_ROLE="$(META_ROLE)" JFS_SETUP_DB_PASS="$(DB_PASS)" \
 	  bash scripts/with-env.sh scripts/juicefs-cross-node-setup.sh
 
 # The check that would have caught the cross-node blocker months earlier. Storage is
@@ -377,9 +383,10 @@ juicefs-mount-local: ## Start JuiceFS mount on this node (local Supabase DB)
 	@echo "Starting JuiceFS mount (local DB)..."
 	$(eval JFS_HOST_HOME := $(HOME))
 	$(eval JFS_MOUNT_POINT := $(JFS_HOST_HOME)/pmoves-fs)
-	# Nodes with a dedicated cache drive (e.g. knuckles NVMe seat) override the
-	# cache backing dir via `make juicefs-mount-local JUICEFS_DATA_DIR=/mnt/...`;
-	# cache bounds then auto-scale to that drive's free space.
+	@# Nodes with a dedicated cache drive (e.g. knuckles NVMe seat) override the
+	@# cache backing dir via `make juicefs-mount-local JUICEFS_DATA_DIR=/mnt/...`;
+	@# cache bounds then auto-scale to that drive's free space. The cross-node
+	@# script accepts the same JUICEFS_DATA_DIR name (alongside its DATA_DIR).
 	$(eval JUICEFS_DATA_DIR ?= $(JFS_HOST_HOME)/.local/share/juicefs-data)
 	@mkdir -p "$(JFS_MOUNT_POINT)" "$(JUICEFS_DATA_DIR)"
 	@test -n "$(SUPABASE_DB_PASSWORD)" || { echo "ERROR: SUPABASE_DB_PASSWORD not set — source it from the CHIT secrets pipeline"; exit 1; }
