@@ -194,7 +194,10 @@ check_neo4j_auth() {
 
   if [[ -n "${NEO4J_PASSWORD:-}" ]]; then
     local authed
-    authed=$(curl -s --max-time 5 -u "neo4j:$NEO4J_PASSWORD" \
+    # The credential goes in on stdin (curl -H @-), not argv: `-u user:pass` is
+    # visible in the process table. printf is a builtin, so it never execs either.
+    authed=$(printf 'Authorization: Basic %s\n' "$(printf 'neo4j:%s' "$NEO4J_PASSWORD" | base64 | tr -d '\n')" \
+      | curl -s --max-time 5 -H @- \
       http://localhost:7474/db/neo4j/tx/commit \
       -H "Content-Type: application/json" \
       -d '{"statements":[{"statement":"RETURN 1"}]}')

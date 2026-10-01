@@ -39,7 +39,7 @@
 | NATS (4222) | Event bus for task coordination and mesh announcements | Yes |
 | Supabase PostgREST (3010) | Persistent state and context storage | Yes |
 | Cipher Memory (8105) | Agent plan/checkpoint/completion persistence | Yes |
-| Neo4j (7474) | Knowledge graph queries | Optional |
+| Neo4j (bolt 7687) | Knowledge graph queries via the seeded `neo4j` MCP server (`bolt://neo4j:7687`); that server requires APOC, see [TAC_NEO4J](TAC_NEO4J.md) | Optional |
 | Qdrant (6333) | Semantic search for agent context | Optional |
 
 ## Downstream Consumers
