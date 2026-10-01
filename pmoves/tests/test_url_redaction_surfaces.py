@@ -225,6 +225,8 @@ def test_channel_monitor_healthz(monkeypatch, tmp_path):
     monkeypatch.setenv("CHANNEL_MONITOR_CONFIG_PATH", str(tmp_path / "channel_monitor.json"))
     monkeypatch.setenv("CHANNEL_MONITOR_DATABASE_URL", DB_WITH)
     monkeypatch.setenv("CHANNEL_MONITOR_QUEUE_URL", HTTP_WITH + "/yt/ingest")
+    # main.py raises at import without NATS_URL; CI has none in its env.
+    monkeypatch.setenv("NATS_URL", NATS_WITH)
     svc = SERVICES / "channel-monitor"
     monkeypatch.syspath_prepend(str(svc))
     for mod in list(sys.modules):
