@@ -69,7 +69,7 @@ AUTH_TS = REPO_ROOT / SUBMODULE / "src" / "pmoves" / "auth.ts"
 
 # The commit these line numbers were read at. Advancing the gitlink without
 # updating this constant is the drift this file exists to catch.
-PIN = "a0ee2314a1ad5a5f3dfd27906c23686096d50f59"
+PIN = "2a45a1a0c238902af478ec58685e2e1fc187a4bf"
 
 # line -> a fragment that must appear on it. Keep in sync with the tables in
 # TAC_CIPHER.md, cipher_identity.py and the cipher-memory SKILL.
