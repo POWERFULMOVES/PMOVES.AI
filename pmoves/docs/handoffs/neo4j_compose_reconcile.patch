@@ -766,7 +766,7 @@ index 4af50d604..cdf8aab6c 100644
 +    # neo4j.conf setting (it does not exclude NEO4J_PASSWORD, which would land as
 +    # PASSWORD=<plaintext>), and the data tier file also carries MinIO, Postgres,
 +    # Meili and Qdrant secrets Neo4j never uses. NEO4J_AUTH below is interpolated
-+    # by compose from with-env.sh, not read from env_file.
++    # from compose's --env-file layering (COMPOSE_ENV_FILES), not env_file.
      cap_drop:
      - ALL
      cap_add:
@@ -844,7 +844,7 @@ index 4af50d604..cdf8aab6c 100644
 +    # neo4j.conf setting (it does not exclude NEO4J_PASSWORD, which would land as
 +    # PASSWORD=<plaintext>), and the data tier file also carries MinIO, Postgres,
 +    # Meili and Qdrant secrets Neo4j never uses. NEO4J_AUTH below is interpolated
-+    # by compose from with-env.sh, not read from env_file.
++    # from compose's --env-file layering (COMPOSE_ENV_FILES), not env_file.
      cap_drop:
      - ALL
      cap_add:
