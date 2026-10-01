@@ -5791,14 +5791,22 @@ define neo4j_apply_cypher
 	@$(LOAD_ENV_SHARED); set +e; \
 	f="$(1)"; \
 	[ -f "$$f" ] || { echo "ERROR: $$f not found" >&2; exit 1; }; \
-	[ -n "$${NEO4J_PASSWORD:-}" ] || { echo "ERROR: NEO4J_PASSWORD is not set (env.shared via with-env.sh); refusing to fall back to a default password" >&2; exit 1; }; \
+	[ -n "$${NEO4J_PASSWORD:-}" ] || { echo "ERROR: NEO4J_PASSWORD is unset or empty (env.shared via with-env.sh); refusing to fall back to a default password" >&2; exit 1; }; \
 	c=$$($(PYTHON) $(CURDIR)/scripts/neo4j_container.py) || exit 3; \
 	echo "→ Applying $$f to $$c"; \
 	NEO4J_USERNAME="$${NEO4J_USER:-neo4j}" docker exec -i -e NEO4J_USERNAME -e NEO4J_PASSWORD "$$c" cypher-shell < "$$f"
 endef
 
-neo4j-up: ## Start Neo4j (the data-tier road, neo4j only)
-	@$(MAKE) --no-print-directory up-data-tier DATA_SERVICES=neo4j
+# --no-recreate (docker compose up: "If containers already exist, don't recreate
+# them"): main's neo4j service still carries env_file and 0.0.0.0 ports, so ANY
+# config-hash drift (one rotated env.tier-data value is enough) would make a plain
+# `up -d` recreate Neo4j on that config and spend the one planned recreate of the
+# compose reconciliation (PR #3251, docs/TAC/TAC_NEO4J.md section 7). Drop the flag
+# when #3251 lands. --wait returns once the healthcheck passes.
+neo4j-up: ## Start Neo4j; never recreates an existing container (until PR #3251 lands)
+	@echo "→ neo4j-up: --no-recreate, so an existing Neo4j is started as-is, never recreated on main's pre-#3251 compose."
+	@echo "   A config change reaches Neo4j only through the reconciliation runbook (docs/TAC/TAC_NEO4J.md section 7)."
+	@$(DC) up -d --no-recreate --wait neo4j
 
 neo4j-down: ## Stop Neo4j (container kept; data volume untouched)
 	@$(DC) stop neo4j
@@ -5823,7 +5831,7 @@ neo4j-migrate: ## Apply one Cypher file from neo4j/cypher (usage: make neo4j-mig
 
 neo4j-bootstrap: ## Initialize Neo4j (constraints, alias seed CSV, CHIT geometry fixture + smoke)
 	@echo "→ Bootstrapping Neo4j..."
-	@bash "$(CURDIR)/scripts/neo4j_bootstrap.sh"
+	@$(LOAD_ENV_SHARED); set +e; bash "$(CURDIR)/scripts/neo4j_bootstrap.sh"
 
 neo4j-status: ## Show the Neo4j container state and health
 	@$(DC) ps neo4j

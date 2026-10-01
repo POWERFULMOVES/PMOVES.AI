@@ -89,11 +89,13 @@ def test_consciousness_schema_target_points_at_a_real_file():
 
 
 @pytest.mark.skipif(shutil.which("make") is None, reason="make not installed")
+@pytest.mark.parametrize("password", [None, ""], ids=["unset", "empty"])
 @pytest.mark.parametrize("target", APPLY_TARGETS)
-def test_unset_password_fails_closed_before_docker(tmp_path, target):
-    rc, docker, out = _make(tmp_path, target, None, "VERSION=001")
+def test_unset_or_empty_password_fails_closed_before_docker(tmp_path, target, password):
+    # "" matters: a guard weakened to set-only (${VAR+x}) passes an empty password through.
+    rc, docker, out = _make(tmp_path, target, password, "VERSION=001")
     assert rc != 0, out
-    assert "NEO4J_PASSWORD is not set" in out, out
+    assert "NEO4J_PASSWORD is unset or empty" in out, out
     assert docker == [], docker
 
 
@@ -118,3 +120,61 @@ def test_migrate_refuses_an_ambiguous_or_missing_version(tmp_path):
     rc, docker, out = _make(tmp_path, "neo4j-migrate", SENTINEL, "VERSION=999")
     assert rc != 0 and "matches 0 files" in out, out
     assert docker == []
+
+
+@pytest.mark.skipif(shutil.which("make") is None, reason="make not installed")
+def test_neo4j_up_never_recreates_before_the_compose_reconciliation(tmp_path):
+    """Until PR #3251 lands, main's neo4j still has env_file + 0.0.0.0 ports; a plain
+    `up -d` on any config-hash drift would recreate on that config."""
+    rc, docker, out = _make(tmp_path, "neo4j-up", SENTINEL)
+    assert rc == 0, out
+    ups = [c for c in docker if "up" in c]
+    assert len(ups) == 1, docker
+    up = ups[0]
+    assert up[up.index("up"):][-1] == "neo4j", up
+    assert "--no-recreate" in up and "--force-recreate" not in up, up
+
+
+# --- scripts/neo4j_bootstrap.sh (what neo4j-bootstrap runs) -----------------
+
+BOOTSTRAP = PMOVES / "scripts" / "neo4j_bootstrap.sh"
+# `ps` reports the container running; `exec -i` drains stdin as cypher-shell does
+# (otherwise the alias-CSV pipe dies with EPIPE under pipefail).
+STUB_PS = ('if [ "$1" = "ps" ]; then echo pmoves-neo4j; fi\n'
+           'if [ "$1" = "exec" ]; then cat >/dev/null; fi\n')
+
+
+def _bootstrap(tmp_path: Path, password: str | None):
+    stub = _docker_guard().build_stub_env(tmp_path / "bin", stub_make=False,
+                                          behaviours={"docker": STUB_PS})
+    env = dict(stub)
+    for k in ("NEO4J_PASSWORD", "NEO4J_AUTH", "NEO4J_USERNAME"):
+        env.pop(k, None)
+    if password is not None:
+        env["NEO4J_PASSWORD"] = password
+    proc = subprocess.run(["bash", str(BOOTSTRAP)], env=env, capture_output=True, text=True, timeout=120)
+    docker = [row[1:] for row in stub.calls() if row[0] == "docker"]
+    return proc.returncode, docker, proc.stdout + proc.stderr
+
+
+@pytest.mark.parametrize("password", [None, ""], ids=["unset", "empty"])
+def test_bootstrap_fails_closed_before_docker(tmp_path, password):
+    rc, docker, out = _bootstrap(tmp_path, password)
+    assert rc != 0, out
+    assert "NEO4J_PASSWORD is unset or empty" in out, out
+    assert docker == [], docker
+
+
+def test_bootstrap_password_goes_by_env_never_argv(tmp_path):
+    rc, docker, out = _bootstrap(tmp_path, SENTINEL)
+    assert rc == 0, out
+    execs = [c for c in docker if c and c[0] == "exec"]
+    # every neo4j/cypher file + the alias CSV + the CHIT fixture and smoke
+    assert len(execs) >= 4, docker
+    for call in execs:
+        assert "pmoves-neo4j" in call, call      # the compose-declared name, not pmoves-neo4j-1
+        assert "cypher-shell" in call, call
+        assert [call[i + 1] for i, tok in enumerate(call[:-1]) if tok == "-e"] == ["NEO4J_USERNAME", "NEO4J_PASSWORD"], call
+        assert "-p" not in call and "--password" not in call, call
+        assert all(SENTINEL not in tok for tok in call), call
+    assert not any(c[:2] == ["exec", "pmoves-neo4j"] and "printenv" in c for c in docker)
