@@ -278,6 +278,48 @@ else
   fi
 fi
 
+# --- fstab preflight (read-only, before ANY write) -------------------------
+# A line that already uses $MOUNT must point at the partition this script
+# mounts. Checked here, before partitioning, so a stale line for another device
+# cannot leave a freshly formatted but unmounted disk. The spec is resolved to a
+# device, so equivalent ways of naming the same partition are accepted:
+#   - TAG=value specs (UUID=, LABEL=, PARTUUID=, PARTLABEL=) via findfs(8),
+#     util-linux: "search the block devices ... for a filesystem or partition
+#     with specified tag"; exit 1 = cannot be found;
+#   - /dev/disk/by-{uuid,label,partuuid,partlabel}/<v>, the udev persistent
+#     names for the same four tags, mapped to the tag so they resolve even
+#     before the link exists;
+#   - any other /dev path via readlink -f.
+# A spec that resolves to nothing, or to a device other than this script's
+# partition (for a fresh provision, the partition it will create), is refused.
+# The policy is Originated, B850-CLAUDE / nvme-3150-rebase, 2026-10-01 (no
+# upstream precedent; checked [ISO], [PHI]); the mechanism is findfs(8).
+resolve_spec() {
+  local spec="$1" tag=""
+  case "$spec" in
+    /dev/disk/by-uuid/*)      spec="UUID=${spec##*/}" ;;
+    /dev/disk/by-label/*)     spec="LABEL=${spec##*/}" ;;
+    /dev/disk/by-partuuid/*)  spec="PARTUUID=${spec##*/}" ;;
+    /dev/disk/by-partlabel/*) spec="PARTLABEL=${spec##*/}" ;;
+  esac
+  case "$spec" in
+    UUID=*|LABEL=*|PARTUUID=*|PARTLABEL=*) tag="$spec" ;;
+  esac
+  if [[ -n "$tag" ]]; then
+    findfs "$tag" 2>/dev/null || true
+  elif [[ "$spec" == /dev/* ]]; then
+    readlink -f "$spec" 2>/dev/null || true
+  fi
+}
+PART_REAL="$(readlink -f "$PART" 2>/dev/null || printf '%s\n' "$PART")"
+EXISTING_SPEC="$(awk -v m="$MOUNT" '$1 !~ /^#/ && $2 == m {print $1; exit}' "$FSTAB")"
+if [[ -n "$EXISTING_SPEC" ]]; then
+  EXISTING_DEV="$(resolve_spec "$EXISTING_SPEC")"
+  if [[ "$EXISTING_DEV" != "$PART_REAL" ]]; then
+    err "fstab already maps $MOUNT to '$EXISTING_SPEC' (resolves to ${EXISTING_DEV:-nothing}), not $PART. Another device owns this mountpoint; refusing before any write (fstab not edited)."
+  fi
+fi
+
 if ! $ALREADY; then
   # Size floor: Originated, Crush lane, 2026-09-22 (a wrong-device tripwire).
   SIZE_BYTES="$(lsblk -dno SIZE -b "$DEVICE")"
@@ -341,15 +383,14 @@ mkdir -p "$MOUNT"
 # Presence is tested on FIELD 2, because fstab(5) separates fields by tabs or
 # spaces. The backup, newline guard and append are Originated, B850-CLAUDE /
 # nvme-3150-rebase (no upstream precedent; checked [ISO], [PART], [PHI], [OMA]).
-# An existing line for this mountpoint must name THIS partition. Otherwise
-# another disk owns the mount: refuse without editing fstab, rather than report
-# success while something else is mounted there. Originated, B850-CLAUDE /
-# nvme-3150-rebase, 2026-10-01 (no upstream precedent; checked [ISO], [PHI]).
-EXISTING_SPEC="$(awk -v m="$MOUNT" '$1 !~ /^#/ && $2 == m {print $1; exit}' "$FSTAB")"
+# Re-check after the partition exists (adoption, and a fresh provision whose
+# stale line named the partition by path): the line must be UUID=<this UUID>
+# or resolve, through resolve_spec above, to this partition.
 if [[ -n "$EXISTING_SPEC" ]]; then
-  [[ "$EXISTING_SPEC" == "UUID=$UUID" ]] \
-    || err "fstab already maps $MOUNT to '$EXISTING_SPEC', not UUID=$UUID ($PART). Another device owns this mountpoint; refusing (fstab not edited)."
-  log "fstab entry for $MOUNT already present (UUID=$UUID) — leaving untouched"
+  if [[ "$EXISTING_SPEC" != "UUID=$UUID" && "$(resolve_spec "$EXISTING_SPEC")" != "$PART_REAL" ]]; then
+    err "fstab already maps $MOUNT to '$EXISTING_SPEC', not UUID=$UUID ($PART). Another device owns this mountpoint; refusing (fstab not edited)."
+  fi
+  log "fstab entry for $MOUNT already present ($EXISTING_SPEC -> $PART) — leaving untouched"
 else
   BACKUP="$FSTAB.pmoves-bak.$(date +%Y%m%dT%H%M%S)"
   cp -a "$FSTAB" "$BACKUP"

@@ -49,7 +49,7 @@ SCRIPT = Path(os.environ.get("NVME_PROVISION_SCRIPT") or REPO_ROOT / "deploy" / 
 # assertion, not an invocation.
 MKE2FS = "mk" "fs.ext4"
 STUBBED = [
-    "lsblk", "findmnt", "blkid", "sgdisk", "partprobe", "udevadm", "wipefs", MKE2FS,
+    "lsblk", "findmnt", "blkid", "findfs", "sgdisk", "partprobe", "udevadm", "wipefs", MKE2FS,
     "mount", "mountpoint", "systemctl", "chown", "df", "id", "sleep",
 ]
 DANGEROUS = ["sgdisk", "wipefs", MKE2FS, "mount", "umount", "parted", "partprobe", "systemctl", "dd", "blkdiscard"]
@@ -131,7 +131,18 @@ elif name == "blkid":
             print(found)
         sys.exit(0 if found else 2)
     if d.get("fstype") == "ext4":
-        print(st.get("uuid", "11111111-2222-3333-4444-555555555555"))
+        print(d.get("uuid") or st.get("uuid", "11111111-2222-3333-4444-555555555555"))
+elif name == "findfs":
+    # findfs(8): TAG=value -> device path, exit 1 when it cannot be found.
+    tag, _, value = args[-1].partition("=")
+    default_uuid = st.get("uuid", "11111111-2222-3333-4444-555555555555")
+    key = {"UUID": "uuid", "LABEL": "label", "PARTUUID": "partuuid", "PARTLABEL": "partlabel"}[tag]
+    hits = [n for n, d in devs.items() if d.get(key) == value]
+    if not hits and tag == "UUID" and value == default_uuid:
+        hits = [n for n, d in devs.items() if d.get("fstype") == "ext4" and not d.get("uuid")]
+    if not hits:
+        sys.exit(1)
+    print(hits[0])
 elif name == "sgdisk":
     dev = args[-1]
     if "--zap-all" in args:
@@ -174,8 +185,8 @@ def _part(disk, fstype="", label="", mountpoints=("",)):
 def base_devices():
     return {
         "/dev/nvme8n1": _disk("/dev/nvme8n1", ["/dev/nvme8n1p1", "/dev/nvme8n1p2"], size=1_000_204_886_016),
-        "/dev/nvme8n1p1": _part("/dev/nvme8n1", "vfat", mountpoints=("/boot/efi",)),
-        "/dev/nvme8n1p2": _part("/dev/nvme8n1", "ext4", mountpoints=("/",)),
+        "/dev/nvme8n1p1": dict(_part("/dev/nvme8n1", "vfat", mountpoints=("/boot/efi",)), uuid="EFI-UUID"),
+        "/dev/nvme8n1p2": dict(_part("/dev/nvme8n1", "ext4", mountpoints=("/",)), uuid="ROOT-UUID"),
         "/dev/nvme9n1": _disk("/dev/nvme9n1"),
     }
 
@@ -329,6 +340,50 @@ def test_existing_fstab_line_for_another_device_is_refused(tmp_path):
     assert "fstab already maps" in r.stderr and "UUID=ffff-other-disk" in r.stderr, r.stderr
     assert h.fstab.read_text() == before and not list(tmp_path.glob("fstab.pmoves-bak.*"))
     assert h.calls("mount") == [] and h.calls("systemctl") == [] and h.calls("chown") == []
+
+
+# --- fstab preflight: checked before ANY write -------------------------------
+def test_stale_fstab_line_for_another_device_is_refused_before_any_write(tmp_path):
+    devs = _second_disk(base_devices(), children=["/dev/nvme7n1p1"])
+    devs["/dev/nvme7n1p1"] = dict(_part("/dev/nvme7n1", "ext4", "OLD-DATA"), uuid="OTHER-UUID")
+    h = Harness(tmp_path, devices=devs)
+    h.fstab.write_text(f"UUID=aaaa  /  ext4  defaults  0  1\nUUID=OTHER-UUID  {h.mnt}  ext4  defaults  0  2\n")
+    r = h.run()
+    assert r.returncode == 1 and "refusing before any write" in r.stderr and "/dev/nvme7n1p1" in r.stderr, r.stderr
+    assert h.destructive() == [], h.calls()  # no sgdisk, wipefs, format or mount
+
+
+def test_stale_fstab_line_resolving_to_nothing_is_refused_before_any_write(tmp_path):
+    h = Harness(tmp_path)
+    h.fstab.write_text(f"UUID=aaaa  /  ext4  defaults  0  1\nLABEL=GONE-DISK  {h.mnt}  ext4  defaults  0  2\n")
+    r = h.run()
+    assert r.returncode == 1 and "resolves to nothing" in r.stderr, r.stderr
+    assert h.destructive() == [], h.calls()
+
+
+@pytest.mark.parametrize(
+    "spec",
+    [
+        "LABEL=PMOVES-NVME1",
+        "PARTUUID=0f0f0f0f-aaaa-bbbb-cccc-000000000001",
+        "/dev/disk/by-uuid/11111111-2222-3333-4444-555555555555",
+        "UUID=11111111-2222-3333-4444-555555555555",
+    ],
+    ids=["label", "partuuid", "by-uuid", "uuid"],
+)
+def test_adoption_accepts_any_spec_naming_the_same_partition(tmp_path, spec):
+    devs = base_devices()
+    devs["/dev/nvme9n1"]["children"] = ["/dev/nvme9n1p1"]
+    devs["/dev/nvme9n1p1"] = dict(_part("/dev/nvme9n1", "ext4", "PMOVES-NVME1"),
+                                  partuuid="0f0f0f0f-aaaa-bbbb-cccc-000000000001", partlabel="PMOVES-NVME1")
+    h = Harness(tmp_path, devices=devs)
+    h.fstab.write_text(f"UUID=aaaa  /  ext4  defaults  0  1\n{spec}  {h.mnt}  ext4  defaults,nofail  0  2\n")
+    before = h.fstab.read_text()
+    st = json.loads(h.state.read_text()); st["mounted"] = [h.mnt]; h.state.write_text(json.dumps(st))
+    r = h.run()
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "already provisioned" in r.stdout and "already present" in r.stdout
+    assert h.destructive() == [] and h.fstab.read_text() == before
 
 
 def test_rerun_as_plain_root_leaves_ownership_alone(tmp_path):

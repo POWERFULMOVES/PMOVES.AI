@@ -260,6 +260,13 @@ with every step attributed in the script header and inline:
   - `blkid -p` exits other than 0/2 fail closed as root (blkid(8) EXIT STATUS);
   - a non-root `--dry-run` cannot run the probe, so it says INCONCLUSIVE and
     exits 3 instead of reporting the disk blank.
+- **fstab preflight (final review):** a line that already uses the mountpoint is
+  resolved to a device BEFORE any write: TAG=value specs via findfs(8), the
+  `/dev/disk/by-*` names mapped to their tags, and other `/dev` paths via
+  `readlink -f`. If it is not this script's partition, or it resolves to
+  nothing, the script refuses before partitioning. Before this fix, a stale line
+  left a formatted, unmounted disk. Equivalent specs for the same partition
+  (`LABEL=`, `PARTUUID=`, `UUID=`, by-uuid) are accepted on adoption.
 - **Ownership on re-runs:** an already-provisioned drive is re-owned only when
   `SUDO_USER` names a user. As plain root it is left alone.
 - **Originated policy, kept:** refusing partitioned drives (except one
