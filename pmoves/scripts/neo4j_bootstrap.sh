@@ -31,8 +31,11 @@ if [ -z "$PYTHON_BIN" ]; then
   exit 0
 fi
 echo "→ Applying Neo4j constraints and seed aliases via cypher-shell"
+# Every file once, in name order; the smoke is a check, not a migration, and runs last.
+CHIT_SMOKE="$ROOT/neo4j/cypher/011_chit_geometry_smoke.cypher"
 for cypher in "$ROOT/neo4j/cypher/"*.cypher; do
   [ -f "$cypher" ] || continue
+  [ "$cypher" = "$CHIT_SMOKE" ] && continue
   echo "   • $(basename "$cypher")"
   cypher < "$cypher" >/dev/null
 done
@@ -115,15 +118,15 @@ RETURN count(row) AS aliases_seeded;
 )
 PY
 
-CHIT_SEED="$ROOT/neo4j/cypher/010_chit_geometry_fixture.cypher"
-if [ -f "$CHIT_SEED" ]; then
-    echo "→ Applying CHIT geometry fixture"
-    cypher < "$CHIT_SEED" >/dev/null
-fi
-
-CHIT_SMOKE="$ROOT/neo4j/cypher/011_chit_geometry_smoke.cypher"
+# 010 already ran in the loop above. Until 2026-10 it and the smoke ran a second
+# time here, and the smoke's `ok=false` was printed and ignored (exit 0).
 if [ -f "$CHIT_SMOKE" ]; then
     echo "   • CHIT geometry smoke check"
-    cypher --format plain < "$CHIT_SMOKE"
+    smoke=$(cypher --format plain < "$CHIT_SMOKE")
+    echo "$smoke"
+    if ! grep -q 'CHIT_SMOKE_OK' <<<"$smoke"; then
+        echo "ERROR: CHIT geometry smoke failed (expected CHIT_SMOKE_OK; see neo4j/cypher/011_chit_geometry_smoke.cypher)" >&2
+        exit 1
+    fi
 fi
 echo "✔ Neo4j bootstrap complete."

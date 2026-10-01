@@ -1,7 +1,10 @@
 // Seeds the CHIT geometry demo constellation described in
 // docs/pmoves_chit_all_in_one/pmoves_all_in_one/pmoves_chit_patch/neo4j/seed/001_fixture.cql
 // Adjustments keep the import idempotent and ensure relationships are created without
-// relying on session-scoped variables.
+// relying on session-scoped variables: every edge statement MATCHes both ends by key.
+// (Until 2026-10 the FORMS statement reused `anchor`/`constellation` across ';', so
+// MERGE created an unlabeled pair and Anchor-[:FORMS]->Constellation never existed.)
+// Keys are unique per 002_chit_constraints.cypher.
 
 MERGE (anchor:Anchor {id:'6d8d2e65-b6b9-4d3a-9b5e-3a9c42c1b111'})
   SET anchor.model='mini-vec-4d',
@@ -16,6 +19,8 @@ MERGE (constellation:Constellation {id:'8c1b7a8c-7b38-4a6b-9bc3-3f1fdc9a1111'})
       constellation.bins=5,
       constellation.summary='Basketball-ish topics';
 
+MATCH (anchor:Anchor {id:'6d8d2e65-b6b9-4d3a-9b5e-3a9c42c1b111'}),
+      (constellation:Constellation {id:'8c1b7a8c-7b38-4a6b-9bc3-3f1fdc9a1111'})
 MERGE (anchor)-[:FORMS]->(constellation);
 
 MERGE (p1:Point {id:'a1a1a1a1-1111-4a4a-9c9c-111111111111'})
