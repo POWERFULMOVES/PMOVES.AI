@@ -1,0 +1,959 @@
+diff --git a/pmoves/Makefile b/pmoves/Makefile
+index 67c77b27a..ab079047f 100644
+--- a/pmoves/Makefile
++++ b/pmoves/Makefile
+@@ -22,18 +22,6 @@ unexport KEY
+ # (KEY="${KEY:-...}"), is not a victim: line 46 resets KEY="" first, and no make
+ # target invokes it. Sub-makes still get KEY via MAKEFLAGS, unexpanded.
+ 
+-unexport NEO4J_BIND
+-# ^ Same mechanism as KEY above, and it must sit in the same place: above every
+-# include and every $(shell ...). A command-line NEO4J_BIND is exported by
+-# default, and on make >= 4.4 $(shell ...) receives exported variables,
+-# EXPANDING them into the child env -- so NEO4J_BIND='$(shell touch X)' would
+-# run during the first parse-time $(shell) (e.g. the NEO4J_BIND block's own
+-# mktemp), before the validator ever sees it. The NEO4J_BIND block below reads
+-# the raw text with $(value NEO4J_BIND) (unaffected by this) and re-exports ONLY
+-# the validated value with `override export NEO4J_BIND := ...`.
+-# REASONED, not measured on make 4.4: this node and CI run make 4.3.
+-# tests/test_neo4j_bind_passthrough.py asserts the ordering structurally.
+-
+ # Many targets rely on bashisms (heredocs, arrays, $'...' quoting).
+ # On Windows, force Git Bash to avoid cmd.exe fallback for bash-style recipes.
+ ifeq ($(OS),Windows_NT)
+@@ -167,57 +155,6 @@ ifneq ("$(wildcard env.tier-supabase.urlencoded)","")
+   COMPOSE_ENV_FILES += --env-file env.tier-supabase.urlencoded
+ endif
+ 
+-# NEO4J_BIND pass-through (option B, #3196).
+-# The node-local file is deliberately NOT on COMPOSE_ENV_FILES under
+-# SUPABASE_RUNTIME=compose (above), so a NEO4J_BIND set there with
+-# `make env-local-set` was silently ignored and Neo4j published on 0.0.0.0.
+-# Read ONLY that one key (parsed, never sourced; no other key, no command
+-# substitution) and export it into every recipe's environment, which is how
+-# it reaches every $(DC) call. COMPOSE_ENV_FILES is untouched.
+-#
+-# Precedence (first NON-EMPTY wins; an empty value counts as unset):
+-#   1. `make NEO4J_BIND=...`          (command line)
+-#   2. NEO4J_BIND exported by the caller's environment
+-#   3. the NEO4J_BIND= line of $(NODE_LOCAL_ENV_FILE)
+-#   4. compose's own default (${NEO4J_BIND:-0.0.0.0})
+-# A malformed value from ANY source stops make here, value withheld, rather
+-# than reaching compose. A caller's value is taken RAW with $(value ...), never
+-# expanded, and reaches the checker through a file written by $(file ...),
+-# never through a $(shell ...) string: a quote or an embedded make function in
+-# it can neither break the command nor run.
+-# Escape hatch for a malformed node-local value: pass a valid one on the
+-# command line (`make NEO4J_BIND=127.0.0.1 ...`, which is checked and wins),
+-# or point elsewhere (`make NODE_LOCAL_ENV_FILE=/dev/null ...`).
+-# Needs GNU make >= 4.2 ($(.SHELLSTATUS)); older make fails closed below.
+-NODE_LOCAL_ENV_FILE ?= .env.local
+-NEO4J_BIND_HELPER = $(PYTHON) $(CURDIR)/scripts/neo4j_bind_from_env_file.py
+-NEO4J_BIND_CALLER := $(if $(filter-out undefined,$(origin NEO4J_BIND)),$(strip $(value NEO4J_BIND)))
+-ifneq ($(NEO4J_BIND_CALLER),)
+-  NEO4J_BIND_TMP := $(shell mktemp)
+-  $(file >$(NEO4J_BIND_TMP),$(NEO4J_BIND_CALLER))
+-  NEO4J_BIND_OK := $(shell $(NEO4J_BIND_HELPER) --check-file "$(NEO4J_BIND_TMP)")
+-  NEO4J_BIND_RC := $(.SHELLSTATUS)
+-  ifeq ($(NEO4J_BIND_RC),)
+-    $(error NEO4J_BIND is set but this make cannot validate it (needs GNU make >= 4.2 for .SHELLSTATUS); refusing)
+-  endif
+-  ifneq ($(NEO4J_BIND_RC),0)
+-    $(error NEO4J_BIND ($(origin NEO4J_BIND)) is malformed; refusing to pass it to compose)
+-  endif
+-  override export NEO4J_BIND := $(NEO4J_BIND_OK)
+-else ifneq ("$(wildcard $(NODE_LOCAL_ENV_FILE))","")
+-  NEO4J_BIND_FROM_FILE := $(shell $(NEO4J_BIND_HELPER) "$(NODE_LOCAL_ENV_FILE)")
+-  NEO4J_BIND_RC := $(.SHELLSTATUS)
+-  ifeq ($(NEO4J_BIND_RC),)
+-    $(error the node-local file exists but this make cannot validate NEO4J_BIND (needs GNU make >= 4.2 for .SHELLSTATUS); pass NODE_LOCAL_ENV_FILE=/dev/null to skip it)
+-  endif
+-  ifneq ($(NEO4J_BIND_RC),0)
+-    $(error NEO4J_BIND in the node-local file is malformed or unreadable (see above); refusing. Escape: make NEO4J_BIND=<valid address> ... or NODE_LOCAL_ENV_FILE=/dev/null)
+-  endif
+-  ifneq ($(NEO4J_BIND_FROM_FILE),)
+-    override export NEO4J_BIND := $(NEO4J_BIND_FROM_FILE)
+-  endif
+-endif
+-
+ # -------- Service Discovery Helper ----------
+ # Resolve service URL using PMOVES service discovery (hybrid support)
+ # Supports docked (NATS/Supabase) and standalone (Docker DNS) modes
+diff --git a/pmoves/docs/security/PORT_BINDING_MODEL.md b/pmoves/docs/security/PORT_BINDING_MODEL.md
+index 2e8b67b21..5940e85ac 100644
+--- a/pmoves/docs/security/PORT_BINDING_MODEL.md
++++ b/pmoves/docs/security/PORT_BINDING_MODEL.md
+@@ -51,7 +51,7 @@ These are the surfaces the abandoned stash tried to widen and this lane intentio
+ |---------|----------|-----------------------|
+ | Supabase DB / Auth / REST / Realtime / Storage / Studio / Pooler | `SUPABASE_*_BIND` | Database, auth, and admin surface area |
+ | Kong Admin | `KONG_ADMIN_BIND` | Direct admin plane |
+-| Qdrant / Meilisearch / Neo4j / ClickHouse | `QDRANT_BIND`, `MEILISEARCH_BIND`, `NEO4J_BIND`, `CLICKHOUSE_BIND` | Data-tier stores |
++| Qdrant / Meilisearch / Neo4j / ClickHouse | `QDRANT_BIND`, `MEILISEARCH_BIND`, `CLICKHOUSE_BIND` (Neo4j publishes no host port: internal-only, reached through the `neo4j-tailnet` forwarder, `docs/TAC/TAC_NEO4J.md`) | Data-tier stores |
+ | MinIO API / Console | `MINIO_BIND`, `MINIO_CONSOLE_BIND` | Object store + admin console |
+ 
+ ### Reviewed Mesh Override Allowlist
+diff --git a/pmoves/env.mesh-bind.example b/pmoves/env.mesh-bind.example
+index 69144c013..12947aeb0 100644
+--- a/pmoves/env.mesh-bind.example
++++ b/pmoves/env.mesh-bind.example
+@@ -57,7 +57,6 @@
+ # KONG_ADMIN_BIND
+ # QDRANT_BIND
+ # MEILISEARCH_BIND
+-# NEO4J_BIND
+ # MINIO_BIND
+ # MINIO_CONSOLE_BIND
+ # CLICKHOUSE_BIND
+diff --git a/pmoves/scripts/neo4j_bind_from_env_file.py b/pmoves/scripts/neo4j_bind_from_env_file.py
+deleted file mode 100755
+index 94206432b..000000000
+--- a/pmoves/scripts/neo4j_bind_from_env_file.py
++++ /dev/null
+@@ -1,110 +0,0 @@
+-#!/usr/bin/env python3
+-"""Read ONE key, NEO4J_BIND, from a node-local env file, for the Makefile.
+-
+-The Makefile exports the result into every $(DC) call, so a per-node publish
+-address (e.g. the node's tailnet address) takes effect WITHOUT putting the
+-node-local file on compose's --env-file list. That list deliberately excludes
+-the file under SUPABASE_RUNTIME=compose (Makefile, COMPOSE_ENV_FILES).
+-Without this, `make env-local-set KEY=NEO4J_BIND` was silently ignored and
+-Neo4j published on 0.0.0.0.
+-
+-The file is PARSED, never sourced: no command substitution runs, and no
+-other key is read. The value is written to stdout only, which the Makefile
+-captures; it is never echoed to the terminal.
+-
+-Usage:
+-  neo4j_bind_from_env_file.py <env-file>          print the value, if the key is present and valid
+-  neo4j_bind_from_env_file.py --check-file <path> validate a CALLER-supplied value that make wrote,
+-                                                  raw, to <path> with $(file ...); <path> is removed
+-
+-The caller's value arrives through a file, never through a shell command
+-string: make never interpolates it into $(shell ...), so a value carrying a
+-quote or a make function can neither break the command nor run anything.
+-
+-Exit codes:
+-  0  printed a valid value, or the key/value is absent or empty (prints nothing)
+-  2  malformed value: not an IP literal, or an IPv6 zone id (message WITHOUT the value)
+-  3  could not read the file, or it is not valid UTF-8
+-"""
+-from __future__ import annotations
+-
+-import ipaddress
+-import os
+-import re
+-import sys
+-
+-KEY = re.compile(r"^\s*(?:export\s+)?NEO4J_BIND\s*=(.*)$")
+-
+-
+-def normalise(raw: str) -> str:
+-    """'' for empty; the literal for an IPv4 address; [literal] for IPv6.
+-
+-    Compose's short `host:published:target` port syntax needs an IPv6 host in
+-    brackets, so a bare IPv6 literal would render garbage.
+-    """
+-    v = raw.strip()
+-    if len(v) >= 2 and v[0] == v[-1] and v[0] in "'\"":
+-        v = v[1:-1].strip()
+-    if not v:
+-        return ""
+-    bare = v[1:-1] if v.startswith("[") and v.endswith("]") else v
+-    ip = ipaddress.ip_address(bare)  # ValueError on anything that is not an IP literal
+-    if ip.version == 6 and ip.scope_id:
+-        # fe80::1%eth0: a zone id names an interface, it cannot be published on
+-        raise ValueError("IPv6 zone id")
+-    return f"[{ip.compressed}]" if ip.version == 6 else ip.compressed
+-
+-
+-def from_file(path: str) -> str:
+-    value = ""
+-    with open(path, encoding="utf-8") as handle:
+-        for line in handle:
+-            m = KEY.match(line.rstrip("\n"))
+-            if m:
+-                value = m.group(1)  # last assignment wins, as in a sourced file
+-    return normalise(value.split(" #", 1)[0])
+-
+-
+-def from_check_file(path: str) -> str:
+-    """A caller value, written raw by make's $(file >...) (which appends a newline)."""
+-    try:
+-        with open(path, encoding="utf-8") as handle:
+-            raw = handle.read()
+-    finally:
+-        try:
+-            os.unlink(path)
+-        except OSError:
+-            pass
+-    return normalise(raw[:-1] if raw.endswith("\n") else raw)
+-
+-
+-def main(argv: list[str]) -> int:
+-    try:
+-        if len(argv) == 3 and argv[1] == "--check-file":
+-            value = from_check_file(argv[2])
+-        elif len(argv) == 2 and not argv[1].startswith("--"):
+-            value = from_file(argv[1])
+-        else:
+-            print("usage: neo4j_bind_from_env_file.py <env-file> | --check-file <path>", file=sys.stderr)
+-            return 3
+-    except UnicodeDecodeError:
+-        # Checked BEFORE ValueError, of which it is a subclass: this is an
+-        # unreadable file, not a malformed address.
+-        print("NEO4J_BIND source is not valid UTF-8; refusing (encoding error, value withheld)",
+-              file=sys.stderr)
+-        return 3
+-    except ValueError:
+-        print("NEO4J_BIND is not an IPv4/IPv6 address literal; refusing to pass it to compose "
+-              "(value withheld)", file=sys.stderr)
+-        return 2
+-    except OSError as exc:
+-        print(f"could not read the node-local env file for NEO4J_BIND ({exc.__class__.__name__})",
+-              file=sys.stderr)
+-        return 3
+-    if value:
+-        sys.stdout.write(value)
+-    return 0
+-
+-
+-if __name__ == "__main__":
+-    raise SystemExit(main(sys.argv))
+diff --git a/pmoves/tests/smoke/test_neo4j_dual_ports.py b/pmoves/tests/smoke/test_neo4j_dual_ports.py
+index 55d4a4e83..1693012cb 100644
+--- a/pmoves/tests/smoke/test_neo4j_dual_ports.py
++++ b/pmoves/tests/smoke/test_neo4j_dual_ports.py
+@@ -1,149 +1,34 @@
+ """
+-Test Neo4j dual-port configuration from PR #483.
++Neo4j ports: HTTP 7474 and Bolt 7687 stay separate, and neither is published on the host.
+ 
+-Validates that Neo4j uses separate ports for HTTP (7474) and Bolt (7687)
+-instead of a single NEO4J_PORT variable that would cause conflicts.
+-
+-PR: https://github.com/POWERFULMOVES/PMOVES.AI/pull/483
++PR #483 split one NEO4J_PORT into NEO4J_HTTP_PORT / NEO4J_BOLT_PORT. Since the
++compose reconciliation (ops/knuckles-neo4j-compose-reconcile) Neo4j publishes NO
++host port at all: it is internal-only, and the fleet reaches Bolt through the
++neo4j-tailnet forwarder (docker-compose.neo4j-tailnet.yml, #3201), which forwards
++7687 only. See docs/TAC/TAC_NEO4J.md section 3.
+ """
+ 
+ import pytest
+-import httpx
++import yaml
+ 
+-from _smoke_helpers import PMOVES_DIR, grep_context, grep_file
++from _smoke_helpers import PMOVES_DIR
+ 
+ 
+ COMPOSE = PMOVES_DIR / "docker-compose.yml"
++FORWARDER = PMOVES_DIR / "docker-compose.neo4j-tailnet.yml"
+ 
+ 
+ @pytest.mark.smoke
+-def test_neo4j_http_port_exposed() -> None:
+-    """Verify Neo4j HTTP interface is exposed on port 7474."""
+-    config = grep_context(COMPOSE, r"  neo4j:", after=60)
+-
+-    assert config, "neo4j service not found in docker-compose.yml"
+-
+-    # Port mappings carry the ${NEO4J_BIND:-0.0.0.0} prefix (post-hardening);
+-    # match the host-port mapping, not the bare literal.
+-    has_http_port = "NEO4J_HTTP_PORT" in config and "}:7474" in config
+-
+-    assert has_http_port, (
+-        "Neo4j should have NEO4J_HTTP_PORT mapping for port 7474"
+-    )
++def test_neo4j_publishes_no_host_port() -> None:
++    svc = yaml.safe_load(COMPOSE.read_text())["services"]["neo4j"]
++    assert "ports" not in svc, "Neo4j is internal-only; use the neo4j-tailnet forwarder"
+ 
+ 
+ @pytest.mark.smoke
+-def test_neo4j_bolt_port_exposed() -> None:
+-    """Verify Neo4j Bolt protocol is exposed on port 7687."""
+-    config = grep_context(COMPOSE, r"  neo4j:", after=60)
+-
+-    assert config, "neo4j service not found in docker-compose.yml"
+-
+-    has_bolt_port = "NEO4J_BOLT_PORT" in config and "}:7687" in config
+-
+-    assert has_bolt_port, (
+-        "Neo4j should have NEO4J_BOLT_PORT mapping for port 7687"
+-    )
++def test_neo4j_never_uses_a_single_port_variable() -> None:
++    assert "NEO4J_PORT:" not in COMPOSE.read_text()
+ 
+ 
+ @pytest.mark.smoke
+-def test_neo4j_ports_not_using_single_variable() -> None:
+-    """Verify Neo4j does NOT use a single NEO4J_PORT for both HTTP and Bolt."""
+-    config = grep_context(COMPOSE, r"neo4j:", after=30)
+-
+-    assert config, "neo4j service not found in docker-compose.yml"
+-
+-    lines = config.split("\n")
+-
+-    # Check that we DON'T have the old format where both ports use NEO4J_PORT
+-    # Old problematic format: ${NEO4J_PORT:-7474}:7474 and ${NEO4J_PORT:-7687}:7687
+-    has_duplicate_port_var = False
+-
+-    for i, line in enumerate(lines):
+-        if "${NEO4J_PORT:-7474}:7474" in line:
+-            # Check if the next line also uses NEO4J_PORT for bolt
+-            if i + 1 < len(lines) and "${NEO4J_PORT:-7687}:7687" in lines[i + 1]:
+-                has_duplicate_port_var = True
+-
+-    assert not has_duplicate_port_var, (
+-        "Neo4j should not use NEO4J_PORT for both HTTP and Bolt ports. "
+-        "Use NEO4J_HTTP_PORT and NEO4J_BOLT_PORT instead."
+-    )
+-
+-
+-@pytest.mark.smoke
+-def test_neo4j_http_port_mapping() -> None:
+-    """Verify HTTP port mapping format is correct."""
+-    matches = grep_file(COMPOSE, r"NEO4J_HTTP_PORT", fixed=True)
+-
+-    if not matches:
+-        pytest.skip("NEO4J_HTTP_PORT not found in docker-compose.yml")
+-
+-    combined = "\n".join(matches)
+-    # Should map internal 7474 to host NEO4J_HTTP_PORT (default 7474)
+-    assert "${NEO4J_HTTP_PORT:-7474}:7474" in combined, (
+-        "HTTP port mapping should use NEO4J_HTTP_PORT variable with default 7474"
+-    )
+-
+-
+-@pytest.mark.smoke
+-def test_neo4j_bolt_port_mapping() -> None:
+-    """Verify Bolt port mapping format is correct."""
+-    matches = grep_file(COMPOSE, r"NEO4J_BOLT_PORT", fixed=True)
+-
+-    if not matches:
+-        pytest.skip("NEO4J_BOLT_PORT not found in docker-compose.yml")
+-
+-    combined = "\n".join(matches)
+-    # Should map internal 7687 to host NEO4J_BOLT_PORT (default 7687)
+-    assert "${NEO4J_BOLT_PORT:-7687}:7687" in combined, (
+-        "Bolt port mapping should use NEO4J_BOLT_PORT variable with default 7687"
+-    )
+-
+-
+-@pytest.mark.smoke
+-@pytest.mark.asyncio
+-async def test_neo4j_http_accessible() -> None:
+-    """Verify Neo4j HTTP interface is accessible on port 7474."""
+-    try:
+-        async with httpx.AsyncClient(timeout=5.0) as client:
+-            response = await client.get("http://localhost:7474")
+-
+-            # Neo4j returns 200 OK when accessible
+-            assert response.status_code == 200
+-
+-    except (httpx.ConnectError, httpx.TimeoutException) as e:
+-        pytest.skip(f"Neo4j not accessible on port 7474: {e}")
+-
+-
+-@pytest.mark.smoke
+-def test_neo4j_env_file_has_both_ports() -> None:
+-    """Verify env.tier-data can configure both HTTP and Bolt ports independently."""
+-    # Check that tier env files support both port variables
+-    matches = grep_file(
+-        PMOVES_DIR / "env.tier-data.example",
+-        r"NEO4J_(HTTP|BOLT)_PORT",
+-    )
+-
+-    # env.tier-data.example should have both port variables documented
+-    if matches:
+-        # At least one of the port variables should be documented
+-        assert len(matches) > 0, "Neo4j port variables should be documented in env.tier-data.example"
+-
+-
+-@pytest.mark.smoke
+-def test_hirag_v2_uses_neo4j_bolt_port() -> None:
+-    """Verify Hi-RAG v2 service can connect to Neo4j via Bolt protocol."""
+-    # NEO4J_URL sits ~32 lines into a 91-line block (environment after
+-    # image/command); a 30-line window truncated before it.
+-    config = grep_context(COMPOSE, r"hi-rag-gateway-v2:", after=90)
+-
+-    if not config:
+-        pytest.skip("hi-rag-gateway-v2 service not found")
+-
+-    # Hi-RAG v2 should have NEO4J_URL configured for Bolt connection
+-    has_bolt_url = "NEO4J_URL" in config or "bolt://neo4j:7687" in config
+-
+-    assert has_bolt_url, (
+-        "Hi-RAG v2 should have NEO4J_URL configured for Bolt protocol connection"
+-    )
++def test_the_forwarder_carries_bolt() -> None:
++    assert "neo4j:7687" in FORWARDER.read_text()
+diff --git a/pmoves/tests/test_neo4j_bind_passthrough.py b/pmoves/tests/test_neo4j_bind_passthrough.py
+index b8e97ff5f..5e8ab7c0a 100644
+--- a/pmoves/tests/test_neo4j_bind_passthrough.py
++++ b/pmoves/tests/test_neo4j_bind_passthrough.py
+@@ -1,292 +1,25 @@
+-"""NEO4J_BIND from the node-local env file reaches compose, alone, and never printed.
+-
+-Measured before this change: under SUPABASE_RUNTIME=compose (the Makefile
+-default) the node-local file is NOT on COMPOSE_ENV_FILES, and up-data-tier runs
+-$(DC) directly, so `make env-local-set KEY=NEO4J_BIND` was silently ignored and
+-Neo4j published on 0.0.0.0. The Makefile now reads ONLY that key (parsed, never
+-sourced) and exports it into every recipe's environment.
+-
+-make is spawned only with the guard's own stub dir FIRST on PATH
+-(build_stub_env from _destructive_docker_guard.py, #3195): docker,
+-docker-compose and supabase are recorders, and the real make runs its recipes. The real compose render is a separate,
+-direct, read-only `docker compose config` on a temp file holding the REAL
+-neo4j `ports` lines. Every address here is FAKE, and NODE_LOCAL_ENV_FILE points
+-at a pytest temp fixture -- never at the node's real file.
++"""The NEO4J_BIND pass-through (#3196, option B) is retired.
++
++#3196 validated a NEO4J_BIND from the command line, the caller's environment or the
++node-local env file and exported it to every compose call, so Neo4j could publish
++7474/7687 on a chosen interface. #3201 then made Neo4j internal-only behind the
++neo4j-tailnet forwarder, which left those `ports:` inert on internal networks, and
++the compose reconciliation removed them. With nothing left to bind, the Makefile
++block, its validator (scripts/neo4j_bind_from_env_file.py) and its tests went too.
++The full compose contract lives in tests/test_neo4j_compose_contract.py; this file
++keeps the retirement from being silently undone.
+ """
+ from __future__ import annotations
+ 
+-import json
+-import os
+-import shutil
+-import subprocess
+-import sys
+ from pathlib import Path
+ 
+-import pytest
+-import yaml
+-
+ PMOVES = Path(__file__).resolve().parents[1]
+-REAL_DOCKER = shutil.which("docker")
+-FAKE_V4 = "10.9.9.9"
+-FAKE_V4_ENV = "10.8.8.8"
+-FAKE_V6 = "fd00::1"
+-FAKE_SUPABASE = "http://fake-supabase.invalid"
+-
+-pytestmark = pytest.mark.skipif(shutil.which("make") is None, reason="make not installed")
+-
+-DOCKER_GUARD_FILE = Path(__file__).with_name("_destructive_docker_guard.py")
+-DOCKER_GUARD_MODULE = "pmoves_tests_destructive_docker_guard"  # conftest's name
+-
+-
+-def _docker_guard():
+-    """The guard instance conftest registered, or a fresh load of the same file."""
+-    if DOCKER_GUARD_MODULE in sys.modules:
+-        return sys.modules[DOCKER_GUARD_MODULE]
+-    import importlib.util
+-    spec = importlib.util.spec_from_file_location(DOCKER_GUARD_MODULE, DOCKER_GUARD_FILE)
+-    module = importlib.util.module_from_spec(spec)
+-    sys.modules[DOCKER_GUARD_MODULE] = module
+-    spec.loader.exec_module(module)
+-    return module
+-
+-
+-# Runs after the recorder's own argv record (build_stub_env behaviours): what
+-# ENVIRONMENT a compose call received, which the argv record cannot show.
+-ENV_BEHAVIOUR = r"""
+-printf 'NEO4J_BIND=%s SUPABASE_URL=%s\n' "${NEO4J_BIND-<unset>}" "${SUPABASE_URL-<unset>}" >> "$NEO4J_BIND_ENV_LOG"
+-"""
+-
+-
+-def _make(tmp_path: Path, env_file_body: str | bytes | None, *make_args: str, extra_env: dict | None = None):
+-    """Run make with the guard's stub dir first; return (rc, stdout+stderr, recorded compose env).
+-
+-    `recorded` is empty if no docker/docker-compose recorder ran at all.
+-    """
+-    node_local = tmp_path / "node_local_fixture.txt"
+-    if isinstance(env_file_body, bytes):
+-        node_local.write_bytes(env_file_body)
+-    elif env_file_body is not None:
+-        node_local.write_text(env_file_body)
+-    base = {k: v for k, v in os.environ.items() if k not in ("NEO4J_BIND", "SUPABASE_URL")}
+-    stub = _docker_guard().build_stub_env(
+-        tmp_path / "bin", stub_make=False, base_env=base,
+-        behaviours={"docker": ENV_BEHAVIOUR, "docker-compose": ENV_BEHAVIOUR},
+-    )
+-    env_log = tmp_path / "compose-env.log"
+-    env = dict(stub)
+-    env.update(NEO4J_BIND_ENV_LOG=str(env_log), **(extra_env or {}))
+-    proc = subprocess.run(
+-        ["make", "-s", "-C", str(PMOVES), f"NODE_LOCAL_ENV_FILE={node_local}", *make_args],
+-        capture_output=True, text=True, timeout=120, env=env,
+-    )
+-    recorded = env_log.read_text() if env_log.exists() else ""
+-    ran = [row for row in stub.calls() if row and row[0] in ("docker", "docker-compose")]
+-    assert bool(ran) == bool(recorded), (ran, recorded)
+-    return proc.returncode, proc.stdout + proc.stderr, recorded
+-
+-
+-RENDER = ["--eval", "neo4j-bind-probe: ; @$(DC) config --format json neo4j", "neo4j-bind-probe"]
+-
+-
+-def _bind_seen(recorded: str) -> str:
+-    line = recorded.strip().splitlines()[-1]
+-    return line.split(" ", 1)[0].split("=", 1)[1]
+-
+-
+-def test_the_file_value_reaches_compose(tmp_path):
+-    rc, out, rec = _make(tmp_path, f"SUPABASE_URL={FAKE_SUPABASE}\nNEO4J_BIND={FAKE_V4}\n", *RENDER)
+-    assert rc == 0, out
+-    assert _bind_seen(rec) == FAKE_V4
+-
+-
+-def test_other_keys_in_the_file_do_not_reach_compose(tmp_path):
+-    rc, out, rec = _make(tmp_path, f"SUPABASE_URL={FAKE_SUPABASE}\nNEO4J_BIND={FAKE_V4}\n", *RENDER)
+-    assert rc == 0, out
+-    assert FAKE_SUPABASE not in rec
+-    assert "SUPABASE_URL=<unset>" in rec
+-
+-
+-def test_absent_key_exports_nothing(tmp_path):
+-    rc, out, rec = _make(tmp_path, f"SUPABASE_URL={FAKE_SUPABASE}\n", *RENDER)
+-    assert rc == 0, out
+-    assert _bind_seen(rec) == "<unset>"
+-
+-
+-def test_missing_file_exports_nothing(tmp_path):
+-    rc, out, rec = _make(tmp_path, None, *RENDER)
+-    assert rc == 0, out
+-    assert _bind_seen(rec) == "<unset>"
+-
+-
+-@pytest.mark.parametrize("bad", ["not-an-ip", "10.9.9.9; touch /tmp/x", "$(id)", "999.1.1.1"])
+-def test_malformed_value_is_refused_without_printing_it(tmp_path, bad):
+-    rc, out, rec = _make(tmp_path, f"NEO4J_BIND={bad}\n", *RENDER)
+-    assert rc != 0
+-    assert "malformed" in out
+-    assert bad not in out
+-    assert rec == "", "compose must not run with a refused value"
+-
+-
+-def test_the_file_is_parsed_not_sourced(tmp_path):
+-    marker = tmp_path / "sourced"
+-    rc, out, rec = _make(tmp_path, f"X=$(touch {marker})\nNEO4J_BIND={FAKE_V4}\n", *RENDER)
+-    assert rc == 0, out
+-    assert not marker.exists(), "a command substitution in another line ran"
+-
+-
+-def test_ipv6_is_bracketed_for_compose(tmp_path):
+-    rc, out, rec = _make(tmp_path, f'NEO4J_BIND="{FAKE_V6}"\n', *RENDER)
+-    assert rc == 0, out
+-    assert _bind_seen(rec) == f"[{FAKE_V6}]"
+-
+-
+-def test_caller_env_wins_over_the_file(tmp_path):
+-    rc, out, rec = _make(tmp_path, f"NEO4J_BIND={FAKE_V4}\n", *RENDER, extra_env={"NEO4J_BIND": FAKE_V4_ENV})
+-    assert rc == 0, out
+-    assert _bind_seen(rec) == FAKE_V4_ENV
+-
+-
+-def test_command_line_wins_over_env_and_file(tmp_path):
+-    rc, out, rec = _make(tmp_path, f"NEO4J_BIND={FAKE_V4}\n", f"NEO4J_BIND={FAKE_V6}", *RENDER,
+-                         extra_env={"NEO4J_BIND": FAKE_V4_ENV})
+-    assert rc == 0, out
+-    assert _bind_seen(rec) == f"[{FAKE_V6}]", "a command-line IPv6 is bracketed (override export)"
+-
+-
+-def test_malformed_caller_env_is_refused_too(tmp_path):
+-    rc, out, rec = _make(tmp_path, None, *RENDER, extra_env={"NEO4J_BIND": "garbage"})
+-    assert rc != 0 and "malformed" in out and "garbage" not in out
+-
+-
+-def test_printed_recipes_never_contain_the_value(tmp_path):
+-    """`make -n` prints the recipe lines; the value lives only in the environment."""
+-    rc, out, rec = _make(tmp_path, f"NEO4J_BIND={FAKE_V4}\n", "-n", "up-bus")
+-    assert rc == 0, out
+-    assert "docker compose" in out
+-    assert FAKE_V4 not in out
+-
+-
+-# --- the real render: the neo4j ports lines, interpolated by real compose ------
+-
+-def _neo4j_ports() -> list:
+-    doc = yaml.safe_load((PMOVES / "docker-compose.yml").read_text())
+-    return doc["services"]["neo4j"]["ports"]
+-
+-
+-@pytest.mark.skipif(REAL_DOCKER is None, reason="docker not installed")
+-@pytest.mark.parametrize("bind,want", [(FAKE_V4, FAKE_V4), (f"[{FAKE_V6}]", FAKE_V6), (None, "0.0.0.0")])
+-def test_real_compose_binds_7474_and_7687_to_the_value(tmp_path, bind, want):
+-    f = tmp_path / "compose.yml"
+-    f.write_text(yaml.safe_dump({"services": {"neo4j": {"image": "busybox", "ports": _neo4j_ports()}}}))
+-    env = {k: v for k, v in os.environ.items() if not k.startswith("NEO4J_")}
+-    if bind is not None:
+-        env["NEO4J_BIND"] = bind
+-    proc = subprocess.run([REAL_DOCKER, "compose", "-p", "neo4j-bind-test", "-f", str(f),
+-                           "config", "--format", "json"],
+-                          capture_output=True, text=True, timeout=60, env=env)
+-    assert proc.returncode == 0, proc.stderr[-400:]
+-    ports = json.loads(proc.stdout)["services"]["neo4j"]["ports"]
+-    got = {str(p["target"]): p.get("host_ip") for p in ports}
+-    assert got == {"7474": want, "7687": want}, got
+-
+-
+-# --- review of #3196: empty means unset; no expansion, no interpolation --------
+-
+-def test_an_empty_caller_env_falls_through_to_the_file(tmp_path):
+-    """An exported-but-empty NEO4J_BIND used to be exported as-is, rendering 0.0.0.0."""
+-    rc, out, rec = _make(tmp_path, f"NEO4J_BIND={FAKE_V4}\n", *RENDER, extra_env={"NEO4J_BIND": ""})
+-    assert rc == 0, out
+-    assert _bind_seen(rec) == FAKE_V4
+-
+-
+-def test_an_empty_command_line_falls_through_to_the_file(tmp_path):
+-    rc, out, rec = _make(tmp_path, f"NEO4J_BIND={FAKE_V4}\n", "NEO4J_BIND=", *RENDER)
+-    assert rc == 0, out
+-    assert _bind_seen(rec) == FAKE_V4
+-
+-
+-def _hostile_values(sentinel: Path) -> list[str]:
+-    return [
+-        f"{FAKE_V4}'",                                    # a quote that would close a shell string
+-        f"{FAKE_V4}'; touch {sentinel}; echo '",          # ...and inject after it
+-        f"$(shell touch {sentinel})",                     # a make function, if ever expanded
+-        f"{FAKE_V4}$(shell touch {sentinel})",
+-    ]
+-
+-
+-@pytest.mark.parametrize("via", ["env", "command-line"])
+-@pytest.mark.parametrize("which", range(4))
+-def test_a_hostile_caller_value_is_refused_and_nothing_runs(tmp_path, via, which):
+-    sentinel = tmp_path / "SENTINEL-must-not-exist"
+-    value = _hostile_values(sentinel)[which]
+-    if via == "env":
+-        rc, out, rec = _make(tmp_path, None, *RENDER, extra_env={"NEO4J_BIND": value})
+-    else:
+-        rc, out, rec = _make(tmp_path, None, f"NEO4J_BIND={value}", *RENDER)
+-    assert rc != 0, out
+-    assert "malformed" in out
+-    assert not sentinel.exists(), "part of the value was executed"
+-    assert rec == "", "compose must not run with a refused value"
+-
+-
+-def test_a_malformed_file_can_be_escaped_from_the_command_line(tmp_path):
+-    rc, out, rec = _make(tmp_path, "NEO4J_BIND=not-an-ip\n", f"NEO4J_BIND={FAKE_V4}", *RENDER)
+-    assert rc == 0, out
+-    assert _bind_seen(rec) == FAKE_V4
+-
+-
+-def test_an_encoding_error_is_reported_as_one(tmp_path):
+-    rc, out, rec = _make(tmp_path, b"NEO4J_BIND=10.9.9.9\xff\xfe\n", *RENDER)
+-    assert rc != 0
+-    assert "encoding" in out and "UTF-8" in out
+-    assert rec == ""
+-
+-
+-def test_an_ipv6_zone_id_is_refused(tmp_path):
+-    rc, out, rec = _make(tmp_path, "NEO4J_BIND=fe80::1%eth0\n", *RENDER)
+-    assert rc != 0 and "malformed" in out and "eth0" not in out
+-    assert rec == ""
+-
+-
+-# --- unexport NEO4J_BIND: make >= 4.4 hands exported vars to $(shell) ----------
+-
+-def _unexport_and_risky(lines: list[str]) -> tuple[list[int], list[int]]:
+-    code = [(i, ln) for i, ln in enumerate(lines) if not ln.lstrip().startswith("#")]
+-    unexport = [i for i, ln in code if ln.strip() == "unexport NEO4J_BIND"]
+-    risky = [i for i, ln in code
+-             if ln.lstrip().startswith(("include ", "-include ", "sinclude "))
+-             or "$(shell" in ln]
+-    return unexport, risky
+-
+-
+-def test_unexport_neo4j_bind_precedes_every_include_and_shell_call():
+-    """On make >= 4.4 a command-line NEO4J_BIND is exported and $(shell ...)
+-    receives -- and EXPANDS -- exported variables, so a payload could run at the
+-    first parse-time $(shell) before the validator. This node and CI run make
+-    4.3 and cannot observe that; the ordering is asserted structurally, as for
+-    KEY (tests/tools/test_env_local_key.py)."""
+-    lines = (PMOVES / "Makefile").read_text().splitlines()
+-    unexport, risky = _unexport_and_risky(lines)
+-    assert len(unexport) == 1, f"expected exactly one `unexport NEO4J_BIND`, found {len(unexport)}"
+-    assert risky, "structural check found no include/$(shell) lines -- parser is broken"
+-    assert unexport[0] < min(risky), (
+-        f"`unexport NEO4J_BIND` at line {unexport[0] + 1} comes after line {min(risky) + 1}: "
+-        f"{lines[min(risky)].strip()!r}")
+ 
+ 
+-def test_positive_control_the_ordering_check_catches_a_late_unexport():
+-    src = (PMOVES / "Makefile").read_text().replace("\nunexport NEO4J_BIND\n", "\n", 1)
+-    unexport, risky = _unexport_and_risky((src + "\nunexport NEO4J_BIND\n").splitlines())
+-    assert unexport and risky and unexport[0] > min(risky)
++def test_no_neo4j_bind_in_the_makefile_or_compose():
++    for f in ("Makefile", "docker-compose.yml", "docker-compose.core.yml", "env.mesh-bind.example"):
++        assert "NEO4J_BIND" not in (PMOVES / f).read_text(), f
+ 
+ 
+-def test_only_the_validated_value_is_re_exported(tmp_path):
+-    """`unexport` stops the caller's raw variable reaching children; the block
+-    re-exports the CHECKED value. An exported-but-empty caller value with no
+-    file now reaches compose as unset, not as an empty string."""
+-    rc, out, rec = _make(tmp_path, None, *RENDER, extra_env={"NEO4J_BIND": ""})
+-    assert rc == 0, out
+-    assert _bind_seen(rec) == "<unset>"
+-    rc, out, rec = _make(tmp_path / "v6", None, *RENDER, extra_env={"NEO4J_BIND": FAKE_V6})
+-    assert rc == 0, out
+-    assert _bind_seen(rec) == f"[{FAKE_V6}]", "the checked, normalised value -- not the raw one"
++def test_the_validator_script_is_gone():
++    assert not (PMOVES / "scripts" / "neo4j_bind_from_env_file.py").exists()
+diff --git a/pmoves/tests/test_neo4j_compose_contract.py b/pmoves/tests/test_neo4j_compose_contract.py
+index 68d8570ed..d41565bf9 100644
+--- a/pmoves/tests/test_neo4j_compose_contract.py
++++ b/pmoves/tests/test_neo4j_compose_contract.py
+@@ -15,7 +15,7 @@ import yaml
+ PMOVES = Path(__file__).resolve().parents[1]
+ VENDOR = "neo4j:5.26.30-community@sha256:037cf5756f0135cbfd66b739b6df7c7c4bb100f9ce11602f6f9538e17e02c74d"
+ 
+-PENDING = "pending road compose:pr:3251: the compose half is a prepared patch (ops/knuckles-neo4j-compose-reconcile)"
++PENDING = None  # set to a reason string while the compose half waits for its road
+ 
+ # Rows this change introduces carry PEND; rows that already hold on main (the explicit
+ # APOC list, the LOAD CSV blocklist) are plain guards and run unmarked.
+diff --git a/pmoves/tests/test_published_ports_need_a_non_internal_network.py b/pmoves/tests/test_published_ports_need_a_non_internal_network.py
+index 4af50d604..cdf8aab6c 100644
+--- a/pmoves/tests/test_published_ports_need_a_non_internal_network.py
++++ b/pmoves/tests/test_published_ports_need_a_non_internal_network.py
+@@ -43,13 +43,11 @@ import yaml
+ PMOVES = Path(__file__).resolve().parents[1]
+ 
+ # Measured 2026-09-27 on origin/main f9d8a8228.
+-# neo4j is here BY DESIGN (#3201, operator option A): it stays internal-only
+-# (app/bus/data; no egress, no host port) and is reached over the tailnet through
+-# the neo4j-tailnet forwarder (docker-compose.neo4j-tailnet.yml), per
+-# DOCKER_NETWORK_HARDENING Rule 5 ("gateway-front it"). Its `ports:` stay only to
+-# carry ${NEO4J_BIND}; on internal-only networks they are inert.
++# neo4j left this list when its inert `ports:` and the ${NEO4J_BIND} pass-through
++# were removed (ops/knuckles-neo4j-from-fork): it is internal-only and reached over
++# the tailnet through the neo4j-tailnet forwarder (docker-compose.neo4j-tailnet.yml),
++# per DOCKER_NETWORK_HARDENING Rule 5 ("gateway-front it").
+ KNOWN_VIOLATORS = frozenset({
+-    "neo4j",
+     "a2ui-nats-bridge", "a2ui-renderer", "consciousness-service", "gateway-agent",
+     "gpu-orchestrator", "grayjay-plugin-host", "grayjay-server", "hf-research-agent",
+     "invidious-companion-proxy", "langextract", "llama-throughput-lab", "meilisearch",
+@@ -139,7 +137,7 @@ def test_the_parser_sees_the_fleet():
+     assert len(_stack_files()) >= 6
+     assert {"pmoves_app", "pmoves_bus", "pmoves_data"} <= {n for n, i in NETWORKS.items() if i}
+     assert NETWORKS.get("pmoves_external") is False, "pmoves_external must exist and be non-internal"
+-    assert "neo4j" in PUBLISHED and "cipher-api" in PUBLISHED
++    assert "cipher-api" in PUBLISHED and "neo4j" not in PUBLISHED
+ 
+ 
+ @pytest.mark.parametrize(
+--- a/pmoves/docker-compose.yml
++++ b/pmoves/docker-compose.yml
+@@ -1580,12 +1580,18 @@
+     # = the digest the live Knuckles graph runs today (5.26.30, a multi-arch
+     #   index Docker Hub still serves), so moving under compose changes no store
+     #   version. neo4j:5-community now means 5.26.31. (#3193)
+-    image: neo4j:5.26.30-community@sha256:037cf5756f0135cbfd66b739b6df7c7c4bb100f9ce11602f6f9538e17e02c74d
++    # NEO4J_IMAGE: the PMOVES source build (POWERFULMOVES/PMOVES-neo4j, branch
++    #   PMOVES.AI-Edition-5.26) replaces this default by digest once it passes the A/B
++    #   against this vendor image (docs/TAC/TAC_NEO4J.md section 2).
++    image: ${NEO4J_IMAGE:-neo4j:5.26.30-community@sha256:037cf5756f0135cbfd66b739b6df7c7c4bb100f9ce11602f6f9538e17e02c74d}
+     # The name the live container already has, and the single name source read
+     # by scripts/neo4j_container.py (backup, restore, start-cipher-stack).
+     container_name: pmoves-neo4j
+-    env_file:
+-    - env.tier-data
++    # No env_file: the vendor entrypoint turns EVERY NEO4J_* variable into a
++    # neo4j.conf setting (it does not exclude NEO4J_PASSWORD, which would land as
++    # PASSWORD=<plaintext>), and the data tier file also carries MinIO, Postgres,
++    # Meili and Qdrant secrets Neo4j never uses. NEO4J_AUTH below is interpolated
++    # by compose from with-env.sh, not read from env_file.
+     cap_drop:
+     - ALL
+     cap_add:
+@@ -1599,7 +1605,7 @@
+     - no-new-privileges:true
+     restart: unless-stopped
+     environment:
+-    - NEO4J_AUTH=neo4j/${NEO4J_PASSWORD:?Set NEO4J_PASSWORD in env.tier-data}
++    - NEO4J_AUTH=neo4j/${NEO4J_PASSWORD:?Set NEO4J_PASSWORD in env.shared}
+     - NEO4J_dbms_security_allow__csv__import__from__file__urls=true
+     # Deny LOAD CSV (http/https) to EVERY address, checked AFTER name resolution:
+     # defense in depth even on internal-only networks (it also stops Cypher from
+@@ -1614,19 +1620,31 @@
+     # APOC extensions with safe procedure allowlist
+     - NEO4J_apoc_export_file_enabled=true
+     - NEO4J_apoc_import_file_enabled=true
+-    - NEO4J_apoc_import_file_use__neo4j__config__true=true
+-    - NEO4JLABS_PLUGINS=["apoc"]
++    - NEO4J_apoc_import_file_use__neo4j__config=true
++    # NEO4J_PLUGINS (NEO4JLABS_PLUGINS was renamed in 5.0; the entrypoint warns on it).
++    # The plugin step adds dbms.security.procedures.unrestricted=apoc.* UNLESS that
++    # key is already set, so the explicit list below must stay.
++    - NEO4J_PLUGINS=["apoc"]
+     - NEO4J_dbms_security_procedures_unrestricted=apoc.coll.*,apoc.text.*,apoc.path.*,apoc.algo.*
++    # Memory: `neo4j-admin server memory-recommendation --memory=4g` on this image
++    # (matches deploy.limits.memory). Without these the Docker defaults apply: 512M
++    # heap, 512M page cache (OM docker/configuration). Heap initial = max
++    # (OM performance/memory-configuration).
++    - NEO4J_server_memory_heap_initial__size=2g
++    - NEO4J_server_memory_heap_max__size=2g
++    - NEO4J_server_memory_pagecache_size=512m
+     - DOCKED_MODE=${DOCKED_MODE:-true}
+     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
+     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
+     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+     - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_data,pmoves_graph_front
+-    ports:
+-    - ${NEO4J_BIND:-0.0.0.0}:${NEO4J_HTTP_PORT:-7474}:7474
+-    - ${NEO4J_BIND:-0.0.0.0}:${NEO4J_BOLT_PORT:-7687}:7687
++    # No ports: Neo4j is internal-only; the fleet reaches it through the
++    # neo4j-tailnet forwarder on pmoves_graph_front (#3201), and on internal-only
++    # networks a published port is inert anyway.
+     volumes:
+     - neo4j-data:/data
++    # Named, so a recreate keeps the logs (the image declares VOLUME /logs).
++    - neo4j-logs:/logs
+     - ./neo4j/cypher:/cypher:ro
+     # Every AGInT that uses the graph must reach it (#3196). Measured consumers:
+     # agent-zero's seeded Neo4j MCP (bolt://neo4j:7687, from the agent-zero
+@@ -6387,6 +6405,7 @@
+           memory: 256M
+ volumes:
+   neo4j-data: {}
++  neo4j-logs: {}
+   fleet-sentinel-data: {}  # fleet-sentinel action trail (jsonl) + state
+   archon-data: {}          # Archon /.archon workspaces + SQLite/state (#2217)
+   archon-user-home: {}     # Archon /home/appuser (Claude/gh creds, git config)
+--- a/pmoves/docker-compose.core.yml
++++ b/pmoves/docker-compose.core.yml
+@@ -1136,12 +1136,18 @@
+     # = the digest the live Knuckles graph runs today (5.26.30, a multi-arch
+     #   index Docker Hub still serves), so moving under compose changes no store
+     #   version. neo4j:5-community now means 5.26.31. (#3193)
+-    image: neo4j:5.26.30-community@sha256:037cf5756f0135cbfd66b739b6df7c7c4bb100f9ce11602f6f9538e17e02c74d
++    # NEO4J_IMAGE: the PMOVES source build (POWERFULMOVES/PMOVES-neo4j, branch
++    #   PMOVES.AI-Edition-5.26) replaces this default by digest once it passes the A/B
++    #   against this vendor image (docs/TAC/TAC_NEO4J.md section 2).
++    image: ${NEO4J_IMAGE:-neo4j:5.26.30-community@sha256:037cf5756f0135cbfd66b739b6df7c7c4bb100f9ce11602f6f9538e17e02c74d}
+     # The name the live container already has, and the single name source read
+     # by scripts/neo4j_container.py (backup, restore, start-cipher-stack).
+     container_name: pmoves-neo4j
+-    env_file:
+-    - env.tier-data
++    # No env_file: the vendor entrypoint turns EVERY NEO4J_* variable into a
++    # neo4j.conf setting (it does not exclude NEO4J_PASSWORD, which would land as
++    # PASSWORD=<plaintext>), and the data tier file also carries MinIO, Postgres,
++    # Meili and Qdrant secrets Neo4j never uses. NEO4J_AUTH below is interpolated
++    # by compose from with-env.sh, not read from env_file.
+     cap_drop:
+     - ALL
+     cap_add:
+@@ -1153,7 +1159,7 @@
+     - SETUID
+     restart: unless-stopped
+     environment:
+-    - NEO4J_AUTH=neo4j/${NEO4J_PASSWORD:?Set NEO4J_PASSWORD in env.tier-data}
++    - NEO4J_AUTH=neo4j/${NEO4J_PASSWORD:?Set NEO4J_PASSWORD in env.shared}
+     - NEO4J_dbms_security_allow__csv__import__from__file__urls=true
+     # Deny LOAD CSV (http/https) to EVERY address, checked AFTER name resolution:
+     # defense in depth even on internal-only networks (it also stops Cypher from
+@@ -1168,19 +1174,31 @@
+     # APOC extensions with safe procedure allowlist
+     - NEO4J_apoc_export_file_enabled=true
+     - NEO4J_apoc_import_file_enabled=true
+-    - NEO4J_apoc_import_file_use__neo4j__config__true=true
+-    - NEO4JLABS_PLUGINS=["apoc"]
++    - NEO4J_apoc_import_file_use__neo4j__config=true
++    # NEO4J_PLUGINS (NEO4JLABS_PLUGINS was renamed in 5.0; the entrypoint warns on it).
++    # The plugin step adds dbms.security.procedures.unrestricted=apoc.* UNLESS that
++    # key is already set, so the explicit list below must stay.
++    - NEO4J_PLUGINS=["apoc"]
+     - NEO4J_dbms_security_procedures_unrestricted=apoc.coll.*,apoc.text.*,apoc.path.*,apoc.algo.*
++    # Memory: `neo4j-admin server memory-recommendation --memory=4g` on this image
++    # (matches deploy.limits.memory). Without these the Docker defaults apply: 512M
++    # heap, 512M page cache (OM docker/configuration). Heap initial = max
++    # (OM performance/memory-configuration).
++    - NEO4J_server_memory_heap_initial__size=2g
++    - NEO4J_server_memory_heap_max__size=2g
++    - NEO4J_server_memory_pagecache_size=512m
+     - DOCKED_MODE=${DOCKED_MODE:-true}
+     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
+     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
+     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+     - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_data,pmoves_graph_front
+-    ports:
+-    - ${NEO4J_BIND:-0.0.0.0}:${NEO4J_HTTP_PORT:-7474}:7474
+-    - ${NEO4J_BIND:-0.0.0.0}:${NEO4J_BOLT_PORT:-7687}:7687
++    # No ports: Neo4j is internal-only; the fleet reaches it through the
++    # neo4j-tailnet forwarder on pmoves_graph_front (#3201), and on internal-only
++    # networks a published port is inert anyway.
+     volumes:
+     - neo4j-data:/data
++    # Named, so a recreate keeps the logs (the image declares VOLUME /logs).
++    - neo4j-logs:/logs
+     - ./neo4j/cypher:/cypher:ro
+     # Every AGInT that uses the graph must reach it (#3196). Measured consumers:
+     # agent-zero's seeded Neo4j MCP (bolt://neo4j:7687, from the agent-zero
+--- a/pmoves/docker-compose.base.yml
++++ b/pmoves/docker-compose.base.yml
+@@ -521,6 +521,7 @@
+ name: pmoves
+ volumes:
+   neo4j-data: {}
++  neo4j-logs: {}
+   fleet-sentinel-data: {}  # fleet-sentinel action trail (jsonl) + state
+   archon-data: {}          # Archon /.archon workspaces + SQLite/state (#2217)
+   archon-user-home: {}     # Archon /home/appuser (Claude/gh creds, git config)
+--- a/pmoves/docker-compose.elder-melchor.yml
++++ b/pmoves/docker-compose.elder-melchor.yml
+@@ -13,7 +13,7 @@
+   neo4j:
+     # Override to use lighter resource limits for Elder-Melchor (32GB RAM, GTX 1650)
+     environment:
+-      - NEO4J_AUTH=neo4j/${NEO4J_PASSWORD:-pmoves2026}
++      - NEO4J_AUTH=neo4j/${NEO4J_PASSWORD:?Set NEO4J_PASSWORD in env.shared}
+       - NEO4J_PLUGINS=["apoc"]
+       - NEO4J_server_memory_heap_initial__size=512m
+       - NEO4J_server_memory_heap_max__size=1G
+--- a/pmoves/docker-compose.jellyfin-ai.yml
++++ b/pmoves/docker-compose.jellyfin-ai.yml
+@@ -151,16 +151,14 @@
+ 
+   jellyfin-neo4j:
+     <<: *jf-hardened-vendor
+-    image: neo4j:5.26.22
++    image: neo4j:5.26.22@sha256:24b071534c7cfe9718689041ab9aafea2cd0d88af9ea58b768cb5eed381ab2d0
+     container_name: pmoves-jellyfin-neo4j
+     profiles: ["default", "jellyfin-ai"]
+     environment:
+-      - NEO4J_AUTH=neo4j/${JELLYFIN_NEO4J_PASSWORD:-mediapassword123}
+-      - NEO4J_dbms_security_procedures_unrestricted=gds.*
+-      - NEO4J_dbms_security_procedures_allowlist=gds.*
+-      - NEO4J_dbms_memory_heap_initial__size=512m
+-      - NEO4J_dbms_memory_heap_max__size=2G
+-      - NEO4J_dbms_memory_pagecache_size=1G
++      - NEO4J_AUTH=neo4j/${JELLYFIN_NEO4J_PASSWORD:?Set JELLYFIN_NEO4J_PASSWORD}
++      - NEO4J_server_memory_heap_initial__size=2G
++      - NEO4J_server_memory_heap_max__size=2G
++      - NEO4J_server_memory_pagecache_size=1G
+     volumes:
+       - ./${JELLYFIN_AI_BASE:-jellyfin-ai}/neo4j/data:/data
+       - ./${JELLYFIN_AI_BASE:-jellyfin-ai}/neo4j/logs:/logs
+@@ -228,7 +226,7 @@
+       - AUDIO_MODEL_ID=${AUDIO_MODEL_ID:-qwen3-vl:8b}
+       - NEO4J_URI=${JELLYFIN_NEO4J_URI:-bolt://jellyfin-neo4j:7687}
+       - NEO4J_USER=${JELLYFIN_NEO4J_USER:-neo4j}
+-      - NEO4J_PASSWORD=${JELLYFIN_NEO4J_PASSWORD:-mediapassword123}
++      - NEO4J_PASSWORD=${JELLYFIN_NEO4J_PASSWORD:?Set JELLYFIN_NEO4J_PASSWORD}
+       - JELLYFIN_HWACCEL_MODE=${JELLYFIN_HWACCEL_MODE:-software}
+       - JELLYFIN_ENABLE_HDR=${JELLYFIN_ENABLE_HDR:-1}
+       - JELLYFIN_PREFER_AV1=${JELLYFIN_PREFER_AV1:-1}
+@@ -286,7 +284,7 @@
+       - JELLYFIN_URL=${JELLYFIN_URL:-http://${JELLYFIN_SERVICE_HOST:-jellyfin}:8096}
+       - NEO4J_URI=${JELLYFIN_NEO4J_URI:-bolt://jellyfin-neo4j:7687}
+       - NEO4J_USER=${JELLYFIN_NEO4J_USER:-neo4j}
+-      - NEO4J_PASSWORD=${JELLYFIN_NEO4J_PASSWORD:-mediapassword123}
++      - NEO4J_PASSWORD=${JELLYFIN_NEO4J_PASSWORD:?Set JELLYFIN_NEO4J_PASSWORD}
+       - REDIS_URL=${JELLYFIN_REDIS_URL:-redis://jellyfin-redis:6379}
+       - JELLYFIN_HWACCEL_MODE=${JELLYFIN_HWACCEL_MODE:-software}
+       - JELLYFIN_ENABLE_HDR=${JELLYFIN_ENABLE_HDR:-1}
