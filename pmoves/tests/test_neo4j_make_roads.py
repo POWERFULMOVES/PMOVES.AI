@@ -14,6 +14,7 @@ files are never read; the password is whatever the test puts in the env.
 """
 from __future__ import annotations
 
+import hashlib
 import re
 import shutil
 import subprocess
@@ -77,6 +78,106 @@ def test_no_neo4j_default_password_fallback():
         # `${NEO4J_PASSWORD:-}` (empty, for set -u) is fine; a non-empty default is a fallback password
         assert not re.search(r"NEO4J_[A-Z_]*PASSWORD:-[^}]", block), block
         assert "-p " not in block.replace("-pl ", ""), block
+
+
+REPO = PMOVES.parent
+# sha256 of the password-shaped fallback literal removed from
+# data/consciousness/load_neo4j_consciousness.sh (and two other files) in 2026-10.
+# The literal itself is never written here; it stays in history and is treated as burned.
+BURNED_SHA256 = "82193070725ee03572a03400e32f07ef142f146bdc48f7ccca796ddc7692a49f"
+ARGV_PASSWORD = re.compile(
+    r"""(?:\s-p\s*|--password[=\s]\s*|\s-u\s*)["']?[^"'\s]*\$\{?NEO4J_[A-Z_]*PASSWORD""")
+
+
+def _neo4j_shell_scripts() -> list[Path]:
+    roots = [REPO / "scripts", PMOVES / "scripts", PMOVES / "data"]
+    files = {f for r in roots if r.is_dir() for f in r.rglob("*.sh")}
+    return sorted(f for f in files if re.search(r"cypher-shell|NEO4J_[A-Z_]*PASSWORD", f.read_text(errors="ignore")))
+
+
+def _script_id(f: Path) -> str:
+    return str(f.relative_to(REPO))
+
+
+def _script_params():
+    for f in _neo4j_shell_scripts():
+        marks = []
+        if f.name == "backup-neo4j.sh":
+            marks.append(pytest.mark.xfail(strict=True, reason=(
+                "neo4j-backup/restore are a separate lane (docs/TAC/TAC_NEO4J.md section 7): "
+                "`:-changeme` fallback and --password= on neo4j-admin argv. Strict, so fixing it turns this red.")))
+        yield pytest.param(f, id=_script_id(f), marks=marks)
+
+
+def test_neo4j_shell_script_set_is_not_empty():
+    ids = {_script_id(f) for f in _neo4j_shell_scripts()}
+    for known in ("pmoves/scripts/neo4j_bootstrap.sh", "pmoves/data/consciousness/load_neo4j_consciousness.sh",
+                  "pmoves/scripts/verify_chr_conch.sh"):
+        assert known in ids, ids
+
+
+@pytest.mark.parametrize("script", list(_script_params()))
+def test_no_neo4j_password_fallback_or_argv_in_shell_scripts(script):
+    text = script.read_text()
+    assert not re.search(r"NEO4J_[A-Z_]*PASSWORD:-[^}]", text), "non-empty password fallback"
+    assert not ARGV_PASSWORD.search(text), ARGV_PASSWORD.search(text).group(0)
+    assert not re.search(r"cypher-shell[^\n]*\s-p\s", text), "cypher-shell -p on argv"
+
+
+def test_argv_password_pattern_catches_the_shapes_it_replaced():
+    for bad in ('cypher-shell -u "$NEO4J_USER" -p "$NEO4J_PASSWORD" "',
+                '--password="$NEO4J_PASSWORD"',
+                'curl -s -u "neo4j:$NEO4J_PASSWORD" http://x'):
+        assert ARGV_PASSWORD.search(bad), bad
+    for good in ('docker exec -i -e NEO4J_USERNAME -e NEO4J_PASSWORD "$c" cypher-shell',
+                 '[ -n "${NEO4J_PASSWORD:-}" ]'):
+        assert not ARGV_PASSWORD.search(good), good
+
+
+@pytest.mark.skipif(shutil.which("git") is None, reason="git not installed")
+def test_the_burned_literal_is_in_no_tracked_file():
+    proc = subprocess.run(["git", "-C", str(REPO), "grep", "-hoE", r"pm_[A-Za-z0-9_]{20,}"],
+                          capture_output=True, text=True)
+    assert proc.returncode in (0, 1), proc.stderr
+    # an int, not the list: pytest's assertion rewrite would print the matching token
+    hits = sum(hashlib.sha256(tok.encode()).hexdigest() == BURNED_SHA256 for tok in set(proc.stdout.split()))
+    assert hits == 0, "the burned literal is still in a tracked file (value not printed)"
+
+
+LOADER = PMOVES / "data" / "consciousness" / "load_neo4j_consciousness.sh"
+
+
+def _loader(tmp_path: Path, password: str | None):
+    stub = _docker_guard().build_stub_env(tmp_path / "bin", stub_make=False,
+                                          behaviours={"docker": 'if [ "$1" = "exec" ]; then cat >/dev/null; fi\n'})
+    env = dict(stub)
+    for k in ("NEO4J_PASSWORD", "NEO4J_AUTH", "NEO4J_USERNAME"):
+        env.pop(k, None)
+    if password is not None:
+        env["NEO4J_PASSWORD"] = password
+    proc = subprocess.run(["bash", str(LOADER)], env=env, capture_output=True, text=True, timeout=120)
+    docker = [row[1:] for row in stub.calls() if row[0] == "docker"]
+    return proc.returncode, docker, proc.stdout + proc.stderr
+
+
+@pytest.mark.parametrize("password", [None, ""], ids=["unset", "empty"])
+def test_consciousness_loader_fails_closed_before_docker(tmp_path, password):
+    rc, docker, out = _loader(tmp_path, password)
+    assert rc != 0, out
+    assert "NEO4J_PASSWORD is unset or empty" in out, out
+    assert docker == [], docker
+
+
+def test_consciousness_loader_password_goes_by_env_never_argv(tmp_path):
+    rc, docker, out = _loader(tmp_path, SENTINEL)
+    assert rc == 0, out
+    execs = [c for c in docker if c and c[0] == "exec"]
+    assert len(execs) == 11, docker
+    for call in execs:
+        assert "pmoves-neo4j" in call and "pmoves-neo4j-1" not in call, call
+        assert [call[i + 1] for i, tok in enumerate(call[:-1]) if tok == "-e"] == ["NEO4J_USERNAME", "NEO4J_PASSWORD"], call
+        assert "-p" not in call and "--password" not in call, call
+        assert all(SENTINEL not in tok for tok in call), call
 
 
 def test_consciousness_schema_target_points_at_a_real_file():
