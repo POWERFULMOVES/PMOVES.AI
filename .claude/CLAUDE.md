@@ -79,7 +79,7 @@ Detail files live in `.claude/context/`:
 - `tensorzero.md` — TensorZero detailed documentation
 - `flute-gateway.md` — Flute-Gateway API reference
 
-**CHIT-Aware Services:** Tokenism Simulator (8103), Hi-RAG v2 (8086/8087), Gateway, Consciousness (8106), Evo Controller (8113), A2UI NATS Bridge (9224), AgentGym RL Coordinator. See `pmoves/docs/audit/CHIT_INTEGRATION_STATUS.md` for per-service status (5 Full, 8 Partial, 15 None).
+**CHIT-Aware Services:** Tokenism Simulator (8103), Hi-RAG v2 (8086/8087), Gateway, Consciousness (8106), Evo Controller (8113), A2UI NATS Bridge (9224), AgentGym RL Coordinator. See `pmoves/docs/audit/CHIT_INTEGRATION_STATUS.md` for per-service status (4 Full, 11 Partial, 14 None, counted from that file 2026-10-01).
 
 ## Git Worktree Workflow
 
