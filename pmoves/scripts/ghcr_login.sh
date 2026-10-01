@@ -6,7 +6,8 @@
 #   1. GHCR_READ_TOKEN_FILE (read-only node pulls). Wins whenever it is set:
 #      it is read BEFORE with-env.sh is sourced, so neither exported
 #      GHCR_TOKEN/GH_PAT_PUBLISH nor an env file can displace it. The file
-#      must be mode 0600 and hold a classic PAT (ghp_ + 36), because GitHub
+#      must be a regular file (not a symlink) owned by the invoking uid, mode
+#      exactly 0600, holding exactly one line: a classic PAT (ghp_ + 36), because GitHub
 #      Packages only accepts classic PATs (GitHub docs,
 #      data/reusables/package_registry/packages-classic-pat-only.md); a
 #      fine-grained PAT or App installation token is not a documented GHCR
@@ -21,6 +22,12 @@
 # Without a docker credential helper (pass / secretservice), docker stores the
 # login base64-encoded in ~/.docker/config.json (Docker docs, docker login
 # "Credential stores").
+#
+# xtrace off FIRST, before any token handling: under `bash -x`, or with
+# SHELLOPTS=xtrace exported into `make docker-login`, the token was printed in
+# the trace of its assignment, the shape test and the printf (review of #3248
+# @ 7407a27c). The braces + redirect keep the `set +x` itself out of the trace.
+{ set +x; } 2>/dev/null
 set -uo pipefail
 
 REGISTRY="ghcr.io"
@@ -34,15 +41,36 @@ file_mode() {
   stat -c '%a' "$1" 2>/dev/null || stat -f '%Lp' "$1" 2>/dev/null
 }
 
+file_uid() {
+  stat -c '%u' "$1" 2>/dev/null || stat -f '%u' "$1" 2>/dev/null
+}
+
 if [ -n "$read_file" ]; then
   read_file="${read_file/#\~/$HOME}"
   source_name="GHCR_READ_TOKEN_FILE"
+  # Symlinks are refused outright: stat reports the link's own mode, so a
+  # chmod hint would act on the target and never clear the error.
+  [ ! -L "$read_file" ] || die "GHCR_READ_TOKEN_FILE must be a regular file, not a symlink: $read_file"
   [ -f "$read_file" ] || die "GHCR_READ_TOKEN_FILE is not a regular file: $read_file"
+  owner="$(file_uid "$read_file")"
+  [ -n "$owner" ] && [ "$owner" = "$(id -u)" ] \
+    || die "GHCR_READ_TOKEN_FILE must be owned by the invoking user (uid $(id -u), file uid ${owner:-unknown}): $read_file"
   mode="$(file_mode "$read_file")"
-  [ "$mode" = "600" ] || die "GHCR_READ_TOKEN_FILE must be mode 0600 (is ${mode:-unknown}): chmod 600 $read_file"
+  [ "$mode" = "600" ] \
+    || die "GHCR_READ_TOKEN_FILE must be mode exactly 0600 (is ${mode:-unknown}; stricter modes such as 0400 are refused too): chmod 600 $read_file"
   [ -n "$read_user" ] || die "GHCR_USERNAME (the PAT owner's GitHub login) is required with GHCR_READ_TOKEN_FILE"
   user="$read_user"
-  token="$(tr -d '\r\n' < "$read_file")"
+  # Exactly one line: strip ONE trailing LF and ONE trailing CR, nothing else,
+  # so a token split across lines is refused rather than silently joined.
+  # read -d '' succeeds only if it hits a NUL, which no token contains.
+  if IFS= read -r -d '' token < "$read_file"; then
+    die "GHCR_READ_TOKEN_FILE must hold exactly one line (it contains a NUL byte)"
+  fi
+  token="${token%$'\n'}"
+  token="${token%$'\r'}"
+  case "$token" in
+    *$'\n'*|*$'\r'*) die "GHCR_READ_TOKEN_FILE must hold exactly one line (the token, optionally ending in LF or CRLF)" ;;
+  esac
   [[ "$token" =~ ^ghp_[A-Za-z0-9]{36}$ ]] \
     || die "GHCR_READ_TOKEN_FILE does not hold a classic PAT (ghp_ + 36 alphanumerics); GitHub Packages accepts only classic PATs"
 else
