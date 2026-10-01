@@ -328,14 +328,19 @@ juicefs-cross-node-setup: ## Mount JuiceFS on this node (run on remote): make ju
 	@# and node shape (JUICEFS_NETWORK, DATA_DIR, ...) resolves from .env.local.
 	@# It cannot be $$(JUICEFS_META_PASSWORD): make populates its variables only
 	@# from the environment and Makefiles, and nothing includes the generated tier
-	@# files. Same idiom as mk/yt-cookies.mk:18 and the lesson at infra.mk:603.
+	@# files. The wrapper form `bash scripts/with-env.sh <command>` is with-env.sh's
+	@# documented entry point (scripts/with-env.sh:143); the earlier printenv form
+	@# followed mk/yt-cookies.mk:33-37. (Older text cited yt-cookies.mk:18 and
+	@# infra.mk:603; neither line holds either idiom.)
 	@#
 	@# This recipe must NOT resolve the fallback into DB_PASS itself: an always-
 	@# non-empty DB_PASS reads as "explicit" to the script, which disables its
 	@# role/credential pairing rule. Only what the operator named on the command
 	@# line is forwarded, as JFS_SETUP_*, because with-env.sh re-sources the node's
 	@# env files over the caller's environment and would silently replace a plain
-	@# META_ROLE/DB_PASS. Empty means "not named".
+	@# META_ROLE/DB_PASS (scripts/with-env.sh:55 `set -a`, :85 .env.local last).
+	@# Empty means "not named". The JFS_SETUP_* forwarding is HAND-ROLLED: no
+	@# prior recipe in Makefile or mk/*.mk forwards variables past with-env.sh.
 	@#
 	@# DB_PASS passes as the sub-process ENVIRONMENT, not argv, and is handed to
 	@# JuiceFS via META_PASSWORD, so it never appears in `ps`. Passing it as

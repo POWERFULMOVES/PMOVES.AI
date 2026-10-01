@@ -37,6 +37,9 @@ DB_PORT="${DB_PORT:-5432}"
 # environment. A META_ROLE/DB_PASS named on the make command line would be
 # silently replaced by the node file, so make forwards them as JFS_SETUP_*,
 # names no env file sets, and they win here.
+#   Provenance: the override is with-env.sh's own behaviour (scripts/with-env.sh:55
+#   `set -a` export; :85 loads .env.local LAST). The JFS_SETUP_* forwarding is
+#   HAND-ROLLED: no prior PMOVES recipe forwards make variables past with-env.sh.
 DB_PASS="${JFS_SETUP_DB_PASS:-${DB_PASS:-}}"
 DB_PASS_EXPLICIT="${DB_PASS:+set}"
 DB_PASS="${DB_PASS:-${JUICEFS_META_PASSWORD:-}}"
@@ -54,6 +57,13 @@ DB_PASS="${DB_PASS:-${JUICEFS_META_PASSWORD:-}}"
 # version defaulted META_ROLE first, so "no role named" could never be observed
 # and the rule was dead (pmoves/tests/scripts/test_juicefs_cross_node_role_pairing.py).
 # An empty META_ROLE counts as "not named".
+#   Provenance: to JuiceFS the role is only the DSN username, and the vendor docs
+#   say nothing about choosing one (https://github.com/juicedata/juicefs/blob/v1.3.0/docs/en/reference/how_to_set_up_metadata_engine.md,
+#   "### PostgreSQL"). juicefs_meta is PMOVES's scoped role
+#   (supabase/initdb/00_3_juicefs_meta_role.sql), and JUICEFS_META_PASSWORD is its
+#   funnel slot (docs/operations/JUICEFS_META_CREDENTIAL_RUNBOOK.md:21). The
+#   AUTOMATIC pairing is HAND-ROLLED: the runbook prescribes passing META_ROLE
+#   explicitly (docs/operations/JUICEFS_CROSS_NODE_MOUNT_RUNBOOK.md:92-102).
 META_ROLE="${JFS_SETUP_META_ROLE:-${META_ROLE:-}}"
 if [ -z "$META_ROLE" ]; then
     if [ -z "$DB_PASS_EXPLICIT" ] && [ -n "${JUICEFS_META_PASSWORD:-}" ]; then
@@ -63,8 +73,8 @@ if [ -z "$META_ROLE" ]; then
     fi
 fi
 MOUNT_POINT="${MOUNT_POINT:-$HOME/pmoves-fs}"
-# JUICEFS_DATA_DIR is the name `make juicefs-mount-local` reads; accept it here
-# too so one knob moves the cache backing dir on either path.
+# JUICEFS_DATA_DIR is the name `make juicefs-mount-local` reads (mk/egress.mk:395);
+# accept it here too so one knob moves the cache backing dir on either path.
 DATA_DIR="${DATA_DIR:-${JUICEFS_DATA_DIR:-$HOME/.local/share/juicefs-data}}"
 # Escape hatch for the storage preflight, e.g. when deliberately standing up a
 # node-local FS rather than joining the shared one.
@@ -85,7 +95,10 @@ echo ""
 
 # Create directories
 # DATA_DIR must fail loudly: a silent failure here falls through to `docker -v`,
-# which creates the directory root-owned. Only MOUNT_POINT is tolerated, because a
+# which creates a missing source directory itself (Docker docs, "Bind mounts" >
+# "Syntax": "If you use --volume to bind-mount a file or directory that does not
+# yet exist on the Docker host, Docker automatically creates the directory"),
+# and a rootful daemon creates it root-owned. Only MOUNT_POINT is tolerated, because a
 # stale FUSE endpoint makes mkdir fail and the guard below diagnoses it properly.
 mkdir -p "$DATA_DIR"
 mkdir -p "$MOUNT_POINT" 2>/dev/null || true
@@ -111,6 +124,12 @@ docker pull juicedata/mount:ce-v1.3.0
 # is safe to appear in `ps` / `docker inspect`. This is the fix for the exposure
 # recorded in the 2026-08-01 metadata note (b850's mount still has the password
 # inline in its command line).
+#   Provenance (https://github.com/juicedata/juicefs/blob/v1.3.0/docs/en/reference/how_to_set_up_metadata_engine.md, "### PostgreSQL"):
+#   DSN form postgres://[username][:<password>]@<host>[:5432]/<database-name>[?parameters];
+#   a non-public schema needs search_path in the connection string, and only one schema
+#   is supported; the password may be passed via META_PASSWORD instead of the URL
+#   (also the vendor's recommendation: docs/en/administration/metadata/
+#   postgresql_best_practices.md, "Passing sensitive information via environment variables").
 META_URL="postgres://${META_ROLE}@${JUICEFS_HOST}:${DB_PORT}/postgres?search_path=juicefs_meta&sslmode=disable"
 
 # Preflight: refuse to join a file-backed volume from a remote node. Storage is baked
@@ -130,6 +149,10 @@ PREFLIGHT_OUT="$(META_PASSWORD="$DB_PASS" docker run --rm --network "${JUICEFS_N
 STORAGE="$(printf '%s\n' "$PREFLIGHT_OUT" | sed -n 's/.*"Storage"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)"
 if [ -z "$STORAGE" ]; then
     echo "ERROR: storage preflight probe produced no Storage field. Probe output (credential redacted):"
+    # -F: the password is a literal, never a regex (GNU grep manual, 2.1.2 Matching
+    # Control: "-F --fixed-strings Interpret patterns as fixed strings, not regular
+    # expressions"; POSIX grep -F). With a regex, BRE metacharacters in a password
+    # could miss its own line or make grep error and swallow every diagnostic.
     printf '%s\n' "$PREFLIGHT_OUT" | grep -vF -- "$DB_PASS" | sed 's/^/  | /' >&2
     exit 1
 fi
