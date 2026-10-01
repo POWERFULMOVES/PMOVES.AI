@@ -518,6 +518,23 @@ def test_register_status_branch_probe_reports_a_baton_aimed_at_that_lane(tmp_pat
     assert rc == 0 and "BATON ROWS" not in capsys.readouterr().out
 
 
+def test_register_status_branch_probe_free_lane_with_a_noop_baton_exits_0(tmp_path, capsys):
+    # Delta review of #3242, P3-1: a no-op baton (the holder holds no row on
+    # the lane) is REPORTED in the BRANCH= probe but must not change the
+    # lane's verdict. FREE is exit 0.
+    register = tmp_path / "register.md"
+    register.write_text(
+        f"- `2026-09-20T00:00:00Z` CLAIM `{HOLDER}` branch: `feat/widget` · scope: x\n"
+        f"- `{RULING_TS}` NOTE `{OPERATOR}` branch: `fix/free` · baton-from: "
+        f"`{HOLDER}` · baton-to: `{SIGNER}` · scope: s\n"
+        + _baton("fix/free", f"grant: `{RULING_TS}`"), encoding="utf-8")
+    rc = _status().main(["--register", str(register), "--branch", "fix/free",
+                         "--owner", "CODEX", "--now", "2026-10-01T01:00:00Z"])
+    out = capsys.readouterr().out
+    assert "FREE" in out and "no-op for that lane" in out
+    assert rc == 0
+
+
 def test_register_status_json_carries_the_batons(tmp_path, capsys):
     rc = _status().main(["--register", str(_refused_register(tmp_path)),
                          "--now", "2026-10-01T00:00:00Z", "--json"])

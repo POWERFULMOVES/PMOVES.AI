@@ -561,11 +561,16 @@ def main(argv=None) -> int:
         code = report_branch(verdict, args.branch, bool(args.owner), lanes,
                              now, prose)
         # Only batons aimed at THIS lane: a refused baton elsewhere is not a
-        # fact about whether this lane is free.
+        # fact about whether this lane is free. And REPORTED, never scored:
+        # the lane's exit code is the gate's verdict on the lane. A baton that
+        # closed nothing leaves the holder's row open, which the verdict above
+        # already reports as HELD; a no-op baton on a FREE lane must not turn
+        # FREE into exit 1 (found in delta review of #3242).
         batons = [e for e in batons if args.branch in e.lanes]
+        report_batons(batons, prose, code)
     else:
         code = report_listing(lanes, register, now, prose)
-    code = report_batons(batons, prose, code)
+        code = report_batons(batons, prose, code)
 
     if args.json:
         json.dump(_json_payload(lanes, register, now, args.branch, verdict,
