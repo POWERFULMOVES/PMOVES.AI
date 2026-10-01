@@ -141,6 +141,19 @@ images:
     dockerfile: services/botz-gateway/Dockerfile
     image: ghcr.io/powerfulmoves/pmoves-botz-gateway
 
+  # Neo4j writers deployed per operator decision 2026-10-01 (PR #3255).
+  # Build-and-start proven locally from the scratch Dockerfile diffs on that PR;
+  # the in-repo Dockerfiles need the dockerfile:pr:3255 fixes before this builds.
+  - name: pmoves-graph-linker
+    context: pmoves
+    dockerfile: services/graph-linker/Dockerfile
+    image: ghcr.io/powerfulmoves/pmoves-graph-linker
+
+  - name: pmoves-gateway
+    context: pmoves
+    dockerfile: services/gateway/Dockerfile
+    image: ghcr.io/powerfulmoves/pmoves-gateway
+
   - name: pmoves-tokenism-simulator
     context: pmoves
     dockerfile: services/tokenism-simulator/Dockerfile
