@@ -110,6 +110,9 @@
             "postgres-mcp@0.3.0",
             "--access-mode=unrestricted"
           ],
+          "client_args": {
+            "kilocode": ["postgres-mcp@0.3.0", "--access-mode=restricted"]
+          },
           "env": {
             "DATABASE_URI": "${SUPABASE_DB_URI}"
           }
