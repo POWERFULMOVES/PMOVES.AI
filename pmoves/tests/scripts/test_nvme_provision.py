@@ -12,8 +12,13 @@ NVME_PROVISION_FSTAB.
 What it covers (the reconciliation verdicts in
 pmoves/docs/operations/KNUCKLES_NVME_OMARCHY_STORAGE_2026-09-22.md):
   * root guard: refuses the root disk AND a partition of it, through a plain
-    partition, a btrfs subvolume source and a LUKS stack; fails closed when the
-    root disk cannot be resolved;
+    partition, a btrfs subvolume source and a LUKS stack; refuses the SECOND
+    disk of an md, LVM or btrfs multi-device root; fails closed when the root
+    disk cannot be resolved;
+  * blank check: refuses a whole-disk filesystem / LVM PV / md member / LUKS /
+    zfs signature (including one only the blkid -p probe sees) and a mounted
+    child, before any write;
+  * ownership: a re-run as plain root with no SUDO_USER leaves it alone;
   * idempotence: an already-provisioned drive exits 0 "already provisioned"
     BEFORE the formatted-partition refusal, with no destructive call;
   * partition naming: nvme9n1 -> nvme9n1p1, never nvme9n11, and the
@@ -44,7 +49,7 @@ STUBBED = [
     "mount", "mountpoint", "systemctl", "chown", "df", "id", "sleep",
 ]
 DANGEROUS = ["sgdisk", "wipefs", MKE2FS, "mount", "umount", "parted", "partprobe", "systemctl", "dd", "blkdiscard"]
-SAFE = ["bash", "sed", "awk", "grep", "cat", "cp", "date", "tail", "head", "readlink", "mkdir", "tr", "env", "printf"]
+SAFE = ["bash", "sed", "awk", "grep", "cat", "cp", "date", "tail", "head", "readlink", "mkdir", "tr", "env", "printf", "sort"]
 
 STUB = r'''#!PYTHON
 import json, os, sys
@@ -74,26 +79,52 @@ if name == "lsblk":
         else:
             dev = a
         i += 1
-    if dev not in devs:
+    if dev is None:
+        rows = list(devs)  # no device argument: every block device
+    elif dev not in devs:
         sys.stderr.write(f"lsblk: {dev}: not a block device\n"); sys.exit(32)
-    rows = [dev] if "d" in flags else [dev] + devs[dev].get("children", [])
+    elif "d" in flags:
+        rows = [dev]
+    elif "s" in flags:
+        # --inverse: the device, then every dependency (all parents, recursively)
+        rows, todo = [], [dev]
+        while todo:
+            r = todo.pop(0)
+            if r in rows:
+                continue
+            rows.append(r)
+            d = devs[r]
+            parents = d.get("parents") or ([d["pkname"]] if d.get("pkname") else [])
+            todo.extend(p if p.startswith("/dev/") else "/dev/" + p for p in parents)
+    else:
+        rows = [dev] + devs[dev].get("children", [])
+    keys = {"NAME": None, "TYPE": "type", "PKNAME": "pkname", "FSTYPE": "fstype", "LABEL": "label",
+            "SIZE": "size", "UUID": "uuid"}
     for r in rows:
         d = devs[r]
-        for col in cols:
-            col = col.upper()
-            if col == "MOUNTPOINTS":
-                for mp in d.get("mountpoints", []):
-                    print(mp)
-            else:
-                key = {"TYPE": "type", "PKNAME": "pkname", "FSTYPE": "fstype", "LABEL": "label", "SIZE": "size"}[col]
-                print(d.get(key, ""))
+        if [c.upper() for c in cols] == ["MOUNTPOINTS"]:
+            for mp in d.get("mountpoints", []):
+                print(mp)
+            continue
+        vals = [r if c.upper() == "NAME" else str(d.get(keys[c.upper()], "")) for c in cols]
+        print(" ".join(vals))
 elif name == "findmnt":
     # Any spelling of "the SOURCE column for /" (-no SOURCE / or -n -o SOURCE /).
     if "SOURCE" in args and args[-1] == "/":
         print(st["root_source"])
+    elif "UUID" in args and args[-1] == "/":
+        print(st.get("root_uuid", ""))
 elif name == "blkid":
     dev = args[-1]
-    if devs.get(dev, {}).get("fstype") == "ext4":
+    d = devs.get(dev, {})
+    if "-p" in args:
+        # low-level probe: what is ON the device, even if the udev cache
+        # (lsblk FSTYPE) has not caught up ("probe_type" overrides for that case)
+        found = d.get("probe_type", d.get("fstype", ""))
+        if found:
+            print(found)
+        sys.exit(0 if found else 2)
+    if d.get("fstype") == "ext4":
         print(st.get("uuid", "11111111-2222-3333-4444-555555555555"))
 elif name == "sgdisk":
     dev = args[-1]
@@ -166,12 +197,14 @@ class Harness:
         self.fstab.write_text("UUID=aaaa  /  ext4  errors=remount-ro  0  1\n")
         self.mnt = str(tmp_path / "mnt" / "pmoves-nvme1")
 
-    def run(self, *flags, device="/dev/nvme9n1", yes=True):
+    def run(self, *flags, device="/dev/nvme9n1", yes=True, sudo_user="tester"):
         argv = ["bash", str(SCRIPT), f"--device={device}", f"--mount={self.mnt}", "--role=creator-store", *flags]
         if yes:
             argv.append("--yes-really")
         env = {"PATH": str(self.bin), "HOME": str(self.tmp), "NVME_STUB_STATE": str(self.state),
-               "NVME_STUB_LOG": str(self.log), "NVME_PROVISION_FSTAB": str(self.fstab), "SUDO_USER": "tester"}
+               "NVME_STUB_LOG": str(self.log), "NVME_PROVISION_FSTAB": str(self.fstab), "USER": "root"}
+        if sudo_user:
+            env["SUDO_USER"] = sudo_user
         return subprocess.run(argv, env=env, capture_output=True, text=True, timeout=60)
 
     def calls(self, tool=None):
@@ -264,6 +297,20 @@ def test_rerun_on_provisioned_drive_is_a_no_op(tmp_path):
     assert h.destructive() == [], h.calls()
     assert h.fstab.read_text() == before  # tab-separated entry recognised; nothing appended
     assert h.calls("systemctl") == []
+    assert ["chown", "tester:tester", h.mnt] in h.calls("chown")  # SUDO_USER named a user
+
+
+def test_rerun_as_plain_root_leaves_ownership_alone(tmp_path):
+    devs = base_devices()
+    devs["/dev/nvme9n1"]["children"] = ["/dev/nvme9n1p1"]
+    devs["/dev/nvme9n1p1"] = _part("/dev/nvme9n1", "ext4", "PMOVES-NVME1", mountpoints=("/mnt/x",))
+    h = Harness(tmp_path, devices=devs)
+    h.fstab.write_text(f"UUID=bbbb  {h.mnt}  ext4  defaults,nofail  0  2\n")
+    st = json.loads(h.state.read_text()); st["mounted"] = [h.mnt]; h.state.write_text(json.dumps(st))
+    r = h.run(sudo_user=None)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert h.calls("chown") == [], h.calls("chown")
+    assert "leaving ownership" in r.stdout
 
 
 def test_foreign_formatted_partition_is_refused(tmp_path):
@@ -272,8 +319,85 @@ def test_foreign_formatted_partition_is_refused(tmp_path):
     devs["/dev/nvme9n1p1"] = _part("/dev/nvme9n1", "ext4", "SOMEONE-ELSE")
     h = Harness(tmp_path, devices=devs)
     r = h.run()
-    assert r.returncode == 1 and "partition table with data" in r.stderr, r.stderr
+    assert r.returncode == 1 and "/dev/nvme9n1p1 carries a ext4 signature" in r.stderr, r.stderr
     assert h.destructive() == []
+
+
+# --- not blank: whole-disk signatures, mounts, multi-device roots ----------
+def test_whole_disk_filesystem_mounted_is_refused(tmp_path):
+    # The review's P1 case: no partition table, a whole-disk ext4 in use.
+    devs = base_devices()
+    devs["/dev/nvme9n1"].update(fstype="ext4", label="SOMEONES-DATA", mountpoints=["/srv/data"])
+    h = Harness(tmp_path, devices=devs)
+    r = h.run()
+    assert r.returncode == 1 and "/dev/nvme9n1 carries a ext4 signature" in r.stderr, r.stderr
+    assert h.destructive() == []
+
+
+@pytest.mark.parametrize("sig", ["LVM2_member", "linux_raid_member", "crypto_LUKS", "zfs_member"])
+def test_whole_disk_member_signature_is_refused(tmp_path, sig):
+    devs = base_devices()
+    devs["/dev/nvme9n1"]["fstype"] = sig
+    h = Harness(tmp_path, devices=devs)
+    r = h.run()
+    assert r.returncode == 1 and f"carries a {sig} signature" in r.stderr, r.stderr
+    assert h.destructive() == []
+
+
+def test_signature_the_udev_cache_missed_is_caught_by_blkid_probe(tmp_path):
+    devs = base_devices()
+    devs["/dev/nvme9n1"]["probe_type"] = "LVM2_member"  # lsblk FSTYPE still empty
+    h = Harness(tmp_path, devices=devs)
+    r = h.run()
+    assert r.returncode == 1 and "carries a LVM2_member signature" in r.stderr, r.stderr
+    assert any(c[0] == "blkid" and "-p" in c for c in h.calls())
+    assert h.destructive() == []
+
+
+def test_mounted_child_is_refused(tmp_path):
+    devs = base_devices()
+    devs["/dev/nvme9n1"]["children"] = ["/dev/nvme9n1p1"]
+    devs["/dev/nvme9n1p1"] = _part("/dev/nvme9n1", "", "", mountpoints=("/srv/scratch",))
+    h = Harness(tmp_path, devices=devs)
+    r = h.run()
+    assert r.returncode == 1 and "/dev/nvme9n1p1 is mounted at /srv/scratch" in r.stderr, r.stderr
+    assert h.destructive() == []
+
+
+def _second_disk(devs, **fields):
+    devs["/dev/nvme7n1"] = _disk("/dev/nvme7n1")
+    devs["/dev/nvme7n1"].update(fields)
+    return devs
+
+
+def test_second_disk_of_an_md_root_is_refused(tmp_path):
+    devs = _second_disk(base_devices(), children=["/dev/nvme7n1p1"])
+    devs["/dev/nvme7n1p1"] = _part("/dev/nvme7n1")
+    # PKNAME (one parent, as real lsblk -d reports for a multi-parent device) + every parent for -s.
+    devs["/dev/md0"] = {"type": "raid1", "pkname": "nvme8n1p2", "parents": ["/dev/nvme8n1p2", "/dev/nvme7n1p1"], "fstype": "ext4",
+                        "label": "", "mountpoints": ["/"]}
+    h = Harness(tmp_path, devices=devs, root_source="/dev/md0")
+    r = h.run(device="/dev/nvme7n1")
+    assert r.returncode == 1 and "hosts the running root filesystem" in r.stderr and "/dev/nvme7n1" in r.stderr, r.stderr
+    assert h.destructive() == []
+
+
+def test_second_pv_of_an_lvm_root_is_refused(tmp_path):
+    devs = _second_disk(base_devices())  # whole-disk PV, no partitions
+    devs["/dev/mapper/vg-root"] = {"type": "lvm", "pkname": "nvme8n1p2", "parents": ["/dev/nvme8n1p2", "/dev/nvme7n1"], "fstype": "ext4",
+                                   "label": "", "mountpoints": ["/"]}
+    h = Harness(tmp_path, devices=devs, root_source="/dev/mapper/vg-root")
+    r = h.run(device="/dev/nvme7n1")
+    assert r.returncode == 1 and "hosts the running root filesystem" in r.stderr, r.stderr
+
+
+def test_second_member_of_a_btrfs_raid_root_is_refused(tmp_path):
+    # findmnt shows ONE member as SOURCE; the other shares the filesystem UUID.
+    devs = _second_disk(base_devices(), fstype="btrfs", uuid="fs-uuid-1")
+    devs["/dev/nvme8n1p2"].update(fstype="btrfs", uuid="fs-uuid-1")
+    h = Harness(tmp_path, devices=devs, root_source="/dev/nvme8n1p2[/@]", root_uuid="fs-uuid-1")
+    r = h.run(device="/dev/nvme7n1")
+    assert r.returncode == 1 and "hosts the running root filesystem" in r.stderr, r.stderr
 
 
 def test_missing_partition_error_names_the_right_device(tmp_path):

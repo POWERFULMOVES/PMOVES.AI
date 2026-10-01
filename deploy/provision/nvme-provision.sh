@@ -20,8 +20,14 @@
 #
 # Re-running is safe: a drive that already carries exactly one ext4 partition
 # with the expected label is reported "already provisioned" and is not
-# repartitioned or reformatted; the fstab entry is added at most once and the
-# mount is skipped when already mounted.
+# repartitioned or reformatted; the fstab entry is added at most once, the
+# mount is skipped when already mounted, and ownership is changed only when
+# SUDO_USER names a user.
+#
+# Refuses, before any write: the root disk and every disk under / (including
+# the other members of an md, LVM or btrfs multi-device root); a partition
+# instead of a whole disk; and any target where the disk itself or anything on
+# it carries a filesystem/RAID/LVM/crypto signature or is mounted.
 #
 # PROVENANCE (attribution; reconciled 2026-10-01 against Omarchy, see
 # pmoves/docs/operations/KNUCKLES_NVME_OMARCHY_STORAGE_2026-09-22.md):
@@ -129,28 +135,43 @@ if ! $DRY; then
 fi
 
 # --- System disk guard ----------------------------------------------------
-# In-repo precedent first: [FMT]:41-52 resolves root's parent via PKNAME, fails
+# In-repo precedent first: [FMT]:41-52 resolves root's backing device, fails
 # closed when it cannot (:46-48), and refuses the root disk and anything named
-# under it (:50). Two extensions, because [FMT]'s single PKNAME step stops at the
-# partition under a LUKS or LVM mapper and so misses the disk:
+# under it (:50). Extended for roots on more than one disk, because a single
+# parent (a PKNAME step, or a walk that keeps one parent) sees only one member
+# of an md/LVM/btrfs set:
 #   - strip a btrfs subvolume suffix ("/dev/nvme0n1p2[/@]"). Adapted from [OMA]
 #     bin/omarchy-system-factory-reset:58 (MIT, (c) David Heinemeier Hansson).
-#   - walk PKNAME until it is empty. Adapted from [ISO]:364-368, get_root_disk
-#     (MIT, (c) 2026 Anton Hvornum).
-# The 8-step bound on the walk is Originated, B850-CLAUDE / nvme-3150-rebase.
+#   - list EVERY dependency of the root device with lsblk(8) -s/--inverse
+#     (-l list, -p full paths) and keep each TYPE=disk. That covers partitions,
+#     LUKS, LVM spanning several PVs, and md arrays. The same inverse walk is
+#     used by [OMA] bin/omarchy-system-factory-reset:84 (`lsblk -nspo ...`).
+#   - a multi-device btrfs root shows only ONE member as its findmnt SOURCE.
+#     Every member carries the same filesystem UUID, so also take every block
+#     device whose lsblk(8) UUID equals findmnt(8)'s UUID for /. Originated,
+#     B850-CLAUDE / nvme-3150-rebase, 2026-10-01 (no upstream precedent found;
+#     checked [ISO], [PART], [OMA] bin/).
 ROOT_SRC="$(findmnt -no SOURCE / | sed 's/\[.*\]//')"
-ROOT_DISK="$(readlink -f "$ROOT_SRC" 2>/dev/null || printf '%s\n' "$ROOT_SRC")"
-for _ in 1 2 3 4 5 6 7 8; do
-  parent="$(lsblk -dno PKNAME "$ROOT_DISK" 2>/dev/null | tail -n1 || true)"
-  [[ -n "$parent" ]] || break
-  ROOT_DISK="/dev/$parent"
-done
-[[ "$(lsblk -dno TYPE "$ROOT_DISK" 2>/dev/null || true)" == "disk" ]] \
+ROOT_UUID="$(findmnt -no UUID / 2>/dev/null || true)"
+ROOT_MEMBERS="$ROOT_SRC"
+if [[ -n "$ROOT_UUID" ]]; then
+  ROOT_MEMBERS+=$'\n'"$(lsblk -nlpo NAME,UUID 2>/dev/null | awk -v u="$ROOT_UUID" '$2 == u {print $1}' || true)"
+fi
+ROOT_DISKS="$(
+  while read -r member; do
+    [[ -n "$member" ]] || continue
+    member="$(readlink -f "$member" 2>/dev/null || printf '%s\n' "$member")"
+    lsblk -nlpso NAME,TYPE "$member" 2>/dev/null | awk '$2 == "disk" {print $1}' || true
+  done <<< "$ROOT_MEMBERS" | sort -u
+)"
+[[ -n "$ROOT_DISKS" ]] \
   || err "Could not resolve the disk under / (source=$ROOT_SRC). Refusing — too risky to proceed."
 DEVICE_REAL="$(readlink -f "$DEVICE" 2>/dev/null || printf '%s\n' "$DEVICE")"
-case "$DEVICE_REAL" in
-  "$ROOT_DISK"|"$ROOT_DISK"*) err "$DEVICE hosts the running root filesystem (root at $ROOT_SRC, disk $ROOT_DISK) — refusing" ;;
-esac
+for root_disk in $ROOT_DISKS; do
+  case "$DEVICE_REAL" in
+    "$root_disk"|"$root_disk"*) err "$DEVICE hosts the running root filesystem (root at $ROOT_SRC, disk $root_disk) — refusing" ;;
+  esac
+done
 # Defense in depth: no system-critical mountpoint anywhere on the target, [FMT]:53-56.
 if lsblk -no MOUNTPOINTS "$DEVICE" 2>/dev/null | grep -qE '^/(boot|boot/efi|home|var|usr|)$'; then
   err "$DEVICE has system-critical mountpoints. Refusing."
@@ -173,15 +194,39 @@ ALREADY=false
 if [[ "$PART_COUNT" -eq 1 && "$(part_fs "$PART")" == "ext4" && "$(part_label "$PART")" == "$LABEL" ]]; then
   ALREADY=true
   log "$DEVICE already provisioned ($PART is ext4/$LABEL) — skipping partition and format"
-elif [[ "$PART_COUNT" -gt 0 ]]; then
-  # PMOVES policy, stricter than the installer (which wipes after a confirm,
-  # [ISO]:726-729): refuse any partitioned drive, except exactly one partition
-  # with no filesystem, which is an interrupted earlier run.
-  # Originated, Crush lane, 2026-09-22 (PR #3150).
-  if [[ "$PART_COUNT" -ne 1 || -n "$(part_fs "$PART")" ]]; then
-    err "$DEVICE already has a partition table with data. This script only provisions BLANK drives. If the partitions are yours to destroy, clear them explicitly first."
+else
+  # --- Blank? (read-only, before ANY write) --------------------------------
+  # Refuse when the disk itself OR any node under it carries a filesystem, RAID,
+  # LVM or crypto signature, or is mounted. Without this, a disk holding a
+  # WHOLE-DISK filesystem or LVM PV / md member / LUKS header (no partition
+  # table, so PART_COUNT=0) went straight to sgdisk. Probes, all read-only:
+  #   - lsblk(8) FSTYPE and MOUNTPOINTS for the disk and every child (-l -p).
+  #   - blkid(8) -p/--probe, a "low-level superblock probing mode (bypassing
+  #     the cache)", restricted with -u to filesystem,raid,crypto,other and
+  #     --no-part-details, so a bare (empty) GPT label alone does not count. It
+  #     catches a signature the udev cache behind lsblk has not seen.
+  # Originated, B850-CLAUDE / nvme-3150-rebase, 2026-10-01 (no upstream
+  # precedent: the installer wipes after an interactive confirm instead,
+  # [ISO]:726-729; checked [ISO], [PART], [OMA] bin/).
+  while read -r node; do
+    [[ -n "$node" ]] || continue
+    sig="$(lsblk -dno FSTYPE "$node" 2>/dev/null || true)"
+    [[ -n "$sig" ]] || sig="$(blkid -p --no-part-details -u filesystem,raid,crypto,other -s TYPE -o value "$node" 2>/dev/null || true)"
+    [[ -z "$sig" ]] || err "$node carries a $sig signature. This script only provisions BLANK drives; refusing."
+    mp="$(lsblk -dno MOUNTPOINTS "$node" 2>/dev/null | grep -v '^$' || true)"
+    [[ -z "$mp" ]] || err "$node is mounted at $mp. Refusing."
+  done < <(lsblk -nlpo NAME "$DEVICE" 2>/dev/null || true)
+
+  if [[ "$PART_COUNT" -gt 0 ]]; then
+    # PMOVES policy, stricter than the installer (which wipes after a confirm,
+    # [ISO]:726-729): refuse any partitioned drive, except exactly one partition
+    # with no filesystem, which is an interrupted earlier run.
+    # Originated, Crush lane, 2026-09-22 (PR #3150).
+    if [[ "$PART_COUNT" -ne 1 || -n "$(part_fs "$PART")" ]]; then
+      err "$DEVICE already has a partition table with data. This script only provisions BLANK drives. If the partitions are yours to destroy, clear them explicitly first."
+    fi
+    log "$DEVICE carries one unformatted partition (interrupted run) — resuming"
   fi
-  log "$DEVICE carries one unformatted partition (interrupted run) — resuming"
 fi
 
 if ! $ALREADY; then
@@ -274,12 +319,19 @@ fi
 mountpoint -q "$MOUNT" || err "$MOUNT did not mount — check fstab and dmesg"
 
 # Owner: Originated, Crush lane, 2026-09-22. The root warning follows the
-# reconciliation's row 15.
+# reconciliation's row 15. On a re-run of an already-provisioned drive,
+# ownership is changed only when SUDO_USER names a user. As plain root with no
+# SUDO_USER, the existing owner of a live mount is left alone instead of being
+# re-owned to root:root. Originated, B850-CLAUDE / nvme-3150-rebase.
 OWNER="${SUDO_USER:-${USER:-root}}"
-if [[ "$OWNER" == "root" ]]; then
-  log "WARN: owner resolves to root; run via sudo from your own user to hand the mount to it"
+if $ALREADY && [[ -z "${SUDO_USER:-}" ]]; then
+  log "already provisioned and no SUDO_USER: leaving ownership of $MOUNT unchanged"
+else
+  if [[ "$OWNER" == "root" ]]; then
+    log "WARN: owner resolves to root; run via sudo from your own user to hand the mount to it"
+  fi
+  chown "$OWNER":"$OWNER" "$MOUNT"
+  log "mounted $MOUNT, owned by $OWNER"
 fi
-chown "$OWNER":"$OWNER" "$MOUNT"
-log "mounted $MOUNT, owned by $OWNER"
 log "done. df follows:"
 df -h "$MOUNT"

@@ -242,6 +242,17 @@ with every step attributed in the script header and inline:
   `findmnt --verify`.
 - **Mount:** `mount -T <fstab> <mountpoint>` + `mountpoint -q` (mount(8),
   mountpoint(1), configurator:762-781), never `mount -a`.
+- **Blank check, before any write (delta review P1):** refuses a target when
+  the disk itself or anything on it carries a filesystem, RAID, LVM or crypto
+  signature, or is mounted. It reads lsblk FSTYPE/MOUNTPOINTS plus a
+  `blkid -p --no-part-details -u filesystem,raid,crypto,other` probe
+  (blkid(8): the probe bypasses the cache). Before this, a disk holding a
+  whole-disk filesystem or PV with no partition table was wiped. The root guard
+  now takes EVERY disk under / (lsblk(8) `-s`/`--inverse`, plus the members
+  sharing a btrfs root's filesystem UUID), so the second disk of an md, LVM or
+  btrfs root is refused.
+- **Ownership on re-runs:** an already-provisioned drive is re-owned only when
+  `SUDO_USER` names a user. As plain root it is left alone.
 - **Originated policy, kept:** refusing partitioned drives (except one
   unformatted partition from an interrupted run) and the 2 TB floor.
 Covered by `pmoves/tests/scripts/test_nvme_provision.py` (stubbed tools only; no
