@@ -15,7 +15,7 @@ import yaml
 PMOVES = Path(__file__).resolve().parents[1]
 VENDOR = "neo4j:5.26.30-community@sha256:037cf5756f0135cbfd66b739b6df7c7c4bb100f9ce11602f6f9538e17e02c74d"
 
-PENDING = "pending road compose:pr:<N>: the compose half is a prepared patch (ops/knuckles-neo4j-compose-reconcile)"
+PENDING = "pending road compose:pr:3251: the compose half is a prepared patch (ops/knuckles-neo4j-compose-reconcile)"
 
 # Rows this change introduces carry PEND; rows that already hold on main (the explicit
 # APOC list, the LOAD CSV blocklist) are plain guards and run unmarked.
