@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import ast
 import re
+import warnings
 from pathlib import Path
 
 import pytest
@@ -38,7 +39,7 @@ CRED = re.compile(
 )
 URLISH = re.compile(r"(url|uri|dsn|servers?|conn_str|connection_string)$", re.I)
 LOG_FUNCS = {"debug", "info", "warning", "warn", "error", "exception", "critical", "log", "print"}
-SAFE_CALL = re.compile(r"(redact|mask|scrub|sanit|safe|host|port|hostname|_display)", re.I)
+SAFE_CALL = re.compile(r"(redact|mask|scrub|sanit|safe|host|port|hostname|_display|^bool$|^len$)", re.I)
 SKIP_PARTS = {"node_modules", ".venv", "site-packages", "__pycache__"}
 
 
@@ -46,7 +47,10 @@ def _ident(node: ast.AST) -> str | None:
     if isinstance(node, ast.Name):
         return node.id
     if isinstance(node, ast.Attribute):
-        return node.attr
+        # Full dotted chain, so ``config.nats.url`` is seen as a NATS URL even
+        # though its last component is only ``url``.
+        base = _ident(node.value)
+        return f"{base}.{node.attr}" if base else node.attr
     if isinstance(node, ast.Subscript):
         sl = node.slice
         if isinstance(sl, ast.Constant) and isinstance(sl.value, str):
@@ -104,7 +108,10 @@ def _python_files() -> list[Path]:
 
 def _parse(path: Path) -> ast.Module | None:
     try:
-        return ast.parse(path.read_text(errors="ignore"))
+        with warnings.catch_warnings():
+            # Repo files with invalid escape sequences are not this test's concern.
+            warnings.simplefilter("ignore", SyntaxWarning)
+            return ast.parse(path.read_text(errors="ignore"))
     except SyntaxError:
         return None
 
@@ -130,6 +137,53 @@ def test_no_unredacted_credential_url_in_log_calls() -> None:
                 hits.append(f"{path.relative_to(PMOVES)}:{node.lineno} {bad}")
     assert len(files) > 500, f"scanned only {len(files)} files; the tree is not populated"
     assert not hits, "credential-capable URL logged without redaction:\n" + "\n".join(hits)
+
+
+# Dicts inside a route that are NOT the response body. Keyed by file + value
+# expression, never by line number, so an edit elsewhere cannot widen it.
+ROUTE_ALLOWLIST = {
+    # The row inserted into Supabase, not served back; rewriting it would change stored data.
+    "services/render-webhook/webhook.py:body.s3_uri",
+}
+
+ROUTE_DECORATORS = {"get", "post", "put", "patch", "delete", "route", "api_route"}
+
+
+def _is_route(fn: ast.AST) -> bool:
+    return any(
+        isinstance(d, ast.Call)
+        and isinstance(d.func, ast.Attribute)
+        and d.func.attr in ROUTE_DECORATORS
+        for d in getattr(fn, "decorator_list", [])
+    )
+
+
+def test_no_unredacted_credential_url_in_http_route_bodies() -> None:
+    """Same leak, different sink: an HTTP route serving the URL in its body.
+
+    Agent Zero's unauthenticated ``/healthz`` returned ``nats.url`` with
+    userinfo (measured live on Knuckles 2026-10-01). Flags dict values inside
+    route-decorated functions; same identifier rules as the log sweep.
+    """
+    hits = []
+    for path in _python_files():
+        if "tests" in path.parts or path.name.startswith("test_"):
+            continue
+        tree = _parse(path)
+        if tree is None:
+            continue
+        for fn in ast.walk(tree):
+            if not isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef)) or not _is_route(fn):
+                continue
+            for node in ast.walk(fn):
+                if not isinstance(node, ast.Dict):
+                    continue
+                for value in node.values:
+                    bad = _offenders(value) if value is not None else []
+                    where = f"{path.relative_to(PMOVES)}:{_ident(value) or '?'}"
+                    if bad and where not in ROUTE_ALLOWLIST:
+                        hits.append(f"{path.relative_to(PMOVES)}:{node.lineno} {sorted(set(bad))}")
+    assert not hits, "credential-capable URL served by an HTTP route:\n" + "\n".join(hits)
 
 
 REDACT_CASES = {

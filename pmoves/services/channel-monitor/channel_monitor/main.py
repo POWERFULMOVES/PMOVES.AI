@@ -531,7 +531,7 @@ async def healthz() -> Dict[str, Any]:
     return {
         "status": "ok" if db_healthy else "error",
         "queue_url": QUEUE_URL,
-        "database_url": DATABASE_URL,
+        "database_url": _redact_url(DATABASE_URL),
         "channels": monitor.channel_count(),
         "database_healthy": db_healthy,
     }

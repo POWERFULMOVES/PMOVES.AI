@@ -30,6 +30,20 @@ service_dir = Path(__file__).parent
 sys.path.insert(0, str(service_dir))
 
 from config import config
+
+
+def _redact_url(url: object) -> str:
+    """Return *url* with userinfo (``user:password@``) removed, for logging.
+
+    Same contract as ``services/common/nats_client.py::_redact_url``; kept
+    module-local so this file needs no cross-service import. Also handles
+    comma-separated server lists (``nats://u:p@a:4222,nats://u:p@b:4222``).
+    """
+    import re
+
+    return re.sub(r"(?<=://)[^@/\s]+@", "", str(url))
+
+
 from api.simulation import simulation_bp
 from api.contracts import contracts_bp
 from nats_consumer import start_nats_consumer
@@ -128,7 +142,7 @@ def create_app() -> Flask:
                 'contracts': '/api/v1/contracts',
             },
             'integrations': {
-                'nats': config.nats.url,
+                'nats': _redact_url(config.nats.url),
                 'tensorzero': config.tensorzero.url,
                 'supabase': config.supabase.url,
             },

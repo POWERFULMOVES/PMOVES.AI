@@ -343,3 +343,30 @@ def test_healthz_reports_200_when_inner_runtime_is_running(
     body = response.json()
     assert body["status"] == "ok"
     assert body["pid"] == 4242
+
+
+def test_unauthenticated_routes_do_not_serve_nats_credentials(
+    monkeypatch, load_service_module
+):
+    """/healthz and /config/environment take no inbound auth.
+
+    Both served NATS_URL verbatim, so user:password reached any caller on the
+    network (measured live on Knuckles 2026-10-01).
+    """
+    secret = "s3cr3t-pa55"
+    monkeypatch.setenv("NATS_URL", f"nats://agentuser:{secret}@nats:4222")
+    module = load_service_module("agent_zero_main", "services/agent-zero/main.py")
+    module.service_config = module.load_service_config()
+    module = _prepare_agent_zero(module, monkeypatch)
+    module.process_manager._process = None
+
+    with TestClient(module.app) as client:
+        health = client.get("/healthz")
+        environment = client.get("/config/environment")
+
+    assert health.json()["nats"]["url"] == "nats://nats:4222"
+    assert environment.status_code == 200
+    assert environment.json()["nats_url"] == "nats://nats:4222"
+    for response in (health, environment):
+        assert secret not in response.text
+        assert "agentuser" not in response.text

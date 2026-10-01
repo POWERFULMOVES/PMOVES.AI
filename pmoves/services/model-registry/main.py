@@ -797,7 +797,7 @@ async def health_check():
         timestamp=datetime.utcnow().isoformat(),
         services={
             "supabase": SUPABASE_URL,
-            "nats": NATS_URL
+            "nats": _redact_url(NATS_URL)
         }
     )
 

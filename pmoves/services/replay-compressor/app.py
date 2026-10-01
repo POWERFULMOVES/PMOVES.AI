@@ -287,7 +287,7 @@ async def healthz():
         "nats_connected": nc_app.is_connected,
         "pending_compressions": len(_pending),
         "bucket": S3_BUCKET,
-        "endpoint": S3_ENDPOINT_URL,
+        "endpoint": _redact_url(S3_ENDPOINT_URL),
     }
 
 
