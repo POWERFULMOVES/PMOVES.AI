@@ -25,6 +25,14 @@ from models import (
 )
 from neo4j_client import Neo4jClient
 
+try:
+    from services.common.nats_client import redact_url
+except ImportError:  # image ships without services/common
+    import re as _re
+
+    def redact_url(url):
+        return _re.sub(r"(?<=//)[^/@\s]*@", "", str(url or ""))
+
 logger = structlog.get_logger(__name__)
 
 
@@ -77,7 +85,7 @@ class NATSHandler:
                 max_reconnect_attempts=self._settings.nats_max_reconnect_attempts,
                 pending_msg_limit=self._settings.nats_pending_msg_limit,
             )
-            logger.info("nats.connected", url=self._settings.nats_url)
+            logger.info("nats.connected", url=redact_url(self._settings.nats_url))
         except (ConnectionClosedError, NoServersError, NATSTimeoutError) as exc:
             logger.error("nats.connection_failed", error=str(exc))
             raise

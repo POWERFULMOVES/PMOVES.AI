@@ -45,6 +45,14 @@ from persistence import SupabasePersistence
 from security import SecurityManager
 from auth import auth_middleware
 
+try:
+    from services.common.nats_client import redact_url
+except ImportError:  # image ships without services/common
+    import re as _re
+
+    def redact_url(url):
+        return _re.sub(r"(?<=//)[^/@\s]*@", "", str(url or ""))
+
 
 # Configuration
 PORT = int(os.getenv("PORT", "8060"))
@@ -2097,7 +2105,7 @@ class CastTTSGateway:
         """Connect to NATS message bus."""
         try:
             self.nats_client = await nats.connect(NATS_URL)
-            print(f"Connected to NATS at {NATS_URL}")
+            print(f"Connected to NATS at {redact_url(NATS_URL)}")
         except Exception as e:
             print(f"NATS connection failed: {e}")
 
@@ -2168,7 +2176,7 @@ class CastTTSGateway:
         print(f"Cast TTS Gateway running at http://0.0.0.0:{PORT}")
         print(f"Flute-Gateway: {FLUTE_URL}")
         print(f"Ultimate-TTS: {ULTIMATE_TTS_URL}")
-        print(f"NATS: {NATS_URL}")
+        print(f"NATS: {redact_url(NATS_URL)}")
         print(f"Monitoring {len(devices)} device(s)")
 
         # Keep running

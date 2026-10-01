@@ -37,6 +37,14 @@ from gateway.threads import (
     run_chained
 )
 
+try:
+    from services.common.nats_client import redact_url
+except ImportError:  # image ships without services/common
+    import re as _re
+
+    def redact_url(url):
+        return _re.sub(r"(?<=//)[^/@\s]*@", "", str(url or ""))
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
@@ -180,7 +188,7 @@ class Gateway:
         if self.config.PMOVES_DOCKED_MODE:
             logger.info("Mode: DOCKED (connected to PMOVES.AI)")
             logger.info(f"  TensorZero: {self.config.TENSORZERO_BASE_URL}")
-            logger.info(f"  NATS: {self.config.NATS_URL}")
+            logger.info(f"  NATS: {redact_url(self.config.NATS_URL)}")
             logger.info(f"  HiRAG: {self.config.HIRAG_URL}")
 
             # Try to connect to NATS

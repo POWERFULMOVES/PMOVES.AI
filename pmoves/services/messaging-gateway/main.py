@@ -19,6 +19,14 @@ from platforms.discord import DiscordPlatform
 from platforms.telegram import TelegramPlatform
 from platforms.whatsapp import WhatsAppPlatform
 
+try:
+    from services.common.nats_client import redact_url
+except ImportError:  # image ships without services/common
+    import re as _re
+
+    def redact_url(url):
+        return _re.sub(r"(?<=//)[^/@\s]*@", "", str(url or ""))
+
 
 YOUTUBE_CONTROL_REJECTION_LABELS = {
     "policy": "Policy issue",
@@ -445,7 +453,7 @@ async def _nats_resilience_loop() -> None:
             logger.warning("NATS connection closed")
 
         try:
-            logger.info(f"Connecting to NATS at {NATS_URL}...")
+            logger.info(f"Connecting to NATS at {redact_url(NATS_URL)}...")
             await nc.connect(
                 servers=[NATS_URL],
                 disconnected_cb=_disconnected_cb,

@@ -30,6 +30,14 @@ import nats
 from nats.js.errors import Error as JSError
 from prometheus_client import Counter, Gauge, generate_latest
 
+try:
+    from services.common.nats_client import redact_url
+except ImportError:  # image ships without services/common
+    import re as _re
+
+    def redact_url(url):
+        return _re.sub(r"(?<=//)[^/@\s]*@", "", str(url or ""))
+
 # Configuration
 NATS_URL = os.getenv("NATS_URL", "nats://nats:4222")
 A2UI_WS_URL = os.getenv("A2UI_WS_URL", "ws://localhost:9223")
@@ -287,7 +295,7 @@ async def connect_nats() -> None:
 
     while retry_count < max_retries:
         try:
-            logger.info(f"Connecting to NATS at {NATS_URL}...")
+            logger.info(f"Connecting to NATS at {redact_url(NATS_URL)}...")
             nc = await nats.connect(NATS_URL)
             js = nc.jetstream()
 

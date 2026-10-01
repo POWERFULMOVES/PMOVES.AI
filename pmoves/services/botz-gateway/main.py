@@ -26,6 +26,14 @@ from nats.aio.client import Client as NATS
 import httpx
 import yaml
 
+try:
+    from services.common.nats_client import redact_url
+except ImportError:  # image ships without services/common
+    import re as _re
+
+    def redact_url(url):
+        return _re.sub(r"(?<=//)[^/@\s]*@", "", str(url or ""))
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("botz-gateway")
@@ -132,7 +140,7 @@ async def lifespan(app: FastAPI):
     # Connect to NATS
     try:
         nc = await nats.connect(NATS_URL)
-        logger.info(f"Connected to NATS at {NATS_URL}")
+        logger.info(f"Connected to NATS at {redact_url(NATS_URL)}")
 
         # Subscribe to BoTZ events
         await nc.subscribe("botz.heartbeat.v1", cb=handle_heartbeat_event)

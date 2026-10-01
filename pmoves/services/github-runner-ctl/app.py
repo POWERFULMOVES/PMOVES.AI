@@ -44,6 +44,14 @@ from github.models import (
     QueueStatus,
 )
 
+try:
+    from services.common.nats_client import redact_url
+except ImportError:  # image ships without services/common
+    import re as _re
+
+    def redact_url(url):
+        return _re.sub(r"(?<=//)[^/@\s]*@", "", str(url or ""))
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -210,7 +218,7 @@ async def lifespan(app: FastAPI):
             timeout=2.0
         )
         if connected:
-            logger.info(f"NATS publisher connected to {NATS_URL}")
+            logger.info(f"NATS publisher connected to {redact_url(NATS_URL)}")
         else:
             logger.warning("NATS connection failed, will retry in background")
     except asyncio.TimeoutError:

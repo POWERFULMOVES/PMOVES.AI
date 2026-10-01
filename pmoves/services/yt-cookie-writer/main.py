@@ -24,6 +24,14 @@ import httpx
 import nats
 
 try:
+    from services.common.nats_client import redact_url
+except ImportError:  # image ships without services/common
+    import re as _re
+
+    def redact_url(url):
+        return _re.sub(r"(?<=//)[^/@\s]*@", "", str(url or ""))
+
+try:
     from cryptography.fernet import Fernet
 except ImportError:
     Fernet = None  # type: ignore[assignment,misc]
@@ -264,7 +272,7 @@ async def _on_message(msg):
 async def run() -> None:
     """Main event loop — connect to NATS, subscribe, wait."""
     nats_url = os.environ.get("NATS_URL", "nats://nats:4222")
-    logger.info(f"Connecting to NATS at {nats_url}")
+    logger.info(f"Connecting to NATS at {redact_url(nats_url)}")
 
     nc = await nats.connect(nats_url)
     await nc.subscribe(NATS_SUBJECT, cb=_on_message)

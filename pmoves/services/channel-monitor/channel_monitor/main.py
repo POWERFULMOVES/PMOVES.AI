@@ -48,6 +48,14 @@ from pydantic import BaseModel, Field, validator
 from .config import config_path_from_env, ensure_config, save_config
 from .monitor import ChannelMonitor, build_manual_drop_raw_content
 
+try:
+    from services.common.nats_client import redact_url
+except ImportError:  # image ships without services/common
+    import re as _re
+
+    def redact_url(url):
+        return _re.sub(r"(?<=//)[^/@\s]*@", "", str(url or ""))
+
 try:  # pragma: no cover - optional at import time
     import nats as nats_pkg
     NATS_AVAILABLE = True
@@ -169,7 +177,7 @@ async def lifespan(app: FastAPI):
     if NATS_AVAILABLE and CONTENT_RAW_PUBLISH_ENABLED:
         try:
             _nats_client = await nats_pkg.connect(NATS_URL)
-            LOGGER.info("content.raw.v1 publisher connected to %s", NATS_URL)
+            LOGGER.info("content.raw.v1 publisher connected to %s", redact_url(NATS_URL))
         except Exception as exc:
             LOGGER.warning("content.raw.v1 publisher connection failed (non-fatal): %s", exc)
     elif CONTENT_RAW_PUBLISH_ENABLED and not NATS_AVAILABLE:

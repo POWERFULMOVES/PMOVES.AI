@@ -56,6 +56,14 @@ from pmoves.services.common.model_fitness import (  # noqa: E402
 )
 
 try:
+    from services.common.nats_client import redact_url
+except ImportError:  # image ships without services/common
+    import re as _re
+
+    def redact_url(url):
+        return _re.sub(r"(?<=//)[^/@\s]*@", "", str(url or ""))
+
+try:
     from nats.aio.client import Client as NATS
     from nats.aio.errors import ErrConnectionClosed, ErrTimeout
     NATS_AVAILABLE = True
@@ -91,7 +99,7 @@ async def lifespan(app: FastAPI):
     # Startup
     logger.info("PMOVES Model Registry starting up...")
     logger.info(f"Supabase URL: {SUPABASE_URL}")
-    logger.info(f"NATS URL: {NATS_URL}")
+    logger.info(f"NATS URL: {redact_url(NATS_URL)}")
 
     # Connect to NATS for GPU event sync + catalog change publishing
     nats_client = RegistryNatsClient(NATS_URL, supabase)
@@ -397,7 +405,7 @@ class RegistryNatsClient:
                 max_reconnect_attempts=-1,
             )
             self._connected = True
-            logger.info(f"Model Registry connected to NATS at {self.nats_url}")
+            logger.info(f"Model Registry connected to NATS at {redact_url(self.nats_url)}")
 
             # Subscribe to GPU orchestrator events
             await self._nc.subscribe(self.SUB_MODEL_LOADED, cb=self._on_model_loaded)

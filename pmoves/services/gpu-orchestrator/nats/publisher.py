@@ -16,6 +16,14 @@ except ImportError:
 
 from config import get_settings
 
+try:
+    from services.common.nats_client import redact_url
+except ImportError:  # image ships without services/common
+    import re as _re
+
+    def redact_url(url):
+        return _re.sub(r"(?<=//)[^/@\s]*@", "", str(url or ""))
+
 logger = logging.getLogger(__name__)
 
 
@@ -76,7 +84,7 @@ class GpuNatsPublisher:
                 max_reconnect_attempts=-1,  # Unlimited
             )
             self._connected = True
-            logger.info(f"Connected to NATS at {self.nats_url}")
+            logger.info(f"Connected to NATS at {redact_url(self.nats_url)}")
             return True
 
         except Exception as e:

@@ -50,6 +50,14 @@ from .service_registry import (
     update_nats_cache,
 )
 
+try:
+    from services.common.nats_client import redact_url
+except ImportError:  # image ships without services/common
+    import re as _re
+
+    def redact_url(url):
+        return _re.sub(r"(?<=//)[^/@\s]*@", "", str(url or ""))
+
 logger = logging.getLogger(__name__)
 
 
@@ -123,7 +131,7 @@ class ServiceAnnouncementListener:
             # Connect to NATS
             self._nc = NATS()
             await self._nc.connect(self.nats_url)
-            logger.info(f"Connected to NATS at {self.nats_url}")
+            logger.info(f"Connected to NATS at {redact_url(self.nats_url)}")
 
             # Subscribe to service announcements
             self._sub = await self._nc.subscribe(

@@ -14,6 +14,14 @@ from .config import (
     create_vllm_config,
 )
 
+try:
+    from services.common.nats_client import redact_url
+except ImportError:  # image ships without services/common
+    import re as _re
+
+    def redact_url(url):
+        return _re.sub(r"(?<=//)[^/@\s]*@", "", str(url or ""))
+
 logger = logging.getLogger(__name__)
 
 
@@ -55,7 +63,7 @@ class VLLMOrchestrator:
             self._nc = await nats.connect(self.nats_url)
             self._js = self._nc.jetstream()
 
-            logger.info(f"Connected to NATS at {self.nats_url}")
+            logger.info(f"Connected to NATS at {redact_url(self.nats_url)}")
 
             # Subscribe to work requests
             await self._subscribe_work_requests()

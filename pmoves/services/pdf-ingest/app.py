@@ -40,6 +40,14 @@ except Exception:  # pragma: no cover - fallback for local runs without shared m
 
 from libs.langextract import extract_text
 
+try:
+    from services.common.nats_client import redact_url
+except ImportError:  # image ships without services/common
+    import re as _re
+
+    def redact_url(url):
+        return _re.sub(r"(?<=//)[^/@\s]*@", "", str(url or ""))
+
 logger = logging.getLogger(__name__)
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -147,7 +155,7 @@ async def _nats_connect_loop() -> None:
         async def _reconnected_cb() -> None:
             global _nc
 
-            logger.info("Reconnected to NATS at %s", NATS_URL)
+            logger.info("Reconnected to NATS at %s", redact_url(NATS_URL))
             _nc = client
 
         async def _closed_cb() -> None:
@@ -168,12 +176,12 @@ async def _nats_connect_loop() -> None:
             await client.close()
             raise
         except Exception as exc:
-            logger.warning("Unable to connect to NATS at %s: %s", NATS_URL, exc)
+            logger.warning("Unable to connect to NATS at %s: %s", redact_url(NATS_URL), exc)
             await asyncio.sleep(backoff)
             backoff = min(backoff * 2, 30.0)
             continue
 
-        logger.info("Connected to NATS at %s", NATS_URL)
+        logger.info("Connected to NATS at %s", redact_url(NATS_URL))
 
         global _nc
         _nc = client

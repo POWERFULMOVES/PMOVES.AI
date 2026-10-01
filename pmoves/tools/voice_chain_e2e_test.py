@@ -50,6 +50,14 @@ import uuid
 from typing import Any, Dict
 
 try:
+    from services.common.nats_client import redact_url
+except ImportError:  # image ships without services/common
+    import re as _re
+
+    def redact_url(url):
+        return _re.sub(r"(?<=//)[^/@\s]*@", "", str(url or ""))
+
+try:
     import nats
 except ImportError:
     print("ERROR: nats-py not installed. Install with: pip install nats-py", file=sys.stderr)
@@ -111,7 +119,7 @@ async def run_test(nats_url: str, wait_seconds: float, text: str) -> int:
     publish_ts: float | None = None
     receive_ts: float | None = None
 
-    print(f"voice-chain-e2e: connecting to NATS at {nats_url}")
+    print(f"voice-chain-e2e: connecting to NATS at {redact_url(nats_url)}")
     try:
         nc = await nats.connect(nats_url, connect_timeout=5)
     except Exception as exc:

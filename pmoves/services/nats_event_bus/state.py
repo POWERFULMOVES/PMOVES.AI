@@ -25,6 +25,14 @@ import os
 from collections import deque
 from typing import Any, Deque, Dict, List, Optional, Set
 
+try:
+    from services.common.nats_client import redact_url
+except ImportError:  # image ships without services/common
+    import re as _re
+
+    def redact_url(url):
+        return _re.sub(r"(?<=//)[^/@\s]*@", "", str(url or ""))
+
 
 logger = logging.getLogger("nats_event_bus.state")
 
@@ -192,7 +200,7 @@ class NatsSubscriber:
                 )
                 self._nc = nc
                 self._connected = True
-                logger.info("nats_event_bus subscriber connected to %s", self._nats_url)
+                logger.info("nats_event_bus subscriber connected to %s", redact_url(self._nats_url))
                 backoff = 1.0
 
                 async def handler(msg):

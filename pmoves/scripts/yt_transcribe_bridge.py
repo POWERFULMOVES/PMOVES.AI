@@ -20,6 +20,14 @@ import sys
 import nats
 import requests
 
+try:
+    from services.common.nats_client import redact_url
+except ImportError:  # image ships without services/common
+    import re as _re
+
+    def redact_url(url):
+        return _re.sub(r"(?<=//)[^/@\s]*@", "", str(url or ""))
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 log = logging.getLogger("yt-bridge")
 
@@ -73,7 +81,7 @@ async def handle_download_event(msg):
 
 
 async def main():
-    log.info(f"Connecting to NATS: {NATS_URL}")
+    log.info(f"Connecting to NATS: {redact_url(NATS_URL)}")
     nc = await nats.connect(NATS_URL)
     js = nc.jetstream()
 

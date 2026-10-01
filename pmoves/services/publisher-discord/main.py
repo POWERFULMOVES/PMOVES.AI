@@ -30,6 +30,7 @@ except Exception:  # pragma: no cover - supabase is optional for local/dev
     supabase_common = None  # type: ignore[assignment]
 
 from services.common.telemetry import PublisherMetrics, PublishTelemetry, compute_publish_telemetry
+from services.common.nats_client import redact_url
 
 
 
@@ -65,7 +66,7 @@ async def lifespan(app: FastAPI):
     if YT_NATS_ENABLE and NATS_URL and (_nats_loop_task is None or _nats_loop_task.done()):
         logger.info(
             "nats_loop_start",
-            extra={"event": "nats_loop_start", "servers": [NATS_URL]},
+            extra={"event": "nats_loop_start", "servers": [redact_url(NATS_URL)]},
         )
         _nats_loop_task = asyncio.create_task(_nats_resilience_loop())
 
@@ -385,7 +386,7 @@ async def _nats_resilience_loop() -> None:
                 extra={
                     "event": "nats_connection_lost",
                     "reason": reason,
-                    "servers": [NATS_URL],
+                    "servers": [redact_url(NATS_URL)],
                 },
             )
 
@@ -398,7 +399,7 @@ async def _nats_resilience_loop() -> None:
         try:
             logger.info(
                 "nats_connect_attempt",
-                extra={"event": "nats_connect_attempt", "servers": [NATS_URL], "backoff": backoff},
+                extra={"event": "nats_connect_attempt", "servers": [redact_url(NATS_URL)], "backoff": backoff},
             )
             await nc.connect(servers=[NATS_URL], disconnected_cb=_disconnected_cb, closed_cb=_closed_cb)
         except asyncio.CancelledError:
@@ -408,7 +409,7 @@ async def _nats_resilience_loop() -> None:
                 "nats_connect_failed",
                 extra={
                     "event": "nats_connect_failed",
-                    "servers": [NATS_URL],
+                    "servers": [redact_url(NATS_URL)],
                     "error": str(exc),
                     "backoff": backoff,
                 },
@@ -422,7 +423,7 @@ async def _nats_resilience_loop() -> None:
         backoff = 1.0
         logger.info(
             "nats_connected",
-            extra={"event": "nats_connected", "servers": [NATS_URL]},
+            extra={"event": "nats_connected", "servers": [redact_url(NATS_URL)]},
         )
         await _register_nats_subscriptions(nc)
 
@@ -1181,7 +1182,7 @@ async def _handle_claude_session_end(payload: Dict[str, Any]) -> None:
     if _nats_loop_task is None or _nats_loop_task.done():
         logger.info(
             "nats_loop_start",
-            extra={"event": "nats_loop_start", "servers": [NATS_URL]},
+            extra={"event": "nats_loop_start", "servers": [redact_url(NATS_URL)]},
         )
         _nats_loop_task = asyncio.create_task(_nats_resilience_loop())
 

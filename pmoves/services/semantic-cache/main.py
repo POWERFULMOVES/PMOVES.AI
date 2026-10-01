@@ -93,6 +93,14 @@ from .metrics import (
     streaming_requests_total,
 )
 
+try:
+    from services.common.nats_client import redact_url
+except ImportError:  # image ships without services/common
+    import re as _re
+
+    def redact_url(url):
+        return _re.sub(r"(?<=//)[^/@\s]*@", "", str(url or ""))
+
 logger = logging.getLogger(__name__)
 
 # ── Shared global clients (initialised in lifespan) ──────────────────────
@@ -175,7 +183,7 @@ async def lifespan(app: FastAPI):
                 max_reconnect_attempts=10,
             )
             asyncio.create_task(_subscribe_cache_invalidation())
-            logger.info("[lifespan] CHIT Bus NATS subscriber started: %s", settings.nats_url)
+            logger.info("[lifespan] CHIT Bus NATS subscriber started: %s", redact_url(settings.nats_url))
         except Exception as exc:
             logger.warning("[lifespan] CHIT Bus NATS unavailable (non-blocking): %s", exc)
             _nats_client = None

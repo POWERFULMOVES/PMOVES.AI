@@ -7,6 +7,14 @@ from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable, Dict, List, Optional, Tuple
 
 try:
+    from services.common.nats_client import redact_url
+except ImportError:  # image ships without services/common
+    import re as _re
+
+    def redact_url(url):
+        return _re.sub(r"(?<=//)[^/@\s]*@", "", str(url or ""))
+
+try:
     from nats.aio.client import Client as NATS
     from nats.aio.msg import Msg
     from nats.js.api import (
@@ -346,7 +354,7 @@ class AgentZeroController:
             return
         if NATS is None:
             raise RuntimeError("nats-py is required to start the Agent Zero controller")
-        logger.info("Connecting to NATS at %s", self.settings.nats_url)
+        logger.info("Connecting to NATS at %s", redact_url(self.settings.nats_url))
         self._nc = NATS()
         await self._nc.connect(servers=[self.settings.nats_url])
         if self.settings.use_jetstream:

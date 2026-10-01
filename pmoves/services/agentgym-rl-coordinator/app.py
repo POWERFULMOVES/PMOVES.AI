@@ -17,6 +17,14 @@ from coordinator import (
     SupabaseStorage,
 )
 
+try:
+    from services.common.nats_client import redact_url
+except ImportError:  # image ships without services/common
+    import re as _re
+
+    def redact_url(url):
+        return _re.sub(r"(?<=//)[^/@\s]*@", "", str(url or ""))
+
 # Configure Logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("agentgym-coordinator")
@@ -68,7 +76,7 @@ async def lifespan(app: FastAPI):
 
     # Connect to NATS
     try:
-        logger.info("Connecting to NATS at %s...", NATS_URL)
+        logger.info("Connecting to NATS at %s...", redact_url(NATS_URL))
         nc = await nats.connect(NATS_URL)
         logger.info("Connected to NATS")
 

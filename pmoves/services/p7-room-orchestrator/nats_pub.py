@@ -29,6 +29,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional
 
+try:
+    from services.common.nats_client import redact_url
+except ImportError:  # image ships without services/common
+    import re as _re
+
+    def redact_url(url):
+        return _re.sub(r"(?<=//)[^/@\s]*@", "", str(url or ""))
+
 _THIS_DIR = str(Path(__file__).resolve().parent)
 if _THIS_DIR not in sys.path:
     sys.path.insert(0, _THIS_DIR)
@@ -100,7 +108,7 @@ class NATSPublisher:
                     timeout=self._connect_timeout,
                 )
                 self._connected = True
-                LOG.info("NATS connected at %s", self._nats_url)
+                LOG.info("NATS connected at %s", redact_url(self._nats_url))
                 return True
             except Exception as exc:
                 LOG.warning("NATS connect failed (%s); running log-only", exc)

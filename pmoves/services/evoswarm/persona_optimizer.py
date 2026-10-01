@@ -40,6 +40,14 @@ except ModuleNotFoundError:
     from pmoves.services.common.env import get_secret
 from pmoves.tools.chit_security import sign_cgp
 
+try:
+    from services.common.nats_client import redact_url
+except ImportError:  # image ships without services/common
+    import re as _re
+
+    def redact_url(url):
+        return _re.sub(r"(?<=//)[^/@\s]*@", "", str(url or ""))
+
 logger = logging.getLogger(__name__)
 
 # NATS subjects for persona optimization
@@ -203,7 +211,7 @@ class PersonaOptimizer:
             "PersonaOptimizer initialized",
             extra={
                 "supabase_url": self.supabase_url,
-                "nats_url": self.nats_url,
+                "nats_url": redact_url(self.nats_url),
                 "max_iterations": max_iterations,
                 "population_size": population_size,
             }
@@ -251,7 +259,7 @@ class PersonaOptimizer:
         """Establish NATS connection."""
         nc = NATS()
         await nc.connect(servers=[self.nats_url])
-        logger.info(f"Connected to NATS at {self.nats_url}")
+        logger.info(f"Connected to NATS at {redact_url(self.nats_url)}")
         return nc
 
     def _get_supabase_headers(self) -> Dict[str, str]:

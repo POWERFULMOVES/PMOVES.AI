@@ -22,6 +22,14 @@ from yt_dlp import YoutubeDL
 from .config import ensure_config, save_config
 from .youtube_api import AccessToken, YouTubeAPIClient, YouTubeAPIError
 
+try:
+    from services.common.nats_client import redact_url
+except ImportError:  # image ships without services/common
+    import re as _re
+
+    def redact_url(url):
+        return _re.sub(r"(?<=//)[^/@\s]*@", "", str(url or ""))
+
 LOGGER = logging.getLogger("channel_monitor")
 
 VALID_STATUSES = {"pending", "processing", "queued", "completed", "failed"}
@@ -748,7 +756,7 @@ class ChannelMonitor:
             try:
                 self._pool = await asyncpg.create_pool(self.database_url, min_size=1, max_size=5)
             except (asyncpg.PostgresConnectionError, OSError) as exc:
-                LOGGER.critical("Failed to connect to database at %s: %s", self.database_url, exc)
+                LOGGER.critical("Failed to connect to database at %s: %s", redact_url(self.database_url), exc)
                 raise RuntimeError(
                     f"Database connection failed for channel-monitor. "
                     f"Check network connectivity and Supabase status. URL: {self.database_url}"

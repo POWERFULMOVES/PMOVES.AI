@@ -20,6 +20,14 @@ from nats.aio.client import Client as NATS
 from nats.aio.msg import Msg
 from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST, REGISTRY
 
+try:
+    from services.common.nats_client import redact_url
+except ImportError:  # image ships without services/common
+    import re as _re
+
+    def redact_url(url):
+        return _re.sub(r"(?<=//)[^/@\s]*@", "", str(url or ""))
+
 # Prometheus metrics
 messages_received = Counter(
     'session_context_worker_messages_received_total',
@@ -373,7 +381,7 @@ async def _nats_resilience_loop() -> None:
                 disconnect_event.set()
             logger.warning(
                 f"NATS connection lost: {reason}",
-                extra={"reason": reason, "servers": [NATS_URL]}
+                extra={"reason": reason, "servers": [redact_url(NATS_URL)]}
             )
 
         async def _disconnected_cb():
@@ -384,8 +392,8 @@ async def _nats_resilience_loop() -> None:
 
         try:
             logger.info(
-                f"Attempting NATS connection: {NATS_URL}",
-                extra={"servers": [NATS_URL], "backoff": backoff}
+                f"Attempting NATS connection: {redact_url(NATS_URL)}",
+                extra={"servers": [redact_url(NATS_URL)], "backoff": backoff}
             )
             await nc.connect(
                 servers=[NATS_URL],
@@ -397,7 +405,7 @@ async def _nats_resilience_loop() -> None:
         except Exception as exc:
             logger.warning(
                 f"NATS connection failed: {exc}",
-                extra={"servers": [NATS_URL], "error": str(exc), "backoff": backoff}
+                extra={"servers": [redact_url(NATS_URL)], "error": str(exc), "backoff": backoff}
             )
             await asyncio.sleep(backoff)
             backoff = min(backoff * 2.0, 30.0)
@@ -406,7 +414,7 @@ async def _nats_resilience_loop() -> None:
         # Connection successful
         _nc = nc
         backoff = 1.0
-        logger.info(f"NATS connected: {NATS_URL}", extra={"servers": [NATS_URL]})
+        logger.info(f"NATS connected: {redact_url(NATS_URL)}", extra={"servers": [redact_url(NATS_URL)]})
 
         # Register subscriptions
         await _register_nats_subscriptions(nc)

@@ -53,6 +53,7 @@ except ImportError:  # pragma: no cover
     torch = None  # type: ignore
 
 from services.common.supabase import insert_segments
+from services.common.nats_client import redact_url
 
 try:
     from services.common.events import envelope as build_event_envelope
@@ -271,7 +272,7 @@ async def lifespan(app: FastAPI):
     if NATS_CGP_AVAILABLE and (CGP_PUBLISH_ENABLED or CONTENT_RAW_PUBLISH_ENABLED):
         try:
             _nats_client = await nats_pkg.connect(NATS_URL)
-            logger.info("NATS CGP client connected to %s", NATS_URL)
+            logger.info("NATS CGP client connected to %s", redact_url(NATS_URL))
         except Exception as e:
             logger.warning("NATS CGP client connection failed (non-fatal): %s", e)
 

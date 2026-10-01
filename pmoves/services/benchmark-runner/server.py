@@ -17,6 +17,14 @@ from nats.aio.msg import Msg
 from .benchmark import BenchmarkConfig, BenchmarkRunner, BenchmarkResult
 from .comparison import BenchmarkComparator, ComparisonReport
 
+try:
+    from services.common.nats_client import redact_url
+except ImportError:  # image ships without services/common
+    import re as _re
+
+    def redact_url(url):
+        return _re.sub(r"(?<=//)[^/@\s]*@", "", str(url or ""))
+
 logger = logging.getLogger(__name__)
 
 # NATS subjects for benchmark coordination
@@ -91,7 +99,7 @@ class BenchmarkServer:
         )
 
         self._running = True
-        logger.info(f"Benchmark server started on {self.nats_url}")
+        logger.info(f"Benchmark server started on {redact_url(self.nats_url)}")
         logger.info(f"Listening on: {SUBJECTS['request']}")
 
     async def stop(self):

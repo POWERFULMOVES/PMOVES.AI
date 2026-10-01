@@ -17,6 +17,14 @@ from nats.aio.client import Client as NATS
 
 from metrics import NATS_EVENTS_PUBLISHED, NATS_EVENTS_FAILED
 
+try:
+    from services.common.nats_client import redact_url
+except ImportError:  # image ships without services/common
+    import re as _re
+
+    def redact_url(url):
+        return _re.sub(r"(?<=//)[^/@\s]*@", "", str(url or ""))
+
 logger = logging.getLogger("github-runner-ctl")
 
 
@@ -86,7 +94,7 @@ class NATSPublisher:
                 self._nc = NATS()
                 await self._nc.connect(self.nats_url)
                 self._connected = True
-                logger.info(f"Connected to NATS at {self.nats_url}")
+                logger.info(f"Connected to NATS at {redact_url(self.nats_url)}")
                 return True
             except Exception as e:
                 logger.warning(f"NATS connection failed: {e}")

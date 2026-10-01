@@ -15,6 +15,14 @@ except Exception:  # pragma: no cover - the service can operate without NATS
 
 from pmoves.services.common import events as event_utils
 
+try:
+    from services.common.nats_client import redact_url
+except ImportError:  # image ships without services/common
+    import re as _re
+
+    def redact_url(url):
+        return _re.sub(r"(?<=//)[^/@\s]*@", "", str(url or ""))
+
 logger = logging.getLogger("pmoves.gateway.events")
 
 
@@ -56,7 +64,7 @@ class EventBus:
             try:
                 await nc.connect(servers=[self._nats_url], allow_reconnect=True, connect_timeout=1.0)
             except Exception as exc:  # pragma: no cover - depends on runtime service availability
-                logger.warning("Unable to connect to NATS at %s: %s", self._nats_url, exc)
+                logger.warning("Unable to connect to NATS at %s: %s", redact_url(self._nats_url), exc)
                 return
             for topic in self._topics:
                 try:
@@ -64,7 +72,7 @@ class EventBus:
                 except Exception as exc:
                     logger.warning("Failed subscribing to %s: %s", topic, exc)
             self._nc = nc
-            logger.info("Event bus connected to %s", self._nats_url)
+            logger.info("Event bus connected to %s", redact_url(self._nats_url))
 
     async def stop(self) -> None:
         async with self._lock:

@@ -37,6 +37,14 @@ from nats.aio.msg import Msg
 from nats.errors import NoServersError, TimeoutError as NATSTimeoutError
 from nats.js.errors import NotFoundError as JSNotFoundError
 
+try:
+    from services.common.nats_client import redact_url
+except ImportError:  # image ships without services/common
+    import re as _re
+
+    def redact_url(url):
+        return _re.sub(r"(?<=//)[^/@\s]*@", "", str(url or ""))
+
 logger = logging.getLogger(__name__)
 
 # Subjects ------------------------------------------------------------------
@@ -203,7 +211,7 @@ async def _run_once(nats_url: str) -> None:
     """One end-to-end NATS session. Returns when the connection drops."""
     logger.info(
         "tokenism nats_consumer: connecting to NATS at %s (durable=%s, subject=%s)",
-        nats_url,
+        redact_url(nats_url),
         DURABLE_NAME,
         CGP_SUBJECT,
     )

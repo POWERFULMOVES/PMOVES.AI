@@ -34,6 +34,14 @@ import nats
 from nats.aio.client import Client as NATS
 from nats.aio.msg import Msg
 
+try:
+    from services.common.nats_client import redact_url
+except ImportError:  # image ships without services/common
+    import re as _re
+
+    def redact_url(url):
+        return _re.sub(r"(?<=//)[^/@\s]*@", "", str(url or ""))
+
 if TYPE_CHECKING:
     from supabase import Client as SupabaseClient
 
@@ -97,7 +105,7 @@ class ChatRelayService:
 
     async def connect(self) -> None:
         """Connect to NATS and Supabase."""
-        logger.info(f"Connecting to NATS at {self.config.nats_url}")
+        logger.info(f"Connecting to NATS at {redact_url(self.config.nats_url)}")
 
         self.nc = await nats.connect(
             self.config.nats_url,

@@ -44,6 +44,14 @@ from prometheus_client import (
 )
 
 try:
+    from services.common.nats_client import redact_url
+except ImportError:  # image ships without services/common
+    import re as _re
+
+    def redact_url(url):
+        return _re.sub(r"(?<=//)[^/@\s]*@", "", str(url or ""))
+
+try:
     from nats.aio.client import Client as NATS
 except ImportError:
     NATS = Any  # type: ignore[assignment]
@@ -673,7 +681,7 @@ async def _nats_resilience_loop() -> None:
 
         _nc = nc
         backoff = 1.0
-        logger.info("Connected to NATS at %s", NATS_URL)
+        logger.info("Connected to NATS at %s", redact_url(NATS_URL))
         await _register_nats_subscriptions(nc)
 
         try:

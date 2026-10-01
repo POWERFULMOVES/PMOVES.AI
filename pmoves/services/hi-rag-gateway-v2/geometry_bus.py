@@ -45,6 +45,14 @@ from provenance_geometry import (
     provenance_payload_to_hyperdimensions_save,
 )
 
+try:
+    from services.common.nats_client import redact_url
+except ImportError:  # image ships without services/common
+    import re as _re
+
+    def redact_url(url):
+        return _re.sub(r"(?<=//)[^/@\s]*@", "", str(url or ""))
+
 # --- Optional heavy dependencies ---
 try:
     import nats
@@ -569,7 +577,7 @@ async def subscribe_geometry_cgp() -> None:
             )
             logger.info(
                 "NATS JetStream geometry.cgp.v1 listener started (url=%s, durable=hirag-cgp-consumer)",
-                NATS_URL,
+                redact_url(NATS_URL),
             )
             await stop_event.wait()
             break
@@ -1008,16 +1016,16 @@ async def lifespan(app: FastAPI):
         if _geometry_swarm_task is None and NATS_URL:
             if hasattr(nats, "connect"):
                 _geometry_swarm_task = asyncio.create_task(_geometry_swarm_worker())
-                logger.info("NATS geometry.swarm.meta listener started (url=%s)", NATS_URL)
+                logger.info("NATS geometry.swarm.meta listener started (url=%s)", redact_url(NATS_URL))
                 _content_provenance_task = asyncio.create_task(_content_provenance_worker())
-                logger.info("NATS content.hirag.accepted listener started (url=%s)", NATS_URL)
+                logger.info("NATS content.hirag.accepted listener started (url=%s)", redact_url(NATS_URL))
             else:
                 logger.info("NATS client unavailable; geometry.swarm.meta/content.hirag.accepted listeners skipped")
 
     # CGP subscriber is independent of ShapeStore availability — start unconditionally.
     if _geometry_cgp_task is None and NATS_URL and hasattr(nats, "connect"):
         _geometry_cgp_task = asyncio.create_task(subscribe_geometry_cgp())
-        logger.info("NATS geometry.cgp.v1 auto-ingest listener started (url=%s)", NATS_URL)
+        logger.info("NATS geometry.cgp.v1 auto-ingest listener started (url=%s)", redact_url(NATS_URL))
 
     # Pub-gate bridge — env-gated; behavior-identical when PUBLISH_GATE_BRIDGE unset.
     if (

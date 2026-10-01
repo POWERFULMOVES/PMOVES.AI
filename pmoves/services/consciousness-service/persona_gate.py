@@ -14,6 +14,14 @@ from typing import Any, Dict, Optional
 import nats
 from nats.aio.client import Client as NATS
 
+try:
+    from services.common.nats_client import redact_url
+except ImportError:  # image ships without services/common
+    import re as _re
+
+    def redact_url(url):
+        return _re.sub(r"(?<=//)[^/@\s]*@", "", str(url or ""))
+
 logger = logging.getLogger(__name__)
 
 # Configuration
@@ -48,7 +56,7 @@ class PersonaGateService:
     async def connect(self):
         """Connect to NATS message bus."""
         self.nc = await nats.connect(NATS_URL)
-        logger.info(f"Connected to NATS at {NATS_URL}")
+        logger.info(f"Connected to NATS at {redact_url(NATS_URL)}")
 
     async def close(self):
         """Close NATS connection."""

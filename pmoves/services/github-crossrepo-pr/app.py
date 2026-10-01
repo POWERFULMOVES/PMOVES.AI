@@ -44,6 +44,14 @@ from workflow_templates import (
 )
 from agentzero_client import AgentZeroMCPClient
 
+try:
+    from services.common.nats_client import redact_url
+except ImportError:  # image ships without services/common
+    import re as _re
+
+    def redact_url(url):
+        return _re.sub(r"(?<=//)[^/@\s]*@", "", str(url or ""))
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -371,7 +379,7 @@ async def lifespan(app: FastAPI):
     try:
         nc = NATS()
         await nc.connect(NATS_URL)
-        logger.info(f"Connected to NATS at {NATS_URL}")
+        logger.info(f"Connected to NATS at {redact_url(NATS_URL)}")
 
         # Subscribe to sync completion events
         await nc.subscribe(

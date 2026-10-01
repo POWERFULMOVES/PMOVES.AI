@@ -26,6 +26,14 @@ from typing import Any
 import httpx
 from fastapi import FastAPI
 
+try:
+    from services.common.nats_client import redact_url
+except ImportError:  # image ships without services/common
+    import re as _re
+
+    def redact_url(url):
+        return _re.sub(r"(?<=//)[^/@\s]*@", "", str(url or ""))
+
 logger = logging.getLogger("model-fitness-bridge")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
@@ -223,7 +231,7 @@ async def nats_subscriber_loop() -> None:
     while True:
         try:
             nc = await nats.connect(NATS_URL, name="model-fitness-bridge", max_reconnect_attempts=-1)
-            logger.info("NATS connected: %s", NATS_URL)
+            logger.info("NATS connected: %s", redact_url(NATS_URL))
 
             async def message_handler(msg):
                 subject = msg.subject
@@ -349,7 +357,7 @@ async def metrics():
 async def startup():
     asyncio.create_task(nats_subscriber_loop())
     asyncio.create_task(telemetry_scrape_loop())
-    logger.info("model-fitness-bridge started — registry=%s nats=%s", MODEL_REGISTRY_URL, NATS_URL)
+    logger.info("model-fitness-bridge started — registry=%s nats=%s", MODEL_REGISTRY_URL, redact_url(NATS_URL))
 
 
 if __name__ == "__main__":

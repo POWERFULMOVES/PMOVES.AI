@@ -21,6 +21,14 @@ from prometheus_client import Counter, Histogram, Gauge, generate_latest
 
 from .config import config
 
+try:
+    from services.common.nats_client import redact_url
+except ImportError:  # image ships without services/common
+    import re as _re
+
+    def redact_url(url):
+        return _re.sub(r"(?<=//)[^/@\s]*@", "", str(url or ""))
+
 # Configure logging
 logging.basicConfig(
     level=getattr(logging, config.LOG_LEVEL),
@@ -120,7 +128,7 @@ async def lifespan(app: FastAPI):
     # Connect to NATS
     try:
         nc = await nats.connect(config.NATS_URL)
-        logger.info(f"Connected to NATS at {config.NATS_URL}")
+        logger.info(f"Connected to NATS at {redact_url(config.NATS_URL)}")
 
         # Subscribe to webhook events
         await nc.subscribe(

@@ -22,6 +22,14 @@ from typing import Any, Dict, Optional
 from fastapi import FastAPI
 from pydantic import BaseModel, Field
 
+try:
+    from services.common.nats_client import redact_url
+except ImportError:  # image ships without services/common
+    import re as _re
+
+    def redact_url(url):
+        return _re.sub(r"(?<=//)[^/@\s]*@", "", str(url or ""))
+
 # --------------------------------------------------------------------------- #
 # Configuration
 # --------------------------------------------------------------------------- #
@@ -110,7 +118,7 @@ class NATSManager:
             from nats.aio.client import Client as NATSClient
             self._nc = NATSClient()
             await self._nc.connect(servers=[NATS_URL])
-            LOG.info("Connected to NATS at %s", NATS_URL)
+            LOG.info("Connected to NATS at %s", redact_url(NATS_URL))
             await self._nc.subscribe(NATS_SUBJECT_SIGNAL, cb=self._on_signal)
             LOG.info("Subscribed to %s", NATS_SUBJECT_SIGNAL)
         except Exception as exc:

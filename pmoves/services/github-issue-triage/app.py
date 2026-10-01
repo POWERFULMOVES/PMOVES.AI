@@ -30,6 +30,14 @@ from nats.aio.client import Client as NATS
 from labeling_rules import LabelingRules
 from hirag_client import HiRAGClient
 
+try:
+    from services.common.nats_client import redact_url
+except ImportError:  # image ships without services/common
+    import re as _re
+
+    def redact_url(url):
+        return _re.sub(r"(?<=//)[^/@\s]*@", "", str(url or ""))
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -328,7 +336,7 @@ async def startup_event():
     try:
         nc = NATS()
         await nc.connect(NATS_URL)
-        logger.info(f"Connected to NATS: {NATS_URL}")
+        logger.info(f"Connected to NATS: {redact_url(NATS_URL)}")
 
         # Subscribe to webhook events
         await nc.subscribe("github.webhook.issue.v1", "github-issue-triage", handle_webhook_event)
