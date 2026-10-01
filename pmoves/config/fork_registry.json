@@ -295,7 +295,7 @@
       "upstream": "neo4j/neo4j",
       "sync": false,
       "branch": "PMOVES.AI-Edition-Hardened",
-      "reason": "untriaged - backfilled by the .gitmodules coverage cross-check. Promoting to sync: true also widens the App-token scope (Workflows:write on the fork), so it is a deliberate, reviewable act rather than a default"
+      "reason": "triaged 2026-10-01 (ops/knuckles-neo4j-from-fork): sync stays false by decision. The fork is the source of the PMOVES Neo4j image, so an upstream move is a store-version decision, not a routine sync: PMOVES.AI-Edition-Hardened tracks upstream 2026.09 (fork PR #3) while runtime is 5.26.30, built from PMOVES.AI-Edition-5.26 (= upstream tag 5.26.30, fork PR #4, which also adds a workflow). Same-line patch syncs are manual and paired with an image rebuild and A/B; auto-sync would also need Workflows:write on the fork. See pmoves/docs/TAC/TAC_NEO4J.md"
     },
     "PMOVES-ollama": {
       "upstream": "ollama/ollama",
