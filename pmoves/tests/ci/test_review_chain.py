@@ -1148,3 +1148,13 @@ def test_selector_declares_each_plan_only_when_its_key_is_set(selector_env):
     declared = json.loads(both.stdout.split("REVIEW with ", 1)[1])["provider"]
     assert set(declared) == {"zai-coding-plan", "minimax-coding-plan"}
     assert json.loads(none.stdout.split("REVIEW with ", 1)[1])["provider"] == {}
+
+
+def test_selector_catalog_admits_only_the_configured_providers(selector_env):
+    env, catalog = selector_env
+    catalog.write_text("kilo/z-ai/glm-5.3\nopenrouter/z-ai/glm-5.3\nhttps://kilo.ai/models\n")
+    p = _select({**env, "KILO_REVIEW_MODEL_PREFERENCES": "openrouter/z-ai/glm-5.3 kilo/z-ai/glm-5.3"})
+    assert p.returncode == 0, p.stderr
+    assert "preferred model 'openrouter/z-ai/glm-5.3' is not in the live kilo catalog" in p.stderr
+    assert "KILO_RESOLVED_MODEL=kilo/z-ai/glm-5.3" in p.stderr
+    assert "kilo catalog: 1 ids" in p.stderr

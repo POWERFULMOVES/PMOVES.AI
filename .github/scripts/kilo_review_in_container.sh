@@ -63,7 +63,9 @@ if [ -n "${MINIMAX_TOKEN_PLAN_API_KEY:-}" ]; then
 fi
 PROVIDERS="\"provider\": {${plans}}"
 printf '{%s}' "$PROVIDERS" > ~/.config/kilo/kilo.json
-kilo models 2>/dev/null | grep -E '^[a-z0-9][a-z0-9._-]*/[^[:space:]]+$' | sort -u > "$CATALOG" || true
+# Only the providers this lane is configured for: any other built-in the CLI
+# happens to activate is not a reviewer we hold a key for.
+kilo models 2>/dev/null | grep -E '^(kilo|zai-coding-plan|minimax-coding-plan)/[^[:space:]]+$' | sort -u > "$CATALOG" || true
 n=$(wc -l < "$CATALOG")
 if [ "$n" -eq 0 ]; then
   echo "::error::kilo model catalog query ('kilo models') returned 0 ids - cannot validate any model (could-not-measure)" >&2
