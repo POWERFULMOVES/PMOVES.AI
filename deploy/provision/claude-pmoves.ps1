@@ -483,7 +483,7 @@ if (Test-Path -LiteralPath $identTool) {
                 # ---------------------------------------------------------
                 # WHO THE SESSION IS -- mirrors pmoves/scripts/claude-pmoves.sh.
                 # Operator direction 2026-09-27: the session must wake up AS
-                # the node identity (e.g. Z890-CLAUDE), doing the steward job,
+                # the node identity (e.g. Z890-CLAUDE), holding the node itself,
                 # not as a role that speaks of that identity in the third
                 # person. The name and the register owner string come from
                 # identity_vocabulary.yaml's declared register_form via the
@@ -506,8 +506,16 @@ if (Test-Path -LiteralPath $identTool) {
                 }
                 if ($identName -and $identForm) {
                     $cardPart = if ($identCard) { ", signing card $identCard" } else { '' }
-                    $rolePart = if ($roleName) { "the '$roleName' role" } else { 'the role this session was launched with' }
-                    $identText = "You are $identName, the Claude Code agent for PMOVES node '$nodeName' (registry key $nodeIdent in pmoves/config/agent_registry.yaml$cardPart). You sign the claim register as '$identForm'. This session you are doing the job of ${rolePart}: the role is the work you are doing, not a second party -- speak as $identName, in the first person, and never describe $identName as someone who directs you. Disclose this at session start rather than rediscovering it. If another live session on this node already signs as '$identForm', do not share that owner string: pmoves/config/identity_vocabulary.yaml requires a second session on one node to use a distinct BASE identity, launched with PMOVES_REGISTER_IDENTITY set to it."
+                    # No --agent is the DEFAULT now (operator direction
+                    # 2026-10-01): the main session is the node identity with
+                    # full tools, and states its job here instead of inheriting
+                    # it from node-steward's body. Parity with claude-pmoves.sh.
+                    $jobPart = if ($roleName) {
+                        "This session you are doing the job of the '$roleName' role: the role is the work you are doing, not a second party -- speak as $identName, in the first person, and never describe $identName as someone who directs you."
+                    } else {
+                        "This session runs with no role agent and your full tools: you hold this node yourself. Your job: claim the lane in pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md BEFORE any edit, then delegate -- coordination to the 'node-steward' role, execution to 'delivery-agent', review to 'code-review' or 'verifier' -- rather than running all three bodies alone. Speak as $identName, in the first person."
+                    }
+                    $identText = "You are $identName, the Claude Code agent for PMOVES node '$nodeName' (registry key $nodeIdent in pmoves/config/agent_registry.yaml$cardPart). You sign the claim register as '$identForm'. $jobPart Disclose this at session start rather than rediscovering it. If another live session on this node already signs as '$identForm', do not share that owner string: pmoves/config/identity_vocabulary.yaml requires a second session on one node to use a distinct BASE identity, launched with PMOVES_REGISTER_IDENTITY set to it."
                     Write-Host "[claude-pmoves] name=$identName register=$identForm"
                 } else {
                     $rw = $ident['PMOVES_REGISTER_WHY']

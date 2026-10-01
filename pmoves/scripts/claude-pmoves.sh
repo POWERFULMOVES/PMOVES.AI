@@ -17,18 +17,22 @@
 # and it now inherits env.shared + the roster.
 #
 # Usage: claude-pmoves [agent-name] [claude-args...]
-# Default agent: node-steward (claims work, then spawns delivery agents)
-# Other agents: control-agent, memory-agent, researcher, test-runner, pr-trimmer, verifier, code-review
+# Default: NO agent -- the main session is the node identity (e.g. B850-CLAUDE)
+#   with full tools; it claims, then delegates (see DEFAULT AGENT below)
+# Agents: node-steward, delivery-agent, control-agent, memory-agent, researcher,
+#   test-runner, pr-trimmer, verifier, code-review
 #
 # Examples:
-#   claude-pmoves                          # node-steward (default)
+#   claude-pmoves                          # the node identity (default)
+#   claude-pmoves node-steward             # restricted coordinator as main session
+#   PMOVES_DEFAULT_AGENT=node-steward claude-pmoves   # same, as a per-node default
 #   claude-pmoves delivery-agent           # straight to execution
 #   claude-pmoves control-agent            # review/gate agent
 #   claude-pmoves memory-agent             # cipher memory agent
 #   claude-pmoves test-runner --worktree   # test runner in worktree
 #
-# To launch with NO agent (plain Claude + PMOVES MCP), call the provisioning
-# script directly: deploy/provision/claude-pmoves.sh
+# To launch with no node identity either (plain Claude + PMOVES MCP), call the
+# provisioning script directly: deploy/provision/claude-pmoves.sh
 set -u
 
 # ---------------------------------------------------------------------------
@@ -64,24 +68,36 @@ fi
 
 LAUNCHER="$ROOT/deploy/provision/claude-pmoves.sh"
 
-# DEFAULT AGENT: node-steward, not delivery-agent.
+# DEFAULT AGENT: none. The main session IS the node identity, with full tools.
 #
-# The old default made every node session an execution body with no node context
-# and no claim discipline. A B850 session on 2026-08-23 ran that way to
-# completion -- eight PRs and three live DB mutations on the data-tier host, all
-# unclaimed -- and the register recorded nobody as having been there. An agent
-# that starts holding Edit will edit; the steward is denied Write/Edit and spawns
-# delivery agents instead. See .claude/agents/node-steward.md.
+# Operator direction 2026-09-27 ("claude-pmoves must wake up AS the node
+# identity ... not as a node-steward role"), reaffirmed 2026-10-01. #3205
+# reworded the prompt below but left this default at node-steward, and
+# `--agent` makes the main thread take on that agent's tool restrictions
+# (Claude Code docs, sub-agents, "Run the whole session as a subagent").
+# node-steward denies Write/Edit/NotebookEdit, so the identity woke up unable to
+# edit, and on 2026-10-01 every teammate it spawned reported "No such tool
+# available: Edit" and fell back to heredocs and sed.
 #
-# Overridable: `claude-pmoves delivery-agent` still gets the old behaviour, and
-# PMOVES_DEFAULT_AGENT sets it per node without editing this file.
+# No `--agent` at all, rather than an identity-shaped agent: a custom agent's
+# prompt REPLACES the default Claude Code system prompt (same docs section), and
+# the empty-prompt escape needs v2.1.281+ on every node. With no agent, the
+# identity rides in --append-system-prompt on top of the default prompt. The
+# claim discipline the steward default was introduced for (2026-08-23: eight
+# unclaimed PRs) is stated in that prompt instead -- hold the node, claim before
+# edits, delegate -- and node-steward is a role the identity delegates to.
 #
-# Falls back to delivery-agent if the steward definition is absent, so a node on
-# an older checkout keeps working rather than launching with --agent pointed at
-# nothing.
-DEFAULT_AGENT="${PMOVES_DEFAULT_AGENT:-node-steward}"
-if [ ! -f "$ROOT/.claude/agents/$DEFAULT_AGENT.md" ]; then
-  DEFAULT_AGENT="delivery-agent"
+# Overridable, unchanged: `claude-pmoves node-steward`, or
+# PMOVES_DEFAULT_AGENT=node-steward per node, still runs the restricted
+# coordinator as the main session; `claude-pmoves delivery-agent` the execution
+# body.
+#
+# An override naming a definition that is absent launches with NO agent and
+# says so, rather than `--agent` pointed at nothing.
+DEFAULT_AGENT="${PMOVES_DEFAULT_AGENT:-}"
+if [ -n "$DEFAULT_AGENT" ] && [ ! -f "$ROOT/.claude/agents/$DEFAULT_AGENT.md" ]; then
+  echo "[claude-pmoves] PMOVES_DEFAULT_AGENT='$DEFAULT_AGENT' has no .claude/agents/$DEFAULT_AGENT.md -- launching as the node identity with no --agent" >&2
+  DEFAULT_AGENT=""
 fi
 # Only treat $1 as an agent NAME if it is not a flag. The previous form,
 # AGENT="${1:-delivery-agent}", consumed anything: `claude-pmoves --print ping`
@@ -97,7 +113,7 @@ fi
 # ---------------------------------------------------------------------------
 # NODE IDENTITY — the half the agent selection above does not answer.
 #
-# `--agent node-steward` says what this session DOES. It says nothing about
+# An `--agent` role, when one is chosen, says what this session DOES. It says nothing about
 # which node it is on or which registered agent it IS, so every session began
 # by rediscovering both. `topology.node_affinity` in agent_registry.yaml was
 # written for exactly this and nothing read it.
@@ -146,11 +162,22 @@ if [ "${PM_IDENT_OK:-0}" = "1" ]; then
   # difference between the identity existing and the identity working.
   if [ -n "${PM_IDENT_DISPLAY:-}" ] && [ -n "${PM_IDENT_REGISTER_FORM:-}" ]; then
     _card="${PM_IDENT_CIPHER_ID:+, signing card ${PM_IDENT_CIPHER_ID}}"
-    pm_ident_append "You are ${PM_IDENT_DISPLAY}, the Claude Code agent for PMOVES node '${PMOVES_NODE}' (registry key ${PMOVES_NODE_IDENTITY} in pmoves/config/agent_registry.yaml${_card}). You sign the claim register as '${PM_IDENT_REGISTER_FORM}'. This session you are doing the job of the '${AGENT}' role: the role is the work you are doing, not a second party -- speak as ${PM_IDENT_DISPLAY}, in the first person, and never describe ${PM_IDENT_DISPLAY} as someone who directs you. Disclose this at session start rather than rediscovering it. If another live session on this node already signs as '${PM_IDENT_REGISTER_FORM}', do not share that owner string: pmoves/config/identity_vocabulary.yaml requires a second session on one node to use a distinct BASE identity, launched with PMOVES_REGISTER_IDENTITY set to it."
-    unset _card
+    if [ -n "$AGENT" ]; then
+      _job="This session you are doing the job of the '${AGENT}' role: the role is the work you are doing, not a second party -- speak as ${PM_IDENT_DISPLAY}, in the first person, and never describe ${PM_IDENT_DISPLAY} as someone who directs you."
+    else
+      # The default: no role agent, so the job is stated here rather than
+      # inherited from an agent body. See DEFAULT AGENT above.
+      _job="This session runs with no role agent and your full tools: you hold this node yourself. Your job: claim the lane in pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md BEFORE any edit, then delegate -- coordination to the 'node-steward' role, execution to 'delivery-agent', review to 'code-review' or 'verifier' -- rather than running all three bodies alone. Speak as ${PM_IDENT_DISPLAY}, in the first person."
+    fi
+    pm_ident_append "You are ${PM_IDENT_DISPLAY}, the Claude Code agent for PMOVES node '${PMOVES_NODE}' (registry key ${PMOVES_NODE_IDENTITY} in pmoves/config/agent_registry.yaml${_card}). You sign the claim register as '${PM_IDENT_REGISTER_FORM}'. ${_job} Disclose this at session start rather than rediscovering it. If another live session on this node already signs as '${PM_IDENT_REGISTER_FORM}', do not share that owner string: pmoves/config/identity_vocabulary.yaml requires a second session on one node to use a distinct BASE identity, launched with PMOVES_REGISTER_IDENTITY set to it."
+    unset _card _job
   else
     echo "[claude-pmoves] identity name unresolved, falling back to the registry key: ${PM_IDENT_DISPLAY_WHY:-no reason given}" >&2
-    pm_ident_append "You are running on PMOVES node '${PMOVES_NODE}'. Your registered identity in pmoves/config/agent_registry.yaml is '${PMOVES_NODE_IDENTITY}'. Disclose it at session start rather than rediscovering it. Your selected role for this session is the '${AGENT}' agent."
+    if [ -n "$AGENT" ]; then
+      pm_ident_append "You are running on PMOVES node '${PMOVES_NODE}'. Your registered identity in pmoves/config/agent_registry.yaml is '${PMOVES_NODE_IDENTITY}'. Disclose it at session start rather than rediscovering it. Your selected role for this session is the '${AGENT}' agent."
+    else
+      pm_ident_append "You are running on PMOVES node '${PMOVES_NODE}'. Your registered identity in pmoves/config/agent_registry.yaml is '${PMOVES_NODE_IDENTITY}'. Disclose it at session start rather than rediscovering it. This session runs with no role agent and your full tools: claim before any edit, then delegate."
+    fi
   fi
 fi
 # Cipher refuses every call without an `agentId`, and refuses a wrong one under
@@ -295,14 +322,20 @@ fi
 # pm-node-identity.sh for the measurement.
 pm_ident_prompt_args
 IDENTITY_ARGS=(${PM_IDENT_PROMPT_ARGS[@]+"${PM_IDENT_PROMPT_ARGS[@]}"})
+# Empty by default -- no `--agent` at all, not `--agent ""`.
+AGENT_ARGS=()
+if [ -n "$AGENT" ]; then
+  AGENT_ARGS=(--agent "$AGENT")
+fi
+echo "[claude-pmoves] agent=${AGENT:-none (main session is the node identity)}" >&2
 
 if [ ! -f "$LAUNCHER" ]; then
   # Degrade to the pre-delegation behavior rather than failing: the agent still
   # loads, MCP creds do not. Warn so the missing half is visible, not silent.
   echo "[claude-pmoves] WARN: $LAUNCHER not found — launching without env.shared or the MCP roster." >&2
-  exec claude --agent "$AGENT" ${IDENTITY_ARGS[@]+"${IDENTITY_ARGS[@]}"} "$@"
+  exec claude ${AGENT_ARGS[@]+"${AGENT_ARGS[@]}"} ${IDENTITY_ARGS[@]+"${IDENTITY_ARGS[@]}"} "$@"
 fi
 
-# The launcher forwards "$@" straight to claude after --mcp-config=, so --agent
-# rides through unchanged.
-exec bash "$LAUNCHER" --agent "$AGENT" ${IDENTITY_ARGS[@]+"${IDENTITY_ARGS[@]}"} "$@"
+# The launcher forwards "$@" straight to claude after --mcp-config=, so --agent,
+# when there is one, rides through unchanged.
+exec bash "$LAUNCHER" ${AGENT_ARGS[@]+"${AGENT_ARGS[@]}"} ${IDENTITY_ARGS[@]+"${IDENTITY_ARGS[@]}"} "$@"
