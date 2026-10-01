@@ -55,14 +55,15 @@ export function ResearchResults({
   };
 
   return (
-    <div className="space-y-4">
+    <div data-testid="research-results" className="space-y-4">
       {/* Summary */}
-      <div>
+      <div data-testid="research-summary">
         <h3 className="font-medium mb-2">Research Summary</h3>
         <div className="bg-neutral-50 rounded p-4">
-          <p className="text-sm leading-relaxed whitespace-pre-wrap">{result.summary}</p>
+          <p data-testid="research-summary-content" className="text-sm leading-relaxed whitespace-pre-wrap">{result.summary}</p>
           <button
             onClick={() => handleCopy(result.summary, "summary")}
+            data-testid="copy-summary-button"
             className="mt-2 text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1"
           >
             <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -80,13 +81,14 @@ export function ResearchResults({
             <h3 className="font-medium">Notes ({result.notes.length})</h3>
             <button
               onClick={() => setExpandedNotes(!expandedNotes)}
+              data-testid="toggle-notes"
               className="text-xs text-blue-600 hover:text-blue-800"
             >
               {expandedNotes ? "Collapse" : "Expand"}
             </button>
           </div>
           {expandedNotes && (
-            <ul className="space-y-2">
+            <ul data-testid="research-notes" className="space-y-2">
               {result.notes.map((note, index) => (
                 <li key={index} className={NOTE_CLASSES}>
                   <p className="text-sm">{note}</p>
@@ -110,13 +112,14 @@ export function ResearchResults({
             <h3 className="font-medium">Sources ({result.sources.length})</h3>
             <button
               onClick={() => setExpandedSources(!expandedSources)}
+              data-testid="toggle-sources"
               className="text-xs text-blue-600 hover:text-blue-800"
             >
               {expandedSources ? "Collapse" : "Expand"}
             </button>
           </div>
           {expandedSources && (
-            <ul className="space-y-1">
+            <ul data-testid="research-sources" className="space-y-1">
               {result.sources.map((source, index) => (
                 <li key={index}>
                   <a
@@ -141,11 +144,11 @@ export function ResearchResults({
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
         <div>
           <span className="text-neutral-500">Iterations:</span>{" "}
-          <span className="font-medium">{result.iterations}</span>
+          <span data-testid="research-iterations" className="font-medium">{result.iterations}</span>
         </div>
         <div>
           <span className="text-neutral-500">Duration:</span>{" "}
-          <span className="font-medium">{formatDuration(result.duration)}</span>
+          <span data-testid="research-duration" className="font-medium">{formatDuration(result.duration)}</span>
         </div>
         <div>
           <span className="text-neutral-500">Completed:</span>{" "}
@@ -162,11 +165,12 @@ export function ResearchResults({
         {onPublish && (
           <button
             onClick={() => onPublish()}
+            data-testid="publish-notebook-button"
             disabled={publishing}
             className="rounded bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-50 transition"
           >
             {publishing ? (
-              <span className="flex items-center gap-2">
+              <span data-testid="publish-loading" className="flex items-center gap-2">
                 <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />

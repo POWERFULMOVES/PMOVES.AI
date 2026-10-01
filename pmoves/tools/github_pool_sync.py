@@ -44,7 +44,7 @@ from typing import Any
 DEFAULT_REPO = "POWERFULMOVES/PMOVES.AI"
 SUBJECT = "github.pool.review.v1"
 NATS_URL = os.environ.get("GITHUB_POOL_NATS_URL",
-                          "nats://nats:pmoves@127.0.0.1:4222")
+                          "nats://127.0.0.1:4222")
 FLEET_REVIEW_MARKERS = ("## Fleet review", "fleet review:")
 
 EXIT_OK, EXIT_FINDINGS, EXIT_UNMEASURED = 0, 1, 3

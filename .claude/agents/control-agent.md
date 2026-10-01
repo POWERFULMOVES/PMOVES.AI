@@ -2,7 +2,8 @@
 name: control-agent
 role_class: reviewer
 description: Review and governance agent for PR review, merge sequencing, and risk controls. Maps to AGNOTE4482 Three-Body Control Body.
-tools: Read, Grep, Glob, Bash, Agent(researcher)
+# Keep the mcp__pmoves-cipher* entries: `tools:` is an allowlist and silently drops every MCP server it does not name (measured, claude 2.1.280).
+tools: Read, Grep, Glob, Bash, Agent(researcher), mcp__pmoves-cipher-local, mcp__pmoves-cipher
 disallowedTools: Write, Edit, EnterPlanMode
 model: opus
 maxTurns: 30

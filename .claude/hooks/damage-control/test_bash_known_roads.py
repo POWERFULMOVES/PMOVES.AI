@@ -22,6 +22,7 @@ Fixtures are assembled from split parts at runtime so this file's own source tex
 cannot trip the guard reading it.
 """
 import importlib.util
+import json
 import os
 import sys
 import tempfile
@@ -54,6 +55,22 @@ _TRAIL = Path(tempfile.mkdtemp(prefix="kr-trail-")) / "known-roads.jsonl"
 _NO_FILE_GRANT = Path(tempfile.mkdtemp(prefix="kr-none-")) / ".known-road-active"
 KR._trail_path = lambda: _TRAIL
 KR._grant_file = lambda: _NO_FILE_GRANT
+
+# Grant LIVENESS is not what this suite tests (test_grant_expiry.py does), and a
+# test must never reach the network. known_roads now asks GitHub whether a pr:/
+# issue: grant's referent is still open; replace that one seam with a fixture
+# that declares every referent OPEN, and keep the state cache out of the tree.
+# The numbers below are real and mostly merged -- that is the point of the stub.
+def _referent_open(api_path):
+    number = int(api_path.rsplit("/", 1)[1])
+    body = {"number": number, "state": "open", "closed_at": None}
+    if "/pulls/" in api_path:
+        body.update(merged=False, merged_at=None)
+    return json.dumps(body)
+
+
+KR._gh_api_raw = _referent_open
+KR._cache_path = lambda: Path(tempfile.mkdtemp(prefix="kr-cache-")) / "cache.json"
 
 V_SED = "s" + "ed"
 V_RM = "r" + "m"

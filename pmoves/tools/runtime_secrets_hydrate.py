@@ -165,6 +165,53 @@ def hydrate_runtime_labels(
         or secrets.token_urlsafe(32),
     )
 
+    # Core credentials that the running containers already hold. These are the
+    # values a recreate MUST reproduce, so there is deliberately NO random
+    # fallback here: a minted value would not match the live Postgres / MinIO /
+    # Neo4j / ClickHouse and would turn a placeholder into a wrong password.
+    # Container-only; if no container carries the key, the placeholder stays and
+    # auth-alignment keeps flagging it. Recovery Known Road for the 2026-09-05
+    # incident where the shared env file carried template placeholders for all
+    # of these while the fleet ran on real values baked at container creation.
+    def _container_only(name_tokens: Sequence[str], keys: Sequence[str]) -> str:
+        return _find_container_env_value(containers, name_tokens=name_tokens, keys=keys)
+
+    pg_password = _container_only(("supabase-db", "supabase_db"), ("POSTGRES_PASSWORD", "PGPASSWORD"))
+    for key in ("POSTGRES_PASSWORD", "SUPABASE_DB_PASSWORD", "SERVICE_PASSWORD_POSTGRES"):
+        set_if_missing(key, pg_password)
+
+    minio_user = _container_only(("minio",), ("MINIO_ROOT_USER", "MINIO_ACCESS_KEY"))
+    minio_password = _container_only(("minio",), ("MINIO_ROOT_PASSWORD", "MINIO_SECRET_KEY"))
+    for key in ("MINIO_ROOT_USER", "MINIO_USER", "MINIO_ACCESS_KEY"):
+        set_if_missing(key, minio_user)
+    for key in ("MINIO_ROOT_PASSWORD", "MINIO_PASSWORD", "MINIO_SECRET_KEY"):
+        set_if_missing(key, minio_password)
+
+    neo4j_auth = _container_only(("neo4j",), ("NEO4J_AUTH",))
+    if neo4j_auth and "/" in neo4j_auth:
+        set_if_missing("NEO4J_AUTH", neo4j_auth)
+        set_if_missing("NEO4J_PASSWORD", neo4j_auth.split("/", 1)[1])
+    else:
+        set_if_missing("NEO4J_PASSWORD", _container_only(("neo4j",), ("NEO4J_PASSWORD",)))
+
+    set_if_missing(
+        "TENSORZERO_CLICKHOUSE_USER",
+        _container_only(("tensorzero-clickhouse", "clickhouse"), ("CLICKHOUSE_USER",)),
+    )
+    set_if_missing(
+        "TENSORZERO_CLICKHOUSE_PASSWORD",
+        _container_only(("tensorzero-clickhouse", "clickhouse"), ("CLICKHOUSE_PASSWORD",)),
+    )
+    set_if_missing("PG_META_CRYPTO_KEY", _container_only(("supabase-meta", "meta"), ("CRYPTO_KEY", "PG_META_CRYPTO_KEY")))
+    set_if_missing(
+        "LOGFLARE_PRIVATE_ACCESS_TOKEN",
+        _container_only(("supabase-analytics", "logflare"), ("LOGFLARE_PRIVATE_ACCESS_TOKEN", "LOGFLARE_API_KEY")),
+    )
+    set_if_missing(
+        "LOGFLARE_PUBLIC_ACCESS_TOKEN",
+        _container_only(("supabase-analytics", "logflare"), ("LOGFLARE_PUBLIC_ACCESS_TOKEN",)),
+    )
+
     # Invidious companion key: must be exactly 16 alphanumeric characters.
     # The Invidious companion rejects keys that are not 16 hex chars.
     set_if_missing(
@@ -187,6 +234,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         default=DEFAULT_STATUS_FILE,
         help="Supabase status env snapshot (from make supa-status)",
     )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="print the masked hydration plan without writing the env file",
+    )
     args = parser.parse_args(argv)
 
     env_file = args.env_file.expanduser().resolve()
@@ -199,6 +251,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     updates = hydrate_runtime_labels(env_values, status_values=status_values, containers=containers)
     if not updates:
         print("No runtime labels needed hydration.")
+        return 0
+
+    if args.dry_run:
+        print(f"DRY RUN: {len(updates)} runtime label(s) would be hydrated into {env_file.name}:")
+        for key in sorted(updates):
+            print(f"  - {key}={_masked(updates[key])}")
         return 0
 
     _write_env_file(env_file, updates)

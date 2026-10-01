@@ -31,10 +31,11 @@ import yaml
 sys.path.insert(0, str(Path(__file__).parent))
 import path_scope  # noqa: E402
 from known_roads import (  # noqa: E402
-    active_grant,
+    active_grant_verified,
     evaluate_known_road,
     known_road_hint,
     record_use,
+    set_hook_input,
 )
 
 
@@ -589,19 +590,26 @@ def check_opaque_write_verbs(
 
         verb = item.get("verb", "?")
         why = item.get("reason", "writes targets not named in the command")
-        domain, reason, provable = active_grant()
+        domain, reason, provable, void_detail, state, source = active_grant_verified()
         if provable:
             record_use(
                 "Bash(opaque-verb)", f"<opaque-verb:{verb}>", domain, reason,
                 note=f"{verb} — target not derivable from command text",
+                grant_state=state, grant_source=source,
             )
             return False, False, ""
+        # A grant that is present but void (merged PR, aged-out file, cannot be
+        # verified) must SAY so here: otherwise the operator sees a generic
+        # prompt and approves on the belief that their grant is still covering it.
+        void_note = (f" A Known Road grant is present but NOT honoured: {void_detail}."
+                     if void_detail else "")
         return False, True, (
             f"OPAQUE WRITE: `{verb}` {why}. The damage-control guard matches "
             "command TEXT, so it cannot tell whether this touches a protected "
             "path — no path rule applies to a target the command never names. "
             "Approve only if you know what it writes. Any protected path it does "
             "change will be reported afterwards by the PostToolUse effect check."
+            + void_note
         )
     return False, False, ""
 
@@ -669,7 +677,21 @@ def _mask_git_commit_heredocs(command: str) -> str:
     message must name a protected path.
     """
     out = command
+    # End of the last body masked. finditer walks the ORIGINAL command, so a
+    # `<<'DELIM'` written INSIDE a message body still yields a match -- and
+    # because that inner delimiter never appears at column 0 afterwards, the
+    # terminator search below falls through to len(out) and masks the REST OF
+    # THE COMMAND, hiding real operations from every downstream scan.
+    #
+    # That fails OPEN, and the trigger is a commit message that merely
+    # DOCUMENTS the heredoc pattern -- which is exactly the kind of message
+    # this repo writes, so it opens during ordinary work rather than only
+    # under attack. A match starting inside an already-masked span is message
+    # text, not shell syntax, and must be skipped.
+    masked_until = 0
     for m in _GIT_COMMIT_HEREDOC_START.finditer(command):
+        if m.start() < masked_until:
+            continue
         dash, delim = m.group(1), m.group(3)
         body_start = m.end()
         # Match the shell exactly. `<<-EOF` strips leading tabs, so an indented
@@ -690,6 +712,7 @@ def _mask_git_commit_heredocs(command: str) -> str:
         # matches, which were computed against the original string.
         masked = "".join("\n" if ch == "\n" else " " for ch in span)
         out = out[:body_start] + masked + out[body_end:]
+        masked_until = body_end
     return out
 
 
@@ -873,6 +896,8 @@ def main() -> None:
     except Exception as e:
         print(f"Error reading input: {e}", file=sys.stderr)
         sys.exit(1)
+    # Attribution (not authentication) for any Known Road row this call records.
+    set_hook_input(input_data)
 
     tool_name = input_data.get("tool_name", "")
     tool_input = input_data.get("tool_input", {})
@@ -908,4 +933,6 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    # Exit 0 or 2 only -- an uncaught exception must never exit open. See fail_closed.py.
+    from fail_closed import run_fail_closed  # noqa: E402
+    run_fail_closed(main, "PreToolUse")

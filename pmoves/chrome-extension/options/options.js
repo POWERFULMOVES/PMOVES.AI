@@ -1,5 +1,11 @@
 // PMOVES.AI Options Page
 
+// Imported, not re-declared. This file previously carried its OWN copy of the
+// nine localhost URLs in the reset handler -- a third copy, after constants.js
+// and manifest.json. Copies are how this extension ended up localhost-only in
+// one place and configurable in another.
+import { buildServices } from '../lib/constants.js';
+
 const $ = (sel) => document.querySelector(sel);
 
 const SERVICES = [
@@ -36,6 +42,14 @@ async function loadConfig() {
         const el = $(`#url-${svc}`);
         if (el && config.services?.[svc]) el.value = config.services[svc];
       });
+
+      // Reflect the host the endpoints actually point at, so the field is not
+      // blank while nine URLs say otherwise. Derived, never stored separately:
+      // a second source of truth for the host is how they drift apart.
+      try {
+        const host = new URL(config.services?.pmovesYt || '').hostname;
+        if (host) $('#fleet-host').value = host;
+      } catch { /* unset or malformed -- leave the placeholder showing */ }
 
       // Auth
       if (config.auth?.agentZeroToken) $('#auth-agentZeroToken').value = config.auth.agentZeroToken;
@@ -85,22 +99,52 @@ $('#save-btn').addEventListener('click', async () => {
   });
 });
 
+// ─── Fleet host ──────────────────────────────────
+//
+// Rewrites every endpoint to one host, keeping each service's port. This is the
+// difference between "an extension that talks to my laptop" and "a fleet
+// client": localhost is not an address any other machine can use.
+//
+// It does NOT save on its own -- it fills the fields so you can see exactly what
+// it did and press Save. A control that silently rewrote nine stored endpoints
+// would be indistinguishable from a bug the first time it guessed wrong.
+
+function setStatus(text, color) {
+  const el = $('#save-status');
+  el.textContent = text;
+  el.style.color = color;
+}
+
+$('#apply-host-btn').addEventListener('click', () => {
+  const raw = $('#fleet-host').value.trim();
+  if (!raw) {
+    setStatus('Enter a host first (e.g. pmoves-z890, or localhost).', '#F44336');
+    return;
+  }
+  const built = buildServices(raw);
+  SERVICES.forEach((svc) => {
+    if (built[svc]) $(`#url-${svc}`).value = built[svc];
+  });
+  const host = new URL(built.pmovesYt).hostname;
+  // A host the manifest cannot reach is the failure this whole change exists to
+  // fix, so name it HERE rather than letting every Test button fail opaquely.
+  const permitted = host === 'localhost' || host.endsWith('.ts.net') || !host.includes('.');
+  setStatus(
+    permitted
+      ? `Endpoints pointed at ${host} — click Save, then Test.`
+      : `${host} is not permitted by the manifest (localhost and *.ts.net only) — fetches will be blocked.`,
+    permitted ? '#FF9800' : '#F44336',
+  );
+});
+
 // ─── Reset ───────────────────────────────────────
 
 $('#reset-btn').addEventListener('click', () => {
+  const defaults = buildServices('localhost');
   SERVICES.forEach((svc) => {
-    const defaults = {
-      tensorzero: 'http://localhost:3030',
-      gpuOrchestrator: 'http://localhost:8200',
-      hirag: 'http://localhost:8086',
-      pmovesYt: 'http://localhost:8077',
-      agentZero: 'http://localhost:8080',
-      fluteGateway: 'http://localhost:8055',
-      prometheus: 'http://localhost:9090',
-      gateway: 'http://localhost:8085',
-    };
     $(`#url-${svc}`).value = defaults[svc] || '';
   });
+  $('#fleet-host').value = '';
   $('#auth-agentZeroToken').value = '';
   $('#auth-fluteApiKey').value = '';
   $('#feat-autoProcess').checked = false;

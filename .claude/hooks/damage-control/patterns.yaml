@@ -1148,6 +1148,32 @@ readOnlyPaths:
   # damage-control hook still READS it internally; only agent tool WRITES are
   # blocked.
   - "*.known-road-active"
+  # KNOWN GAP, measured 2026-09-23 against origin/main, NOT closed here: in the
+  # Bash guard a basename glob reaches only a BARE name. glob_to_regex maps `*`
+  # to `[^\s/]*` and every template anchors the glob right after the verb, so
+  # `echo x > .claude/hooks/damage-control/.known-road-active` (and the `./`,
+  # `touch` and `tee` forms) exit 0 -- an agent can self-grant from Bash. It is
+  # not specific to this file: 17 of the 65 readOnly entries are globs and none
+  # reaches `a/b/<name>` (`**/Dockerfile` reaches exactly one directory level).
+  # The Write and Edit guards DO refuse. Tracked for its own guard change; see
+  # the PR that added the entry below.
+  # Its companion: the GitHub-state cache that decides whether a pr:/issue: grant
+  # is still LIVE (known_roads.py "Grant liveness"). A forged `open` entry would
+  # revive a merged PR's grant for the cache TTL, and could be re-forged forever,
+  # so it gets the same protection as the grant it qualifies -- including the
+  # same KNOWN GAP above. That gap is WORSE here than for the grant file, and the
+  # earlier wording of this comment said otherwise (corrected on review of #3174,
+  # F3): an ENV grant (KNOWN_ROAD, fixed at launch) takes precedence over any file
+  # grant, so the file gap cannot touch it -- but forging this cache CAN revive a
+  # stale env grant (e.g. KNOWN_ROAD=compose:pr:3101 after #3101 merged) for as
+  # long as the forgery is refreshed. Until the directory-depth gap is closed
+  # (lane fix/guard-self-grant-glob-depth), cache integrity rests on the Write/Edit
+  # guards and the bare-name Bash rule only. The two other doors to the same
+  # result -- a shim `gh` on the agent-writable PATH, and gh's own agent-writable
+  # config re-routing its HTTP -- are closed in known_roads.py (_trusted_gh,
+  # fresh GH_CONFIG_DIR). Only the hook writes this file, from Python, never
+  # through an agent tool.
+  - "*.grant-state-cache.json"
 
   # ---------------------------------------------------------------------------
   # DOCKERFILES - Require Known Road grant for edits (service Dockerfiles

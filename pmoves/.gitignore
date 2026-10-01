@@ -18,6 +18,9 @@ data/chit/
 data/jellyfin/
 rustdesk-data/
 data/open-notebook/
+# register-sync sidecars: KEEP rows held across a pull, and the rows a sync
+# dropped (the recovery copy). Node-local by design -- never committed.
+data/register-sync/
 notebook_data/
 surreal_data/
 
