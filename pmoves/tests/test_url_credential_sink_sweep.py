@@ -111,6 +111,19 @@ SHAPES = {
             payload = {"bus": os.getenv("NATS_URL")}
             await nc.publish("svc.up", json.dumps(payload).encode())  # FLAG
     ''',
+    "method_on_tainted_value": '''
+        import logging, os
+        logger = logging.getLogger(__name__)
+        url = os.getenv("NATS_URL")
+        async def announce(nc):
+            await nc.publish("svc.up", url.encode())           # FLAG (canonical nats-py payload shape)
+        logger.info("%s", url.strip())                         # FLAG
+        logger.info("%s", url.split("@")[0])                   # FLAG
+        logger.info("bus " + url.lower())                      # FLAG
+        cfg = {"nats_url": url}
+        logger.info("%s", cfg.get("nats_url"))                 # FLAG
+        logger.info("%s", os.environ.get("HOME"))              # ok (not a source key)
+    ''',
     "non_canonical_redactor": '''
         import logging, os
         logger = logging.getLogger(__name__)

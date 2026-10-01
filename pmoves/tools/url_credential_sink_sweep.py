@@ -10,8 +10,9 @@ SOURCES
   looks like one of those (pydantic BaseSettings fills them from env by name).
 
 PROPAGATION (scope = one service directory under pmoves/services, one file elsewhere)
-  * VALUES follow value-preserving expressions (the value itself, str ops,
-    or/if-else, f-strings, concatenation, lists/tuples, subscripts, split) into
+  * VALUES follow value-preserving expressions (the value itself, ANY method
+    call on it -- url.encode(), .strip(), .split("@")[0], .lower() --,
+    or/if-else, f-strings, concatenation, lists/tuples, subscripts) into
     whatever they are assigned to (``self.url``, ``config.url``, ``url``), keyword
     args, parameter defaults, model/dataclass fields, function returns, and
     positional args to same-scope functions/classes.
@@ -83,8 +84,6 @@ LOGM = {"info", "warning", "warn", "error", "debug", "exception", "critical", "l
         "echo", "secho", "write", "print_json", "rule"}
 PUBLISH = {"publish", "request"}
 ROUTE = re.compile(r"^(get|post|put|delete|patch|route|api_route|websocket)$")
-STROPS = {"strip", "rstrip", "lstrip", "replace", "split", "format", "removeprefix", "removesuffix",
-          "encode", "decode"}
 DUMPS = {"model_dump", "dict", "copy", "model_dump_json", "json", "items", "values", "to_dict"}
 WHOLE_FUNCS = {"dict", "vars", "asdict", "str", "repr", "dumps", "list"}
 CANONICAL_MODULES = {"services.common.redact", "services.common.nats_client",
@@ -248,8 +247,15 @@ def sweep(root: pathlib.Path):
                     return value(e.body)
                 if isinstance(e, ast.Call):
                     f = e.func
-                    if isinstance(f, ast.Attribute) and f.attr in STROPS:
-                        return value(f.value)
+                    if isinstance(f, ast.Attribute):
+                        # ANY method on a tainted value propagates it (url.encode(), .strip(),
+                        # .split("@")[0], .lower()); only the canonical redact_url cleans.
+                        r = value(f.value)
+                        if r:
+                            return f"{r}.{f.attr}()"
+                        if (f.attr in {"get", "pop", "setdefault"} and e.args and _skey(e.args[0])
+                                and SEED.search(_skey(e.args[0])) and not is_environ(f.value)):
+                            return f".{f.attr}({_skey(e.args[0])!r})"  # cfg.get("nats_url")
                     if isinstance(f, ast.Name) and f.id in {"str", "list", "tuple"} and e.args:
                         return value(e.args[0])
                     if _ident(f) in {"Option", "Argument"} and e.args:
@@ -402,6 +408,11 @@ def sweep(root: pathlib.Path):
                             and SEED.search(_skey(n.slice)):
                         out.append(f"[{_skey(n.slice)}]")
                         return
+                    if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute):
+                        r = value(n)  # method call on a tainted receiver (see value())
+                        if r:
+                            out.append(r)
+                            return
                     if isinstance(n, ast.Call):
                         k = container(n)
                         if k:

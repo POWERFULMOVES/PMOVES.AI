@@ -56,6 +56,11 @@ CORPUS = [
     ("b64_mixed", "nats://svc:ab/cd#ef?gh,ij kl@nats:4222", ["ab/", "cd#", "ef?", "gh,", "ij kl"]),
     ("scheme_in_pw", "nats://alice:pw://SYNTH@nats:4222", ["SYNTH", "pw:"]),
     ("token_param", "https://api.example/x?token=SYNTHsecret&page=2", ["SYNTH", "secret"]),
+    # Round-3 review (pullrequestreview-5384822500): '@' then a later '://' inside
+    # the password, and the bare Google/YouTube ?key= API-key parameter.
+    ("r3_at_then_scheme", "nats://alice:SYNTH@secret://x@nats:4222", ["SYNTH", "secret"]),
+    ("r3_at_then_scheme_list", "nats://a:SYNTH@secret://x@h1:4222,nats://b:SYNTHsecret@h2:4222", ["SYNTH", "secret"]),
+    ("r3_key_param", "https://www.googleapis.com/youtube/v3/videos?key=SYNTHsecret&id=1", ["SYNTH", "secret"]),
     # Round-2 control review corpus (pullrequestreview-5382143346), incl. the two
     # fail-open shapes it found: a scheme after ':' or '/' followed by a later
     # scheme, and a password containing a '!http://'-like run.

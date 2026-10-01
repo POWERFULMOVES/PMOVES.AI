@@ -54,7 +54,7 @@ except ImportError:  # image ships without services/common; copy of services/com
         for match in _re.finditer("@", text):
             at = match.start()
             scheme = text.find("://", prev_at + 1, at)
-            if scheme >= 0:
+            if scheme >= 0 and (not spans or _re.search(r"[\s,;'\"()<>|\[\]{}]", text[prev_at + 1:scheme])):
                 spans.append([scheme + 3, at])
             elif spans:
                 spans[-1][1] = at
@@ -68,7 +68,7 @@ except ImportError:  # image ships without services/common; copy of services/com
             pos = end
         out.append(text[pos:])
         return _re.sub(
-            r"(?i)([?&;#][\w.\-]*(?:password|passwd|pwd|pass|secret|token|api[_\-]?key|auth|signature|sig)[\w.\-]*=)[^&#;\s]*",
+            r"(?i)([?&;#][\w.\-]*(?:password|passwd|pwd|pass|secret|token|key|auth|signature|sig)[\w.\-]*=)[^&#;\s]*",
             r"\1***",
             "".join(out),
         )
