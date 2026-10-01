@@ -57,11 +57,11 @@
       "sha256": "675f9de19080a8aabe1e8672e4f80a9d77a4f7865c6444c3e50cde6b0edeb459"
     },
     {
-      "bytes": 1634,
+      "bytes": 1698,
       "executable": true,
       "managed_by": "generator",
       "relpath": "deploy/provision/claude-pmoves-b850.sh",
-      "sha256": "70ef5a54ede1f503c20aa2951ba9a20b975b2d140f0f8ddc641b3c1b13033ffd"
+      "sha256": "78777ef445d5e4380dc215d510fa569fc23a15c2d9958a31af51ba368fe88190"
     },
     {
       "bytes": 1157,
