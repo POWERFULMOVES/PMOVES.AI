@@ -1086,7 +1086,9 @@ exit 9
     assert "KILO_RESOLVED_MODEL=zai-coding-plan/glm-5.3" in p.stderr
     at_query = json.loads(seen.read_text())
     assert at_query["provider"]["zai-coding-plan"]["env"] == ["Z_AI_API_KEY"]
-    assert at_query["provider"]["minimax-coding-plan"]["env"] == ["MINIMAX_TOKEN_PLAN_API_KEY"]
+    # kilo lists a config-declared provider even without its key, so a plan
+    # whose key is unset must not be declared at all
+    assert "minimax-coding-plan" not in at_query["provider"]
     final = json.loads(p.stdout.split("REVIEW with ", 1)[1])
     assert final["model"] == "zai-coding-plan/glm-5.3" and "provider" in final
     leaked = ZAI_KEY in p.stdout + seen.read_text()
@@ -1136,3 +1138,13 @@ def test_workflow_routes_plan_keys_by_secret_and_prefers_the_plans():
     ids = default.strip(" }'").split()
     assert ids[0].startswith("zai-coding-plan/"), "a plan model leads: it needs no Kilo credits"
     assert any(i.startswith("kilo/") for i in ids), "the gateway stays as the last resort"
+
+
+def test_selector_declares_each_plan_only_when_its_key_is_set(selector_env):
+    env, _ = selector_env
+    both = _select({**env, "Z_AI_API_KEY": ZAI_KEY, "MINIMAX_TOKEN_PLAN_API_KEY": MM_KEY})
+    none = _select(env)
+    assert both.returncode == 0 and none.returncode == 0, both.stderr + none.stderr
+    declared = json.loads(both.stdout.split("REVIEW with ", 1)[1])["provider"]
+    assert set(declared) == {"zai-coding-plan", "minimax-coding-plan"}
+    assert json.loads(none.stdout.split("REVIEW with ", 1)[1])["provider"] == {}

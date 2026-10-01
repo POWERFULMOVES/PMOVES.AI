@@ -52,9 +52,16 @@ npm init -y >/dev/null 2>&1
 npm install --no-audit --no-fund "@kilocode/plugin@${KILO_CLI_VERSION}" >/dev/null 2>&1
 # `env` names the variable each plan provider reads its key from; it is a
 # name, not a value, so no key is ever written to this file. Written BEFORE
-# the catalog query so the plan providers are active (and listed) when their
-# key is present.
-PROVIDERS='"provider": {"zai-coding-plan": {"env": ["Z_AI_API_KEY"]}, "minimax-coding-plan": {"env": ["MINIMAX_TOKEN_PLAN_API_KEY"]}}'
+# the catalog query so the plan providers are listed. A provider declared in
+# config is listed EVEN WITHOUT its key (measured with @kilocode/cli 7.6.2), so
+# a plan is declared only when its key is non-empty; otherwise its ids would
+# pass the catalog check and the tier would die on auth instead of moving on.
+plans=""
+[ -n "${Z_AI_API_KEY:-}" ] && plans='"zai-coding-plan": {"env": ["Z_AI_API_KEY"]}'
+if [ -n "${MINIMAX_TOKEN_PLAN_API_KEY:-}" ]; then
+  plans="${plans:+${plans}, }"'"minimax-coding-plan": {"env": ["MINIMAX_TOKEN_PLAN_API_KEY"]}'
+fi
+PROVIDERS="\"provider\": {${plans}}"
 printf '{%s}' "$PROVIDERS" > ~/.config/kilo/kilo.json
 kilo models 2>/dev/null | grep -E '^[a-z0-9][a-z0-9._-]*/[^[:space:]]+$' | sort -u > "$CATALOG" || true
 n=$(wc -l < "$CATALOG")
