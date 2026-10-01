@@ -339,8 +339,8 @@ juicefs-cross-node-setup: ## Mount JuiceFS on this node (run on remote): make ju
 	@# line is forwarded, as JFS_SETUP_*, because with-env.sh re-sources the node's
 	@# env files over the caller's environment and would silently replace a plain
 	@# META_ROLE/DB_PASS (scripts/with-env.sh:55 `set -a`, :85 .env.local last).
-	@# Empty means "not named". The JFS_SETUP_* forwarding is HAND-ROLLED: no
-	@# prior recipe in Makefile or mk/*.mk forwards variables past with-env.sh.
+	@# Empty means "not named". JFS_SETUP_* forwarding — Originated: B850-CLAUDE /
+	@# nvme-3150-rebase, 2026-10-01 (no upstream precedent found; checked: every recipe in pmoves/Makefile and pmoves/mk/*.mk that calls with-env.sh).
 	@#
 	@# DB_PASS passes as the sub-process ENVIRONMENT, not argv, and is handed to
 	@# JuiceFS via META_PASSWORD, so it never appears in `ps`. Passing it as

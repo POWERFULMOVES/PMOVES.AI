@@ -129,8 +129,9 @@ from `.env.local`. The script hardenings:
   `JFS_SETUP_DB_PASS` (names no env file sets) so the node file cannot silently
   replace them, and the recipe no longer resolves the funnel fallback into
   `DB_PASS` itself (that made every run look like an explicit `DB_PASS`).
-- **Provenance for the script and recipe changes** (operator rule 2026-10-01:
-  every mechanism cites vendor docs or source, or the PMOVES fork's own files):
+- **Provenance for the script and recipe changes** (attribution, operator rule
+  2026-10-01). Vendor-sourced items should be re-checked when the vendor changes;
+  originated items are ours to test and evolve:
   - *Metadata DSN and password handling*: JuiceFS v1.3.0 (the pinned
     `juicedata/mount:ce-v1.3.0`), `docs/en/reference/how_to_set_up_metadata_engine.md`,
     section "PostgreSQL". It gives the DSN form
@@ -145,18 +146,25 @@ from `.env.local`. The script hardenings:
     choose one. `juicefs_meta` is PMOVES's scoped role
     (`pmoves/supabase/initdb/00_3_juicefs_meta_role.sql`), and
     `JUICEFS_META_PASSWORD` is its funnel slot
-    (`JUICEFS_META_CREDENTIAL_RUNBOOK.md:21`). **HAND-ROLLED:** the *automatic*
-    pairing (fallback credential => `juicefs_meta`). The runbook prescribes
-    passing `META_ROLE` explicitly (`JUICEFS_CROSS_NODE_MOUNT_RUNBOOK.md:92-102`),
-    and that still works and always wins.
+    (`JUICEFS_META_CREDENTIAL_RUNBOOK.md:21`). The *automatic* pairing (fallback
+    credential => `juicefs_meta`): **Originated:** Crush lane, 2026-09-22
+    (f2519ea67); corrected by B850-CLAUDE / nvme-3150-rebase, 2026-10-01 (no
+    upstream precedent found; checked: JuiceFS v1.3.0 metadata-engine and
+    PostgreSQL best-practices docs, and the PMOVES runbooks). The runbook's
+    explicit `META_ROLE` (`JUICEFS_CROSS_NODE_MOUNT_RUNBOOK.md:92-102`) still
+    works and always wins.
   - *Redaction*: GNU grep manual, 2.1.2 Matching Control (`-F`/`--fixed-strings`:
     "Interpret patterns as fixed strings, not regular expressions"; `-v`); POSIX
     `grep -F`. <https://www.gnu.org/software/grep/manual/grep.html#Matching-Control>
   - *Env precedence*: `pmoves/scripts/with-env.sh:55` (`set -a`) and `:85` (loads
     `.env.local` last) are why a caller's `META_ROLE` is replaced. The wrapper form
-    is with-env.sh's documented entry point (`:143`). **HAND-ROLLED:** the
-    `JFS_SETUP_*` forwarding names. No prior recipe in `pmoves/Makefile` or
-    `pmoves/mk/*.mk` forwards make variables past with-env.sh.
+    is with-env.sh's documented entry point (`:143`). The `JFS_SETUP_*`
+    forwarding names: **Originated:** B850-CLAUDE / nvme-3150-rebase, 2026-10-01
+    (no upstream precedent found; checked: every recipe in `pmoves/Makefile` and
+    `pmoves/mk/*.mk` that calls with-env.sh).
+  - *Stale-FUSE-endpoint guard and preflight output capture*: **Originated:**
+    Crush lane, 2026-09-22 (f2519ea67). Upstream precedent was not searched in
+    this pass.
   - *`DATA_DIR` must not fail silently*: Docker docs, "Bind mounts" > "Syntax":
     with `--volume`, a missing source "Docker automatically creates" as a
     directory. That it ends up root-owned follows from a rootful daemon creating

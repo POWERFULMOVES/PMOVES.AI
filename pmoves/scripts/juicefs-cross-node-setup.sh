@@ -38,8 +38,9 @@ DB_PORT="${DB_PORT:-5432}"
 # silently replaced by the node file, so make forwards them as JFS_SETUP_*,
 # names no env file sets, and they win here.
 #   Provenance: the override is with-env.sh's own behaviour (scripts/with-env.sh:55
-#   `set -a` export; :85 loads .env.local LAST). The JFS_SETUP_* forwarding is
-#   HAND-ROLLED: no prior PMOVES recipe forwards make variables past with-env.sh.
+#   `set -a` export; :85 loads .env.local LAST). JFS_SETUP_* forwarding:
+#   Originated: B850-CLAUDE / nvme-3150-rebase, 2026-10-01 (no upstream precedent
+#   found; checked: every recipe in pmoves/Makefile and pmoves/mk/*.mk that calls with-env.sh).
 DB_PASS="${JFS_SETUP_DB_PASS:-${DB_PASS:-}}"
 DB_PASS_EXPLICIT="${DB_PASS:+set}"
 DB_PASS="${DB_PASS:-${JUICEFS_META_PASSWORD:-}}"
@@ -61,9 +62,12 @@ DB_PASS="${DB_PASS:-${JUICEFS_META_PASSWORD:-}}"
 #   say nothing about choosing one (https://github.com/juicedata/juicefs/blob/v1.3.0/docs/en/reference/how_to_set_up_metadata_engine.md,
 #   "### PostgreSQL"). juicefs_meta is PMOVES's scoped role
 #   (supabase/initdb/00_3_juicefs_meta_role.sql), and JUICEFS_META_PASSWORD is its
-#   funnel slot (docs/operations/JUICEFS_META_CREDENTIAL_RUNBOOK.md:21). The
-#   AUTOMATIC pairing is HAND-ROLLED: the runbook prescribes passing META_ROLE
-#   explicitly (docs/operations/JUICEFS_CROSS_NODE_MOUNT_RUNBOOK.md:92-102).
+#   funnel slot (docs/operations/JUICEFS_META_CREDENTIAL_RUNBOOK.md:21). Automatic
+#   pairing: Originated: Crush lane, 2026-09-22 (f2519ea67), corrected by
+#   B850-CLAUDE / nvme-3150-rebase, 2026-10-01 (no upstream precedent found;
+#   checked: JuiceFS v1.3.0 metadata-engine + PostgreSQL best-practices docs, and
+#   the PMOVES runbooks, which pass META_ROLE explicitly:
+#   docs/operations/JUICEFS_CROSS_NODE_MOUNT_RUNBOOK.md:92-102 — still honoured).
 META_ROLE="${JFS_SETUP_META_ROLE:-${META_ROLE:-}}"
 if [ -z "$META_ROLE" ]; then
     if [ -z "$DB_PASS_EXPLICIT" ] && [ -n "${JUICEFS_META_PASSWORD:-}" ]; then
