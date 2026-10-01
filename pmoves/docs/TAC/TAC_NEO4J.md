@@ -111,8 +111,28 @@ Known contract gaps:
 
 - Endpoint: `GET /mindmap/{constellation_id}?modalities=&minProj=&minConf=&limit=` on hi-rag-gateway-v2 (`routes/geometry.py`).
 - Query shape: `(:Constellation {id})-[:HAS]->(:Point)-[:LOCATES]->(:MediaRef)`, filtered on `p.modality`, `p.proj`, `p.conf`.
-- Data today is fixture data: `neo4j/cypher/003_seed_chit_mindmap.cypher` and `010_chit_geometry_fixture.cypher`. The only
-  live writer (services/gateway) is not deployed. Smoke: `011_chit_geometry_smoke.cypher` (run by `neo4j-bootstrap`).
+- Data today is fixture data: `neo4j/cypher/010_chit_geometry_fixture.cypher`. The only live writer (services/gateway)
+  is not deployed. `002_chit_constraints.cypher` makes `Anchor.id`, `Constellation.id`, `Point.id` and `MediaRef.uid`
+  unique (ported from `docs/pmoves_all_in_one/pmoves_chit_patch/neo4j/migrations/001_chit.cql:1-4`).
+- Smoke: `011_chit_geometry_smoke.cypher` returns `CHIT_SMOKE_OK` only for one `Anchor-[:FORMS]->Constellation`, 3 Points,
+  3 MediaRefs and at least 2 modalities. `neo4j-bootstrap` exits 1 on anything else and applies every file once.
+- Every statement of every road file is self-contained: cypher-shell does not carry variables across `;`. Until 2026-10,
+  `003_seed_chit_mindmap.cypher` (now deleted; it duplicated 010) and `010:19` reused variables across `;`, so each
+  edge statement MERGEd an **unlabeled** node pair. On an empty graph that is 6 blank nodes, and FORMS reached no
+  Anchor. `tests/test_neo4j_cypher_static.py` parses every road file for that shape.
+- **Operator step for an existing graph (not run by this lane; credentialed session via with-env.sh):**
+  1. Duplicate precheck before `002` (CREATE CONSTRAINT fails on duplicates):
+     `MATCH (n:Anchor|Constellation|Point) WITH labels(n)[0] AS l, n.id AS k, count(*) AS c WHERE c > 1 RETURN l, k, c;`
+     and `MATCH (m:MediaRef) WITH m.uid AS k, count(*) AS c WHERE c > 1 RETURN k, c;` must both return no rows.
+  2. Count the residue first and keep the number: `MATCH (n) WHERE size(labels(n)) = 0 RETURN count(n);`. Delete only
+     unlabeled nodes whose every edge is FORMS/HAS/LOCATES, which is 003's shape, and compare the count first.
+     Other writers, such as the consciousness shell loader's `:150`/`:156`, also leave unlabeled nodes.
+- The consciousness taxonomy (`load-consciousness-neo4j`, `data/consciousness/neo4j-consciousness-schema.cypher`) had
+  15 statements opening `WITH <var>` on the previous statement's variable, plus 21 standalone edge MERGEs. The load
+  aborted at `:66` after committing the root, one category and a blank pair. Each statement now re-MATCHes its parent
+  by key. A graph that ran the old file may hold that blank pair too (step 2 above, `HAS_CATEGORY`/`HAS_SUBCATEGORY`).
+  `data/consciousness/load_neo4j_consciousness.sh` is a manual-only duplicate with its own blank-node MERGEs at
+  `:150`/`:156` and a second `Entity` key (`Entity.id` beside `001`'s `Entity.value`). Retire it in favour of the road.
 - The CHIT taxonomy graph (`CHITPillar`, `NATSSubject`, `CGPElement`, `Agent`, `CHITModule`) is a separate seed:
   `make -C pmoves chit-mindmap-seed`.
 
@@ -174,6 +194,25 @@ copied in by `docker exec -e NAME`, so it is never on argv. An unset OR empty pa
 | `pmoves/Makefile`, `pmoves/docs/TAC/*`, `pmoves/config/fork_registry.json` | unprotected | none |
 
 ## 10. Open items / COULD-NOT-MEASURE
+
+- **Open, for the provenance lane (`ops/knuckles-neo4j-chit-provenance`), constraints deliberately unchanged here:
+  three uniqueness keys on `:Agent` in one database.**
+  - `Agent.id`: constraint `agent_id`, `tools/chit_mindmap_seed.cypher:12`.
+  - `Agent.name`: constraint `agent_name`, `services/graph-linker/migrations/01_init.cypher:3`.
+  - `Agent.agent_id`: constraint `agent_agent_id_unique`, `services/graphiti/migrations/0003_polarity_partition.cypher:13`.
+
+  The failure depends on order. After graph-linker has merged `(:Agent {name:"Agent Zero"})`, the chit seed's
+  `MERGE (:Agent {id:"agent-zero"}) SET .name="Agent Zero"` makes a second node and violates `agent_name`, so the seed
+  aborts. In the other order, graph-linker's `MERGE (ag:Agent {name:$source})` silently forks the identity. The
+  candidate from the CHIT review is one key, `Agent.id` = the `pmoves/config/agent_registry.yaml` `agents:` key. That
+  needs a live mapping step, and whether the other two constraints exist live is COULD-NOT-MEASURE.
+- `services/graphiti/migrations/0003_polarity_partition.cypher` is NOT idempotent: `datetime()` inside the MERGE
+  relationship pattern (`:31`, `:37`, `:43`, `:49`) adds a new `OPERATES_AT` edge on every run. It is not fixed here
+  because no road applies it. It is outside the road set, and its only reference is a TAC `expect:` file-exists check.
+  Fix it before anything runs it. The static checker in `tests/test_neo4j_cypher_static.py` flags all four.
+- The fallback password literal removed from `load_neo4j_consciousness.sh`, `verify_chr_conch.sh` and a review doc in
+  2026-10 remains in git history. Whether it equals the live `NEO4J_PASSWORD` is COULD-NOT-MEASURE. Rotate it
+  (operator step).
 
 - A full source build and the A/B against the vendor image (the sandbox preflight returned exit 3 on 2026-10-01).
 - The APOC procedures the Neo4j MCP actually calls, and whether A0's `mcp://neo4j` resolves to the neo4j/mcp binary.
