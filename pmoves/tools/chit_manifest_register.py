@@ -261,7 +261,7 @@ REGISTRY: Dict[str, Dict[str, Any]] = {
     # values, and only the migration context needs the bucket key pair. Shapes
     # are the vendor's: rpc_secret is `openssl rand -hex 32`
     # (cookbook/real-world.md), the tokens `openssl rand -base64 32`
-    # (quick-start.md), the key id GK + 24 hex (src/model/key_table.rs). The
+    # (quick-start/), the key id GK + 24 hex (src/model/key_table.rs). The
     # manifest checks only min_length/prefix; `garage_render_config.py
     # materialize` checks the exact shape before it writes the 0600 files.
     # The secret key outlives the migration (re-injected after the D1 metadata

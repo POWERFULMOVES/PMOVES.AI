@@ -152,6 +152,9 @@ df -hT / /var/lib 2>/dev/null; lsblk -o NAME,SIZE,TYPE,FSTYPE,MOUNTPOINT; free -
    - With replicas "on at least 3 distinct zones" (`garage layout show` output in `operations/layout.md`), each partition then has at most one replica in `lab`. This holds **only while zone redundancy is `maximum`**, which Gate A and G1 check. At least two of every partition's replicas sit on tier 1.
    - **What this does NOT guarantee:** quorum survives all of tier 2 going down **only while that partition's tier-1 replicas are up**. With Spark down (as on 2026-09-27), every partition whose replicas are {spark, one KVM, lab} runs on a single live replica if `lab` is also down. With consistent RF=3 that means **no reads and no writes** for those partitions. Two tier-1 failures, or one tier-1 failure plus the `lab` zone, stop some partitions whatever the layout is.
    - The cost is that the tier-1 zones must together hold **two copies of everything**.
+   - **Limit shared by both levers (§6.1 row 22).** A bucket's object index is not sharded: it lives on RF nodes "chosen at random", and "there is no way of choosing which nodes" (`reference-manual/known-issues/` "Buckets are not sharded"). Capacity weighting does not move the index of bucket `juicefs`, so its index replicas may sit on tier-2 nodes. Under zone grouping, at most one index replica can sit in `lab`. Where the index lands after `bucket create` is COULD-NOT-MEASURE (no documented command).
+
+**Emergency lever, operator-only (§6.1 row 4): `consistency_mode = "degraded"`.** `reference-manual/configuration/` `consistency_mode`: `degraded` lowers the read quorum to 1, so reads continue with one replica of a partition up (the Spark-down plus `lab`-down case above). The cost is the loss of read-after-write consistency. It is never the default. It must be set identically on every node (§6.1 row 3), so switching it is a fleet-wide re-render and restart, and switching back is the same.
 
 **What today's measured free space allows.** The figures below are arithmetic on the §1.1 survey, with G1's headroom rule applied: declared capacity ≤ half of measured free space. They are not measurements, and tier-2 capacity is COULD-NOT-MEASURE.
 
@@ -205,9 +208,18 @@ metrics_require_token = true                            # §6.1 row 6
 - **Image:** ~~`dxflrs/garage:v2.4.1`~~ **superseded 2026-10-01 by operator direction:** build from the PMOVES fork `POWERFULMOVES/PMOVES-garage` (`PMOVES.AI-Edition-Hardened`, cut at upstream tag `v2.4.1`), push to GHCR, pin by digest per F-07. See §6.2 and §7.
 - **Network:** host networking, per Garage's `cookbook/real-world.md`.
 - **Snapshots dir:** `/var/lib/garage/snapshots` is a sibling of `data_dir`. It must not sit inside `data_dir`, which Garage manages as its block store.
-- **Bind addresses:** S3, admin **and RPC** all bind to the node's tailnet address, so nothing listens on a public interface. (Changed 2026-10-01 from RPC on `[::]`: peers dial `rpc_public_addr`, which is the same tailnet address, and the CLI dials `rpc_public_addr` too, per v2.4.1 `src/garage/main.rs`, so nothing needs the wildcard bind.) A bind to a tailnet address fails if `tailscaled` is not up when Garage starts; the compose service relies on `restart: unless-stopped`. The renderer refuses any address outside `100.64.0.0/10`. The firewall rule and the external probe below are still required.
+- **Bind addresses (RPC: operator decision, §6.3):** S3, admin **and RPC** all bind to the node's tailnet address, so nothing listens on a public interface. (Changed 2026-10-01 from RPC on `[::]`: peers dial `rpc_public_addr`, which is the same tailnet address, and the CLI dials `rpc_public_addr` too, per v2.4.1 `src/garage/main.rs`, so nothing needs the wildcard bind.) A bind to a tailnet address fails if `tailscaled` is not up when Garage starts; the compose service relies on `restart: unless-stopped`. The renderer refuses any address outside `100.64.0.0/10`. The firewall rule and the external probe below are still required.
 - **Firewall (required on every storage node, and critical on the KVMs because they are public exit nodes):** allow 3900/3901/3903 on `tailscale0` only. Tier-2 nodes sit behind residential NAT, but the same rule applies. No port-forward for 3900/3901/3903 may exist on any router in front of them.
 - **Hostinger firewall today (Hostinger REST, read-only, 2026-09-27):** no Hostinger firewall rule mentions 3900, 3901 or 3903, and no drop rules exist. The API does not expose the default policy. So whether these ports are closed on the public addresses is **COULD-NOT-MEASURE** from the API.
+- **Baseline probe, before any Garage exists (2026-10-01, B850-CLAUDE from Knuckles, read-only TCP connects, 4 s timeout).** Target: each KVM's public IPv4 as reported in `tailscale status --json` `CurAddr` (direct paths, no exit node in use on Knuckles; addresses not recorded here). Knuckles reaches the internet over its residential uplink, not the tailnet, so this is an outside-the-tailnet vantage.
+
+  | Node | 3900 | 3901 | 3903 | Controls: 22, 80, 443 |
+  |---|---|---|---|---|
+  | kvm2 | timeout | timeout | timeout | timeout |
+  | kvm4-1 | timeout | timeout | timeout | timeout |
+  | kvm4-2 | timeout | timeout | timeout | timeout |
+
+  The same socket code reached `github.com:443` and `:22` (outbound path healthy). Every port timed out rather than being refused, including 22, 80 and 443, which is the signature of an inbound default-drop on the KVMs' public IPv4, the policy the Hostinger API does not expose. **This does not pass the gate:** nothing listens on 3900/3901/3903 yet, the KVMs' public IPv6 addresses were not probed, and the gate is defined on running Garage nodes.
 - **External port-probe gate (REQUIRED; OPEN — OPERATOR):** before Gate A passes, probe **all three ports (3900, 3901, 3903) on every KVM's public address from a host outside the tailnet**. Every probe must be refused or time out. One open port fails the gate. A probe from inside the tailnet proves nothing, because tailnet traffic is allowed by design. Who runs the probe, and from which outside host, is an operator decision.
 
 ### 1.3a Garage on Windows nodes (5090; the 4090 if it runs Windows)
@@ -273,10 +285,12 @@ Every item in this subsection is **COULD-NOT-MEASURE** until someone tries it on
 **Mount nodes do NOT need the Garage key.** JuiceFS stores storage credentials in the volume's format record in the metadata DB, so anyone who can read `juicefs_meta` has this key. That is why it is bucket-scoped.
 
 **Route (all 4, or delivery stops one hop short):**
-1. The `pmoves/chit/secrets_manifest_v2.yaml` entry.
-2. `REGISTRY` in `pmoves/tools/chit_manifest_register.py` (tier `data`, `required: False`).
-3. The bundle map in `.github/workflows/sync-secrets-local.yml`.
-4. The GitHub secret itself.
+1. The `pmoves/chit/secrets_manifest_v2.yaml` entry. **OPERATOR:** the manifest is zero-access to agents; `make -C pmoves chit-manifest-register` writes the five entries from `REGISTRY` (its `--check` lists them as pending today).
+2. `REGISTRY` in `pmoves/tools/chit_manifest_register.py` (tier `data`, `required: False`, the `min_length`/`prefix` of the table above). **DONE in #3241.**
+3. The bundle map in `.github/workflows/sync-secrets-local.yml`. **DONE in #3241.**
+4. The GitHub secret itself. **OPERATOR.**
+
+**Last hop: env file to the files Garage mounts.** The funnel projects these labels into `env.tier-data`, and its docker-secret output is one JSON map (`chit.write_docker_secrets`). No funnel step writes the per-file 0600 form the compose overlay mounts. `make -C pmoves garage-secrets` (`garage_render_config.py materialize`) is that step: it parses (never sources) `GARAGE_ENV_FILE` (default `env.tier-data`), checks the exact shape of each value (64 hex; at least 44 base64 characters), writes all three files 0600 in a 0700 dir or none of them, and prints only label names and lengths. `make -C pmoves garage-preflight` then checks owner and mode. It is an operator-context target: agents cannot read tier env files.
 
 **Key-print hazards:**
 
@@ -411,7 +425,7 @@ comparing 12-char sha256 prefixes, not values.
 | Volume | `pmoves-media`, UUID `72fbf356-3a13-4c50-889c-e0bd703e2459`, `Storage: minio`, `Bucket: http://minio:9000/juicefs`, BlockSize 4096 KiB, Compression none, TrashDays 1 | `juicefs status` |
 | **Encryption** | **`EncryptAlgo: aes256gcm-rsa`.** Objects are client-side encrypted; the RSA key lives in the format record. Not in the plan's inputs | `juicefs status` |
 | JuiceFS used | 80,926,846,976 B (75.37 GiB), 57 inodes (20 regular files; 13 content files under `knuckles/downloads/`) | `juicefs status`, `find` on the mount |
-| Sessions | 2: the S3 gateway (`pmoves-juicefs-gateway-1`) and `juicefs-mount` at `/home/pmoves-knuckles/pmoves-fs` | `juicefs status` |
+| Sessions | 2: the S3 gateway (`pmoves-juicefs-gateway-1`) and `juicefs-mount` at `~/pmoves-fs` (the operator's home on Knuckles) | `juicefs status` |
 | MinIO image | `pmoves/minio:RELEASE.2025-09-07T16-13-09Z-src`, healthy, on `pmoves_bus`, `pmoves_data`, `pmoves_external` | `docker inspect` |
 | MinIO volume | `pmoves_minio-data`, 79.4 GiB total: `juicefs/` 75.7 GiB, `assets/` 3.7 GiB, `outputs/` and `pmoves-comfyui/` 4 KiB each, `.minio.sys` 11.8 MiB | `du` on a read-only mount of the volume |
 | Bucket `juicefs` | **19,328 objects, 80,926,852,230 B.** Only prefix `pmoves-media/`. `chunks/`: 19,304 objects, 80,926,635,709 B. `meta/`: 24 objects, 216,521 B (hourly auto-backups). No other keys | `mc du --json`, `mc ls --recursive` |
@@ -430,14 +444,15 @@ The copy is therefore **80.93 GB**, not 85.
 
 | Sample | sha256 |
 |---|---|
-| file `knuckles/downloads/PXL_20260808_152055294.mp4` (49,599,344 B) | `2adb728e697c83ec35ce6ef6a05a9fea91ff8d73819c9c84a5606e883c115e68` |
-| file `knuckles/downloads/PXL_20260716_151626196.mp4` (56,612,762 B) | `26d76e03a9baaf2bcd2a455ef7bb84a79a4a46881e894a3b99e4ba415bd77482` |
-| file `knuckles/downloads/PXL_20260711_011634031.mp4` (70,409,759 B) | `0393e1c618d449a42091f1158a41a6d687f749c26b34ebd636eab925116bd5f9` |
+| file, inode 8207 (49,599,344 B) | `2adb728e697c83ec35ce6ef6a05a9fea91ff8d73819c9c84a5606e883c115e68` |
+| file, inode 8204 (56,612,762 B) | `26d76e03a9baaf2bcd2a455ef7bb84a79a4a46881e894a3b99e4ba415bd77482` |
+| file, inode 8201 (70,409,759 B) | `0393e1c618d449a42091f1158a41a6d687f749c26b34ebd636eab925116bd5f9` |
 | object `pmoves-media/chunks/0/16/16385_0_303` | `86ed552ac1a4121c2737415e4794302c40077bf748a19585b034fe4f8e7effcf` |
 | object `pmoves-media/chunks/0/25/25182_3_4194304` | `ae05835af515c6e36184f38affe8af009d9e6a9e3425485b3307ce9b623bbbce` |
 | object `pmoves-media/chunks/0/25/25788_9_4194304` | `291c01948e0621a246d0d2b0a90bddc32ea7adc97e9ef240ac6fb6aee5cdc2a7` |
 
 Object checksums are of ciphertext (the volume is encrypted), so they compare bytes 1:1 across stores.
+File samples are named by JuiceFS inode, not by path: the paths are the operator's personal media, and this is a public repo. JuiceFS inodes survive the object-store switch (c3 changes only the format record), so c6 resolves them on the mount with `find ~/pmoves-fs -inum <n>`.
 
 **Gate 0 items still open:** the metadata backup (`juicefs dump --binary` to NVMe1 plus
 `pg_dump -n juicefs_meta`) was not taken by this read-only pass; `juicefs gc` (no `--delete`)
@@ -447,10 +462,9 @@ was not run.
 1. **Compose grant.** No Garage compose definition exists. It needs `compose:pr:<N>` for this
    lane's PR. The grant active on Knuckles at measurement time named a different, already-merged PR
    and was not used.
-2. **G2: no `GARAGE_*` / `JUICEFS_GARAGE_*` funnel labels exist.** They are absent from
-   `REGISTRY` in `pmoves/tools/chit_manifest_register.py` and from the bundle map in
-   `.github/workflows/sync-secrets-local.yml`. The manifest is a zero-access path with no Known
-   Road, so adding them is an operator action.
+2. **G2: the `GARAGE_*` / `JUICEFS_GARAGE_*` funnel labels.** `REGISTRY` and the bundle map now
+   carry them (#3241). The manifest entries (`make -C pmoves chit-manifest-register`), the values
+   and the GitHub secrets are operator actions, and the per-node delivery vehicle is still G2.
 3. **D2, D3 (and D7) open.** With Spark offline and kvm4-1 still a G0 blocker, a 3-zone first cut
    is at most kvm2 + kvm4-2 + one tier-2 node. Knuckles' NVMe1 (3.5 TiB free) is the obvious
    tier-2 candidate, but declaring it is D3.
@@ -489,6 +503,7 @@ garage bucket allow --read --write juicefs --key juicefs-pmoves-media
 - `garage status` shows every first-cut node HEALTHY in its declared zone, with the layout at version 1. The first cut needs at least 3 zones for RF=3.
 - The applied layout's "Effective capacity (replication factor 3)" covers ~85 GB plus growth.
 - `garage layout show` prints **"Zone redundancy: maximum"** and **"Partitions are replicated 3 times on at least 3 distinct zones"** (review N2).
+- **Config parity (§6.1 row 3):** `replication_factor` and `consistency_mode` are identical in every node's rendered `garage.toml` (diff the rendered files; both come from one template, so a difference means a stale render).
 - `garage bucket info juicefs` lists the key with RW.
 - **Addressing choice recorded:** (a) the tailnet IPv4 resolved on the host, or (b) host networking (§1.4; MagicDNS does not resolve inside the bridge, measured). `<ENDPOINT>` below is the tailnet IPv4 under (a).
 - **kvm4-1 inbound reachability (BLOCKER):** before kvm4-1 joins the layout, a connection from kvm4-2 and from Knuckles to kvm4-1:3901 over the tailnet must succeed. On 2026-09-27 a test port timed out, cause COULD-NOT-MEASURE. If it still fails, kvm4-1 stays out of the first cut.
@@ -523,7 +538,7 @@ jfs srcurl,dst 'juicefs sync --no-https --check-all --threads 8 "minio://...same
 **Gate B:**
 - Pass 2 (`--check-all`) reports **0 failed**. This full verification runs here, before the freeze, never inside it.
 - Object count and bytes in `garage bucket info juicefs` are ≥ the Step 0 figures.
-- `garage stats` shows no resync backlog.
+- `garage stats` shows no resync backlog. Read it before declaring one: on the defaults the resync queue can grow faster than it clears (`reference-manual/known-issues/` "Resync tranquility is conservative by default", §6.1 row 23). The operator-tunable levers, per node, are `garage worker set -a resync-worker-count <N>` and `garage worker set -a resync-tranquility 0`; record any value set and restore the defaults after Gate B.
 - `--delete-src` and `--delete-dst` are never used.
 
 ### Step (c): Cutover with a short write freeze
@@ -562,7 +577,7 @@ jfs meta 'juicefs gc "$META"'     # NO --delete; now scans MinIO
 
 | Phase | Action | Gate |
 |---|---|---|
-| Soak, N days (**D4**) | Daily `juicefs fsck` (read-only), `garage status`, `garage stats` | 0 fsck errors. Every storage node in the layout HEALTHY, or its absence explained. Spark down counts as an absence |
+| Soak, N days (**D4**) | Daily `juicefs fsck` (read-only), `garage status`, `garage stats`, `garage layout history` (§6.1 row 11: with disconnected nodes, old layout versions can stay active; run it after every layout change too) | 0 fsck errors. Every storage node in the layout HEALTHY, or its absence explained. Spark down counts as an absence |
 | Node-down test (once, deliberate) | Stop **one** storage node that is **NOT the S3 endpoint** (D2). First confirm with `garage status` that every other storage node is up; with Spark already down, a second stop is a two-node failure, which is a different test. Run it once on a tier-1 node and once on a tier-2 node | Reads **and writes** continue from every client (RF=3: one replica per partition lost) |
 | Endpoint-failover drill (separate, gated: G6a) | In an agreed window, and with a c1-style freeze: `jfs meta 'juicefs config "$META" --bucket http://<other-node>:3900/juicefs'`, remount through the c5 target, run c6, then switch back the same way | Every step exits 0. c6 passes on both the failover endpoint and the restored one. Never combined with the node-down test |
 | Retire | JuiceFS no longer uses `minio:9000/juicefs`. MinIO itself stays up for `assets`/`outputs`/`pmoves-comfyui` until the parent §9 consumer migration | Operator sign-off |
@@ -634,7 +649,7 @@ jfs meta 'juicefs gc "$META"'     # NO --delete; now scans MinIO
 |---|---|---|
 | **D1** | **DECIDED: replicated Postgres** (§2). Sequencing: this data move first, then the metadata move under its own follow-on plan | operator (done) |
 | G0 | This plan merged. The #3192 bridge live, so MinIO is readable. **#3150 merged** (the durable mount and data-dir override that c5 relies on; OPEN today). Step 0 baseline recorded, including the live mount shape. **KVM build cache reclaimed through the build-cache road before declaring capacity:** the space is `buildx_buildkit_pmoves-shared0_state`, reclaimed with a GC cap or `buildx prune` by its owner, outside this plan. Never by volume deletion. **kvm4-1 BLOCKER:** inbound tailnet connections to kvm4-1 must work (3901 reachable from every peer), or kvm4-1 stays out of the first cut | operator |
-| G1 | D3: each first-cut storage node has measured free space and a declared capacity of at most half of it, recorded in its profile. The applied layout's effective capacity covers ~85 GB plus growth, and `garage layout show` prints "Zone redundancy: maximum" and "Partitions are replicated 3 times on at least 3 distinct zones" | operator |
+| G1 | D3: each first-cut storage node has measured free space and a declared capacity of at most half of it, recorded in its profile. `df -i` on each `data_dir` filesystem is recorded too: ext4 is an accepted deviation from the vendor's XFS recommendation (§6.1 row 14), and inodes are its limit. The applied layout's effective capacity covers ~85 GB plus growth, and `garage layout show` prints "Zone redundancy: maximum" and "Partitions are replicated 3 times on at least 3 distinct zones" | operator |
 | G2 | D2, D4-D7 decided. Funnel labels (§1.6) delivered to every first-cut storage node and shape-checked, with a named delivery vehicle per node (COULD-NOT-MEASURE today). The route does not depend on Spark alone; b850 is the fallback producer | operator |
 | G3 | Garage up. Gate A passed, including list, the recorded addressing choice (tailnet IP or host networking), the kvm4-1 inbound check, the `--dry` sync parse check, and the **external probe of 3900/3901/3903** on every storage node's public address (who probes is OPEN — OPERATOR) | delivery + operator |
 | G4 | Gate B passed: `--check-all`, 0 failed | delivery |
@@ -664,7 +679,7 @@ jfs meta 'juicefs gc "$META"'     # NO --delete; now scans MinIO
 | D5 | Garage ports tailnet-only | Recommendation: yes. `tailscale0` only, with S3/admin bound to the tailnet address (§1.3). The external probe is a required gate; who runs it is **OPEN — OPERATOR** |
 | D6 | Known Road grants for the compose, funnel and egress edits | Recommendation: grant per PR, as in the table above |
 | D7 | Zone grouping (all tier-2 nodes in one `lab` zone) vs one zone per node (§1.2) | **OPEN — OPERATOR.** Not viable today: usable ≤ ~23 GB until the KVM build cache is reclaimed or Spark is measured |
-| D8 | Throughput | **MEASURED** (containerised iperf3, 2026-09-27): KVM↔KVM 345-383 Mbit/s. Knuckles → KVM 18-19 Mbit/s, which is the binding constraint: ~10.5 h per full 85 GB pass |
+| D8 | Throughput | **MEASURED** (containerised iperf3, 2026-09-27): KVM↔KVM 345-383 Mbit/s. Knuckles → KVM 18-19 Mbit/s, which is the binding constraint: ~9.5-10 h per full pass of the measured 80.93 GB (Step 0 record; the earlier ~10.5 h assumed 85 GB) |
 
 ## 6. Reconciliation against Garage's official documentation (2026-10-01)
 
@@ -739,9 +754,38 @@ Garage's `connect/fs/` page does not mention JuiceFS. Compatibility rests on Gat
 
 **Does the fork change D2/D3?** No. The endpoint choice (D2) and per-node capacity (D3) are topology decisions. The fork changes only where the binary comes from. It does add build work before Gate A: a multi-arch image, a GHCR publish, and a digest pin.
 
+### 6.3 RPC bind address: OPEN — OPERATOR (recommendation: option A)
+
+**What the vendor docs say** (`reference-manual/configuration/`, v2.4.1):
+- `rpc_bind_addr`: "The address and port on which to bind for inter-cluster communications". The only constraint stated is on the **port**: it "should be the same one that other nodes will use to contact the node, even in the case of a NAT". Nothing requires a wildcard address.
+- `rpc_public_addr`: "The address and port that other nodes need to use to contact this node for RPC calls. This parameter is optional but recommended." Peers learn it, and `bootstrap_peers` entries come from `garage node id` only when it is set (`bootstrap_peers` section).
+- `rpc_public_addr_subnet`: used only when `rpc_public_addr` is unset; it filters autodiscovered addresses to a subnet.
+- `rpc_bind_outgoing`: pre-binds outgoing sockets to the `rpc_bind_addr` IP, for hosts with several addresses where only one reaches the peers. Disabled by default.
+- `cookbook/real-world/` "Configuration": the example uses `rpc_bind_addr = "[::]:3901"` with `rpc_public_addr = "<this node's public IP>:3901"`. That example assumes nodes on public addresses; ours reach each other only over the tailnet.
+- Source, v2.4.1 `src/garage/main.rs` (CLI connect): the CLI dials `rpc_public_addr` when it is set, and otherwise `127.0.0.1:<rpc_bind_addr port>`. So binding off loopback requires `rpc_public_addr`, which every option below sets.
+
+**Measured on Knuckles (2026-10-01, interface classes only; no addresses recorded):**
+- IPv4: `tailscale0` (100.64.0.0/10), `wlp8s0` (RFC 1918, behind residential NAT), `docker0` and 13 `br-*` bridges (RFC 1918), `lo`.
+- **IPv6: `wlp8s0` carries 2 global-scope addresses.** Residential NAT does not cover IPv6, so on this node a `[::]` bind is reachable from the IPv6 internet unless the router or a host firewall drops it.
+- `net.ipv4.ip_nonlocal_bind = 0` and `net.ipv6.ip_nonlocal_bind = 0`: a bind to the tailnet address fails until `tailscale0` has it.
+- `docker.service` has no `After=` ordering on `tailscaled.service`, and both are enabled. At boot Docker can start the container before the tailnet address exists.
+- Nothing listens on 3900-3903 today. No exit node is in use.
+
+| Option | `rpc_bind_addr` | `rpc_public_addr` | Exposure | Boot behaviour | Per-node render |
+|---|---|---|---|---|---|
+| **A (current template)** | `<tailnet IPv4>:3901` | `<tailnet IPv4>:3901` | Listens on `tailscale0` only. A firewall mistake cannot expose 3901, because nothing listens elsewhere | Bind fails until `tailscaled` has the address; `restart: unless-stopped` retries until it does. Garage logs a bind error meanwhile | Yes (already done by `garage-render`) |
+| B (vendor cookbook shape) | `[::]:3901` | `<tailnet IPv4>:3901` | Listens on every interface, including the KVMs' public addresses and Knuckles' global IPv6. Safety rests entirely on the `tailscale0`-only firewall rule on every node, and on the router for tier 2 | No boot dependency | Yes (`rpc_public_addr`) |
+| C (shared config) | `[::]:3901` | unset; `rpc_public_addr_subnet = "100.64.0.0/10"` | Same as B | No boot dependency | No for RPC, but S3 and admin still bind per node in our design, so the render does not go away |
+
+RPC traffic is authenticated and encrypted with `rpc_secret`, so B/C expose an authenticated protocol rather than open data. It is still a listener on public addresses of public exit nodes, which is what §1.3 and D5 rule out.
+
+**Recommendation: A.** It is the only option where the external probe gate (§1.3) is a second check rather than the only one, and it costs nothing the docs require: the port is the same everywhere, and `rpc_public_addr` is set as recommended. The boot-order gap is real; if the restart loop proves noisy, the fix is an ordering drop-in for `docker.service` (`After=tailscaled.service`), an operator host change, not a wildcard bind. `rpc_bind_outgoing` is not needed: outgoing connections to 100.64.0.0/10 already leave through `tailscale0`.
+
+**Decision text for the operator:** "RPC binds the node's tailnet IPv4 (option A, §6.3). Accepted: a node whose `tailscaled` starts after Docker restarts Garage until the address exists."
+
 ## 7. PMOVES-garage integration checklist (precedent: #3206, PMOVES-registry / PMOVES-spynel)
 
-Status as of 2026-10-01 (Phase A agent prep). Protection status comes from `python3 .claude/skills/known-roads/roads.py check <path>`.
+Status as of 2026-10-01 (Phase A agent prep, updated after the first fleet review). Protection status comes from `python3 .claude/skills/known-roads/roads.py check <path>`.
 
 | # | Item | Path or place | Protection | Status |
 |---|---|---|---|---|
@@ -752,15 +796,18 @@ Status as of 2026-10-01 (Phase A agent prep). Protection status comes from `pyth
 | 5 | Submodule gitlink at the Hardened commit | `PMOVES-garage` | none | **DONE** at `268334bd2`. That is an ancestor of Hardened after #1 merges (any merge style), so there is no SIDEWAYS drift. Advance it when the image is published |
 | 6 | Registry entry: `upstream: deuxfleurs-org/garage`, `sync: true`, `branch: PMOVES.AI-Edition-Hardened` | `pmoves/config/fork_registry.json` | none | **DONE**. `fork_registry_ratchet.py`: 83/83 decided |
 | 7 | Audit-list entry and mapping `deuxfleurs-org/garage\|PMOVES-garage\|main-v2` | `.github/workflows/fork-sync.yml` | `noDeletePaths` only | **DONE**. The override is `main-v2`, not Hardened |
-| 8 | Section and summary row | `.claude/context/submodules.md` | **`readOnlyPaths`, no Known Road** | **OPERATOR.** The patch is posted on #3241 (applies cleanly with `git apply`) |
+| 8 | Section and summary row | `.claude/context/submodules.md` | **`readOnlyPaths`, no Known Road** | **OPERATOR.** The patch is posted on #3241. Re-checked with `git apply --check` after merging main into the branch (2026-10-01): applies cleanly |
 | 9 | GHCR build of the hardened image, digest recorded | fork CI | — | **PENDING** on item 2 merging and the first run on Hardened |
 | 10 | Compose service | `pmoves/docker-compose.garage.yml` | `readOnlyPaths`, road `compose` | **PREPARED, NOT WRITTEN.** Waits for the grant `compose:pr:3241` |
-| 10a | Config template, renderer and secret-mode preflight; make targets | `pmoves/config/garage/garage.toml.tmpl`, `pmoves/tools/garage_render_config.py`, `pmoves/mk/garage.mk` | none / `noDeletePaths` | **DONE** in #3241, with tests |
-| 11 | Funnel labels (§1.6) | the CHIT secrets manifest (zero-access, no road), `chit_manifest_register.py`, `sync-secrets-local.yml` | zero-access / `noDeletePaths` | **OPERATOR** (G2) |
+| 10a | Config template, renderer and secret-mode preflight; make targets | `pmoves/config/garage/garage.toml.tmpl`, `pmoves/tools/garage_render_config.py`, `pmoves/mk/garage.mk` | none / `noDeletePaths` | **DONE** in #3241, with tests. The compose-driven targets refuse with the grant name until item 10 lands |
+| 10b | Secret files from the tier env file: `make -C pmoves garage-secrets` (§1.6 "Last hop") | `pmoves/tools/garage_render_config.py materialize` | none | **DONE** in #3241, with tests. Operator-run (reads `env.tier-data`) |
+| 11 | Funnel labels (§1.6) | `REGISTRY` in `chit_manifest_register.py`, the bundle map in `sync-secrets-local.yml`; the CHIT secrets manifest | `noDeletePaths`; manifest zero-access, no road | **REGISTRY and bundle map DONE** in #3241. Manifest write, values, GitHub secrets: **OPERATOR** (G2) |
+| 12 | RPC bind address | `garage.toml.tmpl` | none | **OPEN — OPERATOR** (§6.3; recommendation A, which is what the template does today) |
 
 **Operator-only items (Phase A):**
-1. Add the `GARAGE_*` and `JUICEFS_GARAGE_*` labels to the zero-access secrets manifest, and complete the 4-place route (§1.6).
-2. Run `garage key create` and `garage admin-token create` in operator context, output to an intake file only (§1.6, Step a).
-3. Run the external port probe of 3900, 3901 and 3903 on every storage node's public address, from outside the tailnet (§1.3).
+1. Write the five manifest entries from `REGISTRY`: `make -C pmoves chit-manifest-register`, then `make -C pmoves chit-manifest-sync`. Generate the three cluster values in operator context (`openssl rand -hex 32` for `GARAGE_RPC_SECRET`; `openssl rand -base64 32` for each token, per `cookbook/real-world.md` and `quick-start/`), set them as GitHub secrets, and name the delivery vehicle for each storage node (G2).
+2. After the first node is up: `garage key create` and `garage admin-token create` in operator context, output to a `umask 077` intake file only (§1.6, Step a). The key pair then goes in as `JUICEFS_GARAGE_ACCESS_KEY` / `JUICEFS_GARAGE_SECRET_KEY`.
+3. Run the external port probe of 3900, 3901 and 3903 on every storage node's public address, IPv4 and IPv6, from outside the tailnet, once Garage is listening (§1.3; today's baseline is recorded there and does not pass the gate).
 4. Grant `compose:pr:3241` for `pmoves/docker-compose.garage.yml`.
 5. Apply the `.claude/context/submodules.md` patch (item 8).
+6. Decide the RPC bind address (§6.3).

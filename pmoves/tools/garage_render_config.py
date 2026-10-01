@@ -51,7 +51,7 @@ MOUNT_FILES = {
 
 # Shape at delivery, not just presence (§1.6, the E2B truncation precedent).
 # rpc_secret: "a 32-bytes hex-encoded secret key" (cookbook/real-world.md,
-# `openssl rand -hex 32`). The tokens: `openssl rand -base64 32` (quick-start.md),
+# `openssl rand -hex 32`). The tokens: `openssl rand -base64 32` (quick-start/),
 # 44 chars; anything at least that long passes.
 SHAPES = {
     "GARAGE_RPC_SECRET": (re.compile(r"[0-9a-fA-F]{64}"), "64 hex characters"),
