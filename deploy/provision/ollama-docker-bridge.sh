@@ -26,7 +26,8 @@
 #   systemd-socket-proxyd(8) "Simple Example" — socket unit + Type=notify proxyd.
 #   systemd.socket(5) FreeBind= — bind before docker0 has its address at boot.
 #   dockerd(8) "Configure host gateway IP" — host-gateway resolves to the default
-#     bridge's IPv4 unless daemon.json sets host-gateway-ip; we read the same.
+#     bridge's IPv4 unless daemon.json sets host-gateway-ips (or the legacy
+#     host-gateway-ip); we read the same, first IPv4 wins.
 #   docker run --add-host host.docker.internal=host-gateway (compose extra_hosts).
 #   ufw(8) — `allow proto tcp from <cidr> to <addr> port <n> comment ...`;
 #     ufw skips a rule that already exists, so re-running is idempotent.
@@ -63,6 +64,9 @@ SYSTEMD_DIR="${SYSTEMD_DIR:-/etc/systemd/system}"
 DAEMON_JSON="${DOCKER_DAEMON_JSON:-/etc/docker/daemon.json}"
 PROXYD="${SYSTEMD_SOCKET_PROXYD:-/usr/lib/systemd/systemd-socket-proxyd}"
 UFW_COMMENT="pmoves: containers -> host ollama via ${UNIT}"
+# Absolute, so the rollback hint is runnable from any cwd (make -C pmoves runs
+# this as ../deploy/...).
+SELF="$(readlink -f -- "$0")"
 
 resolve_bind_ip() {
   if [[ -n "${OLLAMA_BRIDGE_BIND_IP:-}" ]]; then
@@ -70,7 +74,21 @@ resolve_bind_ip() {
   fi
   if [[ -r "$DAEMON_JSON" ]]; then
     local configured
-    configured="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("host-gateway-ip",""))' "$DAEMON_JSON" 2>/dev/null || true)"
+    # dockerd(8): "host-gateway-ips" (array, may mix IPv4/IPv6) is the current
+    # key; "host-gateway-ip" (single string) is kept for older daemons.
+    configured="$(python3 - "$DAEMON_JSON" 2>/dev/null <<'PY_EOF' || true
+import ipaddress, json, sys
+cfg = json.load(open(sys.argv[1]))
+ips = cfg.get("host-gateway-ips") or [cfg.get("host-gateway-ip") or ""]
+for ip in ips:
+    try:
+        if ipaddress.ip_address(ip).version == 4:
+            print(ip)
+            break
+    except ValueError:
+        pass
+PY_EOF
+)"
     if [[ -n "$configured" ]]; then echo "$configured"; return; fi
   fi
   ip -4 -o addr show dev docker0 2>/dev/null | awk '{split($4,a,"/"); print a[1]; exit}'
@@ -139,7 +157,7 @@ plan() {
   echo "systemctl daemon-reload"
   echo "systemctl enable --now $UNIT.socket"
   echo "ufw allow ${ufw_rule[*]} comment '$UFW_COMMENT'   # only if ufw is active"
-  echo "--- rollback: sudo $0 --rollback"
+  echo "--- rollback: sudo $SELF --rollback"
   echo "systemctl disable --now $UNIT.socket $UNIT.service; remove both unit files; systemctl daemon-reload"
   echo "ufw delete allow ${ufw_rule[*]}"
 }

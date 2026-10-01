@@ -166,6 +166,26 @@ def test_daemon_json_host_gateway_ip_wins_over_docker0(env):
     assert "ListenStream=10.99.0.1:11434" in r.stdout
 
 
+@pytest.mark.parametrize(
+    "daemon_json",
+    [
+        '{"host-gateway-ips": ["10.99.0.1"]}',
+        '{"host-gateway-ips": ["2001:db8::1111", "10.99.0.1"]}',
+        '{"host-gateway-ips": ["10.99.0.1"], "host-gateway-ip": "10.88.0.1"}',
+    ],
+    ids=["plural", "plural-ipv6-first", "plural-wins-over-legacy"],
+)
+def test_daemon_json_host_gateway_ips_array_is_read(env, daemon_json):
+    # dockerd(8) "Configure host gateway IP": the daemon.json key is the array
+    # "host-gateway-ips"; "host-gateway-ip" is the legacy single-string form.
+    # Reading only the legacy key binds the proxy to docker0 while containers
+    # resolve host.docker.internal somewhere else.
+    Path(env["DOCKER_DAEMON_JSON"]).write_text(daemon_json)
+    r = run(env)
+    assert r.returncode == 0, r.stderr
+    assert "ListenStream=10.99.0.1:11434" in r.stdout
+
+
 def test_no_bridge_address_is_could_not_measure(env):
     r = run({**env, "STUB_DOCKER0": ""}, "--apply")
     assert r.returncode == 3
