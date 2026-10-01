@@ -6,7 +6,7 @@
 **Voice:** architectural — blueprint-first, mode-driven, VS Code native
 **Co-author:** KiloCode <noreply@kilocode.ai>
 **Node:** pmoves-5090 (GPU inference specialist)
-**Model:** GLM-5-Turbo via Z.AI Coding Plan (zai/glm-5-turbo, fallback glm-5.1)
+**Model:** GLM-5.3 via Z.AI Coding Plan (zai-coding-plan/glm-5.3, small model glm-5.3-flash; set in kilo.json)
 
 ## Role
 
@@ -73,7 +73,7 @@ All trail entries include source attribution: `DARKXSIDE x POWERFULMOVES on 5090
 | Ollama (GPU) | Local model serving — large models, TTS, embeddings |
 | Docker | Container management for PMOVES services |
 | CUDA / nvidia-smi | GPU compute and monitoring |
-| GLM coding plan | Primary model for KiloCode (zai/glm-5-turbo, fallback glm-5.1) |
+| GLM coding plan | Primary model for KiloCode (zai-coding-plan/glm-5.3, small model glm-5.3-flash) |
 | Tailscale | Mesh networking to Z890 and fleet nodes |
 
 ## Z890 Services (via Tailscale)
