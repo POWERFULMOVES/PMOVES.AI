@@ -347,11 +347,212 @@ def _row_at(text: str, pos: int) -> str:
     return text[start:] if end == -1 else text[start:end]
 
 
+# --------------------------------------------------------------------------
+# THE BATON CLOSE
+#
+# The AGInTZ here are peers, and a lane is a Known Road passed on like a relay
+# baton -- identity on a row is ATTRIBUTION (who carried which leg), not
+# territory. Real-time handoff will come with ACP; this is the asynchronous
+# path for when the peer who holds the lane is not running.
+#
+# Before this, a RELEASE paired only with the SIGNING owner's claims, so a lane
+# whose holder had stopped running could not be closed by anyone: five finished
+# or transferable lanes held by CRUSH-GLM52 and B850-CLAUDE-FUNNEL sat open
+# with nobody able to move them. A co-owner named on a RELEASE did nothing, and
+# that stays true -- see the comment in _pair_register(). Attribution is not
+# authority; the baton carries its authority explicitly instead:
+#
+#     RELEASE `<signer>` branch: `<lane>` · baton-from: `<holder>` ·
+#         ruling: `<operator ruling ref>`      (or handoff: `<ref>`)
+#
+# It closes <holder>'s open rows on the lanes the row names, and ONLY those
+# lanes and ONLY that holder's rows. The signer's own rows are untouched; a
+# peer picking the lane UP files its own CLAIM afterwards, which then no longer
+# collides.
+#
+# FAIL-CLOSED, NEVER FAIL-BROAD. A row that declares `baton-from:` and is
+# malformed -- no authority, a holder or signer the identity vocabulary does
+# not know, no lane, no vocabulary at all -- closes NOTHING. It is not read as
+# an ordinary RELEASE by the signer: a lane-less RELEASE closes every lane the
+# signer holds, and "the baton was malformed, so close all of MY lanes" is the
+# silent broadening this register has been bitten by before. The refusal is
+# recorded as a BatonEvent with its reason, so it is never silent.
+# --------------------------------------------------------------------------
+
+# The marker is detected WITHOUT the identity vocabulary, on purpose. If
+# detection needed the vocabulary, a node without PyYAML would not see the
+# marker at all and would read the row as an ordinary RELEASE by the signer --
+# the exact fallback the paragraph above forbids.
+BATON_MARKER_RE = re.compile(r'\bbaton[-_ ]from\b\s*:', re.IGNORECASE)
+BATON_FROM_RE = re.compile(r'\bbaton[-_ ]from\b\s*:\s*`([^`]+)`', re.IGNORECASE)
+BATON_AUTHORITY_RE = re.compile(r'\b(ruling|handoff)\b\s*:\s*`([^`]+)`',
+                                re.IGNORECASE)
+
+
+class BatonEvent:
+    """What one baton RELEASE did, or why it did nothing.
+
+    `closed` is the lanes actually closed on the holder's rows; `not_held` is
+    the named lanes the holder held no open row on (a no-op for those lanes,
+    reported rather than swallowed). `problem` is set when the row was refused
+    outright and closed nothing.
+    """
+
+    __slots__ = ("lineno", "signer", "holder", "holder_key", "authority",
+                 "lanes", "closed", "not_held", "problem")
+
+    def __init__(self, lineno, signer, holder="", authority=None):
+        self.lineno = lineno
+        self.signer = signer
+        self.holder = holder
+        self.holder_key = ""
+        self.authority = authority  # (kind, ref) or None
+        self.lanes = set()
+        self.closed = set()
+        self.not_held = set()
+        self.problem = ""
+
+    @property
+    def warning(self) -> str:
+        """One line for a human, or "" when the baton did exactly what it said."""
+        if self.problem:
+            return (f"line {self.lineno}: baton RELEASE by `{self.signer}` "
+                    f"closed NOTHING - {self.problem}")
+        if self.not_held:
+            lanes = ", ".join(f"`{x}`" for x in sorted(self.not_held))
+            return (f"line {self.lineno}: baton RELEASE by `{self.signer}` names "
+                    f"{lanes}, which `{self.holder}` holds no open row on - "
+                    "no-op for that lane")
+        return ""
+
+
+def _outside_code_spans(text: str, regex):
+    """Matches of `regex` whose START is not inside a Markdown code span.
+
+    A row that QUOTES the grammar -- ``baton-from: `X` `` in a double-backtick
+    example -- is a mention, not a declaration; this register describes its own
+    fields constantly. Uses the identity module's run-length span matcher when
+    it is available. Without it every match counts, which errs toward READING a
+    baton -- and an unverifiable baton closes nothing, so that error is a no-op,
+    never a broadening.
+    """
+    module = _load_lineage()
+    spans = module._code_spans(text) if module is not None else []
+    return [m for m in regex.finditer(text)
+            if not any(a <= m.start() < b for a, b in spans)]
+
+
+def baton_declared(line: str) -> bool:
+    """True when a row declares a `baton-from:` field (not merely quotes one)."""
+    return bool(_outside_code_spans(line, BATON_MARKER_RE))
+
+
+def parse_baton(line: str):
+    """(holder_as_written, (kind, ref) or None, problem) for a baton row.
+
+    `problem` is "" when the row is well-formed. Identity is NOT checked here --
+    that needs the vocabulary and is done by `baton_identity_problem()`.
+    """
+    holders = [m.group(1).strip()
+               for m in _outside_code_spans(line, BATON_FROM_RE)]
+    authorities = [(m.group(1).lower(), m.group(2).strip())
+                   for m in _outside_code_spans(line, BATON_AUTHORITY_RE)]
+    authority = authorities[0] if authorities else None
+    if not holders or not holders[0]:
+        return "", authority, ("declares `baton-from:` but names no holder in "
+                               "backticks")
+    if len(set(holders)) > 1:
+        return holders[0], authority, (
+            "names more than one `baton-from:` holder ("
+            + ", ".join(sorted(set(holders)))
+            + "); one baton row passes one holder's lanes")
+    if authority is None or not authority[1]:
+        return holders[0], None, ("carries no authority: a baton needs "
+                                  "`ruling: <ref>` or `handoff: <ref>`")
+    return holders[0], authority, ""
+
+
+def baton_identity_problem(signer: str, holder: str):
+    """("", holder_key) when both are registered peers, else (problem, "")."""
+    module = _load_lineage()
+    if module is None:
+        return ("the identity vocabulary is unavailable, so neither the signer "
+                "nor the holder can be verified as a peer"), ""
+    vocab = module.load_vocabulary()
+    if module.canonical_identity(signer, vocab) is None:
+        return (f"the signer `{signer}` is not a registered identity in "
+                "pmoves/config/identity_vocabulary.yaml"), ""
+    holder_key = module.canonical_identity(holder, vocab)
+    if holder_key is None:
+        return (f"the holder `{holder}` is not a registered identity in "
+                "pmoves/config/identity_vocabulary.yaml"), ""
+    return "", holder_key
+
+
+def baton_lanes(line: str) -> set:
+    """The lanes a baton row names, with its own field VALUES removed first.
+
+    The holder string and the ruling/handoff reference are not lanes; a ref
+    that happened to be branch-shaped (`docs/rulings/2026-10-01`) would
+    otherwise widen what the row closes.
+    """
+    stripped = BATON_AUTHORITY_RE.sub(" ", BATON_FROM_RE.sub(" ", line))
+    return lanes_in(stripped)
+
+
+def _apply_baton(open_claims: dict, lineno: int, line: str, signer: str):
+    """Close the holder's open rows on the named lanes. Returns a BatonEvent."""
+    holder, authority, problem = parse_baton(line)
+    event = BatonEvent(lineno, signer, holder=holder, authority=authority)
+    if not problem:
+        problem, event.holder_key = baton_identity_problem(signer, holder)
+    if not problem:
+        event.lanes = baton_lanes(line)
+        if not event.lanes:
+            problem = ("names no lane. A baton passes NAMED lanes only; there is "
+                       "no bare baton that closes everything a peer holds")
+    if problem:
+        event.problem = problem
+        return event
+    rows = open_claims.get(event.holder_key, [])
+    held = set().union(*(r[1] for r in rows)) if rows else set()
+    event.closed = event.lanes & held
+    event.not_held = event.lanes - held
+    kept = [(ln, lanes - event.lanes, raw, participants)
+            for ln, lanes, raw, participants in rows
+            if lanes - event.lanes]
+    if kept:
+        open_claims[event.holder_key] = kept
+    else:
+        open_claims.pop(event.holder_key, None)
+    return event
+
+
 def open_claims_in(text: str) -> dict:
     """Map canonical owner -> LIST of (line, lanes, as-written, participants).
 
-    A LIST, not a single tuple. Keying one claim per owner silently forgot
-    every lane but the newest: two open claims by one identity collapsed to
+    The open-lane half of `_pair_register()`, the register's ONE pairing
+    implementation. `register_status`, `register_append` and this hook all read
+    lane state through here, so there is no second pairing to drift from it.
+    """
+    return _pair_register(text)[0]
+
+
+def baton_events_in(text: str) -> list:
+    """Every baton RELEASE in the register, as BatonEvents, in file order.
+
+    The other half of `_pair_register()`: what each baton row closed and, for a
+    refused or no-op baton, why it closed nothing.
+    """
+    return _pair_register(text)[1]
+
+
+def _pair_register(text: str):
+    """(open claims, baton events). THE pairing; every reader goes through it.
+
+    Open claims map canonical owner -> LIST of (line, lanes, as-written,
+    participants). A LIST, not a single tuple. Keying one claim per owner
+    silently forgot every lane but the newest: two open claims by one identity collapsed to
     one, and a later release dropped the survivor too -- so a lane another
     node genuinely held stopped colliding. That was true before
     canonicalisation for two claims under the SAME spelling, and folding
@@ -376,6 +577,7 @@ def open_claims_in(text: str) -> dict:
     only speaks when it is blocking someone.
     """
     open_claims = {}
+    batons = []
     for lineno, line in enumerate(text.split("\n"), start=1):
         if is_inert_row(line):
             # A NOTE records a fact. It opens nothing and closes nothing, and
@@ -394,12 +596,20 @@ def open_claims_in(text: str) -> dict:
             )
             continue
         m = RELEASE_RE.search(line)
+        if m and baton_declared(line):
+            # A BATON row closes the NAMED holder's rows on the NAMED lanes and
+            # nothing else -- never the signer's own, and never by falling back
+            # to an ordinary release when the baton is malformed.
+            batons.append(_apply_baton(open_claims, lineno, line, m.group(1)))
+            continue
         if m:
             # Pairing stays on the SIGNING owner, deliberately. A co-owner is
             # declared as having worked the lane, not as having authority to
             # close someone else's claim -- letting a co-worker's RELEASE close
             # the primary's lane would make the field a way to release work you
-            # do not own. Attribution and authority are different powers.
+            # do not own. Attribution and authority are different powers. The
+            # sanctioned way to close a peer's lane is the BATON above, which
+            # carries its authority on the row instead of inferring it.
             owner = canonical_owner(m.group(1))
             released = lanes_in(line)
             if not released:
@@ -420,7 +630,7 @@ def open_claims_in(text: str) -> dict:
                     open_claims[owner] = kept
                 else:
                     open_claims.pop(owner, None)
-    return open_claims
+    return open_claims, batons
 
 
 # --------------------------------------------------------------------------
