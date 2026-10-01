@@ -441,6 +441,7 @@ known_gaps:
   - "UNRUNNABLE_DOC|.claude/README.md|'DROP DATABASE' in: DROP DATABASE"
   - "UNRUNNABLE_DOC|.claude/README.md|'rm -rf /' in: rm -rf /"
   - "UNRUNNABLE_DOC|.claude/commands/db/migrate.md|'DROP TABLE' in: DROP TABLE"
+  - "UNRUNNABLE_DOC|pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md|'docker volume rm' in: docker volume rm"
   - "UNRUNNABLE_DOC|pmoves/docs/handoffs/DOCKER_FLEET_PROD_AUDIT.md|'docker system prune -a' in: docker system prune -af --volumes"
   - "UNRUNNABLE_DOC|pmoves/docs/handoffs/yt-oauth-legacy-stub-drop-2026-08-01.md|'DROP TABLE' in: DROP TABLE IF EXISTS public.yt_oauth_cookies;"
   - "UNRUNNABLE_DOC|pmoves/docs/operations/BRING_UP_WSL2.md|'docker system prune -a' in: docker system prune -a --volumes  # Clean Docker (careful!)"
