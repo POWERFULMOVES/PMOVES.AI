@@ -4,6 +4,9 @@
 #   make -C pmoves garage-render GARAGE_TIER=1|2 [GARAGE_PEERS=<file>]
 #       Render config/garage/rendered/garage.toml for THIS node (gitignored).
 #       Tier 1 (always-on) gets lmdb, tier 2 (desktop) gets sqlite.
+#   make -C pmoves garage-secrets [GARAGE_ENV_FILE=env.tier-data]
+#       Write the three secret files (0600) from the funnel-projected tier env
+#       file, shape-checked first. Prints label names and lengths, never values.
 #   make -C pmoves garage-preflight
 #       Stat (never read) the three secret files: present, non-empty, owned by
 #       GARAGE_UID, and no group/other bits, which Garage refuses at boot.
@@ -19,6 +22,9 @@
 # secret), `garage admin-token create` (prints a token), `garage layout apply`.
 
 GARAGE_COMPOSE := docker-compose.garage.yml
+# Must match container_name in $(GARAGE_COMPOSE).
+GARAGE_CONTAINER := pmoves-garage
+GARAGE_ENV_FILE ?= env.tier-data
 GARAGE_RENDER  := python3 tools/garage_render_config.py
 GARAGE_TIER    ?=
 GARAGE_PEERS   ?=
@@ -28,16 +34,26 @@ GARAGE_GID     ?= $(shell id -g)
 # The preflight and the container must see the SAME dir and uid.
 GARAGE_ENV     := GARAGE_SECRETS_DIR="$(GARAGE_SECRETS_DIR)" GARAGE_UID="$(GARAGE_UID)" GARAGE_GID="$(GARAGE_GID)"
 
-.PHONY: garage-render garage-preflight up-garage garage-status down-garage
+.PHONY: garage-render garage-secrets garage-preflight garage-compose-present up-garage garage-status down-garage
 
 garage-render: ## Render this node's Garage config (GARAGE_TIER=1|2, optional GARAGE_PEERS=<file>)
 	@test -n "$(GARAGE_TIER)" || { echo "[garage] set GARAGE_TIER=1 (always-on, lmdb) or 2 (desktop, sqlite)" >&2; exit 1; }
 	@$(GARAGE_RENDER) render --tier "$(GARAGE_TIER)" $(if $(GARAGE_PEERS),--peers "$(GARAGE_PEERS)")
 
+garage-secrets: ## Write the Garage secret files (0600) from GARAGE_ENV_FILE; shape-checked, values never printed
+	@umask 077; $(GARAGE_RENDER) materialize --env-file "$(GARAGE_ENV_FILE)" --dir "$(GARAGE_SECRETS_DIR)"
+
 garage-preflight: ## Check the Garage secret files' presence, owner and 0600 mode (never reads them)
 	@$(GARAGE_RENDER) check-secrets --dir "$(GARAGE_SECRETS_DIR)" --uid "$(GARAGE_UID)"
 
-up-garage: garage-preflight ## Start this node's Garage (requires a rendered config and the preflight)
+# The overlay is a protected path written only under its Known Road grant
+# (compose:pr:3241, plan §7 item 10). Until it lands, say so instead of letting
+# compose fail with a bare "no configuration file".
+garage-compose-present:
+	@test -f $(GARAGE_COMPOSE) || { \
+		echo "[garage] $(GARAGE_COMPOSE) is not in this tree yet: it lands under the grant compose:pr:3241 (plan §7 item 10)." >&2; exit 3; }
+
+up-garage: garage-compose-present garage-preflight ## Start this node's Garage (requires a rendered config and the preflight)
 	@test -f config/garage/rendered/garage.toml || { \
 		echo "[garage] REFUSING: no rendered config; run garage-render first." >&2; exit 1; }
 	@# `config -q` trips the overlay's own :? guards (digest, data root, uid)
@@ -46,9 +62,9 @@ up-garage: garage-preflight ## Start this node's Garage (requires a rendered con
 		echo "[garage] overlay does not validate; check GARAGE_IMAGE_DIGEST, GARAGE_DATA_ROOT, GARAGE_UID/GID" >&2; exit 1; }
 	@$(GARAGE_ENV) $(DC) -f $(GARAGE_COMPOSE) up -d --no-deps garage
 
-garage-status: ## Show Garage cluster status from this node (node ids and addresses; no secrets)
-	@docker exec pmoves-garage /garage status
+garage-status: garage-compose-present ## Show Garage cluster status from this node (node ids and addresses; no secrets)
+	@docker exec $(GARAGE_CONTAINER) /garage status
 
-down-garage: ## Stop and remove this node's Garage container (data on GARAGE_DATA_ROOT is untouched)
+down-garage: garage-compose-present ## Stop and remove this node's Garage container (data on GARAGE_DATA_ROOT is untouched)
 	@$(DC) -f $(GARAGE_COMPOSE) stop garage
-	@docker container rm pmoves-garage >/dev/null 2>&1 || true
+	@docker container rm $(GARAGE_CONTAINER) >/dev/null 2>&1 || true

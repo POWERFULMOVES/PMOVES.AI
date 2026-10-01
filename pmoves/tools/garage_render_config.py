@@ -10,6 +10,11 @@ Plan: pmoves/docs/architecture/JUICEFS_GARAGE_MIGRATION_PLAN.md §1.3, §6.1.
                    bits. Garage refuses to start on `mode & 0o077 != 0`
                    (src/garage/secrets.rs read_secret_file); this catches it before
                    `up`, with the file named. It stats the files and NEVER opens them.
+    materialize    write the three files from the funnel-projected tier env file
+                   (§1.6), 0600, shape-checked first. No funnel step was found that
+                   writes the per-file form Garage mounts: chit.write_docker_secrets
+                   emits one JSON map. Values are never printed; messages name the
+                   label and its length only.
 
 Exit codes: 0 clean, 1 findings, 3 could not measure (e.g. no tailscale, no dir).
 """
@@ -34,11 +39,25 @@ DEFAULT_OUT = HERE / "rendered" / "garage.toml"
 # (desktops), because LMDB is not recoverable after an unclean shutdown.
 DB_ENGINE_BY_TIER = {"1": "lmdb", "2": "sqlite"}
 
-SECRET_FILES = (
-    "pmoves_garage_rpc_secret",
-    "pmoves_garage_admin_token",
-    "pmoves_garage_metrics_token",
-)
+# Docker-secret file name -> CHIT label. The file names are build_entry()'s
+# `pmoves_<snake(label)>` (chit_manifest_register.py), so the funnel and the
+# compose overlay agree without a second mapping. Named MOUNT_FILES, not
+# *secret*: these are file NAMES, and the stat-only preflight never holds a value.
+MOUNT_FILES = {
+    "pmoves_garage_rpc_secret": "GARAGE_RPC_SECRET",
+    "pmoves_garage_admin_token": "GARAGE_ADMIN_TOKEN",
+    "pmoves_garage_metrics_token": "GARAGE_METRICS_TOKEN",
+}
+
+# Shape at delivery, not just presence (§1.6, the E2B truncation precedent).
+# rpc_secret: "a 32-bytes hex-encoded secret key" (cookbook/real-world.md,
+# `openssl rand -hex 32`). The tokens: `openssl rand -base64 32` (quick-start.md),
+# 44 chars; anything at least that long passes.
+SHAPES = {
+    "GARAGE_RPC_SECRET": (re.compile(r"[0-9a-fA-F]{64}"), "64 hex characters"),
+    "GARAGE_ADMIN_TOKEN": (re.compile(r"[A-Za-z0-9+/=_-]{44,}"), "at least 44 base64 characters"),
+    "GARAGE_METRICS_TOKEN": (re.compile(r"[A-Za-z0-9+/=_-]{44,}"), "at least 44 base64 characters"),
+}
 
 TAILNET_V4 = ipaddress.ip_network("100.64.0.0/10")
 PEER_RE = re.compile(r"^([0-9a-f]{64})@(\d{1,3}(?:\.\d{1,3}){3}):3901$")
@@ -78,7 +97,11 @@ def parse_peers(text: str, self_ip: str) -> list[str]:
         m = PEER_RE.match(line)
         if not m:
             raise ValueError(f"peers line {n}: expected <64 hex node id>@<tailnet ipv4>:3901")
-        if ipaddress.ip_address(m.group(2)) not in TAILNET_V4:
+        try:
+            addr = ipaddress.ip_address(m.group(2))
+        except ValueError:
+            raise ValueError(f"peers line {n}: {m.group(2)} is not an IPv4 address") from None
+        if addr not in TAILNET_V4:
             raise ValueError(f"peers line {n}: {m.group(2)} is not a tailnet address")
         if m.group(2) != self_ip and line not in peers:
             peers.append(line)
@@ -88,16 +111,19 @@ def parse_peers(text: str, self_ip: str) -> list[str]:
 def render(template: str, *, tier: str, ip: str, peers: list[str]) -> str:
     peer_list = "".join(f'\n    "{p}",' for p in peers) + ("\n" if peers else "")
     # substitute(), not safe_substitute(): a placeholder left unfilled is an error.
-    return Template(template).substitute(
-        DB_ENGINE=DB_ENGINE_BY_TIER[tier], TAILNET_IP=ip, BOOTSTRAP_PEERS=peer_list
-    )
+    try:
+        return Template(template).substitute(
+            DB_ENGINE=DB_ENGINE_BY_TIER[tier], TAILNET_IP=ip, BOOTSTRAP_PEERS=peer_list
+        )
+    except KeyError as exc:
+        raise ValueError(f"template placeholder ${{{exc.args[0]}}} has no value") from None
 
 
-def check_secrets(directory: Path, uid: int | None) -> list[str]:
+def check_mounts(directory: Path, uid: int | None) -> list[str]:
     if not directory.is_dir():
         raise Unmeasured(f"secret directory not found: {directory}")
     problems: list[str] = []
-    for name in SECRET_FILES:
+    for name in MOUNT_FILES:
         path = directory / name
         try:
             st = path.stat()
@@ -118,6 +144,49 @@ def check_secrets(directory: Path, uid: int | None) -> list[str]:
     return problems
 
 
+def read_env_labels(env_file: Path, labels: set[str]) -> dict[str, str]:
+    """KEY=VALUE lines for `labels` only; the file is parsed, never sourced."""
+    found: dict[str, str] = {}
+    for raw in env_file.read_text().splitlines():
+        line = raw.strip()
+        if line.startswith("export "):
+            line = line[len("export "):].lstrip()
+        key, sep, value = line.partition("=")
+        if not sep or key.strip() not in labels:
+            continue
+        value = value.strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in "'\"":
+            value = value[1:-1]
+        found[key.strip()] = value
+    return found
+
+
+def materialize(env_file: Path, directory: Path) -> list[str]:
+    """Write the three files at 0600. Nothing is written unless all three pass."""
+    if not env_file.is_file():
+        raise Unmeasured(f"tier env file not found: {env_file}")
+    values = read_env_labels(env_file, set(MOUNT_FILES.values()))
+    problems: list[str] = []
+    for label, (shape, want) in SHAPES.items():
+        v = values.get(label, "")
+        if not v:
+            problems.append(f"{label}: absent or empty in {env_file.name} (funnel route, §1.6)")
+        elif not shape.fullmatch(v):
+            problems.append(f"{label}: {len(v)} chars, expected {want}")
+    if problems:
+        return problems
+    directory.mkdir(mode=0o700, parents=True, exist_ok=True)
+    for name, label in MOUNT_FILES.items():
+        tmp = directory / f".{name}.tmp"
+        tmp.unlink(missing_ok=True)
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(fd, "w") as fh:
+            fh.write(values[label])
+        os.chmod(tmp, 0o600)  # O_CREAT mode is masked by umask; set it exactly
+        tmp.replace(directory / name)
+    return []
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -133,10 +202,17 @@ def main(argv: list[str] | None = None) -> int:
     c.add_argument("--dir", type=Path, required=True)
     c.add_argument("--uid", type=int, help="uid the container runs as (GARAGE_UID)")
 
+    m = sub.add_parser("materialize", help="write the three secret files from a tier env file")
+    m.add_argument("--env-file", type=Path, required=True)
+    m.add_argument("--dir", type=Path, required=True)
+
     args = ap.parse_args(argv)
     try:
         if args.cmd == "render":
             ip = tailnet_ip(args.tailnet_ip)
+            if args.peers and not args.peers.is_file():
+                # Bad input, not an unmeasurable one.
+                raise ValueError(f"peers file not found: {args.peers}")
             peers = parse_peers(args.peers.read_text(), ip) if args.peers else []
             text = render(args.template.read_text(), tier=args.tier, ip=ip, peers=peers)
             args.out.parent.mkdir(parents=True, exist_ok=True)
@@ -147,7 +223,16 @@ def main(argv: list[str] | None = None) -> int:
             print(f"[garage-render] {args.out}: tier {args.tier} ({DB_ENGINE_BY_TIER[args.tier]}), "
                   f"{len(peers)} bootstrap peer(s)")
             return EXIT_OK
-        problems = check_secrets(args.dir, args.uid)
+        if args.cmd == "materialize":
+            problems = materialize(args.env_file, args.dir)
+            for p in problems:
+                print(f"[garage-materialize] {p}", file=sys.stderr)
+            if problems:
+                print("[garage-materialize] nothing written", file=sys.stderr)
+                return EXIT_FINDINGS
+            print(f"[garage-materialize] {len(MOUNT_FILES)} files written to {args.dir}, mode 0600")
+            return EXIT_OK
+        problems = check_mounts(args.dir, args.uid)
     except Unmeasured as exc:
         print(f"[garage] COULD-NOT-MEASURE: {exc}", file=sys.stderr)
         return EXIT_UNMEASURED
@@ -161,7 +246,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"[garage-secrets] {p}", file=sys.stderr)
     if problems:
         return EXIT_FINDINGS
-    print(f"[garage-secrets] {len(SECRET_FILES)} secret files present, 0600-class, correctly owned")
+    print(f"[garage-secrets] {len(MOUNT_FILES)} files present, 0600-class, correctly owned")
     return EXIT_OK
 
 

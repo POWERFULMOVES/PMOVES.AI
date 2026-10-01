@@ -17,6 +17,9 @@ spec = importlib.util.spec_from_file_location("garage_render_config", TOOL)
 grc = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(grc)
 
+# Mode and owner semantics are POSIX; Garage itself runs only in a Linux container.
+pytestmark = pytest.mark.skipif(os.name != "posix", reason="POSIX file modes and uids")
+
 SELF = "100.64.0.10"
 PEER_A = "a" * 64 + "@100.64.0.11:3901"
 PEER_B = "b" * 64 + "@100.64.0.12:3901"
@@ -88,12 +91,26 @@ def test_non_tailnet_bind_address_is_refused(ip):
 
 
 def test_unfilled_placeholder_is_an_error():
-    with pytest.raises(KeyError):
+    with pytest.raises(ValueError, match="NOT_A_KNOWN_VAR"):
         grc.render("x = \"${NOT_A_KNOWN_VAR}\"", tier="1", ip=SELF, peers=[])
 
 
+def test_unfilled_placeholder_through_the_cli_is_a_finding(tmp_path):
+    tmpl = tmp_path / "t.tmpl"
+    tmpl.write_text("x = \"${NOT_A_KNOWN_VAR}\"\n")
+    rc = grc.main(["render", "--tier", "1", "--tailnet-ip", SELF, "--template", str(tmpl),
+                   "--out", str(tmp_path / "o.toml")])
+    assert rc == grc.EXIT_FINDINGS
+    assert not (tmp_path / "o.toml").exists()
+
+
+def test_out_of_range_peer_octet_names_the_line():
+    with pytest.raises(ValueError, match="peers line 2"):
+        grc.parse_peers(f"{PEER_A}\n{'d' * 64}@999.64.0.1:3901\n", SELF)
+
+
 def _secrets(tmp_path, mode=0o600, skip=()):
-    for name in grc.SECRET_FILES:
+    for name in grc.MOUNT_FILES:
         if name in skip:
             continue
         p = tmp_path / name
@@ -103,27 +120,27 @@ def _secrets(tmp_path, mode=0o600, skip=()):
 
 
 def test_secrets_clean(tmp_path):
-    assert grc.check_secrets(_secrets(tmp_path), os.getuid()) == []
-    assert grc.check_secrets(_secrets(tmp_path, mode=0o400), None) == []
+    assert grc.check_mounts(_secrets(tmp_path), os.getuid()) == []
+    assert grc.check_mounts(_secrets(tmp_path, mode=0o400), None) == []
 
 
 @pytest.mark.parametrize("mode", [0o644, 0o640, 0o604, 0o660])
 def test_secrets_group_or_other_bits_flagged(tmp_path, mode):
-    problems = grc.check_secrets(_secrets(tmp_path, mode=mode), None)
-    assert len(problems) == len(grc.SECRET_FILES)
+    problems = grc.check_mounts(_secrets(tmp_path, mode=mode), None)
+    assert len(problems) == len(grc.MOUNT_FILES)
     assert all("Garage refuses to start" in p for p in problems)
 
 
 def test_secrets_missing_and_wrong_owner(tmp_path):
     d = _secrets(tmp_path, skip=("pmoves_garage_metrics_token",))
-    problems = grc.check_secrets(d, os.getuid() + 1)
+    problems = grc.check_mounts(d, os.getuid() + 1)
     assert sum(": missing" in p for p in problems) == 1
     assert sum(": owned by uid" in p for p in problems) == 2
 
 
 def test_secrets_dir_absent_is_could_not_measure(tmp_path):
     with pytest.raises(grc.Unmeasured):
-        grc.check_secrets(tmp_path / "nope", None)
+        grc.check_mounts(tmp_path / "nope", None)
     assert grc.main(["check-secrets", "--dir", str(tmp_path / "nope")]) == grc.EXIT_UNMEASURED
 
 
@@ -133,10 +150,98 @@ def test_cli_exit_codes(tmp_path):
     assert tomllib.loads(out.read_text())["db_engine"] == "sqlite"
     assert oct(out.stat().st_mode & 0o777) == oct(0o644)
     assert grc.main(["render", "--tier", "1", "--tailnet-ip", "8.8.8.8", "--out", str(out)]) == grc.EXIT_FINDINGS
+    # A missing --peers file is bad input (1), not could-not-measure (3).
     assert grc.main(["render", "--tier", "1", "--tailnet-ip", SELF, "--peers", str(tmp_path / "none"),
-                     "--out", str(out)]) == grc.EXIT_UNMEASURED
+                     "--out", str(out)]) == grc.EXIT_FINDINGS
     sdir = tmp_path / "s"
     sdir.mkdir()
     assert grc.main(["check-secrets", "--dir", str(_secrets(sdir))]) == grc.EXIT_OK
-    os.chmod(sdir / grc.SECRET_FILES[0], 0o644)
+    os.chmod(sdir / next(iter(grc.MOUNT_FILES)), 0o644)
     assert grc.main(["check-secrets", "--dir", str(sdir)]) == grc.EXIT_FINDINGS
+
+
+# Synthetic values of the documented shapes (openssl rand -hex 32 / -base64 32).
+GOOD = {
+    "GARAGE_RPC_SECRET": "0123456789abcdef" * 4,
+    "GARAGE_ADMIN_TOKEN": "A" * 43 + "=",
+    "GARAGE_METRICS_TOKEN": "B" * 43 + "=",
+}
+
+
+def _env(tmp_path, values, name="env.tier-data"):
+    p = tmp_path / name
+    p.write_text("# tier env\nOTHER_KEY=unrelated\n"
+                 + "".join(f"{k}={v}\n" for k, v in values.items()))
+    return p
+
+
+def test_materialize_writes_0600_files_that_pass_the_preflight(tmp_path):
+    out = tmp_path / "garage"
+    assert grc.materialize(_env(tmp_path, GOOD), out) == []
+    for name, label in grc.MOUNT_FILES.items():
+        f = out / name
+        assert f.read_text() == GOOD[label]
+        assert f.stat().st_mode & 0o777 == 0o600
+    assert out.stat().st_mode & 0o777 == 0o700
+    assert grc.check_mounts(out, os.getuid()) == []
+    assert not list(out.glob(".*.tmp"))
+
+
+def test_materialize_parses_export_and_quotes(tmp_path):
+    p = tmp_path / "env"
+    p.write_text(f"export GARAGE_RPC_SECRET='{GOOD['GARAGE_RPC_SECRET']}'\n"
+                 f'GARAGE_ADMIN_TOKEN="{GOOD["GARAGE_ADMIN_TOKEN"]}"\n'
+                 f"GARAGE_METRICS_TOKEN={GOOD['GARAGE_METRICS_TOKEN']}\n")
+    out = tmp_path / "g"
+    assert grc.materialize(p, out) == []
+    assert (out / "pmoves_garage_rpc_secret").read_text() == GOOD["GARAGE_RPC_SECRET"]
+
+
+@pytest.mark.parametrize("label,bad", [
+    ("GARAGE_RPC_SECRET", "0123456789abcdef" * 4 + "00"),   # too long
+    ("GARAGE_RPC_SECRET", "zz" + "0" * 62),                  # not hex
+    ("GARAGE_RPC_SECRET", "2" * 62),                         # truncated (the E2B shape)
+    ("GARAGE_ADMIN_TOKEN", "A" * 42),                        # truncated
+    ("GARAGE_METRICS_TOKEN", ""),                            # empty
+])
+def test_materialize_refuses_bad_shapes_and_writes_nothing(tmp_path, label, bad):
+    vals = dict(GOOD, **{label: bad})
+    out = tmp_path / "garage"
+    problems = grc.materialize(_env(tmp_path, vals), out)
+    assert len(problems) == 1 and problems[0].startswith(label)
+    assert not out.exists()
+    # the message carries a length at most, never the value
+    if bad:
+        assert bad not in problems[0]
+
+
+def test_materialize_cli_never_prints_a_value(tmp_path, capsys):
+    env = _env(tmp_path, dict(GOOD, GARAGE_ADMIN_TOKEN="Q" * 30))
+    assert grc.main(["materialize", "--env-file", str(env), "--dir", str(tmp_path / "g")]) == grc.EXIT_FINDINGS
+    out = capsys.readouterr()
+    for v in list(GOOD.values()) + ["Q" * 30]:
+        assert v not in out.out and v not in out.err
+    assert grc.main(["materialize", "--env-file", str(_env(tmp_path, GOOD, "e2")),
+                     "--dir", str(tmp_path / "g")]) == grc.EXIT_OK
+    out = capsys.readouterr()
+    for v in GOOD.values():
+        assert v not in out.out and v not in out.err
+
+
+def test_materialize_missing_env_file_is_could_not_measure(tmp_path):
+    assert grc.main(["materialize", "--env-file", str(tmp_path / "nope"),
+                     "--dir", str(tmp_path / "g")]) == grc.EXIT_UNMEASURED
+
+
+def test_mount_file_names_are_build_entry_docker_secret_names():
+    """The funnel's docker_secret target and the compose secret name must agree."""
+    import sys
+    sys.path.insert(0, str(TOOL.parent))
+    try:
+        from chit_manifest_register import REGISTRY, build_entry
+    finally:
+        sys.path.pop(0)
+    for name, label in grc.MOUNT_FILES.items():
+        assert label in REGISTRY, label
+        targets = build_entry(label, REGISTRY[label])["targets"]
+        assert {"docker_secret": name} in targets
