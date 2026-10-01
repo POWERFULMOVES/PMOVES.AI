@@ -526,13 +526,23 @@ register-release: export REGISTER_BRANCH = $(BRANCH)
 register-release: export REGISTER_SCOPE = $(SCOPE)
 register-release: export REGISTER_SCOPE_VIA_FILE = $(findstring --scope-file,$(ARGS))
 register-release: export REGISTER_CO_OWNERS = $(CO_OWNER)
+# THE BATON. A peer closes or passes a lane ANOTHER registered identity holds,
+# when that peer is not running to release it: BATON_FROM= names the holder,
+# RULING= (operator ruling ref/timestamp) or HANDOFF= (handoff ref) is the
+# authority. Both halves or nothing -- the tool refuses either alone, and never
+# reads a malformed baton as an ordinary release of your own lanes.
+#   make -C pmoves register-release OWNER='B850-CLAUDE (Knuckles)' BRANCH=fix/x \
+#        BATON_FROM='CRUSH-GLM52 (Knuckles)' RULING='operator 2026-10-01' SCOPE='...'
+register-release: export REGISTER_BATON_FROM = $(BATON_FROM)
+register-release: export REGISTER_RULING = $(RULING)
+register-release: export REGISTER_HANDOFF = $(HANDOFF)
 # BRANCH IS NOT OPTIONAL HERE, and the guard is in the python rather than in
 # this recipe on purpose: `ARGS=--all-lanes` is the sanctioned way to ask for a
 # full handoff, and a make-level `[ -z "$$REGISTER_BRANCH" ]` cannot see it. The
 # tool refuses an untargeted release with a message naming both doors -- which
 # survives `make` collapsing every nonzero recipe exit to 2, because the message
 # is the structured part, not the code.
-register-release: ## Close a lane in the claim register (OWNER= BRANCH= SCOPE= [CO_OWNER=]; ARGS=--all-lanes to close ALL your lanes)
+register-release: ## Close a lane in the claim register (OWNER= BRANCH= SCOPE= [CO_OWNER=]; ARGS=--all-lanes to close ALL your lanes; BATON_FROM= RULING=|HANDOFF= to close a PEER's lane)
 	@if [ -z "$$REGISTER_SCOPE" ] && [ -z "$$REGISTER_SCOPE_VIA_FILE" ]; then \
 		echo "usage: make register-release OWNER='B850-CLAUDE (Knuckles)' BRANCH=fix/x SCOPE='what landed'"; \
 		echo "  single-quote SCOPE for the same reason register-claim says to: an expansion absorbed into"; \

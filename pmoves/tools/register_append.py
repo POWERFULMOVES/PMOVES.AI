@@ -113,6 +113,21 @@ def _load_gate():
     return module
 
 
+def baton_refusal(gate, owner: str, baton_from: str) -> str:
+    """Why a baton by `owner` passing `baton_from`'s lanes is refused, or "".
+
+    The identity half of the baton check, through the gate's OWN resolver so
+    the write road and every reader agree on who is a registered peer.
+    """
+    problem, holder_key = gate.baton_identity_problem(owner, baton_from)
+    if problem:
+        return problem
+    if gate.canonical_owner(owner) == holder_key:
+        return (f"`{owner}` and `{baton_from}` are the same identity. Closing your "
+                "own lane is an ordinary release -- drop BATON_FROM/RULING.")
+    return ""
+
+
 def _ttl_delta(ttl: str) -> timedelta | None:
     ttl = (ttl or "").strip().lower()
     if not ttl or ttl in ("n/a", "none"):
@@ -215,6 +230,56 @@ def assert_row_shape(kind: str, owner: str, branch: str, ttl: str,
                 f"{field} is {len(value)} characters (limit {LONG_TOKEN_LIMIT};"
                 " the longest legitimate token in the live register is 153)")
     _ttl_delta(ttl)  # raises on an unparseable TTL, before anything is rendered
+
+
+def assert_baton_shape(kind: str, branch: str, baton_from: str, ruling: str,
+                       handoff: str) -> None:
+    """A baton RELEASE carries BOTH halves -- the holder and the authority.
+
+    Shape only; whether the holder and signer are registered peers needs the
+    identity vocabulary and is checked by `baton_refusal()`. Every refusal here
+    is a row that would otherwise have been written as something else: a
+    `ruling:` with no `baton-from:` reads as an ordinary release by the signer,
+    and a `baton-from:` with no authority closes nothing. Neither is what the
+    filer asked for, so neither is written.
+    """
+    for field, value in (("baton-from", baton_from), ("ruling", ruling),
+                         ("handoff", handoff)):
+        assert_no_control_characters(field, value)
+        if "`" in value:
+            raise ValueError(f"{field} may not contain a backtick -- it is "
+                             "rendered inside one, and a stray backtick ends "
+                             "the field early")
+        if len(value) > LONG_TOKEN_LIMIT:
+            raise ValueError(f"{field} is {len(value)} characters (limit "
+                             f"{LONG_TOKEN_LIMIT})")
+    authority = [name for name, value in (("ruling", ruling),
+                                          ("handoff", handoff)) if value.strip()]
+    if not baton_from.strip():
+        if authority:
+            raise ValueError(
+                f"--{authority[0]} given without --baton-from. Authority with "
+                "no holder would be written as an ordinary RELEASE closing "
+                "only the signer's own lanes -- name the holder whose lane is "
+                "being passed (BATON_FROM=).")
+        return
+    if kind != "RELEASE":
+        raise ValueError(f"--baton-from is a RELEASE field; a {kind} passes no "
+                         "lane. To pick a lane UP, file the baton RELEASE first "
+                         "and then your own CLAIM.")
+    if not authority:
+        raise ValueError(
+            "a baton RELEASE needs its authority: --ruling <operator ruling "
+            "ref/timestamp> or --handoff <handoff ref> (RULING= / HANDOFF=). "
+            "Without it the row would close another peer's lane on nobody's "
+            "say-so. Nothing was written.")
+    if len(authority) > 1:
+        raise ValueError("give ONE authority, --ruling or --handoff, not both")
+    if not branch.strip():
+        raise ValueError(
+            "a baton RELEASE must name --branch. A baton passes NAMED lanes "
+            "only; there is no bare baton that closes everything a peer "
+            "holds.")
 
 
 def expansion_symptoms(text: str) -> list[str]:
@@ -453,6 +518,9 @@ def build_row(
     ttl: str = "",
     co_owners: list[str] | None = None,
     now: datetime | None = None,
+    baton_from: str = "",
+    ruling: str = "",
+    handoff: str = "",
 ) -> str:
     """Render one register row. Pure, so the tests can pin the grammar.
 
@@ -466,6 +534,7 @@ def build_row(
     # pydantic is absent in validate-register-postdate.yml and on offline
     # nodes, and a row's shape must hold there too.
     assert_row_shape(kind, owner, branch, ttl, scope)
+    assert_baton_shape(kind, branch, baton_from, ruling, handoff)
 
     if RegisterRow is not None:
         try:
@@ -500,6 +569,14 @@ def build_row(
             note = note.strip()
             rendered.append(f"`{ident}` ({note})" if note else f"`{ident}`")
         fields.append("co-owners: " + ", ".join(rendered))
+    # BOTH identities on the row: the signer in the head (who carried this
+    # leg) and the holder here (whose leg it was), plus the authority.
+    if baton_from.strip():
+        fields.append(f"baton-from: `{baton_from.strip()}`")
+        if ruling.strip():
+            fields.append(f"ruling: `{ruling.strip()}`")
+        else:
+            fields.append(f"handoff: `{handoff.strip()}`")
 
     head = f"- `{ts}` {kind} `{owner}`"
     middle = (" " + " · ".join(fields)) if fields else ""
@@ -1331,7 +1408,8 @@ def _parse_rendered(text: str):
     header, scope = text.split(_SCOPE_SEP, 1)
     rest = header[head_m.end():]
     out = {"ts": head_m.group(1), "kind": head_m.group(2), "owner": head_m.group(3),
-           "branch": "", "ttl": "", "co_owners": [], "scope": scope.lstrip(" ")}
+           "branch": "", "ttl": "", "co_owners": [], "scope": scope.lstrip(" "),
+           "baton_from": "", "ruling": "", "handoff": ""}
     if not rest:
         return out
     if not rest.startswith(" "):
@@ -1349,6 +1427,10 @@ def _parse_rendered(text: str):
             for ident, note in re.findall(r"`([^`]+)`(?: \(([^()]*)\))?",
                                           field[len("co-owners: "):]):
                 out["co_owners"].append(f"{ident}:{note}" if note else ident)
+            continue
+        m = re.fullmatch(r"(baton-from|ruling|handoff): `([^`]+)`", field)
+        if m:
+            out[m.group(1).replace("-", "_")] = m.group(2)
             continue
         return None
     return out
@@ -1378,7 +1460,9 @@ def _assert_round_trips(line: bytes) -> dict:
         rendered = build_row(
             kind=parsed["kind"], owner=parsed["owner"], branch=parsed["branch"],
             scope=parsed["scope"], ttl=parsed["ttl"], co_owners=parsed["co_owners"],
-            now=datetime.strptime(parsed["ts"], _TS_FMT).replace(tzinfo=timezone.utc))
+            now=datetime.strptime(parsed["ts"], _TS_FMT).replace(tzinfo=timezone.utc),
+            baton_from=parsed["baton_from"], ruling=parsed["ruling"],
+            handoff=parsed["handoff"])
     except ValueError as exc:
         raise SyncRefused(f"row refused by the renderer ({exc}): {text[:120]!r}") from exc
     if rendered.rstrip("\n") != text:
@@ -1439,6 +1523,12 @@ def reapply_sidecar(repo: Path, sidecar: Path, ref: str, apply: bool,
         gate = _load_gate()
     except Exception as exc:  # noqa: BLE001 -- report, never guess
         raise SyncRefused(f"the collision gate could not be loaded ({exc})") from exc
+    for ln in lines:
+        parsed = _parse_rendered(_as_text(ln))
+        if parsed and parsed["baton_from"]:
+            problem = baton_refusal(gate, parsed["owner"], parsed["baton_from"])
+            if problem:
+                raise SyncRefused(f"a reapplied baton RELEASE is refused: {problem}")
 
     with register_lock(register):
         current = register.read_bytes()
@@ -1650,6 +1740,19 @@ def _dispatch(argv: list[str] | None = None) -> int:
              "convention for a full handoff -- 142 rows already use it -- and "
              "from now on it must be asked for. It used to be what you got by "
              "leaving --branch off.")
+    parser.add_argument("--baton-from",
+                        default=os.environ.get("REGISTER_BATON_FROM", ""),
+                        metavar="HOLDER",
+                        help="RELEASE mode: pass or close lanes HELD BY THIS "
+                             "PEER (a registered identity), not your own. "
+                             "Needs --branch and one of --ruling/--handoff. "
+                             "(or set REGISTER_BATON_FROM)")
+    parser.add_argument("--ruling", default=os.environ.get("REGISTER_RULING", ""),
+                        help="baton authority: the operator ruling ref or "
+                             "timestamp (or set REGISTER_RULING)")
+    parser.add_argument("--handoff", default=os.environ.get("REGISTER_HANDOFF", ""),
+                        help="baton authority: the holder's handoff ref "
+                             "(or set REGISTER_HANDOFF)")
     parser.add_argument("--dry-run", action="store_true",
                         help="render and check the row, write nothing")
     args = parser.parse_args(argv)
@@ -1760,6 +1863,12 @@ def _dispatch(argv: list[str] | None = None) -> int:
               "and guessing which you meant is how a release closes work "
               "nobody asked it to. Nothing was written.", file=sys.stderr)
         return EXIT_UNMEASURED
+    if args.kind == "release" and args.baton_from and args.all_lanes:
+        print("register-append: refusing - --all-lanes closes everything the "
+              "SIGNER holds, and --baton-from passes a PEER's named lanes. A "
+              "baton is never bare: name each lane with --branch. Nothing was "
+              "written.", file=sys.stderr)
+        return EXIT_UNMEASURED
     if args.kind == "note" and args.all_lanes:
         print("register-append: NOT MEASURED - --all-lanes is a RELEASE flag. "
               "A NOTE closes nothing by construction.", file=sys.stderr)
@@ -1792,9 +1901,12 @@ def _dispatch(argv: list[str] | None = None) -> int:
             scope=args.scope.strip(),
             ttl=args.ttl,
             co_owners=args.co_owner,
+            baton_from=args.baton_from,
+            ruling=args.ruling,
+            handoff=args.handoff,
         )
     except ValueError as exc:
-        print(f"register-append: {exc}", file=sys.stderr)
+        print(f"register-append: refusing - {exc}", file=sys.stderr)
         return EXIT_UNMEASURED
 
     if not REGISTER.is_file():
@@ -1897,6 +2009,11 @@ def _dispatch(argv: list[str] | None = None) -> int:
                       file=sys.stderr)
             return EXIT_UNMEASURED
 
+        if args.kind == "release":
+            rc = _check_release_reading(row, existing, args, gate)
+            if rc is not None:
+                return rc
+
         if args.dry_run:
             sys.stdout.write(row)
             print("register-append: dry run - checked, not written.", file=sys.stderr)
@@ -1911,6 +2028,64 @@ def _dispatch(argv: list[str] | None = None) -> int:
         print(f"register-append: appended to {where}", file=sys.stderr)
         _warn_if_invisible(REGISTER)
         return EXIT_OK
+
+
+def _check_release_reading(row: str, existing: str, args, gate):
+    """Make the gate's READING of a RELEASE match what the filer asked for.
+
+    Returns an exit code to stop with, or None to proceed. Checked by parsing
+    the rendered row with the same pairing every reader uses, not by trusting
+    the flags -- the row is what the fleet will read, not the command line.
+    """
+    declared = gate.baton_declared(row)
+    if not args.baton_from:
+        if declared:
+            print("register-append: refusing - this RELEASE's scope DECLARES a "
+                  "`baton-from:` field, so every reader would treat it as a "
+                  "baton. Quote the grammar inside a code span, or pass "
+                  "--baton-from with its authority. Nothing was written.",
+                  file=sys.stderr)
+            return EXIT_UNMEASURED
+        return None
+    problem = baton_refusal(gate, args.owner, args.baton_from)
+    if problem:
+        print(f"register-append: refusing - {problem}. Nothing was written.",
+              file=sys.stderr)
+        return EXIT_UNMEASURED
+    ledger = existing if not existing or existing.endswith("\n") else existing + "\n"
+    events = gate.baton_events_in(ledger + row)
+    event = events[-1] if events else None
+    if event is None or event.problem:
+        print("register-append: NOT MEASURED - the rendered row does not read "
+              "back as a valid baton ("
+              + (event.problem if event else "no baton event") + "). "
+              "Nothing was written.", file=sys.stderr)
+        return EXIT_UNMEASURED
+    # The reader closes every lane-shaped token on a RELEASE row, scope prose
+    # included -- that is the register's long-standing convention and the
+    # reader keeps it. The WRITE road is narrower: a baton closes the lane in
+    # --branch and nothing a sentence in the scope happens to mention.
+    extra = event.closed - {args.branch}
+    if extra:
+        print("register-append: refusing - the scope names "
+              + ", ".join(f"`{x}`" for x in sorted(extra))
+              + f", which `{event.holder}` also holds, so every reader would "
+              "close it too. One baton row, one lane: drop it from the scope "
+              "and pass each lane as its own row. "
+              "Nothing was written.", file=sys.stderr)
+        return EXIT_REFUSED
+    if not event.closed:
+        print(f"register-append: WARNING - {event.warning}", file=sys.stderr)
+        print("register-append: refusing - a baton that closes nothing "
+              "records nothing. `make -C pmoves register-status` lists the "
+              "lanes that peer actually holds. Nothing was written.",
+              file=sys.stderr)
+        return EXIT_REFUSED
+    print("register-append: BATON - `" + args.owner + "` closes "
+          + ", ".join(f"`{x}`" for x in sorted(event.closed))
+          + f" held by `{event.holder}` ({event.authority[0]}: "
+          f"{event.authority[1]})", file=sys.stderr)
+    return None
 
 
 def main(argv: list[str] | None = None) -> int:
