@@ -1580,10 +1580,12 @@ services:
     # = the digest the live Knuckles graph runs today (5.26.30, a multi-arch
     #   index Docker Hub still serves), so moving under compose changes no store
     #   version. neo4j:5-community now means 5.26.31. (#3193)
-    # NEO4J_IMAGE: the PMOVES source build (POWERFULMOVES/PMOVES-neo4j, branch
-    #   PMOVES.AI-Edition-5.26) replaces this default by digest once it passes the A/B
-    #   against this vendor image (docs/TAC/TAC_NEO4J.md section 2).
-    image: ${NEO4J_IMAGE:-neo4j:5.26.30-community@sha256:037cf5756f0135cbfd66b739b6df7c7c4bb100f9ce11602f6f9538e17e02c74d}
+    # The PMOVES source build (POWERFULMOVES/PMOVES-neo4j, branch PMOVES.AI-Edition-5.26)
+    #   replaces this literal with its own @sha256 digest once it passes the A/B against
+    #   this vendor image (docs/TAC/TAC_NEO4J.md section 2). Deliberately no NEO4J_IMAGE
+    #   override: nothing would require a digest, so any tag could replace the image of
+    #   the one stateful graph store (#3251 review P2-a).
+    image: neo4j:5.26.30-community@sha256:037cf5756f0135cbfd66b739b6df7c7c4bb100f9ce11602f6f9538e17e02c74d
     # The name the live container already has, and the single name source read
     # by scripts/neo4j_container.py (backup, restore, start-cipher-stack).
     container_name: pmoves-neo4j
@@ -1622,8 +1624,11 @@ services:
     - NEO4J_apoc_import_file_enabled=true
     - NEO4J_apoc_import_file_use__neo4j__config=true
     # NEO4J_PLUGINS (NEO4JLABS_PLUGINS was renamed in 5.0; the entrypoint warns on it).
-    # The plugin step adds dbms.security.procedures.unrestricted=apoc.* UNLESS that
-    # key is already set, so the explicit list below must stay.
+    # On a fresh container the plugin step still appends
+    # dbms.security.procedures.unrestricted=apoc.*: it compares against the image conf,
+    # captured before env settings apply. The env loop then deletes that line and
+    # writes the value below, so the explicit list must stay. Without it, all of apoc.*
+    # would be unrestricted.
     - NEO4J_PLUGINS=["apoc"]
     - NEO4J_dbms_security_procedures_unrestricted=apoc.coll.*,apoc.text.*,apoc.path.*,apoc.algo.*
     # Memory: `neo4j-admin server memory-recommendation --memory=4g` on this image
@@ -1643,7 +1648,8 @@ services:
     # networks a published port is inert anyway.
     volumes:
     - neo4j-data:/data
-    # Named, so a recreate keeps the logs (the image declares VOLUME /logs).
+    # Named, so the logs survive `down`/`rm` (the image declares VOLUME /logs). A
+    # recreate already carries an anonymous volume forward; down/rm orphans it.
     - neo4j-logs:/logs
     - ./neo4j/cypher:/cypher:ro
     # Every AGInT that uses the graph must reach it (#3196). Measured consumers:
