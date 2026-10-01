@@ -26,9 +26,25 @@
 #   KILO_REVIEW_MODEL             (repo variable, optional) explicit override.
 #   KILO_REVIEW_MODEL_PREFERENCES (repo variable, optional) space-separated,
 #                                 ordered fallback list used when no override.
-#   KILOCODE_API_KEY              (repo secret — coding-plan key; NOT checked in)
 #
-# Ids are CLI ids: `<provider>/<gateway-id>`, i.e. `kilo/z-ai/glm-5.2`. The
+# Keys (repo secrets, NOT checked in; names per
+# pmoves/docs/operations/PROVIDER_KEY_CHECKLIST.md):
+#   Z_AI_API_KEY                  GLM Coding Plan -> zai-coding-plan/*
+#   MINIMAX_TOKEN_PLAN_API_KEY    MiniMax Token Plan subscription key ->
+#                                 minimax-coding-plan/* (not the pay-as-you-go
+#                                 MINIMAX_API_KEY: MiniMax says the two are not
+#                                 interchangeable; PMOVES issue #2748)
+#   KILOCODE_API_KEY              Kilo Gateway -> kilo/*, billed in Kilo
+#                                 credits unless the Kilo account holds a BYOK
+#                                 key for that model's provider
+#
+# Default order: the coding plans first, because they need no Kilo credits
+# (this lane died on 'Add credits to continue', run 36489607039), then the
+# gateway. A plan whose key is unset is simply absent from the catalog and
+# skipped with a warning.
+#
+# Ids are CLI ids: `<provider>/<model>`, i.e. `zai-coding-plan/glm-5.3` or
+# `kilo/z-ai/glm-5.2`. The
 # gateway's own ids (`z-ai/glm-5.2`, what `api.kilo.ai/api/gateway/models`
 # and the CLI's "Did you mean" list print) have NO provider prefix, and the CLI
 # parses `z-ai/glm-4.5` as provider `z-ai` -> "Model not found". That is how
@@ -122,13 +138,17 @@ jobs:
         env:
           KILOCODE_API_KEY: ${{ secrets.KILOCODE_API_KEY }}
           KILO_API_KEY: ${{ secrets.KILOCODE_API_KEY }}  # same JWT — this is the var that unlocks the kilo/* model catalog
+          # Coding-plan keys: the plan providers read these by name (the
+          # in-container kilo.json maps provider -> env name, never a value).
+          Z_AI_API_KEY: ${{ secrets.Z_AI_API_KEY }}
+          MINIMAX_TOKEN_PLAN_API_KEY: ${{ secrets.MINIMAX_TOKEN_PLAN_API_KEY }}
           KILO_REVIEW_MODEL: ${{ vars.KILO_REVIEW_MODEL }}
           # Ordered preference, validated against the live catalog (first hit
           # wins). Tier 2 uses it only when KILO_REVIEW_MODEL is unset; tier 3
           # (kilo-alternate) always walks it, skipping the model tier 2 tried.
           # Override the whole list with the KILO_REVIEW_MODEL_PREFERENCES
           # repo variable.
-          KILO_REVIEW_MODEL_PREFERENCES: ${{ vars.KILO_REVIEW_MODEL_PREFERENCES || 'kilo/z-ai/glm-5.2 kilo/z-ai/glm-5.3 kilo/z-ai/glm-5.1 kilo/moonshotai/kimi-k2.7-code kilo/qwen/qwen3-coder-next' }}
+          KILO_REVIEW_MODEL_PREFERENCES: ${{ vars.KILO_REVIEW_MODEL_PREFERENCES || 'zai-coding-plan/glm-5.3 minimax-coding-plan/MiniMax-M3 zai-coding-plan/glm-5.3-flash kilo/z-ai/glm-5.3 kilo/kilo-auto/free' }}
           KILO_TIER_TIMEOUT: '720'
           # Tier 1. Both are SECRETS: the endpoint is tailnet topology and this
           # repo is public (a variable would print in the log). Unset URL ->

@@ -51,6 +51,8 @@ chmod 0644 "$run_script"
 {
   printf 'KILOCODE_API_KEY=%s\n' "${KILOCODE_API_KEY:-}"
   printf 'KILO_API_KEY=%s\n' "${KILO_API_KEY:-}"
+  printf 'Z_AI_API_KEY=%s\n' "${Z_AI_API_KEY:-}"
+  printf 'MINIMAX_TOKEN_PLAN_API_KEY=%s\n' "${MINIMAX_TOKEN_PLAN_API_KEY:-}"
   printf 'KILO_REVIEW_MODEL=%s\n' "${KILO_REVIEW_MODEL:-}"
   printf 'KILO_REVIEW_MODEL_PREFERENCES=%s\n' "${KILO_REVIEW_MODEL_PREFERENCES:-}"
   printf 'KILO_EXCLUDE_MODELS=%s\n' "${KILO_EXCLUDE_MODELS:-}"
@@ -70,6 +72,7 @@ scrub_untrusted() {
   fi
   while IFS= read -r line || [ -n "$line" ]; do
     for s in "${KILOCODE_API_KEY:-}" "${KILO_API_KEY:-}" "${SPARK_REVIEW_TOKEN:-}" \
+             "${Z_AI_API_KEY:-}" "${MINIMAX_TOKEN_PLAN_API_KEY:-}" \
              "$spark_url" "${spark_url%/}" "$netloc" "$host"; do
       [ -n "$s" ] && line="${line//"$s"/<redacted>}"
     done

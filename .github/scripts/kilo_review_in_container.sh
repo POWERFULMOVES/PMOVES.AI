@@ -24,9 +24,19 @@
 #   no-candidate   fallback tier only: every catalog-valid preference was
 #                  already tried
 #
-# Ids are CLI ids: `<provider>/<gateway-id>`, i.e. `kilo/z-ai/glm-5.2`. A
-# prefix-less override that exists as `kilo/<id>` is repaired with a warning
-# (the missing prefix is how this lane died twice, #3080).
+# Ids are CLI ids: `<provider>/<model>`. Two kinds of provider are active:
+#   zai-coding-plan/<m>      the operator's GLM Coding Plan, direct to
+#   minimax-coding-plan/<m>  api.z.ai / api.minimax.io on the plan key
+#                            (Z_AI_API_KEY / MINIMAX_TOKEN_PLAN_API_KEY).
+#                            Built-in Kilo providers from the models.dev
+#                            catalog; active only when their key is set.
+#   kilo/<gateway-id>        the Kilo Gateway on KILOCODE_API_KEY: billed in
+#                            Kilo credits unless the account has a BYOK key
+#                            for that model's provider at app.kilo.ai.
+# The plan providers need no Kilo credits, which is why they lead the default
+# preference list (the lane died on 'Add credits to continue', run
+# 36489607039). A prefix-less override that exists as `kilo/<id>` is repaired
+# with a warning (the missing prefix is how this lane died twice, #3080).
 set -euo pipefail
 set -f  # preference list is word-split on purpose; never glob-expanded
 
@@ -40,21 +50,28 @@ npm install -g "@kilocode/cli@${KILO_CLI_VERSION}" >/dev/null 2>&1
 mkdir -p ~/.config/kilo && cd ~/.config/kilo
 npm init -y >/dev/null 2>&1
 npm install --no-audit --no-fund "@kilocode/plugin@${KILO_CLI_VERSION}" >/dev/null 2>&1
-kilo models kilo 2>/dev/null | grep -E '^kilo/' | sort -u > "$CATALOG" || true
+# `env` names the variable each plan provider reads its key from; it is a
+# name, not a value, so no key is ever written to this file. Written BEFORE
+# the catalog query so the plan providers are active (and listed) when their
+# key is present.
+PROVIDERS='"provider": {"zai-coding-plan": {"env": ["Z_AI_API_KEY"]}, "minimax-coding-plan": {"env": ["MINIMAX_TOKEN_PLAN_API_KEY"]}}'
+printf '{%s}' "$PROVIDERS" > ~/.config/kilo/kilo.json
+kilo models 2>/dev/null | grep -E '^[a-z0-9][a-z0-9._-]*/[^[:space:]]+$' | sort -u > "$CATALOG" || true
 n=$(wc -l < "$CATALOG")
 if [ "$n" -eq 0 ]; then
-  echo "::error::kilo model catalog query ('kilo models kilo') returned 0 ids - cannot validate any model (could-not-measure)" >&2
+  echo "::error::kilo model catalog query ('kilo models') returned 0 ids - cannot validate any model (could-not-measure)" >&2
   echo "KILO_TIER_STATUS=catalog-empty" >&2
   exit 1
 fi
-echo "::notice::kilo catalog: ${n} ids (kilo/*) from @kilocode/cli@${KILO_CLI_VERSION}" >&2
+echo "::notice::kilo catalog: ${n} ids from @kilocode/cli@${KILO_CLI_VERSION} (plan providers: $(grep -cE '^(zai|minimax)-coding-plan/' "$CATALOG" || true) ids)" >&2
 
 in_catalog() { grep -Fxq -- "$1" "$CATALOG"; }
 excluded() { case " ${KILO_EXCLUDE_MODELS:-} " in *" $1 "*) return 0 ;; esac; return 1; }
 suggest() {
   echo "valid ids in the live catalog (sample):" >&2
   { for p in ${KILO_REVIEW_MODEL_PREFERENCES:-}; do in_catalog "$p" && echo "$p"; done
-    grep -E '^kilo/(z-ai|moonshotai|qwen|deepseek|minimax)/' "$CATALOG" | grep -v ':free$' | tail -n 8
+    grep -E '^(zai-coding-plan|minimax-coding-plan)/' "$CATALOG" | head -n 6
+    grep -E '^kilo/(z-ai|moonshotai|qwen|deepseek|minimax)/' "$CATALOG" | grep -v ':free$' | tail -n 6
   } | awk '!seen[$0]++' | head -n 12 | sed 's/^/  /' >&2 || true
 }
 
@@ -95,6 +112,6 @@ else
 fi
 
 echo "KILO_RESOLVED_MODEL=${MODEL}" >&2
-printf '{"model": "%s"}' "${MODEL}" > ~/.config/kilo/kilo.json
+printf '{"model": "%s", %s}' "${MODEL}" "$PROVIDERS" > ~/.config/kilo/kilo.json
 cd /tmp
 kilo run --auto "$(cat "$REVIEW_PROMPT")"

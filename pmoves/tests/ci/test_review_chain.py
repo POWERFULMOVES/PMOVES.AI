@@ -58,6 +58,10 @@ if kind == "ok":
 if kind == "leak":  # a prompt-injected review that prints the Kilo key
     open(out, "w").write(REVIEW + "key: " + os.environ.get("KILOCODE_API_KEY", "") + "\n")
     sys.exit(0)
+if kind == "leakplan":  # the same injection, printing the coding-plan keys
+    open(out, "w").write(REVIEW + "zai: " + os.environ.get("Z_AI_API_KEY", "")
+                         + " mm: " + os.environ.get("MINIMAX_TOKEN_PLAN_API_KEY", "") + "\n")
+    sys.exit(0)
 if kind == "junk":
     open(out, "w").write(os.environ["STUB_JUNK_TEXT"])
     sys.exit(0)
@@ -1055,3 +1059,80 @@ def test_final_workflow_and_docs_name_spark_first():
     text = _WORKFLOW.read_text()
     assert "#   tier 1  spark-local" in text and "#   tier 2  kilo-primary" in text
     assert "Review chain (spark-local when online -> kilo-primary -> kilo-alternate)" in text
+
+
+# ------------------------------------------------- coding-plan providers --
+# The lane died on 'Add credits to continue' (run 36489607039): every tier
+# billed Kilo gateway credits. The plan providers reach api.z.ai /
+# api.minimax.io on the operator's plan keys instead.
+
+ZAI_KEY = "zai-KEY-marker-77c1e0"
+MM_KEY = "mm-KEY-marker-0b3d9a"
+
+
+def test_selector_activates_plan_providers_before_the_catalog_query(selector_env, tmp_path):
+    env, catalog = selector_env
+    seen = tmp_path / "config-at-catalog-time.json"
+    bindir = Path(env["PATH"].split(":", 1)[0])
+    _exe(bindir / "kilo", f"""#!/usr/bin/env bash
+if [ "$1" = models ]; then cp "$HOME/.config/kilo/kilo.json" "{seen}"; cat "{catalog}"; exit 0; fi
+if [ "$1" = run ]; then echo "REVIEW with $(cat "$HOME/.config/kilo/kilo.json")"; exit 0; fi
+exit 9
+""")
+    catalog.write_text("kilo/z-ai/glm-5.3\nzai-coding-plan/glm-5.3\nzai-coding-plan/glm-5.3-flash\n")
+    p = _select({**env, "Z_AI_API_KEY": ZAI_KEY,
+                 "KILO_REVIEW_MODEL_PREFERENCES": "zai-coding-plan/glm-5.3 kilo/z-ai/glm-5.3"})
+    assert p.returncode == 0, p.stderr
+    assert "KILO_RESOLVED_MODEL=zai-coding-plan/glm-5.3" in p.stderr
+    at_query = json.loads(seen.read_text())
+    assert at_query["provider"]["zai-coding-plan"]["env"] == ["Z_AI_API_KEY"]
+    assert at_query["provider"]["minimax-coding-plan"]["env"] == ["MINIMAX_TOKEN_PLAN_API_KEY"]
+    final = json.loads(p.stdout.split("REVIEW with ", 1)[1])
+    assert final["model"] == "zai-coding-plan/glm-5.3" and "provider" in final
+    leaked = ZAI_KEY in p.stdout + seen.read_text()
+    assert not leaked, "the config names the variable, never the key"
+
+
+def test_selector_unset_plan_key_falls_through_to_the_gateway(selector_env):
+    env, catalog = selector_env
+    # no plan key -> kilo lists no zai-coding-plan ids -> next preference
+    catalog.write_text("kilo/z-ai/glm-5.3\nkilo/kilo-auto/free\n")
+    p = _select({**env, "KILO_REVIEW_MODEL_PREFERENCES": "zai-coding-plan/glm-5.3 kilo/z-ai/glm-5.3"})
+    assert p.returncode == 0, p.stderr
+    assert "preferred model 'zai-coding-plan/glm-5.3' is not in the live kilo catalog" in p.stderr
+    assert "KILO_RESOLVED_MODEL=kilo/z-ai/glm-5.3" in p.stderr
+
+
+def test_tier_wrapper_passes_plan_keys_by_env_file_not_argv(tier_env, envfacts):
+    env, tmp_path, calls = tier_env
+    p, out, meta = _tier(env, tmp_path, "ok", Z_AI_API_KEY=ZAI_KEY, MINIMAX_TOKEN_PLAN_API_KEY=MM_KEY)
+    assert p.returncode == 0
+    argv = calls.read_text()
+    assert ZAI_KEY not in argv and MM_KEY not in argv
+    _, _, *content = envfacts.read_text().splitlines()
+    # Booleans, not `in content`: pytest would print the whole env file on a
+    # failure, and on a dev node it carries the ambient KILOCODE_API_KEY.
+    has_zai = f"Z_AI_API_KEY={ZAI_KEY}" in content
+    has_mm = f"MINIMAX_TOKEN_PLAN_API_KEY={MM_KEY}" in content
+    assert has_zai, "Z_AI_API_KEY missing from env file"
+    assert has_mm, "MINIMAX_TOKEN_PLAN_API_KEY missing from env file"
+
+
+def test_plan_keys_in_a_review_are_redacted_before_posting(tmp_path):
+    r = _run_chain(tmp_path, primary="leakplan:zai-coding-plan/glm-5.3", alt="ok:b", spark_url=None,
+                   extra_env={"Z_AI_API_KEY": ZAI_KEY, "MINIMAX_TOKEN_PLAN_API_KEY": MM_KEY})
+    assert r["rc"] == 0
+    for key in (ZAI_KEY, MM_KEY):
+        leaked = key in r["comment"] or key in r["stdout"]
+        assert not leaked, "a plan key reached the comment or log"
+    assert "zai: <redacted>" in r["comment"]
+
+
+def test_workflow_routes_plan_keys_by_secret_and_prefers_the_plans():
+    chain = next(s for s in _job()["steps"] if s.get("id") == "chain")
+    assert chain["env"]["Z_AI_API_KEY"] == "${{ secrets.Z_AI_API_KEY }}"
+    assert chain["env"]["MINIMAX_TOKEN_PLAN_API_KEY"] == "${{ secrets.MINIMAX_TOKEN_PLAN_API_KEY }}"
+    default = chain["env"]["KILO_REVIEW_MODEL_PREFERENCES"].split("||", 1)[1]
+    ids = default.strip(" }'").split()
+    assert ids[0].startswith("zai-coding-plan/"), "a plan model leads: it needs no Kilo credits"
+    assert any(i.startswith("kilo/") for i in ids), "the gateway stays as the last resort"

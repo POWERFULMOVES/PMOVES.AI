@@ -17,7 +17,7 @@ review (see "Review validity" below):
 
 Outputs (all written, whatever happens). Values -- tier details, review
 bodies, model ids -- are redacted once, before rendering (Spark URL, host, IP,
-port, token; Kilo key); keys and markers are never redacted:
+port, token; Kilo and coding-plan keys); keys and markers are never redacted:
   --comment FILE   the PR comment body. Its header names the tier and model
                    that ACTUALLY produced the review.
   $GITHUB_STEP_SUMMARY  a table of every tier tried and its outcome.
@@ -231,7 +231,8 @@ def redactor_from_env() -> Redactor:
     return Redactor(
         url=os.environ.get("SPARK_REVIEW_URL", ""),
         secrets=tuple(os.environ.get(k, "").strip() for k in
-                      ("SPARK_REVIEW_TOKEN", "KILOCODE_API_KEY", "KILO_API_KEY")),
+                      ("SPARK_REVIEW_TOKEN", "KILOCODE_API_KEY", "KILO_API_KEY",
+                       "Z_AI_API_KEY", "MINIMAX_TOKEN_PLAN_API_KEY")),
     )
 
 
