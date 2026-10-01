@@ -30,7 +30,7 @@ except Exception:  # pragma: no cover - supabase is optional for local/dev
     supabase_common = None  # type: ignore[assignment]
 
 from services.common.telemetry import PublisherMetrics, PublishTelemetry, compute_publish_telemetry
-from services.common.nats_client import redact_url
+from services.common.redact import redact_url
 
 
 

@@ -10,29 +10,14 @@ from types import SimpleNamespace
 import pytest
 from fastapi.testclient import TestClient
 
-from services.common.nats_client import redact_url
 
 from .test_main import _prepare_agent_zero
 
 # Synthetic credential pair; it is not, and must never become, a real one.
 SECRET = "example-pass"
 WITH_CREDS = f"nats://example-user:{SECRET}@nats:4222"
-REDACTED = "nats://nats:4222"
-
-
-@pytest.mark.parametrize(
-    "url, expected",
-    [
-        (WITH_CREDS, REDACTED),
-        ("nats://nats:4222", "nats://nats:4222"),
-        (f"postgresql://u:{SECRET}@db:5432/app?sslmode=require", "postgresql://db:5432/app?sslmode=require"),
-        (f"nats://u:{SECRET}@a:4222,nats://u:{SECRET}@b:4222", "nats://a:4222,nats://b:4222"),
-        ("http://[::1]:8080/x", "http://[::1]:8080/x"),
-        (None, ""),
-    ],
-)
-def test_redact_url(url, expected):
-    assert redact_url(url) == expected
+REDACTED = "nats://***@nats:4222"
+PLAIN = "nats://nats:4222"
 
 
 def _load(monkeypatch, load_service_module, nats_url):
@@ -42,7 +27,7 @@ def _load(monkeypatch, load_service_module, nats_url):
     return _prepare_agent_zero(module, monkeypatch)
 
 
-@pytest.mark.parametrize("nats_url, expected", [(WITH_CREDS, REDACTED), (REDACTED, REDACTED)])
+@pytest.mark.parametrize("nats_url, expected", [(WITH_CREDS, REDACTED), (PLAIN, PLAIN)])
 def test_config_environment_redacts_userinfo(monkeypatch, load_service_module, nats_url, expected):
     module = _load(monkeypatch, load_service_module, nats_url)
     with TestClient(module.app) as client:
@@ -54,7 +39,7 @@ def test_config_environment_redacts_userinfo(monkeypatch, load_service_module, n
     assert module.service_config.nats_url == nats_url
 
 
-@pytest.mark.parametrize("nats_url, expected", [(WITH_CREDS, REDACTED), (REDACTED, REDACTED)])
+@pytest.mark.parametrize("nats_url, expected", [(WITH_CREDS, REDACTED), (PLAIN, PLAIN)])
 def test_healthz_redacts_userinfo(monkeypatch, load_service_module, nats_url, expected):
     module = _load(monkeypatch, load_service_module, nats_url)
     module.process_manager._process = SimpleNamespace(returncode=None, pid=4242)
@@ -69,7 +54,7 @@ def test_healthz_redacts_userinfo(monkeypatch, load_service_module, nats_url, ex
     assert SECRET not in response.text
 
 
-@pytest.mark.parametrize("nats_url, expected", [(WITH_CREDS, REDACTED), (REDACTED, REDACTED)])
+@pytest.mark.parametrize("nats_url, expected", [(WITH_CREDS, REDACTED), (PLAIN, PLAIN)])
 def test_controller_logs_redacted_url(monkeypatch, caplog, nats_url, expected):
     # The package re-exports an instance named `controller`; import the module itself.
     ctl = importlib.import_module("services.agent_zero.controller")

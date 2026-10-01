@@ -36,7 +36,7 @@ logging.basicConfig(level=os.environ.get("LOG_LEVEL", "INFO"))
 # Configuration helpers — imported from shared modules
 # ---------------------------------------------------------------------------
 from services.common.config import env_bool as _env_bool
-from services.common.nats_client import redact_url
+from services.common.redact import redact_url
 from services.common.tensorzero import sync_openai_compat_env as _sync_openai_compat_env
 
 _sync_openai_compat_env()

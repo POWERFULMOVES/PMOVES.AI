@@ -53,7 +53,7 @@ except ImportError:  # pragma: no cover
     torch = None  # type: ignore
 
 from services.common.supabase import insert_segments
-from services.common.nats_client import redact_url
+from services.common.redact import redact_url
 
 try:
     from services.common.events import envelope as build_event_envelope

@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from textwrap import shorten
 from typing import Any, Dict, List
-from services.common.nats_client import redact_url
+from services.common.redact import redact_url
 
 
 def _collect_text(value: Any, output: List[str]) -> None:
