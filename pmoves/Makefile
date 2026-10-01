@@ -1960,7 +1960,14 @@ archon-db-setup: ## Run Archon DB migrations (complete_setup + 001-011 + TensorZ
 .PHONY: up-tensorzero
 up-tensorzero: ## Start TensorZero LLM gateway (PRIMARY MODEL PROVIDER)
 	@echo "🧠 Starting TensorZero LLM gateway..."
-	@$(DC) --profile tensorzero up -d tensorzero-clickhouse tensorzero-gateway tensorzero-ui pmoves-ollama
+	@# The gateway goes up on its own first. pmoves-ollama reserves an NVIDIA
+	@# device, so on an AMD node (Knuckles/B850: runc only) it fails with
+	@# 'could not select device driver "nvidia"' -- and bundled into one `up`
+	@# that error aborted the gateway too, leaving it Created but never started
+	@# (measured 2026-10-01). The gateway's host.docker.internal routes,
+	@# including the embedding model, do not need the container.
+	@$(DC) --profile tensorzero up -d tensorzero-clickhouse tensorzero-gateway tensorzero-ui
+	@$(DC) --profile tensorzero up -d pmoves-ollama || echo "⚠️ pmoves-ollama did not start (no NVIDIA runtime on this node?). Routes to http://pmoves-ollama:11434 will fail; host.docker.internal routes are unaffected (see deploy/provision/ollama-docker-bridge.sh)." >&2
 	@timeout 60 bash -c 'until curl -sf http://localhost:3030/metrics; do sleep 2; done' || echo "⚠️ TensorZero may still be starting"
 	@echo "✅ TensorZero ready - LLM calls available"
 	@echo "   Gateway:      http://localhost:3030"
