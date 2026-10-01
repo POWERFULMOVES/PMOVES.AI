@@ -23,6 +23,7 @@ from fastapi import FastAPI
 from fastapi.responses import Response
 from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
 
+from chit_signer import signing_status
 from config import get_settings
 from models import HealthResponse, ReadyResponse
 from nats_handler import NATSHandler
@@ -77,6 +78,16 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     logger.info("graph_linker.starting", version="0.2.0")
 
+    # Fail-closed signer: without a key every write is refused. Say so at
+    # startup rather than only when the first message is dead-lettered.
+    chit_ok, chit_reason = signing_status()
+    if not chit_ok:
+        logger.error(
+            "graph_linker.chit_unavailable",
+            reason=chit_reason,
+            hint="All Neo4j writes will be refused until CHIT_SIGNING_KEY is provided",
+        )
+
     # Initialize Neo4j
     _neo4j_client = Neo4jClient(settings)
     await _neo4j_client.connect()
@@ -129,14 +140,16 @@ async def health() -> HealthResponse:
 
 @app.get("/ready", response_model=ReadyResponse)
 async def ready() -> ReadyResponse:
-    """""""""Readiness check -- verifies Neo4j and NATS connectivity."""""""""
+    """""""""Readiness check -- Neo4j, NATS, and whether writes can be CHIT-signed."""""""""
     neo4j_status = "ok" if _neo4j_client and _neo4j_client.is_healthy() else "unavailable"
     nats_status = "ok" if _nats_handler and _nats_handler.is_connected else "unavailable"
-    overall = "ready" if neo4j_status == "ok" else "degraded"
+    chit_ok, chit_status = signing_status()
+    overall = "ready" if neo4j_status == "ok" and chit_ok else "degraded"
     return ReadyResponse(
         status=overall,
         neo4j=neo4j_status,
         nats=nats_status,
+        chit=chit_status,
     )
 
 

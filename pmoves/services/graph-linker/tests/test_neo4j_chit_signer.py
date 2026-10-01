@@ -1,98 +1,83 @@
-"""Tests for CHIT signing integration with Neo4j graph-linker.
+"""Unit tests for graph-linker's fail-closed CHIT signer.
 
-Covers:
-- sign_neo4j_node / verify_neo4j_node roundtrip
-- CHIT_SIGN_NEO4J gating
-- Dev mode (no passphrase) graceful handling
+The previous signer failed OPEN: no key returned the dict unsigned and
+`verify` returned True, and the tests here enshrined that. These replace them.
 """
+
+from __future__ import annotations
+
+import os
 import sys
-import importlib
 
-sys.path.insert(0, "pmoves/services/graph-linker")
+import pytest
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+
+import chit_signer as cs  # noqa: E402
+from pmoves.tools.chit_security import SignatureStatus  # noqa: E402
 
 
-class TestNeo4jCHITSigner:
-    """Test CHIT signing for Neo4j node data."""
+def _failures(reason: str) -> float:
+    return cs.CHIT_SIGN_FAILURES.labels(reason=reason)._value.get()
 
-    def test_sign_verify_roundtrip(self, monkeypatch):
-        """Signing and verifying a node data dict roundtrips."""
-        monkeypatch.setenv("CHIT_SIGN_NEO4J", "true")
-        monkeypatch.setenv("CHIT_PASSPHRASE", "test-neo4j-signing-key")
-        import chit_signer as cs
-        importlib.reload(cs)
 
-        node_data = {
-            "id": "asset-001",
-            "uri": "s3://bucket/key",
-            "label": "Image",
-        }
-        signed = cs.sign_neo4j_node(node_data)
-        assert "sig" in signed
-        assert "hmac" in signed["sig"]
-        assert cs.verify_neo4j_node(signed) is True
+PARAMS = {"evt_id": "evt-001", "uri": "s3://bucket/obj.png", "source": "comfyui-agent"}
 
-    def test_sign_disabled_returns_original(self, monkeypatch):
-        """When CHIT_SIGN_NEO4J is not set, node data passes through."""
-        monkeypatch.delenv("CHIT_SIGN_NEO4J", raising=False)
-        monkeypatch.setenv("CHIT_PASSPHRASE", "test-key")
-        import chit_signer as cs
-        importlib.reload(cs)
 
-        node_data = {"id": "node-1", "label": "Test"}
-        result = cs.sign_neo4j_node(node_data)
-        assert result == node_data  # Unchanged
-        assert "sig" not in result
+class TestSignWrite:
+    def test_adds_three_flat_fields_and_keeps_params(self):
+        out = cs.sign_write(dict(PARAMS))
+        for field in cs.CHIT_FIELDS:
+            assert isinstance(out[field], str) and out[field]
+        assert {k: out[k] for k in PARAMS} == PARAMS
+        # No nested map: Neo4j property values cannot be maps.
+        assert "sig" not in out
 
-    def test_sign_no_passphrase_dev_mode(self, monkeypatch):
-        """When CHIT_SIGN_NEO4J=true but no passphrase, returns unsigned."""
-        monkeypatch.setenv("CHIT_SIGN_NEO4J", "true")
-        monkeypatch.delenv("CHIT_PASSPHRASE", raising=False)
-        monkeypatch.delenv("CHIT_SIGNING_KEY", raising=False)
-        import chit_signer as cs
-        importlib.reload(cs)
+    def test_roundtrip_verifies_unpinned(self):
+        # Deployment-wide key: attribution, not per-writer authentication.
+        result = cs.verify_write(cs.sign_write(dict(PARAMS)))
+        assert result.status is SignatureStatus.OK_UNPINNED
 
-        node_data = {"id": "node-2", "label": "Test"}
-        result = cs.sign_neo4j_node(node_data)
-        assert "sig" not in result
-        # Verify returns True in dev mode
-        assert cs.verify_neo4j_node(result) is True
+    def test_tampered_param_is_mismatch(self):
+        signed = cs.sign_write(dict(PARAMS))
+        signed["uri"] = "s3://bucket/other.png"
+        assert cs.verify_write(signed).status is SignatureStatus.MISMATCH
 
-    def test_verify_tampered_node_fails(self, monkeypatch):
-        """Verification fails when node data is tampered."""
-        monkeypatch.setenv("CHIT_SIGN_NEO4J", "true")
-        monkeypatch.setenv("CHIT_PASSPHRASE", "test-neo4j-signing-key")
-        import chit_signer as cs
-        importlib.reload(cs)
+    def test_tampered_timestamp_is_mismatch(self):
+        signed = cs.sign_write(dict(PARAMS))
+        signed["chit_signed_at"] = "1970-01-01T00:00:00+00:00"
+        assert cs.verify_write(signed).status is SignatureStatus.MISMATCH
 
-        node_data = {"id": "node-3", "label": "Original"}
-        signed = cs.sign_neo4j_node(node_data)
-        # Tamper
-        signed["label"] = "Tampered"
-        assert cs.verify_neo4j_node(signed) is False
+    def test_unsigned_is_no_signature_not_ok(self):
+        assert cs.verify_write(dict(PARAMS)).status is SignatureStatus.NO_SIGNATURE
 
-    def test_verify_disabled_always_passes(self, monkeypatch):
-        """When CHIT_SIGN_NEO4J is false, verification always passes."""
-        monkeypatch.delenv("CHIT_SIGN_NEO4J", raising=False)
-        import chit_signer as cs
-        importlib.reload(cs)
+    def test_kid_follows_signing_key_id(self, monkeypatch):
+        monkeypatch.setenv("CHIT_SIGNING_KEY_ID", "b850-claude")
+        assert cs.sign_write(dict(PARAMS))["chit_kid"] == "b850-claude"
 
-        # Unsigned data passes
-        assert cs.verify_neo4j_node({"id": "x"}) is True
-        # Even garbage data passes when signing disabled
-        assert cs.verify_neo4j_node({}) is True
 
-    def test_sign_verify_with_passphrase_file(self, monkeypatch, tmp_path):
-        """CHIT_PASSPHRASE_FILE is honored when CHIT_PASSPHRASE env var is absent."""
-        secret_file = tmp_path / "chit-passphrase"
-        secret_file.write_text("test-neo4j-file-key")
-        monkeypatch.setenv("CHIT_SIGN_NEO4J", "true")
-        monkeypatch.delenv("CHIT_PASSPHRASE", raising=False)
-        monkeypatch.delenv("CHIT_SIGNING_KEY", raising=False)
-        monkeypatch.setenv("CHIT_PASSPHRASE_FILE", str(secret_file))
-        import chit_signer as cs
-        importlib.reload(cs)
+class TestFailClosed:
+    def test_no_key_raises_and_counts(self, clear_chit_key):
+        before = _failures("no_key")
+        with pytest.raises(cs.ChitSigningError) as exc:
+            cs.sign_write(dict(PARAMS))
+        assert exc.value.reason == "no_key"
+        assert _failures("no_key") == before + 1
 
-        node_data = {"id": "asset-file", "label": "File"}
-        signed = cs.sign_neo4j_node(node_data)
-        assert "sig" in signed
-        assert cs.verify_neo4j_node(signed) is True
+    def test_error_never_carries_key_material(self, monkeypatch):
+        monkeypatch.setenv("CHIT_SIGNING_KEY", "secret-material-xyz")
+        with pytest.raises(cs.ChitSigningError) as exc:
+            cs.sign_write({"bad": object()})
+        assert "secret-material-xyz" not in str(exc.value)
+
+    def test_unserializable_params_raise_and_count(self):
+        before = _failures("unserializable")
+        with pytest.raises(cs.ChitSigningError) as exc:
+            cs.sign_write({"bad": object()})
+        assert exc.value.reason == "unserializable"
+        assert _failures("unserializable") == before + 1
+
+    def test_signing_status(self, clear_chit_key, monkeypatch):
+        assert cs.signing_status() == (False, "no_key")
+        monkeypatch.setenv("CHIT_SIGNING_KEY", "k")
+        assert cs.signing_status() == (True, "ok")

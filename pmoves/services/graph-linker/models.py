@@ -131,3 +131,5 @@ class ReadyResponse(BaseModel):
     status: str = "ready"
     neo4j: str = "unknown"
     nats: str = "unknown"
+    # "ok" or the reason writes are refused (no_key / unresolved_kid).
+    chit: str = "unknown"

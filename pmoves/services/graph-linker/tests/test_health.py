@@ -80,6 +80,14 @@ class TestReadyEndpoint:
         assert data["status"] == "ready"
         assert data["neo4j"] == "ok"
         assert data["nats"] == "ok"
+        assert data["chit"] == "ok"
+
+    def test_ready_degraded_without_signing_key(self, clear_chit_key, healthy_client):
+        # Neo4j and NATS are up, but every write would be refused.
+        data = healthy_client.get("/ready").json()
+        assert data["status"] == "degraded"
+        assert data["neo4j"] == "ok"
+        assert data["chit"] == "no_key"
 
     def test_ready_degraded(self, degraded_client):
         data = degraded_client.get("/ready").json()
