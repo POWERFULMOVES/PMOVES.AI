@@ -50,15 +50,42 @@ def _resolve_nats_url() -> str:
     return f"nats://{host}:{port}"
 
 
-def _redact_url(url: str) -> str:
-    try:
-        parsed = urlparse(url)
-        if parsed.password:
-            netloc = parsed.netloc.replace(f":{parsed.password}@", ":***@")
-            return url.replace(parsed.netloc, netloc)
-    except Exception:
-        pass
-    return url
+try:
+    from services.common.redact import redact_url
+except ImportError:  # image ships without services/common; copy of services/common/redact.py
+    import re as _re
+
+    def redact_url(url):
+        if url is None:
+            return ""
+        text = str(url)
+        spans = []
+        prev_at = -1
+        for match in _re.finditer("@", text):
+            at = match.start()
+            scheme = text.find("://", prev_at + 1, at)
+            if scheme >= 0:
+                spans.append([scheme + 3, at])
+            elif spans:
+                spans[-1][1] = at
+            else:
+                spans.append([0, at])
+            prev_at = at
+        out = []
+        pos = 0
+        for start, end in spans:
+            out.append(text[pos:start] + "***")
+            pos = end
+        out.append(text[pos:])
+        return _re.sub(
+            r"(?i)([?&;#][\w.\-]*(?:password|passwd|pwd|pass|secret|token|api[_\-]?key|auth|signature|sig)[\w.\-]*=)[^&#;\s]*",
+            r"\1***",
+            "".join(out),
+        )
+
+
+# Former private redactor; fail-open on unencoded / # ? , in passwords (PR #3244).
+_redact_url = redact_url
 
 
 def _chit_attest(payload: dict, passphrase: str) -> dict:
@@ -115,7 +142,7 @@ async def main():
 
     try:
         await nc.connect(nats_url, connect_timeout=10)
-        logger.info("Connected to NATS at %s", _redact_url(nats_url))
+        logger.info("Connected to NATS at %s", redact_url(nats_url))
         logger.info("CHIT strict mode: %s", strict_mode)
     except Exception as e:
         logger.error("Failed to connect to NATS: %s", type(e).__name__)

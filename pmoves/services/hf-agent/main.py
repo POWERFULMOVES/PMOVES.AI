@@ -47,13 +47,42 @@ def _load_secret(key: str, default: str = "") -> str:
     return default
 
 
-def _redact_url(url: str) -> str:
-    """Strip credentials from a NATS URL for safe logging."""
-    if "://" in url:
-        scheme, rest = url.split("://", 1)
-        if "@" in rest:
-            return f"{scheme}://***@{rest.split('@', 1)[1]}"
-    return url
+try:
+    from services.common.redact import redact_url
+except ImportError:  # image ships without services/common; copy of services/common/redact.py
+    import re as _re
+
+    def redact_url(url):
+        if url is None:
+            return ""
+        text = str(url)
+        spans = []
+        prev_at = -1
+        for match in _re.finditer("@", text):
+            at = match.start()
+            scheme = text.find("://", prev_at + 1, at)
+            if scheme >= 0:
+                spans.append([scheme + 3, at])
+            elif spans:
+                spans[-1][1] = at
+            else:
+                spans.append([0, at])
+            prev_at = at
+        out = []
+        pos = 0
+        for start, end in spans:
+            out.append(text[pos:start] + "***")
+            pos = end
+        out.append(text[pos:])
+        return _re.sub(
+            r"(?i)([?&;#][\w.\-]*(?:password|passwd|pwd|pass|secret|token|api[_\-]?key|auth|signature|sig)[\w.\-]*=)[^&#;\s]*",
+            r"\1***",
+            "".join(out),
+        )
+
+
+# Former private redactor; fail-open on unencoded / # ? , in passwords (PR #3244).
+_redact_url = redact_url
 
 
 # ── Configuration ────────────────────────────────────────────────────────────
@@ -222,7 +251,7 @@ class HFAgent:
     async def run(self) -> int:
         # Connect NATS
         self.nc = await nats.connect(self.nats_url)
-        print(f"[hf-agent] connected to {_redact_url(self.nats_url)}")
+        print(f"[hf-agent] connected to {redact_url(self.nats_url)}")
         print(f"[hf-agent] publishing to {PUBLISH_SUBJECT}")
 
         # Initialize HF API

@@ -81,5 +81,7 @@ def test_redact_url_strips_credentials():
 
 def test_redact_url_passthrough_and_unset():
     assert _redact_url("nats://nats:4222") == "nats://nats:4222"
-    assert _redact_url(None) == "<unset>"
-    assert _redact_url("") == "<unset>"
+    # Canonical services/common/redact.py semantics; the "<unset>" label now
+    # lives at the call site (redact_url(...) or "<unset>").
+    assert _redact_url(None) == ""
+    assert _redact_url("") == ""
