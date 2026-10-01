@@ -45,7 +45,7 @@ def _redact_url(url: str) -> str:
 
 
 # ── Configuration ────────────────────────────────────────────────────────────
-NATS_URL = os.environ.get("NATS_URL", "nats://nats:pmoves@nats:4222")
+NATS_URL = os.environ.get("NATS_URL", "nats://nats:4222")
 SERVER_PORT = int(os.environ.get("HF_RESEARCH_PORT", "8202"))
 
 # Evaluation criteria (env-configurable)

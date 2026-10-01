@@ -31,7 +31,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name
 
 # --- Config ---------------------------------------------------------------
 MODEL_REGISTRY_URL = os.environ.get("MODEL_REGISTRY_URL", "http://model-registry:8110")
-NATS_URL = os.environ.get("NATS_URL", "nats://nats:pmoves@nats:4222")
+NATS_URL = os.environ.get("NATS_URL", "nats://nats:4222")
 CLICKHOUSE_URL = os.environ.get("TENSORZERO_CLICKHOUSE_URL", "http://tensorzero-clickhouse:8123")
 CLICKHOUSE_USER = os.environ.get("TENSORZERO_CLICKHOUSE_USER", "tensorzero")
 CLICKHOUSE_PASS = os.environ.get("TENSORZERO_CLICKHOUSE_PASSWORD", "tensorzero")

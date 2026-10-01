@@ -182,7 +182,7 @@ export default function ResearchDashboardPage() {
 
       {/* Success Message Display */}
       {successMessage && (
-        <div className="rounded border border-green-300 bg-green-50 p-4 text-sm text-green-800" role="status" aria-live="polite">
+        <div data-testid="research-success" className="rounded border border-green-300 bg-green-50 p-4 text-sm text-green-800" role="status" aria-live="polite">
           <div className="flex items-center justify-between">
             <span>{successMessage}</span>
             <button
@@ -220,7 +220,7 @@ export default function ResearchDashboardPage() {
         {/* Task Details */}
         <section className="lg:col-span-2 rounded border border-neutral-200 bg-white p-4">
           {selectedTask ? (
-            <div className="space-y-4">
+            <div data-testid="task-details" className="space-y-4">
               <div className="flex items-start justify-between">
                 <div className="flex-1">
                   <h2 className="text-lg font-medium">Task Details</h2>
@@ -308,6 +308,7 @@ export default function ResearchDashboardPage() {
                 <div className="text-center py-8 text-neutral-500">
                   <button
                     onClick={() => handleSelectTask(selectedTask)}
+                    data-testid="load-results"
                     className="text-blue-600 hover:underline"
                   >
                     Load Results

@@ -322,23 +322,38 @@ juicefs-cross-node-setup: ## Mount JuiceFS on this node (run on remote): make ju
 	@# REJECTS supabase_admin from the tailnet (#2702), so that default fails.
 	@#
 	@# Password precedence: explicit DB_PASS, else the funnel-delivered
-	@# JUICEFS_META_PASSWORD, resolved AT RECIPE TIME through scripts/with-env.sh —
-	@# the canonical loader (env.shared* -> tier files -> .env* overlays, mirroring
-	@# compose layering). It cannot be $$(JUICEFS_META_PASSWORD): make populates its
-	@# variables only from the environment and Makefiles, and nothing includes the
-	@# generated tier files, so a make-variable reference is empty on exactly the
-	@# nodes the funnel just delivered to. Same idiom as mk/yt-cookies.mk:18, and
-	@# the lesson infra.mk:603 already records as a prior Codex P1.
+	@# JUICEFS_META_PASSWORD. The script runs under scripts/with-env.sh — the
+	@# canonical loader (env.shared* -> tier files -> .env* overlays, mirroring
+	@# compose layering) — so the funnel value reaches it as JUICEFS_META_PASSWORD
+	@# and node shape (JUICEFS_NETWORK, DATA_DIR, ...) resolves from .env.local.
+	@# It cannot be $$(JUICEFS_META_PASSWORD): make populates its variables only
+	@# from the environment and Makefiles, and nothing includes the generated tier
+	@# files. The wrapper form `bash scripts/with-env.sh <command>` is with-env.sh's
+	@# documented entry point (scripts/with-env.sh:143); the earlier printenv form
+	@# followed mk/yt-cookies.mk:33-37. (Older text cited yt-cookies.mk:18 and
+	@# infra.mk:603; neither line holds either idiom.)
 	@#
-	@# DB_PASS passes as the sub-process ENVIRONMENT, not argv, and is handed to
-	@# JuiceFS via META_PASSWORD, so it never appears in `ps`. Passing it as
-	@# `make ... DB_PASS=...` does put it in make's own argv — prefer the funnel.
+	@# This recipe must NOT resolve the fallback into DB_PASS itself: an always-
+	@# non-empty DB_PASS reads as "explicit" to the script, which disables its
+	@# role/credential pairing rule. Only what the operator named on the command
+	@# line is forwarded, as JFS_SETUP_*, because with-env.sh re-sources the node's
+	@# env files over the caller's environment and would silently replace a plain
+	@# META_ROLE/DB_PASS (scripts/with-env.sh:55 `set -a`, :85 .env.local last).
+	@# Empty means "not named". JFS_SETUP_* forwarding — Originated: B850-CLAUDE /
+	@# nvme-3150-rebase, 2026-10-01 (no upstream precedent found; checked: every recipe in pmoves/Makefile and pmoves/mk/*.mk that calls with-env.sh).
+	@#
+	@# Exposure, precisely. The FUNNEL path keeps the credential out of every argv:
+	@# with-env.sh exports JUICEFS_META_PASSWORD into the script's environment and the
+	@# script hands it to JuiceFS as META_PASSWORD. An EXPLICIT `make ... DB_PASS=...`
+	@# does not: it is in make's own argv, and make expands $(DB_PASS) into the
+	@# recipe line, so it is also in the `sh -c` argv of this recipe's shell. Both are
+	@# visible in `ps` for the life of those processes. (Any environment is also
+	@# readable by the same user via /proc/<pid>/environ.) Prefer the funnel.
 	@#
 	@# No $(error) here: the script already fails with a better message that names
 	@# both DB_PASS and the funnel path.
-	@JUICEFS_HOST=$(JUICEFS_HOST) META_ROLE=$(or $(META_ROLE),supabase_admin) \
-	  DB_PASS="$(or $(DB_PASS),$$(bash scripts/with-env.sh printenv JUICEFS_META_PASSWORD 2>/dev/null || true))" \
-	  bash scripts/juicefs-cross-node-setup.sh
+	@JUICEFS_HOST=$(JUICEFS_HOST) JFS_SETUP_META_ROLE="$(META_ROLE)" JFS_SETUP_DB_PASS="$(DB_PASS)" \
+	  bash scripts/with-env.sh scripts/juicefs-cross-node-setup.sh
 
 # The check that would have caught the cross-node blocker months earlier. Storage is
 # baked into a volume at format time: "file" means the data blocks live on the
@@ -377,14 +392,19 @@ juicefs-mount-local: ## Start JuiceFS mount on this node (local Supabase DB)
 	@echo "Starting JuiceFS mount (local DB)..."
 	$(eval JFS_HOST_HOME := $(HOME))
 	$(eval JFS_MOUNT_POINT := $(JFS_HOST_HOME)/pmoves-fs)
-	@mkdir -p "$(JFS_MOUNT_POINT)"
+	@# Nodes with a dedicated cache drive (e.g. knuckles NVMe seat) override the
+	@# cache backing dir via `make juicefs-mount-local JUICEFS_DATA_DIR=/mnt/...`;
+	@# cache bounds then auto-scale to that drive's free space. The cross-node
+	@# script accepts the same JUICEFS_DATA_DIR name (alongside its DATA_DIR).
+	$(eval JUICEFS_DATA_DIR ?= $(JFS_HOST_HOME)/.local/share/juicefs-data)
+	@mkdir -p "$(JFS_MOUNT_POINT)" "$(JUICEFS_DATA_DIR)"
 	@test -n "$(SUPABASE_DB_PASSWORD)" || { echo "ERROR: SUPABASE_DB_PASSWORD not set — source it from the CHIT secrets pipeline"; exit 1; }
 	@# Per-host bounded cache flags: measure the /data volume's host backing dir so
 	@# this node never inherits JuiceFS's 100 GiB default nor self-disables caching
 	@# on a near-full disk. Canonical logic: scripts/juicefs-cache-bounds.sh.
 	@# Fail-safe guards: make runs this via `sh -c` (no -e), so an empty-failure
 	@# would chain straight into `docker run` with zero bounds. Refuse unbounded.
-	@JFS_CACHE_FLAGS="$$(JFS_CACHE_DIR=/data/jfsCache JFS_CACHE_MEASURE_DIR='$(JFS_HOST_HOME)/.local/share/juicefs-data' bash scripts/juicefs-cache-bounds.sh)" || { echo "ERROR: cache-bounds helper failed"; exit 1; }; \
+	@JFS_CACHE_FLAGS="$$(JFS_CACHE_DIR=/data/jfsCache JFS_CACHE_MEASURE_DIR='$(JUICEFS_DATA_DIR)' bash scripts/juicefs-cache-bounds.sh)" || { echo "ERROR: cache-bounds helper failed"; exit 1; }; \
 	test -n "$$JFS_CACHE_FLAGS" || { echo "ERROR: empty cache bounds — refusing unbounded mount"; exit 1; }; \
 	META_PASSWORD='$(SUPABASE_DB_PASSWORD)' docker run -d \
 	    --name juicefs-mount \
@@ -395,7 +415,7 @@ juicefs-mount-local: ## Start JuiceFS mount on this node (local Supabase DB)
 	    -e META_PASSWORD \
 	    -e JFS_MOUNT="$(JFS_MOUNT_POINT)" \
 	    -e JFS_CACHE_FLAGS="$$JFS_CACHE_FLAGS" \
-	    -v $(JFS_HOST_HOME)/.local/share/juicefs-data:/data \
+	    -v $(JUICEFS_DATA_DIR):/data \
 	    -v $(JFS_MOUNT_POINT):$(JFS_MOUNT_POINT):rshared \
 	    juicedata/mount:ce-v1.3.0 \
 	    -c 'exec juicefs mount --enable-xattr $$JFS_CACHE_FLAGS "postgres://supabase_admin@localhost:5432/postgres?search_path=juicefs_meta&sslmode=disable" "$$JFS_MOUNT"'

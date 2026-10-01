@@ -1,4 +1,52 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
+
+/**
+ * Backend-free mock for the two routes the chat page uses: GET /api/chat/messages
+ * and POST /api/chat/send. Sent messages are echoed back by the next messages fetch,
+ * which is what the page does after a successful send. `sendDelayMs` keeps the
+ * "Sending..." state observable.
+ */
+async function mockChatBackend(page: Page, sendDelayMs = 0) {
+  const items: Array<Record<string, unknown>> = [];
+  await page.route('**/api/chat/messages*', (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ items }) })
+  );
+  await page.route('**/api/chat/send', async (route) => {
+    const body = JSON.parse(route.request().postData() || '{}');
+    items.push({
+      id: items.length + 1,
+      owner_id: 'e2e-owner',
+      role: 'user',
+      agent: null,
+      agent_id: null,
+      avatar_url: null,
+      content: body.content,
+      message_type: 'text',
+      session_id: null,
+      metadata: null,
+      created_at: new Date().toISOString(),
+    });
+    if (sendDelayMs) await new Promise((r) => setTimeout(r, sendDelayMs));
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true }) });
+  });
+}
+
+/** An agent-authored message whose content is a two-item markdown list. */
+function agentMarkdownReply() {
+  return {
+    id: 101,
+    owner_id: 'e2e-owner',
+    role: 'agent',
+    agent: 'Agent Zero',
+    agent_id: 'agent-zero',
+    avatar_url: null,
+    content: '- first item\n- second item',
+    message_type: 'text',
+    session_id: null,
+    metadata: null,
+    created_at: new Date().toISOString(),
+  };
+}
 
 /**
  * E2E Tests for Agent Zero Chat Interface
@@ -14,6 +62,8 @@ import { test, expect } from '@playwright/test';
 
 test.describe('Agent Zero Chat', () => {
   test.beforeEach(async ({ page }) => {
+    // Chat send/list go through /api/chat/*, which needs Supabase; mock them so the suite runs without a backend.
+    await mockChatBackend(page, 1500);
     // Navigate to chat dashboard
     await page.goto('/dashboard/chat');
   });
@@ -43,24 +93,48 @@ test.describe('Agent Zero Chat', () => {
     await page.getByPlaceholder(/message/i).fill(testMessage);
     await page.getByRole('button', { name: /send/i }).click();
 
-    // Check for loading indicator
-    await expect(page.getByRole('status')).toBeVisible({ timeout: 5000 });
+    // Loading state: the send button reads "Sending..." and is disabled while the request is in flight
+    const sendButton = page.getByTestId('chat-send-button');
+    await expect(sendButton).toHaveText(/sending/i, { timeout: 5000 });
+    await expect(sendButton).toBeDisabled();
   });
 
-  test('supports markdown in responses', async ({ page }) => {
-    // Send a message that should trigger a formatted response
-    await page.getByPlaceholder(/message/i).fill('Format this as a list');
-    await page.getByRole('button', { name: /send/i }).click();
+  test('displays agent replies from the message feed verbatim', async ({ page }) => {
+    // Serve an agent reply (routes registered later take precedence over the beforeEach mock)
+    await page.route('**/api/chat/messages*', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ items: [agentMarkdownReply()] }),
+      })
+    );
+    await page.reload();
 
-    // Wait for response (may be mocked in test environment)
-    await page.waitForTimeout(2000);
+    // Content renders in a whitespace-pre-wrap block (app/dashboard/chat/page.tsx), so the markdown
+    // source, including its line break, reaches the page as-is under the agent's name.
+    const reply = page.getByText('- first item', { exact: false });
+    await expect(reply).toBeVisible();
+    await expect(reply).toContainText('- second item');
+    // The author label ({m.agent || m.role}) sits in the same message bubble as the content
+    await expect(reply.locator('..').getByText('Agent Zero', { exact: true })).toBeVisible();
+  });
 
-    // Check for markdown-rendered elements
-    const hasListItems = await page.locator('li, ul, ol').count() > 0;
-    // This is a soft assertion since response content varies
-    if (hasListItems) {
-      await expect(page.locator('li').first()).toBeVisible();
-    }
+  // fixme: FEATURE NOT BUILT. The chat page renders message content as plain text
+  // (<div className="text-sm whitespace-pre-wrap">{m.content}</div> in app/dashboard/chat/page.tsx);
+  // there is no markdown renderer, so a markdown list reply never becomes list items. The old body
+  // was vacuous (`if (count > 0)`), so it could never fail. No tracking issue yet.
+  test.fixme('supports markdown in responses', async ({ page }) => {
+    await page.route('**/api/chat/messages*', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ items: [agentMarkdownReply()] }),
+      })
+    );
+    await page.reload();
+
+    await expect(page.getByRole('listitem').filter({ hasText: 'first item' })).toBeVisible();
+    await expect(page.getByRole('listitem').filter({ hasText: 'second item' })).toBeVisible();
   });
 
   test('clears input after sending', async ({ page }) => {
@@ -98,40 +172,46 @@ test.describe('Agent Zero Chat', () => {
     await expect(page.getByText(testMessage)).toBeVisible();
   });
 
-  test('allows Shift+Enter for new lines without sending', async ({ page }) => {
-    const testMessage = 'Line 1\nLine 2';
-
-    await page.getByPlaceholder(/message/i).fill('Line 1');
-    await page.keyboard.press('Shift+Enter');
-    await page.keyboard.type('Line 2');
-
-    // Verify both lines are in input
-    await expect(page.getByPlaceholder(/message/i)).toHaveValue(testMessage);
-
-    // Message should not be sent yet
-    await expect(page.getByText(testMessage)).not.toBeVisible();
-  });
-
+  // Removed 2026-09-28 (lane test/e2e-reconcile-open-jev): 'allows Shift+Enter for new lines without sending'.
+  // The message field is a single-line <input id="chatMessage"> and has never been a <textarea>
+  // (git log --all -S'<textarea' -- app/dashboard/chat is empty), so multi-line entry is not a feature.
   test('displays agent avatar and name', async ({ page }) => {
-    // Check for agent identification
-    const agentName = page.getByText(/agent zero/i, { exact: false });
-    const hasAvatar = await page.locator('[class*="avatar"], img[alt*="agent"]').count() > 0;
+    // Serve one agent-authored message (routes registered later take precedence over the beforeEach mock)
+    await page.route('**/api/chat/messages*', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ items: [agentMarkdownReply()] }),
+      })
+    );
+    await page.reload();
 
-    // At least one of these should be present
-    const hasAgentIdentification = await agentName.count() > 0 || hasAvatar;
-    expect(hasAgentIdentification).toBe(true);
+    // Walk out from this message's content to its bubble and row (app/dashboard/chat/page.tsx:280-325):
+    // row > [avatar <Image alt={m.agent || m.role}>, bubble > [label {m.agent || m.role}, content]]
+    const content = page.getByText('- first item', { exact: false });
+    await expect(content).toBeVisible();
+    const bubble = content.locator('..');
+    const messageRow = bubble.locator('..');
+
+    // The name label and the avatar belong to THIS message, not the sidebar agent list
+    await expect(bubble.getByText('Agent Zero', { exact: true })).toBeVisible();
+    const avatar = messageRow.getByRole('img', { name: 'Agent Zero', exact: true });
+    await expect(avatar).toBeVisible();
+    // No avatar_url in the payload, so the agent default is used (page.tsx:287)
+    await expect(avatar).toHaveAttribute('src', /agent\.svg/);
   });
 
   test('shows error message on failed request', async ({ page }) => {
-    // This test requires mocking a failed request
-    // For now, we'll check that error handling UI exists
-    const hasErrorDisplay =
-      (await page.locator('[class*="error"], [role="alert"]').count()) > 0;
+    // Make the send fail (routes registered later take precedence over the beforeEach mock)
+    await page.route('**/api/chat/send', (route) =>
+      route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ error: 'e2e simulated failure' }) })
+    );
+    await page.getByPlaceholder(/message/i).fill('This send will fail');
+    await page.getByTestId('chat-send-button').click();
 
-    // If error display exists, verify it's hidden initially
-    if (hasErrorDisplay) {
-      await expect(page.locator('[class*="error"], [role="alert"]').first()).not.toBeVisible();
-    }
+    // The page surfaces the server's error in an alert and keeps the text for a retry
+    await expect(page.getByRole('alert').filter({ hasText: 'e2e simulated failure' })).toBeVisible();
+    await expect(page.getByPlaceholder(/message/i)).toHaveValue('This send will fail');
   });
 });
 
@@ -140,28 +220,28 @@ test.describe('Agent Zero Chat - Settings', () => {
     await page.goto('/dashboard/chat');
   });
 
-  test('provides access to model selection', async ({ page }) => {
-    // Look for model selector or settings button
-    const modelSelector = page.getByRole('combobox', { name: /model/i });
-    const settingsButton = page.getByRole('button', { name: /settings/i });
-
-    const hasControls =
-      (await modelSelector.count()) > 0 || (await settingsButton.count()) > 0;
-    expect(hasControls).toBe(true);
+  // renamed-from: provides access to model selection
+  test('provides access to agent selection', async ({ page }) => {
+    // Current UI: a target-agent selector (not a model selector / settings button).
+    const agentSelect = page.getByTestId('chat-agent-select');
+    await expect(agentSelect).toBeVisible();
+    await expect(agentSelect.locator('option')).toContainText(['Agent Zero', 'Archon']);
+    await agentSelect.selectOption('archon');
+    await expect(agentSelect).toHaveValue('archon');
   });
 
-  test('allows clearing chat history', async ({ page }) => {
-    // Look for clear history button
-    const clearButton = page.getByRole('button', { name: /clear/i, exact: false });
+  // fixme: FEATURE NOT BUILT. app/dashboard/chat/page.tsx has no clear-history control (no
+  // "clear" button, and /api/chat/* has no delete route the page calls). The old body was vacuous
+  // (`if (count > 0)` with no assertion), so it could never fail. No tracking issue yet.
+  // The body states the intended behaviour so it fails loudly once un-fixme'd against a real control.
+  test.fixme('allows clearing chat history', async ({ page }) => {
+    const clearButton = page.getByRole('button', { name: /clear/i });
+    await expect(clearButton).toBeVisible();
+    await clearButton.click();
 
-    if ((await clearButton.count()) > 0) {
-      await clearButton.first().click();
+    const confirm = page.getByRole('button', { name: /confirm/i });
+    if (await confirm.isVisible()) await confirm.click();
 
-      // Verify confirmation or action
-      const hasConfirm = await page.getByRole('button', { name: /confirm/i }).count() > 0;
-      if (hasConfirm) {
-        await page.getByRole('button', { name: /confirm/i }).click();
-      }
-    }
+    await expect(page.getByText(/no messages yet/i)).toBeVisible();
   });
 });

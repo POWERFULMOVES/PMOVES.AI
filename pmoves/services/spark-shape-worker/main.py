@@ -53,7 +53,7 @@ def _redact_url(url: str) -> str:
     return url
 
 
-NATS_URL = os.environ.get("NATS_URL", "nats://nats:pmoves@nats:4222")
+NATS_URL = os.environ.get("NATS_URL", "nats://nats:4222")
 SHAPE_SECRET = _secret("SPARK_SHAPE_SECRET", "")
 MESH_PASSPHRASE = _secret("MESH_PASSPHRASE", "")
 
