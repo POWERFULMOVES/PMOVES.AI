@@ -155,7 +155,7 @@ identities:
 
   - canonical: spark-claude
     # Declared at declaration-time (2026-09-28) because the lane-2979 register
-    # closeout carried 8 stranded `SPARK-CLAUDE` rows onto main and the
+    # closeout carried 10 stranded spark-claude rows onto main and the
     # undeclared-author ratchet correctly refused them. Same node-harness-model
     # shape as `4090-claude`: identity is the node's Claude Code harness,
     # model decoration is worn, not a distinct identity.
@@ -163,10 +163,13 @@ identities:
     node: spark
     register_form: "SPARK-CLAUDE"
     note: >-
-      0 entries on main before the 2026-09-28 lane-2979 carry (7 stranded
-      rows from the SPARK working tree + 1 pickup release); signing card
-      00000000-0000-4000-8000-000000000014; registry key spark-claude in
-      agent_signatures.yaml folds to the same identity.
+      0 register entries on main before the lane-2979 carry (#3235), which
+      adds 10 rows authored as `SPARK-CLAUDE` (8) or `spark-claude` (2).
+      A signing card (00000000-0000-4000-8000-000000000014) and an
+      agent_signatures.yaml key `spark-claude` are claimed on the SPARK node
+      but are NOT present on main as of 2026-10-01 (git grep: 0 hits). This
+      entry declares the alias only and asserts no signing identity.
+      Follow-up owner: SPARK-CLAUDE / CRUSH-SPARK, to land the card and key.
 
   - canonical: 4090-claude
     # `4090-CLAUDE-OPUS-5`: the identity signing with its model appended.
