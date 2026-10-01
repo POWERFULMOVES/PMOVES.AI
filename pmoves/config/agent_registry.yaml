@@ -232,7 +232,8 @@ agents:
     description: >-
       B850/Knuckles node CLI identity. Affinity for data-tier and AMD/ROCm Linux
       workloads, with an infra + governance lane -- a preference, not an
-      exclusive claim. Admin over the node_steward role it launches into.
+      exclusive claim. claude-pmoves launches it as the main session with full
+      tools; it delegates coordination to the node_steward role.
   kimi_knuckles:
     name: "Kimi Knuckles"
     class: standard
@@ -487,12 +488,13 @@ agents:
 
   node_steward:
     name: "Node Steward"
-    # The session ROLE the CLI identities above load into, not a node identity of
-    # its own. `pmoves/scripts/claude-pmoves.sh:82` resolves
-    # `DEFAULT_AGENT="${PMOVES_DEFAULT_AGENT:-node-steward}"` and then execs
-    # `claude --agent "$AGENT"`, so every launcher-started session on every node
-    # begins in this role -- yet this file, which .claude/CLAUDE.md names the
-    # source of truth for agent taxonomy, did not describe it.
+    # A ROLE the CLI identities above delegate coordination to, not a node
+    # identity of its own. Until 2026-10-01 it was also the launcher default
+    # (`DEFAULT_AGENT="${PMOVES_DEFAULT_AGENT:-node-steward}"` in
+    # pmoves/scripts/claude-pmoves.sh), so every launcher-started session began
+    # in this role with Write/Edit denied. The default is now no agent -- the
+    # main session is the node identity with full tools -- and this role runs as
+    # a subagent, or as the main session only via PMOVES_DEFAULT_AGENT.
     class: specialized
     primary_type: agent
     secondary_type: ui
@@ -518,17 +520,18 @@ agents:
       publishes: []
       subscribes: []
     topology:
-      # `any`, following botz_auditor: this role is not affine to one machine. It
-      # is the default on every node the launcher starts, which is what
-      # .claude/CLAUDE.md means by capacity-class rather than expertise-lane.
+      # `any`, following botz_auditor: this role is not affine to one machine.
+      # Any node's identity can delegate to it, which is what .claude/CLAUDE.md
+      # means by capacity-class rather than expertise-lane.
       node_affinity: [any]
       team: orchestration
       ci_runner: null
       compose_profile: null
     description: >-
-      Per-node session role: holds node identity, reads and claims in the
+      Per-node coordination role: holds node context, reads and claims in the
       AGNOTE4482 register before edits, then spawns delivery and review agents to
-      execute. Directed by the node's CLI identity (claude_b850 on Knuckles); its
+      execute. Delegated to by the node's CLI identity (claude_b850 on Knuckles),
+      which is the launcher's main session; its
       own domain is administration of that node. Definition and rationale live in
       .claude/agents/node-steward.md.
 
