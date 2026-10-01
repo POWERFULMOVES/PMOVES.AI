@@ -921,10 +921,7 @@ services:
     # Pinned 2025-02-04: Latest stable from Supabase
     # Matches upstream. Dashboard UI only - no data path and nothing depends on it,
     # so this is the lowest-risk half of the L2 currency slice.
-    # 2026.08.03-sha-022b374 was pruned from Docker Hub (weekly tags churn) —
-    # any node without it cached could never bootstrap. Repinned to the
-    # running-known-good on B850, verified present upstream 2026-09-22.
-    image: supabase/studio:2026.06.03-sha-0bca601
+    image: supabase/studio:2026.08.03-sha-022b374
     restart: unless-stopped
     profiles:
     - supabase-local
