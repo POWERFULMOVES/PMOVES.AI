@@ -147,7 +147,7 @@ async def create_nats_connection(
     service_name = config.name or "unknown"
     logger.info(
         "Connecting to NATS at %s (service=%s)",
-        _redact_url(config.url),
+        redact_url(config.url),
         service_name,
     )
 

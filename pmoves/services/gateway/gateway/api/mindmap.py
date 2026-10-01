@@ -10,6 +10,7 @@ from neo4j import GraphDatabase
 from pydantic import BaseModel
 
 from services.common.env import get_secret
+from services.common.redact import redact_url
 
 router = APIRouter(tags=["MindMap"])
 
@@ -24,7 +25,7 @@ if NEO4J_URL:
     try:  # pragma: no cover - depends on external DB
         driver = GraphDatabase.driver(NEO4J_URL, auth=(NEO4J_USER, NEO4J_PASSWORD))
     except Exception as exc:  # pragma: no cover - optional dependency
-        logger.warning("Neo4j unavailable at %s: %s", NEO4J_URL, exc)
+        logger.warning("Neo4j unavailable at %s: %s", redact_url(NEO4J_URL), exc)
         driver = None
 
 
