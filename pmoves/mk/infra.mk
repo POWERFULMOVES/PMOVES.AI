@@ -581,7 +581,7 @@ ollama-host-bridge: ## Plan (dry-run) exposing HOST Ollama to containers on the 
 	@echo ""
 	@echo "Apply (operator, needs root):  sudo deploy/provision/ollama-docker-bridge.sh --apply"
 
-ollama-host-bridge-status: ## Is the host-Ollama docker bridge provisioned? (exit 1 = not)
+ollama-host-bridge-status: ## Is the host-Ollama docker bridge provisioned? Needs root (state file + ufw); run the script directly for the 0/1/3 code
 	@bash ../deploy/provision/ollama-docker-bridge.sh --status
 
 up-gpu-orchestrator: ## Start GPU orchestrator (gpu profile)
