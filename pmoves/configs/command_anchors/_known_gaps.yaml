@@ -111,6 +111,8 @@ known_gaps:
   - "GHOST_TARGET|pmoves/docs/ARC/network_fabric.md|net-status"
   - "GHOST_TARGET|pmoves/docs/EVOSWARM_OPERATIONS_GUIDE.md|up-evo-controller"
   - "GHOST_TARGET|pmoves/docs/NEO4J_INTEGRATION_GUIDE.md|conch-phase-4b"
+  - "GHOST_TARGET|pmoves/docs/NEO4J_SUBMODULE_INTEGRATION_COMPLETE.md|neo4j-seed"
+  - "GHOST_TARGET|pmoves/docs/NEO4J_SUBMODULE_PROMOTION.md|neo4j-seed"
   - "GHOST_TARGET|pmoves/docs/NEXT_STEPS.md|build-stable"
   - "GHOST_TARGET|pmoves/docs/NEXT_STEPS.md|channel-monitor-discord-drop-smoke"
   - "GHOST_TARGET|pmoves/docs/NEXT_STEPS.md|channel-monitor-discord-gate-smoke"

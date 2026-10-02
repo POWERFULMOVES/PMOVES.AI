@@ -1,5 +1,7 @@
 # Neo4j Submodule Promotion Plan
 
+> **SUPERSEDED (2026-10-01).** The submodule described here (its own Makefile, `docker/`, `db/migrations`, `db/seeds`) was never built: `PMOVES-Neo4j` is the upstream neo4j/neo4j source fork and has none of them on any branch. The make targets that called it were rewritten. Current state: [`docs/TAC/TAC_NEO4J.md`](TAC/TAC_NEO4J.md).
+
 **Status:** Architectural Proposal
 **Priority:** HIGH (blocking CONCH Phase 4)
 **Pattern:** Follow `PMOVES-supabase` submodule structure
