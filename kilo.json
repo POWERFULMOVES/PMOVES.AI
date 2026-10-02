@@ -265,7 +265,15 @@
       "*env.shared": "deny",
       "*env.shared *": "deny",
       "*env.shared.bak*": "deny",
-      "*env.shared~*": "deny"
+      "*env.shared~*": "deny",
+      "* .envrc": "deny",
+      "* .envrc *": "deny",
+      "*/.envrc": "deny",
+      "*/.envrc *": "deny",
+      "*=.envrc": "deny",
+      "*=.envrc *": "deny",
+      "*env*.local": "deny",
+      "*env*.local *": "deny"
     },
     "edit": {
       "**": "allow",

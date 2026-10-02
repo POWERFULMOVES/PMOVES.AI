@@ -97,6 +97,17 @@ ESCAPES_DENIED = [
     "cat pmoves/env.shared.bak-rot20260912",
     "cat " + _DOT_ENV,
     "cat pmoves/" + _DOT_ENV + ".local",
+    # .envrc is a real gitignored secrets file here (.gitignore:47); the
+    # .env-family globs only matched a '', ' a', or '.*' suffix (claude-review
+    # design-decision thread)
+    "cat " + _DOT_ENV + "rc",
+    "cat pmoves/" + _DOT_ENV + "rc",
+    "grep KEY " + _DOT_ENV + "rc",
+    # env.<name>.local: gitignored node-local overlay shape (e.g.
+    # env.mesh-bind.local, .gitignore:57); matched by neither the .env family
+    # nor the env.shared/env.tier families
+    "cat pmoves/env.mesh-bind.local",
+    "grep KEY pmoves/env.jellyfin-ai.local",
 ]
 
 

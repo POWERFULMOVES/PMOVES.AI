@@ -29,12 +29,15 @@
 #   no-candidate   fallback tier only: every catalog-valid preference was
 #                  already tried, or shares a provider with one that was
 #
-# Ids are CLI ids: `<provider>/<model>`. Two kinds of provider are active:
-#   zai-coding-plan/<m>      the operator's GLM Coding Plan, direct to
-#   minimax-coding-plan/<m>  api.z.ai / api.minimax.io on the plan key
-#                            (Z_AI_API_KEY / MINIMAX_TOKEN_PLAN_API_KEY).
-#                            Built-in Kilo providers from the models.dev
-#                            catalog; active only when their key is set.
+# Ids are CLI ids: `<provider>/<model>`. Three kinds of provider are active:
+#   zai-coding-plan/<m>      the operator's GLM Coding Plan, called direct on
+#                            Z_AI_API_KEY against api.z.ai.
+#   minimax-coding-plan/<m>  the operator's MiniMax Token Plan, called direct
+#                            on MINIMAX_TOKEN_PLAN_API_KEY against
+#                            api.minimax.io.
+#                            Both are built-in Kilo providers from the
+#                            models.dev catalog, active only when their key is
+#                            set, and neither bills Kilo credits.
 #   kilo/<gateway-id>        the Kilo Gateway on KILOCODE_API_KEY: billed in
 #                            Kilo credits unless the account has a BYOK key
 #                            for that model's provider at app.kilo.ai.
