@@ -264,3 +264,9 @@ def test_scoped_dry_run_reaches_the_init(stub_docker_path):
 def test_init_is_not_run_for_other_services(stub_docker_path, target, args):
     r, lines = plan(stub_docker_path, target, *args)
     assert not any("agent-zero-usr-init" in l for l in lines)
+
+
+def test_operator_road_runs_only_the_init(stub_docker_path):
+    r, lines = plan(stub_docker_path, "a0-usr-init")
+    assert r.returncode == 0, r.stderr
+    assert [l for l in lines if "docker compose" in l or "docker-compose" in l] == [lines[index(lines, lambda l: l.rstrip().endswith("run --rm --no-deps agent-zero-usr-init"))]]

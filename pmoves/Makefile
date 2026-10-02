@@ -2495,6 +2495,10 @@ up-a0-archon-scoped: ## Recreate ONLY archon and/or agent-zero from prebuilt ima
 	$(if $(filter agent-zero,$(A0_ARCHON_PICK)),@$(call A0_USR_INIT,$(if $(A0_ARCHON_DRY),--dry-run)))
 	$(if $(filter agent-zero,$(A0_ARCHON_PICK)),@$(A0_ARCHON_UP) agent-zero)
 
+.PHONY: a0-usr-init
+a0-usr-init: ## Hand the Agent Zero usr bind mount (AGENT_ZERO_USR_DIR) to the runtime uid 65532; ownership only, never chmod. Runs on its own; does not recreate agent-zero
+	@$(call A0_USR_INIT)
+
 .PHONY: archon-follow
 archon-follow: ## ONLINE: pull the gated GHCR :current, verify its gate label, then recreate archon (use this to follow releases)
 	@set -e; img="$$ARCHON_CHANNEL_REPO:$$ARCHON_CHANNEL"; \
