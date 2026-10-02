@@ -82,7 +82,7 @@ Rows marked **pending** are prepared as ONE compose change (grant `compose:pr:<N
 | `/logs` | anonymous volume (orphaned on each recreate) | `OM/docker/mounting-volumes` | named `neo4j-logs` (**pending**) |
 | healthcheck | `wget localhost:7474` | Community has no unauthenticated database-availability endpoint | keep as liveness; authenticated `RETURN 1` belongs to the make road |
 | `security_opt` | set in docker-compose.yml; stripped from the generated core.yml by design | `OM/docker/security` | add neo4j to `docker-compose.hardened.yml` |
-| other definitions | elder-melchor overlay `${NEO4J_PASSWORD:-pmoves2026}`; `jellyfin-neo4j` `${JELLYFIN_NEO4J_PASSWORD:-mediapassword123}`, tag-only `neo4j:5.26.22`, 4.x memory keys, `gds.*` allowlisted with no GDS plugin | no default credentials | `:?` guards; jellyfin on a digest (**pending**, compose) |
+| other definitions | elder-melchor overlay `${NEO4J_PASSWORD:-<retired literal, redacted 2026-10>}`; `jellyfin-neo4j` `${JELLYFIN_NEO4J_PASSWORD:-<retired literal, redacted 2026-10>}`, tag-only `neo4j:5.26.22`, 4.x memory keys, `gds.*` allowlisted with no GDS plugin | no default credentials | `:?` guards; jellyfin on a digest (**pending**, compose) |
 
 ## 5. Consumers and the graph contract
 
@@ -293,9 +293,13 @@ The three "proposed" rows match on display name only, so they are listed for the
 Nothing that seeds this graph is signed (rows 1-8 of the CHIT review inventory). Proposal:
 
 - **Record.** After a road applies a file, it writes `MERGE (s:SeedSet {id: $sha256_of_file_bytes}) SET s.file, s.git_sha,
-  s.applied_at, s.road, s.chit_sig, s.chit_kid, s.chit_signed_at`. The signed document is
-  `{file, sha256, git_sha, applied_at, road, applied_by}` (`applied_by` = signing-card `agent_id`), signed with
-  `sign_cgp` and no `passphrase=` argument, like graph-linker. Each seed statement also does `SET x.prov = $seed_set`, so
+  s.applied_at, s.road, s.applied_by, s.node_count, s.rel_count, s.chit_sig, s.chit_kid, s.chit_signed_at`. The signed
+  document is the **whole event**: every field of the `graph.seed.applied.signed.v1` payload except `sig`, namely
+  `{seed_set_id, file, sha256, git_sha, applied_at, road, applied_by, node_count, rel_count}` (`applied_by` =
+  signing-card `agent_id`; the counts are present on every event, 0 when unknown). It is signed with `sign_cgp` and no
+  `passphrase=` argument, like graph-linker. `verify_cgp` strips only `sig` and MACs everything else
+  (`tools/chit_security.py:384-386` in `verify_cgp_detailed`; `sign_cgp` does the same at `:340-342`), so signing a subset of the published fields would make every event fail
+  verification. Each seed statement also does `SET x.prov = $seed_set`, so
   every node and edge points back to its SeedSet. Verification recomputes the file hash and calls `verify_cgp_detailed`.
   With today's single deployment key the result is `OK_UNPINNED` (attribution, not authentication).
 - **Event.** On success the road publishes the signed record on **`graph.seed.applied.signed.v1`**. The `*.signed.v1`
@@ -306,7 +310,8 @@ Nothing that seeds this graph is signed (rows 1-8 of the CHIT review inventory).
 - **Where.** A stdlib helper (`tools/neo4j_seed_sign.py`) called from `scripts/neo4j_bootstrap.sh` and the
   `neo4j_apply_cypher` macro after a successful apply. That is Originated: no seed signer exists in the repo.
 - **Registration, which needs grants** (drafts are in the PR #3255 description):
-  - `pmoves/contracts/topics.json` entry: unprotected for edits, but its `schema` must exist first.
+  - `pmoves/contracts/topics.json` entry, with `"publisher": ["neo4j_seed_sign"]`: unprotected for edits, but its
+    `schema` must exist first.
   - `pmoves/contracts/schemas/graph/seed.applied.signed.v1.schema.json`: readOnlyPaths, needs `KNOWN_ROAD=schema:<reason>`.
   - `.claude/context/nats-subjects.md` catalog entry: readOnlyPaths with **no road**, so it is an operator edit.
   - Capture: no JetStream stream catches core publishes on this node today. Add `graph.seed.>` to a stream, or the
