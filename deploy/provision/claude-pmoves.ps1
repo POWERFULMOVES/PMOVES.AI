@@ -522,6 +522,9 @@ if (Test-Path -LiteralPath $identTool) {
                     if ($rw) { $rw = $rw.Replace("'\''", "'") } else { $rw = 'no reason given' }
                     Write-Warning "[claude-pmoves] identity name unresolved, falling back to the registry key: $rw"
                     $identText = "You are running on PMOVES node '$nodeName'. Your registered identity in pmoves/config/agent_registry.yaml is '$nodeIdent'. Disclose it at session start rather than rediscovering it."
+                    # Parity with claude-pmoves.sh: with no role agent this is
+                    # full tools, so the claim sentence must survive the fallback.
+                    if (-not $roleName) { $identText += " This session runs with no role agent and your full tools: claim before any edit, then delegate." }
                 }
                 $identityArgs = @('--append-system-prompt', "$identText Cipher memory carry for this session -- $carryLine.")
             } else {

@@ -43,7 +43,9 @@ set "DEFAULT_AGENT="
 if defined PMOVES_DEFAULT_AGENT set "DEFAULT_AGENT=%PMOVES_DEFAULT_AGENT%"
 rem An override naming an absent definition launches with no agent, loudly --
 rem the .sh twin's rule. Two single-line ifs, no block (see the note below).
-if defined DEFAULT_AGENT if not exist "%REPO_ROOT%\.claude\agents\%DEFAULT_AGENT%.md" echo [claude-pmoves] PMOVES_DEFAULT_AGENT=%DEFAULT_AGENT% has no .claude\agents\%DEFAULT_AGENT%.md -- launching as the node identity with no --agent 1>&2
+rem Quoted, like the `identity unresolved` echo: an unquoted &, | or > in the
+rem value would be run or redirected by cmd.
+if defined DEFAULT_AGENT if not exist "%REPO_ROOT%\.claude\agents\%DEFAULT_AGENT%.md" echo "[claude-pmoves] PMOVES_DEFAULT_AGENT=%DEFAULT_AGENT% has no .claude\agents\%DEFAULT_AGENT%.md -- launching as the node identity with no --agent" 1>&2
 if defined DEFAULT_AGENT if not exist "%REPO_ROOT%\.claude\agents\%DEFAULT_AGENT%.md" set "DEFAULT_AGENT="
 set "AGENT_ARGS="
 if defined DEFAULT_AGENT set "AGENT_ARGS=--agent %DEFAULT_AGENT%"
@@ -53,6 +55,12 @@ set "first=%~1"
 set "prefix=%first:~0,1%"
 set "ROLE=%DEFAULT_AGENT%"
 if not "%first%"=="" if not "%prefix%"=="-" set "ROLE=%first%"
+rem A positional name with no definition launches with no agent, loudly -- the
+rem .sh twin's rule, for both overrides. DROP_FIRST routes the dispatch below.
+set "DROP_FIRST="
+if not "%first%"=="" if not "%prefix%"=="-" if not exist "%REPO_ROOT%\.claude\agents\%first%.md" set "DROP_FIRST=1"
+if defined DROP_FIRST echo "[claude-pmoves] agent '%first%' has no .claude\agents\%first%.md -- dropped; launching as the node identity with no --agent" 1>&2
+if defined DROP_FIRST set "ROLE="
 if not exist "%LAUNCHER%" (
   echo [claude-pmoves] canonical launcher missing: %LAUNCHER% 1>&2
   echo [claude-pmoves] refusing to fall back to raw `claude` - it would start with no 1>&2
@@ -135,12 +143,17 @@ goto ident_done
 :ident_noname
 rem Quoted: the reason contains parentheses that would otherwise be parsed.
 echo "[claude-pmoves] identity name unresolved, falling back to the registry key: %PMOVES_REGISTER_WHY%" 1>&2
-set "IDENT_ARGS=--append-system-prompt "You are running on PMOVES node '%PMOVES_NODE%'. Your registered identity in pmoves/config/agent_registry.yaml is '%PMOVES_RESOLVED_IDENTITY%'. Disclose it at session start rather than rediscovering it.""
+rem Parity with claude-pmoves.sh: with no role agent this is full tools, so the
+rem claim sentence must survive the fallback.
+set "NOAGENT_PART="
+if not defined ROLE set "NOAGENT_PART= This session runs with no role agent and your full tools: claim before any edit, then delegate."
+set "IDENT_ARGS=--append-system-prompt "You are running on PMOVES node '%PMOVES_NODE%'. Your registered identity in pmoves/config/agent_registry.yaml is '%PMOVES_RESOLVED_IDENTITY%'. Disclose it at session start rather than rediscovering it.%NOAGENT_PART%""
 :ident_done
 
 rem first/prefix were read above, before the prompt was composed.
 if "%prefix%"=="-" goto flag
 if "%first%"=="" goto default
+if defined DROP_FIRST goto dropped
 call "%LAUNCHER%" --agent %* %IDENT_ARGS%
 exit /b %ERRORLEVEL%
 :flag
@@ -148,4 +161,17 @@ call "%LAUNCHER%" %AGENT_ARGS% %* %IDENT_ARGS%
 exit /b %ERRORLEVEL%
 :default
 call "%LAUNCHER%" %AGENT_ARGS% %IDENT_ARGS%
+exit /b %ERRORLEVEL%
+rem The undefined positional name is dropped; the rest reach claude unchanged.
+rem %* does not see `shift`, so the remainder is rebuilt from %1.. one by one.
+:dropped
+shift
+set "REST="
+:dropped_loop
+if "%~1"=="" goto dropped_call
+set REST=%REST% %1
+shift
+goto dropped_loop
+:dropped_call
+call "%LAUNCHER%" %AGENT_ARGS% %REST% %IDENT_ARGS%
 exit /b %ERRORLEVEL%

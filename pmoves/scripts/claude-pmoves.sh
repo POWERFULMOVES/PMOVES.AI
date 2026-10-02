@@ -93,7 +93,10 @@ LAUNCHER="$ROOT/deploy/provision/claude-pmoves.sh"
 # body.
 #
 # An override naming a definition that is absent launches with NO agent and
-# says so, rather than `--agent` pointed at nothing.
+# says so, rather than `--agent` pointed at nothing. Both overrides: the
+# PMOVES_DEFAULT_AGENT check is here, the positional one just below. With no
+# default agent, `claude-pmoves "fix X"` is the natural thing to type, and it
+# used to become `--agent "fix X"`.
 DEFAULT_AGENT="${PMOVES_DEFAULT_AGENT:-}"
 if [ -n "$DEFAULT_AGENT" ] && [ ! -f "$ROOT/.claude/agents/$DEFAULT_AGENT.md" ]; then
   echo "[claude-pmoves] PMOVES_DEFAULT_AGENT='$DEFAULT_AGENT' has no .claude/agents/$DEFAULT_AGENT.md -- launching as the node identity with no --agent" >&2
@@ -106,6 +109,10 @@ fi
 if [ $# -gt 0 ] && [ "${1#-}" = "$1" ]; then
   AGENT="$1"
   shift
+  if [ ! -f "$ROOT/.claude/agents/$AGENT.md" ]; then
+    echo "[claude-pmoves] agent '$AGENT' has no .claude/agents/$AGENT.md -- dropped; launching as the node identity with no --agent" >&2
+    AGENT=""
+  fi
 else
   AGENT="$DEFAULT_AGENT"
 fi
@@ -179,6 +186,13 @@ if [ "${PM_IDENT_OK:-0}" = "1" ]; then
       pm_ident_append "You are running on PMOVES node '${PMOVES_NODE}'. Your registered identity in pmoves/config/agent_registry.yaml is '${PMOVES_NODE_IDENTITY}'. Disclose it at session start rather than rediscovering it. This session runs with no role agent and your full tools: claim before any edit, then delegate."
     fi
   fi
+elif [ -z "$AGENT" ]; then
+  # Identity UNRESOLVED and no role agent. The launch still proceeds (fail-open,
+  # above) with full tools. Under the old node-steward default its denies held
+  # whether or not the identity resolved; with no agent, this sentence is the
+  # only claim discipline the session gets. Without it this is the 2026-08-23
+  # shape -- an unclaimed execution body -- the steward default was for.
+  pm_ident_append "Your node identity is UNRESOLVED this session. This session runs with no role agent and your full tools: claim the lane in pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md BEFORE any edit, then delegate. Say at session start that the identity is unresolved, and do not claim under a guessed name: ask the operator which owner string to sign with. The launcher reported -- ${PM_IDENT_LINE}"
 fi
 # Cipher refuses every call without an `agentId`, and refuses a wrong one under
 # token enforcement, so a session that is not told the spelling cannot use
