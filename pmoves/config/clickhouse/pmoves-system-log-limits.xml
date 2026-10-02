@@ -27,10 +27,14 @@
          v24.12.6.70-stable). Horizontal reads every column of every part at once;
          on a 4 GiB container each attempt hit MEMORY_LIMIT_EXCEEDED, was retried
          immediately, and the failed retries burned ~138% CPU steady while the TTL
-         never landed (August rows still present a month later). Nothing in PMOVES
+         never landed (August rows still present a month later). About 15% of the
+         failures (168/1126) were on the unexpired current-month partition: those
+         merges are not TTL-forced, they fail because RSS is already pinned by the
+         concurrent Horizontal metric_log merges. Both stop when metric_log goes. Nothing in PMOVES
          reads system.metric_log; Prometheus covers the same counters.
          NOTE: remove="1" stops new writes but does NOT remove the existing table
-         (see the orphaned error_log_0 / query_log_0 left by earlier schema renames),
+         (see the orphaned error_log_0 / query_log_0 / processors_profile_log_0 left
+         by earlier schema renames),
          and its merges keep failing until the operator drops system.metric_log
          once, after the restart. -->
     <metric_log remove="1"/>
