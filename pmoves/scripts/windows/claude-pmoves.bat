@@ -10,14 +10,18 @@ rem
 rem Repo root is baked in at install time by pmoves\tools\install_tools.py.
 rem Agent selection is preserved: the .ps1 forwards @args straight to claude.
 rem
-rem Usage: claude-pmoves [agent-name] [claude-args...]   (default: node-steward)
-rem A leading flag (e.g. -r, --resume) implies the default agent.
+rem Usage: claude-pmoves [agent-name] [claude-args...]   (default: no agent)
+rem A leading flag (e.g. -r, --resume) implies the default.
 rem
-rem DEFAULT_AGENT is spelled out below rather than inherited: this shim routes
-rem through deploy\provision\claude-pmoves.cmd, which has no default-agent logic
-rem of its own -- the fallback lives in pmoves\scripts\claude-pmoves.sh, which
-rem Windows never executes. Omitting it here would pass NO agent at all.
-rem Keep this value in step with DEFAULT_AGENT in that script.
+rem DEFAULT: NO --agent. The main session IS the node identity, with full
+rem tools (operator direction 2026-09-27, reaffirmed 2026-10-01). node-steward
+rem was the default until then, and `--agent` makes the main thread take on that
+rem agent's Write/Edit deny. It is a role the identity delegates to now; set
+rem PMOVES_DEFAULT_AGENT=node-steward to run it as the main session anyway.
+rem This shim routes through deploy\provision\claude-pmoves.cmd, which has no
+rem default-agent logic of its own -- the rule lives in
+rem pmoves\scripts\claude-pmoves.sh, which Windows never executes -- so it is
+rem spelled out here too. Keep it in step with DEFAULT_AGENT in that script.
 setlocal
 rem REPO ROOT -- baked at install time, but PMOVES_LAUNCHER_ROOT wins when set.
 rem The installed shim in ~/.local/bin is a DELEGATE that sets that variable and
@@ -35,7 +39,28 @@ rem would close the block early. Same trap the identity reason strings hit below
 set "REPO_ROOT=__PMOVES_REPO_ROOT__"
 if defined PMOVES_LAUNCHER_ROOT set "REPO_ROOT=%PMOVES_LAUNCHER_ROOT%"
 set "LAUNCHER=%REPO_ROOT%\deploy\provision\claude-pmoves.cmd"
-set "DEFAULT_AGENT=node-steward"
+set "DEFAULT_AGENT="
+if defined PMOVES_DEFAULT_AGENT set "DEFAULT_AGENT=%PMOVES_DEFAULT_AGENT%"
+rem An override naming an absent definition launches with no agent, loudly --
+rem the .sh twin's rule. Two single-line ifs, no block (see the note below).
+rem Quoted, like the `identity unresolved` echo: an unquoted &, | or > in the
+rem value would be run or redirected by cmd.
+if defined DEFAULT_AGENT if not exist "%REPO_ROOT%\.claude\agents\%DEFAULT_AGENT%.md" echo "[claude-pmoves] PMOVES_DEFAULT_AGENT=%DEFAULT_AGENT% has no .claude\agents\%DEFAULT_AGENT%.md -- launching as the node identity with no --agent" 1>&2
+if defined DEFAULT_AGENT if not exist "%REPO_ROOT%\.claude\agents\%DEFAULT_AGENT%.md" set "DEFAULT_AGENT="
+set "AGENT_ARGS="
+if defined DEFAULT_AGENT set "AGENT_ARGS=--agent %DEFAULT_AGENT%"
+rem The ROLE the prompt names: a positional agent wins, else the default (maybe
+rem none). Read here because the prompt below is composed before the dispatch.
+set "first=%~1"
+set "prefix=%first:~0,1%"
+set "ROLE=%DEFAULT_AGENT%"
+if not "%first%"=="" if not "%prefix%"=="-" set "ROLE=%first%"
+rem A positional name with no definition launches with no agent, loudly -- the
+rem .sh twin's rule, for both overrides. DROP_FIRST routes the dispatch below.
+set "DROP_FIRST="
+if not "%first%"=="" if not "%prefix%"=="-" if not exist "%REPO_ROOT%\.claude\agents\%first%.md" set "DROP_FIRST=1"
+if defined DROP_FIRST echo "[claude-pmoves] agent '%first%' has no .claude\agents\%first%.md -- dropped; launching as the node identity with no --agent" 1>&2
+if defined DROP_FIRST set "ROLE="
 if not exist "%LAUNCHER%" (
   echo [claude-pmoves] canonical launcher missing: %LAUNCHER% 1>&2
   echo [claude-pmoves] refusing to fall back to raw `claude` - it would start with no 1>&2
@@ -97,10 +122,11 @@ rem Quoted: the reason contains parentheses that would otherwise be parsed.
 echo "[claude-pmoves] identity unresolved: %PMOVES_IDENTITY_WHY%" 1>&2
 goto ident_done
 :ident_bound
-echo [claude-pmoves] node=%PMOVES_NODE% identity=%PMOVES_RESOLVED_IDENTITY% agent=%DEFAULT_AGENT% 1>&2
+echo [claude-pmoves] node=%PMOVES_NODE% identity=%PMOVES_RESOLVED_IDENTITY% agent=%ROLE% 1>&2
 rem WHO THE SESSION IS -- parity with pmoves/scripts/claude-pmoves.sh. Operator
-rem direction 2026-09-27: the session wakes up AS the node identity, doing the
-rem steward job. The name and register owner string come from the declared
+rem direction 2026-09-27: the session wakes up AS the node identity, holding the
+rem node itself (2026-10-01: with full tools, no --agent by default). The
+rem name and register owner string come from the declared
 rem register_form in identity_vocabulary.yaml. No declared name falls back to
 rem the registry-key sentence, loudly. goto-based, like the rest of this file.
 if not defined PMOVES_IDENTITY_NAME goto ident_noname
@@ -110,23 +136,42 @@ rem NOT cleared above: it is also the operator's input override, and the resolve
 rem always re-emits it (empty when undeclared, which `set "X="` makes undefined).
 set "CARD_PART="
 if defined PMOVES_CIPHER_AGENT_ID set "CARD_PART=, signing card %PMOVES_CIPHER_AGENT_ID%"
-set "IDENT_ARGS=--append-system-prompt "You are %PMOVES_IDENTITY_NAME%, the Claude Code agent for PMOVES node '%PMOVES_NODE%' (registry key %PMOVES_RESOLVED_IDENTITY% in pmoves/config/agent_registry.yaml%CARD_PART%). You sign the claim register as '%PMOVES_REGISTER_FORM%'. This session you are doing the job of the role it was launched with (--agent): the role is the work you are doing, not a second party -- speak as %PMOVES_IDENTITY_NAME%, in the first person, and never describe %PMOVES_IDENTITY_NAME% as someone who directs you. Disclose this at session start rather than rediscovering it. If another live session on this node already signs as '%PMOVES_REGISTER_FORM%', do not share that owner string: pmoves/config/identity_vocabulary.yaml requires a second session on one node to use a distinct BASE identity, launched with PMOVES_REGISTER_IDENTITY set to it.""
+set "JOB_PART=This session runs with no role agent and your full tools: you hold this node yourself. Your job: claim the lane in pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md BEFORE any edit, then delegate -- coordination to the 'node-steward' role, execution to 'delivery-agent', review to 'code-review' or 'verifier' -- rather than running all three bodies alone. Speak as %PMOVES_IDENTITY_NAME%, in the first person."
+if defined ROLE set "JOB_PART=This session you are doing the job of the '%ROLE%' role: the role is the work you are doing, not a second party -- speak as %PMOVES_IDENTITY_NAME%, in the first person, and never describe %PMOVES_IDENTITY_NAME% as someone who directs you."
+set "IDENT_ARGS=--append-system-prompt "You are %PMOVES_IDENTITY_NAME%, the Claude Code agent for PMOVES node '%PMOVES_NODE%' (registry key %PMOVES_RESOLVED_IDENTITY% in pmoves/config/agent_registry.yaml%CARD_PART%). You sign the claim register as '%PMOVES_REGISTER_FORM%'. %JOB_PART% Disclose this at session start rather than rediscovering it. If another live session on this node already signs as '%PMOVES_REGISTER_FORM%', do not share that owner string: pmoves/config/identity_vocabulary.yaml requires a second session on one node to use a distinct BASE identity, launched with PMOVES_REGISTER_IDENTITY set to it.""
 goto ident_done
 :ident_noname
 rem Quoted: the reason contains parentheses that would otherwise be parsed.
 echo "[claude-pmoves] identity name unresolved, falling back to the registry key: %PMOVES_REGISTER_WHY%" 1>&2
-set "IDENT_ARGS=--append-system-prompt "You are running on PMOVES node '%PMOVES_NODE%'. Your registered identity in pmoves/config/agent_registry.yaml is '%PMOVES_RESOLVED_IDENTITY%'. Disclose it at session start rather than rediscovering it.""
+rem Parity with claude-pmoves.sh: with no role agent this is full tools, so the
+rem claim sentence must survive the fallback.
+set "NOAGENT_PART="
+if not defined ROLE set "NOAGENT_PART= This session runs with no role agent and your full tools: claim before any edit, then delegate."
+set "IDENT_ARGS=--append-system-prompt "You are running on PMOVES node '%PMOVES_NODE%'. Your registered identity in pmoves/config/agent_registry.yaml is '%PMOVES_RESOLVED_IDENTITY%'. Disclose it at session start rather than rediscovering it.%NOAGENT_PART%""
 :ident_done
 
-set "first=%~1"
-set "prefix=%first:~0,1%"
+rem first/prefix were read above, before the prompt was composed.
 if "%prefix%"=="-" goto flag
 if "%first%"=="" goto default
+if defined DROP_FIRST goto dropped
 call "%LAUNCHER%" --agent %* %IDENT_ARGS%
 exit /b %ERRORLEVEL%
 :flag
-call "%LAUNCHER%" --agent %DEFAULT_AGENT% %* %IDENT_ARGS%
+call "%LAUNCHER%" %AGENT_ARGS% %* %IDENT_ARGS%
 exit /b %ERRORLEVEL%
 :default
-call "%LAUNCHER%" --agent %DEFAULT_AGENT% %IDENT_ARGS%
+call "%LAUNCHER%" %AGENT_ARGS% %IDENT_ARGS%
+exit /b %ERRORLEVEL%
+rem The undefined positional name is dropped; the rest reach claude unchanged.
+rem %* does not see `shift`, so the remainder is rebuilt from %1.. one by one.
+:dropped
+shift
+set "REST="
+:dropped_loop
+if "%~1"=="" goto dropped_call
+set REST=%REST% %1
+shift
+goto dropped_loop
+:dropped_call
+call "%LAUNCHER%" %AGENT_ARGS% %REST% %IDENT_ARGS%
 exit /b %ERRORLEVEL%

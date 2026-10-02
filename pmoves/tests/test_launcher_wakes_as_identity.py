@@ -29,6 +29,18 @@ WHAT THESE TESTS HOLD
 
 Expected names are taken from the resolver, not hardcoded, except where a second
 declared source exists to cross-check against (NODE_PROFILES/*.md).
+
+THE HALF #3205 DID NOT DELIVER (section 7)
+------------------------------------------
+#3205 reworded the prompt but left `DEFAULT_AGENT=...:-node-steward`, so every
+launch still ran `claude --agent node-steward`. `--agent` makes the main thread
+take on that agent's tool restrictions (Claude Code docs, sub-agents, "Run the
+whole session as a subagent"), and node-steward denies Write/Edit/NotebookEdit:
+the identity woke up unable to edit, and on 2026-10-01 its teammates reported
+"No such tool available: Edit". Operator direction, reaffirmed 2026-10-01: the
+main session IS the node identity, full tools; node-steward is a role it
+delegates to. Section 7 holds the default argv to that, and keeps the
+PMOVES_DEFAULT_AGENT and positional overrides working.
 """
 from __future__ import annotations
 
@@ -77,7 +89,7 @@ _STEERING = ("PMOVES_NODE_IDENTITY", "PMOVES_REGISTER_IDENTITY", "PMOVES_CIPHER_
 
 def _clean_env(node_id: str, **extra: str) -> dict[str, str]:
     env = dict(os.environ)
-    for key in _STEERING:
+    for key in (*_STEERING, "PMOVES_DEFAULT_AGENT"):
         env.pop(key, None)
     env["PMOVES_NODE_ID"] = node_id
     env.update(extra)
@@ -142,6 +154,7 @@ def _fake_root(tmp_path: Path) -> Path:
 
 
 def _launch(tmp_path: Path, node_id: str, *, launcher: Path = LAUNCHER,
+            args: tuple[str, ...] = ("--print", "hi"),
             **extra: str) -> tuple[list[str], str]:
     root = _fake_root(tmp_path)
     bin_dir = tmp_path / "bin"
@@ -153,7 +166,7 @@ def _launch(tmp_path: Path, node_id: str, *, launcher: Path = LAUNCHER,
     env = _clean_env(node_id, **extra)
     env.update(PATH=f"{bin_dir}{os.pathsep}{env.get('PATH', '')}",
                PMOVES_LAUNCHER_ROOT=str(root), ARGV_OUT=str(argv_out))
-    proc = subprocess.run([_bash(), str(launcher), "--print", "hi"],
+    proc = subprocess.run([_bash(), str(launcher), *args],
                           capture_output=True, text=True, env=env, timeout=180)
     assert proc.returncode == 0, proc.stderr
     assert argv_out.exists(), f"the claude shim was never reached; stderr:\n{proc.stderr}"
@@ -439,3 +452,176 @@ def test_the_register_fold_agrees_with_identity_lineage_over_every_alias():
     assert len(samples) > 100, len(samples)
     for sample in samples:
         assert node_identity._fold_identity(sample) == identity_lineage._norm(sample), sample
+
+
+# ---------------------------------------------------------------------------
+# 7. The main session IS the identity: no restrictive agent by default.
+# ---------------------------------------------------------------------------
+
+def _agent_of(argv: list[str]) -> str | None:
+    if "--agent" not in argv:
+        return None
+    return argv[argv.index("--agent") + 1]
+
+
+def test_the_default_launch_carries_no_agent(tmp_path: Path):
+    argv, stderr = _launch(tmp_path, "knuckles")
+    assert "--agent" not in argv, f"default launch still selects a role agent: {argv!r}"
+    assert argv[-2:] == ["--print", "hi"], argv          # caller's args untouched
+    assert "agent=none" in stderr, stderr
+
+
+def test_the_default_prompt_states_the_identity_job(tmp_path: Path):
+    argv, _ = _launch(tmp_path, "knuckles")
+    prompt = _one_prompt(argv)
+    name = _resolve("knuckles")["PMOVES_IDENTITY_NAME"]
+    assert prompt.startswith(f"You are {name},"), prompt[:200]
+    assert "no role agent and your full tools" in prompt, prompt
+    assert "BEFORE any edit" in prompt and "delegate" in prompt, prompt
+    # Steward named as a delegate, never as the session's own role.
+    assert "'node-steward' role" in prompt
+    assert "doing the job of the 'node-steward' role" not in prompt
+    assert "doing the job of the '' role" not in prompt
+
+
+def test_the_env_override_still_gives_the_restricted_coordinator(tmp_path: Path):
+    argv, _ = _launch(tmp_path, "knuckles", PMOVES_DEFAULT_AGENT="node-steward")
+    assert _agent_of(argv) == "node-steward", argv
+    prompt = _one_prompt(argv)
+    assert "doing the job of the 'node-steward' role" in prompt, prompt
+    assert "no role agent" not in prompt
+
+
+def test_a_positional_agent_still_wins(tmp_path: Path):
+    argv, _ = _launch(tmp_path, "knuckles", args=("delivery-agent", "--print", "hi"))
+    assert _agent_of(argv) == "delivery-agent", argv
+    assert argv.count("--agent") == 1, argv
+    assert "doing the job of the 'delivery-agent' role" in _one_prompt(argv)
+
+
+def test_an_override_naming_no_definition_launches_with_no_agent_loudly(tmp_path: Path):
+    argv, stderr = _launch(tmp_path, "knuckles", PMOVES_DEFAULT_AGENT="no-such-agent")
+    assert "--agent" not in argv, argv
+    assert "no-such-agent" in stderr and "no --agent" in stderr, stderr
+
+
+def test_the_second_session_rule_survives_the_default_change(tmp_path: Path):
+    argv, _ = _launch(tmp_path, "knuckles", PMOVES_REGISTER_IDENTITY="B850-CLAUDE-FUNNEL")
+    assert "--agent" not in argv, argv
+    prompt = _one_prompt(argv)
+    assert prompt.startswith("You are B850-CLAUDE-FUNNEL,"), prompt[:200]
+    assert "distinct BASE identity" in prompt
+
+
+def test_the_windows_twins_default_to_no_agent():
+    """Text-level: neither cmd.exe nor pwsh is assumed on a POSIX CI host."""
+    bat = (REPO_ROOT / "pmoves" / "scripts" / "windows" / "claude-pmoves.bat").read_text(encoding="utf-8")
+    assert 'set "DEFAULT_AGENT=node-steward"' not in bat
+    assert 'set "DEFAULT_AGENT="' in bat
+    assert 'if defined PMOVES_DEFAULT_AGENT set "DEFAULT_AGENT=%PMOVES_DEFAULT_AGENT%"' in bat
+    assert 'if defined DEFAULT_AGENT set "AGENT_ARGS=--agent %DEFAULT_AGENT%"' in bat
+    assert '--agent %DEFAULT_AGENT% %*' not in bat           # the flag path used to force it
+    assert "no role agent and your full tools" in bat
+    ps1 = PS1.read_text(encoding="utf-8")
+    assert "no role agent and your full tools" in ps1
+    assert "'the role this session was launched with'" not in ps1
+
+
+def test_the_steward_definition_is_a_delegate_not_the_default():
+    front, body = STEWARD.read_text(encoding="utf-8").split("\n---\n", 1)
+    meta = yaml.safe_load(front.lstrip("-\n"))
+    assert "The default agent claude-pmoves loads" not in meta["description"]
+    assert "DELEGATES" in meta["description"]
+    assert "it is the default job on every node" not in body
+    # Its own denies are kept: as a subagent they narrow only its pool.
+    for tool in ("Write", "Edit", "NotebookEdit", "mcp__docker", "mcp__supabase-db",
+                 "mcp__cloudflare-api", "mcp__tailscale"):
+        assert tool in meta["disallowedTools"], tool
+
+
+# ---------------------------------------------------------------------------
+# 8. The no-agent session keeps its claim discipline on every fallback path.
+#
+# Review of #3243 (5385561980). With no default agent the session holds full
+# tools, and the only claim discipline it gets is the sentence in its prompt.
+# Under the old node-steward default the denies held whether or not the
+# identity resolved, so every path that can reach a no-agent session must say
+# "claim before any edit": the unresolved identity (P2), the Windows
+# registry-key fallbacks (P2), and a positional name with no definition (P3),
+# which used to become `--agent <name>`.
+# ---------------------------------------------------------------------------
+
+UNKNOWN_NODE = "no-such-node-3243"
+BAT = REPO_ROOT / "pmoves" / "scripts" / "windows" / "claude-pmoves.bat"
+NO_AGENT_CLAIM = "This session runs with no role agent and your full tools: claim before any edit, then delegate."
+
+
+def test_an_unresolved_identity_still_carries_the_claim_sentence(tmp_path: Path):
+    assert _resolve(UNKNOWN_NODE)["PMOVES_RESOLVED_IDENTITY"] == ""   # the premise
+    argv, stderr = _launch(tmp_path, UNKNOWN_NODE)
+    assert "--agent" not in argv, argv
+    prompt = _one_prompt(argv)
+    assert "UNRESOLVED" in prompt, prompt
+    assert "BEFORE any edit" in prompt and "AGNOTE4482PHI.t1.md" in prompt, prompt
+    # Never a guessed owner string: the session is told to ask, not to pick one.
+    assert "guessed name" in prompt and "ask the operator" in prompt, prompt
+    assert "You are B850-CLAUDE" not in prompt and "sign the claim register as" not in prompt
+    assert "unresolved" in stderr, stderr
+
+
+def test_an_unresolved_identity_with_a_role_adds_no_identity_job(tmp_path: Path):
+    """The role agent's own body governs; the fallback sentence is for no agent."""
+    argv, _ = _launch(tmp_path, UNKNOWN_NODE, args=("delivery-agent", "--print", "hi"))
+    assert _agent_of(argv) == "delivery-agent", argv
+    assert "UNRESOLVED" not in _one_prompt(argv)
+
+
+def test_a_positional_name_with_no_definition_launches_with_no_agent(tmp_path: Path):
+    argv, stderr = _launch(tmp_path, "knuckles", args=("no-such-agent", "--print", "hi"))
+    assert "--agent" not in argv, argv
+    assert "no-such-agent" not in argv, argv             # dropped, not forwarded
+    assert argv[-2:] == ["--print", "hi"], argv           # the rest reach claude
+    assert "no-such-agent" in stderr and "no --agent" in stderr, stderr
+    assert "no role agent and your full tools" in _one_prompt(argv)
+
+
+def test_a_bare_positional_prompt_is_not_passed_as_an_agent(tmp_path: Path):
+    argv, stderr = _launch(tmp_path, "knuckles", args=("fix X",))
+    assert "--agent" not in argv, argv
+    assert "fix X" in stderr, stderr
+
+
+def test_the_windows_registry_key_fallbacks_carry_the_no_agent_claim():
+    """Text-level, as section 7: neither cmd.exe nor pwsh is assumed here."""
+    ps1 = PS1.read_text(encoding="utf-8")
+    assert f'if (-not $roleName) {{ $identText += " {NO_AGENT_CLAIM}" }}' in ps1
+    bat = BAT.read_text(encoding="utf-8")
+    assert f'if not defined ROLE set "NOAGENT_PART= {NO_AGENT_CLAIM}"' in bat
+    assert "rather than rediscovering it.%NOAGENT_PART%" in bat
+    # The parity holds in the .sh, which the bash tests above execute.
+    assert NO_AGENT_CLAIM in LAUNCHER.read_text(encoding="utf-8")
+
+
+def test_the_bat_drops_a_positional_name_with_no_definition():
+    bat = BAT.read_text(encoding="utf-8")
+    assert 'if not exist "%REPO_ROOT%\\.claude\\agents\\%first%.md" set "DROP_FIRST=1"' in bat
+    assert 'if defined DROP_FIRST set "ROLE="' in bat
+    assert "if defined DROP_FIRST goto dropped" in bat
+    assert 'call "%LAUNCHER%" %AGENT_ARGS% %REST% %IDENT_ARGS%' in bat
+    # The drop is routed BEFORE the `--agent %*` call that would forward it.
+    assert bat.index("goto dropped") < bat.index('call "%LAUNCHER%" --agent %*')
+
+
+def test_the_bat_override_echo_is_quoted():
+    """An unquoted &, | or > in the value would be run or redirected by cmd."""
+    bat = BAT.read_text(encoding="utf-8")
+    assert 'echo "[claude-pmoves] PMOVES_DEFAULT_AGENT=%DEFAULT_AGENT% has no' in bat
+    assert "echo [claude-pmoves] PMOVES_DEFAULT_AGENT=" not in bat
+
+
+def test_the_initial_prompt_names_where_a_delegate_finds_its_identity():
+    """As a subagent the steward never receives the appended prompt (review P3)."""
+    front = STEWARD.read_text(encoding="utf-8").split("\n---\n", 1)[0]
+    prompt = " ".join(yaml.safe_load(front.lstrip("-\n"))["initialPrompt"].split())
+    assert "named in your appended prompt, and this session you are its steward" not in prompt
+    assert "in the delegation that spawned you" in prompt, prompt
