@@ -31,7 +31,14 @@ services:
     user: "0:0"
     network_mode: none
     volumes:
-    - ${DARKXSIDE_USR_DIR:-./usr}:/a0/usr
+    # Long form with create_host_path: false (Compose spec, services.volumes long
+    # syntax): a missing source fails at create. The short form makes Docker
+    # create it as an empty root-owned dir and A0 would boot with no usr state.
+    - type: bind
+      source: ${DARKXSIDE_USR_DIR:-./usr}
+      target: /a0/usr
+      bind:
+        create_host_path: false
     - ./scripts/a0_usr_init.sh:/scripts/a0_usr_init.sh:ro
     restart: "no"
     read_only: true
@@ -114,7 +121,14 @@ services:
     - ${DARKXSIDE_LOG_DIR:-./data/darkxside/logs}:/a0/logs
     - ${DARKXSIDE_RUNTIME_DIR:-./data/darkxside/runtime}:/a0/runtime
     # User config, plugins, forms, skills
-    - ${DARKXSIDE_USR_DIR:-./usr}:/a0/usr
+    # Long form with create_host_path: false (Compose spec, services.volumes long
+    # syntax): a missing source fails at create. The short form makes Docker
+    # create it as an empty root-owned dir and A0 would boot with no usr state.
+    - type: bind
+      source: ${DARKXSIDE_USR_DIR:-./usr}
+      target: /a0/usr
+      bind:
+        create_host_path: false
     ports:
     - ${DARKXSIDE_BIND:-127.0.0.1}:${DARKXSIDE_PORT:-8092}:8080
     networks:
