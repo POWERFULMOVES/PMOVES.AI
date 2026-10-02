@@ -21,8 +21,13 @@
 #     create them 0600 as 65532).
 #   - Symlinks are never followed: find does not follow them and `chown -h`
 #     changes the link, not its target. -xdev stays on the mounted filesystem.
-#   - Fails loudly: a missing mount, a failed chown, or an entry still not owned
-#     by the runtime uid afterwards exits nonzero, and agent-zero does not start.
+#   - Fails loudly: a failed chown, or an entry still not owned by the runtime
+#     uid afterwards, exits nonzero and agent-zero does not start. A missing
+#     host source is refused earlier, by compose: both usr mounts use the long
+#     form with `create_host_path: false`, so `up` fails at create instead of
+#     Docker making an empty root-owned dir. The -L / -d check below only fires
+#     when the script is run directly. A symlinked host source is accepted: Docker
+#     resolves it on the host, and the init sees the same directory A0 does.
 set -eu
 
 dir="${A0_USR_DIR:-/a0/usr}"

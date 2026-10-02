@@ -163,13 +163,23 @@ def load(name):
     return compose(PMOVES / name)["services"]
 
 
+def usr_mounts(svc) -> list:
+    """Every volume entry of a service whose target is /a0/usr, short or long form."""
+    out = []
+    for v in (svc or {}).get("volumes") or []:
+        if isinstance(v, dict) and v.get("target") == "/a0/usr":
+            out.append(v)
+        elif isinstance(v, str) and re.search(r":/a0/usr(:[a-z,]+)?$", v):
+            out.append(v)
+    return out
+
+
 def test_every_compose_service_mounting_a0_usr_is_covered():
     """A new A0 service that mounts /a0/usr must join COMPOSE_A0, or this fails."""
     found = set()
     for f in PMOVES.glob("docker-compose*.yml"):
         for name, svc in (compose(f).get("services") or {}).items():
-            vols = [v for v in (svc or {}).get("volumes") or [] if isinstance(v, str)]
-            if any(v.split(":")[1:2] == ["/a0/usr"] or v.rsplit(":", 1)[-1] == "/a0/usr" for v in vols) and not name.endswith("usr-init"):
+            if usr_mounts(svc) and not name.endswith("usr-init"):
                 found.add((f.name, name))
     assert found == {(f, svc) for f, (svc, _, _) in COMPOSE_A0.items()}
 
@@ -180,7 +190,10 @@ def test_a0_depends_on_the_init_and_both_mount_the_same_tree(fname):
     services = load(fname)
     assert services[svc]["depends_on"][init]["condition"] == "service_completed_successfully"
     i = services[init]
-    assert f"{usr}:/a0/usr" in i["volumes"] and f"{usr}:/a0/usr" in services[svc]["volumes"]
+    # Long form, create_host_path false, same source on both: a missing source
+    # fails at create instead of Docker making an empty root-owned dir.
+    want = {"type": "bind", "source": usr, "target": "/a0/usr", "bind": {"create_host_path": False}}
+    assert usr_mounts(i) == [want] and usr_mounts(services[svc]) == [want]
     assert "./scripts/a0_usr_init.sh:/scripts/a0_usr_init.sh:ro" in i["volumes"]
     assert i["entrypoint"] == ["/bin/sh", "/scripts/a0_usr_init.sh"]
     assert i["cap_drop"] == ["ALL"] and sorted(i["cap_add"]) == ["CHOWN", "DAC_READ_SEARCH"]
