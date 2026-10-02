@@ -20,9 +20,24 @@
         <level>warning</level>
         <ttl>event_date + INTERVAL 3 DAY DELETE</ttl>
     </text_log>
-    <metric_log>
-        <ttl>event_date + INTERVAL 2 DAY DELETE</ttl>
-    </metric_log>
+    <!-- metric_log is DISABLED, not TTL'd (2026-10-02). It is 1136 columns wide in
+         24.12, and a merge whose parts hold TTL-expired rows is forced to the
+         Horizontal algorithm (MergeTask.cpp chooseMergeAlgorithm:
+         `if (ctx->need_remove_expired_values) return MergeAlgorithm::Horizontal;`,
+         v24.12.6.70-stable). Horizontal reads every column of every part at once;
+         on a 4 GiB container each attempt hit MEMORY_LIMIT_EXCEEDED, was retried
+         immediately, and the failed retries burned ~138% CPU steady while the TTL
+         never landed (August rows still present a month later). About 15% of the
+         failures (168/1126) were on the unexpired current-month partition: those
+         merges are not TTL-forced, they fail because RSS is already pinned by the
+         concurrent Horizontal metric_log merges. Both stop when metric_log goes. Nothing in PMOVES
+         reads system.metric_log; Prometheus covers the same counters.
+         NOTE: remove="1" stops new writes but does NOT remove the existing table
+         (see the orphaned error_log_0 / query_log_0 / processors_profile_log_0 left
+         by earlier schema renames),
+         and its merges keep failing until the operator drops system.metric_log
+         once, after the restart. -->
+    <metric_log remove="1"/>
     <asynchronous_metric_log>
         <ttl>event_date + INTERVAL 2 DAY DELETE</ttl>
     </asynchronous_metric_log>

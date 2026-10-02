@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "note": "Canonical inventory of PMOVES MCP servers. Used by pmoves/tools/mcp_config_generator.py to produce client-native config snippets for Claude, Kimi, KiloCode, Hermes, and Crush. Server entries support an optional 'disabled: true' field to mark servers that should be emitted as disabled in generated configs, and an optional 'endpoint_pinned: true' field meaning the entry's 'endpoint' is what the entry IS rather than a default the caller's --endpoint may override (used by local/fleet sibling pairs that must both be emitted).",
+  "note": "Canonical inventory of PMOVES MCP servers. Used by pmoves/tools/mcp_config_generator.py to produce client-native config snippets for Claude, Kimi, KiloCode, Hermes, and Crush. Server entries support an optional 'disabled: true' field to mark servers that should be emitted as disabled in generated configs, an optional 'disabled_clients' list that emits the entry disabled for the named clients only, an optional 'client_args' map that replaces 'args' for one client, and an optional 'endpoint_pinned: true' field meaning the entry's 'endpoint' is what the entry IS rather than a default the caller's --endpoint may override (used by local/fleet sibling pairs that must both be emitted).",
   "defaults": {
     "cipher_local_url": "http://localhost:8105/mcp/sse",
     "cipher_fleet_url": "http://${TS_Z890}:8105/mcp/sse",
@@ -99,7 +99,12 @@
             "${SUPABASE_SERVICE_ROLE_KEY:-${SUP…EY}}",
             "--schema",
             "public"
-          ]
+          ],
+          "client_args": {
+            "kilocode": ["-y", "@supabase/mcp-server-postgrest@0.1.1", "--apiUrl", "${SUPABASE_REST_URL:-http://localhost:8000/rest/v1}", "--apiKey", "${ANON_KEY}", "--schema", "public"]
+          },
+          "disabled_clients": ["kilocode"],
+          "_note_kilocode": "KiloCode auto-allows pmoves-supabase_* and can run unattended (kilo run --auto), so it never gets the service-role key: Supabase documents that the service_role key bypasses Row Level Security (https://supabase.com/docs/guides/api/api-keys). Its args carry the canonical ANON_KEY (pmoves/bootstrap/registry.json; SUPABASE_SERVICE_KEY is a sunset alias of SERVICE_ROLE_KEY per CANONICAL_NAMES.md), and the entry is emitted disabled because a table without RLS policies is writable with the anon key too."
         },
         {
           "key": "supabase-db",
@@ -110,6 +115,9 @@
             "postgres-mcp@0.3.0",
             "--access-mode=unrestricted"
           ],
+          "client_args": {
+            "kilocode": ["postgres-mcp@0.3.0", "--access-mode=restricted"]
+          },
           "env": {
             "DATABASE_URI": "${SUPABASE_DB_URI}"
           }

@@ -110,6 +110,33 @@
 # the python-multipart note above does. That note is why 57 entries could be
 # removed in one motion instead of being re-derived.
 #
+# ── 2026-10-01: 5 entries removed, 6 added -- a dependency fix, not a regression ──
+# .github/requirements-tests.txt gained uvicorn, structlog and neo4j (PR #3141).
+# That fixed five entries:
+#
+#     ERROR|pmoves/services/graph-linker/tests|<pytest-harness>   conftest imports now
+#     ERROR|pmoves/services/deepresearch/tests|<pytest-harness>   resolve
+#     ERROR|services.agent-zero.python.features.a2a.test_server|<collection-error>
+#     ERROR|tests.services.test_gateway_agent_api|<collection-error>
+#     ERROR|tests.services.test_gateway_agent|<collection-error>
+#
+# The deepresearch harness entry was hiding the six entries added here. It
+# stood for "the conftest cannot be imported, so nothing in this directory was
+# measured." Once the conftest imports, the directory is measured for the first
+# time, and it has six pre-existing failures. This is the same shape as the
+# `pmoves/tests [1]` blind spot above. One umbrella entry that recorded silence
+# is replaced by the specific failures that silence contained. None is a new
+# break. Measured in CI (run 36886644749) on the PR head merged with main e0a6a28ed:
+#
+#     services.deepresearch.tests.test_worker  <collection-error>
+#         The file is two test modules concatenated. The second
+#         `from __future__ import annotations` sits at line 8, which is a
+#         SyntaxError, so this file has never executed.
+#     services.deepresearch.tests.test_parsing  (5 FAIL)
+#         TypeError (tuple indexed by str), KeyError 'confidence',
+#         "Unable to locate JSON payload". The tests and the parser have
+#         drifted apart. Which side is right was not judged here.
+#
 # Regenerate: make -C pmoves python-tests-baseline
 known_failures:
   - "ERROR|docs.PMOVES.AI PLANS.PMOVES.yt.test_integration|test_full_ingest"
@@ -120,11 +147,8 @@ known_failures:
   - "ERROR|docs.PMOVES.AI PLANS.PMOVES.yt.test_integration|test_summarization"
   - "ERROR|docs.PMOVES.AI PLANS.PMOVES.yt.test_integration|test_youtube_info"
   - "ERROR|docs.PMOVES.AI PLANS.PMOVES.yt.test_n8n_workflow|test_workflow"
-  - "ERROR|pmoves/services/deepresearch/tests|<pytest-harness>"
-  - "ERROR|pmoves/services/graph-linker/tests|<pytest-harness>"
   - "ERROR|pmoves/tests/integration/test_voice_relay_e2e.py|<pytest-harness>"
   - "ERROR|pytest|internal"
-  - "ERROR|services.agent-zero.python.features.a2a.test_server|<collection-error>"
   - "ERROR|services.channel-monitor.tests.test_monitor|<collection-error>"
   - "ERROR|services.clap-embed.tests.test_app|<collection-error>"
   - "ERROR|services.clap-embed.tests.test_embedder|<collection-error>"
@@ -144,6 +168,7 @@ known_failures:
   - "ERROR|services.creator-operator.tests.test_router|<collection-error>"
   - "ERROR|services.creator-operator.tests.test_schemas|<collection-error>"
   - "ERROR|services.creator-operator.tests.test_voice_operator|<collection-error>"
+  - "ERROR|services.deepresearch.tests.test_worker|<collection-error>"
   - "ERROR|services.flute-gateway.test_cgp_consumer|<collection-error>"
   - "ERROR|services.semantic-cache.tests.test_cache.TestCacheCount|test_count_returns_total"
   - "ERROR|services.semantic-cache.tests.test_cache.TestCacheDimensionFilter|test_dimension_mismatch_filtered_by_sql"
@@ -168,14 +193,16 @@ known_failures:
   - "ERROR|tests.integration.test_pr483_critical_path|test_critical_path_agent_zero"
   - "ERROR|tests.integration.test_pr483_critical_path|test_critical_path_hirag_v2"
   - "ERROR|tests.integration.test_pr483_critical_path|test_critical_path_nats"
-  - "ERROR|tests.integration.test_pr483_critical_path|test_critical_path_neo4j"
   - "ERROR|tests.integration.test_pr483_critical_path|test_critical_path_supabase"
   - "ERROR|tests.integration.test_pr483_critical_path|test_critical_path_tensorzero"
   - "ERROR|tests.integration.test_pr483_critical_path|test_end_to_end_archon_to_supabase"
   - "ERROR|tests.integration.test_pr483_critical_path|test_end_to_end_pmoves_ui"
-  - "ERROR|tests.services.test_gateway_agent_api|<collection-error>"
-  - "ERROR|tests.services.test_gateway_agent|<collection-error>"
   - "ERROR|tests.test_tools|<collection-error>"
+  - "FAIL|services.deepresearch.tests.test_parsing|test_parse_model_output_falls_back_to_text"
+  - "FAIL|services.deepresearch.tests.test_parsing|test_parse_model_output_from_code_block"
+  - "FAIL|services.deepresearch.tests.test_parsing|test_parse_model_output_handles_inline_json"
+  - "FAIL|services.deepresearch.tests.test_parsing|test_prepare_result_normalises_sources[sources0-expected_urls0]"
+  - "FAIL|services.deepresearch.tests.test_parsing|test_prepare_result_normalises_sources[sources1-expected_urls1]"
   - "FAIL|services.mesh_exposure.tests.test_app|test_live_registry_loads_12_entries_from_slice4_curated"
   - "FAIL|services.nats_event_bus.tests.test_app|test_read_events_limit_is_respected"
   - "FAIL|services.nats_event_bus.tests.test_app|test_subscriber_disabled_when_nats_url_empty"

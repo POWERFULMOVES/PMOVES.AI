@@ -22,18 +22,6 @@ unexport KEY
 # (KEY="${KEY:-...}"), is not a victim: line 46 resets KEY="" first, and no make
 # target invokes it. Sub-makes still get KEY via MAKEFLAGS, unexpanded.
 
-unexport NEO4J_BIND
-# ^ Same mechanism as KEY above, and it must sit in the same place: above every
-# include and every $(shell ...). A command-line NEO4J_BIND is exported by
-# default, and on make >= 4.4 $(shell ...) receives exported variables,
-# EXPANDING them into the child env -- so NEO4J_BIND='$(shell touch X)' would
-# run during the first parse-time $(shell) (e.g. the NEO4J_BIND block's own
-# mktemp), before the validator ever sees it. The NEO4J_BIND block below reads
-# the raw text with $(value NEO4J_BIND) (unaffected by this) and re-exports ONLY
-# the validated value with `override export NEO4J_BIND := ...`.
-# REASONED, not measured on make 4.4: this node and CI run make 4.3.
-# tests/test_neo4j_bind_passthrough.py asserts the ordering structurally.
-
 # Many targets rely on bashisms (heredocs, arrays, $'...' quoting).
 # On Windows, force Git Bash to avoid cmd.exe fallback for bash-style recipes.
 ifeq ($(OS),Windows_NT)
@@ -165,57 +153,6 @@ ifneq ("$(wildcard env.supa.runtime)","")
 endif
 ifneq ("$(wildcard env.tier-supabase.urlencoded)","")
   COMPOSE_ENV_FILES += --env-file env.tier-supabase.urlencoded
-endif
-
-# NEO4J_BIND pass-through (option B, #3196).
-# The node-local file is deliberately NOT on COMPOSE_ENV_FILES under
-# SUPABASE_RUNTIME=compose (above), so a NEO4J_BIND set there with
-# `make env-local-set` was silently ignored and Neo4j published on 0.0.0.0.
-# Read ONLY that one key (parsed, never sourced; no other key, no command
-# substitution) and export it into every recipe's environment, which is how
-# it reaches every $(DC) call. COMPOSE_ENV_FILES is untouched.
-#
-# Precedence (first NON-EMPTY wins; an empty value counts as unset):
-#   1. `make NEO4J_BIND=...`          (command line)
-#   2. NEO4J_BIND exported by the caller's environment
-#   3. the NEO4J_BIND= line of $(NODE_LOCAL_ENV_FILE)
-#   4. compose's own default (${NEO4J_BIND:-0.0.0.0})
-# A malformed value from ANY source stops make here, value withheld, rather
-# than reaching compose. A caller's value is taken RAW with $(value ...), never
-# expanded, and reaches the checker through a file written by $(file ...),
-# never through a $(shell ...) string: a quote or an embedded make function in
-# it can neither break the command nor run.
-# Escape hatch for a malformed node-local value: pass a valid one on the
-# command line (`make NEO4J_BIND=127.0.0.1 ...`, which is checked and wins),
-# or point elsewhere (`make NODE_LOCAL_ENV_FILE=/dev/null ...`).
-# Needs GNU make >= 4.2 ($(.SHELLSTATUS)); older make fails closed below.
-NODE_LOCAL_ENV_FILE ?= .env.local
-NEO4J_BIND_HELPER = $(PYTHON) $(CURDIR)/scripts/neo4j_bind_from_env_file.py
-NEO4J_BIND_CALLER := $(if $(filter-out undefined,$(origin NEO4J_BIND)),$(strip $(value NEO4J_BIND)))
-ifneq ($(NEO4J_BIND_CALLER),)
-  NEO4J_BIND_TMP := $(shell mktemp)
-  $(file >$(NEO4J_BIND_TMP),$(NEO4J_BIND_CALLER))
-  NEO4J_BIND_OK := $(shell $(NEO4J_BIND_HELPER) --check-file "$(NEO4J_BIND_TMP)")
-  NEO4J_BIND_RC := $(.SHELLSTATUS)
-  ifeq ($(NEO4J_BIND_RC),)
-    $(error NEO4J_BIND is set but this make cannot validate it (needs GNU make >= 4.2 for .SHELLSTATUS); refusing)
-  endif
-  ifneq ($(NEO4J_BIND_RC),0)
-    $(error NEO4J_BIND ($(origin NEO4J_BIND)) is malformed; refusing to pass it to compose)
-  endif
-  override export NEO4J_BIND := $(NEO4J_BIND_OK)
-else ifneq ("$(wildcard $(NODE_LOCAL_ENV_FILE))","")
-  NEO4J_BIND_FROM_FILE := $(shell $(NEO4J_BIND_HELPER) "$(NODE_LOCAL_ENV_FILE)")
-  NEO4J_BIND_RC := $(.SHELLSTATUS)
-  ifeq ($(NEO4J_BIND_RC),)
-    $(error the node-local file exists but this make cannot validate NEO4J_BIND (needs GNU make >= 4.2 for .SHELLSTATUS); pass NODE_LOCAL_ENV_FILE=/dev/null to skip it)
-  endif
-  ifneq ($(NEO4J_BIND_RC),0)
-    $(error NEO4J_BIND in the node-local file is malformed or unreadable (see above); refusing. Escape: make NEO4J_BIND=<valid address> ... or NODE_LOCAL_ENV_FILE=/dev/null)
-  endif
-  ifneq ($(NEO4J_BIND_FROM_FILE),)
-    override export NEO4J_BIND := $(NEO4J_BIND_FROM_FILE)
-  endif
 endif
 
 # -------- Service Discovery Helper ----------
@@ -526,13 +463,23 @@ register-release: export REGISTER_BRANCH = $(BRANCH)
 register-release: export REGISTER_SCOPE = $(SCOPE)
 register-release: export REGISTER_SCOPE_VIA_FILE = $(findstring --scope-file,$(ARGS))
 register-release: export REGISTER_CO_OWNERS = $(CO_OWNER)
+# THE BATON. Lanes are shared, not locked (AGNOTE4482.md:1709-1713): a RELEASE
+# closes the named lane for every PARTICIPANT -- the signer's own rows, rows
+# whose co-owners: declare the signer, and, with BATON_FROM=, the rows of the
+# peer who holds it when that peer is not running. The release row is the
+# REGISTER part of the recorded handoff (KRISS_KROSS_ACCORD.md:12-16 also asks
+# for a Graphiti trail entry and a PR comment), and the holder re-claiming
+# supersedes it. A malformed baton closes NOTHING -- never your own lanes.
+#   make -C pmoves register-release OWNER='<you>' BRANCH=fix/x \
+#        BATON_FROM='<holder>' SCOPE='what landed, and why you are carrying it'
+register-release: export REGISTER_BATON_FROM = $(BATON_FROM)
 # BRANCH IS NOT OPTIONAL HERE, and the guard is in the python rather than in
 # this recipe on purpose: `ARGS=--all-lanes` is the sanctioned way to ask for a
 # full handoff, and a make-level `[ -z "$$REGISTER_BRANCH" ]` cannot see it. The
 # tool refuses an untargeted release with a message naming both doors -- which
 # survives `make` collapsing every nonzero recipe exit to 2, because the message
 # is the structured part, not the code.
-register-release: ## Close a lane in the claim register (OWNER= BRANCH= SCOPE= [CO_OWNER=]; ARGS=--all-lanes to close ALL your lanes)
+register-release: ## Close a lane in the claim register (OWNER= BRANCH= SCOPE= [CO_OWNER=]; ARGS=--all-lanes to close ALL your lanes; BATON_FROM=<holder> to close a PEER's lane)
 	@if [ -z "$$REGISTER_SCOPE" ] && [ -z "$$REGISTER_SCOPE_VIA_FILE" ]; then \
 		echo "usage: make register-release OWNER='B850-CLAUDE (Knuckles)' BRANCH=fix/x SCOPE='what landed'"; \
 		echo "  single-quote SCOPE for the same reason register-claim says to: an expansion absorbed into"; \
@@ -1950,7 +1897,14 @@ archon-db-setup: ## Run Archon DB migrations (complete_setup + 001-011 + TensorZ
 .PHONY: up-tensorzero
 up-tensorzero: ## Start TensorZero LLM gateway (PRIMARY MODEL PROVIDER)
 	@echo "🧠 Starting TensorZero LLM gateway..."
-	@$(DC) --profile tensorzero up -d tensorzero-clickhouse tensorzero-gateway tensorzero-ui pmoves-ollama
+	@# The gateway goes up on its own first. pmoves-ollama reserves an NVIDIA
+	@# device, so on an AMD node (Knuckles/B850: runc only) it fails with
+	@# 'could not select device driver "nvidia"' -- and bundled into one `up`
+	@# that error aborted the gateway too, leaving it Created but never started
+	@# (measured 2026-10-01). The gateway's host.docker.internal routes,
+	@# including the embedding model, do not need the container.
+	@$(DC) --profile tensorzero up -d tensorzero-clickhouse tensorzero-gateway tensorzero-ui
+	@$(DC) --profile tensorzero up -d pmoves-ollama || echo "⚠️ pmoves-ollama did not start (no NVIDIA runtime on this node?). Routes to http://pmoves-ollama:11434 will fail; host.docker.internal routes are unaffected (see deploy/provision/ollama-docker-bridge.sh)." >&2
 	@timeout 60 bash -c 'until curl -sf http://localhost:3030/metrics; do sleep 2; done' || echo "⚠️ TensorZero may still be starting"
 	@echo "✅ TensorZero ready - LLM calls available"
 	@echo "   Gateway:      http://localhost:3030"
@@ -2258,7 +2212,9 @@ wait-obs: ## Wait for observability to be ready
 wait-data: ## Wait for data tier to be ready
 	@echo "⏳ Waiting for data tier..."
 	@timeout 60 bash -c 'until curl -sf http://localhost:6333/ready; do sleep 2; done' || true
-	@timeout 60 bash -c 'until curl -sf http://localhost:7474; do sleep 2; done' || true
+	@# Neo4j publishes no host port (internal-only behind the neo4j-tailnet forwarder), so
+	@# localhost:7474 never answers: wait on the container's own healthcheck instead.
+	@n=$$($(PYTHON) $(CURDIR)/scripts/neo4j_container.py) && timeout 60 bash -c "until [ \"\$$(docker inspect -f '{{.State.Health.Status}}' $$n 2>/dev/null)\" = healthy ]; do sleep 2; done" || true
 	@timeout 60 bash -c 'until curl -sf http://localhost:7700/health; do sleep 2; done' || true
 	@timeout 60 bash -c 'until curl -sf http://localhost:9000/minio/health/live; do sleep 2; done' || true
 	@echo "✅ Data tier ready"
@@ -2539,10 +2495,8 @@ archon-follow: ## ONLINE: pull the gated GHCR :current, verify its gate label, t
 .PHONY: load-consciousness-neo4j harvest-consciousness
 
 load-consciousness-neo4j: ## Load consciousness taxonomy schema into Neo4j (CONCH Phase 4b)
-	@echo "→ Loading consciousness Neo4j schema (CONCH Phase 4b)..."
-	@echo "   This will load migration 003_consciousness_taxonomy.cypher (30KB schema)"
-	@echo ""
-	@$(MAKE) --no-print-directory neo4j-migrate VERSION=003_consciousness_taxonomy
+	@echo "→ Loading consciousness Neo4j schema (CONCH Phase 4b): data/consciousness/neo4j-consciousness-schema.cypher"
+	$(call neo4j_apply_cypher,$(CURDIR)/data/consciousness/neo4j-consciousness-schema.cypher)
 	@echo "✔ Consciousness taxonomy loaded into Neo4j (CONCH Phase 4b complete)"
 
 harvest-consciousness: ## Run Archon-based consciousness taxonomy harvester
@@ -4494,16 +4448,9 @@ buildx-setup: ## Ensure docker buildx builder exists and is bootstrapped
 	@docker buildx inspect --bootstrap >/dev/null
 	@echo "✔ buildx builder ready: $(BUILDX_BUILDER)"
 
-docker-login: ensure-env-shared ## Login to GHCR using env.shared or shell env credentials
-	@$(LOAD_ENV_SHARED); \
-	user="$${GHCR_USERNAME:-$${GITHUB_ACTOR:-$$(gh api user -q .login 2>/dev/null || true)}}"; \
-	token="$${GHCR_TOKEN:-$${GH_PAT_PUBLISH:-$${GITHUB_TOKEN:-$$(gh auth token 2>/dev/null || true)}}}"; \
-	if [ -z "$$token" ] && [ -n "$${GHCR_TOKEN_FILE:-}" ] && [ -f "$${GHCR_TOKEN_FILE}" ]; then token="$$(cat "$${GHCR_TOKEN_FILE}")"; fi; \
-	if [ -z "$$user" ] || [ -z "$$token" ]; then \
-	  echo "✖ Missing GHCR credentials. Set GHCR_USERNAME and GHCR_TOKEN (or GH_PAT_PUBLISH)."; \
-	  exit 1; \
-	fi; \
-	printf "%s" "$$token" | docker login ghcr.io -u "$$user" --password-stdin >/dev/null && echo "✔ GHCR login ok as $$user"
+docker-login: ensure-env-shared ## Login to GHCR (read-only pulls: GHCR_READ_TOKEN_FILE=<0600 classic PAT> GHCR_USERNAME=<owner>; DRY_RUN=1 to validate)
+	@GHCR_READ_TOKEN_FILE="$(GHCR_READ_TOKEN_FILE)" GHCR_READ_USERNAME="$(GHCR_USERNAME)" DRY_RUN="$(DRY_RUN)" \
+	  bash scripts/ghcr_login.sh
 
 build-push-supaserch: buildx-setup docker-login ## Build+push SupaSerch multi-arch image
 	@ctx=$$(pwd)/services; \
@@ -5682,7 +5629,7 @@ chit-terminal-viz: ## Render CHIT visualization in terminal
 .PHONY: chit-mindmap-seed
 chit-mindmap-seed: ## Seed Neo4j with CHIT mindmap graph
 	@echo "→ Seeding Neo4j with CHIT mindmap..."
-	@cat tools/chit_mindmap_seed.cypher | $(DC) exec -T neo4j cypher-shell -u neo4j -p "$${NEO4J_AUTH_PASSWORD:-neo4j}"
+	$(call neo4j_apply_cypher,$(CURDIR)/tools/chit_mindmap_seed.cypher)
 	@echo "✔ CHIT mindmap seeded"
 
 # =============================================================================
@@ -5759,53 +5706,64 @@ github-app-test: ## Test GitHub App token minting (requires services running)
 	@echo "→ Testing GitHub App token minting..."
 	@cd ../PMOVES-BoTZ && $(PYTHON) features/github/mint_and_exec.py
 
-# Neo4j Integration (PMOVES-Neo4j Submodule at root level)
+# Neo4j roads
 # =============================================================================
-.PHONY: neo4j-up neo4j-down neo4j-restart neo4j-logs neo4j-migrate neo4j-seed neo4j-bootstrap neo4j-status
+# These used to delegate to a Makefile inside the PMOVES-Neo4j submodule and read
+# its db/{migrations,seeds}. That submodule is the upstream neo4j/neo4j
+# source fork: it has no Makefile and no db/ on any branch, so every one of them
+# failed. They now drive the `neo4j` compose service and the Cypher files this
+# repo actually carries (pmoves/neo4j/cypher/). See docs/TAC/TAC_NEO4J.md.
+.PHONY: neo4j-up neo4j-down neo4j-restart neo4j-logs neo4j-migrate neo4j-bootstrap neo4j-status
 
-neo4j-up: ## Start Neo4j submodule stack
-	@echo "→ Starting Neo4j from submodule..."
-	@$(MAKE) --no-print-directory -C ../PMOVES-Neo4j up
+# Apply one Cypher file to the running Neo4j. The password reaches cypher-shell
+# through its NEO4J_PASSWORD env var (`docker exec -e NAME` copies it from this
+# shell), never argv. An unset password fails closed: there is no fallback to the
+# vendor default, which would either fail auth or, on a fresh store, succeed.
+define neo4j_apply_cypher
+	@$(LOAD_ENV_SHARED); set +e; \
+	f="$(1)"; \
+	[ -f "$$f" ] || { echo "ERROR: $$f not found" >&2; exit 1; }; \
+	[ -n "$${NEO4J_PASSWORD:-}" ] || { echo "ERROR: NEO4J_PASSWORD is unset or empty (env.shared via with-env.sh); refusing to fall back to a default password" >&2; exit 1; }; \
+	c=$$($(PYTHON) $(CURDIR)/scripts/neo4j_container.py) || exit 3; \
+	echo "→ Applying $$f to $$c"; \
+	NEO4J_USERNAME="$${NEO4J_USER:-neo4j}" docker exec -i -e NEO4J_USERNAME -e NEO4J_PASSWORD "$$c" cypher-shell < "$$f"
+endef
 
-neo4j-down: ## Stop Neo4j submodule stack
-	@echo "→ Stopping Neo4j from submodule..."
-	@$(MAKE) --no-print-directory -C ../PMOVES-Neo4j down
+# --no-recreate guarded neo4j-up until the compose reconciliation (#3251) landed.
+# Now a plain `up -d` is right: it recreates Neo4j only when its compose config
+# changed. On a node whose container predates #3251, the first run is that one
+# planned recreate (docs/TAC/TAC_NEO4J.md section 7: dump first). --wait returns
+# once the healthcheck passes.
+neo4j-up: ## Start Neo4j (recreates it once if its compose config changed; see TAC_NEO4J section 7)
+	@$(DC) up -d --wait neo4j
 
-neo4j-restart: ## Restart Neo4j submodule stack
-	@echo "→ Restarting Neo4j from submodule..."
-	@$(MAKE) --no-print-directory -C ../PMOVES-Neo4j restart
+neo4j-down: ## Stop Neo4j (container kept; data volume untouched)
+	@$(DC) stop neo4j
 
-neo4j-logs: ## View Neo4j logs
-	@$(MAKE) --no-print-directory -C ../PMOVES-Neo4j logs
+neo4j-restart: ## Restart Neo4j (60s graceful stop for the checkpoint)
+	@$(DC) restart neo4j
 
-neo4j-migrate: ## Run Neo4j migration (usage: make neo4j-migrate VERSION=003)
+neo4j-logs: ## Follow Neo4j logs
+	@$(DC) logs -f --tail=200 neo4j
+
+neo4j-migrate: ## Apply one Cypher file from neo4j/cypher (usage: make neo4j-migrate VERSION=001)
 	@if [ -z "$(VERSION)" ]; then \
-		echo "Usage: make neo4j-migrate VERSION=003"; \
+		echo "Usage: make neo4j-migrate VERSION=001"; \
 		echo ""; \
-		echo "Available migrations:"; \
-		ls -1 ../PMOVES-Neo4j/db/migrations/*.cypher 2>/dev/null | while read -r f; do \; echo "  • $$(basename "$$f")"; \
-		done; \
+		echo "Available migrations (neo4j/cypher):"; \
+		ls -1 $(CURDIR)/neo4j/cypher/*.cypher | while read -r f; do echo "  • $$(basename "$$f")"; done; \
 		exit 1; \
 	fi
-	@$(MAKE) --no-print-directory -C ../PMOVES-Neo4j migrate VERSION=$(VERSION)
+	@n=$$(ls -1 $(CURDIR)/neo4j/cypher/$(VERSION)*.cypher 2>/dev/null | wc -l); \
+	if [ "$$n" != 1 ]; then echo "ERROR: VERSION=$(VERSION) matches $$n files in neo4j/cypher (need exactly 1)" >&2; exit 1; fi
+	$(call neo4j_apply_cypher,$$(ls -1 $(CURDIR)/neo4j/cypher/$(VERSION)*.cypher))
 
-neo4j-seed: ## Load Neo4j seed data (usage: make neo4j-seed SEED=001_person_aliases.csv)
-	@if [ -z "$(SEED)" ]; then \
-		echo "Usage: make neo4j-seed SEED=001_person_aliases.csv"; \
-		echo ""; \
-		echo "Available seeds:"; \
-		ls -1 ../PMOVES-Neo4j/db/seeds/*.csv 2>/dev/null | while read -r f; do \; echo "  • $$(basename "$$f")"; \
-		done; \
-		exit 1; \
-	fi
-	@$(MAKE) --no-print-directory -C ../PMOVES-Neo4j seed SEED=$(SEED)
-
-neo4j-bootstrap: ## Initialize Neo4j (run migrations and seeds)
+neo4j-bootstrap: ## Initialize Neo4j (constraints, alias seed CSV, CHIT geometry fixture + smoke)
 	@echo "→ Bootstrapping Neo4j..."
-	@bash "$(CURDIR)/scripts/neo4j_bootstrap.sh"
+	@$(LOAD_ENV_SHARED); set +e; bash "$(CURDIR)/scripts/neo4j_bootstrap.sh"
 
-neo4j-status: ## Check Neo4j status from submodule
-	@$(MAKE) --no-print-directory -C ../PMOVES-Neo4j status
+neo4j-status: ## Show the Neo4j container state and health
+	@$(DC) ps neo4j
 
 # Legacy compatibility
 .PHONY: neo4j-bootstrap-legacy

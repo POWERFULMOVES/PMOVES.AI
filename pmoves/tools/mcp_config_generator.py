@@ -159,7 +159,9 @@ def _collect_servers(inventory: Dict[str, Any], client: str, endpoint: str) -> L
                 transport=server["transport"],
                 url=server.get("url"),
                 command=server.get("command"),
-                args=server.get("args", []),
+                # client_args replaces args for one client only, so a client can run
+                # the same server in a narrower mode without forking the entry.
+                args=server.get("client_args", {}).get(client, server.get("args", [])),
                 env=server.get("env", {}),
                 headers=server.get("headers", {}),
                 timeout=server.get("timeout"),
@@ -167,7 +169,8 @@ def _collect_servers(inventory: Dict[str, Any], client: str, endpoint: str) -> L
                 endpoint=server.get("endpoint"),
                 endpoint_prefix=server.get("endpoint_prefix"),
                 endpoint_pinned=server.get("endpoint_pinned", False),
-                disabled=server.get("disabled", False),
+                # disabled_clients emits the entry disabled for those clients only.
+                disabled=server.get("disabled", False) or client in server.get("disabled_clients", []),
             )
             if not spec.supports_client(client):
                 continue
@@ -258,7 +261,10 @@ def render_kilocode(specs: List[ServerSpec], context: Dict[str, str], **kw: Any)
         else:
             continue
         if spec.disabled:
-            entry["disabled"] = True
+            # Kilo's MCP schema (McpLocalConfig / McpRemoteConfig at
+            # https://app.kilo.ai/config.json) has `enabled`, not `disabled`,
+            # and sets additionalProperties false.
+            entry["enabled"] = False
         mcp[spec.key] = entry
         permissions[f"{spec.key}_*"] = "allow"
     return {"mcp": mcp, "permission": permissions}

@@ -60,7 +60,7 @@ done
 if [ "$NEO4J_OK" = "yes" ] && [ "$NATS_OK" = "yes" ]; then
   echo ""
   echo "✅ Cipher stack ready!"
-  echo "   Neo4j: bolt://localhost:7687 (user: neo4j, pass: pmoves2026)"
+  echo "   Neo4j: bolt://localhost:7687 (user: neo4j, password: <NEO4J_PASSWORD in env.shared>)"
   echo "   NATS:  nats://localhost:4222 (user: nats, pass: pmoves)"
   echo "   Cipher: via Hermes stdio MCP (already configured in pmoves-hermes-elder profile)"
   echo ""

@@ -43,13 +43,11 @@ import yaml
 PMOVES = Path(__file__).resolve().parents[1]
 
 # Measured 2026-09-27 on origin/main f9d8a8228.
-# neo4j is here BY DESIGN (#3201, operator option A): it stays internal-only
-# (app/bus/data; no egress, no host port) and is reached over the tailnet through
-# the neo4j-tailnet forwarder (docker-compose.neo4j-tailnet.yml), per
-# DOCKER_NETWORK_HARDENING Rule 5 ("gateway-front it"). Its `ports:` stay only to
-# carry ${NEO4J_BIND}; on internal-only networks they are inert.
+# neo4j left this list when its inert `ports:` and the ${NEO4J_BIND} pass-through
+# were removed (ops/knuckles-neo4j-from-fork): it is internal-only and reached over
+# the tailnet through the neo4j-tailnet forwarder (docker-compose.neo4j-tailnet.yml),
+# per DOCKER_NETWORK_HARDENING Rule 5 ("gateway-front it").
 KNOWN_VIOLATORS = frozenset({
-    "neo4j",
     "a2ui-nats-bridge", "a2ui-renderer", "consciousness-service", "gateway-agent",
     "gpu-orchestrator", "grayjay-plugin-host", "grayjay-server", "hf-research-agent",
     "invidious-companion-proxy", "langextract", "llama-throughput-lab", "meilisearch",
@@ -139,7 +137,7 @@ def test_the_parser_sees_the_fleet():
     assert len(_stack_files()) >= 6
     assert {"pmoves_app", "pmoves_bus", "pmoves_data"} <= {n for n, i in NETWORKS.items() if i}
     assert NETWORKS.get("pmoves_external") is False, "pmoves_external must exist and be non-internal"
-    assert "neo4j" in PUBLISHED and "cipher-api" in PUBLISHED
+    assert "cipher-api" in PUBLISHED and "neo4j" not in PUBLISHED
 
 
 @pytest.mark.parametrize(
