@@ -140,7 +140,7 @@ Known contract gaps:
 
 | Need | Road |
 |---|---|
-| start (never recreates; see the warning below) / stop / restart / logs / status | `make -C pmoves neo4j-up` / `neo4j-down` / `neo4j-restart` / `neo4j-logs` / `neo4j-status` |
+| start (recreates once on a config change; see below) / stop / restart / logs / status | `make -C pmoves neo4j-up` / `neo4j-down` / `neo4j-restart` / `neo4j-logs` / `neo4j-status` |
 | constraints, alias CSV, CHIT fixture + smoke | `make -C pmoves neo4j-bootstrap` |
 | one file from `neo4j/cypher/` | `make -C pmoves neo4j-migrate VERSION=001` |
 | consciousness taxonomy | `make -C pmoves load-consciousness-neo4j` |
@@ -153,13 +153,38 @@ copied in by `docker exec -e NAME`, so it is never on argv. An unset OR empty pa
 (`tests/test_neo4j_make_roads.py`, which runs them against a recording `docker` stub). Exceptions that remain:
 `neo4j-backup`, `neo4j-restore` and `neo4j-reset` (below).
 
-> **Recreate hazard until PR #3251 lands.** main's `neo4j` service still carries `env_file: env.tier-data` and
-> `0.0.0.0` host ports. A plain `docker compose up -d` recreates a container whenever its config hash changes, and one
-> rotated value in `env.tier-data` is enough. A recreate then puts Neo4j back on that config and spends #3251's one
-> planned recreate. `make neo4j-up` therefore runs `up -d --no-recreate --wait neo4j` (docker compose up:
-> `--no-recreate` "If containers already exist, don't recreate them"). **`make up-data-tier` and `make up` carry the
-> same hazard and do NOT pass `--no-recreate`.** On a node with a live graph, do not run them for Neo4j's sake until
-> #3251 has landed; start Neo4j with `make neo4j-up`.
+> **One planned recreate per node (since #3251).** Compose now holds the reconciled config. That means no
+> `env_file`, no host ports, `pmoves_graph_front`, `NEO4J_PLUGINS`, a 2g/2g heap, and a named `neo4j-logs`
+> volume. On a node whose container predates #3251, the next `make neo4j-up`, `make up-data-tier` or `make up`
+> sees a changed config hash and recreates Neo4j once. `/data` (`pmoves_neo4j-data`) is the same volume before
+> and after. Before that first run, take the offline dump below. Copy the old `/logs` too if you need them: a
+> recreate moves them from the anonymous volume to the named one, and the old anonymous volume is left dangling.
+> `neo4j-up` dropped its `--no-recreate` guard once #3251 landed.
+
+**Stale host-port consumers (follow-up list).** Neo4j publishes no host ports. Reach it over the compose networks
+(`neo4j:7474` / `bolt://neo4j:7687`), through `docker exec ... cypher-shell`, or across the fleet via `neo4j-tailnet`
+(`TCPForward neo4j:7687`). These consumers were inert on Knuckles before #3251 too: nothing listened on the host ports.
+They still assume `localhost`:
+- Executable:
+  - `pmoves/Makefile:3720` (EXPECT 7474/7687) and `:5789` (`neo4j-local-up` echoes the URL)
+  - `pmoves/scripts/start-cipher-stack.sh:53` (curl readiness, so the script always reports "not ready")
+  - `pmoves/scripts/smoke-tests.sh:391-392` and `pmoves/scripts/smoke.ps1:468`
+  - `pmoves/scripts/env_check.sh:65` and `env_check.ps1:125`
+  - `pmoves/tools/flightcheck/retro_flightcheck.py:56-57,85-86,116` and `pmoves/tools/swarm_potential.py:87`
+  - `pmoves/ui/lib/serviceCatalog.ts:186-190` and `.claude/skills/pmoves-mesh-preflight/scripts/preflight.sh:25`
+- Port registries that list 7474 as a host port:
+  - `pmoves/scripts/generate_ports.sh:37,217` and `pmoves/scripts/port_allocator.py:35`
+  - `pmoves/tools/cross_reference_validator.py:60`, `pmoves/tools/docs_content_audit.py:102-103,261` and `pmoves/tools/env_validator.py:405`
+- VPS firewall: `deploy/provision/hostinger-kvm-setup.sh:184-185` opens UFW 7474/7687 for ports nothing publishes.
+- Docs and agent context:
+  - `.claude/CATALOG.md:107`, `.claude/commands/deploy/smoke-test.md:39` and `.claude/context/testing-strategy.md:227`
+  - `pmoves/docs/NEO4J_INTEGRATION_GUIDE.md:17,66-67` and `pmoves/docs/operations/COMPLETE_BRING_UP_RUNBOOK.md:243,769`
+  - `HERMES.md:87` and `.kilocodemodes:85`
+  - `pmoves/configs/claws/claude-md/kvm4-2.md:46` and `pmoves/examples/distributed/vps/kvm4-2.env:49`
+
+Already fixed: `scripts/security/post-merge-verify.sh` (it now checks inside the container) and
+`pmoves/tests/integration/test_pr483_critical_path.py`. The in-container healthchecks in `docker-compose.yml` and
+`docker-compose.core.yml` probe the container's own localhost, so they are correct.
 
 **Backup and restore (Community):**
 - There is no online backup: `neo4j-admin database backup` is Enterprise-only.
