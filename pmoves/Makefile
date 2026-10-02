@@ -925,6 +925,7 @@ recreate-svc: ## Surgical recreate of ONE service with current env+image: make r
 	  echo "  list them: make recreate-svc-list"; \
 	  exit 1; }
 	@echo "Recreating $(SVC) with current env (no deps)..."
+	$(if $(filter agent-zero,$(SVC)),@$(call A0_USR_INIT))
 	@$(DC) up -d --force-recreate --no-deps $(SVC)
 	@echo "Done. If Kong fronts it, bounce kong too (cached upstream DNS): docker restart pmoves-supabase-kong-1"
 
@@ -1006,6 +1007,7 @@ supa-query: ## Read-only SQL against the active Supabase DB (server-enforced). U
 supa-recreate-svc: ## Surgical recreate of ONE Supabase service with current env: make supa-recreate-svc SVC=supabase-kong
 	@test -n "$(SVC)" || { echo "Usage: make supa-recreate-svc SVC=<compose-service>"; exit 1; }
 	@echo "Recreating $(SVC) with current env (no deps)..."
+	$(if $(filter agent-zero,$(SVC)),@$(call A0_USR_INIT))
 	@$(DC) up -d --force-recreate --no-deps $(SVC)
 	@echo "Done. If Kong fronts it, bounce kong too (cached upstream DNS): docker restart pmoves-supabase-kong-1"
 
@@ -2451,6 +2453,14 @@ A0_ARCHON_BAD := $(filter-out $(A0_ARCHON_ALLOWED),$(A0_ARCHON_PICK))
 A0_ARCHON_DRY := $(filter-out 0 false no off,$(strip $(value DRY_RUN)))
 # Recursive (=), not :=, because DC is (re)defined further down this file.
 A0_ARCHON_UP = $(DC) --profile agents $(if $(A0_ARCHON_DRY),--dry-run) up -d --no-deps --no-build --pull never
+# One-shot ownership init for the Agent Zero usr bind mount (compose service
+# agent-zero-usr-init, scripts/a0_usr_init.sh). agent-zero depends_on it, so any
+# `up` that resolves dependencies runs it. A recipe that brings agent-zero up
+# with --no-deps, or `start`s it, skips depends_on and must run this first,
+# or the container comes up green and then fails every plugin write with EACCES.
+# It may pull its pinned busybox digest; --pull never applies to agent-zero only.
+# $(1): extra global compose flags (up-a0-archon-scoped passes --dry-run).
+A0_USR_INIT = $(DC) $(1) run --rm --no-deps agent-zero-usr-init
 # archon ALWAYS gets --force-recreate --renew-anon-volumes. Measured on B850
 # 2026-09-28: recreating the retired Python archon container as the native TS
 # image crash-looped, because compose carried the old container's NAMED volume
@@ -2482,7 +2492,12 @@ up-a0-archon-scoped: ## Recreate ONLY archon and/or agent-zero from prebuilt ima
 		$(ARCHON_CHANNEL_TOOL) verify-current "$$img"; \
 		$(A0_ARCHON_UP) --force-recreate --renew-anon-volumes archon;; \
 	esac
+	$(if $(filter agent-zero,$(A0_ARCHON_PICK)),@$(call A0_USR_INIT,$(if $(A0_ARCHON_DRY),--dry-run)))
 	$(if $(filter agent-zero,$(A0_ARCHON_PICK)),@$(A0_ARCHON_UP) agent-zero)
+
+.PHONY: a0-usr-init
+a0-usr-init: ## Hand the Agent Zero usr bind mount (AGENT_ZERO_USR_DIR) to the runtime uid 65532; ownership only, never chmod. Runs on its own; does not recreate agent-zero
+	@$(call A0_USR_INIT)
 
 .PHONY: archon-follow
 archon-follow: ## ONLINE: pull the gated GHCR :current, verify its gate label, then recreate archon (use this to follow releases)
@@ -3442,7 +3457,10 @@ up-darkxside-sidecar: ## Start DARKXSIDE standalone sidecar (port 8092, cloud LL
 		cp env.darkxside-sidecar.example env.darkxside-sidecar; \
 	fi
 	@echo "🌑 Starting DARKXSIDE sidecar..."
-	@bash -lc '. ./scripts/with-env.sh; docker compose -p darkxside-sidecar -f docker-compose.darkxside-sidecar.yml --env-file env.darkxside-sidecar up -d'
+	@# usr mounts use create_host_path: false, and the default ./usr is gitignored and
+	@# never created elsewhere: create the RESOLVED source as the host user first
+	@# (scripts/a0_usr_source_ensure.sh; it prints what it did).
+	@bash -lc '. ./scripts/with-env.sh; sh scripts/a0_usr_source_ensure.sh darkxside-sidecar docker-compose.darkxside-sidecar.yml env.darkxside-sidecar agent-zero-darkxside && docker compose -p darkxside-sidecar -f docker-compose.darkxside-sidecar.yml --env-file env.darkxside-sidecar up -d'
 	@echo "✔ DARKXSIDE sidecar starting. Health: curl -sf http://127.0.0.1:$${DARKXSIDE_PORT:-8092}/"
 
 down-darkxside-sidecar: ## Stop DARKXSIDE standalone sidecar
@@ -3458,7 +3476,10 @@ up-spark-sidecar: ## Start DGX Spark standalone sidecar (port 8093, in-container
 		cp env.spark-sidecar.example env.spark-sidecar; \
 	fi
 	@echo "⚡ Starting DGX Spark sidecar (ARM64 + NVIDIA Blackwell)..."
-	@bash -lc '. ./scripts/with-env.sh; docker compose -p spark-sidecar -f docker-compose.spark-sidecar.yml --env-file env.spark-sidecar up -d'
+	@# usr mounts use create_host_path: false, and the default ./usr is gitignored and
+	@# never created elsewhere: create the RESOLVED source as the host user first
+	@# (scripts/a0_usr_source_ensure.sh; it prints what it did).
+	@bash -lc '. ./scripts/with-env.sh; sh scripts/a0_usr_source_ensure.sh spark-sidecar docker-compose.spark-sidecar.yml env.spark-sidecar agent-zero-spark && docker compose -p spark-sidecar -f docker-compose.spark-sidecar.yml --env-file env.spark-sidecar up -d'
 	@echo "✔ DGX Spark sidecar starting. Health: curl -sf http://127.0.0.1:$${SPARK_PORT:-8093}/"
 	@echo "  GPU check: docker exec pmoves-ollama-spark nvidia-smi"
 
