@@ -7,6 +7,87 @@
 #   (or double-click / run claude-pmoves.cmd, which calls this)
 
 $ErrorActionPreference = 'Stop'
+
+# ---------------------------------------------------------------------------
+# --backend= flag — switch between Anthropic-direct and MiniMax-routed Claude
+# Code for THIS launch without touching ~/.claude/settings.json. Persistent
+# switching lives at `pmoves-mini claude-backend {show,set,backup,restore}`.
+#
+# Accepted values:
+#   auto       (default) — detect hijack via $env:ANTHROPIC_BASE_URL; strip iff
+#                          the host is not api.anthropic.com. Lets a clean
+#                          host pass through with no churn.
+#   anthropic  — force Anthropic-direct routing; strip the Mavis SDK set
+#                unconditionally. One-shot override regardless of persistent
+#                state.
+#   minimax    — preserve whatever the Mavis SDK / settings.json has set.
+#                Used to test the MiniMax routing on demand.
+#
+# Env-var equivalent: $env:PMOVES_CLAUDE_BACKEND = {auto|anthropic|minimax}.
+#
+# Kept in step with deploy/provision/claude-pmoves.sh: same flag surface, same
+# env-var name, same WARN phrase (`stripped Mavis SDK hijack`). Pinned by
+# TwinParityTests in pmoves/tools/tests/test_pmoves_launcher_generator.py.
+# ---------------------------------------------------------------------------
+if (-not $env:PMOVES_CLAUDE_BACKEND) { $env:PMOVES_CLAUDE_BACKEND = '' }
+$env:PMOVES_CLAUDE_BACKEND = $env:PMOVES_CLAUDE_BACKEND.ToLower()
+
+# Pull --backend= out of $args. We rebuild $args to the residual so the
+# launched claude gets them, not the flag.
+$__pmoves_backend_rest = New-Object System.Collections.Generic.List[string]
+$__pmoves_backend_parse_next = $false
+foreach ($__arg in $args) {
+    if ($__pmoves_backend_parse_next) {
+        $env:PMOVES_CLAUDE_BACKEND = $__arg
+        $__pmoves_backend_parse_next = $false
+        continue
+    }
+    if ($__arg -eq '--backend') {
+        $__pmoves_backend_parse_next = $true
+        continue
+    }
+    if ($__arg -like '--backend=*') {
+        $env:PMOVES_CLAUDE_BACKEND = $__arg.Substring('--backend='.Length)
+        continue
+    }
+    if ($__arg -eq '--help' -or $__arg -eq '-h') {
+        Write-Host @'
+claude-pmoves.ps1 — launch Claude Code with PMOVES env + MCP roster.
+
+Usage: claude-pmoves.ps1 [--backend={auto|anthropic|minimax}] [claude-args...]
+
+  --backend=auto       (default) detect hijack via $env:ANTHROPIC_BASE_URL
+  --backend=anthropic  force Anthropic-direct routing for this launch
+  --backend=minimax    preserve the Mavis SDK / settings.json hijack
+
+Persistent switching (writes ~/.claude/settings.json):
+  pmoves-mini claude-backend show
+  pmoves-mini claude-backend set anthropic
+  pmoves-mini claude-backend set minimax
+  pmoves-mini claude-backend backup
+  pmoves-mini claude-backend restore <file>
+'@
+        exit 0
+    }
+    $__pmoves_backend_rest.Add($__arg)
+}
+
+switch ($env:PMOVES_CLAUDE_BACKEND) {
+    '' { }                                                        # default = auto on apply
+    'auto' { }
+    'anthropic' { }
+    'minimax' { }
+    default {
+        Write-Error "[claude-pmoves] --backend=$($env:PMOVES_CLAUDE_BACKEND) invalid; expected one of auto, anthropic, minimax."
+        exit 2
+    }
+}
+
+# Rebuild $args to residual so the launched claude gets them, not the flag.
+$args = [System.Collections.Generic.List[string]]::new()
+foreach ($__arg in $__pmoves_backend_rest) { $args.Add($__arg) }
+$__pmoves_backend_rest = $null
+$__pmoves_backend_parse_next = $false
 $root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $envf = if ($env:PMOVES_ENV_SHARED) { $env:PMOVES_ENV_SHARED } else { Join-Path $root 'pmoves\env.shared' }
 
@@ -36,6 +117,68 @@ if (Test-Path $mavis_helper) {
     Strip-MavisSdkEnvFor -CliName 'claude'
 } else {
     Write-Warning "[claude-pmoves] mavis_sdk_env.ps1 not found at $mavis_helper -- Mavis SDK env may bleed into the launched session."
+}
+
+# ---------------------------------------------------------------------------
+# Claude Code backend selector — strip the Mavis-SDK hijack when --backend=
+# (or $env:PMOVES_CLAUDE_BACKEND) says so. Called AFTER Strip-MavisSdkEnvFor
+# so the NEEDS-list preservation there runs first; this is the OVERRIDE layer.
+#
+# The python module is the source of truth — PowerShell just Invoke-Expression's
+# its stdout and forwards stderr (which carries the WARN when something was
+# actually stripped). Bash twin does the same via `eval`. Kept in step by:
+#   1. TwinParityTests in pmoves/tools/tests/test_pmoves_launcher_generator.py
+#   2. The pinned `--backend=` flag surface
+#   3. The pinned `PMOVES_CLAUDE_BACKEND` env-var name
+#   4. The pinned `stripped Mavis SDK hijack` WARN phrase
+#
+# If python or the tool is missing, we fall through with a WARN — the Mavis
+# SDK env-strip above has already done its partial work, and `claude` will
+# inherit whatever the parent shell set. The user can still fix the persistent
+# state with `pmoves-mini claude-backend set anthropic`.
+# ---------------------------------------------------------------------------
+if ([string]::IsNullOrEmpty($env:PMOVES_CLAUDE_BACKEND)) {
+    $applyBackend = 'auto'
+} else {
+    $applyBackend = $env:PMOVES_CLAUDE_BACKEND
+}
+$pyArgv = Get-PmovesPythonArgv -Root $root
+if (-not $pyArgv) {
+    Write-Warning "[claude-pmoves] no python interpreter; claude_backend_apply skipped (PMOVES_CLAUDE_BACKEND=$applyBackend)."
+} else {
+    $pyExe = $pyArgv[0]
+    $pyPre = if ($pyArgv.Count -gt 1) { $pyArgv[1..($pyArgv.Count - 1)] } else { @() }
+    $cbNormalizer = Join-Path $root 'pmoves\tools\claude_backend.py'
+    if (-not (Test-Path $cbNormalizer)) {
+        Write-Warning "[claude-pmoves] claude_backend.py not found at $cbNormalizer; backend selector skipped."
+    } else {
+        $prevErr = $ErrorActionPreference; $ErrorActionPreference = 'SilentlyContinue'
+        $applyOut = & $pyExe @pyPre $cbNormalizer apply --backend $applyBackend --label 'claude-pmoves.ps1'
+        $applyRc = $LASTEXITCODE
+        $ErrorActionPreference = $prevErr
+        if ($applyRc -ne 0) {
+            Write-Warning "[claude-pmoves] claude_backend.py apply exited $applyRc; skipping the strip."
+        } elseif ($applyOut) {
+            foreach ($__cb_line in ($applyOut -split "`n")) {
+                if (-not $__cb_line) { continue }
+                # The python module emits `unset NAME` and `export NAME=value`
+                # lines. Translate each into PowerShell and apply to the process
+                # env (NOT child-process-only; the launched claude needs to
+                # inherit the unset).
+                if ($__cb_line -match '^unset\s+(\S+)$') {
+                    [Environment]::SetEnvironmentVariable($Matches[1], $null, 'Process')
+                } elseif ($__cb_line -match '^export\s+(\S+)=(.+)$') {
+                    $__cb_k = $Matches[1]
+                    $__cb_v = $Matches[2]
+                    # Strip surrounding single quotes that bash-style export used.
+                    if ($__cb_v.StartsWith("'") -and $__cb_v.EndsWith("'")) {
+                        $__cb_v = $__cb_v.Substring(1, $__cb_v.Length - 2)
+                    }
+                    [Environment]::SetEnvironmentVariable($__cb_k, $__cb_v, 'Process')
+                }
+            }
+        }
+    }
 }
 
 if (Test-Path $envf) {
