@@ -21,7 +21,14 @@ services:
     user: "0:0"
     network_mode: none
     volumes:
-    - ${AGENT_ZERO_USR_DIR:-./data/agent-zero/usr}:/a0/usr
+    # Long form with create_host_path: false (Compose spec, services.volumes long
+    # syntax): a missing source fails at create. The short form makes Docker
+    # create it as an empty root-owned dir and A0 would boot with no usr state.
+    - type: bind
+      source: ${AGENT_ZERO_USR_DIR:-./data/agent-zero/usr}
+      target: /a0/usr
+      bind:
+        create_host_path: false
     - ./scripts/a0_usr_init.sh:/scripts/a0_usr_init.sh:ro
     restart: "no"
     read_only: true
@@ -240,7 +247,14 @@ services:
     # usr tree, not a nested subdir: a nested bind makes Docker pre-create
     # /a0/usr path components as root before init-a0.sh populates /a0,
     # breaking the runtime user's write to /a0/usr/.env (PermissionError).
-    - ${AGENT_ZERO_USR_DIR:-./data/agent-zero/usr}:/a0/usr
+    # Long form with create_host_path: false (Compose spec, services.volumes long
+    # syntax): a missing source fails at create. The short form makes Docker
+    # create it as an empty root-owned dir and A0 would boot with no usr state.
+    - type: bind
+      source: ${AGENT_ZERO_USR_DIR:-./data/agent-zero/usr}
+      target: /a0/usr
+      bind:
+        create_host_path: false
     # Forms layer — persona/cognition profiles consumed by mcp_server.load_form().
     # Read-only: forms are introspective metadata; runtime never rewrites them.
     - ./configs/agents/forms:/app/configs/agents/forms:ro
