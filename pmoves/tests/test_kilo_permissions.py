@@ -91,6 +91,10 @@ ESCAPES_DENIED = [
     "tail -n 5 pmoves/env.tier-llm.env",
     "rg KEY pmoves/env.shared",
     "grep --file=env.shared x",
+    # an .example argument must not lift the deny (last delta review P2)
+    "cat pmoves/env.shared README.example",
+    "grep KEY pmoves/env.shared x.example",
+    "cat pmoves/env.shared.bak-rot20260912",
     "cat " + _DOT_ENV,
     "cat pmoves/" + _DOT_ENV + ".local",
 ]
@@ -190,13 +194,18 @@ NOT_HARD_DENIED = [
     "git log -- pmoves/tools/env.py",
     "ls pmoves/env.d",
     "cat pmoves/env.shared.example",
-    "cat " + _DOT_ENV + ".example",
 ]
 
 
 @pytest.mark.parametrize("command", NOT_HARD_DENIED)
 def test_lookalike_and_example_names_are_not_hard_denied(command):
     assert _resolve("bash", command) != "deny"
+
+
+def test_example_rule_sits_above_every_deny():
+    rules = list(json.loads(_KILO.read_text(encoding="utf-8"))["permission"]["bash"].items())
+    example = next(i for i, (k, _) in enumerate(rules) if k == "*.example*")
+    assert all(v != "deny" for _, v in rules[:example]), "a deny above the .example rule can be lifted by it"
 
 
 @pytest.mark.parametrize("path,expected", [

@@ -229,6 +229,7 @@
       "git log *--o/*": "ask",
       "git show *-/*": "ask",
       "git show *--o/*": "ask",
+      "*.example*": "ask",
       "git stash *": "deny",
       "git diff *--ou*": "deny",
       "git log *--ou*": "deny",
@@ -251,7 +252,6 @@
       "printenv": "deny",
       "printenv *": "deny",
       "*/proc/*/environ*": "deny",
-      "*env.shared*": "deny",
       "*env.tier-*": "deny",
       "* .env": "deny",
       "* .env *": "deny",
@@ -262,7 +262,10 @@
       "*=.env": "deny",
       "*=.env *": "deny",
       "*=.env.*": "deny",
-      "*.example*": "ask"
+      "*env.shared": "deny",
+      "*env.shared *": "deny",
+      "*env.shared.bak*": "deny",
+      "*env.shared~*": "deny"
     },
     "edit": {
       "**": "allow",
