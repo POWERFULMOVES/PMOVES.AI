@@ -4448,16 +4448,9 @@ buildx-setup: ## Ensure docker buildx builder exists and is bootstrapped
 	@docker buildx inspect --bootstrap >/dev/null
 	@echo "✔ buildx builder ready: $(BUILDX_BUILDER)"
 
-docker-login: ensure-env-shared ## Login to GHCR using env.shared or shell env credentials
-	@$(LOAD_ENV_SHARED); \
-	user="$${GHCR_USERNAME:-$${GITHUB_ACTOR:-$$(gh api user -q .login 2>/dev/null || true)}}"; \
-	token="$${GHCR_TOKEN:-$${GH_PAT_PUBLISH:-$${GITHUB_TOKEN:-$$(gh auth token 2>/dev/null || true)}}}"; \
-	if [ -z "$$token" ] && [ -n "$${GHCR_TOKEN_FILE:-}" ] && [ -f "$${GHCR_TOKEN_FILE}" ]; then token="$$(cat "$${GHCR_TOKEN_FILE}")"; fi; \
-	if [ -z "$$user" ] || [ -z "$$token" ]; then \
-	  echo "✖ Missing GHCR credentials. Set GHCR_USERNAME and GHCR_TOKEN (or GH_PAT_PUBLISH)."; \
-	  exit 1; \
-	fi; \
-	printf "%s" "$$token" | docker login ghcr.io -u "$$user" --password-stdin >/dev/null && echo "✔ GHCR login ok as $$user"
+docker-login: ensure-env-shared ## Login to GHCR (read-only pulls: GHCR_READ_TOKEN_FILE=<0600 classic PAT> GHCR_USERNAME=<owner>; DRY_RUN=1 to validate)
+	@GHCR_READ_TOKEN_FILE="$(GHCR_READ_TOKEN_FILE)" GHCR_READ_USERNAME="$(GHCR_USERNAME)" DRY_RUN="$(DRY_RUN)" \
+	  bash scripts/ghcr_login.sh
 
 build-push-supaserch: buildx-setup docker-login ## Build+push SupaSerch multi-arch image
 	@ctx=$$(pwd)/services; \
