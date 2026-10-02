@@ -104,6 +104,24 @@ app.mount(
 )
 
 
+@app.get("/healthz")
+def healthz() -> dict:
+    """Liveness plus dependency state. 200 while the process serves requests.
+
+    `neo4j` is "configured" only when the mindmap driver exists, which needs
+    NEO4J_PASSWORD (no default credential); `nats` reflects the event bus.
+    """
+    from .api import mindmap as _mindmap
+
+    bus = app.state.event_bus
+    return {
+        "status": "ok",
+        "service": "gateway",
+        "neo4j": "configured" if _mindmap.driver is not None else "unconfigured",
+        "nats": "connected" if bus is not None and bus.connected else "disconnected",
+    }
+
+
 @app.get("/demo/shapes-webrtc")
 def demo() -> FileResponse:
     return FileResponse(str(_service_root / "web" / "demo_shapes_webrtc.html"))

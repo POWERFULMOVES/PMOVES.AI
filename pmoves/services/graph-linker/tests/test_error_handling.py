@@ -136,3 +136,24 @@ class TestConfigValidation:
         assert s.neo4j_user == "neo4j"
         assert s.port == 8090
         assert len(s.subjects) == 3
+
+    def test_missing_password_fails_closed(self, monkeypatch):
+        """No default credential: startup must fail without NEO4J_PASSWORD."""
+        from pydantic import ValidationError
+        monkeypatch.delenv("NEO4J_PASSWORD", raising=False)
+        monkeypatch.delenv("NEO4J_PASSWORD_FILE", raising=False)
+        with pytest.raises(ValidationError):
+            Settings(_env_file=None)
+
+    def test_empty_password_fails_closed(self, monkeypatch):
+        from pydantic import ValidationError
+        monkeypatch.setenv("NEO4J_PASSWORD", "")
+        with pytest.raises(ValidationError):
+            Settings(_env_file=None)
+
+    def test_password_file(self, monkeypatch, tmp_path):
+        secret = tmp_path / "neo4j_password"
+        secret.write_text("from-file\n")
+        monkeypatch.delenv("NEO4J_PASSWORD", raising=False)
+        monkeypatch.setenv("NEO4J_PASSWORD_FILE", str(secret))
+        assert Settings(_env_file=None).neo4j_password == "from-file"

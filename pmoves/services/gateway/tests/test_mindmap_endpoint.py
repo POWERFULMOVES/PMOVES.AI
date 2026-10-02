@@ -69,3 +69,19 @@ def test_mindmap_requires_modality(client):
     resp = client.get("/mindmap/demo-constellation", params={"modalities": " "})
     assert resp.status_code == 400
     assert resp.json()["detail"] == "At least one modality is required"
+
+
+def test_mindmap_has_no_default_password(monkeypatch):
+    """No NEO4J_PASSWORD means no driver: never a fallback credential."""
+    import importlib
+
+    for var in ("NEO4J_PASSWORD", "NEO4J_PASSWORD_FILE", "NEO4J_PASS"):
+        monkeypatch.delenv(var, raising=False)
+    monkeypatch.setenv("NEO4J_PASS", "legacy-alias-must-be-ignored")
+    reloaded = importlib.reload(mindmap_module)
+    try:
+        assert reloaded.NEO4J_PASSWORD is None
+        assert reloaded.driver is None
+    finally:
+        monkeypatch.delenv("NEO4J_PASS", raising=False)
+        importlib.reload(mindmap_module)

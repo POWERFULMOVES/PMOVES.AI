@@ -16,6 +16,8 @@ COPY __init__.py /app/pmoves/__init__.py
 COPY services/__init__.py /app/pmoves/services/__init__.py
 COPY services/common /app/pmoves/services/common
 COPY services/gateway /app/pmoves/services/gateway
+# pmoves.chit (CGP_SPEC_VERSION) is imported by api/chit.py and api/consciousness.py
+COPY chit/__init__.py /app/pmoves/chit/__init__.py
 
 # PMOVES shared tools (imported by gateway as pmoves.tools.*)
 COPY tools/__init__.py /app/pmoves/tools/__init__.py
@@ -34,7 +36,7 @@ USER pmoves:pmoves
 
 EXPOSE 8085
 
-# Health check (gateway has no dedicated /healthz — probe root)
+# Health check: /healthz (JSON, dependency state) instead of the HTML root
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
-    CMD curl -f http://localhost:8085/ || exit 1
+    CMD curl -f http://localhost:8085/healthz || exit 1
 CMD ["uvicorn", "pmoves.services.gateway.gateway.main:app", "--host", "0.0.0.0", "--port", "8085"]

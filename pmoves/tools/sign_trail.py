@@ -61,7 +61,7 @@ _LOG_PATH = _PMOVES_ROOT / "docs" / "logs" / "graphiti_signed_latest.json"
 
 # Phase 0 (CHIT-sign-triggered expressive voice): subject the signed trail is
 # published to when CHIT_SIGN_PUBLISH=1. Consumed by voice_cast_on_sign.py.
-# NOTE: this is the canonical RAW signature.v1 subject (nats-subjects.md:441) —
+# NOTE: this is the canonical RAW signature.v1 subject (nats-subjects.md:461) —
 # NOT chit.signed.v1, which is a live multi-consumer channel (Consciousness 8106,
 # Tokenism 8103, Evo 8113, Fordham receipts) carrying the pmoves-chit-sign
 # {schema,tier} envelope. Publishing the raw payload there would collide two

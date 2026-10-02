@@ -3,7 +3,10 @@
 Preserves the exact Cypher queries from the original linker.py while adding
 proper driver lifecycle management, connection pooling, and error handling.
 
-CHIT signing is available when CHIT_SIGN_NEO4J=true — see chit_signer.py.
+Every write is CHIT-signed and fail-closed — see chit_signer.py. The
+signature is persisted on the written nodes as chit_sig / chit_kid /
+chit_signed_at; a write that cannot be signed is refused before Neo4j is
+touched. Migrations (schema only) are not signed.
 """
 
 from __future__ import annotations
@@ -18,10 +21,17 @@ from neo4j.exceptions import ServiceUnavailable, AuthError, Neo4jError
 
 from config import Settings
 
-# CHIT signing — additive, gated by env var
-from chit_signer import sign_neo4j_node, CHIT_SIGN_NEO4J
+from chit_signer import sign_write
 
 logger = structlog.get_logger(__name__)
+
+
+def _chit_set(var: str) -> str:
+    """Cypher SET fragment persisting the write's CHIT signature on `var`."""
+    return (
+        f"{var}.chit_sig = $chit_sig, {var}.chit_kid = $chit_kid, "
+        f"{var}.chit_signed_at = $chit_signed_at"
+    )
 
 
 class Neo4jClient:
@@ -119,14 +129,10 @@ class Neo4jClient:
     ) -> None:
         """""""""Execute a write query against Neo4j with proper parameterization.
 
-        When CHIT_SIGN_NEO4J is enabled, parameters are signed before writing.
+        Parameters are CHIT-signed first. If signing fails, ChitSigningError
+        propagates and no session is opened: no key, no write.
         """""""""
-        parameters = parameters or {}
-
-        # CHIT signing — additive, gated by CHIT_SIGN_NEO4J env var
-        if CHIT_SIGN_NEO4J:
-            parameters = sign_neo4j_node(parameters)
-            logger.debug("neo4j.chit_signed", cypher_preview=cypher[:80])
+        parameters = sign_write(parameters or {})
 
         try:
             with self._driver.session(database=self._settings.neo4j_database) as session:
@@ -160,11 +166,13 @@ class Neo4jClient:
         MERGE (a:Asset:Image {uri:$uri})
           ON CREATE SET a.created_at = datetime($ts)
         SET a.bucket=$bucket, a.key=$key, a.public_url=$public_url,
-            a.presigned_url=$presigned_url, a.updated_at = datetime($ts)
+            a.presigned_url=$presigned_url, a.updated_at = datetime($ts),
+            """ + _chit_set("a") + """
         MERGE (w:Workflow {name:'comfyui', kind:'image'})
         MERGE (g:Generation {id:$evt_id})
           ON CREATE SET g.ts = datetime($ts), g.source=$source
           ON MATCH SET  g.ts = datetime($ts), g.source=$source
+        SET """ + _chit_set("g") + """
         MERGE (ag:Agent {name:$source})
         MERGE (ag)-[:EMITTED]->(g)
         MERGE (g)-[:PRODUCED]->(a)
@@ -185,14 +193,17 @@ class Neo4jClient:
     def handle_analysis_topics_result(self, msg) -> None:
         """""""""Persist topic analysis result to Neo4j."""""""""
         CYPHER_MEDIA = (
-            "MERGE (m:Media {id:$id}) ON CREATE SET m.created_at=datetime($ts)"
+            "MERGE (m:Media {id:$id}) ON CREATE SET m.created_at=datetime($ts) "
+            "SET " + _chit_set("m")
         )
         CYPHER_TOPIC = """
         MERGE (t:Topic {label:$label})
           ON CREATE SET t.created_at = datetime($ts)
-        SET t.last_score = $score, t.updated_at = datetime($ts)
+        SET t.last_score = $score, t.updated_at = datetime($ts),
+            """ + _chit_set("t") + """
         MERGE (m:Media {id:$mid})
-        MERGE (m)-[:HAS_TOPIC {score:$score}]->(t)
+        MERGE (m)-[r:HAS_TOPIC {score:$score}]->(t)
+        SET """ + _chit_set("r") + """
         """
         self.execute_write(CYPHER_MEDIA, {"id": msg.media_id, "ts": msg.ts})
         for topic in msg.topics:
@@ -212,11 +223,13 @@ class Neo4jClient:
         """""""""Persist knowledge-base upsert to Neo4j."""""""""
         CYPHER = """
         MERGE (ns:Namespace {name:$ns})
+        SET """ + _chit_set("ns") + """
         WITH ns
         UNWIND $items AS it
           MERGE (k:KBItem {id:it.id})
             ON CREATE SET k.created_at = datetime($ts)
-          SET k.text = it.text, k.metadata = it.metadata, k.updated_at = datetime($ts)
+          SET k.text = it.text, k.metadata = it.metadata, k.updated_at = datetime($ts),
+              """ + _chit_set("k") + """
           MERGE (ns)-[:CONTAINS]->(k)
         """
         items = [

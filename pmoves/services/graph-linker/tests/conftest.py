@@ -17,6 +17,33 @@ from neo4j_client import Neo4jClient
 from nats_handler import NATSHandler
 
 
+# -- CHIT signing key ----------------------------------------------------
+
+_CHIT_KEY_VARS = (
+    "CHIT_SIGNING_KEY", "CHIT_SIGNING_KEY_FILE",
+    "CHIT_PASSPHRASE", "CHIT_PASSPHRASE_FILE",
+    "CHIT_SIGNING_KEY_ID", "CHIT_KID_STRICT",
+)
+
+
+@pytest.fixture(autouse=True)
+def chit_test_key(monkeypatch):
+    """""""""Every write is signed fail-closed, so tests run with a throwaway key.
+
+    Tests that exercise the no-key path also request `clear_chit_key`.
+    """""""""
+    for var in _CHIT_KEY_VARS:
+        monkeypatch.delenv(var, raising=False)
+    monkeypatch.setenv("CHIT_SIGNING_KEY", "test-graph-linker-signing-key")
+
+
+@pytest.fixture
+def clear_chit_key(chit_test_key, monkeypatch):
+    """""""""Remove every CHIT key source from the environment."""""""""
+    for var in _CHIT_KEY_VARS:
+        monkeypatch.delenv(var, raising=False)
+
+
 # -- Test settings -------------------------------------------------------
 
 @pytest.fixture

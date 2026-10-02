@@ -11,7 +11,11 @@
 > below predate this verification; regenerate per-service rows from live
 > probes before citing them as current.
 
-**Last Updated:** March 24, 2026
+**Last Updated:** March 24, 2026 (Neo4j Mind Map re-tiered 2026-10-01)
+
+> **2026-10-01 (B850-CLAUDE, PR #3255):** Neo4j Mind Map moved Full → None,
+> measured against the criteria below; reasoning in the "No CHIT Integration"
+> section. Counts by section in this file: **4 Full, 11 Partial, 14 None.**
 **CHIT Protocol Version:** v0.1 (legacy), v0.2 (stable), v1.0 (current)
 **Geometry Bus:** NATS-based event bus for geometric intelligence
 
@@ -117,25 +121,7 @@
 
 ---
 
-### 4. Neo4j Mind Map
-**Port:** Gateway (via `/mindmap/{constellation_id}`)
-**Role:** Graph-based constellation drill-down and visualization
-**Key Files:** `pmoves/services/gateway/gateway/api/mindmap.py`
-
-**Neo4j Graph Model:**
-- `Anchor-[:FORMS]->Constellation-[:HAS]->Point-[:LOCATES]->MediaRef`
-
-**API Endpoints:**
-- `GET /mindmap/{constellation_id}` - Retrieve points and media for a constellation
-
-**Capabilities:**
-- Multi-modal point retrieval (text, video, audio, doc, image)
-- Projection and confidence filtering
-- Media reference resolution
-
----
-
-### 5. Agent Zero
+### 4. Agent Zero
 **Port:** 8080 (API), 8081 (UI)
 **Role:** Agent orchestration with CHIT commands
 **CGP Version:** v0.1/v0.2
@@ -157,7 +143,7 @@
 
 ## Partial CHIT Integration Services
 
-### 6. A2UI NATS Bridge
+### 5. A2UI NATS Bridge
 **Port:** 9224
 **Role:** Bridge A2UI events to geometry bus
 **Key Files:** `pmoves/services/a2ui-nats-bridge/bridge.py`
@@ -176,7 +162,7 @@ rejections counted in `a2ui_geometry_events_rejected_total`. Tests:
 
 ---
 
-### 7. PMOVES.YT
+### 6. PMOVES.YT
 **Port:** 8077
 **Role:** YouTube ingestion with video CGP
 **Key Files:** `pmoves/services/pmoves-yt/yt.py`
@@ -188,7 +174,7 @@ rejections counted in `a2ui_geometry_events_rejected_total`. Tests:
 
 ---
 
-### 8. DeepResearch Worker
+### 7. DeepResearch Worker
 **Port:** 8098
 **Role:** LLM-based research planning
 **Key Files:** `pmoves/services/deepresearch/worker.py`
@@ -202,7 +188,7 @@ rejections counted in `a2ui_geometry_events_rejected_total`. Tests:
 
 ---
 
-### 9. SupaSerch
+### 8. SupaSerch
 **Port:** 8099
 **Role:** Multimodal search orchestration
 **Key Files:** `pmoves/services/supaserch/app.py`
@@ -214,7 +200,7 @@ rejections counted in `a2ui_geometry_events_rejected_total`. Tests:
 
 ---
 
-### 10. Consciousness Service
+### 9. Consciousness Service
 **Port:** 8106
 **Role:** CHR clustering + persona theory-to-geometry mapping
 **Key Files:**
@@ -240,11 +226,15 @@ fallback-parity against the canonical signer).
 - No theory proponent database integration
 - No consciousness landscape visualization
 - Neo4j signature persistence (CLAUDE.md step 3) deferred — service holds no
-  Neo4j client; graph persistence happens downstream via Hi-RAG
+  Neo4j client. **Corrected 2026-10-01:** graph persistence does NOT happen
+  downstream via Hi-RAG. hi-rag-gateway-v2 has zero Neo4j writes (it only
+  reads, `clients/neo4j.py`, `routes/geometry.py`); its `_persist_cgp_to_db`
+  writes Postgres, with no `sig` column. Nothing persists this service's
+  signed CGP into the graph today.
 
 ---
 
-### 11. Evo Controller
+### 10. Evo Controller
 **Port:** 8113
 **Role:** Evolutionary optimization for parameters
 **Key Files:** `pmoves/services/evo-controller/app.py`
@@ -264,7 +254,7 @@ dropped under `CHIT_REQUIRE_SIGNATURE`); uses the canonical
 
 ---
 
-### 12. AgentGym RL Coordinator
+### 11. AgentGym RL Coordinator
 **Port:** varies
 **Role:** Reinforcement learning trajectory analysis
 **Key Files:** `pmoves/services/agentgym-rl-coordinator/coordinator/trajectory.py`
@@ -273,7 +263,7 @@ dropped under `CHIT_REQUIRE_SIGNATURE`); uses the canonical
 
 ---
 
-### 13. Flute Gateway
+### 12. Flute Gateway
 **Port:** 8055 (HTTP + WebSocket — a single uvicorn bind; 8056 is published by compose but nothing listens on it)
 **Role:** Voice prosodic synthesis
 **Key Files:** `pmoves/services/flute-gateway/main.py`
@@ -285,7 +275,7 @@ dropped under `CHIT_REQUIRE_SIGNATURE`); uses the canonical
 
 ---
 
-### 14. Cast TTS Gateway
+### 13. Cast TTS Gateway
 **Port:** 8060
 **Role:** Chromecast/Google Home TTS routing with voice attribution
 **Key Files:** `pmoves/services/cast-tts-gateway/service.py`
@@ -302,7 +292,7 @@ dropped under `CHIT_REQUIRE_SIGNATURE`); uses the canonical
 
 ---
 
-### 15. Extract Worker
+### 14. Extract Worker
 **Port:** 8083
 **Role:** Text embedding & indexing to Qdrant + Meilisearch
 **Key Files:** `pmoves/services/extract-worker/worker.py`
@@ -318,7 +308,7 @@ dropped under `CHIT_REQUIRE_SIGNATURE`); uses the canonical
 
 ---
 
-### 16. FFmpeg-Whisper
+### 15. FFmpeg-Whisper
 **Port:** 8078
 **Role:** Media transcription (Whisper, Qwen2-Audio)
 **Key Files:** `pmoves/services/ffmpeg-whisper/server.py`
@@ -351,6 +341,35 @@ dropped under `CHIT_REQUIRE_SIGNATURE`); uses the canonical
 | **N8N** | - | Workflow automation | LOW |
 | **GPU Orchestrator** | - | GPU management | LOW |
 | **MCP YouTube Adapter** | - | YouTube adapter | LOW |
+| **Neo4j Mind Map** | gateway `/mindmap` | Graph read of Constellation/Point (re-tiered from Full, see below) | MEDIUM |
+
+### Neo4j Mind Map — re-tiered Full → None (2026-10-01)
+
+Measured against this document's own criteria (Integration Levels table):
+**Full** needs "Publishes AND consumes CGP, handles geometry events";
+**Partial** needs "Publishes CGP OR subscribes to geometry subjects". The mind
+map does neither:
+
+- `GET /mindmap/{constellation_id}` (`services/gateway/gateway/api/mindmap.py`)
+  is a plain Cypher read. It publishes nothing and subscribes to nothing.
+- `services/gateway` has no stanza in any compose file, so that endpoint is not
+  deployed. The live read is the hi-rag v2 route, also a plain read.
+- No node in the graph carries a CHIT signature. The model this section used
+  to cite, `Anchor-[:FORMS]->Constellation`, is never written by any writer
+  (the seed files create FORMS only between unlabeled nodes).
+- The gateway's CGP writer (`api/workflow.py` `_upsert_neo4j`) ingests an
+  UNSIGNED `chit.cgp.v0.1` document and is undeployed.
+
+graph-linker (PR #3255) now persists `chit_sig` / `chit_kid` /
+`chit_signed_at` on the `Asset`, `Generation`, `Media`, `Topic`, `Namespace` and `KBItem` nodes and the `HAS_TOPIC` edge (NOT `Agent`, `Workflow`, or the `EMITTED`/`PRODUCED`/`USED_WORKFLOW`/`CONTAINS` edges), and refuses unsigned writes. A stored signature is verifiable only against the source event: the MAC covers the write's Cypher parameter dict, and the node keeps a transformed subset of it (e.g. `ts` is stored as `datetime()`), so `chit_signer.verify_write()` needs the original event parameters, not just the node. That is
+signature persistence on Neo4j writes, not CGP flow: graph-linker consumes
+`gen.image.result.v1`, `analysis.extract_topics.result.v1` and
+`kb.upsert.request.v1`, none of which is a geometry subject. It therefore does
+NOT meet the Partial criterion, and the mind map stays **None** until a
+deployed writer consumes geometry subjects (the gateway CGP writer, once
+deployed and signing) or the reader verifies signatures. The signatures use
+the deployment-wide key, so they attribute a writer; they do not authenticate
+one (`verify_cgp_detailed` reports OK_UNPINNED).
 
 ---
 
