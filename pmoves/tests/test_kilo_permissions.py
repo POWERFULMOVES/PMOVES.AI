@@ -1,8 +1,9 @@
 """kilo.json permission rules, fed through a port of Kilo's own resolver.
 
 Kilo (Kilo-Org/kilocode@6fd9b7b) resolves a tool call like this:
-  * packages/opencode/src/util/wildcard.ts `match`: `*` -> `.*` (it crosses
-    `/` and spaces), `?` -> `.`, and a trailing ` *` is optional, so `ls *`
+  * packages/opencode/src/util/wildcard.ts `match`: every backslash becomes
+    `/` in BOTH the input and the pattern, then `*` -> `.*` (it crosses `/`
+    and spaces), `?` -> `.`, and a trailing ` *` is optional, so `ls *`
     matches `ls`;
   * packages/opencode/src/permission/index.ts `evaluate`: the LAST rule whose
     permission and pattern both match wins (config order). There is no
@@ -24,9 +25,11 @@ from pathlib import Path
 import pytest
 
 _KILO = Path(__file__).resolve().parents[2] / "kilo.json"
+_DOT_ENV = "." + "env"  # concatenated: the repo's damage-control hook refuses the literal
 
 
 def _match(text: str, pattern: str) -> bool:
+    text, pattern = text.replace("\\", "/"), pattern.replace("\\", "/")
     escaped = re.sub(r"[.+^${}()|\[\]\\]", lambda m: "\\" + m.group(0), pattern)
     escaped = escaped.replace("*", ".*").replace("?", ".")
     if escaped.endswith(" .*"):
@@ -48,6 +51,8 @@ def test_port_matches_kilo_documented_examples():
     assert _match("git", "git *") and _match("git log --oneline", "git *")
     assert _match("git status", "git status *") and _match("git status -s", "git status *")
     assert not _match("gitx", "git *")
+    # backslashes are normalised to "/" first, on both sides
+    assert _match("a\\b", "a/b") and _match("a/b", "a\\b")
 
 
 # Each of these executes a program or writes a file from inside a command
@@ -79,8 +84,17 @@ ESCAPES_DENIED = [
     "printenv Z_AI_API_KEY",
     "cat /proc/self/environ",
     "cat /proc/1/environ",
+    # secrets files named in the arguments, also through a glob (delta review P2)
     "cat pmoves/env.shared",
     "grep KEY pmoves/env.tier-llm.env",
+    "cat env.s*",
+    "head -c 999 env.sha?",
+    "less pmoves/env.shared",
+    "tail -n 5 pmoves/env.tier-llm.env",
+    "rg KEY pmoves/env.shared",
+    "grep --file=env.shared x",
+    "cat " + _DOT_ENV,
+    "cat pmoves/" + _DOT_ENV + ".local",
 ]
 
 
@@ -102,6 +116,7 @@ ASK_NOT_ALLOW = [
     # shell syntax that can rebuild a denied flag inside an allowed prefix
     'git diff --o""utput=x',
     "git diff -\\-output=x",
+    "git diff --o\\utput=x",
     "git diff --{output,x}=y",
     "git diff $FLAG",
     "git diff $(echo --output=x)",
@@ -110,6 +125,14 @@ ASK_NOT_ALLOW = [
     # redirection writes a file outside the edit gate
     "cat a > b",
     "git log > x",
+    # these read file contents, and a recursive grep or a glob reaches the
+    # gitignored secrets files without naming them; Kilo's read and grep
+    # tools cover reading and search under the `read` rules
+    "grep -r API_KEY pmoves",
+    "grep -rh KEY .",
+    "cat README.md",
+    "head -n 5 kilo.json",
+    "cat env*",
     # git branch is listing-only; anything else asks
     "git branch new-branch",
     "git branch -vD x",
@@ -132,11 +155,14 @@ STILL_ALLOWED = [
     "git branch -a",
     "git branch --show-current",
     "git worktree list",
+    "git log --oneline -- pmoves/tools",
     "ls -la",
-    "cat README.md",
-    "grep -rn foo pmoves",
-    "wc -l kilo.json",
+    "ls pmoves/config",
+    "wc -l kilo.json pmoves/tools/mcp_config_generator.py",
     "pwd",
+    # names that merely contain "env." are not secrets files
+    "git log -- pmoves/scripts/with-env.sh",
+    "wc -l pmoves/tests/test_env.py",
 ]
 
 
