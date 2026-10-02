@@ -2,8 +2,9 @@
 
 Every write graph-linker makes is signed with the canonical
 `pmoves.tools.chit_security.sign_cgp`, and the signature is PERSISTED on the
-node(s) the write creates, as three flat properties (Neo4j property values
-cannot be maps):
+Asset, Generation, Media, Topic, Namespace and KBItem nodes and the HAS_TOPIC
+edge (not Agent, Workflow or the other edges), as three flat properties
+(Neo4j property values cannot be maps):
 
     chit_sig        base64 HMAC-SHA256 over the canonical signed document
     chit_kid        the key id the signature names
@@ -11,7 +12,8 @@ cannot be maps):
 
 The signed document is `{"writer", "signed_at", "params"}`, where `params` is
 the exact Cypher parameter dict of the write.  `verify_write()` rebuilds that
-document, so a write can be re-verified from the event it came from.
+document, so a write is verifiable ONLY against the source event: nodes keep a
+transformed subset of the parameters (e.g. `ts` becomes `datetime()`).
 
 FAIL-CLOSED.  No key, an unresolvable kid, or a parameter dict that cannot be
 canonicalised means NO WRITE: `sign_write()` raises `ChitSigningError`, the

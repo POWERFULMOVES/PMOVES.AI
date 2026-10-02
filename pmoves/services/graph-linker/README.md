@@ -45,14 +45,12 @@ All configuration via environment variables:
 Every write is signed with `pmoves.tools.chit_security.sign_cgp` over
 `{"writer": "graph-linker", "signed_at", "params"}`, where `params` is the
 write's Cypher parameter dict. The signature is persisted on the nodes the
-write creates (Asset, Generation, Media, Topic, the HAS_TOPIC edge, Namespace,
-KBItem) as `chit_sig`, `chit_kid`, `chit_signed_at`.
+write stamps as `chit_sig`, `chit_kid`, `chit_signed_at`: the `Asset`, `Generation`, `Media`, `Topic`, `Namespace` and `KBItem` nodes and the `HAS_TOPIC` edge (NOT `Agent`, `Workflow`, or the `EMITTED`/`PRODUCED`/`USED_WORKFLOW`/`CONTAINS` edges).
 
 No key, or parameters that cannot be canonicalised, means **no write**: the
 message is dead-lettered, `graph_linker_chit_sign_failures_total{reason}` is
 incremented, and `/ready` reports `degraded` with `chit: no_key`. There is no
-unsigned dev mode. `chit_signer.verify_write()` re-verifies a write from its
-event parameters. With the deployment-wide key the result is `OK_UNPINNED`:
+unsigned dev mode. A stored signature is verifiable only against the source event: the MAC covers the write's Cypher parameter dict, and the node keeps a transformed subset of it (e.g. `ts` is stored as `datetime()`), so `chit_signer.verify_write()` needs the original event parameters, not just the node. With the deployment-wide key the result is `OK_UNPINNED`:
 the signature attributes the writer, it does not authenticate it.
 
 ## NATS Message Schemas
@@ -100,5 +98,5 @@ docker run -e NEO4J_URL=bolt://neo4j:7687 -e NATS_URL=nats://nats:4222 -e CHIT_S
 | `models.py` | Pydantic models for NATS messages |
 | `nats_handler.py` | NATS subscription, reconnection, dead-letter |
 | `neo4j_client.py` | Neo4j driver management, query execution |
-| `linker.py` | Original implementation (preserved for reference) |
+| `linker.py` | Original implementation, kept in-tree for reference only. NOT shipped in the image (the Dockerfile copies the runtime modules explicitly); it carries a default Neo4j password and is imported by nothing |
 | `tests/` | Comprehensive test suite (72 tests) |

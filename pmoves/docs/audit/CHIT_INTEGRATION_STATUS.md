@@ -361,7 +361,7 @@ map does neither:
   UNSIGNED `chit.cgp.v0.1` document and is undeployed.
 
 graph-linker (PR #3255) now persists `chit_sig` / `chit_kid` /
-`chit_signed_at` on every node it writes and refuses unsigned writes. That is
+`chit_signed_at` on the `Asset`, `Generation`, `Media`, `Topic`, `Namespace` and `KBItem` nodes and the `HAS_TOPIC` edge (NOT `Agent`, `Workflow`, or the `EMITTED`/`PRODUCED`/`USED_WORKFLOW`/`CONTAINS` edges), and refuses unsigned writes. A stored signature is verifiable only against the source event: the MAC covers the write's Cypher parameter dict, and the node keeps a transformed subset of it (e.g. `ts` is stored as `datetime()`), so `chit_signer.verify_write()` needs the original event parameters, not just the node. That is
 signature persistence on Neo4j writes, not CGP flow: graph-linker consumes
 `gen.image.result.v1`, `analysis.extract_topics.result.v1` and
 `kb.upsert.request.v1`, none of which is a geometry subject. It therefore does

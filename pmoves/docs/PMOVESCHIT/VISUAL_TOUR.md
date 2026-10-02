@@ -550,7 +550,7 @@ signed_params = sign_write(params)
 result = verify_write(signed_params)
 ```
 
-**Design principle:** Signing is additive. Existing functionality is never broken when signing is off.
+**Design principle:** fail-closed. There is no unsigned mode: without a signing key graph-linker refuses the write. Signatures are stamped on the `Asset`, `Generation`, `Media`, `Topic`, `Namespace` and `KBItem` nodes and the `HAS_TOPIC` edge (NOT `Agent`, `Workflow`, or the `EMITTED`/`PRODUCED`/`USED_WORKFLOW`/`CONTAINS` edges). A stored signature is verifiable only against the source event: the MAC covers the write's Cypher parameter dict, and the node keeps a transformed subset of it (e.g. `ts` is stored as `datetime()`), so `chit_signer.verify_write()` needs the original event parameters, not just the node.
 
 ---
 
