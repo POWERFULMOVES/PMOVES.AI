@@ -224,16 +224,19 @@ def test_migrate_refuses_an_ambiguous_or_missing_version(tmp_path):
 
 
 @pytest.mark.skipif(shutil.which("make") is None, reason="make not installed")
-def test_neo4j_up_never_recreates_before_the_compose_reconciliation(tmp_path):
-    """Until PR #3251 lands, main's neo4j still has env_file + 0.0.0.0 ports; a plain
-    `up -d` on any config-hash drift would recreate on that config."""
+def test_neo4j_up_is_a_plain_up_of_neo4j_only(tmp_path):
+    """Before #3251 landed, neo4j-up passed --no-recreate so that config drift could not
+    recreate Neo4j on the old env_file + 0.0.0.0 config. With the reconciled compose on
+    main, a plain `up -d --wait` is right: it recreates only on a real config change,
+    and it never forces one."""
     rc, docker, out = _make(tmp_path, "neo4j-up", SENTINEL)
     assert rc == 0, out
     ups = [c for c in docker if "up" in c]
     assert len(ups) == 1, docker
     up = ups[0]
-    assert up[up.index("up"):][-1] == "neo4j", up
-    assert "--no-recreate" in up and "--force-recreate" not in up, up
+    tail = up[up.index("up"):]
+    assert tail == ["up", "-d", "--wait", "neo4j"], up
+    assert "--no-recreate" not in up and "--force-recreate" not in up, up
 
 
 # --- scripts/neo4j_bootstrap.sh (what neo4j-bootstrap runs) -----------------

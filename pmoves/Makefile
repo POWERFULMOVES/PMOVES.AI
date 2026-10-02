@@ -5729,16 +5729,13 @@ define neo4j_apply_cypher
 	NEO4J_USERNAME="$${NEO4J_USER:-neo4j}" docker exec -i -e NEO4J_USERNAME -e NEO4J_PASSWORD "$$c" cypher-shell < "$$f"
 endef
 
-# --no-recreate (docker compose up: "If containers already exist, don't recreate
-# them"): main's neo4j service still carries env_file and 0.0.0.0 ports, so ANY
-# config-hash drift (one rotated env.tier-data value is enough) would make a plain
-# `up -d` recreate Neo4j on that config and spend the one planned recreate of the
-# compose reconciliation (PR #3251, docs/TAC/TAC_NEO4J.md section 7). Drop the flag
-# when #3251 lands. --wait returns once the healthcheck passes.
-neo4j-up: ## Start Neo4j; never recreates an existing container (until PR #3251 lands)
-	@echo "→ neo4j-up: --no-recreate, so an existing Neo4j is started as-is, never recreated on main's pre-#3251 compose."
-	@echo "   A config change reaches Neo4j only through the reconciliation runbook (docs/TAC/TAC_NEO4J.md section 7)."
-	@$(DC) up -d --no-recreate --wait neo4j
+# --no-recreate guarded neo4j-up until the compose reconciliation (#3251) landed.
+# Now a plain `up -d` is right: it recreates Neo4j only when its compose config
+# changed. On a node whose container predates #3251, the first run is that one
+# planned recreate (docs/TAC/TAC_NEO4J.md section 7: dump first). --wait returns
+# once the healthcheck passes.
+neo4j-up: ## Start Neo4j (recreates it once if its compose config changed; see TAC_NEO4J section 7)
+	@$(DC) up -d --wait neo4j
 
 neo4j-down: ## Stop Neo4j (container kept; data volume untouched)
 	@$(DC) stop neo4j
