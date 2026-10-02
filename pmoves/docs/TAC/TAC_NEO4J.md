@@ -71,11 +71,11 @@ Rows marked **pending** are prepared as ONE compose change (grant `compose:pr:<N
 | image | vendor digest | provenance doctrine | Phase A GHCR image, digest-pinned (**pending** A/B) |
 | `ports:` + `NEO4J_BIND` | published, default `0.0.0.0` | `OM/docker/ports` | removed; forwarder only (**pending**) |
 | plugins | `NEO4JLABS_PLUGINS=["apoc"]` | `OM/docker/plugins`: `NEO4J_PLUGINS`; the entrypoint warns the old name "has been renamed" | `NEO4J_PLUGINS=["apoc"]` (**pending**). Note: the plugin step adds `dbms.security.procedures.unrestricted=apoc.*` (`neo4j-plugins.json`) unless that key is already set, so the explicit list below must stay |
-| APOC file key | `NEO4J_apoc_import_file_use__neo4j__config__true` (typo; live `apoc.conf` holds the junk key) | APOC install docs: `NEO4J_apoc_import_file_use__neo4j__config=true` | corrected (**pending**) |
+| APOC file key | `NEO4J_apoc_import_file_use__neo4j__config__true` (typo; live `apoc.conf` holds the junk key) | APOC install docs: `NEO4J_apoc_import_file_use__neo4j__config=true` | corrected (live on Knuckles since the 2026-10-02 recreate; other nodes pending) |
 | APOC unrestricted | `apoc.coll.*,apoc.text.*,apoc.path.*,apoc.algo.*` | `OM/security/securing-extensions`: unrestrict only what you call; never `apoc.*` | exactly what the Neo4j MCP's `get-schema` needs (measure in a sandbox); no in-repo service calls APOC |
 | APOC export / CSV file import | enabled | `OM/security/checklist` | export off once `make neo4j-backup` no longer uses `apoc.export` |
 | strict validation | `false` | `OM/configuration/configuration-settings` (default `true`) | back to `true` after the `env_file` fix, proven in a sandbox |
-| LOAD CSV egress | `internal.dbms.cypher_ip_blocklist=0.0.0.0/0,::/0` | internal key; the documented `LOAD ON CIDR` is Enterprise-only | keep; verify after recreate. Unknown: whether it covers `apoc.load.*` |
+| LOAD CSV egress | `internal.dbms.cypher_ip_blocklist=0.0.0.0/0,::/0` | internal key; the documented `LOAD ON CIDR` is Enterprise-only | keep; verified on Knuckles 2026-10-02: refuses `LOAD CSV` and `apoc.load.json` (URLAccessValidationError) |
 | `env_file: env.tier-data` | whole data tier | the entrypoint turns every `NEO4J_*` variable into a setting and does not exclude `NEO4J_PASSWORD` | removed (**pending**). It would write `PASSWORD=<plaintext>` into neo4j.conf if the funnel ever emitted that key (the template does), and it hands Neo4j MinIO, Postgres, Meili and Qdrant secrets it never uses. `${NEO4J_PASSWORD}` in `NEO4J_AUTH` is interpolated from compose's `--env-file` layering (`COMPOSE_ENV_FILES` in pmoves/Makefile: `env.shared`, then the tier files), which `env_file:` (container environment) does not feed |
 | auth | `NEO4J_AUTH=neo4j/${NEO4J_PASSWORD:?...}` | `OM/docker/docker-compose-standalone`: `NEO4J_AUTH_FILE` via Docker secrets (recommended) | fix the `:?` text; `NEO4J_AUTH_FILE` is an operator decision (funnel change) |
 | memory | none set; 4G limit | `OM/docker/configuration`: Docker defaults are "very limited" (512M pagecache, 512M heap); `OM/performance/memory-configuration`: heap initial = max | heap and pagecache from `neo4j-admin server memory-recommendation --memory=4g` (**pending**) |
@@ -154,12 +154,35 @@ copied in by `docker exec -e NAME`, so it is never on argv. An unset OR empty pa
 `neo4j-backup`, `neo4j-restore` and `neo4j-reset` (below).
 
 > **One planned recreate per node (since #3251).** Compose now holds the reconciled config. That means no
-> `env_file`, no host ports, `pmoves_graph_front`, `NEO4J_PLUGINS`, a 2g/2g heap, and a named `neo4j-logs`
-> volume. On a node whose container predates #3251, the next `make neo4j-up`, `make up-data-tier` or `make up`
+> `env_file`, no host ports, `pmoves_graph_front`, `NEO4J_PLUGINS`, a 2g/2g heap, a 512m pagecache, the
+> `internal.dbms.cypher_ip_blocklist` (`0.0.0.0/0,::/0`), the corrected APOC key
+> `NEO4J_apoc_import_file_use__neo4j__config` (was `..._config__true`), and a named `neo4j-logs` volume. A
+> pre-flight diff of the running container against `config neo4j` should show exactly these and nothing else. On a node whose container predates #3251, the next `make neo4j-up`, `make up-data-tier` or `make up`
 > sees a changed config hash and recreates Neo4j once. `/data` (`pmoves_neo4j-data`) is the same volume before
 > and after. Before that first run, take the offline dump below. Copy the old `/logs` too if you need them: a
 > recreate moves them from the anonymous volume to the named one, and the old anonymous volume is left dangling.
 > `neo4j-up` dropped its `--no-recreate` guard once #3251 landed.
+>
+> **Done on Knuckles 2026-10-02:** node/rel counts and the per-label/per-type breakdown identical before and
+> after; heap 2g/2g and pagecache 512m read back from `dbms.listConfig()`; the blocklist refuses both `LOAD CSV`
+> and `apoc.load.json` against loopback. Backup order used: count, `make neo4j-down`, `neo4j-admin database
+> info` (both stores `in use: false`, `needs recovery: false`), `neo4j-admin database dump <db> --to-path=`
+> for `neo4j` and `system` from a throwaway container on the same image digest (`--user 7474:7474
+> --network none`), then a read-only tar of `pmoves_neo4j-data` and of the old anonymous `/logs`.
+
+**Stop is a SIGKILL today (follow-up, not yet fixed).** `make neo4j-down` on Knuckles logged
+`[FATAL tini (1)] Unexpected error when forwarding signal: 'Operation not permitted'` and exited 1. PID 1 is
+`tini -g` as uid 0; java runs as uid 7474; with `cap_drop: ALL` PID 1's effective set is `0x4cb` (CHOWN,
+DAC_OVERRIDE, FOWNER, SETGID, SETUID, NET_BIND_SERVICE), so no `CAP_KILL`. kill(2): a sender needs `CAP_KILL`
+or a real/effective uid equal to the target's real/saved uid, else `EPERM`. So tini cannot forward SIGTERM,
+dies, and the kernel kills java: `stop_grace_period: 60s` buys nothing and a stop during writes leaves the
+store needing recovery (this stop was clean only because nothing had been written since the last checkpoint).
+Candidates, to be decided by a sandbox stop with a write in flight, checked with `neo4j-admin database info`:
+- `cap_add: [KILL]`: smallest change; restores the forward with the root PID 1 unchanged.
+- `user: "7474:7474"`: tini and java share a uid so no capability is needed; the image's root-only entrypoint
+  steps (chown, plugin install into `/var/lib/neo4j/plugins`) are then skipped and must be proven unnecessary.
+- `init: true` (docker run `--init`, "Run an init inside the container") is *probably not* a fix: docker-init
+  would be a second root PID 1 under the same capability set, and the tini-to-java hop still lacks `CAP_KILL`.
 
 **Stale host-port consumers (follow-up list).** Neo4j publishes no host ports. Reach it over the compose networks
 (`neo4j:7474` / `bolt://neo4j:7687`), through `docker exec ... cypher-shell`, or across the fleet via `neo4j-tailnet`
@@ -243,7 +266,8 @@ Already fixed: `scripts/security/post-merge-verify.sh` (it now checks inside the
 - The APOC procedures the Neo4j MCP actually calls, and whether A0's `mcp://neo4j` resolves to the neo4j/mcp binary.
 - archon's Cypher surface.
 - Live labels and counts (needs a credentialed session through with-env.sh).
-- Whether `internal.dbms.cypher_ip_blocklist` also stops `apoc.load.*`.
+- ~~Whether `internal.dbms.cypher_ip_blocklist` also stops `apoc.load.*`.~~ It does (measured 2026-10-02, §7).
+- Graceful stop: tini cannot forward SIGTERM without `CAP_KILL` (§7 follow-up).
 - Whether strict validation can be re-enabled.
 - Superseded history: `docs/NEO4J_SUBMODULE_PROMOTION.md` and `docs/NEO4J_SUBMODULE_INTEGRATION_COMPLETE.md` (2026-03)
   describe a PMOVES-supabase-style submodule with its own Makefile and db/. That submodule was never built; this TAC replaces them.
