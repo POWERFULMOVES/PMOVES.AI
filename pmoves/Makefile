@@ -3457,7 +3457,10 @@ up-darkxside-sidecar: ## Start DARKXSIDE standalone sidecar (port 8092, cloud LL
 		cp env.darkxside-sidecar.example env.darkxside-sidecar; \
 	fi
 	@echo "🌑 Starting DARKXSIDE sidecar..."
-	@bash -lc '. ./scripts/with-env.sh; docker compose -p darkxside-sidecar -f docker-compose.darkxside-sidecar.yml --env-file env.darkxside-sidecar up -d'
+	@# usr mounts use create_host_path: false, and the default ./usr is gitignored and
+	@# never created elsewhere: create the RESOLVED source as the host user first
+	@# (scripts/a0_usr_source_ensure.sh; it prints what it did).
+	@bash -lc '. ./scripts/with-env.sh; sh scripts/a0_usr_source_ensure.sh darkxside-sidecar docker-compose.darkxside-sidecar.yml env.darkxside-sidecar agent-zero-darkxside && docker compose -p darkxside-sidecar -f docker-compose.darkxside-sidecar.yml --env-file env.darkxside-sidecar up -d'
 	@echo "✔ DARKXSIDE sidecar starting. Health: curl -sf http://127.0.0.1:$${DARKXSIDE_PORT:-8092}/"
 
 down-darkxside-sidecar: ## Stop DARKXSIDE standalone sidecar
@@ -3473,7 +3476,10 @@ up-spark-sidecar: ## Start DGX Spark standalone sidecar (port 8093, in-container
 		cp env.spark-sidecar.example env.spark-sidecar; \
 	fi
 	@echo "⚡ Starting DGX Spark sidecar (ARM64 + NVIDIA Blackwell)..."
-	@bash -lc '. ./scripts/with-env.sh; docker compose -p spark-sidecar -f docker-compose.spark-sidecar.yml --env-file env.spark-sidecar up -d'
+	@# usr mounts use create_host_path: false, and the default ./usr is gitignored and
+	@# never created elsewhere: create the RESOLVED source as the host user first
+	@# (scripts/a0_usr_source_ensure.sh; it prints what it did).
+	@bash -lc '. ./scripts/with-env.sh; sh scripts/a0_usr_source_ensure.sh spark-sidecar docker-compose.spark-sidecar.yml env.spark-sidecar agent-zero-spark && docker compose -p spark-sidecar -f docker-compose.spark-sidecar.yml --env-file env.spark-sidecar up -d'
 	@echo "✔ DGX Spark sidecar starting. Health: curl -sf http://127.0.0.1:$${SPARK_PORT:-8093}/"
 	@echo "  GPU check: docker exec pmoves-ollama-spark nvidia-smi"
 

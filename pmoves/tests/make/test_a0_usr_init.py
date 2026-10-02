@@ -20,6 +20,7 @@ the PR description.
 """
 from __future__ import annotations
 
+import json
 import os
 import re
 import stat
@@ -283,3 +284,58 @@ def test_operator_road_runs_only_the_init(stub_docker_path):
     r, lines = plan(stub_docker_path, "a0-usr-init")
     assert r.returncode == 0, r.stderr
     assert [l for l in lines if "docker compose" in l or "docker-compose" in l] == [lines[index(lines, lambda l: l.rstrip().endswith("run --rm --no-deps agent-zero-usr-init"))]]
+
+
+# --- sidecar roads create the resolved usr source before `up` ---------------
+# create_host_path: false makes a missing source fail at create; the sidecars
+# default to ./usr, which is gitignored and created nowhere else.
+
+ENSURE = PMOVES / "scripts" / "a0_usr_source_ensure.sh"
+
+
+@pytest.mark.parametrize("target,svc", [("up-darkxside-sidecar", "agent-zero-darkxside"), ("up-spark-sidecar", "agent-zero-spark")])
+def test_sidecar_road_creates_the_usr_source_before_up(stub_docker_path, target, svc):
+    r, lines = plan(stub_docker_path, target)
+    assert r.returncode == 0, r.stderr
+    up = [l for l in lines if " up -d" in l]
+    assert len(up) == 1, lines
+    line = up[0]
+    assert "a0_usr_source_ensure.sh" in line, line
+    assert line.index("a0_usr_source_ensure.sh") < line.index(" up -d")
+    # Chained with &&, inside the same with-env.sh shell as the up it guards.
+    assert f"{svc} && docker compose" in line and line.index("with-env.sh") < line.index("a0_usr_source_ensure.sh")
+
+
+def fake_docker(tmp_path: Path, payload: str) -> dict:
+    bin_ = tmp_path / "bin"
+    bin_.mkdir()
+    (tmp_path / "config.json").write_text(payload)
+    d = bin_ / "docker"
+    d.write_text(f'#!/bin/sh\ncat "{tmp_path / "config.json"}"\n')
+    d.chmod(0o755)
+    return dict(os.environ, PATH=f"{bin_}:{os.environ['PATH']}")
+
+
+def ensure(env):
+    return subprocess.run(["sh", str(ENSURE), "p", "f.yml", "e.env", "agent-zero-x"], env=env,
+                          capture_output=True, text=True, timeout=60)
+
+
+@pytest.mark.skipif(os.getuid() == 0, reason="the script refuses to run as root")
+def test_ensure_creates_the_resolved_source_as_the_host_user_and_is_idempotent(tmp_path):
+    src = tmp_path / "resolved" / "usr"
+    vol = {"type": "bind", "source": str(src), "target": "/a0/usr", "bind": {"create_host_path": False}}
+    env = fake_docker(tmp_path, json.dumps({"services": {"agent-zero-x": {"volumes": [vol]}}}))
+    r = ensure(env)
+    assert r.returncode == 0, r.stderr
+    assert src.is_dir() and src.stat().st_uid == os.getuid()
+    assert "created" in r.stdout
+    r = ensure(env)
+    assert r.returncode == 0 and "exists" in r.stdout
+
+
+@pytest.mark.skipif(os.getuid() == 0, reason="the script refuses to run as root")
+@pytest.mark.parametrize("payload", ['{"services": {"agent-zero-x": {"volumes": []}}}', "not json"])
+def test_ensure_fails_when_the_source_cannot_be_resolved(tmp_path, payload):
+    r = ensure(fake_docker(tmp_path, payload))
+    assert r.returncode != 0
