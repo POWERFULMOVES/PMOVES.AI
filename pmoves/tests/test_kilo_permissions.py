@@ -87,8 +87,6 @@ ESCAPES_DENIED = [
     # secrets files named in the arguments, also through a glob (delta review P2)
     "cat pmoves/env.shared",
     "grep KEY pmoves/env.tier-llm.env",
-    "cat env.s*",
-    "head -c 999 env.sha?",
     "less pmoves/env.shared",
     "tail -n 5 pmoves/env.tier-llm.env",
     "rg KEY pmoves/env.shared",
@@ -133,6 +131,17 @@ ASK_NOT_ALLOW = [
     "cat README.md",
     "head -n 5 kilo.json",
     "cat env*",
+    # a glob hides the name from the secrets deny; cat/head are not
+    # auto-allowed, so these still need a human
+    "cat env.s*",
+    "head -c 999 env.sha?",
+    # git diff goes --no-index (a whole-file diff of any file) when asked to,
+    # or implicitly for a path outside the worktree; a glob hides the name
+    "git diff --no-index Makefile pmoves/?nv.shared",
+    "git diff --no-index a b",
+    "git diff Makefile /etc/hostname",
+    "git diff HEAD~1 -- pmoves",
+    "git diff HEAD -- pmoves/?nv.shared",
     # git branch is listing-only; anything else asks
     "git branch new-branch",
     "git branch -vD x",
@@ -148,7 +157,9 @@ STILL_ALLOWED = [
     "git status",
     "git status --short",
     "git diff",
-    "git diff HEAD~1 -- pmoves",
+    "git diff --stat",
+    "git diff --cached",
+    "git diff origin/main...HEAD --stat",
     "git log --oneline -5",
     "git show HEAD",
     "git branch",
@@ -169,6 +180,23 @@ STILL_ALLOWED = [
 @pytest.mark.parametrize("command", STILL_ALLOWED)
 def test_read_only_commands_stay_auto_allowed(command):
     assert _resolve("bash", command) == "allow"
+
+
+# The secrets-name deny names the files themselves (env.shared, env.tier-*,
+# dotenv). A deny cannot be approved mid-session, so documentation copies and
+# look-alike names must never hit it (final review P3).
+NOT_HARD_DENIED = [
+    "git log -- pmoves/env.shared.example",
+    "git log -- pmoves/tools/env.py",
+    "ls pmoves/env.d",
+    "cat pmoves/env.shared.example",
+    "cat " + _DOT_ENV + ".example",
+]
+
+
+@pytest.mark.parametrize("command", NOT_HARD_DENIED)
+def test_lookalike_and_example_names_are_not_hard_denied(command):
+    assert _resolve("bash", command) != "deny"
 
 
 @pytest.mark.parametrize("path,expected", [
