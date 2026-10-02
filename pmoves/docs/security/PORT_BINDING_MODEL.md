@@ -51,7 +51,7 @@ These are the surfaces the abandoned stash tried to widen and this lane intentio
 |---------|----------|-----------------------|
 | Supabase DB / Auth / REST / Realtime / Storage / Studio / Pooler | `SUPABASE_*_BIND` | Database, auth, and admin surface area |
 | Kong Admin | `KONG_ADMIN_BIND` | Direct admin plane |
-| Qdrant / Meilisearch / Neo4j / ClickHouse | `QDRANT_BIND`, `MEILISEARCH_BIND`, `NEO4J_BIND`, `CLICKHOUSE_BIND` | Data-tier stores |
+| Qdrant / Meilisearch / Neo4j / ClickHouse | `QDRANT_BIND`, `MEILISEARCH_BIND`, `CLICKHOUSE_BIND` (Neo4j publishes no host port: internal-only, reached through the `neo4j-tailnet` forwarder, `docs/TAC/TAC_NEO4J.md`) | Data-tier stores |
 | MinIO API / Console | `MINIO_BIND`, `MINIO_CONSOLE_BIND` | Object store + admin console |
 
 ### Reviewed Mesh Override Allowlist

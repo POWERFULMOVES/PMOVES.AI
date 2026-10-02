@@ -193,7 +193,6 @@ known_failures:
   - "ERROR|tests.integration.test_pr483_critical_path|test_critical_path_agent_zero"
   - "ERROR|tests.integration.test_pr483_critical_path|test_critical_path_hirag_v2"
   - "ERROR|tests.integration.test_pr483_critical_path|test_critical_path_nats"
-  - "ERROR|tests.integration.test_pr483_critical_path|test_critical_path_neo4j"
   - "ERROR|tests.integration.test_pr483_critical_path|test_critical_path_supabase"
   - "ERROR|tests.integration.test_pr483_critical_path|test_critical_path_tensorzero"
   - "ERROR|tests.integration.test_pr483_critical_path|test_end_to_end_archon_to_supabase"
