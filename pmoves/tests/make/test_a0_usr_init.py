@@ -306,12 +306,13 @@ def test_sidecar_road_creates_the_usr_source_before_up(stub_docker_path, target,
     assert f"{svc} && docker compose" in line and line.index("with-env.sh") < line.index("a0_usr_source_ensure.sh")
 
 
-def fake_docker(tmp_path: Path, payload: str) -> dict:
+def fake_docker(tmp_path: Path, payload: str, rc: int = 0) -> dict:
     bin_ = tmp_path / "bin"
     bin_.mkdir()
     (tmp_path / "config.json").write_text(payload)
     d = bin_ / "docker"
-    d.write_text(f'#!/bin/sh\ncat "{tmp_path / "config.json"}"\n')
+    body = f'cat "{tmp_path / "config.json"}"' if rc == 0 else f'echo "COMPOSE-SAYS-NO" >&2; exit {rc}'
+    d.write_text(f"#!/bin/sh\n{body}\n")
     d.chmod(0o755)
     return dict(os.environ, PATH=f"{bin_}:{os.environ['PATH']}")
 
@@ -339,3 +340,12 @@ def test_ensure_creates_the_resolved_source_as_the_host_user_and_is_idempotent(t
 def test_ensure_fails_when_the_source_cannot_be_resolved(tmp_path, payload):
     r = ensure(fake_docker(tmp_path, payload))
     assert r.returncode != 0
+    assert "Traceback" not in r.stderr and "a0-usr-source:" in r.stderr
+
+
+@pytest.mark.skipif(os.getuid() == 0, reason="the script refuses to run as root")
+def test_ensure_surfaces_a_compose_config_failure_without_a_traceback(tmp_path):
+    r = ensure(fake_docker(tmp_path, "", rc=15))
+    assert r.returncode == 1
+    assert "COMPOSE-SAYS-NO" in r.stderr and "compose config failed" in r.stderr
+    assert "Traceback" not in r.stderr

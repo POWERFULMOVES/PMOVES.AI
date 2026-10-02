@@ -26,9 +26,19 @@ if [ "$(id -u)" = 0 ]; then
 	exit 1
 fi
 
-src=$(docker compose -p "$project" -f "$file" --env-file "$envfile" config --format json | python3 -c '
+# Capture first: piping straight into python would hide compose's exit status
+# and bury its error under a JSONDecodeError traceback.
+if ! cfg=$(docker compose -p "$project" -f "$file" --env-file "$envfile" config --format json); then
+	echo "a0-usr-source: docker compose config failed for $project (error above); not creating anything" >&2
+	exit 1
+fi
+
+src=$(printf '%s' "$cfg" | python3 -c '
 import json, sys
-svc = json.load(sys.stdin)["services"][sys.argv[1]]
+try:
+    svc = json.load(sys.stdin)["services"][sys.argv[1]]
+except (ValueError, KeyError) as exc:
+    sys.exit("a0-usr-source: cannot read service %s from compose config: %s" % (sys.argv[1], exc))
 found = [v["source"] for v in svc.get("volumes") or [] if v.get("target") == "/a0/usr"]
 if len(found) != 1:
     sys.exit("a0-usr-source: expected one /a0/usr mount on %s, found %d" % (sys.argv[1], len(found)))
