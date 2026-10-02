@@ -1943,9 +1943,17 @@ up-workers: ## Start worker services (extract, langextract, media)
 .PHONY: up-agents
 up-agents: ## Start agent services (Agent Zero, Archon, DeepResearch, SupaSerch)
 	@echo "🤖 Starting agent services..."
+	@$(MAKE) --no-print-directory a0-usr-perms
 	@$(DC) up -d $(AGENT_SERVICES)
 	@$(MAKE) --no-print-directory wait-agents
 	@echo "✅ Agents ready"
+
+.PHONY: a0-usr-perms
+a0-usr-perms: ## Keep the A0 usr bind-mount tree writable by the container uid (65532). Host seeding (git checkout, cp from pmoves/config/agent-zero/, manual mkdir) creates these dirs as the host uid 0755; the hardened image runs non-root as 65532, so plugin install and settings saves fail with EACCES (observed 2026-10-01). Idempotent; only touches dirs that already exist.
+	@for d in agents api knowledge plugins; do \
+		dir="data/agent-zero/usr/$$d"; \
+		if [ -d "$$dir" ]; then chmod -R a+rwX "$$dir" || true; fi; \
+	done
 
 .PHONY: up-evo
 up-evo: ## Start the EVO SWARM controller (evolutionary optimizer :8113) — builds locally (no ghcr image published). Loads env.shared for CHIT prod signing.
