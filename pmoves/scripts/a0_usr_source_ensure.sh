@@ -1,9 +1,11 @@
 #!/bin/sh
-# Create a sidecar's A0 usr bind source as the HOST user before `up`.
+# Create the usr bind source of a standalone A0 fork (SPARK, DARKXSIDE) as the
+# HOST user before `up`. Their compose files are named *-sidecar.yml, but each is
+# a full A0 with local-node access, not a k8s-style sidecar.
 #
 # The /a0/usr mounts use `create_host_path: false`, so a missing source makes
 # `up` fail at create instead of Docker silently creating an empty root-owned
-# dir. The sidecars default to ./usr, which is gitignored and nothing else
+# dir. SPARK and DARKXSIDE default to ./usr, which is gitignored and nothing else
 # creates, so their roads create it here first; agent-zero-<name>-usr-init then
 # hands it to 65532. The main agent-zero road does not use this: its
 # data/agent-zero/usr carries tracked files and always exists in a clone.
