@@ -2556,10 +2556,8 @@ archon-follow: ## ONLINE: pull the gated GHCR :current, verify its gate label, t
 .PHONY: load-consciousness-neo4j harvest-consciousness
 
 load-consciousness-neo4j: ## Load consciousness taxonomy schema into Neo4j (CONCH Phase 4b)
-	@echo "→ Loading consciousness Neo4j schema (CONCH Phase 4b)..."
-	@echo "   This will load migration 003_consciousness_taxonomy.cypher (30KB schema)"
-	@echo ""
-	@$(MAKE) --no-print-directory neo4j-migrate VERSION=003_consciousness_taxonomy
+	@echo "→ Loading consciousness Neo4j schema (CONCH Phase 4b): data/consciousness/neo4j-consciousness-schema.cypher"
+	$(call neo4j_apply_cypher,$(CURDIR)/data/consciousness/neo4j-consciousness-schema.cypher)
 	@echo "✔ Consciousness taxonomy loaded into Neo4j (CONCH Phase 4b complete)"
 
 harvest-consciousness: ## Run Archon-based consciousness taxonomy harvester
@@ -5699,7 +5697,7 @@ chit-terminal-viz: ## Render CHIT visualization in terminal
 .PHONY: chit-mindmap-seed
 chit-mindmap-seed: ## Seed Neo4j with CHIT mindmap graph
 	@echo "→ Seeding Neo4j with CHIT mindmap..."
-	@cat tools/chit_mindmap_seed.cypher | $(DC) exec -T neo4j cypher-shell -u neo4j -p "$${NEO4J_AUTH_PASSWORD:-neo4j}"
+	$(call neo4j_apply_cypher,$(CURDIR)/tools/chit_mindmap_seed.cypher)
 	@echo "✔ CHIT mindmap seeded"
 
 # =============================================================================
@@ -5776,53 +5774,67 @@ github-app-test: ## Test GitHub App token minting (requires services running)
 	@echo "→ Testing GitHub App token minting..."
 	@cd ../PMOVES-BoTZ && $(PYTHON) features/github/mint_and_exec.py
 
-# Neo4j Integration (PMOVES-Neo4j Submodule at root level)
+# Neo4j roads
 # =============================================================================
-.PHONY: neo4j-up neo4j-down neo4j-restart neo4j-logs neo4j-migrate neo4j-seed neo4j-bootstrap neo4j-status
+# These used to delegate to a Makefile inside the PMOVES-Neo4j submodule and read
+# its db/{migrations,seeds}. That submodule is the upstream neo4j/neo4j
+# source fork: it has no Makefile and no db/ on any branch, so every one of them
+# failed. They now drive the `neo4j` compose service and the Cypher files this
+# repo actually carries (pmoves/neo4j/cypher/). See docs/TAC/TAC_NEO4J.md.
+.PHONY: neo4j-up neo4j-down neo4j-restart neo4j-logs neo4j-migrate neo4j-bootstrap neo4j-status
 
-neo4j-up: ## Start Neo4j submodule stack
-	@echo "→ Starting Neo4j from submodule..."
-	@$(MAKE) --no-print-directory -C ../PMOVES-Neo4j up
+# Apply one Cypher file to the running Neo4j. The password reaches cypher-shell
+# through its NEO4J_PASSWORD env var (`docker exec -e NAME` copies it from this
+# shell), never argv. An unset password fails closed: there is no fallback to the
+# vendor default, which would either fail auth or, on a fresh store, succeed.
+define neo4j_apply_cypher
+	@$(LOAD_ENV_SHARED); set +e; \
+	f="$(1)"; \
+	[ -f "$$f" ] || { echo "ERROR: $$f not found" >&2; exit 1; }; \
+	[ -n "$${NEO4J_PASSWORD:-}" ] || { echo "ERROR: NEO4J_PASSWORD is unset or empty (env.shared via with-env.sh); refusing to fall back to a default password" >&2; exit 1; }; \
+	c=$$($(PYTHON) $(CURDIR)/scripts/neo4j_container.py) || exit 3; \
+	echo "→ Applying $$f to $$c"; \
+	NEO4J_USERNAME="$${NEO4J_USER:-neo4j}" docker exec -i -e NEO4J_USERNAME -e NEO4J_PASSWORD "$$c" cypher-shell < "$$f"
+endef
 
-neo4j-down: ## Stop Neo4j submodule stack
-	@echo "→ Stopping Neo4j from submodule..."
-	@$(MAKE) --no-print-directory -C ../PMOVES-Neo4j down
+# --no-recreate (docker compose up: "If containers already exist, don't recreate
+# them"): main's neo4j service still carries env_file and 0.0.0.0 ports, so ANY
+# config-hash drift (one rotated env.tier-data value is enough) would make a plain
+# `up -d` recreate Neo4j on that config and spend the one planned recreate of the
+# compose reconciliation (PR #3251, docs/TAC/TAC_NEO4J.md section 7). Drop the flag
+# when #3251 lands. --wait returns once the healthcheck passes.
+neo4j-up: ## Start Neo4j; never recreates an existing container (until PR #3251 lands)
+	@echo "→ neo4j-up: --no-recreate, so an existing Neo4j is started as-is, never recreated on main's pre-#3251 compose."
+	@echo "   A config change reaches Neo4j only through the reconciliation runbook (docs/TAC/TAC_NEO4J.md section 7)."
+	@$(DC) up -d --no-recreate --wait neo4j
 
-neo4j-restart: ## Restart Neo4j submodule stack
-	@echo "→ Restarting Neo4j from submodule..."
-	@$(MAKE) --no-print-directory -C ../PMOVES-Neo4j restart
+neo4j-down: ## Stop Neo4j (container kept; data volume untouched)
+	@$(DC) stop neo4j
 
-neo4j-logs: ## View Neo4j logs
-	@$(MAKE) --no-print-directory -C ../PMOVES-Neo4j logs
+neo4j-restart: ## Restart Neo4j (60s graceful stop for the checkpoint)
+	@$(DC) restart neo4j
 
-neo4j-migrate: ## Run Neo4j migration (usage: make neo4j-migrate VERSION=003)
+neo4j-logs: ## Follow Neo4j logs
+	@$(DC) logs -f --tail=200 neo4j
+
+neo4j-migrate: ## Apply one Cypher file from neo4j/cypher (usage: make neo4j-migrate VERSION=001)
 	@if [ -z "$(VERSION)" ]; then \
-		echo "Usage: make neo4j-migrate VERSION=003"; \
+		echo "Usage: make neo4j-migrate VERSION=001"; \
 		echo ""; \
-		echo "Available migrations:"; \
-		ls -1 ../PMOVES-Neo4j/db/migrations/*.cypher 2>/dev/null | while read -r f; do \; echo "  • $$(basename "$$f")"; \
-		done; \
+		echo "Available migrations (neo4j/cypher):"; \
+		ls -1 $(CURDIR)/neo4j/cypher/*.cypher | while read -r f; do echo "  • $$(basename "$$f")"; done; \
 		exit 1; \
 	fi
-	@$(MAKE) --no-print-directory -C ../PMOVES-Neo4j migrate VERSION=$(VERSION)
+	@n=$$(ls -1 $(CURDIR)/neo4j/cypher/$(VERSION)*.cypher 2>/dev/null | wc -l); \
+	if [ "$$n" != 1 ]; then echo "ERROR: VERSION=$(VERSION) matches $$n files in neo4j/cypher (need exactly 1)" >&2; exit 1; fi
+	$(call neo4j_apply_cypher,$$(ls -1 $(CURDIR)/neo4j/cypher/$(VERSION)*.cypher))
 
-neo4j-seed: ## Load Neo4j seed data (usage: make neo4j-seed SEED=001_person_aliases.csv)
-	@if [ -z "$(SEED)" ]; then \
-		echo "Usage: make neo4j-seed SEED=001_person_aliases.csv"; \
-		echo ""; \
-		echo "Available seeds:"; \
-		ls -1 ../PMOVES-Neo4j/db/seeds/*.csv 2>/dev/null | while read -r f; do \; echo "  • $$(basename "$$f")"; \
-		done; \
-		exit 1; \
-	fi
-	@$(MAKE) --no-print-directory -C ../PMOVES-Neo4j seed SEED=$(SEED)
-
-neo4j-bootstrap: ## Initialize Neo4j (run migrations and seeds)
+neo4j-bootstrap: ## Initialize Neo4j (constraints, alias seed CSV, CHIT geometry fixture + smoke)
 	@echo "→ Bootstrapping Neo4j..."
-	@bash "$(CURDIR)/scripts/neo4j_bootstrap.sh"
+	@$(LOAD_ENV_SHARED); set +e; bash "$(CURDIR)/scripts/neo4j_bootstrap.sh"
 
-neo4j-status: ## Check Neo4j status from submodule
-	@$(MAKE) --no-print-directory -C ../PMOVES-Neo4j status
+neo4j-status: ## Show the Neo4j container state and health
+	@$(DC) ps neo4j
 
 # Legacy compatibility
 .PHONY: neo4j-bootstrap-legacy

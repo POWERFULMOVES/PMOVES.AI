@@ -24,12 +24,14 @@ PMOVES.AI uses Neo4j for the knowledge graph that powers:
 
 ```
 pmoves/neo4j/cypher/
-├── 001_init.cypher                    # Constraints and indexes
-├── 002_load_person_aliases.cypher     # Person alias mappings
-├── 003_seed_chit_mindmap.cypher       # CHIT demo constellation
-├── 010_chit_geometry_fixture.cypher    # CHIT geometry test data
-└── 011_chit_geometry_smoke.cypher     # Smoke test data
+├── 001_init.cypher                    # Entity.value uniqueness
+├── 002_chit_constraints.cypher        # Anchor/Constellation/Point/MediaRef uniqueness
+├── 010_chit_geometry_fixture.cypher   # CHIT demo constellation (fixture)
+└── 011_chit_geometry_smoke.cypher     # Fixture check; neo4j-bootstrap fails if it fails
 ```
+
+Person aliases are not a cypher file: `scripts/neo4j_bootstrap.sh` generates an
+`UNWIND` from `neo4j/datasets/person_aliases_seed.csv`.
 
 ---
 
@@ -79,33 +81,31 @@ CREATE CONSTRAINT entity_value_unique IF NOT EXISTS FOR (e:Entity) REQUIRE e.val
 
 Creates unique constraint on Entity values for data integrity.
 
-### 002_load_person_aliases.cypher
+### 002_chit_constraints.cypher
 
-**Purpose:** Load person alias mappings for entity resolution
-
-Creates `:Entity` nodes with person names and their aliases for cross-reference in knowledge graphs.
-
-### 003_seed_chit_mindmap.cypher
-
-**Purpose:** Seed sample CHIT constellation for local testing
-
-**Data Seeded:**
-- **Anchor:** `6d8d2e65-b6b9-4d3a-9b5e-3a9c42c1b111` (mini-vec-4d, sports/basketball)
-- **Constellation:** `8c1b7a8c-7b38-4a6b-9bc3-3f1fdc9a1111` (Basketball-ish topics)
-- **Points:** 3 points (2 text, 1 video)
-- **MediaRefs:** 3 media references (2 doc, 1 video)
+**Purpose:** Uniqueness on the keys every CHIT geometry writer MERGEs on: `Anchor.id`,
+`Constellation.id`, `Point.id`, `MediaRef.uid`. Ported from
+`docs/pmoves_all_in_one/pmoves_chit_patch/neo4j/migrations/001_chit.cql:1-4`.
 
 ### 010_chit_geometry_fixture.cypher
 
-**Purpose:** Idempotent CHIT geometry fixture for testing
+**Purpose:** Idempotent CHIT demo constellation (fixture data, not real media)
 
-Same data structure as `003_seed_chit_mindmap.cypher` but written for idempotent re-running.
+**Data Seeded:**
+- **Anchor:** `6d8d2e65-b6b9-4d3a-9b5e-3a9c42c1b111` (mini-vec-4d, sports/basketball)
+- **Constellation:** `8c1b7a8c-7b38-4a6b-9bc3-3f1fdc9a1111` (Basketball-ish topics), linked by `FORMS`
+- **Points:** 3 points (2 text, 1 video)
+- **MediaRefs:** 3 media references (2 doc, 1 video)
+
+`003_seed_chit_mindmap.cypher` seeded the same nodes and was removed in 2026-10: its edge
+statements reused variables across `;`, so each created an unlabeled node pair instead
+(see `docs/TAC/TAC_NEO4J.md` section 6 for cleaning those up on an existing graph).
 
 ### 011_chit_geometry_smoke.cypher
 
-**Purpose:** Smoke test data for CHIT geometry validation
-
-Minimal dataset for testing CHIT encoding/decoding pipelines.
+**Purpose:** Read-only check of the 010 fixture: one `Anchor-[:FORMS]->Constellation`,
+3 Points, 3 MediaRefs, at least 2 modalities. It returns `CHIT_SMOKE_OK` or
+`CHIT_SMOKE_FAIL`, and `neo4j-bootstrap` exits non-zero on anything but `CHIT_SMOKE_OK`.
 
 ---
 
@@ -114,11 +114,8 @@ Minimal dataset for testing CHIT encoding/decoding pipelines.
 ### Method 1: Direct Cypher Execution
 
 ```bash
-# Connect to Neo4j
-docker exec -it pmoves-neo4j-1 cypher-shell -u neo4j -p ${NEO4J_PASSWORD}
-
-# Execute migration file
-cat pmoves/neo4j/cypher/001_init.cypher | cypher-shell -u neo4j -p ${NEO4J_PASSWORD}
+# One file, password by env (never argv), container resolved from compose
+make -C pmoves neo4j-migrate VERSION=001
 ```
 
 ### Method 2: Using make Command

@@ -535,7 +535,7 @@ Cipher is ONE of FIVE memory surfaces in PMOVES. Agents and docs routinely confl
 | Surface | Port | Backend | Purpose | Overlap with Cipher? |
 |---------|------|---------|---------|---------------------|
 | **Cipher Memory** | 8105 | Neo4j (graph) + Qdrant (vectors) + in-mem fallback | Agent episodic memory, checkpoint/resume | — (this IS Cipher) |
-| **Hi-RAG Gateway v2** | 8086/8087 | Qdrant + Neo4j + Meilisearch + cross-encoder | Document/corpus retrieval with reranking | Shares Neo4j instance, different graph domain. Intentionally separate (`HERMES_CIPHER_LOCAL_ARCHITECTURE.md:115`) |
+| **Hi-RAG Gateway v2** | 8086/8087 | Qdrant + Neo4j + Meilisearch + cross-encoder | Document/corpus retrieval with reranking | Shares the Neo4j instance AND its one database (Community Edition allows exactly one standard database), so the separation is by label only (`:Memory` vs `:Entity`/mindmap labels; see [TAC_NEO4J](TAC_NEO4J.md)). Intentionally separate (`HERMES_CIPHER_LOCAL_ARCHITECTURE.md:115`) |
 | **Semantic-cache** | (via Cipher) | pgvector (Postgres) | LLM response cache; Layer 0 = Cipher pre-check | **Depends on Cipher** — Layer 0 hits Cipher REST, fail-open to pgvector |
 | **Open Notebook** | 5055 | SurrealDB | External document/note KB | Independent. Consumed by DeepResearch, Channel Monitor, Agent Zero, UI |
 | **DoX CipherService** | 8096 | In-memory dicts + DoX DB adapter | Team/workspace memory for DoX app | **Namesake only** — separate impl, separate port, NOT the Cipher API |
