@@ -98,17 +98,20 @@ ESCAPES_DENIED = [
     "cat " + _DOT_ENV,
     "cat pmoves/" + _DOT_ENV + ".local",
     # .envrc: dotenv-adjacent secrets filename. MEASURED before this change:
-    # git check-ignore -v .envrc returned nothing (.gitignore:47-48 are .env
-    # and .env.*, which do not match), so the kilo.json deny was the ONLY
-    # guard - .gitignore now carries .envrc as the second (claude-review
-    # thread: the original comment claimed line 47 covered it; it did not)
+    # git check-ignore -v .envrc returned nothing (.gitignore carried only
+    # the .env and .env.* patterns, which do not match), so the kilo.json deny
+    # was the ONLY guard - .gitignore now carries the .envrc pattern as the
+    # second (claude-review thread: the original comment claimed a covering
+    # line existed; it did not)
     "cat " + _DOT_ENV + "rc",
     "cat pmoves/" + _DOT_ENV + "rc",
     "grep KEY " + _DOT_ENV + "rc",
-    # env.<name>.local: node-local overlay shape. MEASURED: only
-    # pmoves/env.mesh-bind.local is explicitly ignored (.gitignore:57); the
-    # general shape was not, so .gitignore now carries pmoves/env.*.local.
-    # Neither shape matched the .env / env.shared / env.tier deny families
+    # env.<name>.local: node-local overlay shape. MEASURED: only the explicit
+    # pmoves/env.mesh-bind.local entry ignored it; the general shape was not,
+    # so .gitignore now carries the pmoves/env.*.local pattern (check-ignore
+    # resolves both files to it). Neither shape matched the .env /
+    # env.shared / env.tier deny families. Cite patterns, not line numbers:
+    # inserts in this very PR shifted them twice.
     "cat pmoves/env.mesh-bind.local",
     "grep KEY pmoves/env.jellyfin-ai.local",
 ]
