@@ -82,7 +82,7 @@ Rows marked **pending** are prepared as ONE compose change (grant `compose:pr:<N
 | `/logs` | anonymous volume (orphaned on each recreate) | `OM/docker/mounting-volumes` | named `neo4j-logs` (**pending**) |
 | healthcheck | `wget localhost:7474` | Community has no unauthenticated database-availability endpoint | keep as liveness; authenticated `RETURN 1` belongs to the make road |
 | `security_opt` | set in docker-compose.yml; stripped from the generated core.yml by design | `OM/docker/security` | add neo4j to `docker-compose.hardened.yml` |
-| other definitions | elder-melchor overlay `${NEO4J_PASSWORD:-pmoves2026}`; `jellyfin-neo4j` `${JELLYFIN_NEO4J_PASSWORD:-mediapassword123}`, tag-only `neo4j:5.26.22`, 4.x memory keys, `gds.*` allowlisted with no GDS plugin | no default credentials | `:?` guards; jellyfin on a digest (**pending**, compose) |
+| other definitions | elder-melchor overlay `${NEO4J_PASSWORD:-<retired literal, redacted 2026-10>}`; `jellyfin-neo4j` `${JELLYFIN_NEO4J_PASSWORD:-<retired literal, redacted 2026-10>}`, tag-only `neo4j:5.26.22`, 4.x memory keys, `gds.*` allowlisted with no GDS plugin | no default credentials | `:?` guards; jellyfin on a digest (**pending**, compose) |
 
 ## 5. Consumers and the graph contract
 
