@@ -5706,6 +5706,32 @@ github-app-test: ## Test GitHub App token minting (requires services running)
 	@echo "→ Testing GitHub App token minting..."
 	@cd ../PMOVES-BoTZ && $(PYTHON) features/github/mint_and_exec.py
 
+# NATS auth bridge roads (fix/nats-auth-bridge, operator decision B 2026-10-03)
+# =============================================================================
+# Dual-credential rotation without a client-recreation wave: the conf carries
+# the current + target users; the SERVER adopts it once; clients move to the
+# new credential as each is naturally recreated; the old user is dropped by
+# re-render + SIGHUP once monitoring shows zero connections on it. Docs basis:
+# authorization/users is reloadable with no client disconnects (nats docs,
+# configuration/loading + deployment/config-management).
+.PHONY: nats-auth-render nats-auth-validate nats-auth-reload nats-auth-status
+
+nats-auth-render: ## Render data/nats/auth.conf (both users) from funnel env; fail-closed on empty
+	@$(LOAD_ENV_SHARED); $(PRECHECK_PY) scripts/nats_auth_render.py
+
+nats-auth-render-final: ## Final phase: render WITHOUT the old user (only after nats-auth-status shows 0 on it)
+	@$(LOAD_ENV_SHARED); $(PRECHECK_PY) scripts/nats_auth_render.py --drop-old
+
+nats-auth-validate: ## Validate the rendered conf with the pinned nats-server binary (nats-server -t)
+	@docker run --rm -v $(CURDIR)/data/nats/auth.conf:/etc/nats/auth.conf:ro nats:2.11.8-alpine nats-server -c /etc/nats/auth.conf -t
+
+nats-auth-reload: ## SIGHUP the running nats: auth changes apply in place, clients stay connected
+	@docker kill --signal=SIGHUP $$(docker ps --format '{{.Names}}' | grep -E '^pmoves-nats-?1?$$' | head -1)
+	@echo "✔ SIGHUP sent — verify with: docker logs <nats> --tail 5 (expect 'Reloaded server configuration')"
+
+nats-auth-status: ## Connections per auth user (the migration meter for the bridge)
+	@$(PYTHON) -c "import json,urllib.request;d=json.load(urllib.request.urlopen('http://127.0.0.1:'+'$${NATS_MONITORING_PORT:-9223}'+'/connz',timeout=5));rows=[c.get('authorized_user','?') for c in d.get('connections',[])];import collections;print('connections by user:',dict(collections.Counter(rows)));print('total:',len(rows))"
+
 # Neo4j roads
 # =============================================================================
 # These used to delegate to a Makefile inside the PMOVES-Neo4j submodule and read
