@@ -164,6 +164,8 @@ yarn-error.log*
 pmoves/data/agent-zero/memory/
 pmoves/data/agent-zero/logs/
 pmoves/data/open-notebook/surreal_data/
+# Rendered NATS auth conf — bcrypt hashes only, but rotation material stays local
+pmoves/data/nats/
 # Generated at launch by crush-pmoves — per-node runtime state, never committed
 pmoves/data/identity/node-identity.md
 # Node-local operator audit logs (e.g. env_local_edits.jsonl from

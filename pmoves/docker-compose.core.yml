@@ -47,16 +47,21 @@ services:
     - /data/js
     - -m
     - '8222'
-    - --user
-    # Default to the canonical nats:pmoves creds when the runtime env doesn't
-    # supply NATS_USER/NATS_PASSWORD. Without a default, a blank env var starts
-    # the server with empty creds while every client (tier envs + init script)
-    # authenticates as nats:pmoves -> "Authorization Violation" for the whole
-    # bus. These are the documented weak defaults (env.shared.example, tier
-    # envs); a real NATS_PASSWORD still overrides. Keep in sync with clients.
-    - ${NATS_USER:-nats}
-    - --pass
-    - ${NATS_PASSWORD:-pmoves}
+    # Auth lives in the mounted conf, not CLI flags: the dual-credential bridge
+    # (fix/nats-auth-bridge) carries BOTH the current user (bcrypt of
+    # ${NATS_USER}/${NATS_PASSWORD}) and the rotation target
+    # (${NATS_USER_V2}/${NATS_PASSWORD_V2}) so clients move to the new
+    # credential as each is naturally recreated — no fleet-wide recreation wave.
+    # Rendered by `make nats-auth-render` (bcrypt via the tooling venv, fail
+    # closed on an empty password), validated with `nats-server -t` before the
+    # recreate, and every later auth change is a SIGHUP reload — the docs put
+    # authorization/users in the reloadable set with no client disconnects
+    # (docs.nats.io configuration/loading + deployment/config-management).
+    # Fail-closed: without the mounted file this container refuses to start —
+    # an unauthenticated bus can no longer come up by accident (the old
+    # --user/--pass blank-env footgun the weak defaults papered over).
+    - -c
+    - /etc/nats/auth.conf
     restart: unless-stopped
     ports:
     # NATS is the mesh-wide event bus — credential-guarded (nats:***@),
@@ -72,6 +77,9 @@ services:
     volumes:
     # Persists JetStream across recreate. See --store_dir above.
     - pmoves-nats-js:/data/js
+    # Rendered auth conf (make nats-auth-render). Read-only: rotation edits go
+    # through re-render + SIGHUP reload, never an in-container edit.
+    - ./data/nats/auth.conf:/etc/nats/auth.conf:ro
     networks:
     # pmoves_bus is internal:true (isolated in-stack mesh bus). A container on an
     # internal-only network gets NO published-port DNAT rules from Docker, so the
