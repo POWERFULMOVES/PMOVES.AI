@@ -49,8 +49,7 @@ jetstream {{
 authorization {{
   # bcrypt hashes, single-quoted: unquoted $ tokens resolve as env vars.
   users: [
-    {{ user: "{old_user}", password: "{old_hash}" }}
-{new_user_block}  ]
+{users_block}  ]
 }}
 """
 
@@ -105,27 +104,30 @@ def _bcrypt(value: str) -> str:
 
 
 def render(out: Path, drop_old: bool) -> None:
-    old_user, old_pass = _current_credential()
+    """Bridge mode: BOTH the current (leaked) credential and the rotation
+    target, so clients keep working while they migrate. --drop-old (final
+    phase): ONLY the rotation target — the leaked user is evicted, which is
+    the entire point of the rotation. The target credential is required in
+    BOTH modes; a final render that silently kept the leaked user because
+    NATS_PASSWORD_V2 was empty would be the inversion this lane exists to
+    prevent."""
+    target_user = os.environ.get("NATS_USER_V2", "").strip() or "nats-v2"
+    target_pass = _required("NATS_PASSWORD_V2")
 
-    if drop_old:
-        new_block = ""
-    else:
-        new_user = os.environ.get("NATS_USER_V2", "").strip() or "nats-v2"
-        new_pass = _required("NATS_PASSWORD_V2")
-        new_block = (
-            f'    {{ user: "{new_user}", password: "{_bcrypt(new_pass)}" }}\n'
+    blocks = [f'    {{ user: "{target_user}", password: "{_bcrypt(target_pass)}" }}\n']
+    if not drop_old:
+        old_user, old_pass = _current_credential()
+        blocks.insert(
+            0, f'    {{ user: "{old_user}", password: "{_bcrypt(old_pass)}" }}\n'
         )
 
-    conf = CONF_TEMPLATE.format(
-        old_user=old_user,
-        old_hash=_bcrypt(old_pass),
-        new_user_block=new_block,
-    )
+    conf = CONF_TEMPLATE.format(users_block="".join(blocks))
 
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(conf)
     out.chmod(stat.S_IRUSR | stat.S_IWUSR)  # 0600: hashes only, but keep it tight
-    print(f"rendered {out} ({'single-user (old dropped)' if drop_old else 'dual-user bridge'})")
+    mode = "final (leaked user EVICTED, target only)" if drop_old else "dual-user bridge"
+    print(f"rendered {out} ({mode})")
 
 
 def main(argv: list[str] | None = None) -> int:

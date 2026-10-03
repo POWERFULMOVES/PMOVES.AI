@@ -85,16 +85,31 @@ def test_no_credential_anywhere_fails(monkeypatch: MONKEYPATCH) -> None:
         nar._current_credential()
 
 
-def test_drop_old_renders_single_user(
+def test_drop_old_evicts_leaked_user_keeps_target(
     tmp_path: Path, monkeypatch: MONKEYPATCH
 ) -> None:
     _set_env(monkeypatch)
     out = tmp_path / "auth.conf"
     nar.render(out, drop_old=True)
     conf = out.read_text()
-    assert 'user: "nats"' in conf
-    assert "nats-v2" not in conf
+    # the FINAL render must carry ONLY the rotation target: the leaked user is
+    # the thing being retired (behavioural control for the inversion the review
+    # caught: --drop-old once kept the leaked user and evicted the target)
+    assert 'user: "nats-v2"' in conf
+    assert 'user: "nats"' not in conf
+    assert "old-secret" not in conf
     assert conf.count("password: \"$2b$") == 1
+
+
+def test_final_render_requires_v2_even_with_old_present(
+    tmp_path: Path, monkeypatch: MONKEYPATCH
+) -> None:
+    # a final render must never silently fall back to the leaked credential
+    _set_env(monkeypatch, NATS_PASSWORD_V2="")
+    out = tmp_path / "auth.conf"
+    with pytest.raises(SystemExit):
+        nar.render(out, drop_old=True)
+    assert not out.exists()
 
 
 def test_output_mode_is_0600(tmp_path: Path, monkeypatch: MONKEYPATCH) -> None:

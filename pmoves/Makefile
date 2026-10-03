@@ -5714,7 +5714,7 @@ github-app-test: ## Test GitHub App token minting (requires services running)
 # re-render + SIGHUP once monitoring shows zero connections on it. Docs basis:
 # authorization/users is reloadable with no client disconnects (nats docs,
 # configuration/loading + deployment/config-management).
-.PHONY: nats-auth-render nats-auth-validate nats-auth-reload nats-auth-status
+.PHONY: nats-auth-render nats-auth-render-final nats-auth-validate nats-auth-reload nats-auth-status
 
 nats-auth-render: ## Render data/nats/auth.conf (both users) from funnel env; fail-closed on empty
 	@$(LOAD_ENV_SHARED); $(PRECHECK_PY) scripts/nats_auth_render.py
@@ -5726,8 +5726,10 @@ nats-auth-validate: ## Validate the rendered conf with the pinned nats-server bi
 	@docker run --rm -v $(CURDIR)/data/nats/auth.conf:/etc/nats/auth.conf:ro nats:2.11.8-alpine nats-server -c /etc/nats/auth.conf -t
 
 nats-auth-reload: ## SIGHUP the running nats: auth changes apply in place, clients stay connected
-	@docker kill --signal=SIGHUP $$(docker ps --format '{{.Names}}' | grep -E '^pmoves-nats-?1?$$' | head -1)
-	@echo "✔ SIGHUP sent — verify with: docker logs <nats> --tail 5 (expect 'Reloaded server configuration')"
+	@c=$$(docker ps --format '{{.Names}}' | grep -xE 'pmoves-nats(-1)?' | head -1); \
+	if [ -z "$$c" ]; then echo "ERROR: no running nats container matched pmoves-nats / pmoves-nats-1 — is the bus up, or does this node use a different compose project name?" >&2; exit 1; fi; \
+	docker kill --signal=SIGHUP "$$c"; \
+	echo "✔ SIGHUP sent to $$c — verify: docker logs $$c --tail 5 (expect 'Reloaded server configuration')"
 
 nats-auth-status: ## Connections per auth user (the migration meter for the bridge)
 	@$(PYTHON) -c "import json,urllib.request;d=json.load(urllib.request.urlopen('http://127.0.0.1:'+'$${NATS_MONITORING_PORT:-9223}'+'/connz',timeout=5));rows=[c.get('authorized_user','?') for c in d.get('connections',[])];import collections;print('connections by user:',dict(collections.Counter(rows)));print('total:',len(rows))"
