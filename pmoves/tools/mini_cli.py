@@ -27,6 +27,7 @@ from pmoves.tools import (
     profile_loader,
     secrets_sync,
 )
+from pmoves.tools.bash_resolver import resolve_bash
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_PROVISIONING_DEST = REPO_ROOT / "CATACLYSM_STUDIOS_INC" / "PMOVES-PROVISIONS"
@@ -484,7 +485,9 @@ def tailscale_join(
         env["TAILSCALE_FORCE_REAUTH"] = "true"
     # Respect saved secret file path default if set in env file
     # scripts/with-env.sh will populate env vars into this process
-    cmd = ["bash", "-lc", f". ./pmoves/scripts/with-env.sh '{env_file}'; bash '{script}'"]
+    # resolve_bash(), not "bash": on Windows a bare "bash" is System32's WSL
+    # stub, which would load the env and join the tailnet from inside WSL.
+    cmd = [resolve_bash(), "-lc", f". ./pmoves/scripts/with-env.sh '{env_file}'; bash '{script}'"]
     rc = subprocess.run(cmd, cwd=str(REPO_ROOT), env=env).returncode
     if rc != 0:
         raise typer.Exit(rc)

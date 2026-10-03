@@ -29,20 +29,41 @@ import subprocess
 import sys
 from pathlib import Path
 
+try:
+    from pmoves.tools.bash_resolver import resolve_bash
+except ImportError:  # run as a script (see Makefile): pmoves/tools is sys.path[0]
+    from bash_resolver import resolve_bash  # type: ignore[no-redef]
+
 REPO = Path(__file__).resolve().parents[1]  # pmoves/
 
 
-def run(cmd: str, check: bool = True, capture: bool = False) -> str:
-    print(f"\n+ {cmd}")
-    r = subprocess.run(
-        cmd,
-        shell=True,
-        capture_output=capture,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        cwd=str(REPO),
-    )
+def run(cmd, check: bool = True, capture: bool = False, stdout_path: Path | None = None) -> str:
+    """Run *cmd*: a str goes through the shell, a list is exec'd directly.
+
+    The bash steps pass a list whose argv[0] is resolve_bash(). They used to
+    be shell strings ("bash -c '... 2>/dev/null' > env.tier-supabase"), which
+    on Windows broke twice: a bare "bash" can resolve to System32's WSL stub,
+    and cmd.exe does not honour single quotes, so it parsed `2>/dev/null'` as
+    its own redirect and failed ("The system cannot find the path specified").
+    *stdout_path* replaces the shell `>` redirect for list commands.
+    """
+    shown = cmd if isinstance(cmd, str) else " ".join(cmd)
+    print(f"\n+ {shown}" + (f" > {stdout_path.name}" if stdout_path else ""))
+    out_fh = open(stdout_path, "wb") if stdout_path else None
+    try:
+        r = subprocess.run(
+            cmd,
+            shell=isinstance(cmd, str),
+            stdout=out_fh if out_fh else (subprocess.PIPE if capture else None),
+            stderr=subprocess.PIPE if (capture or out_fh) else None,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            cwd=str(REPO),
+        )
+    finally:
+        if out_fh:
+            out_fh.close()
     if check and r.returncode != 0:
         print(f"  ! rc={r.returncode}")
         if r.stderr:
@@ -89,15 +110,15 @@ def main():
         if "your_jwt_secret_here" in current or "PLACEHOLDER" in current:
             print("env.tier-supabase has placeholders, regenerating...")
             run(
-                "bash -c 'bash scripts/supabase/generate-keys.sh 2>/dev/null' > env.tier-supabase",
-                capture=True,
+                [resolve_bash(), "scripts/supabase/generate-keys.sh"],
+                stdout_path=tier_supa,
             )
         else:
             print("env.tier-supabase already has real values, skipping")
     else:
         run(
-            "bash -c 'bash scripts/supabase/generate-keys.sh 2>/dev/null' > env.tier-supabase",
-            capture=True,
+            [resolve_bash(), "scripts/supabase/generate-keys.sh"],
+            stdout_path=tier_supa,
         )
 
     # 3. Align env.shared
@@ -110,7 +131,7 @@ def main():
 
     # 5. Run bootstrap_db.sh (now db is up)
     step("Step 5/9: Run bootstrap_db.sh to align DB password")
-    run("bash scripts/supabase/bootstrap_db.sh")
+    run([resolve_bash(), "scripts/supabase/bootstrap_db.sh"])
 
     # 6. Run kong migrations
     step("Step 6/9: Run kong migrations (kong needs its postgres schema initialized)")

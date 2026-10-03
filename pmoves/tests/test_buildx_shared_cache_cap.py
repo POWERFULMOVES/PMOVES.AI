@@ -29,6 +29,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from pmoves.tools.bash_resolver import resolve_bash  # never System32's WSL stub
 
 REPO = Path(__file__).resolve().parents[2]
 SCRIPT = REPO / "deploy/provision/pmoves-buildx-cap.sh"
@@ -231,7 +232,7 @@ def _run(tmp_path: Path, *args: str, pgrep: str | None = STUB_PGREP, **fake: str
     env["PMOVES_BUILDX_CAP_LOCK"] = str(tmp_path / "cap.lock")
     env.update(fake)
     proc = subprocess.run(
-        ["bash", str(SCRIPT), *args], env=env, capture_output=True, text=True, timeout=60,
+        [resolve_bash(), str(SCRIPT), *args], env=env, capture_output=True, text=True, timeout=60,
     )
     calls = [row[1:] for row in stub.calls() if row[0] == "docker"]
     return proc.returncode, calls, proc.stdout + proc.stderr

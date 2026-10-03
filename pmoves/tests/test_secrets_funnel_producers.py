@@ -36,6 +36,7 @@ from pathlib import Path
 
 import pytest
 import yaml
+from pmoves.tools.bash_resolver import resolve_bash  # never System32's WSL stub
 
 _ROOT = Path(__file__).resolve().parents[2]
 _PULL = _ROOT / "pmoves" / "scripts" / "pull_chit_bundle.sh"
@@ -95,7 +96,7 @@ def _run_pull(tmp_path: Path, extra_env: dict | None = None, *, umask: int | Non
     env["PMOVES_NODE"] = "b850"
     env.update(extra_env or {})
     preexec = (lambda: os.umask(umask)) if umask is not None else None
-    return subprocess.run(["bash", str(_PULL)], env=env, capture_output=True,
+    return subprocess.run([resolve_bash(), str(_PULL)], env=env, capture_output=True,
                           text=True, timeout=60, preexec_fn=preexec)
 
 
@@ -168,7 +169,7 @@ def _run_resolve_targets(tmp_path: Path, targets: str,
            "PRODUCER_TARGETS": (wf["env"]["PRODUCER_TARGETS"]
                                 if producers is None else producers),
            "GITHUB_OUTPUT": str(out)}
-    r = subprocess.run(["bash", "-c", script], env=env, capture_output=True,
+    r = subprocess.run([resolve_bash(), "-c", script], env=env, capture_output=True,
                        text=True, timeout=60)
     return r, out.read_text(encoding="utf-8")
 

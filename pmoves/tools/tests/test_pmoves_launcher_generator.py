@@ -33,6 +33,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from pmoves.tools.bash_resolver import resolve_bash  # never System32's WSL stub
 
 # Make the tools/ folder importable when running standalone.
 _HERE = Path(__file__).resolve().parent
@@ -143,7 +144,7 @@ class TestGeneratorRegistryDriven(unittest.TestCase):
                 name = Path(f.relpath).name
                 (scratch / name).write_text(f.body, encoding="utf-8", newline="\n")
                 r = subprocess.run(
-                    ["bash", "-n", name],
+                    [resolve_bash(), "-n", name],
                     capture_output=True, text=True,
                 )
                 self.assertEqual(

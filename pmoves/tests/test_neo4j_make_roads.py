@@ -22,6 +22,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from pmoves.tools.bash_resolver import resolve_bash  # never System32's WSL stub
 
 PMOVES = Path(__file__).resolve().parents[1]
 MAKEFILE = PMOVES / "Makefile"
@@ -155,7 +156,7 @@ def _loader(tmp_path: Path, password: str | None):
         env.pop(k, None)
     if password is not None:
         env["NEO4J_PASSWORD"] = password
-    proc = subprocess.run(["bash", str(LOADER)], env=env, capture_output=True, text=True, timeout=120)
+    proc = subprocess.run([resolve_bash(), str(LOADER)], env=env, capture_output=True, text=True, timeout=120)
     docker = [row[1:] for row in stub.calls() if row[0] == "docker"]
     return proc.returncode, docker, proc.stdout + proc.stderr
 
@@ -262,7 +263,7 @@ def _bootstrap(tmp_path: Path, password: str | None, smoke_reply: str = SMOKE_OK
     if password is not None:
         env["NEO4J_PASSWORD"] = password
     env["STUB_SMOKE_REPLY"] = smoke_reply
-    proc = subprocess.run(["bash", str(BOOTSTRAP)], env=env, capture_output=True, text=True, timeout=120)
+    proc = subprocess.run([resolve_bash(), str(BOOTSTRAP)], env=env, capture_output=True, text=True, timeout=120)
     docker = [row[1:] for row in stub.calls() if row[0] == "docker"]
     return proc.returncode, docker, proc.stdout + proc.stderr
 

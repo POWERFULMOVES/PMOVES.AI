@@ -36,6 +36,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from pmoves.tools.bash_resolver import resolve_bash  # never System32's WSL stub
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CONFIGURATOR = REPO_ROOT / "pmoves" / "tools" / "crush_configurator.py"
@@ -145,7 +146,7 @@ def _lengths_seen_by_child(loader_path, names, preset=None):
     env.update(preset or {})
 
     proc = subprocess.run(
-        ["bash", "--noprofile", "--norc", "-c", script],
+        [resolve_bash(), "--noprofile", "--norc", "-c", script],
         capture_output=True,
         text=True,
         env=env,

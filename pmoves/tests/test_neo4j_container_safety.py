@@ -35,6 +35,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from pmoves.tools.bash_resolver import resolve_bash  # never System32's WSL stub
 
 PMOVES = Path(__file__).resolve().parents[1]
 SCRIPTS = PMOVES / "scripts"
@@ -128,7 +129,7 @@ def _run(tmp_path: Path, script: str, running: str) -> tuple[int, list[list[str]
     env = dict(stub)
     env.update(FAKE_RUNNING=running)
     proc = subprocess.run(
-        ["bash", str(root / "scripts" / script)],
+        [resolve_bash(), str(root / "scripts" / script)],
         cwd=tmp_path, env=env, capture_output=True, text=True, timeout=60,
     )
     return proc.returncode, _docker_calls(stub), proc.stdout + proc.stderr

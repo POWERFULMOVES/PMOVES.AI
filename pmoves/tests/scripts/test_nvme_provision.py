@@ -39,6 +39,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from pmoves.tools.bash_resolver import resolve_bash  # never System32's WSL stub
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SCRIPT = Path(os.environ.get("NVME_PROVISION_SCRIPT") or REPO_ROOT / "deploy" / "provision" / "nvme-provision.sh")
@@ -225,7 +226,7 @@ class Harness:
         (d / holder).write_text("")
 
     def run(self, *flags, device="/dev/nvme9n1", yes=True, sudo_user="tester"):
-        argv = ["bash", str(SCRIPT), f"--device={device}", f"--mount={self.mnt}", "--role=creator-store", *flags]
+        argv = [resolve_bash(), str(SCRIPT), f"--device={device}", f"--mount={self.mnt}", "--role=creator-store", *flags]
         if yes:
             argv.append("--yes-really")
         env = {"PATH": str(self.bin), "HOME": str(self.tmp), "NVME_STUB_STATE": str(self.state),

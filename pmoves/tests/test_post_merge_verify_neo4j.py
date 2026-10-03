@@ -14,6 +14,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from pmoves.tools.bash_resolver import resolve_bash  # never System32's WSL stub
 
 PMOVES = Path(__file__).resolve().parents[1]
 REPO = PMOVES.parent
@@ -69,7 +70,7 @@ def _run(tmp_path: Path, *, running: bool, wrong_pw_rc: int, wrong_pw_out: str, 
     )
     harness = tmp_path / "harness.sh"
     harness.write_text(prelude + _function_source() + 'check_neo4j_auth\necho "TOTALS $PASS $FAIL $WARN"\n')
-    proc = subprocess.run(["bash", str(harness)], env=env, capture_output=True, text=True, timeout=60)
+    proc = subprocess.run([resolve_bash(), str(harness)], env=env, capture_output=True, text=True, timeout=60)
     docker = [row[1:] for row in stub.calls() if row[0] == "docker"]
     totals = re.search(r"TOTALS (\d+) (\d+) (\d+)", proc.stdout)
     assert totals, proc.stdout + proc.stderr
