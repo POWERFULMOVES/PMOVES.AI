@@ -236,6 +236,11 @@
             "type": "command",
             "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/session-env-check.sh\"",
             "timeout": 20
+          },
+          {
+            "type": "command",
+            "command": "PMOVES_PERSONA_HOOK_EVENT=start bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/persona-session-hook.sh\"",
+            "timeout": 15
           }
         ]
       }
@@ -247,6 +252,17 @@
             "type": "command",
             "command": "echo \"[pmoves-agent] Sub-agent completed: $(cat | jq -r '.agent_type // \"unknown\"')\" >&2",
             "timeout": 5
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "PMOVES_PERSONA_HOOK_EVENT=stop bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/persona-session-hook.sh\"",
+            "timeout": 15
           }
         ]
       }
