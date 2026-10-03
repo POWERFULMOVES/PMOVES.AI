@@ -1,0 +1,147 @@
+{
+  "room_id": "openroom.default.surface",
+  "version": "0.1.0",
+  "stage": "rehearsal",
+  "display_name": "OpenRoom — Default Operating Surface",
+  "description": "OpenRoom (PMOVES fork of MiniMax-AI/OpenRoom, submodule PMOVES-OpenRoom) is the browser-desktop host that opens the rooms of pmoves/config/rooms/catalog.json for operators and agents, with P7 session/stage discipline applied on entry. Standing workspace rule (persisted 2026-09-21): OpenRoom is the DEFAULT OPERATING SURFACE for all five Spynel agent roles — chat, developer, reviewer, notification, heartbeat — unless the user supersedes it; each role declares 'operating surface: OpenRoom' when signing output. Source of truth for the rule: the five .spynel/instructions/ role files (.spynel/instructions/agent-chat.md, agent-developer.md, agent-reviewer.md, agent-notification.md, agent-heartbeat.md).",
+  "agent_id": "mavis",
+  "alter": "openroom",
+  "room_type": "operator",
+  "owner_mode": "primary",
+  "access": {
+    "visibility": "private",
+    "owner_only": true,
+    "rating_note": "Operator/agent desktop host. Room-local expression is unrestricted; public egress stays behind policies.publish.egress_redaction_floor."
+  },
+  "shell": {
+    "theme": {
+      "theme_id": "openroom",
+      "accent_color": "#7c5cff",
+      "icon": "door-open"
+    },
+    "layout": {
+      "default_route": "/desktop",
+      "panels": [
+        {
+          "panel_id": "room-desktop",
+          "kind": "browser",
+          "position": "center",
+          "size": 100,
+          "pinned": true
+        }
+      ]
+    }
+  },
+  "apps": [
+    {
+      "app_id": "openroom-desktop",
+      "kind": "browser",
+      "route": "/desktop",
+      "provider": "openroom",
+      "capabilities": [
+        "room-launch",
+        "surface-render",
+        "p7-session"
+      ],
+      "pinned": true,
+      "status": "active"
+    }
+  ],
+  "notebook": {
+    "provider": "open-notebook",
+    "workspace_ref": "openroom",
+    "default_page": "orientation",
+    "sync": {
+      "mode": "mirrored",
+      "writeback_targets": [
+        "entries"
+      ],
+      "artifact_prefix": "rooms/openroom"
+    }
+  },
+  "skill_bindings": [
+    {
+      "binding_id": "openroom-default-surface-declare",
+      "skill_id": "pmoves/openroom-default-surface",
+      "room_id": "openroom.default.surface",
+      "display_name": "Declare OpenRoom as the operating surface",
+      "intent": [
+        "operating surface",
+        "openroom",
+        "sign output"
+      ],
+      "surface": {
+        "app_id": "openroom-desktop",
+        "target": "toolbar",
+        "route": "/desktop"
+      },
+      "execution": {
+        "mode": "workflow",
+        "run_as": "agent",
+        "stream": "status",
+        "max_steps": 2
+      },
+      "context": {
+        "sources": [
+          "user-intent",
+          "room-state"
+        ],
+        "include_last_turns": 1,
+        "artifact_types": [
+          "text"
+        ]
+      },
+      "outputs": [
+        {
+          "target": "chat-response",
+          "delivery": "notify",
+          "artifact_type": "text"
+        }
+      ],
+      "guardrails": {
+        "require_approval": false,
+        "max_runtime_sec": 30,
+        "fail_open": false,
+        "one_active_run": true
+      },
+      "enabled": true,
+      "tags": [
+        "openroom",
+        "default-surface",
+        "governance"
+      ]
+    }
+  ],
+  "policies": {
+    "model_routing": "hybrid",
+    "publish": {
+      "allow_nats_emit": true,
+      "allow_external_publish": false,
+      "allowed_subjects": [
+        "room.session.updated.v1"
+      ]
+    },
+    "memory": {
+      "graphiti": false,
+      "notebook_writeback": true,
+      "chit_handoff": true
+    }
+  },
+  "telemetry": {
+    "room_events_subject": "room.session.updated.v1",
+    "healthcheck_route": "/healthz"
+  },
+  "provenance": {
+    "source": "pmoves/docs/ROOMS_ON_A_STAGE.md + .spynel/instructions/ (five role files)",
+    "updated_at": "2026-09-22T11:53:53Z",
+    "related_docs": [
+      "pmoves/docs/ROOMS_ON_A_STAGE.md",
+      "pmoves/docs/ROOM_MANIFEST_CONTRACT.md",
+      ".spynel/instructions/agent-chat.md",
+      ".spynel/instructions/agent-developer.md",
+      ".spynel/instructions/agent-reviewer.md",
+      ".spynel/instructions/agent-notification.md",
+      ".spynel/instructions/agent-heartbeat.md"
+    ]
+  }
+}
