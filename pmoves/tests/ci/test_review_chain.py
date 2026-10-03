@@ -30,6 +30,7 @@ from pathlib import Path
 
 import pytest
 import yaml
+from pmoves.tools.bash_resolver import resolve_bash  # never System32's WSL stub
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 _SCRIPTS = _REPO_ROOT / ".github" / "scripts"
@@ -397,7 +398,7 @@ exit 9
 
 
 def _select(env: dict) -> subprocess.CompletedProcess:
-    return subprocess.run(["bash", str(_IN_CONTAINER)], env=env, capture_output=True, text=True, timeout=30)
+    return subprocess.run([resolve_bash(), str(_IN_CONTAINER)], env=env, capture_output=True, text=True, timeout=30)
 
 
 def test_selector_primary_takes_first_catalog_hit(selector_env):
@@ -523,7 +524,7 @@ def envfacts(tier_env):
 
 def _tier(env, tmp_path, mode, **extra):
     out, meta = tmp_path / "out.md", tmp_path / "meta.txt"
-    p = subprocess.run(["bash", str(_TIER), str(out), str(meta)], env={**env, "STUB_DOCKER": mode, **extra},
+    p = subprocess.run([resolve_bash(), str(_TIER), str(out), str(meta)], env={**env, "STUB_DOCKER": mode, **extra},
                        capture_output=True, text=True, timeout=60)
     return p, out.read_text(), dict(l.split("=", 1) for l in meta.read_text().splitlines() if "=" in l)
 
@@ -786,7 +787,7 @@ def _real_prompt(tmp_path: Path) -> str:
     env = {**os.environ, "PATH": f"{bindir}:{os.environ['PATH']}", "GITHUB_BASE_REF": "main",
            "RUNNER_TEMP": str(tmp_path),
            "PR_NUMBER": "3169", "PR_TITLE": "feat(ci): fleet review fallback chain", "PR_BODY": "body text"}
-    subprocess.run(["bash", "-c", script], env=env, check=True, capture_output=True, timeout=30)
+    subprocess.run([resolve_bash(), "-c", script], env=env, check=True, capture_output=True, timeout=30)
     return (tmp_path / "kilo-review-prompt.md").read_text()
 
 

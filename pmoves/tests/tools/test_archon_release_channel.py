@@ -12,6 +12,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from pmoves.tools.bash_resolver import resolve_sh  # never System32's WSL stub
 
 TOOL = Path(__file__).resolve().parents[2] / "tools" / "archon_release_channel.sh"
 SHA = "b" * 40
@@ -62,7 +63,7 @@ def env(tmp_path):
 
 def run(e, *args):
     args = args or ("promote",)
-    return subprocess.run(["sh", str(TOOL), *args], env=e, capture_output=True, text=True, timeout=30)
+    return subprocess.run([resolve_sh(), str(TOOL), *args], env=e, capture_output=True, text=True, timeout=30)
 
 
 def tagged(log):

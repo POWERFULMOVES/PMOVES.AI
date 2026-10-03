@@ -25,6 +25,7 @@ from pathlib import Path
 
 import pytest
 import yaml
+from pmoves.tools.bash_resolver import resolve_bash  # never System32's WSL stub
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 _MATRIX = _REPO_ROOT / ".github" / "workflows" / "integrations-ghcr.matrix.json"
@@ -232,7 +233,7 @@ def test_gate_rejects_bad_invocation(argv: list[str], env: dict) -> None:
     """
     assert _GATE.is_file(), f"missing {_GATE} — this test would pass vacuously"
     result = subprocess.run(
-        ["bash", str(_GATE), *argv],
+        [resolve_bash(), str(_GATE), *argv],
         capture_output=True,
         text=True,
         env={"PATH": os.environ.get("PATH", ""), **env},

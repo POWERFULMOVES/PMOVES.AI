@@ -53,6 +53,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from pmoves.tools.bash_resolver import find_bash  # never System32's WSL stub
 import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -123,7 +124,7 @@ def _symlinks_supported(tmp_path: Path) -> bool:
 
 
 def _bash() -> str:
-    found = shutil.which("bash")
+    found = find_bash()  # not shutil.which: that can return System32's WSL stub
     if not found:
         pytest.skip("bash not available")
     return found

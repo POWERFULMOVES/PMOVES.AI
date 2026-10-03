@@ -33,6 +33,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from pmoves.tools.bash_resolver import resolve_bash  # never System32's WSL stub
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 PMOVES = REPO_ROOT / "pmoves"
@@ -47,7 +48,7 @@ DSN_ROLE = re.compile(r"postgres://([^@]*)@")
 def _role(tmp_path, stub_env_factory, **env: str) -> str:
     stub = stub_env_factory(tmp_path / "stub", base_env={"PATH": os.environ["PATH"], "HOME": str(tmp_path)})
     stub.update({"MOUNT_POINT": str(tmp_path / "mnt"), "DATA_DIR": str(tmp_path / "data"), **env})
-    result = subprocess.run(["bash", str(SCRIPT)], env=stub, capture_output=True, text=True, timeout=60)
+    result = subprocess.run([resolve_bash(), str(SCRIPT)], env=stub, capture_output=True, text=True, timeout=60)
     assert result.returncode == 2, f"expected the file-storage refusal (2), got {result.returncode}:\n{result.stdout}\n{result.stderr}"
     dsns = [m.group(1) for call in stub.calls("docker") for arg in call for m in [DSN_ROLE.search(arg)] if m]
     assert dsns, f"no metadata DSN reached docker: {stub.calls('docker')}"
@@ -69,7 +70,7 @@ def stub_env_factory():
 def _run(tmp_path, stub_env_factory, **env: str):
     stub = stub_env_factory(tmp_path / "stub", base_env={"PATH": os.environ["PATH"], "HOME": str(tmp_path)})
     stub.update({"MOUNT_POINT": str(tmp_path / "mnt"), "DATA_DIR": str(tmp_path / "data"), **env})
-    result = subprocess.run(["bash", str(SCRIPT)], env=stub, capture_output=True, text=True, timeout=60)
+    result = subprocess.run([resolve_bash(), str(SCRIPT)], env=stub, capture_output=True, text=True, timeout=60)
     return stub, result
 
 
@@ -144,7 +145,7 @@ def test_redaction_is_literal_not_regex(tmp_path, stub_env_factory, password):
         )
     )
     stub.update({"MOUNT_POINT": str(tmp_path / "mnt"), "DATA_DIR": str(tmp_path / "data"), "DB_PASS": password, "META_ROLE": "juicefs_meta"})
-    result = subprocess.run(["bash", str(SCRIPT)], env=stub, capture_output=True, text=True, timeout=60)
+    result = subprocess.run([resolve_bash(), str(SCRIPT)], env=stub, capture_output=True, text=True, timeout=60)
     assert result.returncode == 1, result.stdout + result.stderr
     assert password not in result.stdout + result.stderr
     assert "other line" in result.stderr
