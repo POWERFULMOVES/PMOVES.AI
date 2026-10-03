@@ -57,6 +57,34 @@ def test_emit_skips_placeholder_values(tmp_path):
     assert "PLACEHOLDER" not in parse_env_file(local_env)
 
 
+def test_emit_skips_name_here_template_values(tmp_path):
+    # "<NAME>_HERE" is template text, not a secret. The exact-match list only
+    # knew "surreal_user_here", so other templates rode the bundle into
+    # local.env and were force-hydrated over env.shared, shadowing working
+    # consumer defaults.
+    bundle = _make_bundle(tmp_path, {
+        "REAL_KEY": "realvalue123",
+        "TENSORZERO_CLICKHOUSE_USER": "CLICKHOUSE_USER_HERE",
+        "TENSORZERO_CLICKHOUSE_PASSWORD": "clickhouse_password_here",
+    })
+    local_env = tmp_path / "local.env"
+
+    emitted = emit_local_env.emit(bundle, local_env)
+
+    assert emitted == {"REAL_KEY": "realvalue123"}
+
+
+def test_emit_keeps_real_values_that_merely_contain_here(tmp_path):
+    # The rule is a "_here" SUFFIX on a template name, not the substring "here":
+    # a real secret can contain those letters anywhere.
+    bundle = _make_bundle(tmp_path, {"A": "xKhere9Qz", "B": "where-is-it-42", "C": "Zm9vYmFyX0hFUkU"})
+    local_env = tmp_path / "local.env"
+
+    emitted = emit_local_env.emit(bundle, local_env)
+
+    assert emitted == {"A": "xKhere9Qz", "B": "where-is-it-42", "C": "Zm9vYmFyX0hFUkU"}
+
+
 def test_emit_skips_multiline_values(tmp_path):
     bundle = _make_bundle(tmp_path, {"GOOD": "flatvalue", "HOSTINGER_SSH_PRIVATE_KEY": PEM})
     local_env = tmp_path / "local.env"
