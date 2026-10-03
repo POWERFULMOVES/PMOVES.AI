@@ -51,20 +51,42 @@ def _resolve_nats_url() -> str:
     return f"nats://{host}:{port}"
 
 
-def _redact_url(url: str) -> str:
-    """Strip credentials from URL for safe logging."""
-    try:
-        parsed = urlparse(url)
-        # Redact all user-info, not just user:password — token-only URLs
-        # (nats://TOKEN@host) put the secret in `username` with no password.
-        if parsed.username or parsed.password:
-            host = parsed.hostname or ""
-            if parsed.port:
-                host = f"{host}:{parsed.port}"
-            return urlunparse(parsed._replace(netloc=f"***@{host}"))
-    except Exception:
-        pass
-    return url
+try:
+    from services.common.redact import redact_url
+except ImportError:  # image ships without services/common; copy of services/common/redact.py
+    import re as _re
+
+    def redact_url(url):
+        if url is None:
+            return ""
+        text = str(url)
+        spans = []
+        prev_at = -1
+        for match in _re.finditer("@", text):
+            at = match.start()
+            scheme = text.find("://", prev_at + 1, at)
+            if scheme >= 0 and (not spans or _re.search(r"[\s,;'\"()<>|\[\]{}]", text[prev_at + 1:scheme])):
+                spans.append([scheme + 3, at])
+            elif spans:
+                spans[-1][1] = at
+            else:
+                spans.append([0, at])
+            prev_at = at
+        out = []
+        pos = 0
+        for start, end in spans:
+            out.append(text[pos:start] + "***")
+            pos = end
+        out.append(text[pos:])
+        return _re.sub(
+            r"(?i)([?&;#][\w.\-]*(?:password|passwd|pwd|pass|secret|token|key|auth|signature|sig)[\w.\-]*=)[^&#;\s]*",
+            r"\1***",
+            "".join(out),
+        )
+
+
+# Former private redactor; fail-open on unencoded / # ? , in passwords (PR #3244).
+_redact_url = redact_url
 
 
 def _validate_decoded_packet(payload: Dict[str, Any]) -> bool:

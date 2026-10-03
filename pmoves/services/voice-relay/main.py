@@ -21,6 +21,39 @@ from nats.aio.client import Client as NATS
 from nats.js import JetStreamContext
 from prometheus_client import Counter, generate_latest, CONTENT_TYPE_LATEST
 
+try:
+    from services.common.redact import redact_url
+except ImportError:  # image ships without services/common; copy of services/common/redact.py
+    import re as _re
+
+    def redact_url(url):
+        if url is None:
+            return ""
+        text = str(url)
+        spans = []
+        prev_at = -1
+        for match in _re.finditer("@", text):
+            at = match.start()
+            scheme = text.find("://", prev_at + 1, at)
+            if scheme >= 0 and (not spans or _re.search(r"[\s,;'\"()<>|\[\]{}]", text[prev_at + 1:scheme])):
+                spans.append([scheme + 3, at])
+            elif spans:
+                spans[-1][1] = at
+            else:
+                spans.append([0, at])
+            prev_at = at
+        out = []
+        pos = 0
+        for start, end in spans:
+            out.append(text[pos:start] + "***")
+            pos = end
+        out.append(text[pos:])
+        return _re.sub(
+            r"(?i)([?&;#][\w.\-]*(?:password|passwd|pwd|pass|secret|token|key|auth|signature|sig)[\w.\-]*=)[^&#;\s]*",
+            r"\1***",
+            "".join(out),
+        )
+
 # Schema-validated envelope (available when services/common is on PYTHONPATH)
 try:
     from services.common.events import envelope
@@ -38,7 +71,7 @@ except ImportError:
 # Configuration
 # ---------------------------------------------------------------------------
 NATS_URL = get_secret("NATS_URL", "nats://nats:4222") or "nats://nats:4222"
-NATS_URL_REDACTED = re.sub(r"://[^@]+@", "://***@", NATS_URL)
+NATS_URL_REDACTED = redact_url(NATS_URL)
 INPUT_SUBJECT = os.getenv("VOICE_RELAY_INPUT_SUBJECT", "agentzero.task.result.v1")
 OUTPUT_SUBJECT = os.getenv("VOICE_RELAY_OUTPUT_SUBJECT", "voice.agent.response.v1")
 JETSTREAM_ENABLED = os.getenv("VOICE_RELAY_JETSTREAM", "true").lower() in ("true", "1", "yes")

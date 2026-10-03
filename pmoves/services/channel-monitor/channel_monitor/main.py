@@ -48,6 +48,39 @@ from pydantic import BaseModel, Field, validator
 from .config import config_path_from_env, ensure_config, save_config
 from .monitor import ChannelMonitor, build_manual_drop_raw_content
 
+try:
+    from services.common.redact import redact_url
+except ImportError:  # image ships without services/common; copy of services/common/redact.py
+    import re as _re
+
+    def redact_url(url):
+        if url is None:
+            return ""
+        text = str(url)
+        spans = []
+        prev_at = -1
+        for match in _re.finditer("@", text):
+            at = match.start()
+            scheme = text.find("://", prev_at + 1, at)
+            if scheme >= 0 and (not spans or _re.search(r"[\s,;'\"()<>|\[\]{}]", text[prev_at + 1:scheme])):
+                spans.append([scheme + 3, at])
+            elif spans:
+                spans[-1][1] = at
+            else:
+                spans.append([0, at])
+            prev_at = at
+        out = []
+        pos = 0
+        for start, end in spans:
+            out.append(text[pos:start] + "***")
+            pos = end
+        out.append(text[pos:])
+        return _re.sub(
+            r"(?i)([?&;#][\w.\-]*(?:password|passwd|pwd|pass|secret|token|key|auth|signature|sig)[\w.\-]*=)[^&#;\s]*",
+            r"\1***",
+            "".join(out),
+        )
+
 try:  # pragma: no cover - optional at import time
     import nats as nats_pkg
     NATS_AVAILABLE = True
@@ -169,7 +202,7 @@ async def lifespan(app: FastAPI):
     if NATS_AVAILABLE and CONTENT_RAW_PUBLISH_ENABLED:
         try:
             _nats_client = await nats_pkg.connect(NATS_URL)
-            LOGGER.info("content.raw.v1 publisher connected to %s", NATS_URL)
+            LOGGER.info("content.raw.v1 publisher connected to %s", redact_url(NATS_URL))
         except Exception as exc:
             LOGGER.warning("content.raw.v1 publisher connection failed (non-fatal): %s", exc)
     elif CONTENT_RAW_PUBLISH_ENABLED and not NATS_AVAILABLE:
@@ -517,8 +550,8 @@ async def healthz() -> Dict[str, Any]:
     db_healthy = await monitor.check_database_health()
     return {
         "status": "ok" if db_healthy else "error",
-        "queue_url": QUEUE_URL,
-        "database_url": DATABASE_URL,
+        "queue_url": redact_url(QUEUE_URL),
+        "database_url": redact_url(DATABASE_URL),
         "channels": monitor.channel_count(),
         "database_healthy": db_healthy,
     }

@@ -37,6 +37,39 @@ from gateway.threads import (
     run_chained
 )
 
+try:
+    from services.common.redact import redact_url
+except ImportError:  # image ships without services/common; copy of services/common/redact.py
+    import re as _re
+
+    def redact_url(url):
+        if url is None:
+            return ""
+        text = str(url)
+        spans = []
+        prev_at = -1
+        for match in _re.finditer("@", text):
+            at = match.start()
+            scheme = text.find("://", prev_at + 1, at)
+            if scheme >= 0 and (not spans or _re.search(r"[\s,;'\"()<>|\[\]{}]", text[prev_at + 1:scheme])):
+                spans.append([scheme + 3, at])
+            elif spans:
+                spans[-1][1] = at
+            else:
+                spans.append([0, at])
+            prev_at = at
+        out = []
+        pos = 0
+        for start, end in spans:
+            out.append(text[pos:start] + "***")
+            pos = end
+        out.append(text[pos:])
+        return _re.sub(
+            r"(?i)([?&;#][\w.\-]*(?:password|passwd|pwd|pass|secret|token|key|auth|signature|sig)[\w.\-]*=)[^&#;\s]*",
+            r"\1***",
+            "".join(out),
+        )
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
@@ -180,7 +213,7 @@ class Gateway:
         if self.config.PMOVES_DOCKED_MODE:
             logger.info("Mode: DOCKED (connected to PMOVES.AI)")
             logger.info(f"  TensorZero: {self.config.TENSORZERO_BASE_URL}")
-            logger.info(f"  NATS: {self.config.NATS_URL}")
+            logger.info(f"  NATS: {redact_url(self.config.NATS_URL)}")
             logger.info(f"  HiRAG: {self.config.HIRAG_URL}")
 
             # Try to connect to NATS

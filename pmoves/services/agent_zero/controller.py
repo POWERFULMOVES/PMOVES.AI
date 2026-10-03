@@ -7,6 +7,39 @@ from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable, Dict, List, Optional, Tuple
 
 try:
+    from services.common.redact import redact_url
+except ImportError:  # image ships without services/common; copy of services/common/redact.py
+    import re as _re
+
+    def redact_url(url):
+        if url is None:
+            return ""
+        text = str(url)
+        spans = []
+        prev_at = -1
+        for match in _re.finditer("@", text):
+            at = match.start()
+            scheme = text.find("://", prev_at + 1, at)
+            if scheme >= 0 and (not spans or _re.search(r"[\s,;'\"()<>|\[\]{}]", text[prev_at + 1:scheme])):
+                spans.append([scheme + 3, at])
+            elif spans:
+                spans[-1][1] = at
+            else:
+                spans.append([0, at])
+            prev_at = at
+        out = []
+        pos = 0
+        for start, end in spans:
+            out.append(text[pos:start] + "***")
+            pos = end
+        out.append(text[pos:])
+        return _re.sub(
+            r"(?i)([?&;#][\w.\-]*(?:password|passwd|pwd|pass|secret|token|key|auth|signature|sig)[\w.\-]*=)[^&#;\s]*",
+            r"\1***",
+            "".join(out),
+        )
+
+try:
     from nats.aio.client import Client as NATS
     from nats.aio.msg import Msg
     from nats.js.api import (
@@ -346,7 +379,7 @@ class AgentZeroController:
             return
         if NATS is None:
             raise RuntimeError("nats-py is required to start the Agent Zero controller")
-        logger.info("Connecting to NATS at %s", self.settings.nats_url)
+        logger.info("Connecting to NATS at %s", redact_url(self.settings.nats_url))
         self._nc = NATS()
         await self._nc.connect(servers=[self.settings.nats_url])
         if self.settings.use_jetstream:

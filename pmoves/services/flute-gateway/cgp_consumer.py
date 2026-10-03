@@ -7,6 +7,7 @@ from typing import Any, Dict
 from nats.aio.client import Client as NATS
 from chit_signing import verify_cgp
 from geometry_bridge import cgp_subject
+from services.common.redact import redact_url
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -18,7 +19,7 @@ async def main():
     nats_url = os.environ.get("NATS_URL", "nats://localhost:4222")
     try:
         await nc.connect(nats_url)
-        logger.info(f"Connected to NATS at {nats_url}")
+        logger.info(f"Connected to NATS at {redact_url(nats_url)}")
     except Exception as e:
         logger.error(f"Failed to connect to NATS: {e}")
         return

@@ -15,6 +15,39 @@ from nats.aio.client import Client as NATS
 
 from prometheus_client import Counter
 
+try:
+    from services.common.redact import redact_url
+except ImportError:  # image ships without services/common; copy of services/common/redact.py
+    import re as _re
+
+    def redact_url(url):
+        if url is None:
+            return ""
+        text = str(url)
+        spans = []
+        prev_at = -1
+        for match in _re.finditer("@", text):
+            at = match.start()
+            scheme = text.find("://", prev_at + 1, at)
+            if scheme >= 0 and (not spans or _re.search(r"[\s,;'\"()<>|\[\]{}]", text[prev_at + 1:scheme])):
+                spans.append([scheme + 3, at])
+            elif spans:
+                spans[-1][1] = at
+            else:
+                spans.append([0, at])
+            prev_at = at
+        out = []
+        pos = 0
+        for start, end in spans:
+            out.append(text[pos:start] + "***")
+            pos = end
+        out.append(text[pos:])
+        return _re.sub(
+            r"(?i)([?&;#][\w.\-]*(?:password|passwd|pwd|pass|secret|token|key|auth|signature|sig)[\w.\-]*=)[^&#;\s]*",
+            r"\1***",
+            "".join(out),
+        )
+
 logger = logging.getLogger("showtime.nats_sse")
 
 SSE_MESSAGES_DROPPED = Counter(
@@ -43,7 +76,7 @@ async def nats_event_generator() -> AsyncGenerator[str, None]:
 
     try:
         await nc.connect(NATS_URL)
-        logger.info("NATS connected for SSE bridge at %s", NATS_URL)
+        logger.info("NATS connected for SSE bridge at %s", redact_url(NATS_URL))
     except Exception as exc:
         logger.error("NATS connection failed: %s", exc)
         yield f"event: showtime.error\ndata: {json.dumps({'error': 'NATS connection failed', 'detail': str(exc)})}\n\n"

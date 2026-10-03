@@ -15,6 +15,39 @@ except Exception:  # pragma: no cover - the service can operate without NATS
 
 from pmoves.services.common import events as event_utils
 
+try:
+    from services.common.redact import redact_url
+except ImportError:  # image ships without services/common; copy of services/common/redact.py
+    import re as _re
+
+    def redact_url(url):
+        if url is None:
+            return ""
+        text = str(url)
+        spans = []
+        prev_at = -1
+        for match in _re.finditer("@", text):
+            at = match.start()
+            scheme = text.find("://", prev_at + 1, at)
+            if scheme >= 0 and (not spans or _re.search(r"[\s,;'\"()<>|\[\]{}]", text[prev_at + 1:scheme])):
+                spans.append([scheme + 3, at])
+            elif spans:
+                spans[-1][1] = at
+            else:
+                spans.append([0, at])
+            prev_at = at
+        out = []
+        pos = 0
+        for start, end in spans:
+            out.append(text[pos:start] + "***")
+            pos = end
+        out.append(text[pos:])
+        return _re.sub(
+            r"(?i)([?&;#][\w.\-]*(?:password|passwd|pwd|pass|secret|token|key|auth|signature|sig)[\w.\-]*=)[^&#;\s]*",
+            r"\1***",
+            "".join(out),
+        )
+
 logger = logging.getLogger("pmoves.gateway.events")
 
 
@@ -56,7 +89,7 @@ class EventBus:
             try:
                 await nc.connect(servers=[self._nats_url], allow_reconnect=True, connect_timeout=1.0)
             except Exception as exc:  # pragma: no cover - depends on runtime service availability
-                logger.warning("Unable to connect to NATS at %s: %s", self._nats_url, exc)
+                logger.warning("Unable to connect to NATS at %s: %s", redact_url(self._nats_url), exc)
                 return
             for topic in self._topics:
                 try:
@@ -64,7 +97,7 @@ class EventBus:
                 except Exception as exc:
                     logger.warning("Failed subscribing to %s: %s", topic, exc)
             self._nc = nc
-            logger.info("Event bus connected to %s", self._nats_url)
+            logger.info("Event bus connected to %s", redact_url(self._nats_url))
 
     async def stop(self) -> None:
         async with self._lock:

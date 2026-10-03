@@ -24,6 +24,39 @@ from botocore.client import Config
 from fastapi import FastAPI
 from nats.aio.client import Client as NATSClient
 
+try:
+    from services.common.redact import redact_url
+except ImportError:  # image ships without services/common; copy of services/common/redact.py
+    import re as _re
+
+    def redact_url(url):
+        if url is None:
+            return ""
+        text = str(url)
+        spans = []
+        prev_at = -1
+        for match in _re.finditer("@", text):
+            at = match.start()
+            scheme = text.find("://", prev_at + 1, at)
+            if scheme >= 0 and (not spans or _re.search(r"[\s,;'\"()<>|\[\]{}]", text[prev_at + 1:scheme])):
+                spans.append([scheme + 3, at])
+            elif spans:
+                spans[-1][1] = at
+            else:
+                spans.append([0, at])
+            prev_at = at
+        out = []
+        pos = 0
+        for start, end in spans:
+            out.append(text[pos:start] + "***")
+            pos = end
+        out.append(text[pos:])
+        return _re.sub(
+            r"(?i)([?&;#][\w.\-]*(?:password|passwd|pwd|pass|secret|token|key|auth|signature|sig)[\w.\-]*=)[^&#;\s]*",
+            r"\1***",
+            "".join(out),
+        )
+
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
@@ -247,7 +280,7 @@ async def lifespan(app: FastAPI):
     nc_app = NATSClient()
     try:
         await nc_app.connect(NATS_URL, name="replay-compressor")
-        log.info("connected to NATS %s", NATS_URL)
+        log.info("connected to NATS %s", redact_url(NATS_URL))
         await nc_app.subscribe(SUBJECT_ABSENT, cb=on_absent)
         await nc_app.subscribe(SUBJECT_DETECTED, cb=on_detected)
         log.info("subscribed to %s and %s", SUBJECT_ABSENT, SUBJECT_DETECTED)

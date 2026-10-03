@@ -19,17 +19,42 @@ from embedder import ClipHFModel, Embedder
 logger = logging.getLogger("clip-embed")
 
 
-def _redact_url(url: str | None) -> str:
-    if not url:
-        return "<unset>"
-    try:
-        p = urlsplit(url)
-        if p.username or p.password:
-            netloc = (p.hostname or "") + (f":{p.port}" if p.port else "")
-            return urlunsplit((p.scheme, netloc, p.path, p.query, p.fragment))
-    except Exception:
-        return "<redacted>"
-    return url
+try:
+    from services.common.redact import redact_url
+except ImportError:  # image ships without services/common; copy of services/common/redact.py
+    import re as _re
+
+    def redact_url(url):
+        if url is None:
+            return ""
+        text = str(url)
+        spans = []
+        prev_at = -1
+        for match in _re.finditer("@", text):
+            at = match.start()
+            scheme = text.find("://", prev_at + 1, at)
+            if scheme >= 0 and (not spans or _re.search(r"[\s,;'\"()<>|\[\]{}]", text[prev_at + 1:scheme])):
+                spans.append([scheme + 3, at])
+            elif spans:
+                spans[-1][1] = at
+            else:
+                spans.append([0, at])
+            prev_at = at
+        out = []
+        pos = 0
+        for start, end in spans:
+            out.append(text[pos:start] + "***")
+            pos = end
+        out.append(text[pos:])
+        return _re.sub(
+            r"(?i)([?&;#][\w.\-]*(?:password|passwd|pwd|pass|secret|token|key|auth|signature|sig)[\w.\-]*=)[^&#;\s]*",
+            r"\1***",
+            "".join(out),
+        )
+
+
+# Former private redactor; fail-open on unencoded / # ? , in passwords (PR #3244).
+_redact_url = redact_url
 
 
 REQUESTS = Counter("clip_embed_requests_total", "Total requests", ["endpoint"])

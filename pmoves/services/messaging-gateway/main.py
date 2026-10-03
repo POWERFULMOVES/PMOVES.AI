@@ -19,6 +19,39 @@ from platforms.discord import DiscordPlatform
 from platforms.telegram import TelegramPlatform
 from platforms.whatsapp import WhatsAppPlatform
 
+try:
+    from services.common.redact import redact_url
+except ImportError:  # image ships without services/common; copy of services/common/redact.py
+    import re as _re
+
+    def redact_url(url):
+        if url is None:
+            return ""
+        text = str(url)
+        spans = []
+        prev_at = -1
+        for match in _re.finditer("@", text):
+            at = match.start()
+            scheme = text.find("://", prev_at + 1, at)
+            if scheme >= 0 and (not spans or _re.search(r"[\s,;'\"()<>|\[\]{}]", text[prev_at + 1:scheme])):
+                spans.append([scheme + 3, at])
+            elif spans:
+                spans[-1][1] = at
+            else:
+                spans.append([0, at])
+            prev_at = at
+        out = []
+        pos = 0
+        for start, end in spans:
+            out.append(text[pos:start] + "***")
+            pos = end
+        out.append(text[pos:])
+        return _re.sub(
+            r"(?i)([?&;#][\w.\-]*(?:password|passwd|pwd|pass|secret|token|key|auth|signature|sig)[\w.\-]*=)[^&#;\s]*",
+            r"\1***",
+            "".join(out),
+        )
+
 
 YOUTUBE_CONTROL_REJECTION_LABELS = {
     "policy": "Policy issue",
@@ -445,7 +478,7 @@ async def _nats_resilience_loop() -> None:
             logger.warning("NATS connection closed")
 
         try:
-            logger.info(f"Connecting to NATS at {NATS_URL}...")
+            logger.info(f"Connecting to NATS at {redact_url(NATS_URL)}...")
             await nc.connect(
                 servers=[NATS_URL],
                 disconnected_cb=_disconnected_cb,
