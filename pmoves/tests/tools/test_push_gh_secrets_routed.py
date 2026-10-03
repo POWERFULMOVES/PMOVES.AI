@@ -29,11 +29,12 @@ import sys
 from pathlib import Path
 
 import pytest
+from pmoves.tools.bash_resolver import find_bash  # never System32's WSL stub
 import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SCRIPT = REPO_ROOT / "pmoves" / "tools" / "push-gh-secrets.sh"
-BASH = shutil.which("bash")
+BASH = find_bash()  # not shutil.which: that can return System32's WSL stub
 
 pytestmark = pytest.mark.skipif(not BASH, reason="needs bash")
 

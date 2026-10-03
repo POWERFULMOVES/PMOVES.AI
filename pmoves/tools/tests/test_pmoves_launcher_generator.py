@@ -33,7 +33,6 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
-from pmoves.tools.bash_resolver import resolve_bash  # never System32's WSL stub
 
 # Make the tools/ folder importable when running standalone.
 _HERE = Path(__file__).resolve().parent
@@ -42,6 +41,10 @@ _REPO = _TOOLS.parent.parent
 sys.path.insert(0, str(_TOOLS))
 
 import pmoves_launcher_generator as gen  # noqa: E402
+# Sibling import via the same tools/ path, so the documented standalone run
+# (`python pmoves/tools/tests/test_pmoves_launcher_generator.py`) works without
+# the repo root on sys.path.
+from bash_resolver import resolve_bash  # noqa: E402  never System32's WSL stub
 
 
 REPO_ROOT = Path(os.environ.get("PMOVES_REPO_ROOT") or _REPO).resolve()

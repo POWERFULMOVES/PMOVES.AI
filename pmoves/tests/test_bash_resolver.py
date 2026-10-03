@@ -143,3 +143,36 @@ def test_live_windows_resolution_is_not_wsl():
     assert os.path.isabs(bash) and not br.is_rejected_windows_bash(bash)
     out = subprocess.run([bash, "-c", "uname -s"], capture_output=True, text=True, timeout=60).stdout
     assert out.startswith(("MINGW", "MSYS")), out
+
+
+# --- find_bash / find_sh: "skip if no bash" callers ---------------------------
+
+def test_find_bash_off_windows_is_shutil_which(monkeypatch):
+    monkeypatch.setattr(br, "_is_windows", lambda: False)
+    seen = {}
+
+    def fake_which(name, path=None):
+        seen[name] = path
+        return "/usr/bin/" + name
+
+    monkeypatch.setattr(br.shutil, "which", fake_which)
+    assert br.find_bash() == "/usr/bin/bash"
+    assert br.find_sh({"PATH": "/opt/x"}) == "/usr/bin/sh"
+    assert seen == {"bash": None, "sh": "/opt/x"}
+
+
+def test_find_bash_off_windows_none_when_absent(monkeypatch):
+    monkeypatch.setattr(br, "_is_windows", lambda: False)
+    monkeypatch.setattr(br.shutil, "which", lambda name, path=None: None)
+    assert br.find_bash() is None
+
+
+def test_find_bash_on_windows_treats_the_stub_as_unavailable(windows):
+    # The shutil.which("bash") trap: System32 first on the registry PATH.
+    windows.add(WSL_STUB)
+    assert br.find_bash(_env(path=r"C:\Windows\System32")) is None
+
+
+def test_find_bash_on_windows_returns_git_bash(windows):
+    windows.add(GIT_PF)
+    assert br.find_bash(_env(path=r"C:\Windows\System32")) == GIT_PF

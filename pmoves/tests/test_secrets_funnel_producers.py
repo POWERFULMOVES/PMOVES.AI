@@ -256,6 +256,13 @@ def test_stage_files_are_created_0600_even_under_umask_022(tmp_path):
     assert all(mode == "600" for _, mode in seen), seen
 
 
+@pytest.mark.skipif(
+    os.name == "nt",
+    reason="Windows: resolve_bash() returns Git's bin\\bash.exe launcher, which PREPENDS "
+    "/mingw64/bin:/usr/bin to PATH, so Git's own /usr/bin/mv shadows the stubbed `mv` "
+    "and the rename never fails. (It passed on main only vacuously: a bare `bash` ran "
+    "the WSL stub, which could not open the D:\\ script path at all.)",
+)
 def test_a_failed_rename_leaves_no_stage_file(tmp_path):
     """mv of the bundle fails -> set -e aborts -> the EXIT trap must remove
     the staged copy, and the old bundle must be untouched."""

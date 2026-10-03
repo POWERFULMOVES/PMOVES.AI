@@ -51,9 +51,17 @@ from __future__ import annotations
 
 import ntpath
 import os
+import shutil
 from typing import List, Mapping, Optional, Tuple
 
-__all__ = ["BashNotFoundError", "resolve_bash", "resolve_sh", "is_rejected_windows_bash"]
+__all__ = [
+    "BashNotFoundError",
+    "find_bash",
+    "find_sh",
+    "is_rejected_windows_bash",
+    "resolve_bash",
+    "resolve_sh",
+]
 
 # Git for Windows install roots, in the order the .bat shims probe them.
 _GIT_BIN_DIRS: Tuple[Tuple[str, str], ...] = (
@@ -174,3 +182,30 @@ def resolve_bash(env: Optional[Mapping[str, str]] = None) -> str:
 def resolve_sh(env: Optional[Mapping[str, str]] = None) -> str:
     """Return the POSIX sh executable to put in argv[0]. See the module docstring."""
     return _resolve("sh", env)
+
+
+def _find(name: str, env: Optional[Mapping[str, str]]) -> Optional[str]:
+    if not _is_windows():
+        path = None if env is None else _get(env, "PATH")
+        return shutil.which(name, path=path)
+    try:
+        return _resolve(name, env)
+    except BashNotFoundError:
+        return None
+
+
+def find_bash(env: Optional[Mapping[str, str]] = None) -> Optional[str]:
+    """Absolute path to a usable bash, or None -- for "skip if no bash" callers.
+
+    Use this instead of ``shutil.which("bash")``: on Windows, with the
+    registry PATH a PowerShell / cmd / VS Code session gets, ``which`` returns
+    ``C:\\Windows\\system32\\bash.EXE`` -- the WSL stub -- so "bash is
+    available" was true for the wrong bash. Off Windows this IS
+    ``shutil.which("bash")`` (absolute, for callers that replace PATH).
+    """
+    return _find("bash", env)
+
+
+def find_sh(env: Optional[Mapping[str, str]] = None) -> Optional[str]:
+    """Like :func:`find_bash` for POSIX ``sh``."""
+    return _find("sh", env)

@@ -31,14 +31,17 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from pmoves.tools.bash_resolver import find_bash, find_sh  # never System32's WSL stub
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PM_PYTHON_SH = REPO_ROOT / "pmoves" / "scripts" / "pm-python.sh"
 
 # Absolute paths: the sandbox replaces PATH wholesale, so neither the harness
 # nor the stub shebangs may rely on a PATH lookup.
-BASH = shutil.which("bash")
-SH = shutil.which("sh")
+# find_bash/find_sh, not shutil.which: on Windows `which` can return
+# System32's WSL stub. Both return absolute paths (PATH is replaced below).
+BASH = find_bash()
+SH = find_sh()
 
 # A shebang needs a POSIX path, and `shutil.which` does not give one on
 # Windows: it returns a BACKSLASHED path containing a SPACE

@@ -13,6 +13,12 @@ function (subprocess.run/call/check_call/check_output/Popen,
 asyncio.create_subprocess_exec/_shell, os.system/popen, os.exec*/spawn*):
 
 * a list/tuple first argument whose first element is a literal bash/sh name;
+* the same with argv[0] taken from ``shutil.which("bash"/"sh")`` -- directly,
+  via a variable (``BASH = shutil.which("bash")``, ``... or which("bash.exe")``)
+  or via a module-local helper that returns it (``def _bash(): ...``). With the
+  registry PATH a PowerShell / cmd / VS Code session gets on Windows, ``which``
+  returns ``C:\\Windows\\system32\\bash.EXE`` -- the same WSL stub. Use
+  ``find_bash()`` (absolute path or None) for "skip if no bash" callers;
 * ``["bash", ...] + rest`` concatenations;
 * a Name first argument that the enclosing scope assigned such a list to
   (``cmd = ["bash", "-lc", ...]; subprocess.run(cmd)`` -- the mini_cli shape);
@@ -89,14 +95,6 @@ def _callee_name(func: ast.AST) -> Optional[str]:
     return None
 
 
-def _argv_is_bare_shell(node: ast.AST) -> bool:
-    if isinstance(node, (ast.List, ast.Tuple)) and node.elts:
-        return _shell_literal(node.elts[0])
-    if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add):
-        return _argv_is_bare_shell(node.left)
-    return False
-
-
 class _Scanner(ast.NodeVisitor):
     def __init__(self, indirect: bool = False) -> None:
         self.indirect = indirect
@@ -107,6 +105,8 @@ class _Scanner(ast.NodeVisitor):
         # Names of functions/methods defined in this module that themselves
         # spawn a process: `run(cmd, shell=True)` helpers, `self._run_command`.
         self.wrappers: set = set()
+        # Names of module-local functions that return shutil.which("bash").
+        self.which_funcs: set = set()
 
     def prepare(self, tree: ast.AST) -> None:
         """Pre-pass: imports first (they may sit below a helper), then wrappers."""
@@ -122,6 +122,59 @@ class _Scanner(ast.NodeVisitor):
                     for c in ast.walk(node)
                 ):
                     self.wrappers.add(node.name)
+        # Module-level names first, so a function visited before a later
+        # `BASH = shutil.which("bash")` still resolves it.
+        if isinstance(tree, ast.Module):
+            for stmt in tree.body:
+                if isinstance(stmt, ast.Assign):
+                    for t in stmt.targets:
+                        self._record_assign(t, stmt.value)
+                elif isinstance(stmt, ast.AnnAssign):
+                    self._record_assign(stmt.target, stmt.value)
+        # Local helpers that hand back shutil.which("bash"): `def _bash(): ...`
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                if any(self._is_which_call(c) for c in ast.walk(node)):
+                    self.which_funcs.add(node.name)
+
+    # -- argv[0] classification ----------------------------------------------
+    @staticmethod
+    def _is_which_call(node: ast.AST) -> bool:
+        """``shutil.which("bash")`` / ``which("sh")`` -- on Windows that can be
+        ``C:\\Windows\\system32\\bash.EXE``, the WSL stub."""
+        return (
+            isinstance(node, ast.Call)
+            and _callee_name(node.func) == "which"
+            and bool(node.args)
+            and _shell_literal(node.args[0])
+        )
+
+    def _is_which_sourced(self, node: Optional[ast.AST], depth: int = 0) -> bool:
+        if node is None or depth > 5:
+            return False
+        if self._is_which_call(node):
+            return True
+        if isinstance(node, ast.BoolOp):
+            return any(self._is_which_sourced(v, depth + 1) for v in node.values)
+        if isinstance(node, ast.Name):
+            return self._is_which_sourced(self._lookup(node.id), depth + 1)
+        if isinstance(node, ast.Call) and not node.args:
+            return _callee_name(node.func) in self.which_funcs
+        return False
+
+    def _argv_kind(self, node: Optional[ast.AST]) -> Optional[str]:
+        """'argv' for a literal bash/sh argv[0], 'which' for one taken from
+        shutil.which, else None."""
+        if isinstance(node, (ast.List, ast.Tuple)) and node.elts:
+            head = node.elts[0]
+            if _shell_literal(head):
+                return "argv"
+            if self._is_which_sourced(head):
+                return "which"
+            return None
+        if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add):
+            return self._argv_kind(node.left)
+        return None
 
     # -- import tracking ---------------------------------------------------
     def visit_Import(self, node: ast.Import) -> None:
@@ -185,7 +238,7 @@ class _Scanner(ast.NodeVisitor):
                 arg = node.args[0]
                 resolved = self._lookup(arg.id) if isinstance(arg, ast.Name) else arg
                 text = _string_text(resolved) if resolved is not None else None
-                if (resolved is not None and _argv_is_bare_shell(resolved)) or (
+                if self._argv_kind(resolved) or (
                     text is not None and _starts_with_shell(text)
                 ):
                     self._hit(node, "wrapper" if is_wrapper else "indirect")
@@ -214,8 +267,9 @@ class _Scanner(ast.NodeVisitor):
             return
         if fn in _ARGV_FUNCS:
             resolved = self._lookup(arg.id) if isinstance(arg, ast.Name) else arg
-            if resolved is not None and _argv_is_bare_shell(resolved):
-                self._hit(node, "argv" if resolved is arg else "argv-var")
+            kind = self._argv_kind(resolved)
+            if kind:
+                self._hit(node, kind if resolved is arg else f"{kind}-var")
                 return
         if fn in _ARGV_FUNCS or fn in _STRING_FUNCS:
             text = _string_text(arg)
@@ -285,9 +339,53 @@ def resolve(cmd, env):
 '''
 
 
+# Pre-fix shapes of the shutil.which("bash") callers (review of PR #3266):
+# test_claude_pmoves_roster_fallback.py:42/224 (module constant),
+# test_mavis_sdk_env.py:36/46 (`or` chain in a local),
+# test_launcher_prompt_accumulation.py:74 (helper returning which()).
+PRE_FIX_WHICH_CONSTANT = '''
+import shutil, subprocess
+BASH = shutil.which("bash")
+class T:
+    def run(self):
+        subprocess.run([BASH, str(self.launcher), "--some-arg"], capture_output=True)
+'''
+
+PRE_FIX_WHICH_OR_CHAIN = '''
+import shutil, subprocess
+def test_bash_runner_all_pass():
+    bash = shutil.which("bash") or shutil.which("bash.exe")
+    result = subprocess.run([bash, runner_arg], capture_output=True)
+'''
+
+PRE_FIX_WHICH_HELPER = '''
+import shutil, subprocess
+def _bash() -> str:
+    found = shutil.which("bash")
+    if not found:
+        pytest.skip("bash not available")
+    return found
+def _run(launcher):
+    return subprocess.run([_bash(), str(launcher)], capture_output=True)
+'''
+
+
 def test_scanner_flags_the_pre_fix_shapes() -> None:
     assert [k for _, k, _ in scan_source(PRE_FIX_MINI_CLI)] == ["argv-var"]
     assert [k for _, k, _ in scan_source(PRE_FIX_CRUSH)] == ["argv"]
+    assert [k for _, k, _ in scan_source(PRE_FIX_WHICH_CONSTANT)] == ["which"]
+    assert [k for _, k, _ in scan_source(PRE_FIX_WHICH_OR_CHAIN)] == ["which"]
+    assert [k for _, k, _ in scan_source(PRE_FIX_WHICH_HELPER)] == ["which"]
+
+
+def test_find_bash_forms_are_not_flagged() -> None:
+    """The post-fix shapes of the three which() callers above."""
+    for src in (PRE_FIX_WHICH_CONSTANT, PRE_FIX_WHICH_OR_CHAIN, PRE_FIX_WHICH_HELPER):
+        fixed = (
+            src.replace('shutil.which("bash") or shutil.which("bash.exe")', "find_bash()")
+            .replace('shutil.which("bash")', "find_bash()")
+        )
+        assert scan_source(fixed) == [], fixed
 
 
 @pytest.mark.parametrize(
@@ -305,6 +403,10 @@ def test_scanner_flags_the_pre_fix_shapes() -> None:
         "import subprocess\ndef run(cmd):\n    subprocess.run(cmd, shell=True)\nrun('bash scripts/x.sh')",
         "import subprocess\nclass I:\n    def _run_command(self, cmd):\n        subprocess.run(cmd)\n"
         "    def go(self):\n        cmd = ['bash', 'x.sh']\n        self._run_command(cmd)",
+        # argv[0] from shutil.which: direct, `sh`, and via `cmd = [...]`
+        "import shutil, subprocess\nsubprocess.run([shutil.which('bash'), '-c', 'x'])",
+        "import shutil, subprocess\nSH = shutil.which('sh')\nsubprocess.check_call([SH, 'x.sh'])",
+        "import shutil, subprocess\ndef f():\n    b = shutil.which('bash')\n    cmd = [b, 'x']\n    subprocess.run(cmd)",
     ],
 )
 def test_scanner_flags_other_spawn_forms(src: str) -> None:
@@ -316,7 +418,9 @@ def test_scanner_flags_other_spawn_forms(src: str) -> None:
     [
         # resolved argv[0] -- the sanctioned form
         "import subprocess\nsubprocess.run([resolve_bash(), '-c', 'x'])",
-        "import subprocess\nsubprocess.run([BASH, '-c', 'x'])",
+        "import subprocess\nBASH = find_bash()\nsubprocess.run([BASH, '-c', 'x'])",
+        # which() of something that is not a shell is fine
+        "import shutil, subprocess\nGIT = shutil.which('git')\nsubprocess.run([GIT, 'status'])",
         # "bash" as data, not as a spawn
         "x = ['bash', '-c', 'docker compose down']",
         "allowed = ['bash', 'ls', 'view']",
