@@ -650,3 +650,25 @@ def test_sync_drops_a_crlf_row_main_carries_and_keeps_the_rest_byte_exact(tmp_pa
     assert "1 ON-MAIN, 0 RE-FILED, 1 KEEP" in r.stdout
     # KEEP is re-appended as the bytes it was -- matching never rewrites a row.
     assert reg.read_bytes() == BASE.encode() + keep
+
+
+@pytest.mark.parametrize("eol, rc", [
+    ("\r\n", 0),        # a legacy Windows row: ONE CR is a line ending
+    ("\r\r\n", 3),      # two are not -- a different row, still refused
+])
+def test_a_crlf_row_held_in_a_sidecar_reapplies(tmp_path, eol, rc):
+    """REAPPLY sees the same one-CR line ending as matching does. A CRLF row
+    that classified KEEP must not be stranded at REAPPLY by a renderer refusal
+    of its own line ending; the bytes appended are still the held bytes."""
+    row = _render("CLAIM", OWNER, "feat/crlf-legacy", "filed on Windows.", "24h",
+                  T0).replace("\n", eol)
+    repo, keep = _held_with(tmp_path, row)
+    reg = repo / REG_REL
+    before = reg.read_bytes()
+    r = _sync(repo, "--reapply", str(keep), "--apply")
+    assert r.returncode == rc, (r.stdout, r.stderr)
+    if rc == 0:
+        assert reg.read_bytes() == before + row.encode()     # verbatim, CR kept
+    else:
+        assert "refused by the renderer" in r.stderr
+        assert reg.read_bytes() == before

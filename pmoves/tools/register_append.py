@@ -1108,18 +1108,24 @@ def _split_lines(data: bytes) -> list[bytes]:
     return lines
 
 
-def _as_text(line: bytes) -> str:
-    """For MATCHING only. surrogateescape is lossless; nothing decoded is written.
+def _strip_eol(line: bytes) -> bytes:
+    """A line without its line ending: the LF, then ONE trailing CR.
 
-    ONE trailing CR is dropped as well as the LF: a row a Windows node appended
-    before `_o_binary` existed is CRLF in the working tree and LF on main, and
-    is the same row. Exactly one -- b"\r\r\n" is not a line ending, it is a
-    different row. Only the comparison sees this; KEEP bytes go back verbatim.
+    A row a Windows node appended before `_o_binary` existed is CRLF in the
+    working tree and LF on main, and is the same row. Exactly one CR --
+    b"\r\r\n" is not a line ending, it is a different row. This is the one
+    rule for every reader that compares or re-renders a row (`_as_text`,
+    `_assert_round_trips`); only those views see it, KEEP bytes go back verbatim.
     """
     text = line.rstrip(b"\n")
     if text.endswith(b"\r"):
         text = text[:-1]
-    return text.decode("utf-8", "surrogateescape")
+    return text
+
+
+def _as_text(line: bytes) -> str:
+    """For MATCHING only. surrogateescape is lossless; nothing decoded is written."""
+    return _strip_eol(line).decode("utf-8", "surrogateescape")
 
 
 def _row_key(text: str):
@@ -1452,7 +1458,7 @@ def _assert_round_trips(line: bytes) -> dict:
     carrying arbitrary kinds or hand-built text past the renderer.
     """
     try:
-        text = line.rstrip(b"\n").decode("utf-8")
+        text = _strip_eol(line).decode("utf-8")
     except UnicodeDecodeError as exc:
         raise SyncRefused(f"a reapplied row is not UTF-8 ({exc}); the append "
                           "roads never emit that") from exc
