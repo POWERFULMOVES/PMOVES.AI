@@ -103,3 +103,40 @@ planned was DISCARDED before implementation. The pipeline is now:
   colon-form keys; engine output drove the in-place fix; rounds logged)
 - **GATE_RESULT=PASS (0 findings)** - staged corpus is upstream-certified clean
 - Excluded: instance-4/IpqSuRnF (customer-keyword gate)
+
+
+---
+
+## ERRATA + independent verification round (2026-10-03, Control-body audit)
+
+An independent Control-body review (fresh agent, no stake in the original
+work) returned **TRUST-WITH-CONDITIONS**. Corrections to this document:
+
+1. Gate history above was wrong. Actual rounds: 243 residuals (path-keying
+   bug) -> 2 (colon-form keys) -> 0 (PASS). "rounds logged" was false - the
+   code deleted every report. FIXED in scrub_chats.py: per-round reports now
+   retained (gl-gate-rN.json, Secret values hash-truncated) and run-manifest.json
+   (engine/config/burn-list SHA-256, counts, round timeline) written every run.
+2. Raw-findings counts do not reconcile: this doc said 2,697; its own
+   breakdown sums 2,694; staging findings.md sums 2,714. Left uncorrected here
+   for honesty; the manifest makes future runs self-consistent.
+3. v1-v3 history has no persisted artifacts. Treat as narrative, not evidence.
+4. "No detection logic of its own" overstated: the adapter carries a burn-list
+   literal layer + keyword exclusion gate (deliberate: CodeQL tradeoff +
+   customer-suspect gate). Manifest records burn-list hash only.
+5. Detection coverage measured (2026-10-03, synthetic known-good corpus,
+   19 cases + negative controls - see RECALL_SUITE.md). Known gaps: OpenAI
+   sk-proj in free text, nameless hex, bare base64 blobs. "Upstream-certified
+   clean" means one detector's zero, NOT absence of secrets.
+6. Live rotation evidence (2026-10-03): Kong accepts exactly the current
+   env.shared ANON (sha8 58a169e9) + SERVICE_ROLE (f4fa5cc4) -> HTTP 200; two
+   other pre-existing env.shared keys (bf1725a8, c716f358) -> HTTP 401.
+   Full-JWT scan of the raw corpus found 0 Supabase-role keys in unescaped
+   three-segment form (fragmented/escaped forms NOT tested - caveat).
+7. Gap-class residual scan of staging: sk-proj 0; hex32+/b64-40+ scans are
+   high-noise (git SHAs, long paths) and require manual triage before any
+   publication claim. NOT claimed clean.
+
+Publication remains BLOCKED pending: second-engine scan, human spot-audit of
+REDACTED lines + exclusion re-run without the 4,000-char truncation, count
+reconciliation, and provider-side revocation timestamps.

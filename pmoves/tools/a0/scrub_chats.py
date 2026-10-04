@@ -124,11 +124,28 @@ for inst in insts:
 # ITERATE-TO-ZERO: gate-time findings can exist only in JSON-escaped forms the
 # raw scan cannot see. Replace them in-place and re-gate until the upstream
 # engine certifies zero (max 3 rounds; every replacement is logged).
+import hashlib, datetime
+
+def _redact_report(path):
+    if not path.exists():
+        return
+    try:
+        rows_ = json.loads(path.read_text(encoding="utf-8", errors="replace"))
+        for r_ in rows_:
+            if r_.get("Secret"):
+                r_["Secret"] = hashlib.sha256(r_["Secret"].encode()).hexdigest()[:8] + "..."
+        path.write_text(json.dumps(rows_, indent=1), encoding="utf-8")
+    except Exception:
+        pass
+
+gate_history = []
 rounds = 0
 while True:
     rounds += 1
-    rep2 = OUT / "gl-gate.json"
+    rep2 = OUT / ("gl-gate-r%d.json" % rounds)
     gate = gitleaks(OUT, rep2)
+    _redact_report(rep2)
+    gate_history.append({"round": rounds, "findings": len(gate), "report": rep2.name})
     if not gate or rounds >= 3:
         break
     jsonls = list(OUT.rglob("*.jsonl"))
@@ -141,12 +158,35 @@ while True:
             t = jf.read_text(encoding="utf-8", errors="replace")
             if sec in t:
                 jf.write_text(t.replace(sec, ph), encoding="utf-8")
-    rep2.unlink()
 if "rep2" not in dir() or not locals().get("rep2"):
     rep2 = OUT / "gl-gate.json"
 if not (OUT / "gl-gate.json").exists() or True:
     gate = gitleaks(OUT, OUT / "gl-gate.json")
+_redact_report(OUT / "gl-gate.json")
 gate_n = len(gate)
+
+def _sha256_file(p):
+    h = hashlib.sha256()
+    with open(p, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 16), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+_manifest = {
+    "timestamp": datetime.datetime.now().isoformat(),
+    "engine_version": subprocess.run([str(GL), "version"], capture_output=True, text=True).stdout.strip(),
+    "engine_sha256": _sha256_file(GL),
+    "config_sha256": _sha256_file(TOML),
+    "burnlist_sha256": _sha256_file(BURN_LIST) if BURN_LIST.exists() else None,
+    "unique_secrets": len(ordered),
+    "raw_counts": raw_counts,
+    "gate_rounds": gate_history,
+    "gate_final_findings": gate_n,
+    "chats": len(rows),
+    "messages": sum(r["messages"] for r in rows),
+    "excluded": sum(1 for r in rows if r["excluded"]),
+}
+(OUT / "run-manifest.json").write_text(json.dumps(_manifest, indent=2), encoding="utf-8")
 
 with (OUT / "findings.csv").open("w", encoding="utf-8") as f:
     cols = ["instance_alias", "chat", "title", "messages", "excluded", "reason"] + CATS
@@ -161,13 +201,12 @@ lines = ["# Chat Corpus Scrub Findings", "",
          "## Raw findings by rule", ""]
 for k, v in sorted(raw_counts.items(), key=lambda kv: -kv[1]):
     lines.append("- %s: %d" % (k, v))
-lines += ["", "## GATE: %d findings" % gate_n, "",
+lines += ["", "## GATE: %d findings | rounds=%s" % (gate_n, gate_history), "",
           "GATE_RESULT=" + ("PASS" if gate_n == 0 else "FAIL"), "",
           "## Chats: %d | Messages: %d | Excluded: %d" % (len(rows), sum(r["messages"] for r in rows), len([r for r in rows if r["excluded"]])), "",
           "Review this file + findings.csv. Only redacted JSONL dirs are publishable."]
 (OUT / "findings.md").write_text("\n".join(lines), encoding="utf-8")
-if rep2.exists():
-    rep2.unlink()
+# gate reports retained for provenance (see run-manifest.json)
 
 print("RAW_RULE_COUNTS:", json.dumps(raw_counts))
 print("CHATS=%d MESSAGES=%d EXCLUDED=%d" % (len(rows), sum(r["messages"] for r in rows), len([r for r in rows if r["excluded"]])))
