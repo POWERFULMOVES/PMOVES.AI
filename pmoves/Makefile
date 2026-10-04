@@ -495,6 +495,14 @@ register-release: ## Close a lane in the claim register (OWNER= BRANCH= SCOPE= [
 # no lane closes EVERY lane its owner holds. A footnote could therefore close a
 # node's whole workload silently. A NOTE transitions nothing, by construction
 # and by a before/after check on the open-lane map.
+# Pre-PR self-verification (self-verify -> learnings -> evo, adopted
+# 2026-10-03): run this on the lane branch BEFORE opening the PR. Each check
+# is a real catch from a real review; the sidecar under docs/logs/selfcheck/
+# is the evo feed. Warnings advise, they do not block.
+.PHONY: pr-selfcheck
+pr-selfcheck: ## Self-verify the branch diff against the four LEARNINGS buckets (pre-PR)
+	@$(PRECHECK_PY) tools/pr_selfcheck.py $(ARGS)
+
 register-note: export REGISTER_OWNER = $(REGISTER_OWNER_VALUE)
 register-note: export REGISTER_BRANCH = $(BRANCH)
 register-note: export REGISTER_SCOPE = $(SCOPE)
