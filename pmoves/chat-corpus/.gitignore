@@ -6,3 +6,4 @@
 !/gitleaks.toml
 !/manifest.template.json
 !/RECALL_SUITE.md
+!/gen_recall_cases.py
