@@ -3,6 +3,7 @@ from pathlib import Path
 
 ROOT = Path(r"C:\Users\russe\agent-zero")
 OUT = Path(r"C:\Users\russe\agent-zero\chat-corpus-staging")
+PROV = OUT.parent / "chat-corpus-gate-reports"  # provenance artifacts live OUTSIDE the scanned tree
 REPO = Path(r"C:\Users\russe\Documents\GitHub\PMOVES.AI")
 GL = REPO / "pmoves" / "tools" / "a0" / "bin" / "gitleaks.exe"
 TOML = REPO / "pmoves" / "chat-corpus" / "gitleaks.toml"
@@ -77,10 +78,9 @@ def redact(text):
     return text, counts
 
 OUT.mkdir(exist_ok=True)
-for st in OUT.rglob("findings.*"):
-    st.unlink()
-for st in OUT.rglob("gl-gate.json"):
-    st.unlink()
+for pat_ in ("gl-gate*.json", "findings.*", "run-manifest.json"):
+    for st in OUT.rglob(pat_):
+        st.unlink()
 
 rows = []
 totals = {}
@@ -134,6 +134,9 @@ def _redact_report(path):
         for r_ in rows_:
             if r_.get("Secret"):
                 r_["Secret"] = hashlib.sha256(r_["Secret"].encode()).hexdigest()[:8] + "..."
+            if r_.get("Match"):
+                m_ = r_["Match"]
+                r_["Match"] = "[len:%d sha8:%s]" % (len(m_), hashlib.sha256(m_.encode()).hexdigest()[:8])
         path.write_text(json.dumps(rows_, indent=1), encoding="utf-8")
     except Exception:
         pass
@@ -142,7 +145,8 @@ gate_history = []
 rounds = 0
 while True:
     rounds += 1
-    rep2 = OUT / ("gl-gate-r%d.json" % rounds)
+    PROV.mkdir(exist_ok=True)
+    rep2 = PROV / ("gl-gate-r%d.json" % rounds)
     gate = gitleaks(OUT, rep2)
     _redact_report(rep2)
     gate_history.append({"round": rounds, "findings": len(gate), "report": rep2.name})
@@ -159,10 +163,11 @@ while True:
             if sec in t:
                 jf.write_text(t.replace(sec, ph), encoding="utf-8")
 if "rep2" not in dir() or not locals().get("rep2"):
-    rep2 = OUT / "gl-gate.json"
+    rep2 = PROV / "gl-gate.json"
 if not (OUT / "gl-gate.json").exists() or True:
-    gate = gitleaks(OUT, OUT / "gl-gate.json")
-_redact_report(OUT / "gl-gate.json")
+    gate = gitleaks(OUT, PROV / "gl-gate.json")
+PROV.mkdir(exist_ok=True)
+_redact_report(PROV / "gl-gate.json")
 gate_n = len(gate)
 
 def _sha256_file(p):
@@ -186,9 +191,9 @@ _manifest = {
     "messages": sum(r["messages"] for r in rows),
     "excluded": sum(1 for r in rows if r["excluded"]),
 }
-(OUT / "run-manifest.json").write_text(json.dumps(_manifest, indent=2), encoding="utf-8")
+(PROV / "run-manifest.json").write_text(json.dumps(_manifest, indent=2), encoding="utf-8")
 
-with (OUT / "findings.csv").open("w", encoding="utf-8") as f:
+with (PROV / "findings.csv").open("w", encoding="utf-8") as f:
     cols = ["instance_alias", "chat", "title", "messages", "excluded", "reason"] + CATS
     f.write(",".join(cols) + "\n")
     for r in rows:
@@ -205,7 +210,7 @@ lines += ["", "## GATE: %d findings | rounds=%s" % (gate_n, gate_history), "",
           "GATE_RESULT=" + ("PASS" if gate_n == 0 else "FAIL"), "",
           "## Chats: %d | Messages: %d | Excluded: %d" % (len(rows), sum(r["messages"] for r in rows), len([r for r in rows if r["excluded"]])), "",
           "Review this file + findings.csv. Only redacted JSONL dirs are publishable."]
-(OUT / "findings.md").write_text("\n".join(lines), encoding="utf-8")
+(PROV / "findings.md").write_text("\n".join(lines), encoding="utf-8")
 # gate reports retained for provenance (see run-manifest.json)
 
 print("RAW_RULE_COUNTS:", json.dumps(raw_counts))

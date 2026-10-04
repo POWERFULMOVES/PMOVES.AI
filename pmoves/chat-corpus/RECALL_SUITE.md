@@ -47,3 +47,13 @@ then scan:
     gitleaks detect --source pmoves/chat-corpus/recall-cases --no-git \
       --config pmoves/chat-corpus/gitleaks.toml \
       --report-format json --report-path r.json --no-banner
+
+
+## Second-engine verification (2026-10-03)
+
+detect-secrets (Yelp, MIT; different detectors than gitleaks) over the staged
+corpus with explicit file list: 8 automated flags -> 8 triaged likely-FP
+(REDACTED-marker self-triggers + encoded-media blobs). Masked triage:
+detect-secrets-triage.json (in gate-reports dir). Interpretation: second
+engine found no uncaught real-format secrets; automated triage only, human
+confirmation tracked in SPOTAUDIT.md Step 1.
