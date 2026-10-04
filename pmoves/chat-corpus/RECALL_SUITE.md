@@ -39,6 +39,11 @@ one. Always test with realistic entropy.
 
 ## Reproduce
 
-    gitleaks detect --source <cases-dir> --no-git \
+Fixtures are generated locally, NOT committed: GitHub push protection
+rejects real-format credential strings even when synthetic. Generate
+then scan:
+
+    python pmoves/chat-corpus/gen_recall_cases.py
+    gitleaks detect --source pmoves/chat-corpus/recall-cases --no-git \
       --config pmoves/chat-corpus/gitleaks.toml \
       --report-format json --report-path r.json --no-banner
