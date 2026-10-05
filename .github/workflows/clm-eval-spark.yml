@@ -16,7 +16,7 @@ jobs:
 
       - name: Clone repo (eval script)
         run: |
-          git clone --depth 1 https://github.com/POWERFULMOVES/PMOVES.AI.git /tmp/repo
+          git clone --depth 1 https://x-access-token:${{ github.token }}@github.com/POWERFULMOVES/PMOVES.AI.git /tmp/repo
           ls -la /tmp/repo/scripts/eval_clm.py
 
       - name: Start encoder (Qwen3-8B pooling)
