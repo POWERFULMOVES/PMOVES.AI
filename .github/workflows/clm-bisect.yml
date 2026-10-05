@@ -1,0 +1,19 @@
+name: CLM Bisect
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: spark
+    steps:
+      - uses: actions/checkout@v4
+      - name: checkout ok
+        run: echo "checkout passed" && ls
+      - name: pip install
+        run: pip install contrastive-lm 2>&1 | tail -3
+      - name: upload ok
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bisect-test
+          path: '*.md'
+          retention-days: 1
