@@ -31,6 +31,10 @@ chat-corpus-gate-reports/ (outside the repo: staging provenance dir).
 5. Sign off by appending a line to ITERATIONS.md ERRATA:
    'Spot-audit performed <date> by <name>: PASS/FAIL + notes'.
 
+Note: Exclusion truncation (review finding 9) answered empirically 2026-10-04:
+full-text re-run produced identical 3/3 exclusions vs the 4000-char rule - zero
+missed exclusions.
+
 ## Step 2 - provider-side revocation evidence (~10 min)
 
 1. Supabase dashboard -> Settings -> API: confirm current anon/service_role

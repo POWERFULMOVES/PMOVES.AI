@@ -34,8 +34,9 @@ secretGroup = 2
 tags = ["pmoves", "db"]
 
 [[allowlists]]
-description = "Non-secret placeholders and already-redacted markers"
+description = "Non-secret placeholders and already-redacted markers (scoped to pmoves custom rules; upstream rules stay authoritative)"
 regexTarget = "secret"
+rules = ["pmoves-jwt-escaped", "pmoves-env-secret-assign", "pmoves-lan-ip", "pmoves-postgres-url"]
 regexes = [
   '''(?i)change_?me''',
   '''interp-placeholder''',

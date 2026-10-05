@@ -30,18 +30,16 @@ def placeholder(rule):
 def gitleaks(source, report):
     if report.exists():
         report.unlink()
-    subprocess.run(
+    p = subprocess.run(
         [str(GL), "detect", "--source", str(source), "--no-git",
          "--config", str(TOML), "--report-format", "json",
          "--report-path", str(report), "--no-banner"],
         capture_output=True, text=True)
-    data = []
-    if report.exists() and report.stat().st_size:
-        try:
-            data = json.loads(report.read_text(encoding="utf-8", errors="replace"))
-        except Exception:
-            data = []
-    return data
+    if p.returncode not in (0, 1):
+        raise RuntimeError(f"gitleaks failed rc={p.returncode}: {(p.stderr or '')[-300:]}")
+    if not report.exists() or not report.stat().st_size:
+        raise RuntimeError("gitleaks wrote no report - refusing to interpret as clean")
+    return json.loads(report.read_text(encoding="utf-8"))
 
 insts = sorted([d for d in ROOT.iterdir() if d.is_dir() and (d / "usr" / "chats").exists()])
 alias = {d.name: "instance-%d" % (i + 1) for i, d in enumerate(insts)}
@@ -162,10 +160,7 @@ while True:
             t = jf.read_text(encoding="utf-8", errors="replace")
             if sec in t:
                 jf.write_text(t.replace(sec, ph), encoding="utf-8")
-if "rep2" not in dir() or not locals().get("rep2"):
-    rep2 = PROV / "gl-gate.json"
-if not (OUT / "gl-gate.json").exists() or True:
-    gate = gitleaks(OUT, PROV / "gl-gate.json")
+gate = gitleaks(OUT, PROV / "gl-gate.json")
 PROV.mkdir(exist_ok=True)
 _redact_report(PROV / "gl-gate.json")
 gate_n = len(gate)

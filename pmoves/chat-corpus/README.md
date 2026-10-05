@@ -4,9 +4,11 @@ Redacted, operator-curated Agent Zero chat histories published for AI research a
 retrieval. **This repository never contains raw chats or live secrets.** Data lands
 here only after the full safety pipeline:
 
-1. **Scrub** - `pmoves/tools/a0/scrub-chats.ps1` / `scrub_chats.py` redacts JWTs,
-   passwords, API keys, LAN IPs, emails, user paths, and instance identifiers;
-   customer-suspect chats are auto-excluded.
+1. **Scrub** - `pmoves/tools/a0/scrub_chats.py` is a thin gitleaks adapter: it
+   redacts ONLY gitleaks-detected Secret strings plus the local burn-list
+   literals. Upstream gitleaks has no email rule; OpenAI sk-proj is a
+   documented miss (see RECALL_SUITE.md). Customer-suspect chats are
+   auto-excluded.
 2. **Rotate** - every credential that ever appeared in any chat is rotated first,
    so a missed pattern is dead on arrival.
 3. **Review** - operator inspects `findings.md` / `findings.csv` before release.
@@ -22,7 +24,8 @@ here only after the full safety pipeline:
 
 Chats referencing customer engagements are excluded upstream and never enter
 staging for publication. Third-party PII (email addresses, usernames from chat
-platforms) is redacted at scrub time.
+platforms) is NOT redacted by the adapter - upstream gitleaks has no email
+rule; see RECALL_SUITE.md for documented detection gaps.
 
 ## License
 

@@ -101,7 +101,7 @@ planned was DISCARDED before implementation. The pipeline is now:
 - Unique secrets discovered: 714 -> global longest-first replacement
 - Gate round 1: 2 residuals (TAILSCALE_AUTHKEY:, HOSTINGER_SSH_PRIVATE_KEY: -
   colon-form keys; engine output drove the in-place fix; rounds logged)
-- **GATE_RESULT=PASS (0 findings)** - staged corpus is upstream-certified clean
+- **GATE_RESULT=PASS (0 findings)** - staged corpus is gitleaks-authoritative zero; NOT absence of secrets (see ERRATA#5)
 - Excluded: instance-4/IpqSuRnF (customer-keyword gate)
 
 
@@ -140,3 +140,7 @@ work) returned **TRUST-WITH-CONDITIONS**. Corrections to this document:
 Publication remains BLOCKED pending: second-engine scan, human spot-audit of
 REDACTED lines + exclusion re-run without the 4,000-char truncation, count
 reconciliation, and provider-side revocation timestamps.
+
+## Snapshot reconciliation (2026-10-05)
+
+Two snapshots coexist in these docs: the PR-era run (714 unique secrets / 10 chats / ~345 messages / 1 excluded) and the current run (1,318 / 16 / 473 / 3 - run-manifest.json 2026-10-03T20:33Z, config sha256 prefix 818d11c6). All counts in SPOTAUDIT.md refer to the CURRENT manifest; PR-era numbers above are historical. The corpus grew between runs, so per-snapshot counts differ by scope, not contradiction.
