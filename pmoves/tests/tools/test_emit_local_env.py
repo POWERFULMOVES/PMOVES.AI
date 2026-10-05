@@ -18,7 +18,7 @@ import pytest
 
 from pmoves.chit.codec import encode_secret_map, save_cgp
 from pmoves.tools import emit_local_env
-from pmoves.tools._secrets_common import parse_env_file
+from pmoves.tools._secrets_common import is_placeholder, parse_env_file
 
 PEM = (
     "-----BEGIN OPENSSH PRIVATE KEY-----\n"
@@ -75,14 +75,38 @@ def test_emit_skips_name_here_template_values(tmp_path):
 
 
 def test_emit_keeps_real_values_that_merely_contain_here(tmp_path):
-    # The rule is a "_here" SUFFIX on a template name, not the substring "here":
-    # a real secret can contain those letters anywhere.
-    bundle = _make_bundle(tmp_path, {"A": "xKhere9Qz", "B": "where-is-it-42", "C": "Zm9vYmFyX0hFUkU"})
+    # The rule is a "_here" SUFFIX on an identifier-only value. Each value
+    # below contains "_here" or ends in "here" but fails one of the two
+    # conditions, so it must survive.
+    survivors = {
+        "MID": "tok_here_9Qz",          # "_here" mid-string, not a suffix
+        "NOSEP": "xKwhere",             # ends in "here" without the underscore
+        "B64URL": "aGVsbG8-d29ybGQ_here",  # suffix present, but "-" is not identifier-only
+        "B64": "Zm9vYmFy+X0hFUkU/_here",   # suffix present, but "+" and "/" are not identifier-only
+    }
+    bundle = _make_bundle(tmp_path, {"REAL_KEY": "realvalue123", **survivors})
     local_env = tmp_path / "local.env"
 
     emitted = emit_local_env.emit(bundle, local_env)
 
-    assert emitted == {"A": "xKhere9Qz", "B": "where-is-it-42", "C": "Zm9vYmFyX0hFUkU"}
+    assert emitted == {"REAL_KEY": "realvalue123", **survivors}
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        ("CLICKHOUSE_PASSWORD_HERE", True),
+        ("api_key_here", True),
+        ("  'Token_Here'  ", True),        # quoted / padded / mixed case
+        ("tok_here_9Qz", False),
+        ("xKwhere", False),
+        ("aGVsbG8-d29ybGQ_here", False),
+    ],
+)
+def test_is_placeholder_here_suffix_rule(value, expected):
+    # Exercised directly as well: secrets_local_hydrate and the other
+    # is_placeholder callers share this rule, not only emit_local_env.
+    assert is_placeholder(value) is expected
 
 
 def test_emit_skips_multiline_values(tmp_path):
