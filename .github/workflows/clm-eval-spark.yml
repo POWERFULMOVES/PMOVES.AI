@@ -6,44 +6,39 @@ on:
 jobs:
   clm-eval:
     runs-on: spark
-    timeout-minutes: 45
+    timeout-minutes: 60
     steps:
-      - name: Install deps
-        run: pip install contrastive-lm vllm 2>&1 | tail -2
+      - name: Setup venv and install deps
+        run: |
+          python3 -m venv /tmp/clmvenv
+          /tmp/clmvenv/bin/pip install --upgrade pip -q
+          /tmp/clmvenv/bin/pip install contrastive-lm vllm 2>&1 | tail -3
+
+      - name: Clone repo (eval script)
+        run: |
+          git clone --depth 1 https://github.com/POWERFULMOVES/PMOVES.AI.git /tmp/repo
+          ls -la /tmp/repo/scripts/eval_clm.py
 
       - name: Start encoder (Qwen3-8B pooling)
         run: |
-          nohup vllm serve Qwen/Qwen3-8B --served-model-name qwen3-8b --runner pooling --max-model-len 2048 --port 8090 > /tmp/vllm.log 2>&1 &
-          sleep 90
-          curl -sf http://localhost:8090/health >/dev/null && echo ENCODER-UP || echo ENCODER-WAITING
+          nohup /tmp/clmvenv/bin/vllm serve Qwen/Qwen3-8B --served-model-name qwen3-8b --runner pooling --max-model-len 2048 --port 8090 > /tmp/vllm.log 2>&1 &
+          for i in $(seq 1 60); do
+            sleep 10
+            curl -sf http://localhost:8090/health >/dev/null 2>&1 && { echo ENCODER-UP; break; }
+            [ $i -eq 60 ] && { echo ENCODER-TIMEOUT; tail -5 /tmp/vllm.log; }
+          done
 
       - name: Start CLM server
         run: |
-          nohup clm-serve > /tmp/clm.log 2>&1 &
-          sleep 15
-          curl -s -o /dev/null -w 'CLM: %{http_code}\n' http://localhost:8700/ || true
+          nohup /tmp/clmvenv/bin/clm-serve > /tmp/clm.log 2>&1 &
+          for i in $(seq 1 12); do
+            sleep 5
+            curl -sf -o /dev/null http://localhost:8700/ 2>/dev/null && { echo CLM-UP; break; }
+          done
 
       - name: Run eval
-        run: |
-          git clone --depth 1 https://github.com/POWERFULMOVES/PMOVES.AI.git /tmp/repo 2>/dev/null || true
-          python3 /tmp/repo/scripts/eval_clm.py 2>&1 || echo 'eval script unavailable - running inline probe'
-          python3 -c "
-          from clm import CLMClient, Choice, Noul
-          import json, time
-          client = CLMClient()
-          t0 = time.time()
-          r = client.system_one(state='Customer charged twice, no response', questions={'urgent': Noul(instructions='Is this urgent?'), 'team': Choice(instructions='Which team?', criteria={'billing': 'charges', 'technical': 'bugs'})})
-          t1 = time.time()
-          large = {f'tool{i}': f'Tool {i}' for i in range(1024)}
-          client.system_one(state='pick a tool', questions={'pick': Choice(instructions='Best', criteria=large)})
-          t2 = time.time()
-          client.system_one(state='pick another tool', questions={'pick': Choice(instructions='Best', criteria=large)})
-          t3 = time.time()
-          out = {'parity_ms': round((t1-t0)*1000,1), 'first_1024_ms': round((t2-t1)*1000,1), 'cached_1024_ms': round((t3-t2)*1000,1)}
-          json.dump(out, open('results.json','w'), indent=2)
-          print(json.dumps(out, indent=2))
-          " | tee eval_results.txt
+        run: /tmp/clmvenv/bin/python /tmp/repo/scripts/eval_clm.py 2>&1 | tee eval_output.txt
 
       - name: Show results
         if: always()
-        run: cat eval_results.txt 2>/dev/null || echo 'no results'
+        run: cat eval_output.txt 2>/dev/null || echo 'no output file'
