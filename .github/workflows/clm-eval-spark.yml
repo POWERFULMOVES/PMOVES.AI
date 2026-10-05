@@ -2,20 +2,18 @@ name: CLM Eval on Spark
 
 on:
   workflow_dispatch:
-    inputs:
-      rounds:
-        description: 'Rounds to run'
-        default: 'parity,scaling'
 
 jobs:
   clm-eval:
     runs-on: spark
     timeout-minutes: 45
     steps:
-      - name: Install deps
-        run: pip install contrastive-lm vllm --quiet
+      - uses: actions/checkout@v4
 
-      - name: Start Qwen3-8B pooling encoder
+      - name: Install deps
+        run: pip install contrastive-lm vllm
+
+      - name: Start encoder
         run: |
           nohup vllm serve Qwen/Qwen3-8B --served-model-name qwen3-8b --runner pooling --max-model-len 2048 --port 8090 > /tmp/vllm.log 2>&1 &
           for i in $(seq 1 24); do
@@ -29,34 +27,12 @@ jobs:
           sleep 10
 
       - name: Run eval
-        run: |
-          python3 -c "
-          from clm import CLMClient, Choice, Noul
-          import json, time
-          client = CLMClient()
-          results = {}
-          t0 = time.time()
-          r = client.system_one(state='Customer charged twice, no response', questions={'urgent': Noul(instructions='Is this urgent?'), 'team': Choice(instructions='Which team?', criteria={'billing': 'charges', 'technical': 'bugs'})})
-          results['parity_ms'] = round((time.time() - t0) * 1000, 1)
-          results['parity_answer'] = str(r)[:150]
-          t0 = time.time()
-          large = {f'tool{i}': f'Tool {i}' for i in range(1024)}
-          client.system_one(state='pick a tool', questions={'pick': Choice(instructions='Best', criteria=large)})
-          results['first_1024_ms'] = round((time.time() - t0) * 1000, 1)
-          t0 = time.time()
-          client.system_one(state='pick another tool', questions={'pick': Choice(instructions='Best', criteria=large)})
-          results['cached_1024_ms'] = round((time.time() - t0) * 1000, 1)
-          json.dump(results, open('results.json', 'w'), indent=2)
-          print(json.dumps(results, indent=2))
-          " > eval_output.txt 2>&1 || true
-          cat eval_output.txt
+        run: python3 scripts/eval_clm.py
 
       - name: Upload results
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: clm-eval-results
-          path: |
-            results.json
-            eval_output.txt
+          path: results.json
           retention-days: 7
