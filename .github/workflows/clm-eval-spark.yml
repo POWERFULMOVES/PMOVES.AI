@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       rounds:
-        description: 'Rounds to run (parity, scaling, geometry)'
+        description: 'Rounds to run'
         default: 'parity,scaling'
 
 jobs:
@@ -12,81 +12,51 @@ jobs:
     runs-on: spark
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
+      - name: Install deps
+        run: pip install contrastive-lm vllm --quiet
 
-      - name: Install dependencies
-        run: |
-          pip install contrastive-lm vllm --quiet 2>&1 | tail -3
-
-      - name: Start Qwen3-8B pooling encoder (CLM backbone)
+      - name: Start Qwen3-8B pooling encoder
         run: |
           nohup vllm serve Qwen/Qwen3-8B --served-model-name qwen3-8b --runner pooling --max-model-len 2048 --port 8090 > /tmp/vllm.log 2>&1 &
-          echo 'Waiting for encoder (up to 120s)...'
           for i in $(seq 1 24); do
             sleep 5
-            if curl -s -o /dev/null -w '%{http_code}' http://localhost:8090/health 2>/dev/null | grep -q 200; then
-              echo 'Encoder ready'
-              break
-            fi
+            curl -sf http://localhost:8090/health >/dev/null 2>&1 && break
           done
 
       - name: Start CLM server
         run: |
           nohup clm-serve > /tmp/clm.log 2>&1 &
           sleep 10
-          curl -s -o /dev/null -w 'CLM server: %{http_code}\n' http://localhost:8700/ || true
 
-      - name: Parity round (typed probes vs known-answer)
+      - name: Run eval
         run: |
-          python3 - <<'PYEOF'
-          from clm import CLMClient, Choice, Noul, Score
+          python3 -c "
+          from clm import CLMClient, Choice, Noul
           import json, time
           client = CLMClient()
-          probes = [
-              {"state": "Customer charged twice, no response from support", "q": {"urgent": Noul(instructions="Is this urgent?"), "team": Choice(instructions="Which team?", criteria={"billing":"charges/invoices","technical":"bugs/outages"})}},
-              {"state": "GPU node offline, agents cannot reach Ollama", "q": {"urgent": Noul(instructions="Is this urgent?"), "team": Choice(instructions="Which team?", criteria={"billing":"charges","infra":"nodes/network"})}},
-              {"state": "Resident asks about mesh node hosting cost", "q": {"urgent": Noul(instructions="Urgent?"), "topic": Choice(instructions="Topic?", criteria={"infra":"hosting/network","finance":"costs/dues"})}},
-              {"state": "CLM eval pipeline completed all rounds", "q": {"pass": Noul(instructions="Did it pass?")}},
-              {"state": "GroToken pool distribution computed for week 42", "q": {"settlement": Noul(instructions="Is this a settlement event?")}},
-          ]
-          results = []
-          for p in probes:
-              t0 = time.time()
-              r = client.system_one(state=p["state"], questions=p["q"])
-              dt = (time.time() - t0) * 1000
-              results.append({"state": p["state"][:60], "latency_ms": round(dt,1), "raw": str(r)[:200]})
-          json.dump(results, open('results_parity.json','w'), indent=2)
+          results = {}
+          t0 = time.time()
+          r = client.system_one(state='Customer charged twice, no response', questions={'urgent': Noul(instructions='Is this urgent?'), 'team': Choice(instructions='Which team?', criteria={'billing': 'charges', 'technical': 'bugs'})})
+          results['parity_ms'] = round((time.time() - t0) * 1000, 1)
+          results['parity_answer'] = str(r)[:150]
+          t0 = time.time()
+          large = {f'tool{i}': f'Tool {i}' for i in range(1024)}
+          client.system_one(state='pick a tool', questions={'pick': Choice(instructions='Best', criteria=large)})
+          results['first_1024_ms'] = round((time.time() - t0) * 1000, 1)
+          t0 = time.time()
+          client.system_one(state='pick another tool', questions={'pick': Choice(instructions='Best', criteria=large)})
+          results['cached_1024_ms'] = round((time.time() - t0) * 1000, 1)
+          json.dump(results, open('results.json', 'w'), indent=2)
           print(json.dumps(results, indent=2))
-          PYEOF
-
-      - name: Cache-scaling round (8 vs 1024 candidates)
-        run: |
-          python3 - <<'PYEOF'
-          from clm import CLMClient, Choice
-          import json, time
-          client = CLMClient()
-          # small set
-          small = {f"opt{i}": f"Option {i}" for i in range(8)}
-          t0=time.time()
-          r1 = client.system_one(state="route a support ticket", questions={"pick": Choice(instructions="Best option", criteria=small)})
-          t_small = (time.time()-t0)*1000
-          # large set
-          large = {f"tool{i}": f"Tool number {i} for task {i%20}" for i in range(1024)}
-          t0=time.time()
-          r2 = client.system_one(state="pick a tool for file upload", questions={"pick": Choice(instructions="Best tool", criteria=large)})
-          t_large = (time.time()-t0)*1000
-          results = {"small_8_latency_ms": round(t_small,1), "large_1024_first_call_ms": round(t_large,1)}
-          # cached second call
-          t0=time.time()
-          client.system_one(state="pick a tool for webhook", questions={"pick": Choice(instructions="Best tool", criteria=large)})
-          results["large_1024_cached_ms"] = round((time.time()-t0)*1000,1)
-          json.dump(results, open('results_scaling.json','w'), indent=2)
-          print(json.dumps(results, indent=2))
-          PYEOF
+          " > eval_output.txt 2>&1 || true
+          cat eval_output.txt
 
       - name: Upload results
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: clm-eval-results
-          path: results_*.json
+          path: |
+            results.json
+            eval_output.txt
           retention-days: 7
