@@ -14,11 +14,6 @@ jobs:
           /tmp/clmvenv/bin/pip install --upgrade pip -q
           /tmp/clmvenv/bin/pip install contrastive-lm vllm 2>&1 | tail -3
 
-      - name: Clone repo (eval script)
-        run: |
-          git clone --depth 1 https://x-access-token:${{ github.token }}@github.com/POWERFULMOVES/PMOVES.AI.git /tmp/repo
-          ls -la /tmp/repo/scripts/eval_clm.py
-
       - name: Start encoder (Qwen3-8B pooling)
         run: |
           nohup /tmp/clmvenv/bin/vllm serve Qwen/Qwen3-8B --served-model-name qwen3-8b --runner pooling --max-model-len 2048 --port 8090 > /tmp/vllm.log 2>&1 &
@@ -36,9 +31,37 @@ jobs:
             curl -sf -o /dev/null http://localhost:8700/ 2>/dev/null && { echo CLM-UP; break; }
           done
 
-      - name: Run eval
-        run: /tmp/clmvenv/bin/python /tmp/repo/scripts/eval_clm.py 2>&1 | tee eval_output.txt
+      - name: Run eval (inline — no clone needed)
+        run: |
+          /tmp/clmvenv/bin/python -c "
+          from clm import CLMClient, Choice, Noul
+          import json, time
+          client = CLMClient()
+          results = {}
+          probes = [
+              ('Customer charged twice, no response', {'urgent': Noul(instructions='Is this urgent?'), 'team': Choice(instructions='Which team?', criteria={'billing': 'charges', 'technical': 'bugs'})}),
+              ('GPU node offline, agents cannot reach Ollama', {'urgent': Noul(instructions='Is this urgent?'), 'team': Choice(instructions='Which team?', criteria={'billing': 'charges', 'infra': 'nodes'})}),
+              ('GroToken pool computed for week 42', {'settlement': Noul(instructions='Is this a settlement event?')}),
+          ]
+          parity = []
+          for state, questions in probes:
+              t0 = time.time()
+              r = client.system_one(state=state, questions=questions)
+              ms = round((time.time() - t0) * 1000, 1)
+              parity.append({'state': state[:50], 'latency_ms': ms, 'raw': str(r)[:150]})
+          results['parity'] = parity
+          large = {f'tool{i}': f'Tool {i}' for i in range(1024)}
+          t0 = time.time()
+          client.system_one(state='pick a tool for upload', questions={'pick': Choice(instructions='Best', criteria=large)})
+          t1 = time.time()
+          client.system_one(state='pick a tool for webhook', questions={'pick': Choice(instructions='Best', criteria=large)})
+          t2 = time.time()
+          results['scaling'] = {'first_1024_ms': round((t1-t0)*1000,1), 'cached_1024_ms': round((t2-t1)*1000,1)}
+          json.dump(results, open('results.json','w'), indent=2)
+          print('=== EVAL RESULTS ===')
+          print(json.dumps(results, indent=2))
+          "
 
       - name: Show results
         if: always()
-        run: cat eval_output.txt 2>/dev/null || echo 'no output file'
+        run: cat results.json 2>/dev/null || echo 'no results file'
