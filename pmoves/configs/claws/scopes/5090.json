@@ -151,6 +151,8 @@
       "description": "Supabase Postgres database",
       "command": "uvx",
       "args": [
+        "--with",
+        "mcp<2",
         "postgres-mcp@0.3.0",
         "--access-mode=unrestricted"
       ],
