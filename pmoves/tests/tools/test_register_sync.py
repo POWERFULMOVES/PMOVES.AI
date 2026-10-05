@@ -672,3 +672,29 @@ def test_a_crlf_row_held_in_a_sidecar_reapplies(tmp_path, eol, rc):
     else:
         assert "refused by the renderer" in r.stderr
         assert reg.read_bytes() == before
+
+
+# --- console encoding ---------------------------------------------------------
+
+def test_a_row_outside_cp1252_does_not_crash_the_report_on_a_cp1252_stdout(tmp_path):
+    """A Windows pipe/redirect defaults stdout to the ANSI code page (cp1252).
+    Rows are free text, and `->` arrows and U+2028 are not in cp1252, so
+    printing the per-row report raised UnicodeEncodeError mid-report -- the
+    tool crashed (exit 3) on a register it had read correctly. The child is
+    FORCED onto cp1252 here so the regression is reproducible on any OS."""
+    repo = _make_repo(tmp_path)
+    # Short, so the chars land inside `_show`'s 120-char cut.
+    row = ("- `2026-09-27T09:30:00Z` NOTE `B850-CLAUDE (Knuckles)` branch: "
+           "`ops/x` \u00b7 scope: a \u2192 b\u2028c.\n")
+    _dirty(repo, row)
+    env = {k: v for k, v in os.environ.items() if not k.startswith("REGISTER_SYNC_")}
+    env.update(PYTHONIOENCODING="cp1252", PYTHONUTF8="0")
+    r = subprocess.run(
+        [sys.executable, str(TOOL), "sync", "--repo", str(repo), "--ref", "upstream"],
+        capture_output=True, env=env, timeout=120)
+    out = r.stdout.decode("utf-8", "replace")
+    err = r.stderr.decode("utf-8", "replace")
+    assert r.returncode == 0, err
+    assert "UnicodeEncodeError" not in err
+    assert "0 ON-MAIN, 0 RE-FILED, 1 KEEP (of 1 input)" in out
+    assert "scope: a \u2192 b" in out
