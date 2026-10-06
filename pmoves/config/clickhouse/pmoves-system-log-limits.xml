@@ -46,7 +46,9 @@
          and drop what that returns. The _log_ anchor is deliberate: every default
          system log table name ends in _log (SystemLog.h LIST_OF_ALL_SYSTEM_LOGS),
          so this matches only renamed-aside log tables and never a non-log system
-         table that happens to end in digits (system.mysql_binlogs, say). It holds
+         table that happens to end in digits. Measured on z890 2026-10-05, no
+         system table name ends in _<digits> at all, so today the anchor is
+         belt-and-braces rather than load-bearing. It holds
          only while no <table> override renames a log to a name not ending in _log;
          none does today (checked on z890 2026-10-05). Example: z890 on 2026-10-03 measured
          error_log_0, processors_profile_log_0, query_metric_log_0 (no query_log_0). -->
