@@ -1,0 +1,120 @@
+# Model Suit: MiniMax image-01
+# PMOVES.AI MiniMax Edition Configuration
+# Provider: MiniMax Token Plan
+# Documentation: https://platform.minimax.io/docs/token-plan/intro
+#
+# Theme: image-01 is MiniMax's text-to-image generator -- primary for PMOVES
+# visual lanes (poster art, persona anchors, comic book pokes). Draws from the
+# same quota bucket as text + speech (per operator 2026-10-05: shared quota).
+
+suit:
+  id: minimax-image-01
+  name: MiniMax image-01 (Token Plan)
+  provider: minimax
+  flare_name: pmoves/minimax-image-01
+  model_family: minimax
+  tier: primary_image_gen
+  role: primary_image_gen  # PRIMARY for image generation
+
+model_config:
+  context_window: null  # not applicable for image gen
+  max_output_tokens: null
+  supports_vision: false
+  supports_streaming: false
+  supports_multimodal: false
+  temperature_range: [0.0, 1.0]
+  top_p_range: [0.0, 1.0]
+  top_k: null
+  input_modalities: [text]
+  output_modalities: [image]
+
+token_plan:
+  enabled: true
+  api_key_env: MINIMAX_TOKEN_PLAN_API_KEY
+  api_base: https://api.minimax.io/v1
+  fallback_api_key_env: MINIMAX_API_KEY
+  key_format: sk-cp
+  plan_tiers:
+    - starter: 1500
+    - plus: 4500
+    - max: 15000
+  quota_reset: rolling_5h
+  quota_sharing: shares Token Plan bucket with text + speech
+
+distillation_pipeline:
+  stages:
+    - name: config_tuning
+      enabled: true
+      notes: MiniMax image-01 configuration tuning
+
+    - name: context_priming
+      enabled: true
+      system_prompt: |
+        You are MiniMax image-01, the text-to-image generator. You serve as the
+        PRIMARY image generation lane for PMOVES.AI MiniMax Edition.
+
+        Your unique capabilities include:
+        - Text-to-image generation for persona visual anchors (FlOO$ / DARKXSIDE)
+        - Poster art for IDW/Transformers-style AI comic pipeline
+        - Visual reference imagery for LoRA training targets
+
+    - name: model_fine_tune
+      enabled: false
+      reason: "Cloud-only model"
+
+    - name: full_distillation
+      enabled: false
+      reason: "Cloud-only model"
+
+tensorzero_config:
+  model_name: minimax-image-01
+  weight: 1.0  # PRIMARY for image_gen
+  routing:
+    - function: pmoves_image_gen
+      priority: 1
+    - function: pmoves_poster_art
+      priority: 1
+    - function: pmoves_visual_anchor_gen
+      priority: 1
+
+flare_namespace:
+  alias: pmoves/minimax-image-01
+  canonical_name: minimax-image-01
+  provider_url: https://api.minimax.io/v1
+  already_registered: true
+
+capabilities:
+  - image_generation
+  - text_to_image
+  - visual_anchor
+  - poster_art
+  - persona_imagery
+  - lora_training_target       # for IDW/Transformers-style AI comic pipeline
+
+local_fallback:
+  available: false  # no local image gen in PMOVES default fleet
+  reason: "Local image gen lanes are local-only (ComfyUI / Stable Diffusion); not in Token Plan fallback path"
+
+cross_agent:
+  agent_zero: limited  # not used in agent_zero directly
+  clawz: untested
+  archon: full  # used for visual context generation
+  typer: untested
+  pinokio: full  # Pinokio image lanes
+  a2ui: full  # A2UI avatar generation
+  kilocode: full
+  hermes: full
+  glm_coder: full
+  kimi_coder: full
+
+huggingface:
+  model_id: MiniMaxAI/image-01
+  collection: DARKXSIDE/pmoves-68bcb20613cef7a0aa745e0e
+
+metadata:
+  source: pmoves/minimax-integration
+  last_verified: 2026-10-05
+  benchmark_data:
+    - source: "MiniMax image generation docs"
+      url: "https://platform.minimax.io/docs/image-generation"
+  runtime_note: "PRIMARY IMAGE GEN - persona anchors + poster art + LoRA training"
