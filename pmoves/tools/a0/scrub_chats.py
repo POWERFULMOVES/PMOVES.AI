@@ -7,13 +7,33 @@ PROV = OUT.parent / "chat-corpus-gate-reports"  # provenance artifacts live OUTS
 REPO = Path(r"C:\Users\russe\Documents\GitHub\PMOVES.AI")
 GL = REPO / "pmoves" / "tools" / "a0" / "bin" / "gitleaks.exe"
 TOML = REPO / "pmoves" / "chat-corpus" / "gitleaks.toml"
-EXCLUDE_KW = ["unfcu", "docintel"]
+# Exclusion keywords loaded from config (operator-owned, not code-owned)
+_EXCLUDE_CFG = REPO / "pmoves" / "chat-corpus" / "exclusion-config.json"
+EXCLUDE_KW = json.loads(_EXCLUDE_CFG.read_text(encoding="utf-8")).get("exclude_keywords", ["unfcu", "docintel"]) if _EXCLUDE_CFG.exists() else ["unfcu", "docintel"]
 # Burned-secret literals are NOT committed (CodeQL: clear-text secrets in
 # source). They load from a local, gitignored burn-list file maintained beside
 # the staging corpus - the same pattern gitleaks uses for baselines.
 # Source provenance: pmoves/chat-corpus/ITERATIONS.md incident findings.
 BURN_LIST = Path(r"C:\Users\russe\agent-zero\chat-corpus-staging\burn-literals.local")
-LITERALS = [line for line in (BURN_LIST.read_text(encoding="utf-8", errors="replace").splitlines() if BURN_LIST.exists() else []) if line.strip()]
+BURN_LIST_CGP = REPO / "pmoves" / "chat-corpus" / "burn-list.cgp.json"
+
+def _load_burn_literals():
+    """Load burn-list from CGP (preferred) or clear-text fallback."""
+    if BURN_LIST_CGP.exists():
+        try:
+            import sys as _sys
+            _sys.path.insert(0, str(REPO))
+            from pmoves.chit import decode_secret_map, load_cgp
+            cgp = load_cgp(str(BURN_LIST_CGP))
+            decoded = decode_secret_map(cgp)
+            return [v for k, v in sorted(decoded.items()) if v.strip()]
+        except Exception:
+            pass
+    if BURN_LIST.exists():
+        return [line for line in BURN_LIST.read_text(encoding="utf-8", errors="replace").splitlines() if line.strip()]
+    return []
+
+LITERALS = _load_burn_literals()
 PLACEHOLDER = {
     "pmoves-jwt-escaped": "[REDACTED-JWT]",
     "jwt": "[REDACTED-JWT]",
@@ -187,6 +207,17 @@ _manifest = {
     "excluded": sum(1 for r in rows if r["excluded"]),
 }
 (PROV / "run-manifest.json").write_text(json.dumps(_manifest, indent=2), encoding="utf-8")
+
+# CHIT HMAC provenance: sign the manifest so tampering is detectable
+import hashlib as _hl
+import hmac as _hm
+_pp = os.environ.get("CHIT_PASSPHRASE", "")
+if _pp:
+    _mf = (PROV / "run-manifest.json").read_bytes()
+    _sig = _hm.new(_pp.encode(), _mf, _hl.sha256).hexdigest()
+    (PROV / "run-manifest.json.sig").write_text(_sig, encoding="utf-8")
+else:
+    print("WARNING: CHIT_PASSPHRASE not set - run-manifest.json.sig not written (unsigned)")
 
 with (PROV / "findings.csv").open("w", encoding="utf-8") as f:
     cols = ["instance_alias", "chat", "title", "messages", "excluded", "reason"] + CATS

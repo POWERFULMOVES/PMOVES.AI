@@ -57,3 +57,26 @@ corpus with explicit file list: 8 automated flags -> 8 triaged likely-FP
 detect-secrets-triage.json (in gate-reports dir). Interpretation: second
 engine found no uncaught real-format secrets; automated triage only, human
 confirmation tracked in SPOTAUDIT.md Step 1.
+
+## Jev stage-2 triage (2026-10-06)
+
+TypeSafe Jev (jev-1.13.0) classified 709 high-entropy candidates from the
+corpus in 7.5 seconds (endpoint /v1/systemone, 36 batches of 20). Results:
+
+| verdict | count | notes |
+|---|---|---|
+| noise | 579 (81.7%) | git SHAs, URLs, container hashes, file paths, encoded content |
+| unsure | 88 (12.4%) | model genuinely uncertain - human review needed |
+| credential | 42 (5.9%) | all with confidence 0.01-0.21 (borderline) |
+
+Confidence gates: auto-dismiss >=0.9 (82 items), review 0.7-0.9 (136),
+escalate <0.7 (491). Zero high-confidence credential findings means the
+gitleaks pass caught everything real. Jev narrowed the human review scope
+from 709 to ~130 items (82% reduction).
+
+Validation: 10-case and 20-case stratified samples both matched manual
+triage with zero false negatives. Confidence gradient maps to risk gradient
+(1.0 on obvious noise, 0.50-0.77 on genuinely ambiguous cases).
+
+Typesafe Jev is the recommended stage-2 detector. AgentJev-0.6B (ONNX,
+calibrated, 129ms/decision) is the fleet-local fallback.
