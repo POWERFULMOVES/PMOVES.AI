@@ -1,23 +1,22 @@
 # Mavis Collection — Example Manifest
 # Populated example matching manifest.schema.yaml v1.0.
 # This is the FILE shape that gets installed at ~/.mavis/collection/manifest.yaml
-# at first boot of the Mavis SDK when G.2+G.3+G.4 land. For G.1, the manifest
-# is validated against the schema but the example lives here in repo for review.
+# at first boot of the Mavis SDK when G.2+G.3+G.4 land.
 
 spec: pmoves.bootstrap/v1
 
 meta:
   schema_version: 1.0
   created: 2026-10-05
-  last_updated: 2026-10-05
+  last_updated: 2026-10-06
   operator: DARKXSIDE
   home: ~/.mavis/collection/
   notes: |
-    Initial Mavis / HyPeRAGInT collection manifest. Token Plan auth resolves
-    from ~/.mmx/config.json (single source of truth — mmx is the canonical
-    CLI). Personas are local to the operator's voice and not synced to PMOVES
-    git. Datasets, mindmap, skills, plugins, chit are pointer-only — the
-    canonical data lives in pmoves git.
+    Mavis / HyPeRAGInT collection manifest. Token Plan auth resolves from
+    ~/.mmx/config.json (single source of truth -- mmx is the canonical CLI).
+    Personas (FlOO$ + DARKXSIDE + Mavis orchestrator) reference Cataclysm Studios
+    archive on Drive for visual anchors. Datasets point at the operator-curated
+    PMOVES content playlist + the canonical pmoves/config/datasets.yaml.
 
 identity:
   agent: HyPeRAGInT
@@ -39,19 +38,17 @@ super_nodes:
       probe: 3-step-gate
       notes: |
         Token Plan keys (sk-cp-...) and pay-as-you-go keys (sk-api-...) are
-        not interchangeable per `mmx agent setup --help`. mmx auth status
-        returns sk-c... on Token Plan; pay-as-you-go keys pass auth but
-        every chat call returns insufficient-balance (1008). The 3-step
-        probe gate (auth → quota → chat) catches the format mismatch.
+        not interchangeable per `mmx agent setup --help`. The 3-step probe gate
+        catches the format mismatch before treating a credential as wired-up.
 
-    # Future slots — operator will populate as credentials land
+    # Future slots -- operator will populate as credentials land
     # - provider: huggingface
     #   format: hf_
     #   source: ~/.huggingface/token
     #   probe: online-status-only
     # - provider: ollama-cloud
     #   format: ollama-cloud
-    #   source: ~/.mavis/collection/auth/ollama_cloud.json  # when wired
+    #   source: ~/.mavis/collection/auth/ollama_cloud.json
     #   probe: online-status-only
 
   models:
@@ -65,19 +62,34 @@ super_nodes:
         - asr-1.0
       routing_policy: cost-first
       local_fallback:
-        - qwen3-coder:latest      # Ollama local 18GB, code/JSON review
-        - qwen3-vl:8b              # Ollama local 6.1GB, quick vision
-        - qwen3-vl:235b-cloud     # Ollama Cloud, deep vision (when Pro wired)
-        - embeddinggemma           # Ollama local, text embeddings
-        - functiongemma            # Ollama local, function calling
+        - qwen3-coder:latest
+        - qwen3-vl:8b
+        - qwen3-vl:235b-cloud
+        - embeddinggemma
+        - functiongemma
 
   datasets:
     - ref: pmoves/config/datasets.yaml#pmoves-chit-text
       hf_id: DARKXSIDE/pmoves-chit-text
+      manifest: pmoves/configs/mavis_collection/datasets/pmoves-chit-text.yaml
     - ref: pmoves/config/datasets.yaml#pmoves-chit-multimodal
       hf_id: DARKXSIDE/pmoves-chit-multimodal
+      manifest: pmoves/configs/mavis_collection/datasets/pmoves-chit-multimodal.yaml
+      source_playlist:
+        id: PLGupOT04oMfok7S8W8Js7lZZIlhM8ufc8
+        url: "https://www.youtube.com/playlist?list=PLGupOT04oMfok7S8W8Js7lZZIlhM8ufc8"
+        title: "DARKXSIDE School of Powerful Moves"
+        channel: "@PMOVESAI"
+        account: cataclysmstudios@gmail.com
+        namespace: darkxside
+        services:
+          - PMOVES.YT           # canonical ingest
+          - pmoves.yt_mini      # lite variant (TBD)
+        # Live item_count NOT hardcoded -- resolver fetches via YOUTUBE_LIST_PLAYLIST_ITEMS
+        # Operator 2026-10-06: "they start funneling into the ai playlist cus info started to move so fast"
     - ref: pmoves/config/datasets.yaml#pmoves-agent-traces
       hf_id: DARKXSIDE/pmoves-agent-traces
+      manifest: pmoves/configs/mavis_collection/datasets/pmoves-agent-traces.yaml
 
   personas:
     - ref: personas/fl00.yaml
@@ -108,3 +120,18 @@ super_nodes:
       role: design
     - design: pmoves/docs/architecture/MAVIS_COLLECTION_DESIGN.md
       role: design
+
+# Drive references for persona imagery (cataclysmstudios@gmail.com)
+# Resolved at runtime via Composio MCP -> GOOGLEDRIVE_LIST_CHILDREN_V2
+drive_references:
+  account: cataclysmstudios@gmail.com
+  account_alias: googledrive_mettle-automa
+  folders:
+    - path: "My Drive / CataclysmstudiosInc / Pictures"
+      role: persona_visual_anchors
+      expected_files:
+        - cyber.png (2023-11-03)
+        - darkxside.jpg (2024-02-01)
+        - mecha_warrior.png (2011-06-07)
+        - mmx_pose_studies_x4.png (2011-07-15)
+        - silhouette_warrior.png (2010-02-25)
