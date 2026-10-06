@@ -80,3 +80,9 @@ triage with zero false negatives. Confidence gradient maps to risk gradient
 
 Typesafe Jev is the recommended stage-2 detector. AgentJev-0.6B (ONNX,
 calibrated, 129ms/decision) is the fleet-local fallback.
+## Two-pass cascade (2026-10-06)
+
+Second pass with wider context (200 chars + adjacent lines) over the 597
+non-auto candidates from pass 1: 237 additional auto-dismissals, 0 flipped
+to credential, 112 remaining escalations (Neo4j submodule gitlinks).
+Total: 709 -> 627 -> 112 = 84% reduction. HiRAG provenance indexing approved.

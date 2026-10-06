@@ -49,3 +49,17 @@ missed exclusions.
 
 After both steps pass, publication block can be lifted by editing the
 ERRATA 'Publication remains BLOCKED' line.
+
+## Jev cascade narrowed scope (2026-10-06)
+
+The original 709 high-entropy candidates have been narrowed by a two-pass
+TypeSafe Jev cascade (jev-1.13.0, 7.5s pass 1 + 8.0s pass 2):
+
+- Pass 1: 579 noise / 88 unsure / 42 credential (all low-conf)
+- Pass 2 (wider context, 597 re-classified): 237 auto-dismissed, 0 flipped to credential
+- Remaining for human review: **112 items** (84% reduction from 709)
+
+See jev-cascade-results.json in the gate-reports dir for per-candidate detail.
+The 112 are predominantly Neo4j submodule-init gitlink SHAs from 21UD1EwN.jsonl
+(40-char hex in `160000 commit <sha> PMOVES-*` context). HiRAG provenance
+indexing has been approved for known-benign lookup on future scans.
