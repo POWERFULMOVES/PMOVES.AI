@@ -2159,10 +2159,14 @@ def _utf8_stdio() -> None:
     Rows are free text. On a Windows pipe or redirect python encodes stdout
     with the ANSI code page (cp1252), which has no arrows and no U+2028, so
     printing a row raised UnicodeEncodeError half-way through a report: the
-    tool crashed on a register it had read correctly. Only the DISPLAY
+    tool crashed on a register it had read correctly. Only stream OUTPUT
     changes here -- every register write is bytes and never passes through
-    these streams. `errors="replace"` means a stream that still cannot take
-    a char shows `?` rather than crashing. Called from the CLI entry only, so
+    these streams. That output includes --dry-run's rendered row, which a
+    pipe now receives as the same UTF-8 bytes the real write would append. A
+    parent that decodes this tool's output as cp1252 sees `·` garbled instead
+    of a crash. `errors="replace"` (stderr's default was backslashreplace)
+    means a stream that still cannot take a char shows `?` rather than
+    crashing. Called from the CLI entry only, so
     an in-process caller's (or pytest's) streams are left as they were; the
     getattr guard covers streams that are not a TextIOWrapper at all.
     """
