@@ -116,8 +116,13 @@ HTTP_HEALTH = [
     ("neo4j-ui", "http://localhost:7474", "http_200"),
     ("agent-zero", "http://localhost:8080/healthz", "ok_true", True),
     ("agent-zero-a2a", "http://localhost:8080/.well-known/agent-card.json", "http_200", True),
-    ("archon", "http://localhost:8091/healthz", "ok_true", True),
-    ("archon-ui", "http://localhost:3737", "http_200", True),
+    # Archon 0.6.0+: API and UI share container port 3090 (host 8091 = API alias,
+    # host 3737 = UI alias). /api/health is the only health route; the old /healthz
+    # is gone and the SPA catch-all answers it 200 HTML, which "ok_true" accepted
+    # (non-JSON falls back to code == 200). "json_status_ok" has no such fallback.
+    ("archon", "http://localhost:8091/api/health", "json_status_ok", True),
+    # The SPA answers 200 for any path; require Archon's own page title.
+    ("archon-ui", "http://localhost:3737", "html_title:Archon", True),
     ("extract-worker", "http://localhost:${EXTRACT_WORKER_HOST_PORT:-8083}/healthz", "ok_true"),
     ("media-audio", "http://localhost:8082/healthz", "ok_true"),
     ("media-video", "http://localhost:8079/healthz", "ok_true"),
@@ -490,6 +495,28 @@ def _http_get(url: str, timeout: float = 4.0):
         return None, "", str(e)
 
 
+def _json_status_ok(content_type: str, body: str) -> bool:
+    """True only for a JSON body reporting {"ok": true} or {"status": "ok"}."""
+    if "json" not in (content_type or "").lower():
+        return False
+    try:
+        payload = json.loads(body)
+    except ValueError:
+        return False
+    if not isinstance(payload, dict):
+        return False
+    if payload.get("ok") is True:
+        return True
+    return str(payload.get("status", "")).lower() == "ok"
+
+
+def _html_title_ok(content_type: str, body: str, title: str) -> bool:
+    """True only for an HTML page whose <title> is exactly `title`."""
+    if "html" not in (content_type or "").lower():
+        return False
+    return f"<title>{title}</title>" in (body or "")
+
+
 def check_http():
     table = Table(box=box.SIMPLE)
     table.add_column("service", style="cyan")
@@ -516,6 +543,10 @@ def check_http():
                     ok = bool(status_flag) and code == 200
                 except Exception:
                     ok = code == 200
+            elif kind == "json_status_ok":
+                ok = code == 200 and _json_status_ok(ct, body)
+            elif kind.startswith("html_title:"):
+                ok = code == 200 and _html_title_ok(ct, body, kind.split(":", 1)[1])
             elif kind == "json_ok_or_200":
                 if code == 200:
                     ok = True

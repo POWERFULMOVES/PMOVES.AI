@@ -310,9 +310,10 @@ if [ "${PARALLEL:-0}" = "1" ]; then
   check_http_bg "Hi-RAG v2 GPU" "http://localhost:${HIRAG_V2_GPU_HOST_PORT:-8087}/" "$WAIT_T_LONG"
   # Use lightweight readiness for bring-up. Deep dependency checks are covered
   # later by archon-smoke / archon-rest-policy-smoke in verify-all.
+  # Archon 0.6.0+ has no MCP transport and no /mcp/describe (#2943); its SPA
+  # catch-all answers 200 HTML there, so an "Archon MCP" readiness probe false-passes.
   check_http_bg "Archon API" "http://localhost:8091/api/health" "$WAIT_T_MED"
   check_http_bg "Archon UI" "http://localhost:3737" "$WAIT_T_SHORT"
-  check_http_bg "Archon MCP" "http://localhost:8091/mcp/describe" "$WAIT_T_SHORT"
   check_http_bg "Agent Zero API" "http://localhost:8080/healthz" "$WAIT_T_SHORT"
   check_http_bg "Agent Zero UI" "http://localhost:8081" "$WAIT_T_SHORT"
   check_http_bg "Agent Zero Env" "http://localhost:8080/config/environment" "$WAIT_T_SHORT"
@@ -351,7 +352,6 @@ else
   wait_container_ready "pmoves-presign-1" $WAIT_T_SHORT || TIMEOUT_SERVICES+=("Presign")
   wait_http "http://localhost:8091/api/health" $WAIT_T_MED || TIMEOUT_SERVICES+=("Archon API")
   wait_http "http://localhost:3737" $WAIT_T_SHORT || TIMEOUT_SERVICES+=("Archon UI")
-  wait_http "http://localhost:8091/mcp/describe" $WAIT_T_SHORT || TIMEOUT_SERVICES+=("Archon MCP")
   wait_http "http://localhost:8080/healthz" $WAIT_T_SHORT || TIMEOUT_SERVICES+=("Agent Zero API")
   wait_http "http://localhost:8081" $WAIT_T_SHORT || TIMEOUT_SERVICES+=("Agent Zero UI")
   wait_http "http://localhost:8080/config/environment" $WAIT_T_SHORT || TIMEOUT_SERVICES+=("Agent Zero Env")
