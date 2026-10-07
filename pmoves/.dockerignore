@@ -10,3 +10,9 @@ jellyfin-ai/redis/**
 # Dockerfile in this repo copies node_modules from a context (only from a
 # builder stage via --from=), so excluding it is subtractive only.
 **/node_modules
+
+# Signing-card key halves written by pmoves-keygen (gitignored). Several
+# Dockerfiles COPY the whole chit/ tree, which baked these into local images.
+# Nothing in an image reads them; keep them out of every build context.
+chit/keys/
+chit/keys/**
