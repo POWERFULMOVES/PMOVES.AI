@@ -1,0 +1,57 @@
+name: CLM Eval on Spark
+
+on:
+  workflow_dispatch:
+
+jobs:
+  clm-eval:
+    runs-on: spark
+    timeout-minutes: 60
+    steps:
+      - name: Setup venv (clm-serve only - vLLM excluded: engine-init fails on GB10 ARM64)
+        run: |
+          python3 -m venv /tmp/clmvenv
+          /tmp/clmvenv/bin/pip install --upgrade pip -q
+          /tmp/clmvenv/bin/pip install contrastive-lm 2>&1 | tail -3
+
+      - name: Clone repo (eval script)
+        run: |
+          git clone --depth 1 https://github.com/POWERFULMOVES/PMOVES.AI.git /tmp/repo
+          ls -la /tmp/repo/scripts/eval_clm.py
+
+      - name: Encoder readiness (Ollama qwen3-embedding:8b on :11434)
+        run: |
+          set -e
+          # CAVEAT: CLM heads are trained on Qwen3-8B *base* embedding space;
+          # qwen3-embedding:8b is a tuned variant. Results must be flagged
+          # ENCODER=OLLAMA-FALLBACK until embedding-space parity is verified.
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:11434/api/tags > /dev/null 2>&1; then
+              echo ENCODER-UP
+              break
+            fi
+            [ $i -eq 30 ] && { echo ENCODER-TIMEOUT; systemctl is-active ollama || true; exit 1; }
+            sleep 2
+          done
+          RESP=$(curl -sf http://localhost:11434/v1/embeddings -H 'Content-Type: application/json' \
+            -d '{"model":"qwen3-embedding:8b","input":"encoder readiness probe"}')
+          echo "$RESP" | head -c 120; echo
+          echo "$RESP" | grep -q 'embedding'
+          echo 'ENCODER=OLLAMA-FALLBACK' >> "$GITHUB_ENV"
+
+      - name: Start CLM server
+        run: |
+          nohup /tmp/clmvenv/bin/clm-serve > /tmp/clm.log 2>&1 &
+          for i in $(seq 1 12); do
+            sleep 5
+            curl -sf -o /dev/null http://localhost:8700/ 2>/dev/null && { echo CLM-UP; break; }
+          done
+          echo 'NOTE: clm-serve consumes the encoder via its configured provider;' \
+               'verify CLMClient encoder wiring points at Ollama :11434 before interpreting numbers'
+
+      - name: Run eval
+        run: /tmp/clmvenv/bin/python /tmp/repo/scripts/eval_clm.py 2>&1 | tee eval_output.txt
+
+      - name: Show results
+        if: always()
+        run: cat eval_output.txt 2>/dev/null || echo 'no output file'
