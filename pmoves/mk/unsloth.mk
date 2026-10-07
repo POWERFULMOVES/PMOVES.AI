@@ -10,7 +10,7 @@ UNSLOTH_RANK ?= 16
 
 unsloth-finetune: ## Fine-tune a LoRA adapter with Unsloth
 	@echo "=== PMOVES Unsloth Fine-Tuning ==="
-	@python3 pmoves/tools/unsloth_finetune.py \
+	@python3 tools/unsloth_finetune.py \
 	  --model $(UNSLOTH_MODEL) \
 	  --dataset $(UNSLOTH_DATASET) \
 	  --output $(UNSLOTH_OUTPUT) \
