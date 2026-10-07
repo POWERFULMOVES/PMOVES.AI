@@ -251,7 +251,7 @@ Super Nodes: 1
 
 | Variable | Purpose | Default |
 |----------|---------|---------|
-| `NATS_URL` | NATS connection | `nats://nats:pmoves@nats:4222` |
+| `NATS_URL` | NATS connection | `nats://<user>:<password>@nats:4222` |
 | `CGP_OUTPUT_DIR` | CGP file output | `./cgps` |
 | `CGP_NAMESPACE` | Default namespace | `pmoves.secrets` |
 
@@ -367,7 +367,7 @@ For unsigned: omit --sign flag
 **Issue:** NATS publish fails
 ```
 Solution: Verify NATS_URL includes credentials
-Check: nats://nats:pmoves@nats:4222
+Check: nats://<user>:<password>@nats:4222
 ```
 
 **Issue:** CGP spec version mismatch

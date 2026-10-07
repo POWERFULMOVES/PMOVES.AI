@@ -707,7 +707,7 @@ nats pub test.subject "hello"
 nats subs ">test.subject"
 ```
 **Resolution:**
-- Validate NATS URL in env vars: `nats://nats:pmoves@nats:4222` (must include credentials)
+- Validate NATS URL in env vars: `nats://<user>:<password>@nats:4222` (must include credentials)
 - Check NATS streaming is enabled: `docker exec nats nats stream add`
 - Verify `NATS_URL` is propagated to all services via `env.tier-agent`
 - Restart NATS-dependent services after fixing connection string
@@ -949,7 +949,7 @@ make verify-all
 - **Never commit `env.shared`** - contains secrets, in `.gitignore`
 - **Use `scripts/with-env.sh` for env loading** - 120× faster than bash sourcing
 - **Check for OOM warnings early** - Kong memory limit is common failure point
-- **Validate NATS credentials format** - must be `nats://nats:password@nats:4222`
+- **Validate NATS credentials format** - must be `nats://<user>:<password>@nats:4222`
 - **Don't skip `supabase-bootstrap`** - applies critical migrations
 - **GPU services need nvidia-container-toolkit** - won't start without it
 - **Submodule sync failures** - use `git restore --source=HEAD --staged --worktree :/`

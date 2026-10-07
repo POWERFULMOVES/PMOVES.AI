@@ -44,7 +44,7 @@
 - ✅ Hi-RAG v2: `{"ok":true,"service":"hi-rag-gateway-v2"}`
 - ✅ Agent Zero: `{"status":"ok"}` with NATS connected
 - ✅ TensorZero: `{"gateway":"ok","clickhouse":"ok","postgres":"ok","valkey":"ok"}`
-- ✅ NATS: Authenticated at `nats://nats:pmoves@nats:4222`
+- ✅ NATS: Authenticated at `nats://<user>:<password>@nats:4222`
 - ✅ Neo4j: Container running (authentication blocked)
 - ✅ Qdrant, Meilisearch, Supabase: All healthy
 

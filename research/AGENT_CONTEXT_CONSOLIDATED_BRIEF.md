@@ -72,7 +72,7 @@ TensorZero uses **port 3000** for Docker-internal communication (confirmed in do
 - `CHIT_SIGNING_KEY` / `CHIT_ENCRYPTION_KEY` — separate keys for separate crypto purposes. Fall back to `CHIT_PASSPHRASE` with warning.
 - `AGENTZERO_JETSTREAM=true` — required for NATS reliable delivery. False in standalone sidecar mode.
 - `TOPOLOGY_MODE` — `standalone` (sidecar) or `docked` (compose stack).
-- NATS auth: always `nats://nats:pmoves@nats:4222` (authenticated, not `nats://nats:4222`).
+- NATS auth: always `nats://<user>:<password>@nats:4222` (authenticated, not `nats://nats:4222`).
 
 ---
 

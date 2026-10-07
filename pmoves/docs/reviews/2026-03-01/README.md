@@ -41,7 +41,7 @@ All P1 and P2 findings have been addressed. All fix PRs merged.
 | 1 | BoTZ | `HAS_JOSE` fail-open | `features/mcp_bridge/auth.py:57-59` | Raises HTTPException 500 |
 | 2 | transcribe-and-fetch | Hard-coded `admin123`/`langfuse123` | `monitoring/integrate_backend.py` | Uses CHANGE_ME placeholder |
 | 3 | DoX | Hardcoded DB password + JWT secret | `docker-compose.supabase.yml` | Uses `${VAR:?required}` pattern |
-| 4 | ToKenism | NATS client unauthenticated fallback | `integrations/nats/nats-client.ts:114` | Uses `nats://nats:pmoves@nats:4222` |
+| 4 | ToKenism | NATS client unauthenticated fallback | `integrations/nats/nats-client.ts:114` | Uses `nats://<user>:<password>@nats:4222` |
 | 5 | DoX | DELETE /cipher/memory no-op | `backend/app/api/routers/cipher.py` | Returns HTTP 501 |
 | 6 | transcribe-and-fetch | openai v1/v2 divergence | `pyproject.toml` + `requirements.txt` | Aligned to `>=2.14.0,<3.0.0` |
 | 7 | ToKenism | `minioadmin` default creds | tier env files | Uses `${VAR:?required}` pattern |

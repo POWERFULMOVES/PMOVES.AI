@@ -22,9 +22,9 @@ Use this checklist when onboarding a new submodule or auditing an existing one.
 
 ## 2. NATS Event Bus
 
-- [ ] **NATS_URL** defaults to authenticated URL: `nats://nats:pmoves@nats:4222`
+- [ ] **NATS_URL** is an authenticated URL: `nats://<user>:<password>@nats:4222` (from env, never a literal)
   - Check: `docker-compose*.yml`, `.env*`, Python/JS code defaults
-  - Pattern (internal Docker-only): `os.getenv("NATS_URL", "nats://nats:pmoves@nats:4222")`
+  - Pattern: `os.environ["NATS_URL"]` (fail if unset; no literal credentialed default)
   - Production/external deployments should inject `NATS_URL` via secrets (`os.getenv("NATS_URL")`) and avoid credential defaults in source.
 
 - [ ] **NATS subjects** documented in integration template
@@ -96,7 +96,7 @@ Use this checklist when onboarding a new submodule or auditing an existing one.
 - [ ] **No `export` syntax** in env files
   - Docker `env_file:` requires plain `KEY=VALUE`
   - Wrong: `export NATS_URL=nats://...`
-  - Right: `NATS_URL=nats://nats:pmoves@nats:4222`
+  - Right: `NATS_URL=nats://<user>:<password>@nats:4222`
 
 - [ ] **No default credentials** in production env files
   - No `minioadmin`, `root:root`, `neo4j`, `tensorzero:tensorzero`
@@ -169,9 +169,9 @@ Use this checklist when onboarding a new submodule or auditing an existing one.
 ## Quick Validation Commands
 
 ```bash
-# Check NATS auth in all files
-grep -r "nats://nats:pmoves@nats:4222" . --include="*.py" --include="*.yml" --include="*.yaml" --include="*.env*"
-# Should return NO results (all should use nats://nats:pmoves@nats:4222)
+# Check NATS auth in all files (look for unauthenticated URLs)
+grep -r "nats://nats:4222" . --include="*.py" --include="*.yml" --include="*.yaml" --include="*.env*"
+# Should return NO results (all should read an authenticated $NATS_URL)
 
 # Check for export syntax in env files
 grep -r "^export " . --include="*.env*" --include="env.*"

@@ -119,7 +119,7 @@ Three KVMs make up the production VPS substrate (see `pmoves/docs/operations/TOP
 | Host | Tailscale name | Role | Key services | Hub flag |
 |------|---------------|------|--------------|----------|
 | `pmoves-kvm4-1` | `pmoves-kvm4-1` | API gateway | TensorZero `:3030`, Agent Zero `:8080`, Hi-RAG v2 `:8086` (⚠ NOT currently deployed — :8086 down / no container, verified 2026-07-04), Archon `:3090`, Mesh Agent, Gateway Agent `:8100`, Extract Worker `:8083` | — |
-| `pmoves-kvm4-2` | `pmoves-kvm4-2` | Data hub | **NATS `:4222` (fleet hub, DNS `nats.pmoves.ai`)**, Supabase 13-svc stack, Qdrant `:6333`, Neo4j `:7687`, Meilisearch `:7700`, Prometheus `:9090`, Grafana `:3002`, Loki `:3100`, MinIO `:9000` | NATS-hub |
+| `pmoves-kvm4-2` | `pmoves-kvm4-2` | Data hub | **NATS `:4222` (fleet hub, tailnet-only; `nats.pmoves.ai` is reserved and does not resolve)**, Supabase 13-svc stack, Qdrant `:6333`, Neo4j `:7687`, Meilisearch `:7700`, Prometheus `:9090`, Grafana `:3002`, Loki `:3100`, MinIO `:9000` | NATS-hub |
 | `pmoves-kvm2` | `pmoves-kvm2` | Reverse proxy + relay | nginx `:80/443` (SSL termination), RustDesk `hbbs/hbbr` (rendezvous + relay) | — |
 
 **NATS hub addressing**: `nats://${NATS_USER}:${NATS_PASS}@pmoves-kvm4-2:4222` (Tailscale-internal, set via `${NATS_URL}`). All nodes (5090, 4090, SPARK, B850, Z890) connect here for cross-node fan-out. Local-node NATS instances (e.g. `pmoves-nats-1` on 5090) are NOT leafnoded to the hub by default — for fleet signal dispatch use either an MCP that points at the hub URL or SSH to KVM4-2 then `docker exec ... nats pub`.

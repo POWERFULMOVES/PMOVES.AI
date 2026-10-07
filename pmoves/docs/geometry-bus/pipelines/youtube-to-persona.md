@@ -261,7 +261,7 @@ curl -X POST http://localhost:8096/persona/evaluate \
 
 | Variable | Purpose | Default |
 |----------|---------|---------|
-| `NATS_URL` | NATS connection | `nats://nats:pmoves@nats:4222` |
+| `NATS_URL` | NATS connection | `nats://<user>:<password>@nats:4222` |
 | `SUPABASE_URL` | Supabase API | `http://supabase-kong:8000` |
 | `SUPABASE_ANON_KEY` | Supabase auth | - |
 | `MINIO_ROOT_USER` | MinIO credentials | - |

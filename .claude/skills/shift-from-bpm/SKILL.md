@@ -29,13 +29,13 @@ CGP v0.2 packet, publish to NATS, optionally synthesize via Flute Gateway.
 uv run python -m pmoves.tools.beats_to_voice from-bpm \
   --bpm 90 \
   --text "Hello from the 4090 node." \
-  --nats-url "${NATS_URL:-nats://nats:pmoves@localhost:4222}"
+  --nats-url "${NATS_URL:?set NATS_URL}"
 
 # Encode at sentence boundary with Dr. Bean persona
 BEATS_VOICE=dr-bean uv run python -m pmoves.tools.beats_to_voice from-bpm \
   --bpm 60 \
   --text "Analysis complete." \
-  --nats-url "${NATS_URL:-nats://nats:pmoves@localhost:4222}"
+  --nats-url "${NATS_URL:?set NATS_URL}"
 ```
 
 ## Run — BPM from Text Analysis
@@ -46,7 +46,7 @@ uv run python -m pmoves.tools.analyze_beats \
   --text "Hello from the 4090 node." \
   --output-json | \
 uv run python -m pmoves.tools.bpm_encoder --stdin \
-  --nats-url "${NATS_URL:-nats://nats:pmoves@localhost:4222}"
+  --nats-url "${NATS_URL:?set NATS_URL}"
 ```
 
 ## Persona Presets (BEATS_VOICE)

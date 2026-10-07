@@ -114,7 +114,7 @@ Agent Zero generates response
 ```bash
 export FLUTE_GATEWAY_URL=http://localhost:8055
 export ULTIMATE_TTS_URL=http://localhost:7861
-export NATS_URL=nats://nats:pmoves@nats:4222
+export NATS_URL=nats://<user>:<password>@nats:4222
 export CAST_DEFAULT_DEVICE="Brysons Speakers speaker"
 ```
 

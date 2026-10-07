@@ -22,7 +22,7 @@ GPU-bound embedding worker for the Hi-RAG ingestion pipeline. Consumes text arti
 - `TENSORZERO_BASE_URL` → `http://tensorzero:3030`
 - `EMBEDDING_MODEL` → `qwen3_embedding_4b_local` (default; dim 2560)
 - `QDRANT_URL`, `MEILI_URL`, `NEO4J_URI` — backend connections
-- `NATS_URL` — `nats://nats:pmoves@nats:4222`
+- `NATS_URL` — `nats://<user>:<password>@nats:4222`
 
 ## Bringup
 

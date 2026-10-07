@@ -15,7 +15,7 @@ When a downstream agent is unsure, it should query this doc, never invent.
 | **Z890 (ai-lab)** | Production ai-lab node, GPU (RTX 3090 Ti); workstation co-located with dev workflow; full Docker Compose mesh | `pmoves-z890` | None directly; reached over Tailscale |
 | **5090** | Primary GPU (pending hardware) | `pmoves-5090` | None |
 | **KVM4-1** | API gateway VPS + Tailscale egress exit | `pmoves-kvm4-1` | `api.pmoves.ai`, `agent.pmoves.ai`, `rag.pmoves.ai`, `gateway.pmoves.ai` |
-| **KVM4-2** | Data/storage VPS (Supabase, NATS, MinIO, Neo4j, Qdrant, Meilisearch, monitoring) | `pmoves-kvm4-2` | `supabase.pmoves.ai`, `nats.pmoves.ai`, `minio.pmoves.ai`, `grafana.pmoves.ai`, `search.pmoves.ai` |
+| **KVM4-2** | Data/storage VPS (Supabase, NATS, MinIO, Neo4j, Qdrant, Meilisearch, monitoring) | `pmoves-kvm4-2` | `supabase.pmoves.ai`, `minio.pmoves.ai`, `grafana.pmoves.ai`, `search.pmoves.ai` |
 | **KVM2** | Reverse proxy (nginx SSL termination) + RustDesk relay | `pmoves-kvm2` | All other subdomains terminate here before backhauling |
 | **Cloudflare Edge** | DNS + CI router Worker | — | Public DNS for `pmoves.ai` zone |
 
@@ -34,7 +34,7 @@ DNS zone: **`pmoves.ai`** (Cloudflare-managed). Subdomains and their backing ser
 | `n8n.pmoves.ai` | n8n workflow engine | KVM4-1 | `:5678` |
 | `grafana.pmoves.ai` | Grafana | KVM4-2 | `:3000` |
 | `search.pmoves.ai` | SupaSerch / DeepResearch front | KVM4-1 | TBD |
-| `nats.pmoves.ai` | NATS WebSocket gateway | KVM4-2 | `:8080` (NATS WS) |
+| `nats.pmoves.ai` | Reserved — **not configured**. No NATS WebSocket listener exists (no `websocket {}` block in any NATS config); the name does not resolve. NATS clients use the tailnet hub `pmoves-kvm4-2:4222`. | — | — |
 | `minio.pmoves.ai` | MinIO S3 + console | KVM4-2 | `:9000` / `:9001` |
 | `headscale.pmoves.ai` | Headscale control plane | KVM4-2 | `:8080` |
 | `ci.pmoves.ai` | CI runner router (Cloudflare Worker) | Cloudflare Edge | — |
@@ -54,7 +54,7 @@ DNS zone: **`pmoves.ai`** (Cloudflare-managed). Subdomains and their backing ser
    - `https://<subdomain>.pmoves.ai/auth/callback` for each app surface (Archon UI, Agent Zero UI, n8n).
 3. **PKCE flow** is mandatory for SPA surfaces (Next.js UI uses `@supabase/ssr` already; see `pmoves/ui/`).
 4. **JWT claims** include `email`, `email_verified`, `provider: 'google'`. PMOVES-specific role added via Supabase RLS policies (`role: 'creator' | 'admin' | 'agent'`).
-5. **Service-to-service auth**: not OAuth. Use Supabase service role keys for backend, NATS user/pass (`nats:pmoves`) for event bus, mTLS where Tailscale endpoints face other Tailscale endpoints.
+5. **Service-to-service auth**: not OAuth. Use Supabase service role keys for backend, NATS user/password (via `$NATS_URL`) for event bus, mTLS where Tailscale endpoints face other Tailscale endpoints.
 
 ### When to require OAuth
 

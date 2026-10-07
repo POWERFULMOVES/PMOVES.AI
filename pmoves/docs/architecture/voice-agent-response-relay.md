@@ -83,7 +83,7 @@ Uses the same reconnection pattern as `publisher-discord`:
 
 | Env Var | Default | Description |
 |---------|---------|-------------|
-| `NATS_URL` | `nats://nats:pmoves@nats:4222` | NATS server URL |
+| `NATS_URL` | `nats://<user>:<password>@nats:4222` | NATS server URL |
 | `VOICE_RELAY_INPUT_SUBJECT` | `agentzero.task.result.v1` | Input subject |
 | `VOICE_RELAY_OUTPUT_SUBJECT` | `voice.agent.response.v1` | Output subject |
 | `PORT` | `8121` | HTTP port |

@@ -71,7 +71,7 @@ Default credentials that MUST be changed for production:
 
 **All NATS URLs MUST include credentials:**
 ```
-nats://nats:pmoves@nats:4222
+nats://<user>:<password>@nats:4222
 ```
 
 **NOT:** `nats://nats:4222` (unauthenticated)

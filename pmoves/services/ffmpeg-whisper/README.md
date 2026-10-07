@@ -54,7 +54,7 @@ Response:
 
 - `WHISPER_MODEL` — model size (`base`, `small`, `medium`, `large-v3`); default `large-v3`.
 - `WHISPER_DEVICE` — `cuda` (default), `rocm` (pending), `cpu` (fallback, slow).
-- `NATS_URL` — `nats://nats:pmoves@nats:4222`.
+- `NATS_URL` — `nats://<user>:<password>@nats:4222`.
 - `MINIO_*` — for fetching/storing audio assets through `presign` service.
 
 ## Bringup

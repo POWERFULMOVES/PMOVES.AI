@@ -36,12 +36,12 @@ echo "BEATS_AGENT_ID=${BEATS_AGENT_ID:-4090-claude}"
 # Default: listens as 4090-claude agent
 uv run python -m pmoves.tools.beats_to_voice listen \
   --agent-id "${BEATS_AGENT_ID:-4090-claude}" \
-  --nats-url "${NATS_URL:-nats://nats:pmoves@localhost:4222}"
+  --nats-url "${NATS_URL:?set NATS_URL}"
 
 # With explicit Flute Gateway
 uv run python -m pmoves.tools.beats_to_voice listen \
   --agent-id "${BEATS_AGENT_ID:-4090-claude}" \
-  --nats-url "${NATS_URL:-nats://nats:pmoves@localhost:4222}" \
+  --nats-url "${NATS_URL:?set NATS_URL}" \
   --flute-url "${FLUTE_GATEWAY_URL:-http://localhost:8108}"
 ```
 
@@ -69,7 +69,7 @@ uv run python -m pmoves.tools.beats_to_voice listen \
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `NATS_URL` | `nats://nats:pmoves@localhost:4222` | NATS connection |
+| `NATS_URL` | *(required)* `nats://<user>:<password>@localhost:4222` | NATS connection |
 | `FLUTE_GATEWAY_URL` | `http://localhost:8108` | Flute synthesis target |
 | `BEATS_AGENT_ID` | `4090-claude` | Agent identity in packets |
 

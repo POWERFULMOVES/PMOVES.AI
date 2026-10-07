@@ -2,7 +2,7 @@
 
 ## Executive Summary
 
-Phase H successfully resolved all three previously-identified P1 issues: all Dockerfiles now carry `USER a0user`, NATS URLs universally include authenticated credentials (`nats://nats:pmoves@nats:4222`), and the `normalize_settings()`/`create_auth_token()` interaction is working as designed. The remaining security surface is dominated by two architectural choices that are inherent to the agent's purpose (running processes inside a container as root via supervisord, and SSH configured to permit root login) — these are P2 findings rather than regressions. One notable new P2 finding is a path-traversal risk in the `ImageGet` API where the directory-containment check was commented out.
+Phase H successfully resolved all three previously-identified P1 issues: all Dockerfiles now carry `USER a0user`, NATS URLs universally include authenticated credentials (`nats://<user>:<password>@nats:4222`), and the `normalize_settings()`/`create_auth_token()` interaction is working as designed. The remaining security surface is dominated by two architectural choices that are inherent to the agent's purpose (running processes inside a container as root via supervisord, and SSH configured to permit root login) — these are P2 findings rather than regressions. One notable new P2 finding is a path-traversal risk in the `ImageGet` API where the directory-containment check was commented out.
 
 ---
 
@@ -98,7 +98,7 @@ Token is SHA-256 of `runtime_id:username:password` truncated to 16 base64url cha
 
 ## What's Good
 
-- **NATS auth universally applied** — All 5 locations use `nats://nats:pmoves@nats:4222`
+- **NATS auth universally applied** — All 5 locations use `nats://<user>:<password>@nats:4222`
 - **Dockerfile non-root USER in all 3 images** — `docker/base/Dockerfile:44`, `docker/run/Dockerfile:40`, `DockerfileLocal:40`
 - **`normalize_settings()`/`create_auth_token()` interaction clean** — No duplicate generation bug
 - **MCP token-in-path scheme sound** — `DynamicMcpProxy.__call__()` gates access correctly

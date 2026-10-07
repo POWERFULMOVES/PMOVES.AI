@@ -76,7 +76,7 @@ Six locations default to `nats://localhost:4222` (no auth):
 - `features/n8n/monitor_agent.py:137`
 - `features/agent_sdk/core/events.py:29` (docstring)
 
-**Fix:** Change all to `"nats://nats:pmoves@nats:4222"`.
+**Fix:** Change all to `"nats://<user>:<password>@nats:4222"`.
 
 ### P2-C: Two active Dockerfiles run as root
 
@@ -109,7 +109,7 @@ Six locations default to `nats://localhost:4222` (no auth):
 ## Suggestions
 
 - **`gateway.py` line 631** binds to `0.0.0.0` — prefer `127.0.0.1`
-- **`features/vpn_mcp/vpn_mcp_server.py`** hardcodes `NATS_USER=pmoves` / `NATS_PASS=pmoves` separately — consolidate to `NATS_URL`
+- **`features/vpn_mcp/vpn_mcp_server.py`** hardcodes `NATS_USER` / `NATS_PASS` literals separately — consolidate to `NATS_URL`
 - **Stale fastapi pin** in `features/gateway/python-gateway/requirements.txt` (`fastapi==0.109.0`) — FastAPI not actually imported by gateway
 
 ---

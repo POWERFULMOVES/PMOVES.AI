@@ -414,7 +414,7 @@ Publishing NATS messages from an agent session — three paths, choose by locati
 **1. On the node where NATS runs locally (KVM4-2, Z890):**
 ```bash
 make -C pmoves nats-pub SUBJECT=claw.task.assign.v1 PAYLOAD='{"from":"pmoves-4090","to":"pmoves-spark","task":"cascade-wave-B"}'
-# expands to: docker exec pmoves-nats-1 nats pub <subject> '<payload>' --server nats://nats:pmoves@localhost:4222
+# expands to: docker exec pmoves-nats-1 nats pub <subject> '<payload>' --server nats://<user>:<password>@localhost:4222
 ```
 
 **2. Via the `pmoves-nats-mcp` MCP tool (operator opt-in, see PATTERNS.md § NATS MCP server):**
@@ -425,7 +425,7 @@ nats_publish(subject="claw.task.assign.v1", payload={"from": "pmoves-4090", ...}
 **3. From a remote node (4090, SPARK, Knuckles) via Tailscale:**
 ```bash
 # Use Tailscale hostname — never raw IPs
-nats pub claw.task.assign.v1 '...' --server nats://nats:pmoves@pmoves-kvm4-2:4222
+nats pub claw.task.assign.v1 '...' --server nats://<user>:<password>@pmoves-kvm4-2:4222
 # OR ssh to KVM4-2 and use path 1
 ssh root@pmoves-kvm4-2 'docker exec pmoves-nats-1 nats pub claw.task.assign.v1 ...'
 ```

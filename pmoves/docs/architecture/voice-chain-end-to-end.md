@@ -85,7 +85,7 @@ duplicate the HTTP API without adding value.
 | `voice.training.request.v1` | flute-gateway (cloning) | training worker (planned) | Voice cloning training trigger | Listed in cgp_sub_probe.py for forward compatibility |
 | `geometry.cgp.v1`, `geometry.>`, `tokenism.>` | various CHIT-aware services | CGP consumers | CGP packet format | Wildcard subjects covered by `cgp_sub_probe.py` |
 
-NATS authentication: `nats://nats:pmoves@nats:4222` (always use the
+NATS authentication: `nats://<user>:<password>@nats:4222` (always use the
 authenticated form per CLAUDE.md convention).
 
 ### voice-relay Service

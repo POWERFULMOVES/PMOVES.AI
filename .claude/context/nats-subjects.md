@@ -6,9 +6,16 @@ Comprehensive reference of all NATS message subjects used for event-driven commu
 
 ## NATS Configuration
 
-- **Server:** `nats://localhost:4222`
-- **JetStream:** Enabled for persistence
-- **Version:** 2.10-alpine
+- **Server:** `$NATS_URL` (in-stack `nats://<user>:<password>@nats:4222`; fleet hub `pmoves-kvm4-2:4222`, tailnet-only)
+- **JetStream:** Enabled; streams per subject family are listed in `pmoves/docs/NATS_CONFIGURATION.md` § JetStream Streams
+- **Version:** `nats:2.11.8-alpine`
+
+> **CHIT subjects are core-published today.** `chit.*` events (e.g.
+> `chit.signed.v1`, trail receipts) are published with core NATS `PUBLISH` —
+> fire-and-forget, not JetStream-acked, and no stream captures `chit.>`. A
+> subscriber that is not connected at publish time does not receive them.
+> Delivery hardening (a backing stream and acked publish) is planned; until
+> then treat these subjects as best-effort notifications, not a durable ledger.
 
 ## P7 Room and Session Control
 

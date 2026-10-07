@@ -411,7 +411,7 @@ PARENT_VERSION=1.0.0
 
 # Integration
 MINIO_ENDPOINT=http://minio:9000
-NATS_URL=nats://nats:pmoves@nats:4222
+NATS_URL=nats://<user>:<password>@nats:4222
 ```
 
 ---

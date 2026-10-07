@@ -28,9 +28,9 @@ The design is **Agent Zero + Archon-as-client, with headless versions of both sp
 
 ---
 
-## LANE 2 — NATS-auth batch (`nats://nats:4222` → `nats://nats:pmoves@nats:4222`)
+## LANE 2 — NATS-auth batch (`nats://nats:4222` → `nats://<user>:<password>@nats:4222`)
 
-The handoff's "111 files" is inflated by vendored nested submodules (`external/*`) + docs. **Real scope ≈ 17 files** across 7 owning repos, split by editability. The `nats://nats:4222` form connects to the auth-enabled container NATS service without credentials → fails; the authenticated form matches the `env.shared` default `NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}`.
+The handoff's "111 files" is inflated by vendored nested submodules (`external/*`) + docs. **Real scope ≈ 17 files** across 7 owning repos, split by editability. The `nats://nats:4222` form connects to the auth-enabled container NATS service without credentials → fails; the authenticated form matches the `env.shared` default `NATS_URL=${NATS_URL:-nats://<user>:<password>@nats:4222}`.
 
 ### Editable Python connection-defaults (~10 — the clean fix)
 | Repo | Files |
@@ -65,9 +65,9 @@ Scope-and-report (per the "check if already fixed first" rule) overturned the ha
 
 | Surface | Grep finding | Verdict |
 |---|---|---|
-| `env.shared.example:30` | `NATS_URL=nats://nats:pmoves@nats:4222` (authed) | pipeline emits the authed form |
+| `env.shared.example:30` | `NATS_URL=nats://<user>:<password>@nats:4222` (authed) | pipeline emits the authed form |
 | All production wiring | reads `os.getenv("NATS_URL", …)` first; **0** consumers of the bare constant | env always wins → already authed |
-| PMOVES-DoX (`config.py`, `system.py`, `chit_service.py`) | already `if nats_url in ("nats://nats:4222","nats://nats:pmoves@nats:4222")` — **normalizes both forms** | **done** (#1375 / #1292) — editing = redoing |
+| PMOVES-DoX (`config.py`, `system.py`, `chit_service.py`) | already `if nats_url in ("nats://nats:4222","nats://<user>:<password>@nats:4222")` — **normalizes both forms** | **done** (#1375 / #1292) — editing = redoing |
 | `pmoves_health/__init__.py` `checker.nats(":4222")` | inside `if __name__=="__main__": async def example_usage()` | **example code** — cosmetic |
 | `pmoves_announcer/__init__.py` `getenv("NATS_URL",":4222")` | env read first; `:4222` is the unreachable fallback | defense-in-depth nit only |
 | `pmoves_registry.NATS = ":4222"` | class constant, **0 direct consumers** (`ServiceURLs.NATS` / `.get("NATS")`) | cosmetic |

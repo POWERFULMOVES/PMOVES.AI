@@ -224,7 +224,7 @@ import json
 
 async def emit_trail(payload: dict):
     nc = nats.NATS()
-    await nc.connect("nats://nats:pmoves@nats:4222")
+    await nc.connect("nats://<user>:<password>@nats:4222")
     await nc.publish(
         "agent.graphiti.signed.v1",
         json.dumps(payload).encode()

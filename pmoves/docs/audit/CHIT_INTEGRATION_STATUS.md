@@ -370,7 +370,7 @@ from pmoves.services.common.cgp_mappers import (
 
 async def publish_cgp(data: dict, subject: str = "geometry.cgp.v1"):
     """Publish CGP to NATS geometry bus"""
-    nc = await nats.connect("nats://nats:pmoves@nats:4222")
+    nc = await nats.connect("nats://<user>:<password>@nats:4222")
 
     # Create CGP from your data using the appropriate domain mapper
     cgp = map_health_weekly_summary_to_cgp(data)  # or build custom CGP
@@ -385,7 +385,7 @@ async def publish_cgp(data: dict, subject: str = "geometry.cgp.v1"):
 ```python
 async def subscribe_geometry():
     """Subscribe to geometry bus events"""
-    nc = await nats.connect("nats://nats:pmoves@nats:4222")
+    nc = await nats.connect("nats://<user>:<password>@nats:4222")
 
     async def handle_geometry(msg):
         cgp = json.loads(msg.data.decode())

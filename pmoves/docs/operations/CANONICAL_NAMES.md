@@ -98,7 +98,7 @@ A "deprecated alias" means: the audit gate accepts it as a temporary fallback in
 ## 7. NATS broker URL
 
 - **Canonical:** `NATS_URL` sourced from `env.tier-agent` only — no embedded credentials in compose defaults
-- **Deprecated pattern:** `${NATS_URL:-nats://nats:pmoves@nats:4222}` (hardcoded password leaks into git history)
+- **Deprecated pattern:** `${NATS_URL:-nats://<user>:<password>@nats:4222}` with a literal credential as the fallback (keep credentials out of git; source them from the tier env)
 - **Where the canonical lives:** `env.tier-agent` (one line); `pmoves/bootstrap/registry.json §services.nats` (declares the variable)
 - **Migration path:** Compose lines 2344/2372/2461 drop the embedded fallback. Operators with no `env.tier-agent` value fail loudly (`${NATS_URL:?Set NATS_URL in env.tier-agent}`) instead of silently using the leaked default.
 - **Verification:**

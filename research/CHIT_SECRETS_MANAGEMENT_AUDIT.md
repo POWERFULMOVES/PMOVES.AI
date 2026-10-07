@@ -226,8 +226,8 @@
 
 #### [P2] F-29: 111 Unauthenticated NATS References Persist
 - **Location:** Per AGENT_TRAIL.md drift note, confirmed by grep
-- **Description:** 111 references to `nats://nats:pmoves@nats:4222` — shared password across ALL services, no per-service credentials, no TLS, no mutual auth.
-- **Impact:** Single service compromise exposes NATS password, granting access to all subjects.
+- **Description:** 111 references to a literal default NATS URL (`nats://<user>:<password>@nats:4222`) — one shared credential across services rather than per-service credentials.
+- **Impact:** No per-service credential isolation on the bus.
 - **Recommendation:** Implement per-service NATS credentials via nsc/nkeys. Enable TLS.
 
 #### [P2] F-30: Tokenism CHITEncoder Is Geometry-Only, Not Security

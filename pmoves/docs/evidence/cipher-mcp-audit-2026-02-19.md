@@ -16,7 +16,7 @@ Claude Code CLI ──stdio──► pmoves-cipher-mcp (Python) ──HTTP──
 | 4 | All 4 tools registered | PASS | `pmoves_cipher_store`, `pmoves_cipher_search`, `pmoves_cipher_store_reasoning`, `pmoves_cipher_reasoning_patterns` |
 | 5 | Service registry correct | PASS | `pmoves_registry/__init__.py` checks `CIPHER_URL` → `CIPHER_MEMORY_URL` → default `http://localhost:8105` |
 | 6 | cipher-api in compose | PASS | Service `cipher-api` defined at compose line 1608, builds from `../Pmoves-cipher`, port 8105 mapped from 3000 |
-| 7 | NATS URL has creds | PASS | `get_nats_url()` defaults to `nats://nats:pmoves@nats:4222` |
+| 7 | NATS URL has creds | PASS | `get_nats_url()` defaults to `nats://<user>:<password>@nats:4222` |
 
 ## Findings
 

@@ -694,7 +694,7 @@ via `EGRESS_PROTECTED_TERMS` (comma/newline list) or `EGRESS_PROTECTED_TERMS_FIL
 (a gitignored path). Unset denylist => every publish is HELD (fail-closed).
 
 ## Demo (needs NATS)
-    export NATS_URL=nats://nats:pmoves@localhost:4222 PUBLISH_GATE_BRIDGE=1 EGRESS_PROTECTED_TERMS=""
+    export NATS_URL=nats://<user>:<password>@localhost:4222 PUBLISH_GATE_BRIDGE=1 EGRESS_PROTECTED_TERMS=""
     make -C pmoves gate-emit ARTIFACT=s3://pmoves/reports/r1.md TITLE="Report 1"
 
 A clean item publishes content.publish.approved.v1 (publisher then releases it);

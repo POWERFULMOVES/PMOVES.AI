@@ -46,7 +46,7 @@ Reconciliation sweep (2026-03-09) verified all 7 reported P1 submodule issues fr
 | 9 | Pipecat | No MCP tool allowlisting | `src/pipecat/services/mcp_service.py` | P2-LOW | FIXED (verified 2026-03-10 — `tools_filter` parameter + filtering in `MCPClient._list_tools_helper()`) |
 | 6 | PMOVES.YT | MinIO default credentials in env defaults | `env.shared` | P2-LOW | FIXED (verified 2026-03-10 — uses `${MINIO_ACCESS_KEY:?required}` fail-closed pattern, no minioadmin defaults) |
 | 11 | A2UI | env.shared uses `export` syntax | `env.shared` | P2-LOW | FIXED (verified 2026-03-10 — no `export` syntax in env.shared, uses `${VAR:-default}` format) |
-| 12 | A2UI | NATS URL missing auth credentials | `env.shared` | P2-LOW | FIXED (verified 2026-03-10 — `NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}` with auth credentials) |
+| 12 | A2UI | NATS URL missing auth credentials | `env.shared` | P2-LOW | FIXED (verified 2026-03-10 — `NATS_URL=${NATS_URL:-nats://<user>:<password>@nats:4222}` with auth credentials) |
 | 15 | HiRAG | env.shared uses `export` syntax (Docker incompatible) | `env.shared` | P2 | FIXED (stale — env.shared already clean) |
 | 16 | A2UI | env.tier-ui.sh uses `export` syntax | `env.tier-ui.sh` | P2-LOW | FIXED (verified 2026-03-10 — no `export` syntax, plain KEY=VALUE format) |
 
@@ -67,7 +67,7 @@ Each P2 issue requires:
 | P1-2 | BoTZ | MCP Gateway unauthenticated GET endpoints (`/servers`, `/tools`) | 2026-03-09 | Verified `gateway.py:496-528` calls `_require_auth()` |
 | P1-3 | DoX | Hardcoded Supabase credentials in `docker-compose.supabase.yml` | 2026-03-09 | Verified uses `${VAR:?required}` pattern — no hardcoded creds |
 | P1-4 | DoX | DELETE `/cipher/memory` silent no-op | 2026-03-09 | Verified `cipher.py:77-99` returns 501 Not Implemented |
-| P1-5 | ToKenism-Multi | NATS client unauthenticated default URL | 2026-03-09 | Verified `nats-client.ts:114` defaults to `nats://nats:pmoves@...` |
+| P1-5 | ToKenism-Multi | NATS client unauthenticated default URL | 2026-03-09 | Verified `nats-client.ts:114` defaults to `nats://<user>:<password>@...` |
 | P1-6 | ToKenism-Multi | MinIO default credentials in env tiers | 2026-03-09 | Verified `env.tier-*` use `${VAR:?required}` pattern |
 | P1-7 | transcribe-and-fetch | Hardcoded admin passwords in `integrate_backend.py` | 2026-03-09 | Verified uses `CHANGE_ME` placeholders (not real creds) |
 | 1 | BoTZ | MCP Gateway unauthenticated GET | 2026-03-09 | Verified fixed in submodule (`_require_auth()` on GET endpoints) |
@@ -78,7 +78,7 @@ Each P2 issue requires:
 | 6 | PMOVES.YT | MinIO default credentials | 2026-03-10 | Uses `${VAR:?required}` fail-closed pattern |
 | 9 | Pipecat | MCP tool allowlisting | 2026-03-10 | `tools_filter` param + filtering in `MCPClient._list_tools_helper()` |
 | 11 | A2UI | env.shared `export` syntax | 2026-03-10 | No `export` in env.shared |
-| 12 | A2UI | NATS URL missing auth | 2026-03-10 | Authenticated URL: `nats://nats:pmoves@nats:4222` |
+| 12 | A2UI | NATS URL missing auth | 2026-03-10 | Authenticated URL: `nats://<user>:<password>@nats:4222` |
 | 15 | HiRAG | env.shared `export` syntax | 2026-02-26 | Stale — already clean, no fix needed |
 | 16 | A2UI | env.tier-ui.sh `export` syntax | 2026-03-10 | No `export` in file — plain KEY=VALUE format |
 | 3 | Open-Notebook | SurrealDB root:root in compose | 2026-03-10 | All compose files use `${SURREAL_PASSWORD:-changeme_surreal}` env var substitution |

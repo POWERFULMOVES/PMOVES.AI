@@ -94,7 +94,7 @@ _Counts are authoritative from `pmoves/config/agent_registry.yaml` ↔ `pmoves/c
 | `n8n.pmoves.ai` | KVM4-1 | Yes |
 | `grafana.pmoves.ai` | KVM4-2 | Yes |
 | `search.pmoves.ai` | KVM4-2 | Yes |
-| `nats.pmoves.ai` | KVM4-2 | DNS only |
+| `nats.pmoves.ai` | — (reserved; does not resolve) | — — the NATS hub is tailnet-only at `pmoves-kvm4-2:4222` (see `.claude/CATALOG.md` § Hostinger KVM Fleet) |
 | `minio.pmoves.ai` | KVM4-2 | DNS only |
 | `headscale.pmoves.ai` | KVM2 | DNS only |
 | `ci.pmoves.ai` | CF Worker | Yes (routes commented out in `wrangler.toml` — coded, not confirmed live) |

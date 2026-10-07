@@ -425,7 +425,7 @@ import nats
 async def voice_follow_agent():
     """Voice agent that casts responses to speakers."""
 
-    nc = await nats.connect("nats://nats:pmoves@nats:4222")
+    nc = await nats.connect("nats://<user>:<password>@nats:4222")
 
     async def handle_agent_response(msg):
         """Handle agent response from Agent Zero."""
@@ -552,7 +552,7 @@ class VoiceAgentWithCast(AgentForm):
 | `PORT` | 8060 | Cast TTS Gateway HTTP port |
 | `FLUTE_GATEWAY_URL` | http://localhost:8055 | Flute-Gateway URL |
 | `ULTIMATE_TTS_URL` | http://localhost:7861 | Ultimate-TTS URL |
-| `NATS_URL` | nats://nats:pmoves@nats:4222 | NATS message bus |
+| `NATS_URL` | nats://<user>:<password>@nats:4222 | NATS message bus |
 | `CAST_DEFAULT_DEVICE` | — | Default Cast device name |
 
 ### Device Discovery

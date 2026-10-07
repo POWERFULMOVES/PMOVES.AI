@@ -173,7 +173,7 @@ Security (Dockerfile USER, auth patterns), Secrets, NATS, MCP, Healthz, Metrics,
 ### Cross-Cutting Findings (All 8 Submodules)
 
 #### Universal: NATS URL Missing Auth Credentials (8/8)
-Every submodule with NATS connectivity defaults to `nats://nats:4222` instead of `nats://nats:pmoves@nats:4222`. Production will work because docker-compose injects the correct URL, but local dev and fallback defaults are insecure.
+Every submodule with NATS connectivity defaults to `nats://nats:4222` instead of `nats://<user>:<password>@nats:4222`. Production will work because docker-compose injects the correct URL, but local dev and fallback defaults are insecure.
 
 **Affected:** Agent Zero, HiRAG, BoTZ, tensorzero, DoX, Open-Notebook, PMOVES.YT, (Pipecat N/A)
 
@@ -204,7 +204,7 @@ All 3 Dockerfiles run as root:
 **P1 — NATS URL Missing Auth**
 - `pmoves_announcer/__init__.py:146` — defaults to `nats://nats:4222`
 - `pmoves_health/__init__.py:146` — defaults to `nats://nats:4222`
-- Should be: `nats://nats:pmoves@nats:4222`
+- Should be: `nats://<user>:<password>@nats:4222`
 
 **P2 — MCP Token Generation Divergence**
 - `python/helpers/settings.py:426` — `normalize_settings()` always regenerates `mcp_server_token`
@@ -429,7 +429,7 @@ All 3 Dockerfiles run as root:
 | # | Submodule | Issue | Status |
 |---|-----------|-------|--------|
 | 1 | Agent Zero | No USER in 3 Dockerfiles | ✅ `USER a0user` in all 3 (on branch tip) |
-| 2 | Agent Zero | NATS URL no auth | ✅ `nats://nats:pmoves@nats:4222` |
+| 2 | Agent Zero | NATS URL no auth | ✅ `nats://<user>:<password>@nats:4222` |
 | 3 | HiRAG | Cypher injection (f-string labels) | ✅ `_ALLOWED_LABELS` frozenset allowlist added (Phase H) |
 | 4 | HiRAG | Default creds | ✅ `:?` required vars |
 | 5 | HiRAG | No API wrapper | Downgraded to P3 — `hi-rag-gateway/` serves endpoints |
@@ -444,7 +444,7 @@ All 3 Dockerfiles run as root:
 | # | Submodule | Issue | Remediation |
 |---|-----------|-------|-------------|
 | 1 | ALL (5) | env.shared export syntax | Strip `export` prefix |
-| 2 | ALL (8) | NATS URL missing auth | Add `nats://nats:pmoves@nats:4222` |
+| 2 | ALL (8) | NATS URL missing auth | Add `nats://<user>:<password>@nats:4222` |
 | 3 | ALL (6) | Default credentials in fallbacks | Use `:?` (fail if unset) |
 | 4 | BoTZ | MCP Gateway no auth | Add bearer/JWT auth middleware |
 | 5 | tensorzero | 30+ example compose with secrets | Add disclaimers, use placeholders |

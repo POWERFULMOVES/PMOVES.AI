@@ -37,7 +37,7 @@ Environment variables:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `NATS_URL` | `nats://nats:pmoves@nats:4222` | NATS connection URL |
+| `NATS_URL` | `nats://<user>:<password>@nats:4222` | NATS connection URL |
 | `HIRAG_URL` | `http://hi-rag-gateway-v2:8086` | Hi-RAG v2 gateway URL |
 | `LABEL_CONFIDENCE_THRESHOLD` | `0.7` | Minimum confidence for auto-labeling |
 | `INDEX_HISTORICAL_ISSUES` | `true` | Index closed issues on startup |

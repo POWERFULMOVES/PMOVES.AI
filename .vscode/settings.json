@@ -49,12 +49,12 @@
     "pmoves-*/": true
   },
   "terminal.integrated.env.windows": {
-    "NATS_URL": "nats://nats:pmoves@localhost:4222",
+    "NATS_URL": "${env:NATS_URL}",
     "CLAUDE_PROJECT_DIR": "${workspaceFolder}",
     "PMOVES_ENV": "dev"
   },
   "terminal.integrated.env.linux": {
-    "NATS_URL": "nats://nats:pmoves@localhost:4222",
+    "NATS_URL": "${env:NATS_URL}",
     "CLAUDE_PROJECT_DIR": "${workspaceFolder}",
     "PMOVES_ENV": "dev"
   },

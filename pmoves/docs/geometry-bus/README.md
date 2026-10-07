@@ -259,7 +259,7 @@ All GEOMETRY BUS participants MUST use this canonical version. Legacy aliases (`
 
 | Variable | Purpose | Default |
 |----------|---------|---------|
-| `NATS_URL` | NATS connection URL | `nats://nats:pmoves@nats:4222` |
+| `NATS_URL` | NATS connection URL | `nats://<user>:<password>@nats:4222` |
 | `CHIT_PROD_PASSPHRASE` | CGP signing key | Required for signing |
 | `SERVICE_NAME` | Service identifier | `<service-name>` |
 | `SERVICE_PORT` | HTTP port | Service-specific |
@@ -351,7 +351,7 @@ nats stream info TOKENISM_CGP
 
 **Issue:** NATS connection failed
 ```
-Solution: Verify NATS_URL includes credentials: nats://nats:pmoves@nats:4222
+Solution: Verify NATS_URL includes credentials: nats://<user>:<password>@nats:4222
 Check: nats server info
 ```
 

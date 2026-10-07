@@ -109,7 +109,7 @@ CGP JSON Input
 FlOO$ is the orchestration layer connecting CHIT to the broader PMOVES ecosystem:
 
 - **SkillDAG class**: Builds directed acyclic graph from `skill-pairings.yaml`, detects cycles, topological sort
-- **NATS integration**: Publishes step completion/error events with PMOVES envelope format (id, topic, ts, version, source, payload, correlation_id). Default URL: `nats://nats:pmoves@nats:4222`
+- **NATS integration**: Publishes step completion/error events with PMOVES envelope format (id, topic, ts, version, source, payload, correlation_id). Default URL: `nats://<user>:<password>@nats:4222`
 - **MCP execution**: Synchronous HTTP POST to localhost MCP endpoints for step execution
 - **Health checking**: TCP port reachability + HTTP health endpoint validation
 - **CLI**: 5 subcommands — `resolve`, `validate`, `status`, `hooks`, `run`

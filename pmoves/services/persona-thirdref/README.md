@@ -32,7 +32,7 @@ spectrum): shared consumption is the homogeneity that lets resonance bind.
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `NATS_URL` | `nats://nats:pmoves@nats:4222` | bus |
+| `NATS_URL` | `nats://<user>:<password>@nats:4222` | bus |
 | `SUPABASE_URL` / `SUPABASE_ANON_KEY` | — | enrichment join |
 | `PERSONA_THIRDREF_TOKEN` | (empty = HTTP off) | record endpoint auth |
 | `PERSONA_THIRDREF_PROFILE_THRESHOLD` | 10 | events per profile update |

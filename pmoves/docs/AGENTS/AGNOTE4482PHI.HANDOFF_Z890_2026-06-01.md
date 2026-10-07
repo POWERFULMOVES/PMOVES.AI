@@ -36,7 +36,7 @@ The 111-file NATS auth issue was confirmed as **main-repo clean** — all `nats:
 ## Lane 2 — NATS Auth Batch Fix (~111 files)
 
 ### Pattern
-Replace `nats://nats:4222` → `nats://nats:pmoves@nats:4222` in submodule source code.
+Replace `nats://nats:4222` → `nats://<user>:<password>@nats:4222` in submodule source code.
 
 ### Leave Alone
 - `nats://localhost:4222` — dev default, acceptable

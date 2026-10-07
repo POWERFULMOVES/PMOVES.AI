@@ -90,7 +90,7 @@ Configure each node's NATS as a leaf node to KVM4-1:
 ```conf
 leafnodes {
   remotes = [
-    { url: "nats://nats:pmoves@${TS_KVM4}:4222" }
+    { url: "nats://<user>:<password>@${TS_KVM4}:4222" }
   ]
 }
 ```

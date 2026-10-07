@@ -19,7 +19,7 @@ marks the message `X-CHIT-Signed: false`.
 }
 ```
 
-- `NATS_CREDS` → binds to the **CORE account** (replaces the legacy `nats:pmoves`
+- `NATS_CREDS` → binds to the **CORE account** (replaces the legacy shared user/password
   plaintext in `NATS_URL`). When unset, falls back to the URL creds (back-compat).
 - `PYTHONPATH=<repo root>` → lets the MCP import the **canonical** signer
   `pmoves.tools.chit_security.sign_cgp`. Without it, CHIT-aware publishes go out

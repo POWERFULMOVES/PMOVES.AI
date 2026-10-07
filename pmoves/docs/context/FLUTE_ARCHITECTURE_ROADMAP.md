@@ -605,7 +605,7 @@ class WhisperProvider:
 ### Environment Variables
 ```bash
 # Required
-NATS_URL=nats://nats:pmoves@nats:4222
+NATS_URL=nats://<user>:<password>@nats:4222
 SUPABASE_URL=http://supabase-kong:8000  # canonical gateway URL (PostgREST/Auth/Storage all routed through Kong)
 SUPABASE_SERVICE_ROLE_KEY=...
 MINIO_ENDPOINT=minio:9000

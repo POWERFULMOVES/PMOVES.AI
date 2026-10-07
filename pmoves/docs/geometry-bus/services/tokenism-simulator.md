@@ -204,7 +204,7 @@ The TypeScript CHIT publisher in the ToKenism submodule separately publishes the
 ```typescript
 // NATS connection (TypeScript)
 const nc = await NATS.connect({
-  servers: "nats://nats:pmoves@nats:4222"
+  servers: "nats://<user>:<password>@nats:4222"
 });
 
 // Subscribe to CGP ready signal
@@ -223,7 +223,7 @@ for await (const msg of sub) {
 
 | Variable | Purpose | Default |
 |----------|---------|---------|
-| `NATS_URL` | NATS connection | `nats://nats:pmoves@nats:4222` |
+| `NATS_URL` | NATS connection | `nats://<user>:<password>@nats:4222` |
 
 ### Optional
 
@@ -245,7 +245,7 @@ tokenism-simulator:
   ports:
     - "${TOKENISM_HOST_PORT:-8103}:8100"
   environment:
-    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - NATS_URL=${NATS_URL:-nats://<user>:<password>@nats:4222}
     - TOKENISM_PORT=${TOKENISM_PORT:-8100}
   depends_on:
     nats-init:
@@ -362,7 +362,7 @@ async def handle_training(msg):
 **Issue:** TypeScript NATS client defaults to unauthenticated
 ```
 Solution: Always provide credentials in connection string:
-servers: "nats://nats:pmoves@nats:4222"
+servers: "nats://<user>:<password>@nats:4222"
 ```
 
 **Issue:** No optimizer convergence is visible
