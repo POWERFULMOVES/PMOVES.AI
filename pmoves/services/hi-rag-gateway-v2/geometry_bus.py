@@ -98,6 +98,22 @@ _room_ws_id: Dict[str, Dict[WebSocket, str]] = {}
 _room_ids: Dict[str, List[str]] = {}
 
 
+def _safe_url(url: Optional[str]) -> str:
+    """URL for logs: userinfo and query dropped (NATS creds, realtime apikey)."""
+    if not url:
+        return ""
+    try:
+        parts = urlparse(url)
+        if not parts.netloc:
+            return url
+        netloc = parts.hostname or ""
+        if parts.port is not None:
+            netloc = f"{netloc}:{parts.port}"
+        return f"{parts.scheme}://{netloc}{parts.path}"
+    except Exception:
+        return "<redacted>"
+
+
 def _room_get(name: str) -> List[WebSocket]:
     return _rooms.setdefault(name, [])
 
@@ -569,7 +585,7 @@ async def subscribe_geometry_cgp() -> None:
             )
             logger.info(
                 "NATS JetStream geometry.cgp.v1 listener started (url=%s, durable=hirag-cgp-consumer)",
-                NATS_URL,
+                _safe_url(NATS_URL),
             )
             await stop_event.wait()
             break
@@ -1002,22 +1018,22 @@ async def lifespan(app: FastAPI):
             api_key = SUPABASE_REALTIME_KEY
             if ws_url and api_key:
                 _geometry_realtime_task = asyncio.create_task(_geometry_realtime_worker(ws_url, api_key))
-                logger.info("Supabase realtime geometry listener started (url=%s)", ws_url)
+                logger.info("Supabase realtime geometry listener started (url=%s)", _safe_url(ws_url))
             else:
                 logger.info("Supabase realtime subscription skipped; missing URL or API key")
         if _geometry_swarm_task is None and NATS_URL:
             if hasattr(nats, "connect"):
                 _geometry_swarm_task = asyncio.create_task(_geometry_swarm_worker())
-                logger.info("NATS geometry.swarm.meta listener started (url=%s)", NATS_URL)
+                logger.info("NATS geometry.swarm.meta listener started (url=%s)", _safe_url(NATS_URL))
                 _content_provenance_task = asyncio.create_task(_content_provenance_worker())
-                logger.info("NATS content.hirag.accepted listener started (url=%s)", NATS_URL)
+                logger.info("NATS content.hirag.accepted listener started (url=%s)", _safe_url(NATS_URL))
             else:
                 logger.info("NATS client unavailable; geometry.swarm.meta/content.hirag.accepted listeners skipped")
 
     # CGP subscriber is independent of ShapeStore availability — start unconditionally.
     if _geometry_cgp_task is None and NATS_URL and hasattr(nats, "connect"):
         _geometry_cgp_task = asyncio.create_task(subscribe_geometry_cgp())
-        logger.info("NATS geometry.cgp.v1 auto-ingest listener started (url=%s)", NATS_URL)
+        logger.info("NATS geometry.cgp.v1 auto-ingest listener started (url=%s)", _safe_url(NATS_URL))
 
     # Pub-gate bridge — env-gated; behavior-identical when PUBLISH_GATE_BRIDGE unset.
     if (
