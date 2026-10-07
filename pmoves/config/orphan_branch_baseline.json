@@ -1,0 +1,396 @@
+{
+  "_doc": "Baseline for pmoves/tools/orphan_branch_ratchet.py. 'remote' maps branch -> {count, kind, reason}: known orphans on origin, tolerated at that count. The list may only SHRINK: a new branch or a higher count fails the ratchet, and every entry needs a non-empty reason. Regenerate with `make -C pmoves orphan-ratchet-baseline` (keeps reasons; new entries get an empty reason that fails until filled). 'local' is keyed by node id (PMOVES_NODE_ID or hostname) and is empty by design: node-side orphans are a triage queue, not a tolerance. '_exempt' names long-lived branches that are not feature branches at all.",
+  "_exempt": {
+    "PMOVES.AI-Edition-Hardened": "Long-lived integration branch, not a feature branch: named as a PR base in every ratchet workflow's `pull_request.branches`, so carrying commits that are not on main is what it is for. Its divergence from main is a fork-sync question, not an orphan.",
+    "PMOVES.AI-Edition-Hardened-Integrations": "Long-lived integration branch and PR base (same `pull_request.branches` lists) layered on PMOVES.AI-Edition-Hardened; not a feature branch."
+  },
+  "remote": {
+    "chore/pmoves-cipher-gitlink-promotion": {
+      "count": 1,
+      "kind": "CLOSED_UNMERGED",
+      "head_window": "2026-07-26..2026-07-26",
+      "prs": [
+        "#2239 CLOSED"
+      ],
+      "reason": "Pre-existing at ratchet introduction (measured 2026-10-07 against origin): 1 commit(s) whose only PR(s) closed unmerged [#2239 CLOSED; authored 2026-07-26..2026-07-26], each applying cleanly to main as a real change (not patch-equivalent, not a no-op replay). Not triaged by the PR that added this baseline; tolerated at this count only -- salvage or record abandonment, then drop the entry."
+    },
+    "chore/upstream-update-pmoves-supabase": {
+      "count": 1,
+      "kind": "POST_MERGE",
+      "head_window": "2026-09-20..2026-09-20",
+      "prs": [
+        "#1967 MERGED",
+        "#3118 CLOSED"
+      ],
+      "reason": "Pre-existing at ratchet introduction (measured 2026-10-07 against origin): 1 commit(s) made after the latest merged PR's head [#1967 MERGED, #3118 CLOSED; authored 2026-09-20..2026-09-20], each applying cleanly to main as a real change (not patch-equivalent, not a no-op replay). Not triaged by the PR that added this baseline; tolerated at this count only -- salvage or record abandonment, then drop the entry."
+    },
+    "design/execution-path-binding": {
+      "count": 1,
+      "kind": "NO_PR",
+      "head_window": "2026-08-30..2026-08-30",
+      "prs": [],
+      "reason": "Pre-existing at ratchet introduction (measured 2026-10-07 against origin): 1 pushed commit(s) never proposed in a PR [no PR ever opened; authored 2026-08-30..2026-08-30], each applying cleanly to main as a real change (not patch-equivalent, not a no-op replay). Not triaged by the PR that added this baseline; tolerated at this count only -- salvage or record abandonment, then drop the entry."
+    },
+    "docs/handoff-z890-launcher-work": {
+      "count": 1,
+      "kind": "CLOSED_UNMERGED",
+      "head_window": "2026-09-20..2026-09-20",
+      "prs": [
+        "#3136 CLOSED"
+      ],
+      "reason": "Pre-existing at ratchet introduction (measured 2026-10-07 against origin): 1 commit(s) whose only PR(s) closed unmerged [#3136 CLOSED; authored 2026-09-20..2026-09-20], each applying cleanly to main as a real change (not patch-equivalent, not a no-op replay). Not triaged by the PR that added this baseline; tolerated at this count only -- salvage or record abandonment, then drop the entry."
+    },
+    "docs/register-b850-lane-closeout": {
+      "count": 4,
+      "kind": "CLOSED_UNMERGED",
+      "head_window": "2026-09-17..2026-09-19",
+      "prs": [
+        "#3102 CLOSED"
+      ],
+      "reason": "Pre-existing at ratchet introduction (measured 2026-10-07 against origin): 4 commit(s) whose only PR(s) closed unmerged [#3102 CLOSED; authored 2026-09-17..2026-09-19], each applying cleanly to main as a real change (not patch-equivalent, not a no-op replay). Not triaged by the PR that added this baseline; tolerated at this count only -- salvage or record abandonment, then drop the entry."
+    },
+    "docs/register-crush-acp-a0-note": {
+      "count": 1,
+      "kind": "CLOSED_UNMERGED",
+      "head_window": "2026-09-25..2026-09-25",
+      "prs": [
+        "#3183 CLOSED"
+      ],
+      "reason": "Pre-existing at ratchet introduction (measured 2026-10-07 against origin): 1 commit(s) whose only PR(s) closed unmerged [#3183 CLOSED; authored 2026-09-25..2026-09-25], each applying cleanly to main as a real change (not patch-equivalent, not a no-op replay). Not triaged by the PR that added this baseline; tolerated at this count only -- salvage or record abandonment, then drop the entry."
+    },
+    "docs/register-guard-trail-finding": {
+      "count": 1,
+      "kind": "CLOSED_UNMERGED",
+      "head_window": "2026-09-19..2026-09-19",
+      "prs": [
+        "#3112 CLOSED"
+      ],
+      "reason": "Pre-existing at ratchet introduction (measured 2026-10-07 against origin): 1 commit(s) whose only PR(s) closed unmerged [#3112 CLOSED; authored 2026-09-19..2026-09-19], each applying cleanly to main as a real change (not patch-equivalent, not a no-op replay). Not triaged by the PR that added this baseline; tolerated at this count only -- salvage or record abandonment, then drop the entry."
+    },
+    "docs/register-minio-restore-bundle-map": {
+      "count": 3,
+      "kind": "CLOSED_UNMERGED",
+      "head_window": "2026-09-26..2026-09-26",
+      "prs": [
+        "#3187 CLOSED"
+      ],
+      "reason": "Pre-existing at ratchet introduction (measured 2026-10-07 against origin): 3 commit(s) whose only PR(s) closed unmerged [#3187 CLOSED; authored 2026-09-26..2026-09-26], each applying cleanly to main as a real change (not patch-equivalent, not a no-op replay). Not triaged by the PR that added this baseline; tolerated at this count only -- salvage or record abandonment, then drop the entry."
+    },
+    "docs/register-secrets-funnel-producers": {
+      "count": 1,
+      "kind": "CLOSED_UNMERGED",
+      "head_window": "2026-09-25..2026-09-25",
+      "prs": [
+        "#3185 CLOSED"
+      ],
+      "reason": "Pre-existing at ratchet introduction (measured 2026-10-07 against origin): 1 commit(s) whose only PR(s) closed unmerged [#3185 CLOSED; authored 2026-09-25..2026-09-25], each applying cleanly to main as a real change (not patch-equivalent, not a no-op replay). Not triaged by the PR that added this baseline; tolerated at this count only -- salvage or record abandonment, then drop the entry."
+    },
+    "docs/register-stranded-note-land": {
+      "count": 1,
+      "kind": "CLOSED_UNMERGED",
+      "head_window": "2026-09-22..2026-09-22",
+      "prs": [
+        "#3146 CLOSED"
+      ],
+      "reason": "Pre-existing at ratchet introduction (measured 2026-10-07 against origin): 1 commit(s) whose only PR(s) closed unmerged [#3146 CLOSED; authored 2026-09-22..2026-09-22], each applying cleanly to main as a real change (not patch-equivalent, not a no-op replay). Not triaged by the PR that added this baseline; tolerated at this count only -- salvage or record abandonment, then drop the entry."
+    },
+    "docs/typesafe-system-one-integration-scan": {
+      "count": 3,
+      "kind": "NO_PR",
+      "head_window": "2026-09-20..2026-09-21",
+      "prs": [],
+      "reason": "Pre-existing at ratchet introduction (measured 2026-10-07 against origin): 3 pushed commit(s) never proposed in a PR [no PR ever opened; authored 2026-09-20..2026-09-21], each applying cleanly to main as a real change (not patch-equivalent, not a no-op replay). Not triaged by the PR that added this baseline; tolerated at this count only -- salvage or record abandonment, then drop the entry."
+    },
+    "feat/a0-chit-hardening": {
+      "count": 1,
+      "kind": "POST_MERGE",
+      "head_window": "2026-10-06..2026-10-06",
+      "prs": [
+        "#3294 MERGED"
+      ],
+      "reason": "Pre-existing at ratchet introduction (measured 2026-10-07 against origin): 1 commit(s) made after the latest merged PR's head [#3294 MERGED; authored 2026-10-06..2026-10-06], each applying cleanly to main as a real change (not patch-equivalent, not a no-op replay). Not triaged by the PR that added this baseline; tolerated at this count only -- salvage or record abandonment, then drop the entry."
+    },
+    "feat/a2ui-ballot-nonce-rev2": {
+      "count": 3,
+      "kind": "CLOSED_UNMERGED",
+      "head_window": "2026-07-15..2026-07-16",
+      "prs": [
+        "#2153 CLOSED"
+      ],
+      "reason": "Pre-existing at ratchet introduction (measured 2026-10-07 against origin): 3 commit(s) whose only PR(s) closed unmerged [#2153 CLOSED; authored 2026-07-15..2026-07-16], each applying cleanly to main as a real change (not patch-equivalent, not a no-op replay). Not triaged by the PR that added this baseline; tolerated at this count only -- salvage or record abandonment, then drop the entry."
+    },
+    "feat/auto-20260714-9d8a9584": {
+      "count": 4,
+      "kind": "NO_PR",
+      "head_window": "2026-07-15..2026-07-16",
+      "prs": [],
+      "reason": "Pre-existing at ratchet introduction (measured 2026-10-07 against origin): 4 pushed commit(s) never proposed in a PR [no PR ever opened; authored 2026-07-15..2026-07-16], each applying cleanly to main as a real change (not patch-equivalent, not a no-op replay). Not triaged by the PR that added this baseline; tolerated at this count only -- salvage or record abandonment, then drop the entry."
+    },
+    "feat/auto-20260720-8d27fc57": {
+      "count": 3,
+      "kind": "NO_PR",
+      "head_window": "2026-07-20..2026-07-20",
+      "prs": [],
+      "reason": "Pre-existing at ratchet introduction (measured 2026-10-07 against origin): 3 pushed commit(s) never proposed in a PR [no PR ever opened; authored 2026-07-20..2026-07-20], each applying cleanly to main as a real change (not patch-equivalent, not a no-op replay). Not triaged by the PR that added this baseline; tolerated at this count only -- salvage or record abandonment, then drop the entry."
+    },
+    "feat/b850-ledger-room": {
+      "count": 1,
+      "kind": "POST_MERGE",
+      "head_window": "2026-09-16..2026-09-16",
+      "prs": [
+        "#2950 MERGED"
+      ],
+      "reason": "Pre-existing at ratchet introduction (measured 2026-10-07 against origin): 1 commit(s) made after the latest merged PR's head [#2950 MERGED; authored 2026-09-16..2026-09-16], each applying cleanly to main as a real change (not patch-equivalent, not a no-op replay). Not triaged by the PR that added this baseline; tolerated at this count only -- salvage or record abandonment, then drop the entry."
+    },
+    "feat/chit-econ-implementation": {
+      "count": 1,
+      "kind": "NO_PR",
+      "head_window": "2026-09-13..2026-09-13",
+      "prs": [],
+      "reason": "Pre-existing at ratchet introduction (measured 2026-10-07 against origin): 1 pushed commit(s) never proposed in a PR [no PR ever opened; authored 2026-09-13..2026-09-13], each applying cleanly to main as a real change (not patch-equivalent, not a no-op replay). Not triaged by the PR that added this baseline; tolerated at this count only -- salvage or record abandonment, then drop the entry."
+    },
+    "feat/cipher-identity-bind": {
+      "count": 4,
+      "kind": "CLOSED_UNMERGED",
+      "head_window": "2026-09-22..2026-09-23",
+      "prs": [
+        "#3145 CLOSED"
+      ],
+      "reason": "Pre-existing at ratchet introduction (measured 2026-10-07 against origin): 4 commit(s) whose only PR(s) closed unmerged [#3145 CLOSED; authored 2026-09-22..2026-09-23], each applying cleanly to main as a real change (not patch-equivalent, not a no-op replay). Not triaged by the PR that added this baseline; tolerated at this count only -- salvage or record abandonment, then drop the entry."
+    },
+    "feat/crush-pinokio-launcher": {
+      "count": 1,
+      "kind": "POST_MERGE",
+      "head_window": "2026-08-05..2026-08-05",
+      "prs": [
+        "#2412 MERGED"
+      ],
+      "reason": "Pre-existing at ratchet introduction (measured 2026-10-07 against origin): 1 commit(s) made after the latest merged PR's head [#2412 MERGED; authored 2026-08-05..2026-08-05], each applying cleanly to main as a real change (not patch-equivalent, not a no-op replay). Not triaged by the PR that added this baseline; tolerated at this count only -- salvage or record abandonment, then drop the entry."
+    },
+    "feat/crush-tailscale-env-passthrough": {
+      "count": 3,
+      "kind": "POST_MERGE",
+      "head_window": "2026-08-03..2026-08-05",
+      "prs": [
+        "#2297 MERGED"
+      ],
+      "reason": "Pre-existing at ratchet introduction (measured 2026-10-07 against origin): 3 commit(s) made after the latest merged PR's head [#2297 MERGED; authored 2026-08-03..2026-08-05], each applying cleanly to main as a real change (not patch-equivalent, not a no-op replay). Not triaged by the PR that added this baseline; tolerated at this count only -- salvage or record abandonment, then drop the entry."
+    },
+    "feat/google-oauth-vertical": {
+      "count": 1,
+      "kind": "POST_MERGE",
+      "head_window": "2026-06-30..2026-06-30",
+      "prs": [
+        "#1908 MERGED"
+      ],
+      "reason": "Pre-existing at ratchet introduction (measured 2026-10-07 against origin): 1 commit(s) made after the latest merged PR's head [#1908 MERGED; authored 2026-06-30..2026-06-30], each applying cleanly to main as a real change (not patch-equivalent, not a no-op replay). Not triaged by the PR that added this baseline; tolerated at this count only -- salvage or record abandonment, then drop the entry."
+    },
+    "feat/gov-stage4b-eligibility-surface": {
+      "count": 1,
+      "kind": "NO_PR",
+      "head_window": "2026-07-18..2026-07-18",
+      "prs": [],
+      "reason": "Pre-existing at ratchet introduction (measured 2026-10-07 against origin): 1 pushed commit(s) never proposed in a PR [no PR ever opened; authored 2026-07-18..2026-07-18], each applying cleanly to main as a real change (not patch-equivalent, not a no-op replay). Not triaged by the PR that added this baseline; tolerated at this count only -- salvage or record abandonment, then drop the entry."
+    },
+    "feat/notebooklm-mcp-integration": {
+      "count": 1,
+      "kind": "CLOSED_UNMERGED",
+      "head_window": "2026-05-29..2026-05-29",
+      "prs": [
+        "#1958 CLOSED"
+      ],
+      "reason": "Pre-existing at ratchet introduction (measured 2026-10-07 against origin): 1 commit(s) whose only PR(s) closed unmerged [#1958 CLOSED; authored 2026-05-29..2026-05-29], each applying cleanly to main as a real change (not patch-equivalent, not a no-op replay). Not triaged by the PR that added this baseline; tolerated at this count only -- salvage or record abandonment, then drop the entry."
+    },
+    "feat/openroom-adapter": {
+      "count": 4,
+      "kind": "CLOSED_UNMERGED",
+      "head_window": "2026-07-24..2026-07-24",
+      "prs": [
+        "#2199 CLOSED"
+      ],
+      "reason": "Pre-existing at ratchet introduction (measured 2026-10-07 against origin): 4 commit(s) whose only PR(s) closed unmerged [#2199 CLOSED; authored 2026-07-24..2026-07-24], each applying cleanly to main as a real change (not patch-equivalent, not a no-op replay). Not triaged by the PR that added this baseline; tolerated at this count only -- salvage or record abandonment, then drop the entry."
+    },
+    "feat/provider-verifier-ci-gate": {
+      "count": 1,
+      "kind": "POST_MERGE",
+      "head_window": "2026-08-19..2026-08-19",
+      "prs": [
+        "#2623 MERGED"
+      ],
+      "reason": "Pre-existing at ratchet introduction (measured 2026-10-07 against origin): 1 commit(s) made after the latest merged PR's head [#2623 MERGED; authored 2026-08-19..2026-08-19], each applying cleanly to main as a real change (not patch-equivalent, not a no-op replay). Not triaged by the PR that added this baseline; tolerated at this count only -- salvage or record abandonment, then drop the entry."
+    },
+    "fix/2941-kilo-dispositions": {
+      "count": 3,
+      "kind": "NO_PR",
+      "head_window": "2026-09-11..2026-09-11",
+      "prs": [],
+      "reason": "Pre-existing at ratchet introduction (measured 2026-10-07 against origin): 3 pushed commit(s) never proposed in a PR [no PR ever opened; authored 2026-09-11..2026-09-11], each applying cleanly to main as a real change (not patch-equivalent, not a no-op replay). Not triaged by the PR that added this baseline; tolerated at this count only -- salvage or record abandonment, then drop the entry."
+    },
+    "fix/a0-nats-url-log-redaction": {
+      "count": 2,
+      "kind": "NO_PR",
+      "head_window": "2026-10-01..2026-10-01",
+      "prs": [],
+      "reason": "Pre-existing at ratchet introduction (measured 2026-10-07 against origin): 2 pushed commit(s) never proposed in a PR [no PR ever opened; authored 2026-10-01..2026-10-01], each applying cleanly to main as a real change (not patch-equivalent, not a no-op replay). Not triaged by the PR that added this baseline; tolerated at this count only -- salvage or record abandonment, then drop the entry."
+    },
+    "fix/a0-usr-perms-durable": {
+      "count": 1,
+      "kind": "CLOSED_UNMERGED",
+      "head_window": "2026-10-01..2026-10-01",
+      "prs": [
+        "#3256 CLOSED"
+      ],
+      "reason": "Pre-existing at ratchet introduction (measured 2026-10-07 against origin): 1 commit(s) whose only PR(s) closed unmerged [#3256 CLOSED; authored 2026-10-01..2026-10-01], each applying cleanly to main as a real change (not patch-equivalent, not a no-op replay). Not triaged by the PR that added this baseline; tolerated at this count only -- salvage or record abandonment, then drop the entry."
+    },
+    "fix/ci-collects-pmoves-tests": {
+      "count": 2,
+      "kind": "POST_MERGE",
+      "head_window": "2026-08-26..2026-08-27",
+      "prs": [
+        "#2777 CLOSED",
+        "#2785 MERGED",
+        "#2791 CLOSED"
+      ],
+      "reason": "Pre-existing at ratchet introduction (measured 2026-10-07 against origin): 2 commit(s) made after the latest merged PR's head [#2777 CLOSED, #2785 MERGED, #2791 CLOSED; authored 2026-08-26..2026-08-27], each applying cleanly to main as a real change (not patch-equivalent, not a no-op replay). Not triaged by the PR that added this baseline; tolerated at this count only -- salvage or record abandonment, then drop the entry."
+    },
+    "fix/cipher-mint-handoff-and-revoke": {
+      "count": 1,
+      "kind": "NO_PR",
+      "head_window": "2026-09-17..2026-09-17",
+      "prs": [],
+      "reason": "Pre-existing at ratchet introduction (measured 2026-10-07 against origin): 1 pushed commit(s) never proposed in a PR [no PR ever opened; authored 2026-09-17..2026-09-17], each applying cleanly to main as a real change (not patch-equivalent, not a no-op replay). Not triaged by the PR that added this baseline; tolerated at this count only -- salvage or record abandonment, then drop the entry."
+    },
+    "fix/cipher-search-memoryid-followup": {
+      "count": 1,
+      "kind": "POST_MERGE",
+      "head_window": "2026-07-14..2026-07-14",
+      "prs": [
+        "#2119 MERGED"
+      ],
+      "reason": "Pre-existing at ratchet introduction (measured 2026-10-07 against origin): 1 commit(s) made after the latest merged PR's head [#2119 MERGED; authored 2026-07-14..2026-07-14], each applying cleanly to main as a real change (not patch-equivalent, not a no-op replay). Not triaged by the PR that added this baseline; tolerated at this count only -- salvage or record abandonment, then drop the entry."
+    },
+    "fix/f5-tts-license-repoint": {
+      "count": 1,
+      "kind": "CLOSED_UNMERGED",
+      "head_window": "2026-07-10..2026-07-10",
+      "prs": [
+        "#2045 CLOSED"
+      ],
+      "reason": "Pre-existing at ratchet introduction (measured 2026-10-07 against origin): 1 commit(s) whose only PR(s) closed unmerged [#2045 CLOSED; authored 2026-07-10..2026-07-10], each applying cleanly to main as a real change (not patch-equivalent, not a no-op replay). Not triaged by the PR that added this baseline; tolerated at this count only -- salvage or record abandonment, then drop the entry."
+    },
+    "fix/juicefs-mount-hardening": {
+      "count": 1,
+      "kind": "NO_PR",
+      "head_window": "2026-08-07..2026-08-07",
+      "prs": [],
+      "reason": "Pre-existing at ratchet introduction (measured 2026-10-07 against origin): 1 pushed commit(s) never proposed in a PR [no PR ever opened; authored 2026-08-07..2026-08-07], each applying cleanly to main as a real change (not patch-equivalent, not a no-op replay). Not triaged by the PR that added this baseline; tolerated at this count only -- salvage or record abandonment, then drop the entry."
+    },
+    "fix/openroom-p7-upstream-alias": {
+      "count": 1,
+      "kind": "CLOSED_UNMERGED",
+      "head_window": "2026-09-03..2026-09-03",
+      "prs": [
+        "#2922 CLOSED"
+      ],
+      "reason": "Pre-existing at ratchet introduction (measured 2026-10-07 against origin): 1 commit(s) whose only PR(s) closed unmerged [#2922 CLOSED; authored 2026-09-03..2026-09-03], each applying cleanly to main as a real change (not patch-equivalent, not a no-op replay). Not triaged by the PR that added this baseline; tolerated at this count only -- salvage or record abandonment, then drop the entry."
+    },
+    "fix/remove-orphans-guard": {
+      "count": 1,
+      "kind": "NO_PR",
+      "head_window": "2026-08-07..2026-08-07",
+      "prs": [],
+      "reason": "Pre-existing at ratchet introduction (measured 2026-10-07 against origin): 1 pushed commit(s) never proposed in a PR [no PR ever opened; authored 2026-08-07..2026-08-07], each applying cleanly to main as a real change (not patch-equivalent, not a no-op replay). Not triaged by the PR that added this baseline; tolerated at this count only -- salvage or record abandonment, then drop the entry."
+    },
+    "fix/secret-shape-validation-at-delivery": {
+      "count": 3,
+      "kind": "NO_PR",
+      "head_window": "2026-09-11..2026-09-11",
+      "prs": [],
+      "reason": "Pre-existing at ratchet introduction (measured 2026-10-07 against origin): 3 pushed commit(s) never proposed in a PR [no PR ever opened; authored 2026-09-11..2026-09-11], each applying cleanly to main as a real change (not patch-equivalent, not a no-op replay). Not triaged by the PR that added this baseline; tolerated at this count only -- salvage or record abandonment, then drop the entry."
+    },
+    "fix/studio-room-visibility": {
+      "count": 1,
+      "kind": "CLOSED_UNMERGED",
+      "head_window": "2026-09-28..2026-09-28",
+      "prs": [
+        "#3218 CLOSED"
+      ],
+      "reason": "Pre-existing at ratchet introduction (measured 2026-10-07 against origin): 1 commit(s) whose only PR(s) closed unmerged [#3218 CLOSED; authored 2026-09-28..2026-09-28], each applying cleanly to main as a real change (not patch-equivalent, not a no-op replay). Not triaged by the PR that added this baseline; tolerated at this count only -- salvage or record abandonment, then drop the entry."
+    },
+    "fix/topology-guard-rfc1918": {
+      "count": 1,
+      "kind": "NO_PR",
+      "head_window": "2026-09-12..2026-09-12",
+      "prs": [],
+      "reason": "Pre-existing at ratchet introduction (measured 2026-10-07 against origin): 1 pushed commit(s) never proposed in a PR [no PR ever opened; authored 2026-09-12..2026-09-12], each applying cleanly to main as a real change (not patch-equivalent, not a no-op replay). Not triaged by the PR that added this baseline; tolerated at this count only -- salvage or record abandonment, then drop the entry."
+    },
+    "fix/wger-api-auth-bypass-protection": {
+      "count": 1,
+      "kind": "POST_MERGE",
+      "head_window": "2026-08-05..2026-08-05",
+      "prs": [
+        "#2419 MERGED"
+      ],
+      "reason": "Pre-existing at ratchet introduction (measured 2026-10-07 against origin): 1 commit(s) made after the latest merged PR's head [#2419 MERGED; authored 2026-08-05..2026-08-05], each applying cleanly to main as a real change (not patch-equivalent, not a no-op replay). Not triaged by the PR that added this baseline; tolerated at this count only -- salvage or record abandonment, then drop the entry."
+    },
+    "infra/cipher-compose-and-launcher-identity": {
+      "count": 1,
+      "kind": "NO_PR",
+      "head_window": "2026-09-17..2026-09-17",
+      "prs": [],
+      "reason": "Pre-existing at ratchet introduction (measured 2026-10-07 against origin): 1 pushed commit(s) never proposed in a PR [no PR ever opened; authored 2026-09-17..2026-09-17], each applying cleanly to main as a real change (not patch-equivalent, not a no-op replay). Not triaged by the PR that added this baseline; tolerated at this count only -- salvage or record abandonment, then drop the entry."
+    },
+    "research/comprehensive-analysis-2026-07-09": {
+      "count": 8,
+      "kind": "POST_MERGE",
+      "head_window": "2026-07-08..2026-07-08",
+      "prs": [
+        "#2018 MERGED"
+      ],
+      "reason": "Pre-existing at ratchet introduction (measured 2026-10-07 against origin): 8 commit(s) made after the latest merged PR's head [#2018 MERGED; authored 2026-07-08..2026-07-08], each applying cleanly to main as a real change (not patch-equivalent, not a no-op replay). Not triaged by the PR that added this baseline; tolerated at this count only -- salvage or record abandonment, then drop the entry."
+    },
+    "research/hyperagintz-moniker-design-2026-10-05": {
+      "count": 1,
+      "kind": "NO_PR",
+      "head_window": "2026-10-05..2026-10-05",
+      "prs": [],
+      "reason": "Pre-existing at ratchet introduction (measured 2026-10-07 against origin): 1 pushed commit(s) never proposed in a PR [no PR ever opened; authored 2026-10-05..2026-10-05], each applying cleanly to main as a real change (not patch-equivalent, not a no-op replay). Not triaged by the PR that added this baseline; tolerated at this count only -- salvage or record abandonment, then drop the entry."
+    },
+    "research/titan-mail-mcp": {
+      "count": 1,
+      "kind": "NO_PR",
+      "head_window": "2026-08-03..2026-08-03",
+      "prs": [],
+      "reason": "Pre-existing at ratchet introduction (measured 2026-10-07 against origin): 1 pushed commit(s) never proposed in a PR [no PR ever opened; authored 2026-08-03..2026-08-03], each applying cleanly to main as a real change (not patch-equivalent, not a no-op replay). Not triaged by the PR that added this baseline; tolerated at this count only -- salvage or record abandonment, then drop the entry."
+    },
+    "review-iter-1": {
+      "count": 4,
+      "kind": "NO_PR",
+      "head_window": "2026-07-24..2026-07-24",
+      "prs": [],
+      "reason": "Pre-existing at ratchet introduction (measured 2026-10-07 against origin): 4 pushed commit(s) never proposed in a PR [no PR ever opened; authored 2026-07-24..2026-07-24], each applying cleanly to main as a real change (not patch-equivalent, not a no-op replay). Not triaged by the PR that added this baseline; tolerated at this count only -- salvage or record abandonment, then drop the entry."
+    },
+    "review-iter-2": {
+      "count": 4,
+      "kind": "NO_PR",
+      "head_window": "2026-07-24..2026-07-24",
+      "prs": [],
+      "reason": "Pre-existing at ratchet introduction (measured 2026-10-07 against origin): 4 pushed commit(s) never proposed in a PR [no PR ever opened; authored 2026-07-24..2026-07-24], each applying cleanly to main as a real change (not patch-equivalent, not a no-op replay). Not triaged by the PR that added this baseline; tolerated at this count only -- salvage or record abandonment, then drop the entry."
+    },
+    "review-iter-3": {
+      "count": 4,
+      "kind": "NO_PR",
+      "head_window": "2026-07-24..2026-07-24",
+      "prs": [],
+      "reason": "Pre-existing at ratchet introduction (measured 2026-10-07 against origin): 4 pushed commit(s) never proposed in a PR [no PR ever opened; authored 2026-07-24..2026-07-24], each applying cleanly to main as a real change (not patch-equivalent, not a no-op replay). Not triaged by the PR that added this baseline; tolerated at this count only -- salvage or record abandonment, then drop the entry."
+    },
+    "wip/mcp-project-roster": {
+      "count": 2,
+      "kind": "NO_PR",
+      "head_window": "2026-09-23..2026-09-23",
+      "prs": [],
+      "reason": "Pre-existing at ratchet introduction (measured 2026-10-07 against origin): 2 pushed commit(s) never proposed in a PR [no PR ever opened; authored 2026-09-23..2026-09-23], each applying cleanly to main as a real change (not patch-equivalent, not a no-op replay). Not triaged by the PR that added this baseline; tolerated at this count only -- salvage or record abandonment, then drop the entry."
+    }
+  },
+  "local": {}
+}
