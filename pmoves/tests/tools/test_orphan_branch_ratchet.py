@@ -367,6 +367,128 @@ def test_conflicting_commit_is_uncertain_and_not_counted(capsys, fx):
     assert code == 0
 
 
+def _union_register(fx: Fixture) -> None:
+    """A merge=union file on main, like pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md."""
+    git(fx.work, "checkout", "-q", "main")
+    (fx.work / ".gitattributes").write_text("register.md merge=union\n", encoding="utf-8")
+    (fx.work / "register.md").write_text("row A\n", encoding="utf-8")
+    git(fx.work, "add", ".gitattributes", "register.md")
+    git(fx.work, "commit", "-q", "-m", "register")
+    git(fx.work, "push", "-q", "origin", "main")
+
+
+def _append_row(fx: Fixture, branch: str, row: str) -> str:
+    fx.branch(branch)
+    with (fx.work / "register.md").open("a", encoding="utf-8", newline="\n") as fh:
+        fh.write(row + "\n")
+    git(fx.work, "commit", "-q", "-am", f"append {row}")
+    fx.push(branch)
+    return git(fx.work, "rev-parse", "HEAD")
+
+
+def test_union_file_row_already_on_main_is_landed(capsys, fx):
+    """Review P2 on #3306: merge=union makes merge-tree replay an
+    already-landed register row "cleanly" by DUPLICATING it, so the tree
+    differs and the commit read as an orphan (8 of 92 baselined commits)."""
+    _union_register(fx)
+    row_b = _append_row(fx, "docs/reg-landed", "row B")
+    # Main gets row B too, through another PR, at a different position.
+    git(fx.work, "checkout", "-q", "main")
+    with (fx.work / "register.md").open("a", encoding="utf-8", newline="\n") as fh:
+        fh.write("row C\nrow B\nrow D\n")  # B lands mid-run, with rows after it
+    git(fx.work, "commit", "-q", "-am", "other PRs land C, B, D")
+    git(fx.work, "push", "-q", "origin", "main")
+
+    # Sanity: the raw replay really is clean AND tree-changing (the old bug).
+    main_sha = git(fx.work, "rev-parse", "main")
+    tree = git(fx.work, "merge-tree", "--write-tree", f"--merge-base={row_b}^", main_sha, row_b)
+    assert tree != git(fx.work, "rev-parse", "main^{tree}"), "fixture must reproduce the duplicate"
+
+    code, out = run(capsys, fx, "remote")
+    assert "docs/reg-landed" not in by_branch(out)
+    assert "docs/reg-landed" not in [u["branch"] for u in out["uncertain"]]
+    assert code == 0
+
+
+def test_union_file_genuinely_new_row_is_an_orphan(capsys, fx):
+    _union_register(fx)
+    _append_row(fx, "docs/reg-new", "row D")
+    git(fx.work, "checkout", "-q", "main")
+    with (fx.work / "register.md").open("a", encoding="utf-8", newline="\n") as fh:
+        fh.write("row C\n")
+    git(fx.work, "commit", "-q", "-am", "main moves on")
+    git(fx.work, "push", "-q", "origin", "main")
+
+    code, out = run(capsys, fx, "remote")
+    assert by_branch(out)["docs/reg-new"]["count"] == 1
+    assert code == 1
+
+
+def test_exempt_branch_is_skipped(capsys, fx):
+    fx.branch("integration/long-lived")
+    commit(fx.work, "i1", "x\n")
+    fx.push("integration/long-lived")
+    base = fx.baseline({"_exempt": {"integration/long-lived": "PR base branch"},
+                        "remote": {}, "local": {}})
+    code, out = run(capsys, fx, "remote", "--baseline", str(base))
+    assert "integration/long-lived" not in by_branch(out)
+    assert code == 0
+
+
+def test_exempt_entry_without_reason_fails(capsys, fx):
+    base = fx.baseline({"_exempt": {"integration/long-lived": " "}, "remote": {}, "local": {}})
+    code, out = run(capsys, fx, "remote", "--baseline", str(base))
+    assert code == 1
+    assert any("_exempt" in p for p in out["baseline_problems"])
+
+
+def test_pr_list_at_limit_is_could_not_measure(capsys, fx, monkeypatch):
+    """A truncated PR list makes merged branches look orphaned: exit 3."""
+    real_run = obr.subprocess.run
+
+    def fake_run(cmd, *a, **kw):
+        if cmd[0] == "fake-gh":
+            prs = [{"number": i, "state": "MERGED", "headRefName": f"b{i}", "headRefOid": "0" * 40,
+                    "isCrossRepository": False} for i in range(2)]
+            return subprocess.CompletedProcess(cmd, 0, json.dumps(prs), "")
+        return real_run(cmd, *a, **kw)
+
+    monkeypatch.setattr(obr, "PR_LIMIT", 2)
+    monkeypatch.setattr(obr.subprocess, "run", fake_run)
+    git(fx.work, "fetch", "-q", "origin")
+    code = obr.main(["remote", "--repo", str(fx.work), "--baseline", str(fx.baseline()),
+                     "--gh", "fake-gh"])
+    assert code == 3
+    assert "limit" in capsys.readouterr().err
+
+
+def test_missing_merged_head_is_fetched_from_refs_pull_without_moving_refs(capsys, fx):
+    """Force-pushed after merge: the merged head lives only at refs/pull/N/head.
+    The tool fetches it (objects only) and measures, instead of exit 3."""
+    other = fx.tmp / "other"
+    git(fx.tmp, "clone", "-q", str(fx.origin), str(other))
+    git(other, "checkout", "-q", "-b", "pr-head", "origin/main")
+    merged_head = commit(other, "m1", "merged\n")
+    git(other, "push", "-q", "origin", f"{merged_head}:refs/pull/95/head")
+    fx.pr("fix/forced", merged_head, "MERGED", 95)
+
+    fx.branch("fix/forced")
+    commit(fx.work, "f1", "after\n")
+    fx.push("fix/forced")
+    git(fx.work, "fetch", "-q", "origin")
+    assert subprocess.run(["git", "cat-file", "-e", f"{merged_head}^{{commit}}"],
+                          cwd=fx.work, capture_output=True).returncode != 0
+    before = git(fx.work, "for-each-ref", "--format=%(refname) %(objectname)")
+
+    code = obr.main(["remote", "--repo", str(fx.work), "--json", "--prs-json", str(fx.prs_file()),
+                     "--baseline", str(fx.baseline())])
+    out = json.loads(capsys.readouterr().out)
+    assert out["unmeasured"] == []
+    assert by_branch(out)["fix/forced"]["kind"] == "POST_MERGE"
+    assert code == 1
+    assert git(fx.work, "for-each-ref", "--format=%(refname) %(objectname)") == before
+
+
 def test_gh_unavailable_is_could_not_measure_not_a_pass(capsys, fx, tmp_path):
     """No --prs-json and a gh that does not exist: exit 3, never 0."""
     git(fx.work, "fetch", "-q", "origin")

@@ -53,12 +53,16 @@ Two modes:
           the branch's merged PR head. Kinds: NO_UPSTREAM, UPSTREAM_GONE,
           AHEAD_OF_UPSTREAM, DETACHED_WORKTREE.
 
-READ-ONLY. It runs `git ls-remote`, `rev-list`, `cherry`, `log`,
-`for-each-ref`, `worktree list` and `gh pr list`. It never pushes, deletes, or
-rewrites anything, and moves no ref. The one write is to the OBJECT STORE: when
-a branch was force-pushed after its PR merged, the merged head is reachable
-from no branch, so it fetches `refs/pull/N/head` with `--no-write-fetch-head`
-and no destination (objects only). `--no-fetch-pr-heads` disables even that.
+READ-ONLY. It runs `git ls-remote`, `rev-list`, `rev-parse`, `cherry`, `log`,
+`cat-file`, `diff`, `show`, `check-attr`, `merge-tree --write-tree`,
+`for-each-ref`, `worktree list`, `fetch` (below) and `gh pr list`. It never
+pushes, deletes, or rewrites anything, and moves no ref. Writes go to the
+OBJECT STORE only: `merge-tree --write-tree` writes tree/blob objects, and when
+a branch was force-pushed after its PR merged (so the merged head is reachable
+from no branch) it fetches `refs/pull/N/head` with `--no-write-fetch-head`,
+`--refmap=` (so a node whose config maps refs/pull/* never gets a tracking ref
+updated), `--no-auto-gc`, and no destination. `--no-fetch-pr-heads` disables
+the fetch.
 Triage of what it finds is a human/agent act.
 
 Ratchet (pmoves/config/orphan_branch_baseline.json)
@@ -148,6 +152,18 @@ def _git(repo: Path, *args: str, stdin: str | None = None, check: bool = True) -
     if check and proc.returncode != 0:
         raise CouldNotMeasure(f"git {' '.join(args[:3])} failed: {proc.stderr.strip()[:300]}")
     return proc.stdout
+
+
+def _git_rc(repo: Path, *args: str) -> tuple[int, str]:
+    """Like _git(check=False) but also returns the exit code."""
+    try:
+        proc = subprocess.run(
+            ["git", *args], cwd=repo, capture_output=True, text=True,
+            encoding="utf-8", errors="replace",
+        )
+    except FileNotFoundError as exc:
+        raise CouldNotMeasure(f"git not found: {exc}") from exc
+    return proc.returncode, proc.stdout
 
 
 def ls_remote_heads(repo: Path, remote: str) -> Dict[str, str]:
@@ -314,17 +330,19 @@ class Scan:
 def _recommend(kind: str, prs: List[dict], merged: Optional[dict], upstream: str, wt: Optional[str]) -> str:
     if kind == "POST_MERGE":
         return (
-            f"commits landed after PR #{merged['number']} merged and are on no open PR: "
-            "open a follow-up PR from this branch or salvage them onto a fresh branch "
-            "off main; delete the branch only after triage."
+            f"commits made after PR #{merged['number']} merged change main and are on no "
+            "open PR. Either stranded (open a follow-up PR or salvage onto a fresh branch) "
+            "or deliberately superseded/declined (record that); delete only after triage."
         )
     if kind == "CLOSED_UNMERGED":
         return (
-            f"every PR from this branch was closed unmerged (latest #{prs[-1]['number']}): "
-            "re-propose the work in a new PR or record the abandonment, then delete the branch."
+            f"every PR from this branch was closed unmerged (latest #{prs[-1]['number']}). "
+            "Often a deliberate decline/supersede (record it); otherwise re-propose in a "
+            "new PR. Delete the branch only after triage."
         )
     if kind == "NO_PR":
-        return "pushed but never proposed: open a PR, or record why this branch lives off main."
+        return ("pushed but never proposed: open a PR, or record why this branch lives off "
+                "main (scratch, superseded, or declined work also lands here).")
     if kind == "NO_UPSTREAM":
         return "never pushed -- this disk holds the only copy: push it and open a PR, or salvage it."
     if kind == "UPSTREAM_GONE":
@@ -375,9 +393,22 @@ def classify_content(repo: Path, base_sha: str, commits: Sequence[str]) -> tuple
 
         git merge-tree --write-tree --merge-base=C^ <main> C
 
-      clean, tree == main's tree   -> LANDED   (applying C changes nothing)
-      clean, tree != main's tree   -> ORPHAN   (C's change is not on main)
-      conflict / root / error      -> UNCERTAIN (main moved; cannot prove either)
+      exit 0, tree == main's tree  -> LANDED   (applying C changes nothing)
+      exit 0, tree != main's tree  -> ORPHAN   (C's change is not on main)
+                                      ...unless _union_already_on_main(), below
+      exit 1 (conflict)            -> UNCERTAIN (main moved; cannot prove either)
+      any other exit / root commit -> UNCERTAIN (merge-tree could not run)
+
+    merge=union FILES. merge-tree honours .gitattributes, and the claim register
+    (pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md) is `merge=union`. A commit that
+    appends a row which is ALREADY on main -- landed through another PR at a
+    different position -- therefore replays "cleanly" by duplicating the row,
+    the tree differs, and it read as an ORPHAN. Review of PR #3306 measured 8
+    such false orphans (e.g. f22eacbb5). `--attr-source=<empty tree>` is NOT the
+    fix: it turns genuine appends (a37a08d47) into conflicts. Instead a clean,
+    tree-changing replay is LANDED when every path C changes is merge=union and
+    every line C adds is already present, verbatim, in main's copy of that path
+    (and every line it removes is already absent there).
 
     merge-tree writes tree objects only; no ref, index or worktree is touched.
     """
@@ -386,17 +417,49 @@ def classify_content(repo: Path, base_sha: str, commits: Sequence[str]) -> tuple
     landed: List[str] = []
     uncertain: List[str] = []
     for c in commits:
-        out = _git(repo, "merge-tree", "--write-tree", f"--merge-base={c}^", base_sha, c, check=False)
+        rc, out = _git_rc(repo, "merge-tree", "--write-tree", f"--merge-base={c}^", base_sha, c)
         lines = out.splitlines()
         tree = lines[0].strip() if lines else ""
-        proc_clean = len(lines) == 1 and len(tree) in (40, 64)
-        if proc_clean and tree == base_tree:
+        clean = rc == 0 and len(lines) == 1 and len(tree) in (40, 64)
+        if clean and tree == base_tree:
             landed.append(c)
-        elif proc_clean:
+        elif clean and _union_already_on_main(repo, base_sha, c):
+            landed.append(c)
+        elif clean:
             orphan.append(c)
         else:
+            # rc 1 = conflict; anything else = merge-tree could not run (root
+            # commit, missing parent, git error). Neither proves landed or not.
             uncertain.append(c)
     return orphan, landed, uncertain
+
+
+def _union_already_on_main(repo: Path, base_sha: str, c: str) -> bool:
+    """True when C touches only merge=union paths and its whole diff is
+    already reflected in main: every added line present, every removed line
+    absent. See classify_content for why (duplicated register rows)."""
+    paths = [p for p in _git(repo, "diff", "--name-only", "--no-renames", f"{c}^", c).splitlines() if p]
+    if not paths:
+        return False
+    for path in paths:
+        rc, attr = _git_rc(repo, "check-attr", "--source", base_sha, "merge", "--", path)
+        if rc != 0:
+            rc, attr = _git_rc(repo, "check-attr", "merge", "--", path)
+        if rc != 0 or not attr.strip().endswith(": merge: union"):
+            return False
+        rc, blob = _git_rc(repo, "show", f"{base_sha}:{path}")
+        if rc != 0:
+            return False
+        on_main = {ln.rstrip("\r") for ln in blob.splitlines()}
+        diff = _git(repo, "diff", "--no-color", "--no-renames", "--unified=0", f"{c}^", c, "--", path)
+        for ln in diff.splitlines():
+            if ln.startswith(("+++", "---")):
+                continue
+            if ln.startswith("+") and ln[1:].rstrip("\r") not in on_main:
+                return False
+            if ln.startswith("-") and ln[1:].rstrip("\r") in on_main:
+                return False
+    return True
 
 
 def _record(repo: Path, scan: Scan, base_sha: str, name: str, kind: str, cand: List[str],
@@ -427,12 +490,14 @@ def fetch_pr_head(repo: Path, remote: str, number: int) -> None:
     Needed when a branch was force-pushed after its PR merged: the merged head
     is then reachable from no branch, so a normal fetch never brings it, and
     without it we cannot say which commits came after the merge. This writes
-    OBJECTS only -- `--no-write-fetch-head`, no refspec destination -- so no
-    ref, branch or remote-tracking ref moves. Failure is not raised here; the
-    caller re-checks presence and reports could-not-measure.
+    OBJECTS only: `--no-write-fetch-head`, no refspec destination, and an
+    empty `--refmap=` so a remote configured with a refs/pull/* fetch refspec
+    still gets no tracking ref updated; `--no-auto-gc` keeps it from pruning.
+    Failure is not raised here; the caller re-checks presence and reports
+    could-not-measure.
     """
-    _git(repo, "fetch", "--quiet", "--no-tags", "--no-write-fetch-head", remote,
-         f"refs/pull/{number}/head", check=False)
+    _git(repo, "fetch", "--quiet", "--no-tags", "--no-write-fetch-head", "--refmap=",
+         "--no-auto-gc", remote, f"refs/pull/{number}/head", check=False)
 
 
 def _drop_merged_head(repo: Path, branch: str, sha: str, cand: List[str], prs: List[dict],
@@ -524,9 +589,11 @@ def scan_local(repo: Path, remote: str, base: str,
     have = present(repo, heads.values())
     if base_sha not in have:
         raise CouldNotMeasure(f"{remote}/{base} {base_sha[:12]} not in the local object store; fetch first")
-    # A commit reachable from any LIVE remote head is pushed. Heads we have not
-    # fetched cannot be used as an exclusion; a local commit is never only
-    # reachable from an object we do not have, so dropping them is safe.
+    # A commit reachable from any LIVE remote head is pushed. A head we have
+    # not fetched cannot be used as an exclusion (we do not have its history),
+    # so if someone pushed ON TOP of our commit and we have not fetched, that
+    # commit reads as unpushed -- a false positive, never a false negative.
+    # Run `git fetch` first; the make target's help says so.
     pushed_tips = sorted(have)
     wt_by_branch, detached = _worktrees(repo)
     refs = _git(
@@ -711,6 +778,8 @@ def _print_human(scan: Scan, remote: str, base: str, node: str, stale: List[str]
     verdict = {EXIT_CLEAN: "PASS", EXIT_FINDINGS: "FAIL (new orphan, growth, or unreasoned baseline entry)",
                EXIT_CANNOT_MEASURE: "COULD NOT MEASURE (not a pass)"}[code]
     print(f"  verdict: {verdict}")
+    print("  (the ratchet compares per-branch COUNTS: a baselined branch that swaps "
+          "one orphan commit for another at the same count still passes)")
 
 
 def main(argv: Optional[List[str]] = None,
