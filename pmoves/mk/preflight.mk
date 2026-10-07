@@ -343,6 +343,56 @@ showtime-links-open: ## Build clickable UI/API verification pages and open in br
 showtime-links-strict: ## Build verification pages and fail if required endpoints are down
 	@$(PRECHECK_PY) tools/showtime_verify_links.py --strict $(ARGS)
 
+# ----------------------------------------------------------------------------
+# Glances host probe (2026-10-07) -- docs/operations/GLANCES_RUNBOOK.md
+#   glances-check  - glances >= GLANCES_MIN_VERSION and `from glances import api` works
+#   glances-fetch  - one-shot host sitrep (no IPs; Docker "unreachable" != "0")
+# One-shot only. There is deliberately NO server target: `glances -w` binds all
+# interfaces with no auth by default -- see the runbook's security rule.
+# Resolution: GLANCES_BIN (pin) > .venv-pmoves (Windows, then POSIX) > PATH.
+# ----------------------------------------------------------------------------
+GLANCES_BIN ?=
+GLANCES_MIN_VERSION ?= 4.4
+GLANCES_TEMPLATE ?= config/glances/pmoves-sitrep.jinja
+define GLANCES_RESOLVE
+g="$(GLANCES_BIN)"; \
+if [ -n "$$g" ] && ! "$$g" --version >/dev/null 2>&1; then echo "ERROR: GLANCES_BIN=$$g is not a runnable glances"; exit 2; fi; \
+if [ -z "$$g" ]; then \
+  for c in .venv-pmoves/Scripts/glances.exe .venv-pmoves/bin/glances; do \
+    if [ -f "$$c" ] && "$$c" --version >/dev/null 2>&1; then g="$$c"; break; fi; \
+  done; \
+fi; \
+if [ -z "$$g" ] && command -v glances >/dev/null 2>&1; then g="$$(command -v glances)"; fi; \
+if [ -z "$$g" ]; then \
+  echo "ERROR: glances not found (checked GLANCES_BIN, pmoves/.venv-pmoves, PATH)."; \
+  echo "  Install (uv, never pip): uv pip install --python .venv-pmoves/Scripts/python.exe 'glances[containers,gpu]>=4.5.7,<4.6'"; \
+  echo "  POSIX: same with .venv-pmoves/bin/python. See docs/operations/GLANCES_RUNBOOK.md#install"; \
+  exit 2; \
+fi
+endef
+
+.PHONY: glances-check glances-fetch
+glances-check: ## Glances probe preflight: version >= GLANCES_MIN_VERSION (4.4) and Python API import (GLANCES_BIN= to pin)
+	@$(GLANCES_RESOLVE); \
+	real="$$(readlink -f "$$g" 2>/dev/null || echo "$$g")"; dir="$$(dirname "$$real")"; py=""; \
+	for c in "$$dir/python.exe" "$$dir/python" "$$dir/python3"; do [ -f "$$c" ] && { py="$$c"; break; }; done; \
+	if [ -z "$$py" ]; then echo "ERROR: no interpreter beside $$real -- cannot verify the Python API (pin GLANCES_BIN to a venv glances)"; exit 2; fi; \
+	echo "glances binary: $$g"; \
+	PYTHONIOENCODING=utf-8 "$$py" -c "import glances; from glances import api; v = glances.__version__; need = tuple(int(x) for x in '$(GLANCES_MIN_VERSION)'.split('.')); have = tuple(int(x) for x in v.split('.')[:2]); print('glances version:', v, '(need >=', '$(GLANCES_MIN_VERSION)' + ')'); assert have >= need, 'glances ' + v + ' is older than $(GLANCES_MIN_VERSION): the Python API (glances.api) needs >= 4.4'; gl = api.GlancesAPI(); dw = getattr(gl.containers, 'watchers', {}).get('docker'); print('python API: GlancesAPI() OK,', len(gl.plugins()), 'plugins'); print('docker watcher:', 'extra missing (glances[containers])' if dw is None else ('reachable' if dw.client is not None else 'UNREACHABLE')); print('gpu plugin:', len(gl.gpu.get_raw()), 'GPU(s) visible')" \
+	  && echo "glances-check: OK"
+
+glances-fetch: ## One-shot host sitrep via `glances --fetch` (PMOVES template: no IPs; GLANCES_TEMPLATE= for upstream stock, which prints the IP)
+	@$(GLANCES_RESOLVE); \
+	tpl="$(GLANCES_TEMPLATE)"; \
+	if [ -n "$$tpl" ]; then \
+	  [ -f "$$tpl" ] || { echo "ERROR: fetch template not found: $$tpl"; exit 2; }; \
+	  set -- --fetch-template "$$tpl"; \
+	else \
+	  echo "WARNING: upstream stock fetch template prints the host IP -- do not paste this output into PRs/notes."; \
+	  set --; \
+	fi; \
+	PYTHONIOENCODING=utf-8 "$$g" --fetch "$$@" $(ARGS)
+
 bringup-showtime: ## Bring up stack and run retro readiness (Hyperdimensions/BotZ/Evo/Flute aware)
 	@echo "→ Showtime bring-up starting..."
 	@watcher_pid=""; \

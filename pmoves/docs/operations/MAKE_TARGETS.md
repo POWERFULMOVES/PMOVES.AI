@@ -356,6 +356,12 @@ This file summarizes the most-used targets and maps them to what they do under d
   - Same as `showtime-links` and opens the generated HTML file in your default browser.
 - `make showtime-links-strict`
   - Same artifacts, but fails if required core endpoints are down (`SHOWTIME_REQUIRED_NAMES` override available).
+- `make glances-check`
+  - Glances host-probe preflight: Glances >= 4.4 (`GLANCES_MIN_VERSION`) and `from glances import api` / `GlancesAPI()` works; reports the Docker watcher (reachable / UNREACHABLE / extra missing) and visible GPUs.
+  - Resolves `GLANCES_BIN` (pin) > `pmoves/.venv-pmoves` > `PATH`; exits 2 with the uv install line when missing. See `docs/operations/GLANCES_RUNBOOK.md`.
+- `make glances-fetch`
+  - One-shot host sitrep (`glances --fetch`) with `PYTHONIOENCODING=utf-8` and the PMOVES template `config/glances/pmoves-sitrep.jinja` (no IP/network/port fields; prints "DOCKER unreachable" instead of 0 containers; shows the vmmemWSL VM on Windows).
+  - `GLANCES_TEMPLATE=` uses the upstream stock template, which prints the host IP (warned). There is deliberately no server target.
 - `make smoke-showtime`
   - Runs core smoke + production monitoring smoke with the live watcher active.
   - Includes `showtime-links-strict` so endpoint click-through verification doubles as part of smoke.

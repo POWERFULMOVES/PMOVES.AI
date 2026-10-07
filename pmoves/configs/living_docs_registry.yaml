@@ -171,6 +171,10 @@ tracked:
     freshness_days: 90
     severity: P2
     description: "Per-service health endpoint truth — reference for compose healthchecks and Prometheus blackbox probes"
+  - path: pmoves/docs/operations/GLANCES_RUNBOOK.md
+    freshness_days: 90
+    severity: P2
+    description: "Sanctioned host probe on every node (Glances, pinned release) — install, loopback/tailnet-only start-up, one-shot sitrep, blind spots, and the 2026-10-06 z890 Docker Desktop auto-update incident. Consulted when a node is already in trouble."
 
   # ── Access-path + secrets-road docs (enrolled 2026-09-04) ──────────────────
   # These describe how an operator or agent REACHES the fleet and how credentials

@@ -104,11 +104,11 @@ host_clis:
       linux: "curl -LsSf https://astral.sh/uv/install.sh | sh"
     check: "uv --version"
   glances:
-    purpose: "Glances — hardware probe backend (node profiles, ghost detector)"
+    purpose: "Glances — hardware probe backend (node profiles, ghost detector); sanctioned one-shot host probe (make -C pmoves glances-fetch / glances-check). Runbook: docs/operations/GLANCES_RUNBOOK.md"
     required: false
     install:
-      windows: "pip install glances[web]"
-      linux: "pip install glances[web]  # or brew install glances"
+      windows: "cd pmoves && uv pip install --python .venv-pmoves/Scripts/python.exe \"glances[containers,gpu]>=4.5.7,<4.6\"  # uv, never pip; add 'web' only where the loopback/tailnet server runs"
+      linux: "cd pmoves && uv pip install --python .venv-pmoves/bin/python \"glances[containers,gpu]>=4.5.7,<4.6\"  # uv, never pip"
     check: "glances --version"
   skills:
     purpose: "Open skills ecosystem package manager (vercel-labs/skills CLI, via npx) — backs the find-skills meta-skill"
