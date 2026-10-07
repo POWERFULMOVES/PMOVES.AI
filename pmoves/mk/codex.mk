@@ -304,6 +304,10 @@ secrets-ensure-check: ## Fail if any stack-generated secret is still unprovision
 	  $(CODEX_PY) scripts/bootstrap_env.py --ensure-dry-run $(foreach k,$(SECRETS_ENSURE_KEYS),--ensure $(k)); \
 	fi
 
+.PHONY: secrets-derive-nats-url
+secrets-derive-nats-url: ## Re-derive NATS_URL credentials in env.shared from NATS_USER/NATS_PASSWORD (no-op when consistent; never prints values)
+	@$(CODEX_PY) tools/derive_nats_url.py
+
 secrets-funnel: ## Portable secrets flow: env repair -> local hydrate -> CHIT export -> manifest sync -> urlencode -> audit gates (FORCE=1 to overwrite stale)
 	@$(MAKE) --no-print-directory env-shared-repair
 	@$(MAKE) --no-print-directory secrets-local-hydrate
@@ -312,6 +316,9 @@ secrets-funnel: ## Portable secrets flow: env repair -> local hydrate -> CHIT ex
 	@# target's chit-export prerequisite encodes env.shared into the CGP bundle.
 	@# Mint after this point and the bundle is already sealed without the value.
 	@$(MAKE) --no-print-directory secrets-ensure-generated
+	@# Same ordering rule: NATS_URL embeds NATS_PASSWORD, so re-derive it before
+	@# the bundle is sealed or a password rotation ships a stale URL.
+	@$(MAKE) --no-print-directory secrets-derive-nats-url
 	@$(MAKE) --no-print-directory secrets-funnel-sync
 	@$(CODEX_PY) tools/credential_urlencoder.py
 	@$(MAKE) --no-print-directory secrets-audit
@@ -324,6 +331,8 @@ secrets-rotate: ## Rotate ONE secret in env.shared then re-funnel. Usage: make s
 	$(if $(strip $(KEY)),,$(error Usage: make -C pmoves secrets-rotate KEY=<env.shared key> [VALUE=<minted>] [LEN=<n>]. For values with shell-active chars ($$ ` \ " ') instead: export PMOVES_ROTATE_VALUE=<minted> first. Generates a random_urlsafe value when neither is set.))
 	@echo "→ Rotating $(KEY) in env.shared (surgical, single-line)"
 	@$(CODEX_PY) scripts/bootstrap_env.py --rotate "$(KEY)" $(if $(PMOVES_ROTATE_VALUE),--value-env PMOVES_ROTATE_VALUE,$(if $(VALUE),--value "$(VALUE)",)) $(if $(LEN),--length $(LEN),)
+	@# NATS_URL embeds the NATS credential; keep it in step (no-op for other keys).
+	@$(MAKE) --no-print-directory secrets-derive-nats-url
 	@# Rotation is a LEGITIMATE reason to re-export, so force past the CI-bundle
 	@# guard rather than failing the road -- but say plainly what was replaced.
 	@# The defect this fixes was never the overwrite; it was the SILENCE. A local
