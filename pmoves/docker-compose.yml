@@ -3378,9 +3378,12 @@ services:
     - ${NATS_PASSWORD:-pmoves}
     restart: unless-stopped
     ports:
-    # NATS is the mesh-wide event bus — credential-guarded (nats:***@),
-    # so 0.0.0.0 default is intentional to allow Tailscale mesh peers to connect.
-    - ${NATS_BIND:-0.0.0.0}:${NATS_PORT:-4222}:4222
+    # Loopback by default (secure-by-default, PORT_BINDING_MODEL.md). In-stack
+    # clients reach the broker over the docker network, not this host port, and
+    # host tools use localhost:4222. A node that must serve the bus to mesh peers
+    # opts in with NATS_BIND=<node tailnet IP> -- never 0.0.0.0 on a multi-homed
+    # or public host. The account-based hub below keeps its own explicit binds.
+    - ${NATS_BIND:-127.0.0.1}:${NATS_PORT:-4222}:4222
     # Monitoring (8222) is NOT credential-guarded — it answered HTTP 200
     # unauthenticated on the LAN IP, exposing /varz, /connz (connected clients)
     # and /subsz (subject subscriptions). It shared NATS_BIND with 4222, so it
