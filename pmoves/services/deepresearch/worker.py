@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from textwrap import shorten
 from typing import Any, Dict, List
+from services.common.redact import redact_url
 
 
 def _collect_text(value: Any, output: List[str]) -> None:
@@ -956,7 +957,7 @@ async def main() -> None:
 
     # Now connect to NATS
     await nc.connect(servers=[nats_url])
-    LOGGER.info("DeepResearch worker connected to NATS at %s", nats_url)
+    LOGGER.info("DeepResearch worker connected to NATS at %s", redact_url(nats_url))
 
     async def cb(msg: Msg) -> None:
         await _handle_request(msg, runner, publisher, nc)

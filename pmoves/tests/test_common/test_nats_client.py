@@ -92,9 +92,11 @@ def test_redact_url_strips_userinfo():
     """NATS credentials are not emitted in connection logs."""
     from pmoves.services.common import nats_client as nc_mod
 
+    # Delegates to the canonical services/common/redact.py, which masks the
+    # userinfo span as ``***`` rather than dropping it.
     assert (
         nc_mod._redact_url("nats://pmoves:secret@nats.example:4222")
-        == "nats://nats.example:4222"
+        == "nats://***@nats.example:4222"
     )
     assert nc_mod._redact_url("nats://nats.example:4222") == "nats://nats.example:4222"
 

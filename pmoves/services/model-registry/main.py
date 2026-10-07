@@ -56,6 +56,39 @@ from pmoves.services.common.model_fitness import (  # noqa: E402
 )
 
 try:
+    from services.common.redact import redact_url
+except ImportError:  # image ships without services/common; copy of services/common/redact.py
+    import re as _re
+
+    def redact_url(url):
+        if url is None:
+            return ""
+        text = str(url)
+        spans = []
+        prev_at = -1
+        for match in _re.finditer("@", text):
+            at = match.start()
+            scheme = text.find("://", prev_at + 1, at)
+            if scheme >= 0 and (not spans or _re.search(r"[\s,;'\"()<>|\[\]{}]", text[prev_at + 1:scheme])):
+                spans.append([scheme + 3, at])
+            elif spans:
+                spans[-1][1] = at
+            else:
+                spans.append([0, at])
+            prev_at = at
+        out = []
+        pos = 0
+        for start, end in spans:
+            out.append(text[pos:start] + "***")
+            pos = end
+        out.append(text[pos:])
+        return _re.sub(
+            r"(?i)([?&;#][\w.\-]*(?:password|passwd|pwd|pass|secret|token|key|auth|signature|sig)[\w.\-]*=)[^&#;\s]*",
+            r"\1***",
+            "".join(out),
+        )
+
+try:
     from nats.aio.client import Client as NATS
     from nats.aio.errors import ErrConnectionClosed, ErrTimeout
     NATS_AVAILABLE = True
@@ -91,7 +124,7 @@ async def lifespan(app: FastAPI):
     # Startup
     logger.info("PMOVES Model Registry starting up...")
     logger.info(f"Supabase URL: {SUPABASE_URL}")
-    logger.info(f"NATS URL: {NATS_URL}")
+    logger.info(f"NATS URL: {redact_url(NATS_URL)}")
 
     # Connect to NATS for GPU event sync + catalog change publishing
     nats_client = RegistryNatsClient(NATS_URL, supabase)
@@ -397,7 +430,7 @@ class RegistryNatsClient:
                 max_reconnect_attempts=-1,
             )
             self._connected = True
-            logger.info(f"Model Registry connected to NATS at {self.nats_url}")
+            logger.info(f"Model Registry connected to NATS at {redact_url(self.nats_url)}")
 
             # Subscribe to GPU orchestrator events
             await self._nc.subscribe(self.SUB_MODEL_LOADED, cb=self._on_model_loaded)
@@ -783,8 +816,8 @@ async def health_check():
         status="healthy",
         timestamp=datetime.utcnow().isoformat(),
         services={
-            "supabase": SUPABASE_URL,
-            "nats": NATS_URL
+            "supabase": redact_url(SUPABASE_URL),
+            "nats": redact_url(NATS_URL)
         }
     )
 

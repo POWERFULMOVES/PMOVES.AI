@@ -22,6 +22,39 @@ from yt_dlp import YoutubeDL
 from .config import ensure_config, save_config
 from .youtube_api import AccessToken, YouTubeAPIClient, YouTubeAPIError
 
+try:
+    from services.common.redact import redact_url
+except ImportError:  # image ships without services/common; copy of services/common/redact.py
+    import re as _re
+
+    def redact_url(url):
+        if url is None:
+            return ""
+        text = str(url)
+        spans = []
+        prev_at = -1
+        for match in _re.finditer("@", text):
+            at = match.start()
+            scheme = text.find("://", prev_at + 1, at)
+            if scheme >= 0 and (not spans or _re.search(r"[\s,;'\"()<>|\[\]{}]", text[prev_at + 1:scheme])):
+                spans.append([scheme + 3, at])
+            elif spans:
+                spans[-1][1] = at
+            else:
+                spans.append([0, at])
+            prev_at = at
+        out = []
+        pos = 0
+        for start, end in spans:
+            out.append(text[pos:start] + "***")
+            pos = end
+        out.append(text[pos:])
+        return _re.sub(
+            r"(?i)([?&;#][\w.\-]*(?:password|passwd|pwd|pass|secret|token|key|auth|signature|sig)[\w.\-]*=)[^&#;\s]*",
+            r"\1***",
+            "".join(out),
+        )
+
 LOGGER = logging.getLogger("channel_monitor")
 
 VALID_STATUSES = {"pending", "processing", "queued", "completed", "failed"}
@@ -748,10 +781,10 @@ class ChannelMonitor:
             try:
                 self._pool = await asyncpg.create_pool(self.database_url, min_size=1, max_size=5)
             except (asyncpg.PostgresConnectionError, OSError) as exc:
-                LOGGER.critical("Failed to connect to database at %s: %s", self.database_url, exc)
+                LOGGER.critical("Failed to connect to database at %s: %s", redact_url(self.database_url), exc)
                 raise RuntimeError(
                     f"Database connection failed for channel-monitor. "
-                    f"Check network connectivity and Supabase status. URL: {self.database_url}"
+                    f"Check network connectivity and Supabase status. URL: {redact_url(self.database_url)}"
                 ) from exc
         await self._ensure_tables()
         await self._load_processed_videos()

@@ -30,7 +30,6 @@ import os
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from typing import Any, AsyncIterator, Callable, Optional, Sequence
-from urllib.parse import urlsplit, urlunsplit
 
 logger = logging.getLogger(__name__)
 
@@ -59,21 +58,11 @@ def _env_float(name: str, default: float) -> float:
         return default
 
 
-def _redact_url(url: str) -> str:
-    """Return *url* with userinfo removed for safe logging."""
-    try:
-        parts = urlsplit(url)
-        if not parts.netloc or "@" not in parts.netloc:
-            return url
-        host = parts.hostname or ""
-        if ":" in host and not host.startswith("["):
-            host = f"[{host}]"
-        netloc = host
-        if parts.port is not None:
-            netloc = f"{netloc}:{parts.port}"
-        return urlunsplit((parts.scheme, netloc, parts.path, parts.query, parts.fragment))
-    except Exception:
-        return "<redacted>"
+# Canonical, fail-closed implementation lives in services/common/redact.py.
+from services.common.redact import redact_url  # noqa: E402
+
+# Back-compat alias for the original private name.
+_redact_url = redact_url
 
 
 @dataclass
@@ -158,7 +147,7 @@ async def create_nats_connection(
     service_name = config.name or "unknown"
     logger.info(
         "Connecting to NATS at %s (service=%s)",
-        _redact_url(config.url),
+        redact_url(config.url),
         service_name,
     )
 

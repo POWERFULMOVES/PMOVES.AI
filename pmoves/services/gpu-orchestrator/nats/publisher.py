@@ -16,6 +16,39 @@ except ImportError:
 
 from config import get_settings
 
+try:
+    from services.common.redact import redact_url
+except ImportError:  # image ships without services/common; copy of services/common/redact.py
+    import re as _re
+
+    def redact_url(url):
+        if url is None:
+            return ""
+        text = str(url)
+        spans = []
+        prev_at = -1
+        for match in _re.finditer("@", text):
+            at = match.start()
+            scheme = text.find("://", prev_at + 1, at)
+            if scheme >= 0 and (not spans or _re.search(r"[\s,;'\"()<>|\[\]{}]", text[prev_at + 1:scheme])):
+                spans.append([scheme + 3, at])
+            elif spans:
+                spans[-1][1] = at
+            else:
+                spans.append([0, at])
+            prev_at = at
+        out = []
+        pos = 0
+        for start, end in spans:
+            out.append(text[pos:start] + "***")
+            pos = end
+        out.append(text[pos:])
+        return _re.sub(
+            r"(?i)([?&;#][\w.\-]*(?:password|passwd|pwd|pass|secret|token|key|auth|signature|sig)[\w.\-]*=)[^&#;\s]*",
+            r"\1***",
+            "".join(out),
+        )
+
 logger = logging.getLogger(__name__)
 
 
@@ -76,7 +109,7 @@ class GpuNatsPublisher:
                 max_reconnect_attempts=-1,  # Unlimited
             )
             self._connected = True
-            logger.info(f"Connected to NATS at {self.nats_url}")
+            logger.info(f"Connected to NATS at {redact_url(self.nats_url)}")
             return True
 
         except Exception as e:

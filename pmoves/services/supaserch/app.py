@@ -36,12 +36,42 @@ CGP_PUBLISH_ENABLED = os.getenv("CGP_PUBLISH_ENABLED", "true").strip().lower() =
 CGP_SUBJECT = os.getenv("CGP_SUBJECT", "geometry.cgp.v1")
 
 
-def _redact_url(url: str) -> str:
-    p = urlparse(url)
-    if not p.username:
-        return url
-    netloc = p.hostname + (f":{p.port}" if p.port else "")
-    return urlunparse(p._replace(netloc=netloc))
+try:
+    from services.common.redact import redact_url
+except ImportError:  # image ships without services/common; copy of services/common/redact.py
+    import re as _re
+
+    def redact_url(url):
+        if url is None:
+            return ""
+        text = str(url)
+        spans = []
+        prev_at = -1
+        for match in _re.finditer("@", text):
+            at = match.start()
+            scheme = text.find("://", prev_at + 1, at)
+            if scheme >= 0 and (not spans or _re.search(r"[\s,;'\"()<>|\[\]{}]", text[prev_at + 1:scheme])):
+                spans.append([scheme + 3, at])
+            elif spans:
+                spans[-1][1] = at
+            else:
+                spans.append([0, at])
+            prev_at = at
+        out = []
+        pos = 0
+        for start, end in spans:
+            out.append(text[pos:start] + "***")
+            pos = end
+        out.append(text[pos:])
+        return _re.sub(
+            r"(?i)([?&;#][\w.\-]*(?:password|passwd|pwd|pass|secret|token|key|auth|signature|sig)[\w.\-]*=)[^&#;\s]*",
+            r"\1***",
+            "".join(out),
+        )
+
+
+# Former private redactor; fail-open on unencoded / # ? , in passwords (PR #3244).
+_redact_url = redact_url
 
 
 # Module-level task reference for proper cleanup
@@ -519,10 +549,10 @@ async def _connect_nats() -> None:
         app.state.nats = nc
         await nc.subscribe("supaserch.request.v1", cb=_handle_nats_message)
         NATS_CONNECTION_GAUGE.set(1)
-        logger.info("Connected to NATS at %s", _redact_url(url))
+        logger.info("Connected to NATS at %s", redact_url(url))
     except Exception as exc:  # noqa: BLE001
         NATS_CONNECTION_GAUGE.set(0)
-        logger.warning("Failed to connect to NATS at %s: %s", _redact_url(url), exc)
+        logger.warning("Failed to connect to NATS at %s: %s", redact_url(url), exc)
 
 
 @app.get("/healthz")

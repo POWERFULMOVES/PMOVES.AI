@@ -50,6 +50,39 @@ import uuid
 from typing import Any, Dict
 
 try:
+    from services.common.redact import redact_url
+except ImportError:  # image ships without services/common; copy of services/common/redact.py
+    import re as _re
+
+    def redact_url(url):
+        if url is None:
+            return ""
+        text = str(url)
+        spans = []
+        prev_at = -1
+        for match in _re.finditer("@", text):
+            at = match.start()
+            scheme = text.find("://", prev_at + 1, at)
+            if scheme >= 0 and (not spans or _re.search(r"[\s,;'\"()<>|\[\]{}]", text[prev_at + 1:scheme])):
+                spans.append([scheme + 3, at])
+            elif spans:
+                spans[-1][1] = at
+            else:
+                spans.append([0, at])
+            prev_at = at
+        out = []
+        pos = 0
+        for start, end in spans:
+            out.append(text[pos:start] + "***")
+            pos = end
+        out.append(text[pos:])
+        return _re.sub(
+            r"(?i)([?&;#][\w.\-]*(?:password|passwd|pwd|pass|secret|token|key|auth|signature|sig)[\w.\-]*=)[^&#;\s]*",
+            r"\1***",
+            "".join(out),
+        )
+
+try:
     import nats
 except ImportError:
     print("ERROR: nats-py not installed. Install with: pip install nats-py", file=sys.stderr)
@@ -111,7 +144,7 @@ async def run_test(nats_url: str, wait_seconds: float, text: str) -> int:
     publish_ts: float | None = None
     receive_ts: float | None = None
 
-    print(f"voice-chain-e2e: connecting to NATS at {nats_url}")
+    print(f"voice-chain-e2e: connecting to NATS at {redact_url(nats_url)}")
     try:
         nc = await nats.connect(nats_url, connect_timeout=5)
     except Exception as exc:

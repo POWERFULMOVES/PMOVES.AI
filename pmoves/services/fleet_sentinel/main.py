@@ -38,6 +38,39 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 
+try:
+    from services.common.redact import redact_url
+except ImportError:  # image ships without services/common; copy of services/common/redact.py
+    import re as _re
+
+    def redact_url(url):
+        if url is None:
+            return ""
+        text = str(url)
+        spans = []
+        prev_at = -1
+        for match in _re.finditer("@", text):
+            at = match.start()
+            scheme = text.find("://", prev_at + 1, at)
+            if scheme >= 0 and (not spans or _re.search(r"[\s,;'\"()<>|\[\]{}]", text[prev_at + 1:scheme])):
+                spans.append([scheme + 3, at])
+            elif spans:
+                spans[-1][1] = at
+            else:
+                spans.append([0, at])
+            prev_at = at
+        out = []
+        pos = 0
+        for start, end in spans:
+            out.append(text[pos:start] + "***")
+            pos = end
+        out.append(text[pos:])
+        return _re.sub(
+            r"(?i)([?&;#][\w.\-]*(?:password|passwd|pwd|pass|secret|token|key|auth|signature|sig)[\w.\-]*=)[^&#;\s]*",
+            r"\1***",
+            "".join(out),
+        )
+
 logger = logging.getLogger("fleet_sentinel")
 
 NATS_URL = os.environ.get("NATS_URL", "nats://nats:4222")
@@ -239,12 +272,12 @@ class FleetSentinel:
         ok = bool(await self.listener.start())
         if not ok:
             self.listener = None
-            self.listener_error = f"ServiceAnnouncementListener.start() returned False ({NATS_URL})"
-            logger.error("announce listener FAILED to start (%s)", NATS_URL)
+            self.listener_error = f"ServiceAnnouncementListener.start() returned False ({redact_url(NATS_URL)})"
+            logger.error("announce listener FAILED to start (%s)", redact_url(NATS_URL))
             return False
         self.listener_mode = "common"
         self.listener_error = None
-        logger.info("announce listener started (%s)", NATS_URL)
+        logger.info("announce listener started (%s)", redact_url(NATS_URL))
         return True
 
     async def _start_raw_listener(self) -> bool:
@@ -276,12 +309,12 @@ class FleetSentinel:
             await nc.subscribe("services.announce.v1", cb=cb)
         except Exception as exc:
             self.listener_error = f"raw listener connect failed: {exc}"
-            logger.error("raw announce listener FAILED (%s): %s", NATS_URL, exc)
+            logger.error("raw announce listener FAILED (%s): %s", redact_url(NATS_URL), exc)
             return False
         self._raw_nc = nc
         self.listener_mode = "raw"
         self.listener_error = None
-        logger.info("raw announce listener started (%s)", NATS_URL)
+        logger.info("raw announce listener started (%s)", redact_url(NATS_URL))
         return True
 
     # -- health polling ------------------------------------------------------

@@ -128,25 +128,15 @@ def _build_nats_url() -> str:
     return f"nats://{host}:{port}"
 
 
-def _redact_url_password(url: str) -> str:
-    try:
-        split = urlsplit(url)
-    except Exception:
-        return url
-    if not split.netloc:
-        return url
-    host = split.hostname or ""
-    port = f":{split.port}" if split.port else ""
-    user = split.username
-    if user:
-        netloc = f"{user}:<redacted>@{host}{port}"
-    else:
-        netloc = f"{host}{port}"
-    return urlunsplit((split.scheme, netloc, split.path, split.query, split.fragment))
+from services.common.redact import redact_url
+
+
+# Former private redactor; fail-open on unencoded / # ? , in passwords (PR #3244).
+_redact_url_password = redact_url
 
 
 NATS_URL = _build_nats_url()
-NATS_URL_REDACTED = _redact_url_password(NATS_URL)
+NATS_URL_REDACTED = redact_url(NATS_URL)
 SUPABASE_URL = os.getenv("SUPABASE_URL", "http://localhost:3010")
 SUPABASE_KEY = get_secret("SUPABASE_SERVICE_ROLE_KEY", "")
 # Ultimate-TTS-Studio: native Pinokio at 7860, Docker at 7861.
