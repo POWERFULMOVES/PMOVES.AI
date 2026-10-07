@@ -424,6 +424,54 @@ def test_union_file_genuinely_new_row_is_an_orphan(capsys, fx):
     assert code == 1
 
 
+def test_union_check_fails_closed_when_sourced_check_attr_cannot_run(capsys, fx, monkeypatch):
+    """Review thread on #3306: with no worktree fallback, an unusable
+    `check-attr --source` (git < 2.40) must leave the commit an ORPHAN --
+    never wave it through as LANDED on worktree/global attributes."""
+    _union_register(fx)
+    _append_row(fx, "docs/reg-landed", "row B")
+    git(fx.work, "checkout", "-q", "main")
+    with (fx.work / "register.md").open("a", encoding="utf-8", newline="\n") as fh:
+        fh.write("row C\nrow B\nrow D\n")
+    git(fx.work, "commit", "-q", "-am", "other PRs land C, B, D")
+    git(fx.work, "push", "-q", "origin", "main")
+
+    real = obr._git_rc
+    calls = []
+
+    def old_git(repo, *args):
+        if args[:2] == ("check-attr", "--source"):
+            calls.append(args)
+            return 129, ""  # what git < 2.40 does with an unknown option
+        return real(repo, *args)
+
+    monkeypatch.setattr(obr, "_git_rc", old_git)
+    code, out = run(capsys, fx, "remote")
+    assert calls, "the sourced probe must be attempted"
+    assert by_branch(out)["docs/reg-landed"]["count"] == 1
+    assert code == 1
+
+
+@pytest.mark.parametrize("payload", [
+    {"remote": None, "local": {}},
+    {"remote": "oops", "local": {}},
+])
+def test_malformed_remote_baseline_section_is_could_not_measure(capsys, fx, payload):
+    code, out = run(capsys, fx, "remote", "--baseline", str(fx.baseline(payload)))
+    assert code == 3
+    assert "baseline section" in out["error"]
+
+
+@pytest.mark.parametrize("payload", [
+    {"remote": {}, "local": None},
+    {"remote": {}, "local": {"testnode": []}},
+])
+def test_malformed_local_baseline_section_is_could_not_measure(capsys, fx, payload):
+    code, out = run(capsys, fx, "local", "--baseline", str(fx.baseline(payload)))
+    assert code == 3
+    assert "baseline section" in out["error"]
+
+
 def test_exempt_branch_is_skipped(capsys, fx):
     fx.branch("integration/long-lived")
     commit(fx.work, "i1", "x\n")

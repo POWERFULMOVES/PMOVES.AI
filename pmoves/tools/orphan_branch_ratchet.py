@@ -442,9 +442,12 @@ def _union_already_on_main(repo: Path, base_sha: str, c: str) -> bool:
     if not paths:
         return False
     for path in paths:
+        # Attributes AS OF MAIN's tree, so a .gitattributes the commit itself
+        # carries cannot vote. No worktree fallback: if the sourced probe
+        # cannot run (git < 2.40 has no --source), fail CLOSED -- not provably
+        # union-only, so the commit stays an ORPHAN rather than being waved
+        # through as LANDED. A ratchet may over-report; it must not drift down.
         rc, attr = _git_rc(repo, "check-attr", "--source", base_sha, "merge", "--", path)
-        if rc != 0:
-            rc, attr = _git_rc(repo, "check-attr", "merge", "--", path)
         if rc != 0 or not attr.strip().endswith(": merge: union"):
             return False
         rc, blob = _git_rc(repo, "show", f"{base_sha}:{path}")
@@ -668,9 +671,26 @@ def read_baseline(path: Path) -> dict:
 
 
 def section(data: dict, mode: str, node: str) -> Dict[str, dict]:
+    """The baseline section for this mode/node, created empty if absent.
+
+    A hand-edit that leaves `"remote": null` or `"local": "x"` must surface as
+    COULD NOT MEASURE (exit 3), not as a raw traceback that exits 1 and reads
+    as "findings" -- the same doctrine read_baseline applies to bad JSON.
+    """
     if mode == "remote":
-        return data.setdefault("remote", {})
-    return data.setdefault("local", {}).setdefault(node, {})
+        sec = data.setdefault("remote", {})
+    else:
+        local = data.setdefault("local", {})
+        if not isinstance(local, dict):
+            raise CouldNotMeasure(
+                f"baseline section 'local' must be an object of node -> entries, "
+                f"got {type(local).__name__}")
+        sec = local.setdefault(node, {})
+    if not isinstance(sec, dict):
+        raise CouldNotMeasure(
+            f"baseline section {mode!r} must be an object of branch -> entry, "
+            f"got {type(sec).__name__}")
+    return sec
 
 
 def validate_section(entries: Dict[str, dict], exempt: Dict[str, str]) -> List[str]:
@@ -806,6 +826,7 @@ def main(argv: Optional[List[str]] = None,
 
     try:
         data = read_baseline(args.baseline)
+        section(data, args.mode, node)  # shape-check now, inside the exit-3 net
         exempt = data.get("_exempt") or {}
         if not isinstance(exempt, dict):
             raise CouldNotMeasure("baseline '_exempt' must be an object of branch -> reason")
