@@ -105,6 +105,7 @@ See `research/SUBMODULE_SYNC_AUDIT_2026-06-07.md` for the live drift backlog.
       (kills the duplication; standardizes on client-id v3).
 - [ ] **Retire PATs the App can replace**: `GH_PAT`, `GH_PAT_PUBLISH`, `GHCR_TOKEN`,
       `ACTIONS_PAT`, (partly) `CI_GIT_CLONE_TOKEN`. Then retire `pat-health-check.yml`.
+      > **Correction (2026-10-01):** `GHCR_TOKEN` (and any PAT used only for GHCR) is NOT replaceable by the App. GitHub Packages "only supports authentication using a personal access token (classic)" (GitHub docs, `data/reusables/package_registry/packages-classic-pat-only.md`); App installation tokens and fine-grained PATs are not a documented GHCR credential. In workflows `GITHUB_TOKEN` covers packages linked to the repo; node-side pulls use `make -C pmoves docker-login GHCR_READ_TOKEN_FILE=...` with a `read:packages`-only classic PAT.
 - [ ] **Fix GHCR org packages:write** so the App token stops falling back to PATs
       for image pushes (app-install setting, not a workflow change).
 - [ ] **Drop unused App permissions** (e.g. secrets:write, security_events:write if

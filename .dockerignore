@@ -5,3 +5,8 @@ pmoves/jellyfin-ai/neo4j/import/**
 pmoves/jellyfin-ai/redis
 pmoves/jellyfin-ai/redis/*
 pmoves/jellyfin-ai/redis/**
+
+# Signing-card key halves written by pmoves-keygen (gitignored); see
+# pmoves/.dockerignore. Excluded from root-context builds too.
+pmoves/chit/keys/
+pmoves/chit/keys/**

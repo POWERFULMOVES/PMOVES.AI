@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Resolve which node a session is on, and which registered agent it IS.
 
-The launcher selects a ROLE (`--agent node-steward`). That answers "what am I
-doing", never "who am I". This module answers the second question, and is the
+A launcher may select a ROLE (`--agent node-steward`; since 2026-10-01 only on
+request -- the default main session carries no agent). A role answers "what am
+I doing", never "who am I". This module answers the second question, and is the
 half `pmoves/config/agent_registry.yaml`'s `topology.node_affinity` was written
 for but nothing read.
 

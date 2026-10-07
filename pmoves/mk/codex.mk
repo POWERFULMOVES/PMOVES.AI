@@ -188,7 +188,7 @@ gh-app-token: ## Mint a GitHub App installation token (dsh github agent). REPOSI
 	if [ -n "$(PERMISSIONS)" ]; then args="$$args --permissions $(PERMISSIONS)"; fi; \
 	if [ -n "$(OUT)" ]; then args="$$args --out $(OUT)"; fi; \
 	if [ "$(ALL)" = "1" ]; then \
-	  if [ "$$(CONFIRM)" != "1" ]; then echo "ALL=1 mints installation-default scope; pass CONFIRM=1 to acknowledge" >&2; exit 3; fi; \
+	  if [ "$(CONFIRM)" != "1" ]; then echo "ALL=1 mints installation-default scope; pass CONFIRM=1 to acknowledge" >&2; exit 3; fi; \
 	  args="$$args --all --yes"; \
 	fi; \
 	PYTHONPATH="$(CURDIR)/.." $(CODEX_PY) tools/gh_app_token.py $$args

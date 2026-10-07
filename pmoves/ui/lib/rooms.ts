@@ -194,17 +194,20 @@ export async function loadRooms(roomConfigDir = DEFAULT_ROOM_CONFIG_DIR): Promis
 }
 
 /**
- * A room is public (safe for an unauthenticated launcher) unless its manifest
- * marks it private/unlisted or opts out of the public catalog. Private persona
- * rooms (e.g. darkxsides.room) must never surface on the shared home page.
+ * FAIL CLOSED: a room is public (safe for an unauthenticated launcher) only if
+ * its manifest has an access block, access.visibility is exactly 'public', and
+ * neither exclude_from_public_catalog nor owner_only is true. A missing access
+ * block, a missing visibility, or an unrecognised value (e.g. a typo) is NOT
+ * public. The old default was public, which listed 9850x3d-rdna4.room.studio
+ * on the shared home page from #3165 until #3218. Private persona rooms (e.g.
+ * darkxsides.room) must never surface there.
  */
 export function isPublicRoom(room: RoomDefinition): boolean {
   const access = room.manifest.access;
-  if (!access) return true;
+  if (!access) return false;
   if (access.exclude_from_public_catalog === true) return false;
   if (access.owner_only === true) return false;
-  if (access.visibility === 'private' || access.visibility === 'unlisted') return false;
-  return true;
+  return access.visibility === 'public';
 }
 
 /**

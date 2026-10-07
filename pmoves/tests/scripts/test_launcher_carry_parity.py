@@ -73,7 +73,23 @@ def _invokes_fragment(text: str) -> bool:
 
 
 def _resolves_identity(text: str) -> bool:
-    return "node_identity.py" in text or "node_identity" in text
+    """Code lines that resolve an identity, not a mention.
+
+    Resolution moved into the shared fragment pm-node-identity.sh on 2026-09-16,
+    and the launchers now source it and call pm_node_identity. The old predicate
+    was a bare substring over the whole file, comments included. It still
+    answered correctly, but only because `pm_node_identity` contains
+    "node_identity". It never named the fragment it was detecting.
+    """
+    for raw in text.splitlines():
+        line = raw.strip()
+        if line.startswith("#"):
+            continue
+        if (line.startswith(". ") or line.startswith("source ")) and "pm-node-identity.sh" in line:
+            return True
+        if line.startswith("pm_node_identity ") or "node_identity.py" in line:
+            return True
+    return False
 
 
 def test_the_shared_fragment_exists():
@@ -83,7 +99,11 @@ def test_the_shared_fragment_exists():
     )
 
 
-@pytest.mark.parametrize("launcher", [p for p in SHELL_LAUNCHERS], ids=lambda p: p.name)
+# ids are repo-relative PATHS: claude-pmoves.sh exists in pmoves/scripts AND in
+# deploy/provision, so a bare name made the provisioning delegate's legitimate
+# skip read as the main launcher being skipped (#3243 review, P3).
+@pytest.mark.parametrize("launcher", [p for p in SHELL_LAUNCHERS],
+                         ids=lambda p: p.relative_to(REPO_ROOT).as_posix())
 def test_identity_resolving_launchers_also_report_the_carry(launcher: Path):
     if not launcher.is_file():
         pytest.skip(f"{launcher.name} not present in this checkout")
@@ -91,7 +111,7 @@ def test_identity_resolving_launchers_also_report_the_carry(launcher: Path):
     if not _resolves_identity(text):
         # A launcher that never asks who it is cannot be inconsistent about it.
         # It is also the next candidate: see the companion test below.
-        pytest.skip(f"{launcher.name} does not resolve a node identity")
+        pytest.skip(f"{launcher.relative_to(REPO_ROOT).as_posix()} does not resolve a node identity")
 
     assert _sources_fragment(text), (
         f"{launcher.name} resolves a node identity but never sources "

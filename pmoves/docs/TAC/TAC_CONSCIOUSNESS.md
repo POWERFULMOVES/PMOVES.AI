@@ -9,7 +9,7 @@ Map consciousness topology via Compressed Geometric Packets (CGP). The Conscious
 
 - **Port:** 8106
 - **Team:** Orchestration (agent-teams.yaml)
-- **Dependencies:** Tokenism Simulator (8103), NATS (4222), Neo4j (7474/7687)
+- **Dependencies:** Tokenism Simulator (8103), NATS (4222). Not Neo4j: the service has no Neo4j driver and no compose dependency on it (`services/consciousness-service/*.py`, measured 2026-10-01). The consciousness taxonomy reaches Neo4j only through `make -C pmoves load-consciousness-neo4j` (see [TAC_NEO4J](TAC_NEO4J.md)).
 - **CHIT Integration:** Full target (5/5 toggles)
 - **CGP Schema:** `chit.cgp.v1.0` (canonical), transported via `geometry.cgp.v1` NATS subject
 
@@ -28,7 +28,7 @@ Map consciousness topology via Compressed Geometric Packets (CGP). The Conscious
  Encode Sign  Store
     │    │    │
     ▼    ▼    ▼
-  geometry.cgp.v1 ──► Neo4j (7474)
+  geometry.cgp.v1 ──► (no graph write; see note)
          │
          ▼
   tokenism.cgp.ready.v1
@@ -63,7 +63,7 @@ No conflict — the distinction is intentional (transport layer vs payload schem
 
 1. **Encode** — Transform agent interactions into CGP geometry
 2. **Sign** — CHIT HMAC signature for provenance (if `CHIT_PASSPHRASE` set)
-3. **Store** — Persist to Neo4j knowledge graph
+3. **Store** — *Not implemented.* The service writes nothing to Neo4j; the taxonomy schema is loaded out of band by `make -C pmoves load-consciousness-neo4j`
 4. **Publish** — Emit to Geometry Bus via NATS
 5. **Simulate** — Tokenism Simulator processes CGP for economic modeling
 6. **Attribute** — Map simulation results back to consciousness topology
@@ -73,7 +73,7 @@ No conflict — the distinction is intentional (transport layer vs payload schem
 | Check | Status |
 |-------|--------|
 | NATS integration | Active (geometry bus) |
-| Neo4j storage | Connected |
+| Neo4j storage | Not implemented (no driver in the service; corrected 2026-10-01) |
 | CHIT toggles | Target: 5/5 |
 | Auth | Network isolation |
 | Docker Compose | Profile: `agents` |

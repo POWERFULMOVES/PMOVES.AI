@@ -50,6 +50,13 @@ port_up() { timeout 2 bash -c "echo >/dev/tcp/localhost/$1" 2>/dev/null; }
 for _envf in "$REPO_ROOT/pmoves/env.shared" "$REPO_ROOT/pmoves/env.tier-data" "$REPO_ROOT/pmoves/env.tier-supabase"; do
   [[ -f "$_envf" ]] && set -a && source "$_envf" && set +a
 done
+# env.shared exports SSL_CERT_FILE= etc. EMPTY (container leak guard), which
+# breaks host python TLS; see pmoves/scripts/pm-ca-bundle.sh.
+if [[ -f "$REPO_ROOT/pmoves/scripts/pm-ca-bundle.sh" ]]; then
+  # shellcheck source=../../pmoves/scripts/pm-ca-bundle.sh
+  source "$REPO_ROOT/pmoves/scripts/pm-ca-bundle.sh"
+  pm_ca_bundle_normalize || true
+fi
 
 # ============================================================================
 # 1. Supabase RLS Verification (PR #1331)
@@ -172,29 +179,42 @@ check_qdrant_auth() {
 check_neo4j_auth() {
   section "4. Neo4j authentication enforcement (PR #1333)"
 
-  if ! port_up 7474; then
-    warn_check "Neo4j port 7474 not reachable — skipping"
+  # Neo4j publishes no host ports (#3251; docs/TAC/TAC_NEO4J.md), so the old
+  # localhost:7474 probe could only ever WARN-skip and never verified auth. Ask
+  # the server itself with cypher-shell inside its container. The password
+  # reaches cypher-shell by env (docker exec -e NAME), never argv.
+  local c
+  if ! c=$(python3 "$REPO_ROOT/pmoves/scripts/neo4j_container.py" 2>/dev/null); then
+    warn_check "Neo4j container name not resolvable (pmoves/scripts/neo4j_container.py) — skipping"
+    return 0
+  fi
+  if ! docker ps --format '{{.Names}}' 2>/dev/null | grep -qxF "$c"; then
+    warn_check "Neo4j container $c not running — skipping"
     return 0
   fi
 
-  local unauth
-  unauth=$(curl -s --max-time 5 http://localhost:7474/db/neo4j/tx/commit)
-  if echo "$unauth" | grep -qi 'unauthorized\|error\|forbidden'; then
-    pass_check "Neo4j rejects unauthenticated request"
+  # One deliberately wrong password: a single failed attempt, well under the
+  # default lockout threshold. Auth on means cypher-shell exits non-zero with an
+  # authentication error. Auth off would accept any password.
+  local unauth rc
+  unauth=$(docker exec -e NEO4J_USERNAME=neo4j -e NEO4J_PASSWORD=post-merge-verify-wrong-password \
+    "$c" cypher-shell --format plain 'RETURN 1 AS ok;' 2>&1) && rc=0 || rc=$?
+  if [[ $rc -ne 0 ]] && grep -qiE 'unauthori[sz]ed|authentication failure|credentials' <<<"$unauth"; then
+    pass_check "Neo4j rejects a wrong password"
+  elif [[ $rc -eq 0 ]]; then
+    fail_check "Neo4j accepted a wrong password — auth not enforced"
   else
-    fail_check "Neo4j allows unauthenticated request — auth not enforced"
+    warn_check "Neo4j wrong-password probe failed for another reason (exit $rc) — auth not verified"
   fi
 
   if [[ -n "${NEO4J_PASSWORD:-}" ]]; then
     local authed
-    authed=$(curl -s --max-time 5 -u "neo4j:$NEO4J_PASSWORD" \
-      http://localhost:7474/db/neo4j/tx/commit \
-      -H "Content-Type: application/json" \
-      -d '{"statements":[{"statement":"RETURN 1"}]}')
-    if echo "$authed" | grep -q 'results'; then
-      pass_check "Neo4j accepts authenticated request"
+    authed=$(NEO4J_USERNAME="${NEO4J_USER:-neo4j}" NEO4J_PASSWORD="$NEO4J_PASSWORD" \
+      docker exec -e NEO4J_USERNAME -e NEO4J_PASSWORD "$c" cypher-shell --format plain 'RETURN 1 AS ok;' 2>&1) || true
+    if grep -qx '1' <<<"$authed"; then
+      pass_check "Neo4j accepts the configured password"
     else
-      fail_check "Neo4j rejects authenticated request — check NEO4J_PASSWORD"
+      fail_check "Neo4j rejects the configured password — check NEO4J_PASSWORD"
     fi
   else
     warn_check "NEO4J_PASSWORD not set — cannot verify authenticated access"

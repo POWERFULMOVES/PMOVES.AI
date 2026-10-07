@@ -1,0 +1,10 @@
+{
+  "release": "2026-09-27",
+  "scrubber_version": "1.0.0",
+  "rotation_date": "2026-09-27",
+  "instances": [
+    { "alias": "instance-1", "chats": 0, "messages": 0 }
+  ],
+  "excluded_chats": [],
+  "notes": "counts filled from findings.csv after operator review"
+}

@@ -19,7 +19,7 @@ This proves the voice chain works end-to-end through the bus layer:
     test subscriber (this script)
 
 Prerequisites:
-    - NATS broker running (default: nats://nats:pmoves@nats:4222)
+    - NATS broker running (default: nats://nats:4222)
     - voice-relay service running (port 8121, /healthz returns nats_connected=true)
     - Flute-Gateway is NOT required (this only tests the bus, not synthesis)
 
@@ -28,7 +28,7 @@ Usage:
     python pmoves/tools/voice_chain_e2e_test.py
 
     # Custom NATS URL
-    NATS_URL=nats://nats:pmoves@nats:4222 python pmoves/tools/voice_chain_e2e_test.py
+    NATS_URL=nats://nats:4222 python pmoves/tools/voice_chain_e2e_test.py
 
     # Longer wait window (for slow runners)
     python pmoves/tools/voice_chain_e2e_test.py --wait 15
@@ -192,8 +192,8 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Voice chain end-to-end NATS verifier")
     parser.add_argument(
         "--nats-url",
-        default=os.environ.get("NATS_URL", "nats://nats:pmoves@nats:4222"),
-        help="NATS broker URL (default: nats://nats:pmoves@nats:4222 or $NATS_URL)",
+        default=os.environ.get("NATS_URL", "nats://nats:4222"),
+        help="NATS broker URL (default: nats://nats:4222 or $NATS_URL)",
     )
     parser.add_argument(
         "--wait",

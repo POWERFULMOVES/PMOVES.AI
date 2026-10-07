@@ -1580,12 +1580,20 @@ services:
     # = the digest the live Knuckles graph runs today (5.26.30, a multi-arch
     #   index Docker Hub still serves), so moving under compose changes no store
     #   version. neo4j:5-community now means 5.26.31. (#3193)
+    # The PMOVES source build (POWERFULMOVES/PMOVES-neo4j, branch PMOVES.AI-Edition-5.26)
+    #   replaces this literal with its own @sha256 digest once it passes the A/B against
+    #   this vendor image (docs/TAC/TAC_NEO4J.md section 2). Deliberately no NEO4J_IMAGE
+    #   override: nothing would require a digest, so any tag could replace the image of
+    #   the one stateful graph store (#3251 review P2-a).
     image: neo4j:5.26.30-community@sha256:037cf5756f0135cbfd66b739b6df7c7c4bb100f9ce11602f6f9538e17e02c74d
     # The name the live container already has, and the single name source read
     # by scripts/neo4j_container.py (backup, restore, start-cipher-stack).
     container_name: pmoves-neo4j
-    env_file:
-    - env.tier-data
+    # No env_file: the vendor entrypoint turns EVERY NEO4J_* variable into a
+    # neo4j.conf setting (it does not exclude NEO4J_PASSWORD, which would land as
+    # PASSWORD=<plaintext>), and the data tier file also carries MinIO, Postgres,
+    # Meili and Qdrant secrets Neo4j never uses. NEO4J_AUTH below is interpolated
+    # from compose's --env-file layering (COMPOSE_ENV_FILES), not env_file.
     cap_drop:
     - ALL
     cap_add:
@@ -1599,7 +1607,7 @@ services:
     - no-new-privileges:true
     restart: unless-stopped
     environment:
-    - NEO4J_AUTH=neo4j/${NEO4J_PASSWORD:?Set NEO4J_PASSWORD in env.tier-data}
+    - NEO4J_AUTH=neo4j/${NEO4J_PASSWORD:?Set NEO4J_PASSWORD in env.shared}
     - NEO4J_dbms_security_allow__csv__import__from__file__urls=true
     # Deny LOAD CSV (http/https) to EVERY address, checked AFTER name resolution:
     # defense in depth even on internal-only networks (it also stops Cypher from
@@ -1614,19 +1622,35 @@ services:
     # APOC extensions with safe procedure allowlist
     - NEO4J_apoc_export_file_enabled=true
     - NEO4J_apoc_import_file_enabled=true
-    - NEO4J_apoc_import_file_use__neo4j__config__true=true
-    - NEO4JLABS_PLUGINS=["apoc"]
+    - NEO4J_apoc_import_file_use__neo4j__config=true
+    # NEO4J_PLUGINS (NEO4JLABS_PLUGINS was renamed in 5.0; the entrypoint warns on it).
+    # On a fresh container the plugin step still appends
+    # dbms.security.procedures.unrestricted=apoc.*: it compares against the image conf,
+    # captured before env settings apply. The env loop then deletes that line and
+    # writes the value below, so the explicit list must stay. Without it, all of apoc.*
+    # would be unrestricted.
+    - NEO4J_PLUGINS=["apoc"]
     - NEO4J_dbms_security_procedures_unrestricted=apoc.coll.*,apoc.text.*,apoc.path.*,apoc.algo.*
+    # Memory: `neo4j-admin server memory-recommendation --memory=4g` on this image
+    # (matches deploy.limits.memory). Without these the Docker defaults apply: 512M
+    # heap, 512M page cache (OM docker/configuration). Heap initial = max
+    # (OM performance/memory-configuration).
+    - NEO4J_server_memory_heap_initial__size=2g
+    - NEO4J_server_memory_heap_max__size=2g
+    - NEO4J_server_memory_pagecache_size=512m
     - DOCKED_MODE=${DOCKED_MODE:-true}
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
     - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_data,pmoves_graph_front
-    ports:
-    - ${NEO4J_BIND:-0.0.0.0}:${NEO4J_HTTP_PORT:-7474}:7474
-    - ${NEO4J_BIND:-0.0.0.0}:${NEO4J_BOLT_PORT:-7687}:7687
+    # No ports: Neo4j is internal-only; the fleet reaches it through the
+    # neo4j-tailnet forwarder on pmoves_graph_front (#3201), and on internal-only
+    # networks a published port is inert anyway.
     volumes:
     - neo4j-data:/data
+    # Named, so the logs survive `down`/`rm` (the image declares VOLUME /logs). A
+    # recreate already carries an anonymous volume forward; down/rm orphans it.
+    - neo4j-logs:/logs
     - ./neo4j/cypher:/cypher:ro
     # Every AGInT that uses the graph must reach it (#3196). Measured consumers:
     # agent-zero's seeded Neo4j MCP (bolt://neo4j:7687, from the agent-zero
@@ -4151,6 +4175,7 @@ services:
     - EMBEDDING_MODEL=tensorzero::embedding_model_name::qwen3_embedding_4b_local
     - EMBEDDING_DIM=2560
     - PMOVES_NETWORKS=pmoves_app,pmoves_data,pmoves_bus,pmoves_external,pmoves_api
+    - PMOVES_EMBED_TIMEOUT_MS=${PMOVES_EMBED_TIMEOUT_MS:-30000}
     ports:
     - "${CIPHER_BIND:-127.0.0.1}:${CIPHER_PORT:-8105}:8105"
     depends_on:
@@ -6387,6 +6412,7 @@ services:
           memory: 256M
 volumes:
   neo4j-data: {}
+  neo4j-logs: {}
   fleet-sentinel-data: {}  # fleet-sentinel action trail (jsonl) + state
   archon-data: {}          # Archon /.archon workspaces + SQLite/state (#2217)
   archon-user-home: {}     # Archon /home/appuser (Claude/gh creds, git config)

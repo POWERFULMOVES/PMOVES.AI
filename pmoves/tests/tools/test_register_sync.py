@@ -88,17 +88,28 @@ def _git(repo: Path, *args: str) -> str:
         check=True, capture_output=True, text=True).stdout
 
 
+def _write(path: Path, text: str) -> None:
+    """Byte-exact. `write_text` translates LF to os.linesep, so on Windows
+    every fixture register was CRLF -- the very defect under test."""
+    path.write_bytes(text.encode("utf-8"))
+
+
 def _make_repo(tmp_path: Path, ignore_sidecar: bool = True) -> Path:
     repo = tmp_path / "repo"
     (repo / "pmoves" / "docs" / "AGENTS").mkdir(parents=True)
     _git(repo, "init", "-q", "-b", "main")
-    (repo / REG_REL).write_text(BASE, encoding="utf-8")
+    # REPO-LOCAL, so it also governs the tool's own git calls and the raw
+    # `git merge` below: a Windows node's global core.autocrlf=true would
+    # otherwise rewrite the register to CRLF on every checkout, and no fixture
+    # would ever be a pure append over HEAD's LF blob.
+    _git(repo, "config", "core.autocrlf", "false")
+    _write(repo / REG_REL, BASE)
     if ignore_sidecar:
         (repo / "pmoves" / ".gitignore").write_text("data/register-sync/\n")
     _git(repo, "add", "-A")
     _git(repo, "commit", "-q", "-m", "base")
     _git(repo, "checkout", "-q", "-b", "upstream")
-    (repo / REG_REL).write_text(UPSTREAM, encoding="utf-8")
+    _write(repo / REG_REL, UPSTREAM)
     _git(repo, "commit", "-q", "-am", "upstream re-files")
     _git(repo, "checkout", "-q", "main")
     return repo
@@ -106,7 +117,7 @@ def _make_repo(tmp_path: Path, ignore_sidecar: bool = True) -> Path:
 
 def _dirty(repo: Path, appended: str) -> Path:
     reg = repo / REG_REL
-    with open(reg, "a", encoding="utf-8") as fh:
+    with open(reg, "a", encoding="utf-8", newline="") as fh:
         fh.write(appended)
     return reg
 
@@ -183,7 +194,7 @@ def test_keep_is_never_dropped_on_a_near_miss(tmp_path, stale, why):
 def test_refuses_anything_but_a_pure_append(tmp_path, mutate):
     repo = _make_repo(tmp_path)
     reg = repo / REG_REL
-    reg.write_text(mutate(BASE) + STALE + KEEP_ROWS, encoding="utf-8")
+    _write(reg, mutate(BASE) + STALE + KEEP_ROWS)
     before = reg.read_bytes()
     for extra in ((), ("--apply",)):
         r = _sync(repo, *extra)
@@ -212,7 +223,7 @@ def test_refuses_on_a_concurrent_write(tmp_path, monkeypatch, capsys):
     real_lock = tool.register_lock
 
     def racing_lock(target, timeout=None):
-        with open(target, "a", encoding="utf-8") as fh:   # the other filer wins the race
+        with open(target, "a", encoding="utf-8", newline="") as fh:   # the other filer wins the race
             fh.write(late)
         return real_lock(target, timeout)
 
@@ -343,7 +354,7 @@ def _forge(keep: Path, rows: str) -> None:
 def test_reapply_refuses_a_file_outside_the_sidecar_directory(tmp_path):
     repo, _keep = _held_sidecar(tmp_path)
     forged = tmp_path / "forged.keep.md"
-    forged.write_text(KEEP_A)
+    _write(forged, KEEP_A)
     before = (repo / REG_REL).read_bytes()
     r = _sync(repo, "--reapply", str(forged), "--apply")
     assert r.returncode == 3 and "sidecar in" in r.stderr
@@ -362,7 +373,7 @@ def test_reapply_refuses_an_edited_sidecar(tmp_path):
 def test_reapply_refuses_a_sidecar_with_no_manifest(tmp_path):
     repo, keep = _held_sidecar(tmp_path)
     planted = keep.with_name("planted.keep.md")
-    planted.write_text(KEEP_A)
+    _write(planted, KEEP_A)
     r = _sync(repo, "--reapply", str(planted), "--apply")
     assert r.returncode == 3 and "manifest" in r.stderr
 
@@ -393,7 +404,7 @@ def test_reapply_skips_rows_main_re_filed_during_the_pull(tmp_path):
               "`feat/crush-acp` · **TTL 24h** · scope: RE-FILED: first filed at "
               f"{TS_A}.\n")
     _git(repo, "checkout", "-q", "upstream")
-    with open(reg, "a", encoding="utf-8") as fh:
+    with open(reg, "a", encoding="utf-8", newline="") as fh:
         fh.write(refile)
     _git(repo, "commit", "-q", "-am", "main re-files the crush lane")
     _git(repo, "checkout", "-q", "main")
@@ -547,3 +558,143 @@ def test_i_have_coordinated_passes_through_to_reapply(tmp_path):
     r = _sync(repo, "--reapply", str(keep), "--apply", "--i-have-coordinated")
     assert r.returncode == 0, (r.stdout, r.stderr)
     assert (repo / REG_REL).read_bytes().endswith(nxt.encode())
+
+
+# --- [P2] line endings: register bytes are LF on every OS --------------------
+#
+# `os.open` without O_BINARY is a TEXT-mode descriptor on Windows, so the CRT
+# turned every "\n" this tool wrote into "\r\n". Every row a Windows node filed
+# was CRLF in the working tree, never byte-equal to main's LF copy, so
+# register-sync classified it KEEP forever -- and the sync's own byte writers
+# (`_append_bytes`, `_write_exclusive`) re-appended CRLF and failed their own
+# HEAD + KEEP post-check as a PARTIAL APPLY.
+
+def _capture_open_flags(monkeypatch):
+    """Record the flags of every `os.open`, with O_BINARY present on any OS.
+
+    On Windows `os.O_BINARY` is real. Elsewhere it is planted with the Windows
+    value, so the same assertion runs on Linux CI; the planted bit is stripped
+    before the real open, so the OS is never handed a flag it does not know.
+    """
+    real_open = os.open
+    real_bin = getattr(os, "O_BINARY", 0)
+    binary = real_bin or 0x8000
+    monkeypatch.setattr(os, "O_BINARY", binary, raising=False)
+    seen: list[tuple[str, int]] = []
+
+    def spy(path, flags, *args, **kwargs):
+        seen.append((str(path), flags))
+        return real_open(path, (flags & ~binary) | (flags & real_bin), *args, **kwargs)
+
+    monkeypatch.setattr(os, "open", spy)
+    return seen, binary
+
+
+def test_append_row_writes_lf_only_and_opens_binary(tmp_path, monkeypatch):
+    tool = _load_tool()
+    reg = tmp_path / "register.md"
+    seen, binary = _capture_open_flags(monkeypatch)
+    tool.append_row(KEEP_A, register=reg)
+    tool.append_row(KEEP_B.rstrip("\n"), register=reg)     # newline added by the tool
+    assert reg.read_bytes() == KEEP_ROWS.encode()            # no b"\r", byte-exact
+    opens = [flags for path, flags in seen if path == str(reg)]
+    assert len(opens) == 2 and all(flags & binary for flags in opens), opens
+    assert all(flags & os.O_APPEND for flags in opens)       # still append-only
+
+
+@pytest.mark.parametrize("writer", ["_append_bytes", "_write_exclusive"])
+def test_the_sync_byte_writers_open_binary(tmp_path, monkeypatch, writer):
+    tool = _load_tool()
+    target = tmp_path / "out.md"
+    if writer == "_append_bytes":
+        target.write_bytes(b"")                              # it never creates
+    seen, binary = _capture_open_flags(monkeypatch)
+    getattr(tool, writer)(target, KEEP_ROWS.encode())
+    assert target.read_bytes() == KEEP_ROWS.encode()
+    opens = [flags for path, flags in seen if path == str(target)]
+    assert opens and all(flags & binary for flags in opens), opens
+
+
+def test_insert_docs_leaves_the_register_lf(tmp_path):
+    tool = _load_tool()
+    reg = tmp_path / "register.md"
+    _write(reg, BASE)
+    anchor, block = "## Active Claim Register\n", "Prose about the ledger.\n\n"
+    assert tool.insert_docs(anchor, block, register=reg) == 0
+    assert reg.read_bytes() == BASE.replace(anchor, block + anchor).encode()
+
+
+def test_a_crlf_row_identical_to_a_ref_row_is_on_main():
+    """Matching tolerates ONE trailing CR; a different row is still KEEP."""
+    tool = _TOOL
+    ref = UPSTREAM.encode()
+    crlf = lambda s: s.replace("\n", "\r\n").encode()          # noqa: E731
+    same = crlf(VERBATIM)
+    stale = crlf(STALE_A)
+    different = crlf(VERBATIM.replace("main already carries", "main lacks"))
+    two_crs = VERBATIM.replace("\n", "\r\r\n").encode()
+    got = tool.classify_uncommitted([same, stale, different, two_crs], ref)
+    assert got == [(tool.ON_MAIN, same), (tool.RE_FILED, stale),
+                   (tool.KEEP, different), (tool.KEEP, two_crs)]
+
+
+def test_sync_drops_a_crlf_row_main_carries_and_keeps_the_rest_byte_exact(tmp_path):
+    repo = _make_repo(tmp_path)
+    reg = repo / REG_REL
+    on_main = VERBATIM.replace("\n", "\r\n").encode()
+    keep = KEEP_A.replace("\n", "\r\n").encode()
+    with open(reg, "ab") as fh:
+        fh.write(on_main + keep)
+    r = _sync(repo, "--apply")
+    assert r.returncode == 0, (r.stdout, r.stderr)
+    assert "1 ON-MAIN, 0 RE-FILED, 1 KEEP" in r.stdout
+    # KEEP is re-appended as the bytes it was -- matching never rewrites a row.
+    assert reg.read_bytes() == BASE.encode() + keep
+
+
+@pytest.mark.parametrize("eol, rc", [
+    ("\r\n", 0),        # a legacy Windows row: ONE CR is a line ending
+    ("\r\r\n", 3),      # two are not -- a different row, still refused
+])
+def test_a_crlf_row_held_in_a_sidecar_reapplies(tmp_path, eol, rc):
+    """REAPPLY sees the same one-CR line ending as matching does. A CRLF row
+    that classified KEEP must not be stranded at REAPPLY by a renderer refusal
+    of its own line ending; the bytes appended are still the held bytes."""
+    row = _render("CLAIM", OWNER, "feat/crlf-legacy", "filed on Windows.", "24h",
+                  T0).replace("\n", eol)
+    repo, keep = _held_with(tmp_path, row)
+    reg = repo / REG_REL
+    before = reg.read_bytes()
+    r = _sync(repo, "--reapply", str(keep), "--apply")
+    assert r.returncode == rc, (r.stdout, r.stderr)
+    if rc == 0:
+        assert reg.read_bytes() == before + row.encode()     # verbatim, CR kept
+    else:
+        assert "refused by the renderer" in r.stderr
+        assert reg.read_bytes() == before
+
+
+# --- console encoding ---------------------------------------------------------
+
+def test_a_row_outside_cp1252_does_not_crash_the_report_on_a_cp1252_stdout(tmp_path):
+    """A Windows pipe/redirect defaults stdout to the ANSI code page (cp1252).
+    Rows are free text, and `->` arrows and U+2028 are not in cp1252, so
+    printing the per-row report raised UnicodeEncodeError mid-report -- the
+    tool crashed (exit 3) on a register it had read correctly. The child is
+    FORCED onto cp1252 here so the regression is reproducible on any OS."""
+    repo = _make_repo(tmp_path)
+    # Short, so the chars land inside `_show`'s 120-char cut.
+    row = ("- `2026-09-27T09:30:00Z` NOTE `B850-CLAUDE (Knuckles)` branch: "
+           "`ops/x` \u00b7 scope: a \u2192 b\u2028c.\n")
+    _dirty(repo, row)
+    env = {k: v for k, v in os.environ.items() if not k.startswith("REGISTER_SYNC_")}
+    env.update(PYTHONIOENCODING="cp1252", PYTHONUTF8="0")
+    r = subprocess.run(
+        [sys.executable, str(TOOL), "sync", "--repo", str(repo), "--ref", "upstream"],
+        capture_output=True, env=env, timeout=120)
+    out = r.stdout.decode("utf-8", "replace")
+    err = r.stderr.decode("utf-8", "replace")
+    assert r.returncode == 0, err
+    assert "UnicodeEncodeError" not in err
+    assert "0 ON-MAIN, 0 RE-FILED, 1 KEEP (of 1 input)" in out
+    assert "scope: a \u2192 b" in out

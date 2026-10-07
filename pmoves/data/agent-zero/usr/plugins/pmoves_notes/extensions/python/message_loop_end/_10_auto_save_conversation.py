@@ -37,7 +37,7 @@ async def _publish_nats_event(subject: str, data: dict[str, Any]) -> None:
     try:
         import nats  # lazy import: optional dependency
 
-        nc = await nats.connect(os.getenv("NATS_URL", "nats://nats:pmoves@nats:4222"))
+        nc = await nats.connect(os.getenv("NATS_URL", "nats://nats:4222"))
         try:
             await nc.publish(subject, json.dumps(data).encode())
         finally:
