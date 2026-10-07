@@ -121,7 +121,8 @@ HTTP_HEALTH = [
     # is gone and the SPA catch-all answers it 200 HTML, which "ok_true" accepted
     # (non-JSON falls back to code == 200). "json_status_ok" has no such fallback.
     ("archon", "http://localhost:8091/api/health", "json_status_ok", True),
-    ("archon-ui", "http://localhost:3737", "http_200", True),
+    # The SPA answers 200 for any path; require Archon's own page title.
+    ("archon-ui", "http://localhost:3737", "html_title:Archon", True),
     ("extract-worker", "http://localhost:${EXTRACT_WORKER_HOST_PORT:-8083}/healthz", "ok_true"),
     ("media-audio", "http://localhost:8082/healthz", "ok_true"),
     ("media-video", "http://localhost:8079/healthz", "ok_true"),
@@ -509,6 +510,13 @@ def _json_status_ok(content_type: str, body: str) -> bool:
     return str(payload.get("status", "")).lower() == "ok"
 
 
+def _html_title_ok(content_type: str, body: str, title: str) -> bool:
+    """True only for an HTML page whose <title> is exactly `title`."""
+    if "html" not in (content_type or "").lower():
+        return False
+    return f"<title>{title}</title>" in (body or "")
+
+
 def check_http():
     table = Table(box=box.SIMPLE)
     table.add_column("service", style="cyan")
@@ -537,6 +545,8 @@ def check_http():
                     ok = code == 200
             elif kind == "json_status_ok":
                 ok = code == 200 and _json_status_ok(ct, body)
+            elif kind.startswith("html_title:"):
+                ok = code == 200 and _html_title_ok(ct, body, kind.split(":", 1)[1])
             elif kind == "json_ok_or_200":
                 if code == 200:
                     ok = True

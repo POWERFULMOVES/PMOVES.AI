@@ -29,7 +29,7 @@ SERVICE_CATALOG: list[dict[str, Any]] = [
     # Archon 0.6.0+: /api/health is the only health route; the SPA catch-all answers
     # any other path 200 HTML, so the body must be JSON (expect_json). UI on host 3737.
     {"name": "Archon API", "url": "http://localhost:8091/api/health", "tier": 6, "type": "Agent", "expect_json": True},
-    {"name": "Archon UI", "url": "http://localhost:3737", "tier": 7, "type": "UI"},
+    {"name": "Archon UI", "url": "http://localhost:3737", "tier": 7, "type": "UI", "expect_title": "Archon"},
     {"name": "Agent Zero API", "url": "http://localhost:8080/healthz", "tier": 6, "type": "Agent"},
     {"name": "PMOVES.YT", "url": "http://localhost:8077/", "tier": 5, "type": "Media"},
     {"name": "Grafana", "url": f"http://localhost:{os.environ.get('GRAFANA_PORT', '3002')}", "tier": 7, "type": "UI"},
@@ -89,6 +89,13 @@ def _json_health_ok(content_type: str, body: str) -> bool:
     return str(payload.get("status", "")).lower() == "ok"
 
 
+def _html_title_ok(content_type: str, body: str, title: str) -> bool:
+    """True only for an HTML page whose <title> is exactly `title`."""
+    if "html" not in (content_type or "").lower():
+        return False
+    return f"<title>{title}</title>" in (body or "")
+
+
 async def _probe_one(client: httpx.AsyncClient, svc: dict[str, Any]) -> ProbeResult:
     t0 = time.monotonic()
     error = ""
@@ -100,6 +107,10 @@ async def _probe_one(client: httpx.AsyncClient, svc: dict[str, Any]) -> ProbeRes
             ok = _json_health_ok(resp.headers.get("content-type", ""), resp.text)
             if not ok:
                 error = "expected a JSON health body reporting ok"
+        if ok and svc.get("expect_title"):
+            ok = _html_title_ok(resp.headers.get("content-type", ""), resp.text, svc["expect_title"])
+            if not ok:
+                error = f"expected an HTML page titled {svc['expect_title']!r}"
     except (httpx.ConnectError, httpx.ConnectTimeout):
         ok = False
         code = 0

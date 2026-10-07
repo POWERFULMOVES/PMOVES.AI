@@ -157,6 +157,12 @@ JSON_HEALTH_NAMES = {
     "Archon API",
 }
 
+# Endpoints that must answer an HTML page with this exact <title>. The Archon SPA
+# answers 200 for any path, so a bare 2xx on :3737 does not prove Archon serves it.
+HTML_TITLE_BY_NAME = {
+    "Archon UI": "Archon",
+}
+
 TIMEOUT = int(os.environ.get("PMOVES_RETRO_TIMEOUT", "5"))
 
 
@@ -175,16 +181,33 @@ def json_health_ok(content_type: str, body: str) -> bool:
     return str(payload.get("status", "")).lower() == "ok"
 
 
-def check(url: str, timeout: int = TIMEOUT, require_json: bool = False) -> tuple[str, int, str]:
+def html_title_ok(content_type: str, body: str, title: str) -> bool:
+    """True only for an HTML page whose <title> is exactly `title`."""
+    if "html" not in (content_type or "").lower():
+        return False
+    return f"<title>{title}</title>" in (body or "")
+
+
+def check(
+    url: str,
+    timeout: int = TIMEOUT,
+    require_json: bool = False,
+    expect_title: str | None = None,
+) -> tuple[str, int, str]:
     try:
         with urlopen(url, timeout=timeout) as resp:
             code = getattr(resp, "status", 200)
             if not 200 <= code < 400:
                 return "warn", code, ""
-            if require_json:
+            if require_json or expect_title:
+                ctype = resp.headers.get("content-type", "")
                 body = resp.read().decode("utf-8", errors="ignore")
-                if not json_health_ok(resp.headers.get("content-type", ""), body):
+            if require_json:
+                if not json_health_ok(ctype, body):
                     return "error", code, "expected a JSON health body reporting ok"
+            if expect_title:
+                if not html_title_ok(ctype, body, expect_title):
+                    return "error", code, f"expected an HTML page titled {expect_title!r}"
             return "ok", code, ""
     except HTTPError as e:
         return ("warn" if 400 <= e.code < 500 else "error"), e.code, str(e)
@@ -210,7 +233,10 @@ def main() -> int:
     if Console is None:
         print("Retro check (plain):")
         with cf.ThreadPoolExecutor(max_workers=min(16, len(checks))) as ex:
-            futs = {ex.submit(check, url, TIMEOUT, name in JSON_HEALTH_NAMES): name for name, url in checks}
+            futs = {
+                ex.submit(check, url, TIMEOUT, name in JSON_HEALTH_NAMES, HTML_TITLE_BY_NAME.get(name)): name
+                for name, url in checks
+            }
             failures = 0
             critical_failures = 0
             for fut in cf.as_completed(futs):
@@ -234,7 +260,10 @@ def main() -> int:
         task = progress.add_task("wait", total=len(checks))
         results = []
         with cf.ThreadPoolExecutor(max_workers=min(16, len(checks))) as ex:
-            futs = {ex.submit(check, url, TIMEOUT, name in JSON_HEALTH_NAMES): (name, url) for name, url in checks}
+            futs = {
+                ex.submit(check, url, TIMEOUT, name in JSON_HEALTH_NAMES, HTML_TITLE_BY_NAME.get(name)): (name, url)
+                for name, url in checks
+            }
             for fut in cf.as_completed(futs):
                 name, url = futs[fut]
                 status, code, err = fut.result()

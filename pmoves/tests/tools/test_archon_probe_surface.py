@@ -21,6 +21,7 @@ denies outbound connects).
 from __future__ import annotations
 
 import asyncio
+import http.client
 import importlib.util
 import json
 import sys
@@ -32,6 +33,7 @@ PMOVES = Path(__file__).resolve().parents[2]
 
 LIVE_HEALTH_BODY = json.dumps({"status": "ok", "adapter": "web", "version": "0.8.0"})
 SPA_HTML = "<!doctype html><html><head><title>Archon</title></head><body></body></html>"
+OTHER_HTML = "<!doctype html><html><head><title>Some Other App</title></head><body></body></html>"
 DEAD_ROUTES = ("/healthz", "/mcp/describe")
 
 
@@ -116,6 +118,16 @@ def test_fcr_check_accepts_live_health_json(fcr, monkeypatch):
     assert fcr.check("http://localhost:8091/api/health", require_json=True) == ("ok", 200, "")
 
 
+def test_fcr_archon_ui_requires_archon_title(fcr, monkeypatch):
+    assert fcr.HTML_TITLE_BY_NAME["Archon UI"] == "Archon"
+    monkeypatch.setattr(fcr, "urlopen", lambda url, timeout: _FakeResp(200, "text/html", SPA_HTML))
+    assert fcr.check("http://localhost:3737", expect_title="Archon")[0] == "ok"
+    monkeypatch.setattr(fcr, "urlopen", lambda url, timeout: _FakeResp(200, "text/html", OTHER_HTML))
+    assert fcr.check("http://localhost:3737", expect_title="Archon")[:2] == ("error", 200)
+    monkeypatch.setattr(fcr, "urlopen", lambda url, timeout: _FakeResp(200, "application/json", LIVE_HEALTH_BODY))
+    assert fcr.check("http://localhost:3737", expect_title="Archon")[0] == "error"
+
+
 @pytest.mark.parametrize(
     "ctype,body,expected",
     [
@@ -129,6 +141,9 @@ def test_fcr_check_accepts_live_health_json(fcr, monkeypatch):
     ],
 )
 def test_json_health_validators_agree(fcr, monkeypatch, ctype, body, expected):
+    # same optional-dep guards as the rfc/hp fixtures, so a missing dep SKIPs uniformly
+    pytest.importorskip("rich")
+    pytest.importorskip("httpx")
     rfc = _load("retro_flightcheck_t", "tools/flightcheck/retro_flightcheck.py", monkeypatch)
     hp = _load("health_probe_t", "services/showtime-api/health_probe.py", monkeypatch)
     assert fcr.json_health_ok(ctype, body) is expected
@@ -141,6 +156,7 @@ def test_json_health_validators_agree(fcr, monkeypatch, ctype, body, expected):
 
 @pytest.fixture
 def rfc(monkeypatch):
+    pytest.importorskip("rich")
     return _load("retro_flightcheck_t", "tools/flightcheck/retro_flightcheck.py", monkeypatch)
 
 
@@ -149,18 +165,25 @@ def test_rfc_archon_rows(rfc):
     assert rows["archon"][1] == "http://localhost:8091/api/health"
     assert rows["archon"][2] == "json_status_ok"
     assert rows["archon-ui"][1] == "http://localhost:3737"
+    assert rows["archon-ui"][2] == "html_title:Archon"
     assert {"archon", "archon-ui"} <= rfc.CRITICAL_HTTP_NAMES
     for e in rfc.HTTP_HEALTH:
         if e[0].startswith("archon"):
             assert not any(e[1].endswith(r) for r in DEAD_ROUTES), e
 
 
-def _run_check_http(rfc, monkeypatch, archon_resp):
+def _run_check_http(rfc, monkeypatch, archon_resp, ui_resp=(200, "text/html; charset=utf-8", SPA_HTML)):
+    """Model the live Archon: /api/health answers archon_resp, :3737 answers ui_resp,
+    and EVERY other path on :8091 gets the SPA catch-all (200 HTML), exactly as the
+    real container does. Pre-fix code (probing /healthz) must PASS here falsely."""
+
     def fake_get(url, timeout=4.0):
         if url == "http://localhost:8091/api/health":
             return archon_resp
-        if url == "http://localhost:3737":
-            return 200, "text/html", SPA_HTML
+        if url.startswith("http://localhost:3737"):
+            return ui_resp
+        if url.startswith("http://localhost:8091"):
+            return 200, "text/html; charset=utf-8", SPA_HTML
         return None, "", "refused"
 
     monkeypatch.setattr(rfc, "_http_get", fake_get)
@@ -175,8 +198,15 @@ def test_rfc_check_http_passes_live_archon(rfc, monkeypatch):
 
 
 def test_rfc_check_http_fails_spa_catch_all(rfc, monkeypatch):
-    # 200 HTML on the health route is the false-PASS this lane removes
+    # /api/health missing (Archon not there / wrong service): every :8091 path is the
+    # SPA catch-all. Pre-fix, the /healthz probe passed on that HTML (false PASS).
     assert _run_check_http(rfc, monkeypatch, (200, "text/html; charset=utf-8", SPA_HTML)) == (1, 1)
+
+
+def test_rfc_check_http_fails_foreign_ui(rfc, monkeypatch):
+    # some other app answering 200 on :3737 must not count as the Archon UI
+    live = (200, "application/json", LIVE_HEALTH_BODY)
+    assert _run_check_http(rfc, monkeypatch, live, ui_resp=(200, "text/html", OTHER_HTML)) == (1, 1)
 
 
 # --------------------------------------------------------------- showtime-api health_probe
@@ -195,14 +225,15 @@ def test_hp_catalog_matches_flight_check_retro(hp, fcr):
     for name in ("Archon API", "Archon UI"):
         assert cat[name]["url"] == fcr_urls[name], name
     assert cat["Archon API"].get("expect_json") is True
+    assert cat["Archon UI"].get("expect_title") == "Archon"
     assert "Archon MCP" not in cat
 
 
-def _probe(hp, ctype: str, body: str):
+def _probe(hp, ctype: str, body: str, name: str = "Archon API"):
     import httpx
 
     transport = httpx.MockTransport(lambda req: httpx.Response(200, headers={"content-type": ctype}, text=body))
-    svc = next(s for s in hp.SERVICE_CATALOG if s["name"] == "Archon API")
+    svc = next(s for s in hp.SERVICE_CATALOG if s["name"] == name)
 
     async def go():
         async with httpx.AsyncClient(transport=transport) as client:
@@ -219,6 +250,12 @@ def test_hp_probe_rejects_spa_html(hp):
 def test_hp_probe_accepts_live_health(hp):
     r = _probe(hp, "application/json", LIVE_HEALTH_BODY)
     assert r.ok is True and r.error == ""
+
+
+def test_hp_probe_ui_requires_archon_title(hp):
+    assert _probe(hp, "text/html; charset=utf-8", SPA_HTML, "Archon UI").ok is True
+    r = _probe(hp, "text/html", OTHER_HTML, "Archon UI")
+    assert r.ok is False and r.error
 
 
 # --------------------------------------------------------------- topology_chit_gate
@@ -255,12 +292,13 @@ def test_policy_requires_archon_container_port_3090():
 
 def test_topo_archon_live_layout_passes(topo, monkeypatch):
     seen = []
-    monkeypatch.setattr(topo, "_json_health_ok", lambda url, **kw: (seen.append(url) or True, "200"))
-    monkeypatch.setattr(topo, "_http_code", lambda url, **kw: (seen.append(url) or 200))
+    monkeypatch.setattr(
+        topo, "_json_health_ok", lambda url, **kw: (seen.append((url, kw.get("expect_title"))) or True, "200")
+    )
     warnings, errors = [], []
     topo._check_archon_topology(_archon_inspection(LIVE_PORTS), warnings=warnings, errors=errors)
     assert (warnings, errors) == ([], [])
-    assert seen == ["http://localhost:8091/api/health", "http://localhost:3737/"]
+    assert seen == [("http://localhost:8091/api/health", None), ("http://localhost:3737/", "Archon")]
 
 
 def test_topo_archon_missing_publish_is_error(topo):
@@ -275,3 +313,23 @@ def test_topo_json_health_rejects_spa_html(topo, monkeypatch):
     assert ok is False and "non-JSON" in detail
     monkeypatch.setattr(topo, "urlopen", lambda req, timeout: _FakeResp(200, "application/json", LIVE_HEALTH_BODY))
     assert topo._json_health_ok("http://localhost:8091/api/health") == (True, "200")
+
+
+def test_topo_ui_title_check(topo, monkeypatch):
+    monkeypatch.setattr(topo, "urlopen", lambda req, timeout: _FakeResp(200, "text/html", SPA_HTML))
+    assert topo._json_health_ok("http://localhost:3737/", expect_title="Archon") == (True, "200")
+    monkeypatch.setattr(topo, "urlopen", lambda req, timeout: _FakeResp(200, "text/html", OTHER_HTML))
+    ok, detail = topo._json_health_ok("http://localhost:3737/", expect_title="Archon")
+    assert ok is False and "titled" in detail
+
+
+@pytest.mark.parametrize(
+    "exc",
+    [ConnectionResetError("reset"), OSError("boom"), TimeoutError("slow"), http.client.IncompleteRead(b"")],
+)
+def test_topo_json_health_survives_socket_errors(topo, monkeypatch, exc):
+    def boom(req, timeout):
+        raise exc
+
+    monkeypatch.setattr(topo, "urlopen", boom)
+    assert topo._json_health_ok("http://localhost:8091/api/health") == (False, "0")
