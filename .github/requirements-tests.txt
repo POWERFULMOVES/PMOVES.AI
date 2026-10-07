@@ -94,6 +94,7 @@ slowapi               # content-provenance-gate rate limiter; imported by no tes
 uvicorn               # deepresearch/worker.py; imported by no test directly
 structlog             # graph-linker + 10 other service modules; imported by no test directly
 neo4j                 # graph-linker/neo4j_client.py; second link in the structlog chain
+jinja2                # 1 file: pmoves/tests/config/test_glances_sitrep_template.py (renders the Glances fetch template as Glances does)
 
 # Deliberately NOT installed: torch (3 files). It is a multi-GB download for
 # three tests and would dominate gate runtime. Those modules stay recorded in

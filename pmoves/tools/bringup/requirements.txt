@@ -11,9 +11,14 @@
 #
 # Updated: 2026-05-15 (Wave 0.6 doc-audit + topology validation)
 
-# Glances — cross-platform system monitor; underpins deploy/provision/glances-autodetect.{sh,ps1}
-# Stable JSON API; used to populate pmoves/configs/node_profiles/*.json.
-glances>=4.5.0,<5.0
+# Glances — cross-platform system monitor; the sanctioned fleet host probe
+# (docs/operations/GLANCES_RUNBOOK.md; make glances-check / glances-fetch).
+# Pinned to the 4.5.x release line (fork POWERFULMOVES/Pmoves-Glancer tracks
+# upstream release tags). Extras (verified in v4.5.7 pyproject.toml):
+#   containers -> docker/podman SDK (without it the containers plugin is absent)
+#   gpu        -> nvidia-ml-py      (without it GPUs are invisible)
+#   web        -> fastapi/uvicorn   (loopback `glances -w` server, runbook §4)
+glances[containers,gpu,web]>=4.5.7,<4.6
 
 # psutil — Glances dep; explicit pin so `bringup` and `lite` stay coherent.
 psutil>=5.9.8

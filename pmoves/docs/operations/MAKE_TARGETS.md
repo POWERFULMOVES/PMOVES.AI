@@ -360,8 +360,8 @@ This file summarizes the most-used targets and maps them to what they do under d
   - Glances host-probe preflight: Glances >= 4.4 (`GLANCES_MIN_VERSION`) and `from glances import api` / `GlancesAPI()` works; reports the Docker watcher (reachable / UNREACHABLE / extra missing) and visible GPUs.
   - Resolves `GLANCES_BIN` (pin) > `pmoves/.venv-pmoves` > `PATH`; exits 2 with the uv install line when missing. See `docs/operations/GLANCES_RUNBOOK.md`.
 - `make glances-fetch`
-  - One-shot host sitrep (`glances --fetch`) with `PYTHONIOENCODING=utf-8` and the PMOVES template `config/glances/pmoves-sitrep.jinja` (no IP/network/port fields; prints "DOCKER unreachable" instead of 0 containers; shows the vmmemWSL VM on Windows).
-  - `GLANCES_TEMPLATE=` uses the upstream stock template, which prints the host IP (warned). There is deliberately no server target.
+  - One-shot host sitrep: `glances -C config/glances/pmoves-glances.conf --fetch --fetch-template config/glances/pmoves-sitrep.jinja` with `PYTHONIOENCODING=utf-8`. The conf disables the `ip`/`cloud`/`connections` plugins and the update check; the template prints no addresses, lists non-running containers, says "DOCKER unreachable" instead of 0, and shows the vmmemWSL VM on Windows.
+  - No stock-template mode: upstream's default fetch template prints the host address. There is deliberately no server target.
 - `make smoke-showtime`
   - Runs core smoke + production monitoring smoke with the live watcher active.
   - Includes `showtime-links-strict` so endpoint click-through verification doubles as part of smoke.

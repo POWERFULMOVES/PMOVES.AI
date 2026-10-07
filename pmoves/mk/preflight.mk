@@ -346,7 +346,7 @@ showtime-links-strict: ## Build verification pages and fail if required endpoint
 # ----------------------------------------------------------------------------
 # Glances host probe (2026-10-07) -- docs/operations/GLANCES_RUNBOOK.md
 #   glances-check  - glances >= GLANCES_MIN_VERSION and `from glances import api` works
-#   glances-fetch  - one-shot host sitrep (no IPs; Docker "unreachable" != "0")
+#   glances-fetch  - one-shot host sitrep (PMOVES conf+template: no addresses; Docker "unreachable" != "0")
 # One-shot only. There is deliberately NO server target: `glances -w` binds all
 # interfaces with no auth by default -- see the runbook's security rule.
 # Resolution: GLANCES_BIN (pin) > .venv-pmoves (Windows, then POSIX) > PATH.
@@ -354,6 +354,7 @@ showtime-links-strict: ## Build verification pages and fail if required endpoint
 GLANCES_BIN ?=
 GLANCES_MIN_VERSION ?= 4.4
 GLANCES_TEMPLATE ?= config/glances/pmoves-sitrep.jinja
+GLANCES_CONF ?= config/glances/pmoves-glances.conf
 define GLANCES_RESOLVE
 g="$(GLANCES_BIN)"; \
 if [ -n "$$g" ] && ! "$$g" --version >/dev/null 2>&1; then echo "ERROR: GLANCES_BIN=$$g is not a runnable glances"; exit 2; fi; \
@@ -365,8 +366,8 @@ fi; \
 if [ -z "$$g" ] && command -v glances >/dev/null 2>&1; then g="$$(command -v glances)"; fi; \
 if [ -z "$$g" ]; then \
   echo "ERROR: glances not found (checked GLANCES_BIN, pmoves/.venv-pmoves, PATH)."; \
-  echo "  Install (uv, never pip): uv pip install --python .venv-pmoves/Scripts/python.exe 'glances[containers,gpu]>=4.5.7,<4.6'"; \
-  echo "  POSIX: same with .venv-pmoves/bin/python. See docs/operations/GLANCES_RUNBOOK.md#install"; \
+  echo "  Install (uv, never pip): uv pip install --python .venv-pmoves/Scripts/python.exe -r tools/bringup/requirements.txt"; \
+  echo "  POSIX: same with .venv-pmoves/bin/python. See docs/operations/GLANCES_RUNBOOK.md#2-install-uv-pinned-45x"; \
   exit 2; \
 fi
 endef
@@ -378,20 +379,20 @@ glances-check: ## Glances probe preflight: version >= GLANCES_MIN_VERSION (4.4) 
 	for c in "$$dir/python.exe" "$$dir/python" "$$dir/python3"; do [ -f "$$c" ] && { py="$$c"; break; }; done; \
 	if [ -z "$$py" ]; then echo "ERROR: no interpreter beside $$real -- cannot verify the Python API (pin GLANCES_BIN to a venv glances)"; exit 2; fi; \
 	echo "glances binary: $$g"; \
-	PYTHONIOENCODING=utf-8 "$$py" -c "import glances; from glances import api; v = glances.__version__; need = tuple(int(x) for x in '$(GLANCES_MIN_VERSION)'.split('.')); have = tuple(int(x) for x in v.split('.')[:2]); print('glances version:', v, '(need >=', '$(GLANCES_MIN_VERSION)' + ')'); assert have >= need, 'glances ' + v + ' is older than $(GLANCES_MIN_VERSION): the Python API (glances.api) needs >= 4.4'; gl = api.GlancesAPI(); dw = getattr(gl.containers, 'watchers', {}).get('docker'); print('python API: GlancesAPI() OK,', len(gl.plugins()), 'plugins'); print('docker watcher:', 'extra missing (glances[containers])' if dw is None else ('reachable' if dw.client is not None else 'UNREACHABLE')); print('gpu plugin:', len(gl.gpu.get_raw()), 'GPU(s) visible')" \
+	v="$$("$$py" -c "import glances; print(glances.__version__)" 2>/dev/null)"; \
+	if [ -z "$$v" ]; then echo "ERROR: $$py cannot import glances -- reinstall with uv (see above)"; exit 2; fi; \
+	if ! "$$py" -c "import sys; need = tuple(int(x) for x in sys.argv[1].split('.')); have = tuple(int(x) for x in sys.argv[2].split('.')[:2]); sys.exit(0 if have >= need else 1)" "$(GLANCES_MIN_VERSION)" "$$v"; then \
+	  echo "ERROR: glances $$v is older than $(GLANCES_MIN_VERSION) -- the Python API (glances.api) needs >= 4.4; upgrade: uv pip install --python $$py -r tools/bringup/requirements.txt"; exit 1; \
+	fi; \
+	echo "glances version: $$v (need >= $(GLANCES_MIN_VERSION))"; \
+	PYTHONIOENCODING=utf-8 "$$py" -c "from glances import api; gl = api.GlancesAPI(); pl = gl.plugins(); dw = gl.containers.watchers.get('docker') if 'containers' in pl else None; print('python API: GlancesAPI() OK,', len(pl), 'plugins'); print('docker watcher:', 'not probed (containers plugin disabled)' if 'containers' not in pl else ('extra missing (glances[containers])' if dw is None else ('reachable' if dw.client is not None else 'UNREACHABLE'))); print('gpu plugin:', (str(len(gl.gpu.get_raw())) + ' GPU(s) visible') if 'gpu' in pl else 'disabled')" \
 	  && echo "glances-check: OK"
 
-glances-fetch: ## One-shot host sitrep via `glances --fetch` (PMOVES template: no IPs; GLANCES_TEMPLATE= for upstream stock, which prints the IP)
+glances-fetch: ## One-shot host sitrep via `glances --fetch` with the PMOVES conf (ip plugin off) + template (no addresses)
 	@$(GLANCES_RESOLVE); \
-	tpl="$(GLANCES_TEMPLATE)"; \
-	if [ -n "$$tpl" ]; then \
-	  [ -f "$$tpl" ] || { echo "ERROR: fetch template not found: $$tpl"; exit 2; }; \
-	  set -- --fetch-template "$$tpl"; \
-	else \
-	  echo "WARNING: upstream stock fetch template prints the host IP -- do not paste this output into PRs/notes."; \
-	  set --; \
-	fi; \
-	PYTHONIOENCODING=utf-8 "$$g" --fetch "$$@" $(ARGS)
+	[ -f "$(GLANCES_TEMPLATE)" ] || { echo "ERROR: fetch template not found: $(GLANCES_TEMPLATE) (the stock template prints the host address and is not supported here)"; exit 2; }; \
+	[ -f "$(GLANCES_CONF)" ] || { echo "ERROR: glances config not found: $(GLANCES_CONF)"; exit 2; }; \
+	PYTHONIOENCODING=utf-8 "$$g" -C "$(GLANCES_CONF)" --fetch --fetch-template "$(GLANCES_TEMPLATE)" $(ARGS)
 
 bringup-showtime: ## Bring up stack and run retro readiness (Hyperdimensions/BotZ/Evo/Flute aware)
 	@echo "→ Showtime bring-up starting..."

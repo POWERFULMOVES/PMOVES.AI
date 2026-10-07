@@ -2,7 +2,8 @@
   PMOVES host sitrep -- Glances fetch template (Glances >= 4.4, tested on 4.5.7).
 
   Usage:  make -C pmoves glances-fetch
-     or:  glances --fetch --fetch-template pmoves/config/glances/pmoves-sitrep.jinja
+     or:  glances -C pmoves/config/glances/pmoves-glances.conf --fetch
+            --fetch-template pmoves/config/glances/pmoves-sitrep.jinja
 
   Rules this template enforces (see pmoves/docs/operations/GLANCES_RUNBOOK.md):
     * NO addresses: the `ip`, `network`, `connections` and `ports` plugins and the
@@ -18,9 +19,11 @@
 CPU    {{ '%5.1f' | format(gl.cpu['total']) }}% of {{ gl.core['log'] }} logical cores | load {{ '%0.2f' | format(gl.load['min1']) }}/{{ '%0.2f' | format(gl.load['min5']) }}/{{ '%0.2f' | format(gl.load['min15']) }}
 MEM    {{ '%5.1f' | format(gl.mem['percent']) }}% used {{ gl.auto_unit(gl.mem['used']) }} / {{ gl.auto_unit(gl.mem['total']) }} | available {{ gl.auto_unit(gl.mem['available']) }}{% if gl.mem['percent'] >= 90 %}  !! CRITICAL{% elif gl.mem['percent'] >= 80 %}  ! WARNING{% endif %}
 SWAP   {{ '%5.1f' | format(gl.memswap['percent']) }}% used {{ gl.auto_unit(gl.memswap['used']) }} / {{ gl.auto_unit(gl.memswap['total']) }}
-{%- set gpus = gl.gpu.get_raw() %}
-{%- if gpus %}
-{%- for g in gpus %}
+{%- set pl = gl.plugins() %}
+{%- if 'gpu' not in pl %}
+GPU    not probed (gpu plugin disabled)
+{%- elif gl.gpu.get_raw() %}
+{%- for g in gl.gpu.get_raw() %}
 GPU{{ loop.index0 }}   {{ g['name'] }} | mem {{ '%0.1f' | format(g['mem'] or 0) }}% | util {{ g['proc'] if g['proc'] is not none else '-' }}% | {{ g['temperature'] if g['temperature'] is not none else '-' }}C
 {%- endfor %}
 {%- else %}
@@ -29,23 +32,33 @@ GPU    none visible (no NVIDIA driver, or the glances[gpu] extra / nvidia-ml-py 
 {%- for fs in gl.fs.keys() %}
 DISK   {{ '%5.1f' | format(gl.fs[fs]['percent']) }}% {{ gl.auto_unit(gl.fs[fs]['used']) }} / {{ gl.auto_unit(gl.fs[fs]['size']) }} {{ fs }}{% if gl.fs[fs]['percent'] >= 90 %}  !! >=90%{% endif %}
 {%- endfor %}
-{%- set watchers = gl.containers.watchers %}
-{%- set dw = watchers.get('docker') %}
+{#- Containers. Upstream 4.5.7 (plugins/containers/engines/docker.py) only fills
+    memory_usage/cpu for ACTIVE containers (running|healthy|paused); for any
+    other status (unhealthy, starting, restarting, exited, created, dead -- the
+    health status replaces State.Status) the key is absent or None. So: list the
+    non-active ones by name+status, and rank memory only over containers that
+    actually carry a memory_usage value. #}
+{%- if 'containers' not in pl %}
+DOCKER not probed (containers plugin disabled) -- this is NOT "0 containers"
+{%- else %}
+{%- set dw = gl.containers.watchers.get('docker') %}
 {%- if dw is none %}
 DOCKER not probed: glances[containers] extra (docker SDK) not installed -- this is NOT "0 containers"
 {%- elif dw.client is none %}
 DOCKER unreachable: daemon down or socket/pipe not exposed -- container count UNKNOWN (not 0)
 {%- else %}
 {%- set cs = gl.containers.get_raw() | selectattr('engine', 'equalto', 'docker') | list %}
-{%- set unhealthy = cs | selectattr('status', 'in', ['unhealthy', 'restarting', 'exited', 'dead']) | list %}
-DOCKER reachable: {{ cs | length }} containers | {{ unhealthy | length }} unhealthy/restarting/exited
-{%- for c in unhealthy[:10] %}
+{%- set inactive = cs | rejectattr('status', 'in', ['running', 'healthy', 'paused']) | list %}
+DOCKER reachable: {{ cs | length }} containers | {{ inactive | length }} not running/healthy
+{%- for c in inactive[:15] %}
   !    {{ c['name'] }} [{{ c['status'] }}]
 {%- endfor %}
-{%- for c in (cs | sort(attribute='memory_usage', reverse=true))[:5] %}
-  mem  {{ gl.auto_unit(c['memory_usage'] or 0) }}B {{ c['name'] }}
+{%- for c in (cs | selectattr('memory_usage') | sort(attribute='memory_usage', reverse=true))[:5] %}
+  mem  {{ gl.auto_unit(c['memory_usage']) }}B {{ c['name'] }}
 {%- endfor %}
 {%- endif %}
+{%- endif %}
+{%- if 'processlist' in pl %}
 {#- Upstream top_process() drops every process with an empty cmdline, which on
     Windows includes vmmemWSL -- the WSL2/Docker VM, usually the largest memory
     consumer on the node. Read it straight from processlist instead. #}
@@ -67,9 +80,14 @@ TOP CPU
 {%- for p in gl.top_process(limit=3) %}
   {{ loop.index }}. {{ p['name'][:28] }} {{ p['cpu_percent'] }}% CPU | {{ gl.auto_unit(p['memory_info']['rss']) }}B
 {%- endfor %}
+{%- else %}
+PROCS  not probed (processlist plugin disabled)
+{%- endif %}
+{%- if 'alert' in pl %}
 {%- set alerts = gl.alert.get_raw() %}
 ALERTS {{ alerts | length }}
 {%- for a in alerts[:8] %}
   {{ a['state'] }} {{ a['type'] }} max {{ '%0.1f' | format(a['max']) }}{% if a['end'] == -1 %} (ongoing){% endif %}
 {%- endfor %}
+{%- endif %}
 == GLANCES CANNOT SEE: WSL distro state, Windows event logs, .wslconfig -- see GLANCES_RUNBOOK.md "Blind spots" ==

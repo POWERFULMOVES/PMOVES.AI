@@ -107,8 +107,8 @@ host_clis:
     purpose: "Glances — hardware probe backend (node profiles, ghost detector); sanctioned one-shot host probe (make -C pmoves glances-fetch / glances-check). Runbook: docs/operations/GLANCES_RUNBOOK.md"
     required: false
     install:
-      windows: "cd pmoves && uv pip install --python .venv-pmoves/Scripts/python.exe \"glances[containers,gpu]>=4.5.7,<4.6\"  # uv, never pip; add 'web' only where the loopback/tailnet server runs"
-      linux: "cd pmoves && uv pip install --python .venv-pmoves/bin/python \"glances[containers,gpu]>=4.5.7,<4.6\"  # uv, never pip"
+      windows: "cd pmoves && uv pip install --python .venv-pmoves/Scripts/python.exe -r tools/bringup/requirements.txt  # uv, never pip; pins glances[containers,gpu,web]>=4.5.7,<4.6"
+      linux: "cd pmoves && uv pip install --python .venv-pmoves/bin/python -r tools/bringup/requirements.txt  # uv, never pip"
     check: "glances --version"
   skills:
     purpose: "Open skills ecosystem package manager (vercel-labs/skills CLI, via npx) — backs the find-skills meta-skill"

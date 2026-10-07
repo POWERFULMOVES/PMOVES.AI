@@ -35,8 +35,8 @@ fi
 
 if [[ -n "${python_target}" ]] && [[ "${python_target}" == *.exe ]] && [[ "${uv_cmd}" == "uv" ]]; then
   # WSL/Git-Bash mixed mode: linux uv cannot target Windows interpreters reliably.
-  uv_cmd=""
-  have_uv=0
+  # Under Git Bash the bare `uv` IS uv.exe, so prefer uv.exe over a pip fallback.
+  if have uv.exe; then uv_cmd="uv.exe"; else uv_cmd=""; have_uv=0; fi
 fi
 
 to_native_path() {
