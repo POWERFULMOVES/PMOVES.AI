@@ -5104,7 +5104,7 @@ a2ui-renderer-render: ## Render a single markdown doc as a living-doc MP4 via a2
 	    --token "$${A2UI_RENDERER_TOKEN}" \
 	    --format mp4
 
-# Render every entry in pmoves/config/living_docs_registry.yaml.
+# Render every entry in pmoves/configs/living_docs_registry.yaml.
 # Each entry: { id, source_doc, output_key, format, ttl_days }.
 # Outputs go to $${A2UI_RENDERER_RENDER_DIR}/<id>.<format> and are uploaded
 # to MinIO bucket $${MINIO_BUCKET}/a2ui/living-docs/<id>.<format>.

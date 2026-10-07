@@ -15,8 +15,13 @@ targets and gpu-rerank-evidence carrying the same mistake.
 Sibling of test_make_submodule_targets_repo_rooted.py, same shape: a ratchet on
 recipe lines only. It fires where a `pmoves/`-prefixed path is in a position the
 SHELL resolves against cwd (run by an interpreter, written by mkdir or a
-redirect, or `make -C pmoves`), and only when that path does not exist relative
-to `pmoves/`. Arguments handed to tools that resolve paths against the repo
+redirect, or `make -C pmoves`) when the path was evidently meant repo-rooted:
+its first component exists under `pmoves/` (so `pmoves/<it>` from cwd
+`pmoves/` names the wrong place), or the path starts with a make/shell
+variable and so cannot be checked statically. Existence under `pmoves/pmoves/`
+is NEVER an exemption: that is exactly the directory this bug populates, so one
+local run of a buggy `mkdir -p pmoves/docs/logs` would otherwise silence the
+ratchet for good. Arguments handed to tools that resolve paths against the repo
 root themselves (e.g. `secrets_sync.py --manifest pmoves/chit/...`) are not in
 those positions and are left alone. A recipe that first does
 `cd $(CURDIR)/..` (or `cd $(REPO_ROOT)` / `cd $(PMOVES_ROOT)`) is at the repo
@@ -66,18 +71,21 @@ def _prep(line: str) -> str:
     return MAKE_MESSAGE.sub(" ", QUOTED.sub(" ", line.lstrip("\t").lstrip("@-+")))
 
 
-def _line_offenders(body: str) -> list[str]:
-    """Return the cwd-resolved pmoves/ paths in one recipe line that do not exist."""
+def _line_offenders(body: str, pmoves_dir: Path = PMOVES) -> list[str]:
+    """Return the cwd-resolved pmoves/ paths in one recipe line that point at pmoves/pmoves/."""
     if body.lstrip().startswith("#") or AT_REPO_ROOT.search(body):
         return []
     hits = []
     for m in CWD_RESOLVED.finditer(body):
         rel = m.group(1)
-        # Make variables in the path can't be checked statically; check the literal prefix.
-        literal = re.split(r"\$[({]", rel, maxsplit=1)[0].rstrip("/")
-        if not (PMOVES / "pmoves" / literal).exists():
+        # Literal prefix before any make/shell variable; empty means `pmoves/$(X)...`.
+        literal = re.split(r"\$[({]", rel, maxsplit=1)[0]
+        head = literal.split("/", 1)[0]
+        # Flag when the path was meant repo-rooted (its first component lives in
+        # pmoves/) or cannot be checked. Never consult pmoves/pmoves/ itself.
+        if not head or (pmoves_dir / head).exists():
             hits.append(f"pmoves/{rel}")
-    if MAKE_C_PMOVES.search(body) and not (PMOVES / "pmoves" / "Makefile").exists():
+    if MAKE_C_PMOVES.search(body):
         hits.append("-C pmoves")
     return hits
 
@@ -129,3 +137,23 @@ def test_the_check_would_actually_catch_the_original_defect():
     ]
     for line in fixed_or_legit:
         assert not _line_offenders(_prep(line)), f"detector wrongly flags: {line!r}"
+
+
+def test_variable_prefixed_path_is_flagged():
+    """`pmoves/$(X)` has no literal to check, so it must be flagged, not waved through."""
+    for line in ("\tbash pmoves/$(SPARK_SCRIPT)", "\t@mkdir -p pmoves/${OUT_DIR}"):
+        assert _line_offenders(_prep(line)), f"variable-prefixed path not flagged: {line!r}"
+
+
+def test_a_stray_pmoves_pmoves_copy_does_not_exempt(tmp_path: Path):
+    """The bug writes into pmoves/pmoves/. A stray copy there must not hide the bug."""
+    fake = tmp_path / "pmoves"
+    (fake / "docs" / "logs").mkdir(parents=True)
+    (fake / "pmoves" / "docs" / "logs").mkdir(parents=True)  # left by an earlier buggy run
+    (fake / "pmoves" / "Makefile").write_text("", encoding="utf-8")
+    assert _line_offenders(_prep("\t@mkdir -p pmoves/docs/logs"), fake), (
+        "a path that also exists under pmoves/pmoves/ was exempted"
+    )
+    assert _line_offenders(_prep("\t(make -C pmoves x)"), fake), (
+        "a stray pmoves/pmoves/Makefile exempted `make -C pmoves`"
+    )

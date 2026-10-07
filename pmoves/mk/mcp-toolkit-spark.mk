@@ -35,7 +35,7 @@ mcp-spark-status: ## [spark-mcp] Show SPARK MCP gateway + Kimi config status
 	@echo "=== Kimi Code MCP config ===" && \
 	  ( [ -f "$(CURDIR)/../.kimi/mcp.json" ] && echo "Found: .kimi/mcp.json ($(shell wc -l < $(CURDIR)/../.kimi/mcp.json) lines)" || echo "Missing: .kimi/mcp.json" )
 
+# The script writes .kimi/mcp.json relative to cwd, so it runs from the repo root.
 mcp-spark-connect: ## [spark-mcp] Connect Kimi Code to Docker MCP gateway (writes .kimi/mcp.json)
 	@echo "[mcp-spark-connect] Wiring Kimi Code to Docker MCP Toolkit..."
-	@# The script writes .kimi/mcp.json relative to cwd, so it runs from the repo root.
 	@cd $(CURDIR)/.. && bash pmoves/scripts/mcp-toolkit-connect-kimi.sh
