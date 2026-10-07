@@ -102,3 +102,5 @@ DNS is necessary, not sufficient. Also required, in order:
    apps fall back to their own logins.
 
 See [`EDGE_TRAEFIK_SSO_RUNBOOK.md`](./EDGE_TRAEFIK_SSO_RUNBOOK.md).
+
+> **2026-10-07 UPDATE (agent0-sidecar):** `persona.pmoves.ai` and `chit.pmoves.ai` are **LIVE** via cloudflared tunnel `persona-edge-a0` (CNAMEs proxied → `<tunnel-id>.cfargotunnel.com`, remote-managed ingress on the A0 sidecar). The Direct-vs-Tunnel matrix above remains canonical for the durable kvm2 edge (Option D); when it lands, swap the two CNAMEs to A records. Full trail: `reviews/DNS_CUTOVER_REVIEW_2026-10-07.md` + AGNOTE4482PHI.t1 2026-10-07 rows.
