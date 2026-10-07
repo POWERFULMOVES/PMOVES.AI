@@ -91,7 +91,6 @@ DO $$
 DECLARE
     auth_rows int;
     shadow_rows int;
-    v bigint;
 BEGIN
     SELECT count(*) INTO auth_rows FROM auth.schema_migrations;
     SELECT count(*) INTO shadow_rows
@@ -105,10 +104,25 @@ BEGIN
     IF shadow_rows IS NOT NULL AND shadow_rows > 0 AND auth_rows < shadow_rows THEN
         DELETE FROM auth.schema_migrations
         WHERE version BETWEEN 20170101000000 AND 20181231235959;
+        -- Re-seed modern versions only: the DELETE above must stick, so the
+        -- legacy 2017/2018 rows are excluded here, not re-imported.
+        -- Both quarantined copies are consulted; the misdirected ledger can
+        -- land under either shadow name depending on the node's role name.
         INSERT INTO auth.schema_migrations (version)
         SELECT version FROM auth_quarantine.schema_migrations_public_shadow
+        WHERE version NOT BETWEEN 20170101000000 AND 20181231235959
         ON CONFLICT (version) DO NOTHING;
-        RAISE NOTICE 'auth.schema_migrations re-seeded: % rows', shadow_rows;
+        IF EXISTS (
+            SELECT 1 FROM information_schema.tables
+            WHERE table_schema = 'auth_quarantine'
+              AND table_name = 'schema_migrations_pmoves_shadow'
+        ) THEN
+            INSERT INTO auth.schema_migrations (version)
+            SELECT version FROM auth_quarantine.schema_migrations_pmoves_shadow
+            WHERE version NOT BETWEEN 20170101000000 AND 20181231235959
+            ON CONFLICT (version) DO NOTHING;
+        END IF;
+        RAISE NOTICE 'auth.schema_migrations re-seeded: % shadow rows', shadow_rows;
     ELSE
         RAISE NOTICE 'auth.schema_migrations left as-is (auth_rows=%)', auth_rows;
     END IF;
