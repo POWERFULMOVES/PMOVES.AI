@@ -1,0 +1,112 @@
+name: Orphan Branch Ratchet
+
+# Reports work stranded off `main`: branches on origin holding commits that are
+# not on main (by ancestry AND by patch, `git cherry`) and are carried by no
+# open PR -- after a merged PR (POST_MERGE), behind PRs that closed unmerged
+# (CLOSED_UNMERGED), or never proposed at all (NO_PR). Squash merges are
+# handled: commits inside the latest merged PR's head are not orphans.
+#
+# WHY IT EXISTS. Measured 2026-10-07: 47 branches on origin held 92 commits
+# whose change applies cleanly to main and is not on it, carried by no open
+# PR. Nothing reported them. They are baselined in
+# pmoves/config/orphan_branch_baseline.json, which may only shrink. Commits
+# whose replay onto main is a no-op are LANDED (this is how a branch swallowed
+# by another branch's squash, e.g. fix/consolidate-archon via PR #2275, is
+# recognised); commits that conflict are UNCERTAIN and listed, not counted.
+#
+# ADVISORY, NOT A MERGE GATE -- and that is a departure from fork-registry /
+# validate-* ratchets, for a reason. Those check a property of the PR's OWN
+# tree, offline, so a red result is something the PR author caused and can fix.
+# This one measures REMOTE STATE (every branch head + the PR list via the
+# GitHub API): a PR's verdict would depend on what other people pushed to other
+# branches, and on API availability. Wired into merge-gate it would block
+# unrelated PRs. So:
+#   * the ratchet step is `continue-on-error` and runs daily + on dispatch,
+#     plus on PRs that touch the tool, its baseline, or this workflow;
+#   * the pytest step is a real gate on those PRs (offline, fixture repos),
+#     the same regression net every ratchet workflow carries.
+#
+# Exit doctrine is preserved in the step: 1 (findings) is a ::warning, 3 (could
+# not measure: gh/API or remote unreachable) is an ::error -- never a pass.
+
+on:
+  schedule:
+    - cron: "30 6 * * *"  # Daily 06:30 UTC, after fork-sync / branch-protection-drift
+  pull_request:
+    branches:
+      - main
+      - PMOVES.AI-Edition-Hardened
+      - PMOVES.AI-Edition-Hardened-Integrations
+    paths:
+      - "pmoves/config/orphan_branch_baseline.json"
+      - "pmoves/tools/orphan_branch_ratchet.py"
+      - "pmoves/tests/tools/test_orphan_branch_ratchet.py"
+      - ".github/workflows/orphan-branch-ratchet.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  orphan-branch-ratchet:
+    name: orphan-branch-ratchet
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Every branch's history is needed: the tool resolves each live head
+          # (`git ls-remote`) to a local commit and runs `git cherry` against
+          # main. A depth-1 checkout would make every branch UNMEASURED (exit 3).
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+
+      # Same install as merge-gate.yml: official script, not a marketplace
+      # action, so no new Actions-allowlist entry or SHA to keep pinned.
+      - name: Install uv
+        run: |
+          set -euo pipefail
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Pytest the ratchet (regression net for the ratchet itself)
+        run: |
+          # pmoves/conftest.py imports pytest_asyncio + pyyaml; the import chain
+          # must resolve or collection dies before a test runs.
+          uv run --no-project --with pytest --with pytest-asyncio --with pyyaml \
+            python -m pytest -q pmoves/tests/tools/test_orphan_branch_ratchet.py
+
+      - name: Orphan ratchet (remote mode, advisory)
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Invoked DIRECTLY, not through `make`: make collapses 1 and 3 into 2,
+          # and could-not-measure must stay distinguishable from findings.
+          # stdlib only; `gh` is preinstalled on ubuntu-latest.
+          set +e
+          python pmoves/tools/orphan_branch_ratchet.py remote | tee orphan-report.txt
+          code=${PIPESTATUS[0]}
+          {
+            echo "## Orphan branch ratchet (advisory)"
+            echo
+            echo '```'
+            cat orphan-report.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          case "$code" in
+            0) ;;
+            1) echo "::warning title=orphan-branch-ratchet::new orphan, growth, or unreasoned baseline entry (see summary)" ;;
+            3) echo "::error title=orphan-branch-ratchet::COULD NOT MEASURE (gh/API or remote unavailable) - not a pass" ;;
+            *) echo "::error title=orphan-branch-ratchet::unexpected exit $code" ;;
+          esac
+          exit "$code"
