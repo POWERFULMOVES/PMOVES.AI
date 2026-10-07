@@ -323,6 +323,11 @@ async def connect_nats() -> None:
             # _js_geom_sub_active stays False either way; per-connection core
             # NATS subs handle delivery.
             if A2UI_GEOM_DURABLE:
+                logger.warning(
+                    "A2UI_GEOM_DURABLE=1: durable %s consumer has no callback yet; "
+                    "messages will accumulate unacked until forwarding is wired",
+                    GEOMETRY_STREAM,
+                )
                 try:
                     await js.subscribe(
                         GEOMETRY_WILDCARD,
