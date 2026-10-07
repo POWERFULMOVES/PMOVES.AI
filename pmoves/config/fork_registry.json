@@ -499,6 +499,12 @@
       "sync": true,
       "reason": "kilocode CLI harness source of truth for the fleet (#3058); pinned to fork main in .gitmodules; serves the kiloclaw VPS lane (kilo-auto/zai-coding lanes whitelisted)",
       "branch": "main"
+    },
+    "Pmoves-Glancer": {
+      "upstream": "nicolargo/glances",
+      "sync": true,
+      "reason": "Glances is the fleet host-probe backend (docs/operations/GLANCES_RUNBOOK.md; make glances-fetch/glances-check). Hardened branches are pinned to upstream RELEASE TAGS (fast-forwarded to v4.5.7 on 2026-10-07, 0 PMOVES-specific commits), not upstream develop -- so it is deliberately NOT in the fork-sync.yml FORKS list, which would merge the upstream default branch (develop). Advance by fast-forwarding to the next release tag. Not a submodule: nodes install the pinned PyPI release with uv (glances>=4.5.7,<4.6); the fork is the audit/patch point if PMOVES hardening is ever needed. PMOVES.AI-Edition-Hardened-DoX tracks the same tag for the DoX lane.",
+      "branch": "PMOVES.AI-Edition-Hardened"
     }
   },
   "_excluded": {
