@@ -14,6 +14,19 @@ $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $envf = if ($env:PMOVES_ENV_SHARED) { $env:PMOVES_ENV_SHARED } else { Join-Path $root 'pmoves\env.shared' }
 
+# --- MAVIS SDK ENV STRIP -----------------------------------------------------
+# Mirror the bash twin's section. Crush consumes zero Mavis SDK env (it
+# talks to Z.AI/GLM on its own config), so all Mavis SDK vars get stripped +
+# preserved under PMOVES_MAVIS_SDK_<NAME>. See mavis_sdk_env.ps1 for the
+# registry + per-CLI needs list.
+$helper = Join-Path $root 'pmoves\scripts\mavis_sdk_env.ps1'
+if (Test-Path $helper) {
+    . $helper
+    Strip-MavisSdkEnvFor -CliName 'crush'
+} else {
+    Write-Warning "[crush-pmoves] mavis_sdk_env.ps1 not found at $helper -- Mavis SDK env may bleed into the launched session."
+}
+
 if (Test-Path $envf) {
     # Blocklist mirrors crush-pmoves.sh: vars that control Crush SDK/session/billing
     # and must NEVER be sourced by the launcher. Sourcing ANTHROPIC_API_KEY (or

@@ -66,6 +66,21 @@ fi
 
 ENVF="${PMOVES_ENV_SHARED:-$ROOT/pmoves/env.shared}"
 
+# ---------------------------------------------------------------------------
+# Mavis SDK env strip -- mirrors the same step in claude-pmoves.sh so every
+# PMOVES launcher has parity (operator direction 2026-09-17). Crush consumes
+# zero Mavis SDK env (it talks to Z.AI/GLM on its own config), so all
+# Mavis SDK vars get stripped + preserved under PMOVES_MAVIS_SDK_<NAME>.
+# See pmoves/scripts/mavis_sdk_env.sh for the registry + per-CLI needs list.
+# ---------------------------------------------------------------------------
+if [ -f "$ROOT/pmoves/scripts/mavis_sdk_env.sh" ]; then
+  # shellcheck source=../../pmoves/scripts/mavis_sdk_env.sh
+  . "$ROOT/pmoves/scripts/mavis_sdk_env.sh"
+  mavis_sdk_strip_env_for "crush"
+else
+  echo "[crush-pmoves] WARN: mavis_sdk_env.sh not found at $ROOT/pmoves/scripts/ -- Mavis SDK env may bleed into the launched session." >&2
+fi
+
 if [ -f "$ENVF" ]; then
   # Blocklist: vars that control Crush SDK/session behavior and should NEVER be
   # sourced by the launcher. These are user's personal billing/config, not fleet
