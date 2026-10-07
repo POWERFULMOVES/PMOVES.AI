@@ -107,8 +107,14 @@ host_clis:
     purpose: "Glances — hardware probe backend (node profiles, ghost detector); sanctioned one-shot host probe (make -C pmoves glances-fetch / glances-check). Runbook: docs/operations/GLANCES_RUNBOOK.md"
     required: false
     install:
-      windows: "cd pmoves && uv pip install --python .venv-pmoves/Scripts/python.exe -r tools/bringup/requirements.txt  # uv, never pip; pins glances[containers,gpu,web]>=4.5.7,<4.6"
-      linux: "cd pmoves && uv pip install --python .venv-pmoves/bin/python -r tools/bringup/requirements.txt  # uv, never pip"
+      windows: "cd pmoves && uv pip install --python .venv-pmoves/Scripts/python.exe -r tools/bringup/requirements.txt  # uv, never pip; pins glances[containers,gpu,web]>=4.5.7,<4.6; REQUIRES pmoves/.venv-pmoves (fresh node: uv venv .venv-pmoves first, runbook section 2)"
+      linux: "cd pmoves && uv pip install --python .venv-pmoves/bin/python -r tools/bringup/requirements.txt  # uv, never pip; REQUIRES pmoves/.venv-pmoves (fresh node: uv venv .venv-pmoves first, runbook section 2)"
+    # Venv creation is NOT chained in: `uv venv --allow-existing` re-points an existing
+    # venv at uv's default interpreter (measured: a 3.12 venv became 3.14), which
+    # would break the shared bring-up venv.
+    # Kept as `glances --version`: install_tools.py runs `check` only for a version
+    # line, only after shutil.which() found the binary, with a 10 s timeout --
+    # `make -C pmoves glances-check` (~30 s, cwd-dependent) would time out there.
     check: "glances --version"
   skills:
     purpose: "Open skills ecosystem package manager (vercel-labs/skills CLI, via npx) — backs the find-skills meta-skill"

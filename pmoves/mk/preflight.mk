@@ -375,16 +375,21 @@ endef
 .PHONY: glances-check glances-fetch
 glances-check: ## Glances probe preflight: version >= GLANCES_MIN_VERSION (4.4) and Python API import (GLANCES_BIN= to pin)
 	@$(GLANCES_RESOLVE); \
+	echo "glances binary: $$g"; \
 	real="$$(readlink -f "$$g" 2>/dev/null || echo "$$g")"; dir="$$(dirname "$$real")"; py=""; \
 	for c in "$$dir/python.exe" "$$dir/python" "$$dir/python3"; do [ -f "$$c" ] && { py="$$c"; break; }; done; \
-	if [ -z "$$py" ]; then echo "ERROR: no interpreter beside $$real -- cannot verify the Python API (pin GLANCES_BIN to a venv glances)"; exit 2; fi; \
-	echo "glances binary: $$g"; \
-	v="$$("$$py" -c "import glances; print(glances.__version__)" 2>/dev/null)"; \
-	if [ -z "$$v" ]; then echo "ERROR: $$py cannot import glances -- reinstall with uv (see above)"; exit 2; fi; \
-	if ! "$$py" -c "import sys; need = tuple(int(x) for x in sys.argv[1].split('.')); have = tuple(int(x) for x in sys.argv[2].split('.')[:2]); sys.exit(0 if have >= need else 1)" "$(GLANCES_MIN_VERSION)" "$$v"; then \
-	  echo "ERROR: glances $$v is older than $(GLANCES_MIN_VERSION) -- the Python API (glances.api) needs >= 4.4; upgrade: uv pip install --python $$py -r tools/bringup/requirements.txt"; exit 1; \
+	if [ -n "$$py" ]; then v="$$("$$py" -c "import glances; print(glances.__version__)" 2>/dev/null)"; \
+	  [ -n "$$v" ] || { echo "ERROR: $$py cannot import glances -- reinstall with uv (see runbook section 2)"; exit 2; }; \
+	else v="$$("$$g" --version 2>/dev/null | awk '/^Glances version/ {print $$NF; exit}')"; \
+	  [ -n "$$v" ] || { echo "ERROR: $$g --version reported no Glances version"; exit 2; }; fi; \
+	if ! awk -v h="$$v" -v n="$(GLANCES_MIN_VERSION)" 'BEGIN { split(h, a, "."); split(n, b, "."); for (i = 1; i <= 4; i++) { x = a[i] + 0; y = b[i] + 0; if (x > y) exit 0; if (x < y) exit 1 } exit 0 }'; then \
+	  echo "ERROR: glances $$v is older than $(GLANCES_MIN_VERSION) -- the Python API (glances.api) needs >= 4.4; upgrade with uv: -r tools/bringup/requirements.txt"; exit 1; \
 	fi; \
 	echo "glances version: $$v (need >= $(GLANCES_MIN_VERSION))"; \
+	if [ -z "$$py" ]; then \
+	  echo "WARNING: no interpreter beside $$real (PATH / uv tool install) -- Python API not verified; use the pmoves/.venv-pmoves install for a full check"; \
+	  echo "glances-check: OK (binary + version only)"; exit 0; \
+	fi; \
 	PYTHONIOENCODING=utf-8 "$$py" -c "from glances import api; gl = api.GlancesAPI(); pl = gl.plugins(); dw = gl.containers.watchers.get('docker') if 'containers' in pl else None; print('python API: GlancesAPI() OK,', len(pl), 'plugins'); print('docker watcher:', 'not probed (containers plugin disabled)' if 'containers' not in pl else ('extra missing (glances[containers])' if dw is None else ('reachable' if dw.client is not None else 'UNREACHABLE'))); print('gpu plugin:', (str(len(gl.gpu.get_raw())) + ' GPU(s) visible') if 'gpu' in pl else 'disabled')" \
 	  && echo "glances-check: OK"
 

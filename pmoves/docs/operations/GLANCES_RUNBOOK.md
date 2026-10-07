@@ -70,7 +70,10 @@ glances-check: OK
 `glances-check` resolves `GLANCES_BIN` (pin) > `pmoves/.venv-pmoves` > `PATH`;
 missing Glances, a non-importable install or a version below
 `GLANCES_MIN_VERSION` (4.4, the Python API floor `[gd:api/python]`) each exit
-with a one-line remedy. Source: `pmoves/mk/preflight.mk` (Glances block).
+with a one-line remedy (versions compare at full arity, so `GLANCES_MIN_VERSION=4.5.7`
+passes on 4.5.7). A PATH-only install with no interpreter beside it (e.g. `uv tool
+install`) gets a binary + version check and a WARNING that the Python API was not
+verified. Source: `pmoves/mk/preflight.mk` (Glances block).
 
 ## 3. One-shot usage (the default — no daemon)
 
