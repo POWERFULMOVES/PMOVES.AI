@@ -23,7 +23,7 @@ starts and never completes `initialize` does not qualify.
 
 | Fork / CLI | Verdict | Command run | What came back |
 |---|---|---|---|
-| **PMOVES-hermes-agent** | ✅ **PASS** | `hermes-acp` (from its venv) | `result.protocolVersion: 1`, `agentInfo.name: hermes-agent`, `version 0.17.0`, 2 `authMethods`. `--check` → `Hermes ACP check OK` |
+| **PMOVES-hermes-agent** | ✅ **PASS** | `hermes-acp` (from its venv) | `result.protocolVersion: 1`, `agentInfo.name: hermes-agent`, `version 0.17.0` (the **installed venv copy**, not the fork pin: the pinned tree reports `0.20.0`, see `PMOVES_ACP_CITIZENSHIP_INVENTORY_2026-09-22.md` §4.1), 2 `authMethods`. `--check` → `Hermes ACP check OK` |
 | **PMOVES-Agent-Zero** | ✅ **PASS** | `a0 acp --check` | `A0 ACP check OK`. Already covered by Spynel's built-in `agent-zero` alias — no custom config needed |
 | **Kilo** (`@kilocode/cli`) | ✅ **PASS** | `kilo acp` | `result.protocolVersion: 1`, `agentInfo.name: Kilo`, `version 7.7.5`, 1 `authMethod` |
 | **PMOVES-crush** @ `v0.91.1-pmoves.1` | ❌ **NOT ACP-CAPABLE** | `crush acp` | `Unknown command "acp" for "crush"` (exit 1) |

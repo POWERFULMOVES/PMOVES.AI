@@ -12,7 +12,7 @@
 
 **Landing recommendation: LAND as-is.** The PR's true reviewable delta is **5 files, 591 insertions, 0 deletions** against the merge-base, not the 130 files / 10,123 insertions suggested by the local three-dot measurement. The "4 commits ahead of main" figure was wrong on this node; there are 5 commits since the merge-base, of which 3 are substantive. CI is mergeable; the single failing check (`kilo-review`) is a known tool-pin flake, not a code defect. `merge-decision` (the actual merge-gate) passed.
 
-The PR is the implementation of `plans/HYPERAGINTZ_ORCHESTRATION_SCOPE_2026-09-19.md` **D1** (register the harnesses Spynel drives) and Amendment **A.12** substrate 1 (PMOVES-Registry as the harness-portability substrate). Landing is consistent with operator intent ("it should have promoted many PRs ago"). One unrelated commit (`chore(node): manage Node as a pinned dep — fnm 24 + .node-version`) is in the PR; it was discovered during this lane and is load-bearing for the probe to pass — keep it.
+The PR is the implementation of `plans/HYPERAGINTZ_ORCHESTRATION_SCOPE_2026-09-19.md` **D1** (register the harnesses Spynel drives) and Amendment **A.12** substrate 1 (PMOVES-registry as the harness-portability substrate). Landing is consistent with operator intent ("it should have promoted many PRs ago"). One unrelated commit (`chore(node): manage Node as a pinned dep — fnm 24 + .node-version`) is in the PR; it was discovered during this lane and is load-bearing for the probe to pass — keep it.
 
 ---
 
@@ -220,9 +220,9 @@ Read from `origin/main:plans/HYPERAGINTZ_ORCHESTRATION_SCOPE_2026-09-19.md` (642
 
 > *"Register the harnesses Spynel drives (Agent Zero et al.) — recommended."*
 
-**Binds #3097.** The PR stands up the registry fork (`PMOVES-Registry`) and brings the launcher probe + TAC tree that make the registry operable from the fleet. This is exactly the harness-portability substrate D1 names as the customization target.
+**Binds #3097.** The PR stands up the registry fork (`PMOVES-registry`) and brings the launcher probe + TAC tree that make the registry operable from the fleet. This is exactly the harness-portability substrate D1 names as the customization target.
 
-### 6.2 A.12 substrate 1 — PMOVES-Registry as harness portability
+### 6.2 A.12 substrate 1 — PMOVES-registry as harness portability
 
 > *"Sha256-pinned, schema-validated harness entries... A node's harness substrate comes from the registry, never from hand-installs."*
 

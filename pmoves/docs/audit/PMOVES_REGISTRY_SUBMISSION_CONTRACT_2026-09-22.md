@@ -230,7 +230,7 @@ A submission PR adding `<id>/agent.json` + `<id>/icon.svg` matches the `pull_req
 |---|---|---|---|
 | `lint-and-test` | yes | `ruff check .`, `ruff format --check .`, and `pytest tests/ -v` — all with `working-directory: .github/workflows` | `build-registry.yml:26-48` |
 | `build` (Build & Validate) | yes, `needs: lint-and-test` | `uv run --with jsonschema .github/workflows/build_registry.py` — full schema + id + version + distribution + URL + icon validation; then `--list-ids` to emit the auth matrix | `build-registry.yml:50-77` |
-| `verify-auth` | **yes** — `needs: build`, gated only by `if: needs.build.outputs.agent_ids != '[]'`, **no event condition** | one matrix leg per non-quarantined agent id, `timeout-minutes: 5`, `fail-fast: false`, running `verify_agents.py --auth-check --agent "$AGENT_ID"` | `build-registry.yml:89-115` |
+| `verify-auth` | **yes** — `needs: build`, gated only by `if: needs.build.outputs.agent_ids != '[]'`, **no event condition** (as of `a5cc072`; see §12 on upstream drift) | one matrix leg per non-quarantined agent id, `timeout-minutes: 5`, `fail-fast: false`, running `verify_agents.py --auth-check --agent "$AGENT_ID"` | `build-registry.yml:89-115` |
 | `upload` (S3/R2) | **no** | explicitly `(github.event_name == 'push' \|\| github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'` | `build-registry.yml:117-120` |
 | `release` (GitHub Release) | **no** | same event/ref condition | `build-registry.yml:172-175` |
 
@@ -312,7 +312,7 @@ Enforcement of the two directory-coupled rules:
 | Agent directories | **42** | `ls -d */ \| wc -l` at the checkout root |
 | Directories carrying `agent.json` | **42** | `find . -maxdepth 2 -name agent.json \| wc -l`; the "dirs without agent.json" check returned empty |
 | `agent.json` files repo-wide | **42** | `find . -name agent.json` (excluding `.git`) |
-| Quarantined ids | 8 | `quarantine.json` |
+| Quarantined ids | 8 | `quarantine.json`: agoragentic-acp, crow-cli, deepagents, minion-code, qoder, vtcode, fast-agent, mistral-vibe |
 | Non-quarantined (auth-matrix) ids | 34 | 42 − 8 |
 | PMOVES / POWERFULMOVES entry present? | **No** | `grep -ril 'powerfulmoves\|pmoves' --exclude-dir=.git .` → **zero matches** anywhere in the tree, including README/CONTRIBUTING prose |
 

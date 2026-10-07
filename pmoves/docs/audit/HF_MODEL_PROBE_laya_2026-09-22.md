@@ -3,7 +3,7 @@
 **Node:** PMOVES-SPARK (`/home/powerfulmoves/agent-zero/PMOVES.AI`) · **Branch:** `feat/comfyui-ui-to-api` · **Operating surface:** OpenRoom
 **Task:** `t-20260922T202933Z-8f3a0b5b2d9e` · **Goal:** `g-20260922T142400Z-d1e2f3a4b5c6d7e8` · round 1 · criterion **SC-2**
 **Inventory input:** `pmoves/docs/audit/HF_MODEL_INVENTORY_2026-09-22.md` §4 (Laya row, `local-viable`)
-**Probe-script artifact (intermediate):** `/tmp/probe/probe_laya.py` + `/tmp/probe/laya_raw.json`
+**Probe-script artifact (intermediate, not retained):** the probe driver and raw output lived under `/tmp/probe/` and were not preserved; the results below are the record. A re-run needs a fresh driver.
 **Bounded probe spec scope:** cipher sign · CHIT geometry-bus interaction · NATS round-trip — exactly three, per the task spec; no fourth probe added.
 
 ---
@@ -25,7 +25,7 @@
 - **tool call**: `bash pmoves/scripts/with-env.sh python3 pmoves/scripts/mint_cipher_token.py --agent spark-claude --scopes memory:read,memory:write --allow-uncarded --rest-url http://localhost:8000/rest/v1`
   - `--allow-uncarded` is the documented override for the case where a fleet agent emits but is not yet on the active card list (`pmoves/scripts/mint_cipher_token.py` gate, per `pmoves/docs/operations/CIPHER_AUTH_RUNBOOK.md`).
   - `--rest-url http://localhost:8000/rest/v1` overrides the with-env.sh default `http://supabase-kong:8000/rest/v1` (which only resolves inside the docker network). The host-side supabase-kong is reachable at `localhost:8000`.
-- **result**: success; `CIPHER_TOKEN=<redacted:token_uuid>` shape; `AGENT=spark-claude`; `SCOPES=memory:read,memory:write`; returncode 0; the token_uuid hex span is `<39 chars hex>` (16 bytes of entropy before the 32-char hex uuid).
+- **result**: success; `CIPHER_TOKEN=<redacted:token_uuid>` shape; `AGENT=spark-claude`; `SCOPES=memory:read,memory:write`; returncode 0; a token of the expected shape was returned (value and structure not recorded here).
 - **timing**: 102 ms end-to-end (subprocess spawn + urllib HTTPS round-trip + Supabase insert).
 
 ## CHIT geometry-bus
@@ -52,14 +52,14 @@
     }
   }
   ```
-- **observation**: subscribed to `tokenism.cgp.ready.v1` BEFORE publishing (handshake window 0.1 s). The publish landed and the same subject delivered the message back to the host-side subscriber (`bus_reply_observations[0].size == 346`, `subject == "tokenism.cgp.ready.v1"`, payload digest matches the published payload). This is a **self-echo through the geometry bus**: NATS delivers published messages to every subscriber on the subject, and the host client is itself a subscriber. It proves (a) the subject accepts the CGP-shaped payload, (b) the bus routes the message at the geometry-bus subject, and (c) Hi-RAG v2 / shape-store / analytics subscribers on the same subject inside the docker network would receive the same payload (the geometry-bus architecture places those subscribers on `nats://nats:4222`, not on the host client, so we cannot observe their downstream action from this probe).
+- **observation**: subscribed to `tokenism.cgp.ready.v1` BEFORE publishing, with a 0.1 s subscribe-to-publish gap in the probe driver (a race margin of the driver, not a bus property; a slower host could need more). The publish landed and the same subject delivered the message back to the host-side subscriber (`bus_reply_observations[0].size == 346`, `subject == "tokenism.cgp.ready.v1"`, payload digest matches the published payload). This is a **self-echo through the geometry bus**: NATS delivers published messages to every subscriber on the subject, and the host client is itself a subscriber. It proves (a) the subject accepts the CGP-shaped payload, (b) the bus routes the message at the geometry-bus subject, and (c) Hi-RAG v2 / shape-store / analytics subscribers on the same subject inside the docker network would receive the same payload (the geometry-bus architecture places those subscribers on `nats://nats:4222`, not on the host client, so we cannot observe their downstream action from this probe).
 - **timing**: publish 1 ms; subscriber delivery within the same poll window (<500 ms observation window).
 
 ## NATS round-trip
 
 - **subject**: `probe.laya.20260923T000406Z.346b53d1` — fresh, scoped to this probe run.
 - **payload**: a CGP-v0.1-shaped packet with `meta.source = "sc2.probe.nats-rt"` and `meta.model_id = "convaiinnovations/laya"`.
-- **timing**: end-to-end round-trip **0 ms** (subprocess timing resolution; the actual one-way publish-then-receive crosses a single in-process asyncio loop and a single NATS server hop, well below the 1 ms measurement floor).
+- **timing**: end-to-end round-trip **<1 ms** (below the subprocess timing resolution; the actual one-way publish-then-receive crosses a single in-process asyncio loop and a single NATS server hop, well below the 1 ms measurement floor).
 - **received**: `true`; **payload_match**: `true` (subscribed message `meta.source == "sc2.probe.nats-rt"`).
 
 ## Verdict
