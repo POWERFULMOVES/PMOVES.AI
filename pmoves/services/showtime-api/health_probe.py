@@ -6,6 +6,7 @@ for the Showtime dashboard. Probes all services in parallel via httpx.
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import os
 import time
@@ -18,12 +19,17 @@ PROBE_TIMEOUT = float(os.environ.get("SHOWTIME_PROBE_TIMEOUT", "3.0"))
 
 # Canonical service list with tier metadata.
 # Mirrors flight_check_retro.py ENDPOINTS with additional classification.
+# NOTE: this is a hand-kept copy, not an import; keep the two in step
+# (pmoves/tests/tools/test_archon_probe_surface.py pins the Archon rows of both).
 SERVICE_CATALOG: list[dict[str, Any]] = [
     {"name": "Supabase REST", "url": f"http://127.0.0.1:{os.environ.get('SUPABASE_REST_PORT', '65421')}/rest/v1", "tier": 1, "type": "Data"},
     {"name": "Hi-RAG v2 CPU", "url": f"http://localhost:{os.environ.get('HIRAG_V2_HOST_PORT', '8086')}/", "tier": 4, "type": "Worker"},
     {"name": "Hi-RAG v2 GPU", "url": f"http://localhost:{os.environ.get('HIRAG_V2_GPU_HOST_PORT', '8087')}/", "tier": 4, "type": "Worker"},
     {"name": "Presign", "url": "http://localhost:8088/healthz", "tier": 2, "type": "API"},
-    {"name": "Archon API", "url": "http://localhost:8091/healthz", "tier": 6, "type": "Agent"},
+    # Archon 0.6.0+: /api/health is the only health route; the SPA catch-all answers
+    # any other path 200 HTML, so the body must be JSON (expect_json). UI on host 3737.
+    {"name": "Archon API", "url": "http://localhost:8091/api/health", "tier": 6, "type": "Agent", "expect_json": True},
+    {"name": "Archon UI", "url": "http://localhost:3737", "tier": 7, "type": "UI"},
     {"name": "Agent Zero API", "url": "http://localhost:8080/healthz", "tier": 6, "type": "Agent"},
     {"name": "PMOVES.YT", "url": "http://localhost:8077/", "tier": 5, "type": "Media"},
     {"name": "Grafana", "url": f"http://localhost:{os.environ.get('GRAFANA_PORT', '3002')}", "tier": 7, "type": "UI"},
@@ -68,6 +74,21 @@ class ProbeResult:
 logger = logging.getLogger("showtime.health_probe")
 
 
+def _json_health_ok(content_type: str, body: str) -> bool:
+    """True only for a JSON body reporting {"ok": true} or {"status": "ok"}."""
+    if "json" not in (content_type or "").lower():
+        return False
+    try:
+        payload = json.loads(body)
+    except ValueError:
+        return False
+    if not isinstance(payload, dict):
+        return False
+    if payload.get("ok") is True:
+        return True
+    return str(payload.get("status", "")).lower() == "ok"
+
+
 async def _probe_one(client: httpx.AsyncClient, svc: dict[str, Any]) -> ProbeResult:
     t0 = time.monotonic()
     error = ""
@@ -75,6 +96,10 @@ async def _probe_one(client: httpx.AsyncClient, svc: dict[str, Any]) -> ProbeRes
         resp = await client.get(svc["url"], timeout=PROBE_TIMEOUT)
         ok = 200 <= resp.status_code < 400
         code = resp.status_code
+        if ok and svc.get("expect_json"):
+            ok = _json_health_ok(resp.headers.get("content-type", ""), resp.text)
+            if not ok:
+                error = "expected a JSON health body reporting ok"
     except (httpx.ConnectError, httpx.ConnectTimeout):
         ok = False
         code = 0

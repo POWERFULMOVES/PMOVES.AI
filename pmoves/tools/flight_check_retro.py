@@ -6,6 +6,7 @@ with per-endpoint status. Falls back to plain output if Rich is unavailable.
 from __future__ import annotations
 import argparse
 import concurrent.futures as cf
+import json
 import os
 import subprocess
 import sys
@@ -77,6 +78,9 @@ def _detect_supabase_runtime() -> str:
     return "cli"
 
 
+ARCHON_HEALTH_PATH = "/api/health"
+
+
 def _build_endpoints() -> list[tuple[str, str]]:
     supabase_runtime = _detect_supabase_runtime()
     if supabase_runtime == "compose":
@@ -93,9 +97,14 @@ def _build_endpoints() -> list[tuple[str, str]]:
         ("Hi-RAG v2 CPU", _get_url("SERVICE_HIRAG_V2_URL", f"http://localhost:{os.environ.get('HIRAG_V2_HOST_PORT','8086')}/hirag/admin/stats")),
         ("Hi-RAG v2 GPU", _get_url("SERVICE_HIRAG_V2_GPU_URL", f"http://localhost:{os.environ.get('HIRAG_V2_GPU_HOST_PORT','8087')}/hirag/admin/stats")),
         ("Presign", _get_url("SERVICE_PRESIGN_URL", "http://localhost:8088/healthz")),
-        ("Archon API", _get_url("SERVICE_ARCHON_URL", "http://localhost:8091/healthz")),
+        # Archon 0.6.0+ (TypeScript/Bun) serves API and UI from one container port
+        # (3090), published on host 8091 (API alias) and 3737 (UI alias). Its only
+        # health route is /api/health (JSON). The pre-0.6.0 /healthz and
+        # /mcp/describe no longer exist and 0.6.0 has no MCP transport (#2943);
+        # the SPA catch-all answers 200 HTML for them, so probing them false-PASSes.
+        # SERVICE_ARCHON_URL is a base URL (scheme://host:port); the path is appended.
+        ("Archon API", _get_url("SERVICE_ARCHON_URL", "http://localhost:8091") + ARCHON_HEALTH_PATH),
         ("Archon UI", _get_url(None, "http://localhost:3737")),
-        ("Archon MCP", _get_url("SERVICE_ARCHON_URL", "http://localhost:8091/mcp/describe")),
         ("Agent Zero API", _get_url("SERVICE_AGENT_ZERO_URL", "http://localhost:8080/healthz")),
         ("Agent Zero Env", _get_url("SERVICE_AGENT_ZERO_URL", "http://localhost:8080/config/environment")),
         ("Agent Zero MCP", _get_url("SERVICE_AGENT_ZERO_URL", "http://localhost:8080/mcp/commands")),
@@ -142,14 +151,41 @@ CRITICAL_NAMES = {
     "n8n UI",
 }
 
+# Endpoints that must answer a JSON health body ({"status": "ok"} or {"ok": true}).
+# A bare 2xx is not enough for these: a SPA catch-all answers 200 HTML for any path.
+JSON_HEALTH_NAMES = {
+    "Archon API",
+}
+
 TIMEOUT = int(os.environ.get("PMOVES_RETRO_TIMEOUT", "5"))
 
 
-def check(url: str, timeout: int = TIMEOUT) -> tuple[str, int, str]:
+def json_health_ok(content_type: str, body: str) -> bool:
+    """True when the body is a JSON health payload reporting ok."""
+    if "json" not in (content_type or "").lower():
+        return False
+    try:
+        payload = json.loads(body)
+    except ValueError:
+        return False
+    if not isinstance(payload, dict):
+        return False
+    if payload.get("ok") is True:
+        return True
+    return str(payload.get("status", "")).lower() == "ok"
+
+
+def check(url: str, timeout: int = TIMEOUT, require_json: bool = False) -> tuple[str, int, str]:
     try:
         with urlopen(url, timeout=timeout) as resp:
             code = getattr(resp, "status", 200)
-            return ("ok" if 200 <= code < 400 else "warn"), code, ""
+            if not 200 <= code < 400:
+                return "warn", code, ""
+            if require_json:
+                body = resp.read().decode("utf-8", errors="ignore")
+                if not json_health_ok(resp.headers.get("content-type", ""), body):
+                    return "error", code, "expected a JSON health body reporting ok"
+            return "ok", code, ""
     except HTTPError as e:
         return ("warn" if 400 <= e.code < 500 else "error"), e.code, str(e)
     except URLError as e:
@@ -174,7 +210,7 @@ def main() -> int:
     if Console is None:
         print("Retro check (plain):")
         with cf.ThreadPoolExecutor(max_workers=min(16, len(checks))) as ex:
-            futs = {ex.submit(check, url): name for name, url in checks}
+            futs = {ex.submit(check, url, TIMEOUT, name in JSON_HEALTH_NAMES): name for name, url in checks}
             failures = 0
             critical_failures = 0
             for fut in cf.as_completed(futs):
@@ -198,7 +234,7 @@ def main() -> int:
         task = progress.add_task("wait", total=len(checks))
         results = []
         with cf.ThreadPoolExecutor(max_workers=min(16, len(checks))) as ex:
-            futs = {ex.submit(check, url): (name, url) for name, url in checks}
+            futs = {ex.submit(check, url, TIMEOUT, name in JSON_HEALTH_NAMES): (name, url) for name, url in checks}
             for fut in cf.as_completed(futs):
                 name, url = futs[fut]
                 status, code, err = fut.result()
