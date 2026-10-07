@@ -105,7 +105,8 @@ def _safe_url(url: Optional[str]) -> str:
     try:
         parts = urlparse(url)
         if not parts.netloc:
-            return url
+            # Fail closed: scheme-less input (host:port?token=...) is not echoed.
+            return "<redacted>"
         netloc = parts.hostname or ""
         if parts.port is not None:
             netloc = f"{netloc}:{parts.port}"

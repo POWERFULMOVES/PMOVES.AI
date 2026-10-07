@@ -31,20 +31,27 @@ _safe_url = _load_safe_url()
 @pytest.mark.parametrize(
     ("url", "expected"),
     [
-        ("nats://svc:s3cr3t-pass@nats:4222", "nats://nats:4222"),
+        # user:pass is the credential scanner's sanctioned placeholder pair.
+        ("nats://user:pass@nats:4222", "nats://nats:4222"),
         ("nats://nats:4222", "nats://nats:4222"),
         ("wss://db.example.test/realtime/v1/websocket?apikey=abc.def&vsn=1.0.0", "wss://db.example.test/realtime/v1/websocket"),
         ("", ""),
         (None, ""),
+        # scheme-less: no netloc to rebuild, so fail closed rather than echo
+        ("nats:4222?token=abc", "<redacted>"),
+        ("host-only-no-scheme", "<redacted>"),
     ],
 )
 def test_safe_url_drops_userinfo_and_query(url, expected):
     assert _safe_url(url) == expected
 
 
-def test_no_listener_log_passes_a_raw_url():
-    src = _SRC.read_text()
-    for needle in ("url=%s", "url=%s,"):
-        for line in src.splitlines():
-            if needle in line and "logger." in line:
-                assert "_safe_url(" in line, line
+def test_no_log_line_passes_a_raw_url():
+    """Any logger call that mentions a URL-bearing name must route it through
+    _safe_url -- %-style ("url=%s", NATS_URL) and f-strings ({NATS_URL}) alike."""
+    url_names = ("NATS_URL", "ws_url")
+    for n, line in enumerate(_SRC.read_text().splitlines(), 1):
+        if "logger." not in line:
+            continue
+        if "url=%s" in line or any(name in line for name in url_names):
+            assert "_safe_url(" in line, f"geometry_bus.py:{n}: {line.strip()}"

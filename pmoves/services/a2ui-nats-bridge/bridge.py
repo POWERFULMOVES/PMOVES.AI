@@ -38,9 +38,6 @@ A2UI_REQUEST_SUBJECT = os.getenv("A2UI_REQUEST_SUBJECT", "a2ui.request.v1")
 GEOMETRY_WILDCARD = os.getenv("GEOMETRY_WILDCARD", "geometry.>")
 GEOMETRY_CGP_SUBJECT = os.getenv("GEOMETRY_CGP_SUBJECT", "geometry.cgp.v1")
 GEOMETRY_WS_ROOM = os.getenv("GEOMETRY_WS_ROOM", "geometry")
-# JetStream stream that captures geometry.> (created by scripts/nats/init_streams.sh).
-GEOMETRY_STREAM = os.getenv("GEOMETRY_STREAM", "GEOMETRY_CGP")
-A2UI_GEOM_DURABLE = os.getenv("A2UI_GEOM_DURABLE", "0").strip().lower() in {"1", "true", "yes"}
 # P7 room-aware stage manager subjects (open-room lane, 2026-07-20).
 # `room.session.updated.v1` is emitted on every room stage transition;
 # `pmoves.config.rooms.reloaded.v1` is emitted when the catalog is re-read
@@ -314,29 +311,12 @@ async def connect_nats() -> None:
                     logger.error(f"Failed to create A2UI stream: {e}")
                     raise
 
-            # Durable JetStream geometry consumer — OFF by default.
-            # It used to name stream "GEOMETRY", which init_streams.sh never
-            # creates (the stream is GEOMETRY_CGP), so it always failed and was
-            # effectively disabled. Pointing it at the real stream without a
-            # callback would build an unread, unacked backlog in this process,
-            # so it stays opt-in until a forwarding callback is wired here.
-            # _js_geom_sub_active stays False either way; per-connection core
-            # NATS subs handle delivery.
-            if A2UI_GEOM_DURABLE:
-                logger.warning(
-                    "A2UI_GEOM_DURABLE=1: durable %s consumer has no callback yet; "
-                    "messages will accumulate unacked until forwarding is wired",
-                    GEOMETRY_STREAM,
-                )
-                try:
-                    await js.subscribe(
-                        GEOMETRY_WILDCARD,
-                        "a2ui_geom_sub",
-                        stream=GEOMETRY_STREAM,
-                    )
-                    logger.info(f"Registered durable JetStream consumer for {GEOMETRY_WILDCARD} on {GEOMETRY_STREAM} (forwarding via core NATS per-connection subs)")
-                except Exception as e:
-                    logger.warning(f"Could not register geometry JetStream consumer on {GEOMETRY_STREAM}: {e} — per-connection core subs will handle forwarding")
+            # No durable JetStream geometry consumer is registered here. The old
+            # one named stream "GEOMETRY" (never created; the stream is
+            # GEOMETRY_CGP) and had no callback, so it either failed or would
+            # have built an undrained backlog. Per-connection core NATS subs do
+            # the forwarding (_js_geom_sub_active stays False); a durable belongs
+            # here only together with a callback that forwards and acks.
 
             nats_connected.set(1)
             logger.info("NATS connection established")
