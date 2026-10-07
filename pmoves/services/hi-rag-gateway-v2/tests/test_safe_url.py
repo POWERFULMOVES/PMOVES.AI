@@ -47,6 +47,7 @@ def test_safe_url_drops_userinfo_and_query(url, expected):
 
 
 _URL_NAMES = {"NATS_URL", "ws_url"}
+_LOG_METHODS = {"debug", "info", "warning", "warn", "error", "exception", "critical", "log"}
 
 
 def _raw_url_uses(node: ast.AST):
@@ -67,10 +68,9 @@ def test_no_logger_call_passes_a_raw_url():
     tree = ast.parse(_SRC.read_text())
     offenders = []
     for call in ast.walk(tree):
-        if not (isinstance(call, ast.Call) and isinstance(call.func, ast.Attribute)):
-            continue
-        owner = call.func.value
-        if not (isinstance(owner, ast.Name) and owner.id == "logger"):
+        # Any receiver: logger.info, logging.getLogger(...).info, log = logger.
+        if not (isinstance(call, ast.Call) and isinstance(call.func, ast.Attribute)
+                and call.func.attr in _LOG_METHODS):
             continue
         for arg in [*call.args, *(k.value for k in call.keywords)]:
             offenders += [f"geometry_bus.py:{n.lineno} {n.id}" for n in _raw_url_uses(arg)]
