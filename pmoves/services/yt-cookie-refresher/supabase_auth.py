@@ -108,7 +108,7 @@ def get_provider_refresh_token(user_email: str = DARKXSIDE_USER_EMAIL) -> Option
     """
     identity = get_google_identity(user_email)
     if identity:
-        token = identity.get("identity_data", {}).get("provider_refresh_token")
+        token = (identity.get("identity_data") or {}).get("provider_refresh_token")
         if token:
             return token
         # GoTrue >= v2.163 strips provider tokens from persisted identity_data
