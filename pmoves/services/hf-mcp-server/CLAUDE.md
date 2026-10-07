@@ -35,7 +35,7 @@ docker compose -f pmoves/docker-compose.yml --profile agents --profile research 
 | `HF_HOME` | `/models` | Model storage root |
 | `HF_HUB_CACHE` | `/models/hub` | HF Hub cache |
 | `HUGGINGFACE_HUB_TOKEN` | — | HF token (gated models) |
-| `NATS_URL` | `nats://nats:pmoves@nats:4222` | NATS for download events |
+| `NATS_URL` | `nats://<user>:<password>@nats:4222` | NATS for download events |
 
 ## NATS Events Published
 

@@ -52,7 +52,7 @@ git branch --show-current
 # - FastAPI routes: snake_case functions, kebab-case URLs
 # - All services expose /healthz and /metrics
 # - LLM calls route through TensorZero at localhost:3030
-# - Event publishing via NATS at nats://nats:pmoves@nats:4222
+# - Event publishing via NATS at nats://<user>:<password>@nats:4222
 ```
 
 ### Step 3: Validate

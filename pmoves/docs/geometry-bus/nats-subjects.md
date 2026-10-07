@@ -1,7 +1,7 @@
 # GEOMETRY BUS NATS Subject Catalog
 
 **Last Updated:** 2026-03-13
-**NATS Server:** `nats://nats:pmoves@nats:4222` (authenticated)
+**NATS Server:** `nats://<user>:<password>@nats:4222` (authenticated)
 **WebSocket Ports:** 9222 (standalone), 9223 (docked)
 
 ---

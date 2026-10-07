@@ -13,7 +13,7 @@ sentinel is that consumer (design: `docs/services/IDE_PINOKIO_FLEET_CONSOLE_PLAN
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `NATS_URL` | `nats://nats:pmoves@nats:4222` | NATS bus (announce subject) |
+| `NATS_URL` | `nats://<user>:<password>@nats:4222` | NATS bus (announce subject) |
 | `SENTINEL_POLL_INTERVAL` | `30` | Health poll seconds |
 | `SENTINEL_POLL_CONCURRENCY` | `16` | Max concurrent health probes per cycle |
 | `SENTINEL_HTTP_TIMEOUT` | `5` | Per-probe timeout seconds |

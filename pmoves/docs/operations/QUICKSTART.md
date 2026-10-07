@@ -147,7 +147,7 @@ nats pub test.subject "hello"
 nats sub ">test.subject"
 
 # Validate NATS URL includes credentials
-grep NATS_URL env.shared  # Should be: nats://nats:password@nats:4222
+grep NATS_URL env.shared  # Should be: nats://<user>:<password>@nats:4222
 ```
 
 ### Container restart loops

@@ -110,6 +110,10 @@ TAILSCALE_AUTHKEY=tskey-auth-...
 
 ### NATS TLS (Fallback)
 
+> **Opt-in, not used in production.** The TLS/external-URL configuration below
+> is an optional fallback. Production nodes reach the NATS hub over Tailscale
+> (`pmoves-kvm4-2:4222`, tailnet-only) and do not set `NATS_EXTERNAL_URL`.
+
 If Tailscale is unavailable, NATS TLS provides direct encrypted connection:
 
 ```bash
@@ -126,8 +130,9 @@ make nats-tls-setup
 
 **External NATS URL:**
 ```bash
-# env.shared (on main PC)
-NATS_EXTERNAL_URL=nats://100.100.100.1:4222
+# env.shared (on main PC) — PLACEHOLDER: substitute your own host; only set
+# this if you have opted into the TLS fallback above.
+NATS_EXTERNAL_URL=nats://<nats-host>:4222
 ```
 
 ## Service Registry

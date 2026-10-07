@@ -238,7 +238,7 @@ NATS connection issue:
 curl -s http://localhost:8222/varz | jq '.server_id'
 
 # Verify credentials
-echo $NATS_URL  # Should be nats://user:pass@host:port
+echo $NATS_URL  # Should be nats://<user>:<password>@host:port
 ```
 
 ---

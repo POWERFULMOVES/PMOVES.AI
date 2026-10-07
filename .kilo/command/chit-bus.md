@@ -20,7 +20,7 @@ python -c "
 import asyncio, nats, json
 
 async def main():
-    nc = await nats.connect('nats://nats:pmoves@nats:4222')
+    nc = await nats.connect('nats://<user>:<password>@nats:4222')
     await nc.publish('<subject>', json.dumps(<payload>).encode())
     await nc.close()
 

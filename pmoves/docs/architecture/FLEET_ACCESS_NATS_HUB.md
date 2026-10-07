@@ -3,6 +3,13 @@
 > **Status:** design blueprint (2026-06-16). Execution is staged — nothing here
 > is applied to the live tailnet yet. The SSH unblock stopgap is PR #1828.
 >
+> **As of 2026-10-07:** the production hub on `pmoves-kvm4-2` is a standalone,
+> flag-launched NATS broker (command-line flags, no accounts config file). The
+> accounts / leafnode topology described in
+> [`NATS_LEAF_TOPOLOGY_ROLLOUT_RUNBOOK.md`](../operations/NATS_LEAF_TOPOLOGY_ROLLOUT_RUNBOOK.md)
+> (Phase 2 — hub accounts + `leafnodes{7422}`; Phase 3 — service `.creds`
+> migration) is **not yet in production**.
+>
 > **Pattern source:** [Tailscale — Connect inference servers (AI infrastructure access)](https://tailscale.com/docs/use-cases/ai-infrastructure-access/connect-inference-servers)
 
 ## 1. Why this doc exists
@@ -68,7 +75,9 @@ This one change fixes three things at once:
 storage/compute. NATS is *not* co-located with inference or storage concerns.
 
 - The hub node carries `tag:hub`; it is the canonical bus all nodes dial
-  (`nats.pmoves.ai:4222`).
+  (`pmoves-kvm4-2:4222`, tailnet-only — MagicDNS name, not public DNS).
+  `nats.pmoves.ai` is a reserved name and does **not** currently resolve; do
+  not configure clients against it.
 - **Exposure (hybrid): keep NATS on the working path.** NATS already reaches the
   fleet via the #1824 fix (non-internal docker network + `NATS_BIND` = node tailnet
   IP, mesh-only). Don't churn what works. A NATS Tailscale sidecar is an *optional*

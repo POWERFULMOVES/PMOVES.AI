@@ -104,7 +104,7 @@ ToKenism **is** the CHIT engine — all CHIT integration radiates from here.
 | Finding | Severity | Status |
 |---------|----------|--------|
 | `export` syntax in `env.shared` | P1 | **Resolved** — no `export` prefix in `PMOVES-ToKenism-Multi/env.shared` |
-| NATS_URL missing credentials | P1 | **Resolved** — defaults to `nats://nats:pmoves@nats:4222` |
+| NATS_URL missing credentials | P1 | **Resolved** — defaults to `nats://<user>:<password>@nats:4222` |
 | Hardhat CI / local contract test coverage | P2 | **Partial** — local harness passing; CI wiring still open |
 | Old temp-file and duplicate-layout findings | P3 | Re-audit required; do not reuse stale counts without verification |
 

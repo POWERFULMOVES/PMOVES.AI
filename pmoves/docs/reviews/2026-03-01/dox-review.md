@@ -106,7 +106,7 @@ test: ["CMD", "nats-server", "--help"]
 
 ## What's Good
 
-- **NATS auth resolved** — `nats.conf` has proper `authorization` block with `user: nats, password: pmoves`
+- **NATS auth resolved** — `nats.conf` has proper `authorization` block with `user` / `password` entries
 - **JWT authentication fail-closed** — `RuntimeError` at startup if unconfigured in production. Anonymous tokens explicitly rejected
 - **User identity from JWT only** — `cipher.py` uses `Depends(get_current_user)` exclusively
 - **Non-root containers** — Backend: `useradd pmoves UID 1001; USER pmoves`. Frontend: `adduser nodejs UID 1001; USER nodejs`
@@ -120,7 +120,7 @@ test: ["CMD", "nats-server", "--help"]
 
 ## Phase C Fix Verification
 
-- [x] NATS auth block added to `nats.conf` — `authorization { users: [{ user: nats, password: pmoves }] }` at lines 1-5
+- [x] NATS auth block added to `nats.conf` — `authorization { users: [{ user: <user>, password: <password> }] }` at lines 1-5
 - [ ] NATS WebSocket TLS configured — still `no_tls: true` (P2-1); host port should be loopback-restricted
 - [x] JWT fail-closed pattern maintained — `RuntimeError` at startup, no silent pass-through
 - [x] All API routers have auth middleware — Destructive operations require `get_current_user`

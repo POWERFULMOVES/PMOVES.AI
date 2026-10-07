@@ -24,7 +24,7 @@
 | Dimension | Running on Knuckles (2026-09-11) | Fork/spec target |
 |---|---|---|
 | Launch | CLI flags (`-js -m 8222 --user/--pass`) | `pmoves-nats.conf` baked in image |
-| Tenancy | ONE global account, shared `nats:pmoves` | SYS / CORE / EDGE / CLOUD accounts (nsc, memory resolver) |
+| Tenancy | ONE global account, shared user/password | SYS / CORE / EDGE / CLOUD accounts (nsc, memory resolver) |
 | Auth | plaintext user/pass | nsc-minted `.creds` (JWT + nkey), funnel-materialized |
 | Leafnodes | **none** — no 7422 listener anywhere | `leafnodes { listen: 0.0.0.0:7422 }` + account-scoped leaves |
 | Monitoring | 8222→loopback:9223, unguarded HTTP | SYS account guards `$SYS.*`; HTTP stays loopback-bound |

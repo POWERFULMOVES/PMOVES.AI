@@ -47,8 +47,8 @@ So the critical-path unblocker is cleared and **Phase 2 is what everything now w
 ### ⚠️ Sequencing warning for Phase 2 (read before authorizing)
 
 The production hub (`pmoves-nats-1`) is launched from **CLI flags** with plaintext
-`--user/--pass` (`nats:pmoves` defaults). Swapping it to the account/JWT config below is
-**not backwards compatible**: every existing client authenticating as `nats:pmoves` will fail
+`--user/--pass` (from `NATS_USER` / `NATS_PASSWORD`). Swapping it to the account/JWT config below is
+**not backwards compatible**: every existing client authenticating with the shared user/password will fail
 with an authorization violation the moment the hub starts requiring account creds. **Phase 2 and
 Phase 3 must land in the same maintenance window**, or the hub must temporarily run both auth
 modes. Do not merge a Phase-2 compose swap expecting it to be a no-op.

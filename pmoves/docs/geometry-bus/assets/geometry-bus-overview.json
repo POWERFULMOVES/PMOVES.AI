@@ -126,7 +126,7 @@
           "id": "nats-card",
           "content": {
             "title": "NATS Geometry Bus",
-            "value": "nats://nats:pmoves@nats:4222",
+            "value": "nats://<user>:<password>@nats:4222",
             "items": [
               "JetStream Enabled",
               "geometry.cgp.v1",

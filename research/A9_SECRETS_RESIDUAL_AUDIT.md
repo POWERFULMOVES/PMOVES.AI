@@ -105,7 +105,7 @@ This causes `docker compose up` to **fail immediately** with a clear error messa
    - `WGER_ADMIN_PASSWORD` → `env.tier-api`
    - `CHIT_PROD_PASSPHRASE` → `env.shared`
 
-2. **NATS Embedded Password**: Multiple services use `nats://nats:pmoves@nats:4222` as a default. This is an internal-only network credential with no external exposure. Classified as **CONTEXT-NEEDED** but not changed in this audit — the NATS password is set during `nats-init` and is internal-only. No action required unless NATS is exposed externally.
+2. **NATS default URL**: Multiple services carry a default `NATS_URL` with an embedded credential (`nats://<user>:<password>@nats:4222`). Classified as **CONTEXT-NEEDED** and not changed in this audit; per-service credentials are tracked by the NATS accounts/leaf topology work (`pmoves/docs/operations/NATS_LEAF_TOPOLOGY_ROLLOUT_RUNBOOK.md`).
 
 3. **Split File Consistency**: The monolithic `docker-compose.yml` and the split overlay files (`docker-compose.apps.yml`, `docker-compose.media.yml`) should be kept in sync. Consider regenerating overlays via `scripts/split_compose.py` to ensure consistency.
 

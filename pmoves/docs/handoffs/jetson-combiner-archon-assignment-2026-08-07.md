@@ -47,7 +47,7 @@ them silently (Known-Road / running-NATS territory) — operator confirms, then 
    - **b850's `elder-melchor-leaf.conf` is misconfigured** — its remote points at
      `${TS_Z890}:4222` (the *client* port). Per docs, a leaf connects to the hub's **7422**
      leafnode port, not 4222. Fix the remote URL to `:7422`.
-   - **Auth:** replace the plaintext `nats:pmoves` with **nsc-minted account `.creds` (JWT)** +
+   - **Auth:** replace the shared user/password with **nsc-minted account `.creds` (JWT)** +
      `account` binding (the production pattern the docs prescribe; `nats-io/nsc`). This is the
      work that belongs in the **`POWERFULMOVES/PMOVES-nats-server`** fork (not yet registered as
      a submodule) — give it the real-integration treatment (Dockerfile/compose/config), same

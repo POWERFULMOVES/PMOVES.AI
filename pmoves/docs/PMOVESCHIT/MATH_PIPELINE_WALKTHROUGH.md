@@ -609,7 +609,7 @@ import json
 
 async def publish_cgp(cgp):
     nc = nats.NATS()
-    await nc.connect("nats://nats:pmoves@nats:4222")
+    await nc.connect("nats://<user>:<password>@nats:4222")
     await nc.publish(
         "tokenism.cgp.ready.v1",
         json.dumps(cgp).encode()

@@ -51,7 +51,7 @@ echo "Active persona: ${BEATS_VOICE:-default}  engine=${BEATS_ENGINE:-?} node=${
 uv run python -m pmoves.tools.beats_to_voice from-bpm \
   --bpm "${BEATS_BPM:-60}" \
   --text "Analysis complete." \
-  --nats-url "${NATS_URL:-nats://nats:pmoves@localhost:4222}"
+  --nats-url "${NATS_URL:?set NATS_URL}"
 ```
 
 `bind.sh` is **fail-open**: if the gateway is unreachable it still exports

@@ -56,7 +56,7 @@ Comprehensive reference of all production services, ports, APIs, and integration
 - **Router constraint:** Single-segment paths only (`/api/<name>`) — no nested paths
 - **Environment:**
   - `PMOVES_BRIDGE_API_KEY` — REQUIRED, generate with `openssl rand -hex 32`
-  - `PMOVES_NATS_URL` — defaults to `nats://nats:pmoves@nats:4222`
+  - `PMOVES_NATS_URL` — defaults to `nats://<user>:<password>@nats:4222`
   - `SPACE_AGENT_SRC` — host path to submodule `pmoves/` dir (default: `../PMOVES-space-agent/pmoves`)
   - `SPACE_AGENT_DATA` — host path for customware persistence (default: `./data/space-agent`)
 
@@ -651,7 +651,7 @@ Comprehensive reference of all production services, ports, APIs, and integration
 - **Purpose:** Message bus for agent coordination
 - **Version:** 2.10-alpine
 - **Features:** JetStream enabled for persistence
-- **Auth:** `nats://nats:pmoves@nats:4222` (always use authenticated URL)
+- **Auth:** `nats://<user>:<password>@nats:4222` (always use authenticated URL)
 - **WebSocket:** DoX standalone uses 9222, docker-compose docked mode uses 9223
 - **Key Subjects:** See `.claude/context/nats-subjects.md`
 - **Health / Monitoring:** `GET /connz?subs=1` on monitor port 8222 from inside

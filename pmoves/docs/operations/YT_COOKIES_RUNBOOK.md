@@ -120,9 +120,9 @@ make -C pmoves yt-cookies-refresh
 ### Cookie file not updating after NATS event
 
 1. Check writer sidecar logs: `docker logs pmoves-yt-cookie-writer-1`
-2. Verify NATS connectivity (auth required — base nats service runs with `--auth nats:pmoves`):
+2. Verify NATS connectivity (auth required — base nats service runs with `--user`/`--pass` from `NATS_USER` / `NATS_PASSWORD`):
    ```bash
-   nats sub --server "nats://nats:pmoves@localhost:4222" ingest.cookies.refreshed.v1
+   nats sub --server "nats://<user>:<password>@localhost:4222" ingest.cookies.refreshed.v1
    ```
 3. Check `VAULT_ENC_KEY` is consistent between refresher and writer
 4. Check shared volume mount exists in both containers

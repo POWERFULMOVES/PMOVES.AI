@@ -33,7 +33,7 @@ async def handler(msg):
     print(f"Decoded from {packet['source']['agent']}")
 
 async def main():
-    nc = await nats.connect("nats://nats:pmoves@nats:4222")
+    nc = await nats.connect("nats://<user>:<password>@nats:4222")
     await nc.subscribe("geometry.packet.decoded.v1", cb=handler)
     await asyncio.Future()  # run forever
 ```

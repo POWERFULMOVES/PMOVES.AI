@@ -29,7 +29,7 @@ flowchart TD
         CM["Cipher Memory<br/>Port: 8096<br/>Agent Memory Storage"]:::subscriber
     end
 
-    NATS["NATS Geometry Bus<br/>nats://nats:pmoves@nats:4222<br/>JetStream Enabled"]:::bus
+    NATS["NATS Geometry Bus<br/>nats://<user>:<password>@nats:4222<br/>JetStream Enabled"]:::bus
 
     CS -->|"publish"| NATS
     TS -->|"publish"| NATS

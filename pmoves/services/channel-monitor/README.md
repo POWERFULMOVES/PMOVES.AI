@@ -22,7 +22,7 @@ Current production fetch order:
 | `CHANNEL_MONITOR_SECRET` | Optional shared secret required by protected write endpoints (`/api/monitor/status`, `/api/monitor/discord-drop`). | _(unset)_ |
 | `CHANNEL_MONITOR_DISCORD_APPROVAL_MODE` | Default Discord intake mode (`ask` or `auto`). | `ask` |
 | `CHANNEL_MONITOR_CONTENT_RAW_PUBLISH` | Publish Discord/manual drop messages to `content.raw.v1` for provenance shaping. | `true` |
-| `NATS_URL` | NATS server used by the `content.raw.v1` publisher. | `nats://nats:pmoves@nats:4222` |
+| `NATS_URL` | NATS server used by the `content.raw.v1` publisher. | `nats://<user>:<password>@nats:4222` |
 
 ### Commands
 

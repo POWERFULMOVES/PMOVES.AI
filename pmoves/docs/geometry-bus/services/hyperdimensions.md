@@ -44,7 +44,7 @@ Hyperdimensions uses a Portal bridge for NATS integration, not direct subscripti
 ```typescript
 // Portal subscription
 const portal = new Portal({
-  natsUrl: "nats://nats:pmoves@nats:4222",
+  natsUrl: "nats://<user>:<password>@nats:4222",
   subjects: ["geometry.cgp.v1"]
 });
 

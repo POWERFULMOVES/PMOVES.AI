@@ -87,7 +87,7 @@ Combined tier+hardening anchors in `pmoves/docker-compose.yml` (66 services):
 | # | Submodule | Issue | Resolution |
 |---|-----------|-------|-----------|
 | 1 | Agent Zero | 3x root Dockerfiles | USER a0user in all 3 |
-| 2 | Agent Zero | NATS no auth | nats://nats:pmoves@nats:4222 |
+| 2 | Agent Zero | NATS no auth | nats://<user>:<password>@nats:4222 |
 | 3 | HiRAG | Cypher injection (f-string labels) | _ALLOWED_LABELS frozenset allowlist |
 | 4 | HiRAG | Default creds | :? required vars |
 | 5 | HiRAG | No API wrapper | Downgraded P3 (gateway serves endpoints) |

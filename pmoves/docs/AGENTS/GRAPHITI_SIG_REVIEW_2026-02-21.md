@@ -15,7 +15,7 @@ Phase 5 verification handoff snapshot for CHIT flaws, signature hygiene, and lan
   - `PMOVES.YT/CLAUDE.md`
 - `pmoves/integrations/archon/env.shared` verified as Docker `env_file` compatible:
   - no `export` prefixes
-  - authenticated NATS default: `nats://nats:pmoves@nats:4222`
+  - authenticated NATS default: `nats://<user>:<password>@nats:4222`
   - usage comment explicitly states plain `KEY=VALUE` format
 - PR #669 owner triage confirms four actionable follow-ups are queued:
   - MD5 to SHA256
@@ -24,7 +24,7 @@ Phase 5 verification handoff snapshot for CHIT flaws, signature hygiene, and lan
   - `docker exec` to compose-aware `exec`
 
 ## Drift Note
-- Current repository scan reports `111` references to unauthenticated `nats://nats:pmoves@nats:4222` under `pmoves/`.
+- Current repository scan reports `111` references to unauthenticated `nats://nats:4222` under `pmoves/`.
 - Treat this as canonical current count for follow-up batching in this workspace snapshot.
 
 ## Graphiti Signature Hygiene

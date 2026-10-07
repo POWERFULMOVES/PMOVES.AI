@@ -26,7 +26,7 @@
 Before integrating Graphiti:
 
 1. **Agent registered**: Your agent's identity must exist in `pmoves/config/agent_signatures.yaml`
-2. **NATS connectivity**: Service must connect to `nats://nats:pmoves@nats:4222`
+2. **NATS connectivity**: Service must connect to `nats://<user>:<password>@nats:4222`
 3. **Optional**: `CHIT_PASSPHRASE` environment variable for signed payloads
 4. **Optional**: JSON Schema for validation (`pmoves/contracts/schemas/agent-graphiti/signature.v1.schema.json`)
 
@@ -72,7 +72,7 @@ class GraphitiTrailEmitter:
     def __init__(
         self,
         agent_id: str,
-        nats_url: str = "nats://nats:pmoves@nats:4222",
+        nats_url: str = "nats://<user>:<password>@nats:4222",
         passphrase: Optional[str] = None,
     ):
         self.agent_id = agent_id
@@ -237,7 +237,7 @@ class GraphitiEmitter {
     private agentId: string,
     private glyph: string,
     private color: string,
-    private natsUrl: string = 'nats://nats:pmoves@nats:4222',
+    private natsUrl: string = 'nats://<user>:<password>@nats:4222',
     private passphrase?: string,
   ) {
     this.passphrase = passphrase || process.env.CHIT_PASSPHRASE;
@@ -346,7 +346,7 @@ nats stream add GRAPHITI_TRAILS \
 # Subscribe to all trail entries
 async def consume_trails():
     nc = nats.NATS()
-    await nc.connect("nats://nats:pmoves@nats:4222")
+    await nc.connect("nats://<user>:<password>@nats:4222")
 
     sub = await nc.subscribe("agent.graphiti.signed.v1")
     async for msg in sub.messages:
@@ -420,7 +420,7 @@ async def test_nats_emission():
     # Subscribe first
     received = []
     nc = nats.NATS()
-    await nc.connect("nats://nats:pmoves@nats:4222")
+    await nc.connect("nats://<user>:<password>@nats:4222")
     sub = await nc.subscribe("agent.graphiti.signed.v1")
 
     # Emit
@@ -443,7 +443,7 @@ async def test_nats_emission():
 Before deploying Graphiti integration:
 
 - [ ] Agent ID registered in `pmoves/config/agent_signatures.yaml`
-- [ ] NATS URL includes credentials (`nats://nats:pmoves@nats:4222`)
+- [ ] NATS URL includes credentials (`nats://<user>:<password>@nats:4222`)
 - [ ] Payload fields match `signature.v1.schema.json`
 - [ ] Summary capped at 200 characters
 - [ ] Timestamp is ISO 8601 with timezone

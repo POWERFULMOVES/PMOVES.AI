@@ -24,7 +24,7 @@ Environment
 - `YT_BUCKET` (default `assets`)
 - `INDEXER_NAMESPACE` (default `pmoves`)
 - `SUPA_REST_URL` (default `http://supabase-kong:8000/rest/v1`)
-- `NATS_URL` (default `nats://nats:pmoves@nats:4222`)
+- `NATS_URL` (default `nats://<user>:<password>@nats:4222`)
 - `HIRAG_URL` (default `http://hi-rag-gateway-v2:8086`)
 - `YT_RATE_LIMIT` (seconds; per-item sleep during playlist/channel ingest; read at call time so test overrides via env are honored — set via env_file, not compose defaults)
 

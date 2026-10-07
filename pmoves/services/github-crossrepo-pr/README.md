@@ -141,7 +141,7 @@ curl -X POST http://localhost:8104/api/pr/batch \
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `NATS_URL` | `nats://nats:pmoves@nats:4222` | NATS server URL |
+| `NATS_URL` | `nats://<user>:<password>@nats:4222` | NATS server URL |
 | `SERVICE_PORT` | `8104` | Service port |
 | `DRY_RUN` | `true` | Enable dry-run mode |
 | `AGENTZERO_MCP_URL` | `http://agent-zero:8080/mcp/command` | Agent Zero MCP endpoint |

@@ -68,7 +68,7 @@ agent signs a trail                     voice_cast_on_sign.py (daemon)
 
 | Var | Default | Used by | Purpose |
 |---|---|---|---|
-| `NATS_URL` | — | `sign_trail.py`, `voice_cast_on_sign.py` | NATS connection URL. `voice_cast_on_sign.py` runs on the host by default — `DEFAULT_NATS_URL` targets `localhost`, since the Docker-internal hostname `nats` only resolves inside the compose network (fails opaquely from a host shell). Containers running this daemon inside the compose network must pass `NATS_URL=nats://nats:pmoves@nats:4222` explicitly (finding #6). |
+| `NATS_URL` | — | `sign_trail.py`, `voice_cast_on_sign.py` | NATS connection URL. `voice_cast_on_sign.py` runs on the host by default — `DEFAULT_NATS_URL` targets `localhost`, since the Docker-internal hostname `nats` only resolves inside the compose network (fails opaquely from a host shell). Containers running this daemon inside the compose network must pass `NATS_URL=nats://<user>:<password>@nats:4222` explicitly (finding #6). |
 | `VOICE_CAST_NATS_URL` | — | `voice_cast_on_sign.py` | Explicit override, takes precedence over `NATS_URL` translation. |
 | `CHIT_SIGN_PUBLISH` | unset (no-op) | `sign_trail.py` | Set to `1` to publish the signed trail to `agent.graphiti.signed.v1` after signing. Requires `NATS_URL` also set. |
 | `FLUTE_GATEWAY_URL` | `http://localhost:8055` | `voice_cast_on_sign.py` | Flute-Gateway base URL for the expressive synthesis path (`/healthz`, `/v1/voice/synthesize/audio`). |
@@ -85,7 +85,7 @@ python pmoves/tools/voice_cast_on_sign.py --subjects agent.graphiti.signed.v1
 ## Demo path
 
 ```
-CHIT_SIGN_PUBLISH=1 NATS_URL=nats://nats:pmoves@localhost:4222 \
+CHIT_SIGN_PUBLISH=1 NATS_URL=nats://<user>:<password>@localhost:4222 \
   python pmoves/tools/sign_trail.py --agent-id claude-opus --summary "Completed X"
 ```
 

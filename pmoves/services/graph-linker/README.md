@@ -34,7 +34,7 @@ All configuration via environment variables:
 | `NEO4J_USER` | `neo4j` | Neo4j username |
 | `NEO4J_PASSWORD` | `neo4j` | Neo4j password |
 | `NEO4J_DATABASE` | `neo4j` | Neo4j database name |
-| `NATS_URL` | `nats://nats:pmoves@nats:4222` | NATS server URL |
+| `NATS_URL` | `nats://<user>:<password>@nats:4222` | NATS server URL |
 | `PORT` | `8090` | HTTP server port |
 | `LOG_LEVEL` | `info` | Logging level |
 
@@ -70,7 +70,7 @@ python -m pytest tests/ -v
 
 ```bash
 docker build -t pmoves-graph-linker .
-docker run -e NEO4J_URL=bolt://neo4j:7687 -e NATS_URL=nats://nats:pmoves@nats:4222 pmoves-graph-linker
+docker run -e NEO4J_URL=bolt://neo4j:7687 -e NATS_URL=nats://<user>:<password>@nats:4222 pmoves-graph-linker
 ```
 
 ## Files

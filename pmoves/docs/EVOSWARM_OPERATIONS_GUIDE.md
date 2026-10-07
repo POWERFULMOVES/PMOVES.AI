@@ -78,7 +78,7 @@ EvoSwarm sits between the encoding pipeline (which produces CGPs) and the consum
 | `EVOSWARM_SAMPLE_LIMIT` | `25` | CGPs sampled per iteration |
 | `EVOSWARM_NAMESPACE` | `default` | Optional namespace filter |
 | `NVML_ENABLED` | `true` | Enable GPU power monitoring |
-| `NATS_URL` | `nats://nats:pmoves@nats:4222` | NATS connection string |
+| `NATS_URL` | `nats://<user>:<password>@nats:4222` | NATS connection string |
 | `AGENTGYM_ENABLE` | `true` | Enable RL integration |
 | `AGENT_ZERO_BASE_URL` | `http://agent-zero:8080` | Agent Zero for event publishing |
 
@@ -96,7 +96,7 @@ evo-controller:
     - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
     - EVOSWARM_POLL_SECONDS=${EVOSWARM_POLL_SECONDS:-300}
     - EVOSWARM_SAMPLE_LIMIT=${EVOSWARM_SAMPLE_LIMIT:-25}
-    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - NATS_URL=${NATS_URL:-nats://<user>:<password>@nats:4222}
   depends_on:
     nats:
       condition: service_healthy
@@ -491,7 +491,7 @@ curl http://localhost:8113/config | jq .sample_limit
 
 ```bash
 # Verify NATS credentials in URL
-echo $NATS_URL  # Should contain nats://nats:pmoves@...
+echo $NATS_URL  # Should contain nats://<user>:<password>@...
 
 # Test connection
 nats pub test "ping" --server "$NATS_URL"

@@ -162,7 +162,7 @@ class TextUnit(BaseModel):
 | Variable | Purpose | Default |
 |----------|---------|---------|
 | `CHIT_PROD_PASSPHRASE` | CGP signing key | `pmoves-chit-default` (dev only) |
-| `NATS_URL` | NATS connection | `nats://nats:pmoves@nats:4222` |
+| `NATS_URL` | NATS connection | `nats://<user>:<password>@nats:4222` |
 | `SUPABASE_URL` | Supabase API | `http://supabase-kong:8000` |
 | `SUPABASE_ANON_KEY` | Supabase auth | - |
 
@@ -256,7 +256,7 @@ consciousness-service:
     - "${CONSCIOUSNESS_PORT:-8096}:8096"
   environment:
     - CHIT_PROD_PASSPHRASE=${CHIT_PROD_PASSPHRASE}
-    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - NATS_URL=${NATS_URL:-nats://<user>:<password>@nats:4222}
     - SUPABASE_URL=${SUPABASE_URL}
     - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
   depends_on:

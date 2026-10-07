@@ -35,7 +35,7 @@ events (`agent.notes.saved.v1` / `agent.notes.searched.v1`).
 | `OPEN_NOTEBOOK_API_TOKEN` | _(empty)_ | Bearer; warns on plain-http |
 | `MCP_HOST` / `MCP_PORT` | `0.0.0.0` / `8092` | streamable-http bind |
 | `MCP_TRANSPORT` | `streamable-http` | `sse` \| `stdio` also supported |
-| `NATS_URL` | `nats://nats:pmoves@nats:4222` | best-effort events |
+| `NATS_URL` | `nats://<user>:<password>@nats:4222` | best-effort events |
 
 ## Multi-tenancy
 

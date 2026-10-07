@@ -16,13 +16,13 @@ The Phase C issues targeted by PRs #44 and #45 are largely resolved: `export` sy
 url: config.url ?? process.env.NATS_URL ?? "nats://localhost:4222",
 ```
 
-When `NATS_URL` is not injected into the environment, the client silently falls back to `nats://localhost:4222` — a URL with no credentials. Per PMOVES.AI CLAUDE.md: "Auth: `nats://nats:pmoves@nats:4222` (always use authenticated URL)." A container missing `NATS_URL` will appear connected but unauthenticated, bypassing the NATS auth layer silently.
+When `NATS_URL` is not injected into the environment, the client silently falls back to `nats://localhost:4222` — a URL with no credentials. Per PMOVES.AI CLAUDE.md: "Auth: `nats://<user>:<password>@nats:4222` (always use authenticated URL)." A container missing `NATS_URL` will appear connected but unauthenticated, bypassing the NATS auth layer silently.
 
 The same unauthenticated default is embedded in `.claude/skills/pmoves-integration/tools/nats-monitor.ts:236` (a dev-only tool, lower risk).
 
 **Fix:**
 ```typescript
-url: config.url ?? process.env.NATS_URL ?? "nats://nats:pmoves@nats:4222",
+url: config.url ?? process.env.NATS_URL ?? "nats://<user>:<password>@nats:4222",
 ```
 
 ### P1-2 — `minioadmin` default credentials in committed tier env files (Confidence: 85)
@@ -83,7 +83,7 @@ PMOVES best practices: prefer `127.0.0.1`. Binding to `0.0.0.0` exposes the serv
 - `docs/PHASE5_RESEARCH_SUMMARY.md`, line 215: `NATS_URL=nats://nats:4222`
 - `docs/architecture/rl-feedback-loop-quickref.md`, line 262: `NATS_URL=nats://nats:4222`
 
-**Fix:** Update both to `NATS_URL=nats://nats:pmoves@nats:4222`.
+**Fix:** Update both to `NATS_URL=nats://<user>:<password>@nats:4222`.
 
 ---
 

@@ -34,7 +34,7 @@ Add to `.claude/mcp.json` once smoke-tested. **The roadmap (Wave 0 / Task 10) de
       "command": "uv",
       "args": ["--directory", "./pmoves-nats-mcp", "run", "python", "-m", "nats_mcp.server"],
       "env": {
-        "NATS_URL": "nats://nats:pmoves@127.0.0.1:4222"
+        "NATS_URL": "nats://<user>:<password>@127.0.0.1:4222"
       }
     }
   }
@@ -43,7 +43,7 @@ Add to `.claude/mcp.json` once smoke-tested. **The roadmap (Wave 0 / Task 10) de
 
 ## Environment
 
-- `NATS_URL` — connection URL (default `nats://nats:pmoves@127.0.0.1:4222`).
+- `NATS_URL` — connection URL (default `nats://<user>:<password>@127.0.0.1:4222`).
 
 ## Design notes
 

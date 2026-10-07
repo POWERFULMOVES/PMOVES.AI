@@ -235,7 +235,8 @@ Developer (Z890)
 
 ```
 All nodes interconnected via Tailscale overlay network.
-NATS URL: nats://nats:pmoves@nats:4222
+NATS URL (in-stack): $NATS_URL   # nats://<user>:<password>@nats:4222
+Fleet hub (tailnet-only): nats://<user>:<password>@pmoves-kvm4-2:4222
 
 POWERFULMOVES ←→ Z890 ←→ KVM4-1 ←→ KVM4-2
                             ↕
@@ -255,14 +256,14 @@ POWERFULMOVES ←→ Z890 ←→ KVM4-1 ←→ KVM4-2
 | `ci.pmoves.ai` | CNAME | CF Worker | Proxied | Edge | HTTPS |
 | `grafana.pmoves.ai` | A | KVM4-2 IP | Proxied | KVM4-2 | HTTPS |
 | `n8n.pmoves.ai` | A | KVM4-1 IP | Proxied | KVM4-1 | HTTPS |
-| `nats.pmoves.ai` | A | KVM4-2 IP | DNS only | KVM4-2 | TCP (4222) |
+| `nats.pmoves.ai` | — | reserved, not resolving | — | — | — (NATS hub is tailnet-only: `pmoves-kvm4-2:4222`) |
 | `minio.pmoves.ai` | A | KVM4-2 IP | DNS only | KVM4-2 | HTTPS (9000) |
 | `rag.pmoves.ai` | A | KVM4-1 IP | Proxied | KVM4-1 | HTTPS |
 | `agent.pmoves.ai` | A | KVM4-1 IP | Proxied | KVM4-1 | HTTPS |
 | `search.pmoves.ai` | A | KVM4-2 IP | Proxied | KVM4-2 | HTTPS |
 | `tts.pmoves.ai` | A | Z890 IP | Proxied | Z890 (via Tailscale relay from KVM4-1) | HTTPS |
 
-**Note:** NATS, MinIO, and Headscale use DNS-only (no Cloudflare proxy) because they use non-HTTP protocols or need direct TCP connections.
+**Note:** `nats.pmoves.ai` is a reserved name with no record today; clients reach the NATS hub over Tailscale at `pmoves-kvm4-2:4222` (MagicDNS). MinIO and Headscale use DNS-only (no Cloudflare proxy) because they use non-HTTP protocols or need direct TCP connections.
 
 ---
 

@@ -507,7 +507,7 @@ For services that consume CGPs but don't produce them:
 ```typescript
 import { connect, StringCodec } from 'nats';
 
-const nc = await connect({ servers: 'nats://nats:pmoves@nats:4222' });
+const nc = await connect({ servers: 'nats://<user>:<password>@nats:4222' });
 const sc = StringCodec();
 
 const sub = nc.subscribe('tokenism.cgp.ready.v1');

@@ -193,7 +193,7 @@ The CHR algorithm performs geometric clustering on text embeddings:
 
 ```bash
 # Environment variables
-NATS_URL=nats://nats:pmoves@nats:4222
+NATS_URL=nats://<user>:<password>@nats:4222
 NATS_CONNECTED=true  # Health check status
 ```
 
@@ -272,7 +272,7 @@ CREATE (theory)-[:PROPOSED_BY]->(proponent)
 
 | Variable | Purpose | Default |
 |----------|---------|---------|
-| `NATS_URL` | NATS connection | `nats://nats:pmoves@nats:4222` |
+| `NATS_URL` | NATS connection | `nats://<user>:<password>@nats:4222` |
 | `SUPABASE_URL` | Supabase API | `http://supabase-kong:8000` |
 | `SUPABASE_ANON_KEY` | Supabase auth | - |
 
@@ -304,7 +304,7 @@ consciousness-service:
   ports:
     - "${CONSCIOUSNESS_PORT:-8096}:8096"
   environment:
-    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - NATS_URL=${NATS_URL:-nats://<user>:<password>@nats:4222}
     - SUPABASE_URL=${SUPABASE_URL}
     - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
     - CHIT_PROD_PASSPHRASE=${CHIT_PROD_PASSPHRASE}
@@ -402,7 +402,7 @@ from datetime import datetime, timezone
 **Issue:** NATS publish fails silently
 ```
 Solution: Check health endpoint for nats_connected status
-Verify NATS_URL includes credentials: nats://nats:pmoves@nats:4222
+Verify NATS_URL includes credentials: nats://<user>:<password>@nats:4222
 ```
 
 **Issue:** sentence-transformers import error

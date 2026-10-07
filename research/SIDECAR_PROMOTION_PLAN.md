@@ -268,7 +268,7 @@ x-env-tier-agent:
 ### Required Env Vars (from env.tier-agent.example)
 
 ```bash
-NATS_URL=nats://nats:pmoves@nats:4222
+NATS_URL=nats://<user>:<password>@nats:4222
 SUPABASE_URL=http://supabase-kong:8000
 SUPABASE_SERVICE_ROLE_KEY=<REQUIRED>
 SUPA_REST_URL=http://supabase-kong:8000/rest/v1
@@ -418,7 +418,7 @@ TENSORZERO_URL=http://tensorzero-gateway:3000
 
 ```bash
 # NATS: Unreachable but pre-staged
-NATS_URL=nats://nats:pmoves@nats:4222
+NATS_URL=nats://<user>:<password>@nats:4222
 
 # Supabase: Unreachable but pre-staged
 SUPABASE_URL=http://supabase-kong:8000

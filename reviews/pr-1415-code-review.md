@@ -38,8 +38,8 @@
 ### H2: Hardcoded Credentials in Defaults
 - **Files:** `content-provenance-gate/main.py:6039`, `channel-monitor/main.py:5541,5538`
 - **OWASP:** A02:2021 + A05:2021
-- `nats://nats:pmoves@nats:4222` appears in two new files. `postgresql://postgres:postgres@supabase-db:5432/postgres` in channel-monitor. Passwords `pmoves` and `postgres:postgres` are now permanently in git history.
-- **Fix:** Remove defaults entirely — use `os.environ["NATS_URL"]` (raise if missing). Rotate both passwords immediately. Add pre-commit hook to prevent recurrence.
+- `nats://<user>:<password>@nats:4222` appears in two new files. `postgresql://postgres:postgres@supabase-db:5432/postgres` in channel-monitor. Literal default credentials should not live in code defaults.
+- **Fix:** Remove defaults entirely — use `os.environ["NATS_URL"]` (raise if missing). Add pre-commit hook to prevent recurrence.
 
 ### H3: No Input Validation on POST Endpoints
 - **File:** `content-provenance-gate/main.py:6617-6628`

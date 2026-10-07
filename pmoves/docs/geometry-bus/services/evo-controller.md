@@ -222,7 +222,7 @@ import asyncio
 import nats
 
 async def connect_to_nats():
-    nc = await nats.connect("nats://nats:pmoves@nats:4222")
+    nc = await nats.connect("nats://<user>:<password>@nats:4222")
 
     # Subscribe to training completion
     await nc.subscribe("agentgym.train.completed.v1", cb=handle_training)
@@ -241,7 +241,7 @@ async def connect_to_nats():
 
 | Variable | Purpose | Default |
 |----------|---------|---------|
-| `NATS_URL` | NATS connection | `nats://nats:pmoves@nats:4222` |
+| `NATS_URL` | NATS connection | `nats://<user>:<password>@nats:4222` |
 
 ### Optional
 
@@ -264,7 +264,7 @@ evo-controller:
   ports:
     - "${EVO_CONTROLLER_PORT:-8113}:8113"
   environment:
-    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - NATS_URL=${NATS_URL:-nats://<user>:<password>@nats:4222}
     - POPULATION_SIZE=${EVO_POPULATION:-50}
     - MAX_GENERATIONS=${EVO_GENERATIONS:-30}
     - TARGET_FITNESS=${EVO_TARGET_FITNESS:-0.95}
@@ -428,7 +428,7 @@ Check fitness function is appropriate for target CGP
 **Issue:** NATS subscription fails
 ```
 Solution: Verify NATS_URL includes credentials
-Check: nats://nats:pmoves@nats:4222
+Check: nats://<user>:<password>@nats:4222
 ```
 
 **Issue:** Port 8113 conflicts

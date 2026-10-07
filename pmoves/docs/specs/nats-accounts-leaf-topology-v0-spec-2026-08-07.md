@@ -20,7 +20,7 @@ Python MCP (`pmoves-nats-mcp`), CHIT signing tooling (existing), CHIT vault + se
 
 - **Server stays upstream-clean** — no Go patches to `PMOVES-nats-server` in v0. Value lives in
   config + packaging. Broker-level CHIT enforcement is explicitly out of scope (see §11).
-- **No plaintext credentials** anywhere — replaces b850's `nats:pmoves`. All creds are nsc-minted
+- **No plaintext credentials** anywhere — replaces b850's shared user/password. All creds are nsc-minted
   `.creds`, held in the **CHIT vault**, materialized via secrets-funnel. Never hand-edit `env.shared`.
 - **Committed artifacts use hostnames/placeholders, never literal IPs** (refer to nodes by Tailscale hostname).
 - **Compose/Dockerfile/config edits are Known-Road domains** — operator-authorized.
@@ -37,9 +37,9 @@ Python MCP (`pmoves-nats-mcp`), CHIT signing tooling (existing), CHIT vault + se
 - Leaf `.conf` files exist (`elder-melchor-leaf.conf`, `configs/nats-leaf-z890.conf`, `nats/config/external.conf`)
   but the server is **not** launched with them, and **no leafnode listener** exists.
 - **Bug:** b850's `elder-melchor-leaf.conf` remote points at `${TS_Z890}:4222` (client port) with plaintext
-  `nats:pmoves`. Per NATS docs a leaf attaches to the hub's **7422** leafnode port. It has never been a real leaf.
+  shared user/password. Per NATS docs a leaf attaches to the hub's **7422** leafnode port. It has never been a real leaf.
 - `PMOVES-nats-server` = clean fork of `nats-io/nats-server`, tracking upstream, **zero PMOVES commits**.
-- `pmoves-nats-mcp` = tracked (7 files), env `NATS_URL=nats://nats:pmoves@…:4222`, tools `nats_publish` /
+- `pmoves-nats-mcp` = tracked (7 files), env `NATS_URL=nats://<user>:<password>@…:4222`, tools `nats_publish` /
   `nats_subscribe`. **No Dockerfile/compose/examples** — shim-shaped.
 
 ## 2. Account topology (trust zones)
@@ -153,7 +153,7 @@ Stock binary, **no Go patches**. Carries the PMOVES config + packaging:
 - Tracks upstream for CVE currency via the existing fork-sync discipline.
 
 ### 7b. `pmoves-nats-mcp` (complete + enhance)
-1. **CORE `.creds` auth** — replace `NATS_URL=nats://nats:pmoves@…` with a CORE user `.creds` file
+1. **CORE `.creds` auth** — replace `NATS_URL=nats://<user>:<password>@…` with a CORE user `.creds` file
    (env `NATS_CREDS` path); connect on the client port with the CORE account.
 2. **CHIT-signed publish** — `nats_publish(subject, payload, sign?)`: when the subject is CHIT-aware
    (`chit.*`, `tokenism.prosodic.*`, `geometry.*`, or `sign:true`), sign the CGP via the existing CHIT

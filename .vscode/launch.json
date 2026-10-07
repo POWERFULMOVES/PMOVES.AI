@@ -27,7 +27,7 @@
       "cwd": "${workspaceFolder}",
       "env": {
         "PYTHONPATH": "${workspaceFolder}",
-        "NATS_URL": "nats://nats:pmoves@localhost:4222"
+        "NATS_URL": "${env:NATS_URL}"
       }
     },
     {
@@ -40,7 +40,7 @@
       "cwd": "${workspaceFolder}",
       "env": {
         "PYTHONPATH": "${workspaceFolder}",
-        "NATS_URL": "nats://nats:pmoves@localhost:4222"
+        "NATS_URL": "${env:NATS_URL}"
       }
     },
     {

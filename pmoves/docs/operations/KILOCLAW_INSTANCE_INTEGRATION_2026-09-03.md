@@ -35,7 +35,7 @@
 ## 2. Geometry bus (NATS) — current state
 
 - Hub: `pmoves-nats-1` container on **kvm4-2**, up 6 weeks, healthy, `nats:2.11.8-alpine`, JetStream + monitoring enabled.
-- Binds the node's tailnet interface only (reach it as `pmoves-kvm4-2:4222`); loopback refused. Creds `nats:pmoves` (documented weak default; real password overrides via env).
+- Binds the node's tailnet interface only (reach it as `pmoves-kvm4-2:4222`); loopback refused. Credentials come from `NATS_USER` / `NATS_PASSWORD` (set per node via env).
 - **AUTH VERIFIED** from inside the hub network (`docker run --network host` probe): connect + auth OK.
 - **BUS IS IDLE: zero publishers/subscribers observed in a 6s wildcard subscribe.** The geometry bus needs activation — consumers/subscribers (flute geometry subscriber, agent task subscribers, geometry publishers) are not running on any KVM.
 

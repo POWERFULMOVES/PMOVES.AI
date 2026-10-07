@@ -70,7 +70,7 @@ Set `EXTERNAL_NEO4J|MEILI|QDRANT|SUPABASE=true` in `.env.local` to skip local in
   - For iterative local work when optional surfaces are intentionally down, set `UI_TOPOLOGY_ALLOW_MISSING=true`.
 
 - `make up-nats`
-  - Starts the NATS broker (`agents` profile) and rewrites `.env.local` so `YT_NATS_ENABLE=true` with `NATS_URL=nats://nats:pmoves@nats:4222`.
+  - Starts the NATS broker (`agents` profile) and rewrites `.env.local` so `YT_NATS_ENABLE=true` with `NATS_URL=nats://<user>:<password>@nats:4222`.
   - Use this before opting into the agents profile (Agent Zero, Archon, mesh-agent, Discord publisher).
 - `make up-n8n`
   - Starts the production/default n8n stack: `n8n`, `n8n-runners`, and the dedicated `n8n-db` Postgres sidecar.

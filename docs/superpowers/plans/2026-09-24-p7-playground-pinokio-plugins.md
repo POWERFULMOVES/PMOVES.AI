@@ -50,7 +50,7 @@
 - Never edit upstream checkouts. PMOVES harness plugins go to `POWERFULMOVES/PMOVES-registry` (D2), with PMOVES metadata in sidecars so upstream entry dirs stay byte-identical (D5). App changes go to `POWERFULMOVES/PMOVES-pinokio`.
 - Every plugin installed on a node must resolve to a tracked git ref. A hand-copied plugin is a finding (see P10).
 - No absolute paths or hardcoded binaries in scripts: use `{{which('x')}}`, `{{kernel.path(...)}}`, `{{args.cwd}}` (gepeto "shell.run API").
-- No credentials in committed files. `nats://nats:pmoves@…` defaults (P9, and `.vscode/settings.json` `terminal.integrated.env.*`) become `{{envs.PMOVES_NATS_URL}}` with no credentialed default.
+- No credentials in committed files. `nats://<user>:<password>@…` defaults (P9, and `.vscode/settings.json` `terminal.integrated.env.*`) become `{{envs.PMOVES_NATS_URL}}` with no credentialed default.
 - Tool exit codes: 0 clean / 1 findings / 3 could-not-measure. Always print the input counts beside a result.
 - Harness customization is read from the P17 source of truth. Do not create a second registry.
 - Live services are not touched by this plan's delivery tasks. Phase 0 runtime checks are runbook steps run by the operator or steward.

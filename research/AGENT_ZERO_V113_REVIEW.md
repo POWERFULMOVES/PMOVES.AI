@@ -620,7 +620,7 @@ Full developer context document for Claude Code CLI. Key sections:
 | `A0_SET_embedding_model` | Embedding model | `tensorzero::embedding_model_name::embed_default` |
 | `A0_SET_mcp_server_token` | MCP auth token | Auto-generated |
 | `MCP_CLIENT_SECRET` | External MCP client auth | Required |
-| `NATS_URL` | NATS connection | `nats://nats:pmoves@nats:4222` |
+| `NATS_URL` | NATS connection | `nats://<user>:<password>@nats:4222` |
 | `AGENTZERO_JETSTREAM` | Enable JetStream | `true` |
 
 **Security Posture (as documented):**

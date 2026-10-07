@@ -52,9 +52,9 @@
 
 ### 3. Archon NATS Authorization Fixed ✅
 **Issue:** Archon couldn't connect to NATS due to missing credentials
-- **Root cause:** `NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}` default in docker-compose.yml overrode env_file
+- **Root cause:** `NATS_URL=${NATS_URL:-nats://<user>:<password>@nats:4222}` default in docker-compose.yml overrode env_file
 - **Fixed:** Removed hardcoded NATS_URL from archon environment section
-- **Result:** NATS_URL now comes from `env.tier-agent` with credentials: `nats://nats:pmoves@nats:4222`
+- **Result:** NATS_URL now comes from `env.tier-agent` with credentials: `nats://<user>:<password>@nats:4222`
 
 ---
 

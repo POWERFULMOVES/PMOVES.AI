@@ -89,7 +89,7 @@ GET /metrics
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `NATS_URL` | `nats://nats:pmoves@nats:4222` | NATS connection URL |
+| `NATS_URL` | `nats://<user>:<password>@nats:4222` | NATS connection URL |
 | `SERVICE_PORT` | `8100` | HTTP port for API |
 | `BRANCH_STALE_DAYS` | `30` | Days before branch is considered stale |
 | `DRY_RUN` | `true` | Enable dry-run mode (no actual deletions) |
@@ -244,7 +244,7 @@ curl http://localhost:8100/healthz
 curl http://localhost:8222/varz
 
 # Check NATS credentials
-echo $NATS_URL  # Should include credentials: nats://nats:pmoves@nats:4222
+echo $NATS_URL  # Should include credentials: nats://<user>:<password>@nats:4222
 ```
 
 ## Integration with Other Services
