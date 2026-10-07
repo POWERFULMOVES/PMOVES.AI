@@ -46,12 +46,40 @@ def test_safe_url_drops_userinfo_and_query(url, expected):
     assert _safe_url(url) == expected
 
 
-def test_no_log_line_passes_a_raw_url():
-    """Any logger call that mentions a URL-bearing name must route it through
-    _safe_url -- %-style ("url=%s", NATS_URL) and f-strings ({NATS_URL}) alike."""
-    url_names = ("NATS_URL", "ws_url")
-    for n, line in enumerate(_SRC.read_text().splitlines(), 1):
-        if "logger." not in line:
+_URL_NAMES = {"NATS_URL", "ws_url"}
+
+
+def _raw_url_uses(node: ast.AST):
+    """Yield Name nodes for URL-bearing names NOT wrapped in _safe_url(...)."""
+    if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "_safe_url":
+        return
+    if isinstance(node, ast.Name) and node.id in _URL_NAMES:
+        yield node
+        return
+    for child in ast.iter_child_nodes(node):
+        yield from _raw_url_uses(child)
+
+
+def test_no_logger_call_passes_a_raw_url():
+    """Statement-level (AST), so multi-line calls are covered: every argument of
+    every logger.<level>(...) call -- %-style args and f-string parts alike --
+    may only reach NATS_URL / ws_url through _safe_url(...)."""
+    tree = ast.parse(_SRC.read_text())
+    offenders = []
+    for call in ast.walk(tree):
+        if not (isinstance(call, ast.Call) and isinstance(call.func, ast.Attribute)):
             continue
-        if "url=%s" in line or any(name in line for name in url_names):
-            assert "_safe_url(" in line, f"geometry_bus.py:{n}: {line.strip()}"
+        owner = call.func.value
+        if not (isinstance(owner, ast.Name) and owner.id == "logger"):
+            continue
+        for arg in [*call.args, *(k.value for k in call.keywords)]:
+            offenders += [f"geometry_bus.py:{n.lineno} {n.id}" for n in _raw_url_uses(arg)]
+    assert not offenders, offenders
+
+
+def test_guard_catches_a_multiline_raw_url():
+    # The guard itself must fail on the multi-line shape a line scan misses.
+    bad = ast.parse('logger.info(\n    "listener (url=%s)",\n    NATS_URL,\n)\n')
+    good = ast.parse('logger.info(\n    "listener (url=%s)",\n    _safe_url(NATS_URL),\n)\n')
+    assert [n.id for c in ast.walk(bad) if isinstance(c, ast.Call) and isinstance(c.func, ast.Attribute) for a in c.args for n in _raw_url_uses(a)] == ["NATS_URL"]
+    assert [n.id for c in ast.walk(good) if isinstance(c, ast.Call) and isinstance(c.func, ast.Attribute) for a in c.args for n in _raw_url_uses(a)] == []
