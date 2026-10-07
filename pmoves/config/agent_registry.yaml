@@ -1,5 +1,5 @@
 # PMOVES Agent Registry — Single Source of Truth
-# Last updated: 2026-07-02
+# Last updated: 2026-09-25 (111 agent entries; provenance stamp per reviews/persona-corpus-review-2026-09-24.md fix #5 — agent0-sidecar)
 #
 # This file encodes every agent's class, type(s), tier, layers,
 # NATS subjects, health endpoint, CHIT toggles, and evolution stage.

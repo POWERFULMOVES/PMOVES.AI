@@ -118,3 +118,14 @@ Re-verified from the hosted kiloclaw instance with live sources (composio YouTub
 - **Site status unchanged/worse:** `persona.pmoves.ai` NXDOMAIN, `pmoves.ai` 403, `/chit-tour/` 404. The calendar's hard blocker stands. Cloudflare DNS access is available via composio (`cloudflare` toolkit ACTIVE on org `pmoves_ai`) — the cutover is an operator decision away, not an access problem.
 - **Gmail ingestion is not yet wired:** composio gmail toolkit not linked; local `gog` OAuth is expired (`invalid_grant`). `composio link gmail` is the one-command fix before the next source-gathering pass.
 - Ops context for the pipeline: see `pmoves/docs/operations/KILOCLAW_INSTANCE_INTEGRATION_2026-09-03.md`.
+
+## 2026-09-25 verification addendum (agent0-sidecar)
+
+Re-verified live via composio YouTube API (`YOUTUBE_LIST_PLAYLIST_ITEMS` via platform MCP) and repo registries:
+
+- **AI Playlist current size: 2,389 videos** (`PLGupOT04oMfok7S8W8Js7lZZIlhM8ufc8`; newest item published 2026-09-24T16:30:55Z) — +155 since the 09-03 count of 2,234. Every crawl count above remains a snapshot.
+- **PMOVES.AI playlist: 869 videos** (`PLa64xecRY4d0`) — up from 345 at the 09-03 check (+524; heavy music additions since the 2026-08-11 creation). Do not quote 345 in post copy.
+- **Registry counts now: 111 agents, 14 teams, 16 rooms, 81 gitlinked submodules** (was 104/14/13/79 on 09-03). `agent_registry.yaml` header now carries a real last-updated stamp (2026-09-25) — provenance gap from `reviews/persona-corpus-review-2026-09-24.md` fix #5 closed.
+- **`pmoves/rooms/persona/persona.json` synced 91/13/50/5 → 111/14/81/16 (version 2026-09-25)** — the L104 prerequisite is closed in data; persona-render re-run still owed before DNS cutover.
+- **Destinations unchanged:** `persona.pmoves.ai` NXDOMAIN, `pmoves.ai` 403, `/chit-tour/` 403 (was 404 on 09-03). The hard blocker stands; cutover remains the operator decision per the 09-03 note above.
+- **PMOVES.YT service healthy** (`/healthz` 200, yt-dlp 2026.07.04, `/yt/info` verified end-to-end); canonical playlist enumeration is the composio platform MCP per the 2026-09-25 SOLVED note in AGNOTE4482PHI.t1.
