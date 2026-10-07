@@ -41,6 +41,10 @@ by that twice in one week:
     backend-failure lines are now built from a `reason` variable (see
     AUTH_EMIT_SITES), so this file now also derives the emitted text from
     the pinned source and checks the rule-out against it.
+  * #3281 bumped the pin — `2a45a1a0c` -> `cd426d505` (fork PR #31,
+    retrieval-path fixes, squash-merged). It touches `hirag-client.ts`,
+    `mcp-sse.ts`, `embedding.ts` and tests, not `auth.ts` (byte-identical at
+    both, `git diff --quiet`); all citations re-verified, only PIN moved.
 
 Re-numbering by hand each time is not a fix; it is the same manual step failing
 again on a schedule. This test makes the citation machine-checkable in three
@@ -69,7 +73,7 @@ AUTH_TS = REPO_ROOT / SUBMODULE / "src" / "pmoves" / "auth.ts"
 
 # The commit these line numbers were read at. Advancing the gitlink without
 # updating this constant is the drift this file exists to catch.
-PIN = "2a45a1a0c238902af478ec58685e2e1fc187a4bf"
+PIN = "cd426d5053608e530f3061ffb790b330f5aeae4b"
 
 # line -> a fragment that must appear on it. Keep in sync with the tables in
 # TAC_CIPHER.md, cipher_identity.py and the cipher-memory SKILL.

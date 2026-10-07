@@ -964,6 +964,7 @@ services:
     - EMBEDDING_MODEL=tensorzero::embedding_model_name::qwen3_embedding_4b_local
     - EMBEDDING_DIM=2560
     - PMOVES_NETWORKS=pmoves_app,pmoves_data,pmoves_bus,pmoves_external,pmoves_api
+    - PMOVES_EMBED_TIMEOUT_MS=${PMOVES_EMBED_TIMEOUT_MS:-30000}
     ports:
     - "${CIPHER_BIND:-127.0.0.1}:${CIPHER_PORT:-8105}:8105"
     depends_on:

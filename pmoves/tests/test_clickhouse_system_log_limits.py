@@ -38,4 +38,4 @@ def test_every_enabled_system_log_has_a_ttl():
 
 def test_override_is_mounted_by_compose():
     for name in ("docker-compose.yml", "docker-compose.core.yml"):
-        assert MOUNT in (PMOVES / name).read_text(), f"{name} no longer mounts the override"
+        assert MOUNT in (PMOVES / name).read_text(encoding="utf-8"), f"{name} no longer mounts the override"

@@ -556,6 +556,20 @@ def build_row(
     return f"{head}{middle} · scope: {scope}\n"
 
 
+def _o_binary() -> int:
+    """O_BINARY where the platform has one (Windows), else 0 -- read at CALL time.
+
+    Without it `os.open` hands back a TEXT-mode descriptor on Windows, and the
+    CRT rewrites every b"\n" this tool writes as b"\r\n". A row filed on a
+    Windows node was then CRLF in the working tree, never byte-equal to main's
+    LF copy of the same row, so `register-sync` classified it KEEP forever and
+    the checkout could neither pull nor sync. The register is LF on every OS
+    (`.gitattributes`: `*.md text eol=lf`). OR this into every `os.open` that
+    writes register or sidecar bytes; on POSIX it is a no-op.
+    """
+    return getattr(os, "O_BINARY", 0)
+
+
 def append_row(row: str, register: Path | None = None) -> None:
     """Append one row. O_APPEND, so it cannot truncate and cannot interleave.
 
@@ -583,7 +597,9 @@ def append_row(row: str, register: Path | None = None) -> None:
     if not row.endswith("\n"):
         row += "\n"
     target = REGISTER if register is None else register
-    flags = os.O_WRONLY | os.O_APPEND | os.O_CREAT
+    # BINARY too: see `_o_binary` -- O_APPEND orders the bytes, O_BINARY keeps
+    # them the bytes we wrote.
+    flags = os.O_WRONLY | os.O_APPEND | os.O_CREAT | _o_binary()
     fd = os.open(target, flags, 0o644)
     try:
         os.write(fd, row.encode("utf-8"))
@@ -747,7 +763,9 @@ def insert_docs(anchor: str, block: str, register: Path | None = None) -> int:
                   file=sys.stderr)
             return EXIT_REFUSED
 
-        target.write_text(updated, encoding="utf-8")
+        # BYTES, not `write_text`: text mode writes os.linesep, so on Windows
+        # this rewrote EVERY line of the register as CRLF (see `_o_binary`).
+        target.write_bytes(updated.encode("utf-8"))
         print(f"register-append: inserted {len(block.splitlines())} line(s) before "
               f"{anchor!r}; {len(after)} ledger rows unchanged.", file=sys.stderr)
         return EXIT_OK
@@ -923,7 +941,9 @@ def amend_co_owners(owner, branch, co_owners, register=None, gate=None):
                   "an amend must touch exactly one.", file=sys.stderr)
             return EXIT_REFUSED
 
-        target.write_text(updated, encoding="utf-8")
+        # BYTES, not `write_text`: text mode writes os.linesep, so on Windows
+        # this rewrote EVERY line of the register as CRLF (see `_o_binary`).
+        target.write_bytes(updated.encode("utf-8"))
         print(new_row)
         print(f"register-append: amended line {lineno}; {len(after)} ledger rows, "
               "one row changed by insertion only.", file=sys.stderr)
@@ -1088,9 +1108,24 @@ def _split_lines(data: bytes) -> list[bytes]:
     return lines
 
 
+def _strip_eol(line: bytes) -> bytes:
+    """A line without its line ending: the LF, then ONE trailing CR.
+
+    A row a Windows node appended before `_o_binary` existed is CRLF in the
+    working tree and LF on main, and is the same row. Exactly one CR --
+    b"\r\r\n" is not a line ending, it is a different row. This is the one
+    rule for every reader that compares or re-renders a row (`_as_text`,
+    `_assert_round_trips`); only those views see it, KEEP bytes go back verbatim.
+    """
+    text = line.rstrip(b"\n")
+    if text.endswith(b"\r"):
+        text = text[:-1]
+    return text
+
+
 def _as_text(line: bytes) -> str:
     """For MATCHING only. surrogateescape is lossless; nothing decoded is written."""
-    return line.rstrip(b"\n").decode("utf-8", "surrogateescape")
+    return _strip_eol(line).decode("utf-8", "surrogateescape")
 
 
 def _row_key(text: str):
@@ -1221,7 +1256,7 @@ def _sidecar_dir(repo: Path) -> Path:
 
 def _write_exclusive(path: Path, data: bytes) -> None:
     try:
-        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | _o_binary(), 0o644)
     except FileExistsError as exc:
         raise SyncRefused(f"sidecar {path} already exists; nothing on the "
                           "register was written. Re-run the sync") from exc
@@ -1233,8 +1268,13 @@ def _write_exclusive(path: Path, data: bytes) -> None:
 
 
 def _append_bytes(register: Path, data: bytes) -> None:
-    """The O_APPEND primitive, on BYTES, so nothing is re-encoded on the way out."""
-    fd = os.open(register, os.O_WRONLY | os.O_APPEND)
+    """The O_APPEND primitive, on BYTES, so nothing is re-encoded on the way out.
+
+    O_BINARY as well, or "on bytes" is false on Windows: a text-mode descriptor
+    turns each b"\n" into b"\r\n" and the HEAD + KEEP post-check then fails as
+    a PARTIAL APPLY. See `_o_binary`.
+    """
+    fd = os.open(register, os.O_WRONLY | os.O_APPEND | _o_binary())
     try:
         os.write(fd, data)
     finally:
@@ -1418,7 +1458,7 @@ def _assert_round_trips(line: bytes) -> dict:
     carrying arbitrary kinds or hand-built text past the renderer.
     """
     try:
-        text = line.rstrip(b"\n").decode("utf-8")
+        text = _strip_eol(line).decode("utf-8")
     except UnicodeDecodeError as exc:
         raise SyncRefused(f"a reapplied row is not UTF-8 ({exc}); the append "
                           "roads never emit that") from exc
@@ -2113,5 +2153,30 @@ def _guarded(argv=None) -> int:
         return EXIT_UNMEASURED
 
 
+def _utf8_stdio() -> None:
+    """Print rows as UTF-8, whatever the console's code page.
+
+    Rows are free text. On a Windows pipe or redirect python encodes stdout
+    with the ANSI code page (cp1252), which has no arrows and no U+2028, so
+    printing a row raised UnicodeEncodeError half-way through a report: the
+    tool crashed on a register it had read correctly. Only stream OUTPUT
+    changes here -- every register write is bytes and never passes through
+    these streams. That output includes --dry-run's rendered row, which a
+    pipe now receives as the same UTF-8 bytes the real write would append. A
+    parent that decodes this tool's output as cp1252 sees `·` garbled instead
+    of a crash. `errors="replace"` (stderr's default was backslashreplace)
+    means a stream that still cannot take a char shows `?` rather than
+    crashing. Called from the CLI entry only, so
+    an in-process caller's (or pytest's) streams are left as they were; the
+    getattr guard covers streams that are not a TextIOWrapper at all.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is not None:
+            with contextlib.suppress(Exception):
+                reconfigure(encoding="utf-8", errors="replace")
+
+
 if __name__ == "__main__":
+    _utf8_stdio()
     sys.exit(_guarded())

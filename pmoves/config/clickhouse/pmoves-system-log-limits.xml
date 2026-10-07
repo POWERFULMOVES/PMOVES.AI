@@ -33,10 +33,25 @@
          concurrent Horizontal metric_log merges. Both stop when metric_log goes. Nothing in PMOVES
          reads system.metric_log; Prometheus covers the same counters.
          NOTE: remove="1" stops new writes but does NOT remove the existing table
-         (see the orphaned error_log_0 / query_log_0 / processors_profile_log_0 left
-         by earlier schema renames),
+         (compare the orphaned system.*_log_N tables ClickHouse leaves behind when
+         an upgrade changes a system log's schema and renames the old table aside),
          and its merges keep failing until the operator drops system.metric_log
-         once, after the restart. -->
+         once, after the restart. The rename suffix INCREMENTS: the first schema
+         change yields name_0, the next name_1 while name_0 still exists, and so
+         on (SystemLog.cpp prepareTable, v24.12.6.70-stable, lines 548-551, which
+         loop ++suffix while table_name + "_" + toString(suffix) already exists).
+         The orphan set varies per node and upgrade history, so discover it
+         rather than assume a list:
+           SELECT name FROM system.tables WHERE database='system' AND match(name, '_log_[0-9]+$')
+         and drop what that returns. The _log_ anchor is deliberate: every default
+         system log table name ends in _log (SystemLog.h LIST_OF_ALL_SYSTEM_LOGS),
+         so this matches only renamed-aside log tables and never a non-log system
+         table that happens to end in digits. Measured on z890 2026-10-05, no
+         system table name ends in _<digits> at all, so today the anchor is
+         belt-and-braces rather than load-bearing. It holds
+         only while no <table> override renames a log to a name not ending in _log;
+         none does today (checked on z890 2026-10-05). Example: z890 on 2026-10-03 measured
+         error_log_0, processors_profile_log_0, query_metric_log_0 (no query_log_0). -->
     <metric_log remove="1"/>
     <asynchronous_metric_log>
         <ttl>event_date + INTERVAL 2 DAY DELETE</ttl>

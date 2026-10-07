@@ -1,0 +1,9 @@
+name: CLM Test Minimal
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: spark
+    steps:
+      - name: hello
+        run: echo hello from spark && uname -m && python3 --version
