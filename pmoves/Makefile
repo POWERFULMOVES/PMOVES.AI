@@ -2300,10 +2300,10 @@ yt-docs-catalog-smoke: ## Smoke check for /yt/docs/catalog (counts + version)
 
 .PHONY: gpu-rerank-evidence
 gpu-rerank-evidence: ## Run strict GPU rerank smoke and save evidence under pmoves/docs/logs/
-	@mkdir -p pmoves/docs/logs
+	@mkdir -p docs/logs
 	@STAMP=$$(date +%Y-%m-%d_%H-%M-%S); \
 	  echo "→ Strict GPU rerank smoke (this will fail if rerank not enabled/model missing)"; \
-	  (GPU_SMOKE_STRICT=true $(MAKE) smoke-gpu) > pmoves/docs/logs/$${STAMP}_gpu_rerank_smoke.txt 2>&1 || true; \
+	  (GPU_SMOKE_STRICT=true $(MAKE) smoke-gpu) > docs/logs/$${STAMP}_gpu_rerank_smoke.txt 2>&1 || true; \
 	  echo "Wrote pmoves/docs/logs/$${STAMP}_gpu_rerank_smoke.txt"
 
 .PHONY: evidence-auto
@@ -5096,23 +5096,23 @@ A2UI_RENDERER_RENDER_INPUT  ?= $(DOC)
 A2UI_RENDERER_RENDER_OUTPUT ?= $(A2UI_RENDERER_RENDER_DIR)/$(notdir $(basename $(DOC))).mp4
 a2ui-renderer-render: ## Render a single markdown doc as a living-doc MP4 via a2ui-renderer
 	@echo "Rendering $(A2UI_RENDERER_RENDER_INPUT) -> $(A2UI_RENDERER_RENDER_OUTPUT)..."
-	@mkdir -p $(dir $(A2UI_RENDERER_RENDER_OUTPUT))
-	@uv run --script pmoves/tools/a2ui_renderer/render_living_doc.py \
+	@cd $(CURDIR)/.. && mkdir -p $(dir $(A2UI_RENDERER_RENDER_OUTPUT))
+	@cd $(CURDIR)/.. && uv run --script pmoves/tools/a2ui_renderer/render_living_doc.py \
 	    --doc $(A2UI_RENDERER_RENDER_INPUT) \
 	    --output $(A2UI_RENDERER_RENDER_OUTPUT) \
 	    --renderer-url http://localhost:$(A2UI_RENDERER_PORT) \
 	    --token "$${A2UI_RENDERER_TOKEN}" \
 	    --format mp4
 
-# Render every entry in pmoves/config/living_docs_registry.yaml.
+# Render every entry in pmoves/configs/living_docs_registry.yaml.
 # Each entry: { id, source_doc, output_key, format, ttl_days }.
 # Outputs go to $${A2UI_RENDERER_RENDER_DIR}/<id>.<format> and are uploaded
 # to MinIO bucket $${MINIO_BUCKET}/a2ui/living-docs/<id>.<format>.
 docs-render-living: ## Render all LIVING_DOCS_INDEX-registered docs through a2ui-renderer
-	@echo "Rendering living docs from pmoves/config/living_docs_registry.yaml..."
-	@mkdir -p $(A2UI_RENDERER_RENDER_DIR)
-	@uv run --script pmoves/tools/a2ui_renderer/render_living_doc.py \
-	    --registry pmoves/config/living_docs_registry.yaml \
+	@echo "Rendering living docs from pmoves/configs/living_docs_registry.yaml..."
+	@cd $(CURDIR)/.. && mkdir -p $(A2UI_RENDERER_RENDER_DIR)
+	@cd $(CURDIR)/.. && uv run --script pmoves/tools/a2ui_renderer/render_living_doc.py \
+	    --registry pmoves/configs/living_docs_registry.yaml \
 	    --output-dir $(A2UI_RENDERER_RENDER_DIR) \
 	    --renderer-url http://localhost:$(A2UI_RENDERER_PORT) \
 	    --token "$${A2UI_RENDERER_TOKEN}" \
