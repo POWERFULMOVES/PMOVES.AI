@@ -7,6 +7,101 @@
 # Generated from docker-compose.yml by scripts/split_compose.py
 ##############################################################################
 services:
+  clip-embed:
+    <<: &tier-api-hardened
+      env_file:
+      - env.shared
+      - env.tier-api
+      cap_drop:
+      - ALL
+      cap_add:
+      - NET_BIND_SERVICE
+      - CHOWN
+      - SETGID
+      - SETUID
+
+    build:
+      context: ./services/clip-embed
+      dockerfile: Dockerfile
+    image: pmoves/clip-embed:latest
+    environment:
+    - CLIP_MODEL_ID=${CLIP_MODEL_ID:-openai/clip-vit-large-patch14}
+    - CLIP_MODEL_REVISION=${CLIP_MODEL_REVISION:-main}
+    - CLIP_DEVICE=${CLIP_DEVICE:-cpu}
+    - CLIP_EMBED_PORT=8109
+    - MODEL_REGISTRY_URL=${MODEL_REGISTRY_URL:-http://model-registry:8110}
+    - PMOVES_NETWORKS=pmoves_api,pmoves_bus,pmoves_external
+    ports:
+    - "${CLIP_EMBED_BIND:-0.0.0.0}:8109:8109"
+    # networks: clip-embed carried PMOVES_NETWORKS but NO networks: key, so it
+    # landed on the compose DEFAULT network while self-reporting api+bus.
+    # Not cosmetic: MODEL_REGISTRY_URL is the SERVICE NAME model-registry:8110,
+    # which lives on pmoves_api/bus/external -- from the default network that
+    # name does not resolve. Its twin clap-embed, the very next block with the
+    # same *tier-api-hardened anchor, already had this key.
+    # pmoves_external is REQUIRED, not optional: this service calls
+    # CLIPModel.from_pretrained at first request, which downloads weights from
+    # HuggingFace. pmoves_api and pmoves_bus are both `internal: true`, so
+    # without an egress network the container reports HEALTHY and then fails
+    # the first real request. Codex caught this on clip-embed; clap-embed had
+    # the identical defect, which is why copying clap-embed's network list
+    # onto clip-embed fixed one bug and propagated another. Neither service
+    # has ever been run.
+    networks:
+    - pmoves_api
+    - pmoves_bus
+    - pmoves_external
+    restart: unless-stopped
+    profiles:
+    - orchestration
+  clap-embed:
+    <<: *tier-api-hardened
+    build:
+      context: ./services/clap-embed
+      dockerfile: Dockerfile
+    image: pmoves/clap-embed:latest
+    environment:
+    - CLAP_MODEL_ID=${CLAP_MODEL_ID:-laion/larger_clap_music}
+    - CLAP_MODEL_REVISION=${CLAP_MODEL_REVISION:-main}
+    - CLAP_DEVICE=${CLAP_DEVICE:-cpu}
+    - CLAP_EMBED_PORT=8108
+    - NATS_URL=${NATS_URL:-}
+    - MODEL_REGISTRY_URL=${MODEL_REGISTRY_URL:-http://model-registry:8110}
+    - PMOVES_NETWORKS=pmoves_api,pmoves_bus,pmoves_external
+    ports:
+    - "${CLAP_EMBED_BIND:-0.0.0.0}:8108:8108"
+    restart: unless-stopped
+    depends_on:
+      nats:
+        condition: service_healthy
+        required: false
+    profiles:
+    - orchestration
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8108/healthz"]
+      interval: 30s
+      timeout: 5s
+      start_period: 60s
+      retries: 3
+    # pmoves_external is REQUIRED, not optional: this service calls
+    # ClapModel.from_pretrained at first request, which downloads weights from
+    # HuggingFace. pmoves_api and pmoves_bus are both `internal: true`, so
+    # without an egress network the container reports HEALTHY and then fails
+    # the first real request. Codex caught this on clip-embed; clap-embed had
+    # the identical defect, which is why copying clap-embed's network list
+    # onto clip-embed fixed one bug and propagated another. Neither service
+    # has ever been run.
+    networks:
+    - pmoves_api
+    - pmoves_bus
+    - pmoves_external
+    extra_hosts:
+    - host.docker.internal:host-gateway
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
   extract-worker:
     <<: &tier-worker-hardened
       env_file:
@@ -581,18 +676,7 @@ services:
           cpus: '1.0'
           memory: 512M
   model-registry:
-    <<: &tier-api-hardened
-      env_file:
-      - env.shared
-      - env.tier-api
-      cap_drop:
-      - ALL
-      cap_add:
-      - NET_BIND_SERVICE
-      - CHOWN
-      - SETGID
-      - SETUID
-
+    <<: *tier-api-hardened
     build:
       context: .
       dockerfile: services/model-registry/Dockerfile

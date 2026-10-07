@@ -7,6 +7,78 @@
 # Generated from docker-compose.yml by scripts/split_compose.py
 ##############################################################################
 services:
+  a2ui-renderer:
+    build:
+      context: .
+      dockerfile: services/a2ui-renderer/Dockerfile
+    image: ${A2UI_RENDERER_IMAGE:-ghcr.io/powerfulmoves/pmoves-a2ui-renderer:pmoves-latest}
+    container_name: pmoves-a2ui-renderer
+    hostname: a2ui-renderer
+    restart: unless-stopped
+    <<: &tier-agent-hardened-ro
+      env_file:
+      - env.shared
+      - env.tier-agent
+      cap_drop:
+      - ALL
+      cap_add:
+      - NET_BIND_SERVICE
+      read_only: true
+      tmpfs:
+      - /tmp:noexec,nosuid,size=64m
+      - /var/tmp:noexec,nosuid,size=64m
+
+    environment:
+    - PORT=8107
+    - NODE_ENV=production
+    # NATS (slice 3 publisher: emits a2ui.render.completed.v1 on success)
+    - NATS_URL=${NATS_URL}
+    # MinIO output mount per the creator pipeline doc - the renderer
+    # writes MP4/GIF/WebM to a2ui/* keys and publishes the S3 URI
+    - MINIO_ENDPOINT=${MINIO_ENDPOINT:-${S3_ENDPOINT:-minio:9000}}
+    - MINIO_SECURE=${MINIO_SECURE:-false}
+    - MINIO_ACCESS_KEY=${MINIO_USER:?Run make brand-defaults}
+    - MINIO_SECRET_KEY=${MINIO_PASSWORD:?Run make brand-defaults}
+    - MINIO_BUCKET=${A2UI_RENDERER_BUCKET:-outputs}
+    # CHIT fail-closed signing (house pattern, mirrors hi-rag-gateway*)
+    - CHIT_REQUIRE_SIGNATURE=${CHIT_PROD_REQUIRE_SIGNATURE:-true}
+    - CHIT_PASSPHRASE=${CHIT_PROD_PASSPHRASE:?set CHIT_PROD_PASSPHRASE in env.shared}
+    # Supabase JWT for /render, /render/chart, /render/provenance (fail-closed)
+    - SUPABASE_JWT_SECRET=${SUPABASE_JWT_SECRET:?set SUPABASE_JWT_SECRET in env.shared}
+    # Provenance agent identity for graphiti events
+    - PROVENANCE_AGENT_ID=${PROVENANCE_AGENT_ID:-a2ui-renderer}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_data
+    ports:
+    - ${A2UI_RENDERER_BIND:-0.0.0.0}:${A2UI_RENDERER_PORT:-8107}:8107
+    profiles:
+    - agents
+    - media
+    - docs  # living-docs hook (make docs-render-living) needs the renderer up
+    networks:
+    - pmoves_app
+    - pmoves_bus
+    - pmoves_data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8107/healthz >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    depends_on:
+      nats:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+
+
   pmoves-ui:
     build:
       context: ./ui
@@ -161,19 +233,7 @@ services:
       dockerfile: services/tokenism-simulator/Dockerfile
     image: ${TOKENISM_IMAGE:-ghcr.io/powerfulmoves/pmoves-tokenism-simulator:edge}
     restart: unless-stopped
-    <<:
-      env_file:
-      - env.shared
-      - env.tier-agent
-      cap_drop:
-      - ALL
-      cap_add:
-      - NET_BIND_SERVICE
-      read_only: true
-      tmpfs:
-      - /tmp:noexec,nosuid,size=64m
-      - /var/tmp:noexec,nosuid,size=64m
-
+    <<: *tier-agent-hardened-ro
     environment:
     # NATS_URL from env.shared/env.tier-agent has credentials: nats://nats:***@nats:4222
     - TOKENISM_HOST=${TOKENISM_HOST:-0.0.0.0}
@@ -430,6 +490,12 @@ services:
         # page renders blank and any probe of the app root reports healthy.
         # Measured on PMOVES-4090 2026-09-08.
         BIZ_PROJECT_NAME: webuiapps
+        # PMOVES room adapter build-time inputs; empty = auto-detect via
+        # same-origin /api/rooms/ + URL/hostname matching. Node-local overrides:
+        # OPENROOM_ROOM_DEFAULT pins a room; OPENROOM_ROOM_IFRAMES is a JSON map
+        # of panel_id|kind -> url for embedded app panels.
+        VITE_PMOVES_ROOM_DEFAULT: ${OPENROOM_ROOM_DEFAULT:-}
+        VITE_PMOVES_ROOM_IFRAMES: ${OPENROOM_ROOM_IFRAMES:-}
     image: pmoves-openroom:latest
     container_name: pmoves-openroom
     restart: unless-stopped

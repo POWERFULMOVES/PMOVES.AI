@@ -27,6 +27,8 @@ SERVICE_GROUPS = {
         "supabase-db",
         "supabase-gotrue",
         "supabase-realtime",
+        "nats-hub",
+        "archon-postgres",
         "supabase-storage",
         "supabase-imgproxy",
         "supabase-meta",
@@ -49,6 +51,7 @@ SERVICE_GROUPS = {
         "invidious-db",
     ],
     "agents": [
+        "p7",
         "agent-zero",
         "archon",
         "gateway-agent",
@@ -93,6 +96,7 @@ SERVICE_GROUPS = {
         "comfy-watcher",
     ],
     "ui": [
+        "a2ui-renderer",
         "pmoves-ui",
         "tokenism-ui",
         "tokenism-simulator",
@@ -104,6 +108,8 @@ SERVICE_GROUPS = {
         "openroom",
     ],
     "workers": [
+        "clip-embed",
+        "clap-embed",
         "extract-worker",
         "watch-folder-router",
         "spark-shape-worker",
