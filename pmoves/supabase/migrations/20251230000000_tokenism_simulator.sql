@@ -110,18 +110,21 @@ ALTER TABLE pmoves_core.simulation_calibration ENABLE ROW LEVEL SECURITY;
 
 -- Public can read simulations (for transparency)
 -- Note: USING (true) is intentional for public read-only access
+DROP POLICY IF EXISTS "Public read access to simulations" ON pmoves_core.simulations;
 CREATE POLICY "Public read access to simulations"
   ON pmoves_core.simulations FOR SELECT
   TO public, anon
   USING (true);
 
 -- Authenticated users can create their own simulations
+DROP POLICY IF EXISTS "Authenticated insert simulations" ON pmoves_core.simulations;
 CREATE POLICY "Authenticated insert simulations"
   ON pmoves_core.simulations FOR INSERT
   TO authenticated
   WITH CHECK (created_by = auth.uid());
 
 -- Users can update their own simulations
+DROP POLICY IF EXISTS "Users update own simulations" ON pmoves_core.simulations;
 CREATE POLICY "Users update own simulations"
   ON pmoves_core.simulations FOR UPDATE
   TO authenticated
@@ -129,6 +132,7 @@ CREATE POLICY "Users update own simulations"
   WITH CHECK (created_by = auth.uid());
 
 -- Public read access to weekly metrics (via simulation relationship)
+DROP POLICY IF EXISTS "Public read access to weekly metrics" ON pmoves_core.simulation_weekly_metrics;
 CREATE POLICY "Public read access to weekly metrics"
   ON pmoves_core.simulation_weekly_metrics FOR SELECT
   TO public, anon
@@ -140,6 +144,7 @@ CREATE POLICY "Public read access to weekly metrics"
   );
 
 -- Public read access to calibration data (via simulation relationship)
+DROP POLICY IF EXISTS "Public read access to calibration" ON pmoves_core.simulation_calibration;
 CREATE POLICY "Public read access to calibration"
   ON pmoves_core.simulation_calibration FOR SELECT
   TO public, anon
