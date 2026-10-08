@@ -362,6 +362,23 @@ def _worn_off_home(lineage, vocab, owner: str, identity: str):
     return worn if worn is not None and worn != home else None
 
 
+# THE CONSTRUCTED-KEY NAMESPACE. An off-home owner key is
+# `<identity>` + NODE_KEY_SEP + `<node>`. The separator holds ONE backtick, and
+# every key component goes through _key_text(), which doubles any backtick --
+# so a constructed key has an ODD number of backticks and every other key
+# (raw owner, bare identity) an EVEN number. No raw owner string can therefore
+# equal a constructed key, whatever it is spelled as: `b850-claude @ spark`
+# written literally stays a raw key, not spark's session. In practice no row
+# can even deliver a backtick -- CLAIM_RE, RELEASE_RE, BATON_FROM_RE and the
+# co-owner item regex all capture [^`]+ -- the escaping covers callers that
+# hand canonical_owner() a string directly (register_append's CLI owner).
+NODE_KEY_SEP = "`@"
+
+
+def _key_text(text: str) -> str:
+    return text.replace("`", "``")
+
+
 def _load_folder():
     """Return a name-folding callable, or None if it is unavailable."""
     global _FOLDER
@@ -379,10 +396,12 @@ def _load_folder():
             return memo[owner]
         identity = module.canonical_identity(owner, vocab)
         if not identity:
-            key = owner
+            key = _key_text(owner)
         else:
             node = _worn_off_home(module, vocab, owner, identity)
-            key = f"{identity} @ {node}" if node else identity
+            key = _key_text(identity)
+            if node:
+                key += NODE_KEY_SEP + _key_text(node)
         memo[owner] = key
         return key
 
@@ -413,7 +432,8 @@ def canonical_owner(owner: str) -> str:
     returns the bare canonical identity, exactly the key it returned before,
     so the 2026-08-25 fold is intact. Only a parenthetical naming a declared
     machine other than the home node yields a distinct key,
-    `<identity> @ <node>`. See _worn_off_home() for every case that stays home.
+    `<identity>`@<node>` (see NODE_KEY_SEP for why no raw owner can spell
+    it). See _worn_off_home() for every case that stays home.
 
     FAIL-SAFE: with no vocabulary this returns the string unchanged, which
     is exactly the previous behaviour. A guard that cannot fold keys is no

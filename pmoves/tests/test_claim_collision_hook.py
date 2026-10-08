@@ -361,6 +361,23 @@ def test_an_off_home_session_folds_its_own_spellings(tmp_path):
     assert reclaimed.returncode == ALLOW, reclaimed.stderr
 
 
+@pytest.mark.parametrize("raw", ["b850-claude @ spark", "b850-claude (@ spark)"])
+def test_a_raw_owner_cannot_spell_a_constructed_node_key(tmp_path, raw):
+    """An owner literally WRITTEN as the off-home key must not become that
+    session. Constructed keys live in a namespace no raw owner can reach."""
+    released = run_hook(
+        tmp_path, _claim("AGENT-C", ts="2026-01-03T00:00:00Z"),
+        _claim(B850_SPARK) + _release(raw),
+    )
+    assert released.returncode == BLOCK, (
+        f"a RELEASE by the literal owner {raw!r} closed spark's lane\n{released.stdout}"
+    )
+    claimed = run_hook(tmp_path, _claim(raw, ts="2026-01-03T00:00:00Z"), _claim(B850_SPARK))
+    assert claimed.returncode == BLOCK, (
+        f"the literal owner {raw!r} re-claimed spark's lane as itself\n{claimed.stdout}"
+    )
+
+
 def test_an_identity_with_no_home_node_keeps_folding_across_nodes(tmp_path):
     """`claude-opus` declares no home ("runs wherever it is launched"), so
     there is no home to be OFF and its node-named spellings keep folding --
@@ -1995,3 +2012,17 @@ def test_a_failed_node_identity_import_leaves_no_half_built_module(
     assert sys.modules.get("node_identity") is sentinel, (
         "a failed exec left a half-built node_identity in sys.modules"
     )
+
+
+@pytest.mark.parametrize("raw", [
+    "b850-claude`@spark", "b850-claude``@spark", "x`@y", "`@", "b850-claude @ spark",
+])
+def test_no_raw_owner_string_equals_a_constructed_key(raw, clean_tool_modules):
+    """Even through an API that hands canonical_owner() a string with a
+    backtick in it (no row regex can -- they all capture [^`]+), a raw owner
+    never lands on a constructed `<identity>`@<node>` key."""
+    gate = _fresh("claim_gate_under_test", HOOK)
+    constructed = {gate.canonical_owner(o) for o in (
+        "B850-CLAUDE (spark)", "Z890-CLAUDE (Z890-mirror-on-5090)")}
+    assert len(constructed) == 2
+    assert gate.canonical_owner(raw) not in constructed

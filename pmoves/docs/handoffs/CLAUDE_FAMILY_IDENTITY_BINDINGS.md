@@ -285,7 +285,7 @@ node token defaults to the identity's declared home node. Measured over the same
 existing row. It separates only worn sessions, which do not exist in the register yet.
 
 **Implemented in #3313** as exactly that key. `canonical_owner()` returns the bare canonical
-identity for every home spelling (unchanged from before), and `<identity> @ <node>` only
+identity for every home spelling (unchanged from before), and `` <identity>`@<node> `` (a key no raw owner string can spell; see `NODE_KEY_SEP`) only
 when `identity_lineage.wearing()` finds a declared MACHINE in the parenthetical (a
 node-vocabulary alias, or a `node_relations` token such as `Z890-mirror-on-5090` -> 5090)
 that is not the identity's home. Stays folded, by design: no node named (`(Opus 5)`),
