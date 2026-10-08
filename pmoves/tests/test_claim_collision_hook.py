@@ -246,6 +246,121 @@ def test_a_genuine_collision_still_blocks_across_spellings(tmp_path):
     )
 
 
+# ---------------------------------------------------------------------------
+# One identity, two machines (#3313).
+#
+# resolve_register_name() lets an identity sign OFF its home node as
+# `<BASE> (<node>)` -- `B850-CLAUDE (spark)`, or the declared node_relations
+# token `Z890-CLAUDE (Z890-mirror-on-5090)` -- while home stays
+# `B850-CLAUDE (Knuckles)`. The spelling fold above merged all of them into one
+# owner key, so a bare RELEASE by one machine's session closed the OTHER
+# machine's open lanes, and a CLAIM by one read as a self-reclaim of the
+# other's lane. Same identity, different sessions: the key is (identity, node).
+# Home-spelling variants -- `(Knuckles, opus 4.7 1M)`, `(Opus 5)` -- must keep
+# folding together, which is the 2026-08-25 reason the fold exists at all.
+# ---------------------------------------------------------------------------
+
+B850_SPARK = "B850-CLAUDE (spark)"
+Z890_HOME = "Z890-CLAUDE"
+Z890_MIRROR = "Z890-CLAUDE (Z890-mirror-on-5090)"
+
+
+def _claim(owner, branch="feat/widget", ts="2026-01-01T00:00:00Z"):
+    return f"- `{ts}` CLAIM `{owner}` scope: **x.** Branch `{branch}`\n"
+
+
+def _release(owner, ts="2026-01-02T00:00:00Z"):
+    return f"- `{ts}` RELEASE `{owner}` scope: done.\n"
+
+
+def test_an_off_home_release_does_not_close_the_home_sessions_lane(tmp_path):
+    """The defect. spark's bare RELEASE must leave Knuckles' lane held."""
+    existing = _claim(B850_A) + _release(B850_SPARK)
+    result = run_hook(tmp_path, _claim("AGENT-C", ts="2026-01-03T00:00:00Z"), existing)
+    assert result.returncode == BLOCK, (
+        "a RELEASE signed on spark closed a lane the Knuckles session still "
+        f"holds -- one machine's session freed the other's work\n{result.stdout}"
+    )
+    assert B850_A in result.stderr
+
+
+def test_a_home_release_does_not_close_the_off_home_sessions_lane(tmp_path):
+    """The mirror direction: Knuckles' RELEASE leaves spark's lane held."""
+    existing = _claim(B850_SPARK) + _release(B850_A)
+    result = run_hook(tmp_path, _claim("AGENT-C", ts="2026-01-03T00:00:00Z"), existing)
+    assert result.returncode == BLOCK, (
+        f"Knuckles' RELEASE closed spark's open lane\n{result.stdout}"
+    )
+    assert B850_SPARK in result.stderr
+
+
+def test_an_off_home_claim_on_a_home_held_lane_is_a_collision(tmp_path):
+    """Two concurrent sessions of one identity on one branch is the event the
+    register exists to catch -- not a self-reclaim."""
+    result = run_hook(tmp_path, _claim(B850_SPARK, ts="2026-01-03T00:00:00Z"), _claim(B850_A))
+    assert result.returncode == BLOCK, (
+        "spark claimed a branch the Knuckles session holds and the gate read "
+        f"it as the same owner re-naming its own lane\n{result.stdout}"
+    )
+    assert B850_A in result.stderr
+
+
+def test_a_node_relations_mirror_claim_is_its_own_session(tmp_path):
+    """`Z890-CLAUDE (Z890-mirror-on-5090)` runs on the 5090, not on the z890."""
+    claim = run_hook(tmp_path, _claim(Z890_MIRROR, ts="2026-01-03T00:00:00Z"), _claim(Z890_HOME))
+    assert claim.returncode == BLOCK, (
+        f"the 5090 mirror's CLAIM read as the z890 re-naming its lane\n{claim.stdout}"
+    )
+
+
+def test_a_node_relations_mirror_release_does_not_close_the_home_lane(tmp_path):
+    release = run_hook(
+        tmp_path, _claim("AGENT-C", ts="2026-01-03T00:00:00Z"),
+        _claim(Z890_HOME) + _release(Z890_MIRROR),
+    )
+    assert release.returncode == BLOCK, (
+        f"the 5090 mirror's RELEASE closed the z890's open lane\n{release.stdout}"
+    )
+
+
+@pytest.mark.parametrize("spelling", [
+    "B850-CLAUDE (Knuckles, opus 4.7 1M)",   # node token + model annotation
+    "B850-CLAUDE (Opus 5)",                  # no node named -> home node
+    "B850-CLAUDE",                           # bare base -> home node
+    "B850-CLAUDE (pmoves-b850-ai-top)",      # a node ALIAS of the home node
+])
+def test_home_spelling_variants_still_fold_together(tmp_path, spelling):
+    """The 2026-08-25 fold must survive: every HOME spelling closes and
+    re-claims the home session's lane."""
+    released = run_hook(
+        tmp_path, _claim("AGENT-C", ts="2026-01-03T00:00:00Z"),
+        _claim(B850_A) + _release(spelling),
+    )
+    assert released.returncode == ALLOW, (
+        f"{spelling!r} is a home spelling and must close the home CLAIM\n"
+        f"{released.stderr}"
+    )
+    reclaimed = run_hook(tmp_path, _claim(spelling, ts="2026-01-03T00:00:00Z"), _claim(B850_A))
+    assert reclaimed.returncode == ALLOW, (
+        f"{spelling!r} collided with its own home session\n{reclaimed.stderr}"
+    )
+
+
+def test_an_off_home_session_folds_its_own_spellings(tmp_path):
+    """Off home, the fold still applies WITHIN the session: spark's RELEASE
+    with an annotation closes spark's CLAIM, and re-naming is not a collision."""
+    released = run_hook(
+        tmp_path, _claim("AGENT-C", ts="2026-01-03T00:00:00Z"),
+        _claim(B850_SPARK) + _release("B850-CLAUDE (spark, opus 4.7 1M)"),
+    )
+    assert released.returncode == ALLOW, released.stderr
+    reclaimed = run_hook(
+        tmp_path, _claim("B850-CLAUDE (dgx-spark)", ts="2026-01-03T00:00:00Z"),
+        _claim(B850_SPARK),
+    )
+    assert reclaimed.returncode == ALLOW, reclaimed.stderr
+
+
 def test_the_hook_still_guards_when_the_vocabulary_is_missing(tmp_path, monkeypatch):
     """Fail-safe, not fail-open.
 
