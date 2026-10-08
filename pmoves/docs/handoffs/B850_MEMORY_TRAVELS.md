@@ -253,9 +253,10 @@ fixed; those harnesses need the same rule in their own config path.
 Also not measured: `pmoves-hirag-mcp` has no `env` block and inherits the
 launcher's environment, so I could not see what host it dials from the roster.
 
-Tests (`pmoves/tests/test_mcp_roster_normalize.py`): 10 new. RED commit
-`1352fbeb3`: 80 passed / 4 failed, rc 1 — all 4 failures behavioural (host still
-`nats`; no notice on stderr), and the 6 narrowness/docker guards passed pre-fix,
-as they must. GREEN: 84 passed, rc 0.
+Tests (`pmoves/tests/test_mcp_roster_normalize.py`): 76 collected before, 84
+after (8 new). RED commit `1352fbeb3`: 80 passed / 4 failed, rc 1 — all 4
+failures behavioural (host still `nats`; no notice on stderr), and the 4
+narrowness/docker guards passed pre-fix, as they must. GREEN `c36cc8f31`: 84
+passed, rc 0.
 
 Not done, per brief: no leafnode topology change, nothing published to the bus.
