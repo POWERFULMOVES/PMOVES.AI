@@ -278,97 +278,146 @@ verifies.
 ### 3c. Node verification at launch — measured, never a gate
 
 The question is "which box woke me?", answered by measurement and recorded as a
-fact (doctrine 2). It never stops a session.
+fact (doctrine 2). It never stops a session and never refuses a claim.
+
+**This is attribution, not attestation.** The probe is self-reported, and the
+expected-side values sit in a public vocabulary file; a host that wants to lie
+can. What binds a session to hardware is **custody**: the delegated subkey
+(§3a) is held on that node. Hardware-rooted attestation (TPM quotes) is future
+work.
 
 **Probe** (new, beside `node_identity.py`; `this_node()` keeps the *claim*,
-the probe *confirms* it):
+the probe *confirms* it). The launcher runs it **once per session** and caches
+the verdict in a session-scoped file; everything else reads the cache.
 
-| Field | Source (Linux) | Stored as | Notes |
+| Field | Source (Linux) | Stored as | Strength |
 |---|---|---|---|
-| board vendor / board name / product name | `/sys/class/dmi/id/*` | plaintext shape | readable without root (measured on Knuckles, 2026-10-08) |
-| serial, last 4 | `/sys/class/dmi/id/product_serial` | last 4 only | **root-only** (measured: not readable non-root). Without root this field is could-not-measure, not a mismatch. |
-| machine-id | `/etc/machine-id` | domain-tagged hash `sha256("pmoves.node-evidence.v1" ‖ value)` | never stored raw; reviewers to check systemd `machine-id(5)` guidance on app-specific hashing |
-| GPU PCI ids | `/sys/bus/pci/devices/*/{class,vendor,device}` (display class) | `vendor:device` list | shape, not secret |
-| RAM | `/proc/meminfo` MemTotal | rounded GiB | weak field |
-| tailnet self id | `tailscale status --json` → `Self.ID` (stable node id) | hash | never an address |
+| machine-id | `/etc/machine-id` | keyed `HMAC-SHA256(fleet_salt, "pmoves.node-evidence.v1" ‖ field ‖ value)`; never raw (follows the app-specific-hash advice in systemd `machine-id(5)`; reviewers confirm) | strong, but cloned VMs, Jetson images, and containers share it |
+| tailnet self id | `tailscale status --json` → `Self.ID` | keyed HMAC as above; never an address | strong, but changes on re-registration |
+| board vendor + board name | `/sys/class/dmi/id/board_*` | plaintext shape | strong; readable without root (measured on Knuckles 2026-10-08) |
+| product name | `/sys/class/dmi/id/product_name` | plaintext shape | strong; WSL2 reports the Hyper-V VM's, not the host's |
+| GPU PCI id set | `/sys/bus/pci/devices/*/{class,vendor,device}` (display class) | sorted `vendor:device` list | strong as a set |
+| RAM | `/proc/meminfo` MemTotal | rounded GiB | weak |
 
-Windows, WSL2, and Jetson need their own sources (WSL2 reports the Hyper-V VM's
-DMI, not the host's). Each platform lists the fields it can measure; a missing
-field is `3` for that field, never a guess.
+The serial number is **dropped**: it is root-only on Knuckles and, even
+truncated, an identifier the design does not need. `fleet_salt` is a funnel
+secret; without it the HMAC fields are could-not-measure.
+
+**Strong-field rule (k of n).** No single field decides. A node matches when at
+least *k* of the *n* strong fields agree (proposed k = 3 of 5; security review
+sets it). A probe that detects it is inside a container (`/.dockerenv`,
+`/run/.containerenv`, or a container cgroup) returns could-not-measure, because
+it would be measuring the image, not the host.
 
 **Expected side**: an optional `node_evidence` block per node in
-`pmoves/configs/node-vocabulary.yaml`, hashes and shapes only (no full serials,
-no addresses), written by the node's steward from one probe run and reviewed
-like any vocabulary change. The card does not copy it; it points at the node.
+`pmoves/configs/node-vocabulary.yaml`, HMACs and shapes only, written by the
+node's steward from one probe run and reviewed like any vocabulary change.
 
-**Verdict** (exit codes, called directly):
+**Verdict** (called directly):
 
-- `0` **match**: strong fields (machine-id hash, tailnet id, board+product)
-  agree with the claimed node. Weak-field drift (RAM, GPU added) is reported
-  as a note, not a mismatch.
-- `1` **new-node / mismatch**: strong fields match a *different* recorded node,
-  or none. Recorded as "woke on a different node". The identity stays itself
-  (doctrine 4); it may *decide* to fork (doctrine 5). For an unrecorded host the
-  steward runs `glances-autodetect.sh` (root) to classify it, then records
-  `node_evidence`.
-- `3` **could not measure**: too few strong fields readable. Recorded as such,
-  never as a pass.
+- `0` — **any successful measurement.** The result carries
+  `node_match ∈ {match, different_recorded:<node>, unrecorded}` plus weak-field
+  drift notes. Waking on another recorded node, or on a new host, is a
+  legitimate trip (doctrine 4) and is **not** nonzero. On `unrecorded` the
+  steward may run `glances-autodetect.sh` (root) to classify the host and record
+  `node_evidence`; the autodetect script exits `1` when not root
+  (`deploy/provision/glances-autodetect.sh:101-106`), which the wrapper remaps
+  to `3`.
+- `1` — **a real contradiction only**: strong fields split between two recorded
+  nodes, the measured node contradicts the session's own delegation
+  (`delegation_node_mismatch`, §3a), or the probe's own outputs disagree.
+- `3` — **could not measure**: fewer than *k* strong fields readable, no
+  `fleet_salt`, or running inside a container.
 
-**Readable state line**: at session start the launcher prints one line —
-identity · node (verdict) · the Glances sitrep line (`GLANCES_RUNBOOK.md:82-102`,
-already address-free) · model stamp — and the same facts go into the signed
-`session.v1` record.
+**Readable state line.** At session start the launcher prints one line —
+identity · node (`node_match`) · the Glances sitrep line
+(`GLANCES_RUNBOOK.md:82-102`) · model stamp — and the same facts go into the
+signed `session.v1` record. `glances-fetch` takes seconds and prints the
+hostname, so the launcher runs it in the background and shows the line when it
+arrives; the hostname is a name, not an address, and is acceptable there.
 
-**Claim check**: the owner key is `(identity, node)`
-(`claim-collision-pre.py:555`). The hook compares the owner token's node with
-the measured node. A mismatch means the *row's key* is wrong, not that the
-agent lacks permission, so the hook refuses with the corrected owner string.
-Could-not-measure writes the row with the node marked unmeasured; the hook
-already carries a `node_unmeasured` verdict class for owners whose node half it
-could not resolve (`claim-collision-pre.py:2313-2328,2385`), which the measured
-probe would feed rather than replace.
+**Claim check** (addresses the code-review P1). The owner key is
+`(identity, node)` (`claim-collision-pre.py:555`). The hook **never refuses**
+on node grounds and never probes; it reads the launcher's cached verdict.
+
+- It compares only the **writer's own** owner token, never BATON targets,
+  co-owner names, or other rows (those name other sessions on other machines).
+- Writer token's node = measured node → no comment.
+- Different recorded node → `ask`, suggesting the owner string for the measured
+  node, and records the verdict on the row.
+- Unrecorded host, missing cache, or `3` → the existing `node_unmeasured`
+  path, which already *asks* ("Ask; never allow",
+  `claim-collision-pre.py:2319-2323`, `:2385`). An unrecorded host has no
+  "corrected owner" to offer (`node_identity.resolve_register_name`, `:372`,
+  returns none), so asking is the only non-deadlocking answer.
 
 ### 3d. Model provenance at launch — attributed, never keyed
 
 Recorded in `session.v1`, never a gate (doctrine 3):
 
 - `declared_model`: what the harness reports (CLI flag, harness config).
-- `registry_match`: lookup in the model registry (catalog port 8111, G14
-  port conflict to settle) → `known` / `unknown`, plus provider.
-- `provider_conformance`: last result of the provider verifier for that
-  provider. This is conformance of the *provider*, not proof of which model
-  answered; the record says so.
+- `registry_match`: lookup in the model registry → `known` / `unknown`, plus
+  provider. The registry's port must be settled first (P-7).
+- `provider_conformance`: **future work.** The provider verifier is a
+  conformance gate with no stored per-provider result
+  (`provider_verifier_gate.py:1-20`). The field is omitted until the verifier
+  writes results somewhere a launcher can read (proposed: a registry column);
+  even then it describes the *provider*, not which model answered.
 - `weights_digest` for local open models (the runtime's content digest).
   Provider-hosted weights are anchored by the provider (doctrine 7); we record
   the provider's model id and nothing more.
 - **"Waz here"** (doctrine 8): when an identity runs, tunes, or adapts an open
   model, a `woke` travels entry records identity, card, and `weights_digest`;
-  derived artifacts (adapters, model cards) carry the travels reference. The
-  open model's lineage then names who woke it, signed and anchored.
+  derived artifacts (adapters, model cards) carry the travels reference.
 
-### 3e. Travels — append-only, hash-chained, merkle-anchored
+### 3e. Travels — per-writer sub-chains under one identity anchor
 
-- **Entry**: `{identity, card_id, seq, prev_hash, ts, kind, node{canonical,
-  verdict, evidence_ref}, model{...}, body_hash, refs[]}` signed under
-  `pmoves.travel.v1`. `kind` ∈ `session.start|session.end|ack|claim|release|
-  memory.write|node.verdict|fork|woke|card.rotate|card.revoke`.
-- **Chain**: `prev_hash` = hash of the previous entry's canonical bytes. A gap
-  or fork in the chain is a finding.
-- **Bodies stay out**: memory writes and ACK texts enter as `body_hash`; the log
-  carries node canonical names and evidence hashes, never addresses or secrets.
-- **Anchoring**: every N entries or daily, the identity signs an anchor
-  carrying a merkle root over entry hashes, emitted as a cgp.v2 merkle block.
-  The tree uses **leaf/interior domain separation** (leaf `H(0x00‖x)`, interior
-  `H(0x01‖l‖r)`, the RFC 6962 construction) as a *new versioned* function. The
-  existing `merkle_root()` (G6) is left unchanged so current outputs do not
-  silently change meaning. Anchors are small and public-safe; committing them
-  to git gives "trace down to the merkle" (doctrine 9).
-- **Never overwrite**: append-only at every layer. `sign_trail.py:349` is the
-  counter-example and is a precondition (§5).
-- **Neo4j mirror**, only after the `:Agent` key is resolved (G11):
+**Why sub-chains.** #3313 lets one identity run concurrent sessions on several
+nodes, each with its own owner string (`node_identity.py:403-437`). A single
+linear chain per identity would fork every time that happens. So:
+
+- **Sub-chain** = one single writer, keyed `(identity, node[, session])` to
+  match the #3313 owner key. Each sub-chain has its own `seq` and `prev_hash`.
+- **Entry**: `{sub_chain: {identity, node, session?}, card_id, delegation_id,
+  seq, prev_hash, ts, kind, node_verdict, model{...}, body_hash, refs[]}`,
+  signed under `pmoves.travel.v1`. `kind` ∈ `genesis|session.start|session.end|
+  ack|claim|release|memory.write|node.verdict|fork|woke|card.rotate|card.revoke`.
+- **`prev_hash`** covers the previous entry's **full signed bytes**, `idsig`
+  included.
+- **Only a fork within one sub-chain is a finding** (`1`): two entries with the
+  same `seq` or the same `prev_hash`. Two nodes producing two sub-chains is
+  normal.
+- **Identity anchor** = an RFC 6962 Merkle Tree Hash over the sub-chain heads,
+  signed by the identity key under `pmoves.travel.v1`, with fields
+  `{agent_id, anchor_seq, prev_anchor_hash, tree_size, root,
+  sub_chains: [{sub_chain, first_seq, last_seq, head_hash}]}`. Each sub-chain's
+  range must start where the previous anchor's ended, so an anchor cannot cover
+  a cherry-picked subset (it behaves like a vector clock).
+- **RFC 6962 exactly**: leaf `H(0x00 ‖ d)`, interior `H(0x01 ‖ l ‖ r)`, split at
+  the largest power of two below *n*; no odd-node duplication (the
+  CVE-2012-2459 shape in G6). Vectors for n = 1, 2, 3, 5, 7. A new versioned
+  function; the existing `merkle_root()` is left unchanged so current outputs
+  keep their meaning.
+- **Anchors go to git.** They are small and public-safe, and their commit time
+  is the trusted clock for §3a. Proposed cadence: daily or every N entries.
+  The **tamper window** is the time between an entry's write and the commit of
+  the anchor covering it; the cadence sets it.
+- **Bodies stay out.** ACK texts enter as `body_hash`; memory writes enter as a
+  **salted** hash (per-entry salt kept with the body, not in the log), so a
+  short memory cannot be confirmed by dictionary. Node names and evidence
+  HMACs only; never addresses or secrets.
+- **Offline.** A node off the mesh keeps appending to its own sub-chain locally
+  (single writer, so no ordering conflict) while its delegation lasts, and
+  syncs on reconnect; the next anchor covers the gap. Verification of others'
+  entries while offline follows the registry staleness bound (`3` when stale).
+- **Genesis backfill.** Each identity's first entry is `genesis`: an RFC 6962
+  root over its existing records (attributed ACK lines, HMAC trails, register
+  rows), flagged `backfill: true`. It earns **no standing** (§3h).
+- **Store**: see D2.
+- **Neo4j mirror**, only after the `:Agent` key is resolved (G11, D4):
   `(:Agent)-[:TRAVELED {seq}]->(:Node)`, `(:Agent)-[:FORKED_FROM]->(:Agent)`,
-  `(:Agent)-[:WOKE]->(:Model)`. Derived and rebuildable from the log; never the
-  source of truth.
+  `(:Agent)-[:WOKE]->(:Model)`. Derived and rebuildable; never the source of
+  truth.
 
 ### 3f. Card / passport — a CHIT bundle per identity
 
