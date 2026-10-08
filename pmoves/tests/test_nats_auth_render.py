@@ -73,9 +73,9 @@ def test_current_credential_falls_back_to_nats_url(
     monkeypatch: MONKEYPATCH,
 ) -> None:
     monkeypatch.delenv("NATS_PASSWORD", raising=False)
-    monkeypatch.setenv("NATS_URL", "nats://bususer:buspass@nats:4222")
+    monkeypatch.setenv("NATS_URL", "nats://bususer:secret@nats:4222")
     user, password = nar._current_credential()
-    assert (user, password) == ("bususer", "buspass")
+    assert (user, password) == ("bususer", "secret")
 
 
 def test_no_credential_anywhere_fails(monkeypatch: MONKEYPATCH) -> None:
