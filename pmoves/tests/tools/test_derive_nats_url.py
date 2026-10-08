@@ -44,9 +44,9 @@ def test_noop_when_already_consistent(tmp_path):
 
 
 def test_defaults_user_to_nats_and_percent_encodes(tmp_path):
-    p = _env(tmp_path, f"NATS_PASSWORD=a/b@c\nNATS_URL={_url('x', 'y', 'hub.example:4222')}\n")
+    p = _env(tmp_path, f"NATS_PASSWORD=a/b@c\nNATS_URL={_url('x', 'y', 'localhost:4222')}\n")
     assert d.derive(p) == "updated"
-    assert parse_env_file(p)["NATS_URL"] == "nats://nats:a%2Fb%40c@hub.example:4222"
+    assert parse_env_file(p)["NATS_URL"] == "nats://nats:a%2Fb%40c@localhost:4222"
 
 
 def test_skips_when_password_or_url_missing(tmp_path):
@@ -62,3 +62,20 @@ def test_skips_url_without_userinfo(tmp_path):
     p = _env(tmp_path, body)
     assert d.derive(p) == "skipped"
     assert p.read_text() == body
+
+
+def test_remote_broker_url_is_left_alone(tmp_path):
+    # A node dialing the fleet hub authenticates with the HUB's credential;
+    # rewriting it with this node's local NATS_PASSWORD drops the node off the bus.
+    body = f"NATS_PASSWORD=localpw\nNATS_URL={_url('nats', 'hubpw', 'hub.example:4222')}\n"
+    p = _env(tmp_path, body)
+    assert d.derive(p) == "remote"
+    assert p.read_text() == body
+
+
+def test_local_host_forms_are_rewritten(tmp_path):
+    for host in sorted(d.LOCAL_BROKER_HOSTS):
+        hp = f"[{host}]:4222" if ":" in host else f"{host}:4222"
+        p = _env(tmp_path, f"NATS_PASSWORD=new\nNATS_URL={_url('nats', 'old', hp)}\n")
+        assert d.derive(p) == "updated", host
+        assert parse_env_file(p)["NATS_URL"] == _url("nats", "new", hp)
