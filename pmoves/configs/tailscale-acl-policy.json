@@ -130,12 +130,12 @@
   ],
 
   "ssh": [
-    // SSH between PMOVES nodes - non-root only for hardening.
+    // SSH between PMOVES nodes - full mesh root+nonroot (amended 2026-10-08).
     {
       "action": "accept",
       "src": ["tag:pmoves"],
       "dst": ["tag:pmoves"],
-      "users": ["autogroup:nonroot"]
+      "users": ["root", "autogroup:nonroot"]
     },
     // Admin + Owner SSH (root allowed for provisioning). Owner role is DISTINCT from
     // Admin and must be listed explicitly, else owner SSH falls through to the tenant
@@ -193,8 +193,8 @@
       "users": ["root", "autogroup:nonroot"]
     },
     // Full-mesh fleet SSH (2026-10-08, operator: "all nodes connected"):
-    // tag:lab carries every fleet compute node; dst tag:pmoves covers the mesh.
-    // Root+nonroot; S1 and the S3-companion tests amended to match this posture.
+    // tag:lab (mgmt workstations + KVMs) reaches the whole mesh, root+nonroot.
+    // S3-companion test asserts exactly this.
     {
       "action": "accept",
       "src": ["tag:lab"],
