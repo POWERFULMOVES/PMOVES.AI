@@ -199,6 +199,19 @@ def resolve_identity(
       - the node is a placeholder/class, not a machine
       - no identity is declared for this harness on this node
       - one is declared but the registry has no such agent (declared-not-wired)
+      - the node's DEFAULT does not claim the node in its node_affinity
+
+    AFFINITY IS A PREFERENCE (operator correction 2026-10-08; agent_registry.yaml
+    says so of claude_b850 itself: "a preference, not an exclusive claim").
+    Identity is the aggregate -- card, signature, alters, roles, lineage, ACK
+    trail -- and the node is a fact about the session, never a permission to be
+    the identity. So an identity DECLARED for this session (PMOVES_NODE_IDENTITY
+    naming a registered agent) binds on any machine node, and the explanation
+    records it as off-affinity. The auto-binding of the node's default_identity,
+    when nothing is declared, still requires affinity: that is the node vouching
+    for its own default, not a session declaring who it is. NOTE: declaring is
+    attribution, not authentication -- an env var names the identity and nothing
+    here proves the session holds it.
     """
     vocab = vocab if vocab is not None else load_vocabulary()
     registry = registry if registry is not None else load_registry()
@@ -240,6 +253,11 @@ def resolve_identity(
 
     affinity = (registry[declared].get("topology") or {}).get("node_affinity") or []
     if not any(canonical_node(v, vocab) == node for v in affinity):
+        if override:
+            return node, declared, (
+                f"node {node} via {how}; identity {declared} via {source}, "
+                f"off-affinity on {node} (node_affinity {affinity!r} is a preference)"
+            )
         return node, None, (
             f"identity {declared!r} is declared ({source}) but its own "
             f"node_affinity {affinity!r} does not include {node}. Refusing to "
@@ -381,21 +399,31 @@ def resolve_register_name(
     names it (e.g. B850-CLAUDE-FUNNEL). It must resolve in the vocabulary, be
     declared for THIS node, and carry a register_form -- otherwise None, never a
     fallback to the primary's name, because falling back is exactly how two
-    sessions end up signing one owner string. The override does NOT reach
-    through a mirror (below): a second session borrowing another identity's
-    BASE is the shared-owner-string collision the rule exists to prevent.
+    sessions end up signing one owner string. That rule is about the override,
+    not about the identity: the override renames only the register owner string,
+    so it stays scoped to identities declared for this node.
 
-    A WORN IDENTITY (A.12 multiplicity, operator ruling 2026-10-08). An identity
-    off its home node is named only through a DECLARED mirror: a
-    `node_relations` row in identity_vocabulary.yaml ("an identity worn on
-    hardware that is not its home node" -- the doctrine block above that table,
-    whose ledger example is `CLAUDE-OPUS (Z890-mirror-on-5090)`) with `node` =
-    this node and `mirrored_from` = the identity's home node, both normalised
-    through canonical_node. The register form is `<BASE> (<token>)` with the
-    declared token verbatim -- the shape identity_lineage.wearing() parses back
-    into node + mirrored_from, and canonical_identity() folds to the same
-    identity. No row, no name; two rows for one mirror is a refusal, not a
-    choice. The table is read from the same document as `identities` rather
+    NO NODE GATE ON THE IDENTITY (operator correction 2026-10-08). Identity is the
+    aggregate -- card, signature, alters, roles, lineage, ACK trail -- and the
+    node is a FACT about the session, never a permission to be the identity. On
+    its home node an identity signs its declared register_form, unchanged. Off
+    it, the owner string is `<BASE> (<fact>)`, which keeps the identity and
+    records where it was worn -- and keeps two concurrent sessions of one
+    identity on two nodes from signing one owner string:
+      - `<fact>` is the declared token, verbatim, when exactly one
+        `node_relations` row in identity_vocabulary.yaml has `node` = this node
+        and `mirrored_from` = the identity's home (both via canonical_node). That
+        table's doctrine block: "an identity worn on hardware that is not its
+        home node ... where it was worn is a separate fact worth keeping";
+        ledger example `CLAUDE-OPUS (Z890-mirror-on-5090)`.
+      - otherwise the node's canonical name from node-vocabulary.yaml. Not an
+        invented spelling: identity_vocabulary.yaml's parenthetical doctrine
+        lists the node as one of the parenthetical's declared kinds (`Z890`,
+        `SPARK`, `Knuckles`), and identity_lineage.wearing() parses any node
+        alias there as `node`. Two rows for one mirror is ambiguous, so neither
+        token is used and the explanation names both.
+    canonical_identity() folds every one of these forms back to the same
+    identity. The table is read from the same document as `identities` rather
     than through identity_lineage's loader, which caches the real file
     module-wide and cannot be pointed at `path`.
     """
@@ -434,32 +462,22 @@ def resolve_register_name(
     vocab = vocab if vocab is not None else load_vocabulary()
     entry_node = canonical_node(entry.get("node"), vocab)
     here = canonical_node(node, vocab)
-    mirror = None
-    if entry_node != here:
-        refusal = (
+    if override and entry_node != here:
+        # The second-session rule, unchanged. Not a node gate on the identity:
+        # the override renames only the register owner string, so a foreign
+        # BASE would sign as one aggregate while cipher and the registry carry
+        # another. Wearing another identity is PMOVES_NODE_IDENTITY.
+        return None, None, (
             f"no register name: identity {canonical!r} ({source}) is declared for "
-            f"node {entry.get('node')!r}, not {node!r}. Refusing to name a session "
-            f"after another node's identity."
+            f"node {entry.get('node')!r}, not {node!r}. PMOVES_REGISTER_IDENTITY "
+            f"names a second session's BASE on its own node; to wear another "
+            f"identity, set PMOVES_NODE_IDENTITY."
         )
-        if override or entry_node is None or here is None:
-            return None, None, refusal
-        tokens = sorted(
-            str(r["token"]) for r in doc.get("node_relations") or []
-            if isinstance(r, dict) and r.get("token")
-            and canonical_node(r.get("node"), vocab) == here
-            and canonical_node(r.get("mirrored_from"), vocab) == entry_node
+    if here is None:
+        return None, None, (
+            f"no register name: {node!r} is not a declared node, so the session's "
+            f"node cannot be recorded in its owner string"
         )
-        if not tokens:
-            return None, None, (
-                f"{refusal} No node_relations row in {path.name} declares it worn "
-                f"here (node: {here}, mirrored_from: {entry_node})."
-            )
-        if len(tokens) > 1:
-            return None, None, (
-                f"no register name: {len(tokens)} node_relations rows declare "
-                f"{entry_node} mirrored on {here} ({', '.join(tokens)}); declare one."
-            )
-        mirror = tokens[0]
 
     form = str(entry.get("register_form") or "").strip()
     if not form:
@@ -469,12 +487,28 @@ def resolve_register_name(
             f"the register with; it is not derived."
         )
     name = form.split("(", 1)[0].strip()
-    if mirror:
-        worn = f"{name} ({mirror})"
+
+    if entry_node != here:
+        tokens = sorted(
+            str(r["token"]) for r in doc.get("node_relations") or []
+            if isinstance(r, dict) and r.get("token")
+            and entry_node is not None
+            and canonical_node(r.get("node"), vocab) == here
+            and canonical_node(r.get("mirrored_from"), vocab) == entry_node
+        )
+        fact = tokens[0] if len(tokens) == 1 else here
+        worn = f"{name} ({fact})"
+        if len(tokens) == 1:
+            how = f"node_relations token {fact!r}"
+        elif tokens:
+            how = (f"node {here} -- {len(tokens)} node_relations tokens declared for "
+                   f"this mirror ({', '.join(tokens)}), so none is used")
+        else:
+            how = f"node {here}"
         return name, worn, (
             f"register name {name!r} (signs as {worn!r}) from {path.name}: "
-            f"{canonical} worn on {here} via node_relations token {mirror!r} "
-            f"(home {entry_node}), via {source}"
+            f"{canonical} (home {entry_node or 'undeclared'}) worn on {here}, "
+            f"recorded via {how}; via {source}"
         )
     return name, form, (
         f"register name {name!r} (signs as {form!r}) from {path.name}: "

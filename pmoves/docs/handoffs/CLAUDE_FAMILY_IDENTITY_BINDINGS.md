@@ -178,59 +178,159 @@ affinity-matched and teamed.
      canonical name or alias in `node-vocabulary.yaml`. Measured with
      `PMOVES_NODE_ID=st-maarten`, the resolver answered "`'st-maarten'` is not a declared
      node name. Add it as an alias in node-vocabulary.yaml".
-   - **registry identity:** `<node>.default_identity.claude-code`. It must be a key in
-     `agent_registry.yaml` whose `topology.node_affinity` resolves to that node.
-   - **cipher agentId:** `<node>.cipher_agent_id.claude-code` when the bound identity is
-     this node's default. For a worn identity it is the `cipher_agent_id` declared beside
-     that identity on its home node. Declared, never derived.
+   - **registry identity:** `PMOVES_NODE_IDENTITY`, if set.
+     - It must name a registered agent, and it binds on any machine node.
+     - When the node is outside the agent's `node_affinity`, the explanation records
+       "off-affinity on <node>". Affinity is a preference, not a gate.
+     - Otherwise `<node>.default_identity.claude-code` is used. That auto-binding still
+       requires the default's affinity to claim the node.
+   - **cipher agentId:**
+     - When the bound identity is the node's default, it is
+       `<node>.cipher_agent_id.claude-code`.
+     - Otherwise it is the `cipher_agent_id` declared beside that identity on its home
+       node. The card follows the identity.
+     - Declared, never derived.
    - **register name:** the `identity_vocabulary.yaml` entry whose canonical or alias
-     matches the registry key, with a `register_form`. On its home node this is the
-     `register_form`. On another node it is `<BASE> (<token>)`, but only when a
-     `node_relations` row declares the mirror.
+     matches the registry key, and which has a `register_form`.
+     - On its home node: the declared `register_form`, unchanged.
+     - On any other node: `<BASE> (<fact>)`. The `<fact>` is the declared
+       `node_relations` token if one exists, and otherwise the node's canonical name.
 4. then `pm-cipher-identity.sh` checks the cipher id against a signing card and the
    `CIPHER_API_TOKEN` visible to the process.
 
-**A.12 multiplicity (operator ruling 2026-10-08): do BOTH.** A new node gets its own
-default identity (the table below), AND an existing identity can be worn there. These
-used to be written up as "Option A vs Option B". That was a false choice, and the
-"2 of 3 namespaces" result was a resolver defect, which is now fixed in
-`node_identity.py`.
+**The aggregate model (operator correction, 2026-10-08).** "node_relations are not the
+determinant of identity. Identity is the collection aggregate that may or may not include
+a node." That aggregate is:
+- the signing card
+- the signature
+- alters (`agent_signatures.yaml` `alters`, identity_vocabulary `alter_lineage`)
+- roles
+- lineage
+- the ACK trail
+
+A node is a FACT about a session, never a permission to be the identity. Nodes differ in
+depth: some are tip-only, some host the mesh, some join it. A node may also spawn new
+alters or roles for the work done there.
+
+So a new node gets its own default identity (the table below), AND any existing identity
+can be worn there. Two earlier write-ups of this are superseded:
+- "Option A vs Option B" was a false choice.
+- "Resolve only through a declared mirror" was the wrong premise.
 
 ### Wearing an existing identity on node X (e.g. B850-CLAUDE on a St Maarten host)
 
 To wear B850-CLAUDE on node X:
-1. Add node X to `node-vocabulary.yaml`, with its own default as in the table below.
-2. Add a `node_relations` row to `identity_vocabulary.yaml`:
-   `{token: KNUCKLES-mirror-on-X, node: X, mirrored_from: knuckles}`.
-   - The token is used verbatim in the owner string.
-   - `node` and `mirrored_from` may use any alias, because both are normalised.
-   - Declare exactly one row per mirror; two rows for the same mirror are refused.
-3. Extend `claude_b850.topology.node_affinity` in `agent_registry.yaml` with X.
-   `resolve_identity` still refuses an identity whose affinity does not claim the node.
-   A.12 names the affinity entry as part of portability, so the resolver keeps requiring
-   it rather than inferring it from the relation.
-4. Launch with `PMOVES_NODE_IDENTITY=claude_b850`. This selects the worn identity over the
-   node's own default.
+1. Node X must be in `node-vocabulary.yaml`. Its node fact has to be nameable;
+   placeholders and classes such as `cloud` or `jetson` still do not bind.
+2. Launch with `PMOVES_NODE_IDENTITY=claude_b850`.
 
-No `cipher_agent_id` entry on X is needed for the worn identity.
+Nothing else is needed:
+- **No `node_affinity` edit.** The binding is recorded as `off-affinity on X`.
+- **No `node_relations` row.**
+- **No `cipher_agent_id` on X.**
 
 Result, from fixtures in `pmoves/tests/test_node_identity_worn.py`:
-`identity=claude_b850`, `cipher=b850-claude` (knuckles' declared card, not X's), and
-`register_form=B850-CLAUDE (KNUCKLES-mirror-on-X)`. The form folds back to `b850-claude`
-under `identity_lineage.canonical_identity`. It is the same shape as the one real row
-(`Z890-mirror-on-5090`), and against the real files that row now names
-`Z890-CLAUDE (Z890-mirror-on-5090)`.
+- identity `claude_b850`
+- cipher `b850-claude` (the card follows the identity, not X's default)
+- register form `B850-CLAUDE (X)`
 
-**Not reachable through `PMOVES_REGISTER_IDENTITY`.** That second-session override still
-requires an identity declared for THIS node. If it could reach through a mirror, a second
-session could borrow another identity's BASE.
+**Optional annotation.** A `node_relations` row `{token, node: X, mirrored_from: knuckles}`
+in `identity_vocabulary.yaml` replaces the node name in the owner string with the token,
+used verbatim. That is what happens to the one real row today: on 5090,
+`PMOVES_NODE_IDENTITY=claude_z890` signs as `Z890-CLAUDE (Z890-mirror-on-5090)`. If two
+rows declare the same mirror, neither token is used: the node name is, and the
+explanation names both tokens.
 
-**Open hazard (raise-only).** A worn session and the home session fold to the SAME
-identity in the collision gate, because the parenthetical is stripped. That is the
-cross-node form of the 2026-09-26 B850-CLAUDE-FUNNEL incident: one gate identity, and a
-bare RELEASE by either session closes both sessions' lanes. If both run at the same time,
-the second needs a distinct BASE. The rule exists in identity_vocabulary, but nothing
-enforces it across nodes.
+**Spelling of the node fact.** The node's canonical name from `node-vocabulary.yaml` (e.g.
+`B850-CLAUDE (spark)`, `Z890-CLAUDE (knuckles)` on the real files). I did not invent it.
+identity_vocabulary's parenthetical doctrine lists the node as one of the parenthetical's
+declared kinds, with examples `Z890`, `SPARK` and `Knuckles`. `identity_lineage.wearing()`
+also already parses any node alias there as `node`: `wearing("B850-CLAUDE (5090)")` gives
+`node=5090` with nothing unclassified. The home node is unchanged: its declared form
+`B850-CLAUDE (Knuckles)` is still used there.
+
+**`PMOVES_REGISTER_IDENTITY` keeps its same-node rule.** It names a second session's BASE
+on its own node. It renames only the register owner string. If it named another
+identity, the session would sign as one aggregate while cipher and the registry carry a
+different one. Wearing another identity is `PMOVES_NODE_IDENTITY`, which moves all three
+namespaces together.
+
+### Two sessions of one identity: owner strings, and the collision gate
+
+The resolver now gives two concurrent sessions of one identity DISTINCT owner strings
+across nodes, e.g. `B850-CLAUDE (Knuckles)` and `B850-CLAUDE (spark)`. On the same node a
+second session still needs a distinct BASE via `PMOVES_REGISTER_IDENTITY`.
+
+**The collision gate still folds them together.** The fold happens in
+`.claude/hooks/governance/claim-collision-pre.py`:
+- `canonical_owner()` (around line 278) maps every owner string through
+  `identity_lineage.canonical_identity`, which strips the parenthetical.
+- `_pair_register()` keys open claims on that fold.
+
+So `B850-CLAUDE (spark)` and `B850-CLAUDE (Knuckles)` are one owner there, and a bare
+RELEASE by either closes both sessions' lanes. This is the cross-node form of the
+2026-09-26 B850-CLAUDE-FUNNEL incident.
+
+**Keying the gate on the full register form would NOT close it safely.** I measured this
+over the real register: 766 CLAIM/RELEASE rows, 64 distinct owner strings. 9 identities
+are written under more than one string, 50 strings in all. B850 alone uses `(Knuckles)`,
+`(Knuckles, opus 4.7 1M)`, `(Opus 5)` and `(Claude Opus 5)`. The fold exists so that a
+RELEASE under one spelling closes a CLAIM opened under another. Keying on the full string
+reintroduces exactly the defect that left a lane open for a week.
+
+**The key that would close it** is `(canonical identity, wearing().node)`, where an absent
+node token defaults to the identity's declared home node. Measured over the same 766 rows,
+**0 rows** carry a node token other than their identity's home, so this key re-pairs no
+existing row. It separates only worn sessions, which do not exist in the register yet.
+
+This lives in the hook, outside `node_identity.py`, so it is documented here and **not
+implemented**. The hook is a governance path; route it through its own lane.
+
+### Binding is attribution, not authentication
+
+**Nothing in this resolver proves that a session IS the identity it names.** Once the node
+gate is gone, `PMOVES_NODE_IDENTITY=claude_b850` alone makes any session on any node
+B850-CLAUDE:
+- in the registry namespace
+- in the register owner string
+- in the cipher agentId it is told to use
+
+The node gate never authenticated anything either: it read the same env var and a
+hostname. But it at least narrowed where a wrong claim could come from. Without it the
+claim is purely declarative. Every output here is **attribution**: a name the session
+carries. None of it is **authentication**: proof that the session holds that name.
+
+Cipher's per-agent token is not a substitute. It is a bearer secret, and
+`CIPHER_AUTH_RUNBOOK.md` §5 records that MCP has no per-agent authorization. It also
+proves possession of a token, not of an identity. The CHIT trail MAC is a deployment-wide
+key, so it names a signer without proving which one.
+
+**Target design** (design note only; nothing implemented):
+- **An identity key.** Each identity card carries an Ed25519 public key. That fits
+  `ml.ssh_fingerprint` / `ssh_allowed_signers_line`, or a dedicated `ml.ed25519_pub`.
+- **Where the private key lives.** With the identity's holder, not the node. A worn
+  identity carries its key to the node it is worn on, which is what makes "the identity
+  is the aggregate" verifiable rather than declared.
+- **What it signs.**
+  - A session announcement at launch: identity, node fact, harness, model, session
+    nonce, timestamp.
+  - ACKs, CLAIM rows and RELEASE rows.
+  - Domain-separated per message kind, so an ACK signature cannot be replayed as a
+    claim.
+- **Who verifies.** Any node's cipher, and the claim-collision gate, using only the
+  public keys on the cards. No shared secret, so third-party verifiable.
+- **Pattern to follow.**
+  `PMOVES-ToKenism-Multi/integrations/contracts/tally-signer-ed25519.ts` already does
+  Ed25519 k-of-n signing over a domain-tagged preimage (`TALLY_DOMAIN =
+  'pmoves.tally.v1'`), "third-party verifiable on public keys only". Copy its *verifier*
+  shape.
+- **Counter-example, not to copy.** `integrations/firefly/settlement-executor.ts:392`
+  `isSigned()`, which at the locally checked-out pin `04285b8` is
+  `Boolean(alg && kid && hmac)`: a presence check, not verification.
+- **Until then.** The resolver output must be read as "the session SAYS it is X". The
+  launcher prompt and any UI should not present it as verified.
+
+### The node's own default identity (resolves all three namespaces)
 
 ### The node's own default identity (resolves all three namespaces)
 
@@ -320,6 +420,37 @@ All four red failures were behavioural, not import errors:
 The 8 cases that already passed are regression guards: home node, fold-back, no relation,
 relation from a different home node, mirror keyed on home, both override cases, and the
 node's own default.
+
+**Aggregate-model rework (2026-10-08, operator correction).** The same file was rewritten
+to 20 cases. The node-gated expectations invert:
+- A declared identity now binds off-affinity.
+- With no relation, the owner string is `<BASE> (<node>)` instead of a refusal.
+- Two tokens for one mirror fall back to the node instead of refusing.
+
+| When | worn tests | 13-file suite | validator |
+|---|---|---|---|
+| red (`6ce87ab64`, resolver as of `f41a923fa`) | 7 failed, 13 passed | — | — |
+| green (aggregate model) | rc=0 · 20 passed | rc=0 · 407 passed, 1 skipped | rc=0 |
+
+All 7 red failures were the old refusals, i.e. behavioural:
+- Affinity gate: "its own node_affinity ['pmoves-b850'] does not include st-maarten.
+  Refusing to bind". This came from the off-affinity bind and both end-to-end worn cases.
+- Node gate: "declared for node 'knuckles', not 'st-maarten'. Refusing to name a
+  session". This came from no relation, a relation for another home, and the mirror keyed
+  on home.
+- Two-token refusal: "2 node_relations rows declare knuckles mirrored on st-maarten ...
+  declare one".
+
+One of my first-draft red cases failed on a test bug instead: it compared `unclassified`
+(a tuple) to `[]`. I fixed it before the red commit, so it now passes as a guard that
+`wearing()` already parses the node form.
+
+Live effect on the real files:
+- The default bindings on all four claude nodes are unchanged (asserted by
+  `test_launcher_wakes_as_identity.py`).
+- `PMOVES_NODE_ID=knuckles PMOVES_NODE_IDENTITY=claude_z890` now binds `claude_z890`
+  off-affinity, with cipher `z890-claude` and form `Z890-CLAUDE (knuckles)`. Before, it
+  refused.
 
 An earlier attempt failed 7 `test_identity_coupling_gate` cases with
 `ModuleNotFoundError: pydantic`. That was the ephemeral env missing a dependency of
