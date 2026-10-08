@@ -89,7 +89,7 @@ fi
 # bearing lines through for shell expansion), then source it auto-export.
 ENVF="${PMOVES_ENV_SHARED:-$ROOT/pmoves/env.shared}"
 if [ -f "$ENVF" ]; then
-  blocklist='^(KILOCODE_API_KEY|KILO_.*|OPENCODE_.*)$'
+  blocklist='^$NEVER_MATCH$'
   set +H 2>/dev/null || true
   tmpf=$(mktemp)
   n=0
@@ -130,31 +130,8 @@ else
   echo "[kilo-pmoves]       run: make -C pmoves ensure-env-shared" >&2
 fi
 
-# --- HOST TLS ------------------------------------------------------------
-# env.shared carries SSL_CERT_FILE= / SSL_CERT_DIR= / REQUESTS_CA_BUNDLE= ...
-# EMPTY on purpose (a container leak guard), and the loader above EXPORTS
-# them. On the host, set-but-empty breaks python ssl and the HF Xet backend
-# (CERTIFICATE_VERIFY_FAILED). Clear the empties; fill in the system bundle
-# only when no CA variable is configured by a later-loaded env file.
-# See pmoves/scripts/pm-ca-bundle.sh.
-if [ -f "$ROOT/pmoves/scripts/pm-ca-bundle.sh" ]; then
-  # shellcheck source=../../pmoves/scripts/pm-ca-bundle.sh
-  . "$ROOT/pmoves/scripts/pm-ca-bundle.sh"
-  pm_ca_bundle_normalize || true
-  if [ -n "${PM_CA_BUNDLE_LINE:-}" ]; then
-    echo "[kilo-pmoves] ${PM_CA_BUNDLE_LINE}" >&2
-  fi
-else
-  echo "[kilo-pmoves] WARN: pmoves/scripts/pm-ca-bundle.sh missing -- host TLS not normalized." >&2
-fi
-
 # --- NAME BRIDGES (operator-facing alias to upstream SDK name) -------------
-# Mirror crush-pmoves.sh:133-136 -- alias bridge for upstream-vs-PMOVES env names.
-# Only set when the upstream var is unset, so an explicit operator pin still wins.
-if [ -z "${ZAI_API_KEY:-}" ] && [ -n "${Z_AI_API_KEY:-}" ]; then
-  export ZAI_API_KEY="${Z_AI_API_KEY}"
-  echo "[${{0##*/}}] ZAI_API_KEY <- Z_AI_API_KEY (upstream/PMOVES name bridge)" >&2
-fi
+# (no name bridges for this CLI)
 
 # --- LAUNCH ---------------------------------------------------------------
 export PMOVES_LAUNCHER_SESSION="kilo-pmoves.sh"

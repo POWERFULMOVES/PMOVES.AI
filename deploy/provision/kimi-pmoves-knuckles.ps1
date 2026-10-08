@@ -17,5 +17,5 @@
 # ===========================================================================
 $ErrorActionPreference = 'Stop'
 $env:PMOVES_NODE_ID = 'pmoves-b850'
-$ps1 = Join-Path $PSScriptRoot 'kimi-pmoves.ps1'
+$ps1 = Join-Path (Split-Path -Parent $PSScriptRoot) 'kimi-pmoves.ps1'
 & $ps1 @args

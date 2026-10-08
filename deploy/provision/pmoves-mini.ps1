@@ -67,13 +67,12 @@ if (Test-Path $envf) {
         $changed = $false
         foreach ($k in @($vars.Keys)) {
             $curKey = $k
-            $varPat = '\$' + [char]123 + '([A-Za-z_][A-Za-z0-9_]*)(?::-([^' + [char]125 + ']*))?' + [char]125
-            $resolved = [regex]::Replace($vars[$k], $varPat, {
+            $resolved = [regex]::Replace($vars[$k], '\\$\\{([A-Za-z_][A-Za-z0-9_]*)(?::-([^}]*))?\\}', {
                 param($m)
                 $name = $m.Groups[1].Value
                 $repl = $null
                 if ($name -ne $curKey) {
-                    if ($vars.Contains($name) -and $vars[$name] -ne '' -and $vars[$name] -notmatch $varPat) {
+                    if ($vars.Contains($name) -and $vars[$name] -ne '' -and $vars[$name] -notmatch '\\$\\{') {
                         $repl = $vars[$name]
                     } else {
                         $envv = [Environment]::GetEnvironmentVariable($name)
