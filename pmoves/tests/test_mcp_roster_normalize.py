@@ -852,3 +852,95 @@ def test_the_launchers_pass_the_roster_path_where_the_liveness_scan_can_see_it()
             f"{launcher.name} no longer passes the roster path in argv; "
             f"the liveness scan cannot see it"
         )
+
+
+# --------------------------------------------------------------------------
+# P6 host reachability: a host-run server never gets a docker-internal host.
+#
+# Measured 2026-10-08 on knuckles: env.shared's NATS_URL is the IN-STACK form
+# (`nats://<user>:<pass>@nats:4222`, right for containers; #3309 re-derives its
+# userinfo and keeps the host). P4 expanded it verbatim into `pmoves-nats-fleet`,
+# which `uv run`s on the HOST, where `nats` does not resolve: every tool call
+# answered "nats: no servers available". Swapping only the host for loopback
+# connected -- the broker publishes ${NATS_BIND:-0.0.0.0}:${NATS_PORT:-4222}.
+#
+# The internal-hostname set is the test's own and deliberately NOT read from
+# the module: asking the module which names are internal would pass whenever
+# the module's table is empty.
+# --------------------------------------------------------------------------
+
+_DOCKER_INTERNAL_HOSTS = {"nats"}
+_URL_HOST = re.compile(r"[a-z][a-z0-9+.-]*://(?:[^@/\s]*@)?(\[[^\]]+\]|[^:/\s]+)")
+_IN_STACK_NATS = "nats://fleetuser:s3cret@nats:4222"
+
+
+def _nats_mcp(command="uv"):
+    return _roster(**{"pmoves-nats-fleet": {
+        "command": command, "args": [], "env": {"NATS_URL": "${NATS_URL}"},
+    }})
+
+
+def _is_host_run(cfg):
+    cmd = cfg.get("command")
+    return isinstance(cmd, str) and os.path.basename(cmd) not in ("docker", "podman")
+
+
+def test_real_roster_hands_no_host_run_server_a_docker_internal_hostname():
+    data = json.loads(REAL_ROSTER.read_text(encoding="utf-8"))
+    clean, _d, _g = norm.normalize(data, str(REPO_ROOT), {"NATS_URL": _IN_STACK_NATS})
+
+    host_run = {k: v for k, v in clean["mcpServers"].items()
+                if isinstance(v, dict) and _is_host_run(v)}
+    assert "pmoves-nats-fleet" in host_run, "fixture premise: the NATS MCP is host-run"
+    offenders = [
+        f"{name}.env.{key} -> {host!r}"
+        for name, cfg in host_run.items()
+        for key, value in (cfg.get("env") or {}).items() if isinstance(value, str)
+        for host in _URL_HOST.findall(value) if host in _DOCKER_INTERNAL_HOSTS
+    ]
+    assert offenders == [], (
+        f"checked {len(host_run)} host-run servers; a docker service name does "
+        f"not resolve on the host: {offenders}"
+    )
+
+
+def test_in_stack_nats_url_goes_to_loopback_keeping_creds_and_port():
+    clean, _d, _g = norm.normalize(_nats_mcp(), "/repo", {"NATS_URL": _IN_STACK_NATS})
+    assert clean["mcpServers"]["pmoves-nats-fleet"]["env"]["NATS_URL"] == \
+        "nats://fleetuser:s3cret@127.0.0.1:4222"
+
+
+def test_rewrite_follows_the_published_host_port():
+    env = {"NATS_URL": _IN_STACK_NATS, "NATS_PORT": "14222"}
+    clean, _d, _g = norm.normalize(_nats_mcp(), "/repo", env)
+    assert clean["mcpServers"]["pmoves-nats-fleet"]["env"]["NATS_URL"] == \
+        "nats://fleetuser:s3cret@127.0.0.1:14222"
+
+
+def test_container_run_server_keeps_the_in_stack_hostname():
+    """`docker run -e NATS_URL` forwards the value INTO a container on the
+    compose network, where `nats` is exactly right."""
+    clean, _d, _g = norm.normalize(_nats_mcp("docker"), "/repo", {"NATS_URL": _IN_STACK_NATS})
+    assert clean["mcpServers"]["pmoves-nats-fleet"]["env"]["NATS_URL"] == _IN_STACK_NATS
+
+
+@pytest.mark.parametrize("value", [
+    "nats://fleetuser:s3cret@nats:6222",       # cluster port, not the published client listener
+    "nats://fleetuser:s3cret@fleet-hub:4222",  # a routable host is left alone
+    "nats://fleetuser:s3cret@natsbox:4222",    # a name CONTAINING an internal name is not it
+])
+def test_rewrite_is_narrow(value):
+    clean, _d, _g = norm.normalize(_nats_mcp(), "/repo", {"NATS_URL": value})
+    assert clean["mcpServers"]["pmoves-nats-fleet"]["env"]["NATS_URL"] == value
+
+
+def test_rewrite_is_announced_and_recorded_without_the_credential(tmp_path):
+    proc = _run_cli(tmp_path, _nats_mcp(), {"NATS_URL": _IN_STACK_NATS})
+    assert proc.returncode == 0, proc.stderr
+    assert "pmoves-nats-fleet" in proc.stderr and "127.0.0.1" in proc.stderr, proc.stderr
+    assert "s3cret" not in proc.stderr, "the rewrite notice leaked the credential"
+    verdicts = json.loads(Path(proc.stdout.strip()).read_text())["_pmoves_roster_verdicts"]
+    assert verdicts["rewritten"] == [{
+        "server": "pmoves-nats-fleet", "field": "env.NATS_URL",
+        "from_host": "nats", "to_host": "127.0.0.1",
+    }]
