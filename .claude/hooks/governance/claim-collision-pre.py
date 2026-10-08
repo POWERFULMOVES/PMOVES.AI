@@ -217,6 +217,7 @@ def is_inert_row(line: str) -> bool:
 _UNSET = object()
 _FOLDER = _UNSET
 _LINEAGE = _UNSET
+_NODES = _UNSET
 
 
 def _load_lineage():
@@ -263,6 +264,86 @@ def _load_lineage():
     return _LINEAGE
 
 
+def _load_nodes():
+    """Return (node_identity module, alias index), or None if unavailable.
+
+    The node half of the owner key. node_identity.py is the ONE reader of
+    node-vocabulary.yaml (canonical names, aliases, and which entries are not a
+    machine at all), so the gate asks it rather than keeping a second list.
+
+    WHAT IS LOST WHEN THIS RETURNS None: owners fold to identity alone -- the
+    behaviour before the node half existed. Two sessions of one identity on
+    two machines then share a key again; that is the pre-#3313 state, stated
+    rather than hidden, and no worse than it was.
+    """
+    global _NODES
+    if _NODES is not _UNSET:
+        return _NODES
+    _NODES = None
+    try:
+        import importlib.util
+        root = Path(__file__).resolve().parents[3]
+        spec = importlib.util.spec_from_file_location(
+            "node_identity", root / "pmoves" / "tools" / "node_identity.py",
+        )
+        module = importlib.util.module_from_spec(spec)
+        # Registered before exec_module for the same @dataclass reason as
+        # identity_lineage above.
+        sys.modules["node_identity"] = module
+        spec.loader.exec_module(module)
+        _NODES = (module, module.load_vocabulary())
+    except Exception as exc:  # noqa: BLE001 -- a guard must not die here
+        sys.stderr.write(
+            f"claim-collision-pre: node vocabulary unavailable ({exc}); owner "
+            "keys fold to identity only, so one identity's sessions on two "
+            "nodes are not told apart.\n"
+        )
+    return _NODES
+
+
+def _machine(nodes, raw):
+    """Canonical name of `raw` if it names one declared MACHINE, else None.
+
+    A class (`jetson`), placeholder (`any`, `cloud`) or runner label is a
+    declared non-machine: it says where something MAY run, not where a session
+    DID, so it never splits a key.
+    """
+    if raw is None:
+        return None
+    module, index = nodes
+    entry = index.get(module._norm(raw))
+    return entry.canonical if entry is not None and entry.is_machine else None
+
+
+def _worn_off_home(lineage, vocab, owner: str, identity: str):
+    """The node `owner` was signed on, when that is NOT its identity's home.
+
+    None means "the home session" -- and is also every answer this cannot be
+    sure of, because None is the previous behaviour:
+      - no node named in the parenthetical (`(Opus 5)`) -> home, by default;
+      - a non-node annotation (`(Knuckles, opus 4.7 1M)` names knuckles AND a
+        model; the model is not a node) -> whatever node token is present;
+      - an identity with no declared home (`claude-opus`, which "runs wherever
+        it is launched") -> no home to be off, so its spellings keep folding;
+      - the node vocabulary unreadable -> identity-only, as before.
+    The parenthetical is parsed by identity_lineage.wearing(), the parser the
+    ledger audit already uses; it resolves node aliases AND node_relations
+    tokens (`Z890-mirror-on-5090` -> node 5090), so no regex lives here.
+    """
+    nodes = _load_nodes()
+    if nodes is None:
+        return None
+    try:
+        declared = vocab.index.get(lineage._norm(identity))
+        home = _machine(nodes, declared.node if declared else None)
+        if home is None:
+            return None
+        worn = _machine(nodes, lineage.wearing(owner, vocab).node)
+    except Exception:  # noqa: BLE001 -- unparseable -> previous behaviour
+        return None
+    return worn if worn is not None and worn != home else None
+
+
 def _load_folder():
     """Return a name-folding callable, or None if it is unavailable."""
     global _FOLDER
@@ -273,23 +354,48 @@ def _load_folder():
         _FOLDER = None
         return _FOLDER
     vocab = module.load_vocabulary()
+    memo: dict = {}
 
     def _fold(owner: str) -> str:
-        return module.canonical_identity(owner, vocab) or owner
+        if owner in memo:
+            return memo[owner]
+        identity = module.canonical_identity(owner, vocab)
+        if not identity:
+            key = owner
+        else:
+            node = _worn_off_home(module, vocab, owner, identity)
+            key = f"{identity} @ {node}" if node else identity
+        memo[owner] = key
+        return key
 
     _FOLDER = _fold
     return _FOLDER
 
 
 def canonical_owner(owner: str) -> str:
-    """Fold an owner string to its canonical identity.
+    """Fold an owner string to its owner key: (canonical identity, node).
 
-    WHY: this hook compared owner strings with `==`, and one identity writes
-    several. B850 alone appears as `(Knuckles)` x16, `(Knuckles, opus 4.7
-    1M)` x7, `(Opus 5)` x2, `(Claude Opus 5)` x1 -- so a RELEASE under one
+    WHY THE FOLD: this hook compared owner strings with `==`, and one identity
+    writes several. B850 alone appears as `(Knuckles)` x16, `(Knuckles, opus
+    4.7 1M)` x7, `(Opus 5)` x2, `(Claude Opus 5)` x1 -- so a RELEASE under one
     spelling did not close a CLAIM opened under another, and a lane stayed
     open for a week (2026-08-25). The same equality also makes an identity
     collide with ITSELF as soon as its parenthetical changes.
+
+    WHY THE NODE (#3313): the fold went one step too far once an identity
+    could be WORN off its home node. node_identity.resolve_register_name()
+    signs such a session `<BASE> (<node>)` -- `B850-CLAUDE (spark)`, or a
+    declared node_relations token, `Z890-CLAUDE (Z890-mirror-on-5090)` --
+    precisely so two concurrent sessions of one identity on two machines do
+    not share an owner string. Folding identity alone merged them anyway: a
+    bare RELEASE on spark closed the lanes Knuckles still held, and a spark
+    CLAIM on a Knuckles branch read as a self-reclaim. So the key carries the
+    node too, and the node DEFAULTS TO HOME: every home spelling --
+    `(Knuckles)`, `(Knuckles, opus 4.7 1M)`, `(Opus 5)`, the bare base --
+    returns the bare canonical identity, exactly the key it returned before,
+    so the 2026-08-25 fold is intact. Only a parenthetical naming a declared
+    machine other than the home node yields a distinct key,
+    `<identity> @ <node>`. See _worn_off_home() for every case that stays home.
 
     FAIL-SAFE: with no vocabulary this returns the string unchanged, which
     is exactly the previous behaviour. A guard that cannot fold keys is no

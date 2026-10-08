@@ -361,6 +361,23 @@ def test_an_off_home_session_folds_its_own_spellings(tmp_path):
     assert reclaimed.returncode == ALLOW, reclaimed.stderr
 
 
+def test_an_identity_with_no_home_node_keeps_folding_across_nodes(tmp_path):
+    """`claude-opus` declares no home ("runs wherever it is launched"), so
+    there is no home to be OFF and its node-named spellings keep folding --
+    the pre-#3313 behaviour, pinned so a change to it is a decision."""
+    result = run_hook(
+        tmp_path, _claim("AGENT-C", ts="2026-01-03T00:00:00Z"),
+        _claim("CLAUDE-OPUS (Z890)") + _release("CLAUDE-OPUS (Z890-mirror-on-5090)"),
+    )
+    assert result.returncode == ALLOW, result.stderr
+
+
+def test_a_non_machine_node_word_does_not_split_the_key(tmp_path):
+    """`any` is a declared placeholder, not a machine a session ran on."""
+    result = run_hook(tmp_path, _claim("B850-CLAUDE (any)", ts="2026-01-03T00:00:00Z"), _claim(B850_A))
+    assert result.returncode == ALLOW, result.stderr
+
+
 def test_the_hook_still_guards_when_the_vocabulary_is_missing(tmp_path, monkeypatch):
     """Fail-safe, not fail-open.
 

@@ -261,14 +261,15 @@ The resolver now gives two concurrent sessions of one identity DISTINCT owner st
 across nodes, e.g. `B850-CLAUDE (Knuckles)` and `B850-CLAUDE (spark)`. On the same node a
 second session still needs a distinct BASE via `PMOVES_REGISTER_IDENTITY`.
 
-**The collision gate still folds them together.** The fold happens in
-`.claude/hooks/governance/claim-collision-pre.py`:
-- `canonical_owner()` (around line 278) maps every owner string through
+**FIXED in #3313 (2026-10-08).** Before the fix the collision gate folded them together.
+The fold happens in `.claude/hooks/governance/claim-collision-pre.py`:
+- `canonical_owner()` mapped every owner string through
   `identity_lineage.canonical_identity`, which strips the parenthetical.
-- `_pair_register()` keys open claims on that fold.
+- `_pair_register()` keys open claims on that fold (and `register_status.py` /
+  `register_append.py` read through the same `canonical_owner()` / `open_claims_in()`).
 
-So `B850-CLAUDE (spark)` and `B850-CLAUDE (Knuckles)` are one owner there, and a bare
-RELEASE by either closes both sessions' lanes. This is the cross-node form of the
+So `B850-CLAUDE (spark)` and `B850-CLAUDE (Knuckles)` were one owner there, and a bare
+RELEASE by either closed both sessions' lanes. This is the cross-node form of the
 2026-09-26 B850-CLAUDE-FUNNEL incident.
 
 **Keying the gate on the full register form would NOT close it safely.** I measured this
@@ -283,8 +284,17 @@ node token defaults to the identity's declared home node. Measured over the same
 **0 rows** carry a node token other than their identity's home, so this key re-pairs no
 existing row. It separates only worn sessions, which do not exist in the register yet.
 
-This lives in the hook, outside `node_identity.py`, so it is documented here and **not
-implemented**. The hook is a governance path; route it through its own lane.
+**Implemented in #3313** as exactly that key. `canonical_owner()` returns the bare canonical
+identity for every home spelling (unchanged from before), and `<identity> @ <node>` only
+when `identity_lineage.wearing()` finds a declared MACHINE in the parenthetical (a
+node-vocabulary alias, or a `node_relations` token such as `Z890-mirror-on-5090` -> 5090)
+that is not the identity's home. Stays folded, by design: no node named (`(Opus 5)`),
+non-machine words (`(any)`), identities with no declared home (`claude-opus`), and an
+unreadable node vocabulary (fail-safe: the previous behaviour). Corpus control on
+origin/main's register: 792 owner reads (390 CLAIM, 382 RELEASE, 20 co-owner; 69 distinct
+strings), **0** keys changed, open claims 73 -> 73 with an empty symmetric difference.
+Pinned by `pmoves/tests/test_claim_collision_hook.py` (the "One identity, two machines"
+block).
 
 ### Binding is attribution, not authentication
 
