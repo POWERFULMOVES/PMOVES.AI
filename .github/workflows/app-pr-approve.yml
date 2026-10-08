@@ -1,0 +1,114 @@
+name: App PR Approve
+
+# Guarded GitHub-App approval for POWERFULMOVES-authored PRs — clears
+# REVIEW_REQUIRED (the same-account fleet standing state) WITHOUT the
+# admin bypass, so the merge wave can merge normally.
+#
+# Authority: operator directive 2026-09-28 ("setting it up so our github app
+# can approve"). App permission set validated read&write on pull requests
+# (pmoves/docs/operations/GITHUB_APP.md, 2026-06-09).
+#
+# GUARDS (all must pass or the run REFUSES with reasons):
+#   1. PR author is POWERFULMOVES (same-account fleet pattern only)
+#   2. PR is OPEN and not draft
+#   3. Every check at head is SUCCESS or SKIPPED; CANCELLED tolerated only
+#      for the three review-bot checks (they cancel on rerun by design);
+#      FAILURE or in-progress => refuse (absence of a verdict is NOT consent)
+#   4. mergeable != CONFLICTING
+# The approval body carries the caller-supplied reason verbatim, so the
+# audit trail on the PR names the human/agent basis for every approval.
+
+on:
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: "PR number to approve"
+        required: true
+        type: string
+      reason:
+        description: "Approval basis (operator directive / gate evidence) - recorded verbatim on the review"
+        required: true
+        type: string
+      dry-run:
+        description: "Run guards only, do not submit the review"
+        required: false
+        type: boolean
+        default: false
+
+permissions: {}
+
+jobs:
+  approve:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # Mint INLINE in this job, NOT via _app-token.yml, on purpose (the
+      # review-collect.yml precedent): create-github-app-token revokes the
+      # installation token in its post-step, which fires when the minting
+      # job ends - a single-job consumer must hold the token in the same job.
+      - uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        id: app-token
+        with:
+          client-id: ${{ secrets.GH_APP_CLIENT_ID }}
+          private-key: ${{ secrets.GH_APP_SEC }}
+          owner: ${{ github.repository_owner }}
+          # Per official action docs: owner with EMPTY repositories scopes to
+          # ALL repos in the installation (over-broad). Pin the single repo.
+          repositories: ${{ github.event.repository.name }}
+          permission-pull-requests: write
+
+      - name: Guarded approve
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          PR: ${{ inputs.pr }}
+          REASON: ${{ inputs.reason }}
+          DRY_RUN: ${{ inputs.dry-run }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          refuse() { echo "REFUSED: $*" >&2; exit 1; }
+
+          meta="$(gh pr view "$PR" --repo "$REPO" --json number,state,isDraft,author,mergeable,headRefOid)"
+          state="$(jq -r .state <<<"$meta")"
+          draft="$(jq -r .isDraft <<<"$meta")"
+          author="$(jq -r .author.login <<<"$meta")"
+          mergeable="$(jq -r .mergeable <<<"$meta")"
+          head="$(jq -r .headRefOid <<<"$meta")"
+
+          [ "$state" = "OPEN" ]        || refuse "PR is $state, not OPEN"
+          [ "$draft" = "false" ]       || refuse "PR is a draft"
+          [ "$author" = "POWERFULMOVES" ] || refuse "author is $author, not POWERFULMOVES (same-account fleet pattern only)"
+          [ "$mergeable" != "CONFLICTING" ] || refuse "mergeable=$mergeable"
+
+          # Check verdicts at the CURRENT head. Absence is not consent: every
+          # check must have produced a terminal verdict we accept.
+          checks="$(gh api "repos/$REPO/commits/$head/check-runs" --jq '.check_runs[] | "\(.conclusion // "PENDING") \(.name)"')"
+          bad=0; tolerated=0
+          while IFS= read -r line; do
+            [ -n "$line" ] || continue
+            concl="${line%% *}"; name="${line#* }"
+            case "$concl" in
+              SUCCESS|SKIPPED|NEUTRAL) ;;
+              CANCELLED)
+                case "$name" in
+                  "kilo-review"|"Kilo Code Review"|"claude-review"|"Claude Code Review"|"Codex Review")
+                    tolerated=$((tolerated+1)); echo "tolerated CANCELLED review-bot check: $name" ;;
+                  *) bad=$((bad+1)); echo "BAD: $name is CANCELLED" ;;
+                esac ;;
+              *) bad=$((bad+1)); echo "BAD: $name is $concl" ;;
+            esac
+          done <<<"$checks"
+          [ "$bad" -eq 0 ] || refuse "$bad check(s) not green at head $head"
+          [ -n "$checks" ] || refuse "no check runs at head $head - absence is not consent"
+
+          body="App approval via guarded workflow (app-pr-approve). Basis: $REASON. Head $head: all checks SUCCESS/SKIPPED${tolerated:+ (+$tolerated tolerated CANCELLED review-bot rerun)}. Guards: author=POWERFULMOVES, state=OPEN, mergeable=$mergeable."
+
+          if [ "$DRY_RUN" = "true" ]; then
+            echo "DRY RUN - guards passed; would submit APPROVE with body:"; echo "$body"
+          else
+            # commit_id pins the approval to the exact audited head: a push
+            # landing between the guard check and this POST shifts "latest
+            # commit" (the API default) and would approve unaudited code.
+            gh api -X POST "repos/$REPO/pulls/$PR/reviews"               -f event=APPROVE -f body="$body" -f commit_id="$head" --jq '.html_url'
+          fi
