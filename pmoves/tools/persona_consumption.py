@@ -12,7 +12,9 @@ Usage:
   python3 -m pmoves.tools.persona_consumption \
       --user darkxside --kind beat --item "808 Low.m4a"
 
-Env: NATS_URL (default nats://nats:4222). Events fail loudly —
+Env: NATS_URL required (no credential-bearing default; the session hook
+resolves env.shared and rewrites the Docker-internal host for host-side
+sessions). Events fail loudly —
 a dropped consumption event is lost grounding signal, not a convenience.
 """
 
@@ -60,7 +62,9 @@ async def publish(event: dict, url: str) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser = argparse.ArgumentParser(
+        description=(__doc__ or "persona.consumption.recorded.v1 producer").splitlines()[0]
+    )
     identity = parser.add_mutually_exclusive_group(required=True)
     identity.add_argument("--agent", help="agent_id (agent-side consumption)")
     identity.add_argument("--user", help="user_id (human-side consumption)")
@@ -73,7 +77,7 @@ def main(argv: list[str] | None = None) -> int:
 
     event = build_event(args)
     try:
-        asyncio.run(publish(event, os.environ.get("NATS_URL", "nats://nats:4222")))
+        asyncio.run(publish(event, os.environ.get("NATS_URL", "nats://localhost:4222")))
     except Exception as exc:  # noqa: BLE001 — surface, never swallow
         print(f"publish failed: {exc}", file=sys.stderr)
         return 1
