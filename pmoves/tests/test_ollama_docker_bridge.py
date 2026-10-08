@@ -32,6 +32,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from pmoves.tools.bash_resolver import resolve_bash  # never System32's WSL stub
 
 REPO = Path(__file__).resolve().parents[2]
 SCRIPT = REPO / "deploy/provision/ollama-docker-bridge.sh"
@@ -164,7 +165,7 @@ def env(tmp_path):
 
 
 def run(env, *args, script=SCRIPT):
-    return subprocess.run(["bash", str(script), *args], env=env, capture_output=True, text=True)
+    return subprocess.run([resolve_bash(), str(script), *args], env=env, capture_output=True, text=True)
 
 
 def calls(env) -> list[str]:

@@ -15,6 +15,7 @@ import os
 import stat
 import subprocess
 from pathlib import Path
+from pmoves.tools.bash_resolver import resolve_bash  # never System32's WSL stub
 
 PMOVES = Path(__file__).resolve().parents[1]
 SCRIPT = PMOVES / "scripts" / "ghcr_login.sh"
@@ -36,7 +37,7 @@ def _run(
     env.update(env_extra)
     if path_prefix:
         env["PATH"] = f"{path_prefix}{os.pathsep}{env['PATH']}"
-    return subprocess.run(["bash", *bash_flags, str(SCRIPT)], env=env, capture_output=True, text=True, cwd=tmp_path, timeout=30)
+    return subprocess.run([resolve_bash(), *bash_flags, str(SCRIPT)], env=env, capture_output=True, text=True, cwd=tmp_path, timeout=30)
 
 
 def _fake_bin(tmp_path: Path, name: str, body: str) -> Path:

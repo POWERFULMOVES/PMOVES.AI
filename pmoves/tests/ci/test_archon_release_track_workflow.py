@@ -14,6 +14,7 @@ from pathlib import Path
 
 import pytest
 import yaml
+from pmoves.tools.bash_resolver import resolve_bash  # never System32's WSL stub
 
 WF = Path(__file__).resolve().parents[3] / ".github" / "workflows" / "archon-release-track.yml"
 
@@ -52,7 +53,7 @@ def run_step(tmp_path, stdout: str, rc: int):
     script.write_text(resolve_script())
     env = dict(os.environ, PATH=f"{stub}{os.pathsep}{os.environ['PATH']}",
                GITHUB_OUTPUT=str(out), GITHUB_STEP_SUMMARY=str(summ))
-    r = subprocess.run(["bash", "--noprofile", "--norc", "-eo", "pipefail", str(script)],
+    r = subprocess.run([resolve_bash(), "--noprofile", "--norc", "-eo", "pipefail", str(script)],
                        env=env, capture_output=True, text=True, timeout=30)
     lines = out.read_text().splitlines()
     return r, lines

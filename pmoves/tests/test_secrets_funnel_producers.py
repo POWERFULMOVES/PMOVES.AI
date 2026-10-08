@@ -36,6 +36,7 @@ from pathlib import Path
 
 import pytest
 import yaml
+from pmoves.tools.bash_resolver import resolve_bash  # never System32's WSL stub
 
 _ROOT = Path(__file__).resolve().parents[2]
 _PULL = _ROOT / "pmoves" / "scripts" / "pull_chit_bundle.sh"
@@ -95,7 +96,7 @@ def _run_pull(tmp_path: Path, extra_env: dict | None = None, *, umask: int | Non
     env["PMOVES_NODE"] = "b850"
     env.update(extra_env or {})
     preexec = (lambda: os.umask(umask)) if umask is not None else None
-    return subprocess.run(["bash", str(_PULL)], env=env, capture_output=True,
+    return subprocess.run([resolve_bash(), str(_PULL)], env=env, capture_output=True,
                           text=True, timeout=60, preexec_fn=preexec)
 
 
@@ -168,7 +169,7 @@ def _run_resolve_targets(tmp_path: Path, targets: str,
            "PRODUCER_TARGETS": (wf["env"]["PRODUCER_TARGETS"]
                                 if producers is None else producers),
            "GITHUB_OUTPUT": str(out)}
-    r = subprocess.run(["bash", "-c", script], env=env, capture_output=True,
+    r = subprocess.run([resolve_bash(), "-c", script], env=env, capture_output=True,
                        text=True, timeout=60)
     return r, out.read_text(encoding="utf-8")
 
@@ -255,6 +256,13 @@ def test_stage_files_are_created_0600_even_under_umask_022(tmp_path):
     assert all(mode == "600" for _, mode in seen), seen
 
 
+@pytest.mark.skipif(
+    os.name == "nt",
+    reason="Windows: resolve_bash() returns Git's bin\\bash.exe launcher, which PREPENDS "
+    "/mingw64/bin:/usr/bin to PATH, so Git's own /usr/bin/mv shadows the stubbed `mv` "
+    "and the rename never fails. (It passed on main only vacuously: a bare `bash` ran "
+    "the WSL stub, which could not open the D:\\ script path at all.)",
+)
 def test_a_failed_rename_leaves_no_stage_file(tmp_path):
     """mv of the bundle fails -> set -e aborts -> the EXIT trap must remove
     the staged copy, and the old bundle must be untouched."""
