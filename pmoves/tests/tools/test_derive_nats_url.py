@@ -73,9 +73,30 @@ def test_remote_broker_url_is_left_alone(tmp_path):
     assert p.read_text() == body
 
 
+EXPECTED_LOCAL = {"nats", "pmoves-nats-1", "localhost", "127.0.0.1", "::1", "host.docker.internal"}
+
+
 def test_local_host_forms_are_rewritten(tmp_path):
-    for host in sorted(d.LOCAL_BROKER_HOSTS):
+    # Literal set, not d.LOCAL_BROKER_HOSTS: dropping a form must fail here.
+    assert EXPECTED_LOCAL <= d.LOCAL_BROKER_HOSTS
+    for host in sorted(EXPECTED_LOCAL | {"127.0.0.2", "0:0:0:0:0:0:0:1"}):
         hp = f"[{host}]:4222" if ":" in host else f"{host}:4222"
         p = _env(tmp_path, f"NATS_PASSWORD=new\nNATS_URL={_url('nats', 'old', hp)}\n")
         assert d.derive(p) == "updated", host
         assert parse_env_file(p)["NATS_URL"] == _url("nats", "new", hp)
+
+
+def test_private_and_tailnet_ips_count_as_remote(tmp_path):
+    # The hub sits on a private/tailnet address; only loopback is assumed local.
+    for hp in ("10.0.0.5:4222", "172.17.0.1:4222", "100.64.0.9:4222"):
+        body = f"NATS_PASSWORD=localpw\nNATS_URL={_url('nats', 'hubpw', hp)}\n"
+        p = _env(tmp_path, body)
+        assert d.derive(p) == "remote", hp
+        assert p.read_text() == body
+
+
+def test_operator_can_declare_extra_local_hosts(tmp_path, monkeypatch):
+    monkeypatch.setenv("NATS_LOCAL_BROKER_HOSTS", " other-nats-1 , ")
+    p = _env(tmp_path, f"NATS_PASSWORD=new\nNATS_URL={_url('nats', 'old', 'other-nats-1:4222')}\n")
+    assert d.derive(p) == "updated"
+    assert parse_env_file(p)["NATS_URL"] == _url("nats", "new", "other-nats-1:4222")
