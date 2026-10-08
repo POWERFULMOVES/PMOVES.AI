@@ -540,44 +540,82 @@ is a credential minted once per session.
 
 ## 4. Decisions
 
-Eleven decisions. "Who decides" names the seat that ratifies; the owner of this
+Twelve decisions. "Who decides" names the seat that ratifies; the owner of this
 doc only recommends. Two are **operator-only** and are marked.
 
 | # | Decision | Options | Recommendation | Who decides |
 |---|---|---|---|---|
-| D1 | **Card home** (source of truth for identity data) | (a) keep `signing_identity_cards.yaml` + vocabularies, generate the passport; (b) new per-identity files; (c) a database | **(a)**. The YAML is already reviewed in PRs and read by the hooks. The passport is a generated, signed artifact, never hand-edited. | Owner recommends; control body ACKs |
-| D2 | **Travels store** | (a) git (one file per identity); (b) cipher memory; (c) Supabase append-only table, JetStream as transport; (d) object store | **(c)** for entries, with **anchors in git**. Git per-entry means merge conflicts and a public activity feed; cipher is per-node today (G10). Insert-only policy on the table; the chain and anchors make tampering detectable even so. | Owner + memory body; operator ratifies retention |
-| D3 | **Card serving** | (a) static files published from the repo; (b) a per-node endpoint; (c) the gateway | **(a)** first: generated `agent-card.json` per identity, signed, verifiable offline. (b) later for live call-me fields. A2A JWT gating (G8) stays for A0 task routes, not for public card reads. | Owner; security review |
-| D4 | **ID unification** (registry key `claude_b850`, signature `b850-claude`, display `B850 Claude`, Neo4j `id`/`name`/`agent_id`) | (a) `card_id` UUID as the key; (b) `h.agent_id` as the key; (c) a new id | **(b)** `h.agent_id` is the identity key: stable across rotation. `card_id` is the *key epoch* (changes on rotation). Everything else is an alias resolved by `identity_vocabulary.yaml`. Neo4j `:Agent` goes UNIQUE on `agent_id`. | Neo4j lane owner (`ops/knuckles-neo4j-chit-provenance`) + operator |
-| D5 | **Key binding** | (a) one identity key everywhere; (b) per-(identity, node) keys; (c) identity key + signed node delegations | **(c)**. Doctrine 2 and 4 hold (one identity, the node a recorded fact), and a lost node revokes a delegation, not the identity. P1 may run (a) on the home node only. | Security review (chit-compliance + code-review); operator ratifies |
-| D6 | **Token type** | (a) transferable ERC20 (`GroToken.sol` as-is); (b) soulbound standing credit; (c) none | **(b)** soulbound, non-transferable, off-chain ledger first; on-chain only after a spec and review. | Operator ratifies |
-| D7 | **Minting rules and granularity** | per claim / per PR / per period; Gaussian vs Dirichlet | **Per period**, over delivered + signed-ACKed claims, Dirichlet-weighted per delivery, capped per period, k-of-n committee signature. **Committee membership (who mints) is an OPERATOR DECISION.** | **Operator** (membership, k, cap); owner recommends rules |
+| D1 | **Card home** (source of truth for identity data) | (a) keep `signing_identity_cards.yaml` + vocabularies, generate the passport; (b) new per-identity files; (c) a database | **(a)**, after the v2 schema lands and the file validates (P-8). The passport is a generated, signed artifact, never hand-edited. | Owner recommends; control body ACKs |
+| D2 | **Travels store** | see below | **JetStream domains + git anchors; shard-file fallback until the NATS topology lands.** | Owner + memory body; operator ratifies retention |
+| D3 | **Card serving** | (a) static files published from the repo; (b) a per-node endpoint; (c) the gateway | **(a)** first: generated `agent-card.json` per identity, verifiable offline against the registry. (b) later for live call-me fields. A2A JWT gating (G8) stays for A0 task routes. | Owner; security review |
+| D4 | **ID unification** | (a) `card_id` UUID; (b) `h.agent_id` (`b850-claude`); (c) registry key (`claude_b850`), the TAC_NEO4J candidate | See below. | Neo4j lane owner (`ops/knuckles-neo4j-chit-provenance`) + operator |
+| D5 | **Key binding** | (a) one identity key everywhere; (b) per-(identity, node) keys; (c) identity key + scoped node delegations | **(c)** as specified in §3a (scoped tags, max lifetime, anchor time). P1 may run (a) on the home node only, with no delegations issued. | Security review; operator ratifies |
+| D6 | **Token type** | (a) transferable ERC20 (`GroToken.sol` as-is); (b) soulbound standing credit; (c) none | **(b)**, off-chain ledger first; on-chain only after a spec and review. | Operator ratifies |
+| D7 | **Minting rules and granularity** | per claim / per PR / per period; Gaussian vs Dirichlet | **One mint per period** (`period_id`, `mint_id`, cap), over delivered + signed-ACKed claims from a different root, Dirichlet-weighted, per-ACKer cap, lineage-distance rule, recusal. **Committee membership, k, the cap, and lineage distance *d* are an OPERATOR DECISION.** | **Operator** (membership, k, cap, d); owner recommends rules |
 | D8 | **Backing mix** | unbacked standing; partial reserve; FoodUSD-style peg | **Unbacked standing credit** until a spendable `$CRED` spec exists (FoodUSD's peg has no reserve code, G17). | **OPERATOR DECISION** |
-| D9 | **Governance** | standing votes; standing weights votes; no link | **No link.** Standing earns no votes. Governance stays on its own track (equal-weight, committee tally). | Operator ratifies |
-| D10 | **Revoke / retire** | card-state flip only; card-state + travels entry + registry propagation | **Card-state + travels entry + registry propagation**, two kinds (retire vs compromise), signed by the identity or the operator. Needs the D3 road from the damage-control RFC. | RFC D3 owner (4090 pair per RFC `:256`) + security review |
-| D11 | **Fleet visibility channel** | NATS presence only; served cards only; both | **Both**: signed `identity.presence.v1` heartbeats for liveness, served cards for the durable record. Subjects registered before use. | Owner; `nats-subject-auditor` |
+| D9 | **Governance** | standing votes; standing weights votes; no link | **No link.** Standing earns no votes. | Operator ratifies |
+| D10 | **Revoke / retire** | card-state flip only; card-state + travels entry + registry propagation | **Card-state + `pmoves.revoke.v1` entry + registry propagation**, two kinds (retire vs compromise), compromise judged by anchor time. Needs the RFC D3 road. | RFC D3 owner (4090 pair per RFC `:256`) + security review |
+| D11 | **Fleet visibility channel** | NATS presence only; served cards only; both | **Both**: `identity.presence.signed.v1` heartbeats for liveness, served cards for the durable record. Subjects registered before use. | Owner; `nats-subject-auditor` |
+| D12 | **Passport key vs git signing key** | (a) one SSH key for both; (b) separate keys | **(b)** separate (§3a). The git key lives wherever commits are made; the identity key stays in custody. | Security review |
+
+**D2 — travels store (rewritten after the control finding and the code review).**
+A single Supabase table is per-node, the same defect that makes the fleet
+cipher 401 (G10): an identity writing on Knuckles and on SPARK would build two
+partial chains in two databases. The sub-chain model (§3e) removes the
+cross-node ordering problem; the store only has to keep each single-writer
+sub-chain intact and bring heads together for anchoring.
+
+- **Target design.** Each node keeps a local JetStream stream in its own
+  JetStream domain, one subject per sub-chain, plus a local JSONL file as the
+  offline fallback. Each append uses `Nats-Expected-Last-Subject-Sequence` so a
+  second writer on the same sub-chain is rejected at the store. A hub stream
+  aggregates node streams through JetStream `sources`. The identity signs the
+  RFC 6962 anchor over sub-chain heads and commits it to git. Reviewers confirm
+  the JetStream semantics against the NATS docs before P3.
+- **Dependencies, not yet met.** The NATS leafnode / account topology is
+  specified but not deployed, and the hub location is inconsistent across docs
+  (`.claude/CATALOG.md:122` names `pmoves-kvm4-2`;
+  `.claude/skills/node-5090-sitrep/SKILL.md:122` probes Z890 as "NATS hub";
+  the code review also found 5090). JetStream domains need that decision first.
+- **Fallback until then.** Per-`(identity, node, day)` shard files, written
+  append-only by the one writer, batch-committed to git together with the
+  anchors that cover them. Git is the transport; merge conflicts cannot occur
+  because no two writers share a shard.
+- **Integrity in both modes** comes from the chain and the git-committed
+  anchors, not from the store's access controls (a service-role writer can
+  bypass insert-only policies). The tamper window is the anchor cadence.
+
+**D4 — ID unification, reconciled with TAC_NEO4J.** `TAC_NEO4J.md:254-256`
+proposes `Agent.id` = the `agent_registry.yaml` `agents:` key (`claude_b850`).
+This doc recommends **`h.agent_id` (`b850-claude`)** as the identity key
+because it is on the signing card the verifier already resolves (§3b policy 5),
+is what `ACK::` lines and signatures use (`KRISS_KROSS_ACCORD.md:117-140`
+documents the two namespaces), and survives key rotation; `card_id` is the key
+*epoch*. Either choice needs the same live mapping step the TAC names, and the
+registry key stays an alias in `identity_vocabulary.yaml`. If the Neo4j lane
+keeps the registry key for `:Agent.id`, the passport still keys on
+`h.agent_id` and the mirror stores both. The Neo4j lane owner decides; this is
+the one place the two docs disagree.
 
 ---
 
 ## 5. Preconditions before any code
 
-None of the layers in §3 starts until these hold. Each names the defect, the
-evidence, and the exit test.
+None of the layers in §3 starts until these hold.
 
 | # | Precondition | Why | Evidence | Done when |
 |---|---|---|---|---|
 | P-1 | `sign_trail.py` stops overwriting | One signer destroys the last artifact; travels must be append-only | `pmoves/tools/sign_trail.py:349` | Two consecutive signers leave two records; a test asserts it |
-| P-2 | Trail schema declares `sig` (and later `idsig`) | Every signed trail is invalid against its own schema today | `signature.v1.schema.json:14,119` | A freshly signed trail validates; a trail with an undeclared field still fails |
-| P-3 | `:Agent` key resolved | The Neo4j mirror would fork identities | `TAC_NEO4J.md:106,247-254` | One UNIQUE constraint on `:Agent`; both seed orders converge to one node |
-| P-4 | Revoke / retire road exists | Rotation without revocation leaves compromised keys valid | RFC `:211` (D3); no card uses `supersedes_card_id` | A Known Road retires a card and verifiers report its post-retirement signatures as findings |
-| P-5 | `isSigned` truthiness **not inherited** | A check that passes `hmac:'abc123'` must not be the shape of any passport verifier | G15, three files | Every new verifier has a negative test (tampered signature, wrong key, wrong domain tag) that asserts the **failure reason**, not merely that it throws; a repo-wide grep for the `Boolean(sig?.alg && …)` shape returns nothing in new code |
-| P-6 | Versioned domain-separated merkle | Anchors must not be ambiguous between leaf and interior | `cgp_v2_build.py:28,33` | A new function with committed vectors; existing `merkle_root()` output unchanged |
-| P-7 | Model registry port settled | `session.v1` needs one address to look up | `services-catalog.md:166-168` vs `agent_registry.yaml:897` | One documented port, measured on two nodes |
+| P-2 | Trail schema declares `sig` (and later `idsig`) | Every signed trail is invalid against its own schema today | `signature.v1.schema.json:14,119` | A freshly signed trail validates; a trail with an undeclared field still fails. Schema validity is **never** treated as signature validity (P-5). |
+| P-3 | `:Agent` key resolved | The Neo4j mirror would fork identities | `TAC_NEO4J.md:106,247-256` | One UNIQUE constraint on `:Agent`; both seed orders converge to one node; D4 settled |
+| P-4 | Revoke / retire road exists | Rotation without revocation leaves compromised keys valid | RFC `:211` (D3) | A Known Road retires a card; post-retirement signatures report `1` |
+| P-5 | `isSigned` truthiness **not inherited** | A check that passes `hmac:'abc123'` must not be the shape of any passport verifier | G15, three files | **Behavioural**: a schema-valid payload with a bogus signature returns `1 bad_signature`; a stripped `idsig` on a keyed card returns `1 missing_idsig`; `alg:"HMAC"` returns `1 alg_mismatch`; each test asserts the **reason**, not just nonzero. **Structural**: an AST/semgrep rule fails CI on any verifier branch that tests the presence or truthiness of `sig`/`idsig`/`hmac` fields as its decision, in Python and TS. **References**: the `trv:` resolver rejects a truncated hash. |
+| P-6 | Versioned RFC 6962 merkle | Anchors must not be ambiguous between leaf and interior, nor malleable on odd n | `cgp_v2_build.py:28,33` | New function with odd-n vectors (1, 2, 3, 5, 7); existing `merkle_root()` output unchanged |
+| P-7 | Model registry port settled | `session.v1` needs one address; both docs claim 8111 for different services | `services-catalog.md:166-168` vs `agent_registry.yaml:897` | One documented port per service, measured on two nodes |
+| P-8 | Signing-card v2 lands and the cards file validates; keygen can rotate | New fields (§3a) are rejected by v1; rotation would collide or select a retired card | G9; `keygen_cards.py:122,133-135`; `build_allowed_signers.py:49` | All cards validate against v2 in CI; a rotation test produces a second key file, selects the active card, and keeps the retired key with `valid-before` |
 
 P-5 is the one to watch: the ToKenism defect sits in three files because a fix
 in one announced itself as total. Grep the *shape* repo-wide, not the name.
-
----
 
 ## 6. Collaboration
 
