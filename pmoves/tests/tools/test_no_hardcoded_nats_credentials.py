@@ -9,6 +9,9 @@ History of this guard, because it is instructive:
    only the credential-inside-a-URL form. Review found it blind to 48 further
    occurrences in 32 files outside pmoves/, and to 16 in bare-assignment form --
    reproducing the exact failure it was written to replace.
+3. Both shapes were blind to the server side: ``start-cipher-stack.sh`` ran
+   ``nats-server --user nats --pass <leaked>`` and echoed ``pass: <leaked>``
+   in its ready banner, and the guard stayed green through #3139.
 
 So: the corpus is the whole tracked repo, both credential shapes are matched,
 and the corpus control asserts a floor PER GLOB, because a union floor passes
@@ -26,6 +29,9 @@ URL_CREDENTIAL = re.compile(r"nats://([A-Za-z0-9_.-]+):([A-Za-z0-9_.-]+)@")
 # Shape 2: the password alone -- the directly usable form, and the one the
 # first version of this guard could not see at all.
 BARE_CREDENTIAL = re.compile(r"NATS_PASSWORD(?::-|=)([A-Za-z0-9_.-]+)")
+# Shape 3: the password as a server flag or a printed banner -- the form that
+# STARTS a server on the leaked value rather than connecting to one.
+FLAG_CREDENTIAL = re.compile(r"(?:--pass[ =]|\bpass(?:word)?:\s*)['\"]?([A-Za-z0-9_.-]+)")
 
 LEAKED_PASSWORD = "pmoves"
 
@@ -105,6 +111,9 @@ def _offenders():
             for m in BARE_CREDENTIAL.finditer(line):
                 if m.group(1) == LEAKED_PASSWORD:
                     hits.append(f"{rel}:{lineno}: NATS_PASSWORD={m.group(1)}")
+            for m in FLAG_CREDENTIAL.finditer(line):
+                if m.group(1) == LEAKED_PASSWORD:
+                    hits.append(f"{rel}:{lineno}: {m.group(0)}")
     return hits
 
 
@@ -129,6 +138,24 @@ def test_no_committed_nats_credentials_outside_the_rotation_backlog():
         + "\n  ".join(offenders[:25])
         + ("\n  ..." if len(offenders) > 25 else "")
     )
+
+
+def test_flag_shape_matches_the_server_side_form():
+    """Control for shape 3: the pattern must catch the exact lines that shipped.
+
+    Production change that would make this fail: narrowing FLAG_CREDENTIAL so
+    it no longer sees a server started on the leaked value.
+    """
+    # Built from LEAKED_PASSWORD so this fixture does not itself trip the guard.
+    shipped = [
+        f"  -js -m 8222 --user nats --pass {LEAKED_PASSWORD} 2>&1",
+        f'echo "   NATS:  nats://localhost:4222 (user: nats, pass: {LEAKED_PASSWORD})"',
+    ]
+    for line in shipped:
+        found = [m.group(1) for m in FLAG_CREDENTIAL.finditer(line)]
+        assert LEAKED_PASSWORD in found, line
+    assert not [m for m in FLAG_CREDENTIAL.finditer('--pass "$NATS_PASSWORD"')
+                if m.group(1) == LEAKED_PASSWORD]
 
 
 def test_rotation_backlog_has_no_stale_entries():
