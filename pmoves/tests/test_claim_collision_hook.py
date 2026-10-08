@@ -384,16 +384,32 @@ def test_a_raw_owner_cannot_spell_a_constructed_node_key(tmp_path, raw):
     )
 
 
-def test_an_identity_with_no_home_node_keeps_folding_across_nodes(tmp_path):
-    """`claude-opus` declares no home ("runs wherever it is launched"), so
-    there is no home to be OFF and its node-named spellings keep folding --
-    the pre-#3313 behaviour, pinned so a change to it is a decision."""
-    result = run_hook(
+def test_an_identity_with_no_home_node_is_split_per_node_too(tmp_path):
+    """Operator decision 2026-10-08: the node is a measured fact, so a no-home
+    identity (`claude-opus`) on two named nodes is two sessions. The z890
+    session's RELEASE must not close the 5090 mirror's lane -- the shape of
+    register row 1795 (a spark lane closed by a bare RELEASE from elsewhere)."""
+    released = run_hook(
         tmp_path, _claim("AGENT-C", ts="2026-01-03T00:00:00Z"),
-        _claim("CLAUDE-OPUS (Z890)") + _release("CLAUDE-OPUS (Z890-mirror-on-5090)"),
+        _claim("CLAUDE-OPUS (Z890-mirror-on-5090)") + _release("CLAUDE-OPUS (Z890)"),
     )
-    assert result.returncode == ALLOW, result.stderr
-    assert '"permissionDecision": "ask"' not in result.stdout, result.stdout
+    assert released.returncode == BLOCK, (
+        f"a z890 RELEASE closed the 5090 session's lane\n{released.stdout}"
+    )
+    assert "CLAUDE-OPUS (Z890-mirror-on-5090)" in released.stderr
+    bare = run_hook(
+        tmp_path, _claim("AGENT-C", ts="2026-01-03T00:00:00Z"),
+        _claim("CLAUDE-OPUS (spark)") + _release("CLAUDE-OPUS"),
+    )
+    assert bare.returncode == BLOCK, (
+        f"a node-less RELEASE closed a named-node session's lane\n{bare.stdout}"
+    )
+    same = run_hook(
+        tmp_path, _claim("AGENT-C", ts="2026-01-03T00:00:00Z"),
+        _claim("CLAUDE-OPUS (Z890)") + _release("CLAUDE-OPUS-5 (z890)"),
+    )
+    assert same.returncode == ALLOW, same.stderr
+    assert '"permissionDecision": "ask"' not in same.stdout, same.stdout
 
 
 def test_a_non_machine_node_word_does_not_split_the_key(tmp_path):

@@ -352,9 +352,19 @@ def _node_half(lineage, vocab, owner: str, identity: str):
     The node is None for the HOME session:
       - no node named in the parenthetical (`(Opus 5)`) -> home, by default;
       - a node token plus non-node annotations (`(Knuckles, opus 4.7 1M)`
-        names knuckles AND a model; the model is not a node) -> that node;
-      - an identity with no declared home (`claude-opus`, which "runs wherever
-        it is launched") -> no home to be off, so its spellings keep folding.
+        names knuckles AND a model; the model is not a node) -> that node.
+
+    IDENTITIES WITH NO DECLARED HOME (`claude-opus`, `crush`, `hermes-agent`,
+    any drop-in) ARE SPLIT PER NODE TOO -- operator decision 2026-10-08. The
+    node a session runs on is a MEASURED fact (launcher node resolution,
+    bootstrap probes), so a parenthetical naming a real node yields
+    `<identity>`@<node>` whether or not the identity has a home; with no node
+    named, the key stays bare (node unknown -- the legacy spelling). The MODEL
+    is never part of the key: crush runs a newer GLM and still idents as
+    crush_glm_5.2; a model is an annotation. Before this decision a no-home
+    identity folded across nodes, which on origin/main had let a bare `CRUSH`
+    RELEASE (row 1849, about another PR) close a `CRUSH-GLM52 (SPARK)` lane
+    (row 1795) -- the #3313 defect in the old ledger.
     A node token is a declared MACHINE (node-vocabulary.yaml, aliases
     included) or a node_relations token (`Z890-mirror-on-5090` -> node 5090);
     each comma-separated token is parsed by identity_lineage.wearing(), the
@@ -378,18 +388,18 @@ def _node_half(lineage, vocab, owner: str, identity: str):
     """
     declared = vocab.index.get(lineage._norm(identity))
     home_raw = declared.node if declared else None
-    if not home_raw:
+    if not home_raw and not lineage.split_author(owner)[1]:
+        # No home and no parenthetical: nothing can name a node. Bare key.
         return None, ""
     nodes = _load_nodes()
     if nodes is None:
         return None, (
             f"the node vocabulary is unavailable ({_NODES_ERROR}), so the gate "
-            f"cannot tell whether `{owner}` is {identity}'s home session or a "
-            "session on another node"
+            f"cannot tell which node `{owner}` ({identity}) was signed from"
         )
     try:
-        home = _machine(nodes, home_raw)
-        if home is None:
+        home = _machine(nodes, home_raw) if home_raw else None
+        if home_raw and home is None:
             return None, (
                 f"{identity}'s declared home node {home_raw!r} is not a machine "
                 f"in node-vocabulary.yaml, so whether `{owner}` is off-home "

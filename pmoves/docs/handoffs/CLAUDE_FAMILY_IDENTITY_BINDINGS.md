@@ -289,12 +289,28 @@ identity for every home spelling (unchanged from before), and `` <identity>`@<no
 when `identity_lineage.wearing()` finds a declared MACHINE in the parenthetical (a
 node-vocabulary alias, or a `node_relations` token such as `Z890-mirror-on-5090` -> 5090)
 that is not the identity's home. Stays folded, by design: no node named (`(Opus 5)`),
-non-machine words (`(any)`), identities with no declared home (`claude-opus`), and an
-unreadable node vocabulary (fail-safe: the previous behaviour). Corpus control on
+and non-machine words (`(any)`). An unreadable node vocabulary, or an ambiguous
+parenthetical, is asked about rather than folded silently. Corpus control on
 origin/main's register: 792 owner reads (390 CLAIM, 382 RELEASE, 20 co-owner; 69 distinct
 strings), **0** keys changed, open claims 73 -> 73 with an empty symmetric difference.
 Pinned by `pmoves/tests/test_claim_collision_hook.py` (the "One identity, two machines"
 block).
+
+**No-home identities split too (operator decision 2026-10-08).** The node a session runs on
+is a measured fact (launcher node resolution, bootstrap probes); the model is never part of
+the key (crush runs a newer GLM and still idents as crush_glm_5.2). So `claude-opus`,
+`crush`, `hermes-agent` and any drop-in identity with no declared home get
+`` <identity>`@<node> `` when the parenthetical names a real node (including a
+`node_relations` token), and the bare key when it names none. Corpus control on origin/main
+347e354a1, old key (ac51e81c1) vs new: 792 owner reads (69 distinct strings); **47 reads /
+9 distinct strings** change key (claude-opus, crush, hermes-agent node spellings); open
+claims **73 -> 74**, 0 peer closes either way, 0 real owners on the ask path.
+
+**Finding: register row 1795 reopens, correctly.** `CLAIM CRUSH-GLM52 (SPARK)` on
+`feat/cipher-agent-scope` (2026-07-28) was closed under the old fold by row 1849, a bare
+`CRUSH` RELEASE filed on Knuckles about a different PR; `feat/cipher-agent-scope` has no PR.
+That is the #3313 defect in the old ledger: one machine's session closed another's lane.
+No RELEASE is filed for it here; the coordinator is raising it with crush/spark.
 
 ### Binding is attribution, not authentication
 
