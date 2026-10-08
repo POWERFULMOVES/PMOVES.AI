@@ -476,6 +476,38 @@ def test_an_unresolved_owner_is_not_asked_about_nodes(tmp_path, no_node_vocabula
     assert '"permissionDecision": "ask"' not in result.stdout
 
 
+# ---------------------------------------------------------------------------
+# An AMBIGUOUS parenthetical (#3313 review, P3). Two nodes named, or tokens
+# the vocabulary does not know and no node it does, is not "home" -- it is a
+# question. The gate asks; it does not pick (last-token-wins was the old rule).
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("owner", [
+    "B850-CLAUDE (Knuckles, spark)",     # two machines
+    "B850-CLAUDE (spark, Knuckles)",     # same two, other order
+    "B850-CLAUDE (dgx spark)",           # unrecognised token, no node
+    "B850-CLAUDE (Knuckles @ spark)",    # unrecognised token, no node
+])
+def test_an_ambiguous_node_parenthetical_is_asked(tmp_path, owner):
+    result = run_hook(tmp_path, _claim(owner, branch="feat/fresh", ts="2026-01-03T00:00:00Z"))
+    assert result.returncode == ALLOW, result.stderr
+    reason = _ask_reason(result)
+    assert reason and owner in reason, (
+        f"{owner!r} names no single node, and the gate decided one silently\n"
+        f"{result.stdout!r}"
+    )
+
+
+@pytest.mark.parametrize("owner", [
+    "B850-CLAUDE (spark, some lane nobody declared)",  # node + unknown: decided
+    "B850-CLAUDE (Knuckles, opus 4.7 1M)",             # node + known model
+])
+def test_a_single_node_with_annotations_is_decided_not_asked(tmp_path, owner):
+    result = run_hook(tmp_path, _claim(owner, branch="feat/fresh", ts="2026-01-03T00:00:00Z"))
+    assert result.returncode == ALLOW, result.stderr
+    assert '"permissionDecision": "ask"' not in result.stdout, result.stdout
+
+
 def test_the_hook_still_guards_when_the_vocabulary_is_missing(tmp_path, monkeypatch):
     """Fail-safe, not fail-open.
 

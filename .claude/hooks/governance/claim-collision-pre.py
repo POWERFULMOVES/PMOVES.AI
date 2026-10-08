@@ -355,9 +355,20 @@ def _node_half(lineage, vocab, owner: str, identity: str):
         names knuckles AND a model; the model is not a node) -> that node;
       - an identity with no declared home (`claude-opus`, which "runs wherever
         it is launched") -> no home to be off, so its spellings keep folding.
-    The parenthetical is parsed by identity_lineage.wearing(), the parser the
-    ledger audit already uses; it resolves node aliases AND node_relations
-    tokens (`Z890-mirror-on-5090` -> node 5090), so no regex lives here.
+    A node token is a declared MACHINE (node-vocabulary.yaml, aliases
+    included) or a node_relations token (`Z890-mirror-on-5090` -> node 5090);
+    each comma-separated token is parsed by identity_lineage.wearing(), the
+    parser the ledger audit already uses, so no regex lives here.
+
+    AMBIGUOUS -> CAVEAT, not a guess:
+      - more than one distinct machine named (`(Knuckles, spark)`, in either
+        order) -- there is no "last token wins";
+      - NO recognised node but some unrecognised token (`(dgx spark)`,
+        `(Knuckles @ spark)`) -- the token may be a node the vocabulary does
+        not spell, so "home" would be a guess. Unrecognised tokens BESIDE one
+        recognised node (`(spark, some lane)`) are annotations: decided.
+    Measured on origin/main's register at the time of writing: 0 of 69
+    distinct owner strings hit either rule.
 
     The CAVEAT is non-empty when the node half could not be evaluated -- the
     node vocabulary is unreadable, the identity's declared home is not a node
@@ -384,12 +395,37 @@ def _node_half(lineage, vocab, owner: str, identity: str):
                 f"in node-vocabulary.yaml, so whether `{owner}` is off-home "
                 "cannot be decided"
             )
-        worn = _machine(nodes, lineage.wearing(owner, vocab).node)
+        # PER TOKEN, not wearing(owner) once: wearing() keeps only the LAST
+        # node token it sees, so `(Knuckles, spark)` was spark and
+        # `(spark, Knuckles)` was home -- an order nobody chose meaning
+        # something. Each comma token is parsed by wearing() on its own.
+        base, paren = lineage.split_author(owner)
+        found, unclassified = set(), []
+        for token in (t.strip() for t in paren.split(",")):
+            if not token:
+                continue
+            parsed = lineage.wearing(f"{base} ({token})", vocab)
+            machine = _machine(nodes, parsed.node)
+            if machine is not None:
+                found.add(machine)
+            unclassified.extend(parsed.unclassified)
     except Exception as exc:  # noqa: BLE001 -- unparseable: say so, never guess
         return None, (
             f"parsing `{owner}`'s parenthetical raised {type(exc).__name__}: "
             f"{exc}"
         )
+    if len(found) > 1:
+        return None, (
+            f"`{owner}` names more than one node ({', '.join(sorted(found))}), "
+            "so which session signed it is ambiguous"
+        )
+    if not found and unclassified:
+        return None, (
+            f"`{owner}` names no node the vocabulary knows but carries "
+            f"unrecognised token(s) {', '.join(repr(t) for t in unclassified)}; "
+            "if one of them is meant as a node, the gate cannot tell"
+        )
+    worn = next(iter(found), None)
     return (worn if worn is not None and worn != home else None), ""
 
 
