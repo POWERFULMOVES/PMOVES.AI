@@ -22,6 +22,8 @@ import sys
 from ast import parse, walk
 from pathlib import Path
 
+import pytest
+
 TOOLS = Path(__file__).resolve().parents[1] / "tools"
 sys.path.insert(0, str(TOOLS))
 
@@ -30,6 +32,25 @@ import pr_selfcheck as t  # noqa: E402
 REPO = Path(__file__).resolve().parents[1]
 ROASTED_HEAD = "104d56375"  # PR #3269 as reviewed: 5 threads, machine-detectable subset
 DOCS_ONLY = "bec8dbfec"    # merge of #3264 (TAC doc follow-ups), docs-only
+
+
+def _have_sha(sha: str) -> bool:
+    # CI checkouts are shallow and do not carry historical shas; these
+    # controls run wherever the history exists (every fleet full clone)
+    # and SKIP with that reason where it does not
+    return (
+        subprocess.run(
+            ["git", "-C", str(REPO), "cat-file", "-e", f"{sha}^{{commit}}"],
+            capture_output=True,
+        ).returncode
+        == 0
+    )
+
+
+_hist = all(_have_sha(s) for s in (ROASTED_HEAD, DOCS_ONLY))
+pytestmark = pytest.mark.skipif(
+    not _hist, reason="historical control shas not in this checkout (shallow clone)"
+)
 
 
 def _merge_base(sha: str) -> str:
