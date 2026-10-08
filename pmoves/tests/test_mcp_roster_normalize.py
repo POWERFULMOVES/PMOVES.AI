@@ -871,7 +871,7 @@ def test_the_launchers_pass_the_roster_path_where_the_liveness_scan_can_see_it()
 
 _DOCKER_INTERNAL_HOSTS = {"nats"}
 _URL_HOST = re.compile(r"[a-z][a-z0-9+.-]*://(?:[^@/\s]*@)?(\[[^\]]+\]|[^:/\s]+)")
-_IN_STACK_NATS = "nats://fleetuser:s3cret@nats:4222"
+_IN_STACK_NATS = "nats://user:pass@nats:4222"
 
 
 def _nats_mcp(command="uv"):
@@ -907,14 +907,14 @@ def test_real_roster_hands_no_host_run_server_a_docker_internal_hostname():
 def test_in_stack_nats_url_goes_to_loopback_keeping_creds_and_port():
     clean, _d, _g = norm.normalize(_nats_mcp(), "/repo", {"NATS_URL": _IN_STACK_NATS})
     assert clean["mcpServers"]["pmoves-nats-fleet"]["env"]["NATS_URL"] == \
-        "nats://fleetuser:s3cret@127.0.0.1:4222"
+        "nats://user:pass@127.0.0.1:4222"
 
 
 def test_rewrite_follows_the_published_host_port():
     env = {"NATS_URL": _IN_STACK_NATS, "NATS_PORT": "14222"}
     clean, _d, _g = norm.normalize(_nats_mcp(), "/repo", env)
     assert clean["mcpServers"]["pmoves-nats-fleet"]["env"]["NATS_URL"] == \
-        "nats://fleetuser:s3cret@127.0.0.1:14222"
+        "nats://user:pass@127.0.0.1:14222"
 
 
 def test_container_run_server_keeps_the_in_stack_hostname():
@@ -925,9 +925,9 @@ def test_container_run_server_keeps_the_in_stack_hostname():
 
 
 @pytest.mark.parametrize("value", [
-    "nats://fleetuser:s3cret@nats:6222",       # cluster port, not the published client listener
-    "nats://fleetuser:s3cret@fleet-hub:4222",  # a routable host is left alone
-    "nats://fleetuser:s3cret@natsbox:4222",    # a name CONTAINING an internal name is not it
+    "nats://user:pass@nats:6222",       # cluster port, not the published client listener
+    "nats://user:pass@fleet-hub:4222",  # a routable host is left alone
+    "nats://user:pass@natsbox:4222",    # a name CONTAINING an internal name is not it
 ])
 def test_rewrite_is_narrow(value):
     clean, _d, _g = norm.normalize(_nats_mcp(), "/repo", {"NATS_URL": value})
@@ -938,7 +938,7 @@ def test_rewrite_is_announced_and_recorded_without_the_credential(tmp_path):
     proc = _run_cli(tmp_path, _nats_mcp(), {"NATS_URL": _IN_STACK_NATS})
     assert proc.returncode == 0, proc.stderr
     assert "pmoves-nats-fleet" in proc.stderr and "127.0.0.1" in proc.stderr, proc.stderr
-    assert "s3cret" not in proc.stderr, "the rewrite notice leaked the credential"
+    assert "user:pass" not in proc.stderr, "the rewrite notice leaked the credential"
     verdicts = json.loads(Path(proc.stdout.strip()).read_text())["_pmoves_roster_verdicts"]
     assert verdicts["rewritten"] == [{
         "server": "pmoves-nats-fleet", "field": "env.NATS_URL",

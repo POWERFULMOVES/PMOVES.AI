@@ -241,7 +241,7 @@ def _import_tool(name: str):
     previous = sys.modules.get(name)
     if previous is not None:
         try:
-            if Path(previous.__file__).resolve() == path:
+            if Path(previous.__file__).resolve() == path.resolve():
                 return previous
         except (AttributeError, TypeError, OSError):
             pass
@@ -346,8 +346,14 @@ def _machine(nodes, raw):
     return entry.canonical if entry is not None and entry.is_machine else None
 
 
+# Version / quantity SHAPE only (Kilo r4221570771). "Contains a digit" made
+# `(nano-2)`, `(z890-mirror-2)`, `(dgx spark 2)` annotations, so an unknown
+# digit-bearing NODE folded home silently. A dotted version (`5.5`), a context
+# size (`1M`, `200K`) or the word "context" is model-shaped; a bare integer is
+# NOT -- fleet nodes are named `4090` / `5090`, so an unknown bare number is
+# more likely a node than a model and is asked about.
 _ANNOTATION_SHAPE = re.compile(
-    r"\d+(?:\.\d+)?|\b\d+\s*[KM]\b|\bcontext\b", re.IGNORECASE)
+    r"\d+\.\d+|\b\d+\s*[KM]\b|\bcontext\b", re.IGNORECASE)
 _ROLES = _UNSET
 
 
@@ -414,7 +420,7 @@ def _node_half(lineage, vocab, owner: str, identity: str):
         vocabulary does not spell, so "home" would be a guess. A token is
         an ANNOTATION, not node-shaped, when the vocabulary's models / lanes
         / roles know it or it is model-shaped (a version number, a context
-        marker like `1M`, the word "context"): `(Opus 5.5)`,
+        size like `1M`, the word "context"; NOT any digit): `(Opus 5.5)`,
         `(Claude Opus 5.5 1M context)`, `(reviewer)` are decided, not asked
         (re-review P3-1: per doctrine the model is an annotation). No model
         list is hardcoded. Unrecognised tokens BESIDE one recognised node

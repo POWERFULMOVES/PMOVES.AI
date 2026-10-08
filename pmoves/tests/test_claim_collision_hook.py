@@ -545,6 +545,30 @@ def test_a_model_or_role_annotation_is_not_asked_about(tmp_path, owner):
     assert '"permissionDecision": "ask"' not in result.stdout, result.stdout
 
 
+# Kilo r4221570771: "contains a digit" is not "is a model". An unknown node
+# spelled with a digit must not be waved through as an annotation.
+@pytest.mark.parametrize("owner", [
+    "B850-CLAUDE (nano-2)", "B850-CLAUDE (z890-mirror-2)", "B850-CLAUDE (dgx spark 2)",
+])
+def test_an_unknown_digit_bearing_node_still_asks(tmp_path, owner):
+    result = run_hook(tmp_path, _claim(owner, branch="feat/fresh", ts="2026-01-03T00:00:00Z"))
+    assert result.returncode == ALLOW, result.stderr
+    assert owner in _ask_reason(result), (
+        f"{owner!r} folded home silently -- a digit is not a version\n{result.stdout!r}"
+    )
+
+
+@pytest.mark.parametrize("owner, node", [
+    ("B850-CLAUDE (4090)", "4090"), ("B850-CLAUDE (kvm4-2)", "kvm4-2"),
+])
+def test_known_digit_nodes_still_resolve_as_nodes(tmp_path, owner, node):
+    """A digit-named node is still a node: its session is distinct from home."""
+    result = run_hook(tmp_path, _claim(owner, ts="2026-01-03T00:00:00Z"), _claim(B850_A))
+    assert result.returncode == BLOCK, (
+        f"{owner!r} read as the home session\n{result.stdout!r}"
+    )
+
+
 def test_a_node_shaped_unknown_token_still_asks_and_says_how_to_fix_it(tmp_path):
     result = run_hook(tmp_path, _claim("B850-CLAUDE (dgx spark)", branch="feat/fresh",
                                        ts="2026-01-03T00:00:00Z"))
