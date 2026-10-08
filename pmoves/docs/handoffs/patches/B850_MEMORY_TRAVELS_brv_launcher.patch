@@ -1,0 +1,24 @@
+--- a/pmoves/scripts/claude-pmoves.sh
++++ b/pmoves/scripts/claude-pmoves.sh
+@@ -328,6 +328,21 @@
+   pm_ident_append "$PM_CARRY_PROMPT"
+ fi
+
++# BRV — the context-tree memory CLI (byterover-cli). Cipher above is the
++# vector/graph memory; brv is the other half, and a node without it had no line
++# of output saying so (measured on knuckles 2026-10-08). FAIL-OPEN, LOUDLY:
++# stderr for the operator, and the prompt for the model, because stderr has
++# scrolled away before the TUI paints. See pmoves/scripts/pm-brv-check.sh.
++if [ -f "$ROOT/pmoves/scripts/pm-brv-check.sh" ]; then
++  # shellcheck source=./pm-brv-check.sh
++  . "$ROOT/pmoves/scripts/pm-brv-check.sh"
++  pm_brv_check
++  echo "[claude-pmoves] ${PM_BRV_LINE}" >&2
++  if [ -n "${PM_BRV_PROMPT:-}" ]; then
++    pm_ident_append "$PM_BRV_PROMPT"
++  fi
++fi
++
+ # ONE FLAG, COMPOSED ONCE. Every block above called pm_ident_append, which
+ # concatenates; none of them pushed a flag of its own. `claude
+ # --append-system-prompt` keeps only its LAST occurrence, so the multi-flag form

@@ -10,7 +10,7 @@ node with its memory reachable.
 | # | Gap | Status |
 |---|-----|--------|
 | 1 | Fleet roster entry `pmoves-cipher` (tailnet Z890 :8105/mcp/sse) answers 401; `pmoves-cipher-local` (localhost:8105) works | COULD-NOT-FIX-LOCALLY (design decision + Z890 operator step) |
-| 2 | `brv` (ByteRover CLI, `byterover-cli`) absent on knuckles; launcher says nothing | investigating |
+| 2 | `brv` (ByteRover CLI, `byterover-cli`) absent on knuckles; launcher says nothing | FIXED in fragment + manifest; launcher hookup is a PATCH (protected path, no grant) |
 | 3 | cipher `agent_checkpoint` rows record `harness:"unknown"`, `model:"unknown"` | investigating |
 
 Findings are appended per gap below as each is resolved.
@@ -92,6 +92,42 @@ operator step on Z890. Neither is a launcher patch.
 card), and deliver the bearer to knuckles through the CHIT pipeline
 (`make -C pmoves env-local-set KEY=CIPHER_FLEET_TOKEN_B850_CLAUDE` under B, which
 prompts without echo). Repeat per roaming agent (`z890-claude` needs nothing;
-`5090-claude`, `4090-claude`, `spark-claude` each need a Z890 row). Also
+`5090-claude` and `4090-claude` each need a Z890 row; SPARK has no `*-claude`
+signing card in `pmoves/config/signing_identity_cards.yaml`, so it needs a card first). Also
 `make -C pmoves up-cipher` on Z890 so its shim reports `per_agent_auth` and a
 future 401 can be told apart from a lookup failure.
+
+## Gap 2 — `brv` absent, and nothing said so
+
+Install route verified from the submodule (read-only): `Pmoves-cipher/package.json`
+is `byterover-cli` 3.16.1, `bin: {brv: ./bin/run.js}`, `engines.node >=20`;
+its README installs with `npm install -g byterover-cli`. Under fnm/nvm the npm
+global prefix is in `$HOME`, so no sudo. Nothing was installed.
+
+Landed on this branch:
+
+- `pmoves/scripts/pm-brv-check.sh` — new fragment, same contract style as
+  `pm-cipher-token-bind.sh`: always returns 0, sets `PM_BRV_OK`, `PM_BRV_LINE`
+  (one stderr line, `WARN: brv=MISSING ... Install (user-level, no sudo): npm
+  install -g byterover-cli`) and `PM_BRV_PROMPT` (the same fact for the session
+  prompt, because stderr scrolls away before the TUI paints).
+- `pmoves/configs/cli_tools.yaml` — `host_clis.brv` (optional), so
+  `make -C pmoves cli-check` now reports it: measured `MISSING  brv (optional)`.
+- `pmoves/tests/test_pm_brv_check.py` — hermetic PATH: missing is loud + rc 0,
+  present is quiet, and the fragment's install hint is pinned to the manifest.
+
+NOT landed — the two-line hookup in `pmoves/scripts/claude-pmoves.sh`. That path
+is `readOnlyPaths` (`pmoves/scripts/*-pmoves.sh`); the road is
+`KNOWN_ROAD=launcher:<reason>`, and grants are operator-reserved, so I did not
+open one. The exact edit is
+`pmoves/docs/handoffs/patches/B850_MEMORY_TRAVELS_brv_launcher.patch`
+(`git apply --check` rc 0 against this branch; `bash -n` clean on the patched
+copy). It sits after the identity-carry block and before
+`pm_ident_prompt_args`, so the prompt sentence is composed into the single
+`--append-system-prompt` flag. Operator: open
+`launcher:handoff:B850_MEMORY_TRAVELS.md` (or `launcher:pr:<n>` once a PR
+exists), `git apply` the patch, close the road.
+
+Unattended grant found while checking: `.claude/hooks/damage-control/.known-road-active`
+holds `compose:pr:3260`, 146 h old, verdict `NOT honoured [stale]`. Not ridden;
+reported here so its owner can clear it.
