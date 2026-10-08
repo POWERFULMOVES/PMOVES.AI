@@ -195,8 +195,12 @@ jobs:
           # file to the 8 packages PMOVES actually adds, and the accidental
           # transitive went with it. Declaring it here makes the dependency real
           # instead of a side effect of a file being too big.
+          # bcrypt: pmoves/scripts/nats_auth_render.py (the NATS credential
+          # rotation bridge) bcrypt-hashes both users before anything touches
+          # disk; its tests exercise the real render path, so CI needs the
+          # library the tool imports.
           base_packages = ["pytest", "pytest-asyncio", "pytest-cov", "ruamel.yaml==0.19.1",
-                           "pydantic-settings"]
+                           "pydantic-settings", "bcrypt"]
 
           for path in requirements:
               with path.open() as handle:

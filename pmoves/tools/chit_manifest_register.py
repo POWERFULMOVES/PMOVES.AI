@@ -256,6 +256,14 @@ REGISTRY: Dict[str, Dict[str, Any]] = {
     # loudly at mount time with an auth error, not quietly at runtime.
     "JUICEFS_META_PASSWORD": {"tier": "data", "required": False},
     "NATS_EVENT_BUS_TOKEN": {"tier": "data", "required": True},
+    # Rotation target for the leaked default NATS credential
+    # (fix/nats-auth-bridge, operator decision B 2026-10-03). The rendered
+    # dual-user conf carries it alongside the current password; it becomes THE
+    # credential at the drop phase, when the nats_url entry's source flips to
+    # it and the funnel re-materializes NATS_URL for clients on their natural
+    # recreate. required=False until then (strict funnel must not fail nodes
+    # that have not filled the slot yet).
+    "NATS_PASSWORD_V2": {"tier": "worker", "required": False},
     "PMOVES_BRIDGE_TOKEN": {"tier": "worker", "required": True},
     # ActivePieces self-host (docker-compose.activepieces.yml, PR #2906). The
     # pinned 0.86.3 image reads AP_JWT_SECRET for stable auth signing across
