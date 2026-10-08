@@ -108,7 +108,243 @@ history, travels, signed ACKs). That bundle is the passport.
 
 ## 3. Design layers
 
-TBD
+Nine layers. Each names what it builds on, what it must not inherit, and how it
+fails. Throughout: a verifier returns a **structured verdict** with exit codes
+`0` verified / `1` finding (bad signature, mismatch) / `3` could not measure
+(missing card, unreachable registry). A verifier is never a truthiness check and
+never collapses `3` into `0` (G15 is the counter-example). Tools that emit these
+codes are called **directly**, not through `make`, because make reports every
+nonzero recipe exit as `2`.
+
+### 3a. Key — one Ed25519 identity key per identity
+
+- **Issue** with the existing road: `pmoves-keygen` via `keygen_cards.py generate`
+  (G1). The card already carries `ml.ssh_allowed_signers_line`, whose
+  `ssh-ed25519 <blob>` holds the raw 32-byte public key, so P1 needs no new key
+  format: the verifier decodes the blob. A dedicated `ml.ed25519_pub` field is
+  a later schema addition (signing-card v2), not a precondition.
+- **Bind to the identity, not to a node** (doctrine 2, 4). Recommended shape:
+  the **identity key** signs a short-lived **node delegation**
+  (`pmoves.nodecert.v1`: subkey pub, measured-node evidence hash, `not_before`,
+  `not_after`). Day-to-day signing uses the node subkey; verifiers walk subkey →
+  identity key → card. Losing or retiring a node revokes one delegation and
+  leaves the identity intact. P1 may start with the identity key alone on its
+  home node; delegation lands in P2 with node verification (decision D5).
+- **Custody** through the secrets funnel only, delivered as a `_FILE`
+  (mode 0600) like the other file-delivered credentials. Never in git
+  (`pmoves/.gitignore:77` already excludes `chit/keys/`), never in an env
+  dump, never in a CHIT bundle that leaves the node. Delivery validates the key
+  **shape** (parses as Ed25519, public half matches the card), because a
+  presence check passes a truncated secret.
+- **Rotate** by issuing a new card with `supersedes_card_id` set and the old
+  card `active: false` + `rotated_at` (fields exist:
+  `signing-card.v1.schema.json:90-103`). Signatures verify against the card
+  that was active at `signed_at`.
+- **Revoke** needs a road that does not exist (G9, RFC D3). Two kinds: *retire*
+  (old signatures stay valid) and *compromise* (signatures after a stated
+  `compromised_since` are findings). Both are card-state changes the identity
+  or operator signs; neither deletes history.
+- **Do not reuse** `chit_security.py` HMAC keys for identity (G3). HMAC stays
+  what it is: deployment-wide transport integrity. Ed25519 is the identity proof.
+  The two coexist on one payload (`sig` = HMAC block, `idsig` = Ed25519 block).
+
+### 3b. Signing — one signer, domain-separated
+
+- **One implementation** in `pmoves/tools/` (Python), with a TypeScript twin
+  only where a TS service must verify (ToKenism). Both are held to one set of
+  committed test vectors; no third copy (flute-gateway's HMAC fork, G3, is the
+  drift this prevents).
+- **Preimage** = `domain_tag || 0x00 || canonical_json(payload)`, copying the
+  `tallyPreimage` shape (`tally-signer-ed25519.ts:9,40-43`). Canonical JSON =
+  RFC 8785 (JCS); reviewers should confirm against the RFC text, not this
+  summary.
+- **Domain tags** (a signature under one tag never verifies under another):
+
+| Tag | Signs | Producer |
+|---|---|---|
+| `pmoves.ack.v1` | an ACK: lane, PR/commit sha, verdict, ACK line text hash | ACK writers |
+| `pmoves.session.v1` | session start/heartbeat/end: identity, node verdict, model stamp, harness | launcher (`claude-pmoves`, crush, kimi) |
+| `pmoves.memory.v1` | a memory write: content hash, category, cipher instance | cipher client |
+| `pmoves.travel.v1` | one travels-log entry (3e) | travels appender |
+| `pmoves.card.v1` *(added)* | the generated passport card (3f) | card generator |
+| `pmoves.nodecert.v1` *(added)* | a node delegation (3a) | identity key |
+| `pmoves.cipher-req.v1` *(added)* | a cipher request (3i) | cipher client |
+
+- **Envelope**: `idsig: {alg: "ed25519", card_id, key_fpr, signed_at, sig}`.
+  `card_id` names the card; `key_fpr` names the key on it, so a rotated card
+  cannot be confused with its successor.
+- **ACK lines stay human-readable.** An `ACK::` line gains a short reference
+  `trv:<identity>/<seq>@<hash8>` to the travels entry that carries the
+  signature, so the register stays prose while the proof lives in the log.
+
+### 3c. Node verification at launch — measured, never a gate
+
+The question is "which box woke me?", answered by measurement and recorded as a
+fact (doctrine 2). It never stops a session.
+
+**Probe** (new, beside `node_identity.py`; `this_node()` keeps the *claim*,
+the probe *confirms* it):
+
+| Field | Source (Linux) | Stored as | Notes |
+|---|---|---|---|
+| board vendor / board name / product name | `/sys/class/dmi/id/*` | plaintext shape | readable without root (measured on Knuckles, 2026-10-08) |
+| serial, last 4 | `/sys/class/dmi/id/product_serial` | last 4 only | **root-only** (measured: not readable non-root). Without root this field is could-not-measure, not a mismatch. |
+| machine-id | `/etc/machine-id` | domain-tagged hash `sha256("pmoves.node-evidence.v1" ‖ value)` | never stored raw; reviewers to check systemd `machine-id(5)` guidance on app-specific hashing |
+| GPU PCI ids | `/sys/bus/pci/devices/*/{class,vendor,device}` (display class) | `vendor:device` list | shape, not secret |
+| RAM | `/proc/meminfo` MemTotal | rounded GiB | weak field |
+| tailnet self id | `tailscale status --json` → `Self.ID` (stable node id) | hash | never an address |
+
+Windows, WSL2, and Jetson need their own sources (WSL2 reports the Hyper-V VM's
+DMI, not the host's). Each platform lists the fields it can measure; a missing
+field is `3` for that field, never a guess.
+
+**Expected side**: an optional `node_evidence` block per node in
+`pmoves/configs/node-vocabulary.yaml`, hashes and shapes only (no full serials,
+no addresses), written by the node's steward from one probe run and reviewed
+like any vocabulary change. The card does not copy it; it points at the node.
+
+**Verdict** (exit codes, called directly):
+
+- `0` **match**: strong fields (machine-id hash, tailnet id, board+product)
+  agree with the claimed node. Weak-field drift (RAM, GPU added) is reported
+  as a note, not a mismatch.
+- `1` **new-node / mismatch**: strong fields match a *different* recorded node,
+  or none. Recorded as "woke on a different node". The identity stays itself
+  (doctrine 4); it may *decide* to fork (doctrine 5). For an unrecorded host the
+  steward runs `glances-autodetect.sh` (root) to classify it, then records
+  `node_evidence`.
+- `3` **could not measure**: too few strong fields readable. Recorded as such,
+  never as a pass.
+
+**Readable state line**: at session start the launcher prints one line —
+identity · node (verdict) · the Glances sitrep line (`GLANCES_RUNBOOK.md:82-102`,
+already address-free) · model stamp — and the same facts go into the signed
+`session.v1` record.
+
+**Claim check**: the owner key is `(identity, node)`
+(`claim-collision-pre.py:555`). The hook compares the owner token's node with
+the measured node. A mismatch means the *row's key* is wrong, not that the
+agent lacks permission, so the hook refuses with the corrected owner string.
+Could-not-measure writes the row with the node marked unmeasured, as the hook
+already does for unparseable co-owner fields.
+
+### 3d. Model provenance at launch — attributed, never keyed
+
+Recorded in `session.v1`, never a gate (doctrine 3):
+
+- `declared_model`: what the harness reports (CLI flag, harness config).
+- `registry_match`: lookup in the model registry (catalog port 8111, G14
+  port conflict to settle) → `known` / `unknown`, plus provider.
+- `provider_conformance`: last result of the provider verifier for that
+  provider. This is conformance of the *provider*, not proof of which model
+  answered; the record says so.
+- `weights_digest` for local open models (the runtime's content digest).
+  Provider-hosted weights are anchored by the provider (doctrine 7); we record
+  the provider's model id and nothing more.
+- **"Waz here"** (doctrine 8): when an identity runs, tunes, or adapts an open
+  model, a `woke` travels entry records identity, card, and `weights_digest`;
+  derived artifacts (adapters, model cards) carry the travels reference. The
+  open model's lineage then names who woke it, signed and anchored.
+
+### 3e. Travels — append-only, hash-chained, merkle-anchored
+
+- **Entry**: `{identity, card_id, seq, prev_hash, ts, kind, node{canonical,
+  verdict, evidence_ref}, model{...}, body_hash, refs[]}` signed under
+  `pmoves.travel.v1`. `kind` ∈ `session.start|session.end|ack|claim|release|
+  memory.write|node.verdict|fork|woke|card.rotate|card.revoke`.
+- **Chain**: `prev_hash` = hash of the previous entry's canonical bytes. A gap
+  or fork in the chain is a finding.
+- **Bodies stay out**: memory writes and ACK texts enter as `body_hash`; the log
+  carries node canonical names and evidence hashes, never addresses or secrets.
+- **Anchoring**: every N entries or daily, the identity signs an anchor
+  carrying a merkle root over entry hashes, emitted as a cgp.v2 merkle block.
+  The tree uses **leaf/interior domain separation** (leaf `H(0x00‖x)`, interior
+  `H(0x01‖l‖r)`, the RFC 6962 construction) as a *new versioned* function. The
+  existing `merkle_root()` (G6) is left unchanged so current outputs do not
+  silently change meaning. Anchors are small and public-safe; committing them
+  to git gives "trace down to the merkle" (doctrine 9).
+- **Never overwrite**: append-only at every layer. `sign_trail.py:349` is the
+  counter-example and is a precondition (§5).
+- **Neo4j mirror**, only after the `:Agent` key is resolved (G11):
+  `(:Agent)-[:TRAVELED {seq}]->(:Node)`, `(:Agent)-[:FORKED_FROM]->(:Agent)`,
+  `(:Agent)-[:WOKE]->(:Model)`. Derived and rebuildable from the log; never the
+  source of truth.
+
+### 3f. Card / passport — a CHIT bundle per identity
+
+- **Generated, not hand-edited**, from the sources that already exist:
+  `signing_identity_cards.yaml` (card, glyph, colour, voice, key),
+  `identity_vocabulary.yaml` (aliases, lineage), `agent_registry.yaml`
+  (role, affinity), node vocabulary (where worn), travels head + latest anchor.
+- **Contents** (doctrine 1): canonical identity, aliases, glyph, theme, avatar,
+  voice, signature card + public key, lineage (3g), model history (from
+  `session.v1`), travels head, standing (3h), and **call-me info**: harnesses
+  it runs in, MCP/ACP endpoints by service name, availability (from presence),
+  capacity (hardware profile + Glances). No addresses.
+- **Signed** under `pmoves.card.v1`; any consumer verifies it on the card's own
+  key plus the card registry.
+- **Served** as `agent-card.json` in the A2A shape (G8's path) with a PMOVES
+  extension block. `agent_card_schema.py` (G7) is a source of layer names, not
+  the schema as-is: it makes the model a layer of the card, while doctrine 3
+  makes the model history, not identity.
+- **Announced on NATS**, proposed subjects (to be registered through the
+  subject catalog and `nats-subject-auditor` before use):
+  `identity.presence.v1` (signed `session.v1` heartbeat; references the node,
+  which keeps announcing on `mesh.node.announce.v1`) and
+  `identity.card.updated.v1`.
+
+### 3g. Forks and lineage — both directions, add only
+
+- A fork is two signed travels entries: `fork` in the parent's log (child
+  `card_id`) and `fork` in the child's log (parent `card_id`, parent anchor).
+  The child's card carries `forked_from`; the parent's card lists `forks[]`.
+  Both directions exist, neither side is removed (doctrine 6).
+- The child gets its **own** key. It never inherits the parent's.
+- **Alts / roles** the operator creates for a node carry `alt_of: <root>` and
+  sign with their own keys; they share the root's standing (3h).
+- **Backfill**: existing sibling lineage (Z890/5090/4090/SPARK-CLAUDE,
+  `identity_vocabulary.yaml:453,560`) enters as operator-attested entries
+  flagged `backfill: true`. Attribution, honestly labelled.
+
+### 3h. Tokens — soulbound standing from kept commitments
+
+- **Registration for all AGInTZ**: every carded identity has a standing account
+  at zero. Alts share their root's account.
+- **What earns standing**: a kept commitment = a CLAIM that was delivered
+  (merged) **and** ACKed with a valid `pmoves.ack.v1` signature by a *different*
+  identity. Unsigned ACKs earn nothing, which is why this waits for P1.
+- **Weighting**: Dirichlet attribution over the contributors to one delivery,
+  i.e. the existing `distributeByAttribution` (`grotoken-model.ts:161`), not the
+  Gaussian `distributeWeekly` default (`:93-117`).
+- **Soulbound**: non-transferable. The model has the switch
+  (`grotoken-model.ts:24,225-226`) but defaults it off (`:59`); standing turns it on.
+- **No governance votes** from standing. Standing records kept commitments; it
+  does not buy a say.
+- **Minting**: a k-of-n committee signs each period's mint under a
+  `pmoves.mint.v1` tag on the `Ed25519MultisigSigner` pattern (G16), with a
+  **per-period cap**. Each mint record carries the merkle root of the ACKed
+  claims it rewards, so every unit traces to anchored work.
+- **Not to be used as-is**: `GroToken.sol` / `FoodUSD.sol` (`onlyOwner`, no cap,
+  G17) and anything carrying the `isSigned` defect (G15).
+- **Backing mix: OPERATOR DECISION.** Recommendation: unbacked standing credit
+  (no redemption, no reserve claim) until a spendable `$CRED` spec exists.
+  FoodUSD's peg has no reserve code, so a backed claim made today would be prose.
+
+### 3i. Cipher auth — signed requests against the card
+
+- **Request**: headers carry `card_id` and an `idsig` over
+  `pmoves.cipher-req.v1` `{method, path, sha256(body), ts, nonce, audience}`,
+  where `audience` is the target cipher instance, so a request signed for one
+  node's cipher cannot be replayed to another.
+- **Verify**: cipher resolves the public key from a synced card registry
+  (cards are not read by cipher today, G10), checks freshness (±120 s) and the
+  nonce cache, sets `agentId` from the card. This replaces the one
+  identity-setting point (`auth.ts:219-220`) and with it the per-node token store.
+- **Scopes** move from token rows to a role → scope mapping on the card side.
+- **Keep the 401 / 503 split** (`auth.ts:209,214`): bad signature, inactive or
+  revoked card → 401; card registry unavailable → 503 ("not judged").
+- **Migration**: bearer tokens keep working in parallel. Minting a B850 token on
+  Z890's cipher (option B) is a stopgap only, retired when signed requests land.
 
 ## 4. Decisions
 
