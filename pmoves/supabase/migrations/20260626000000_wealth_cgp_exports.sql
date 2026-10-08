@@ -58,17 +58,20 @@ CREATE TRIGGER trg_wealth_cgp_exports_updated_at
 -- Row-level security
 ALTER TABLE pmoves_core.wealth_cgp_exports ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Public read wealth cgp exports" ON pmoves_core.wealth_cgp_exports;
 CREATE POLICY "Public read wealth cgp exports"
   ON pmoves_core.wealth_cgp_exports FOR SELECT
   TO public, anon
   USING (true);
 
 -- Service role / authenticated can insert/update their own exports
+DROP POLICY IF EXISTS "Service role insert wealth cgp exports" ON pmoves_core.wealth_cgp_exports;
 CREATE POLICY "Service role insert wealth cgp exports"
   ON pmoves_core.wealth_cgp_exports FOR INSERT
   TO service_role
   WITH CHECK (true);
 
+DROP POLICY IF EXISTS "Service role update wealth cgp exports" ON pmoves_core.wealth_cgp_exports;
 CREATE POLICY "Service role update wealth cgp exports"
   ON pmoves_core.wealth_cgp_exports FOR UPDATE
   TO service_role

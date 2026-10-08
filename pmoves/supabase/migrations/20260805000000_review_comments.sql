@@ -10,7 +10,7 @@ CREATE TABLE IF NOT EXISTS pmoves_core.review_comments (
     -- GitHub source
     repo            TEXT NOT NULL,                    -- e.g. "PMOVES.AI" or "Pmoves-cipher"
     pr_number       INTEGER NOT NULL,
-    comment_id      BIGIGNINT,                        -- GitHub REST API comment ID
+    comment_id      BIGINT,                           -- GitHub REST API comment ID
     -- Comment metadata
     author          TEXT NOT NULL,                    -- e.g. "chatgpt-codex-connector", "coderabbitai", "darkxside"
     author_type     TEXT NOT NULL DEFAULT 'bot',      -- bot|human|agent
