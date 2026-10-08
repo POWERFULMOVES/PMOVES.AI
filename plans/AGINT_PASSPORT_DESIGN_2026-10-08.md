@@ -487,8 +487,13 @@ security-reviewed before merge. Exit criteria are measured, with the
    owners (Z890 for Windows/WSL2, spark-claude for ARM64?).
 7. **Harness model reporting**: do Crush and Kimi expose the running model id
    reliably at launch, or is `declared_model` config-only for them?
-8. **Call-me source of truth**: PMOVES-registry carries harness entries
-   (`claude-acp`, A.12 in `plans/HYPERAGINTZ_ORCHESTRATION_SCOPE_2026-09-19.md`).
-   Does the passport read call-me info from there or from the agent registry?
+8. **Call-me source of truth**: A.12 makes PMOVES-Registry the home of harness
+   entries and the vocabularies + cards the home of identity
+   (`plans/HYPERAGINTZ_ORCHESTRATION_SCOPE_2026-09-19.md:567-590`). The
+   passport's "harnesses it runs in" should therefore *reference* registry
+   entries, not copy them. Confirm with the registry owner, and decide whether
+   availability/capacity come from presence or from `agent_registry.yaml`.
+   Also, the A.12 portability substrates (registry × bundle × vocabulary) are
+   the passport's inputs; §3f should be reviewed against A.12 directly.
 9. **Travels retention**: how long are entries kept once anchored, and who may
    prune bodies that were never stored (hashes only) versus entries (never)?
