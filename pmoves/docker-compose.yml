@@ -4300,6 +4300,12 @@ services:
         # page renders blank and any probe of the app root reports healthy.
         # Measured on PMOVES-4090 2026-09-08.
         BIZ_PROJECT_NAME: webuiapps
+        # PMOVES room adapter build-time inputs; empty = auto-detect via
+        # same-origin /api/rooms/ + URL/hostname matching. Node-local overrides:
+        # OPENROOM_ROOM_DEFAULT pins a room; OPENROOM_ROOM_IFRAMES is a JSON map
+        # of panel_id|kind -> url for embedded app panels.
+        VITE_PMOVES_ROOM_DEFAULT: ${OPENROOM_ROOM_DEFAULT:-}
+        VITE_PMOVES_ROOM_IFRAMES: ${OPENROOM_ROOM_IFRAMES:-}
     image: pmoves-openroom:latest
     container_name: pmoves-openroom
     restart: unless-stopped
