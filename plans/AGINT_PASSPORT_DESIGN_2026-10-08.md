@@ -636,92 +636,179 @@ Findings land **on the PR as threads**, not in transcripts.
 ## 7. Phased plan
 
 Each phase is its own PR (or small set), claimed in the register before work,
-security-reviewed before merge. Exit criteria are measured, with the
-`0/1/3` codes reported from direct tool calls.
+security-reviewed before merge. Exit criteria are measured, with `0/1/3` codes
+reported from direct tool calls.
 
 ### P0 — Preconditions
 
-- Scope: P-1 … P-7 (§5). No identity keys issued yet.
+- Scope: P-1 … P-8 (§5). No identity keys issued yet.
 - **Exit**: every "Done when" in §5 holds, with test output in the PR; P-5's
   negative tests exist as a reusable fixture the later phases import.
 
 ### P1 — Key + signing
 
-- Scope: key `b850-claude` via `keygen_cards.py` (first identity; others follow
-  by their own decision, doctrine 5); one signer module with the §3b domain
-  tags and committed vectors; `idsig` on ACKs and `session.v1`; funnel delivery
-  with shape validation.
-- **Exit**: (1) an ACK signed by B850-CLAUDE verifies on a **second node** from
-  the card alone (no shared secret); (2) the same ACK under a different domain
-  tag, a tampered body, or another card's key each return `1` with the named
-  reason; (3) a missing card returns `3`; (4) HMAC `sig` still verifies
-  unchanged (no regression in G3 consumers).
+- Scope: key `b850-claude` via the fixed `keygen_cards.py` (first identity;
+  others follow by their own decision, doctrine 5); one signer module with the
+  §3b tags, envelope, and vectors; the verification policy; `idsig` on ACKs and
+  `session.v1`; funnel delivery with shape validation. No delegations yet.
+- **Exit**:
+  1. An ACK signed by B850-CLAUDE verifies on a **second node** from the
+     registry card alone (no shared secret).
+  2. Negative tests each return `1` with the named reason: different tag,
+     tampered body, another card's key (`identity_mismatch`), stripped `idsig`
+     re-MACed with the deployment key (`missing_idsig`), `alg:"HMAC"` MACed with
+     the card public key (`alg_mismatch`), non-canonical `S`, small-order key.
+  3. A missing card against a fresh registry returns `1 unknown_card`; an
+     unreachable registry returns `3`.
+  4. HMAC `sig` still verifies unchanged (no regression in G3 consumers).
+  5. **Doctrine 1**: the alias set (`B850 Claude`, `claude_b850`,
+     `PMOVES-B850-CLAUDE`) resolves to one `h.agent_id` and one card in a test.
 
-### P2 — Node verification + model provenance
+### P2 — Node verification, delegations, model provenance
 
-- Scope: fingerprint probe (3c) on Linux first, `node_evidence` for Knuckles and
-  one more node, node delegations (D5), claim-hook comparison, `session.v1`
-  model stamp (3d), readable state line at launch.
-- **Exit**: (1) on Knuckles the probe returns `0`; (2) the same probe on
-  another node with Knuckles' evidence returns `1` ("different node") and the
-  session still starts as B850-CLAUDE (doctrine 2, 4); (3) without root, the
-  serial field reports `3` for that field and the verdict still resolves from
-  the strong fields; (4) a session record carries `declared_model` and
-  `registry_match`, and a wrong declared model is recorded, not rejected
-  (doctrine 3).
+- Scope: fingerprint probe (§3c) on Linux first, `node_evidence` for Knuckles
+  and one more node, scoped delegations (§3a), launcher-cached verdict and the
+  hook's ask path, `session.v1` model stamp (§3d), readable state line.
+- **Exit**:
+  1. On Knuckles the probe returns `0` with `node_match: match`.
+  2. On another recorded node with B850-CLAUDE launched, the probe returns `0`
+     with `different_recorded:<node>`; the session starts as B850-CLAUDE and
+     the hook *asks* with a suggested owner, never refuses (doctrine 2, 4).
+  3. On an unrecorded host: `0` with `unrecorded`, and the hook takes the
+     `node_unmeasured` ask path without deadlock.
+  4. Inside a container: `3`. Without `fleet_salt`: `3`.
+  5. A delegated subkey signing `pmoves.card.v1` or `pmoves.nodecert.v1`
+     returns `1 tag_not_delegated`; a delegated signature first anchored after
+     `not_after` returns `1 expired_delegation`.
+  6. A session record carries `declared_model` and `registry_match`; a wrong
+     declared model is recorded, not rejected (doctrine 3).
+  7. **Doctrine 5**: a negative test runs every tool that writes identity
+     data (vocabulary loaders, keygen, card generator, probe, hook) and asserts
+     none changes an existing `h.agent_id` or alias mapping.
 
-### P3 — Travels + card
+### P3 — Travels + card + cipher
 
-- Scope: travels store (D2), chain, anchors with the P-6 merkle; passport
-  generator (3f) and served `agent-card.json` (D3); fork/lineage entries and
-  sibling backfill (3g); `identity.presence.v1` (D11); cipher signed-request
-  auth (3i) behind a flag; Neo4j mirror after P-3.
-- **Exit**: (1) from one ACK line, a reader reaches its travels entry, the
-  anchor, and a merkle root committed to git, verifying each hop (doctrine 9);
-  (2) a cipher write signed on Knuckles is accepted by another node's cipher
-  with no per-node token, and a replay to a third instance (wrong `audience`)
-  is a 401; registry down is a 503; (3) parent and child of a fork each list
-  the other; (4) a `woke` entry exists for one open model with its weights
-  digest (doctrine 8).
+- Scope: the D2 store (shard fallback unless the NATS topology has landed),
+  sub-chains and anchors with the P-6 merkle; genesis backfill; passport
+  generator and served `agent-card.json` (D3); fork entries and sibling
+  backfill (§3g); `identity.presence.signed.v1` (D11); cipher session-scoped
+  bearer (§3i) behind a flag; Neo4j mirror after P-3.
+- **Exit**:
+  1. **Doctrine 9**: from one ACK line, a reader reaches its travels entry (full
+     hash), the anchor, and a merkle root committed to git, verifying each hop.
+  2. **Concurrency**: B850-CLAUDE runs on two nodes at once; two sub-chains
+     appear under one anchor and the verifier reports **no** finding. A forged
+     second entry at an existing `seq` in one sub-chain reports `1`.
+  3. **Offline**: a node disconnected for a test period keeps appending
+     locally; after reconnect the next anchor covers the gap with no finding.
+  4. A cipher write from Knuckles is accepted by another node's cipher with no
+     per-node token; a credential with the wrong `aud`, or past `exp`, is 401;
+     a stale registry is 503; dev-skip is off when the registry is configured.
+  5. Parent and child of a fork each list the other; a `woke` entry exists for
+     one open model with its weights digest (doctrine 6, 8).
+  6. **Doctrine 10**: the passport verifies on a "tip" node that runs only the
+     launcher and verifier (no cipher, no NATS), using registry + git anchors.
 
 ### P4 — Tokens
 
-- Scope: standing ledger (3h), registration for all carded identities, Dirichlet
-  weighting, committee mint with per-period cap. Backing per the operator's D8.
-- **Exit**: (1) one period's mint is signed k-of-n and its record carries the
-  merkle root of the rewarded claims; (2) a self-ACK, an unsigned ACK, and an
-  over-cap mint are each refused with the named reason; (3) standing cannot be
+- Scope: standing ledger (§3h), registration for all carded identities, the
+  self-ACK/lineage/per-ACKer rules, committee mint. Backing per the operator's D8.
+- **Exit**: (1) one period's mint is signed k-of-n with recusal applied and
+  carries `period_id`, `mint_id`, and the merkle root of rewarded claims;
+  (2) each of these is refused with the named reason: a self-ACK, an alt-to-root
+  ACK, an ACK within lineage distance *d*, an unsigned ACK, a genesis record, a
+  second mint for the same `period_id`, an over-cap mint; (3) standing cannot be
   transferred and grants no governance weight.
 
 ---
 
 ## 8. Open questions
 
-1. **Key custody off-funnel**: where does an identity's key (or delegation)
-   live on a "tip of the iceberg" node that has no funnel delivery (doctrine
-   10)? Is a short-lived delegation minted elsewhere enough?
-2. **Sibling ACK collusion**: forks are distinct identities, so a sibling's ACK
-   counts under 3h. Should standing discount ACKs between identities that share
-   a recent common ancestor?
+1. **Key custody off-funnel**: how does a "tip of the iceberg" node with no
+   funnel delivery (doctrine 10) get a delegation? Proposed: the identity's home
+   node issues it and the tip node only ever holds the subkey.
+2. **Bearer refresh in Claude Code**: §3i(a) needs a way to refresh a static
+   MCP header inside a 15-minute window without restarting the session. If none
+   exists, (b) the sidecar becomes the recommendation.
 3. **Card-less reviewers**: sub-agents (`chit-compliance-reviewer`,
-   `code-review`) run under a node identity. Do they sign as that identity with
-   a role annotation, and can such an ACK earn standing for the same identity's
-   own delivery? (Proposed: no.)
+   `code-review`) run under a node identity. Proposed: they sign as that
+   identity with a role annotation, and such an ACK never earns standing for
+   the same root's delivery (§3h already enforces this).
 4. **Humans and AGInTZ**: Grand Convergence L5 covers human participants only.
    How does AGInT standing relate to human-side tokens, if at all?
 5. **Public cadence**: anchors in a public repo reveal each identity's activity
-   rhythm. Acceptable, or anchor a fleet-wide root instead of per-identity roots?
-6. **Non-Linux probes**: the WSL2 host, Windows, and Jetson field sources need
+   rhythm. Acceptable, or anchor a fleet-wide root over identity roots instead?
+6. **Non-Linux probes**: WSL2 host, Windows, and Jetson field sources need
    owners (Z890 for Windows/WSL2, spark-claude for ARM64?).
 7. **Harness model reporting**: do Crush and Kimi expose the running model id
    reliably at launch, or is `declared_model` config-only for them?
-8. **Call-me source of truth**: A.12 makes PMOVES-Registry the home of harness
-   entries and the vocabularies + cards the home of identity
-   (`plans/HYPERAGINTZ_ORCHESTRATION_SCOPE_2026-09-19.md:567-590`). The
-   passport's "harnesses it runs in" should therefore *reference* registry
-   entries, not copy them. Confirm with the registry owner, and decide whether
-   availability/capacity come from presence or from `agent_registry.yaml`.
-   Also, the A.12 portability substrates (registry × bundle × vocabulary) are
-   the passport's inputs; §3f should be reviewed against A.12 directly.
-9. **Travels retention**: how long are entries kept once anchored, and who may
-   prune bodies that were never stored (hashes only) versus entries (never)?
+8. **`fleet_salt` custody and rotation**: rotating it re-keys every
+   `node_evidence` HMAC; who holds it and how often it rotates.
+9. **Parameters for security review**: delegation maximum lifetime, anchor
+   cadence, registry staleness bound, *k* of the strong-field rule, per-ACKer cap.
+10. **Travels retention**: how long anchored entries are kept; entries are never
+    pruned, salted bodies may be.
+
+---
+
+## 9. Review log (r2)
+
+Findings from draft PR #3317 and where each is addressed.
+
+**Control finding 6065534385 (B850-CLAUDE)**
+
+| Finding | Addressed in |
+|---|---|
+| D2 Supabase is per-node; one authoritative chain across nodes; offline behaviour | §4 D2 (rewritten), §3e sub-chains + offline, §7 P3 exits 2-3 |
+
+**CHIT compliance review 6065603673 (WARN)**
+
+| Finding | Addressed in |
+|---|---|
+| Wrong citation (`tallyPreimage` is netstrings) | §3b "Signed bytes" (corrected; NUL-safety argument) |
+| P1-a `idsig` not mandatory, `alg` not pinned | §3b Verification policy; §7 P1 exit 2; §5 P-5 |
+| P1-b delegation scope, issuer binding, backdating | §3a delegation table, "Time is anchored", rotation's effect on delegations; §3b envelope `delegation_id`; §7 P2 exit 5 |
+| P2-a signed bytes, sign order, floats, `key_fpr`, vectors | §3b |
+| P2-b signer ≠ payload identity; self-signed card; rotation signer | §3b policy 1 and 5; §3f; §3a Rotate |
+| P2-c dev-skip, bootstrap, bearer sunset, `sessionId`, nonce store, staleness | §3i "Close the bypasses", Verify, staleness bound |
+| P2-d CVE-2012-2459, cherry-picked anchors, `prev_hash` coverage | §3e (RFC 6962 exact, anchor fields, full signed bytes); §5 P-6 |
+| P2-e concurrent sessions fork the chain; service-role bypass; tamper window | §3e sub-chains; §4 D2 integrity + `Expected-Last-Subject-Sequence`; tamper window in §3e |
+| P2-f refuse contradicts doctrine 2 | §3c Claim check (ask, never refuse) |
+| P2-g attribution not attestation; cloned machine-id | §3c opening note; k-of-n rule |
+| P2-h alt/fork self-ACK, double mint, recusal, tally-signer properties | §3h; §4 D7; §7 P4 |
+| P2-i grep-only P-5, schema-as-presence, `trv:` grinding | §5 P-5 (behavioural + AST/semgrep + full hash); §3b ACK reference |
+| P3 keyed HMAC for machine-id / tailnet id | §3c probe table |
+| P3 drop serial last-4 | §3c (dropped) |
+| P3 git SSH key reuse | §3a; §4 D12 |
+| P3 salted `body_hash` for memory writes | §3e "Bodies stay out" |
+| P3 presence subject naming | §3f; §4 D11 |
+
+**Code review 6065618963 (REQUEST-CHANGES)**
+
+| Finding | Addressed in |
+|---|---|
+| Overstated: `tallyPreimage` shape | §3b (corrected) |
+| Overstated: `provider_conformance` "last result" | §3d (future work); G14 |
+| P1 single chain forks under #3313 concurrency | §3e sub-chains keyed `(identity, node[, session])`; §7 P3 exit 2 |
+| P1 §3c deadlock on unrecorded host; comparing others' names | §3c Claim check (own token only, cached verdict, `node_unmeasured` ask) |
+| P1 §3i static MCP headers | §3i (a) session-scoped signed bearer recommended, (b) sidecar alternative, staleness bound; §8 Q2 |
+| P2 keygen cannot rotate | §3a Issue; G9; §5 P-8 |
+| P2 compromise relies on `signed_at` | §3a Revoke + "Time is anchored" |
+| P2 v2 card fields; cards do not validate | §3a v2 field list; G9; §5 P-8 |
+| P2 no stdlib JCS; floats | §3b canonical form (named libraries or netstrings; integers/strings only) |
+| P2 D4 vs TAC_NEO4J | §4 D4 reconciliation |
+| P2 "different node" returns 1; autodetect non-root exit | §3c Verdict (0 with `node_match`; remap to 3) |
+| P2 cloned machine-id, Tailscale re-register, WSL2 DMI, containers | §3c strong-field rule, container = 3 |
+| P2 `provider_conformance` source; port conflict | §3d; §5 P-7 |
+| P2 migration of existing records | §3e genesis backfill (no standing) |
+| P2 offline nodes | §3e Offline; §4 D2; §7 P3 exit 3 |
+| P2 FUNNEL second session ACKing | §3h ("different" = different root; same-node second session = `alt_of`) |
+| P2 exits for doctrines 1, 5, 10, concurrency, offline | §7 P1 exit 5, P2 exit 7, P3 exits 2, 3, 6 |
+| P3 CVE-2012-2459 shape in G6 | G6; §3e |
+| P3 SSHSIG option | §3b |
+| P3 glances-fetch latency and hostname | §3c readable state line |
+| D2 alternative (JetStream domains, `sources`, expected-last-sequence, shard fallback) | §4 D2, adopted with dependencies listed |
+
+**Deferred**: none of the findings. Parameters the reviews left open
+(lifetimes, cadence, *k*, caps, *d*) are listed in §8 Q9 for the security
+review to set, rather than chosen here.
