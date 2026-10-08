@@ -73,12 +73,14 @@ make -C pmoves nats-auth-reload
 #    (connect with the old password; expect an authorization error)
 
 # 6. Client cutover — how clients actually GET the new credential:
-#    flip the funnel's nats_url source to the v2 value (change the
-#    NATS_URL entry's source label to NATS_PASSWORD_V2 in the v2 manifest
-#    registry, then re-run the funnel). Tier files re-materialize
-#    NATS_URL=nats://nats-v2:<v2>@nats:4222 and each client adopts it on
-#    its natural recreate — the same gradual model, now with a concrete
-#    cutover step. Until this runs, NATS_URL keeps the old credential and
+#    the funnel copies source values VERBATIM (secrets_sync.build_outputs
+#    has no URL-composition step), so the operator composes the new URL
+#    string ONCE and stores it as the NATS_URL label's value in the vault:
+#      nats://<NATS_USER_V2>:<NATS_PASSWORD_V2>@nats:4222
+#    then re-runs the funnel. Tier files re-materialize NATS_URL with the
+#    new value and each client adopts it on its natural recreate — the same
+#    gradual model, with a cutover step that matches what the funnel can
+#    actually do. Until this runs, NATS_URL keeps the old credential and
 #    clients keep authenticating on it (harmless: step 4 only drops the old
 #    user AFTER the meter shows zero, i.e. after every client already moved).
 ```

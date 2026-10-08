@@ -18,9 +18,10 @@ without a fleet-wide client recreation wave:
 
 Both passwords are bcrypt-hashed (cost 11) before touching disk: the conf is
 runtime data, but a hash means a stray read or backup never yields a usable
-credential. bcrypt hashes contain '$' and MUST be single-quoted in the conf —
-an unquoted $NAME token resolves as a config env variable (documented NATS
-gotcha). golang.org/x/crypto/bcrypt (nats-server) verifies $2a$/$2b$.
+credential. bcrypt hashes contain "$" and MUST be quoted in the conf (either
+quote character; the emitted form is double-quoted) — an unquoted $NAME token
+resolves as a config env variable (documented NATS gotcha).
+golang.org/x/crypto/bcrypt (nats-server) verifies $2a$/$2b$.
 
 Fail-closed: an unset or empty password on either user, or a bcrypt failure,
 exits non-zero BEFORE any file is written. The output file is 0600.
@@ -47,7 +48,7 @@ jetstream {{
   store_dir: /data/js
 }}
 authorization {{
-  # bcrypt hashes, single-quoted: unquoted $ tokens resolve as env vars.
+  # bcrypt hashes are QUOTED (double): unquoted $ tokens resolve as env vars.
   users: [
 {users_block}  ]
 }}
