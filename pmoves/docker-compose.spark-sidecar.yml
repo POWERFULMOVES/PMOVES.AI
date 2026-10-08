@@ -82,6 +82,36 @@ services:
       retries: 5
       start_period: 30s
 
+  # One-shot: hand the bind-mounted A0 user tree to the runtime uid (65532)
+  # before Agent Zero starts. Docker never changes a bind mount's ownership, so
+  # host-seeded files (uid 1000) left A0 failing every plugin install and
+  # settings save with EACCES behind a green healthcheck. Ownership only, never
+  # chmod: _oauth credentials stay 0600 and plugin code gains no write bit.
+  # Invariants and failure modes: scripts/a0_usr_init.sh.
+  agent-zero-spark-usr-init:
+    image: ${A0_USR_INIT_IMAGE:-busybox:1.37.0@sha256:bdf57e528e45e4433820e045b29b4597825a1c9e38353532d90a01445013f82e}
+    entrypoint: ["/bin/sh", "/scripts/a0_usr_init.sh"]
+    user: "0:0"
+    network_mode: none
+    volumes:
+    # Long form with create_host_path: false (Compose spec, services.volumes long
+    # syntax): a missing source fails at create. The short form makes Docker
+    # create it as an empty root-owned dir and A0 would boot with no usr state.
+    - type: bind
+      source: ${SPARK_USR_DIR:-./usr}
+      target: /a0/usr
+      bind:
+        create_host_path: false
+    - ./scripts/a0_usr_init.sh:/scripts/a0_usr_init.sh:ro
+    restart: "no"
+    read_only: true
+    # CHOWN to hand entries to 65532; DAC_READ_SEARCH so root can traverse
+    # dirs A0 created 0700. No FOWNER, so it cannot chmod what it does not own.
+    cap_drop: ["ALL"]
+    cap_add: ["CHOWN", "DAC_READ_SEARCH"]
+    security_opt:
+    - no-new-privileges:true
+
   agent-zero-spark:
     image: pmoves-agent-zero:latest
     container_name: pmoves-agent-zero-spark
@@ -151,13 +181,22 @@ services:
     depends_on:
       pmoves-ollama:
         condition: service_healthy
+      agent-zero-spark-usr-init:
+        condition: service_completed_successfully
     volumes:
     - ${SPARK_MEMORY_DIR:-./data/spark/memory}:/a0/memory
     - ${SPARK_KNOWLEDGE_DIR:-./data/spark/knowledge}:/a0/knowledge
     - ${SPARK_INSTRUMENTS_DIR:-./data/spark/instruments}:/a0/instruments
     - ${SPARK_LOG_DIR:-./data/spark/logs}:/a0/logs
     - ${SPARK_RUNTIME_DIR:-./data/spark/runtime}:/a0/runtime
-    - ${SPARK_USR_DIR:-./usr}:/a0/usr
+    # Long form with create_host_path: false (Compose spec, services.volumes long
+    # syntax): a missing source fails at create. The short form makes Docker
+    # create it as an empty root-owned dir and A0 would boot with no usr state.
+    - type: bind
+      source: ${SPARK_USR_DIR:-./usr}
+      target: /a0/usr
+      bind:
+        create_host_path: false
     ports:
     - ${SPARK_BIND:-127.0.0.1}:${SPARK_PORT:-8093}:8080
     networks:

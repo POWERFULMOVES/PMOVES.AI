@@ -801,6 +801,7 @@ svc-start: ## Start one service's containers after engine restart. Usage: make s
 	@if [ -z "$(SVC)" ]; then echo "usage: make svc-start SVC=<compose-service>"; exit 2; fi
 	@case "$(SVC)" in *[!a-z0-9-]*|'') echo "invalid service slug: $(SVC)"; exit 2;; esac
 	@echo "svc-start $(SVC): starting via compose"
+	$(if $(filter agent-zero,$(SVC)),@$(call A0_USR_INIT))
 	@$(DC) start $(SVC) 2>/dev/null || { echo "  not startable directly — falling back to up -d --no-deps"; $(DC) up -d --no-deps $(SVC); }
 	@$(DC) ps $(SVC)
 

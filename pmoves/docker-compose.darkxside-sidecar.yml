@@ -19,6 +19,36 @@
 #   - External networks created (pmoves-net, pmoves_app, pmoves_bus, pmoves_external)
 ##############################################################################
 services:
+  # One-shot: hand the bind-mounted A0 user tree to the runtime uid (65532)
+  # before Agent Zero starts. Docker never changes a bind mount's ownership, so
+  # host-seeded files (uid 1000) left A0 failing every plugin install and
+  # settings save with EACCES behind a green healthcheck. Ownership only, never
+  # chmod: _oauth credentials stay 0600 and plugin code gains no write bit.
+  # Invariants and failure modes: scripts/a0_usr_init.sh.
+  agent-zero-darkxside-usr-init:
+    image: ${A0_USR_INIT_IMAGE:-busybox:1.37.0@sha256:bdf57e528e45e4433820e045b29b4597825a1c9e38353532d90a01445013f82e}
+    entrypoint: ["/bin/sh", "/scripts/a0_usr_init.sh"]
+    user: "0:0"
+    network_mode: none
+    volumes:
+    # Long form with create_host_path: false (Compose spec, services.volumes long
+    # syntax): a missing source fails at create. The short form makes Docker
+    # create it as an empty root-owned dir and A0 would boot with no usr state.
+    - type: bind
+      source: ${DARKXSIDE_USR_DIR:-./usr}
+      target: /a0/usr
+      bind:
+        create_host_path: false
+    - ./scripts/a0_usr_init.sh:/scripts/a0_usr_init.sh:ro
+    restart: "no"
+    read_only: true
+    # CHOWN to hand entries to 65532; DAC_READ_SEARCH so root can traverse
+    # dirs A0 created 0700. No FOWNER, so it cannot chmod what it does not own.
+    cap_drop: ["ALL"]
+    cap_add: ["CHOWN", "DAC_READ_SEARCH"]
+    security_opt:
+    - no-new-privileges:true
+
   agent-zero-darkxside:
     image: pmoves-agent-zero:latest
     container_name: pmoves-agent-zero-darkxside
@@ -80,6 +110,9 @@ services:
     - HTTP_PROXY=
     - HTTPS_PROXY=
     - NO_PROXY=
+    depends_on:
+      agent-zero-darkxside-usr-init:
+        condition: service_completed_successfully
     volumes:
     # Persistent data volumes (same pattern as docked agent-zero)
     - ${DARKXSIDE_MEMORY_DIR:-./data/darkxside/memory}:/a0/memory
@@ -88,7 +121,14 @@ services:
     - ${DARKXSIDE_LOG_DIR:-./data/darkxside/logs}:/a0/logs
     - ${DARKXSIDE_RUNTIME_DIR:-./data/darkxside/runtime}:/a0/runtime
     # User config, plugins, forms, skills
-    - ${DARKXSIDE_USR_DIR:-./usr}:/a0/usr
+    # Long form with create_host_path: false (Compose spec, services.volumes long
+    # syntax): a missing source fails at create. The short form makes Docker
+    # create it as an empty root-owned dir and A0 would boot with no usr state.
+    - type: bind
+      source: ${DARKXSIDE_USR_DIR:-./usr}
+      target: /a0/usr
+      bind:
+        create_host_path: false
     ports:
     - ${DARKXSIDE_BIND:-127.0.0.1}:${DARKXSIDE_PORT:-8092}:8080
     networks:
