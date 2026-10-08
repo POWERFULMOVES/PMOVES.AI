@@ -11,7 +11,7 @@ node with its memory reachable.
 |---|-----|--------|
 | 1 | Fleet roster entry `pmoves-cipher` (tailnet Z890 :8105/mcp/sse) answers 401; `pmoves-cipher-local` (localhost:8105) works | COULD-NOT-FIX-LOCALLY (design decision + Z890 operator step) |
 | 2 | `brv` (ByteRover CLI, `byterover-cli`) absent on knuckles; launcher says nothing | FIXED in fragment + manifest; launcher hookup is a PATCH (protected path, no grant) |
-| 3 | cipher `agent_checkpoint` rows record `harness:"unknown"`, `model:"unknown"` | investigating |
+| 3 | cipher `agent_checkpoint` rows record `harness:"unknown"`, `model:"unknown"` | DESIGN-ONLY (server fix is in the `Pmoves-cipher` submodule); interim launcher PATCH |
 
 Findings are appended per gap below as each is resolved.
 
@@ -131,3 +131,74 @@ exists), `git apply` the patch, close the road.
 Unattended grant found while checking: `.claude/hooks/damage-control/.known-road-active`
 holds `compose:pr:3260`, 146 h old, verdict `NOT honoured [stale]`. Not ridden;
 reported here so its owner can clear it.
+
+## Gap 3 — checkpoints filed as `unknown/unknown`
+
+Measured: `pmoves_cipher_session_recall(agentId=b850-claude, limit=10)` on
+`pmoves-cipher-local` returned **1** checkpoint (2026-09-20), with
+`harness:"unknown"`, `model:"unknown"`. n=1, so this shows the defect exists,
+not how widespread it is.
+
+### Where the value comes from (submodule `Pmoves-cipher` @ `cd426d50`, the gitlink on origin/main)
+
+| file:line | what |
+|---|---|
+| `src/pmoves/mcp-sse.ts:632-633` | tool schema: `harness` and `model` are OPTIONAL, `default: 'unknown'` |
+| `src/pmoves/mcp-sse.ts:817` | `const {..., harness = 'unknown', model = 'unknown', summary} = args` |
+| `src/pmoves/mcp-sse.ts:821-822` | `unknown` written into both the content header and `metadata` |
+| `src/pmoves/mcp-sse.ts:844, :854` | recall reads them back, also defaulting to `unknown` |
+
+The server never guesses: it stamps whatever the CALLER passes, and no caller
+passes anything. Nothing in the launcher, the roster or the prompt tells the
+model these arguments exist, so it omits them.
+
+### Design (DESIGN-ONLY — the server change is inside the submodule)
+
+Precedence at write time: **explicit tool argument > per-session client header
+> `'unknown'`**. A tool argument equal to `'unknown'` counts as absent, because
+schema-default-filling clients send it literally.
+
+1. **Server** (`Pmoves-cipher`, fork PR on `PMOVES.AI-Edition-Hardened`):
+   - `mcp-sse.ts`, beside `identityFromRequest` (`:87`): add
+     `clientFromRequest(req): {harness?: string; model?: string}` reading
+     `X-PMOVES-Harness` / `X-PMOVES-Model`. Sanitize: trim, at most 64 chars,
+     `[A-Za-z0-9._:/@+\[\]-]` only, else undefined. These are SELF-ASSERTED
+     labels, not identity — keep them OUT of `McpAuthContext` (`:20`) so nothing
+     can mistake them for authentication.
+   - `:496-500` (SSE `GET /sse`, the request that OPENS the session — headers
+     are present there) and `:545` (stateless `POST /`): compute it and pass it
+     to `buildMcpServer` (`:561`) as a new optional trailing parameter.
+   - `:817`: `harness = pick(args.harness, client.harness)`,
+     `model = pick(args.model, client.model)`, where `pick` skips
+     undefined/empty/`'unknown'`.
+   - Test: session_save with no args + headers -> stamped from headers; args
+     present -> args win; `'unknown'` arg + header -> header; oversized/garbage
+     header -> `unknown`.
+2. **Roster** (main repo, lands WITH or AFTER the server change, never before:
+   an inert header the server ignores is a gated publisher, not a wired one):
+   add to both cipher entries in `pmoves/config/mcp_inventory.json`
+   `"X-PMOVES-Harness": "${PMOVES_HARNESS:-unknown}"` and
+   `"X-PMOVES-Model": "${PMOVES_MODEL:-unknown}"`, then regenerate
+   (`python -m pmoves.tools.mcp_config_generator --client claude` etc.). The
+   `:-unknown` default is deliberate: a bare reference would make
+   `mcp_roster_normalize.py` DROP cipher on any node that does not export the
+   label, trading a missing label for missing memory.
+3. **Launchers** export `PMOVES_HARNESS` (each knows its own: `claude-code`,
+   `crush`, `kimi-cli`, `kilocode`, `hermes-agent`) and, where the launcher
+   actually knows it, `PMOVES_MODEL` (`--model` / `ANTHROPIC_MODEL` after
+   `claude_backend_apply` in the inner launcher).
+
+### Interim, client-side (PATCH, protected path)
+
+`pmoves/docs/handoffs/patches/B850_MEMORY_TRAVELS_checkpoint_stamp_launcher.patch`
+for `pmoves/scripts/claude-pmoves.sh`: exports `PMOVES_HARNESS=claude-code` and
+appends one prompt sentence telling the model to pass `harness 'claude-code'`
+and its own exact model id on every `pmoves_cipher_session_save`. The model is
+the most reliable source of its own id (the launcher composes the prompt
+BEFORE `claude_backend_apply` may swap the model). Fixes new checkpoints
+without a server change; it relies on the model following the instruction, which
+is why the server-side stamp above is still needed.
+
+Both patches apply together: `git apply --check` rc 0 on this branch; applied
+in order to a scratch copy, 355 -> 381 lines, `bash -n` clean. `shellcheck` is
+not installed on knuckles — not run.
