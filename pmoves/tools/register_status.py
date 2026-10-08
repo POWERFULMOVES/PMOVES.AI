@@ -327,8 +327,11 @@ def report_listing(lanes, register, now, out) -> int:
     owners = {x.owner_key for x in lanes}
 
     out.write(f"claim register: {register}\n")
+    # Owner KEYS, not identities: since #3313 one identity signed from two
+    # nodes is two owner sessions (`b850-claude` and `b850-claude`@spark`).
     out.write(f"read at {_iso(now)} - {len(lanes)} open claim rows held by "
-              f"{len(owners)} {'identity' if len(owners) == 1 else 'identities'}\n\n")
+              f"{len(owners)} owner session{'' if len(owners) == 1 else 's'} "
+              "(identity + node)\n\n")
 
     if not lanes:
         out.write("OPEN LANES: none. Every CLAIM in this file has a later "
@@ -496,6 +499,11 @@ def _json_payload(lanes, register, now, branch, verdict, code, batons=(),
         "open_claims": [x.as_dict() for x in lanes],
         "counts": {
             "open": len(lanes),
+            # Distinct owner KEYS = (identity, node) sessions since #3313.
+            "owner_sessions": len({x.owner_key for x in lanes}),
+            # DEPRECATED alias, same value: it always counted owner keys, which
+            # were identities only until #3313. No in-repo reader found
+            # (grep 2026-10-08); kept so an out-of-repo consumer does not break.
             "identities": len({x.owner_key for x in lanes}),
             "expired": sum(1 for x in lanes if x.expiry.state == "expired"),
             "no_ttl": sum(1 for x in lanes if x.expiry.state == "none"),

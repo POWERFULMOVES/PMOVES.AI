@@ -462,3 +462,12 @@ def test_live_register_every_state_change_is_a_participant_close(gate, tmp_path)
           f"{len(old_rows)} new open rows={len(new_rows)}; changed={sorted(changed)}")
     assert not (set(new_rows) - set(old_rows)), "the new rule must never OPEN a row"
     assert changed <= explained
+
+
+def test_an_off_home_session_may_take_the_baton_from_its_home_session(gate):
+    """#3313: `B850-CLAUDE (spark)` and `B850-CLAUDE` (home, Knuckles) are two
+    sessions of one identity, so a baton between them is a real handoff, not
+    "closing your own lane". Home spellings are still one session."""
+    ra = _load(TOOL, "register_append_baton_node")
+    assert ra.baton_refusal(gate, "B850-CLAUDE (spark)", "B850-CLAUDE") == ""
+    assert "same identity" in ra.baton_refusal(gate, "B850-CLAUDE (Opus 5)", "B850-CLAUDE")

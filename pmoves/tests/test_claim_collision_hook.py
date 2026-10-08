@@ -311,6 +311,7 @@ def test_a_node_relations_mirror_claim_is_its_own_session(tmp_path):
     assert claim.returncode == BLOCK, (
         f"the 5090 mirror's CLAIM read as the z890 re-naming its lane\n{claim.stdout}"
     )
+    assert Z890_HOME in claim.stderr, "the block must name the holder"
 
 
 def test_a_node_relations_mirror_release_does_not_close_the_home_lane(tmp_path):
@@ -321,6 +322,7 @@ def test_a_node_relations_mirror_release_does_not_close_the_home_lane(tmp_path):
     assert release.returncode == BLOCK, (
         f"the 5090 mirror's RELEASE closed the z890's open lane\n{release.stdout}"
     )
+    assert Z890_HOME in release.stderr, "the block must name the holder"
 
 
 @pytest.mark.parametrize("spelling", [
@@ -340,10 +342,12 @@ def test_home_spelling_variants_still_fold_together(tmp_path, spelling):
         f"{spelling!r} is a home spelling and must close the home CLAIM\n"
         f"{released.stderr}"
     )
+    assert '"permissionDecision": "ask"' not in released.stdout, released.stdout
     reclaimed = run_hook(tmp_path, _claim(spelling, ts="2026-01-03T00:00:00Z"), _claim(B850_A))
     assert reclaimed.returncode == ALLOW, (
         f"{spelling!r} collided with its own home session\n{reclaimed.stderr}"
     )
+    assert '"permissionDecision": "ask"' not in reclaimed.stdout, reclaimed.stdout
 
 
 def test_an_off_home_session_folds_its_own_spellings(tmp_path):
@@ -354,11 +358,13 @@ def test_an_off_home_session_folds_its_own_spellings(tmp_path):
         _claim(B850_SPARK) + _release("B850-CLAUDE (spark, opus 4.7 1M)"),
     )
     assert released.returncode == ALLOW, released.stderr
+    assert '"permissionDecision": "ask"' not in released.stdout, released.stdout
     reclaimed = run_hook(
         tmp_path, _claim("B850-CLAUDE (dgx-spark)", ts="2026-01-03T00:00:00Z"),
         _claim(B850_SPARK),
     )
     assert reclaimed.returncode == ALLOW, reclaimed.stderr
+    assert '"permissionDecision": "ask"' not in reclaimed.stdout, reclaimed.stdout
 
 
 @pytest.mark.parametrize("raw", ["b850-claude @ spark", "b850-claude (@ spark)"])
@@ -387,12 +393,14 @@ def test_an_identity_with_no_home_node_keeps_folding_across_nodes(tmp_path):
         _claim("CLAUDE-OPUS (Z890)") + _release("CLAUDE-OPUS (Z890-mirror-on-5090)"),
     )
     assert result.returncode == ALLOW, result.stderr
+    assert '"permissionDecision": "ask"' not in result.stdout, result.stdout
 
 
 def test_a_non_machine_node_word_does_not_split_the_key(tmp_path):
     """`any` is a declared placeholder, not a machine a session ran on."""
     result = run_hook(tmp_path, _claim("B850-CLAUDE (any)", ts="2026-01-03T00:00:00Z"), _claim(B850_A))
     assert result.returncode == ALLOW, result.stderr
+    assert '"permissionDecision": "ask"' not in result.stdout, result.stdout
 
 
 # ---------------------------------------------------------------------------
