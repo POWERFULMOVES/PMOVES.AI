@@ -873,7 +873,9 @@ def get_environment_endpoint() -> AgentZeroServiceConfig:
         update={
             name: redact_url(value)
             for name, value in config.model_dump().items()
-            if name.endswith("_url") and value
+            # str-only: a future list-typed *_urls field must NOT be str()'d
+            # into a bracketed repr by the unauthenticated path (PR #3244 review)
+            if name.endswith("_url") and isinstance(value, str) and value
         }
     )
 

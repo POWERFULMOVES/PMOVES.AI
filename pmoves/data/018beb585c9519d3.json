@@ -1,0 +1,55 @@
+{
+  "spec": "chit.cgp.v0.2",
+  "meta": {},
+  "super_nodes": [
+    {
+      "id": "sn-1",
+      "constellations": [
+        {
+          "id": "const-1",
+          "anchor": [
+            1.0,
+            0.0,
+            0.0
+          ],
+          "anchor_enc": null,
+          "summary": "demo",
+          "radial_minmax": [
+            0.0,
+            1.0
+          ],
+          "spectrum": [
+            0.3,
+            0.4,
+            0.3
+          ],
+          "points": [
+            {
+              "id": "pt-1",
+              "modality": "video",
+              "ref_id": "yt123",
+              "video_id": null,
+              "doc_id": null,
+              "x": null,
+              "y": null,
+              "proj": null,
+              "conf": null,
+              "t_start": 12.5,
+              "t_end": null,
+              "frame_idx": null,
+              "token_start": null,
+              "token_end": null,
+              "meta": null,
+              "text": null,
+              "source_ref": null
+            }
+          ],
+          "meta": {
+            "modality": "video"
+          }
+        }
+      ]
+    }
+  ],
+  "sig": null
+}

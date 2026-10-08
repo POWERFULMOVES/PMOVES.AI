@@ -147,7 +147,13 @@ async def check_nats() -> Dict[str, Any]:
             "version": nc._server_info.get("version", ""),
             "jetstream": nc._server_info.get("jetstream", False),
             "leafnode": nc._server_info.get("leafnode", False),
-            "connected_url": redact_url(nc.connected_url.geturl() if nc.connected_url else NATS_URL),
+            "connected_url": redact_url(
+                # str() first: nats-py returns ParseResult today; a future
+                # plain-string return would make .geturl() raise, the except
+                # would swallow it, and a healthy broker would read as
+                # connected:false (PR #3244 review)
+                str(nc.connected_url.geturl()) if nc.connected_url else NATS_URL
+            ),
         }
         await nc.close()
         ms = round((time.monotonic() - t0) * 1000, 1)
