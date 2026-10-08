@@ -1918,3 +1918,80 @@ def test_a_quoted_delimiter_does_NOT_fold_its_terminator(tmp_path):
         "a quoted delimiter's terminator was folded, so body content was parsed "
         f"as a command:\n{cmd}\nstderr={r.stderr}"
     )
+
+
+# ---------------------------------------------------------------------------
+# sys.modules hygiene for the tool modules the hook loads (#3313 review, P3).
+# In-process on purpose: what is under test is interpreter state, which a
+# subprocess would discard before it could be asserted on.
+# ---------------------------------------------------------------------------
+
+def _fresh(name: str, path: Path):
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(name, path)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+@pytest.fixture
+def clean_tool_modules():
+    saved = {k: sys.modules.get(k) for k in ("identity_lineage", "node_identity",
+                                             "claim_gate_under_test")}
+    yield
+    for k, v in saved.items():
+        if v is None:
+            sys.modules.pop(k, None)
+        else:
+            sys.modules[k] = v
+
+
+def test_the_hook_reuses_an_already_loaded_node_identity(clean_tool_modules):
+    """Loading the node half must not replace a node_identity module that is
+    already this exact file -- two module objects for one file is how a
+    caller ends up holding a different Node class than the gate compares."""
+    already = _fresh("node_identity", REPO_ROOT / "pmoves" / "tools" / "node_identity.py")
+    gate = _fresh("claim_gate_under_test", HOOK)
+    assert gate._load_nodes() is not None
+    assert sys.modules["node_identity"] is already, (
+        "the hook replaced an already-loaded node_identity with a second copy"
+    )
+
+
+def test_a_malformed_node_relations_row_is_not_cached_half_built(
+        tmp_path, monkeypatch, clean_tool_modules):
+    """One bad row (no `token`) must raise on EVERY call, not once and then
+    hand out a half-built table whose KeyError names the wrong defect."""
+    lineage = _fresh("identity_lineage", REPO_ROOT / "pmoves" / "tools" / "identity_lineage.py")
+    bad = tmp_path / "vocab.yaml"
+    bad.write_text("identities: []\nnode_relations:\n  - node: '5090'\n", encoding="utf-8")
+    monkeypatch.setenv("PMOVES_IDENTITY_VOCABULARY", str(bad))
+    monkeypatch.setattr(lineage, "_TABLES", None)
+    for attempt in (1, 2):
+        with pytest.raises(KeyError) as exc:
+            lineage._tables()
+        assert exc.value.args == ("token",), (
+            f"attempt {attempt}: expected the real defect (missing `token`), "
+            f"got {exc.value!r}"
+        )
+    assert lineage._TABLES is None
+
+
+def test_a_failed_node_identity_import_leaves_no_half_built_module(
+        tmp_path, monkeypatch, clean_tool_modules):
+    """A node_identity that fails to execute must not stay in sys.modules."""
+    lineage = _fresh("identity_lineage", REPO_ROOT / "pmoves" / "tools" / "identity_lineage.py")
+    broken_root = tmp_path / "repo"
+    (broken_root / "pmoves" / "tools").mkdir(parents=True)
+    (broken_root / "pmoves" / "tools" / "node_identity.py").write_text(
+        "raise RuntimeError('half-built')\n", encoding="utf-8")
+    sentinel = type(sys)("node_identity")
+    sentinel.__file__ = str(tmp_path / "elsewhere" / "node_identity.py")
+    sys.modules["node_identity"] = sentinel
+    monkeypatch.setattr(lineage, "REPO_ROOT", broken_root)
+    monkeypatch.setattr(lineage, "_TABLES", None)
+    lineage._tables()  # node vocab is optional to _tables(): swallowed there
+    assert sys.modules.get("node_identity") is sentinel, (
+        "a failed exec left a half-built node_identity in sys.modules"
+    )

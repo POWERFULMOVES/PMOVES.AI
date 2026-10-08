@@ -220,6 +220,45 @@ _LINEAGE = _UNSET
 _NODES = _UNSET
 
 
+def _import_tool(name: str):
+    """Import `pmoves/tools/<name>.py`, keeping sys.modules honest.
+
+    The module MUST be in sys.modules while it executes: identity_lineage and
+    node_identity define @dataclass, and dataclasses._is_type resolves the
+    owning module via sys.modules[cls.__module__]. Unregistered, that is None
+    and the import dies with a bare AttributeError about __dict__.
+
+    Two hygiene rules ride on that registration:
+      - REUSE an entry that is already this exact file. identity_lineage
+        imports node_identity under the same name; loading it twice built two
+        module objects and left whichever ran last in sys.modules.
+      - On a FAILED exec, restore what was there before (or remove the entry).
+        Left in place, a half-built module is what the next `import` returns,
+        and it fails somewhere unrelated with no trace of the real error.
+    """
+    import importlib.util
+    path = Path(__file__).resolve().parents[3] / "pmoves" / "tools" / f"{name}.py"
+    previous = sys.modules.get(name)
+    if previous is not None:
+        try:
+            if Path(previous.__file__).resolve() == path:
+                return previous
+        except (AttributeError, TypeError, OSError):
+            pass
+    spec = importlib.util.spec_from_file_location(name, path)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module
+    try:
+        spec.loader.exec_module(module)
+    except BaseException:
+        if previous is not None:
+            sys.modules[name] = previous
+        else:
+            sys.modules.pop(name, None)
+        raise
+    return module
+
+
 def _load_lineage():
     """Return the identity_lineage module, or None if it is unavailable.
 
@@ -240,19 +279,7 @@ def _load_lineage():
         return _LINEAGE
     _LINEAGE = None
     try:
-        import importlib.util
-        root = Path(__file__).resolve().parents[3]
-        spec = importlib.util.spec_from_file_location(
-            "identity_lineage",
-            root / "pmoves" / "tools" / "identity_lineage.py",
-        )
-        module = importlib.util.module_from_spec(spec)
-        # MUST be registered before exec_module: identity_lineage defines
-        # @dataclass, and dataclasses._is_type resolves the owning module
-        # via sys.modules[cls.__module__]. Unregistered, that is None and
-        # the import dies with a bare AttributeError about __dict__.
-        sys.modules["identity_lineage"] = module
-        spec.loader.exec_module(module)
+        module = _import_tool("identity_lineage")
         module.load_vocabulary()  # fail here, not on the first fold
         _LINEAGE = module
     except Exception as exc:  # noqa: BLE001 -- a guard must not die here
@@ -281,16 +308,7 @@ def _load_nodes():
         return _NODES
     _NODES = None
     try:
-        import importlib.util
-        root = Path(__file__).resolve().parents[3]
-        spec = importlib.util.spec_from_file_location(
-            "node_identity", root / "pmoves" / "tools" / "node_identity.py",
-        )
-        module = importlib.util.module_from_spec(spec)
-        # Registered before exec_module for the same @dataclass reason as
-        # identity_lineage above.
-        sys.modules["node_identity"] = module
-        spec.loader.exec_module(module)
+        module = _import_tool("node_identity")
         _NODES = (module, module.load_vocabulary())
     except Exception as exc:  # noqa: BLE001 -- a guard must not die here
         sys.stderr.write(
