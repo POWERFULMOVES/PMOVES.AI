@@ -258,6 +258,7 @@ def resolve_cipher_agent_id(
     node: str | None,
     vocab: dict[str, Node] | None = None,
     env: dict[str, str] | None = None,
+    identity: str | None = None,
 ) -> tuple[str | None, str]:
     """Resolve (cipher agentId, explanation) for `harness` on `node`.
 
@@ -278,6 +279,17 @@ def resolve_cipher_agent_id(
 
     PMOVES_CIPHER_AGENT_ID overrides, matching how PMOVES_NODE_IDENTITY works
     for the registry identity: the operator is allowed to know better.
+
+    A WORN IDENTITY CARRIES ITS OWN CARD. `cipher_agent_id` is declared per node
+    per harness, beside that node's `default_identity`, so it names the card of
+    the node's DEFAULT. When `identity` (the registry identity actually bound) is
+    not that default -- a PMOVES_NODE_IDENTITY override, or an identity worn on a
+    node that has its own default (A.12 multiplicity) -- the node's declaration
+    is the wrong card: a session bound as claude_b850 would write memory as the
+    node's own agent. The answer is then the cipher_agent_id declared beside
+    `identity` on the node(s) whose default it IS -- still declared, never
+    derived. No such node, or two that disagree, yields None with the reason.
+    `identity=None` keeps the node-default lookup unchanged.
     """
     env = os.environ if env is None else env
 
@@ -292,6 +304,33 @@ def resolve_cipher_agent_id(
     entry = vocab.get(_norm(node))
     if entry is None:
         return None, f"no cipher agentId: {node!r} is not in the node vocabulary"
+
+    if identity and entry.default_identity.get(harness) != identity:
+        # vocab is an alias index, so one node appears once per alias; keying
+        # on canonical collapses that.
+        homes = {
+            n.canonical: (n.cipher_agent_id.get(harness) or "").strip()
+            for n in vocab.values()
+            if n.default_identity.get(harness) == identity
+        }
+        cards = sorted({card for card in homes.values() if card})
+        if len(cards) == 1:
+            return cards[0], (
+                f"cipher agentId {cards[0]!r} declared beside {identity!r} on "
+                f"{', '.join(sorted(homes))}; worn on {entry.canonical!r}, whose own "
+                f"{harness!r} default is {entry.default_identity.get(harness)!r}"
+            )
+        if len(cards) > 1:
+            return None, (
+                f"no cipher agentId: {identity!r} is declared with conflicting cards "
+                f"{cards} across {sorted(homes)}. Set PMOVES_CIPHER_AGENT_ID."
+            )
+        return None, (
+            f"no cipher agentId for {identity!r}: it is not {entry.canonical!r}'s "
+            f"{harness!r} default, and no node declares a cipher_agent_id beside it in "
+            f"{VOCABULARY_PATH.name}. The node's own card would name a different agent; "
+            f"set PMOVES_CIPHER_AGENT_ID."
+        )
 
     declared = (entry.cipher_agent_id.get(harness) or "").strip()
     if not declared:
@@ -342,7 +381,23 @@ def resolve_register_name(
     names it (e.g. B850-CLAUDE-FUNNEL). It must resolve in the vocabulary, be
     declared for THIS node, and carry a register_form -- otherwise None, never a
     fallback to the primary's name, because falling back is exactly how two
-    sessions end up signing one owner string.
+    sessions end up signing one owner string. The override does NOT reach
+    through a mirror (below): a second session borrowing another identity's
+    BASE is the shared-owner-string collision the rule exists to prevent.
+
+    A WORN IDENTITY (A.12 multiplicity, operator ruling 2026-10-08). An identity
+    off its home node is named only through a DECLARED mirror: a
+    `node_relations` row in identity_vocabulary.yaml ("an identity worn on
+    hardware that is not its home node" -- the doctrine block above that table,
+    whose ledger example is `CLAUDE-OPUS (Z890-mirror-on-5090)`) with `node` =
+    this node and `mirrored_from` = the identity's home node, both normalised
+    through canonical_node. The register form is `<BASE> (<token>)` with the
+    declared token verbatim -- the shape identity_lineage.wearing() parses back
+    into node + mirrored_from, and canonical_identity() folds to the same
+    identity. No row, no name; two rows for one mirror is a refusal, not a
+    choice. The table is read from the same document as `identities` rather
+    than through identity_lineage's loader, which caches the real file
+    module-wide and cannot be pointed at `path`.
     """
     env = os.environ if env is None else env
     path = path or IDENTITY_VOCABULARY_PATH
@@ -378,12 +433,33 @@ def resolve_register_name(
 
     vocab = vocab if vocab is not None else load_vocabulary()
     entry_node = canonical_node(entry.get("node"), vocab)
-    if entry_node != canonical_node(node, vocab):
-        return None, None, (
+    here = canonical_node(node, vocab)
+    mirror = None
+    if entry_node != here:
+        refusal = (
             f"no register name: identity {canonical!r} ({source}) is declared for "
             f"node {entry.get('node')!r}, not {node!r}. Refusing to name a session "
             f"after another node's identity."
         )
+        if override or entry_node is None or here is None:
+            return None, None, refusal
+        tokens = sorted(
+            str(r["token"]) for r in doc.get("node_relations") or []
+            if isinstance(r, dict) and r.get("token")
+            and canonical_node(r.get("node"), vocab) == here
+            and canonical_node(r.get("mirrored_from"), vocab) == entry_node
+        )
+        if not tokens:
+            return None, None, (
+                f"{refusal} No node_relations row in {path.name} declares it worn "
+                f"here (node: {here}, mirrored_from: {entry_node})."
+            )
+        if len(tokens) > 1:
+            return None, None, (
+                f"no register name: {len(tokens)} node_relations rows declare "
+                f"{entry_node} mirrored on {here} ({', '.join(tokens)}); declare one."
+            )
+        mirror = tokens[0]
 
     form = str(entry.get("register_form") or "").strip()
     if not form:
@@ -393,6 +469,13 @@ def resolve_register_name(
             f"the register with; it is not derived."
         )
     name = form.split("(", 1)[0].strip()
+    if mirror:
+        worn = f"{name} ({mirror})"
+        return name, worn, (
+            f"register name {name!r} (signs as {worn!r}) from {path.name}: "
+            f"{canonical} worn on {here} via node_relations token {mirror!r} "
+            f"(home {entry_node}), via {source}"
+        )
     return name, form, (
         f"register name {name!r} (signs as {form!r}) from {path.name}: "
         f"{canonical}.register_form via {source}"
@@ -421,7 +504,7 @@ def main(argv: list[str] | None = None) -> int:
 
     fmt = args.format or ("shell" if args.shell else "human")
     node, identity, why = resolve_identity(args.harness)
-    cipher_id, cipher_why = resolve_cipher_agent_id(args.harness, node)
+    cipher_id, cipher_why = resolve_cipher_agent_id(args.harness, node, identity=identity)
     # Only looked up for a BOUND identity: naming a session whose registry
     # identity did not resolve would put a name on an unbound session.
     if identity:

@@ -180,41 +180,59 @@ affinity-matched and teamed.
      node name. Add it as an alias in node-vocabulary.yaml".
    - **registry identity:** `<node>.default_identity.claude-code`. It must be a key in
      `agent_registry.yaml` whose `topology.node_affinity` resolves to that node.
-   - **cipher agentId:** `<node>.cipher_agent_id.claude-code`. Declared, never derived.
+   - **cipher agentId:** `<node>.cipher_agent_id.claude-code` when the bound identity is
+     this node's default. For a worn identity it is the `cipher_agent_id` declared beside
+     that identity on its home node. Declared, never derived.
    - **register name:** the `identity_vocabulary.yaml` entry whose canonical or alias
-     matches the registry key. Its `node` must equal this node and it must carry a
-     `register_form`.
+     matches the registry key, with a `register_form`. On its home node this is the
+     `register_form`. On another node it is `<BASE> (<token>)`, but only when a
+     `node_relations` row declares the mirror.
 4. then `pm-cipher-identity.sh` checks the cipher id against a signing card and the
    `CIPHER_API_TOKEN` visible to the process.
 
-### Option A: wear an EXISTING identity on the new node (the A.12 "hostable on ANY node" case)
+**A.12 multiplicity (operator ruling 2026-10-08): do BOTH.** A new node gets its own
+default identity (the table below), AND an existing identity can be worn there. These
+used to be written up as "Option A vs Option B". That was a false choice, and the
+"2 of 3 namespaces" result was a resolver defect, which is now fixed in
+`node_identity.py`.
 
-Entries:
-- `node-vocabulary.yaml`: add a new node with `default_identity.claude-code: claude_b850`
-  and `cipher_agent_id.claude-code: b850-claude`.
-- `agent_registry.yaml`: add the new node to `claude_b850.topology.node_affinity`.
+### Wearing an existing identity on node X (e.g. B850-CLAUDE on a St Maarten host)
 
-**Measured result: only partly portable.** Simulated in memory against the real files,
-with nothing written:
-```
-identity=claude_b850   cipher=b850-claude
-register_form=None  (identity 'b850-claude' ... is declared for node 'knuckles',
-                     not 'st-maarten'. Refusing to name a session after another node's identity.)
-```
-`identity_vocabulary.yaml` `node:` is a scalar, and `resolve_register_name` deliberately
-refuses cross-node naming because of the second-session rule. A worn identity therefore
-gets its registry identity and cipher id, but no register owner string. `claude-pmoves`
-then prints "identity name unresolved, falling back to the registry key".
+To wear B850-CLAUDE on node X:
+1. Add node X to `node-vocabulary.yaml`, with its own default as in the table below.
+2. Add a `node_relations` row to `identity_vocabulary.yaml`:
+   `{token: KNUCKLES-mirror-on-X, node: X, mirrored_from: knuckles}`.
+   - The token is used verbatim in the owner string.
+   - `node` and `mirrored_from` may use any alias, because both are normalised.
+   - Declare exactly one row per mirror; two rows for the same mirror are refused.
+3. Extend `claude_b850.topology.node_affinity` in `agent_registry.yaml` with X.
+   `resolve_identity` still refuses an identity whose affinity does not claim the node.
+   A.12 names the affinity entry as part of portability, so the resolver keeps requiring
+   it rather than inferring it from the relation.
+4. Launch with `PMOVES_NODE_IDENTITY=claude_b850`. This selects the worn identity over the
+   node's own default.
 
-So A.12's "hostable on ANY node that gains the default_identity declaration and affinity
-entry" holds for 2 of the 3 namespaces. It does not hold for the register name. This audit
-only raises the point and does not change the resolver. Two ways to close it:
-- make `node:` a list, and keep the second-session refusal keyed on BASE identity, or
-- give the new node its own identity (Option B). The per-node card doctrine
-  (`signing_identity_cards.yaml`: "a private key lives on one machine") already points
-  this way once keys are issued.
+No `cipher_agent_id` entry on X is needed for the worn identity.
 
-### Option B: a NEW per-node identity (recommended; resolves all three namespaces)
+Result, from fixtures in `pmoves/tests/test_node_identity_worn.py`:
+`identity=claude_b850`, `cipher=b850-claude` (knuckles' declared card, not X's), and
+`register_form=B850-CLAUDE (KNUCKLES-mirror-on-X)`. The form folds back to `b850-claude`
+under `identity_lineage.canonical_identity`. It is the same shape as the one real row
+(`Z890-mirror-on-5090`), and against the real files that row now names
+`Z890-CLAUDE (Z890-mirror-on-5090)`.
+
+**Not reachable through `PMOVES_REGISTER_IDENTITY`.** That second-session override still
+requires an identity declared for THIS node. If it could reach through a mirror, a second
+session could borrow another identity's BASE.
+
+**Open hazard (raise-only).** A worn session and the home session fold to the SAME
+identity in the collision gate, because the parenthetical is stripped. That is the
+cross-node form of the 2026-09-26 B850-CLAUDE-FUNNEL incident: one gate identity, and a
+bare RELEASE by either session closes both sessions' lanes. If both run at the same time,
+the second needs a distinct BASE. The rule exists in identity_vocabulary, but nothing
+enforces it across nodes.
+
+### The node's own default identity (resolves all three namespaces)
 
 Replace `<n>` with the node's canonical name and `<N>` with its upper-case form. These are
 the exact entries:
@@ -231,7 +249,7 @@ the exact entries:
 | 8 | host: Python | `.venv-pmoves` (or any `python3`) with `pyyaml`. |
 | 9 | host: cipher | Per-agent `CIPHER_API_TOKEN` minted per `CIPHER_AUTH_RUNBOOK.md` §2. This is an operator step; never scrape it from `docker inspect`. Set `CIPHER_BIND` only if the fleet SSE entry must reach this node. |
 
-Simulated in memory, Option B resolves all three namespaces:
+Simulated in memory, the node's own default resolves all three namespaces:
 `identity=claude_st_maarten`, `cipher=st-maarten-claude`, `register_form=ST-MAARTEN-CLAUDE`.
 
 Verification once applied:
@@ -283,6 +301,25 @@ over: `test_node_identity`, `test_crush_node_identity`, `test_identity_coupling_
 The before and after numbers are identical, as expected. This lane changed no identity
 config. The only changes are this doc, the ledger row, and the gitlink, and none of the
 suite reads the gitlink.
+
+**Worn-identity resolver fix (2026-10-08).** Written test-first in
+`pmoves/tests/test_node_identity_worn.py`, which has 12 cases.
+
+| When | `test_node_identity_worn.py` | 13-file suite | validator |
+|---|---|---|---|
+| red (`96f0bdaab`, resolver unchanged) | 4 failed, 8 passed | — | — |
+| green (resolver fixed) | rc=0 · 12 passed | rc=0 · 407 passed, 1 skipped | rc=0 |
+
+All four red failures were behavioural, not import errors:
+- The declared mirror was still refused with "declared for node 'knuckles', not
+  'st-maarten'".
+- The two-token refusal did not name either token.
+- The worn `claude_b850` got cipher `st-maarten-claude`, which is the node default's card.
+- An identity no node declares also got `st-maarten-claude`.
+
+The 8 cases that already passed are regression guards: home node, fold-back, no relation,
+relation from a different home node, mirror keyed on home, both override cases, and the
+node's own default.
 
 An earlier attempt failed 7 `test_identity_coupling_gate` cases with
 `ModuleNotFoundError: pydantic`. That was the ephemeral env missing a dependency of
