@@ -10,9 +10,9 @@ node with its memory reachable.
 | # | Gap | Status |
 |---|-----|--------|
 | 1 | Fleet roster entry `pmoves-cipher` (tailnet Z890 :8105/mcp/sse) answers 401; `pmoves-cipher-local` (localhost:8105) works | COULD-NOT-FIX-LOCALLY (design decision + Z890 operator step) |
-| 2 | `brv` (ByteRover CLI, `byterover-cli`) absent on knuckles; launcher says nothing | FIXED in fragment + manifest; launcher hookup is a PATCH (protected path, no grant) |
+| 2 | `brv` (ByteRover CLI, `byterover-cli`) absent on knuckles; launcher says nothing | FIXED in fragment + manifest; launcher hookup LANDED in `c8b7377ab` (road `launcher:pr:3313`) |
+| 3 | cipher `agent_checkpoint` rows record `harness:"unknown"`, `model:"unknown"` | DESIGN-ONLY (server fix is in the `Pmoves-cipher` submodule); interim launcher stamp LANDED in `c8b7377ab` |
 | 4 | host-run `pmoves-nats-fleet` MCP handed `NATS_URL` host `nats` (compose-internal) -> "no servers available" | FIXED in the normalizer (P6), tested red then green |
-| 3 | cipher `agent_checkpoint` rows record `harness:"unknown"`, `model:"unknown"` | DESIGN-ONLY (server fix is in the `Pmoves-cipher` submodule); interim launcher PATCH |
 
 Findings are appended per gap below as each is resolved.
 
@@ -117,17 +117,16 @@ Landed on this branch:
 - `pmoves/tests/test_pm_brv_check.py` — hermetic PATH: missing is loud + rc 0,
   present is quiet, and the fragment's install hint is pinned to the manifest.
 
-NOT landed — the two-line hookup in `pmoves/scripts/claude-pmoves.sh`. That path
-is `readOnlyPaths` (`pmoves/scripts/*-pmoves.sh`); the road is
-`KNOWN_ROAD=launcher:<reason>`, and grants are operator-reserved, so I did not
-open one. The exact edit is
+LANDED in `c8b7377ab` — the hookup in `pmoves/scripts/claude-pmoves.sh`. That
+path is `readOnlyPaths` (`pmoves/scripts/*-pmoves.sh`) and grants are
+operator-reserved, so it was first staged as
 `pmoves/docs/handoffs/patches/B850_MEMORY_TRAVELS_brv_launcher.patch`
-(`git apply --check` rc 0 against this branch; `bash -n` clean on the patched
-copy). It sits after the identity-carry block and before
-`pm_ident_prompt_args`, so the prompt sentence is composed into the single
-`--append-system-prompt` flag. Operator: open
-`launcher:handoff:B850_MEMORY_TRAVELS.md` (or `launcher:pr:<n>` once a PR
-exists), `git apply` the patch, close the road.
+(`git apply --check` rc 0; `bash -n` clean on the patched copy), then applied
+under the operator-approved road `launcher:pr:3313` (2026-10-08). The block
+sits after the identity-carry block and before `pm_ident_prompt_args`, so the
+prompt sentence is composed into the single `--append-system-prompt` flag.
+The patch file is kept as a record only — **do not re-apply it**; its context
+is already in the tree.
 
 Unattended grant found while checking: `.claude/hooks/damage-control/.known-road-active`
 holds `compose:pr:3260`, 146 h old, verdict `NOT honoured [stale]`. Not ridden;
@@ -189,7 +188,7 @@ schema-default-filling clients send it literally.
    actually knows it, `PMOVES_MODEL` (`--model` / `ANTHROPIC_MODEL` after
    `claude_backend_apply` in the inner launcher).
 
-### Interim, client-side (PATCH, protected path)
+### Interim, client-side (LANDED in `c8b7377ab`, protected path)
 
 `pmoves/docs/handoffs/patches/B850_MEMORY_TRAVELS_checkpoint_stamp_launcher.patch`
 for `pmoves/scripts/claude-pmoves.sh`: exports `PMOVES_HARNESS=claude-code` and
@@ -200,9 +199,11 @@ BEFORE `claude_backend_apply` may swap the model). Fixes new checkpoints
 without a server change; it relies on the model following the instruction, which
 is why the server-side stamp above is still needed.
 
-Both patches apply together: `git apply --check` rc 0 on this branch; applied
-in order to a scratch copy, 355 -> 381 lines, `bash -n` clean. `shellcheck` is
-not installed on knuckles — not run.
+Both patches were APPLIED in `c8b7377ab` under the operator-approved road
+`launcher:pr:3313` (+26 lines in `claude-pmoves.sh`; pre-apply check: `git
+apply --check` rc 0, scratch copy 355 -> 381 lines, `bash -n` clean;
+`shellcheck` is not installed on knuckles — not run). The two `.patch` files
+are kept as a record only — **do not re-apply them**.
 
 ## Gap 4 — the bus: a host-run NATS MCP was handed a container hostname
 

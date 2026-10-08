@@ -358,8 +358,6 @@ key, so it names a signer without proving which one.
 
 ### The node's own default identity (resolves all three namespaces)
 
-### The node's own default identity (resolves all three namespaces)
-
 Replace `<n>` with the node's canonical name and `<N>` with its upper-case form. These are
 the exact entries:
 
