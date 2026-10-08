@@ -425,32 +425,41 @@ linear chain per identity would fork every time that happens. So:
   `signing_identity_cards.yaml` (card, glyph, colour, voice, key),
   `identity_vocabulary.yaml` (aliases, lineage), `agent_registry.yaml`
   (role, affinity), node vocabulary (where worn), travels head + latest anchor.
+  These are the A.12 portability substrates
+  (`plans/HYPERAGINTZ_ORCHESTRATION_SCOPE_2026-09-19.md:567-590`).
 - **Contents** (doctrine 1): canonical identity, aliases, glyph, theme, avatar,
-  voice, signature card + public key, lineage (3g), model history (from
-  `session.v1`), travels head, standing (3h), and **call-me info**: harnesses
-  it runs in, MCP/ACP endpoints by service name, availability (from presence),
-  capacity (hardware profile + Glances). No addresses.
-- **Signed** under `pmoves.card.v1`; any consumer verifies it on the card's own
-  key plus the card registry.
+  voice, signature card + public key, lineage (§3g), model history (from
+  `session.v1`), travels head, standing (§3h), and **call-me info**: harnesses
+  it runs in (referencing PMOVES-Registry entries, not copies), MCP/ACP
+  endpoints by service name, availability (from presence), capacity (hardware
+  profile + Glances). No addresses.
+- **Signed** under `pmoves.card.v1` by the identity key. A served card is a
+  *convenience copy*: verifiers resolve the key from the card registry
+  (§3b policy 1), so a self-signed bundle with its own key never verifies.
 - **Served** as `agent-card.json` in the A2A shape (G8's path) with a PMOVES
   extension block. `agent_card_schema.py` (G7) is a source of layer names, not
   the schema as-is: it makes the model a layer of the card, while doctrine 3
   makes the model history, not identity.
-- **Announced on NATS**, proposed subjects (to be registered through the
-  subject catalog and `nats-subject-auditor` before use):
-  `identity.presence.v1` (signed `session.v1` heartbeat; references the node,
+- **Announced on NATS**, proposed subjects, registered through the subject
+  catalog and `nats-subject-auditor` before use. The name says the envelope is
+  signed so consumers cannot mistake it for the unsigned node announce:
+  `identity.presence.signed.v1` (a `session.v1` heartbeat; references the node,
   which keeps announcing on `mesh.node.announce.v1`) and
-  `identity.card.updated.v1`.
+  `identity.card.updated.signed.v1`.
 
 ### 3g. Forks and lineage — both directions, add only
 
-- A fork is two signed travels entries: `fork` in the parent's log (child
-  `card_id`) and `fork` in the child's log (parent `card_id`, parent anchor).
-  The child's card carries `forked_from`; the parent's card lists `forks[]`.
-  Both directions exist, neither side is removed (doctrine 6).
+- A fork is two `pmoves.fork.v1` entries: an offer in the parent's sub-chain
+  (child `card_id`) and an acceptance in the child's (parent `card_id`, parent
+  anchor), each signed by its own identity key. The child's card carries
+  `forked_from`; the parent's card lists `forks[]`. Both directions exist and
+  neither side is removed (doctrine 6).
 - The child gets its **own** key. It never inherits the parent's.
+- A fork is the identity's **own decision** (doctrine 5): only the parent's
+  identity key can sign the offer, and no tool path renames an identity (§7
+  negative test).
 - **Alts / roles** the operator creates for a node carry `alt_of: <root>` and
-  sign with their own keys; they share the root's standing (3h).
+  sign with their own keys; they share the root's standing (§3h).
 - **Backfill**: existing sibling lineage (Z890/5090/4090/SPARK-CLAUDE,
   `identity_vocabulary.yaml:453,560`) enters as operator-attested entries
   flagged `backfill: true`. Attribution, honestly labelled.
@@ -460,40 +469,74 @@ linear chain per identity would fork every time that happens. So:
 - **Registration for all AGInTZ**: every carded identity has a standing account
   at zero. Alts share their root's account.
 - **What earns standing**: a kept commitment = a CLAIM that was delivered
-  (merged) **and** ACKed with a valid `pmoves.ack.v1` signature by a *different*
-  identity. Unsigned ACKs earn nothing, which is why this waits for P1.
+  (merged) **and** ACKed with a valid `pmoves.ack.v1` signature by a
+  **different root**. Unsigned ACKs and genesis/backfill records earn nothing.
+- **"Different" means a different root.** Self-ACK checks run on the *root
+  standing account*: an alt cannot ACK its root, and a same-node second session
+  (e.g. `B850-CLAUDE-FUNNEL`) is `alt_of` its root, not a new identity.
+  Forks are distinct roots (doctrine 6), so fork-and-ACK is limited by a
+  **lineage distance** rule (ACKs between identities with a common ancestor
+  within *d* generations do not count; *d* set by the operator) or,
+  alternatively, by requiring the ACKer to come from a committee reviewer set.
+- **Per-ACKer cap**: one identity's ACKs can contribute at most a fixed share
+  of any period's standing.
 - **Weighting**: Dirichlet attribution over the contributors to one delivery,
-  i.e. the existing `distributeByAttribution` (`grotoken-model.ts:161`), not the
-  Gaussian `distributeWeekly` default (`:93-117`).
+  i.e. the existing `distributeByAttribution` (`grotoken-model.ts:161`), not
+  the Gaussian `distributeWeekly` default (`:93-117`), with weights carried as
+  integer basis points (§3b).
 - **Soulbound**: non-transferable. The model has the switch
   (`grotoken-model.ts:24,225-226`) but defaults it off (`:59`); standing turns it on.
-- **No governance votes** from standing. Standing records kept commitments; it
-  does not buy a say.
-- **Minting**: a k-of-n committee signs each period's mint under a
-  `pmoves.mint.v1` tag on the `Ed25519MultisigSigner` pattern (G16), with a
-  **per-period cap**. Each mint record carries the merkle root of the ACKed
-  claims it rewards, so every unit traces to anchored work.
+- **No governance votes** from standing.
+- **Minting**: one mint per period. A mint record carries `period_id`, a unique
+  `mint_id`, the per-period **cap**, and the merkle root of the ACKed claims it
+  rewards; a second mint for the same `period_id` is refused, so two under-cap
+  mints cannot double the cap. A k-of-n committee signs under
+  `pmoves.mint.v1`; a member whose own work is rewarded in that period
+  **recuses**. Required properties, as in `Ed25519MultisigSigner` (G16):
+  domain-tagged canonical preimage, distinct approvers, threshold checked
+  against a fixed committee list, every listed signature verified on public
+  keys only.
 - **Not to be used as-is**: `GroToken.sol` / `FoodUSD.sol` (`onlyOwner`, no cap,
   G17) and anything carrying the `isSigned` defect (G15).
 - **Backing mix: OPERATOR DECISION.** Recommendation: unbacked standing credit
   (no redemption, no reserve claim) until a spendable `$CRED` spec exists.
   FoodUSD's peg has no reserve code, so a backed claim made today would be prose.
 
-### 3i. Cipher auth — signed requests against the card
+### 3i. Cipher auth — a session-scoped signed bearer
 
-- **Request**: headers carry `card_id` and an `idsig` over
-  `pmoves.cipher-req.v1` `{method, path, sha256(body), ts, nonce, audience}`,
-  where `audience` is the target cipher instance, so a request signed for one
-  node's cipher cannot be replayed to another.
-- **Verify**: cipher resolves the public key from a synced card registry
-  (cards are not read by cipher today, G10), checks freshness (±120 s) and the
-  nonce cache, sets `agentId` from the card. This replaces the one
-  identity-setting point (`auth.ts:219-220`) and with it the per-node token store.
+Per-request signing is not buildable for the main client: Claude Code's MCP
+transport sends **static headers** configured at launch. So the recommendation
+is a credential minted once per session.
+
+- **Recommended (a): session-scoped signed bearer.** At launch the launcher
+  signs, with the session's delegated subkey under `pmoves.cipher-req.v1`,
+  `{agent_id, card_id, key_fpr, delegation_id, aud, iat, exp, nonce}` where
+  `aud` is the target cipher instance and `exp − iat ≤ 15 min`. The result is
+  the bearer header. The launcher re-mints before expiry (a relaunch or a
+  refresh hook; how Claude Code picks up a refreshed header is an open
+  question, §8).
+- **Alternative (b): a named signing sidecar** that holds the key and signs each
+  request, including the full target with query string and every `/messages`
+  POST. It needs its own custody model (it is a key-holding process) and is
+  the path if (a)'s replay window is judged too wide.
+- **Verify**: cipher resolves the key from a synced card registry (cards are not
+  read by cipher today, G10), checks the delegation, `aud`, and `exp`, records
+  the `nonce` in a **persistent shared nonce store** (store down → 503), then
+  sets `agentId` from the card. This replaces the one identity-setting point
+  (`auth.ts:219-220`) and with it the per-node token store.
+- **Registry staleness bound.** A registry copy older than the bound → 503
+  ("not judged"; `3` for offline tools). Unknown card against a fresh registry,
+  bad signature, expired credential, inactive or revoked card → 401. The
+  existing split stays (`auth.ts:209,214`).
+- **Close the bypasses** (CHIT P2-c). The dev-mode skip
+  (`auth.ts:191-195`: no token and no `CIPHER_API_TOKEN` → no enforcement) is
+  disabled whenever a card registry is configured. A card flag `signed_only`
+  refuses bearer-token auth for that identity. Bearer tokens (and the bootstrap
+  token) get a **retirement date**. The MCP `sessionId` is bound to the
+  credential that opened it, so a leaked session id is not a bearer credential.
 - **Scopes** move from token rows to a role → scope mapping on the card side.
-- **Keep the 401 / 503 split** (`auth.ts:209,214`): bad signature, inactive or
-  revoked card → 401; card registry unavailable → 503 ("not judged").
-- **Migration**: bearer tokens keep working in parallel. Minting a B850 token on
-  Z890's cipher (option B) is a stopgap only, retired when signed requests land.
+- **Migration**: bearer tokens keep working in parallel until their retirement
+  date. Minting a B850 token on Z890's cipher (option B) is a stopgap only.
 
 ## 4. Decisions
 
