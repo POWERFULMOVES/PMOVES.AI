@@ -92,7 +92,7 @@ def get_google_identity(user_email: str = DARKXSIDE_USER_EMAIL) -> Optional[dict
         logger.warning(f"Supabase user {user_email!r} not found")
         return None
 
-    for identity in user.get("identities", []):
+    for identity in (user.get("identities") or []):
         if identity.get("provider") == "google":
             return identity
     logger.warning(f"Supabase user {user_email!r} has no Google identity")
@@ -107,6 +107,84 @@ def get_provider_refresh_token(user_email: str = DARKXSIDE_USER_EMAIL) -> Option
     action) to seed this.
     """
     identity = get_google_identity(user_email)
-    if not identity:
+    if identity:
+        token = (identity.get("identity_data") or {}).get("provider_refresh_token")
+        if token:
+            return token
+        # GoTrue >= v2.163 strips provider tokens from persisted identity_data
+        # for security (they are delivered only in the OAuth redirect fragment),
+        # and the admin list endpoint may omit the identities array entirely.
+        # Fall back to the Fernet-encrypted token stored by
+        # tools/yt_oauth_flow.py in pmoves_core.yt_oauth_cookies — same Google
+        # consent, same client.
+        logger.info(
+            "Google identity lacks provider_refresh_token (GoTrue token-stripping); "
+            "falling back to the yt_oauth_cookies vault"
+        )
+    else:
+        logger.info(
+            "Admin API returned no Google identity for %r (stripped or omitted); "
+            "falling back to the yt_oauth_cookies vault",
+            user_email,
+        )
+    return _vault_fallback_token()
+
+
+def _vault_fallback_token() -> Optional[str]:
+    """Decrypt the refresh token from pmoves_core.yt_oauth_cookies (darkxside row).
+
+    Mirrors the derivation in tools/yt_oauth_flow._get_fernet (hex -> base64url
+    -> raw, padded/truncated to 32 bytes) so the reader can never drift from
+    the writer.
+    """
+    try:
+        import base64
+
+        import httpx
+        from cryptography.fernet import Fernet
+
+        key_raw = os.environ.get("VAULT_ENC_KEY", "").strip()
+        if not key_raw:
+            logger.warning("VAULT_ENC_KEY not set — cannot decrypt vault token")
+            return None
+
+        def _decode_key(raw: str) -> bytes:
+            try:
+                return bytes.fromhex(raw)
+            except ValueError:
+                pass
+            try:
+                padded = raw + "=" * (-len(raw) % 4)
+                decoded = base64.urlsafe_b64decode(padded)
+                if decoded:
+                    return decoded
+            except Exception:  # noqa: BLE001 — fall through to raw
+                pass
+            return raw.encode("utf-8")
+
+        key_bytes = _decode_key(key_raw)
+        key_bytes = key_bytes[:32].ljust(32, b"\x00")
+        fernet = Fernet(base64.urlsafe_b64encode(key_bytes))
+
+        base = os.environ.get("SUPABASE_URL", os.environ.get("SUPA_REST_URL", "")).rstrip("/")
+        key = _service_role_key()
+        resp = httpx.get(
+            f"{base}/rest/v1/yt_oauth_cookies",
+            params={"select": "encrypted_refresh_token", "user_id": "eq.darkxside", "limit": 1},
+            headers={
+                "apikey": key,
+                "Authorization": f"Bearer {key}",
+                "Accept-Profile": "pmoves_core",
+            },
+            timeout=10,
+        )
+        if resp.status_code != 200:
+            logger.warning(f"Vault lookup failed: {resp.status_code} {resp.text[:120]}")
+            return None
+        rows = resp.json()
+        if not rows or not rows[0].get("encrypted_refresh_token"):
+            return None
+        return fernet.decrypt(rows[0]["encrypted_refresh_token"].encode()).decode()
+    except Exception as exc:  # noqa: BLE001 — any failure means no token
+        logger.warning(f"Vault fallback failed: {exc}")
         return None
-    return identity.get("identity_data", {}).get("provider_refresh_token")
