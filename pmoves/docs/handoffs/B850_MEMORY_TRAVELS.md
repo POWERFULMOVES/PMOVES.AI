@@ -11,6 +11,7 @@ node with its memory reachable.
 |---|-----|--------|
 | 1 | Fleet roster entry `pmoves-cipher` (tailnet Z890 :8105/mcp/sse) answers 401; `pmoves-cipher-local` (localhost:8105) works | COULD-NOT-FIX-LOCALLY (design decision + Z890 operator step) |
 | 2 | `brv` (ByteRover CLI, `byterover-cli`) absent on knuckles; launcher says nothing | FIXED in fragment + manifest; launcher hookup is a PATCH (protected path, no grant) |
+| 4 | host-run `pmoves-nats-fleet` MCP handed `NATS_URL` host `nats` (compose-internal) -> "no servers available" | FIXED in the normalizer (P6), tested red then green |
 | 3 | cipher `agent_checkpoint` rows record `harness:"unknown"`, `model:"unknown"` | DESIGN-ONLY (server fix is in the `Pmoves-cipher` submodule); interim launcher PATCH |
 
 Findings are appended per gap below as each is resolved.
@@ -202,3 +203,59 @@ is why the server-side stamp above is still needed.
 Both patches apply together: `git apply --check` rc 0 on this branch; applied
 in order to a scratch copy, 355 -> 381 lines, `bash -n` clean. `shellcheck` is
 not installed on knuckles — not run.
+
+## Gap 4 — the bus: a host-run NATS MCP was handed a container hostname
+
+A session that cannot reach NATS cannot see its siblings, so the bus is part of
+"memory travels".
+
+**Measured (team-lead, 2026-10-08, re-measured here):** the live roster gives
+`pmoves-nats-fleet` — which `uv run`s `nats_mcp.server` on the HOST — a
+`NATS_URL` whose host is `nats`. That is env.shared's IN-STACK value, correct for
+containers; #3309 (`derive_nats_url.py`) re-derives only its userinfo and keeps
+the host, by design, and this fix does not touch it. On the host, `nats` does not
+resolve. With the roster's own credentials and nothing else changed:
+
+| NATS_URL host | result (raw socket: INFO, CONNECT, PING — nothing published) |
+|---|---|
+| `nats` (before) | `gaierror [Errno -3] Temporary failure in name resolution` |
+| `127.0.0.1` (after P6) | `INFO` -> `PONG` (authenticated) |
+
+**Rule:** env files are written for containers; a stdio MCP server launched by
+`uv`/`npx`/`uvx` is a host process. The normalizer now has a P6 pass
+(`pmoves/tools/mcp_roster_normalize.py`): in the `env` of a host-run server, a URL
+whose host is a compose service name is pointed at that service's published
+loopback port. Narrow on purpose:
+
+- table `_IN_STACK_HOSTS = {"nats": ("NATS_PORT", 4222)}` — only names whose host
+  publish is measured (`${NATS_BIND:-0.0.0.0}:${NATS_PORT:-4222}:4222`);
+- only the client port (4222, or no port) is rewritten — `nats:6222`/`:8222` are
+  not the published listener and are left alone; `natsbox` is not `nats`;
+- the published port follows `NATS_PORT` when set;
+- servers launched through `docker`/`podman` keep `nats` (`docker run -e` forwards
+  the value into a container on the compose network, where the name is right);
+- scheme, userinfo and path are carried byte-for-byte — the credential is never
+  parsed, decoded or re-encoded; a comma-separated server list is handled per entry;
+- every rewrite is announced on stderr and recorded in
+  `_pmoves_roster_verdicts.rewritten` as `{server, field, from_host, to_host}` —
+  hostnames only, never the value.
+
+Comparison with cipher-local: it never had the defect because its URL is a
+literal `http://localhost:8105/...` in the inventory (`cipher_local_url`), not an
+env-file value. NATS is the only host-run server whose URL comes from an env file
+written for containers. Sweep of the live roster: 9 host-run servers; the only
+URL host that is compose-internal is `pmoves-nats-fleet`'s `nats`.
+
+**Not fixed, same defect elsewhere:** `.kimi/mcp.json`, `kilo.json` and 7
+`pmoves/configs/claws/opencode-*.json` also pass a raw `${NATS_URL}` to the NATS
+MCP, and none of those harnesses runs this normalizer. Claude Code sessions are
+fixed; those harnesses need the same rule in their own config path.
+Also not measured: `pmoves-hirag-mcp` has no `env` block and inherits the
+launcher's environment, so I could not see what host it dials from the roster.
+
+Tests (`pmoves/tests/test_mcp_roster_normalize.py`): 10 new. RED commit
+`1352fbeb3`: 80 passed / 4 failed, rc 1 — all 4 failures behavioural (host still
+`nats`; no notice on stderr), and the 6 narrowness/docker guards passed pre-fix,
+as they must. GREEN: 84 passed, rc 0.
+
+Not done, per brief: no leafnode topology change, nothing published to the bus.
