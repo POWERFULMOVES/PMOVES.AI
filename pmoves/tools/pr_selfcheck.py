@@ -18,6 +18,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import ast
 import json
 import re
 import subprocess
@@ -57,16 +58,25 @@ def _git(*args: str) -> str:
     ).stdout
 
 
-def diff_names(base: str, head: str) -> list[str]:
-    return _git("diff", "--name-only", f"{base}...{head}").split()
+def diff_names(base: str, head: str, deleted: bool = True) -> list[str]:
+    filt = [] if deleted else ["--diff-filter=d"]
+    return _git("diff", "--name-only", *filt, f"{base}...{head}").split()
 
 
 def diff_for(base: str, head: str, path: str) -> str:
     return _git("diff", f"{base}...{head}", "--", path)
 
 
-def blob(head: str, path: str) -> str:
-    return _git("show", f"{head}:{path}")
+def blob(head: str, path: str) -> str | None:
+    """File content at head; None when the path does not exist there (e.g.
+    deleted in this branch). The first version raised and the whole check
+    silently skipped (PR #3278 thread 4)."""
+    r = subprocess.run(
+        ["git", "-C", str(GIT_ROOT), "show", f"{head}:{path}"],
+        capture_output=True,
+        text=True,
+    )
+    return r.stdout if r.returncode == 0 else None
 
 
 # --- checks: each cites the review that taught it ---------------------------
@@ -76,35 +86,50 @@ def check_format_braces_in_templates(report: Report, base: str, head: str) -> No
     """Unescaped braces inside a .format() template. PR #3269 (nats bridge):
     the template's own comment carried '{ users }' and 'jetstream {' and
     rendering died with KeyError at the worst moment (first live use).
-    Any module defining an UPPERCASE *_TEMPLATE string used with .format()
-    must escape every literal brace, comments included."""
-    for name in diff_names(base, head):
+    Review-hardened (PR #3278 threads 1+2): the template body comes from the
+    AST (exact literal, no quote-scanning), and a token is suspicious when
+    its RAW inner text is not a strict .format() field - spaces inside the
+    braces ('{ users }') are legal Python but never intended in a template,
+    and the first version normalized them away, waving through exactly the
+    shape it existed to catch."""
+    for name in diff_names(base, head, deleted=False):
         if not name.endswith(".py"):
             continue
         text = blob(head, name)
-        for m in re.finditer(r"^([A-Z][A-Z_]*TEMPLATE[A-Z_]*)\s*=", text, re.M):
-            var = m.group(1)
-            q = re.search(r'(["\'])\1\1', text[m.start(): m.start() + 200])
-            if not q:
+        if text is None:
+            continue
+        try:
+            tree = ast.parse(text)
+        except SyntaxError:
+            continue
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Assign):
                 continue
-            quote = q.group(0)
-            start = text.find(quote, m.start()) + 3
-            end = text.find(quote, start)
-            body = text[start:end]
-            for line in body.splitlines():
-                for token in re.findall(r"\{[^{}]*\}", line):
-                    inner = token[1:-1].strip().replace(" ", "")
-                    if not re.match(r"^[a-z_][\w.]*(:[^{}]*)?$", inner or "x"):
-                        report.findings.append(
-                            Finding(
-                                "fix-pattern",
-                                "format-braces-in-template",
-                                name,
-                                f"{var}: literal-looking token {token} would be read as a .format() field",
-                                "escape literal braces ({{ }}) everywhere in the template, comments included",
-                            )
+            if not any(
+                isinstance(t, ast.Name)
+                and re.fullmatch(r"[A-Z][A-Z_]*TEMPLATE[A-Z_]*", t.id)
+                for t in node.targets
+            ):
+                continue
+            if not isinstance(node.value, ast.Constant) or not isinstance(node.value.value, str):
+                continue
+            for line_no, line in enumerate(node.value.value.splitlines(), 1):
+                for token in re.findall(r"\{[^{}\n]*\}", line):
+                    inner = token[1:-1]
+                    if re.fullmatch(r"[a-zA-Z_]\w*(!r|!s|:[^{}]*)?|", inner):
+                        continue  # a strict field: name with optional conv/format spec
+                    report.findings.append(
+                        Finding(
+                            "fix-pattern",
+                            "format-braces-in-template",
+                            name,
+                            f"template literal line {line_no}: raw token {token} is not a strict "
+                            ".format() field (spaces/punctuation inside braces are legal Python "
+                            "but never intended in a template)",
+                            "escape literal braces ({{ }}) everywhere in the template, comments included",
                         )
-                        break
+                    )
+                    break
 
 
 def check_phony_covers_new_targets(report: Report, base: str, head: str) -> None:
@@ -134,27 +159,33 @@ def check_phony_covers_new_targets(report: Report, base: str, head: str) -> None
 
 
 def check_grep_pipeline_fails_closed(report: Report, base: str, head: str) -> None:
-    """Command substitution feeding a docker verb without an empty guard.
-    PR #3269 thread 4: `docker kill --signal=SIGHUP $(grep ...)` with no
-    match handed docker an empty argument and failed with an error naming
-    neither NATS nor containers."""
-    for name in diff_names(base, head):
+    """An INLINE command substitution feeding a docker verb. PR #3269 thread
+    4: `docker kill --signal=SIGHUP $(grep ...)` with no match handed docker
+    an empty argument and failed with an error naming neither NATS nor
+    containers. Review-hardened (PR #3278 thread 3): fires ONLY on inline
+    substitution (the verb and $$( on the same line with no assignment in
+    between). A recipe that resolves into a variable first - whatever the
+    variable is named, however it guards - is the fixed shape and is not
+    flagged."""
+    for name in diff_names(base, head, deleted=False):
         if not name.endswith(("Makefile", ".mk")):
             continue
         for line in diff_for(base, head, name).splitlines():
-            if not line.startswith("+") or "$$" not in line:
+            if not line.startswith("+"):
                 continue
             body = line[1:]
-            if re.search(r"docker\s+(kill|rm|stop|exec)\b.*\$\$", body) and not re.search(
-                r"if \[ -z|-n \"\$\$c\"|ERROR", body
+            # inline = docker verb followed by the substitution on this line,
+            # with no '=' assignment ahead of it (assignment = resolved var)
+            if re.search(r"docker\s+(kill|rm|stop|exec)\b[^\n]*\$\$\(", body) and not re.match(
+                r"\s*[\w.-]+\s*=\s*\$\$", body.lstrip("@\t-")
             ):
                 report.findings.append(
                     Finding(
                         "fix-pattern",
                         "grep-pipeline-fails-closed",
                         name,
-                        f"docker verb fed by $$() with no empty guard: {body.strip()[:70]}",
-                        "resolve into a var; fail with a NAMED error when empty before use",
+                        f"docker verb fed by an INLINE $$() substitution: {body.strip()[:70]}",
+                        "resolve into a variable first, then fail with a named error when it is empty",
                     )
                 )
 
@@ -249,8 +280,11 @@ def main(argv: list[str] | None = None) -> int:
     for check in CHECKS:
         try:
             check(report, args.base, args.head)
-        except subprocess.CalledProcessError:
-            continue
+        except subprocess.CalledProcessError as exc:
+            # a check that dies must be VISIBLE, not silent: the first version
+            # swallowed this and one deleted .py file blanked a whole check
+            # (PR #3278 thread 4)
+            print(f"  [missed-signal] check-error: {check.__name__} skipped ({exc})", file=sys.stderr)
 
     print(f"selfcheck: {branch} vs {args.base} ({len(report.files)} files)")
     for f in report.findings:
