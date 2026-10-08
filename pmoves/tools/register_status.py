@@ -109,6 +109,10 @@ def _require_measurable(gate) -> None:
 
     The remedy is one line and it is printed, because a refusal with no route
     is the whole defect this lane exists to fix.
+
+    THE NODE HALF TOO (#3313). The owner key is (identity, node); with the
+    node vocabulary unreadable, an off-home owner folds onto the home session,
+    and the read fails open the same way. Refused for the same reason.
     """
     if gate._load_lineage() is None:
         sys.stderr.write(
@@ -120,6 +124,18 @@ def _require_measurable(gate) -> None:
             "  Remedy: `make -C pmoves register-status`, which picks an "
             "interpreter that has PyYAML, or `uv run --script "
             "pmoves/tools/register_status.py`.\n"
+        )
+        sys.exit(EXIT_UNMEASURED)
+    if gate._load_nodes() is None:
+        sys.stderr.write(
+            "register-status: NOT MEASURED - the node vocabulary could not be "
+            "loaded, so an owner signed off its home node (`B850-CLAUDE "
+            "(spark)`) folds onto the home session. A RELEASE by one machine's "
+            "session would then read as closing the other machine's lanes, and "
+            "a lane one of them holds could be reported free to the other. "
+            "Refusing to answer rather than answering wrongly.\n"
+            "  Remedy: check pmoves/configs/node-vocabulary.yaml parses "
+            "(`python3 pmoves/tools/node_identity.py`), then re-run.\n"
         )
         sys.exit(EXIT_UNMEASURED)
 
@@ -458,6 +474,11 @@ def report_branch(verdict, branch, owner_given, lanes, now, out) -> int:
 
     if verdict.collisions or verdict.one_sided:
         return EXIT_FINDINGS
+    node_unmeasured = getattr(verdict, "node_unmeasured", None) or []
+    for owner, why in node_unmeasured:
+        out.write(f"  NOT MEASURED - `{owner}`: {why}\n")
+    if node_unmeasured:
+        return EXIT_UNMEASURED
     if any(x.expiry.state == "unmeasured" for x in matching):
         return EXIT_UNMEASURED
     if stale:

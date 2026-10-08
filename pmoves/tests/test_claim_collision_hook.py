@@ -395,6 +395,87 @@ def test_a_non_machine_node_word_does_not_split_the_key(tmp_path):
     assert result.returncode == ALLOW, result.stderr
 
 
+# ---------------------------------------------------------------------------
+# The node half, unreadable (#3313 review, P2). Folding onto the home key is
+# the pre-#3313 behaviour -- the one under which a spark RELEASE closed
+# Knuckles' lanes -- so it may be a fallback, never a silent allow.
+# PMOVES_NODE_VOCABULARY is honoured only by the hook's node loader, for this.
+# ---------------------------------------------------------------------------
+
+def _ask_reason(result) -> str:
+    if '"permissionDecision": "ask"' not in result.stdout:
+        return ""
+    return json.loads(result.stdout)["hookSpecificOutput"]["permissionDecisionReason"]
+
+
+@pytest.fixture
+def no_node_vocabulary(tmp_path, monkeypatch):
+    monkeypatch.setenv("PMOVES_NODE_VOCABULARY", str(tmp_path / "no-such-nodes.yaml"))
+
+
+def test_a_claim_is_asked_when_the_node_vocabulary_is_unreadable(tmp_path, no_node_vocabulary):
+    result = run_hook(tmp_path, _claim(B850_A, branch="feat/fresh", ts="2026-01-03T00:00:00Z"))
+    assert result.returncode == ALLOW, result.stderr
+    reason = _ask_reason(result)
+    assert reason, f"a degraded node half allowed silently\n{result.stdout!r}"
+    assert "node vocabulary is unavailable" in reason and B850_A in reason
+    assert "NOT MEASURED" in result.stderr
+
+
+def test_a_degraded_self_reclaim_across_nodes_is_never_a_silent_allow(
+        tmp_path, no_node_vocabulary):
+    """With the node half gone, Knuckles claiming spark's lane folds to
+    'same owner' -- the gate must at least ASK."""
+    result = run_hook(tmp_path, _claim(B850_A, ts="2026-01-03T00:00:00Z"), _claim(B850_SPARK))
+    assert result.returncode == BLOCK or _ask_reason(result), (
+        f"degraded cross-node reclaim was a silent allow\n{result.stdout!r}"
+    )
+
+
+def test_a_release_only_write_is_asked_when_the_node_vocabulary_is_unreadable(
+        tmp_path, no_node_vocabulary):
+    """A RELEASE is what closes lanes; a RELEASE-only Write used to skip the
+    gate entirely."""
+    existing = _claim(B850_A)
+    result = run_hook(tmp_path, existing + _release(B850_SPARK), existing)
+    assert result.returncode == ALLOW, result.stderr
+    assert B850_SPARK in _ask_reason(result), result.stdout
+
+
+def test_a_shell_release_is_asked_when_the_node_vocabulary_is_unreadable(
+        tmp_path, no_node_vocabulary):
+    reg = tmp_path / REGISTER_NAME
+    row = _release(B850_SPARK).rstrip("\n")
+    result = _run_bash(tmp_path, f"cat >> {reg} <<'EOF'\n{row}\nEOF", _claim(B850_A))
+    assert result.returncode == ALLOW, result.stderr
+    assert B850_SPARK in _ask_reason(result), result.stdout
+
+
+def test_a_malformed_node_relations_row_is_asked_not_silently_folded(tmp_path, monkeypatch):
+    """The reviewer's concrete case, through an override that predates the
+    fix: a node_relations row with no `token` makes wearing() raise. That
+    used to be swallowed, folding spark onto home -- a silent allow of a
+    cross-node reclaim. It must surface as an ask naming the failure."""
+    real = REPO_ROOT / "pmoves" / "config" / "identity_vocabulary.yaml"
+    broken = tmp_path / "identity_vocabulary.yaml"
+    broken.write_text(real.read_text(encoding="utf-8").rstrip("\n")
+                      + "\n  - node: '5090'\n", encoding="utf-8")
+    monkeypatch.setenv("PMOVES_IDENTITY_VOCABULARY", str(broken))
+    result = run_hook(tmp_path, _claim(B850_SPARK, ts="2026-01-03T00:00:00Z"), _claim(B850_A))
+    assert result.returncode == BLOCK or _ask_reason(result), (
+        f"an unparseable node half folded spark onto home silently\n{result.stdout!r}"
+    )
+    assert "KeyError" in (_ask_reason(result) + result.stderr)
+
+
+def test_an_unresolved_owner_is_not_asked_about_nodes(tmp_path, no_node_vocabulary):
+    """No identity -> compared as an exact string, which already keeps every
+    node spelling apart. Nothing to ask."""
+    result = run_hook(tmp_path, _claim("AGENT-B", branch="feat/fresh", ts="2026-01-03T00:00:00Z"))
+    assert result.returncode == ALLOW, result.stderr
+    assert '"permissionDecision": "ask"' not in result.stdout
+
+
 def test_the_hook_still_guards_when_the_vocabulary_is_missing(tmp_path, monkeypatch):
     """Fail-safe, not fail-open.
 
