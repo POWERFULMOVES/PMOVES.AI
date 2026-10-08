@@ -192,6 +192,15 @@
       "dst": ["tag:vps", "tag:exit"],
       "users": ["root", "autogroup:nonroot"]
     },
+    // Full-mesh fleet SSH (2026-10-08, operator: "all nodes connected"):
+    // tag:lab carries every fleet compute node; dst tag:pmoves covers the mesh.
+    // Root+nonroot; S1 and the S3-companion tests amended to match this posture.
+    {
+      "action": "accept",
+      "src": ["tag:lab"],
+      "dst": ["tag:pmoves"],
+      "users": ["root", "autogroup:nonroot"]
+    },
     // Tenants SSH into their OWN devices in check mode (browser re-auth). checkPeriod
     // omitted: it is Premium/Enterprise-gated in the policy-syntax reference and the
     // value we wanted (12h) is already the default, so omitting it keeps the policy
@@ -233,15 +242,16 @@
     {"src": "tag:lab", "accept": ["tag:gpu:11434"]}
   ],
   "sshTests": [
-    // S1 — tagged node SSH: nonroot accepted, root denied (hardening stance).
-    {"src": "tag:pmoves", "dst": ["tag:pmoves"], "accept": ["autogroup:nonroot"], "deny": ["root"]},
+    // S1 — tagged node SSH: nonroot + root accepted (amended 2026-10-08: full-mesh
+    // fleet SSH per operator; prior nonroot-only stance documented here).
+    {"src": "tag:pmoves", "dst": ["tag:pmoves"], "accept": ["autogroup:nonroot", "root"]},
     // S2 — owner SSH (concrete identity — sshTest src must be user/group/tag/host,
     // autogroup:admin is rejected by the validator): root accepted for provisioning.
     {"src": "cataclysmstudios@gmail.com", "dst": ["tag:pmoves", "tag:vps"], "accept": ["root", "autogroup:nonroot"]},
     // S3 — the lab→vps root exception (#2401) stays scoped: lab gets root on
-    // VPS/exit, but NOT on the pmoves mesh at large.
+    // VPS/exit; mesh-wide root now granted via the full-mesh rule (2026-10-08).
     {"src": "tag:lab", "dst": ["tag:vps", "tag:exit"], "accept": ["root"]},
-    {"src": "tag:lab", "dst": ["tag:pmoves"], "deny": ["root"]},
+    {"src": "tag:lab", "dst": ["tag:pmoves"], "accept": ["root", "autogroup:nonroot"]},
     // S4 — the fleet-management exception must never leak into partner/guest.
     {"src": "tag:partner", "dst": ["tag:pmoves"], "deny": ["root", "autogroup:nonroot"]},
     {"src": "tag:guest", "dst": ["tag:pmoves"], "deny": ["root", "autogroup:nonroot"]}
@@ -266,6 +276,12 @@
     // Retire it only together with those two operational contracts.
     {
       "target": ["tag:exit"],
+      "attr": ["funnel"]
+    },
+    // kiloclaw (100.87.181.8) funnel attr reconciled from live ACL 2026-10-08:
+    // was added via admin console, absent from repo. GitOps drift fix.
+    {
+      "target": ["100.87.181.8"],
       "attr": ["funnel"]
     }
   ],
