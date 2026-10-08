@@ -104,7 +104,7 @@ behave as advertised by the catalog.
   - `Pmoves-MiniMax-Provider-Verifier/summary_m3.json` (this run's summary)
 - **SDK files (inherited, NOT modified):**
   - `pmoves/config/provider_catalog.yaml:496` (minimax provider block, slice G.2)
-  - `pmoves/configs/model-suits/MiniMax-M3.yaml` (M3 suit, slice G.2)
+  - `pmoves/configs/model-suits/minimax-m3.yaml` (M3 suit, slice G.2)
 - **AGNOTE row:** to be appended at `pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md`
   with timestamp `2026-10-06T18:30:00Z` (verification milestone)
 - **Branch:** `feat/mavis-collection-scaffold-2026-10-05`
