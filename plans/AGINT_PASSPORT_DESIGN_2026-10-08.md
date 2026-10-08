@@ -10,6 +10,7 @@
 | Date | 2026-10-08, against `origin/main` `cbf980dfd` |
 | Reviewers invited | Z890-CLAUDE (glances), spark-claude (Laya, second-node cross-check), the author of PR #3294 (A0 corpus, Jev), `chit-compliance-reviewer` + `code-review` agents (security review), 4090-CLAUDE (KRISS KROSS watch pair) |
 | Gate | Security review (§6) comes **before** any implementation PR. |
+| Revision | **r2** — revised against the CHIT review (WARN, comment 6065603673), the code review (REQUEST-CHANGES, 6065618963) and the control finding on D2 (6065534385) on draft PR #3317. Finding → section map in §9. |
 
 > **Attribution today is not authentication.** Every identity claim in the fleet
 > right now (an `ACK::` line, a CHIT trail's `kid`, a claim-register owner, a cipher
@@ -81,15 +82,15 @@ history, travels, signed ACKs). That bundle is the passport.
 | G3 | CHIT signing | HMAC-SHA256, per-`kid` key resolution (`CHIT_SIGNING_KEY__<KID>`), fail-closed once any per-kid key is set, `verify_cgp_detailed()` | Per-agent keys are **shared secrets**: any verifier can forge. Must not become the passport's signature. The flute-gateway copy does not resolve by kid. | `pmoves/tools/chit_security.py:104-144,288-320,323-343,347-396`; `pmoves/services/flute-gateway/chit_signing.py:59-62` |
 | G4 | Trail log | `sign_trail.py` persists the latest signed payload | Opened with mode `"w"`: each signer overwrites the previous artifact. No history, no chain. | `pmoves/tools/sign_trail.py:346-350` |
 | G5 | Trail schema | `signature.v1.schema.json`, root `additionalProperties: false` | Declares no `sig` property, so every emitted signed trail is invalid against its own schema. | `pmoves/contracts/schemas/agent-graphiti/signature.v1.schema.json:14,119` |
-| G6 | Merkle | `cgp_v2_build.merkle_root()`; content-provenance-gate has its own `_merkle_root()` | Leaves and interior nodes are both `sha256(str)` with no domain prefix (leaf/interior ambiguity). No hash chain over trails. | `pmoves/tools/cgp_v2_build.py:21-36` (leaf `:28`, interior `:33`); `pmoves/services/content-provenance-gate/main.py:409` |
+| G6 | Merkle | `cgp_v2_build.merkle_root()`; content-provenance-gate has its own `_merkle_root()` | Leaves and interior nodes are both `sha256(str)` with no domain prefix (leaf/interior ambiguity), and an odd level duplicates its last node — the CVE-2012-2459 malleability shape. No hash chain over trails. | `pmoves/tools/cgp_v2_build.py:21-36` (leaf `:28`, interior `:33`); `pmoves/services/content-provenance-gate/main.py:409` |
 | G7 | Agent card (rich) | `agent_card_schema.py`: Model → Agent → Harness → Framework, CHIT 5D, FlOO$ suit | Unwired. One commit (`96b8be6f4`); its only consumer is the sibling `example_cards.py`. | `pmoves/services/agent-cards/agent_card_schema.py:18-19,42-549` |
 | G8 | Agent card (served) | A2A `/.well-known/agent-card.json` live | Agent Zero only, Supabase-JWT-gated (`A2A_DISCOVERY_PUBLIC` default false). No card per identity. | `pmoves/services/agent-zero/python/features/a2a/server.py:40`; `pmoves/docs/operations/AGENT_ZERO_API.md:179,188-192` |
-| G9 | Card lifecycle | `signing-card.v1` has `active`, `rotated_at`, `supersedes_card_id` | No card uses `supersedes_card_id`; no road retires or revokes an identity (RFC D3). The YAML header still calls the schema "pending land". | `pmoves/contracts/schemas/identity/signing-card.v1.schema.json:7,90-103`; `signing_identity_cards.yaml:16`; `pmoves/docs/architecture/DAMAGE_CONTROL_STRUCTURED_POLICY_RFC.md:211` |
+| G9 | Card lifecycle | `signing-card.v1` has `active`, `rotated_at`, `supersedes_card_id` | No card uses `supersedes_card_id`; no road retires or revokes an identity (RFC D3). The YAML header still calls the schema "pending land", and the cards file does not validate against it today (e.g. a card with `role: ci-bot`). The schema sets `additionalProperties: false`, so every new card field needs a v2. `keygen_cards.py` cannot rotate: it picks the first card by `agent_id` even if retired (`:122`), refuses an existing key path (`:133-135`), and `build_allowed_signers.py:49` emits active cards only. | `pmoves/contracts/schemas/identity/signing-card.v1.schema.json:7,90-103`; `signing_identity_cards.yaml:16`; `pmoves/docs/architecture/DAMAGE_CONTROL_STRUCTURED_POLICY_RFC.md:211` |
 | G10 | Cipher auth | Bearer token → Supabase `cipher_agent_tokens` row → `agentId` + scopes; 401 (rejected) vs 503 (not judged) split | Token store is **per node** (each cipher resolves in its own Supabase), so a token minted on one node 401s on another. Cards are not read; scopes live only on token rows. | `Pmoves-cipher` gitlink `cd426d50`: `src/pmoves/auth.ts:85-124,179-222` (503 `:209`, 401 `:214`, identity attach `:219-220`) |
 | G11 | Graph mirror | Neo4j mindmap live (fixture data) | `:Agent` has three conflicting UNIQUE keys (`id`, `name`, `agent_id`); seed order either aborts or silently forks an identity. | `pmoves/docs/TAC/TAC_NEO4J.md:106,247-254` |
 | G12 | Node identity | `node_identity.this_node()`: `PMOVES_NODE_ID` or hostname → vocabulary alias → canonical | **Claimed, never measured.** No card or vocabulary entry carries node evidence. Nothing detects "woke on a different node". | `pmoves/tools/node_identity.py:122-148`; `pmoves/configs/node-vocabulary.yaml:36,86-103` |
 | G13 | Host state | Glances runbook + `glances-fetch` sitrep, address-free | Answers "how is the box", not "which box". `glances-autodetect.sh` classifies an unknown host but needs root. Hardware profiles are the expected side but are never compared at runtime. | `pmoves/docs/operations/GLANCES_RUNBOOK.md:1-6,82-102` (PR #3305); `deploy/provision/glances-autodetect.sh:50,99-103`; `pmoves/config/profiles/workstation-9850x3d-dual-r9700.yaml` |
-| G14 | Model provenance | Model registry service; `models_sync.py registry-snapshot`; provider-verifier static gate | The verifier is a *provider conformance* gate, not a per-session model stamp. Checkpoints record harness/model as `unknown`. Docs disagree on the registry port (catalog 8111; `agent_registry.yaml:897` says 8110 is reserved for it). | `.claude/context/services-catalog.md:166-168`; `pmoves/tools/models/models_sync.py:2-9`; `pmoves/tools/provider_verifier_gate.py:1-20`; research `djRPo-NFQOz5` |
+| G14 | Model provenance | Model registry service; `models_sync.py registry-snapshot`; provider-verifier static gate | The verifier is a *provider conformance* gate, not a per-session model stamp. No stored per-provider conformance result exists to look up. Checkpoints record harness/model as `unknown`. Both docs claim 8111 for *different* services: the catalog gives it to the model registry, `agent_registry.yaml:897` to gateway-agent (calling 8110 the registry's). | `.claude/context/services-catalog.md:166-168`; `pmoves/tools/models/models_sync.py:2-9`; `pmoves/tools/provider_verifier_gate.py:1-20`; research `djRPo-NFQOz5` |
 | G15 | Settlement signatures | `isSigned()` = `Boolean(alg && kid && hmac)` | A truthiness check gating LIVE settlement, operator approval, and deployment attestation; `hmac:'abc123'` passes. **Must not be inherited.** | `PMOVES-ToKenism-Multi` gitlink `04285b81`: `integrations/firefly/settlement-executor.ts:392-394`; `integrations/contracts/contract-settlement-executor.ts:506-508`; `integrations/contracts/settlement-deployment-attestation.ts:156-158` |
 | G16 | Ed25519 pattern | `Ed25519MultisigSigner`: domain tag `pmoves.tally.v1`, canonical preimage, k-of-n, verifiable on public keys only | The pattern to copy. Not used by the main repo or by settlement. | gitlink `04285b81`: `integrations/contracts/tally-signer-ed25519.ts:2-9,40-43,87-106,140-144` |
 | G17 | Tokens | `GroToken.sol`, `FoodUSD.sol` (21 lines each) | Plain ERC20, `onlyOwner` mint, no cap, undeployed. FoodUSD's 1:1 peg is prose only; no reserve code. `soulbound` defaults to `false`; `distributeWeekly` is Gaussian; a Dirichlet `distributeByAttribution` exists off the default path. | gitlink `04285b81`: `contracts/solidity/contracts/GroToken.sol:9,13`; `FoodUSD.sol:9,13`; `integrations/README.md:34`; `integrations/contracts/grotoken-model.ts:24,59,93-117,161,225-226` |
@@ -109,73 +110,170 @@ history, travels, signed ACKs). That bundle is the passport.
 ## 3. Design layers
 
 Nine layers. Each names what it builds on, what it must not inherit, and how it
-fails. Throughout: a verifier returns a **structured verdict** with exit codes
-`0` verified / `1` finding (bad signature, mismatch) / `3` could not measure
-(missing card, unreachable registry). A verifier is never a truthiness check and
-never collapses `3` into `0` (G15 is the counter-example). Tools that emit these
-codes are called **directly**, not through `make`, because make reports every
-nonzero recipe exit as `2`.
+fails. Throughout: a verifier returns a **structured verdict**
+`{code, reason, card_id, key_fpr, delegation_id}` with exit codes `0` verified /
+`1` finding (bad signature, contradiction) / `3` could not measure (registry
+unreachable or stale). A verifier is never a truthiness check and never
+collapses `3` into `0` (G15 is the counter-example). Tools that emit these codes
+are called **directly**, not through `make`, because make reports every nonzero
+recipe exit as `2`.
 
-### 3a. Key — one Ed25519 identity key per identity
+### 3a. Key — one Ed25519 identity key per identity, scoped delegations
 
-- **Issue** with the existing road: `pmoves-keygen` via `keygen_cards.py generate`
-  (G1). The card already carries `ml.ssh_allowed_signers_line`, whose
-  `ssh-ed25519 <blob>` holds the raw 32-byte public key, so P1 needs no new key
-  format: the verifier decodes the blob. A dedicated `ml.ed25519_pub` field is
-  a later schema addition (signing-card v2), not a precondition.
-- **Bind to the identity, not to a node** (doctrine 2, 4). Recommended shape:
-  the **identity key** signs a short-lived **node delegation**
-  (`pmoves.nodecert.v1`: subkey pub, measured-node evidence hash, `not_before`,
-  `not_after`). Day-to-day signing uses the node subkey; verifiers walk subkey →
-  identity key → card. Losing or retiring a node revokes one delegation and
-  leaves the identity intact. P1 may start with the identity key alone on its
-  home node; delegation lands in P2 with node verification (decision D5).
-- **Custody** through the secrets funnel only, delivered as a `_FILE`
-  (mode 0600) like the other file-delivered credentials. Never in git
-  (`pmoves/.gitignore:77` already excludes `chit/keys/`), never in an env
-  dump, never in a CHIT bundle that leaves the node. Delivery validates the key
-  **shape** (parses as Ed25519, public half matches the card), because a
-  presence check passes a truncated secret.
-- **Rotate** by issuing a new card with `supersedes_card_id` set and the old
-  card `active: false` + `rotated_at` (fields exist:
-  `signing-card.v1.schema.json:90-103`). Signatures verify against the card
-  that was active at `signed_at`.
-- **Revoke** needs a road that does not exist (G9, RFC D3). Two kinds: *retire*
-  (old signatures stay valid) and *compromise* (signatures after a stated
-  `compromised_since` are findings). Both are card-state changes the identity
-  or operator signs; neither deletes history.
-- **Do not reuse** `chit_security.py` HMAC keys for identity (G3). HMAC stays
-  what it is: deployment-wide transport integrity. Ed25519 is the identity proof.
-  The two coexist on one payload (`sig` = HMAC block, `idsig` = Ed25519 block).
+**Issue.** Use the existing road, `pmoves-keygen` via `keygen_cards.py` (G1),
+after fixing the rotation gaps in G9 (P0, §5 P-8): per-card key paths
+(`<agent>-<card_id>-signing`, so a rotation never collides with the old file),
+active-card selection instead of the first match by `agent_id`, and retired keys
+kept in `allowed_signers` with `valid-after` / `valid-before` bounds rather than
+dropped (reviewers confirm against `ssh-keygen(1)` § ALLOWED SIGNERS).
+
+**Passport key ≠ git signing key** (decision D12). The identity key signs only
+passport tags (§3b). Git commit signing keeps its own SSH key, held wherever
+commits are made. Reusing one key would put the identity key on every machine
+that commits, which is the custody risk the delegation design exists to avoid.
+
+**Custody** through the secrets funnel only, delivered as a `_FILE` (mode 0600).
+Never in git (`pmoves/.gitignore:77` already excludes `chit/keys/`), never in an
+env dump, never inside a CHIT bundle that leaves the node. Delivery validates
+the key's **shape** (parses as Ed25519, public half matches the card), because
+a presence check passes a truncated secret.
+
+**Delegations** (doctrine 2 and 4: one identity, the node a recorded fact). The
+identity key signs a short-lived delegation to a per-node subkey under
+`pmoves.nodecert.v1`. Day-to-day signing uses the subkey; the identity key stays
+in custody and signs only the identity-key-only tags.
+
+| Delegation field | Meaning |
+|---|---|
+| `issuer_agent_id`, `issuer_card_id`, `issuer_key_fpr` | which identity key issued it; must resolve to an active card whose `h.agent_id` matches |
+| `subkey_pub`, `subkey_fpr` | the delegated key |
+| `node` | canonical node + `evidence_ref` from the launch probe (§3c) — records where the subkey is held |
+| `delegation_id` | UUID, referenced from every delegated `idsig` |
+| `allowed_tags[]` | subset of `ack`, `session`, `memory`, `travel`, `cipher-req`. **Never** `card`, `nodecert`, `rotate`, `revoke`, `fork`, `mint`. |
+| `not_before`, `not_after` | lifetime, capped at a fleet maximum (proposed 7 days; security review sets it) |
+
+A delegated signature under a tag outside `allowed_tags` is `1 tag_not_delegated`;
+a stolen tip-node subkey can therefore sign ACKs and memory writes for at most
+one lifetime, and can never sign a card, a rotation, a revocation, a fork, a
+mint, or another delegation. A session record naming a different node from its
+delegation is `1 delegation_node_mismatch`: a **key-custody** contradiction (the
+subkey moved), not an identity gate. The identity can issue a fresh delegation
+on any node at any time (doctrine 4).
+
+**Time is anchored, never self-asserted.** `signed_at` is the signer's claim.
+Every time-dependent check (delegation lifetime, rotation, compromise) uses the
+commit time of the first **anchor committed to git** that covers the signature
+(§3e). A delegated signature counts only if an anchor covering it was committed
+before `not_after` plus a stated grace; otherwise it is `3 unanchored` until
+anchored, and `1 expired_delegation` if the first covering anchor lands late.
+
+**Rotate.** A new card carries `supersedes_card_id`; the old card gets
+`active: false` + `rotated_at`. The rotation itself is a `pmoves.rotate.v1`
+entry signed by the **old** key, naming the new `card_id` and `key_fpr`. If the
+old key is compromised, the rotation goes through the operator compromise path
+(signed by the operator's card, with a reason) instead. Rotation ends every
+delegation the old key issued as of the rotation's anchor; signatures covered by
+earlier anchors stay valid; the identity re-issues delegations under the new key.
+
+**Revoke** needs a road that does not exist yet (G9, RFC D3). Two kinds, both
+`pmoves.revoke.v1` entries that change card state and delete nothing:
+*retire* (old signatures stay valid) and *compromise* (`compromised_since`; a
+signature counts as pre-compromise only if covered by an anchor committed before
+`compromised_since`).
+
+**Do not reuse** `chit_security.py` HMAC keys for identity (G3). HMAC stays what
+it is, deployment-wide transport integrity. The two coexist on one payload
+(`sig` = HMAC block, `idsig` = Ed25519 block) and never verify each other (§3b
+policy).
+
+**Signing-card v2 fields** (v1 sets `additionalProperties: false`, so each needs
+the v2 schema; landing it and making the cards file validate is precondition P-8):
+`ml.idkey.pub` (raw 32-byte key, base64), `ml.idkey.key_fpr`,
+`idsig_required_since`, `signed_only` (cipher, §3i), `retired_at`,
+`compromised_since`, `delegation_max_lifetime`, `forked_from`, `forks[]`,
+`alt_of`, and `h.theme` / `h.avatar` for the doctrine-1 umbrella fields not yet
+on the card. `supersedes_card_id` and `rotated_at` exist in v1.
 
 ### 3b. Signing — one signer, domain-separated
 
 - **One implementation** in `pmoves/tools/` (Python), with a TypeScript twin
   only where a TS service must verify (ToKenism). Both are held to one set of
   committed test vectors; no third copy (flute-gateway's HMAC fork, G3, is the
-  drift this prevents).
-- **Preimage** = `domain_tag || 0x00 || canonical_json(payload)`, copying the
-  `tallyPreimage` shape (`tally-signer-ed25519.ts:9,40-43`). Canonical JSON =
-  RFC 8785 (JCS); reviewers should confirm against the RFC text, not this
-  summary.
-- **Domain tags** (a signature under one tag never verifies under another):
+  drift this prevents). **SSHSIG** (`ssh-keygen -Y sign -n <tag>`) is a
+  candidate implementation: its namespace is native domain separation and it
+  avoids hand-rolled crypto; the cost is the SSHSIG blob format in TS verifiers.
+  Security review chooses.
+- **Signed bytes.** `preimage = tag ‖ 0x00 ‖ C(P)`, where `P` is the payload with
+  `sig` and `idsig` removed, plus `idsig` without its own `sig` field, so
+  `card_id`, `key_fpr`, `delegation_id` and `signed_at` are covered. The split
+  is unambiguous because every tag is NUL-free ASCII and the canonical form `C`
+  never emits a raw 0x00 (JCS escapes U+0000 inside strings). This is **not**
+  the `tallyPreimage` encoding: that one is netstring-based
+  (`tally-signer-ed25519.ts:11-16,58-60`). Netstrings over an ordered field list
+  are the fallback for `C` if JCS libraries are rejected.
+- **Canonical form `C`.** RFC 8785 (JCS) via a *named* library in each language
+  with shared vectors. Python has no stdlib JCS; candidates for review are the
+  `rfc8785` package (Python) and `canonicalize` (npm). Signed payloads carry
+  **integers and strings only**: no floats, NaN, or duplicate keys (scores as
+  integer basis points, times as integer epoch milliseconds).
+- **Order.** Compute `idsig` first, then the HMAC `sig` over the document that
+  already contains `idsig`. The two checks are independent: P1 exit (4)
+  requires the HMAC verifier to see an unchanged document shape.
+- **`key_fpr`** = lowercase hex SHA-256 of the raw 32-byte Ed25519 public key.
+  This differs from OpenSSH's `SHA256:` fingerprint (which hashes the SSH wire
+  blob); the card lists both, labelled.
+- **Envelope**: `idsig: {alg: "ed25519", card_id, key_fpr, delegation_id|null,
+  signed_at, sig}`.
+- **Vectors** include non-canonical `S`, small-order public keys, a wrong-tag
+  signature, and odd-sized merkle trees (§3e); verifiers use strict
+  verification and the vectors pin which inputs are rejected.
 
-| Tag | Signs | Producer |
+> **Verification policy** (binding on every verifier; addresses CHIT P1-a)
+>
+> 1. Resolve the card **only** from the card registry by `idsig.card_id`; never
+>    from the payload, a served card, or a self-signed bundle.
+> 2. The key type comes **from the card**. `idsig.alg` must equal the constant
+>    `"ed25519"`; anything else is `1 alg_mismatch`. `alg` is never used to
+>    choose a verifier.
+> 3. The HMAC path and the `idsig` path **never cross**. A card public key is
+>    never used as an HMAC secret; an HMAC key never verifies an `idsig`; a valid
+>    HMAC `sig` says nothing about identity.
+> 4. Once a card is keyed, a payload whose covering anchor is after the card's
+>    `idsig_required_since` and that carries no `idsig` is **`1 missing_idsig`**,
+>    not `3`.
+> 5. `card.h.agent_id` must equal the identity the payload names, else
+>    `1 identity_mismatch` (a valid card cannot sign for someone else).
+> 6. A delegated signature needs a valid delegation (signed by the card's key,
+>    tag in `allowed_tags`, within lifetime by anchor time), else `1` with the
+>    named reason.
+> 7. Registry unreachable or older than its staleness bound → `3
+>    registry_unavailable`. Unknown `card_id` against a fresh registry →
+>    `1 unknown_card`.
+>
+> Both CHIT P1-a attacks are P1 negative tests: **strip `idsig` and re-MAC
+> `sig` with the deployment key** → `1 missing_idsig`; **set `alg:"HMAC"` and
+> MAC with the card's public key** → `1 alg_mismatch`.
+
+**Domain tags** (a signature under one tag never verifies under another):
+
+| Tag | Signs | Signed by |
 |---|---|---|
-| `pmoves.ack.v1` | an ACK: lane, PR/commit sha, verdict, ACK line text hash | ACK writers |
-| `pmoves.session.v1` | session start/heartbeat/end: identity, node verdict, model stamp, harness | launcher (`claude-pmoves`, crush, kimi) |
-| `pmoves.memory.v1` | a memory write: content hash, category, cipher instance | cipher client |
-| `pmoves.travel.v1` | one travels-log entry (3e) | travels appender |
-| `pmoves.card.v1` *(added)* | the generated passport card (3f) | card generator |
-| `pmoves.nodecert.v1` *(added)* | a node delegation (3a) | identity key |
-| `pmoves.cipher-req.v1` *(added)* | a cipher request (3i) | cipher client |
+| `pmoves.ack.v1` | an ACK: lane, PR/commit sha, verdict, ACK-line text hash | delegated subkey |
+| `pmoves.session.v1` | session start/heartbeat/end: identity, node verdict, model stamp, harness | delegated subkey |
+| `pmoves.memory.v1` | a memory write: salted content hash, category, cipher instance | delegated subkey |
+| `pmoves.travel.v1` | one travels entry (§3e) | delegated subkey |
+| `pmoves.cipher-req.v1` | a cipher session credential (§3i) | delegated subkey |
+| `pmoves.card.v1` | the generated passport card (§3f) | identity key only |
+| `pmoves.nodecert.v1` | a delegation (§3a) | identity key only |
+| `pmoves.rotate.v1` | a key rotation (§3a) | old identity key, or operator compromise path |
+| `pmoves.revoke.v1` | retire / compromise (§3a) | identity key or operator |
+| `pmoves.fork.v1` | a fork offer / acceptance (§3g) | identity keys of parent and child |
+| `pmoves.mint.v1` | a standing mint (§3h) | k-of-n committee |
 
-- **Envelope**: `idsig: {alg: "ed25519", card_id, key_fpr, signed_at, sig}`.
-  `card_id` names the card; `key_fpr` names the key on it, so a rotated card
-  cannot be confused with its successor.
-- **ACK lines stay human-readable.** An `ACK::` line gains a short reference
-  `trv:<identity>/<seq>@<hash8>` to the travels entry that carries the
-  signature, so the register stays prose while the proof lives in the log.
+**ACK lines stay human-readable.** An `ACK::` line gains a reference
+`trv:<identity>/<node>/<seq>@<entry hash>`. Display may truncate the hash, but
+the resolver checks the **full** entry hash; a truncated reference never
+verifies.
 
 ### 3c. Node verification at launch — measured, never a gate
 
