@@ -1471,6 +1471,7 @@ first-run: ## Guided first-run: env setup, Supabase, core services, agents, MCPs
 	@$(MAKE) --no-print-directory auth-bootstrap
 	@$(MAKE) --no-print-directory mcp-toolkit-bootstrap || true
 	@$(MAKE) --no-print-directory mcp-config-bootstrap
+	@$(MAKE) --no-print-directory a0-model-sync
 	@$(MAKE) --no-print-directory a0-mcp-seed
 	@echo ""
 	@echo "✅ First-run complete!"
@@ -1591,6 +1592,7 @@ first-run-multi-host: ## Guided first-run with multi-host mesh setup
 	@$(MAKE) --no-print-directory up
 	@$(MAKE) --no-print-directory up-agents-ui
 	@$(MAKE) --no-print-directory auth-bootstrap
+	@$(MAKE) --no-print-directory a0-model-sync
 	@$(MAKE) --no-print-directory a0-mcp-seed
 	@$(MAKE) --no-print-directory registry-sync
 	@echo ""
@@ -4327,6 +4329,11 @@ a0-mcp-show: ## Print Agent Zero runtime MCP server map
 	if [ ! -f "$$file" ]; then echo "✖ $$file not found (run: make -C pmoves a0-mcp-seed)"; exit 1; fi; \
 	echo "→ $$file"; \
 	sed -E 's/(password=)[^&"]+/\1***REDACTED***/g; s/(key=)[^&"]+/\1***REDACTED***/g' "$$file"
+
+# Registry (not compose env) owns the Agent Zero model-config surface.
+.PHONY: a0-model-sync
+a0-model-sync: ensure-env-shared ## Generate Agent Zero presets.yaml from the live model registry (registry = config authority; T0 demoted to optional lane)
+	@$(LOAD_ENV_SHARED); PYTHONPATH="$(CURDIR)/.." $(PYTHON) tools/models/models_sync.py sync-dynamic --target agent-zero --apply-presets --tensorzero-base "$${TENSORZERO_BASE_URL:-http://tensorzero-gateway:3000}"
 
 .PHONY: archon-ui-smoke
 archon-ui-smoke: ## Verify consolidated Archon service API/UI endpoints are reachable (200)

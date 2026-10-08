@@ -1,5 +1,11 @@
 # PMOVES model presets — DOCKED Agent Zero (Agent Zero 2.5 _model_config plugin)
 #
+# STATUS (registry-sync cutover): checked-in FALLBACK TEMPLATE. The live
+# presets file (data/agent-zero/usr/plugins/_model_config/presets.yaml,
+# bind-mounted to /a0/usr/plugins/_model_config/presets.yaml) is GENERATED
+# by 'make a0-model-sync' from the Supabase model registry; this template
+# is what the generator degrades to when the registry is unreachable.
+#
 # Deployed to /a0/usr/plugins/_model_config/presets.yaml (bind mount from
 # pmoves/data/agent-zero/model-config/). When this file exists in usr, the
 # plugin's bootstrap skips downloading the stock agent0ai/a0-presets
