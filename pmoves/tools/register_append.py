@@ -1584,6 +1584,10 @@ def reapply_sidecar(repo: Path, sidecar: Path, ref: str, apply: bool,
                 if verdict.unreadable_co_owners or verdict.unkeyed:
                     raise SyncRefused("a reapplied CLAIM has unreadable co-owners or "
                                       "names no lane. Nothing was appended")
+                if getattr(verdict, "node_unmeasured", None):
+                    why = "; ".join(f"`{o}`: {w}" for o, w in verdict.node_unmeasured)
+                    raise SyncRefused(f"a reapplied CLAIM's owner node could not be "
+                                      f"decided ({why}). Nothing was appended")
             ledger += row
         payload = b"".join(todo)
         print(f"register-sync: RESULT    {len(todo)} to append, "
@@ -2011,6 +2015,15 @@ def _dispatch(argv: list[str] | None = None) -> int:
                 print(f"register-append: NOT MEASURED - CLAIM by `{owner}` names no "
                       "branch the gate can read, so no lane was compared.",
                       file=sys.stderr)
+            return EXIT_UNMEASURED
+
+        # The hook ASKS here; this tool has nobody to ask, and the fallback
+        # (the identity's home key) is the key under which one machine's
+        # RELEASE closed another machine's lanes. Could-not-measure, not a pass.
+        if getattr(verdict, "node_unmeasured", None):
+            for owner, why in verdict.node_unmeasured:
+                print(f"register-append: NOT MEASURED - `{owner}`: {why}. The row "
+                      "was NOT written.", file=sys.stderr)
             return EXIT_UNMEASURED
 
         if args.kind == "release":

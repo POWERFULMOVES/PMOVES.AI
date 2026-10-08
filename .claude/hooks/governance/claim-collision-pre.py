@@ -217,6 +217,46 @@ def is_inert_row(line: str) -> bool:
 _UNSET = object()
 _FOLDER = _UNSET
 _LINEAGE = _UNSET
+_NODES = _UNSET
+
+
+def _import_tool(name: str):
+    """Import `pmoves/tools/<name>.py`, keeping sys.modules honest.
+
+    The module MUST be in sys.modules while it executes: identity_lineage and
+    node_identity define @dataclass, and dataclasses._is_type resolves the
+    owning module via sys.modules[cls.__module__]. Unregistered, that is None
+    and the import dies with a bare AttributeError about __dict__.
+
+    Two hygiene rules ride on that registration:
+      - REUSE an entry that is already this exact file. identity_lineage
+        imports node_identity under the same name; loading it twice built two
+        module objects and left whichever ran last in sys.modules.
+      - On a FAILED exec, restore what was there before (or remove the entry).
+        Left in place, a half-built module is what the next `import` returns,
+        and it fails somewhere unrelated with no trace of the real error.
+    """
+    import importlib.util
+    path = Path(__file__).resolve().parents[3] / "pmoves" / "tools" / f"{name}.py"
+    previous = sys.modules.get(name)
+    if previous is not None:
+        try:
+            if Path(previous.__file__).resolve() == path.resolve():
+                return previous
+        except (AttributeError, TypeError, OSError):
+            pass
+    spec = importlib.util.spec_from_file_location(name, path)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module
+    try:
+        spec.loader.exec_module(module)
+    except BaseException:
+        if previous is not None:
+            sys.modules[name] = previous
+        else:
+            sys.modules.pop(name, None)
+        raise
+    return module
 
 
 def _load_lineage():
@@ -239,19 +279,7 @@ def _load_lineage():
         return _LINEAGE
     _LINEAGE = None
     try:
-        import importlib.util
-        root = Path(__file__).resolve().parents[3]
-        spec = importlib.util.spec_from_file_location(
-            "identity_lineage",
-            root / "pmoves" / "tools" / "identity_lineage.py",
-        )
-        module = importlib.util.module_from_spec(spec)
-        # MUST be registered before exec_module: identity_lineage defines
-        # @dataclass, and dataclasses._is_type resolves the owning module
-        # via sys.modules[cls.__module__]. Unregistered, that is None and
-        # the import dies with a bare AttributeError about __dict__.
-        sys.modules["identity_lineage"] = module
-        spec.loader.exec_module(module)
+        module = _import_tool("identity_lineage")
         module.load_vocabulary()  # fail here, not on the first fold
         _LINEAGE = module
     except Exception as exc:  # noqa: BLE001 -- a guard must not die here
@@ -261,6 +289,233 @@ def _load_lineage():
             "will not be folded, and declared co-owners will not be read.\n"
         )
     return _LINEAGE
+
+
+# Override for the node vocabulary path, honoured ONLY by _load_nodes() below.
+# It exists so a test can make the node half unreadable in a subprocess and
+# assert the degradation is audible; identity_lineage.wearing() keeps reading
+# the default file. Do not set it outside tests.
+NODE_VOCABULARY_ENV = "PMOVES_NODE_VOCABULARY"
+_NODES_ERROR = ""
+
+
+def _load_nodes():
+    """Return (node_identity module, alias index), or None if unavailable.
+
+    The node half of the owner key. node_identity.py is the ONE reader of
+    node-vocabulary.yaml (canonical names, aliases, and which entries are not a
+    machine at all), so the gate asks it rather than keeping a second list.
+
+    WHAT IS LOST WHEN THIS RETURNS None: owners fold to identity alone -- the
+    pre-#3313 key, under which one machine's RELEASE closes another machine's
+    lanes. That is NOT accepted silently: every CLAIM or RELEASE row whose
+    owner resolves to an identity with a declared home gets a caveat (see
+    owner_caveat()), and a caveat is an `ask` on the hook path, a refusal on
+    register-append, and could-not-measure on register-status.
+    """
+    global _NODES, _NODES_ERROR
+    if _NODES is not _UNSET:
+        return _NODES
+    _NODES = None
+    try:
+        module = _import_tool("node_identity")
+        override = os.environ.get(NODE_VOCABULARY_ENV)
+        _NODES = (module, module.load_vocabulary(Path(override) if override else None))
+    except Exception as exc:  # noqa: BLE001 -- a guard must not die here
+        _NODES_ERROR = f"{type(exc).__name__}: {exc}"
+        sys.stderr.write(
+            f"claim-collision-pre: node vocabulary unavailable ({exc}); owner "
+            "keys fold to identity only, so one identity's sessions on two "
+            "nodes are not told apart. CLAIM/RELEASE rows by such identities "
+            "will be ASKED, not allowed.\n"
+        )
+    return _NODES
+
+
+def _machine(nodes, raw):
+    """Canonical name of `raw` if it names one declared MACHINE, else None.
+
+    A class (`jetson`), placeholder (`any`, `cloud`) or runner label is a
+    declared non-machine: it says where something MAY run, not where a session
+    DID, so it never splits a key.
+    """
+    if raw is None:
+        return None
+    module, index = nodes
+    entry = index.get(module._norm(raw))
+    return entry.canonical if entry is not None and entry.is_machine else None
+
+
+# Version / quantity SHAPE only (Kilo r4221570771). "Contains a digit" made
+# `(nano-2)`, `(z890-mirror-2)`, `(dgx spark 2)` annotations, so an unknown
+# digit-bearing NODE folded home silently. A dotted version (`5.5`), a context
+# size (`1M`, `200K`) or the word "context" is model-shaped; a bare integer is
+# NOT -- fleet nodes are named `4090` / `5090`, so an unknown bare number is
+# more likely a node than a model and is asked about.
+_ANNOTATION_SHAPE = re.compile(
+    r"\d+\.\d+|\b\d+\s*[KM]\b|\bcontext\b", re.IGNORECASE)
+_ROLES = _UNSET
+
+
+def _roles() -> frozenset:
+    """Role names from agent_registry.yaml `role_classes` (planner, reviewer,
+    ...). Unreadable -> empty: a role token then reads as node-shaped and is
+    ASKED about -- noisy, never silent."""
+    global _ROLES
+    if _ROLES is _UNSET:
+        try:
+            import yaml
+            path = (Path(__file__).resolve().parents[3] / "pmoves" / "config"
+                    / "agent_registry.yaml")
+            doc = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+            _ROLES = frozenset(str(k).casefold()
+                               for k in (doc.get("role_classes") or {}))
+        except Exception:  # noqa: BLE001
+            _ROLES = frozenset()
+    return _ROLES
+
+
+def _is_annotation(token: str) -> bool:
+    """True when an unrecognised parenthetical token is an annotation (a
+    model, role, or context marker), not something that might be a node."""
+    return (token.strip().casefold() in _roles()
+            or bool(_ANNOTATION_SHAPE.search(token)))
+
+
+def _node_entry(nodes, raw):
+    """The node-vocabulary entry for `raw` (machine or not), or None."""
+    module, index = nodes
+    return index.get(module._norm(raw))
+
+
+def _node_half(lineage, vocab, owner: str, identity: str):
+    """(off-home node or None, caveat). The node half of `owner`'s key.
+
+    The node is None for the HOME session:
+      - no node named in the parenthetical (`(Opus 5)`) -> home, by default;
+      - a node token plus non-node annotations (`(Knuckles, opus 4.7 1M)`
+        names knuckles AND a model; the model is not a node) -> that node.
+
+    IDENTITIES WITH NO DECLARED HOME (`claude-opus`, `crush`, `hermes-agent`,
+    any drop-in) ARE SPLIT PER NODE TOO -- operator decision 2026-10-08. The
+    node a session runs on is a MEASURED fact (launcher node resolution,
+    bootstrap probes), so a parenthetical naming a real node yields
+    `<identity>`@<node>` whether or not the identity has a home; with no node
+    named, the key stays bare (node unknown -- the legacy spelling). The MODEL
+    is never part of the key: crush runs a newer GLM and still idents as
+    crush_glm_5.2; a model is an annotation. Before this decision a no-home
+    identity folded across nodes, which on origin/main had let a bare `CRUSH`
+    RELEASE (row 1849, about another PR) close a `CRUSH-GLM52 (SPARK)` lane
+    (row 1795) -- the #3313 defect in the old ledger.
+    A node token is a declared MACHINE (node-vocabulary.yaml, aliases
+    included) or a node_relations token (`Z890-mirror-on-5090` -> node 5090);
+    each comma-separated token is parsed by identity_lineage.wearing(), the
+    parser the ledger audit already uses, so no regex lives here.
+
+    AMBIGUOUS -> CAVEAT, not a guess:
+      - more than one distinct machine named (`(Knuckles, spark)`, in either
+        order) -- there is no "last token wins";
+      - NO recognised node but some NODE-SHAPED unrecognised token
+        (`(dgx spark)`, `(Knuckles @ spark)`) -- it may be a node the
+        vocabulary does not spell, so "home" would be a guess. A token is
+        an ANNOTATION, not node-shaped, when the vocabulary's models / lanes
+        / roles know it or it is model-shaped (a version number, a context
+        size like `1M`, the word "context"; NOT any digit): `(Opus 5.5)`,
+        `(Claude Opus 5.5 1M context)`, `(reviewer)` are decided, not asked
+        (re-review P3-1: per doctrine the model is an annotation). No model
+        list is hardcoded. Unrecognised tokens BESIDE one recognised node
+        (`(spark, some lane)`) are annotations: decided;
+      - a node wearing() resolved that the gate's own node index lacks.
+    Measured on origin/main's register at the time of writing: 0 of 69
+    distinct owner strings hit either rule.
+
+    The CAVEAT is non-empty when the node half could not be evaluated -- the
+    node vocabulary is unreadable, the identity's declared home is not a node
+    the vocabulary knows, or the parse raised. The key then falls back to the
+    home key (the pre-#3313 behaviour), and the caveat is what stops that
+    fallback from being SILENT: callers turn it into an ask / a refusal.
+    """
+    declared = vocab.index.get(lineage._norm(identity))
+    home_raw = declared.node if declared else None
+    if not home_raw and not lineage.split_author(owner)[1]:
+        # No home and no parenthetical: nothing can name a node. Bare key.
+        return None, ""
+    nodes = _load_nodes()
+    if nodes is None:
+        return None, (
+            f"the node vocabulary is unavailable ({_NODES_ERROR}), so the gate "
+            f"cannot tell which node `{owner}` ({identity}) was signed from"
+        )
+    try:
+        home = _machine(nodes, home_raw) if home_raw else None
+        if home_raw and home is None:
+            return None, (
+                f"{identity}'s declared home node {home_raw!r} is not a machine "
+                f"in node-vocabulary.yaml, so whether `{owner}` is off-home "
+                "cannot be decided"
+            )
+        # PER TOKEN, not wearing(owner) once: wearing() keeps only the LAST
+        # node token it sees, so `(Knuckles, spark)` was spark and
+        # `(spark, Knuckles)` was home -- an order nobody chose meaning
+        # something. Each comma token is parsed by wearing() on its own.
+        base, paren = lineage.split_author(owner)
+        found, node_shaped, unknown_nodes = set(), [], []
+        for token in (t.strip() for t in paren.split(",")):
+            if not token:
+                continue
+            parsed = lineage.wearing(f"{base} ({token})", vocab)
+            machine = _machine(nodes, parsed.node)
+            if machine is not None:
+                found.add(machine)
+            elif parsed.node is not None and _node_entry(nodes, parsed.node) is None:
+                # wearing() resolved a node through ITS table that the gate's
+                # own index does not hold (the two can diverge: the
+                # PMOVES_NODE_VOCABULARY override feeds only this hook).
+                unknown_nodes.append(f"{token!r} -> {parsed.node!r}")
+            node_shaped.extend(t for t in parsed.unclassified
+                               if not _is_annotation(t))
+    except Exception as exc:  # noqa: BLE001 -- unparseable: say so, never guess
+        return None, (
+            f"parsing `{owner}`'s parenthetical raised {type(exc).__name__}: "
+            f"{exc}"
+        )
+    if unknown_nodes:
+        return None, (
+            f"`{owner}` names node(s) {', '.join(unknown_nodes)} that the "
+            "gate's node vocabulary does not know, so its session cannot be "
+            "keyed"
+        )
+    if len(found) > 1:
+        return None, (
+            f"`{owner}` names more than one node ({', '.join(sorted(found))}), "
+            "so which session signed it is ambiguous. Name exactly one node"
+        )
+    if not found and node_shaped:
+        return None, (
+            f"`{owner}` names no node the vocabulary knows but carries "
+            f"node-shaped token(s) {', '.join(repr(t) for t in node_shaped)}; "
+            "the gate cannot tell which session this is. Add your node token, "
+            "e.g. `(Knuckles, ...)`"
+        )
+    worn = next(iter(found), None)
+    return (worn if worn is not None and worn != home else None), ""
+
+
+# THE CONSTRUCTED-KEY NAMESPACE. An off-home owner key is
+# `<identity>` + NODE_KEY_SEP + `<node>`. The separator holds ONE backtick, and
+# every key component goes through _key_text(), which doubles any backtick --
+# so a constructed key has an ODD number of backticks and every other key
+# (raw owner, bare identity) an EVEN number. No raw owner string can therefore
+# equal a constructed key, whatever it is spelled as: `b850-claude @ spark`
+# written literally stays a raw key, not spark's session. In practice no row
+# can even deliver a backtick -- CLAIM_RE, RELEASE_RE, BATON_FROM_RE and the
+# co-owner item regex all capture [^`]+ -- the escaping covers callers that
+# hand canonical_owner() a string directly (register_append's CLI owner).
+NODE_KEY_SEP = "`@"
+
+
+def _key_text(text: str) -> str:
+    return text.replace("`", "``")
 
 
 def _load_folder():
@@ -273,30 +528,73 @@ def _load_folder():
         _FOLDER = None
         return _FOLDER
     vocab = module.load_vocabulary()
+    memo: dict = {}
 
-    def _fold(owner: str) -> str:
-        return module.canonical_identity(owner, vocab) or owner
+    def _fold(owner: str):
+        """(key, caveat) for `owner`. Memoised: the register is folded once
+        per row and most rows repeat a handful of owners."""
+        if owner in memo:
+            return memo[owner]
+        identity = module.canonical_identity(owner, vocab)
+        caveat = ""
+        if not identity:
+            key = _key_text(owner)
+        else:
+            node, caveat = _node_half(module, vocab, owner, identity)
+            key = _key_text(identity)
+            if node:
+                key += NODE_KEY_SEP + _key_text(node)
+        memo[owner] = (key, caveat)
+        return memo[owner]
 
     _FOLDER = _fold
     return _FOLDER
 
 
 def canonical_owner(owner: str) -> str:
-    """Fold an owner string to its canonical identity.
+    """Fold an owner string to its owner key: (canonical identity, node).
 
-    WHY: this hook compared owner strings with `==`, and one identity writes
-    several. B850 alone appears as `(Knuckles)` x16, `(Knuckles, opus 4.7
-    1M)` x7, `(Opus 5)` x2, `(Claude Opus 5)` x1 -- so a RELEASE under one
+    WHY THE FOLD: this hook compared owner strings with `==`, and one identity
+    writes several. B850 alone appears as `(Knuckles)` x16, `(Knuckles, opus
+    4.7 1M)` x7, `(Opus 5)` x2, `(Claude Opus 5)` x1 -- so a RELEASE under one
     spelling did not close a CLAIM opened under another, and a lane stayed
     open for a week (2026-08-25). The same equality also makes an identity
     collide with ITSELF as soon as its parenthetical changes.
+
+    WHY THE NODE (#3313): the fold went one step too far once an identity
+    could be WORN off its home node. node_identity.resolve_register_name()
+    signs such a session `<BASE> (<node>)` -- `B850-CLAUDE (spark)`, or a
+    declared node_relations token, `Z890-CLAUDE (Z890-mirror-on-5090)` --
+    precisely so two concurrent sessions of one identity on two machines do
+    not share an owner string. Folding identity alone merged them anyway: a
+    bare RELEASE on spark closed the lanes Knuckles still held, and a spark
+    CLAIM on a Knuckles branch read as a self-reclaim. So the key carries the
+    node too, and the node DEFAULTS TO HOME: every home spelling --
+    `(Knuckles)`, `(Knuckles, opus 4.7 1M)`, `(Opus 5)`, the bare base --
+    returns the bare canonical identity, exactly the key it returned before,
+    so the 2026-08-25 fold is intact. Only a parenthetical naming a declared
+    machine other than the home node yields a distinct key,
+    `<identity>`@<node>` (see NODE_KEY_SEP for why no raw owner can spell
+    it). See _node_half() for every case that stays home.
 
     FAIL-SAFE: with no vocabulary this returns the string unchanged, which
     is exactly the previous behaviour. A guard that cannot fold keys is no
     worse than it was; a guard that raises stops guarding.
     """
     fold = _load_folder()
-    return fold(owner) if fold else owner
+    return fold(owner)[0] if fold else owner
+
+
+def owner_caveat(owner: str) -> str:
+    """Why `owner`'s key could not be fully evaluated, or "".
+
+    Non-empty only when the identity vocabulary IS loaded (so the owner was
+    folded) but its node half was not decided -- see _node_half(). With no
+    identity vocabulary there is no caveat: owners are compared as exact
+    strings, which already keeps every node spelling apart.
+    """
+    fold = _load_folder()
+    return fold(owner)[1] if fold else ""
 
 
 def co_owners_in(text: str) -> set:
@@ -2012,7 +2310,7 @@ class ClaimVerdict:
     """
 
     __slots__ = ("collisions", "shared", "one_sided", "unkeyed",
-                 "unreadable_co_owners")
+                 "unreadable_co_owners", "node_unmeasured")
 
     def __init__(self):
         self.collisions = []   # nobody declared anything: block
@@ -2020,10 +2318,14 @@ class ClaimVerdict:
         self.one_sided = []    # only this row declared it: ask
         self.unkeyed = []      # no branch named: not checkable
         self.unreadable_co_owners = False
+        # (owner, reason): a CLAIM/RELEASE owner whose node half was not
+        # decided, so its key fell back to the home key. Ask; never allow.
+        self.node_unmeasured = []
 
     def __bool__(self):
         return bool(self.collisions or self.shared or self.one_sided
-                    or self.unkeyed or self.unreadable_co_owners)
+                    or self.unkeyed or self.unreadable_co_owners
+                    or self.node_unmeasured)
 
 
 def evaluate_claims(proposed: str, existing_open: dict) -> ClaimVerdict:
@@ -2058,6 +2360,29 @@ def evaluate_claims(proposed: str, existing_open: dict) -> ClaimVerdict:
     """
     verdict = ClaimVerdict()
     payload_lanes = lanes_in(proposed)
+    # THE NODE HALF, for every CLAIM and RELEASE owner in the proposed write.
+    # A RELEASE is included because a RELEASE is what CLOSES lanes: an owner
+    # whose key fell back to home would close the home session's lanes, which
+    # is the #3313 defect itself.
+    # Every NAME such a row carries is folded through the same key, so each is
+    # checked: the signer, a `baton-from:` holder (whose lanes a baton closes)
+    # and `co-owners:` names (who may close the row) -- re-review P3-2.
+    seen = set()
+    lineage = _load_lineage()
+    for rx in (CLAIM_RE, RELEASE_RE):
+        for m in rx.finditer(proposed):
+            row = _row_at(proposed, m.start())
+            if is_inert_row(row):
+                continue
+            names = [m.group(1)]
+            names += [b.group(1) for b in BATON_FROM_RE.finditer(row)]
+            if lineage is not None:
+                names += [n for n, _note in lineage.co_owners_in(row)]
+            for name in names:
+                caveat = owner_caveat(name)
+                if caveat and name not in seen:
+                    seen.add(name)
+                    verdict.node_unmeasured.append((name, caveat))
     for m in CLAIM_RE.finditer(proposed):
         row = _row_at(proposed, m.start())
         if is_inert_row(row):
@@ -2231,27 +2556,62 @@ def _build_asks(verdict: ClaimVerdict):
     return asks
 
 
-def _emit_ask(asks) -> None:
+NODE_ASKS_SHOWN = 10
+
+
+def _build_node_asks(verdict: ClaimVerdict):
+    """One line per owner, capped: a Write tool's `content` is the WHOLE
+    register, so in a degraded run every historical owner is listed."""
+    asks = []
+    for owner, why in verdict.node_unmeasured[:NODE_ASKS_SHOWN]:
+        sys.stderr.write(f"claim-collision-pre: NOT MEASURED - {why}.\n")
+        asks.append(f"  - `{owner}`: {why}.")
+    hidden = len(verdict.node_unmeasured) - NODE_ASKS_SHOWN
+    if hidden > 0:
+        asks.append(f"  - ... and {hidden} more owner(s) for the same reason.")
+    return asks
+
+
+def _emit_ask(asks, node_asks=()) -> None:
+    lines = []
+    if asks:
+        lines += [
+            "This CLAIM does not collide only because of something "
+            "written in the edit itself. Nobody on the other side has "
+            "said so:",
+            "",
+            *asks,
+            "",
+            "A one-sided declaration is attribution, not a handoff, and "
+            "this hook cannot tell the two apart from here. If you have "
+            "coordinated -- or the incumbent is offline and you are "
+            "picking the lane up -- proceed. If you have not, coordinate "
+            "first or pick a different branch. Asking rather than "
+            "refusing is deliberate: the register is a shared ledger, "
+            "not a lock, and more than one node on a lane is often the "
+            "village working.",
+        ]
+    if node_asks:
+        if lines:
+            lines.append("")
+        lines += [
+            "NOT MEASURED - which NODE these owners signed from could not be "
+            "decided, so the gate compared them as their identity's HOME "
+            "session:",
+            "",
+            *node_asks,
+            "",
+            "That fallback is the key under which one machine's RELEASE "
+            "closed another machine's lanes (#3313). Proceed only if this "
+            "session IS the home session, or if no other node's session of "
+            "this identity holds the lanes involved. To fix the cause, "
+            "repair the vocabulary named above.",
+        ]
     print(json.dumps({
         "hookSpecificOutput": {
             "hookEventName": "PreToolUse",
             "permissionDecision": "ask",
-            "permissionDecisionReason": "\n".join([
-                "This CLAIM does not collide only because of something "
-                "written in the edit itself. Nobody on the other side has "
-                "said so:",
-                "",
-                *asks,
-                "",
-                "A one-sided declaration is attribution, not a handoff, and "
-                "this hook cannot tell the two apart from here. If you have "
-                "coordinated -- or the incumbent is offline and you are "
-                "picking the lane up -- proceed. If you have not, coordinate "
-                "first or pick a different branch. Asking rather than "
-                "refusing is deliberate: the register is a shared ledger, "
-                "not a lock, and more than one node on a lane is often the "
-                "village working.",
-            ]),
+            "permissionDecisionReason": "\n".join(lines),
         }
     }))
 
@@ -2275,8 +2635,9 @@ def _apply_verdict(verdict: ClaimVerdict) -> None:
     # contradictory answers in one response.
     _report_unkeyed(verdict.unkeyed)
     asks = _build_asks(verdict)
-    if asks:
-        _emit_ask(asks)
+    node_asks = _build_node_asks(verdict)
+    if asks or node_asks:
+        _emit_ask(asks, node_asks)
 
 
 def _gate_shell_write(payload: dict) -> None:
@@ -2375,7 +2736,9 @@ def main() -> None:
     # Proposed-text source differs across tools.
     proposed = ti.get("new_string") if tool == "Edit" else ti.get("content")
     proposed = proposed or ""
-    if not CLAIM_RE.search(proposed):
+    # RELEASE too, not only CLAIM: a RELEASE is what closes lanes, and its
+    # owner's node half has to be decided before it closes the right ones.
+    if not (CLAIM_RE.search(proposed) or RELEASE_RE.search(proposed)):
         sys.exit(0)
 
     register = Path(file_path)

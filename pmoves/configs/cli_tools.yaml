@@ -144,6 +144,15 @@ host_clis:
       windows: "npm install -g @kilocode/cli  # or: curl -fsSL https://kilo.ai/cli/install | bash"
       linux: "npm install -g @kilocode/cli  # or: curl -fsSL https://kilo.ai/cli/install | bash"
     check: "kilo --version"
+  brv:
+    purpose: "ByteRover CLI (byterover-cli, upstream of the Pmoves-cipher fork) — context-tree memory (brv-query/brv-curate). claude-pmoves warns when absent (pmoves/scripts/pm-brv-check.sh). Runbook: docs/TAC/TAC_CIPHER.md"
+    required: false
+    install:
+      # Keep linux identical to PM_BRV_INSTALL_HINT in pmoves/scripts/pm-brv-check.sh
+      # (pinned by pmoves/tests/test_pm_brv_check.py). Requires node >= 20.
+      windows: "npm install -g byterover-cli"
+      linux: "npm install -g byterover-cli"
+    check: "brv --version"
   node:
     purpose: "Node.js — web toolchains (jest/eslint run via package.json scripts, not global). Windows: nvm4w manages versions"
     required: false

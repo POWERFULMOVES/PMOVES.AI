@@ -43,7 +43,10 @@ HOOK = REPO_ROOT / ".claude" / "hooks" / "governance" / "claim-collision-pre.py"
 LIVE_REGISTER = REPO_ROOT / "pmoves" / "docs" / "AGENTS" / "AGNOTE4482PHI.t1.md"
 
 # Registered identities (pmoves/config/identity_vocabulary.yaml).
-HOLDER = "CRUSH-GLM52 (Knuckles)"        # -> crush
+HOLDER = "CRUSH-GLM52 (Knuckles)"        # -> crush`@knuckles
+# crush declares no home node, so since the 2026-10-08 operator decision its
+# Knuckles session keys as `crush`@knuckles` (node measured, never the model).
+CRUSH_KEY = "crush`@knuckles"
 SIGNER = "B850-CLAUDE (Knuckles)"        # -> b850-claude
 OTHER = "B850-CLAUDE-FUNNEL (Knuckles)"  # -> b850-claude-funnel
 
@@ -58,7 +61,7 @@ HELD = (
 SHARED = (f"- `2026-09-20T00:15:00Z` CLAIM `{HOLDER}` branch: `feat/shared` "
           f"· co-owners: `{SIGNER}` (reviewed) · scope: **shared.**\n")
 
-BEFORE = {"crush": ["feat/widget", "fix/sprocket"], "b850-claude": ["chore/mine"]}
+BEFORE = {CRUSH_KEY: ["feat/widget", "fix/sprocket"], "b850-claude": ["chore/mine"]}
 
 
 def _load(path: Path, name: str):
@@ -95,14 +98,14 @@ def _baton(lane: str, holder: str = HOLDER, **kw) -> str:
 def test_a_peer_release_with_baton_from_closes_the_holders_row(gate):
     assert _lanes(gate, HELD) == BEFORE
     assert _lanes(gate, HELD + _baton("feat/widget")) == {
-        "crush": ["fix/sprocket"],          # the holder's OTHER lane stays held
+        CRUSH_KEY: ["fix/sprocket"],          # the holder's OTHER lane stays held
         "b850-claude": ["chore/mine"],      # the signer's own lane is untouched
     }
 
 
 def test_a_co_owners_plain_release_closes_the_shared_row(gate):
     named = _release("branch: `feat/shared`")
-    assert _lanes(gate, HELD + SHARED)["crush"] == [
+    assert _lanes(gate, HELD + SHARED)[CRUSH_KEY] == [
         "feat/shared", "feat/widget", "fix/sprocket"]
     assert _lanes(gate, HELD + SHARED + named) == BEFORE
 
@@ -171,7 +174,7 @@ P2_1_REPROS = {
 @pytest.mark.parametrize("case", sorted(P2_1_REPROS))
 def test_p2_1_a_non_row_or_prose_lane_closes_no_other_owners_row(gate, case):
     text = HELD + SHARED + OWN_SHARED + P2_1_REPROS[case]
-    assert "feat/shared" in _lanes(gate, text)["crush"]
+    assert "feat/shared" in _lanes(gate, text)[CRUSH_KEY]
     assert gate.peer_closes_in(text) == []
 
 
@@ -186,19 +189,23 @@ def test_p2_1_the_same_release_on_a_real_row_does_close_the_shared_row(gate):
     # DECLARES the lane closes the co-owned row.
     row = _release("branch: `feat/shared`")
     text = HELD + SHARED + OWN_SHARED + row
-    assert "feat/shared" not in _lanes(gate, text)["crush"]
+    assert "feat/shared" not in _lanes(gate, text)[CRUSH_KEY]
     [pc] = gate.peer_closes_in(text)
-    assert (pc.owner_key, pc.via) == ("crush", "co-owner")
+    assert (pc.owner_key, pc.via) == (CRUSH_KEY, "co-owner")
 
 
 def test_co_owner_match_uses_the_vocabulary_fold(gate):
-    # Documented choice (P3-3): a co-owner is matched by canonical identity,
-    # the same fold that decides an owner's own rows. CRUSH-GLM52 and CRUSH
-    # fold to `crush`, so a row declaring one is closable by the other.
+    # Documented choice (P3-3): a co-owner is matched by the SAME fold that
+    # decides an owner's own rows. CRUSH-GLM52 and CRUSH fold to `crush`, and
+    # since 2026-10-08 the node is part of the key too: `CRUSH (Knuckles)`
+    # closes a row declaring `CRUSH-GLM52 (Knuckles)`; a node-less `CRUSH`
+    # (unknown session) no longer does.
     row = (f"- `2026-09-20T00:00:00Z` CLAIM `{SIGNER}` branch: `feat/fold` "
            "· co-owners: `CRUSH-GLM52 (Knuckles)` · scope: s\n")
-    rel = _release("branch: `feat/fold`", signer="CRUSH")
+    rel = _release("branch: `feat/fold`", signer="CRUSH (Knuckles)")
     assert "b850-claude" not in _lanes(gate, row + rel)
+    bare = _release("branch: `feat/fold`", signer="CRUSH")
+    assert "feat/fold" in _lanes(gate, row + bare)["b850-claude"]
 
 
 # ---------------------------------------------------- reading the rows ------
@@ -206,7 +213,7 @@ def test_co_owner_match_uses_the_vocabulary_fold(gate):
 def test_peer_close_says_who_released_it_on_whose_behalf(gate):
     [pc] = gate.peer_closes_in(HELD + _baton("feat/widget"))
     assert (pc.signer, pc.owner_key, pc.via, pc.lanes) == (
-        SIGNER, "crush", "baton-from", {"feat/widget"})
+        SIGNER, CRUSH_KEY, "baton-from", {"feat/widget"})
     assert not pc.heard_from
     assert f"released by `{SIGNER}` on behalf of owner" in str(pc)
     assert "not heard from since" in str(pc)
@@ -214,7 +221,7 @@ def test_peer_close_says_who_released_it_on_whose_behalf(gate):
 
 def test_co_owner_close_is_recorded_as_such(gate):
     [pc] = gate.peer_closes_in(HELD + SHARED + _release("branch: `feat/shared`"))
-    assert (pc.owner_key, pc.via) == ("crush", "co-owner")
+    assert (pc.owner_key, pc.via) == (CRUSH_KEY, "co-owner")
 
 
 def test_the_signers_own_release_is_not_a_peer_close(gate):
@@ -223,20 +230,20 @@ def test_the_signers_own_release_is_not_a_peer_close(gate):
 
 def test_a_bare_co_owner_release_reaches_no_one_elses_row(gate):
     bare = f"- `2026-10-01T00:00:00Z` RELEASE `{SIGNER}` · scope: **bare.**\n"
-    assert _lanes(gate, HELD + SHARED + bare)["crush"] == [
+    assert _lanes(gate, HELD + SHARED + bare)[CRUSH_KEY] == [
         "feat/shared", "feat/widget", "fix/sprocket"]
 
 
 def test_a_baton_closes_only_lanes_it_declares_not_lanes_its_prose_mentions(gate):
     row = (f"- `2026-10-01T00:00:00Z` RELEASE `{SIGNER}` branch: `feat/widget` "
            f"· baton-from: `{HOLDER}` · scope: done; `fix/sprocket` is next\n")
-    assert _lanes(gate, HELD + row)["crush"] == ["fix/sprocket"]
+    assert _lanes(gate, HELD + row)[CRUSH_KEY] == ["fix/sprocket"]
 
 
 def test_the_bare_word_branch_in_baton_prose_is_not_a_declaration(gate):
     row = (f"- `2026-10-01T00:00:00Z` RELEASE `{SIGNER}` branch: `feat/widget` "
            f"· baton-from: `{HOLDER}` · scope: keeping branch `fix/sprocket`\n")
-    assert _lanes(gate, HELD + row)["crush"] == ["fix/sprocket"]
+    assert _lanes(gate, HELD + row)[CRUSH_KEY] == ["fix/sprocket"]
 
 
 def test_a_fenced_baton_is_refused(gate):
@@ -247,7 +254,7 @@ def test_a_fenced_baton_is_refused(gate):
 def test_a_quoted_baton_field_is_a_mention_not_a_baton(gate):
     row = (f"- `2026-10-01T00:00:00Z` RELEASE `{SIGNER}` branch: `chore/mine` "
            f"· scope: **the new field reads ``baton-from: `{HOLDER}` ``.**\n")
-    assert _lanes(gate, HELD + row) == {"crush": ["feat/widget", "fix/sprocket"]}
+    assert _lanes(gate, HELD + row) == {CRUSH_KEY: ["feat/widget", "fix/sprocket"]}
 
 
 def test_baton_naming_a_lane_the_holder_no_longer_holds_is_a_noop(gate):
@@ -295,13 +302,13 @@ def test_write_road_files_a_baton_that_the_gate_reads(mod, gate, capsys):
     last = _text(mod).rstrip("\n").split("\n")[-1]
     assert f"RELEASE `{SIGNER}`" in last and f"baton-from: `{HOLDER}`" in last
     assert "grant:" not in last
-    assert _lanes(gate, _text(mod))["crush"] == ["feat/shared", "fix/sprocket"]
+    assert _lanes(gate, _text(mod))[CRUSH_KEY] == ["feat/shared", "fix/sprocket"]
     assert "on behalf of `" in capsys.readouterr().err
 
 
 def test_write_road_co_owner_release_announces_the_shared_close(mod, gate, capsys):
     assert _run(mod, "--branch", "feat/shared") == 0
-    assert _lanes(gate, _text(mod))["crush"] == ["feat/widget", "fix/sprocket"]
+    assert _lanes(gate, _text(mod))[CRUSH_KEY] == ["feat/widget", "fix/sprocket"]
     assert "via co-owner" in capsys.readouterr().err
 
 
@@ -352,7 +359,7 @@ def test_ordinary_release_is_unchanged(mod, gate):
     assert mod.main(["release", "--owner", SIGNER, "--branch", "chore/mine",
                      "--scope", "done"]) == 0
     assert _lanes(gate, _text(mod)) == {
-        "crush": ["feat/shared", "feat/widget", "fix/sprocket"]}
+        CRUSH_KEY: ["feat/shared", "feat/widget", "fix/sprocket"]}
 
 
 def test_baton_rows_round_trip_for_register_sync_reapply(mod):
@@ -462,3 +469,12 @@ def test_live_register_every_state_change_is_a_participant_close(gate, tmp_path)
           f"{len(old_rows)} new open rows={len(new_rows)}; changed={sorted(changed)}")
     assert not (set(new_rows) - set(old_rows)), "the new rule must never OPEN a row"
     assert changed <= explained
+
+
+def test_an_off_home_session_may_take_the_baton_from_its_home_session(gate):
+    """#3313: `B850-CLAUDE (spark)` and `B850-CLAUDE` (home, Knuckles) are two
+    sessions of one identity, so a baton between them is a real handoff, not
+    "closing your own lane". Home spellings are still one session."""
+    ra = _load(TOOL, "register_append_baton_node")
+    assert ra.baton_refusal(gate, "B850-CLAUDE (spark)", "B850-CLAUDE") == ""
+    assert "same identity" in ra.baton_refusal(gate, "B850-CLAUDE (Opus 5)", "B850-CLAUDE")

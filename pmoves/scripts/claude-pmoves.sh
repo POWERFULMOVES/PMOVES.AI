@@ -203,6 +203,17 @@ if [ -n "${PM_IDENT_CIPHER_ID:-}" ]; then
 else
   pm_ident_append "You have NO declared Cipher agentId this session. Cipher requires one on every call, so declare it per call and say that you are doing so. Reason: ${PM_IDENT_CIPHER_WHY:-not measured}"
 fi
+# CHECKPOINT STAMP. pmoves_cipher_session_save files harness/model as 'unknown'
+# unless the CALLER passes them (Pmoves-cipher src/pmoves/mcp-sse.ts:817 @
+# cd426d50), and no caller did: b850-claude's checkpoint (session_recall,
+# 2026-10-08, 1 row returned) reads "unknown/unknown", so a cold start cannot
+# tell which harness or model left the note it is resuming from. The launcher
+# knows the harness; the model knows its own id (claude_backend may swap it
+# after this point, so the launcher does not). PMOVES_HARNESS is exported for
+# the roster header the server will read once it stamps at write time -- see
+# pmoves/docs/handoffs/B850_MEMORY_TRAVELS.md.
+export PMOVES_HARNESS=claude-code
+pm_ident_append "When you call pmoves_cipher_session_save, ALWAYS pass harness 'claude-code' and model set to your own exact model id. Omitting them files the checkpoint as 'unknown/unknown'."
 
 # CIPHER TOKEN BIND — the handoff the carry check could only report as missing.
 #
@@ -326,6 +337,21 @@ pm_cipher_identity "$ROOT" "${PM_IDENT_CIPHER_ID:-${PMOVES_NODE_IDENTITY:-}}" ${
 echo "[claude-pmoves] ${PM_CARRY_LINE}" >&2
 if [ -n "${PM_CARRY_PROMPT:-}" ]; then
   pm_ident_append "$PM_CARRY_PROMPT"
+fi
+
+# BRV — the context-tree memory CLI (byterover-cli). Cipher above is the
+# vector/graph memory; brv is the other half, and a node without it had no line
+# of output saying so (measured on knuckles 2026-10-08). FAIL-OPEN, LOUDLY:
+# stderr for the operator, and the prompt for the model, because stderr has
+# scrolled away before the TUI paints. See pmoves/scripts/pm-brv-check.sh.
+if [ -f "$ROOT/pmoves/scripts/pm-brv-check.sh" ]; then
+  # shellcheck source=./pm-brv-check.sh
+  . "$ROOT/pmoves/scripts/pm-brv-check.sh"
+  pm_brv_check
+  echo "[claude-pmoves] ${PM_BRV_LINE}" >&2
+  if [ -n "${PM_BRV_PROMPT:-}" ]; then
+    pm_ident_append "$PM_BRV_PROMPT"
+  fi
 fi
 
 # ONE FLAG, COMPOSED ONCE. Every block above called pm_ident_append, which
