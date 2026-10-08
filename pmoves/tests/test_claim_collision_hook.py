@@ -532,6 +532,59 @@ def test_a_single_node_with_annotations_is_decided_not_asked(tmp_path, owner):
     assert '"permissionDecision": "ask"' not in result.stdout, result.stdout
 
 
+# Re-review P3-1: the model (and a role) is an annotation, never a node.
+@pytest.mark.parametrize("owner", [
+    "B850-CLAUDE (Opus 5.5)",
+    "B850-CLAUDE (Claude Opus 5.5 1M context)",
+    "B850-CLAUDE (reviewer)",
+    "CLAUDE-OPUS (Opus 5.5)",                 # no-home identity, model only
+])
+def test_a_model_or_role_annotation_is_not_asked_about(tmp_path, owner):
+    result = run_hook(tmp_path, _claim(owner, branch="feat/fresh", ts="2026-01-03T00:00:00Z"))
+    assert result.returncode == ALLOW, result.stderr
+    assert '"permissionDecision": "ask"' not in result.stdout, result.stdout
+
+
+def test_a_node_shaped_unknown_token_still_asks_and_says_how_to_fix_it(tmp_path):
+    result = run_hook(tmp_path, _claim("B850-CLAUDE (dgx spark)", branch="feat/fresh",
+                                       ts="2026-01-03T00:00:00Z"))
+    reason = _ask_reason(result)
+    assert reason and "Add your node token" in reason, result.stdout
+
+
+# Re-review P3-2: baton-from holders and co-owner names are keyed too.
+def test_an_ambiguous_baton_from_holder_is_asked(tmp_path):
+    """A homeless signer passing a baton on behalf of a holder whose node
+    cannot be decided: the baton closes THAT holder's lanes, so ask."""
+    row = ("- `2026-01-03T00:00:00Z` RELEASE `CRUSH (Knuckles)` branch: `feat/fresh` "
+           "\u00b7 baton-from: `CLAUDE-OPUS (dgx spark)` \u00b7 scope: passing.\n")
+    result = run_hook(tmp_path, EXISTING + row, EXISTING)
+    assert "CLAUDE-OPUS (dgx spark)" in _ask_reason(result), result.stdout
+
+
+def test_an_ambiguous_co_owner_name_is_asked(tmp_path):
+    row = ("- `2026-01-03T00:00:00Z` CLAIM `CRUSH (Knuckles)` branch: `feat/fresh` "
+           "\u00b7 co-owners: `B850-CLAUDE (Knuckles, spark)` \u00b7 scope: s.\n")
+    result = run_hook(tmp_path, row)
+    assert "B850-CLAUDE (Knuckles, spark)" in _ask_reason(result), result.stdout
+
+
+# Re-review P3-3: the override feeds only the hook's index; a node wearing()
+# resolves that the index lacks must be asked about, not folded home.
+def test_a_node_the_gate_index_lacks_is_asked(tmp_path, monkeypatch):
+    import yaml
+    real = REPO_ROOT / "pmoves" / "configs" / "node-vocabulary.yaml"
+    doc = yaml.safe_load(real.read_text(encoding="utf-8"))
+    doc["nodes"] = [n for n in doc["nodes"] if n.get("canonical") != "spark"]
+    trimmed = tmp_path / "nodes.yaml"
+    trimmed.write_text(yaml.safe_dump(doc), encoding="utf-8")
+    monkeypatch.setenv("PMOVES_NODE_VOCABULARY", str(trimmed))
+    result = run_hook(tmp_path, _claim(B850_SPARK, ts="2026-01-03T00:00:00Z"), _claim(B850_A))
+    assert result.returncode == BLOCK or "does not know" in _ask_reason(result), (
+        f"a node outside the gate's index folded home silently\n{result.stdout!r}"
+    )
+
+
 def test_the_hook_still_guards_when_the_vocabulary_is_missing(tmp_path, monkeypatch):
     """Fail-safe, not fail-open.
 

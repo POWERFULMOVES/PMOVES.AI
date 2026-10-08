@@ -346,6 +346,42 @@ def _machine(nodes, raw):
     return entry.canonical if entry is not None and entry.is_machine else None
 
 
+_ANNOTATION_SHAPE = re.compile(
+    r"\d+(?:\.\d+)?|\b\d+\s*[KM]\b|\bcontext\b", re.IGNORECASE)
+_ROLES = _UNSET
+
+
+def _roles() -> frozenset:
+    """Role names from agent_registry.yaml `role_classes` (planner, reviewer,
+    ...). Unreadable -> empty: a role token then reads as node-shaped and is
+    ASKED about -- noisy, never silent."""
+    global _ROLES
+    if _ROLES is _UNSET:
+        try:
+            import yaml
+            path = (Path(__file__).resolve().parents[3] / "pmoves" / "config"
+                    / "agent_registry.yaml")
+            doc = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+            _ROLES = frozenset(str(k).casefold()
+                               for k in (doc.get("role_classes") or {}))
+        except Exception:  # noqa: BLE001
+            _ROLES = frozenset()
+    return _ROLES
+
+
+def _is_annotation(token: str) -> bool:
+    """True when an unrecognised parenthetical token is an annotation (a
+    model, role, or context marker), not something that might be a node."""
+    return (token.strip().casefold() in _roles()
+            or bool(_ANNOTATION_SHAPE.search(token)))
+
+
+def _node_entry(nodes, raw):
+    """The node-vocabulary entry for `raw` (machine or not), or None."""
+    module, index = nodes
+    return index.get(module._norm(raw))
+
+
 def _node_half(lineage, vocab, owner: str, identity: str):
     """(off-home node or None, caveat). The node half of `owner`'s key.
 
@@ -373,10 +409,17 @@ def _node_half(lineage, vocab, owner: str, identity: str):
     AMBIGUOUS -> CAVEAT, not a guess:
       - more than one distinct machine named (`(Knuckles, spark)`, in either
         order) -- there is no "last token wins";
-      - NO recognised node but some unrecognised token (`(dgx spark)`,
-        `(Knuckles @ spark)`) -- the token may be a node the vocabulary does
-        not spell, so "home" would be a guess. Unrecognised tokens BESIDE one
-        recognised node (`(spark, some lane)`) are annotations: decided.
+      - NO recognised node but some NODE-SHAPED unrecognised token
+        (`(dgx spark)`, `(Knuckles @ spark)`) -- it may be a node the
+        vocabulary does not spell, so "home" would be a guess. A token is
+        an ANNOTATION, not node-shaped, when the vocabulary's models / lanes
+        / roles know it or it is model-shaped (a version number, a context
+        marker like `1M`, the word "context"): `(Opus 5.5)`,
+        `(Claude Opus 5.5 1M context)`, `(reviewer)` are decided, not asked
+        (re-review P3-1: per doctrine the model is an annotation). No model
+        list is hardcoded. Unrecognised tokens BESIDE one recognised node
+        (`(spark, some lane)`) are annotations: decided;
+      - a node wearing() resolved that the gate's own node index lacks.
     Measured on origin/main's register at the time of writing: 0 of 69
     distinct owner strings hit either rule.
 
@@ -410,7 +453,7 @@ def _node_half(lineage, vocab, owner: str, identity: str):
         # `(spark, Knuckles)` was home -- an order nobody chose meaning
         # something. Each comma token is parsed by wearing() on its own.
         base, paren = lineage.split_author(owner)
-        found, unclassified = set(), []
+        found, node_shaped, unknown_nodes = set(), [], []
         for token in (t.strip() for t in paren.split(",")):
             if not token:
                 continue
@@ -418,22 +461,35 @@ def _node_half(lineage, vocab, owner: str, identity: str):
             machine = _machine(nodes, parsed.node)
             if machine is not None:
                 found.add(machine)
-            unclassified.extend(parsed.unclassified)
+            elif parsed.node is not None and _node_entry(nodes, parsed.node) is None:
+                # wearing() resolved a node through ITS table that the gate's
+                # own index does not hold (the two can diverge: the
+                # PMOVES_NODE_VOCABULARY override feeds only this hook).
+                unknown_nodes.append(f"{token!r} -> {parsed.node!r}")
+            node_shaped.extend(t for t in parsed.unclassified
+                               if not _is_annotation(t))
     except Exception as exc:  # noqa: BLE001 -- unparseable: say so, never guess
         return None, (
             f"parsing `{owner}`'s parenthetical raised {type(exc).__name__}: "
             f"{exc}"
         )
+    if unknown_nodes:
+        return None, (
+            f"`{owner}` names node(s) {', '.join(unknown_nodes)} that the "
+            "gate's node vocabulary does not know, so its session cannot be "
+            "keyed"
+        )
     if len(found) > 1:
         return None, (
             f"`{owner}` names more than one node ({', '.join(sorted(found))}), "
-            "so which session signed it is ambiguous"
+            "so which session signed it is ambiguous. Name exactly one node"
         )
-    if not found and unclassified:
+    if not found and node_shaped:
         return None, (
             f"`{owner}` names no node the vocabulary knows but carries "
-            f"unrecognised token(s) {', '.join(repr(t) for t in unclassified)}; "
-            "if one of them is meant as a node, the gate cannot tell"
+            f"node-shaped token(s) {', '.join(repr(t) for t in node_shaped)}; "
+            "the gate cannot tell which session this is. Add your node token, "
+            "e.g. `(Knuckles, ...)`"
         )
     worn = next(iter(found), None)
     return (worn if worn is not None and worn != home else None), ""
@@ -2302,16 +2358,25 @@ def evaluate_claims(proposed: str, existing_open: dict) -> ClaimVerdict:
     # A RELEASE is included because a RELEASE is what CLOSES lanes: an owner
     # whose key fell back to home would close the home session's lanes, which
     # is the #3313 defect itself.
+    # Every NAME such a row carries is folded through the same key, so each is
+    # checked: the signer, a `baton-from:` holder (whose lanes a baton closes)
+    # and `co-owners:` names (who may close the row) -- re-review P3-2.
     seen = set()
+    lineage = _load_lineage()
     for rx in (CLAIM_RE, RELEASE_RE):
         for m in rx.finditer(proposed):
-            if is_inert_row(_row_at(proposed, m.start())):
+            row = _row_at(proposed, m.start())
+            if is_inert_row(row):
                 continue
-            owner = m.group(1)
-            caveat = owner_caveat(owner)
-            if caveat and owner not in seen:
-                seen.add(owner)
-                verdict.node_unmeasured.append((owner, caveat))
+            names = [m.group(1)]
+            names += [b.group(1) for b in BATON_FROM_RE.finditer(row)]
+            if lineage is not None:
+                names += [n for n, _note in lineage.co_owners_in(row)]
+            for name in names:
+                caveat = owner_caveat(name)
+                if caveat and name not in seen:
+                    seen.add(name)
+                    verdict.node_unmeasured.append((name, caveat))
     for m in CLAIM_RE.finditer(proposed):
         row = _row_at(proposed, m.start())
         if is_inert_row(row):
