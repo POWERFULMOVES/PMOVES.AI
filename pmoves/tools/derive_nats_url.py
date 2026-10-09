@@ -25,6 +25,17 @@ Rules:
 
 Run via `make -C pmoves secrets-derive-nats-url`; secrets-rotate and
 secrets-funnel call it before chit-export.
+
+Tier files (--check / --promote):
+  Compose loads env.shared and then a service's tier file, and the later file
+  wins. A tier file still holding an old NATS_URL therefore overrides the fresh
+  one in env.shared for every service on that tier. secrets-funnel-sync does not
+  write every tier (env.tier-ui is one it leaves alone), so after a rotation the
+  NATS keys are mirrored from env.shared into each env.tier-* that DECLARES
+  them. A tier that does not declare a key never gains it: that would hand the
+  bus credential to services that have no use for it.
+  --check   prints "<KEY> <file> match|MISMATCH", exits 1 on any mismatch.
+  --promote rewrites the mismatched lines (same surgical writer).
 """
 
 from __future__ import annotations
@@ -33,6 +44,7 @@ import argparse
 import importlib.util
 import ipaddress
 import os
+import re
 import sys
 from pathlib import Path
 from urllib.parse import quote, urlsplit, urlunsplit
@@ -108,10 +120,63 @@ def derive(env_path: Path = ENV_SHARED) -> str:
     return "updated"
 
 
+NATS_KEYS = ("NATS_URL", "NATS_USER", "NATS_PASSWORD")
+# Live tier files only: env.tier-<name>, no .example / .urlencoded / backups.
+_TIER_NAME = re.compile(r"^env\.tier-[A-Za-z0-9_-]+$")
+
+
+def tier_files(root: Path) -> list[Path]:
+    return sorted(p for p in root.glob("env.tier-*") if _TIER_NAME.match(p.name) and p.is_file())
+
+
+def tier_status(env_path: Path = ENV_SHARED) -> list[tuple[str, Path, bool]]:
+    """(key, tier file, matches env.shared) for each NATS key a tier declares.
+
+    A key env.shared leaves empty has no source of truth and is not compared.
+    """
+    shared = parse_env_file(env_path)
+    rows = []
+    for tier in tier_files(env_path.parent):
+        declared = parse_env_file(tier)
+        for key in NATS_KEYS:
+            want = normalize_env_value(shared.get(key, ""))
+            if key in declared and want:
+                rows.append((key, tier, normalize_env_value(declared[key]) == want))
+    return rows
+
+
+def promote(env_path: Path = ENV_SHARED) -> list[tuple[str, Path]]:
+    """Copy env.shared's NATS keys over each mismatched tier line. Never prints a value."""
+    shared = parse_env_file(env_path)
+    fixed = []
+    for key, tier, ok in tier_status(env_path):
+        if not ok:
+            _rotate_secret()(key, value=normalize_env_value(shared[key]), env_path=tier)
+            fixed.append((key, tier))
+    return fixed
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Re-derive NATS_URL credentials from NATS_USER/NATS_PASSWORD.")
     ap.add_argument("--env-file", type=Path, default=ENV_SHARED)
+    mode = ap.add_mutually_exclusive_group()
+    mode.add_argument("--check", action="store_true", help="compare tier files' NATS keys with env.shared")
+    mode.add_argument("--promote", action="store_true", help="mirror env.shared's NATS keys into tier files")
     args = ap.parse_args(argv)
+    if args.check:
+        rows = tier_status(args.env_file)
+        for key, tier, ok in rows:
+            print(f"nats-tier-check: {key} {tier.name} {'match' if ok else 'MISMATCH'}")
+        if not rows:
+            print("nats-tier-check: no tier file declares a NATS key")
+        return 0 if all(ok for _, _, ok in rows) else 1
+    if args.promote:
+        fixed = promote(args.env_file)
+        for key, tier in fixed:
+            print(f"nats-tier-promote: {key} -> {tier.name} (value not shown)")
+        if not fixed:
+            print("nats-tier-promote: every tier file already matches env.shared")
+        return 0
     result = derive(args.env_file)
     messages = {
         "updated": "NATS_URL credentials re-derived from NATS_USER/NATS_PASSWORD (value not shown)",

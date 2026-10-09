@@ -100,3 +100,60 @@ def test_operator_can_declare_extra_local_hosts(tmp_path, monkeypatch):
     p = _env(tmp_path, f"NATS_PASSWORD=new\nNATS_URL={_url('nats', 'old', 'other-nats-1:4222')}\n")
     assert d.derive(p) == "updated"
     assert parse_env_file(p)["NATS_URL"] == _url("nats", "new", "other-nats-1:4222")
+
+
+def _tiers(tmp_path: Path, shared: str, tiers: dict[str, str]) -> Path:
+    p = _env(tmp_path, shared)
+    for name, body in tiers.items():
+        (tmp_path / name).write_text(body, encoding="utf-8")
+    return p
+
+
+def test_check_reports_stale_tier_and_ignores_non_tier_files(tmp_path):
+    fresh, stale = _url("nats", "newpw"), _url("nats", "oldpw")
+    p = _tiers(
+        tmp_path,
+        f"NATS_PASSWORD=newpw\nNATS_URL={fresh}\n",
+        {
+            "env.tier-agent": f"NATS_URL={fresh}\nNATS_PASSWORD=newpw\n",
+            "env.tier-ui": f"NATS_URL={stale}\n",
+            "env.tier-data": "OTHER=1\n",  # declares no NATS key
+            "env.tier-ui.example": f"NATS_URL={stale}\n",
+            "env.tier-supabase.urlencoded": f"NATS_URL={stale}\n",
+        },
+    )
+    rows = {(k, t.name): ok for k, t, ok in d.tier_status(p)}
+    assert rows == {
+        ("NATS_URL", "env.tier-agent"): True,
+        ("NATS_PASSWORD", "env.tier-agent"): True,
+        ("NATS_URL", "env.tier-ui"): False,
+    }
+
+
+def test_promote_fixes_declared_keys_only_and_never_prints_values(tmp_path, capsys):
+    fresh, stale = _url("nats", "newpw"), _url("nats", "oldpw")
+    p = _tiers(
+        tmp_path,
+        f"NATS_USER=nats\nNATS_PASSWORD=newpw\nNATS_URL={fresh}\n",
+        {
+            "env.tier-ui": f"# keep\nNATS_URL={stale}\nUI=1\n",
+            "env.tier-data": "OTHER=1\n",
+        },
+    )
+    assert d.main(["--env-file", str(p), "--promote"]) == 0
+    ui = tmp_path / "env.tier-ui"
+    assert ui.read_text() == f"# keep\nNATS_URL={fresh}\nUI=1\n"  # only the stale line moved
+    assert (tmp_path / "env.tier-data").read_text() == "OTHER=1\n"  # never gains a key
+    assert d.main(["--env-file", str(p), "--check"]) == 0
+    out = capsys.readouterr().out
+    assert "newpw" not in out and "oldpw" not in out
+    assert "NATS_URL -> env.tier-ui" in out
+
+
+def test_check_exits_nonzero_on_mismatch(tmp_path):
+    p = _tiers(
+        tmp_path,
+        f"NATS_PASSWORD=newpw\nNATS_URL={_url('nats', 'newpw')}\n",
+        {"env.tier-ui": "NATS_PASSWORD=oldpw\n"},
+    )
+    assert d.main(["--env-file", str(p), "--check"]) == 1
