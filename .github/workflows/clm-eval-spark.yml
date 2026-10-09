@@ -8,7 +8,7 @@ jobs:
     runs-on: spark
     timeout-minutes: 60
     steps:
-      - name: Setup venv (clm-serve only - vLLM excluded: engine-init fails on GB10 ARM64)
+      - name: "Setup venv (clm-serve only; vLLM excluded — engine-init fails on GB10 ARM64)"
         run: |
           python3 -m venv /tmp/clmvenv
           /tmp/clmvenv/bin/pip install --upgrade pip -q
