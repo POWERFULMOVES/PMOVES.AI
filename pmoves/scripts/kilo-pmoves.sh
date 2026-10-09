@@ -4,7 +4,7 @@
 #
 # Kilo loads the project config from the repo root (kilo.json, .kilo/,
 # .kilocode/) by walking up from the working directory, so the launcher binds
-# the session to this checkout (pm-launch-cwd.sh) and passes every argument
+# the session to this checkout and passes every argument
 # through to `kilo`.
 #
 # What this replaced, and why each part was broken:
@@ -65,12 +65,21 @@ if [ -n "${1:-}" ] && [ -f "$PROJECT_ROOT/pmoves/configs/claws/opencode-$1.json"
   shift
 fi
 
-if [ -f "$PROJECT_ROOT/pmoves/scripts/pm-launch-cwd.sh" ]; then
-  # shellcheck source=./pm-launch-cwd.sh
-  . "$PROJECT_ROOT/pmoves/scripts/pm-launch-cwd.sh"
-  pm_launch_cwd "$PROJECT_ROOT" kilo-pmoves || { echo "${PM_LAUNCH_CWD_LINE}" >&2; exit 1; }
-  echo "${PM_LAUNCH_CWD_LINE}" >&2
-fi
+# Bind the session to this checkout. kilo finds its project layer
+# (<git root>/kilo.json, .kilo/) and keys "continue" by cwd, so a launch from a sibling
+# checkout ran against THAT checkout's files. A cwd inside this checkout
+# (including .claude/worktrees/*) is kept; PMOVES_LAUNCH_KEEP_CWD=1 keeps any.
+ROOT_P="$(CDPATH='' cd -P -- "$PROJECT_ROOT" && pwd)" || exit 1
+HERE_P="$(pwd -P)"
+case "$HERE_P/" in
+  "$ROOT_P"/*) ;;
+  *)
+    if [ -z "${PMOVES_LAUNCH_KEEP_CWD:-}" ]; then
+      cd -- "$ROOT_P" || exit 1
+      echo "[kilo-pmoves] cwd=$ROOT_P (was $HERE_P, outside this checkout; PMOVES_LAUNCH_KEEP_CWD=1 keeps it)" >&2
+    fi
+    ;;
+esac
 
 # `kilocode` is the same npm package (@kilocode/cli) under its older name.
 for KILO_BIN in kilo kilocode; do

@@ -12,7 +12,7 @@
 #     which load .kimi/config.toml and .kimi/mcp.json.
 # The flag set is chosen by asking `kimi --help`, not by version-guessing.
 #
-# Either way the session is bound to THIS checkout (pm-launch-cwd.sh).
+# Either way the session is bound to THIS checkout (see the cwd block below).
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
@@ -63,12 +63,21 @@ if [ -f "$PROJECT_ROOT/pmoves/scripts/pm-node-identity.sh" ]; then
   fi
 fi
 
-if [ -f "$PROJECT_ROOT/pmoves/scripts/pm-launch-cwd.sh" ]; then
-  # shellcheck source=./pm-launch-cwd.sh
-  . "$PROJECT_ROOT/pmoves/scripts/pm-launch-cwd.sh"
-  pm_launch_cwd "$PROJECT_ROOT" kimi-pmoves || { echo "${PM_LAUNCH_CWD_LINE}" >&2; exit 1; }
-  echo "${PM_LAUNCH_CWD_LINE}" >&2
-fi
+# Bind the session to this checkout. Kimi Code finds its project layer
+# (<git root>/.mcp.json, AGENTS.md) and keys "continue" by cwd, so a launch from a sibling
+# checkout ran against THAT checkout's files. A cwd inside this checkout
+# (including .claude/worktrees/*) is kept; PMOVES_LAUNCH_KEEP_CWD=1 keeps any.
+ROOT_P="$(CDPATH='' cd -P -- "$PROJECT_ROOT" && pwd)" || exit 1
+HERE_P="$(pwd -P)"
+case "$HERE_P/" in
+  "$ROOT_P"/*) ;;
+  *)
+    if [ -z "${PMOVES_LAUNCH_KEEP_CWD:-}" ]; then
+      cd -- "$ROOT_P" || exit 1
+      echo "[kimi-pmoves] cwd=$ROOT_P (was $HERE_P, outside this checkout; PMOVES_LAUNCH_KEEP_CWD=1 keeps it)" >&2
+    fi
+    ;;
+esac
 
 if ! command -v kimi >/dev/null 2>&1; then
   echo "[!] kimi not found on PATH. Install Kimi Code (https://moonshotai.github.io/kimi-code/)."

@@ -270,6 +270,37 @@ agents:
       B850/Knuckles node Kimi Code CLI identity (PMOVES-KIMI-KNUCKLES-B850).
       Same affinity posture as claude_b850 -- a preference, not an exclusive
       claim. First harness wired to a per-node cipher_agent_id.
+  kimi_spark:
+    name: "Kimi Spark"
+    class: standard
+    # SPARK-KIMI in identity_vocabulary.yaml (canonical spark-kimi), the
+    # lineage kimi_knuckles descends from. Same shape as kimi_knuckles.
+    # Harness `kimi` (scripts/kimi-pmoves.sh), so node-vocabulary.yaml
+    # spark.default_identity.kimi binds here instead of launching unbound.
+    primary_type: ui
+    secondary_type: agent
+    # No listening socket. A CLI session, not a service.
+    port: null
+    health: null
+    layers:
+      - L0
+      - L2
+      - L4
+    evolution_stage: stage_1
+    # No signing card is minted for spark-kimi yet, so node-vocabulary.yaml
+    # declares no cipher_agent_id for it; the launcher reports that absence.
+    signature: spark-kimi
+    nats:
+      publishes: []
+      subscribes: []
+    topology:
+      node_affinity: [spark]
+      team: orchestration
+      ci_runner: null
+      compose_profile: null
+    description: >-
+      SPARK node Kimi Code CLI identity (SPARK-KIMI). A preference, not an
+      exclusive claim. Cipher carry waits on a minted card.
   claude_5090:
     name: "5090 Claude"
     class: standard

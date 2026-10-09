@@ -71,6 +71,8 @@ nodes:
   - pmoves-spark
   - dgx-spark
   - PMOVES-SPARK
+  default_identity:
+    kimi: kimi_spark
 - canonical: z890
   kind: node
   reach: pmoves-z890
