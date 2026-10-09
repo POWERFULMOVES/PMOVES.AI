@@ -38,7 +38,7 @@ jobs:
           /tmp/clmvenv/bin/python /dev/stdin <<'PYEOF'
           from clm import CLMClient, Choice, Noul
           import json, time
-          client = CLMClient()
+          client = CLMClient(timeout=3600)
           results = {}
           probes = [
               ('Customer charged twice, no response', {'urgent': Noul(instructions='Is this urgent?'), 'team': Choice(instructions='Which team?', criteria={'billing': 'charges', 'technical': 'bugs'})}),
