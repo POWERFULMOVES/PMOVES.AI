@@ -1,0 +1,40 @@
+##############################################################################
+# PMOVES.AI - Agent Zero standalone instances (first-class)
+##############################################################################
+# Registers the upstream-launcher one-off (a0-inst-PMOVES-AGInTZeR0-darkxside)
+# as a tracked compose service. SPARK (agent-zero-darkxside) stays in
+# docker-compose.darkxside-sidecar.yml + Makefile up/down-darkxside-sidecar.
+# IMAGE-only services: no build stanzas -> compose-provenance-audit untouched.
+##############################################################################
+services:
+  agent-zero-darkxside-inst:
+    image: agent0ai/agent-zero:latest
+    container_name: pmoves-agent-zero-darkxside-inst
+    hostname: agent-zero-darkxside-inst
+    restart: unless-stopped
+    labels:
+      a0.launcher.managed: "true"
+      a0.launcher.instanceName: PMOVES-AGInTZeR0-darkxside
+      a0.launcher.role: instance
+    environment:
+      - PORT=80
+      - DOCKED_MODE=false
+      - TOPOLOGY_MODE=standalone
+      - PARENT_SYSTEM=PMOVES.AI
+    volumes:
+      - ${A0INST_USR_DIR:-C:/Users/russe/agent-zero/PMOVES-AGInTZeR0-darkxside/usr}:/a0/usr
+    ports:
+      - ${A0INST_BIND:-127.0.0.1}:${A0INST_PORT:-60937}:80
+    networks:
+      - pmoves-net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:80/health >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+networks:
+  pmoves-net:
+    external: true
+    name: pmoves-net

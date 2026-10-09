@@ -1112,3 +1112,16 @@ def test_the_row_grammar_is_unchanged_by_the_model(mod):
     assert "branch: `fix/x`" in row
     assert "**TTL 72h (expires `2026-01-04T00:00:00Z`)**" in row
     assert row.endswith("· scope: some scope\n")
+
+
+# --- the node half of the owner key, unreadable (#3313 review) ---------------
+
+def test_an_unreadable_node_vocabulary_refuses_rather_than_appending(mod, monkeypatch, tmp_path):
+    """The hook ASKS when it cannot tell which node an owner signed from; this
+    road has nobody to ask, so it is could-not-measure -- never an append under
+    the home key, which is how one machine's RELEASE closed another's lanes."""
+    monkeypatch.setenv("PMOVES_NODE_VOCABULARY", str(tmp_path / "no-such-nodes.yaml"))
+    rc = mod.main(["claim", "--owner", "B850-CLAUDE (spark)", "--branch", "feat/free",
+                   "--scope", "s"])
+    assert rc == mod.EXIT_UNMEASURED
+    assert len(_rows(mod)) == 1, "a row whose owner node was not decided was written"

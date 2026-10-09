@@ -3,7 +3,10 @@
 
 Supports:
   - sync: write service override env files from static model manifests
-  - sync-dynamic: write overrides from live Supabase registry mappings
+  - sync-dynamic: write overrides from live Supabase registry mappings;
+      for targets agent-zero/all, generate the _model_config presets.yaml
+      from the same registry rows (registry = config authority; TensorZero
+      is one optional lane, not a hard dependency)
   - swap: patch a single model env for a target service
   - seed-list: emit comma-separated local models to pre-pull
   - registry-snapshot: export active model registry JSON
@@ -14,7 +17,9 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import subprocess
+import sys
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -351,30 +356,316 @@ def _fallback_from_active_models(active_models: list[dict], model_types: tuple[s
     return _select_best(rows, cloud_order)
 
 
-def _sync_dynamic_agent_zero(rows: list[dict], active_models: list[dict], cloud_order: tuple[str, ...], tensorzero_base: str) -> None:
+# --- Agent Zero presets generation (registry cutover) -----------------------
+# The registry is the config authority: these helpers project the same
+# Supabase rows the old env lane consumed into the A0 2.5 _model_config
+# presets.yaml schema. TensorZero is one lane among several, not a hard dep.
+
+A0_PRESETS_SUBPATH = Path("data/agent-zero/usr/plugins/_model_config/presets.yaml")
+A0_PRESETS_TEMPLATE = "pmoves/config/agent-zero/model-presets-docked.yaml"
+A0_OLLAMA_API_BASE = "http://pmoves-ollama-1:11434"
+
+# Registry provider_name -> A0 model provider id (model_providers.yaml ids).
+PROVIDER_ID_ALIASES = {
+    "tensorzero": "tensorzero",
+    "zai": "zai",
+    "zai coding plan": "zai_coding",
+    "ollama": "ollama",
+    "nvidia nim": "nvidia_nim",
+    "openai": "openai",
+}
+
+# Degraded-mode rows: the checked-in fallback template expressed as
+# registry-shaped rows (TensorZero chat lane default + its embedding lane).
+A0_FALLBACK_TEMPLATE_ROWS = (
+    {
+        "service_name": "agent_zero",
+        "function_name": "chat",
+        "model_type": "chat",
+        "model_id": "chat_zai_glm53",
+        "provider_name": "tensorzero",
+        "provider_type": "tensorzero",
+        "context_length": 128000,
+    },
+    {
+        "service_name": "tensorzero",
+        "function_name": "embeddings",
+        "model_type": "embedding",
+        "model_id": "qwen3_embedding_4b_local",
+        "provider_name": "tensorzero",
+        "provider_type": "tensorzero",
+        "context_length": 0,
+    },
+)
+
+
+def _provider_id_for(provider_name: str) -> str:
+    """Map a registry provider_name to an A0 model provider id."""
+    key = provider_name.strip().lower()
+    if key in PROVIDER_ID_ALIASES:
+        return PROVIDER_ID_ALIASES[key]
+    slug = re.sub(r"[^a-z0-9]+", "_", key).strip("_")
+    return slug or "other"
+
+
+def _a0_chat_model_name(provider_id: str, model_id: str) -> str:
+    if provider_id == "tensorzero":
+        return f"tensorzero::model_name::{model_id}"
+    return f"{provider_id}/{model_id}"
+
+
+def _a0_embed_model_name(provider_id: str, model_id: str) -> str:
+    if provider_id == "tensorzero":
+        # openai/ prefix REQUIRED: A0's embed path hands the name straight to
+        # litellm without adding a provider prefix (see the presets template
+        # header) -- bare tensorzero::... fails with "LLM Provider NOT provided".
+        return f"openai/tensorzero::embedding_model_name::{model_id}"
+    if provider_id == "openai":
+        return model_id
+    return f"{provider_id}/{model_id}"
+
+
+def _a0_api_base(row: dict, provider_id: str, tensorzero_base: str) -> str | None:
+    if provider_id == "tensorzero":
+        return f"{tensorzero_base.rstrip('/')}/openai/v1"
+    base = str(row.get("api_base") or "").strip()
+    if base:
+        return base
+    if provider_id == "ollama":
+        return A0_OLLAMA_API_BASE
+    return None
+
+
+def _a0_model_block(row: dict, tensorzero_base: str, kind: str) -> dict:
+    """Build a chat/utility preset block matching the _model_config schema."""
+    provider_id = _provider_id_for(str(row.get("provider_name", "")))
+    model_id = _normalize_model_id(row.get("model_id"))
+    api_base = _a0_api_base(row, provider_id, tensorzero_base)
+    block: dict = {
+        "provider": provider_id,
+        "name": _a0_chat_model_name(provider_id, model_id),
+    }
+    if api_base:
+        block["api_base"] = api_base
+    if kind == "chat":
+        block.update({
+            "ctx_length": _safe_int(row.get("context_length"), 32768),
+            "ctx_history": 0.7,
+            "vision": False,
+            "max_embeds": 10,
+        })
+    else:
+        block.update({
+            "ctx_length": _safe_int(row.get("context_length"), 32768),
+            "ctx_input": 0.7,
+        })
+    block.update({"rl_requests": 0, "rl_input": 0, "rl_output": 0, "kwargs": {}})
+    return block
+
+
+def _a0_embedding_block(row: dict, tensorzero_base: str) -> dict:
+    provider_id = _provider_id_for(str(row.get("provider_name", "")))
+    model_id = _normalize_model_id(row.get("model_id"))
+    api_base = _a0_api_base(row, provider_id, tensorzero_base)
+    block: dict = {
+        "provider": provider_id,
+        "name": _a0_embed_model_name(provider_id, model_id),
+    }
+    if api_base:
+        block["api_base"] = api_base
+    block.update({"rl_requests": 0, "rl_input": 0, "kwargs": {}})
+    return block
+
+
+def _a0_chat_lane(
+    rows: list[dict],
+    active_models: list[dict],
+    cloud_order: tuple[str, ...],
+) -> tuple[list[dict], dict | None, tuple[str, ...]]:
+    """agent_zero chat lane: same selection the old env lane performed."""
     functions = _parse_csv_env(
         os.environ.get("MODEL_DYNAMIC_AGENT_ZERO_FUNCTIONS"),
         ("chat", "coding", "reasoning", "orchestrator", "default"),
     )
-    selected, chain = _select_best(
-        _filter_rows(rows, ("agent_zero", "agent-zero", "agentzero"), functions, ("chat",)),
+    chat_rows = _filter_rows(rows, ("agent_zero", "agent-zero", "agentzero"), functions, ("chat",))
+    selected, chain = _select_best(chat_rows, cloud_order)
+    if selected is None:
+        fb_rows = [
+            row for row in active_models
+            if str(row.get("model_type", "")).strip().lower() == "chat"
+        ]
+        selected, chain = _select_best(fb_rows, cloud_order)
+        if selected is not None:
+            chat_rows = fb_rows
+    return chat_rows, selected, chain
+
+
+def _a0_embedding_row(
+    rows: list[dict],
+    active_models: list[dict],
+    cloud_order: tuple[str, ...],
+) -> dict | None:
+    """agent_zero embedding lane: archon-style embed selection."""
+    embed_functions = _parse_csv_env(
+        os.environ.get("MODEL_DYNAMIC_EMBED_FUNCTIONS"),
+        ("embeddings", "embedding", "embed", "retrieval", "default"),
+    )
+    embed_row, _chain = _select_best(
+        _filter_rows(rows, ("tensorzero", "archon", "hirag"), embed_functions, ("embedding",)),
         cloud_order,
     )
-    if selected is None:
-        selected, chain = _fallback_from_active_models(active_models, ("chat",), cloud_order)
-    if selected is None:
-        raise SystemExit("unable to resolve dynamic model for agent-zero")
+    if embed_row is None:
+        embed_row, _chain = _fallback_from_active_models(active_models, ("embedding",), cloud_order)
+    if embed_row is None:
+        print("WARNING: no embedding row resolvable; using template embedding lane")
+        embed_row = dict(A0_FALLBACK_TEMPLATE_ROWS[1])
+    return embed_row
 
-    model_id = _normalize_model_id(selected.get("model_id"))
-    env_map = {
-        "AGENT_ZERO_MODEL_ID": model_id,
-        "AGENT_ZERO_DECODING": json.dumps({"temperature": 0.3, "top_p": 0.8}),
-        "AGENT_ZERO_CONTEXT_WINDOW": _safe_int(selected.get("context_length"), 32768),
-        "AGENT_ZERO_MODEL_SELECTION_MODE": "dynamic_registry",
-        "AGENT_ZERO_FALLBACK_MODELS": ",".join(chain[1:5]),
-        "OPENAI_COMPAT_BASE_URL": tensorzero_base,
+
+def _build_a0_presets(
+    rows: list[dict],
+    active_models: list[dict],
+    tensorzero_base: str,
+    cloud_order: tuple[str, ...],
+) -> tuple[list[tuple[str, dict]], dict | None]:
+    """Order presets: T0 lane first (resilient), then best direct, then fallbacks."""
+    chat_rows, selected, chain = _a0_chat_lane(rows, active_models, cloud_order)
+
+    def chat_name(row: dict) -> str:
+        return _a0_chat_model_name(
+            _provider_id_for(str(row.get("provider_name", ""))),
+            _normalize_model_id(row.get("model_id")),
+        )
+
+    presets: list[tuple[str, dict]] = []
+    emitted: set[str] = set()
+    t0_row = next(
+        (row for row in chat_rows if _provider_id_for(str(row.get("provider_name", ""))) == "tensorzero"),
+        None,
+    )
+    if t0_row is not None:
+        presets.append(("TensorZero", t0_row))
+        emitted.add(chat_name(t0_row))
+    if selected is not None and chat_name(selected) not in emitted:
+        presets.append(("Registry", selected))
+        emitted.add(chat_name(selected))
+
+    by_model: dict[str, dict] = {}
+    for row in chat_rows:
+        model_id = _normalize_model_id(row.get("model_id"))
+        if model_id and model_id not in by_model:
+            by_model[model_id] = row
+    fallback_idx = 0
+    for model_id in chain[1:5]:
+        row = by_model.get(model_id) or {
+            "model_id": model_id,
+            "provider_name": "tensorzero",
+            "provider_type": "tensorzero",
+        }
+        name = chat_name(row)
+        if name in emitted:
+            continue
+        fallback_idx += 1
+        emitted.add(name)
+        presets.append((f"Fallback-{fallback_idx}", row))
+
+    return presets, _a0_embedding_row(rows, active_models, cloud_order)
+
+
+def _write_a0_presets(
+    rows: list[dict],
+    active_models: list[dict],
+    out_path: Path,
+    instance: str = "docked",
+    tensorzero_base: str = "http://tensorzero-gateway:3000",
+    cloud_order: tuple[str, ...] = DEFAULT_CLOUD_FALLBACK_ORDER,
+    apply: bool = True,
+) -> None:
+    """Generate the Agent Zero _model_config presets.yaml from registry rows.
+
+    The T0 lane (when a tensorzero chat-lane row exists) is emitted first as
+    the resilient preset, then the best direct lane, then the fallback chain
+    as Fallback-1..N. When the live file exists and --apply-presets was not
+    passed, the result is written as presets.yaml.new beside it with a one-line
+    diff summary; the operator applies it by rename.
+    """
+    presets, embed_row = _build_a0_presets(rows, active_models, tensorzero_base, cloud_order)
+    if not presets:
+        print("WARNING: no chat-lane row resolvable; writing an empty presets file")
+    doc: list[dict] = []
+    for preset_name, row in presets:
+        preset = {
+            "name": preset_name,
+            "chat": _a0_model_block(row, tensorzero_base, "chat"),
+            "utility": _a0_model_block(row, tensorzero_base, "utility"),
+        }
+        if embed_row is not None:
+            preset["embedding"] = _a0_embedding_block(embed_row, tensorzero_base)
+        doc.append(preset)
+
+    header = (
+        "# GENERATED FILE - do not hand-edit.\n"
+        f"# Source: pmoves/tools/models/models_sync.py sync-dynamic (instance: {instance}).\n"
+        f"# Checked-in fallback template: {A0_PRESETS_TEMPLATE}\n"
+    )
+    payload = header + yaml.safe_dump(doc, sort_keys=False, default_flow_style=False)
+
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    applied = True
+    if out_path.exists() and not apply:
+        new_path = Path(str(out_path) + ".new")
+        new_path.write_text(payload, encoding="utf-8")
+        try:
+            old_doc = yaml.safe_load(out_path.read_text(encoding="utf-8")) or []
+        except yaml.YAMLError:
+            old_doc = []
+        old_names = ", ".join(str(p.get("name")) for p in old_doc if isinstance(p, dict)) or "(none)"
+        new_names = ", ".join(name for name, _row in presets) or "(none)"
+        print(
+            f"diff summary: {out_path} [{old_names}] -> {new_path} [{new_names}] "
+            "(rename the .new file over the live one to apply, or rerun with --apply-presets)"
+        )
+        applied = False
+    else:
+        out_path.write_text(payload, encoding="utf-8")
+        print(f"wrote {out_path}")
+
+    print(f"template: {A0_PRESETS_TEMPLATE}")
+    manifest = {
+        "instance": instance,
+        "presets_file": str(out_path),
+        "applied": applied,
+        "presets": [name for name, _row in presets],
+        "chat_lane": {
+            name: _a0_chat_model_name(
+                _provider_id_for(str(row.get("provider_name", ""))),
+                _normalize_model_id(row.get("model_id")),
+            )
+            for name, row in presets
+        },
     }
-    _write_env(ENV_DIR / ".env.agent-zero.override", env_map)
+    if embed_row is not None:
+        manifest["embedding"] = _normalize_model_id(embed_row.get("model_id"))
+    print(json.dumps(manifest, indent=2))
+
+
+def _sync_dynamic_agent_zero(rows: list[dict], active_models: list[dict], cloud_order: tuple[str, ...], tensorzero_base: str, apply_presets: bool = True) -> None:
+    """Agent Zero output is now the generated presets file, not env overrides.
+
+    The .env.agent-zero.override lane (AGENT_ZERO_MODEL_ID /
+    AGENT_ZERO_FALLBACK_MODELS / OPENAI_COMPAT_BASE_URL) is dead: the A0 2.5
+    _model_config preset plugin ignores those vars. The registry emits
+    presets.yaml instead, with the T0 lane demoted to one lane among several.
+    """
+    _write_a0_presets(
+        rows,
+        active_models,
+        ROOT / A0_PRESETS_SUBPATH,
+        instance="docked",
+        tensorzero_base=tensorzero_base,
+        cloud_order=cloud_order,
+        apply=apply_presets,
+    )
 
 
 def _sync_dynamic_archon(rows: list[dict], active_models: list[dict], cloud_order: tuple[str, ...]) -> None:
@@ -438,19 +729,41 @@ def _sync_dynamic_creator(rows: list[dict], active_models: list[dict], cloud_ord
     _write_env(ENV_DIR / ".env.creator.override", env_map)
 
 
-def _sync_agent_zero(manifest: dict, host: str, tensorzero_base: str) -> None:
+
+def _sync_agent_zero(manifest: dict, host: str, tensorzero_base: str, apply_presets: bool = True) -> None:
+    """Static manifests flow through the same presets generator.
+
+    The manifest's llm entry becomes a single synthetic registry row:
+    provider-prefixed ids map to their direct lane, everything else rides the
+    TensorZero model_name lane (the routing the old AGENT_ZERO_MODEL_ID +
+    OPENAI_COMPAT_BASE_URL env pair encoded, minus the dead env write).
+    """
     target = _target_for_host(manifest.get("targets", {}), host)
     model_id = str(target.get("llm") or manifest.get("llm", {}).get("default", "")).strip()
     if not model_id:
         raise SystemExit("agent-zero manifest is missing llm model for selected host")
-    env_map = {
-        "AGENT_ZERO_MODEL_ID": model_id,
-        "AGENT_ZERO_DECODING": json.dumps(target.get("decoding", {"temperature": 0.3, "top_p": 0.8})),
-        "AGENT_ZERO_CONTEXT_WINDOW": target.get("ctx", 32768),
-        "AGENT_ZERO_MODEL_SELECTION_MODE": "manifest_static",
-        "OPENAI_COMPAT_BASE_URL": tensorzero_base,
-    }
-    _write_env(ENV_DIR / ".env.agent-zero.override", env_map)
+    prefixed = re.match(r"^([a-z0-9_]+)/(.+)$", model_id)
+    if prefixed:
+        rows = [{
+            "model_id": prefixed.group(2),
+            "provider_name": prefixed.group(1),
+            "provider_type": prefixed.group(1),
+        }]
+    else:
+        rows = [{
+            "model_id": model_id,
+            "provider_name": "tensorzero",
+            "provider_type": "tensorzero",
+            "context_length": _safe_int(target.get("ctx"), 32768),
+        }]
+    _write_a0_presets(
+        rows,
+        [],
+        ROOT / A0_PRESETS_SUBPATH,
+        instance="docked",
+        tensorzero_base=tensorzero_base,
+        apply=apply_presets,
+    )
 
 
 def _sync_archon(manifest: dict) -> None:
@@ -504,7 +817,7 @@ def cmd_sync(args: argparse.Namespace) -> int:
     """Sync a static model profile manifest into service override env files."""
     manifest = _manifest(args.profile)
     if args.profile == "agent-zero":
-        _sync_agent_zero(manifest, args.host, args.tensorzero_base)
+        _sync_agent_zero(manifest, args.host, args.tensorzero_base, args.apply_presets)
     elif args.profile == "archon":
         _sync_archon(manifest)
     elif args.profile == "media":
@@ -517,17 +830,30 @@ def cmd_sync(args: argparse.Namespace) -> int:
 
 
 def cmd_sync_dynamic(args: argparse.Namespace) -> int:
-    """Sync override env files from live Supabase model registry mappings."""
+    """Sync Agent Zero presets from live Supabase model registry mappings."""
     cloud_order = _parse_csv_env(
         args.cloud_order or os.environ.get("MODEL_CLOUD_FALLBACK_ORDER"),
         DEFAULT_CLOUD_FALLBACK_ORDER,
     )
-    rows = _load_service_models()
-    active_models = _load_active_models()
     target = args.target.strip().lower()
+    try:
+        rows = _load_service_models()
+        active_models = _load_active_models()
+    except (SystemExit, urllib.error.URLError, urllib.error.HTTPError, json.JSONDecodeError, OSError) as exc:
+        if target != "agent-zero":
+            raise
+        # Degrade, don't die: emit presets from the checked-in template rows
+        # so standalone nodes keep a stale-but-valid config surface.
+        rows = [dict(row) for row in A0_FALLBACK_TEMPLATE_ROWS]
+        active_models = []
+        print(
+            f"WARNING: model registry unreachable ({exc}); "
+            "emitting Agent Zero presets from fallback template rows",
+            file=sys.stderr,
+        )
 
     if target in {"all", "agent-zero"}:
-        _sync_dynamic_agent_zero(rows, active_models, cloud_order, args.tensorzero_base)
+        _sync_dynamic_agent_zero(rows, active_models, cloud_order, args.tensorzero_base, args.apply_presets)
     if target in {"all", "archon"}:
         _sync_dynamic_archon(rows, active_models, cloud_order)
     if target in {"all", "creator"}:
@@ -687,6 +1013,7 @@ def build_parser() -> argparse.ArgumentParser:
     sync.add_argument("--profile", required=True, choices=["agent-zero", "archon", "media", "vlm-and-creator"])
     sync.add_argument("--host", default="desktop-9950xd")
     sync.add_argument("--tensorzero-base", default="http://tensorzero-gateway:3000")
+    sync.add_argument("--apply-presets", action="store_true", help="overwrite the live presets.yaml (default: write presets.yaml.new beside it when it exists)")
     sync.set_defaults(func=cmd_sync)
 
     sync_dynamic = sub.add_parser("sync-dynamic", help="sync overrides from live registry mappings")
@@ -694,6 +1021,7 @@ def build_parser() -> argparse.ArgumentParser:
     sync_dynamic.add_argument("--host", default="desktop-9950xd")
     sync_dynamic.add_argument("--tensorzero-base", default="http://tensorzero-gateway:3000")
     sync_dynamic.add_argument("--cloud-order", default="", help="comma list, default MODEL_CLOUD_FALLBACK_ORDER")
+    sync_dynamic.add_argument("--apply-presets", action="store_true", help="overwrite the live presets.yaml (default: write presets.yaml.new beside it when it exists)")
     sync_dynamic.set_defaults(func=cmd_sync_dynamic)
 
     swap = sub.add_parser("swap", help="swap one service model override")
