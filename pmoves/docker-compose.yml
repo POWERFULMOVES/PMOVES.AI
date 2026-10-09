@@ -1784,9 +1784,9 @@ services:
 
     environment:
     - PMOVES_NETWORKS=pmoves_data,pmoves_external
-    - META_PASSWORD=${SUPABASE_DB_PASSWORD}
-    - ACCESS_KEY=${JUICEFS_S3_USER:-${MINIO_USER}}
-    - SECRET_KEY=${JUICEFS_S3_PASSWORD:-${MINIO_PASSWORD}}
+    - META_PASSWORD=${SUPABASE_DB_PASSWORD:?Set SUPABASE_DB_PASSWORD in env.tier-supabase}
+    - ACCESS_KEY=${JUICEFS_S3_USER:-${MINIO_USER:?Run make brand-defaults}}
+    - SECRET_KEY=${JUICEFS_S3_PASSWORD:-${MINIO_PASSWORD:?Run make brand-defaults}}
   juicefs-gateway:  # S3-compatible drop-in for minio:9000 (--multi-buckets required on CE)
     <<: *tier-data-hardened
     image: juicedata/mount:ce-v1.3.0
@@ -1801,7 +1801,7 @@ services:
     - MINIO_ROOT_PASSWORD=${JUICEFS_S3_PASSWORD:-${MINIO_PASSWORD:?Run make brand-defaults}}
     # Metadata password via env, not the DSN: a DSN on the command line is
     # readable by any local user through `ps`.
-    - META_PASSWORD=${SUPABASE_DB_PASSWORD}
+    - META_PASSWORD=${SUPABASE_DB_PASSWORD:?Set SUPABASE_DB_PASSWORD in env.tier-supabase}
     - PMOVES_NETWORKS=pmoves_data
     entrypoint: ["sh", "-lc"]
     command:
