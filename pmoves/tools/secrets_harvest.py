@@ -184,13 +184,26 @@ class DockerProbe:
 
     @staticmethod
     def _run(cmd: Sequence[str]) -> str:
+        # Docker emits UTF-8. text=True alone decodes with the platform codec
+        # (cp1252 on Windows): one UTF-8 byte such as 0x8d in `docker inspect`
+        # kills the reader thread, stdout comes back None, and every live holder
+        # vanishes -- a false "no holder" refusal. Strict, not "replace": a
+        # harvested value must arrive byte-for-byte or not at all.
         try:
-            proc = subprocess.run(cmd, capture_output=True, text=True, check=False, timeout=60)
-        except (OSError, subprocess.SubprocessError):
+            proc = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="strict",
+                check=False,
+                timeout=60,
+            )
+        except (OSError, subprocess.SubprocessError, UnicodeDecodeError):
             return ""
         if proc.returncode != 0:
             return ""
-        return proc.stdout
+        return proc.stdout or ""
 
     def available(self) -> bool:
         if not self._checked:
