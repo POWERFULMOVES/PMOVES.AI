@@ -8,33 +8,34 @@ jobs:
     runs-on: spark
     timeout-minutes: 60
     steps:
-      - name: Setup venv (clm-serve only — vLLM excluded: engine-init fails on GB10 ARM64)
+      - name: Install contrastive-lm in venv
         run: |
           python3 -m venv /tmp/clmvenv
           /tmp/clmvenv/bin/pip install --upgrade pip -q
           /tmp/clmvenv/bin/pip install contrastive-lm 2>&1 | tail -3
 
-      - name: Encoder readiness (Ollama qwen3-embedding:8b on :11434)
+      - name: Verify Ollama encoder readiness
         run: |
           for i in $(seq 1 30); do
             curl -sf http://localhost:11434/api/tags >/dev/null 2>&1 && { echo ENCODER-UP; break; }
             [ $i -eq 30 ] && { echo ENCODER-TIMEOUT; exit 1; }
             sleep 2
           done
-          curl -sf http://localhost:11434/v1/embeddings -H 'Content-Type: application/json'             -d '{"model":"qwen3-embedding:8b","input":"probe"}' | head -c 80; echo
+          curl -sf http://localhost:11434/v1/embeddings -H 'Content-Type: application/json' \
+            -d '{"model":"qwen3-embedding:8b","input":"probe"}' | head -c 80; echo
 
-      - name: Start CLM server (embedder = Ollama qwen3-embedding:8b)
+      - name: Start CLM server with Ollama embedder
         run: |
           nohup /tmp/clmvenv/bin/clm-serve --emb-url http://localhost:11434/v1/embeddings --emb-model qwen3-embedding:8b > /tmp/clm.log 2>&1 &
           for i in $(seq 1 24); do
             sleep 5
             curl -sf http://localhost:8700/health >/dev/null 2>&1 && { echo CLM-UP; break; }
-            [ $i -eq 24 ] && { echo CLM-TIMEOUT; tail -10 /tmp/clm.log; }
+            [ $i -eq 24 ] && { echo CLM-TIMEOUT; tail -10 /tmp/clm.log; exit 1; }
           done
 
-      - name: Run eval (inline — no clone needed)
+      - name: Run eval inline
         run: |
-          /tmp/clmvenv/bin/python -c "
+          /tmp/clmvenv/bin/python /dev/stdin <<'PYEOF'
           from clm import CLMClient, Choice, Noul
           import json, time
           client = CLMClient()
@@ -61,7 +62,7 @@ jobs:
           json.dump(results, open('results.json','w'), indent=2)
           print('=== EVAL RESULTS ===')
           print(json.dumps(results, indent=2))
-          "
+          PYEOF
 
       - name: Show results
         if: always()
