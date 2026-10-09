@@ -661,7 +661,7 @@ Additional agent smokes:
 
 ```bash
 # MCP bridge reachability on :8051 (HTTP code printed; 404 acceptable)
-make -C pmoves archon-mcp-smoke
+make -C pmoves archon-ui-smoke
 
 # Verify Archon API/ UI endpoints return 200
 make -C pmoves archon-ui-smoke

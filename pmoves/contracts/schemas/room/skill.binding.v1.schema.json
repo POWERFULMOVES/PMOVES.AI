@@ -129,10 +129,11 @@
               "clipboard",
               "open-apps",
               "search-results",
-              "user-intent"
+              "user-intent",
+              "nats-bus"
             ]
           },
-          "description": "Context lanes injected before skill execution"
+          "description": "Context lanes injected before skill execution. `nats-bus` was added 2026-09-08: jons-edge.room.control already declared it as a source AND as a panel, and it had been failing validation invisibly because nothing invoked validate_room_manifests.py. NATS is the fleet's transport (GEOMETRY BUS, Grand Convergence L3), so a room agent reading bus events is a legitimate lane rather than a typo. Additive -- no existing manifest changes meaning."
         },
         "include_last_turns": {
           "type": "integer",

@@ -71,8 +71,11 @@ def _hardware_summary(room: dict) -> str:
         return "no hardware_requirements"
     gpu = "GPU" if hr.get("gpu") else "CPU"
     vram = hr.get("min_vram_mb", 0)
+    # node_roles is optional, and omitting it is the portable choice for a room
+    # that runs anywhere. Join only what is declared, or the card reads
+    # "CPU 0MB · " with a separator pointing at nothing.
     roles = ",".join(hr.get("node_roles", []))
-    return f"{gpu} {vram}MB · {roles}"
+    return f"{gpu} {vram}MB · {roles}" if roles else f"{gpu} {vram}MB"
 
 
 def _app_refs_summary(room: dict) -> str:

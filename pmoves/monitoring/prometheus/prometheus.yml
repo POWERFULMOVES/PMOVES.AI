@@ -36,6 +36,22 @@ scrape_configs:
     static_configs:
       - targets: ["pmoves-device-metrics-exporter:5000"]
 
+  # NATS bus. Added 2026-09-15 — until then this stack scraped 46 targets and
+  # not one of them was the message bus every service coordinates through.
+  #
+  # Scraped via nats-exporter, not nats directly: the server's monitoring port
+  # serves JSON (/varz, /jsz, /leafz), which Prometheus cannot parse. The
+  # exporter also bridges pmoves_bus <-> monitoring_tier, which had no shared
+  # network — so this job was unreachable in two independent ways.
+  #
+  # Key series this unlocks:
+  #   gnatsd_varz_*        server/message rates
+  #   gnatsd_jsz_*         stream + consumer counts  <- the durability signal
+  #   gnatsd_leafz_*       leaf connections          <- the mesh signal
+  - job_name: nats
+    static_configs:
+      - targets: ["nats-exporter:7777"]
+
   - job_name: loki
     static_configs:
       - targets: ["loki:3100"]

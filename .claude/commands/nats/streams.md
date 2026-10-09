@@ -7,8 +7,9 @@ List and inspect NATS JetStream streams.
 Query JetStream for active streams and their configuration:
 
 ```bash
+NATS_URL=$(bash .claude/scripts/nats-endpoint.sh)  # derives host AND port; see that file
 # List all streams
-curl -s http://localhost:8222/jsz?streams=1 | python -c "
+curl -s $NATS_URL/jsz?streams=1 | python -c "
 import sys, json
 d = json.load(sys.stdin)
 streams = d.get('account_details', [{}])[0].get('stream_detail', [])
@@ -23,8 +24,9 @@ else:
 ```
 
 ```bash
+NATS_URL=$(bash .claude/scripts/nats-endpoint.sh)  # derives host AND port; see that file
 # Stream consumers
-curl -s http://localhost:8222/jsz?consumers=1 | python -c "
+curl -s $NATS_URL/jsz?consumers=1 | python -c "
 import sys, json
 d = json.load(sys.stdin)
 streams = d.get('account_details', [{}])[0].get('stream_detail', [])

@@ -71,7 +71,7 @@ This file is the operator list of active CHIT-adjacent flows, ordered for produc
 - Entry commands:
   - `make -C pmoves a0-mcp-seed`
   - `cat pmoves/data/agent-zero/runtime/mcp/servers.env`
-  - `make -C pmoves archon-mcp-smoke`
+  - `make -C pmoves archon-ui-smoke`
   - `make -C pmoves codex-health-quick`
 - Output:
   - Refreshed MCP server map for Agent Zero runtime

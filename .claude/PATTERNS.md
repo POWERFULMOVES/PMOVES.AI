@@ -48,6 +48,7 @@ PMOVES uses a Known Roads model: every dangerous-but-necessary operation has a c
 | `docker compose up voice-relay` (NATS bridge for mic chain) | `make -C pmoves up-voice-relay` | `/voice:status` |
 | `docker compose build hi-rag-gateway-v2` | `make -C pmoves up-hirag` | `/search:hirag` |
 | `tailscale status` (raw IPs) | `make -C pmoves fleet-status` | `/fleet:status` |
+| Proving a fix by mutating **production** (revoke/rotate a credential, delete a record, write to a live service) | `make -C pmoves sandbox-smoke` / `sandbox-create` + `sandbox-exec SBX=.. CMD=..` + `sandbox-kill` | `agent-sandbox` |
 | RustDesk deep diagnostics | `make -C pmoves fleet-status` + `pmoves/docs/operations/RUSTDESK_SELF_HOSTED.md` | `/fleet:rustdesk-check` |
 | SSH to KVM2 for RustDesk relay | `make -C pmoves fleet-rustdesk-fix` | `/fleet:fix-relay` |
 | Tailscale admin API calls | `make -C pmoves fleet-stale-audit` | `/fleet:stale-nodes` |
@@ -60,6 +61,8 @@ PMOVES uses a Known Roads model: every dangerous-but-necessary operation has a c
 | Supabase crash-loop diagnosis | `pmoves/docs/operations/SUPABASE_OPERATIONS.md` | — |
 | Kong port bind silent-fail | `docker events --filter container=X` — check OOM FIRST | — |
 | Bootstrap a node onto the Docker MCP Toolkit (per-node MCP surface) | `make -C pmoves mcp-toolkit-bootstrap` + `mcp-toolkit-connect` — **run ON the node**, no raw-SSH sidestep | runbook `pmoves/docs/runbooks/MCP_TOOLKIT_NODE_BOOTSTRAP.md`; agent `fleet-node-deployer` |
+| Give an agent / drop-in model cipher memory (store + search) | § Known Road — Cipher memory for any agent or drop-in model (below) | `pmoves-cipher-memory` |
+| Add / change / remove ONE key in `pmoves/.env.local` (**operator-run**; agents stay zero-access) | `make -C pmoves env-local-{has,set,unset} KEY=NAME` — § Known Road — node-local env overlay keys (below) | — |
 
 **`volume-reset SERVICE` values:** `neo4j`, `tensorzero-clickhouse`, `meilisearch`, `qdrant`, `minio`, `supabase-db`, `nats`.
 
@@ -72,6 +75,210 @@ PMOVES uses a Known Roads model: every dangerous-but-necessary operation has a c
 **When raw commands are appropriate:** only when the user explicitly directs. The `ask` prompt surfaces to user for approval.
 
 If a rebuild manifest arrives as raw `docker compose build ...`, translate to the nearest Known Road whenever possible. Use raw build only when no dedicated target exists yet, and still return to the Make-target bring-up path.
+
+## Known Road — node-local env overlay keys (`pmoves/.env.local`)
+
+**What it's for.** `pmoves/.env.local` is the node-local overlay that
+`scripts/with-env.sh` loads after the generated tier files. Nothing generates
+it, so every change used to be a hand edit with no record. That is how
+`CIPHER_DB_SERVICE_KEY=${SERVICE_ROLE_KEY}` reached a fleet node: someone copied it from
+a recipe in commit `df0218537` and it left no trail. It now points at a key
+Kong rejects (see `pmoves/docs/TAC/TAC_CIPHER.md` § `CIPHER_DB_SERVICE_KEY`).
+Operator rule (2026-09-23): a key comes out the same way it should have gone
+in, on this road.
+
+**Who runs it: the OPERATOR.** Agents keep **zero access** to the file. The
+damage-control zero-access rule for `.env*` is unchanged, and this road does
+not open it. An agent that needs a key changed names the key and the reason
+and hands the command to the operator. It does not read, source, symlink or
+`$VAR`-path its way to the file.
+
+```bash
+make -C pmoves env-local-has   KEY=NAME   # present / absent, plus the old value LENGTH
+make -C pmoves env-local-unset KEY=NAME   # remove the single NAME line
+make -C pmoves env-local-set   KEY=NAME   # value from a no-echo prompt, or piped stdin
+```
+
+**Removing the stale Cipher line (any node that followed the `df0218537`
+recipe), before the next `up-cipher`:**
+
+```bash
+make -C pmoves env-local-unset KEY=CIPHER_DB_SERVICE_KEY
+```
+
+**Guarantees** (`pmoves/tools/env_local_key.py`, stdlib only, 69 tests):
+- **Definitions follow the loader.** `with-env.sh` loads only unindented
+  `KEY=` lines. `export KEY=` and indented forms are **inert**: `has` reports
+  them as `inert=N`, and `set`/`unset` refuse while one exists. Resolve those
+  by hand-review first.
+- **Refuses:**
+  - a key that does not match `^[A-Z][A-Z0-9_]*$` (without echoing the text);
+  - a key defined more than once (reports the count);
+  - an inert form of the key;
+  - an empty or multi-line value;
+  - a dangling symlink;
+  - an audit log it cannot open. It opens the log BEFORE any change.
+
+  Duplicates and inert forms are checked before the value is requested. A
+  value given as an argument is a usage error. `set` reads stdin only, so
+  the value never appears in shell history or `ps`.
+- **Never prints a value.** Output is `result=`, key, action, whether a line
+  existed, `inert=`, the old/new value length, the backup name and the
+  resolved path (`via=` names a symlink it wrote through). A key that matches
+  no line prints as `<redacted: not present>` and leaves no audit row,
+  because it may be a pasted value.
+- **Values are written verbatim, unquoted.** `with-env.sh` sources values
+  containing `${` raw, so the tool WARNS (without echoing) on `$(`, `${` or a
+  backtick. An identical `set` is a no-op (`changed=no`, no backup, no row).
+- **Before any change**, it copies the file to `<file>.bak-<UTC ts>` with mode
+  0600, next to the real target when the path is a symlink. The write is
+  atomic: temp `<name>.tmp-*` in the same directory, fsync, rename. It keeps
+  the file's mode (and owner when permitted), and keeps every other line
+  byte-for-byte. Lines are split on `\n` only. A test asserts the backup, temp
+  and audit names with `git check-ignore`.
+- **Backups do not expire.** Nothing prunes them automatically. The operator
+  lists them with `ls -l pmoves/.env.local.bak-*` and removes old ones with
+  `find pmoves -maxdepth 1 -name '.env.local.bak-*' -mtime +30 -delete`
+  (adjust the age). Each backup is a full copy of the overlay, secrets
+  included.
+- **Audit:** one fsync'd JSONL row per applied set/unset in
+  `pmoves/data/audit/env_local_edits.jsonl`. The row holds `ts, host, key,
+  action, old_len, new_len, operator, line_existed, changed, backup`, and
+  never the value. The log is **git-ignored on purpose**: a tracked,
+  per-node list of key names in a public repo is a topology decision for the
+  operator, not a side effect of this tool.
+- **Exit codes:**
+  - 0 done, noop or present;
+  - 1 refused or absent;
+  - 2 usage;
+  - 3 could-not-measure, and **nothing changed**;
+  - 4 **`APPLIED-UNAUDITED`**: the edit landed but its row did not, so record
+    it by hand.
+
+  `make` collapses every nonzero exit to 2, so read the `result=` line.
+- **Make hygiene.** KEY travels by environment via `$(value KEY)`, and
+  `unexport KEY` is the **first directive** in `pmoves/Makefile`, above every
+  include and `$(shell ...)`. A command-line KEY is exported, and GNU make
+  expands exported variables whenever it builds a child environment. On 4.3
+  that means recipes only. On 4.4 and later it also includes parse-time
+  `$(shell ...)` calls, so an unexport placed later in the file is too late.
+  A structural test asserts the ordering, because CI's 4.3 cannot observe the
+  4.4 path. A positive control proves the directive is load-bearing on 4.3.
+- **Tests never reach the real file.** The make-target helper asserts that the
+  resolved override is under `tmp_path` before it invokes make. The tool also
+  refuses its default path whenever `PYTEST_CURRENT_TEST` is set.
+- **A failure after the write is reported as APPLIED.** If anything fails once
+  the edit has landed (for example, a broken stdout pipe while reporting), the
+  tool prints `result=APPLIED ... audited=yes|NO` on stderr and exits 4. It
+  never says "nothing changed" for an edit that happened.
+
+**Known limits** (accepted, stated here so nobody has to rediscover them):
+- **`set` of an absent key cannot tell a pasted value from a real new key.** If
+  an all-caps value is pasted into `KEY=` and matches no line, `set` treats it
+  as a new key name. It echoes that name and audits it, and writes it as a new
+  line. `unset` and `has` redact an absent key; `set` cannot, because creating
+  a new key is its job. Check the key name before running `set`.
+- **A refused edit can leave an empty audit file.** The log is opened (and
+  created, 0600) before the change so that an unwritable log refuses the edit.
+  A later refusal, such as an empty value, therefore leaves a 0-byte 0600
+  `env_local_edits.jsonl`. It holds nothing.
+- **The group can be lost.** When the process may not `fchown` (not root, and
+  the file belonged to another group), the replaced file takes this process's
+  uid/gid. The tool prints a WARNING that names the lost group, and never a
+  value. Re-apply it with `chgrp` if another account reads the file.
+- **The pytest guard covers the overlay path, not the audit-log path.** A test
+  that forgets `--audit-log` or `ENV_LOCAL_KEY_AUDIT` would append rows (names
+  and lengths, never values) to the node's real
+  `pmoves/data/audit/env_local_edits.jsonl`. Every test in this suite sets it
+  explicitly.
+
+Sibling road for the GENERATED file: `make -C pmoves secrets-rotate KEY=...`
+rotates one key in `env.shared` and re-funnels (`pmoves/mk/codex.mk`).
+
+## Known Road — Cipher memory for any agent or drop-in model
+
+This takes a harness or model with no PMOVES context from zero to a working
+store + search. Each command below is marked RUN (executed on B850, 2026-09-23,
+output summarised) or UNVERIFIED. The service-side behaviour is documented in
+`pmoves/docs/TAC/TAC_CIPHER.md` § MCP identity enforcement.
+
+**1. Pick the endpoint.** The service is `cipher-api` on port 8105. Only
+`/health` is unauthenticated. Every other path returns 401 without a bearer,
+including paths that do not exist, so an unauthenticated 401 tells you nothing.
+
+| Your client | Use |
+|---|---|
+| Claude Code / Crush via the fleet roster (`.claude/mcp.json`) | server **`pmoves-cipher-local`** (`http://localhost:8105/mcp/sse`). This entry connects today. |
+| Same roster, other node's cipher | server `pmoves-cipher` (`http://${TS_Z890}:8105/mcp/sse`). It is refused or times out unless the serving node published beyond loopback: compose binds `"${CIPHER_BIND:-127.0.0.1}:8105:8105"`. The fix is setting `CIPHER_BIND` on the serving node, which is an operator decision. Do not delete the entry. |
+| New MCP harness (Hermes, Kimi, A0-style, a drop-in model's agent loop) | **streamable-http `POST http://localhost:8105/mcp`**, which is stateless and cannot hit the legacy "Unknown session" 400. Agent Zero uses this. |
+| No MCP at all | REST: `POST /api/memory` `{agentId, content, category?, tags?}` and `GET /api/memory/search?q=&agentId=&limit=`. REST **always** refuses an `agentId` that differs from the token's agent (403), whatever `CIPHER_MCP_ENFORCE` says. |
+
+Every call needs the header `Authorization: Bearer ${CIPHER_API_TOKEN}`. Start
+Claude Code through `claude-pmoves` so the variable is present. Claude Code does
+not expand `${VAR}` in mcp.json by itself; the launcher's normaliser does.
+
+**2. Pick your `agentId`.** Use the **signing-card spelling**
+(`h.agent_id` in `pmoves/config/signing_identity_cards.yaml`, e.g.
+`b850-claude`, `z890-claude`, `4090-claude`), not the agent-registry key
+(`claude_b850`). `agentId` is required on every tool call. With a token,
+omitting it or sending `*` is refused in every mode, on MCP and REST alike.
+
+```bash
+make -C pmoves cipher-identity AGENT=<card id>     # RUN: reads no secret, sends nothing
+```
+
+RUN on B850: `AGENT=b850-claude` → `signing card yes`,
+`cipher mode bootstrap`, `writes land as bootstrap`. The exit code is 1 when
+the carry is not intact. That is the correct result on a node that shares the
+bootstrap token. An uncarded id such as `drop-in-model-x` → `signing card no`.
+
+**3. A brand-new agent or model.**
+
+- **Signing card.** There is **no Make target to create one.** A card is a
+  reviewed edit to `signing_identity_cards.yaml`, made by the operator per
+  `pmoves/docs/operations/SIGNING_IDENTITY_CARDS.md` § "How to issue a new
+  card", with `h.agent_id` as the spelling you will pass. Until the card lands,
+  the model still works; see step 4.
+- **Per-agent token.** Run
+  `make -C pmoves cipher-mint-token AGENT=<card id>`. It requires an ACTIVE
+  card, and its default scopes are memory, reasoning and session read+write.
+  Deliver the token through the CHIT pipeline (`secrets-funnel`), never by
+  pasting it. **UNVERIFIED:** not run, because minting is a live write. The
+  target exists at `pmoves/Makefile` `cipher-mint-token:`.
+
+**4. What works before you have a per-agent token.** With the node's bootstrap
+bearer:
+
+- **MCP:** runs in **advisory** mode (`CIPHER_MCP_ENFORCE` unset, the default).
+  Your call succeeds, and the write is filed under the `agentId` you
+  **declared**. Cipher also logs one line:
+  `pmoves-mcp-auth: ADVISORY (…) {…"tokenAgent":"bootstrap","declaredAgent":"<you>"…}`.
+  That line is the migration signal, not an error. Attribution is
+  **self-asserted** until you hold a per-agent token.
+- **REST:** does NOT behave this way. A bootstrap bearer plus your own
+  `agentId` is a 403 on REST. So a model without MCP needs a per-agent token,
+  or must declare `agentId: "bootstrap"` (which files its memory under the
+  shared bootstrap identity).
+- **After enforcement is turned on:** MCP behaves like REST. Mint the token
+  before that day.
+
+**5. Prove it.** Store, then search, with the same `agentId`, from the new
+harness. **UNVERIFIED in this session:** it would be a live write to
+production memory. It was measured earlier via `pmoves-cipher-local`
+(store + search work). For a write-free first check, a session that has the
+MCP tools can call `pmoves_cipher_mcp_list` with your `agentId`.
+
+**Triage when there is no memory. Check three terms, in this order:**
+
+| Term | Command | What it tells you |
+|---|---|---|
+| **Roster**: did this session get the env and the servers? | `make -C pmoves session-check` (RUN: 18 servers declared; cipher entries resolved; `hostinger` and `supabase-db` unresolvable; exit 0) | Reads no secrets. `x` = literal `${VAR}` goes on the wire; `!` = empty bearer. Remedy: relaunch via `claude-pmoves`. |
+| **Agent definition**: may THIS agent call the tools? | read the agent's frontmatter in `.claude/agents/<name>.md` | `tools:` is an **allowlist**, and it fails closed silently. A subagent whose `tools:` does not name the cipher servers has no cipher tools even when the roster is healthy. The whole-server form `mcp__pmoves-cipher-local, mcp__pmoves-cipher` in `tools:` grants every tool on those servers (probe, claude 2.1.280: throwaway stdio servers, tool list read back; unnamed servers were filtered out). `disallowedTools: mcp__<server>` denies a whole server. Tiered grant, 2026-09-23 (the operator approved it): 21 agent files, 20 with an allowlist, every one of them now granted. **FULL, 5** (whole servers `mcp__pmoves-cipher-local, mcp__pmoves-cipher`): `memory-agent`, `delivery-agent`, `hermes-agent`, `control-agent`, `known-roads`. **READ-ONLY, 15** (seven named tools on each server: `pmoves_cipher_search`, `_hybrid_search`, `_session_recall`, `_reasoning_patterns`, `_graph_expand`, `_mcp_list`, `_mcp_get`; no `store`, `store_reasoning`, `session_save`, `memory` or `identity`): `researcher`, `verifier`, `test-runner`, `code-review`, `archon-qa-agent`, `chit-compliance-reviewer`, `chit-pr-audit-agent`, `nats-subject-auditor`, `amd-usb-installer`, `jetson-refresh-operator`, `fleet-node-deployer`, `vps-deployer`, `pr-trimmer`, `windows-claw-operator`, `claim-collision-agent`. **INHERIT, 1**: `node-steward` has no allowlist and gets cipher that way. Each granted file has a one-line comment above `tools:` so the entries don't get dropped in a later edit. |
+| **Service**: is cipher up and reachable on the URL the roster names? | `make -C pmoves cipher-health` (RUN: 200 `cipher-pmoves-shim`) and `python3 pmoves/tools/cipher_preflight.py` (RUN: `pmoves-cipher` DOWN timed out; `pmoves-cipher-local` OK 200; exit 0) | `/health` is 200 in every auth posture, so health alone cannot prove your bearer works. Preflight probes each roster URL. |
+
+If the roster, the agent definition and the service are all healthy and calls
+still fail, the cause is the token. A 403 whose error names the token's agent
+means your `agentId` disagrees with your token: go back to step 2.
 
 ## Known Roads — Protected-File Edits via `KNOWN_ROAD`
 
@@ -97,7 +304,9 @@ Set it in the shell that launches Claude Code, or in `.claude/settings.json` `en
 
 **Provability guarantees:**
 - A bare value (`1`, `true`, arbitrary string) is **not** a Known Road — the edit stays blocked.
-- `handoff:` reasons are checked against the filesystem; a missing brief is rejected.
+- `handoff:` reasons are checked against the filesystem and git; a missing or untracked brief is rejected.
+- **A grant expires when its PR/issue closes, or after 24 h.** `pr:N`/`issue:N` is honoured only while N is OPEN on `POWERFULMOVES/PMOVES.AI` (checked via `gh api`; merged/closed → `grant VOID`). If the state cannot be checked the grant is **refused** (`grant not verifiable: …`), never assumed. A file grant (`.known-road-active`) older than 24 h is void regardless of PR state. Successful lookups are cached 120 s. Measured motive: a stale `compose:pr:3101` (merged 09-20) silently authorised compose edits for PR #3143.
+- **Offline:** append `!offline` to a `pr:`/`issue:` grant (`compose:pr:3200!offline`). It skips only the PR-state check (not the age limit) and each use is recorded as `grant_state: offline-override`.
 - Every granted bypass appends a line to `.claude/hooks/damage-control/known-roads.jsonl` — append-only, git-tracked (`merge=union`), machine-parseable. **Fail-closed:** if the trail line cannot be written, the bypass is denied (an unrecorded bypass is not provable).
 - Scope is narrow: `compose:` opens *only* `pmoves/docker-compose*.yml`. Migrations, contracts, secrets stay blocked regardless.
 
@@ -122,6 +331,21 @@ PR #1233 split the compose stack into a base + 6 overlay files (`base.yml` + `co
 | Single-overlay `up`, `restart`, `--force-recreate` | **DO NOT** — use the matching `overlay-up-<tier>` target |
 
 **Detail + failure modes + cold-start recovery:** `pmoves/docs/operations/COMPOSE_LAYERING_RUNBOOK.md`.
+
+### Shell env wins over `--env-file` (the host-`NATS_URL` leak, 2026-09-13)
+
+Compose interpolation prefers the **calling shell's environment** over every `--env-file`. A
+host profile that exports runner-style values (e.g. `NATS_URL` pointing at `localhost` for
+host-side MCP clients) silently rewrites every `${NATS_URL}` service on `make overlay-up-*` —
+containers come up with a bus URL that resolves to nothing inside the network. Same class as
+the B850 #2322 NATS bug. **Deploy with host vars stripped:**
+
+```bash
+env -u NATS_URL make -C pmoves overlay-up-workers   # repeat -u for any host-only runner vars
+```
+
+Symptom: healthy containers, `ConnectionRefusedError` in subscriber logs against a URL that
+contains `localhost`. Verify with `docker exec <svc> printenv NATS_URL` after any overlay up.
 
 ## Damage-Control Hook Recovery
 
@@ -270,7 +494,7 @@ curl -X POST "http://pmoves-spark:8080/mcp/execute" \
 ## Pinokio pterm (Windows)
 
 - Resolve path: `GET http://127.0.0.1:42000/pinokio/path/pterm`
-- Windows binary: `D:/pinokio/bin/npm/pterm.cmd` (use `.cmd` shim, not bare `pterm`)
+- Windows binary: `<PINOKIO_ROOT>/bin/npm/pterm.cmd` (use `.cmd` shim, not bare `pterm`)
 - P7 Ask AI: drawer on app Run page (not a separate dashboard tab)
 - Agent Interpreter: auto-discovers apps via `pterm search` + `SKILL.md` files
 - subprocess encoding: always `encoding="utf-8", errors="replace"` for pterm output on Windows
@@ -495,6 +719,16 @@ Health check: `gh run list --workflow=claude-code-review.yml --limit 10` — a w
 ### Node signatures in the claim register — disambiguate primary vs mirror
 
 Multiple Claude instances can run as the **same node identity** (e.g. a 4090 primary and its 1M-context mirror both signing `4090-CLAUDE`). When two same-named claims race the AGNOTE append slot, **union-merge** (keep both — they're usually non-overlapping lanes), never pick-one. To prevent ambiguity, disambiguate the signature when a mirror is active (`4090-CLAUDE` vs `4090-CLAUDE-mirror`, or distinct `ACK::` scope tags) so `claim-collision-agent` and humans can tell the lanes apart.
+
+### `mergeable: UNKNOWN` can persist AFTER a successful merge (2026-09-13)
+
+The guarded `pr-closeout-merge` reads live PR state; GitHub's `mergeable`/`mergeStateStatus`
+recompute is asynchronous and can stay `UNKNOWN` for minutes — including **after the merge
+already happened**. Symptom: first merge attempt reports blockers (UNKNOWN state, a CANCELLED
+`emit lifecycle trail`), a retry reports "PR state is MERGED, not OPEN" — the first call
+landed. **Before re-invoking the merge, check `gh pr view <N> --json state` first.** A
+CANCELLED lifecycle-trail run from a force-push is fixed by `gh run rerun <id>`, not by
+re-pushing.
 
 ## Merge Hazards — Stacked PRs and Squash-Merge Rebase
 
@@ -1096,3 +1330,27 @@ because the whole point is that you are abandoning a checkout, not a commit.
 
 Related: [[Blank Is Not Absent]] — same family, in that the dangerous state and
 the benign state are visually identical at the place you habitually look.
+
+## Python/TS Packaging — Cut Every Agent as a Locked Cassette (2026-09-03)
+
+Canonical discipline lives in the **`uv-cassettes` skill** (`.claude/skills/uv-cassettes/`).
+Invoke it whenever you add or edit a service image, MCP server, A0/dsh plugin, or standalone
+tool — anywhere Python deps are declared.
+
+DARKXSIDE canon: each agent/plugin is a **cassette** the platform (Soundwave / P7) ejects into
+any layer; reproducible **locked** packaging is what makes it play identically in **sandbox, on
+host, and deployed**. Lockless deps = a cassette that plays differently in each deck.
+
+- **Service images:** uv + a committed `requirements.lock` (botz-gateway / ffmpeg-whisper
+  pattern): `uv pip install --system --constraint requirements.lock -r requirements.txt`.
+  `requirements.txt` bounds the major (`mcp>=1.2,<2` — never a bare `>=`); the lock pins direct
+  + transitive. **70 of 73 service Dockerfiles are lockless** — the same break can recur on any.
+- **Single-file agents (PEP 723 / IndyDevDan):** inline `# /// script … dependencies = […] ///`
+  run via `uv run --script`; `uv lock --script` for a frozen drop. The file IS the cassette.
+- **TypeScript:** the pnpm/bun lockfile is the equivalent; install `--frozen-lockfile`.
+- **Deploy** through Make (`build-svc` / `recreate-svc` / `rebuild-svc SVC=<name>`), never a
+  hand-run `docker compose --env-file` (guard-blocked) or `docker run` (skips the env pipeline).
+
+Proof it's load-bearing: notebook-mcp shipped unpinned `mcp>=1.2.0`; a rebuild pulled mcp 2.x
+(FastMCP→MCPServer) → crash-loop. See [[Check which compose file is LIVE before editing a stanza]]
+(same session, sibling lesson) and memory `vision_agents_as_cassettes_uv_portability`.

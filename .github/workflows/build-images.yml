@@ -26,7 +26,7 @@ jobs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
     steps:
       - name: Harden Runner
-        uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2
         with:
           egress-policy: audit
           allowed-endpoints: >
@@ -46,6 +46,11 @@ jobs:
           EOF
 
   build:
+    # Named explicitly: with no `name:` this job's context was the bare
+    # `build`, which build-nats-workers.yml (push on main) also publishes.
+    # Required checks match on name alone, and dispatch-only is not
+    # protection -- see self-hosted-builds.yml and #2840.
+    name: Manual Image Build
     needs: setup-matrix
     runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 60
@@ -58,7 +63,7 @@ jobs:
         shell: bash
     steps:
       - name: Harden Runner
-        uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2
         with:
           egress-policy: audit
           allowed-endpoints: >

@@ -18,14 +18,17 @@ Gracefully stop a running Pinokio app via `pterm stop`. Verifies the app transit
 ## Implementation
 
 ```bash
+# Pinokio root is a PER-NODE value (C: here, D: on other nodes), so derive it.
+# pinokio-root.sh exits 1 when it had to guess -- see .claude/scripts/pinokio-root.sh
+PTERM="$(bash .claude/scripts/pinokio-root.sh --exe)"
 APP_ID="{{args.app_id}}"
 
 # Stop command
-D:/pinokio/bin/npm/pterm.cmd stop "$APP_ID" 2>&1 | head -5
+"$PTERM" stop "$APP_ID" 2>&1 | head -5
 
 # Verify transition to offline
 sleep 2
-D:/pinokio/bin/npm/pterm.cmd search "$APP_ID" 2>&1 | python -c "
+"$PTERM" search "$APP_ID" 2>&1 | python -c "
 import sys, json
 d = json.load(sys.stdin)
 for app in d.get('apps', []):

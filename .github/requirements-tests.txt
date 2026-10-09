@@ -68,6 +68,33 @@ python-multipart      # fastapi Form() dependency; imported by no test directly
 # what is hiding that.
 slowapi               # content-provenance-gate rate limiter; imported by no test directly
 
+# Third and fourth instances of the SAME blind spot documented above, found the
+# same way -- a test module failing at import with a package name in the message.
+# Both are imported by SERVICE modules that tests import transitively, never by a
+# test file directly, so the import scan over test_*.py could not see them.
+#
+#   uvicorn   <- pmoves/services/deepresearch/worker.py:270, reached via that
+#                package's __init__.py, so the whole deepresearch test package
+#                failed at collection.
+#   structlog <- pmoves/services/graph-linker/neo4j_client.py:15, reached via
+#                graph-linker/tests/conftest.py. 11 service modules import it.
+#   neo4j     <- the next link in the same graph-linker chain
+#                (neo4j_client.py imports GraphDatabase); adding structlog alone
+#                just moves the error one line down.
+#
+# Measured on Z890 2026-09-21 with `uv run --with-requirements` against this very
+# file: as-is, deepresearch+graph-linker collect ZERO tests; with these three,
+# 85 collect. Neither package appeared in the 217-entry ratchet baseline, so
+# these were unbaselined regressions failing the gate rather than known errors.
+#
+# THE METHOD'S LIMIT, restated because it has now cost four packages: deriving
+# the dependency set from test imports is blind to anything a test reaches
+# THROUGH a service module. A scan of the transitive import closure -- not just
+# test_*.py -- would have found all four.
+uvicorn               # deepresearch/worker.py; imported by no test directly
+structlog             # graph-linker + 10 other service modules; imported by no test directly
+neo4j                 # graph-linker/neo4j_client.py; second link in the structlog chain
+
 # Deliberately NOT installed: torch (3 files). It is a multi-GB download for
 # three tests and would dominate gate runtime. Those modules stay recorded in
 # the ratchet baseline as collection errors rather than being hidden — see

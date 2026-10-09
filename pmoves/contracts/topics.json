@@ -314,6 +314,14 @@
       "schema": "schemas/agent-rl/reward.v1.schema.json",
       "description": "Computed reward signal for trajectory evaluation"
     },
+    "agent.wealth.searched.v1": {
+      "schema": "schemas/agent-wealth/searched.v1.schema.json",
+      "description": "wealth-mcp emitted after a Firefly transaction search (query + result count)"
+    },
+    "agent.wealth.transaction_created.v1": {
+      "schema": "schemas/agent-wealth/transaction_created.v1.schema.json",
+      "description": "wealth-mcp emitted after a Firefly transaction is created (id, kind, amount)"
+    },
     "agent.rl.training.request.v1": {
       "schema": "schemas/agent-rl/training.request.v1.schema.json",
       "description": "Request to trigger RL training job"

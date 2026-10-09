@@ -14,6 +14,24 @@ permissions:
 
 jobs:
   verify:
+    # A job with no `name:` publishes its check-run under the JOB ID, and
+    # `main` requires a status check named `verify` -- which is
+    # chit-contract.yml's CHIT contract gate, an unrelated job that happens
+    # to share this id. GitHub matches required checks on name alone:
+    # "Required status checks do not take workflow, matrix, or event trigger
+    # types into account."
+    #
+    # Being workflow_dispatch-only is NOT protection. Measured 2026-08-30 by
+    # dispatching this workflow at a ref and reading that commit's check-runs:
+    # it published `name=verify conclusion=failure app=github-actions`, from
+    # the same app as the real gate. Dispatched at an open PR's head, this
+    # one-step SLSA check could satisfy main's required `verify` for a commit
+    # the contract gate never approved -- or fail on a bad `image` input and
+    # block a PR whose real `verify` passed.
+    #
+    # So the context is named explicitly. Nothing depended on the old one:
+    # this workflow had never been dispatched before that measurement.
+    name: verify-slsa-attestation
     runs-on: ubuntu-latest
     steps:
       - name: Verify SLSA attestation

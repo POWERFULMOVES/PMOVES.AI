@@ -81,3 +81,52 @@ Add libraries in Jellyfin pointing at the shared content. Verify a title plays e
 `pmoves-jellyfin-ai` is pinned to a Knuckles JuiceFS path whose shared-mount propagation isn't
 present on the 5090 — a separate node-mount decision. The main `pmoves-jellyfin` server (this
 lane) is healthy and independent of it.
+
+## Reconciliation & provenance (measured 2026-09-14, SPARK)
+
+### Fleet reality check — the exposure step has NOT run on any node
+TCP probe from SPARK across all 11 tailnet nodes (`pmoves-4090/5090/spark/z890/b850-ai-top/
+nano-1/kvm4-1/kvm4-2/kvm2/rdna4/elder-melchor`, + `jetson`) on 5432/5433/54322: **zero
+Postgres listeners anywhere on the tailnet.** The compose side of step 4 has LANDED (see
+below) but no node sets `SUPABASE_DB_BIND` to its tailnet address, so every published db port
+stays bound to loopback. The remaining exposure step is exactly: on the meta host, set
+`SUPABASE_DB_BIND=<that node's tailnet IP>` and recreate `supabase-db`.
+
+### Step 4 wording is superseded by the landed compose
+This checklist (and the 08-18 handoff) said "multi-home onto `pmoves_external`". The compose
+that actually landed is stricter: a **dedicated non-internal bridge `pmoves_db_egress`**
+(subnet declared canonically in `ensure-overlay-networks` / `docker-compose.base.yml` — no
+literals here) carrying only supabase-db, plus a **repo-managed `pg_hba.conf`** whose
+tailnet rules admit only `juicefs_meta`, plus the `SUPABASE_DB_BIND` tailnet-bind default of
+`127.0.0.1`. Read `supabase-db`'s block in `pmoves/docker-compose.yml` as the mechanism of
+record; the prose here predates review P1 that rejected the shared egress network.
+
+### "Meta is on KVM" — reconciled
+The 2026-09 operator statement that the meta "is on kvm ready for it" matches **role/schema-side
+readiness** (the scoped-role SQL is committed and `JUICEFS_META_PASSWORD` is funnel-delivered),
+not exposure. The formatted `pmoves-media` volume's metadata home is **B850** (18 tables, per
+the 08-18 handoff). Pointing a cross-node mount at a KVM Postgres that never carried this
+volume yields an empty metadata engine or a different volume — the mount preflight in
+`juicefs-cross-node-setup.sh` will refuse or the mount will list-and-fail-on-open. Host
+selection stays B850 until a deliberate meta-migration lane exists.
+
+### Official-doc provenance (accessed 2026-09-14)
+Primary source, current official PostgreSQL best practices (docs have moved; old
+`databases/postgres` path now 404s):
+- https://juicefs.com/docs/community/postgresql_best_practices/
+- canonical markdown: `juicedata/juicefs` → `docs/en/administration/metadata/postgresql_best_practices.md`
+
+| Official guidance (current) | Our state | Verdict |
+|---|---|---|
+| Pass the password via `META_PASSWORD` env var, never the URL | `juicefs-cross-node-setup.sh` does exactly this | aligned |
+| Set connection ceilings per mount: `max_open_conns`, `max_idle_conns`, `max_idle_time`, `max_life_time` URL params | **Not set anywhere** — our DSN runs unlimited | **adopt before fleet-wide mounts** (suggest `max_open_conns=30&max_life_time=3600` per official example; every Postgres client conn is a dedicated server process) |
+| Keep server-side SSL enabled; `sslmode=disable` only when the server has none | Recorded decision: `sslmode=disable` because WireGuard encrypts the tailnet transport; role is non-superuser + pg_hba-scoped | recorded deviation, unchanged; the compose comment already says revisit if the DB is ever reachable off-tailnet |
+| Poolers (PgBouncer/Pgpool) described generically; **no endorsement of transaction-mode pooling**; JuiceFS metadata ops are transaction-heavy | 08-18 handoff rejected supavisor transaction mode (unprovisioned tenants + prepared statements via lib/pq) | our rejection stands — the official page does not authorize transaction-mode pooling |
+| "do not use a multi-server distributed architecture for the JuiceFS metadata" (no distributed-PG/Citus meta) | n/a today | note for any future HA lane |
+| pg_hba example scopes one user to one subnet with md5 | ours is stricter (tailnet CIDR + dedicated bridge subnet, role-scoped, repo-managed) | aligned, stricter |
+
+### Tailscale API status
+Device enumeration via `api.tailscale.com` (official v2 endpoint, verbatim `Authorization` key)
+returns **401** with a well-formed `tskey-api-` key — the funnel-delivered `TAILSCALE_APIKEY`
+is stale/revoked (July vintage). Operator rotation item through the CHIT funnel; the probe
+above fell back to `node-vocabulary.yaml` + direct TCP.

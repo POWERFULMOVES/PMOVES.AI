@@ -236,7 +236,7 @@ cd pmoves
 make verify-all          # Full smoke test suite
 make smoke               # Core services only
 make smoke-gpu           # GPU-enabled services
-make archon-smoke        # Archon agent services
+make archon-ui-smoke    # Archon agent services
 make deepresearch-smoke  # Research orchestration
 ```
 

@@ -58,7 +58,7 @@
 # and surfaced 127 findings that had never once been reported, taking this file
 # from 124 entries to 250. The bulk of them:
 #
-#     54  tests.hardening.test_docker_hardening.TestResourceLimits
+#     54  tests.hardening.test_docker_hardening.TestResourceLimits  (GONE -- see below)
 #     10  tests.integration.test_pr483_critical_path
 #      7  tests.hardening.test_docker_hardening.TestNonRootUser
 #      7  tests.fresh_start.test_env_layout.TestTierFilesExist
@@ -77,6 +77,66 @@
 # test_tokenism_simulator.py) -- they reach for services that exist on a dev node
 # and not on a runner. Only test_voice_relay_e2e.py hangs in both.
 #
+# ── 2026-09-21: the 54 TestResourceLimits entries are GONE, and none of them
+#    was a real failure ──────────────────────────────────────────────────────
+# They were the single largest group in this file, and every one was FALSE.
+#
+# TestResourceLimits asserted `deploy.resources.limits` against
+# pmoves/docker-compose.hardened.yml. That file is a security-only overlay BY
+# DESIGN: it carries no `deploy:` key for any service, because the Makefile's
+# $(DC) always stacks it on docker-compose.yml, which supplies sizing at merge
+# time. The tests were asserting a property against a file that was never meant
+# to hold it. Measured live on B850 (Docker 29.8.1 / Compose v5.5.1) while all
+# 54 sat here as baselined failures:
+#
+#     extract-worker   Memory=536870912   NanoCpus=1000000000
+#     archon           Memory=2147483648  NanoCpus=2000000000
+#     ffmpeg-whisper   Memory=8589934592  NanoCpus=4000000000
+#
+# The limits existed, were correct, and were enforced. The tests now read the
+# merged config for that one property and all 54 pass.
+#
+# THE PART WORTH KEEPING, because it is about this file and not about compose:
+# these 54 arrived in the batch of 127 the timed-out-chunk repair surfaced, and
+# they were recorded with a count and no diagnosis. The note above says of that
+# batch "Every one is a real failing test that was already failing." For these
+# 54 that sentence was wrong, and nothing in this file could have shown it --
+# a baselined entry records THAT a test fails, never WHY, so a whole class of
+# false failure can sit here indefinitely looking like honest debt. Baselining
+# is what makes a failure visible; it is not what makes it understood, and the
+# gap between those two is exactly 54 entries wide here.
+#
+# So: when a group this size lands at once, write down what it MEANS, the way
+# the python-multipart note above does. That note is why 57 entries could be
+# removed in one motion instead of being re-derived.
+#
+# ── 2026-10-01: 5 entries removed, 6 added -- a dependency fix, not a regression ──
+# .github/requirements-tests.txt gained uvicorn, structlog and neo4j (PR #3141).
+# That fixed five entries:
+#
+#     ERROR|pmoves/services/graph-linker/tests|<pytest-harness>   conftest imports now
+#     ERROR|pmoves/services/deepresearch/tests|<pytest-harness>   resolve
+#     ERROR|services.agent-zero.python.features.a2a.test_server|<collection-error>
+#     ERROR|tests.services.test_gateway_agent_api|<collection-error>
+#     ERROR|tests.services.test_gateway_agent|<collection-error>
+#
+# The deepresearch harness entry was hiding the six entries added here. It
+# stood for "the conftest cannot be imported, so nothing in this directory was
+# measured." Once the conftest imports, the directory is measured for the first
+# time, and it has six pre-existing failures. This is the same shape as the
+# `pmoves/tests [1]` blind spot above. One umbrella entry that recorded silence
+# is replaced by the specific failures that silence contained. None is a new
+# break. Measured in CI (run 36886644749) on the PR head merged with main e0a6a28ed:
+#
+#     services.deepresearch.tests.test_worker  <collection-error>
+#         The file is two test modules concatenated. The second
+#         `from __future__ import annotations` sits at line 8, which is a
+#         SyntaxError, so this file has never executed.
+#     services.deepresearch.tests.test_parsing  (5 FAIL)
+#         TypeError (tuple indexed by str), KeyError 'confidence',
+#         "Unable to locate JSON payload". The tests and the parser have
+#         drifted apart. Which side is right was not judged here.
+#
 # Regenerate: make -C pmoves python-tests-baseline
 known_failures:
   - "ERROR|docs.PMOVES.AI PLANS.PMOVES.yt.test_integration|test_full_ingest"
@@ -87,11 +147,8 @@ known_failures:
   - "ERROR|docs.PMOVES.AI PLANS.PMOVES.yt.test_integration|test_summarization"
   - "ERROR|docs.PMOVES.AI PLANS.PMOVES.yt.test_integration|test_youtube_info"
   - "ERROR|docs.PMOVES.AI PLANS.PMOVES.yt.test_n8n_workflow|test_workflow"
-  - "ERROR|pmoves/services/deepresearch/tests|<pytest-harness>"
-  - "ERROR|pmoves/services/graph-linker/tests|<pytest-harness>"
   - "ERROR|pmoves/tests/integration/test_voice_relay_e2e.py|<pytest-harness>"
   - "ERROR|pytest|internal"
-  - "ERROR|services.agent-zero.python.features.a2a.test_server|<collection-error>"
   - "ERROR|services.channel-monitor.tests.test_monitor|<collection-error>"
   - "ERROR|services.clap-embed.tests.test_app|<collection-error>"
   - "ERROR|services.clap-embed.tests.test_embedder|<collection-error>"
@@ -111,6 +168,7 @@ known_failures:
   - "ERROR|services.creator-operator.tests.test_router|<collection-error>"
   - "ERROR|services.creator-operator.tests.test_schemas|<collection-error>"
   - "ERROR|services.creator-operator.tests.test_voice_operator|<collection-error>"
+  - "ERROR|services.deepresearch.tests.test_worker|<collection-error>"
   - "ERROR|services.flute-gateway.test_cgp_consumer|<collection-error>"
   - "ERROR|services.semantic-cache.tests.test_cache.TestCacheCount|test_count_returns_total"
   - "ERROR|services.semantic-cache.tests.test_cache.TestCacheDimensionFilter|test_dimension_mismatch_filtered_by_sql"
@@ -123,14 +181,6 @@ known_failures:
   - "ERROR|services.semantic-cache.tests.test_cache.TestCacheStore|test_store_failure_is_non_blocking"
   - "ERROR|services.semantic-cache.tests.test_cache.TestCacheStore|test_store_new_entry"
   - "ERROR|services.semantic-cache.tests.test_cache.TestCacheTTL|test_ttl_expired_entries_not_returned"
-  - "ERROR|services.semantic-cache.tests.test_proxy.TestCacheHit|test_cache_hit_cipher_l0"
-  - "ERROR|services.semantic-cache.tests.test_proxy.TestCacheHit|test_cache_hit_pgvector_l1"
-  - "ERROR|services.semantic-cache.tests.test_proxy.TestCacheMissForward|test_cache_miss_forwards_to_tensorzero"
-  - "ERROR|services.semantic-cache.tests.test_proxy.TestHealthEndpoint|test_health_endpoint"
-  - "ERROR|services.semantic-cache.tests.test_proxy.TestMetricsEndpoint|test_metrics_endpoint"
-  - "ERROR|services.semantic-cache.tests.test_proxy.TestPassthroughNonCacheable|test_passthrough_high_temperature"
-  - "ERROR|services.semantic-cache.tests.test_proxy.TestPassthroughNonCacheable|test_passthrough_more_than_three_messages"
-  - "ERROR|services.semantic-cache.tests.test_proxy.TestPassthroughNonCacheable|test_passthrough_tools"
   - "ERROR|services.sso-auth.tests.test_jwt_verify|<collection-error>"
   - "ERROR|services.sso-auth.tests.test_login|<collection-error>"
   - "ERROR|services.sso-auth.tests.test_oidc|<collection-error>"
@@ -143,27 +193,19 @@ known_failures:
   - "ERROR|tests.integration.test_pr483_critical_path|test_critical_path_agent_zero"
   - "ERROR|tests.integration.test_pr483_critical_path|test_critical_path_hirag_v2"
   - "ERROR|tests.integration.test_pr483_critical_path|test_critical_path_nats"
-  - "ERROR|tests.integration.test_pr483_critical_path|test_critical_path_neo4j"
   - "ERROR|tests.integration.test_pr483_critical_path|test_critical_path_supabase"
   - "ERROR|tests.integration.test_pr483_critical_path|test_critical_path_tensorzero"
   - "ERROR|tests.integration.test_pr483_critical_path|test_end_to_end_archon_to_supabase"
   - "ERROR|tests.integration.test_pr483_critical_path|test_end_to_end_pmoves_ui"
-  - "ERROR|tests.services.test_archon_mcp|<collection-error>"
-  - "ERROR|tests.services.test_gateway_agent_api|<collection-error>"
-  - "ERROR|tests.services.test_gateway_agent|<collection-error>"
   - "ERROR|tests.test_tools|<collection-error>"
+  - "FAIL|services.deepresearch.tests.test_parsing|test_parse_model_output_falls_back_to_text"
+  - "FAIL|services.deepresearch.tests.test_parsing|test_parse_model_output_from_code_block"
+  - "FAIL|services.deepresearch.tests.test_parsing|test_parse_model_output_handles_inline_json"
+  - "FAIL|services.deepresearch.tests.test_parsing|test_prepare_result_normalises_sources[sources0-expected_urls0]"
+  - "FAIL|services.deepresearch.tests.test_parsing|test_prepare_result_normalises_sources[sources1-expected_urls1]"
   - "FAIL|services.mesh_exposure.tests.test_app|test_live_registry_loads_12_entries_from_slice4_curated"
   - "FAIL|services.nats_event_bus.tests.test_app|test_read_events_limit_is_respected"
   - "FAIL|services.nats_event_bus.tests.test_app|test_subscriber_disabled_when_nats_url_empty"
-  - "FAIL|services.semantic-cache.tests.test_cipher_layer.TestCipherLifecycle|test_close"
-  - "FAIL|services.semantic-cache.tests.test_cipher_layer.TestCipherLifecycle|test_init"
-  - "FAIL|services.semantic-cache.tests.test_cipher_layer.TestCipherSearch|test_search_disabled"
-  - "FAIL|services.semantic-cache.tests.test_cipher_layer.TestCipherSearch|test_search_hit"
-  - "FAIL|services.semantic-cache.tests.test_cipher_layer.TestCipherSearch|test_search_http_error_fail_open"
-  - "FAIL|services.semantic-cache.tests.test_cipher_layer.TestCipherSearch|test_search_miss"
-  - "FAIL|services.semantic-cache.tests.test_cipher_layer.TestCipherStore|test_store"
-  - "FAIL|services.semantic-cache.tests.test_cipher_layer.TestCipherStore|test_store_failure_is_non_blocking"
-  - "FAIL|services.semantic-cache.tests.test_cipher_layer.TestCipherStore|test_store_network_exception_fail_open"
   - "FAIL|tests.a2ui.test_bridge.TestMetricsEndpoint|test_metrics_returns_prometheus_format"
   - "FAIL|tests.fresh_start.test_chit_integration.TestCHITManifestV2|test_manifest_entries_have_tier"
   - "FAIL|tests.fresh_start.test_env_layout.TestCHITManifestV2|test_manifest_v2_entries_have_tier"
@@ -192,60 +234,6 @@ known_failures:
   - "FAIL|tests.hardening.test_docker_hardening.TestNonRootUser|test_service_has_user_directive[nats-init]"
   - "FAIL|tests.hardening.test_docker_hardening.TestNonRootUser|test_service_has_user_directive[tokenism-simulator]"
   - "FAIL|tests.hardening.test_docker_hardening.TestNonRootUser|test_service_has_user_directive[tokenism-ui]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_cpu_limit[agent-zero]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_cpu_limit[archon]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_cpu_limit[channel-monitor]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_cpu_limit[comfy-watcher]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_cpu_limit[deepresearch]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_cpu_limit[extract-worker]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_cpu_limit[ffmpeg-whisper]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_cpu_limit[grayjay-plugin-host]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_cpu_limit[hi-rag-gateway-gpu]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_cpu_limit[hi-rag-gateway-v2-gpu]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_cpu_limit[hi-rag-gateway-v2]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_cpu_limit[invidious-companion-proxy]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_cpu_limit[jellyfin-bridge]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_cpu_limit[langextract]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_cpu_limit[media-audio]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_cpu_limit[media-video]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_cpu_limit[mesh-agent]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_cpu_limit[nats-echo-req]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_cpu_limit[nats-echo-res]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_cpu_limit[notebook-sync]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_cpu_limit[pdf-ingest]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_cpu_limit[pmoves-yt]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_cpu_limit[presign]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_cpu_limit[publisher-discord]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_cpu_limit[render-webhook]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_cpu_limit[retrieval-eval]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_cpu_limit[supaserch]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_memory_limit[agent-zero]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_memory_limit[archon]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_memory_limit[channel-monitor]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_memory_limit[comfy-watcher]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_memory_limit[deepresearch]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_memory_limit[extract-worker]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_memory_limit[ffmpeg-whisper]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_memory_limit[grayjay-plugin-host]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_memory_limit[hi-rag-gateway-gpu]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_memory_limit[hi-rag-gateway-v2-gpu]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_memory_limit[hi-rag-gateway-v2]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_memory_limit[invidious-companion-proxy]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_memory_limit[jellyfin-bridge]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_memory_limit[langextract]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_memory_limit[media-audio]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_memory_limit[media-video]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_memory_limit[mesh-agent]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_memory_limit[nats-echo-req]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_memory_limit[nats-echo-res]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_memory_limit[notebook-sync]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_memory_limit[pdf-ingest]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_memory_limit[pmoves-yt]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_memory_limit[presign]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_memory_limit[publisher-discord]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_memory_limit[render-webhook]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_memory_limit[retrieval-eval]"
-  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_memory_limit[supaserch]"
   - "FAIL|tests.hardening.test_docker_hardening.TestSecretsManagement|test_github_runner_uses_secrets"
   - "FAIL|tests.hardening.test_docker_hardening.TestValidationScriptIntegration|test_validation_script_checks_flute_gateway"
   - "FAIL|tests.integration.test_gateway_agent_integration.TestEndToEndWorkflows|test_category_browse_workflow"
@@ -277,30 +265,9 @@ known_failures:
   - "FAIL|tests.services.test_content_provenance_gate|test_preview_pipeline_rejects_low_signal_content"
   - "FAIL|tests.services.test_content_provenance_gate|test_preview_pipeline_shapes_attests_and_accepts"
   - "FAIL|tests.services.test_voice_cloning.TestCloningSynthesisProvider|test_synthesis_provider_initialization"
-  - "FAIL|tests.smoke.test_compose_structure|test_no_deprecated_version_key"
   - "FAIL|tests.smoke.test_critical_path|test_postgres_health"
-  - "FAIL|tests.smoke.test_environment_consistency|test_env_files_have_no_export_keywords"
-  - "FAIL|tests.smoke.test_environment_consistency|test_env_shared_exists"
-  - "FAIL|tests.smoke.test_environment_consistency|test_no_duplicate_jwt_secrets"
-  - "FAIL|tests.smoke.test_environment_consistency|test_no_trailing_whitespace_in_env_files"
   - "FAIL|tests.smoke.test_health_endpoints|test_service_health_endpoint[postgres]"
-  - "FAIL|tests.smoke.test_nats_authentication|test_agent_zero_env_file_has_nats_credentials"
-  - "FAIL|tests.smoke.test_nats_authentication|test_comfy_watcher_env_file_has_nats_credentials"
-  - "FAIL|tests.smoke.test_nats_authentication|test_env_shared_still_has_nats_user_and_password"
-  - "FAIL|tests.smoke.test_nats_authentication|test_nats_url_in_env_shared_is_authenticated"
-  - "FAIL|tests.smoke.test_nats_configuration|test_critical_services_depend_on_nats"
-  - "FAIL|tests.smoke.test_nats_configuration|test_nats_on_correct_networks"
-  - "FAIL|tests.smoke.test_nats_configuration|test_nats_url_defined_in_tier_files"
-  - "FAIL|tests.smoke.test_nats_configuration|test_nats_url_has_credentials"
-  - "FAIL|tests.smoke.test_neo4j_dual_ports|test_hirag_v2_uses_neo4j_bolt_port"
-  - "FAIL|tests.smoke.test_neo4j_dual_ports|test_neo4j_bolt_port_exposed"
-  - "FAIL|tests.smoke.test_neo4j_dual_ports|test_neo4j_http_port_exposed"
-  - "FAIL|tests.smoke.test_network_configuration|test_agent_zero_connects_to_tensorzero"
-  - "FAIL|tests.smoke.test_network_configuration|test_tensorzero_uses_internal_port"
-  - "FAIL|tests.smoke.test_supabase_network|test_archon_uses_host_dot_internal_for_supabase"
-  - "FAIL|tests.smoke.test_supabase_network|test_pmoves_ui_on_supabase_network"
   - "FAIL|tests.smoke.test_supabase_network|test_supabase_network_exists"
-  - "FAIL|tests.smoke.test_supabase_selfhosted|test_env_shared_has_jwt_comment"
   - "FAIL|tests.smoke.test_supabase_selfhosted|test_supabase_network_exists"
   - "FAIL|tests.test_audit_naming_drift|test_cards_summary_active_count_matches_seed"
   - "FAIL|tests.test_audit_naming_drift|test_pem_misuse_count_matches_sitrep"

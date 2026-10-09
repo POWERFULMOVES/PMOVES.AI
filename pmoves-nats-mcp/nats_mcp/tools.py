@@ -13,10 +13,24 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import sys
+from pathlib import Path
 from typing import Any
 
 import nats
 from mcp.types import TextContent, Tool
+
+# Ensure the monorepo root is on sys.path so the CANONICAL signer resolves even
+# when launched via `uv --directory ./pmoves-nats-mcp` — that puts this package
+# dir on the path but NOT the repo root, so the import below would silently fall
+# to None and every CHIT-aware publish would ship X-CHIT-Signed: false. Walk up
+# to the dir that actually holds pmoves/tools/chit_security.py (never a fixed
+# depth); no-op outside the monorepo, so the guarded import still degrades cleanly.
+for _root in Path(__file__).resolve().parents:
+    if (_root / "pmoves" / "tools" / "chit_security.py").exists():
+        if str(_root) not in sys.path:
+            sys.path.insert(0, str(_root))
+        break
 
 # Name it, don't re-type it: use the CANONICAL CHIT signer. Optional import so
 # the MCP still runs (raw publish) outside the monorepo context.
@@ -35,8 +49,18 @@ def _nats_url() -> str:
 
 def _nats_creds() -> str | None:
     """Path to a CORE user `.creds` file (nsc-minted). When set, the MCP binds to
-    the CORE account instead of the legacy plaintext user/pass in NATS_URL."""
-    return os.environ.get("NATS_CREDS")
+    the CORE account instead of the legacy plaintext user/pass in NATS_URL.
+
+    Returns None (legacy fallback) when unset, empty, or still an unresolved
+    ``${...}`` placeholder. A bare mcp.json ``"${NATS_CREDS}"`` survives literally
+    on nodes where the var is absent, and that string is truthy — passing it to
+    nats-py would make it try to open a file literally named ``${NATS_CREDS}`` and
+    fail every publish/subscribe instead of falling back to NATS_URL. Guarding here
+    protects ALL launch paths, not just Claude Code's ${VAR} expansion."""
+    val = (os.environ.get("NATS_CREDS") or "").strip()
+    if not val or (val.startswith("${") and val.endswith("}")):
+        return None
+    return val
 
 
 async def _connect(name: str):

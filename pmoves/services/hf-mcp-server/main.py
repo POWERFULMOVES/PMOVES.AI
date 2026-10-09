@@ -50,7 +50,7 @@ logger = logging.getLogger(__name__)
 # Environment variables
 HF_HOME = os.environ.get("HF_HOME", "/models")
 HF_HUB_CACHE = os.environ.get("HF_HUB_CACHE", "/models/hub")
-NATS_URL = os.environ.get("NATS_URL", "nats://nats:pmoves@nats:4222")
+NATS_URL = os.environ.get("NATS_URL", "nats://nats:4222")
 SERVER_PORT = int(os.environ.get("PORT", "8096"))
 
 MODELS_BASE = Path(HF_HUB_CACHE) / "models"
@@ -870,7 +870,7 @@ async def hf_model_convert_gguf(
     # Step 3: publish completion event
     try:
         from nats.aio.client import Client as NATSClient
-        nats_url = os.environ.get("NATS_URL", "nats://nats:pmoves@nats:4222")
+        nats_url = os.environ.get("NATS_URL", "nats://nats:4222")
         nc = NATSClient()
         await nc.connect(nats_url, max_reconnect_attempts=1, connect_timeout=5)
         import json as _json

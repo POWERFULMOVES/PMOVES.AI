@@ -8,7 +8,7 @@ Overview
 Compose
 - Service: `minio`
 - Ports: `9000:9000` (API), `9001:9001` (console)
-- Profile: `data`
+- Profiles: none (always-on)
 - Network: `pmoves-net`
 
 Used by

@@ -520,6 +520,50 @@ x-tier-api-hardened-gpu: &tier-api-hardened-gpu
   - SETGID
   - SETUID
 
+# ── Network-tier anchors (§1465 PR-A) ─────────────────────────────────────────
+# Mirrors the x-tier-*-hardened service anchors above: the tier DECISION becomes
+# a named, greppable thing instead of a bare `internal:` literal repeated seven
+# times. Each network still carries its own name/ipam; only the tier is shared.
+#
+# `internal: true` does more than block egress. A service attached ONLY to
+# internal networks has its published ports stored and never activated, silently
+# -- Docker documents `internal` as "externally isolated" and says nothing about
+# published ingress; the behaviour lives in moby/moby#36174 (open since 2018).
+# Verify what a node actually publishes with `make -C pmoves net-reality`.
+#
+# There is NO publish-without-egress primitive: internal:false grants both.
+# See docs/operations/DOCKER_NETWORK_HARDENING.md Rules 1, 4 and 5.
+
+# Air-gapped: container-to-container only. Ports declared here never publish.
+x-network-internal-only: &network-internal-only
+  driver: bridge
+  internal: true
+
+# Message bus: internal, but pinned to Docker's embedded resolver so a service
+# needing external DNS resolution fails loudly here rather than silently.
+x-network-bus-internal-dns: &network-bus-internal-dns
+  driver: bridge
+  internal: true
+
+# Internet-capable. Rule 1: only for services that genuinely need outbound
+# (LLM APIs, package installs). Never reach for this merely to publish a port.
+#
+# DECLARATION ONLY -- deliberately carries no `&anchor`. The tier it describes
+# is pmoves_external, which is `external: true`: compose adopts that network and
+# does not own its driver/internal, so nothing here can merge this in. An unused
+# anchor is also not round-trip stable -- ruamel drops it on re-serialize, which
+# fails scripts/inject_pmoves_networks.py --check (it compares the whole file).
+x-network-external-bridged:
+  driver: bridge
+  internal: false
+
+# Host-reachable, therefore ALSO egress-capable (Rule 5 -- Docker offers no way
+# to separate them). On Docker Desktop Windows bind 0.0.0.0 and restrict at the
+# Tailscale ACL layer; IP-specific binds are silently dropped there (Rule 4).
+x-network-tailnet-published: &network-tailnet-published
+  driver: bridge
+  internal: false
+
 # PMOVES.AI production compose project
 name: pmoves
 
@@ -731,7 +775,7 @@ services:
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
     # DNS configuration - Docker embedded DNS (default)
-    - PMOVES_NETWORKS=pmoves_api
+    - PMOVES_NETWORKS=pmoves_api,pmoves_external
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9999/health"]
       interval: 15s
@@ -747,6 +791,12 @@ services:
       pmoves_api:
         aliases:
         - auth   # upstream Supabase name used by vendored kong.yml
+      # Egress for external identity providers. pmoves_api is internal-only, so
+      # GoTrue could not fetch https://accounts.google.com/.well-known/openid-configuration
+      # ("lookup accounts.google.com ... server misbehaving") and every Google
+      # sign-in -- and therefore every Archon mint Step 0 -- failed with 400.
+      # It still listens only behind Kong (#2974).
+      pmoves_external: {}
 
     deploy:
       resources:
@@ -1120,12 +1170,26 @@ services:
     # embedded DNS) and the server exits, kicking the container into a
     # restart loop. Pinning to 0.0.0.0 skips the lookup entirely.
     - HOSTNAME=0.0.0.0
-    # Healthcheck: External check (Next.js 16 binds to container hostname, not localhost)
-    # Note: Official Supabase uses node -e fetch but their image has different network config
-    # We rely on container being started successfully (logs show "Ready in Xms")
+    # Healthcheck: the upstream probe, which this service had replaced with a
+    # no-op. The previous test was `node -e 'process.exit(0)' || exit 1` --
+    # it names no host, no port and no route, so it could not fail while the
+    # `node` binary existed, and it reported `service_healthy` to dependents
+    # on a dead Studio. Its own comment said so: "We rely on container being
+    # started successfully", which is a fact Docker already has from the PID.
+    #
+    # The stated reason for the substitution ("Next.js 16 binds to container
+    # hostname, not localhost") is stale: `HOSTNAME=0.0.0.0` is pinned three
+    # lines above, so the bind it worked around no longer happens. Verified
+    # against the running container 2026-09-05 -- both spellings answer:
+    #   docker exec pmoves-supabase-studio-1 node -e "fetch('http://localhost:3000/api/platform/profile')..."
+    #   -> localhost status 200 / 127.0.0.1 status 200
+    #
+    # Probe body copied from the vendored upstream at
+    # PMOVES-supabase/docker/docker-compose.yml:17-23, with `studio` swapped
+    # for `localhost` because the service name differs here.
     - PMOVES_NETWORKS=pmoves_api
     healthcheck:
-      test: ["CMD-SHELL", "node -e 'process.exit(0)' || exit 1"]
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3000/api/platform/profile').then((r) => {if (r.status !== 200) throw new Error(r.status)})"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -1513,9 +1577,23 @@ services:
   neo4j:
     # Graceful stop: Page-cache flush and checkpoint on shutdown.
     stop_grace_period: 60s
-    image: neo4j:5.26.22
-    env_file:
-    - env.tier-data
+    # = the digest the live Knuckles graph runs today (5.26.30, a multi-arch
+    #   index Docker Hub still serves), so moving under compose changes no store
+    #   version. neo4j:5-community now means 5.26.31. (#3193)
+    # The PMOVES source build (POWERFULMOVES/PMOVES-neo4j, branch PMOVES.AI-Edition-5.26)
+    #   replaces this literal with its own @sha256 digest once it passes the A/B against
+    #   this vendor image (docs/TAC/TAC_NEO4J.md section 2). Deliberately no NEO4J_IMAGE
+    #   override: nothing would require a digest, so any tag could replace the image of
+    #   the one stateful graph store (#3251 review P2-a).
+    image: neo4j:5.26.30-community@sha256:037cf5756f0135cbfd66b739b6df7c7c4bb100f9ce11602f6f9538e17e02c74d
+    # The name the live container already has, and the single name source read
+    # by scripts/neo4j_container.py (backup, restore, start-cipher-stack).
+    container_name: pmoves-neo4j
+    # No env_file: the vendor entrypoint turns EVERY NEO4J_* variable into a
+    # neo4j.conf setting (it does not exclude NEO4J_PASSWORD, which would land as
+    # PASSWORD=<plaintext>), and the data tier file also carries MinIO, Postgres,
+    # Meili and Qdrant secrets Neo4j never uses. NEO4J_AUTH below is interpolated
+    # from compose's --env-file layering (COMPOSE_ENV_FILES), not env_file.
     cap_drop:
     - ALL
     cap_add:
@@ -1529,28 +1607,68 @@ services:
     - no-new-privileges:true
     restart: unless-stopped
     environment:
-    - NEO4J_AUTH=neo4j/${NEO4J_PASSWORD:?Set NEO4J_PASSWORD in env.tier-data}
+    - NEO4J_AUTH=neo4j/${NEO4J_PASSWORD:?Set NEO4J_PASSWORD in env.shared}
     - NEO4J_dbms_security_allow__csv__import__from__file__urls=true
+    # Deny LOAD CSV (http/https) to EVERY address, checked AFTER name resolution:
+    # defense in depth even on internal-only networks (it also stops Cypher from
+    # reaching the host gateway, the LAN, or other containers). Verified on the
+    # pinned 5.26.30 Community image (#3201): strict validation recognises the
+    # key, and LOAD CSV of an IP literal or a resolvable hostname fails with
+    # "access to ... is blocked via the configuration property
+    # internal.dbms.cypher_ip_blocklist" (a plain connection error without it).
+    # `internal.*` = unsupported by Neo4j; the digest pin keeps it stable.
+    - NEO4J_internal_dbms_cypher__ip__blocklist=0.0.0.0/0,::/0
     - NEO4J_server_config_strict__validation_enabled=false
     # APOC extensions with safe procedure allowlist
     - NEO4J_apoc_export_file_enabled=true
     - NEO4J_apoc_import_file_enabled=true
-    - NEO4J_apoc_import_file_use__neo4j__config__true=true
-    - NEO4JLABS_PLUGINS=["apoc"]
+    - NEO4J_apoc_import_file_use__neo4j__config=true
+    # NEO4J_PLUGINS (NEO4JLABS_PLUGINS was renamed in 5.0; the entrypoint warns on it).
+    # On a fresh container the plugin step still appends
+    # dbms.security.procedures.unrestricted=apoc.*: it compares against the image conf,
+    # captured before env settings apply. The env loop then deletes that line and
+    # writes the value below, so the explicit list must stay. Without it, all of apoc.*
+    # would be unrestricted.
+    - NEO4J_PLUGINS=["apoc"]
     - NEO4J_dbms_security_procedures_unrestricted=apoc.coll.*,apoc.text.*,apoc.path.*,apoc.algo.*
+    # Memory: `neo4j-admin server memory-recommendation --memory=4g` on this image
+    # (matches deploy.limits.memory). Without these the Docker defaults apply: 512M
+    # heap, 512M page cache (OM docker/configuration). Heap initial = max
+    # (OM performance/memory-configuration).
+    - NEO4J_server_memory_heap_initial__size=2g
+    - NEO4J_server_memory_heap_max__size=2g
+    - NEO4J_server_memory_pagecache_size=512m
     - DOCKED_MODE=${DOCKED_MODE:-true}
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
-    - PMOVES_NETWORKS=pmoves_data
-    ports:
-    - ${NEO4J_BIND:-0.0.0.0}:${NEO4J_HTTP_PORT:-7474}:7474
-    - ${NEO4J_BIND:-0.0.0.0}:${NEO4J_BOLT_PORT:-7687}:7687
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_data,pmoves_graph_front
+    # No ports: Neo4j is internal-only; the fleet reaches it through the
+    # neo4j-tailnet forwarder on pmoves_graph_front (#3201), and on internal-only
+    # networks a published port is inert anyway.
     volumes:
     - neo4j-data:/data
+    # Named, so the logs survive `down`/`rm` (the image declares VOLUME /logs). A
+    # recreate already carries an anonymous volume forward; down/rm orphans it.
+    - neo4j-logs:/logs
     - ./neo4j/cypher:/cypher:ro
+    # Every AGInT that uses the graph must reach it (#3196). Measured consumers:
+    # agent-zero's seeded Neo4j MCP (bolt://neo4j:7687, from the agent-zero
+    # container: api/app/bus/external), archon (app/bus), cipher-api and the
+    # hi-rag gateways (data, plus bus). The alias on each network keeps one name.
     networks:
-    - pmoves_data
+      pmoves_app:
+        aliases:
+        - neo4j
+      pmoves_bus:
+        aliases:
+        - neo4j
+      pmoves_data:
+        aliases:
+        - neo4j
+      # Internal link to the tailnet forwarder only (#3201). No alias needed:
+      # compose registers the service name `neo4j` on every network it joins.
+      pmoves_graph_front:
     healthcheck:
       test:
       - CMD-SHELL
@@ -1568,15 +1686,23 @@ services:
     # Graceful stop: Completes in-flight PUTs before exit.
     stop_grace_period: 30s
     <<: *tier-data-hardened
-    # Pin = the LAST community RELEASE tag MinIO published to Docker Hub
-    # (RELEASE.2025-09-07T16-13-09Z, 2025-09-07). The prior pin
-    # RELEASE.2025-12-20T04-58-37Z was a phantom — a December date AFTER MinIO
-    # stopped publishing minio/minio community images, so it 404s on the registry
-    # ("not found") and broke every data-tier bring-up. Verified 2026-06-22:
-    # 2025-09-07 is the newest tag on hub.docker.com/r/minio/minio.
-    # ⚠️ MinIO Community Edition is EOL/archived (Feb 2026); this tag is the
-    # ceiling. Migration to SeaweedFS/Garage/Enterprise is the durable fix.
-    image: ${MINIO_IMAGE:-minio/minio:RELEASE.2025-09-07T16-13-09Z}
+    # Pin = RELEASE.2025-09-07T16-13-09Z, the last community release and the one
+    # the data in pmoves_minio-data was written by. Every published copy is now
+    # gone (measured 2026-09-26): docker.io/minio/minio 401 (repo deleted),
+    # quay.io/minio/minio 401 anonymously (public-quay control = 200),
+    # ghcr.io/minio/minio 403, dl.min.io archive 410 Gone. So the default is a
+    # LOCAL image built from the archived GitHub tag, with the tag-object and
+    # commit SHAs verified: run `make -C pmoves minio-build-src` first
+    # (docker/minio-src/). It is not published to any registry. The tag lives in
+    # OUR org namespace (ghcr.io/powerfulmoves), so an unbuilt node that falls
+    # through to a pull FAILS CLOSED against our own org (anonymous HEAD = 403)
+    # instead of pulling a third party's image from an unowned namespace. `make
+    # up-minio` checks for the image first and names the fix. A node that still
+    # has upstream cached may set MINIO_IMAGE=minio/minio:RELEASE.2025-09-07T16-13-09Z.
+    # COUPLING: must equal MINIO_SRC_TAG in pmoves/Makefile.
+    # ⚠️ INTERIM: MinIO Community Edition is EOL/archived. Garage is the planned
+    # object substrate (docs/architecture/JUICEFS_OBJECT_STORE_MIGRATION.md §0.8).
+    image: ${MINIO_IMAGE:-ghcr.io/powerfulmoves/pmoves-minio:RELEASE.2025-09-07T16-13-09Z-src}
     # Only data-tier service without a restart policy — every Docker Desktop
     # restart left MinIO dead (Exited 255) until manually started, which is
     # how it sat down for 9 days and silently blocked the YT pipeline.
@@ -1793,10 +1919,13 @@ services:
     - HIRAG_URL=${HIRAG_URL:-http://hi-rag-gateway-v2:8086}
     - EVAL_HTTP_PORT=${EVAL_HTTP_PORT:-8090}
     - PMOVES_NETWORKS=pmoves_app,pmoves_api,pmoves_bus
-    depends_on:
-    - hi-rag-gateway-v2
+    # No cross-overlay depends_on: hi-rag-gateway-v2 is defined in a
+    # sibling overlay, and a depends_on referencing an undefined service
+    # invalidates the WHOLE workers project (overlay-up-workers fails
+    # fleet-wide). The dependency is runtime HTTP (HIRAG_URL), not
+    # startup ordering.
     ports:
-    - ${RETRIEVAL_EVAL_BIND:-0.0.0.0}:${RETRIEVAL_EVAL_PORT:-8090}:8090
+    - ${RETRIEVAL_EVAL_BIND:-127.0.0.1}:${RETRIEVAL_EVAL_PORT:-8090}:8090
     volumes:
     - ./services/retrieval-eval:/app:rw
     - ./datasets:/app/data:rw
@@ -1947,9 +2076,27 @@ services:
     - CLIP_DEVICE=${CLIP_DEVICE:-cpu}
     - CLIP_EMBED_PORT=8109
     - MODEL_REGISTRY_URL=${MODEL_REGISTRY_URL:-http://model-registry:8110}
-    - PMOVES_NETWORKS=pmoves_api,pmoves_bus
+    - PMOVES_NETWORKS=pmoves_api,pmoves_bus,pmoves_external
     ports:
     - "${CLIP_EMBED_BIND:-0.0.0.0}:8109:8109"
+    # networks: clip-embed carried PMOVES_NETWORKS but NO networks: key, so it
+    # landed on the compose DEFAULT network while self-reporting api+bus.
+    # Not cosmetic: MODEL_REGISTRY_URL is the SERVICE NAME model-registry:8110,
+    # which lives on pmoves_api/bus/external -- from the default network that
+    # name does not resolve. Its twin clap-embed, the very next block with the
+    # same *tier-api-hardened anchor, already had this key.
+    # pmoves_external is REQUIRED, not optional: this service calls
+    # CLIPModel.from_pretrained at first request, which downloads weights from
+    # HuggingFace. pmoves_api and pmoves_bus are both `internal: true`, so
+    # without an egress network the container reports HEALTHY and then fails
+    # the first real request. Codex caught this on clip-embed; clap-embed had
+    # the identical defect, which is why copying clap-embed's network list
+    # onto clip-embed fixed one bug and propagated another. Neither service
+    # has ever been run.
+    networks:
+    - pmoves_api
+    - pmoves_bus
+    - pmoves_external
     restart: unless-stopped
     profiles:
     - orchestration
@@ -1966,7 +2113,7 @@ services:
     - CLAP_EMBED_PORT=8108
     - NATS_URL=${NATS_URL:-}
     - MODEL_REGISTRY_URL=${MODEL_REGISTRY_URL:-http://model-registry:8110}
-    - PMOVES_NETWORKS=pmoves_api,pmoves_bus
+    - PMOVES_NETWORKS=pmoves_api,pmoves_bus,pmoves_external
     ports:
     - "${CLAP_EMBED_BIND:-0.0.0.0}:8108:8108"
     restart: unless-stopped
@@ -1982,9 +2129,18 @@ services:
       timeout: 5s
       start_period: 60s
       retries: 3
+    # pmoves_external is REQUIRED, not optional: this service calls
+    # ClapModel.from_pretrained at first request, which downloads weights from
+    # HuggingFace. pmoves_api and pmoves_bus are both `internal: true`, so
+    # without an egress network the container reports HEALTHY and then fails
+    # the first real request. Codex caught this on clip-embed; clap-embed had
+    # the identical defect, which is why copying clap-embed's network list
+    # onto clip-embed fixed one bug and propagated another. Neither service
+    # has ever been run.
     networks:
     - pmoves_api
     - pmoves_bus
+    - pmoves_external
     extra_hosts:
     - host.docker.internal:host-gateway
     deploy:
@@ -2082,6 +2238,48 @@ services:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "python3", "-c", "import os; exit(0 if os.path.exists('/proc/1/cmdline') else 1)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+  persona-thirdref:
+    <<: *tier-worker-hardened
+    build:
+      context: .
+      dockerfile: services/persona-thirdref/Dockerfile
+    restart: unless-stopped
+    environment:
+    - NATS_URL=${NATS_URL}
+    - SUPABASE_URL=${SUPABASE_URL}
+    - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+    - PERSONA_THIRDREF_TOKEN=${PERSONA_THIRDREF_TOKEN:-}
+    - PERSONA_THIRDREF_PROFILE_THRESHOLD=${PERSONA_THIRDREF_PROFILE_THRESHOLD:-10}
+    # Host environment leak guard (see x-host-leak-guard docs above)
+    - SSL_CERT_FILE=
+    - SSL_CERT_DIR=
+    - REQUESTS_CA_BUNDLE=
+    - CURL_CA_BUNDLE=
+    - NODE_EXTRA_CA_CERTS=
+    - HTTP_PROXY=
+    - HTTPS_PROXY=
+    - NO_PROXY=
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus
+    profiles:
+    - workers
+    - orchestration
+    networks:
+    - pmoves_app
+    - pmoves_bus
+    depends_on:
+      nats:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8099/healthz', timeout=5)"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -2751,6 +2949,43 @@ services:
         limits:
           cpus: '1.0'
           memory: 512M
+  fleet-sentinel:
+    <<: *tier-agent-hardened-ro
+    build:
+      context: .
+      dockerfile: services/fleet_sentinel/Dockerfile
+    restart: unless-stopped
+    environment:
+    # Host environment leak guard (see x-host-leak-guard docs above)
+    - SSL_CERT_FILE=
+    - SSL_CERT_DIR=
+    - REQUESTS_CA_BUNDLE=
+    - CURL_CA_BUNDLE=
+    - NODE_EXTRA_CA_CERTS=
+    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - SENTINEL_POLL_INTERVAL=${SENTINEL_POLL_INTERVAL:-30}
+    - SENTINEL_FAILURE_THRESHOLD=${SENTINEL_FAILURE_THRESHOLD:-3}
+    - SENTINEL_RESTART_COOLDOWN=${SENTINEL_RESTART_COOLDOWN:-600}
+    - SENTINEL_SELF_HEAL=${SENTINEL_SELF_HEAL:-1}
+    # Restart actions shell out to make on the host checkout
+    - SENTINEL_PMOVES_DIR=${SENTINEL_PMOVES_DIR:-/srv/pmoves}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_external
+    volumes:
+    # Read-only mount of the repo root for Known-Road restart invocations
+    # (restarts run make -C /srv/pmoves/pmoves via with-env.sh; docker socket
+    # intentionally NOT mounted — restart actions require a host-side runner
+    # until the dsh agent runtime provides a constrained route)
+    - ${PWD}/..:/srv/pmoves:ro
+    - fleet-sentinel-data:/data/fleet-sentinel
+    networks:
+    - pmoves_app
+    - pmoves_bus
+    - pmoves_external
+    ports:
+    - ${SENTINEL_BIND:-127.0.0.1}:${SENTINEL_PORT:-8116}:8116
+    depends_on:
+    - nats
+
   channel-monitor:
     <<: *tier-agent-hardened-ro
     build: ./services/channel-monitor
@@ -2782,8 +3017,10 @@ services:
     volumes:
     - ./config:/app/config
     depends_on:
-      pmoves-yt:
-        condition: service_started
+      # No cross-overlay depends_on: pmoves-yt is defined in a sibling overlay,
+      # and a depends_on referencing an undefined service invalidates the
+      # WHOLE project for this overlay (overlay-up fails fleet-wide). The
+      # dependency is runtime HTTP, not startup ordering.
       nats:
         condition: service_healthy
     ports:
@@ -3102,6 +3339,11 @@ services:
   # ── NATS Message Bus — JetStream-enabled event broker ──────────────────
   # Auth: nats://nats:***@nats:4222 | Monitoring: :8222/varz
   # See: pmoves/docs/NATS_CONFIGURATION.md
+  #
+  # The accounts/leaf hub (SYS/CORE/EDGE/CLOUD, 7422 leafnodes) is `nats-hub`
+  # below — spec §9 Phase 2, profile-gated OFF so default bring-up is unchanged
+  # until the funnel renders the trust material. Spec:
+  # pmoves/docs/specs/nats-accounts-leaf-topology-v0-spec-2026-08-07.md
   nats:
     # Graceful stop: JetStream state flush.
     stop_grace_period: 30s
@@ -3110,6 +3352,18 @@ services:
     image: nats:2.11.8-alpine
     command:
     - -js
+    # JetStream store. WITHOUT this flag the server falls back to
+    # /tmp/nats/jetstream and logs, in its own words:
+    #   "Temporary storage directory used, data could be lost on system reboot"
+    # That is not theoretical: measured on z890 2026-09-15 the bus reported
+    # streams=0 consumers=0 messages=0 — the durable PMOVES-PERSONA stream
+    # created and replay-proven by #3010 was gone, because this service had no
+    # volume at all and /tmp does not survive a container recreate.
+    # Paired with the pmoves-nats-js volume below. Same path the hub uses
+    # (config/nats/pmoves-nats.conf -> store_dir: /data/js), different volume:
+    # legacy and hub must never share JetStream state during the spec §9 cutover.
+    - --store_dir
+    - /data/js
     - -m
     - '8222'
     - --user
@@ -3134,6 +3388,9 @@ services:
     # Loopback by default; set NATS_MONITORING_BIND explicitly (ideally to the
     # tailnet IP, not 0.0.0.0) if a node genuinely needs remote NATS monitoring.
     - ${NATS_MONITORING_BIND:-127.0.0.1}:${NATS_MONITORING_PORT:-9223}:8222
+    volumes:
+    # Persists JetStream across recreate. See --store_dir above.
+    - pmoves-nats-js:/data/js
     networks:
     # pmoves_bus is internal:true (isolated in-stack mesh bus). A container on an
     # internal-only network gets NO published-port DNAT rules from Docker, so the
@@ -3161,6 +3418,94 @@ services:
         limits:
           cpus: '1.0'
           memory: 512M
+
+  # ── NATS accounts/leaf hub — spec §9 Phase 2 (PMOVES-nats-server fork) ──
+  # Four trust zones (SYS/CORE/EDGE/CLOUD) via memory resolver of nsc-minted
+  # account JWTs; 7422 leafnode listener for EDGE/CLOUD leaves; SYS-guarded
+  # monitoring. Two-gate model: the account is the transport-trust gate; CHIT
+  # signing (inside messages) is the payload-provenance gate — broker-level CHIT
+  # enforcement is out of scope per spec §11. No Go patches (spec global
+  # constraint): the fork's value is config + packaging on stock nats:2.11.
+  #
+  # OFF by default (profile `nats-hub`): flipping bring-up to the hub requires
+  # the funnel-rendered trust material (see environment/secrets below) — the
+  # fork entrypoint fails fast without it. Default `nats` above is the
+  # flag-launched single-principal bus until the operator cuts over per spec §9.
+  #
+  # CONFIG NOTE: the fork image bakes the Aug-8 §7a conf, which predates the
+  # Aug-15 lab finding that `operator:` is REQUIRED (without it the server dies
+  # at boot: "error resolving system account: account validation failed"). The
+  # lab-verified template — pmoves/config/nats/pmoves-nats.conf, VERIFIED
+  # 2026-08-15 on z890 with leaf attach + account isolation proven — is mounted
+  # OVER the baked conf. Its ${NATS_*} placeholders expand from container env
+  # (env_file via the tier anchor; funnel renders them into env.shared per §8 —
+  # nats-server expands $VAR itself, no ${VAR:-default} supported).
+  #
+  # Cutover path (spec §9): Phase 2 = enable here on the hub node (KVM4-2 per
+  # mcp.json, or z890 lab first) → Phase 3 migrate CORE clients to .creds →
+  # Phase 4/5 attach EDGE/CLOUD leaves at 7422 → Phase 6 MCP NATS_CREDS cutover.
+  nats-hub:
+    stop_grace_period: 30s
+    <<: *tier-data-hardened
+    build:
+      context: ../PMOVES-nats-server/pmoves
+      dockerfile: Dockerfile
+    image: ghcr.io/powerfulmoves/pmoves-nats:pmoves-latest
+    container_name: pmoves-nats-hub-1
+    restart: unless-stopped
+    profiles:
+    - nats-hub
+    volumes:
+    # Lab-verified hub template (newer than the baked one — carries the required
+    # `operator:` directive). Placeholders resolve from container env.
+    - ./config/nats/pmoves-nats.conf:/etc/nats/pmoves-nats.conf:ro
+    - pmoves-nats-hub-js:/data/js
+    environment:
+    - PMOVES_NATS_SERVER_NAME=pmoves-nats-hub-${PMOVES_NODE:-z890}
+    # Template vars (funnel-rendered into env.shared per spec §8; PUBLIC values):
+    #   NATS_OPERATOR_JWT, NATS_SYS_ACCOUNT_PUBKEY/JWT,
+    #   NATS_CORE_ACCOUNT_PUBKEY/JWT, NATS_EDGE_ACCOUNT_PUBKEY/JWT,
+    #   NATS_CLOUD_ACCOUNT_PUBKEY/JWT — all arrive via env_file from the anchor.
+    - PMOVES_NETWORKS=pmoves_bus,pmoves_external
+    ports:
+    # client 4222 (cross-node, account-authenticated) — leaf 7422 (cross-node,
+    # the port EDGE/CLOUD leaves attach to; 4222 is the WRONG port for leaves)
+    - ${NATS_BIND:-0.0.0.0}:${NATS_PORT:-4222}:4222
+    - ${NATS_LEAF_BIND:-0.0.0.0}:${NATS_LEAF_PORT:-7422}:7422
+    # monitoring: the HTTP monitor (/varz, /connz, /leafz ...) is UNAUTHENTICATED —
+    # `system_account` guards the $SYS.> subjects, not this port. Loopback-only,
+    # on a hub-specific bind var so a tailnet NATS_MONITORING_BIND set for the
+    # legacy `nats` service cannot leak it off-host. Cross-node ops read /leafz
+    # via the SYS account over the bus, not via HTTP.
+    - ${NATS_HUB_MONITORING_BIND:-127.0.0.1}:${NATS_MONITORING_PORT:-9223}:8222
+    # No websocket publish: pmoves-nats.conf declares no `websocket {}` block
+    # (client 4222 / monitor 8222 / leaf 7422 only) and the v0 spec defines no
+    # browser surface. Add the listener block and the publish together when
+    # A2UI needs it — never advertise a port nothing listens on.
+    secrets:
+    # Satisfies the fork entrypoint's fail-fast (trust-material-present check).
+    # PUBLIC nsc-minted account JWTs, funnel-rendered — shape: fork
+    # pmoves/examples/resolver_preload.conf.example. The template renders the
+    # same JWTs from env, so this file is the redundancy gate, not the source.
+    - source: nats_resolver_preload
+      target: /etc/nats/resolver_preload.conf
+    networks:
+    - pmoves_bus
+    - pmoves_external
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - wget --no-verbose --tries=1 --spider http://localhost:8222/varz || exit 1
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+
   nats-init:
     image: natsio/nats-box:0.14.5
     entrypoint: ["/bin/sh", "/scripts/init_streams.sh"]
@@ -3293,8 +3638,15 @@ services:
     # Prefer the secrets-sync name — the legacy local SERVICE_ROLE_KEY has been
     # observed stale (retired-secret signature); same preference as #2333/#2346.
     - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-${SERVICE_ROLE_KEY:-}}
+    # Cipher MCP endpoints — two transports, two DIFFERENT paths:
+    #   CIPHER_MCP_URL      = legacy SSE stream  (…/mcp/sse), kept for SSE consumers
+    #   CIPHER_MCP_HTTP_URL = modern streamable-http (…/mcp), what A0 mounts below
+    # A remote/non-default Cipher deployment MUST override BOTH (the paths differ, so
+    # one can't stand in for the other) — declared here + in env templates so an
+    # override is never silently dropped.
     - CIPHER_MCP_URL=${CIPHER_MCP_URL:-http://cipher-api:8105/mcp/sse}
-    - 'A0_SET_mcp_servers={"mcpServers":{"docker":{"command":"docker","args":["run","--rm","-i","--mount","type=bind,src=/var/run/docker.sock,dst=/var/run/docker.sock","mcp/docker"]},"pmoves-supabase":{"command":"mcp-server-postgrest","args":["--apiUrl","${SUPABASE_REST_URL:-http://supabase-kong:8000/rest/v1}","--apiKey","${SERVICE_ROLE_KEY:-${SUPABASE_SERVICE_ROLE_KEY:-}}","--schema","public,storage"]},"cipher":{"type":"sse","url":"${CIPHER_MCP_URL:-http://cipher-api:8105/mcp/sse}"}}}'
+    - CIPHER_MCP_HTTP_URL=${CIPHER_MCP_HTTP_URL:-http://cipher-api:8105/mcp}
+    - 'A0_SET_mcp_servers={"mcpServers":{"docker":{"command":"docker","args":["run","--rm","-i","--mount","type=bind,src=/var/run/docker.sock,dst=/var/run/docker.sock","mcp/docker"]},"pmoves-supabase":{"command":"mcp-server-postgrest","args":["--apiUrl","${SUPABASE_REST_URL:-http://supabase-kong:8000/rest/v1}","--apiKey","${SERVICE_ROLE_KEY:-${SUPABASE_SERVICE_ROLE_KEY:-}}","--schema","public,storage"]},"cipher":{"type":"streamable-http","url":"${CIPHER_MCP_HTTP_URL:-http://cipher-api:8105/mcp}","headers":{"Authorization":"Bearer ${CIPHER_API_TOKEN}"}},"notebook":{"type":"streamable-http","url":"${NOTEBOOK_MCP_URL:-http://notebook-mcp:8092/mcp}"},"wealth":{"type":"streamable-http","url":"${WEALTH_MCP_URL:-http://wealth-mcp:8092/mcp}","headers":{"Authorization":"Bearer ${FIREFLY_ACCESS_TOKEN}"}}}}'
     # LLM routing: use TensorZero gateway as OpenAI-compatible provider
     # Agent Zero's get_default_value() reads A0_SET_* from env (dotenv priority)
     # Dummy key silences LiteLLM "Missing API Key" warning — TensorZero handles auth
@@ -3462,7 +3814,7 @@ services:
     build:
       context: ../PMOVES-Archon
       dockerfile: Dockerfile
-    image: ${ARCHON_IMAGE:-ghcr.io/powerfulmoves/pmoves-archon:pmoves-latest}
+    image: ${ARCHON_IMAGE:-ghcr.io/powerfulmoves/pmoves-archon:current}
     # No container_name: keep the compose-default `${PROJECT}-archon-1` name that
     # `wait-agents` and the REST policy probe (Makefile) inspect by that exact name.
     hostname: archon
@@ -3471,6 +3823,18 @@ services:
     - PORT=3090
     - HOST=0.0.0.0
     - NODE_ENV=production
+    # Highest-priority input to services/archon/main.py:_ensure_supabase_env(),
+    # which otherwise ranks SUPA_REST_URL -- shipped fleet-wide as
+    # host.docker.internal:54321, the Supabase CLI topology -- ABOVE the correct
+    # SUPABASE_URL, and forces it to a host this container has no extra_hosts
+    # mapping for. That rewrite, not the network, is what kept /api/health
+    # reporting Errno -2 even after pmoves_api was attached.
+    #
+    # The ${VAR:-default} form is load-bearing: a service-level environment entry
+    # OVERRIDES env_file, so a bare value would silently discard an operator
+    # override -- the same nested-default lesson already documented above for
+    # ANTHROPIC_AUTH_TOKEN.
+    - ARCHON_SUPABASE_BASE_URL=${ARCHON_SUPABASE_BASE_URL:-http://supabase-kong:8000}
     - ARCHON_DOCKER=true
     # Postgres backend (pg_notify realtime). Archon auto-inits its schema on boot.
     - DATABASE_URL=${ARCHON_DATABASE_URL:-postgresql://${ARCHON_DB_USER:-archon}:${ARCHON_DB_PASSWORD:-archon}@archon-postgres:5432/${ARCHON_DB_NAME:-remote_coding_agent}}
@@ -3551,7 +3915,7 @@ services:
     - HTTP_PROXY=
     - HTTPS_PROXY=
     - NO_PROXY=
-    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_external
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_external,pmoves_api
     depends_on:
       archon-postgres:
         condition: service_healthy
@@ -3578,10 +3942,29 @@ services:
       # Archon needs egress to reach the Claude API + GitHub with the configured
       # credentials; pmoves_app/pmoves_bus are internal-only.
       pmoves_external:
+      # Supabase REST and auth live on pmoves_api. Without this the container
+      # cannot resolve supabase-kong at all -- Errno -2 here is a network
+      # MEMBERSHIP failure, not a DNS outage (nats resolves fine from inside).
+      # pmoves_data is deliberately NOT added: supabase-db is reachable from
+      # pmoves_api and the failing path is REST, not direct postgres.
+      pmoves_api:
     profiles:
     - agents
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:3090/api/health || exit 1"]
+      # READINESS-AWARE HEALTHCHECK. `curl -f` keys on the HTTP status code only,
+      # and this endpoint answers 200 while its body says ready:false -- so the
+      # previous check reported `healthy` with FailingStreak=0 for nine days while
+      # the service told anyone who read the body that it was not ready.
+      #
+      # Deliberately asserts on `status`, NOT on `ready`: the `ready` field is
+      # emitted ONLY by the failure branch (api_routes/knowledge_api.py), so a
+      # grep for '"ready":true' would be a check that can never pass. Verified
+      # against both body shapes with real Docker health machinery.
+      #
+      # Fail-closed on an unrecognised status word, which is correct for a health
+      # probe. Reusable shape for any PMOVES service whose /health carries a
+      # status string -- copy this rather than writing another one-off.
+      test: ["CMD-SHELL", "curl -fsS http://localhost:3090/api/health | grep -qE '\"status\"[[:space:]]*:[[:space:]]*\"(healthy|ok|ready|up)\"'"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -3638,6 +4021,107 @@ services:
           cpus: '1.0'
           memory: 1G
 
+  notebook-mcp:
+    # notebook-mcp — MCP wrapper for Open Notebook (build once, mount by any agent).
+    # Exposes save_note/search_notes over MCP (streamable-http) so A0's :8081 client,
+    # deepseek-harness (dsh-mcp-client), and Claude/Codex all mount ONE wrapper instead
+    # of re-implementing the REST calls. Reuses the exact pmoves_notes REST contract
+    # (POST /api/notes, POST /api/search) + the same OPEN_NOTEBOOK_API_TOKEN bearer auth.
+    # Tenant seam stays in the mounting harness (dsh ctx.credentials / A0 per-context).
+    <<: *tier-agent-hardened-rw
+    build:
+      context: ./services/notebook-mcp
+      dockerfile: Dockerfile
+    image: ${NOTEBOOK_MCP_IMAGE:-ghcr.io/powerfulmoves/pmoves-notebook-mcp:pmoves-latest}
+    container_name: pmoves-notebook-mcp
+    hostname: notebook-mcp
+    restart: unless-stopped
+    environment:
+    - MCP_HOST=0.0.0.0
+    - MCP_PORT=8092
+    - MCP_TRANSPORT=${NOTEBOOK_MCP_TRANSPORT:-streamable-http}
+    # In-network service DNS via a DEDICATED override var — do NOT inherit
+    # ${OPEN_NOTEBOOK_API_URL}, which the env pipeline sets to http://localhost:5055
+    # for HOST-side tools (inside a container localhost is itself, not Open Notebook).
+    # Default = the standalone `open-notebook` alias (verified /api/search -> HTTP 200).
+    # On the `make up-external` topology set NOTEBOOK_MCP_API_URL=http://open-notebook-ext:5055
+    # (that stack registers open-notebook-ext / pmoves-open-notebook-ext, not open-notebook).
+    - OPEN_NOTEBOOK_API_URL=${NOTEBOOK_MCP_API_URL:-http://open-notebook:5055}
+    # Token IS required — /api/* returns 401 without it. Sourced from the env pipeline
+    # (same OPEN_NOTEBOOK_API_TOKEN the pmoves_notes plugin uses). Per-tenant credential
+    # resolution is the mounting harness's job on top of this baseline.
+    - OPEN_NOTEBOOK_API_TOKEN=${OPEN_NOTEBOOK_API_TOKEN:-}
+    - NATS_URL=${NATS_URL}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus
+    ports:
+    - ${NOTEBOOK_MCP_BIND:-127.0.0.1}:${NOTEBOOK_MCP_PORT:-8207}:8092
+    depends_on:
+      nats:
+        condition: service_healthy
+    profiles: ["agents", "research"]
+    networks: [pmoves_app, pmoves_bus]  # open-notebook reachable on pmoves_app
+    # python:3.12-slim has no curl; use a stdlib TCP-connect probe on the MCP port.
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket,sys; s=socket.socket(); s.settimeout(3); sys.exit(0 if s.connect_ex(('127.0.0.1',8092))==0 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+
+  wealth-mcp:
+    # wealth-mcp — MCP wrapper for Firefly III (build once, mount by any agent).
+    # Exposes list_accounts/list_transactions/search_transactions/create_transaction
+    # over MCP (streamable-http) so A0's :8081 client, deepseek-harness, and Claude/Codex
+    # mount ONE wrapper. Tenancy supports BOTH Firefly models: a per-request Bearer PAT
+    # forwarded by the mounting harness (shared Firefly + per-tenant PATs), or
+    # WEALTH_MCP_FIREFLY_URL per tenant instance. FIREFLY_PAT is the baseline fallback.
+    <<: *tier-agent-hardened-rw
+    build:
+      context: ./services/wealth-mcp
+      dockerfile: Dockerfile
+    image: ${WEALTH_MCP_IMAGE:-ghcr.io/powerfulmoves/pmoves-wealth-mcp:pmoves-latest}
+    container_name: pmoves-wealth-mcp
+    hostname: wealth-mcp
+    restart: unless-stopped
+    environment:
+    - MCP_HOST=0.0.0.0
+    - MCP_PORT=8092
+    - MCP_TRANSPORT=${WEALTH_MCP_TRANSPORT:-streamable-http}
+    # Firefly reachable in-network on pmoves_app (alias `firefly`). Do NOT inherit a
+    # host-oriented URL; this is a compose service, always in-network.
+    - FIREFLY_API_URL=${WEALTH_MCP_FIREFLY_URL:-http://firefly:8080/api/v1}
+    # Fleet convention: FIREFLY_ACCESS_TOKEN (integration-auth-setup.sh lands it in
+    # env.shared). FIREFLY_PAT kept as a back-compat fallback. Per-tenant PATs are
+    # forwarded per-request by the mounting harness (they win over these baselines).
+    - FIREFLY_ACCESS_TOKEN=${FIREFLY_ACCESS_TOKEN:-}
+    - FIREFLY_PAT=${FIREFLY_PAT:-}
+    - NATS_URL=${NATS_URL}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus
+    ports:
+    - ${WEALTH_MCP_BIND:-127.0.0.1}:${WEALTH_MCP_PORT:-8208}:8092
+    depends_on:
+      nats:
+        condition: service_healthy
+    profiles: ["agents", "research"]
+    networks: [pmoves_app, pmoves_bus]  # firefly reachable on pmoves_app
+    # python:3.12-slim has no curl; stdlib TCP-connect probe on the MCP port.
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket,sys; s=socket.socket(); s.settimeout(3); sys.exit(0 if s.connect_ex(('127.0.0.1',8092))==0 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+
   # Tier: agent (NotebookLM Agent - Google NotebookLM integration)
   cipher-api:
     <<: *tier-agent-hardened
@@ -3649,19 +4133,49 @@ services:
     - NODE_ENV=production
     - NATS_URL=${NATS_URL}
     - CIPHER_API_TOKEN=${CIPHER_API_TOKEN:-}
+    # Per-agent token resolution (auth.ts resolveToken) presents this key to
+    # PostgREST on every cipher_<uuid> bearer lookup. env.shared carries TWO
+    # JWT key pairs (legacy ANON_KEY/SERVICE_ROLE_KEY and newer
+    # SUPABASE_ANON_KEY/SUPABASE_SERVICE_KEY); the running postgrest validates
+    # only the pair it was configured with (measured 2026-09-22 on B850:
+    # PGRST301 on the SUPABASE_* pair, legacy pair verifies). Default keeps
+    # current behavior; a node whose postgrest accepts only the other pair
+    # steers with CIPHER_DB_SERVICE_KEY=<the key postgrest accepts> in
+    # pmoves/.env.local (loaded by with-env.sh into the compose process env).
+    - SUPABASE_SERVICE_KEY=${CIPHER_DB_SERVICE_KEY:-${SUPABASE_SERVICE_KEY:-}}
+    # MCP per-request identity (Pmoves-cipher 36b28d0f, src/pmoves/mcp-sse.ts).
+    # Empty by default = ADVISORY: '' is in ADVISORY_VALUES (recognised, no
+    # WARN), and envNumber() treats '' as unset, so the interval/budget fall
+    # back to 60000ms / 200 with no clamp WARN. Set CIPHER_MCP_ENFORCE=true in
+    # pmoves/.env.local to refuse identity mismatches instead of logging them.
+    - CIPHER_MCP_ENFORCE=${CIPHER_MCP_ENFORCE:-}
+    - CIPHER_MCP_ADVISORY_INTERVAL_MS=${CIPHER_MCP_ADVISORY_INTERVAL_MS:-}
+    - CIPHER_MCP_ADVISORY_BUDGET=${CIPHER_MCP_ADVISORY_BUDGET:-}
     - PMOVES_STORAGE_DIR=/data/cipher
     - PMOVES_PORT=8105
     - PMOVES_HOST=0.0.0.0
-    - OLLAMA_URL=http://host.docker.internal:11434
-    - OLLAMA_BASE_URL=http://host.docker.internal:11434
+    - OLLAMA_URL=${OLLAMA_URL:-http://host.docker.internal:11434}
+    - OLLAMA_BASE_URL=${OLLAMA_URL:-http://host.docker.internal:11434}
     - OLLAMA_EMBED_MODEL=${OLLAMA_EMBED_MODEL:-qwen3-embedding:4b}
-    - TENSORZERO_URL=http://tensorzero-gateway:3000
+    - TENSORZERO_URL=${TENSORZERO_URL:-http://tensorzero-gateway:3000}
+    # Graph backend — same interpolation class as OLLAMA_URL above (#3082).
+    # Image-baked bolt://neo4j:7687 left every node without a local Neo4j
+    # dark (fleet graph layer 100% down 2026-09-15: spark 7474/7687 dead,
+    # elder-melchor never launched). Nodes that can host the graph run it
+    # local; hardware-limited nodes point at a mesh donor (capability-based
+    # routing, operator doctrine: "ok to have graph on cipher unless PC
+    # can't handle nodes — only hardware limited, and even then we have mesh").
+    - NEO4J_URI=${NEO4J_URI:-bolt://neo4j:7687}
+    - NEO4J_USER=${NEO4J_USER:-neo4j}
+    - NEO4J_PASSWORD=${NEO4J_PASSWORD:?Set NEO4J_PASSWORD in env.tier-data}
+    - NEO4J_AUTH=${NEO4J_AUTH:-}
     - QDRANT_URL=http://qdrant:6333
     - QDRANT_API_KEY=${QDRANT__API_KEY:-}
     - QDRANT_COLLECTION=pmoves_cipher_memory
     - EMBEDDING_MODEL=tensorzero::embedding_model_name::qwen3_embedding_4b_local
     - EMBEDDING_DIM=2560
     - PMOVES_NETWORKS=pmoves_app,pmoves_data,pmoves_bus,pmoves_external,pmoves_api
+    - PMOVES_EMBED_TIMEOUT_MS=${PMOVES_EMBED_TIMEOUT_MS:-30000}
     ports:
     - "${CIPHER_BIND:-127.0.0.1}:${CIPHER_PORT:-8105}:8105"
     depends_on:
@@ -3772,6 +4286,20 @@ services:
       args:
         ENV: production
         APP_PATH: /app/apps/webuiapps
+        # The app is served under /webuiapps/ (see the nginx location below and
+        # apps/webuiapps/nginx/default.conf). vite.config.ts::getBase() returns
+        # '/' + BIZ_PROJECT_NAME + '/' for a production build and '/' when the
+        # variable is empty -- its own comment reads "Test: sub-path
+        # /webuiapps/". The Dockerfile already accepts BIZ_PROJECT_NAME as a
+        # build ARG and exports it as ENV for the build; compose was the one
+        # link that never passed a value.
+        #
+        # Without it every asset in index.html is emitted root-relative
+        # (/assets/index-*.js), nginx has no `location /assets/`, and the whole
+        # bundle 404s while /webuiapps/ still answers 200 with the HTML. The
+        # page renders blank and any probe of the app root reports healthy.
+        # Measured on PMOVES-4090 2026-09-08.
+        BIZ_PROJECT_NAME: webuiapps
     image: pmoves-openroom:latest
     container_name: pmoves-openroom
     restart: unless-stopped
@@ -3872,12 +4400,14 @@ services:
     - ${GITHUB_CLEANUP_BIND:-0.0.0.0}:8100:8100
     - ${GITHUB_CLEANUP_BIND:-0.0.0.0}:9096:9096
     depends_on:
+    # No cross-overlay depends_on: agent-zero is defined in a sibling overlay,
+    # and a depends_on referencing an undefined service invalidates the
+    # WHOLE project for this overlay (overlay-up fails fleet-wide). The
+    # dependency is runtime HTTP, not startup ordering.
       nats:
         condition: service_healthy
       nats-init:
         condition: service_completed_successfully
-      agent-zero:
-        condition: service_healthy
     profiles: ["agents", "github-automation"]
     networks: [pmoves_app, pmoves_bus, pmoves_api, pmoves_monitoring, pmoves_external]  # GitHub API
     healthcheck:
@@ -3913,14 +4443,18 @@ services:
     - ${GITHUB_TRIAGE_BIND:-0.0.0.0}:8101:8101
     - ${GITHUB_TRIAGE_BIND:-0.0.0.0}:9097:9097
     depends_on:
+    # No cross-overlay depends_on: botz-gateway is defined in a sibling overlay,
+    # and a depends_on referencing an undefined service invalidates the
+    # WHOLE project for this overlay (overlay-up fails fleet-wide). The
+    # dependency is runtime HTTP, not startup ordering.
+    # No cross-overlay depends_on: hi-rag-gateway-v2 is defined in a sibling overlay,
+    # and a depends_on referencing an undefined service invalidates the
+    # WHOLE project for this overlay (overlay-up fails fleet-wide). The
+    # dependency is runtime HTTP, not startup ordering.
       nats:
         condition: service_healthy
       nats-init:
         condition: service_completed_successfully
-      hi-rag-gateway-v2:
-        condition: service_healthy
-      botz-gateway:
-        condition: service_healthy
     profiles: ["agents", "github-automation"]
     networks: [pmoves_app, pmoves_bus, pmoves_api, pmoves_monitoring, pmoves_external]  # GitHub API
     healthcheck:
@@ -4675,10 +5209,11 @@ services:
       retries: 5
       start_period: 60s
     depends_on:
+    # No cross-overlay depends_on: model-registry is defined in a sibling overlay,
+    # and a depends_on referencing an undefined service invalidates the
+    # WHOLE project for this overlay (overlay-up fails fleet-wide). The
+    # dependency is runtime HTTP, not startup ordering.
       nats:
-        condition: service_healthy
-        required: false
-      model-registry:
         condition: service_healthy
         required: false
 
@@ -4854,6 +5389,10 @@ services:
     # NATS_URL from env.shared/env.tier-media has credentials: nats://nats:***@nats:4222
     - PORT=8055
     - NATS_URL=${NATS_URL}
+    # Voicebox model variant (per-request API param in Voicebox's docs; this is
+    # the node-level default the provider falls back to). 0.6B = GTX 1650 4GB
+    # class — 1.7B OOMs at synthesis time on 4GB cards.
+    - VOICEBOX_MODEL_SIZE=${VOICEBOX_MODEL_SIZE:-0.6B}
     - SUPABASE_URL=${SUPABASE_INTERNAL_URL:-${SUPABASE_URL:-http://supabase-kong:8000}}
     - TENSORZERO_URL=${TENSORZERO_URL:-http://tensorzero-gateway:3000}
     # Default TTS = OmniVoice (k2-fsa, Apache-2.0; license-clean creator-pipeline
@@ -5241,8 +5780,10 @@ services:
     networks:
     - pmoves_app
     - pmoves_bus
-    depends_on:
-    - hi-rag-gateway-v2
+    # No cross-overlay depends_on: hi-rag-gateway-v2 is defined in a
+    # sibling overlay, and a depends_on referencing an undefined service
+    # invalidates the WHOLE workers project (overlay-up-workers fails
+    # fleet-wide). The dependency is runtime HTTP, not startup ordering.
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8100/healthz', timeout=5)"]
       interval: 30s
@@ -5762,9 +6303,11 @@ services:
     - pmoves_monitoring
     - pmoves_external  # GitHub API
     depends_on:
+    # No cross-overlay depends_on: agent-zero is defined in a sibling overlay,
+    # and a depends_on referencing an undefined service invalidates the
+    # WHOLE project for this overlay (overlay-up fails fleet-wide). The
+    # dependency is runtime HTTP, not startup ordering.
       nats:
-        condition: service_healthy
-      agent-zero:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8102/healthz"]
@@ -5806,9 +6349,11 @@ services:
     - pmoves_monitoring
     - pmoves_external  # GitHub API + git clone
     depends_on:
+    # No cross-overlay depends_on: agent-zero is defined in a sibling overlay,
+    # and a depends_on referencing an undefined service invalidates the
+    # WHOLE project for this overlay (overlay-up fails fleet-wide). The
+    # dependency is runtime HTTP, not startup ordering.
       nats:
-        condition: service_healthy
-      agent-zero:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8103/healthz"]
@@ -5847,9 +6392,11 @@ services:
     - pmoves_monitoring
     - pmoves_external  # GitHub API for PR management
     depends_on:
+    # No cross-overlay depends_on: agent-zero is defined in a sibling overlay,
+    # and a depends_on referencing an undefined service invalidates the
+    # WHOLE project for this overlay (overlay-up fails fleet-wide). The
+    # dependency is runtime HTTP, not startup ordering.
       nats:
-        condition: service_healthy
-      agent-zero:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8104/healthz"]
@@ -5865,6 +6412,8 @@ services:
           memory: 256M
 volumes:
   neo4j-data: {}
+  neo4j-logs: {}
+  fleet-sentinel-data: {}  # fleet-sentinel action trail (jsonl) + state
   archon-data: {}          # Archon /.archon workspaces + SQLite/state (#2217)
   archon-user-home: {}     # Archon /home/appuser (Claude/gh creds, git config)
   archon-pg-data: {}       # Archon dedicated Postgres data (pg_notify realtime)
@@ -5895,59 +6444,85 @@ volumes:
   wger-media: {}
   wger-prometheus: {}
   pmoves-yt-data: {}
+  # NATS accounts/leaf hub (profile: nats-hub) — spec §9 Phase 2. Separate
+  # volume from the legacy `nats` service so the two never share JetStream
+  # state during cutover (spec §9: phased, each independently testable).
+  pmoves-nats-hub-js: {}
+  # Legacy `nats` JetStream store. Added 2026-09-15: the service ran with no
+  # volume, so JetStream lived in the container's /tmp and every recreate
+  # silently discarded durable streams.
+  pmoves-nats-js: {}
+secrets:
+  # ── NATS hub trust material (profile: nats-hub) — funnel-rendered (spec §8) ──
+  # resolver_preload: PUBLIC nsc-minted account JWTs (SYS/CORE/EDGE/CLOUD) —
+  #   safe in a rendered config and in logs. Render via
+  #   `nsc generate config --mem-resolver` from the CHIT-vault-held operator
+  #   material; shape: fork pmoves/examples/resolver_preload.conf.example.
+  #   Satisfies the fork entrypoint's fail-fast gate; the mounted template
+  #   renders the same JWTs from env — this file is the redundancy, not source.
+  nats_resolver_preload:
+    file: ${CHIT_VAULT:-./secrets}/nats/resolver_preload.conf
 networks:
   pmoves_data:
+    <<: *network-internal-only
     name: pmoves_data
-    driver: bridge
-    internal: true
     ipam:
       driver: default
       config:
       - subnet: 172.30.4.0/24
         gateway: 172.30.4.1
-  # Non-internal bridge for services that expose host-facing ports.
-  # Kong proxy/admin and PostgREST REST port attach here; the services still
-  # default to 127.0.0.1 host binds for safer standalone operation.
+  # Graph front (#3201, option A): the ONLY link between the tailnet forwarder
+  # (docker-compose.neo4j-tailnet.yml) and neo4j. Internal, and joined by exactly
+  # those two, so a compromised forwarder reaches Neo4j and nothing else on the
+  # data tier (least privilege; it is deliberately NOT on pmoves_data).
+  # Subnet 172.30.9.0/24 is permanent (DOCKER_NETWORK_HARDENING Rule 2).
+  pmoves_graph_front:
+    <<: *network-internal-only
+    name: pmoves_graph_front
+    ipam:
+      driver: default
+      config:
+      - subnet: 172.30.9.0/24
+        gateway: 172.30.9.1
+  # Host-reachable tier. Kong proxy/admin and PostgREST attach here; the
+  # services still default to 127.0.0.1 host binds for safer standalone
+  # operation. Being internal:false this is ALSO egress-capable -- see the
+  # x-network-tailnet-published anchor and DOCKER_NETWORK_HARDENING.md Rule 5.
   pmoves_public:
+    <<: *network-tailnet-published
     name: pmoves_public
-    driver: bridge
-    internal: false
     ipam:
       driver: default
       config:
       - subnet: 172.30.7.0/24
         gateway: 172.30.7.1
   pmoves_api:
+    <<: *network-internal-only
     name: pmoves_api
-    driver: bridge
-    internal: true
     ipam:
       driver: default
       config:
       - subnet: 172.30.1.0/24
         gateway: 172.30.1.1
   pmoves_app:
+    <<: *network-internal-only
     name: pmoves_app
-    driver: bridge
-    internal: true
     ipam:
       driver: default
       config:
       - subnet: 172.30.2.0/24
         gateway: 172.30.2.1
   pmoves_bus:
+    <<: *network-bus-internal-dns
     name: pmoves_bus
-    driver: bridge
-    internal: true
     ipam:
       driver: default
       config:
       - subnet: 172.30.3.0/24
         gateway: 172.30.3.1
   pmoves_monitoring:
+    <<: *network-internal-only
     name: pmoves_monitoring
-    driver: bridge
-    internal: true
     ipam:
       driver: default
       config:

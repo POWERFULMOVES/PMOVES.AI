@@ -61,7 +61,7 @@ def _read_secret(name: str) -> Optional[str]:
 
 # --- Environment configuration ---
 PORT = int(os.environ.get("MEDIA_AUDIO_PORT", "8082"))
-NATS_URL = os.environ.get("NATS_URL", "nats://nats:pmoves@nats:4222")
+NATS_URL = os.environ.get("NATS_URL", "nats://nats:4222")
 MEDIA_BACKEND = os.environ.get("MEDIA_BACKEND", "transformers").lower()
 STT_MODEL = os.environ.get("STT_MODEL", "openai/whisper-large-v3-turbo")
 EMOTION_MODEL = os.environ.get("EMOTION_MODEL", "superb/hubert-large-superb-er")
@@ -489,7 +489,7 @@ async def _run_analysis(req: AudioAnalysisRequest) -> JSONResponse:
         # included) and rejects anything outside MEDIA_INPUT_DIR via os.path.commonpath (the
         # exact root-confinement guard CodeQL's own py/path-injection remediation recommends);
         # it just doesn't recognize a custom function as a sanitizer barrier (alert #326).
-        if not os.path.exists(path):  # lgtm[py/path-injection]
+        if not os.path.exists(path):
             raise HTTPException(status_code=404, detail="audio file not found")
     try:
         dispatch = {

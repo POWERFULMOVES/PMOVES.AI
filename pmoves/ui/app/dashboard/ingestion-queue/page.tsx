@@ -349,6 +349,7 @@ export default function IngestionQueuePage() {
           </div>
           <div className="flex items-center gap-2">
             <button
+              data-testid="approval-rules-button"
               onClick={() => setShowRules(!showRules)}
               className={cn(
                 'rounded-lg px-4 py-2 text-sm font-medium transition-colors',
@@ -412,6 +413,7 @@ export default function IngestionQueuePage() {
         <div>
           <label className="block text-xs text-neutral-500 mb-1">Status</label>
           <select
+            data-testid="queue-status-filter"
             value={filter}
             onChange={(e) => setFilter(e.target.value as IngestionStatus | 'all')}
             className="rounded-lg border border-neutral-200 px-3 py-2 text-sm bg-white"
@@ -455,7 +457,7 @@ export default function IngestionQueuePage() {
       />
 
       {/* Queue Items */}
-      <div className="space-y-4">
+      <div className="space-y-4" data-testid="ingestion-queue-table">
         {items.length === 0 ? (
           <div className="rounded-lg border border-neutral-200 bg-white p-8 text-center">
             <div className="text-4xl mb-4">📭</div>
@@ -464,9 +466,10 @@ export default function IngestionQueuePage() {
             </div>
           </div>
         ) : (
-          items.map((item) => (
+          items.map((item, index) => (
             <div
               key={item.id}
+              data-testid="queue-item"
               className={cn(
                 'rounded-lg bg-white shadow-sm overflow-hidden transition',
                 selectedIds.has(item.id) ? 'border-2 border-blue-500' : 'border border-neutral-200'
@@ -500,6 +503,7 @@ export default function IngestionQueuePage() {
                   <div className="flex items-start justify-between gap-4">
                     {/* Selection Checkbox */}
                     <BulkSelectionCheckbox
+                      testId={'select-item-' + index}
                       checked={selectedIds.has(item.id)}
                       selectable={item.status === 'pending'}
                       onToggle={() => {
@@ -515,7 +519,7 @@ export default function IngestionQueuePage() {
 
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
-                        <span className={cn('text-xs px-2 py-0.5 rounded-full', STATUS_COLORS[item.status])}>
+                        <span data-testid="status-badge" className={cn('text-xs px-2 py-0.5 rounded-full', STATUS_COLORS[item.status])}>
                           {item.status}
                         </span>
                         <span className="text-xs text-neutral-400">

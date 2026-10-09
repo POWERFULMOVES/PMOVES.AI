@@ -333,7 +333,7 @@ root:
             command: "tailscale status"
             expect: >
               powerfulmoves-1 (powerfulmoves-1.ts),
-              pmoves-laptop (pmoves-laptop.ts),
+              pmoves-4090 (pmoves-4090.ts),
               pmoves-z890 (pmoves-z890.ts)
           context: "All three nodes should show as online"
           agent_hint: codex

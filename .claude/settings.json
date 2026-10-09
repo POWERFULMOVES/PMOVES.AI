@@ -82,6 +82,7 @@
       "Bash(rm -rf /:*)"
     ],
     "additionalDirectories": [
+      "C:/pinokio",
       "D:/pinokio"
     ]
   },
@@ -144,6 +145,16 @@
       }
     ],
     "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "uv run --quiet \"$CLAUDE_PROJECT_DIR/.claude/hooks/damage-control/effect_check.py\"",
+            "timeout": 15
+          }
+        ]
+      },
       {
         "matcher": "Edit|Write",
         "hooks": [

@@ -75,3 +75,49 @@ The downside is they're large (~250KB each) and versioned to a specific
 ComfyUI build (0.30.0 for the turbo, 0.29.0+ for the standard). If you
 upgrade ComfyUI, re-export the workflow from a working install to get
 the new node IDs.
+
+## V3 workflows (added 2026-09-06)
+
+`MINIMAX_H3_ULTRA_WORKFLOW-V3.json` + `MINIMAX_H3_ULTRA_TURBO_WORKFLOW-V3.json`
+— production pipeline: 356 nodes, 11-stage sampling, 12 resolution selectors,
+SageAttention patched at 11 sites (`PathchSageAttentionKJ` — needs the
+SageAttention install from `../install/OPTIONAL_SAGEATTENTION-INSTALLER.bat`
+on Windows hosts, or the Linux equivalent on SPARK).
+
+V3 model manifest (8 files, superset of V1's 6):
+
+| model | role |
+|---|---|
+| `qwen3vl_32b_minimax_h3_int8_convrot.safetensors` | text encoder (int8) |
+| `minimax_h3_fl2va_pruned_int8_convrot.safetensors` | T2V/I2V engine (int8) |
+| `minimax_h3_ref2va_pruned_int8_convrot.safetensors` | reference-video engine (int8) |
+| `minimax_h3_video_vae_fp16.safetensors` | video VAE |
+| `minimax_h3_audio_vae_fp32.safetensors` | audio VAE (new in V3) |
+| `minimax_h3_t1_image_vae_step1597.safetensors` | image VAE |
+| `minimax_h3_latent_upscaler_3d_fp16.safetensors` | 3D latent upscaler (new in V3) |
+| `sam3.1_multiplex_fp16.safetensors` | SAM 3.1 subject segmentation (new in V3) |
+
+Custom-node stack beyond V1's Spectrum node: rgthree (Power Lora Loader, Fast
+Groups Bypasser), VHS VideoCombine, KJ-nodes (SageAttention patch),
+MiniMaxH3SigmaShift / MediaLoader, ResolutionSelector.
+
+## SPARK stage-1 result (measured 2026-09-06): SageAttention runs on GB10
+
+The unlock is one environment variable — Triton 3.5.1 ships a `ptxas` that
+predates `sm_121a`, and the kernel JIT dies with
+`ptxas fatal: Value 'sm_121a' is not defined for option 'gpu-name'`.
+The host's CUDA 13.0 toolkit knows the arch:
+
+```bash
+export TRITON_PTXAS_PATH=/usr/local/cuda-13.0/bin/ptxas
+```
+
+Probe (autoresearch venv, torch 2.9.1+cu128, triton 3.5.1, pip
+`sageattention`): `sageattn(q,k,v, tensor_core=True, pv_accum_dtype="fp16+fp32")`
+executed with mean abs diff **0.00053** vs SDPA reference — numerically PASS.
+At the tiny probe shape (1×16×1024×128) sageattn is not yet faster than SDPA
+(0.16 vs 0.12 ms — quant overhead dominates); the payoff arrives at video-gen
+sequence lengths, which is what the H3 V3 pipeline feeds it. Any SPARK
+ComfyUI/serving container that wants the 11 SageAttention patch sites must
+export `TRITON_PTXAS_PATH` (or carry CUDA 13 ptxas) — same lesson class as
+the #2871 torch-cu128 preinstall.

@@ -49,7 +49,7 @@ processing_errors = Counter(
 
 # --- Environment configuration ---
 PORT = int(os.environ.get("MEDIA_VIDEO_PORT", "8079"))
-NATS_URL = os.environ.get("NATS_URL", "nats://nats:pmoves@nats:4222")
+NATS_URL = os.environ.get("NATS_URL", "nats://nats:4222")
 MEDIA_BACKEND = os.environ.get("MEDIA_BACKEND", "transformers").lower()
 # Detector engine, operator-selectable:
 #   "detr" (default) — facebook/detr-resnet-50, Apache-2.0, ships anywhere.
@@ -350,7 +350,7 @@ def _fetch_from_minio(bucket: str, key: str) -> str:
         # `local` is tmpdir + a random uuid4 hex — never derived from `key`/`bucket` — so
         # this open() cannot be steered by client input despite CodeQL's taint tracking
         # conflating it with the (separately-passed) S3 bucket/key args below.
-        with open(local, "wb") as fh:  # lgtm[py/path-injection]
+        with open(local, "wb") as fh:
             _s3_client().download_fileobj(bucket, key, fh)
     except Exception as e:  # noqa: BLE001
         shutil.rmtree(tmpdir, ignore_errors=True)  # don't leak the tempdir on failure
@@ -369,7 +369,7 @@ def _resolve_source(req: VideoAnalysisRequest) -> "tuple[str, Optional[str]]":
     # outside MEDIA_INPUT_DIR via os.path.commonpath (the exact root-confinement guard
     # CodeQL's own py/path-injection remediation recommends); it just doesn't recognize
     # a custom function as a sanitizer barrier.
-    if not os.path.exists(path):  # lgtm[py/path-injection]
+    if not os.path.exists(path):
         raise HTTPException(status_code=404, detail="media file not found")
     return path, None
 
@@ -404,8 +404,9 @@ async def _run_video(req: VideoAnalysisRequest) -> JSONResponse:
 
             # `cleanup` is only set for the MinIO branch of `_resolve_source()`, where it is
             # `os.path.dirname()` of a uuid4-named tempfile under `tempfile.mkdtemp()` — never
-            # built from client-supplied bucket/key/file_path text.
-            shutil.rmtree(cleanup, ignore_errors=True)  # lgtm[py/path-injection]
+            # built from client-supplied bucket/key/file_path text, so the directory this
+            # deletes is provably not attacker-controlled.
+            shutil.rmtree(cleanup, ignore_errors=True)
 
 
 @app.post("/analyze")
@@ -437,7 +438,7 @@ async def analyze_frame(req: VideoAnalysisRequest):
 
             # Same reasoning as `_run_video()`: `cleanup` is a uuid4-named tempdir, never
             # built from client-supplied text.
-            shutil.rmtree(cleanup, ignore_errors=True)  # lgtm[py/path-injection]
+            shutil.rmtree(cleanup, ignore_errors=True)
 
 
 if __name__ == "__main__":

@@ -175,7 +175,7 @@ jobs:
 
     steps:
       - name: Harden Runner
-        uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1
         with:
           egress-policy: audit
 
@@ -396,7 +396,7 @@ jobs:
 
     steps:
       - name: Harden Runner
-        uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1
         with:
           egress-policy: audit
           allowed-endpoints: >
@@ -588,6 +588,30 @@ jobs:
             fi
           fi
 
+          # Release-tracked entries ("resolve" in the matrix) build the SHA the
+          # shared resolver returned, not whatever the branch name points at when
+          # the clone happens: pmoves/tools/upstream_release_track.py is the one
+          # answer to "which commit", for this workflow, the release-track
+          # workflow and `make archon-build-latest` alike.
+          if [ -n "${CFG_RESOLVE:-}" ]; then
+            case "$CFG_RESOLVE" in archon|agent-zero) ;; *) echo "::error::unknown resolve '$CFG_RESOLVE'"; exit 1 ;; esac
+            set +e
+            resolved="$(python3 pmoves/tools/upstream_release_track.py "$CFG_RESOLVE")"
+            rc=$?
+            set -e
+            fork_sha="$(printf '%s\n' "$resolved" | sed -n 's/^FORK_SHA=//p')"
+            if [ "$rc" -eq 3 ] || ! printf '%s' "$fork_sha" | grep -Eqx '[0-9a-f]{40}'; then
+              echo "::error::COULD-NOT-MEASURE: release resolution for $CFG_RESOLVE failed (rc=$rc)"
+              exit 1
+            fi
+            if [ "$rc" -eq 1 ]; then
+              echo "::warning::$CFG_RESOLVE hardened branch does not contain the latest upstream release; building the resolved hardened SHA anyway (this is the :pmoves-latest lane, not the gated :current lane)"
+            fi
+            git -C integration-src fetch --depth=1 origin "$fork_sha"
+            git -C integration-src checkout --detach "$fork_sha"
+            echo "✔ $CFG_RESOLVE pinned to resolved FORK_SHA $fork_sha"
+          fi
+
           # Fail here, loudly, rather than letting docker/build-push-action emit a
           # confusing "failed to read dockerfile". A missing Dockerfile at this
           # point almost always means the entry's build context lives in a git
@@ -599,6 +623,8 @@ jobs:
           echo "✔ build context ready: integration-src/${cfg_context} (dockerfile: ${cfg_dockerfile})"
         env:
           APP_TOKEN: ${{ steps.app_token.outputs.token }}
+          CFG_RESOLVE: ${{ steps.cfg.outputs.resolve }}
+          GH_TOKEN: ${{ github.token }}
 
       - name: Free disk space (runner)
         run: |
@@ -616,7 +642,7 @@ jobs:
           df -h
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8
+        uses: docker/setup-qemu-action@1f40c72289eff860ee54a304f1438e3cff362e0a
 
       - name: Set up Docker Buildx
         uses: ./.github/actions/pmoves-buildx

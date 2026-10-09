@@ -260,3 +260,38 @@ def test_gate_reports_a_duplicate_alias_instead_of_crashing(tmp_path, monkeypatc
     assert "must name exactly one node" in out, out
     # The rest of the report still ran.
     assert "registry agents:" in out, out
+
+
+def test_gate_goes_red_when_a_node_affinity_token_is_unknown(
+        tmp_path, monkeypatch):
+    """The registry -> vocabulary direction: a node_affinity token the
+    vocabulary does not know is the name-bound-in-one-context-consumed-in-
+    another defect class (4090-open-findings-2026-08-31). It must fail the
+    gate naming the agent and the token."""
+    registry = _yaml(REGISTRY)
+    first = next(iter(registry["agents"]))
+    registry["agents"][first].setdefault("topology", {})["node_affinity"] = [
+        "kvm4-1", "not-a-node-anywhere",
+    ]
+
+    code, out = _run_gate_against(
+        tmp_path, monkeypatch, registry, _yaml(VOCABULARY), _yaml(TEAMS))
+    assert code == 1, out
+    assert "does not resolve in node-vocabulary.yaml" in out, out
+    assert "not-a-node-anywhere" in out, out
+    assert first in out, out
+
+
+def test_gate_accepts_declared_non_node_kinds(tmp_path, monkeypatch):
+    """placeholder / runner-label / class kinds are declared concepts, not
+    unknown spellings -- [any], [cloud] and [ai-lab] are live registry values.
+    They pass: the gate rejects unknown spellings, not declared concepts."""
+    registry = _yaml(REGISTRY)
+    first = next(iter(registry["agents"]))
+    registry["agents"][first].setdefault("topology", {})["node_affinity"] = [
+        "any", "cloud", "ai-lab",
+    ]
+
+    code, out = _run_gate_against(
+        tmp_path, monkeypatch, registry, _yaml(VOCABULARY), _yaml(TEAMS))
+    assert code == 0, out

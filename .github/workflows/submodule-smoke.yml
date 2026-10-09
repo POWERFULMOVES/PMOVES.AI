@@ -38,14 +38,33 @@ jobs:
   smoke-test:
     name: Submodule Smoke Test
     needs: gate-check
-    if: needs.gate-check.outputs.should_run == 'true'
+    # FORK GUARD. This workflow triggers on `pull_request` -- not
+    # `pull_request_target` -- so the checkout below is the PR's OWN code. The
+    # label gate above is an intent filter, not a trust boundary: applying
+    # `upstream-update` to a fork's PR is a routine, low-suspicion action, and
+    # without this line it would execute untrusted code on `ai-lab`, which the
+    # comment below records as physical fleet hardware. Self-hosted runners are
+    # non-ephemeral by default, so the exposure would outlive the run.
+    #
+    # `head.repo.full_name == github.repository` and NOT the sibling spelling
+    # `github.event_name != 'pull_request'` used in integrations-ghcr.yml and
+    # self-hosted-builds.yml: this workflow's ONLY trigger is `pull_request`, so
+    # that spelling would be permanently false and would disable the check
+    # rather than guard it -- closing the hole by breaking the instrument.
+    #
+    # The label gate is deliberately kept. This is defence in depth, not a
+    # replacement. Asserted for every self-hosted job by
+    # pmoves/tools/validate_fork_guards.py, wired into merge-gate.yml.
+    if: >-
+      needs.gate-check.outputs.should_run == 'true' &&
+      github.event.pull_request.head.repo.full_name == github.repository
     # ai-lab spans b850 (X64) and spark (ARM64) — pin the arch.
     runs-on: [self-hosted, Linux, X64, ai-lab]
     timeout-minutes: 45
 
     steps:
       - name: Harden Runner
-        uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2
         with:
           egress-policy: audit
           allowed-endpoints: >
@@ -121,6 +140,13 @@ jobs:
         working-directory: pmoves
         run: |
           set -euo pipefail
+
+          # The self-hosted ai-lab runner (b850/spark) has system python3 but
+          # no pytest; the smoke target shells out to `$(PYTHON) -m pytest`.
+          # Install the minimum so `make test` measures the tests, not the
+          # runner image. requirements-smoke.txt is the curated subset.
+          python3 -m pip install --quiet --disable-pip-version-check \
+            -r requirements-smoke.txt
 
           # NOTE: make verify-all was previously used here, but it prefixes
           # downstream smoke targets with '-' (ignore-errors) and can exit 0

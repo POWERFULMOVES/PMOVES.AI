@@ -224,7 +224,52 @@ agents:
       team: orchestration
       ci_runner: null
       compose_profile: null
-    description: "B850/Knuckles node CLI identity -- data-tier host, infra + governance lane"
+    # Affinity, not exclusivity. The earlier wording ("data-tier host, infra +
+    # governance lane") read as a singular assignment; .claude/CLAUDE.md states
+    # every node is a pore in the lattice, capacity-class rather than
+    # expertise-lane, so what this row records is where work lands by preference,
+    # not what the node is alone permitted to hold.
+    description: >-
+      B850/Knuckles node CLI identity. Affinity for data-tier and AMD/ROCm Linux
+      workloads, with an infra + governance lane -- a preference, not an
+      exclusive claim. claude-pmoves launches it as the main session with full
+      tools; it delegates coordination to the node_steward role.
+  kimi_knuckles:
+    name: "Kimi Knuckles"
+    class: standard
+    # Same shape as claude_b850: the surface a human drives is a UI; what it
+    # drives is an agent. Harness `kimi` (scripts/kimi-pmoves.sh passes it to
+    # pm_node_identity), so node-vocabulary.yaml knuckles.default_identity.kimi
+    # binds here instead of launching unbound.
+    primary_type: ui
+    secondary_type: agent
+    # No listening socket. A CLI session, not a service.
+    port: null
+    health: null
+    layers:
+      - L0
+      - L2
+      - L4
+    evolution_stage: stage_1
+    # Card 00000000-0000-4000-8000-000000000051 (knuckles-kimi, interim) --
+    # the spelling cipher's assertAgentId answers to; matches
+    # node-vocabulary.yaml knuckles.cipher_agent_id.kimi.
+    signature: knuckles-kimi
+    # Discord 2-way / Composio lane subjects land here when the poll service
+    # ships (scope doc A.10); declaring them before the publisher exists is
+    # the undeclared-emission defect #2734 exists to catch.
+    nats:
+      publishes: []
+      subscribes: []
+    topology:
+      node_affinity: [pmoves-b850]
+      team: orchestration
+      ci_runner: null
+      compose_profile: null
+    description: >-
+      B850/Knuckles node Kimi Code CLI identity (PMOVES-KIMI-KNUCKLES-B850).
+      Same affinity posture as claude_b850 -- a preference, not an exclusive
+      claim. First harness wired to a per-node cipher_agent_id.
   claude_5090:
     name: "5090 Claude"
     class: standard
@@ -363,6 +408,48 @@ agents:
       compose_profile: agents
     description: "VS Code-native GLM-5-Turbo delivery agent via KiloCode. Blueprint-first implementation, MCP-integrated, DARKXSIDE witness."
 
+  kiloclaw:
+    name: "KiloClaw"
+    class: standard
+    kind: harness
+    primary_type: agent
+    secondary_type: llm
+    port: null
+    health: null
+    layers: [L0, L2, L4]
+    evolution_stage: stage_2
+    role_class: worker
+    signature: "kilocode"   # same lineage as kilocode_glm (▲ emerald alter)
+    nats:
+      publishes:
+        - pmoves.agent.result.v1
+        - claw.task.complete.v1
+        - agent.graphiti.signed.v1
+      subscribes:
+        - pmoves.agent.task.v1
+        - claw.task.assign.v1
+    chit_toggles:
+      delta_sensitive: true
+      kappa_sensitive: true
+      hz_sensitive: false
+      swarm_participant: true
+      attribution_gated: true
+    resilience:
+      context_budget: large
+      checkpoint_frequency: per_wave
+      recovery_strategy: cipher_resumable
+      cipher_categories: [agent_checkpoint, agent_completion]
+    topology:
+      node_affinity: [5090, laptop-4090, z890, kiloclaw]
+      team: implementation
+      ci_runner: vps
+      compose_profile: null   # hosted KiloClaw VPS — managed runtime, not a compose service
+    description: >-
+      Fleet KiloCode claw behind the Mavis harness routing entry (wire target glm-5.1).
+      Node-agnostic Kilo CLI worker on the Z.AI coding plan, including the hosted KiloClaw
+      VPS (runtime lane kilocode/zai-coding/glm-5.3). CLI harness source of truth:
+      PMOVES-KeYlOkODe (fork of Kilo-Org/kilocode, @kilocode/cli); reads repo kilo.json natively.
+
   darkxside_persona:
     name: "DARKXSIDE Persona"
     class: specialized
@@ -398,6 +485,208 @@ agents:
       ci_runner: ai-lab
       compose_profile: agents
     description: "Private co-creator and witness identity for darkxsides.room; public egress remains approval- and redaction-gated."
+
+  node_steward:
+    name: "Node Steward"
+    # A ROLE the CLI identities above delegate coordination to, not a node
+    # identity of its own. Until 2026-10-01 it was also the launcher default
+    # (`DEFAULT_AGENT="${PMOVES_DEFAULT_AGENT:-node-steward}"` in
+    # pmoves/scripts/claude-pmoves.sh), so every launcher-started session began
+    # in this role with Write/Edit denied. The default is now no agent -- the
+    # main session is the node identity with full tools -- and this role runs as
+    # a subagent, or as the main session only via PMOVES_DEFAULT_AGENT.
+    class: specialized
+    primary_type: agent
+    secondary_type: ui
+    # No listening socket. A CLI session role, not a service.
+    port: null
+    health: null
+    layers: [L0, L2, L4]
+    evolution_stage: stage_1
+    # Pre-work face of the Control Body, per the role_classes block above:
+    # "Decomposes intent into scoped work: specs, plans, lane claims. Read-heavy;
+    # produces no production edits." That is this role verbatim -- it claims the
+    # lane and spawns delivery agents -- and .claude/agents/node-steward.md
+    # withholds Write/Edit, so "no production edits" is enforced, not asserted.
+    role_class: planner
+    # Deliberately no `signature`. The signing roster (agent_signatures.yaml and
+    # external_contributors above) carries NODE identities -- a steward session on
+    # this host signs as `b850-claude`. Minting a card for the role would give one
+    # signer two resolvable names.
+    #
+    # Deliberately empty: the steward publishes nothing to NATS. Its claim goes
+    # through the `pmoves-chit-sign` skill, not a subject of its own.
+    nats:
+      publishes: []
+      subscribes: []
+    topology:
+      # `any`, following botz_auditor: this role is not affine to one machine.
+      # Any node's identity can delegate to it, which is what .claude/CLAUDE.md
+      # means by capacity-class rather than expertise-lane.
+      node_affinity: [any]
+      team: orchestration
+      ci_runner: null
+      compose_profile: null
+    description: >-
+      Per-node coordination role: holds node context, reads and claims in the
+      AGNOTE4482 register before edits, then spawns delivery and review agents to
+      execute. Delegated to by the node's CLI identity (claude_b850 on Knuckles),
+      which is the launcher's main session; its
+      own domain is administration of that node. Definition and rationale live in
+      .claude/agents/node-steward.md.
+
+  # ---- Village Rule bodies (AGNOTE4482 Three-Body) ----------------------------
+  # The four session roles a node_steward spawns to do claimed work. Like
+  # node_steward they are ROLES loaded from `.claude/agents/<kebab-key>.md`, not
+  # node identities and not services. They were missing from this file entirely
+  # (2026-09-23, operator: "ensure your AGInTZ delivery-agent and code-review have
+  # registered names and voices approved for Known Roads"), so the one file
+  # .claude/CLAUDE.md calls the taxonomy's source of truth could not name the
+  # bodies the Village Rule depends on, and Known Roads recorded their actions as
+  # the node or as "unknown".
+  #
+  # The key -> file mapping is deterministic, not a lookup: validate_agent_registry
+  # derives the runtime spelling as `snake.replace("_", "-")`, and that spelling is
+  # the `.claude/agents/*.md` filename and the `name:` in its frontmatter.
+  # `three_body` reuses the vocabulary of the role_classes block above; it is set
+  # per entry because memory_agent has a Three-Body seat but no role_class.
+  #
+  # SIGNATURE: like node_steward these carry no `signature:`, for a related but
+  # distinct reason. The key that signs is held by a MACHINE, so a body's signing
+  # card is per node (`b850-delivery-agent`, ...) while one registry row spans
+  # every node -- there is no single card to point at. The B850 cards are seeded
+  # H-half-only and INACTIVE in signing_identity_cards.yaml; the operator issues
+  # keys per pmoves/docs/operations/SIGNING_IDENTITY_CARDS.md. Until a card is
+  # active a body's work is signed by its node identity (b850-claude on
+  # Knuckles), exactly as today, so no signer gains a second resolvable name.
+  delivery_agent:
+    name: "Delivery Body"
+    class: specialized
+    primary_type: agent
+    secondary_type: worker
+    # No listening socket. A subagent session role spawned through the Agent
+    # tool (`subagent_type: delivery-agent`), never a service.
+    port: null
+    health: null
+    layers: [L0, L2, L4]
+    evolution_stage: stage_1
+    # role_classes.worker verbatim: "Implements the plan: code, fixes, docs,
+    # deploys. The only role_class that writes production changes." The
+    # frontmatter of .claude/agents/delivery-agent.md already declares
+    # `role_class: worker`, and it is the only one of these four bodies granted
+    # Write/Edit, so this row records what the definition enforces.
+    role_class: worker
+    three_body: delivery
+    agent_definition: .claude/agents/delivery-agent.md
+    # Deliberately empty. The body publishes nothing to NATS itself; its trail
+    # goes through `/chit:sign-trail` (the pmoves-chit-sign skill), not a
+    # subject of its own. Declaring subjects it does not publish is #2734.
+    nats:
+      publishes: []
+      subscribes: []
+    topology:
+      # `any`, following node_steward: every node's steward can spawn it.
+      node_affinity: [any]
+      team: implementation
+      ci_runner: null
+      compose_profile: null
+    description: >-
+      AGNOTE4482 Delivery Body. Executes code changes inside a lane a steward has
+      already CLAIMED in AGNOTE4482PHI.t1.md; hands off by CHIT reference, never
+      plaintext secrets. Loads .claude/agents/delivery-agent.md.
+
+  code_review:
+    name: "Code Review Body"
+    class: specialized
+    primary_type: agent
+    secondary_type: worker
+    # No listening socket. A read-only subagent session role.
+    port: null
+    health: null
+    layers: [L0, L2, L4]
+    evolution_stage: stage_1
+    # role_classes.reviewer: "Verifies and gates ... Never edits what it
+    # reviews." .claude/agents/code-review.md withholds Write, Edit and Agent,
+    # so that is enforced. Its frontmatter does NOT declare `role_class`; per
+    # the note under role_classes, absence there means unclassified, never an
+    # error, and this row is where the classification is recorded.
+    role_class: reviewer
+    # Post-work face of the Control Body: line-by-line correctness findings that
+    # feed a control_agent ACK. Distinct from control_agent, which sequences
+    # merges and signs off; this body only reports.
+    three_body: control
+    agent_definition: .claude/agents/code-review.md
+    nats:
+      publishes: []
+      subscribes: []
+    topology:
+      node_affinity: [any]
+      team: orchestration
+      ci_runner: null
+      compose_profile: null
+    description: >-
+      Deep code-correctness reviewer for non-trivial diffs (bugs, security,
+      error handling, types), run after a delivery push and before a control
+      ACK. Not CHIT audit (chit-compliance-reviewer) and not merge governance
+      (control_agent). Loads .claude/agents/code-review.md.
+
+  control_agent:
+    name: "Control Body"
+    class: specialized
+    primary_type: agent
+    secondary_type: worker
+    # No listening socket. A read-only subagent session role.
+    port: null
+    health: null
+    layers: [L0, L2, L4]
+    evolution_stage: stage_1
+    # role_classes.reviewer; .claude/agents/control-agent.md already declares
+    # `role_class: reviewer` and withholds Write/Edit.
+    role_class: reviewer
+    three_body: control
+    agent_definition: .claude/agents/control-agent.md
+    nats:
+      publishes: []
+      subscribes: []
+    topology:
+      node_affinity: [any]
+      team: orchestration
+      ci_runner: null
+      compose_profile: null
+    description: >-
+      AGNOTE4482 Control Body. PR review, merge sequencing, risk controls and
+      Village Rule signoff; cannot edit what it reviews. Loads
+      .claude/agents/control-agent.md.
+
+  memory_agent:
+    name: "Memory Body"
+    class: specialized
+    primary_type: agent
+    secondary_type: data
+    # No listening socket. A subagent session role; Cipher is reached through
+    # the cipher MCP server and skills, not through a port this role owns.
+    port: null
+    health: null
+    layers: [L0, L2, L4]
+    evolution_stage: stage_1
+    # Deliberately no `role_class`. The role_classes block says so directly:
+    # "the Memory Body is orthogonal (cross-cutting CHIT/Cipher custody, not a
+    # workflow role)". Inventing a fourth role_class here would contradict the
+    # block this key is read against.
+    three_body: memory
+    agent_definition: .claude/agents/memory-agent.md
+    nats:
+      publishes: []
+      subscribes: []
+    topology:
+      node_affinity: [any]
+      team: orchestration
+      ci_runner: null
+      compose_profile: null
+    description: >-
+      AGNOTE4482 Memory Body. CHIT encoding, Cipher Memory store/search and
+      signature trails across sessions; no file edits. Loads
+      .claude/agents/memory-agent.md.
 
   space_agent:
     name: "PMOVES Space-Agent"
@@ -2783,7 +3072,7 @@ agents:
       recovery_strategy: cipher_resumable
       cipher_categories: [agent_plan, agent_completion]
     topology:
-      node_affinity: [powerfulmoves, pmoves-laptop]
+      node_affinity: [powerfulmoves, pmoves-4090]
       team: orchestration
       ci_runner: ai-lab
       compose_profile: agents
@@ -3273,6 +3562,25 @@ mcp_servers:
     action_namespace: "mcp.v1.e2b"
     capabilities: ["sandbox", "execution", "artifacts"]
     rooms: ["4090-field.room.control", "hermes-agent.room.control"]
+    status: "planned"
+
+  pipecat_context_hub:
+    name: "pipecat-context-hub"
+    # Fork (Pmoves-pipecat-context-hub, upstream pipecat-ai/pipecat-context-hub),
+    # not yet a submodule - see fork_registry.json and
+    # AGNOTE4482_FLEET_FORK_REVIEW_2026-09-15.md.
+    fork: "Pmoves-pipecat-context-hub"
+    class: utility
+    transport: "http"
+    # endpoint null per the e2b convention above: no compose service serves this
+    # yet. The Flute/voice lane owes the service; restore the endpoint when it
+    # listens (planned: http://pipecat-context-hub:8204/mcp).
+    endpoint: null
+    action_namespace: "mcp.v1.pipecat-context"
+    capabilities: ["pipecat-docs", "pipecat-examples", "pipecat-api-context"]
+    # Local-first grounding for anything touching the voice stack: authoritative
+    # Pipecat API/docs context without web calls - a Flute Gateway context option.
+    grounding_source: true
     status: "planned"
 
   pmoves_hirag_mcp:

@@ -441,8 +441,8 @@ Activation paths and cross-references live in `skills/README.md`.
 
 ### PMOVES-n8n
 - **Path:** `PMOVES-n8n/`
-- **Repository:** https://github.com/POWERFULMOVES/PMOVES-n8n.git
-- **Branch:** `main`
+- **Repository:** https://github.com/POWERFULMOVES/PMOVES-n8n-FlooS.git (first-party workflows + a thin runtime Dockerfile `FROM n8nio/n8n`; no upstream sync). The full n8n source fork is `POWERFULMOVES/PMOVES-N8N` at path `PMOVES-N8N-Auto/`.
+- **Branch:** `PMOVES.AI-Edition-Hardened`
 - **Purpose:** n8n workflow automation for PMOVES.AI platform
 - **Key Workflows:**
   - `echo_publisher.json` - Discord echo publishing
@@ -478,6 +478,32 @@ Activation paths and cross-references live in `skills/README.md`.
   - MCP-compatible for tool extensions
 - **Relevant Skills:** `/crush:setup`, `/crush:status`
 - **README:** [PMOVES-crush/README.md](../../../PMOVES-crush/README.md)
+
+### PMOVES-registry
+- **Path:** `PMOVES-registry/`
+- **Repository:** https://github.com/POWERFULMOVES/PMOVES-registry.git
+- **Branch:** `main` (fork of `agentclientprotocol/registry`, tracks parity)
+- **Purpose:** Registry of agents implementing the Agent Client Protocol (ACP) — the ecosystem catalog Zed/JetBrains/Spynel-class clients launch agents from
+- **Features:**
+  - 57 agent entries (claude-acp, codex-acp, goose, opencode, kimi, ...) with schema-validated `agent.json` + icon per entry
+  - `crush-acp` entry added 2026-09-27 (binary distribution from PMOVES-crush releases)
+- **Integration Points:**
+  - Substrate for the cross-agent shared-registry vision (a0/archon/every agent discover each other); open wiring: map ACP entries to `pmoves/config/agent_registry.yaml`
+- **Overlay:** none (parity fork); fork-sync wired 2026-09-27
+
+### PMOVES-spynel
+- **Path:** `PMOVES-spynel/`
+- **Repository:** https://github.com/POWERFULMOVES/PMOVES-spynel.git
+- **Branch:** `PMOVES.AI-Edition-Hardened` (consumable; hardened ⊇ main enforced 2026-09-27)
+- **Purpose:** Fork of `agent0ai/spynel` (Go, "one chat, unlimited AI orchestration") — multi-agent TUI that orchestrates coding harnesses over ACP
+- **Features:**
+  - Harness catalog: Codex app-server, Claude Code print-mode, Agent Zero CLI (ACP), Pi RPC, and stable ACP v1 aliases (opencode, qwen-code, kimi, goose, cursor, gemini-cli, github-copilot, factory-droid, **crush** added 2026-09-27)
+  - Local API: loopback + constant-time bearer token; optional authenticated Unix socket
+  - Node-local runtime state in `.spynel/` (0600, gitignored)
+- **Integration Points:**
+  - Drives `crush acp` (PMOVES-crush v0.91.2-pmoves.1+) as a harness
+  - Source-build install only (F1): `go build -o spynel ./cmd/spynel`
+- **Review of record:** `pmoves/docs/services/spynel/REVIEW-REGISTRY.md` (PMOVES.AI#3047); overlay `PMOVES.AI_INTEGRATION.md` on the hardened branch
 
 ### Pmoves-minimax-cli
 - **Path:** `Pmoves-minimax-cli/`
@@ -628,6 +654,8 @@ git submodule foreach 'echo $name: $(git rev-parse HEAD)'
 | PMOVES-ToKenism-Multi | N/A | Token economy simulator | N/A |
 | PMOVES-Wealth | varies | Finance tracking (Firefly III) | varies |
 | PMOVES-crush | N/A | Terminal AI assistant | N/A |
+| PMOVES-registry | N/A | ACP agent registry (fork) | N/A |
+| PMOVES-spynel | N/A | Multi-agent chat orchestration (Go TUI) | N/A |
 | PMOVES-n8n | varies | Workflow automation | varies |
 | PMOVES-supabase | 3010 | Postgres + pgvector | data |
 | PMOVES-tensorzero | 3030, 4000 | LLM gateway + observability | default |

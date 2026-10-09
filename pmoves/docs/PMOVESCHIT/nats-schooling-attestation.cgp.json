@@ -1,0 +1,95 @@
+{
+  "spec": "chit.cgp.v0.2",
+  "summary": "Attestation: the PMOVES NATS treatment \u2014 SYS/CORE/EDGE/CLOUD trust-zone accounts, real 7422 leafnodes, WebSocket for A2UI, MQTT-ready edge, SYS-guarded monitoring, and the two-gate trust model (NATS account = transport trust, CHIT signature = payload provenance) \u2014 was designed, committed, and exampled in-tree BEFORE it was deployed. Schooling map PR #3027 verified the designs exist while the running broker was flag-launched single-account. Conception chronology per register NOTE 2026-09-11T21:40:27Z (operator testimony).",
+  "meta": {
+    "packet_id": "nats-schooling-attestation-2026-09-11",
+    "profile": "pmoves.attestation/v1",
+    "subject": "NATS schooling discovery + DARKXSIDE provenance testimony",
+    "kind": "attestation",
+    "attestation_date": "2026-09-11",
+    "direction": "operator (DARKXSIDE): this is attestation \u2014 publish on Discord, update as verified, mintable with required provenances as example and demonstration",
+    "artifacts": {
+      "schooling_map": "pmoves/docs/specs/nats-schooling-mapping-2026-09-11.md (PR #3027)",
+      "attestation_doc": "pmoves/docs/PMOVESCHIT/ATTESTATION_NATS_SCHOOLING_2026-09-11.md",
+      "register_note": "pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md @ 2026-09-11T21:40:27Z"
+    },
+    "update_path": "verification states live in the attestation doc's ledger; each state change files a register row and may re-publish to Discord"
+  },
+  "attribution": {
+    "contributors": [
+      {
+        "address": "powerfulmoves",
+        "display_name": "POWERFULMOVES / DARKXSIDE",
+        "glyph": "\u26a1",
+        "color": "#F59E0B",
+        "weight": 0.5,
+        "role": "conception, provenance testimony, topology direction, vision"
+      },
+      {
+        "address": "z890-claude",
+        "display_name": "Z890 Claude",
+        "glyph": "\u2699",
+        "color": "#1E40AF",
+        "weight": 0.2,
+        "role": "author, accounts+leaf v0 design spec (2026-08-07)"
+      },
+      {
+        "address": "crush_glm52",
+        "display_name": "Crush (GLM-5.2, Knuckles)",
+        "glyph": "\u25c7",
+        "color": "#0EA5E9",
+        "weight": 0.3,
+        "role": "schooling map, verification, attestation transport"
+      }
+    ],
+    "weights_note": "Dirichlet-normalized provenance weights for the attestation subject; not a market valuation (Tokenism settlement remains gated)."
+  },
+  "super_nodes": [],
+  "points": [
+    {
+      "id": "att-nats-01",
+      "label": "Fork overlay exists in-tree",
+      "verified": true,
+      "evidence": "PMOVES-nats-server/pmoves/ \u2014 README, pmoves-nats.conf, examples/ (leaf-edge, leaf-cloud, resolver_preload, compose)",
+      "jump": "https://github.com/POWERFULMOVES/PMOVES.AI/pull/3027"
+    },
+    {
+      "id": "att-nats-02",
+      "label": "v0 design spec dated 2026-08-07",
+      "verified": true,
+      "evidence": "pmoves/docs/specs/nats-accounts-leaf-topology-v0-spec-2026-08-07.md (author z890-claude)"
+    },
+    {
+      "id": "att-nats-03",
+      "label": "Running broker was single-account flags until 2026-09-11 restore",
+      "verified": true,
+      "evidence": "register RELEASE 2026-09-11T19:59:45Z (bus-restore lane) + schooling map \u00a71 delta table"
+    },
+    {
+      "id": "att-prov-01",
+      "label": "Operator provenance testimony recorded",
+      "verified": true,
+      "evidence": "register NOTE 2026-09-11T21:40:27Z \u2014 message-board capability prior art, signal-mixing methodology, DoX process, scrapbook sharing, Transcribe-and-Fetch precedence, friends-calc origin, git+playlist grounding corpus"
+    },
+    {
+      "id": "att-topo-01",
+      "label": "Operator topology call: no pinned hub \u2014 three-in-one floating lanes",
+      "verified": true,
+      "evidence": "PR #3027 \u00a75.1 (commit e249a50a1)"
+    },
+    {
+      "id": "att-verif-01",
+      "label": "Third-party verification of provenance chronology (4090/Z890/5090 reviewers)",
+      "verified": false,
+      "evidence": "PENDING \u2014 routed per identity-proposal review paths"
+    }
+  ],
+  "sig": {
+    "alg": "HMAC-SHA256",
+    "kid": "chit-signing-v01",
+    "hmac": "aOZzFT0WsoYnEuu+bVg5ZNBvlCtSPwASgfjhDn6dcco=",
+    "signed_by": "crush_glm52",
+    "signed_at": "2026-09-11T22:00:00Z",
+    "scope": "attestation content + attribution, transport signature; provenance weights subject to Tokenism-gated settlement"
+  }
+}

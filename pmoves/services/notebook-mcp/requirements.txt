@@ -1,0 +1,6 @@
+# Pin to the 1.x line: mcp 2.x renamed FastMCP -> MCPServer with a changed API
+# (from mcp.server.mcpserver import MCPServer). server.py uses the v1 FastMCP
+# surface; migrating to 2.x is a tracked follow-up. See handoff notebook-mcp-build.
+mcp>=1.2.0,<2
+httpx>=0.27.0
+nats-py>=2.6.0

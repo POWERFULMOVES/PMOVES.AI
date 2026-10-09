@@ -1,0 +1,117 @@
+# Submodule-resident services — declarative inventory (Source C)
+#
+# The matrix builder's Source A walks pmoves/services/ and pmoves/integrations/
+# for directories with a Dockerfile. Source B scans compose overlays for
+# top-level service-name keys. Neither sees services whose source lives
+# in a git submodule (cipher-api in PMOVES-cipher, agent-zero in
+# PMOVES-Agent-Zero, etc.) — those submodules aren't gitignored, but the
+# builder deliberately does not recurse into submodule worktrees.
+#
+# Source C is this file: a manually-curated, operator-reviewed list of
+# submodule-resident services with the compose-name keys they appear
+# under and the path to their source Dockerfile. When a new submodule-resident
+# service is created, add a row here; the matrix will pick it up on the
+# next build. The CI gate (check_known_roads.py) checks provenance against
+# the matrix, so a missing row here means the gate will refuse edits to
+# that service's Dockerfile until the row lands.
+#
+# Schema per entry:
+#   name:           canonical service name (hyphenated)
+#   compose_keys:   list of keys under which this service appears in compose files
+#   source_repo:    which PMOVES-* submodule owns the service
+#   source_path:    path within the submodule to the Dockerfile
+#   compose_overlays: list of overlay files where the service is declared
+
+- name: agent-zero
+  compose_keys: [agent-zero, agent-zero-darkxside, agent-zero-spark]
+  source_repo: PMOVES-Agent-Zero
+  source_path: Dockerfile
+  compose_overlays:
+    - pmoves/docker-compose.yml
+    - pmoves/docker-compose.agents.yml
+    - pmoves/docker-compose.agents.images.yml
+    - pmoves/docker-compose.agents.integrations.yml
+    - pmoves/docker-compose.hardened.yml
+    - pmoves/docker-compose.arm64.override.yml
+    - pmoves/docker-compose.vps.override.yml
+    - pmoves/docker-compose.a0-elder-melchor.yml
+    - pmoves/docker-compose.darkxside-sidecar.yml
+    - pmoves/docker-compose.spark-sidecar.yml
+  # guard_paths: paths the gate accepts as owned by this service. Listed
+  # under each overlay so the gate matches the exact paths the operator
+  # would edit when working through the parent repo (submodule's working
+  # tree). Add new paths when this service gains new protected files.
+  guard_paths:
+    - PMOVES-Agent-Zero/Dockerfile
+    - PMOVES-Agent-Zero/docker-compose.yml
+    - PMOVES-Agent-Zero/.env
+    - PMOVES-Agent-Zero/pmoves_a0_config.json
+
+- name: cipher-api
+  compose_keys: [cipher-api]
+  source_repo: Pmoves-cipher
+  source_path: Dockerfile.pmoves
+  compose_overlays:
+    - pmoves/docker-compose.agents.yml
+    - pmoves/docker-compose.agents.stack.yml
+    - pmoves/docker-compose.yml
+  guard_paths:
+    - Pmoves-cipher/Dockerfile.pmoves
+    - Pmoves-cipher/src/pmoves/auth.ts
+    - Pmoves-cipher/src/pmoves/memory-routes.ts
+    - Pmoves-cipher/src/pmoves/a2a.ts
+    - Pmoves-cipher/src/pmoves/rest-server.ts
+    - Pmoves-cipher/PMOVES.AI_INTEGRATION.md
+
+- name: archon
+  compose_keys: [archon]
+  source_repo: PMOVES-Archon
+  source_path: Dockerfile
+  compose_overlays:
+    - pmoves/docker-compose.yml
+    - pmoves/docker-compose.agents.yml
+    - pmoves/docker-compose.agents.images.yml
+    - pmoves/docker-compose.agents.integrations.yml
+    - pmoves/docker-compose.archon.submodule.yml
+    - pmoves/docker-compose.arm64.override.yml
+    - pmoves/docker-compose.hardened.yml
+    - pmoves/docker-compose.vps.override.yml
+  guard_paths:
+    - PMOVES-Archon/Dockerfile
+    - PMOVES-Archon/docker-compose.yml
+    - PMOVES-Archon/docker-compose.pmoves.yml
+    - PMOVES-Archon/pmoves_a0_config.json
+    - PMOVES-Archon/.env
+
+- name: botz-gateway
+  compose_keys: [botz-gateway]
+  source_repo: PMOVES-BotZ-gateway
+  source_path: Dockerfile.pmoves
+  compose_overlays:
+    - pmoves/docker-compose.apps.yml
+    - pmoves/docker-compose.yml
+  guard_paths:
+    - PMOVES-BotZ-gateway/Dockerfile.pmoves
+    - PMOVES-BotZ-gateway/pmoves_mcp_config.json
+    - PMOVES-BotZ-gateway/.env
+
+- name: pipecat
+  compose_keys: [pipecat, pipecat-context-hub]
+  source_repo: PMOVES-Pipecat
+  source_path: Dockerfile
+  compose_overlays: []  # not yet wired into main compose; surface reserved
+  guard_paths: []       # add when wired
+
+- name: a2ui-nats-bridge
+  compose_keys: [a2ui-nats-bridge]
+  source_repo: PMOVES-A2UI
+  source_path: Dockerfile
+  compose_overlays: []  # see Source B (compose walk)
+  guard_paths: []
+
+
+# Note for next session: the above list is operator-curated at 2026-09-16
+# wave-7. Many submodule-resident services are still uncurated (PMOVES-ClawZ,
+# PMOVES-Creator, PMOVES-HiRAG, PMOVES-Jellyfin, PMOVES-MAI-UI, etc.). Adding
+# them is a follow-up lane; the gate will fail-edit on their Dockerfiles until
+# the row lands. That's the correct safety behavior.

@@ -15,6 +15,83 @@
 set -u
 
 # ---------------------------------------------------------------------------
+# --backend= flag — switch between Anthropic-direct and MiniMax-routed Claude
+# Code for THIS launch without touching ~/.claude/settings.json. Persistent
+# switching lives at `pmoves-mini claude-backend {show,set,backup,restore}`.
+#
+# Accepted values:
+#   auto       (default) — detect hijack via $ANTHROPIC_BASE_URL; strip iff
+#                          the host is not api.anthropic.com. Lets a clean
+#                          host pass through with no churn.
+#   anthropic  — force Anthropic-direct routing; strip the Mavis SDK set
+#                unconditionally. One-shot override regardless of persistent
+#                state.
+#   minimax    — preserve whatever the Mavis SDK / settings.json has set.
+#                Used to test the MiniMax routing on demand.
+#
+# Env-var equivalent: PMOVES_CLAUDE_BACKEND={auto|anthropic|minimax}.
+#
+# The flag is parsed BEFORE the symlink-walk + ROOT resolution so `--help`
+# can be honoured even when the launcher cannot find the repo (the launched
+# `claude` does not need ROOT for help).
+#
+# Kept in step with deploy/provision/claude-pmoves.ps1: see `claude_backend_apply`
+# below and TwinParityTests in pmoves/tools/tests/test_pmoves_launcher_generator.py.
+# ---------------------------------------------------------------------------
+PMOVES_CLAUDE_BACKEND="${PMOVES_CLAUDE_BACKEND:-}"
+PMOVES_CLAUDE_BACKEND_REST=()
+__pmoves_claude_backend_parse=0
+for __arg in "$@"; do
+  if [ "$__pmoves_claude_backend_parse" -eq 1 ]; then
+    PMOVES_CLAUDE_BACKEND="$__arg"
+    __pmoves_claude_backend_parse=0
+    continue
+  fi
+  case "$__arg" in
+    --backend=*)
+      PMOVES_CLAUDE_BACKEND="${__arg#--backend=}"
+      ;;
+    --backend)
+      __pmoves_claude_backend_parse=1
+      ;;
+    --help|-h)
+      cat <<'USAGE' >&2
+claude-pmoves.sh — launch Claude Code with PMOVES env + MCP roster.
+
+Usage: claude-pmoves.sh [--backend={auto|anthropic|minimax}] [claude-args...]
+
+  --backend=auto       (default) detect hijack via $ANTHROPIC_BASE_URL
+  --backend=anthropic  force Anthropic-direct routing for this launch
+  --backend=minimax    preserve the Mavis SDK / settings.json hijack
+
+Persistent switching (writes ~/.claude/settings.json):
+  pmoves-mini claude-backend show
+  pmoves-mini claude-backend set anthropic
+  pmoves-mini claude-backend set minimax
+  pmoves-mini claude-backend backup
+  pmoves-mini claude-backend restore <file>
+USAGE
+      exit 0
+      ;;
+    *)
+      PMOVES_CLAUDE_BACKEND_REST+=("$__arg")
+      ;;
+  esac
+done
+# Lowercase + validate. Empty stays empty (= default auto on the apply side).
+PMOVES_CLAUDE_BACKEND="$(printf '%s' "$PMOVES_CLAUDE_BACKEND" | tr '[:upper:]' '[:lower:]')"
+case "$PMOVES_CLAUDE_BACKEND" in
+  ""|auto|anthropic|minimax) ;;
+  *)
+    echo "[claude-pmoves] ERROR: --backend=$PMOVES_CLAUDE_BACKEND invalid; expected one of auto, anthropic, minimax." >&2
+    exit 2
+    ;;
+esac
+# Rebuild "$@" from the residual args (so the launched claude gets them, not the flag).
+set -- "${PMOVES_CLAUDE_BACKEND_REST[@]}"
+unset PMOVES_CLAUDE_BACKEND_REST __pmoves_claude_backend_parse __arg
+
+# ---------------------------------------------------------------------------
 # REPO-ROOT RESOLUTION — keep byte-identical across the three launchers that
 # carry it (this file, crush-pmoves.sh, pmoves/scripts/claude-pmoves.sh).
 # Enforced by deploy/provision/tests/test-launcher-root-resolution.sh, which
@@ -71,11 +148,100 @@ fi
 
 ENVF="${PMOVES_ENV_SHARED:-$ROOT/pmoves/env.shared}"
 
+# ---------------------------------------------------------------------------
+# Mavis SDK env strip — see pmoves/scripts/mavis_sdk_env.sh for the WHY.
+#
+# The Mavis SDK's `env` block in `~/.claude/settings.json` injects
+# ANTHROPIC_BASE_URL, ANTHROPIC_AUTH_TOKEN, ANTHROPIC_MODEL, MCP_TIMEOUT,
+# API_TIMEOUT_MS, CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC, ... into every
+# Claude Code session's process env.  That env block is inherited by the
+# shell that runs `claude-pmoves.sh`, and would otherwise be inherited by
+# the launched `claude` -- overriding the operator's own Claude Code
+# settings (their Anthropic API endpoint, their model picker).
+#
+# The strip checks each Mavis SDK var against claude's NEEDS list
+# (ANTHROPIC_BASE_URL + ANTHROPIC_AUTH_TOKEN + ANTHROPIC_API_KEY) and:
+#   * keeps the ones claude consumes
+#   * preserves the others under PMOVES_MAVIS_SDK_<NAME> for inspection
+#   * unsets the originals
+#   * emits one WARN line summarizing what was caught
+#
+# Sourced AFTER repo-root resolution (helper file is repo-relative) and
+# BEFORE env.shared loading (the env.shared reader below has a parallel
+# blocklist for env.shared itself; the two layers cover the SHELL env
+# and env.shared independently).
+# ---------------------------------------------------------------------------
+if [ -f "$ROOT/pmoves/scripts/mavis_sdk_env.sh" ]; then
+  # shellcheck source=../../pmoves/scripts/mavis_sdk_env.sh
+  . "$ROOT/pmoves/scripts/mavis_sdk_env.sh"
+  mavis_sdk_strip_env_for "claude"
+else
+  echo "[claude-pmoves] WARN: mavis_sdk_env.sh not found at $ROOT/pmoves/scripts/ -- Mavis SDK env may bleed into the launched session." >&2
+fi
+
+# ---------------------------------------------------------------------------
+# Claude Code backend selector — strip the Mavis-SDK hijack when --backend=
+# (or $PMOVES_CLAUDE_BACKEND) says so. Called AFTER mavis_sdk_strip_env_for so
+# the NEEDS-list preservation there runs first; this is the OVERRIDE layer.
+#
+# The python module is the source of truth — bash just `eval`s its stdout and
+# forwards stderr (which carries the WARN when something was actually stripped).
+# PowerShell twin does the same via `Invoke-Expression`. Kept in step with the
+# ps1 by:
+#   1. TwinParityTests in pmoves/tools/tests/test_pmoves_launcher_generator.py
+#   2. The pinned `--backend=` flag surface
+#   3. The pinned `PMOVES_CLAUDE_BACKEND` env-var name
+#   4. The pinned `stripped Mavis SDK hijack` WARN phrase
+#
+# If python or the tool is missing, we fall through with a WARN — the Mavis
+# SDK env-strip above has already done its partial work, and `claude` will
+# inherit whatever the parent shell set. The user can still fix the persistent
+# state with `pmoves-mini claude-backend set anthropic`.
+# ---------------------------------------------------------------------------
+claude_backend_apply() {
+  local _apply_backend="${PMOVES_CLAUDE_BACKEND:-auto}"
+  local _pm_py=()
+  # Reuse pm-python.sh's ladder — same precedence rules as the normalizer.
+  # shellcheck source=../../pmoves/scripts/pm-python.sh
+  if [ -f "$ROOT/pmoves/scripts/pm-python.sh" ]; then
+    . "$ROOT/pmoves/scripts/pm-python.sh"
+  fi
+  if ! pm_pick_python "" 2>/dev/null; then
+    echo "[claude-pmoves] WARN: no python interpreter; claude_backend_apply skipped (PMOVES_CLAUDE_BACKEND=$_apply_backend)." >&2
+    return 0
+  fi
+  local _apply_out _apply_rc=0
+  _apply_out="$(cd "$ROOT" && "${PM_PY[@]}" pmoves/tools/claude_backend.py apply \
+                  --backend "$_apply_backend" --label "claude-pmoves.sh")" || _apply_rc=$?
+  if [ "$_apply_rc" -ne 0 ]; then
+    echo "[claude-pmoves] WARN: claude_backend.py apply exited $_apply_rc; skipping the strip." >&2
+    return 0
+  fi
+  if [ -n "$_apply_out" ]; then
+    # The python module emits `unset NAME` and `export NAME=value` lines.
+    # Eval inside a subshell so a parse error here does not abort the launcher.
+    # Errors would be the worst kind: a launch that does not actually launch.
+    if ! (eval "$_apply_out") 2>/dev/null; then
+      echo "[claude-pmoves] WARN: claude_backend_apply eval produced an error; launching with the Mavis SDK env intact." >&2
+    fi
+  fi
+}
+claude_backend_apply
+unset -f claude_backend_apply
+
 if [ -f "$ENVF" ]; then
   # Blocklist: vars that control Claude SDK/session behavior and should NEVER be
   # sourced by the launcher. These are user's personal billing/config, not fleet MCP creds.
   # Sourcing them forces API billing (ANTHROPIC_API_KEY) or clobbers session state.
-  blocklist='^(ANTHROPIC_API_KEY|ANTHROPIC_AUTH_TOKEN|ANTHROPIC_BASE_URL|CLAUDECODE|CLAUDE_CODE_|CLAUDE_SESSION_)$'
+  #
+  # DRIFT FIX 2026-09-17: `CLAUDE_CODE_` and `CLAUDE_SESSION_` were anchored
+  # literal matches -- they caught only a var named EXACTLY `CLAUDE_CODE_`,
+  # not `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC`.  The PowerShell twin
+  # already had `CLAUDE_CODE_*` (regex) which translates to `CLAUDE_CODE_.*`.
+  # The bash twin is now brought into step: `CLAUDE_CODE_.+` (regex, require
+  # at least one char after the prefix) matches the same set as the ps1.
+  # Kept in step with deploy/provision/claude-pmoves.ps1:25-31.
+  blocklist='^(ANTHROPIC_API_KEY|ANTHROPIC_AUTH_TOKEN|ANTHROPIC_BASE_URL|CLAUDECODE|CLAUDE_CODE_.+|CLAUDE_SESSION_.+)$'
 
   # env.shared is Docker Compose env_file format: unquoted values, and some are
   # ALIAS lines like SUPABASE_SERVICE_ROLE_KEY=${SERVICE_ROLE_KEY}. Two hazards:
@@ -119,10 +285,27 @@ if [ -f "$ENVF" ]; then
   rm -f "$tmpf"
   set -H 2>/dev/null || true
   echo "[claude-pmoves] loaded $n vars from $ENVF" >&2
+  PMOVES_LAUNCHER_SESSION="claude-pmoves.sh ($n vars)"
 else
   echo "[claude-pmoves] WARN: $ENVF not found — MCP creds may be missing." >&2
   echo "[claude-pmoves]       run: make -C pmoves ensure-env-shared" >&2
+  PMOVES_LAUNCHER_SESSION="claude-pmoves.sh (env file NOT FOUND)"
 fi
+
+# Leave a marker in the child's environment so "did this session come through
+# the launcher" is ANSWERABLE from inside the session.
+#
+# `launcher-check` asks whether the command resolves on this host. That is a
+# question about the installer, and it passes on a host where the launcher is
+# installed and simply was not used -- which is the actual failure mode, since
+# starting `claude` directly is the habit the launcher exists to replace. Both
+# were true simultaneously on Z890 (2026-08-31): launcher-check OK, and 13 of
+# 20 roster entries missing their variables in the live process.
+#
+# The marker carries the count, not just a flag, because "loaded 0 vars" and
+# "never ran" are different faults with different remedies and would otherwise
+# be indistinguishable to anything reading it.
+export PMOVES_LAUNCHER_SESSION
 
 # Resolve ${TS_<NODE>} for the cross-node MCP servers in the roster.
 #
@@ -150,8 +333,59 @@ fi
 # NOT --strict-mcp-config: we want a MERGE, so the per-node `.mcp.json` written
 # by `make -C pmoves mcp-toolkit-connect` (the Docker MCP gateway entry) stays
 # live alongside the tracked roster.
+# WHICH ROSTER: origin/main, not whatever branch this checkout sits on.
+# Kept deliberately in step with the PowerShell twin -- these two have drifted
+# before, and that drift shipped a Windows node a literal ${TS_Z890} hostname.
+#
+# The roster is FLEET configuration, not branch content. Measured 2026-08-30 on
+# the 4090: the repo root sat on a wip snapshot branch and the launcher loaded 14
+# servers where origin/main has 19 -- five missing, including
+# `pmoves-cipher-local`, the loopback entry that needs no bearer. The symptom was
+# `pmoves-cipher / failed` and a 401, which reads as a credential problem and was
+# a checkout problem.
+#   PMOVES_ROSTER_FROM_TREE=1  use the working tree (editing the roster itself)
 MCP_ROSTER="$ROOT/.claude/mcp.json"
+MCP_ROSTER_SOURCE="working tree"
+if [ -z "${PMOVES_ROSTER_FROM_TREE:-}" ]; then
+  # PER-LAUNCH name, not a fixed one. The old fixed
+  # `$TMPDIR/pmoves-roster-origin-main.json` is shared by every concurrent
+  # session on the node, so a second launch overwrites the file the first is
+  # still pointing at: if origin/main moved in between, the older session now
+  # reads the NEWER roster. That is invisible while nothing reads the file
+  # after launch -- and this change makes something read it, since
+  # PMOVES_MCP_ROSTER is exported for `make -C pmoves session-check`. An older
+  # session could report success against a roster it never loaded, which is the
+  # exact false-negative that tool exists to prevent.
+  #
+  # Same lesson the normalizer already learned two blocks down ("the old fixed
+  # name is squattable in a world-writable /tmp"); the raw copy simply never
+  # got the fix. mktemp also removes the squat, since this file is written
+  # before anything validates it.
+  _main_roster="$(mktemp "${TMPDIR:-/tmp}/pmoves-roster-origin-main.XXXXXXXX.json" 2>/dev/null)" \
+    || _main_roster="${TMPDIR:-/tmp}/pmoves-roster-origin-main.$$.json"
+  git -C "$ROOT" fetch --quiet origin main >/dev/null 2>&1 || true
+  if git -C "$ROOT" show origin/main:.claude/mcp.json > "$_main_roster" 2>/dev/null      && [ -s "$_main_roster" ]; then
+    MCP_ROSTER="$_main_roster"
+    MCP_ROSTER_SOURCE="origin/main"
+  else
+    echo "[claude-pmoves] could not read the roster from origin/main; using the working tree." >&2
+    echo "[claude-pmoves]   (offline, or origin/main not fetched -- servers may differ from the fleet's)" >&2
+  fi
+fi
+# Tell the session which roster it got, and from where.
+#
+# Deliberately the RAW roster, not the normalized "$RESOLVED" produced below.
+# The normalized copy has every ${VAR} already expanded and every unresolvable
+# server DROPPED, so anything reading it sees a clean roster and cannot tell a
+# healthy session from one that lost five servers on the way in -- it would
+# report OK precisely when something went wrong. The raw file still carries the
+# references, so `make -C pmoves session-check` evaluates the same expressions
+# the launcher evaluated, against the same environment.
+export PMOVES_MCP_ROSTER="$MCP_ROSTER"
+export PMOVES_MCP_ROSTER_SOURCE="$MCP_ROSTER_SOURCE"
+
 if [ -f "$MCP_ROSTER" ]; then
+  echo "[claude-pmoves] MCP roster source: $MCP_ROSTER_SOURCE"
   # Normalize the roster before handing it to Claude:
   #   P2 — drop servers whose key starts with "_" (disabled-in-name-only, e.g.
   #        `_pmoves-cipher-legacy-python-wrapper`; `_disabled` is metadata, not a
@@ -208,6 +442,22 @@ if [ -f "$MCP_ROSTER" ]; then
     fi
   fi
 
+  # TWO couplings to the normalizer's sweep live in this line. Both are load-
+  # bearing and neither is obvious from here:
+  #
+  #  1. We `exec`, so this path becomes an argument of the SESSION's own
+  #     process, and that is the only reason the sweep can tell a live roster
+  #     from an abandoned one. Before it could, a roster was unlinked one hour
+  #     in purely on mtime while the session that named it was still running.
+  #     If this ever stops naming the path on the command line, the liveness
+  #     check goes blind and the sweep quietly reverts to deleting live files.
+  #  2. We deliberately pass NO `--out-dir`. The tool picks custody --
+  #     XDG_RUNTIME_DIR (0700, logind-managed) when it exists, the temp dir
+  #     otherwise -- because the file holds EXPANDED bearer tokens. Pinning a
+  #     directory here would silently undo that for the whole fleet.
+  #
+  # pmoves/tests/test_mcp_roster_normalize.py pins both.
+  #
   # Pass the config with `--mcp-config=<file>` (the `=` form): `--mcp-config` is a
   # variadic option (`<configs...>`), so the space form would swallow a trailing
   # positional prompt as another config value (Codex #2243 P1). The `=` binds

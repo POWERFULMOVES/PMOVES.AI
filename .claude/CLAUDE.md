@@ -21,7 +21,8 @@ Per PR #1378 MOF Architecture: PMOVES is a Metal-Organic Framework for distribut
 | Cold-start orientation | `pmoves/docs/AGENTS/AGNOTE4482_SITREP.md` |
 | Audit gateway + convergence waves | `pmoves/docs/AGENTS/AGNOTE4482.md` |
 | Architecture thesis | `pmoves/docs/architecture/PMOVES_MOF_ARCHITECTURE.md`, `PMOVES_GRAND_CONVERGENCE.md` |
-| AGENTS.md format reference & taxonomy | [`PMOVES-agents.md/`](../PMOVES-agents.md/) submodule (fork of agentsmd/agents.md, Tier-2 always-relevant) |
+| Agent taxonomy & autonomy model | [`pmoves/config/agent_registry.yaml`](../pmoves/config/agent_registry.yaml) — the source of truth (`classes`, `types`, `role_classes`, `resilience_classes`, every agent). Prose hub: [`AGENT_TAXONOMY_CROSS_REFERENCE.md`](../pmoves/docs/AGENTS/AGENT_TAXONOMY_CROSS_REFERENCE.md) |
+| AGENTS.md *format* convention | [`PMOVES-agents.md/`](../PMOVES-agents.md/) — fork of agentsmd/agents.md. It is the upstream **website** (61 blobs, all Next.js) and its own `AGENTS.md` documents how to run that site. It carries **no** PMOVES taxonomy or persona content — verified at the pinned commit, 2026-08-30 |
 | Skills constellation | [`skills/`](../skills/) — Anthropic skills, agent-sandbox, fork-repository, awesome-agent-skills, claude-d3js (see `skills/README.md`) |
 | Pinokio launcher development | [`PINOKIO_LAUNCHER_GUIDE.md`](./PINOKIO_LAUNCHER_GUIDE.md) — on-demand context for `D:\pinokio\` work |
 | Living-docs freshness rules | [`pmoves/configs/living_docs_registry.yaml`](../pmoves/configs/living_docs_registry.yaml) — tracked by `make -C pmoves docs-reconcile-check` |
@@ -35,7 +36,15 @@ Per PR #1378 MOF Architecture: PMOVES is a Metal-Organic Framework for distribut
 - `pmoves/docs/AGENTS/AGNOTE4482_SITREP.md` (cold-start orientation)
 
 **Tier 2 — On-Demand (Major Subsystems):**
-- `PMOVES-agents.md/` — AGENTS.md format reference + agent taxonomy/persona docs (Tier-2 *always-relevant*: load when discussing agent class, taxonomy, or AGENTS.md format)
+- `PMOVES-agents.md/` — the agents.md **website** fork, nothing more. This line
+  used to promise "agent taxonomy/persona docs"; a recursive listing of the
+  pinned tree finds zero files matching taxonomy / persona / pmoves / capacity /
+  autonomy. The submodule is also unpopulated locally, so anyone following the
+  old pointer found nothing and moved on rather than discovering the gap.
+  The taxonomy lives in `pmoves/config/agent_registry.yaml` +
+  `pmoves/docs/AGENTS/`. The agents.md convention specifies one thing — a
+  root `AGENTS.md` in plain Markdown for coding agents — and has no vocabulary
+  for class, persona, or autonomy, so there is no upstream model to map onto.
 - `PMOVES-Archon/.claude/CLAUDE.md` — agent service architecture
 - `PMOVES-BoTZ/.claude/CLAUDE.md` — skills marketplace framework (legacy/archived per 2026-04-19)
 - Agent Zero — the submodule has **no** `.claude/CLAUDE.md` (verified 2026-08-06). Use `pmoves/services/agent-zero/README.md` for the service, and `pmoves/docs/operations/AGENT_ZERO_API.md` for the live API surface.
@@ -127,7 +136,7 @@ Full audit: `pmoves/docs/CLAUDE_CONTEXT_AUDIT.md`.
 **Agent Zero MCP protocol server** — served by the A0 runtime on port 8081 at `/t-{MCP_SERVER_TOKEN}/sse`, `/t-{...}/http`, `/t-{...}/messages/`. The runtime authenticates with `X-API-KEY`. A2A routes (`/a2a/v1/*`, `/.well-known/agent-card.json`) on 8080 use a Supabase JWT `Authorization: Bearer`, gated by `A2A_DISCOVERY_PUBLIC` / `A2A_TASKS_PUBLIC`.
 
 **Configured local MCP servers** (`.claude/mcp.json`):
-- `pmoves-cipher` (SSE `http://localhost:8105/mcp/sse`) — persistent memory lookups + writes. Path verified 2026-08-12 against the running container; `/sse` and `/api/mcp/sse` both 404.
+- `pmoves-cipher` (SSE `http://localhost:8105/mcp/sse`) — persistent memory lookups + writes. **Re-measured 2026-09-08; the 2026-08-12 note that `/sse` and `/api/mcp/sse` are 404 no longer holds and cannot be re-derived that way.** Auth middleware now runs BEFORE routing, so *every* path returns 401 unauthenticated — including `/xyzzy` and `/definitely-not-a-route` (measured). An unauthenticated 401 therefore proves nothing about whether a route exists; route discovery on this service requires an AUTHENTICATED probe. `/health` is the only unauthenticated route (200, `{"service":"cipher-pmoves-shim"}`). The `pmoves-cipher-shim` process name is the sanctioned A1-Shim design (`pmoves/docs/TAC/TAC_CIPHER.md`), not a broken deployment. **Today `pmoves-cipher-local` is the entry that connects**; the fleet entry `http://${TS_Z890}:8105/mcp/sse` is refused because this node publishes `8105/tcp -> 127.0.0.1:8105`. That is NOT a design flaw and the entry should not be deleted: the app listens on `0.0.0.0` as documented (`Pmoves-cipher/PMOVES.AI_INTEGRATION.md:96`), the documented run publishes `-p 8105:8105` (`:111`), and our compose parameterises the host bind as `"${CIPHER_BIND:-127.0.0.1}:..."`. **Set `CIPHER_BIND` to make the fleet entry work** — no code or compose change. `TS_Z890` resolves correctly and maps to the Z890 node. **Reaching cipher: `agentId` is required on every call and must be your signing-card `agent_id`** (`pmoves/config/signing_identity_cards.yaml` — this node is `z890-claude`); cross-agent `*` is refused under token enforcement. This node's token currently resolves to `bootstrap`, so passing `z890-claude` returns 403 — the blocker is per-agent token provisioning, not transport. **If the cipher MCP server is not connected in your session, say so and use auto-memory** (`cipher_preflight` says this explicitly); do NOT scrape `CIPHER_API_TOKEN` out of `docker inspect` — that is a CHIT-pipeline bypass. Full provenance-linked reconciliation in `pmoves/docs/TAC/TAC_CIPHER.md`.
 - `docker` (`mcp/docker`) — container inspection via local Docker socket
 - `hostinger-mcp` — Hostinger API tasks via `$HOSTINGER_API_KEY`
 - `tailscale` — tailnet inventory, stale-node cleanup, tag inspection, ACL operations

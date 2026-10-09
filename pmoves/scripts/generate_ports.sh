@@ -214,8 +214,6 @@ done
 echo "# Multi-port services"
 echo "MINIO_CONSOLE_PORT=9001"
 echo "NATS_WS_PORT=9223"
-echo "ARCHON_PROMETHEUS_PORT=8052"
-echo "ARCHON_GRPC_PORT=8052"
 echo "NEO4J_BOLT_PORT=7687"
 
 # Tier-specific port ranges for reference

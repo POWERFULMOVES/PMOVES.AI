@@ -1,276 +1,376 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 
 /**
- * E2E Tests for Archon Prompts Management
+ * E2E Tests for the Archon Prompt Forge (app/dashboard/archon-prompts/page.tsx)
  *
- * Tests the prompt templates interface for:
- * - Listing and filtering prompts
- * - Creating new prompts
- * - Editing existing prompts
- * - Deleting prompts
- * - Executing prompts with variables
+ * The page is a single view: an always-visible create/edit form, a search box, and a
+ * table of prompts with inline Edit/Delete. There is no per-prompt detail route, no
+ * category field, no delete confirmation, and no execute action (see the fixme notes).
+ *
+ * Backend-free: both data paths the page uses are mocked with page.route, so every
+ * assertion is unconditional and deterministic.
+ *   - list/search: the browser Supabase client, GET /rest/v1/archon_prompts
+ *     (listArchonPrompts, lib/archonPrompts.ts:123-145)
+ *   - writes: POST /api/archon-prompts, PATCH|DELETE /api/archon-prompts/:id
+ *     (createPromptRequest..deletePromptRequest, page.tsx:43-87)
  *
  * @module e2e/archon-prompts
  */
 
+type Prompt = {
+  id: string;
+  prompt_name: string;
+  prompt: string;
+  description: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+const STAMP = '2026-09-01T12:00:00.000Z';
+const FIXTURE: Prompt[] = [
+  {
+    id: 'p-alpha',
+    prompt_name: 'alpha_research',
+    prompt: 'Research {{topic}} in depth.',
+    description: 'Deep research starter',
+    created_at: STAMP,
+    updated_at: STAMP,
+  },
+  {
+    id: 'p-beta',
+    prompt_name: 'beta_summary',
+    prompt: 'Summarise the input.',
+    description: null,
+    created_at: STAMP,
+    updated_at: STAMP,
+  },
+];
+
+type Write = { method: string; path: string; body: Record<string, unknown> | null };
+
+interface ForgeMock {
+  /** Query string of every list request the Supabase client made. */
+  listQueries: URLSearchParams[];
+  /** Every write sent to /api/archon-prompts[/:id]. */
+  writes: Write[];
+  /** When set, writes answer with this status and error payload instead of succeeding. */
+  failWrites: { status: number; type?: string; message: string } | null;
+}
+
+const CORS = { 'access-control-allow-origin': '*' };
+
+async function mockPromptForge(page: Page): Promise<ForgeMock> {
+  const mock: ForgeMock = { listQueries: [], writes: [], failWrites: null };
+  const rows = FIXTURE.map((p) => ({ ...p }));
+
+  await page.route(/\/rest\/v1\/archon_prompts(\?|$)/, async (route) => {
+    const req = route.request();
+    if (req.method() === 'OPTIONS') {
+      await route.fulfill({
+        status: 204,
+        headers: { ...CORS, 'access-control-allow-headers': '*', 'access-control-allow-methods': '*' },
+      });
+      return;
+    }
+    const params = new URL(req.url()).searchParams;
+    mock.listQueries.push(params);
+    // PostgREST ilike filter as sent by listArchonPrompts: prompt_name=ilike.%term%
+    const ilike = params.get('prompt_name');
+    const term = ilike ? ilike.replace(/^ilike\./, '').replace(/%/g, '').toLowerCase() : '';
+    const out = rows.filter((r) => r.prompt_name.toLowerCase().includes(term));
+    await route.fulfill({ status: 200, contentType: 'application/json', headers: CORS, body: JSON.stringify(out) });
+  });
+
+  await page.route(/\/api\/archon-prompts(\/[^/?]+)?(\?.*)?$/, async (route) => {
+    const req = route.request();
+    const path = new URL(req.url()).pathname;
+    const raw = req.postData();
+    const body = raw ? (JSON.parse(raw) as Record<string, unknown>) : null;
+    mock.writes.push({ method: req.method(), path, body });
+
+    if (mock.failWrites) {
+      const { status, type, message } = mock.failWrites;
+      await route.fulfill({ status, contentType: 'application/json', body: JSON.stringify({ error: { type, message } }) });
+      return;
+    }
+    const id = path.split('/').pop() as string;
+    if (req.method() === 'POST') {
+      const created = { id: 'p-new', created_at: STAMP, updated_at: STAMP, ...body };
+      await route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify({ data: created }) });
+      return;
+    }
+    if (req.method() === 'PATCH') {
+      const existing = rows.find((r) => r.id === id);
+      const updated = { ...existing, ...body, updated_at: STAMP };
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: updated }) });
+      return;
+    }
+    if (req.method() === 'DELETE') {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true }) });
+      return;
+    }
+    await route.fulfill({ status: 405, contentType: 'application/json', body: '{}' });
+  });
+
+  return mock;
+}
+
+async function openForge(page: Page): Promise<ForgeMock> {
+  const mock = await mockPromptForge(page);
+  await page.goto('/dashboard/archon-prompts');
+  await expect(page.getByTestId('prompt-row')).toHaveCount(FIXTURE.length);
+  return mock;
+}
+
+/** The page's own feedback region (page.tsx:290-301); Next's route announcer is also role=alert. */
+function feedback(page: Page, role: 'alert' | 'status') {
+  return page.getByTestId('archon-prompts-page').getByRole(role);
+}
+
+function row(page: Page, name: string) {
+  return page.getByTestId('prompt-row').filter({ hasText: name });
+}
+
 test.describe('Archon Prompts - List View', () => {
-  test.beforeEach(async ({ page }) => {
-    await page.goto('/dashboard/archon-prompts');
+  // renamed-from: displays prompts list with search and filters
+  test('displays prompts list with search', async ({ page }) => {
+    await openForge(page);
+
+    await expect(page.getByTestId('archon-prompts-page')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Archon Prompt Forge' })).toBeVisible();
+    await expect(page.getByRole('searchbox', { name: 'Search prompts' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Search', exact: true })).toBeVisible();
   });
 
-  test('displays prompts list with search and filters', async ({ page }) => {
-    // Check for main elements
-    await expect(page.getByRole('heading', { name: /prompts/i })).toBeVisible();
+  // renamed-from: displays prompt cards with key information
+  test('displays prompt rows with key information', async ({ page }) => {
+    const mock = await openForge(page);
 
-    // Search input
-    const searchInput = page.getByPlaceholder(/search/i);
-    if ((await searchInput.count()) > 0) {
-      await expect(searchInput.first()).toBeVisible();
-    }
+    // listArchonPrompts orders by name (lib/archonPrompts.ts:130-132)
+    expect(mock.listQueries[0].get('order')).toBe('prompt_name.asc');
 
-    // Category filter
+    const alpha = row(page, 'alpha_research');
+    await expect(alpha.getByRole('cell').nth(0)).toHaveText('alpha_research');
+    await expect(alpha.getByRole('cell').nth(1)).toHaveText('Deep research starter');
+    await expect(alpha.getByRole('button', { name: 'Edit' })).toBeVisible();
+    await expect(alpha.getByRole('button', { name: 'Delete' })).toBeVisible();
+
+    // A null description renders as an em dash (page.tsx:393)
+    await expect(row(page, 'beta_summary').getByRole('cell').nth(1)).toHaveText('—');
+  });
+
+  // fixme: FEATURE NOT BUILT: prompts have no category. ArchonPrompt has no category field
+  // (lib/archonPrompts.ts:3-10) and app/dashboard/archon-prompts/page.tsx:271-580 renders no
+  // category control. The old body was guarded by `if (count > 0)` and could never fail.
+  // The body states the intended behaviour so it fails loudly once un-fixme'd.
+  test.fixme('filters prompts by category', async ({ page }) => {
+    await openForge(page);
     const categoryFilter = page.getByRole('combobox', { name: /category/i });
-    if ((await categoryFilter.count()) > 0) {
-      await expect(categoryFilter.first()).toBeVisible();
-    }
-  });
-
-  test('displays prompt cards with key information', async ({ page }) => {
-    // Look for prompt cards or table rows
-    const _promptCards = page.locator('[class*="prompt"], [class*="card"], tr').first();
-
-    // Wait for content to load
-    await page.waitForTimeout(1000);
-
-    // Check for common prompt elements
-    const hasPrompts = await page.locator('a[href*="/prompts/"], tr').count() > 0;
-    if (hasPrompts) {
-      // Check that at least one prompt is displayed
-      const prompts = page.locator('a[href*="/prompts/"], tr');
-      await expect(prompts.first()).toBeVisible();
-    }
-  });
-
-  test('filters prompts by category', async ({ page }) => {
-    const categoryFilter = page.getByRole('combobox', { name: /category/i });
-
-    if ((await categoryFilter.count()) > 0) {
-      // Select the first non-empty option (typically "all" or a specific category)
-      const selectElement = await categoryFilter.first().elementHandle();
-      if (selectElement) {
-        const options = await selectElement.$$('option');
-        // Skip the first option (usually placeholder/empty) and select second
-        if (options.length > 1) {
-          await categoryFilter.first().selectOption({ index: 1 });
-        }
-      }
-
-      // Wait for filtered results
-      await page.waitForTimeout(500);
-
-      // Verify filter is applied (URL or content changes)
-      const url = page.url();
-      const hasCategoryInUrl = url.includes('category') || url.includes('agent');
-      expect(hasCategoryInUrl || true).toBe(true); // Soft assertion
-    }
+    await expect(categoryFilter).toBeVisible();
+    await categoryFilter.selectOption({ index: 1 });
+    await expect(page.getByTestId('prompt-row')).toHaveCount(1);
   });
 
   test('searches prompts by text', async ({ page }) => {
-    const searchInput = page.getByPlaceholder(/search/i);
+    const mock = await openForge(page);
+    const search = page.getByRole('searchbox', { name: 'Search prompts' });
 
-    if ((await searchInput.count()) > 0) {
-      // Enter search term
-      await searchInput.first().fill('test');
-      await page.keyboard.press('Enter');
+    // Typing filters the loaded rows client-side (filteredPrompts, page.tsx:130-141)
+    await search.fill('alpha');
+    await expect(page.getByTestId('prompt-row')).toHaveCount(1);
+    await expect(row(page, 'alpha_research')).toBeVisible();
 
-      // Wait for search results
-      await page.waitForTimeout(500);
+    // Submitting re-queries Supabase with an ilike filter (onSearchSubmit, page.tsx:266-269)
+    await search.press('Enter');
+    // (the initial load can run twice under React dev StrictMode, so match by content, not index)
+    await expect
+      .poll(() => mock.listQueries.map((q) => q.get('prompt_name')))
+      .toContain('ilike.%alpha%');
+    await expect(page.getByTestId('prompt-row')).toHaveCount(1);
 
-      // Verify search was performed
-      const url = page.url();
-      expect(url.includes('search') || true).toBe(true);
-    }
+    // No match: the empty state replaces the table
+    await search.fill('zzz-no-such-prompt');
+    await expect(page.getByText('No prompts found.')).toBeVisible();
+    await expect(page.getByTestId('prompt-row')).toHaveCount(0);
   });
 });
 
 test.describe('Archon Prompts - Create', () => {
-  test.beforeEach(async ({ page }) => {
-    await page.goto('/dashboard/archon-prompts');
-  });
-
   test('shows create prompt button', async ({ page }) => {
-    const createButton = page.getByRole('button', { name: /create|new|add/i, exact: false });
-    const count = await createButton.count();
-    expect(count).toBeGreaterThan(0);
+    await openForge(page);
+    const form = page.getByTestId('prompt-form');
+    await expect(form.getByRole('heading', { name: 'Create Prompt' })).toBeVisible();
+    await expect(form.getByRole('button', { name: 'Create prompt' })).toBeEnabled();
   });
 
-  test('opens create form with required fields', async ({ page }) => {
-    const createButton = page.getByRole('button', { name: /create|new/i, exact: false }).first();
+  // renamed-from: opens create form with required fields
+  test('shows create form with required fields', async ({ page }) => {
+    await openForge(page);
+    const form = page.getByTestId('prompt-form');
 
-    if ((await createButton.count()) > 0) {
-      await createButton.click();
-
-      // Check for form fields
-      await expect(page.getByRole('textbox', { name: /name/i })).toBeVisible();
-      await expect(page.getByRole('textbox', { name: /template/i })).toBeVisible();
-
-      // Category selector
-      const categorySelect = page.getByRole('combobox', { name: /category/i });
-      if ((await categorySelect.count()) > 0) {
-        await expect(categorySelect.first()).toBeVisible();
-      }
-    }
+    // The form is always rendered (no open step): Prompt name, Prompt body, Description
+    const name = form.getByRole('textbox', { name: 'Prompt name' });
+    const body = form.getByRole('textbox', { name: 'Prompt body' });
+    const description = form.getByRole('textbox', { name: 'Description' });
+    await expect(name).toBeVisible();
+    await expect(body).toBeVisible();
+    await expect(description).toBeVisible();
+    await expect(name).toHaveAttribute('required', '');
+    await expect(body).toHaveAttribute('required', '');
+    await expect(description).not.toHaveAttribute('required', '');
   });
 
   test('validates required fields on create', async ({ page }) => {
-    const createButton = page.getByRole('button', { name: /create|new/i, exact: false }).first();
+    const mock = await openForge(page);
+    const form = page.getByTestId('prompt-form');
+    const name = form.getByRole('textbox', { name: 'Prompt name' });
+    const submit = form.getByRole('button', { name: 'Create prompt' });
 
-    if ((await createButton.count()) > 0) {
-      await createButton.click();
+    // Empty fields: native `required` validation blocks the submit
+    await submit.click();
+    expect(await name.evaluate((el) => (el as HTMLInputElement).validity.valueMissing)).toBe(true);
 
-      // Try to submit without filling required fields
-      const submitButton = page.getByRole('button', { name: /save|submit|create/i });
-      if ((await submitButton.count()) > 0) {
-        await submitButton.first().click();
+    // Whitespace-only passes `required`, then the page's own trim check rejects it (page.tsx:171-174)
+    await name.fill('   ');
+    await form.getByRole('textbox', { name: 'Prompt body' }).fill('   ');
+    await submit.click();
+    await expect(feedback(page, 'alert')).toHaveText('Prompt name and prompt body are required.');
 
-        // Check for validation errors
-        await page.waitForTimeout(500);
-        const _hasError =
-          (await page.locator('text=/required/i').count()) > 0 ||
-          (await page.locator('[class*="error"]').count()) > 0;
-        // This is a soft assertion - depends on validation strategy
-      }
-    }
+    expect(mock.writes).toHaveLength(0);
+  });
+
+  test('creates a prompt', async ({ page }) => {
+    const mock = await openForge(page);
+    const form = page.getByTestId('prompt-form');
+
+    await form.getByRole('textbox', { name: 'Prompt name' }).fill('  gamma_plan  ');
+    await form.getByRole('textbox', { name: 'Prompt body' }).fill('Plan the next step.');
+    await form.getByRole('button', { name: 'Create prompt' }).click();
+
+    await expect(feedback(page, 'status')).toHaveText('Prompt created successfully.');
+    expect(mock.writes).toEqual([
+      {
+        method: 'POST',
+        path: '/api/archon-prompts',
+        body: { prompt_name: 'gamma_plan', prompt: 'Plan the next step.', description: null },
+      },
+    ]);
+    await expect(row(page, 'gamma_plan')).toBeVisible();
+    await expect(page.getByTestId('prompt-row')).toHaveCount(FIXTURE.length + 1);
+    // Form resets after a successful create
+    await expect(form.getByRole('textbox', { name: 'Prompt name' })).toHaveValue('');
+  });
+
+  test('shows the duplicate-name error and rolls back the optimistic row', async ({ page }) => {
+    const mock = await openForge(page);
+    mock.failWrites = { status: 409, type: 'DuplicatePromptNameError', message: 'duplicate' };
+    const form = page.getByTestId('prompt-form');
+
+    await form.getByRole('textbox', { name: 'Prompt name' }).fill('alpha_research');
+    await form.getByRole('textbox', { name: 'Prompt body' }).fill('Again.');
+    await form.getByRole('button', { name: 'Create prompt' }).click();
+
+    await expect(feedback(page, 'alert')).toHaveText(
+      'A prompt with this name already exists. Choose a different name.'
+    );
+    await expect(page.getByTestId('prompt-row')).toHaveCount(FIXTURE.length);
   });
 });
 
 test.describe('Archon Prompts - Edit', () => {
-  test('navigates to edit page from list', async ({ page }) => {
-    await page.goto('/dashboard/archon-prompts');
+  // renamed-from: navigates to edit page from list
+  test('loads a prompt into the form from the list', async ({ page }) => {
+    await openForge(page);
+    const form = page.getByTestId('prompt-form');
 
-    // Wait for prompts to load
-    await page.waitForTimeout(1000);
+    // There is no detail route: Edit loads the row into the same form (startEditing, page.tsx:257-264)
+    await row(page, 'alpha_research').getByRole('button', { name: 'Edit' }).click();
+    await expect(form.getByRole('heading', { name: 'Edit Prompt' })).toBeVisible();
+    await expect(form.getByRole('textbox', { name: 'Prompt name' })).toHaveValue('alpha_research');
+    await expect(form.getByRole('textbox', { name: 'Prompt body' })).toHaveValue('Research {{topic}} in depth.');
+    await expect(form.getByRole('textbox', { name: 'Description' })).toHaveValue('Deep research starter');
+    await expect(form.getByRole('button', { name: 'Save changes' })).toBeVisible();
 
-    // Find first prompt link
-    const promptLink = page.locator('a[href*="/prompts/"]').first();
-
-    if ((await promptLink.count()) > 0) {
-      await promptLink.click();
-
-      // Verify we're on detail/edit page
-      await expect(page.getByRole('heading')).toBeVisible();
-
-      // Check for edit button or editable fields
-      const hasEdit =
-        (await page.getByRole('button', { name: /edit/i }).count()) > 0 ||
-        (await page.getByRole('textbox').count()) > 0;
-      expect(hasEdit).toBe(true);
-    }
+    // Cancel returns the form to create mode
+    await form.getByRole('button', { name: 'Cancel' }).click();
+    await expect(form.getByRole('heading', { name: 'Create Prompt' })).toBeVisible();
+    await expect(form.getByRole('textbox', { name: 'Prompt name' })).toHaveValue('');
   });
 
   test('saves prompt changes', async ({ page }) => {
-    // Navigate to a specific prompt (this would need a real prompt ID in testing)
-    await page.goto('/dashboard/archon-prompts/test-prompt');
+    const mock = await openForge(page);
+    const form = page.getByTestId('prompt-form');
 
-    // Look for edit button
-    const editButton = page.getByRole('button', { name: /edit/i });
+    await row(page, 'alpha_research').getByRole('button', { name: 'Edit' }).click();
+    await form.getByRole('textbox', { name: 'Prompt name' }).fill('alpha_research_v2');
+    await form.getByRole('button', { name: 'Save changes' }).click();
 
-    if ((await editButton.count()) > 0) {
-      await editButton.click();
-
-      // Modify a field
-      const nameField = page.getByRole('textbox', { name: /name/i });
-      if ((await nameField.count()) > 0) {
-        await nameField.first().fill('Updated Test Prompt');
-
-        // Save changes
-        const saveButton = page.getByRole('button', { name: /save/i });
-        await saveButton.click();
-
-        // Verify success message or redirect
-        await page.waitForTimeout(1000);
-        const hasSuccess =
-          (await page.locator('text=/saved|success/i').count()) > 0 ||
-          page.url().includes('prompts');
-        expect(hasSuccess || true).toBe(true);
-      }
-    }
+    await expect(feedback(page, 'status')).toHaveText('Prompt updated successfully.');
+    expect(mock.writes).toEqual([
+      {
+        method: 'PATCH',
+        path: '/api/archon-prompts/p-alpha',
+        body: {
+          prompt_name: 'alpha_research_v2',
+          prompt: 'Research {{topic}} in depth.',
+          description: 'Deep research starter',
+        },
+      },
+    ]);
+    await expect(row(page, 'alpha_research_v2')).toBeVisible();
+    await expect(form.getByRole('heading', { name: 'Create Prompt' })).toBeVisible();
   });
 });
 
 test.describe('Archon Prompts - Delete', () => {
-  test('shows delete confirmation', async ({ page }) => {
-    await page.goto('/dashboard/archon-prompts/test-prompt');
+  test('deletes a prompt from the list', async ({ page }) => {
+    const mock = await openForge(page);
 
-    // Look for delete button
-    const deleteButton = page.getByRole('button', { name: /delete/i });
+    await row(page, 'beta_summary').getByRole('button', { name: 'Delete' }).click();
 
-    if ((await deleteButton.count()) > 0) {
-      await deleteButton.click();
-
-      // Check for confirmation dialog
-      const hasConfirm =
-        (await page.locator('[role="dialog"]').count()) > 0 ||
-        (await page.getByRole('button', { name: /confirm|yes/i }).count()) > 0;
-      expect(hasConfirm).toBe(true);
-    }
+    await expect(feedback(page, 'status')).toHaveText('Prompt deleted successfully.');
+    expect(mock.writes).toEqual([{ method: 'DELETE', path: '/api/archon-prompts/p-beta', body: null }]);
+    await expect(row(page, 'beta_summary')).toHaveCount(0);
+    await expect(page.getByTestId('prompt-row')).toHaveCount(FIXTURE.length - 1);
   });
 
-  test('cancels delete on confirmation cancel', async ({ page }) => {
-    await page.goto('/dashboard/archon-prompts/test-prompt');
+  // fixme: FEATURE NOT BUILT: there is no delete confirmation. handleDelete
+  // (app/dashboard/archon-prompts/page.tsx:236-254) removes the row and calls DELETE immediately,
+  // and the page renders no dialog. The old body was guarded by `if (count > 0)` against a
+  // /dashboard/archon-prompts/test-prompt route that does not exist, so it could never fail.
+  test.fixme('shows delete confirmation', async ({ page }) => {
+    const mock = await openForge(page);
+    await row(page, 'beta_summary').getByRole('button', { name: 'Delete' }).click();
+    await expect(page.getByRole('dialog')).toBeVisible();
+    expect(mock.writes).toHaveLength(0);
+  });
 
-    const deleteButton = page.getByRole('button', { name: /delete/i });
-
-    if ((await deleteButton.count()) > 0) {
-      await deleteButton.click();
-
-      // Click cancel if present
-      const cancelButton = page.getByRole('button', { name: /cancel/i });
-      if ((await cancelButton.count()) > 0) {
-        await cancelButton.click();
-
-        // Verify still on prompt page (not deleted)
-        await expect(page.getByRole('heading')).toBeVisible();
-      }
-    }
+  // fixme: FEATURE NOT BUILT: there is no delete confirmation to cancel (handleDelete,
+  // app/dashboard/archon-prompts/page.tsx:236-254, deletes immediately). Old body was guarded
+  // by `if (count > 0)` against a nonexistent detail route.
+  test.fixme('cancels delete on confirmation cancel', async ({ page }) => {
+    const mock = await openForge(page);
+    await row(page, 'beta_summary').getByRole('button', { name: 'Delete' }).click();
+    await page.getByRole('dialog').getByRole('button', { name: /cancel/i }).click();
+    await expect(row(page, 'beta_summary')).toBeVisible();
+    expect(mock.writes).toHaveLength(0);
   });
 });
 
 test.describe('Archon Prompts - Execute', () => {
-  test('shows execute button on prompt detail', async ({ page }) => {
-    await page.goto('/dashboard/archon-prompts/test-prompt');
-
-    // Look for execute/run button
-    const executeButton = page.getByRole('button', { name: /execute|run/i });
-
-    // This may not always be visible depending on prompt state
-    if ((await executeButton.count()) > 0) {
-      await expect(executeButton.first()).toBeVisible();
-    }
+  // fixme: FEATURE NOT BUILT: prompts cannot be executed from the UI. app/dashboard/archon-prompts/
+  // holds only page.tsx (no detail route), the row actions are Edit/Delete only (page.tsx:395-407),
+  // and app/api/archon-prompts/[id]/route.ts exports only PATCH and DELETE. Old body was guarded.
+  test.fixme('shows execute button on prompt detail', async ({ page }) => {
+    await openForge(page);
+    await expect(row(page, 'alpha_research').getByRole('button', { name: /execute|run/i })).toBeVisible();
   });
 
-  test('shows variable input form for template variables', async ({ page }) => {
-    await page.goto('/dashboard/archon-prompts/test-prompt');
-
-    // Look for execute button to trigger variable form
-    const executeButton = page.getByRole('button', { name: /execute|run/i });
-
-    if ((await executeButton.count()) > 0) {
-      await executeButton.first().click();
-
-      // Check for variable input fields
-      await page.waitForTimeout(500);
-
-      // Look for input fields that might be for variables
-      const hasVariableInputs =
-        (await page.locator('[placeholder*="{{"]').count()) > 0 ||
-        (await page.locator('label:has-text("variable")').count()) > 0 ||
-        (await page.getByRole('dialog').locator('input').count()) > 0;
-
-      // Soft assertion - depends on prompt having variables
-      if (hasVariableInputs) {
-        await expect(page.locator('input').first()).toBeVisible();
-      }
-    }
+  // fixme: FEATURE NOT BUILT: no execute flow, so no template-variable form (see the test above;
+  // the {{topic}} placeholder in a prompt body is stored verbatim and never parsed by the page).
+  test.fixme('shows variable input form for template variables', async ({ page }) => {
+    await openForge(page);
+    await row(page, 'alpha_research').getByRole('button', { name: /execute|run/i }).click();
+    await expect(page.getByRole('dialog').getByRole('textbox', { name: /topic/i })).toBeVisible();
   });
 });

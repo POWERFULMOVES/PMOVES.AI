@@ -1,4 +1,4 @@
-.PHONY: env-bootstrap-lite env-setup env-check preflight flight-check flight-check-retro preflight-retro showtime bringup-showtime smoke-showtime showtime-links showtime-links-open showtime-links-strict submodule-integrity submodule-layer-validate submodule-layer-validate-one submodule-layer-validate-all submodule-layer-validate-all-strict submodule-layer-validate-strict submodule-branch-policy-check audit-layers audit-layers-static audit-layers-runtime ci-runners-check ci-runners-check-strict ci-runners-map ci-runners-map-strict ci-runners-lockdown ci-runners-lockdown-strict ci-runners-local-cert-up ci-runners-local-cert-down ci-runners-local-cert-status ci-queue-sitrep ci-queue-drain-nonpr ci-queue-drain-nonpr-apply skill-registry-validate runner-labels-check runner-labels-refresh auth-alignment auth-alignment-strict topology-chit-gate topology-chit-gate-strict pr-monitor pr-monitor-strict pr-monitor-chit-packet pr-trim-analyze pr-trim-resolve pr-trim-report pr-trim floos-status floos-pr-monitor-validate floos-pr-monitor-resolve floos-pr-monitor-run-dry chit-flow-pr-monitor chit-flow-pr-monitor-strict ports-resolve sign-trail naming-drift-check naming-drift-strict docker-hub-inject showtime-update
+.PHONY: launcher-check launcher-install session-check env-bootstrap-lite env-setup env-check preflight flight-check flight-check-retro preflight-retro showtime bringup-showtime smoke-showtime showtime-links showtime-links-open showtime-links-strict submodule-integrity submodule-layer-validate submodule-layer-validate-one submodule-layer-validate-all submodule-layer-validate-all-strict submodule-layer-validate-strict submodule-branch-policy-check audit-layers audit-layers-static audit-layers-runtime ci-runners-check ci-runners-check-strict ci-runners-map ci-runners-map-strict ci-runners-lockdown ci-runners-lockdown-strict ci-runners-local-cert-up ci-runners-local-cert-down ci-runners-local-cert-status ci-queue-sitrep ci-queue-drain-nonpr ci-queue-drain-nonpr-apply skill-registry-validate runner-labels-check runner-labels-refresh auth-alignment auth-alignment-strict topology-chit-gate topology-chit-gate-strict pr-monitor pr-monitor-strict pr-monitor-chit-packet pr-trim-analyze pr-trim-resolve pr-trim-report pr-trim floos-status floos-pr-monitor-validate floos-pr-monitor-resolve floos-pr-monitor-run-dry chit-flow-pr-monitor chit-flow-pr-monitor-strict ports-resolve sign-trail naming-drift-check naming-drift-strict docker-hub-inject showtime-update
 
 # Force UTF-8 output on Windows (cp1252 chokes on Unicode/emoji in pr-trim et al.)
 export PYTHONIOENCODING ?= utf-8
@@ -78,10 +78,104 @@ endif
 env-bootstrap-lite: ensure-env-shared ## Bootstrap lightweight runtime env (uv-first) and check core host tools
 	@$(PRECHECK_PY) tools/bootstrap_light_env.py $(ARGS)
 
+env-bootstrap-check: ## Precheck ONLY (no create/install): lite venv + core deps present, else exit 3 with remediation. Gate for funnel entry points.
+	@$(PRECHECK_PY) tools/bootstrap_light_env.py --check
+
 env-setup: ensure-env-shared ## Unified env bootstrap (registry-driven + strict env drift checks + showtime quick diagnostics)
 	@$(PRECHECK_PY) tools/env_setup_unified.py $(ARGS)
 
+launcher-check: ## Verify `claude-pmoves` resolves — the MCP roster depends on it
+	@# Claude Code does NOT read .claude/mcp.json; only --mcp-config does, and
+	@# supplying that flag is the whole job of the claude-pmoves launcher. So a
+	@# missing launcher does not cost keystrokes, it silently drops every server
+	@# in the roster -- including pmoves-cipher, which BOOTSTRAP.md tells every
+	@# session to check at startup. Measured 2026-08-30: cipher healthy on 8105,
+	@# declared in the roster, and unreachable as a tool for a whole session,
+	@# because the command was never installed.
+	@# The failure mode is an ABSENCE: no error, no warning, just a tool that was
+	@# never offered. That is exactly what a preflight is for.
+	@# WHICH SHELL is the question. The launcher runs from PowerShell, and its
+	@# PATH shim lives in WindowsApps as a .cmd -- which Git Bash does not
+	@# resolve. Probing with bash's `command -v` reported MISSING on a node where
+	@# the install was correct and PowerShell's Get-Command found it fine.
+	@# "Does it resolve" is shell-relative; ask the shell that runs it.
+ifeq ($(OS),Windows_NT)
+	@powershell -NoProfile -Command "if (Get-Command claude-pmoves -ErrorAction SilentlyContinue) { Write-Host ('launcher-check: OK - ' + (Get-Command claude-pmoves).Source); exit 0 } else { Write-Host 'launcher-check: MISSING - claude-pmoves does not resolve in PowerShell.'; Write-Host '  Every server in .claude/mcp.json stays dark without it.'; Write-Host '  Fix: make -C pmoves launcher-install'; exit 1 }"
+else
+	@command -v claude-pmoves >/dev/null 2>&1 && echo "launcher-check: OK - $$(command -v claude-pmoves)" || { echo "launcher-check: MISSING - claude-pmoves does not resolve."; echo "  Every server in .claude/mcp.json stays dark without it."; echo "  Fix: make -C pmoves launcher-install"; exit 1; }
+endif
+
+launcher-install: ## Install the launcher shell command(s): claude-pmoves everywhere, crush-pmoves on Windows (no POSIX crush installer exists yet)
+	@# Both installers existed and NEITHER was invoked by anything: crush-pmoves
+	@# had been run by hand at some point, claude-pmoves never had. A bootstrap
+	@# step that is only ever run by memory cannot tell "installed" from "never
+	@# attempted".
+ifeq ($(OS),Windows_NT)
+	@powershell -NoProfile -ExecutionPolicy Bypass -File ../deploy/provision/install-claude-pmoves-command.ps1
+	@powershell -NoProfile -ExecutionPolicy Bypass -File ../deploy/provision/install-crush-pmoves-command.ps1
+else
+	@bash ../deploy/provision/install-claude-pmoves-command.sh
+	@# The target advertises BOTH commands; installing only one while reporting
+	@# success is the same "advertises coverage it lacks" defect this file is
+	@# full of. Caught in review.
+	@if [ -f ../deploy/provision/install-crush-pmoves-command.sh ]; then 	  bash ../deploy/provision/install-crush-pmoves-command.sh; 	else 	  echo "launcher-install: no POSIX crush installer present; crush-pmoves NOT installed"; 	fi
+endif
+	@echo "Open a NEW shell, then: make -C pmoves launcher-check"
+
+session-check: ## Report which MCP servers THIS session can authenticate (reads no secrets)
+	@# launcher-check and session-check answer different questions, and only the
+	@# second one is about the session you are in.
+	@#
+	@#   launcher-check   does `claude-pmoves` resolve on this host?   (installer)
+	@#   session-check    did THIS process actually get the env?       (session)
+	@#
+	@# A launcher can be installed and simply not used -- starting `claude`
+	@# directly is the habit it exists to replace. Measured on Z890 2026-08-31,
+	@# both true at the same moment: launcher-check OK, and 13 of 20 roster
+	@# entries missing their variables in the live process.
+	@#
+	@# This became load-bearing only once nodes started configuring a cipher
+	@# token. With no token the empty bearer is ACCEPTED (200 on the 4090), so a
+	@# launcher-less session degrades invisibly; with one it is REJECTED (401 on
+	@# Z890). Hardening turns a silent degradation into a hard failure.
+	@#
+	@# Advisory by default and prints NAMES only, never values -- it has to be
+	@# safe to run inside an agent transcript, which is where the fault shows up.
+	@$(PRECHECK_PY) scripts/session_check.py $(ARGS)
+
 env-check: ## Run cross-platform environment preflight checks
+	@# launcher-check is REPORTED here, never required. A first draft made it a
+	@# prerequisite, which would have failed the repo's canonical environment
+	@# validation on any fresh clone, CI runner, container, or non-Claude
+	@# operator host -- for a Claude-specific optional tool that neither
+	@# `env-setup` nor the documented bring-up sequence installs. Caught in
+	@# review. A missing launcher is worth SAYING; it is not worth blocking a
+	@# fleet's env validation over.
+	@$(MAKE) --no-print-directory launcher-check || 	  echo "env-check: continuing -- launcher-check is advisory here (run 'make -C pmoves launcher-install' if you use Claude Code on this host)"
+	@# session-check is advisory for the same reason, plus one of its own: on a
+	@# CI runner or any non-Claude host there is no roster to authenticate and
+	@# "13 servers degraded" is not a finding, it is noise. It exits 0 unless
+	@# --strict is passed, so this cannot fail env-check even by accident.
+	@#
+	@# `ARGS=` is REQUIRED, and CI caught its absence
+	@# (tests/make/test_args_no_leak_to_submake.py). env-check consumes $(ARGS)
+	@# and forwards it to env_check.ps1 / env_check.sh; session-check consumes
+	@# $(ARGS) and forwards it to session_check.py. Without the literal clear,
+	@# one ARGS value would have to satisfy two argparse surfaces, so
+	@# `make env-check ARGS=--some-env-check-flag` would hand that flag to
+	@# session_check.py, which rejects unknown flags. The `|| true` would have
+	@# HIDDEN it -- an advisory that silently stops advising is the worst of
+	@# both. Clearing ARGS keeps the advisory honest.
+	@$(MAKE) --no-print-directory ARGS= session-check || true
+	@# chit-provenance-check, same advisory contract and the same cleared ARGS.
+	@# `--offline` is deliberate HERE and only here: env-check is the routine
+	@# environment validation and must not acquire a network dependency, a gh
+	@# auth dependency, or two API round-trips of latency. The local half --
+	@# marker present, bundle age, which declared keys cannot project -- needs
+	@# none of that and is the half that says whether anything is wrong at all.
+	@# Run the target directly, without --offline, to learn whether the artifact
+	@# that would fix it is still inside its 1-day retention.
+	@$(MAKE) --no-print-directory ARGS=--offline chit-provenance-check || true
 ifeq ($(OS),Windows_NT)
 	@pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/env_check.ps1 $(ARGS)
 else

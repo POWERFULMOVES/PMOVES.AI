@@ -8,7 +8,7 @@ Overview
 Compose
 - Service: `neo4j`
 - Ports: `7474:7474`, `7687:7687`
-- Profile: `data`
+- Profiles: none (always-on)
 - Network: `pmoves-net`
 
 Used by

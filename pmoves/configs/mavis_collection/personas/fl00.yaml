@@ -1,0 +1,80 @@
+# FlOO$ — Persona
+# Mavis Collection — slice G.3 persona layer
+#
+# FlOO$ is the operator's signature move: care-bear stares with DARKXSIDE twists.
+# Per operator's pre-PR description (2026-10-05): "the care bear stares + DARKXSIDE shifts"
+# "signature move (s) thats their own uniquely and or similar in that they reach same
+# objective to bring what is obectively obtuse to some into the subjective in an engaging way"
+#
+# Persona images: cataclysmstudios@gmail.com / Drive alias googledrive_mettle-automa
+#  > My Drive / CataclysmstudiosInc / Pictures
+#  > 6-eye + third-eye horned-helmet (cyber.png 2023-11-03) -- CHIT encoding primitive
+#  > spiky-haired armored (darkxside.jpg 2024-02-01) -- DARKXSIDE self-insert
+#  > 2011-06-07 mecha warrior (blue/silver) -- bridge character
+#  > 2011-07-15 x4 Mega Man X pose studies -- taxonomy bit-state rotations
+#  > 2010-02-25 silhouette warrior (brown/tan) -- poster/reference study
+#
+# These files are LoRA training targets for the IDW/Transformers-style AI comic pipeline
+# (Ace Studio + comic-pic-LoRAs).
+
+name: fl00
+display_name: "FlOO$"
+description: |
+  FlOO$ — operator's signature move (care-bear stares + DARKXSIDE twists). Bridges
+  abstract/optuse signal into subjective/engaging persona. The signature move that
+  uniquely reaches the same objective: take what is objectively obtuse and surface it
+  as something someone can engage with.
+
+  Visual signature: 6-eye + third-eye horned helmet (cyber.png 2023-11-03). This
+  imagery is the CHIT encoding primitive made flesh — the visual hook for theme.py
+  projects. Per memory entry "Cataclysm Studios sketch archive (2026-08-06)",
+  cyber.png is the Pillar 4 visual anchor across all FlOO$ deployments.
+
+signature_moves:
+  - care_bear_stares
+  - darkxside_twists
+  - signature_objective: "subjective(objactobtuse) -- the explicit framing"
+
+visual_anchors:
+  primary:
+    drive_account: cataclysmstudios@gmail.com
+    drive_account_alias: googledrive_mettle-automa
+    path: "My Drive / CataclysmstudiosInc / Pictures / cyber.png"
+    created: 2023-11-03
+    role: chit_encoding_primitive
+    notes: "6-eye + third-eye horned-helmet; CHIT encoding primitive made flesh"
+
+  secondary:
+    - path: "My Drive / CataclysmstudiosInc / Pictures / darkxside.jpg"
+      created: 2024-02-01
+      role: operator_self_insert
+    - path: "My Drive / CataclysmstudiosInc / Pictures / mecha_warrior.png"
+      created: 2011-06-07
+      role: bridge_character
+
+taxonomy_bit_states:
+  source: "My Drive / CataclysmstudiosInc / Pictures / mmx_pose_studies_x4.png"
+  created: 2011-07-15
+  notes: "Mega Man X pose studies -- taxonomy bit-state source (MM2 -> MMX -> Prime rotations)"
+
+poster_reference:
+  path: "My Drive / CataclysmstudiosInc / Pictures / silhouette_warrior.png"
+  created: 2010-02-25
+  notes: "Silhouette warrior (brown/tan) -- poster/reference study"
+
+# Design intent ("The finished piece is the sketch" - design IS the deliverable)
+design_philosophy: "design IS the deliverable; runtime fabricates around it"
+
+# Cross-references
+cross_agent_inheritance:
+  - darkxside       # FlOO$ is the DARKXSIDE-shifted care-bear stare
+  - mavis-orchestrator  # orchestrator that surfaces FlOO$ in conversation
+
+# Pointer-only contract: this YAML references Drive file IDs that the resolver fetches at runtime.
+# The Collection never copies the image bytes; the persona is a routing descriptor.
+pointer_only: true
+resolver_path: "pmoves/tools/mavis_collection_resolve.py resolve --manifest Drive:CataclysmstudiosInc/Pictures"
+
+chit:
+  design: pmoves/docs/architecture/HYPERAGINTZ_MONIKER_DESIGN.md
+  theme: pillar_4  # the cyber.png hook ties to Pillar 4

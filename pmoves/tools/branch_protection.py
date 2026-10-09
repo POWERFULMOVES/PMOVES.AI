@@ -171,11 +171,31 @@ DEFAULT_SPEC_PATH = (
 
 DEFAULT_BRANCH = "main"
 
-# Valid top-level ruleset rule types as of 2026-08 per
+# Top-level ruleset rule types, per
 # https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/available-rules-for-rulesets
+#
+# THIS LIST IS A COPY OF A REMOTE SCHEMA, and copies drift. It can only ever say
+# "this type was believed valid when someone last read the docs" -- it cannot
+# validate against what the API accepts today. Treat a pass here as "not
+# obviously wrong", never as "will apply".
+#
+# Proven by one entry: `required_conversation_resolution` sat in this set,
+# pinned by a test asserting its acceptance, and GitHub rejects it outright --
+#
+#     PUT repos/POWERFULMOVES/PMOVES.AI/rulesets/10887588
+#     422  Invalid property /rules/4: data matches no possible input
+#
+# It is a CLASSIC branch-protection field. The rulesets expression of the same
+# intent is the `pull_request` rule's `required_review_thread_resolution`
+# parameter, which pmoves_standard.json already sets to true. So the spec was
+# unappliable and the local validator blessed it -- the only thing that could
+# say otherwise was a live write.
+#
+# The remaining entries are UNVERIFIED against the live API. Removing the one
+# proven wrong does not make the rest right.
 VALID_RULESET_RULE_TYPES = frozenset({
     "creation", "update", "deletion", "required_linear_history", "non_fast_forward",
-    "required_signatures", "required_conversation_resolution", "pull_request",
+    "required_signatures", "pull_request",
     "required_status_checks", "required_workflows",
     "required_code_scanning", "required_codeql", "required_secret_scanning",
     "required_deployments", "required_deployment_environments", "copilot_code_review",

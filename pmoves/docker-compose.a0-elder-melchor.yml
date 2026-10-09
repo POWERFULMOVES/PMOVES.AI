@@ -1,0 +1,187 @@
+# PMOVES.AI — Agent Zero Elder-Melchor edition (compose overlay)
+#
+# Standalone bring-up overlay for the Elder-Melchor node: an Agent Zero
+# runtime built FROM the PMOVES-A0-codex-docker base, with host access
+# (docker socket, PMOVES.AI repo mount) and the fleet coding-agent CLIs
+# (hermes, crush, opencode, codex) baked into the image.
+#
+# Usage (Known Roads only — never raw docker compose):
+#   make -C pmoves a0-elder-up          # build + start
+#   make -C pmoves a0-elder-down
+#   make -C pmoves a0-elder-cli STATUS
+#   make -C pmoves a0-elder-logs
+#
+# Ports (8080/8081 already carry the stock agent-zero on nodes that run it;
+# this node runs the elder-melchor edition instead — 8180/8181):
+#   8180 — PMOVES supervisor (healthz + MCP SSE)
+#   8818 — container-internal A0 UI (via supervisor proxy), host loopback only
+#
+# Env chain: env.shared + env.tier-agent + env.tier-llm (see mk/a0-elder.mk).
+
+services:
+  a0-elder-melchor:
+    build:
+      context: .
+      dockerfile: ./services/a0-elder-melchor/Dockerfile
+    image: ${A0_ELDER_IMAGE:-pmoves-a0-elder-melchor:local}
+    container_name: pmoves-a0-elder-melchor
+    restart: unless-stopped
+    init: true
+    profiles: [""]
+    # No compose profile gate: this overlay IS the bring-up unit for this node.
+    # Env chain (mirrors x-tier-agent-hardened anchor + LLM tier for Z_AI key):
+    env_file:
+      - env.shared
+      - env.tier-agent
+      - env.tier-llm
+    environment:
+      # ── supervisor ─────────────────────────────────────────────
+      # Container listens on 8080 (stock supervisor default; Dockerfile
+      # healthcheck targets it). Host maps 8180→8080 to avoid clashing with
+      # any stock agent-zero on 8080.
+      - PORT=8080
+      - AGENT_ZERO_API_BASE=${AGENT_ZERO_API_BASE:-http://127.0.0.1:80}
+      - AGENT_ZERO_HEALTH_PATH=${AGENT_ZERO_HEALTH_PATH:-/api/plugins/_a0_connector/v1/capabilities}
+      - AGENT_ZERO_HEALTH_METHOD=${AGENT_ZERO_HEALTH_METHOD:-POST}
+      - AGENT_ZERO_MESSAGE_PATH=${AGENT_ZERO_MESSAGE_PATH:-/api/plugins/_a0_connector/v1/message_send}
+      - AGENT_ZERO_MESSAGE_TIMEOUT=${AGENT_ZERO_MESSAGE_TIMEOUT:-600}
+      - AGENT_ZERO_CAPTURE_OUTPUT=${AGENT_ZERO_CAPTURE_OUTPUT:-false}
+      - AGENT_ZERO_API_KEY=${AGENT_ZERO_MCP_TOKEN:-${MCP_SERVER_TOKEN:-}}
+      - AGENT_ZERO_EXTRA_ARGS=${AGENT_ZERO_EXTRA_ARGS:---port=80 --host=0.0.0.0 --dockerized=true}
+      - PYTHONPATH=/app:/app/services
+      - DOCKED_MODE=true
+      - TOPOLOGY_MODE=docked
+      - PARENT_SYSTEM=PMOVES.AI
+      - PARENT_VERSION=1.0.0-hardened
+      # /workspace carries the host PMOVES.AI repo — git needs explicit trust.
+      - GIT_CONFIG_COUNT=1
+      - GIT_CONFIG_KEY_0=safe.directory
+      - GIT_CONFIG_VALUE_0=*
+      # ── LLM routing: env → generated presets (verified integration map) ──
+      # A0_SET_chat_model_* is DEAD upstream (settings.py: "models are now
+      # resolved at call time via _model_config plugin" — the fork moved model
+      # CONTENTS to usr/plugins/_model_config/presets.yaml, which has no env
+      # surface). init-a0.sh GENERATES that file from A0_ELDER_* on first boot
+      # (env stays the source of truth; deleting the file regenerates it).
+      # Endpoint note: this account is a Z.AI CODING plan — the general
+      # api.z.ai/api/paas/v4 base rejects coding slugs with "Unknown Model"
+      # (1211); the coding base is api.z.ai/api/coding/paas/v4 (verified from
+      # hermes_cli/auth_zai_kimi.py endpoint table + live probes, 2026-09-08).
+      # Coding plans carry NO embeddings API — embeddings run on the local
+      # sentence-transformers wrapper (provider huggingface).
+      - A0_ELDER_CHAT_MODEL=${A0_ELDER_CHAT_MODEL:-glm-5.3}
+      - A0_ELDER_UTIL_MODEL=${A0_ELDER_UTIL_MODEL:-glm-5.3-flash}
+      - A0_ELDER_EMBED_MODEL=${A0_ELDER_EMBED_MODEL:-sentence-transformers/all-MiniLM-L6-v2}
+      - A0_ELDER_EMBED_PROVIDER=${A0_ELDER_EMBED_PROVIDER:-huggingface}
+      - A0_ELDER_LLM_BASE=${A0_ELDER_LLM_BASE:-https://api.z.ai/api/coding/paas/v4}
+      # OPENAI_API_KEY is the provider key the fork's get_api_key() resolves
+      # for provider "openai" — carries the Z.AI key through that flow.
+      - OPENAI_API_KEY=${Z_AI_API_KEY:-}
+      - A0_SET_mcp_server_enabled=true
+      - A0_SET_mcp_server_token=${AGENT_ZERO_MCP_TOKEN:-${MCP_SERVER_TOKEN:-}}
+      - MCP_SERVER_TOKEN=${AGENT_ZERO_MCP_TOKEN:-}
+      - A0_SET_a2a_server_enabled=true
+      - A2A_DISCOVERY_PUBLIC=${A2A_DISCOVERY_PUBLIC:-false}
+      - A2A_TASKS_PUBLIC=${A2A_TASKS_PUBLIC:-false}
+      # ── CHIT ───────────────────────────────────────────────────
+      - CHIT_REQUIRE_SIGNATURE=${CHIT_PROD_REQUIRE_SIGNATURE:-true}
+      - CHIT_DECRYPT_ANCHORS=${CHIT_PROD_DECRYPT_ANCHORS:-true}
+      - CHIT_PASSPHRASE=${CHIT_PROD_PASSPHRASE:?set CHIT_PROD_PASSPHRASE in env.shared}
+      # ── plugin: pmoves_notes ───────────────────────────────────
+      - OPEN_NOTEBOOK_API_URL=${OPEN_NOTEBOOK_API_URL:-http://open-notebook:5055}
+      - OPEN_NOTEBOOK_API_TOKEN=${OPEN_NOTEBOOK_API_TOKEN:-}
+      - PMOVES_NOTES_ENABLED=${PMOVES_NOTES_ENABLED:-false}
+      # ── plugin: pmoves_coding_agents ───────────────────────────
+      # CLI timeouts for the coding-agent tools (seconds).
+      - PMOVES_HERMES_TIMEOUT=${PMOVES_HERMES_TIMEOUT:-1800}
+      - PMOVES_CRUSH_TIMEOUT=${PMOVES_CRUSH_TIMEOUT:-1800}
+      - PMOVES_OPENCODE_TIMEOUT=${PMOVES_OPENCODE_TIMEOUT:-1800}
+      - PMOVES_CODEX_TIMEOUT=${PMOVES_CODEX_TIMEOUT:-1800}
+      # ── coding-CLI credentials (headless delegation) ───────────
+      # hermes: provider keys from the LLM tier; writes config to /workspace
+      # gitignored .hermes dir via the mounted repo (never baked into image).
+      - Z_AI_API_KEY=${Z_AI_API_KEY:-}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+      # crush/opencode/codex: auth carried by the mounted host config dirs
+      # (volumes below) — nothing baked into the image or env.
+      # ── NATS (bus; this node runs pmoves-nats-1 on the default network) ──
+      - NATS_URL=${A0_ELDER_NATS_URL:-nats://nats:pmoves@nats:4222}
+      - AGENTZERO_JETSTREAM=${AGENTZERO_JETSTREAM:-true}
+      - AGENTZERO_JS_UNAVAILABLE_THRESHOLD=${AGENTZERO_JS_UNAVAILABLE_THRESHOLD:-1}
+      # XDG state/cache dirs → /tmp (read-only-rootfs-safe; opencode CLI
+      # otherwise dies with EACCES mkdir /app/.local/state — found by A0's
+      # own in-container probe 2026-09-08).
+      - XDG_STATE_HOME=/tmp/xdg-state
+      - XDG_CACHE_HOME=/tmp/xdg-cache
+      # TLS: point at container store (anti host-leak, working chain).
+      - SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
+      - SSL_CERT_DIR=/etc/ssl/certs
+      - REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
+      - CURL_CA_BUNDLE=
+      - NODE_EXTRA_CA_CERTS=
+      - HTTP_PROXY=
+      - HTTPS_PROXY=
+      - NO_PROXY=
+    volumes:
+      # Host access (operator directive): docker socket for container control
+      # and the PMOVES.AI repo root mounted read-only as the shared workspace.
+      # Socket gid: Docker Desktop proxies the socket as root:root → DOCKER_GID=0
+      # on this node (same note as the stock agent-zero stanza).
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${A0_ELDER_WORKSPACE:-../}:/workspace:ro
+      # Persistent A0 state (memory/knowledge/instruments) on named volumes.
+      - a0-elder-memory:/a0/memory
+      - a0-elder-knowledge:/a0/knowledge
+      - a0-elder-instruments:/a0/instruments
+      - a0-elder-workdir:/a0/workdir
+      # Host CLI auth mounts so crush/opencode/codex share the node's existing
+      # logins instead of re-authenticating in-container. Targets follow the
+      # runtime user's home (/app, uid 65532) — NOT /root.
+      - ${A0_ELDER_CRUSH_CONFIG:-~/.config/crush}:/app/.config/crush
+      - ${A0_ELDER_OPENCODE_CONFIG:-~/.local/share/opencode}:/app/.local/share/opencode
+      - ${A0_ELDER_CODEX_AUTH:-~/.codex}:/app/.codex
+    # Docker Desktop socket gid is 0 (see stock agent-zero stanza note).
+    group_add:
+      - "${DOCKER_GID:-0}"
+    ports:
+      - ${A0_ELDER_BIND:-127.0.0.1}:${A0_ELDER_PORT:-8180}:8080
+    networks:
+      - pmoves_app
+      - pmoves_bus
+      # pmoves_external carries the NAT egress — pmoves_app/pmoves_bus are
+      # internal=true by design (east-west only). Without this net the inner
+      # A0 runtime has no DNS/egress and dies on its first LLM cost-map fetch
+      # (live 2026-09-08). Stock agent-zero attaches the same set.
+      - pmoves_external
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/healthz || exit 1"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  pmoves_app:
+    external: true
+    name: ${PMOVES_APP_NETWORK:-pmoves_app}
+  pmoves_bus:
+    external: true
+    name: ${PMOVES_BUS_NETWORK:-pmoves_bus}
+  pmoves_external:
+    external: true
+    name: ${PMOVES_EXTERNAL_NETWORK:-pmoves_external}
+
+volumes:
+  a0-elder-memory:
+  a0-elder-knowledge:
+  a0-elder-instruments:
+  a0-elder-workdir:

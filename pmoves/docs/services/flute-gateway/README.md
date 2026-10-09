@@ -16,7 +16,7 @@ Environment
 - `NATS_URL` — event bus connection
 - `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` — persona/config lookups
 - `TENSORZERO_URL` — LLM handoff for voice-agent flows
-- `DEFAULT_VOICE_PROVIDER` — default voice backend (`vibevoice` by default)
+- `DEFAULT_VOICE_PROVIDER` — default voice backend (`omnivoice` by default)
 - `FLUTE_API_KEY` — optional API key gate for HTTP routes
 - `VIBEVOICE_URL` — VibeVoice endpoint
 - `ULTIMATE_TTS_URL` — Ultimate TTS Studio endpoint

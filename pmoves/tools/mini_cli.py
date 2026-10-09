@@ -90,6 +90,7 @@ agent_sdk_app = typer.Typer(help="PMOVES Agent SDK management")
 deps_app = typer.Typer(help="Host tooling dependency helpers")
 tailscale_app = typer.Typer(help="Tailscale helpers")
 env_app = typer.Typer(help="Environment management (tier layout)")
+claude_backend_app = typer.Typer(help="Switch Claude Code between Anthropic-direct and MiniMax-routed.")
 app.add_typer(secrets_app, name="secrets")
 app.add_typer(credentials_app, name="credentials")
 app.add_typer(profile_app, name="profile")
@@ -100,6 +101,7 @@ app.add_typer(agent_sdk_app, name="agent-sdk")
 app.add_typer(deps_app, name="deps")
 app.add_typer(tailscale_app, name="tailscale")
 app.add_typer(env_app, name="env")
+app.add_typer(claude_backend_app, name="claude-backend")
 
 
 DEPENDENCY_DEFINITIONS = {
@@ -1851,6 +1853,95 @@ def agent_sdk_list(
     """List existing PMOVES Agent instances."""
 
     typer.echo("Agent listing not yet implemented.")
+
+
+# ---------------------------------------------------------------------------
+# Claude Code backend selector (`pmoves-mini claude-backend ...`)
+#
+# Persistent switching between Anthropic-direct and MiniMax-routed Claude Code.
+# Writes ~/.claude/settings.json with backup-first semantics. The transient
+# per-launch override is `claude-pmoves --backend={auto|anthropic|minimax}`
+# (handled in deploy/provision/claude-pmoves.{sh,ps1}).
+#
+# Source of truth: pmoves/tools/claude_backend.py (parse/apply/backup/restore).
+# Templates:       pmoves/configs/claude_settings/{anthropic,minimax}.json.
+# ---------------------------------------------------------------------------
+@claude_backend_app.command("show", help="Print the current ~/.claude/settings.json state.")
+def claude_backend_show() -> None:
+    from pmoves.tools import claude_backend as _cb
+    settings_path = _cb._home_settings_path()
+    if not settings_path.exists():
+        typer.echo(f"(no settings.json at {settings_path})")
+        return
+    try:
+        data = _cb.read_settings(settings_path)
+    except (json.JSONDecodeError, ValueError) as e:
+        typer.echo(f"error: cannot parse {settings_path}: {e}", err=True)
+        raise typer.Exit(1)
+    typer.echo(_cb._render_show(data))
+    typer.echo("")
+    _cb._print_backups(settings_path.parent)
+
+
+@claude_backend_app.command("set", help="Write a template to ~/.claude/settings.json.")
+def claude_backend_set(
+    backend: str = typer.Argument(..., help="One of: anthropic, minimax"),
+) -> None:
+    from pmoves.tools import claude_backend as _cb
+    if backend not in ("anthropic", "minimax"):
+        typer.echo(f"error: backend must be one of anthropic|minimax; got {backend!r}", err=True)
+        raise typer.Exit(2)
+    template = _cb._templates_dir() / f"{backend}.json"
+    if not template.exists():
+        typer.echo(f"error: no template at {template}", err=True)
+        raise typer.Exit(1)
+    data = _cb.read_settings(template)
+    settings_path = _cb._home_settings_path()
+    backup = _cb.write_settings_atomic(settings_path, data, backup=True)
+    if backup:
+        typer.echo(f"claude-backend now {backend} (backup at {backup.name})")
+    else:
+        typer.echo(f"claude-backend now {backend} (no prior settings.json to back up)")
+
+
+@claude_backend_app.command("backup", help="Snapshot ~/.claude/settings.json to a timestamped backup.")
+def claude_backend_backup() -> None:
+    from pmoves.tools import claude_backend as _cb
+    settings_path = _cb._home_settings_path()
+    if not settings_path.exists():
+        typer.echo(f"error: {settings_path} does not exist; nothing to back up", err=True)
+        raise typer.Exit(1)
+    backup = _cb.write_settings_atomic(settings_path, _cb.read_settings(settings_path), backup=True)
+    if backup is None:
+        typer.echo("error: backup failed", err=True)
+        raise typer.Exit(1)
+    typer.echo(str(backup))
+
+
+@claude_backend_app.command("restore", help="Restore ~/.claude/settings.json from a backup file.")
+def claude_backend_restore(
+    backup_file: str = typer.Argument(..., help="Path to a settings.json.bak.<ISO> file"),
+) -> None:
+    from pmoves.tools import claude_backend as _cb
+    backup = Path(backup_file)
+    if not backup.name.startswith("settings.json.bak."):
+        typer.echo(
+            f"warning: {backup} does not match the settings.json.bak.<ISO> naming; restoring anyway",
+            err=True,
+        )
+    settings_path = _cb._home_settings_path()
+    try:
+        written = _cb.restore_from_backup(backup, settings_path)
+    except FileNotFoundError as e:
+        typer.echo(f"error: {e}", err=True)
+        raise typer.Exit(1)
+    typer.echo(f"restored from {backup} -> {written}")
+
+
+@claude_backend_app.command("list-backups", help="List existing settings.json backup files.")
+def claude_backend_list_backups() -> None:
+    from pmoves.tools import claude_backend as _cb
+    _cb._print_backups(_cb._home_settings_path().parent)
 
 
 def main() -> None:

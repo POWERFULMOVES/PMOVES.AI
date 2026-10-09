@@ -1,0 +1,4 @@
+{
+  "_comment": "Operator-owned exclusion keywords. Add customer/project names here to exclude their chats from the corpus.",
+  "exclude_keywords": ["unfcu", "docintel"]
+}

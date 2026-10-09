@@ -179,6 +179,32 @@ Important current runtime note:
 
 ---
 
+## Verifying Access (executable, not prose)
+
+Every invariant this runbook states is encoded as a policy-file `tests` / `sshTests`
+assertion in `pmoves/configs/tailscale-acl-policy.json` (T1-T5, S1-S4). Tailscale
+evaluates them on EVERY gitops apply — a failing assertion rejects the policy, so the
+runbook can no longer drift from the applied policy silently.
+
+Pre-PR local verification (same check gitops runs) — needs a Tailscale API key
+from the funnel (`TAILSCALE_API_KEY` in `pmoves/env.tier-agent`; operator-minted):
+
+```bash
+KEY=$(grep -oP '^TAILSCALE_API_KEY=\K.*' pmoves/env.tier-agent | head -1)
+curl -s -X POST https://api.tailscale.com/api/v2/tailnet/-/acl/validate \
+  -H "Authorization: Bearer $KEY" \
+  -H 'Content-Type: application/hujson' \
+  --data-binary @pmoves/configs/tailscale-acl-policy.json
+# Expect: {}  (policy valid + all assertions pass)
+# Any "test(s) failed" response blocks the gitops apply — fix before pushing.
+```
+
+Identity classes (verified 2026-09-09 against the live tailnet):
+- TAGGED fleet nodes (spark, z890, B850, KVMs) match `tag:pmoves` rules — SSH rule 0 covers them.
+- USER-authenticated nodes (the elder-melchor Windows seat: per-node login) match NO SSH rule
+  by design — T2/S-suite pins this. Fleet work for such seats runs over HTTP surfaces, or the
+  node is re-authenticated with a tagged auth key (operator action).
+
 ## Related Docs
 
 - `pmoves/docs/operations/RUSTDESK_SELF_HOSTED.md`

@@ -1,4 +1,4 @@
-# Deployment-class registry — the axis license answers depend on.
+# Deployment-class registry — the LICENSE axis. Not the market-segment axis.
 #
 # WHY THIS FILE EXISTS
 #   The fleet can already express license class per model
@@ -17,7 +17,27 @@
 #   EXCLUDED from the hosted/commercial path — which means: never baked into
 #   images or compose defaults served to classes with hosted_path: false.
 #
-# CLASSES (the four customer types; names are stable IDs, prose may evolve):
+# NOT THE MARKETING SEGMENTS. Corrected 2026-09-01 (founder: "reconcile to what
+# it is"). This file used to call these "the four customer types", which reads
+# as the public site's "Who it's for" cards. It is not that list, and mistaking
+# one for the other silently mis-routes a licensing decision:
+#
+#   this file (LICENSE axis)      private-mesh · community · school · enterprise
+#   pmoves-ai.pages.dev (MARKET)  Enterprise & UN/NGO · Communities & Co-ops ·
+#                                 Disaster Response · Creators
+#
+# Both have four members and share two names, which is the most confusable
+# arrangement possible — it reads like one list with typos. They are different
+# axes and BOTH are correct. What this file answers is "what may be baked into
+# images and compose defaults for this deployment", keyed on hosted_path and
+# requires_ack_components. It cannot answer "which market segment is this", and
+# a market segment cannot answer the licensing question: Disaster Response may
+# be community-licensed or enterprise-licensed depending on who operates it.
+#
+# If you need the market axis, it belongs in its own registry. Do not add
+# Disaster Response or Creators here — they are not license classes.
+#
+# CLASSES (stable IDs; prose may evolve):
 #   private-mesh  — the operator's own nodes. Least constrained: run what we
 #                   want under each component's own terms. Longbow-class
 #                   self-hosted infra lives here.

@@ -180,11 +180,31 @@ and handoff system for PMOVES.AI's multi-agent codebase.
 
 ### Context Paths
 
-The `crush setup` command injects these Graphiti files into `options.context_paths`:
+The `crush setup` command injects these files into `options.context_paths`:
 
 - `docs/AGENT_TRAIL.md` — living trail of all agent contributions
 - `pmoves/docs/AGENTS/AI_GRAPHITI_PROTOCOL.md` — full protocol spec
-- `pmoves/config/agent_signatures.yaml` — visual identity for all 7 contributors
+- `pmoves/config/agent_signatures.yaml` — visual identity for all contributors
+- `pmoves/docs/AGENTS/AGNOTE4482.md` — CHIT-aware governance: Village Rule
+  (claim → work → sign → release), signoff contract
+- `pmoves/docs/AGENTS/AGNOTE4482_SITREP.md` — cold-start situation digest
+
+Two things are deliberately **not** context paths:
+
+- `AGENTS.md` — Crush auto-loads root instruction files (AGENTS.md,
+  CLAUDE.md, GEMINI.md, .cursorrules) natively; a context_paths entry would
+  double-load it.
+- `pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md` — the ACTIVE claims register
+  (~921KB / ~230k tokens). Read it on demand when claiming a lane; the
+  SITREP digest carries the cold-start load.
+
+### Skills
+
+Crush supports the [Agent Skills](https://agentskills.io) standard natively.
+The repo's `.claude/skills/` mirrors (agent-sandbox, fork-repository,
+claude-d3js, and the PMOVES-specific skills) are discovered automatically.
+The `skills/PMOVES-skills` package fork sits outside every default scan
+path, so `crush setup` wires it through `options.skills_paths`.
 
 On first boot, Crush discovers the trail, finds a welcome entry from Claude Opus
 (`◆`), and finds its own identity already set. Its first act should be to write

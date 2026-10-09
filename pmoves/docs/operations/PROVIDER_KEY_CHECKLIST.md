@@ -59,7 +59,7 @@
 | # | Variant | Primary | Notes |
 |---|---------|---------|-------|
 | 16 | `ZHIPU_API_KEY` | `Z_AI_API_KEY` | Legacy name |
-| 17 | `MINIMAX_TOKEN_PLAN_API_KEY` | `MINIMAX_API_KEY` | Token plan variant |
+| 17 | `MINIMAX_TOKEN_PLAN_API_KEY` | - (distinct key) | NOT an alias of `MINIMAX_API_KEY`: the Token Plan Subscription Key "is not interchangeable with pay-as-you-go API Keys" ([platform.minimax.io/docs/token-plan/intro](https://platform.minimax.io/docs/token-plan/intro)); PMOVES issue #2748 (`pmoves/configs/chit_target_drift/_accepted.yaml`) |
 | 18 | `DASHSCOPE_API_KEY` | `ALIBABA_PRO_CODING_PLAN` | DashScope direct |
 | 19 | `OPENAI_API_KEY` | - | Not used (OpenRouter preferred) |
 | 20 | `ANTHROPIC_API_KEY` | - | Not used (Claude via TensorZero) |
@@ -123,10 +123,19 @@ provider keys additionally required the workflow env-map entries added
 - [ ] DARKXSIDE: Fill `KEY_RECEIPT_FORM.md` for the **NEEDED** keys only
       (`MOONSHOT_API_KEY`, `KILOCODE_API_KEY`, `MCP_SERVER_TOKEN`) — the other
       8 already live in GitHub Secrets
-- [ ] Node op: enroll the target node's runner if missing
-      (`make -C pmoves gha-runner-up RUNNER_NODE=<node>`; B850 currently unregistered)
-- [ ] Node op: dispatch `sync-secrets-local.yml` with `targets=<node>` to land
-      GitHub-held keys in that node's `local.env` + CHIT bundle
+- [ ] Node op: make sure a Linux PRODUCER runner is up
+      (`make -C pmoves gha-runner-up RUNNER_NODE=b850`, or spark). Only Linux
+      runners produce; the Windows ai-lab runners (4090, 5090) are consumers.
+      To enroll a NEW Linux producer, add its runner label in three places:
+      `PRODUCER_TARGETS` in `.github/workflows/sync-secrets-local.yml`, the
+      `PRODUCERS` default in `pmoves/scripts/pull_chit_bundle.sh`, and the
+      `--producer` default in `pmoves/tools/chit_provenance_check.py`
+      (`pmoves/tests/test_secrets_funnel_producers.py::test_the_producer_lists_cannot_drift`
+      fails if they disagree). Any other `targets=` value is refused.
+- [ ] Node op: dispatch `sync-secrets-local.yml` with `targets=spark,b850`
+      (`make -C pmoves secrets-sync-trigger TARGETS=spark,b850`), then on each
+      consumer node run `PMOVES_NODE=<node> make -C pmoves secrets-pull`
+      within the 1-day artifact retention
 - [ ] DevOps: `python pmoves/tools/secrets_funnel_populate.py --validate-only`
 - [ ] DevOps: merge filled receipt template:
       `python pmoves/tools/secrets_funnel_populate.py --import-file <filled.env> --dry-run`, then without `--dry-run`

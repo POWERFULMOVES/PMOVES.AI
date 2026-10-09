@@ -1,0 +1,8 @@
+# OPTIONAL heavy tier for the embedding-decode tools (chit_backend,
+# catalog_lensing_engine, chit_decoder_mm). NOT installed by the default
+# env-bootstrap-lite — installing this pulls torch; prefer the CPU wheel
+# index unless the node actually serves GPU embeddings:
+#   uv pip install --extra-index-url https://download.pytorch.org/whl/cpu \
+#     -r pmoves/tools/requirements-lite-embeddings.txt
+sentence-transformers>=2.0.0
+scikit-learn>=1.3.0

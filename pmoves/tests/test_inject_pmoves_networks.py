@@ -100,3 +100,62 @@ def test_duplicates_collapse_to_one():
     inj._inject_into_env(env, "final")
     vals = [str(e) for e in env if str(e).startswith("PMOVES_NETWORKS=")]
     assert vals == ["PMOVES_NETWORKS=final"], vals
+
+
+# ── --check message classification (issue #2996) ───────────────────────
+# The gate's assertion is broader than its old message: "file != injector-
+# canonical" fires for network drift AND for pure ruamel round-trip noise.
+# Same exit code either way; only the sentence must match the measured cause.
+
+FORMAT_DRIFT = """\
+services:
+  demo:
+    networks: [pmoves_api]
+    environment:
+    - PMOVES_NETWORKS=pmoves_api
+    test:
+      [
+        "CMD",
+        "node",
+        "-e",
+        "fetch('http://localhost:3000/api/platform/profile').then(...)",
+      ]
+"""
+
+
+def _load_both(text: str):
+    """Load twice: `data` PRE-apply (for _classify, as main() does) and the
+    post-apply dump."""
+    import io
+    y = yaml_mod.YAML()
+    y.preserve_quotes = True
+    y.width = 4096
+    data = y.load(text)          # fresh, un-mutated — classification input
+    data2 = y.load(text)
+    inj._apply(data2)
+    buf = io.StringIO()
+    y.dump(data2, buf)
+    return data, buf.getvalue()
+
+
+def test_check_classifies_pure_formatting_drift():
+    """Multi-line flow sequence collapsing: values agree, layout doesn't."""
+    data, updated = _load_both(FORMAT_DRIFT)
+    assert updated != FORMAT_DRIFT  # ruamel re-emits it differently
+    assert inj._classify(FORMAT_DRIFT, data) == "formatting"
+
+
+def test_check_classifies_network_value_drift_as_semantic():
+    text = (
+        "services:\n  demo:\n    networks: [pmoves_api]\n"
+        "    environment:\n    - PMOVES_NETWORKS=stale_wrong\n"
+    )
+    data, updated = _load_both(text)
+    assert inj._classify(text, data) == "semantic"
+
+
+def test_unified_diff_shows_the_collapsed_healthcheck():
+    data, updated = _load_both(FORMAT_DRIFT)
+    diff = inj._unified_diff(FORMAT_DRIFT, updated)
+    assert "injector-canonical" in diff
+    assert "fetch('http://localhost:3000" in diff  # the actual hunk, visible

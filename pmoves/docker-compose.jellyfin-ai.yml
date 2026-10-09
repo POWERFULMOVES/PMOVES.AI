@@ -151,16 +151,14 @@ services:
 
   jellyfin-neo4j:
     <<: *jf-hardened-vendor
-    image: neo4j:5.26.22
+    image: neo4j:5.26.22@sha256:24b071534c7cfe9718689041ab9aafea2cd0d88af9ea58b768cb5eed381ab2d0
     container_name: pmoves-jellyfin-neo4j
     profiles: ["default", "jellyfin-ai"]
     environment:
-      - NEO4J_AUTH=neo4j/${JELLYFIN_NEO4J_PASSWORD:-mediapassword123}
-      - NEO4J_dbms_security_procedures_unrestricted=gds.*
-      - NEO4J_dbms_security_procedures_allowlist=gds.*
-      - NEO4J_dbms_memory_heap_initial__size=512m
-      - NEO4J_dbms_memory_heap_max__size=2G
-      - NEO4J_dbms_memory_pagecache_size=1G
+      - NEO4J_AUTH=neo4j/${JELLYFIN_NEO4J_PASSWORD:?Set JELLYFIN_NEO4J_PASSWORD}
+      - NEO4J_server_memory_heap_initial__size=2G
+      - NEO4J_server_memory_heap_max__size=2G
+      - NEO4J_server_memory_pagecache_size=1G
     volumes:
       - ./${JELLYFIN_AI_BASE:-jellyfin-ai}/neo4j/data:/data
       - ./${JELLYFIN_AI_BASE:-jellyfin-ai}/neo4j/logs:/logs
@@ -228,7 +226,7 @@ services:
       - AUDIO_MODEL_ID=${AUDIO_MODEL_ID:-qwen3-vl:8b}
       - NEO4J_URI=${JELLYFIN_NEO4J_URI:-bolt://jellyfin-neo4j:7687}
       - NEO4J_USER=${JELLYFIN_NEO4J_USER:-neo4j}
-      - NEO4J_PASSWORD=${JELLYFIN_NEO4J_PASSWORD:-mediapassword123}
+      - NEO4J_PASSWORD=${JELLYFIN_NEO4J_PASSWORD:?Set JELLYFIN_NEO4J_PASSWORD}
       - JELLYFIN_HWACCEL_MODE=${JELLYFIN_HWACCEL_MODE:-software}
       - JELLYFIN_ENABLE_HDR=${JELLYFIN_ENABLE_HDR:-1}
       - JELLYFIN_PREFER_AV1=${JELLYFIN_PREFER_AV1:-1}
@@ -286,7 +284,7 @@ services:
       - JELLYFIN_URL=${JELLYFIN_URL:-http://${JELLYFIN_SERVICE_HOST:-jellyfin}:8096}
       - NEO4J_URI=${JELLYFIN_NEO4J_URI:-bolt://jellyfin-neo4j:7687}
       - NEO4J_USER=${JELLYFIN_NEO4J_USER:-neo4j}
-      - NEO4J_PASSWORD=${JELLYFIN_NEO4J_PASSWORD:-mediapassword123}
+      - NEO4J_PASSWORD=${JELLYFIN_NEO4J_PASSWORD:?Set JELLYFIN_NEO4J_PASSWORD}
       - REDIS_URL=${JELLYFIN_REDIS_URL:-redis://jellyfin-redis:6379}
       - JELLYFIN_HWACCEL_MODE=${JELLYFIN_HWACCEL_MODE:-software}
       - JELLYFIN_ENABLE_HDR=${JELLYFIN_ENABLE_HDR:-1}

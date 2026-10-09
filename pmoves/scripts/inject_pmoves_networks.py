@@ -118,6 +118,69 @@ def _apply(data) -> int:
     return wired
 
 
+def _expected_networks(data) -> dict:
+    """Map service name -> the PMOVES_NETWORKS value the injector would set."""
+    out = {}
+    for name, svc in (data.get("services") or {}).items():
+        if not isinstance(svc, dict):
+            continue
+        names = _network_names(svc.get("networks"))
+        if names:
+            out[name] = ",".join(names)
+    return out
+
+
+def _env_value(env, key: str):
+    """Current value of ``key`` in a service environment of either shape."""
+    if env is None:
+        return None
+    if isinstance(env, dict):
+        return env.get(key)
+    if isinstance(env, list):
+        for item in env:
+            if isinstance(item, str) and item.split("=", 1)[0] == key:
+                return item.split("=", 1)[1] if "=" in item else ""
+    return None
+
+
+def _classify(original: str, data) -> str:
+    """Why would the injector change the file: semantic or formatting-only?
+
+    The gate's exit code is the same either way -- it keeps refusing -- but the
+    MESSAGE must not send the reader looking for network-topology drift when
+    the only difference is ruamel re-emitting a hand-edited block (e.g. a
+    multi-line flow sequence collapsing onto one line). One sentence per
+    failure mode; measure before attributing (issue #2996).
+    """
+    for name, expected in _expected_networks(data).items():
+        current = _env_value(
+            (data["services"][name] or {}).get("environment"), _ENV_KEY
+        )
+        if current != expected:
+            return "semantic"
+    return "formatting"
+
+
+def _unified_diff(original: str, updated: str) -> str:
+    """A short unified diff for --check output (context 1, capped lines)."""
+    import difflib
+
+    lines = list(
+        difflib.unified_diff(
+            original.splitlines(),
+            updated.splitlines(),
+            fromfile="docker-compose.yml (committed)",
+            tofile="docker-compose.yml (injector-canonical)",
+            lineterm="",
+            n=1,
+        )
+    )
+    cap = 30
+    if len(lines) > cap:
+        lines = lines[:cap] + [f"... ({len(lines) - cap} more diff lines)"]
+    return "\n".join(lines)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument(
@@ -141,13 +204,31 @@ def main() -> int:
 
     if args.check:
         if updated != original:
-            print(
-                "ERROR: PMOVES_NETWORKS wiring out of sync with services' networks: "
-                "blocks — run 'uv run --no-project --with ruamel.yaml==0.19.1 python "
+            # Classify on a PRE-apply load: _apply() has already mutated
+            # `data`, so every PMOVES_NETWORKS value in it now agrees with the
+            # injector by construction and _classify would always say
+            # "formatting" -- including for genuine network drift.
+            kind = _classify(original, yaml.load(original))
+            remedy = (
+                "run 'uv run --no-project --with ruamel.yaml==0.19.1 python "
                 "scripts/inject_pmoves_networks.py' and 'make -C pmoves compose-split', "
-                "then commit.",
-                file=sys.stderr,
+                "then commit."
             )
+            if kind == "semantic":
+                print(
+                    "ERROR: PMOVES_NETWORKS wiring out of sync with services' "
+                    "networks: blocks — " + remedy,
+                    file=sys.stderr,
+                )
+            else:
+                print(
+                    "ERROR: docker-compose.yml is not in injector-canonical form "
+                    "(round-trip formatting difference only; no PMOVES_NETWORKS "
+                    "value disagrees with its service's networks:) — " + remedy,
+                    file=sys.stderr,
+                )
+            print("\nDiff the gate actually found:\n" + _unified_diff(original, updated),
+                  file=sys.stderr)
             return 1
         print(f"OK: PMOVES_NETWORKS wiring in sync ({wired} services).")
         return 0

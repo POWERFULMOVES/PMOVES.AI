@@ -2,13 +2,17 @@
 
 The registry exists because the fleet could express license class per model
 and per TTS engine but not per deployment (no tenant_type in profiles, so
-"which customer type is this node?" was unanswerable). These tests hold the
+"what may this node bake into its images?" was unanswerable). These tests hold the
 coupling the registry is FOR:
 
   * every deployment_class set in ANY profile resolves to a registry class
   * unset stays unset — nothing guesses a default (declare-never-infer)
-  * the four customer types exist and their hosted_path/requires_ack posture
+  * the four LICENSE classes exist and their hosted_path/requires_ack posture
     is internally consistent with the gate creator_models established
+
+  These are license classes, NOT the public site's market segments
+  (Enterprise & UN/NGO / Communities & Co-ops / Disaster Response / Creators).
+  Two fours sharing two names; see the registry header.
 """
 
 from __future__ import annotations
@@ -32,10 +36,10 @@ def test_registry_exists_and_versions():
     assert doc["classes"], "registry declares no classes"
 
 
-def test_the_four_customer_types_exist():
+def test_the_four_license_classes_exist():
     classes = _registry()["classes"]
     for expected in ("private-mesh", "community", "school", "enterprise"):
-        assert expected in classes, f"missing customer type {expected!r}"
+        assert expected in classes, f"missing license class {expected!r}"
 
 
 def test_every_profile_class_resolves():

@@ -2,7 +2,7 @@
 _Last updated: 2026-03-12_
 
 ## Overview
-This guide covers the production n8n path for PMOVES.AI. `PMOVES-n8n` is the authoritative runtime/workflow fork, n8n internals live on the dedicated `n8n-db` Postgres sidecar, and Supabase tracks PMOVES workflow state in `pmoves_core.n8n_workflow_registry`.
+This guide covers the production n8n path for PMOVES.AI. `PMOVES-n8n` (repo `PMOVES-n8n-FlooS`) is the authoritative workflow repo and runtime wrapper. It is first-party, and its Dockerfile builds `FROM` the official n8nio/n8n image. The full source fork of n8n-io/n8n is `PMOVES-N8N` at submodule path `PMOVES-N8N-Auto`. n8n internals live on the dedicated `n8n-db` Postgres sidecar, and Supabase tracks PMOVES workflow state in `pmoves_core.n8n_workflow_registry`.
 
 ## Preflight (quick)
 - Start stacks: `make up && make up-agents && make up-n8n`

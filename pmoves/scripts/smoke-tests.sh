@@ -156,6 +156,39 @@ test_http_endpoint() {
 }
 
 # Connectivity test function
+# Which container in THIS compose project requested host port $1 and did not
+# get it? Prints its name, or nothing.
+#
+# The map is built ONCE with a single batched `docker inspect` and cached. The
+# first version inspected every container per failed probe -- 63 exec calls per
+# test on this node -- which pushed the suite past its timeout. Build once, then
+# it is a variable lookup.
+_SILENT_BIND_MAP=""
+_silent_bind_owner() {
+    local want="$1"
+    if [ -z "$_SILENT_BIND_MAP" ]; then
+        local proj ids
+        proj="${COMPOSE_PROJECT_NAME:-pmoves}"
+        ids="$(docker ps --filter "label=com.docker.compose.project=$proj" -q 2>/dev/null)"
+        if [ -z "$ids" ]; then
+            _SILENT_BIND_MAP="none"
+        else
+            # One inspect for the whole project: "<name> <requested> <active>"
+            _SILENT_BIND_MAP="$(docker inspect $ids --format \
+'{{.Name}}|{{range $p,$b := .HostConfig.PortBindings}}{{range $b}}{{.HostPort}},{{end}}{{end}}|{{range $p,$b := .NetworkSettings.Ports}}{{if $b}}{{range $b}}{{.HostPort}},{{end}}{{end}}{{end}}' \
+                2>/dev/null)"
+            [ -z "$_SILENT_BIND_MAP" ] && _SILENT_BIND_MAP="none"
+        fi
+    fi
+    [ "$_SILENT_BIND_MAP" = "none" ] && return 0
+    printf '%s\n' "$_SILENT_BIND_MAP" | while IFS='|' read -r cname req act; do
+        case ",$req" in *",$want,"*) ;; *) continue ;; esac
+        case ",$act" in *",$want,"*) continue ;; esac   # active: not a silent bind
+        printf '%s\n' "${cname#/}"
+        break
+    done
+}
+
 test_tcp_connectivity() {
     local name="$1"
     local host="$2"
@@ -175,10 +208,31 @@ test_tcp_connectivity() {
     if timeout "$TIMEOUT" bash -c "echo >/dev/tcp/$host/$port" 2>/dev/null; then
         print_pass "$name connectivity"
         return 0
-    else
-        print_warn "$name connectivity (port $port unreachable)"
-        return 1
     fi
+
+    # Unreachable has two causes and the suite used to collapse them into one
+    # warning, which exits 0 on the reasoning "expected if you haven't started
+    # all profiles". That is right for a service that is DOWN, and wrong for one
+    # that is UP and asked for a host port it never received -- a silent bind.
+    # The second is a real defect and was passing as an expected condition.
+    if [ "$host" = "localhost" ] || [ "$host" = "127.0.0.1" ]; then
+        # Find the owner by the HOST PORT IT REQUESTED, scoped to this compose
+        # project -- never by matching the display name against container names.
+        # A substring match picks the wrong container: the full stack defines
+        # pmoves-jellyfin-neo4j, so `grep -m1 neo4j` can select it over the core
+        # Neo4j, and because that side service requests no host ports the real
+        # silent bind falls back to a warning and the suite exits 0. Same defect
+        # published-port.sh already solved with compose labels.
+        _owner="$(_silent_bind_owner "$port")"
+        if [ -n "$_owner" ]; then
+            print_fail "$name — SILENT BIND: $_owner requested :$port, Docker never activated it"
+            print_info "  diagnose: make -C pmoves net-reality   (moby/moby#36174)"
+            return 1
+        fi
+    fi
+
+    print_warn "$name connectivity (port $port unreachable)"
+    return 1
 }
 
 # Functional test: TensorZero inference

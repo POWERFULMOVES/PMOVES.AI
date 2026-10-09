@@ -1,0 +1,96 @@
+# AgentGym-RL Coordinator — TAC Tree
+#
+# This TAC tree documents the AgentGym-RL Coordinator service. The service
+# body itself is upstream (AgentGym-RL); this repo declares the integration
+# surface and the placement target. See:
+#
+#   pmoves/docs/handoffs/agentgym-rl-coordinator-spec-2026-09-14.md
+#
+# for the full contract.
+#
+# Status: specs land 2026-09-14. Code + compose wiring is operator-side.
+# Lane: wave-4-evo-spark-watch-list.
+
+meta:
+  service: agentgym-rl-coordinator
+  tier: workers
+  placement: SPARK
+  rationale: >
+    RL training is the bursty training loop behind EvoSwarm. SPARK is the
+    experiment host; placing the coordinator there keeps the 5090 / 4090 /
+    Z890 production nodes free of GPU contention, and lets the operator swap
+    the upstream AgentGym-RL image without rebooting a production node.
+  source_of_truth: pmoves/docs/handoffs/agentgym-rl-coordinator-spec-2026-09-14.md
+
+surface:
+  http:
+    port: 8114
+    healthz: "GET /healthz -> {status: ok}"
+    start_training: POST /agentgym/train/start
+    cors: same-host-only
+  nats:
+    subscribes:
+      - agentgym.train.started.v1
+      - agentgym.train.completed.v1
+    publishes: []
+
+dependencies:
+  upstream_services:
+    - name: evo-controller
+      contract: pmoves/services/evo-controller/agentgym_integration.py
+      reason: >
+        The controller's AgentGymIntegration mixin calls
+        POST {AGENTGYM_COORDINATOR_URL}/agentgym/train/start and reads the
+        training_run_id from the response. The coordinator must answer that
+        contract exactly.
+  upstream_images:
+    - source: pmoves/upstream/AgentGym-RL  (operator-side, not in this repo)
+      reason: The coordinator body implements the AgentGym-RL upstream contract.
+
+environment_contract:
+  AGENTGYM_COORDINATOR_URL: "http://agentgym-rl-coordinator:8114"
+  AGENTGYM_ENABLE: "true"
+  AGENTGYM_BASE_MODEL: "Qwen/Qwen3-8B"
+  AGENTGYM_ENV_NAMESPACE: "pmoves.consciousness"
+  AGENTGYM_DEFAULT_ALGORITHM: "ppo"
+  AGENTGYM_DEFAULT_HORIZON: "10"
+  AGENTGYM_DEFAULT_EPOCHS: "25"
+  AGENTGYM_DEFAULT_BATCH_SIZE: "32"
+  AGENTGYM_DEFAULT_LR: "1e-6"
+  AGENTGYM_DEFAULT_KL_COEF: "0.001"
+  AGENTGYM_TRIGGER_ON_PLATEAU: "true"
+  AGENTGYM_PLATEAU_WINDOW: "5"
+  AGENTGYM_TRIGGER_ON_NEW_CONSTELLATION: "true"
+  AGENTGYM_PERIODIC_TRAINING_INTERVAL: "100"
+  AGENTGYM_TASK_SUCCESS_WEIGHT: "0.4"
+  AGENTGYM_RETRIEVAL_QUALITY_WEIGHT: "0.3"
+  AGENTGYM_CGP_FITNESS_WEIGHT: "0.2"
+  AGENTGYM_EFFICIENCY_WEIGHT: "0.1"
+  AGENTGYM_HORIZON_SCHEDULE: "5,10,15"
+  AGENTGYM_HORIZON_EPOCH_THRESHOLDS: "0,10,20"
+compose:
+  service_name: agentgym-rl-coordinator
+  image_source: upstream-agnostic  # operator fills this in on SPARK
+  network: pmoves-net
+  depends_on:
+    - evo-controller
+  ports:
+    - 8114:8114
+
+known_gaps:
+  - Service body is upstream (AgentGym-RL). Operator must source the image.
+  - Submodule PMOVES-agentgym-rl-coordinator is NOT registered in fork_registry.json yet
+    (the wave-3 ratchet caught this pattern for 4 other PMOVES submodules; land those first
+    or include this one there).
+  - SPARK-specific compose wiring is not in this PR; lane is docs-only on main.
+  - The integration code path has not been re-verified end-to-end yet because the coordinator
+    does not exist. Once SPARK brings up the coordinator, the controller's existing training
+    triggers will fire on the first fitness plateau and the loop closes.
+
+cross_references:
+  - doc: pmoves/services/evo-controller/agentgym_integration.py
+    reason: the integration that calls the coordinator
+  - doc: pmoves/scripts/nats/init_streams.sh
+    reason: the AGENTGYM JetStream stream the coordinator should subscribe to
+  - doc: pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md
+    reason: lane record (wave-4-evo-spark-watch-list)

@@ -13,7 +13,7 @@ Compose
 Environment
 - `MINIO_ENDPOINT`, `MINIO_ACCESS_KEY`, `MINIO_SECRET_KEY`, `MINIO_SECURE`
 - `NVIDIA_VISIBLE_DEVICES` (default `all`)
-- `YOLO_MODEL` (default `yolov8n.pt`), `FRAME_EVERY` (default `5`), `SCORE_THRES` (default `0.25`)
+- `YOLO_MODEL` (default `yolov8n.pt`), `FRAME_SAMPLE_RATE` (default `5`), `YOLO_CONFIDENCE` (default `0.25`)
 - `GPU_COUNT` (deploy reservation)
 
 Smoke

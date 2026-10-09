@@ -8,7 +8,7 @@ Overview
 Compose
 - Service: `qdrant`
 - Ports: `6333:6333`
-- Profile: `data`
+- Profiles: none (always-on)
 - Network: `pmoves-net`
 
 Used by

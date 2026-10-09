@@ -56,6 +56,25 @@ jobs:
 Installation tokens are single-owner and live <=1h (auto-revoked at job end).
 Always pair `owner` with an explicit `repositories:` list + minimal `permission-*`.
 
+## Node-side mint (the dsh GitHub agent Known Road)
+
+For runs OUTSIDE CI (pr-monitor sweeps, harness containers, fork tooling), the
+same identity is available locally — **the one sanctioned exception** to
+"never ad-hoc", because it reuses the workflow's rules rather than
+re-implementing them:
+
+```bash
+make -C pmoves gh-app-token REPOSITORIES=PMOVES.AI PERMISSIONS=contents:read,pull_requests:read
+# over-broad escape hatch, deliberately two-keyed:
+make -C pmoves gh-app-token ALL=1 CONFIRM=1
+```
+
+- `pmoves/tools/gh_app_token.py` — JWT is RS256 via **PyJWT against `GH_APP_SEC`** (no hand-rolled crypto); scopes through the SAME truth table (explicit `--repositories` + minimal `--permissions`; `--all` refuses without `--yes`).
+- **Secret hand-off is a 0600 file** (`~/.pmoves/gh_app_token`), never stdout-by-default — only metadata prints (`--print` exists for controlled piping and warns). Consume with `GH_TOKEN=$(cat ~/.pmoves/gh_app_token)`.
+- Why: installation tokens carry their **own >=5,000/hr REST quota per installation** — fleet automation stops burning the shared user PAT (measured exhausted 2026-09-05 by B850 + SPARK monitor runs) and acts as the App (bot identity, clean audit trail).
+- **Prerequisite**: `GH_APP_SEC` on the node must be the real PEM. The funnel tier files have carried a 40-hex placeholder on some nodes — Actions secrets are write-only, so the real key reaches nodes only via the prod CHIT bundle (`make -C pmoves secrets-pull && make -C pmoves secrets-funnel-from-prod`). The tool hard-refuses non-PEM values rather than minting garbage.
+- CI stays on `_app-token.yml` — nothing here changes the workflow path.
+
 ## Upstream->fork merges (fork-sync)
 
 The REST `/merges` endpoint does **not** accept cross-repo `owner:branch` as
@@ -86,6 +105,7 @@ See `research/SUBMODULE_SYNC_AUDIT_2026-06-07.md` for the live drift backlog.
       (kills the duplication; standardizes on client-id v3).
 - [ ] **Retire PATs the App can replace**: `GH_PAT`, `GH_PAT_PUBLISH`, `GHCR_TOKEN`,
       `ACTIONS_PAT`, (partly) `CI_GIT_CLONE_TOKEN`. Then retire `pat-health-check.yml`.
+      > **Correction (2026-10-01):** `GHCR_TOKEN` (and any PAT used only for GHCR) is NOT replaceable by the App. GitHub Packages "only supports authentication using a personal access token (classic)" (GitHub docs, `data/reusables/package_registry/packages-classic-pat-only.md`); App installation tokens and fine-grained PATs are not a documented GHCR credential. In workflows `GITHUB_TOKEN` covers packages linked to the repo; node-side pulls use `make -C pmoves docker-login GHCR_READ_TOKEN_FILE=...` with a `read:packages`-only classic PAT.
 - [ ] **Fix GHCR org packages:write** so the App token stops falling back to PATs
       for image pushes (app-install setting, not a workflow change).
 - [ ] **Drop unused App permissions** (e.g. secrets:write, security_events:write if

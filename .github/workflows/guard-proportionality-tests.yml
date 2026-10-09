@@ -1,0 +1,154 @@
+name: Guard Proportionality Tests
+
+# Runs the damage-control guard suite AND the differential sweep in CI.
+#
+# WHY THIS WORKFLOW EXISTS, in one number: 66 workflows, ZERO of which named
+# sweep_differential, path_scope, or any guard test. So 143 assertions -- and the
+# sweep that caught 16 permissive regressions the hand-written suite was green
+# through -- ran only when a human remembered. This repo has shipped that defect
+# twice already: a shell test committed with no Known Road, and a stream
+# validator wired but unable to fail correctly.
+#
+# Two jobs because they answer two different questions:
+#
+#   suite  Do the cases someone THOUGHT OF still hold? Seconds.
+#   sweep  Does this change LET ANYTHING THROUGH that the base guard refused?
+#          ~6.5k generated commands x two guard versions. Minutes. The suite
+#          cannot answer this -- it was green while 16 blocks vanished.
+#
+# Both invoke their tool DIRECTLY, never through `make`: GNU make collapses every
+# nonzero recipe exit to 2, which would erase the `0 clean / 1 findings / 3 could
+# not measure` distinction both tools report. Exit 3 is failed here and labelled
+# COULD NOT MEASURE, because a sweep that could not run is not a passing sweep.
+
+on:
+  pull_request:
+    branches:
+      - main
+      - PMOVES.AI-Edition-Hardened
+      - PMOVES.AI-Edition-Hardened-Integrations
+    paths:
+      # The guard, its config, its resolver, its tests, its sweep.
+      - ".claude/hooks/damage-control/**"
+      # The skill that answers "what is protected?" derives its answers from
+      # patterns.yaml, so a config change can falsify the skill's output too.
+      - ".claude/skills/known-roads/**"
+      - ".github/workflows/guard-proportionality-tests.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  suite:
+    name: guard-suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+
+      - name: Install the guard's only third-party dependency
+        # bash-tool-damage-control.py declares `dependencies = ["pyyaml"]` in its
+        # script header because load_config() parses patterns.yaml. Everything
+        # else in the suite is stdlib. Without this the tests do not fail -- they
+        # fail to IMPORT, which is a different and much less informative red.
+        run: python -m pip install --quiet pyyaml
+
+      - name: Run the guard suite (direct invocation, per-file exit codes)
+        # The driver discovers its suite by glob beside itself and FAILS when the
+        # discovered count drops below its floor, so a renamed or deleted test is
+        # a red run rather than quietly smaller coverage. Same command a human runs.
+        run: |
+          set -o pipefail
+          bash .claude/hooks/damage-control/run_guard_tests.sh | tee /tmp/guard-suite.log
+
+      - name: Prove the suite actually executed
+        # A test that passes because it was never collected is worse than no test.
+        # The counts go in the run summary so the evidence is visible without
+        # expanding a log.
+        if: always()
+        run: |
+          {
+            echo "### damage-control guard suite"
+            echo
+            echo '```'
+            grep -E '^discovered|^PASS|^FAIL|test file' /tmp/guard-suite.log || echo "no driver output captured"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  sweep:
+    name: differential-sweep
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout with full history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The sweep materializes the BASE guard with `git show <ref>:<path>`.
+          # A shallow clone has no base blob, and the sweep would exit 3 --
+          # honestly, but uselessly, on every run.
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+
+      - name: Install the guard's only third-party dependency
+        run: python -m pip install --quiet pyyaml
+
+      - name: Resolve the base ref, and prove the base guard is readable
+        id: base
+        run: |
+          set -euo pipefail
+          BASE="${{ github.event.pull_request.base.sha }}"
+          if [ -z "$BASE" ]; then
+            # workflow_dispatch: no PR base. Compare against main's tip.
+            git fetch --no-tags --depth=1 origin main
+            BASE="$(git rev-parse FETCH_HEAD)"
+          fi
+          # Fail here, loudly, rather than letting the sweep discover it and
+          # report a bare 3 with no indication of which lookup failed.
+          git cat-file -e "${BASE}:.claude/hooks/damage-control/bash-tool-damage-control.py"
+          echo "sha=${BASE}" >> "$GITHUB_OUTPUT"
+          echo "base=${BASE} ($(git log --oneline -1 "${BASE}" | cut -c1-72))"
+
+      - name: Differential sweep against the base guard
+        env:
+          PYTHONUNBUFFERED: "1"
+        run: |
+          set -o pipefail
+          set +e
+          python3 .claude/hooks/damage-control/sweep_differential.py \
+            "${{ steps.base.outputs.sha }}" 2>&1 | tee /tmp/sweep.log
+          rc=${PIPESTATUS[0]}
+          set -e
+          echo "sweep exit=${rc}"
+          case "${rc}" in
+            0) echo "CLEAN — no relaxations. Any tightening present was adjudicated in sweep_baseline.yaml; see the breakdown above." ;;
+            1) echo "::error::PERMISSIVE REGRESSION — this change lets through something the base guard refused, or newly blocks something it allowed. See the UNSANCTIONED list above."; exit 1 ;;
+            3) echo "::error::COULD NOT MEASURE — the sweep did not run. This is NOT a pass."; exit 1 ;;
+            *) echo "::error::sweep exited ${rc}, which it does not document."; exit 1 ;;
+          esac
+
+      - name: Prove the sweep actually ran, and on what
+        if: always()
+        run: |
+          {
+            echo "### differential sweep"
+            echo
+            echo '```'
+            grep -E '^base=|^corpus:|^verdict changes:|^relaxations|^tightenings|^OK —|RELAXATION|TIGHTENING' /tmp/sweep.log \
+              || echo "no sweep output captured — the sweep did not reach its corpus"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

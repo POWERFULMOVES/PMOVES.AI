@@ -101,7 +101,7 @@ Every PR **must** include a Testing section (per `.github/pull_request_template.
 | `pytest pmoves/tests/` | Cross-service integration tests |
 | `pytest pmoves/services/<svc>/tests/` | Single service unit tests |
 | `make channel-monitor-smoke` | Channel monitor validation |
-| `make archon-smoke` | Archon service validation |
+| `make archon-ui-smoke` | Archon service validation |
 | `make discord-smoke` | Discord publisher validation |
 
 ### Observability Testing
@@ -261,13 +261,13 @@ The `make verify-all` command executes the following tests in order:
 4. **smoke-tensorzero-observability** - Validate TensorZero → ClickHouse pipeline
 5. **smoke-creator-pipeline** - Test render-webhook, comfy-watcher, MinIO
 6. **yt-docs-catalog-smoke** - yt-dlp catalog validation
-7. **archon-smoke** - Archon service health
+7. **archon-ui-smoke** - Archon service health
 8. **archon-rest-policy-smoke** - Archon REST API policy probe
 9. **smoke** - Core 15-step smoke tests
 10. **smoke-gpu** - GPU reranker validation
 11. **channel-monitor-smoke** - Channel monitor health
 12. **agents-headless-smoke** - Agent Zero headless validation
-13. **archon-mcp-evidence** - Capture MCP API evidence
+13. **archon-rest-policy-smoke** - Supabase REST policy probe via the archon container
 14. **discord-smoke** - Discord publisher validation
 
 ---

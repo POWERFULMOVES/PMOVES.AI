@@ -151,6 +151,13 @@ def _build_v1_entry(
     min_length = source_entry.get("min_length")
     if isinstance(min_length, int) and not isinstance(min_length, bool) and min_length > 0:
         v1["min_length"] = min_length
+    # `prefix` is the second such constraint and would have been dropped here for
+    # exactly the reason written above. It is the one that catches the E2B_API_KEY
+    # delivery shape -- 42 chars starting `b_` instead of 44 starting `e2b_` --
+    # which min_length cannot see, since 42 is not obviously short.
+    prefix = source_entry.get("prefix")
+    if isinstance(prefix, str) and prefix:
+        v1["prefix"] = prefix
     return v1
 
 

@@ -21,11 +21,22 @@
 # difference is that a node without the tailscale CLI can now pre-set them, and
 # the tests can drive this without a tailnet.
 #
-# KNOWN GAP (reported, deliberately not fixed here): the `pmoves-laptop` case
-# below no longer matches anything — that peer registers as `pmoves-4090` — so
-# TS_4090 resolves to empty on every node. Carried over verbatim from the block
-# this replaces so the move stays a move; correcting it changes which host an
-# MCP server dials and belongs in its own change.
+# THE KNOWN GAP RECORDED HERE IS NOW CLOSED, and this is that change. The case
+# below read `pmoves-laptop`, which no peer has ever registered as — the 4090
+# announces itself as `pmoves-4090` — so TS_4090 resolved to EMPTY on every node
+# in the fleet.
+#
+# The previous author deferred it correctly: "correcting it changes which host
+# an MCP server dials and belongs in its own change." This is that change.
+#
+# What made it expensive to leave: nothing failed. Consumers carry `:-` literal
+# fallbacks (pmoves/config/profiles/z890-coordinator.yaml:57), so an empty
+# TS_4090 silently became a hardcoded address instead of an error. A variable
+# that resolves to a stale literal is worse than one that resolves to nothing —
+# the second announces itself.
+#
+# Verified against the live tailnet, not inferred: `pmoves-laptop` does not
+# resolve and appears in zero DNSNames; `pmoves-4090` resolves and answers.
 # ===========================================================================
 
 # Set VAR=value only when VAR is unset or empty.
@@ -43,7 +54,7 @@ pmoves_resolve_tailscale_node_ips() {
     case "$host" in
       pmoves-z890)     _pm_ts_set TS_Z890   "$ip" ;;
       pmoves-5090)     _pm_ts_set TS_5090   "$ip" ;;
-      pmoves-laptop)   _pm_ts_set TS_4090   "$ip" ;;
+      pmoves-4090)     _pm_ts_set TS_4090   "$ip" ;;
       pmoves-spark)    _pm_ts_set TS_SPARK  "$ip" ;;
       pmoves-b850-*)   _pm_ts_set TS_B850   "$ip" ;;
       pmoves-kvm4-1)   _pm_ts_set TS_KVM4_1 "$ip" ;;

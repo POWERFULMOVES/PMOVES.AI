@@ -1,0 +1,229 @@
+# =============================================================================
+# Mavis Collection — Manifest Schema (v1.0)
+# =============================================================================
+# CGP v1.0 spec-derived schema for ~/.mavis/collection/manifest.yaml.
+#
+# Source spec: pmoves/docs/PMOVESCHIT/CGP_v1.0_SPECIFICATION.md
+# Profile: pmoves.bootstrap/v1
+#
+# The schema is intentionally permissive at edges (additionalProperties: true
+# at super_nodes level) so sub-slice additions (G.2 models, G.3 personas+datasets,
+# G.4 mindmap+skills+plugins+chit) extend the namespace without rippling schema
+# bumps. Major refactors (v2.0+) bump schema_version.
+#
+# Validation:
+#   pmoves/tools/mavis_collection_resolve.py validate --manifest PATH
+#
+# Resolution:
+#   pmoves/tools/mavis_collection_resolve.py resolve --manifest PATH
+# =============================================================================
+
+$schema: https://json-schema.org/draft/2020-12/schema
+spec: pmoves.bootstrap/v1
+schema_version: "1.0"
+
+required:
+  - spec
+  - meta
+  - identity
+  - super_nodes
+
+properties:
+  spec:
+    type: string
+    enum: ["pmoves.bootstrap/v1"]
+    description: "CGP-derived bootstrap profile. Always pmoves.bootstrap/v1 for the Collection."
+
+  meta:
+    type: object
+    required: [schema_version, created, operator, home]
+    properties:
+      schema_version:
+        type: string
+        pattern: "^[0-9]+\\.[0-9]+$"
+        description: "Manifest schema version (semver-like; major.minor)."
+      created:
+        type: string
+        format: date
+        description: "ISO 8601 creation date (YYYY-MM-DD)."
+      last_updated:
+        type: string
+        format: date
+        description: "ISO 8601 last-update date (YYYY-MM-DD)."
+      operator:
+        type: string
+        description: "Operator namespace (DARKXSIDE)."
+      home:
+        type: string
+        description: "Absolute path to collection root (default ~/.mavis/collection/)."
+      notes:
+        type: string
+        description: "Free-form operator notes."
+
+  identity:
+    type: object
+    required: [agent, form_ref]
+    properties:
+      agent:
+        type: string
+        description: "HyPeRAGInT or other agent identity (matches pmoves/configs/agents/forms/<name>.yaml name field)."
+        enum: ["HyPeRAGInT", "Mavis", "claude-code", "kilocode", "codex", "hermes", "gpt"]
+      form_ref:
+        type: string
+        description: "Path to agent form YAML (e.g. pmoves/configs/agents/forms/hyperagint.yaml)."
+      cross_agent_inheritance:
+        type: array
+        items:
+          type: string
+        description: "Other harnesses this agent inherits from / collaborates with."
+
+  super_nodes:
+    type: object
+    description: "Top-level surfaces the Collection points at. Each super_node is a manifest pointer (NOT a copy of canonical data)."
+    additionalProperties:
+      type: array
+      items:
+        type: object
+    properties:
+      auth:
+        type: array
+        description: "Provider auth resolution entries. Each entry says: 'resolve from this location, format must match.'"
+        items:
+          type: object
+          required: [provider, format, source]
+          properties:
+            provider:
+              type: string
+              enum: ["minimax", "huggingface", "ollama", "ollama-cloud", "anthropic", "openai"]
+            format:
+              type: string
+              description: "Expected key prefix (e.g. 'sk-cp' for Token Plan, 'sk-api' for pay-as-you-go, 'hf_' for HF tokens)."
+            source:
+              type: string
+              description: "Absolute path or well-known location (~/.mmx/config.json, ~/.huggingface/token, etc.)."
+            probe:
+              type: string
+              enum: ["3-step-gate", "none", "online-status-only"]
+              description: "Required probe before treating as wired-up. Default: 'none' (operator trust). '3-step-gate' enforces auth→quota→chat."
+
+      models:
+        type: array
+        description: "Model suit entries — pointer to pmoves/configs/model-suits/<name>.yaml + routing policy."
+        items:
+          type: object
+          required: [provider, models]
+          properties:
+            provider:
+              type: string
+            models:
+              type: array
+              items:
+                type: string
+                description: "Model identifier (e.g. MiniMax-M3, MiniMax-M2.7-highspeed, image-01, speech-2.8-hd)."
+            routing_policy:
+              type: string
+              enum: ["cost-first", "quality-first", "latency-first", "manual"]
+            local_fallback:
+              type: array
+              items:
+                type: string
+                description: "Local Ollama / HF models to fall back on when cloud quota exhausts."
+
+      datasets:
+        type: array
+        description: "Pointer to pmoves/config/datasets.yaml entries."
+        items:
+          type: object
+          required: [ref]
+          properties:
+            ref:
+              type: string
+              description: "YAML anchor reference like 'pmoves/config/datasets.yaml#pmoves-chit-text'."
+            hf_id:
+              type: string
+              description: "HF dataset ID (DARKXSIDE/<name>)."
+
+      personas:
+        type: array
+        description: "Operator persona pointers — local files in ~/.mavis/collection/personas/."
+        items:
+          type: object
+          required: [ref]
+          properties:
+            ref:
+              type: string
+              description: "Path relative to collection home (e.g. personas/fl00.yaml)."
+            name:
+              type: string
+
+      mindmap:
+        type: array
+        description: "Constellation pointers to /mindmap/{constellation_id} endpoint."
+        items:
+          type: object
+          required: [constellation_id, endpoint]
+          properties:
+            constellation_id:
+              type: string
+            endpoint:
+              type: string
+              description: "URL or path to mindmap gateway (default: pmoves/services/gateway/gateway/api/mindmap.py)."
+
+      skills:
+        type: array
+        description: "Skill catalog pointers — forks in PMOVES org."
+        items:
+          type: object
+          required: [ref]
+          properties:
+            ref:
+              type: string
+            catalog:
+              type: string
+
+      plugins:
+        type: array
+        description: "Plugin registry pointers."
+        items:
+          type: object
+          required: [ref]
+          properties:
+            ref:
+              type: string
+            catalog:
+              type: string
+
+      chit:
+        type: array
+        description: "CHIT manifest pointers (design docs, specs, encoding profiles)."
+        items:
+          type: object
+          required: [spec]
+          properties:
+            spec:
+              type: string
+              description: "Path to spec or design doc."
+            role:
+              type: string
+              enum: ["spec", "design", "encoding", "signature"]
+
+# =============================================================================
+# Examples
+# =============================================================================
+examples:
+  minimal:
+    spec: pmoves.bootstrap/v1
+    meta:
+      schema_version: 1.0
+      created: 2026-10-05
+      operator: DARKXSIDE
+      home: ~/.mavis/collection/
+    identity:
+      agent: HyPeRAGInT
+      form_ref: pmoves/configs/agents/forms/hyperagint.yaml
+    super_nodes:
+      auth:
+        - provider: minimax
+          format: sk-cp
+          source: ~/.mmx/config.json
+          probe: 3-step-gate

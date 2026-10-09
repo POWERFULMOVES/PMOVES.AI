@@ -2,6 +2,9 @@
 
 # =============================================================================
 # Python venvs (machine-local; canonical bringup venv is pmoves/.venv-pmoves/
+# ...and the bare path too: a symlink named .venv-pmoves is a file, not a dir,
+# and slipped past the trailing-slash rule into PR #2961.
+pmoves/.venv-pmoves
 # via `make -C pmoves venv-bringup` — see pmoves/scripts/create_venv.sh)
 # =============================================================================
 .venv/
@@ -43,6 +46,7 @@ pmoves/scripts/fleet/.enrollment-ledger.jsonl
 # =============================================================================
 .env
 .env.*
+.envrc
 !.env.example
 !.env.shared.example
 !.env.shared.sh
@@ -52,6 +56,7 @@ env.tier-*
 # Runtime-populated credential files (never commit populated values)
 pmoves/env.shared
 pmoves/env.mesh-bind.local
+pmoves/env.*.local
 pmoves/.supabase.status.env
 pmoves/env.supa.runtime
 # Bootstrap-generated env fragments + supabase env (can carry live secrets)
@@ -161,6 +166,10 @@ pmoves/data/agent-zero/logs/
 pmoves/data/open-notebook/surreal_data/
 # Generated at launch by crush-pmoves — per-node runtime state, never committed
 pmoves/data/identity/node-identity.md
+# Node-local operator audit logs (e.g. env_local_edits.jsonl from
+# `make -C pmoves env-local-{set,unset}`). They hold key NAMES and hostnames,
+# never values -- but key names per node are topology, so they stay local.
+pmoves/data/audit/
 
 # =============================================================================
 # Docker
@@ -317,6 +326,9 @@ website/hyperdim/
 
 # Known Roads live file-grant (operator-written, never commit)
 .claude/hooks/damage-control/.known-road-active
+.claude/hooks/damage-control/.grant-state-cache.json
+.claude/hooks/damage-control/.grant-state-cache.*.tmp
+.claude/hooks/damage-control/.effect-state.json
 pmoves/docs/logs/village_gate_latest.json
 crush.json
 *.crush
@@ -360,3 +372,27 @@ indextts/
 checkpoints/
 pmoves/data/models/
 20.md
+
+# Claim-register transaction lock. Only ever created on nodes with no fcntl
+# (Windows), where `register_lock()` falls back to an O_EXCL lockfile. It is
+# removed in a finally block; a filer killed mid-transaction leaves it behind,
+# and that must not become a committed file in the register's own directory.
+AGNOTE4482PHI.t1.md.lock
+
+# Artifacts written by the test suite itself. `pmoves/tools/tests/` renders
+# these on every run, so any `git add -A` in a clean worktree sweeps four PNGs
+# into the commit -- which is how they reached a PR that touches neither.
+pmoves/tools/tests/_renders/
+pmoves/tools/comfyui/_input/
+
+# Node-local runtime caches (sqlite/tiktoken/tool state) and test-fixture
+# output - generated in any working checkout, never committable content.
+/data/
+/tests/test_data/
+
+# Provisioner node state written INTO the /opt/pmoves checkout root:
+# profile.yaml (hardware profile contract: deploy/provision/{b850,dgx-spark}-
+# bootstrap.sh, z890/common/00-glances-profile.sh) and .node-config
+# (hostinger-kvm-setup.sh). Rooted so a same-named file elsewhere is unaffected.
+/profile.yaml
+/.node-config

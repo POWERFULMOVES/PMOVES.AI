@@ -38,7 +38,7 @@ logging.basicConfig(level=os.environ.get("LOG_LEVEL", "INFO"))
 logger = logging.getLogger("watch-folder-router")
 
 # ── Config ──────────────────────────────────────────────────────────────────
-NATS_URL = os.environ.get("NATS_URL", "nats://nats:pmoves@nats:4222")
+NATS_URL = os.environ.get("NATS_URL", "nats://nats:4222")
 MEDIA_AUDIO_URL = os.environ.get("MEDIA_AUDIO_URL", "http://media-audio:8082")
 
 SUBJECT_IN = "ingest.file.added.v1"

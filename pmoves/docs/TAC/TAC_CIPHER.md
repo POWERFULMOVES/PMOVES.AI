@@ -4,6 +4,146 @@
 > See [§Decision Matrix](#decision-matrix--path-selection) for the full path comparison + [§A1-Shim Workorder](#a1-shim-workorder) for execution phases.
 > **Last refreshed:** 2026-07-14 (CRUSH-GLM52, A1-Shim Phases 4-5 + Codex P1 fix delivered via PR #2117).
 
+## Measured on Z890, 2026-09-08 (Z890-CLAUDE)
+
+An outage here was **not** any of the causes this document lists. Recording it
+because every signal except one said the service was fine:
+
+| Signal | Said |
+|---|---|
+| `docker ps` | `Up 30 hours (healthy)`, `RestartCount 0`, `FailingStreak 0` |
+| host `GET /health` | connection closed — **curl and PowerShell alike** |
+| in-container probe | **200** on loopback, `0.0.0.0` **and** eth0 (`172.30.1.8`) |
+| `cipher_preflight.py` | `NO persistent memory` |
+
+**Root cause: a stale Docker published-port mapping.** `docker restart
+pmoves-cipher-api-1` restored it — no rebuild, no config change, no code change.
+
+Why the healthcheck could not see it: it is
+`node -e http.get('http://127.0.0.1:8105/health')` executed *inside* the
+container. It probes itself over loopback and cannot observe that no external
+client can reach it. That is §3 of `AGENT_IDENTITY_PROPOSAL_2026-09-04.md`
+("Memory absence must be loud") in the field, and why #2955 recommends an
+**authenticated store→recall round-trip at mount time** rather than a health
+endpoint.
+
+**Keep-list audited 2026-09-09 — nothing was dropped.** Every PMOVES additive
+capability listed under §PMOVES Additive Commits survives the re-fork,
+re-implemented in `src/pmoves/` as A1-Shim intended (the SHAs do not carry over,
+so the SHAs are the wrong thing to check): dossier -> `PMOVES.AI_INTEGRATION.md`;
+A2A + canonical agent-card -> `a2a.ts`; Bearer middleware -> `auth.ts`;
+`/api/memory` CRUD -> `memory-routes.ts`; Ollama/embedding backend ->
+`embedding.ts` (now TensorZero-primary with `OLLAMA_URL` fallback). Six modules
+exist BEYOND the keep-list: `graph.ts`, `health.ts`, `hirag-client.ts`,
+`mcp-catalog.ts`, `mcp-sse.ts`, `nats-emitter.ts`. The one item with no trace is
+the build fix (node-gyp `disturl` + pnpm 9 workspaces) — no `disturl` or
+`packageManager` pin is present, and the image now builds without it, so it
+appears obsoleted by the new upstream rather than lost.
+
+**Windows papercut, found running the road:** `make -C pmoves up-cipher`
+succeeds, then `qdrant-provision-cipher` fails with
+`python3: can't open file '//C:/Program Files/Git/scripts/provision_qdrant_cipher_memory.py'`
+— MSYS path conversion mangling an absolute `/scripts/...` argument. The
+collection is therefore NOT provisioned on Windows nodes even though the road
+prints "Cipher Memory ready". Reported, not fixed here.
+
+**401 is a catch-all.** After the restart, `/mcp`, `/mcp/sse`, `/api/memory`,
+`/sse`, `/api/mcp/sse` all return 401 — and so do `/xyzzy` and
+`/definitely-not-a-route`. Auth runs before routing, so an unauthenticated 401
+proves nothing about whether a route exists. Route discovery here needs an
+authenticated probe; `/health` is the only unauthenticated route.
+
+**Image drift: RESOLVED 2026-09-09.** The running image had been built
+2026-08-06 with `grep -rl streamable /app/dist` = **0** (5090 = 1, per #2955).
+`cipher-api` has no `image:` — it builds from `context: ../Pmoves-cipher` — so
+the fix was to promote this node's submodule gitlink `d5c4045e -> e24f1323`
+(main's pin since #2923) and rebuild. The pull had been blocked by stale Docker
+Hub credentials on the base `node:22-slim`; the operator re-authenticated.
+
+After `make -C pmoves up-cipher`: image rebuilt, **`streamable` = 1**, `/health`
+200, `cipher_preflight` local row **OK 200**. Z890 now matches 5090.
+
+### Reconciliation: grounded against source, 2026-09-09
+
+**Provenance rule applied here:** every claim below cites the file and line it
+came from, at submodule pin `975e02e6` (later `c88b009a2` — #3103 re-pinned, then `36b28d0f` — #3152;
+`auth.ts` was unchanged across those; then `a0ee2314` — #3189, fork PR #28, which DID change
+`auth.ts`, so the `auth.ts` line numbers below were re-resolved at `a0ee2314`)
+or superproject `origin/main`. An earlier
+revision of this section proposed three remedies and cited nothing; it was
+reasoning from THIS runbook, which was itself stale. A runbook with no provenance
+link to source is unverified, and it was wrong.
+
+**What the official docs say the deployment is:**
+
+| Claim | Source |
+|---|---|
+| Upstream is the ByteRover CLI (`brv`); memory is a context tree with curate/sync | `Pmoves-cipher/README.md:24-28` @ `e24f1323` |
+| `PMOVES_HOST` default is **`0.0.0.0`** | `Pmoves-cipher/PMOVES.AI_INTEGRATION.md:96` @ `e24f1323` |
+| Documented run publishes **`-p 8105:8105`** (all interfaces) | `Pmoves-cipher/PMOVES.AI_INTEGRATION.md:111` @ `e24f1323` |
+| node-gyp/pnpm build fixes are **obsolete on the new arch** | `Pmoves-cipher/PMOVES.AI_INTEGRATION.md:127` @ `e24f1323` |
+| OAuth2/RBAC **never implemented** (aspirational) | `Pmoves-cipher/PMOVES.AI_INTEGRATION.md:126` @ `e24f1323` |
+| BoTZ cipher `:8081` and DoX CipherService `:8096` are **different services** | `Pmoves-cipher/PMOVES.AI_INTEGRATION.md:131-133` @ `e24f1323` |
+
+**What this deployment does:**
+
+| Fact | Source |
+|---|---|
+| `PMOVES_HOST=0.0.0.0` — matches the documented default | `pmoves/docker-compose.agents.yml`, `cipher-api` env |
+| publish is `"${CIPHER_BIND:-127.0.0.1}:${CIPHER_PORT:-8105}:8105"` | `pmoves/docker-compose.agents.yml`, `cipher-api` ports |
+| healthcheck self-probes `http://127.0.0.1:8105/health` from INSIDE | `pmoves/docker-compose.agents.yml`, `cipher-api` healthcheck |
+| observed: `docker port` -> `8105/tcp -> 127.0.0.1:8105` | measured on Z890 2026-09-09 |
+
+**The correction.** The app is not loopback-bound — it listens on `0.0.0.0`
+inside the container, exactly as documented. The narrowing happens at the HOST
+publish, and it is already **parameterised**: `CIPHER_BIND` defaults to
+`127.0.0.1`. So the roster's `${TS_Z890}:8105` entry matches the DOCUMENTED
+deployment, and it is this node's `CIPHER_BIND` default that diverges from it.
+
+That makes the earlier framing wrong in an important way: the fleet entry is not
+"decorative" and does not want deleting. **It wants `CIPHER_BIND` set.** No code
+change, no compose edit, no new pattern, and no `tailscale serve` — the knob
+already exists and was missed because this runbook was consulted instead of the
+source.
+
+Setting it is still an operator decision (it exposes a Bearer-gated service to
+the tailnet, and the bearer is the only control — `PMOVES.AI_INTEGRATION.md:126`
+records that OAuth2/RBAC was never built), but it is a CONFIGURATION decision,
+not a redesign.
+
+### The real blocker for agent access is token provisioning, not transport
+
+| Fact | Source |
+|---|---|
+| `agentId` is REQUIRED on every store/search call | `.claude/skills/pmoves-cipher-memory/SKILL.md` |
+| the `agentId` to use is the signing-card `agent_id` | same, referencing `pmoves/config/signing_identity_cards.yaml` |
+| a `z890-claude` card exists | `pmoves/config/signing_identity_cards.yaml:188` |
+| cross-agent wildcard is refused under token enforcement | `Pmoves-cipher/src/pmoves/memory-routes.ts:20-22` @ `e24f1323` |
+| measured: this node's token resolves to agent `bootstrap` | 403 `token belongs to agent 'bootstrap', but request specified 'z890-claude'` |
+
+The node holds a **bootstrap** token, not a per-agent token for `z890-claude`.
+So an agent following the documented path — pass your signing-card id — is
+correctly refused, because the credential it was given belongs to a different
+identity. This is the same finding as the unclaimed expensive half of the cipher
+token-model lane (bootstrap as a shared six-scope identity, ACTIVE on this node),
+seen from the client side.
+
+Remedy is a mint through the pipeline, per agent, not a transport change.
+
+### Corrected claims from the previous revision of this section
+
+- ~~"the fleet entry can never have worked and should be deleted"~~ — it matches
+  the documented deployment; `CIPHER_BIND` is the divergence.
+- ~~"three options, one of which is `tailscale serve`"~~ — a supported knob
+  already exists; `tailscale serve` is not needed to make the documented
+  topology work.
+- ~~"the store/search routes are blocked (skill, 2026-04-01)"~~ — measured false:
+  `POST /api/memory` -> 201 with a non-null `embedding_id`, and a semantic recall
+  under different phrasing returned the new record. `.claude/skills/cipher-search`
+  still carries that stale blocker and instructs agents to skip cipher entirely.
+
+---
+
 ## Service Identity
 
 | Field | Value |
@@ -11,8 +151,8 @@
 | **Service** | Cipher Memory (a.k.a. `cipher-api`) |
 | **Current gitlink** | `6f8150cf` on `Pmoves-cipher` fork `PMOVES.AI-Edition-Hardened` (Phase 5 + Codex P1 + search() complement; PR #2117) — pre-refork `1c9b2851` archived 2026-07-13 |
 | **Fleet rule status** | ✅ **RESOLVED** — `.gitmodules` flipped to `branch = PMOVES.AI-Edition-Hardened` (Phase 1, commit `99bbe8d03`) |
-| **Host port** | `8105` (host-published from container `:3000`) |
-| **Container port** | `3000` (internal listener) |
+| **Host port** | `8105` (published `127.0.0.1:8105->8105/tcp`) |
+| **Container port** | `8105` — **RE-MEASURED 2026-09-08 on Z890, was documented as `3000`.** `/proc/net/tcp` in `pmoves-cipher-api-1` shows `00000000:1FA9` = `0.0.0.0:8105` LISTEN, and the app answers 200 on loopback, `0.0.0.0` and its eth0 address alike. |
 | **Health** | `GET /health` (NOT `/healthz`) |
 | **Metrics** | None |
 | **Submodule** | `Pmoves-cipher` (fork of `campfirein/byterover-cli`, formerly `campfirein/cipher`) |
@@ -21,6 +161,298 @@
 | **Tier** | data |
 | **Class** | Specialized |
 | **Evolution** | Base |
+
+## Agent Identity Carry — bootstrap is a launcher, and nothing was being launched
+
+**Known Road:** `make -C pmoves cipher-identity [AGENT=<card id>]` — reports which
+`agent_id` this session's memory writes will actually be filed under. Reads no
+secret, sends nothing over the network, exits `0` only when the carry is intact.
+
+Provenance — `Pmoves-cipher/src/pmoves/auth.ts` @ **`a0ee2314`** (the gitlink on
+`main` since #3189; re-resolved from `975e02e6`), `resolveToken()`:
+
+| line | condition | resulting `agentId` |
+|---|---|---|
+| `:95` `if (!token.startsWith('cipher_'))` | bearer lacks the prefix | `:98` **`'bootstrap'`**, six scopes, **no Supabase lookup at all** |
+| `:104`–`:105` per-agent mode | bearer is `cipher_<uuid>` | `:150`–`:155` the `agent_id` on that `pmoves_core.cipher_agent_tokens` row (a malformed tail is rejected at `:112` before any lookup; a failed lookup is 503, not a verdict) |
+| `:191`–`:193` | no bearer, and server `CIPHER_API_TOKEN` unset | `undefined` — advisory, the caller self-declares per call |
+
+`auth.ts:93` labels the first row "legacy / bootstrap". It is the single-token
+launch path, whose purpose is to hand off to a minted agent — and the handoff is
+that seven-character prefix. **Nothing in this repo checked it.**
+
+Consequence, measured on Z890 2026-09-09: `claude-pmoves.sh` resolves the node's
+registered identity and tells the session it is `z890-claude`; the session writes
+to memory all session; every row lands under `bootstrap`, shared with every other
+agent on the node and attributed to none of them; and not one line of output
+disagrees. The session's grounding shaped everything it concluded about its own
+memory, and the grounding was invisible to it.
+
+Two changes close the **visible** half of this:
+
+- `pmoves/tools/cipher_identity.py` measures the carry, and `claude-pmoves.sh`
+  appends the verdict to session context beside the node-identity and
+  cipher-health verdicts it already appends. Fail-open-loudly, matching the rest
+  of that file: it never blocks a launch, never prints or exports a token, and
+  never reads a bearer past its prefix.
+- `pmoves/scripts/mint_cipher_token.py` now requires an **ACTIVE signing card**
+  in `pmoves/config/signing_identity_cards.yaml` for `--agent`, with an
+  `--allow-uncarded` escape hatch that warns on stderr. Before this gate,
+  `--agent` accepted any string — which is the mechanism behind #2935's "the
+  signature and the ledger are separate systems". That was never a stance; it
+  was the implementation. The card is the unlock.
+
+**Provenance hazard, and why these numbers are now machine-checked.** This
+section's citations have been wrong twice, for two different reasons, inside one
+week. Both are recorded because the second one was *predicted* by the first and
+still had to be fixed by hand.
+
+| | pin | what happened |
+|---|---|---|
+| 1 | `d94a1dcc` | The first revision read line numbers off this node's submodule **working tree**, which sat on `fix/per-agent-token-profile-header` — the head of *unmerged* fork PR #19. It inserts three lines at `:67`, so four citations were wrong for everyone who did not have that branch checked out. |
+| 2 | `e24f1323` | Re-verified against the gitlink `main` actually carried. Correct — until #19 merged. |
+| 3 | `975e02e6` | #19 merged (`Accept-Profile: pmoves_core`) and the gitlink promoted. The same three inserted lines moved the same four citations again: `e24f1323:79` → `975e02e6:82`, and `e24f1323:103` → `975e02e6:106`. The prefix fork at `:44`/`:46`/`:49`/`:54`/`:60` sits above the insertion and never moved. |
+| 4 | `c88b009a2` | #3103 bumped the pin for cipher build fix #21 + installer #20. Neither commit touches `auth.ts`; all nine citations re-verified at the same lines and only the pin constant moved. The quiet bump this test exists to keep quiet. |
+| 6 | `a0ee2314` | #3189 pinned fork PR #28 (lookup failure is 503, not revocation; `UUID_RE`; empty `agent_id` fails closed), squash-merged on `PMOVES.AI-Edition-Hardened` (tree identical to reviewed head `151a6bfb`; descends from `36b28d0f`). It **rewrites `resolveToken()`**, so every citation moved: `:44`→`:93`, `:46`→`:95`, `:49`→`:98`, `:54`→`:104`, `:60`→`:105`, `:82`→`:150`, `:84`→`:155`, `:106`→`:191`, `:108`→`:193`. The first bump in this table that actually moved `auth.ts`; the test caught it in CI. |
+| 5 | `36b28d0f` | #3152 pinned fork PR #27 (per-request MCP identity, `CIPHER_MCP_ENFORCE`), merged as merge commit `36b28d0f` on `PMOVES.AI-Edition-Hardened` (second parent = reviewed head `750878ab`, identical tree). It changes `mcp-sse.ts`/`rest-server.ts`/`app.ts`, not `auth.ts`; all nine citations unchanged. |
+
+Re-numbering by hand on each pin bump is not a fix; it is the same manual step
+failing again on a schedule. `pmoves/tests/tools/test_auth_citations_resolve.py`
+now checks three things on the required test job: the gitlink still equals the
+pin these numbers were read at, every cited line still carries its **anchor
+text**, and the docs quote the current numbers and not the superseded ones.
+Anchors are the real citation; the numbers are a convenience for a human reader,
+and that test is what keeps the convenience honest.
+
+The underlying rule is the one that produced this section: a working tree is not
+a source of truth, and a submodule parked on someone's open PR is a source of
+*plausible* truth, which is worse. Anyone quoting `auth.ts` on a node should run
+`git -C Pmoves-cipher status -sb` first — or just let the test say it.
+
+**Still open — operator decisions, not code.** The carry is now *measured*, not
+*closed*. Closing it means minting `cipher_<uuid>` tokens per carded agent and
+delivering them through the CHIT pipeline; no launcher can do that without
+putting a secret through a shell, so it is not attempted here.
+
+Two findings fall out of the card gate and are recorded rather than fixed:
+
+1. `TAC_CIPHER_VILLAGE.md:28` names the village's agent ids and sources them,
+   explicitly, to `signing_identity_cards.yaml` `agent_id` — and `:188` answers
+   "match `signing_identity_cards.yaml` `agent_id` exactly? — **YES**". Checked
+   against the 25 active cards, **none of the six exists**:
+
+   | documented id | actual card |
+   |---|---|
+   | `crush-spark` | `crush` |
+   | `claude-4090` | `4090-claude` |
+   | `kimi-spark` | — none |
+   | `clawz-darkxsides` | — none |
+   | `hermes-knuckles` | `hermes` / `hermes-agent` |
+   | `nemotron-1` | — none |
+
+   So the canonical mint invocation (`:86`, `AGENT=crush-spark`) now fails
+   closed, and the village doc's own naming rule has never been satisfied by the
+   village doc. The gate did not create this; it made it visible on first use.
+   Reconciling those ids is a separate lane — renaming an `agent_id` moves the
+   memories filed under it.
+2. The reverse direction is unguarded: a token minted before this gate, for an
+   agent whose card is later deactivated, keeps working. `cipher_identity.py`
+   reports that state (`minted token in use, but ... has no active signing card`)
+   but nothing revokes it. Revocation lives in `cipher_agent_tokens.revoked_at`
+   and no tool writes that column.
+
+## MCP identity enforcement — `CIPHER_MCP_ENFORCE` (advisory → enforce)
+
+**Known Road for connecting any agent or drop-in model:** `.claude/PATTERNS.md`
+§ "Known Road — Cipher memory for any agent or drop-in model".
+
+**Defect closed (#3152, fork PR POWERFULMOVES/Pmoves-cipher#27, pin `36b28d0f`, the #27 merge commit).**
+`rest-server.ts:58` mounted `createMcpSseRouter(memoryManager, nats)` with no
+auth argument, so the router's identity defaulted to `{}` (`mcp-sse.ts:48` @
+`c88b009a`). `/mcp/sse` passed that construction-time `{}` to every session, and
+`POST /mcp` passed nothing, so `assertAgentId` (`mcp-sse.ts:99-107`) never
+fired on the MCP path. Any valid bearer could store or search under any
+declared `agentId`, and scope checks were skipped. The REST path
+(`memory-routes.ts:13-27`) always checked each request.
+
+**What the fix does:**
+
+- It reads identity **per request** from what the auth middleware resolved
+  (`req.agentId` / `req.scopes`).
+- A legacy SSE session **binds** the identity of whoever opened `GET /mcp/sse`.
+  `POST /mcp/messages` for that session runs as that agent. A POST whose own
+  token identity differs from the session owner's is a violation.
+- `POST /mcp` (streamable-http) binds each request's own identity.
+- The router no longer accepts a construction-time identity. The router is
+  shared by every caller, so passing a constant identity at the mount would be
+  wrong, and the parameter that invited that fix is gone.
+
+**What counts as a violation.** With a token present, each of these is one. It
+mirrors the REST path, plus scopes:
+
+- no `agentId` on the call (refused in every mode; see below)
+- `agentId: "*"` on any tool (refused in every mode; see below)
+- `agentId` ≠ the token's agent
+- a missing per-tool scope. `admin` satisfies any scope. Scope per tool:
+
+  | Tools | Required scope |
+  |---|---|
+  | `store` | `memory:write` |
+  | `search`, `hybrid_search`, `graph_expand` | `memory:read` |
+  | `store_reasoning` | `reasoning:write` |
+  | `reasoning_patterns` | `reasoning:read` |
+  | `session_save` | `session:write` |
+  | `session_recall` | `session:read` |
+  | `mcp_list`, `mcp_get` | none (no `mcp:*` scope is minted) |
+
+With no token (dev-skip, server `CIPHER_API_TOKEN` unset), nothing is checked
+in either mode.
+
+**Always refused when a token is present, whatever the flag says** (review
+F3, steward decision): an omitted `agentId`, and `agentId: "*"`. REST refuses
+both too. In advisory mode an omitted `agentId` used to reach
+`sidecar.search(agentId=undefined)`, which is an unscoped cross-agent read.
+
+| `CIPHER_MCP_ENFORCE` | declared-name mismatch, missing scope, or a `/messages` poster that is a different agent or holds fewer scopes than the session opener |
+|---|---|
+| unset, or `false` / `0` / `no` / `off` / `advisory` (**default, advisory**) | The call proceeds and one `pmoves-mcp-auth: ADVISORY (CIPHER_MCP_ENFORCE off, accepted) {…}` line is written (see the audit trail below). |
+| `true` / `1` / `yes` / `on` / `enforce` | Refused. A tool call gets McpError `-32003` with `data.httpStatus: 403` and message `Forbidden: …` (the REST path's wording). A `/messages` POST gets HTTP 403. |
+| anything else (`enabled`, `strict`, `2`, a quoted `"true"`) | Stays **advisory** and logs `pmoves-mcp-auth: WARN unrecognised CIPHER_MCP_ENFORCE=…` once. At startup the router logs `pmoves-mcp-auth: mode=…`, which is the line to check after flipping the flag. |
+
+**Behaviour change in the default mode.** Before #27 the MCP path checked
+nothing. With the flag **unset**, a token-bearing call that omits `agentId` or
+passes `*` is now **refused**. No in-repo MCP caller relies on `*`. A client that
+omits `agentId` must now send its signing-card id.
+
+**The audit trail.** In advisory mode, the log is the only control. It is
+written to stderr of `cipher-api`, and every line is one JSON object:
+
+| Line | When |
+|---|---|
+| `pmoves-mcp-auth: mode=… (CIPHER_MCP_ENFORCE=…)` | the router is built (startup) |
+| `pmoves-mcp-auth: WARN unrecognised CIPHER_MCP_ENFORCE=…` | the flag value is in neither list; mode stays advisory |
+| `pmoves-mcp-auth: ADVISORY (CIPHER_MCP_ENFORCE off, accepted) {kind, tool, scope, tokenAgent, declaredAgent, reason, outcome, suppressedSinceLast}` | a tolerated violation: declared-name mismatch, missing scope, or a `/messages` poster problem |
+| `pmoves-mcp-auth: REFUSED {…, outcome:"refused"}` | every refusal. That covers an omitted `agentId` or `*` in any mode, any violation under enforce, and a refused `/messages` POST. It is logged before the error is returned. |
+| `pmoves-mcp-auth: ADVISORY-SUMMARY {cause, suppressed…}` | `interval`: suppressed repeats of one key, flushed by an unref()'d timeout when they fall due. `cap` / `pool-cap`: pending counts flushed before the 1000-entry key or pool map clears. `budget`: one token's lines over its budget, with that pool's `tokenAgent`, `outcome` and a top-20 (tokenAgent, kind, tool) breakdown. |
+
+Rules that keep the trail complete, bounded and unforgeable:
+
+- **Escaping.** Caller values are JSON-escaped, including C1 controls,
+  U+2028/U+2029 and every Unicode bidi control, so they cannot add a line or
+  reorder one.
+- **Deduplication.** Repeats are deduped per (outcome, kind, route, tool,
+  missing scope, token-agent, declared-agent) per
+  `CIPHER_MCP_ADVISORY_INTERVAL_MS` (default 60000). A read-to-write escalation
+  under the same declared agent is therefore a new line.
+- **Budget, per caller.** At most `CIPHER_MCP_ADVISORY_BUDGET` (default 200)
+  first-occurrence lines are written per interval **per (outcome, token
+  agent)**. On `/mcp/messages` the token agent is the poster's. The rule is that
+  a suppression mechanism may only suppress lines from the caller producing the
+  volume. A token that floods by cycling its declared agent drowns only its own
+  ADVISORY lines. Its REFUSED lines, and every other token's lines, are still
+  written, because REFUSED and ADVISORY never share a pool.
+- **Interval floor.** `CIPHER_MCP_ADVISORY_INTERVAL_MS` is clamped to at least
+  1000 ms, with a `pmoves-mcp-auth: WARN` line. Below that, the budget window
+  would reset on almost every call and stop bounding anything.
+
+**Why advisory is the default.** Today most agents on a node share the
+bootstrap `CIPHER_API_TOKEN`, which resolves to agentId `bootstrap` (see §Agent
+Identity Carry). They declare their own signing-card id on each call. In
+enforce mode every such call is a mismatch and would be refused. That includes
+Agent Zero's `cipher` MCP entry (`docker-compose.yml`
+`A0_SET_mcp_servers` → `Bearer ${CIPHER_API_TOKEN}`) and every Claude Code /
+Crush / Hermes session using the fleet roster. Turning enforcement on before
+per-agent tokens are minted would cut every one of them off from memory. The
+operator requirement is that drop-in models must not have to fight for the
+memory layer, so advisory is the only safe default.
+
+**What advisory means for attribution.** In advisory mode a write is filed under
+the `agentId` the caller *declared*, not under the token's agent. So attribution
+is self-asserted, exactly as before this change. The difference is that each
+disagreement now leaves a line in the cipher container's log. Read those lines
+as the list of agents that still need a per-agent token.
+
+**The path from advisory to enforce:**
+
+1. **Watch.** No Make target reads cipher's log (`logs-*` has only
+   `logs-cloudflare`). The read-only route is the container log, filtered for
+   `pmoves-mcp-auth: ADVISORY`, e.g. `docker logs pmoves-cipher-api-1 2>&1 | grep 'pmoves-mcp-auth: ADVISORY'`.
+   Collect the distinct `declaredAgent` values from `ADVISORY` lines, and read `REFUSED` lines for callers already being turned away. **UNVERIFIED:** I did not run
+   this, and the running image predates this change, so it prints no such lines
+   until `make -C pmoves up-cipher` rebuilds from the new pin.
+2. **Card each one.** Every declared id needs an ACTIVE card in
+   `pmoves/config/signing_identity_cards.yaml`. Check with
+   `make -C pmoves cipher-identity AGENT=<id>`.
+3. **Mint per-agent tokens.** Run `make -C pmoves cipher-mint-token AGENT=<id>`
+   for each agent, and deliver the tokens through the CHIT pipeline
+   (`secrets-funnel`). Operator step; not run here.
+4. **Confirm the carry.** For each agent, `cipher-identity` should report
+   `cipher mode per-agent`.
+5. **Watch again.** The `ADVISORY` lines should stop.
+6. **Enforce.** Set `CIPHER_MCP_ENFORCE=true` for the cipher container, then
+   `make -C pmoves up-cipher`. Prerequisite, NOT DONE: the `cipher-api`
+   compose stanza does not pass `CIPHER_MCP_ENFORCE` through yet. That compose
+   file is protected, so adding the passthrough needs a `KNOWN_ROAD` grant.
+   Until then, enforce mode can only be reached by editing the stanza.
+
+**Asymmetry to know about.** The REST path (`/api/memory`) refuses mismatches
+**unconditionally**, has **no scope check**, and ignores `CIPHER_MCP_ENFORCE`.
+The two paths agree only in enforce mode, and even then they disagree on scopes.
+REST is not relaxed here: weakening a check that already refuses would be a
+security regression.
+
+**Stacked fork PRs #22 → #25 → #26** add the same per-tool scope table and
+refuse an omitted `agentId`, but they do it inside the old
+construction-time-`auth` function, so in production they never fire without
+#27. They conflict with #27 in `mcp-sse.ts` only. A trial merge that resolves
+`mcp-sse.ts` to #27's side passes 65/65 with `CIPHER_MCP_ENFORCE=true`. #26's
+enforcement test needs that flag set, because it asserts refusal while the
+default is advisory. Details: POWERFULMOVES/Pmoves-cipher#27 comments.
+
+## `CIPHER_DB_SERVICE_KEY` — steer it through the Known Road, never by hand
+
+**What the knob is.** `auth.ts resolveToken` presents a Supabase service key to
+PostgREST (through Kong) on every `cipher_<uuid>` bearer lookup. Commit
+`df0218537` added `CIPHER_DB_SERVICE_KEY` as a compose override for that key,
+set per node in `pmoves/.env.local` (loaded by `scripts/with-env.sh`). Unset,
+the container presents the default `SUPABASE_SERVICE_KEY`.
+
+**Where the knob lives today.** Only on unmerged branches:
+`origin/fix/cipher-agent-token-handoff` (PR #3143),
+`origin/feat/cipher-identity-bind` and `origin/wip/mcp-project-roster`, in
+`pmoves/docker-compose.yml` and `docker-compose.agents.yml` on each. `git grep CIPHER_DB_SERVICE_KEY` on `origin/main`
+(`dfb5421ef`) returns 0 hits, so a compose built from main does not read the
+override. It takes effect only when a node brings cipher up from one of those
+branches.
+
+**Measured 2026-09-23 on one fleet node (by the steward; recorded here, not
+re-run by this change):** the default `SUPABASE_SERVICE_KEY` returns **200** through Kong.
+Both copies of the `SERVICE_ROLE_KEY` value return **401**. `df0218537`'s
+message recommended `CIPHER_DB_SERVICE_KEY=${SERVICE_ROLE_KEY}` from a
+2026-09-22 measurement, when PostgREST was rejecting the `SUPABASE_*` pair.
+That recipe is now **wrong** on that node: a cipher brought up with the line in place
+presents a key Kong rejects, and every per-agent token lookup fails.
+
+**How the line got there, and why that matters.** Someone hand-copied the
+recipe from the commit message into the node's `.env.local`. There was no
+tool, no audit row and no `known-roads.jsonl` entry, so nobody could say
+when it was placed or by whom. The operator's rule: it is removed the same
+way it should have been placed, on a road.
+
+**The road (OPERATOR-run; agents have zero access to the file):**
+
+```bash
+make -C pmoves env-local-has   KEY=CIPHER_DB_SERVICE_KEY   # present? prints no value
+make -C pmoves env-local-unset KEY=CIPHER_DB_SERVICE_KEY   # removes the one line, 0600 backup, audit row
+```
+
+Run the unset **before the next `make -C pmoves up-cipher`** on any node that
+followed the `df0218537` recipe. To steer the key deliberately later (for
+example, if a node's PostgREST really does validate only the legacy pair),
+re-measure first, then run `make -C pmoves env-local-set
+KEY=CIPHER_DB_SERVICE_KEY`. It prompts for the value without echoing it and
+never takes it as an argument. Full road: `.claude/PATTERNS.md` § Known Road —
+node-local env overlay keys.
 
 ## ⚠️ Architectural Fork — PMOVES vs Upstream
 
@@ -103,7 +535,7 @@ Cipher is ONE of FIVE memory surfaces in PMOVES. Agents and docs routinely confl
 | Surface | Port | Backend | Purpose | Overlap with Cipher? |
 |---------|------|---------|---------|---------------------|
 | **Cipher Memory** | 8105 | Neo4j (graph) + Qdrant (vectors) + in-mem fallback | Agent episodic memory, checkpoint/resume | — (this IS Cipher) |
-| **Hi-RAG Gateway v2** | 8086/8087 | Qdrant + Neo4j + Meilisearch + cross-encoder | Document/corpus retrieval with reranking | Shares Neo4j instance, different graph domain. Intentionally separate (`HERMES_CIPHER_LOCAL_ARCHITECTURE.md:115`) |
+| **Hi-RAG Gateway v2** | 8086/8087 | Qdrant + Neo4j + Meilisearch + cross-encoder | Document/corpus retrieval with reranking | Shares the Neo4j instance AND its one database (Community Edition allows exactly one standard database), so the separation is by label only (`:Memory` vs `:Entity`/mindmap labels; see [TAC_NEO4J](TAC_NEO4J.md)). Intentionally separate (`HERMES_CIPHER_LOCAL_ARCHITECTURE.md:115`) |
 | **Semantic-cache** | (via Cipher) | pgvector (Postgres) | LLM response cache; Layer 0 = Cipher pre-check | **Depends on Cipher** — Layer 0 hits Cipher REST, fail-open to pgvector |
 | **Open Notebook** | 5055 | SurrealDB | External document/note KB | Independent. Consumed by DeepResearch, Channel Monitor, Agent Zero, UI |
 | **DoX CipherService** | 8096 | In-memory dicts + DoX DB adapter | Team/workspace memory for DoX app | **Namesake only** — separate impl, separate port, NOT the Cipher API |
@@ -320,7 +752,7 @@ These subjects are declared across registries, TAC trees, topology docs, and BoT
 | 278 vulnerabilities (9 critical) on fork default branch | **CRITICAL** | Open — closed by re-fork (A1-Shim or A3-Full) |
 | No API authentication (upstream base) | P2 | **Fixed** — Bearer token via `CIPHER_API_TOKEN` (PMOVES-added, PR #1) |
 | A2A discovery endpoint unauthenticated | P1 | **Fixed** — auth-gated (PR #1) |
-| `CIPHER_URL` host/container port mismatch | P1 | **Open** — in-network services use `:8105` but container listens on `:3000` |
+| `CIPHER_URL` host/container port mismatch | P1 | **STALE AS WRITTEN (2026-09-08)** — the premise no longer holds: the container listens on `:8105`, not `:3000`, so host and container agree. Re-scope or close this row rather than acting on it. |
 | `pmoves-cipher-mcp/` not a proper submodule | P2 | Open (low priority — bridge is dead code) |
 | `.gitmodules` tracks `main` not `PMOVES.AI-Edition-Hardened` | P1 | **Open** — fleet rule violation |
 
@@ -358,7 +790,7 @@ b4a780b0 feat(api): add /api/memory CRUD routes for pmoves-cipher-mcp bridge (#5
 ### Post-decision (any path)
 - [ ] Remove stale vendored cipher copies (4 mirror sites)
 - [ ] Reconcile `TAC_CIPHER.md`, `CATALOG.md`, `AGNOTE4482_SITREP.md`, `pmoves-cipher-mcp/README.md` to single source of truth
-- [ ] Fix `CIPHER_URL` host/container port mismatch in compose (3 files: `docker-compose.yml`, `docker-compose.agents.yml`, `docker-compose.vps.override.yml`)
+- [ ] ~~Fix `CIPHER_URL` host/container port mismatch in compose~~ — **premise re-measured false 2026-09-08**: container listens on `:8105`. Verify on other nodes before closing.
 - [ ] Remove or rewire dead NATS subjects (`cipher.memory.*.v1`) — zero subscribers
 - [ ] Remove dead gateway-agent `/skills/*` calls (already 404)
 

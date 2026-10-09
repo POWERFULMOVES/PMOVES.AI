@@ -1,8 +1,8 @@
 {
-  "$schema": "https://kilo.ai/schemas/project.json",
+  "$schema": "https://app.kilo.ai/config.json",
   "default_agent": "kilocode-glm",
-  "model": "zai/glm-5.2",
-  "small_model": "zai/glm-4-air",
+  "model": "zai-coding-plan/glm-5.3",
+  "small_model": "zai-coding-plan/glm-5.3-flash",
   "instructions": [
     ".claude/CLAUDE.md",
     "AGENTS.md",
@@ -11,58 +11,40 @@
     ".kilo/agent/**/*.md"
   ],
   "provider": {
-    "zai": {
+    "zai-coding-plan": {
+      "env": [
+        "Z_AI_API_KEY"
+      ],
       "options": {
-        "baseURL": "https://api.z.ai/api/coding/paas/v4/",
-        "timeout": 300000,
-        "apiKey": "${Z_AI_API_KEY}"
-      },
-      "models": {
-        "glm-5.2": {
-          "name": "GLM-5.2 (Latest)"
-        },
-        "glm-5-turbo": {
-          "name": "GLM-5 Turbo (Agentic)"
-        },
-        "glm-5.1": {
-          "name": "GLM-5.1 (Reasoning)"
-        },
-        "glm-5v-turbo": {
-          "name": "GLM-5V Turbo (Vision+Coding)"
-        },
-        "glm-4.7": {
-          "name": "GLM-4.7 (Balanced Coding)"
-        },
-        "glm-4-air": {
-          "name": "GLM-4 Air (Fast)"
-        }
+        "timeout": 300000
       },
       "whitelist": [
-        "glm-*"
+        "glm-5.3",
+        "glm-5.3-flash"
       ]
     },
-    "minimax": {
+    "minimax-coding-plan": {
+      "env": [
+        "MINIMAX_TOKEN_PLAN_API_KEY"
+      ],
       "options": {
-        "baseURL": "https://api.minimax.chat/v1",
-        "timeout": 300000,
-        "apiKey": "${MINIMAX_API_KEY}"
-      },
-      "models": {
-        "minimax-m2.7": {
-          "name": "MiniMax-M2.7 (1M Context)"
-        },
-        "minimax-m2.1": {
-          "name": "MiniMax-M2.1 (100K Context)"
-        }
+        "timeout": 300000
       },
       "whitelist": [
-        "minimax-*"
+        "MiniMax-M3",
+        "MiniMax-M2.7"
       ]
+    },
+    "kilo": {
+      "options": {
+        "timeout": 300000
+      }
     }
   },
   "enabled_providers": [
-    "zai",
-    "minimax"
+    "zai-coding-plan",
+    "minimax-coding-plan",
+    "kilo"
   ],
   "mcp": {
     "zai-vision": {
@@ -102,7 +84,7 @@
       "type": "remote",
       "url": "http://${TS_Z890}:8105/mcp/sse",
       "headers": {
-        "Authorization": "Bearer ${CIPHER_API_TOKEN:-}"
+        "Authorization": "Bearer ${CIPHER_API_TOKEN}"
       }
     },
     "tailscale": {
@@ -154,21 +136,20 @@
         "-y",
         "@supabase/mcp-server-postgrest@0.1.1",
         "--apiUrl",
-        "http://localhost:8000/rest/v1",
-        "--apiKey",
-        "${SUPABASE_SERVICE_KEY}",
-        "--schema",
-        "public",
         "${SUPABASE_REST_URL:-http://localhost:8000/rest/v1}",
-        "${SUPABASE_SERVICE_ROLE_KEY:-${SUPABASE_SERVICE_KEY}}"
-      ]
+        "--apiKey",
+        "${ANON_KEY}",
+        "--schema",
+        "public"
+      ],
+      "enabled": false
     },
     "supabase-db": {
       "type": "local",
       "command": [
         "uvx",
         "postgres-mcp@0.3.0",
-        "--access-mode=unrestricted"
+        "--access-mode=restricted"
       ],
       "environment": {
         "DATABASE_URI": "${SUPABASE_DB_URI}"
@@ -178,13 +159,13 @@
       "type": "remote",
       "url": "http://localhost:8090/sse",
       "headers": {
-        "Authorization": "Bearer ${MCP_GATEWAY_AUTH_TOKEN}"
+        "Authorization": "Bearer ${CIPHER_API_TOKEN}"
       }
     },
     "archon": {
       "type": "remote",
       "url": "http://${TS_Z890}:8051",
-      "disabled": true
+      "enabled": false
     },
     "hostinger": {
       "type": "local",
@@ -207,11 +188,113 @@
     "urls": []
   },
   "permission": {
-    "bash": "allow",
-    "edit": {
-      "**": "allow"
+    "bash": {
+      "*": "ask",
+      "git status *": "allow",
+      "git diff": "allow",
+      "git diff --stat": "allow",
+      "git diff --name-only": "allow",
+      "git diff --name-status": "allow",
+      "git diff --cached": "allow",
+      "git diff --cached --stat": "allow",
+      "git diff --staged": "allow",
+      "git diff --staged --stat": "allow",
+      "git diff HEAD": "allow",
+      "git diff HEAD --stat": "allow",
+      "git diff origin/main...HEAD": "allow",
+      "git diff origin/main...HEAD --stat": "allow",
+      "git diff origin/main...HEAD --name-only": "allow",
+      "git log *": "allow",
+      "git show *": "allow",
+      "git branch": "allow",
+      "git branch -a": "allow",
+      "git branch -r": "allow",
+      "git branch -v": "allow",
+      "git branch -vv": "allow",
+      "git branch --show-current": "allow",
+      "git worktree list *": "allow",
+      "ls *": "allow",
+      "wc *": "allow",
+      "pwd *": "allow",
+      "*\"*": "ask",
+      "*'*": "ask",
+      "*{*": "ask",
+      "*[*": "ask",
+      "*$*": "ask",
+      "*`*": "ask",
+      "*>*": "ask",
+      "git diff *-/*": "ask",
+      "git diff *--o/*": "ask",
+      "git log *-/*": "ask",
+      "git log *--o/*": "ask",
+      "git show *-/*": "ask",
+      "git show *--o/*": "ask",
+      "*.example*": "ask",
+      "git stash *": "deny",
+      "git diff *--ou*": "deny",
+      "git log *--ou*": "deny",
+      "git show *--ou*": "deny",
+      "git branch *-d*": "deny",
+      "git branch *-D*": "deny",
+      "git branch *-f*": "deny",
+      "git branch *-m*": "deny",
+      "git branch *-M*": "deny",
+      "rg *--pre*": "deny",
+      "make *--eval*": "deny",
+      "make -E*": "deny",
+      "make * -E*": "deny",
+      "make -f*": "deny",
+      "make * -f*": "deny",
+      "make *--file*": "deny",
+      "make *--makefile*": "deny",
+      "env": "deny",
+      "env *": "deny",
+      "printenv": "deny",
+      "printenv *": "deny",
+      "*/proc/*/environ*": "deny",
+      "*env.tier-*": "deny",
+      "* .env": "deny",
+      "* .env *": "deny",
+      "* .env.*": "deny",
+      "*/.env": "deny",
+      "*/.env *": "deny",
+      "*/.env.*": "deny",
+      "*=.env": "deny",
+      "*=.env *": "deny",
+      "*=.env.*": "deny",
+      "*env.shared": "deny",
+      "*env.shared *": "deny",
+      "*env.shared.bak*": "deny",
+      "*env.shared~*": "deny",
+      "* .envrc": "deny",
+      "* .envrc *": "deny",
+      "*/.envrc": "deny",
+      "*/.envrc *": "deny",
+      "*=.envrc": "deny",
+      "*=.envrc *": "deny",
+      "*env*.local": "deny",
+      "*env*.local *": "deny"
     },
-    "read": "allow",
+    "edit": {
+      "**": "allow",
+      ".git": "deny",
+      ".git/*": "deny",
+      "*/.git": "deny",
+      "*/.git/*": "deny",
+      "-*": "deny",
+      "*/-*": "deny"
+    },
+    "read": {
+      "*": "allow",
+      "pmoves/env.*": "deny",
+      "*/env.shared*": "deny",
+      "*env.tier-*": "deny",
+      "*.example": "allow"
+    },
+    "external_directory": {
+      "*": "ask",
+      "/proc/*": "deny"
+    },
     "zai-vision_*": "allow",
     "zai-web-search_*": "allow",
     "zai-web-reader_*": "allow",

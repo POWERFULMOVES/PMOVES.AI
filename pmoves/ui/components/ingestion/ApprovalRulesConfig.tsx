@@ -272,7 +272,7 @@ export function ApprovalRulesConfig({
 
   return (
     <>
-      <div className="rounded border border-neutral-200 bg-white p-4">
+      <div data-testid="approval-rules-panel" className="rounded border border-neutral-200 bg-white p-4">
         <div className="flex items-center justify-between mb-4">
           <div>
             <h3 className="text-lg font-medium">Approval Rules</h3>
@@ -292,6 +292,7 @@ export function ApprovalRulesConfig({
               </button>
             )}
             <button
+              data-testid="new-rule-button"
               onClick={openCreateModal}
               className={BUTTON_PRIMARY_CLASSES}
               disabled={processing}
@@ -303,10 +304,11 @@ export function ApprovalRulesConfig({
         </div>
 
         {/* Rules List */}
-        <div className="space-y-3">
-          {[...enabledRules, ...disabledRules].map((rule) => (
+        <div className="space-y-3" data-testid="approval-rules-list">
+          {[...enabledRules, ...disabledRules].map((rule, index) => (
             <div
               key={rule.id}
+              data-testid="approval-rule-item"
               className={`${RULE_CARD_CLASSES} ${!rule.enabled ? 'opacity-60' : ''}`}
             >
               <div className="flex items-start justify-between">
@@ -325,7 +327,7 @@ export function ApprovalRulesConfig({
                   {rule.description && (
                     <p className="text-sm text-neutral-600 mb-2">{rule.description}</p>
                   )}
-                  <p className="text-xs text-neutral-500">
+                  <p data-testid="rule-condition-summary" className="text-xs text-neutral-500">
                     When: {formatConditionSummary(rule.conditions)}
                   </p>
                   <div className="flex items-center gap-3 mt-2 text-xs text-neutral-500">
@@ -344,6 +346,7 @@ export function ApprovalRulesConfig({
                 {/* Rule Actions */}
                 <div className="flex items-center gap-2">
                   <button
+                    data-testid={'rule-toggle-' + index}
                     onClick={() => handleToggleEnabled(rule.id, !rule.enabled)}
                     className="text-xs text-blue-600 hover:text-blue-800"
                     type="button"
@@ -351,6 +354,7 @@ export function ApprovalRulesConfig({
                     {rule.enabled ? 'Disable' : 'Enable'}
                   </button>
                   <button
+                    data-testid={'edit-rule-' + index}
                     onClick={() => openEditModal(rule)}
                     className="text-xs text-blue-600 hover:text-blue-800"
                     type="button"
@@ -358,6 +362,7 @@ export function ApprovalRulesConfig({
                     Edit
                   </button>
                   <button
+                    data-testid={'delete-rule-' + index}
                     onClick={() => handleDelete(rule.id)}
                     className="text-xs text-red-600 hover:text-red-800"
                     type="button"
@@ -381,8 +386,9 @@ export function ApprovalRulesConfig({
 
       {/* Rule Edit/Create Modal */}
       {showModal && (
-        <div className={MODAL_OVERLAY_CLASSES} onClick={handleCloseModal}>
+        <div data-testid="modal-overlay" className={MODAL_OVERLAY_CLASSES} onClick={handleCloseModal}>
           <div
+            data-testid="rule-editor-modal"
             className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[80vh] overflow-hidden flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
@@ -595,6 +601,7 @@ export function ApprovalRulesConfig({
                 Cancel
               </button>
               <button
+                data-testid="save-rule"
                 onClick={handleSave}
                 className={BUTTON_PRIMARY_CLASSES}
                 disabled={processing || !formData.name.trim()}

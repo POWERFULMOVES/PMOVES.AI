@@ -11,7 +11,10 @@
     "typecheck": "node scripts/with-env.mjs tsc --noEmit",
     "test": "node scripts/with-env.mjs jest",
     "smoke:upload-events": "node scripts/with-env.mjs jest upload-events-table.test.tsx",
-    "test:e2e": "node scripts/with-env.mjs playwright test"
+    "test:e2e": "node scripts/with-env.mjs playwright test --grep-invert @backend",
+    "test:e2e:backend": "node scripts/with-env.mjs playwright test --grep @backend",
+    "test:e2e:launcher": "node scripts/run-launcher-e2e.mjs",
+    "check:agent-rules": "node scripts/check-agent-rules.mjs"
   },
   "dependencies": {
     "@monaco-editor/react": "^4.7.0",
@@ -22,7 +25,7 @@
     "diff2html": "^3.4.56",
     "dotenv": "^16.4.5",
     "jose": "^5.9.3",
-    "next": "^16.3.0",
+    "next": "^16.3.3",
     "react": "19.2.0",
     "react-dom": "19.2.0",
     "react-dropzone": "14.2.3",
