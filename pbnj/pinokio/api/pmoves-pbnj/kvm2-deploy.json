@@ -1,0 +1,17 @@
+{
+  "run": [
+    {
+      "method": "shell.run",
+      "params": {
+        "message": [
+          "echo 'Deploying KVM2 (Exit Node) via Tailscale SSH...'",
+          "echo 'NOTE: SSH as root — key-only auth enforced (PasswordAuthentication no)'",
+          "ssh root@pmoves-kvm2 'cd /opt/pmoves && git pull --ff-only origin main && cd pmoves && docker compose -f docker-compose.yml -f docker-compose.vps.override.yml pull nginx && docker compose -f docker-compose.yml -f docker-compose.vps.override.yml up -d nginx'",
+          "echo 'Verifying exit node...'",
+          "ssh root@pmoves-kvm2 'tailscale status | head -5'",
+          "echo 'KVM2 deployment complete.'"
+        ]
+      }
+    }
+  ]
+}

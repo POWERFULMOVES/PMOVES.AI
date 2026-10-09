@@ -15,6 +15,12 @@ if str(_repo_root) not in sys.path:
 
 from libs.providers.embedding import embed_text as embed_via_providers
 
+_repo_root = Path(__file__).resolve().parents[4]
+if str(_repo_root) not in sys.path:
+    sys.path.append(str(_repo_root))
+
+from libs.providers.embedding import embed_text as embed_via_providers
+
 QDRANT_URL = os.environ.get("QDRANT_URL", "http://qdrant:6333")
 QDRANT_API_KEY = os.environ.get("QDRANT__API_KEY", "")
 COLL = os.environ.get("QDRANT_COLLECTION", "pmoves_chunks")

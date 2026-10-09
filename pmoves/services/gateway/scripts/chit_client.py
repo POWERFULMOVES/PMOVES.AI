@@ -22,6 +22,8 @@ import sys
 
 from gateway.api.chit import compute_shape_id
 
+from gateway.api.chit import compute_shape_id
+
 def maybe_sign(cgp: dict, sign: str=None, encrypt: bool=False) -> dict:
     if not sign and not encrypt: 
         return cgp
