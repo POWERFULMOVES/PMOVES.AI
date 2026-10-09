@@ -34,7 +34,7 @@ Tier files (--check / --promote):
   NATS keys are mirrored from env.shared into each env.tier-* that DECLARES
   them. A tier that does not declare a key never gains it: that would hand the
   bus credential to services that have no use for it.
-  --check   prints "<KEY> <file> match|MISMATCH", exits 1 on any mismatch.
+  --check   prints "<KEY> <file> match|MISMATCH|UNSOURCED", exits 1 unless all match.
   --promote rewrites the mismatched lines (same surgical writer).
 """
 
@@ -129,28 +129,40 @@ def tier_files(root: Path) -> list[Path]:
     return sorted(p for p in root.glob("env.tier-*") if _TIER_NAME.match(p.name) and p.is_file())
 
 
-def tier_status(env_path: Path = ENV_SHARED) -> list[tuple[str, Path, bool]]:
-    """(key, tier file, matches env.shared) for each NATS key a tier declares.
+def tier_status(env_path: Path = ENV_SHARED) -> list[tuple[str, Path, str]]:
+    """(key, tier file, status) for each NATS key a tier declares.
 
-    A key env.shared leaves empty has no source of truth and is not compared.
+    status is "match", "MISMATCH", or "UNSOURCED": the tier sets a value but
+    env.shared has none, so the tier's value is what that tier's services get and
+    there is nothing to correct it from. That is the stale-override hazard with
+    no source of truth, so --check fails on it rather than skipping it.
     """
     shared = parse_env_file(env_path)
     rows = []
     for tier in tier_files(env_path.parent):
         declared = parse_env_file(tier)
         for key in NATS_KEYS:
+            if key not in declared:
+                continue
             want = normalize_env_value(shared.get(key, ""))
-            if key in declared and want:
-                rows.append((key, tier, normalize_env_value(declared[key]) == want))
+            have = normalize_env_value(declared[key])
+            if not want:
+                status = "UNSOURCED" if have else "match"
+            else:
+                status = "match" if have == want else "MISMATCH"
+            rows.append((key, tier, status))
     return rows
 
 
 def promote(env_path: Path = ENV_SHARED) -> list[tuple[str, Path]]:
-    """Copy env.shared's NATS keys over each mismatched tier line. Never prints a value."""
+    """Copy env.shared's NATS keys over each mismatched tier line. Never prints a value.
+
+    UNSOURCED rows are left alone: there is no env.shared value to copy.
+    """
     shared = parse_env_file(env_path)
     fixed = []
-    for key, tier, ok in tier_status(env_path):
-        if not ok:
+    for key, tier, status in tier_status(env_path):
+        if status == "MISMATCH":
             _rotate_secret()(key, value=normalize_env_value(shared[key]), env_path=tier)
             fixed.append((key, tier))
     return fixed
@@ -165,11 +177,12 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
     if args.check:
         rows = tier_status(args.env_file)
-        for key, tier, ok in rows:
-            print(f"nats-tier-check: {key} {tier.name} {'match' if ok else 'MISMATCH'}")
+        for key, tier, status in rows:
+            note = " (env.shared has no value; set it there, then promote)" if status == "UNSOURCED" else ""
+            print(f"nats-tier-check: {key} {tier.name} {status}{note}")
         if not rows:
             print("nats-tier-check: no tier file declares a NATS key")
-        return 0 if all(ok for _, _, ok in rows) else 1
+        return 0 if all(status == "match" for _, _, status in rows) else 1
     if args.promote:
         fixed = promote(args.env_file)
         for key, tier in fixed:

@@ -22,7 +22,15 @@ describe('withoutCredentials', () => {
     expect(withoutCredentials('nats://nats:4222')).toBe('nats://nats:4222');
   });
 
-  it('does not treat an @ in the path or query as credentials', () => {
-    expect(withoutCredentials('http://host:8080/a@b?c=d@e')).toBe('http://host:8080/a@b?c=d@e');
+  it('keeps an @ in the path but drops the query and fragment', () => {
+    expect(withoutCredentials('http://host:8080/a@b?c=d@e#f')).toBe('http://host:8080/a@b');
+  });
+
+  it('drops a credential carried in the query', () => {
+    expect(withoutCredentials('https://host/x?token=t1')).toBe('https://host/x');
+  });
+
+  it('drops a password holding a raw ? or # without leaving part of it', () => {
+    expect(withoutCredentials(withUserinfo(['nats', 'a?b#c'].join(':'), 'host:4222'))).toBe('nats://host:4222');
   });
 });

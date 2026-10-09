@@ -122,11 +122,11 @@ def test_check_reports_stale_tier_and_ignores_non_tier_files(tmp_path):
             "env.tier-supabase.urlencoded": f"NATS_URL={stale}\n",
         },
     )
-    rows = {(k, t.name): ok for k, t, ok in d.tier_status(p)}
+    rows = {(k, t.name): status for k, t, status in d.tier_status(p)}
     assert rows == {
-        ("NATS_URL", "env.tier-agent"): True,
-        ("NATS_PASSWORD", "env.tier-agent"): True,
-        ("NATS_URL", "env.tier-ui"): False,
+        ("NATS_URL", "env.tier-agent"): "match",
+        ("NATS_PASSWORD", "env.tier-agent"): "match",
+        ("NATS_URL", "env.tier-ui"): "MISMATCH",
     }
 
 
@@ -157,3 +157,13 @@ def test_check_exits_nonzero_on_mismatch(tmp_path):
         {"env.tier-ui": "NATS_PASSWORD=oldpw\n"},
     )
     assert d.main(["--env-file", str(p), "--check"]) == 1
+
+
+def test_tier_value_with_no_shared_source_fails_check(tmp_path, capsys):
+    # env.shared has no NATS_URL, but a tier still sets one: that tier value wins
+    # in compose and nothing can correct it, so --check must not pass quietly.
+    p = _tiers(tmp_path, "NATS_PASSWORD=newpw\n", {"env.tier-ui": f"NATS_URL={_url('nats', 'oldpw')}\n"})
+    assert d.main(["--env-file", str(p), "--check"]) == 1
+    out = capsys.readouterr().out
+    assert "NATS_URL env.tier-ui UNSOURCED" in out and "oldpw" not in out
+    assert d.promote(p) == []  # nothing to copy from
