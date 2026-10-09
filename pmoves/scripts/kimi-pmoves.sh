@@ -1,14 +1,18 @@
 #!/usr/bin/env bash
-# kimi-pmoves — Bootstrap Kimi Code CLI with PMOVES project config and MCP
+# kimi-pmoves — Bootstrap Kimi with PMOVES project context
 # Usage: kimi-pmoves [kimi-args...]
 #
-# Launches Kimi with PMOVES context files, MCP config (Cipher + Agent Zero),
-# and skill merging from .kimi/, .claude/, .codex/ skill trees.
+# Two different programs answer to `kimi`, and this launcher serves both:
+#   - Kimi Code (>= 2.x, ~/.kimi-code/bin/kimi): takes NO config-file flags.
+#     It reads <KIMI_CODE_HOME>/config.toml and mcp.json, plus the project
+#     layer it finds from the working directory (<git root>/.mcp.json,
+#     <cwd>/.kimi-code/mcp.json, AGENTS.md). Passing --config-file made it
+#     exit with "error: unknown option '--config-file'" before any session.
+#   - legacy kimi-cli (uv tool): takes --config-file / --mcp-config-file,
+#     which load .kimi/config.toml and .kimi/mcp.json.
+# The flag set is chosen by asking `kimi --help`, not by version-guessing.
 #
-# Prerequisites:
-#   - kimi CLI installed
-#   - .kimi/config.toml exists (created by make -C pmoves env-setup)
-#   - .kimi/mcp.json exists (created by PR #2112)
+# Either way the session is bound to THIS checkout (pm-launch-cwd.sh).
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
@@ -59,8 +63,27 @@ if [ -f "$PROJECT_ROOT/pmoves/scripts/pm-node-identity.sh" ]; then
   fi
 fi
 
+if [ -f "$PROJECT_ROOT/pmoves/scripts/pm-launch-cwd.sh" ]; then
+  # shellcheck source=./pm-launch-cwd.sh
+  . "$PROJECT_ROOT/pmoves/scripts/pm-launch-cwd.sh"
+  pm_launch_cwd "$PROJECT_ROOT" kimi-pmoves || { echo "${PM_LAUNCH_CWD_LINE}" >&2; exit 1; }
+  echo "${PM_LAUNCH_CWD_LINE}" >&2
+fi
+
+if ! command -v kimi >/dev/null 2>&1; then
+  echo "[!] kimi not found on PATH. Install Kimi Code (https://moonshotai.github.io/kimi-code/)."
+  exit 127
+fi
+
 CONFIG="$PROJECT_ROOT/.kimi/config.toml"
 MCP_CONFIG="$PROJECT_ROOT/.kimi/mcp.json"
+
+if ! kimi --help 2>&1 | grep -q -- '--config-file'; then
+  # Kimi Code. Its config is user-level; the .kimi/ files are kimi-cli
+  # formats it does not read, so say where config really comes from.
+  echo "[kimi-pmoves] $(command -v kimi): Kimi Code -- config from ${KIMI_CODE_HOME:-$HOME/.kimi-code}/{config.toml,mcp.json} + $PROJECT_ROOT/.mcp.json; .kimi/config.toml and .kimi/mcp.json are legacy kimi-cli files and are not loaded" >&2
+  exec kimi "$@"
+fi
 
 if [ ! -f "$CONFIG" ]; then
   echo "[!] Kimi config not found: $CONFIG"
