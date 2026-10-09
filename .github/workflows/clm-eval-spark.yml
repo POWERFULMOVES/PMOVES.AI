@@ -8,35 +8,37 @@ jobs:
     runs-on: spark
     timeout-minutes: 60
     steps:
-      - name: Setup venv and install deps
+      - name: Install contrastive-lm in venv
         run: |
           python3 -m venv /tmp/clmvenv
           /tmp/clmvenv/bin/pip install --upgrade pip -q
-          /tmp/clmvenv/bin/pip install contrastive-lm vllm 2>&1 | tail -3
+          /tmp/clmvenv/bin/pip install contrastive-lm 2>&1 | tail -3
 
-      - name: Start encoder (Qwen3-8B pooling)
+      - name: Verify Ollama encoder readiness
         run: |
-          nohup /tmp/clmvenv/bin/vllm serve Qwen/Qwen3-8B --served-model-name qwen3-8b --runner pooling --max-model-len 2048 --port 8090 > /tmp/vllm.log 2>&1 &
-          for i in $(seq 1 60); do
-            sleep 10
-            curl -sf http://localhost:8090/health >/dev/null 2>&1 && { echo ENCODER-UP; break; }
-            [ $i -eq 60 ] && { echo ENCODER-TIMEOUT; tail -5 /tmp/vllm.log; }
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:11434/api/tags >/dev/null 2>&1 && { echo ENCODER-UP; break; }
+            [ $i -eq 30 ] && { echo ENCODER-TIMEOUT; exit 1; }
+            sleep 2
           done
+          curl -sf http://localhost:11434/v1/embeddings -H 'Content-Type: application/json' \
+            -d '{"model":"qwen3-embedding:8b","input":"probe"}' | head -c 80; echo
 
-      - name: Start CLM server
+      - name: Start CLM server with Ollama embedder
         run: |
-          nohup /tmp/clmvenv/bin/clm-serve > /tmp/clm.log 2>&1 &
-          for i in $(seq 1 12); do
+          CUDA_VISIBLE_DEVICES="" nohup /tmp/clmvenv/bin/clm-serve --emb-url http://localhost:11434/v1/embeddings --emb-model qwen3-embedding:8b > /tmp/clm.log 2>&1 &
+          for i in $(seq 1 24); do
             sleep 5
-            curl -sf -o /dev/null http://localhost:8700/ 2>/dev/null && { echo CLM-UP; break; }
+            curl -sf http://localhost:8700/health >/dev/null 2>&1 && { echo CLM-UP; break; }
+            [ $i -eq 24 ] && { echo CLM-TIMEOUT; tail -10 /tmp/clm.log; exit 1; }
           done
 
-      - name: Run eval (inline — no clone needed)
+      - name: Run eval inline
         run: |
-          /tmp/clmvenv/bin/python -c "
+          /tmp/clmvenv/bin/python /dev/stdin <<'PYEOF'
           from clm import CLMClient, Choice, Noul
           import json, time
-          client = CLMClient()
+          client = CLMClient(timeout=3600)
           results = {}
           probes = [
               ('Customer charged twice, no response', {'urgent': Noul(instructions='Is this urgent?'), 'team': Choice(instructions='Which team?', criteria={'billing': 'charges', 'technical': 'bugs'})}),
@@ -60,7 +62,7 @@ jobs:
           json.dump(results, open('results.json','w'), indent=2)
           print('=== EVAL RESULTS ===')
           print(json.dumps(results, indent=2))
-          "
+          PYEOF
 
       - name: Show results
         if: always()

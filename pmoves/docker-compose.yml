@@ -3655,20 +3655,11 @@ services:
     # TENSORZERO_API_KEY for provider "tensorzero"; without it the UI banners
     # "Missing API Key for model presets" even though the gateway needs none.
     - TENSORZERO_API_KEY=${TENSORZERO_API_KEY:-tensorzero-routed}
-    - A0_SET_chat_model_provider=openai
-    # Chat/util/browser wrappers ADD openai/ prefix internally — do NOT double it
-    - A0_SET_chat_model_name=tensorzero::function_name::${AGENT_ZERO_TZ_FUNCTION:-agent_zero}
-    - A0_SET_chat_model_api_base=http://tensorzero-gateway:3000/openai/v1
-    - A0_SET_util_model_provider=openai
-    - A0_SET_util_model_name=tensorzero::function_name::${AGENT_ZERO_TZ_FUNCTION:-agent_zero}
-    - A0_SET_util_model_api_base=http://tensorzero-gateway:3000/openai/v1
-    - A0_SET_embed_model_provider=openai
-    # Embed wrapper does NOT add openai/ prefix — must include it here
-    - A0_SET_embed_model_name=openai/tensorzero::embedding_model_name::gemma_embed_local
-    - A0_SET_embed_model_api_base=http://tensorzero-gateway:3000/openai/v1
-    - A0_SET_browser_model_provider=openai
-    - A0_SET_browser_model_name=tensorzero::function_name::${AGENT_ZERO_TZ_FUNCTION:-agent_zero}
-    - A0_SET_browser_model_api_base=http://tensorzero-gateway:3000/openai/v1
+    # Model routing moved to the GENERATED presets file:
+    #   data/agent-zero/usr/plugins/_model_config/presets.yaml (make a0-model-sync).
+    # The A0_SET_{chat,util,embed,browser}_model_* env lane above is gone: the
+    # A0 2.5 preset plugin ignores it. tensorzero-gateway stays out of
+    # depends_on: T0 is now an optional lane inside the generated presets.
     - A0_SET_a2a_server_enabled=true
     # Expose Agent Zero's MCP SSE server so external clients (Crush, Archon,
     # other nodes) can connect via standard MCP transport at /t-{token}/sse.
@@ -3706,8 +3697,6 @@ services:
         condition: service_healthy
       nats-init:
         condition: service_completed_successfully
-      tensorzero-gateway:
-        condition: service_healthy
     ports:
     - ${AGENT_ZERO_BIND:-127.0.0.1}:${AGENT_ZERO_PORT:-8080}:8080
     - ${AGENT_ZERO_BIND:-127.0.0.1}:${AGENT_ZERO_UI_PORT:-8081}:80
