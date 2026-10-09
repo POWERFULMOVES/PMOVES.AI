@@ -477,3 +477,51 @@ def test_empty_key_list_still_mints_nothing():
     """The pre-existing EOFError guard must survive the rewiring."""
     recipe = _ensure_generated_recipe()
     assert 'if [ -z "$(strip $(SECRETS_ENSURE_KEYS))" ]' in recipe
+
+
+# --- DockerProbe decoding (2026-10-09, z890) -----------------------------------
+# `text=True` with no encoding decoded docker output as cp1252 on Windows. One
+# UTF-8 byte (0x8d, e.g. the tail of U+200D) in `docker inspect` killed the
+# subprocess reader thread, stdout came back None, and the probe reported "NO
+# running container holds" SECRET_KEY_BASE / VAULT_ENC_KEY while the Supabase
+# pooler was up -- a false refusal that blocked `make secrets-funnel`.
+
+_UTF8_EMITTER = (
+    "import sys; sys.stdout.buffer.write("
+    "'{\"Env\": [\"NOTE=a\u200db\"]}'.encode('utf-8'))"
+)
+
+
+def test_probe_decodes_docker_output_as_utf8_on_every_platform():
+    """Byte 0x8d is undefined in cp1252; the probe must still read it."""
+    out = sh.DockerProbe._run([sys.executable, "-c", _UTF8_EMITTER])
+    assert "a\u200db" in out
+
+
+def test_probe_pins_utf8_strict_rather_than_the_platform_codec(monkeypatch):
+    """Pins the intent where the platform codec is already UTF-8 (Linux CI)."""
+    seen = {}
+
+    class _Done:
+        returncode = 0
+        stdout = "x"
+
+    def fake_run(cmd, **kwargs):
+        seen.update(kwargs)
+        return _Done()
+
+    monkeypatch.setattr(sh.subprocess, "run", fake_run)
+    assert sh.DockerProbe._run(["docker", "ps"]) == "x"
+    assert seen.get("encoding") == "utf-8"
+    assert seen.get("errors") == "strict"
+
+
+def test_probe_fails_closed_when_stdout_is_lost(monkeypatch):
+    """A lost stdout (reader-thread decode death) must read as nothing, not crash."""
+
+    class _Lost:
+        returncode = 0
+        stdout = None
+
+    monkeypatch.setattr(sh.subprocess, "run", lambda cmd, **kw: _Lost())
+    assert sh.DockerProbe._run(["docker", "inspect", "x"]) == ""
