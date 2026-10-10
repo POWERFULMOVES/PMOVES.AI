@@ -536,7 +536,7 @@ models:
 # (agent_signatures.yaml:216), not a free-text note.
 lanes:
   - canonical: digital-twin
-    aliases: ["A0 digital-twin", "digital-twin"]
+    aliases: ["A0 digital-twin", "digital-twin", "WINDOWS"]
     note: >-
       The digital-twin lane worn by agent0-sidecar instances -- the operator's
       corpus-tied twin posture. Declared 2026-10-10 after the gate flagged the
