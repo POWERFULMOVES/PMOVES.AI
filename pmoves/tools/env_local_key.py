@@ -199,7 +199,7 @@ def _backup(path: Path, data: bytes) -> Path:
         except FileExistsError:
             continue
         try:
-            os.fchmod(fd, 0o600)
+            _fchmod(fd, 0o600)
             with os.fdopen(fd, "wb") as fh:
                 fh.write(data)
                 fh.flush()
@@ -231,14 +231,23 @@ def _warn_lost_owner(owner: tuple[int, int]) -> None:
           file=sys.stderr)
 
 
+def _fchmod(fd: int, mode: int) -> None:
+    """os.fchmod where it exists. Windows has no os.fchmod (AttributeError, not
+    OSError, so the callers' `except OSError` never caught it) and no POSIX mode
+    bits to tighten; the mode passed to os.open/mkstemp is all it honours."""
+    fchmod = getattr(os, "fchmod", None)
+    if fchmod is not None:
+        fchmod(fd, mode)
+
+
 def _atomic_write(path: Path, data: bytes, mode: int,
                   owner: tuple[int, int] | None) -> None:
     # `<name>.tmp-*` so the leftover of a crash still matches the `.env.*`
     # ignore rule (a leading-dot prefix made it `..env.local.tmp-*`).
     fd, tmp = tempfile.mkstemp(prefix=f"{path.name}.tmp-", dir=str(path.parent))
     try:
-        os.fchmod(fd, mode)
-        if owner is not None:
+        _fchmod(fd, mode)
+        if owner is not None and hasattr(os, "fchown"):  # POSIX only
             try:
                 os.fchown(fd, *owner)
             except PermissionError:
@@ -269,7 +278,7 @@ class _AuditLog:
             raise Refused(f"audit log not writable ({exc.__class__.__name__}); "
                           "nothing changed") from exc
         try:  # re-tighten a pre-existing looser file
-            os.fchmod(self.fd, 0o600)
+            _fchmod(self.fd, 0o600)
         except OSError:
             pass
 
