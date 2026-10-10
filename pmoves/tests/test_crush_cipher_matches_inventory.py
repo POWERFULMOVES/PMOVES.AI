@@ -118,7 +118,12 @@ def test_generated_config_carries_the_live_path(key):
     )
     url = (specs[0].config or {}).get("url", "")
     assert "/api/mcp/sse" not in url, f"{key} still points at the 404 path: {url}"
-    assert url.endswith("/mcp/sse"), f"{key} unexpected cipher URL: {url}"
+    # 2026-10-10: the live path is the stateless streamable-http endpoint. The
+    # legacy SSE pair (/mcp/sse + /mcp/messages) 400s "stream is not readable"
+    # on any container built before fork PR #27 (pin a0ee2314); POST /mcp works
+    # on pre- and post-pin builds (measured on 5090). Mirrors the inventory.
+    assert not url.endswith("/mcp/sse"), f"{key} still on the legacy SSE path: {url}"
+    assert url.endswith("/mcp"), f"{key} unexpected cipher URL: {url}"
     # The empty-bearer fallback only works if the token is NOT required:
     # missing_envs() would add disabled=true on tokenless nodes and the
     # corrected URL/ header would still ship a dark entry.

@@ -10,8 +10,8 @@ the session looks normal and every recalled fact is missing.
 
 `.claude/mcp.json` carries TWO cipher entries, and which one answers matters:
 
-    pmoves-cipher        http://${TS_Z890}:8105/mcp/sse   the Z890 node
-    pmoves-cipher-local  http://localhost:8105/mcp/sse    this node
+    pmoves-cipher        http://${TS_Z890}:8105/mcp   the Z890 node
+    pmoves-cipher-local  http://localhost:8105/mcp    this node
 
 #2792 added the local entry precisely because the roster had carried only the
 fleet one — "memory that silently wasn't there" when Z890 was unreachable. This
@@ -20,6 +20,12 @@ tool reports WHICH endpoint answered, so "memory is up" never quietly means
 
 SSE is why this cannot be a naive health check
 ----------------------------------------------
+Since 2026-10-10 the roster entries are `type: http` at `/mcp` (stateless
+streamable-http). That route is POST-only -- a GET answers 404 -- so the probe
+sends a JSON-RPC `initialize` POST there and reads the status line. An entry
+that is `type: sse` (or an explicit --url ending in /sse) is still probed with
+the GET below. Both forms present the same bearer and 401 without it.
+
 `/mcp/sse` is a Server-Sent Events stream: the response headers arrive at once
 and the body NEVER closes. A check that waits for the request to finish reads a
 perfectly healthy Cipher as a timeout — measured on the 4090, a 10s budget
@@ -69,7 +75,7 @@ which is not the same instruction as start the service.
 Usage:
   python pmoves/tools/cipher_preflight.py
   python pmoves/tools/cipher_preflight.py --json
-  python pmoves/tools/cipher_preflight.py --url http://localhost:8105/mcp/sse
+  python pmoves/tools/cipher_preflight.py --url http://localhost:8105/mcp
   python pmoves/tools/cipher_preflight.py --url ... --token-env OTHER_TOKEN_VAR
   python pmoves/tools/cipher_preflight.py --url ... --token-env ''   # anonymous
 
@@ -104,6 +110,7 @@ import socket
 import sys
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Optional
@@ -346,7 +353,13 @@ def cipher_urls_from_roster(roster: Optional[Path] = None) -> List[Dict[str, str
             # roster declares the bearer /mcp/sse requires, and a probe that
             # discards it can only ever be told 401.
             headers = (spec or {}).get("headers") or {}
-            found.append({"name": name, "url": url, "headers": headers})
+            found.append({
+                "name": name,
+                "url": url,
+                "headers": headers,
+                # `type` decides the probe shape: streamable-http is POST-only.
+                "transport": (spec or {}).get("type"),
+            })
     return found
 
 
@@ -400,8 +413,15 @@ def probe(
     headers: Optional[Dict[str, str]] = None,
     timeout: float = CONNECT_TIMEOUT,
     environ: Optional[Mapping[str, str]] = None,
+    transport: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Reach the endpoint, present its credential, and read ONLY the status line.
+
+    `transport` is the roster entry's `type`. For `http` (streamable-http, the
+    roster default since 2026-10-10) the endpoint is POST-only, so the probe is a
+    JSON-RPC `initialize` POST; otherwise (sse, or an explicit --url) it is the
+    GET below. A URL whose path ends in `/mcp` is treated as streamable even
+    when no `type` rode along (an explicit --url has none).
 
     Returns a row describing the outcome; never raises for a reachability
     failure, because "this one is down" is a measurement.
@@ -470,9 +490,34 @@ def probe(
         return row
 
     # `sent` holds the secret. It goes onto the request and is not retained.
-    request_headers = {"Accept": "text/event-stream", **sent}
+    streamable = transport == "http" or (
+        transport != "sse" and urllib.parse.urlsplit(url).path.rstrip("/").endswith("/mcp")
+    )
+    if streamable:
+        request_headers = {
+            "Accept": "application/json, text/event-stream",
+            "Content-Type": "application/json",
+            **sent,
+        }
+        body = json.dumps(
+            {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "initialize",
+                "params": {
+                    "protocolVersion": "2025-03-26",
+                    "capabilities": {},
+                    "clientInfo": {"name": "cipher_preflight", "version": "0"},
+                },
+            }
+        ).encode("utf-8")
+    else:
+        request_headers = {"Accept": "text/event-stream", **sent}
+        body = None
     try:
-        req = urllib.request.Request(url, headers=request_headers)
+        req = urllib.request.Request(
+            url, data=body, headers=request_headers, method="POST" if streamable else "GET"
+        )
     except ValueError:
         # `Request()` raises ValueError("unknown url type: ...") for a
         # schemeless or otherwise unparseable url. This construction sat
@@ -546,7 +591,7 @@ def check(
         # An explicit --url used to build a candidate with NO headers, so the
         # documented command
         #
-        #     python pmoves/tools/cipher_preflight.py --url http://localhost:8105/mcp/sse
+        #     python pmoves/tools/cipher_preflight.py --url http://localhost:8105/mcp
         #
         # probed anonymously against an endpoint that requires a bearer and
         # could therefore only ever report 401. That is this file's own thesis
@@ -564,7 +609,7 @@ def check(
         # measure whether an endpoint requires a credential at all, which is
         # the observation this whole lane started from.
         hdrs = {"Authorization": f"Bearer ${{{token_env}}}"} if token_env else {}
-        candidates = [{"name": "--url", "url": u, "headers": dict(hdrs)} for u in urls]
+        candidates = [{"name": "--url", "url": u, "headers": dict(hdrs), "transport": None} for u in urls]
     else:
         candidates = cipher_urls_from_roster(roster)
         if not candidates:
@@ -585,7 +630,7 @@ def check(
     probe_since = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     rows = []
     for cand in candidates:
-        result = probe(cand["url"], cand.get("headers"), environ=environ)
+        result = probe(cand["url"], cand.get("headers"), environ=environ, transport=cand.get("transport"))
         result["name"] = cand["name"]
         rows.append(result)
 
