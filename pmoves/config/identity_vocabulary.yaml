@@ -536,6 +536,13 @@ models:
 # Lanes and alters. `field` is a declared ALTER of 4090-claude
 # (agent_signatures.yaml:216), not a free-text note.
 lanes:
+  - canonical: digital-twin
+    aliases: ["A0 digital-twin", "digital-twin"]
+    note: >-
+      The digital-twin lane worn by agent0-sidecar instances -- the operator's
+      corpus-tied twin posture. Declared 2026-10-10 after the gate flagged the
+      parenthetical in 46 register author strings (declared late, recorded honestly).
+
   - canonical: field
     aliases: ["field"]
     alter_of: 4090-claude
