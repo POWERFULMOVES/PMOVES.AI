@@ -540,6 +540,9 @@ services:
       dockerfile: services/hi-rag-gateway-v2/Dockerfile
     restart: unless-stopped
     environment:
+    # NATS_URL via interpolation, the same source as the broker's ${NATS_PASSWORD};
+    # env_file alone was measured failing auth after a broker recreate.
+    - NATS_URL=${NATS_URL}
     # Host environment leak guard (see x-host-leak-guard docs above)
     - SSL_CERT_FILE=
     - SSL_CERT_DIR=
@@ -751,6 +754,9 @@ services:
     - --port
     - '8086'
     environment:
+    # NATS_URL via interpolation, the same source as the broker's ${NATS_PASSWORD};
+    # env_file alone was measured failing auth after a broker recreate.
+    - NATS_URL=${NATS_URL}
     # Host environment leak guard (see x-host-leak-guard docs above)
     - SSL_CERT_FILE=
     - SSL_CERT_DIR=
@@ -879,7 +885,9 @@ services:
     build: ./services/mesh-agent
     restart: unless-stopped
     environment:
-    # NATS_URL from env.shared/env.tier-agent has credentials: nats://nats:***@nats:4222
+    # NATS_URL via interpolation, the same source as the broker's ${NATS_PASSWORD};
+    # env_file alone was measured failing auth after a broker recreate.
+    - NATS_URL=${NATS_URL}
     - HIRAG_URL=${HIRAG_URL:-http://hi-rag-gateway-v2-gpu:8086}
     - ANNOUNCE_SEC=${ANNOUNCE_SEC:-15}
     - PMOVES_NETWORKS=pmoves_app,pmoves_bus
