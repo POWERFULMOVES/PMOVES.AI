@@ -6,7 +6,7 @@
 > guilds, and access grants; it **references** the canonical sources for agents/nodes
 > and personas — it does not redefine them:
 >
-> - Agents / teams / node_affinity → [`pmoves/configs/agent-teams.yaml`](../pmoves/configs/agent-teams.yaml) (62 agents · 11 teams)
+> - Agents / teams / node_affinity → [`pmoves/configs/agent-teams.yaml`](../pmoves/configs/agent-teams.yaml) (111 registry agents · 14 teams — source: pmoves/config/agent_registry.yaml + agent-teams.yaml, measured 2026-10-10)
 > - Agent personas → [`pmoves/docs/AGENTS/PERSONAS.md`](../pmoves/docs/AGENTS/PERSONAS.md)
 > - Node hardware → `pmoves/config/profiles/<node>.yaml`
 >
@@ -49,7 +49,7 @@ _Add collaborators / DAO members / Fordham Hill participants in `users.yaml:huma
 
 _Tailnet hostnames marked TODO in `users.yaml` need operator confirmation._
 
-## Org Guilds  *(people/access — distinct from the 11 functional agent teams)*
+## Org Guilds  *(people/access — distinct from the 14 functional agent teams (measured 2026-10-10))*
 
 | Guild | Purpose | Charter | Functional teams | Members |
 |-------|---------|---------|------------------|---------|
