@@ -82,6 +82,7 @@ jobs:
             PMOVES-crush
             PMOVES-spynel
             PMOVES-registry
+            PMOVES-garage
 
       - name: Discover forks
         env:
@@ -175,6 +176,7 @@ jobs:
           charmbracelet/crush|PMOVES-crush|
           agent0ai/spynel|PMOVES-spynel|PMOVES.AI-Edition-Hardened
           agentclientprotocol/registry|PMOVES-registry|
+          deuxfleurs-org/garage|PMOVES-garage|main-v2
           "
 
           # Process substitution (`< <(...)`) instead of `echo | grep | while`

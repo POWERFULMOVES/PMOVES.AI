@@ -255,6 +255,22 @@ REGISTRY: Dict[str, Dict[str, Any]] = {
     # required=False buys elsewhere does not apply here -- an absent value fails
     # loudly at mount time with an auth error, not quietly at runtime.
     "JUICEFS_META_PASSWORD": {"tier": "data", "required": False},
+    # Garage object store for JuiceFS pmoves-media
+    # (docs/architecture/JUICEFS_GARAGE_MIGRATION_PLAN.md §1.6). required=False for
+    # the JUICEFS_META_PASSWORD reason: only storage nodes need the three GARAGE_*
+    # values, and only the migration context needs the bucket key pair. Shapes
+    # are the vendor's: rpc_secret is `openssl rand -hex 32`
+    # (cookbook/real-world.md), the tokens `openssl rand -base64 32`
+    # (quick-start/), the key id GK + 24 hex (src/model/key_table.rs). The
+    # manifest checks only min_length/prefix; `garage_render_config.py
+    # materialize` checks the exact shape before it writes the 0600 files.
+    # The secret key outlives the migration (re-injected after the D1 metadata
+    # move, §1.6), so it is not a one-shot label.
+    "GARAGE_RPC_SECRET": {"tier": "data", "required": False, "min_length": 64},
+    "GARAGE_ADMIN_TOKEN": {"tier": "data", "required": False, "min_length": 44},
+    "GARAGE_METRICS_TOKEN": {"tier": "data", "required": False, "min_length": 44},
+    "JUICEFS_GARAGE_ACCESS_KEY": {"tier": "data", "required": False, "min_length": 26, "prefix": "GK"},
+    "JUICEFS_GARAGE_SECRET_KEY": {"tier": "data", "required": False, "min_length": 64},
     "NATS_EVENT_BUS_TOKEN": {"tier": "data", "required": True},
     "PMOVES_BRIDGE_TOKEN": {"tier": "worker", "required": True},
     # ActivePieces self-host (docker-compose.activepieces.yml, PR #2906). The
