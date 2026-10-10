@@ -67,6 +67,10 @@ fi
 # (<git root>/.mcp.json, AGENTS.md) and keys "continue" by cwd, so a launch from a sibling
 # checkout ran against THAT checkout's files. A cwd inside this checkout
 # (including .claude/worktrees/*) is kept; PMOVES_LAUNCH_KEEP_CWD=1 keeps any.
+# pm-cwd-bind: this block is an inline TWIN of the one in kilo-pmoves.sh --
+# deliberately not a sourced fragment, so the binding holds on a checkout with
+# no fragments at all. test_kimi_kilo_launchers.py asserts the two blocks are
+# byte-identical modulo the launcher tag; edit both or the test fails.
 ROOT_P="$(CDPATH='' cd -P -- "$PROJECT_ROOT" && pwd)" || exit 1
 HERE_P="$(pwd -P)"
 case "$HERE_P/" in
@@ -87,7 +91,18 @@ fi
 CONFIG="$PROJECT_ROOT/.kimi/config.toml"
 MCP_CONFIG="$PROJECT_ROOT/.kimi/mcp.json"
 
-if ! kimi --help 2>&1 | grep -q -- '--config-file'; then
+# Which program is this? Ask its --help ONCE and keep the answer. The match is
+# anchored to a flag-DEFINITION line (`--config-file` at the start of a line,
+# optionally after a short flag), not to the string appearing anywhere: a
+# deprecation note or an example mentioning the flag must not flip this to the
+# legacy path and resurrect `unknown option '--config-file'`. Empty or failed
+# --help is an explicit refusal, not a silent fall-through into either branch.
+KIMI_HELP="$(kimi --help 2>&1 || true)"
+if [ -z "$KIMI_HELP" ]; then
+  echo "[!] 'kimi --help' printed nothing, so this launcher cannot tell Kimi Code from the legacy kimi-cli ($(command -v kimi)). Not guessing: run 'kimi --help' yourself and fix the install." >&2
+  exit 1
+fi
+if ! printf '%s\n' "$KIMI_HELP" | grep -Eq -- '^[[:space:]]*(-[A-Za-z][[:space:]]*,[[:space:]]*)?--config-file([[:space:]=,]|$)'; then
   # Kimi Code. Its config is user-level; the .kimi/ files are kimi-cli
   # formats it does not read, so say where config really comes from.
   echo "[kimi-pmoves] $(command -v kimi): Kimi Code -- config from ${KIMI_CODE_HOME:-$HOME/.kimi-code}/{config.toml,mcp.json} + $PROJECT_ROOT/.mcp.json; .kimi/config.toml and .kimi/mcp.json are legacy kimi-cli files and are not loaded" >&2

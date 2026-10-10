@@ -69,6 +69,10 @@ fi
 # (<git root>/kilo.json, .kilo/) and keys "continue" by cwd, so a launch from a sibling
 # checkout ran against THAT checkout's files. A cwd inside this checkout
 # (including .claude/worktrees/*) is kept; PMOVES_LAUNCH_KEEP_CWD=1 keeps any.
+# pm-cwd-bind: this block is an inline TWIN of the one in kimi-pmoves.sh --
+# deliberately not a sourced fragment, so the binding holds on a checkout with
+# no fragments at all. test_kimi_kilo_launchers.py asserts the two blocks are
+# byte-identical modulo the launcher tag; edit both or the test fails.
 ROOT_P="$(CDPATH='' cd -P -- "$PROJECT_ROOT" && pwd)" || exit 1
 HERE_P="$(pwd -P)"
 case "$HERE_P/" in

@@ -18,11 +18,14 @@ stub saw.
 
 from __future__ import annotations
 
+import re
 import shutil
 import subprocess
 from pathlib import Path
 
 import pytest
+
+from pmoves.tools.bash_resolver import resolve_bash  # never System32's WSL stub
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SCRIPTS = REPO_ROOT / "pmoves" / "scripts"
@@ -67,7 +70,7 @@ def _run(
         **(extra_env or {}),
     }
     proc = subprocess.run(
-        ["bash", str(SCRIPTS / launcher), *args],
+        [resolve_bash(), str(SCRIPTS / launcher), *args],
         cwd=outside,
         env=env,
         capture_output=True,
@@ -120,3 +123,42 @@ def test_keep_cwd_opt_out(tmp_path: Path) -> None:
         extra_env={"PMOVES_LAUNCH_KEEP_CWD": "1"},
     )
     assert cwd == str((tmp_path / "elsewhere").resolve()), proc.stderr
+
+
+def test_kimi_empty_help_is_refused_not_guessed(tmp_path: Path) -> None:
+    """`kimi --help` printing nothing (broken install, shim) must not fall through
+    into either branch: a silent Kimi Code launch would drop the legacy config,
+    a silent legacy launch would die on `--config-file`. Explicit exit 1."""
+    proc, argv, _ = _run("kimi-pmoves.sh", ["-p", "hi"], tmp_path, "kimi", help_text="")
+    assert proc.returncode == 1, proc.stderr
+    assert argv is None, "kimi must not be exec'd when --help is empty"
+    assert "cannot tell Kimi Code from the legacy kimi-cli" in proc.stderr
+
+
+def test_kimi_help_mentioning_the_flag_in_prose_is_not_legacy(tmp_path: Path) -> None:
+    """The match is anchored to a flag-definition line. A help text that merely
+    MENTIONS --config-file (deprecation note, example) is still Kimi Code."""
+    proc, argv, _ = _run(
+        "kimi-pmoves.sh", ["-p", "hi"], tmp_path, "kimi",
+        help_text="Usage: kimi [options]\n  -p, --prompt <prompt>\nNote: the old --config-file flag was removed in 2.0",
+    )
+    assert argv == ["-p", "hi"], proc.stderr
+
+
+_CWD_BLOCK = re.compile(r"ROOT_P=.*?\nesac\n", re.S)
+
+
+def test_cwd_binding_blocks_are_twins() -> None:
+    """Both launchers carry the cwd binding INLINE on purpose (it must hold on a
+    checkout with no fragments). The price of a copied block is drift; this test
+    is what makes the copy non-driftable: byte-identical modulo the tag."""
+    blocks = {}
+    for name in ("kimi-pmoves.sh", "kilo-pmoves.sh"):
+        text = (SCRIPTS / name).read_text(encoding="utf-8")
+        m = _CWD_BLOCK.search(text)
+        assert m, f"{name}: cwd binding block not found"
+        tag = name.removesuffix(".sh")
+        blocks[name] = m.group(0).replace(f"[{tag}]", "[TAG]")
+    assert blocks["kimi-pmoves.sh"] == blocks["kilo-pmoves.sh"], (
+        "cwd binding blocks drifted between kimi-pmoves.sh and kilo-pmoves.sh"
+    )
