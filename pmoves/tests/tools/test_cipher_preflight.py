@@ -85,6 +85,59 @@ def test_a_reachable_endpoint_passes(monkeypatch, tmp_path):
     assert cp.main(["--roster", str(roster)]) == 0
 
 
+def test_a_streamable_http_entry_is_probed_with_a_jsonrpc_post(monkeypatch, tmp_path):
+    """Roster entries are `type: http` at /mcp since 2026-10-10. That route is
+    POST-only (GET -> 404 on the live shim), so a GET probe would report a
+    healthy cipher as http_error. The probe must POST an `initialize`."""
+    seen = {}
+
+    def fake(req, *a, **k):
+        seen["method"] = req.get_method()
+        seen["accept"] = req.get_header("Accept")
+        seen["body"] = json.loads(req.data.decode("utf-8")) if req.data else None
+        return _Resp(200)
+
+    monkeypatch.setattr(cp, "_urlopen", fake)
+    roster = _roster(
+        tmp_path,
+        {"pmoves-cipher-local": {"type": "http", "url": "http://localhost:8105/mcp"}},
+    )
+    assert cp.main(["--roster", str(roster)]) == 0
+    assert seen["method"] == "POST"
+    assert "application/json" in seen["accept"]
+    assert seen["body"]["method"] == "initialize"
+
+
+def test_an_sse_entry_is_still_probed_with_a_get(monkeypatch, tmp_path):
+    seen = {}
+
+    def fake(req, *a, **k):
+        seen["method"] = req.get_method()
+        seen["body"] = req.data
+        return _Resp(200)
+
+    monkeypatch.setattr(cp, "_urlopen", fake)
+    roster = _roster(
+        tmp_path,
+        {"pmoves-cipher-local": {"type": "sse", "url": "http://localhost:8105/mcp/sse"}},
+    )
+    assert cp.main(["--roster", str(roster)]) == 0
+    assert seen["method"] == "GET"
+    assert seen["body"] is None
+
+
+def test_an_explicit_url_ending_in_mcp_is_treated_as_streamable(monkeypatch, tmp_path):
+    seen = {}
+
+    def fake(req, *a, **k):
+        seen["method"] = req.get_method()
+        return _Resp(200)
+
+    monkeypatch.setattr(cp, "_urlopen", fake)
+    assert cp.main(["--url", "http://localhost:8105/mcp", "--token-env", ""]) == 0
+    assert seen["method"] == "POST"
+
+
 def test_the_answering_endpoint_is_named(monkeypatch, tmp_path, capsys):
     """"Memory is up" must not quietly mean "someone else's memory is up"."""
     monkeypatch.setattr(cp, "_urlopen", lambda *a, **k: _Resp(200))
