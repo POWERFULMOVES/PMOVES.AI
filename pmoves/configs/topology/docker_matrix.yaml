@@ -30,6 +30,8 @@ overlays:
     canonical_path: pmoves/docker-compose.a0-elder-melchor.yml
   - name: activepieces
     canonical_path: pmoves/docker-compose.activepieces.yml
+  - name: agent-zero-darkxside-vm
+    canonical_path: pmoves/docker-compose.agent-zero-darkxside-vm.yml
   - name: agent-zero-instances
     canonical_path: pmoves/docker-compose.agent-zero-instances.yml
   - name: agentgym
@@ -2206,6 +2208,12 @@ unmapped_compose_keys:
   - overlay: activepieces
     compose_key: activepieces-worker
     path: pmoves/docker-compose.activepieces.yml
+  - overlay: agent-zero-darkxside-vm
+    compose_key: agent-zero-darkxside-vm
+    path: pmoves/docker-compose.agent-zero-darkxside-vm.yml
+  - overlay: agent-zero-darkxside-vm
+    compose_key: pmoves-net
+    path: pmoves/docker-compose.agent-zero-darkxside-vm.yml
   - overlay: agent-zero-instances
     compose_key: agent-zero-darkxside-inst
     path: pmoves/docker-compose.agent-zero-instances.yml
