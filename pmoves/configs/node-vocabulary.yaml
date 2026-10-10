@@ -71,6 +71,10 @@ nodes:
   - pmoves-spark
   - dgx-spark
   - PMOVES-SPARK
+  default_identity:
+    claude-code: claude_spark
+  cipher_agent_id:
+    claude-code: spark-claude
 - canonical: z890
   kind: node
   reach: pmoves-z890
