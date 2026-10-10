@@ -242,7 +242,7 @@ identities:
       instead of in the identity.
 
   - canonical: spark-kimi
-    aliases: ["SPARK-KIMI", "KIMI-SPARK"]
+    aliases: ["SPARK-KIMI", "KIMI-SPARK", "kimi_spark"]
     node: spark
     note: 32 entries under two orderings of the same two words.
 

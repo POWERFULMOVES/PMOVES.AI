@@ -1,14 +1,18 @@
 #!/usr/bin/env bash
-# kimi-pmoves — Bootstrap Kimi Code CLI with PMOVES project config and MCP
+# kimi-pmoves — Bootstrap Kimi with PMOVES project context
 # Usage: kimi-pmoves [kimi-args...]
 #
-# Launches Kimi with PMOVES context files, MCP config (Cipher + Agent Zero),
-# and skill merging from .kimi/, .claude/, .codex/ skill trees.
+# Two different programs answer to `kimi`, and this launcher serves both:
+#   - Kimi Code (>= 2.x, ~/.kimi-code/bin/kimi): takes NO config-file flags.
+#     It reads <KIMI_CODE_HOME>/config.toml and mcp.json, plus the project
+#     layer it finds from the working directory (<git root>/.mcp.json,
+#     <cwd>/.kimi-code/mcp.json, AGENTS.md). Passing --config-file made it
+#     exit with "error: unknown option '--config-file'" before any session.
+#   - legacy kimi-cli (uv tool): takes --config-file / --mcp-config-file,
+#     which load .kimi/config.toml and .kimi/mcp.json.
+# The flag set is chosen by asking `kimi --help`, not by version-guessing.
 #
-# Prerequisites:
-#   - kimi CLI installed
-#   - .kimi/config.toml exists (created by make -C pmoves env-setup)
-#   - .kimi/mcp.json exists (created by PR #2112)
+# Either way the session is bound to THIS checkout (see the cwd block below).
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
@@ -59,8 +63,51 @@ if [ -f "$PROJECT_ROOT/pmoves/scripts/pm-node-identity.sh" ]; then
   fi
 fi
 
+# Bind the session to this checkout. Kimi Code finds its project layer
+# (<git root>/.mcp.json, AGENTS.md) and keys "continue" by cwd, so a launch from a sibling
+# checkout ran against THAT checkout's files. A cwd inside this checkout
+# (including .claude/worktrees/*) is kept; PMOVES_LAUNCH_KEEP_CWD=1 keeps any.
+# pm-cwd-bind: this block is an inline TWIN of the one in kilo-pmoves.sh --
+# deliberately not a sourced fragment, so the binding holds on a checkout with
+# no fragments at all. test_kimi_kilo_launchers.py asserts the two blocks are
+# byte-identical modulo the launcher tag; edit both or the test fails.
+ROOT_P="$(CDPATH='' cd -P -- "$PROJECT_ROOT" && pwd)" || exit 1
+HERE_P="$(pwd -P)"
+case "$HERE_P/" in
+  "$ROOT_P"/*) ;;
+  *)
+    if [ -z "${PMOVES_LAUNCH_KEEP_CWD:-}" ]; then
+      cd -- "$ROOT_P" || exit 1
+      echo "[kimi-pmoves] cwd=$ROOT_P (was $HERE_P, outside this checkout; PMOVES_LAUNCH_KEEP_CWD=1 keeps it)" >&2
+    fi
+    ;;
+esac
+
+if ! command -v kimi >/dev/null 2>&1; then
+  echo "[!] kimi not found on PATH. Install Kimi Code (https://moonshotai.github.io/kimi-code/)."
+  exit 127
+fi
+
 CONFIG="$PROJECT_ROOT/.kimi/config.toml"
 MCP_CONFIG="$PROJECT_ROOT/.kimi/mcp.json"
+
+# Which program is this? Ask its --help ONCE and keep the answer. The match is
+# anchored to a flag-DEFINITION line (`--config-file` at the start of a line,
+# optionally after a short flag), not to the string appearing anywhere: a
+# deprecation note or an example mentioning the flag must not flip this to the
+# legacy path and resurrect `unknown option '--config-file'`. Empty or failed
+# --help is an explicit refusal, not a silent fall-through into either branch.
+KIMI_HELP="$(kimi --help 2>&1 || true)"
+if [ -z "$KIMI_HELP" ]; then
+  echo "[!] 'kimi --help' printed nothing, so this launcher cannot tell Kimi Code from the legacy kimi-cli ($(command -v kimi)). Not guessing: run 'kimi --help' yourself and fix the install." >&2
+  exit 1
+fi
+if ! printf '%s\n' "$KIMI_HELP" | grep -Eq -- '^[[:space:]]*(-[A-Za-z][[:space:]]*,[[:space:]]*)?--config-file([[:space:]=,]|$)'; then
+  # Kimi Code. Its config is user-level; the .kimi/ files are kimi-cli
+  # formats it does not read, so say where config really comes from.
+  echo "[kimi-pmoves] $(command -v kimi): Kimi Code -- config from ${KIMI_CODE_HOME:-$HOME/.kimi-code}/{config.toml,mcp.json} + $PROJECT_ROOT/.mcp.json; .kimi/config.toml and .kimi/mcp.json are legacy kimi-cli files and are not loaded" >&2
+  exec kimi "$@"
+fi
 
 if [ ! -f "$CONFIG" ]; then
   echo "[!] Kimi config not found: $CONFIG"

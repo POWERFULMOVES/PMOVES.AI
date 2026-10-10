@@ -1,16 +1,25 @@
 #!/usr/bin/env bash
-# kilo-pmoves — Bootstrap KiloCode/OpenCode with PMOVES per-node config
-# Usage: kilo-pmoves [node-name] [opencode-args...]
-# Default node: 5090 (GPU inference workhorse)
-# Other nodes: 4090, kvm4-1, kvm4-2, nemotron-claw, nemoclaw
+# kilo-pmoves — Bootstrap the Kilo CLI with PMOVES project config
+# Usage: kilo-pmoves [kilo-args...]
 #
-# Examples:
-#   kilo-pmoves                    # 5090 node (default)
-#   kilo-pmoves 4090               # 4090 laptop node
-#   kilo-pmoves kvm4-1             # KVM4-1 VPS gateway node
-
-NODE="${1:-5090}"
-shift 2>/dev/null || true
+# Kilo loads the project config from the repo root (kilo.json, .kilo/,
+# .kilocode/) by walking up from the working directory, so the launcher binds
+# the session to this checkout and passes every argument
+# through to `kilo`.
+#
+# What this replaced, and why each part was broken:
+#   - It exec'd `opencode`, not `kilo`: a different program that does not read
+#     kilo.json, so "kilo-pmoves" never started Kilo at all.
+#   - It passed `--config pmoves/configs/claws/opencode-<node>.json`. Neither
+#     opencode nor kilo has a --config flag (it was silently ignored), and those
+#     files use the Claude-style `mcpServers` key, which opencode rejects with
+#     "Unrecognized key: mcpServers" when the file is supplied through
+#     OPENCODE_CONFIG. They remain the per-node MCP reference that
+#     `make opencode-bootstrap` maintains; they are not a launch config.
+#   - It took $1 as a node name unconditionally, defaulting to 5090 on every
+#     node, so `kilo-pmoves --version` died with "Config not found:
+#     opencode---version.json". A leading node name that matches a claws file
+#     is still accepted (and dropped) so old invocations keep working.
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
@@ -51,15 +60,36 @@ if [ -f "$PROJECT_ROOT/pmoves/scripts/pm-node-identity.sh" ]; then
   fi
 fi
 
-CONFIG="$PROJECT_ROOT/pmoves/configs/claws/opencode-${NODE}.json"
-
-if [ ! -f "$CONFIG" ]; then
-  echo "[!] Config not found: $CONFIG"
-  echo "    Available nodes:"
-  ls "$PROJECT_ROOT/pmoves/configs/claws/opencode-"*.json 2>/dev/null | \
-    xargs -n1 basename | sed 's/opencode-//; s/.json//' | \
-    awk '{print "      - "$0}'
-  exit 1
+if [ -n "${1:-}" ] && [ -f "$PROJECT_ROOT/pmoves/configs/claws/opencode-$1.json" ]; then
+  echo "[kilo-pmoves] node argument '$1' ignored: claws/opencode-$1.json is an MCP reference, not a kilo config; kilo loads $PROJECT_ROOT/kilo.json" >&2
+  shift
 fi
 
-exec opencode --config "$CONFIG" "$@"
+# Bind the session to this checkout. kilo finds its project layer
+# (<git root>/kilo.json, .kilo/) and keys "continue" by cwd, so a launch from a sibling
+# checkout ran against THAT checkout's files. A cwd inside this checkout
+# (including .claude/worktrees/*) is kept; PMOVES_LAUNCH_KEEP_CWD=1 keeps any.
+# pm-cwd-bind: this block is an inline TWIN of the one in kimi-pmoves.sh --
+# deliberately not a sourced fragment, so the binding holds on a checkout with
+# no fragments at all. test_kimi_kilo_launchers.py asserts the two blocks are
+# byte-identical modulo the launcher tag; edit both or the test fails.
+ROOT_P="$(CDPATH='' cd -P -- "$PROJECT_ROOT" && pwd)" || exit 1
+HERE_P="$(pwd -P)"
+case "$HERE_P/" in
+  "$ROOT_P"/*) ;;
+  *)
+    if [ -z "${PMOVES_LAUNCH_KEEP_CWD:-}" ]; then
+      cd -- "$ROOT_P" || exit 1
+      echo "[kilo-pmoves] cwd=$ROOT_P (was $HERE_P, outside this checkout; PMOVES_LAUNCH_KEEP_CWD=1 keeps it)" >&2
+    fi
+    ;;
+esac
+
+# `kilocode` is the same npm package (@kilocode/cli) under its older name.
+for KILO_BIN in kilo kilocode; do
+  if command -v "$KILO_BIN" >/dev/null 2>&1; then
+    exec "$KILO_BIN" "$@"
+  fi
+done
+echo "[!] kilo not found on PATH. Install it with: npm install -g @kilocode/cli"
+exit 127
