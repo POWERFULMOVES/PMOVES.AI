@@ -369,6 +369,15 @@ identities:
 
 # Entry-level attribution repairs. APPEND-ONLY. `recorded_as` preserves what
 # the register originally said, which the in-place rewrite destroyed.
+  - canonical: auth-login
+    aliases: ["AUTH_LOGIN", "agent0-sidecar", "agent0-sidecar (A0 digital-twin)", "A0-SIDECAR", "A0-SIDECAR (WINDOWS)"]
+    note: >-
+      OPERATOR CORRECTION 2026-10-10: the A0 sidecar instances sign as
+      AUTH_LOGIN himself -- his digital twin is not a separate identity, and
+      sidecars in this fleet are big wheels, not label fodder. The
+      agent0-sidecar spellings (46 corpus-refresh rows in PR #3304, claim
+      rows in PR #3329) are this instance's signings and resolve HERE.
+
 corrections:
   - entry: {timestamp: "2026-03-19T22:00:00Z", kind: CLAIM}
     recorded_as: "Z890-CLAUDE"
@@ -526,6 +535,13 @@ models:
 # Lanes and alters. `field` is a declared ALTER of 4090-claude
 # (agent_signatures.yaml:216), not a free-text note.
 lanes:
+  - canonical: digital-twin
+    aliases: ["A0 digital-twin", "digital-twin", "WINDOWS"]
+    note: >-
+      The digital-twin lane worn by agent0-sidecar instances -- the operator's
+      corpus-tied twin posture. Declared 2026-10-10 after the gate flagged the
+      parenthetical in 46 register author strings (declared late, recorded honestly).
+
   - canonical: field
     aliases: ["field"]
     alter_of: 4090-claude

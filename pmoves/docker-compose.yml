@@ -1766,12 +1766,13 @@ services:
     # reachable MinIO endpoint (z890 tailnet IP:9000) so the URL recorded in
     # metadata resolves from remote nodes too; falls back to internal minio:9000
     # for single-node. Creds embed into metadata at format time.
+    # Credentials reach JuiceFS through META_PASSWORD / ACCESS_KEY / SECRET_KEY
+    # (environment below), never argv, so they do not show in `ps` on the host.
     # Single quotes around the DSN protect the '&' from shell interpretation.
     - >-
       n=0; until juicefs format --storage minio
       --bucket http://${JUICEFS_S3_ENDPOINT:-minio:9000}/${JUICEFS_BUCKET:-juicefs}
-      --access-key ${JUICEFS_S3_USER:-${MINIO_USER}} --secret-key ${JUICEFS_S3_PASSWORD:-${MINIO_PASSWORD}}
-      '${JUICEFS_META_URL:-postgres://supabase_admin:${SUPABASE_DB_PASSWORD}@supabase-db:5432/postgres?search_path=juicefs_meta&sslmode=disable}'
+      '${JUICEFS_META_URL:-postgres://supabase_admin@supabase-db:5432/postgres?search_path=juicefs_meta&sslmode=disable}'
       ${JUICEFS_NAME:-pmoves} 2>/dev/null; do
       n=$$((n+1)); [ $$n -ge 15 ] && { echo 'ERROR: Postgres not reachable after 15 retries'; exit 1; };
       echo "waiting for Postgres ($$n/15)..."; sleep 2; done
@@ -1783,6 +1784,9 @@ services:
 
     environment:
     - PMOVES_NETWORKS=pmoves_data,pmoves_external
+    - META_PASSWORD=${SUPABASE_DB_PASSWORD:?Set SUPABASE_DB_PASSWORD in env.tier-supabase}
+    - ACCESS_KEY=${JUICEFS_S3_USER:-${MINIO_USER:?Run make brand-defaults}}
+    - SECRET_KEY=${JUICEFS_S3_PASSWORD:-${MINIO_PASSWORD:?Run make brand-defaults}}
   juicefs-gateway:  # S3-compatible drop-in for minio:9000 (--multi-buckets required on CE)
     <<: *tier-data-hardened
     image: juicedata/mount:ce-v1.3.0
@@ -1795,6 +1799,9 @@ services:
     # juicefs gateway uses the MinIO gateway code: these are the S3 access/secret keys.
     - MINIO_ROOT_USER=${JUICEFS_S3_USER:-${MINIO_USER:?Run make brand-defaults}}
     - MINIO_ROOT_PASSWORD=${JUICEFS_S3_PASSWORD:-${MINIO_PASSWORD:?Run make brand-defaults}}
+    # Metadata password via env, not the DSN: a DSN on the command line is
+    # readable by any local user through `ps`.
+    - META_PASSWORD=${SUPABASE_DB_PASSWORD:?Set SUPABASE_DB_PASSWORD in env.tier-supabase}
     - PMOVES_NETWORKS=pmoves_data
     entrypoint: ["sh", "-lc"]
     command:
@@ -1810,7 +1817,7 @@ services:
       eval "$$(df -Pk "$$D" | awk 'NR==2{a=$$4;t=$$2;c=int(a/1024*0.5);if(c>102400)c=102400;if(c<512)c=512;r=(t>0?a/t*0.5:0.1);if(r>0.1)r=0.1;if(r<0.01)r=0.01;printf "CS=%d FSR=%.3f",c,r}')"
       mkdir -p "$$D/jfsCache"
       echo "[juicefs-gateway] bounded cache: --cache-dir $$D/jfsCache --cache-size $${CS}MiB --free-space-ratio $$FSR"
-      exec juicefs gateway --multi-buckets --keep-etag --cache-dir "$$D/jfsCache" --cache-size "$$CS" --free-space-ratio "$$FSR" '${JUICEFS_META_URL:-postgres://supabase_admin:${SUPABASE_DB_PASSWORD}@supabase-db:5432/postgres?search_path=juicefs_meta&sslmode=disable}' 0.0.0.0:9000
+      exec juicefs gateway --multi-buckets --keep-etag --cache-dir "$$D/jfsCache" --cache-size "$$CS" --free-space-ratio "$$FSR" '${JUICEFS_META_URL:-postgres://supabase_admin@supabase-db:5432/postgres?search_path=juicefs_meta&sslmode=disable}' 0.0.0.0:9000
     volumes:
     - juicefs-data:/data
     networks:
@@ -3048,6 +3055,9 @@ services:
       dockerfile: services/hi-rag-gateway-v2/Dockerfile
     restart: unless-stopped
     environment:
+    # NATS_URL via interpolation, the same source as the broker's ${NATS_PASSWORD};
+    # env_file alone was measured failing auth after a broker recreate.
+    - NATS_URL=${NATS_URL}
     # Host environment leak guard (see x-host-leak-guard docs above)
     - SSL_CERT_FILE=
     - SSL_CERT_DIR=
@@ -3233,6 +3243,9 @@ services:
     - --port
     - '8086'
     environment:
+    # NATS_URL via interpolation, the same source as the broker's ${NATS_PASSWORD};
+    # env_file alone was measured failing auth after a broker recreate.
+    - NATS_URL=${NATS_URL}
     # Host environment leak guard (see x-host-leak-guard docs above)
     - SSL_CERT_FILE=
     - SSL_CERT_DIR=
@@ -3561,6 +3574,13 @@ services:
     # task longer than a minute surfaced as a wrapper 503 (SPARK 2026-08-28:
     # three failed long-research dispatches before root cause).
     - AGENT_ZERO_MESSAGE_TIMEOUT=${AGENT_ZERO_MESSAGE_TIMEOUT:-600}
+    # Supervisor startup budget for the inner runtime (services/agent-zero/main.py
+    # startup_timeout, default 180s). Measured 2026-10-09 (Windows node): a fresh
+    # boot re-downloads Playwright Chromium+FFmpeg after 'Preload completed.' and
+    # cannot bind :80 within 180s -> TimeoutError -> unless-stopped restart loop
+    # (30+ cycles). 1800s covers a cold boot; the playwright volume below makes
+    # the download a one-time cost.
+    - AGENT_ZERO_STARTUP_TIMEOUT=${AGENT_ZERO_STARTUP_TIMEOUT:-1800}
     # OTEL traces for cloud-model calls — parity with tensorzero-gateway
     # (the A0 runtime honors the OTLP env contract for provider calls).
     - OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=${OTEL_EXPORTER_OTLP_TRACES_ENDPOINT:-http://pmoves-otel-collector:4317}
@@ -3646,7 +3666,7 @@ services:
     # override is never silently dropped.
     - CIPHER_MCP_URL=${CIPHER_MCP_URL:-http://cipher-api:8105/mcp/sse}
     - CIPHER_MCP_HTTP_URL=${CIPHER_MCP_HTTP_URL:-http://cipher-api:8105/mcp}
-    - 'A0_SET_mcp_servers={"mcpServers":{"docker":{"command":"docker","args":["run","--rm","-i","--mount","type=bind,src=/var/run/docker.sock,dst=/var/run/docker.sock","mcp/docker"]},"pmoves-supabase":{"command":"mcp-server-postgrest","args":["--apiUrl","${SUPABASE_REST_URL:-http://supabase-kong:8000/rest/v1}","--apiKey","${SERVICE_ROLE_KEY:-${SUPABASE_SERVICE_ROLE_KEY:-}}","--schema","public,storage"]},"cipher":{"type":"streamable-http","url":"${CIPHER_MCP_HTTP_URL:-http://cipher-api:8105/mcp}","headers":{"Authorization":"Bearer ${CIPHER_API_TOKEN}"}},"notebook":{"type":"streamable-http","url":"${NOTEBOOK_MCP_URL:-http://notebook-mcp:8092/mcp}"},"wealth":{"type":"streamable-http","url":"${WEALTH_MCP_URL:-http://wealth-mcp:8092/mcp}","headers":{"Authorization":"Bearer ${FIREFLY_ACCESS_TOKEN}"}}}}'
+    - 'A0_SET_mcp_servers={"mcpServers":{"docker":{"command":"docker","args":["run","--rm","-i","--mount","type=bind,src=/var/run/docker.sock,dst=/var/run/docker.sock","mcp/docker"]},"pmoves-supabase":{"command":"mcp-server-postgrest","args":["--apiUrl","${SUPABASE_REST_URL:-http://supabase-kong:8000/rest/v1}","--apiKey","${SERVICE_ROLE_KEY:-${SUPABASE_SERVICE_ROLE_KEY:-}}","--schema","public,pmoves_core,pmoves_kb"]},"cipher":{"type":"streamable-http","url":"${CIPHER_MCP_HTTP_URL:-http://cipher-api:8105/mcp}","headers":{"Authorization":"Bearer ${CIPHER_API_TOKEN}"}},"notebook":{"type":"streamable-http","url":"${NOTEBOOK_MCP_URL:-http://notebook-mcp:8092/mcp}","headers":{"Authorization":"Bearer ${OPEN_NOTEBOOK_API_TOKEN}"}},"wealth":{"type":"streamable-http","url":"${WEALTH_MCP_URL:-http://wealth-mcp:8092/mcp}","headers":{"Authorization":"Bearer ${FIREFLY_ACCESS_TOKEN}"}}}}'
     # LLM routing: use TensorZero gateway as OpenAI-compatible provider
     # Agent Zero's get_default_value() reads A0_SET_* from env (dotenv priority)
     # Dummy key silences LiteLLM "Missing API Key" warning — TensorZero handles auth
@@ -3733,6 +3753,10 @@ services:
     # intentional posture for the primary orchestrator. Note: :ro on the socket
     # is cosmetic (the Docker API is bidirectional regardless of file mode).
     - ${DOCKER_SOCK:-/var/run/docker.sock}:/var/run/docker.sock
+    # Persist Playwright browser downloads (Chromium+FFmpeg, ~150MB). Without
+    # this every recreate re-downloads into the ephemeral tmp and can blow the
+    # startup budget (measured 2026-10-09: 30+ restart crash-loop, Windows).
+    - agent-zero-playwright-tmp:/a0/tmp/playwright
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:80/ >/dev/null || curl -fsS http://localhost:8080/healthz >/dev/null || exit 1"]
       interval: 30s
@@ -4311,7 +4335,9 @@ services:
     build: ./services/mesh-agent
     restart: unless-stopped
     environment:
-    # NATS_URL from env.shared/env.tier-agent has credentials: nats://nats:***@nats:4222
+    # NATS_URL via interpolation, the same source as the broker's ${NATS_PASSWORD};
+    # env_file alone was measured failing auth after a broker recreate.
+    - NATS_URL=${NATS_URL}
     - HIRAG_URL=${HIRAG_URL:-http://hi-rag-gateway-v2-gpu:8086}
     - ANNOUNCE_SEC=${ANNOUNCE_SEC:-15}
     - PMOVES_NETWORKS=pmoves_app,pmoves_bus
@@ -6428,6 +6454,7 @@ volumes:
   tensorzero-clickhouse-data: {}
   invidious-postgres-data: {}
   invidious-companion-cache: {}
+  agent-zero-playwright-tmp: {}  # Playwright browser cache for agent-zero (/a0/tmp/playwright)
   pmoves-ollama-models: {}
   hi-rag-gpu-hf-cache: {}  # HuggingFace model cache for Qwen3-Reranker-4B (persists across restarts)
   comfy-watcher-output: {}

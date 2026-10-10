@@ -308,6 +308,13 @@ secrets-ensure-check: ## Fail if any stack-generated secret is still unprovision
 secrets-derive-nats-url: ## Re-derive NATS_URL credentials in env.shared from NATS_USER/NATS_PASSWORD (no-op when consistent; never prints values)
 	@$(CODEX_PY) tools/derive_nats_url.py
 
+.PHONY: secrets-nats-check secrets-nats-promote
+secrets-nats-check: ## Compare NATS_URL/NATS_USER/NATS_PASSWORD in every env.tier-* with env.shared (prints match/MISMATCH only; exit 1 on mismatch)
+	@$(CODEX_PY) tools/derive_nats_url.py --check
+
+secrets-nats-promote: ## Mirror env.shared's NATS keys into each env.tier-* that declares them (never adds a key; never prints values)
+	@$(CODEX_PY) tools/derive_nats_url.py --promote
+
 secrets-funnel: ## Portable secrets flow: env repair -> local hydrate -> CHIT export -> manifest sync -> urlencode -> audit gates (FORCE=1 to overwrite stale)
 	@$(MAKE) --no-print-directory env-shared-repair
 	@$(MAKE) --no-print-directory secrets-local-hydrate
@@ -320,6 +327,9 @@ secrets-funnel: ## Portable secrets flow: env repair -> local hydrate -> CHIT ex
 	@# the bundle is sealed or a password rotation ships a stale URL.
 	@$(MAKE) --no-print-directory secrets-derive-nats-url
 	@$(MAKE) --no-print-directory secrets-funnel-sync
+	@# After the sync: it writes most tiers but not all (env.tier-ui), and a
+	@# tier's stale NATS_URL overrides env.shared's for that tier's services.
+	@$(MAKE) --no-print-directory secrets-nats-promote
 	@$(CODEX_PY) tools/credential_urlencoder.py
 	@$(MAKE) --no-print-directory secrets-audit
 	@$(MAKE) --no-print-directory tooling-audit
