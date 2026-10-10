@@ -162,6 +162,8 @@
       "_setup": "Set SUPABASE_DB_URI to a HOST-reachable connection string: postgresql://pmoves:<SUPABASE_DB_PASSWORD>@<host>:<port>/pmoves (the Supabase CLI stack publishes Postgres on a host port \u2014 use localhost/host.docker.internal + that port, NOT the internal 'supabase-db' service name). access-mode=unrestricted enables DDL/DML for migrations/RLS; use --access-mode=restricted for read-only audits.",
       "command": "uvx",
       "args": [
+        "--with",
+        "mcp<2",
         "postgres-mcp@0.3.0",
         "--access-mode=unrestricted"
       ],

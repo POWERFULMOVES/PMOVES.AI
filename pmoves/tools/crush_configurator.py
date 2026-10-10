@@ -403,6 +403,10 @@ MCP_SPECS: List[MCPSpec] = [
             "type": "stdio",
             "command": "uvx",
             "args": [
+                # postgres-mcp 0.3.0 leaves `mcp` unpinned; mcp 2.x renamed
+                # FastMCP and the server dies at import. Pin until upstream does.
+                "--with",
+                "mcp<2",
                 "postgres-mcp@0.3.0",
                 "--access-mode=unrestricted",
             ],
