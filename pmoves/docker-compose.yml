@@ -3574,6 +3574,13 @@ services:
     # task longer than a minute surfaced as a wrapper 503 (SPARK 2026-08-28:
     # three failed long-research dispatches before root cause).
     - AGENT_ZERO_MESSAGE_TIMEOUT=${AGENT_ZERO_MESSAGE_TIMEOUT:-600}
+    # Supervisor startup budget for the inner runtime (services/agent-zero/main.py
+    # startup_timeout, default 180s). Measured 2026-10-09 (Windows node): a fresh
+    # boot re-downloads Playwright Chromium+FFmpeg after 'Preload completed.' and
+    # cannot bind :80 within 180s -> TimeoutError -> unless-stopped restart loop
+    # (30+ cycles). 1800s covers a cold boot; the playwright volume below makes
+    # the download a one-time cost.
+    - AGENT_ZERO_STARTUP_TIMEOUT=${AGENT_ZERO_STARTUP_TIMEOUT:-1800}
     # OTEL traces for cloud-model calls — parity with tensorzero-gateway
     # (the A0 runtime honors the OTLP env contract for provider calls).
     - OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=${OTEL_EXPORTER_OTLP_TRACES_ENDPOINT:-http://pmoves-otel-collector:4317}
@@ -3746,6 +3753,10 @@ services:
     # intentional posture for the primary orchestrator. Note: :ro on the socket
     # is cosmetic (the Docker API is bidirectional regardless of file mode).
     - ${DOCKER_SOCK:-/var/run/docker.sock}:/var/run/docker.sock
+    # Persist Playwright browser downloads (Chromium+FFmpeg, ~150MB). Without
+    # this every recreate re-downloads into the ephemeral tmp and can blow the
+    # startup budget (measured 2026-10-09: 30+ restart crash-loop, Windows).
+    - agent-zero-playwright-tmp:/a0/tmp/playwright
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:80/ >/dev/null || curl -fsS http://localhost:8080/healthz >/dev/null || exit 1"]
       interval: 30s
@@ -6443,6 +6454,7 @@ volumes:
   tensorzero-clickhouse-data: {}
   invidious-postgres-data: {}
   invidious-companion-cache: {}
+  agent-zero-playwright-tmp: {}  # Playwright browser cache for agent-zero (/a0/tmp/playwright)
   pmoves-ollama-models: {}
   hi-rag-gpu-hf-cache: {}  # HuggingFace model cache for Qwen3-Reranker-4B (persists across restarts)
   comfy-watcher-output: {}
