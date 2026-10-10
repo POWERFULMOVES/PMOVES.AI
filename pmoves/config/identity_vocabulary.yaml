@@ -369,15 +369,14 @@ identities:
 
 # Entry-level attribution repairs. APPEND-ONLY. `recorded_as` preserves what
 # the register originally said, which the in-place rewrite destroyed.
-  - canonical: agent0-sidecar
-    aliases: ["agent0-sidecar", "agent0-sidecar (A0 digital-twin)", "A0-SIDECAR", "A0-SIDECAR (WINDOWS)"]
+  - canonical: auth-login
+    aliases: ["AUTH_LOGIN", "agent0-sidecar", "agent0-sidecar (A0 digital-twin)", "A0-SIDECAR", "A0-SIDECAR (WINDOWS)"]
     note: >-
-      Agent Zero sidecar instances (declared 2026-10-10, after the gate flagged
-      both spellings -- declared late, and this note records that ordering
-      honestly). `agent0-sidecar (A0 digital-twin)` authored the 46
-      persona-corpus register rows in the 2026-09-25 corpus refresh (PR #3304).
-      `A0-SIDECAR (WINDOWS)` is the same family on the Windows host node (PR
-      #3329, agent-zero startup-timeout fix).
+      OPERATOR CORRECTION 2026-10-10: the A0 sidecar instances sign as
+      AUTH_LOGIN himself -- his digital twin is not a separate identity, and
+      sidecars in this fleet are big wheels, not label fodder. The
+      agent0-sidecar spellings (46 corpus-refresh rows in PR #3304, claim
+      rows in PR #3329) are this instance's signings and resolve HERE.
 
 corrections:
   - entry: {timestamp: "2026-03-19T22:00:00Z", kind: CLAIM}
