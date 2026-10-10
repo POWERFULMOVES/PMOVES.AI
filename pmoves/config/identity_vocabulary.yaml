@@ -450,6 +450,15 @@ corrections:
 # The forward edge. "Identity A became identity B" -- what the register has
 # never been able to say, and the reason correction #1-6 were implemented as a
 # rewrite instead of an edge.
+  - canonical: agent0-sidecar
+    aliases: ["agent0-sidecar", "agent0-sidecar (A0 digital-twin)", "A0-SIDECAR", "A0-SIDECAR (WINDOWS)"]
+    note: >-
+      Agent Zero sidecar instances (declared 2026-10-10, after the gate flagged
+      both spellings -- declared late, and this note records that ordering
+      honestly). `agent0-sidecar (A0 digital-twin)` authored the 46
+      persona-corpus register rows in the 2026-09-25 corpus refresh (PR #3304).
+      `A0-SIDECAR (WINDOWS)` is the same family on the Windows host node (PR
+      #3329, agent-zero startup-timeout fix).
 successions:
   - from: z890-claude
     to: 5090-claude
