@@ -78,6 +78,27 @@
       "sha256": "4cd895c0501a5c7d45ec231aa2d482a98bddd919b4b41d19b22476abc1348810"
     },
     {
+      "bytes": 1690,
+      "executable": true,
+      "managed_by": "generator",
+      "relpath": "deploy/provision/claude-pmoves-spark.sh",
+      "sha256": "9e5f93ecdb8aaed7ffa5bd4ad94b304b0de90ce0cc05f36eff9af0c51c6b4917"
+    },
+    {
+      "bytes": 1143,
+      "executable": false,
+      "managed_by": "generator",
+      "relpath": "deploy/provision/claude-pmoves-spark.ps1",
+      "sha256": "f4fc9a37422bc5b17a291461ce6f8fa0b6a82bcb09624be3e896c18b2afca082"
+    },
+    {
+      "bytes": 776,
+      "executable": false,
+      "managed_by": "generator",
+      "relpath": "deploy/provision/claude-pmoves-spark.cmd",
+      "sha256": "b23fdeda010179f98f1ecac36cd02e427145812a050eeee56f3ad3eb2245b14c"
+    },
+    {
       "bytes": 1461,
       "executable": true,
       "managed_by": "generator",
@@ -366,6 +387,6 @@
     }
   ],
   "generator_version": "1.0.0",
-  "identity_count": 9,
+  "identity_count": 10,
   "tool_count": 7
 }
