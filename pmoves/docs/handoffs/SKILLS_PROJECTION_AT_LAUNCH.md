@@ -14,7 +14,7 @@ Operator canon, 2026-10-11 (verbatim): "parrity across AGInTZ skills cant only w
 | Crush | `.crush/skills/` | dir absent | 36 |
 | Hermes | `.hermes/skills/` | dir absent | 36 |
 
-`make -C pmoves skills-parity` (lands with #3347) read `PARITY GAP: 216 missing placements across 6 harnesses` before and `PARITY OK` after. The projector is the PMOVES-skills CLI (`skills/PMOVES-skills`, fork of vercel-labs/skills), run as `add ./.claude/skills -s '*' --copy -y` with one `-a` per harness; `-a` does not take a comma list (measured: "Invalid agents: codex,opencode,...").
+The parity check that lands with #3347 (`pmoves/tools/skills_parity.py`, its own make target there) read `PARITY GAP: 216 missing placements across 6 harnesses` before and `PARITY OK` after. The projector is the PMOVES-skills CLI (`skills/PMOVES-skills`, fork of vercel-labs/skills), run as `add ./.claude/skills -s '*' --copy -y` with one `-a` per harness; `-a` does not take a comma list (measured: "Invalid agents: codex,opencode,...").
 
 ## What lands here
 
@@ -45,7 +45,7 @@ The patches are LF, generated from the index copies. `crush-pmoves` and `hermes-
 
 ```bash
 make -C pmoves skills-project FORCE=1      # [skills-project] skills=projected (36 skills -> codex, opencode, kimi-code-cli, kilo, crush, hermes-agent)
-make -C pmoves skills-parity               # PARITY OK (after #3347)
+# parity check (pmoves/tools/skills_parity.py, lands with #3347): PARITY OK
 claude-pmoves                              # stderr shows the identity banner, then [claude-pmoves] skills=... / theme=...
 ```
 

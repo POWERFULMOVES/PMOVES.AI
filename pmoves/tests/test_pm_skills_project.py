@@ -12,13 +12,18 @@ The contract these tests hold:
   present, so the projector and the parity check cannot drift apart.
 
 Hermetic: PM_SKILLS_CLI points at a stub that records its argv and can be told
-to fail; PATH carries no node or npx.
+to fail; PATH carries only the directory bash lives in (coreutils for the
+fragment, bash for the stub's shebang) and never node or npx. Measured
+2026-10-11: an empty PATH passes on Git Bash, which prepends /usr/bin on its
+own, and fails on the Linux runner, where `#!/usr/bin/env bash` and `find`
+then resolve nothing.
 """
 
 from __future__ import annotations
 
 import os
 import re
+import shutil
 import subprocess
 import time
 from pathlib import Path
@@ -64,7 +69,7 @@ def _run(tmp_path: Path, root: Path, stub: Path | None, force: str = "0") -> dic
     if not bash:
         pytest.skip("no bash on this host")
     env = {
-        "PATH": str(tmp_path / "empty-path"),
+        "PATH": os.pathsep.join([str(tmp_path / "empty-path"), str(Path(bash).parent)]),
         "HOME": str(tmp_path),
         "TMPDIR": str(tmp_path),
         "STUB_ARGV": str(tmp_path / "argv"),
@@ -133,6 +138,9 @@ def test_failed_cli_is_loud_fail_open_and_leaves_no_stamp(tmp_path: Path) -> Non
 
 
 def test_no_cli_is_loud_and_names_the_build_route(tmp_path: Path) -> None:
+    bash = find_bash()
+    if bash and any(shutil.which(t, path=str(Path(bash).parent)) for t in ("node", "npx")):
+        pytest.skip("node/npx share a directory with bash here; the NO-CLI branch cannot be isolated")
     root = _repo(tmp_path)
     out = _run(tmp_path, root, None)  # no PM_SKILLS_CLI, empty PATH, no built fork
     assert out["rc"] == "0"
