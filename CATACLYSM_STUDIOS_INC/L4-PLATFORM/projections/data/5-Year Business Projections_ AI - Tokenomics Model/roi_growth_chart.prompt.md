@@ -10,7 +10,7 @@ Document how to recreate the five-year ROI line chart that compares Cataclysm St
 
 ## Regeneration Options
 1. **Rebuild with Plotly**  
-   `python "CATACLYSM_STUDIOS_INC/ABOUT/notes/5-Year Business Projections_ AI - Tokenomics Model/chart_script.py"`  
+   `python "CATACLYSM_STUDIOS_INC/L4-PLATFORM/projections/data/5-Year Business Projections_ AI - Tokenomics Model/chart_script.py"`  
    Output file: `roi_growth_chart.png`
 2. **Creator pipeline prompt**  
    ```
