@@ -1,6 +1,6 @@
 # Cataclysm Studios Platform Vision & Brand Identity
 
-_Status review: February 18 2026 (repo branch `PMOVES.AI-Edition-Hardened`)_
+_Status review: 2026-10-10 (supersedes the 2026-02-18 review; `PMOVES.AI-Edition-Hardened` merged to main; pmoves.ai live — 7/7 routes measured 200 on 2026-10-10)_
 
 This document aligns the Cataclysm Studios brand platform with the current PMOVES.AI codebase so product, engineering, and creative teams can work from a single, verifiable blueprint.
 
@@ -12,7 +12,7 @@ This document aligns the Cataclysm Studios brand platform with the current PMOVE
 - Stewardship focus: trustworthy operations, reproducible builds, and compliance with internal security policies (`SECURITY.md`, `docs/PMOVES_Multi-Agent_System_Crush_CLI_Integration_and_Guidelines.md`).
 
 ### 1.2 PMOVES.AI (Powerful Moves AI)
-- Primary technical product—a 60+ microservice orchestration platform featuring Agent Zero, Archon, Hi-RAG v2, TensorZero LLM gateway, and EvoSwarm evolutionary optimization (`README.md`, `docs/PMOVES_ARC.md`, `pmoves/docs/context/PMOVES_COMPLETE_ARCHITECTURE.md`).
+- Primary technical product—a ~100-service orchestration platform (101 service directories measured 2026-10-10) featuring Agent Zero, Archon, Hi-RAG v2, TensorZero LLM gateway, and EvoSwarm evolutionary optimization (`README.md`, `docs/PMOVES_ARC.md`, `pmoves/docs/context/PMOVES_COMPLETE_ARCHITECTURE.md`).
 - Centralized LLM observability via TensorZero [Port 3030] with ClickHouse metrics storage and UI dashboard [Port 4000]; structured multimodal data exchange via CHIT Geometry Bus with CGP v1.0 runtime (MACA consensus and point attribution).
 - Code, compose profiles, and runbooks live under `pmoves/`; developer context for Claude Code CLI is maintained in `.claude/CLAUDE.md` with 101 slash commands across 30 categories.
 - Brand promise: "Local-first autonomy, reproducible provisioning, and self-improving research loops."
@@ -105,7 +105,7 @@ This document aligns the Cataclysm Studios brand platform with the current PMOVE
 - **Security defaults:** highlight Axes rate limiting in onboarding docs, recommend Redis cache wiring, and include Supabase RLS examples in UI documentation.
 
 ### 4.3 Visual & Messaging Anchors (to be expanded)
-- Logo lockups and color references live in `CATACLYSM_STUDIOS_INC/ABOUT/notes/` (pending vector cleanup).  
+- Logo lockups and color references: the previously cited `CATACLYSM_STUDIOS_INC/ABOUT/notes/` path is dead as of 2026-10-10; no lockup assets located in-tree (pending vector cleanup — status unchanged).  
 - Future design system should reference Next.js app tokens once `pmoves/ui` design tokens land.
 
 ## 5. Blueprint Backlog (cross-reference with ROADMAP & NEXT_STEPS)
@@ -120,7 +120,7 @@ This document aligns the Cataclysm Studios brand platform with the current PMOVE
 
 ### 5.2 Now (February 2026 Sprint)
 1. **EvoSwarm → CHIT calibration loop** – Complete integration of evolutionary optimization with CGP v1.0 parameters; validate production telemetry feedback.
-2. **Edition Hardened stabilization** – Finalize security hardening, secrets pipeline, and CI gates for the `PMOVES.AI-Edition-Hardened` branch merge to main.
+2. **Edition Hardened stabilization** – Status 2026-10-10: the `PMOVES.AI-Edition-Hardened` branch merged to main long since (per the 2026-10-10 evidence-citation refresh audit); hardening continues via CI gates, Trivy, and CodeQL.
 3. **Slash command coverage expansion** – Continue expanding from 101 commands across 30 categories; fill gaps in observability and GPU management workflows.
 
 ### 5.3 Next
@@ -163,6 +163,7 @@ This document aligns the Cataclysm Studios brand platform with the current PMOVE
 
 ## 8. Change Log
 
+- **2026-10-10:** Evidence-citation refresh per `research/analyses/2026-10-10_CATACLYSM_EVIDENCE_CITATION_REFRESH_AUDIT.md` — status review re-dated (was 2026-02-18); Edition-Hardened merge marked complete; “60+ microservices” refreshed to measured ~100 service directories; pmoves.ai live (7/7 routes 200).
 - **2026-02-18:** February 2026 platform status update — 101 slash commands across 30 categories (up from 43/12). Added Voice & Speech pillar (Flute-Gateway, Ultimate-TTS-Studio, Pipecat). Added Cipher Memory agent knowledge graph. CHIT Geometry Bus upgraded to CGP v1.0 with MACA consensus and point attribution. Updated blueprint backlog to reflect Q4 2025 completions. Refreshed `.claude/` directory documentation (20 context files, up from 7).
 - **2025-12-11:** Major platform evolution update—expanded from 6 to 9 platform pillars reflecting 60+ microservices. Added TensorZero LLM gateway stack, CHIT Geometry Bus, EvoSwarm evolutionary optimization, Messaging Gateway, BoTZ Gateway, and comprehensive `.claude/` directory documentation. Updated all platform pillars, implementation snapshot, blueprint backlog, and reference map to reflect current architecture. Added new Section 9 documenting Claude Code CLI integration with 43+ slash commands.
 - **2025-10-26:** Rebuilt document to match repository state, removed external-only references, and established blueprint backlog linked to `pmoves/docs/`.

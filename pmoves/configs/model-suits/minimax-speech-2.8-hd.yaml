@@ -1,0 +1,120 @@
+# Model Suit: MiniMax speech-2.8-hd
+# PMOVES.AI MiniMax Edition Configuration
+# Provider: MiniMax Token Plan
+# Documentation: https://platform.minimax.io/docs/token-plan/intro
+#
+# Theme: speech-2.8-hd is MiniMax's TTS (text-to-speech) -- high-definition
+# voice synthesis. Primary for PMOVES voice lanes (operator's public voice for
+# content, narrator voices for video, persona voice signatures).
+
+suit:
+  id: minimax-speech-2.8-hd
+  name: MiniMax speech-2.8-hd (Token Plan)
+  provider: minimax
+  flare_name: pmoves/minimax-speech-2.8-hd
+  model_family: minimax
+  tier: primary_tts
+  role: primary_tts
+
+model_config:
+  context_window: null  # TTS doesn't use chat context window
+  max_output_tokens: 10000  # 10k char limit per call (per mmx-cli skill)
+  supports_vision: false
+  supports_streaming: true
+  supports_multimodal: false
+  temperature_range: [0.0, 1.0]
+  top_p_range: [0.0, 1.0]
+  top_k: null
+  input_modalities: [text]
+  output_modalities: [audio]
+
+token_plan:
+  enabled: true
+  api_key_env: MINIMAX_TOKEN_PLAN_API_KEY
+  api_base: https://api.minimax.io/v1
+  fallback_api_key_env: MINIMAX_API_KEY
+  key_format: sk-cp
+  plan_tiers:
+    - starter: 1500
+    - plus: 4500
+    - max: 15000
+  quota_reset: rolling_5h
+  quota_sharing: shares Token Plan bucket with text + image
+
+distillation_pipeline:
+  stages:
+    - name: config_tuning
+      enabled: true
+      notes: MiniMax speech-2.8-hd configuration tuning
+
+    - name: context_priming
+      enabled: true
+      system_prompt: |
+        You are MiniMax speech-2.8-hd, the high-definition text-to-speech model.
+        You serve as the PRIMARY TTS lane for PMOVES.AI MiniMax Edition.
+
+        Your unique capabilities include:
+        - High-definition voice synthesis for content narration
+        - Operator's public voice (DARKXSIDE) for video content
+        - Persona voice signatures (FlOO$ care-bear voice)
+        - 10k character limit per call
+
+    - name: model_fine_tune
+      enabled: false
+      reason: "Cloud-only model"
+
+    - name: full_distillation
+      enabled: false
+      reason: "Cloud-only model"
+
+tensorzero_config:
+  model_name: minimax-speech-2.8-hd
+  weight: 1.0  # PRIMARY for pmoves_tts + pmoves_voice_clone
+  routing:
+    - function: pmoves_tts
+      priority: 1
+    - function: pmoves_voice_clone
+      priority: 1
+
+flare_namespace:
+  alias: pmoves/minimax-speech-2.8-hd
+  canonical_name: minimax-speech-2.8-hd
+  provider_url: https://api.minimax.io/v1
+  already_registered: true
+
+capabilities:
+  - text_to_speech
+  - voice_synthesis
+  - high_definition_audio
+  - narrator_voice
+  - persona_voice               # opera voice + persona signatures
+  - voice_clone
+  - prosodic_flow
+  - content_narration          # for IDW/Transformers comic + video content
+
+local_fallback:
+  available: false  # no local TTS in PMOVES default fleet
+
+cross_agent:
+  agent_zero: limited
+  clawz: untested
+  archon: full
+  typer: untested
+  pinokio: full
+  a2ui: full  # A2UI voice prompts
+  kilocode: full
+  hermes: full
+  glm_coder: full
+  kimi_coder: full
+
+huggingface:
+  model_id: MiniMaxAI/speech-2.8-hd
+  collection: DARKXSIDE/pmoves-68bcb20613cef7a0aa745e0e
+
+metadata:
+  source: pmoves/minimax-integration
+  last_verified: 2026-10-05
+  benchmark_data:
+    - source: "MiniMax speech docs"
+      url: "https://platform.minimax.io/docs/speech-synthesis"
+  runtime_note: "PRIMARY TTS - operator voice + persona signatures + content narration"
