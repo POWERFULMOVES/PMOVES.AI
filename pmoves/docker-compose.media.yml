@@ -89,16 +89,13 @@ services:
     - REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
     - CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
     - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_external
-    deploy:
-      resources:
-        reservations:
-          devices:
-          - capabilities:
-            - gpu
-            count: ${GPU_COUNT:-all}
-        limits:
-          cpus: '4.0'
-          memory: 8G
+runtime: nvidia
+# GPU via NVIDIA runtime env (NVIDIA_VISIBLE_DEVICES below). The
+# deploy.resources.devices path fires the legacy nvidia prestart hook,
+# which fails on Docker Desktop/WSL2 (ld.so assertion, driver rpc error).
+# Runtime-env path measured working on PMOVES-5090 2026-10-11;
+# cite: docs.nvidia.com container-runtime + docker compose service runtime attr.
+HF_HUB_DISABLE_XET: ${HF_HUB_DISABLE_XET:-1}
     ports:
     - ${MEDIA_AUDIO_BIND:-127.0.0.1}:${MEDIA_AUDIO_PORT:-8082}:8082
     profiles:
