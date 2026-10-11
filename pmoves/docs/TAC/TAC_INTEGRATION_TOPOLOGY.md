@@ -34,6 +34,7 @@
 - `TAC_A0_PLUGINS.md` — Community plugin index
 - `TAC_AUTORESEARCH.md` — Autonomous ML training
 - `TAC_DOX.md` — Document intelligence
+- `TAC_AGINTZ_TOPOLOGY_WALK.md` — Seat-to-lattice walk: harness reconcile, AGInTZ identity, CHIT L1–L5 measured against code, fleet/registry/rooms, contradictions (2026-10-11)
 
 **Infrastructure:**
 - `TAC_INFRASTRUCTURE.md` — Node topology, networking
