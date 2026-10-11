@@ -395,6 +395,42 @@ agents:
       compose_profile: null
     description: "B850/Knuckles Crush-on-GLM-5.2 identity -- the terminal companion harness on this node (Z.AI coding plan)"
 
+  crush_spark:
+    name: "Crush (SPARK)"
+    class: standard
+    # The crush-harness twin of claude_spark, same shape as crush_glm52 above:
+    # the generic `crush` entry claims z890/5090 and cannot answer for this
+    # node. node-vocabulary.yaml spark.default_identity.crush binds here.
+    primary_type: ui
+    secondary_type: agent
+    # No listening socket. A CLI session, not a service.
+    port: null
+    health: null
+    layers:
+      - L0
+      - L2
+      - L4
+    evolution_stage: stage_1
+    # Signs as ITS OWN identity, not the shared `crush` contributor
+    # (operator, 2026-10-11: "so Crush's trail is its own"). Register form
+    # PMOVES-SPARK-CRUSH (identity_vocabulary.yaml `spark-crush`, with the
+    # provenance of its earlier CRUSH-SPARK (KIMI) rows); H half in agent_signatures.yaml `spark-crush`; card
+    # 00000000-0000-4000-8000-000000000056 (interim); cipher agentId declared
+    # in node-vocabulary.yaml spark.cipher_agent_id.crush. This is the
+    # kimi_knuckles shape. crush_glm52 still signs as `crush`.
+    signature: spark-crush
+    # Same posture as crush_glm52: publishes nothing today; the generic `crush`
+    # entry carries the fleet-level subjects.
+    nats:
+      publishes: []
+      subscribes: []
+    topology:
+      node_affinity: [pmoves-spark]
+      team: orchestration
+      ci_runner: null
+      compose_profile: null
+    description: "SPARK (DGX Spark, GB10, ARM64) Crush identity -- the terminal companion harness on this node, working alongside claude_spark"
+
   kilocode_glm:
     name: "KiloCode GLM"
     class: standard

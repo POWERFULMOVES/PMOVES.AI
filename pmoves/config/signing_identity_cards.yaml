@@ -496,6 +496,49 @@ cards:
       agent_signatures.yaml entries) is a follow-up lane; the cipher chain only
       needs this card + the vocabulary declaration.
 
+  # ---- Crush Harness (SPARK) ----
+- card_id: "00000000-0000-4000-8000-000000000056"
+  # issued_at is schema-required; knuckles-kimi (051) omits it and audit_naming_drift flags that.
+  issued_at: "2026-10-11T00:00:00Z"
+  agent_id: spark-crush
+  active: true
+  role: agent
+  ml:
+    primary_method: github-app
+    github_app_installation_id:
+    ci_runner_label:
+  h:
+    agent_id: "spark-crush"
+    display_name: "SPARK Crush"
+    glyph: "⠿"           # ⠿ Braille dots-123456 — the glyph first proposed for this
+                              #   identity in PR #3078 (CHIT-braille lane). Unused by any
+                              #   card or agent_signatures.yaml entry; distinct from the
+                              #   generic `crush` ◇ and from spark-claude's ⌁.
+    color: "#A21CAF"          # Fuchsia-700 — Charm's magenta family for a Charm harness.
+                              #   #3078 proposed lime-700 #4D7C0F, but spark-claude took that
+                              #   hue on 2026-09-21; distinct from `crush` #0EA5E9 too.
+    voice: companion
+    role: agent
+  metadata:
+    created: "2026-10-11"
+    interim: true
+    notes: >-
+      Crush (Charm; PMOVES fork PMOVES-crush; ACP entry crush-acp in
+      PMOVES-registry) harness identity on the SPARK node (DGX Spark, GB10,
+      ARM64). SIGNING-CARD (cipher) spelling, <node>-<harness> per the
+      node-vocabulary.yaml header -- NOT crush-spark. Its register history
+      appears as `CRUSH-SPARK (KIMI)` (identity_vocabulary.yaml, folded into
+      `crush`): the model kimi-k2 was the decoration, not the identity.
+      Operator DARKXSIDE approved 2026-10-11 ("you and crush will be working
+      together on node"). Ends the DELIBERATELY-ABSENT crush state for SPARK
+      only; knuckles' crush (crush_glm52 -> nodeless `crush` card) stays
+      absent. Marked interim pending operator ssh-keygen; flip to
+      non-interim + populate ssh fingerprints when the card binds to a
+      runtime key. The card provisions no Cipher token -- the operator mints
+      one after merge (`make -C pmoves cipher-mint-token AGENT=spark-crush`).
+      agent_signatures.yaml half is a follow-up lane; the registry half is
+      `crush_spark` in agent_registry.yaml.
+
   # ---- Village Rule bodies on B850/Knuckles (H half only, INACTIVE) ----
   #
   # The four AGNOTE4482 bodies a node_steward spawns (agent_registry.yaml:

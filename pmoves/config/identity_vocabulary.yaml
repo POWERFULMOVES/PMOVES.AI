@@ -160,9 +160,12 @@ identities:
     # undeclared-author ratchet correctly refused them. Same node-harness-model
     # shape as `4090-claude`: identity is the node's Claude Code harness,
     # model decoration is worn, not a distinct identity.
-    aliases: ["SPARK-CLAUDE", "spark-claude", "Spark-Claude", "claude_spark"]
+    # PMOVES-approved stamp adopted by the wearer itself 2026-10-11 (operator
+    # rule: every AGInTZ's full ident is PMOVES-<NODE>-<HARNESS>). The 10
+    # earlier `SPARK-CLAUDE` rows keep resolving through the alias.
+    aliases: ["PMOVES-SPARK-CLAUDE", "SPARK-CLAUDE", "spark-claude", "Spark-Claude", "claude_spark"]
     node: spark
-    register_form: "SPARK-CLAUDE"
+    register_form: "PMOVES-SPARK-CLAUDE"
     note: >-
       0 register entries on main before the lane-2979 carry (#3235), which
       adds 10 rows authored as `SPARK-CLAUDE` (8) or `spark-claude` (2).
@@ -244,7 +247,51 @@ identities:
   - canonical: spark-kimi
     aliases: ["SPARK-KIMI", "KIMI-SPARK"]
     node: spark
-    note: 32 entries under two orderings of the same two words.
+    note: >-
+      32 entries under two orderings of the same two words. Measured
+      2026-10-11 against SPARK's session stores. This is the KIMI HARNESS
+      identity on SPARK: Kimi CLI (`~/.kimi`, 5 sessions 2026-05-27..07-15)
+      signed first, and Kimi Code (`~/.kimi-code`, 50 sessions
+      2026-05-29..09-23) followed, both defaulting to model
+      `kimi-for-coding`. The 15 bare `SPARK-KIMI` / `KIMI-SPARK` rows fall in
+      Kimi activity windows (6 Kimi-only, 9 overlapping, 0 Crush-only). That
+      is Kimi's signed work and it stays attributed here.
+      The 34 `SPARK-KIMI (Crush...)` rows are the SPARK Crush seat WEARING
+      this name (identity worn, harness typed into -- see `harnesses: crush`):
+      28 Crush-only, 6 overlapping, models glm-5.2 per the Crush stores. They
+      stay attributed as signed. From 2026-10-11 Crush on SPARK wears its own
+      `spark-crush`, so the harness defaults no longer clash: spark-kimi is
+      Kimi's, spark-crush is Crush's.
+
+  - canonical: spark-crush
+    # Name derivation (operator, 2026-10-11): the FULL ident carries PMOVES --
+    # "PMOVES-SPARK-CRUSH not just any spark crush" -- in the same order as
+    # PMOVES-SPARK-CLAUDE (PMOVES-<NODE>-<HARNESS>). The card / cipher spelling
+    # stays <node>-<harness> (`spark-crush`), the node-vocabulary rule that
+    # `b850-claude` and `knuckles-kimi` follow. The same rule names Crush on
+    # the other nodes (PMOVES-Z890-CRUSH, PMOVES-B850-CRUSH, PMOVES-5090-CRUSH,
+    # PMOVES-4090-CRUSH); each is declared only when that node's Crush reviews
+    # and ACKs its own card, as this one must.
+    aliases: ["PMOVES-SPARK-CRUSH", "SPARK-CRUSH", "spark-crush", "crush_spark", "CRUSH-SPARK", "CRUSH-SPARK (KIMI)"]
+    node: spark
+    register_form: "PMOVES-SPARK-CRUSH"
+    note: >-
+      Crush harness identity on SPARK. Card
+      00000000-0000-4000-8000-000000000056 (interim), cipher agentId
+      `spark-crush`, agent_registry.yaml key `crush_spark` (signature
+      `spark-crush`). PROVENANCE: the seat named itself `CRUSH-SPARK (KIMI)`
+      for 16 rows (2026-09-08..09-28; 15 fall only in Crush activity, 1 in
+      neither), so those are its own trail and resolve here. The `(KIMI)` was
+      the borrowed `spark-kimi` name, not the model: SPARK's Crush stores show
+      zero kimi messages. Before that it wore `spark-kimi` outright (the 34
+      `SPARK-KIMI (Crush...)` rows, which stay spark-kimi's). MODEL is a
+      WORN fact, not part of the name: config default `ollama/qwen3-coder:30b`
+      (large) / `ollama/qwen3:8b` (small); actually chosen `zai/glm-5.2` in
+      ~11.5k of ~11.8k messages across four Crush stores (2026-07-13..10-11),
+      plus glm-5-turbo, gemma4:26b and qwen3-coder:30b. GLM-5.2 is a
+      PREFERENCE that outlived the 5.3 and flash releases, not the default.
+      That split is recorded on purpose: evals of model fit to persona need
+      to tell chosen from defaulted.
 
   - canonical: knuckles-kimi
     aliases: ["PMOVES-KIMI-KNUCKLES-B850", "kimi_knuckles"]
@@ -259,14 +306,14 @@ identities:
       unclassified rather than aliased into a model it is not.
 
   - canonical: crush
-    aliases: ["CRUSH", "CRUSH-GLM52", "CRUSH-SPARK (KIMI)"]
+    aliases: ["CRUSH", "CRUSH-GLM52"]
     note: >-
       13 entries. The `-GLM52` suffix is a MODEL, not a different identity --
       the same lane appears as `CRUSH (z890, glm-5.2)` and `CRUSH-GLM52
       (Z890)`. Merged here; split them if crush-on-GLM is ever meant to be a
-      distinct signer. `CRUSH-SPARK (KIMI)` is the same decoration shape on
-      the SPARK node (model kimi-k2), 5 entries from the 2026-09-08 merge
-      wave.
+      distinct signer. `CRUSH-SPARK (KIMI)` was folded here until
+      2026-10-11; it moved to `spark-crush`, the per-node Crush identity
+      those rows name (measured provenance on that entry).
 
   - canonical: kilocode-glm
     aliases: ["KILOCODE-GLM", "KILOCODE", "kilocode_glm"]
@@ -528,9 +575,12 @@ models:
   - canonical: kimi-k2
     aliases: ["KIMI", "kimi-k2"]
     note: >-
-      The model behind CRUSH-SPARK on the SPARK node (register decoration
-      `CRUSH-SPARK (KIMI)`, 5 entries from the 2026-09-08 merge wave) -- the
-      same model+node decoration shape as `CRUSH-GLM52 (Z890)`.
+      Kimi K2. NOT the model behind `CRUSH-SPARK (KIMI)`, as this note
+      previously said: SPARK's Crush stores show zero kimi messages
+      (glm-5.2 answered), so that `(KIMI)` is the borrowed `spark-kimi` name.
+      The Kimi model that DID work and sign on SPARK is `kimi-for-coding`,
+      through the Kimi CLI and Kimi Code harnesses (see `spark-kimi`).
+      Corrected 2026-10-11.
 
 # Lanes and alters. `field` is a declared ALTER of 4090-claude
 # (agent_signatures.yaml:216), not a free-text note.
