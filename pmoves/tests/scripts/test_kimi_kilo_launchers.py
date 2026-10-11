@@ -105,6 +105,29 @@ def test_legacy_kimi_cli_still_gets_project_config(tmp_path: Path) -> None:
     assert argv[-2:] == ["-p", "hi"]
 
 
+def test_legacy_kimi_cli_with_short_flag_and_metavar_is_still_legacy(tmp_path: Path) -> None:
+    """argparse renders `-c CFG, --config-file CFG`: a metavar sits between the
+    short flag and the comma. The anchor must still see a flag DEFINITION there,
+    or a real legacy kimi-cli launches without its config (review on #3325)."""
+    if not (REPO_ROOT / ".kimi" / "config.toml").is_file():
+        pytest.skip(".kimi/config.toml not present in this checkout")
+    proc, argv, _ = _run(
+        "kimi-pmoves.sh", ["-p", "hi"], tmp_path, "kimi",
+        help_text="\n".join(
+            [
+                "usage: kimi [-h] [-c CFG]",
+                "",
+                "options:",
+                "  -h, --help            show this help message and exit",
+                "  -c CFG, --config-file CFG",
+                "                        Config TOML/JSON",
+            ]
+        ),
+    )
+    assert argv is not None, proc.stderr
+    assert argv[:2] == ["--config-file", str(REPO_ROOT / ".kimi" / "config.toml")]
+
+
 def test_kilo_launcher_execs_kilo_with_args_untouched(tmp_path: Path) -> None:
     proc, argv, cwd = _run("kilo-pmoves.sh", ["--version"], tmp_path, "kilo")
     assert argv == ["--version"], proc.stderr

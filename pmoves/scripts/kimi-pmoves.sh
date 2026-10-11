@@ -93,7 +93,8 @@ MCP_CONFIG="$PROJECT_ROOT/.kimi/mcp.json"
 
 # Which program is this? Ask its --help ONCE and keep the answer. The match is
 # anchored to a flag-DEFINITION line (`--config-file` at the start of a line,
-# optionally after a short flag), not to the string appearing anywhere: a
+# optionally after a short flag and its metavar, `-c CFG, --config-file CFG`),
+# not to the string appearing anywhere: a
 # deprecation note or an example mentioning the flag must not flip this to the
 # legacy path and resurrect `unknown option '--config-file'`. Empty or failed
 # --help is an explicit refusal, not a silent fall-through into either branch.
@@ -102,7 +103,7 @@ if [ -z "$KIMI_HELP" ]; then
   echo "[!] 'kimi --help' printed nothing, so this launcher cannot tell Kimi Code from the legacy kimi-cli ($(command -v kimi)). Not guessing: run 'kimi --help' yourself and fix the install." >&2
   exit 1
 fi
-if ! printf '%s\n' "$KIMI_HELP" | grep -Eq -- '^[[:space:]]*(-[A-Za-z][[:space:]]*,[[:space:]]*)?--config-file([[:space:]=,]|$)'; then
+if ! printf '%s\n' "$KIMI_HELP" | grep -Eq -- '^[[:space:]]*(-[A-Za-z][^,]*,[[:space:]]*)?--config-file([[:space:]=,]|$)'; then
   # Kimi Code. Its config is user-level; the .kimi/ files are kimi-cli
   # formats it does not read, so say where config really comes from.
   echo "[kimi-pmoves] $(command -v kimi): Kimi Code -- config from ${KIMI_CODE_HOME:-$HOME/.kimi-code}/{config.toml,mcp.json} + $PROJECT_ROOT/.mcp.json; .kimi/config.toml and .kimi/mcp.json are legacy kimi-cli files and are not loaded" >&2
