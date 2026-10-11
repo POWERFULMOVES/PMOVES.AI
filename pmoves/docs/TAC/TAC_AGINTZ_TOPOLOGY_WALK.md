@@ -151,7 +151,16 @@ CHIT tools an agent can use today:
 
 1. **Bind before you walk.** Make `cipher_preflight` (or a `SessionStart` hook) fail loudly when a session's Cipher identity is `bootstrap` but the node vocabulary says a per-agent ID exists. This walk ran an hour before discovering it was anonymous. Pair it with moving the root `.mcp.json` to http (#3339 leaves it on SSE).
 2. **One signer.** Collapse the four vendored HMAC copies onto `chit_security.py` (vendor with a byte-equivalence test, as flute already does). Move mesh-agent onto the per-kid key scheme instead of `MESH_PASSPHRASE`.
-3. **Flip `CHIT_REQUIRE_SIGNATURE` node by node**, the same way `CIPHER_MCP_ENFORCE` and `CIPHER_AUTH_REQUIRED` were flipped (advisory → enforce, measured). P7 already proves the pattern.
+3. **Enforce signing on the GEOMETRY BUS fleet-wide.** This is a standalone item, read from code and not yet measured live.
+   - **Today:** `CHIT_REQUIRE_SIGNATURE` is off in every verifier except P7. A tampered stamp is dropped, but a message with **no stamp passes**. Tokenism and graph-linker publish unsigned ("dev mode") when no key is set.
+   - **Effect:** anyone holding NATS credentials can inject CGP packets. NATS auth limits *who connects*; it does not authenticate *what they publish*.
+   - **Rollout:** use the same advisory → enforce ladder as `CIPHER_MCP_ENFORCE` and `CIPHER_AUTH_REQUIRED`.
+     1. **Measure.** Count unsigned vs signed packets per subject on each node (`geometry_bus_stream.py` plus a counter).
+     2. **Close the gaps.** Provision per-kid keys so no producer falls back to unsigned, and fix mesh-agent's separate key (improvement 2).
+     3. **Enforce node by node.** Flip `CHIT_REQUIRE_SIGNATURE=true`, then check that no producer goes silent.
+     4. **Make producers fail closed.** A producer refuses to publish unsigned once its node is in enforce mode.
+
+     P7 (default true) already proves step 3 works.
 4. **Make `chit.signed.v1` real.** `sign-trail` publishes through `pmoves-nats-fleet`, and a consumer in Hi-RAG or Neo4j makes signed trails queryable. That is the ledger the passport design needs.
 5. **Name the two codecs apart**: "CHIT-secrets" (`pmoves/chit`) and "CHIT-geometry" (CGP), in docs and the skill text.
 6. **Shared settings PR (operator to approve)**: drop the two settings-only `docker compose` denies (damage-control and the `compose` Known Road already guard compose). Keep the redundant destructive denies as the no-`uv` fallback. Move the Windows `additionalDirectories` to those nodes' local settings.
