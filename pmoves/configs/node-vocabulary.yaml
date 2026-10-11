@@ -15,7 +15,8 @@ version: 1
 # yields `glm52-crush`, which is no card at all.
 #
 # DELIBERATELY ABSENT, not forgotten: crush, codex, hermes and kilo have no
-# cipher_agent_id on any node. `crush` and `hermes` are nodeless cards, so
+# cipher_agent_id on any node (crush: except SPARK since 2026-10-11, see
+# below). `crush` and `hermes` are nodeless cards, so
 # whether one card covers the whole fleet or each node needs its own has not been
 # measured; `codex` and `hermes` each have TWO candidate cards (codex /
 # agent-zero-codex, hermes / hermes-agent) and picking one would be a guess.
@@ -29,6 +30,14 @@ version: 1
 # matching the claude cards (b850-claude), NOT the <harness>-<node> order the
 # mint-lane doc examples show (crush-spark, kimi-spark); the card is the
 # normative spelling because cipher's assertAgentId answers to it.
+#
+# crush on SPARK RESOLVED 2026-10-11: spark's `crush` carries
+# cipher_agent_id `spark-crush` (card 00000000-0000-4000-8000-000000000056,
+# registry key crush_spark), operator-approved by DARKXSIDE. This answers the
+# nodeless-card question above for SPARK only, the same way kimi was answered:
+# a per-node card, not the fleet `crush` card. knuckles' crush stays
+# DELIBERATELY ABSENT -- crush_glm52 still signs as the nodeless `crush` card,
+# and choosing between that and a new knuckles-crush card is unmeasured.
 #
 # Every value here is checked against an ACTIVE card by
 # pmoves/tests/test_node_identity.py, so a revoked card fails CI instead of
@@ -73,8 +82,10 @@ nodes:
   - PMOVES-SPARK
   default_identity:
     claude-code: claude_spark
+    crush: crush_spark
   cipher_agent_id:
     claude-code: spark-claude
+    crush: spark-crush
 - canonical: z890
   kind: node
   reach: pmoves-z890

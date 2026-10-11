@@ -628,11 +628,13 @@ def test_the_agent_registry_key_is_a_declared_spelling(key, canonical):
 @pytest.mark.parametrize("key", [
     "metrics_specialist", "logs_specialist", "tracing_specialist",
     "dashboard_specialist", "llm_observability", "agent_zero", "crush_glm52",
+    "crush_spark",
 ])
 def test_keys_sharing_a_signature_are_deliberately_NOT_aliased(key):
     """A SHARED SIGNATURE IS NOT AN ALIAS -- the load-bearing half of that fix.
 
-    `claude-opus` is the signature of six distinct keys and `crush` of two.
+    `claude-opus` is the signature of six distinct keys and `crush` of three
+    (crush_spark joined crush_glm52 and the generic `crush` key on 2026-10-11).
     Aliasing them would declare six different agents to be one identity, and the
     collision gate keys on identity -- so a genuine clash between, say,
     metrics_specialist and logs_specialist would stop being reported. Widening
