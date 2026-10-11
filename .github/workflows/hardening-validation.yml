@@ -283,6 +283,8 @@ jobs:
           SUPABASE_DB_PASSWORD: ci-validation-placeholder
           SUPABASE_SERVICE_ROLE_KEY: ci-validation-placeholder
           MCP_SERVER_TOKEN: ci-validation-placeholder
+          SECRET_KEY: ci-validation-placeholder
+          CHIT_PASSPHRASE: ci-validation-placeholder
         run: |
           echo "Validating docker-compose files..."
 

@@ -3610,7 +3610,7 @@ services:
     # Same resolved value A0_SET_mcp_server_token below pins the inner runtime
     # to: fleet-canonical AGENT_ZERO_MCP_TOKEN (issue #2056), legacy
     # MCP_SERVER_TOKEN fallback. Do NOT source AGENT_ZERO_API_KEY from env:
-    # env.shared carries a dev placeholder MCP_SERVER_TOKEN=dev-local-mcp-token
+    # env.shared provides MCP_SERVER_TOKEN via the secrets funnel (variable reference)
     # that would win interpolation and never match the inner token.
     # NOTE: when BOTH token vars are unset the inner runtime auto-generates a
     # token the wrapper cannot know — /sessions will then 401 by design
@@ -3670,11 +3670,11 @@ services:
     # LLM routing: use TensorZero gateway as OpenAI-compatible provider
     # Agent Zero's get_default_value() reads A0_SET_* from env (dotenv priority)
     # Dummy key silences LiteLLM "Missing API Key" warning — TensorZero handles auth
-    - OPENAI_API_KEY=${OPENAI_API_KEY:-tensorzero-routed}
+    - OPENAI_API_KEY=${OPENAI_API_KEY:-}
     # Same placeholder for the A0 2.5 preset plugin: get_api_key() resolves
     # TENSORZERO_API_KEY for provider "tensorzero"; without it the UI banners
     # "Missing API Key for model presets" even though the gateway needs none.
-    - TENSORZERO_API_KEY=${TENSORZERO_API_KEY:-tensorzero-routed}
+    - TENSORZERO_API_KEY=${TENSORZERO_API_KEY:-}
     # Model routing moved to the GENERATED presets file:
     #   data/agent-zero/usr/plugins/_model_config/presets.yaml (make a0-model-sync).
     # The A0_SET_{chat,util,embed,browser}_model_* env lane above is gone: the
@@ -3915,7 +3915,7 @@ services:
     # TensorZero as OpenAI-compatible provider for Archon's LLM calls.
     # Archon reads OPENAI_API_KEY / OPENAI_API_BASE for its model calls.
     # Derives from the canonical TENSORZERO_BASE_URL used across the fleet.
-    - OPENAI_API_KEY=${OPENAI_API_KEY:-tensorzero-routed}
+    - OPENAI_API_KEY=${OPENAI_API_KEY:-}
     - OPENAI_API_BASE=${TENSORZERO_BASE_URL:-http://tensorzero-gateway:3000}/openai/v1
     # gh auth — non-fatal warning if absent.
     - GH_TOKEN=${GH_TOKEN:-}
@@ -5071,28 +5071,28 @@ services:
     environment:
     - TENSORZERO_CLICKHOUSE_URL=${TENSORZERO_CLICKHOUSE_GATEWAY_URL:-${TENSORZERO_CLICKHOUSE_URL:-http://tensorzero:tensorzero@tensorzero-clickhouse:8123/default}}
     # Keep gateway bootable in local-first mode when cloud provider keys are absent.
-    - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-local-disabled}
-    - GLM_API_KEY=${GLM_API_KEY:-local-disabled}
-    - OPENAI_API_KEY=${OPENAI_API_KEY:-local-disabled}
-    - GROQ_API_KEY=${GROQ_API_KEY:-local-disabled}
-    - MOONSHOT_API_KEY=${MOONSHOT_API_KEY:-local-disabled}
+    - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+    - GLM_API_KEY=${GLM_API_KEY:-}
+    - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+    - GROQ_API_KEY=${GROQ_API_KEY:-}
+    - MOONSHOT_API_KEY=${MOONSHOT_API_KEY:-}
     # Kimi Code SUBSCRIPTION key (canonical manifest/tier name, 2026-07-24).
     # Read by models.chat_kimi_for_coding on api.kimi.com/coding/v1 — the
     # subscription platform is ISOLATED from pay-per-token api.moonshot.ai,
     # so this key must NOT be funneled into the legacy Moonshot location
     # (it 401s there; verified live).
-    - KIMI_CODING_API=${KIMI_CODING_API:-local-disabled}
-    - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-local-disabled}
-    - VENICE_API_KEY=${VENICE_API_KEY:-local-disabled}
-    - Z_AI_API_KEY=${Z_AI_API_KEY:-local-disabled}
-    - ALIBABA_PRO_CODING_PLAN=${ALIBABA_PRO_CODING_PLAN:-local-disabled}
-    - OLLAMA_API_KEY=${OLLAMA_API_KEY:-local-disabled}
-    - KILOCODE_API_KEY=${KILOCODE_API_KEY:-local-disabled}
-    - HF_TOKEN=${HF_TOKEN:-local-disabled}
-    - MINIMAX_API_KEY=${MINIMAX_API_KEY:-local-disabled}
-    - TOGETHER_AI_API_KEY=${TOGETHER_AI_API_KEY:-local-disabled}
-    - CLOUDFLARE_API_TOKEN=${CLOUDFLARE_API_TOKEN:-local-disabled}
-    - GEMINI_API_KEY=${GEMINI_API_KEY:-local-disabled}
+    - KIMI_CODING_API=${KIMI_CODING_API:-}
+    - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+    - VENICE_API_KEY=${VENICE_API_KEY:-}
+    - Z_AI_API_KEY=${Z_AI_API_KEY:-}
+    - ALIBABA_PRO_CODING_PLAN=${ALIBABA_PRO_CODING_PLAN:-}
+    - OLLAMA_API_KEY=${OLLAMA_API_KEY:-}
+    - KILOCODE_API_KEY=${KILOCODE_API_KEY:-}
+    - HF_TOKEN=${HF_TOKEN:-}
+    - MINIMAX_API_KEY=${MINIMAX_API_KEY:-}
+    - TOGETHER_AI_API_KEY=${TOGETHER_AI_API_KEY:-}
+    - CLOUDFLARE_API_TOKEN=${CLOUDFLARE_API_TOKEN:-}
+    - GEMINI_API_KEY=${GEMINI_API_KEY:-}
     - OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=${OTEL_EXPORTER_OTLP_TRACES_ENDPOINT:-http://pmoves-otel-collector:4317}
     - DOCKED_MODE=${DOCKED_MODE:-true}
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
@@ -5493,7 +5493,7 @@ services:
     # CHIT fail-closed signing (house pattern, mirrors hi-rag-gateway*)
     - CHIT_REQUIRE_SIGNATURE=${CHIT_PROD_REQUIRE_SIGNATURE:-true}
     - CHIT_PASSPHRASE=${CHIT_PROD_PASSPHRASE:?set CHIT_PROD_PASSPHRASE in env.shared}
-    - SECRET_KEY=${SECRET_KEY:-pmoves-tokenism-secret}
+    - SECRET_KEY=${SECRET_KEY:?set SECRET_KEY via secrets funnel}
     - NATS_URL=${NATS_URL}
     - NATS_CLIENT_NAME=tokenism-simulator
     - NATS_JETSTREAM=${NATS_JETSTREAM:-true}
@@ -5851,7 +5851,7 @@ services:
     environment:
     - WGER_API_URL=http://wger:8000
     - NATS_URL=${NATS_URL}
-    - CHIT_PASSPHRASE=${CHIT_PASSPHRASE:-}
+    - CHIT_PASSPHRASE=${CHIT_PASSPHRASE:?set CHIT_PASSPHRASE via secrets funnel}
     - WGER_POLL_INTERVAL=${WGER_POLL_INTERVAL:-60}
     depends_on:
       nats:
