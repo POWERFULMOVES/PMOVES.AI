@@ -1,0 +1,20 @@
+--- a/pmoves/scripts/claude-pmoves.sh
++++ b/pmoves/scripts/claude-pmoves.sh
+@@ -354,6 +354,17 @@
+   fi
+ fi
+ 
++# Theme: the identity's own glyph/colour/voice from agent_signatures.yaml,
++# rendered to stderr before the TUI paints (operator, 2026-10-11: the
++# customization work "should load with claude-pmoves"). FAIL-OPEN, LOUD; see
++# pmoves/scripts/pm-theme-banner.sh.
++if [ -f "$ROOT/pmoves/scripts/pm-theme-banner.sh" ]; then
++  # shellcheck source=./pm-theme-banner.sh
++  . "$ROOT/pmoves/scripts/pm-theme-banner.sh"
++  pm_theme_banner "$ROOT" "${PM_IDENT_CIPHER_ID:-}" ${IDENT_PY[@]+"${IDENT_PY[@]}"} || true
++  echo "[claude-pmoves] ${PM_THEME_LINE}" >&2
++fi
++
+ # ONE FLAG, COMPOSED ONCE. Every block above called pm_ident_append, which
+ # concatenates; none of them pushed a flag of its own. `claude
+ # --append-system-prompt` keeps only its LAST occurrence, so the multi-flag form

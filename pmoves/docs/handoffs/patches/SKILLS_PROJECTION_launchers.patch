@@ -1,0 +1,114 @@
+--- a/pmoves/scripts/codex-pmoves.sh
++++ b/pmoves/scripts/codex-pmoves.sh
+@@ -44,5 +44,15 @@
+   fi
+ fi
+ 
++# Skills parity: project .claude/skills into this harness's own skills dir so a
++# PMOVES skill reaches every AGInT, not only Claude Code (operator canon
++# 2026-10-11). FAIL-OPEN, LOUD; see pmoves/scripts/pm-skills-project.sh.
++if [ -f "$$PROJECT_ROOT/pmoves/scripts/pm-skills-project.sh" ]; then
++  # shellcheck source=./pm-skills-project.sh
++  . "$$PROJECT_ROOT/pmoves/scripts/pm-skills-project.sh"
++  pm_skills_project "$$PROJECT_ROOT" || true
++  echo "[codex-pmoves] ${PM_SKILLS_LINE}" >&2
++fi
++
+ cd "$PROJECT_ROOT"
+ exec codex "$@"
+\ No newline at end of file
+--- a/pmoves/scripts/kilo-pmoves.sh
++++ b/pmoves/scripts/kilo-pmoves.sh
+@@ -51,6 +51,16 @@
+   fi
+ fi
+ 
++# Skills parity: project .claude/skills into this harness's own skills dir so a
++# PMOVES skill reaches every AGInT, not only Claude Code (operator canon
++# 2026-10-11). FAIL-OPEN, LOUD; see pmoves/scripts/pm-skills-project.sh.
++if [ -f "$$PROJECT_ROOT/pmoves/scripts/pm-skills-project.sh" ]; then
++  # shellcheck source=./pm-skills-project.sh
++  . "$$PROJECT_ROOT/pmoves/scripts/pm-skills-project.sh"
++  pm_skills_project "$$PROJECT_ROOT" || true
++  echo "[kilo-pmoves] ${PM_SKILLS_LINE}" >&2
++fi
++
+ CONFIG="$PROJECT_ROOT/pmoves/configs/claws/opencode-${NODE}.json"
+ 
+ if [ ! -f "$CONFIG" ]; then
+--- a/pmoves/scripts/kimi-pmoves.sh
++++ b/pmoves/scripts/kimi-pmoves.sh
+@@ -59,6 +59,16 @@
+   fi
+ fi
+ 
++# Skills parity: project .claude/skills into this harness's own skills dir so a
++# PMOVES skill reaches every AGInT, not only Claude Code (operator canon
++# 2026-10-11). FAIL-OPEN, LOUD; see pmoves/scripts/pm-skills-project.sh.
++if [ -f "$$PROJECT_ROOT/pmoves/scripts/pm-skills-project.sh" ]; then
++  # shellcheck source=./pm-skills-project.sh
++  . "$$PROJECT_ROOT/pmoves/scripts/pm-skills-project.sh"
++  pm_skills_project "$$PROJECT_ROOT" || true
++  echo "[kimi-pmoves] ${PM_SKILLS_LINE}" >&2
++fi
++
+ CONFIG="$PROJECT_ROOT/.kimi/config.toml"
+ MCP_CONFIG="$PROJECT_ROOT/.kimi/mcp.json"
+ 
+--- a/pmoves/scripts/crush-pmoves
++++ b/pmoves/scripts/crush-pmoves
+@@ -120,6 +120,16 @@
+   fi
+ } >> "$IDENTITY_FILE"
+ 
++# Skills parity: project .claude/skills into this harness's own skills dir so a
++# PMOVES skill reaches every AGInT, not only Claude Code (operator canon
++# 2026-10-11). FAIL-OPEN, LOUD; see pmoves/scripts/pm-skills-project.sh.
++if [ -f "$$REPO_ROOT/pmoves/scripts/pm-skills-project.sh" ]; then
++  # shellcheck source=./pm-skills-project.sh
++  . "$$REPO_ROOT/pmoves/scripts/pm-skills-project.sh"
++  pm_skills_project "$$REPO_ROOT" || true
++  echo "[crush-pmoves] ${PM_SKILLS_LINE}" >&2
++fi
++
+ echo "◇ crush-pmoves → bootstrapping from $REPO_ROOT"
+ make -C "$REPO_ROOT/pmoves" crush-bootstrap
+ 
+--- a/pmoves/scripts/hermes-pmoves
++++ b/pmoves/scripts/hermes-pmoves
+@@ -71,6 +71,16 @@
+   export DOCKER_HOST=""
+ fi
+ 
++# Skills parity: project .claude/skills into this harness's own skills dir so a
++# PMOVES skill reaches every AGInT, not only Claude Code (operator canon
++# 2026-10-11). FAIL-OPEN, LOUD; see pmoves/scripts/pm-skills-project.sh.
++if [ -f "$$REPO_ROOT/pmoves/scripts/pm-skills-project.sh" ]; then
++  # shellcheck source=./pm-skills-project.sh
++  . "$$REPO_ROOT/pmoves/scripts/pm-skills-project.sh"
++  pm_skills_project "$$REPO_ROOT" || true
++  echo "[hermes-pmoves] ${PM_SKILLS_LINE}" >&2
++fi
++
+ PMOVES_HERMES_PROFILE="$HERMES_PROFILE" make -C "$REPO_ROOT/pmoves" hermes-bootstrap
+ 
+ echo ""
+--- a/pmoves/scripts/claude-pmoves.sh
++++ b/pmoves/scripts/claude-pmoves.sh
+@@ -354,6 +354,16 @@
+   fi
+ fi
+ 
++# Skills parity: project .claude/skills into this harness's own skills dir so a
++# PMOVES skill reaches every AGInT, not only Claude Code (operator canon
++# 2026-10-11). FAIL-OPEN, LOUD; see pmoves/scripts/pm-skills-project.sh.
++if [ -f "$$ROOT/pmoves/scripts/pm-skills-project.sh" ]; then
++  # shellcheck source=./pm-skills-project.sh
++  . "$$ROOT/pmoves/scripts/pm-skills-project.sh"
++  pm_skills_project "$$ROOT" || true
++  echo "[claude-pmoves] ${PM_SKILLS_LINE}" >&2
++fi
++
+ # ONE FLAG, COMPOSED ONCE. Every block above called pm_ident_append, which
+ # concatenates; none of them pushed a flag of its own. `claude
+ # --append-system-prompt` keeps only its LAST occurrence, so the multi-flag form

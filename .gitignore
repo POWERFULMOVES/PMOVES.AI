@@ -301,6 +301,17 @@ NUL
 .kilocode/*
 !.kilocode/rules/
 !.kilocode/skills/
+# Skills PROJECTIONS (pmoves/scripts/pm-skills-project.sh, #skills-projection):
+# copies of .claude/skills/* written at launch into every harness's own skills
+# dir. Generated per node, never tracked. Kilo's own 24 `kilocode-*` skills stay
+# tracked; everything else under .kilocode/skills/ is a projection.
+.kilocode/skills/*
+!.kilocode/skills/kilocode-*/
+.agents/skills/
+.agents/.pmoves-skills-stamp
+.crush/skills/
+.hermes/skills/
+skills-lock.json
 Z.AI_MAX_Plan_Developer_Reference.html
 
 # Runtime state files (not version-controlled)
