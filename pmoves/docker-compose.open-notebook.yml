@@ -71,7 +71,7 @@ services:
       TRUST_REMOTE_USER_HEADER: ${TRUST_REMOTE_USER_HEADER:-true}
       NOTEBOOK_PROVIDER_MODE: ${NOTEBOOK_PROVIDER_MODE:-tensorzero}
       TENSORZERO_BASE_URL: ${TENSORZERO_BASE_URL:-http://tensorzero-gateway:3000/v1}
-      TENSORZERO_API_KEY: ${TENSORZERO_API_KEY:-pmoves-internal}
+      TENSORZERO_API_KEY: ${TENSORZERO_API_KEY:-}
       MODEL_REGISTRY_URL: ${MODEL_REGISTRY_URL:-http://model-registry:8110}
       OPEN_NOTEBOOK_ENCRYPTION_KEY: ${OPEN_NOTEBOOK_ENCRYPTION_KEY:-pmoves-default-change-me}
       # Ensure notebook can reach SurrealDB over pmoves_app.

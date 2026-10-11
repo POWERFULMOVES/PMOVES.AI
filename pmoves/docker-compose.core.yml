@@ -1364,28 +1364,28 @@ services:
     environment:
     - TENSORZERO_CLICKHOUSE_URL=${TENSORZERO_CLICKHOUSE_GATEWAY_URL:-${TENSORZERO_CLICKHOUSE_URL:-http://tensorzero:tensorzero@tensorzero-clickhouse:8123/default}}
     # Keep gateway bootable in local-first mode when cloud provider keys are absent.
-    - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-local-disabled}
-    - GLM_API_KEY=${GLM_API_KEY:-local-disabled}
-    - OPENAI_API_KEY=${OPENAI_API_KEY:-local-disabled}
-    - GROQ_API_KEY=${GROQ_API_KEY:-local-disabled}
-    - MOONSHOT_API_KEY=${MOONSHOT_API_KEY:-local-disabled}
+    - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+    - GLM_API_KEY=${GLM_API_KEY:-}
+    - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+    - GROQ_API_KEY=${GROQ_API_KEY:-}
+    - MOONSHOT_API_KEY=${MOONSHOT_API_KEY:-}
     # Kimi Code SUBSCRIPTION key (canonical manifest/tier name, 2026-07-24).
     # Read by models.chat_kimi_for_coding on api.kimi.com/coding/v1 — the
     # subscription platform is ISOLATED from pay-per-token api.moonshot.ai,
     # so this key must NOT be funneled into the legacy Moonshot location
     # (it 401s there; verified live).
-    - KIMI_CODING_API=${KIMI_CODING_API:-local-disabled}
-    - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-local-disabled}
-    - VENICE_API_KEY=${VENICE_API_KEY:-local-disabled}
-    - Z_AI_API_KEY=${Z_AI_API_KEY:-local-disabled}
-    - ALIBABA_PRO_CODING_PLAN=${ALIBABA_PRO_CODING_PLAN:-local-disabled}
-    - OLLAMA_API_KEY=${OLLAMA_API_KEY:-local-disabled}
-    - KILOCODE_API_KEY=${KILOCODE_API_KEY:-local-disabled}
-    - HF_TOKEN=${HF_TOKEN:-local-disabled}
-    - MINIMAX_API_KEY=${MINIMAX_API_KEY:-local-disabled}
-    - TOGETHER_AI_API_KEY=${TOGETHER_AI_API_KEY:-local-disabled}
-    - CLOUDFLARE_API_TOKEN=${CLOUDFLARE_API_TOKEN:-local-disabled}
-    - GEMINI_API_KEY=${GEMINI_API_KEY:-local-disabled}
+    - KIMI_CODING_API=${KIMI_CODING_API:-}
+    - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+    - VENICE_API_KEY=${VENICE_API_KEY:-}
+    - Z_AI_API_KEY=${Z_AI_API_KEY:-}
+    - ALIBABA_PRO_CODING_PLAN=${ALIBABA_PRO_CODING_PLAN:-}
+    - OLLAMA_API_KEY=${OLLAMA_API_KEY:-}
+    - KILOCODE_API_KEY=${KILOCODE_API_KEY:-}
+    - HF_TOKEN=${HF_TOKEN:-}
+    - MINIMAX_API_KEY=${MINIMAX_API_KEY:-}
+    - TOGETHER_AI_API_KEY=${TOGETHER_AI_API_KEY:-}
+    - CLOUDFLARE_API_TOKEN=${CLOUDFLARE_API_TOKEN:-}
+    - GEMINI_API_KEY=${GEMINI_API_KEY:-}
     - OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=${OTEL_EXPORTER_OTLP_TRACES_ENDPOINT:-http://pmoves-otel-collector:4317}
     - DOCKED_MODE=${DOCKED_MODE:-true}
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
