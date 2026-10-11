@@ -6438,3 +6438,11 @@ env-local-set: ## Operator: set KEY in pmoves/.env.local; value from a no-echo p
 env-local-unset: ## Operator: remove the single KEY line from pmoves/.env.local, with backup + audit row (KEY=NAME)
 	@$(ENV_LOCAL_KEY_GUARD)
 	@$(PYTHON) tools/env_local_key.py unset "$$ENV_LOCAL_KEY_NAME"
+
+# --- media-audio nvidia-hook fallback (Known Road: MEDIA_AUDIO_GPU_HOOK_RECOVERY.md) ---
+media-audio-cpu-rescue: ## CPU-mode rescue when the nvidia prestart hook is broken (no node restart)
+@bash pmoves/scripts/media_audio_cpu_rescue.sh
+
+media-audio-gpu-restore: ## Restore GPU media-audio after Docker/nvidia runtime is healthy again
+docker rm -f pmoves-media-audio-cpu 2>/dev/null || true
+$(DC) --env-file env.shared -f docker-compose.base.yml -f docker-compose.media.yml up -d --force-recreate --no-deps media-audio

@@ -1,0 +1,12 @@
+# CPU-mode override for media-audio (nvidia hook broken).
+# NOTE: compose list-merge APPENDS devices, so this override alone does NOT
+# strip the GPU reservation - use scripts/media_audio_cpu_rescue.sh (runc twin)
+# for the guaranteed path. Kept for documentation + future compose fix.
+services:
+  media-audio:
+    deploy:
+      resources:
+        reservations:
+          devices: []
+    environment:
+      NVIDIA_VISIBLE_DEVICES: ""
