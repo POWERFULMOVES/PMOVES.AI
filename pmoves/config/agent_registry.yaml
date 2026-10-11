@@ -27,6 +27,7 @@ external_contributors:
   - 5090-claude
   - 4090-claude
   - b850-claude
+  - spark-claude
   - botz-architect
   - botz-builder
   - botz-auditor
@@ -232,6 +233,34 @@ agents:
     description: >-
       B850/Knuckles node CLI identity. Affinity for data-tier and AMD/ROCm Linux
       workloads, with an infra + governance lane -- a preference, not an
+      exclusive claim. claude-pmoves launches it as the main session with full
+      tools; it delegates coordination to the node_steward role.
+  claude_spark:
+    name: "SPARK Claude"
+    class: standard
+    # Same shape as claude_b850 and claude_4090: a CLI session a human drives.
+    primary_type: ui
+    secondary_type: agent
+    port: null
+    health: null
+    layers:
+      - L0
+      - L2
+      - L4
+    evolution_stage: stage_1
+    # Signing card 00000000-0000-4000-8000-000000000014 (agent_id spark-claude).
+    signature: spark-claude
+    nats:
+      publishes: []
+      subscribes: []
+    topology:
+      node_affinity: [spark]
+      team: orchestration
+      ci_runner: null
+      compose_profile: null
+    description: >-
+      SPARK (DGX Spark, GB10, ARM64) node CLI identity. Affinity for unified-memory
+      inference and the creator/visualization lanes -- a preference, not an
       exclusive claim. claude-pmoves launches it as the main session with full
       tools; it delegates coordination to the node_steward role.
   kimi_knuckles:
