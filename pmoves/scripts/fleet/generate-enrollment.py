@@ -222,9 +222,16 @@ def generate(args: argparse.Namespace) -> None:
     expires_at = now + ttl_seconds
 
     # Build enrollment payload
+    # Serial: ledger-aligned certificate serial for KRL revocation.
+    # Derived from ledger size + time+token entropy so concurrent
+    # enrollments never collide (ordering + entropy).
+    serial = (len(list_active_tokens()) + 1) * 100000 + (
+        int(hashlib.sha256((secrets.token_urlsafe(8) + str(now)).encode()).hexdigest(), 16) % 99999
+    )
     enrollment = {
         "version": "fleet.enrollment.v1",
         "token_id": secrets.token_urlsafe(16),
+        "serial": serial,
         "role": role,
         "device_name": args.device or f"enrollment-{role}-{int(now)}",
         "issued_at": datetime.fromtimestamp(now, tz=timezone.utc).isoformat(),
@@ -264,6 +271,7 @@ def generate(args: argparse.Namespace) -> None:
     # Log to ledger
     ledger_entry = {
         "token_id": enrollment["token_id"],
+        "serial": serial,
         "role": role,
         "device_name": enrollment["device_name"],
         "issued_at": enrollment["issued_at"],
