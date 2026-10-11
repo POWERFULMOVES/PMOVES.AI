@@ -23,7 +23,7 @@ Operator canon, 2026-10-11 (verbatim): "your cipher config should be different b
 
 So "different based on node capacity" has no surface to be different on yet, and on this node the single surface it does have points at a port that is not listening.
 
-Re-measured 19:50 EDT the same day: a host Ollama now answers on 11434 outside compose, and the next cipher store landed  (id ). That does not close the row above: the compose default works only while that host process runs, which is node-local runtime state, not a fix in the files. The URL-class fix in section 3 still stands.
+Re-measured 19:50 EDT the same day: a host Ollama now answers on 11434 outside compose, and the next cipher store landed `embedded: true` (id `ZLkgU4VHM69c`). That does not close the row above: the compose default works only while that host process runs, which is node-local runtime state, not a fix in the files. The URL-class fix in section 3 still stands.
 
 ## 2. Design
 
