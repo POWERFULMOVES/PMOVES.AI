@@ -152,13 +152,17 @@ recognize it before it bites) · **Harvest** (the correct pre-existing tool/proc
   own guards, committed templates that bake one operator's filesystem into fleet config.
   The harness's native settings surface and protocol are the contract; the overlay layers
   identity, env and routing on top of that contract and never replaces it.
-- **Live:** #3282 (Mavis launcher, merged 2026-10-11 with 27 review findings unanswered):
+- **Live (teachable moments, not blame):** #3282 (Mavis launcher, merged 2026-10-11 with 27 review findings unanswered):
   regen dropped the codex blocklist note and the kilo/kimi node bridges, shipped
   `configs/claude_settings/minimax.json` with an operator home path, and a second launcher
   at mode 100644. #3325: `kimi-pmoves.sh` grepped `kimi --help` for `--config-file` to
   pick a code path; two regex patches later it still infers from prose (review
   2026-10-11). `kilo-pmoves.sh` on main exec's `opencode --config`, not `kilo`. Operator,
-  2026-10-11: "PMOVES connects and overlays it does not break shim or paper over".
+  2026-10-11: "PMOVES connects and overlays it does not break shim or paper over", and on
+  the lanes above: "the purpose is not to blame it is to learn those were honest efforts
+  which led to a better outcome the teachable moment". Each one produced the thing that
+  closes it: the regen lane produced the harness map; the regex rounds produced the
+  declared-flavor registry row; the wrong-binary exec produced `kilo.json` as the seam.
 - **Signal:** a launcher that parses the CLI's help text; `exec <other-binary>`; a
   generator diff that removes lines it did not emit; an absolute operator home path
   (`C:` drive or `/home`) in a committed config; a PR that cannot name the harness's native
@@ -168,8 +172,12 @@ recognize it before it bites) · **Harvest** (the correct pre-existing tool/proc
   overlay seam (identity, env.shared, MCP roster, routing). Hydrate through that surface
   (`--mcp-config`, `--settings`, `--profile`, `--config`); speak ACP via the
   PMOVES-registry harness (`client.py`) instead of wrapping the CLI; declare the flavor in
-  `node-vocabulary.yaml` instead of detecting it. Review gate: the PR template's overlay
-  checkbox and `kilocode-review.yml` section 2.
+  `node-vocabulary.yaml` instead of detecting it. Declare the harness itself: a
+  `kind: harness` row in `agent_registry.yaml` whose `overlay:` block names the settings
+  surface, the instructions file, the skills dir and the ACP command, so the ACP map marks
+  it `linked` (4 of 42 on 2026-10-11: claude-acp, codex-acp, kilo, opencode) and
+  `skills_parity.py` can measure whether the skill reaches every AGInT. Review gate: the
+  PR template's overlay checkbox and `kilocode-review.yml` section 2.
 
 ### `phantom-deliverable`
 - **Trap:** post-interruption (or post-compaction) work claimed as done that was never
