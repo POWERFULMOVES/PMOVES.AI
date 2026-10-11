@@ -160,9 +160,12 @@ identities:
     # undeclared-author ratchet correctly refused them. Same node-harness-model
     # shape as `4090-claude`: identity is the node's Claude Code harness,
     # model decoration is worn, not a distinct identity.
-    aliases: ["SPARK-CLAUDE", "spark-claude", "Spark-Claude", "claude_spark"]
+    # PMOVES-approved stamp adopted by the wearer itself 2026-10-11 (operator
+    # rule: every AGInTZ's full ident is PMOVES-<NODE>-<HARNESS>). The 10
+    # earlier `SPARK-CLAUDE` rows keep resolving through the alias.
+    aliases: ["PMOVES-SPARK-CLAUDE", "SPARK-CLAUDE", "spark-claude", "Spark-Claude", "claude_spark"]
     node: spark
-    register_form: "SPARK-CLAUDE"
+    register_form: "PMOVES-SPARK-CLAUDE"
     note: >-
       0 register entries on main before the lane-2979 carry (#3235), which
       adds 10 rows authored as `SPARK-CLAUDE` (8) or `spark-claude` (2).

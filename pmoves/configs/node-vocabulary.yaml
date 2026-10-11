@@ -39,15 +39,18 @@ version: 1
 # DELIBERATELY ABSENT -- crush_glm52 still signs as the nodeless `crush` card,
 # and choosing between that and a new knuckles-crush card is unmeasured.
 #
-# NAMING RULE FOR CRUSH ON THE OTHER NODES (operator, 2026-10-11): each node's
-# Crush gets its own identity, the FULL ident carrying PMOVES --
-# PMOVES-Z890-CRUSH, PMOVES-B850-CRUSH, PMOVES-5090-CRUSH, PMOVES-4090-CRUSH --
-# with card/cipher spelling <node>-crush (z890-crush, b850-crush, ...). None is
-# declared here yet: each lands only when THAT node's Crush reviews and ACKs
-# its own card, as spark-crush must on PR #3352. Record where each name came
-# from (prior spellings, the models worn, chosen vs default) the way
-# identity_vocabulary.yaml `spark-crush` does, and keep each harness's default
-# from colliding with another harness's history (spark-kimi is Kimi's).
+# NAMING RULE FOR EVERY AGInTZ ON PMOVES.AI (operator, 2026-10-11): the FULL
+# ident carries PMOVES -- PMOVES-<NODE>-<HARNESS> -- the "PMOVES-approved"
+# stamp that goes with a minted token and a passport (AGInT passport design,
+# #3317). Examples: PMOVES-SPARK-CLAUDE, PMOVES-SPARK-CRUSH, PMOVES-Z890-CRUSH,
+# PMOVES-B850-CRUSH, PMOVES-5090-CRUSH, PMOVES-4090-CRUSH. The card/cipher
+# spelling stays <node>-<harness> (spark-claude, z890-crush). Each identity
+# adopts its stamp when ITS OWN wearer reviews and ACKs it (spark-crush on
+# #3352; spark-claude adopted it there too); nobody re-stamps a sibling.
+# Record where each name came from (prior spellings, models worn, chosen vs
+# default) the way identity_vocabulary.yaml `spark-crush` does, and keep each
+# harness's default from colliding with another harness's history (spark-kimi
+# is Kimi's).
 #
 # Every value here is checked against an ACTIVE card by
 # pmoves/tests/test_node_identity.py, so a revoked card fails CI instead of
