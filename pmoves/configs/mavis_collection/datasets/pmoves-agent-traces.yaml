@@ -1,0 +1,62 @@
+# pmoves-agent-traces — Dataset manifest pointer
+# Mavis Collection — slice G.3 dataset layer
+#
+# Per pmoves/config/datasets.yaml:106, this dataset is published to
+# DARKXSIDE/pmoves-agent-traces on HuggingFace Hub. Agent execution traces
+# for behavioral cloning + DPO training from Agent Zero + Archon + TensorZero.
+
+name: pmoves-agent-traces
+canonical_ref: pmoves/config/datasets.yaml#pmoves-agent-traces
+hf_id: DARKXSIDE/pmoves-agent-traces
+description: |
+  Agent execution traces for behavioral cloning and DPO training. Chosen/rejected
+  response pairs from production Agent Zero and Archon runs, with reward signals
+  derived from task completion and user feedback.
+
+# Sources (per pmoves/config/datasets.yaml:114-117)
+sources:
+  - agent-zero               # Orchestrator traces
+  - archon                   # Planning/execution traces
+  - tensorzero-clickhouse    # Inference logs with latency/quality
+
+# Mavis/HyPeRAGInT traces are a primary source (HyperAgent traces
+# feed behavioral cloning)
+mavis_traces:
+  orchestrator: agent_zero
+  harness: mavis
+  identity_form: pmoves/configs/agents/forms/hyperagint.yaml
+  deployment_node: 5090
+
+# Schema (per pmoves/config/datasets.yaml:118-145)
+schema:
+  format: parquet
+  columns:
+    - {name: agent_id, type: string}
+    - {name: function, type: string, description: "TensorZero function/role"}
+    - {name: prompt, type: string}
+    - {name: chosen_response, type: string}
+    - {name: rejected_response, type: string}
+    - {name: reward_signal, type: float, range: [0.0, 1.0]}
+    - {name: model_id, type: string}
+    - {name: latency_ms, type: float}
+    - {name: token_count, type: integer}
+
+clickhouse_source:
+  query: |
+    SELECT
+      function_name AS function,
+      model_name AS model_id,
+      input AS prompt,
+      output AS chosen_response,
+      inference_params,
+      processing_time_ms AS latency_ms
+    FROM inference
+    WHERE timestamp > now() - INTERVAL 7 DAY
+    ORDER BY timestamp DESC
+
+publishing:
+  hf_org: DARKXSIDE
+  hf_id: DARKXSIDE/pmoves-agent-traces
+  default_license: apache-2.0
+
+pointer_only: true
