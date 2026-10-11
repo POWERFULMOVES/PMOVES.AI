@@ -419,9 +419,9 @@ def probe(
 
     `transport` is the roster entry's `type`. For `http` (streamable-http, the
     roster default since 2026-10-10) the endpoint is POST-only, so the probe is a
-    JSON-RPC `initialize` POST; otherwise (sse, or an explicit --url) it is the
-    GET below. A URL whose path ends in `/mcp` is treated as streamable even
-    when no `type` rode along (an explicit --url has none).
+    JSON-RPC `initialize` POST; otherwise (sse, or an explicit --url not ending
+    in /mcp) it is the GET below. A URL whose path ends in `/mcp` is treated as
+    streamable even when no `type` rode along (an explicit --url has none).
 
     Returns a row describing the outcome; never raises for a reachability
     failure, because "this one is down" is a measurement.

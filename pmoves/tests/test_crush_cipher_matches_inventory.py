@@ -122,8 +122,9 @@ def test_generated_config_carries_the_live_path(key):
     # legacy SSE pair (/mcp/sse + /mcp/messages) 400s "stream is not readable"
     # on any container built before fork PR #27 (pin a0ee2314); POST /mcp works
     # on pre- and post-pin builds (measured on 5090). Mirrors the inventory.
-    assert not url.endswith("/mcp/sse"), f"{key} still on the legacy SSE path: {url}"
-    assert url.endswith("/mcp"), f"{key} unexpected cipher URL: {url}"
+    assert url.endswith("/mcp"), (
+        f"{key} still on the legacy SSE path / not the live /mcp endpoint: {url}"
+    )
     # The empty-bearer fallback only works if the token is NOT required:
     # missing_envs() would add disabled=true on tokenless nodes and the
     # corrected URL/ header would still ship a dark entry.
