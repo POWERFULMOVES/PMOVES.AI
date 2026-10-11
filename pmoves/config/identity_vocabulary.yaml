@@ -675,3 +675,12 @@ node_relations:
   - token: Z890-mirror-on-5090
     node: "5090"
     mirrored_from: z890
+  - token: 5090-claude
+    node: "5090"
+    note: >-
+      `Mavis (5090-claude)` x2 (CLAIM 2026-10-05, NOTE 2026-10-08, lane
+      feat/claude-pmoves-mavis-launcher): the mavis identity worn by the
+      5090 claude-code session on its own home node. The parenthetical
+      names the WEARER, not a mirror, so there is no mirrored_from. Declared
+      2026-10-10 after the gate flagged the two rows (declared late, recorded
+      honestly -- same posture as the digital-twin lane above).

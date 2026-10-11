@@ -1,0 +1,52 @@
+name: HyPeRAGInT
+description: |
+  HyPeRAGInT persona — per-agent identity at "level-11 / Spynel framing /
+  post-4090-claude" per pmoves/docs/architecture/DAMAGE_CONTROL_STRUCTURED_POLICY_RFC.md:280.
+  Singular form of the HyPeRAGInTZ moniker (the integrated fabric — harness +
+  config + model support + PMOVES.AI integration — with Hi-RAG v2 + Cipher
+  as first-class organs, per pmoves/docs/AGENTS/AGNOTE4482.md:1684).
+
+  Built FROM POWERFULMOVES/PMOVES-MiniMaXX-AGInT (customization + build, NOT
+  rename, per operator directive 2026-10-05). Home of HyPeRAGInTZ will be
+  POWERFULMOVES/PMOVES-registry renamed AFTER a few more additions land.
+
+  Profile reflects honest cognitive shape for a HyPeRAGInT instance:
+  - harness-native (Claude Code + coder harness + KiloCode harness + Codex
+    harness all runnable side-by-side via the claude-pmoves-{node}-{suite}.{sh,ps1}
+    family of launchers)
+  - generate-heavy for long reasoning (Hi-RAG v2 RAG + Cipher mindmap recall
+    both pre-load context — fewer turns needed in-band)
+  - low mesh-offload threshold because 1M context on Opus means most work
+    stays in-band; offload only to GPU peers (5090/SPARK/EKWS) when the
+    task fits a smaller specialised model
+  - full-artifact sharing: collaborative review/auditing is the point, and
+    the artifact store is human-readable
+weights:
+  decode: 0.20
+  retrieve: 0.20
+  generate: 0.60
+band_emphasis:
+  low: 0.20
+  mid: 0.30
+  high: 0.50
+mesh_offload_threshold:
+  gpu_free_mem_gb: 1
+  latency_ms: 400
+sharing:
+  shapes_only_default: false
+  allow_artifacts_on_approve: true
+# HyPeRAGInT-specific additions (beyond the standard form):
+harness_target:
+  registry: PMOVES-registry          # home of HyPeRAGInTZ (rename pending)
+  launcher_family: claude-pmoves-{node}-{suite}
+  default_suite: mavis               # PMOVES_CLAUDE_BACKEND=minimax on first boot
+memory_overrides:
+  cipher_mindmap_local: true         # L1 per-node Neo4j via Cipher :8105
+  hirag_v2_index_local: true         # L3 Qdrant + Hi-RAG gateway :8086
+  fleet_sync_l2: true                # sync to Z890 Neo4j via Tailscale (L2)
+miniagent_policy:
+  spawn_protocol: scoped-hyperaagint-instance # miniagents are HyPeRAGInT not Archon
+  acp_registry_entry: required      # each spawned miniagent gets a PMOVES-registry entry
+  lifecycle: # after-execution archive
+    capture: "after-task-complete"
+    targets: [L1, L2]                # snapshot to per-node + fleet cipher
