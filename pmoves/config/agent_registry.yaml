@@ -411,12 +411,14 @@ agents:
       - L2
       - L4
     evolution_stage: stage_1
-    # Visual/attribution half is the shared `crush` contributor, as for
-    # crush_glm52. The CIPHER spelling is separate and per-node: card
-    # 00000000-0000-4000-8000-000000000056 (spark-crush, interim), declared in
-    # node-vocabulary.yaml spark.cipher_agent_id.crush. A dedicated
-    # agent_signatures.yaml `spark-crush` entry is a follow-up lane.
-    signature: crush
+    # Signs as ITS OWN identity, not the shared `crush` contributor
+    # (operator, 2026-10-11: "so Crush's trail is its own"). Register form
+    # PMOVES-SPARK-CRUSH (identity_vocabulary.yaml `spark-crush`, with the
+    # provenance of its earlier CRUSH-SPARK (KIMI) rows); H half in agent_signatures.yaml `spark-crush`; card
+    # 00000000-0000-4000-8000-000000000056 (interim); cipher agentId declared
+    # in node-vocabulary.yaml spark.cipher_agent_id.crush. This is the
+    # kimi_knuckles shape. crush_glm52 still signs as `crush`.
+    signature: spark-crush
     # Same posture as crush_glm52: publishes nothing today; the generic `crush`
     # entry carries the fleet-level subjects.
     nats:
