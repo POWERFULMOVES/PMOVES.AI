@@ -21,7 +21,7 @@
     },
     {
       "name": "delta",
-      "value": 0.4958,
+      "value": 0.605,
       "min": 0.396,
       "max": 0.596,
       "step": 0.005,
@@ -29,7 +29,7 @@
     },
     {
       "name": "kappa",
-      "value": -0.1269,
+      "value": -0.1188,
       "min": -0.148,
       "max": -0.048,
       "step": 0.005,
@@ -37,7 +37,7 @@
     },
     {
       "name": "hz",
-      "value": 0.368,
+      "value": 0.2722,
       "min": 0.194,
       "max": 0.394,
       "step": 0.01,
@@ -45,7 +45,7 @@
     },
     {
       "name": "fitness",
-      "value": 0.7,
+      "value": 0.9532,
       "min": 0.1,
       "max": 1.0,
       "step": 0.05,
@@ -60,7 +60,7 @@
     "dirIntensity": 1.2,
     "ambientIntensity": 0.5,
     "shininess": 50,
-    "globalSaturation": 1.96,
+    "globalSaturation": 1.67664,
     "camera": {
       "position": {
         "x": 12,
@@ -81,14 +81,14 @@
   "meta": {
     "source": "cipher_beats_analyst",
     "cgp_spec": "chit.cgp.v0.2",
-    "group": "DARKXSIDE Beats Constellation",
+    "group": "Allegro_balanced_Bright_c7",
     "tracks": 82,
     "state_vector": {
-      "delta": 0.4958,
-      "kappa": -0.1269,
-      "Hz": 0.368,
-      "A": 0.956,
-      "F": 0.7
+      "delta": 0.605,
+      "kappa": -0.1188,
+      "Hz": 0.2722,
+      "A": 0.9532,
+      "F": 0.9532
     },
     "sonic_profile": {
       "tempo_bpm": 119.5,
@@ -121,24 +121,69 @@
     "inferred_shape": "Full Catalog Constellation",
     "pipeline": "analyze_beats -> beats_to_cgp export-hyperdim",
     "provenance_chain": {
-      "corpus": "82-track founder SoundCloud catalog (sc:user:darkxside -> pmoves.darkxside.beats)",
+      "corpus": "82-track founder catalog: SoundCloud (soundcloud.com/darkxside, permalinks per track below) + Google Drive mirror (folder id operator-held, to be recorded)",
       "proto_system": "08_darkxside_persona.md: 'the 82-track catalog IS the proto-PMOVES system'",
       "pipeline": [
-        "analyze_beats.py (Cipher Beats Analyst) - sonic fingerprint per track/group",
-        "pmoves/tools/beats_to_cgp.py track_to_state_vector() - canonical mapping",
+        "analyze_beats.py (Cipher Beats Analyst) - per-track sonic fingerprint (measured, .fingerprints.json)",
+        "group m3u8 playlists (playlists/<group>.m3u8) - actual track membership per variant",
+        "pmoves/tools/beats_to_cgp.py track_to_state_vector() - canonical mapping, group-averaged",
         "chit.cgp.v0.2 packet + geometry.cgp.v1 NATS publish",
         "Hyperdimensions surface render (this file)"
       ],
       "mapping_authority": "tempo_bpm->delta (bpm-60)/120; spectral_centroid->Hz c/8000; loudness_LRA->kappa -(lra/20); spectral_flatness->A 1-min(f*2,1); coherence->F",
+      "grounding": "state vectors measured from THIS variant's actual track membership (m3u8 x fingerprints.json, host VES.AI 2026-10-12), not synthetic",
       "reconstruction": {
-        "status": "reconstructed-from-catalog-parameterspace",
+        "status": "grounded-aggregate-from-fingerprints",
         "parent": "beats_constellation.json",
         "date": "2026-10-12",
         "author": "agent0-sidecar twin",
-        "reason": "original variant files lost to website/hyperdim gitignore (new files un-addable); _list.json entries survived",
-        "method": "state vectors regenerated via the canonical track_to_state_vector formulas from tempo-class bpm + c-index spread of centroid/LRA/flatness bands; not the lost originals - they drop in over these if recovered"
+        "reason": "original variant files lost to website/hyperdim gitignore; state vectors re-aggregated from the variant's own m3u8 track list and per-track fingerprints",
+        "supersedes": "52631dd20 synthetic-spread; 1ce625071 parent-derived approximation"
       }
     },
-    "variant_index": 7
-  }
+    "variant_index": 7,
+    "track_count": 8
+  },
+  "tracks": [
+    {
+      "name": "Aquary 4",
+      "soundcloud": "https://soundcloud.com/darkxside/aquary-4",
+      "audio_url": "/audio/beats/Aquary 4.opus"
+    },
+    {
+      "name": "Shrooms 9 Low slow change",
+      "soundcloud": "https://soundcloud.com/darkxside/shrooms-9-low-slow-change",
+      "audio_url": "/audio/beats/Shrooms 9 Low slow change.opus"
+    },
+    {
+      "name": "Storms",
+      "soundcloud": "https://soundcloud.com/darkxside/storms",
+      "audio_url": "/audio/beats/Storms.m4a"
+    },
+    {
+      "name": "Lately",
+      "soundcloud": "https://soundcloud.com/darkxside/lately",
+      "audio_url": "/audio/beats/Lately.opus"
+    },
+    {
+      "name": "Hip Hops n Star Snaps",
+      "soundcloud": "https://soundcloud.com/darkxside/hip-hops-n-star-snaps",
+      "audio_url": "/audio/beats/Hip Hops n Star Snaps.opus"
+    },
+    {
+      "name": "Piano Wax 76 Bpm dnb Dark",
+      "soundcloud": "https://soundcloud.com/darkxside/piano-wax-76-bpm-dnb-dark",
+      "audio_url": "/audio/beats/Piano Wax 76 Bpm dnb Dark.opus"
+    },
+    {
+      "name": "Piano Wax Loud",
+      "soundcloud": "https://soundcloud.com/darkxside/piano-wax-loud",
+      "audio_url": "/audio/beats/Piano Wax Loud.opus"
+    },
+    {
+      "name": "The Calm Storm",
+      "soundcloud": "https://soundcloud.com/darkxside/the-calm-storm",
+      "audio_url": "/audio/beats/The Calm Storm.opus"
+    }
+  ]
 }

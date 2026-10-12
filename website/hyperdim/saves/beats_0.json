@@ -21,7 +21,7 @@
     },
     {
       "name": "delta",
-      "value": 0.4958,
+      "value": 0.4689,
       "min": 0.396,
       "max": 0.596,
       "step": 0.005,
@@ -29,7 +29,7 @@
     },
     {
       "name": "kappa",
-      "value": -0.0781,
+      "value": -0.0859,
       "min": -0.148,
       "max": -0.048,
       "step": 0.005,
@@ -37,7 +37,7 @@
     },
     {
       "name": "hz",
-      "value": 0.2502,
+      "value": 0.2791,
       "min": 0.194,
       "max": 0.394,
       "step": 0.01,
@@ -45,7 +45,7 @@
     },
     {
       "name": "fitness",
-      "value": 0.7,
+      "value": 0.9397,
       "min": 0.1,
       "max": 1.0,
       "step": 0.05,
@@ -60,7 +60,7 @@
     "dirIntensity": 1.2,
     "ambientIntensity": 0.5,
     "shininess": 50,
-    "globalSaturation": 1.4,
+    "globalSaturation": 1.67664,
     "camera": {
       "position": {
         "x": 12,
@@ -81,14 +81,14 @@
   "meta": {
     "source": "cipher_beats_analyst",
     "cgp_spec": "chit.cgp.v0.2",
-    "group": "DARKXSIDE Beats Constellation",
+    "group": "Allegro_balanced_Bright_c0",
     "tracks": 82,
     "state_vector": {
-      "delta": 0.4958,
-      "kappa": -0.0781,
-      "Hz": 0.2502,
-      "A": 0.9246,
-      "F": 0.7
+      "delta": 0.4689,
+      "kappa": -0.0859,
+      "Hz": 0.2791,
+      "A": 0.9397,
+      "F": 0.9397
     },
     "sonic_profile": {
       "tempo_bpm": 119.5,
@@ -121,24 +121,109 @@
     "inferred_shape": "Full Catalog Constellation",
     "pipeline": "analyze_beats -> beats_to_cgp export-hyperdim",
     "provenance_chain": {
-      "corpus": "82-track founder SoundCloud catalog (sc:user:darkxside -> pmoves.darkxside.beats)",
+      "corpus": "82-track founder catalog: SoundCloud (soundcloud.com/darkxside, permalinks per track below) + Google Drive mirror (folder id operator-held, to be recorded)",
       "proto_system": "08_darkxside_persona.md: 'the 82-track catalog IS the proto-PMOVES system'",
       "pipeline": [
-        "analyze_beats.py (Cipher Beats Analyst) - sonic fingerprint per track/group",
-        "pmoves/tools/beats_to_cgp.py track_to_state_vector() - canonical mapping",
+        "analyze_beats.py (Cipher Beats Analyst) - per-track sonic fingerprint (measured, .fingerprints.json)",
+        "group m3u8 playlists (playlists/<group>.m3u8) - actual track membership per variant",
+        "pmoves/tools/beats_to_cgp.py track_to_state_vector() - canonical mapping, group-averaged",
         "chit.cgp.v0.2 packet + geometry.cgp.v1 NATS publish",
         "Hyperdimensions surface render (this file)"
       ],
       "mapping_authority": "tempo_bpm->delta (bpm-60)/120; spectral_centroid->Hz c/8000; loudness_LRA->kappa -(lra/20); spectral_flatness->A 1-min(f*2,1); coherence->F",
+      "grounding": "state vectors measured from THIS variant's actual track membership (m3u8 x fingerprints.json, host VES.AI 2026-10-12), not synthetic",
       "reconstruction": {
-        "status": "reconstructed-from-catalog-parameterspace",
+        "status": "grounded-aggregate-from-fingerprints",
         "parent": "beats_constellation.json",
         "date": "2026-10-12",
         "author": "agent0-sidecar twin",
-        "reason": "original variant files lost to website/hyperdim gitignore (new files un-addable); _list.json entries survived",
-        "method": "state vectors regenerated via the canonical track_to_state_vector formulas from tempo-class bpm + c-index spread of centroid/LRA/flatness bands; not the lost originals - they drop in over these if recovered"
+        "reason": "original variant files lost to website/hyperdim gitignore; state vectors re-aggregated from the variant's own m3u8 track list and per-track fingerprints",
+        "supersedes": "52631dd20 synthetic-spread; 1ce625071 parent-derived approximation"
       }
     },
-    "variant_index": 0
-  }
+    "variant_index": 0,
+    "track_count": 16
+  },
+  "tracks": [
+    {
+      "name": "Crush no # 71",
+      "soundcloud": "https://soundcloud.com/darkxside/crush-no-71",
+      "audio_url": "/audio/beats/Crush no # 71.opus"
+    },
+    {
+      "name": "THEY'LL KILL YOU (OOMPA LOOMPA mix)",
+      "soundcloud": "https://soundcloud.com/darkxside/theyll-kill-you-oompa-loompa-mix",
+      "audio_url": "/audio/beats/THEY'LL KILL YOU (OOMPA LOOMPA mix).opus"
+    },
+    {
+      "name": "inquiringcuriousmind",
+      "soundcloud": "https://soundcloud.com/darkxside/inquiringcuriousmind",
+      "audio_url": "/audio/beats/inquiringcuriousmind.mp3"
+    },
+    {
+      "name": "LITTY",
+      "soundcloud": "https://soundcloud.com/darkxside/litty",
+      "audio_url": "/audio/beats/LITTY.opus"
+    },
+    {
+      "name": "Ask You",
+      "soundcloud": "https://soundcloud.com/darkxside/ask-you",
+      "audio_url": "/audio/beats/Ask You.opus"
+    },
+    {
+      "name": "FIRST BOSS",
+      "soundcloud": "https://soundcloud.com/darkxside/first-boss",
+      "audio_url": "/audio/beats/FIRST BOSS.opus"
+    },
+    {
+      "name": "Ree 3b 25",
+      "soundcloud": "https://soundcloud.com/darkxside/ree-3b-25",
+      "audio_url": "/audio/beats/Ree 3b 25.opus"
+    },
+    {
+      "name": "WACK",
+      "soundcloud": "https://soundcloud.com/darkxside/wack",
+      "audio_url": "/audio/beats/WACK.opus"
+    },
+    {
+      "name": "NICE BABY",
+      "soundcloud": "https://soundcloud.com/darkxside/nice-baby",
+      "audio_url": "/audio/beats/NICE BABY.m4a"
+    },
+    {
+      "name": "Lost Tapes A Side B Side - 1",
+      "soundcloud": "https://soundcloud.com/darkxside/lost-tapes-a-side-b-side-1",
+      "audio_url": "/audio/beats/Lost Tapes A Side B Side - 1.opus"
+    },
+    {
+      "name": "Sketch 8 B Loud Dark",
+      "soundcloud": "https://soundcloud.com/darkxside/sketch-8-b-loud-dark",
+      "audio_url": "/audio/beats/Sketch 8 B Loud Dark.opus"
+    },
+    {
+      "name": "Starscreams and Loud Scars",
+      "soundcloud": "https://soundcloud.com/darkxside/starscreams-and-loud-scars",
+      "audio_url": "/audio/beats/Starscreams and Loud Scars.opus"
+    },
+    {
+      "name": "Jazz2loud",
+      "soundcloud": "https://soundcloud.com/darkxside/jazz2loud",
+      "audio_url": "/audio/beats/Jazz2loud.opus"
+    },
+    {
+      "name": "CLANK",
+      "soundcloud": "https://soundcloud.com/darkxside/clank",
+      "audio_url": "/audio/beats/CLANK.opus"
+    },
+    {
+      "name": "STARBLAST",
+      "soundcloud": "https://soundcloud.com/darkxside/starblast",
+      "audio_url": "/audio/beats/STARBLAST.mp3"
+    },
+    {
+      "name": "The Setup Just Leave Me Alone \u29f8 Don't Leave Me Alone",
+      "soundcloud": "https://soundcloud.com/darkxside/the-setup-just-leave-me-alone-dont-leave-me-alone",
+      "audio_url": "/audio/beats/The Setup Just Leave Me Alone \u29f8 Don't Leave Me Alone.opus"
+    }
+  ]
 }

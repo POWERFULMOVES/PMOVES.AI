@@ -21,7 +21,7 @@
     },
     {
       "name": "delta",
-      "value": 0.4958,
+      "value": 0.6259,
       "min": 0.396,
       "max": 0.596,
       "step": 0.005,
@@ -29,7 +29,7 @@
     },
     {
       "name": "kappa",
-      "value": -0.099,
+      "value": -0.1038,
       "min": -0.148,
       "max": -0.048,
       "step": 0.005,
@@ -37,7 +37,7 @@
     },
     {
       "name": "hz",
-      "value": 0.3007,
+      "value": 0.2852,
       "min": 0.194,
       "max": 0.394,
       "step": 0.01,
@@ -45,7 +45,7 @@
     },
     {
       "name": "fitness",
-      "value": 0.8286,
+      "value": 0.9654,
       "min": 0.1,
       "max": 1.0,
       "step": 0.05,
@@ -60,7 +60,7 @@
     "dirIntensity": 1.2,
     "ambientIntensity": 0.5,
     "shininess": 50,
-    "globalSaturation": 1.64,
+    "globalSaturation": 1.67664,
     "camera": {
       "position": {
         "x": 12,
@@ -81,14 +81,14 @@
   "meta": {
     "source": "cipher_beats_analyst",
     "cgp_spec": "chit.cgp.v0.2",
-    "group": "DARKXSIDE Beats Constellation",
+    "group": "Allegro_balanced_Bright_c3",
     "tracks": 82,
     "state_vector": {
-      "delta": 0.4958,
-      "kappa": -0.099,
-      "Hz": 0.3007,
-      "A": 0.9381,
-      "F": 0.8286
+      "delta": 0.6259,
+      "kappa": -0.1038,
+      "Hz": 0.2852,
+      "A": 0.9654,
+      "F": 0.9654
     },
     "sonic_profile": {
       "tempo_bpm": 119.5,
@@ -121,24 +121,49 @@
     "inferred_shape": "Full Catalog Constellation",
     "pipeline": "analyze_beats -> beats_to_cgp export-hyperdim",
     "provenance_chain": {
-      "corpus": "82-track founder SoundCloud catalog (sc:user:darkxside -> pmoves.darkxside.beats)",
+      "corpus": "82-track founder catalog: SoundCloud (soundcloud.com/darkxside, permalinks per track below) + Google Drive mirror (folder id operator-held, to be recorded)",
       "proto_system": "08_darkxside_persona.md: 'the 82-track catalog IS the proto-PMOVES system'",
       "pipeline": [
-        "analyze_beats.py (Cipher Beats Analyst) - sonic fingerprint per track/group",
-        "pmoves/tools/beats_to_cgp.py track_to_state_vector() - canonical mapping",
+        "analyze_beats.py (Cipher Beats Analyst) - per-track sonic fingerprint (measured, .fingerprints.json)",
+        "group m3u8 playlists (playlists/<group>.m3u8) - actual track membership per variant",
+        "pmoves/tools/beats_to_cgp.py track_to_state_vector() - canonical mapping, group-averaged",
         "chit.cgp.v0.2 packet + geometry.cgp.v1 NATS publish",
         "Hyperdimensions surface render (this file)"
       ],
       "mapping_authority": "tempo_bpm->delta (bpm-60)/120; spectral_centroid->Hz c/8000; loudness_LRA->kappa -(lra/20); spectral_flatness->A 1-min(f*2,1); coherence->F",
+      "grounding": "state vectors measured from THIS variant's actual track membership (m3u8 x fingerprints.json, host VES.AI 2026-10-12), not synthetic",
       "reconstruction": {
-        "status": "reconstructed-from-catalog-parameterspace",
+        "status": "grounded-aggregate-from-fingerprints",
         "parent": "beats_constellation.json",
         "date": "2026-10-12",
         "author": "agent0-sidecar twin",
-        "reason": "original variant files lost to website/hyperdim gitignore (new files un-addable); _list.json entries survived",
-        "method": "state vectors regenerated via the canonical track_to_state_vector formulas from tempo-class bpm + c-index spread of centroid/LRA/flatness bands; not the lost originals - they drop in over these if recovered"
+        "reason": "original variant files lost to website/hyperdim gitignore; state vectors re-aggregated from the variant's own m3u8 track list and per-track fingerprints",
+        "supersedes": "52631dd20 synthetic-spread; 1ce625071 parent-derived approximation"
       }
     },
-    "variant_index": 3
-  }
+    "variant_index": 3,
+    "track_count": 4
+  },
+  "tracks": [
+    {
+      "name": "Final Chrono Dark Rev A",
+      "soundcloud": "https://soundcloud.com/darkxside/final-chrono-dark-rev-a",
+      "audio_url": "/audio/beats/Final Chrono Dark Rev A.opus"
+    },
+    {
+      "name": "808 Low",
+      "soundcloud": "https://soundcloud.com/darkxside/808-low",
+      "audio_url": "/audio/beats/808 Low.m4a"
+    },
+    {
+      "name": "Final Chrono 3",
+      "soundcloud": "https://soundcloud.com/darkxside/final-chrono-3",
+      "audio_url": "/audio/beats/Final Chrono 3.opus"
+    },
+    {
+      "name": "808 SIGNS",
+      "soundcloud": "https://soundcloud.com/darkxside/808-signs",
+      "audio_url": "/audio/beats/808 SIGNS.opus"
+    }
+  ]
 }

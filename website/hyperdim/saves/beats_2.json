@@ -21,7 +21,7 @@
     },
     {
       "name": "delta",
-      "value": 0.3333,
+      "value": 0.3915,
       "min": 0.396,
       "max": 0.596,
       "step": 0.005,
@@ -29,7 +29,7 @@
     },
     {
       "name": "kappa",
-      "value": -0.092,
+      "value": -0.1268,
       "min": -0.148,
       "max": -0.048,
       "step": 0.005,
@@ -37,7 +37,7 @@
     },
     {
       "name": "hz",
-      "value": 0.2839,
+      "value": 0.3063,
       "min": 0.194,
       "max": 0.394,
       "step": 0.01,
@@ -45,7 +45,7 @@
     },
     {
       "name": "fitness",
-      "value": 0.7857,
+      "value": 0.9459,
       "min": 0.1,
       "max": 1.0,
       "step": 0.05,
@@ -60,7 +60,7 @@
     "dirIntensity": 1.2,
     "ambientIntensity": 0.5,
     "shininess": 50,
-    "globalSaturation": 1.56,
+    "globalSaturation": 1.67664,
     "camera": {
       "position": {
         "x": 12,
@@ -81,18 +81,18 @@
   "meta": {
     "source": "cipher_beats_analyst",
     "cgp_spec": "chit.cgp.v0.2",
-    "group": "DARKXSIDE Beats Constellation",
+    "group": "Moderato_balanced_Bright_c2",
     "tracks": 82,
     "state_vector": {
-      "delta": 0.3333,
-      "kappa": -0.092,
-      "Hz": 0.2839,
-      "A": 0.9336,
-      "F": 0.7857
+      "delta": 0.3915,
+      "kappa": -0.1268,
+      "Hz": 0.3063,
+      "A": 0.9459,
+      "F": 0.9459
     },
     "sonic_profile": {
-      "tempo_bpm": 100.0,
-      "tempo_label": "Moderato",
+      "tempo_bpm": 119.5,
+      "tempo_label": "Allegro",
       "timbre": "balanced",
       "character": "tonal",
       "energy": "Bright",
@@ -121,24 +121,99 @@
     "inferred_shape": "Full Catalog Constellation",
     "pipeline": "analyze_beats -> beats_to_cgp export-hyperdim",
     "provenance_chain": {
-      "corpus": "82-track founder SoundCloud catalog (sc:user:darkxside -> pmoves.darkxside.beats)",
+      "corpus": "82-track founder catalog: SoundCloud (soundcloud.com/darkxside, permalinks per track below) + Google Drive mirror (folder id operator-held, to be recorded)",
       "proto_system": "08_darkxside_persona.md: 'the 82-track catalog IS the proto-PMOVES system'",
       "pipeline": [
-        "analyze_beats.py (Cipher Beats Analyst) - sonic fingerprint per track/group",
-        "pmoves/tools/beats_to_cgp.py track_to_state_vector() - canonical mapping",
+        "analyze_beats.py (Cipher Beats Analyst) - per-track sonic fingerprint (measured, .fingerprints.json)",
+        "group m3u8 playlists (playlists/<group>.m3u8) - actual track membership per variant",
+        "pmoves/tools/beats_to_cgp.py track_to_state_vector() - canonical mapping, group-averaged",
         "chit.cgp.v0.2 packet + geometry.cgp.v1 NATS publish",
         "Hyperdimensions surface render (this file)"
       ],
       "mapping_authority": "tempo_bpm->delta (bpm-60)/120; spectral_centroid->Hz c/8000; loudness_LRA->kappa -(lra/20); spectral_flatness->A 1-min(f*2,1); coherence->F",
+      "grounding": "state vectors measured from THIS variant's actual track membership (m3u8 x fingerprints.json, host VES.AI 2026-10-12), not synthetic",
       "reconstruction": {
-        "status": "reconstructed-from-catalog-parameterspace",
+        "status": "grounded-aggregate-from-fingerprints",
         "parent": "beats_constellation.json",
         "date": "2026-10-12",
         "author": "agent0-sidecar twin",
-        "reason": "original variant files lost to website/hyperdim gitignore (new files un-addable); _list.json entries survived",
-        "method": "state vectors regenerated via the canonical track_to_state_vector formulas from tempo-class bpm + c-index spread of centroid/LRA/flatness bands; not the lost originals - they drop in over these if recovered"
+        "reason": "original variant files lost to website/hyperdim gitignore; state vectors re-aggregated from the variant's own m3u8 track list and per-track fingerprints",
+        "supersedes": "52631dd20 synthetic-spread; 1ce625071 parent-derived approximation"
       }
     },
-    "variant_index": 2
-  }
+    "variant_index": 2,
+    "track_count": 14
+  },
+  "tracks": [
+    {
+      "name": "MULTI BIT DARK",
+      "soundcloud": "https://soundcloud.com/darkxside/multi-bit-dark",
+      "audio_url": "/audio/beats/MULTI BIT DARK.opus"
+    },
+    {
+      "name": "MULTIBIT",
+      "soundcloud": "https://soundcloud.com/darkxside/multibit",
+      "audio_url": "/audio/beats/MULTIBIT.opus"
+    },
+    {
+      "name": "Absynth Club mix",
+      "soundcloud": "https://soundcloud.com/darkxside/absynth-club-mix",
+      "audio_url": "/audio/beats/Absynth Club mix.opus"
+    },
+    {
+      "name": "the legend of Rattlesnake Jake",
+      "soundcloud": "https://soundcloud.com/darkxside/the-legend-of-rattlesnake-jake",
+      "audio_url": "/audio/beats/the legend of Rattlesnake Jake.mp3"
+    },
+    {
+      "name": "Arcade Low - 2",
+      "soundcloud": "https://soundcloud.com/darkxside/arcade-low-2",
+      "audio_url": "/audio/beats/Arcade Low - 2.opus"
+    },
+    {
+      "name": "SCARD",
+      "soundcloud": "https://soundcloud.com/darkxside/scard",
+      "audio_url": "/audio/beats/SCARD.opus"
+    },
+    {
+      "name": "Darque 8",
+      "soundcloud": "https://soundcloud.com/darkxside/darque-8",
+      "audio_url": "/audio/beats/Darque 8.opus"
+    },
+    {
+      "name": "RAKS LIT",
+      "soundcloud": "https://soundcloud.com/darkxside/raks-lit",
+      "audio_url": "/audio/beats/RAKS LIT.opus"
+    },
+    {
+      "name": "RAKS SLOW",
+      "soundcloud": "https://soundcloud.com/darkxside/raks-slow",
+      "audio_url": "/audio/beats/RAKS SLOW.opus"
+    },
+    {
+      "name": "Rav Low",
+      "soundcloud": "https://soundcloud.com/darkxside/rav-low",
+      "audio_url": "/audio/beats/Rav Low.opus"
+    },
+    {
+      "name": "Lira 9",
+      "soundcloud": "https://soundcloud.com/darkxside/lira-9",
+      "audio_url": "/audio/beats/Lira 9.m4a"
+    },
+    {
+      "name": "When",
+      "soundcloud": "https://soundcloud.com/darkxside/when",
+      "audio_url": "/audio/beats/When.opus"
+    },
+    {
+      "name": "BoomBap Low Long",
+      "soundcloud": "https://soundcloud.com/darkxside/boombap-low-long",
+      "audio_url": "/audio/beats/BoomBap Low Long.opus"
+    },
+    {
+      "name": "WEIRD v1",
+      "soundcloud": "https://soundcloud.com/darkxside/weird-v1",
+      "audio_url": "/audio/beats/WEIRD v1.opus"
+    }
+  ]
 }
