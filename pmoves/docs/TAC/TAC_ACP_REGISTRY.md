@@ -7,7 +7,7 @@
 | Field | Value |
 |-------|-------|
 | **Fork** | `POWERFULMOVES/PMOVES-registry` (upstream: `agentclientprotocol/registry`) |
-| **Clone convention** | repo-root sibling (`../PMOVES-registry`) — enforced by `acp_registry_map.py:33`, `infra.mk:682` |
+| **Clone convention** | the `PMOVES-registry` **submodule** pinned in this repo (`git submodule update --init PMOVES-registry`) — `acp_registry_map.py` `DEFAULT_REGISTRY`, `infra.mk` `ACP_REGISTRY_PATH`. The earlier repo-root sibling clone is retired: a stale sibling on z890 silently dropped `crush-acp` from the map (PR #3347). |
 | **Fork registry entry** | `pmoves/config/fork_registry.json` → `PMOVES-registry` (`sync: true`, branch `main`) |
 | **Entries at fork** | 42 agents (synced 2026-09-15) |
 | **Published index** | `https://cdn.agentclientprotocol.com/registry/v1/latest/registry.json` |
@@ -35,7 +35,7 @@
 |-------|----------|----------------------|
 | ACP↔PMOVES mapper | `pmoves/tools/acp_registry_map.py` → `pmoves/configs/acp_registry_map.json` | **No upstream equivalent.** Conservative matching (explicit bridges + exact repo basenames; substring search forbidden). Live: `kilo → kilocode_glm` |
 | Launcher probe | `pmoves/tools/acp_launcher_probe.py` | **Port of upstream's client.py contract** (initialize shape verbatim, env allowlist from `AGENT_ENV_PASSTHROUGH`, authMethods parsing) with 3 documented divergences: thread reads (Windows pipes), continuously-drained stderr (npx cold-install deadlock), `taskkill /T` tree kill |
-| Make targets | `infra.mk:682` `acp-registry-map` | — |
+| Make targets | `infra.mk` `acp-registry-map` (write), `acp-registry-map-check` (drift: exit 1) | Generator fails closed (exit 2) on a missing **or empty** registry and stamps `registry_commit` in the artifact |
 | Explicit bridges | `acp_registry_map.py:39` | `spynel → PMOVES-spynel` is **dead** — no `spynel/` entry exists in the registry (see Branch E) |
 
 ## Measured State — 2026-09-16, POWERFULMOVES (windows-x86_64)
@@ -84,13 +84,13 @@ Resolved measurement gaps (2026-09-17):
 
 
 ```bash
-# sibling clone (once per node)
-git clone https://github.com/POWERFULMOVES/PMOVES-registry ../PMOVES-registry
+# populate the pinned registry submodule (once per checkout / worktree)
+git submodule update --init PMOVES-registry
 
 # managed Node (once per node; repo .node-version pins the major)
 fnm install 24 && fnm default 24   # then reload shell (fnm env is profile-wired)
 
-# regenerate the ACP<->PMOVES mapping artifact
+# regenerate the ACP<->PMOVES mapping artifact (or verify it: acp-registry-map-check)
 make -C pmoves acp-registry-map
 
 # verify fleet-relevant launchers on this node
