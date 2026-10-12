@@ -5,7 +5,7 @@
 | Status | **DRAFT, design only.** No code, compose or submodule edits ride on this document. |
 | Owner | 5090-CLAUDE (`5090-claude`), lane `docs/cipher-capacity-profiles`, claim filed 2026-10-11 |
 | Base | `origin/main` `6d179267a7` |
-| Pairs with | `pmoves/docs/TAC/TAC_CIPHER.md` (service), `plans/AGINT_PASSPORT_DESIGN_2026-10-08.md` §3c node evidence (PR #3317), B850 handoff `B850_MEMORY_TRAVELS.md` (BRV, per-node token store) |
+| Pairs with | `pmoves/docs/TAC/TAC_CIPHER.md` (service); PR #3317 §3c node evidence (the passport design doc lives on branch `docs/agint-passport-design`, not yet on main); B850 handoff `pmoves/docs/handoffs/B850_MEMORY_TRAVELS.md` (BRV, per-node token store) |
 
 Operator canon, 2026-10-11 (verbatim): "your cipher config should be different based on node capacity and embeds are multi dimensions plus lightwieght brv".
 
@@ -13,8 +13,8 @@ Operator canon, 2026-10-11 (verbatim): "your cipher config should be different b
 
 | Fact | Evidence |
 |---|---|
-| One static cipher config for every node: `embedding: ollama / qwen3-embedding:4b / dimensions: 2560` | `Pmoves-cipher/memAgent/cipher.yml:14-18`; `pmoves/docker-compose.yml:4126` `EMBEDDING_DIM=2560` |
-| The embedding URL class is wrong on this node: compose defaults `OLLAMA_URL` / `OLLAMA_BASE_URL` to `host.docker.internal:11434`; nothing answers on 11434 here; the compose Ollama publishes on 11436 and is `pmoves-ollama:11434` in-network | `pmoves/docker-compose.yml:4107-4109`; `curl :11434/api/tags` no answer, `:11436/api/tags` lists `qwen3-embedding:4b` (2.5 GB), `embeddinggemma:300m`, `nomic-embed-text` |
+| One static cipher config for every node: `embedding: ollama / qwen3-embedding:4b / dimensions: 2560` | `Pmoves-cipher/memAgent/cipher.yml:14-18`; `pmoves/docker-compose.yml:4189` `EMBEDDING_DIM=2560` (line numbers as of `origin/main` `6d179267a7`; `grep -n EMBEDDING_DIM pmoves/docker-compose.yml` re-derives them) |
+| The embedding URL class is wrong on this node: the cipher stanza defaults `OLLAMA_URL` / `OLLAMA_BASE_URL` to `host.docker.internal:11434`, while every other Ollama consumer in the file defaults to `pmoves-ollama:11434`; at 15:30 EDT nothing answered on 11434 (re-measured 19:50: a host Ollama does, see below); the compose Ollama publishes on 11436 and is `pmoves-ollama:11434` in-network | `pmoves/docker-compose.yml:4170-4171` (cipher) vs `:2788`, `:3091`, `:3293`, `:5190` (`pmoves-ollama:11434`); `curl :11434/api/tags` no answer at 15:30, `:11436/api/tags` lists `qwen3-embedding:4b` (2.5 GB), `embeddinggemma:300m`, `nomic-embed-text` |
 | Consequence: every memory stored this session landed `embedded: false` (four stores, ids `XJ9At38W6D8i`, `wQRWVtVC_tV8`, `qeHUXPilxlYe`, …) so recall is text-match only | cipher `pmoves_cipher_store` responses, 2026-10-11 |
 | BRV (ByteRover CLI, the context-tree memory, BM25, no embeddings) is not installed on 5090; `pm-brv-check.sh` (#3313) says so at claude-pmoves launch | `command -v brv` → missing; `pmoves/scripts/pm-brv-check.sh` |
 | Qwen3-Embedding is one family with Matryoshka (MRL) output: 0.6B up to 1024 d, 4B up to 2560 d, 8B up to 4096 d, each with user-defined dims from 32 | model cards `Qwen/Qwen3-Embedding-{0.6B,4B}` README, read 2026-10-11 |
@@ -33,11 +33,11 @@ A `cipher_profile` key on each node's entry in `pmoves/configs/node-vocabulary.y
 
 | Class | Nodes (from profiles) | Embedding model | Dim | BRV |
 |---|---|---|---|---|
-| `gpu-large` (≥24 GB VRAM or ≥64 GB unified) | 5090, 4090, B850 (2×32 GB), SPARK | `qwen3-embedding:4b` | 2560 local, **1024 fleet** (see 2b) | yes |
-| `gpu-small` / `cpu-rich` (8–16 GB VRAM, or ≥32 GB RAM no GPU) | Z890, KVM4-1, KVM4-2 | `qwen3-embedding:0.6b` | 1024 | yes |
+| `gpu-large` (≥24 GB VRAM or ≥64 GB unified) | 5090 (32 GB), B850 (2×32 GB), SPARK (128 GB unified) | `qwen3-embedding:4b` | 2560 local, **1024 fleet** (see 2b) | yes |
+| `gpu-small` / `cpu-rich` (8–16 GB VRAM, or ≥32 GB RAM no GPU) | 4090 (laptop, 16 GB VRAM, 14 GB usable: `pmoves/config/profiles/laptop-4090.yaml:4,72`), Z890, KVM4-1, KVM4-2 | `qwen3-embedding:0.6b` | 1024 | yes |
 | `edge` (≤8 GB unified, or `ephemeral-microvm`) | Jetson Orin Nano, Jetson Nano, KVM2, tip-of-iceberg nodes | none local; embed through TensorZero to a `gpu-compute` node when reachable | 1024 (remote) | **BRV is the whole memory when offline** |
 
-The class is a derived field with a documented rule, so a new profile gets a class without a judgement call; the rule lives next to `node_roles.yaml`'s role definitions.
+The class is a derived field with a documented rule, so a new profile gets a class without a judgement call; the rule lives next to `node_roles.yaml`'s role definitions. The rule assigns the class; the first draft of this table listed the 4090 under `gpu-large` by habit, and the kilo review caught it (16 GB is a class below the stated threshold). A node may still run a bigger embedder than its class says, but that is an explicit `cipher_profile` override written into its vocabulary entry, never an inference: the 4090's profile already inventories `qwen3-embedding:8b` (4.7 GB), so an override there is the expected case, and the record then says so.
 
 ### 2b. Multi-dimension vectors: one family, two named vectors, comparable fleet-wide
 
