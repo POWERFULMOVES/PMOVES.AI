@@ -6,18 +6,31 @@ drop-in can be silently ignored: sshd_config without an Include for
 sshd_config.d (STUB_SSHD_INCLUDES=0), and `sshd -t` failing (STUB_SSHD_T_RC).
 """
 import os
-import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
 
+from pmoves.tools.bash_resolver import find_bash  # noqa: E402  never the WSL stub
+
 from ssh_surface import gen_krl, generate_ca
 
 _INSTALLER = Path(__file__).resolve().parent / "install_ssh_surface.sh"
-_BASH = shutil.which("bash")
+_BASH = find_bash()
 
 pytestmark = pytest.mark.skipif(_BASH is None, reason="bash not available")
+# On Windows, only run under Git Bash (or any non-WSL bash). The WSL stub
+# returned by `shutil.which("bash")` would silently run a different OS
+# against a different filesystem view (Z890 measured: /mnt/d vs D:).
+# `find_bash()` already rejects the WSL stub. This skip is belt + braces.
+_SKIP_REASON_WIN32 = (
+    "install_ssh_surface.sh runs under POSIX bash (use Git for Windows "
+    "or a POSIX host); find_bash() returned None on this Windows host."
+)
+pytestmark_win32 = pytest.mark.skipif(
+    sys.platform == "win32" or _BASH is None, reason=_SKIP_REASON_WIN32
+)
 
 _STUB_SSHD = """#!/usr/bin/env bash
 mode=""; cfg=""
