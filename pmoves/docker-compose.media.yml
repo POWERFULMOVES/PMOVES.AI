@@ -143,7 +143,10 @@ services:
     - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_data,pmoves_external
     # GPU via NVIDIA runtime env (NVIDIA_VISIBLE_DEVICES above) — NOT
     # deploy.resources.devices: the devices path fires the legacy nvidia
-    # prestart hook, which fails on Docker Desktop/WSL2. Pattern per #3358.
+    # prestart hook, which fails on Docker Desktop/WSL2 (ld.so assertion,
+    # driver rpc error, container stuck Created). The runtime itself is
+    # healthy on those hosts (nvidia-smi live, driver 610.57.01) — CUDA
+    # installs fine through runtime+env. Pattern per PR #3358 (media-audio).
     runtime: nvidia
     deploy:
       resources:
