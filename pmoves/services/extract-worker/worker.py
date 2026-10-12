@@ -23,6 +23,9 @@ qdrant_operations_total = Counter('extract_worker_qdrant_operations_total', 'Qdr
 embeddings_processed_total = Counter('extract_worker_embeddings_processed_total', 'Embeddings processed')
 
 QDRANT_URL = os.environ.get("QDRANT_URL","http://qdrant:6333")
+# Qdrant runs with QDRANT__SERVICE__API_KEY set, so a keyless client gets 401 on
+# every call. Same variable names hi-rag-gateway-v2 reads.
+QDRANT_API_KEY = os.environ.get("QDRANT_API_KEY") or os.environ.get("QDRANT__API_KEY") or None
 COLL = os.environ.get("QDRANT_COLLECTION","pmoves_chunks_qwen3")
 MODEL = os.environ.get("SENTENCE_MODEL","all-MiniLM-L6-v2")
 MEILI_URL = os.environ.get("MEILI_URL","http://meilisearch:7700")
@@ -224,10 +227,14 @@ def ingest(request: Request, body: Dict[str, Any] = Body(...)):
             # Upsert chunks to Qdrant + Meili
             if chunks:
                 texts = [c.get('text','') for c in chunks]
+                # Reach Qdrant BEFORE embedding: embedding is the expensive step,
+                # and a store we cannot write to (e.g. a 401) used to burn it on
+                # every retry of the same document.
+                qc = QdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY, timeout=30.0)
+                qc.get_collections()
                 vecs = _embed(texts)
                 embeddings_processed_total.inc(len(texts))
 
-                qc = QdrantClient(url=QDRANT_URL, timeout=30.0)
                 _ensure_qdrant(qc, vecs.shape[1])
                 points: List[PointStruct] = []
                 for i, v in enumerate(vecs):
