@@ -33,9 +33,8 @@
     },
     "claude-acp": {
       "name": "Claude Agent",
-      "pmoves": "claude_code",
       "repository": "https://github.com/agentclientprotocol/claude-agent-acp",
-      "status": "linked",
+      "status": "available",
       "version": "0.79.0"
     },
     "cline": {
@@ -52,9 +51,8 @@
     },
     "codex-acp": {
       "name": "Codex",
-      "pmoves": "codex_cli",
       "repository": "https://github.com/agentclientprotocol/codex-acp",
-      "status": "linked",
+      "status": "available",
       "version": "1.12.0"
     },
     "cortex-code": {
@@ -74,6 +72,12 @@
       "repository": "https://github.com/crow-cli/crow-cli",
       "status": "available",
       "version": "0.1.24"
+    },
+    "crush-acp": {
+      "name": "Crush",
+      "repository": "https://github.com/POWERFULMOVES/PMOVES-crush",
+      "status": "available",
+      "version": "0.91.2-pmoves.2"
     },
     "cursor": {
       "name": "Cursor",
@@ -210,9 +214,8 @@
     },
     "opencode": {
       "name": "OpenCode",
-      "pmoves": "opencode",
       "repository": "https://github.com/anomalyco/opencode",
-      "status": "linked",
+      "status": "available",
       "version": "1.18.31"
     },
     "pi-acp": {

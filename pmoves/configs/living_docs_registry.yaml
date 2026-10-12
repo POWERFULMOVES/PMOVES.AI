@@ -243,8 +243,9 @@ tracked:
   # map is the pre-implementation check; the catalog is the reviewer's room
   # index; the topology map is the index the walk PRs (#3345) hang off. All
   # three were unregistered. TAC_INTEGRATION_TOPOLOGY.md last moved
-  # 2026-03-15, so it enrols at P2 (warn) until the refresh pass brings it
-  # inside budget -- same posture as the Agent Zero block above.
+  # 2026-04-22 (5ee942ad; its v2.2 content is dated 2026-03-15), so it
+  # enrols at P2 (warn) until the refresh pass brings it inside budget --
+  # same posture as the Agent Zero block above.
   - path: pmoves/docs/TAC/TAC_HARNESS_OVERLAY_MAP.md
     freshness_days: 30
     severity: P2
