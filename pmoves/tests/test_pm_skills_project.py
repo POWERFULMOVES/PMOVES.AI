@@ -6,8 +6,11 @@ The contract these tests hold:
   harnesses their skills for the session, not the launch);
 * the CLI is called with one `-a` per harness from the pinned list, `--copy`
   and the local `.claude/skills` source, telemetry disabled;
-* a stamp newer than every source file skips the call; a newer source or
-  FORCE=1 runs it again; a failing CLI leaves no stamp and produces a WARN line;
+* the stamp is a content fingerprint of `.claude/skills`: an unchanged tree
+  skips the call; an edited, added or DELETED skill, or FORCE=1, runs it again,
+  and a deleted skill loses the copies this script projected (kilo review on
+  #3351: an mtime stamp never sees a deletion); a failing CLI leaves no stamp
+  and produces a WARN line;
 * the harness list matches `pmoves/tools/skills_parity.py` when that tool is
   present, so the projector and the parity check cannot drift apart.
 
@@ -107,25 +110,66 @@ def test_projects_with_one_agent_flag_per_harness_and_no_telemetry(tmp_path: Pat
     assert (root / ".agents" / ".pmoves-skills-stamp").is_file()
 
 
-def test_fresh_stamp_skips_and_newer_source_or_force_reruns(tmp_path: Path) -> None:
+def test_unchanged_tree_skips_and_edit_or_force_reruns(tmp_path: Path) -> None:
     root = _repo(tmp_path)
     stub = _stub(tmp_path)
     assert _run(tmp_path, root, stub)["OK"] == "1"
+    stamp = root / ".agents" / ".pmoves-skills-stamp"
+    assert stamp.read_text().splitlines()[1:] == ["alpha", "beta"], "stamp lists the projected names"
     (tmp_path / "argv").unlink()
     out = _run(tmp_path, root, stub)
     assert out["OK"] == "2", out["LINE"]
-    assert not (tmp_path / "argv").exists(), "a fresh stamp must not call the CLI"
+    assert not (tmp_path / "argv").exists(), "an unchanged tree must not call the CLI"
     # FORCE runs regardless of the stamp
     assert _run(tmp_path, root, stub, force="1")["OK"] == "1"
-    # a source file newer than the stamp runs again
+    # an edited source file runs again, even with its mtime pushed into the past
     (tmp_path / "argv").unlink()
-    time.sleep(1.1)
     skill = root / ".claude" / "skills" / "beta" / "SKILL.md"
     skill.write_text("changed")
-    now = time.time() + 5
-    os.utime(skill, (now, now))
+    past = time.time() - 3600
+    os.utime(skill, (past, past))
     assert _run(tmp_path, root, stub)["OK"] == "1"
     assert (tmp_path / "argv").exists()
+    # a new skill runs again too
+    (tmp_path / "argv").unlink()
+    (root / ".claude" / "skills" / "gamma").mkdir()
+    (root / ".claude" / "skills" / "gamma" / "SKILL.md").write_text("x")
+    out = _run(tmp_path, root, stub)
+    assert out["OK"] == "1" and out["LINE"].startswith("skills=projected (3 skills"), out["LINE"]
+
+
+def test_deleted_skill_reruns_and_removes_only_its_own_projected_copies(tmp_path: Path) -> None:
+    root = _repo(tmp_path)
+    stub = _stub(tmp_path)
+    assert _run(tmp_path, root, stub)["OK"] == "1"
+    # simulate what the real CLI leaves behind: a copy per harness dir, plus
+    # content this script never projected and must not touch
+    for rel in (".agents/skills", ".kilocode/skills", ".crush/skills", ".hermes/skills"):
+        for name in ("alpha", "beta"):
+            (root / rel / name).mkdir(parents=True)
+            (root / rel / name / "SKILL.md").write_text("copy")
+    (root / ".kilocode" / "skills" / "kilocode-native").mkdir()
+    (root / ".kilocode" / "skills" / "kilocode-native" / "SKILL.md").write_text("kilo's own")
+    (root / ".agents" / "skills" / "beta-unrelated").mkdir()
+
+    shutil.rmtree(root / ".claude" / "skills" / "beta")
+    (tmp_path / "argv").unlink()
+    out = _run(tmp_path, root, stub)
+    assert out["OK"] == "1", out["LINE"]
+    assert (tmp_path / "argv").exists(), "a deletion must re-run the CLI"
+    assert out["LINE"] == (
+        "skills=projected (1 skills -> codex, opencode, kimi-code-cli, kilo, crush, hermes-agent; 4 stale copies removed)"
+    ), out["LINE"]
+    for rel in (".agents/skills", ".kilocode/skills", ".crush/skills", ".hermes/skills"):
+        assert not (root / rel / "beta").exists(), rel
+        assert (root / rel / "alpha").is_dir(), rel
+    assert (root / ".kilocode" / "skills" / "kilocode-native" / "SKILL.md").is_file()
+    assert (root / ".agents" / "skills" / "beta-unrelated").is_dir()
+    stamp = root / ".agents" / ".pmoves-skills-stamp"
+    assert stamp.read_text().splitlines()[1:] == ["alpha"]
+    # and the tree is fresh again afterwards
+    (tmp_path / "argv").unlink()
+    assert _run(tmp_path, root, stub)["OK"] == "2"
 
 
 def test_failed_cli_is_loud_fail_open_and_leaves_no_stamp(tmp_path: Path) -> None:

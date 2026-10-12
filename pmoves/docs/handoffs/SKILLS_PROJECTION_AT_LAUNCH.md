@@ -18,25 +18,26 @@ The parity check that lands with #3347 (`pmoves/tools/skills_parity.py`, its own
 
 ## What lands here
 
-- `pmoves/scripts/pm-skills-project.sh` — `pm_skills_project ROOT [FORCE]`. Fail-open, loud. Stamp at `.agents/.pmoves-skills-stamp` makes the call free when nothing under `.claude/skills` changed. CLI resolution: `PM_SKILLS_CLI` (tests) → built local fork (`skills/PMOVES-skills/dist` + `bin/cli.mjs`) → `npx -y skills` → WARN naming the build route. Telemetry disabled (`DISABLE_TELEMETRY=1`, `DO_NOT_TRACK=1`).
+- `pmoves/scripts/pm-skills-project.sh` — `pm_skills_project ROOT [FORCE]`. Fail-open, loud. The stamp at `.agents/.pmoves-skills-stamp` is a content fingerprint (cksum over every file under `.claude/skills`) plus the list of projected names, so an edit, an addition or a deletion re-runs the CLI, and a deleted skill loses the copies this script projected in each harness dir (kilo review: an mtime stamp never sees a deletion). CLI resolution: `PM_SKILLS_CLI` (tests) → built local fork (`skills/PMOVES-skills/dist` + `bin/cli.mjs`) → `npx -y skills` → WARN naming the build route. Telemetry disabled (`DISABLE_TELEMETRY=1`, `DO_NOT_TRACK=1`).
 - `pmoves/scripts/pm-theme-banner.sh` — `pm_theme_banner ROOT AGENT_ID [PYTHON...]`. Renders `agent_terminal_theme.py --agent <card id> --banner` to stderr. Fail-open. Measured on 5090: `theme=rendered for 5090-claude`.
 - `make -C pmoves skills-project` (`FORCE=1` to ignore the stamp). Exit 1 only when the projection did not happen, so CI can gate on it later.
-- `.gitignore`: `.kilocode/skills/*` with `!.kilocode/skills/kilocode-*/` (Kilo's own 24 skills stay tracked), `.crush/skills/`, `.hermes/skills/`, `skills-lock.json`, `.agents/skills/` and the stamp. (`.agents/` is not ignored on main; only the projection paths under it are.)
+- `.gitignore`: `.kilocode/skills/*` with `!.kilocode/skills/kilocode-*/` and `!.kilocode/skills/minimax-*/` (Kilo's own 24 tracked skills are 15 `kilocode-*` and 9 `minimax-*`), `.crush/skills/`, `.hermes/skills/`, `skills-lock.json`, `.agents/skills/` and the stamp. (`.agents/` is not ignored on main; only the projection paths under it are.)
 - `pmoves/tests/test_pm_skills_project.py` — hermetic contract tests (stub CLI): agent flags, `--copy`, cwd, telemetry env, stamp skip/rerun/FORCE, failure is loud and leaves no stamp, no-CLI names the build route, and the harness list is pinned to `skills_parity.py` when present.
 
 ## What the operator applies (launcher Known Road)
 
-`pmoves/scripts/*-pmoves*` and `deploy/provision/*-pmoves.sh` are `readOnlyPaths`; the grant domain is `launcher` and grants are operator-reserved. The hookups are therefore staged as patches, generated from the launchers at this branch's base and validated with `git apply --check` and `bash -n` on the patched copies:
+`pmoves/scripts/*-pmoves*` and `deploy/provision/*-pmoves.sh` are `readOnlyPaths`; the grant domain is `launcher` and grants are operator-reserved. The hookups are therefore staged as patches, generated from the launchers at this branch's base. They apply **in this order**: the theme patch was generated against the skills-patched `claude-pmoves.sh`, so its context is the tail of the skills block (the first version of both patches anchored the same line and the second one failed with "patch does not apply"; kilo review, 2026-10-11). Validation is on the patched copies, not on the patches: both applied in sequence to a scratch copy of main's six launchers, `bash -n` on the result, and `grep -n '\$\$' pmoves/docs/handoffs/patches/*.patch` empty (the first version doubled every dollar, which made every hookup a dead `-f` test on a PID-prefixed path; `git apply --check` and `bash -n` cannot catch that, only a run can).
 
 | Patch | Touches | Where the block sits |
 |---|---|---|
-| `patches/SKILLS_PROJECTION_launchers.patch` | `codex-pmoves.sh`, `kilo-pmoves.sh`, `kimi-pmoves.sh`, `crush-pmoves`, `hermes-pmoves`, `claude-pmoves.sh` (all `pmoves/scripts/`) | after the identity/cipher carry block, before the harness-specific config and `exec` |
-| `patches/THEME_BANNER_claude_launcher.patch` | `pmoves/scripts/claude-pmoves.sh` | after the BRV block, before `pm_ident_prompt_args`; uses `PM_IDENT_CIPHER_ID` and the resolved `IDENT_PY` |
+| `patches/SKILLS_PROJECTION_launchers.patch` | `codex-pmoves.sh`, `kilo-pmoves.sh`, `kimi-pmoves.sh`, `crush-pmoves`, `hermes-pmoves`, `claude-pmoves.sh` (all `pmoves/scripts/`) | after the identity/cipher carry block, before the harness-specific config and `exec`; the root variable is each script's own (`$PROJECT_ROOT` codex/kilo/kimi, `$REPO_ROOT` crush/hermes, `$ROOT` claude) |
+| `patches/THEME_BANNER_claude_launcher.patch` | `pmoves/scripts/claude-pmoves.sh` | directly after the skills block, before `pm_ident_prompt_args`; uses `PM_IDENT_CIPHER_ID` and the resolved `IDENT_PY` |
 
 ```bash
 KNOWN_ROAD=launcher:pr:<this PR> git apply pmoves/docs/handoffs/patches/SKILLS_PROJECTION_launchers.patch
 KNOWN_ROAD=launcher:pr:<this PR> git apply pmoves/docs/handoffs/patches/THEME_BANNER_claude_launcher.patch
 bash -n pmoves/scripts/*-pmoves.sh pmoves/scripts/crush-pmoves pmoves/scripts/hermes-pmoves
+grep -n 'pm-skills-project.sh' pmoves/scripts/*-pmoves* | grep -c '\$\$'   # must print 0
 ```
 
 The patches are LF, generated from the index copies. `crush-pmoves` and `hermes-pmoves` are `text=auto`, so a Windows worktree holds them as CRLF: apply there with `git apply --ignore-whitespace`, or apply on a Linux node. `kimi-pmoves.sh` and `kilo-pmoves.sh` are also changed by #3325; apply this patch after #3325 merges and regenerate the hunk if the context moved (the block is self-contained; only its anchor line matters). The generated trio under `deploy/provision/` is NOT patched: when the hand-written and generated launchers converge, the generator template is the place for the block, not a second copy.

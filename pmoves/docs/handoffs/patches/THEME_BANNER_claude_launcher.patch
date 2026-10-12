@@ -1,7 +1,9 @@
+diff --git a/pmoves/scripts/claude-pmoves.sh b/pmoves/scripts/claude-pmoves.sh
+index c8251a4..09ce330 100644
 --- a/pmoves/scripts/claude-pmoves.sh
 +++ b/pmoves/scripts/claude-pmoves.sh
-@@ -354,6 +354,17 @@
-   fi
+@@ -364,6 +364,17 @@ if [ -f "$ROOT/pmoves/scripts/pm-skills-project.sh" ]; then
+   echo "[claude-pmoves] ${PM_SKILLS_LINE}" >&2
  fi
  
 +# Theme: the identity's own glyph/colour/voice from agent_signatures.yaml,

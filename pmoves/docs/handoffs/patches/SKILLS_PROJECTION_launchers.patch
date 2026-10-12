@@ -7,10 +7,10 @@
 +# Skills parity: project .claude/skills into this harness's own skills dir so a
 +# PMOVES skill reaches every AGInT, not only Claude Code (operator canon
 +# 2026-10-11). FAIL-OPEN, LOUD; see pmoves/scripts/pm-skills-project.sh.
-+if [ -f "$$PROJECT_ROOT/pmoves/scripts/pm-skills-project.sh" ]; then
++if [ -f "$PROJECT_ROOT/pmoves/scripts/pm-skills-project.sh" ]; then
 +  # shellcheck source=./pm-skills-project.sh
-+  . "$$PROJECT_ROOT/pmoves/scripts/pm-skills-project.sh"
-+  pm_skills_project "$$PROJECT_ROOT" || true
++  . "$PROJECT_ROOT/pmoves/scripts/pm-skills-project.sh"
++  pm_skills_project "$PROJECT_ROOT" || true
 +  echo "[codex-pmoves] ${PM_SKILLS_LINE}" >&2
 +fi
 +
@@ -26,10 +26,10 @@
 +# Skills parity: project .claude/skills into this harness's own skills dir so a
 +# PMOVES skill reaches every AGInT, not only Claude Code (operator canon
 +# 2026-10-11). FAIL-OPEN, LOUD; see pmoves/scripts/pm-skills-project.sh.
-+if [ -f "$$PROJECT_ROOT/pmoves/scripts/pm-skills-project.sh" ]; then
++if [ -f "$PROJECT_ROOT/pmoves/scripts/pm-skills-project.sh" ]; then
 +  # shellcheck source=./pm-skills-project.sh
-+  . "$$PROJECT_ROOT/pmoves/scripts/pm-skills-project.sh"
-+  pm_skills_project "$$PROJECT_ROOT" || true
++  . "$PROJECT_ROOT/pmoves/scripts/pm-skills-project.sh"
++  pm_skills_project "$PROJECT_ROOT" || true
 +  echo "[kilo-pmoves] ${PM_SKILLS_LINE}" >&2
 +fi
 +
@@ -45,10 +45,10 @@
 +# Skills parity: project .claude/skills into this harness's own skills dir so a
 +# PMOVES skill reaches every AGInT, not only Claude Code (operator canon
 +# 2026-10-11). FAIL-OPEN, LOUD; see pmoves/scripts/pm-skills-project.sh.
-+if [ -f "$$PROJECT_ROOT/pmoves/scripts/pm-skills-project.sh" ]; then
++if [ -f "$PROJECT_ROOT/pmoves/scripts/pm-skills-project.sh" ]; then
 +  # shellcheck source=./pm-skills-project.sh
-+  . "$$PROJECT_ROOT/pmoves/scripts/pm-skills-project.sh"
-+  pm_skills_project "$$PROJECT_ROOT" || true
++  . "$PROJECT_ROOT/pmoves/scripts/pm-skills-project.sh"
++  pm_skills_project "$PROJECT_ROOT" || true
 +  echo "[kimi-pmoves] ${PM_SKILLS_LINE}" >&2
 +fi
 +
@@ -64,10 +64,10 @@
 +# Skills parity: project .claude/skills into this harness's own skills dir so a
 +# PMOVES skill reaches every AGInT, not only Claude Code (operator canon
 +# 2026-10-11). FAIL-OPEN, LOUD; see pmoves/scripts/pm-skills-project.sh.
-+if [ -f "$$REPO_ROOT/pmoves/scripts/pm-skills-project.sh" ]; then
++if [ -f "$REPO_ROOT/pmoves/scripts/pm-skills-project.sh" ]; then
 +  # shellcheck source=./pm-skills-project.sh
-+  . "$$REPO_ROOT/pmoves/scripts/pm-skills-project.sh"
-+  pm_skills_project "$$REPO_ROOT" || true
++  . "$REPO_ROOT/pmoves/scripts/pm-skills-project.sh"
++  pm_skills_project "$REPO_ROOT" || true
 +  echo "[crush-pmoves] ${PM_SKILLS_LINE}" >&2
 +fi
 +
@@ -83,10 +83,10 @@
 +# Skills parity: project .claude/skills into this harness's own skills dir so a
 +# PMOVES skill reaches every AGInT, not only Claude Code (operator canon
 +# 2026-10-11). FAIL-OPEN, LOUD; see pmoves/scripts/pm-skills-project.sh.
-+if [ -f "$$REPO_ROOT/pmoves/scripts/pm-skills-project.sh" ]; then
++if [ -f "$REPO_ROOT/pmoves/scripts/pm-skills-project.sh" ]; then
 +  # shellcheck source=./pm-skills-project.sh
-+  . "$$REPO_ROOT/pmoves/scripts/pm-skills-project.sh"
-+  pm_skills_project "$$REPO_ROOT" || true
++  . "$REPO_ROOT/pmoves/scripts/pm-skills-project.sh"
++  pm_skills_project "$REPO_ROOT" || true
 +  echo "[hermes-pmoves] ${PM_SKILLS_LINE}" >&2
 +fi
 +
@@ -102,10 +102,10 @@
 +# Skills parity: project .claude/skills into this harness's own skills dir so a
 +# PMOVES skill reaches every AGInT, not only Claude Code (operator canon
 +# 2026-10-11). FAIL-OPEN, LOUD; see pmoves/scripts/pm-skills-project.sh.
-+if [ -f "$$ROOT/pmoves/scripts/pm-skills-project.sh" ]; then
++if [ -f "$ROOT/pmoves/scripts/pm-skills-project.sh" ]; then
 +  # shellcheck source=./pm-skills-project.sh
-+  . "$$ROOT/pmoves/scripts/pm-skills-project.sh"
-+  pm_skills_project "$$ROOT" || true
++  . "$ROOT/pmoves/scripts/pm-skills-project.sh"
++  pm_skills_project "$ROOT" || true
 +  echo "[claude-pmoves] ${PM_SKILLS_LINE}" >&2
 +fi
 +
