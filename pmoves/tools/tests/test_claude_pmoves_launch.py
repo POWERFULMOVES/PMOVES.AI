@@ -34,6 +34,9 @@ import unittest
 from pathlib import Path
 
 _REPO = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(_REPO / "pmoves" / "tools"))
+from bash_resolver import find_bash  # noqa: E402  never System32's WSL stub
+
 _PS1 = _REPO / "deploy" / "provision" / "claude-pmoves.ps1"
 _SH = _REPO / "deploy" / "provision" / "claude-pmoves.sh"
 
@@ -70,9 +73,14 @@ class _LauncherHarness:
 
     def env(self, **overrides: str) -> dict:
         env = dict(os.environ)
+        # The last three are the tracked roster's ${VAR}s (.claude/mcp.json).
+        # Stripping them means every case runs as a node WITHOUT the fleet env:
+        # the normalizer then drops/degrades servers with WARN lines on stderr,
+        # which must not trip the launcher's fail-closed roster gate.
         for name in ("PMOVES_CLAUDE_BACKEND", "ANTHROPIC_BASE_URL",
                      "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_API_KEY",
-                     "PMOVES_ALLOW_RAW_ROSTER"):
+                     "PMOVES_ALLOW_RAW_ROSTER",
+                     "TS_Z890", "CIPHER_API_TOKEN", "AGENT_ZERO_MCP_TOKEN"):
             env.pop(name, None)
         env["PATH"] = str(self.bin) + os.pathsep + env.get("PATH", "")
         env["PMOVES_ENV_SHARED"] = str(self.env_shared)
@@ -163,7 +171,7 @@ class TestClaudePmovesPs1Launch(_LaunchCases, unittest.TestCase):
             encoding="utf-8", errors="replace", timeout=300)
 
 
-@unittest.skipIf(sys.platform == "win32" or not shutil.which("bash"),
+@unittest.skipIf(sys.platform == "win32" or not find_bash(),
                  "the .sh twin runs under POSIX bash")
 class TestClaudePmovesShLaunch(_LaunchCases, unittest.TestCase):
     def setUp(self):
@@ -174,7 +182,7 @@ class TestClaudePmovesShLaunch(_LaunchCases, unittest.TestCase):
 
     def _run(self, args, **env):
         return subprocess.run(
-            ["bash", str(_SH), *args],
+            [find_bash(), str(_SH), *args],
             env=self.harness.env(**env), capture_output=True, text=True,
             stdin=subprocess.DEVNULL,
             encoding="utf-8", errors="replace", timeout=300)
