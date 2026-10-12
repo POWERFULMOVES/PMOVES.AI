@@ -45,11 +45,14 @@ CHECKS = 0
 
 
 def check(label: str, ok: bool, detail: str = "") -> None:
+    """`detail` is kept for a debugger, never printed: the reasons carry absolute
+    paths from the trust probe, and CodeQL (py/clear-text-logging-sensitive-data)
+    treats them as a secret sink. Re-run the probed call to see the value."""
     global CHECKS
     CHECKS += 1
-    print(f"  {'ok  ' if ok else 'FAIL'} {label}" + (f"  [{detail}]" if detail and not ok else ""))
+    print(f"  {'ok  ' if ok else 'FAIL'} {label}")
     if not ok:
-        FAILS.append(label)
+        FAILS.append((label, detail))
 
 
 def _elevated() -> bool:
@@ -104,7 +107,7 @@ def main() -> int:
 
     if FAILS:
         print(f"FAIL: {len(FAILS)} of {CHECKS} checks failed.")
-        for name in FAILS:
+        for name, _detail in FAILS:
             print(f"  - {name}")
         return 1
     print(f"PASS: {CHECKS} checks held.")
