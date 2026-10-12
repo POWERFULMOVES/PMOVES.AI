@@ -95,7 +95,7 @@ services:
     environment:
     - WGER_API_URL=http://wger:8000
     - NATS_URL=${NATS_URL}
-    - CHIT_PASSPHRASE=${CHIT_PASSPHRASE:-}
+    - CHIT_PASSPHRASE=${CHIT_PASSPHRASE:?set CHIT_PASSPHRASE via secrets funnel}
     - WGER_POLL_INTERVAL=${WGER_POLL_INTERVAL:-60}
     depends_on:
       nats:
