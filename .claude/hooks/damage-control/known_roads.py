@@ -366,6 +366,52 @@ _GH_ENV_DROP = ("GH_HOST", "GH_ENTERPRISE_TOKEN", "GITHUB_ENTERPRISE_TOKEN", "GH
                 "GH_CONFIG_DIR", "GH_DEBUG", "GH_PATH")
 
 
+def _untrusted_reason_nt(path: str, is_dir: bool) -> str:
+    """Windows: measure the permission, do not infer it (issue #3362).
+
+    `os.access(path, os.W_OK)` on Windows reads only the read-only attribute and
+    ignores ACLs, so it reported `C:\\Program Files\\GitHub CLI` writable on every
+    node (z890 and 5090 measured) and every `pr:`/`issue:` grant fell back to
+    `!offline` -- the referent check meant to tighten grants was never enforced.
+    Probe with the process's real token instead, through CreateFileW so the Win32
+    error is visible (the CRT behind `os.open` folds ACCESS_DENIED and
+    SHARING_VIOLATION into one EACCES): for a directory, create a
+    delete-on-close probe file; for a file, open it for write without
+    truncating. ERROR_ACCESS_DENIED (5) is the only answer that proves this user
+    cannot modify the target; a successful open proves they can; anything else
+    (sharing violation 32, missing path, odd error) is "could not measure" and
+    fails closed like the rest of the guard.
+    """
+    import ctypes
+    from ctypes import wintypes
+
+    k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    create = k32.CreateFileW
+    create.argtypes = [wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD, wintypes.LPVOID,
+                       wintypes.DWORD, wintypes.DWORD, wintypes.HANDLE]
+    create.restype = wintypes.HANDLE
+    generic_write = 0x40000000
+    share_all = 0x1 | 0x2 | 0x4
+    create_new, open_existing = 1, 3
+    attr_normal, delete_on_close = 0x80, 0x04000000
+    invalid = wintypes.HANDLE(-1).value
+    if is_dir:
+        target = os.path.join(path, f".known-roads-probe-{os.getpid()}-{os.urandom(4).hex()}")
+        handle = create(target, generic_write, share_all, None, create_new,
+                        attr_normal | delete_on_close, None)
+        how = "probe file created"
+    else:
+        handle = create(path, generic_write, share_all, None, open_existing, attr_normal, None)
+        how = "opened for write"
+    if handle == invalid:
+        err = ctypes.get_last_error()
+        if err == 5:
+            return ""
+        return f"{path}: write probe inconclusive (win32 error {err})"
+    k32.CloseHandle(handle)
+    return f"{path} is writable ({how})"
+
+
 def _untrusted_reason(path: str) -> str:
     """"" when `path` cannot be modified by the user this hook runs as."""
     try:
@@ -373,7 +419,7 @@ def _untrusted_reason(path: str) -> str:
     except OSError as exc:
         return f"cannot stat {path}: {exc.__class__.__name__}"
     if os.name == "nt":
-        return "" if not os.access(path, os.W_OK) else f"{path} is writable"
+        return _untrusted_reason_nt(path, os.path.isdir(path))
     if st.st_mode & 0o022:
         return f"{path} is group/world-writable"
     uid = os.getuid()
