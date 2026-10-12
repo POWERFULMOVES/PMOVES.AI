@@ -83,7 +83,7 @@ services:
     # Same resolved value A0_SET_mcp_server_token below pins the inner runtime
     # to: fleet-canonical AGENT_ZERO_MCP_TOKEN (issue #2056), legacy
     # MCP_SERVER_TOKEN fallback. Do NOT source AGENT_ZERO_API_KEY from env:
-    # env.shared carries a dev placeholder MCP_SERVER_TOKEN=dev-local-mcp-token
+    # env.shared provides MCP_SERVER_TOKEN via the secrets funnel (variable reference)
     # that would win interpolation and never match the inner token.
     # NOTE: when BOTH token vars are unset the inner runtime auto-generates a
     # token the wrapper cannot know — /sessions will then 401 by design
@@ -145,11 +145,11 @@ services:
     # LLM routing: use TensorZero gateway as OpenAI-compatible provider
     # Agent Zero's get_default_value() reads A0_SET_* from env (dotenv priority)
     # Dummy key silences LiteLLM "Missing API Key" warning — TensorZero handles auth
-    - OPENAI_API_KEY=${OPENAI_API_KEY:-tensorzero-routed}
+    - OPENAI_API_KEY=${OPENAI_API_KEY:-}
     # Same placeholder for the A0 2.5 preset plugin: get_api_key() resolves
     # TENSORZERO_API_KEY for provider "tensorzero"; without it the UI banners
     # "Missing API Key for model presets" even though the gateway needs none.
-    - TENSORZERO_API_KEY=${TENSORZERO_API_KEY:-tensorzero-routed}
+    - TENSORZERO_API_KEY=${TENSORZERO_API_KEY:-}
     # Model routing moved to the GENERATED presets file:
     #   data/agent-zero/usr/plugins/_model_config/presets.yaml (make a0-model-sync).
     # The A0_SET_{chat,util,embed,browser}_model_* env lane above is gone: the
@@ -359,7 +359,7 @@ services:
     # TensorZero as OpenAI-compatible provider for Archon's LLM calls.
     # Archon reads OPENAI_API_KEY / OPENAI_API_BASE for its model calls.
     # Derives from the canonical TENSORZERO_BASE_URL used across the fleet.
-    - OPENAI_API_KEY=${OPENAI_API_KEY:-tensorzero-routed}
+    - OPENAI_API_KEY=${OPENAI_API_KEY:-}
     - OPENAI_API_BASE=${TENSORZERO_BASE_URL:-http://tensorzero-gateway:3000}/openai/v1
     # gh auth — non-fatal warning if absent.
     - GH_TOKEN=${GH_TOKEN:-}
