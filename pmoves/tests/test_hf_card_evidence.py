@@ -71,10 +71,13 @@ class _Card:
 
 
 class _Api:
+    last_timeout: object = "unset"
+
     def __init__(self, token=None):
         self.token = token
 
-    def model_info(self, model_id):
+    def model_info(self, model_id, timeout=None):
+        _Api.last_timeout = timeout
         if model_id in ("boom/info", "boom/both"):
             raise RuntimeError("info 503")
         return SimpleNamespace(gated="manual", library_name="transformers")
@@ -88,7 +91,8 @@ class _CardBoth(_Card):
 
 def test_loader_merges_card_and_model_info(ce):
     ce._HF_API, ce._MODEL_CARD = _Api, _Card
-    ev = ce.load_card_evidence("org/model", token="t")
+    ev = ce.load_card_evidence("org/model", token="t", timeout=7.5)
+    assert _Api.last_timeout == 7.5, "the timeout bounds the Hub request, not only the caller's wait"
     assert ev["available"] is True
     assert ev["license"] == "apache-2.0"
     assert ev["base_model"] == ["org/base"]
@@ -131,6 +135,22 @@ def test_recipe_mirrors_the_evaluation_skill_flags(ce):
     assert r.endswith("run_eval_job.py --model org/model --task gsm8k --hardware t4-small")
 
 
+@pytest.mark.parametrize("bad", ["org/model; rm -rf /", "org/model && id", "no-slash", "/x", "org/", "a b/c", "", None, 7])
+def test_bus_supplied_id_that_is_not_a_hub_id_is_refused_everywhere(ce, bad):
+    assert ce.is_hub_model_id(bad) is False
+    assert ce.eval_job_recipe(bad) is None
+    ce._HF_API, ce._MODEL_CARD = _Api, _Card
+    _Api.last_timeout = "unset"
+    ev = ce.load_card_evidence(bad)
+    assert ev["available"] is False and ev["errors"][0].startswith("not a Hub model id")
+    assert _Api.last_timeout == "unset", "no Hub read for a refused id"
+
+
+@pytest.mark.parametrize("good", ["org/model", "Qwen/Qwen3-Embedding-0.6B", "a.b/c_d-e", "0/1"])
+def test_hub_ids_pass(ce, good):
+    assert ce.is_hub_model_id(good) is True
+
+
 @pytest.fixture()
 def main_mod(monkeypatch):
     pytest.importorskip("nats")
@@ -168,6 +188,22 @@ def test_card_evidence_adds_exactly_its_points_and_rides_the_envelope(main_mod):
     partial = main_mod.HFResearchAgent._evaluate_model(_MODEL, no_evals)
     assert partial["score"] == base["score"]
     assert "no model-index evals on card" in partial["reasons"]
+
+    # a card that was never read is not a card without evals
+    unread = dict(no_evals, errors=["card: card 404"])
+    out = main_mod.HFResearchAgent._evaluate_model(_MODEL, unread)
+    assert "no model-index evals on card" not in out["reasons"]
+    assert any(r.startswith("card evidence incomplete (1 Hub read(s) failed") for r in out["reasons"]), out["reasons"]
+    assert out["card_evidence"]["errors"] == ["card: card 404"]
+
+
+def test_passing_model_with_a_non_hub_id_carries_no_recipe_and_says_why(main_mod):
+    hostile = dict(_MODEL, model_id="org/model; rm -rf /")
+    out = main_mod.HFResearchAgent._evaluate_model(hostile, None)
+    assert out["passed"] is True
+    assert out["eval_job_recipe"] is None
+    assert "model id is not a Hub id; no eval-job recipe" in out["reasons"]
+    assert "rm -rf" not in "".join(out["reasons"])
 
 
 def test_failing_model_carries_no_recipe(main_mod):

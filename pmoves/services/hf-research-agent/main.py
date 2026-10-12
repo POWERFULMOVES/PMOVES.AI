@@ -11,17 +11,19 @@ Follows the spark-shape-worker pattern: asyncio + nats-py + _load_secret.
 from __future__ import annotations
 
 import asyncio
+import functools
 import json
 import os
 import signal
 import sys
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from typing import Any
 
 import nats
 from nats.aio.client import Client as NATS
 
-from card_evidence import eval_job_recipe, load_card_evidence
+from card_evidence import eval_job_recipe, is_hub_model_id, load_card_evidence
 from aiohttp import web
 
 
@@ -67,11 +69,17 @@ LICENSE_POINTS = 5
 MAX_SCORE = BASE_MAX_SCORE + COMPAT_BONUS_POINTS + EVAL_EVIDENCE_POINTS + LICENSE_POINTS
 
 # Model-card evidence (card_evidence.py): the card's model-index results,
-# licence, base model, library and gated state. Fetched off the event loop
-# with a timeout; HF_CARD_EVIDENCE=0 turns it off and criteria 6-7 score 0.
+# licence, base model, library and gated state. Fetched off the event loop on
+# a BOUNDED pool: nats-py gives every message its own handler task, so a burst
+# of slow or gated models must not stack an unbounded number of Hub reads
+# (kilo review on #3354). The timeout is passed down to the Hub client as the
+# request timeout, so it bounds the work and not only the wait; the pool caps
+# how many reads are in flight at once. HF_CARD_EVIDENCE=0 turns it off and
+# criteria 6-7 score 0.
 HF_TOKEN = _load_secret("HF_TOKEN")
 HF_CARD_EVIDENCE = os.environ.get("HF_CARD_EVIDENCE", "1").strip().lower() not in {"0", "false", "no", "off", ""}
 HF_CARD_EVIDENCE_TIMEOUT = float(os.environ.get("HF_CARD_EVIDENCE_TIMEOUT", "20"))
+HF_CARD_EVIDENCE_WORKERS = max(1, int(os.environ.get("HF_CARD_EVIDENCE_WORKERS", "4")))
 # The eval-job RECIPE attached to a passing model (text only; nothing is
 # submitted here). Flavors/tasks follow the hugging-face-jobs skill.
 HF_EVAL_FLAVOR = os.environ.get("HF_EVAL_FLAVOR", "cpu-basic")
@@ -97,6 +105,9 @@ class HFResearchAgent:
         self._evaluated_count = 0
         self._passed_count = 0
         self._last_evaluated: str = ""
+        self._evidence_pool = ThreadPoolExecutor(
+            max_workers=HF_CARD_EVIDENCE_WORKERS, thread_name_prefix="card-evidence"
+        )
 
     # ── Health ───────────────────────────────────────────────────────────────
 
@@ -187,9 +198,14 @@ class HFResearchAgent:
         # a consumer can judge them. (hugging-face-evaluation skill surface.)
         evidence = evidence or {}
         eval_results = evidence.get("eval_results") or []
+        errors = evidence.get("errors") or []
         if eval_results:
             score += EVAL_EVIDENCE_POINTS
             reasons.append(f"model-index evals (+{EVAL_EVIDENCE_POINTS}): {len(eval_results)} result(s)")
+        elif errors:
+            # A card that was never read has no absence to report; the
+            # receipts ride in card_evidence.errors (kilo review on #3354).
+            reasons.append(f"card evidence incomplete ({len(errors)} Hub read(s) failed; see card_evidence.errors)")
         elif evidence.get("available"):
             reasons.append("no model-index evals on card")
         else:
@@ -211,6 +227,11 @@ class HFResearchAgent:
             reasons.append(f"avoid tags match (-{penalty}): {sorted(matched_avoid)}")
 
         passed = score >= MIN_SCORE
+        # The recipe is shell text an operator pastes; a bus-supplied id that
+        # is not a Hub id never reaches it (eval_job_recipe returns None).
+        recipe = eval_job_recipe(model_id, task=HF_EVAL_TASK, flavor=HF_EVAL_FLAVOR) if passed else None
+        if passed and recipe is None:
+            reasons.append("model id is not a Hub id; no eval-job recipe")
         return {
             "model_id": model_id,
             "score": score,
@@ -226,9 +247,7 @@ class HFResearchAgent:
                 "errors": evidence.get("errors") or [],
             },
             "eval_results": eval_results,
-            "eval_job_recipe": (
-                eval_job_recipe(model_id, task=HF_EVAL_TASK, flavor=HF_EVAL_FLAVOR) if passed else None
-            ),
+            "eval_job_recipe": recipe,
             "tags": model.get("tags", []),
             "downloads": downloads,
             "likes": likes,
@@ -253,10 +272,14 @@ class HFResearchAgent:
             return
 
         evidence: dict[str, Any] | None = None
-        if HF_CARD_EVIDENCE and isinstance(model.get("model_id"), str):
+        if HF_CARD_EVIDENCE and is_hub_model_id(model.get("model_id")):
             try:
+                loop = asyncio.get_running_loop()
                 evidence = await asyncio.wait_for(
-                    asyncio.to_thread(load_card_evidence, model["model_id"], HF_TOKEN),
+                    loop.run_in_executor(
+                        self._evidence_pool,
+                        functools.partial(load_card_evidence, model["model_id"], HF_TOKEN, HF_CARD_EVIDENCE_TIMEOUT),
+                    ),
                     timeout=HF_CARD_EVIDENCE_TIMEOUT,
                 )
             except asyncio.TimeoutError:
@@ -312,6 +335,7 @@ class HFResearchAgent:
 
         # Cleanup
         await self.sub.unsubscribe()
+        self._evidence_pool.shutdown(wait=False, cancel_futures=True)
         await runner.cleanup()
         await self.nc.drain()
         print("[hf-research] shutdown complete")

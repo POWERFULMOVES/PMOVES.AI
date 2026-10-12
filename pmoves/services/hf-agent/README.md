@@ -10,7 +10,7 @@ Polls the Hugging Face Hub for models matching the configured criteria and publi
 
 | Var | Default | Meaning |
 |---|---|---|
-| `NATS_URL` | `nats://nats:pmoves@nats:4222` | bus |
+| `NATS_URL` | `nats://nats:4222` | bus (compose injects the credentialed URL) |
 | `HF_TOKEN` | unset | via `_load_secret`; raises the rate limit, optional |
 | `HF_POLL_INTERVAL` | `300` | seconds |
 | `HF_TASK_FILTER` | empty | `pipeline_tag`, e.g. `text-generation` |

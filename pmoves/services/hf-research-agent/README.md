@@ -23,12 +23,13 @@ A model that passes carries `eval_job_recipe`: the `hf jobs uv run` command (fro
 
 | Var | Default | Meaning |
 |---|---|---|
-| `NATS_URL` | `nats://nats:pmoves@nats:4222` | bus |
+| `NATS_URL` | `nats://nats:4222` | bus (compose injects the credentialed URL) |
 | `HF_TOKEN` | unset | read via `_load_secret`; optional (public cards need none) |
 | `HF_MIN_DOWNLOADS` / `HF_MIN_LIKES` / `HF_MIN_SCORE` | 100 / 10 / 50 | thresholds |
 | `HF_PREFERRED_TAGS` / `HF_AVOID_TAGS` | empty | comma lists |
 | `HF_CARD_EVIDENCE` | `1` | fetch card evidence (criteria 6, 7) |
-| `HF_CARD_EVIDENCE_TIMEOUT` | `20` | seconds per model |
+| `HF_CARD_EVIDENCE_TIMEOUT` | `20` | seconds per model; passed to `model_info` as its request timeout (the card read honours `HF_HUB_ETAG_TIMEOUT` / `HF_HUB_DOWNLOAD_TIMEOUT`, 10 s each), so it bounds the work, not only the wait |
+| `HF_CARD_EVIDENCE_WORKERS` | `4` | card reads in flight at once (bounded pool; a burst of slow models queues instead of stacking threads) |
 | `HF_EVAL_FLAVOR` / `HF_EVAL_TASK` | `cpu-basic` / `mmlu` | recipe only |
 
 ## Tests
