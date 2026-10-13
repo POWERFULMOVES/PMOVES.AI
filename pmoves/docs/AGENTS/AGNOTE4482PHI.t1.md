@@ -57,6 +57,47 @@ is unrelated to the `worker` service TYPE (tier 4) in the registry.
 3. Handoff: agent publishes CHIT payload reference and signs ACK block.
 4. Release: agent writes `RELEASE` entry and clears claim.
 
+### Worktrees — one per body
+
+**The register records who holds a branch. Nothing records who is standing in a
+working tree, and no gate checks it.** Two bodies in one checkout pass every
+collision check in this file, because no rule here mentions a working tree. A
+`git checkout`, `reset`, `pull` or fast-forward by one of them silently changes
+files the other has already read. Another body's branch switch has removed a
+session's tracked edits while `git status` read clean.
+
+Measured on Knuckles, 2026-10-13: three bodies (Kilo, Crush and B850-CLAUDE)
+were live in the main checkout, which sat **192 commits behind** `origin/main`.
+It held two hazards. One was a staged copy of `pmoves/scripts/claude-pmoves.sh`
+that predated #3313, so committing it would have deleted merged work. The other
+was five `RELEASE` rows that had never left that working tree, 10 days after
+they were written. Fast-forwarding to fix the first would have rewritten the
+tree under the two other live sessions.
+
+1. **Edit only in your own worktree**, named for the lane, and put its path in
+   your claim scope:
+   `git worktree add -b <branch> ../pmoves-<lane> origin/main`
+2. **The main checkout is shared ground.** Read from it. Do not switch its
+   branch, reset it, pull it or fast-forward it while another body is live in
+   it. To check, run this from the checkout root. It lists agent CLIs whose
+   working directory is this checkout:
+   `for p in $(pgrep -f 'claude|crush|kilo|codex|gemini|hermes|kimi'); do [ "$(readlink /proc/$p/cwd)" = "$PWD" ] && ps -o pid=,etime=,comm= -p "$p"; done`
+   Every line other than your own session is another body. Filtering on agent
+   names matters: a raw `/proc/*/cwd` listing of the main checkout on Knuckles
+   returned about 40 processes, mostly MCP servers and editor helpers, which
+   would make every checkout look occupied.
+3. **Read fleet state from `origin/main`, not from a working tree.** Run
+   `git fetch origin main`, then
+   `git show origin/main:pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md`. A checkout
+   that is behind reports a stale register. `register_status.py` reads whatever
+   file it is given.
+4. **A worktree is not a checkout.** Gitignored files are absent and submodules
+   are unpopulated (`git submodule update --init <path>` for the ones you need).
+   Never compare main-in-a-checkout against a PR-in-a-worktree. The two sides
+   read different inputs.
+5. **Close it with the lane.** After merge, run `git worktree remove <path>`.
+   `make -C pmoves worktree-sitrep` lists what is still open.
+
 ### Row grammar
 
 A register row is:
