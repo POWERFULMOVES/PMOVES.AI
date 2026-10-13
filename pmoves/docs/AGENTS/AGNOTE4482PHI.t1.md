@@ -76,21 +76,29 @@ tree under the two other live sessions.
 
 1. **Edit only in your own worktree**, named for the lane, and put its path in
    your claim scope:
-   `git worktree add -b <branch> ../pmoves-<lane> origin/main`
+   `git worktree add --no-track -b <branch> ../pmoves-<lane> origin/main`
+   (without `--no-track` the new branch tracks `main`, and a bare `git push`
+   targets the wrong ref).
 2. **The main checkout is shared ground.** Read from it. Do not switch its
    branch, reset it, pull it or fast-forward it while another body is live in
-   it. To check, run this from the checkout root. It lists agent CLIs whose
-   working directory is this checkout:
-   `for p in $(pgrep -f 'claude|crush|kilo|codex|gemini|hermes|kimi'); do [ "$(readlink /proc/$p/cwd)" = "$PWD" ] && ps -o pid=,etime=,comm= -p "$p"; done`
-   Every line other than your own session is another body. Filtering on agent
-   names matters: a raw `/proc/*/cwd` listing of the main checkout on Knuckles
-   returned about 40 processes, mostly MCP servers and editor helpers, which
-   would make every checkout look occupied.
+   it. To check, run this anywhere inside the checkout. It lists agent CLIs
+   whose working directory is the checkout or any directory under it:
+   `r=$(git rev-parse --show-toplevel); for p in $(pgrep -f 'claude|crush|kilo|codex|gemini|hermes|kimi'); do case "$(readlink /proc/$p/cwd)" in "$r"|"$r"/*) ps -o pid=,ppid=,etime=,args= -p "$p";; esac; done`
+   Ignore three kinds of line: your own session, the shell running this check
+   (its parent is your session), and any line whose PPID is another listed PID
+   (a CLI's wrapper and its child are one body). Everything else is another
+   body. Filtering on agent names matters: a raw `/proc/*/cwd` listing of the
+   main checkout on Knuckles returned about 40 processes, mostly MCP servers and
+   editor helpers, which would make every checkout look occupied. Uncommitted
+   register rows in a shared checkout are the hazard `register-sync` (below)
+   exists for.
 3. **Read fleet state from `origin/main`, not from a working tree.** Run
    `git fetch origin main`, then
    `git show origin/main:pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md`. A checkout
-   that is behind reports a stale register. `register_status.py` reads whatever
-   file it is given.
+   that is behind reports a stale register. `register_status.py`, and
+   `make -C pmoves register-status` which calls it, reads its OWN tree's working
+   copy unless given `--register <file>`. In a checkout that is behind, write
+   the `git show` output to a scratch file and pass that file.
 4. **A worktree is not a checkout.** Gitignored files are absent and submodules
    are unpopulated (`git submodule update --init <path>` for the ones you need).
    Never compare main-in-a-checkout against a PR-in-a-worktree. The two sides
