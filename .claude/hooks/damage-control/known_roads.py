@@ -456,8 +456,9 @@ def _untrusted_reason_nt(path: str) -> str:
             if handle.value:
                 k32.CloseHandle(handle)
         k32.LocalFree(sd)
-    if not status.value:
-        return ""  # nothing is granted at all; the user cannot even read it
+    # `status` is an out-parameter only. With MAXIMUM_ALLOWED the granted mask is
+    # the whole answer, and it is scanned unconditionally: a mask with no alter
+    # bit (including 0, "cannot even read it") is trusted, anything else is not.
     held = [name for bit, name in alter if granted.value & bit]
     if held:
         return f"{path} is writable by the current user ({', '.join(held)})"

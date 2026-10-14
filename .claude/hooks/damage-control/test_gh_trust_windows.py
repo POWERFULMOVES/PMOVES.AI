@@ -21,11 +21,19 @@ On Windows:
 4. A running executable this user owns is reported writable, not "inconclusive":
    the check reads the DACL, it never opens the file for write, so a sharing
    violation cannot occur (a busy gh.exe must not flake a grant closed).
-5. A missing path is "cannot stat", never trusted.
-6. If `%ProgramFiles%\\GitHub CLI` exists, it is trusted ("" reason). If the suite
+5. A user-owned file whose DACL has been emptied (icacls /inheritance:r) is
+   still reported writable through the owner-implied WRITE_DAC right: an
+   empty DACL does not hide a file from its owner.
+6. A missing path is "cannot stat", never trusted.
+7. If `%ProgramFiles%\\GitHub CLI` exists, it is trusted ("" reason). If the suite
    runs elevated, the directory IS writable and the check must say so -- an
    elevated agent could replace gh.
-7. `_untrusted_reason` never raises for any of the above.
+8. `_untrusted_reason` never raises for any of the above.
+
+These checks run only on Windows nodes; the POSIX CI runner records a pass with
+zero checks, so the floor in run_guard_tests.sh proves the file ran, not that
+the Windows assertions did. The Windows evidence is the guard-suite output a
+Windows node posts on the PR.
 
 The environment is scrubbed of KNOWN_ROAD and KNOWN_ROAD_GH so an operator-set
 gh override on the host cannot hijack the `_trusted_gh()` resolution check. The
@@ -40,6 +48,7 @@ import ctypes
 import os
 import shutil
 import stat
+import subprocess
 import sys
 import tempfile
 from pathlib import Path
@@ -97,6 +106,23 @@ def _user_targets(tmp: Path) -> None:
     why = KR._untrusted_reason(sys.executable)
     check("a RUNNING executable is measured, never 'inconclusive' (no write-open, no sharing violation)",
           "inconclusive" not in why, why)
+
+    # Owner-implied rights: strip the inherited ACEs so the DACL is EMPTY. The
+    # file is still owned by this user, and AccessCheck grants the owner
+    # READ_CONTROL | WRITE_DAC implicitly -- enough to re-grant everything.
+    g = tmp / "owner-only.txt"
+    g.write_text("x", encoding="utf-8")
+    stripped = subprocess.run(["icacls", str(g), "/inheritance:r"],
+                              capture_output=True, text=True).returncode == 0
+    if not stripped:
+        print("  skip  icacls could not strip the DACL; owner-implied rights not exercised")
+    else:
+        try:
+            why = KR._untrusted_reason(str(g))
+            check("a user-OWNED file with an EMPTY DACL is writable (owner-implied WRITE_DAC)",
+                  WRITABLE in why and "write DAC" in why, why)
+        finally:
+            subprocess.run(["icacls", str(g), "/reset"], capture_output=True)
 
     why = KR._untrusted_reason(str(tmp / "nope"))
     check("a missing path is 'cannot stat', not trusted", why.startswith("cannot stat"), why)
