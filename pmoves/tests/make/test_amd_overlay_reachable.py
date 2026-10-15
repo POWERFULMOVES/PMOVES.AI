@@ -24,11 +24,16 @@ What is asserted
    `$(WHISPER_NODE_OVERLAY)`, the injection slot the `-amd` siblings set.
 2. Each of those targets has an `-amd` sibling that recurses into it with
    `WHISPER_NODE_OVERLAY="$(AMD_OVERLAY)"`.
-3. `AMD_OVERLAY` names a compose file that exists and actually resets the
-   reservation for ffmpeg-whisper.
-4. The base compose file still declares an `nvidia` reservation for
-   ffmpeg-whisper -- without this the overlay would be a no-op and assertions
-   1-3 would be guarding nothing.
+3. `AMD_OVERLAY` names a compose file that exists and actually neutralises
+   every path by which the base asks for an NVIDIA GPU for ffmpeg-whisper.
+   Two spellings exist: the `deploy.resources.reservations.devices` reservation
+   and the service-level `runtime: nvidia` that ee1573f55b (#3363) moved the
+   service to. `devices: !reset []` alone stopped being enough at that commit:
+   Docker refuses to create a container whose runtime is not installed, so an
+   AMD node went from CPU fallback to a create failure (issue #3365).
+4. The base compose file still requests an NVIDIA GPU for ffmpeg-whisper by at
+   least one of those paths -- without this the overlay would be a no-op and
+   assertions 1-3 would be guarding nothing.
 
 Deliberately static: no `docker` binary and no tier env files are required, so
 this runs in CI. The merged-config behaviour it stands in for was verified
@@ -153,30 +158,70 @@ def test_scanner_finds_whisper_bringup_targets():
     )
 
 
-def test_base_compose_really_reserves_an_nvidia_device():
-    """Non-vacuity guard for the whole file: if the base stopped requesting an
-    NVIDIA device, the overlay would be pointless and every wiring assertion
-    below would be protecting a no-op."""
-    base = _whisper_service(PMOVES / "docker-compose.yml")
-    reservations = base.get("deploy", {}).get("resources", {}).get("reservations", {})
+def _nvidia_paths(service: dict) -> dict[str, object]:
+    """The ways a service asks for an NVIDIA GPU, keyed by path.
+
+    `devices`: a `deploy.resources.reservations.devices` entry with driver nvidia.
+    `runtime`: service-level `runtime: nvidia` (ee1573f55b / #3363 moved
+    ffmpeg-whisper here because the devices path fires the legacy prestart hook
+    on Docker Desktop/WSL2). The overlay must neutralise whichever the base uses;
+    assuming either one alone is how the overlay silently became a no-op.
+    """
+    found: dict[str, object] = {}
+    reservations = service.get("deploy", {}).get("resources", {}).get("reservations", {})
     devices = reservations.get("devices")
-    assert devices, "docker-compose.yml no longer reserves a device for ffmpeg-whisper"
-    assert any(d.get("driver") == "nvidia" for d in devices), (
-        f"expected an nvidia device reservation, got {devices}"
+    if isinstance(devices, list) and any(
+        isinstance(d, dict) and d.get("driver") == "nvidia" for d in devices
+    ):
+        found["devices"] = devices
+    if service.get("runtime") == "nvidia":
+        found["runtime"] = "nvidia"
+    return found
+
+
+def _is_reset(value: object) -> bool:
+    return isinstance(value, dict) and value.get("__tag__") == "reset"
+
+
+def test_base_compose_really_requests_an_nvidia_gpu():
+    """Non-vacuity guard for the whole file: if the base stopped requesting an
+    NVIDIA GPU by any path, the overlay would be pointless and every wiring
+    assertion below would be protecting a no-op."""
+    base = _whisper_service(PMOVES / "docker-compose.yml")
+    assert _nvidia_paths(base), (
+        "docker-compose.yml no longer requests an NVIDIA GPU for ffmpeg-whisper "
+        "(neither `runtime: nvidia` nor an nvidia devices reservation)"
     )
 
 
-def test_amd_overlay_file_exists_and_resets_the_reservation():
+def test_amd_overlay_file_exists_and_neutralises_every_gpu_path_the_base_uses():
+    """Checked against the base, not against a fixed expectation: when the base
+    moved from a devices reservation to `runtime: nvidia`, an overlay that only
+    reset `devices` kept passing the old fixed check while doing nothing."""
     overlay = _amd_overlay_path()
     assert overlay.is_file(), f"AMD_OVERLAY points at a missing file: {overlay}"
+    base_paths = _nvidia_paths(_whisper_service(PMOVES / "docker-compose.yml"))
     service = _whisper_service(overlay)
     reservations = service.get("deploy", {}).get("resources", {}).get("reservations", {})
     devices = reservations.get("devices")
-    assert isinstance(devices, dict) and devices.get("__tag__") == "reset", (
-        "the overlay must reset the devices reservation with `devices: !reset []`; "
-        f"got {devices!r}"
+    runtime = service.get("runtime")
+    unhandled = []
+    if "devices" in base_paths and not (_is_reset(devices) and devices.get("value") == []):
+        unhandled.append(
+            f"devices reservation (overlay has {devices!r}; need `devices: !reset []` -- "
+            "a plain `[]` MERGES into the base list and leaves the nvidia entry in place)"
+        )
+    if "runtime" in base_paths and not (
+        _is_reset(runtime) or (isinstance(runtime, str) and runtime != "nvidia")
+    ):
+        unhandled.append(
+            f"runtime (overlay has {runtime!r}; need `runtime: !reset null` or an "
+            "explicit non-nvidia runtime)"
+        )
+    assert not unhandled, (
+        "the overlay leaves the base's NVIDIA request in place on AMD nodes: "
+        + "; ".join(unhandled)
     )
-    assert devices.get("value") == [], f"expected an empty reset list, got {devices!r}"
 
 
 def test_every_whisper_bringup_target_accepts_the_overlay():
