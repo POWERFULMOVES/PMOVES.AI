@@ -17,6 +17,7 @@
 #
 # Per-node pin functions (set PMOVES_NODE_ID before calling the launcher):
 #   kimi-pmoves-knuckles (PMOVES_NODE_ID=pmoves-b850)
+#   kimi-pmoves-spark (PMOVES_NODE_ID=spark)
 # ---------------------------------------------------------------------------
 set -euo pipefail
 
@@ -54,6 +55,7 @@ $begin
 # Purpose: Kimi Code with PMOVES context files + Cipher/Agent Zero MCP
 kimi-pmoves() { "$launcher" "\$@"; }
 kimi-pmoves-knuckles() { PMOVES_NODE_ID="pmoves-b850" kimi-pmoves "$@"; }
+kimi-pmoves-spark() { PMOVES_NODE_ID="spark" kimi-pmoves "$@"; }
 $end
 EOF
 )
@@ -96,5 +98,5 @@ esac
 
 echo ""
 echo "Installed 'kimi-pmoves' -> $launcher"
-echo "Also installed: kimi-pmoves-knuckles"
+echo "Also installed: kimi-pmoves-knuckles, kimi-pmoves-spark"
 echo "Run:  source ~/.bashrc   (or open a new shell)   then just type:  kimi-pmoves"

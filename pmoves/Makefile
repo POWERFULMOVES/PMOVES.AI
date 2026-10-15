@@ -6133,17 +6133,8 @@ stage-data-check: stage-data ## Fail if committed website/stage/data drifted fro
 	@echo "✅ website/stage/data matches room manifests"
 
 .PHONY: kimi
-kimi: ## Launch Kimi Code CLI with PMOVES project config and MCP set
-	@if [ ! -f "$(CURDIR)/../.kimi/config.toml" ]; then \
-	  echo "[!] Kimi config not found: $(CURDIR)/../.kimi/config.toml"; exit 1; \
-	fi
-	@if [ -f "$(CURDIR)/../.kimi/mcp.json" ]; then \
-	  kimi --config-file "$(CURDIR)/../.kimi/config.toml" --mcp-config-file "$(CURDIR)/../.kimi/mcp.json"; \
-	else \
-	  echo "[!] Warning: $(CURDIR)/../.kimi/mcp.json not found; launching Kimi without MCP config."; \
-	  echo "    Run 'make -C pmoves mcp-spark-connect' to generate it from Docker MCP Toolkit."; \
-	  kimi --config-file "$(CURDIR)/../.kimi/config.toml"; \
-	fi
+kimi: ## Launch Kimi with PMOVES project context (same as kimi-pmoves)
+	@bash $(CURDIR)/scripts/kimi-pmoves.sh
 
 .PHONY: claude-pmoves kimi-pmoves kilo-pmoves codex-pmoves cipher-mint-token cipher-identity
 claude-pmoves: ## Launch Claude Code with PMOVES delivery-agent context
@@ -6152,8 +6143,8 @@ claude-pmoves: ## Launch Claude Code with PMOVES delivery-agent context
 kimi-pmoves: ## Launch Kimi Code CLI with PMOVES project config and MCP
 	@bash $(CURDIR)/scripts/kimi-pmoves.sh
 
-kilo-pmoves: ## Launch KiloCode/OpenCode with PMOVES 5090 node config
-	@bash $(CURDIR)/scripts/kilo-pmoves.sh 5090
+kilo-pmoves: ## Launch the Kilo CLI with PMOVES project config (kilo.json)
+	@bash $(CURDIR)/scripts/kilo-pmoves.sh
 
 codex-pmoves: ## Launch Codex CLI with PMOVES context
 	@bash $(CURDIR)/scripts/codex-pmoves.sh

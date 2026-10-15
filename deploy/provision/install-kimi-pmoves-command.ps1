@@ -16,6 +16,7 @@
 #
 # Per-node pin functions (set $env:PMOVES_NODE_ID before calling the launcher):
 #   kimi-pmoves-knuckles ($env:PMOVES_NODE_ID=pmoves-b850)
+#   kimi-pmoves-spark ($env:PMOVES_NODE_ID=spark)
 # ---------------------------------------------------------------------------
 param([switch]$Force)
 
@@ -44,6 +45,11 @@ $begin
 function kimi-pmoves { & "$cmd" @args }
 function kimi-pmoves-knuckles {
     $env:PMOVES_NODE_ID = 'pmoves-b850'
+    & kimi-pmoves @args
+    Remove-Item Env:PMOVES_NODE_ID -ErrorAction SilentlyContinue
+}
+function kimi-pmoves-spark {
+    $env:PMOVES_NODE_ID = 'spark'
     & kimi-pmoves @args
     Remove-Item Env:PMOVES_NODE_ID -ErrorAction SilentlyContinue
 }
@@ -84,6 +90,6 @@ if (Test-Path $shimDir) {
 
 Write-Host ''
 Write-Host "Installed 'kimi-pmoves' -> $cmd"
-Write-Host "Also installed: 'kimi-pmoves-knuckles'"
+Write-Host "Also installed: 'kimi-pmoves-knuckles', 'kimi-pmoves-spark'"
 
 Write-Host 'Works in any NEW shell (PATH shim). In an existing session, open a new shell.'
