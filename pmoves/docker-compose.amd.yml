@@ -16,6 +16,7 @@ services:
         reservations:
           devices: !reset []
           driver: !reset null
+    runtime: !reset null
     environment:
       # CPU-only on this class; the CUDA path is unreachable without the
       # runtime and the value documents that rather than leaving a GPU
