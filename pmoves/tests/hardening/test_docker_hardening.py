@@ -968,7 +968,7 @@ class TestWindowsHostCompat:
         """Every `open(...)` of a compose YAML in this file passes encoding=.
 
         A regression to a bare `open(path, "r")` here re-introduces the
-        cp1252 trap. The check is a regex over the file's source, NOT the
+        cp1252 trap. The check is an AST walk over the file's source, NOT the
         test runner's platform; a future contributor who edits the file on
         any OS sees the failure on this Windows host before CI does.
         """
