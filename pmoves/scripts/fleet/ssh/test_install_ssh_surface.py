@@ -7,7 +7,6 @@ sshd_config.d (STUB_SSHD_INCLUDES=0), and `sshd -t` failing (STUB_SSHD_T_RC).
 """
 import os
 import subprocess
-import sys
 from pathlib import Path
 
 import pytest
@@ -19,17 +18,19 @@ from ssh_surface import gen_krl, generate_ca
 _INSTALLER = Path(__file__).resolve().parent / "install_ssh_surface.sh"
 _BASH = find_bash()
 
-pytestmark = pytest.mark.skipif(_BASH is None, reason="bash not available")
-# On Windows, only run under Git Bash (or any non-WSL bash). The WSL stub
-# returned by `shutil.which("bash")` would silently run a different OS
-# against a different filesystem view (Z890 measured: /mnt/d vs D:).
-# `find_bash()` already rejects the WSL stub. This skip is belt + braces.
-_SKIP_REASON_WIN32 = (
-    "install_ssh_surface.sh runs under POSIX bash (use Git for Windows "
-    "or a POSIX host); find_bash() returned None on this Windows host."
-)
-pytestmark_win32 = pytest.mark.skipif(
-    sys.platform == "win32" or _BASH is None, reason=_SKIP_REASON_WIN32
+# On Windows this suite runs under Git Bash (or any non-WSL bash) and passes
+# there -- Z890 measured 6/6. The hazard is the WSL stub `shutil.which("bash")`
+# returns, which would run a different OS against a different filesystem view
+# (/mnt/d vs D:). `find_bash()` rejects that stub and returns None when no
+# POSIX bash exists, so a single skip on `_BASH is None` covers every host.
+# pytest reads only the module attribute named `pytestmark`; an earlier
+# `pytestmark_win32` here was never applied (review of #3359).
+pytestmark = pytest.mark.skipif(
+    _BASH is None,
+    reason=(
+        "install_ssh_surface.sh needs a POSIX bash (Git for Windows or a POSIX "
+        "host); find_bash() found none and refuses the WSL stub."
+    ),
 )
 
 _STUB_SSHD = """#!/usr/bin/env bash
