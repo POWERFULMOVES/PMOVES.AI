@@ -113,6 +113,18 @@
 version: 1
 
 identities:
+  - canonical: pmoves-hermes-elder
+    aliases: ["PMOVES-HERMES-ELDER"]
+    node: "elder-melchor"
+    note: >-
+      The pmoves-hermes-elder Hermes profile session on elder-melchor
+      (operator custody, AGInTZ family; harness identity `hermes`, distinct
+      from `hermes-agent` and `em-flash` -- same harness family, different
+      wearer). First register use 2026-10-14T15:38:48Z, the #3366 Trigger-B
+      takeover CLAIM row; the identity gate flagged it undeclared and this
+      declaration answers that finding -- declared ahead of further use,
+      per the declared-before-use doctrine at the head of this file.
+
   - canonical: 5090-claude
     aliases: ["5090-CLAUDE", "claude_5090"]
     node: "5090"
