@@ -151,9 +151,10 @@ elevated Windows terminal unless noted.
    like `/dev/sdX` move between attaches. From a regular WSL distro (for example
    Ubuntu-24.04):
    `lsblk -o NAME,SIZE,FSTYPE,UUID` and `sudo blkid`. Pick the ext4 device
-   whose size matches the vhdx's virtual size. Record its UUID here at the first
-   healthy check so later recoveries can match it exactly:
-   `<docker-data-fs-uuid: TODO record>`.
+   whose size matches the vhdx's virtual size (1 TiB on z890). The z890 Docker
+   data filesystem UUID, recorded during the 2026-10-14 recovery, is
+   `1d2dc5e5-d026-4af5-a310-1d052e912cf1`; `blkid -U <uuid>` returns the device.
+   If the UUID differs, stop: you are looking at a different disk.
 6. **Run a read-only check:** `sudo e2fsck -fn /dev/<dev>`. `-n` answers "no"
    to every question and writes nothing. Save the output.
 7. **[OPERATOR CONFIRM] Repair only if step 6 reported errors and the operator
