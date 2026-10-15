@@ -7,8 +7,8 @@
 
 | Surface | Measured | Source |
 |---|---|---|
-| `SSO_GOOGLE_ENABLED` | `false` | node-local `env.shared` (gitignored; line numbers omitted, they differ per node) |
-| `SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID/SECRET` | present but **empty** | node-local `env.shared` (gitignored) |
+| `SSO_GOOGLE_ENABLED` | `false` | `pmoves/env.shared:288` |
+| `SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID/SECRET` | present but **empty** | `pmoves/env.shared:291-292` |
 | YT service Google client | `google_client_configured: false`, `default_refresh_token_configured: false` | `GET :8077/yt/control/status` |
 | Cookie workflow | overlay exists, wired only via `COOKIES_DC` (up-yt) | `pmoves/docker-compose.yt-cookies.yml`, Makefile `up-yt` |
 | sso-auth service | defined (orphan list shows it ran historically), not in current stack | `pmoves/docker-compose.sso.yml` |
