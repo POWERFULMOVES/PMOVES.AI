@@ -396,3 +396,4 @@ pmoves/tools/comfyui/_input/
 # (hostinger-kvm-setup.sh). Rooted so a same-named file elsewhere is unaffected.
 /profile.yaml
 /.node-config
+pmoves/docs/logs/selfcheck/
