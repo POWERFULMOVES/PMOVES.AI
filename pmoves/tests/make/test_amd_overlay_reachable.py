@@ -26,7 +26,7 @@ What is asserted
    `WHISPER_NODE_OVERLAY="$(AMD_OVERLAY)"`.
 3. `AMD_OVERLAY` names a compose file that exists and actually neutralises
    every path by which the base asks for an NVIDIA GPU, for each service in
-   AMD_NEUTRALISED_SERVICES (ffmpeg-whisper; media-audio pending, see #3358).
+   AMD_NEUTRALISED_SERVICES (ffmpeg-whisper and media-audio, #3358).
    Two spellings exist: the `deploy.resources.reservations.devices` reservation
    and the service-level `runtime: nvidia` that ee1573f55b (#3363) moved the
    service to. `devices: !reset []` alone stopped being enough at that commit:
@@ -143,7 +143,7 @@ def _amd_overlay_path() -> Path:
 # every path it uses. Not "every NVIDIA service in the base": pmoves-ollama,
 # nvidia-nim, hi-rag-gateway-v2-gpu etc. are NVIDIA-only by design and have no
 # CPU path for this overlay to fall back to.
-AMD_NEUTRALISED_SERVICES = ("ffmpeg-whisper",)
+AMD_NEUTRALISED_SERVICES = ("ffmpeg-whisper", "media-audio")
 
 
 def _service(name: str, *compose_files: Path) -> dict:
