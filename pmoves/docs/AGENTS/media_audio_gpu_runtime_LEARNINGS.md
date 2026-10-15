@@ -4,7 +4,7 @@
 **Branch**: `fix/media-audio-gpu-runtime`
 **HEAD at write**: `f9c720e9f15` (test port) ← `812168c2551` (compose fix) ← `aed68d92b8d` (first cut)
 **Test contract**: `pmoves/tests/make/test_amd_overlay_reachable.py` 6/6 PASS on Windows + 6/6 PASS on ratchet
-**Compose contract**: `media-audio` and `ffmpeg-whisper` both serve NVIDIA via `runtime: nvidia`; the AMD overlay's `!reset` neutralises both paths
+**Compose contract**: `media-audio` and `ffmpeg-whisper` both serve NVIDIA via `runtime: nvidia`. The AMD overlay (`pmoves/docker-compose.amd.yml`) currently `!reset`s **only `ffmpeg-whisper`**; `media-audio` is **not yet neutralised** on AMD nodes. The fix is a `media-audio: runtime: !reset null` block plus adding `media-audio` to `AMD_NEUTRALISED_SERVICES` in `pmoves/tests/make/test_amd_overlay_reachable.py`; it is pending a `compose:pr:3358` Known Road grant, because `docker-compose*.yml` is a protected path. No `-amd` Make target brings `media-audio` up yet either (`up-media` does not take `$(WHISPER_NODE_OVERLAY)`)
 
 ## 4-bucket × 5-class taxonomy
 

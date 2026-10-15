@@ -26,13 +26,13 @@ with open(path, "r", encoding="utf-8") as f:
     compose = yaml.safe_load(f)
 ```
 
-One file, one line, plus a comment that points at the ratchet. UTF-8 is the canonical Python default for portability; the BOM-stripping variant `encoding="utf-8-sig"` is also accepted by the ratchet regex (the ratchet checks for `encoding=` as a substring, not the literal value).
+One file, one line, plus a comment that points at the ratchet. UTF-8 is the canonical Python default for portability; the BOM-stripping variant `encoding="utf-8-sig"` is also accepted by the ratchet (it checks that an `encoding=` keyword is present, not its value).
 
 ### 2. The static ratchet
 
-`TestWindowsHostCompat::test_compose_reads_use_utf8` (in the same test file, class `TestWindowsHostCompat`). It reads the test file's own source, strips docstrings and Python comments (so the ratchet's own examples don't trip the ratchet against itself), then matches every `open(<arg>, "<mode>"[, ...])` call. Any call without `encoding=` is a regression.
+`TestWindowsHostCompat::test_compose_reads_use_utf8` (in the same test file, class `TestWindowsHostCompat`). It parses the test file's own source with `ast` and visits every `open(...)` / `<obj>.open(...)` call, with or without a mode argument. Any non-binary call without an `encoding=` keyword is a regression. (The first cut was a regex keyed on a quoted mode argument; review of #3358 showed it let the modeless `open(path)` through -- the commonest bare shape -- so it was replaced by the AST walk, which also ignores docstrings and comments for free.)
 
-Why a static ratchet instead of a runtime test? Per the cross-cutting comment in CLAUDE.md: "static ratchets over runtime tests when the runtime test would never reach the bug (e.g. ... )." The runtime test (the compose_data fixture loading) only reaches the bug on a Windows host. A future contributor editing the file on any OS would only see the failure on Windows. A regex ratchet is platform-agnostic and runs in 0.01s.
+Why a static ratchet instead of a runtime test? Per the cross-cutting comment in CLAUDE.md: "static ratchets over runtime tests when the runtime test would never reach the bug (e.g. ... )." The runtime test (the compose_data fixture loading) only reaches the bug on a Windows host. A future contributor editing the file on any OS would only see the failure on Windows. A static source ratchet is platform-agnostic and runs in 0.01s.
 
 ### 3. The runtime smoke test
 
@@ -65,7 +65,7 @@ That lane is NOT in this PR's scope. The ratchet class `TestWindowsHostCompat` c
 | # | Class | What | Why | Alternative considered | Cost of alternative |
 |---|-------|------|-----|------------------------|---------------------|
 | 2.1 | fix-the-source-not-skip-the-test | The operator had worked around the bug by `pytest.skip`-ing media services on Windows (no record in repo, but discussed in the lane handoff). I fixed the source. | Skipping a test on a host class erodes the gate; the test is the contract. | Skip media tests on Windows | Silent blindness on a real production host class |
-| 2.2 | static-ratchet | The ratchet is a regex over the test file's source, not a runtime test. | The runtime test only fails on Windows; a future contributor on Linux would not see the bug. The regex ratchet pins the source. | Runtime test on Windows only | Test would not run on CI (Linux) |
+| 2.2 | static-ratchet | The ratchet is an AST walk over the test file's source, not a runtime test. | The runtime test only fails on Windows; a future contributor on Linux would not see the bug. The static ratchet pins the source. | Runtime test on Windows only | Test would not run on CI (Linux) |
 | 2.3 | fold-into-#3358-vs-separate-PR | The fix is a single-line change in a test file, not a runtime compose change. Operator said "separate lane (or fold into this PR's next push)". I folded it in. | One PR per logical change is the rule, but the encoding fix is part of "make the test suite pass on the 5090 worktree" which is the same goal as #3358. | Separate PR | Two PRs, two reviews, same effect |
 | 2.4 | scope-to-docker_hardening-only | The same `read_text()`-without-encoding pattern exists in ~100+ test files. The fix is scoped to `test_docker_hardening.py` only. | The operator's directive was the hardening test specifically. The wider audit is a follow-up. | Sweep the whole test suite | Out of scope for this PR; the wider sweep's failures may surface other host-class bugs that need their own ratchets |
 
@@ -75,6 +75,7 @@ That lane is NOT in this PR's scope. The ratchet class `TestWindowsHostCompat` c
 |---|-------|------|----------|---------------|
 | 3.1 | ratchet-self-reference-defence | The ratchet's own docstring contains the literal `open(path, "r")` as documentation. Without scrubbing, the ratchet trips on its own example. | The `test_compose_reads_use_utf8` first implementation failed with "5 false positives, all from the ratchet's own docstring". The fix is `re.sub(r'"""[\s\S]*?"""|\'\'\'[\s\S]*?\'\'\'', ...)` before matching. | A future contributor who adds a new `open(...)` call with `encoding=` in the test will not trigger the ratchet. A new call without `encoding=` will. |
 | 3.2 | comment-stripping-false-positives | Same as 3.1 but for `# ...` comments. A second `re.sub(r'#[^\n]*', ...)` is needed because comments can also contain the literal `open(path, "r")`. | Without this, the ratchet tripped on the inline comment at line 980 (`# triple-quoted blocks (including the literal `open(path, "r")`)`. | Same as 3.1. |
+| 3.2a | regex-missed-modeless-open | The regex ratchet (3.1/3.2) required a quoted mode argument, so a modeless `open(path)` -- which uses the platform default encoding, the exact trap -- passed. Replaced by an `ast` walk: no docstring/comment scrubbing needed, nested parentheses handled, binary modes exempt. | Positive control: rewriting the fixture's read to `open(path)` in a scratch copy fails the AST ratchet with `line 125: open(path)`; the old regex passed it. | Prefer AST over regex for any source-shape ratchet in Python. |
 | 3.3 | host-class-ratchet-is-rare | Most ratchets in the project are cross-platform (compose syntax, dependency pins, file-mode). This ratchet is one of the few that gates a host class. | The CI matrix runs Ubuntu only; the operator's 5090 is one of three known Windows hosts. The ratchet is a guard, not a gate. | n/a |
 
 ### 4. Cross-references
@@ -93,8 +94,8 @@ The new class `TestWindowsHostCompat` in `pmoves/tests/hardening/test_docker_har
 ```python
 class TestWindowsHostCompat:
     def test_compose_reads_use_utf8(self):
-        """Regex over the test file's own source, strips docstrings + # comments,
-        matches every `open(<arg>, <mode>...)` call, fails if any lacks encoding=."""
+        """AST walk over the test file's own source: every non-binary
+        `open(...)` / `<obj>.open(...)` call, modeless or not, must pass encoding=."""
 
     def test_docker_hardening_runs_on_windows(self, compose_data):
         """Runtime smoke: the fixture loads on this host. Linux passes always;
