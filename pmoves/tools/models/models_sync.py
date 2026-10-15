@@ -13,6 +13,12 @@ Supports:
         the bind-mounted usr/plugins/_model_config plugin dir
       + --check exits 1 on drift and writes nothing (fleet drift control)
       + --instance/--out parameterize per-variant presets
+      + per-node paths are env contracts: AGENT_ZERO_USR_DIR (output, the
+        same var compose binds to /a0/usr) and PMOVES_OLLAMA_BASE_URL
+        (ollama lane api_base); fallback rows are derived at runtime from
+        the template yaml -- presets are never handwritten or hardcoded
+      + --apply-presets archives the previous live file to the review dir
+        before overwriting (operator CB-4: preset safety)
   - swap: patch a single model env for a target service
   - seed-list: emit comma-separated local models to pre-pull
   - registry-snapshot: export active model registry JSON
@@ -24,8 +30,10 @@ import argparse
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
+import time
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -384,7 +392,12 @@ PROVIDER_ID_ALIASES = {
 
 # Degraded-mode rows: the checked-in fallback template expressed as
 # registry-shaped rows (TensorZero chat lane default + its embedding lane).
-A0_FALLBACK_TEMPLATE_ROWS = (
+A0_LAST_RESORT_ROWS = (
+    # Last-ditch in-code rows used ONLY when the registry is unreachable AND
+    # the checked-in template yaml is unreadable. Kept minimal on purpose:
+    # the template file (pmoves/config/agent-zero/model-presets-docked.yaml)
+    # is the real fallback, and runtime rows are DERIVED from it below -
+    # presets are never handwritten or hardcoded when any source can be read.
     {
         "service_name": "agent_zero",
         "function_name": "chat",
@@ -404,6 +417,86 @@ A0_FALLBACK_TEMPLATE_ROWS = (
         "context_length": 0,
     },
 )
+
+
+def _preset_block_to_row(block: dict, model_type: str, function_name: str) -> dict | None:
+    """Convert a template preset block into a registry-shaped row."""
+    name = _normalize_model_id(block.get("name"))
+    if not name:
+        return None
+    provider = str(block.get("provider") or "").strip().lower()
+    model_id = name
+    if name.startswith("openai/") and "tensorzero::" in name:
+        name = name[len("openai/"):]
+    if "tensorzero::" in name:
+        model_id = name.split("::")[-1]
+        provider = "tensorzero"
+    elif "/" in name:
+        provider, model_id = name.split("/", 1)
+    if not model_id:
+        return None
+    row: dict = {
+        "service_name": "agent_zero" if model_type != "embedding" else "tensorzero",
+        "function_name": function_name,
+        "model_type": model_type,
+        "model_id": model_id,
+        "provider_name": provider or "tensorzero",
+        "provider_type": provider or "tensorzero",
+    }
+    if model_type == "chat":
+        row["context_length"] = _safe_int(block.get("ctx_length"), 32768)
+    base = str(block.get("api_base") or "").strip()
+    if base and provider != "tensorzero":
+        row["api_base"] = base
+    return row
+
+
+def _load_template_rows() -> list[dict]:
+    """Derive fallback rows from the checked-in template (single source of truth)."""
+    template = ROOT.parent / A0_PRESETS_TEMPLATE
+    try:
+        doc = yaml.safe_load(template.read_text(encoding="utf-8")) or []
+    except (OSError, yaml.YAMLError):
+        doc = []
+    rows: list[dict] = []
+    for preset in doc:
+        if not isinstance(preset, dict):
+            continue
+        chat = preset.get("chat")
+        if isinstance(chat, dict) and not any(r["model_type"] == "chat" for r in rows):
+            row = _preset_block_to_row(chat, "chat", "chat")
+            if row:
+                rows.append(row)
+        embed = preset.get("embedding")
+        if isinstance(embed, dict) and not any(r["model_type"] == "embedding" for r in rows):
+            row = _preset_block_to_row(embed, "embedding", "embeddings")
+            if row:
+                rows.append(row)
+    if not rows:
+        print(
+            f"WARNING: fallback template unreadable ({template}); using last-resort rows",
+            file=sys.stderr,
+        )
+        return [dict(r) for r in A0_LAST_RESORT_ROWS]
+    return rows
+
+
+def _a0_presets_out_path() -> Path:
+    """Resolve the live presets path the same way compose mounts usr.
+
+    AGENT_ZERO_USR_DIR (the var docker-compose binds to /a0/usr) wins, so a
+    node relocating usr to another drive gets presets written where the
+    container actually reads them. Relative values resolve against pmoves/
+    (compose --project-directory semantics); default matches the compose
+    default ./data/agent-zero/usr.
+    """
+    usr = os.environ.get("AGENT_ZERO_USR_DIR", "").strip()
+    if usr:
+        p = Path(usr)
+        if not p.is_absolute():
+            p = ROOT / p
+        return p / "plugins" / "_model_config" / "presets.yaml"
+    return ROOT / A0_PRESETS_SUBPATH
 
 
 def _provider_id_for(provider_name: str) -> str:
@@ -439,7 +532,7 @@ def _a0_api_base(row: dict, provider_id: str, tensorzero_base: str) -> str | Non
     if base:
         return base
     if provider_id == "ollama":
-        return A0_OLLAMA_API_BASE
+        return os.environ.get("PMOVES_OLLAMA_BASE_URL", A0_OLLAMA_API_BASE)
     return None
 
 
@@ -525,7 +618,17 @@ def _a0_embedding_row(
         embed_row, _chain = _fallback_from_active_models(active_models, ("embedding",), cloud_order)
     if embed_row is None:
         print("WARNING: no embedding row resolvable; using template embedding lane")
-        embed_row = dict(A0_FALLBACK_TEMPLATE_ROWS[1])
+        tpl_rows = _load_template_rows()
+        embed_row = next(
+            (dict(r) for r in tpl_rows if r.get("model_type") == "embedding"),
+            None,
+        )
+        if embed_row is None:
+            print(
+                "WARNING: fallback template has no embedding lane; embedding omitted",
+                file=sys.stderr,
+            )
+            return None
     return embed_row
 
 
@@ -625,7 +728,7 @@ def _write_a0_presets(
             file=sys.stderr,
         )
         presets, embed_row = _build_a0_presets(
-            [dict(row) for row in A0_FALLBACK_TEMPLATE_ROWS], [], tensorzero_base, cloud_order,
+            [dict(row) for row in _load_template_rows()], [], tensorzero_base, cloud_order,
         )
     doc: list[dict] = []
     for preset_name, row in presets:
@@ -691,6 +794,14 @@ def _write_a0_presets(
         manifest["review_copy"] = str(new_path)
         manifest["applied"] = False
     else:
+        if out_path.exists():
+            # CB-4: never clobber the live preset without an archive.
+            review_dir = ROOT / A0_REVIEW_DIR_SUBPATH
+            review_dir.mkdir(parents=True, exist_ok=True)
+            stamp = time.strftime("%Y%m%d-%H%M%S")
+            bak = review_dir / f"{out_path.name}.bak-{stamp}"
+            shutil.copy2(out_path, bak)
+            print(f"backup: {bak}")
         out_path.write_text(payload, encoding="utf-8")
         print(f"wrote {out_path}")
         manifest["applied"] = True
@@ -705,7 +816,7 @@ def _sync_dynamic_agent_zero(rows: list[dict], active_models: list[dict], cloud_
     _model_config preset plugin ignores those vars. The registry emits
     presets.yaml instead, with the T0 lane demoted to one lane among several.
     """
-    out_path = Path(out_override) if out_override else ROOT / A0_PRESETS_SUBPATH
+    out_path = Path(out_override) if out_override else _a0_presets_out_path()
     _write_a0_presets(
         rows,
         active_models,
@@ -824,7 +935,7 @@ def _sync_agent_zero(manifest: dict, host: str, tensorzero_base: str, apply_pres
             "provider_type": "tensorzero",
             "context_length": _safe_int(target.get("ctx"), 32768),
         }]
-    out_path = Path(out_override) if out_override else ROOT / A0_PRESETS_SUBPATH
+    out_path = Path(out_override) if out_override else _a0_presets_out_path()
     _write_a0_presets(
         rows,
         [],
@@ -924,7 +1035,7 @@ def cmd_sync_dynamic(args: argparse.Namespace) -> int:
         # (SystemExit from _db_json_query, TimeoutExpired/SubprocessError from
         # docker exec; FileNotFoundError from a missing docker CLI is an
         # OSError, already listed).
-        rows = [dict(row) for row in A0_FALLBACK_TEMPLATE_ROWS]
+        rows = [dict(row) for row in _load_template_rows()]
         active_models = []
         print(
             f"WARNING: model registry unreachable ({exc}); "
