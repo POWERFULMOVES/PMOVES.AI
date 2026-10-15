@@ -359,11 +359,110 @@ def _cache_path() -> Path:
 # macOS/Homebrew: /opt/homebrew/bin is owned by the user, so it FAILS the
 # ownership test and grants refuse as unverifiable there; use `!offline` or a
 # root-owned gh. Windows: only %ProgramFiles%\GitHub CLI\gh.exe is searched, and
-# the ownership test is POSIX-only (os.access on Windows sees only the read-only
-# attribute) -- stated, not claimed.
+# the ownership test is an AccessCheck of the DACL against this process's token
+# (`_untrusted_reason_nt`, issue #3362); os.access is never consulted there.
 _TRUSTED_GH_POSIX = ("/usr/bin/gh", "/usr/local/bin/gh", "/opt/homebrew/bin/gh", "/bin/gh")
 _GH_ENV_DROP = ("GH_HOST", "GH_ENTERPRISE_TOKEN", "GITHUB_ENTERPRISE_TOKEN", "GH_REPO",
                 "GH_CONFIG_DIR", "GH_DEBUG", "GH_PATH")
+
+
+def _untrusted_reason_nt(path: str) -> str:
+    """Windows: ask the security reference monitor, do not infer (issue #3362).
+
+    `os.access(path, os.W_OK)` on Windows reads only the read-only attribute and
+    ignores ACLs, so it reported `C:\\Program Files\\GitHub CLI` writable on every
+    Windows node measured, and every `pr:`/`issue:` grant fell back to `!offline`
+    -- the referent check meant to tighten grants was never enforced.
+
+    This runs the check the kernel itself runs on open: AccessCheck of the
+    object's DACL against this process's own token, asking for MAXIMUM_ALLOWED.
+    The path is untrusted when any right that lets the user alter or replace the
+    object is granted -- write/append data (add file / add subdirectory on a
+    directory), delete, delete child, write DAC, write owner. Nothing is opened
+    for write and no probe file is created, so neither a read-only attribute
+    (which makes a write OPEN fail with ACCESS_DENIED although the ACL allows the
+    write) nor a running gh.exe (which makes it fail with SHARING_VIOLATION) can
+    distort the answer. Owner-implied rights (READ_CONTROL | WRITE_DAC for the
+    owning SID) are part of AccessCheck, so a user-owned file is untrusted even
+    with an empty DACL. Any API failure is "could not measure" and fails closed.
+    Integrity labels are not consulted; they can only make the kernel refuse
+    where the DACL allows, so ignoring them errs toward refusing a grant.
+    """
+    import ctypes
+    from ctypes import wintypes
+
+    class GenericMapping(ctypes.Structure):
+        _fields_ = [("read", wintypes.DWORD), ("write", wintypes.DWORD),
+                    ("execute", wintypes.DWORD), ("all", wintypes.DWORD)]
+
+    k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    adv = ctypes.WinDLL("advapi32", use_last_error=True)
+    k32.GetCurrentProcess.restype = wintypes.HANDLE
+    k32.OpenProcessToken.argtypes = [wintypes.HANDLE, wintypes.DWORD,
+                                     ctypes.POINTER(wintypes.HANDLE)]
+    k32.OpenProcessToken.restype = wintypes.BOOL
+    k32.CloseHandle.argtypes = [wintypes.HANDLE]
+    k32.CloseHandle.restype = wintypes.BOOL
+    k32.LocalFree.argtypes = [wintypes.HLOCAL]
+    k32.LocalFree.restype = wintypes.HLOCAL
+    adv.GetNamedSecurityInfoW.argtypes = [
+        wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD, ctypes.c_void_p, ctypes.c_void_p,
+        ctypes.c_void_p, ctypes.c_void_p, ctypes.POINTER(ctypes.c_void_p)]
+    adv.GetNamedSecurityInfoW.restype = wintypes.DWORD
+    adv.DuplicateToken.argtypes = [wintypes.HANDLE, ctypes.c_int, ctypes.POINTER(wintypes.HANDLE)]
+    adv.DuplicateToken.restype = wintypes.BOOL
+    adv.AccessCheck.argtypes = [
+        ctypes.c_void_p, wintypes.HANDLE, wintypes.DWORD, ctypes.POINTER(GenericMapping),
+        ctypes.c_void_p, ctypes.POINTER(wintypes.DWORD), ctypes.POINTER(wintypes.DWORD),
+        ctypes.POINTER(wintypes.BOOL)]
+    adv.AccessCheck.restype = wintypes.BOOL
+
+    se_file_object = 1
+    owner_group_dacl = 0x1 | 0x2 | 0x4
+    token_duplicate, token_query = 0x2, 0x8
+    security_impersonation = 2
+    maximum_allowed = 0x02000000
+    # FILE_GENERIC_READ / FILE_GENERIC_WRITE / FILE_GENERIC_EXECUTE / FILE_ALL_ACCESS
+    mapping = GenericMapping(0x120089, 0x120116, 0x1200A0, 0x1F01FF)
+    alter = (  # any one of these lets the user change or replace the object
+        (0x00002, "write data / add file"), (0x00004, "append data / add subdirectory"),
+        (0x00040, "delete child"), (0x10000, "delete"), (0x40000, "write DAC"),
+        (0x80000, "write owner"))
+
+    def inconclusive(api: str, err: int) -> str:
+        return f"{path}: access check inconclusive ({api} win32 error {err})"
+
+    sd = ctypes.c_void_p()
+    rc = adv.GetNamedSecurityInfoW(path, se_file_object, owner_group_dacl,
+                                   None, None, None, None, ctypes.byref(sd))
+    if rc != 0:
+        return inconclusive("GetNamedSecurityInfo", rc)
+    proc_token, imp_token = wintypes.HANDLE(), wintypes.HANDLE()
+    try:
+        if not k32.OpenProcessToken(k32.GetCurrentProcess(), token_query | token_duplicate,
+                                    ctypes.byref(proc_token)):
+            return inconclusive("OpenProcessToken", ctypes.get_last_error())
+        if not adv.DuplicateToken(proc_token, security_impersonation, ctypes.byref(imp_token)):
+            return inconclusive("DuplicateToken", ctypes.get_last_error())
+        privileges = ctypes.create_string_buffer(1024)  # PRIVILEGE_SET out-buffer
+        privileges_len = wintypes.DWORD(len(privileges))
+        granted, status = wintypes.DWORD(0), wintypes.BOOL(0)
+        if not adv.AccessCheck(sd, imp_token, maximum_allowed, ctypes.byref(mapping), privileges,
+                               ctypes.byref(privileges_len), ctypes.byref(granted),
+                               ctypes.byref(status)):
+            return inconclusive("AccessCheck", ctypes.get_last_error())
+    finally:
+        for handle in (imp_token, proc_token):
+            if handle.value:
+                k32.CloseHandle(handle)
+        k32.LocalFree(sd)
+    # `status` is an out-parameter only. With MAXIMUM_ALLOWED the granted mask is
+    # the whole answer, and it is scanned unconditionally: a mask with no alter
+    # bit (including 0, "cannot even read it") is trusted, anything else is not.
+    held = [name for bit, name in alter if granted.value & bit]
+    if held:
+        return f"{path} is writable by the current user ({', '.join(held)})"
+    return ""
 
 
 def _untrusted_reason(path: str) -> str:
@@ -373,7 +472,7 @@ def _untrusted_reason(path: str) -> str:
     except OSError as exc:
         return f"cannot stat {path}: {exc.__class__.__name__}"
     if os.name == "nt":
-        return "" if not os.access(path, os.W_OK) else f"{path} is writable"
+        return _untrusted_reason_nt(path)
     if st.st_mode & 0o022:
         return f"{path} is group/world-writable"
     uid = os.getuid()
