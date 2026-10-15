@@ -2540,6 +2540,7 @@ services:
     - MINIO_SECRET_KEY=${MINIO_PASSWORD:?Run make brand-defaults}
     - USE_CUDA=${USE_CUDA:-true}
     - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
+    - HF_HUB_DISABLE_XET=${HF_HUB_DISABLE_XET:-1}
     - FFW_PROVIDER=${FFW_PROVIDER:-faster-whisper}
     # Host environment leak guard (see x-host-leak-guard docs above)
     - SSL_CERT_FILE=
@@ -2553,15 +2554,15 @@ services:
     - WHISPER_MODEL=${WHISPER_MODEL:-small}
     - WHISPER_LANGUAGE=${WHISPER_LANGUAGE:-en}
     - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_data,pmoves_external
+    # GPU via NVIDIA runtime env (NVIDIA_VISIBLE_DEVICES above) — NOT
+    # deploy.resources.devices: the devices path fires the legacy nvidia
+    # prestart hook, which fails on Docker Desktop/WSL2 (ld.so assertion,
+    # driver rpc error, container stuck Created). The runtime itself is
+    # healthy on those hosts (nvidia-smi live, driver 610.57.01) — CUDA
+    # installs fine through runtime+env. Pattern per PR #3358 (media-audio).
+    runtime: nvidia
     deploy:
       resources:
-        reservations:
-          devices:
-          - driver: nvidia
-            capabilities:
-            - compute
-            - utility
-            count: ${GPU_COUNT:-all}
         limits:
           cpus: '4.0'
           memory: 8G
