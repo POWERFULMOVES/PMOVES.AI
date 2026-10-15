@@ -119,7 +119,7 @@ def compose_data() -> Dict[str, dict]:
 
         # encoding="utf-8" so the cp1252 default on Windows does not trip over
         # the ⚠ U+26A0 / ✅ U+2705 in the compose header comments. The ratchet
-        # test_hardening_compose_reads_use_utf8() pins this; a regression to a
+        # TestWindowsHostCompat.test_compose_reads_use_utf8() pins this; a regression to a
         # bare `open(path, "r")` here fails the test on this Windows host before
         # CI ever sees it.
         with open(path, "r", encoding="utf-8") as f:
@@ -972,40 +972,38 @@ class TestWindowsHostCompat:
         test runner's platform; a future contributor who edits the file on
         any OS sees the failure on this Windows host before CI does.
         """
-        import re
+        import ast
 
-        source = Path(__file__).read_text(encoding="utf-8")
-        # Strip docstrings AND # comments so the ratchet's own examples
-        # in the test docstring / inline comments don't trigger the
-        # ratchet against itself. Replace each with whitespace of equal
-        # length so line numbers in error messages stay correct.
-        scrubbed = re.sub(
-            r'"""[\s\S]*?"""|\'\'\'[\s\S]*?\'\'\'',
-            lambda m: " " * len(m.group(0)),
-            source,
-        )
-        # Strip Python comments line-by-line. Crude: a `#` not inside a
-        # string literal -- but we already stripped the strings, so any
-        # remaining `#` is a comment. A `#` inside a multi-line `r"""..."""`
-        # was stripped above, so this is safe.
-        scrubbed = "\n".join(
-            re.sub(r"#[^\n]*", lambda m: " " * len(m.group(0)), line)
-            for line in scrubbed.splitlines()
-        )
-        # Match `open(<anything>, <mode>...)` where <mode> is a quoted string
-        # starting with a read/write/append mode letter. We accept
-        # `encoding=` ANYWHERE in the call -- a future
-        # `open(path, "r", encoding="utf-8")` passes, a bare
-        # `open(path, "r")` fails.
-        pattern = re.compile(
-            r"open\(\s*[^)]*?,\s*['\"](?:r|rb|w|wb|a|ab|x|xb|r\+|w\+|a\+|x\+)['\"]"
-            r"[^)]*\)"
-        )
+        # AST, not a regex over the source: a regex keyed on a quoted mode
+        # argument missed the most common bare shape of all, a modeless
+        # `open(path)` (review of #3358), and could not see through nested
+        # parentheses such as `open(str(path))`. Docstrings and comments are
+        # not Call nodes, so the examples in this test do not trip it.
+        tree = ast.parse(Path(__file__).read_text(encoding="utf-8"))
         bare = []
-        for match in pattern.finditer(scrubbed):
-            call = match.group(0)
-            if "encoding=" not in call:
-                bare.append(call)
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            func = node.func
+            name = func.id if isinstance(func, ast.Name) else (
+                func.attr if isinstance(func, ast.Attribute) else None
+            )
+            if name != "open":
+                continue
+            if any(kw.arg == "encoding" for kw in node.keywords):
+                continue
+            # Path.open(mode) takes the mode first; builtin open(file, mode)
+            # second. A binary mode takes no encoding (passing one raises).
+            mode_index = 0 if isinstance(func, ast.Attribute) else 1
+            mode = None
+            if len(node.args) > mode_index and isinstance(node.args[mode_index], ast.Constant):
+                mode = node.args[mode_index].value
+            for kw in node.keywords:
+                if kw.arg == "mode" and isinstance(kw.value, ast.Constant):
+                    mode = kw.value.value
+            if isinstance(mode, str) and "b" in mode:
+                continue
+            bare.append(f"line {node.lineno}: {ast.unparse(node)}")
         assert not bare, (
             "compose YAML reads must pass encoding= to the open() call so the "
             "Windows cp1252 default does not trip over UTF-8 multi-byte "
@@ -1020,7 +1018,7 @@ class TestWindowsHostCompat:
         Linux host it always passes (the cp1252 trap is Windows-only). On
         the operator's 5090 worktree (Windows, the one place the ratchet
         matters) it is the canary that the fix at line ~120 is still in
-        place. The static regex pins the source; this test pins the
+        place. The static AST check pins the source; this test pins the
         runtime.
         """
         assert "main" in compose_data or "hardened" in compose_data, (
