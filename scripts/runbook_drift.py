@@ -130,6 +130,50 @@ def probe_endpoint(url):
 
 PROBES = {"make_target": probe_make, "file_path": probe_file, "endpoint": probe_endpoint}
 
+# ---- optional local decision-model classifier (Jev family) ----------------
+# Frozen-weight backbone, OPTIONAL per the Aragon pattern: core learner makes
+# zero AI calls; attaching a local model accelerates but is never required.
+# Import-guarded both ways: no onnxruntime OR no tokenizers -> heuristics only.
+JEV_MODEL = ROOT / "research/models/agentjev/agentjev_0.6b_int8.onnx"
+JEV_LABELS = ["DRAFT", "RUNBOOK", "HISTORICAL"]
+
+def _load_jev():
+    """Load AgentJev ONNX + tokenizer if available; return (session, tokenizer) or None."""
+    try:
+        import onnxruntime  # noqa: F401
+        from tokenizers import Tokenizer
+        if not JEV_MODEL.exists():
+            return None
+        tok = Tokenizer.from_file(str(JEV_MODEL.parent / "tokenizer.json"))
+        so = onnxruntime.SessionOptions()
+        so.intra_op_num_threads = 2  # CPU sidecar-friendly
+        sess = onnxruntime.InferenceSession(str(JEV_MODEL), so, providers=["CPUExecutionProvider"])
+        return sess, tok
+    except Exception:
+        return None  # silent fallback: heuristics-only, audit never depends on this
+
+def jev_classify_doc(sess, tok, text):
+    """Trio-of-options: classify a doc's intent from its first lines. Returns label or UNDECIDED."""
+    try:
+        sample = "\n".join(text.splitlines()[:12])[:1200]
+        enc = tok.encode(sample)
+        ids = enc.ids[:256]
+        mask = [1] * len(ids)
+        pad = 256 - len(ids)
+        ids += [0] * pad; mask += [0] * pad
+        feed = {"input_ids": [ids], "attention_mask": [mask]}
+        out = sess.run(None, feed)[0][0]
+        import math
+        exps = [math.exp(float(x)) for x in out]
+        s = sum(exps)
+        probs = [e / s for e in exps]
+        best = max(range(len(probs)), key=lambda i: probs[i])
+        if probs[best] < 0.5:
+            return "UNDECIDED"  # fail-closed: low-confidence model output is not a decision
+        return JEV_LABELS[best]
+    except Exception:
+        return "UNDECIDED"
+
 # ---- sealed reporting -----------------------------------------------------
 def seal(records):
     """Hash-chain the records (sha256, each digest feeds the next); return chain tip."""
@@ -147,7 +191,14 @@ def main():
     ap.add_argument("--out", default=str(ROOT / "research" / "runbook_drift_report.json"))
     ap.add_argument("--globs", default=",".join(DEFAULT_GLOBS),
                     help="comma-separated glob patterns relative to repo root")
+    ap.add_argument("--jev", action="store_true",
+                    help="optionally classify doc intent with local AgentJev ONNX "
+                         "(requires onnxruntime+tokenizers; silent heuristic fallback)")
     args = ap.parse_args()
+    jev = _load_jev() if args.jev else None
+    if args.jev and jev is None:
+        print(json.dumps({"note": "--jev requested but runtime/model unavailable; "
+                                  "falling back to filename heuristics"}))
     globs = [g.strip() for g in args.globs.split(",") if g.strip()]
     records, files_scanned = [], 0
     for pattern in globs:
@@ -158,6 +209,8 @@ def main():
             rel = str(f.relative_to(ROOT))
             dc = doc_class(rel)
             text = f.read_text(errors="replace")
+            if jev is not None:
+                dc = jev_classify_doc(jev[0], jev[1], text)  # model replaces heuristic when live
             for c in extract_claims(text, rel):
                 verdict, evidence = PROBES[c["kind"]](c["value"])
                 records.append({
