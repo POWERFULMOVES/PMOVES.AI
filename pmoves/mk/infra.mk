@@ -124,6 +124,17 @@ CLEANUP_TIMER := ../deploy/provision/docker-fleet-cleanup.timer
 docker-host-policy-check: ## Assert Docker log rotation is APPLIED on this host (exit 3 = unmeasurable, not a pass)
 	@$(PRECHECK_PY) tools/docker_host_policy_check.py $(ARGS)
 
+# READ-ONLY. Run BEFORE any Docker Desktop restart/reset after an engine hang.
+# Docker's wsl-bootstrap cannot tell an unreadable data disk from a blank one
+# and will try to FORMAT it (z890, 2026-10-14). Never mounts, repairs or
+# restarts anything. Tool exit 0 pass / 1 warn / 2 fail / 3 could-not-measure;
+# make itself collapses any non-zero to 2, so read the RESULT line (or the
+# --json exit_code) for the real verdict.
+# Runbook: docs/handoffs/z890-docker-data-disk-usb-spof-2026-10-14.md
+.PHONY: docker-disk-preflight
+docker-disk-preflight: ## Read-only Docker Desktop data-disk check (junction/USB, vhdx header, disk events, health, VM log). ARGS='--json'
+	@$(PRECHECK_PY) tools/docker_disk_preflight.py $(ARGS)
+
 # Uses $(MCP_GATEWAY_DC), defined beside the other per-stack macros in the
 # Makefile, so it carries -p $(PROJECT) and $(COMPOSE_ENV_FILES). A raw
 # `docker compose up -d` here would skip COMPOSE_ENV_FILES injection and the
