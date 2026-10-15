@@ -17,7 +17,7 @@ permissions:
 jobs:
   gate-check:
     name: Check if upstream-update PR
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       should_run: ${{ steps.check.outputs.should_run }}
     steps:
