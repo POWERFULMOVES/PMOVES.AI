@@ -26,6 +26,8 @@ v1 ran bare `make` from repo root — the exact Known-Road trap AGENTS.md docume
 
 ## What v2 found (24 DRIFTED, classified)
 
+> **v3 CORRECTION (2026-10-15T16:45Z):** the sidecar working tree sits on a stale September branch (`docs/persona-corpus-refresh-2026-09-25`). origin/main cross-checks (new in v3) show items 2 and 3 below are **stale-checkout artifacts, not doc drift**: `secrets-rotate` (pmoves/mk/codex.mk) and `up-cipher` (pmoves/Makefile) both exist on main, and `AUTH_FLIPON_RUNBOOK_2026-10-11.md` exists at its referenced path on main. Lesson logged in the tool's docstring: **never call DRIFTED without checking origin/main first.** v3 post-fix baseline: 198 claims → 117 VERIFIED / 80 UNDECIDED / **1 DRIFTED** (digest `a1a111176b35…`).
+
 ### Real drift — fix the doc
 1. `pmoves/config/model_registry.yaml` in LOCAL_REVIEW_INFRA_PLAN_2026-10-12.md — real file is **models.yaml** (verified by ls). One-word bug; would 404 every agent following the plan literally.
 2. Make targets `secrets-rotate`, `up-cipher` referenced in HYPERAGINTZ_ORCHESTRATION_SCOPE_2026-09-19.md — no such targets in pmoves/Makefile(+mk includes).
