@@ -55,6 +55,10 @@ teams:
     - agents
     agents:
     - kilocode_glm
+    - claude_code        # ACP-bridged harness rows (#3347)
+    - codex_cli
+    - kimi_code
+    - opencode
     - delivery_agent     # AGNOTE4482 Delivery Body (.claude/agents/delivery-agent.md)
   research:
     name: Research & Knowledge
