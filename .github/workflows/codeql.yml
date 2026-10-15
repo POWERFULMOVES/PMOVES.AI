@@ -71,7 +71,7 @@ jobs:
     # Runner size impacts CodeQL analysis time. To learn more, please see:
     #   - https://gh.io/recommended-hardware-resources-for-running-codeql
     #   - https://gh.io/supported-runners-and-hardware-resources
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     # Allow C/CPP to fail gracefully - this repo is primarily Python/TypeScript
     # C/CPP files only exist in submodules (external dependencies)
