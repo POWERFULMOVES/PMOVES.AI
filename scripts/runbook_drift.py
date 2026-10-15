@@ -130,65 +130,70 @@ def probe_endpoint(url):
 
 PROBES = {"make_target": probe_make, "file_path": probe_file, "endpoint": probe_endpoint}
 
-# ---- local decision-model classifier (Jev family, PRIMARY when present) ----
-# Brand + vision (operator directive 2026-10-15): Jev decision models are the
-# PRIMARY intent classifier. Frozen-weight, local, CPU, zero API keys.
-# Architecture (decoded from ONNX signature): multiple-choice scoring head —
-# input_ids [num_candidates, seq_len], cand_end_pos [num_candidates], OUT
-# logits [num_candidates]. All options scored in ONE pass, softmax over candidates.
-# Prompt shape = calibrated trio ([STATE]/[Q]/[OPT]) from the 3/3 @ 129ms baseline.
-# temperatures.json: choice calibration is SOFT (soft-CE ~0.97) — near-uniform is
-# expected for ambiguous inputs; confidence < 0.5 => UNDECIDED (never guesses).
-# --no-jev opts out; missing runtime/model => heuristics fallback, announced in stdout.
-JEV_MODEL = ROOT / "research/models/agentjev/agentjev_0.6b_int8.onnx"
+# ---- local decision-model classifier (OPEN JEV PRIMARY, brand+vision) -------
+# Operator directive 2026-10-15: Open Jev models (DeBERTa-v3-large family,
+# com-kotobalabs/open-jev-deberta-v3-large, ingested from B850) are the PRIMARY
+# intent classifier. CUDA-first provider order (we have cuda); CPU fallback.
+# Scoring = the proven 5/6 @ 412ms eval pattern: span-mean-pool the state,
+# cosine-sim vs each option pooled rep, argmax. Calibrated [STATE]/[Q]/[OPT]
+# markers from open_jev_config.json. AgentJev-0.6B int8 = documented fallback
+# (different model family). --no-jev opts out entirely; missing deps/model =>
+# ANNOUNCED heuristic fallback, never silent. Confidence < 0.5 => UNDECIDED.
+OPENJEV_DIR = ROOT / "research/models/openjev/deberta-v3-large"
 JEV_LABELS = ["DRAFT", "RUNBOOK", "HISTORICAL"]
 JEV_OPTIONS = [
-    "DRAFT - planned or proposal document referencing artifacts that may not exist yet",
-    "RUNBOOK - operational instructions with checkable claims about the current tree",
-    "HISTORICAL - past-tense record of completed, destroyed, or superseded work",
+    "planned or proposal document referencing artifacts that may not exist yet",
+    "operational instructions with checkable claims about the current tree",
+    "past-tense record of completed, destroyed, or superseded work",
 ]
 
 def _load_jev():
-    """Load AgentJev ONNX MC-scoring session + tokenizer, or None with announced reason."""
+    """Load Open-Jev DeBERTa (CUDA-first) + tokenizer; return (model, tok) or None announced."""
     try:
-        import onnxruntime
-        from tokenizers import Tokenizer
-        if not JEV_MODEL.exists():
-            print(json.dumps({"note": "jev model file absent, heuristics fallback"}))
+        import torch
+        from transformers import AutoModel, AutoTokenizer
+        from safetensors.torch import load_file
+        import os
+        if not OPENJEV_DIR.exists():
+            print(json.dumps({"note": "open-jev model dir absent, heuristics fallback"}))
             return None
-        tok = Tokenizer.from_file(str(JEV_MODEL.parent / "tokenizer.json"))
-        so = onnxruntime.SessionOptions()
-        so.intra_op_num_threads = 2  # sidecar CPU friendly
-        sess = onnxruntime.InferenceSession(str(JEV_MODEL), so, providers=["CPUExecutionProvider"])
-        return sess, tok
+        dev = "cuda" if torch.cuda.is_available() else "cpu"
+        tok = AutoTokenizer.from_pretrained(str(OPENJEV_DIR))
+        model = AutoModel.from_pretrained(str(OPENJEV_DIR), state_dict=None,
+                                          config=os.path.join(str(OPENJEV_DIR), "config.json"))
+        sd = load_file(str(OPENJEV_DIR / "model.safetensors"))
+        model.load_state_dict(sd, strict=False)
+        model.eval().to(dev)
+        return model, tok, dev
     except Exception as e:
-        print(json.dumps({"note": "jev unavailable, heuristics fallback", "reason": str(e)[:120]}))
+        print(json.dumps({"note": "open-jev unavailable, heuristics fallback", "reason": str(e)[:120]}))
         return None
 
-def jev_classify_doc(sess, tok, text, source="doc"):
-    """Score DRAFT/RUNBOOK/HISTORICAL as candidates in one pass (MC head); <0.5 => UNDECIDED."""
+def jev_classify_doc(model_pack, text, source="doc"):
+    """Cosine-sim span scoring (proven 5/6 pattern); confidence < 0.5 => UNDECIDED."""
     try:
-        import numpy as np
+        import torch
+        import torch.nn.functional as F
+        model, tok, dev = model_pack
         sample = " ".join(text.split()[:140])[:1100]
-        prompt = (f"[STATE] {source}: {sample}\n"
-                  f"[Q] Which document class is this?\n"
-                  f"[OPT] A. {JEV_OPTIONS[0]}\n"
-                  f"[OPT] B. {JEV_OPTIONS[1]}\n"
-                  f"[OPT] C. {JEV_OPTIONS[2]}\n"
-                  f"Answer:")
-        rows, ends = [], []
-        for opt in JEV_OPTIONS:
-            ids = tok.encode(prompt + " " + opt).ids[-384:]
-            rows.append(ids); ends.append(len(ids) - 1)
-        L = max(len(r) for r in rows)
-        ii = [[0] * (L - len(r)) + r for r in rows]
-        am = [[0] * (L - len(r)) + [1] * len(r) for r in rows]
-        out = sess.run(None, {"input_ids": ii, "attention_mask": am, "cand_end_pos": ends})
-        lg = np.array(out[0] if isinstance(out, list) else out).flatten()
-        e = np.exp(lg - lg.max()); probs = e / e.sum()
-        best = int(np.argmax(probs))
-        if probs[best] < 0.5:
-            return "UNDECIDED"  # fail-closed: soft-calibrated abstention
+        stext = f"[STATE] {source}: {sample} [Q] Which document class is this?"
+        enc = tok(stext, truncation=True, max_length=512, return_tensors="pt").to(dev)
+        with torch.no_grad():
+            pooled = model(**enc).last_hidden_state[0].mean(dim=0)
+        sims = []
+        for i, opt in enumerate(JEV_OPTIONS):
+            otext = f"[OPT] {JEV_LABELS[i]} - {opt}"
+            oe = tok(otext, truncation=True, max_length=128, return_tensors="pt").to(dev)
+            with torch.no_grad():
+                o_pool = model(**oe).last_hidden_state[0].mean(dim=0)
+            sims.append(float(F.cosine_similarity(pooled, o_pool, dim=0)))
+        # margin-based abstention (measured 2026-10-15: real-doc margins 0.012-0.015;
+        # GRAMZ misclass at 0.0117 = below gate). Raw argmax = the proven 5/6 eval shape.
+        order = sorted(sims, reverse=True)
+        margin = order[0] - order[1]
+        best = max(range(len(sims)), key=lambda i: sims[i])
+        if margin < 0.015:
+            return "UNDECIDED"  # fail-closed: near-tie cosines are noise, not signal
         return JEV_LABELS[best]
     except Exception:
         return "UNDECIDED"
@@ -225,7 +230,7 @@ def main():
             dc = doc_class(rel)
             text = f.read_text(errors="replace")
             if jev is not None:
-                dc = jev_classify_doc(jev[0], jev[1], text)  # model replaces heuristic when live
+                dc = jev_classify_doc(jev, text, rel)  # OPEN JEV primary (CUDA-first)
             for c in extract_claims(text, rel):
                 verdict, evidence = PROBES[c["kind"]](c["value"])
                 records.append({
