@@ -194,7 +194,18 @@ def main() -> int:
 
     rendered = json.dumps(artifact, indent=2, sort_keys=True) + "\n"
     if args.check:
-        current = args.out.read_text(encoding="utf-8") if args.out.is_file() else ""
+        # Compare CONTENT, not line endings. The committed blob is LF by
+        # construction (.gitattributes: `*.json text eol=lf` normalises on
+        # `git add`), so a CRLF working copy -- an autocrlf checkout, or a
+        # pre-newline-fix Windows regeneration -- is not drift in what is
+        # committed. Normalised explicitly rather than relying on
+        # read_text()'s universal-newline default, so the rule is visible and
+        # pinned by test_check_passes_a_crlf_working_copy.
+        current = (
+            args.out.read_bytes().decode("utf-8").replace("\r\n", "\n")
+            if args.out.is_file()
+            else ""
+        )
         if current != rendered:
             print(f"DRIFT: {args.out} differs from a build of {args.registry}; "
                   "run `make -C pmoves acp-registry-map`", file=sys.stderr)

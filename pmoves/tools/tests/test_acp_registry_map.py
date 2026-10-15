@@ -90,6 +90,28 @@ class TestAcpRegistryMap(unittest.TestCase):
         self.assertEqual(rc, 1)
         self.assertIn("DRIFT", err)
 
+    def test_check_passes_a_crlf_working_copy(self):
+        # A CRLF working copy (autocrlf checkout, or a Windows regeneration
+        # before the write path forced LF) has the same content as the LF
+        # blob git commits under `*.json text eol=lf`; it is not drift.
+        self._add_entry("alpha")
+        _run("--registry", str(self.registry), "--out", str(self.out), "--write")
+        lf = self.out.read_bytes()
+        self.out.write_bytes(lf.replace(b"\n", b"\r\n"))
+        self.assertIn(b"\r\n", self.out.read_bytes())
+        rc, err = _run("--registry", str(self.registry), "--out", str(self.out), "--check")
+        self.assertEqual(rc, 0, err)
+
+    def test_check_still_detects_content_drift_in_a_crlf_copy(self):
+        # Newline normalisation must not launder a real content change.
+        self._add_entry("alpha")
+        _run("--registry", str(self.registry), "--out", str(self.out), "--write")
+        crlf = self.out.read_bytes().replace(b"\n", b"\r\n")
+        self.out.write_bytes(crlf.replace(b'"alpha"', b'"alphX"', 1))
+        rc, err = _run("--registry", str(self.registry), "--out", str(self.out), "--check")
+        self.assertEqual(rc, 1)
+        self.assertIn("DRIFT", err)
+
     def test_check_and_write_are_exclusive(self):
         self._add_entry("alpha")
         with self.assertRaises(SystemExit):
