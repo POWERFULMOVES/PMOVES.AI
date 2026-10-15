@@ -171,6 +171,11 @@ class HFAgent:
                     "last_modified": str(last_modified) if last_modified else "",
                     "pipeline_tag": pipeline_tag,
                     "author": getattr(model_info, "author", "") or "",
+                    # 2026-10-11: library and gated state ride along when the
+                    # Hub returns them (gated is False / "auto" / "manual");
+                    # the card itself is read downstream by hf-research-agent.
+                    "library_name": getattr(model_info, "library_name", "") or "",
+                    "gated": getattr(model_info, "gated", None),
                     "hf_url": f"https://huggingface.co/{model_id}",
                     "discovered_at": datetime.now(timezone.utc).isoformat(),
                 }
