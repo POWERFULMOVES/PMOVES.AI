@@ -130,46 +130,65 @@ def probe_endpoint(url):
 
 PROBES = {"make_target": probe_make, "file_path": probe_file, "endpoint": probe_endpoint}
 
-# ---- optional local decision-model classifier (Jev family) ----------------
-# Frozen-weight backbone, OPTIONAL per the Aragon pattern: core learner makes
-# zero AI calls; attaching a local model accelerates but is never required.
-# Import-guarded both ways: no onnxruntime OR no tokenizers -> heuristics only.
+# ---- local decision-model classifier (Jev family, PRIMARY when present) ----
+# Brand + vision (operator directive 2026-10-15): Jev decision models are the
+# PRIMARY intent classifier. Frozen-weight, local, CPU, zero API keys.
+# Architecture (decoded from ONNX signature): multiple-choice scoring head —
+# input_ids [num_candidates, seq_len], cand_end_pos [num_candidates], OUT
+# logits [num_candidates]. All options scored in ONE pass, softmax over candidates.
+# Prompt shape = calibrated trio ([STATE]/[Q]/[OPT]) from the 3/3 @ 129ms baseline.
+# temperatures.json: choice calibration is SOFT (soft-CE ~0.97) — near-uniform is
+# expected for ambiguous inputs; confidence < 0.5 => UNDECIDED (never guesses).
+# --no-jev opts out; missing runtime/model => heuristics fallback, announced in stdout.
 JEV_MODEL = ROOT / "research/models/agentjev/agentjev_0.6b_int8.onnx"
 JEV_LABELS = ["DRAFT", "RUNBOOK", "HISTORICAL"]
+JEV_OPTIONS = [
+    "DRAFT - planned or proposal document referencing artifacts that may not exist yet",
+    "RUNBOOK - operational instructions with checkable claims about the current tree",
+    "HISTORICAL - past-tense record of completed, destroyed, or superseded work",
+]
 
 def _load_jev():
-    """Load AgentJev ONNX + tokenizer if available; return (session, tokenizer) or None."""
+    """Load AgentJev ONNX MC-scoring session + tokenizer, or None with announced reason."""
     try:
-        import onnxruntime  # noqa: F401
+        import onnxruntime
         from tokenizers import Tokenizer
         if not JEV_MODEL.exists():
+            print(json.dumps({"note": "jev model file absent, heuristics fallback"}))
             return None
         tok = Tokenizer.from_file(str(JEV_MODEL.parent / "tokenizer.json"))
         so = onnxruntime.SessionOptions()
-        so.intra_op_num_threads = 2  # CPU sidecar-friendly
+        so.intra_op_num_threads = 2  # sidecar CPU friendly
         sess = onnxruntime.InferenceSession(str(JEV_MODEL), so, providers=["CPUExecutionProvider"])
         return sess, tok
-    except Exception:
-        return None  # silent fallback: heuristics-only, audit never depends on this
+    except Exception as e:
+        print(json.dumps({"note": "jev unavailable, heuristics fallback", "reason": str(e)[:120]}))
+        return None
 
-def jev_classify_doc(sess, tok, text):
-    """Trio-of-options: classify a doc's intent from its first lines. Returns label or UNDECIDED."""
+def jev_classify_doc(sess, tok, text, source="doc"):
+    """Score DRAFT/RUNBOOK/HISTORICAL as candidates in one pass (MC head); <0.5 => UNDECIDED."""
     try:
-        sample = "\n".join(text.splitlines()[:12])[:1200]
-        enc = tok.encode(sample)
-        ids = enc.ids[:256]
-        mask = [1] * len(ids)
-        pad = 256 - len(ids)
-        ids += [0] * pad; mask += [0] * pad
-        feed = {"input_ids": [ids], "attention_mask": [mask]}
-        out = sess.run(None, feed)[0][0]
-        import math
-        exps = [math.exp(float(x)) for x in out]
-        s = sum(exps)
-        probs = [e / s for e in exps]
-        best = max(range(len(probs)), key=lambda i: probs[i])
+        import numpy as np
+        sample = " ".join(text.split()[:140])[:1100]
+        prompt = (f"[STATE] {source}: {sample}\n"
+                  f"[Q] Which document class is this?\n"
+                  f"[OPT] A. {JEV_OPTIONS[0]}\n"
+                  f"[OPT] B. {JEV_OPTIONS[1]}\n"
+                  f"[OPT] C. {JEV_OPTIONS[2]}\n"
+                  f"Answer:")
+        rows, ends = [], []
+        for opt in JEV_OPTIONS:
+            ids = tok.encode(prompt + " " + opt).ids[-384:]
+            rows.append(ids); ends.append(len(ids) - 1)
+        L = max(len(r) for r in rows)
+        ii = [[0] * (L - len(r)) + r for r in rows]
+        am = [[0] * (L - len(r)) + [1] * len(r) for r in rows]
+        out = sess.run(None, {"input_ids": ii, "attention_mask": am, "cand_end_pos": ends})
+        lg = np.array(out[0] if isinstance(out, list) else out).flatten()
+        e = np.exp(lg - lg.max()); probs = e / e.sum()
+        best = int(np.argmax(probs))
         if probs[best] < 0.5:
-            return "UNDECIDED"  # fail-closed: low-confidence model output is not a decision
+            return "UNDECIDED"  # fail-closed: soft-calibrated abstention
         return JEV_LABELS[best]
     except Exception:
         return "UNDECIDED"
@@ -191,14 +210,10 @@ def main():
     ap.add_argument("--out", default=str(ROOT / "research" / "runbook_drift_report.json"))
     ap.add_argument("--globs", default=",".join(DEFAULT_GLOBS),
                     help="comma-separated glob patterns relative to repo root")
-    ap.add_argument("--jev", action="store_true",
-                    help="optionally classify doc intent with local AgentJev ONNX "
-                         "(requires onnxruntime+tokenizers; silent heuristic fallback)")
+    ap.add_argument("--no-jev", action="store_true",
+                    help="disable the local AgentJev intent classifier (heuristic fallback)")
     args = ap.parse_args()
-    jev = _load_jev() if args.jev else None
-    if args.jev and jev is None:
-        print(json.dumps({"note": "--jev requested but runtime/model unavailable; "
-                                  "falling back to filename heuristics"}))
+    jev = None if args.no_jev else _load_jev()
     globs = [g.strip() for g in args.globs.split(",") if g.strip()]
     records, files_scanned = [], 0
     for pattern in globs:
