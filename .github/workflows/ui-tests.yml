@@ -24,7 +24,7 @@ concurrency:
 jobs:
   lint:
     name: Lint (ESLint)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
     steps:
@@ -58,7 +58,7 @@ jobs:
 
   typecheck:
     name: Type Check (TypeScript)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
     steps:
@@ -86,7 +86,7 @@ jobs:
 
   unit-tests:
     name: Unit Tests (Jest)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
       actions: read
@@ -131,7 +131,7 @@ jobs:
 
   e2e-tests:
     name: E2E Tests (Playwright)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
     # E2E was non-blocking because 120/186 tests failed. Triage (PR #3223,
@@ -220,7 +220,7 @@ jobs:
   # broke. Triggered by pmoves/ui/** and pmoves/config/rooms/** above.
   launcher-visibility-e2e:
     name: E2E Launcher Visibility (Playwright, backend-free)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
       contents: read
@@ -265,7 +265,7 @@ jobs:
 
   integration-tests:
     name: Integration Tests (API Clients)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
       actions: read

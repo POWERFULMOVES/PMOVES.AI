@@ -53,7 +53,7 @@ jobs:
   # ============================================================================
   validate-hardening:
     name: Validate Hardening Patterns
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Harden Runner
@@ -126,7 +126,7 @@ jobs:
   # ============================================================================
   validate-dockerfiles:
     name: Validate Dockerfiles
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       # Limit fan-out to reduce self-hosted queue contention.
@@ -199,7 +199,7 @@ jobs:
   # ============================================================================
   validate-compose:
     name: Validate Compose Files
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Harden Runner
@@ -395,7 +395,7 @@ jobs:
   # sequencing this lane must not do.
   secrets-audit:
     name: Secrets Hardening Audit
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Harden Runner
@@ -418,7 +418,7 @@ jobs:
   # ============================================================================
   summary:
     name: Validation Summary
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # EVERY job in this file must be listed here. `docker-bench` used to be
     # absent, so the only aggregating job in the workflow did not even read it.
     needs: [validate-hardening, validate-dockerfiles, validate-compose, secrets-audit]
