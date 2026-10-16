@@ -47,10 +47,12 @@ metadata:
       short embed under backlog load. Ctx 8192 (global OLLAMA_CONTEXT_LENGTH
       stopgap): 3.2 of 5.4 GB, 18/37 layers, 7.5-10 s. This suit's variant:
       37/37 layers, 5.0 of 5.0 GB, 0.14 s warm, vectors identical to the stock
-      tag (cosine 1.000000). Ollama 0.40.4 (container test, stock tag): 7/37
-      layers, ~10 s -- upgrading does not fix it; it still sizes offload from
-      ~4 GB "available". Runtime latency is recorded via
-      tools/model_fitness_collector.py, not here.
+      tag (cosine 1.000000). Layer counts for the stock tag move with free
+      memory at load time, so only same-session A/Bs compare versions: back to
+      back on one copy (2026-10-16), 0.30.0 loaded 7/37 and 0.40.5 11/37 --
+      newer is a little better, neither offloads fully, because both size
+      offload from ~4 GB "available". Upgrading does not replace num_gpu.
+      Runtime latency is recorded via tools/model_fitness_collector.py.
 
 ecosystem_role: |
   The embedder every local memory path shares. When it is slow or down, Cipher
