@@ -44,6 +44,32 @@ updates:
       prefix: "chore(deps)"
       include: "scope"
 
+  # Ollama follows upstream releases (operator, 2026-10-16: "the repo should not
+  # be pinned when ollama releases often; it should update with each release").
+  # The compose files keep their digest pin -- compose_provenance_audit.py wants
+  # digest-pinned images -- and this bumps tag+digest on every release.
+  # Scoped to ollama/ollama only: the other compose images are not in this lane.
+  # Dependabot's compose parser reads the default out of
+  # ${PMOVES_OLLAMA_IMAGE:-ollama/ollama:X@sha256:...} and matches
+  # docker-compose.<name>.yml, so one entry covers all five pins.
+  # NOT auto-merged (see dependabot-auto-merge.yml): Ollama is 0.x, so semver
+  # calls 0.31 -> 0.40 "minor", yet 0.40.x migrates the model store to
+  # manifests-v2 on first use and changes the default num_ctx.
+  - package-ecosystem: "docker-compose"
+    directory: "/pmoves"
+    schedule:
+      interval: "daily"
+    allow:
+      - dependency-name: "ollama/ollama"
+    open-pull-requests-limit: 2
+    labels:
+      - "dependencies"
+      - "docker"
+      - "ollama"
+    commit-message:
+      prefix: "chore(deps)"
+      include: "scope"
+
   # GitHub Actions workflows — staggered to Wednesday to avoid Monday spike
   - package-ecosystem: "github-actions"
     directory: "/"

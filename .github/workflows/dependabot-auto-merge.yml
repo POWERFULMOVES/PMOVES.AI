@@ -36,7 +36,13 @@ jobs:
         uses: dependabot/fetch-metadata@25dd0e34f4fe68f24cc83900b1fe3fe149efef98 # v3.1.0
 
       - name: Enable auto-merge for patch + minor updates
-        if: steps.meta.outputs.update-type == 'version-update:semver-patch' || steps.meta.outputs.update-type == 'version-update:semver-minor'
+        # Ollama is excluded: it is 0.x, so a release that migrates the model
+        # store (0.40.x -> manifests-v2) still arrives labelled "minor". Its bumps
+        # wait for a human and the host canary (dependabot.yml docker-compose entry).
+        if: >-
+          (steps.meta.outputs.update-type == 'version-update:semver-patch' ||
+           steps.meta.outputs.update-type == 'version-update:semver-minor') &&
+          !contains(steps.meta.outputs.dependency-names, 'ollama/ollama')
         run: gh pr merge --auto --squash "$PR_URL"
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
