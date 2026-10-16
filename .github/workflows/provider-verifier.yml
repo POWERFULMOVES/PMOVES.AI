@@ -61,7 +61,7 @@ concurrency:
 jobs:
   static-gate:
     name: verifier-gate
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # Override the workflow-level {} permissions: the PR-comment step
     # uses actions/github-script, which needs issues: write. The static
     # gate itself needs no scopes; this is the minimum that lets the
@@ -161,7 +161,7 @@ jobs:
         run: |
           # 6 checks, no API calls. Output: JSON line on stdout.
           set +e
-          # `python`, not `py`. This job is runs-on: ubuntu-latest and
+          # `python`, not `py`. This job is runs-on: ubuntu-24.04 and
           # actions/setup-python exposes the selected interpreter as `python`;
           # `py` is the Windows launcher and is absent here. It would exit 127,
           # set verdict=FAIL, and block every PR matching the path filter without
