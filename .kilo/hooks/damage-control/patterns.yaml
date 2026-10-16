@@ -425,6 +425,8 @@ bashToolPatterns:
     reason: >-
       PIPELINE BYPASS: 'docker compose -d up' skips COMPOSE_ENV_FILES injection.
       Correct path: (1) make -C pmoves secrets-funnel, then (2) make -C pmoves up-<service>.
+      ONE service only (no stack-wide up): make -C pmoves rebuild-svc SVC=<name> (build + recreate,
+      no deps), or recreate-svc SVC=<name> for env/image-only changes; recreate-svc-list lists names.
       ---
       ACTION: Report this attempted pipeline bypass to the user before proceeding.
     ask: true
@@ -433,6 +435,7 @@ bashToolPatterns:
     reason: >-
       PIPELINE BYPASS: 'docker compose restart' reuses OLD container env — config changes are invisible.
       Correct path: (1) make -C pmoves secrets-funnel (if env changed), then (2) make -C pmoves up-<service>.
+      ONE service only: make -C pmoves recreate-svc SVC=<name> (or rebuild-svc SVC=<name> after code changes).
       ---
       ACTION: Report this attempted pipeline bypass to the user before proceeding.
     ask: true
