@@ -894,8 +894,7 @@ def _sync_agent_zero(manifest: dict, host: str, tensorzero_base: str, apply_pres
     """Static manifests flow through the same presets generator.
 
     The manifest's llm entry becomes synthetic registry rows. Provider is
-    taken from the manifest when declared (target-level `provider:` or the
-    profile's provider map), so a bare ollama id stays on the ollama lane
+    taken from the manifest when declared (target-level `provider:`), so a bare ollama id stays on the ollama lane
     instead of being force-routed into TensorZero. Bare ids WITHOUT a
     declared provider keep the historical TensorZero model_name lane;
     provider-prefixed ids map through the prefix.
@@ -907,34 +906,21 @@ def _sync_agent_zero(manifest: dict, host: str, tensorzero_base: str, apply_pres
     declared_provider = str(target.get("provider") or "").strip()
     prefixed = re.match(r"^([a-z0-9_]+)/(.+)$", model_id)
     if prefixed:
-        rows = [{
-            "model_id": prefixed.group(2),
-            "provider_name": prefixed.group(1),
-            "provider_type": prefixed.group(1),
-        }]
-    elif declared_provider:
-        # service_name/function_name/model_type are REQUIRED: _filter_rows
-        # drops rows failing the service/type filter, which silently
-        # degraded static manifests to the fallback template.
-        rows = [{
-            "service_name": "agent_zero",
-            "function_name": "chat",
-            "model_type": "chat",
-            "model_id": model_id,
-            "provider_name": declared_provider,
-            "provider_type": declared_provider,
-            "context_length": _safe_int(target.get("ctx"), 32768),
-        }]
+        provider, model_id = prefixed.group(1), prefixed.group(2)
     else:
-        rows = [{
-            "service_name": "agent_zero",
-            "function_name": "chat",
-            "model_type": "chat",
-            "model_id": model_id,
-            "provider_name": "tensorzero",
-            "provider_type": "tensorzero",
-            "context_length": _safe_int(target.get("ctx"), 32768),
-        }]
+        provider = declared_provider or "tensorzero"
+    # service_name/function_name/model_type are REQUIRED on every branch:
+    # _filter_rows drops rows failing the service/type filter, which silently
+    # degraded static manifests to the fallback template.
+    rows = [{
+        "service_name": "agent_zero",
+        "function_name": "chat",
+        "model_type": "chat",
+        "model_id": model_id,
+        "provider_name": provider,
+        "provider_type": provider,
+        "context_length": _safe_int(target.get("ctx"), 32768),
+    }]
     out_path = Path(out_override) if out_override else _a0_presets_out_path()
     _write_a0_presets(
         rows,
