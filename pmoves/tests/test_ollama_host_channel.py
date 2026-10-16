@@ -13,13 +13,15 @@ from pathlib import Path
 
 import pytest
 
+from pmoves.tools.bash_resolver import resolve_bash  # never System32's WSL stub
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 TOOL = REPO_ROOT / "pmoves" / "tools" / "ollama_host_channel.sh"
 
 
 def _install(state: Path, version: str) -> subprocess.CompletedProcess:
     env = {**os.environ, "OLLAMA_CHANNEL_STATE": str(state), "OLLAMA_CHANNEL_VERSION": version}
-    return subprocess.run(["sh", str(TOOL), "install"], env=env,
+    return subprocess.run([resolve_bash(), str(TOOL), "install"], env=env,
                           capture_output=True, text=True, timeout=30)
 
 
