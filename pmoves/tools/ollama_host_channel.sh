@@ -20,8 +20,9 @@
 # store's manifests (small; blobs are content-addressed and never rewritten),
 # copies ONE model to a scratch store beside the live one, and runs the host's
 # version and the candidate as containers on that copy, one after the other.
-# Verdict PASS needs: the candidate serves the model, offloads at least as many
-# GPU layers as the baseline, and leaves the store layout unchanged.
+# Verdict PASS needs: the candidate serves the model, its best GPU-layer count is
+# within OLLAMA_CANARY_LAYER_MARGIN (default 2) of the baseline's best over
+# OLLAMA_CANARY_RUNS samples each (default 2), and the store layout is unchanged.
 # OLLAMA_ACCEPT_STORE_MIGRATION=1 turns a layout change into a PASS-with-warning
 # for an operator who has decided to cross that line.
 #
@@ -32,6 +33,8 @@ set -eu
 DOCKER="${DOCKER:-docker}"
 MODEL="${OLLAMA_CANARY_MODEL:-qwen3-embedding:4b}"
 PORT="${OLLAMA_CANARY_PORT:-11499}"
+RUNS="${OLLAMA_CANARY_RUNS:-2}"
+MARGIN="${OLLAMA_CANARY_LAYER_MARGIN:-2}"
 STATE="${OLLAMA_CHANNEL_STATE:-${XDG_STATE_HOME:-$HOME/.local/state}/pmoves/ollama-channel}"
 UPSTREAM="${OLLAMA_UPSTREAM_REPO:-ollama/ollama}"
 
@@ -50,6 +53,8 @@ need() {
 VER='v?[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}(-rc[0-9]{1,3})?'
 need OLLAMA_CANARY_MODEL "$MODEL" '[A-Za-z0-9._/-]{1,80}(:[A-Za-z0-9._-]{1,64})?'
 need OLLAMA_CANARY_PORT "$PORT" '[0-9]{4,5}'
+need OLLAMA_CANARY_RUNS "$RUNS" '[1-9]'
+need OLLAMA_CANARY_LAYER_MARGIN "$MARGIN" '[0-9]{1,2}'
 need OLLAMA_UPSTREAM_REPO "$UPSTREAM" '[A-Za-z0-9._-]+/[A-Za-z0-9._-]+'
 
 strip_v() { printf '%s' "$1" | sed 's/^v//'; }
@@ -152,16 +157,27 @@ print("\n".join(x["digest"].replace(":","-") for x in [m["config"]]+m["layers"])
   trap cleanup EXIT
   trap 'cleanup; exit 130' INT TERM
 
-  # 3. A/B on the copy: baseline first (it must not see a migrated store).
-  echo "→ baseline ollama $base on a copy of $MODEL"
-  out=$(probe "$base" "$scratch"); set -- $out; b_on=$1 b_all=$2
-  echo "→ candidate ollama $cand on the same copy"
-  out=$(probe "$cand" "$scratch"); set -- $out; c_on=$1 c_all=$2
+  # 3. A/B on the copy. GPU layer counts move with free memory at load time
+  #    (same version: 18/37 one hour, 7/37 the next on SPARK), so one sample per
+  #    side is noise. Take RUNS samples per side, keep each side's best, and
+  #    refuse only past MARGIN layers. All baseline runs come first: the
+  #    candidate may migrate the copy, and the baseline must not see that.
+  b_on=0 b_all=0 c_on=0 c_all=0 b_seen="" c_seen=""
+  i=0; while [ $i -lt "$RUNS" ]; do i=$((i+1))
+    echo "→ baseline ollama $base on a copy of $MODEL (run $i/$RUNS)"
+    out=$(probe "$base" "$scratch"); set -- $out
+    b_seen="$b_seen $1/$2"; [ "$1" -gt "$b_on" ] && b_on=$1; b_all=$2
+  done
+  i=0; while [ $i -lt "$RUNS" ]; do i=$((i+1))
+    echo "→ candidate ollama $cand on the same copy (run $i/$RUNS)"
+    out=$(probe "$cand" "$scratch"); set -- $out
+    c_seen="$c_seen $1/$2"; [ "$1" -gt "$c_on" ] && c_on=$1; c_all=$2
+  done
   after=$(ls "$scratch" | sort | tr '\n' ' ')
 
   verdict=PASS; why=""
-  if [ "$c_on" -lt "$b_on" ]; then
-    verdict=REFUSE; why="$why offload regressed ($c_on/$c_all < $b_on/$b_all);"
+  if [ $((c_on + MARGIN)) -lt "$b_on" ]; then
+    verdict=REFUSE; why="$why offload regressed beyond the ${MARGIN}-layer margin (best $c_on/$c_all < best $b_on/$b_all);"
   fi
   if [ "$before" != "$after" ]; then
     if [ "${OLLAMA_ACCEPT_STORE_MIGRATION:-}" = 1 ]; then
@@ -171,15 +187,18 @@ print("\n".join(x["digest"].replace(":","-") for x in [m["config"]]+m["layers"])
     fi
   fi
   report="$STATE/canary-$cand.json"
-  python3 - "$report" "$verdict" "$base" "$cand" "$MODEL" "$b_on/$b_all" "$c_on/$c_all" "$bak" "${why# }" <<'EOF'
+  python3 - "$report" "$verdict" "$base" "$cand" "$MODEL" "$b_on/$b_all" "$c_on/$c_all" "$bak" "${why# }" "${b_seen# }" "${c_seen# }" "$MARGIN" <<'EOF'
 import json, sys, datetime
-p, verdict, base, cand, model, b, c, bak, why = sys.argv[1:]
+p, verdict, base, cand, model, b, c, bak, why, bs, cs, margin = sys.argv[1:]
 json.dump({"verdict": verdict, "baseline": base, "candidate": cand, "model": model,
-           "gpu_layers": {"baseline": b, "candidate": c}, "store_backup": bak,
+           "gpu_layers": {"baseline_best": b, "candidate_best": c,
+                          "baseline_runs": bs.split(), "candidate_runs": cs.split(),
+                          "margin_layers": int(margin)},
+           "store_backup": bak,
            "reasons": why, "at": datetime.datetime.now(datetime.timezone.utc).isoformat()},
           open(p, "w"), indent=2)
 EOF
-  echo "baseline $base: $b_on/$b_all GPU layers | candidate $cand: $c_on/$c_all"
+  echo "baseline $base:${b_seen} (best $b_on) | candidate $cand:${c_seen} (best $c_on) | margin $MARGIN"
   [ -z "$why" ] || echo "notes: ${why# }"
   echo "$verdict -> $report"
   [ "$verdict" = PASS ] || exit 1
