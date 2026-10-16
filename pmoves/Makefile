@@ -3459,6 +3459,12 @@ up-spark-sidecar: ## Start DGX Spark standalone sidecar (port 8093, in-container
 		echo "📝 Bootstrapping env.spark-sidecar from template..."; \
 		cp env.spark-sidecar.example env.spark-sidecar; \
 	fi
+	@# Copies made before #3380 still pin Ollama; the pin overrides the compose
+	@# default that Dependabot now bumps. Warn only (a pin may be deliberate); never print the value.
+	@if grep -Eq '^[[:space:]]*(export[[:space:]]+)?PMOVES_OLLAMA_IMAGE=' env.spark-sidecar; then \
+		echo "⚠  env.spark-sidecar pins PMOVES_OLLAMA_IMAGE: this node will NOT follow Ollama releases."; \
+		echo "   Comment that line out to track the compose default (see env.spark-sidecar.example)."; \
+	fi
 	@echo "⚡ Starting DGX Spark sidecar (ARM64 + NVIDIA Blackwell)..."
 	@bash -lc '. ./scripts/with-env.sh; docker compose -p spark-sidecar -f docker-compose.spark-sidecar.yml --env-file env.spark-sidecar up -d'
 	@echo "✔ DGX Spark sidecar starting. Health: curl -sf http://127.0.0.1:$${SPARK_PORT:-8093}/"
