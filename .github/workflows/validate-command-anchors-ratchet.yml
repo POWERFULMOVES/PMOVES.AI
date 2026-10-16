@@ -44,6 +44,8 @@ on:
       # promise made to an agent at its least recoverable moment.
       - ".claude/hooks/damage-control/patterns.yaml"
       - "deploy/runbooks/**/*.md"
+      # Plans carry runnable steps too (scanned since the #3375 review).
+      - "plans/**/*.md"
       - "pmoves/Makefile"
       - "pmoves/mk/*.mk"
       - "pmoves/config/fleet-map.yaml"

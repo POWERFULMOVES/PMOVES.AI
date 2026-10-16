@@ -449,3 +449,50 @@ def test_external_router_marker_detects_inclusion_and_mount():
                  'app.mount("/static", StaticFiles())'):
         assert vca.ROUTE_EXTERNAL_RE.search(body), body
     assert vca.ROUTE_EXTERNAL_RE.search('@app.get("/healthz")') is None
+
+
+# ── plans/ coverage + index-based path resolution (#3375 review) ────
+
+
+def test_plans_are_scanned():
+    """#3375 shipped a second auditor whose only new coverage was plans/."""
+    assert vca.REPO_ROOT / "plans" in vca.DOC_ROOTS
+    docs = {d.as_posix() for d in vca.live_docs()}
+    if (vca.REPO_ROOT / "plans").is_dir():
+        assert any("/plans/" in d for d in docs), "plans/ not scanned"
+
+
+def _with_index(monkeypatch, tracked, gitlinks=()):
+    monkeypatch.setattr(vca, "_INDEX_READ", True)
+    monkeypatch.setattr(vca, "_TRACKED", set(tracked))
+    monkeypatch.setattr(vca, "_GITLINKS", list(gitlinks))
+
+
+def test_present_but_untracked_path_is_a_ghost(monkeypatch, tmp_path):
+    """The node-dependent verdict: a gitignored file that exists on THIS disk
+    must still be a ghost, because CI and other nodes do not have it."""
+    monkeypatch.setattr(vca, "REPO_ROOT", tmp_path)
+    (tmp_path / "pmoves").mkdir()
+    (tmp_path / "pmoves" / "local.cfg").write_text("x\n")
+    _with_index(monkeypatch, tracked=["pmoves/Makefile"])
+    assert vca._path_resolves("pmoves/Makefile")
+    assert not vca._path_resolves("pmoves/local.cfg")
+
+
+def test_submodule_files_keep_filesystem_behaviour(monkeypatch, tmp_path):
+    monkeypatch.setattr(vca, "REPO_ROOT", tmp_path)
+    (tmp_path / "pmoves" / "sub").mkdir(parents=True)
+    (tmp_path / "pmoves" / "sub" / "a.py").write_text("x\n")
+    _with_index(monkeypatch, tracked=[], gitlinks=["pmoves/sub/"])
+    assert vca._path_resolves("pmoves/sub/a.py")
+    assert not vca._path_resolves("pmoves/sub/missing.py")
+
+
+def test_no_git_falls_back_to_filesystem(monkeypatch, tmp_path):
+    monkeypatch.setattr(vca, "REPO_ROOT", tmp_path)
+    (tmp_path / "pmoves").mkdir()
+    (tmp_path / "pmoves" / "f.md").write_text("x\n")
+    monkeypatch.setattr(vca, "_INDEX_READ", True)
+    monkeypatch.setattr(vca, "_TRACKED", None)
+    assert vca._path_resolves("pmoves/f.md")
+    assert not vca._path_resolves("pmoves/g.md")

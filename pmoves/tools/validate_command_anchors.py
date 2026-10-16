@@ -88,9 +88,10 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import subprocess
 import sys
 from pathlib import Path
-from typing import Dict, Iterable, List, Set
+from typing import Dict, Iterable, List, Optional, Set
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 PMOVES = REPO_ROOT / "pmoves"
@@ -105,6 +106,10 @@ DOC_ROOTS = [
     REPO_ROOT / ".claude" / "commands",
     REPO_ROOT / ".claude" / "agents",
     REPO_ROOT / "deploy" / "runbooks",
+    # Plans name make targets, paths and endpoints as steps to run. #3375 added
+    # a second auditor (scripts/runbook_drift.py) whose only new coverage was
+    # this directory; covering it here keeps one auditor.
+    REPO_ROOT / "plans",
 ]
 # The ALWAYS-LOADED orientation files. An agent entering this repo reads these
 # before it reads anything else, so a dead reference here is the highest-cost
@@ -256,6 +261,58 @@ def blocked_patterns() -> List[str]:
     if not m:
         return []
     return re.findall(r'"([^"]+)"', m.group(1))
+
+
+# ── Path resolution ─────────────────────────────────────────────────
+
+_TRACKED: Optional[Set[str]] = None
+_GITLINKS: List[str] = []
+_INDEX_READ = False
+
+
+def _load_tracked() -> None:
+    """Index the files git tracks, and the submodule gitlinks.
+
+    GHOST_PATH used Path.exists(), so its verdict depended on the node: a
+    line-numbered citation of a gitignored tier env file passed on a node that
+    had the file, and failed in CI and in every fresh worktree (#3377). A doc in
+    a shared repo can only promise what the repo carries, so resolve against
+    the index.
+    """
+    global _TRACKED, _INDEX_READ
+    _INDEX_READ = True
+    try:
+        out = subprocess.run(
+            ["git", "-C", str(REPO_ROOT), "ls-files", "-s", "-z"],
+            capture_output=True, check=True, timeout=60,
+        ).stdout.decode("utf-8", "replace")
+    except (OSError, subprocess.SubprocessError):
+        return
+    tracked: Set[str] = set()
+    for rec in out.split("\0"):
+        if not rec:
+            continue
+        meta, _, path = rec.partition("\t")
+        if meta.startswith("160000"):
+            _GITLINKS.append(path + "/")
+        else:
+            tracked.add(path)
+    _TRACKED = tracked
+
+
+def _path_resolves(cited: str) -> bool:
+    if not _INDEX_READ:
+        _load_tracked()
+    if _TRACKED is None:
+        # No git (tarball checkout): fall back to the filesystem, as before.
+        return (REPO_ROOT / cited).exists()
+    if cited in _TRACKED:
+        return True
+    # A file inside a submodule is not in this repo's index; the submodule's
+    # own history owns it. Keep the previous filesystem behaviour there.
+    if any(cited.startswith(g) for g in _GITLINKS):
+        return (REPO_ROOT / cited).exists()
+    return False
 
 
 # ── Doc scanning ────────────────────────────────────────────────────
@@ -598,10 +655,10 @@ def scan(targets: Dict[str, Path], scopes: Dict[str, str]) -> List[dict]:
             })
 
         for m in PATH_CITE_RE.finditer(text):
-            cited = m.group(1)
-            if (REPO_ROOT / cited).exists():
+            cited_path = m.group(1)
+            if _path_resolves(cited_path):
                 continue
-            findings.append({"kind": "GHOST_PATH", "doc": rel, "detail": cited, "scope": "-"})
+            findings.append({"kind": "GHOST_PATH", "doc": rel, "detail": cited_path, "scope": "-"})
 
         for pat in blocked:
             # Only flag inside fenced/inline command context, and never flag the
