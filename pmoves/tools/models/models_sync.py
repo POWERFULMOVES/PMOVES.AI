@@ -1194,7 +1194,9 @@ def cmd_registry_snapshot(args: argparse.Namespace) -> int:
 # num_gpu: 999, and until this subcommand nothing read them. On SPARK
 # (2026-10-15) that left the shared embedder at 18/37 GPU layers: Ollama sizes
 # offload from *free* memory, and unified-memory page cache does not count.
-# 0.40.4 is no better (7/37 measured), so the setting has to be baked in.
+# Upgrading does not fix it: a same-session A/B (2026-10-16) gave 0.30.0 7/37
+# and 0.40.5 11/37 -- slightly better, still partial, since both size offload
+# from ~4 GB "available". So the setting has to be baked in.
 # A variant keeps the same weights (cosine 1.000000 vs the base tag) with the
 # suit's parameters as defaults. Pulling bases stays with seed-list /
 # models-seed-ollama.
