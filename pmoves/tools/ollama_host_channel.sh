@@ -35,7 +35,14 @@ MODEL="${OLLAMA_CANARY_MODEL:-qwen3-embedding:4b}"
 PORT="${OLLAMA_CANARY_PORT:-11499}"
 RUNS="${OLLAMA_CANARY_RUNS:-2}"
 MARGIN="${OLLAMA_CANARY_LAYER_MARGIN:-2}"
-STATE="${OLLAMA_CHANNEL_STATE:-${XDG_STATE_HOME:-$HOME/.local/state}/pmoves/ollama-channel}"
+# Under 'sudo make ... ollama-host-install' HOME is root's and OLLAMA_CHANNEL_STATE
+# is dropped, so derive the default from the invoking user: install must find the
+# canary report that user's run wrote.
+_home="$HOME"
+if [ "$(id -u)" -eq 0 ] && [ -n "${SUDO_USER:-}" ]; then
+  _home=$(getent passwd "$SUDO_USER" | cut -d: -f6); _home="${_home:-$HOME}"
+fi
+STATE="${OLLAMA_CHANNEL_STATE:-$_home/.local/state/pmoves/ollama-channel}"
 UPSTREAM="${OLLAMA_UPSTREAM_REPO:-ollama/ollama}"
 
 die() { echo "✖ $2" >&2; exit "$1"; }
@@ -72,11 +79,22 @@ latest_version() {
   strip_v "$v"
 }
 
-# The store the HOST service uses: systemd's OLLAMA_MODELS, else upstream's default.
+# The store the HOST service uses. Backup, canary and rollback all act on it, so
+# a wrong guess is worse than none: OLLAMA_CHANNEL_MODELS wins, then systemd's
+# Environment= and EnvironmentFile=, then upstream's default only if it exists.
 models_dir() {
-  d=$(systemctl show ollama -p Environment 2>/dev/null | tr ' ' '\n' \
-      | sed -n 's/^OLLAMA_MODELS=//p' | tail -1)
-  printf '%s' "${d:-/usr/share/ollama/.ollama/models}"
+  d="${OLLAMA_CHANNEL_MODELS:-}"
+  [ -n "$d" ] || d=$(systemctl show ollama -p Environment --value 2>/dev/null | tr ' ' '\n' \
+      | sed -n 's/^"\{0,1\}OLLAMA_MODELS=//p' | sed 's/"$//' | tail -1)
+  if [ -z "$d" ]; then
+    for f in $(systemctl show ollama -p EnvironmentFiles --value 2>/dev/null | sed 's/ (ignore_errors=[a-z]*)//g'); do
+      [ -r "$f" ] && d=$(sed -n 's/^[[:space:]]*\(export[[:space:]]\{1,\}\)\{0,1\}OLLAMA_MODELS=//p' "$f" | tr -d "\"'" | tail -1)
+      [ -z "$d" ] || break
+    done
+  fi
+  [ -n "$d" ] || d=/usr/share/ollama/.ollama/models
+  [ -d "$d" ] || die 2 "model store not found ($d); set OLLAMA_CHANNEL_MODELS"
+  printf '%s' "$d"
 }
 
 manifest_path() {  # store, model -> manifest file (library models only)
@@ -213,6 +231,10 @@ install)
     || die 3 "canary for $ver did not PASS ($report); refusing"
   [ "$(id -u)" -eq 0 ] || die 3 "install needs root: sudo make -C pmoves ollama-host-install VERSION=$ver"
   before=$(curl -fsS --max-time 5 http://127.0.0.1:11434/api/tags | python3 -c 'import json,sys; print(len(json.load(sys.stdin)["models"]))' || echo "?")
+  store=$(models_dir); mkdir -p "$STATE"
+  bak="$STATE/manifests-$(host_version)-$(date -u +%Y%m%dT%H%M%SZ)-preinstall.tar.gz"
+  tar -C "$store" -czf "$bak" manifests
+  echo "→ store index backed up right before install: $bak"
   echo "→ installing ollama $ver via upstream installer (models before: $before)"
   curl -fsSL https://ollama.com/install.sh | OLLAMA_VERSION="$ver" sh
   systemctl restart ollama
@@ -228,11 +250,14 @@ install)
 rollback)
   echo "Restore the store index from the newest backup, then pin the old binary:"
   ls -1t "$STATE"/manifests-*.tar.gz 2>/dev/null | head -3 | sed 's/^/  backup: /'
+  store=$(models_dir)
   echo "  sudo systemctl stop ollama"
-  echo "  sudo find $(models_dir)/manifests-v2 -delete   # only if a migration created it"
-  echo "  sudo tar -C $(models_dir) -xzf <backup>     # manifests only; blobs are untouched"
+  echo "  # models pulled AFTER a migration exist only in manifests-v2: re-pull them after rollback"
+  echo "  sudo find $store/manifests-v2 $store/metadata -delete   # only what a migration created"
+  echo "  sudo tar -C $store -xzf <backup>     # manifests only; blobs are untouched"
   echo "  curl -fsSL https://ollama.com/install.sh | sudo OLLAMA_VERSION=<old> sh"
-  echo "  sudo systemctl start ollama"
+  echo "  # first start with OLLAMA_NOPRUNE=1 so the old binary does not prune v2-only blobs:"
+  echo "  sudo systemctl set-environment OLLAMA_NOPRUNE=1 && sudo systemctl start ollama"
   ;;
 
 *)

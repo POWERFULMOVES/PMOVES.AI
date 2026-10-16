@@ -56,3 +56,45 @@ def test_make_passes_version_through_the_environment_not_the_recipe():
         assert f"{target}: export OLLAMA_CHANNEL_VERSION = $(VERSION)" in text
     assert "ollama_host_channel.sh canary $(VERSION)" not in text
     assert "ollama_host_channel.sh install $(VERSION)" not in text
+
+
+def _rollback_with_fake_systemctl(tmp_path, environment: str, env_files: str = ""):
+    """Run 'rollback' (print-only) with a stub systemctl answering 'show'."""
+    bindir = tmp_path / "bin"; bindir.mkdir()
+    stub = bindir / "systemctl"
+    stub.write_text(
+        "#!/bin/sh\n"
+        'case "$*" in *EnvironmentFiles*) printf \'%s\\n\' "$FAKE_ENVFILES";;\n'
+        '  *Environment*) printf \'%s\\n\' "$FAKE_ENV";; esac\n')
+    stub.chmod(0o755)
+    env = {**os.environ, "PATH": f"{bindir}:{os.environ['PATH']}", "FAKE_ENV": environment,
+           "FAKE_ENVFILES": env_files, "OLLAMA_CHANNEL_STATE": str(tmp_path / "state")}
+    env.pop("OLLAMA_CHANNEL_MODELS", None)
+    return subprocess.run([resolve_bash(), str(TOOL), "rollback"], env=env,
+                          capture_output=True, text=True, timeout=30)
+
+
+def test_store_found_when_ollama_models_is_the_first_environment_entry(tmp_path):
+    store = tmp_path / "store"; store.mkdir()
+    r = _rollback_with_fake_systemctl(tmp_path, f"OLLAMA_MODELS={store} OLLAMA_HOST=0.0.0.0")
+    assert r.returncode == 0 and f"-C {store} " in r.stdout
+
+
+def test_store_found_in_an_environment_file(tmp_path):
+    store = tmp_path / "store"; store.mkdir()
+    envfile = tmp_path / "ollama-service-environment"
+    envfile.write_text(f'export OLLAMA_MODELS="{store}"\n')
+    r = _rollback_with_fake_systemctl(tmp_path, "OLLAMA_HOST=0.0.0.0", f"{envfile} (ignore_errors=no)")
+    assert r.returncode == 0 and f"-C {store} " in r.stdout
+
+
+def test_missing_store_is_refused_not_guessed(tmp_path):
+    r = _rollback_with_fake_systemctl(tmp_path, f"OLLAMA_MODELS={tmp_path / 'gone'}")
+    assert r.returncode != 0 and "model store not found" in r.stderr
+
+
+def test_rollback_removes_everything_a_migration_creates(tmp_path):
+    store = tmp_path / "store"; store.mkdir()
+    r = _rollback_with_fake_systemctl(tmp_path, f"OLLAMA_MODELS={store}")
+    assert f"{store}/manifests-v2 {store}/metadata -delete" in r.stdout
+    assert "OLLAMA_NOPRUNE=1" in r.stdout
