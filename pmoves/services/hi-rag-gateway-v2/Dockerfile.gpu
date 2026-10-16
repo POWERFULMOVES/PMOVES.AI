@@ -49,6 +49,17 @@ COPY services/common /app/services/common
 COPY tools/__init__.py /app/tools/__init__.py
 COPY tools/chit_security.py /app/tools/chit_security.py
 
+# PMOVES Python namespace package (for services.common.shape_store →
+# pmoves.chit import). The CPU `Dockerfile` has had this since 30efedfb77f;
+# the GPU image was missing it and ShapeStore init failed at runtime with
+# "No module named 'pmoves'" -- which made /geometry/event return 503 and
+# broke the CGP (Compressed Geometric Packet) emit step that pmoves-yt
+# relies on to feed PMOVES-Creator's geometry bus. The ratchet in
+# pmoves/tests/test_dockerfile_packages_pmoves_chit.py pins this.
+RUN mkdir -p /app/pmoves \
+    && printf '"""Minimal pmoves namespace for Docker."""\n' > /app/pmoves/__init__.py
+COPY chit /app/pmoves/chit
+
 # Make wait-for-deps.sh executable
 RUN chmod +x /app/scripts/wait-for-deps.sh
 
