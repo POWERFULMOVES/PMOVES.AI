@@ -1235,6 +1235,19 @@ def _ollama_model_parameters(model: str) -> dict[str, str]:
     return out
 
 
+def _ollama_tagged(name: str) -> str:
+    """Ollama's listed name for ``name``: /api/tags always carries a tag."""
+    return name if ":" in name.rsplit("/", 1)[-1] else f"{name}:latest"
+
+
+def _ollama_from_blob(model: str) -> str:
+    """Weights blob an installed model is built FROM (its modelfile FROM line)."""
+    for line in (_ollama_api("/api/show", {"model": model}).get("modelfile") or "").splitlines():
+        if line.startswith("FROM "):
+            return line.rsplit("/", 1)[-1].strip()
+    return ""
+
+
 def suit_ollama_plan(doc: dict) -> dict | None:
     """{suit, base, variant, parameters, ignored} for an Ollama suit, else None.
 
@@ -1247,7 +1260,7 @@ def suit_ollama_plan(doc: dict) -> dict | None:
     oc = mc.get("ollama_config")
     if not isinstance(oc, dict) or not mc.get("model_name"):
         return None
-    base = str(mc["model_name"])
+    base = _ollama_tagged(str(mc["model_name"]))
     params = {k: oc[k] for k in OLLAMA_PARAMETER_KEYS if k in oc}
     if "num_ctx" not in params and mc.get("context_window"):
         params["num_ctx"] = int(mc["context_window"])
@@ -1257,7 +1270,7 @@ def suit_ollama_plan(doc: dict) -> dict | None:
     return {
         "suit": doc.get("name"),
         "base": base,
-        "variant": str(oc.get("variant") or f"{name}:{tag or 'latest'}-pmoves"),
+        "variant": _ollama_tagged(str(oc.get("variant") or f"{name}:{tag}-pmoves")),
         "parameters": params,
         "ignored": sorted(k for k in oc if k not in OLLAMA_PARAMETER_KEYS and k not in OLLAMA_DESCRIPTIVE_KEYS),
     }
@@ -1311,6 +1324,16 @@ def cmd_ollama_apply(args: argparse.Namespace) -> int:
     except (urllib.error.URLError, OSError) as exc:
         print(f"Ollama unreachable at {_ollama_base_url()}: {exc}")
         return 3
+    try:
+        return _ollama_apply_plans(plans, installed, loaded, args)
+    except (urllib.error.URLError, OSError) as exc:
+        # HTTPError is a URLError: a 4xx/5xx from /api/show or /api/create.
+        print(f"FAILED Ollama API error at {_ollama_base_url()}: {exc}")
+        return 1
+
+
+def _ollama_apply_plans(plans: list[dict], installed: set[str], loaded: dict[str, dict],
+                        args: argparse.Namespace) -> int:
     drifted = 0
     for p in plans:
         label = f"{p['suit']}: {p['base']} -> {p['variant']} {p['parameters']}"
@@ -1319,8 +1342,14 @@ def cmd_ollama_apply(args: argparse.Namespace) -> int:
         if p["base"] not in installed:
             print(f"SKIP  {label} -- base not installed (make models-seed-ollama)")
             continue
-        diff = (suit_ollama_drift(p, _ollama_model_parameters(p["variant"]))
-                if p["variant"] in installed else {"variant": "not created yet"})
+        if p["variant"] in installed:
+            diff = suit_ollama_drift(p, _ollama_model_parameters(p["variant"]))
+            # A re-pulled base leaves the variant on the old weights; callers
+            # that fall back to the base tag would then mix vector spaces.
+            if _ollama_from_blob(p["variant"]) != _ollama_from_blob(p["base"]):
+                diff["base"] = ("re-pulled", "variant still on old weights")
+        else:
+            diff = {"variant": "not created yet"}
         if not diff:
             verdict = suit_offload_verdict(p, loaded) if args.check else ""
             print(f"OK    {label}{f' -- offload {verdict}' if verdict else ''}")
@@ -1334,6 +1363,8 @@ def cmd_ollama_apply(args: argparse.Namespace) -> int:
         _ollama_api("/api/create", {"model": p["variant"], "from": p["base"],
                                     "parameters": p["parameters"], "stream": False})
         left = suit_ollama_drift(p, _ollama_model_parameters(p["variant"]))
+        if _ollama_from_blob(p["variant"]) != _ollama_from_blob(p["base"]):
+            left["base"] = ("re-pulled", "variant still on old weights")
         print(f"{'APPLIED' if not left else 'FAILED '} {label}{f' still drifted: {left}' if left else ''}")
         if left:
             return 1

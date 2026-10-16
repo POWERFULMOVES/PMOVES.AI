@@ -65,3 +65,49 @@ def test_the_embedding_suit_plans_its_named_variant():
     assert len(plans) == 1
     assert plans[0]["variant"] == "qwen3-embedding:4b-pmoves"
     assert plans[0]["parameters"] == {"num_gpu": 999, "num_ctx": 8192}
+
+
+def test_untagged_model_name_matches_ollama_listing():
+    p = ms.suit_ollama_plan(_suit(model_config={"model_name": "nomic-embed-text",
+                                                "ollama_config": {"num_gpu": 999}}))
+    assert p["base"] == "nomic-embed-text:latest"
+    assert p["variant"] == "nomic-embed-text:latest-pmoves"
+
+
+def _fake_ollama(monkeypatch, blobs, params="num_gpu 999\nnum_ctx 8192", fail_create=False):
+    import argparse, io, urllib.error
+    calls = []
+
+    def api(path, body=None, timeout=600):
+        calls.append((path, body))
+        if path == "/api/tags":
+            return {"models": [{"name": n} for n in blobs]}
+        if path == "/api/ps":
+            return {"models": []}
+        if path == "/api/show":
+            return {"parameters": params, "modelfile": f"FROM /m/blobs/{blobs[body['model']]}"}
+        if path == "/api/create":
+            if fail_create:
+                raise urllib.error.HTTPError("u", 500, "boom", {}, io.BytesIO())
+            blobs[body["model"]] = blobs[body["from"]]
+            return {}
+        raise AssertionError(path)
+
+    monkeypatch.setattr(ms, "_ollama_api", api)
+    monkeypatch.setattr(ms, "suit_ollama_plans", lambda suit: [ms.suit_ollama_plan(_suit())])
+    return calls, argparse.Namespace
+
+
+def test_repulled_base_is_drift_and_apply_rebuilds_the_variant(monkeypatch):
+    blobs = {"m:4b": "sha256-new", "m:4b-pmoves": "sha256-old"}
+    calls, ns = _fake_ollama(monkeypatch, blobs)
+    assert ms.cmd_ollama_apply(ns(suit="", apply=False, check=True)) == 1
+    assert ms.cmd_ollama_apply(ns(suit="", apply=True, check=False)) == 0
+    assert blobs["m:4b-pmoves"] == "sha256-new"
+    assert any(p == "/api/create" for p, _ in calls)
+
+
+def test_api_error_is_a_clean_failure_not_a_traceback(monkeypatch, capsys):
+    calls, ns = _fake_ollama(monkeypatch, {"m:4b": "sha256-a"}, fail_create=True)
+    assert ms.cmd_ollama_apply(ns(suit="", apply=True, check=False)) == 1
+    assert "FAILED Ollama API error" in capsys.readouterr().out
