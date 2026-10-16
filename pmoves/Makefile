@@ -3729,7 +3729,7 @@ model-readiness: ## Validate model registry, persona seeds, Ollama models, Tenso
 	@$(LOAD_ENV_SHARED); $(PYTHON) tools/model_readiness_check.py
 
 # -------- Model profiles / management --------
-.PHONY: model-profiles model-apply model-swap models-sync models-sync-dynamic models-seed-ollama ollama-host-resolve ollama-host-canary ollama-host-install ollama-host-rollback models-registry-snapshot
+.PHONY: model-profiles model-apply model-swap models-sync models-sync-dynamic models-seed-ollama models-registry-snapshot
 
 model-profiles: ## List available model manifests
 	@ls -1 models/*.yaml | sed 's#models/##' | sed 's#\.yaml##'
@@ -3777,6 +3777,12 @@ models-seed-ollama: ## Pre-pull Ollama models from profiles/registry (override w
 	  done; \
 	  echo "✔ Seeded Ollama models (container=$$ollama_cid host=$$host source=$$source).";'
 
+models-registry-snapshot: ensure-env-shared ## Snapshot Supabase model registry into models/registry.snapshot.json
+	@$(LOAD_ENV_SHARED); python3 tools/models/models_sync.py registry-snapshot --out models/registry.snapshot.json
+
+# -------- Host Ollama release channel (tools/ollama_host_channel.sh) --------
+.PHONY: ollama-host-resolve ollama-host-canary ollama-host-install ollama-host-rollback
+
 ollama-host-resolve: ## Host Ollama version vs latest upstream release (read-only)
 	@sh tools/ollama_host_channel.sh resolve
 
@@ -3793,9 +3799,6 @@ ollama-host-install: ## Install host Ollama VERSION (root; refuses unless its ca
 
 ollama-host-rollback: ## Print the restore steps (store-index backups + pinned old binary)
 	@sh tools/ollama_host_channel.sh rollback
-
-models-registry-snapshot: ensure-env-shared ## Snapshot Supabase model registry into models/registry.snapshot.json
-	@$(LOAD_ENV_SHARED); python3 tools/models/models_sync.py registry-snapshot --out models/registry.snapshot.json
 
 # -------- Console (UI) dev helpers --------
 .PHONY: ui-dev-start ui-dev-stop ui-dev-logs
