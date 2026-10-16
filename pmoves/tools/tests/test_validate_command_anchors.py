@@ -496,3 +496,38 @@ def test_no_git_falls_back_to_filesystem(monkeypatch, tmp_path):
     monkeypatch.setattr(vca, "_TRACKED", None)
     assert vca._path_resolves("pmoves/f.md")
     assert not vca._path_resolves("pmoves/g.md")
+
+
+def test_scan_end_to_end_flags_a_present_but_ignored_file(monkeypatch, tmp_path):
+    """Real git, real ls-files parser, real scan() wiring. The cited file EXISTS
+    on disk but is gitignored, so the old exists() check passed it; the doc's
+    tracked citation must still resolve. Fails under the old behaviour."""
+    import subprocess as sp
+    repo = tmp_path / "repo"
+    (repo / "pmoves" / "docs").mkdir(parents=True)
+    (repo / "pmoves" / "kept.py").write_text("x\n")
+    (repo / "pmoves" / "local.cfg").write_text("secret-shaped\n")
+    (repo / ".gitignore").write_text("pmoves/local.cfg\n")
+    doc = repo / "pmoves" / "docs" / "runbook.md"
+    doc.write_text("see `pmoves/kept.py:1` and `pmoves/local.cfg:3`\n")
+    git = ["git", "-C", str(repo), "-c", "user.email=t@t", "-c", "user.name=t"]
+    sp.run(git + ["init", "-q"], check=True)
+    sp.run(git + ["add", "-A"], check=True)
+    monkeypatch.setattr(vca, "REPO_ROOT", repo)
+    monkeypatch.setattr(vca, "live_docs", lambda: [doc])
+    monkeypatch.setattr(vca, "blocked_patterns", lambda: [])
+    monkeypatch.setattr(vca, "_INDEX_READ", False)
+    monkeypatch.setattr(vca, "_TRACKED", None)
+    monkeypatch.setattr(vca, "_GITLINKS", [])
+    ghosts = {f["detail"] for f in vca.scan({}, {}) if f["kind"] == "GHOST_PATH"}
+    assert ghosts == {"pmoves/local.cfg"}
+
+
+def test_no_git_fallback_warns(monkeypatch, tmp_path, capsys):
+    monkeypatch.setattr(vca, "REPO_ROOT", tmp_path)  # not a git repo
+    monkeypatch.setattr(vca, "_INDEX_READ", False)
+    monkeypatch.setattr(vca, "_TRACKED", None)
+    monkeypatch.setattr(vca, "_GITLINKS", [])
+    vca._load_tracked()
+    assert vca._TRACKED is None
+    assert "node-dependent" in capsys.readouterr().err

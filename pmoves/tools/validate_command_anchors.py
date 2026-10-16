@@ -279,25 +279,32 @@ def _load_tracked() -> None:
     a shared repo can only promise what the repo carries, so resolve against
     the index.
     """
-    global _TRACKED, _INDEX_READ
+    global _TRACKED, _GITLINKS, _INDEX_READ
     _INDEX_READ = True
     try:
         out = subprocess.run(
             ["git", "-C", str(REPO_ROOT), "ls-files", "-s", "-z"],
             capture_output=True, check=True, timeout=60,
         ).stdout.decode("utf-8", "replace")
-    except (OSError, subprocess.SubprocessError):
+    except (OSError, subprocess.SubprocessError) as exc:
+        # Say so: the fallback brings back the node-dependent verdict this
+        # function exists to remove, and the report would otherwise look the
+        # same in both modes.
+        print(f"WARN: git index unreadable ({exc.__class__.__name__}); GHOST_PATH "
+              "falls back to the local filesystem and its verdict is node-dependent",
+              file=sys.stderr)
         return
     tracked: Set[str] = set()
+    gitlinks: List[str] = []
     for rec in out.split("\0"):
         if not rec:
             continue
         meta, _, path = rec.partition("\t")
         if meta.startswith("160000"):
-            _GITLINKS.append(path + "/")
+            gitlinks.append(path + "/")
         else:
             tracked.add(path)
-    _TRACKED = tracked
+    _TRACKED, _GITLINKS = tracked, gitlinks
 
 
 def _path_resolves(cited: str) -> bool:
