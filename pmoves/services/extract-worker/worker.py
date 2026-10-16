@@ -24,7 +24,8 @@ embeddings_processed_total = Counter('extract_worker_embeddings_processed_total'
 
 QDRANT_URL = os.environ.get("QDRANT_URL","http://qdrant:6333")
 # Qdrant runs with QDRANT__SERVICE__API_KEY set, so a keyless client gets 401 on
-# every call. Same variable names hi-rag-gateway-v2 reads.
+# every call. QDRANT__API_KEY is what hi-rag-gateway-v2 reads; QDRANT_API_KEY
+# is the client-side name and wins when both are set.
 QDRANT_API_KEY = os.environ.get("QDRANT_API_KEY") or os.environ.get("QDRANT__API_KEY") or None
 COLL = os.environ.get("QDRANT_COLLECTION","pmoves_chunks_qwen3")
 MODEL = os.environ.get("SENTENCE_MODEL","all-MiniLM-L6-v2")
@@ -139,11 +140,12 @@ def _meili(method: str, path: str, **kwargs):
     return requests.request(method, f"{MEILI_URL}{path}", headers=headers, timeout=30, **kwargs)
 
 def _ensure_qdrant(client: QdrantClient, dim: int):
-    try:
-        info = client.get_collection(COLL)
-    except Exception:
-        client.recreate_collection(COLL, vectors_config=VectorParams(size=dim, distance=Distance.COSINE))
+    # Create only when Qdrant says the collection is absent. A timeout or 5xx
+    # must propagate: recreate_collection DROPS an existing collection.
+    if not client.collection_exists(COLL):
+        client.create_collection(COLL, vectors_config=VectorParams(size=dim, distance=Distance.COSINE))
         return
+    info = client.get_collection(COLL)
 
     # Validate dimension compatibility (avoid opaque 400s later).
     try:
@@ -231,7 +233,13 @@ def ingest(request: Request, body: Dict[str, Any] = Body(...)):
                 # and a store we cannot write to (e.g. a 401) used to burn it on
                 # every retry of the same document.
                 qc = QdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY, timeout=30.0)
-                qc.get_collections()
+                try:
+                    qc.get_collections()
+                except Exception as exc:
+                    # 503, not 500: the store is unavailable (bad key or down),
+                    # so the caller can tell it apart from a bad document.
+                    logger.error("qdrant unreachable at %s: %s", QDRANT_URL, type(exc).__name__)
+                    raise HTTPException(status_code=503, detail="qdrant unavailable") from exc
                 vecs = _embed(texts)
                 embeddings_processed_total.inc(len(texts))
 
