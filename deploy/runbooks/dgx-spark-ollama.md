@@ -140,6 +140,24 @@ nats stream add mesh_gpu_inference \
 
 With 128GB unified memory, you can run multiple models simultaneously or one large model comfortably.
 
+## GPU offload on unified memory
+
+Ollama sizes GPU offload from *free* memory and ignores reclaimable page cache,
+so on GB10 models load only partly onto the GPU (qwen3-embedding:4b: 7-11 of 37
+layers, varying with free memory at load time; compare Ollama versions only in a
+same-session A/B). Upgrading does not fix it. The fix is per model: a model
+suit's `ollama_config` (`num_gpu: 999`, `num_ctx`) becomes an Ollama variant
+`<model>-pmoves` (measured: 37/37 layers, identical vectors):
+
+```bash
+make -C pmoves models-suit-ollama SUIT=qwen3-embedding-4b            # dry run
+make -C pmoves models-suit-ollama SUIT=qwen3-embedding-4b APPLY=1    # create/update
+make -C pmoves models-suit-ollama CHECK=1                            # drift + offload verdict
+```
+
+Ollama 0.40+ defaults `num_ctx` to 262144 on this node. Until every model in use
+has a suit, the drop-in `context.conf` sets `OLLAMA_CONTEXT_LENGTH=8192`.
+
 ## Monitoring
 
 ```bash
