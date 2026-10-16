@@ -52,6 +52,10 @@ tar xzf ollama-linux-arm64.tgz
 sudo mv ollama /usr/local/bin/
 ```
 
+First install only. **Upgrades go through the release channel** (§ Model store,
+upgrades and GPU offload below), never a bare re-run of `install.sh`: Ollama
+0.40+ converts the model store in place on first start.
+
 ### 3. Configure Ollama for Tailscale Access
 
 By default, Ollama binds to `127.0.0.1:11434`. To allow Tailscale access:
@@ -127,6 +131,43 @@ nats stream add mesh_gpu_inference \
   --max-msgs 10000 \
   --max-age 24h
 ```
+
+## Model store, upgrades and GPU offload
+
+Measured on SPARK 2026-10-12..16 (host Ollama 0.30.0).
+
+**Store on the 4TB drive.** The models live on the external NVMe, set by a
+systemd drop-in so Ollama never starts against an empty default store:
+
+```ini
+# /etc/systemd/system/ollama.service.d/pmoves-models.conf
+[Unit]
+RequiresMountsFor=/media/powerfulmoves/pmoves-archive
+[Service]
+Environment=OLLAMA_MODELS=/media/powerfulmoves/pmoves-archive/ollama/models
+```
+
+Unplugging the drive stops Ollama (and with it memory saves and document
+indexing). After replugging: `sudo systemctl start ollama`, then
+`curl -s localhost:11434/api/tags` should list the drive's models.
+
+**Upgrades follow every release, gated by a canary** (`pmoves/tools/ollama_host_channel.sh`):
+
+| Step | Command |
+|------|---------|
+| Host vs latest | `make -C pmoves ollama-host-resolve` |
+| A/B on a copied model, backs up the store index | `make -C pmoves ollama-host-canary [VERSION=x.y.z]` |
+| Install (root; refuses without a PASS report) | `sudo make -C pmoves ollama-host-install VERSION=x.y.z` |
+| Restore steps | `make -C pmoves ollama-host-rollback` |
+
+0.40+ rewrites the store (`manifests-v2`, `metadata`). The canary REFUSEs that
+until the operator backs up the library and re-runs it with
+`OLLAMA_ACCEPT_STORE_MIGRATION=1` — a one-time decision, after which releases
+flow through the canary normally. The containerised Ollama (compose
+`PMOVES_OLLAMA_IMAGE`) is bumped separately by Dependabot.
+
+Upgrading does not fix partial GPU offload on unified memory; see
+§ GPU offload on unified memory.
 
 ## GPU Memory Planning
 

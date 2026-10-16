@@ -3780,6 +3780,26 @@ models-seed-ollama: ## Pre-pull Ollama models from profiles/registry (override w
 models-registry-snapshot: ensure-env-shared ## Snapshot Supabase model registry into models/registry.snapshot.json
 	@$(LOAD_ENV_SHARED); python3 tools/models/models_sync.py registry-snapshot --out models/registry.snapshot.json
 
+# -------- Host Ollama release channel (tools/ollama_host_channel.sh) --------
+.PHONY: ollama-host-resolve ollama-host-canary ollama-host-install ollama-host-rollback
+
+ollama-host-resolve: ## Host Ollama version vs latest upstream release (read-only)
+	@sh tools/ollama_host_channel.sh resolve
+
+# VERSION reaches the tool through the ENVIRONMENT (target-specific export), never
+# spliced into recipe text: VERSION='x;cmd' must be rejected by the tool's shape
+# check, not executed by make's shell.
+ollama-host-canary: export OLLAMA_CHANNEL_VERSION = $(VERSION)
+ollama-host-canary: ## A/B host Ollama vs VERSION (default latest) on a COPY of one model; backs up the store index; PASS/REFUSE report
+	@sh tools/ollama_host_channel.sh canary
+
+ollama-host-install: export OLLAMA_CHANNEL_VERSION = $(VERSION)
+ollama-host-install: ## Install host Ollama VERSION (root; refuses unless its canary PASSed)
+	@sh tools/ollama_host_channel.sh install
+
+ollama-host-rollback: ## Print the restore steps (store-index backups + pinned old binary)
+	@sh tools/ollama_host_channel.sh rollback
+
 # -------- Console (UI) dev helpers --------
 .PHONY: ui-dev-start ui-dev-stop ui-dev-logs
 
