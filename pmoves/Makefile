@@ -3459,6 +3459,20 @@ up-spark-sidecar: ## Start DGX Spark standalone sidecar (port 8093, in-container
 		echo "📝 Bootstrapping env.spark-sidecar from template..."; \
 		cp env.spark-sidecar.example env.spark-sidecar; \
 	fi
+	@# A pin overrides the compose default that Dependabot bumps on every Ollama
+	@# release, so it must say why. Copies made before #3380 carry an unexplained
+	@# 0.31.2 pin: refuse those rather than silently stay behind.
+	@pin=$$(sed -n 's/^[[:space:]]*\(export[[:space:]]\{1,\}\)\{0,1\}PMOVES_OLLAMA_IMAGE=//p' env.spark-sidecar | tail -1 | tr -d "\"'"); \
+	why=$$(sed -n 's/^[[:space:]]*\(export[[:space:]]\{1,\}\)\{0,1\}PMOVES_OLLAMA_PIN_REASON=//p' env.spark-sidecar | tail -1 | tr -d "\"'"); \
+	dflt=$$(sed -n 's/.*image: \$${PMOVES_OLLAMA_IMAGE:-\([^}]*\)}.*/\1/p' docker-compose.spark-sidecar.yml | head -1); \
+	if [ -n "$$pin" ] && [ -z "$$why" ]; then \
+		echo "✖ env.spark-sidecar pins PMOVES_OLLAMA_IMAGE=$$pin with no PMOVES_OLLAMA_PIN_REASON."; \
+		echo "  Compose default (follows releases): $$dflt"; \
+		echo "  Either comment the pin out, or state why: PMOVES_OLLAMA_PIN_REASON=\"<reason>\""; \
+		exit 1; \
+	elif [ -n "$$pin" ]; then \
+		echo "📌 Ollama pinned to $$pin (compose default: $$dflt). Reason: $$why"; \
+	fi
 	@echo "⚡ Starting DGX Spark sidecar (ARM64 + NVIDIA Blackwell)..."
 	@bash -lc '. ./scripts/with-env.sh; docker compose -p spark-sidecar -f docker-compose.spark-sidecar.yml --env-file env.spark-sidecar up -d'
 	@echo "✔ DGX Spark sidecar starting. Health: curl -sf http://127.0.0.1:$${SPARK_PORT:-8093}/"
