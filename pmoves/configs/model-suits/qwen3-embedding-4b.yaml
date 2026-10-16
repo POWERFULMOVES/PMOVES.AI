@@ -1,0 +1,60 @@
+# Qwen3-Embedding 4B — Local via Ollama (the fleet's default embedder)
+# Behind TensorZero `qwen3_embedding_4b_local` (2560-d): Cipher memory,
+# extract-worker -> Qdrant `pmoves_chunks_qwen3`, Hi-RAG v2.
+#
+# WHY THIS SUIT EXISTS (measured on SPARK, 2026-10-15). Ollama sizes GPU
+# offload from *free* memory. On the GB10's unified memory, page cache holds
+# ~68 GB that would be released on demand, but it is not counted, so the stock
+# model loaded 18/37 layers on GPU. One embed took 20-24 s (7.5-10 s with the
+# context capped at 8192); llama-server sat at ~850% CPU. `num_gpu: 999` forces
+# every layer onto the GPU. `context_window` drops the model's 40960 default:
+# embed inputs are chunked well under 8k tokens, and the KV cache scales with it
+# (1152 MiB at 8192).
+#
+# Applied by `make -C pmoves models-suit-ollama SUIT=qwen3-embedding-4b`
+# (models_sync.py ollama-apply; dry-run, APPLY=1 creates the variant, CHECK=1
+# also judges live GPU offload). Same weights as the base tag, so
+# existing vectors stay valid.
+
+name: qwen3-embedding-4b
+provider: ollama_local
+provider_display: "Ollama (Local)"
+distillation_stage: none
+
+model_config:
+  model_name: qwen3-embedding:4b
+  endpoint: http://localhost:11434/v1
+  api_key_env: null
+  context_window: 8192
+  embedding_dimensions: 2560
+  ollama_config:
+    variant: qwen3-embedding:4b-pmoves
+    num_gpu: 999
+
+agent_zero:
+  role: embedding
+
+huggingface:
+  model_id: Qwen/Qwen3-Embedding-4B
+
+metadata:
+  last_verified: 2026-10-15
+  benchmark_data:
+  - source: measured_spark_2026-10-15
+    hardware: "DGX Spark GB10, 128 GB unified"
+    notes: >-
+      Ollama 0.30.0, stock tag, ctx 40960: 3.0 of 10.4 GB on GPU, 20-24 s per
+      short embed under backlog load. Ctx 8192 (global OLLAMA_CONTEXT_LENGTH
+      stopgap): 3.2 of 5.4 GB, 18/37 layers, 7.5-10 s. This suit's variant:
+      37/37 layers, 5.0 of 5.0 GB, 0.14 s warm, vectors identical to the stock
+      tag (cosine 1.000000). Layer counts for the stock tag move with free
+      memory at load time, so only same-session A/Bs compare versions: back to
+      back on one copy (2026-10-16), 0.30.0 loaded 7/37 and 0.40.5 11/37 --
+      newer is a little better, neither offloads fully, because both size
+      offload from ~4 GB "available". Upgrading does not replace num_gpu.
+      Runtime latency is recorded via tools/model_fitness_collector.py.
+
+ecosystem_role: |
+  The embedder every local memory path shares. When it is slow or down, Cipher
+  stores come back embedded:false and ingest retries pile up behind it, so its
+  load shape is fleet-critical rather than per-agent.
