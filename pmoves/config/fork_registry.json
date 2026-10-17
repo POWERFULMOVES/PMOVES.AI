@@ -464,6 +464,12 @@
       "reason": "fork of agent0ai/spynel (Go, multi-agent chat orchestration); overlay landed: PMOVES.AI-Edition-Hardened carries PMOVES.AI_INTEGRATION.md (source-build install F1, transport boundaries F3, template governance F4); consumable branch is the hardened branch; default tracks parity",
       "branch": "PMOVES.AI-Edition-Hardened"
     },
+    "PMOVES-garage": {
+      "upstream": "deuxfleurs-org/garage",
+      "sync": true,
+      "reason": "fork of deuxfleurs-org/garage (Rust, geo-distributed S3 object store); object store for JuiceFS pmoves-media (JUICEFS_GARAGE_MIGRATION_PLAN.md). PMOVES.AI-Edition-Hardened is a RELEASE pin cut from upstream tag v2.4.1 plus the PMOVES CI overlay (multi-arch GHCR image); it moves only by deliberate tag-based promotion. fork-sync therefore syncs main-v2 (parity) via the FORKS override, never Hardened",
+      "branch": "PMOVES.AI-Edition-Hardened"
+    },
     "PMOVES-registry": {
       "upstream": "agentclientprotocol/registry",
       "sync": true,

@@ -1,0 +1,57 @@
+# Garage node config for the JuiceFS pmoves-media object store.
+# Plan: pmoves/docs/architecture/JUICEFS_GARAGE_MIGRATION_PLAN.md §1.3, §6.1.
+#
+# TEMPLATE. Render per node with `make -C pmoves garage-render`, which writes the
+# gitignored pmoves/config/garage/rendered/garage.toml. Never edit the rendered file.
+# No secret VALUES appear here: the three secrets are files under /run/secrets/,
+# mode 0600 on the host (Garage refuses to start otherwise, src/garage/secrets.rs).
+#
+# Must be IDENTICAL on every node (§6.1 row 3): replication_factor, consistency_mode.
+# Per node: the tailnet address, db_engine (by tier), bootstrap_peers.
+
+replication_factor = 3
+consistency_mode   = "consistent"
+
+metadata_dir           = "/var/lib/garage/meta"
+data_dir               = "/var/lib/garage/data"
+# Sibling of data_dir, never inside it; up to 4x the metadata size.
+metadata_snapshots_dir = "/var/lib/garage/snapshots"
+metadata_auto_snapshot_interval = "6h"
+
+# Tier 1 (always-on): lmdb. Tier 2 (desktops): sqlite, because LMDB corrupts on
+# unclean shutdown and is "generally not recoverable" (§6.1 row 15, operator decision).
+db_engine = "${DB_ENGINE}"
+
+# The volume is aes256gcm-rsa encrypted client-side: blocks are incompressible
+# ciphertext, so zstd would only burn CPU (§6.1 row 18).
+compression_level = "none"
+
+rpc_secret_file = "/run/secrets/pmoves_garage_rpc_secret"
+# Bound to the tailnet address, like the S3 and admin APIs, so nothing listens on
+# a public interface. The tailscale0-only firewall rule and the external probe of
+# 3900/3901/3903 are still required (§1.3).
+rpc_bind_addr   = "${TAILNET_IP}:3901"
+rpc_public_addr = "${TAILNET_IP}:3901"
+
+# Tracked membership instead of session-only `garage node connect` (§6.1 row 12).
+# Entries are `<node id>@<tailnet ip>:3901` from `garage node id`. Node ids are
+# public keys, not secrets. Empty on a node's first start.
+bootstrap_peers = [${BOOTSTRAP_PEERS}]
+
+# Never set allow_world_readable_secrets (or GARAGE_ALLOW_WORLD_READABLE_SECRETS).
+
+[s3_api]
+api_bind_addr = "${TAILNET_IP}:3900"
+# JuiceFS's default region; Garage rejects any other with AuthorizationHeaderMalformed (§1.4).
+s3_region     = "us-east-1"
+
+# [s3_web] is intentionally absent, so 3902 is never bound (§6.1 row 8).
+
+[admin]
+api_bind_addr         = "${TAILNET_IP}:3903"
+# Full-scope bootstrap token. Day-to-day work uses scoped, expiring tokens from
+# `garage admin-token create --scope ...` (§6.1 row 7).
+admin_token_file      = "/run/secrets/pmoves_garage_admin_token"
+metrics_token_file    = "/run/secrets/pmoves_garage_metrics_token"
+# Without this, an unset or unreadable metrics token leaves /metrics open (§6.1 row 6).
+metrics_require_token = true
