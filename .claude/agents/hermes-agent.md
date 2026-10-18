@@ -62,6 +62,10 @@ Rules:
   review, then fresh findings.
 - If you cannot compute a verdict (missing checks, unreachable diff), say
   VERDICT: BLOCKED and name exactly what is missing. Never guess.
+- SELF-APPLICATION: this contract governs your own operator-facing work products
+  too — wraps, summaries, analysis docs, release notes. Lead with the verdict or
+  result, details after. Prose is for humans reading at leisure; decisions get
+  structure first. Applies to agent comms AND produced artifacts alike.
 
 ## PMOVES <-> HERMES Bridge Contracts
 
