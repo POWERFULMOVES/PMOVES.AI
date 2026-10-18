@@ -49,16 +49,33 @@ COPY services/common /app/services/common
 COPY tools/__init__.py /app/tools/__init__.py
 COPY tools/chit_security.py /app/tools/chit_security.py
 
-# PMOVES Python namespace package (for services.common.shape_store →
-# pmoves.chit import). The CPU `Dockerfile` has had this since 30efedfb77f;
-# the GPU image was missing it and ShapeStore init failed at runtime with
-# "No module named 'pmoves'" -- which made /geometry/event return 503 and
-# broke the CGP (Compressed Geometric Packet) emit step that pmoves-yt
-# relies on to feed PMOVES-Creator's geometry bus. The ratchet in
-# pmoves/tests/test_dockerfile_packages_pmoves_chit.py pins this.
+# PMOVES Python namespace packages (for the in-image `from pmoves.chit`
+# and `from pmoves.tools.*` imports used by services.common.shape_store,
+# services.common.geometry_decoder, services.common.branch_trail, etc.).
+#
+# History:
+#   - 30efedfb77f: CPU `Dockerfile` added the `pmoves.chit` namespace copy.
+#     The GPU `Dockerfile.gpu` never picked it up; PR #3382 closed that gap.
+#   - 2026-10-17 follow-up: verification surfaced a SECOND missing
+#     namespace -- `pmoves.tools` -- imported by tools/chit_security.py
+#     (line 25: `from pmoves.tools.chit_common import canon`), services/
+#     common/geometry_decoder.py (line 75-76), services/common/branch_trail.
+#     py (lines 146-147), services/common/model_fitness.py (line 22). Without
+#     `pmoves.tools`, `/geometry/event` returns 500 (`ModuleNotFoundError:
+#     No module named 'pmoves.tools'`) and CGP emit degrades to cgp_ok=false.
+#
+# The ratchet at pmoves/tests/test_dockerfile_packages_pmoves_chit.py
+# pins BOTH namespaces; update the ratchet whenever a new `pmoves.*`
+# import lands in services/*.
 RUN mkdir -p /app/pmoves \
-    && printf '"""Minimal pmoves namespace for Docker."""\n' > /app/pmoves/__init__.py
+    && printf '"""Minimal pmoves namespace for Docker."""\n' > /app/pmoves/__init__.py \
+    && mkdir -p /app/pmoves/tools \
+    && printf '"""pmoves.tools namespace for Docker."""\n' > /app/pmoves/tools/__init__.py
 COPY chit /app/pmoves/chit
+COPY tools/__init__.py /app/pmoves/tools/__init__.py
+COPY tools/chit_common.py /app/pmoves/tools/chit_common.py
+COPY tools/chit_security.py /app/pmoves/tools/chit_security.py
+COPY tools/sign_trail.py /app/pmoves/tools/sign_trail.py
 
 # Make wait-for-deps.sh executable
 RUN chmod +x /app/scripts/wait-for-deps.sh
