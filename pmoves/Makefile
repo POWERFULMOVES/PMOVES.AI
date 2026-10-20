@@ -5680,6 +5680,10 @@ docs-reconcile-check: ## Check living document freshness (read-only, CI-safe)
 docs-reconcile-json: ## Living document freshness report (JSON output)
 	@$(PYTHON) tools/docs_reconcile.py --check --json $(ARGS)
 
+.PHONY: skills-project
+skills-project: ## Project .claude/skills into every harness's skills dir (copies, gitignored; FORCE=1 ignores the freshness stamp). Launchers call this fragment themselves.
+	@bash -c '. scripts/pm-skills-project.sh; pm_skills_project "$(CURDIR)/.." "$${FORCE:-0}"; echo "[skills-project] $$PM_SKILLS_LINE" >&2; [ "$$PM_SKILLS_OK" != "0" ] || exit 1'
+
 # Renamed from docs-render-living: it silently shadowed the Lane 2228
 # registry iterator (make keeps the LAST single-colon recipe) — same
 # duplicate-target class as the #2339 fix for juicefs-status et al.
