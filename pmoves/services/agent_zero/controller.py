@@ -6,6 +6,8 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable, Dict, List, Optional, Tuple
 
+from services.common.nats_client import _redact_url
+
 try:
     from nats.aio.client import Client as NATS
     from nats.aio.msg import Msg
@@ -346,7 +348,7 @@ class AgentZeroController:
             return
         if NATS is None:
             raise RuntimeError("nats-py is required to start the Agent Zero controller")
-        logger.info("Connecting to NATS at %s", self.settings.nats_url)
+        logger.info("Connecting to NATS at %s", _redact_url(self.settings.nats_url))
         self._nc = NATS()
         await self._nc.connect(servers=[self.settings.nats_url])
         if self.settings.use_jetstream:

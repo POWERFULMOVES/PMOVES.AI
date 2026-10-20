@@ -343,3 +343,18 @@ def test_healthz_reports_200_when_inner_runtime_is_running(
     body = response.json()
     assert body["status"] == "ok"
     assert body["pid"] == 4242
+
+
+def test_healthz_never_returns_nats_credentials(monkeypatch, load_service_module):
+    """/healthz is unauthenticated and tailnet-served; NATS_URL userinfo must not leak."""
+    monkeypatch.setenv("NATS_URL", "nats://svc-user:s3cret-pass@nats:4222")
+    module = load_service_module("agent_zero_main", "services/agent-zero/main.py")
+    module.service_config = module.load_service_config()
+    module = _prepare_agent_zero(module, monkeypatch)
+    module.process_manager._process = None
+
+    with TestClient(module.app) as client:
+        response = client.get("/healthz")
+    assert "s3cret-pass" not in response.text
+    assert "svc-user" not in response.text
+    assert response.json()["nats"]["url"] == "nats://nats:4222"
