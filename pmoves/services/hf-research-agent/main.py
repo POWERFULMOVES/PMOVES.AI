@@ -11,15 +11,19 @@ Follows the spark-shape-worker pattern: asyncio + nats-py + _load_secret.
 from __future__ import annotations
 
 import asyncio
+import functools
 import json
 import os
 import signal
 import sys
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from typing import Any
 
 import nats
 from nats.aio.client import Client as NATS
+
+from card_evidence import eval_job_recipe, is_hub_model_id, load_card_evidence
 from aiohttp import web
 
 
@@ -54,12 +58,32 @@ MIN_LIKES = int(os.environ.get("HF_MIN_LIKES", "10"))
 MIN_SCORE = int(os.environ.get("HF_MIN_SCORE", "50"))
 
 # Scoring scale. Criteria 1-4 award up to BASE_MAX_SCORE (40 + 25 + 20 + 15);
-# Criterion 5 adds a further COMPAT_BONUS_POINTS on top, so the attainable
-# maximum is 110, not 100. MIN_SCORE is an absolute threshold, not a
+# Criterion 5 adds COMPAT_BONUS_POINTS, criteria 6-7 (model-card evidence,
+# 2026-10-11) add EVAL_EVIDENCE_POINTS + LICENSE_POINTS, so the attainable
+# maximum is 130, not 100. MIN_SCORE is an absolute threshold, not a
 # percentage of MAX_SCORE.
 BASE_MAX_SCORE = 100
 COMPAT_BONUS_POINTS = 10
-MAX_SCORE = BASE_MAX_SCORE + COMPAT_BONUS_POINTS
+EVAL_EVIDENCE_POINTS = 15
+LICENSE_POINTS = 5
+MAX_SCORE = BASE_MAX_SCORE + COMPAT_BONUS_POINTS + EVAL_EVIDENCE_POINTS + LICENSE_POINTS
+
+# Model-card evidence (card_evidence.py): the card's model-index results,
+# licence, base model, library and gated state. Fetched off the event loop on
+# a BOUNDED pool: nats-py gives every message its own handler task, so a burst
+# of slow or gated models must not stack an unbounded number of Hub reads
+# (kilo review on #3354). The timeout is passed down to the Hub client as the
+# request timeout, so it bounds the work and not only the wait; the pool caps
+# how many reads are in flight at once. HF_CARD_EVIDENCE=0 turns it off and
+# criteria 6-7 score 0.
+HF_TOKEN = _load_secret("HF_TOKEN")
+HF_CARD_EVIDENCE = os.environ.get("HF_CARD_EVIDENCE", "1").strip().lower() not in {"0", "false", "no", "off", ""}
+HF_CARD_EVIDENCE_TIMEOUT = float(os.environ.get("HF_CARD_EVIDENCE_TIMEOUT", "20"))
+HF_CARD_EVIDENCE_WORKERS = max(1, int(os.environ.get("HF_CARD_EVIDENCE_WORKERS", "4")))
+# The eval-job RECIPE attached to a passing model (text only; nothing is
+# submitted here). Flavors/tasks follow the hugging-face-jobs skill.
+HF_EVAL_FLAVOR = os.environ.get("HF_EVAL_FLAVOR", "cpu-basic")
+HF_EVAL_TASK = os.environ.get("HF_EVAL_TASK", "mmlu")
 PREFERRED_TAGS_RAW = os.environ.get("HF_PREFERRED_TAGS", "")
 PREFERRED_TAGS = {t.strip().lower() for t in PREFERRED_TAGS_RAW.split(",") if t.strip()}
 AVOID_TAGS_RAW = os.environ.get("HF_AVOID_TAGS", "")
@@ -81,6 +105,9 @@ class HFResearchAgent:
         self._evaluated_count = 0
         self._passed_count = 0
         self._last_evaluated: str = ""
+        self._evidence_pool = ThreadPoolExecutor(
+            max_workers=HF_CARD_EVIDENCE_WORKERS, thread_name_prefix="card-evidence"
+        )
 
     # ── Health ───────────────────────────────────────────────────────────────
 
@@ -100,9 +127,11 @@ class HFResearchAgent:
     # ── Evaluation ───────────────────────────────────────────────────────────
 
     @staticmethod
-    def _evaluate_model(model: dict[str, Any]) -> dict[str, Any]:
+    def _evaluate_model(model: dict[str, Any], evidence: dict[str, Any] | None = None) -> dict[str, Any]:
         """Evaluate a discovered model against configured benchmark criteria.
 
+        ``evidence`` is the model-card envelope from ``load_card_evidence``;
+        ``None`` (fetch off or failed) scores criteria 6-7 as zero and says so.
         Returns an evaluation envelope with pass/fail, score, and rationale.
         """
         tags = {str(t).lower() for t in model.get("tags", [])}
@@ -163,6 +192,33 @@ class HFResearchAgent:
                 f"local-compat (+{COMPAT_BONUS_POINTS}): {sorted(matched_compat)}"
             )
 
+        # Criterion 6: reported evaluations on the model card (0-15).
+        # model-index results are the model's own benchmark claims; their
+        # presence is evidence someone measured it, the values ride along so
+        # a consumer can judge them. (hugging-face-evaluation skill surface.)
+        evidence = evidence or {}
+        eval_results = evidence.get("eval_results") or []
+        errors = evidence.get("errors") or []
+        if eval_results:
+            score += EVAL_EVIDENCE_POINTS
+            reasons.append(f"model-index evals (+{EVAL_EVIDENCE_POINTS}): {len(eval_results)} result(s)")
+        elif errors:
+            # A card that was never read has no absence to report; the
+            # receipts ride in card_evidence.errors (kilo review on #3354).
+            reasons.append(f"card evidence incomplete ({len(errors)} Hub read(s) failed; see card_evidence.errors)")
+        elif evidence.get("available"):
+            reasons.append("no model-index evals on card")
+        else:
+            reasons.append("card evidence unavailable")
+
+        # Criterion 7: a declared licence (0-5). Gated/base-model are recorded
+        # below, never scored: whether a fleet node may pull the weights is an
+        # operator judgement, not a number.
+        license_id = evidence.get("license")
+        if license_id:
+            score += LICENSE_POINTS
+            reasons.append(f"license declared (+{LICENSE_POINTS}): {license_id}")
+
         # Penalty: Avoid tags (-10 points each)
         matched_avoid = tags & AVOID_TAGS
         if matched_avoid:
@@ -171,12 +227,27 @@ class HFResearchAgent:
             reasons.append(f"avoid tags match (-{penalty}): {sorted(matched_avoid)}")
 
         passed = score >= MIN_SCORE
+        # The recipe is shell text an operator pastes; a bus-supplied id that
+        # is not a Hub id never reaches it (eval_job_recipe returns None).
+        recipe = eval_job_recipe(model_id, task=HF_EVAL_TASK, flavor=HF_EVAL_FLAVOR) if passed else None
+        if passed and recipe is None:
+            reasons.append("model id is not a Hub id; no eval-job recipe")
         return {
             "model_id": model_id,
             "score": score,
             "max_score": MAX_SCORE,
             "passed": passed,
             "reasons": reasons,
+            "card_evidence": {
+                "available": bool(evidence.get("available", False)),
+                "license": evidence.get("license"),
+                "base_model": evidence.get("base_model") or [],
+                "library_name": evidence.get("library_name"),
+                "gated": evidence.get("gated"),
+                "errors": evidence.get("errors") or [],
+            },
+            "eval_results": eval_results,
+            "eval_job_recipe": recipe,
             "tags": model.get("tags", []),
             "downloads": downloads,
             "likes": likes,
@@ -200,7 +271,23 @@ class HFResearchAgent:
             print("[hf-research] dropping non-object message", file=sys.stderr)
             return
 
-        evaluation = self._evaluate_model(model)
+        evidence: dict[str, Any] | None = None
+        if HF_CARD_EVIDENCE and is_hub_model_id(model.get("model_id")):
+            try:
+                loop = asyncio.get_running_loop()
+                evidence = await asyncio.wait_for(
+                    loop.run_in_executor(
+                        self._evidence_pool,
+                        functools.partial(load_card_evidence, model["model_id"], HF_TOKEN, HF_CARD_EVIDENCE_TIMEOUT),
+                    ),
+                    timeout=HF_CARD_EVIDENCE_TIMEOUT,
+                )
+            except asyncio.TimeoutError:
+                evidence = {"available": False, "errors": [f"card evidence timed out after {HF_CARD_EVIDENCE_TIMEOUT:g}s"], "eval_results": []}
+            except Exception as exc:  # the loader itself never raises; belt and braces
+                evidence = {"available": False, "errors": [f"card evidence: {exc}"], "eval_results": []}
+
+        evaluation = self._evaluate_model(model, evidence)
         data = json.dumps(evaluation, default=str).encode("utf-8")
         await self.nc.publish(PUBLISH_SUBJECT, data)
 
@@ -248,6 +335,7 @@ class HFResearchAgent:
 
         # Cleanup
         await self.sub.unsubscribe()
+        self._evidence_pool.shutdown(wait=False, cancel_futures=True)
         await runner.cleanup()
         await self.nc.drain()
         print("[hf-research] shutdown complete")
