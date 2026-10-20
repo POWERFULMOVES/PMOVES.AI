@@ -127,6 +127,7 @@ jobs:
             echo
             echo "Repo is PUBLIC — flag ANY leaked topology: tailnet/LAN IPs, bridge gateway IPs, hostnames, ports that map internal layout, secrets, tokens, plaintext credentials."
             echo "Also report: correctness bugs, unsafe shell (quoting/pipefail), CI edge cases (missing services on runners, empty vars), YAML/YAML-anchor mistakes, and scope creep (files unrelated to the PR purpose)."
+            echo "OVERLAY CHECK (pmoves/docs/danger-room/anti-patterns.md, room overlay-paper-over): PMOVES connects to a harness through its native settings/protocol surface; it never shims, detects, or papers over it. Flag any launcher that parses --help/--version to pick a code path, any exec of a binary other than the one the launcher is named for, any generator diff that deletes lines the harness shipped, and any absolute operator path (C:/Users/..., /home/...) in a committed config. Name the harness row in pmoves/docs/TAC/TAC_HARNESS_OVERLAY_MAP.md the change should cite."
             echo "Output format — three sections, terse bullets:"
             echo "1. CORRECTNESS"
             echo "2. SECURITY / TOPOLOGY (explicitly say 'clean' if nothing found)"
