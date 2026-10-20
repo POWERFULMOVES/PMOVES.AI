@@ -7,12 +7,12 @@
 
 | Surface | Measured | Source |
 |---|---|---|
-| `SSO_GOOGLE_ENABLED` | `false` | `pmoves/env.shared:288` |
-| `SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID/SECRET` | present but **empty** | `pmoves/env.shared:291-292` |
+| `SSO_GOOGLE_ENABLED` | `false` | local `env.shared` (gitignored, generated; no stable line numbers). Template: `pmoves/env.shared.example:870` |
+| `SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID` / `SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET` | present but **empty** | local `env.shared`. Template: `pmoves/env.shared.example:257-258` |
 | YT service Google client | `google_client_configured: false`, `default_refresh_token_configured: false` | `GET :8077/yt/control/status` |
 | Cookie workflow | overlay exists, wired only via `COOKIES_DC` (up-yt) | `pmoves/docker-compose.yt-cookies.yml`, Makefile `up-yt` |
 | sso-auth service | defined (orphan list shows it ran historically), not in current stack | `pmoves/docker-compose.sso.yml` |
-| Google client creds | in local `env.shared` (gitignored) + GH-secret custody | `env.shared:48-49,123-124` |
+| Google client creds | in local `env.shared` (gitignored) + GH-secret custody | local `env.shared`, written by the secrets pipeline (`make -C pmoves secrets-funnel`). Template keys: `GOOGLE_CLIENT_ID`/`_SECRET` at `pmoves/env.shared.example:458-459`, `CHANNEL_MONITOR_GOOGLE_CLIENT_ID`/`_SECRET` at `pmoves/env.shared.example:466-467` |
 
 Reads (transcription) need none of this; the gap is **writes** (playlist/comment control) and **SSO** (auth.pmoves.ai + Supabase external Google).
 
