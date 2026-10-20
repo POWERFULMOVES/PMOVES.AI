@@ -492,8 +492,12 @@ def test_no_git_falls_back_to_filesystem(monkeypatch, tmp_path):
     monkeypatch.setattr(vca, "REPO_ROOT", tmp_path)
     (tmp_path / "pmoves").mkdir()
     (tmp_path / "pmoves" / "f.md").write_text("x\n")
+    # git discovers repos upward; the ceiling stops discovery at tmp_path so
+    # the test is hermetic even when pytest's basetemp sits inside a checkout.
+    monkeypatch.setenv("GIT_CEILING_DIRECTORIES", str(tmp_path.parent))
     monkeypatch.setattr(vca, "_INDEX_READ", True)
     monkeypatch.setattr(vca, "_TRACKED", None)
+    monkeypatch.setattr(vca, "_GITLINKS", [])
     assert vca._path_resolves("pmoves/f.md")
     assert not vca._path_resolves("pmoves/g.md")
 
@@ -525,6 +529,9 @@ def test_scan_end_to_end_flags_a_present_but_ignored_file(monkeypatch, tmp_path)
 
 def test_no_git_fallback_warns(monkeypatch, tmp_path, capsys):
     monkeypatch.setattr(vca, "REPO_ROOT", tmp_path)  # not a git repo
+    # git discovers repos upward; the ceiling stops discovery at tmp_path so
+    # the test is hermetic even when pytest's basetemp sits inside a checkout.
+    monkeypatch.setenv("GIT_CEILING_DIRECTORIES", str(tmp_path.parent))
     monkeypatch.setattr(vca, "_INDEX_READ", False)
     monkeypatch.setattr(vca, "_TRACKED", None)
     monkeypatch.setattr(vca, "_GITLINKS", [])
