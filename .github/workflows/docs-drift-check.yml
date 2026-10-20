@@ -1,0 +1,66 @@
+name: Docs Drift Check (fail-soft advisory)
+
+# ORGSIM-MIRROR runbook drift auditor — advisory only, never blocks merges.
+# Intelligence in the harness, not the model: zero LLM, stdlib-only, GET-only probes.
+
+on:
+  pull_request:
+    paths:
+      - 'plans/**'
+      - 'docs/**'
+      - 'pmoves/docs/**'
+      - 'scripts/runbook_drift.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  drift:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+
+      - name: Run runbook drift auditor
+        run: |
+          python scripts/runbook_drift.py \
+            --globs 'plans/*.md' \
+            --out research/runbook_drift_report_ci.json
+
+      - name: Append verdict summary
+        if: always()
+        run: |
+          echo "## ORGSIM-MIRROR Runbook Drift (advisory)" >> $GITHUB_STEP_SUMMARY
+          echo '```json' >> $GITHUB_STEP_SUMMARY
+          python -c "import json;d=json.load(open('research/runbook_drift_report_ci.json'));print(json.dumps({k:d[k] for k in ('version','run_digest','files_scanned','counts')},indent=1))" >> $GITHUB_STEP_SUMMARY || echo 'report parse failed - see logs' >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          # NEVER fail the job on drift: advisory only. The report speaks; the gate doesn't.
+          exit 0
+
+      - name: Comment verdict summary on PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
+        with:
+          script: |
+            const fs = require('fs');
+            let summary = 'report unavailable';
+            try {
+              const r = JSON.parse(fs.readFileSync('research/runbook_drift_report_ci.json','utf8'));
+              summary = `v${r.version} / ${r.files_scanned} files / ` +
+                Object.entries(r.counts).map(([k,v])=>`${k} ${v}`).join(' / ') +
+                ` / digest ${r.run_digest.slice(0,12)}`;
+            } catch (e) { summary = 'report parse failed - see action logs'; }
+            const body = '## ORGSIM-MIRROR drift check (advisory, fail-soft)\n\n' + summary +
+              '\n\n<sub>Zero-LLM deterministic audit - unreachable = UNDECIDED, never dead - scripts/runbook_drift.py</sub>';
+            await github.rest.issues.createComment({
+              owner: context.repo.owner, repo: context.repo.repo,
+              issue_number: context.issue.number, body
+            });

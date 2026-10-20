@@ -44,6 +44,8 @@ on:
       # promise made to an agent at its least recoverable moment.
       - ".claude/hooks/damage-control/patterns.yaml"
       - "deploy/runbooks/**/*.md"
+      # Plans carry runnable steps too (scanned since the #3375 review).
+      - "plans/**/*.md"
       - "pmoves/Makefile"
       - "pmoves/mk/*.mk"
       - "pmoves/config/fleet-map.yaml"
@@ -73,7 +75,7 @@ concurrency:
 jobs:
   validate-command-anchors-ratchet:
     name: validate-command-anchors-ratchet
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

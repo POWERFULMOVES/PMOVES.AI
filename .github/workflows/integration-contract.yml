@@ -29,7 +29,7 @@ permissions:
 jobs:
   gate:
     name: Integration Contract Gate
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Harden Runner
