@@ -60,6 +60,13 @@ actors:
     ref: "agent-teams.yaml → Research & Knowledge: cipher_memory (:8105)"
     guilds: [core]
 
+  - id: kimi-knuckles
+    kind: agent
+    ref: "agent_registry.yaml → kimi_knuckles (Kimi Code CLI on B850/Knuckles)"
+    persona: null
+    host: pmoves-knuckles
+    guilds: [infra-cloud, governance]
+
   - id: minimax-floos
     kind: agent
     ref: "agent-teams.yaml → Media & Voice: <TODO confirm entry>"
