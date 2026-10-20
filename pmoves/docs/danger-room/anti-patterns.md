@@ -145,6 +145,40 @@ recognize it before it bites) · **Harvest** (the correct pre-existing tool/proc
 - **Harvest:** write the row after the operation, carrying the actual result; initialize
   `None`/`pending`.
 
+### `overlay-paper-over`
+- **Trap:** a PMOVES overlay that stops *connecting to* a harness and starts *standing in
+  for* it: sniffing `--help`/`--version` to guess which program is installed, exec'ing a
+  different binary than the launcher is named for, regen output that deletes the harness's
+  own guards, committed templates that bake one operator's filesystem into fleet config.
+  The harness's native settings surface and protocol are the contract; the overlay layers
+  identity, env and routing on top of that contract and never replaces it.
+- **Live (teachable moments, not blame):** #3282 (Mavis launcher, merged 2026-10-11 with 27 review findings unanswered):
+  regen dropped the codex blocklist note and the kilo/kimi node bridges, shipped
+  `configs/claude_settings/minimax.json` with an operator home path, and a second launcher
+  at mode 100644. #3325: `kimi-pmoves.sh` grepped `kimi --help` for `--config-file` to
+  pick a code path; two regex patches later it still infers from prose (review
+  2026-10-11). `kilo-pmoves.sh` on main exec's `opencode --config`, not `kilo`. Operator,
+  2026-10-11: "PMOVES connects and overlays it does not break shim or paper over", and on
+  the lanes above: "the purpose is not to blame it is to learn those were honest efforts
+  which led to a better outcome the teachable moment". Each one produced the thing that
+  closes it: the regen lane produced the harness map; the regex rounds produced the
+  declared-flavor registry row; the wrong-binary exec produced `kilo.json` as the seam.
+- **Signal:** a launcher that parses the CLI's help text; `exec <other-binary>`; a
+  generator diff that removes lines it did not emit; an absolute operator home path
+  (`C:` drive or `/home`) in a committed config; a PR that cannot name the harness's native
+  setting it hydrates.
+- **Harvest:** map first, build second — `pmoves/docs/TAC/TAC_HARNESS_OVERLAY_MAP.md` rows
+  name each harness's native surface (settings file, protocol, ACP id) and the PMOVES
+  overlay seam (identity, env.shared, MCP roster, routing). Hydrate through that surface
+  (`--mcp-config`, `--settings`, `--profile`, `--config`); speak ACP via the
+  PMOVES-registry harness (`client.py`) instead of wrapping the CLI; declare the flavor in
+  `node-vocabulary.yaml` instead of detecting it. Declare the harness itself: a
+  `kind: harness` row in `agent_registry.yaml` whose `overlay:` block names the settings
+  surface, the instructions file, the skills dir and the ACP command, so the ACP map marks
+  it `linked` (4 of 42 on 2026-10-11: claude-acp, codex-acp, kilo, opencode) and
+  `skills_parity.py` can measure whether the skill reaches every AGInT. Review gate: the
+  PR template's overlay checkbox and `kilocode-review.yml` section 2.
+
 ### `phantom-deliverable`
 - **Trap:** post-interruption (or post-compaction) work claimed as done that was never
   durably created — files written to scratch that never got committed, PRs "opened" whose
@@ -178,6 +212,7 @@ recognize it before it bites) · **Harvest** (the correct pre-existing tool/proc
 | exit codes in docstring + switch + test | `exit-code-contract-drift` |
 | audit row initialized `True` | `premature-audit-write` |
 | completion claim without a fresh receipt | `phantom-deliverable` |
+| launcher parses `--help`, exec's another binary, regen deletes guards, operator path in config | `overlay-paper-over` |
 
 ## Provenance
 
@@ -187,3 +222,7 @@ PMOVES-Registry tooling survey (42 agents, `verify_agents.py`/`client.py`/
 `registry_utils.py`/`protocol_matrix.py`); the 2026-09-20 cipher heal and TTS 401.
 Doctrine owner: DARKXSIDE. Catalog home: this file; matching signals feed Danger Room
 room-generation (E2B E2E per `pmoves-e2b-danger-room`).
+
+`overlay-paper-over` added 2026-10-11 by 5090-CLAUDE from operator canon stated the same
+day (quoted in the room) and live evidence on #3282 / #3325; reviewer wiring landed in the
+same PR (kilo prompt, pair-review observation class 5, PR template overlay checkbox).

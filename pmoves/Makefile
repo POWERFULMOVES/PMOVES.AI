@@ -5691,6 +5691,10 @@ docs-reconcile-check: ## Check living document freshness (read-only, CI-safe)
 docs-reconcile-json: ## Living document freshness report (JSON output)
 	@$(PYTHON) tools/docs_reconcile.py --check --json $(ARGS)
 
+.PHONY: skills-parity
+skills-parity: ## Which harnesses see which skills (report; ARGS=--strict to gate, --json for machine output)
+	@$(PYTHON) tools/skills_parity.py $(ARGS)
+
 # Renamed from docs-render-living: it silently shadowed the Lane 2228
 # registry iterator (make keeps the LAST single-colon recipe) — same
 # duplicate-target class as the #2339 fix for juicefs-status et al.

@@ -39,6 +39,18 @@ DEFAULT_OUT = REPO_ROOT / "pmoves" / "configs" / "acp_registry_map.json"
 EXPLICIT_BRIDGES: dict[str, str] = {
     "spynel": "PMOVES-spynel",
     "kilo": "kilocode_glm",  # Kilo-Org/kilocode — the kilocode_glm harness agent
+    # 2026-10-11 (#3347): the harnesses that were "in the registry but
+    # unbridged" now have `kind: harness` rows in agent_registry.yaml whose
+    # `overlay:` block declares the native settings surface and ACP command.
+    "claude-acp": "claude_code",
+    "codex-acp": "codex_cli",
+    "opencode": "opencode",
+    # NOT bridged on purpose: the registry's `kimi` entry pins the archived
+    # Python kimi-cli (MoonshotAI/kimi-cli 1.50.0). The harness PMOVES runs is
+    # Kimi Code CLI (registry row `kimi_code`), which also answers `kimi acp`
+    # but has no agent.json upstream yet. Linking the legacy entry to the new
+    # program would paper over the two-programs split (#3325); the bridge is
+    # a registry PR adding `kimi-code/agent.json`.
 }
 
 
