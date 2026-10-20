@@ -29,8 +29,9 @@ $ErrorActionPreference = 'Stop'
 # env-var name, same WARN phrase (`stripped Mavis SDK hijack`). Pinned by
 # TwinParityTests in pmoves/tools/tests/test_pmoves_launcher_generator.py.
 # ---------------------------------------------------------------------------
-if (-not $env:PMOVES_CLAUDE_BACKEND) { $env:PMOVES_CLAUDE_BACKEND = '' }
-$env:PMOVES_CLAUDE_BACKEND = $env:PMOVES_CLAUDE_BACKEND.ToLower()
+# Assigning '' to an env var DELETES it in PowerShell, so an unset backend is
+# still $null here -- interpolate to a string before calling .ToLower() (#3356).
+$env:PMOVES_CLAUDE_BACKEND = "$env:PMOVES_CLAUDE_BACKEND".ToLower()
 
 # Pull --backend= out of $args. We rebuild $args to the residual so the
 # launched claude gets them, not the flag.
@@ -91,6 +92,109 @@ $__pmoves_backend_parse_next = $false
 $root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $envf = if ($env:PMOVES_ENV_SHARED) { $env:PMOVES_ENV_SHARED } else { Join-Path $root 'pmoves\env.shared' }
 
+# ---------------------------------------------------------------------------
+# Interpreter discovery — the Windows half of pmoves/scripts/pm-python.sh.
+#
+# This block exists because the FAIL-CLOSED gate below was mirrored from the
+# POSIX twin and the discovery it gates on was not. The ps1 tried exactly
+# `Get-Command python` then `Get-Command python3`, and on a stock Windows 10/11
+# node BOTH resolve to the Microsoft Store app-execution alias in
+# %LOCALAPPDATA%\Microsoft\WindowsApps. Get-Command SUCCEEDS on that alias, so
+# the "no interpreter" branch never fired, the normalizer never ran, and the
+# gate refused a node that had previously warned and launched — via an override
+# ($env:PMOVES_PYTHON) this file did not read and a remedy (`make -C pmoves
+# preflight`) whose output (pmoves\.venv-pmoves) it did not look in.
+#
+# PRESENCE IS NOT RUNNABILITY. That is the whole lesson: the stub is present.
+# So every candidate is RUN before it is accepted, exactly as pm-python.sh does.
+# ---------------------------------------------------------------------------
+
+function Test-PmovesPythonRuns {
+    <#
+      Runs `<argv> -c 'pass'` — a no-op for any real interpreter, non-zero for
+      anything that is not one. This is what rejects the Store stub, which
+      answers with "Python was not found; run without arguments to install from
+      the Microsoft Store" and a non-zero code.
+
+      pm-python.sh probes with `-c ''`. An EMPTY argument is not safely passable
+      to a native command from Windows PowerShell 5.1 (it can be dropped, which
+      would turn the probe into `python -c` and reject a GOOD interpreter — the
+      same class of silent misjudgement this whole change is about), so the
+      no-op is spelled `pass`. Same semantics, no quoting hazard.
+    #>
+    param([string[]]$Argv)
+    # Function-scoped: a candidate that is not an interpreter is EXPECTED to
+    # fail, and under the script's 'Stop' preference that failure (or a native
+    # non-zero exit, under $PSNativeCommandUseErrorActionPreference on PS 7.4+)
+    # would terminate the launcher instead of advancing the ladder.
+    $ErrorActionPreference = 'SilentlyContinue'
+    $PSNativeCommandUseErrorActionPreference = $false
+    if (-not $Argv -or $Argv.Count -eq 0) { return $false }
+    $exe  = $Argv[0]
+    # @(...) is load-bearing: a one-element slice is a bare STRING, and splatting
+    # a string passes its characters -- `py -3` became `py - 3`, and a lone `-`
+    # makes python run a script read from STDIN (#3356).
+    $rest = @(if ($Argv.Count -gt 1) { $Argv[1..($Argv.Count - 1)] })
+    $global:LASTEXITCODE = 1
+    try { & $exe @rest -c 'pass' *> $null } catch { return $false }
+    return ($LASTEXITCODE -eq 0)
+}
+
+function Get-PmovesPythonArgv {
+    <#
+      Returns a string[] argv vector for a python that RUNS, or $null.
+      Same rungs as pm-python.sh; `py -3` is tried before `python3` because on
+      Windows `python3` is the Store alias and `py` is the real launcher that
+      ships with every python.org install — probing the launcher first avoids
+      the stub's console message in the common case. Both are probed either
+      way, so the order changes noise, not the outcome.
+    #>
+    param([Parameter(Mandatory)][string]$Root)
+
+    # 0. Operator pin always wins. Space-separated so multi-word vectors like
+    #    `py -3` work, but a path is tried VERBATIM first: the Windows default
+    #    install path is C:\Program Files\Python313\python.exe, and splitting
+    #    that on whitespace would make the pin the launcher advertises as its
+    #    own remedy fail on the platform's default layout.
+    if ($env:PMOVES_PYTHON) {
+        $verbatim = $env:PMOVES_PYTHON.Trim()
+        if ($verbatim -and (Test-Path -LiteralPath $verbatim -PathType Leaf) -and
+            (Test-PmovesPythonRuns @($verbatim))) {
+            return , @($verbatim)
+        }
+        $pin = @($env:PMOVES_PYTHON -split '\s+' | Where-Object { $_ -ne '' })
+        if ($pin.Count -gt 0 -and (Test-PmovesPythonRuns $pin)) { return , $pin }
+        # An explicit pin that does not run is an ERROR, not a hint. Falling
+        # through to a guess is how `PMOVES_PYTHON=" "` became "python3 is
+        # missing" on the POSIX side.
+        return $null
+    }
+
+    # 1. The canonical venv — what `make -C pmoves preflight` provisions, and
+    #    therefore what the refusal below is allowed to name as a remedy.
+    foreach ($c in @(
+            (Join-Path $Root 'pmoves\.venv-pmoves\Scripts\python.exe'),
+            (Join-Path $Root 'pmoves\.venv-pmoves\bin\python'))) {
+        if ((Test-Path -LiteralPath $c -PathType Leaf) -and (Test-PmovesPythonRuns @($c))) {
+            return , @($c)
+        }
+    }
+
+    # 2. Platform launchers. Written out rather than looped for the same reason
+    #    pm-python.sh writes its branches out: `py -3` is two words and
+    #    `python3` is one, and no array-flattening rule should be load-bearing
+    #    in the code that decides whether this node can start a session.
+    if (Test-PmovesPythonRuns @('py', '-3')) { return , @('py', '-3') }
+    if (Test-PmovesPythonRuns @('python3'))  { return , @('python3') }
+    if (Test-PmovesPythonRuns @('python'))   { return , @('python') }
+    return $null
+}
+
+# Defined HERE, ahead of the backend selector below, because that selector is
+# their first caller. PowerShell functions must be defined before they are
+# called; a later merge left them ~190 lines below it and every launch died
+# with 'Get-PmovesPythonArgv is not recognized' (#3356).
+
 # --- MAVIS SDK ENV STRIP ----------------------------------------------------
 # The Mavis SDK's `env` block in `~/.claude/settings.json` injects
 # ANTHROPIC_BASE_URL, ANTHROPIC_AUTH_TOKEN, ANTHROPIC_MODEL, MCP_TIMEOUT,
@@ -147,7 +251,7 @@ if (-not $pyArgv) {
     Write-Warning "[claude-pmoves] no python interpreter; claude_backend_apply skipped (PMOVES_CLAUDE_BACKEND=$applyBackend)."
 } else {
     $pyExe = $pyArgv[0]
-    $pyPre = if ($pyArgv.Count -gt 1) { $pyArgv[1..($pyArgv.Count - 1)] } else { @() }
+    $pyPre = @(if ($pyArgv.Count -gt 1) { $pyArgv[1..($pyArgv.Count - 1)] })   # @(): see Test-PmovesPythonRuns
     $cbNormalizer = Join-Path $root 'pmoves\tools\claude_backend.py'
     if (-not (Test-Path $cbNormalizer)) {
         Write-Warning "[claude-pmoves] claude_backend.py not found at $cbNormalizer; backend selector skipped."
@@ -288,101 +392,6 @@ if (Test-Path $envf) {
 # it. Set on BOTH branches -- "loaded 0 vars" and "never ran" are different
 # faults with different remedies, and a bare boolean would merge them.
 [Environment]::SetEnvironmentVariable('PMOVES_LAUNCHER_SESSION', $script:launcherSession, 'Process')
-
-# ---------------------------------------------------------------------------
-# Interpreter discovery — the Windows half of pmoves/scripts/pm-python.sh.
-#
-# This block exists because the FAIL-CLOSED gate below was mirrored from the
-# POSIX twin and the discovery it gates on was not. The ps1 tried exactly
-# `Get-Command python` then `Get-Command python3`, and on a stock Windows 10/11
-# node BOTH resolve to the Microsoft Store app-execution alias in
-# %LOCALAPPDATA%\Microsoft\WindowsApps. Get-Command SUCCEEDS on that alias, so
-# the "no interpreter" branch never fired, the normalizer never ran, and the
-# gate refused a node that had previously warned and launched — via an override
-# ($env:PMOVES_PYTHON) this file did not read and a remedy (`make -C pmoves
-# preflight`) whose output (pmoves\.venv-pmoves) it did not look in.
-#
-# PRESENCE IS NOT RUNNABILITY. That is the whole lesson: the stub is present.
-# So every candidate is RUN before it is accepted, exactly as pm-python.sh does.
-# ---------------------------------------------------------------------------
-
-function Test-PmovesPythonRuns {
-    <#
-      Runs `<argv> -c 'pass'` — a no-op for any real interpreter, non-zero for
-      anything that is not one. This is what rejects the Store stub, which
-      answers with "Python was not found; run without arguments to install from
-      the Microsoft Store" and a non-zero code.
-
-      pm-python.sh probes with `-c ''`. An EMPTY argument is not safely passable
-      to a native command from Windows PowerShell 5.1 (it can be dropped, which
-      would turn the probe into `python -c` and reject a GOOD interpreter — the
-      same class of silent misjudgement this whole change is about), so the
-      no-op is spelled `pass`. Same semantics, no quoting hazard.
-    #>
-    param([string[]]$Argv)
-    # Function-scoped: a candidate that is not an interpreter is EXPECTED to
-    # fail, and under the script's 'Stop' preference that failure (or a native
-    # non-zero exit, under $PSNativeCommandUseErrorActionPreference on PS 7.4+)
-    # would terminate the launcher instead of advancing the ladder.
-    $ErrorActionPreference = 'SilentlyContinue'
-    $PSNativeCommandUseErrorActionPreference = $false
-    if (-not $Argv -or $Argv.Count -eq 0) { return $false }
-    $exe  = $Argv[0]
-    $rest = if ($Argv.Count -gt 1) { $Argv[1..($Argv.Count - 1)] } else { @() }
-    $global:LASTEXITCODE = 1
-    try { & $exe @rest -c 'pass' *> $null } catch { return $false }
-    return ($LASTEXITCODE -eq 0)
-}
-
-function Get-PmovesPythonArgv {
-    <#
-      Returns a string[] argv vector for a python that RUNS, or $null.
-      Same rungs as pm-python.sh; `py -3` is tried before `python3` because on
-      Windows `python3` is the Store alias and `py` is the real launcher that
-      ships with every python.org install — probing the launcher first avoids
-      the stub's console message in the common case. Both are probed either
-      way, so the order changes noise, not the outcome.
-    #>
-    param([Parameter(Mandatory)][string]$Root)
-
-    # 0. Operator pin always wins. Space-separated so multi-word vectors like
-    #    `py -3` work, but a path is tried VERBATIM first: the Windows default
-    #    install path is C:\Program Files\Python313\python.exe, and splitting
-    #    that on whitespace would make the pin the launcher advertises as its
-    #    own remedy fail on the platform's default layout.
-    if ($env:PMOVES_PYTHON) {
-        $verbatim = $env:PMOVES_PYTHON.Trim()
-        if ($verbatim -and (Test-Path -LiteralPath $verbatim -PathType Leaf) -and
-            (Test-PmovesPythonRuns @($verbatim))) {
-            return , @($verbatim)
-        }
-        $pin = @($env:PMOVES_PYTHON -split '\s+' | Where-Object { $_ -ne '' })
-        if ($pin.Count -gt 0 -and (Test-PmovesPythonRuns $pin)) { return , $pin }
-        # An explicit pin that does not run is an ERROR, not a hint. Falling
-        # through to a guess is how `PMOVES_PYTHON=" "` became "python3 is
-        # missing" on the POSIX side.
-        return $null
-    }
-
-    # 1. The canonical venv — what `make -C pmoves preflight` provisions, and
-    #    therefore what the refusal below is allowed to name as a remedy.
-    foreach ($c in @(
-            (Join-Path $Root 'pmoves\.venv-pmoves\Scripts\python.exe'),
-            (Join-Path $Root 'pmoves\.venv-pmoves\bin\python'))) {
-        if ((Test-Path -LiteralPath $c -PathType Leaf) -and (Test-PmovesPythonRuns @($c))) {
-            return , @($c)
-        }
-    }
-
-    # 2. Platform launchers. Written out rather than looped for the same reason
-    #    pm-python.sh writes its branches out: `py -3` is two words and
-    #    `python3` is one, and no array-flattening rule should be load-bearing
-    #    in the code that decides whether this node can start a session.
-    if (Test-PmovesPythonRuns @('py', '-3')) { return , @('py', '-3') }
-    if (Test-PmovesPythonRuns @('python3'))  { return , @('python3') }
-    if (Test-PmovesPythonRuns @('python'))   { return , @('python') }
-    return $null
-}
 
 function Test-PmovesRosterHasBarePlaceholder {
     <#
@@ -542,7 +551,14 @@ if (Test-Path -LiteralPath $identTool) {
         }
         $identArgv = @($identTool, '--harness', 'claude-code', '--shell')
         if ($identPy.Count -gt 1) { $identArgv = @($identPy[1..($identPy.Count - 1)]) + $identArgv }
+        # Under the script-wide 'Stop', Windows PowerShell 5.1 turns ANY native
+        # stderr line into a terminating NativeCommandError even with 2>$null,
+        # so a resolver traceback (e.g. a bare `py -3` without PyYAML) killed
+        # the launch this block promises to keep (#3356). Same guard as the
+        # backend selector above.
+        $prevErr = $ErrorActionPreference; $ErrorActionPreference = 'SilentlyContinue'
         $identOut = & $identPy[0] @identArgv 2>$null
+        $ErrorActionPreference = $prevErr
         if ($LASTEXITCODE -eq 0 -and $identOut) {
             # The tool emits shell assignments (KEY='value'); PARSE them rather
             # than eval. PowerShell has no eval of shell syntax, and inventing
@@ -586,7 +602,10 @@ if (Test-Path -LiteralPath $identTool) {
                 } else {
                     $carryArgv = @($carryTool, '--agent', $nodeIdent, '--shell')
                     if ($identPy.Count -gt 1) { $carryArgv = @($identPy[1..($identPy.Count - 1)]) + $carryArgv }
+                    # Same 5.1 stderr-under-'Stop' guard as the resolver above.
+                    $prevErr = $ErrorActionPreference; $ErrorActionPreference = 'SilentlyContinue'
                     $carryOut = & $identPy[0] @carryArgv 2>$null
+                    $ErrorActionPreference = $prevErr
                     # EXIT CODE IS A VERDICT, NOT SUCCESS/FAILURE. The tool
                     # documents: 0 carry intact | 1 carry GAP (bootstrap /
                     # advisory / uncarded) | 2 usage error | 3 nothing to
@@ -754,7 +773,7 @@ if (Test-Path $roster) {
     } else {
         $pyShown = ($pyArgv -join ' ')
         $pyExe   = $pyArgv[0]
-        $pyPre   = if ($pyArgv.Count -gt 1) { $pyArgv[1..($pyArgv.Count - 1)] } else { @() }
+        $pyPre   = @(if ($pyArgv.Count -gt 1) { $pyArgv[1..($pyArgv.Count - 1)] })   # @(): see Test-PmovesPythonRuns
         try {
             # The tool prints the path it wrote on stdout; warnings go to stderr
             # and pass through to the console.
