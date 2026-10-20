@@ -76,14 +76,19 @@ tree under the two other live sessions.
 
 1. **Edit only in your own worktree**, named for the lane, and put its path in
    your claim scope:
-   `git worktree add --no-track -b <branch> ../pmoves-<lane> origin/main`
-   (without `--no-track` the new branch tracks `main`, and a bare `git push`
-   targets the wrong ref).
+   `git fetch origin main && git worktree add --no-track -b <branch> ../pmoves-<lane> origin/main`
+   (without `--no-track` the new branch tracks `main`: under git's default
+   `push.default=simple` a bare `git push` is refused, and under
+   `push.default=upstream` it pushes to `main`. Push with an explicit
+   `git push -u origin <branch>` either way).
 2. **The main checkout is shared ground.** Read from it. Do not switch its
    branch, reset it, pull it or fast-forward it while another body is live in
-   it. To check, run this anywhere inside the checkout. It lists agent CLIs
-   whose working directory is the checkout or any directory under it:
-   `r=$(git rev-parse --show-toplevel); for p in $(pgrep -f 'claude|crush|kilo|codex|gemini|hermes|kimi'); do case "$(readlink /proc/$p/cwd)" in "$r"|"$r"/*) ps -o pid=,ppid=,etime=,args= -p "$p";; esac; done`
+   it. To check, run this from the checkout root or a plain subdirectory of it.
+   From inside a submodule, `--show-toplevel` reports the submodule rather than
+   the checkout, so the command below asks for the superproject first. It lists
+   agent CLIs whose working directory is the checkout or any directory under it:
+   `r=$(git rev-parse --show-superproject-working-tree); [ -n "$r" ] || r=$(git rev-parse --show-toplevel); command -v pgrep >/dev/null || echo 'COULD-NOT-MEASURE: no pgrep on this host'; for p in $(pgrep -f 'claude|crush|kilo|codex|gemini|hermes|kimi'); do case "$(readlink /proc/$p/cwd)" in "$r"|"$r"/*) ps -o pid=,ppid=,etime=,args= -p "$p";; esac; done`
+   POSIX-only (needs `/proc`, `readlink`, `pgrep`). On Windows-hosted nodes there is no equivalent one-liner, and an empty result there means could-not-measure, not unoccupied: treat the main checkout as occupied.
    Ignore three kinds of line: your own session, the shell running this check
    (its parent is your session), and any line whose PPID is another listed PID
    (a CLI's wrapper and its child are one body). Everything else is another
