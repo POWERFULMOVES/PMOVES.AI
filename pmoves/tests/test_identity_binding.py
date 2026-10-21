@@ -55,7 +55,16 @@ def _module():
     return module
 
 
-il = _module()
+from functools import lru_cache
+
+
+@lru_cache(maxsize=1)
+def _il():
+    # Lazy: identity_lineage.py is only executed when a test actually runs,
+    # so collection on a node without `.spynel/` (or without the tool's own
+    # import-time requirements satisfied) skips cleanly instead of breaking
+    # at import/collection time.
+    return _module()
 
 
 def _harness() -> dict:
@@ -137,12 +146,14 @@ def test_appending_an_identity_does_not_break_the_binding(tmp_path, monkeypatch)
     widened.write_text(yaml.safe_dump(doc), encoding="utf-8")
     monkeypatch.setenv("PMOVES_IDENTITY_VOCABULARY", str(widened))
 
+    il = _il()
     vocab = il.load_vocabulary()
     assert il.canonical_identity("APPEND-PROBE-IDENTITY", vocab) == "append-probe-identity"
     _assert_slots_carry_no_identity(_harness(), vocab=vocab)
 
 
 def _assert_slots_carry_no_identity(harness: dict, vocab=None) -> None:
+    il = _il()
     vocab = vocab if vocab is not None else il.load_vocabulary()
     offenders = {}
     for slot in sorted(_configured_slots(harness)):

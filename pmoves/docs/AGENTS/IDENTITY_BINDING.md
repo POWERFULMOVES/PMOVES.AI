@@ -60,13 +60,14 @@ identity only when it reaches `make -C pmoves register-claim` and supplies `OWNE
 Nothing validates that string at write time; `identity_lineage.verify()` catches it
 afterward.
 
-That gap is live, not hypothetical. `pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md:2980` is a
-NOTE filed `2026-09-21T21:19:28Z` by author `SPARK-CLAUDE` — a Spynel developer session on
-this node with `developer_agent_prefix: ""`. `SPARK-CLAUDE` is **not** in the vocabulary,
-so `verify()` currently returns exactly one finding naming it, while
-`pmoves/config/signing_identity_cards.yaml:253` does carry `agent_id: "spark-claude"`. The
-card exists; the vocabulary entry does not. Closing it is a vocabulary append, out of
-scope here and deliberately not performed by this document.
+That gap was live when this document was drafted (2026-09-21): a NOTE filed by author
+`SPARK-CLAUDE` — a Spynel developer session with `developer_agent_prefix: ""` — was not in
+the vocabulary while the signing card was pending. **It has since closed on main**: the
+spark-claude signing card landed (PR #3331, `pmoves/config/signing_identity_cards.yaml`,
+`agent_id: "spark-claude"`) and `pmoves/config/identity_vocabulary.yaml` now carries the
+`spark-claude` canonical entry (with the `claude_spark -> spark-claude` alias). The
+example stands as the shape of the gap: identity resolves only when the CLAIM reaches
+`identity_lineage.verify()`, never at write time.
 
 ## The missing fifth slot
 

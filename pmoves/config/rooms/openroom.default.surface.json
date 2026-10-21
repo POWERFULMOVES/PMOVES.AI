@@ -11,7 +11,7 @@
   "access": {
     "visibility": "private",
     "owner_only": true,
-    "rating_note": "Operator/agent desktop host. Room-local expression is unrestricted; public egress stays behind policies.publish.egress_redaction_floor."
+    "rating_note": "Operator/agent desktop host. Room-local expression is unrestricted; public egress stays behind policies.publish.allow_external_publish and its allowed_subjects gate."
   },
   "shell": {
     "theme": {

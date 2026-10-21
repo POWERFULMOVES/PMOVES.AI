@@ -37,11 +37,21 @@ def _documents() -> list[Path]:
 
 def _front_matter(path: Path) -> dict:
     text = path.read_text(encoding="utf-8")
+    # Tolerate CRLF checkouts before the startswith probe.
+    if text.startswith("---\r\n"):
+        text = text.replace("\r\n", "\n")
     if not text.startswith("---\n"):
         pytest.fail(f"{path}: no YAML front matter")
-    end = text.find("\n---", 3)
+    # Search past a possible leading '---' value line: start at the first newline
+    # so a multiline VALUE containing '\n---' inside a block scalar cannot truncate
+    # the front matter before the real terminator.
+    first_nl = text.find("\n")
+    end = text.find("\n---\n", first_nl + 1)
     if end == -1:
-        pytest.fail(f"{path}: unterminated YAML front matter")
+        # Last resort: terminator at EOF without trailing newline.
+        end = text.find("\n---", first_nl + 1)
+        if end == -1:
+            pytest.fail(f"{path}: unterminated YAML front matter")
     data = yaml.safe_load(text[4:end])
     if not isinstance(data, dict):
         pytest.fail(f"{path}: front matter is not a mapping")
@@ -49,13 +59,17 @@ def _front_matter(path: Path) -> dict:
 
 
 def _timestamp_fields(node, prefix: str = ""):
-    """Yield (dotted_name, value) for every key ending in `_at`, at any depth."""
+    """Yield (dotted_name, value) for every key ending in `_at`, at any depth,
+    including keys inside lists of mappings."""
     if isinstance(node, dict):
         for key, value in node.items():
             name = f"{prefix}{key}"
             if str(key).endswith("_at"):
                 yield name, value
             yield from _timestamp_fields(value, f"{name}.")
+    elif isinstance(node, list):
+        for i, item in enumerate(node):
+            yield from _timestamp_fields(item, f"{prefix}{i}.")
 
 
 def _instant(name: str, value, path: Path) -> dt.datetime:
