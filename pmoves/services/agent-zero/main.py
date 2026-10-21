@@ -868,7 +868,9 @@ async def metrics() -> Response:
 
 @app.get("/config/environment", response_model=AgentZeroServiceConfig)
 def get_environment_endpoint() -> AgentZeroServiceConfig:
-    return get_service_config()
+    # Unauthenticated like /healthz: return a copy with NATS userinfo stripped.
+    config = get_service_config()
+    return config.model_copy(update={"nats_url": redact_url(config.nats_url)})
 
 
 @app.get("/mcp/commands")
