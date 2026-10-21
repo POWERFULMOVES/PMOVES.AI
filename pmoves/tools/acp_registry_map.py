@@ -80,15 +80,28 @@ def _load_acp_entries(registry: pathlib.Path) -> list[dict]:
 
 
 def _registry_commit(registry: pathlib.Path) -> str | None:
-    """HEAD of the registry checkout, or None when it is not a git checkout."""
-    try:
-        out = subprocess.run(
-            ["git", "-C", str(registry), "rev-parse", "HEAD"],
+    """HEAD of the registry checkout, or None when it is not a git checkout.
+
+    ``git -C <dir>`` walks UP to the nearest enclosing repository, so a plain
+    directory (an uninitialized submodule, a copied tree) inside this repo
+    would otherwise stamp the PARENT repo's HEAD. Only stamp when the
+    registry dir is itself a work-tree top level.
+    """
+    def _git(*args: str) -> str:
+        return subprocess.run(
+            ["git", "-C", str(registry), *args],
             capture_output=True, text=True, timeout=30, check=True,
-        )
+        ).stdout.strip()
+
+    try:
+        toplevel = _git("rev-parse", "--show-toplevel")
+        if not toplevel or (
+            pathlib.Path(toplevel).resolve() != registry.resolve()
+        ):
+            return None
+        return _git("rev-parse", "HEAD") or None
     except (OSError, subprocess.SubprocessError):
         return None
-    return out.stdout.strip() or None
 
 
 def _repo_basename(url: str) -> str:

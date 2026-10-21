@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import io
 import json
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -111,6 +112,34 @@ class TestAcpRegistryMap(unittest.TestCase):
         rc, err = _run("--registry", str(self.registry), "--out", str(self.out), "--check")
         self.assertEqual(rc, 1)
         self.assertIn("DRIFT", err)
+
+    def _git(self, cwd: Path, *args: str) -> str:
+        return subprocess.run(
+            ["git", "-C", str(cwd), "-c", "user.name=t", "-c", "user.email=t@t",
+             "-c", "commit.gpgsign=false", *args],
+            capture_output=True, text=True, check=True,
+        ).stdout.strip()
+
+    def test_commit_not_stamped_from_an_enclosing_repo(self):
+        # `git -C <dir> rev-parse HEAD` walks up to the parent repo when the
+        # registry dir is a plain directory (e.g. an uninitialized submodule
+        # inside this repo) -- that must NOT stamp the parent's commit.
+        self._git(self.dir, "init", "-q")
+        self._add_entry("alpha")
+        self._git(self.dir, "add", "-A")
+        self._git(self.dir, "commit", "-q", "-m", "outer")
+        self.assertTrue(self._git(self.dir, "rev-parse", "HEAD"))
+        self.assertIsNone(arm._registry_commit(self.registry))
+        artifact, _ = arm.build_map(self.registry)
+        self.assertNotIn("registry_commit", artifact)
+
+    def test_commit_stamped_when_registry_is_its_own_checkout(self):
+        self._add_entry("alpha")
+        self._git(self.registry, "init", "-q")
+        self._git(self.registry, "add", "-A")
+        self._git(self.registry, "commit", "-q", "-m", "registry")
+        head = self._git(self.registry, "rev-parse", "HEAD")
+        self.assertEqual(arm._registry_commit(self.registry), head)
 
     def test_check_and_write_are_exclusive(self):
         self._add_entry("alpha")
