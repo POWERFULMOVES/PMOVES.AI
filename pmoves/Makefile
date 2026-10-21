@@ -258,6 +258,7 @@ include mk/kilo.mk
 include mk/voice.mk
 include mk/kong.mk
 include mk/review.mk
+include mk/mike.mk
 
 # ----------------------------------------------------------------------------
 # venv + bringup-toolchain prereqs
