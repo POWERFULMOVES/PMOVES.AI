@@ -157,7 +157,7 @@ indexing). After replugging: `sudo systemctl start ollama`, then
 |------|---------|
 | Host vs latest | `make -C pmoves ollama-host-resolve` |
 | A/B on a copied model, backs up the store index | `make -C pmoves ollama-host-canary [VERSION=x.y.z]` |
-| Install (root; refuses without a PASS report) | `sudo make -C pmoves ollama-host-install VERSION=x.y.z` |
+| Install (root; refuses without a PASS report for the current host version and store, under 72 h old) | `sudo make -C pmoves ollama-host-install VERSION=x.y.z` |
 | Restore steps | `make -C pmoves ollama-host-rollback` |
 
 0.40+ rewrites the store (`manifests-v2`, `metadata`). The canary REFUSEs that
@@ -166,8 +166,7 @@ until the operator backs up the library and re-runs it with
 flow through the canary normally. The containerised Ollama (compose
 `PMOVES_OLLAMA_IMAGE`) is bumped separately by Dependabot.
 
-Upgrading does not fix partial GPU offload on unified memory; see
-§ GPU offload on unified memory.
+Upgrading does not fix partial GPU offload on unified memory.
 
 ## GPU Memory Planning
 
