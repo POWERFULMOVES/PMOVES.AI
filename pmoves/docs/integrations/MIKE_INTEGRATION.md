@@ -7,7 +7,7 @@
 | Pinned SHA | `563c8319` (2026-10-20, `chore(deps): bump the priority-2-production group ... (#680)`) |
 | First node | SPARK (DGX Spark, `linux/arm64`) |
 | Known Road | `make -C pmoves up-mike` · `down-mike` · `mike-status` · `mike-config` · `mike-logs` (`pmoves/mk/mike.mk`) |
-| Overlay | `pmoves/docker-compose.mike.yml` (layered on `PMOVES-Mike/docker-compose.yml`) |
+| Overlay | `pmoves/docker-compose.mike.yml` (layered on `PMOVES-Mike/docker-compose.yml`). **Staged for operator apply** in `pmoves/docs/handoffs/mike-compose-overlay-spark-2026-10-21.md` because the compose path is guard-protected. Validated with `docker compose config -q` from a scratch copy: 9 published ports, all `127.0.0.1` |
 | Env | `pmoves/env.mike` (gitignored), seeded from `pmoves/env.mike.example` |
 | Consumers | MiSSinGLinC validator (`pmoves/docs/AGENTS/MISSINGLINC_MINT_SPEC.md`), TitanMail MCP (Mailpit as local test inbox) |
 
@@ -228,6 +228,9 @@ The backend's chat endpoint, which the spec lists as `POST /api/chat`, is
 
 ## Open items
 
+0. **Apply the overlay** from
+   `pmoves/docs/handoffs/mike-compose-overlay-spark-2026-10-21.md` (operator,
+   `KNOWN_ROAD=compose:handoff:mike-compose-overlay-spark-2026-10-21.md`).
 1. First real `make up-mike` on SPARK (build of backend/frontend on arm64,
    `db-init` migration, `workflow-sync`). Not run in the PR that added this
    doc, which by brief started no containers.
