@@ -669,9 +669,16 @@ def check_health(url: str, timeout: int = 5) -> tuple[bool, str]:
 
         resp = urlopen(url, timeout=timeout)
         status = resp.getcode()
-        if status and status < 400:
-            return True, f"OK ({status})"
-        return False, f"Unhealthy ({status})"
+        if not status or status >= 400:
+            return False, f"Unhealthy ({status})"
+        # A web app's catch-all route answers any path, /healthz included, with
+        # its index.html and 200 (SPARK :8091 is Archon's UI). That is not the
+        # service this step depends on, so an HTML answer is not healthy.
+        ctype = (resp.headers.get("Content-Type") or "").lower()
+        head = resp.read(512).lstrip().lower()
+        if "text/html" in ctype or head.startswith((b"<!doctype html", b"<html")):
+            return False, f"Not a health endpoint: HTML page ({status}) - wrong port?"
+        return True, f"OK ({status})"
     except Exception as e:
         return False, f"Unreachable: {e}"
 

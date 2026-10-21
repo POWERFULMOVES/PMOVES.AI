@@ -38,7 +38,7 @@ pairings:
         depends:
           services: ["nats:4222"]
           skills: ["hf-benchmark"]
-          health: "http://localhost:8091/healthz"
+          health: "http://localhost:8091/health"  # Archon; its /healthz is the UI catch-all
         hooks:
           on_complete: "skills.step.a2ui-chart.done.v1"
           on_error: "skills.error.v1"
@@ -113,7 +113,7 @@ pairings:
         depends:
           services: ["nats:4222"]
           skills: ["deepresearch"]
-          health: "http://localhost:8091/healthz"
+          health: "http://localhost:8091/health"  # Archon; its /healthz is the UI catch-all
         hooks:
           on_complete: "skills.step.a2ui-chart.done.v1"
           on_error: "skills.error.v1"
@@ -214,7 +214,7 @@ pairings:
         agent: archon
         depends:
           services: ["nats:4222"]
-          health: "http://localhost:8091/healthz"
+          health: "http://localhost:8091/health"  # Archon; its /healthz is the UI catch-all
         hooks:
           on_complete: "skills.step.theme-lookup.done.v1"
           on_error: "skills.error.v1"
@@ -235,7 +235,7 @@ pairings:
         depends:
           services: ["nats:4222"]
           skills: ["comfyui-generate"]
-          health: "http://localhost:8091/healthz"
+          health: "http://localhost:8091/health"  # Archon; its /healthz is the UI catch-all
         hooks:
           on_complete: "skills.pipeline.agent-card-gen.done.v1"
           on_error: "skills.error.v1"
@@ -281,7 +281,7 @@ pairings:
         depends:
           services: ["nats:4222"]
           skills: ["pr-learnings-encode"]
-          health: "http://localhost:8091/healthz"
+          health: "http://localhost:8091/health"  # Archon; its /healthz is the UI catch-all
         hooks:
           on_complete: "agent.graphiti.signed.v1"
           on_error: "ops.pr.monitor.failed.v1"
