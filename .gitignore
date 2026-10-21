@@ -397,5 +397,5 @@ pmoves/tools/comfyui/_input/
 /profile.yaml
 /.node-config
 
-# Local model weights (runbook_drift JEV_MODEL default lives here)
-research/models/
+# Local model weights (runbook_drift JEV_MODEL default lives here). Rooted, as above.
+/research/models/

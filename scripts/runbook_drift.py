@@ -23,7 +23,8 @@ from pathlib import Path
 
 # The checkout this script lives in. RUNBOOK_DRIFT_ROOT points it at another
 # tree (the A0 sidecar runs it against /a0/usr/projects/pmoves_ai).
-ROOT = Path(os.environ.get("RUNBOOK_DRIFT_ROOT") or Path(__file__).resolve().parents[1])
+# Resolved so a relative override is pinned once, not re-read against the CWD.
+ROOT = Path(os.environ.get("RUNBOOK_DRIFT_ROOT") or Path(__file__).resolve().parents[1]).resolve()
 DEFAULT_GLOBS = ["plans/*.md"]
 ENDPOINT_TIMEOUT = 6  # seconds
 REPO = "POWERFULMOVES/PMOVES.AI"
@@ -221,10 +222,11 @@ def main():
     args = ap.parse_args()
     jev = None if args.no_jev else _load_jev()
     globs = [g.strip() for g in args.globs.split(",") if g.strip()]
-    records, files_scanned = [], 0
+    records, files_scanned, register_skipped = [], 0, 0
     for pattern in globs:
         for f in sorted(ROOT.glob(pattern)):
             if f.name.startswith("AGNOTE4482PHI"):
+                register_skipped += 1
                 continue  # the register is append-only history, not claims (v3)
             files_scanned += 1
             rel = str(f.relative_to(ROOT))
@@ -246,7 +248,10 @@ def main():
                 })
     if files_scanned == 0:
         # An empty scan is not a clean audit: say so and fail.
-        print(f"runbook_drift: globs {globs} matched no files under {ROOT}", file=sys.stderr)
+        msg = f"runbook_drift: globs {globs} matched no auditable files under {ROOT}"
+        if register_skipped:
+            msg += f" ({register_skipped} AGNOTE4482PHI register file(s) matched and skipped)"
+        print(msg, file=sys.stderr)
         sys.exit(2)
     run_digest = seal(records)
     counts = {}
