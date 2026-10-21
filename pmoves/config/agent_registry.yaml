@@ -3279,11 +3279,11 @@ agents:
       recovery_strategy: cipher_resumable
       cipher_categories: [agent_plan, agent_completion]
     topology:
-      node_affinity: [powerfulmoves, pmoves-4090]
+      node_affinity: [spark, powerfulmoves, pmoves-4090]
       team: orchestration
       ci_runner: ai-lab
       compose_profile: agents
-    description: "External peer-review validator (DangerRuss frame) built on PMOVES-mike; adversarial claim validation with cryptographic evidence chains. Audits only - never drafts. Wave-0 staged; runtime-minted by Archon. Spec: pmoves/docs/AGENTS/MISSINGLINC_MINT_SPEC.md"
+    description: "External peer-review validator (DangerRuss frame) built on PMOVES-Mike (submodule PMOVES-Mike, runs on SPARK via make up-mike); adversarial claim validation with cryptographic evidence chains. Audits only - never drafts. Wave-0 staged; runtime-minted by Archon. Spec: pmoves/docs/AGENTS/MISSINGLINC_MINT_SPEC.md"
 
   fordham_onboarding:
     name: "Fordham Onboarding"
