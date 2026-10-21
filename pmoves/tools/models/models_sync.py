@@ -687,7 +687,28 @@ def _build_a0_presets(
         emitted.add(name)
         presets.append((f"Fallback-{fallback_idx}", row))
 
+    if presets:
+        # A0 v2 contract: the first preset is "Default". Without one, A0's startup
+        # migration inserts upstream's OpenRouter Default and every chat uses it.
+        presets[0] = (A0_DEFAULT_PRESET, presets[0][1])
     return presets, _a0_embedding_row(rows, active_models, cloud_order)
+
+
+A0_DEFAULT_PRESET = "Default"
+# Names this generator emits; anything else in the live file is the operator's.
+_GENERATED_PRESET_RE = re.compile(r"^(Default|TensorZero|Registry|Fallback-\d+)$")
+
+
+def _carried_over_presets(out_path: Path) -> list[dict]:
+    """Hand-kept presets in the live file (cloud lanes etc.), preserved across syncs."""
+    if not out_path.exists():
+        return []
+    try:
+        live = yaml.safe_load(out_path.read_text(encoding="utf-8")) or []
+    except yaml.YAMLError:
+        return []
+    return [p for p in live if isinstance(p, dict)
+            and not _GENERATED_PRESET_RE.match(str(p.get("name", "")))]
 
 
 def _write_a0_presets(
@@ -740,6 +761,8 @@ def _write_a0_presets(
         if embed_row is not None:
             preset["embedding"] = _a0_embedding_block(embed_row, tensorzero_base)
         doc.append(preset)
+    kept = _carried_over_presets(out_path)
+    doc.extend(kept)
     header = (
         "# GENERATED FILE - do not hand-edit.\n"
         f"# Source: pmoves/tools/models/models_sync.py sync-dynamic (instance: {instance}).\n"
@@ -750,6 +773,7 @@ def _write_a0_presets(
         "instance": instance,
         "presets_file": str(out_path),
         "presets": [name for name, _row in presets],
+        "kept": [str(p.get("name")) for p in kept],
         "chat_lane": {
             name: _a0_chat_model_name(
                 _provider_id_for(str(row.get("provider_name", ""))),
