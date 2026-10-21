@@ -193,6 +193,62 @@ mcp-gateway-verify: ## Prove the gateway federates: list tools through it, per s
 	@set -a; $(LOAD_ENV_SHARED) 2>/dev/null || true; set +a; \
 	$(PRECHECK_PY) tools/mcp_gateway_verify.py $(ARGS)
 
+# ── Composio MCP fleet proxy (SPARK first, then KVM2) ─────────────────
+# supergateway 4.2.0 re-serving hosted Composio Connect over streamable HTTP,
+# loopback-bound, gateway-key protected. Composio ships no self-hostable MCP
+# server; see pmoves/docs/handoffs/COMPOSIO_MCP_SELFHOST.md for the research,
+# the compose blocks, and why they are operator-apply.
+#
+# The kit is ONE portable compose file shared with KVM2
+# (deploy/kvm2/composio-mcp/), so it runs as its own compose project rather
+# than as an overlay on the pmoves project. On SPARK the mesh overlay attaches
+# it to pmoves_app so Agent Zero reaches http://composio-mcp:8000/composio/mcp.
+#
+# Secrets: COMPOSIO_MCP_ENV_FILE (chmod 600) carries COMPOSIO_MCP_CONSUMER_KEY
+# (ck_*) and COMPOSIO_MCP_GATEWAY_KEY. These targets never print either; the
+# preflight checks presence and mode only, never content.
+COMPOSIO_MCP_KIT := $(CURDIR)/../deploy/kvm2/composio-mcp
+COMPOSIO_MCP_ENV_FILE ?= $(HOME)/.config/pmoves/composio-mcp.env
+COMPOSIO_MCP_PORT ?= 8190
+COMPOSIO_MCP_DC := COMPOSIO_MCP_ENV_FILE=$(COMPOSIO_MCP_ENV_FILE) COMPOSIO_MCP_PORT=$(COMPOSIO_MCP_PORT) \
+	docker compose -p composio-mcp --project-directory $(COMPOSIO_MCP_KIT) $(COMPOSE_ENV_FILES) \
+	-f $(COMPOSIO_MCP_KIT)/docker-compose.yml -f $(COMPOSIO_MCP_KIT)/docker-compose.pmoves-mesh.yml
+
+.PHONY: composio-mcp-preflight up-composio-mcp down-composio-mcp composio-mcp-smoke
+
+composio-mcp-preflight: ## Check the Composio MCP proxy kit, secrets file (presence+mode only) and mesh network
+	@missing=0; \
+	for f in docker-compose.yml docker-compose.pmoves-mesh.yml; do \
+	  [ -f "$(COMPOSIO_MCP_KIT)/$$f" ] || { echo "MISSING kit file: deploy/kvm2/composio-mcp/$$f (operator-apply: pmoves/docs/handoffs/COMPOSIO_MCP_SELFHOST.md)"; missing=1; }; \
+	done; \
+	if [ -f "$(COMPOSIO_MCP_ENV_FILE)" ]; then \
+	  mode=$$(stat -c %a "$(COMPOSIO_MCP_ENV_FILE)" 2>/dev/null || echo "?"); \
+	  [ "$$mode" = "600" ] || { echo "BAD MODE $$mode on the proxy secrets file -- chmod 600 it"; missing=1; }; \
+	else \
+	  echo "MISSING secrets file (COMPOSIO_MCP_ENV_FILE) holding COMPOSIO_MCP_CONSUMER_KEY + COMPOSIO_MCP_GATEWAY_KEY, chmod 600"; missing=1; \
+	fi; \
+	docker network inspect pmoves_app >/dev/null 2>&1 || { echo "MISSING network: pmoves_app (start the PMOVES stack first)"; missing=1; }; \
+	if [ "$$missing" -ne 0 ]; then exit 1; fi; \
+	echo "preflight ok: kit present, secrets file present (mode 600), pmoves_app present"
+
+up-composio-mcp: composio-mcp-preflight ## Start the Composio MCP fleet proxy (loopback, /composio/mcp)
+	@$(COMPOSIO_MCP_DC) up -d composio-mcp $(ARGS)
+	@echo "Composio MCP proxy on http://127.0.0.1:$(COMPOSIO_MCP_PORT)/composio/mcp -- prove it: make -C pmoves composio-mcp-smoke"
+
+down-composio-mcp: ## Stop the Composio MCP fleet proxy
+	@$(COMPOSIO_MCP_DC) down $(ARGS)
+
+composio-mcp-smoke: ## MCP initialize + tools/list through the Composio proxy; prints tool count (exit 3 = unmeasured)
+	@# The gateway key comes from the caller's env if exported, else from the
+	@# proxy's own secrets file into THIS process's env only -- a shell
+	@# assignment, never argv, never echoed.
+	@key="$${COMPOSIO_MCP_GATEWAY_KEY:-}"; \
+	if [ -z "$$key" ] && [ -r "$(COMPOSIO_MCP_ENV_FILE)" ]; then \
+	  key=$$(sed -n 's/^COMPOSIO_MCP_GATEWAY_KEY=//p' "$(COMPOSIO_MCP_ENV_FILE)" | tail -n 1); \
+	fi; \
+	COMPOSIO_MCP_GATEWAY_KEY="$$key" $(PRECHECK_PY) tools/composio_mcp_smoke.py \
+	  --url "$${COMPOSIO_MCP_SMOKE_URL:-http://127.0.0.1:$(COMPOSIO_MCP_PORT)/composio/mcp}" $(ARGS)
+
 docker-fleet-cleanup-install: ## Install daily Docker cleanup systemd timer (run on each node)
 	@echo "=== Installing Docker Fleet Cleanup Timer ==="
 	@if [ "$$(id -u)" -ne 0 ]; then \
