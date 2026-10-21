@@ -3461,8 +3461,10 @@ up-spark-sidecar: ## Start DGX Spark standalone sidecar (port 8093, in-container
 	fi
 	@# A pin overrides the compose default that Dependabot bumps on every Ollama
 	@# release, so it must say why. Copies made before #3380 carry an unexplained
-	@# 0.31.2 pin: refuse those rather than silently stay behind.
-	@pin=$$(sed -n 's/^[[:space:]]*\(export[[:space:]]\{1,\}\)\{0,1\}PMOVES_OLLAMA_IMAGE=//p' env.spark-sidecar | tail -1 | tr -d "\"'"); \
+	@# 0.31.2 pin: refuse those rather than silently stay behind. An empty value
+	@# (PMOVES_OLLAMA_IMAGE= , optionally with a trailing " # comment") is not a
+	@# pin: compose's :- default treats empty as unset, so it follows releases.
+	@pin=$$(sed -n 's/^[[:space:]]*\(export[[:space:]]\{1,\}\)\{0,1\}PMOVES_OLLAMA_IMAGE=//p' env.spark-sidecar | tail -1 | tr -d "\"'" | sed 's/[[:space:]]\{1,\}#.*//; s/^[[:space:]]*//; s/[[:space:]]*$$//'); \
 	why=$$(sed -n 's/^[[:space:]]*\(export[[:space:]]\{1,\}\)\{0,1\}PMOVES_OLLAMA_PIN_REASON=//p' env.spark-sidecar | tail -1 | tr -d "\"'"); \
 	dflt=$$(sed -n 's/.*image: \$${PMOVES_OLLAMA_IMAGE:-\([^}]*\)}.*/\1/p' docker-compose.spark-sidecar.yml | head -1); \
 	if [ -n "$$pin" ] && [ -z "$$why" ]; then \

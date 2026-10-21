@@ -30,6 +30,11 @@ def _run(tmp_path: Path, env_body: str, env: dict) -> subprocess.CompletedProces
 @pytest.mark.parametrize("body,ok,says", [
     ("", True, ""),
     ("# PMOVES_OLLAMA_IMAGE=ollama/ollama:0.31.2", True, ""),
+    # Empty values are not pins: compose's :- default treats them as unset.
+    ("PMOVES_OLLAMA_IMAGE=", True, ""),
+    ('PMOVES_OLLAMA_IMAGE=""', True, ""),
+    ("PMOVES_OLLAMA_IMAGE=   # follow releases", True, ""),
+    ("PMOVES_OLLAMA_IMAGE=ollama/ollama:0.31.2  # old", False, "PMOVES_OLLAMA_IMAGE=ollama/ollama:0.31.2 with"),
     ("PMOVES_OLLAMA_IMAGE=ollama/ollama:0.31.2", False, "no PMOVES_OLLAMA_PIN_REASON"),
     ('PMOVES_OLLAMA_IMAGE=ollama/ollama:0.31.2\nPMOVES_OLLAMA_PIN_REASON="driver test"', True, "Reason: driver test"),
 ])
@@ -38,5 +43,7 @@ def test_pin_must_state_a_reason(tmp_path, stub_docker_path, body, ok, says):
     r = _run(tmp_path, body, stub_docker_path)
     assert (r.returncode == 0) is ok, r.stdout + r.stderr
     assert says in r.stdout
-    if "PMOVES_OLLAMA_IMAGE=" in body and not body.startswith("#"):
+    if "ollama/ollama:0.31.2" in body and not body.startswith("#"):
         assert "ollama/ollama:0.31.2" in r.stdout  # the pin is shown, not hidden
+    else:
+        assert "pin" not in r.stdout.lower()  # no pin, so no pin warning to tune out

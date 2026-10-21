@@ -38,11 +38,15 @@ jobs:
       - name: Enable auto-merge for patch + minor updates
         # Ollama is excluded: it is 0.x, so a release that migrates the model
         # store (0.40.x -> manifests-v2) still arrives labelled "minor". Its bumps
-        # wait for a human and the host canary (dependabot.yml docker-compose entry).
+        # wait for a human (dependabot.yml docker-compose entry). A host canary,
+        # `make ollama-host-update`, is planned for a follow-up and does not exist yet.
+        # Fail closed: if fetch-metadata ever returns no dependency-names, the
+        # Ollama exclusion cannot be judged, so nothing auto-merges.
         if: >-
+          steps.meta.outputs.dependency-names != '' &&
+          !contains(steps.meta.outputs.dependency-names, 'ollama/ollama') &&
           (steps.meta.outputs.update-type == 'version-update:semver-patch' ||
-           steps.meta.outputs.update-type == 'version-update:semver-minor') &&
-          !contains(steps.meta.outputs.dependency-names, 'ollama/ollama')
+          steps.meta.outputs.update-type == 'version-update:semver-minor')
         run: gh pr merge --auto --squash "$PR_URL"
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
