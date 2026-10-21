@@ -213,13 +213,20 @@ def test_archive_keep_zero_disables_pruning(root, out, monkeypatch):
     assert len(list((root / ms.A0_REVIEW_DIR_SUBPATH).glob("*.bak-*"))) == 4
 
 
-def test_unparseable_live_file_warns_instead_of_silently_dropping(out, capsys):
+@pytest.mark.parametrize("bad", ["- name: [unclosed\n", "42\n", "just-a-word\n"])
+@pytest.mark.parametrize("apply", [True, False])
+def test_malformed_live_file_fails_closed(out, capsys, bad, apply):
+    # It may hold hand-kept cloud lanes: never regenerate over it silently.
+    out.write_text(bad)
+    assert _exit_code(ms._write_a0_presets, ROWS, [], out, apply=apply) == 2
+    assert "hand-kept presets cannot be carried over" in capsys.readouterr().err
+    assert out.read_text() == bad
+    assert not (ms.ROOT / ms.A0_REVIEW_DIR_SUBPATH).exists()  # no .new / .bak either
+
+
+def test_malformed_live_file_is_drift_under_check(out):
     out.write_text("- name: [unclosed\n")
-    ms._write_a0_presets(ROWS, [], out, apply=True)
-    err = capsys.readouterr().err
-    assert "WARNING: live presets unreadable" in err
-    baks = list((ms.ROOT / ms.A0_REVIEW_DIR_SUBPATH).glob("*.bak-*"))
-    assert [b.read_text() for b in baks] == ["- name: [unclosed\n"]  # original archived
+    assert _exit_code(ms._write_a0_presets, ROWS, [], out, check=True) == 1
 
 
 # --- ollama default host -----------------------------------------------------
