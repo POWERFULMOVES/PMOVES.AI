@@ -264,7 +264,7 @@ A0_SET_chat_model=https://integrate.api.nvidia.com/v1/glm-5-turbo
 subordinate_profile=sidecar
 
 # Spark mode (local-first, DGX Spark)
-A0_SET_chat_model=http://pmoves-dgx-spark:11434/v1/gemma4:31b-q4
+A0_SET_chat_model=http://pmoves-dgx-spark:11434/v1/gemma4:31b
 subordinate_profile=spark_claw
 ```
 
