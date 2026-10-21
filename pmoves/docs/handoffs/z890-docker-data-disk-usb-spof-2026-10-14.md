@@ -144,6 +144,9 @@ elevated Windows terminal unless noted.
    - `WARN` (exit 1): read the evidence. USB placement and *old* event-153
      bursts are expected on z890 until the follow-up in § 7 lands. *Recent*
      events are not.
+   - `COULD-NOT-MEASURE` (exit 3) or usage error (exit 4): not a pass. Treat
+     it like `FAIL`. Fix the measurement gap (see § 8), re-run, and continue
+     only on exit 0 or a WARN you have read.
 3. **Stop the VM cleanly:** `wsl --shutdown`.
 4. **Attach the vhdx without mounting it:**
    `wsl --mount --vhd "I:\DockerData\disk\docker_data.vhdx" --bare`
@@ -223,7 +226,7 @@ Order of operations (each step its own PR or operator session):
 | `vm-init-log` | newest init logs clean | generic `I/O error` | `Buffer I/O error`, `EXT4-fs error`, `detected no file system` |
 
 Exit codes: `0` pass, `1` warn, `2` fail, `3` could not measure (non-Windows,
-or checks skipped). Exit 3 is **not** a pass. Through `make`, every non-zero
+checks skipped, or the tool itself crashed), `4` usage error. Exit 3 is **not** a pass. Through `make`, every non-zero
 becomes make's own exit 2 (`Error 1` in the message), so read the `RESULT:` line
 or the `--json` `exit_code` for the real verdict. `ARGS='--json'` gives
 machine-readable output. The tool never mounts, repairs, restarts, or writes.

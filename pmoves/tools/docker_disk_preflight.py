@@ -117,9 +117,17 @@ INIT_LOG_FAIL_PATTERNS = (
 INIT_LOG_WARN_PATTERNS = (("io-error", re.compile(r"\bI/O error\b", re.I)),)
 INIT_LOG_MAX_BYTES = 8 * 1024 * 1024  # tail cap per file
 
+# Disk attribution. Event *properties* (the EventData insertion strings) are not
+# localized: for the `disk` provider, Properties[0] is the device path
+# `\Device\HarddiskN\DRN` (measured on z890 for event 153; the same insertion
+# string backs 7/51). So attribute from properties first. The rendered Message
+# IS localized, so the `Disk N` form below only matches English Windows; it is a
+# fallback for rows that carry no properties. On a non-English host whose rows
+# also lack properties, events land in `unattributed`, which stays a WARN.
+_HARDDISK_RE = re.compile(r"\bHarddisk(\d+)\b", re.I)
 _DISK_NUMBER_RES = (
-    re.compile(r"\bHarddisk(\d+)\b", re.I),
-    re.compile(r"\bDisk (\d+)\b"),
+    _HARDDISK_RE,
+    re.compile(r"\bDisk (\d+)\b"),  # English-only fallback (localized Message)
 )
 
 POWERSHELL_TIMEOUT_S = 60
@@ -403,7 +411,8 @@ def query_disk_events(hours: int) -> str:
         "$rows = @($e | ForEach-Object { [pscustomobject]@{ "
         "time = $_.TimeCreated.ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ'); "
         "id = [int]$_.Id; provider = [string]$_.ProviderName; "
-        "message = [string]$_.Message } }); "
+        "message = [string]$_.Message; "
+        "props = @($_.Properties | ForEach-Object { [string]$_.Value }) } }); "
         "ConvertTo-Json -InputObject $rows -Compress -Depth 3"
     )
     return run_powershell(script)
@@ -417,7 +426,13 @@ def _parse_time(value: str) -> Optional[_dt.datetime]:
         return None
 
 
-def event_disk_number(message: str) -> Optional[int]:
+def event_disk_number(message: str,
+                      props: Optional[Sequence[str]] = None) -> Optional[int]:
+    """Disk number for an event: locale-independent properties first, then Message."""
+    for value in props or ():
+        m = _HARDDISK_RE.search(str(value or ""))
+        if m:
+            return int(m.group(1))
     for rx in _DISK_NUMBER_RES:
         m = rx.search(message or "")
         if m:
@@ -434,12 +449,19 @@ def parse_events(raw: str) -> List[Dict[str, Any]]:
         except (TypeError, ValueError):
             continue
         msg = str(row.get("message") or "")
+        raw_props = row.get("props")
+        if raw_props is None:
+            props: List[str] = []
+        elif isinstance(raw_props, list):
+            props = [str(p) for p in raw_props if p is not None]
+        else:  # ConvertTo-Json may unroll a one-element array to a scalar
+            props = [str(raw_props)]
         out.append({
             "time": row.get("time"),
             "id": eid,
             "provider": str(row.get("provider") or ""),
             "message": msg,
-            "disk": event_disk_number(msg),
+            "disk": event_disk_number(msg, props),
         })
     return out
 
@@ -543,7 +565,16 @@ def newest_init_logs(log_dir: str, count: int) -> List[str]:
         return []
     paths = [os.path.join(log_dir, n) for n in names]
     paths = [p for p in paths if os.path.isfile(p)]
-    paths.sort(key=lambda p: os.path.getmtime(p), reverse=True)
+
+    def _mtime(p: str) -> float:
+        # A log rotated away between isfile() and here must not crash the tool:
+        # an uncaught traceback exits 1, which reads as WARN. Sort it last.
+        try:
+            return os.path.getmtime(p)
+        except OSError:
+            return float("-inf")
+
+    paths.sort(key=_mtime, reverse=True)
     return paths[:max(count, 0)]
 
 
@@ -732,7 +763,19 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             print(msg)
         return EXIT_UNMEASURED
 
-    results = run_checks(args)
+    try:
+        results = run_checks(args)
+    except Exception as exc:  # noqa: BLE001 - a crash must never read as WARN (exit 1)
+        msg = (f"docker-disk-preflight crashed: {type(exc).__name__}: {exc}. "
+               "Exit 3 = could not measure, not a pass.")
+        if args.json:
+            print(json.dumps({"platform": sys.platform, "exit_code": EXIT_UNMEASURED,
+                              "result": overall_label(EXIT_UNMEASURED), "checks": [],
+                              "message": msg}, indent=2))
+        else:
+            print(msg)
+            print(f"RESULT: {overall_label(EXIT_UNMEASURED)} (exit {EXIT_UNMEASURED})")
+        return EXIT_UNMEASURED
     code = aggregate_exit(results)
     if args.json:
         print(json.dumps({

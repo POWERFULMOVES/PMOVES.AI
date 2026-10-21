@@ -150,6 +150,47 @@ def test_event_disk_number_forms():
     assert ddp.event_disk_number("Reset to device, \\Device\\RaidPort4") is None
 
 
+# Event 153 as Get-WinEvent returns it on a German host: the Message is
+# localized, so the English "Disk N" regex cannot match it, but Properties
+# are not localized (layout measured on z890: [0] = \Device\HarddiskN\DRN).
+EVENT_153_DE = {
+    "time": "2026-10-14T11:45:00Z",
+    "id": 153,
+    "provider": "disk",
+    "message": "Der E/A-Vorgang an der logischen Blockadresse 0x349c72db8 "
+    "für Datenträger 6 (PDO-Name: \\Device\\00000082) wurde wiederholt.",
+    "props": ["\\Device\\Harddisk6\\DR6", "0x349c72db8", "6", "\\Device\\00000082"],
+}
+
+
+def test_event_disk_number_prefers_properties():
+    assert ddp.event_disk_number(EVENT_153_DE["message"]) is None
+    assert ddp.event_disk_number(EVENT_153_DE["message"], EVENT_153_DE["props"]) == 6
+    # Properties win over a conflicting Message.
+    assert ddp.event_disk_number("for Disk 2 (PDO", ["\\Device\\Harddisk6\\DR6"]) == 6
+    # No Harddisk form in properties -> Message fallback still applies.
+    assert ddp.event_disk_number("for Disk 2 (PDO", ["0x1", "2"]) == 2
+
+
+def test_localized_recent_retries_on_docker_disk_fail():
+    """The gate must not dissolve on a non-English host (kilo thread on #3374)."""
+    res = _eval([EVENT_153_DE])
+    assert res.status == ddp.FAIL
+    assert res.data["ours"] == 1 and res.data["unattributed"] == 0
+
+
+def test_parse_events_scalar_props_unrolled():
+    row = dict(EVENT_153_DE, props="\\Device\\Harddisk6\\DR6")
+    assert ddp.parse_events(json.dumps(row))[0]["disk"] == 6
+
+
+def test_query_disk_events_requests_properties(monkeypatch):
+    seen = {}
+    monkeypatch.setattr(ddp, "run_powershell", lambda s, **_: seen.setdefault("s", s))
+    ddp.query_disk_events(72)
+    assert "$_.Properties" in seen["s"] and "props =" in seen["s"]
+
+
 def _eval(rows, docker_disk=6, hours=72, fail_hours=1.0):
     return ddp.evaluate_events(ddp.parse_events(json.dumps(rows)), docker_disk,
                                hours, fail_hours, now=NOW)
@@ -267,6 +308,38 @@ def test_check_init_logs_newest_files(tmp_path):
 
 def test_check_init_logs_missing_dir_skip(tmp_path):
     assert ddp.check_init_logs(str(tmp_path / "nope"), 3).status == ddp.SKIP
+
+
+def test_newest_init_logs_survives_rotation_race(tmp_path, monkeypatch):
+    """A log vanishing between isfile() and getmtime() must not raise."""
+    keep = tmp_path / "init.log"
+    keep.write_text("")
+    gone = tmp_path / "init.log.1"
+    gone.write_text("")
+    real = os.path.getmtime
+
+    def flaky(p):
+        if os.path.basename(p) == gone.name:
+            raise FileNotFoundError(p)
+        return real(p)
+
+    monkeypatch.setattr(ddp.os.path, "getmtime", flaky)
+    assert ddp.newest_init_logs(str(tmp_path), 5) == [str(keep), str(gone)]
+
+
+def test_main_crash_is_unmeasured_not_warn(monkeypatch, capsys):
+    """An unexpected exception must exit 3, never 1 (which reads as WARN)."""
+    monkeypatch.setattr(ddp.sys, "platform", "win32")
+
+    def boom(_args):
+        raise RuntimeError("synthetic")
+
+    monkeypatch.setattr(ddp, "run_checks", boom)
+    assert ddp.main([]) == ddp.EXIT_UNMEASURED
+    out = capsys.readouterr().out
+    assert "RESULT: COULD-NOT-MEASURE (exit 3)" in out
+    assert ddp.main(["--json"]) == ddp.EXIT_UNMEASURED
+    assert json.loads(capsys.readouterr().out)["exit_code"] == ddp.EXIT_UNMEASURED
 
 
 # ------------------------------------------------------- helpers / main -----
