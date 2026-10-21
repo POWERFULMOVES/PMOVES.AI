@@ -143,8 +143,16 @@ def _ensure_qdrant(client: QdrantClient, dim: int):
     # Create only when Qdrant says the collection is absent. A timeout or 5xx
     # must propagate: recreate_collection DROPS an existing collection.
     if not client.collection_exists(COLL):
-        client.create_collection(COLL, vectors_config=VectorParams(size=dim, distance=Distance.COSINE))
-        return
+        try:
+            client.create_collection(COLL, vectors_config=VectorParams(size=dim, distance=Distance.COSINE))
+            return
+        except Exception:
+            # Two cold-start ingests can both see "absent"; the loser's create
+            # gets a 409. If the collection exists now, a peer won the race:
+            # fall through and validate it like any existing collection.
+            # Anything else (absent still, or Qdrant down) propagates.
+            if not client.collection_exists(COLL):
+                raise
     info = client.get_collection(COLL)
 
     # Validate dimension compatibility (avoid opaque 400s later).
