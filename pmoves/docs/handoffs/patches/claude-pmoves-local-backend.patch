@@ -1,0 +1,258 @@
+diff --git a/deploy/provision/claude-pmoves.sh b/deploy/provision/claude-pmoves.sh
+index a9920599b..ce1ee0c4d 100755
+--- a/deploy/provision/claude-pmoves.sh
++++ b/deploy/provision/claude-pmoves.sh
+@@ -28,8 +28,11 @@ set -u
+ #                state.
+ #   minimax    — preserve whatever the Mavis SDK / settings.json has set.
+ #                Used to test the MiniMax routing on demand.
++#   local      — run on THIS node's GPU models through host Ollama's
++#                Anthropic Messages API, same MCP roster. Preflighted and
++#                fail-closed; see the `--backend=local` block below.
+ #
+-# Env-var equivalent: PMOVES_CLAUDE_BACKEND={auto|anthropic|minimax}.
++# Env-var equivalent: PMOVES_CLAUDE_BACKEND={auto|anthropic|minimax|local}.
+ #
+ # The flag is parsed BEFORE the symlink-walk + ROOT resolution so `--help`
+ # can be honoured even when the launcher cannot find the repo (the launched
+@@ -58,11 +61,23 @@ for __arg in "$@"; do
+       cat <<'USAGE' >&2
+ claude-pmoves.sh — launch Claude Code with PMOVES env + MCP roster.
+ 
+-Usage: claude-pmoves.sh [--backend={auto|anthropic|minimax}] [claude-args...]
++Usage: claude-pmoves.sh [--backend={auto|anthropic|minimax|local}] [claude-args...]
+ 
+   --backend=auto       (default) detect hijack via $ANTHROPIC_BASE_URL
+   --backend=anthropic  force Anthropic-direct routing for this launch
+   --backend=minimax    preserve the Mavis SDK / settings.json hijack
++  --backend=local      run on this node's GPU models via host Ollama's
++                       Anthropic Messages API -- same MCP roster (cipher,
++                       NATS, ...), so local sessions share fleet memory.
++      PMOVES_LOCAL_ANTHROPIC_URL       default http://127.0.0.1:11434
++      PMOVES_LOCAL_CLAUDE_MODEL        default qwen3:30b-a3b-gpu
++      PMOVES_LOCAL_CLAUDE_SMALL_MODEL  default qwen3:8b-gpu (haiku alias +
++                                       background tasks)
++    Refuses if GET /api/version does not answer or a model is missing from
++    GET /api/tags. Warns if /api/show lacks num_gpu (measured ~1 tok/s
++    off-GPU) or num_ctx is below 32768 (measured: n_ctx 8192 truncated a
++    long system prompt to one-token replies). Per-launch only: passes
++    --settings=$PMOVES_LOCAL_CLAUDE_SETTINGS, never writes settings.json.
+ 
+ Persistent switching (writes ~/.claude/settings.json):
+   pmoves-mini claude-backend show
+@@ -81,9 +96,9 @@ done
+ # Lowercase + validate. Empty stays empty (= default auto on the apply side).
+ PMOVES_CLAUDE_BACKEND="$(printf '%s' "$PMOVES_CLAUDE_BACKEND" | tr '[:upper:]' '[:lower:]')"
+ case "$PMOVES_CLAUDE_BACKEND" in
+-  ""|auto|anthropic|minimax) ;;
++  ""|auto|anthropic|minimax|local) ;;
+   *)
+-    echo "[claude-pmoves] ERROR: --backend=$PMOVES_CLAUDE_BACKEND invalid; expected one of auto, anthropic, minimax." >&2
++    echo "[claude-pmoves] ERROR: --backend=$PMOVES_CLAUDE_BACKEND invalid; expected one of auto, anthropic, minimax, local." >&2
+     exit 2
+     ;;
+ esac
+@@ -361,6 +376,60 @@ fi
+ # be indistinguishable to anything reading it.
+ export PMOVES_LAUNCHER_SESSION
+ 
++# ---------------------------------------------------------------------------
++# --backend=local — Claude Code on this node's own GPU models (host Ollama's
++# Anthropic Messages API), with the SAME MCP roster as every other backend:
++# nothing below this block knows which backend was chosen.
++#
++# WHY HERE, not in claude_backend_apply above: the env.shared block just ran a
++# parent-env sweep that unsets ANTHROPIC_BASE_URL / ANTHROPIC_AUTH_TOKEN /
++# CLAUDE_CODE_*. Anything set before it would be undone.
++#
++# FAIL-CLOSED: if the endpoint does not answer or a model is not pulled, the
++# python tool exits 1 and we refuse. Launching anyway would send a session the
++# operator asked to keep local to the cloud (or to a dead endpoint).
++#
++# The tool's stdout is the `unset NAME` / `export NAME='v'` grammar of
++# `claude_backend.py apply`; it is PARSED here (split on the first '='), never
++# eval'd, and the tool refuses values carrying a quote or newline.
++#
++# BOTH the process env AND `--settings=<json>`: an `env` block in
++# ~/.claude/settings.json overwrites a shell export (code.claude.com/docs/en/
++# settings-reference), which is exactly where the Mavis-SDK hijack lives; the
++# command-line settings level outranks it (code.claude.com/docs/en/settings).
++# Per-launch only -- nothing on disk changes. Kept in step with the ps1 twin.
++# ---------------------------------------------------------------------------
++PMOVES_LOCAL_SETTINGS_ARGS=()
++if [ "${PMOVES_CLAUDE_BACKEND:-}" = "local" ]; then
++  # shellcheck source=../../pmoves/scripts/pm-python.sh
++  [ -f "$ROOT/pmoves/scripts/pm-python.sh" ] && . "$ROOT/pmoves/scripts/pm-python.sh"
++  if ! command -v pm_pick_python >/dev/null 2>&1 || ! pm_pick_python "" 2>/dev/null \
++       || [ ! -f "$ROOT/pmoves/tools/claude_backend.py" ]; then
++    echo "[claude-pmoves] backend=local: local backend refused -- no python / claude_backend.py to run the preflight." >&2
++    exit 1
++  fi
++  _local_out="$(cd "$ROOT" && "${PM_PY[@]}" pmoves/tools/claude_backend.py local --label "claude-pmoves.sh")" || {
++    echo "[claude-pmoves] --backend=local refused (reason above). Nothing was launched." >&2
++    exit 1
++  }
++  while IFS= read -r _local_line; do
++    case "$_local_line" in
++      "unset "*) unset "${_local_line#unset }" ;;
++      "export "*=*)
++        _local_kv="${_local_line#export }"
++        _local_v="${_local_kv#*=}"; _local_v="${_local_v#\'}"; _local_v="${_local_v%\'}"
++        export "${_local_kv%%=*}=$_local_v"
++        ;;
++    esac
++  done <<< "$_local_out"
++  unset _local_out _local_line _local_kv _local_v
++  if [ -z "${PMOVES_LOCAL_CLAUDE_SETTINGS:-}" ]; then
++    echo "[claude-pmoves] backend=local: local backend refused -- the preflight emitted no PMOVES_LOCAL_CLAUDE_SETTINGS." >&2
++    exit 1
++  fi
++  PMOVES_LOCAL_SETTINGS_ARGS=("--settings=$PMOVES_LOCAL_CLAUDE_SETTINGS")
++fi
++
+ # CIPHER TOKEN BIND — AFTER env.shared, BEFORE the roster is normalized.
+ #
+ # env.shared carries the node bootstrap CIPHER_API_TOKEN (auth.ts files every
+@@ -541,7 +610,7 @@ if [ -f "$MCP_ROSTER" ]; then
+   # positional prompt as another config value (Codex #2243 P1). The `=` binds
+   # exactly one value and leaves "$@" as separate arguments.
+   if [ "$resolved_ok" -eq 1 ]; then
+-    exec claude --mcp-config="$RESOLVED" "$@"
++    exec claude ${PMOVES_LOCAL_SETTINGS_ARGS[@]+"${PMOVES_LOCAL_SETTINGS_ARGS[@]}"} --mcp-config="$RESOLVED" "$@"
+   fi
+ 
+   # -------------------------------------------------------------------------
+@@ -631,8 +700,8 @@ if [ -f "$MCP_ROSTER" ]; then
+     echo "[claude-pmoves]       Lost: '_'-prefixed disabled duplicates are NOT dropped, and" >&2
+     echo "[claude-pmoves]       ./ paths stay relative to your CWD instead of the repo root." >&2
+   fi
+-  exec claude --mcp-config="$MCP_ROSTER" "$@"
++  exec claude ${PMOVES_LOCAL_SETTINGS_ARGS[@]+"${PMOVES_LOCAL_SETTINGS_ARGS[@]}"} --mcp-config="$MCP_ROSTER" "$@"
+ else
+   echo "[claude-pmoves] WARN: $MCP_ROSTER not found — PMOVES MCP servers will not load." >&2
+-  exec claude "$@"
++  exec claude ${PMOVES_LOCAL_SETTINGS_ARGS[@]+"${PMOVES_LOCAL_SETTINGS_ARGS[@]}"} "$@"
+ fi
+diff --git a/deploy/provision/claude-pmoves.ps1 b/deploy/provision/claude-pmoves.ps1
+index f81971590..41e07e073 100644
+--- a/deploy/provision/claude-pmoves.ps1
++++ b/deploy/provision/claude-pmoves.ps1
+@@ -22,8 +22,11 @@ $ErrorActionPreference = 'Stop'
+ #                state.
+ #   minimax    — preserve whatever the Mavis SDK / settings.json has set.
+ #                Used to test the MiniMax routing on demand.
++#   local      — run on THIS node's GPU models through host Ollama's
++#                Anthropic Messages API, same MCP roster. Preflighted and
++#                fail-closed; see the `--backend=local` block below.
+ #
+-# Env-var equivalent: $env:PMOVES_CLAUDE_BACKEND = {auto|anthropic|minimax}.
++# Env-var equivalent: $env:PMOVES_CLAUDE_BACKEND = {auto|anthropic|minimax|local}.
+ #
+ # Kept in step with deploy/provision/claude-pmoves.sh: same flag surface, same
+ # env-var name, same WARN phrase (`stripped Mavis SDK hijack`). Pinned by
+@@ -55,11 +58,23 @@ foreach ($__arg in $args) {
+         Write-Host @'
+ claude-pmoves.ps1 — launch Claude Code with PMOVES env + MCP roster.
+ 
+-Usage: claude-pmoves.ps1 [--backend={auto|anthropic|minimax}] [claude-args...]
++Usage: claude-pmoves.ps1 [--backend={auto|anthropic|minimax|local}] [claude-args...]
+ 
+   --backend=auto       (default) detect hijack via $env:ANTHROPIC_BASE_URL
+   --backend=anthropic  force Anthropic-direct routing for this launch
+   --backend=minimax    preserve the Mavis SDK / settings.json hijack
++  --backend=local      run on this node's GPU models via host Ollama's
++                       Anthropic Messages API -- same MCP roster (cipher,
++                       NATS, ...), so local sessions share fleet memory.
++      PMOVES_LOCAL_ANTHROPIC_URL       default http://127.0.0.1:11434
++      PMOVES_LOCAL_CLAUDE_MODEL        default qwen3:30b-a3b-gpu
++      PMOVES_LOCAL_CLAUDE_SMALL_MODEL  default qwen3:8b-gpu (haiku alias +
++                                       background tasks)
++    Refuses if GET /api/version does not answer or a model is missing from
++    GET /api/tags. Warns if /api/show lacks num_gpu (measured ~1 tok/s
++    off-GPU) or num_ctx is below 32768 (measured: n_ctx 8192 truncated a
++    long system prompt to one-token replies). Per-launch only: passes
++    --settings=$env:PMOVES_LOCAL_CLAUDE_SETTINGS, never writes settings.json.
+ 
+ Persistent switching (writes ~/.claude/settings.json):
+   pmoves-mini claude-backend show
+@@ -78,8 +93,9 @@ switch ($env:PMOVES_CLAUDE_BACKEND) {
+     'auto' { }
+     'anthropic' { }
+     'minimax' { }
++    'local' { }
+     default {
+-        Write-Error "[claude-pmoves] --backend=$($env:PMOVES_CLAUDE_BACKEND) invalid; expected one of auto, anthropic, minimax."
++        Write-Error "[claude-pmoves] --backend=$($env:PMOVES_CLAUDE_BACKEND) invalid; expected one of auto, anthropic, minimax, local."
+         exit 2
+     }
+ }
+@@ -393,6 +409,57 @@ if (Test-Path $envf) {
+ # faults with different remedies, and a bare boolean would merge them.
+ [Environment]::SetEnvironmentVariable('PMOVES_LAUNCHER_SESSION', $script:launcherSession, 'Process')
+ 
++# ---------------------------------------------------------------------------
++# --backend=local — Windows half of the block in claude-pmoves.sh; see the
++# comment there for the WHY (after the env.shared sweep; fail-closed; parsed
++# not eval'd; process env AND --settings=<json>, because a settings.json env
++# block overwrites a shell export and the command-line level outranks it).
++# Per-launch only -- nothing on disk changes.
++# ---------------------------------------------------------------------------
++$localSettingsArgs = @()
++if ($env:PMOVES_CLAUDE_BACKEND -eq 'local') {
++    $localPy = Get-PmovesPythonArgv -Root $root
++    $localTool = Join-Path $root 'pmoves\tools\claude_backend.py'
++    if (-not $localPy -or -not (Test-Path -LiteralPath $localTool)) {
++        Write-Warning '[claude-pmoves] backend=local: local backend refused -- no python / claude_backend.py to run the preflight.'
++        exit 1
++    }
++    $localPre = @(if ($localPy.Count -gt 1) { $localPy[1..($localPy.Count - 1)] })   # @(): see Test-PmovesPythonRuns
++    # Same 5.1 stderr-under-'Stop' guard as the backend selector above: the
++    # tool's WARN lines go to stderr and must not become terminating errors.
++    $prevErr = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
++    $localOut = & $localPy[0] @localPre (Join-Path $root 'pmoves\tools\claude_backend.py') local --label 'claude-pmoves.ps1'
++    $localRc = $LASTEXITCODE
++    $ErrorActionPreference = $prevErr
++    if ($localRc -ne 0) {
++        Write-Warning '[claude-pmoves] --backend=local refused (reason above). Nothing was launched.'
++        exit 1
++    }
++    foreach ($__lb_line in @($localOut)) {
++        if (-not $__lb_line) { continue }
++        if ($__lb_line -match '^unset\s+(\S+)$') {
++            [Environment]::SetEnvironmentVariable($Matches[1], $null, 'Process')
++        } elseif ($__lb_line -match '^export\s+([^=\s]+)=(.+)$') {
++            $__lb_k = $Matches[1]; $__lb_v = $Matches[2]
++            if ($__lb_v.StartsWith("'") -and $__lb_v.EndsWith("'")) {
++                $__lb_v = $__lb_v.Substring(1, $__lb_v.Length - 2)
++            }
++            [Environment]::SetEnvironmentVariable($__lb_k, $__lb_v, 'Process')
++        }
++    }
++    if (-not $env:PMOVES_LOCAL_CLAUDE_SETTINGS) {
++        Write-Warning '[claude-pmoves] backend=local: local backend refused -- the preflight emitted no PMOVES_LOCAL_CLAUDE_SETTINGS.'
++        exit 1
++    }
++    # Windows PowerShell 5.1 strips embedded double quotes from native-command
++    # arguments, which would mangle the JSON; escape them for the native argv.
++    $localJson = $env:PMOVES_LOCAL_CLAUDE_SETTINGS
++    if ($PSVersionTable.PSVersion.Major -lt 7 -or $PSNativeCommandArgumentPassing -eq 'Legacy') {
++        $localJson = $localJson.Replace('"', '\"')
++    }
++    $localSettingsArgs = @("--settings=$localJson")
++}
++
+ function Test-PmovesRosterHasBarePlaceholder {
+     <#
+       Does this roster hold a reference that would be SENT as literal text?
+@@ -846,9 +913,9 @@ if (Test-Path $roster) {
+     # `--mcp-config=<file>` (the `=` form): `--mcp-config` is variadic
+     # (`<configs...>`), so the space form would swallow a trailing positional
+     # prompt as another config value (Codex #2243 P1).
+-    & claude "--mcp-config=$useRoster" @identityArgs @args
++    & claude @localSettingsArgs "--mcp-config=$useRoster" @identityArgs @args
+ } else {
+     Write-Warning "[claude-pmoves] $roster not found - PMOVES MCP servers will not load."
+-    & claude @identityArgs @args
++    & claude @localSettingsArgs @identityArgs @args
+ }
+ exit $LASTEXITCODE
