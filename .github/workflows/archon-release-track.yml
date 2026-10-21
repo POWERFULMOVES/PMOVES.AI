@@ -57,7 +57,7 @@ jobs:
       compare: ${{ steps.r.outputs.compare }}
     steps:
       - name: Harden Runner
-        uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2
+        uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2
         with:
           egress-policy: audit
 
@@ -175,7 +175,7 @@ jobs:
       CANDIDATE: ghcr.io/powerfulmoves/pmoves-archon:${{ needs.resolve.outputs.release_version }}-pmoves.${{ needs.resolve.outputs.fork_sha8 }}
     steps:
       - name: Harden Runner
-        uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2
+        uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2
         with:
           egress-policy: audit
 
@@ -207,11 +207,11 @@ jobs:
 
       - name: Set up QEMU
         if: steps.state.outputs.done != 'true' && steps.state.outputs.built != 'true'
-        uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8 # v4
+        uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4
 
       - name: Set up Buildx
         if: steps.state.outputs.done != 'true' && steps.state.outputs.built != 'true'
-        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
 
       - name: Build and push the candidate (exact resolved fork sha)
         if: steps.state.outputs.done != 'true' && steps.state.outputs.built != 'true'
