@@ -1203,7 +1203,14 @@ def cmd_registry_snapshot(args: argparse.Namespace) -> int:
 
 SUITS_DIR = ROOT / "configs" / "model-suits"
 OLLAMA_PARAMETER_KEYS = ("num_gpu", "num_ctx", "num_batch", "num_thread", "num_predict")
-OLLAMA_DESCRIPTIVE_KEYS = ("variant", "quantization", "ubatch", "nvruntime")
+# Keys that describe the suit rather than tune the runner. `ubatch` is NOT one:
+# it is llama.cpp's -ub, which Ollama does not accept (api/types.go Runner has
+# num_ctx/num_batch/num_gpu/main_gpu/use_mmap/num_thread only), so it can be
+# neither applied nor silently dropped -- it lands in `ignored`, and is printed.
+OLLAMA_DESCRIPTIVE_KEYS = ("variant", "quantization", "nvruntime")
+# HTTPError is a URLError; a 200 with a non-JSON body (proxy error page) is a
+# JSONDecodeError, i.e. a ValueError.
+OLLAMA_API_ERRORS = (urllib.error.URLError, OSError, json.JSONDecodeError)
 
 
 def _ollama_base_url() -> str:
@@ -1321,56 +1328,67 @@ def cmd_ollama_apply(args: argparse.Namespace) -> int:
     try:
         installed = {m["name"] for m in _ollama_api("/api/tags").get("models", [])}
         loaded = {m["name"]: m for m in _ollama_api("/api/ps").get("models", [])}
-    except (urllib.error.URLError, OSError) as exc:
+    except OLLAMA_API_ERRORS as exc:
         print(f"Ollama unreachable at {_ollama_base_url()}: {exc}")
         return 3
-    try:
-        return _ollama_apply_plans(plans, installed, loaded, args)
-    except (urllib.error.URLError, OSError) as exc:
-        # HTTPError is a URLError: a 4xx/5xx from /api/show or /api/create.
-        print(f"FAILED Ollama API error at {_ollama_base_url()}: {exc}")
-        return 1
+    return _ollama_apply_plans(plans, installed, loaded, args)
 
 
 def _ollama_apply_plans(plans: list[dict], installed: set[str], loaded: dict[str, dict],
                         args: argparse.Namespace) -> int:
-    drifted = 0
+    """One line per suit; a suit that fails never stops the ones after it.
+
+    Exit 1 if any suit FAILED (API error, or still drifted after --apply), or on
+    any drift under --check; 0 otherwise.
+    """
+    drifted = failed = 0
     for p in plans:
         label = f"{p['suit']}: {p['base']} -> {p['variant']} {p['parameters']}"
         if p["ignored"]:
-            label += f" (not runtime params, ignored: {', '.join(p['ignored'])})"
-        if p["base"] not in installed:
-            print(f"SKIP  {label} -- base not installed (make models-seed-ollama)")
-            continue
-        if p["variant"] in installed:
-            diff = suit_ollama_drift(p, _ollama_model_parameters(p["variant"]))
-            # A re-pulled base leaves the variant on the old weights; callers
-            # that fall back to the base tag would then mix vector spaces.
-            if _ollama_from_blob(p["variant"]) != _ollama_from_blob(p["base"]):
-                diff["base"] = ("re-pulled", "variant still on old weights")
-        else:
-            diff = {"variant": "not created yet"}
-        if not diff:
-            verdict = suit_offload_verdict(p, loaded) if args.check else ""
-            print(f"OK    {label}{f' -- offload {verdict}' if verdict else ''}")
-            if verdict.startswith("DRIFTED"):
-                drifted += 1
-            continue
-        drifted += 1
-        if not args.apply:
-            print(f"DRIFT {label} {diff}")
-            continue
-        _ollama_api("/api/create", {"model": p["variant"], "from": p["base"],
-                                    "parameters": p["parameters"], "stream": False})
-        left = suit_ollama_drift(p, _ollama_model_parameters(p["variant"]))
-        if _ollama_from_blob(p["variant"]) != _ollama_from_blob(p["base"]):
-            left["base"] = ("re-pulled", "variant still on old weights")
-        print(f"{'APPLIED' if not left else 'FAILED '} {label}{f' still drifted: {left}' if left else ''}")
-        if left:
-            return 1
+            label += f" (not Ollama parameters, ignored: {', '.join(p['ignored'])})"
+        try:
+            status = _ollama_apply_plan(p, label, installed, loaded, args)
+        except OLLAMA_API_ERRORS as exc:
+            print(f"FAILED {label} -- Ollama API error at {_ollama_base_url()}: {exc}")
+            status = "failed"
+        drifted += status in ("drift", "applied", "failed")
+        failed += status == "failed"
     if drifted and not args.apply:
         print("dry-run: nothing changed; re-run with APPLY=1 to create the variants above")
+    if failed:
+        print(f"{failed} of {len(plans)} suit(s) FAILED; every other suit was still attempted")
+        return 1
     return 1 if (args.check and drifted) else 0
+
+
+def _ollama_apply_plan(p: dict, label: str, installed: set[str], loaded: dict[str, dict],
+                       args: argparse.Namespace) -> str:
+    """Judge (and under --apply, fix) one plan: skip / ok / drift / applied / failed."""
+    if p["base"] not in installed:
+        print(f"SKIP  {label} -- base not installed (make models-seed-ollama)")
+        return "skip"
+    if p["variant"] in installed:
+        diff = suit_ollama_drift(p, _ollama_model_parameters(p["variant"]))
+        # A re-pulled base leaves the variant on the old weights; callers
+        # that fall back to the base tag would then mix vector spaces.
+        if _ollama_from_blob(p["variant"]) != _ollama_from_blob(p["base"]):
+            diff["base"] = ("re-pulled", "variant still on old weights")
+    else:
+        diff = {"variant": "not created yet"}
+    if not diff:
+        verdict = suit_offload_verdict(p, loaded) if args.check else ""
+        print(f"OK    {label}{f' -- offload {verdict}' if verdict else ''}")
+        return "drift" if verdict.startswith("DRIFTED") else "ok"
+    if not args.apply:
+        print(f"DRIFT {label} {diff}")
+        return "drift"
+    _ollama_api("/api/create", {"model": p["variant"], "from": p["base"],
+                                "parameters": p["parameters"], "stream": False})
+    left = suit_ollama_drift(p, _ollama_model_parameters(p["variant"]))
+    if _ollama_from_blob(p["variant"]) != _ollama_from_blob(p["base"]):
+        left["base"] = ("re-pulled", "variant still on old weights")
+    print(f"{'APPLIED' if not left else 'FAILED '} {label}{f' still drifted: {left}' if left else ''}")
+    return "failed" if left else "applied"
 
 
 def build_parser() -> argparse.ArgumentParser:
