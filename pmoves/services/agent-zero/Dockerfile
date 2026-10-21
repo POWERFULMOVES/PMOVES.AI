@@ -106,6 +106,7 @@ RUN . /opt/venv-a0/bin/activate \
 # /a0 is owned by the non-root runtime user (65532) so the container can keep
 # the hardened tier's cap_drop=ALL and run without DAC_OVERRIDE.
 RUN install -d -o 65532 -g 65532 /a0 \
+    && install -d -o 65532 -g 65532 /a0/tmp \
     && printf '#!/bin/bash\nset -e\nif [ ! -f "/a0/run_ui.py" ]; then\n  cp -rn --no-preserve=ownership,mode "/git/agent-zero/." "/a0"\nfi\n' \
        > /usr/local/bin/init-a0.sh \
     && chmod +x /usr/local/bin/init-a0.sh
