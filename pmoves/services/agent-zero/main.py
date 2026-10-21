@@ -37,7 +37,7 @@ logging.basicConfig(level=os.environ.get("LOG_LEVEL", "INFO"))
 # ---------------------------------------------------------------------------
 from services.common.config import env_bool as _env_bool
 from services.common.tensorzero import sync_openai_compat_env as _sync_openai_compat_env
-from services.common.nats_client import _redact_url
+from services.common.nats_client import redact_url
 
 _sync_openai_compat_env()
 
@@ -831,7 +831,7 @@ async def healthz() -> Dict[str, Any]:
     }
     detail["nats"] = {
         # /healthz is unauthenticated and tailnet-served: never return userinfo.
-        "url": _redact_url(service_config.nats_url),
+        "url": redact_url(service_config.nats_url),
         "connected": event_controller.is_connected,
         "controller_started": event_controller.is_started,
         "use_jetstream": controller_settings.use_jetstream,
