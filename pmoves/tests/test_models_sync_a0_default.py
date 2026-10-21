@@ -46,9 +46,9 @@ def test_first_generated_preset_is_named_default(out):
 def test_hand_presets_survive_a_sync(out):
     out.write_text(yaml.safe_dump([{"name": "Registry", "chat": {}}, CLOUD]))
     ms._write_a0_presets(ROWS, [], out, apply=True)
-    names = _names(out)
-    assert names[0] == "Default" and names[-1] == CLOUD["name"]
-    assert "Registry" not in names[1:] or names.count("Registry") == 1
+    # The stale generator-owned "Registry" is regenerated (as Default), not
+    # carried over; the hand-kept cloud preset survives after it.
+    assert _names(out) == ["Default", CLOUD["name"]]
 
 
 def test_stale_generated_names_are_not_carried_over(out):
