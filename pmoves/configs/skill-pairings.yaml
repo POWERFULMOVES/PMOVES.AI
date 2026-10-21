@@ -86,7 +86,7 @@ pairings:
         depends:
           services: ["nats:4222", "qdrant:6333", "neo4j:7687", "meilisearch:7700"]
           skills: ["chit-encode"]
-          health: "http://localhost:8086/healthz"
+          health: "http://localhost:8086/"  # Hi-RAG v2 health is / ({"ok":true}); /healthz 404s
         hooks:
           on_complete: "skills.pipeline.ingest-chit-index.done.v1"
           on_error: "skills.error.v1"
@@ -388,7 +388,7 @@ pairings:
         depends:
           services: ["nats:4222", "qdrant:6333", "neo4j:7687", "meilisearch:7700"]
           skills: ["consciousness-chr"]
-          health: "http://localhost:8086/healthz"
+          health: "http://localhost:8086/"  # Hi-RAG v2 health is / ({"ok":true}); /healthz 404s
         hooks:
           on_complete: "skills.step.hirag-index.done.v1"
           on_error: "skills.error.v1"

@@ -66,3 +66,66 @@ def test_server_errors_fail():
         assert check_health(url)[0] is False
     finally:
         srv.shutdown()
+
+
+# --- mesh-only services: refused on the host, healthy in Docker ---------------
+# On SPARK qdrant, neo4j, meilisearch and consciousness expose their ports only on
+# the compose mesh. A host TCP probe is refused although Docker reports them
+# healthy, so validate --live called a running pipeline down.
+
+import subprocess as _sp
+
+from pmoves.tools.chit import floos_resolver as fr
+
+PS = ("pmoves-qdrant-1\t6333-6334/tcp\tUp 2 days (healthy)\n"
+      "pmoves-consciousness-service-1\t8106/tcp\tUp 2 days (healthy)\n"
+      "pmoves-broken-1\t9911/tcp\tUp 3 minutes (unhealthy)\n"
+      "pmoves-plain-1\t9912/tcp\tUp 1 hour\n")
+
+
+def _fake_ps(monkeypatch, out=PS, rc=0):
+    monkeypatch.setattr(fr.shutil, "which", lambda name: "/usr/bin/docker")
+    monkeypatch.setattr(fr.subprocess, "run",
+                        lambda *a, **k: _sp.CompletedProcess(a, rc, stdout=out, stderr=""))
+
+
+@pytest.mark.parametrize("port,expect", [(6333, True), (6334, True), (8106, True),
+                                         (9911, False), (9912, True)])
+def test_docker_health_by_exposed_port(monkeypatch, port, expect):
+    _fake_ps(monkeypatch)
+    healthy, msg = fr.docker_port_health(port)
+    assert healthy is expect and "mesh-only" in msg
+
+
+def test_unknown_port_or_no_docker_gives_no_verdict(monkeypatch):
+    _fake_ps(monkeypatch)
+    assert fr.docker_port_health(7777) is None
+    monkeypatch.setattr(fr.shutil, "which", lambda name: None)
+    assert fr.docker_port_health(6333) is None
+
+
+def test_refused_service_port_falls_back_to_docker(monkeypatch):
+    _fake_ps(monkeypatch)
+    monkeypatch.setattr(fr.socket, "socket", _RefusingSocket)
+    assert fr.check_service_port("qdrant:6333")[0] is True
+    assert fr.check_service_port("broken:9911")[0] is False
+
+
+def test_refused_health_url_falls_back_to_docker(monkeypatch):
+    _fake_ps(monkeypatch)
+    healthy, msg = check_health("http://127.0.0.1:8106/healthz", timeout=1)
+    assert healthy is True and "mesh-only" in msg
+
+
+class _RefusingSocket:
+    def __init__(self, *a, **k):
+        pass
+
+    def settimeout(self, t):
+        pass
+
+    def connect_ex(self, addr):
+        return 111
+
+    def close(self):
+        pass

@@ -24,6 +24,10 @@ import argparse
 import asyncio
 import json
 import os
+import re
+import shutil
+import socket
+import subprocess
 import sys
 import time
 import uuid
@@ -680,13 +684,49 @@ def check_health(url: str, timeout: int = 5) -> tuple[bool, str]:
             return False, f"Not a health endpoint: HTML page ({status}) - wrong port?"
         return True, f"OK ({status})"
     except Exception as e:
+        from urllib.parse import urlsplit
+
+        parts = urlsplit(url)
+        refused = isinstance(getattr(e, "reason", e), ConnectionRefusedError)
+        if refused and parts.hostname in ("localhost", "127.0.0.1") and parts.port:
+            fallback = docker_port_health(parts.port)
+            if fallback is not None:
+                return fallback
         return False, f"Unreachable: {e}"
+
+
+def docker_port_health(port: int) -> tuple[bool, str] | None:
+    """Docker's own health for the container exposing *port*, or None if unknown.
+
+    Mesh-only services (no host publish) refuse a host probe while running fine;
+    the container healthcheck is the honest signal for them.
+    """
+    docker = shutil.which("docker")
+    if not docker:
+        return None
+    try:
+        out = subprocess.run(
+            [docker, "ps", "--format", "{{.Names}}\t{{.Ports}}\t{{.Status}}"],
+            capture_output=True, text=True, timeout=10,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if out.returncode != 0:
+        return None
+    for line in out.stdout.splitlines():
+        name, _, rest = line.partition("\t")
+        ports, _, status = rest.partition("\t")
+        for lo, hi in re.findall(r"(?:->)?(\d+)(?:-(\d+))?/tcp", ports):
+            if int(lo) <= port <= int(hi or lo):
+                if "(unhealthy)" in status or not status.startswith("Up"):
+                    return False, f"container {name} {status} (mesh-only)"
+                note = "" if "(healthy)" in status else ", no healthcheck"
+                return True, f"container {name} up{note} (mesh-only, docker health)"
+    return None
 
 
 def check_service_port(service_spec: str, timeout: int = 2) -> tuple[bool, str]:
     """Check if a service:port is reachable via TCP connect."""
-    import socket
-
     parts = service_spec.split(":")
     if len(parts) != 2:
         return False, f"Invalid service spec: {service_spec}"
@@ -707,6 +747,8 @@ def check_service_port(service_spec: str, timeout: int = 2) -> tuple[bool, str]:
         sock.close()
         if result == 0:
             return True, f"Port {port} open"
+        if check_host == "127.0.0.1" and (fallback := docker_port_health(port)) is not None:
+            return fallback
         return False, f"Port {port} closed"
     except Exception as e:
         return False, f"Connection error: {e}"
