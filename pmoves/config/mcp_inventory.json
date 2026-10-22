@@ -177,6 +177,21 @@
           "_note": "ACTIVATED 2026-09-04: clients populated per the fail-closed checklist — COMPOSIO_API_KEY registered in the CHIT secrets manifest (#2837, slot composio_api_key, tier llm) and DELIVERED via the Pattern-B funnel (secrets-funnel-from-prod, bundle chit-bundle-b850-33907455784); clients = claude + crush (the 4090 control-plane coding agents; KiloCode joins via #2918's lane). Auth is in-band managed OAuth: the client's first connect returns the OAuth link, the operator authorizes, the connection is reusable — NOT a static X-API-Key header. Endpoint updated 2026-09-02 from stale mcp.composio.dev to connect.composio.dev/mcp. Old 2026-08-27 note (superseded): operator-approved registration; the stale disabled:true + X-API-Key header block was removed 2026-09-02."
         },
         {
+          "key": "composio-local",
+          "description": "Composio MCP fleet proxy on this node (supergateway 4.2.0 re-serving Composio Connect, loopback :8190) - same 7 COMPOSIO_* meta-tools as `composio`, but Composio auth is the proxy's ck_ consumer key, so headless clients work",
+          "transport": "http",
+          "endpoint": "local",
+          "endpoint_pinned": true,
+          "url": "http://127.0.0.1:8190/composio/mcp",
+          "headers": {
+            "Authorization": "Bearer ${COMPOSIO_MCP_GATEWAY_KEY}"
+          },
+          "clients": [
+            "claude"
+          ],
+          "_note": "Added 2026-10-21 (feat/composio-mcp-selfhost). Kit: deploy/kvm2/composio-mcp/, bring-up `make -C pmoves up-composio-mcp`, proof `make -C pmoves composio-mcp-smoke`. NOT running on any node yet: until the proxy is up Claude Code shows this entry as failed to connect (no tools) - harmless, the hosted `composio` entry is unchanged. Bearer is bare (no :- default) so a missing COMPOSIO_MCP_GATEWAY_KEY is visible, as with cipher. Provenance: pmoves/docs/handoffs/COMPOSIO_MCP_SELFHOST.md."
+        },
+        {
           "key": "jcodemunch",
           "description": "jCodemunch MCP - token-efficient code exploration via tree-sitter AST parsing (70+ languages, 95%+ token savings over grep loops). Fork: PMOVES-jcodemunch-mcp (Hardened).",
           "transport": "stdio",
