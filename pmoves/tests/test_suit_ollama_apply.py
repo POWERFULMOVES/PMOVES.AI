@@ -2,7 +2,11 @@
 from __future__ import annotations
 
 import importlib.util
+import shutil
+import subprocess
 from pathlib import Path
+
+import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SPEC = importlib.util.spec_from_file_location(
@@ -159,3 +163,20 @@ def test_non_json_reply_from_tags_is_unreachable_not_a_traceback(monkeypatch, ca
     monkeypatch.setattr(ms, "suit_ollama_plans", lambda suit: [ms.suit_ollama_plan(_suit())])
     assert ms.cmd_ollama_apply(argparse.Namespace(suit="", apply=False, check=False)) == 3
     assert "Ollama unreachable" in capsys.readouterr().out
+
+
+def _recipe(stub_docker_path, *assigns: str) -> str:
+    proc = subprocess.run(["make", "-s", "-n", "-C", str(REPO_ROOT / "pmoves"), "models-suit-ollama", *assigns],
+                          capture_output=True, text=True, timeout=60, env=stub_docker_path)
+    assert proc.returncode == 0, proc.stderr
+    return proc.stdout
+
+
+@pytest.mark.skipif(shutil.which("make") is None, reason="needs make")
+def test_make_target_loads_env_shared_and_only_literal_truthy_applies(stub_docker_path):
+    # -n prints, never runs: the recipe has no $(MAKE) line, so nothing reaches Ollama.
+    dry = _recipe(stub_docker_path, "SUIT=qwen3-embedding-4b", "APPLY=0", "CHECK=0")
+    assert dry.startswith(". ./scripts/with-env.sh;")  # OLLAMA_HOST + venv, like model-readiness
+    assert '--suit "qwen3-embedding-4b"' in dry and "--apply" not in dry and "--check" not in dry
+    assert "--apply" in _recipe(stub_docker_path, "APPLY=1")
+    assert "--check" in _recipe(stub_docker_path, "CHECK=yes")

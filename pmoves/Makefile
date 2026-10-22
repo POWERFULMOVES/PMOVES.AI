@@ -3778,7 +3778,7 @@ models-seed-ollama: ## Pre-pull Ollama models from profiles/registry (override w
 	  echo "✔ Seeded Ollama models (container=$$ollama_cid host=$$host source=$$source).";'
 
 models-suit-ollama: ## Enforce model-suit ollama_config as Ollama variants (SUIT=<name>; dry-run unless APPLY=1; CHECK=1 exits 1 on drift)
-	@python3 tools/models/models_sync.py ollama-apply $(if $(SUIT),--suit "$(SUIT)") $(if $(filter 1 yes true,$(APPLY)),--apply,$(if $(filter 1 yes true,$(CHECK)),--check))
+	@$(LOAD_ENV_SHARED); $(PYTHON) tools/models/models_sync.py ollama-apply $(if $(SUIT),--suit "$(SUIT)") $(if $(filter 1 yes true,$(APPLY)),--apply,$(if $(filter 1 yes true,$(CHECK)),--check))
 
 models-registry-snapshot: ensure-env-shared ## Snapshot Supabase model registry into models/registry.snapshot.json
 	@$(LOAD_ENV_SHARED); python3 tools/models/models_sync.py registry-snapshot --out models/registry.snapshot.json
