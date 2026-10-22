@@ -4331,20 +4331,26 @@ a0-mcp-show: ## Print Agent Zero runtime MCP server map
 	sed -E 's/(password=)[^&"]+/\1***REDACTED***/g; s/(key=)[^&"]+/\1***REDACTED***/g' "$$file"
 
 # Registry (not compose env) owns the Agent Zero model-config surface.
-# Per-node deployment pass-through: INSTANCE stamps header/manifest; OUT
-# relocates output (default follows AGENT_ZERO_USR_DIR like compose does).
-INSTANCE ?= docked
-OUT ?=
+# Per-node deployment pass-through: INSTANCE stamps header/manifest and picks
+# the instance's usr-dir var; OUT relocates output (default follows that var
+# like compose does). INSTANCE/OUT are generic names, so they are honoured ONLY
+# from the make command line: a stray exported OUT/INSTANCE in the invoking
+# shell must not relocate presets. The namespaced A0_MODEL_SYNC_INSTANCE /
+# A0_MODEL_SYNC_OUT may come from the environment. Empty INSTANCE= -> docked.
+A0_MODEL_SYNC_INSTANCE ?=
+A0_MODEL_SYNC_OUT ?=
+A0_SYNC_INSTANCE = $(or $(if $(filter command line,$(origin INSTANCE)),$(INSTANCE)),$(A0_MODEL_SYNC_INSTANCE),docked)
+A0_SYNC_OUT = $(or $(if $(filter command line,$(origin OUT)),$(OUT)),$(A0_MODEL_SYNC_OUT))
 
 .PHONY: a0-model-sync
 a0-model-sync: ensure-env-shared ## Generate Agent Zero presets.yaml from the live model registry (registry = config authority; T0 demoted to optional lane)
-	@$(LOAD_ENV_SHARED); PYTHONPATH="$(CURDIR)/.." $(PYTHON) tools/models/models_sync.py sync-dynamic --target agent-zero --apply-presets --tensorzero-base "$${TENSORZERO_BASE_URL:-http://tensorzero-gateway:3000}" --instance "$(INSTANCE)"$(if $(OUT), --out "$(OUT)",)
+	@$(LOAD_ENV_SHARED); PYTHONPATH="$(CURDIR)/.." $(PYTHON) tools/models/models_sync.py sync-dynamic --target agent-zero --apply-presets --tensorzero-base "$${TENSORZERO_BASE_URL:-http://tensorzero-gateway:3000}" --instance "$(A0_SYNC_INSTANCE)"$(if $(A0_SYNC_OUT), --out "$(A0_SYNC_OUT)",)
 
 # Variant 3 of the ownership plan: drift control. Clean rooms stay quiet;
 # drifted rooms exit 1 so fleet sweepers can score them.
 .PHONY: a0-model-sync-check
-a0-model-sync-check: ensure-env-shared ## Check Agent Zero presets.yaml against the live registry (exit 1 on drift; writes nothing)
-	@$(LOAD_ENV_SHARED); PYTHONPATH="$(CURDIR)/.." $(PYTHON) tools/models/models_sync.py sync-dynamic --target agent-zero --check --tensorzero-base "$${TENSORZERO_BASE_URL:-http://tensorzero-gateway:3000}" --instance "$(INSTANCE)"$(if $(OUT), --out "$(OUT)",)
+a0-model-sync-check: ensure-env-shared ## Check Agent Zero presets.yaml against the live registry (writes nothing; exit 0 clean, 1 drift, 2 undecided)
+	@$(LOAD_ENV_SHARED); PYTHONPATH="$(CURDIR)/.." $(PYTHON) tools/models/models_sync.py sync-dynamic --target agent-zero --check --tensorzero-base "$${TENSORZERO_BASE_URL:-http://tensorzero-gateway:3000}" --instance "$(A0_SYNC_INSTANCE)"$(if $(A0_SYNC_OUT), --out "$(A0_SYNC_OUT)",)
 
 .PHONY: archon-ui-smoke
 archon-ui-smoke: ## Verify consolidated Archon service API/UI endpoints are reachable (200)
