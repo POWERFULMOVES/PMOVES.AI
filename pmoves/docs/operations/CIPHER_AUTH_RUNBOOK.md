@@ -217,6 +217,17 @@ the REST path only.
 
 ## 6. The client-side half — do not enable the token without this
 
+**Transport (2026-10-10, 5090):** the roster's two cipher entries are `type: http` at
+`.../8105/mcp` (stateless streamable-http), no longer `type: sse` at `/mcp/sse`. The
+auth story below is unchanged — same bare bearer, `/mcp` 401s without it. What changed:
+on a container built before fork PR #27 (pin a0ee2314) the SSE pair opens (`GET /mcp/sse`
+200 + `endpoint` event) and then `POST /mcp/messages` fails 400 `stream is not readable`
+with the CORRECT token — the `express.json()`-before-router defect `cipher-build-pin-check`
+already documents for B850. `POST /mcp` (initialize, tools/list = 10, tools/call) works on
+that same stale container and on the pinned build, so the http entry is correct on every
+node regardless of rebuild state. A node still on a pre-pin container should also run
+`make -C pmoves up-cipher` (pin check + rebuild) — that is a node-ops action, not a roster one.
+
 Setting the token 401s every MCP client that does not present it, and Claude Code
 surfaces **no error** for an MCP server it cannot reach; it simply offers no tools.
 
