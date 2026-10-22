@@ -137,6 +137,12 @@
     "model_id": "nemotron-3-super",
     "provider": "ollama_spark"
   },
+  "qwen3-embedding-4b": {
+    "model_id": "qwen3-embedding-4b",
+    "provider": "ollama_local",
+    "api_base": "http://localhost:11434/v1",
+    "api_key_env": "OLLAMA_API_KEY"
+  },
   "qwen3.6": {
     "api_base": "http://localhost:11434/v1",
     "api_key_env": "OLLAMA_API_KEY",
