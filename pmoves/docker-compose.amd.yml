@@ -6,6 +6,11 @@
 # with the reservation reset it degrades to CPU transcription instead of
 # failing to schedule (`could not select device driver "nvidia"`).
 #
+# media-audio asks for the GPU the same way (service-level `runtime: nvidia`,
+# #3358), so it is neutralised here too. It has no device knob to set: the
+# server picks `cuda` only when torch.cuda.is_available(), which is false once
+# the runtime is reset, so it loads its models on CPU.
+#
 # Usage on AMD nodes:
 #   docker compose ... -f docker-compose.yml -f docker-compose.amd.yml \
 #     --profile media up -d ffmpeg-whisper
@@ -22,3 +27,8 @@ services:
       # runtime and the value documents that rather than leaving a GPU
       # request silently unanswered.
       - WHISPER_DEVICE=cpu
+  media-audio:
+    # The base requests NVIDIA via `runtime: nvidia` only (no devices
+    # reservation since #3358); reset it so container creation does not fail
+    # on a host with no nvidia runtime installed.
+    runtime: !reset null
