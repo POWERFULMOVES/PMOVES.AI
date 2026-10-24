@@ -1285,6 +1285,10 @@ services:
     roots:
       - pmoves/services
     overlays:
+      - overlay: amd
+        compose_key: media-audio
+        paths:
+          - pmoves/docker-compose.amd.yml
       - overlay: hardened
         compose_key: media-audio
         paths:
