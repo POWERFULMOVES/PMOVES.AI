@@ -562,7 +562,7 @@ def _render_bridges_bash(bridges: list[tuple[str, str]]) -> str:
 
 def render_powershell_launcher(tool: CliTool) -> str:
     """Generate the PowerShell twin of the bash launcher."""
-    bridge_block = _render_bridges_powershell(tool.bridges)
+    bridge_block = _render_bridges_powershell(tool.bridges, tool.launcher_basename)
     blocklist_entries = _powershell_blocklist_entries(tool.blocklist)
     header = GENERATOR_HEADER_PWSH.format(ver=GENERATOR_VERSION)
     return f"""{header}
@@ -683,7 +683,7 @@ def _powershell_blocklist_entries(blocklist: list[str]) -> str:
     return "\n".join(out)
 
 
-def _render_bridges_powershell(bridges: list[tuple[str, str]]) -> str:
+def _render_bridges_powershell(bridges: list[tuple[str, str]], launcher_basename: str) -> str:
     if not bridges:
         return "# (no name bridges for this CLI)"
     lines = ["# Mirror crush-pmoves.ps1 -- alias bridge for upstream-vs-PMOVES env names."]
@@ -691,18 +691,12 @@ def _render_bridges_powershell(bridges: list[tuple[str, str]]) -> str:
         lines.append(
             f"if (-not $env:{to_v} -and $env:{from_v}) {{\n"
             f"    [Environment]::SetEnvironmentVariable('{to_v}', $env:{from_v}, 'Process')\n"
-            f"    Write-Host \"[{tool_name_placeholder()}] {to_v} <- {from_v} (upstream/PMOVES name bridge)\"\n"
+            f"    Write-Host \"[{launcher_basename}] {to_v} <- {from_v} (upstream/PMOVES name bridge)\"\n"
             f"}}"
         )
     return "\n".join(lines)
 
 
-def tool_name_placeholder() -> str:  # tiny helper for clarity in templates
-    return "{tool.launcher_basename}"
-
-
-# ----------------------------------------------------------------------------
-# Template: Windows cmd wrapper (.cmd)
 # ----------------------------------------------------------------------------
 
 def render_cmd_wrapper(tool: CliTool) -> str:
