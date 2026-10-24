@@ -396,3 +396,6 @@ pmoves/tools/comfyui/_input/
 # (hostinger-kvm-setup.sh). Rooted so a same-named file elsewhere is unaffected.
 /profile.yaml
 /.node-config
+
+# Local model weights (runbook_drift JEV_MODEL default lives here). Rooted, as above.
+/research/models/
