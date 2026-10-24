@@ -12,7 +12,7 @@ provider_display: "Ollama on DGX Spark"
 distillation_stage: model_fine_tune
 
 model_config:
-  model_name: "gemma4:31b-q4"
+  model_name: "gemma4:31b"  # registry: same weights as 31b-it-q4_K_M (digest cd20f2b3f2e3); "31b-q4" was never a tag
   endpoint: http://pmoves-dgx-spark:11434/v1
   api_key_env: null
   context_window: 32768

@@ -105,7 +105,7 @@ if (Test-Path $envf) {
 # Mirror crush-pmoves.ps1 -- alias bridge for upstream-vs-PMOVES env names.
 if (-not $env:ZAI_API_KEY -and $env:Z_AI_API_KEY) {
     [Environment]::SetEnvironmentVariable('ZAI_API_KEY', $env:Z_AI_API_KEY, 'Process')
-    Write-Host "[{tool.launcher_basename}] ZAI_API_KEY <- Z_AI_API_KEY (upstream/PMOVES name bridge)"
+    Write-Host "[kilo-pmoves] ZAI_API_KEY <- Z_AI_API_KEY (upstream/PMOVES name bridge)"
 }
 
 # --- LAUNCH ---------------------------------------------------------------

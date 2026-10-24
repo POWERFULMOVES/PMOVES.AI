@@ -197,11 +197,11 @@
       "sha256": "2277d387c46cde78c56aa9aee5305515a996e8aae6fcba142b303e427ade3469"
     },
     {
-      "bytes": 5553,
+      "bytes": 5540,
       "executable": false,
       "managed_by": "generator",
       "relpath": "deploy/provision/kilo-pmoves.ps1",
-      "sha256": "326f3a5e21e9399bd51bd4540a30a20181943ed470d7f3a0cb8a1762119c040f"
+      "sha256": "199c20ec041a9e883a651018bd9c22ae9b64c96501687c861e7b59728e3bf06f"
     },
     {
       "bytes": 741,

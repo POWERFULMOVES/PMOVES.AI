@@ -36,6 +36,11 @@ reads them. Relative values resolve against pmoves/ (compose
 The darkxside variant uses its own USR_DIR var - set it when generating for
 that instance (INSTANCE=darkxside OUT=<its usr path>).
 
+SPARK's local GPU lane is the checked-in variant
+`pmoves/config/agent-zero/model-presets-spark.yaml` (Default = host-Ollama
+GPU variants, cloud lanes kept by name). See PATTERNS.md, Known Road - a local
+model lane for an Agent Zero node.
+
 ## Degradation ladder (config never goes empty)
 
 live registry rows -> template-derived rows (parsed at runtime from the
