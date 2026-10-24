@@ -63,6 +63,8 @@ PMOVES uses a Known Roads model: every dangerous-but-necessary operation has a c
 | Bootstrap a node onto the Docker MCP Toolkit (per-node MCP surface) | `make -C pmoves mcp-toolkit-bootstrap` + `mcp-toolkit-connect` — **run ON the node**, no raw-SSH sidestep | runbook `pmoves/docs/runbooks/MCP_TOOLKIT_NODE_BOOTSTRAP.md`; agent `fleet-node-deployer` |
 | Give an agent / drop-in model cipher memory (store + search) | § Known Road — Cipher memory for any agent or drop-in model (below) | `pmoves-cipher-memory` |
 | Add / change / remove ONE key in `pmoves/.env.local` (**operator-run**; agents stay zero-access) | `make -C pmoves env-local-{has,set,unset} KEY=NAME` — § Known Road — node-local env overlay keys (below) | — |
+| Overlay a coding harness (launcher, generator, settings template, skill) — map BEFORE build | row in `pmoves/docs/TAC/TAC_HARNESS_OVERLAY_MAP.md` + `kind: harness` registry row with `overlay:` → `python pmoves/tools/acp_registry_map.py` (ACP `linked`?) → `make -C pmoves skills-parity` (does the skill reach every AGInT?); never sniff `--help`, exec another binary, or commit an operator path (`anti-patterns.md` § `overlay-paper-over`) | `pmoves-pair-review` class 5 |
+| Docker engine hang on z890 → `docker desktop restart` / Reset | **Do not restart yet.** Run `make -C pmoves docker-disk-preflight` (read-only) first, then a read-only `e2fsck -fn` of the bare-mounted vhdx. Docker's bootstrap formats a disk it can't read. Runbook: `pmoves/docs/handoffs/z890-docker-data-disk-usb-spof-2026-10-14.md` | — |
 
 **`volume-reset SERVICE` values:** `neo4j`, `tensorzero-clickhouse`, `meilisearch`, `qdrant`, `minio`, `supabase-db`, `nats`.
 
