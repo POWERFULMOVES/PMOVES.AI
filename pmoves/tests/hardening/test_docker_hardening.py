@@ -117,7 +117,12 @@ def compose_data() -> Dict[str, dict]:
         if not path.exists():
             continue
 
-        with open(path, "r") as f:
+        # encoding="utf-8" so the cp1252 default on Windows does not trip over
+        # the ⚠ U+26A0 / ✅ U+2705 in the compose header comments. The ratchet
+        # TestWindowsHostCompat.test_compose_reads_use_utf8() pins this; a regression to a
+        # bare `open(path, "r")` here fails the test on this Windows host before
+        # CI ever sees it.
+        with open(path, "r", encoding="utf-8") as f:
             compose = yaml.safe_load(f)
             data[name] = compose.get("services", {})
 
@@ -938,3 +943,84 @@ class TestDocumentationReferences:
 
         assert doc_path.exists(), \
             f"Subsystem integration guide not found: {doc_path}"
+
+
+# =============================================================================
+# Tests: Windows-host compatibility (ratchet)
+# =============================================================================
+
+class TestWindowsHostCompat:
+    """Ratchets that keep this file's compose reads portable across platforms.
+
+    The `compose_data` fixture at the top of the file reads every tracked
+    compose YAML. On a Windows host, the default platform encoding is cp1252,
+    which cannot decode the ⚠ U+26A0 / ✅ U+2705 in our compose-file header
+    comments. CI runs on Linux (UTF-8 default), so the bug never reaches the
+    gate; a future contributor to this file would only see it on the
+    operator's 5090 worktree, where 32/34 `media-*` tests ERROR with
+    `UnicodeDecodeError: 'charmap' codec can't decode byte 0x8f`.
+
+    The runtime test would only catch this on a Windows host, so a static
+    ratchet is cheaper and pins the same shape forever.
+    """
+
+    def test_compose_reads_use_utf8(self):
+        """Every `open(...)` of a compose YAML in this file passes encoding=.
+
+        A regression to a bare `open(path, "r")` here re-introduces the
+        cp1252 trap. The check is an AST walk over the file's source, NOT the
+        test runner's platform; a future contributor who edits the file on
+        any OS sees the failure on this Windows host before CI does.
+        """
+        import ast
+
+        # AST, not a regex over the source: a regex keyed on a quoted mode
+        # argument missed the most common bare shape of all, a modeless
+        # `open(path)` (review of #3358), and could not see through nested
+        # parentheses such as `open(str(path))`. Docstrings and comments are
+        # not Call nodes, so the examples in this test do not trip it.
+        tree = ast.parse(Path(__file__).read_text(encoding="utf-8"))
+        bare = []
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            func = node.func
+            name = func.id if isinstance(func, ast.Name) else (
+                func.attr if isinstance(func, ast.Attribute) else None
+            )
+            if name != "open":
+                continue
+            if any(kw.arg == "encoding" for kw in node.keywords):
+                continue
+            # Path.open(mode) takes the mode first; builtin open(file, mode)
+            # second. A binary mode takes no encoding (passing one raises).
+            mode_index = 0 if isinstance(func, ast.Attribute) else 1
+            mode = None
+            if len(node.args) > mode_index and isinstance(node.args[mode_index], ast.Constant):
+                mode = node.args[mode_index].value
+            for kw in node.keywords:
+                if kw.arg == "mode" and isinstance(kw.value, ast.Constant):
+                    mode = kw.value.value
+            if isinstance(mode, str) and "b" in mode:
+                continue
+            bare.append(f"line {node.lineno}: {ast.unparse(node)}")
+        assert not bare, (
+            "compose YAML reads must pass encoding= to the open() call so the "
+            "Windows cp1252 default does not trip over UTF-8 multi-byte "
+            "sequences in the compose-file header comments:\n  "
+            + "\n  ".join(bare)
+        )
+
+    def test_docker_hardening_runs_on_windows(self, compose_data):
+        """Smoke check: the compose_data fixture loads on this host.
+
+        This is the runtime counterpart to the static ratchet above. On a
+        Linux host it always passes (the cp1252 trap is Windows-only). On
+        the operator's 5090 worktree (Windows, the one place the ratchet
+        matters) it is the canary that the fix at line ~120 is still in
+        place. The static AST check pins the source; this test pins the
+        runtime.
+        """
+        assert "main" in compose_data or "hardened" in compose_data, (
+            f"compose_data loaded no services: keys={sorted(compose_data.keys())}"
+        )
