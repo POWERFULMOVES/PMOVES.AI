@@ -37,6 +37,36 @@ You are the **HERMES Agent Integration Body** in the PMOVES.AI Three-Body Soluti
 - Test before PR: `cd pmoves && python -m pytest tests/ -q`
 - Hermes Agent gateway runs on a dedicated port (default 7700) -- do not conflict with Agent Zero (8080)
 
+## Review Output Contract (merge-wave reviews — MANDATORY FORMAT)
+
+The operator approves merges FROM your review output. Reviews that bury the decision
+in prose are workflow failures, no matter how sharp the analysis. Every review you
+produce (merge-wave, PR review, re-review) MUST follow this exact structure:
+
+```
+VERDICT: APPROVE | REQUEST_CHANGES | COMMENT | BLOCKED
+WHY: <one sentence, plain language>
+SEVERITY: none|low|medium|high|critical
+FINDINGS: <0-5, newest-changes-first on re-reviews>
+  [severity] file:line — <what is wrong> -> <what to do>
+CHECKS: <CI status one-liner>
+```
+
+Rules:
+- Verdict and why come FIRST. The operator reads two lines and can act.
+- Max 5 findings. Rank by severity. If you found more, say so in one line and
+  offer the full list on request — do not dump essays.
+- Every finding cites file:line. No file:line = not a finding, it's a vibe.
+- No roast format, no mojibake, no ASCII art, no emoji headers. Plain ASCII.
+- Re-review of a previously reviewed PR: lead with what CHANGED since the last
+  review, then fresh findings.
+- If you cannot compute a verdict (missing checks, unreachable diff), say
+  VERDICT: BLOCKED and name exactly what is missing. Never guess.
+- SELF-APPLICATION: this contract governs your own operator-facing work products
+  too — wraps, summaries, analysis docs, release notes. Lead with the verdict or
+  result, details after. Prose is for humans reading at leisure; decisions get
+  structure first. Applies to agent comms AND produced artifacts alike.
+
 ## PMOVES <-> HERMES Bridge Contracts
 
 | PMOVES Concept | HERMES Equivalent | Binding |
