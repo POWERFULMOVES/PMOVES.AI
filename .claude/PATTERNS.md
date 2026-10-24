@@ -197,6 +197,40 @@ make -C pmoves env-local-unset KEY=CIPHER_DB_SERVICE_KEY
 Sibling road for the GENERATED file: `make -C pmoves secrets-rotate KEY=...`
 rotates one key in `env.shared` and re-funnels (`pmoves/mk/codex.mk`).
 
+## Known Road — a local model lane for an Agent Zero node
+
+**What it's for.** Putting an A0 node on its own GPU models (the local analog
+of a cloud lane) without hand-editing generated config. Built from SPARK on
+2026-10-21, where each layer failed silently in turn: A0 crash-looped on an
+unwritable `_model_config` dir; a generated preset set with no `Default` let
+A0's migration install upstream's paid OpenRouter Default; three suits named
+Ollama tags that 404 at the registry; GB10 loaded 16/37 layers (0.9 tok/s)
+until `num_gpu 999` (49/49, ~70 tok/s); and Ollama's default 8192 context cut
+A0's ~14.5k-token prompt so every reply was one token. Each was found only by
+going through the real consumer.
+
+**The road, in order — tooling first, hand probes only where a tool can't answer:**
+
+1. **Suit** — the suit enforcer from PR #3379 (`models-suit-ollama`, dry run
+   by default). A `SKIP ... base not installed` can mean the suit names a tag that does not exist upstream:
+   fix the tag in `pmoves/configs/model-suits/` (the registry has no tag list;
+   compare model-layer digests of `/v2/library/<m>/manifests/<tag>`).
+2. **Variant** — every local variant pairs `num_gpu` with a `num_ctx` that fits
+   the consumer's prompt (A0 ~14.5k, Claude Code ~27-31k). Proof:
+   `journalctl -u ollama | grep -E "task.n_tokens|truncated = 1"`.
+3. **Reach** — containers reach host Ollama via `make -C pmoves
+   ollama-host-bridge` (plan; operator applies with sudo). Ollama itself stays
+   on loopback: it has no auth.
+4. **Presets** — the node's lane is a checked-in instance variant,
+   `pmoves/config/agent-zero/model-presets-<instance>.yaml` (see
+   `MODEL_PRESET_LIFECYCLE.md`). Generated `presets.yaml` is never hand-edited
+   and never lives only in a shared checkout or outside git. A preset named
+   `Default` must exist. Cloud lanes stay as named presets — hybrid by node.
+5. **Prove through the consumer** — `POST :8080/tasks` must return
+   `status: completed`. A fast direct Ollama call proves nothing about A0.
+6. **Bank it** — Cipher `context`/`code_pattern` entries (a `decision` store
+   came back `embedded:false`), then sign the trail.
+
 ## Known Road — Cipher memory for any agent or drop-in model
 
 This takes a harness or model with no PMOVES context from zero to a working
