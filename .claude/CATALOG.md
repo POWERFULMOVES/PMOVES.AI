@@ -91,6 +91,8 @@ Agent has no HTTP interface; Cipher Memory exposes `/health`, not `/healthz`).
 
 **Jellyfin Bridge** `:8093` — Jellyfin metadata webhook + helper. Syncs Jellyfin events to Supabase.
 
+**PMOVES-Mike** (SPARK, compose project `pmoves-mike`, loopback block `18300-18391`) — MikeOSS legal-AI platform with its OWN Supabase/Mailpit/RustFS/Redis. Frontend `:18300`, backend `:18301` (`GET /health`), Supabase gateway `:18321`, Postgres `:18322`, Mailpit UI+API `:18325` (`GET /readyz`), Mailpit SMTP `:18326`, Redis `:18379`, RustFS S3 `:18390` / console `:18391`. Road: `make -C pmoves up-mike | down-mike | mike-status`. Doc: `pmoves/docs/integrations/MIKE_INTEGRATION.md`.
+
 ## Monitoring Stack
 
 **Prometheus** `:9090` — Metrics scrape from all services (all expose `/metrics`).

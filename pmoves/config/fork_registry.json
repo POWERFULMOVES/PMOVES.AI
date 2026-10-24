@@ -470,6 +470,12 @@
       "reason": "fork of agentclientprotocol/registry (the official ACP agent registry); tracks upstream entries (MiniMax Code, harn, factory-droid, ...); substrate for the cross-agent shared-registry vision (a0/archon/every agent discover each other) \u2014 open wiring: map ACP entries to pmoves agent_registry.yaml",
       "branch": "main"
     },
+    "PMOVES-Mike": {
+      "upstream": "open-legal-products/mike",
+      "sync": true,
+      "reason": "fork of open-legal-products/mike (MikeOSS, AGPL-3.0 legal-AI platform); parity fork on main (0 ahead / 7 behind upstream at add time), consumed as the PMOVES-Mike submodule and run on SPARK as compose project pmoves-mike (make up-mike); MiSSinGLinC validator build base — see pmoves/docs/integrations/MIKE_INTEGRATION.md",
+      "branch": "main"
+    },
     "PMOVES-natscli-CHIT-EeZz": {
       "upstream": "nats-io/natscli",
       "sync": true,
