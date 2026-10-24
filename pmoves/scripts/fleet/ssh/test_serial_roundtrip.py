@@ -92,6 +92,23 @@ def test_mint_serial_never_reuses_a_ledger_serial(tmp_path, monkeypatch):
     assert gen.mint_serial() == 9
 
 
+def test_torn_ledger_line_does_not_brick_minting(tmp_path, monkeypatch, capsys):
+    """A crash mid-append leaves a partial last line. Minting continues, and
+    a serial the fragment still names stays reserved."""
+    gen = _load_gen()
+    ledger = tmp_path / "ledger.jsonl"
+    ledger.write_text(
+        json.dumps({"token_id": "ok", "serial": 7, "expires_at": 1}) + "\n"
+        + '{"token_id": "torn", "serial": 11, "expi\n'
+    )
+    monkeypatch.setattr(gen, "LEDGER_PATH", ledger)
+    assert gen.ledger_serials() == {7, 11}
+    assert "ledger.jsonl:2 is not valid JSON" in capsys.readouterr().err
+    draws = iter([11, 12])
+    monkeypatch.setattr(gen.secrets, "randbits", lambda bits: next(draws))
+    assert gen.mint_serial() == 12
+
+
 def test_minted_serials_are_distinct_and_json_safe(tmp_path, monkeypatch):
     gen = _load_gen()
     monkeypatch.setattr(gen, "LEDGER_PATH", tmp_path / "ledger.jsonl")
