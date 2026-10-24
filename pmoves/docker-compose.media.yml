@@ -88,14 +88,18 @@ services:
     - SSL_CERT_DIR=/etc/ssl/certs
     - REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
     - CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
+    # The xet downloader panics on slim images ("No CA certificates were
+    # loaded from the system"); disabling it is huggingface_hub's documented
+    # fallback to plain HTTPS downloads.
+    - HF_HUB_DISABLE_XET=${HF_HUB_DISABLE_XET:-1}
     - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_external
+    # GPU via the NVIDIA runtime + NVIDIA_VISIBLE_DEVICES (environment above),
+    # not deploy.resources.reservations.devices: that path fires the legacy
+    # nvidia prestart hook, which fails on Docker Desktop/WSL2 (ld.so
+    # assertion, driver rpc error; container stuck in Created).
+    runtime: nvidia
     deploy:
       resources:
-        reservations:
-          devices:
-          - capabilities:
-            - gpu
-            count: ${GPU_COUNT:-all}
         limits:
           cpus: '4.0'
           memory: 8G
