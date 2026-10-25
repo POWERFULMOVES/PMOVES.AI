@@ -1189,6 +1189,208 @@ def cmd_registry_snapshot(args: argparse.Namespace) -> int:
     return 0
 
 
+# --- ollama-apply: enforce model-suit ollama_config as Ollama variants --------
+# Suits (configs/model-suits/*.yaml) declare per-model Ollama settings such as
+# num_gpu: 999, and until this subcommand nothing read them. On SPARK
+# (2026-10-15) that left the shared embedder at 18/37 GPU layers: Ollama sizes
+# offload from *free* memory, and unified-memory page cache does not count.
+# Upgrading does not fix it: a same-session A/B (2026-10-16) gave 0.30.0 7/37
+# and 0.40.5 11/37 -- slightly better, still partial, since both size offload
+# from ~4 GB "available". So the setting has to be baked in.
+# A variant keeps the same weights (cosine 1.000000 vs the base tag) with the
+# suit's parameters as defaults. Pulling bases stays with seed-list /
+# models-seed-ollama.
+
+SUITS_DIR = ROOT / "configs" / "model-suits"
+OLLAMA_PARAMETER_KEYS = ("num_gpu", "num_ctx", "num_batch", "num_thread", "num_predict")
+# Keys that describe the suit rather than tune the runner. `ubatch` is NOT one:
+# it is llama.cpp's -ub, which Ollama does not accept (api/types.go Runner has
+# num_ctx/num_batch/num_gpu/main_gpu/use_mmap/num_thread only), so it can be
+# neither applied nor silently dropped -- it lands in `ignored`, and is printed.
+OLLAMA_DESCRIPTIVE_KEYS = ("variant", "quantization", "nvruntime")
+# HTTPError is a URLError; a 200 with a non-JSON body (proxy error page) is a
+# JSONDecodeError, i.e. a ValueError.
+OLLAMA_API_ERRORS = (urllib.error.URLError, OSError, json.JSONDecodeError)
+
+
+def _ollama_base_url() -> str:
+    """Ollama to apply against: OLLAMA_HOST, default http://localhost:11434."""
+    host = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
+    return (host if "://" in host else f"http://{host}").rstrip("/")
+
+
+def _ollama_api(path: str, body: dict | None = None, timeout: int = 600) -> dict:
+    """POST (GET when body is None) an Ollama API path; return its JSON."""
+    req = urllib.request.Request(
+        f"{_ollama_base_url()}{path}",
+        data=None if body is None else json.dumps(body).encode(),
+        headers={"Content-Type": "application/json"},
+        method="GET" if body is None else "POST",
+    )
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        return json.loads(resp.read() or b"{}")
+
+
+def _ollama_model_parameters(model: str) -> dict[str, str]:
+    """Parameters baked into an installed Ollama model, as {name: value}."""
+    raw = _ollama_api("/api/show", {"model": model}).get("parameters") or ""
+    out: dict[str, str] = {}
+    for line in raw.splitlines():
+        parts = line.split(None, 1)
+        if len(parts) == 2:
+            out[parts[0]] = parts[1].strip().strip('"')
+    return out
+
+
+def _ollama_tagged(name: str) -> str:
+    """Ollama's listed name for ``name``: /api/tags always carries a tag."""
+    return name if ":" in name.rsplit("/", 1)[-1] else f"{name}:latest"
+
+
+def _ollama_from_blob(model: str) -> str:
+    """Weights blob an installed model is built FROM (its modelfile FROM line)."""
+    for line in (_ollama_api("/api/show", {"model": model}).get("modelfile") or "").splitlines():
+        if line.startswith("FROM "):
+            return line.rsplit("/", 1)[-1].strip()
+    return ""
+
+
+def suit_ollama_plan(doc: dict) -> dict | None:
+    """{suit, base, variant, parameters, ignored} for an Ollama suit, else None.
+
+    context_window becomes num_ctx unless ollama_config sets it; the variant
+    defaults to <base>-pmoves (tag suffix) when the suit does not name one.
+    """
+    if not str(doc.get("provider", "")).startswith("ollama"):
+        return None
+    mc = doc.get("model_config") or {}
+    oc = mc.get("ollama_config")
+    if not isinstance(oc, dict) or not mc.get("model_name"):
+        return None
+    base = _ollama_tagged(str(mc["model_name"]))
+    params = {k: oc[k] for k in OLLAMA_PARAMETER_KEYS if k in oc}
+    if "num_ctx" not in params and mc.get("context_window"):
+        params["num_ctx"] = int(mc["context_window"])
+    if not params:
+        return None
+    name, _, tag = base.partition(":")
+    return {
+        "suit": doc.get("name"),
+        "base": base,
+        "variant": _ollama_tagged(str(oc.get("variant") or f"{name}:{tag}-pmoves")),
+        "parameters": params,
+        "ignored": sorted(k for k in oc if k not in OLLAMA_PARAMETER_KEYS and k not in OLLAMA_DESCRIPTIVE_KEYS),
+    }
+
+
+def suit_ollama_plans(suit: str = "", suits_dir: Path = SUITS_DIR) -> list[dict]:
+    """Plans for every applicable suit, or only the one named ``suit``."""
+    plans = []
+    for path in sorted(suits_dir.glob("*.yaml")):
+        doc = _read_yaml(path)
+        if suit and suit not in (path.stem, doc.get("name")):
+            continue
+        plan = suit_ollama_plan(doc)
+        if plan:
+            plans.append(plan)
+    return plans
+
+
+def suit_ollama_drift(plan: dict, current: dict[str, str]) -> dict[str, tuple]:
+    """Suit parameters whose installed value differs: {name: (want, have)}."""
+    return {k: (v, current.get(k)) for k, v in plan["parameters"].items() if current.get(k) != str(v)}
+
+
+def suit_offload_verdict(plan: dict, loaded: dict[str, dict]) -> str:
+    """VERIFIED / DRIFTED / UNDECIDED for whether the live variant honours num_gpu.
+
+    Read-only, in the runbook-drift (#3375) verdict vocabulary: a variant that is
+    not loaded right now is UNDECIDED -- the check never loads a model to find out.
+    Only suits asking for full offload (num_gpu >= 999) are judged.
+    """
+    if int(plan["parameters"].get("num_gpu", 0)) < 999:
+        return "UNDECIDED (suit does not ask for full offload)"
+    m = loaded.get(plan["variant"])
+    if not m:
+        return "UNDECIDED (variant not loaded; not loading it to check)"
+    size, vram = int(m.get("size") or 0), int(m.get("size_vram") or 0)
+    if size and vram >= size:
+        return f"VERIFIED (full GPU offload, {vram / 1e9:.1f} GB)"
+    return f"DRIFTED (only {vram / 1e9:.1f} of {size / 1e9:.1f} GB on GPU)"
+
+
+def cmd_ollama_apply(args: argparse.Namespace) -> int:
+    """Dry-run by default; --apply creates/updates variants; --check exits 1 on drift."""
+    plans = suit_ollama_plans(args.suit)
+    if not plans:
+        print(f"no suit with an applicable ollama_config{f' named {args.suit!r}' if args.suit else ''}")
+        return 2 if args.suit else 0
+    try:
+        installed = {m["name"] for m in _ollama_api("/api/tags").get("models", [])}
+        loaded = {m["name"]: m for m in _ollama_api("/api/ps").get("models", [])}
+    except OLLAMA_API_ERRORS as exc:
+        print(f"Ollama unreachable at {_ollama_base_url()}: {exc}")
+        return 3
+    return _ollama_apply_plans(plans, installed, loaded, args)
+
+
+def _ollama_apply_plans(plans: list[dict], installed: set[str], loaded: dict[str, dict],
+                        args: argparse.Namespace) -> int:
+    """One line per suit; a suit that fails never stops the ones after it.
+
+    Exit 1 if any suit FAILED (API error, or still drifted after --apply), or on
+    any drift under --check; 0 otherwise.
+    """
+    drifted = failed = 0
+    for p in plans:
+        label = f"{p['suit']}: {p['base']} -> {p['variant']} {p['parameters']}"
+        if p["ignored"]:
+            label += f" (not Ollama parameters, ignored: {', '.join(p['ignored'])})"
+        try:
+            status = _ollama_apply_plan(p, label, installed, loaded, args)
+        except OLLAMA_API_ERRORS as exc:
+            print(f"FAILED {label} -- Ollama API error at {_ollama_base_url()}: {exc}")
+            status = "failed"
+        drifted += status in ("drift", "applied", "failed")
+        failed += status == "failed"
+    if drifted and not args.apply:
+        print("dry-run: nothing changed; re-run with APPLY=1 to create the variants above")
+    if failed:
+        print(f"{failed} of {len(plans)} suit(s) FAILED; every other suit was still attempted")
+        return 1
+    return 1 if (args.check and drifted) else 0
+
+
+def _ollama_apply_plan(p: dict, label: str, installed: set[str], loaded: dict[str, dict],
+                       args: argparse.Namespace) -> str:
+    """Judge (and under --apply, fix) one plan: skip / ok / drift / applied / failed."""
+    if p["base"] not in installed:
+        print(f"SKIP  {label} -- base not installed (make models-seed-ollama)")
+        return "skip"
+    if p["variant"] in installed:
+        diff = suit_ollama_drift(p, _ollama_model_parameters(p["variant"]))
+        # A re-pulled base leaves the variant on the old weights; callers
+        # that fall back to the base tag would then mix vector spaces.
+        if _ollama_from_blob(p["variant"]) != _ollama_from_blob(p["base"]):
+            diff["base"] = ("re-pulled", "variant still on old weights")
+    else:
+        diff = {"variant": "not created yet"}
+    if not diff:
+        verdict = suit_offload_verdict(p, loaded) if args.check else ""
+        print(f"OK    {label}{f' -- offload {verdict}' if verdict else ''}")
+        return "drift" if verdict.startswith("DRIFTED") else "ok"
+    if not args.apply:
+        print(f"DRIFT {label} {diff}")
+        return "drift"
+    _ollama_api("/api/create", {"model": p["variant"], "from": p["base"],
+                                "parameters": p["parameters"], "stream": False})
+    left = suit_ollama_drift(p, _ollama_model_parameters(p["variant"]))
+    if _ollama_from_blob(p["variant"]) != _ollama_from_blob(p["base"]):
+        left["base"] = ("re-pulled", "variant still on old weights")
+    print(f"{'APPLIED' if not left else 'FAILED '} {label}{f' still drifted: {left}' if left else ''}")
+    return "failed" if left else "applied"
+
+
 def build_parser() -> argparse.ArgumentParser:
     """Build the CLI argument parser with all subcommands."""
     parser = argparse.ArgumentParser(description="PMOVES model sync utilities")
@@ -1224,6 +1426,13 @@ def build_parser() -> argparse.ArgumentParser:
     seed.add_argument("--source", default="auto", choices=["auto", "profile", "registry", "dynamic"])
     seed.add_argument("--include-baseline", action="store_true", default=True)
     seed.set_defaults(func=cmd_seed_list)
+
+    oapply = sub.add_parser("ollama-apply", help="enforce model-suit ollama_config as Ollama variants (dry-run by default)")
+    oapply.add_argument("--suit", default="", help="suit file stem or name (default: all)")
+    omode = oapply.add_mutually_exclusive_group()
+    omode.add_argument("--apply", action="store_true", help="create/update the variants")
+    omode.add_argument("--check", action="store_true", help="exit 1 on drift; changes nothing")
+    oapply.set_defaults(func=cmd_ollama_apply)
 
     snap = sub.add_parser("registry-snapshot", help="export Supabase active model snapshot")
     snap.add_argument("--out", required=True)
