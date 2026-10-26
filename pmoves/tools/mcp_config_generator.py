@@ -39,6 +39,23 @@ DEFAULT_OUTPUTS = {
     "opencode": PROJECT_ROOT / ".opencode" / "config.json",
     "hermes": Path.home() / ".hermes" / "profiles" / "pmoves-hermes" / "config.yaml",
     "crush": Path.home() / ".config" / "crush" / "crush.json",
+    # MiniMax Code (the Mavis desktop client). The native runtime owns
+    # ~/.minimax/mcp.json -- it carries runtime-managed keys (`configured`,
+    # `builtin`) and pre-existing entries (composio) that the generator
+    # MERGES into rather than replaces.
+    "minimax": Path.home() / ".minimax" / "mcp.json",
+}
+
+# Client bootstrap profiles (pmoves.bootstrap/v1) that pin the roster for a
+# client. When a client has a profile, ONLY the tools the profile declares
+# are rendered -- the profile is load-bearing, not documentation. That keeps
+# the profile and the generated config diffable against each other: every
+# `tools[].key` in the profile must exist in the inventory (fail-closed), and
+# every rendered key must be declared in the profile.
+#
+# Added 2026-10-26 for the MiniMax Code client parity lane.
+CLIENT_PROFILES: Dict[str, Path] = {
+    "minimax": PROJECT_ROOT / "pmoves" / "configs" / "mavis_collection" / "clients" / "minimax-code.yaml",
 }
 
 
@@ -325,6 +342,58 @@ def render_crush(specs: List[ServerSpec], context: Dict[str, str], **kw: Any) ->
     return {"mcp": mcp}
 
 
+def render_minimax(specs: List[ServerSpec], context: Dict[str, str], **kw: Any) -> Dict[str, Any]:
+    """Render MiniMax Code mcpServers block (native `~/.minimax/mcp.json`).
+
+    WHY A DEDICATE RENDERER. MiniMax Code (the Mavis desktop client) does
+    not read the Claude/Kimi `mcpServers` shape verbatim -- it is close, but
+    it carries three extra per-server keys and one different key name:
+
+      * `type`            -- REQUIRED. The Claude renderer omits it (Claude
+                             infers from the presence of `url`); MiniMax
+                             requires an explicit transport discriminator.
+      * `enabled`         -- MiniMax uses `enabled`, not `disabled`. The
+                             inventory's `disabled: true` therefore renders
+                             as `enabled: false` (same mapping KiloCode
+                             already uses for its own schema).
+      * `configured`      -- the MiniMax runtime marks a server as
+                             "configured" once it has been wired; the merge
+                             path preserves the operator's existing value.
+      * `builtin`         -- false for PMOVES-owned servers (true only for
+                             servers the client ships itself).
+
+    The `type` vocabulary is the MiniMax MCP contract: `stdio` takes
+    `command`/`args`/`env`; `http` / `streamable-http` / `sse` take
+    `url`/`headers`. stdio and remote fields are never mixed on one entry.
+    """
+    servers: Dict[str, Any] = {}
+    for spec in specs:
+        entry: Dict[str, Any] = {
+            "type": spec.transport,
+            "enabled": not spec.disabled,
+            "configured": True,
+            "builtin": False,
+        }
+        if spec.description:
+            entry["description"] = spec.description
+        if spec.transport in ("sse", "http", "streamable-http"):
+            entry["url"] = _expand(spec.url or "", context, **kw)
+            if spec.headers:
+                entry["headers"] = _render_headers(spec.headers, context, **kw)
+        elif spec.transport == "stdio":
+            command, args = _split_command_args(spec.command or "", spec.args)
+            entry["command"] = command
+            entry["args"] = _render_args(args, context, **kw)
+            if spec.env:
+                entry["env"] = _render_env(spec.env, context, **kw)
+        else:
+            continue
+        if spec.timeout:
+            entry["timeout_ms"] = spec.timeout
+        servers[spec.key] = entry
+    return {"mcpServers": servers}
+
+
 RENDERERS = {
     "claude": render_claude_kimi,
     "kimi": render_claude_kimi,
@@ -332,8 +401,8 @@ RENDERERS = {
     "kilocode": render_kilocode,
     "hermes": render_hermes,
     "crush": render_crush,
+    "minimax": render_minimax,
 }
-
 
 # ---------------------------------------------------------------------------
 # Merge / write helpers
@@ -374,6 +443,43 @@ def _backup_once(path: Path) -> None:
         shutil.copy2(path, backup)
 
 
+def _profile_tool_keys(client: str, profile_path: Optional[Path] = None) -> Optional[List[str]]:
+    """Return the tool keys a client's bootstrap profile declares.
+
+    Returns None when the client has no profile (every other client keeps
+    the whole-inventory behaviour). Raises MCPConfigError when a declared
+    key is missing from the inventory -- fail-closed, because a profile
+    that names a server the fleet does not run is a silent broken roster.
+    """
+    if client not in CLIENT_PROFILES:
+        return None
+    path = profile_path or CLIENT_PROFILES[client]
+    if not path.exists():
+        raise MCPConfigError(f"Client profile not found for '{client}': {path}")
+    try:
+        import yaml  # local import: the generator's core path does not need PyYAML
+    except ImportError as exc:  # pragma: no cover - dependency guard
+        raise MCPConfigError(
+            f"Client profile '{path}' requires PyYAML to read the roster. "
+            f"Install pyyaml or pass --no-profile-filter."
+        ) from exc
+    data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    tools = (data.get("super_nodes") or {}).get("tools") or []
+    keys: List[str] = []
+    for entry in tools:
+        if not isinstance(entry, dict):
+            continue
+        key = entry.get("key")
+        if key:
+            keys.append(key)
+    if not keys:
+        raise MCPConfigError(
+            f"Client profile '{path}' declares no tools[].key entries -- "
+            f"refusing to render an empty roster for '{client}'."
+        )
+    return keys
+
+
 def generate_for_client(
     client: str,
     *,
@@ -381,12 +487,28 @@ def generate_for_client(
     endpoint: str = "fleet",
     context: Optional[Dict[str, str]] = None,
     allow_os_environ: bool = True,
+    profile_path: Optional[Path] = None,
+    use_profile: bool = True,
 ) -> Dict[str, Any]:
     inventory = inventory or load_inventory()
     context = context or {}
     if client not in RENDERERS:
         raise MCPConfigError(f"Unknown client: {client}")
     specs = _collect_servers(inventory, client, endpoint)
+    if use_profile:
+        declared = _profile_tool_keys(client, profile_path)
+        if declared is not None:
+            by_key = {spec.key: spec for spec in specs}
+            missing = [k for k in declared if k not in by_key]
+            if missing:
+                raise MCPConfigError(
+                    f"Client profile for '{client}' declares tool keys that the "
+                    f"inventory does not resolve for this client/endpoint: "
+                    f"{', '.join(missing)}. Either the inventory entry is "
+                    f"missing, is allowlisted to other clients only, or the "
+                    f"endpoint mode ({endpoint}) excludes it."
+                )
+            specs = [by_key[k] for k in declared]
     return RENDERERS[client](specs, context, allow_os_environ=allow_os_environ)
 
 
@@ -399,17 +521,20 @@ def write_client_config(
     endpoint: str = "fleet",
     context: Optional[Dict[str, str]] = None,
     allow_os_environ: bool = True,
+    profile_path: Optional[Path] = None,
+    use_profile: bool = True,
 ) -> Path:
     """Generate and write config for a single client.
 
-    For JSON clients (Claude, Kimi, KiloCode, Crush) the output is merged with
+    For JSON clients (Claude, Kimi, KiloCode, Crush, MiniMax) the output is merged with
     the existing file when merge=True. For Hermes, a YAML mcp_servers snippet
     is printed to stdout; callers are responsible for injecting it into the
     Hermes config.yaml because YAML round-tripping is left to the Hermes
     bootstrap script.
     """
     rendered = generate_for_client(client, inventory=inventory, endpoint=endpoint, context=context,
-                                   allow_os_environ=allow_os_environ)
+                                   allow_os_environ=allow_os_environ, profile_path=profile_path,
+                                   use_profile=use_profile)
 
     if client == "hermes":
         # Hermes is YAML; write a snippet file for the bootstrap script to merge.
@@ -433,6 +558,22 @@ def write_client_config(
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(json.dumps(final, indent=2) + "\n", encoding="utf-8")
+    # Owner-only on POSIX.
+    #
+    # WHY NOW (2026-10-26). A rendered config CAN hold expanded secrets --
+    # the agent-zero MCP token rides in the URL PATH, and the cipher +
+    # flute headers carry API keys. For the tracked repo configs the
+    # placeholders are preserved (allow_os_environ=False), so those files
+    # stay secret-free. But a LIVE per-node config (the MiniMax client's
+    # ~/.minimax/mcp.json, the Hermes profile) is written with the values
+    # expanded, and the default umask would leave it world-readable.
+    #
+    # This is a no-op on Windows (no POSIX mode bits); the mode is still
+    # applied when the same generator runs on a Linux fleet node.
+    try:
+        os.chmod(output_path, 0o600)
+    except (OSError, NotImplementedError):  # pragma: no cover - platform guard
+        pass
     return output_path
 
 
@@ -484,6 +625,24 @@ def main(argv: Optional[List[str]] = None) -> int:
         metavar="KEY=VALUE",
         default=[],
         help="Override context variable for ${...} expansion (can be repeated).",
+    )
+    parser.add_argument(
+        "--client-profile",
+        type=Path,
+        default=None,
+        help=(
+            "Path to a pmoves.bootstrap/v1 client profile that pins the roster "
+            f"for a client. Defaults to the profile registered for that client "
+            f"({', '.join(sorted(CLIENT_PROFILES)) or 'none'})."
+        ),
+    )
+    parser.add_argument(
+        "--no-profile-filter",
+        action="store_true",
+        help=(
+            "Render the whole inventory for the client instead of the roster its "
+            "bootstrap profile declares."
+        ),
     )
     args = parser.parse_args(argv)
 
@@ -549,6 +708,8 @@ def main(argv: Optional[List[str]] = None) -> int:
         rendered = generate_for_client(
             client, inventory=inventory, endpoint=args.endpoint, context=context,
             allow_os_environ=not is_tracked,
+            profile_path=args.client_profile,
+            use_profile=not args.no_profile_filter,
         )
 
         if args.dry_run:
@@ -564,6 +725,8 @@ def main(argv: Optional[List[str]] = None) -> int:
             endpoint=args.endpoint,
             context=context,
             allow_os_environ=not is_tracked,
+            profile_path=args.client_profile,
+            use_profile=not args.no_profile_filter,
         )
         print(f"OK Wrote {client} MCP config to {written}")
 

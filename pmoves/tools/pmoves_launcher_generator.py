@@ -103,6 +103,11 @@ DEFAULT_BLOCKLIST_BY_TOOL: dict[str, list[str]] = {
     "kilo":    ["KILOCODE_API_KEY", "KILO_*", "OPENCODE_*"],
     "kimi":    ["KIMI_API_KEY", "MOONSHOT_API_KEY", "KIMI_*"],
     "hermes":  ["HERMES_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_API_KEY", "HERMES_*"],
+    # MiniMax Code: the client reads its own provider config from
+    # ~/.mmx/config.json, so ANTHROPIC_* must not leak in from the shell --
+    # it would route the MiniMax backend at an Anthropic endpoint.
+    "minimax": ["ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_BASE_URL",
+                "MINIMAX_API_KEY"],
 }
 
 # Per-CLI binary name (the actual command exec'd at the end).  Defaults to
@@ -115,6 +120,11 @@ BINARY_BY_TOOL: dict[str, str] = {
     "kilo":    "kilo",
     "kimi":    "kimi",
     "hermes":  "hermes",
+    # MiniMax Code (the Mavis desktop client). The `minimax` command is the
+    # client's own CLI shim; the desktop install lays it down under
+    # ~/.minimax/bin/ (minimax.cmd on Windows). Added 2026-10-26 with the
+    # MiniMax client parity lane.
+    "minimax": "minimax",
 }
 
 # Per-CLI signature aliases (the `signature:` field in agent_registry.yaml
@@ -144,6 +154,7 @@ DEFAULT_BRIDGES_BY_TOOL: dict[str, list[tuple[str, str]]] = {
     "codex":  [],
     "hermes": [],
     "claude": [],
+    "minimax": [],
 }
 
 

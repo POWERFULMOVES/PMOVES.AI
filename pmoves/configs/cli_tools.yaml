@@ -51,6 +51,11 @@ pmoves_wrappers:
     windows_shim: pmoves/scripts/windows/hermes-pmoves.bat
     drives: hermes (Hermes Agent)
     purpose: "One-shot Hermes bootstrap+launch (profile + MCP + CHIT)"
+  minimax-pmoves:
+    script: pmoves/scripts/minimax-pmoves.sh
+    windows_shim: pmoves/scripts/windows/minimax-pmoves.bat
+    drives: minimax (MiniMax Code / Mavis desktop client)
+    purpose: "MiniMax Code with the pmoves.bootstrap/v1 client profile (roster + service tags + routing + constraints)"
 
 host_clis:
   # name -> { purpose, required, install hints, check command }

@@ -384,9 +384,44 @@
       "managed_by": "generator",
       "relpath": "deploy/provision/hermes-pmoves.cmd",
       "sha256": "6b8f8d9f0df4bad899636324d21c2a27a197296d1936a2b52be6a619a59e49c4"
+    },
+    {
+      "bytes": 4012,
+      "executable": true,
+      "managed_by": "generator",
+      "relpath": "deploy/provision/install-minimax-pmoves-command.sh",
+      "sha256": "dcaeccdabcb5725fe814757d93a70a9160d1510ad517bc7d71616757ae3ee879"
+    },
+    {
+      "bytes": 3813,
+      "executable": false,
+      "managed_by": "generator",
+      "relpath": "deploy/provision/install-minimax-pmoves-command.ps1",
+      "sha256": "37ecedaa4d5a77df89d00cf6b7eca7dba9f9672a0e336c4524e58549201f9250"
+    },
+    {
+      "bytes": 7688,
+      "executable": true,
+      "managed_by": "generator",
+      "relpath": "deploy/provision/minimax-pmoves.sh",
+      "sha256": "492409d176b8fb9860f1ea19265b1bf7d39f86a25cc2e810037cbbbfc596c6fa"
+    },
+    {
+      "bytes": 5383,
+      "executable": false,
+      "managed_by": "generator",
+      "relpath": "deploy/provision/minimax-pmoves.ps1",
+      "sha256": "5b60062d83e96d27880c92c823c48e43181959519b797c46f314a978a569ab77"
+    },
+    {
+      "bytes": 750,
+      "executable": false,
+      "managed_by": "generator",
+      "relpath": "deploy/provision/minimax-pmoves.cmd",
+      "sha256": "2f1c47632ebd1c9e9ce1d119abf79e4a838a9a4f96ef5b8dab02d6c263d66971"
     }
   ],
   "generator_version": "1.0.0",
   "identity_count": 10,
-  "tool_count": 7
+  "tool_count": 8
 }
