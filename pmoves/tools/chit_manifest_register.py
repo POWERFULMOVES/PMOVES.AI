@@ -217,6 +217,40 @@ REGISTRY: Dict[str, Dict[str, Any]] = {
         "required": True,
         "aliases": ["CHIT_PASSPHRASE"],
     },
+    # Tier 5: Agent — tokenism-simulator's Flask session key.
+    # docker-compose.ui.yml declares `SECRET_KEY=${SECRET_KEY:?set SECRET_KEY
+    # via secrets funnel}` for tokenism-simulator (added 1fd84fc07, 2026-10-11),
+    # but nothing in the pipeline supplied it: no manifest entry, no env-file
+    # slot, no bootstrap spec — so stack-wide compose interpolation failed on
+    # every node, while the app itself fell back to a public inline literal in
+    # this repository (session-forge risk; the Fordham Hill pilot is
+    # production-bound). The alias is the load-bearing part, same shape as
+    # CHIT_PROD_PASSPHRASE above: bundles carry only SECRET_KEY_BASE (the
+    # Supabase trust root, 64-char), and secrets_sync.py `_first_usable`
+    # resolves label-then-aliases and emits the CANONICAL target key either
+    # way — so one CGP point materializes SECRET_KEY_BASE (supabase tier) AND
+    # SECRET_KEY (agent tier) from the same value.
+    # required=True: the compose gate is fail-closed by design and STAYS. The
+    # app now also self-mints an ephemeral dev key when the var is absent
+    # (tokenism-simulator config), but fleet deployments resolve this slot
+    # through the funnel like every other hard-required var.
+    # min_length=64 mirrors SECRET_KEY_BASE so a truncated value is withheld
+    # (secrets_sync.py:218) instead of silently becoming a session trust root.
+    # TARGETS TRIM (deliberate): build_entry's auto tail would add
+    # github_secret: SECRET_KEY + docker_secret: pmoves_secret_key. Both are
+    # wrong here — the GitHub secret would duplicate the Supabase trust root
+    # under a second name (broadening workflow read surface for the fleet's
+    # most sensitive value), and no consumer reads a pmoves_secret_key Docker
+    # secret. The entry keeps only the two file targets, exactly the shape the
+    # stranded alias commit (71c0e1478) carried. Targets are operator-tuned
+    # and NOT reconciled (RECONCILED_FIELDS is ("min_length",)), so the
+    # one-time hand trim of the emitted v2 entry survives every register run.
+    "SECRET_KEY": {
+        "tier": "agent",
+        "required": True,
+        "aliases": ["SECRET_KEY_BASE"],
+        "min_length": 64,
+    },
     # PMOVES MCP Gateway inbound auth. The gateway binds 0.0.0.0 across four
     # fleet networks so every agent can reach it; without this token and without
     # --allow-unauthenticated it refuses remote callers, which is the correct
