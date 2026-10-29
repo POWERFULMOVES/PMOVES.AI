@@ -3,10 +3,17 @@
 Deliberately imports ONLY the config module (stdlib + optional dotenv), so
 the suite runs on seats without flask/structlog — the heavy import surface
 (app.py -> flask, structlog, api blueprints) is not touched here.
+
+These are PURE-FUNCTION tests: they call config._resolve_secret_key() and
+config.ServiceConfig() directly under monkeypatch. An earlier revision used
+importlib.reload(config) per scenario — the CI ratchet's grouped execution
+(three test files sharing one pytest process) made that a cross-file hazard:
+a reload that raised mid-module left the shared config module partially
+re-exec'd, and every later reload in the group failed with
+"module config not in sys.modules". Resolution is a pure function of
+os.environ, so no reload is needed to exercise any scenario.
 """
 
-import importlib
-import os
 import re
 import sys
 from pathlib import Path
@@ -14,26 +21,16 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-sys.modules.pop("services", None)
 
-# The config module instantiates ServiceConfig() at import time and — by
-# design after the codex P1 fix — fail-closes (raises) when it finds
-# neither SECRET_KEY nor a dev signal. Pytest collection imports this
-# module before any monkeypatch can run, so the INITIAL import carries
-# the minimal dev signal; every test then reloads the module under its
-# own scenario (the production-raises test deletes this shim explicitly).
-os.environ.setdefault("TOKENISM_DEV", "1")
-
-import config  # noqa: E402
+import config  # noqa: E402  (tests/conftest.py floors TOKENISM_DEV for import)
 
 
 def test_env_set_uses_value_verbatim(monkeypatch):
     """Fleet mode: a funnel-provided SECRET_KEY is used exactly as given."""
-    # Hermetic: skips the module's dev-only env.shared dotenv loader, so the
-    # test cannot ingest whatever a future funnel hydration writes there.
     monkeypatch.setenv("DOCKER_CONTAINER", "1")
     monkeypatch.setenv("SECRET_KEY", "fleet-value-from-funnel-0123456789abcdef")
-    importlib.reload(config)
+    assert config._resolve_secret_key() == "fleet-value-from-funnel-0123456789abcdef"
+    # The dataclass path resolves through the same function at instantiation.
     cfg = config.ServiceConfig()
     assert cfg.secret_key == "fleet-value-from-funnel-0123456789abcdef"
 
@@ -47,9 +44,8 @@ def test_env_set_preserves_whitespace_padding_verbatim(monkeypatch):
     monkeypatch.setenv("DOCKER_CONTAINER", "1")
     padded = "  padded-fleet-value-0123456789abcdef  "
     monkeypatch.setenv("SECRET_KEY", padded)
-    importlib.reload(config)
-    cfg = config.ServiceConfig()
-    assert cfg.secret_key == padded
+    assert config._resolve_secret_key() == padded
+    assert config.ServiceConfig().secret_key == padded
 
 
 def test_env_unset_mints_ephemeral_64hex_in_dev(monkeypatch):
@@ -57,12 +53,11 @@ def test_env_unset_mints_ephemeral_64hex_in_dev(monkeypatch):
     monkeypatch.setenv("DOCKER_CONTAINER", "1")
     monkeypatch.setenv("FLASK_ENV", "development")
     monkeypatch.delenv("SECRET_KEY", raising=False)
-    importlib.reload(config)
-    first = config.ServiceConfig().secret_key
-    second = config.ServiceConfig().secret_key
+    first = config._resolve_secret_key()
+    second = config._resolve_secret_key()
     assert re.fullmatch(r"[0-9a-f]{64}", first)
     assert re.fullmatch(r"[0-9a-f]{64}", second)
-    # Two instantiations must not share a key: ephemeral means per-process,
+    # Two resolutions must not share a key: ephemeral means per-mint,
     # never a repo-wide constant wearing a random coat.
     assert first != second
 
@@ -73,9 +68,7 @@ def test_tokenism_dev_flag_also_enables_mint(monkeypatch):
     monkeypatch.setenv("TOKENISM_DEV", "1")
     monkeypatch.delenv("SECRET_KEY", raising=False)
     monkeypatch.delenv("FLASK_ENV", raising=False)
-    importlib.reload(config)
-    key = config.ServiceConfig().secret_key
-    assert re.fullmatch(r"[0-9a-f]{64}", key)
+    assert re.fullmatch(r"[0-9a-f]{64}", config._resolve_secret_key())
 
 
 def test_production_without_key_raises(monkeypatch):
@@ -89,12 +82,10 @@ def test_production_without_key_raises(monkeypatch):
     monkeypatch.delenv("SECRET_KEY", raising=False)
     monkeypatch.delenv("FLASK_ENV", raising=False)
     monkeypatch.delenv("TOKENISM_DEV", raising=False)
-    # The module-level singleton (config = ServiceConfig()) executes during
-    # reload — THAT is the raiser, so the reload itself sits in the block.
     with pytest.raises(RuntimeError):
-        importlib.reload(config)
-    # Secondary: after the failed reload the module namespace carries the new
-    # (raising) resolver, so a direct instantiation must raise too.
+        config._resolve_secret_key()
+    # The dataclass path (module-level singleton at import) raises through
+    # the same resolver via default_factory — assert that path too.
     with pytest.raises(RuntimeError):
         config.ServiceConfig()
 
