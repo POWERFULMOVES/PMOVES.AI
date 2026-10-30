@@ -249,3 +249,19 @@ def test_invidious_compose_keys_are_required():
             if loose:
                 bad.append(f"{name}: {loose} reference(s) to {var} are not ${{{var}:?...}}")
     assert not bad, "; ".join(bad)
+
+
+def test_ensure_dry_run_warns_on_a_wrong_shape_without_rotating(tmp_path, monkeypatch, capsys):
+    """A 64-char companion key (the registry's old spec) is private but fatal.
+
+    The funnel must not reshape it on its own; the check must say so.
+    """
+    old_shape = "ab" * 32
+    env = _env(tmp_path, f"INVIDIOUS_COMPANION_KEY={old_shape}\n")
+    monkeypatch.setattr(be, "ENV_SHARED_PATH", env)
+    rc = be.main(["--ensure", "INVIDIOUS_COMPANION_KEY", "--ensure-dry-run", "--registry", str(REGISTRY)])
+    out = capsys.readouterr()
+    assert rc == 0
+    assert "secrets-rotate KEY=INVIDIOUS_COMPANION_KEY" in out.out + out.err
+    assert old_shape not in out.out + out.err
+    assert be.read_env_value("INVIDIOUS_COMPANION_KEY", env) == old_shape

@@ -117,7 +117,7 @@ Supersedes the open-gap note above. Scope: **all 58 chat folders** (`1,314` mess
 
 **Rotation road (operator, per node).**
 1. `make -C pmoves secrets-funnel` (or just `make -C pmoves secrets-ensure-generated`). Mints both keys where they are absent or equal to the published values; never touches a private value already set. Do this **before** any `make up-*` on that node, or compose refuses with `required variable INVIDIOUS_HMAC_KEY is missing a value`.
-2. `make -C pmoves secrets-ensure-check` -- every key must print `provisioned`.
+2. `make -C pmoves secrets-ensure-check` -- every key must print `provisioned` with no shape warning. A node that ran `env-setup` under the old registry spec holds a **64-char** companion key: private, but Invidious exits on it. The funnel deliberately does not reshape a live value, so the check warns and the operator rotates it: `make -C pmoves secrets-rotate KEY=INVIDIOUS_COMPANION_KEY` (type and length now come from the registry: 16 hex).
 3. Nodes that run Invidious: `make -C pmoves up-invidious` recreates `invidious`, `invidious-db` and `invidious-companion` with the new keys. The `docker-compose.ui.yml` copies of these services have no dedicated road (`overlay-up-ui` starts `--profile ui` only); they matter for the interpolation gate, not for the running containers.
 4. `make -C pmoves invidious-smoke` (read-only): Invidious `/api/v1/stats` 200, companion `/healthz` 200, and the companion rejects a wrong bearer token but accepts the funnel's key. Exit 0 clean / 1 findings / 3 could-not-measure (`make` reports both 1 and 3 as 2; run `python3 tools/invidious_smoke.py` under `scripts/with-env.sh` for the exact code).
 
