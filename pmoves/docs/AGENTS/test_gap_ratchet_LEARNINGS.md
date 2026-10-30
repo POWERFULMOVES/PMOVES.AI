@@ -236,3 +236,41 @@ Pattern after round 3: **contract-correctness now leads** — 9 of 21 lessons. T
 |---|---|
 | `pmoves/tests/test_mavis_cli_timeout.py` | +421 lines net — `_matrix_axes`, `_base_combinations`, `_combo_matches_exclude`, `_apply_matrix_exclusions`, `_apply_matrix_inclusions`, rewritten `_extract_matrix_platforms`, `_assert_matrix_platforms`, `_is_github_api_url`, `test_mutation_excluded_platform_is_not_covered`, `test_mutation_github_api_host_match_is_exact` |
 | `pmoves/tests/tools/test_mavis_ratchet_mutation_kill.py` | +826 lines net — `MutationLockTimeout`, `_write_holder_info`, `_try_lock_windows`, `_try_lock_posix`, `_try_lock_nonblocking`, `_lock_file`, `_read_ratchet_file_under_lock`, `_assert_ratchet_file_clean`, `_mutation_case`, `ORIGINAL_API_HOST_MATCH`, and the four new mutation-kill cases |
+
+---
+
+## Review round 4 (2026-10-30 · PR #3427) — "the lock has two halves, and the holder is the one that can hang"
+
+Two more findings against the round-3 code, both confirmed valid. Together they close a loop the earlier rounds had only half-closed: round 3 taught that **the lock's two halves must agree** (the timeout must exist on both platforms) and that **the verification must hold the lock the writer holds**. Round 4 finds the remaining two gaps — the lock must cover **the subject under test**, and the **holder** must not be able to hang.
+
+| # | Class | Observation (rule) | Evidence / Why | Apply when |
+|---|-------|---------------------|----------------|------------|
+| 22 | **contract-correctness** | **The lock must cover the SUBJECT, not just the mutation.** | `_load_ratchet_module()` read and executed the ratchet file with **no lock held**. A load that lands while another case holds the lock and has the file mutated measures a *different* ratchet than the one it thinks it is measuring — the same class as round-3 finding 20, one level earlier: there the VERIFICATION was unlocked, here the SUBJECT is. FIX: `_load_ratchet_module(lock_path, target)` (`:726`) takes `_mutation_lock(lock_path)` around the whole read+exec; the read+exec itself moved into `_read_and_exec_ratchet_module()` (`:706`) so the lock covers both halves as one indivisible window — a mutation landing between the read and the exec would be just as wrong. Pinned by `test_module_load_is_serialized_against_concurrent_mutation` (`:1112`), which mutates a marker file under the lock in one thread while a loader thread runs and asserts the loader **cannot finish** while the mutation is in effect; killed by `test_mutation_unlocked_module_load_is_killed` (`:1311`), which rewrites the loader back to the unlocked form. | Any harness that loads, imports, or parses the artifact it is about to mutate. |
+| 23 | **contract-correctness** | **The lock HOLDER must not be able to hang — a deadline on the holder is part of the lock.** | `_run_pytest()` called `subprocess.run` with **no `timeout=`**, and it runs **inside** the mutation lock. A hung child therefore held the lock forever and every other case blocked behind it. This is round-3 finding 19's own lesson turned on its owner: finding 19 said a lock with a timeout on one platform and none on another is two different locks; here the *holder* is the one that can hang, so the deadline belongs to the holder. FIX: `_run_pytest()` (`:621`) passes a real `timeout=` and converts `subprocess.TimeoutExpired` into `PytestRunTimeout` (`:373`), whose message (`:599`) names the deadline, the argv/`select` (the test being run), and states that the lock is about to be released and the mutated file restored. The deadline comes from `_pytest_timeout_seconds()` (`:576`) and is overridable via `PMOVES_MAVIS_RATCHET_PYTEST_TIMEOUT`; a bad or non-positive override falls back to the default rather than disabling the deadline. The restore is in a `finally` **inside** the lock block, so the timeout path restores the file **before** releasing the lock. Pinned by `test_pytest_run_timeout_fires_and_releases_the_lock` (`:1182`), which drives a genuinely hanging module through `_mutation_case` with an 8s override and then asserts the timeout fired with a message naming `8s`/`test_slow`/the lock, that the lock is acquirable again (checked in a thread, so a leaked non-reentrant lock fails rather than deadlocks), and that the mutated file is back to its original bytes; killed by `test_mutation_pytest_run_without_timeout_is_killed` (`:1333`). | Any lock held across a subprocess, a socket, or a file wait. |
+
+### Round-4 measurement (2026-10-30)
+
+| Run | Result | Wall-clock |
+|---|---|---|
+| harness `-v` (14 cases) | **14 passed** | 106.7s |
+| ratchet `-q` | **11 passed, 1 skipped** (the network-gated matrix cross-check) | 1.2s |
+| pair, `PMOVES_MAVIS_MATRIX_CHECK=1` | **26 passed** | 106.5s |
+| pair, `mavis` off PATH | **23 passed, 3 skipped** | 110.8s |
+
+The timeout is **300s per subprocess run**. The measured slowest *legitimate* single pytest subprocess run is **1.6s** (including interpreter and pytest startup), so the deadline carries ~180× headroom; the deadline is per-subprocess, not per-case, so the 48s mutation case is unaffected. The slowest harness case is 48.2s — the one that must let a hang run out under the mutated harness to prove the deadline is what stops it.
+
+### Round-4 cross-check (re-tallied)
+
+- **(1) reasoning-gap** — 3 lessons (#3, #7, #11, #14) — *(unchanged)*
+- **(2) semantic-naming drift** — 1 lesson (#8)
+- **(3) contract-correctness** — 11 lessons (#2, #4, #10, #15, #17, #18, #19, #20, #21, **#22, #23**)
+- **(4) defense-in-depth** — 6 lessons (#1, #6, #9, #12, #13, #16)
+- **(5) pattern-conformance** — 1 lesson (#5)
+
+Pattern after round 4: **contract-correctness now clearly dominates** — 11 of 21 lessons. And the shape of the four rounds is one story told four times: round 1 was about making the ratchet able to say NO at all; round 2 about making its signals attributable; round 3 about making it read the WHOLE declaration; round 4 about making the harness's own guarantees true. Each round the ratchet got more literal, and each round the harness got more honest about what it was actually holding.
+
+### Round-4 SDK provenance
+
+| File | Change |
+|---|---|
+| `pmoves/tests/tools/test_mavis_ratchet_mutation_kill.py` | +417 / −15 — `PytestRunTimeout` (`:373`), `_pytest_timeout_seconds()` (`:576`), the timeout message (`:599`), `_run_pytest()` deadline (`:621`), `_read_and_exec_ratchet_module()` (`:706`), `_load_ratchet_module(lock_path, target)` (`:726`), `_mutation_case(lock_path=…)` (`:754`), `test_module_load_is_serialized_against_concurrent_mutation` (`:1112`), `test_pytest_run_timeout_fires_and_releases_the_lock` (`:1182`), `test_mutation_unlocked_module_load_is_killed` (`:1311`), `test_mutation_pytest_run_without_timeout_is_killed` (`:1333`) |
