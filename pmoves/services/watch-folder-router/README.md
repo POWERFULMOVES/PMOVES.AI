@@ -25,6 +25,18 @@ analyzer — so every ingest went through a hand-driven script. This service is
 the smallest, highest-leverage node in the constellation: drop a file in the
 watch folder (MinIO), get automatic analysis.
 
+## Upstream (who emits `ingest.file.added.v1`)
+
+- **[drop-folder-ingest](../drop-folder-ingest/README.md)**: host drop folder ->
+  MinIO -> `ingest.file.added.v1`. The operator-facing way in: drop any file in
+  the folder and it routes here.
+- a2ui-renderer and pdf-ingest also publish the subject; their payloads carry no
+  `bucket`/`key`, so the router rejects them (pdf-ingest has already processed
+  and announced its document itself).
+
+Both the standard envelope (`{id, topic, ts, version, source, payload}`) and the
+legacy flat shape are accepted: fields are read from `payload` when present.
+
 ## Downstream (the rest of the constellation — not this service)
 
 - **transcript-harvester** (Bud 2, not yet built): consume the `*.ready.v1`
