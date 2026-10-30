@@ -810,6 +810,8 @@ def render(verdict: Mapping[str, Any]) -> List[str]:
         em = f["expressions_match"]
         lines.append("compose wiring .......... " + (
             "cipher == kong" if em else "DRIFT (cipher != kong)" if em is False else "unmeasured"))
+    if "overlay_retired_key" in f:
+        lines.append(f"retired key in overlay .. {f['overlay_retired_key']}")
     if "kong_order_drift" in f:
         lines.append(f"reverse-order sites ..... {len(f['kong_order_drift'])}")
     c = f.get("container")
@@ -866,6 +868,14 @@ def main(argv: Optional[List[str]] = None) -> int:
         env, provenance, notes = resolve_env(args.env_files, dict(os.environ))
         overlay = overlay_defines(args.env_local, RETIRED_OVERRIDE) if args.env_local else None
         verdict = assess(env, exprs, provenance, overlay_has_retired=overlay)
+        if args.env_local:
+            # Say which of the three it was: a silent 'no WARN' must not stand in
+            # for 'could not look'.
+            verdict["facets"]["overlay_retired_key"] = (
+                "present" if overlay else "absent" if overlay is False else "unreadable")
+            if overlay is None:
+                verdict["unmeasured"].append(
+                    f"{args.env_local.name} could not be read for the retired-key presence check")
         for doc_path, doc in zip(args.scan_files, scan_docs):
             other = compose_env_expr([doc], *CIPHER)
             if other is not None and exprs["gateway"] is not None and other.strip() != exprs["gateway"].strip():

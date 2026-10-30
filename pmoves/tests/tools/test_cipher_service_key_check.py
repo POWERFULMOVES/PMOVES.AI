@@ -711,3 +711,16 @@ def test_overlay_only_paste_warns_with_runtime_caveat(tmp_path, monkeypatch, cap
     assert rc == 0
     assert "defined in the .env.local overlay, which is NOT in compose's env-file list" in out
     _assert_no_leak(out + err)
+
+
+def test_overlay_presence_is_reported_including_unreadable(tmp_path, monkeypatch, capsys):
+    absent_env = {k: v for k, v in INCIDENT_ENV.items() if k != "CIPHER_DB_SERVICE_KEY"}
+    local = tmp_path / ".env.local"
+    local.write_text("OTHER=1\n")
+    rc, out, _ = _run_cli(tmp_path, monkeypatch, capsys, GATEWAY, absent_env, "--env-local", str(local))
+    assert "retired key in overlay .. absent" in out and rc == 0
+    unreadable = tmp_path / "dir.env.local"
+    unreadable.mkdir()  # reading a directory fails -> unknown, and it must SAY so
+    rc, out, _ = _run_cli(tmp_path, monkeypatch, capsys, GATEWAY, absent_env, "--env-local", str(unreadable))
+    assert "retired key in overlay .. unreadable" in out
+    assert "could not be read for the retired-key presence check" in out
