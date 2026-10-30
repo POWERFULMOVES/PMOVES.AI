@@ -258,7 +258,7 @@ def _literal_findings(payload: str, name: str):
     try:
         r = _run_ratchet_on_file(path)
         out = json.loads(r.stdout)
-        return r, [p for p in out["problems"] if p["kind"] == "literal-secret-default"]
+        return r, [p for p in out["problems"] if p["kind"].startswith("literal-secret-")]
     finally:
         _cleanup(path)
 
@@ -322,3 +322,46 @@ def test_literal_check_runs_on_a_file_outside_the_repo(tmp_path):
     out = json.loads(r.stdout)
     assert r.returncode == 1
     assert [p["kind"] for p in out["problems"]] == ["literal-secret-default"]
+
+
+def test_bare_literal_secret_values_fail_in_list_and_mapping_form():
+    payload = f"""
+services:
+  invidious-companion:
+    environment:
+    - SERVER_SECRET_KEY={FAKE_HEX16}
+  invidious:
+    environment:
+      INVIDIOUS_HMAC_KEY: "{FAKE_HEX64}"
+"""
+    r, found = _literal_findings(payload, "test_validate_composes_bare_literal")
+    assert r.returncode == 1
+    assert [(p["kind"], p["line"]) for p in found] == [
+        ("literal-secret-value", 5), ("literal-secret-value", 8)
+    ]
+    assert FAKE_HEX16 not in r.stdout and FAKE_HEX64 not in r.stdout
+
+
+def test_escaped_interpolation_default_is_still_found():
+    payload = f"""
+services:
+  svc:
+    command: ["sh", "-c", "run --key $${{API_TOKEN:-{FAKE_HEX64}}}"]
+"""
+    r, found = _literal_findings(payload, "test_validate_composes_escaped")
+    assert r.returncode == 1 and len(found) == 1
+
+
+def test_bare_non_credential_values_pass():
+    payload = """
+services:
+  svc:
+    environment:
+    - POSTGRES_PASSWORD=postgres
+    - TOKEN_URL=http://auth:8080/token
+    - API_KEY_FILE=/run/secrets/api_key_0123456789abcdef
+    - BUILD_SHA=0123456789abcdef0123
+    - SECRET_KEY=${SECRET_KEY:?set SECRET_KEY via secrets funnel}
+"""
+    r, found = _literal_findings(payload, "test_validate_composes_bare_clean")
+    assert found == [] and r.returncode == 0, r.stdout

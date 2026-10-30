@@ -31,7 +31,10 @@ the straggler sweep in PR #2415):
      generator in bootstrap/registry.json. Always on. Findings print
      the variable and the SHAPE of the default, never the value.
      Word-like dev defaults (`postgres`, `kemal`) are a different,
-     weaker class and are deliberately not matched here.
+     weaker class and are deliberately not matched here. The same shape
+     test applies to a bare `SECRET_NAME=<credential>` with no `${}` at
+     all (kind `literal-secret-value`), and `$${...}` escapes are caught
+     because the inner `${...}` still matches.
 
 This script reads a static set of YAML files in the repo. No GitHub
 API, no fork-registry access, no token privilege. Runs in <100ms on
@@ -144,6 +147,11 @@ NON_SECRET_SUFFIXES = ("_FILE", "_DIR", "_PATH", "_URL", "_URI", "_IMAGE", "_ID"
 HEX_CREDENTIAL_RE = re.compile(r"[0-9a-fA-F]{16,}")
 TOKEN_CREDENTIAL_RE = re.compile(r"[A-Za-z0-9_\-+/=.]{20,}")
 SERVICE_HEADER_RE = re.compile(r"^  ([A-Za-z0-9_.-]+):\s*(?:#.*)?$")
+# A bare `NAME=value` / `NAME: value` line (list or mapping environment form)
+# with no interpolation at all: the value IS the container's secret.
+BARE_ASSIGN_RE = re.compile(
+    r"""^\s*(?:-\s*)?["']?([A-Za-z_][A-Za-z0-9_]*)["']?\s*[=:]\s*["']?([^"'\s#$]+)["']?\s*(?:#.*)?$"""
+)
 
 
 def _scan_env_file(
@@ -295,14 +303,31 @@ def _scan_literal_defaults(file: Path, text: str) -> list[dict]:
             header = SERVICE_HEADER_RE.match(line)
             if header:
                 service = header.group(1)
-        for match in INTERP_DEFAULT_RE.finditer(line):
-            name, default = match.group(1), match.group(2)
+        candidates = [
+            ("literal-secret-default", m.group(1), m.group(2)) for m in INTERP_DEFAULT_RE.finditer(line)
+        ]
+        bare = BARE_ASSIGN_RE.match(line) if "$" not in line else None
+        if bare:
+            candidates.append(("literal-secret-value", bare.group(1), bare.group(2)))
+        for kind, name, default in candidates:
             if not SECRET_NAME_RE.search(name):
                 continue
             if name.upper().endswith(NON_SECRET_SUFFIXES):
                 continue
             shape = _credential_shape(default)
             if shape is None:
+                continue
+            if kind == "literal-secret-value":
+                problems.append({
+                    "file": _rel(file),
+                    "service": service,
+                    "line": lineno,
+                    "kind": kind,
+                    "detail": (
+                        f"line {lineno}: {name}={shape} hard-codes a credential-shaped value "
+                        f"in a public repo. Use ${{{name}:?set {name} via secrets funnel}}."
+                    ),
+                })
                 continue
             problems.append({
                 "file": _rel(file),

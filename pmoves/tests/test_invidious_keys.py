@@ -239,7 +239,7 @@ def test_no_compose_file_ships_a_literal_secret_default():
         capture_output=True, text=True,
     )
     out = json.loads(r.stdout)
-    literal = [p for p in out["problems"] if p["kind"] == "literal-secret-default"]
+    literal = [p for p in out["problems"] if p["kind"] in ("literal-secret-default", "literal-secret-value")]
     assert out["files_total"] > 0
     assert literal == [], "\n".join(f"{p['file']}:{p['line']} {p['detail']}" for p in literal)
 
