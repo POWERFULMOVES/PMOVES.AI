@@ -21,8 +21,10 @@ Next steps: supply a valid API key if required for production workloads, otherwi
 
 | Key | Vendor requirement (iv-org, read 2026-10-30) | What we mint |
 |---|---|---|
-| `INVIDIOUS_HMAC_KEY` -> `hmac_key` | mandatory random string; Invidious exits if empty | `random_hex` 64 |
-| `INVIDIOUS_COMPANION_KEY` -> `invidious_companion_key` **and** companion `SERVER_SECRET_KEY` | exactly 16 chars (Invidious exits otherwise); companion requires `[a-zA-Z0-9]{16}`; must differ from the HMAC key | `random_hex` 16 |
+| `INVIDIOUS_HMAC_KEY` -> `hmac_key` | mandatory random string; Invidious exits if empty | `random_hex` 64 (any existing value of 32 or more chars is kept) |
+| `INVIDIOUS_COMPANION_KEY` -> `invidious_companion_key` **and** companion `SERVER_SECRET_KEY` | exactly 16 chars (Invidious exits otherwise); companion requires `[a-zA-Z0-9]{16}`; reusing the HMAC key is "NOT recommended" (vendor) | `random_hex` 16 |
+
+Owner: `tools/invidious_keys_preflight.py` is the only writer of both keys. It runs from `ensure-env-shared` and before every stack goal. `brand_defaults.py` no longer writes them.
 
 Operate:
 
@@ -32,7 +34,7 @@ make -C pmoves invidious-keys-preflight  # mint/rotate in env.shared (also runs 
 make -C pmoves secrets-funnel          # seal the values into the CHIT bundle
 make -C pmoves secrets-ensure-check    # both must print "provisioned"
 make -C pmoves up-invidious            # recreate invidious + invidious-db + invidious-companion
-make -C pmoves invidious-smoke         # read-only: stats 200, companion healthz, companion accepts the funnel key
+make -C pmoves invidious-smoke         # read-only: stats 200, companion healthz, companion accepts the funnel key, both containers hold the same key
 ```
 
 A new HMAC key invalidates what Invidious signs with it (CSRF tokens, cookies, pubsub verification): signed-in users re-authenticate.
