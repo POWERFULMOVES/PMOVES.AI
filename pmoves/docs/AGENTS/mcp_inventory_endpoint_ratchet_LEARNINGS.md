@@ -1,0 +1,157 @@
+# MCP inventory endpoint ratchet — LEARNINGS
+
+**Lane:** flute-voice-mcp inventory entry — the declared endpoint was correct, the DEPLOYMENT was stale
+**Branch:** `fix/mcp-inventory-endpoint-ratchet`
+**Operator:** DARKXSIDE · **Author:** 5090-CLAUDE
+**Companion CLAIM row:** `pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md` (2026-10-30T19:5x:xxZ)
+**Related lane:** `test_gap_ratchet_LEARNINGS.md` (the kilo/mavis ratchet slice — lessons #9–#12 there are the direct ancestors of lesson 1.4 below)
+
+---
+
+## Operator direction (verbatim)
+
+> "New lane: fix the flute-voice-mcp inventory entry — it reaches all six sibling clients' configs; I deliberately did not fold that into #3418 (blast radius)."
+
+---
+
+## The finding
+
+**The inventory entry was CORRECT.** It was not edited. Editing it would have been the workaround: it accurately described the service's source, while the running deployment lagged behind that source by 65 days.
+
+Measured on the operator's host, 2026-10-30:
+
+```
+$ docker ps --filter name=flute-gateway
+pmoves-flute-gateway-1 | ghcr.io/powerfulmoves/pmoves-flute-gateway:latest | Up 2 days
+
+$ docker image inspect ghcr.io/powerfulmoves/pmoves-flute-gateway:latest
+created=2026-08-08T16:37:12Z          <-- 65 days BEFORE the route landed
+```
+
+The route the entry declares IS in the source:
+
+| Fact | Location |
+|---|---|
+| `@router.post("/mcp")` | `pmoves/services/flute-gateway/mcp_bridge.py:508` |
+| `@router.get("/sse")` | `pmoves/services/flute-gateway/mcp_bridge.py:529` |
+| `@router.post("/messages")` | `pmoves/services/flute-gateway/mcp_bridge.py:568` |
+| `app.include_router(create_mcp_router(...))` | `pmoves/services/flute-gateway/main.py:619` |
+| The route landed in source | 2026-09-12, PR #3036, commit `8c366f68410` |
+
+But the RUNNING container's route table had **no `/mcp`**. The image was built 65 days before the route existed in the source. So the entry reached all six sibling clients while pointing at a URL that answered **404**.
+
+**Blast radius, confirmed from source:** the `flute-voice-mcp` entry declares no `clients` key, and `ServerSpec.supports_client` returns `True` for every client when `clients is None` (`pmoves/tools/mcp_config_generator.py:66-69`). The roster has six clients — `claude`, `kimi`, `opencode`, `kilocode`, `hermes`, `crush` (`pmoves/tools/mcp_config_generator.py:328-335`). The operator's "all six sibling clients" is exact.
+
+**The fix was the DEPLOYMENT, not the config:**
+
+```
+make -C pmoves rebuild-svc SVC=flute-gateway
+```
+
+New image `created=2026-10-30T19:39:03Z`. Live probe after the rebuild:
+
+```
+$ curl -X POST http://localhost:8055/mcp -d '{"jsonrpc":"2.0","id":1,"method":"initialize",...}'
+HTTP 200
+{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2024-11-05","capabilities":{"tools":{}},"serverInfo":{"name":"pmoves-flute-gateway","version":"1.0.0"}}}
+```
+
+> **A raw `docker compose build flute-gateway` FAILS.** Compose interpolates the whole project, and 25+ unrelated services need tier env vars that only exist in the tier env files. The Makefile resolves `COMPOSE_ENV_FILES` from `PRIMARY_ENV_FILE` + `TIER_ENV_FILES`. Use `make -C pmoves rebuild-svc SVC=flute-gateway`.
+
+---
+
+## 4-bucket · 5-class taxonomy
+
+### Bucket 1 — Defects
+
+| # | Class | Observation (rule) | Evidence / Why | Apply when |
+|---|-------|---------------------|----------------|------------|
+| 1.1 | **stale-deployment-masquerading-as-config-defect** | **A correct config + a stale deployment is indistinguishable from a wrong config at the config layer.** The operator's instruction was to "fix the flute-voice-mcp inventory entry". Editing the entry to match the running container would have been a WORKAROUND: it would have made the 404 look intentional, permanently broken the entry against a source that serves `/mcp`, and left the six client configs pointing at a wrong URL. The defect was in the DEPLOYED IMAGE, not in the DECLARATION. **Fix the deployment; never edit a correct declaration to match a stale runtime.** | The entry was left byte-identical. The route is in source (`mcp_bridge.py:508`, landed 2026-09-12 / `8c366f68410`); the image was `2026-08-08T16:37:12Z`. Fix = `make -C pmoves rebuild-svc SVC=flute-gateway`. | Any "fix the config" instruction where a runtime probe contradicts the source. |
+| 1.2 | **blast-radius-not-folding** | **A fix that reaches every client's config is a separate lane by blast radius, not a nicety.** The operator explicitly did not fold the flute fix into #3418 (the MiniMax client-parity PR) because the inventory entry reaches all six clients' configs. This lane therefore carries its own branch, its own PR, its own AGNOTE row and its own LEARNINGS file. | The entry has no `clients` key → `supports_client` → `True` for all → `RENDERERS` has 6 clients (`mcp_config_generator.py:328-335`, `:66-69`). | Any fix whose reach is wider than the PR it was found in. |
+| 1.3 | **route-declared-but-not-mounted** | **A route decorator in a module that is never included in the ASGI app is the same 404 with an extra step of indirection.** The ratchet asserts BOTH: the decorator exists in the source, AND `app.include_router(...)` mounts the router. Asserting only the decorator would pass against a router that is built and discarded. | `test_inventory_flute_route_is_mounted_in_service_app` asserts `create_mcp_router` appears in `main.py` AND `re.search(r"app\.include_router\(", main_source)` matches. | Any FastAPI/Starlette service whose routes live in a router module. |
+| 1.4 | **not-404-is-not-a-suff assertion** | **"The endpoint did not 404" is too weak to be a pass.** ANY service holding port 8055 satisfies "not 404". The live probe therefore asserts three properties: not a 404, not a 5xx, AND `serverInfo.name == "pmoves-flute-gateway"` — so a port collision cannot masquerade as the service. | `_assert_responder_is_flute_gateway()` in `pmoves/tests/tools/test_mcp_inventory_endpoint_ratchet.py`. Mutation-killed: weakening the identity assert to `assert True or ...` → `test_live_probe_rejects_a_responder_that_is_not_the_flute_gateway` FAILED (DID NOT RAISE). | Any live probe against a fixed port. |
+| 1.5 | **inert-control** | **A knob that looks like it controls something but does not is the same defect class this ratchet exists to catch.** The first cut of the live probe read `FLUTE_GATEWAY_URL` into `base` and then probed the INVENTORY URL — the override gated reachability but never redirected the probe. It was an override in name only. Fixed by `_probe_url(declared_url, base)`, which rebases the declared URL onto the override while preserving the PATH. | `test_live_probe_url_follows_the_base_override` asserts `_probe_url("http://localhost:8055/mcp", "http://flute-node.internal:9000") == "http://flute-node.internal:9000/mcp"` and that it differs from the original. | Any env-var override, feature flag, or env switch. |
+
+### Bucket 2 — Decisions
+
+| # | Class | Observation (rule) | Why | Alternative considered | Cost of alternative |
+|---|-------|---------------------|-----|------------------------|---------------------|
+| 2.1 | **fix-deployment-not-declaration** | Rebuild and redeploy the service; leave `mcp_inventory.json` untouched. | The declaration matches the source, which is the reference. The image is the drifted artefact. | Edit the inventory entry to remove/redirect `flute-voice-mcp` | A workaround: the entry would contradict the source, all six clients would carry a knowingly-wrong URL, and the real fault (a 65-day-old image) would be hidden. |
+| 2.2 | **static-plus-live, not live-only** | The ratchet has TWO halves: a static half (always on, no network, no service) and a live half (runs when the service is reachable, skips otherwise). | The static half catches authoring-time drift in ANY checkout, including CI with no service running. The live half catches deployment staleness, which static analysis cannot see. A live-only ratchet would skip in CI; a static-only ratchet would miss exactly the defect that shipped. | Live only | Skips in CI — the ratchet would be dead where it matters most. |
+| 2.3 | **skip-is-not-a-pass** | The live half skips (does not pass) when the service is unreachable, and the docstring says so explicitly. | Deployment is a separate lane from the code lane. A skip must not be read as a pass, and the docstring says so at the point of use. | Fail when unreachable | CI would be red on every checkout without a running service — noise that trains people to ignore the gate. |
+| 2.4 | **separate branch-and-PR** | This lane is `fix/mcp-inventory-endpoint-ratchet`, not a commit on #3427 (the ratchet-correction PR) nor a fold into #3418. | The operator called it a NEW lane and cited blast radius. Two of its three artefacts (the ratchet, the mutation-kill) are new files, so a shared branch would have coupled two unrelated reviews. | Fold into #3427 | Couples the flute deployment fix to the mavis CLI ratchet correction; the reviews share no subject. |
+| 2.5 | **mutation-kill-invokes-the-ratchet** | The harness calls the ratchet's OWN functions (`test_inventory_flute_endpoint_is_declared_in_service_source`, `test_inventory_flute_route_is_mounted_in_service_app`, `_assert_responder_is_flute_gateway`, `_probe_url`) rather than re-implementing the checks. | Lesson #12 of `test_gap_ratchet_LEARNINGS.md`: a mutation-kill that RESTATES the assertion proves nothing — the first attempt at the mavis mutation-kill re-implemented the gate inline, the mutation SURVIVED (7 passed). | Restate the checks in the harness | The harness would pass while the ratchet was broken — exactly the failure it exists to prevent. |
+| 2.6 | **control-case-in-every-harness** | Every mutation-kill set includes an un-mutated control that must PASS. | Without it, a harness that fails for any reason (typo in the mutation, import error) looks like a successful kill. | Mutation cases only | False confidence in the harness. |
+
+### Bucket 3 — Operations
+
+| # | Class | Observation (rule) | Measured | Repeatability |
+|---|-------|---------------------|----------|---------------|
+| 3.1 | **make-rebuild-svc-is-the-only-working-rebuild-path** | `make -C pmoves rebuild-svc SVC=flute-gateway` resolves `COMPOSE_ENV_FILES` from `PRIMARY_ENV_FILE` + `TIER_ENV_FILES` and rebuilds + recreates the service. | A raw `docker compose build flute-gateway` FAILS: compose interpolates the entire project and 25+ unrelated services need tier env vars. | Every stale-image rebuild on this fleet. |
+| 3.2 | **image-creation-date-is-the-fingerprint** | `docker image inspect <image> --format created={{.Created}}` is the cheapest way to prove an image predates a source change. | Old: `2026-08-08T16:37:12Z` (65 days before the route landed). New: `2026-10-30T19:39:03Z`. | Whenever a service "works in source but not at runtime". |
+| 3.3 | **live-probe-uses-the-mcp-handshake-not-an-openapi-diff** | The probe POSTs a JSON-RPC `initialize` and reads `serverInfo.name`. It does not diff the OpenAPI schema. | Live: `{"protocolVersion":"2024-11-05","capabilities":{"tools":{}},"serverInfo":{"name":"pmoves-flute-gateway","version":"1.0.0"}}`. | Any MCP-over-HTTP service. |
+| 3.4 | **absolute-paths-only-for-mutation-harness** | The harness copies the service tree to `tmp_path` and repoints the ratchet's module constants. Any `Path.relative_to(PMOVES_ROOT)` in the ratchet's failure MESSAGE raises `ValueError` on that copy. | The first run of the harness failed 3/8 with `ValueError: ... is not in the subpath of ...pmoves` — a ratchet whose failure message raises reports the WRONG failure. Fixed with `_display_path()`, which falls back to the absolute path. | Any ratchet whose error message formats a path. |
+| 3.5 | **importlib-reload-in-the-harness** | The harness calls `importlib.reload()` on the ratchet module for every case. | Without the reload, `FLUTE_SERVICE_DIR` stayed pointed at the PREVIOUS case's mutated copy, and the next case failed with "mutation setup failed: route decl not found" instead of running its assertion. | Any harness that mutates module-level state. |
+
+### Bucket 4 — Cross-references
+
+| # | Class | What | Link | Why it matters |
+|---|-------|------|------|----------------|
+| 4.1 | **lesson-9-lineage** | "A test that can only assert absence cannot say no" — the ancestor of lesson 1.4 (not-404 is not a pass). | `pmoves/docs/AGENTS/pmoves_launcher_generator_LEARNINGS.md` lesson #9 | The same rule, one layer up: absence of an error is not evidence of a working system. |
+| 4.2 | **lesson-12-lineage** | "A mutation-kill that restates the assertion instead of invoking it proves nothing." | `pmoves/docs/AGENTS/test_gap_ratchet_LEARNINGS.md` lesson #12 | Directly applied here — decision 2.5. |
+| 4.3 | **sibling-harness-shape** | The mavis ratchet's mutation-kill harness is the pattern this harness follows (mutate → re-run → assert it fails → restore in `finally`). | `pmoves/tests/tools/test_mavis_ratchet_mutation_kill.py` | Two harnesses, one shape, so the next agent recognises the idiom. |
+| 4.4 | **the-inventory-is-the-source-of-truth-for-endpoints** | `mcp_inventory.json` + `mcp_config_generator.py` are the contract; the six client configs are DERIVED from them. | `pmoves/config/mcp_inventory.json`, `pmoves/tools/mcp_config_generator.py:66-69` (supports_client), `:328-335` (RENDERERS) | Which artifact to fix is decided by asking: is the DERIVATION right, or the SOURCE? Here the source was right and the deployment was stale. |
+| 4.5 | **container-rebuild-manifest** | The repo already tracks flute-gateway as a rebuild target. | `pmoves/docs/operations/CONTAINER_REBUILD_MANIFEST.md` (row 1: flute-gateway, `services/flute-gateway/Dockerfile`, `ghcr.io/powerfulmoves/pmoves-flute-gateway:latest`) | The rebuild was a known, documented obligation that had simply not been executed for 65 days. |
+| 4.6 | **operator-queue-provenance** | The lane was raised in the operator's 2026-10-30 queue alongside the #3418/#3382/#3411 review work. | AGNOTE row (this lane) + `pmoves/docs/AGENTS/test_gap_ratchet_LEARNINGS.md` | One queue, several lanes, each with its own provenance so the trail stays per-lane. |
+
+---
+
+## Test inventory
+
+| File | Lines | Tests | What it pins |
+|---|---|---|---|
+| `pmoves/tests/tools/test_mcp_inventory_endpoint_ratchet.py` (new) | 322 | 6 | The ratchet. Static half (5): the declared route must be in the serving source (×2 entries: `flute-voice` SSE + `flute-voice-mcp` HTTP); the router must be MOUNTED via `app.include_router(...)` (×2); the entry must resolve to a URL carrying a PATH. Live half (1): the declared URL must answer, must not 404, must not 5xx, and the responder must identify as `pmoves-flute-gateway`. |
+| `pmoves/tests/tools/test_mcp_inventory_endpoint_mutation_kill.py` (new) | 268 | 8 | The PROVENANCE harness. 4 static mutations (route removed / mount removed / both removed / un-mutated control) + 4 live-half cases (override rebases the probe URL / an impostor responder is rejected / a 404 is rejected / the genuine service passes). |
+
+Total: **14 new tests across 2 new files.** No existing file was modified — this lane is purely additive, which is what keeps its blast radius separate from #3418's.
+
+---
+
+## SDK provenance
+
+- **Ratchet:** `pmoves/tests/tools/test_mcp_inventory_endpoint_ratchet.py` — `_assert_responder_is_flute_gateway()`, `_probe_url()`, `_display_path()`, `EXPECTED_ROUTES`, `FLUTE_SERVER_NAME`
+- **Harness:** `pmoves/tests/tools/test_mcp_inventory_endpoint_mutation_kill.py` — `RATCHET_MODULE`, `ROUTE_DECL`/`MUTATED_ROUTE_DECL`, `MOUNT_CALL`/`MUTATED_MOUNT_CALL`
+- **SDK files exercised:**
+  - `pmoves/services/flute-gateway/mcp_bridge.py:508` — `@router.post("/mcp")` (the declared surface)
+  - `pmoves/services/flute-gateway/mcp_bridge.py:529` — `@router.get("/sse")`
+  - `pmoves/services/flute-gateway/mcp_bridge.py:401` — `serverInfo.name = "pmoves-flute-gateway"` (the identity the live probe asserts)
+  - `pmoves/services/flute-gateway/main.py:619` — `app.include_router(create_mcp_router(...))`
+  - `pmoves/config/mcp_inventory.json:12` — `defaults.flute_mcp_local_url = "http://localhost:8055/mcp"`
+  - `pmoves/config/mcp_inventory.json:210-218` — the `flute-voice-mcp` entry (no `clients` key → all clients)
+  - `pmoves/tools/mcp_config_generator.py:66-69` — `ServerSpec.supports_client` (None ⇒ every client)
+  - `pmoves/tools/mcp_config_generator.py:328-335` — `RENDERERS` (the six clients)
+- **Deployment provenance:** `make -C pmoves rebuild-svc SVC=flute-gateway`; image `created=2026-10-30T19:39:03Z`; live `POST http://localhost:8055/mcp` → **200** with `serverInfo.name = "pmoves-flute-gateway"`.
+- **CI gate:** `merge-gate.yml::python-tests` runs `pmoves/tools/pytest_ratchet.py`, which discovers `pmoves/tests/**` without a paths filter — both new files land in the ratchet automatically.
+
+---
+
+## Test status
+
+- `pmoves/tests/tools/test_mcp_inventory_endpoint_ratchet.py` → **6 passed** on the operator's host (the live half RAN, not skipped: the container was rebuilt and answers).
+- `pmoves/tests/tools/test_mcp_inventory_endpoint_mutation_kill.py` → **8 passed**.
+- Combined: **14 passed**.
+- Mutation-kill re-verified by hand after the refactor: weakening `assert server_name == FLUTE_SERVER_NAME` to `assert True or server_name == FLUTE_SERVER_NAME` → `test_live_probe_rejects_a_responder_that_is_not_the_flute_gateway` **FAILED** ("DID NOT RAISE AssertionError"); restoring the file → **8 passed**.
+
+---
+
+## Hand-written exclusions
+
+This lane modifies **no** existing file. `pmoves/config/mcp_inventory.json` is byte-identical to `origin/main` — deliberately, because the entry was correct. The container rebuild is a host deployment action, not a repository change, and leaves no diff.
+
+---
+
+## Open follow-ups
+
+1. **Fleet-wide image staleness.** The 65-day-old flute image was one instance of a general condition: nothing measures whether a running container's image is NEWER than the last commit that touched its source. The `CONTAINER_REBUILD_MANIFEST.md` lists six services with pending rebuilds. A fleet-wide "running image predates its source" ratchet is the natural generalization of this lane and is **not** done here.
+2. **The other five manifest services.** `tensorzero`, `publisher-discord`, `botz-gateway`, `cipher-memory`, `pmoves-yt` carry the same rebuild obligation and have not been checked for staleness on this host.
+3. **The six client configs.** This lane fixed the SERVICE, which makes the six clients' existing configs correct again. It did not regenerate them — no regeneration was needed, because the configs were already right; only the server was behind.
