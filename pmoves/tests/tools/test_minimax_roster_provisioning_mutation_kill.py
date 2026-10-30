@@ -106,6 +106,85 @@ M3_NEW = '            abs_args = list(args)'
 M4_OLD = '            final = _restore_minimax_runtime_managed(existing, final)'
 M4_NEW = '            pass  # MUTATED: the restore is implemented but never called'
 
+# M5 -- the Mavis SDK env strip is nested back inside the env.shared branch.
+# The PowerShell twin used to run the strip unconditionally; the regression
+# is putting it back where a missing env.shared disables it.
+M5_OLD = """$mavis_helper = Join-Path $root 'pmoves\\\\scripts\\\\mavis_sdk_env.ps1'
+if (Test-Path $mavis_helper) {{
+    . $mavis_helper
+    Strip-MavisSdkEnvFor -CliName '{tool.family}'
+}} else {{
+    Write-Warning "[{tool.launcher_basename}] mavis_sdk_env.ps1 not found at $mavis_helper -- Mavis SDK env may bleed into the launched session."
+}}
+
+if (Test-Path $envf) {{
+    # Per-CLI blocklist (mirrors DEFAULT_BLOCKLIST_BY_TOOL in pmoves_launcher_generator.py).
+    # These control the {tool.binary} SDK itself, not MCP creds -- sourcing them would
+    # clobber session state or force API billing.
+    $blocklist = @(
+{blocklist_entries}
+    ) -replace '\\\\*', '.*'"""
+M5_NEW = """if (Test-Path $envf) {{
+    $mavis_helper = Join-Path $root 'pmoves\\\\scripts\\\\mavis_sdk_env.ps1'
+    if (Test-Path $mavis_helper) {{
+        . $mavis_helper
+        Strip-MavisSdkEnvFor -CliName '{tool.family}'
+    }} else {{
+        Write-Warning "[{tool.launcher_basename}] mavis_sdk_env.ps1 not found at $mavis_helper -- Mavis SDK env may bleed into the launched session."
+    }}
+    # Per-CLI blocklist (mirrors DEFAULT_BLOCKLIST_BY_TOOL in pmoves_launcher_generator.py).
+    # These control the {tool.binary} SDK itself, not MCP creds -- sourcing them would
+    # clobber session state or force API billing.
+    $blocklist = @(
+{blocklist_entries}
+    ) -replace '\\\\*', '.*'"""
+
+# M6 -- the MiniMax renderer drops an unrenderable transport instead of
+# failing closed, so the rendered roster silently stops being the declared
+# roster.
+M6_OLD = """            raise MCPConfigError(
+                f"server '{spec.key}' has unsupported transport "
+                f"'{spec.transport}' for client 'minimax' -- refusing to "
+                f"render a roster that is not the declared one."
+            )"""
+M6_NEW = "            continue  # MUTATED: the unrenderable server silently vanishes"
+
+# M7 -- an explicitly supplied client profile is ignored for any client
+# that has no registered profile of its own.
+M7_OLD = """    path = profile_path or CLIENT_PROFILES.get(client)
+    if path is None:
+        return None"""
+M7_NEW = """    if client not in CLIENT_PROFILES:
+        return None
+    path = profile_path or CLIENT_PROFILES.get(client)
+    if path is None:
+        return None"""
+
+# M8 -- the emitted usage line names the doubled installer that has never
+# existed.
+M8_OLD = "#   {tool.install_basename}.sh && {tool.launcher_basename}         # rc function"
+M8_NEW = (
+    "#   install-{tool.name}-pmoves-command.sh && {tool.launcher_basename}"
+    "         # rc function"
+)
+
+# M9 -- the roster is written with write_text() and chmod'd afterwards, so
+# it spends a window world-readable. POSIX-only: Windows has no mode bits,
+# so the mode assertion cannot run there at all.
+M9_OLD = """    payload = json.dumps(final, indent=2) + "\\n"
+    fd = os.open(output_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    try:
+        handle = os.fdopen(fd, "w", encoding="utf-8")
+    except BaseException:
+        # fdopen did not take ownership of the descriptor -- close it here
+        # rather than leaking it.
+        os.close(fd)
+        raise
+    with handle:
+        handle.write(payload)"""
+M9_NEW = """    payload = json.dumps(final, indent=2) + "\\n"
+    output_path.write_text(payload, encoding="utf-8")  # MUTATED: wide open at birth"""
+
 
 MUTATIONS = [
     (
@@ -114,6 +193,7 @@ MUTATIONS = [
         M1_OLD,
         M1_NEW,
         "test_minimax_launcher_invokes_the_roster_generator",
+        False,
     ),
     (
         "M2",
@@ -121,6 +201,7 @@ MUTATIONS = [
         M2_OLD,
         M2_NEW,
         "test_minimax_roster_absolutizes_a_repo_relative_command",
+        False,
     ),
     (
         "M3",
@@ -128,6 +209,7 @@ MUTATIONS = [
         M3_OLD,
         M3_NEW,
         "test_minimax_roster_absolutizes_repo_relative_stdio_paths",
+        False,
     ),
     (
         "M4",
@@ -135,17 +217,63 @@ MUTATIONS = [
         M4_OLD,
         M4_NEW,
         "test_write_client_config_preserves_the_runtime_flags",
+        False,
+    ),
+    (
+        "M5",
+        LAUNCHER_GEN,
+        M5_OLD,
+        M5_NEW,
+        "test_the_powershell_sdk_strip_runs_outside_the_env_shared_branch",
+        False,
+    ),
+    (
+        "M6",
+        CONFIG_GEN,
+        M6_OLD,
+        M6_NEW,
+        "test_minimax_renderer_refuses_an_unsupported_transport",
+        False,
+    ),
+    (
+        "M7",
+        CONFIG_GEN,
+        M7_OLD,
+        M7_NEW,
+        "test_an_explicit_client_profile_is_honoured_for_any_client",
+        False,
+    ),
+    (
+        "M8",
+        LAUNCHER_GEN,
+        M8_OLD,
+        M8_NEW,
+        "test_every_launcher_names_an_installer_that_actually_exists",
+        False,
+    ),
+    (
+        "M9",
+        CONFIG_GEN,
+        M9_OLD,
+        M9_NEW,
+        "test_the_rendered_roster_is_created_owner_only",
+        True,
     ),
 ]
 
 
 @pytest.mark.parametrize(
-    "label,target,old,new,killing_test",
+    "label,target,old,new,killing_test,posix_only",
     MUTATIONS,
     ids=[m[0] for m in MUTATIONS],
 )
-def test_mutation_is_killed(label, target, old, new, killing_test, tmp_path):
+def test_mutation_is_killed(label, target, old, new, killing_test, posix_only):
     """Break the fix on purpose; the named test must go RED."""
+    if posix_only and os.name == "nt":
+        pytest.skip(
+            f"{label}: the mode assertion cannot run on Windows -- the "
+            f"filesystem has no POSIX mode bits, so there is nothing to kill"
+        )
     original = _apply_mutation(target, old, new)
     try:
         mutated = _run_pytest(killing_test)

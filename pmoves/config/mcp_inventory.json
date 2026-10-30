@@ -176,7 +176,7 @@
             "crush",
             "minimax"
           ],
-          "_note": "ACTIVATED 2026-09-04: clients populated per the fail-closed checklist — COMPOSIO_API_KEY registered in the CHIT secrets manifest (#2837, slot composio_api_key, tier llm) and DELIVERED via the Pattern-B funnel (secrets-funnel-from-prod, bundle chit-bundle-b850-33907455784); clients = claude + crush (the 4090 control-plane coding agents; KiloCode joins via #2918's lane). Auth is in-band managed OAuth: the client's first connect returns the OAuth link, the operator authorizes, the connection is reusable — NOT a static X-API-Key header. Endpoint updated 2026-09-02 from stale mcp.composio.dev to connect.composio.dev/mcp. Old 2026-08-27 note (superseded): operator-approved registration; the stale disabled:true + X-API-Key header block was removed 2026-09-02."
+          "_note": "ACTIVATED 2026-09-04: clients populated per the fail-closed checklist — COMPOSIO_API_KEY registered in the CHIT secrets manifest (#2837, slot composio_api_key, tier llm) and DELIVERED via the Pattern-B funnel (secrets-funnel-from-prod, bundle chit-bundle-b850-33907455784); clients = claude + crush + minimax (the 4090 control-plane coding agents + the Mavis desktop client; KiloCode joins via #2918's lane). Auth is in-band managed OAuth: the client's first connect returns the OAuth link, the operator authorizes, the connection is reusable — NOT a static X-API-Key header. Endpoint updated 2026-09-02 from stale mcp.composio.dev to connect.composio.dev/mcp. Old 2026-08-27 note (superseded): operator-approved registration; the stale disabled:true + X-API-Key header block was removed 2026-09-02."
         },
         {
           "key": "jcodemunch",

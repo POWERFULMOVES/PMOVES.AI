@@ -16,7 +16,7 @@
 #
 # Usage:
 #   bash deploy/provision/kilo-pmoves.sh        [args...]
-#   install-kilo-pmoves-pmoves-command.sh && kilo-pmoves         # rc function
+#   install-kilo-pmoves-command.sh && kilo-pmoves         # rc function
 #   kilo-pmoves.cmd                              # Windows Explorer double-click
 #
 # Purpose: KiloCode/OpenCode with per-node configs (pmoves/configs/claws/opencode-<node>.json)

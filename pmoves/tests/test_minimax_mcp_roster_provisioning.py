@@ -39,6 +39,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import stat
 import subprocess
@@ -526,3 +527,184 @@ def test_dropped_servers_are_not_resurrected():
     restored = gen._restore_minimax_runtime_managed(existing, rendered)
     assert "dropped-server" not in restored["mcpServers"]
     assert "kept-server" in restored["mcpServers"]
+
+
+# ---------------------------------------------------------------------------
+# Round 2 -- the seven findings the second review round raised on #3418
+# ---------------------------------------------------------------------------
+
+def test_the_powershell_sdk_strip_runs_outside_the_env_shared_branch():
+    """Round-2: the PowerShell twin must strip the Mavis SDK env UNCONDITIONALLY.
+
+    The bash twin runs the strip before the env.shared branch. Nesting it in
+    the PS1's `if (Test-Path $envf)` meant the one scenario where the strip
+    matters most -- env.shared missing, launcher still launching -- was
+    exactly the scenario where it never ran, letting ANTHROPIC_BASE_URL /
+    ANTHROPIC_AUTH_TOKEN from the operator's parent process point the
+    launched binary at an Anthropic endpoint.
+    """
+    ps1 = _emitted("deploy/provision/minimax-pmoves.ps1")
+    # Match the STATEMENT, not the prose that mentions it: the explanatory
+    # comment quotes `if (Test-Path $envf)` in backticks, and a naive
+    # substring search finds that comment first.
+    strip_idx = ps1.index("Strip-MavisSdkEnvFor -CliName")
+    branch_match = re.search(r"^if \(Test-Path \$envf\)", ps1, re.M)
+    assert branch_match, "the env.shared branch is missing from the PS1 launcher"
+    assert strip_idx < branch_match.start(), (
+        "the Mavis SDK env strip must run BEFORE the env.shared branch, so "
+        "a missing env.shared cannot disable it"
+    )
+
+    # The bash twin is the reference: its strip is also before the branch.
+    sh = _emitted("deploy/provision/minimax-pmoves.sh")
+    assert sh.index("mavis_sdk_strip_env_for") < sh.index('if [ -f "$ENVF" ]')
+
+
+def test_every_launcher_names_an_installer_that_actually_exists():
+    """Round-2: the usage line must name a file that exists.
+
+    The template composed `install-{name}-pmoves-command` from a name that
+    ALREADY ended in `-pmoves`, so every emitted launcher told the operator
+    to run `install-kilo-pmoves-pmoves-command.sh` -- a file that has never
+    existed. Copy the documented command, get "No such file or directory",
+    blame the repo.
+    """
+    plan = launcher_gen.build_plan(REPO_ROOT)
+    checked = 0
+    for generated in plan.files:
+        if not generated.relpath.startswith("deploy/provision/"):
+            continue
+        for match in re.finditer(r"install-[A-Za-z0-9._-]+\.(?:sh|ps1)", generated.body):
+            named = match.group(0)
+            assert not named.startswith("install-") or "pmoves-pmoves-command" not in named, (
+                f"{generated.relpath} names the doubled installer '{named}'"
+            )
+            assert (REPO_ROOT / "deploy" / "provision" / named).exists(), (
+                f"{generated.relpath} names installer '{named}', which does not exist"
+            )
+            checked += 1
+    assert checked, "no installer references were found to check -- the matcher went blind"
+
+
+def test_every_registered_wrapper_script_exists():
+    """Round-2: the registry must not name a file that was never created.
+
+    `minimax-pmoves` pointed at pmoves/scripts/minimax-pmoves.sh and
+    pmoves/scripts/windows/minimax-pmoves.bat -- neither exists. Every
+    sibling entry resolved to a real file.
+    """
+    yaml = pytest.importorskip("yaml")
+    registry = yaml.safe_load(
+        (REPO_ROOT / "pmoves" / "configs" / "cli_tools.yaml").read_text(encoding="utf-8")
+    )
+    wrappers = registry.get("pmoves_wrappers") or {}
+    assert wrappers, "the wrapper registry is empty -- the matcher went blind"
+    for name, entry in wrappers.items():
+        for field in ("script", "windows_shim"):
+            declared = entry.get(field)
+            assert declared, f"{name} declares no {field}"
+            assert (REPO_ROOT / declared).exists(), (
+                f"{name}.{field} names '{declared}', which does not exist"
+            )
+
+
+def test_minimax_renderer_refuses_an_unsupported_transport():
+    """Round-2: an unrenderable transport must FAIL, not vanish.
+
+    The old `else: continue` quietly DELETED the server from the render --
+    the profile filter had already waved it through by key -- so the
+    generated roster silently stopped being the declared roster.
+    """
+    spec = gen.ServerSpec(
+        key="weird-transport",
+        description="",
+        transport="websocket",
+        url="ws://localhost:9999/ws",
+    )
+    with pytest.raises(gen.MCPConfigError) as excinfo:
+        gen.render_minimax([spec], {})
+    assert "weird-transport" in str(excinfo.value)
+    assert "websocket" in str(excinfo.value)
+
+
+def test_an_explicit_client_profile_is_honoured_for_any_client(tmp_path: Path):
+    """Round-2: `--client-profile` must always mean something.
+
+    The old shape short-circuited on `client not in CLIENT_PROFILES` and
+    returned None, so `--client claude --client-profile some.yaml` never
+    read the file: the flag silently no-op'd and the operator got a
+    full-inventory render with a clean exit 0.
+    """
+    yaml = pytest.importorskip("yaml")
+    profile = tmp_path / "custom-profile.yaml"
+    profile.write_text(
+        yaml.safe_dump({"super_nodes": {"tools": [{"key": "only-this-one"}]}}),
+        encoding="utf-8",
+    )
+    keys = gen._profile_tool_keys("claude", profile_path=profile)
+    assert keys == ["only-this-one"], (
+        "an explicitly supplied client profile was ignored for a client "
+        "that has no registered profile of its own"
+    )
+
+
+def test_the_rendered_roster_is_created_owner_only(tmp_path: Path):
+    """Round-2: the secret-grade mode must be a BIRTHRIGHT, not an afterthought.
+
+    `write_text()` opens with the default umask and only got 0o600
+    afterwards, so every freshly rendered roster spent a brief window
+    world-readable while carrying expanded tokens.
+    """
+    output = tmp_path / "mcp.json"
+    gen.write_client_config(
+        "minimax",
+        output,
+        merge=False,
+        inventory=gen.load_inventory(),
+        endpoint="local",
+        context={},
+        allow_os_environ=False,
+    )
+    assert output.exists()
+    if os.name == "nt":
+        # Windows has no POSIX mode bits -- S_IMODE reports 0o666 for every
+        # file -- so the mode cannot be asserted here. The creation path is
+        # still exercised: the file exists and parses.
+        json.loads(output.read_text(encoding="utf-8"))
+        return
+    import stat
+    assert stat.S_IMODE(output.stat().st_mode) == 0o600
+
+
+def test_the_composio_note_names_every_client_it_lists():
+    """Round-2: the fail-closed checklist's memory must not describe a fleet
+    that no longer exists.
+
+    The composio entry's `_note` said "clients = claude + crush" while the
+    entry itself listed minimax too -- the note was left remembering the
+    fleet as it was BEFORE the hunk that changed it.
+    """
+    inventory = json.loads(
+        (REPO_ROOT / "pmoves" / "config" / "mcp_inventory.json").read_text(encoding="utf-8")
+    )
+    checked = 0
+    for group in (inventory.get("groups") or {}).values():
+        for server in group.get("servers") or []:
+            note = server.get("_note")
+            clients = server.get("clients")
+            if not note or not clients:
+                continue
+            # Only a note that ENUMERATES its clients is held to naming
+            # them all. A note that describes the mechanism generically
+            # ("spawned per client with E2B_API_KEY") is not claiming a
+            # roster, so it is not a stale roster -- asserting on it would
+            # be a rule the inventory never agreed to.
+            if "clients =" not in note:
+                continue
+            for client in clients:
+                assert client in note, (
+                    f"server '{server['key']}' lists client '{client}' but its "
+                    f"_note enumerates a different client set -- the note is stale"
+                )
+            checked += 1
+    assert checked, "no server carried both a client-enumerating _note and a clients list"

@@ -439,7 +439,20 @@ def render_minimax(
             if spec.env:
                 entry["env"] = _render_env(spec.env, context, **kw)
         else:
-            continue
+            # FAIL CLOSED on an unrenderable transport. The old shape was
+            # `continue`, which quietly DELETED the server from the render:
+            # the profile filter had already waved it through by key, so the
+            # generated roster silently stopped being the declared roster --
+            # the exact mismatch this lane's fail-closed profile contract
+            # exists to make impossible. The other renderers share the
+            # pattern, but minimax is the one whose contract explicitly
+            # promises rendered roster == profile roster, so it is the one
+            # that raises.
+            raise MCPConfigError(
+                f"server '{spec.key}' has unsupported transport "
+                f"'{spec.transport}' for client 'minimax' -- refusing to "
+                f"render a roster that is not the declared one."
+            )
         if spec.timeout:
             entry["timeout_ms"] = spec.timeout
         servers[spec.key] = entry
@@ -599,9 +612,19 @@ def _profile_tool_keys(client: str, profile_path: Optional[Path] = None) -> Opti
     key is missing from the inventory -- fail-closed, because a profile
     that names a server the fleet does not run is a silent broken roster.
     """
-    if client not in CLIENT_PROFILES:
+    # An EXPLICIT --client-profile must always mean something. The old
+    # shape short-circuited on `client not in CLIENT_PROFILES` and returned
+    # None, so `--client claude --client-profile some-profile.yaml` never
+    # read the file: the flag silently no-op'd and the operator got a
+    # full-inventory render with a clean exit 0. That is the "silent
+    # degradation" failure mode this generator's own comments rail against,
+    # shipped in the tool whose job is to prevent it.
+    #
+    # So: an explicit path is honoured for ANY client. Only a client with no
+    # profile of its own AND no explicit path falls back to whole-inventory.
+    path = profile_path or CLIENT_PROFILES.get(client)
+    if path is None:
         return None
-    path = profile_path or CLIENT_PROFILES[client]
     if not path.exists():
         raise MCPConfigError(f"Client profile not found for '{client}': {path}")
     try:
@@ -725,7 +748,29 @@ def write_client_config(
         final = rendered
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.write_text(json.dumps(final, indent=2) + "\n", encoding="utf-8")
+    # CREATE WITH THE MODE ALREADY SET. `write_text()` opens with the
+    # default umask and only gets 0o600 afterwards, so every freshly
+    # rendered roster spent a brief window world-readable while carrying
+    # expanded tokens -- a wide-open moment inside the very block whose
+    # comment explains why the file must be secret-grade. The mode is a
+    # BIRTHRIGHT here, not an afterthought applied once the secret is
+    # already on disk.
+    #
+    # os.open() honours the mode only when it CREATES the file, so a
+    # pre-existing file keeps whatever mode it had -- which is why the
+    # chmod below still runs, as belt-and-suspenders for files that
+    # already existed.
+    payload = json.dumps(final, indent=2) + "\n"
+    fd = os.open(output_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    try:
+        handle = os.fdopen(fd, "w", encoding="utf-8")
+    except BaseException:
+        # fdopen did not take ownership of the descriptor -- close it here
+        # rather than leaking it.
+        os.close(fd)
+        raise
+    with handle:
+        handle.write(payload)
     # Owner-only on POSIX.
     #
     # WHY NOW (2026-10-26). A rendered config CAN hold expanded secrets --

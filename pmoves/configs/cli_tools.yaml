@@ -52,8 +52,21 @@ pmoves_wrappers:
     drives: hermes (Hermes Agent)
     purpose: "One-shot Hermes bootstrap+launch (profile + MCP + CHIT)"
   minimax-pmoves:
-    script: pmoves/scripts/minimax-pmoves.sh
-    windows_shim: pmoves/scripts/windows/minimax-pmoves.bat
+    # This family's launcher is GENERATOR-MANAGED in deploy/provision/, not a
+    # hand-written pmoves/scripts/ wrapper -- so `script:` points at the
+    # emitted artifact rather than at a pmoves/scripts/ path that was never
+    # created. The previous values (pmoves/scripts/minimax-pmoves.sh and
+    # pmoves/scripts/windows/minimax-pmoves.bat) named files that do not
+    # exist: a phantom path that resolved to nothing for every consumer,
+    # while every sibling entry resolved to a real file.
+    #
+    # NOTE: install_tools.py's WRAPPERS list does not include this family, so
+    # `make -C pmoves install-tools` does NOT install it. That is a known gap
+    # rather than an accident -- this family is installed by
+    # deploy/provision/install-minimax-pmoves-command.sh, which is the
+    # generator-managed installer that also writes the profile function.
+    script: deploy/provision/minimax-pmoves.sh
+    windows_shim: deploy/provision/minimax-pmoves.cmd
     drives: minimax (MiniMax Code / Mavis desktop client)
     purpose: "MiniMax Code with the pmoves.bootstrap/v1 client profile (roster + service tags + routing + constraints)"
 

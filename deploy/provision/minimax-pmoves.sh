@@ -16,7 +16,7 @@
 #
 # Usage:
 #   bash deploy/provision/minimax-pmoves.sh        [args...]
-#   install-minimax-pmoves-pmoves-command.sh && minimax-pmoves         # rc function
+#   install-minimax-pmoves-command.sh && minimax-pmoves         # rc function
 #   minimax-pmoves.cmd                              # Windows Explorer double-click
 #
 # Purpose: MiniMax Code with the pmoves.bootstrap/v1 client profile (roster + service tags + routing + constraints)

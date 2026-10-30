@@ -17,13 +17,38 @@
 # Usage:
 #   powershell -ExecutionPolicy Bypass -File deploy\provision\minimax-pmoves.ps1 [args]
 #   .\minimax-pmoves.cmd                     # Windows Explorer double-click
-#   install-minimax-pmoves-pmoves-command.ps1 ; minimax-pmoves     # profile function
+#   install-minimax-pmoves-command.ps1 ; minimax-pmoves     # profile function
 #
 # Purpose: MiniMax Code with the pmoves.bootstrap/v1 client profile (roster + service tags + routing + constraints)
 
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $envf = if ($env:PMOVES_ENV_SHARED) { $env:PMOVES_ENV_SHARED } else { Join-Path $root 'pmoves\env.shared' }
+
+# Mavis SDK env strip -- dot-source pmoves/scripts/mavis_sdk_env.ps1
+# (PowerShell twin of mavis_sdk_env.sh) and apply the per-CLI needs check.
+# The strip happens BEFORE env.shared is read, because the SHELL env (parent
+# process) and env.shared (PMOVES fleet creds) are INDEPENDENT layers -- the
+# blocklist below handles env.shared, this strip handles SHELL vars that came
+# in from the operator's parent process (typically the Mavis
+# `~/.claude/settings.json` env block).
+#
+# WHY IT IS OUTSIDE THE `if (Test-Path $envf)` BRANCH. The bash twin runs
+# this strip UNCONDITIONALLY, before env.shared loading. Nesting it inside
+# the env.shared branch meant the one scenario where the strip matters most
+# -- env.shared missing, launcher still launching -- was EXACTLY the scenario
+# where it never ran, letting ANTHROPIC_BASE_URL / ANTHROPIC_AUTH_TOKEN from
+# the operator's parent process sail into the launched binary and quietly
+# point its backend at an Anthropic endpoint. The platform the Mavis desktop
+# client actually lives on is the one that lost the guard. Two independent
+# layers means one being absent must not disable the other.
+$mavis_helper = Join-Path $root 'pmoves\scripts\mavis_sdk_env.ps1'
+if (Test-Path $mavis_helper) {
+    . $mavis_helper
+    Strip-MavisSdkEnvFor -CliName 'minimax'
+} else {
+    Write-Warning "[minimax-pmoves] mavis_sdk_env.ps1 not found at $mavis_helper -- Mavis SDK env may bleed into the launched session."
+}
 
 if (Test-Path $envf) {
     # Per-CLI blocklist (mirrors DEFAULT_BLOCKLIST_BY_TOOL in pmoves_launcher_generator.py).
@@ -35,21 +60,6 @@ if (Test-Path $envf) {
         'ANTHROPIC_BASE_URL',
         'MINIMAX_API_KEY'
     ) -replace '\*', '.*'
-
-    # Mavis SDK env strip -- dot-source pmoves/scripts/mavis_sdk_env.ps1
-    # (PowerShell twin of mavis_sdk_env.sh) and apply the per-CLI needs
-    # check. The strip happens BEFORE env.shared is read, because the
-    # SHELL env (parent process) and env.shared (PMOVES fleet creds) are
-    # independent layers -- the blocklist above handles env.shared, this
-    # strip handles SHELL vars that came in from the operator's parent
-    # process (typically the Mavis `~/.claude/settings.json` env block).
-    $mavis_helper = Join-Path $root 'pmoves\scripts\mavis_sdk_env.ps1'
-    if (Test-Path $mavis_helper) {
-        . $mavis_helper
-        Strip-MavisSdkEnvFor -CliName 'minimax'
-    } else {
-        Write-Warning "[minimax-pmoves] mavis_sdk_env.ps1 not found at $mavis_helper -- Mavis SDK env may bleed into the launched session."
-    }
 
     # Pass 1: read KEY=VALUE verbatim into an ordered map, skipping blocklisted keys.
     $vars = [ordered]@{}
