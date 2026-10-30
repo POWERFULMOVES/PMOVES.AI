@@ -86,8 +86,8 @@ it, so every change used to be a hand edit with no record. That is how
 `CIPHER_DB_SERVICE_KEY=${SERVICE_ROLE_KEY}` reached a fleet node: someone copied it from
 a recipe in commit `df0218537` and it left no trail, then expired 2026-10-21 and
 shadowed the funnel-refreshed keys. The knob is retired: cipher presents Kong's
-own key expression, and `make -C pmoves cipher-auth-check` WARNs while a node
-still sets it (see `pmoves/docs/TAC/TAC_CIPHER.md` § Cipher's service key).
+own key expression, and `make -C pmoves cipher-auth-check` WARNs when a node
+still sets it, in compose's env or in `.env.local` (read by presence only) (see `pmoves/docs/TAC/TAC_CIPHER.md` § Cipher's service key).
 Operator rule (2026-09-23): a key comes out the same way it should have gone
 in, on this road.
 

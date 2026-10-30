@@ -447,34 +447,87 @@ character:
 Selection is by NAME, and the gateway has already made it. Whatever a node's
 Kong admits, cipher presents. Both names are funnel-refreshed when expired, so
 no node needs a paste. A node where this key still fails is broken for every
-Kong client, not just cipher. The fix for that node is in the funnel (the key
-was not minted from the secret PostgREST runs with), not a cipher-only override
-that would hide it. `CIPHER_DB_SERVICE_KEY` is **retired**: compose stops
-reading it, and the preflight below WARNs while a node still sets it.
+Kong client, not just cipher. The fix for that node is in the funnel, not a
+cipher-only override that would hide it. `CIPHER_DB_SERVICE_KEY` is
+**retired**: compose stops reading it. `cipher-auth-check` WARNs when the node
+still sets it, in either of two places. One is the env compose reads (the
+`--env-file` list plus the process env). The other is `pmoves/.env.local`,
+which it reads by presence only, through `env_local_key.py`'s own line matcher.
+That second read matters because under `SUPABASE_RUNTIME=compose` the overlay
+is not in `COMPOSE_ENV_FILES` (Makefile `:136-145`). On those nodes compose
+does not read the paste today, but another runtime or branch would.
 
-> **Status:** the compose edit (both `pmoves/docker-compose.yml` and
-> `docker-compose.agents.yml`) is a readOnly path. It needs an operator
-> KNOWN_ROAD grant. The exact diff is in the PR #3433 body. Until it lands, the
-> on-disk expression is still the `df0218537` one, and `cipher-auth-check`
-> reports that as `compose wiring drift`.
+**Order matters for every Kong client, not only cipher.** Three more sites
+present the service key in the REVERSE of Kong's order,
+`${SERVICE_ROLE_KEY:-${SUPABASE_SERVICE_ROLE_KEY:-}}`. Kong refuses them on any
+node where the two names differ:
+- `supabase-storage` `SERVICE_KEY` (`docker-compose.yml:1079`)
+- Agent Zero's postgrest MCP `--apiKey` (`docker-compose.yml:3674`, `docker-compose.agents.yml:142`)
+
+The `kong_order_drift` facet lists them. Their fix rides the same compose grant.
+
+**The funnel mints with the verifiers' secret (PR #3433).**
+`tools/secrets_self_generated.py` used to sign with `JWT_SECRET` first. Every
+verifier reads `${SUPABASE_JWT_SECRET:-${JWT_SECRET:-}}`: PostgREST `:820`,
+GoTrue `:732`, Realtime `:1033`, Studio `:1152`. Wherever the two secrets
+differed, every funnel mint was admitted by Kong and refused by PostgREST
+(PGRST301). The funnel now uses the verifiers' order. It also re-mints a
+self-generated HS256 key that does not *verify* under that secret, not only one
+that has expired. Non-HS256 values are never judged.
+
+> **Status:** the compose edits need an operator KNOWN_ROAD grant. They are
+> cipher-api in both files plus the three reverse-order sites, and the exact
+> diff is in the PR #3433 body. Until they land, `cipher-auth-check` reports
+> `compose wiring drift` and the reverse-order sites.
 
 **Diagnose without printing a key: `make -C pmoves cipher-auth-check`**
-(`tools/cipher_service_key_check.py`). It is read-only. It evaluates the
-compose expressions on disk against the same `--env-file` list `$(DC)` uses,
-and reports the following:
-`key present` (+ which NAME supplied it), `role`, `exp in past`,
-`gateway admits` (value equals Kong's consumer key), `signature verifies`
-(HS256 under PostgREST's secret), and a WARN if `CIPHER_DB_SERVICE_KEY` is set.
-`CONTAINER=1` also reads the running `cipher-api`: role/exp decoded inside the
-container, and whether it matches what the env would deliver, compared by
-digest in-process. `PROBE=1` runs cipher's own lookup from inside the
-container (`GET ...cipher_agent_tokens?select=agent_id&limit=0`). It
-classifies a refusal as Kong (`lookup_refused_gateway`: usually supabase-kong
-still holding a pre-refresh key), expired (`PGRST303`), or signature
-(`PGRST301`). Exit `0` ok / `1` finding / `3` could-not-measure. `make`
-collapses these to 2, so read the final `CIPHER_AUTH_VERDICT=` line. All three
-cipher bring-up roads (`up-cipher`, `-nobuild`, `-full`) run it first,
-non-blocking.
+(`tools/cipher_service_key_check.py`, read-only). Exit `0` ok / `1` finding /
+`3` could-not-measure. `make` collapses these to 2, so read the final
+`CIPHER_AUTH_VERDICT=` line. All three cipher bring-up roads (`up-cipher`,
+`-nobuild`, `-full`) run it first, non-blocking.
+
+*Static facets* (always on). These evaluate the compose expressions on disk
+against the same `--env-file` list `$(DC)` uses, so they judge what the next
+`up-cipher` presents.
+- `key present` (+ which NAME supplied it), `role`, `exp in past`.
+- `matches Kong config`: the env value equals one of the consumer keys Kong is
+  *configured* with (`SUPABASE_SERVICE_KEY` or `SUPABASE_SECRET_KEY`, same env).
+  **This is not what the running Kong holds.**
+- `signature verifies` (HS256 under PostgREST's secret).
+- `JWT secrets agree` (`JWT_SECRET` == `SUPABASE_JWT_SECRET`, a boolean only).
+- Reverse-order sites.
+
+On `wrong_pair_signature` it lists which *live, non-retired* candidate names do
+verify.
+
+*Live facets* (`CONTAINER=1`), the authority on what is running.
+- The running `cipher-api` key's role and exp, decoded inside the container.
+- Whether that key matches the env.
+- `running Kong admits it`: sha256 digests of the consumer keys the running
+  `supabase-kong` was *started* with, computed inside Kong and compared
+  in-process, never printed.
+
+**After a funnel refresh, supabase-kong keeps its old key until it is
+recreated.** That shows up here as `kong_live_mismatch`, and the finding names
+whichever side is stale.
+
+`PROBE=1` runs cipher's own lookup from inside the container
+(`GET ...cipher_agent_tokens?select=agent_id&limit=0`). It classifies a refusal
+as follows:
+- Kong (`lookup_refused_gateway`): kong 3.x `Unauthorized` / `No API key found`,
+  2.x wording, or any 401/403 without a PGRST code.
+- Expired (`PGRST303`).
+- Signature (`PGRST301`).
+
+Any requested live facet that cannot be measured makes the verdict **3**, never
+ok. That covers a probe timeout, a probe that did not run, an undecodable
+container key, and an unreadable Kong without a 200 probe.
+
+*Known limits.* A DB-backed Kong with seeded consumers (a pre
+`KONG_DATABASE=off` container) is visible **only to `PROBE=1`**. So is a
+`SUPABASE_REST_URL` (e.g. from a tier env file) that points cipher at a
+different Kong, such as a remote one or the CLI runtime. The static and digest
+facets compare against the compose-defined `supabase-kong`.
 
 **Removing the paste (OPERATOR-run; agents have zero access to the file):**
 
