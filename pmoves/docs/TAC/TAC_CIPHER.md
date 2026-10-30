@@ -409,50 +409,81 @@ construction-time-`auth` function, so in production they never fire without
 enforcement test needs that flag set, because it asserts refusal while the
 default is advisory. Details: POWERFULMOVES/Pmoves-cipher#27 comments.
 
-## `CIPHER_DB_SERVICE_KEY` — steer it through the Known Road, never by hand
+## Cipher's service key: mirror the gateway, never paste it (`CIPHER_DB_SERVICE_KEY` retired)
 
-**What the knob is.** `auth.ts resolveToken` presents a Supabase service key to
-PostgREST (through Kong) on every `cipher_<uuid>` bearer lookup. Commit
-`df0218537` added `CIPHER_DB_SERVICE_KEY` as a compose override for that key,
-set per node in `pmoves/.env.local` (loaded by `scripts/with-env.sh`). Unset,
-the container presents the default `SUPABASE_SERVICE_KEY`.
+**What the key does.** `auth.ts resolveToken` presents the container's
+`SUPABASE_SERVICE_KEY` to Kong `/rest/v1` on every `cipher_<uuid>` bearer
+lookup. Two gates judge it, and they fail differently:
 
-**Where the knob lives today.** Only on unmerged branches:
-`origin/fix/cipher-agent-token-handoff` (PR #3143),
-`origin/feat/cipher-identity-bind` and `origin/wip/mcp-project-roster`, in
-`pmoves/docker-compose.yml` and `docker-compose.agents.yml` on each. `git grep CIPHER_DB_SERVICE_KEY` on `origin/main`
-(`dfb5421ef`) returns 0 hits, so a compose built from main does not read the
-override. It takes effect only when a node brings cipher up from one of those
-branches.
+1. **Kong key-auth** (`PMOVES-supabase/docker/volumes/api/kong.yml`, route
+   `rest-v1`, consumer `service_role`) admits only an EXACT match with the key
+   `supabase-kong` was started with: `SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-${SERVICE_ROLE_KEY:-}}`
+   in `pmoves/docker-compose.yml`. Any other value is refused before PostgREST sees it.
+2. **PostgREST** verifies the JWT signature against `PGRST_JWT_SECRET`
+   (`${SUPABASE_JWT_SECRET:-${JWT_SECRET:-}}`), then its `exp`.
 
-**Measured 2026-09-23 on one fleet node (by the steward; recorded here, not
-re-run by this change):** the default `SUPABASE_SERVICE_KEY` returns **200** through Kong.
-Both copies of the `SERVICE_ROLE_KEY` value return **401**. `df0218537`'s
-message recommended `CIPHER_DB_SERVICE_KEY=${SERVICE_ROLE_KEY}` from a
-2026-09-22 measurement, when PostgREST was rejecting the `SUPABASE_*` pair.
-That recipe is now **wrong** on that node: a cipher brought up with the line in place
-presents a key Kong rejects, and every per-agent token lookup fails.
+The caller's `cipher_<uuid>` bearer is not involved in either gate. When this
+key is refused, every agent on the node gets 503 together, and `/health` reads
+`per_agent_auth: unavailable, token lookup returned HTTP 401`.
 
-**How the line got there, and why that matters.** Someone hand-copied the
-recipe from the commit message into the node's `.env.local`. There was no
-tool, no audit row and no `known-roads.jsonl` entry, so nobody could say
-when it was placed or by whom. The operator's rule: it is removed the same
-way it should have been placed, on a road.
+**The defect (knuckles, 2026-10-21/22).** `df0218537` wired cipher as
+`${CIPHER_DB_SERVICE_KEY:-${SUPABASE_SERVICE_KEY:-}}`. That expression shares
+no name with Kong's. The node was steered by pasting a JWT into
+`pmoves/.env.local` as `CIPHER_DB_SERVICE_KEY`. The paste expired on
+2026-10-21. The funnel refresh (#3410, `tools/secrets_self_generated.py`)
+renews `SUPABASE_SERVICE_ROLE_KEY` and `SERVICE_ROLE_KEY`, but it never touches
+`.env.local`, so the dead paste kept winning. The knob also changed meaning
+between measurements. On 2026-09-22 the legacy pair verified. On 2026-09-23,
+on one node, the `SERVICE_ROLE_KEY` value got 401 while `SUPABASE_SERVICE_KEY`
+got 200. A per-node value paste cannot be kept right across a mesh.
 
-**The road (OPERATOR-run; agents have zero access to the file):**
+**The design (PR #3433).** Cipher presents Kong's own expression, character for
+character:
+
+```yaml
+- SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-${SERVICE_ROLE_KEY:-}}
+```
+
+Selection is by NAME, and the gateway has already made it. Whatever a node's
+Kong admits, cipher presents. Both names are funnel-refreshed when expired, so
+no node needs a paste. A node where this key still fails is broken for every
+Kong client, not just cipher. The fix for that node is in the funnel (the key
+was not minted from the secret PostgREST runs with), not a cipher-only override
+that would hide it. `CIPHER_DB_SERVICE_KEY` is **retired**: compose stops
+reading it, and the preflight below WARNs while a node still sets it.
+
+> **Status:** the compose edit (both `pmoves/docker-compose.yml` and
+> `docker-compose.agents.yml`) is a readOnly path. It needs an operator
+> KNOWN_ROAD grant. The exact diff is in the PR #3433 body. Until it lands, the
+> on-disk expression is still the `df0218537` one, and `cipher-auth-check`
+> reports that as `compose wiring drift`.
+
+**Diagnose without printing a key: `make -C pmoves cipher-auth-check`**
+(`tools/cipher_service_key_check.py`). It is read-only. It evaluates the
+compose expressions on disk against the same `--env-file` list `$(DC)` uses,
+and reports the following:
+`key present` (+ which NAME supplied it), `role`, `exp in past`,
+`gateway admits` (value equals Kong's consumer key), `signature verifies`
+(HS256 under PostgREST's secret), and a WARN if `CIPHER_DB_SERVICE_KEY` is set.
+`CONTAINER=1` also reads the running `cipher-api`: role/exp decoded inside the
+container, and whether it matches what the env would deliver, compared by
+digest in-process. `PROBE=1` runs cipher's own lookup from inside the
+container (`GET ...cipher_agent_tokens?select=agent_id&limit=0`). It
+classifies a refusal as Kong (`lookup_refused_gateway`: usually supabase-kong
+still holding a pre-refresh key), expired (`PGRST303`), or signature
+(`PGRST301`). Exit `0` ok / `1` finding / `3` could-not-measure. `make`
+collapses these to 2, so read the final `CIPHER_AUTH_VERDICT=` line. All three
+cipher bring-up roads (`up-cipher`, `-nobuild`, `-full`) run it first,
+non-blocking.
+
+**Removing the paste (OPERATOR-run; agents have zero access to the file):**
 
 ```bash
 make -C pmoves env-local-has   KEY=CIPHER_DB_SERVICE_KEY   # present? prints no value
 make -C pmoves env-local-unset KEY=CIPHER_DB_SERVICE_KEY   # removes the one line, 0600 backup, audit row
 ```
 
-Run the unset **before the next `make -C pmoves up-cipher`** on any node that
-followed the `df0218537` recipe. To steer the key deliberately later (for
-example, if a node's PostgREST really does validate only the legacy pair),
-re-measure first, then run `make -C pmoves env-local-set
-KEY=CIPHER_DB_SERVICE_KEY`. It prompts for the value without echoing it and
-never takes it as an argument. Full road: `.claude/PATTERNS.md` § Known Road —
-node-local env overlay keys.
+Full road: `.claude/PATTERNS.md` § Known Road — node-local env overlay keys.
 
 ## ⚠️ Architectural Fork — PMOVES vs Upstream
 
