@@ -171,6 +171,25 @@ _LOOPBACK_HOSTS = frozenset({"localhost", "127.0.0.1", "::1", "0.0.0.0", "host.d
 _URL_KEYS = ("SUPABASE_URL", "SUPABASE_REST_URL")
 _RUNTIME_KEY = "SUPABASE_RUNTIME"
 _LOCAL_RUNTIME = "compose"
+# The runtimes the Makefile knows (SUPABASE_RUNTIME=cli|kong|compose). A reason
+# never carries the raw SUPABASE_RUNTIME value -- it comes from the secret map
+# or the shell, so anything outside this set is reported as "other".
+KNOWN_RUNTIMES = ("compose", "cli", "kong")
+
+# CLOSED vocabulary of every event field (#3433 CodeQL): every label, role and
+# reason fill_self_generated can emit is a member of these tuples, so a printer
+# can map each field onto a constant and nothing from a value reaches output.
+EVENT_ROLES = ("anon", "service_role")
+EVENT_ACTIONS = ("filled", "reminted", "left_unchanged")
+_REFUSALS = (
+    "not_minted_here", "runtime_unknown", "remote_url",
+    *(f"empty_{k}" for k in ("SUPABASE_RUNTIME", "SUPABASE_URL", "SUPABASE_REST_URL")),
+    *(f"runtime_{r}" for r in (*KNOWN_RUNTIMES[1:], "other")),
+)
+EVENT_REASONS = (
+    "absent", "expired", "signed_with_other_secret",
+    *_REFUSALS, *(f"expired_{r}" for r in _REFUSALS),
+)
 
 
 def _host_is_local(url: str, local_services: Optional[frozenset] = None) -> bool:
@@ -202,7 +221,8 @@ def local_runtime_is_verifier(
     if not runtime:
         return False, f"empty_{_RUNTIME_KEY}"
     if runtime != _LOCAL_RUNTIME:
-        return False, f"runtime_{runtime}"
+        known = next((r for r in KNOWN_RUNTIMES if r == runtime), "other")
+        return False, f"runtime_{known}"
     for key in _URL_KEYS:
         if key not in context:
             continue

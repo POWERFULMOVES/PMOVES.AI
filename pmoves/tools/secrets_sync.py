@@ -17,6 +17,10 @@ from pmoves.tools.secret_shape import inspect_value
 from pmoves.tools.secrets_self_generated import (
     SELF_GENERATED,
     _SUPABASE_JWT_KEYS,
+    EVENT_ACTIONS,
+    EVENT_REASONS,
+    EVENT_ROLES,
+    KNOWN_RUNTIMES,
     compose_consumers,
     compose_service_names,
     fill_self_generated,
@@ -460,6 +464,20 @@ def load_compose_docs(paths: Sequence[Path] | None = None, out=None) -> tuple[li
 
 
 _CONTEXT_KEYS = ("SUPABASE_RUNTIME", "SUPABASE_URL", "SUPABASE_REST_URL")
+_SOURCES = ("shell env", "secret map", "unset")
+_EVENT_LABELS = tuple(_SUPABASE_JWT_KEYS)
+_UNRECOGNISED = "<unrecognised>"
+
+
+def _closed(value: object, choices: Sequence[str]) -> str:
+    """Return the CONSTANT member of *choices* equal to *value*, else a fixed
+    marker. What is returned is always an element of a literal tuple, never the
+    input, so nothing derived from the secret map (or a value in it) can reach
+    the announcement -- the printers below only print what this returns."""
+    for choice in choices:
+        if choice == value:
+            return choice
+    return _UNRECOGNISED
 
 
 def runtime_context(
@@ -481,7 +499,7 @@ def _describe_context(context: Mapping[str, str], sources: Mapping[str, str], lo
 
     parts = []
     for key in _CONTEXT_KEYS:
-        src = sources.get(key, "unset")
+        src = _closed(sources.get(key, "unset"), _SOURCES)
         if src == "unset":
             parts.append(f"{key}=unset")
             continue
@@ -489,7 +507,8 @@ def _describe_context(context: Mapping[str, str], sources: Mapping[str, str], lo
         if not val:
             shown = "EMPTY"
         elif key == "SUPABASE_RUNTIME":
-            shown = val
+            # The runtime NAME only if it is a known one; never the raw value.
+            shown = next((r for r in KNOWN_RUNTIMES if r == val), "other")
         else:  # never print a URL: hostnames can be topology
             shown = "local" if _host_is_local(val, local_services) else "remote"
         parts.append(f"{key}={shown} (from {src})")
@@ -507,7 +526,8 @@ _RECREATE_ROADS = (
 
 
 def _refusal_text(e: Mapping[str, str], sources: Mapping[str, str]) -> str:
-    reason = e["reason"]
+    label = _closed(e.get("label"), _EVENT_LABELS)
+    reason = _closed(e.get("reason"), EVENT_REASONS)
     expired = reason.startswith("expired_")
     base = reason[len("expired_"):] if expired else reason
     if base == "not_minted_here":
@@ -515,8 +535,9 @@ def _refusal_text(e: Mapping[str, str], sources: Mapping[str, str]) -> str:
                + ("it is EXPIRED: obtain a new key from its issuer (cloud project / Supabase CLI / peer node)"
                   if expired else "it may be correct for its own verifier"))
     elif base.startswith("empty_"):
-        var = base[len("empty_"):]
-        why = (f"{var} is set but EMPTY (from {sources.get(var, 'unknown')}); the runtime cannot "
+        var = _closed(base[len("empty_"):], _CONTEXT_KEYS)
+        src = _closed(sources.get(var, "unset"), _SOURCES)
+        why = (f"{var} is set but EMPTY (from {src}); the runtime cannot "
                "be judged. Unset it or give it its real value")
     elif base == "runtime_unknown":
         why = ("SUPABASE_RUNTIME is not stated; on a compose-runtime node re-run with "
@@ -524,7 +545,7 @@ def _refusal_text(e: Mapping[str, str], sources: Mapping[str, str]) -> str:
     else:
         why = f"this node's compose Supabase is not its verifier ({base})"
     state = "expired, " if expired else ""
-    return f"[secrets-sync] WARN {e['label']} {state}left unchanged: {why}"
+    return f"[secrets-sync] WARN {label} {state}left unchanged: {why}"
 
 
 def announce_jwt_events(
@@ -548,16 +569,25 @@ def announce_jwt_events(
         return []
     if context is not None and sources is not None:
         print("[secrets-sync] runtime context: " + _describe_context(context, sources, local_services), file=out)
-    changed = [e for e in events if e.get("action") in ("reminted", "filled")]
-    for e in events:
-        if e.get("action") == "left_unchanged":
+    # Rebuild every event from the closed vocabulary before anything prints:
+    # each field becomes the constant it equals (or the unrecognised marker).
+    closed = [
+        {"label": _closed(e.get("label"), _EVENT_LABELS),
+         "role": _closed(e.get("role"), EVENT_ROLES),
+         "action": _closed(e.get("action"), EVENT_ACTIONS),
+         "reason": _closed(e.get("reason"), EVENT_REASONS)}
+        for e in events
+    ]
+    for e in closed:
+        if e["action"] == "left_unchanged":
             print(_refusal_text(e, sources or {}), file=out)
-    reminted = [e for e in changed if e["action"] == "reminted"]
+    reminted = [e for e in closed if e["action"] == "reminted"]
     if not reminted:
         return []
     for e in reminted:
         print(f"[secrets-sync] RE-MINTED {e['label']} ({e['role']}): {e['reason']}", file=out)
-    labels = sorted({e["label"] for e in changed})
+    labels = sorted({e["label"] for e in closed
+                     if e["action"] in ("reminted", "filled") and e["label"] != _UNRECOGNISED})
     if docs is None:
         docs, _ = load_compose_docs(out=out)
     consumers = compose_consumers(labels, docs)

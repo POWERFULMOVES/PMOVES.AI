@@ -443,3 +443,61 @@ def test_compose_consumers_reads_environment_and_build_args():
         "other": {"environment": {"X": "${SERVICE_ROLE_KEYS_LIST}"}},   # different name, no match
     }}]
     assert compose_consumers(["SERVICE_ROLE_KEY", "NEXT_PUBLIC_SUPABASE_ANON_KEY"], docs) == ["kong", "ui"]
+
+
+# ── announcement output is a closed vocabulary (#3433 CodeQL clear-text) ────
+
+_FAKE = "sk_live_FAKE-SECRET-9f8e7d6c5b4a"
+
+
+def test_raw_runtime_value_never_reaches_a_reason():
+    """The one real flow found: SUPABASE_RUNTIME's VALUE (secret map / shell)
+    used to become reason f"runtime_{value}". It is now a closed name."""
+    assert local_runtime_is_verifier({"SUPABASE_RUNTIME": _FAKE}) == (False, "runtime_other")
+    assert local_runtime_is_verifier({"SUPABASE_RUNTIME": "cli"}) == (False, "runtime_cli")
+
+
+def test_every_emitted_event_field_is_in_the_closed_vocabulary():
+    from pmoves.tools.secrets_self_generated import EVENT_ACTIONS, EVENT_REASONS, EVENT_ROLES, _SUPABASE_JWT_KEYS
+
+    ours_other = derive_supabase_jwt(_OTHER, "service_role", exp=_LIVE)
+    dead_local = derive_supabase_jwt(_VERIFIER, "anon", iat=1, exp=int(time.time()) - 5)
+    dead_cloud = _jwt({"alg": "HS256"}, {"role": "anon", "exp": int(time.time()) - 5}, secret="cloud")
+    contexts = [{}, {"SUPABASE_RUNTIME": ""}, {"SUPABASE_RUNTIME": "cli"}, {"SUPABASE_RUNTIME": _FAKE},
+                {"SUPABASE_RUNTIME": "compose"}, {"SUPABASE_RUNTIME": "compose", "SUPABASE_URL": ""},
+                {"SUPABASE_RUNTIME": "compose", "SUPABASE_REST_URL": "https://x.example"}]
+    seen = 0
+    for ctx in contexts:
+        for values in ({"SERVICE_ROLE_KEY": ours_other}, {"ANON_KEY": dead_local}, {"SUPABASE_ANON_KEY": dead_cloud}, {}):
+            events = []
+            fill_self_generated({"JWT_SECRET": _OTHER, "SUPABASE_JWT_SECRET": _VERIFIER, **values},
+                                context=ctx, events=events, local_services=_SERVICES)
+            for e in events:
+                seen += 1
+                assert e["label"] in _SUPABASE_JWT_KEYS and e["role"] in EVENT_ROLES
+                assert e["action"] in EVENT_ACTIONS and e["reason"] in EVENT_REASONS, e
+    assert seen > 20
+
+
+@pytest.mark.parametrize("field", ["label", "role", "action", "reason"])
+@pytest.mark.parametrize("shape", ["whole", "prefixed-expired", "prefixed-empty", "suffix"])
+def test_fuzzed_event_fields_never_print_a_secret(field, shape, capsys):
+    from pmoves.tools.secrets_sync import _refusal_text, announce_jwt_events
+
+    poison = {"whole": _FAKE, "prefixed-expired": "expired_" + _FAKE,
+              "prefixed-empty": "empty_" + _FAKE, "suffix": "SERVICE_ROLE_KEY" + _FAKE}[shape]
+    base = [
+        {"label": "SERVICE_ROLE_KEY", "role": "service_role", "action": "reminted", "reason": "expired"},
+        {"label": "SUPABASE_ANON_KEY", "role": "anon", "action": "left_unchanged", "reason": "empty_SUPABASE_URL"},
+    ]
+    events = [{**e, field: poison, "extra": _FAKE} for e in base]
+    context = {"SUPABASE_RUNTIME": _FAKE, "SUPABASE_URL": "https://user:" + _FAKE + "@abcd.supabase.co",
+               "SUPABASE_REST_URL": _FAKE}
+    sources = {k: _FAKE for k in ("SUPABASE_RUNTIME", "SUPABASE_URL", "SUPABASE_REST_URL")}
+    announce_jwt_events(events, docs=[], context=context, sources=sources, local_services=_SERVICES)
+    for e in events:
+        print(_refusal_text(e, sources))
+    printed = capsys.readouterr().out
+    assert _FAKE not in printed
+    assert "FAKE-SECRET" not in printed and "abcd.supabase.co" not in printed
+    assert "<unrecognised>" in printed or field == "action"
