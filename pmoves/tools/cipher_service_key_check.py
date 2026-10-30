@@ -85,6 +85,12 @@ GATEWAY = ("supabase-kong", "SUPABASE_SERVICE_KEY")
 PGRST_SECRET = ("supabase-postgrest", "PGRST_JWT_SECRET")
 
 RETIRED_OVERRIDE = "CIPHER_DB_SERVICE_KEY"
+# Every name a service_role key has travelled under on this mesh (legacy pair,
+# newer pair, funnel canonical, retired override). Probed by NAME for the
+# wrong-pair diagnosis only; values never leave the process.
+CANDIDATE_NAMES = (
+    "SUPABASE_SERVICE_ROLE_KEY", "SERVICE_ROLE_KEY", "SUPABASE_SERVICE_KEY", RETIRED_OVERRIDE,
+)
 EXPECTED_ROLE = "service_role"
 EXPIRY_WARN_S = 30 * 24 * 3600
 
@@ -419,10 +425,24 @@ def assess(
         else:
             facets["signature_verifies"] = hs256_verifies(key, secret)
             if facets["signature_verifies"] is False:
+                # Which candidate NAMES would verify (booleans over names only).
+                # The 2026-09-22 compose comment: PGRST301 on the SUPABASE_* pair,
+                # legacy SERVICE_ROLE_KEY verifies. If a different name verifies
+                # here, cipher still cannot present it: Kong admits only its own
+                # consumer key. The fix is aligning that name in the funnel.
+                verifying = [
+                    name for name in CANDIDATE_NAMES
+                    if env.get(name) and hs256_verifies(env[name], secret)
+                ]
+                facets["verifying_names"] = verifying
                 findings.append(_finding(
                     "wrong_pair_signature",
                     "the key's HS256 signature does not verify under the secret PostgREST "
-                    "is configured with (PGRST_JWT_SECRET); PostgREST answers 401 PGRST301",
+                    "is configured with (PGRST_JWT_SECRET); PostgREST answers 401 PGRST301. "
+                    + (f"Names that DO verify: {', '.join(verifying)}. Kong admits only its "
+                       "consumer key, so re-mint the supplying name from the secret PostgREST "
+                       "uses (funnel) and recreate supabase-kong; do not paste around it"
+                       if verifying else "No candidate name verifies: the JWT secrets disagree"),
                 ))
             elif facets["signature_verifies"] is None:
                 unmeasured.append("key is not HS256; signature not checked")

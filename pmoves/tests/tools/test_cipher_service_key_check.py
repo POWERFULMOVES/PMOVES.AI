@@ -182,6 +182,43 @@ def test_every_node_shape_presents_what_kong_admits_without_a_paste(node_env, so
     assert v["status"] == "ok", v
 
 
+def test_legacy_verifies_newer_does_not_reproduces_the_compose_comment():
+    """pmoves/docker-compose.yml:4154-4162 (B850, 2026-09-22): PGRST301 on the
+    SUPABASE_* pair (SUPABASE_SERVICE_KEY), the LEGACY pair (SERVICE_ROLE_KEY)
+    verifies. The proposed expression never reads SUPABASE_SERVICE_KEY, so a
+    node in that state with a funnel-derived canonical key is clean."""
+    env = {
+        "SUPABASE_SERVICE_KEY": FOREIGN,          # the newer pair: PGRST301
+        "SERVICE_ROLE_KEY": FRESH_LEGACY,         # the legacy pair: verifies
+        "SUPABASE_SERVICE_ROLE_KEY": FRESH_LEGACY,  # funnel: same role group, same mint
+        "SUPABASE_JWT_SECRET": PGRST_SECRET,
+    }
+    v = ck.assess(env, exprs(), now=NOW)
+    assert v["status"] == "ok" and v["facets"]["signature_verifies"] is True
+    # ...while the pre-fix fallback presents exactly the pair the comment says fails.
+    pre = ck.assess(env, exprs(PRE_FIX), now=NOW)
+    assert pre["facets"]["key_source"] == "SUPABASE_SERVICE_KEY"
+    assert "wrong_pair_signature" in codes(pre)
+
+
+def test_legacy_first_precedence_would_be_refused_by_kong():
+    """Why cipher does NOT put SERVICE_ROLE_KEY first even though the legacy pair
+    verified: when the two names differ, Kong admits only its own consumer key
+    (SUPABASE_SERVICE_ROLE_KEY first), so legacy-first is refused at the gateway.
+    The mirrored order instead surfaces the real fault, and names who verifies."""
+    env = {
+        "SUPABASE_SERVICE_ROLE_KEY": FOREIGN,     # canonical name holds a foreign-signed key
+        "SERVICE_ROLE_KEY": FRESH_LEGACY,         # legacy verifies
+        "SUPABASE_JWT_SECRET": PGRST_SECRET,
+    }
+    legacy_first = ck.assess(env, exprs("${SERVICE_ROLE_KEY:-${SUPABASE_SERVICE_ROLE_KEY:-}}"), now=NOW)
+    assert codes(legacy_first) == ["wrong_pair_gateway"]
+    mirrored = ck.assess(env, exprs(), now=NOW)
+    assert codes(mirrored) == ["wrong_pair_signature"]
+    assert mirrored["facets"]["verifying_names"] == ["SERVICE_ROLE_KEY"]
+    assert "SERVICE_ROLE_KEY" in mirrored["findings"][0]["detail"]
+
+
 # ── verdicts ──────────────────────────────────────────────────────────────
 
 
