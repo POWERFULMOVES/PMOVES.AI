@@ -531,9 +531,10 @@ def assess(
                     "the key's HS256 signature does not verify under the secret PostgREST "
                     "is configured with (PGRST_JWT_SECRET); PostgREST answers 401 PGRST301. "
                     + cause + also
-                    + "Remedy: make -C pmoves secrets-funnel. It re-mints the key only if it is "
-                    "provably funnel-minted (iss supabase-local) and SUPABASE_RUNTIME=compose "
-                    "with local Supabase URLs; otherwise it leaves the key and WARNs by name. "
+                    + "Remedy: SUPABASE_RUNTIME=compose make -C pmoves secrets-funnel. It re-mints "
+                    "the key only if THIS node minted it (signature verifies under one of its JWT "
+                    "secrets) and its own compose Supabase is the verifier (stated runtime, local "
+                    "or compose-defined URLs); otherwise it leaves the key and WARNs by name. "
                     "Then recreate every consumer it lists (supabase-kong first)",
                 ))
             elif facets["signature_verifies"] is None:

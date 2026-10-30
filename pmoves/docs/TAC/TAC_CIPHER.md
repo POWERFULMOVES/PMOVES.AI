@@ -476,17 +476,22 @@ differed, every funnel mint was admitted by Kong and refused by PostgREST
 
 **What the funnel rewrites.**
 - Absent or placeholder labels are filled.
-- Expired JWTs are re-minted (#3410).
-- A live key that does not verify is re-minted **only** when two things both
-  hold:
-  - It is provably funnel-minted: HS256, `iss` = `supabase-local`, and the
-    label's role.
-  - This node's compose Supabase is its verifier: `SUPABASE_RUNTIME=compose`
-    is stated, and every set `SUPABASE_URL`/`SUPABASE_REST_URL` is local.
+- An existing JWT is re-minted **only** when all three of these hold:
+  - **This node minted it.** It is HS256 with the label's role, and its
+    signature verifies under one of this node's JWT secrets. `iss` is not the
+    proof: every PMOVES funnel stamps `supabase-local`.
+  - **This node's own compose Supabase is its verifier.** `SUPABASE_RUNTIME=compose`
+    is stated. Every `SUPABASE_URL`/`SUPABASE_REST_URL` that is present names
+    loopback, `host.docker.internal`, or a service defined in our compose files.
+    A tailnet or LAN short name is remote. A set-but-empty value is unknown.
+  - **It is stale.** It has expired (#3410), or it is signed with this node's
+    other secret.
 
-**What it never rewrites.** Every other live key: foreign `iss` (cloud, Supabase
-CLI), RS256/ES256, opaque `sb_*`, or any key on a CLI or remote runtime. For
-each of these it prints a WARN with the label name only.
+**What it never rewrites.** Every other key, expired or not: cloud, Supabase
+CLI, a peer node's, RS256/ES256, or opaque `sb_*`. Each one gets a WARN naming
+the label and the reason. For an expired key it is not allowed to refresh, the
+WARN says to get a new key from the key's issuer. A key re-minted under our
+secret would look fresh, but its real verifier would still refuse it.
 
 **What it reports.** Every re-mint is printed as `RE-MINTED <label> (<role>):
 <reason>`, with the compose services that name the label (environment and
