@@ -283,6 +283,125 @@ class TemplateTests(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
+# 5b. LocalBackendTests — --backend=local env + Ollama preflight
+# ---------------------------------------------------------------------------
+_GOOD_PARAMS = "temperature 0.6\nnum_ctx                        32768\nnum_gpu                        999"
+
+
+def _fake_ollama(*, tags=("qwen3:30b-a3b-gpu", "qwen3:8b-gpu"), params=None, down=False):
+    """Return a fetch(method, url, body) stub shaped like Ollama 0.30."""
+    params = params or {}
+
+    def fetch(method, url, body=None):
+        if down:
+            raise OSError("connection refused")
+        if url.endswith("/api/version"):
+            return {"version": "0.30.0"}
+        if url.endswith("/api/tags"):
+            return {"models": [{"name": t, "model": t} for t in tags]}
+        if url.endswith("/api/show"):
+            return {"parameters": params.get(body["model"], _GOOD_PARAMS)}
+        raise AssertionError(url)
+
+    return fetch
+
+
+class LocalBackendTests(unittest.TestCase):
+    URL = "http://127.0.0.1:11434"
+
+    def test_local_is_a_backend(self):
+        self.assertIn("local", cb.BACKENDS)
+        self.assertEqual(cb.parse_backend_argv(["--backend=LOCAL"]), "local")
+
+    def test_apply_local_strips_hijack_like_anthropic(self):
+        e = {"ANTHROPIC_BASE_URL": "https://api.minimax.io/anthropic", "ANTHROPIC_MODEL": "MiniMax-M3"}
+        stripped, warn = cb.apply_backend("local", e)
+        self.assertIn("ANTHROPIC_BASE_URL", stripped)
+        self.assertNotIn("ANTHROPIC_BASE_URL", e)
+        self.assertIn(cb.WARN_PHRASE, warn)
+
+    def test_settings_defaults_and_overrides(self):
+        self.assertEqual(
+            cb.local_settings({}),
+            (cb.LOCAL_URL_DEFAULT, cb.LOCAL_MODEL_DEFAULT, cb.LOCAL_SMALL_MODEL_DEFAULT))
+        self.assertEqual(cb.LOCAL_URL_DEFAULT, "http://127.0.0.1:11434")
+        self.assertEqual(cb.LOCAL_MODEL_DEFAULT, "qwen3:30b-a3b-gpu")
+        self.assertEqual(cb.LOCAL_SMALL_MODEL_DEFAULT, "qwen3:8b-gpu")
+        got = cb.local_settings({
+            "PMOVES_LOCAL_ANTHROPIC_URL": "http://spark:11434/",
+            "PMOVES_LOCAL_CLAUDE_MODEL": "m",
+            "PMOVES_LOCAL_CLAUDE_SMALL_MODEL": "",   # empty -> default, like ${V:-d}
+        })
+        self.assertEqual(got, ("http://spark:11434", "m", cb.LOCAL_SMALL_MODEL_DEFAULT))
+
+    def test_local_env_routes_every_alias_and_uses_dummy_token(self):
+        env = cb.local_env(self.URL, "big", "small")
+        self.assertEqual(env["ANTHROPIC_BASE_URL"], self.URL)
+        self.assertEqual(env["ANTHROPIC_AUTH_TOKEN"], "ollama")
+        self.assertEqual(env["ANTHROPIC_MODEL"], "big")
+        self.assertEqual(env["ANTHROPIC_DEFAULT_OPUS_MODEL"], "big")
+        self.assertEqual(env["ANTHROPIC_DEFAULT_SONNET_MODEL"], "big")
+        # Current name for the background / small-fast model; the old
+        # ANTHROPIC_SMALL_FAST_MODEL is deprecated (code.claude.com/docs/en/model-config).
+        self.assertEqual(env["ANTHROPIC_DEFAULT_HAIKU_MODEL"], "small")
+        self.assertNotIn("ANTHROPIC_SMALL_FAST_MODEL", env)
+        self.assertNotIn("ANTHROPIC_API_KEY", env)
+        self.assertIn("ANTHROPIC_API_KEY", cb.LOCAL_UNSET_VARS)
+
+    def test_settings_json_carries_routing_env_only(self):
+        env = cb.local_env(self.URL, "big", "small")
+        data = json.loads(cb.local_settings_json(env))
+        self.assertEqual(set(data), {"env"})
+        self.assertEqual(data["env"]["ANTHROPIC_BASE_URL"], self.URL)
+        self.assertEqual(data["env"]["ANTHROPIC_DEFAULT_HAIKU_MODEL"], "small")
+        self.assertNotIn("PMOVES_CLAUDE_BACKEND", data["env"])
+
+    def test_preflight_ok(self):
+        errors, warnings = cb.local_preflight(self.URL, "qwen3:30b-a3b-gpu", "qwen3:8b-gpu",
+                                              fetch=_fake_ollama())
+        self.assertEqual((errors, warnings), ([], []))
+
+    def test_preflight_refuses_when_endpoint_down(self):
+        errors, _ = cb.local_preflight(self.URL, "a", "b", fetch=_fake_ollama(down=True))
+        self.assertEqual(len(errors), 1)
+        self.assertIn("/api/version did not answer", errors[0])
+
+    def test_preflight_refuses_missing_model_and_names_the_env_var(self):
+        errors, _ = cb.local_preflight(self.URL, "nope:1b", "qwen3:8b-gpu", fetch=_fake_ollama())
+        self.assertEqual(len(errors), 1)
+        self.assertIn("nope:1b", errors[0])
+        self.assertIn("PMOVES_LOCAL_CLAUDE_MODEL", errors[0])
+
+    def test_preflight_refuses_missing_small_model(self):
+        errors, _ = cb.local_preflight(self.URL, "qwen3:30b-a3b-gpu", "gone", fetch=_fake_ollama())
+        self.assertIn("PMOVES_LOCAL_CLAUDE_SMALL_MODEL", errors[0])
+
+    def test_preflight_bare_name_matches_latest(self):
+        errors, _ = cb.local_preflight(self.URL, "llama", "llama",
+                                       fetch=_fake_ollama(tags=("llama:latest",)))
+        self.assertEqual(errors, [])
+
+    def test_preflight_warns_without_num_gpu_and_with_small_ctx(self):
+        errors, warnings = cb.local_preflight(
+            self.URL, "qwen3:30b-a3b-gpu", "qwen3:8b-gpu",
+            fetch=_fake_ollama(params={"qwen3:30b-a3b-gpu": "temperature 0.6\nnum_ctx 8192"}))
+        self.assertEqual(errors, [])
+        joined = "\n".join(warnings)
+        self.assertIn("num_gpu", joined)
+        self.assertIn("1 tok/s", joined)            # cites the measured failure
+        self.assertIn("num_ctx is 8192", joined)
+        self.assertIn("one token", joined)
+        self.assertEqual(len(warnings), 2)          # the 8b variant is fine
+
+    def test_preflight_warns_when_num_ctx_unset(self):
+        _, warnings = cb.local_preflight(
+            self.URL, "qwen3:30b-a3b-gpu", "qwen3:30b-a3b-gpu",
+            fetch=_fake_ollama(params={"qwen3:30b-a3b-gpu": "num_gpu 999"}))
+        self.assertEqual(len(warnings), 1)          # same model probed once
+        self.assertIn("Ollama default 8192", warnings[0])
+
+
+# ---------------------------------------------------------------------------
 # 6. TwinParityTests — bash + PowerShell launcher surface parity
 # ---------------------------------------------------------------------------
 class TwinParityTests(unittest.TestCase):
@@ -332,6 +451,16 @@ class TwinParityTests(unittest.TestCase):
         for label, text in (("bash", self.sh_text), ("ps1", self.ps1_text)):
             for v in ("auto", "anthropic", "minimax"):
                 self.assertIn(v, text, f"{label} twin help block missing backend {v}")
+
+    def test_both_twins_accept_and_document_local(self):
+        for label, text in (("bash", self.sh_text), ("ps1", self.ps1_text)):
+            # assertTrue, not assertIn: a miss would dump the whole launcher.
+            self.assertTrue("--backend=local" in text, f"{label} twin help missing --backend=local")
+            for name in (cb.LOCAL_URL_ENV, cb.LOCAL_MODEL_ENV, cb.LOCAL_SMALL_MODEL_ENV,
+                         cb.LOCAL_SETTINGS_VAR):
+                self.assertTrue(name in text, f"{label} twin missing {name}")
+            self.assertTrue(re.search(r"claude_backend\.py['\")]*\s+local\b", text),
+                            f"{label} twin does not call `claude_backend.py local`")
 
 
 if __name__ == "__main__":
