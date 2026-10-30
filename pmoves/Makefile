@@ -4301,14 +4301,18 @@ cipher-health: ## Check Cipher Memory health
 # Kong key-auth AND PostgREST? Evaluates the compose expressions on disk against
 # the SAME --env-file list $(DC) uses, so it judges what the next up-cipher
 # delivers. Tells expired / wrong pair (gateway or signature) / missing / wrong
-# role apart, and WARNs on the retired CIPHER_DB_SERVICE_KEY paste. Prints no
-# key, digest or secret. CONTAINER=1 also reads the running cipher-api; PROBE=1
-# runs cipher's own lookup from inside it (GET ...?limit=0). make collapses exit
+# role apart, and WARNs on the retired CIPHER_DB_SERVICE_KEY paste (also read
+# from .env.local by presence only, since SUPABASE_RUNTIME=compose leaves the
+# overlay out of COMPOSE_ENV_FILES). Prints no key, digest or secret. The static
+# facets do NOT see the running Kong: CONTAINER=1 reads the running cipher-api
+# and supabase-kong (digests compared in-process); PROBE=1 runs cipher's own
+# lookup from inside cipher-api (GET ...?limit=0) and is the authority on what
+# the live gateway admits. make collapses exit
 # codes to 2, so read the CIPHER_AUTH_VERDICT= line (0 ok / 1 finding / 3
 # could-not-measure) or run the tool directly.
 .PHONY: cipher-auth-check
 cipher-auth-check: ## Read-only: does cipher's service key pass Kong + PostgREST? (expired / wrong pair / missing; never prints a key) [CONTAINER=1 PROBE=1]
-	@$(PYTHON) tools/cipher_service_key_check.py --compose docker-compose.yml $(COMPOSE_ENV_FILES) $(if $(CONTAINER),--container,) $(if $(PROBE),--probe,)
+	@$(PYTHON) tools/cipher_service_key_check.py --compose docker-compose.yml --scan docker-compose.agents.yml --env-local .env.local $(COMPOSE_ENV_FILES) $(if $(CONTAINER),--container,) $(if $(PROBE),--probe,)
 
 .PHONY: spark-health
 spark-health: ## Check SPARK node (DGX Spark) health: Ollama, TensorZero, NATS, Cipher, Agent Zero SPARK
