@@ -15,7 +15,6 @@ if _REPO_ROOT not in sys.path:
 
 from pmoves.tools._secrets_common import (
     PLACEHOLDER_VALUES,
-    is_known_public,
     is_placeholder as _is_blank_or_placeholder,
     normalize_env_value as _normalize_env_value,
 )
@@ -34,9 +33,9 @@ DEFAULTS = {
     # Geometry graph (compose reads NEO4J_AUTH; we set URL, user, and generate password if missing)
     "NEO4J_URL": "bolt://neo4j:7687",
     "NEO4J_USER": "neo4j",
-    # Invidious companion (keys will be strengthened below)
-    "INVIDIOUS_HMAC_KEY": "localhack",
-    "INVIDIOUS_COMPANION_KEY": "localhack",
+    # INVIDIOUS_HMAC_KEY / INVIDIOUS_COMPANION_KEY are deliberately NOT here.
+    # Their one owner is tools/invidious_keys_preflight.py (registry generator,
+    # vendor validation), which ensure_env_shared.py runs right after this file.
     # Vector search (Qwen3-4b 2560d embeddings)
     "QDRANT_COLLECTION": "pmoves_chunks_qwen3",
     # TensorZero embedding model (direct model name, not prefixed)
@@ -464,25 +463,6 @@ def _ensure_minio_credentials(text: str) -> str:
 
 
 
-def _ensure_invidious_keys(text: str) -> str:
-    """Invidious keys in the vendor's format, never a value published in the repo.
-
-    Companion key: exactly 16 of [A-Za-z0-9] -- Invidious exits on any other
-    length and the companion rejects '-' and '_'. This used to mint
-    token_urlsafe, so ~40% of values carried '-'/'_' and the companion refused
-    to start. HMAC key: any random string; a short one is replaced. Either key
-    equal to a published compose default (is_known_public) is rotated.
-    """
-    companion_key = _get_kv(text, "INVIDIOUS_COMPANION_KEY")
-    if not re.fullmatch(r"[A-Za-z0-9]{16}", companion_key) or is_known_public(companion_key):
-        companion_key = secrets.token_hex(8)
-        text = _set_kv(text, "INVIDIOUS_COMPANION_KEY", companion_key)
-    hmac_key = _get_kv(text, "INVIDIOUS_HMAC_KEY")
-    if len(hmac_key) < 32 or is_known_public(hmac_key) or hmac_key == companion_key:
-        text = _set_kv(text, "INVIDIOUS_HMAC_KEY", secrets.token_hex(32))
-    return text
-
-
 def upsert_env(path: Path, env_gen_path: Path, pairs: dict[str, str]) -> None:
     """Apply branded defaults to env file, strengthen weak keys, and write back."""
     text = path.read_text(encoding="utf-8") if path.exists() else ""
@@ -501,8 +481,6 @@ def upsert_env(path: Path, env_gen_path: Path, pairs: dict[str, str]) -> None:
     meili_key = _get_kv(text, "MEILI_MASTER_KEY")
     if len(meili_key) < 16:
         text = _set_kv(text, "MEILI_MASTER_KEY", _strong_random(24))
-
-    text = _ensure_invidious_keys(text)
 
     # Qdrant API key for inter-service authentication
     qdrant_key = _get_kv(text, "QDRANT__API_KEY")

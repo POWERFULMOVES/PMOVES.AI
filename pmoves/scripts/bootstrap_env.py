@@ -755,6 +755,12 @@ def bootstrap(registry: Dict, services: List[Dict], accept_defaults: bool) -> in
                 _warn(f"{key} in {var['file']} fails {gen_spec.get('type')} format check — regenerating")
                 existing = None
                 env.set(key, "")
+            elif existing and is_known_public(existing):
+                # Well-formed but published in the repo: the shape check alone
+                # would keep it (the Invidious companion literal is valid hex).
+                _warn(f"{key} in {var['file']} is a value published in the repo — regenerating")
+                existing = None
+                env.set(key, "")
             inherited = None if existing not in (None, "") else resolve_inherit(var)
             default = existing
             if default in (None, "") and inherited not in (None, ""):
@@ -948,17 +954,6 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
                     _error(f"{key}: UNPROVISIONED ({why} in env.shared)")
                 else:
                     print(f"{key}: provisioned")
-                    # Report, never reshape: the funnel must not rotate a live
-                    # value on its own (VAULT_ENC_KEY). But a wrong shape can be
-                    # fatal to the consumer -- a 64-char INVIDIOUS_COMPANION_KEY
-                    # (the registry's old spec) makes Invidious exit at start-up.
-                    declared = _registry_generator(key, args.registry)
-                    if not value_matches_spec(value, declared):
-                        _warn(
-                            f"{key}: does not match the registry shape "
-                            f"({declared.get('type')} length {declared.get('length')}); "
-                            f"rotate deliberately: make -C pmoves secrets-rotate KEY={key}"
-                        )
             if unprovisioned:
                 _error(
                     "Unprovisioned stack-generated secrets: "

@@ -254,6 +254,9 @@ env-shared-repair: ## Self-heal env.shared: collapse raw multi-line PEM/SSH valu
 # when the invidious profile is off -- so EVERY node needs them minted, including
 # nodes that never run Invidious. A value equal to the old public literal counts
 # as unprovisioned (bootstrap_env.slot_is_filled), so this also rotates it out.
+# Their FORMAT is owned by tools/invidious_keys_preflight.py, which the
+# ensure-env-shared prerequisite runs first; by the time --ensure looks, a
+# vendor-invalid value has already been repaired.
 SECRETS_ENSURE_KEYS ?= \
   SECRET_KEY_BASE \
   VAULT_ENC_KEY \
@@ -313,6 +316,10 @@ secrets-ensure-check: ## Fail if any stack-generated secret is still unprovision
 	else \
 	  $(CODEX_PY) scripts/bootstrap_env.py --ensure-dry-run $(foreach k,$(SECRETS_ENSURE_KEYS),--ensure $(k)); \
 	fi
+	@# Presence is not enough for the Invidious keys: ${VAR:?} accepts any
+	@# non-empty value, including the published literal or a urlsafe companion key
+	@# the companion rejects. The vendor-rule check names the key and the fix.
+	@$(CODEX_PY) tools/invidious_keys_preflight.py --check
 
 .PHONY: secrets-derive-nats-url
 secrets-derive-nats-url: ## Re-derive NATS_URL credentials in env.shared from NATS_USER/NATS_PASSWORD (no-op when consistent; never prints values)

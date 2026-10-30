@@ -7,6 +7,7 @@ runtime_secrets_hydrate, auth_bootstrap_check, and local_cert_runners.
 
 from __future__ import annotations
 
+import functools
 import hashlib
 import os
 import re
@@ -80,21 +81,28 @@ def normalize_env_value(value: str) -> str:
 # funnel would harvest the public value back out of a running container and keep
 # it forever. Digests, not values -- the point is to stop re-publishing them.
 #
-# PBKDF2-SHA256 with a fixed salt, keyed by length: is_placeholder() runs over
-# every env value, so the KDF only runs for a value whose length matches a
-# published one. The salt is fixed on purpose -- this is a lookup table, not
-# password storage, and the inputs are already public.
+# Cost: is_placeholder() runs over whole env files from ~17 callers, so the
+# KDF must almost never run. Three cheap gates come first -- the length must
+# match a published one, the value must be in the published charset (lowercase
+# hex), and results are cached per process. PBKDF2 rather than a bare SHA-256
+# because CodeQL (py/weak-sensitive-data-hashing) flags a fast hash over
+# password-tainted input; the iteration count is deliberately low, since the
+# inputs are already public and the digest protects nothing -- it only keeps the
+# literal out of HEAD. The salt is fixed for the same reason: a lookup table,
+# not password storage.
 #
 #   64  INVIDIOUS_HMAC_KEY       docker-compose{,.ui}.yml until fix/invidious-required-keys
 #   16  INVIDIOUS_COMPANION_KEY  same files (also the companion's SERVER_SECRET_KEY default)
 KNOWN_PUBLIC_SECRET_SALT = b"pmoves-known-public-secret-v1"
-KNOWN_PUBLIC_SECRET_ITERATIONS = 200_000
+KNOWN_PUBLIC_SECRET_ITERATIONS = 10_000
+KNOWN_PUBLIC_SECRET_CHARSET = re.compile(r"[0-9a-f]+")
 KNOWN_PUBLIC_SECRET_DIGESTS: Dict[int, frozenset[str]] = {
-    64: frozenset({"63cc5d52c881d833a6a05548d022c12dceb6cfb141e74fb055f7353600b0dc12"}),
-    16: frozenset({"7788ce9136c04cd8919e3b39309617c1f58ecc1bcabe437818bcdb535e7acc94"}),
+    64: frozenset({"a322b75ef9d4831532616245c5e47146d1fe6c4b3f36b7566d28c7f493138586"}),
+    16: frozenset({"bc5dccd2f4cc885002a13ef6420e430bcf9cad374f38f993041e30f52b9abc36"}),
 }
 
 
+@functools.lru_cache(maxsize=512)
 def known_public_digest(value: str) -> str:
     """The denylist digest of *value* (already normalized)."""
     return hashlib.pbkdf2_hmac(
@@ -108,7 +116,7 @@ def is_known_public(value: str | None) -> bool:
         return False
     normalized = normalize_env_value(value)
     candidates = KNOWN_PUBLIC_SECRET_DIGESTS.get(len(normalized))
-    if not candidates:
+    if not candidates or not KNOWN_PUBLIC_SECRET_CHARSET.fullmatch(normalized):
         return False
     return known_public_digest(normalized) in candidates
 

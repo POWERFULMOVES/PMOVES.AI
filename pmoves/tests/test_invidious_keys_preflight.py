@@ -167,27 +167,99 @@ def test_makefile_runs_preflight_before_stack_goals_only():
 
 
 # ---------------------------------------------------------------------------
-# brand_defaults -- the older road (ensure-env-shared on `make up` & co.)
+# One owner. brand_defaults used to mint these with token_urlsafe (~40% of
+# companion keys carried '-'/'_' and the companion refused to start), and its
+# value then satisfied --ensure, so the registry generator never ran.
 # ---------------------------------------------------------------------------
 
 
-def test_brand_defaults_mints_a_companion_key_the_companion_accepts():
-    for _ in range(200):  # token_urlsafe used to fail this ~40% of the time
-        text = bd._ensure_invidious_keys("INVIDIOUS_COMPANION_KEY=localhack\nINVIDIOUS_HMAC_KEY=localhack\n")
-        companion = bd._get_kv(text, "INVIDIOUS_COMPANION_KEY")
-        hmac = bd._get_kv(text, "INVIDIOUS_HMAC_KEY")
-        assert COMPANION_RE.fullmatch(companion)
-        assert len(hmac) >= 32 and hmac != companion
+def test_preflight_rejects_placeholders_and_short_hmacs(tmp_path):
+    env = _env(tmp_path, "INVIDIOUS_HMAC_KEY=localhack\nINVIDIOUS_COMPANION_KEY=your_companion_key_here\n")
+    assert pf.run(env, check=False, registry=REGISTRY, probe=Probe()) == 0
+    assert _usable(env)
+    env = _env(tmp_path, f"INVIDIOUS_HMAC_KEY={'s' * 20}\nINVIDIOUS_COMPANION_KEY={LIVE_COMPANION}\n")
+    assert pf.run(env, check=False, registry=REGISTRY, probe=Probe()) == 0
+    assert len(_read(env, "INVIDIOUS_HMAC_KEY")) == 64
 
 
-def test_brand_defaults_repairs_a_dashed_key_and_keeps_good_ones():
-    text = bd._ensure_invidious_keys(f"INVIDIOUS_COMPANION_KEY=ab-def_123456789\nINVIDIOUS_HMAC_KEY={LIVE_HMAC}\n")
-    assert COMPANION_RE.fullmatch(bd._get_kv(text, "INVIDIOUS_COMPANION_KEY"))
-    assert bd._get_kv(text, "INVIDIOUS_HMAC_KEY") == LIVE_HMAC
-    good = f"INVIDIOUS_COMPANION_KEY={LIVE_COMPANION}\nINVIDIOUS_HMAC_KEY={LIVE_HMAC}\n"
-    assert bd._ensure_invidious_keys(good) == good
+def test_brand_defaults_no_longer_owns_the_invidious_keys():
+    assert "INVIDIOUS_HMAC_KEY" not in bd.DEFAULTS
+    assert "INVIDIOUS_COMPANION_KEY" not in bd.DEFAULTS
+    src = (PMOVES / "tools" / "brand_defaults.py").read_text(encoding="utf-8")
+    assert '_set_kv(text, "INVIDIOUS_' not in src
 
 
-def test_brand_defaults_rotates_a_published_value(published):
-    text = bd._ensure_invidious_keys(f"INVIDIOUS_COMPANION_KEY={PUBLISHED}\nINVIDIOUS_HMAC_KEY={LIVE_HMAC}\n")
-    assert bd._get_kv(text, "INVIDIOUS_COMPANION_KEY") != PUBLISHED
+TEMPLATE = (
+    "OTHER=keep\n"
+    # What a node carries today: the 16-char token_urlsafe brand_defaults wrote
+    # (with a '-', which the companion rejects) and a 32-char urlsafe HMAC.
+    "INVIDIOUS_COMPANION_KEY=ab-def_123456789\n"
+    "INVIDIOUS_HMAC_KEY=AbCdEfGhIjKlMnOpQrStUvWxYz012345\n"
+)
+
+
+def _real_ensure_env_shared(tmp_path, text):
+    """Run the REAL ensure-env-shared step: ensure_env_shared.py -> brand_defaults -> preflight."""
+    import subprocess
+
+    env = _env(tmp_path, text)
+    template = tmp_path / "template.example"
+    template.write_text("", encoding="utf-8")
+    r = subprocess.run(
+        [sys.executable, str(PMOVES / "tools" / "ensure_env_shared.py"),
+         "--env-file", str(env), "--template", str(template)],
+        capture_output=True, text=True, env=_hermetic_env(),
+    )
+    return env, r
+
+
+def _hermetic_env():
+    """No INVIDIOUS_* exports, and NO DOCKER.
+
+    The real preflight harvests a live key from any running container. On a
+    developer node that would copy a real secret into the test's tmp file (and
+    into an assertion message) -- observed once while writing this test. Point
+    the docker CLI at a socket that does not exist so the probe sees no holders.
+    """
+    import os
+
+    env = {k: v for k, v in os.environ.items() if not k.startswith(("INVIDIOUS_", "DOCKER_"))}
+    env["DOCKER_HOST"] = "unix:///nonexistent/pmoves-test-no-docker.sock"
+    return env
+
+
+def test_funnel_path_repairs_a_dashed_companion_and_keeps_a_valid_hmac(tmp_path):
+    """secrets-ensure-generated = ensure-env-shared prerequisite, then harvest + --ensure."""
+    env, r = _real_ensure_env_shared(tmp_path, TEMPLATE)
+    assert r.returncode == 0, r.stdout + r.stderr
+    companion = _read(env, "INVIDIOUS_COMPANION_KEY") or ""
+    repaired = bool(COMPANION_RE.fullmatch(companion)) and companion != "ab-def_123456789"
+    assert repaired, "dashed companion key was not repaired"
+    assert _read(env, "INVIDIOUS_HMAC_KEY") == "AbCdEfGhIjKlMnOpQrStUvWxYz012345"  # valid: kept
+    assert "ab-def_123456789" not in r.stdout + r.stderr and companion not in r.stdout + r.stderr
+    # The rest of the funnel step: harvest, then --ensure. Both now see a valid slot.
+    plan = pf._sh.build_plan(list(pf.KEYS), env_path=env, probe=Probe(), registry_path=REGISTRY)
+    assert {d.state for d in plan} == {pf._sh.STATE_SATISFIED}
+    for key in pf.KEYS:
+        assert pf._be.ensure_secret(key, env_path=env, registry_path=REGISTRY) == (False, "already set")
+    assert _usable(env)
+
+
+def test_funnel_path_mints_registry_format_on_a_virgin_node(tmp_path):
+    env, r = _real_ensure_env_shared(tmp_path, "OTHER=keep\n")
+    assert r.returncode == 0, r.stdout + r.stderr
+    # Booleans only: never let pytest introspect a key into the failure output.
+    minted_companion = bool(re.fullmatch(r"[0-9a-f]{16}", _read(env, "INVIDIOUS_COMPANION_KEY") or ""))
+    minted_hmac = bool(re.fullmatch(r"[0-9a-f]{64}", _read(env, "INVIDIOUS_HMAC_KEY") or ""))
+    assert minted_companion, "companion key is not the registry's random_hex 16"
+    assert minted_hmac, "HMAC key is not the registry's random_hex 64"
+
+
+def test_funnel_path_rotates_a_published_value(tmp_path, monkeypatch):
+    """Published digests are patched in-process only, so drive the preflight directly."""
+    table = {k: set(v) for k, v in common.KNOWN_PUBLIC_SECRET_DIGESTS.items()}
+    table.setdefault(len(PUBLISHED), set()).add(common.known_public_digest(PUBLISHED))
+    monkeypatch.setattr(common, "KNOWN_PUBLIC_SECRET_DIGESTS", {k: frozenset(v) for k, v in table.items()})
+    env = _env(tmp_path, f"INVIDIOUS_COMPANION_KEY={PUBLISHED}\nINVIDIOUS_HMAC_KEY={LIVE_HMAC}\n")
+    assert pf.run(env, check=False, registry=REGISTRY, probe=Probe()) == 0
+    assert _read(env, "INVIDIOUS_COMPANION_KEY") != PUBLISHED

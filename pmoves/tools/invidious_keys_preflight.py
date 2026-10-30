@@ -17,9 +17,14 @@ iv-org/invidious-companion @fcb0456a)
   other length; the companion rejects any other character. brand_defaults used
   to mint it with token_urlsafe, so about 40% of those values carry '-' or '_'
   and the companion would refuse to start.
-- INVIDIOUS_HMAC_KEY: non-empty, and not equal to the companion key (the vendor
-  says not to reuse it).
-- Neither may be a value published in this repo (``is_known_public``).
+- INVIDIOUS_HMAC_KEY: at least 32 characters, and not the companion key
+  (reusing it is "NOT recommended" by the vendor).
+- Neither may be a template placeholder or a value published in this repo.
+
+This is the ONE owner of both keys: brand_defaults no longer writes them, and
+ensure_env_shared.py runs this right after brand_defaults, so every path that
+reaches ensure-env-shared (make up, the funnel's secrets-ensure-generated,
+brand-defaults) repairs them too.
 
 What it does, per key, in env.shared (the file compose reads first)
 - absent or empty -> recover a live value from a running container if one
@@ -55,7 +60,7 @@ _REPO_ROOT = _PMOVES.parent
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-from pmoves.tools._secrets_common import is_known_public  # noqa: E402
+from pmoves.tools._secrets_common import is_known_public, is_placeholder  # noqa: E402
 
 
 def _load(name: str, path: Path):
@@ -72,6 +77,10 @@ _sh = _load("_secrets_harvest_for_invidious_preflight", _PMOVES / "tools" / "sec
 HMAC, COMPANION = "INVIDIOUS_HMAC_KEY", "INVIDIOUS_COMPANION_KEY"
 KEYS = (HMAC, COMPANION)
 COMPANION_RE = re.compile(r"[A-Za-z0-9]{16}")
+# The vendor sets no HMAC length (it suggests `pwgen 20 1`). 32 is the floor
+# brand_defaults enforced before this file took ownership, so every HMAC it
+# ever wrote stays valid and no node is logged out just for this change.
+HMAC_MIN_LENGTH = 32
 EXIT_OK, EXIT_FINDINGS, EXIT_COULD_NOT_MEASURE = 0, 1, 3
 
 
@@ -81,8 +90,12 @@ def problem(key: str, value: Optional[str], others: Dict[str, Optional[str]]) ->
         return "missing"
     if is_known_public(value):
         return "published in the repo"
+    if is_placeholder(value):
+        return "a template placeholder"
     if key == COMPANION and not COMPANION_RE.fullmatch(value):
         return "not 16 alphanumeric characters"
+    if key == HMAC and len(value) < HMAC_MIN_LENGTH:
+        return f"shorter than {HMAC_MIN_LENGTH} characters"
     if key == HMAC and value == others.get(COMPANION):
         return "same value as INVIDIOUS_COMPANION_KEY"
     return None
