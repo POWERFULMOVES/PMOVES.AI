@@ -85,32 +85,11 @@ ORG = "POWERFULMOVES"
 def _gh(*args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
     cmd = ["gh", *args]
     try:
-        # encoding="utf-8" IS LOAD-BEARING, not decoration.
-        #
-        # `text=True` with no `encoding=` decodes the child's stdout with the
-        # LOCALE encoding. On a Windows host that is cp1252, and a `gh api
-        # compare` payload containing a UTF-8 continuation byte raises
-        # UnicodeDecodeError INSIDE the reader thread -- which leaves
-        # `result.stdout` as None, so the crash surfaces far away as
-        # `AttributeError: 'NoneType' object has no attribute 'strip'` at
-        # _gh_json, pointing at the wrong line entirely.
-        #
-        # MEASURED 2026-10-30 on this Windows host: 6 of the 82 registry
-        # fork compare-payloads are not cp1252-decodable --
-        # PMOVES-Open-Notebook (0x8f @198160), PMOVES-hermes-agent (0x9d
-        # @354498), PMOVES-Agent-Zero (0x90 @143048), PMOVES-BotZ-gateway
-        # (0x90 @57457), PMOVES-skills (0x9d @39049),
-        # PMOVES-Ultimate-TTS-Studio (0x8f @93041). The other 76 decode.
-        # The effect was that `fork_sync.py audit` -- the tool that answers
-        # "how far behind is this fork?" -- could not complete at all on
-        # this host; it died partway through the sweep.
-        #
-        # gh emits UTF-8 regardless of the host locale, so decoding as
-        # UTF-8 is correct on every platform. Same defect class as the
-        # compose_data fixture in test_docker_hardening.py
-        # (pmoves/docs/AGENTS/windows_cp1252_hardening_test_ratchet_LEARNINGS.md);
-        # that lane fixed the test fixture, this is the same bug in TOOL
-        # code, invisible in CI because CI runs on Ubuntu (UTF-8 locale).
+        # gh emits UTF-8 regardless of the host locale, so decode as UTF-8:
+        # `text=True` alone decodes with the LOCALE (cp1252 on Windows) and
+        # crashes on non-ASCII bytes in a compare payload, while `errors=`
+        # keeps a decode failure from leaving `result.stdout` as None.
+        # Forensics: pmoves/docs/services/PIPECAT_FORK_PROVENANCE_AUDIT_2026-10-30.md
         return subprocess.run(
             cmd, capture_output=True, text=True, encoding="utf-8",
             errors="replace", check=check, timeout=60,

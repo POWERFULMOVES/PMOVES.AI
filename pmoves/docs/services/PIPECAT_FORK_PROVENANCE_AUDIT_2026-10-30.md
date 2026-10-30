@@ -81,7 +81,7 @@ So: the flute image was 65 days stale because **nothing rebuilds it automaticall
 
 ## Gap 4 — `fork_sync.py` crashes on Windows and cannot audit 6 of 82 forks
 
-Found while measuring drift. `pmoves/tools/fork_sync.py:88-90`:
+Found while measuring drift. Pre-fix `pmoves/tools/fork_sync.py:88-90`:
 
 ```python
 return subprocess.run(
@@ -89,7 +89,7 @@ return subprocess.run(
 )
 ```
 
-`text=True` with **no `encoding=`** → Python decodes the child's stdout with the **locale** encoding. On this Windows host that is **cp1252**. A `gh api compare` payload containing a UTF-8 continuation byte raises `UnicodeDecodeError` **inside the reader thread**, which leaves `result.stdout` as `None` → `AttributeError: 'NoneType' object has no attribute 'strip'` at `fork_sync.py:103`.
+`text=True` with **no `encoding=`** → Python decodes the child's stdout with the **locale** encoding. On this Windows host that is **cp1252**. A `gh api compare` payload containing a UTF-8 continuation byte raises `UnicodeDecodeError` **inside the reader thread**, which leaves `result.stdout` as `None` → `AttributeError: 'NoneType' object has no attribute 'strip'` at `fork_sync.py:103` (pre-fix).
 
 **Measured: 6 of 82 registry fork compare-payloads are not cp1252-decodable:**
 
@@ -107,6 +107,8 @@ The remaining 76 decode fine. Verified fix: `encoding="utf-8"` makes the hermes-
 **This is the same defect class already recorded** in `pmoves/docs/AGENTS/windows_cp1252_hardening_test_ratchet_LEARNINGS.md` (the `compose_data` fixture in `test_docker_hardening.py` opening files with no `encoding=`). That lane fixed the *test* fixture; this is the same bug in *tool* code, and it was not caught because CI runs on Ubuntu where the locale is UTF-8.
 
 **Impact:** the fleet drift audit — the tool that would answer "is this fork stale?" — **cannot complete on a Windows host**. It dies partway through. Any operator asking "how far behind is X?" on the operator's own machine gets a stack trace instead of an answer.
+
+**Status — fixed in PR #3429.** `pmoves/tools/fork_sync.py::_gh` now decodes with `encoding="utf-8", errors="replace"`; the contract is pinned by `pmoves/tools/tests/test_fork_sync_encoding.py` (an AST ratchet over the tool's own source — hermetic, no `gh`, no network). The measurements above are the pre-fix forensics, and the fix changes none of them. The line numbers quoted in this section are the PRE-FIX ones; the code comment at the fix site now points back here.
 
 ---
 
@@ -142,11 +144,11 @@ The September review also predicted the fork layer: *"mcp_inventory has ZERO pip
 1. **Register the two unregistered pipecat forks** in `pmoves/config/fork_registry.json` with `sync` + `reason` + `branch`, so the ratchet can see them. (`client-web-transports` → `sync: true`; `mcp-server` → `sync: true`, upstream dormant but the decision should be explicit.)
 2. **Close the registry → workflow gap.** Either add the 6 missing `sync: true` forks to `fork-sync.yml`'s `FORKS` block + GH App scope, or downgrade their registry `sync` to `false` with a reason. The current state — claiming `sync: true` with no mechanism — is the defect either way.
 3. **Add a registry → workflow coverage ratchet** to `fork_registry_ratchet.py`: every registry fork with `sync: true` must appear in `fork-sync.yml`'s `FORKS` block. That is the cross-check the ratchet is missing, and it is the same shape as the `.gitmodules` → registry check it already does.
-4. **Fix `fork_sync.py:88`** — add `encoding="utf-8"`. One line; restores the drift audit on Windows hosts.
+4. **Fix `fork_sync.py:88`** — add `encoding="utf-8"`. One line; restores the drift audit on Windows hosts. *(Shipped in PR #3429.)*
 5. **Decide the flute image rebuild path** — either add a `schedule:`/`push:` trigger to `build-images.yml`, or un-comment the `integrations-ghcr.yml` schedule and add flute-gateway to its matrix. Until one of those exists, the flute image will go stale again the same way, and the PR #3428 ratchet will be the only thing catching it.
 
 ---
 
 ## Test status
 
-No code changed in this lane — it is a read-only provenance audit. All measurements are live `gh api` / local `git rev-list --left-right --count` against the four forks on 2026-10-30.
+The provenance audit itself was read-only; the cp1252 defect it found (Gap 4) was fixed in PR #3429 (`pmoves/tools/fork_sync.py` + `pmoves/tools/tests/test_fork_sync_encoding.py`). All measurements are live `gh api` / local `git rev-list --left-right --count` against the four forks on 2026-10-30.
