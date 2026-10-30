@@ -3730,7 +3730,7 @@ model-readiness: ## Validate model registry, persona seeds, Ollama models, Tenso
 	@$(LOAD_ENV_SHARED); $(PYTHON) tools/model_readiness_check.py
 
 # -------- Model profiles / management --------
-.PHONY: model-profiles model-apply model-swap models-sync models-sync-dynamic models-seed-ollama models-registry-snapshot
+.PHONY: model-profiles model-apply model-swap models-sync models-sync-dynamic models-seed-ollama models-layer-map models-registry-snapshot
 
 model-profiles: ## List available model manifests
 	@ls -1 models/*.yaml | sed 's#models/##' | sed 's#\.yaml##'
@@ -3777,6 +3777,9 @@ models-seed-ollama: ## Pre-pull Ollama models from profiles/registry (override w
 	    docker exec "$$ollama_cid" ollama pull "$$model" >/dev/null 2>&1 || echo "⚠ Pull failed for $$model"; \
 	  done; \
 	  echo "✔ Seeded Ollama models (container=$$ollama_cid host=$$host source=$$source).";'
+
+models-layer-map: ## Read-only map of local model layers (Ollama runtime / HF card / suit / consumer demand). JSON=1, CHECK=1 exits 1 on a conflict, SINCE=-24h, NO_HF=1
+	@set -uo pipefail; python3 tools/models/local_model_map.py --since "$(or $(SINCE),-24h)" $(if $(filter 1 yes true,$(JSON)),--json) $(if $(filter 1 yes true,$(CHECK)),--check) $(if $(filter 1 yes true,$(NO_HF)),--no-hf)
 
 models-registry-snapshot: ensure-env-shared ## Snapshot Supabase model registry into models/registry.snapshot.json
 	@$(LOAD_ENV_SHARED); python3 tools/models/models_sync.py registry-snapshot --out models/registry.snapshot.json
