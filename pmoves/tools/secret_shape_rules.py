@@ -101,6 +101,11 @@ class ShapeRule(BaseModel):
     max_length: Optional[StrictInt] = Field(default=None, ge=1)
     exact_length: Optional[StrictInt] = Field(default=None, ge=1)
     charset: Optional[StrictStr] = None
+    # Per-prefix charset override, for a label whose token forms differ in
+    # alphabet: GitHub's stateless installation token (ghs_APPID_JWT) carries
+    # JWT punctuation that ghp_/gho_ never do. The longest matching prefix wins;
+    # values matching no key use ``charset``.
+    prefix_charsets: Dict[StrictStr, StrictStr] = Field(default_factory=dict)
     length_source: Literal["documented", "example", "floor", "none"] = "none"
     docs: Tuple[StrictStr, ...] = ()
 
@@ -112,11 +117,8 @@ class ShapeRule(BaseModel):
                 raise ValueError(f"prefix {prefix!r} must be non-empty printable ASCII")
         return value
 
-    @field_validator("charset")
-    @classmethod
-    def _charset_compiles(cls, value: Optional[str]) -> Optional[str]:
-        if value is None:
-            return value
+    @staticmethod
+    def _valid_charset(value: str) -> str:
         if not _CHARSET_FORM.match(value):
             raise ValueError(
                 f"charset {value!r} must have the form ^[...]+$ -- one character "
@@ -126,6 +128,18 @@ class ShapeRule(BaseModel):
             re.compile(value)
         except re.error as exc:
             raise ValueError(f"charset is not a valid regex: {exc}") from None
+        return value
+
+    @field_validator("charset")
+    @classmethod
+    def _charset_compiles(cls, value: Optional[str]) -> Optional[str]:
+        return value if value is None else cls._valid_charset(value)
+
+    @field_validator("prefix_charsets")
+    @classmethod
+    def _prefix_charsets_compile(cls, value: Dict[str, str]) -> Dict[str, str]:
+        for charset in value.values():
+            cls._valid_charset(charset)
         return value
 
     @field_validator("docs")
@@ -153,7 +167,15 @@ class ShapeRule(BaseModel):
             raise ValueError("a length constraint needs a length_source")
         if not constrained and self.length_source != "none":
             raise ValueError(f"length_source {self.length_source!r} with no length constraint")
+        stray = sorted(set(self.prefix_charsets) - set(self.prefixes))
+        if stray:
+            raise ValueError(f"prefix_charsets keys {stray} are not among prefixes")
         return self
+
+    def charset_for(self, value: str) -> Optional[str]:
+        """The charset that governs this value: longest matching prefix override."""
+        matching = [p for p in self.prefix_charsets if value.startswith(p)]
+        return self.prefix_charsets[max(matching, key=len)] if matching else self.charset
 
     def expected(self) -> str:
         """Human description of the shape. Public facts only."""
@@ -169,6 +191,8 @@ class ShapeRule(BaseModel):
                 parts.append(f"<= {self.max_length} chars ({self.length_source})")
         if self.charset:
             parts.append(f"charset {self.charset}")
+        for prefix, charset in sorted(self.prefix_charsets.items()):
+            parts.append(f"{prefix!r} charset {charset}")
         return "; ".join(parts) or "unconstrained"
 
     def violations(self, value: str) -> FrozenSet[str]:
@@ -183,7 +207,8 @@ class ShapeRule(BaseModel):
             or (self.max_length is not None and total > self.max_length)
         ):
             failed.add("length")
-        if self.charset and not re.fullmatch(self.charset, value):
+        charset = self.charset_for(value)
+        if charset and not re.fullmatch(charset, value):
             failed.add("charset")
         return frozenset(failed)
 
@@ -196,14 +221,15 @@ class ShapeRule(BaseModel):
             f"observed {len(value)} chars",
             "prefix-match " + ("no" if "prefix" in failed else "yes"),
         ]
-        if self.charset:
+        charset = self.charset_for(value)
+        if charset:
             if "charset" in failed:
                 # Position only. The character itself would be one character of
                 # the secret; a lookalike glyph is already named by codepoint in
                 # secret_shape.inspect_value, which runs first.
                 # Well defined because the model admits only ^[class]+$: test
                 # each character against the bare class.
-                char_class = re.compile(self.charset[1:-2])
+                char_class = re.compile(charset[1:-2])
                 first_bad = next(
                     (pos for pos, ch in enumerate(value, start=1)
                      if not char_class.fullmatch(ch)),
@@ -241,10 +267,11 @@ class ShapeRuleSet(BaseModel):
 class ManifestShape(BaseModel):
     """The typed fields of one secrets-manifest entry.
 
-    Strict types throughout. ``min_length: true`` is a bool, not an int, and
-    ``required: "false"`` is a STRING -- which ``bool()`` turns into True, so a
-    hand-rolled ``bool(item.get("required", True))`` silently made a quoted
-    "false" mandatory. YAML makes both easy to write by accident.
+    ``min_length: true`` is a bool, not an int, and YAML makes that easy to
+    write by accident. ``required`` keeps the meaning every YAML-native form
+    had under the old ``bool(item.get("required", True))`` -- see
+    ``_required_is_a_yaml_boolean`` -- and refuses only a STRING, the one form
+    where that coercion was wrong (a quoted "false" read as True).
 
     ``label`` must be an env-var name. Every rule built from this entry carries
     it, and a label the model refuses must be refused HERE, at manifest load,
@@ -255,6 +282,28 @@ class ManifestShape(BaseModel):
 
     label: str = Field(default="_", pattern=LABEL_PATTERN)
     required: StrictBool = True
+
+    @field_validator("required", mode="before")
+    @classmethod
+    def _required_is_a_yaml_boolean(cls, value: object) -> object:
+        # YAML-native forms keep their old meaning: false/no/0 and null or a
+        # bare `required:` are False; true/yes/1 are True. (PyYAML already
+        # turns unquoted yes/no into bools.)
+        if value is None or isinstance(value, bool):
+            return bool(value)
+        if isinstance(value, int) and value in (0, 1):
+            return bool(value)
+        if isinstance(value, str):
+            if value == "":
+                return False
+            raise ValueError(
+                f"is a string ({value[:16]!r}); write an unquoted YAML boolean. "
+                "The old coercion read every non-empty string -- including "
+                "'false' -- as True, so this entry's intent is ambiguous"
+            )
+        raise ValueError(
+            f"is a {type(value).__name__} ({str(value)[:16]!r}); write true or false"
+        )
     min_length: StrictInt = Field(default=0, ge=0)
     prefix: StrictStr = ""
 

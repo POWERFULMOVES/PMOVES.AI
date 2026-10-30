@@ -62,15 +62,15 @@ TIMEOUT_SECONDS = 15.0
 Verdict = Literal["ok", "fail", "unmeasured"]
 
 # Static headers live in a committed file, so none of them may be able to
-# carry a credential. Refuse the known auth-bearing names AND anything whose
-# name says auth/token/secret/key/cookie -- not merely the probe's own
-# auth_header: a literal `Authorization:` on an x-api-key probe would
-# otherwise load and be sent.
-_AUTH_BEARING_HEADERS = {
-    "authorization", "proxy-authorization", "x-api-key", "x-goog-api-key",
-    "api-key", "x-auth-token", "cookie",
-}
-_AUTH_BEARING_WORDS = ("auth", "token", "secret", "key", "cookie")
+# carry a credential. An ALLOWLIST, not a deny-list: a deny-list of
+# auth-looking names still admitted `X-Access`, `Bearer` and `X-Session`.
+# Adding a name here is a reviewed change to this file, which is the point.
+STATIC_HEADER_ALLOWLIST = frozenset({
+    "accept",
+    "user-agent",
+    "x-github-api-version",
+    "anthropic-version",
+})
 
 # Machine-readable error reasons (google.rpc.ErrorInfo.reason, error.status):
 # upper-snake identifiers only, so free-text messages are never retained.
@@ -122,15 +122,15 @@ class ProviderProbe(BaseModel):
     @model_validator(mode="after")
     def _no_static_auth_bearing_header(self) -> "ProviderProbe":
         # Static headers are the one place a literal credential could be pasted
-        # into this file. Refuse every auth-bearing shape outright.
+        # into this file. Only allowlisted, non-credential names may be set.
         for header in self.headers:
-            name = header.lower()
-            if (
-                name == self.auth_header.lower()
-                or name in _AUTH_BEARING_HEADERS
-                or any(word in name for word in _AUTH_BEARING_WORDS)
-            ):
-                raise ValueError(f"headers must not set an auth-bearing header ({header!r})")
+            if header.lower() not in STATIC_HEADER_ALLOWLIST:
+                raise ValueError(
+                    f"static header {header!r} is not in STATIC_HEADER_ALLOWLIST "
+                    f"({', '.join(sorted(STATIC_HEADER_ALLOWLIST))})"
+                )
+        if self.auth_header.lower() in STATIC_HEADER_ALLOWLIST:
+            raise ValueError(f"auth_header {self.auth_header!r} is an allowlisted static header")
         return self
 
     @model_validator(mode="after")

@@ -514,3 +514,12 @@ secrets-provider-verify: ## Post-rotation: ONE read-only auth call per provider 
 	  set +euo pipefail; \
 	  PYTHONPATH="$(CURDIR)/.." "$(CODEX_PY)" tools/secrets_provider_verify.py $(if $(strip $(ONLY)),--only $(ONLY)) $(ARGS); \
 	  rc=$$?; echo "secrets-provider-verify: tool exit $$rc (0 all ok / 1 auth failure / 3 could-not-measure)"; exit $$rc'
+
+# Read-only pre-merge check for a node holder: load the v1 secrets manifest
+# through the funnel's ManifestShape model and list every entry it would refuse
+# (ids + problems only; no values, no CHIT decode). Agents cannot read the
+# manifest, so this is how a parsing change gets measured against the real one.
+.PHONY: secrets-manifest-check
+secrets-manifest-check: ## Read-only: list manifest entries the funnel's models would refuse (ids + problems only). Exit 0 ok / 1 refusals / 3 unreadable. MANIFEST=<path> to override
+	@PYTHONPATH="$(CURDIR)/.." $(CODEX_PY) tools/secrets_manifest_check.py --manifest "$(if $(MANIFEST),$(MANIFEST),$(CURDIR)/../$(CHIT_MANIFEST_DEST))"; \
+	  rc=$$?; echo "secrets-manifest-check: tool exit $$rc (0 ok / 1 refusals / 3 could-not-measure)"; exit $$rc

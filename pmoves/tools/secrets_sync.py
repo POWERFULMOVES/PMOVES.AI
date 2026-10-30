@@ -68,6 +68,17 @@ class Entry:
 
 
 def load_manifest(path: Path) -> tuple[Path, Sequence[Entry]]:
+    cgp_path, default_targets, entries_raw = _load_manifest_document(path)
+    entries: List[Entry] = []
+    for item in entries_raw:
+        entry = _parse_entry(item, default_targets)
+        if entry is not None:
+            entries.append(entry)
+    return cgp_path, entries
+
+
+def _load_manifest_document(path: Path) -> tuple[Path, Sequence[Target], list]:
+    """Document-level checks: version, cgp_file, defaults, entries list."""
     manifest_data = yaml.safe_load(path.read_text())
     if not isinstance(manifest_data, Mapping):
         raise ValueError("Manifest must be a mapping")
@@ -90,77 +101,80 @@ def load_manifest(path: Path) -> tuple[Path, Sequence[Entry]]:
     if not isinstance(entries_raw, list):
         raise ValueError("Manifest 'entries' must be a list")
 
-    entries: List[Entry] = []
-    for item in entries_raw:
-        if not isinstance(item, Mapping):
-            continue
-        entry_id = item.get("id")
-        source = item.get("source", {})
-        if not isinstance(entry_id, str):
-            raise ValueError("Entry missing id")
-        if not isinstance(source, Mapping):
-            raise ValueError(f"Entry {entry_id} missing source mapping")
-        if source.get("type") != "cgp":
-            raise ValueError(f"Entry {entry_id} uses unsupported source")
-        label = source.get("label")
-        if not isinstance(label, str):
-            raise ValueError(f"Entry {entry_id} missing source label")
+    return cgp_path, default_targets, entries_raw
 
-        aliases_raw = source.get("aliases", [])
-        aliases = (
-            [a for a in aliases_raw if isinstance(a, str)]
-            if isinstance(aliases_raw, list)
-            else []
-        )
 
-        targets_data = item.get("targets")
-        if isinstance(targets_data, list) and targets_data:
-            targets = [_parse_target(t) for t in targets_data]
-        else:
-            targets = list(default_targets)
-        if not targets:
-            raise ValueError(f"Entry {entry_id} has no targets")
+def _parse_entry(item: object, default_targets: Sequence[Target]) -> Entry | None:
+    """One manifest entry -> Entry. Raises ValueError naming the entry id.
 
-        # Strict pydantic types (see ManifestShape): a quoted "false" is not
-        # False, `min_length: true` is not an int, and a label that is not an
-        # env-var name is refused here rather than crashing build_outputs.
-        try:
-            shape = ManifestShape.model_validate({**item, "label": label})
-        except ValidationError as exc:
-            fields = {str(err["loc"][0]) for err in exc.errors() if err["loc"]}
-            if "label" in fields:
-                raise ValueError(
-                    f"Entry {entry_id} has label {label!r}, which is not an "
-                    "env-var name ([A-Za-z_][A-Za-z0-9_]*)"
-                ) from None
-            if "required" in fields:
-                raise ValueError(
-                    f"Entry {entry_id} has non-boolean required "
-                    "(a quoted 'false' is a string, and would read as True)"
-                ) from None
-            if "min_length" in fields:
-                raise ValueError(f"Entry {entry_id} has non-integer min_length") from None
-            if "prefix" in fields:
-                raise ValueError(f"Entry {entry_id} has non-string prefix") from None
+    Non-mapping items are skipped (None), as they always were.
+    """
+    if not isinstance(item, Mapping):
+        return None
+    entry_id = item.get("id")
+    source = item.get("source", {})
+    if not isinstance(entry_id, str):
+        raise ValueError("Entry missing id")
+    if not isinstance(source, Mapping):
+        raise ValueError(f"Entry {entry_id} missing source mapping")
+    if source.get("type") != "cgp":
+        raise ValueError(f"Entry {entry_id} uses unsupported source")
+    label = source.get("label")
+    if not isinstance(label, str):
+        raise ValueError(f"Entry {entry_id} missing source label")
+
+    aliases_raw = source.get("aliases", [])
+    aliases = (
+        [a for a in aliases_raw if isinstance(a, str)]
+        if isinstance(aliases_raw, list)
+        else []
+    )
+
+    targets_data = item.get("targets")
+    if isinstance(targets_data, list) and targets_data:
+        targets = [_parse_target(t) for t in targets_data]
+    else:
+        targets = list(default_targets)
+    if not targets:
+        raise ValueError(f"Entry {entry_id} has no targets")
+
+    # Strict pydantic types (see ManifestShape): a quoted "false" is not
+    # False, `min_length: true` is not an int, and a label that is not an
+    # env-var name is refused here rather than crashing build_outputs.
+    try:
+        shape = ManifestShape.model_validate({**item, "label": label})
+    except ValidationError as exc:
+        fields = {str(err["loc"][0]) for err in exc.errors() if err["loc"]}
+        if "label" in fields:
             raise ValueError(
-                f"Entry {entry_id}: " + "; ".join(format_validation_error(exc))
+                f"Entry {entry_id} has label {label!r}, which is not an "
+                "env-var name ([A-Za-z_][A-Za-z0-9_]*)"
             ) from None
-        required = shape.required
-        min_length = shape.min_length
-        prefix = shape.prefix
-        entries.append(
-            Entry(
-                id=entry_id,
-                label=label,
-                required=required,
-                targets=targets,
-                aliases=aliases,
-                min_length=min_length,
-                prefix=prefix,
+        if "required" in fields:
+            why = next(
+                str(err["msg"]).removeprefix("Value error, ")
+                for err in exc.errors() if err["loc"] and err["loc"][0] == "required"
             )
-        )
-
-    return cgp_path, entries
+            raise ValueError(f"Entry {entry_id} has invalid required: {why}") from None
+        if "min_length" in fields:
+            raise ValueError(f"Entry {entry_id} has non-integer min_length") from None
+        if "prefix" in fields:
+            raise ValueError(f"Entry {entry_id} has non-string prefix") from None
+        raise ValueError(
+            f"Entry {entry_id}: " + "; ".join(format_validation_error(exc))
+        ) from None
+    required = shape.required
+    min_length = shape.min_length
+    prefix = shape.prefix
+    return Entry(
+        id=entry_id,
+        label=label,
+        required=required,
+        targets=targets,
+        aliases=aliases,
+        min_length=min_length,
+        prefix=prefix,
+    )
 
 
 def _parse_target(data: Mapping) -> Target:

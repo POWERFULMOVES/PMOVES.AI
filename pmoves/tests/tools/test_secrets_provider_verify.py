@@ -125,6 +125,14 @@ def test_error_reasons_keep_only_machine_identifiers():
     assert v._error_reasons(b"not json") == () and v._error_reasons(b"[1]") == ()
 
 
+def test_an_installation_token_in_gh_token_is_unmeasured_and_never_sent():
+    """A CI GITHUB_TOKEN (ghs_) in GH_TOKEN would 403 on GET /user: a false fail."""
+    http = FakeHttp(by_label={"GH_TOKEN": (403, {})})
+    env = {**KEYS, "GH_TOKEN": "ghs_123456_FAKEhdr0.FAKEpayload0-0000.FAKEsig_0000"}
+    assert _run(env, http, "--only", "github-gh-token") == 3
+    assert http.calls == []
+
+
 def test_an_installation_token_on_ghcr_is_unmeasured_and_never_sent():
     """ghs_ cannot call GET /user; reporting 403 as 'rejected' would be a lie."""
     http = FakeHttp()
@@ -204,6 +212,13 @@ def test_unknown_only_name_exits_3():
         "    headers: {X-Goog-Api-Key: AIzaFAKE0000}\n",
         "version: 1\nprobes:\n  - name: x\n    api_key_env: X\n    url: https://example.invalid/\n"
         "    headers: {X-Session-Token: FAKE0000}\n",
+        # names a deny-list missed: the allowlist refuses anything unlisted
+        "version: 1\nprobes:\n  - name: x\n    api_key_env: X\n    url: https://example.invalid/\n"
+        "    headers: {X-Access: FAKE0000}\n",
+        "version: 1\nprobes:\n  - name: x\n    api_key_env: X\n    url: https://example.invalid/\n"
+        "    headers: {Bearer: FAKE0000}\n",
+        "version: 1\nprobes:\n  - name: x\n    api_key_env: X\n    url: https://example.invalid/\n"
+        "    headers: {X-Session: FAKE0000}\n",
         # a reason-gated status that is also unconditional
         "version: 1\nprobes:\n  - name: x\n    api_key_env: X\n    url: https://example.invalid/\n"
         "    auth_failure_reasons: {401: [API_KEY_INVALID]}\n",
@@ -286,3 +301,9 @@ def test_urllib_get_returns_statuses_and_does_not_follow_a_redirect():
     finally:
         server.shutdown()
     assert "/landed" not in hits
+
+
+def test_every_static_header_in_the_tracked_probes_is_allowlisted():
+    """Positive control for the allowlist: the real file loads under it."""
+    names = {h.lower() for p in v.load_probes().probes for h in p.headers}
+    assert names and names <= v.STATIC_HEADER_ALLOWLIST

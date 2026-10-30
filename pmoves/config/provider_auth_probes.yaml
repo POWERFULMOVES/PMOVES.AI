@@ -11,6 +11,9 @@
 # model (pmoves/tools/secrets_provider_verify.py, ProbeSet) forbids unknown
 # fields, so an `api_key:` line fails to load (exit 3).
 #
+# Static headers are limited to an allowlist of non-credential names
+# (STATIC_HEADER_ALLOWLIST in the tool); anything else fails to load.
+#
 # Every api_key_env must also have a shape rule in secret_shapes.yaml; the tool
 # refuses to send a value that fails its rule (reported `fail`, status `shape`).
 #
@@ -72,9 +75,13 @@ probes:
     docs:
       - https://docs.github.com/en/rest/users/users#get-the-authenticated-user
 
+  # GH_TOKEN may legitimately be an installation token (ghs_, e.g. a CI
+  # GITHUB_TOKEN). Those cannot call GET /user and would come back 403 -- a
+  # false `fail` -- so they are reported unmeasured and not sent.
   - name: github-gh-token
     api_key_env: GH_TOKEN
     url: https://api.github.com/user
+    unmeasurable_prefixes: ["ghs_"]
     headers:
       Accept: application/vnd.github+json
       X-GitHub-Api-Version: "2022-11-28"

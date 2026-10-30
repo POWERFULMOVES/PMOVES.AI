@@ -338,8 +338,52 @@ def test_a_label_that_is_not_an_env_var_name_is_refused_at_load(tmp_path):
 
 
 def test_a_quoted_false_required_is_refused_not_read_as_true(tmp_path):
-    with pytest.raises(ValueError, match="non-boolean required"):
+    with pytest.raises(ValueError, match="invalid required: is a string"):
         secrets_sync.load_manifest(_manifest(tmp_path, QUOTED_FALSE))
+
+
+def _required_entry(form: str) -> str:
+    return (
+        "  - id: e\n    source: {type: cgp, label: SOME_LABEL}\n"
+        "    targets: [{file: env.tier-x, key: SOME_LABEL}]\n" + form
+    )
+
+
+@pytest.mark.parametrize(
+    "form, expected",
+    [
+        ("    required: false\n", False),
+        ("    required: no\n", False),       # YAML 1.1 boolean
+        ("    required: 0\n", False),
+        ("    required: null\n", False),
+        ("    required:\n", False),          # bare key
+        ("    required: ''\n", False),       # empty string: old bool('') was False
+        ("    required: true\n", True),
+        ("    required: yes\n", True),
+        ("    required: 1\n", True),
+        ("", True),                           # absent: the default
+    ],
+)
+def test_yaml_native_required_forms_keep_their_old_meaning(tmp_path, form, expected):
+    """Every form the old bool() coercion read correctly still reads the same."""
+    _, entries = secrets_sync.load_manifest(_manifest(tmp_path, _required_entry(form)))
+    assert entries[0].required is expected
+
+
+@pytest.mark.parametrize(
+    "form, named_type",
+    [
+        ("    required: 'false'\n", "is a string"),
+        ("    required: 'true'\n", "is a string"),
+        ('    required: "no"\n', "is a string"),
+        ("    required: 2\n", "is a int"),
+        ("    required: 0.5\n", "is a float"),
+        ("    required: [true]\n", "is a list"),
+    ],
+)
+def test_ambiguous_required_forms_are_refused_naming_their_type(tmp_path, form, named_type):
+    with pytest.raises(ValueError, match=f"Entry e has invalid required: {named_type}"):
+        secrets_sync.load_manifest(_manifest(tmp_path, _required_entry(form)))
 
 
 def test_a_real_bool_required_still_parses(tmp_path):
@@ -375,3 +419,70 @@ def test_onboarding_helper_exits_3_on_a_rules_failure(monkeypatch, command, caps
     monkeypatch.setattr(onboarding_helper, "cmd_generate", broken)
     assert onboarding_helper.main([command]) == 3
     assert "COULD-NOT-MEASURE" in capsys.readouterr().err
+
+
+# ── Per-prefix charset: JWT punctuation for ghs_ only (re-review P3) ────────
+
+
+@pytest.mark.parametrize("label", ["GH_TOKEN", "GHCR_TOKEN"])
+@pytest.mark.parametrize("value", ["ghp_FAKE0000.000000000000000000000000000", "gho_FAKE-00000000000000000000000000000000"])
+def test_jwt_punctuation_is_refused_outside_ghs(label, value):
+    finding = load_rules()[label].check(value)
+    position = next(i for i, ch in enumerate(value, start=1) if ch in ".-")
+    assert finding and f"charset-match no (first mismatch at position {position})" in finding[0]
+
+
+@pytest.mark.parametrize("label", ["GH_TOKEN", "GHCR_TOKEN"])
+def test_jwt_punctuation_is_admitted_for_ghs(label):
+    assert load_rules()[label].check(GH_INSTALLATION_STATELESS) == []
+
+
+@pytest.mark.parametrize(
+    "rule",
+    [
+        "    prefixes: ['ghp_']\n    prefix_charsets: {ghs_: '^[A-Za-z0-9_.-]+$'}\n",
+        "    prefixes: ['ghs_']\n    prefix_charsets: {ghs_: '^ghs_.*$'}\n",
+    ],
+)
+def test_a_malformed_prefix_charset_exits_3(tmp_path, rule):
+    path = tmp_path / "secret_shapes.yaml"
+    path.write_text("version: 1\nrules:\n  - label: GH_TOKEN\n" + rule)
+    assert rules_mod.main(["--rules", str(path)]) == 3
+
+
+# ── secrets-manifest-check: the read-only pre-merge dry run ─────────────────
+
+
+def test_manifest_check_lists_every_refused_entry_and_exits_1(tmp_path, capsys):
+    from pmoves.tools import secrets_manifest_check
+
+    path = _manifest(
+        tmp_path,
+        _required_entry("    required: false\n")
+        + DASHED_LABEL
+        + QUOTED_FALSE.replace("id: quoted", "id: quoted2"),
+    )
+    assert secrets_manifest_check.main(["--manifest", str(path)]) == 1
+    out = capsys.readouterr().out
+    assert "entry dashed: " in out and "not an env-var name" in out
+    assert "entry quoted2: " in out and "is a string" in out
+    assert "1 entry load, 2 would be refused" in out
+    assert "VERDICT: FAIL exit=1" in out
+
+
+def test_manifest_check_passes_a_clean_manifest(tmp_path, capsys):
+    from pmoves.tools import secrets_manifest_check
+
+    path = _manifest(tmp_path, _required_entry("    required: 0\n"))
+    assert secrets_manifest_check.main(["--manifest", str(path)]) == 0
+    assert "VERDICT: PASS exit=0" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("body", [None, "version: 2\nentries: []\n", "version: 1\nentries: [\n"])
+def test_manifest_check_exits_3_when_the_document_is_unreadable(tmp_path, body):
+    from pmoves.tools import secrets_manifest_check
+
+    path = tmp_path / "manifest.yaml"
+    if body is not None:
+        path.write_text(body)
+    assert secrets_manifest_check.main(["--manifest", str(path)]) == 3
