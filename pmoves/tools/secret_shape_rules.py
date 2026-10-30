@@ -30,7 +30,7 @@ import re
 import sys
 from functools import lru_cache
 from pathlib import Path
-from typing import Dict, List, Literal, Optional, Sequence, Tuple
+from typing import Dict, FrozenSet, List, Literal, Optional, Sequence, Tuple
 
 import yaml
 from pydantic import (
@@ -53,7 +53,9 @@ EXIT_OK = 0
 EXIT_FINDINGS = 1
 EXIT_UNMEASURED = 3
 
-LABEL_PATTERN = r"^[A-Z][A-Z0-9_]*$"
+# An env-var name. Upper case by convention, but the funnel does not enforce
+# that, so neither does the model.
+LABEL_PATTERN = r"^[A-Za-z_][A-Za-z0-9_]*$"
 
 
 class RulesFileError(Exception):
@@ -152,37 +154,45 @@ class ShapeRule(BaseModel):
             parts.append(f"charset {self.charset}")
         return "; ".join(parts) or "unconstrained"
 
+    def violations(self, value: str) -> FrozenSet[str]:
+        """Which constraint families fail: a subset of {prefix, length, charset}."""
+        total = len(value)
+        failed = set()
+        if self.prefixes and not any(value.startswith(p) for p in self.prefixes):
+            failed.add("prefix")
+        if (
+            (self.exact_length is not None and total != self.exact_length)
+            or total < self.min_length
+            or (self.max_length is not None and total > self.max_length)
+        ):
+            failed.add("length")
+        if self.charset and not re.fullmatch(self.charset, value):
+            failed.add("charset")
+        return frozenset(failed)
+
     def check(self, value: str) -> List[str]:
         """Return value-free findings; an empty list means the value conforms."""
-        total = len(value)
-        prefix_ok = not self.prefixes or any(value.startswith(p) for p in self.prefixes)
-        length_ok = (
-            (self.exact_length is None or total == self.exact_length)
-            and total >= self.min_length
-            and (self.max_length is None or total <= self.max_length)
-        )
-        charset_note = ""
-        charset_ok = True
+        failed = self.violations(value)
+        if not failed:
+            return []
+        observed = [
+            f"observed {len(value)} chars",
+            "prefix-match " + ("no" if "prefix" in failed else "yes"),
+        ]
         if self.charset:
-            pattern = re.compile(self.charset)
-            if not pattern.fullmatch(value):
-                charset_ok = False
+            if "charset" in failed:
                 # Position only. The character itself would be one character of
                 # the secret; a lookalike glyph is already named by codepoint in
                 # secret_shape.inspect_value, which runs first.
                 first_bad = next(
-                    (pos for pos, ch in enumerate(value, start=1) if not pattern.fullmatch(ch)),
+                    (pos for pos, ch in enumerate(value, start=1)
+                     if not re.fullmatch(self.charset, ch)),
                     None,
                 )
-                charset_note = f" (first mismatch at position {first_bad})" if first_bad else ""
-        if prefix_ok and length_ok and charset_ok:
-            return []
-        observed = [
-            f"observed {total} chars",
-            "prefix-match " + ("yes" if prefix_ok else "no"),
-        ]
-        if self.charset:
-            observed.append("charset-match " + ("yes" if charset_ok else "no" + charset_note))
+                where = f" (first mismatch at position {first_bad})" if first_bad else ""
+                observed.append("charset-match no" + where)
+            else:
+                observed.append("charset-match yes")
         return [f"{self.label}: expected {self.expected()}; " + ", ".join(observed)]
 
 

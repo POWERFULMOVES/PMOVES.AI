@@ -13,6 +13,15 @@ import yaml
 
 from pmoves.chit.codec import decode_secret_map, load_cgp
 from pmoves.tools.secret_shape import inspect_value
+from pmoves.tools.secret_shape_rules import (
+    EXIT_UNMEASURED,
+    ManifestShape,
+    RulesFileError,
+    ShapeRule,
+    format_validation_error,
+    load_rules,
+)
+from pydantic import ValidationError
 from pmoves.tools.secrets_self_generated import fill_self_generated, SELF_GENERATED, _SUPABASE_JWT_KEYS
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -52,6 +61,10 @@ class Entry:
     # into every tier file and the E2B Danger Room simply never ran. min_length
     # alone would not have caught it: 42 is not obviously short.
     prefix: str = ""
+
+    def manifest_rule(self) -> ShapeRule | None:
+        """The manifest's own min_length/prefix, as the same model the rules file uses."""
+        return ManifestShape(min_length=self.min_length, prefix=self.prefix).as_rule(self.label)
 
 
 def load_manifest(path: Path) -> tuple[Path, Sequence[Entry]]:
@@ -109,12 +122,21 @@ def load_manifest(path: Path) -> tuple[Path, Sequence[Entry]]:
             raise ValueError(f"Entry {entry_id} has no targets")
 
         required = bool(item.get("required", True))
-        min_length = item.get("min_length", 0)
-        if not isinstance(min_length, int) or isinstance(min_length, bool) or min_length < 0:
-            raise ValueError(f"Entry {entry_id} has non-integer min_length")
-        prefix = item.get("prefix", "")
-        if not isinstance(prefix, str):
-            raise ValueError(f"Entry {entry_id} has non-string prefix")
+        # Strict pydantic types: `min_length: true` is a bool and `prefix: 42`
+        # an int, and YAML makes both easy to write by accident.
+        try:
+            shape = ManifestShape.model_validate(item)
+        except ValidationError as exc:
+            fields = {str(err["loc"][0]) for err in exc.errors() if err["loc"]}
+            if "min_length" in fields:
+                raise ValueError(f"Entry {entry_id} has non-integer min_length") from None
+            if "prefix" in fields:
+                raise ValueError(f"Entry {entry_id} has non-string prefix") from None
+            raise ValueError(
+                f"Entry {entry_id}: " + "; ".join(format_validation_error(exc))
+            ) from None
+        min_length = shape.min_length
+        prefix = shape.prefix
         entries.append(
             Entry(
                 id=entry_id,
@@ -164,8 +186,14 @@ def build_outputs(
     *,
     strict: bool = True,
     rejected_out: Dict[str, set] | None = None,
+    rules: Mapping[str, ShapeRule] | None = None,
 ) -> tuple[Dict[str, Dict[str, str]], List[str]]:
     """Materialise per-file outputs.
+
+    ``rules`` maps label -> ShapeRule from the tracked rules file
+    (pmoves/config/secret_shapes.yaml). ``None`` loads that file, so every
+    caller enforces it without opting in; a malformed or missing file raises
+    ``RulesFileError`` rather than delivering unchecked.
 
     ``rejected_out``, when supplied, is filled with ``{file: {key, ...}}`` for
     values that were WITHHELD. Callers writing in merge mode must delete those
@@ -178,6 +206,9 @@ def build_outputs(
     too_short: List[str] = []
     shape_withheld: List[str] = []
     shape_warnings: List[str] = []
+    rule_withheld: List[str] = []
+    if rules is None:
+        rules = load_rules()
     for entry in entries:
         # Honor legacy aliases: an operator may supply a deprecated name (e.g.
         # MCP_SERVER_TOKEN) that maps to a canonical label. Emit the canonical
@@ -238,10 +269,19 @@ def build_outputs(
         # doctrine as the under-length branch: loud beats late.
         verdict = inspect_value(entry.label, value, prefix=entry.prefix)
         shape_warnings.extend(verdict.warn)
+        # The tracked rules file -- provider shapes nobody could previously see,
+        # because they lived only in the zero-access manifest if anywhere. This
+        # is what catches a truncated HF/Anthropic/OpenAI/Gemini/GitHub key on a
+        # label whose manifest entry declares no prefix: the E2B failure (42
+        # chars, leading `e2` lost, passed by a presence check) recurring on a
+        # label with no rule. Withheld and removed exactly like a lookalike.
+        file_rule = rules.get(entry.label) or rules.get(source_key)
+        rule_findings = file_rule.check(value) if file_rule is not None else []
+        rule_withheld.extend(rule_findings)
         # Branch on `.withhold` explicitly. A ShapeVerdict instance is always
         # truthy, so `if verdict:` would read as "there is a problem" while being
         # unconditionally true.
-        if verdict.withhold:
+        if verdict.withhold or rule_findings:
             shape_withheld.extend(verdict.withhold)
             if rejected_out is not None:
                 for target in entry.targets:
@@ -259,7 +299,8 @@ def build_outputs(
         # Withhold rather than emit. Emitting a known-bad value buys a container
         # that boots and then answers 500 forever; withholding it makes compose's
         # `${VAR:?}` refuse at `up` time with the variable named. Loud beats late.
-        if entry.min_length and len(value) < entry.min_length:
+        manifest_rule = entry.manifest_rule()
+        if manifest_rule is not None and "length" in manifest_rule.violations(value):
             too_short.append(
                 f"{entry.label} (have {len(value)} chars, need >= {entry.min_length})"
             )
@@ -284,6 +325,22 @@ def build_outputs(
             "one. The value is present but shorter than its consumer accepts, so "
             "emitting it would produce a service that starts and then fails every "
             "request.",
+            file=sys.stderr,
+        )
+    if rule_withheld:
+        print(
+            "WARNING: withheld "
+            + str(len(rule_withheld))
+            + " secret(s) that fail their shape rule in "
+            "pmoves/config/secret_shapes.yaml: "
+            + "; ".join(sorted(rule_withheld))
+            + " -- the value is present but is not the shape its provider "
+            "issues, most often truncated in delivery (E2B_API_KEY once arrived "
+            "2 characters short and a presence check passed it). Re-deliver the "
+            "credential from the provider console. If the provider has changed "
+            "its format, update the rule, with a doc citation, not the value. "
+            "Nothing above is secret material -- only the variable name, the "
+            "public prefix, and the expected and observed lengths.",
             file=sys.stderr,
         )
     if shape_withheld:
@@ -453,6 +510,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
+    # Rules first: a funnel that cannot read its shape rules cannot say whether
+    # a delivered key is well-formed, so it stops before decoding anything.
+    try:
+        rules = load_rules()
+    except RulesFileError as exc:
+        print(f"ERROR: COULD-NOT-MEASURE -- {exc}", file=sys.stderr)
+        return EXIT_UNMEASURED
+
     manifest_path = (REPO_ROOT / args.manifest).resolve()
     cgp_path, entries = load_manifest(manifest_path)
 
@@ -477,7 +542,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     rejected: Dict[str, set] = {}
     outputs, missing = build_outputs(
-        secrets, entries, strict=False, rejected_out=rejected
+        secrets, entries, strict=False, rejected_out=rejected, rules=rules
     )
     # Filter out self-generated secrets from the missing report — they are
     # either derivable (handled by fill_self_generated) or generated elsewhere
