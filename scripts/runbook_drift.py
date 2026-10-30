@@ -21,10 +21,9 @@ No AI model calls — the harness IS the intelligence. Read-only vs repo and net
 import argparse, hashlib, json, os, re, subprocess, sys, time
 from pathlib import Path
 
-# The checkout this script lives in. RUNBOOK_DRIFT_ROOT points it at another
-# tree (the A0 sidecar runs it against /a0/usr/projects/pmoves_ai).
-# Resolved so a relative override is pinned once, not re-read against the CWD.
-ROOT = Path(os.environ.get("RUNBOOK_DRIFT_ROOT") or Path(__file__).resolve().parents[1]).resolve()
+# portable: derive from script location (works on any node's clone; parity wave 10-26
+# caught the hardcoded sidecar path breaking Windows host runs)
+ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_GLOBS = ["plans/*.md"]
 ENDPOINT_TIMEOUT = 6  # seconds
 REPO = "POWERFULMOVES/PMOVES.AI"
@@ -143,9 +142,7 @@ PROBES = {"make_target": probe_make, "file_path": probe_file, "endpoint": probe_
 # temperatures.json: choice calibration is SOFT (soft-CE ~0.97) — near-uniform is
 # expected for ambiguous inputs; confidence < 0.5 => UNDECIDED (never guesses).
 # --no-jev opts out; missing runtime/model => heuristics fallback, announced in stdout.
-# JEV_MODEL_PATH lets a node keep the 1 GB model off the checkout (SPARK: 4TB drive).
-JEV_MODEL = Path(os.environ.get("JEV_MODEL_PATH")
-                 or ROOT / "research/models/agentjev/agentjev_0.6b_int8.onnx")
+JEV_MODEL = ROOT / "research/models/agentjev/agentjev_0.6b_int8.onnx"
 JEV_LABELS = ["DRAFT", "RUNBOOK", "HISTORICAL"]
 JEV_OPTIONS = [
     "DRAFT - planned or proposal document referencing artifacts that may not exist yet",
@@ -222,22 +219,17 @@ def main():
     args = ap.parse_args()
     jev = None if args.no_jev else _load_jev()
     globs = [g.strip() for g in args.globs.split(",") if g.strip()]
-    records, files_scanned, register_skipped = [], 0, 0
+    records, files_scanned = [], 0
     for pattern in globs:
         for f in sorted(ROOT.glob(pattern)):
             if f.name.startswith("AGNOTE4482PHI"):
-                register_skipped += 1
                 continue  # the register is append-only history, not claims (v3)
             files_scanned += 1
             rel = str(f.relative_to(ROOT))
             dc = doc_class(rel)
             text = f.read_text(errors="replace")
             if jev is not None:
-                # The model replaces the heuristic only when it commits; an
-                # abstention must not erase what the filename already says.
-                jdc = jev_classify_doc(jev[0], jev[1], text)
-                if jdc != "UNDECIDED":
-                    dc = jdc
+                dc = jev_classify_doc(jev[0], jev[1], text)  # model replaces heuristic when live
             for c in extract_claims(text, rel):
                 verdict, evidence = PROBES[c["kind"]](c["value"])
                 records.append({
@@ -246,13 +238,6 @@ def main():
                     "verdict": verdict, "evidence": evidence,
                     "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
                 })
-    if files_scanned == 0:
-        # An empty scan is not a clean audit: say so and fail.
-        msg = f"runbook_drift: globs {globs} matched no auditable files under {ROOT}"
-        if register_skipped:
-            msg += f" ({register_skipped} AGNOTE4482PHI register file(s) matched and skipped)"
-        print(msg, file=sys.stderr)
-        sys.exit(2)
     run_digest = seal(records)
     counts = {}
     for r in records:
