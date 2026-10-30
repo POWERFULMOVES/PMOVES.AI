@@ -59,8 +59,8 @@ def _env_float(name: str, default: float) -> float:
         return default
 
 
-def _redact_url(url: str) -> str:
-    """Return *url* with userinfo removed for safe logging."""
+def redact_url(url: str) -> str:
+    """Return *url* with userinfo removed, safe to log or return from an endpoint."""
     try:
         parts = urlsplit(url)
         if not parts.netloc or "@" not in parts.netloc:
@@ -74,6 +74,10 @@ def _redact_url(url: str) -> str:
         return urlunsplit((parts.scheme, netloc, parts.path, parts.query, parts.fragment))
     except Exception:
         return "<redacted>"
+
+
+# Pre-existing private name, kept so callers that already import it keep working.
+_redact_url = redact_url
 
 
 @dataclass
@@ -158,7 +162,7 @@ async def create_nats_connection(
     service_name = config.name or "unknown"
     logger.info(
         "Connecting to NATS at %s (service=%s)",
-        _redact_url(config.url),
+        redact_url(config.url),
         service_name,
     )
 
@@ -380,5 +384,6 @@ __all__ = [
     "traced_publish",
     "make_traced_callback",
     "publish_cgp",
+    "redact_url",
     "DEFAULT_NATS_URL",
 ]
