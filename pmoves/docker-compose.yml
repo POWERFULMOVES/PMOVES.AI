@@ -4169,6 +4169,12 @@ services:
     - CIPHER_MCP_ENFORCE=${CIPHER_MCP_ENFORCE:-}
     - CIPHER_MCP_ADVISORY_INTERVAL_MS=${CIPHER_MCP_ADVISORY_INTERVAL_MS:-}
     - CIPHER_MCP_ADVISORY_BUDGET=${CIPHER_MCP_ADVISORY_BUDGET:-}
+    # Refuse requests with no Bearer even when CIPHER_API_TOKEN is unset
+    # (Pmoves-cipher src/pmoves/auth.ts authRequired). Empty by default = off:
+    # '' is an OFF value, so an unset token still means dev mode. Any other
+    # value is ON (a typo does not reopen dev mode). Set CIPHER_AUTH_REQUIRED=true
+    # in env.shared so a token that never reached the container is a 401.
+    - CIPHER_AUTH_REQUIRED=${CIPHER_AUTH_REQUIRED:-}
     - PMOVES_STORAGE_DIR=/data/cipher
     - PMOVES_PORT=8105
     - PMOVES_HOST=0.0.0.0
