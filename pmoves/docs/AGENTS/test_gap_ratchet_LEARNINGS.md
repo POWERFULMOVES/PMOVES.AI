@@ -188,3 +188,51 @@ The matrix cross-check now reads upstream's `ci.yml` structurally. Live result w
 ```
 
 Note what is NOT in that set: `linux`. The word "Linux" exists in upstream's `ci.yml` only inside a COMMENT, and a comment is not a matrix entry — which is precisely the distinction the old body scan could not make.
+
+---
+
+## Review round 3 (2026-10-30 · PR #3427) — "the shape of the declaration is the declaration"
+
+Round 2 landed, the branch was pushed, and the reviewer came back with **three more findings against the pushed code** plus a CodeQL high-severity alert on the lane's own test double. All four were confirmed valid. They share one shape: **the ratchet read part of a declaration and treated the part as the whole.**
+
+| # | Class | Observation (rule) | Evidence / Why | Apply when |
+|---|-------|---------------------|----------------|------------|
+| 18 | **contract-correctness** | **A matrix's `exclude:` is part of its declaration. Reading only the base axes and `include:` reports platforms the matrix never runs.** | `_extract_matrix_platforms` collected runner labels from the base dimension list plus `include:` entries and never expanded or removed combinations. A matrix carrying `exclude: [{os: windows-latest}]` still reported `windows` as covered — the ratchet asserting "upstream covers Windows" for an upstream that does not. The repair expands base → `exclude` → `include` (GitHub's documented order) and takes labels only from surviving combinations: `_matrix_axes` (`:368`), `_base_combinations` (`:388`), `_combo_matches_exclude` (`:405`), `_apply_matrix_exclusions` (`:422`), `_apply_matrix_inclusions` (`:444`), `_extract_matrix_platforms` (`:499`). An `exclude:` entry that matches nothing removes nothing — it is not an error. Pinned by `test_mutation_excluded_platform_is_not_covered` (`:1255`) and killed by `test_mutation_exclude_handling_is_killed` (`:686`). | Any classifier that reads a declaration with more than one way to select members (matrix + include + exclude, a filter chain, a query with union and difference): apply the DIFFERENCE before the ADDITION, or the verdict is inverted. |
+| 19 | **contract-correctness** | **A lock with a timeout on one platform and none on another is two different locks.** | `_lock_file` enforced `_LOCK_TIMEOUT_SECONDS` on the Windows branch only; the POSIX branch used a bare blocking `flock`, so a stuck holder wedged the whole suite forever — no timeout, no diagnostic, and the symptom (a CI job that never returns) does not name the lock. The repair splits the acquire into `_try_lock_windows` (`:347`) and `_try_lock_posix` (`:359`, `LOCK_EX|LOCK_NB`) behind `_try_lock_nonblocking` (`:375`), with ONE shared deadline loop in `_lock_file` (`:382`) that raises `MutationLockTimeout` (`:290`) naming the lock file, the timeout and the recorded holder. Both branches now share the constant, the failure mode and the message. A timeout **always raises** — it never proceeds unlocked, because proceeding without the lock would defeat the guarantee the lock exists to provide. Pinned by `test_posix_lock_path_times_out_and_raises` (`:762`) and `test_held_lock_makes_the_next_holder_time_out` (`:831`), killed by `test_mutation_posix_blocking_flock_is_killed` (`:912`). | Any cross-platform primitive (locks, semaphores, file waits, process joins): the deadline belongs to the CALLER, not to the platform branch. Write the branch to attempt, and the deadline to decide. |
+| 20 | **contract-correctness** | **A read that verifies integrity must hold the same lock the writer holds.** | `test_ratchet_file_is_left_clean_after_mutations` read `TARGET` outside `_mutation_lock()`. It could therefore observe the file mid-mutation — torn bytes, or a restored file from another case — and report a false pass. The repair takes the lock for the whole read: `_read_ratchet_file_under_lock` (`:464`) and `_assert_ratchet_file_clean` (`:475`), with the test (`:982`) using both. | Any test that asserts a file was left clean, unchanged, or untouched: the assertion runs INSIDE the same mutual-exclusion window as the mutation. A clean-check that reads outside the lock is a check of a moment nobody promised. |
+| 21 | **contract-correctness** | **A host is a host, not a substring.** | CodeQL flagged the lane's own test double at HIGH severity: `fake_urlopen` matched with `"api.github.com" in url`, which also accepts `https://api.github.com.evil.example/repos` and `https://evil.example/?x=api.github.com`. Fixed AT THE SOURCE — `_is_github_api_url` (`:305`) parses with `urllib.parse.urlsplit` and requires `parsed.hostname == "api.github.com"`. The **netloc** is deliberately NOT compared: it carries userinfo and a port, so comparing it would reject a real request to `https://api.github.com:443/...` and reintroduce a different mismatch class. A URL that is not absolute or not parseable is not the API host and must not raise out of the caller. **No `nosec`, no CodeQL config change — the alert is fixed, not silenced.** Pinned by `test_mutation_github_api_host_match_is_exact` (`:1394`), killed by `test_mutation_loose_api_host_match_is_killed` (`:953`). The harness keeps the defective form as the string constant `ORIGINAL_API_HOST_MATCH` so the mutation has something to restore. | Any host/host:port/URL comparison: parse, then compare the HOST component exactly. A substring test over a URL is a test over "does this text appear somewhere", which is a different and much weaker question. |
+
+### Finding → lesson → code map (PR #3427 review round 3)
+
+| Finding | Thread id | Lesson | Where it landed |
+|---|---|---|---|
+| `exclude:` was never read — an excluded platform still counted as covered | 4428901573 | 18 | `pmoves/tests/test_mavis_cli_timeout.py::_matrix_axes` / `_base_combinations` / `_combo_matches_exclude` / `_apply_matrix_exclusions` / `_apply_matrix_inclusions`, `_extract_matrix_platforms` (`:499`), `test_mutation_excluded_platform_is_not_covered` (`:1255`) |
+| the POSIX lock path had no deadline — a stuck holder wedged the suite forever | 4428901583 | 19 | `pmoves/tests/tools/test_mavis_ratchet_mutation_kill.py::_try_lock_posix` (`:359`), `_try_lock_nonblocking` (`:375`), `_lock_file` (`:382`), `MutationLockTimeout` (`:290`) |
+| the clean-check read the target outside the mutation lock | 4428901592 | 20 | `pmoves/tests/tools/test_mavis_ratchet_mutation_kill.py::_read_ratchet_file_under_lock` (`:464`), `_assert_ratchet_file_clean` (`:475`) |
+| CodeQL HIGH: `"api.github.com" in url` is a loose host match | (CodeQL alert 124343833316) | 21 | `pmoves/tests/test_mavis_cli_timeout.py::_is_github_api_url` (`:305`), `test_mutation_github_api_host_match_is_exact` (`:1394`) |
+
+### Round-3 measurement (2026-10-30)
+
+| Run | Result |
+|---|---|
+| `pmoves/tests/test_mavis_cli_timeout.py` | **11 passed, 1 skipped** (skip = the network-gated matrix cross-check) |
+| `pmoves/tests/tools/test_mavis_ratchet_mutation_kill.py` | **10 passed** |
+| both, with `PMOVES_MAVIS_MATRIX_CHECK=1` | **22 passed, 0 skipped** — the live probe ran and passed |
+| both, with `mavis` removed from PATH | **19 passed, 3 skipped** — the two CLI probes plus the matrix gate; every mutation-kill still fires |
+
+### Round-3 cross-check (re-tallied)
+
+- **(1) reasoning-gap** — 4 lessons (#3, #7, #11, #14)
+- **(2) semantic-naming drift** — 1 lesson (#8)
+- **(3) contract-correctness** — 9 lessons (#2, #4, #10, #15, #17, **#18, #19, #20, #21**)
+- **(4) defense-in-depth** — 6 lessons (#1, #6, #9, #12, #13, #16)
+- **(5) pattern-conformance** — 1 lesson (#5)
+
+Pattern after round 3: **contract-correctness now leads** — 9 of 21 lessons. The shape of the shift is the lesson of the whole slice: round 1 was about making the ratchet able to say NO at all, round 2 about making its signals attributable, and round 3 about making it read the WHOLE declaration. Each round the defect got smaller and the ratchet got more literal — which is the direction a ratchet should move.
+
+### Round-3 SDK provenance
+
+| File | Change |
+|---|---|
+| `pmoves/tests/test_mavis_cli_timeout.py` | +421 lines net — `_matrix_axes`, `_base_combinations`, `_combo_matches_exclude`, `_apply_matrix_exclusions`, `_apply_matrix_inclusions`, rewritten `_extract_matrix_platforms`, `_assert_matrix_platforms`, `_is_github_api_url`, `test_mutation_excluded_platform_is_not_covered`, `test_mutation_github_api_host_match_is_exact` |
+| `pmoves/tests/tools/test_mavis_ratchet_mutation_kill.py` | +826 lines net — `MutationLockTimeout`, `_write_holder_info`, `_try_lock_windows`, `_try_lock_posix`, `_try_lock_nonblocking`, `_lock_file`, `_read_ratchet_file_under_lock`, `_assert_ratchet_file_clean`, `_mutation_case`, `ORIGINAL_API_HOST_MATCH`, and the four new mutation-kill cases |
