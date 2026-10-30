@@ -489,3 +489,235 @@ def test_in_container_script_emits_claims_and_digest_never_the_key():
     report = json.loads(proc.stdout)
     assert report["role"] == "service_role" and report["exp"] == LIVE["exp"]
     assert FRESH not in proc.stdout and FRESH.split(".")[-1] not in proc.stdout
+
+
+# ── review #3433 P1: a requested live facet that is unmeasured is never ok ─
+
+
+@pytest.mark.parametrize(
+    "report, why",
+    [
+        (_container_report(FRESH, {"error": "TimeoutError"}), "probe timed out"),
+        (_container_report(FRESH), "probe requested but never ran"),
+        ({"present": True, "sha256": _digest(FRESH), "decode_error": True}, "container key undecodable"),
+        ({"present": True, "sha256": _digest(FRESH), "opaque": True}, "container key opaque"),
+    ],
+    ids=["timeout", "never-ran", "decode-error", "opaque"],
+)
+def test_unmeasured_requested_live_facet_is_could_not_measure(report, why):
+    v = ck.assess_container(_base_ok(), FRESH, _runner(report), probe=True, now=NOW)
+    assert v["findings"] == [], why
+    assert (v["status"], v["exit"]) == ("could_not_measure", 3), why
+
+
+def test_unreadable_running_kong_without_probe_is_could_not_measure():
+    v = ck.assess_container(_base_ok(), FRESH, _runner(_container_report(FRESH), kong_keys=None),
+                            probe=False, now=NOW)
+    assert v["exit"] == 3
+    assert any("supabase-kong consumer keys could not be read" in u for u in v["unmeasured"])
+
+
+def test_probe_200_is_authoritative_when_kong_is_not_a_compose_container():
+    # CLI runtime / remote Kong: no supabase-kong container, but cipher's own
+    # lookup succeeded -- the live gateway admitted the key.
+    run = _runner(_container_report(FRESH, {"status": 200, "code": None, "kong": False}), kong=None)
+    v = ck.assess_container(_base_ok(), FRESH, run, probe=True, now=NOW)
+    assert (v["status"], v["exit"]) == ("ok", 0)
+
+
+# ── review #3433 P2: what the RUNNING Kong admits ──────────────────────────
+
+
+def test_stale_kong_after_funnel_refresh_is_named():
+    # Funnel refreshed, cipher recreated (matches env), Kong not recreated.
+    run = _runner(_container_report(FRESH), kong_keys=(EXPIRED_PASTE,))
+    v = ck.assess_container(_base_ok(), FRESH, run, probe=False, now=NOW)
+    c = v["facets"]["container"]
+    assert c["matches_env"] is True and c["kong_live_admits"] is False
+    assert c["kong_live_matches_env"] is False
+    assert codes(v) == ["kong_live_mismatch"] and v["exit"] == 1
+    assert "supabase-kong is stale" in v["findings"][0]["detail"]
+
+
+def test_running_kong_second_credential_counts():
+    run = _runner(_container_report(FRESH), kong_keys=(EXPIRED_PASTE, FRESH))
+    v = ck.assess_container(_base_ok(), FRESH, run, probe=False, now=NOW)
+    assert v["facets"]["container"]["kong_live_admits"] is True and v["exit"] == 0
+
+
+def test_garbled_kong_output_is_not_trusted():
+    run = _runner(_container_report(FRESH), kong_out="not-a-digest\n-\n")
+    v = ck.assess_container(_base_ok(), FRESH, run, probe=False, now=NOW)
+    assert "kong_live_admits" not in v["facets"]["container"] and v["exit"] == 3
+
+
+@pytest.mark.parametrize(
+    "probe",
+    [
+        {"status": 401, "code": None, "kong": False},       # 3.x 'Unauthorized' if regex missed it
+        {"status": 403, "code": None, "kong": False},
+    ],
+)
+def test_401_or_403_without_pgrst_code_is_the_gateway(probe):
+    finding, note = ck.classify_probe(probe)
+    assert note is None and finding["code"] == "lookup_refused_gateway"
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")
+@pytest.mark.parametrize(
+    "body, status, expect",
+    [
+        ('{"message":"Unauthorized"}', 401, "lookup_refused_gateway"),                     # kong 3.x (3.9.3)
+        ('{"message":"No API key found in request"}', 401, "lookup_refused_gateway"),     # kong 3.x, no key
+        ('{"message":"Invalid authentication credentials"}', 401, "lookup_refused_gateway"),  # kong 2.x
+        ('{"code":"PGRST303","message":"JWT expired"}', 401, "lookup_refused_expired"),
+        ('{"code":"PGRST301","message":"JWSError JWSInvalidSignature"}', 401, "lookup_refused_signature"),
+        ("[]", 200, None),
+    ],
+    ids=["kong3-unauthorized", "kong3-no-key", "kong2-invalid", "pgrst303", "pgrst301", "ok"],
+)
+def test_in_container_probe_end_to_end_against_a_local_gateway(body, status, expect):
+    """Runs the real node script against a loopback HTTP server speaking each
+    gateway's wording, then classifies what the script reports."""
+    import http.server
+    import threading
+
+    seen = {}
+
+    class H(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):  # noqa: N802
+            seen["path"] = self.path
+            seen["profile"] = self.headers.get("Accept-Profile")
+            payload = body.encode()
+            self.send_response(status)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(payload)))
+            self.end_headers()
+            self.wfile.write(payload)
+
+        def log_message(self, *a):
+            pass
+
+    srv = http.server.HTTPServer(("127.0.0.1", 0), H)
+    t = threading.Thread(target=srv.serve_forever, daemon=True)
+    t.start()
+    try:
+        script = ck._NODE_SCRIPT.replace("__PROBE__", "true")
+        proc = subprocess.run(
+            ["node", "-e", script], capture_output=True, text=True, timeout=20,
+            env={"PATH": "/usr/bin:/bin:/usr/local/bin", "SUPABASE_SERVICE_KEY": FRESH,
+                 "SUPABASE_REST_URL": f"http://127.0.0.1:{srv.server_port}/rest/v1"},
+        )
+    finally:
+        srv.shutdown()
+    assert proc.returncode == 0, proc.stderr
+    report = json.loads(proc.stdout)
+    assert FRESH not in proc.stdout
+    assert seen["path"].endswith("/cipher_agent_tokens?select=agent_id&limit=0")
+    assert seen["profile"] == "pmoves_core"
+    finding, note = ck.classify_probe(report["probe"])
+    assert note is None
+    assert (finding["code"] if finding else None) == expect
+
+
+# ── review #3433 P2: JWT secret precedence, end to end with the funnel ─────
+
+
+def test_secret_disagreement_is_named_and_the_funnel_now_fixes_it():
+    from pmoves.tools.secrets_self_generated import fill_self_generated
+
+    other = "j" * 40
+    minted_old_way = derive_supabase_jwt(other, "service_role", **LIVE)  # JWT_SECRET-first mint
+    env = {"JWT_SECRET": other, "SUPABASE_JWT_SECRET": PGRST_SECRET,
+           "SUPABASE_SERVICE_ROLE_KEY": minted_old_way, "SERVICE_ROLE_KEY": minted_old_way}
+    v = ck.assess(env, exprs(), now=NOW)
+    assert v["facets"]["jwt_secrets_agree"] is False
+    assert v["facets"]["matches_kong_config"] is True   # Kong admits it...
+    assert codes(v) == ["wrong_pair_signature"]         # ...PostgREST refuses it
+    detail = v["findings"][0]["detail"]
+    assert "JWT_SECRET and SUPABASE_JWT_SECRET differ" in detail and "secrets-funnel" in detail
+    # The remedy the finding gives actually works: run the funnel guard.
+    refreshed = fill_self_generated(env)
+    after = ck.assess({**env, **refreshed}, exprs(), now=int(__import__("time").time()))
+    assert after["facets"]["signature_verifies"] is True
+    assert "wrong_pair_signature" not in codes(after)
+
+
+def test_secrets_agree_facet_is_boolean_only(tmp_path, monkeypatch, capsys):
+    rc, out, err = _run_cli(tmp_path, monkeypatch, capsys, GATEWAY,
+                            {**INCIDENT_ENV, "JWT_SECRET": "j" * 40}, "--json")
+    payload = json.loads(out)
+    assert payload["facets"]["jwt_secrets_agree"] is False
+    assert "j" * 40 not in out + err
+    _assert_no_leak(out + err)
+
+
+# ── review #3433 P3 ────────────────────────────────────────────────────────
+
+
+def test_retired_paste_and_expired_keys_are_never_recommended():
+    env = {
+        "SUPABASE_SERVICE_ROLE_KEY": FOREIGN,
+        "SERVICE_ROLE_KEY": EXPIRED_PASTE,                  # verifies, but dead
+        "CIPHER_DB_SERVICE_KEY": FRESH_LEGACY,             # verifies and live, but retired
+        "SUPABASE_JWT_SECRET": PGRST_SECRET,
+    }
+    v = ck.assess(env, exprs(), now=NOW)
+    assert codes(v) == ["wrong_pair_signature"]
+    assert v["facets"]["verifying_names"] == []
+    assert "CIPHER_DB_SERVICE_KEY" not in v["findings"][0]["detail"]
+
+
+def test_kong_secret_key_credential_counts_for_opaque_nodes():
+    exprs_ = {**exprs(), "gateway_secret": "${SUPABASE_SECRET_KEY:-}"}
+    env = {"SUPABASE_SERVICE_ROLE_KEY": "sb_secret_abc", "SUPABASE_SECRET_KEY": "sb_secret_abc"}
+    v = ck.assess(env, exprs_, now=NOW)
+    assert v["facets"]["matches_kong_config"] is True
+    assert "wrong_pair_gateway" not in codes(v)
+    assert v["exit"] == 3   # opaque: exp unreadable, so not a pass
+
+
+def test_compose_kong_second_credential_is_read_from_disk():
+    docs = _compose(PMOVES / "docker-compose.yml")
+    assert ck.compose_env_expr(docs, *ck.GATEWAY_SECRET) == "${SUPABASE_SECRET_KEY:-}"
+
+
+def test_kong_order_drift_scanner():
+    docs = [{"services": {
+        "a": {"environment": ["SERVICE_KEY=${SERVICE_ROLE_KEY:-${SUPABASE_SERVICE_ROLE_KEY:-}}"]},
+        "b": {"environment": ['A0_SET_mcp_servers={"x":{"args":["--apiKey","${SERVICE_ROLE_KEY:-${SUPABASE_SERVICE_ROLE_KEY:-}}"]}}']},
+        "c": {"environment": {"K": "${SUPABASE_SERVICE_ROLE_KEY:-${SERVICE_ROLE_KEY:-}}"}},
+    }}]
+    assert ck.kong_order_drift(docs) == ["a:SERVICE_KEY", "b:A0_SET_mcp_servers"]
+
+
+def test_on_disk_reverse_order_sites_are_the_ones_in_the_pr_diff():
+    """Characterises main: these three sites carry the reversed order and ride
+    the same compose grant as cipher-api (diff in PR #3433)."""
+    docs = _compose(PMOVES / "docker-compose.yml") + _compose(PMOVES / "docker-compose.agents.yml")
+    assert set(ck.kong_order_drift(docs)) <= {"supabase-storage:SERVICE_KEY", "agent-zero:A0_SET_mcp_servers"}
+
+
+@pytest.mark.xfail(strict=True, reason="BLOCKED: same compose grant as cipher-api (PR #3433 body)")
+def test_no_service_presents_the_key_in_reverse_of_kongs_order():
+    docs = _compose(PMOVES / "docker-compose.yml") + _compose(PMOVES / "docker-compose.agents.yml")
+    assert ck.kong_order_drift(docs) == []
+
+
+def test_overlay_presence_uses_env_local_key_matcher(tmp_path):
+    f = tmp_path / ".env.local"
+    f.write_text("# CIPHER_DB_SERVICE_KEY=commented\nOTHER=1\n")
+    assert ck.overlay_defines(f, "CIPHER_DB_SERVICE_KEY") is False
+    f.write_text("CIPHER_DB_SERVICE_KEY=" + EXPIRED_PASTE + "\n")
+    assert ck.overlay_defines(f, "CIPHER_DB_SERVICE_KEY") is True
+    assert ck.overlay_defines(tmp_path / "absent", "CIPHER_DB_SERVICE_KEY") is False
+
+
+def test_overlay_only_paste_warns_with_runtime_caveat(tmp_path, monkeypatch, capsys):
+    local = tmp_path / ".env.local"
+    local.write_text("CIPHER_DB_SERVICE_KEY=" + EXPIRED_PASTE + "\n")
+    env = {k: v for k, v in INCIDENT_ENV.items() if k != "CIPHER_DB_SERVICE_KEY"}
+    rc, out, err = _run_cli(tmp_path, monkeypatch, capsys, GATEWAY, env, "--env-local", str(local))
+    assert rc == 0
+    assert "defined in the .env.local overlay, which is NOT in compose's env-file list" in out
+    _assert_no_leak(out + err)
