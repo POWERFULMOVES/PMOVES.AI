@@ -4116,6 +4116,10 @@ cipher-build-pin-check: ## Refuse to build cipher from a submodule worktree that
 
 .PHONY: up-cipher
 up-cipher: cipher-build-pin-check ## Start Cipher Memory (knowledge-graph memory for Claude Code / agents)
+	@# Non-blocking: name a service-key fault (expired / wrong pair / missing / the
+	@# retired CIPHER_DB_SERVICE_KEY still set) BEFORE starting, instead of finding
+	@# it afterwards as per_agent_auth 'token lookup returned HTTP 401' on /health.
+	@$(MAKE) --no-print-directory cipher-auth-check || echo "WARN: cipher-auth-check did not pass (verdict above) - per-agent token lookups may 503 after this start"
 	@$(DC) --profile agents up -d --build cipher-api
 	@# Idempotent. ONLY the schema-mismatch exit 2 is tolerated (the smoke
 	@# gate fails loudly on it); every other failure — bad Qdrant creds,
@@ -4126,6 +4130,10 @@ up-cipher: cipher-build-pin-check ## Start Cipher Memory (knowledge-graph memory
 
 .PHONY: up-cipher-nobuild
 up-cipher-nobuild: ## Recreate Cipher from the EXISTING image (no rebuild) — applies env/port changes when the Pmoves-cipher submodule build is unavailable (gitlink drift). Honors COMPOSE_ENV_FILES via $(DC).
+	@# Non-blocking: name a service-key fault (expired / wrong pair / missing / the
+	@# retired CIPHER_DB_SERVICE_KEY still set) BEFORE starting, instead of finding
+	@# it afterwards as per_agent_auth 'token lookup returned HTTP 401' on /health.
+	@$(MAKE) --no-print-directory cipher-auth-check || echo "WARN: cipher-auth-check did not pass (verdict above) - per-agent token lookups may 503 after this start"
 	@$(DC) --profile agents up -d --no-build --force-recreate cipher-api
 	@# Provisioning on EVERY cipher-starting road (review P1): a fresh volume
 	@# recreated here is exactly as empty as a fresh build's.
@@ -4222,6 +4230,10 @@ up-cipher-full: cipher-build-pin-check ## Start Cipher Memory with full embeddin
 	@echo "Starting full Cipher embedding stack..."
 	@$(DC) up -d nats qdrant
 	@$(DC) --profile tensorzero up -d tensorzero-gateway pmoves-ollama
+	@# Non-blocking: name a service-key fault (expired / wrong pair / missing / the
+	@# retired CIPHER_DB_SERVICE_KEY still set) BEFORE starting, instead of finding
+	@# it afterwards as per_agent_auth 'token lookup returned HTTP 401' on /health.
+	@$(MAKE) --no-print-directory cipher-auth-check || echo "WARN: cipher-auth-check did not pass (verdict above) - per-agent token lookups may 503 after this start"
 	@$(DC) --profile agents up -d --build cipher-api
 	@$(MAKE) --no-print-directory qdrant-provision-cipher
 	@echo "✔ Cipher Memory + embedding pipeline ready"
@@ -4284,6 +4296,19 @@ cipher-memory-smoke: ## Smoke test cipher /api/memory POST + search — FAILS if
 .PHONY: cipher-health
 cipher-health: ## Check Cipher Memory health
 	@curl -sf http://localhost:$${CIPHER_PORT:-8105}/health && echo " ✔ cipher-api healthy" || (echo "✗ cipher-api unhealthy" && exit 1)
+
+# Read-only: will the key cipher-api presents for per-agent token lookups pass
+# Kong key-auth AND PostgREST? Evaluates the compose expressions on disk against
+# the SAME --env-file list $(DC) uses, so it judges what the next up-cipher
+# delivers. Tells expired / wrong pair (gateway or signature) / missing / wrong
+# role apart, and WARNs on the retired CIPHER_DB_SERVICE_KEY paste. Prints no
+# key, digest or secret. CONTAINER=1 also reads the running cipher-api; PROBE=1
+# runs cipher's own lookup from inside it (GET ...?limit=0). make collapses exit
+# codes to 2, so read the CIPHER_AUTH_VERDICT= line (0 ok / 1 finding / 3
+# could-not-measure) or run the tool directly.
+.PHONY: cipher-auth-check
+cipher-auth-check: ## Read-only: does cipher's service key pass Kong + PostgREST? (expired / wrong pair / missing; never prints a key) [CONTAINER=1 PROBE=1]
+	@$(PYTHON) tools/cipher_service_key_check.py --compose docker-compose.yml $(COMPOSE_ENV_FILES) $(if $(CONTAINER),--container,) $(if $(PROBE),--probe,)
 
 .PHONY: spark-health
 spark-health: ## Check SPARK node (DGX Spark) health: Ollama, TensorZero, NATS, Cipher, Agent Zero SPARK
