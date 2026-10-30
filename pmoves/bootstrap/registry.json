@@ -1047,7 +1047,7 @@
           "key": "INVIDIOUS_HMAC_KEY",
           "file": "pmoves/env.shared",
           "prompt": "Invidious HMAC signing key",
-          "help": "Secret key for signing Invidious API requests. Auto-generated for development.",
+          "help": "Invidious hmac_key: signs CSRF tokens, cookies and pubsub verification (iv-org/invidious config/config.example.yml). Mandatory random string; Invidious exits if empty. Vendor suggests pwgen 20 1; we mint 64 hex. Must differ from INVIDIOUS_COMPANION_KEY. Rotating it invalidates sessions.",
           "required": true,
           "sensitive": true,
           "generate": {
@@ -1059,12 +1059,12 @@
           "key": "INVIDIOUS_COMPANION_KEY",
           "file": "pmoves/env.shared",
           "prompt": "Invidious Companion API key",
-          "help": "API key for Invidious Companion service. Auto-generated for development.",
+          "help": "Shared key between Invidious (invidious_companion_key) and the companion (SERVER_SECRET_KEY). EXACTLY 16 alphanumeric characters: Invidious exits on any other length and the companion's config schema enforces length 16 + [a-zA-Z0-9]. 16 hex satisfies both. Vendor suggests pwgen 16 1.",
           "required": true,
           "sensitive": true,
           "generate": {
             "type": "random_hex",
-            "length": 64
+            "length": 16
           }
         }
       ]

@@ -283,7 +283,7 @@ def classify(
     # would be a slot the guard skips and the mint then fills -- the defect,
     # reintroduced one layer down.
     existing = read_env_value(key, env_path)
-    if existing not in (None, ""):
+    if _be.slot_is_filled(existing):
         return Decision(key, STATE_SATISFIED, "already set in the funnel source")
 
     ack = ack_destructive or set()

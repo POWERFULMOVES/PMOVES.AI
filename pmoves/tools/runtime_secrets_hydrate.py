@@ -213,7 +213,10 @@ def hydrate_runtime_labels(
     )
 
     # Invidious companion key: must be exactly 16 alphanumeric characters.
-    # The Invidious companion rejects keys that are not 16 hex chars.
+    # Invidious exits unless invidious_companion_key.size == 16 (src/invidious/config.cr)
+    # and the companion's schema is z.string().length(16).regex(/^[a-zA-Z0-9]+$/)
+    # (src/lib/helpers/config.ts). A container still carrying the old PUBLIC
+    # compose default is not harvested: is_placeholder() rejects published values.
     set_if_missing(
         "INVIDIOUS_COMPANION_KEY",
         _find_container_env_value(

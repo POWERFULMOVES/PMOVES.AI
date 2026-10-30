@@ -7,6 +7,7 @@ runtime_secrets_hydrate, auth_bootstrap_check, and local_cert_runners.
 
 from __future__ import annotations
 
+import hashlib
 import os
 import re
 import sys
@@ -72,6 +73,30 @@ def normalize_env_value(value: str) -> str:
     return value
 
 
+# SHA-256 digests of secret values that were committed to this public repo as
+# compose literal defaults. A value published in git history is compromised for
+# good: removing it from HEAD does not un-publish it. Every predicate that asks
+# "does this slot already hold a usable secret?" must answer NO for these, or the
+# funnel would harvest the public value back out of a running container and keep
+# it forever. Digests, not values -- the point is to stop re-publishing them.
+#
+#   INVIDIOUS_HMAC_KEY       64 hex, docker-compose{,.ui}.yml until the fix
+#                            for invidious-required-keys
+#   INVIDIOUS_COMPANION_KEY  16 hex, same files (also the companion's
+#                            SERVER_SECRET_KEY default)
+KNOWN_PUBLIC_SECRET_SHA256: frozenset[str] = frozenset({
+    "f0fdab5ca05b32f04a2b2daf074d81ae52b7bf92e0e714c867d52d7926a2e433",
+    "d34df49b401f6034654f748efe01478a56ba8b29703f0977cf04e0c04c432958",
+})
+
+
+def is_known_public(value: str | None) -> bool:
+    """Return True if *value* is a secret that was published in this repo."""
+    if not value:
+        return False
+    normalized = normalize_env_value(value)
+    return hashlib.sha256(normalized.encode("utf-8")).hexdigest() in KNOWN_PUBLIC_SECRET_SHA256
+
 def is_placeholder(value: str | None) -> bool:
     """Return True if value is missing, empty, or a known placeholder.
 
@@ -86,6 +111,9 @@ def is_placeholder(value: str | None) -> bool:
     normalized = normalize_env_value(value)
     lowered = normalized.lower()
     if not lowered or lowered in PLACEHOLDER_VALUES:
+        return True
+    # A published secret is no secret: treat it exactly like a template value.
+    if is_known_public(normalized):
         return True
     # Pattern: your_* prefix (any position), placeholder_* prefix
     if "your_" in lowered:

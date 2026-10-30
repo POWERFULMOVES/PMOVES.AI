@@ -23,6 +23,10 @@ from urllib.parse import urlparse
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from pmoves.tools._secrets_common import is_known_public  # noqa: E402  (stdlib-only module)
 DEFAULT_REGISTRY_PATH = REPO_ROOT / "pmoves" / "bootstrap" / "registry.json"
 ENV_SHARED_PATH = REPO_ROOT / "pmoves" / "env.shared"
 CLEARED_KEYS_PATH = REPO_ROOT / "pmoves" / "configs" / "secrets_cleared.yaml"
@@ -340,6 +344,19 @@ def read_env_value(key: str, env_path: Optional[Path] = None) -> Optional[str]:
     return found
 
 
+def slot_is_filled(existing: Optional[str]) -> bool:
+    """The one predicate for "this env slot already holds a usable secret".
+
+    Absent and empty are unfilled. So is a value that was published in this
+    repo (``KNOWN_PUBLIC_SECRET_SHA256``): the Invidious keys shipped as compose
+    literal defaults, so a node whose env file -- or whose running container --
+    holds them is holding a public value. Treating it as filled would make the
+    funnel defend the compromised key forever. ``secrets_harvest.classify`` calls
+    this too; the two must never disagree.
+    """
+    return existing not in (None, "") and not is_known_public(existing)
+
+
 def ensure_secret(
     key: str,
     *,
@@ -382,7 +399,7 @@ def ensure_secret(
     can never rotate live cryptographic material.
     """
     existing = read_env_value(key, env_path)
-    if existing not in (None, ""):
+    if slot_is_filled(existing):
         return False, "already set"
 
     declared = _registry_generator(key, registry_path)
@@ -402,6 +419,8 @@ def ensure_secret(
     # tombstone would permanently block secrets-local-hydrate from it.
     unmark_key_cleared(key)
     detail = gen_type + (f" length {length}" if length else "")
+    if is_known_public(existing):
+        detail += "; replaced a value published in the repo"
     return True, f"generated ({detail})"
 
 
@@ -923,9 +942,10 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
             unprovisioned = []
             for key in args.ensure:
                 value = read_env_value(key)
-                if value in (None, ""):
+                if not slot_is_filled(value):
                     unprovisioned.append(key)
-                    _error(f"{key}: UNPROVISIONED (absent or empty in env.shared)")
+                    why = "a value published in the repo" if is_known_public(value) else "absent or empty"
+                    _error(f"{key}: UNPROVISIONED ({why} in env.shared)")
                 else:
                     print(f"{key}: provisioned")
             if unprovisioned:
