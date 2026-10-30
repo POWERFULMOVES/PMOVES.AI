@@ -422,6 +422,15 @@ def report(outputs: Mapping[str, Mapping[str, str]]) -> str:
     return "\n".join(rows)
 
 
+class _ComposeLoader(yaml.SafeLoader):
+    """SafeLoader that tolerates compose's own tags (``!reset``, ``!override``).
+    Without it the overlays that use them fail to parse and their services drop
+    out of the consumer list."""
+
+
+_ComposeLoader.add_multi_constructor("!", lambda loader, suffix, node: None)
+
+
 # Known Roads that recreate the consumers a Supabase key change reaches. Printed
 # as guidance only; this tool never starts or recreates anything.
 _RECREATE_ROADS = (
@@ -466,7 +475,7 @@ def announce_jwt_events(
     docs = []
     for path in compose_paths:
         try:
-            docs.append(yaml.safe_load(path.read_text(encoding="utf-8")) or {})
+            docs.append(yaml.load(path.read_text(encoding="utf-8"), Loader=_ComposeLoader) or {})
         except (OSError, yaml.YAMLError) as exc:
             print(f"[secrets-sync] WARN could not read {path.name} for the consumer list ({type(exc).__name__})", file=out)
     consumers = compose_consumers(labels, docs)

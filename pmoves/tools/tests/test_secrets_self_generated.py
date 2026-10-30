@@ -256,6 +256,7 @@ def test_our_key_signed_with_the_other_secret_is_reminted_and_announced(capsys):
         (e["label"], e["action"], e["reason"]) for e in events}
     consumers = announce_jwt_events(events)  # real compose files
     printed = capsys.readouterr().out
+    assert "could not read" not in printed  # every docker-compose*.yml parsed (incl. !reset overlays)
     assert "RE-MINTED SUPABASE_SERVICE_ROLE_KEY (service_role): signed_with_other_secret" in printed
     assert {"supabase-kong", "cipher-api"} <= set(consumers)
     assert "make -C pmoves up-supabase" in printed and "make -C pmoves up-cipher" in printed
