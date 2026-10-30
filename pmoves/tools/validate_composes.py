@@ -21,6 +21,17 @@ the straggler sweep in PR #2415):
      image that runs in production. `latest`, semver tags, and
      non-digested refs all surface here so the operator sees the gap
      before the next "why is prod on a moving tag" incident.
+  4. literal secret defaults — `${SOME_KEY:-<credential>}` where the
+     variable is secret-named and the default is credential-SHAPED
+     (>=16 hex, or a >=20-char token mixing letters and digits). This
+     repo is public, so such a default is a published key: every node
+     that never set the variable runs on it. The Invidious HMAC and
+     companion keys shipped this way until fix/invidious-required-keys.
+     Fix: `${SOME_KEY:?set SOME_KEY via secrets funnel}` plus a
+     generator in bootstrap/registry.json. Always on. Findings print
+     the variable and the SHAPE of the default, never the value.
+     Word-like dev defaults (`postgres`, `kemal`) are a different,
+     weaker class and are deliberately not matched here.
 
 This script reads a static set of YAML files in the repo. No GitHub
 API, no fork-registry access, no token privilege. Runs in <100ms on
@@ -122,6 +133,18 @@ HAND_MAINTAINED_OVERLAYS = frozenset({
 # Pin-digest regex (the canonical sha256:64hex form for a digest).
 DIGEST_RE = re.compile(r"@sha256:[0-9a-f]{64}\b")
 
+# `${NAME:-default}` / `${NAME-default}`. The default stops at `}` or a nested
+# `$`, so `${A:-${B}}` (a reference, not a literal) never matches as a literal.
+INTERP_DEFAULT_RE = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*):?-([^}$]*)\}")
+SECRET_NAME_RE = re.compile(
+    r"(KEY|SECRET|TOKEN|PASSWORD|PASSWD|PASSPHRASE|HMAC|SALT|CREDENTIAL)", re.I
+)
+# Secret-named variables that hold a LOCATION, not the secret itself.
+NON_SECRET_SUFFIXES = ("_FILE", "_DIR", "_PATH", "_URL", "_URI", "_IMAGE", "_ID", "_NAME")
+HEX_CREDENTIAL_RE = re.compile(r"[0-9a-fA-F]{16,}")
+TOKEN_CREDENTIAL_RE = re.compile(r"[A-Za-z0-9_\-+/=.]{20,}")
+SERVICE_HEADER_RE = re.compile(r"^  ([A-Za-z0-9_.-]+):\s*(?:#.*)?$")
+
 
 def _scan_env_file(
     file: Path,
@@ -138,7 +161,7 @@ def _scan_env_file(
         # `.env.local` (always opt-in).
         if env_file == ".env.local":
             problems.append({
-                "file": str(file.relative_to(REPO_ROOT)),
+                "file": _rel(file),
                 "service": service,
                 "kind": "env-local-shortform",
                 "detail": (
@@ -153,7 +176,7 @@ def _scan_env_file(
     for entry in env_file:
         if entry == ".env.local":
             problems.append({
-                "file": str(file.relative_to(REPO_ROOT)),
+                "file": _rel(file),
                 "service": service,
                 "kind": "env-local-shortform",
                 "detail": (
@@ -165,7 +188,7 @@ def _scan_env_file(
             # long-form present; OK if not required
             if entry.get("required", True):
                 problems.append({
-                    "file": str(file.relative_to(REPO_ROOT)),
+                    "file": _rel(file),
                     "service": service,
                     "kind": "env-local-longform-required",
                     "detail": (
@@ -207,7 +230,7 @@ def _scan_image(
     # default to `:latest` in compose, so they ARE moving. Flag.
     if ":" not in target.split("/")[-1]:
         return [{
-            "file": str(file.relative_to(REPO_ROOT)),
+            "file": _rel(file),
             "service": service,
             "kind": "image-no-tag",
             "detail": f"image '{image}' has no tag; defaults to :latest.",
@@ -215,7 +238,7 @@ def _scan_image(
     tag = target.split(":")[-1].split("@")[0]
     if tag in ("latest",) or re.match(r"^\d+(\.\d+){0,2}$", tag):
         return [{
-            "file": str(file.relative_to(REPO_ROOT)),
+            "file": _rel(file),
             "service": service,
             "kind": "image-no-digest",
             "detail": (
@@ -224,6 +247,76 @@ def _scan_image(
             ),
         }]
     return []
+
+
+def _rel(file: Path) -> str:
+    """Repo-relative path when possible; the scan also runs on scratch copies."""
+    try:
+        return str(file.resolve().relative_to(REPO_ROOT))
+    except ValueError:
+        return str(file)
+
+
+def _credential_shape(default: str) -> str | None:
+    """Describe *default* if it looks like key material, else None.
+
+    The description is the shape (`<64 hex>`), never the value: a finding
+    must not re-publish the secret it is reporting.
+    """
+    value = default.strip().strip("\"'")
+    if not value or value.startswith("/") or "://" in value:
+        return None
+    if HEX_CREDENTIAL_RE.fullmatch(value):
+        return f"<{len(value)} hex>"
+    if (
+        TOKEN_CREDENTIAL_RE.fullmatch(value)
+        and re.search(r"[0-9]", value)
+        and re.search(r"[A-Za-z]", value)
+    ):
+        return f"<{len(value)} chars>"
+    return None
+
+
+def _scan_literal_secret_defaults(file: Path, text: str) -> list[dict]:
+    """Flag secret-named interpolations that carry a credential-shaped default.
+
+    Text scan, not YAML: the defaults that matter also hide INSIDE string
+    values (the Invidious HMAC was interpolated into the INVIDIOUS_CONFIG
+    YAML-in-an-env-var), which a structured walk of `environment:` misses.
+    """
+    problems: list[dict] = []
+    service = "-"
+    in_services = False
+    for lineno, line in enumerate(text.splitlines(), 1):
+        if line and not line[0].isspace() and not line.startswith("#"):
+            in_services = line.startswith("services:")
+            service = "-"
+        elif in_services:
+            header = SERVICE_HEADER_RE.match(line)
+            if header:
+                service = header.group(1)
+        for match in INTERP_DEFAULT_RE.finditer(line):
+            name, default = match.group(1), match.group(2)
+            if not SECRET_NAME_RE.search(name):
+                continue
+            if name.upper().endswith(NON_SECRET_SUFFIXES):
+                continue
+            shape = _credential_shape(default)
+            if shape is None:
+                continue
+            problems.append({
+                "file": _rel(file),
+                "service": service,
+                "line": lineno,
+                "kind": "literal-secret-default",
+                "detail": (
+                    f"line {lineno}: ${{{name}:-{shape}}} ships a credential-shaped "
+                    "default in a public repo. Use "
+                    f"${{{name}:?set {name} via secrets funnel}} and declare a "
+                    "generator in bootstrap/registry.json."
+                ),
+            })
+    return problems
 
 
 def _yaml_safe_load_with_compose_tags(text: str):
@@ -258,14 +351,14 @@ def _scan_file(file: Path) -> list[dict]:
     except ImportError:
         print("PyYAML required: pip install pyyaml", file=sys.stderr)
         sys.exit(2)
-    with file.open(encoding="utf-8") as fh:
-        data = _yaml_safe_load_with_compose_tags(fh)
+    text = file.read_text(encoding="utf-8")
+    problems: list[dict] = _scan_literal_secret_defaults(file, text)
+    data = _yaml_safe_load_with_compose_tags(text)
     if not isinstance(data, dict):
-        return []
+        return problems
     services = data.get("services") or {}
     if not isinstance(services, dict):
-        return []
-    problems: list[dict] = []
+        return problems
     for svc_name, svc in services.items():
         if not isinstance(svc, dict):
             continue
@@ -342,7 +435,7 @@ def main() -> int:
 
     if args.json:
         print(json.dumps({
-            "files_scanned": [str(f.relative_to(REPO_ROOT)) for f in files],
+            "files_scanned": [_rel(f) for f in files],
             "files_total": len(files),
             "problems": problems,
             "summary": _summary(problems),
