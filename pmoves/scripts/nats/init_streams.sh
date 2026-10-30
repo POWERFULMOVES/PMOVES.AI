@@ -13,6 +13,7 @@
 #   COMFY_COLLAB           comfy.collab.> limits 7d  1GB    (Creator Collab slice 3)
 #   ROOMS                  room.>        limits 7d  500MB   (P7 room presence/directory/manifest)
 #   HELPDESK               helpdesk.>    limits 30d 1GB    (PMOVES-helpdesk intake/routed/suggested)
+#   COMPUTE                mesh.node.announce.> compute.nodes.>  limits 7d 1GB (node registry announce plane)
 #
 # FLAGGED, NOT CHANGED: CONTENT_PROVENANCE still uses `interest` retention and
 # also has 0 bound consumers, so it has the same silent-discard hazard described
@@ -216,6 +217,34 @@ add_stream HELPDESK \
 # void-publish, the exact Lane 5 bug class. `limits` retention; 30d: mint
 # events are governance records (persona x room x agent), not telemetry.
 add_stream ARCHON   --subjects "archon.>"   --storage file   --retention limits   --max-age 720h   --max-bytes 536870912   --discard old   --replicas 1
+
+# ---------- COMPUTE (node registry announcement plane) ----------
+# WHY (D5 / PRE_RESTART_PREFLIGHT R8a): the node registry subscribes to the
+# mesh announcement family with a JetStream durable consumer
+# (`stream="compute"`), but no stream named `compute` was ever created -- so
+# every subscribe attempt failed and the registry silently fell back to core
+# NATS, losing every announcement published while it was down. This stream
+# carries the two families the registry owns: the mesh announcement plane
+# (mesh.node.announce.v1/.v2, published by mesh-agent and by the node
+# bootstrap scripts) and the registry's own node protocol (compute.nodes.*).
+#
+# `limits` retention, NOT `interest`: under interest retention a message with
+# no currently bound consumer is accepted and immediately discarded. The
+# registry's durable consumer is created lazily on its first connect, so an
+# interest-retention stream would silently drop every announcement published
+# before the registry first ran -- the same silent-discard hazard described
+# on TOKENISM_ATTRIBUTION above.
+#
+# No subject overlap with the other streams: "mesh.node.announce.>" does not
+# intersect MESH_GPU's "mesh.gpu.>", and "compute.nodes.>" intersects nothing.
+add_stream COMPUTE \
+  --subjects "mesh.node.announce.> compute.nodes.>" \
+  --storage file \
+  --retention limits \
+  --max-age 168h \
+  --max-bytes 1073741824 \
+  --discard old \
+  --replicas 1
 
 if [ "$FAIL_COUNT" -gt 0 ]; then
   echo "ERROR: $FAIL_COUNT stream(s) failed to create" >&2

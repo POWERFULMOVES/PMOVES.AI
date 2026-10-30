@@ -13,41 +13,36 @@ import sys
 import structlog
 from aiohttp import web
 
-# Import service components
+# Import service components.
+#
+# WHY (D3): this entry point used to load its own submodules with
+# importlib.util.spec_from_file_location(...). A module loaded that way has
+# no parent package, so `from ..resource_detector.models import ...` inside
+# registry.py / storage.py / api.py raised "attempted relative import with no
+# known parent package" -- the service could not start at all. The package
+# directory is now `node_registry`, so the relative imports resolve
+# natively; the fallback below covers a plain script launch
+# (`python pmoves/services/node_registry/main.py`), where the module still
+# has no package context.
 try:
     from .registry import NodeRegistry, SUBJECTS
     from .api import NodeRegistryAPI
     from .storage import SupabaseNodeStore, InMemoryNodeStore
 except ImportError:
-    # Handle hyphenated module name
-    import importlib.util
-    spec = importlib.util.spec_from_file_location(
-        "node_registry",
-        os.path.join(os.path.dirname(__file__), "__init__.py")
-    )
-    node_registry = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(node_registry)
-    NodeRegistry = node_registry.NodeRegistry
-    SUBJECTS = node_registry.SUBJECTS
+    # Script mode: no package context. Make the repo root importable and
+    # load the REAL package by its canonical name instead of by file path.
+    import pathlib
 
-    # Import API module
-    spec_api = importlib.util.spec_from_file_location(
-        "node_registry_api",
-        os.path.join(os.path.dirname(__file__), "api.py")
-    )
-    node_registry_api = importlib.util.module_from_spec(spec_api)
-    spec_api.loader.exec_module(node_registry_api)
-    NodeRegistryAPI = node_registry_api.NodeRegistryAPI
+    _REPO_ROOT = str(pathlib.Path(__file__).resolve().parents[3])
+    if _REPO_ROOT not in sys.path:
+        sys.path.insert(0, _REPO_ROOT)
 
-    # Import storage module
-    spec_storage = importlib.util.spec_from_file_location(
-        "node_registry_storage",
-        os.path.join(os.path.dirname(__file__), "storage.py")
+    from pmoves.services.node_registry.registry import NodeRegistry, SUBJECTS
+    from pmoves.services.node_registry.api import NodeRegistryAPI
+    from pmoves.services.node_registry.storage import (
+        SupabaseNodeStore,
+        InMemoryNodeStore,
     )
-    node_registry_storage = importlib.util.module_from_spec(spec_storage)
-    spec_storage.loader.exec_module(node_registry_storage)
-    SupabaseNodeStore = node_registry_storage.SupabaseNodeStore
-    InMemoryNodeStore = node_registry_storage.InMemoryNodeStore
 
 
 # Configure structured logging

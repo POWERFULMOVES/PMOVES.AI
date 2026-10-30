@@ -26,8 +26,24 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Any, Callable, Dict, List, Optional, Set
 
-from ..resource_detector.models import WorkRequest, WorkAssignment
-from ..resource_detector.hardware import NodeTier
+# WHY (D2/D3): this service directory was kebab-case (`work-marshaling`), so
+# the module was loaded by file path (`work-marshaling/main.py` did exactly
+# that) and therefore had no `pmoves.services` package context -- the relative
+# import below could never resolve ("attempted relative import beyond
+# top-level package"), and the package it pointed at (`resource_detector`) did
+# not exist under that name either: the directory was `resource-detector`.
+# The directories are now snake-case, so this is a real package and the
+# canonical absolute import is the only one. The repo root is put on
+# sys.path first so the absolute import resolves from any launcher.
+import pathlib
+import sys
+
+_REPO_ROOT = str(pathlib.Path(__file__).resolve().parents[3])
+if _REPO_ROOT not in sys.path:
+    sys.path.insert(0, _REPO_ROOT)
+
+from pmoves.services.resource_detector.hardware import NodeTier
+from pmoves.services.resource_detector.models import WorkAssignment, WorkRequest
 
 logger = logging.getLogger(__name__)
 

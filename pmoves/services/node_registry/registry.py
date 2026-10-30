@@ -5,25 +5,198 @@ query interface for work allocator to find suitable nodes.
 """
 
 import asyncio
+import json
 import logging
 import os
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from .storage import InMemoryNodeStore, NodeRecord, SupabaseNodeStore
+from ..resource_detector.hardware import CpuInfo, GpuInfo, NodeTier, SystemMemory
 from ..resource_detector.models import NodeCapabilities, NodeHeartbeat
 
 logger = logging.getLogger(__name__)
 
 
-# NATS subjects for node registry
+# NATS subjects for node registry.
+#
+# WHY THESE STRINGS (D4 / PRE_RESTART_PREFLIGHT R8): the registry used to
+# subscribe to `compute.nodes.announce.v1` while every publisher in the repo
+# announces on `mesh.node.announce.v1` -- mesh-agent (the DEPLOYED publisher:
+# it has a Dockerfile and a compose entry), pmoves/scripts/bootstrap-node.sh
+# and pmoves/scripts/mesh-bind.sh. Two finished halves wired to different
+# strings: the announcements reached nobody and the registry heard nothing.
+#
+# The SUBSCRIBER moved, not the publisher. `mesh.node.announce.v1` is the
+# subject declared across pmoves/config/agent_registry.yaml,
+# pmoves/services/graphiti/nats_subject_registry.py and the bootstrap
+# scripts, and mesh-agent additionally publishes the richer v2 payload
+# (namespace identity + topology), which this registry also consumes.
 SUBJECTS = {
-    "announce": "compute.nodes.announce.v1",
-    "heartbeat": "compute.nodes.heartbeat.v1",
+    "announce": "mesh.node.announce.v1",
+    "announce_v2": "mesh.node.announce.v2",
+    # Both versions live in one subject family; the JetStream consumer takes
+    # the whole family in one durable subscription.
+    "announce_family": "mesh.node.announce.>",
+    # The mesh has NO separate heartbeat subject -- it re-announces every
+    # ANNOUNCE_SEC seconds, so the announcement IS the heartbeat. The
+    # heartbeat subject therefore points at the same stream instead of at a
+    # subject nobody publishes.
+    "heartbeat": "mesh.node.announce.v1",
     "query": "compute.nodes.query.v1",
     "response": "compute.nodes.response.v1",
     "drain": "compute.nodes.drain.v1",
 }
+
+# JetStream stream that carries the announce family (see
+# pmoves/scripts/nats/init_streams.sh -- the COMPUTE stream).
+ANNOUNCE_STREAM = "compute"
+ANNOUNCE_DURABLE = "node-registry-announce"
+
+
+def _first_str(payload: Dict[str, Any], *keys: str) -> Optional[str]:
+    """First non-empty string value among *keys*, or None."""
+    for key in keys:
+        value = payload.get(key)
+        if isinstance(value, str) and value:
+            return value
+    return None
+
+
+def node_id_from_announcement(payload: Dict[str, Any]) -> Optional[str]:
+    """Node id from any announcement dialect published in this repo.
+
+    * mesh-agent v1/v2 -> {"node": <hostname>, "slug": <id>}
+    * bootstrap-node.sh / mesh-bind.sh -> {"node_id": <id>}
+    * the registry's own protocol -> {"node_id": <id>}
+    """
+    return _first_str(payload, "node_id", "slug", "node")
+
+
+def timestamp_from_announcement(payload: Dict[str, Any]) -> datetime:
+    """Announcement timestamp.
+
+    mesh-agent and the bootstrap scripts send an integer epoch under "ts";
+    the registry's own protocol sends an ISO-8601 string under "timestamp".
+    """
+    raw = payload.get("timestamp")
+    if isinstance(raw, str):
+        try:
+            return datetime.fromisoformat(raw)
+        except ValueError:
+            pass
+    epoch = payload.get("ts")
+    if isinstance(epoch, (int, float)):
+        return datetime.fromtimestamp(epoch)
+    return datetime.now()
+
+
+def _tier_from_announcement(payload: Dict[str, Any]) -> NodeTier:
+    """Node tier from an announcement, defaulting when it says nothing.
+
+    WHY (D4): mesh-agent v2 announces its namespace tier
+    (`namespace.tier`, from SERVICE_TIER); the v1 payload and the bootstrap
+    scripts say nothing about the tier at all. An announcement with no
+    hardware facts is registered as CPU_PEER -- the least GPU-capable tier
+    that still describes an online node -- with ZERO available slots, so the
+    work allocator cannot route work to a node that never claimed any
+    capacity until a hardware probe reports real numbers.
+    """
+    candidates = [
+        _first_str(payload, "tier"),
+        _first_str(payload.get("namespace") or {}, "tier"),
+    ]
+    for candidate in candidates:
+        if not candidate:
+            continue
+        try:
+            return NodeTier(candidate)
+        except ValueError:
+            continue
+    return NodeTier.CPU_PEER
+
+
+def capabilities_from_announcement(payload: Dict[str, Any]) -> NodeCapabilities:
+    """Build a NodeCapabilities record from a mesh announcement.
+
+    WHY (D4): the registry used to hand every announcement to
+    NodeCapabilities.from_nats_message(), which expects the registry's OWN
+    full capability message ({node_id, hostname, tier, cpu_cores, ...}). The
+    messages that actually flow on mesh.node.announce.v1/v2 are presence
+    announcements with no hardware facts, so every single one raised
+    KeyError('node_id') and was dropped -- the registry stayed empty even
+    once the subject matched.
+
+    This maps each dialect (mesh-agent v1, mesh-agent v2, the bootstrap
+    scripts) onto the capability record. Hardware facts are never invented:
+    an announcement without them yields zero capacity.
+    """
+    node_id = node_id_from_announcement(payload)
+    if not node_id:
+        raise ValueError("announcement carries no node identity")
+
+    hostname = _first_str(payload, "hostname", "node") or node_id
+
+    memory_mb = int(payload.get("memory_mb", 0) or 0)
+    memory_gb = float(payload.get("memory_gb", 0.0) or 0.0)
+    if not memory_mb and memory_gb:
+        memory_mb = int(memory_gb * 1024)
+    if not memory_gb and memory_mb:
+        memory_gb = memory_mb / 1024
+
+    cpu_threads = int(payload.get("cpu_threads", payload.get("cpu_cores", 0)) or 0)
+    cpu_cores = int(payload.get("cpu_cores", 0) or 0)
+
+    gpus = []
+    for index, name in enumerate(payload.get("gpu_models", []) or []):
+        gpus.append(
+            GpuInfo(
+                index=index,
+                name=name,
+                total_vram_mb=0,
+                total_vram_gb=0.0,
+                driver_version="unknown",
+                cuda_version="unknown",
+            )
+        )
+
+    host = _first_str(payload, "host")
+    tailscale_ip = _first_str(payload, "tailscale_ip")
+
+    return NodeCapabilities(
+        node_id=node_id,
+        hostname=hostname,
+        tier=_tier_from_announcement(payload),
+        cpu=CpuInfo(
+            cores=cpu_cores,
+            threads_per_core=1,
+            total_threads=cpu_threads,
+            model_name=_first_str(payload, "cpu_model", "model_name") or "Unknown",
+            mhz_per_cpu=float(payload.get("cpu_mhz", 0.0) or 0.0),
+        ),
+        memory=SystemMemory(
+            total_mb=memory_mb,
+            total_gb=memory_gb,
+            available_mb=int(payload.get("available_memory_mb", 0) or 0),
+            available_gb=float(payload.get("available_memory_mb", 0) or 0) / 1024,
+        ),
+        gpus=gpus,
+        total_gpu_vram_gb=float(payload.get("gpu_vram_gb", 0.0) or 0.0),
+        ipv4=tailscale_ip or (host if host and host[0].isdigit() else None),
+        ipv6=None,
+        port=int(payload.get("port", 4222) or 4222),
+        available_cpu_slots=int(payload.get("available_cpu_slots", 0) or 0),
+        available_gpu_slots=int(payload.get("available_gpu_slots", 0) or 0),
+        available_memory_mb=int(payload.get("available_memory_mb", 0) or 0),
+        available_vram_mb=int(payload.get("available_vram_mb", 0) or 0),
+        supported_models=list(payload.get("supported_models", []) or []),
+        supported_frameworks=list(payload.get("supported_frameworks", []) or []),
+        is_online=True,
+        is_draining=False,
+        last_heartbeat=timestamp_from_announcement(payload),
+        uptime_seconds=float(payload.get("uptime_seconds", 0.0) or 0.0),
+    )
+
 
 
 class NodeRegistry:
@@ -129,69 +302,96 @@ class NodeRegistry:
         logger.info("Node registry stopped")
 
     async def _subscribe_announce(self):
-        """Subscribe to node announcements."""
+        """Subscribe to node announcements (mesh.node.announce.v1 AND .v2).
+
+        WHY (D4): mesh-agent publishes BOTH versions of the announcement --
+        v1 for backward compatibility and v2 with namespace identity and
+        topology. The registry must consume both, otherwise it ignores half
+        of what the mesh says about itself.
+        """
 
         async def on_announce(msg):
             try:
-                data = msg.data.decode()
-                import json
+                payload = json.loads(msg.data.decode())
+            except (UnicodeDecodeError, json.JSONDecodeError) as e:
+                logger.error(f"Invalid announcement message format: {e}", exc_info=True)
+                return
+            except Exception as e:
+                logger.error(f"Error processing announcement: {e}", exc_info=True)
+                return
 
-                payload = json.loads(data)
-                capabilities = NodeCapabilities.from_nats_message(payload)
+            try:
+                capabilities = capabilities_from_announcement(payload)
+            except (KeyError, ValueError, TypeError) as e:
+                logger.error(f"Invalid announcement payload: {e}", exc_info=True)
+                return
 
+            try:
                 await self.storage.register(capabilities)
-
                 logger.debug(
                     f"Node announcement: {capabilities.node_id} ({capabilities.tier.value})"
                 )
-
-            except (UnicodeDecodeError, json.JSONDecodeError) as e:
-                logger.error(f"Invalid announcement message format: {e}", exc_info=True)
-            except (KeyError, ValueError, TypeError) as e:
-                logger.error(f"Invalid announcement payload: {e}", exc_info=True)
             except Exception as e:
                 logger.error(f"Error processing announcement: {e}", exc_info=True)
 
-        # Create JetStream consumer for announcements
+        # JetStream first: the announce family is durable, so a registry that
+        # restarts catches up on the announcements it missed instead of
+        # waiting for the next 15s cycle.
         try:
             await self._js.subscribe(
-                subject=SUBJECTS["announce"],
-                stream="compute",
-                durable_name="node-registry-announce",
+                subject=SUBJECTS["announce_family"],
+                stream=ANNOUNCE_STREAM,
+                durable=ANNOUNCE_DURABLE,
                 cb=on_announce,
             )
-            logger.info(f"Subscribed to {SUBJECTS['announce']}")
+            logger.info(
+                f"Subscribed to {SUBJECTS['announce_family']} "
+                f"(JetStream stream {ANNOUNCE_STREAM})"
+            )
         except Exception:
-            # Fallback to regular subscription
-            sub = await self._nc.subscribe(SUBJECTS["announce"], cb=on_announce)
-            self._subscriptions.append(sub)
-            logger.info(f"Subscribed to {SUBJECTS['announce']} (non-JetStream)")
+            # Fallback to regular subscriptions -- one per published version.
+            for subject in (SUBJECTS["announce"], SUBJECTS["announce_v2"]):
+                sub = await self._nc.subscribe(subject, cb=on_announce)
+                self._subscriptions.append(sub)
+                logger.info(f"Subscribed to {subject} (non-JetStream)")
 
     async def _subscribe_heartbeat(self):
-        """Subscribe to node heartbeats."""
+        """Subscribe to heartbeats.
+
+        WHY (D4): the mesh has no separate heartbeat subject -- it
+        re-announces every ANNOUNCE_SEC seconds -- so the heartbeat subject
+        points at the announce stream. The handler accepts every announcement
+        dialect (mesh-agent v1/v2 and the bootstrap scripts), which carry a
+        node id and a timestamp but no utilisation figures.
+        """
 
         async def on_heartbeat(msg):
             try:
-                data = msg.data.decode()
-                import json
-
-                payload = json.loads(data)
-                heartbeat = NodeHeartbeat(
-                    node_id=payload["node_id"],
-                    timestamp=datetime.fromisoformat(payload["timestamp"]),
-                    cpu_utilization=payload.get("cpu_utilization", 0.0),
-                    memory_utilization=payload.get("memory_utilization", 0.0),
-                    gpu_utilization=payload.get("gpu_utilization", []),
-                    active_jobs=payload.get("active_jobs", 0),
-                    status=payload.get("status", "online"),
-                )
-
-                await self.storage.update_heartbeat(heartbeat)
-
+                payload = json.loads(msg.data.decode())
             except (UnicodeDecodeError, json.JSONDecodeError) as e:
                 logger.error(f"Invalid heartbeat message format: {e}", exc_info=True)
-            except (KeyError, ValueError, TypeError) as e:
-                logger.error(f"Invalid heartbeat payload: {e}", exc_info=True)
+                return
+            except Exception as e:
+                logger.error(f"Error processing heartbeat: {e}", exc_info=True)
+                return
+
+            node_id = node_id_from_announcement(payload)
+            if not node_id:
+                logger.error("Invalid heartbeat payload: no node identity")
+                return
+
+            heartbeat = NodeHeartbeat(
+                node_id=node_id,
+                timestamp=timestamp_from_announcement(payload),
+                cpu_utilization=float(payload.get("cpu_utilization", 0.0) or 0.0),
+                memory_utilization=float(payload.get("memory_utilization", 0.0) or 0.0),
+                gpu_utilization=list(payload.get("gpu_utilization", []) or []),
+                active_jobs=int(payload.get("active_jobs", 0) or 0),
+                status=payload.get("status", "online"),
+            )
+
+            try:
+                await self.storage.update_heartbeat(heartbeat)
             except Exception as e:
                 logger.error(f"Error processing heartbeat: {e}", exc_info=True)
 
@@ -221,10 +421,7 @@ class NodeRegistry:
             query_id = None
 
             try:
-                data = msg.data.decode()
-                import json
-
-                payload = json.loads(data)
+                payload = json.loads(msg.data.decode())
                 query_id = payload.get("query_id")
 
                 # Query parameters

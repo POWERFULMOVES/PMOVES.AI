@@ -12,16 +12,29 @@ gpu_required: false
 gpu_reservation_mb: 0
 autostart: false
 network_exposure:
-  layer_1:
+  # WHY THE CANONICAL NAMES: this entry was authored against the
+  # `layer_1..layer_4` vocabulary of the CRUSH_IN_PINOKIO_PLAN_2026-08-04
+  # handoff. The slice-4 contract that mesh_exposure actually reconciles
+  # names the same four layers `l1_venv` / `l2_container_same_host` /
+  # `l3_mesh` / `l4_public`, and the planner reads THOSE names only -- so
+  # under the old spelling this entry contributed NO exposure rules at all
+  # and crush was invisible to the mesh planner. The four concepts are
+  # 1:1, so this is a vocabulary migration, not a change of intent.
+  #
+  # The reachable flags are unchanged: L1 yes, L2 no, L3 yes, L4 no. L3
+  # declares no `headscale_acl_ports`, so the ACL planner produces no
+  # rules for crush -- exactly as before the migration. L4 is not
+  # reachable, so no tunnel and no DNS record are planned.
+  l1_venv:
     reachable: true
     description: "venv — no external deps beyond npx/node"
-  layer_2:
+  l2_container_same_host:
     reachable: false
     description: "not a containerized service"
-  layer_3:
+  l3_mesh:
     reachable: true
     description: "reaches TensorZero :3030, NATS :4222, Cipher :8105 via Docker network"
-  layer_4:
+  l4_public:
     reachable: false
     description: "not publicly exposed (terminal agent)"
 tags: [agent, terminal, companion, pmoves-native]

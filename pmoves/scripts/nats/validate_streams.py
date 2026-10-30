@@ -49,6 +49,13 @@ EXPECTED_STREAMS: list[tuple[str, str, str]] = [
     ("ROOMS", "room.>", "limits"),
     ("HELPDESK", "helpdesk.>", "limits"),
     ("ARCHON", "archon.>", "limits"),  # mint family (#2336) — added 2026-08-04
+    # The node registry's announcement plane. The registry subscribes to
+    # `mesh.node.announce.>` with a JetStream durable consumer named for the
+    # `compute` stream; before this stream existed the subscribe raised and
+    # the registry silently fell back to core NATS, losing every
+    # announcement published while it was down. Keep in sync with
+    # init_streams.sh (see PRE_RESTART_PREFLIGHT_2026-08-25.md row R8a).
+    ("COMPUTE", "mesh.node.announce.> compute.nodes.>", "limits"),
 ]
 
 # Streams the validator does NOT require (control-plane / p7.* / voice.*) — present
