@@ -472,9 +472,27 @@ The `kong_order_drift` facet reports any that come back.
 verifier reads `${SUPABASE_JWT_SECRET:-${JWT_SECRET:-}}`: PostgREST `:820`,
 GoTrue `:732`, Realtime `:1033`, Studio `:1152`. Wherever the two secrets
 differed, every funnel mint was admitted by Kong and refused by PostgREST
-(PGRST301). The funnel now uses the verifiers' order. It also re-mints a
-self-generated HS256 key that does not *verify* under that secret, not only one
-that has expired. Non-HS256 values are never judged.
+(PGRST301). The funnel now mints with the verifiers' order.
+
+**What the funnel rewrites.**
+- Absent or placeholder labels are filled.
+- Expired JWTs are re-minted (#3410).
+- A live key that does not verify is re-minted **only** when two things both
+  hold:
+  - It is provably funnel-minted: HS256, `iss` = `supabase-local`, and the
+    label's role.
+  - This node's compose Supabase is its verifier: `SUPABASE_RUNTIME=compose`
+    is stated, and every set `SUPABASE_URL`/`SUPABASE_REST_URL` is local.
+
+**What it never rewrites.** Every other live key: foreign `iss` (cloud, Supabase
+CLI), RS256/ES256, opaque `sb_*`, or any key on a CLI or remote runtime. For
+each of these it prints a WARN with the label name only.
+
+**What it reports.** Every re-mint is printed as `RE-MINTED <label> (<role>):
+<reason>`, with the compose services that name the label (environment and
+build args) and the Known Roads to recreate them. Until they are all
+recreated the stack is half-old, half-new: Kong refuses every client whose key
+differs from its consumer key.
 
 > **Status:** landed in PR #3433 under operator grant `compose:pr:3433`. The
 > grant covered cipher-api in `docker-compose.yml` and
