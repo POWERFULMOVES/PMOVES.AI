@@ -92,8 +92,35 @@ def test_dockerfile_packages_pmoves_tools(dockerfile: Path) -> None:
     """Every hi-rag-gateway-v2 Dockerfile must also package the
     `pmoves.tools` namespace (the 2026-10-17 follow-up). The minimal
     set is `__init__.py` + `chit_common.py` + `chit_security.py` +
-    `sign_trail.py` (the latter via COPY because shape_store /
-    geometry_decoder / branch_trail / model_fitness import from it).
+    `sign_trail.py`.
+
+    WHY EACH MODULE (verified against the import graph, not assumed):
+
+    - `chit_security.py` — imported by `pmoves/tools/chit_security.py`'s
+      own consumer set: `pmoves/services/common/geometry_decoder.py:76`
+      (`from pmoves.tools.chit_security import ...`),
+      `pmoves/services/common/model_fitness.py:22`
+      (`from pmoves.tools.chit_security import sign_cgp`), and
+      `pmoves/tools/chit_security.py:25`
+      (`from pmoves.tools.chit_common import canon`).
+    - `chit_common.py` — imported by `geometry_decoder.py:75`
+      (`from pmoves.tools.chit_common import canon`) and by
+      `chit_security.py:25`.
+    - `sign_trail.py` — imported by EXACTLY ONE module in the tree:
+      `pmoves/services/common/branch_trail.py:146`
+      (`from pmoves.tools.sign_trail import build_payload`). The earlier
+      draft of this ratchet listed shape_store / geometry_decoder /
+      branch_trail / model_fitness as its importers; that was WRONG.
+      Verified 2026-10-30:
+
+          $ grep -rn 'pmoves[.]tools[.]sign_trail' pmoves/ --include='*.py'
+          pmoves/services/common/branch_trail.py:146
+
+      `sign_trail.py` is kept in the required set because `branch_trail.py`
+      IS copied into the image (`COPY services/common /app/services/common`)
+      and its import is lazy (inside the function body at line 146) — so the
+      failure would surface at CALL time, not at import time, which is the
+      worst kind of regression to leave unguarded.
 
     A future `from pmoves.tools.<x>` that adds a new module should
     extend this ratchet (or, better, broaden it to "COPY tools/*.py
@@ -125,8 +152,8 @@ def test_dockerfile_packages_pmoves_tools(dockerfile: Path) -> None:
         )
         assert pattern.search(source), (
             f"{dockerfile.name} does not COPY tools/{module} "
-            f"/app/pmoves/tools/{module}. The chit_security / branch_trail / "
-            f"geometry_decoder / model_fitness imports will fail at module load."
+            f"/app/pmoves/tools/{module}. The chit_common / chit_security / "
+            f"sign_trail imports will fail at module load."
         )
 
 
@@ -136,9 +163,11 @@ def test_pmoves_chit_in_cpu_dockerfile_unchanged() -> None:
     failure; this is the historical baseline pinned as a sibling check
     so the ratchet does not have to enumerate BOTH paths implicitly.
 
-    The pmoves.tools namespace is the 2026-10-17 follow-up; the CPU
-    Dockerfile has the same gap and is pinned by this single check
-    rather than a separate `pmoves.tools` baseline test.
+    The `pmoves.tools` namespace is the 2026-10-17 follow-up, and it is
+    covered by `test_dockerfile_packages_pmoves_tools`, which is
+    PARAMETRIZED over every `Dockerfile*` in this directory — so the CPU
+    Dockerfile's tools namespace is already asserted there. This check
+    therefore only pins the CHIT namespace on the CPU path.
     """
     cpu = HI_RAG_DIR / "Dockerfile"
     if not cpu.exists():
@@ -150,10 +179,11 @@ def test_pmoves_chit_in_cpu_dockerfile_unchanged() -> None:
         f"it, also update pmoves/services/common/shape_store.py to not import "
         f"`from pmoves.chit import CGP_SPEC_VERSION` at module top."
     )
-    assert "/app/pmoves/tools" in source, (
-        f"{cpu.name} is missing the pmoves.tools namespace packaging that "
-        f"tools/chit_security.py + services/common/{'{geometry_decoder,branch_trail,model_fitness}'}.py "
-        f"require. PR #3382 closed the chit gap but missed the tools gap; the "
-        f"2026-10-17 follow-up added it to Dockerfile.gpu but the CPU sibling "
-        f"needs the same update."
-    )
+    # NOTE: the `pmoves.tools` namespace on the CPU path is NOT asserted
+    # here. `test_dockerfile_packages_pmoves_tools` is parametrized over
+    # every `Dockerfile*` in this directory (including this one) and
+    # asserts the tools namespace with a REGEX that checks the exact
+    # `COPY tools/<module> ... /app/pmoves/tools/<module>` destination.
+    # A bare `"/app/pmoves/tools" in source` substring check is strictly
+    # WEAKER (it matches a mention in a comment) AND redundant — it was
+    # flagged as such in review on 2026-10-30.

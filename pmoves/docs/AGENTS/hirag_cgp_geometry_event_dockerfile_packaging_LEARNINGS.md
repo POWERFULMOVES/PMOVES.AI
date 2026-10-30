@@ -110,3 +110,67 @@ The ratchet is parametrized over every `Dockerfile*` in the service dir. Adding 
 - **PR + branch** — new PR off `fix/hi-rag-cgp-geometry-event-handler` (this agent, mvs_5d5493b128b640e9aff8d45adcc77a66).
 - **Docs cited** — `pmoves/docs/geometry-bus/pipelines/youtube-to-persona.md` (the CGP bridge documentation).
 - **Operator handoff** — 2026-10-15 "ok you are up MAVIS! lets complete this"; operator approved the proposed slice 2026-10-15.
+
+---
+
+## Review-fix round (2026-10-30)
+
+Review on PR #3382 raised five findings against this slice. Each was
+independently re-verified before acting; **two were valid, one was a
+false positive, and two were valid-but-nits that the fixes below also
+close**.
+
+| # | Finding | Verdict | Disposition |
+|---|---------|---------|-------------|
+| 1 | `test_yt_emit_cgp_ok.py:62` — `_video_in_archive()` probes with `POST /yt/download`, which is **state-mutating**: it downloads the video and writes it to the archive when the video is NOT already there. | **VALID** | The probe no longer calls `/yt/download` at all. The archive-skip decision now comes from the **emit response itself** (`_emit_declined_for_archived_video`), which is the authoritative answer to "was the CGP path actually exercised". |
+| 2 | `test_yt_emit_cgp_ok.py:69` — `"already in download archive" in r.text` is a case-sensitive substring sniff with no status-code check. | **VALID** | Replaced by `_emit_declined_for_archived_video(payload, status_code)`: case-insensitive, status-code-aware, and it covers the **404 `transcript not found`** shape (yt-dlp refused to re-download an archived video → no CGP was built) that the old substring sniff could never see. |
+| 3 | `test_dockerfile_packages_pmoves_chit.py:96` — the docstring claims `sign_trail.py` is imported by "shape_store / geometry_decoder / branch_trail / model_fitness". | **VALID — the claim was factually wrong** | Verified: `sign_trail.py` has **exactly ONE** importer in the tree — `pmoves/services/common/branch_trail.py:146` (`from pmoves.tools.sign_trail import build_payload`). The other three import `chit_common` / `chit_security`, not `sign_trail`. The docstring now states the real import graph with file:line citations. |
+| 4 | `test_dockerfile_packages_pmoves_chit.py:141` — the CPU-only check duplicates the parametrized `test_dockerfile_packages_pmoves_tools`; the docstring claims the CPU tools namespace is "pinned by this single check". | **VALID** | The redundant `assert "/app/pmoves/tools" in source` is **removed**. It was strictly WEAKER than the parametrized test (a bare substring match hits a comment; the parametrized test asserts the exact `COPY tools/<module> ... /app/pmoves/tools/<module>` destination via regex). The docstring now says the CPU tools namespace is covered by the parametrized test. |
+| 5 | `AUTH_FLIPON_RUNBOOK_2026-10-11.md:11` — cites `env.shared.example:257` for both `..._CLIENT_ID` and `..._SECRET`. | **FALSE POSITIVE** | The runbook already cites **`257-258`** — the correct two-line range. Verified: `env.shared.example:257` is `SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID` and `:258` is `..._SECRET`. No change needed. |
+
+### Why the sign_trail.py copy stays even though it has one importer
+
+`branch_trail.py` **is** copied into the image (`COPY services/common
+/app/services/common`) and its import is **lazy** — it lives inside the
+function body at line 146, not at module top. So the failure would
+surface at **call** time, not import time. A copy that fails late and
+only on one code path is exactly the kind of regression a static ratchet
+should keep covered, so `sign_trail.py` remains in the required set —
+but the ratchet now states the real reason instead of an invented one.
+
+### Live effect of the fix
+
+Before the fix, on the operator's host the probe video `0p_1QSUsbsM`
+was already in the download archive (`youtube 0p_1QSUsbsM` in
+`/data/yt-dlp/download-archive.txt`), so the test **SKIPPED**. After the
+fix the test **RUNS** and PASSES against the live stack:
+
+```
+$ POST http://localhost:8077/yt/emit {"video_id":"0p_1QSUsbsM",...}
+{"ok":true,"video_id":"0p_1QSUsbsM","chunks":6,"upserted":6,...,"cgp_ok":true,...}
+```
+
+`pmoves/tests/test_yt_emit_cgp_ok.py` → **1 passed** (was SKIP).
+`pmoves/tests/test_dockerfile_packages_pmoves_chit.py` → **5 passed**.
+
+### New lessons
+
+- **A probe that mutates state cannot establish a precondition.** The
+  archive check asked "is this video already downloaded?" using the
+  endpoint that downloads videos. On a host where the answer was "no",
+  the probe made the answer "yes". The precondition must be observed
+  through a read-only channel or through the operation's own response.
+- **A substring sniff on response text is not a status-code check.**
+  The archived-video skip surfaces as a **404** in one path and a
+  **200 with a message** in another; only the former was invisible to
+  the old check.
+- **A ratchet's docstring is part of its contract.** A justification
+  that names the wrong importers is not cosmetic — it teaches the next
+  engineer to trust a claim that was never verified. The import graph
+  is now cited file:line.
+- **The repo's destructive-docker guard is itself a ratchet.**
+  `pmoves/tests/_destructive_docker_guard.py` BLOCKED the first attempt
+  at a read-only `docker exec` archive probe — correctly, because
+  `docker exec` is refused in tests outside `pg_isready`/`psql -c`
+  (incident 2026-09-26: a test tore down the live `pmoves` compose
+  project). The fix moved to pure HTTP rather than adding an exemption.

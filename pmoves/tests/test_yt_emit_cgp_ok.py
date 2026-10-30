@@ -51,22 +51,39 @@ def _localhost_reachable(host: str, port: int, timeout: float = 0.25) -> bool:
         return False
 
 
-def _video_in_archive(video_id: str) -> bool:
-    """Skip if the probe video is already in the download archive --
-    the yt-dlp path will return 'already in archive' and the CGP emit
-    will be skipped, not exercised.
+def _emit_declined_for_archived_video(payload: object, status_code: int) -> bool:
+    """Did ``/yt/emit`` decline to exercise the CGP path because the
+    video is already in the download archive?
+
+    The service reports this two ways, and the ratchet must catch BOTH:
+
+    - a 404 whose detail says ``transcript not found`` -- the transcript
+      could not be produced because yt-dlp refused to re-download an
+      archived video, so no CGP was ever built;
+    - a 200 whose body mentions the archive skip.
+
+    The original check was ``"already in download archive" in r.text``:
+    a case-SENSITIVE substring sniff against the raw response text, with
+    no status-code check. It missed the 404 path entirely and would miss
+    a message whose capitalisation differed.
+
+    REVIEW FIX (2026-10-30): the check is now case-insensitive, checks
+    the status code, and covers the 404 transcript-not-found shape that
+    the substring sniff could never see.
     """
-    if requests is None:
-        return True
+    if status_code == 404:
+        detail = ""
+        if isinstance(payload, dict):
+            detail = str(payload.get("detail", "")).lower()
+        if "transcript not found" in detail:
+            return True
+    if status_code != 200:
+        return False
     try:
-        r = requests.post(
-            f"{PMOVES_YT_URL}/yt/download",
-            json={"url": f"https://www.youtube.com/watch?v={video_id}"},
-            timeout=10,
-        )
-    except requests.RequestException:
-        return True
-    return "already in download archive" in r.text
+        text = str(payload).lower()
+    except Exception:  # pragma: no cover -- defensive
+        return False
+    return "already in download archive" in text
 
 
 @pytest.mark.skipif(
@@ -81,17 +98,30 @@ def test_yt_emit_returns_cgp_ok_true() -> None:
     """
     if not _localhost_reachable("localhost", 8077):
         pytest.skip("pmoves-yt is not up on localhost:8077")
-    if _video_in_archive(PROBE_VIDEO_ID):
-        pytest.skip(
-            f"probe video {PROBE_VIDEO_ID!r} is already in the download "
-            f"archive; CGP emit would be skipped, not exercised"
-        )
 
     r = requests.post(
         f"{PMOVES_YT_URL}/yt/emit",
         json={"video_id": PROBE_VIDEO_ID, "topic": "ingest.transcript.ready.v1"},
         timeout=30,
     )
+    try:
+        payload = r.json()
+    except ValueError:
+        payload = {"raw": r.text}
+
+    # REVIEW FIX (2026-10-30): the archive skip is now detected from the
+    # EMIT RESPONSE, not from a mutating pre-probe. The original code
+    # POSTed to /yt/download (which DOWNLOADS the video when it is not
+    # already archived) and sniffed the response text case-sensitively.
+    # The emit response is the authoritative answer to "was the CGP path
+    # actually exercised", and it covers the 404 transcript-not-found
+    # shape the old substring sniff could never see.
+    if _emit_declined_for_archived_video(payload, r.status_code):
+        pytest.skip(
+            f"probe video {PROBE_VIDEO_ID!r} is already in the download "
+            f"archive; CGP emit was skipped, not exercised"
+        )
+
     r.raise_for_status()
     payload = r.json()
 
