@@ -110,17 +110,18 @@ HTTP 200
 
 | File | Lines | Tests | What it pins |
 |---|---|---|---|
-| `pmoves/tests/tools/test_mcp_inventory_endpoint_ratchet.py` (new) | 322 | 6 | The ratchet. Static half (5): the declared route must be in the serving source (×2 entries: `flute-voice` SSE + `flute-voice-mcp` HTTP); the router must be MOUNTED via `app.include_router(...)` (×2); the entry must resolve to a URL carrying a PATH. Live half (1): the declared URL must answer, must not 404, must not 5xx, and the responder must identify as `pmoves-flute-gateway`. |
-| `pmoves/tests/tools/test_mcp_inventory_endpoint_mutation_kill.py` (new) | 268 | 8 | The PROVENANCE harness. 4 static mutations (route removed / mount removed / both removed / un-mutated control) + 4 live-half cases (override rebases the probe URL / an impostor responder is rejected / a 404 is rejected / the genuine service passes). |
+| `pmoves/tests/tools/test_mcp_inventory_endpoint_ratchet.py` (new) | 642 | 7 | The ratchet. Static half (6): the route DERIVED FROM THE INVENTORY must be declared in the serving source (×2 entries: `flute-voice` SSE + `flute-voice-mcp` HTTP), with the method derived from the inventory's `transport`; the MCP router must be the ARGUMENT of `app.include_router(...)` (×2); the entry must resolve to a URL carrying a PATH (×2 entries). Live half (1): the declared URL must answer, must not 404, must not 5xx, must carry the INVENTORY-declared credential, and the responder must identify as `pmoves-flute-gateway`. |
+| `pmoves/tests/tools/test_mcp_inventory_endpoint_mutation_kill.py` (new) | 543 | 13 | The PROVENANCE harness. 6 static mutations (route removed / mount removed / another router mounted / the inventory declares an unserved path / both removed / un-mutated control) + 7 live-half cases (override rebases the probe URL / a no-path URL is rejected / the declared credential is sent / an unavailable credential skips / an impostor responder is rejected / a 404 is rejected / the genuine service passes). |
 
-Total: **14 new tests across 2 new files.** No existing file was modified — this lane is purely additive, which is what keeps its blast radius separate from #3418's.
+Total: **20 new tests across 2 new files.** No existing file was modified — this lane is purely additive, which is what keeps its blast radius separate from #3418's.
 
 ---
 
 ## SDK provenance
 
-- **Ratchet:** `pmoves/tests/tools/test_mcp_inventory_endpoint_ratchet.py` — `_assert_responder_is_flute_gateway()`, `_probe_url()`, `_display_path()`, `EXPECTED_ROUTES`, `FLUTE_SERVER_NAME`
-- **Harness:** `pmoves/tests/tools/test_mcp_inventory_endpoint_mutation_kill.py` — `RATCHET_MODULE`, `ROUTE_DECL`/`MUTATED_ROUTE_DECL`, `MOUNT_CALL`/`MUTATED_MOUNT_CALL`
+- **Ratchet:** `pmoves/tests/tools/test_mcp_inventory_endpoint_ratchet.py` — `_assert_responder_is_flute_gateway()`, `_probe_url()`, `_display_path()`, `FLUTE_SERVER_KEYS`, `FLUTE_ROUTER_MODULE`, `TRANSPORT_METHODS`, `FLUTE_SERVER_NAME`
+- **Ratchet (review hardening):** `_declared_path()`, `_url_path()`, `_declared_routes()`, `_mcp_router_mounted()`, `_resolve_declared_headers()`, `_probe_headers()`
+- **Harness:** `pmoves/tests/tools/test_mcp_inventory_endpoint_mutation_kill.py` — `RATCHET_MODULE`, `MOUNT_CALL`/`MUTATED_MOUNT_CALL`, `MCP_ROUTER_FACTORY_CALL`/`MUTATED_ROUTER_FACTORY_CALL`, `DISABLED_SUFFIX`, `TARGET_KEY`, `UNSERVED_PATH`, `_route_declaration()`
 - **SDK files exercised:**
   - `pmoves/services/flute-gateway/mcp_bridge.py:508` — `@router.post("/mcp")` (the declared surface)
   - `pmoves/services/flute-gateway/mcp_bridge.py:529` — `@router.get("/sse")`
@@ -137,10 +138,11 @@ Total: **14 new tests across 2 new files.** No existing file was modified — th
 
 ## Test status
 
-- `pmoves/tests/tools/test_mcp_inventory_endpoint_ratchet.py` → **6 passed** on the operator's host (the live half RAN, not skipped: the container was rebuilt and answers).
-- `pmoves/tests/tools/test_mcp_inventory_endpoint_mutation_kill.py` → **8 passed**.
-- Combined: **14 passed**.
-- Mutation-kill re-verified by hand after the refactor: weakening `assert server_name == FLUTE_SERVER_NAME` to `assert True or server_name == FLUTE_SERVER_NAME` → `test_live_probe_rejects_a_responder_that_is_not_the_flute_gateway` **FAILED** ("DID NOT RAISE AssertionError"); restoring the file → **8 passed**.
+- `pmoves/tests/tools/test_mcp_inventory_endpoint_ratchet.py` → **6 passed, 1 skipped** on this host. The skip is the live half, and the skip REASON is the point of lesson 1.7: the inventory declares `X-API-Key: ${FLUTE_API_KEY}` and that variable is unset here, so the probe declines to send an unauthenticated request and says why (header name + variable name, never a value).
+- With `FLUTE_API_KEY` exported (any value — the local gateway runs in dev mode), the live half **RUNS and PASSES** against the running gateway → **7 passed**: `serverInfo.name = "pmoves-flute-gateway"`.
+- `pmoves/tests/tools/test_mcp_inventory_endpoint_mutation_kill.py` → **13 passed**.
+- Combined (credential absent): **19 passed, 1 skipped**. Combined (credential exported): **20 passed**.
+- Mutation-kill re-verified by hand after the review hardening: each of the four fixes was REVERTED in place and its harness case re-run — all four reverts were **KILLED** (the harness case failed, i.e. the mutation survived the reverted ratchet). Details in 3.6 below.
 
 ---
 
@@ -155,3 +157,40 @@ This lane modifies **no** existing file. `pmoves/config/mcp_inventory.json` is b
 1. **Fleet-wide image staleness.** The 65-day-old flute image was one instance of a general condition: nothing measures whether a running container's image is NEWER than the last commit that touched its source. The `CONTAINER_REBUILD_MANIFEST.md` lists six services with pending rebuilds. A fleet-wide "running image predates its source" ratchet is the natural generalization of this lane and is **not** done here.
 2. **The other five manifest services.** `tensorzero`, `publisher-discord`, `botz-gateway`, `cipher-memory`, `pmoves-yt` carry the same rebuild obligation and have not been checked for staleness on this host.
 3. **The six client configs.** This lane fixed the SERVICE, which makes the six clients' existing configs correct again. It did not regenerate them — no regeneration was needed, because the configs were already right; only the server was behind.
+
+---
+
+## Review hardening — 2026-10-30 (PR #3428 review threads)
+
+**Status:** four review threads on PR #3428 challenged the RATCHET itself, not the deployment. All four were valid, and each one changed the SHAPE of an assertion rather than adding a check beside it. Lesson numbering continues from the taxonomy above (1.6–1.9, 2.7–2.8, 3.6–3.7, 4.7).
+
+**The common thread:** every one of these ratchets could pass while the defect it exists to catch was PRESENT. That is the definition of a ratchet that cannot say no — the same rule as lesson 1.4, one layer down.
+
+### Bucket 1 — Defects
+
+| # | Class | Observation (rule) | Evidence / Why | Apply when |
+|---|-------|---------------------|----------------|------------|
+| 1.6 | **hard-coded-expected-value** | **An expected value that is written INTO the test cannot see the contract change.** A hard-coded expected value can only prove that ITS OWN value still exists; it is structurally blind to the contract it is supposed to police. The expected route must be DERIVED from the inventory's own declared URL. | Finding **4427921337** (P1). The first cut hard-coded `/sse` and `/mcp` in `EXPECTED_ROUTES`; the separate URL test only asserted that SOME path existed. Repoint `flute_mcp_local_url` at `/mcp-v2` and the assertion kept hunting for the old `/mcp` decorator while every client was handed a path nothing serves — and because the live half SKIPS in CI, the same client-wide 404 could merge undetected. Fixed: `_declared_path()` parses the declared URL's path, `_declared_routes()` lifts the route decorators out of the service source's AST, and the assertion is "the path the INVENTORY declares is among the routes the SOURCE declares". The METHOD is derived too, from the inventory's `transport` field (`TRANSPORT_METHODS`), so a route served with the wrong verb (405) is caught statically. | Any test whose expected value is also a value the production contract can change. |
+| 1.7 | **credential-blind-probe** | **A probe against an AUTHENTICATED endpoint must carry the credential the CONTRACT declares — and a credential it cannot obtain is a SKIP with a reason, never a failure and never a silent pass.** | Finding **4427921351** (P1). The flute-gateway mounts the MCP router with `dependencies=[Depends(verify_api_key)]` (`main.py:624`) and the inventory declares `X-API-Key: ${FLUTE_API_KEY}`. The probe sent no key, so on a fleet deployment it was answered 401 — and a 401 reads exactly like "the wrong service answered" to a probe whose identity check is the handshake body. The probe was rejecting a HEALTHY endpoint. Fixed: `_resolve_declared_headers()` reads the declared header NAME and its `${VAR}` source from the inventory and resolves the value from the environment; `_probe_headers()` SKIPS when the variable is unset. The value is never hard-coded, never logged and never printed — the skip reason names the header and the VARIABLE only. | Any probe of an endpoint that declares a credential (API key, token, basic-auth). |
+| 1.8 | **string-presence-is-not-a-call-argument** | **"The file contains the token" is not "the call mounts the object".** An assertion about a MOUNT must inspect the CALL EXPRESSION and require the right ARGUMENT. | Finding **4427921357** (P2). The old check proved `create_mcp_router` appears in `main.py` AND that `app.include_router(` appears — two INDEPENDENT facts that a router which is built and DISCARDED satisfies, while some other router is mounted and `/sse` and `/mcp` both 404. Fixed: `_mcp_router_mounted()` parses `main.py`, requires `create_mcp_router` to be imported from the module that DECLARES the routes, and requires an `app.include_router(...)` whose ARGUMENT is that factory call — directly, or through a variable bound to it. | Any "is it wired up" assertion about a framework registration call (`include_router`, `register`, `add_handler`, `mount`). |
+| 1.9 | **silent-path-demotion** | **A URL with no PATH can be neither asserted nor probed. Coercing it silently demotes the HOST to a path segment and turns the control into a decoration.** | Finding **4427972925**. `_probe_url("http://host:8055", base)` used to produce `<base>/host:8055` — a path nothing serves, reported as a 404 that reads like route drift. Now `_url_path()` raises `ValueError` naming the offending URL. It is an explicit raise, NOT an `assert`, because `pytest -O` strips asserts — and a ratchet that can be switched off by a flag is not a ratchet. | Any URL handling helper shared by a static assertion and a live probe. |
+
+### Bucket 2 — Decisions
+
+| # | Class | Observation (rule) | Why | Alternative considered | Cost of alternative |
+|---|-------|---------------------|-----|------------------------|---------------------|
+| 2.7 | **skip-on-unavailable-credential** | The live half SKIPS (does not fail) when the inventory-declared credential cannot be resolved from the environment, and the skip reason names the header and the variable. | A missing credential is an ENVIRONMENTAL condition, not a defect in the endpoint. Failing would train people to ignore the gate (the same reasoning as 2.3); probing WITHOUT the credential would reject a healthy endpoint — the very defect 1.7 exists to remove. | Fail when the credential is missing | CI red on every checkout without the secret; and the loudest possible false alarm. |
+| 2.8 | **the-harness-derives-its-mutation-target** | The mutation-kill derives the decorator it mutates from the RATCHET's own inventory-derived path, instead of hard-coding `@router.post("/mcp")` the way the ratchet used to. | If the harness hard-coded the mutation target, an inventory path change would leave the mutation aimed at a route nobody asserts: the mutation would SURVIVE and the harness would report a false green — the harness would carry the same defect as the ratchet it polices (1.6). | Hard-coded mutation target | A silently-decaying harness; a false green is worse than a red. |
+
+### Bucket 3 — Operations
+
+| # | Class | Observation (rule) | Measured | Repeatability |
+|---|-------|---------------------|----------|---------------|
+| 3.6 | **hand-verification-by-revert** | Each fix was reverted IN PLACE and its harness case re-run, to prove the harness actually kills it. | All four reverts **KILLED**: the hard-coded-route revert → `test_mutation_inventory_declares_an_unserved_path_is_killed` FAILED; the string-presence mount revert → `test_mutation_mounting_another_router_is_killed` FAILED; the no-credential revert → `test_live_probe_sends_the_credential_the_inventory_declares` FAILED; the no-path-URL revert → `test_live_probe_rejects_a_declared_url_with_no_path` FAILED. The ratchet file was restored byte-identical afterwards. | Every time a ratchet assertion is rewritten, not only when it is added. |
+| 3.7 | **the-live-probe-runs-or-skips-never-fails-on-the-environment** | The live half reports one of two things and never a third: it RUNS and asserts, or it SKIPS with a reason. With `FLUTE_API_KEY` unset it skips with `X-API-Key (env FLUTE_API_KEY)`; with the variable exported it RUNS and passes against the running gateway. | Live on this host: `POST http://localhost:8055/mcp` → **200**, `serverInfo.name = "pmoves-flute-gateway"`. Ratchet run with the variable exported → **7 passed** (no skip). | Every live-probe lane in this repo. |
+
+### Bucket 4 — Cross-references
+
+| # | Class | What | Link | Why it matters |
+|---|-------|------|------|----------------|
+| 4.7 | **the-four-review-threads** | The provenance of the hardening: four GitHub review threads on PR #3428, each naming the defect class it exposed. | dbId `4427921337` (P1, derive the route from the inventory) · `4427921351` (P1, send the declared credential) · `4427921357` (P2, assert the `include_router` ARGUMENT) · `4427972925` (suggestion, no-path URL guard) | The lessons above are the generalised rules; the thread ids are the exact places they came from, so the next reviewer can read the finding against the fix. |

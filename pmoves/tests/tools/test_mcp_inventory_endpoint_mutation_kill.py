@@ -22,11 +22,12 @@ INVOKE the assertion the ratchet uses, never restate it. So this
 harness does not re-implement the checks. It:
 
 1. copies the real flute-gateway service tree into a tmp dir,
-2. MUTATES the copy (removes the route decorator, or removes the
-   router mount),
+2. MUTATES the copy (removes the route decorator, removes the router
+   mount, or mounts a DIFFERENT router),
 3. repoints the ratchet module's own module-level constants at the
    mutated copy,
-4. calls the ratchet's OWN test functions and asserts they RAISE.
+4. calls the ratchet's OWN test functions and asserts they RAISE with
+   the SPECIFIC expected message -- not merely that "something" raised.
 
 The mutated copy is what makes the mutation honest: the ratchet reads
 whatever tree it is pointed at, so pointing it at a tree with the route
@@ -34,12 +35,34 @@ deleted is exactly the state that must be rejected.
 
 The original defect is preserved here as the mutation, so the harness
 keeps the historical failure mode alive and watchable.
+
+What the 2026-10-30 review (PR #3428) added
+-------------------------------------------
+Four review threads each stated a way the ratchet could pass while the
+defect it exists to catch was present. A mutation that leaves such a
+ratchet green is a mutation the harness must also kill:
+
+* 4427921337 -- the expected route must be DERIVED from the inventory.
+  Mutated here by pointing the ratchet at an inventory whose entry
+  declares an UNSERVED path (`/mcp-v2`): a hard-coded assertion would
+  keep hunting for the old route and survive.
+* 4427921351 -- the live probe must send the credential the INVENTORY
+  declares. Asserted here by invoking the ratchet's own header
+  resolution with a fixture credential, and by proving the probe SKIPS
+  (never sends a placeholder, never prints a secret) when the
+  credential is unavailable.
+* 4427921357 -- the mount assertion must inspect the `include_router`
+  ARGUMENT. Mutated here by mounting a DIFFERENT router: the old
+  "the string create_mcp_router appears somewhere" check survives that.
+* 4427972925 -- a declared URL with no path must fail loudly. Asserted
+  here by invoking the ratchet's own `_probe_url` with a bare host:port.
 """
 
 from __future__ import annotations
 
 import importlib
 import json
+import re
 import shutil
 import sys
 from pathlib import Path
@@ -49,15 +72,26 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[3]
 RATCHET_MODULE = "pmoves.tests.tools.test_mcp_inventory_endpoint_ratchet"
 
-# The route declaration the ratchet requires, and the mutation that
-# removes it. This is the ORIGINAL defect shape: the source no longer
-# declares the route the inventory promises.
-ROUTE_DECL = '@router.post("/mcp")'
-MUTATED_ROUTE_DECL = '@router.post("/mcp_DISABLED")'
-
 # The mount that makes the declared route reachable at all.
 MOUNT_CALL = "app.include_router("
 MUTATED_MOUNT_CALL = "app.include_router_DISABLED("
+
+# The MCP router factory call inside the mount. Mutating it mounts a
+# DIFFERENT router -- the case the old "the string create_mcp_router
+# appears in the file" check could not see (finding 4427921357).
+MCP_ROUTER_FACTORY_CALL = "create_mcp_router("
+MUTATED_ROUTER_FACTORY_CALL = "some_other_router("
+
+# The suffix appended to a route path to take the route out of service
+# while leaving the rest of the source intact.
+DISABLED_SUFFIX = "_DISABLED"
+
+# The inventory entry whose declared route this harness mutates.
+TARGET_KEY = "flute-voice-mcp"
+
+# A path the source does NOT serve -- the state the inventory mutation
+# must be rejected for.
+UNSERVED_PATH = "/mcp-v2"
 
 
 def _load_ratchet():
@@ -76,6 +110,41 @@ def _load_ratchet():
     return importlib.reload(module)
 
 
+def _route_declaration(ratchet, key: str = TARGET_KEY) -> tuple[str, str]:
+    """The decorator the ratchet PINS for `key`, derived from the ratchet.
+
+    WHY derive it (finding 4427921337): the harness must mutate the
+    route the ratchet actually asserts. If the harness hard-coded the
+    decorator text the way the ratchet used to, an inventory path change
+    would leave the mutation aimed at a route nobody checks -- the
+    mutation would SURVIVE and the harness would report a false green.
+    Deriving it from the ratchet's own inventory-derived path keeps the
+    two in lockstep.
+
+    Returns `(decorator_text, path)`.
+    """
+    server = ratchet._server_by_key(key)
+    assert server is not None, f"mutation setup failed: {key} is not in the inventory"
+    declared = ratchet._resolved_url(server, ratchet._inventory().get("defaults", {}))
+    assert declared, f"mutation setup failed: {key} resolves no URL"
+    path = ratchet._url_path(declared)
+    bridge = Path(ratchet.FLUTE_SERVICE_DIR) / ratchet.FLUTE_ROUTER_MODULE
+    routes = ratchet._declared_routes(bridge.read_text(encoding="utf-8"))
+    assert path in routes, (
+        f"mutation setup failed: the inventory path {path!r} is not declared "
+        f"in {bridge}"
+    )
+    method = sorted(routes[path])[0]
+    pattern = re.compile(
+        r"@\w+\." + method.lower() + r"\(\s*['\"]" + re.escape(path) + r"['\"]\s*\)"
+    )
+    match = pattern.search(bridge.read_text(encoding="utf-8"))
+    assert match, (
+        f"mutation setup failed: no {method} decorator for {path} found in {bridge}"
+    )
+    return match.group(0), path
+
+
 def _mutated_service_tree(tmp_path: Path, *, drop_route: bool, drop_mount: bool) -> Path:
     """Copy the flute-gateway tree and apply the requested mutation."""
     ratchet = _load_ratchet()
@@ -84,10 +153,11 @@ def _mutated_service_tree(tmp_path: Path, *, drop_route: bool, drop_mount: bool)
     shutil.copytree(source_dir, dest)
 
     if drop_route:
-        bridge = dest / "mcp_bridge.py"
+        decl, path = _route_declaration(ratchet)
+        bridge = dest / ratchet.FLUTE_ROUTER_MODULE
         text = bridge.read_text(encoding="utf-8")
-        assert ROUTE_DECL in text, "mutation setup failed: route decl not found"
-        bridge.write_text(text.replace(ROUTE_DECL, MUTATED_ROUTE_DECL), encoding="utf-8")
+        assert decl in text, "mutation setup failed: route decl not found"
+        bridge.write_text(text.replace(decl, decl.replace(path, path + DISABLED_SUFFIX)), encoding="utf-8")
 
     if drop_mount:
         main = dest / "main.py"
@@ -98,9 +168,36 @@ def _mutated_service_tree(tmp_path: Path, *, drop_route: bool, drop_mount: bool)
     return dest
 
 
-def _point_ratchet_at(ratchet, service_dir: Path):
-    """Repoint the ratchet's own constants at the mutated tree."""
+def _mutated_inventory(tmp_path: Path, ratchet, key: str, path: str) -> Path:
+    """A copy of the inventory whose entry declares an UNSERVED path.
+
+    WHY this mutation (finding 4427921337): the inventory is the
+    contract the client configs are derived from. If it declares a path
+    the service does not serve, every client that carries the entry is
+    broken -- and a ratchet that asserts a HARDCODED path cannot see it.
+    """
+    inventory = json.loads(Path(ratchet.INVENTORY).read_text(encoding="utf-8"))
+    defaults = inventory.setdefault("defaults", {})
+    server = ratchet._server_by_key(key)
+    assert server is not None, f"mutation setup failed: {key} is not in the inventory"
+    prefix = server.get("endpoint_prefix")
+    endpoint = server.get("endpoint")
+    defaults_key = f"{prefix}_{endpoint}_url"
+    assert defaults_key in defaults, (
+        f"mutation setup failed: the inventory has no {defaults_key} default"
+    )
+    original = str(defaults[defaults_key])
+    defaults[defaults_key] = original.rsplit("/", 1)[0] + path
+    dest = tmp_path / "mcp_inventory.json"
+    dest.write_text(json.dumps(inventory, indent=2), encoding="utf-8")
+    return dest
+
+
+def _point_ratchet_at(ratchet, service_dir: Path, inventory: Path | None = None):
+    """Repoint the ratchet's own constants at the mutated artefacts."""
     ratchet.FLUTE_SERVICE_DIR = service_dir
+    if inventory is not None:
+        ratchet.INVENTORY = inventory
 
 
 def test_mutation_removed_route_declaration_is_killed(tmp_path: Path) -> None:
@@ -130,13 +227,93 @@ def test_mutation_removed_router_mount_is_killed(tmp_path: Path) -> None:
     app is the same 404 with an extra step of indirection. This is the
     other half of the ORIGINAL defect: the route existed but was never
     mounted, so the running service could not serve it.
+
+    The SPECIFIC failure is asserted, not merely "it raised": a mount
+    that vanished and a mount that mounts the WRONG router are
+    different defects, and the message says which one fired.
     """
     ratchet = _load_ratchet()
     mutated = _mutated_service_tree(tmp_path, drop_route=False, drop_mount=True)
     _point_ratchet_at(ratchet, mutated)
 
-    with pytest.raises(AssertionError):
+    with pytest.raises(AssertionError) as excinfo:
         ratchet.test_inventory_flute_route_is_mounted_in_service_app("flute-voice-mcp")
+    assert "does not mount the MCP bridge router" in str(excinfo.value), (
+        "the ratchet raised, but not with the missing-mount message -- the "
+        f"assertion that should have fired changed shape: {excinfo.value!r}"
+    )
+
+
+def test_mutation_mounting_another_router_is_killed(tmp_path: Path) -> None:
+    """Mounting a DIFFERENT router MUST make the ratchet fail.
+
+    This is the mutation the old mount check could NOT see
+    (finding 4427921357): the MCP router is still constructed, and the
+    file still contains the string "create_mcp_router", but the router
+    that is INCLUDED is somebody else's -- so `/sse` and `/mcp` both
+    404. The old check asserted "some app.include_router( call exists"
+    and passed.
+
+    The route-declaration assertion must still PASS here -- that is what
+    isolates the failure to the mount.
+    """
+    ratchet = _load_ratchet()
+    mutated = _mutated_service_tree(tmp_path, drop_route=False, drop_mount=False)
+    main = mutated / "main.py"
+    text = main.read_text(encoding="utf-8")
+    assert MCP_ROUTER_FACTORY_CALL in text, (
+        "mutation setup failed: the MCP router factory call not found"
+    )
+    main.write_text(
+        text.replace(MCP_ROUTER_FACTORY_CALL, MUTATED_ROUTER_FACTORY_CALL),
+        encoding="utf-8",
+    )
+    _point_ratchet_at(ratchet, mutated)
+
+    # The route is still declared -- only the mount was broken.
+    ratchet.test_inventory_flute_endpoint_is_declared_in_service_source(
+        "flute-voice-mcp"
+    )
+    with pytest.raises(AssertionError) as excinfo:
+        ratchet.test_inventory_flute_route_is_mounted_in_service_app("flute-voice-mcp")
+    assert "does not mount the MCP bridge router" in str(excinfo.value), (
+        "the ratchet raised, but not with the missing-mount message -- the "
+        f"assertion that should have fired changed shape: {excinfo.value!r}"
+    )
+
+
+def test_mutation_inventory_declares_an_unserved_path_is_killed(
+    tmp_path: Path,
+) -> None:
+    """An inventory that promises an UNSERVED path MUST make the ratchet fail.
+
+    This is finding 4427921337. The ratchet used to assert the
+    HARDCODED paths `/sse` and `/mcp`, so repointing the inventory at
+    `/mcp-v2` left the assertion hunting for the old route: the
+    inventory promised a path nothing serves and the ratchet stayed
+    green -- exactly the client-wide 404 this lane exists to prevent.
+
+    The expected route must be DERIVED from the inventory, so this
+    mutation kills a ratchet that hard-codes it.
+    """
+    ratchet = _load_ratchet()
+    mutated_inventory = _mutated_inventory(
+        tmp_path, ratchet, TARGET_KEY, UNSERVED_PATH
+    )
+    _point_ratchet_at(ratchet, Path(ratchet.FLUTE_SERVICE_DIR), mutated_inventory)
+
+    with pytest.raises(AssertionError) as excinfo:
+        ratchet.test_inventory_flute_endpoint_is_declared_in_service_source(
+            TARGET_KEY
+        )
+    assert "does not declare" in str(excinfo.value), (
+        "the ratchet raised, but not with the route-drift message -- the "
+        f"assertion that should have fired changed shape: {excinfo.value!r}"
+    )
+    assert UNSERVED_PATH in str(excinfo.value), (
+        "the failure does not name the unserved path the inventory declared: "
+        f"{excinfo.value!r}"
+    )
 
 
 def test_mutation_both_route_and_mount_removed_is_killed(tmp_path: Path) -> None:
@@ -203,6 +380,102 @@ def test_live_probe_url_follows_the_base_override() -> None:
         f"the override did not rebase the probe URL: {rebased!r}"
     )
     assert rebased != "http://localhost:8055/mcp"
+
+
+def test_live_probe_rejects_a_declared_url_with_no_path() -> None:
+    """A declared URL with NO PATH must fail loudly, not silently rebase.
+
+    Finding 4427972925: `_probe_url` used to turn `http://host:8055`
+    into `<override>/host:8055` -- the host quietly demoted to a path
+    segment and the probe aimed at a path nothing serves. That is an
+    override that does not control, wearing the costume of one that
+    does.
+
+    The failure must NAME the offending URL, and it must be a real
+    error rather than an `assert` (which `pytest -O` strips).
+    """
+    ratchet = _load_ratchet()
+    with pytest.raises(ValueError) as excinfo:
+        ratchet._probe_url("http://localhost:8055", "http://flute-node.internal:9000")
+    message = str(excinfo.value)
+    assert "http://localhost:8055" in message, (
+        f"the failure does not name the offending URL: {message!r}"
+    )
+
+
+def test_live_probe_sends_the_credential_the_inventory_declares(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The probe must send the credential the INVENTORY declares.
+
+    Finding 4427921351: the flute-gateway mounts the MCP router with
+    `Depends(verify_api_key)`, so on a fleet deployment an
+    unauthenticated probe is answered 401 -- and the probe read that as
+    "the wrong service answered", rejecting a HEALTHY endpoint.
+
+    The value used here is a TEST FIXTURE, not a secret: it proves the
+    header is resolved from the environment and sent under the header
+    NAME the inventory declares, without any real key being involved.
+    """
+    ratchet = _load_ratchet()
+    server = ratchet._server_by_key(TARGET_KEY)
+    assert server is not None, f"mutation setup failed: {TARGET_KEY} is not in the inventory"
+    declared = server.get("headers") or {}
+    assert declared, "mutation setup failed: the entry declares no headers"
+    header_name = next(iter(declared))
+    env_names = re.findall(
+        r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}", str(declared[header_name])
+    )
+    assert env_names, (
+        "mutation setup failed: the declared header carries no ${VAR} placeholder"
+    )
+    for env_name in env_names:
+        monkeypatch.setenv(env_name, "ratchet-fixture-key")
+
+    headers = ratchet._probe_headers(server)
+    assert header_name in headers, (
+        f"the probe did not send the header the inventory declares "
+        f"(declared: {sorted(declared)})"
+    )
+    assert headers[header_name] == "ratchet-fixture-key", (
+        "the probe did not send the credential resolved from the environment"
+    )
+
+
+def test_live_probe_skips_when_the_declared_credential_is_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An UNAVAILABLE credential must SKIP -- never fail, never leak.
+
+    Finding 4427921351: a missing credential is an ENVIRONMENTAL
+    condition, not a defect in the endpoint. The probe must skip with a
+    reason that names the header and the VARIABLE -- and must never
+    send a literal `${VAR}` placeholder and never print a secret.
+    """
+    ratchet = _load_ratchet()
+    server = ratchet._server_by_key(TARGET_KEY)
+    assert server is not None, f"mutation setup failed: {TARGET_KEY} is not in the inventory"
+    declared = server.get("headers") or {}
+    assert declared, "mutation setup failed: the entry declares no headers"
+    header_name = next(iter(declared))
+    env_names = re.findall(
+        r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}", str(declared[header_name])
+    )
+    assert env_names, (
+        "mutation setup failed: the declared header carries no ${VAR} placeholder"
+    )
+    for env_name in env_names:
+        monkeypatch.delenv(env_name, raising=False)
+
+    with pytest.raises(pytest.skip.Exception) as excinfo:
+        ratchet._probe_headers(server)
+    message = str(excinfo.value)
+    assert env_names[0] in message, (
+        f"the skip reason does not name the variable: {message!r}"
+    )
+    assert "${" not in message, (
+        f"the skip reason leaked an unresolved placeholder: {message!r}"
+    )
 
 
 def test_live_probe_rejects_a_responder_that_is_not_the_flute_gateway() -> None:

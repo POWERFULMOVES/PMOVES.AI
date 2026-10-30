@@ -55,10 +55,29 @@ Mutation-kill
 companion harness. It copies the service tree, removes the route (or the
 mount), points THIS module's constants at the mutated copy, and asserts
 the corresponding test FAILS. A ratchet nobody re-runs decays.
+
+What the 2026-10-30 review (PR #3428) hardened
+----------------------------------------------
+Four review threads on this lane changed the shape of the assertions.
+They are recorded here because each one is a RULE, not a patch:
+
+* 4427921337 -- the expected route is DERIVED from the inventory's
+  declared URL. A hard-coded path proves only that the hard-coded path
+  still exists; it cannot notice that the inventory now promises a
+  different one.
+* 4427921351 -- the live probe sends the credential the INVENTORY
+  declares (`X-API-Key`), resolved from the environment, never
+  hard-coded and never printed.
+* 4427921357 -- the mount assertion inspects the `include_router` CALL
+  EXPRESSION and requires the MCP ROUTER to be the argument. The
+  presence of a string is not a mount.
+* 4427972925 -- a declared URL with no path is a loud failure, not a
+  silently rebased URL whose host became a path segment.
 """
 
 from __future__ import annotations
 
+import ast
 import json
 import os
 import re
@@ -75,18 +94,31 @@ PMOVES_ROOT = Path(__file__).resolve().parents[2]
 INVENTORY = PMOVES_ROOT / "config" / "mcp_inventory.json"
 FLUTE_SERVICE_DIR = PMOVES_ROOT / "services" / "flute-gateway"
 
-# The MCP surface this ratchet pins. Each entry maps an inventory key to
-# (service source file, the route decorator that must declare it).
+# The inventory entries this ratchet pins to the flute-gateway service.
 #
-# `flute-voice` is the SSE surface (`GET /sse`, mcp_bridge.py:529) and
-# `flute-voice-mcp` is the streamable-http surface (`POST /mcp`,
-# mcp_bridge.py:508). BOTH must be present in the source -- the SSE
-# surface is what existing consumers use and the HTTP surface is the
-# newer one.
-EXPECTED_ROUTES: dict[str, tuple[str, str]] = {
-    "flute-voice": ("mcp_bridge.py", '@router.get("/sse")'),
-    "flute-voice-mcp": ("mcp_bridge.py", '@router.post("/mcp")'),
-}
+# WHY the ROUTE is not named here: the expected route is DERIVED from
+# the inventory's own declared URL (see `_declared_path`), because a
+# hard-coded path proves only that the hard-coded path still exists --
+# it cannot notice that the INVENTORY now promises a different one.
+# Finding 4427921337: with `/sse` and `/mcp` baked into the test, a
+# change of `flute_mcp_local_url` to an unserved `/mcp-v2` left the
+# assertion hunting for the OLD route while the inventory promised the
+# new one -- so the same client-wide 404 this ratchet exists to prevent
+# could merge undetected. The inventory is the contract; the assertion
+# must be derived from it.
+FLUTE_SERVER_KEYS = ("flute-voice", "flute-voice-mcp")
+
+# The flute-gateway module that DECLARES the MCP routes, and the
+# `create_mcp_router` factory that `main.py` mounts.
+FLUTE_ROUTER_MODULE = "mcp_bridge.py"
+
+# The HTTP method each MCP transport uses, so the static assertion can
+# check the METHOD as well as the path. Derived from the inventory's
+# `transport` field rather than hard-coded per entry: the SSE surface is
+# a server->client GET stream, the streamable-http surface carries
+# client->server JSON-RPC in a POST body. An entry whose transport is
+# not listed here is path-checked only.
+TRANSPORT_METHODS = {"sse": "GET", "http": "POST"}
 
 # The flute-gateway's declared HTTP port.
 FLUTE_PORT = 8055
@@ -140,7 +172,217 @@ def _resolved_url(server: dict[str, Any], defaults: dict[str, Any]) -> str | Non
     return url
 
 
-@pytest.mark.parametrize("key", sorted(EXPECTED_ROUTES))
+def _url_path(url: str) -> str:
+    """The PATH component of a declared URL -- or a loud failure.
+
+    WHY loud (finding 4427972925): a URL with no path cannot be
+    asserted against the serving source and cannot be probed. Coercing it
+    to "/" silently demotes the HOST to a path segment -- the override
+    would "rebase" `http://host:8055` onto `<override>/host:8055` and
+    probe a path nothing serves, which is exactly the inert-control
+    defect this ratchet exists to catch. `pytest -O` strips `assert`,
+    so this is an explicit raise, not an assert, and the message names
+    the offending URL.
+    """
+    remainder = str(url).split("://", 1)[-1]
+    if "/" not in remainder:
+        raise ValueError(
+            f"declared URL {url!r} carries no path -- it cannot be asserted "
+            f"against the serving source or probed live"
+        )
+    return "/" + remainder.split("/", 1)[-1]
+
+
+def _declared_path(server: dict[str, Any]) -> str:
+    """The PATH the INVENTORY declares for one entry.
+
+    The single place the expected route is derived, so the static
+    assertion and the live probe cannot drift apart: both read the
+    inventory, neither hard-codes a path (finding 4427921337).
+    """
+    defaults = _inventory().get("defaults", {})
+    url = _resolved_url(server, defaults)
+    if not url:
+        raise ValueError(
+            f"inventory entry {server.get('key')!r} resolves no URL "
+            f"(prefix={server.get('endpoint_prefix')!r}, "
+            f"endpoint={server.get('endpoint')!r})"
+        )
+    return _url_path(url)
+
+
+# The FastAPI/Starlette route-decorator method names, used to recognise
+# a route DECLARATION in the source.
+_ROUTE_METHODS = frozenset(
+    {"get", "post", "put", "patch", "delete", "head", "options", "websocket"}
+)
+
+
+def _declared_routes(source: str) -> dict[str, set[str]]:
+    """The routes the service source DECLARES, as `{path: {METHOD, ...}}`.
+
+    WHY parse instead of grep: a grep for `"/mcp"` also matches a
+    docstring, a log line, a comment or a URL inside another string --
+    none of which creates a route. Only the decorator calls
+    (`@router.post("/mcp")`) actually register a route, so the AST is
+    the only source of truth that cannot be fooled by prose.
+    """
+    routes: dict[str, set[str]] = {}
+    for node in ast.walk(ast.parse(source)):
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        for dec in node.decorator_list:
+            if not isinstance(dec, ast.Call) or not isinstance(dec.func, ast.Attribute):
+                continue
+            method = dec.func.attr.lower()
+            if method not in _ROUTE_METHODS or not dec.args:
+                continue
+            first = dec.args[0]
+            if not (isinstance(first, ast.Constant) and isinstance(first.value, str)):
+                continue
+            routes.setdefault(first.value, set()).add(method.upper())
+    return routes
+
+
+def _mcp_router_mounted(main_source: str) -> tuple[bool, str]:
+    """Is the MCP router the ARGUMENT of an `app.include_router(...)` call?
+
+    WHY the call EXPRESSION (finding 4427921357): the previous check
+    proved only that `main.py` contained SOME `app.include_router(` call,
+    independently of the string "create_mcp_router" appearing somewhere
+    in the file. A router that is constructed and DISCARDED while some
+    other router is included passes that check -- and `/sse` and `/mcp`
+    both 404. So this inspects what is actually passed to
+    `include_router`, and requires it to be the MCP router.
+
+    Returns `(mounted, detail)`; `detail` names WHAT was found so a
+    failure says which of the two ways the mount can be wrong.
+    """
+    tree = ast.parse(main_source)
+
+    # (1) the MCP router factory, imported from the module that declares
+    #     the routes the static assertion just checked.
+    factory_names: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom) and (node.module or "").lstrip(".") == (
+            FLUTE_ROUTER_MODULE.removesuffix(".py")
+        ):
+            for alias in node.names:
+                if alias.name == "create_mcp_router":
+                    factory_names.add(alias.asname or alias.name)
+    if not factory_names:
+        return False, (
+            f"main.py does not import create_mcp_router from "
+            f"{FLUTE_ROUTER_MODULE.removesuffix('.py')}, so the router that "
+            f"declares the routes is not a router this app could mount"
+        )
+
+    # (2) a variable bound to the MCP router, e.g. `router = create_mcp_router(...)`.
+    bound: set[str] = set()
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Assign) or not isinstance(node.value, ast.Call):
+            continue
+        func = node.value.func
+        if isinstance(func, ast.Name) and func.id in factory_names:
+            for target in node.targets:
+                if isinstance(target, ast.Name):
+                    bound.add(target.id)
+
+    # (3) an `include_router` whose ARGUMENT is the MCP router.
+    seen: list[str] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
+            continue
+        if node.func.attr != "include_router":
+            continue
+        arg = node.args[0] if node.args else next(
+            (kw.value for kw in node.keywords if kw.arg == "router"), None
+        )
+        seen.append(ast.unparse(arg) if arg is not None else "<no router argument>")
+        if arg is None:
+            continue
+        if isinstance(arg, ast.Call) and isinstance(arg.func, ast.Name):
+            if arg.func.id in factory_names:
+                return True, f"app.include_router({arg.func.id}(...))"
+        if isinstance(arg, ast.Name) and arg.id in bound:
+            return True, f"app.include_router({arg.id})"
+    return False, (
+        f"no app.include_router(...) call takes the MCP router as its argument "
+        f"(include_router argument(s) seen: {seen or 'none'})"
+    )
+
+
+# A `${VAR}` placeholder in a declared header value, e.g. `${FLUTE_API_KEY}`.
+_PLACEHOLDER = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}")
+
+
+def _resolve_declared_headers(
+    server: dict[str, Any],
+) -> tuple[dict[str, str], list[tuple[str, str]]]:
+    """Resolve the headers the INVENTORY declares for one entry.
+
+    WHY the inventory is the source (finding 4427921351): the inventory
+    is the contract the client configs are DERIVED from, so it is where
+    the credential's HEADER NAME and its ENVIRONMENT SOURCE are
+    declared -- `flute-voice-mcp` declares `X-API-Key: ${FLUTE_API_KEY}`.
+    The flute-gateway mounts the MCP router with
+    `dependencies=[Depends(verify_api_key)]` (main.py:624), so on a fleet
+    deployment where `FLUTE_API_KEY` is configured, a probe that sends
+    no key is rejected with 401 -- and a 401 reads exactly like "some
+    other service answered" to a probe whose identity check is the
+    handshake body. The probe was rejecting a HEALTHY endpoint.
+
+    Returns `(resolved_headers, unresolved)` where `unresolved` is a
+    list of `(header name, env var name)` pairs. The VALUE of an
+    unresolved credential is never returned, never logged and never
+    printed -- only the header name and the variable name are.
+    """
+    resolved: dict[str, str] = {}
+    unresolved: list[tuple[str, str]] = []
+    declared = server.get("headers") or {}
+    for name, raw in declared.items():
+        value = str(raw)
+        env_names = _PLACEHOLDER.findall(value)
+        if not env_names:
+            resolved[name] = value
+            continue
+        missing: list[str] = []
+        for env_name in env_names:
+            env_value = os.environ.get(env_name)
+            if not env_value:
+                missing.append(env_name)
+                continue
+            value = value.replace("${" + env_name + "}", env_value)
+        if missing:
+            unresolved.append((name, missing[0]))
+            continue
+        resolved[name] = value
+    return resolved, unresolved
+
+
+def _probe_headers(server: dict[str, Any]) -> dict[str, str]:
+    """The headers the live probe must send -- or SKIP, loudly.
+
+    WHY skip and not fail: a missing credential is an ENVIRONMENTAL
+    condition, not a defect in the endpoint. The ratchet must never
+    fail for a reason it cannot fix, and must never silently pass
+    either -- so it skips, and the skip reason names the header and the
+    variable (never the value). A skip here is not a pass; the static
+    half is what carries the lane in CI.
+    """
+    resolved, unresolved = _resolve_declared_headers(server)
+    if unresolved:
+        names = ", ".join(f"{name} (env {env_name})" for name, env_name in unresolved)
+        pytest.skip(
+            f"flute-gateway probe cannot authenticate: the inventory declares "
+            f"credential(s) that are not available in this environment: {names}. "
+            f"Export the variable(s) and re-run -- a probe skipped for a "
+            f"missing credential must not be read as a pass."
+        )
+    return resolved
+
+
+@pytest.mark.parametrize("key", sorted(FLUTE_SERVER_KEYS))
 def test_inventory_flute_endpoint_is_declared_in_service_source(key: str) -> None:
     """The inventory must not declare a path the serving source omits.
 
@@ -148,71 +390,102 @@ def test_inventory_flute_endpoint_is_declared_in_service_source(key: str) -> Non
     and it reaches EVERY client that carries the entry, because the
     default `clients: null` means "all clients" (see
     `ServerSpec.supports_client` in `pmoves/tools/mcp_config_generator.py`).
+
+    The expected route is DERIVED from the inventory's own declared URL
+    (finding 4427921337). Asserting a hard-coded `/sse` and `/mcp` would
+    only prove that the hard-coded paths still exist: repoint the
+    inventory at `/mcp-v2` and the assertion would keep hunting for the
+    old route while the clients were handed a path nothing serves.
     """
-    filename, route_decl = EXPECTED_ROUTES[key]
-    source_path = FLUTE_SERVICE_DIR / filename
+    server = _server_by_key(key)
+    assert server is not None, f"{key}: entry missing from mcp_inventory.json"
+    try:
+        expected_path = _declared_path(server)
+    except ValueError as exc:
+        pytest.fail(f"{key}: {exc}")
+    declared_url = _resolved_url(server, _inventory().get("defaults", {}))
+
+    source_path = FLUTE_SERVICE_DIR / FLUTE_ROUTER_MODULE
     assert source_path.exists(), (
         f"{key}: expected the serving source {source_path} to exist -- the "
         f"inventory entry and the service tree have diverged"
     )
-    source = source_path.read_text(encoding="utf-8")
-    assert route_decl in source, (
-        f"{key}: the inventory declares this surface, but "
-        f"{_display_path(source_path)} does not declare "
-        f"{route_decl!r}. Either the route was removed or the inventory "
-        f"entry was added without the serving route -- both are 404s for "
-        f"every client that carries the entry."
+    routes = _declared_routes(source_path.read_text(encoding="utf-8"))
+    assert expected_path in routes, (
+        f"{key}: the inventory declares {declared_url!r} (path {expected_path!r}), "
+        f"but {_display_path(source_path)} does not declare that route "
+        f"(routes declared there: {sorted(routes)}). Either the route was "
+        f"removed or the inventory entry was added without the serving route "
+        f"-- both are 404s for every client that carries the entry."
     )
 
+    # The METHOD matters as much as the path: a route served with the
+    # wrong verb answers 405, which the live probe would catch only when
+    # a service happens to be running. The method is derived from the
+    # inventory's own `transport` field, so an entry that changes
+    # transport is caught here rather than silently keeping the old verb.
+    transport = server.get("transport")
+    expected_method = TRANSPORT_METHODS.get(str(transport))
+    if expected_method:
+        assert expected_method in routes[expected_path], (
+            f"{key}: the inventory declares {declared_url!r} on transport "
+            f"{transport!r}, which is {expected_method}, but "
+            f"{_display_path(source_path)} declares "
+            f"{sorted(routes[expected_path])} for {expected_path!r}."
+        )
 
-@pytest.mark.parametrize("key", sorted(EXPECTED_ROUTES))
+
+@pytest.mark.parametrize("key", sorted(FLUTE_SERVER_KEYS))
 def test_inventory_flute_route_is_mounted_in_service_app(key: str) -> None:
     """The route must be MOUNTED, not merely declared.
 
     A route decorator in a module that is never included in the ASGI app
     is the same 404 with an extra step of indirection. This pins the
-    mount in `main.py`.
+    mount in `main.py` -- and pins it at the ARGUMENT (finding
+    4427921357): the included object must BE the MCP router, not merely
+    a router of some kind.
     """
     main_path = FLUTE_SERVICE_DIR / "main.py"
     assert main_path.exists(), f"flute-gateway main.py missing at {main_path}"
     main_source = main_path.read_text(encoding="utf-8")
-    assert "create_mcp_router" in main_source, (
-        "flute-gateway/main.py does not mount the MCP bridge router "
-        "(create_mcp_router). The /sse and /mcp routes exist in "
-        "mcp_bridge.py but are never mounted into the ASGI app."
-    )
-    assert re.search(r"app\.include_router\(", main_source), (
-        "flute-gateway/main.py declares create_mcp_router but never calls "
-        "app.include_router(...) -- the router is built and discarded."
+    mounted, detail = _mcp_router_mounted(main_source)
+    assert mounted, (
+        f"flute-gateway/main.py does not mount the MCP bridge router: {detail}. "
+        f"The router that declares the routes is built and discarded, so every "
+        f"path the inventory promises 404s for every client that carries the entry."
     )
 
 
-def test_inventory_flute_mcp_entry_resolves_to_a_path_url() -> None:
-    """The `flute_mcp` endpoint prefix must resolve to a URL with a PATH.
+@pytest.mark.parametrize("key", sorted(FLUTE_SERVER_KEYS))
+def test_inventory_flute_entry_resolves_to_a_path_url(key: str) -> None:
+    """Every pinned entry must resolve to a URL with a PATH.
 
     A path is what makes the endpoint assertable (the static half of
     this ratchet) and what makes it probeable (the live half). An entry
     that resolved to a bare host:port would be un-assertable and
     un-probeable, which is exactly the gap that let the stale-container
     defect ship.
+
+    This guard used to cover `flute-voice-mcp` only, while the URL it
+    protects is resolved for EVERY entry (finding 4427972925).
     """
-    server = _server_by_key("flute-voice-mcp")
-    assert server is not None, "flute-voice-mcp entry missing from mcp_inventory.json"
+    server = _server_by_key(key)
+    assert server is not None, f"{key}: entry missing from mcp_inventory.json"
     defaults = _inventory().get("defaults", {})
     prefix = server.get("endpoint_prefix")
     endpoint = server.get("endpoint")
     assert prefix and endpoint, (
-        "flute-voice-mcp must declare both endpoint_prefix and endpoint so "
-        "its URL resolves from the inventory defaults"
+        f"{key} must declare both endpoint_prefix and endpoint so "
+        f"its URL resolves from the inventory defaults"
     )
     url = _resolved_url(server, defaults)
     assert url, (
-        f"flute-voice-mcp resolves no URL: prefix={prefix!r} "
+        f"{key} resolves no URL: prefix={prefix!r} "
         f"endpoint={endpoint!r} and defaults has no "
         f"{prefix}_{endpoint}_url key"
     )
     assert "/" in str(url).split("://", 1)[-1], (
-        f"flute-voice-mcp URL {url!r} carries no path -- it cannot be "
+        f"{key} URL {url!r} carries no path -- it cannot be "
         f"asserted against the source or probed live"
     )
 
@@ -239,8 +512,16 @@ def _probe_url(declared_url: str, base: str) -> str:
     leaves the probe pointed at the original address is the same
     defect class this ratchet exists to catch: a control that does not
     control.
+
+    WHY the path guard (finding 4427972925): a declared URL with no
+    path used to be "rebased" into `<override>/host:8055` -- the host
+    quietly demoted to a path segment, and the probe aimed at a path
+    nothing serves. That is an override that does not control, wearing
+    the costume of one that does. `_url_path` raises instead, naming
+    the offending URL; the raise is explicit rather than an `assert`
+    because `pytest -O` strips asserts.
     """
-    path = "/" + str(declared_url).split("://", 1)[-1].split("/", 1)[-1]
+    path = _url_path(declared_url)
     return f"{base.rstrip('/')}{path}"
 
 
@@ -296,9 +577,18 @@ def test_inventory_flute_mcp_endpoint_answers_live() -> None:
     `_assert_responder_is_flute_gateway`, which the companion
     mutation-kill harness exercises directly.
 
+    The request carries the credential the INVENTORY declares
+    (finding 4427921351): the flute-gateway mounts the MCP router with
+    `Depends(verify_api_key)`, so on a fleet deployment an
+    unauthenticated probe is answered 401 -- and a 401 reads exactly
+    like "the wrong service answered" to a probe whose identity check
+    is the handshake body. The probe was rejecting a HEALTHY endpoint.
+
     Skips when the service is not running on this host -- deployment is
     a separate lane from the code lane, and a skip must not be read as
-    a pass.
+    a pass. Skips equally when the declared credential is not available
+    in this environment: a missing credential is environmental, not a
+    defect in the endpoint.
     """
     base = _live_flute_base()
     if base is None:
@@ -309,7 +599,14 @@ def test_inventory_flute_mcp_endpoint_answers_live() -> None:
     defaults = _inventory().get("defaults", {})
     declared_url = _resolved_url(server, defaults)
     assert declared_url
-    url = _probe_url(declared_url, base)
+    try:
+        url = _probe_url(declared_url, base)
+    except ValueError as exc:
+        pytest.fail(f"flute-voice-mcp: {exc}")
+    # The declared credential, resolved from the inventory and the
+    # environment. Never logged, never printed, never hard-coded.
+    headers = {"Content-Type": "application/json"}
+    headers.update(_probe_headers(server))
     # A streamable-http MCP endpoint answers an initialize POST. We only
     # assert the path is NOT a 404 and that the responder is the
     # flute-gateway -- the protocol handshake is the MCP client's job,
@@ -329,7 +626,7 @@ def test_inventory_flute_mcp_endpoint_answers_live() -> None:
     req = urllib.request.Request(
         url,
         data=payload,
-        headers={"Content-Type": "application/json"},
+        headers=headers,
         method="POST",
     )
     try:
