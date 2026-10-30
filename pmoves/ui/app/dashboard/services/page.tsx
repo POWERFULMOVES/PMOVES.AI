@@ -43,6 +43,9 @@ const PORT_LINKS = [
   { name: 'Archon UI', port: '3737', href: 'http://localhost:3737' },
   { name: 'Jellyfin', port: '8096', href: 'http://localhost:8096' },
   { name: 'MinIO Console', port: '9001', href: 'http://localhost:9001' },
+  // Cloudflare Pages (live surfaces, reachable from anywhere)
+  { name: 'PMOVES.AI Live', port: '443', href: 'https://pmoves.ai' },
+  { name: 'Cataclysm Studios', port: '443', href: 'https://cataclysmstudios.pages.dev' },
 ];
 
 /**
