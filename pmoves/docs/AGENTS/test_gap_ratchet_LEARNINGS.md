@@ -32,17 +32,33 @@ This slice closes both gaps load-bearingly.
 | 6 | **defense-in-depth** | Mutation-kill: every positive assertion in this slice has a companion "if this assertion were flipped, would the test catch it?" test. `test_mutation_js_only_path_fails_ratchet` patches `subprocess.run` to return empty stdout + rc=0 (the shape a pure-JS shim would produce) and verifies the ratchet's primary gate WOULD fire. `test_mutation_hang_fails_ratchet` patches `subprocess.run` to raise `TimeoutExpired` and verifies the gate WOULD fire. **A ratchet without a mutation-kill is decoration.** | `pmoves/tests/test_kilo_binary_path.py::test_mutation_js_only_path_fails_ratchet` + `pmoves/tests/test_mavis_cli_timeout.py::test_mutation_hang_fails_ratchet`. | Every ratchet in this slice. |
 | 7 | **reasoning-gap** | `kilo --version` returning a non-empty string is necessary but not sufficient: a future regression that drops the dispatch chain's stderr but still prints the version would pass the ratchet. The mutation-kill (`test_mutation_js_only_path_fails_ratchet`) catches this by ALSO asserting `len(parts) >= 2 and all(p.isdigit() for p in parts[:2])` — i.e. the version must be parseable as `MAJOR.MINOR.PATCH`, not just non-empty. | `pmoves/tests/test_kilo_binary_path.py::test_kilocode_cli_version_documented_in_sign_trail` (parseability assertion) + the cross-link to the kilocode-glm alter identity. | Any ratchet that asserts "is non-empty" — add a parseability check on top. |
 | 8 | **semantic-naming drift** | `pyproject.toml` adds two new pytest markers: `kilo` and `mavis_cli`. The marker names follow the tool family, not the test file name. This is the same pattern `pmoves_launcher_generator` used for `pmoves` markers: marker = lane identifier, not file = lane identifier. A future test that exercises kilo's `--acp` subcommand should still be `@pytest.mark.kilo`, not a new `@pytest.mark.kilo_acp` marker (that would create marker explosion). | `pmoves/pyproject.toml:60-62` (`kilo:` + `mavis_cli:` markers with brief annotation pointing back to this AGNOTE row). | Any new ratchet module that needs a marker — pick the lane identifier, not the subcommand. |
+| 9 | **defense-in-depth** | **A ratchet whose assertion accepts STDERR as a success signal is vacuous.** The shipped `mavis --version` gate was `version = (proc.stdout or proc.stderr or "").strip()` + `assert version`. Node's module loader writes `Error: Cannot find module '<path>'` to stderr and exits 1 — so a 100%-broken launcher satisfied the non-empty check and the ratchet reported GREEN. Measured on the operator's host: `rc=1, stdout='', stderr="Error: Cannot find module ..."` → test PASSED. The repaired gate asserts the three properties a working CLI has and a broken one cannot fake: **rc == 0**, **non-empty STDOUT** (stderr is never a fallback), and **stdout is not an error banner**. | `pmoves/tests/test_mavis_cli_timeout.py::_assert_healthy_version_output` (the extracted gate) + `pmoves/tests/tools/test_mavis_ratchet_mutation_kill.py::test_mutation_original_version_gate_is_killed` (proves the mutation is caught). | Any ratchet that shells out to a subprocess and inspects its output — stdout and stderr are different signals and only one of them means success. |
+| 10 | **contract-correctness** | **A ratchet that can only SKIP cannot say no.** The upstream matrix cross-check pinned `MiniMaxInc/MiniMax-Code`, which does not exist (GitHub returns HTTP 404 — the real upstream is `MiniMax-AI/minimax-code`). A 404 body is a JSON **object** where the helper expected a **list**, so the fetch took the `not isinstance(payload, list)` branch and returned `None` → the cross-check degraded to a permanent SKIP. It could never report green OR red. The repair pins the repo that exists AND makes the pin itself assertable. | `pmoves/tests/test_mavis_cli_timeout.py::_UPSTREAM_REPO` + `pmoves/tests/tools/test_mavis_ratchet_mutation_kill.py::test_mutation_original_upstream_pin_is_killed`. | Any ratchet that degrades to skip on an upstream/network error — assert the identity of what it queries so a wrong target cannot silently disable it. |
+| 11 | **reasoning-gap** | **"Matrix files put the OS in the filename" was an unverified assumption, and it was false.** The original platform detector scanned workflow **filenames** for `ubuntu`/`macos`/`windows`. Upstream's actual workflow filenames are `ci.yml`, `cli-release.yml`, `compatibility.yml`, `label-issue-product.yml`, `performance.yml`, `security.yml`, `source-candidate.yml`, `sync-issue-to-feishu.yml` — **not one carries an OS name**. The upstream matrix is declared INSIDE `ci.yml`'s body as `runs-on: ${{ matrix.os }}` with `os: [ubuntu-latest, macos-latest, windows-latest]`. The filename scan therefore returned an EMPTY platform set, so the gate's `assert "windows" in platforms` would have FAILED the moment it was enabled — the ratchet was inverted, reporting "upstream does not cover Windows" for an upstream that DOES. The repair reads each workflow's `download_url` body and scans for the runner labels. | `pmoves/tests/test_mavis_cli_timeout.py::_fetch_upstream_matrix` (reads workflow CONTENT) + `pmoves/tests/test_mavis_cli_timeout.py::test_mutation_filename_derived_platforms_would_be_empty` (pins the empty-set invariant) + live probe returning `{'platforms': ['macos', 'ubuntu', 'windows'], 'status': 'ok'}`. | Any detector that classifies by metadata rather than by the actual content — filename, title, and label conventions are assumptions; the payload is the fact. |
+| 12 | **defense-in-depth** | **A mutation-kill that RESTATES the assertion instead of INVOKING it proves nothing.** The first attempt at the broken-shim mutation-kill re-implemented the gate inline (`assert proc.returncode == 0` inside the test) rather than calling the gate the ratchet actually uses. Restoring the original defective gate left the suite **7 passed** — the mutation survived. The repair extracts the gate into `_assert_healthy_version_output()` and the mutation-kill calls THAT function, so the mutation is genuinely coupled to production logic. The tracked harness `pmoves/tests/tools/test_mavis_ratchet_mutation_kill.py` rewrites the gate back to the original and asserts the module then fails. | `pmoves/tests/test_mavis_cli_timeout.py::_assert_healthy_version_output` (shared by ratchet + mutation-kill) + `pmoves/tests/tools/test_mavis_ratchet_mutation_kill.py` (3/3 pass; both mutations killed). | Every mutation-kill — assert against the SAME function the ratchet calls, never a copy of its logic. |
 
 ---
 
 ## 4-bucket · 5-class cross-check
 
-- **(1) reasoning-gap** — 2 lessons (#3, #7) — `--version` vs `--help` paths and parseability-vs-non-empty are subtle distinctions the ratchet must hold simultaneously.
+- **(1) reasoning-gap** — 3 lessons (#3, #7, #11) — `--version` vs `--help` paths, parseability-vs-non-empty, and filename-vs-content classification are subtle distinctions the ratchet must hold simultaneously.
 - **(2) semantic-naming drift** — 1 lesson (#8) — marker naming follows lane identifier convention.
-- **(3) contract-correctness** — 2 lessons (#2, #4) — the kilo 4-link dispatch chain and the outer/inner timeout split.
-- **(4) defense-in-depth** — 3 lessons (#1, #5, #6) — positive assertions only, classification ratchets, mutation-kills.
+- **(3) contract-correctness** — 3 lessons (#2, #4, #10) — the kilo 4-link dispatch chain, the outer/inner timeout split, and the upstream-target contract.
+- **(4) defense-in-depth** — 5 lessons (#1, #5, #6, #9, #12) — positive assertions only, classification ratchets, mutation-kills, the stderr-as-success trap, and the restated-vs-invoked mutation trap.
 
-Pattern: **defense-in-depth + contract-correctness dominate** — 5 of 8 lessons. This slice closes two test gaps; the close-out work IS asserting the contracts load-bearingly (positive state + mutation-kill + classification), not just adding more tests.
+Pattern: **defense-in-depth + contract-correctness dominate** — 8 of 12 lessons. This slice closes two test gaps; the close-out work IS asserting the contracts load-bearingly (positive state + mutation-kill + classification), not just adding more tests.
+
+### Post-merge correction round (2026-10-30)
+
+The slice shipped as PR #3095. A follow-up audit on 2026-10-30 found **two defects in the shipped ratchet itself** — both of the "ratchet that cannot say no" family this lane exists to prevent:
+
+| Defect | Shipped behaviour | Root cause | Repair | Mutation-kill |
+|---|---|---|---|---|
+| A — stderr accepted as a version | `mavis --version` reported PASSED on a 100%-broken CLI (`rc=1`, stdout empty, `Cannot find module` on stderr) | `(proc.stdout or proc.stderr or "").strip()` + bare non-empty assert | extracted `_assert_healthy_version_output()`: rc==0, stdout-only, no error-banner prose | `test_mutation_original_version_gate_is_killed` |
+| B — upstream pin 404 | the matrix cross-check could only ever SKIP | pinned `MiniMaxInc/MiniMax-Code` (HTTP 404); real upstream is `MiniMax-AI/minimax-code` | pin corrected + asserted; platform detection now reads workflow CONTENT | `test_mutation_original_upstream_pin_is_killed` |
+| C — filename-derived platforms *(found while repairing B)* | the cross-check would have reported "upstream does not cover Windows" for an upstream that DOES | platform set derived from workflow filenames; upstream declares the matrix inside `ci.yml`'s body | fetch each workflow body via `download_url`, scan for runner labels | `test_mutation_filename_derived_platforms_would_be_empty` |
+
+**The upstream matrix answer (Gap 2's actual question):** upstream's Linux matrix is **GREEN**, and upstream **does** cover Windows. `MiniMax-AI/minimax-code`'s `ci.yml` declares `os: [ubuntu-latest, macos-latest, windows-latest]` with `profile: full` on Ubuntu and a focused `profile: windows` on Windows ("Windows runs a focused contract; full capability coverage remains on Linux/macOS"). Live probe on 2026-10-30: `{'platforms': ['macos', 'ubuntu', 'windows'], 'status': 'ok'}`. So the operator's 240s timeout is the **platform-specific Windows case** (operator's lane), not a known-broken upstream — but only once the ratchet can actually read the matrix, which it previously could not.
 
 ---
 
@@ -53,8 +69,10 @@ Pattern: **defense-in-depth + contract-correctness dominate** — 5 of 8 lessons
 | `pmoves/tests/test_kilo_binary_path.py` | 362 | 6 | kilo binary-path ratchet: shim → binary dispatch is intact on the live host, postinstall declares the platform subpackage, JS shim source encodes the dispatch chain, mutation-kill on the JS-only mutation, cross-link to sign-trail. |
 | `pmoves/tests/test_mavis_cli_timeout.py` | 300 | 4 | Mavis CLI timeout ratchet: `--version` returns within 30s, `--help` returns within 30s, upstream matrix classification (gated on env var), mutation-kill on the hang mutation. |
 | `pmoves/tests/test_sign_trail.py` (augmented) | +35 lines | +0 (augmented existing test) | `test_build_payload_applies_kilocode_glm_alter` now asserts the structural fingerprint (accent is 7-char hex, payload has fields beyond the legacy `{selected_alter, accent}`). |
+| `pmoves/tests/test_mavis_cli_timeout.py` (corrected 2026-10-30) | +360 lines net | 4 → 8 | The original 4 tests were kept; 4 mutation-kills added (broken-shim, error-banner-on-stdout, wrong-upstream-pin, filename-derived-platforms). The version/help gates now call the shared `_assert_healthy_version_output()`. |
+| `pmoves/tests/tools/test_mavis_ratchet_mutation_kill.py` (new 2026-10-30) | 135 lines | 3 | The PROVENANCE harness: rewrites the gate and the upstream pin back to their original defective forms and asserts the ratchet module then FAILS. Both mutations confirmed killed. |
 
-Total: **10 new + 1 augmented test** across 3 files. `pyproject.toml` adds 2 markers (`kilo`, `mavis_cli`).
+Total: **10 new + 1 augmented test** across 3 files (original slice) **+ 4 mutation-kills + 3 harness tests** (2026-10-30 correction round). `pyproject.toml` adds 2 markers (`kilo`, `mavis_cli`).
 
 ---
 
@@ -68,7 +86,7 @@ Total: **10 new + 1 augmented test** across 3 files. `pyproject.toml` adds 2 mar
   - `@kilocode/cli-windows-x64-baseline/bin/kilo.exe` — non-AVX2 fallback binary (also installed on this host)
   - `C:\Users\russe\.minimax\bin\mavis.cmd` — Mavis CLI shim → `MiniMax Code.exe` → `cli.js`
   - `pmoves/tools/sign_trail.py` — augment target (kilocode-glm alter identity)
-- **Upstream matrix source-of-truth**: `MiniMaxInc/MiniMax-Code` `.github/workflows/` (queried via GitHub Contents API in `test_upstream_matrix_classifies_regression_lane` when `PMOVES_MAVIS_MATRIX_CHECK=1`)
+- **Upstream matrix source-of-truth**: `MiniMax-AI/minimax-code` `.github/workflows/` — the **workflow CONTENT** (queried via the GitHub Contents API, then each workflow's `download_url` body), not the filenames. Corrected 2026-10-30 from the non-existent `MiniMaxInc/MiniMax-Code`.
 - **CI gate**: `merge-gate.yml::python-tests` runs `pmoves/tools/pytest_ratchet.py` on every PR; that runner discovers `pmoves/tests/**` without a paths filter, so both new test files land in the ratchet
 
 ---
@@ -82,6 +100,30 @@ Verified by direct file inspection (no pytest available in this venv; CI is the 
 - `bin/kilo` JS shim contains `spawnSync`, `platformMap` with `windows` mapping, `@kilocode/cli-` prefix — all ratchet invariants pass on this host
 - `postinstall.mjs` contains `platformMap`, `windows` mapping, `@kilocode/cli-` prefix — all ratchet invariants pass on this host
 - `mavis.cmd` resolves to `C:\Users\russe\AppData\Local\Programs\MiniMax Code\MiniMax Code.exe`, shim carries the known `resources\resources\` duplicated segment (the platform-specific path bug)
+
+### Correction-round live state (2026-10-30)
+
+The shim bug above was REAL and still present on the operator's host when the correction round started:
+
+```
+$ mavis --version
+Error: Cannot find module 'C:\Users\russe\AppData\Local\Programs\MiniMax Code\resources\resources\daemon\cli.js'
+rc=1, elapsed=0.16s
+```
+
+The daemon now ships inside `app.asar`; the `resources\resources\daemon\cli.js` path no longer exists on disk (verified: neither the doubled nor the single-`resources` variant resolves).
+
+**The host shim was repaired** to run the fork build, per the operator's direction that the CLI should run from the fork:
+
+```
+C:\Users\russe\.minimax\bin\mavis.cmd  →  node.exe C:\Users\russe\pmoves-fork-minimax-code\dist\cli.js
+```
+
+using `C:\Users\russe\AppData\Local\Programs\node-v22.22.1-win-x64\node.exe` (Node 22.22.1 — the host's default `node` is 22.17.1, and `@minimax-ai/code` requires `>=22.19 <23 || >=24.2 <27`).
+
+Result: `mavis --version` → `0.6.5`, rc=0, 0.47s. The ratchet now passes **legitimately** rather than vacuously.
+
+The fork build itself came from `POWERFULMOVES/PMOVES-minimax-code` (fast-forwarded to upstream `main` via PR #1; `pnpm build` → `Built MiniMax Code 0.6.5 from 6285 source files`).
 
 ---
 
