@@ -409,50 +409,160 @@ construction-time-`auth` function, so in production they never fire without
 enforcement test needs that flag set, because it asserts refusal while the
 default is advisory. Details: POWERFULMOVES/Pmoves-cipher#27 comments.
 
-## `CIPHER_DB_SERVICE_KEY` — steer it through the Known Road, never by hand
+## Cipher's service key: mirror the gateway, never paste it (`CIPHER_DB_SERVICE_KEY` retired)
 
-**What the knob is.** `auth.ts resolveToken` presents a Supabase service key to
-PostgREST (through Kong) on every `cipher_<uuid>` bearer lookup. Commit
-`df0218537` added `CIPHER_DB_SERVICE_KEY` as a compose override for that key,
-set per node in `pmoves/.env.local` (loaded by `scripts/with-env.sh`). Unset,
-the container presents the default `SUPABASE_SERVICE_KEY`.
+**What the key does.** `auth.ts resolveToken` presents the container's
+`SUPABASE_SERVICE_KEY` to Kong `/rest/v1` on every `cipher_<uuid>` bearer
+lookup. Two gates judge it, and they fail differently:
 
-**Where the knob lives today.** Only on unmerged branches:
-`origin/fix/cipher-agent-token-handoff` (PR #3143),
-`origin/feat/cipher-identity-bind` and `origin/wip/mcp-project-roster`, in
-`pmoves/docker-compose.yml` and `docker-compose.agents.yml` on each. `git grep CIPHER_DB_SERVICE_KEY` on `origin/main`
-(`dfb5421ef`) returns 0 hits, so a compose built from main does not read the
-override. It takes effect only when a node brings cipher up from one of those
-branches.
+1. **Kong key-auth** (`PMOVES-supabase/docker/volumes/api/kong.yml`, route
+   `rest-v1`, consumer `service_role`) admits only an EXACT match with the key
+   `supabase-kong` was started with: `SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-${SERVICE_ROLE_KEY:-}}`
+   in `pmoves/docker-compose.yml`. Any other value is refused before PostgREST sees it.
+2. **PostgREST** verifies the JWT signature against `PGRST_JWT_SECRET`
+   (`${SUPABASE_JWT_SECRET:-${JWT_SECRET:-}}`), then its `exp`.
 
-**Measured 2026-09-23 on one fleet node (by the steward; recorded here, not
-re-run by this change):** the default `SUPABASE_SERVICE_KEY` returns **200** through Kong.
-Both copies of the `SERVICE_ROLE_KEY` value return **401**. `df0218537`'s
-message recommended `CIPHER_DB_SERVICE_KEY=${SERVICE_ROLE_KEY}` from a
-2026-09-22 measurement, when PostgREST was rejecting the `SUPABASE_*` pair.
-That recipe is now **wrong** on that node: a cipher brought up with the line in place
-presents a key Kong rejects, and every per-agent token lookup fails.
+The caller's `cipher_<uuid>` bearer is not involved in either gate. When this
+key is refused, every agent on the node gets 503 together, and `/health` reads
+`per_agent_auth: unavailable, token lookup returned HTTP 401`.
 
-**How the line got there, and why that matters.** Someone hand-copied the
-recipe from the commit message into the node's `.env.local`. There was no
-tool, no audit row and no `known-roads.jsonl` entry, so nobody could say
-when it was placed or by whom. The operator's rule: it is removed the same
-way it should have been placed, on a road.
+**The defect (knuckles, 2026-10-21/22).** `df0218537` wired cipher as
+`${CIPHER_DB_SERVICE_KEY:-${SUPABASE_SERVICE_KEY:-}}`. That expression shares
+no name with Kong's. The node was steered by pasting a JWT into
+`pmoves/.env.local` as `CIPHER_DB_SERVICE_KEY`. The paste expired on
+2026-10-21. The funnel refresh (#3410, `tools/secrets_self_generated.py`)
+renews `SUPABASE_SERVICE_ROLE_KEY` and `SERVICE_ROLE_KEY`, but it never touches
+`.env.local`, so the dead paste kept winning. The knob also changed meaning
+between measurements. On 2026-09-22 the legacy pair verified. On 2026-09-23,
+on one node, the `SERVICE_ROLE_KEY` value got 401 while `SUPABASE_SERVICE_KEY`
+got 200. A per-node value paste cannot be kept right across a mesh.
 
-**The road (OPERATOR-run; agents have zero access to the file):**
+**The design (PR #3433).** Cipher presents Kong's own expression, character for
+character:
+
+```yaml
+- SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-${SERVICE_ROLE_KEY:-}}
+```
+
+Selection is by NAME, and the gateway has already made it. Whatever a node's
+Kong admits, cipher presents. Both names are funnel-refreshed when expired, so
+no node needs a paste. A node where this key still fails is broken for every
+Kong client, not just cipher. The fix for that node is in the funnel, not a
+cipher-only override that would hide it. `CIPHER_DB_SERVICE_KEY` is
+**retired**: compose stops reading it. `cipher-auth-check` WARNs when the node
+still sets it, in either of two places. One is the env compose reads (the
+`--env-file` list plus the process env). The other is `pmoves/.env.local`,
+which it reads by presence only, through `env_local_key.py`'s own line matcher.
+That second read matters because under `SUPABASE_RUNTIME=compose` the overlay
+is not in `COMPOSE_ENV_FILES` (Makefile `:136-145`). On those nodes compose
+does not read the paste today, but another runtime or branch would.
+
+**Order matters for every Kong client, not only cipher.** Four more sites
+presented the service key in the REVERSE of Kong's order (fixed in #3433),
+`${SERVICE_ROLE_KEY:-${SUPABASE_SERVICE_ROLE_KEY:-}}`. Kong refuses them on any
+node where the two names differ:
+- `supabase-storage` `SERVICE_KEY` (`docker-compose.yml:1079`)
+- Agent Zero's postgrest MCP `--apiKey` (`docker-compose.yml:3674`, `docker-compose.agents.yml:142`)
+- `docker-compose.core.yml:423` `SERVICE_KEY`
+
+The `kong_order_drift` facet reports any that come back.
+
+**The funnel mints with the verifiers' secret (PR #3433).**
+`tools/secrets_self_generated.py` used to sign with `JWT_SECRET` first. Every
+verifier reads `${SUPABASE_JWT_SECRET:-${JWT_SECRET:-}}`: PostgREST `:820`,
+GoTrue `:732`, Realtime `:1033`, Studio `:1152`. Wherever the two secrets
+differed, every funnel mint was admitted by Kong and refused by PostgREST
+(PGRST301). The funnel now mints with the verifiers' order.
+
+**What the funnel rewrites.**
+- Absent or placeholder labels are filled.
+- An existing JWT is re-minted **only** when all three of these hold:
+  - **This node minted it.** It is HS256 with the label's role, and its
+    signature verifies under one of this node's JWT secrets. `iss` is not the
+    proof: every PMOVES funnel stamps `supabase-local`.
+  - **This node's own compose Supabase is its verifier.** `SUPABASE_RUNTIME=compose`
+    is stated. Every `SUPABASE_URL`/`SUPABASE_REST_URL` that is present names
+    loopback, `host.docker.internal`, or a service defined in our compose files.
+    A tailnet or LAN short name is remote. A set-but-empty value is unknown.
+  - **It is stale.** It has expired (#3410), or it is signed with this node's
+    other secret.
+
+**What it never rewrites.** Every other key, expired or not: cloud, Supabase
+CLI, a peer node's, RS256/ES256, or opaque `sb_*`. Each one gets a WARN naming
+the label and the reason. For an expired key it is not allowed to refresh, the
+WARN says to get a new key from the key's issuer. A key re-minted under our
+secret would look fresh, but its real verifier would still refuse it.
+
+**What it reports.** Every re-mint is printed as `RE-MINTED <label> (<role>):
+<reason>`, with the compose services that name the label (environment and
+build args) and the Known Roads to recreate them. Until they are all
+recreated the stack is half-old, half-new: Kong refuses every client whose key
+differs from its consumer key.
+
+> **Status:** landed in PR #3433 under operator grant `compose:pr:3433`. The
+> grant covered cipher-api in `docker-compose.yml` and
+> `docker-compose.agents.yml`, plus the reverse-order sites in those files and
+> in `docker-compose.core.yml:423`. The edits were made in a sibling worktree
+> and left **no row in `known-roads.jsonl`**; see the PR for the open guard
+> question.
+
+**Diagnose without printing a key: `make -C pmoves cipher-auth-check`**
+(`tools/cipher_service_key_check.py`, read-only). Exit `0` ok / `1` finding /
+`3` could-not-measure. `make` collapses these to 2, so read the final
+`CIPHER_AUTH_VERDICT=` line. All three cipher bring-up roads (`up-cipher`,
+`-nobuild`, `-full`) run it first, non-blocking.
+
+*Static facets* (always on). These evaluate the compose expressions on disk
+against the same `--env-file` list `$(DC)` uses, so they judge what the next
+`up-cipher` presents.
+- `key present` (+ which NAME supplied it), `role`, `exp in past`.
+- `matches Kong config`: the env value equals one of the consumer keys Kong is
+  *configured* with (`SUPABASE_SERVICE_KEY` or `SUPABASE_SECRET_KEY`, same env).
+  **This is not what the running Kong holds.**
+- `signature verifies` (HS256 under PostgREST's secret).
+- `JWT secrets agree` (`JWT_SECRET` == `SUPABASE_JWT_SECRET`, a boolean only).
+- Reverse-order sites.
+
+On `wrong_pair_signature` it lists which *live, non-retired* candidate names do
+verify.
+
+*Live facets* (`CONTAINER=1`), the authority on what is running.
+- The running `cipher-api` key's role and exp, decoded inside the container.
+- Whether that key matches the env.
+- `running Kong admits it`: sha256 digests of the consumer keys the running
+  `supabase-kong` was *started* with, computed inside Kong and compared
+  in-process, never printed.
+
+**After a funnel refresh, supabase-kong keeps its old key until it is
+recreated.** That shows up here as `kong_live_mismatch`, and the finding names
+whichever side is stale.
+
+`PROBE=1` runs cipher's own lookup from inside the container
+(`GET ...cipher_agent_tokens?select=agent_id&limit=0`). It classifies a refusal
+as follows:
+- Kong (`lookup_refused_gateway`): kong 3.x `Unauthorized` / `No API key found`,
+  2.x wording, or any 401/403 without a PGRST code.
+- Expired (`PGRST303`).
+- Signature (`PGRST301`).
+
+Any requested live facet that cannot be measured makes the verdict **3**, never
+ok. That covers a probe timeout, a probe that did not run, an undecodable
+container key, and an unreadable Kong without a 200 probe.
+
+*Known limits.* A DB-backed Kong with seeded consumers (a pre
+`KONG_DATABASE=off` container) is visible **only to `PROBE=1`**. So is a
+`SUPABASE_REST_URL` (e.g. from a tier env file) that points cipher at a
+different Kong, such as a remote one or the CLI runtime. The static and digest
+facets compare against the compose-defined `supabase-kong`.
+
+**Removing the paste (OPERATOR-run; agents have zero access to the file):**
 
 ```bash
 make -C pmoves env-local-has   KEY=CIPHER_DB_SERVICE_KEY   # present? prints no value
 make -C pmoves env-local-unset KEY=CIPHER_DB_SERVICE_KEY   # removes the one line, 0600 backup, audit row
 ```
 
-Run the unset **before the next `make -C pmoves up-cipher`** on any node that
-followed the `df0218537` recipe. To steer the key deliberately later (for
-example, if a node's PostgREST really does validate only the legacy pair),
-re-measure first, then run `make -C pmoves env-local-set
-KEY=CIPHER_DB_SERVICE_KEY`. It prompts for the value without echoing it and
-never takes it as an argument. Full road: `.claude/PATTERNS.md` § Known Road —
-node-local env overlay keys.
+Full road: `.claude/PATTERNS.md` § Known Road — node-local env overlay keys.
 
 ## ⚠️ Architectural Fork — PMOVES vs Upstream
 

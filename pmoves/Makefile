@@ -4116,6 +4116,24 @@ cipher-build-pin-check: ## Refuse to build cipher from a submodule worktree that
 
 .PHONY: up-cipher
 up-cipher: cipher-build-pin-check ## Start Cipher Memory (knowledge-graph memory for Claude Code / agents)
+	@# Before (re)creating cipher-api: the static verdict PLUS the RUNNING
+	@# supabase-kong's consumer keys (digests compared in-process; no probe).
+	@# Refuses ONLY on kong_stale_for_env: Kong holds a key this env no longer
+	@# delivers (funnel refresh without a Kong recreate), so a cipher-api started
+	@# now is refused on every lookup. Every other verdict only WARNs. A tool
+	@# crash (exit 1) never refuses; the gate's own exit is 4.
+	@rc=0; $(PYTHON) tools/cipher_service_key_check.py $(CIPHER_AUTH_CHECK_ARGS) --container --gate kong_stale_for_env || rc=$$?; \
+	if [ $$rc -eq 4 ]; then \
+		if [ "$${CIPHER_KONG_GATE}" = "warn" ]; then \
+			echo "CIPHER_KONG_GATE=warn - starting cipher-api against a stale supabase-kong anyway"; \
+		else \
+			echo "Refusing to (re)create cipher-api: the running supabase-kong is stale for this env."; \
+			echo "    Recreate Kong first:  make -C pmoves up-supabase   (override: CIPHER_KONG_GATE=warn)"; \
+			exit 1; \
+		fi; \
+	elif [ $$rc -ne 0 ]; then \
+		echo "WARN: cipher-auth-check could not run (exit $$rc) - per-agent token lookups may 503 after this start"; \
+	fi
 	@$(DC) --profile agents up -d --build cipher-api
 	@# Idempotent. ONLY the schema-mismatch exit 2 is tolerated (the smoke
 	@# gate fails loudly on it); every other failure — bad Qdrant creds,
@@ -4126,6 +4144,24 @@ up-cipher: cipher-build-pin-check ## Start Cipher Memory (knowledge-graph memory
 
 .PHONY: up-cipher-nobuild
 up-cipher-nobuild: ## Recreate Cipher from the EXISTING image (no rebuild) — applies env/port changes when the Pmoves-cipher submodule build is unavailable (gitlink drift). Honors COMPOSE_ENV_FILES via $(DC).
+	@# Before (re)creating cipher-api: the static verdict PLUS the RUNNING
+	@# supabase-kong's consumer keys (digests compared in-process; no probe).
+	@# Refuses ONLY on kong_stale_for_env: Kong holds a key this env no longer
+	@# delivers (funnel refresh without a Kong recreate), so a cipher-api started
+	@# now is refused on every lookup. Every other verdict only WARNs. A tool
+	@# crash (exit 1) never refuses; the gate's own exit is 4.
+	@rc=0; $(PYTHON) tools/cipher_service_key_check.py $(CIPHER_AUTH_CHECK_ARGS) --container --gate kong_stale_for_env || rc=$$?; \
+	if [ $$rc -eq 4 ]; then \
+		if [ "$${CIPHER_KONG_GATE}" = "warn" ]; then \
+			echo "CIPHER_KONG_GATE=warn - starting cipher-api against a stale supabase-kong anyway"; \
+		else \
+			echo "Refusing to (re)create cipher-api: the running supabase-kong is stale for this env."; \
+			echo "    Recreate Kong first:  make -C pmoves up-supabase   (override: CIPHER_KONG_GATE=warn)"; \
+			exit 1; \
+		fi; \
+	elif [ $$rc -ne 0 ]; then \
+		echo "WARN: cipher-auth-check could not run (exit $$rc) - per-agent token lookups may 503 after this start"; \
+	fi
 	@$(DC) --profile agents up -d --no-build --force-recreate cipher-api
 	@# Provisioning on EVERY cipher-starting road (review P1): a fresh volume
 	@# recreated here is exactly as empty as a fresh build's.
@@ -4222,6 +4258,24 @@ up-cipher-full: cipher-build-pin-check ## Start Cipher Memory with full embeddin
 	@echo "Starting full Cipher embedding stack..."
 	@$(DC) up -d nats qdrant
 	@$(DC) --profile tensorzero up -d tensorzero-gateway pmoves-ollama
+	@# Before (re)creating cipher-api: the static verdict PLUS the RUNNING
+	@# supabase-kong's consumer keys (digests compared in-process; no probe).
+	@# Refuses ONLY on kong_stale_for_env: Kong holds a key this env no longer
+	@# delivers (funnel refresh without a Kong recreate), so a cipher-api started
+	@# now is refused on every lookup. Every other verdict only WARNs. A tool
+	@# crash (exit 1) never refuses; the gate's own exit is 4.
+	@rc=0; $(PYTHON) tools/cipher_service_key_check.py $(CIPHER_AUTH_CHECK_ARGS) --container --gate kong_stale_for_env || rc=$$?; \
+	if [ $$rc -eq 4 ]; then \
+		if [ "$${CIPHER_KONG_GATE}" = "warn" ]; then \
+			echo "CIPHER_KONG_GATE=warn - starting cipher-api against a stale supabase-kong anyway"; \
+		else \
+			echo "Refusing to (re)create cipher-api: the running supabase-kong is stale for this env."; \
+			echo "    Recreate Kong first:  make -C pmoves up-supabase   (override: CIPHER_KONG_GATE=warn)"; \
+			exit 1; \
+		fi; \
+	elif [ $$rc -ne 0 ]; then \
+		echo "WARN: cipher-auth-check could not run (exit $$rc) - per-agent token lookups may 503 after this start"; \
+	fi
 	@$(DC) --profile agents up -d --build cipher-api
 	@$(MAKE) --no-print-directory qdrant-provision-cipher
 	@echo "✔ Cipher Memory + embedding pipeline ready"
@@ -4284,6 +4338,24 @@ cipher-memory-smoke: ## Smoke test cipher /api/memory POST + search — FAILS if
 .PHONY: cipher-health
 cipher-health: ## Check Cipher Memory health
 	@curl -sf http://localhost:$${CIPHER_PORT:-8105}/health && echo " ✔ cipher-api healthy" || (echo "✗ cipher-api unhealthy" && exit 1)
+
+# Read-only: will the key cipher-api presents for per-agent token lookups pass
+# Kong key-auth AND PostgREST? Evaluates the compose expressions on disk against
+# the SAME --env-file list $(DC) uses, so it judges what the next up-cipher
+# delivers. Tells expired / wrong pair (gateway or signature) / missing / wrong
+# role apart, and WARNs on the retired CIPHER_DB_SERVICE_KEY paste (also read
+# from .env.local by presence only, since SUPABASE_RUNTIME=compose leaves the
+# overlay out of COMPOSE_ENV_FILES). Prints no key, digest or secret. The static
+# facets do NOT see the running Kong: CONTAINER=1 reads the running cipher-api
+# and supabase-kong (digests compared in-process); PROBE=1 runs cipher's own
+# lookup from inside cipher-api (GET ...?limit=0) and is the authority on what
+# the live gateway admits. make collapses exit
+# codes to 2, so read the CIPHER_AUTH_VERDICT= line (0 ok / 1 finding / 3
+# could-not-measure) or run the tool directly.
+CIPHER_AUTH_CHECK_ARGS = --compose docker-compose.yml --scan docker-compose.agents.yml --env-local .env.local $(COMPOSE_ENV_FILES)
+.PHONY: cipher-auth-check
+cipher-auth-check: ## Read-only: does cipher's service key pass Kong + PostgREST? (expired / wrong pair / missing; never prints a key) [CONTAINER=1 PROBE=1]
+	@$(PYTHON) tools/cipher_service_key_check.py $(CIPHER_AUTH_CHECK_ARGS) $(if $(CONTAINER),--container,) $(if $(PROBE),--probe,)
 
 .PHONY: spark-health
 spark-health: ## Check SPARK node (DGX Spark) health: Ollama, TensorZero, NATS, Cipher, Agent Zero SPARK

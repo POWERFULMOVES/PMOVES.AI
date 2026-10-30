@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from collections import defaultdict
 from dataclasses import dataclass
@@ -13,7 +14,17 @@ import yaml
 
 from pmoves.chit.codec import decode_secret_map, load_cgp
 from pmoves.tools.secret_shape import inspect_value
-from pmoves.tools.secrets_self_generated import fill_self_generated, SELF_GENERATED, _SUPABASE_JWT_KEYS
+from pmoves.tools.secrets_self_generated import (
+    SELF_GENERATED,
+    _SUPABASE_JWT_KEYS,
+    EVENT_ACTIONS,
+    EVENT_REASONS,
+    EVENT_ROLES,
+    KNOWN_RUNTIMES,
+    compose_consumers,
+    compose_service_names,
+    fill_self_generated,
+)
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = PROJECT_ROOT.parent
@@ -416,6 +427,197 @@ def report(outputs: Mapping[str, Mapping[str, str]]) -> str:
     return "\n".join(rows)
 
 
+class _ComposeLoader(yaml.SafeLoader):
+    """SafeLoader that understands compose's own tags (``!reset``, ``!override``).
+    Without it the overlays that use them fail to parse and their services drop
+    out of the consumer list."""
+
+
+def _compose_tag(loader: yaml.SafeLoader, suffix: str, node: yaml.Node):
+    # Build the tagged block as plain data rather than dropping it: an
+    # `!override` env list carries the replacement values, and a label named
+    # only there must still show up as a consumer. (Over-inclusion on `!reset`
+    # is harmless for a "who might need a recreate" list.)
+    if isinstance(node, yaml.MappingNode):
+        return loader.construct_mapping(node, deep=True)
+    if isinstance(node, yaml.SequenceNode):
+        return loader.construct_sequence(node, deep=True)
+    return loader.construct_scalar(node)
+
+
+_ComposeLoader.add_multi_constructor("!", _compose_tag)
+
+
+def load_compose_docs(paths: Sequence[Path] | None = None, out=None) -> tuple[list, list[str]]:
+    """``(docs, skipped_file_names)`` for every pmoves/docker-compose*.yml."""
+    out = out or sys.stdout
+    if paths is None:
+        paths = sorted((REPO_ROOT / "pmoves").glob("docker-compose*.yml"))
+    docs, skipped = [], []
+    for path in paths:
+        try:
+            docs.append(yaml.load(path.read_text(encoding="utf-8"), Loader=_ComposeLoader) or {})
+        except (OSError, yaml.YAMLError) as exc:
+            skipped.append(path.name)
+            print(f"[secrets-sync] WARN could not read {path.name} for the compose service list ({type(exc).__name__})", file=out)
+    return docs, skipped
+
+
+_CONTEXT_KEYS = ("SUPABASE_RUNTIME", "SUPABASE_URL", "SUPABASE_REST_URL")
+_SOURCES = ("shell env", "secret map", "unset")
+_EVENT_LABELS = tuple(_SUPABASE_JWT_KEYS)
+_UNRECOGNISED = "<unrecognised>"
+
+
+def _closed(value: object, choices: Sequence[str]) -> str:
+    """Return the CONSTANT member of *choices* equal to *value*, else a fixed
+    marker. What is returned is always an element of a literal tuple, never the
+    input, so nothing derived from the secret map (or a value in it) can reach
+    the announcement -- the printers below only print what this returns."""
+    for choice in choices:
+        if choice == value:
+            return choice
+    return _UNRECOGNISED
+
+
+def runtime_context(
+    secrets: Mapping[str, str], environ: Mapping[str, str]
+) -> tuple[Dict[str, str], Dict[str, str]]:
+    """``(context, sources)``: the shell env wins over the secret map, exactly as
+    it wins over compose's --env-file, INCLUDING a set-but-empty export (which
+    fill_self_generated then treats as unknown). *sources* names where each
+    context key came from, so a stray export is visible in the announcement."""
+    context = {**secrets, **environ}
+    sources = {}
+    for key in _CONTEXT_KEYS:
+        sources[key] = "shell env" if key in environ else "secret map" if key in secrets else "unset"
+    return context, sources
+
+
+def _describe_context(context: Mapping[str, str], sources: Mapping[str, str], local_services) -> str:
+    from pmoves.tools.secrets_self_generated import _host_is_local
+
+    parts = []
+    for key in _CONTEXT_KEYS:
+        src = _closed(sources.get(key, "unset"), _SOURCES)
+        if src == "unset":
+            parts.append(f"{key}=unset")
+            continue
+        val = (context.get(key) or "").strip()
+        if not val:
+            shown = "EMPTY"
+        elif key == "SUPABASE_RUNTIME":
+            # The runtime NAME only if it is a known one; never the raw value.
+            shown = next((r for r in KNOWN_RUNTIMES if r == val), "other")
+        else:  # never print a URL: hostnames can be topology
+            shown = "local" if _host_is_local(val, local_services) else "remote"
+        parts.append(f"{key}={shown} (from {src})")
+    return "; ".join(parts)
+
+
+# Known Roads that recreate the consumers a Supabase key change reaches. Printed
+# as guidance only; this tool never starts or recreates anything.
+_RECREATE_ROADS = (
+    "make -C pmoves up-supabase   # supabase-kong (consumer keys), rest, studio, storage, ...",
+    "make -C pmoves up-cipher     # cipher-api",
+    "make -C pmoves up-agents     # agent-zero, archon, ...",
+    "make -C pmoves up-ui         # UI builds with a baked-in anon key (rebuild)",
+)
+
+
+def _refusal_text(e: Mapping[str, str], sources: Mapping[str, str]) -> str:
+    label = _closed(e.get("label"), _EVENT_LABELS)
+    reason = _closed(e.get("reason"), EVENT_REASONS)
+    expired = reason.startswith("expired_")
+    base = reason[len("expired_"):] if expired else reason
+    if base == "not_minted_here":
+        why = ("was not minted by this node (no local JWT secret verifies it); "
+               + ("it is EXPIRED: obtain a new key from its issuer (cloud project / Supabase CLI / peer node)"
+                  if expired else "it may be correct for its own verifier"))
+    elif base.startswith("empty_"):
+        var = _closed(base[len("empty_"):], _CONTEXT_KEYS)
+        src = _closed(sources.get(var, "unset"), _SOURCES)
+        why = (f"{var} is set but EMPTY (from {src}); the runtime cannot "
+               "be judged. Unset it or give it its real value")
+    elif base == "runtime_unknown":
+        why = ("SUPABASE_RUNTIME is not stated; on a compose-runtime node re-run with "
+               "SUPABASE_RUNTIME=compose exported")
+    else:
+        why = f"this node's compose Supabase is not its verifier ({base})"
+    state = "expired, " if expired else ""
+    return f"[secrets-sync] WARN {label} {state}left unchanged: {why}"
+
+
+def announce_jwt_events(
+    events: Sequence[Mapping[str, str]],
+    docs: Sequence[Mapping] | None = None,
+    out=None,
+    context: Mapping[str, str] | None = None,
+    sources: Mapping[str, str] | None = None,
+    local_services=None,
+    written_labels: set | None = None,
+) -> List[str]:
+    """Print what the self-generated guard changed or refused -- NAMES only.
+
+    A re-mint changes a key that running containers captured at create time;
+    until every consumer is recreated the stack is half-old, half-new (Kong's
+    consumer key is the sharpest case: every Kong client is refused). So the
+    consumers are listed from the compose files themselves, not a typed list.
+    Returns the consumer service names (for tests).
+    """
+    out = out or sys.stdout
+    if not events:
+        return []
+    if context is not None and sources is not None:
+        print("[secrets-sync] runtime context: " + _describe_context(context, sources, local_services), file=out)
+    # Rebuild every event from the closed vocabulary before anything prints:
+    # each field becomes the constant it equals (or the unrecognised marker).
+    closed = [
+        {"label": _closed(e.get("label"), _EVENT_LABELS),
+         "role": _closed(e.get("role"), EVENT_ROLES),
+         "action": _closed(e.get("action"), EVENT_ACTIONS),
+         "reason": _closed(e.get("reason"), EVENT_REASONS)}
+        for e in events
+    ]
+    for e in closed:
+        if e["action"] == "left_unchanged":
+            print(_refusal_text(e, sources or {}), file=out)
+    # *written_labels*: labels that actually reach an env file on this run
+    # (None = all). A re-mint that is not written -- excluded by --keys, a
+    # report-only run, or an aborted run -- needs no recreate, and saying
+    # "RECREATE" for it would send an operator to restart half the mesh for a
+    # value that never changed on disk (#3433 review r4429049880).
+    def written(e):
+        return written_labels is None or e["label"] in written_labels
+
+    for e in closed:
+        if e["action"] == "reminted" and not written(e):
+            print(f"[secrets-sync] NOT WRITTEN {e['label']} ({e['role']}): re-mint computed "
+                  f"({e['reason']}) but this run does not write it; nothing to recreate for it",
+                  file=out)
+    reminted = [e for e in closed if e["action"] == "reminted" and written(e)]
+    if not reminted:
+        return []
+    for e in reminted:
+        print(f"[secrets-sync] RE-MINTED {e['label']} ({e['role']}): {e['reason']}", file=out)
+    labels = sorted({e["label"] for e in closed
+                     if e["action"] in ("reminted", "filled") and written(e)
+                     and e["label"] != _UNRECOGNISED})
+    if docs is None:
+        docs, _ = load_compose_docs(out=out)
+    consumers = compose_consumers(labels, docs)
+    print(
+        "[secrets-sync] RECREATE every consumer of the re-minted keys, or the stack runs "
+        "half-old/half-new (Kong refuses every client whose key differs from its consumer key):",
+        file=out,
+    )
+    print("[secrets-sync]   services naming them in compose: " + (", ".join(consumers) or "(none found)"), file=out)
+    print("[secrets-sync]   plus any service that inherits them via env_file. Known Roads:", file=out)
+    for road in _RECREATE_ROADS:
+        print(f"[secrets-sync]     {road}", file=out)
+    return consumers
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Seed env files from CHIT secrets manifest.")
     parser.add_argument(
@@ -462,9 +664,20 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     secrets = decode_secret_map(load_cgp(cgp_path))
     # Funnel-side guard: fill self-generated secrets (Supabase anon/service_role
-    # JWTs derived from JWT_SECRET) so they project without operator input and
-    # are never emitted as placeholders. Never overwrites an existing value.
-    secrets = fill_self_generated(secrets)
+    # JWTs, minted under the verifiers' ${SUPABASE_JWT_SECRET:-${JWT_SECRET}})
+    # so they project without operator input and are never emitted as
+    # placeholders. It overwrites an existing value ONLY when this node minted
+    # it (signature verifies under a local JWT secret), this node's compose
+    # Supabase is its verifier, and it is expired or signed with the other
+    # local secret (see fill_self_generated). Every change and every refusal is
+    # announced below by NAME, with where the runtime context came from.
+    compose_docs, _skipped = load_compose_docs()
+    local_services = compose_service_names(compose_docs) if compose_docs else None
+    context, sources = runtime_context(secrets, os.environ)
+    jwt_events: List[Dict[str, str]] = []
+    secrets = fill_self_generated(
+        secrets, context=context, events=jwt_events, local_services=local_services
+    )
 
     # Filter entries if --keys is specified (selective rotation)
     if args.keys:
@@ -483,6 +696,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     # either derivable (handled by fill_self_generated) or generated elsewhere
     # (e.g. POSTGRES_PASSWORD at db-init), so they are never operator gaps.
     missing = [k for k in missing if k not in SELF_GENERATED]
+    # Announce only now, against what this run actually writes: the entries that
+    # survived --keys, and only on a generate run that is not about to abort.
+    projected = {e.label for e in entries} | {a for e in entries for a in e.aliases}
+    aborting = bool(missing) and not args.allow_missing
+    writes = args.command == "generate" and not aborting
+    announce_jwt_events(jwt_events, docs=compose_docs, context=context, sources=sources,
+                        local_services=local_services,
+                        written_labels=projected if writes else set())
     if missing:
         joined = ", ".join(sorted(missing))
         if args.allow_missing:
