@@ -127,7 +127,8 @@ services:
       - TWIN_QDRANT_URL=${TWIN_QDRANT_URL:-http://twin-qdrant:6333}
       - INGEST_COLLECTION_PREFIX=${INGEST_COLLECTION_PREFIX:-twin_}
       # host bus
-      - NATS_URL=nats://${NATS_USER:-nats}:${NATS_PASSWORD:-pmoves}@nats:4222
+      # fail-closed credentials: the ratchet forbids committed defaults
+      - NATS_URL=nats://${NATS_USER:?set NATS_USER via secrets funnel}:${NATS_PASSWORD:?set NATS_PASSWORD via secrets funnel}@nats:4222
       - CGP_SUBJECT=${CGP_SUBJECT:-geometry.cgp.v1}
       # media artifacts (MinIO on pmoves_data)
       - MINIO_ENDPOINT=${MINIO_ENDPOINT:-minio:9000}
