@@ -42,6 +42,7 @@ from __future__ import annotations
 import inspect
 import json
 import os
+import re
 import shutil
 import ssl
 import subprocess
@@ -69,6 +70,54 @@ pytestmark = pytest.mark.mavis_cli
 # and the cross-check degraded to a permanent SKIP -- it could never report
 # anything, green or red. Fixed to the repo that actually exists.
 _UPSTREAM_REPO = "MiniMax-AI/minimax-code"
+
+# The upstream workflow that OWNS the CI test matrix. Upstream declares the
+# matrix inside THIS file -- the ``verify`` job runs on ``${{ matrix.os }}``
+# with ``os: [ubuntu-latest, macos-latest, windows-latest]`` -- so the
+# platform set must be read from here and nowhere else.
+#
+# WHY A SINGLE WORKFLOW AND NOT AN AGGREGATE OVER ALL OF THEM
+# -----------------------------------------------------------
+# The previous implementation scanned the body of EVERY workflow under
+# ``.github/workflows/`` and unioned whatever runner labels it found. That
+# does not establish test coverage. Upstream also ships ``cli-release.yml``,
+# ``compatibility.yml`` and ``performance.yml``; a label that survives in a
+# release/compatibility/packaging workflow -- or survives only in a COMMENT
+# -- still counted as "the CI test matrix covers this platform". Deleting
+# Windows from the test matrix therefore left the ratchet GREEN while it
+# named the wrong owner for the regression. Coverage is a property of one
+# job's MATRIX, so the read is scoped to that matrix.
+_UPSTREAM_CI_WORKFLOW = "ci.yml"
+
+# Runner-label FAMILIES. A GitHub-hosted runner label is always
+# ``<family>-<version>``, and the version part is OPEN-ENDED: ``-latest``,
+# ``-22``, ``-24.04``, ``-2025``, ``-15``, ... The previous match tested a
+# fixed suffix list (``-latest``/``-22``/``-24``), so one upstream rename to
+# ``windows-2025`` made the helper report an EMPTY platform set -- and the
+# inverted ratchet came back wearing a new coat of paint. The family is
+# matched, the version is not enumerated.
+_PLATFORM_TAGS = ("ubuntu", "macos", "windows", "linux")
+
+# Words that mark a job -- or the command that job runs -- as the TEST
+# surface rather than a packaging/release surface. The match is WORD
+# bounded on purpose: ``latest`` contains "test", so an unbounded match
+# would read ``ubuntu-latest`` as a test command.
+_TEST_JOB_WORDS = (
+    "test",
+    "tests",
+    "testing",
+    "spec",
+    "specs",
+    "verify",
+    "verification",
+    "e2e",
+    "integration",
+    "unit",
+)
+_TEST_WORD_RE = re.compile(
+    r"(?<![a-z0-9])(?:" + "|".join(_TEST_JOB_WORDS) + r")(?![a-z0-9])",
+    re.IGNORECASE,
+)
 
 # Local subprocess timeout. 30s gives 6x headroom over the operator-measured
 # Linux baseline (<5s for --version), and is well under the 240s CI timeout
@@ -252,39 +301,167 @@ def _ssl_context() -> ssl.SSLContext | None:
         return None
 
 
-def _fetch_upstream_matrix() -> dict[str, object] | None:
-    """Fetch the upstream ``minimax-code`` Actions matrix summary.
+def _is_test_job(job_name: str, job: dict[str, object]) -> bool:
+    """Whether a matrix-bearing job is the TEST job (not packaging/release).
+
+    Two independent signals, because a single one is too easy to lose:
+    the job's own name, and the commands the job runs. Upstream's
+    ``verify`` job satisfies both ("verify" as the job key, ``pnpm
+    verify --profile ...`` as a run step).
+
+    WHY THIS IS NOT A LOOSE "THE ONLY MATRIX JOB" FALLBACK
+    ------------------------------------------------------
+    If the sole matrix job in a workflow were a packaging job, treating it
+    as the test job would re-create the exact defect this ratchet exists
+    to prevent: a platform that is only ever BUILT for, never TESTED for,
+    would be reported as covered. When no test job can be identified the
+    honest answer is "unavailable" (the cross-check skips with a reason),
+    never a confident platform set.
+    """
+    declared_name = job.get("name")
+    label = f"{job_name} {declared_name if isinstance(declared_name, str) else ''}"
+    if _TEST_WORD_RE.search(label):
+        return True
+    steps = job.get("steps")
+    if isinstance(steps, list):
+        for step in steps:
+            if not isinstance(step, dict):
+                continue
+            run = step.get("run")
+            if isinstance(run, str) and _TEST_WORD_RE.search(run):
+                return True
+    return False
+
+
+def _extract_matrix_platforms(workflow_body: str) -> dict[str, object]:
+    """Extract the platform set from a CI workflow's TEST-job matrix.
+
+    PURE: takes a workflow body, returns a verdict. No network, so the
+    ratchet can pin the classification logic with hermetic tests.
+
+    Returns a dict whose ``status`` is either:
+      "ok"          -> ``platforms`` holds the platform set;
+      "unavailable" -> ``reason`` says why the matrix could not be read.
+
+    WHY THE PLATFORM SET COMES FROM THE MATRIX, NOT FROM THE BODY
+    --------------------------------------------------------------
+    The body of upstream's ``ci.yml`` contains the word "Windows" in a
+    COMMENT ("Windows runs a focused contract; full capability coverage
+    remains on Linux/macOS") and the token ``Linux/macOS`` in that same
+    comment. A body scan therefore reports platforms that the matrix never
+    declared. The matrix is read structurally instead: find the job whose
+    ``runs-on`` is driven by ``matrix.<key>``, read the value of THAT key
+    (plus the ``include:`` entries that override it), and count only the
+    runner labels in that value.
+    """
+    try:
+        import yaml
+    except Exception as exc:  # pragma: no cover - environment dependent
+        return {"status": "unavailable", "reason": f"PyYAML unavailable on this host: {exc}"}
+    try:
+        doc = yaml.safe_load(workflow_body)
+    except Exception as exc:
+        return {"status": "unavailable", "reason": f"workflow YAML did not parse: {exc}"}
+    if not isinstance(doc, dict):
+        return {"status": "unavailable", "reason": "workflow YAML is not a mapping"}
+    jobs = doc.get("jobs")
+    if not isinstance(jobs, dict) or not jobs:
+        return {"status": "unavailable", "reason": "workflow declares no jobs"}
+
+    # The matrix-bearing job is the one whose runner comes FROM the matrix.
+    matrix_jobs: list[tuple[str, dict[str, object], str]] = []
+    for job_name, job in jobs.items():
+        if not isinstance(job, dict):
+            continue
+        runs_on = job.get("runs-on")
+        if not isinstance(runs_on, str):
+            continue
+        match = re.search(r"matrix\.([A-Za-z_][A-Za-z0-9_-]*)", runs_on)
+        if match:
+            matrix_jobs.append((str(job_name), job, match.group(1)))
+    if not matrix_jobs:
+        return {
+            "status": "unavailable",
+            "reason": "no job drives runs-on from a matrix",
+        }
+    test_jobs = [entry for entry in matrix_jobs if _is_test_job(entry[0], entry[1])]
+    if not test_jobs:
+        return {
+            "status": "unavailable",
+            "reason": (
+                "could not identify the TEST job among the matrix job(s) "
+                f"{[name for name, _, _ in matrix_jobs]!r}"
+            ),
+        }
+
+    labels: list[str] = []
+    job_names: list[str] = []
+    keys: set[str] = set()
+    for job_name, job, key in test_jobs:
+        strategy = job.get("strategy")
+        matrix = strategy.get("matrix") if isinstance(strategy, dict) else None
+        if not isinstance(matrix, dict):
+            continue
+        values = matrix.get(key)
+        if isinstance(values, list):
+            labels.extend(str(value) for value in values)
+        elif isinstance(values, str):
+            labels.append(values)
+        # `include:` entries REPLACE matrix coordinates for the rows they
+        # match, so their runner labels are part of the matrix too.
+        include = matrix.get("include")
+        if isinstance(include, list):
+            for entry in include:
+                if isinstance(entry, dict) and key in entry:
+                    labels.append(str(entry[key]))
+        job_names.append(job_name)
+        keys.add(key)
+    if not labels:
+        return {
+            "status": "unavailable",
+            "reason": "the TEST job declares no runner labels for its matrix key",
+        }
+
+    platforms: set[str] = set()
+    for label in labels:
+        lowered = str(label).lower()
+        for tag in _PLATFORM_TAGS:
+            # `<family>-<version>`: the version family is open-ended, so
+            # match "latest" or ANY digit start ("-22", "-24.04", "-2025",
+            # "-15"). A fixed suffix list would go stale on the first
+            # upstream runner rename and report an EMPTY platform set.
+            if re.search(rf"\b{tag}-(latest|\d)", lowered):
+                platforms.add(tag)
+    return {
+        "status": "ok",
+        "platforms": sorted(platforms),
+        "jobs": job_names,
+        "matrix_key": ",".join(sorted(keys)),
+        "labels": sorted(set(labels)),
+    }
+
+
+def _fetch_upstream_matrix() -> dict[str, object]:
+    """Fetch the upstream ``minimax-code`` CI test matrix.
 
     Uses the public ``.github`` repo contents endpoint (no auth, rate-limited
-    per-IP). Returns a dict with ``platforms`` (set of OS names found in the
-    CI workflow YAMLs) and ``status`` ("ok" / "unreachable").
-    Returns None on any network/parse error -- the ratchet degrades to skip
-    rather than fail when the network is unavailable.
+    per-IP). Returns a dict whose ``status`` is:
 
-    WHY THIS READS WORKFLOW CONTENT, NOT FILENAMES
-    ----------------------------------------------
-    The original implementation derived the platform set from the workflow
-    FILENAMES ("matrix files conventionally include the OS name in the
-    filename"). That assumption is false for the upstream repo. Measured
-    against the real upstream on 2026-10-30:
+      "ok"          -> ``platforms`` holds the upstream test-matrix platforms;
+      "unavailable" -> the check could not run, and ``reason`` says why.
 
-        $ gh api repos/MiniMax-AI/minimax-code/contents/.github/workflows
-        ci.yml, cli-release.yml, compatibility.yml, label-issue-product.yml,
-        performance.yml, security.yml, source-candidate.yml,
-        sync-issue-to-feishu.yml
-
-    Not one filename contains an OS name. The upstream matrix is declared
-    INSIDE ``ci.yml`` as ``runs-on: ${{ matrix.os }}`` with
-    ``os: [ubuntu-latest, macos-latest, windows-latest]``. The old
-    filename-derived scan therefore returned an EMPTY platform set, so
-    `assert "windows" in platforms` would FAIL the moment the gate was
-    switched on -- the ratchet was not merely wrong, it was inverted: it
-    reported "upstream does not cover Windows" for an upstream that DOES
-    cover Windows.
-
-    So this now reads each workflow's actual content and scans for the
-    runner labels. ``ubuntu-latest`` / ``macos-latest`` / ``windows-latest``
-    appear as literal strings inside ``ci.yml``.
+    WHY A FAILED READ IS "unavailable" AND NEVER "ok"
+    -------------------------------------------------
+    The previous implementation caught a failed workflow download with a
+    bare ``continue`` and then returned ``status="ok"`` carrying whatever
+    platforms it had managed to collect. A rate-limited or timed-out
+    download therefore produced a PARTIAL platform set that was reported
+    as a successful read: the cross-check then announced that upstream had
+    DROPPED a platform, when the truth was that the network had hiccuped.
+    An infrastructure failure was being published as an upstream change.
+    Every failure path below therefore returns "unavailable", and the test
+    SKIPS with the reason -- "I could not check" is not "upstream dropped
+    it".
 
     WHY THE REPO PIN CHANGED
     -------------------------
@@ -301,6 +478,14 @@ def _fetch_upstream_matrix() -> dict[str, object] | None:
     the old code took the ``if not isinstance(payload, list)`` branch and
     returned None -- degrading to SKIP. The cross-check could therefore
     never report anything, even with the gate enabled.
+
+    WHY THE WORKFLOW IS SELECTED BY NAME
+    ------------------------------------
+    The matrix-bearing workflow is upstream's ``ci.yml``. Selecting it
+    explicitly is what makes the platform set MEANINGFUL: a scan over
+    every workflow file would union the release, compatibility and
+    packaging workflows into "test coverage" and would also pick up
+    runner labels that only ever appear inside a comment.
     """
     url = f"https://api.github.com/repos/{_UPSTREAM_REPO}/contents/.github/workflows"
     req = urllib.request.Request(
@@ -321,41 +506,62 @@ def _fetch_upstream_matrix() -> dict[str, object] | None:
         TimeoutError,
         OSError,
         json.JSONDecodeError,
-    ):
-        return None
+    ) as exc:
+        return {"status": "unavailable", "reason": f"workflow listing fetch failed: {exc}"}
     if not isinstance(payload, list):
-        return None
+        return {
+            "status": "unavailable",
+            "reason": "workflow listing is not a list (wrong repo pin?)",
+        }
 
-    platforms: set[str] = set()
+    ci_entry: dict[str, object] | None = None
     for entry in payload:
         if not isinstance(entry, dict):
             continue
-        raw_url = entry.get("download_url")
-        if not raw_url:
-            continue
-        try:
-            wf_req = urllib.request.Request(
-                str(raw_url),
-                headers={"User-Agent": "pmoves-test-ratchet"},
-            )
-            with urllib.request.urlopen(wf_req, timeout=10, context=ctx) as resp:
-                body = resp.read().decode("utf-8", errors="replace")
-        except (
-            urllib.error.URLError,
-            urllib.error.HTTPError,
-            TimeoutError,
-            OSError,
-            json.JSONDecodeError,
-        ):
-            continue
-        # Scan the workflow BODY for the GitHub-hosted runner labels.
-        # `runs-on: ubuntu-latest` and the `os:` matrix list both appear
-        # literally in the YAML.
-        lowered = body.lower()
-        for tag in ("ubuntu", "macos", "windows", "linux"):
-            if f"{tag}-latest" in lowered or f"{tag}-22" in lowered or f"{tag}-24" in lowered:
-                platforms.add(tag)
-    return {"platforms": sorted(platforms), "status": "ok"}
+        name = str(entry.get("name") or "").lower()
+        if name in ("ci.yml", "ci.yaml"):
+            ci_entry = entry
+            break
+    if ci_entry is None:
+        listing = sorted(
+            str(entry.get("name")) for entry in payload if isinstance(entry, dict)
+        )
+        return {
+            "status": "unavailable",
+            "reason": (
+                f"upstream {_UPSTREAM_CI_WORKFLOW} not found in "
+                f".github/workflows ({listing!r})"
+            ),
+        }
+    raw_url = ci_entry.get("download_url")
+    if not raw_url:
+        return {
+            "status": "unavailable",
+            "reason": f"upstream {_UPSTREAM_CI_WORKFLOW} entry has no download_url",
+        }
+    try:
+        wf_req = urllib.request.Request(
+            str(raw_url),
+            headers={"User-Agent": "pmoves-test-ratchet"},
+        )
+        with urllib.request.urlopen(wf_req, timeout=10, context=ctx) as resp:
+            body = resp.read().decode("utf-8", errors="replace")
+    except (
+        urllib.error.URLError,
+        urllib.error.HTTPError,
+        TimeoutError,
+        OSError,
+        json.JSONDecodeError,
+    ) as exc:
+        # A failed download of the MATRIX-BEARING workflow must NOT be
+        # swallowed: it used to be a `continue`, which returned "ok" with a
+        # partial platform set and made the ratchet blame upstream for a
+        # network hiccup.
+        return {
+            "status": "unavailable",
+            "reason": f"upstream {_UPSTREAM_CI_WORKFLOW} download failed: {exc}",
+        }
+    return _extract_matrix_platforms(body)
 
 
 def test_upstream_matrix_classifies_regression_lane() -> None:
@@ -394,13 +600,20 @@ def test_upstream_matrix_classifies_regression_lane() -> None:
             "on a network call)."
         )
     matrix = _fetch_upstream_matrix()
-    if matrix is None:
-        pytest.skip("upstream matrix fetch failed (network or rate-limit)")
-    platforms = matrix["platforms"]
+    if matrix.get("status") != "ok":
+        # "I could not check" is NOT "upstream dropped it". A read that
+        # failed (network, rate limit, unparseable workflow) must skip with
+        # its reason -- reporting it as a platform set would publish an
+        # infrastructure failure as an upstream change.
+        pytest.skip(
+            "upstream matrix cross-check UNAVAILABLE -- this is not a "
+            f"verdict about upstream: {matrix.get('reason')!r}"
+        )
+    platforms = list(matrix["platforms"])
     assert "windows" in platforms, (
         f"upstream matrix does NOT include 'windows' -- any mavis hang on "
         f"Windows is operator-lane (no upstream signal). Matrix platforms: "
-        f"{platforms!r}"
+        f"{platforms!r} (read from job(s) {matrix.get('jobs')!r})"
     )
     # Windows IS covered upstream -> a Windows hang is upstream's lane to
     # fix, not platform-specific. Record the finding for the operator's
@@ -428,10 +641,21 @@ def test_mutation_hang_fails_ratchet(monkeypatch: pytest.MonkeyPatch) -> None:
     ``test_mavis_cli_version_completes_within_timeout``) WOULD reject this
     state -- the assert is on what the ratchet WOULD see, not on the live
     subprocess.
+    WHY THERE IS NO `_mavis_cmd()` GUARD HERE
+    ---------------------------------------
+    This test never runs the real CLI: ``subprocess.run`` is patched, so
+    the call below is intercepted and raised on by the patch. Guarding on
+    "mavis is on PATH" meant the mutation-kill SKIPPED on every host
+    without the CLI -- which is CI, where the ratchet runner actually
+    lives. A mutation-kill that only bears load on the operator's laptop
+    is decoration. The args are constructed directly, the same way
+    ``test_mutation_error_banner_on_stdout_fails_ratchet`` does it, so the
+    kill fires on every host.
     """
-    mavis = _mavis_cmd()
-    if mavis is None:
-        pytest.skip("mavis / minimax-code not on PATH on this host")
+    # `real_run` is captured BEFORE the patch: `hang_on_version` is
+    # installed AS `subprocess.run`, so a fallback that called
+    # `subprocess.run(...)` would resolve the PATCHED attribute and
+    # re-enter itself with the same arguments, forever.
     real_run = subprocess.run
 
     def hang_on_version(*args, **kwargs):
@@ -451,7 +675,7 @@ def test_mutation_hang_fails_ratchet(monkeypatch: pytest.MonkeyPatch) -> None:
     # Verify that mutation raises the same exception.
     with pytest.raises(subprocess.TimeoutExpired):
         subprocess.run(
-            [mavis, "--version"],
+            ["mavis", "--version"],
             capture_output=True,
             text=True,
             timeout=_LOCAL_TIMEOUT_SECONDS,
@@ -478,10 +702,26 @@ def test_mutation_broken_shim_fails_ratchet(monkeypatch: pytest.MonkeyPatch) -> 
     This test simulates exactly that shape (rc=1, empty stdout, an error
     banner on stderr) and asserts the ratchet's OWN gate rejects it. If
     someone restores the stderr-fallback, this test fails.
+    WHY THERE IS NO `_mavis_cmd()` GUARD HERE
+    ---------------------------------------
+    This test never runs the real CLI: the ``CompletedProcess`` is built
+    BY HAND and the patched ``subprocess.run`` returns it. Guarding on
+    "mavis is on PATH" meant the mutation-kill SKIPPED on every host
+    without the CLI -- which is CI, where the ratchet runner actually
+    lives. This is the kill that proves the version gate cannot be
+    weakened back to the stderr fallback, so it must bear load
+    everywhere, not only on the operator's laptop.
+
+    WHY `real_run` IS CAPTURED BEFORE THE PATCH
+    -------------------------------------------
+    ``broken_launcher`` is installed AS ``subprocess.run``. Its fallback
+    branch used to call ``subprocess.run(*args, **kwargs)``, which
+    resolved the PATCHED attribute and re-entered ``broken_launcher``
+    with the same arguments -- infinite recursion, waiting for the day
+    some other call site took that branch. The sibling test 60 lines
+    above had it right; both now capture the original first.
     """
-    mavis = _mavis_cmd()
-    if mavis is None:
-        pytest.skip("mavis / minimax-code not on PATH on this host")
+    real_run = subprocess.run
 
     def broken_launcher(*args, **kwargs):
         cmd = args[0] if args else kwargs.get("args", [])
@@ -495,11 +735,11 @@ def test_mutation_broken_shim_fails_ratchet(monkeypatch: pytest.MonkeyPatch) -> 
                     "Error: Cannot find module 'C:\\...\\daemon\\cli.js'\n"
                 ),
             )
-        return subprocess.run(*args, **kwargs)
+        return real_run(*args, **kwargs)
 
     monkeypatch.setattr(subprocess, "run", broken_launcher)
     proc = subprocess.run(
-        [mavis, "--version"],
+        ["mavis", "--version"],
         capture_output=True,
         text=True,
         timeout=_LOCAL_TIMEOUT_SECONDS,
@@ -561,52 +801,247 @@ def test_mutation_wrong_upstream_repo_is_detectable() -> None:
     )
 
 
-def test_mutation_filename_derived_platforms_would_be_empty() -> None:
-    """Mutation-kill: the platform scan must NOT be filename-derived.
+# A faithful EXCERPT of upstream ``MiniMax-AI/minimax-code``'s ``ci.yml``
+# (captured 2026-10-30). It is kept verbatim in shape because it carries
+# the two traps this ratchet has to survive:
+#   * the matrix block carries a COMMENT that mentions "Windows" and
+#     "Linux/macOS" -- neither of which is a matrix entry;
+#   * non-matrix jobs (``changes``) run on a plain ``ubuntu-latest``.
+_SAMPLE_UPSTREAM_CI = """\
+name: Source verification
+on:
+  push:
+    branches: [main]
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e
+      - run: node scripts/ci-changes.mjs
+  verify:
+    name: verify (${{ matrix.os }}, ${{ matrix.node }})
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        # Windows runs a focused contract; full capability coverage remains on Linux/macOS.
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        node: ["24"]
+        include:
+          - os: ubuntu-latest
+            node: "24"
+            profile: full
+          - os: windows-latest
+            node: "24"
+            profile: windows
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@3d3c42e
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm verify --profile ${{ matrix.profile || 'platform' }}
+"""
 
-    The original implementation derived the platform set from the
-    workflow FILENAMES. Upstream's workflow filenames carry no OS name
-    (``ci.yml``, ``cli-release.yml``, ``compatibility.yml``, ...), so the
-    filename-derived set is EMPTY -- which would have FAILED the
-    ``assert "windows" in platforms`` gate, reporting "upstream does not
-    cover Windows" for an upstream that DOES.
+# The same workflow with Windows REMOVED from the matrix. The comment still
+# says "Windows" -- so a body scan still finds the word, and still reports
+# Windows as covered.
+_SAMPLE_UPSTREAM_CI_WITHOUT_WINDOWS = _SAMPLE_UPSTREAM_CI.replace(
+    "os: [ubuntu-latest, macos-latest, windows-latest]",
+    "os: [ubuntu-latest, macos-latest]",
+).replace(
+    "          - os: windows-latest\n            node: \"24\"\n            profile: windows\n",
+    "",
+)
 
-    This asserts the detector reads workflow CONTENT, by checking it
-    against the real upstream workflow filename list. If someone restores
-    the filename-derived scan, the empty-set invariant is violated and
-    this test fires.
+# A workflow whose ONLY matrix job is a packaging job. Its matrix mentions
+# every platform, but nothing there is ever TESTED, so it must not be
+# reported as upstream test coverage.
+_SAMPLE_PACKAGING_ONLY_CI = """\
+name: Release
+on:
+  push:
+    branches: [main]
+jobs:
+  package:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - run: pnpm build
+"""
+
+# A matrix whose runner labels carry explicit versions. GitHub-hosted runner
+# labels are ``<family>-<version>`` and the version set is open-ended
+# (``-latest``, ``-22``, ``-24.04``, ``-2025``, ``-15``, ...).
+_SAMPLE_VERSIONED_RUNNER_CI = """\
+name: CI
+on:
+  push:
+    branches: [main]
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-24.04, macos-15, windows-2025]
+    steps:
+      - run: pnpm test
+"""
+
+
+def test_mutation_matrix_scoped_platform_detection() -> None:
+    """Platform coverage must come from the TEST job's MATRIX, not a scan.
+
+    The original detector unioned the runner labels it found in the body of
+    EVERY workflow. That does not establish that the upstream CI test matrix
+    covers a platform: a label left behind in a release, compatibility or
+    packaging workflow -- or in a COMMENT -- kept the ratchet green while it
+    named the wrong owner for the regression.
+
+    This pins the classification hermetically: no network, no upstream.
     """
-    upstream_workflow_names = (
-        "ci.yml",
-        "cli-release.yml",
-        "compatibility.yml",
-        "label-issue-product.yml",
-        "performance.yml",
-        "security.yml",
-        "source-candidate.yml",
-        "sync-issue-to-feishu.yml",
+    parsed = _extract_matrix_platforms(_SAMPLE_UPSTREAM_CI)
+    assert parsed["status"] == "ok", (
+        f"the upstream-shaped workflow did not parse into a verdict: {parsed!r}"
     )
-    filename_derived: set[str] = set()
-    for name in upstream_workflow_names:
-        lowered = name.lower()
-        for tag in ("ubuntu", "macos", "windows", "linux"):
-            if tag in lowered:
-                filename_derived.add(tag)
-    assert not filename_derived, (
-        f"upstream workflow filenames unexpectedly carry an OS tag: "
-        f"{sorted(filename_derived)!r} -- re-check whether the filename "
-        f"scan assumption still holds"
+    assert parsed["platforms"] == ["macos", "ubuntu", "windows"], (
+        f"the TEST job's matrix did not yield the expected platform set: {parsed!r}"
     )
-    # The upstream matrix IS declared in ci.yml's body. Assert the helper
-    # scans bodies -- scoped to the helper's OWN source, because this
-    # module's prose (the correction notes) legitimately quotes the old
-    # filename-derived expression.
+    assert parsed["jobs"] == ["verify"], (
+        f"the platform set was not read from the TEST job: {parsed!r}"
+    )
+    assert parsed["matrix_key"] == "os", (
+        f"the matrix key was not read from the runs-on expression: {parsed!r}"
+    )
+
+    # THE REGRESSION: Windows removed from the matrix, still named in the
+    # comment. Reporting "windows" here is the inverted ratchet.
+    dropped = _extract_matrix_platforms(_SAMPLE_UPSTREAM_CI_WITHOUT_WINDOWS)
+    assert dropped["status"] == "ok", (
+        f"the Windows-dropped workflow did not parse into a verdict: {dropped!r}"
+    )
+    assert dropped["platforms"] == ["macos", "ubuntu"], (
+        "a platform that only survives in a COMMENT (or in a non-matrix job) "
+        f"must not be reported as upstream test coverage: {dropped!r}"
+    )
+    assert "windows" not in dropped["platforms"], (
+        "upstream dropped Windows from the test matrix but the ratchet still "
+        f"reports it as covered: {dropped!r}"
+    )
+
+    # A matrix job that is not the TEST job carries no coverage claim.
+    packaging = _extract_matrix_platforms(_SAMPLE_PACKAGING_ONLY_CI)
+    assert packaging["status"] == "unavailable", (
+        "a workflow with no identifiable TEST job must report UNAVAILABLE, "
+        f"not a confident platform set: {packaging!r}"
+    )
+    assert not packaging.get("platforms"), (
+        f"a packaging matrix was reported as test coverage: {packaging!r}"
+    )
+
+    # Structural pin: the platform set is parsed out of the MATRIX, never
+    # accumulated by scanning workflow bodies.
     helper_source = inspect.getsource(_fetch_upstream_matrix)
-    assert 'entry.get("name"' not in helper_source, (
-        "the platform scan is filename-derived again -- upstream declares "
-        "its matrix inside ci.yml's body, not in the filenames"
+    assert "_UPSTREAM_CI_WORKFLOW" in helper_source, (
+        "the upstream matrix must be read from the CI workflow explicitly, "
+        "not from an aggregate over every workflow file"
     )
-    assert "download_url" in helper_source, (
-        "the platform scan no longer reads workflow CONTENT -- it must "
-        "fetch each workflow body via its download_url"
+    assert "_extract_matrix_platforms" in helper_source, (
+        "the network helper must delegate the matrix read to the structural "
+        "parser -- a body scan cannot tell a matrix entry from a comment"
+    )
+
+
+def test_mutation_runner_label_family_matching() -> None:
+    """Runner labels are ``<family>-<version>``; the version set is open-ended.
+
+    The previous match tested a fixed suffix list (``-latest`` / ``-22`` /
+    ``-24``). GitHub-hosted runners routinely appear as ``windows-2025``,
+    ``macos-15`` and ``ubuntu-24.04`` -- none of which end in one of those
+    suffixes. One upstream rename and the helper reported an EMPTY platform
+    set, which made the gate fire and blame upstream for a rename.
+    """
+    parsed = _extract_matrix_platforms(_SAMPLE_VERSIONED_RUNNER_CI)
+    assert parsed["status"] == "ok", (
+        f"the versioned-runner workflow did not parse into a verdict: {parsed!r}"
+    )
+    assert parsed["platforms"] == ["macos", "ubuntu", "windows"], (
+        "the runner-label family match went stale: an upstream runner rename "
+        f"emptied the platform set. Parsed: {parsed!r}"
+    )
+
+    # A label with no version is not a GitHub-hosted runner family, and a
+    # self-hosted label is not a platform at all.
+    self_hosted = _SAMPLE_VERSIONED_RUNNER_CI.replace(
+        "os: [ubuntu-24.04, macos-15, windows-2025]",
+        "os: [self-hosted]",
+    )
+    parsed_self_hosted = _extract_matrix_platforms(self_hosted)
+    assert parsed_self_hosted["status"] == "ok", (
+        f"the self-hosted workflow did not parse into a verdict: {parsed_self_hosted!r}"
+    )
+    assert parsed_self_hosted["platforms"] == [], (
+        "a self-hosted runner label is not a platform: "
+        f"{parsed_self_hosted!r}"
+    )
+
+
+def test_mutation_upstream_download_failure_is_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A failed workflow download must be UNAVAILABLE, never a partial "ok".
+
+    The listing fetch used to succeed while the matrix-bearing workflow
+    download was rate-limited or timed out; that branch was a bare
+    ``continue``, and the helper then returned ``status="ok"`` carrying
+    whatever platforms it had scraped from the other workflows. The
+    cross-check reported that upstream had DROPPED a platform when the
+    truth was that the network had hiccuped -- an infrastructure failure
+    published as an upstream change.
+    """
+    listing = [
+        {
+            "name": "ci.yml",
+            "path": ".github/workflows/ci.yml",
+            "download_url": "https://example.invalid/ci.yml",
+        },
+        {
+            "name": "cli-release.yml",
+            "path": ".github/workflows/cli-release.yml",
+            "download_url": "https://example.invalid/cli-release.yml",
+        },
+    ]
+
+    class _FakeResponse:
+        def __init__(self, payload: bytes) -> None:
+            self._payload = payload
+
+        def read(self) -> bytes:
+            return self._payload
+
+        def __enter__(self) -> "_FakeResponse":
+            return self
+
+        def __exit__(self, *exc_info: object) -> bool:
+            return False
+
+    def fake_urlopen(req, *args, **kwargs):
+        url = getattr(req, "full_url", str(req))
+        if "api.github.com" in url:
+            return _FakeResponse(json.dumps(listing).encode("utf-8"))
+        raise urllib.error.HTTPError(url, 403, "rate limit exceeded", None, None)
+
+    monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+    matrix = _fetch_upstream_matrix()
+    assert matrix.get("status") == "unavailable", (
+        "a failed download of the matrix-bearing workflow was reported as a "
+        f"successful read: {matrix!r}"
+    )
+    assert not matrix.get("platforms"), (
+        "an unavailable read must not carry a platform set -- a partial set "
+        f"is published as an upstream change: {matrix!r}"
+    )
+    assert matrix.get("reason"), (
+        f"an unavailable read must say WHY it is unavailable: {matrix!r}"
     )

@@ -41,12 +41,13 @@ This slice closes both gaps load-bearingly.
 
 ## 4-bucket · 5-class cross-check
 
-- **(1) reasoning-gap** — 3 lessons (#3, #7, #11) — `--version` vs `--help` paths, parseability-vs-non-empty, and filename-vs-content classification are subtle distinctions the ratchet must hold simultaneously.
+- **(1) reasoning-gap** — 4 lessons (#3, #7, #11, #14) — `--version` vs `--help` paths, parseability-vs-non-empty, filename-vs-content classification, and matrix-vs-body classification are subtle distinctions the ratchet must hold simultaneously.
 - **(2) semantic-naming drift** — 1 lesson (#8) — marker naming follows lane identifier convention.
-- **(3) contract-correctness** — 3 lessons (#2, #4, #10) — the kilo 4-link dispatch chain, the outer/inner timeout split, and the upstream-target contract.
-- **(4) defense-in-depth** — 5 lessons (#1, #5, #6, #9, #12) — positive assertions only, classification ratchets, mutation-kills, the stderr-as-success trap, and the restated-vs-invoked mutation trap.
+- **(3) contract-correctness** — 5 lessons (#2, #4, #10, #15, #17) — the kilo 4-link dispatch chain, the outer/inner timeout split, the upstream-target contract, the runner-label family, and the harness's own mutate→restore contract.
+- **(4) defense-in-depth** — 6 lessons (#1, #6, #9, #12, #13, #16) — positive assertions only, classification ratchets, mutation-kills, the stderr-as-success trap, the restated-vs-invoked mutation trap, unavailable-vs-ok, and the named-test kill signal.
+- **(5) pattern-conformance** — 1 lesson (#5) — the classification ratchet is gated behind an env var instead of running unconditionally.
 
-Pattern: **defense-in-depth + contract-correctness dominate** — 8 of 12 lessons. This slice closes two test gaps; the close-out work IS asserting the contracts load-bearingly (positive state + mutation-kill + classification), not just adding more tests.
+Pattern: **defense-in-depth + contract-correctness dominate** — 11 of 17 lessons. This slice closes two test gaps; the close-out work IS asserting the contracts load-bearingly (positive state + mutation-kill + classification), not just adding more tests.
 
 ### Post-merge correction round (2026-10-30)
 
@@ -71,6 +72,8 @@ The slice shipped as PR #3095. A follow-up audit on 2026-10-30 found **two defec
 | `pmoves/tests/test_sign_trail.py` (augmented) | +35 lines | +0 (augmented existing test) | `test_build_payload_applies_kilocode_glm_alter` now asserts the structural fingerprint (accent is 7-char hex, payload has fields beyond the legacy `{selected_alter, accent}`). |
 | `pmoves/tests/test_mavis_cli_timeout.py` (corrected 2026-10-30) | +360 lines net | 4 → 8 | The original 4 tests were kept; 4 mutation-kills added (broken-shim, error-banner-on-stdout, wrong-upstream-pin, filename-derived-platforms). The version/help gates now call the shared `_assert_healthy_version_output()`. |
 | `pmoves/tests/tools/test_mavis_ratchet_mutation_kill.py` (new 2026-10-30) | 135 lines | 3 | The PROVENANCE harness: rewrites the gate and the upstream pin back to their original defective forms and asserts the ratchet module then FAILS. Both mutations confirmed killed. |
+| `pmoves/tests/test_mavis_cli_timeout.py` (review round 2, 2026-10-30 · PR #3427) | 1047 lines | 8 → 10 | The filename-derived-platforms test was REPLACED by `test_mutation_matrix_scoped_platform_detection` (the old invariant is now structural, not assertable) and joined by `test_mutation_runner_label_family_matching` + `test_mutation_upstream_download_failure_is_unavailable`. The matrix read moved into a pure, hermetic parser. |
+| `pmoves/tests/tools/test_mavis_ratchet_mutation_kill.py` (review round 2, 2026-10-30 · PR #3427) | 303 lines | 3 | The kill signal is now the NAME of the test that failed, parsed from pytest's own `-rA` short summary; the mutate→restore window is serialized by a `threading.Lock` plus a cross-process advisory file lock; the restore writes back the exact pre-mutation bytes and is asserted. |
 
 Total: **10 new + 1 augmented test** across 3 files (original slice) **+ 4 mutation-kills + 3 harness tests** (2026-10-30 correction round). `pyproject.toml` adds 2 markers (`kilo`, `mavis_cli`).
 
@@ -132,6 +135,7 @@ The fork build itself came from `POWERFULMOVES/PMOVES-minimax-code` (fast-forwar
 - **kilo binary-path ratchet** (Gap 1): all 6 tests should pass on this host when pytest is available. CI is the gate; structural invariants verified locally by file inspection.
 - **minimax-code timeout ratchet** (Gap 2): 3 of 4 tests run unconditionally (`--version` timeout, `--help` timeout, mutation-kill); 1 is gated on `PMOVES_MAVIS_MATRIX_CHECK=1`.
 - **test_sign_trail.py augmentation**: structural fingerprint ratchet added on top of the existing assertion.
+- **after review round 2 (PR #3427)**: the mavis ratchet module is 10 tests (9 unconditional + 1 gated on `PMOVES_MAVIS_MATRIX_CHECK=1`) and the mutation-kill harness is 3 tests. Both files pass with NO skips on this host — the mutation-kills no longer depend on the mavis CLI being installed.
 
 ---
 
@@ -146,3 +150,41 @@ This slice does NOT regenerate any existing files. The new test files are added 
 1. **Operator-side `mavis.cmd` fix**: the duplicated `resources\resources\` segment in the daemon path is a Windows-only Electron-shim bug. The ratchet catches the hang; the fix is in the Mavis install scripts. Out of scope for this slice.
 2. **Upstream matrix test gating**: `PMOVES_MAVIS_MATRIX_CHECK=1` should be set in a CI matrix job (cron, weekly) so the upstream-platform-coverage assertion stays fresh. Currently skipped by default.
 3. **`@kilocode/cli` upstream pins**: the ratchet's structural invariants (spawnSync, platformMap, `@kilocode/cli-`) match `@kilocode/cli@7.1.3` and `@kilocode/cli@7.6.2`. A future major version that rewrites the shim would need a ratchet update. The cross-link to the sign-trail's kilocode-glm alter identity (`test_kilocode_cli_version_documented_in_sign_trail`) catches the case where the version moves but the structural invariants don't.
+
+---
+
+## Review round 2 (2026-10-30 · PR #3427) — "a ratchet that can only skip is decoration"
+
+PR #3427 carried the A/B/C correction round into review. Seven threads came back, and most of them were one defect wearing different clothes: a check that cannot tell "I could not check" from "the answer is no", and a kill signal that cannot tell "the mutation died" from "the run died".
+
+| # | Class | Observation (rule) | Evidence / Why | Apply when |
+|---|-------|---------------------|----------------|------------|
+| 13 | **defense-in-depth** | **A read that could not complete is UNAVAILABLE — never "ok" carrying a partial result.** "I could not check" and "the answer is no" are different verdicts, and only one of them may be published as a verdict. | The matrix helper caught a failed workflow download with a bare `continue` and then returned `status="ok"` with whatever platforms it had scraped from the other workflows. A rate-limited download therefore published "upstream dropped Windows" when the truth was "GitHub throttled us" — an infrastructure failure reported as an upstream change. Every failure path now returns `status="unavailable"` plus a `reason`, and the test SKIPS with that reason. Pinned by `test_mutation_upstream_download_failure_is_unavailable`. | Any ratchet whose input comes from the network, a queue, or another process: the skip must carry the reason, and a partial result must never be presented as a complete one. |
+| 14 | **reasoning-gap** | **Coverage is a property of one job's MATRIX, not of a keyword scan across the workflow set.** A runner label left behind in a release, compatibility or packaging workflow — or in a COMMENT — is not test coverage. | The detector unioned runner labels found in the body of EVERY workflow under `.github/workflows/`. Upstream ships `cli-release.yml`, `compatibility.yml` and `performance.yml` beside `ci.yml`, and upstream's own `ci.yml` carries the comment "Windows runs a focused contract; full capability coverage remains on Linux/macOS" — that comment is where "linux" came from. Removing Windows from the test matrix left the ratchet green while it named the wrong owner for the regression. The repair reads `ci.yml` STRUCTURALLY: find the job whose `runs-on` is driven by a matrix key, confirm it is the TEST job, and read that key's values (plus its `include:` overrides). Pinned by `test_mutation_matrix_scoped_platform_detection`. | Any "does the other side cover X?" classifier — read the structure that DECLARES coverage (a matrix, a test list, a job graph), never a keyword scan of a corpus. |
+| 15 | **contract-correctness** | **Match the FAMILY of a versioned identifier and treat its version space as open.** A `<family>-<version>` identifier must never be matched against an enumerated list of version suffixes. | The detector tested for the literal suffixes `-latest`, `-22` and `-24`. GitHub-hosted runners appear as `windows-2025`, `windows-2022`, `macos-15` and `ubuntu-24.04` — none of them ends in one of those suffixes. One upstream rename emptied the platform set, the `assert "windows" in platforms` gate fired, and the ratchet rebuilt the inverted defect it exists to kill. The match is now the family followed by `latest` or ANY digit, which covers every version shape GitHub publishes. Pinned by `test_mutation_runner_label_family_matching`. | Any matcher over versioned identifiers (runner labels, image tags, model revisions, API versions): match the family, enumerate nothing. |
+| 16 | **defense-in-depth** | **A kill signal must name the thing that died.** "pytest exited non-zero and the word 'failed' appeared somewhere in the output" is satisfied by a collection error, a timeout, or an environment failure — none of which exercised the mutation. | The harness's kill signal was `proc.returncode != 0 and "failed" in output`; the substring cannot tell "1 failed" from "failed to create endpoint". Each mutation now names the test that MUST fail — `test_mutation_broken_shim_fails_ratchet` for the version gate, `test_mutation_wrong_upstream_repo_is_detectable` for the upstream pin — and the harness reads pytest's own short test summary (`-rA`) for that name. A run that died for any other reason is no longer celebrated as a kill. | Every mutation/property harness: the kill must be attributable to the mutation, not to the mood of the run. |
+| 17 | **contract-correctness** | **A harness that rewrites a shared file must serialize its own mutate→restore window, and must assert the restore.** | Both mutations rewrote the SAME tracked source file and restored it in a `finally`. Under `pytest-xdist` (or any parallel runner, or a Ctrl-C mid-write) they interleave: one test reads the "original" while the other has it mutated, and the `finally` restore can resurrect a mutated file — a self-healing grenade. The harness now holds a `threading.Lock` (threads within one process) plus a cross-process advisory FILE lock (xdist workers, concurrent pytest runs), restores the exact pre-mutation BYTES, and asserts the restore. The file lock is released by the OS if a worker dies, so a crashed run cannot leave it held forever. | Any test that edits a tracked file in place: lock the window, restore exact bytes, assert the restore. |
+
+### Finding → lesson → code map (PR #3427 review)
+
+| Finding | Thread id | Lesson | Where it landed |
+|---|---|---|---|
+| a failed workflow download was reported as "ok" with a partial platform set | 4427664896 | 13 | `pmoves/tests/test_mavis_cli_timeout.py::_fetch_upstream_matrix` (every failure path returns `status="unavailable"`), `test_mutation_upstream_download_failure_is_unavailable` |
+| platform detection aggregated over every workflow file | 4427664903 | 14 | `_extract_matrix_platforms` + `_is_test_job`, `test_mutation_matrix_scoped_platform_detection` |
+| the runner-label version assumption | 4427675919 | 15 | the label match inside `_extract_matrix_platforms`, `test_mutation_runner_label_family_matching` |
+| `subprocess.run` recursion inside the patched launcher | 4427675854 | 17 (harness hygiene) | `test_mutation_broken_shim_fails_ratchet` captures `real_run` BEFORE `monkeypatch.setattr` |
+| the mutation-kill skipped whenever the CLI was absent | 4427675888 | 16 (the kill must fire on every host) | `test_mutation_broken_shim_fails_ratchet` and `test_mutation_hang_fails_ratchet` construct the args directly, with no `_mavis_cmd()` guard |
+| the kill signal was "the run got sad" | 4427675898 | 16 | `pmoves/tests/tools/test_mavis_ratchet_mutation_kill.py::_failed_test_names` + `_mutate_and_run(old, new, expected_failing_test)` |
+| the mutate/restore window raced | 4427675910 | 17 | `_mutation_lock()` (threading + advisory file lock), exact-byte restore, asserted restore |
+
+### Live probe after round 2 (2026-10-30)
+
+The matrix cross-check now reads upstream's `ci.yml` structurally. Live result with `PMOVES_MAVIS_MATRIX_CHECK=1`:
+
+```
+{'status': 'ok', 'platforms': ['macos', 'ubuntu', 'windows'],
+ 'jobs': ['verify'], 'matrix_key': 'os',
+ 'labels': ['macos-latest', 'ubuntu-latest', 'windows-latest']}
+```
+
+Note what is NOT in that set: `linux`. The word "Linux" exists in upstream's `ci.yml` only inside a COMMENT, and a comment is not a matrix entry — which is precisely the distinction the old body scan could not make.
