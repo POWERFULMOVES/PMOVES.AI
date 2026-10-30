@@ -45,6 +45,21 @@ def main() -> int:
             ],
             check=True,
         )
+
+    # The Invidious keys have exactly one owner: the preflight. It mints them
+    # from the bootstrap registry, repairs vendor-invalid values (the 16-char
+    # token_urlsafe brand_defaults used to write, ~40% of which the companion
+    # rejects) and rotates values published in the repo. It exits 1 only when
+    # compose's ${VAR:?} would fail anyway, so passing that through never makes
+    # a node worse than compose alone; anything else (3 = could not measure)
+    # must not block bring-up.
+    preflight = Path(__file__).resolve().with_name("invidious_keys_preflight.py")
+    if preflight.exists():
+        rc = subprocess.run(
+            [sys.executable, str(preflight), "--env-file", str(env_file)], check=False
+        ).returncode
+        if rc == 1:
+            return 1
     return 0
 
 

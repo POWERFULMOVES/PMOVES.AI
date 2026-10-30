@@ -103,9 +103,10 @@ your own before or after `make first-run`.
       - `INVIDIOUS_PG_DB`
       - `INVIDIOUS_PG_USER`
       - `INVIDIOUS_PG_PASSWORD`
-    - HMAC/companion keys:
-      - `INVIDIOUS_HMAC_KEY`
-      - `INVIDIOUS_COMPANION_KEY`
+    - HMAC/companion keys (`INVIDIOUS_HMAC_KEY`, `INVIDIOUS_COMPANION_KEY`) are NOT
+      seeded by `brand_defaults.py`. Their only writer is `tools/invidious_keys_preflight.py`,
+      which runs from `ensure-env-shared` and before every stack goal (vendor format,
+      published values rotated). Check: `make -C pmoves invidious-keys-check`.
   - When you rotate keys or credentials, update `pmoves/env.shared` and rerun
     `make env-setup` before restarting the Invidious stack.
 

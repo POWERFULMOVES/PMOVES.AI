@@ -7,6 +7,8 @@ runtime_secrets_hydrate, auth_bootstrap_check, and local_cert_runners.
 
 from __future__ import annotations
 
+import functools
+import hashlib
 import os
 import re
 import sys
@@ -72,6 +74,53 @@ def normalize_env_value(value: str) -> str:
     return value
 
 
+# Digests of secret values that were committed to this public repo as compose
+# literal defaults. A value published in git history is compromised for good:
+# removing it from HEAD does not un-publish it. Every predicate that asks "does
+# this slot already hold a usable secret?" must answer NO for these, or the
+# funnel would harvest the public value back out of a running container and keep
+# it forever. Digests, not values -- the point is to stop re-publishing them.
+#
+# Cost: is_placeholder() runs over whole env files from ~17 callers, so the
+# KDF must almost never run. Three cheap gates come first -- the length must
+# match a published one, the value must be in the published charset (lowercase
+# hex), and results are cached per process. PBKDF2 rather than a bare SHA-256
+# because CodeQL (py/weak-sensitive-data-hashing) flags a fast hash over
+# password-tainted input; the iteration count is deliberately low, since the
+# inputs are already public and the digest protects nothing -- it only keeps the
+# literal out of HEAD. The salt is fixed for the same reason: a lookup table,
+# not password storage.
+#
+#   64  INVIDIOUS_HMAC_KEY       docker-compose{,.ui}.yml until fix/invidious-required-keys
+#   16  INVIDIOUS_COMPANION_KEY  same files (also the companion's SERVER_SECRET_KEY default)
+KNOWN_PUBLIC_SECRET_SALT = b"pmoves-known-public-secret-v1"
+KNOWN_PUBLIC_SECRET_ITERATIONS = 10_000
+KNOWN_PUBLIC_SECRET_CHARSET = re.compile(r"[0-9a-f]+")
+KNOWN_PUBLIC_SECRET_DIGESTS: Dict[int, frozenset[str]] = {
+    64: frozenset({"a322b75ef9d4831532616245c5e47146d1fe6c4b3f36b7566d28c7f493138586"}),
+    16: frozenset({"bc5dccd2f4cc885002a13ef6420e430bcf9cad374f38f993041e30f52b9abc36"}),
+}
+
+
+@functools.lru_cache(maxsize=512)
+def known_public_digest(value: str) -> str:
+    """The denylist digest of *value* (already normalized)."""
+    return hashlib.pbkdf2_hmac(
+        "sha256", value.encode("utf-8"), KNOWN_PUBLIC_SECRET_SALT, KNOWN_PUBLIC_SECRET_ITERATIONS
+    ).hex()
+
+
+def is_known_public(value: str | None) -> bool:
+    """Return True if *value* is a secret that was published in this repo."""
+    if not value:
+        return False
+    normalized = normalize_env_value(value)
+    candidates = KNOWN_PUBLIC_SECRET_DIGESTS.get(len(normalized))
+    if not candidates or not KNOWN_PUBLIC_SECRET_CHARSET.fullmatch(normalized):
+        return False
+    return known_public_digest(normalized) in candidates
+
+
 def is_placeholder(value: str | None) -> bool:
     """Return True if value is missing, empty, or a known placeholder.
 
@@ -86,6 +135,9 @@ def is_placeholder(value: str | None) -> bool:
     normalized = normalize_env_value(value)
     lowered = normalized.lower()
     if not lowered or lowered in PLACEHOLDER_VALUES:
+        return True
+    # A published secret is no secret: treat it exactly like a template value.
+    if is_known_public(normalized):
         return True
     # Pattern: your_* prefix (any position), placeholder_* prefix
     if "your_" in lowered:

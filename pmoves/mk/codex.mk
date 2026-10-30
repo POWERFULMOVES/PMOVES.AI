@@ -246,11 +246,24 @@ env-shared-repair: ## Self-heal env.shared: collapse raw multi-line PEM/SSH valu
 #     database; a funnel-invented value desyncs it (28P01).
 # Those stay out. Add a key here only once you have checked it is pure random
 # material with no derivation and no external consumer that pins its value.
+#
+# INVIDIOUS_HMAC_KEY / INVIDIOUS_COMPANION_KEY qualify: pure random, read only at
+# container creation by invidious + invidious-companion from the same variable.
+# They are here because compose now declares them `${VAR:?}` (they used to ship
+# as public literal defaults), and compose interpolates the whole project even
+# when the invidious profile is off -- so EVERY node needs them minted, including
+# nodes that never run Invidious. A value equal to the old public literal counts
+# as unprovisioned (bootstrap_env.slot_is_filled), so this also rotates it out.
+# Their FORMAT is owned by tools/invidious_keys_preflight.py, which the
+# ensure-env-shared prerequisite runs first; by the time --ensure looks, a
+# vendor-invalid value has already been repaired.
 SECRETS_ENSURE_KEYS ?= \
   SECRET_KEY_BASE \
   VAULT_ENC_KEY \
   LOGFLARE_PUBLIC_ACCESS_TOKEN \
-  LOGFLARE_PRIVATE_ACCESS_TOKEN
+  LOGFLARE_PRIVATE_ACCESS_TOKEN \
+  INVIDIOUS_HMAC_KEY \
+  INVIDIOUS_COMPANION_KEY
 
 .PHONY: secrets-ensure-generated secrets-harvest-check
 secrets-ensure-generated: ensure-env-shared ## Recover live secrets from the running fleet, THEN mint only what is genuinely absent. Idempotent; never overwrites a live value.
@@ -303,6 +316,10 @@ secrets-ensure-check: ## Fail if any stack-generated secret is still unprovision
 	else \
 	  $(CODEX_PY) scripts/bootstrap_env.py --ensure-dry-run $(foreach k,$(SECRETS_ENSURE_KEYS),--ensure $(k)); \
 	fi
+	@# Presence is not enough for the Invidious keys: ${VAR:?} accepts any
+	@# non-empty value, including the published literal or a urlsafe companion key
+	@# the companion rejects. The vendor-rule check names the key and the fix.
+	@$(CODEX_PY) tools/invidious_keys_preflight.py --check
 
 .PHONY: secrets-derive-nats-url
 secrets-derive-nats-url: ## Re-derive NATS_URL credentials in env.shared from NATS_USER/NATS_PASSWORD (no-op when consistent; never prints values)
