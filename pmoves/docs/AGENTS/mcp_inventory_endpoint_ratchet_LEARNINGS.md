@@ -121,7 +121,9 @@ Total: **20 new tests across 2 new files.** No existing file was modified — th
 
 - **Ratchet:** `pmoves/tests/tools/test_mcp_inventory_endpoint_ratchet.py` — `_assert_responder_is_flute_gateway()`, `_probe_url()`, `_display_path()`, `FLUTE_SERVER_KEYS`, `FLUTE_ROUTER_MODULE`, `TRANSPORT_METHODS`, `FLUTE_SERVER_NAME`
 - **Ratchet (review hardening):** `_declared_path()`, `_url_path()`, `_declared_routes()`, `_mcp_router_mounted()`, `_resolve_declared_headers()`, `_probe_headers()`
+- **Ratchet (review hardening, round 2 — finding 4428873759):** `MCP_ROUTER_FACTORY`, `_decorator_route()`, `_route_decorators()`, `_factory_node()`, `_nested_def_nodes()`, `_factory_bindings()`, `_route_ownership()`, `RouterOwnershipError`, `_assert_route_on_returned_router()`
 - **Harness:** `pmoves/tests/tools/test_mcp_inventory_endpoint_mutation_kill.py` — `RATCHET_MODULE`, `MOUNT_CALL`/`MUTATED_MOUNT_CALL`, `MCP_ROUTER_FACTORY_CALL`/`MUTATED_ROUTER_FACTORY_CALL`, `DISABLED_SUFFIX`, `TARGET_KEY`, `UNSERVED_PATH`, `_route_declaration()`
+- **Harness (round 2):** `_mutate_route_onto_sibling_router()`, `test_mutation_route_moved_onto_a_sibling_router_is_killed`
 - **SDK files exercised:**
   - `pmoves/services/flute-gateway/mcp_bridge.py:508` — `@router.post("/mcp")` (the declared surface)
   - `pmoves/services/flute-gateway/mcp_bridge.py:529` — `@router.get("/sse")`
@@ -138,10 +140,10 @@ Total: **20 new tests across 2 new files.** No existing file was modified — th
 
 ## Test status
 
-- `pmoves/tests/tools/test_mcp_inventory_endpoint_ratchet.py` → **6 passed, 1 skipped** on this host. The skip is the live half, and the skip REASON is the point of lesson 1.7: the inventory declares `X-API-Key: ${FLUTE_API_KEY}` and that variable is unset here, so the probe declines to send an unauthenticated request and says why (header name + variable name, never a value).
-- With `FLUTE_API_KEY` exported (any value — the local gateway runs in dev mode), the live half **RUNS and PASSES** against the running gateway → **7 passed**: `serverInfo.name = "pmoves-flute-gateway"`.
-- `pmoves/tests/tools/test_mcp_inventory_endpoint_mutation_kill.py` → **13 passed**.
-- Combined (credential absent): **19 passed, 1 skipped**. Combined (credential exported): **20 passed**.
+- `pmoves/tests/tools/test_mcp_inventory_endpoint_ratchet.py` → **8 passed, 1 skipped** on this host. The skip is the live half, and the skip REASON is the point of lesson 1.7: the inventory declares `X-API-Key: ${FLUTE_API_KEY}` and that variable is unset here, so the probe declines to send an unauthenticated request and says why (header name + variable name, never a value).
+- With `FLUTE_API_KEY` exported (any value — the local gateway runs in dev mode), the live half **RUNS and PASSES** against the running gateway → **9 passed**: `serverInfo.name = "pmoves-flute-gateway"`.
+- `pmoves/tests/tools/test_mcp_inventory_endpoint_mutation_kill.py` → **14 passed**.
+- Combined (credential absent): **22 passed, 1 skipped**. Combined (credential exported): **23 passed**.
 - Mutation-kill re-verified by hand after the review hardening: each of the four fixes was REVERTED in place and its harness case re-run — all four reverts were **KILLED** (the harness case failed, i.e. the mutation survived the reverted ratchet). Details in 3.6 below.
 
 ---
@@ -194,3 +196,47 @@ This lane modifies **no** existing file. `pmoves/config/mcp_inventory.json` is b
 | # | Class | What | Link | Why it matters |
 |---|-------|------|------|----------------|
 | 4.7 | **the-four-review-threads** | The provenance of the hardening: four GitHub review threads on PR #3428, each naming the defect class it exposed. | dbId `4427921337` (P1, derive the route from the inventory) · `4427921351` (P1, send the declared credential) · `4427921357` (P2, assert the `include_router` ARGUMENT) · `4427972925` (suggestion, no-path URL guard) | The lessons above are the generalised rules; the thread ids are the exact places they came from, so the next reviewer can read the finding against the fix. |
+
+---
+
+## Review hardening round 2 — finding 4428873759 (PR #3428, second pass)
+
+**Status:** one further review thread on PR #3428, against the STATIC half. Valid: the ratchet could still pass while the defect it exists to catch was PRESENT. Lesson numbering continues from the taxonomy above (1.10, 2.9, 3.8, 4.8).
+
+**The blind spot, in one sentence:** `_declared_routes` answered *"does this file, anywhere, decorate some `.post('/mcp')` on SOME object"* — so a route declared on an UNMOUNTED sibling router in the same module satisfied BOTH static halves (the file "declares" the path AND the factory is "mounted") while every client got a 404.
+
+### Bucket 1 — Defects
+
+| # | Class | Observation (rule) | Evidence / Why | Apply when |
+|---|-------|---------------------|----------------|------------|
+| 1.10 | **declared-anywhere-is-not-attached-to-the-served-router** | **"The module declares the path SOMEWHERE" is a different fact from "the route is attached to the object that is served".** A static check that asks *is it declared?* must also ask *declared ON WHAT?* — and the answer must be the object the factory hands back. | Finding **4428873759** (suggestion). `mcp_bridge.py:508` declares `@router.post("/mcp")` on the LOCAL `router` that `create_mcp_router` returns (`mcp_bridge.py:583`). A mutation that moves the decorator to a sibling `APIRouter` satisfies the declaration census AND the mount check, because neither of them asks whether the two halves name the SAME object. Fixed: `_route_ownership()` resolves the factory's RETURNED names and its LOCALLY ASSIGNED names from the AST, `_route_decorators()` carries each decorator's SCOPE, and `_assert_route_on_returned_router()` requires the derived path's decorator to be attached to a returned object — raising `RouterOwnershipError` naming the path AND the offending router object otherwise. | Any "is it declared?" check on a registration call whose receiver is an object (`include_router`, `register`, `add_handler`) rather than a name. |
+
+### Bucket 2 — Decisions
+
+| # | Class | Observation (rule) | Why | Alternative considered | Cost of alternative |
+|---|-------|---------------------|-----|------------------------|---------------------|
+| 2.9 | **the-check-raises-a-named-exception,-not-an-assert** | The ownership check raises `RouterOwnershipError` (an `AssertionError` subclass) rather than asserting inline, and BOTH the pytest test and the mutation harness call that one named function. | `pytest -O` strips `assert` — a ratchet that can be switched off by a flag is not a ratchet (same reasoning as 1.9). The named type also lets the harness name the failure MODE instead of matching on a message, and it keeps the harness from restating the logic (lesson #12 / decision 2.5). | `assert` inside the pytest test | The harness could not distinguish this failure from the other assertions, and `-O` would silently disarm the check. |
+
+### Bucket 3 — Operations
+
+| # | Class | Observation (rule) | Measured | Repeatability |
+|---|-------|---------------------|----------|----------------|
+| 3.8 | **green-before / red-after / green-after-restore** | A mutation case that mutates a REAL source file must assert all three states on ONE copy: the ratchet passes on the pristine bytes, fails with the mutation applied, and passes again after the original bytes are restored — with the restore in a `finally`, byte-exact, verified by re-reading the file. | The sibling-router mutation: **KILLED** with `route '/mcp' (POST) is declared on 'router_sibling', but create_mcp_router() returns 'router'`. Hand-verified by revert (lesson 3.6): with the ownership check stubbed to a no-op the mutation **SURVIVES**, so the case is load-bearing. Restore verified byte-exact (`bridge.read_bytes() == pristine`). | Every mutation that edits a file the ratchet reads. |
+
+### Bucket 4 — Cross-references
+
+| # | Class | What | Link | Why it matters |
+|---|-------|------|------|----------------|
+| 4.8 | **the-fifth-review-thread** | The provenance of the round-2 hardening: a fifth GitHub review thread on PR #3428, against the static half's ownership gap. | dbId `4428873759` (suggestion, the decorator must belong to the router the factory returns) | The same trail shape as 4.7 — the thread id is where the finding was made, so the next reviewer can read it against the fix. |
+
+---
+
+## Test inventory (after round 2)
+
+| File | Lines | Tests | What it pins |
+|---|---|---|---|
+| `pmoves/tests/tools/test_mcp_inventory_endpoint_ratchet.py` | 967 | 9 | The ratchet. Static half (8): the route DERIVED FROM THE INVENTORY must be declared in the serving source AND attached to the router `create_mcp_router` RETURNS (×2 entries: `flute-voice` SSE + `flute-voice-mcp` HTTP); the MCP router must be the ARGUMENT of `app.include_router(...)` (×2); the entry must resolve to a URL carrying a PATH (×2 entries); the ownership check says NO on a route on an unreturned router, and YES on the right shape (2 unit cases). Live half (1): the declared URL must answer, must not 404, must not 5xx, must carry the INVENTORY-declared credential, and the responder must identify as `pmoves-flute-gateway`. |
+| `pmoves/tests/tools/test_mcp_inventory_endpoint_mutation_kill.py` | 669 | 14 | The PROVENANCE harness. 7 static mutations (route removed / mount removed / another router mounted / the inventory declares an unserved path / the route moved onto a sibling router / both removed / un-mutated control) + 7 live-half cases (override rebases the probe URL / a no-path URL is rejected / the declared credential is sent / an unavailable credential skips / an impostor responder is rejected / a 404 is rejected / the genuine service passes). |
+
+Total: **23 tests across the 2 files.**
+

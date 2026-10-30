@@ -73,6 +73,13 @@ They are recorded here because each one is a RULE, not a patch:
   presence of a string is not a mount.
 * 4427972925 -- a declared URL with no path is a loud failure, not a
   silently rebased URL whose host became a path segment.
+* 4428873759 -- the declared route must be attached to the ROUTER the
+  factory RETURNS. "The file declares the path SOMEWHERE" is not the
+  same fact as "the route the inventory promises is served by the
+  router `main.py` mounts": a route declared on an unmounted sibling
+  router in the same module satisfies BOTH static halves -- the file
+  "declares" the path AND the factory is "mounted" -- while every
+  client gets a 404.
 """
 
 from __future__ import annotations
@@ -111,6 +118,12 @@ FLUTE_SERVER_KEYS = ("flute-voice", "flute-voice-mcp")
 # The flute-gateway module that DECLARES the MCP routes, and the
 # `create_mcp_router` factory that `main.py` mounts.
 FLUTE_ROUTER_MODULE = "mcp_bridge.py"
+
+# The factory that BUILDS the router `main.py` mounts. A route
+# decorator only counts if it is attached to the router object this
+# factory RETURNS -- a route declared on any other router in the
+# module is declared on nothing that is served (finding 4428873759).
+MCP_ROUTER_FACTORY = "create_mcp_router"
 
 # The HTTP method each MCP transport uses, so the static assertion can
 # check the METHOD as well as the path. Derived from the inventory's
@@ -218,6 +231,29 @@ _ROUTE_METHODS = frozenset(
 )
 
 
+def _decorator_route(dec: ast.AST) -> dict[str, str] | None:
+    """A route DECORATOR as `{path, method, receiver}`, or None.
+
+    `receiver` is the OBJECT the route is attached to, unparsed:
+    `router`, `self.router`, `APIRouter()`. It is the half that says
+    WHICH router owns the route -- the half `_declared_routes` threw
+    away, and the half finding 4428873759 needs.
+    """
+    if not isinstance(dec, ast.Call) or not isinstance(dec.func, ast.Attribute):
+        return None
+    method = dec.func.attr.lower()
+    if method not in _ROUTE_METHODS or not dec.args:
+        return None
+    first = dec.args[0]
+    if not (isinstance(first, ast.Constant) and isinstance(first.value, str)):
+        return None
+    return {
+        "path": first.value,
+        "method": method.upper(),
+        "receiver": ast.unparse(dec.func.value),
+    }
+
+
 def _declared_routes(source: str) -> dict[str, set[str]]:
     """The routes the service source DECLARES, as `{path: {METHOD, ...}}`.
 
@@ -226,22 +262,239 @@ def _declared_routes(source: str) -> dict[str, set[str]]:
     none of which creates a route. Only the decorator calls
     (`@router.post("/mcp")`) actually register a route, so the AST is
     the only source of truth that cannot be fooled by prose.
+
+    WHAT THIS DOES NOT ANSWER: whether the route is attached to the
+    router that is actually mounted. That is `_assert_route_on_returned_router`'s
+    job (finding 4428873759) -- this function is deliberately
+    scope-blind so it stays a faithful "declared ANYWHERE" census.
     """
     routes: dict[str, set[str]] = {}
     for node in ast.walk(ast.parse(source)):
         if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
         for dec in node.decorator_list:
-            if not isinstance(dec, ast.Call) or not isinstance(dec.func, ast.Attribute):
+            route = _decorator_route(dec)
+            if route is None:
                 continue
-            method = dec.func.attr.lower()
-            if method not in _ROUTE_METHODS or not dec.args:
-                continue
-            first = dec.args[0]
-            if not (isinstance(first, ast.Constant) and isinstance(first.value, str)):
-                continue
-            routes.setdefault(first.value, set()).add(method.upper())
+            routes.setdefault(route["path"], set()).add(route["method"])
     return routes
+
+
+def _route_decorators(tree: ast.Module) -> list[dict[str, Any]]:
+    """Every route decorator in the module, WITH THE SCOPE it lives in.
+
+    Each entry carries `path`, `method`, `receiver` and `scopes` -- the
+    tuple of enclosing function names (empty at module scope). The
+    scope is what decides WHICH OBJECT a receiver name binds to: a
+    name the factory ASSIGNS is the factory's own local, while a name
+    it never assigns is the module-level one.
+    """
+    found: list[dict[str, Any]] = []
+
+    def visit(node: ast.AST, scopes: tuple[str, ...]) -> None:
+        for child in ast.iter_child_nodes(node):
+            if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                for dec in child.decorator_list:
+                    route = _decorator_route(dec)
+                    if route is not None:
+                        found.append({**route, "scopes": scopes})
+                visit(child, scopes + (child.name,))
+            elif isinstance(child, ast.ClassDef):
+                visit(child, scopes)
+            else:
+                visit(child, scopes)
+
+    visit(tree, ())
+    return found
+
+
+def _factory_node(tree: ast.Module) -> ast.FunctionDef | ast.AsyncFunctionDef | None:
+    """The AST node of the router factory, or None when it is absent."""
+    for node in ast.walk(tree):
+        if (
+            isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+            and node.name == MCP_ROUTER_FACTORY
+        ):
+            return node
+    return None
+
+
+def _nested_def_nodes(node: ast.AST) -> set[int]:
+    """The ids of the nodes that belong to a NESTED def/class inside `node`.
+
+    A nested function has its OWN scope, so its assignments and returns
+    are not the factory's.
+    """
+    skip: set[int] = set()
+    for child in ast.iter_child_nodes(node):
+        if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            skip.update(id(sub) for sub in ast.walk(child))
+    return skip
+
+
+def _factory_bindings(
+    factory: ast.FunctionDef | ast.AsyncFunctionDef,
+) -> tuple[set[str], set[str]]:
+    """(assigned, returned) -- the names the factory binds, and hands back.
+
+    `assigned` are the names the factory creates LOCALLY, so a decorator
+    inside the factory that names one of them attaches to the factory's
+    OWN object. `returned` are the names the factory hands back -- the
+    router objects a caller can mount, and therefore the only objects a
+    route may be attached to if it is to be served.
+
+    A non-name return (a call, a conditional expression) cannot be
+    matched to a decorator receiver by name; it is recorded as its
+    source text so the failure message can name it instead of silently
+    matching nothing.
+    """
+    skip = _nested_def_nodes(factory)
+    assigned: set[str] = set()
+    returned: set[str] = set()
+    for node in ast.walk(factory):
+        if id(node) in skip:
+            continue
+        if isinstance(node, ast.Assign):
+            for target in node.targets:
+                if isinstance(target, ast.Name):
+                    assigned.add(target.id)
+        elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+            assigned.add(node.target.id)
+        elif isinstance(node, ast.Return) and node.value is not None:
+            value = node.value
+            returned.add(
+                value.id if isinstance(value, ast.Name) else ast.unparse(value)
+            )
+    return assigned, returned
+
+
+def _route_ownership(source: str) -> dict[str, Any]:
+    """Who owns the routes in this module -- and which object is served.
+
+    Returns a dict with:
+      * `factory`  -- the factory's AST node, or None when it is absent
+      * `assigned` -- the names the factory binds LOCALLY
+      * `returned` -- the names the factory RETURNS (the mountable routers)
+      * `decorators` -- every route decorator, each with an `owned` flag
+
+    THE OWNERSHIP RULE: a route is owned when the object its decorator
+    names is one the factory RETURNS, and both refer to the SAME
+    binding. A name the factory assigns binds to the factory's local;
+    a name it never assigns binds to the module-level object. So a
+    module-level decorator naming a factory-local is a DIFFERENT
+    object -- and is not owned.
+    """
+    tree = ast.parse(source)
+    factory = _factory_node(tree)
+    assigned: set[str] = set()
+    returned: set[str] = set()
+    if factory is not None:
+        assigned, returned = _factory_bindings(factory)
+
+    decorators = _route_decorators(tree)
+    for dec in decorators:
+        receiver = dec["receiver"]
+        in_factory = MCP_ROUTER_FACTORY in dec["scopes"]
+        dec["owned"] = (
+            receiver in returned
+            and not (receiver in assigned and not in_factory)
+        )
+    return {
+        "factory": factory,
+        "assigned": assigned,
+        "returned": returned,
+        "decorators": decorators,
+    }
+
+
+class RouterOwnershipError(AssertionError):
+    """A declared route is attached to a router the factory does NOT return.
+
+    An `AssertionError` subclass, so the mutation-kill harness's
+    `pytest.raises(AssertionError)` idiom keeps working, and a SPECIFIC
+    type, so a caller can name the failure mode instead of matching on
+    a message.
+    """
+
+
+def _scope_label(scopes: tuple[str, ...]) -> str:
+    """Where a decorator lives, in words.
+
+    Two DIFFERENT objects can share a name -- a module-level `router`
+    and the factory's own local `router` are not the same binding -- so
+    the failure message has to say which one it means.
+    """
+    if not scopes:
+        return "module scope"
+    if MCP_ROUTER_FACTORY in scopes:
+        return f"inside {MCP_ROUTER_FACTORY}()"
+    return "inside " + " -> ".join(scopes)
+
+
+def _assert_route_on_returned_router(
+    source: str,
+    path: str,
+    method: str | None = None,
+) -> None:
+    """The route must be attached to the router the factory RETURNS.
+
+    WHY this exists (finding 4428873759): `_declared_routes` answers
+    "does this file, anywhere, decorate some `.post('/mcp')` on SOME
+    object". That is not the same fact as "is the route the inventory
+    promises served by the router `main.py` mounts". A route declared on
+    an UNMOUNTED sibling router in the same module satisfies BOTH
+    static halves -- the file "declares" the path and the factory is
+    "mounted" -- while every client gets a 404.
+
+    Raises `RouterOwnershipError` (an AssertionError) naming the path
+    and the router object the route IS attached to, when the route is
+    not attached to a router the factory returns. It is an explicit
+    `raise`, not an `assert`, so `pytest -O` cannot switch the ratchet
+    off -- a ratchet that can be switched off by a flag is not a
+    ratchet.
+    """
+    ownership = _route_ownership(source)
+    if ownership["factory"] is None:
+        raise RouterOwnershipError(
+            f"route {path!r} cannot be served: the module does not define "
+            f"{MCP_ROUTER_FACTORY}(...), so there is no router to attach it to"
+        )
+
+    candidates = [
+        dec
+        for dec in ownership["decorators"]
+        if dec["path"] == path
+        and (method is None or dec["method"] == method.upper())
+    ]
+    if not candidates:
+        raise RouterOwnershipError(
+            f"route {path!r} is not declared in the module at all"
+        )
+    if any(dec["owned"] for dec in candidates):
+        return
+
+    owners = ", ".join(
+        f"{dec['receiver']!r} ({_scope_label(dec['scopes'])})" for dec in candidates
+    )
+    returned = ", ".join(
+        f"{name!r} ("
+        + (
+            "the factory's own local"
+            if name in ownership["assigned"]
+            else "module level"
+        )
+        + ")"
+        for name in sorted(ownership["returned"])
+    )
+    raise RouterOwnershipError(
+        f"route {path!r}"
+        + (f" ({method.upper()})" if method else "")
+        + f" is declared on {owners}, but {MCP_ROUTER_FACTORY}() returns "
+        + (returned or "<nothing>")
+        + " -- the route is attached to a router that is never mounted, so "
+        "the endpoint the inventory promises 404s for every client that "
+        "carries the entry"
+    )
 
 
 def _mcp_router_mounted(main_source: str) -> tuple[bool, str]:
@@ -410,7 +663,8 @@ def test_inventory_flute_endpoint_is_declared_in_service_source(key: str) -> Non
         f"{key}: expected the serving source {source_path} to exist -- the "
         f"inventory entry and the service tree have diverged"
     )
-    routes = _declared_routes(source_path.read_text(encoding="utf-8"))
+    source_text = source_path.read_text(encoding="utf-8")
+    routes = _declared_routes(source_text)
     assert expected_path in routes, (
         f"{key}: the inventory declares {declared_url!r} (path {expected_path!r}), "
         f"but {_display_path(source_path)} does not declare that route "
@@ -433,6 +687,77 @@ def test_inventory_flute_endpoint_is_declared_in_service_source(key: str) -> Non
             f"{_display_path(source_path)} declares "
             f"{sorted(routes[expected_path])} for {expected_path!r}."
         )
+
+    # And the route must hang on the ROUTER THE FACTORY RETURNS
+    # (finding 4428873759). "Declared somewhere in this module" is not
+    # "served by the router `main.py` mounts": a route on an unmounted
+    # sibling router satisfies the two assertions above and still 404s
+    # for every client that carries the entry. This check raises
+    # `RouterOwnershipError` -- naming the path and the router object --
+    # when the route belongs to some other object.
+    _assert_route_on_returned_router(source_text, expected_path, expected_method)
+
+
+_MINIMAL_ROUTER_SOURCE = (
+    "from fastapi import APIRouter\n"
+    "\n"
+    "\n"
+    "def create_mcp_router():\n"
+    "    router = APIRouter()\n"
+    "{sibling}"
+    "\n"
+    "    @{receiver}.post('/mcp')\n"
+    "    async def mcp_streamable(request):\n"
+    "        return {{}}\n"
+    "\n"
+    "    return router\n"
+)
+
+
+def _minimal_router_source(receiver: str, sibling: str = "") -> str:
+    """A minimal module shaped like the flute-gateway's router factory.
+
+    Used to exercise the OWNERSHIP CHECK's own decision on both sides.
+    The realistic version of this defect -- a REAL service file with the
+    decorator moved onto a sibling router -- is the mutation-kill
+    harness's job; this is the unit-level proof that the check can say
+    NO at all.
+    """
+    return _MINIMAL_ROUTER_SOURCE.format(
+        receiver=receiver,
+        sibling=sibling,
+    )
+
+
+def test_route_ownership_rejects_a_route_on_an_unreturned_router() -> None:
+    """The ownership check MUST be able to say NO.
+
+    A ratchet that can only assert absence cannot catch a route that is
+    declared on the wrong object (finding 4428873759). The failure must
+    name the offending path AND the router object the route is
+    actually attached to.
+    """
+    source = _minimal_router_source(receiver="stray", sibling="    stray = APIRouter()\n")
+    with pytest.raises(RouterOwnershipError) as excinfo:
+        _assert_route_on_returned_router(source, "/mcp", "POST")
+    message = str(excinfo.value)
+    assert "/mcp" in message, (
+        f"the failure does not name the offending path: {message!r}"
+    )
+    assert "stray" in message, (
+        f"the failure does not name the router object the route is attached to: {message!r}"
+    )
+
+
+def test_route_ownership_accepts_a_route_on_the_returned_router() -> None:
+    """The control for the ownership check: the RIGHT shape must PASS.
+
+    Without it, a check that failed for ANY reason (a typo in the
+    fixture, an over-eager parser) would look like a working ratchet.
+    """
+    source = _minimal_router_source(receiver="router")
+    # Raises on failure, so reaching here IS the pass.
+    _assert_route_on_returned_router(source, "/mcp", "POST")
 
 
 @pytest.mark.parametrize("key", sorted(FLUTE_SERVER_KEYS))

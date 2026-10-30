@@ -56,6 +56,17 @@ ratchet green is a mutation the harness must also kill:
   "the string create_mcp_router appears somewhere" check survives that.
 * 4427972925 -- a declared URL with no path must fail loudly. Asserted
   here by invoking the ratchet's own `_probe_url` with a bare host:port.
+
+A fifth thread landed on the same PR afterwards:
+
+* 4428873759 -- the declared route must be attached to the router the
+  factory RETURNS. The declaration check answered "does this file,
+  anywhere, decorate some `.post('/mcp')` on SOME object", so a route on
+  an UNMOUNTED sibling router satisfied both static halves -- the file
+  "declares" the path and the factory is "mounted" -- while every client
+  got a 404. Mutated here by moving the decorator onto a sibling router
+  the factory never returns: the old check survives that, the new one
+  does not.
 """
 
 from __future__ import annotations
@@ -110,7 +121,7 @@ def _load_ratchet():
     return importlib.reload(module)
 
 
-def _route_declaration(ratchet, key: str = TARGET_KEY) -> tuple[str, str]:
+def _route_declaration(ratchet, key: str = TARGET_KEY) -> tuple[str, str, str]:
     """The decorator the ratchet PINS for `key`, derived from the ratchet.
 
     WHY derive it (finding 4427921337): the harness must mutate the
@@ -121,7 +132,9 @@ def _route_declaration(ratchet, key: str = TARGET_KEY) -> tuple[str, str]:
     Deriving it from the ratchet's own inventory-derived path keeps the
     two in lockstep.
 
-    Returns `(decorator_text, path)`.
+    Returns `(decorator_text, path, receiver)` -- `receiver` is the
+    router object the decorator is attached to, which the sibling-router
+    mutation needs so it can detach the route from the served router.
     """
     server = ratchet._server_by_key(key)
     assert server is not None, f"mutation setup failed: {key} is not in the inventory"
@@ -136,13 +149,55 @@ def _route_declaration(ratchet, key: str = TARGET_KEY) -> tuple[str, str]:
     )
     method = sorted(routes[path])[0]
     pattern = re.compile(
-        r"@\w+\." + method.lower() + r"\(\s*['\"]" + re.escape(path) + r"['\"]\s*\)"
+        r"@(?P<receiver>\w+)\."
+        + method.lower()
+        + r"\(\s*['\"]"
+        + re.escape(path)
+        + r"['\"]\s*\)"
     )
     match = pattern.search(bridge.read_text(encoding="utf-8"))
     assert match, (
         f"mutation setup failed: no {method} decorator for {path} found in {bridge}"
     )
-    return match.group(0), path
+    return match.group(0), path, match.group("receiver")
+
+
+def _mutate_route_onto_sibling_router(
+    text: str, decl: str, receiver: str
+) -> tuple[str, str]:
+    """Move the route decorator onto a stray SIBLING router.
+
+    WHY this shape (finding 4428873759): it is the smallest edit that
+    reproduces the defect class the finding names -- a route DECLARED on
+    a router the factory never RETURNS. A second `APIRouter` is created
+    right beside the decorator (a realistic slip: the decorator lands on
+    the wrong object) and the decorator is re-targeted at it, while
+    `create_mcp_router` still returns the ORIGINAL router.
+
+    The mutation is a plain text edit of the REAL source -- no stub, no
+    synthetic module -- so the harness proves the ratchet rejects the
+    defect as it would appear in the service tree.
+
+    Returns `(mutated_source, sibling_name)`.
+    """
+    assert decl in text, "mutation setup failed: route decl not found"
+    index = text.index(decl)
+    line_start = text.rfind("\n", 0, index) + 1
+    indent = text[line_start:index]
+    sibling = f"{receiver}_sibling"
+    moved = decl.replace(f"{receiver}.", f"{sibling}.", 1)
+    assert moved != decl, (
+        "mutation setup failed: the decorator receiver could not be re-targeted"
+    )
+    # The ORIGINAL indent before `decl` stays in the text, so the first
+    # replacement line must not repeat it; the moved decorator needs it
+    # because it now starts its own line.
+    mutated = (
+        f"{sibling} = APIRouter()\n"
+        f"\n"
+        f"{indent}{moved}"
+    )
+    return text.replace(decl, mutated, 1), sibling
 
 
 def _mutated_service_tree(tmp_path: Path, *, drop_route: bool, drop_mount: bool) -> Path:
@@ -153,7 +208,7 @@ def _mutated_service_tree(tmp_path: Path, *, drop_route: bool, drop_mount: bool)
     shutil.copytree(source_dir, dest)
 
     if drop_route:
-        decl, path = _route_declaration(ratchet)
+        decl, path, _receiver = _route_declaration(ratchet)
         bridge = dest / ratchet.FLUTE_ROUTER_MODULE
         text = bridge.read_text(encoding="utf-8")
         assert decl in text, "mutation setup failed: route decl not found"
@@ -314,6 +369,77 @@ def test_mutation_inventory_declares_an_unserved_path_is_killed(
         "the failure does not name the unserved path the inventory declared: "
         f"{excinfo.value!r}"
     )
+
+
+def test_mutation_route_moved_onto_a_sibling_router_is_killed(tmp_path: Path) -> None:
+    """A route on a router the factory does NOT return MUST make the ratchet fail.
+
+    Finding 4428873759: the ratchet derived the PATH the inventory
+    promises and pinpointed the ROUTER that gets mounted, but its
+    declaration check answered "does this file, anywhere, decorate some
+    `.post('/mcp')` on SOME object". A route declared on an UNMOUNTED
+    sibling router in the same module therefore satisfied BOTH static
+    halves -- the file "declares" the path and the factory is
+    "mounted" -- while every client got a 404. CI green, clients 404.
+
+    THE MUTATION is a realistic edit of the REAL file: a second
+    `APIRouter` is created beside the decorator and the decorator is
+    re-targeted at it, while `create_mcp_router` still returns the
+    original router. Nothing is stubbed and no module is synthesised --
+    this is the shape the defect would take in the service tree.
+
+    THE THREE STATES are asserted in order, on ONE copy: GREEN on the
+    pristine bytes, RED with the mutation applied, GREEN again after the
+    original bytes are restored. The restore happens in a `finally`, so
+    a failing assertion cannot leave the tree mutated -- and it is
+    byte-exact, verified by re-reading the file.
+    """
+    ratchet = _load_ratchet()
+    mutated_tree = _mutated_service_tree(tmp_path, drop_route=False, drop_mount=False)
+    bridge = mutated_tree / ratchet.FLUTE_ROUTER_MODULE
+    pristine = bridge.read_bytes()
+    decl, path, receiver = _route_declaration(ratchet)
+    mutated_source, sibling = _mutate_route_onto_sibling_router(
+        pristine.decode("utf-8"), decl, receiver
+    )
+    assert mutated_source != pristine.decode("utf-8"), (
+        "mutation setup failed: the route decorator was not moved onto a "
+        "sibling router"
+    )
+    _point_ratchet_at(ratchet, mutated_tree)
+
+    try:
+        # GREEN BEFORE: the pristine copy passes the ratchet.
+        ratchet.test_inventory_flute_endpoint_is_declared_in_service_source(TARGET_KEY)
+
+        # RED AFTER: the route now hangs on a router nothing mounts.
+        bridge.write_text(mutated_source, encoding="utf-8")
+        with pytest.raises(ratchet.RouterOwnershipError) as excinfo:
+            ratchet.test_inventory_flute_endpoint_is_declared_in_service_source(
+                TARGET_KEY
+            )
+        message = str(excinfo.value)
+        assert path in message, (
+            "the failure does not name the route the inventory declares: "
+            f"{message!r}"
+        )
+        assert sibling in message, (
+            "the failure does not name the router object the route is "
+            f"actually attached to: {message!r}"
+        )
+        assert "is declared on" in message, (
+            "the failure is not the route/decorator mismatch message: "
+            f"{message!r}"
+        )
+    finally:
+        # Restore the ORIGINAL bytes, byte-exact, whatever happened above.
+        bridge.write_bytes(pristine)
+        assert bridge.read_bytes() == pristine, (
+            "mutation setup failed: the tree was not restored byte-exactly"
+        )
+
+    # GREEN AFTER RESTORE: the ratchet passes again on the original bytes.
+    ratchet.test_inventory_flute_endpoint_is_declared_in_service_source(TARGET_KEY)
 
 
 def test_mutation_both_route_and_mount_removed_is_killed(tmp_path: Path) -> None:
