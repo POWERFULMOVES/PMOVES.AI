@@ -92,7 +92,9 @@ def _expired_jwt(secret: str, role: str, exp: int) -> str:
 
 def test_fill_refreshes_expired_service_role_jwt():
     dead = _expired_jwt(_SECRET, "service_role", exp=int(time.time()) - 3600)
-    out = fill_self_generated({"JWT_SECRET": _SECRET, "SERVICE_ROLE_KEY": dead})
+    # #3433: the refresh needs the local compose runtime STATED (expired keys are
+    # gated like live ones: minted by this node AND this node's stack verifies).
+    out = fill_self_generated({"JWT_SECRET": _SECRET, "SERVICE_ROLE_KEY": dead, "SUPABASE_RUNTIME": "compose"})
     fresh = out["SERVICE_ROLE_KEY"]
     assert fresh != dead
     claims = _decode_claims(fresh)
@@ -102,7 +104,8 @@ def test_fill_refreshes_expired_service_role_jwt():
 
 def test_fill_refreshes_all_aliases_of_same_role_consistently():
     dead = _expired_jwt(_SECRET, "anon", exp=int(time.time()) - 60)
-    out = fill_self_generated({"JWT_SECRET": _SECRET, "SUPABASE_ANON_KEY": dead})
+    out = fill_self_generated({"JWT_SECRET": _SECRET, "SUPABASE_ANON_KEY": dead, "SUPABASE_RUNTIME": "compose"})
+    assert out["SUPABASE_ANON_KEY"] != dead
     assert out["ANON_KEY"] == out["NEXT_PUBLIC_SUPABASE_ANON_KEY"] == out["SUPABASE_ANON_KEY"]
 
 
@@ -134,8 +137,9 @@ def test_refreshed_token_signature_verifies_with_same_secret():
     import hmac as hmac_mod
 
     dead = _expired_jwt(_SECRET, "service_role", exp=int(time.time()) - 1)
-    out = fill_self_generated({"JWT_SECRET": _SECRET, "SERVICE_ROLE_KEY": dead})
+    out = fill_self_generated({"JWT_SECRET": _SECRET, "SERVICE_ROLE_KEY": dead, "SUPABASE_RUNTIME": "compose"})
     token = out["SERVICE_ROLE_KEY"]
+    assert token != dead  # otherwise the signature check below is vacuous
     header, payload, sig = token.split(".")
     expected = base64.urlsafe_b64encode(
         hmac_mod.new(_SECRET.encode(), f"{header}.{payload}".encode(), hashlib.sha256).digest()
@@ -283,10 +287,102 @@ def test_no_live_remint_unless_the_local_compose_stack_is_the_verifier(ctx, reas
     assert {e["reason"] for e in events if e["role"] == "service_role"} == {reason}
 
 
+_SERVICES = frozenset({"supabase-kong", "supabase-postgrest"})
+
+
 def test_local_urls_count_as_local():
     for url in ("http://supabase-kong:8000", "http://localhost:3001", "http://127.0.0.1:8000/rest/v1",
                 "http://host.docker.internal:8000"):
-        assert local_runtime_is_verifier({"SUPABASE_RUNTIME": "compose", "SUPABASE_URL": url}) == (True, "local"), url
+        assert local_runtime_is_verifier({"SUPABASE_RUNTIME": "compose", "SUPABASE_URL": url},
+                                         _SERVICES) == (True, "local"), url
+
+
+@pytest.mark.parametrize(
+    "url",
+    ["http://pmoves-z890:8000",      # tailnet MagicDNS short name (a PEER's Supabase)
+     "http://nas:8000",              # LAN short hostname
+     "http://supabase-kong:8000"],   # a real compose name, but no service set was loaded
+    ids=["magicdns-short", "lan-short", "compose-name-without-service-set"],
+)
+def test_dotless_hosts_are_not_local_unless_defined_in_compose(url):
+    ctx = {"SUPABASE_RUNTIME": "compose", "SUPABASE_URL": url}
+    services = None if "supabase-kong" in url else _SERVICES
+    assert local_runtime_is_verifier(ctx, services) == (False, "remote_url")
+
+
+def test_peer_short_name_never_triggers_a_remint():
+    """Measured by the #3433 final review: runtime=compose +
+    SUPABASE_URL=http://pmoves-z890:8000 re-minted our-iss key. It must not."""
+    ours = derive_supabase_jwt(_OTHER, "service_role", exp=_LIVE)
+    secrets = _base(SERVICE_ROLE_KEY=ours, SUPABASE_URL="http://pmoves-z890:8000")
+    events = []
+    out = fill_self_generated(secrets, events=events, local_services=_SERVICES)
+    assert out["SERVICE_ROLE_KEY"] == ours
+    assert ("SERVICE_ROLE_KEY", "left_unchanged", "remote_url") in {(e["label"], e["action"], e["reason"]) for e in events}
+
+
+def test_real_compose_service_names_are_local():
+    from pmoves.tools.secrets_self_generated import compose_service_names
+    from pmoves.tools.secrets_sync import load_compose_docs
+
+    docs, skipped = load_compose_docs()
+    assert skipped == []
+    services = compose_service_names(docs)
+    assert {"supabase-kong", "supabase-postgrest", "cipher-api"} <= services
+    assert "pmoves-z890" not in services
+    assert local_runtime_is_verifier({"SUPABASE_RUNTIME": "compose",
+                                      "SUPABASE_REST_URL": "http://supabase-kong:8000/rest/v1"},
+                                     services) == (True, "local")
+
+
+def test_another_pmoves_nodes_key_is_not_ours_even_with_our_iss():
+    """iss supabase-local is stamped by EVERY PMOVES funnel. A key signed by a
+    peer's secret verifies under neither of this node's secrets: leave it."""
+    peer = derive_supabase_jwt("peer-node-secret-abcdefghijklmnopqrstuvwxyz", "service_role", exp=_LIVE)
+    events = []
+    out = fill_self_generated(_base(SERVICE_ROLE_KEY=peer), events=events)
+    assert out["SERVICE_ROLE_KEY"] == peer
+    assert ("SERVICE_ROLE_KEY", "left_unchanged", "not_minted_here") in {(e["label"], e["action"], e["reason"]) for e in events}
+
+
+# ── set-but-EMPTY is unknown, and the context's source is announced ────────
+
+
+@pytest.mark.parametrize("var", ["SUPABASE_URL", "SUPABASE_REST_URL", "SUPABASE_RUNTIME"])
+def test_set_but_empty_shell_export_means_no_live_remint(var, capsys):
+    """Measured by the final review: cloud SUPABASE_URL in the map + `export
+    SUPABASE_URL=` + runtime=compose RE-MINTED. Empty must be UNKNOWN."""
+    from pmoves.tools.secrets_sync import announce_jwt_events, runtime_context
+
+    ours = derive_supabase_jwt(_OTHER, "service_role", exp=_LIVE)
+    # The secret map holds the REAL value under the very name the empty export
+    # shadows (a cloud URL, or runtime=compose); the export blanks it.
+    shadowed = {var: "compose" if var == "SUPABASE_RUNTIME" else "https://abcd.supabase.co"}
+    secret_map = {**_base(SERVICE_ROLE_KEY=ours), **shadowed}
+    environ = {var: ""} if var == "SUPABASE_RUNTIME" else {var: "", "SUPABASE_RUNTIME": "compose"}
+    context, sources = runtime_context(secret_map, environ)
+    events = []
+    out = fill_self_generated(secret_map, context=context, events=events, local_services=_SERVICES)
+    assert out["SERVICE_ROLE_KEY"] == ours
+    assert {e["reason"] for e in events if e["label"] == "SERVICE_ROLE_KEY"} == {f"empty_{var}"}
+    announce_jwt_events(events, docs=[], context=context, sources=sources, local_services=_SERVICES)
+    printed = capsys.readouterr().out
+    assert f"{var} is set but EMPTY (from shell env)" in printed
+    assert "abcd.supabase.co" not in printed  # URLs are classified, never printed
+
+
+def test_runtime_from_shell_env_is_announced_as_such(capsys):
+    from pmoves.tools.secrets_sync import announce_jwt_events, runtime_context
+
+    ours = derive_supabase_jwt(_OTHER, "service_role", exp=_LIVE)
+    secret_map = {k: v for k, v in _base(SERVICE_ROLE_KEY=ours).items() if k != "SUPABASE_RUNTIME"}
+    context, sources = runtime_context(secret_map, {"SUPABASE_RUNTIME": "compose"})
+    events = []
+    fill_self_generated(secret_map, context=context, events=events, local_services=_SERVICES)
+    announce_jwt_events(events, docs=[], context=context, sources=sources, local_services=_SERVICES)
+    printed = capsys.readouterr().out
+    assert "SUPABASE_RUNTIME=compose (from shell env)" in printed
+    assert "SUPABASE_URL=unset" in printed
 
 
 def test_context_overrides_the_secret_map():
@@ -296,11 +392,46 @@ def test_context_overrides_the_secret_map():
     assert out["SERVICE_ROLE_KEY"] == ours
 
 
-def test_expired_foreign_key_still_refreshed_as_in_3410():
+# ── expired keys are gated too (#3433 final review P2) ─────────────────────
+
+
+@pytest.mark.parametrize(
+    "secret, ctx, reason",
+    [
+        ("cloud", {"SUPABASE_RUNTIME": "compose"}, "expired_not_minted_here"),       # cloud key, foreign secret
+        (_VERIFIER, {"SUPABASE_RUNTIME": "cli"}, "expired_runtime_cli"),            # CLI runtime verifies it
+        (_VERIFIER, {"SUPABASE_RUNTIME": "compose", "SUPABASE_URL": "https://abcd.supabase.co"},
+         "expired_remote_url"),
+    ],
+    ids=["cloud-key", "cli-runtime", "remote-url"],
+)
+def test_expired_key_not_ours_or_not_local_is_left_dead_and_warned(secret, ctx, reason, capsys):
+    from pmoves.tools.secrets_sync import _refusal_text
+
     dead = _jwt({"alg": "HS256", "typ": "JWT"}, {"iss": "supabase-demo", "role": "service_role",
-                                                 "exp": int(time.time()) - 60}, secret="cli")
+                                                 "exp": int(time.time()) - 60}, secret=secret)
     events = []
-    out = fill_self_generated({"SUPABASE_JWT_SECRET": _VERIFIER, "SERVICE_ROLE_KEY": dead}, events=events)
+    out = fill_self_generated({"SUPABASE_JWT_SECRET": _VERIFIER, "SERVICE_ROLE_KEY": dead, **ctx},
+                              events=events, local_services=_SERVICES)
+    assert out["SERVICE_ROLE_KEY"] == dead  # visibly dead beats fresh-looking-but-refused
+    ev = [e for e in events if e["label"] == "SERVICE_ROLE_KEY"]
+    assert [(e["action"], e["reason"]) for e in ev] == [("left_unchanged", reason)]
+    text = _refusal_text(ev[0], {})
+    assert "expired" in text and dead not in text
+    if reason == "expired_not_minted_here":
+        assert "obtain a new key from its issuer" in text
+
+
+def test_expired_key_minted_here_on_local_runtime_is_refreshed_like_3410():
+    """The knuckles 2026-10-21 shape: a CLI-minted (iss supabase-demo) 1-year key
+    signed with THIS node's secret. Ours by signature, so it refreshes."""
+    dead = _jwt({"alg": "HS256", "typ": "JWT"}, {"iss": "supabase-demo", "role": "service_role",
+                                                 "exp": int(time.time()) - 60}, secret=_VERIFIER)
+    events = []
+    out = fill_self_generated({"SUPABASE_JWT_SECRET": _VERIFIER, "SERVICE_ROLE_KEY": dead,
+                               "SUPABASE_RUNTIME": "compose",
+                               "SUPABASE_REST_URL": "http://supabase-kong:8000/rest/v1"},
+                              events=events, local_services=_SERVICES)
     assert out["SERVICE_ROLE_KEY"] != dead and _signed_by(out["SERVICE_ROLE_KEY"], _VERIFIER)
     assert ("SERVICE_ROLE_KEY", "reminted", "expired") in {(e["label"], e["action"], e["reason"]) for e in events}
 

@@ -18,6 +18,7 @@ from pmoves.tools.secrets_self_generated import (
     SELF_GENERATED,
     _SUPABASE_JWT_KEYS,
     compose_consumers,
+    compose_service_names,
     fill_self_generated,
 )
 
@@ -423,12 +424,76 @@ def report(outputs: Mapping[str, Mapping[str, str]]) -> str:
 
 
 class _ComposeLoader(yaml.SafeLoader):
-    """SafeLoader that tolerates compose's own tags (``!reset``, ``!override``).
+    """SafeLoader that understands compose's own tags (``!reset``, ``!override``).
     Without it the overlays that use them fail to parse and their services drop
     out of the consumer list."""
 
 
-_ComposeLoader.add_multi_constructor("!", lambda loader, suffix, node: None)
+def _compose_tag(loader: yaml.SafeLoader, suffix: str, node: yaml.Node):
+    # Build the tagged block as plain data rather than dropping it: an
+    # `!override` env list carries the replacement values, and a label named
+    # only there must still show up as a consumer. (Over-inclusion on `!reset`
+    # is harmless for a "who might need a recreate" list.)
+    if isinstance(node, yaml.MappingNode):
+        return loader.construct_mapping(node, deep=True)
+    if isinstance(node, yaml.SequenceNode):
+        return loader.construct_sequence(node, deep=True)
+    return loader.construct_scalar(node)
+
+
+_ComposeLoader.add_multi_constructor("!", _compose_tag)
+
+
+def load_compose_docs(paths: Sequence[Path] | None = None, out=None) -> tuple[list, list[str]]:
+    """``(docs, skipped_file_names)`` for every pmoves/docker-compose*.yml."""
+    out = out or sys.stdout
+    if paths is None:
+        paths = sorted((REPO_ROOT / "pmoves").glob("docker-compose*.yml"))
+    docs, skipped = [], []
+    for path in paths:
+        try:
+            docs.append(yaml.load(path.read_text(encoding="utf-8"), Loader=_ComposeLoader) or {})
+        except (OSError, yaml.YAMLError) as exc:
+            skipped.append(path.name)
+            print(f"[secrets-sync] WARN could not read {path.name} for the compose service list ({type(exc).__name__})", file=out)
+    return docs, skipped
+
+
+_CONTEXT_KEYS = ("SUPABASE_RUNTIME", "SUPABASE_URL", "SUPABASE_REST_URL")
+
+
+def runtime_context(
+    secrets: Mapping[str, str], environ: Mapping[str, str]
+) -> tuple[Dict[str, str], Dict[str, str]]:
+    """``(context, sources)``: the shell env wins over the secret map, exactly as
+    it wins over compose's --env-file, INCLUDING a set-but-empty export (which
+    fill_self_generated then treats as unknown). *sources* names where each
+    context key came from, so a stray export is visible in the announcement."""
+    context = {**secrets, **environ}
+    sources = {}
+    for key in _CONTEXT_KEYS:
+        sources[key] = "shell env" if key in environ else "secret map" if key in secrets else "unset"
+    return context, sources
+
+
+def _describe_context(context: Mapping[str, str], sources: Mapping[str, str], local_services) -> str:
+    from pmoves.tools.secrets_self_generated import _host_is_local
+
+    parts = []
+    for key in _CONTEXT_KEYS:
+        src = sources.get(key, "unset")
+        if src == "unset":
+            parts.append(f"{key}=unset")
+            continue
+        val = (context.get(key) or "").strip()
+        if not val:
+            shown = "EMPTY"
+        elif key == "SUPABASE_RUNTIME":
+            shown = val
+        else:  # never print a URL: hostnames can be topology
+            shown = "local" if _host_is_local(val, local_services) else "remote"
+        parts.append(f"{key}={shown} (from {src})")
+    return "; ".join(parts)
 
 
 # Known Roads that recreate the consumers a Supabase key change reaches. Printed
@@ -441,10 +506,34 @@ _RECREATE_ROADS = (
 )
 
 
+def _refusal_text(e: Mapping[str, str], sources: Mapping[str, str]) -> str:
+    reason = e["reason"]
+    expired = reason.startswith("expired_")
+    base = reason[len("expired_"):] if expired else reason
+    if base == "not_minted_here":
+        why = ("was not minted by this node (no local JWT secret verifies it); "
+               + ("it is EXPIRED: obtain a new key from its issuer (cloud project / Supabase CLI / peer node)"
+                  if expired else "it may be correct for its own verifier"))
+    elif base.startswith("empty_"):
+        var = base[len("empty_"):]
+        why = (f"{var} is set but EMPTY (from {sources.get(var, 'unknown')}); the runtime cannot "
+               "be judged. Unset it or give it its real value")
+    elif base == "runtime_unknown":
+        why = ("SUPABASE_RUNTIME is not stated; on a compose-runtime node re-run with "
+               "SUPABASE_RUNTIME=compose exported")
+    else:
+        why = f"this node's compose Supabase is not its verifier ({base})"
+    state = "expired, " if expired else ""
+    return f"[secrets-sync] WARN {e['label']} {state}left unchanged: {why}"
+
+
 def announce_jwt_events(
     events: Sequence[Mapping[str, str]],
-    compose_paths: Sequence[Path] | None = None,
+    docs: Sequence[Mapping] | None = None,
     out=None,
+    context: Mapping[str, str] | None = None,
+    sources: Mapping[str, str] | None = None,
+    local_services=None,
 ) -> List[str]:
     """Print what the self-generated guard changed or refused -- NAMES only.
 
@@ -455,29 +544,22 @@ def announce_jwt_events(
     Returns the consumer service names (for tests).
     """
     out = out or sys.stdout
+    if not events:
+        return []
+    if context is not None and sources is not None:
+        print("[secrets-sync] runtime context: " + _describe_context(context, sources, local_services), file=out)
     changed = [e for e in events if e.get("action") in ("reminted", "filled")]
-    refused = [e for e in events if e.get("action") == "left_unchanged"]
-    for e in refused:
-        print(
-            f"[secrets-sync] WARN {e['label']} does not verify under the local JWT secret "
-            f"and was left unchanged ({e['reason']}: not minted here, or this node's "
-            "compose Supabase is not its verifier)",
-            file=out,
-        )
+    for e in events:
+        if e.get("action") == "left_unchanged":
+            print(_refusal_text(e, sources or {}), file=out)
     reminted = [e for e in changed if e["action"] == "reminted"]
     if not reminted:
         return []
     for e in reminted:
         print(f"[secrets-sync] RE-MINTED {e['label']} ({e['role']}): {e['reason']}", file=out)
     labels = sorted({e["label"] for e in changed})
-    if compose_paths is None:
-        compose_paths = sorted((REPO_ROOT / "pmoves").glob("docker-compose*.yml"))
-    docs = []
-    for path in compose_paths:
-        try:
-            docs.append(yaml.load(path.read_text(encoding="utf-8"), Loader=_ComposeLoader) or {})
-        except (OSError, yaml.YAMLError) as exc:
-            print(f"[secrets-sync] WARN could not read {path.name} for the consumer list ({type(exc).__name__})", file=out)
+    if docs is None:
+        docs, _ = load_compose_docs(out=out)
     consumers = compose_consumers(labels, docs)
     print(
         "[secrets-sync] RECREATE every consumer of the re-minted keys, or the stack runs "
@@ -539,14 +621,20 @@ def main(argv: Sequence[str] | None = None) -> int:
     # Funnel-side guard: fill self-generated secrets (Supabase anon/service_role
     # JWTs, minted under the verifiers' ${SUPABASE_JWT_SECRET:-${JWT_SECRET}})
     # so they project without operator input and are never emitted as
-    # placeholders. It overwrites an existing value ONLY when it is expired, or
-    # provably ours and signed with the other secret on a local compose runtime
-    # (see fill_self_generated); every change is announced below by NAME.
+    # placeholders. It overwrites an existing value ONLY when this node minted
+    # it (signature verifies under a local JWT secret), this node's compose
+    # Supabase is its verifier, and it is expired or signed with the other
+    # local secret (see fill_self_generated). Every change and every refusal is
+    # announced below by NAME, with where the runtime context came from.
+    compose_docs, _skipped = load_compose_docs()
+    local_services = compose_service_names(compose_docs) if compose_docs else None
+    context, sources = runtime_context(secrets, os.environ)
     jwt_events: List[Dict[str, str]] = []
     secrets = fill_self_generated(
-        secrets, context={**secrets, **os.environ}, events=jwt_events
+        secrets, context=context, events=jwt_events, local_services=local_services
     )
-    announce_jwt_events(jwt_events)
+    announce_jwt_events(jwt_events, docs=compose_docs, context=context, sources=sources,
+                        local_services=local_services)
 
     # Filter entries if --keys is specified (selective rotation)
     if args.keys:
