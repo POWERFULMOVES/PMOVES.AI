@@ -80,6 +80,20 @@ They are recorded here because each one is a RULE, not a patch:
   router in the same module satisfies BOTH static halves -- the file
   "declares" the path AND the factory is "mounted" -- while every
   client gets a 404.
+* 4429144504 -- that ownership rule must be decided by OBJECT IDENTITY,
+  never by comparing SOURCE TEXT. A text comparison fails in BOTH
+  directions: `return APIRouter()` puts the literal text
+  "APIRouter()" into the returned set, and a stray
+  `@APIRouter().post("/mcp")` unparses to the SAME text -- so the
+  stray instance looks OWNED (a false negative, and the blind spot
+  stays open). And `return router, admin` -- a legitimate two-value
+  return -- was recorded as ONE name spelled "router, admin", so the
+  router it returns became invisible and a VALID module failed the
+  ratchet (a false positive; the ratchet cried wolf). Ownership is
+  now resolved from the AST: a plain `ast.Name` in a `return` names a
+  binding, a tuple is DESTRUCTURED into its elements, and a `return`
+  of a CALL names NO binding at all -- and the two halves are then
+  compared by the IDENTITY of the object they bind to.
 """
 
 from __future__ import annotations
@@ -231,13 +245,19 @@ _ROUTE_METHODS = frozenset(
 )
 
 
-def _decorator_route(dec: ast.AST) -> dict[str, str] | None:
-    """A route DECORATOR as `{path, method, receiver}`, or None.
+def _decorator_route(dec: ast.AST) -> dict[str, Any] | None:
+    """A route DECORATOR as `{path, method, receiver, receiver_node}`, or None.
 
     `receiver` is the OBJECT the route is attached to, unparsed:
     `router`, `self.router`, `APIRouter()`. It is the half that says
     WHICH router owns the route -- the half `_declared_routes` threw
     away, and the half finding 4428873759 needs.
+
+    `receiver_node` is the SAME receiver as an AST node. The TEXT is
+    only ever used to NAME the offending object in a failure message:
+    two DIFFERENT objects can share one text (`return APIRouter()` and
+    `@APIRouter().post("/mcp")` are two instances), so the text must
+    never be compared against anything (finding 4429144504).
     """
     if not isinstance(dec, ast.Call) or not isinstance(dec.func, ast.Attribute):
         return None
@@ -251,6 +271,7 @@ def _decorator_route(dec: ast.AST) -> dict[str, str] | None:
         "path": first.value,
         "method": method.upper(),
         "receiver": ast.unparse(dec.func.value),
+        "receiver_node": dec.func.value,
     }
 
 
@@ -280,31 +301,196 @@ def _declared_routes(source: str) -> dict[str, set[str]]:
     return routes
 
 
-def _route_decorators(tree: ast.Module) -> list[dict[str, Any]]:
+class _Scope:
+    """A lexical scope: the module body, a function body, a class body.
+
+    A scope records the names it BINDS and the VALUES bound to them.
+    Resolving a name walks the scope chain, so a name a function
+    assigns binds to the function's OWN object while a name it never
+    assigns binds to the module-level object -- which is exactly how
+    two routers that share a NAME are told apart.
+
+    The identity of an object is `(scope path, name)`: the scope that
+    binds it, and the name itself. Two references that resolve to the
+    same identity are the SAME object; two that resolve to different
+    identities are DIFFERENT objects, even when their source text is
+    identical (finding 4429144504).
+    """
+
+    __slots__ = ("name", "parent", "bindings", "children")
+
+    def __init__(self, name: str | None, parent: "_Scope | None") -> None:
+        self.name = name
+        self.parent = parent
+        self.bindings: dict[str, list[ast.expr | None]] = {}
+        self.children: list[_Scope] = []
+
+    @property
+    def path(self) -> tuple[str, ...]:
+        """The tuple of enclosing scope names (empty at module scope)."""
+        names: list[str] = []
+        scope: _Scope | None = self
+        while scope is not None and scope.name is not None:
+            names.append(scope.name)
+            scope = scope.parent
+        return tuple(reversed(names))
+
+    def bind(self, name: str, value: ast.expr | None) -> None:
+        """Record that THIS scope binds `name` to `value`."""
+        self.bindings.setdefault(name, []).append(value)
+
+    def resolve(
+        self,
+        name: str,
+        _seen: frozenset[tuple[tuple[str, ...], str]] = frozenset(),
+    ) -> tuple[tuple[str, ...], str]:
+        """The identity of the OBJECT `name` refers to in this scope.
+
+        A name bound in this scope resolves to this scope's binding --
+        unless it is bound to another NAME, in which case it is an
+        ALIAS and resolves to that name's object. A name no enclosing
+        scope binds is a global the module does not define here; it
+        still gets an identity of its own.
+        """
+        scope: _Scope | None = self
+        while scope is not None:
+            values = scope.bindings.get(name)
+            if values is not None:
+                if (
+                    len(values) == 1
+                    and isinstance(values[0], ast.Name)
+                    and values[0].id != name
+                ):
+                    key = (scope.path, name)
+                    if key not in _seen:
+                        return scope.resolve(values[0].id, _seen | {key})
+                return (scope.path, name)
+            scope = scope.parent
+        return ((), name)
+
+
+# The nodes that open a NEW scope: their bodies do not bind names in
+# the enclosing scope.
+_NEW_SCOPE_NODES = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Lambda)
+
+
+def _target_names(target: ast.expr) -> list[str]:
+    """The names an assignment TARGET binds."""
+    if isinstance(target, ast.Name):
+        return [target.id]
+    if isinstance(target, (ast.Tuple, ast.List)):
+        names: list[str] = []
+        for element in target.elts:
+            names.extend(_target_names(element))
+        return names
+    if isinstance(target, ast.Starred):
+        return _target_names(target.value)
+    return []
+
+
+def _collect_bindings(node: ast.AST, scope: _Scope) -> None:
+    """The names THIS scope binds, and the values bound to them."""
+    for child in ast.iter_child_nodes(node):
+        if isinstance(child, _NEW_SCOPE_NODES):
+            continue
+        if isinstance(child, ast.Assign):
+            for target in child.targets:
+                for name in _target_names(target):
+                    scope.bind(name, child.value)
+        elif isinstance(child, ast.AnnAssign):
+            for name in _target_names(child.target):
+                scope.bind(name, child.value)
+        elif isinstance(child, ast.AugAssign):
+            for name in _target_names(child.target):
+                scope.bind(name, None)
+        elif isinstance(child, (ast.For, ast.AsyncFor)):
+            for name in _target_names(child.target):
+                scope.bind(name, None)
+        elif isinstance(child, (ast.With, ast.AsyncWith)):
+            for item in child.items:
+                if item.optional_vars is not None:
+                    for name in _target_names(item.optional_vars):
+                        scope.bind(name, None)
+        elif isinstance(child, ast.NamedExpr):
+            for name in _target_names(child.target):
+                scope.bind(name, child.value)
+        elif isinstance(child, ast.ExceptHandler) and child.name:
+            scope.bind(child.name, None)
+        _collect_bindings(child, scope)
+
+
+def _scope_tree(tree: ast.Module) -> tuple[_Scope, dict[int, _Scope]]:
+    """The module's scope tree, and each function's OWN scope.
+
+    The second return value maps a definition node's id to the scope
+    its body lives in, so the factory's scope can be found from its
+    AST node.
+    """
+    module = _Scope(name=None, parent=None)
+    by_node: dict[int, _Scope] = {}
+    _collect_bindings(tree, module)
+
+    def visit(node: ast.AST, scope: _Scope) -> None:
+        for child in ast.iter_child_nodes(node):
+            if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                child_scope = _Scope(name=child.name, parent=scope)
+                _collect_bindings(child, child_scope)
+                scope.children.append(child_scope)
+                by_node[id(child)] = child_scope
+                visit(child, child_scope)
+            elif isinstance(child, ast.ClassDef):
+                child_scope = _Scope(name=child.name, parent=scope)
+                _collect_bindings(child, child_scope)
+                scope.children.append(child_scope)
+                by_node[id(child)] = child_scope
+                visit(child, child_scope)
+            elif isinstance(child, ast.Lambda):
+                child_scope = _Scope(name="<lambda>", parent=scope)
+                _collect_bindings(child, child_scope)
+                scope.children.append(child_scope)
+                visit(child, child_scope)
+            else:
+                visit(child, scope)
+
+    visit(tree, module)
+    return module, by_node
+
+
+def _route_decorators(
+    tree: ast.Module,
+    module_scope: _Scope,
+    scopes_by_node: dict[int, _Scope],
+) -> list[dict[str, Any]]:
     """Every route decorator in the module, WITH THE SCOPE it lives in.
 
-    Each entry carries `path`, `method`, `receiver` and `scopes` -- the
-    tuple of enclosing function names (empty at module scope). The
-    scope is what decides WHICH OBJECT a receiver name binds to: a
-    name the factory ASSIGNS is the factory's own local, while a name
-    it never assigns is the module-level one.
+    Each entry carries `path`, `method`, `receiver` (the source TEXT of
+    the object the route is attached to), `receiver_node` (the AST node
+    itself) and `scopes` (the tuple of enclosing scope names; empty at
+    module scope).
+
+    The scope is what decides WHICH OBJECT a receiver name binds to:
+    a name the factory ASSIGNS is the factory's own local, while a
+    name it never assigns is the module-level one. The scope of a
+    decorator is the scope the DECORATOR EXPRESSION is evaluated in --
+    the scope ENCLOSING the decorated function, because that is where
+    the receiver name is looked up.
     """
     found: list[dict[str, Any]] = []
 
-    def visit(node: ast.AST, scopes: tuple[str, ...]) -> None:
+    def visit(node: ast.AST, scope: _Scope) -> None:
         for child in ast.iter_child_nodes(node):
             if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 for dec in child.decorator_list:
                     route = _decorator_route(dec)
                     if route is not None:
-                        found.append({**route, "scopes": scopes})
-                visit(child, scopes + (child.name,))
+                        found.append({**route, "scope": scope, "scopes": scope.path})
+                visit(child, scopes_by_node.get(id(child), scope))
             elif isinstance(child, ast.ClassDef):
-                visit(child, scopes)
+                visit(child, scopes_by_node.get(id(child), scope))
             else:
-                visit(child, scopes)
+                visit(child, scope)
 
-    visit(tree, ())
+    visit(tree, module_scope)
     return found
 
 
@@ -332,77 +518,117 @@ def _nested_def_nodes(node: ast.AST) -> set[int]:
     return skip
 
 
-def _factory_bindings(
+def _factory_returns(
     factory: ast.FunctionDef | ast.AsyncFunctionDef,
 ) -> tuple[set[str], set[str]]:
-    """(assigned, returned) -- the names the factory binds, and hands back.
+    """(names, expressions) -- what the factory hands back.
 
-    `assigned` are the names the factory creates LOCALLY, so a decorator
-    inside the factory that names one of them attaches to the factory's
-    OWN object. `returned` are the names the factory hands back -- the
-    router objects a caller can mount, and therefore the only objects a
-    route may be attached to if it is to be served.
+    `names` are the NAMED objects the factory returns. Only a plain
+    `ast.Name` contributes one, and a `return router, admin`
+    contributes `router` and `admin` SEPARATELY -- a tuple is TWO
+    objects, not one name spelled "router, admin" (finding
+    4429144504).
 
-    A non-name return (a call, a conditional expression) cannot be
-    matched to a decorator receiver by name; it is recorded as its
-    source text so the failure message can name it instead of silently
-    matching nothing.
+    `expressions` are the returns that are NOT names: a constructed
+    router (`return APIRouter()`), a conditional, anything else. Their
+    source TEXT is kept ONLY to NAME them in a failure message -- it is
+    never compared against a decorator's receiver, because the same
+    text can describe two DIFFERENT objects: `return APIRouter()` and
+    `@APIRouter().post("/mcp")` are two INSTANCES, and the text-based
+    comparison the previous round used could not tell them apart.
     """
+    names: set[str] = set()
+    expressions: set[str] = set()
     skip = _nested_def_nodes(factory)
-    assigned: set[str] = set()
-    returned: set[str] = set()
     for node in ast.walk(factory):
         if id(node) in skip:
             continue
-        if isinstance(node, ast.Assign):
-            for target in node.targets:
-                if isinstance(target, ast.Name):
-                    assigned.add(target.id)
-        elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
-            assigned.add(node.target.id)
-        elif isinstance(node, ast.Return) and node.value is not None:
-            value = node.value
-            returned.add(
-                value.id if isinstance(value, ast.Name) else ast.unparse(value)
-            )
-    return assigned, returned
+        if isinstance(node, ast.Return) and node.value is not None:
+            _collect_returned(node.value, names, expressions)
+    return names, expressions
+
+
+def _collect_returned(
+    value: ast.expr,
+    names: set[str],
+    expressions: set[str],
+) -> None:
+    """Destructure one `return` value into names and expressions."""
+    if isinstance(value, ast.Name):
+        names.add(value.id)
+    elif isinstance(value, (ast.Tuple, ast.List)):
+        for element in value.elts:
+            _collect_returned(element, names, expressions)
+    else:
+        expressions.add(ast.unparse(value))
+
+
+def _decorator_is_owned(
+    dec: dict[str, Any],
+    returned_ids: dict[str, tuple[tuple[str, ...], str]],
+) -> bool:
+    """Is the route attached to an object the factory RETURNS?
+
+    The receiver must be a plain NAME: a construction
+    (`@APIRouter().post("/mcp")`) or an attribute (`@self.router.post`)
+    is an EXPRESSION, not a binding, and cannot be shown to be the
+    object the factory hands back. A NAME then has to resolve to the
+    SAME IDENTITY as one of the returned names -- the scope that binds
+    it and the name itself -- so a factory-local `router` and a
+    module-level `router` are DIFFERENT objects, and a stray
+    construction is not an object anybody returns.
+    """
+    receiver = dec["receiver_node"]
+    if not isinstance(receiver, ast.Name):
+        return False
+    identity = dec["scope"].resolve(receiver.id)
+    return identity in set(returned_ids.values())
 
 
 def _route_ownership(source: str) -> dict[str, Any]:
     """Who owns the routes in this module -- and which object is served.
 
     Returns a dict with:
-      * `factory`  -- the factory's AST node, or None when it is absent
-      * `assigned` -- the names the factory binds LOCALLY
-      * `returned` -- the names the factory RETURNS (the mountable routers)
-      * `decorators` -- every route decorator, each with an `owned` flag
+      * `factory`        -- the factory's AST node, or None when absent
+      * `returned`       -- the NAMES the factory returns
+      * `returned_ids`   -- each returned name's object identity
+      * `returned_exprs` -- the returns that are NOT names (a
+                            constructed router, a conditional)
+      * `decorators`     -- every route decorator, each with an `owned`
+                            flag
 
     THE OWNERSHIP RULE: a route is owned when the object its decorator
-    names is one the factory RETURNS, and both refer to the SAME
-    binding. A name the factory assigns binds to the factory's local;
-    a name it never assigns binds to the module-level object. So a
-    module-level decorator naming a factory-local is a DIFFERENT
-    object -- and is not owned.
+    names is one the factory RETURNS, and BOTH refer to the SAME
+    BINDING. Ownership is decided by IDENTITY -- the scope that binds
+    a name and the name itself -- NEVER by comparing source text,
+    because two different objects can share one text (`return
+    APIRouter()` versus `@APIRouter().post("/mcp")`) and one text can
+    describe two objects in one statement (`return router, admin`).
     """
     tree = ast.parse(source)
+    module_scope, scopes_by_node = _scope_tree(tree)
     factory = _factory_node(tree)
-    assigned: set[str] = set()
-    returned: set[str] = set()
-    if factory is not None:
-        assigned, returned = _factory_bindings(factory)
+    factory_scope = scopes_by_node.get(id(factory)) if factory is not None else None
 
-    decorators = _route_decorators(tree)
+    returned: set[str] = set()
+    returned_exprs: set[str] = set()
+    if factory is not None:
+        returned, returned_exprs = _factory_returns(factory)
+
+    returned_ids: dict[str, tuple[tuple[str, ...], str]] = {}
+    if factory_scope is not None:
+        for name in returned:
+            returned_ids[name] = factory_scope.resolve(name)
+
+    decorators = _route_decorators(tree, module_scope, scopes_by_node)
     for dec in decorators:
-        receiver = dec["receiver"]
-        in_factory = MCP_ROUTER_FACTORY in dec["scopes"]
-        dec["owned"] = (
-            receiver in returned
-            and not (receiver in assigned and not in_factory)
-        )
+        dec["owned"] = _decorator_is_owned(dec, returned_ids)
+
     return {
         "factory": factory,
-        "assigned": assigned,
         "returned": returned,
+        "returned_ids": returned_ids,
+        "returned_exprs": returned_exprs,
         "decorators": decorators,
     }
 
@@ -431,6 +657,40 @@ def _scope_label(scopes: tuple[str, ...]) -> str:
     return "inside " + " -> ".join(scopes)
 
 
+def _describe_returned(ownership: dict[str, Any]) -> str:
+    """What the factory RETURNS, in words -- for the failure message.
+
+    The names come first, each labelled with the scope that BINDS it
+    (so a factory-local `router` and a module-level `router` are told
+    apart). A return that is not a NAME is named separately and said
+    out loud: a factory that hands back a CONSTRUCTED router names no
+    binding at all, and the message must say that honestly rather than
+    pretend the source text matched something (finding 4429144504).
+    """
+    returned_ids = ownership["returned_ids"]
+    parts: list[str] = []
+    for name in sorted(ownership["returned"]):
+        scope_path = returned_ids.get(name, ((), name))[0]
+        if not scope_path:
+            label = "module level"
+        elif MCP_ROUTER_FACTORY in scope_path:
+            label = "the factory's own local"
+        else:
+            label = "nested in " + " -> ".join(scope_path)
+        parts.append(f"{name!r} ({label})")
+
+    expressions = sorted(ownership["returned_exprs"])
+    if expressions:
+        rendered = ", ".join(repr(expr) for expr in expressions)
+        if parts:
+            parts.append(f"{rendered} (a constructed router, not a named binding)")
+        else:
+            parts.append(
+                f"a constructed router {rendered} rather than a named binding"
+            )
+    return ", ".join(parts) or "<nothing>"
+
+
 def _assert_route_on_returned_router(
     source: str,
     path: str,
@@ -445,6 +705,16 @@ def _assert_route_on_returned_router(
     an UNMOUNTED sibling router in the same module satisfies BOTH
     static halves -- the file "declares" the path and the factory is
     "mounted" -- while every client gets a 404.
+
+    HOW it decides (finding 4429144504): by IDENTITY, never by source
+    text. The factory's returned names come from the AST -- a plain
+    `ast.Name` names a binding, a tuple is DESTRUCTURED into its
+    elements, and a `return` of a CALL names NO binding at all -- and
+    a decorator's receiver is owned only when it resolves to the SAME
+    binding as one of those names. A text comparison cannot tell
+    `return APIRouter()` from `@APIRouter().post("/mcp")` (two
+    instances, one text) nor `return router, admin` from `router` (one
+    text, two objects).
 
     Raises `RouterOwnershipError` (an AssertionError) naming the path
     and the router object the route IS attached to, when the route is
@@ -476,21 +746,11 @@ def _assert_route_on_returned_router(
     owners = ", ".join(
         f"{dec['receiver']!r} ({_scope_label(dec['scopes'])})" for dec in candidates
     )
-    returned = ", ".join(
-        f"{name!r} ("
-        + (
-            "the factory's own local"
-            if name in ownership["assigned"]
-            else "module level"
-        )
-        + ")"
-        for name in sorted(ownership["returned"])
-    )
     raise RouterOwnershipError(
         f"route {path!r}"
         + (f" ({method.upper()})" if method else "")
         + f" is declared on {owners}, but {MCP_ROUTER_FACTORY}() returns "
-        + (returned or "<nothing>")
+        + _describe_returned(ownership)
         + " -- the route is attached to a router that is never mounted, so "
         "the endpoint the inventory promises 404s for every client that "
         "carries the entry"
@@ -758,6 +1018,82 @@ def test_route_ownership_accepts_a_route_on_the_returned_router() -> None:
     source = _minimal_router_source(receiver="router")
     # Raises on failure, so reaching here IS the pass.
     _assert_route_on_returned_router(source, "/mcp", "POST")
+
+
+_TUPLE_ROUTER_SOURCE = (
+    "from fastapi import APIRouter\n"
+    "\n"
+    "\n"
+    "def create_mcp_router():\n"
+    "    router = APIRouter()\n"
+    "    admin = APIRouter()\n"
+    "\n"
+    "    @{receiver}.post('/mcp')\n"
+    "    async def mcp_streamable(request):\n"
+    "        return {{}}\n"
+    "\n"
+    "    return router, admin\n"
+)
+
+_CONSTRUCTED_ROUTER_SOURCE = (
+    "from fastapi import APIRouter\n"
+    "\n"
+    "\n"
+    "def create_mcp_router():\n"
+    "    router = APIRouter()\n"
+    "\n"
+    "    @{receiver}.post('/mcp')\n"
+    "    async def mcp_streamable(request):\n"
+    "        return {{}}\n"
+    "\n"
+    "    return APIRouter()\n"
+)
+
+
+def test_route_ownership_accepts_a_factory_that_returns_a_tuple() -> None:
+    """A factory that returns a TUPLE must NOT be failed (defect b).
+
+    Finding 4429144504: the previous round's rule recorded the
+    returned name as the SOURCE TEXT of the return value, so the
+    legitimate `return router, admin` became ONE name spelled
+    "router, admin". The router it returns was invisible, so a VALID
+    module FAILED the ratchet -- the ratchet cried wolf. The tuple is
+    DESTRUCTURED now, so `router` and `admin` are two separate
+    bindings and the route on `router` is still owned.
+    """
+    source = _TUPLE_ROUTER_SOURCE.format(receiver="router")
+    # Raises on failure, so reaching here IS the pass.
+    _assert_route_on_returned_router(source, "/mcp", "POST")
+
+
+def test_route_ownership_rejects_a_factory_that_returns_a_constructed_router() -> None:
+    """A factory that returns a CONSTRUCTED router must be FAILED (defect a).
+
+    Finding 4429144504: `return APIRouter()` put the literal text
+    "APIRouter()" into the returned set, and a stray
+    `@APIRouter().post("/mcp")` unparses to the SAME text -- so the
+    text comparison called the STRAY instance owned, and the blind spot
+    the ownership rule exists to close stayed open. A constructed
+    router names NO binding, so no route can be shown to hang on it.
+
+    The failure must NAME the constructed router, so the message says
+    the factory hands back a construction rather than a binding.
+    """
+    source = _CONSTRUCTED_ROUTER_SOURCE.format(receiver="APIRouter()")
+    with pytest.raises(RouterOwnershipError) as excinfo:
+        _assert_route_on_returned_router(source, "/mcp", "POST")
+    message = str(excinfo.value)
+    assert "/mcp" in message, (
+        f"the failure does not name the offending path: {message!r}"
+    )
+    assert "APIRouter()" in message, (
+        "the failure does not name the router object the route is "
+        f"actually attached to: {message!r}"
+    )
+    assert "constructed router" in message, (
+        "the failure does not say the factory hands back a CONSTRUCTION "
+        f"rather than a named binding: {message!r}"
+    )
 
 
 @pytest.mark.parametrize("key", sorted(FLUTE_SERVER_KEYS))

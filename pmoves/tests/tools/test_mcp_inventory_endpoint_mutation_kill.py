@@ -67,10 +67,29 @@ A fifth thread landed on the same PR afterwards:
   got a 404. Mutated here by moving the decorator onto a sibling router
   the factory never returns: the old check survives that, the new one
   does not.
+
+A sixth thread landed on the same PR after that, and it was aimed at the
+OWNERSHIP RULE itself -- at how it decided ownership:
+
+* 4429144504 -- ownership must be decided by OBJECT IDENTITY, never by
+  comparing SOURCE TEXT. The text comparison failed in BOTH
+  directions, so both directions are mutated here:
+  * defect (a), a FALSE NEGATIVE: `return APIRouter()` put the literal
+    text "APIRouter()" into the returned set, and a stray
+    `@APIRouter().post("/mcp")` unparses to the SAME text -- so the
+    stray instance looked OWNED and the blind spot stayed open.
+    Mutated here: the factory returns a CONSTRUCTED router and the
+    decorator sits on ANOTHER fresh instance. The ratchet must FAIL.
+  * defect (b), a FALSE POSITIVE: `return router, admin` -- a
+    legitimate two-value return -- was recorded as ONE name spelled
+    "router, admin", so the router it returns became invisible and a
+    VALID module FAILED the ratchet. The ratchet cried wolf.
+    Mutated here: the factory returns a TUPLE. The ratchet must PASS.
 """
 
 from __future__ import annotations
 
+import ast
 import importlib
 import json
 import re
@@ -198,6 +217,119 @@ def _mutate_route_onto_sibling_router(
         f"{indent}{moved}"
     )
     return text.replace(decl, mutated, 1), sibling
+
+
+def _replace_factory_return(text: str, ratchet, new_lines: list[str]) -> str:
+    """Replace the factory's OWN `return` with `new_lines`.
+
+    WHY the AST (lesson 2.8): the harness must mutate the return the
+    ratchet actually reads. The factory's own return is located with
+    the RATCHET's own helpers -- `_factory_node()` and
+    `_nested_def_nodes()` -- so a nested helper's return (the route
+    handlers' own `return {}` / `return responses`) is never the one
+    replaced. A text search would hit those first.
+    """
+    tree = ast.parse(text)
+    factory = ratchet._factory_node(tree)
+    assert factory is not None, (
+        "mutation setup failed: the module does not define "
+        f"{ratchet.MCP_ROUTER_FACTORY}()"
+    )
+    skip = ratchet._nested_def_nodes(factory)
+    returns = [
+        node
+        for node in ast.walk(factory)
+        if isinstance(node, ast.Return)
+        and node.value is not None
+        and id(node) not in skip
+    ]
+    assert len(returns) == 1, (
+        f"mutation setup failed: expected exactly ONE return in "
+        f"{ratchet.MCP_ROUTER_FACTORY}(), found {len(returns)}"
+    )
+    node = returns[0]
+    lines = text.splitlines(keepends=True)
+    indent = lines[node.lineno - 1][: node.col_offset]
+    replaced = (
+        lines[: node.lineno - 1]
+        + [f"{indent}{line}\n" for line in new_lines]
+        + lines[node.end_lineno :]
+    )
+    return "".join(replaced)
+
+
+def _mutate_factory_onto_a_constructed_router(
+    text: str,
+    decl: str,
+    receiver: str,
+    ratchet,
+) -> str:
+    """Re-target the decorator at a FRESH instance, and return a FRESH router.
+
+    WHY this shape (finding 4429144504, defect (a)): the false
+    negative lived in the TEXT comparison, so the mutation has to put
+    the SAME text on both sides of it. `return APIRouter()` puts the
+    text "APIRouter()" into the factory's returned set, and
+    `@APIRouter().post("/mcp")` puts the same text on the decorator's
+    receiver -- two DIFFERENT instances sharing one text. The previous
+    round's rule could not tell them apart and called the stray
+    instance OWNED.
+    """
+    assert decl in text, "mutation setup failed: route decl not found"
+    moved = decl.replace(f"{receiver}.", "APIRouter().", 1)
+    assert moved != decl, (
+        "mutation setup failed: the decorator receiver could not be re-targeted"
+    )
+    text = text.replace(decl, moved, 1)
+    return _replace_factory_return(text, ratchet, ["return APIRouter()"])
+
+
+def _legacy_owned(ratchet, source: str, path: str, method: str) -> bool:
+    """The PREVIOUS round's TEXT-based ownership rule, frozen as a witness.
+
+    Finding 4429144504 removed that rule from the ratchet: it decided
+    ownership by comparing SOURCE TEXT -- the factory's returned set was
+    the unparsed text of the `return` value, and the decorator's
+    receiver was the unparsed text of the object it decorates.
+
+    This copy exists ONLY as a WITNESS. It lets the harness state what
+    the OLD rule would have said about a mutation, so the new rule's
+    verdict can be shown to DIFFER in both directions -- blind on a
+    constructed router, crying wolf on a tuple. The rule under test is
+    always the ratchet's own AST-based one (lesson 2.5); nothing here
+    is asserted on its behalf.
+    """
+    tree = ast.parse(source)
+    factory = ratchet._factory_node(tree)
+    if factory is None:
+        return False
+    skip = ratchet._nested_def_nodes(factory)
+    assigned: set[str] = set()
+    returned: set[str] = set()
+    for node in ast.walk(factory):
+        if id(node) in skip:
+            continue
+        if isinstance(node, ast.Assign):
+            for target in node.targets:
+                if isinstance(target, ast.Name):
+                    assigned.add(target.id)
+        elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+            assigned.add(node.target.id)
+        elif isinstance(node, ast.Return) and node.value is not None:
+            value = node.value
+            returned.add(
+                value.id if isinstance(value, ast.Name) else ast.unparse(value)
+            )
+    module_scope, scopes_by_node = ratchet._scope_tree(tree)
+    decorators = ratchet._route_decorators(tree, module_scope, scopes_by_node)
+    for dec in decorators:
+        if dec["path"] != path or dec["method"] != method.upper():
+            continue
+        receiver = dec["receiver"]
+        in_factory = ratchet.MCP_ROUTER_FACTORY in dec["scopes"]
+        if receiver in returned and not (receiver in assigned and not in_factory):
+            return True
+    return False
 
 
 def _mutated_service_tree(tmp_path: Path, *, drop_route: bool, drop_mount: bool) -> Path:
@@ -431,6 +563,160 @@ def test_mutation_route_moved_onto_a_sibling_router_is_killed(tmp_path: Path) ->
             "the failure is not the route/decorator mismatch message: "
             f"{message!r}"
         )
+    finally:
+        # Restore the ORIGINAL bytes, byte-exact, whatever happened above.
+        bridge.write_bytes(pristine)
+        assert bridge.read_bytes() == pristine, (
+            "mutation setup failed: the tree was not restored byte-exactly"
+        )
+
+    # GREEN AFTER RESTORE: the ratchet passes again on the original bytes.
+    ratchet.test_inventory_flute_endpoint_is_declared_in_service_source(TARGET_KEY)
+
+
+def test_mutation_factory_returning_a_constructed_router_is_killed(
+    tmp_path: Path,
+) -> None:
+    """A factory that returns a CONSTRUCTED router MUST make the ratchet fail.
+
+    Finding 4429144504, defect (a) -- the FALSE NEGATIVE. The previous
+    round's ownership rule compared SOURCE TEXT: the factory's returned
+    set was the unparsed text of the `return` value, so
+    `return APIRouter()` contributed the literal string "APIRouter()".
+    A stray `@APIRouter().post("/mcp")` decorator unparses to the SAME
+    string -- so the text comparison concluded the STRAY instance was
+    the returned router, and the blind spot the ownership rule exists
+    to close stayed open. The rule must decide by IDENTITY: a
+    constructed router names NO binding, so no route can be shown to
+    hang on it.
+
+    THE MUTATION is a realistic edit of the REAL file: the factory
+    hands back a freshly constructed router instead of the named one,
+    and the `/mcp` decorator is re-targeted at ANOTHER fresh instance.
+    Nothing is stubbed and no module is synthesised.
+
+    THE THREE STATES are asserted in order, on ONE copy: GREEN on the
+    pristine bytes, RED with the mutation applied, GREEN again after the
+    original bytes are restored. The restore happens in a `finally`, so
+    a failing assertion cannot leave the tree mutated -- and it is
+    byte-exact, verified by re-reading the file.
+    """
+    ratchet = _load_ratchet()
+    mutated_tree = _mutated_service_tree(tmp_path, drop_route=False, drop_mount=False)
+    bridge = mutated_tree / ratchet.FLUTE_ROUTER_MODULE
+    pristine = bridge.read_bytes()
+    decl, path, receiver = _route_declaration(ratchet)
+    mutated_source = _mutate_factory_onto_a_constructed_router(
+        pristine.decode("utf-8"), decl, receiver, ratchet
+    )
+    assert mutated_source != pristine.decode("utf-8"), (
+        "mutation setup failed: the factory was not made to return a "
+        "constructed router"
+    )
+    _point_ratchet_at(ratchet, mutated_tree)
+
+    # The witness states what the PREVIOUS round's text-based rule said
+    # about this mutation: it considered the stray instance OWNED (the
+    # text "APIRouter()" was in its returned set), so the mutation
+    # SURVIVED that rule. This is the blind spot the new rule closes.
+    assert _legacy_owned(ratchet, mutated_source, path, "POST"), (
+        "the witness disagrees: the previous round's text-based rule did "
+        "NOT consider the stray instance owned, so this mutation does not "
+        "reproduce the false negative it is meant to"
+    )
+
+    try:
+        # GREEN BEFORE: the pristine copy passes the ratchet.
+        ratchet.test_inventory_flute_endpoint_is_declared_in_service_source(TARGET_KEY)
+
+        # RED AFTER: the route now hangs on an instance the factory does
+        # not hand back -- the constructed router names no binding.
+        bridge.write_text(mutated_source, encoding="utf-8")
+        with pytest.raises(ratchet.RouterOwnershipError) as excinfo:
+            ratchet.test_inventory_flute_endpoint_is_declared_in_service_source(
+                TARGET_KEY
+            )
+        message = str(excinfo.value)
+        assert path in message, (
+            "the failure does not name the route the inventory declares: "
+            f"{message!r}"
+        )
+        assert "APIRouter()" in message, (
+            "the failure does not name the router object the route is "
+            f"actually attached to: {message!r}"
+        )
+        assert "is declared on" in message, (
+            "the failure is not the route/decorator mismatch message: "
+            f"{message!r}"
+        )
+    finally:
+        # Restore the ORIGINAL bytes, byte-exact, whatever happened above.
+        bridge.write_bytes(pristine)
+        assert bridge.read_bytes() == pristine, (
+            "mutation setup failed: the tree was not restored byte-exactly"
+        )
+
+    # GREEN AFTER RESTORE: the ratchet passes again on the original bytes.
+    ratchet.test_inventory_flute_endpoint_is_declared_in_service_source(TARGET_KEY)
+
+
+def test_mutation_factory_returning_a_tuple_is_not_cried_wolf(tmp_path: Path) -> None:
+    """A factory that returns a TUPLE MUST NOT make the ratchet fail.
+
+    Finding 4429144504, defect (b) -- the FALSE POSITIVE. The previous
+    round's ownership rule recorded the returned name as the SOURCE
+    TEXT of the return value, so the legitimate two-value return
+    `return router, admin` was recorded as ONE name spelled
+    "router, admin". The router it actually returns became invisible to
+    the rule, so a VALID module FAILED the ratchet: the ratchet cried
+    wolf and broke CI for correct code. The rule must DESTRUCTURE the
+    tuple, so `router` and `admin` are two separate bindings and the
+    route on `router` is still owned.
+
+    THE MUTATION is a legitimate edit of the REAL file: the factory
+    hands back its router AND a second router -- exactly the shape a
+    factory serving two surfaces takes.
+
+    THE THREE STATES are asserted in order, on ONE copy: GREEN on the
+    pristine bytes, GREEN again with the legitimate two-value return
+    applied (the ratchet must NOT cry wolf), and GREEN once more after
+    the original bytes are restored. The restore happens in a `finally`
+    and is byte-exact, verified by re-reading the file.
+    """
+    ratchet = _load_ratchet()
+    mutated_tree = _mutated_service_tree(tmp_path, drop_route=False, drop_mount=False)
+    bridge = mutated_tree / ratchet.FLUTE_ROUTER_MODULE
+    pristine = bridge.read_bytes()
+    _decl, path, _receiver = _route_declaration(ratchet)
+    mutated_source = _replace_factory_return(
+        pristine.decode("utf-8"),
+        ratchet,
+        ["admin = APIRouter()", "return router, admin"],
+    )
+    assert mutated_source != pristine.decode("utf-8"), (
+        "mutation setup failed: the factory was not made to return a tuple"
+    )
+    _point_ratchet_at(ratchet, mutated_tree)
+
+    # The witness states what the PREVIOUS round's text-based rule said
+    # about this mutation: its returned set was the single name
+    # "router, admin", so the router it returns was invisible and the
+    # route looked UNOWNED -- the ratchet cried wolf. The new rule
+    # destructures the tuple and keeps the ownership intact.
+    assert not _legacy_owned(ratchet, mutated_source, path, "POST"), (
+        "the witness disagrees: the previous round's text-based rule did "
+        "NOT reject the two-value return, so this mutation does not "
+        "reproduce the false positive it is meant to"
+    )
+
+    try:
+        # GREEN BEFORE: the pristine copy passes the ratchet.
+        ratchet.test_inventory_flute_endpoint_is_declared_in_service_source(TARGET_KEY)
+
+        # STILL GREEN AFTER: a legitimate two-value return must NOT make
+        # the ratchet cry wolf.
+        bridge.write_text(mutated_source, encoding="utf-8")
+        ratchet.test_inventory_flute_endpoint_is_declared_in_service_source(TARGET_KEY)
     finally:
         # Restore the ORIGINAL bytes, byte-exact, whatever happened above.
         bridge.write_bytes(pristine)

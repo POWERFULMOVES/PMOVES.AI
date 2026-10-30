@@ -122,8 +122,10 @@ Total: **20 new tests across 2 new files.** No existing file was modified — th
 - **Ratchet:** `pmoves/tests/tools/test_mcp_inventory_endpoint_ratchet.py` — `_assert_responder_is_flute_gateway()`, `_probe_url()`, `_display_path()`, `FLUTE_SERVER_KEYS`, `FLUTE_ROUTER_MODULE`, `TRANSPORT_METHODS`, `FLUTE_SERVER_NAME`
 - **Ratchet (review hardening):** `_declared_path()`, `_url_path()`, `_declared_routes()`, `_mcp_router_mounted()`, `_resolve_declared_headers()`, `_probe_headers()`
 - **Ratchet (review hardening, round 2 — finding 4428873759):** `MCP_ROUTER_FACTORY`, `_decorator_route()`, `_route_decorators()`, `_factory_node()`, `_nested_def_nodes()`, `_factory_bindings()`, `_route_ownership()`, `RouterOwnershipError`, `_assert_route_on_returned_router()`
+- **Ratchet (review hardening, round 3 — finding 4429144504):** `_Scope` (scope path + binding resolution), `_target_names()`, `_collect_bindings()`, `_scope_tree()`, `_factory_returns()`, `_collect_returned()`, `_decorator_is_owned()`, `_describe_returned()`, `_factory_bindings()` **RETIRED** (its text-based returned set was the defect)
 - **Harness:** `pmoves/tests/tools/test_mcp_inventory_endpoint_mutation_kill.py` — `RATCHET_MODULE`, `MOUNT_CALL`/`MUTATED_MOUNT_CALL`, `MCP_ROUTER_FACTORY_CALL`/`MUTATED_ROUTER_FACTORY_CALL`, `DISABLED_SUFFIX`, `TARGET_KEY`, `UNSERVED_PATH`, `_route_declaration()`
 - **Harness (round 2):** `_mutate_route_onto_sibling_router()`, `test_mutation_route_moved_onto_a_sibling_router_is_killed`
+- **Harness (round 3):** `_replace_factory_return()`, `_mutate_factory_onto_a_constructed_router()`, `_legacy_owned()` (a FROZEN witness of the retired text-based rule), `test_mutation_factory_returning_a_constructed_router_is_killed`, `test_mutation_factory_returning_a_tuple_is_not_cried_wolf`
 - **SDK files exercised:**
   - `pmoves/services/flute-gateway/mcp_bridge.py:508` — `@router.post("/mcp")` (the declared surface)
   - `pmoves/services/flute-gateway/mcp_bridge.py:529` — `@router.get("/sse")`
@@ -239,4 +241,56 @@ This lane modifies **no** existing file. `pmoves/config/mcp_inventory.json` is b
 | `pmoves/tests/tools/test_mcp_inventory_endpoint_mutation_kill.py` | 669 | 14 | The PROVENANCE harness. 7 static mutations (route removed / mount removed / another router mounted / the inventory declares an unserved path / the route moved onto a sibling router / both removed / un-mutated control) + 7 live-half cases (override rebases the probe URL / a no-path URL is rejected / the declared credential is sent / an unavailable credential skips / an impostor responder is rejected / a 404 is rejected / the genuine service passes). |
 
 Total: **23 tests across the 2 files.**
+
+---
+
+## Review hardening round 3 — finding 4429144504 (PR #3428, third pass)
+
+**Status:** one further review thread on PR #3428, aimed at the OWNERSHIP RULE itself — at HOW it decided ownership. Valid, and wrong in BOTH directions. Lesson numbering continues from the taxonomy above (1.11–1.12, 2.10, 3.9, 4.9).
+
+**The blind spot, in one sentence:** the round-2 ownership rule compared **SOURCE TEXT** — the factory's returned set was the unparsed text of the `return` value, and the decorator's receiver was the unparsed text of the object it decorates — so one text could name two different objects, and one statement could name two objects at once.
+
+### Bucket 1 — Defects
+
+| # | Class | Observation (rule) | Evidence / Why | Apply when |
+|---|-------|---------------------|----------------|------------|
+| 1.11 | **text-comparison-is-not-identity** | **"Are these the same object?" must be answered by IDENTITY, never by SOURCE TEXT.** One text can name two different objects (`return APIRouter()` and `@APIRouter().post("/mcp")` are two INSTANCES), and one statement can name two objects at once (`return router, admin` is two objects, not one name spelled "router, admin"). | Finding **4429144504**. Defect (a), the FALSE NEGATIVE: `return APIRouter()` put the literal text "APIRouter()" into the returned set, and a stray `@APIRouter().post("/mcp")` unparses to the SAME text — so the text comparison concluded the STRAY instance WAS the returned router, and the blind spot lesson 1.10 exists to close stayed open. Fixed: `_factory_returns()` contributes a name ONLY for a plain `ast.Name`, DESTRUCTURES a tuple into its elements, and contributes NO name for a `return` of a CALL (an expression is not a binding); `_Scope.resolve()` resolves each name to an IDENTITY — the scope that binds it plus the name — and `_decorator_is_owned()` compares identities. The source text survives only to NAME the offending object in the failure message. | Any static check that decides "is this the SAME object?" from source: ownership, aliasing, shadowing, `include_router` arguments, handler registries. |
+| 1.12 | **a-ratchet-that-cries-wolf-is-as-broken-as-one-that-never-fires** | **A check that fails CORRECT code is as broken as a check that never fires** — the first trains people to ignore the gate, the second never catches anything. A ratchet must be able to say NO *and* must stay quiet on a valid module. | Defect (b), the FALSE POSITIVE: the text-based rule recorded `return router, admin` as ONE name spelled "router, admin", so the router the factory actually returns became INVISIBLE to the rule and a VALID module FAILED the ratchet — CI red for correct code. Measured against the retired rule, the failure message read `create_mcp_router() returns '(router, admin)'`. Fixed by the tuple destructuring in 1.11, and pinned by `test_mutation_factory_returning_a_tuple_is_not_cried_wolf`, which asserts the ratchet PASSES on a legitimate two-value return. | Any gate whose failure mode must be reachable ONLY by a defect — especially a gate that blocks a merge for everyone. |
+
+### Bucket 2 — Decisions
+
+| # | Class | Observation (rule) | Why | Alternative considered | Cost of alternative |
+|---|-------|---------------------|-----|------------------------|---------------------|
+| 2.10 | **ownership-is-resolved-through-the-scope-chain** | The receiver's identity is resolved the way Python resolves the NAME: walk the scope chain, and the first scope that BINDS the name owns the object. A name the factory assigns binds to the factory's own local; a name it never assigns binds to the module-level one; an alias (`admin = router`) resolves to the object it aliases. | The scope chain is the ground truth for "which object is this name", and it makes the rule's verdict explainable: the failure message can say "the factory's own local" versus "module level" versus "a constructed router" and be CORRECT about which. | Comparing the two unparsed source texts (the retired `_factory_bindings()`) | Wrong in both directions: blind on a constructed router (1.11a) and crying wolf on a tuple (1.12). A gate that is wrong in both directions cannot be trusted in either. |
+
+### Bucket 3 — Operations
+
+| # | Class | Observation (rule) | Measured | Repeatability |
+|---|-------|---------------------|----------|---------------|
+| 3.9 | **hand-verification-by-revert (round 3), and the round-2 guarantee re-proved** | The retired text-based rule was re-implemented IN MEMORY and the harness re-run against it. A new mutation case that PASSES against the retired rule proves nothing — the case must FAIL against it. | Reverted rule → `test_mutation_factory_returning_a_constructed_router_is_killed` **FAILED** ("DID NOT RAISE RouterOwnershipError") and `test_mutation_factory_returning_a_tuple_is_not_cried_wolf` **FAILED** with `RouterOwnershipError: ... returns '(router, admin)'` — the blind spot and the cry wolf, both reproduced on demand. The round-2 case `test_mutation_route_moved_onto_a_sibling_router_is_killed` still **PASSED** against the retired rule and against the new one, so lesson 1.10's guarantee was neither weakened nor silently removed. | Every time a ratchet assertion is rewritten, not only when it is added (extends lesson 3.6). |
+
+### Bucket 4 — Cross-references
+
+| # | Class | What | Link | Why it matters |
+|---|-------|------|------|----------------|
+| 4.9 | **the-sixth-review-thread** | The provenance of the round-3 hardening: a sixth GitHub review thread on PR #3428, against the ownership rule's own implementation. | dbId `4429144504` (the ownership rule must be AST/identity-based, not text-based) | The same trail shape as 4.7 and 4.8 — the thread id is where the finding was made, so the next reviewer can read it against the fix. |
+
+---
+
+## Test inventory (after round 3)
+
+| File | Lines | Tests | What it pins |
+|---|---|---|---|
+| `pmoves/tests/tools/test_mcp_inventory_endpoint_ratchet.py` | 1303 | 11 | The ratchet. Static half (10): the route DERIVED FROM THE INVENTORY must be declared in the serving source AND attached to the router `create_mcp_router` RETURNS (×2 entries: `flute-voice` SSE + `flute-voice-mcp` HTTP); the MCP router must be the ARGUMENT of `app.include_router(...)` (×2); the entry must resolve to a URL carrying a PATH (×2 entries); the ownership check says NO on a route on an unreturned router, YES on the right shape, YES on a factory that returns a TUPLE, and NO on a factory that returns a CONSTRUCTED router (4 unit cases). Live half (1): the declared URL must answer, must not 404, must not 5xx, must carry the INVENTORY-declared credential, and the responder must identify as `pmoves-flute-gateway`. |
+| `pmoves/tests/tools/test_mcp_inventory_endpoint_mutation_kill.py` | 955 | 16 | The PROVENANCE harness. 9 static mutations (route removed / mount removed / another router mounted / the inventory declares an unserved path / the route moved onto a sibling router / the factory returns a CONSTRUCTED router / the factory returns a TUPLE / both removed / un-mutated control) + 7 live-half cases (override rebases the probe URL / a no-path URL is rejected / the declared credential is sent / an unavailable credential skips / an impostor responder is rejected / a 404 is rejected / the genuine service passes). |
+
+Total: **27 tests across the 2 files.**
+
+### Test status (after round 3)
+
+- `pmoves/tests/tools/test_mcp_inventory_endpoint_ratchet.py` → **10 passed, 1 skipped** with `FLUTE_API_KEY` unset (the live half skips, naming `X-API-Key (env FLUTE_API_KEY)`).
+- The same file with `FLUTE_API_KEY` exported → **11 passed, 0 skipped** — the live half RAN against the running gateway and passed (`serverInfo.name = "pmoves-flute-gateway"`).
+- `pmoves/tests/tools/test_mcp_inventory_endpoint_mutation_kill.py` → **16 passed** (unchanged by the credential).
+- Combined (credential absent): **26 passed, 1 skipped**. Combined (credential exported): **27 passed**.
+- Revert-verified (lesson 3.9): against the retired text-based rule, the two new cases **FAIL** and the round-2 sibling-router case still **PASSES**.
 
