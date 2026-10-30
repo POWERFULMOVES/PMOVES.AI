@@ -6454,3 +6454,18 @@ env-local-set: ## Operator: set KEY in pmoves/.env.local; value from a no-echo p
 env-local-unset: ## Operator: remove the single KEY line from pmoves/.env.local, with backup + audit row (KEY=NAME)
 	@$(ENV_LOCAL_KEY_GUARD)
 	@$(PYTHON) tools/env_local_key.py unset "$$ENV_LOCAL_KEY_NAME"
+
+# --- TitanMail MCP (services/titanmail-mcp) ----------------------------------
+# Built, not deployed. The compose service `titanmail-mcp` is an OPERATOR-APPLY
+# item from the PR that added this block (compose is a protected path); until it
+# lands, up-titanmail-mcp fails with "no such service" rather than doing anything.
+.PHONY: titanmail-test titanmail-eval up-titanmail-mcp
+titanmail-test: ## TitanMail MCP unit tests (offline)
+	$(PYTHON) -m pytest -q services/titanmail-mcp/tests
+
+titanmail-eval: ## TitanMail date-window + dedup harness. 0 pass / 1 below target / 3 could-not-measure. ARGS="--transport mailpit --mailpit-url ... --seed-smtp host:1025"
+	$(PYTHON) services/titanmail-mcp/eval/run_harness.py $(ARGS)
+
+up-titanmail-mcp: ## Start TitanMail MCP (loopback ${TITANMAIL_MCP_BIND:-127.0.0.1}:${TITANMAIL_MCP_PORT:-8209} -> 8092)
+	@$(DC) up -d titanmail-mcp
+	@echo "TitanMail MCP: http://127.0.0.1:$${TITANMAIL_MCP_PORT:-8209}/mcp (streamable-http), /sse, /healthz"
