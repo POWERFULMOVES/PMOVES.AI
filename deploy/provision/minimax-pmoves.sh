@@ -151,6 +151,73 @@ fi
 # --- NAME BRIDGES (operator-facing alias to upstream SDK name) -------------
 # (no name bridges for this CLI)
 
+# --- MCP ROSTER GENERATION ------------------------------------------------
+# WHY THIS BLOCK EXISTS. minimax-pmoves does NOT read the tracked
+# `.claude/mcp.json` roster that the sibling stacks (claude / kimi / kilo /
+# hermes / crush) load -- MiniMax Code reads its OWN `~/.minimax/mcp.json`,
+# and that file is RENDERED by pmoves/tools/mcp_config_generator.py from the
+# shared inventory plus this client's bootstrap profile.
+#
+# Nothing else in the launch path rendered it. The launcher sourced
+# env.shared and exec'd the binary, so a fresh host -- or any host whose
+# ~/.minimax/mcp.json still carried only the `composio` entry -- started the
+# client with NO PMOVES MCP servers at all. That is a SILENT degradation: no
+# error, no non-zero exit, just a client that cannot reach the fleet. This
+# block is what turns the roster from a hope into a precondition.
+#
+# ORDERING IS LOAD-BEARING.
+#   * AFTER env.shared -- the roster expands ${VAR} from the env.shared
+#     values (NATS_URL, the cipher token, the cross-node hostnames). A roster
+#     rendered before env.shared would carry literal ${VAR} text, which is
+#     the exact failure mode claude-pmoves.sh fails closed on.
+#   * BEFORE the exec -- the client reads ~/.minimax/mcp.json at startup, so
+#     the file has to be current before the binary starts.
+#
+# --endpoint local: the client is a DESKTOP client on this host, and the
+# services it declares node-local are published on THIS host's loopback.
+# The generator's "fleet" default would point them at ${TS_Z890} instead.
+#
+# FAILURE PATH: FAIL CLOSED. If the generator cannot run, the client would
+# start with a stale or missing roster and no error at all -- the precise
+# failure this block exists to prevent. So a generator failure is an explicit
+# ERROR plus a non-zero exit, not a WARN. The operator can still launch
+# without the roster by exporting PMOVES_ALLOW_MISSING_ROSTER=1, which is an
+# explicit, greppable opt-out rather than a default.
+#
+# Python discovery is pm-python.sh's ladder (pm_pick_python) -- NOT a bare
+# `python3`. The probe argument is `yaml` because mcp_config_generator.py
+# reads this client's bootstrap profile, which is YAML.
+ROSTER_GEN="$ROOT/pmoves/tools/mcp_config_generator.py"
+if [ -n "${PMOVES_ALLOW_MISSING_ROSTER:-}" ]; then
+  echo "[minimax-pmoves] PMOVES_ALLOW_MISSING_ROSTER is set -- skipping MCP roster generation." >&2
+else
+  _roster_why=""
+  if [ ! -f "$ROSTER_GEN" ]; then
+    _roster_why="the generator is missing: $ROSTER_GEN"
+  elif [ ! -f "$ROOT/pmoves/scripts/pm-python.sh" ]; then
+    _roster_why="pm-python.sh is missing: $ROOT/pmoves/scripts/pm-python.sh"
+  else
+    # shellcheck source=../../pmoves/scripts/pm-python.sh
+    . "$ROOT/pmoves/scripts/pm-python.sh"
+    if ! pm_pick_python yaml 2>/dev/null; then
+      _roster_why="no python interpreter that can import yaml (tried \$PMOVES_PYTHON, $ROOT/pmoves/.venv-pmoves, python3, py -3, python)"
+    else
+      _roster_rc=0
+      "${PM_PY[@]}" "$ROSTER_GEN" --client minimax --endpoint local || _roster_rc=$?
+      if [ "$_roster_rc" -ne 0 ]; then
+        _roster_why="mcp_config_generator.py --client minimax --endpoint local exited $_roster_rc under '${PM_PY[*]}' (its own stderr is above)"
+      fi
+    fi
+  fi
+  if [ -n "$_roster_why" ]; then
+    echo "[minimax-pmoves] ERROR: could not generate the MCP roster -- $_roster_why" >&2
+    echo "[minimax-pmoves]        the client would start with NO PMOVES MCP servers." >&2
+    echo "[minimax-pmoves]        to launch anyway: PMOVES_ALLOW_MISSING_ROSTER=1 minimax-pmoves ..." >&2
+    exit 1
+  fi
+  echo "[minimax-pmoves] MCP roster generated for client 'minimax' (endpoint 'local')." >&2
+fi
+
 # --- LAUNCH ---------------------------------------------------------------
 export PMOVES_LAUNCHER_SESSION="minimax-pmoves.sh"
 exec minimax "$@"

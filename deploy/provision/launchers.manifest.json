@@ -400,18 +400,18 @@
       "sha256": "37ecedaa4d5a77df89d00cf6b7eca7dba9f9672a0e336c4524e58549201f9250"
     },
     {
-      "bytes": 7688,
+      "bytes": 11363,
       "executable": true,
       "managed_by": "generator",
       "relpath": "deploy/provision/minimax-pmoves.sh",
-      "sha256": "492409d176b8fb9860f1ea19265b1bf7d39f86a25cc2e810037cbbbfc596c6fa"
+      "sha256": "9d26b7f121ad9e047db136bb356a3f326c0319a5b4cd4aed3828dd6a7981f06b"
     },
     {
-      "bytes": 5383,
+      "bytes": 9711,
       "executable": false,
       "managed_by": "generator",
       "relpath": "deploy/provision/minimax-pmoves.ps1",
-      "sha256": "5b60062d83e96d27880c92c823c48e43181959519b797c46f314a978a569ab77"
+      "sha256": "8e442bae66aa8520d8db8109cf7892d1134beb171145a743e2aece4f43e15691"
     },
     {
       "bytes": 750,

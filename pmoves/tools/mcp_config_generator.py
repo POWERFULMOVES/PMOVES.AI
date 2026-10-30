@@ -342,7 +342,53 @@ def render_crush(specs: List[ServerSpec], context: Dict[str, str], **kw: Any) ->
     return {"mcp": mcp}
 
 
-def render_minimax(specs: List[ServerSpec], context: Dict[str, str], **kw: Any) -> Dict[str, Any]:
+def _abs_repo_relative(value: Any, root: Optional[Path] = None) -> Any:
+    """Absolutize a repo-relative `./`-prefixed path against the repo root.
+
+    THE RULE is identical to pmoves/tools/mcp_roster_normalize.py :: _abs_path
+    -- a value that starts with "./" is joined to the repo root, anything else
+    is returned untouched. Reusing the rule (rather than inventing one) is the
+    point: two places now resolve the same declared path the same way.
+
+    WHY THE MINIMAX RENDERER NEEDS IT (the P2 review finding on #3418).
+
+    MiniMax Code reads its roster from `~/.minimax/mcp.json` -- OUTSIDE the
+    repo. Every other client reads a TRACKED roster INSIDE the repo and hands
+    it to the binary with `--mcp-config`, so a repo-relative path inside it
+    resolves against the repo the client was pointed at.
+
+    The MiniMax launcher resolves ROOT but never cd's there and never
+    absolutizes anything, so the inventory's
+
+        uv --directory ./pmoves-nats-mcp run python -m nats_mcp.server
+
+    was resolved against the CALLER's working directory. Launched from
+    anywhere but the repo root, the NATS MCP server simply failed to start --
+    and the failure mode is a server that is ABSENT, not an error the operator
+    could read or act on.
+
+    So the MiniMax renderer absolutizes repo-relative stdio paths against the
+    repo root. Two things deliberately do NOT change:
+
+      * The tracked `.claude/mcp.json` keeps `./pmoves-hirag-mcp` relative.
+        The other renderers are untouched -- absolutizing a path inside a
+        repo-rooted roster would break the contract that roster already has.
+      * Expansion order. The path is absolutized BEFORE `${VAR}` expansion,
+        matching mcp_roster_normalize.py's P3-then-P4 order, so a value the
+        operator supplies at runtime stays their responsibility.
+    """
+    if not isinstance(value, str) or not value.startswith("./"):
+        return value
+    return os.path.join(str(root or PROJECT_ROOT), value[2:])
+
+
+def render_minimax(
+    specs: List[ServerSpec],
+    context: Dict[str, str],
+    *,
+    root: Optional[Path] = None,
+    **kw: Any,
+) -> Dict[str, Any]:
     """Render MiniMax Code mcpServers block (native `~/.minimax/mcp.json`).
 
     WHY A DEDICATE RENDERER. MiniMax Code (the Mavis desktop client) does
@@ -365,6 +411,10 @@ def render_minimax(specs: List[ServerSpec], context: Dict[str, str], **kw: Any) 
     The `type` vocabulary is the MiniMax MCP contract: `stdio` takes
     `command`/`args`/`env`; `http` / `streamable-http` / `sse` take
     `url`/`headers`. stdio and remote fields are never mixed on one entry.
+
+    `root` is the repo root that repo-relative stdio paths resolve against.
+    It defaults to this module's own PROJECT_ROOT. See `_abs_repo_relative`
+    for why this client -- and only this client -- needs it.
     """
     servers: Dict[str, Any] = {}
     for spec in specs:
@@ -382,8 +432,10 @@ def render_minimax(specs: List[ServerSpec], context: Dict[str, str], **kw: Any) 
                 entry["headers"] = _render_headers(spec.headers, context, **kw)
         elif spec.transport == "stdio":
             command, args = _split_command_args(spec.command or "", spec.args)
-            entry["command"] = command
-            entry["args"] = _render_args(args, context, **kw)
+            entry["command"] = _abs_repo_relative(command, root)
+            # Absolutize BEFORE expansion -- see _abs_repo_relative.
+            abs_args = [_abs_repo_relative(a, root) for a in args]
+            entry["args"] = _render_args(abs_args, context, **kw)
             if spec.env:
                 entry["env"] = _render_env(spec.env, context, **kw)
         else:
@@ -404,9 +456,52 @@ RENDERERS = {
     "minimax": render_minimax,
 }
 
+# Renderers that resolve repo-relative paths against the repo root.
+#
+# WHY ONLY MINIMAX. Every other client reads a TRACKED roster that lives
+# INSIDE the repo (`.claude/mcp.json`, `.kimi/mcp.json`, `kilo.json`,
+# `.opencode/config.json`, the Hermes profile) and hands it to the binary
+# with `--mcp-config`. A repo-relative path inside a repo-rooted roster is
+# resolved by the client against the repo -- which is correct, and is what
+# `.claude/mcp.json`'s deliberate `./pmoves-hirag-mcp` depends on.
+#
+# The MiniMax client is the odd one out: it reads `~/.minimax/mcp.json`,
+# which lives OUTSIDE the repo, so nothing about it is repo-rooted. Its
+# repo-relative stdio paths have to be absolutized at render time or they
+# resolve against whatever directory the client happened to be started in.
+# See _abs_repo_relative.
+ROOT_AWARE_RENDERERS = ("minimax",)
+
 # ---------------------------------------------------------------------------
 # Merge / write helpers
 # ---------------------------------------------------------------------------
+
+# Keys the MiniMax RUNTIME owns, not the generator.
+#
+# WHY THIS LIST EXISTS. The renderer docstring (render_minimax) promises:
+# "`configured` -- the MiniMax runtime marks a server as 'configured' once it
+# has been wired; the merge path preserves the operator's existing value."
+# That promise was FALSE until this constant was introduced: the rendered
+# overlay always supplied `configured: True` and `builtin: False`, and
+# _deep_merge overwrites scalars with the overlay, so a regeneration
+# silently reset whatever the runtime had decided.
+#
+# THE CONSEQUENCE (the bug this fixes). A server the operator had NOT yet
+# finished wiring came back marked `configured: true` -- falsely claiming it
+# was live. And a server the runtime had marked `builtin: true` came back
+# marked `builtin: false` -- stripping a runtime-owned marker. Either way
+# the regenerated file disagreed with the runtime's own state.
+#
+# THE FIX. These keys are supplied by the renderer only for NEW entries.
+# On merge, an entry that ALREADY exists in the on-disk config keeps the
+# runtime's value verbatim. That is what "the merge path preserves the
+# operator's existing value" has to mean for it to be true.
+#
+# Deliberately NOT a general "preserve these keys" list for every client:
+# only MiniMax's runtime owns these names. Claude/Kimi/Kilo have no such
+# keys, and inventing a shared mechanism for one client would be a
+# workaround, not a fix.
+MINIMAX_RUNTIME_MANAGED_KEYS = ("configured", "builtin")
 
 
 def _deep_merge(base: Any, overlay: Any, *, _key: Optional[str] = None) -> Any:
@@ -426,6 +521,59 @@ def _deep_merge(base: Any, overlay: Any, *, _key: Optional[str] = None) -> Any:
             return list(overlay)
         return list(base) + [item for item in overlay if item not in base]
     return overlay
+
+
+def _restore_minimax_runtime_managed(
+    existing: Dict[str, Any], rendered: Dict[str, Any]
+) -> Dict[str, Any]:
+    """Re-apply the MiniMax runtime's own values onto a freshly rendered roster.
+
+    Call this AFTER `_deep_merge`, because the merge is what overwrites them:
+    the rendered overlay carries `configured: True` / `builtin: False` for
+    every server, and `_deep_merge` lets the overlay win on scalars.
+
+    For each server that ALREADY existed in the on-disk config, the
+    runtime-managed keys are copied back from the on-disk value. Servers
+    that are NEW in this render keep the renderer's defaults -- there is no
+    runtime state for a server the runtime has never seen.
+
+    Returns a NEW dict; the inputs are not mutated.
+    """
+    existing_servers = existing.get("mcpServers")
+    if not isinstance(existing_servers, dict):
+        # Nothing to preserve. Return a copy of the render.
+        return dict(rendered)
+
+    result = dict(rendered)
+    rendered_servers = rendered.get("mcpServers")
+    if not isinstance(rendered_servers, dict):
+        return result
+
+    merged_servers = dict(rendered_servers)
+    for server_key, on_disk in existing_servers.items():
+        if not isinstance(on_disk, dict):
+            continue
+        current = merged_servers.get(server_key)
+        if not isinstance(current, dict):
+            # The render does not carry this server (it was dropped from
+            # the roster). Leave it alone -- do not resurrect it.
+            continue
+        # COPY the per-server dict before touching it. `merged_servers` holds
+        # the SAME dict objects as `rendered`, so assigning into `current`
+        # in place would mutate the caller's input -- which this function
+        # promises not to do. The copy is written back so the restored
+        # values are the ones that land on disk.
+        updated = dict(current)
+        for managed_key in MINIMAX_RUNTIME_MANAGED_KEYS:
+            if managed_key not in on_disk:
+                # The runtime has not expressed an opinion about this key
+                # on this entry. The renderer's default stands.
+                continue
+            updated[managed_key] = on_disk[managed_key]
+        merged_servers[server_key] = updated
+
+    result["mcpServers"] = merged_servers
+    return result
 
 
 def _load_json_or_empty(path: Path) -> Dict[str, Any]:
@@ -489,6 +637,7 @@ def generate_for_client(
     allow_os_environ: bool = True,
     profile_path: Optional[Path] = None,
     use_profile: bool = True,
+    root: Optional[Path] = None,
 ) -> Dict[str, Any]:
     inventory = inventory or load_inventory()
     context = context or {}
@@ -509,7 +658,14 @@ def generate_for_client(
                     f"endpoint mode ({endpoint}) excludes it."
                 )
             specs = [by_key[k] for k in declared]
-    return RENDERERS[client](specs, context, allow_os_environ=allow_os_environ)
+    # Only the MiniMax renderer resolves repo-relative paths, because only the
+    # MiniMax client reads its roster from OUTSIDE the repo. See
+    # _abs_repo_relative for the whole argument; the short form is that the
+    # other clients read a repo-rooted roster and would be BROKEN by it.
+    extra: Dict[str, Any] = {}
+    if root is not None and client in ROOT_AWARE_RENDERERS:
+        extra["root"] = root
+    return RENDERERS[client](specs, context, allow_os_environ=allow_os_environ, **extra)
 
 
 def write_client_config(
@@ -523,6 +679,7 @@ def write_client_config(
     allow_os_environ: bool = True,
     profile_path: Optional[Path] = None,
     use_profile: bool = True,
+    root: Optional[Path] = None,
 ) -> Path:
     """Generate and write config for a single client.
 
@@ -531,10 +688,14 @@ def write_client_config(
     is printed to stdout; callers are responsible for injecting it into the
     Hermes config.yaml because YAML round-tripping is left to the Hermes
     bootstrap script.
+
+    `root` is the repo root that repo-relative stdio paths resolve against,
+    for the clients that need it (ROOT_AWARE_RENDERERS). It defaults to the
+    generator's own PROJECT_ROOT.
     """
     rendered = generate_for_client(client, inventory=inventory, endpoint=endpoint, context=context,
                                    allow_os_environ=allow_os_environ, profile_path=profile_path,
-                                   use_profile=use_profile)
+                                   use_profile=use_profile, root=root)
 
     if client == "hermes":
         # Hermes is YAML; write a snippet file for the bootstrap script to merge.
@@ -553,6 +714,13 @@ def write_client_config(
         _backup_once(output_path)
         existing = _load_json_or_empty(output_path)
         final = _deep_merge(existing, rendered)
+        if client == "minimax":
+            # The rendered overlay carries `configured: True` /
+            # `builtin: False` for every server, and _deep_merge lets the
+            # overlay win on scalars -- so the merge is exactly what
+            # clobbers the runtime's own values. Restore them AFTER the
+            # merge. See MINIMAX_RUNTIME_MANAGED_KEYS.
+            final = _restore_minimax_runtime_managed(existing, final)
     else:
         final = rendered
 

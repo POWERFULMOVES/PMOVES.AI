@@ -105,5 +105,84 @@ if (Test-Path $envf) {
 # --- NAME BRIDGES (mirror bash twin) ----------------------------------------
 # (no name bridges for this CLI)
 
+# --- MCP ROSTER GENERATION ------------------------------------------------
+# WHY THIS BLOCK EXISTS. minimax-pmoves does NOT read the tracked
+# `.claude/mcp.json` roster that the sibling stacks (claude / kimi / kilo /
+# hermes / crush) load -- MiniMax Code reads its OWN `~/.minimax/mcp.json`,
+# and that file is RENDERED by pmoves/tools/mcp_config_generator.py from the
+# shared inventory plus this client's bootstrap profile.
+#
+# Nothing else in the launch path rendered it. The launcher sourced
+# env.shared and handed off to the binary, so a fresh host -- or any host
+# whose ~/.minimax/mcp.json still carried only the `composio` entry -- started
+# the client with NO PMOVES MCP servers at all. That is a SILENT degradation:
+# no error, no non-zero exit, just a client that cannot reach the fleet.
+#
+# ORDERING IS LOAD-BEARING.
+#   * AFTER env.shared -- the roster expands ${VAR} from the env.shared
+#     values (NATS_URL, the cipher token, the cross-node hostnames). A roster
+#     rendered before env.shared would carry literal ${VAR} text.
+#   * BEFORE the handoff -- the client reads ~/.minimax/mcp.json at startup.
+#
+# FAILURE PATH: FAIL CLOSED. If the generator cannot run, the client would
+# start with a stale or missing roster and no error at all -- the precise
+# failure this block exists to prevent. So a generator failure is an explicit
+# ERROR plus a non-zero exit. PMOVES_ALLOW_MISSING_ROSTER=1 is the explicit,
+# greppable opt-out.
+#
+# --endpoint local: the client is a DESKTOP client on this host, and the
+# services it declares node-local are published on THIS host's loopback.
+# The generator's "fleet" default would point them at ${TS_Z890} instead.
+$rosterGen = Join-Path $root 'pmoves\tools\mcp_config_generator.py'
+if ($env:PMOVES_ALLOW_MISSING_ROSTER) {
+    Write-Warning "[minimax-pmoves] PMOVES_ALLOW_MISSING_ROSTER is set -- skipping MCP roster generation."
+} else {
+    $rosterWhy = ''
+    $pyHelper = Join-Path $root 'pmoves\scripts\pm-python.ps1'
+    if (-not (Test-Path -LiteralPath $rosterGen -PathType Leaf)) {
+        $rosterWhy = "the generator is missing: $rosterGen"
+    } elseif (-not (Test-Path -LiteralPath $pyHelper -PathType Leaf)) {
+        $rosterWhy = "pm-python.ps1 is missing: $pyHelper"
+    } else {
+        . $pyHelper
+        # -Probe yaml: mcp_config_generator.py reads this client's bootstrap
+        # profile, which is YAML. An interpreter that cannot import it would
+        # fail the render with a traceback instead of a clean refusal.
+        $pyArgv = Get-PmovesPythonArgv -Root $root -Probe 'yaml'
+        if (-not $pyArgv) {
+            $rosterWhy = "no python interpreter that can import yaml (tried `$env:PMOVES_PYTHON, $root\pmoves\.venv-pmoves, py -3, python3, python)"
+        } else {
+            # @(...) is load-bearing: a one-element slice is a bare STRING, and
+            # splatting a string passes its characters (see pm-python.ps1).
+            $pyPre = @(if ($pyArgv.Count -gt 1) { $pyArgv[1..($pyArgv.Count - 1)] })
+            $exe = $pyArgv[0]
+            # A generator failure is DATA here -- it becomes $rosterWhy -- not
+            # a script abort, so the native non-zero exit is captured instead
+            # of thrown. $ErrorActionPreference is 'Stop' in this script.
+            $prevEap = $ErrorActionPreference
+            $ErrorActionPreference = 'Continue'
+            $rosterRc = 0
+            try {
+                & $exe @pyPre $rosterGen --client minimax --endpoint local
+                $rosterRc = $LASTEXITCODE
+            } catch {
+                $rosterRc = 1
+            } finally {
+                $ErrorActionPreference = $prevEap
+            }
+            if ($rosterRc -ne 0) {
+                $rosterWhy = "mcp_config_generator.py --client minimax --endpoint local exited $rosterRc"
+            }
+        }
+    }
+    if ($rosterWhy) {
+        Write-Error "[minimax-pmoves] ERROR: could not generate the MCP roster -- $rosterWhy" -ErrorAction Continue
+        Write-Error "[minimax-pmoves]        the client would start with NO PMOVES MCP servers." -ErrorAction Continue
+        Write-Error "[minimax-pmoves]        to launch anyway: `$env:PMOVES_ALLOW_MISSING_ROSTER=1 ..." -ErrorAction Continue
+        exit 1
+    }
+    Write-Host "[minimax-pmoves] MCP roster generated for client 'minimax' (endpoint 'local')."
+}
+
 # --- LAUNCH ---------------------------------------------------------------
 & minimax @args

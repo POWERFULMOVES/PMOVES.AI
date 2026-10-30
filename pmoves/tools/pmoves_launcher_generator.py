@@ -174,6 +174,11 @@ class CliTool:
     signature_aliases: list[str]    # registry `signature` values this tool matches
     managed: str = "generator"  # "generator" (we emit) | "hand" (existing files stay)
     script_path: str | None = None  # pmoves/scripts/* path from cli_tools.yaml
+    mcp_roster_client: str | None = None  # mcp_config_generator client whose
+                                         # roster this launcher must materialize
+                                         # on disk BEFORE the binary is handed off
+    mcp_roster_endpoint: str | None = None  # --endpoint mode for that render
+                                            # ("local" | "fleet")
 
     @property
     def family(self) -> str:
@@ -273,6 +278,54 @@ def _family_of(wrapper_name: str) -> str:
     return wrapper_name[:-len("-pmoves")] if wrapper_name.endswith("-pmoves") else wrapper_name
 
 
+# Which mcp_config_generator client profile each CLI family must have on disk
+# before the binary is handed off, and in which ENDPOINT MODE to render it.
+#
+# WHY THIS IS A MAPPING AND NOT A RULE. A CLI reads its MCP roster from
+# wherever its CLIENT reads it, and the two families do not work the same way:
+#
+#   * claude / kimi / kilo / opencode / hermes / crush read a TRACKED roster
+#     that lives INSIDE the repo (`.claude/mcp.json` and friends) and hand it
+#     to the binary with `--mcp-config`. Nothing has to be GENERATED at
+#     launch time -- the file is already there, in the repo, and it is
+#     version-controlled.
+#
+#   * minimax (MiniMax Code / the Mavis desktop client) reads its OWN
+#     `~/.minimax/mcp.json`. That file is RENDERED by
+#     pmoves/tools/mcp_config_generator.py from the shared inventory plus the
+#     client's bootstrap profile. It is NOT in the repo and nothing else
+#     renders it.
+#
+# The P1 review finding on #3418 was exactly that gap for the MiniMax
+# launcher: it sourced env.shared and exec'd the binary, and NOTHING in the
+# launch path ever called the generator. So a fresh host -- or any host whose
+# ~/.minimax/mcp.json still carried only the `composio` entry -- started the
+# client with no PMOVES MCP servers at all. That is a SILENT degradation: no
+# error, no non-zero exit, just a client that cannot reach the fleet.
+#
+# WHY "local" AND NOT THE GENERATOR'S "fleet" DEFAULT. The endpoint mode
+# chooses between a loopback URL and the tailnet URL of the fleet node
+# (${TS_Z890}). The MiniMax Code client is a DESKTOP client running on the
+# operator's own host, and the three services it declares as node-local --
+# cipher (8105), agent-zero (8081) and flute (8055) -- are published on
+# THIS host's loopback. The fleet URLs point at a different machine, so a
+# "fleet" render produces a roster whose three live entries all address the
+# wrong host. The operator's own bootstrap profile states the intent
+# ("`endpoint` is left as the inventory's own resolution ... The launcher
+# picks the resolution mode; the profile states the INTENT"), and the
+# roster already on disk (rendered by hand on 2026-10-26) carries
+# localhost for all three. The launcher now picks the same mode.
+#
+# The roster block is emitted ONLY for the families listed here. Adding a
+# family to this map is what turns the block on for it; that is the whole
+# mechanism, so it is one line and greppable rather than a rule spread across
+# the templates.
+ROSTER_CLIENT_BY_FAMILY: dict[str, tuple[str, str]] = {
+    # family -> (mcp_config_generator client name, --endpoint mode)
+    "minimax": ("minimax", "local"),
+}
+
+
 def load_cli_tools(registry_root: Path) -> list[CliTool]:
     """Read pmoves/configs/cli_tools.yaml :: pmoves_wrappers."""
     cli_yaml = _load_yaml(registry_root / "pmoves" / "configs" / "cli_tools.yaml")
@@ -295,6 +348,15 @@ def load_cli_tools(registry_root: Path) -> list[CliTool]:
             signature_aliases=list(DEFAULT_SIGNATURE_ALIASES.get(_family_of(name), [name])),
             managed="hand" if name in ("claude-pmoves", "crush-pmoves") else "generator",
             script_path=entry.get("script"),
+            # Only the families in ROSTER_CLIENT_BY_FAMILY get an MCP roster
+            # generation block in their launcher. See that constant for why
+            # this is a mapping and not a rule.
+            mcp_roster_client=(
+                ROSTER_CLIENT_BY_FAMILY.get(_family_of(name), (None, None))[0]
+            ),
+            mcp_roster_endpoint=(
+                ROSTER_CLIENT_BY_FAMILY.get(_family_of(name), (None, None))[1]
+            ),
         )
         tools.append(tool)
     return tools
@@ -359,6 +421,200 @@ def load_node_identities(registry_root: Path, tools: list[CliTool]) -> list[Node
 
 
 # ----------------------------------------------------------------------------
+# Template: MCP roster generation block
+# ----------------------------------------------------------------------------
+#
+# WHY A BLOCK AND NOT A RULE INSIDE THE TEMPLATE. The roster generation is
+# needed by exactly ONE family today (minimax -- see
+# ROSTER_CLIENT_BY_FAMILY), and every other family reads a TRACKED,
+# repo-rooted roster that needs no generation. A rule baked into the template
+# would either fire for everyone (wrong: it would rewrite rosters the other
+# clients already read correctly) or need a condition inline at three places
+# in two languages. A block that renders to the empty string for every other
+# family keeps the "which clients need this" question in ONE map, and keeps
+# the emitted launchers byte-identical to what they are today.
+#
+# WHY IT IS IN THE GENERATOR AND NOT IN THE GENERATED FILES. All five
+# `minimax-pmoves` provision files (launcher .sh/.ps1/.cmd + the two
+# installers) are `managed=generator` in the plan. Hand-editing the emitted
+# .sh would drift from `--check` on the next regeneration, and the drift gate
+# would fail CI -- so the fix belongs in the template, and the emitted files
+# are regenerated from it.
+
+def _render_bash_roster_block(tool: CliTool) -> str:
+    """Emit the MCP roster generation block for the bash launcher.
+
+    Returns "" for a tool whose family does not need one.
+    """
+    client = tool.mcp_roster_client
+    endpoint = tool.mcp_roster_endpoint
+    if not client:
+        return ""
+    return f"""
+# --- MCP ROSTER GENERATION ------------------------------------------------
+# WHY THIS BLOCK EXISTS. {tool.launcher_basename} does NOT read the tracked
+# `.claude/mcp.json` roster that the sibling stacks (claude / kimi / kilo /
+# hermes / crush) load -- MiniMax Code reads its OWN `~/.minimax/mcp.json`,
+# and that file is RENDERED by pmoves/tools/mcp_config_generator.py from the
+# shared inventory plus this client's bootstrap profile.
+#
+# Nothing else in the launch path rendered it. The launcher sourced
+# env.shared and exec'd the binary, so a fresh host -- or any host whose
+# ~/.minimax/mcp.json still carried only the `composio` entry -- started the
+# client with NO PMOVES MCP servers at all. That is a SILENT degradation: no
+# error, no non-zero exit, just a client that cannot reach the fleet. This
+# block is what turns the roster from a hope into a precondition.
+#
+# ORDERING IS LOAD-BEARING.
+#   * AFTER env.shared -- the roster expands ${{VAR}} from the env.shared
+#     values (NATS_URL, the cipher token, the cross-node hostnames). A roster
+#     rendered before env.shared would carry literal ${{VAR}} text, which is
+#     the exact failure mode claude-pmoves.sh fails closed on.
+#   * BEFORE the exec -- the client reads ~/.minimax/mcp.json at startup, so
+#     the file has to be current before the binary starts.
+#
+# --endpoint {endpoint}: the client is a DESKTOP client on this host, and the
+# services it declares node-local are published on THIS host's loopback.
+# The generator's "fleet" default would point them at ${{TS_Z890}} instead.
+#
+# FAILURE PATH: FAIL CLOSED. If the generator cannot run, the client would
+# start with a stale or missing roster and no error at all -- the precise
+# failure this block exists to prevent. So a generator failure is an explicit
+# ERROR plus a non-zero exit, not a WARN. The operator can still launch
+# without the roster by exporting PMOVES_ALLOW_MISSING_ROSTER=1, which is an
+# explicit, greppable opt-out rather than a default.
+#
+# Python discovery is pm-python.sh's ladder (pm_pick_python) -- NOT a bare
+# `python3`. The probe argument is `yaml` because mcp_config_generator.py
+# reads this client's bootstrap profile, which is YAML.
+ROSTER_GEN="$ROOT/pmoves/tools/mcp_config_generator.py"
+if [ -n "${{PMOVES_ALLOW_MISSING_ROSTER:-}}" ]; then
+  echo "[{tool.launcher_basename}] PMOVES_ALLOW_MISSING_ROSTER is set -- skipping MCP roster generation." >&2
+else
+  _roster_why=""
+  if [ ! -f "$ROSTER_GEN" ]; then
+    _roster_why="the generator is missing: $ROSTER_GEN"
+  elif [ ! -f "$ROOT/pmoves/scripts/pm-python.sh" ]; then
+    _roster_why="pm-python.sh is missing: $ROOT/pmoves/scripts/pm-python.sh"
+  else
+    # shellcheck source=../../pmoves/scripts/pm-python.sh
+    . "$ROOT/pmoves/scripts/pm-python.sh"
+    if ! pm_pick_python yaml 2>/dev/null; then
+      _roster_why="no python interpreter that can import yaml (tried \\$PMOVES_PYTHON, $ROOT/pmoves/.venv-pmoves, python3, py -3, python)"
+    else
+      _roster_rc=0
+      "${{PM_PY[@]}}" "$ROSTER_GEN" --client {client} --endpoint {endpoint} || _roster_rc=$?
+      if [ "$_roster_rc" -ne 0 ]; then
+        _roster_why="mcp_config_generator.py --client {client} --endpoint {endpoint} exited $_roster_rc under '${{PM_PY[*]}}' (its own stderr is above)"
+      fi
+    fi
+  fi
+  if [ -n "$_roster_why" ]; then
+    echo "[{tool.launcher_basename}] ERROR: could not generate the MCP roster -- $_roster_why" >&2
+    echo "[{tool.launcher_basename}]        the client would start with NO PMOVES MCP servers." >&2
+    echo "[{tool.launcher_basename}]        to launch anyway: PMOVES_ALLOW_MISSING_ROSTER=1 {tool.launcher_basename} ..." >&2
+    exit 1
+  fi
+  echo "[{tool.launcher_basename}] MCP roster generated for client '{client}' (endpoint '{endpoint}')." >&2
+fi
+"""
+
+
+def _render_powershell_roster_block(tool: CliTool) -> str:
+    """Emit the MCP roster generation block for the PowerShell launcher.
+
+    The PowerShell twin of _render_bash_roster_block. It sources the Windows
+    sibling of pm-python.sh (pmoves/scripts/pm-python.ps1) rather than
+    re-implementing the ladder: one discovery convention per shell, the same
+    way mavis_sdk_env.sh / mavis_sdk_env.ps1 are a pair.
+    """
+    client = tool.mcp_roster_client
+    endpoint = tool.mcp_roster_endpoint
+    if not client:
+        return ""
+    return f"""
+# --- MCP ROSTER GENERATION ------------------------------------------------
+# WHY THIS BLOCK EXISTS. {tool.launcher_basename} does NOT read the tracked
+# `.claude/mcp.json` roster that the sibling stacks (claude / kimi / kilo /
+# hermes / crush) load -- MiniMax Code reads its OWN `~/.minimax/mcp.json`,
+# and that file is RENDERED by pmoves/tools/mcp_config_generator.py from the
+# shared inventory plus this client's bootstrap profile.
+#
+# Nothing else in the launch path rendered it. The launcher sourced
+# env.shared and handed off to the binary, so a fresh host -- or any host
+# whose ~/.minimax/mcp.json still carried only the `composio` entry -- started
+# the client with NO PMOVES MCP servers at all. That is a SILENT degradation:
+# no error, no non-zero exit, just a client that cannot reach the fleet.
+#
+# ORDERING IS LOAD-BEARING.
+#   * AFTER env.shared -- the roster expands ${{VAR}} from the env.shared
+#     values (NATS_URL, the cipher token, the cross-node hostnames). A roster
+#     rendered before env.shared would carry literal ${{VAR}} text.
+#   * BEFORE the handoff -- the client reads ~/.minimax/mcp.json at startup.
+#
+# FAILURE PATH: FAIL CLOSED. If the generator cannot run, the client would
+# start with a stale or missing roster and no error at all -- the precise
+# failure this block exists to prevent. So a generator failure is an explicit
+# ERROR plus a non-zero exit. PMOVES_ALLOW_MISSING_ROSTER=1 is the explicit,
+# greppable opt-out.
+#
+# --endpoint {endpoint}: the client is a DESKTOP client on this host, and the
+# services it declares node-local are published on THIS host's loopback.
+# The generator's "fleet" default would point them at ${{TS_Z890}} instead.
+$rosterGen = Join-Path $root 'pmoves\\tools\\mcp_config_generator.py'
+if ($env:PMOVES_ALLOW_MISSING_ROSTER) {{
+    Write-Warning "[{tool.launcher_basename}] PMOVES_ALLOW_MISSING_ROSTER is set -- skipping MCP roster generation."
+}} else {{
+    $rosterWhy = ''
+    $pyHelper = Join-Path $root 'pmoves\\scripts\\pm-python.ps1'
+    if (-not (Test-Path -LiteralPath $rosterGen -PathType Leaf)) {{
+        $rosterWhy = "the generator is missing: $rosterGen"
+    }} elseif (-not (Test-Path -LiteralPath $pyHelper -PathType Leaf)) {{
+        $rosterWhy = "pm-python.ps1 is missing: $pyHelper"
+    }} else {{
+        . $pyHelper
+        # -Probe yaml: mcp_config_generator.py reads this client's bootstrap
+        # profile, which is YAML. An interpreter that cannot import it would
+        # fail the render with a traceback instead of a clean refusal.
+        $pyArgv = Get-PmovesPythonArgv -Root $root -Probe 'yaml'
+        if (-not $pyArgv) {{
+            $rosterWhy = "no python interpreter that can import yaml (tried `$env:PMOVES_PYTHON, $root\\pmoves\\.venv-pmoves, py -3, python3, python)"
+        }} else {{
+            # @(...) is load-bearing: a one-element slice is a bare STRING, and
+            # splatting a string passes its characters (see pm-python.ps1).
+            $pyPre = @(if ($pyArgv.Count -gt 1) {{ $pyArgv[1..($pyArgv.Count - 1)] }})
+            $exe = $pyArgv[0]
+            # A generator failure is DATA here -- it becomes $rosterWhy -- not
+            # a script abort, so the native non-zero exit is captured instead
+            # of thrown. $ErrorActionPreference is 'Stop' in this script.
+            $prevEap = $ErrorActionPreference
+            $ErrorActionPreference = 'Continue'
+            $rosterRc = 0
+            try {{
+                & $exe @pyPre $rosterGen --client {client} --endpoint {endpoint}
+                $rosterRc = $LASTEXITCODE
+            }} catch {{
+                $rosterRc = 1
+            }} finally {{
+                $ErrorActionPreference = $prevEap
+            }}
+            if ($rosterRc -ne 0) {{
+                $rosterWhy = "mcp_config_generator.py --client {client} --endpoint {endpoint} exited $rosterRc"
+            }}
+        }}
+    }}
+    if ($rosterWhy) {{
+        Write-Error "[{tool.launcher_basename}] ERROR: could not generate the MCP roster -- $rosterWhy" -ErrorAction Continue
+        Write-Error "[{tool.launcher_basename}]        the client would start with NO PMOVES MCP servers." -ErrorAction Continue
+        Write-Error "[{tool.launcher_basename}]        to launch anyway: `$env:PMOVES_ALLOW_MISSING_ROSTER=1 ..." -ErrorAction Continue
+        exit 1
+    }}
+    Write-Host "[{tool.launcher_basename}] MCP roster generated for client '{client}' (endpoint '{endpoint}')."
+}}
+"""
+
+
+# ----------------------------------------------------------------------------
 # Template: bash launcher (.sh)
 # ----------------------------------------------------------------------------
 
@@ -366,6 +622,7 @@ def render_bash_launcher(tool: CliTool) -> str:
     """Generate a bash launcher that sources env.shared and execs the binary."""
     blocklist_re = _bash_blocklist_regex(tool.blocklist)
     bridges_block = _render_bridges_bash(tool.bridges)
+    roster_block = _render_bash_roster_block(tool)
     # AWK_INVOCATION: replace every single quote with the 4-char bash
     # idiom `'\''` (close single-quote, escaped quote, open new quote).
     # Built in Python so we never nest backslash escapes inside the f-string
@@ -520,7 +777,7 @@ fi
 
 # --- NAME BRIDGES (operator-facing alias to upstream SDK name) -------------
 {bridges_block}
-
+{roster_block}
 # --- LAUNCH ---------------------------------------------------------------
 export PMOVES_LAUNCHER_SESSION="{tool.launcher_basename}.sh"
 exec {tool.binary} "$@"
@@ -575,6 +832,7 @@ def render_powershell_launcher(tool: CliTool) -> str:
     """Generate the PowerShell twin of the bash launcher."""
     bridge_block = _render_bridges_powershell(tool.bridges, tool.launcher_basename)
     blocklist_entries = _powershell_blocklist_entries(tool.blocklist)
+    roster_block = _render_powershell_roster_block(tool)
     header = GENERATOR_HEADER_PWSH.format(ver=GENERATOR_VERSION)
     return f"""{header}
 # {tool.launcher_basename}.ps1 -- launch `{tool.binary}` with pmoves/env.shared loaded
@@ -673,7 +931,7 @@ if (Test-Path $envf) {{
 
 # --- NAME BRIDGES (mirror bash twin) ----------------------------------------
 {bridge_block}
-
+{roster_block}
 # --- LAUNCH ---------------------------------------------------------------
 & {tool.binary} @args
 """
