@@ -1,0 +1,109 @@
+name: Agent-Zero Release Watch (auto submodule bump PR)
+
+# Watches upstream agent0ai/agent-zero releases; when a new release tag exists
+# that our PMOVES-Agent-Zero submodule pin does not contain, opens a PR bumping
+# the gitlink. Auth via the GitHub App (._app-token.yml pattern) — never the
+# shared user PAT. Fail-closed: any probe error opens an issue-comment-free no-op
+# run and marks the job failed (visible, not silent).
+
+on:
+  schedule:
+    - cron: '23 6 * * *' # daily 06:23 UTC — off the hour to dodge peak
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  check-release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      bumped: ${{ steps.compare.outputs.bumped }}
+      tag: ${{ steps.latest.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true # PMOVES-Agent-Zero gitlink fetched for SHA compare
+          fetch-depth: 0
+
+      - name: Latest upstream release
+        id: latest
+        run: |
+          TAG=$(curl -sf https://api.github.com/repos/agent0ai/agent-zero/releases/latest | jq -r '.tag_name')
+          [ "$TAG" != "null" ] && [ -n "$TAG" ] || { echo "::error::upstream latest release probe failed"; exit 1; }
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "upstream latest release: $TAG"
+
+      - name: Compare with pinned submodule SHA
+        id: compare
+        run: |
+          PINNED=$(git ls-tree HEAD PMOVES-Agent-Zero | awk '{print $3}')
+          [ -n "$PINNED" ] || { echo "::error::gitlink not found"; exit 1; }
+          # does the fork main (which carries our sync-merge commits) contain the upstream tag?
+          if git -C PMOVES-Agent-Zero merge-base --is-ancestor "$PINNED" "$(git -C PMOVES-Agent-Zero rev-parse origin/main)"; then
+            echo "pinned SHA is an ancestor of fork main — pin valid"
+          else
+            echo "::warning::pinned SHA not on fork main — manual inspection required"
+          fi
+          # upstream tag contained in fork main?
+          git -C PMOVES-Agent-Zero fetch --depth=50 origin tag "$TAG" 2>/dev/null || \
+            git -C PMOVES-Agent-Zero fetch --depth=50 https://github.com/agent0ai/agent-zero.git "$TAG"
+          if git -C PMOVES-Agent-Zero merge-base --is-ancestor "$TAG" origin/main; then
+            echo "bumped=false" >> "$GITHUB_OUTPUT"
+            echo "upstream $TAG already contained in fork main — nothing to do"
+          else
+            echo "bumped=true" >> "$GITHUB_OUTPUT"
+            echo "upstream $TAG NOT in fork main — bump PR warranted"
+          fi
+
+  bump-pr:
+    needs: check-release
+    if: needs.check-release.outputs.bumped == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Mint App token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.GH_APP_ID }}
+          private-key: ${{ secrets.GH_APP_SEC }}
+
+      - name: Update submodule gitlink to release commit
+        run: |
+          TAG='${{ needs.check-release.outputs.tag }}'
+          cd PMOVES-Agent-Zero
+          git fetch --depth=50 https://github.com/agent0ai/agent-zero.git "$TAG"
+          NEW_SHA=$(git rev-parse FETCH_HEAD)
+          git checkout --detach "$NEW_SHA"
+          cd ..
+          git config user.name 'pmoves-release-bot[bot]'
+          git config user.email 'pmoves-release-bot[bot]@users.noreply.github.com'
+          git add PMOVES-Agent-Zero
+          git commit -m "chore(submodule): bump PMOVES-Agent-Zero to upstream $TAG" \
+                     -m "Automated by the Agent-Zero Release Watch workflow (GitHub App identity). Release notes: https://github.com/agent0ai/agent-zero/releases/tag/$TAG"
+          git push origin "HEAD:refs/heads/chore/agent-zero-bump-$TAG"
+
+      - name: Open bump PR
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ steps.app-token.outputs.token }}
+          script: |
+            const tag = '${{ needs.check-release.outputs.tag }}';
+            await github.rest.pulls.create({
+              owner: context.repo.owner, repo: context.repo.repo,
+              title: `chore(submodule): bump PMOVES-Agent-Zero to upstream ${tag}`,
+              head: `chore/agent-zero-bump-${tag}`,
+              base: 'main',
+              body: `Automated submodule bump to upstream release ${tag}.\n\n` +
+                    `- Release notes: https://github.com/agent0ai/agent-zero/releases/tag/${tag}\n` +
+                    `- Review the release delta before merge (submodule bumps trigger CI rebuilds — upstream trust rule).\n` +
+                    `- PMOVES overlay files (PMOVES_AI_INTEGRATION.md etc.) re-apply per the sync-merge pattern (#23).\n\n` +
+                    `<sub>agent-zero-release-watch · GitHub App identity · fail-closed probes</sub>`
+            });
