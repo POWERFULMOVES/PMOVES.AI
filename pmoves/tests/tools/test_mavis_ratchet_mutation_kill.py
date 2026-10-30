@@ -62,6 +62,24 @@ Defect F -- the GitHub API host was matched by SUBSTRING
     ``https://evil.example/?x=api.github.com``. The host is now compared
     EXACTLY, through the parsed hostname.
 
+Defect G -- the module LOAD ran WITHOUT the mutation lock
+    ``_load_ratchet_module`` read the ratchet file and executed it
+    without holding the lock. A load that landed while another case
+    held the lock and had the file in its MUTATED state measured a
+    DIFFERENT ratchet than the one it thought it was measuring -- the
+    subject under test was swapped out from under the measurement. This
+    is round-3 finding C one level earlier: there the VERIFICATION was
+    unlocked, here it is the SUBJECT.
+
+Defect H -- the pytest run had NO timeout, and it ran while holding the lock
+    ``_run_pytest`` called ``subprocess.run`` with no ``timeout=``. It is
+    invoked from inside the mutation lock, so a hung pytest -- a stuck
+    child, a network-gated test waiting on a socket, a deadlock inside
+    the child -- held the lock FOREVER and every other case in this file
+    blocked behind it. Same defect class as lesson #19 ("a lock with a
+    timeout on one platform and none on another is two different
+    locks"): here the LOCK HOLDER is the one that can hang.
+
 THE KILL SIGNAL IS A TEST NAME, NOT A MOOD
 ------------------------------------------
 Each mutation names the test that MUST fail for the mutation to count as
@@ -265,6 +283,42 @@ ORIGINAL_API_HOST_MATCH = '''def _is_github_api_url(url: str) -> bool:
     return "api.github.com" in url
 '''
 
+# The FIXED module load: the whole read+exec happens UNDER the lock.
+FIXED_LOCKED_MODULE_LOAD = '''    path = TARGET if target is None else Path(target)
+    with _mutation_lock(lock_path):
+        return _read_and_exec_ratchet_module(path)
+'''
+
+# The ORIGINAL module load: no lock at all around the read+exec.
+UNLOCKED_MODULE_LOAD = '''    path = TARGET if target is None else Path(target)
+    return _read_and_exec_ratchet_module(path)
+'''
+
+# The FIXED pytest run: a REAL deadline, and the timeout is turned into a
+# failure that names the deadline, the test and the lock release.
+FIXED_PYTEST_RUN = '''    try:
+        return subprocess.run(
+            args,
+            cwd=str(REPO_ROOT),
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise PytestRunTimeout(
+            _pytest_timeout_message(timeout, args, select)
+        ) from exc
+'''
+
+# The ORIGINAL pytest run: NO deadline, and no handling of a hang.
+ORIGINAL_PYTEST_RUN = '''    return subprocess.run(
+        args,
+        cwd=str(REPO_ROOT),
+        capture_output=True,
+        text=True,
+    )
+'''
+
 # WHY THE MUTATE WINDOW IS LOCKED
 # -------------------------------
 # Both mutations rewrite the SAME tracked source file on disk and restore
@@ -286,6 +340,26 @@ _LOCK_TIMEOUT_SECONDS = 300
 # timeout is felt quickly, long enough not to spin the CPU.
 _LOCK_POLL_SECONDS = 0.2
 
+# The DEADLINE for ONE pytest run inside the mutation lock.
+#
+# WHY A SEPARATE, LARGER DEADLINE THAN THE LOCK ACQUISITION TIMEOUT
+# -------------------------------------------------------------------
+# ``_LOCK_TIMEOUT_SECONDS`` bounds how long a case WAITS FOR the lock.
+# This bounds how long a case may HOLD the lock. They are different
+# questions, and the second one is the one that can wedge the suite:
+# a pytest run that hangs holds the lock FOREVER unless the run itself
+# has a deadline.
+#
+# The measured slowest legitimate single pytest run in this harness is
+# ~1.6s (a selected test in the ratchet file, including interpreter and
+# pytest startup). 300s is ~180x that, so it cannot fire on a healthy
+# run, while still bounding a wedged one.
+_DEFAULT_PYTEST_TIMEOUT_SECONDS = 300.0
+# The override exists so the TIMEOUT PATH ITSELF can be exercised with a
+# short deadline instead of waiting out the real one. Same pattern as the
+# other gates in this lane (``PMOVES_MAVIS_MATRIX_CHECK``).
+_PYTEST_TIMEOUT_ENV = "PMOVES_MAVIS_RATCHET_PYTEST_TIMEOUT"
+
 
 class MutationLockTimeout(TimeoutError):
     """The mutation lock could not be taken within the deadline.
@@ -293,6 +367,15 @@ class MutationLockTimeout(TimeoutError):
     A subclass of ``TimeoutError`` (and therefore of ``OSError``) so the
     failure reads as a timeout, and so the Windows and POSIX branches
     behave identically.
+    """
+
+
+class PytestRunTimeout(TimeoutError):
+    """A pytest run inside the mutation lock exceeded its deadline.
+
+    A subclass of ``TimeoutError`` so it reads as a timeout and cannot be
+    mistaken for an ordinary assertion failure: the run was killed, not
+    judged.
     """
 
 
@@ -490,7 +573,57 @@ def _repo_relative(path: Path) -> str:
         return str(path)
 
 
-def _run_pytest(module: Path, *, select: str | None = None) -> subprocess.CompletedProcess[str]:
+def _pytest_timeout_seconds() -> float:
+    """The deadline for ONE pytest run, with the env override applied.
+
+    The override (``PMOVES_MAVIS_RATCHET_PYTEST_TIMEOUT``) exists so the
+    TIMEOUT PATH ITSELF can be tested with a short deadline instead of
+    waiting out the real one.
+
+    An unparseable, empty or non-positive override falls back to the
+    DEFAULT rather than silently dropping the deadline: a deadline that
+    can be switched off by a typo is the defect this fixes, not a fix.
+    """
+    raw = os.environ.get(_PYTEST_TIMEOUT_ENV)
+    if raw is None:
+        return _DEFAULT_PYTEST_TIMEOUT_SECONDS
+    try:
+        value = float(raw.strip())
+    except (AttributeError, ValueError):
+        return _DEFAULT_PYTEST_TIMEOUT_SECONDS
+    if value <= 0:
+        return _DEFAULT_PYTEST_TIMEOUT_SECONDS
+    return value
+
+
+def _pytest_timeout_message(
+    timeout: float,
+    args: list[str],
+    select: str | None,
+) -> str:
+    """The message a timed-out pytest run fails with.
+
+    It names the DEADLINE, the TEST that was being run, and the fact that
+    the mutation lock is being released -- a reader who hits this needs to
+    know that the lock is NOT stuck, and that the mutated file is being
+    restored.
+    """
+    return (
+        f"the pytest run TIMED OUT after {timeout:g}s (deadline "
+        f"{_PYTEST_TIMEOUT_ENV}={timeout:g}s): {args!r} select={select!r}. "
+        f"The mutation lock is about to be RELEASED and the mutated file is "
+        f"being restored. A hung child process, a network-gated test waiting "
+        f"on a socket, or a deadlock inside pytest holds the mutation lock "
+        f"FOREVER without this deadline -- check for a stuck child process."
+    )
+
+
+def _run_pytest(
+    module: Path,
+    *,
+    select: str | None = None,
+    timeout_seconds: float | None = None,
+) -> subprocess.CompletedProcess[str]:
     """Run a pytest module and capture the whole report.
 
     ``-rA`` makes pytest print the short test summary for EVERY test. That
@@ -501,6 +634,20 @@ def _run_pytest(module: Path, *, select: str | None = None) -> subprocess.Comple
     to run ONLY the test the mutation is supposed to kill: the other
     tests are not evidence for this mutation, and running the whole
     module would pay for a live ``mavis --version`` on every mutation.
+
+    THE DEADLINE IS MANDATORY, NOT DECORATION
+    -----------------------------------------
+    This runs INSIDE the mutation lock. A pytest run that hangs -- a stuck
+    child, a network-gated test waiting on a socket, a deadlock inside the
+    child -- would hold the lock FOREVER, and every other case in this
+    file would block behind it. That is the same defect class as the POSIX
+    branch that used a bare blocking ``flock`` (lesson #19: a lock with a
+    timeout on one platform and none on another is two different locks):
+    here the LOCK HOLDER is the one that can hang.
+
+    The deadline is overridable through ``PMOVES_MAVIS_RATCHET_PYTEST_TIMEOUT``
+    so the timeout path can be exercised without waiting out the real
+    deadline.
     """
     args = [
         sys.executable,
@@ -513,12 +660,23 @@ def _run_pytest(module: Path, *, select: str | None = None) -> subprocess.Comple
     ]
     if select:
         args += ["-k", select]
-    return subprocess.run(
-        args,
-        cwd=str(REPO_ROOT),
-        capture_output=True,
-        text=True,
+    timeout = (
+        _pytest_timeout_seconds()
+        if timeout_seconds is None
+        else float(timeout_seconds)
     )
+    try:
+        return subprocess.run(
+            args,
+            cwd=str(REPO_ROOT),
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise PytestRunTimeout(
+            _pytest_timeout_message(timeout, args, select)
+        ) from exc
 
 
 def _failed_test_names(output: str) -> set[str]:
@@ -545,23 +703,52 @@ def _failed_test_names(output: str) -> set[str]:
     return names
 
 
-def _load_ratchet_module():
-    """Import the ratchet module FROM DISK, freshly.
+def _read_and_exec_ratchet_module(path: Path):
+    """Read the module at ``path`` and execute it as a fresh module.
+
+    This is the INNER half of the load: the READ of the bytes and the
+    EXEC of what was read. It is called ONLY from
+    ``_load_ratchet_module``, which holds the mutation lock across the
+    whole call -- the read and the exec must not be separable, or a
+    mutation can land between them.
+    """
+    spec = importlib.util.spec_from_file_location(
+        "pmoves_mavis_ratchet_under_test", path
+    )
+    assert spec is not None and spec.loader is not None, (
+        f"could not load the ratchet module from {path}"
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _load_ratchet_module(
+    lock_path: Path | None = None,
+    target: Path | None = None,
+):
+    """Import the ratchet module FROM DISK, freshly, UNDER the mutation lock.
 
     The harness INVOKES the ratchet's own assertion functions -- it
     never restates the check inline. Loading from disk (rather than
     importing once at module load) is what lets the harness call those
     functions against a MUTATED source.
+
+    THE WHOLE READ+EXEC IS UNDER THE LOCK
+    --------------------------------------
+    The load is a READ of the target followed by an EXEC of what was
+    read. Without the lock, a load that lands while another case holds
+    the lock and has the file in its MUTATED state measures a DIFFERENT
+    ratchet than the one it thinks it is measuring: the subject under
+    test is swapped out from under the measurement. This is round-3
+    finding C (the unlocked clean-check read) one level EARLIER -- there
+    the verification was unlocked, here it is the subject.
+
+    The lock is taken for the whole read+exec and RELEASED afterwards.
     """
-    spec = importlib.util.spec_from_file_location(
-        "pmoves_mavis_ratchet_under_test", TARGET
-    )
-    assert spec is not None and spec.loader is not None, (
-        f"could not load the ratchet module from {TARGET}"
-    )
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+    path = TARGET if target is None else Path(target)
+    with _mutation_lock(lock_path):
+        return _read_and_exec_ratchet_module(path)
 
 
 def _mutation_case(
@@ -571,6 +758,7 @@ def _mutation_case(
     *,
     select: str,
     expected_failing_test: str,
+    lock_path: Path | None = None,
 ) -> tuple[bool, str]:
     """Apply a mutation, prove it kills, restore -- GREEN, RED, GREEN.
 
@@ -585,9 +773,21 @@ def _mutation_case(
     timeout, an unrelated failure) does NOT count: the harness may only
     claim a kill it can point at.
 
+    ``lock_path`` selects the advisory lock FILE. The default is the
+    shared lock, so the cases in this file serialize against each other
+    and against any other pytest process on this host. A case that needs
+    its own lock file (because it runs inside a child pytest that must
+    not contend for the shared one) passes one explicitly.
+
     Returns (mutation_was_killed, combined_output).
     """
-    with _mutation_lock():
+    # The mutation lock is held through ALL THREE PHASES. The ``with``
+    # statement is what guarantees it is RELEASED on every exit path --
+    # including the one where a pytest run times out and raises. The
+    # mutated file is restored by the ``finally`` INSIDE this block, so
+    # the restore happens BEFORE the lock is released: no other case can
+    # ever observe the file in its mutated state.
+    with _mutation_lock(lock_path):
         # The original BYTES are captured before the mutation and written
         # back verbatim: the restore must put the tracked file back exactly
         # as it was, not approximately.
@@ -909,6 +1109,164 @@ def test_clean_check_is_serialized_against_concurrent_mutation(
     )
 
 
+def test_module_load_is_serialized_against_concurrent_mutation(
+    tmp_path: Path,
+) -> None:
+    """The module LOAD must not observe a file that is mid-mutation.
+
+    ``_load_ratchet_module`` reads the ratchet file and executes it.
+    Without the mutation lock, a load that lands while another case
+    holds the lock and has the file in its MUTATED state measures a
+    DIFFERENT ratchet than the one it thinks it is measuring -- the
+    subject under test is swapped out from under the measurement.
+
+    The proof is a CONCURRENT mutation: a second thread takes the
+    mutation lock and puts a marker into the file, and the loader -- run
+    from a third thread -- must NOT be able to finish while that
+    mutation is in effect. It may only load once the mutation has been
+    undone.
+    """
+    lock_path = tmp_path / "module-load.lock"
+    target = tmp_path / "ratchet_under_test.py"
+    pristine = 'MARKER = "pristine"\n'
+    mutated = 'MARKER = "mutated"\n'
+    target.write_text(pristine, encoding="utf-8")
+
+    mutation_written = threading.Event()
+    may_restore = threading.Event()
+    load_finished = threading.Event()
+    outcome: dict[str, object] = {}
+
+    def mutator() -> None:
+        with _mutation_lock(lock_path):
+            target.write_text(mutated, encoding="utf-8")
+            mutation_written.set()
+            may_restore.wait(60)
+            target.write_text(pristine, encoding="utf-8")
+
+    def loader() -> None:
+        if not mutation_written.wait(60):
+            return
+        module = _load_ratchet_module(lock_path, target)
+        outcome["marker"] = getattr(module, "MARKER", None)
+        load_finished.set()
+
+    mutator_thread = threading.Thread(target=mutator, daemon=True)
+    loader_thread = threading.Thread(target=loader, daemon=True)
+    mutator_thread.start()
+    loader_thread.start()
+    try:
+        assert mutation_written.wait(60), (
+            "the mutator never put the file into its mutated state"
+        )
+        assert not load_finished.wait(2.0), (
+            "the module load COMPLETED while another case held the mutation "
+            "lock -- the loader measured a ratchet that was mid-mutation "
+            "instead of the one it thinks it measured"
+        )
+    finally:
+        may_restore.set()
+        mutator_thread.join(timeout=60)
+        loader_thread.join(timeout=60)
+
+    assert load_finished.is_set(), (
+        "the module load never completed after the mutation was restored"
+    )
+    assert outcome.get("marker") == "pristine", (
+        "the loader observed the MUTATED bytes "
+        f"({outcome.get('marker')!r}) -- the load is not serialized against "
+        f"the mutation lock"
+    )
+
+
+def test_pytest_run_timeout_fires_and_releases_the_lock(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A pytest run that HANGS must time out, release the lock, restore.
+
+    ``_run_pytest`` runs INSIDE the mutation lock. Without a deadline, a
+    hung pytest -- a stuck child, a network-gated test, a deadlock --
+    holds the lock FOREVER and every other case in this file blocks
+    behind it. The lock HOLDER was the one that could hang.
+
+    The deadline is exercised here with a SHORT override
+    (``PMOVES_MAVIS_RATCHET_PYTEST_TIMEOUT``) so the test never waits out
+    the real deadline, and against a module that really does hang, so
+    the deadline is not a formality.
+
+    After the timeout the lock must be acquirable again, and the
+    mutated file must be back to its original bytes.
+    """
+    slow_module = tmp_path / "test_slow_ratchet.py"
+    pristine = (
+        "SLEEP_SECONDS = 0.0\n"
+        "\n"
+        "\n"
+        "def test_slow() -> None:\n"
+        "    import time\n"
+        "\n"
+        "    time.sleep(SLEEP_SECONDS)\n"
+    )
+    slow_module.write_text(pristine, encoding="utf-8")
+    original_bytes = slow_module.read_bytes()
+
+    # A SHORT deadline: long enough for a healthy pytest startup, far
+    # shorter than the hang it has to catch.
+    monkeypatch.setenv(_PYTEST_TIMEOUT_ENV, "8")
+    lock_path = tmp_path / "pytest-timeout.lock"
+
+    with pytest.raises(PytestRunTimeout) as excinfo:
+        _mutation_case(
+            slow_module,
+            "SLEEP_SECONDS = 0.0",
+            "SLEEP_SECONDS = 20.0",
+            select="test_slow",
+            expected_failing_test="test_slow",
+            lock_path=lock_path,
+        )
+
+    message = str(excinfo.value)
+    assert "8s" in message, (
+        f"the timeout message does not name the timeout: {message!r}"
+    )
+    assert "test_slow" in message, (
+        f"the timeout message does not name the test that was running: {message!r}"
+    )
+    assert "lock" in message.lower(), (
+        f"the timeout message does not say the lock is being released: {message!r}"
+    )
+
+    # The lock must be acquirable again -- the timeout path may not leave
+    # it held. The check runs in a THREAD: the in-process half of the
+    # lock is a non-reentrant ``threading.Lock``, so a leak would
+    # deadlock the main thread instead of failing.
+    acquired = threading.Event()
+    failure: dict[str, object] = {}
+
+    def acquire() -> None:
+        try:
+            with _MUTATION_LOCK:
+                with _file_lock(lock_path, timeout_seconds=10):
+                    acquired.set()
+        except BaseException as exc:  # pragma: no cover - diagnostic path
+            failure["exc"] = exc
+
+    thread = threading.Thread(target=acquire, daemon=True)
+    thread.start()
+    thread.join(timeout=30)
+    assert acquired.is_set(), (
+        "the mutation lock was NOT released after the pytest timeout "
+        f"(failure={failure.get('exc')!r}) -- every other case in this "
+        f"file would block behind it forever"
+    )
+
+    # The mutated file must NOT be left in place.
+    assert slow_module.read_bytes() == original_bytes, (
+        "the mutated file was left in place after the pytest timeout"
+    )
+
+
 def test_mutation_posix_blocking_flock_is_killed() -> None:
     """A BLOCKING ``flock`` in the POSIX branch MUST fail the harness.
 
@@ -947,6 +1305,50 @@ def test_mutation_unlocked_clean_check_is_killed() -> None:
     assert killed, (
         "the clean-check can read the target without the lock again -- it "
         f"can observe a torn, mid-mutation file.\n{output}"
+    )
+
+
+def test_mutation_unlocked_module_load_is_killed() -> None:
+    """Loading the ratchet module WITHOUT the lock MUST fail the harness.
+
+    The mutation rewrites this harness' own module load back to the
+    unlocked form; the test that must fail is
+    ``test_module_load_is_serialized_against_concurrent_mutation``,
+    because an unlocked load measures a ratchet that is mid-mutation
+    instead of the one it thinks it measured.
+    """
+    killed, output = _mutation_case(
+        HARNESS,
+        FIXED_LOCKED_MODULE_LOAD,
+        UNLOCKED_MODULE_LOAD,
+        select="test_module_load_is_serialized_against_concurrent_mutation",
+        expected_failing_test="test_module_load_is_serialized_against_concurrent_mutation",
+    )
+    assert killed, (
+        "the module load can run without the mutation lock again -- the "
+        f"harness may measure a ratchet that is mid-mutation.\n{output}"
+    )
+
+
+def test_mutation_pytest_run_without_timeout_is_killed() -> None:
+    """A pytest run with NO deadline MUST fail the harness.
+
+    The mutation rewrites this harness' own pytest call back to the
+    deadline-less form; the test that must fail is
+    ``test_pytest_run_timeout_fires_and_releases_the_lock``, because a
+    pytest run without a deadline can hold the mutation lock FOREVER --
+    the lock HOLDER is the one that can hang.
+    """
+    killed, output = _mutation_case(
+        HARNESS,
+        FIXED_PYTEST_RUN,
+        ORIGINAL_PYTEST_RUN,
+        select="test_pytest_run_timeout_fires_and_releases_the_lock",
+        expected_failing_test="test_pytest_run_timeout_fires_and_releases_the_lock",
+    )
+    assert killed, (
+        "the pytest run can hang without a deadline again -- it holds the "
+        f"mutation lock forever and blocks every other case.\n{output}"
     )
 
 
