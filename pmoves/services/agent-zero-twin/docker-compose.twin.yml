@@ -1,0 +1,177 @@
+# PMOVES-Agent-Zero standalone digital twin — v2 (2026-10-08)
+# Ring model unchanged; v2 adds the INGESTION + GROUNDING layer and attaches
+# the twin to the LIVE host fleet networks (external) instead of duplicating
+# ingestion services. Verified against C:\Users\russe\Documents\GitHub\PMOVES.AI
+# (compose provenance: pmoves\docker-compose*.yml) on 2026-10-08.
+#
+# Ring model (harmonic sidecars):
+#   ring-0 core    : agent-zero — always up; joins twin net + host pmoves_bus
+#   ring-1 llm     : twin-tensorzero (local lane) or direct providers
+#   ring-2 memory  : twin-qdrant — twin-local knowledge mirror (NOT prod qdrant)
+#   ring-3 bus     : twin-nats (isolated lane) + host nats via pmoves_bus attach
+#   ring-4 render  : chit renderer — on-demand jobs (unchanged)
+#   ring-ingest    : twin-ingest — YouTube/web ingestion + grounding indexer
+#   ring-vss       : OPTIONAL Spark-VSS blueprint lane (GPU/NIM; off by default)
+#
+# v2 naming rule: twin ring services are prefixed `twin-` and aliased so their
+# DNS names can never collide with the host fleet services (`nats`, `qdrant`,
+# `tensorzero-gateway`) when a container joins both network sets.
+
+services:
+  # ------------------------------------------------ ring-0 core (always up)
+  agent-zero:
+    image: pmoves-agent-zero:latest        # twin runs EXACTLY what prod runs
+    build:
+      context: ${TWIN_A0_SRC:-.}/services/agent-zero
+      dockerfile: Dockerfile
+      args:
+        AGENT_ZERO_REF: ${AGENT_ZERO_REF:-PMOVES.AI-Edition-Hardened}
+    container_name: pmoves-agent-zero-twin
+    restart: unless-stopped
+    ports:
+      - "${TWIN_PORT:-8092}:80"            # SPARK parity surface
+    environment:
+      - PORT=8080
+      - A2A_SERVER_ENABLED=${A2A_SERVER_ENABLED:-true}
+      - MCP_SERVER_TOKEN=${MCP_SERVER_TOKEN:?set from env.tier-agent}
+      - TWIN_GPU=${TWIN_GPU:-auto}
+      - TWIN_RING_LLM=${TWIN_RING_LLM:-auto}
+      - TWIN_RING_MEMORY=${TWIN_RING_MEMORY:-auto}
+      - TWIN_RING_BUS=${TWIN_RING_BUS:-auto}
+      # grounding surfaces (host fleet, container DNS via external networks;
+      # agent calls ingestion THROUGH twin-ingest — least privilege)
+      - TWIN_INGEST_URL=${TWIN_INGEST_URL:-http://twin-ingest:8094}
+      - PMOVES_YT_URL=${PMOVES_YT_URL:-http://pmoves-yt:8077}
+      - TRANSCRIBE_BACKEND_URL=${TRANSCRIBE_BACKEND_URL:-http://transcribe-backend:8000}
+      - SUPASERCH_URL=${SUPASERCH_URL:-http://supaserch:8099}
+      - DEEPRESEARCH_URL=${DEEPRESEARCH_URL:-http://deepresearch:8098}
+    env_file:
+      - ${TWIN_ENV_DIR:-./env}/env.tier-llm
+      - ${TWIN_ENV_DIR:-./env}/env.tier-agent
+    volumes:
+      - twin-usr:/a0/usr
+      - twin-memory:/a0/memory
+      - twin-knowledge:/a0/knowledge
+      - ${TWIN_DOCKER_SOCK:-/var/run/docker.sock}:/var/run/docker.sock
+    healthcheck:
+      test: ["CMD", "sh", "-c", "wget -qO- --post-data='' http://127.0.0.1:80/api/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+    networks:
+      twin:
+        aliases: [twin-core]
+      pmoves_bus: []                        # consume host bus events only
+
+  # ------------------------------------------------ ring-1 llm (optional)
+  twin-tensorzero:
+    image: tensorzero/gateway:2026.1.8
+    profiles: ["ring-llm"]
+    restart: unless-stopped
+    env_file:
+      - ${TWIN_ENV_DIR:-./env}/env.tier-llm
+    networks:
+      twin:
+        aliases: [twin-tensorzero, tensorzero-gateway]
+
+  # ------------------------------------------------ ring-2 memory (optional)
+  twin-qdrant:
+    image: qdrant/qdrant:v1.16.0
+    profiles: ["ring-memory"]
+    restart: unless-stopped
+    volumes: [twin-qdrant:/qdrant/storage]
+    networks:
+      twin:
+        aliases: [twin-qdrant, qdrant]
+
+  # ------------------------------------------------ ring-3 bus (optional)
+  twin-nats:
+    image: nats:2.11.8-alpine
+    profiles: ["ring-bus"]
+    restart: unless-stopped
+    command: ["-js"]
+    networks:
+      twin:
+        aliases: [twin-nats]
+
+  # ------------------------------------------------ ring-ingest (NEW, v2)
+  # Ingestion + grounding worker: YouTube via pmoves-yt, transcripts via
+  # transcribe-backend/ffmpeg-whisper, web via crawl4ai fetch + deepresearch,
+  # search via supaserch; embeds via tensorzero/LLM registry and upserts into
+  # twin-qdrant collections. Consumes host services over the external networks.
+  twin-ingest:
+    build:
+      context: ./ingest                     # new worker image (see gaps)
+      dockerfile: Dockerfile
+    image: pmoves-twin-ingest:latest
+    container_name: pmoves-twin-ingest
+    profiles: ["ring-ingest"]
+    restart: unless-stopped
+    ports:
+      - "${TWIN_INGEST_BIND:-127.0.0.1}:${TWIN_INGEST_PORT:-8094}:8094"
+    environment:
+      - TWIN_INGEST_PORT=8094
+      # host fleet endpoints (container DNS names, verified in pmoves compose)
+      - PMOVES_YT_URL=${PMOVES_YT_URL:-http://pmoves-yt:8077}
+      - PMOVES_YT_API_KEY=${PMOVES_YT_API_KEY:-}
+      - TRANSCRIBE_BACKEND_URL=${TRANSCRIBE_BACKEND_URL:-http://transcribe-backend:8000}
+      - FFMPEG_WHISPER_URL=${FFMPEG_WHISPER_URL:-http://ffmpeg-whisper:8078}
+      - SUPASERCH_URL=${SUPASERCH_URL:-http://supaserch:8099}
+      - DEEPRESEARCH_URL=${DEEPRESEARCH_URL:-http://deepresearch:8098}
+      - OPEN_NOTEBOOK_URL=${OPEN_NOTEBOOK_URL:-http://open-notebook:5055}
+      - SUPA_REST_URL=${SUPA_REST_URL:-http://supabase-kong:8000/rest/v1}
+      - TENSORZERO_URL=${TENSORZERO_URL:-http://twin-tensorzero:3000}
+      # embedding fallback: transcribe-backend LLM registry (LiteLLM-routed)
+      - EMBEDDINGS_URL=${EMBEDDINGS_URL:-http://transcribe-backend:8000/llm/embeddings}
+      # twin-local grounding store (ring-2); prod qdrant stays read-only
+      - TWIN_QDRANT_URL=${TWIN_QDRANT_URL:-http://twin-qdrant:6333}
+      - INGEST_COLLECTION_PREFIX=${INGEST_COLLECTION_PREFIX:-twin_}
+      # host bus
+      - NATS_URL=nats://${NATS_USER:-nats}:${NATS_PASSWORD:-pmoves}@nats:4222
+      - CGP_SUBJECT=${CGP_SUBJECT:-geometry.cgp.v1}
+      # media artifacts (MinIO on pmoves_data)
+      - MINIO_ENDPOINT=${MINIO_ENDPOINT:-minio:9000}
+      - MINIO_SECURE=${MINIO_SECURE:-false}
+      - MINIO_ACCESS_KEY=${MINIO_USER:-}
+      - MINIO_SECRET_KEY=${MINIO_PASSWORD:-}
+    volumes:
+      - twin-ingest-state:/state            # staging for md transcripts / jobs
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8094/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    networks:
+      twin: []
+      pmoves_app: []                         # pmoves-yt, transcribe-backend, supaserch, deepresearch
+      pmoves_bus: []                         # host nats events (media.transcript.ready.v1, geometry.cgp.v1)
+      pmoves_data: []                        # minio / supabase storage lane
+
+  # ------------------------------------------------ ring-vss (OPTIONAL, off)
+  # Spark-VSS blueprint lane (NVIDIA VSS: GPU + NIM + Elasticsearch). NOT in
+  # the local registry today and heavy (driver 580.x, Docker <29.5.0). Left as
+  # a profile stub pending operator decision — see INGESTION-GROUNDING.md gaps.
+  # vss-agent:
+  #   image: vss-agent:latest
+  #   profiles: ["ring-vss"]
+  #   networks: [twin]
+
+volumes:
+  twin-usr: {}
+  twin-memory: {}
+  twin-knowledge: {}
+  twin-qdrant: {}
+  twin-ingest-state: {}
+
+networks:
+  twin:
+    name: pmoves-twin-net
+  # host fleet networks created by pmoves\docker-compose.yml (verified via
+  # docker network ls + docker inspect on 2026-10-08). External => no create.
+  pmoves_app:
+    external: true
+  pmoves_bus:
+    external: true
+  pmoves_data:
+    external: true
