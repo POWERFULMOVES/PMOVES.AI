@@ -48,6 +48,7 @@ import ssl
 import subprocess
 import sys
 import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
 
@@ -301,6 +302,37 @@ def _ssl_context() -> ssl.SSLContext | None:
         return None
 
 
+def _is_github_api_url(url: str) -> bool:
+    """Whether ``url`` addresses the GitHub API host EXACTLY.
+
+    A SUBSTRING test (``"api.github.com" in url``) is a loose host
+    match: it also accepts
+
+        https://api.github.com.evil.example/repos
+        https://evil.example/?x=api.github.com
+
+    -- neither of which is the host this ratchet talks to. The host is
+    compared EXACTLY, through the parsed ``hostname``. The netloc is
+    NOT compared: it carries userinfo and a port, so comparing it would
+    reintroduce a different mismatch class (a real request to
+    ``https://api.github.com:443/...`` would be rejected).
+
+    A URL that is not an absolute, parseable URL is NOT the API host,
+    and must not raise out of the caller.
+    """
+    try:
+        parsed = urllib.parse.urlsplit(url)
+    except ValueError:
+        return False
+    if not parsed.scheme or not parsed.netloc:
+        return False
+    try:
+        hostname = parsed.hostname
+    except ValueError:
+        return False
+    return hostname == "api.github.com"
+
+
 def _is_test_job(job_name: str, job: dict[str, object]) -> bool:
     """Whether a matrix-bearing job is the TEST job (not packaging/release).
 
@@ -333,6 +365,137 @@ def _is_test_job(job_name: str, job: dict[str, object]) -> bool:
     return False
 
 
+def _matrix_axes(matrix: dict[str, object]) -> list[tuple[str, list[object]]]:
+    """The matrix's base dimensions, in declaration order.
+
+    ``include``/``exclude`` are NOT dimensions -- they modify the
+    expansion of the other dimensions.
+    """
+    axes: list[tuple[str, list[object]]] = []
+    for key, value in matrix.items():
+        if key in ("include", "exclude"):
+            continue
+        if isinstance(value, list):
+            axes.append((key, list(value)))
+        elif isinstance(value, (str, int, float, bool)) or value is None:
+            axes.append((key, [value]))
+        # Any other shape (a mapping, an expression) cannot be expanded
+        # without evaluating the workflow, so it is skipped rather than
+        # guessed at.
+    return axes
+
+
+def _base_combinations(axes: list[tuple[str, list[object]]]) -> list[dict[str, object]]:
+    """The cartesian product of the matrix's base dimensions."""
+    combos: list[dict[str, object]] = [{}]
+    for key, values in axes:
+        combos = [
+            {**combo, key: value}
+            for combo in combos
+            for value in values
+        ]
+    return combos
+
+
+def _combo_values_equal(left: object, right: object) -> bool:
+    """Compare two matrix values the way GitHub does (as strings)."""
+    return str(left) == str(right)
+
+
+def _combo_matches_exclude(combo: dict[str, object], entry: dict[str, object]) -> bool:
+    """Whether a base combination is matched by an ``exclude:`` entry.
+
+    GitHub's rule: "An excluded configuration only has to be a partial
+    match for it to be excluded." The entry's dimensions are therefore a
+    PARTIAL match: every dimension the entry names must match, and the
+    dimensions it does not name are unconstrained. An entry that names a
+    dimension the matrix does not have never matches anything.
+    """
+    for key, value in entry.items():
+        if key not in combo:
+            return False
+        if not _combo_values_equal(combo[key], value):
+            return False
+    return True
+
+
+def _apply_matrix_exclusions(
+    combos: list[dict[str, object]],
+    exclude_entries: list[object],
+) -> list[dict[str, object]]:
+    """Remove the combinations an ``exclude:`` entry matches.
+
+    An ``exclude:`` entry that matches NOTHING is not an error: exclude
+    can be broader than the matrix it filters (a shared exclude list
+    naming platforms this job does not run). The entry is simply a
+    filter, so an unmatched entry removes nothing.
+    """
+    for entry in exclude_entries:
+        if not isinstance(entry, dict) or not entry:
+            continue
+        combos = [
+            combo
+            for combo in combos
+            if not _combo_matches_exclude(combo, entry)
+        ]
+    return combos
+
+
+def _apply_matrix_inclusions(
+    combos: list[dict[str, object]],
+    include_entries: list[object],
+    axes: list[tuple[str, list[object]]],
+) -> list[dict[str, object]]:
+    """Apply the ``include:`` entries to the matrix combinations.
+
+    GitHub's documented order is ``exclude`` FIRST, ``include`` AFTER:
+    "All ``include`` combinations are processed after ``exclude``. This
+    allows you to use ``include`` to add back combinations that were
+    previously excluded." (GitHub workflow syntax reference.)
+
+    An entry is merged into every ORIGINAL combination it does not
+    conflict with (it may not overwrite an original matrix value, but it
+    may add new keys); an entry that fits no original combination becomes
+    a NEW combination -- and, per the same reference, a later entry does
+    not merge into a combination an earlier entry created.
+    """
+    original_keys = {key for key, _ in axes}
+    if not axes:
+        # A matrix that declares nothing but `include:` runs one job per
+        # entry.
+        return [
+            dict(entry)
+            for entry in include_entries
+            if isinstance(entry, dict) and entry
+        ]
+    created: list[dict[str, object]] = []
+    for entry in include_entries:
+        if not isinstance(entry, dict) or not entry:
+            continue
+        added = {
+            key: value
+            for key, value in entry.items()
+            if key not in original_keys
+        }
+        matched = False
+        for combo in combos:
+            conflicts = any(
+                key in original_keys
+                and (
+                    key not in combo
+                    or not _combo_values_equal(combo[key], value)
+                )
+                for key, value in entry.items()
+            )
+            if conflicts:
+                continue
+            combo.update(added)
+            matched = True
+        if not matched:
+            created.append(dict(entry))
+    return combos + created
+
+
 def _extract_matrix_platforms(workflow_body: str) -> dict[str, object]:
     """Extract the platform set from a CI workflow's TEST-job matrix.
 
@@ -350,9 +513,10 @@ def _extract_matrix_platforms(workflow_body: str) -> dict[str, object]:
     remains on Linux/macOS") and the token ``Linux/macOS`` in that same
     comment. A body scan therefore reports platforms that the matrix never
     declared. The matrix is read structurally instead: find the job whose
-    ``runs-on`` is driven by ``matrix.<key>``, read the value of THAT key
-    (plus the ``include:`` entries that override it), and count only the
-    runner labels in that value.
+    ``runs-on`` is driven by ``matrix.<key>``, EXPAND that job's matrix
+    (base dimensions, minus the ``exclude:`` combinations, plus the
+    ``include:`` ones), and count only the runner labels of the
+    combinations that actually run.
     """
     try:
         import yaml
@@ -402,18 +566,29 @@ def _extract_matrix_platforms(workflow_body: str) -> dict[str, object]:
         matrix = strategy.get("matrix") if isinstance(strategy, dict) else None
         if not isinstance(matrix, dict):
             continue
-        values = matrix.get(key)
-        if isinstance(values, list):
-            labels.extend(str(value) for value in values)
-        elif isinstance(values, str):
-            labels.append(values)
-        # `include:` entries REPLACE matrix coordinates for the rows they
-        # match, so their runner labels are part of the matrix too.
-        include = matrix.get("include")
-        if isinstance(include, list):
-            for entry in include:
-                if isinstance(entry, dict) and key in entry:
-                    labels.append(str(entry[key]))
+        # The matrix is EXPANDED, not scanned: the base dimensions are
+        # combined, `exclude:` removes the combinations it matches, and
+        # `include:` adds to (or creates) combinations. Only the
+        # combinations that actually RUN contribute a runner label.
+        #
+        # Reading only `include:` and ignoring `exclude:` reported a
+        # platform as covered when the matrix never runs it -- an
+        # `exclude: [{os: windows-latest}]` left the ratchet claiming
+        # upstream covers Windows.
+        axes = _matrix_axes(matrix)
+        combos = _base_combinations(axes)
+        # GitHub's documented order: `exclude` is applied FIRST, `include`
+        # is processed AFTER ("All `include` combinations are processed
+        # after `exclude`" -- GitHub workflow syntax reference).
+        exclude_entries = matrix.get("exclude")
+        if isinstance(exclude_entries, list):
+            combos = _apply_matrix_exclusions(combos, exclude_entries)
+        include_entries = matrix.get("include")
+        if isinstance(include_entries, list):
+            combos = _apply_matrix_inclusions(combos, include_entries, axes)
+        for combo in combos:
+            if key in combo:
+                labels.append(str(combo[key]))
         job_names.append(job_name)
         keys.add(key)
     if not labels:
@@ -439,6 +614,35 @@ def _extract_matrix_platforms(workflow_body: str) -> dict[str, object]:
         "matrix_key": ",".join(sorted(keys)),
         "labels": sorted(set(labels)),
     }
+
+
+def _assert_matrix_platforms(
+    workflow_body: str,
+    expected_platforms: list[str],
+    *,
+    context: str = "workflow",
+) -> dict[str, object]:
+    """Assert the matrix verdict for a workflow body names the expected platforms.
+
+    NAMED AND IMPORTABLE ON PURPOSE: the pytest test below and the
+    mutation-kill harness must BOTH call THIS function. Restating the
+    check inline in the harness is what let the original defect ship --
+    the harness kept passing because it never touched the gate the
+    ratchet actually uses.
+
+    Returns the parsed verdict so a caller can assert further details.
+    """
+    parsed = _extract_matrix_platforms(workflow_body)
+    assert parsed.get("status") == "ok", (
+        f"the {context} did not parse into a verdict: {parsed!r}"
+    )
+    actual = sorted(str(platform) for platform in parsed.get("platforms", []))
+    assert actual == sorted(expected_platforms), (
+        f"the {context} reports platforms {actual!r}, expected "
+        f"{sorted(expected_platforms)!r} -- the verdict must describe the "
+        f"combinations the matrix actually runs: {parsed!r}"
+    )
+    return parsed
 
 
 def _fetch_upstream_matrix() -> dict[str, object]:
@@ -889,6 +1093,101 @@ jobs:
       - run: pnpm test
 """
 
+# The upstream-shaped matrix with an ``exclude:`` entry. GitHub processes
+# ``exclude`` BEFORE ``include`` ("All ``include`` combinations are
+# processed after ``exclude``"), so an ``include`` entry that re-adds the
+# excluded platform WOULD run it again. This fixture keeps the include
+# entries clear of the excluded platform, so the verdict is unambiguous:
+# the matrix runs ubuntu + macos and NOT windows.
+_SAMPLE_UPSTREAM_CI_WITH_EXCLUDE = """\
+name: Source verification
+on:
+  push:
+    branches: [main]
+jobs:
+  verify:
+    name: verify (${{ matrix.os }}, ${{ matrix.node }})
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        node: ["24"]
+        exclude:
+          - os: windows-latest
+        include:
+          - os: ubuntu-latest
+            node: "24"
+            profile: full
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@3d3c42e
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm verify --profile ${{ matrix.profile || 'platform' }}
+"""
+
+# An ``exclude:`` entry that names MORE than the platform dimension only
+# removes the combinations where ALL of its dimensions match. Here the
+# windows/node-22 combination is excluded, but windows/node-24 still runs
+# -- so windows IS still covered upstream.
+_SAMPLE_UPSTREAM_CI_WITH_PARTIAL_EXCLUDE = """\
+name: Source verification
+on:
+  push:
+    branches: [main]
+jobs:
+  verify:
+    name: verify (${{ matrix.os }}, ${{ matrix.node }})
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        node: ["22", "24"]
+        exclude:
+          - os: windows-latest
+            node: "22"
+        include:
+          - os: ubuntu-latest
+            node: "24"
+            profile: full
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@3d3c42e
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm verify --profile ${{ matrix.profile || 'platform' }}
+"""
+
+# An ``exclude:`` entry that matches NOTHING is not an error: exclude can
+# be broader than the matrix it filters. The verdict must stay "ok" and
+# the platform set must not change.
+_SAMPLE_UPSTREAM_CI_WITH_UNUSED_EXCLUDE = """\
+name: Source verification
+on:
+  push:
+    branches: [main]
+jobs:
+  verify:
+    name: verify (${{ matrix.os }}, ${{ matrix.node }})
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        node: ["24"]
+        exclude:
+          - os: freebsd-latest
+        include:
+          - os: ubuntu-latest
+            node: "24"
+            profile: full
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@3d3c42e
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm verify --profile ${{ matrix.profile || 'platform' }}
+"""
+
 
 def test_mutation_matrix_scoped_platform_detection() -> None:
     """Platform coverage must come from the TEST job's MATRIX, not a scan.
@@ -950,6 +1249,48 @@ def test_mutation_matrix_scoped_platform_detection() -> None:
     assert "_extract_matrix_platforms" in helper_source, (
         "the network helper must delegate the matrix read to the structural "
         "parser -- a body scan cannot tell a matrix entry from a comment"
+    )
+
+
+def test_mutation_excluded_platform_is_not_covered() -> None:
+    """An ``exclude:``d platform must NOT be reported as upstream-covered.
+
+    The matrix reader parsed ``include:`` but never ``exclude:``. A
+    matrix like::
+
+        matrix:
+          os: [ubuntu-latest, macos-latest, windows-latest]
+          exclude:
+            - os: windows-latest
+
+    therefore still reported ``windows`` as covered -- the ratchet would
+    announce "upstream covers Windows" for a matrix that never runs
+    Windows, which is the inverted ratchet in its purest form.
+
+    Hermetic: no network, no upstream.
+    """
+    parsed = _assert_matrix_platforms(
+        _SAMPLE_UPSTREAM_CI_WITH_EXCLUDE,
+        ["macos", "ubuntu"],
+        context="the matrix with an `exclude:` entry",
+    )
+    assert "windows" not in parsed["platforms"], (
+        "an excluded platform was reported as upstream test coverage: "
+        f"{parsed!r}"
+    )
+    # A platform that is NOT excluded is still reported as covered -- the
+    # fix must not over-exclude and hide real coverage.
+    _assert_matrix_platforms(
+        _SAMPLE_UPSTREAM_CI_WITH_PARTIAL_EXCLUDE,
+        ["macos", "ubuntu", "windows"],
+        context="the matrix with a combination-scoped `exclude:` entry",
+    )
+    # An `exclude:` entry that matches nothing is NOT an error: exclude
+    # can be broader than the matrix it filters.
+    _assert_matrix_platforms(
+        _SAMPLE_UPSTREAM_CI_WITH_UNUSED_EXCLUDE,
+        ["macos", "ubuntu", "windows"],
+        context="the matrix with an `exclude:` entry that matches nothing",
     )
 
 
@@ -1028,7 +1369,10 @@ def test_mutation_upstream_download_failure_is_unavailable(
 
     def fake_urlopen(req, *args, **kwargs):
         url = getattr(req, "full_url", str(req))
-        if "api.github.com" in url:
+        # The host is matched EXACTLY (see _is_github_api_url): a
+        # substring match would also accept "api.github.com.evil.example"
+        # and "evil.example/?x=api.github.com".
+        if _is_github_api_url(url):
             return _FakeResponse(json.dumps(listing).encode("utf-8"))
         raise urllib.error.HTTPError(url, 403, "rate limit exceeded", None, None)
 
@@ -1044,4 +1388,49 @@ def test_mutation_upstream_download_failure_is_unavailable(
     )
     assert matrix.get("reason"), (
         f"an unavailable read must say WHY it is unavailable: {matrix!r}"
+    )
+
+
+def test_mutation_github_api_host_match_is_exact() -> None:
+    """The GitHub API host must be matched EXACTLY, not by substring.
+
+    The test double that stands in for the network matched the API host
+    with ``"api.github.com" in url``. That is a loose host match: it
+    also accepts
+
+        https://api.github.com.evil.example/repos
+        https://evil.example/?x=api.github.com
+
+    -- neither of which is the host this ratchet talks to. The check is
+    the ratchet's OWN helper (``_is_github_api_url``), so this test and
+    the mutation-kill harness exercise the SAME code rather than a copy.
+    """
+    assert _is_github_api_url(
+        "https://api.github.com/repos/MiniMax-AI/minimax-code/contents"
+    ), "the real GitHub API URL was not recognised as the API host"
+    # A host that merely CONTAINS the API host is not the API host.
+    assert not _is_github_api_url(
+        "https://api.github.com.evil.example/repos"
+    ), "a look-alike host was accepted as the GitHub API host"
+    assert not _is_github_api_url(
+        "https://evil.example/?x=api.github.com"
+    ), "the API host was matched inside a query string"
+    assert not _is_github_api_url(
+        "https://user@api.github.com.evil.example/repos"
+    ), "userinfo must not smuggle a look-alike host past the check"
+    # The netloc carries the port and the userinfo; only the HOSTNAME
+    # is compared, so a real request to the API on a port still counts.
+    assert _is_github_api_url(
+        "https://api.github.com:443/repos"
+    ), "the API host on an explicit port was not recognised"
+    # A URL that is not an absolute URL is not the API host -- and the
+    # check must not raise out of the caller.
+    assert not _is_github_api_url("api.github.com/repos"), (
+        "a relative URL was treated as the GitHub API host"
+    )
+    assert not _is_github_api_url(""), (
+        "an empty URL was treated as the GitHub API host"
+    )
+    assert not _is_github_api_url("https://"), (
+        "a URL with no host was treated as the GitHub API host"
     )
