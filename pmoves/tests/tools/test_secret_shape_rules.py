@@ -76,9 +76,30 @@ def test_a_well_formed_fabricated_value_passes_its_rule(label):
     assert load_rules()[label].check(WELL_FORMED[label]) == []
 
 
-def test_ghcr_refuses_a_fine_grained_pat():
-    """GitHub Packages accepts only classic PATs; the rule follows the docs."""
-    finding = load_rules()["GHCR_TOKEN"].check("github_pat_FAKE_" + "0" * 60)
+# GitHub's documented user/app token forms. gho_ is what `gh auth token` yields
+# after the default browser login; the stateless installation token form
+# (ghs_APPID_JWT) carries JWT punctuation and is not 40 characters.
+GH_OAUTH = "gho_FAKE" + "0" * 32
+GH_APP_USER = "ghu_FAKE" + "0" * 32
+GH_INSTALLATION_STATELESS = "ghs_123456_FAKEhdr0.FAKEpayload0-0000.FAKEsig_0000"
+
+
+@pytest.mark.parametrize("value", [GH_OAUTH, GH_APP_USER])
+def test_github_pat_admits_the_gh_cli_token_forms(value):
+    assert load_rules()["GITHUB_PAT"].check(value) == []
+
+
+@pytest.mark.parametrize(
+    "value", [GH_OAUTH, GH_APP_USER, GH_INSTALLATION_STATELESS, WELL_FORMED["GITHUB_PAT"]]
+)
+@pytest.mark.parametrize("label", ["GHCR_TOKEN", "GH_TOKEN"])
+def test_ghcr_and_gh_token_admit_every_github_token_form(label, value):
+    """The prefix catches corruption; read:packages (provider-verify) decides GHCR."""
+    assert load_rules()[label].check(value) == []
+
+
+def test_a_github_token_missing_its_prefix_is_still_withheld():
+    finding = load_rules()["GITHUB_PAT"].check(GH_OAUTH[1:])
     assert finding and "prefix-match no" in finding[0]
 
 
@@ -102,6 +123,9 @@ MALFORMED = {
     ),
     "length_without_source": "version: 1\nrules:\n  - label: HF_TOKEN\n    min_length: 30\n",
     "bad_regex": "version: 1\nrules:\n  - label: HF_TOKEN\n    charset: '^[A-Z'\n",
+    "charset_not_a_single_class": (
+        "version: 1\nrules:\n  - label: HF_TOKEN\n    charset: '^hf_[A-Za-z0-9]+$'\n"
+    ),
     "duplicate_label": "version: 1\nrules:\n  - label: HF_TOKEN\n  - label: HF_TOKEN\n",
     "bool_min_length": (
         "version: 1\nrules:\n  - label: HF_TOKEN\n    min_length: true\n"
@@ -246,3 +270,108 @@ def test_pydantic_is_declared_where_the_funnel_gate_probes_for_it():
     """env-bootstrap-check reads requirements-lite.txt; undeclared = unprobed."""
     lite = Path(rules_mod.__file__).with_name("requirements-lite.txt").read_text()
     assert any(line.strip().startswith("pydantic") for line in lite.splitlines())
+
+
+def test_charset_position_is_exact_for_a_class_with_escapes():
+    rule = ShapeRule(label="X", charset=r"^[A-Za-z0-9_\-]+$")
+    assert "first mismatch at position 3" in rule.check("ab.c")[0]
+
+
+# ── The gh-CLI injector -> funnel path (review P1 on #3432) ──────────────────
+
+
+def test_a_gho_token_from_the_gh_cli_injector_reaches_the_tier_file(tmp_path, monkeypatch):
+    """`make gha-token-refresh`: injector writes `gh auth token`, then the funnel runs.
+
+    After `gh auth login`'s browser flow that token is gho_. A GITHUB_PAT rule
+    admitting only ghp_/github_pat_ withheld it, and github-runner-ctl lost its
+    credential at the next refresh. Exercise the real injector, then the real
+    funnel, on the same fabricated value.
+    """
+    from pmoves.tools import inject_github_pat_from_gh_cli as injector
+
+    stored_at = tmp_path / "injected_pat.txt"
+    monkeypatch.setattr(injector, "get_gh_token", lambda: GH_OAUTH)
+    monkeypatch.setattr(injector, "validate_token_behaviorally", lambda token, repo: True)
+    with pytest.raises(SystemExit) as refreshed:
+        injector.refresh_if_stale(stored_at, "owner/repo", True)
+    assert refreshed.value.code == injector.EXIT_REFRESHED
+
+    delivered = injector.read_stored_pat(stored_at)
+    assert delivered == GH_OAUTH
+
+    rejected: dict = {}
+    outputs, missing = secrets_sync.build_outputs(
+        {"GITHUB_PAT": delivered},
+        [_entry("GITHUB_PAT", required=True)],
+        strict=True,
+        rejected_out=rejected,
+    )
+    assert outputs[FILE]["GITHUB_PAT"] == GH_OAUTH
+    assert missing == [] and rejected == {}
+
+
+# ── Manifest fields are model-owned: label, required (review P2/P3) ─────────
+
+
+def _manifest(tmp_path, entry_yaml: str) -> Path:
+    path = tmp_path / "manifest.yaml"
+    path.write_text(
+        "version: 1\ncgp_file: x.cgp\nentries:\n" + entry_yaml
+    )
+    return path
+
+
+DASHED_LABEL = (
+    "  - id: dashed\n    source: {type: cgp, label: SOME-LABEL}\n"
+    "    targets: [{file: env.tier-x, key: SOME_LABEL}]\n"
+)
+QUOTED_FALSE = (
+    "  - id: quoted\n    source: {type: cgp, label: SOME_LABEL}\n"
+    "    targets: [{file: env.tier-x, key: SOME_LABEL}]\n    required: 'false'\n"
+)
+
+
+def test_a_label_that_is_not_an_env_var_name_is_refused_at_load(tmp_path):
+    with pytest.raises(ValueError, match="not an env-var name"):
+        secrets_sync.load_manifest(_manifest(tmp_path, DASHED_LABEL))
+
+
+def test_a_quoted_false_required_is_refused_not_read_as_true(tmp_path):
+    with pytest.raises(ValueError, match="non-boolean required"):
+        secrets_sync.load_manifest(_manifest(tmp_path, QUOTED_FALSE))
+
+
+def test_a_real_bool_required_still_parses(tmp_path):
+    body = QUOTED_FALSE.replace("required: 'false'", "required: false")
+    _, entries = secrets_sync.load_manifest(_manifest(tmp_path, body))
+    assert entries[0].required is False
+
+
+@pytest.mark.parametrize("body", [DASHED_LABEL, QUOTED_FALSE])
+def test_the_funnel_exits_3_with_a_message_on_a_malformed_manifest(tmp_path, body, capsys):
+    """Not exit 1 with a traceback from deep inside build_outputs."""
+    path = _manifest(tmp_path, body)
+    assert secrets_sync.main(["report", "--manifest", str(path)]) == 3
+    assert "COULD-NOT-MEASURE" in capsys.readouterr().err
+
+
+def test_inspect_value_no_longer_builds_a_model_from_the_label():
+    """A hand-built Entry with an odd label must not crash the charset scan."""
+    from pmoves.tools.secret_shape import inspect_value
+
+    verdict = inspect_value("odd-label.x", "b_" + "0" * 40, prefix="e2b_")
+    assert len(verdict.withhold) == 1
+
+
+@pytest.mark.parametrize("command", ["status", "generate"])
+def test_onboarding_helper_exits_3_on_a_rules_failure(monkeypatch, command, capsys):
+    from pmoves.tools import onboarding_helper
+
+    def broken(*_a, **_k):
+        raise RulesFileError("synthetic: rules file fails the model")
+
+    monkeypatch.setattr(onboarding_helper, "cmd_status", broken)
+    monkeypatch.setattr(onboarding_helper, "cmd_generate", broken)
+    assert onboarding_helper.main([command]) == 3
+    assert "COULD-NOT-MEASURE" in capsys.readouterr().err

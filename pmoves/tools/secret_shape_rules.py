@@ -37,6 +37,7 @@ from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
+    StrictBool,
     StrictInt,
     StrictStr,
     ValidationError,
@@ -58,8 +59,19 @@ EXIT_UNMEASURED = 3
 LABEL_PATTERN = r"^[A-Za-z_][A-Za-z0-9_]*$"
 
 
+# A charset must be ONE character class repeated over the whole value:
+# ``^[...]+$``. That is the only form for which "first character outside the
+# class" is well defined, so it is the only form the model admits.
+_CHARSET_FORM = re.compile(r"^\^\[(?:[^\]\\]|\\.)+\]\+\$$")
+
+
 class RulesFileError(Exception):
     """The rules file is absent, unparseable, or fails the model. Exit 3."""
+
+
+def prefix_matches(value: str, prefixes: Sequence[str]) -> bool:
+    """The one definition of "starts with a registered prefix" in the funnel."""
+    return not prefixes or any(value.startswith(p) for p in prefixes)
 
 
 class ShapeRule(BaseModel):
@@ -105,6 +117,11 @@ class ShapeRule(BaseModel):
     def _charset_compiles(cls, value: Optional[str]) -> Optional[str]:
         if value is None:
             return value
+        if not _CHARSET_FORM.match(value):
+            raise ValueError(
+                f"charset {value!r} must have the form ^[...]+$ -- one character "
+                "class over the whole value, so a mismatch has a position"
+            )
         try:
             re.compile(value)
         except re.error as exc:
@@ -158,7 +175,7 @@ class ShapeRule(BaseModel):
         """Which constraint families fail: a subset of {prefix, length, charset}."""
         total = len(value)
         failed = set()
-        if self.prefixes and not any(value.startswith(p) for p in self.prefixes):
+        if not prefix_matches(value, self.prefixes):
             failed.add("prefix")
         if (
             (self.exact_length is not None and total != self.exact_length)
@@ -184,9 +201,12 @@ class ShapeRule(BaseModel):
                 # Position only. The character itself would be one character of
                 # the secret; a lookalike glyph is already named by codepoint in
                 # secret_shape.inspect_value, which runs first.
+                # Well defined because the model admits only ^[class]+$: test
+                # each character against the bare class.
+                char_class = re.compile(self.charset[1:-2])
                 first_bad = next(
                     (pos for pos, ch in enumerate(value, start=1)
-                     if not re.fullmatch(self.charset, ch)),
+                     if not char_class.fullmatch(ch)),
                     None,
                 )
                 where = f" (first mismatch at position {first_bad})" if first_bad else ""
@@ -219,14 +239,22 @@ class ShapeRuleSet(BaseModel):
 
 
 class ManifestShape(BaseModel):
-    """The two shape fields a secrets-manifest entry may carry.
+    """The typed fields of one secrets-manifest entry.
 
-    Strict types: ``min_length: true`` is a bool, not an int, and YAML makes
-    that easy to write by accident.
+    Strict types throughout. ``min_length: true`` is a bool, not an int, and
+    ``required: "false"`` is a STRING -- which ``bool()`` turns into True, so a
+    hand-rolled ``bool(item.get("required", True))`` silently made a quoted
+    "false" mandatory. YAML makes both easy to write by accident.
+
+    ``label`` must be an env-var name. Every rule built from this entry carries
+    it, and a label the model refuses must be refused HERE, at manifest load,
+    with a message -- not deep inside ``build_outputs`` as a traceback.
     """
 
     model_config = ConfigDict(extra="ignore")
 
+    label: str = Field(default="_", pattern=LABEL_PATTERN)
+    required: StrictBool = True
     min_length: StrictInt = Field(default=0, ge=0)
     prefix: StrictStr = ""
 

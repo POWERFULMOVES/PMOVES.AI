@@ -121,13 +121,23 @@ def load_manifest(path: Path) -> tuple[Path, Sequence[Entry]]:
         if not targets:
             raise ValueError(f"Entry {entry_id} has no targets")
 
-        required = bool(item.get("required", True))
-        # Strict pydantic types: `min_length: true` is a bool and `prefix: 42`
-        # an int, and YAML makes both easy to write by accident.
+        # Strict pydantic types (see ManifestShape): a quoted "false" is not
+        # False, `min_length: true` is not an int, and a label that is not an
+        # env-var name is refused here rather than crashing build_outputs.
         try:
-            shape = ManifestShape.model_validate(item)
+            shape = ManifestShape.model_validate({**item, "label": label})
         except ValidationError as exc:
             fields = {str(err["loc"][0]) for err in exc.errors() if err["loc"]}
+            if "label" in fields:
+                raise ValueError(
+                    f"Entry {entry_id} has label {label!r}, which is not an "
+                    "env-var name ([A-Za-z_][A-Za-z0-9_]*)"
+                ) from None
+            if "required" in fields:
+                raise ValueError(
+                    f"Entry {entry_id} has non-boolean required "
+                    "(a quoted 'false' is a string, and would read as True)"
+                ) from None
             if "min_length" in fields:
                 raise ValueError(f"Entry {entry_id} has non-integer min_length") from None
             if "prefix" in fields:
@@ -135,6 +145,7 @@ def load_manifest(path: Path) -> tuple[Path, Sequence[Entry]]:
             raise ValueError(
                 f"Entry {entry_id}: " + "; ".join(format_validation_error(exc))
             ) from None
+        required = shape.required
         min_length = shape.min_length
         prefix = shape.prefix
         entries.append(
@@ -519,7 +530,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         return EXIT_UNMEASURED
 
     manifest_path = (REPO_ROOT / args.manifest).resolve()
-    cgp_path, entries = load_manifest(manifest_path)
+    try:
+        cgp_path, entries = load_manifest(manifest_path)
+    except ValueError as exc:
+        # The message names the entry id and the field, never a value.
+        print(f"ERROR: COULD-NOT-MEASURE -- manifest {manifest_path.name}: {exc}", file=sys.stderr)
+        return EXIT_UNMEASURED
 
     # Allow CLI override of CGP path
     if args.cgp:
