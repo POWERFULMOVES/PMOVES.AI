@@ -27,7 +27,9 @@ Next steps: supply a valid API key if required for production workloads, otherwi
 Operate:
 
 ```bash
-make -C pmoves secrets-funnel          # mints both keys (every node; compose needs them even with Invidious off)
+make -C pmoves invidious-keys-check    # report-only: are both keys usable on this node?
+make -C pmoves invidious-keys-preflight  # mint/rotate in env.shared (also runs automatically before up/down/ps/... goals)
+make -C pmoves secrets-funnel          # seal the values into the CHIT bundle
 make -C pmoves secrets-ensure-check    # both must print "provisioned"
 make -C pmoves up-invidious            # recreate invidious + invidious-db + invidious-companion
 make -C pmoves invidious-smoke         # read-only: stats 200, companion healthz, companion accepts the funnel key
