@@ -139,3 +139,56 @@ def test_refreshed_token_signature_verifies_with_same_secret():
         hmac_mod.new(_SECRET.encode(), f"{header}.{payload}".encode(), hashlib.sha256).digest()
     ).rstrip(b"=").decode()
     assert sig == expected
+
+
+# ── verifier precedence (#3433 review P2) ────────────────────────────────────
+# Every compose verifier (PostgREST, GoTrue, Realtime, Studio) reads
+# ${SUPABASE_JWT_SECRET:-${JWT_SECRET:-}}. Minting JWT_SECRET-first produced keys
+# Kong admits but PostgREST refuses (PGRST301) wherever the two secrets differ.
+
+_VERIFIER = "verifier-secret-abcdefghijklmnopqrstuvwxyz"
+_OTHER = "legacy-jwt-secret-abcdefghijklmnopqrstuvwxyz"
+
+
+def _signed_by(token: str, secret: str) -> bool:
+    import hashlib
+    import hmac as hmac_mod
+
+    header, payload, sig = token.split(".")
+    expected = base64.urlsafe_b64encode(
+        hmac_mod.new(secret.encode(), f"{header}.{payload}".encode(), hashlib.sha256).digest()
+    ).rstrip(b"=").decode()
+    return sig == expected
+
+
+def test_mints_with_the_verifiers_secret_when_the_two_secrets_differ():
+    out = fill_self_generated({"JWT_SECRET": _OTHER, "SUPABASE_JWT_SECRET": _VERIFIER})
+    for label in ("SUPABASE_SERVICE_ROLE_KEY", "SERVICE_ROLE_KEY", "ANON_KEY"):
+        assert _signed_by(out[label], _VERIFIER), label
+        assert not _signed_by(out[label], _OTHER), label
+
+
+def test_remints_a_live_key_that_does_not_verify_under_the_verifiers_secret():
+    # Live (unexpired) but minted under the other secret: the old funnel left it,
+    # so PostgREST refused it forever. It is self-generated, so re-mint it.
+    live_exp = int(time.time()) + 365 * 86400
+    wrong = derive_supabase_jwt(_OTHER, "service_role", exp=live_exp)
+    out = fill_self_generated({
+        "JWT_SECRET": _OTHER, "SUPABASE_JWT_SECRET": _VERIFIER,
+        "SUPABASE_SERVICE_ROLE_KEY": wrong, "SERVICE_ROLE_KEY": wrong,
+    })
+    assert out["SUPABASE_SERVICE_ROLE_KEY"] != wrong
+    assert _signed_by(out["SUPABASE_SERVICE_ROLE_KEY"], _VERIFIER)
+    # one role, one key: every alias moves to the same mint
+    assert out["SERVICE_ROLE_KEY"] == out["SUPABASE_SERVICE_ROLE_KEY"]
+
+
+def test_live_key_that_verifies_is_still_never_touched():
+    live = derive_supabase_jwt(_VERIFIER, "service_role", exp=int(time.time()) + 86400)
+    out = fill_self_generated({"SUPABASE_JWT_SECRET": _VERIFIER, "SERVICE_ROLE_KEY": live})
+    assert out["SERVICE_ROLE_KEY"] == live
+
+
+def test_non_hs256_values_are_never_judged_by_signature():
+    out = fill_self_generated({"SUPABASE_JWT_SECRET": _VERIFIER, "SERVICE_ROLE_KEY": "sb_secret_opaque"})
+    assert out["SERVICE_ROLE_KEY"] == "sb_secret_opaque"
