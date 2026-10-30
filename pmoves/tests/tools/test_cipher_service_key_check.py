@@ -446,7 +446,8 @@ def test_stale_container_warns_and_expired_container_is_a_finding():
     v = ck.assess_container(_base_ok(), FRESH, run, probe=False, now=NOW)
     assert v["facets"]["container"]["matches_env"] is False
     assert any("up-cipher" in w for w in v["warnings"])
-    assert codes(v) == ["container_expired"] and v["exit"] == 1
+    # Kong holds the old key while the env delivers FRESH: stale for the env too.
+    assert codes(v) == ["container_expired", "kong_stale_for_env"] and v["exit"] == 1
 
 
 @pytest.mark.parametrize(
@@ -526,8 +527,8 @@ def test_stale_kong_after_funnel_refresh_is_named():
     c = v["facets"]["container"]
     assert c["matches_env"] is True and c["kong_live_admits"] is False
     assert c["kong_live_matches_env"] is False
-    assert codes(v) == ["kong_live_mismatch"] and v["exit"] == 1
-    assert "supabase-kong is stale" in v["findings"][0]["detail"]
+    assert codes(v) == ["kong_live_mismatch", "kong_stale_for_env"] and v["exit"] == 1
+    assert "supabase-kong is stale" in [f for f in v["findings"] if f["code"] == "kong_live_mismatch"][0]["detail"]
 
 
 def test_running_kong_second_credential_counts():
@@ -724,3 +725,69 @@ def test_overlay_presence_is_reported_including_unreadable(tmp_path, monkeypatch
     rc, out, _ = _run_cli(tmp_path, monkeypatch, capsys, GATEWAY, absent_env, "--env-local", str(unreadable))
     assert "retired key in overlay .. unreadable" in out
     assert "could not be read for the retired-key presence check" in out
+
+
+
+# ── review threads on #3433 (r4428920242, r4428920247, r4428996879) ────────
+
+
+def test_stale_kong_is_named_before_cipher_is_recreated():
+    """r4428920242: after a funnel refresh the env delivers FRESH, the running
+    cipher-api still presents the old key and the running Kong still holds it.
+    Everything works NOW, but recreating cipher-api would break it. The static
+    check cannot see that; the live Kong-vs-env comparison must."""
+    run = _runner(_container_report(EXPIRED_PASTE), kong_keys=(EXPIRED_PASTE,))
+    v = ck.assess_container(_base_ok(), FRESH, run, probe=False, now=NOW)
+    assert v["facets"]["container"]["kong_live_admits"] is True   # works today
+    assert "kong_stale_for_env" in codes(v)
+    assert "make -C pmoves up-supabase" in [f for f in v["findings"] if f["code"] == "kong_stale_for_env"][0]["detail"]
+
+
+def test_stale_kong_is_named_even_with_no_cipher_container():
+    run = _runner({}, names="", kong_keys=(EXPIRED_PASTE,))
+    v = ck.assess_container(_base_ok(), FRESH, run, probe=False, now=NOW)
+    assert codes(v) == ["kong_stale_for_env"]
+
+
+def _cli_gate(tmp_path, monkeypatch, capsys, runner, *extra):
+    monkeypatch.setattr(ck, "_default_runner", runner)
+    return _run_cli(tmp_path, monkeypatch, capsys, GATEWAY,
+                    {**INCIDENT_ENV, "CIPHER_DB_SERVICE_KEY": ""}, "--container", *extra)
+
+
+def test_gate_trips_only_on_the_named_finding(tmp_path, monkeypatch, capsys):
+    stale = _runner(_container_report(FRESH), kong_keys=(EXPIRED_PASTE,))
+    rc, out, err = _cli_gate(tmp_path, monkeypatch, capsys, stale, "--gate", "kong_stale_for_env")
+    assert rc == ck.GATE_TRIPPED == 4 and '"tripped": ["kong_stale_for_env"]' in out
+    _assert_no_leak(out + err)
+    # Kong current, but the RUNNING cipher key is expired: a finding, not the gate.
+    current = _runner(_container_report(EXPIRED_PASTE), kong_keys=(FRESH, EXPIRED_PASTE))
+    rc, out, _ = _cli_gate(tmp_path, monkeypatch, capsys, current, "--gate", "kong_stale_for_env")
+    assert rc == 0 and '"tripped": []' in out and "container_expired" in out
+    # No Kong at all (CLI runtime): unknown is not a trip.
+    rc, out, _ = _cli_gate(tmp_path, monkeypatch, capsys, _runner(_container_report(FRESH), kong=None),
+                           "--gate", "kong_stale_for_env")
+    assert rc == 0
+
+
+def test_jwt_with_unresolvable_postgrest_secret_is_could_not_measure():
+    """r4428920247: the PostgREST gate unchecked is not a pass."""
+    env = {"SUPABASE_SERVICE_ROLE_KEY": FRESH}   # no SUPABASE_JWT_SECRET / JWT_SECRET
+    v = ck.assess(env, exprs(), now=NOW)
+    assert v["facets"]["matches_kong_config"] is True and v["facets"]["signature_verifies"] is None
+    assert (v["status"], v["exit"]) == ("could_not_measure", 3)
+
+
+def test_unreadable_overlay_is_exit_3_and_survives_the_container_recompute(tmp_path, monkeypatch, capsys):
+    """r4428996879: the overlay was a requested facet; unreadable -> 3, and a
+    later container recompute must not forget it."""
+    absent_env = {k: v for k, v in INCIDENT_ENV.items() if k != "CIPHER_DB_SERVICE_KEY"}
+    unreadable = tmp_path / "dir.env.local"
+    unreadable.mkdir()
+    rc, out, _ = _run_cli(tmp_path, monkeypatch, capsys, GATEWAY, absent_env, "--env-local", str(unreadable))
+    assert rc == 3
+    monkeypatch.setattr(ck, "_default_runner",
+                        _runner(_container_report(FRESH, {"status": 200, "code": None, "kong": False})))
+    rc, out, _ = _run_cli(tmp_path, monkeypatch, capsys, GATEWAY, absent_env, "--env-local", str(unreadable),
+                          "--container", "--probe")
+    assert rc == 3

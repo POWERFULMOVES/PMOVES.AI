@@ -65,6 +65,7 @@ structured ``CIPHER_AUTH_VERDICT=<json>`` that survives it):
   0  every requested facet measured and clean
   1  findings: missing, expired, wrong role, wrong pair (Kong or signature),
      live Kong/cipher mismatch, or the running container's lookup is refused
+  4  (only with --gate FINDING) that finding is present; otherwise --gate exits 0
   3  could not measure ANY requested facet (no env, unreadable compose, opaque
      key, container/probe unreadable, probe timed out, crash). NOT a pass
 
@@ -107,6 +108,7 @@ RETIRED_OVERRIDE = "CIPHER_DB_SERVICE_KEY"
 # is deliberately NOT a candidate: recommending it would steer back to the paste.
 CANDIDATE_NAMES = ("SUPABASE_SERVICE_ROLE_KEY", "SERVICE_ROLE_KEY", "SUPABASE_SERVICE_KEY")
 EXPECTED_ROLE = "service_role"
+GATE_TRIPPED = 4  # --gate exit when a named finding is present
 EXPIRY_WARN_S = 30 * 24 * 3600
 
 # Kong's order: canonical first. The REVERSE order presents a different value
@@ -544,11 +546,15 @@ def assess(
 
 
 def _verdict(facets, findings, warnings, unmeasured, gaps: Sequence[str] = ()) -> Dict[str, Any]:
+    # The two gates are both core: Kong (matches_kong_config) AND, for a JWT,
+    # PostgREST (signature_verifies). An unchecked signature is not a pass.
     core_measured = (
         facets.get("present") is not None
         and (facets.get("present") is False
              or (facets.get("exp_in_past") is not None
-                 and facets.get("matches_kong_config") is not None))
+                 and facets.get("matches_kong_config") is not None
+                 and (facets.get("shape") != "jwt"
+                      or facets.get("signature_verifies") is not None)))
     )
     if findings:
         status, code = "finding", 1
@@ -658,6 +664,22 @@ def classify_probe(probe: Mapping[str, Any]) -> Tuple[Optional[Dict[str, str]], 
     return _finding("lookup_http_error", f"lookup returned HTTP {status} ({code or 'no PGRST code'})"), None
 
 
+def _read_kong_digests(runner: Runner) -> Tuple[Optional[str], Optional[List[str]]]:
+    """``(kong container name, consumer-key digests)`` of the RUNNING supabase-kong.
+    Digests are computed inside Kong; ``None`` means they could not be read."""
+    kong_name = discover_container(runner, "supabase-kong")
+    if not kong_name:
+        return None, None
+    try:
+        rc, out = runner(["docker", "exec", kong_name, "sh", "-c", _KONG_SCRIPT])
+    except (OSError, subprocess.SubprocessError):
+        return kong_name, None
+    lines = [ln.strip() for ln in out.splitlines() if ln.strip()] if rc == 0 else []
+    if len(lines) == 2 and all(ln == "-" or re.fullmatch(r"[0-9a-f]{64}", ln) for ln in lines):
+        return kong_name, [ln for ln in lines if ln != "-"]
+    return kong_name, None
+
+
 def assess_container(
     verdict: Dict[str, Any],
     env_key: Optional[str],
@@ -667,7 +689,12 @@ def assess_container(
     name: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Add the LIVE facets. Any requested live facet that cannot be measured is a
-    gap, and a gap makes the verdict could-not-measure (3), never ok."""
+    gap, and a gap makes the verdict could-not-measure (3), never ok.
+
+    The running Kong is judged against the ENV key first, independently of
+    cipher-api: after a funnel refresh, Kong still holds the old consumer key, and
+    recreating cipher-api (which picks up the new key) would break every lookup.
+    That is ``kong_stale_for_env``, the finding the up-cipher roads gate on."""
     now = int(time.time()) if now is None else now
     gaps: List[str] = []
 
@@ -675,9 +702,22 @@ def assess_container(
         gaps.append(note)
         verdict["unmeasured"].append(note)
 
+    kong_name, kong_digests = _read_kong_digests(runner)
     name = name or discover_container(runner)
-    facet: Dict[str, Any] = {"name": name}
+    facet: Dict[str, Any] = {"name": name, "kong": kong_name}
     verdict["facets"]["container"] = facet
+    if kong_digests is not None and env_key:
+        env_digest = hashlib.sha256(env_key.encode()).hexdigest()
+        facet["kong_live_matches_env"] = any(hmac.compare_digest(d, env_digest) for d in kong_digests)
+        if not facet["kong_live_matches_env"]:
+            verdict["findings"].append(_finding(
+                "kong_stale_for_env",
+                "the RUNNING supabase-kong holds no consumer key equal to the key this env "
+                "delivers (stale since the last funnel refresh?). A cipher-api started from "
+                "this env is refused at the gateway on every lookup. Recreate supabase-kong "
+                "FIRST: make -C pmoves up-supabase",
+            ))
+
     if not name:
         gap("no running cipher-api container found")
         return _reverdict(verdict, gaps)
@@ -714,23 +754,9 @@ def assess_container(
                 "deliver; it changes only when cipher-api is recreated (make -C pmoves up-cipher)"
             )
 
-    # What the RUNNING Kong admits: digests of the consumer keys it was started with.
-    kong_name = discover_container(runner, "supabase-kong")
-    facet["kong"] = kong_name
-    kong_digests: Optional[List[str]] = None
-    if kong_name:
-        try:
-            rc, out = runner(["docker", "exec", kong_name, "sh", "-c", _KONG_SCRIPT])
-            lines = [ln.strip() for ln in out.splitlines() if ln.strip()] if rc == 0 else []
-            if len(lines) == 2 and all(ln == "-" or re.fullmatch(r"[0-9a-f]{64}", ln) for ln in lines):
-                kong_digests = [ln for ln in lines if ln != "-"]
-        except (OSError, subprocess.SubprocessError):
-            kong_digests = None
+    # What the RUNNING Kong admits vs what the RUNNING cipher-api presents.
     if kong_digests is not None and digest:
         facet["kong_live_admits"] = any(hmac.compare_digest(d, digest) for d in kong_digests)
-        if env_key:
-            env_digest = hashlib.sha256(env_key.encode()).hexdigest()
-            facet["kong_live_matches_env"] = any(hmac.compare_digest(d, env_digest) for d in kong_digests)
         if not facet["kong_live_admits"]:
             stale = (
                 "supabase-kong is stale (it predates the current env: recreate it, "
@@ -767,8 +793,12 @@ def assess_container(
 
 
 def _reverdict(verdict: Dict[str, Any], gaps: Sequence[str]) -> Dict[str, Any]:
+    """Recompute status/exit. Gaps ACCUMULATE across callers (overlay, container),
+    so a later recompute can never forget an earlier unmeasured requested facet."""
+    all_gaps = verdict.setdefault("gaps", [])
+    all_gaps.extend(g for g in gaps if g not in all_gaps)
     fresh = _verdict(verdict["facets"], verdict["findings"], verdict["warnings"],
-                     verdict["unmeasured"], gaps)
+                     verdict["unmeasured"], all_gaps)
     verdict.update(status=fresh["status"], exit=fresh["exit"])
     return verdict
 
@@ -855,6 +885,10 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument("--probe", action="store_true",
                         help="with --container: run cipher's own lookup (read-only GET, limit=0)")
     parser.add_argument("--json", action="store_true", dest="as_json")
+    parser.add_argument("--gate", action="append", default=[], metavar="FINDING",
+                        help="exit 1 ONLY if this finding code is present, else 0 (the "
+                             "verdict still prints). Used by the up-cipher roads to "
+                             "refuse on kong_stale_for_env without blocking on anything else")
     args = parser.parse_args(argv)
     try:
         compose_files = args.compose_files or [_PMOVES_DIR / "docker-compose.yml"]
@@ -876,8 +910,11 @@ def main(argv: Optional[List[str]] = None) -> int:
             verdict["facets"]["overlay_retired_key"] = (
                 "present" if overlay else "absent" if overlay is False else "unreadable")
             if overlay is None:
-                verdict["unmeasured"].append(
-                    f"{args.env_local.name} could not be read for the retired-key presence check")
+                # A requested facet that could not be measured: a gap (exit 3),
+                # not a footnote under an exit-0 verdict.
+                note = f"{args.env_local.name} could not be read for the retired-key presence check"
+                verdict["unmeasured"].append(note)
+                verdict = _reverdict(verdict, [note])
         for doc_path, doc in zip(args.scan_files, scan_docs):
             other = compose_env_expr([doc], *CIPHER)
             if other is not None and exprs["gateway"] is not None and other.strip() != exprs["gateway"].strip():
@@ -902,6 +939,12 @@ def main(argv: Optional[List[str]] = None) -> int:
             {"status": verdict["status"], "exit": verdict["exit"],
              "findings": [x["code"] for x in verdict["findings"]],
              "warnings": len(verdict["warnings"])}, sort_keys=True))
+    if args.gate:
+        hit = sorted({x["code"] for x in verdict["findings"]} & set(args.gate))
+        print("CIPHER_AUTH_GATE=" + json.dumps({"gate": sorted(args.gate), "tripped": hit}))
+        # 4, not 1: python's own uncaught-exception exit is 1, and a crash must
+        # never read as "gate tripped" (it would refuse a start for no reason).
+        return GATE_TRIPPED if hit else 0
     return int(verdict["exit"])
 
 
