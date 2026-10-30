@@ -63,6 +63,23 @@ def _companion(key):
     return Companion
 
 
+@pytest.fixture(autouse=True)
+def containers(monkeypatch):
+    """Stub docker inspect; tests never touch the host's real containers."""
+    state = {"invidious": SERVER_KEY, "invidious-companion": SERVER_KEY}
+
+    def fake(service):
+        key = state.get(service)
+        if key is None:
+            return None
+        if service == "invidious":
+            return {"INVIDIOUS_CONFIG": f'db:\n  host: x\ninvidious_companion_key: "{key}"\nhmac_key: "h"\n'}
+        return {"SERVER_SECRET_KEY": key}
+
+    monkeypatch.setattr(smoke, "_service_env", fake)
+    return state
+
+
 @pytest.fixture
 def stack():
     servers = []
@@ -99,3 +116,25 @@ def test_could_not_measure_without_the_key(stack, monkeypatch):
 def test_could_not_measure_when_unreachable(monkeypatch):
     monkeypatch.setenv("INVIDIOUS_COMPANION_KEY", SERVER_KEY)
     assert smoke.main(["--invidious-url", "http://127.0.0.1:9", "--companion-url", "http://127.0.0.1:9"]) == 3
+
+
+def test_finding_when_invidious_and_companion_containers_disagree(stack, monkeypatch, containers, capsys):
+    """Companion recreated, invidious not: pages load, playback fails. Checks 1-3 all pass."""
+    monkeypatch.setenv("INVIDIOUS_COMPANION_KEY", SERVER_KEY)
+    containers["invidious"] = "0000111122223333"
+    assert smoke.main(stack(SERVER_KEY)) == 1
+    out = capsys.readouterr().out
+    assert "DIFFERENT companion keys" in out
+    assert SERVER_KEY not in out and "0000111122223333" not in out
+
+
+def test_could_not_measure_when_containers_unreadable(stack, monkeypatch, containers):
+    monkeypatch.setenv("INVIDIOUS_COMPANION_KEY", SERVER_KEY)
+    containers.pop("invidious")
+    assert smoke.main(stack(SERVER_KEY)) == 3
+
+
+def test_config_key_parser_reads_the_compose_blob():
+    blob = 'db:\n  dbname: invidious\nhmac_key: "h"\ninvidious_companion_key: "abcDEF0123456789"\nstatistics_enabled: false\n'
+    m = smoke.CONFIG_COMPANION_KEY_RE.search(blob)
+    assert m and m.group(1) == "abcDEF0123456789"

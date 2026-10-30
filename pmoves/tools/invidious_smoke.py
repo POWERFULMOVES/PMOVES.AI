@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Read-only Invidious smoke: started, companion up, and the two agree on the key.
+"""Read-only Invidious smoke: started, companion up, and both containers hold the funnel's key.
 
 Exit doctrine: 0 clean / 1 findings / 3 could-not-measure. Note that
 ``make`` collapses every nonzero recipe exit to 2, so call this directly when
@@ -22,6 +22,12 @@ iv-org/invidious-companion @fcb0456a, both read 2026-10-30):
    route answers GET there, so neither request reaches YouTube. A 401 on the
    real key means the running companion was created with a different value
    than the funnel now holds -- recreate with ``make -C pmoves up-invidious``.
+4. Invidious <-> companion agreement. Check 3 only proves companion == funnel.
+   If the companion was recreated and invidious was not, pages still load and
+   playback fails. So read the key each RUNNING container was created with
+   (``docker inspect``: invidious's INVIDIOUS_CONFIG -> invidious_companion_key,
+   the companion's SERVER_SECRET_KEY) and compare them in-process. The values
+   are never printed, logged or returned -- only the boolean.
 
 Never prints the key. Pure stdlib.
 """
@@ -31,6 +37,8 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
+import subprocess
 import sys
 import urllib.error
 import urllib.request
@@ -65,6 +73,43 @@ def _stats(url: str, timeout: float = 8.0) -> tuple[int | None, bool]:
         return int(exc.code), False
     except (urllib.error.URLError, OSError, ValueError):
         return None, False
+
+
+CONFIG_COMPANION_KEY_RE = re.compile(r'^invidious_companion_key:\s*"?([^"\n]*)"?\s*$', re.M)
+
+
+def _service_env(service: str) -> dict[str, str] | None:
+    """Environment of the running container for a compose *service*; None if not measurable."""
+    try:
+        ids = subprocess.run(
+            ["docker", "ps", "-q", "--filter", f"label=com.docker.compose.service={service}"],
+            capture_output=True, text=True, timeout=15, check=False,
+        )
+        cid = ids.stdout.split()[0] if ids.returncode == 0 and ids.stdout.split() else None
+        if cid is None:
+            return None
+        out = subprocess.run(
+            ["docker", "inspect", "--format", "{{json .Config}}", cid],
+            capture_output=True, text=True, timeout=15, check=False,
+        )
+        if out.returncode != 0:
+            return None
+        entries = json.loads(out.stdout).get("Env") or []
+        return dict(e.split("=", 1) for e in entries if "=" in e)
+    except (OSError, ValueError, AttributeError, subprocess.SubprocessError):
+        return None
+
+
+def containers_agree() -> bool | None:
+    """True/False when both running containers' keys could be read, else None."""
+    inv, comp = _service_env("invidious"), _service_env("invidious-companion")
+    if inv is None or comp is None:
+        return None
+    match = CONFIG_COMPANION_KEY_RE.search(inv.get("INVIDIOUS_CONFIG", ""))
+    inv_key, comp_key = (match.group(1) if match else ""), comp.get("SERVER_SECRET_KEY", "")
+    if not inv_key or not comp_key:
+        return None
+    return inv_key == comp_key
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -116,6 +161,20 @@ def main(argv: list[str] | None = None) -> int:
         )
     else:
         print(f"ok   companion accepts the funnel key on {path} (wrong key -> 401, funnel key -> {code})")
+
+    agree = containers_agree()
+    if agree is None:
+        print("COULD-NOT-MEASURE: could not read the key from both running containers (docker inspect)")
+        for f in findings:
+            print(f"FAIL {f}")
+        return EXIT_FINDINGS if findings else EXIT_COULD_NOT_MEASURE
+    if agree:
+        print("ok   invidious and companion containers hold the same companion key")
+    else:
+        findings.append(
+            "the running invidious and invidious-companion containers hold DIFFERENT companion keys "
+            "(one was recreated without the other) -- recreate both: make -C pmoves up-invidious"
+        )
 
     for f in findings:
         print(f"FAIL {f}")

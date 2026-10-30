@@ -3369,7 +3369,7 @@ $(INVIDIOUS_KEYS_PREFLIGHT_GOALS): invidious-keys-preflight
 endif
 
 .PHONY: invidious-smoke
-invidious-smoke: ## Read-only Invidious check: stats 200, companion healthz, companion accepts the funnel key (exit 0/1/3)
+invidious-smoke: ## Read-only Invidious check: stats 200, companion healthz, companion accepts the funnel key, invidious+companion containers hold the same key (exit 0/1/3)
 	@# Sourcing with-env.sh turns errexit on; set +e so the 0/1/3 verdict is
 	@# printed rather than aborted. make still collapses 1 and 3 to 2 -- for the
 	@# exact code run: python3 tools/invidious_smoke.py (with the env loaded).
