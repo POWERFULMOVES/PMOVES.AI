@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from collections import defaultdict
 from dataclasses import dataclass
@@ -13,7 +14,12 @@ import yaml
 
 from pmoves.chit.codec import decode_secret_map, load_cgp
 from pmoves.tools.secret_shape import inspect_value
-from pmoves.tools.secrets_self_generated import fill_self_generated, SELF_GENERATED, _SUPABASE_JWT_KEYS
+from pmoves.tools.secrets_self_generated import (
+    SELF_GENERATED,
+    _SUPABASE_JWT_KEYS,
+    compose_consumers,
+    fill_self_generated,
+)
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = PROJECT_ROOT.parent
@@ -416,6 +422,66 @@ def report(outputs: Mapping[str, Mapping[str, str]]) -> str:
     return "\n".join(rows)
 
 
+# Known Roads that recreate the consumers a Supabase key change reaches. Printed
+# as guidance only; this tool never starts or recreates anything.
+_RECREATE_ROADS = (
+    "make -C pmoves up-supabase   # supabase-kong (consumer keys), rest, studio, storage, ...",
+    "make -C pmoves up-cipher     # cipher-api",
+    "make -C pmoves up-agents     # agent-zero, archon, ...",
+    "make -C pmoves up-ui         # UI builds with a baked-in anon key (rebuild)",
+)
+
+
+def announce_jwt_events(
+    events: Sequence[Mapping[str, str]],
+    compose_paths: Sequence[Path] | None = None,
+    out=None,
+) -> List[str]:
+    """Print what the self-generated guard changed or refused -- NAMES only.
+
+    A re-mint changes a key that running containers captured at create time;
+    until every consumer is recreated the stack is half-old, half-new (Kong's
+    consumer key is the sharpest case: every Kong client is refused). So the
+    consumers are listed from the compose files themselves, not a typed list.
+    Returns the consumer service names (for tests).
+    """
+    out = out or sys.stdout
+    changed = [e for e in events if e.get("action") in ("reminted", "filled")]
+    refused = [e for e in events if e.get("action") == "left_unchanged"]
+    for e in refused:
+        print(
+            f"[secrets-sync] WARN {e['label']} does not verify under the local JWT secret "
+            f"and was left unchanged ({e['reason']}: not minted here, or this node's "
+            "compose Supabase is not its verifier)",
+            file=out,
+        )
+    reminted = [e for e in changed if e["action"] == "reminted"]
+    if not reminted:
+        return []
+    for e in reminted:
+        print(f"[secrets-sync] RE-MINTED {e['label']} ({e['role']}): {e['reason']}", file=out)
+    labels = sorted({e["label"] for e in changed})
+    if compose_paths is None:
+        compose_paths = sorted((REPO_ROOT / "pmoves").glob("docker-compose*.yml"))
+    docs = []
+    for path in compose_paths:
+        try:
+            docs.append(yaml.safe_load(path.read_text(encoding="utf-8")) or {})
+        except (OSError, yaml.YAMLError) as exc:
+            print(f"[secrets-sync] WARN could not read {path.name} for the consumer list ({type(exc).__name__})", file=out)
+    consumers = compose_consumers(labels, docs)
+    print(
+        "[secrets-sync] RECREATE every consumer of the re-minted keys, or the stack runs "
+        "half-old/half-new (Kong refuses every client whose key differs from its consumer key):",
+        file=out,
+    )
+    print("[secrets-sync]   services naming them in compose: " + (", ".join(consumers) or "(none found)"), file=out)
+    print("[secrets-sync]   plus any service that inherits them via env_file. Known Roads:", file=out)
+    for road in _RECREATE_ROADS:
+        print(f"[secrets-sync]     {road}", file=out)
+    return consumers
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Seed env files from CHIT secrets manifest.")
     parser.add_argument(
@@ -462,9 +528,16 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     secrets = decode_secret_map(load_cgp(cgp_path))
     # Funnel-side guard: fill self-generated secrets (Supabase anon/service_role
-    # JWTs derived from JWT_SECRET) so they project without operator input and
-    # are never emitted as placeholders. Never overwrites an existing value.
-    secrets = fill_self_generated(secrets)
+    # JWTs, minted under the verifiers' ${SUPABASE_JWT_SECRET:-${JWT_SECRET}})
+    # so they project without operator input and are never emitted as
+    # placeholders. It overwrites an existing value ONLY when it is expired, or
+    # provably ours and signed with the other secret on a local compose runtime
+    # (see fill_self_generated); every change is announced below by NAME.
+    jwt_events: List[Dict[str, str]] = []
+    secrets = fill_self_generated(
+        secrets, context={**secrets, **os.environ}, events=jwt_events
+    )
+    announce_jwt_events(jwt_events)
 
     # Filter entries if --keys is specified (selective rotation)
     if args.keys:

@@ -7,6 +7,8 @@ exception to additivity: these labels are re-derivable from JWT_SECRET by
 construction, so a dead key is stale, not operator intent.
 """
 import base64
+
+import pytest
 import json
 import time
 
@@ -176,6 +178,7 @@ def test_remints_a_live_key_that_does_not_verify_under_the_verifiers_secret():
     out = fill_self_generated({
         "JWT_SECRET": _OTHER, "SUPABASE_JWT_SECRET": _VERIFIER,
         "SUPABASE_SERVICE_ROLE_KEY": wrong, "SERVICE_ROLE_KEY": wrong,
+        "SUPABASE_RUNTIME": "compose",
     })
     assert out["SUPABASE_SERVICE_ROLE_KEY"] != wrong
     assert _signed_by(out["SUPABASE_SERVICE_ROLE_KEY"], _VERIFIER)
@@ -192,3 +195,119 @@ def test_live_key_that_verifies_is_still_never_touched():
 def test_non_hs256_values_are_never_judged_by_signature():
     out = fill_self_generated({"SUPABASE_JWT_SECRET": _VERIFIER, "SERVICE_ROLE_KEY": "sb_secret_opaque"})
     assert out["SERVICE_ROLE_KEY"] == "sb_secret_opaque"
+
+
+
+# ── ownership + runtime gates on the live re-mint (#3433 follow-up P1/P2/P3) ──
+# A live key is rewritten only if it is provably funnel-minted (HS256, iss
+# supabase-local, the label's role) AND this node's compose Supabase is the
+# verifier. Before #3433 live keys were never touched; a CLI/cloud key that does
+# not verify under OUR secret may be exactly right for ITS verifier.
+
+from pmoves.tools.secrets_self_generated import compose_consumers, local_runtime_is_verifier  # noqa: E402
+
+_LIVE = int(time.time()) + 365 * 86400
+_COMPOSE = {"SUPABASE_RUNTIME": "compose"}
+
+
+def _jwt(header: dict, claims: dict, secret: str = "x") -> str:
+    import hashlib
+    import hmac as hmac_mod
+
+    enc = lambda d: base64.urlsafe_b64encode(json.dumps(d, separators=(",", ":")).encode()).rstrip(b"=").decode()  # noqa: E731
+    si = f"{enc(header)}.{enc(claims)}"
+    sig = base64.urlsafe_b64encode(hmac_mod.new(secret.encode(), si.encode(), hashlib.sha256).digest()).rstrip(b"=").decode()
+    return f"{si}.{sig}"
+
+
+def _base(**extra):
+    return {"JWT_SECRET": _OTHER, "SUPABASE_JWT_SECRET": _VERIFIER, **_COMPOSE, **extra}
+
+
+def test_rs256_shaped_jwt_is_left_alone():
+    rs = _jwt({"alg": "RS256", "typ": "JWT"}, {"role": "anon", "iss": "supabase-local", "exp": _LIVE})
+    events = []
+    out = fill_self_generated(_base(SUPABASE_ANON_KEY=rs), events=events)
+    assert out["SUPABASE_ANON_KEY"] == rs
+    assert not [e for e in events if e["label"] == "SUPABASE_ANON_KEY"]
+
+
+def test_foreign_iss_hs256_cloud_key_is_left_alone_and_warned_by_name():
+    cloud = _jwt({"alg": "HS256", "typ": "JWT"},
+                 {"iss": "supabase", "ref": "abcd", "role": "anon", "exp": _LIVE}, secret="cloud-secret")
+    events = []
+    out = fill_self_generated(_base(SUPABASE_ANON_KEY=cloud, NEXT_PUBLIC_SUPABASE_ANON_KEY=cloud), events=events)
+    assert out["SUPABASE_ANON_KEY"] == cloud and out["NEXT_PUBLIC_SUPABASE_ANON_KEY"] == cloud
+    assert {(e["label"], e["action"], e["reason"]) for e in events if e["role"] == "anon" and e["action"] != "filled"} == {
+        ("SUPABASE_ANON_KEY", "left_unchanged", "not_minted_here"),
+        ("NEXT_PUBLIC_SUPABASE_ANON_KEY", "left_unchanged", "not_minted_here"),
+    }
+    assert all(cloud not in str(e) for e in events)
+
+
+def test_our_key_signed_with_the_other_secret_is_reminted_and_announced(capsys):
+    from pmoves.tools.secrets_sync import announce_jwt_events
+
+    ours = derive_supabase_jwt(_OTHER, "service_role", exp=_LIVE)  # iss supabase-local
+    events = []
+    out = fill_self_generated(_base(SUPABASE_SERVICE_ROLE_KEY=ours, SERVICE_ROLE_KEY=ours), events=events)
+    assert out["SUPABASE_SERVICE_ROLE_KEY"] != ours and _signed_by(out["SUPABASE_SERVICE_ROLE_KEY"], _VERIFIER)
+    assert ("SUPABASE_SERVICE_ROLE_KEY", "reminted", "signed_with_other_secret") in {
+        (e["label"], e["action"], e["reason"]) for e in events}
+    consumers = announce_jwt_events(events)  # real compose files
+    printed = capsys.readouterr().out
+    assert "RE-MINTED SUPABASE_SERVICE_ROLE_KEY (service_role): signed_with_other_secret" in printed
+    assert {"supabase-kong", "cipher-api"} <= set(consumers)
+    assert "make -C pmoves up-supabase" in printed and "make -C pmoves up-cipher" in printed
+    assert ours not in printed and out["SUPABASE_SERVICE_ROLE_KEY"] not in printed
+
+
+@pytest.mark.parametrize(
+    "ctx, reason",
+    [
+        ({"SUPABASE_RUNTIME": "compose", "SUPABASE_URL": "https://abcd.supabase.co"}, "remote_url"),
+        ({"SUPABASE_RUNTIME": "compose", "SUPABASE_REST_URL": "http://node.tailnet.example:8000/rest/v1"}, "remote_url"),
+        ({"SUPABASE_RUNTIME": "cli"}, "runtime_cli"),
+        ({}, "runtime_unknown"),
+    ],
+    ids=["cloud-url", "remote-rest-url", "cli-runtime", "runtime-unstated"],
+)
+def test_no_live_remint_unless_the_local_compose_stack_is_the_verifier(ctx, reason):
+    ours = derive_supabase_jwt(_OTHER, "service_role", exp=_LIVE)
+    secrets = {"JWT_SECRET": _OTHER, "SUPABASE_JWT_SECRET": _VERIFIER,
+               "SUPABASE_SERVICE_ROLE_KEY": ours, "SERVICE_ROLE_KEY": ours, **ctx}
+    events = []
+    out = fill_self_generated(secrets, events=events)
+    assert out["SUPABASE_SERVICE_ROLE_KEY"] == ours and out["SERVICE_ROLE_KEY"] == ours
+    assert {e["reason"] for e in events if e["role"] == "service_role"} == {reason}
+
+
+def test_local_urls_count_as_local():
+    for url in ("http://supabase-kong:8000", "http://localhost:3001", "http://127.0.0.1:8000/rest/v1",
+                "http://host.docker.internal:8000"):
+        assert local_runtime_is_verifier({"SUPABASE_RUNTIME": "compose", "SUPABASE_URL": url}) == (True, "local"), url
+
+
+def test_context_overrides_the_secret_map():
+    # secrets_sync passes {**secrets, **os.environ}: an exported runtime wins.
+    ours = derive_supabase_jwt(_OTHER, "service_role", exp=_LIVE)
+    out = fill_self_generated(_base(SERVICE_ROLE_KEY=ours), context={"SUPABASE_RUNTIME": "cli"})
+    assert out["SERVICE_ROLE_KEY"] == ours
+
+
+def test_expired_foreign_key_still_refreshed_as_in_3410():
+    dead = _jwt({"alg": "HS256", "typ": "JWT"}, {"iss": "supabase-demo", "role": "service_role",
+                                                 "exp": int(time.time()) - 60}, secret="cli")
+    events = []
+    out = fill_self_generated({"SUPABASE_JWT_SECRET": _VERIFIER, "SERVICE_ROLE_KEY": dead}, events=events)
+    assert out["SERVICE_ROLE_KEY"] != dead and _signed_by(out["SERVICE_ROLE_KEY"], _VERIFIER)
+    assert ("SERVICE_ROLE_KEY", "reminted", "expired") in {(e["label"], e["action"], e["reason"]) for e in events}
+
+
+def test_compose_consumers_reads_environment_and_build_args():
+    docs = [{"services": {
+        "kong": {"environment": ["SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-${SERVICE_ROLE_KEY:-}}"]},
+        "ui": {"build": {"args": {"NEXT_PUBLIC_SUPABASE_ANON_KEY": "${NEXT_PUBLIC_SUPABASE_ANON_KEY}"}}},
+        "other": {"environment": {"X": "${SERVICE_ROLE_KEYS_LIST}"}},   # different name, no match
+    }}]
+    assert compose_consumers(["SERVICE_ROLE_KEY", "NEXT_PUBLIC_SUPABASE_ANON_KEY"], docs) == ["kong", "ui"]

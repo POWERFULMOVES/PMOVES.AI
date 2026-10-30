@@ -628,7 +628,7 @@ def test_secret_disagreement_is_named_and_the_funnel_now_fixes_it():
     detail = v["findings"][0]["detail"]
     assert "JWT_SECRET and SUPABASE_JWT_SECRET differ" in detail and "secrets-funnel" in detail
     # The remedy the finding gives actually works: run the funnel guard.
-    refreshed = fill_self_generated(env)
+    refreshed = fill_self_generated(env, context={"SUPABASE_RUNTIME": "compose"})
     after = ck.assess({**env, **refreshed}, exprs(), now=int(__import__("time").time()))
     assert after["facets"]["signature_verifies"] is True
     assert "wrong_pair_signature" not in codes(after)
