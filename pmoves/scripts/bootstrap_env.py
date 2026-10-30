@@ -348,7 +348,7 @@ def slot_is_filled(existing: Optional[str]) -> bool:
     """The one predicate for "this env slot already holds a usable secret".
 
     Absent and empty are unfilled. So is a value that was published in this
-    repo (``KNOWN_PUBLIC_SECRET_SHA256``): the Invidious keys shipped as compose
+    repo (``KNOWN_PUBLIC_SECRET_DIGESTS``): the Invidious keys shipped as compose
     literal defaults, so a node whose env file -- or whose running container --
     holds them is holding a public value. Treating it as filled would make the
     funnel defend the compromised key forever. ``secrets_harvest.classify`` calls

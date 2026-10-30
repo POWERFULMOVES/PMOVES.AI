@@ -277,7 +277,7 @@ def _credential_shape(default: str) -> str | None:
     return None
 
 
-def _scan_literal_secret_defaults(file: Path, text: str) -> list[dict]:
+def _scan_literal_defaults(file: Path, text: str) -> list[dict]:
     """Flag secret-named interpolations that carry a credential-shaped default.
 
     Text scan, not YAML: the defaults that matter also hide INSIDE string
@@ -352,7 +352,7 @@ def _scan_file(file: Path) -> list[dict]:
         print("PyYAML required: pip install pyyaml", file=sys.stderr)
         sys.exit(2)
     text = file.read_text(encoding="utf-8")
-    problems: list[dict] = _scan_literal_secret_defaults(file, text)
+    problems: list[dict] = _scan_literal_defaults(file, text)
     data = _yaml_safe_load_with_compose_tags(text)
     if not isinstance(data, dict):
         return problems

@@ -11,7 +11,7 @@ keep that from coming back:
    src/invidious/config.cr) and the companion's schema is
    ``z.string().length(16).regex(/^[a-zA-Z0-9]+$/)`` (iv-org/invidious-companion
    src/lib/helpers/config.ts). The registry used to say 64.
-2. A value that was published (``KNOWN_PUBLIC_SECRET_SHA256``) counts as
+2. A value that was published (``KNOWN_PUBLIC_SECRET_DIGESTS``) counts as
    unprovisioned everywhere the funnel asks "is this slot filled?": ensure,
    ensure-dry-run, harvest and the runtime hydrate. Otherwise the funnel would
    harvest the public key back out of a running container and defend it.
@@ -19,12 +19,11 @@ keep that from coming back:
    (``validate_composes.py`` rule ``literal-secret-default``).
 
 Fixture values below are INVENTED. The real published values are never written
-into this repo again; the denylist holds their SHA-256 digests only.
+into this repo again; the denylist holds PBKDF2 digests only.
 """
 
 from __future__ import annotations
 
-import hashlib
 import importlib.util
 import json
 import re
@@ -62,9 +61,10 @@ FAKE_LIVE = "a1b2c3d4e5f60718"  # stands in for a private, live companion key
 @pytest.fixture
 def published(monkeypatch):
     """Pretend FAKE_PUBLIC was published, without touching the real digests."""
-    digest = hashlib.sha256(FAKE_PUBLIC.encode()).hexdigest()
+    table = {k: set(v) for k, v in common.KNOWN_PUBLIC_SECRET_DIGESTS.items()}
+    table.setdefault(len(FAKE_PUBLIC), set()).add(common.known_public_digest(FAKE_PUBLIC))
     monkeypatch.setattr(
-        common, "KNOWN_PUBLIC_SECRET_SHA256", common.KNOWN_PUBLIC_SECRET_SHA256 | {digest}
+        common, "KNOWN_PUBLIC_SECRET_DIGESTS", {k: frozenset(v) for k, v in table.items()}
     )
     return FAKE_PUBLIC
 
@@ -128,9 +128,18 @@ def test_funnel_ensures_both_keys():
 
 
 def test_denylist_holds_digests_not_values():
-    assert len(common.KNOWN_PUBLIC_SECRET_SHA256) >= 2
-    for digest in common.KNOWN_PUBLIC_SECRET_SHA256:
-        assert re.fullmatch(r"[0-9a-f]{64}", digest)
+    table = common.KNOWN_PUBLIC_SECRET_DIGESTS
+    assert set(table) >= {16, 64}  # companion key, HMAC key
+    for digests in table.values():
+        for digest in digests:
+            assert re.fullmatch(r"[0-9a-f]{64}", digest)
+
+
+def test_denylist_skips_the_kdf_for_lengths_never_published(monkeypatch):
+    calls = []
+    monkeypatch.setattr(common, "known_public_digest", lambda v: calls.append(v) or "")
+    assert not common.is_known_public("x" * 17)
+    assert calls == []
 
 
 def test_published_value_is_a_placeholder(published):

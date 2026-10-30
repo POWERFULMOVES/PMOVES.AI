@@ -112,7 +112,7 @@ Supersedes the open-gap note above. Scope: **all 58 chat folders** (`1,314` mess
 - Compose: every literal default becomes `${VAR:?set VAR via secrets funnel}`, including inside `INVIDIOUS_CONFIG`.
 - `pmoves/bootstrap/registry.json`: companion generator `random_hex` 16 (was 64).
 - `pmoves/mk/codex.mk`: both keys join `SECRETS_ENSURE_KEYS`. Compose interpolates the whole project even when the `invidious` profile is off (measured, compose v5.6.0), so **every node** must hold both values, including nodes that never run Invidious.
-- `pmoves/tools/_secrets_common.py`: SHA-256 digests (not values) of the two published keys. A slot or container holding them counts as unprovisioned, so the funnel replaces them instead of harvesting them back.
+- `pmoves/tools/_secrets_common.py`: PBKDF2-SHA256 digests (not values) of the two published keys. A slot or container holding them counts as unprovisioned, so the funnel replaces them instead of harvesting them back.
 - `pmoves/tools/validate_composes.py`: rule `literal-secret-default` fails CI if a credential-shaped default is reintroduced.
 
 **Rotation road (operator, per node).**

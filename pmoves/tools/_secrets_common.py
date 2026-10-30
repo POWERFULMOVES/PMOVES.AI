@@ -73,21 +73,33 @@ def normalize_env_value(value: str) -> str:
     return value
 
 
-# SHA-256 digests of secret values that were committed to this public repo as
-# compose literal defaults. A value published in git history is compromised for
-# good: removing it from HEAD does not un-publish it. Every predicate that asks
-# "does this slot already hold a usable secret?" must answer NO for these, or the
+# Digests of secret values that were committed to this public repo as compose
+# literal defaults. A value published in git history is compromised for good:
+# removing it from HEAD does not un-publish it. Every predicate that asks "does
+# this slot already hold a usable secret?" must answer NO for these, or the
 # funnel would harvest the public value back out of a running container and keep
 # it forever. Digests, not values -- the point is to stop re-publishing them.
 #
-#   INVIDIOUS_HMAC_KEY       64 hex, docker-compose{,.ui}.yml until the fix
-#                            for invidious-required-keys
-#   INVIDIOUS_COMPANION_KEY  16 hex, same files (also the companion's
-#                            SERVER_SECRET_KEY default)
-KNOWN_PUBLIC_SECRET_SHA256: frozenset[str] = frozenset({
-    "f0fdab5ca05b32f04a2b2daf074d81ae52b7bf92e0e714c867d52d7926a2e433",
-    "d34df49b401f6034654f748efe01478a56ba8b29703f0977cf04e0c04c432958",
-})
+# PBKDF2-SHA256 with a fixed salt, keyed by length: is_placeholder() runs over
+# every env value, so the KDF only runs for a value whose length matches a
+# published one. The salt is fixed on purpose -- this is a lookup table, not
+# password storage, and the inputs are already public.
+#
+#   64  INVIDIOUS_HMAC_KEY       docker-compose{,.ui}.yml until fix/invidious-required-keys
+#   16  INVIDIOUS_COMPANION_KEY  same files (also the companion's SERVER_SECRET_KEY default)
+KNOWN_PUBLIC_SECRET_SALT = b"pmoves-known-public-secret-v1"
+KNOWN_PUBLIC_SECRET_ITERATIONS = 200_000
+KNOWN_PUBLIC_SECRET_DIGESTS: Dict[int, frozenset[str]] = {
+    64: frozenset({"63cc5d52c881d833a6a05548d022c12dceb6cfb141e74fb055f7353600b0dc12"}),
+    16: frozenset({"7788ce9136c04cd8919e3b39309617c1f58ecc1bcabe437818bcdb535e7acc94"}),
+}
+
+
+def known_public_digest(value: str) -> str:
+    """The denylist digest of *value* (already normalized)."""
+    return hashlib.pbkdf2_hmac(
+        "sha256", value.encode("utf-8"), KNOWN_PUBLIC_SECRET_SALT, KNOWN_PUBLIC_SECRET_ITERATIONS
+    ).hex()
 
 
 def is_known_public(value: str | None) -> bool:
@@ -95,7 +107,11 @@ def is_known_public(value: str | None) -> bool:
     if not value:
         return False
     normalized = normalize_env_value(value)
-    return hashlib.sha256(normalized.encode("utf-8")).hexdigest() in KNOWN_PUBLIC_SECRET_SHA256
+    candidates = KNOWN_PUBLIC_SECRET_DIGESTS.get(len(normalized))
+    if not candidates:
+        return False
+    return known_public_digest(normalized) in candidates
+
 
 def is_placeholder(value: str | None) -> bool:
     """Return True if value is missing, empty, or a known placeholder.
