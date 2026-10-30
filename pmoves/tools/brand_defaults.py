@@ -15,6 +15,7 @@ if _REPO_ROOT not in sys.path:
 
 from pmoves.tools._secrets_common import (
     PLACEHOLDER_VALUES,
+    is_known_public,
     is_placeholder as _is_blank_or_placeholder,
     normalize_env_value as _normalize_env_value,
 )
@@ -69,13 +70,6 @@ SUPERSEDED_VALUES: dict[str, str] = {
 
 def _strong_random(n_bytes: int) -> str:
     return secrets.token_urlsafe(n_bytes)
-
-
-def _rand_exact_len(n_chars: int) -> str:
-    s = _strong_random(max(12, n_chars))
-    if len(s) < n_chars:
-        s = (s * ((n_chars // len(s)) + 1))[:n_chars]
-    return s[:n_chars]
 
 
 def _rand_alnum(n_chars: int) -> str:
@@ -470,6 +464,25 @@ def _ensure_minio_credentials(text: str) -> str:
 
 
 
+def _ensure_invidious_keys(text: str) -> str:
+    """Invidious keys in the vendor's format, never a value published in the repo.
+
+    Companion key: exactly 16 of [A-Za-z0-9] -- Invidious exits on any other
+    length and the companion rejects '-' and '_'. This used to mint
+    token_urlsafe, so ~40% of values carried '-'/'_' and the companion refused
+    to start. HMAC key: any random string; a short one is replaced. Either key
+    equal to a published compose default (is_known_public) is rotated.
+    """
+    companion_key = _get_kv(text, "INVIDIOUS_COMPANION_KEY")
+    if not re.fullmatch(r"[A-Za-z0-9]{16}", companion_key) or is_known_public(companion_key):
+        companion_key = secrets.token_hex(8)
+        text = _set_kv(text, "INVIDIOUS_COMPANION_KEY", companion_key)
+    hmac_key = _get_kv(text, "INVIDIOUS_HMAC_KEY")
+    if len(hmac_key) < 32 or is_known_public(hmac_key) or hmac_key == companion_key:
+        text = _set_kv(text, "INVIDIOUS_HMAC_KEY", secrets.token_hex(32))
+    return text
+
+
 def upsert_env(path: Path, env_gen_path: Path, pairs: dict[str, str]) -> None:
     """Apply branded defaults to env file, strengthen weak keys, and write back."""
     text = path.read_text(encoding="utf-8") if path.exists() else ""
@@ -489,18 +502,12 @@ def upsert_env(path: Path, env_gen_path: Path, pairs: dict[str, str]) -> None:
     if len(meili_key) < 16:
         text = _set_kv(text, "MEILI_MASTER_KEY", _strong_random(24))
 
-    companion_key = _get_kv(text, "INVIDIOUS_COMPANION_KEY")
-    if len(companion_key) != 16:
-        text = _set_kv(text, "INVIDIOUS_COMPANION_KEY", _rand_exact_len(16))
+    text = _ensure_invidious_keys(text)
 
     # Qdrant API key for inter-service authentication
     qdrant_key = _get_kv(text, "QDRANT__API_KEY")
     if len(qdrant_key) < 32:
         text = _set_kv(text, "QDRANT__API_KEY", _strong_random(32))
-
-    hmac_key = _get_kv(text, "INVIDIOUS_HMAC_KEY")
-    if len(hmac_key) < 32:
-        text = _set_kv(text, "INVIDIOUS_HMAC_KEY", _strong_random(24))
 
     neo4j_password = _get_kv(text, "NEO4J_PASSWORD")
     if _is_blank_or_placeholder(neo4j_password):

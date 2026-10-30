@@ -3339,6 +3339,35 @@ channel-monitor-smoke: ## Verify channel-monitor HTTP endpoints
 	  done; \
 	'
 
+.PHONY: invidious-keys-preflight invidious-keys-check
+invidious-keys-preflight: ## Mint/rotate Invidious keys in env.shared when missing, published or vendor-invalid (idempotent; runs before stack goals)
+	@# Exit 1 only when ${VAR:?} would fail compose anyway, so this can never
+	@# make a node worse than compose alone; 3 (could not measure) continues.
+	@$(PYTHON) tools/invidious_keys_preflight.py; rc=$$?; \
+	  if [ $$rc -eq 1 ]; then exit 1; \
+	  elif [ $$rc -ne 0 ]; then echo "invidious-keys: could not measure (exit $$rc) -- continuing; compose stays the final gate"; fi
+
+invidious-keys-check: ## Report-only Invidious key check, never writes (exit 0/1/3)
+	@$(PYTHON) tools/invidious_keys_preflight.py --check
+
+# Mesh compatibility. Compose interpolates every service, profile or not, so a
+# node that never runs Invidious still needs both keys or EVERY stack goal fails
+# on ${INVIDIOUS_*_KEY:?}. Only `make secrets-funnel` minted them, and no up-*
+# target runs the funnel. Attach the preflight to the stack goals named on this
+# make invocation: the goals whose recipes interpolate docker-compose.yml ($(DC))
+# or docker-compose.ui.yml (overlay-up-full / -ui / overlay-down). Other goals
+# (tests, CI checks, secrets-*) are untouched.
+# Only goals that are DEFINED targets: giving an unknown goal a prerequisite
+# would turn make's "No rule to make target" error into a silent success.
+INVIDIOUS_KEYS_PREFLIGHT_GOALS := $(filter up up-% update down down-% recreate-% restart-% rebuild-% stop-% logs-% ps ps-% overlay-up-full overlay-up-ui overlay-down,$(MAKECMDGOALS))
+ifneq ($(strip $(INVIDIOUS_KEYS_PREFLIGHT_GOALS)),)
+INVIDIOUS_KEYS_DEFINED_TARGETS := $(shell sed -n 's/^\([A-Za-z0-9_.-][A-Za-z0-9_.-]*\):.*/\1/p' $(wildcard $(CURDIR)/Makefile $(CURDIR)/mk/*.mk))
+INVIDIOUS_KEYS_PREFLIGHT_GOALS := $(filter $(INVIDIOUS_KEYS_DEFINED_TARGETS),$(INVIDIOUS_KEYS_PREFLIGHT_GOALS))
+endif
+ifneq ($(strip $(INVIDIOUS_KEYS_PREFLIGHT_GOALS)),)
+$(INVIDIOUS_KEYS_PREFLIGHT_GOALS): invidious-keys-preflight
+endif
+
 .PHONY: invidious-smoke
 invidious-smoke: ## Read-only Invidious check: stats 200, companion healthz, companion accepts the funnel key (exit 0/1/3)
 	@# Sourcing with-env.sh turns errexit on; set +e so the 0/1/3 verdict is
