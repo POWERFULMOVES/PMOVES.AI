@@ -30,6 +30,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 import urllib.error
 import urllib.request
@@ -60,6 +61,22 @@ TIMEOUT_SECONDS = 15.0
 
 Verdict = Literal["ok", "fail", "unmeasured"]
 
+# Static headers live in a committed file, so none of them may be able to
+# carry a credential. Refuse the known auth-bearing names AND anything whose
+# name says auth/token/secret/key/cookie -- not merely the probe's own
+# auth_header: a literal `Authorization:` on an x-api-key probe would
+# otherwise load and be sent.
+_AUTH_BEARING_HEADERS = {
+    "authorization", "proxy-authorization", "x-api-key", "x-goog-api-key",
+    "api-key", "x-auth-token", "cookie",
+}
+_AUTH_BEARING_WORDS = ("auth", "token", "secret", "key", "cookie")
+
+# Machine-readable error reasons (google.rpc.ErrorInfo.reason, error.status):
+# upper-snake identifiers only, so free-text messages are never retained.
+_REASON_RE = re.compile(r"^[A-Z][A-Z0-9_]{0,63}$")
+_MAX_ERROR_BODY = 65536
+
 
 class ProbeConfigError(Exception):
     """The probes file is absent, unparseable, or fails the model. Exit 3."""
@@ -84,6 +101,14 @@ class ProviderProbe(BaseModel):
     auth_scheme: StrictStr = "Bearer"
     headers: Dict[StrictStr, StrictStr] = Field(default_factory=dict)
     auth_failure_statuses: Tuple[int, ...] = (401, 403)
+    # status -> reasons. A status listed here is an auth failure ONLY when the
+    # error body's machine-readable reason is one of these; otherwise the
+    # answer is unmeasured. Google answers a bad key with 400 + API_KEY_INVALID
+    # but also answers 400 FAILED_PRECONDITION for an unsupported region.
+    auth_failure_reasons: Dict[int, Tuple[StrictStr, ...]] = Field(default_factory=dict)
+    # Token forms this probe cannot measure (e.g. an installation token cannot
+    # call GET /user). Reported unmeasured, never sent.
+    unmeasurable_prefixes: Tuple[StrictStr, ...] = ()
     require_header: Optional[RequireHeader] = None
     docs: Tuple[StrictStr, ...] = ()
 
@@ -95,11 +120,29 @@ class ProviderProbe(BaseModel):
         return value
 
     @model_validator(mode="after")
-    def _auth_header_not_in_static_headers(self) -> "ProviderProbe":
-        # A static header named like the auth header is the one place a literal
-        # credential could be pasted into this file. Refuse the shape outright.
-        if self.auth_header.lower() in {h.lower() for h in self.headers}:
-            raise ValueError(f"headers must not set the auth header {self.auth_header!r}")
+    def _no_static_auth_bearing_header(self) -> "ProviderProbe":
+        # Static headers are the one place a literal credential could be pasted
+        # into this file. Refuse every auth-bearing shape outright.
+        for header in self.headers:
+            name = header.lower()
+            if (
+                name == self.auth_header.lower()
+                or name in _AUTH_BEARING_HEADERS
+                or any(word in name for word in _AUTH_BEARING_WORDS)
+            ):
+                raise ValueError(f"headers must not set an auth-bearing header ({header!r})")
+        return self
+
+    @model_validator(mode="after")
+    def _reasons_are_coherent(self) -> "ProviderProbe":
+        overlap = set(self.auth_failure_reasons) & set(self.auth_failure_statuses)
+        if overlap:
+            raise ValueError(
+                f"status(es) {sorted(overlap)} are both unconditional and reason-gated"
+            )
+        for reasons in self.auth_failure_reasons.values():
+            if not reasons or not all(_REASON_RE.match(r) for r in reasons):
+                raise ValueError("auth_failure_reasons must be non-empty UPPER_SNAKE reasons")
         return self
 
 
@@ -138,6 +181,27 @@ def load_probes(path: Path | str = DEFAULT_PROBES_PATH) -> ProbeSet:
 class HttpResult:
     status: int
     headers: Mapping[str, str]
+    # Machine-readable error reasons only (see _error_reasons). Never a body.
+    reasons: Tuple[str, ...] = ()
+
+
+def _error_reasons(raw: bytes) -> Tuple[str, ...]:
+    """Pull ``error.status`` and ``error.details[].reason`` out of an error body.
+
+    Only UPPER_SNAKE identifiers survive, so a message that echoes anything --
+    including the key -- cannot. The body itself is discarded by the caller.
+    """
+    try:
+        error = json.loads(raw.decode("utf-8", errors="replace")).get("error")
+    except Exception:
+        return ()
+    if not isinstance(error, dict):
+        return ()
+    found = [error.get("status")]
+    details = error.get("details")
+    if isinstance(details, list):
+        found.extend(d.get("reason") for d in details if isinstance(d, dict))
+    return tuple(r for r in found if isinstance(r, str) and _REASON_RE.match(r))
 
 
 # (url, headers, timeout) -> HttpResult. Raises on transport failure.
@@ -162,8 +226,14 @@ def urllib_get(url: str, headers: Mapping[str, str], timeout: float) -> HttpResu
         # 4xx/5xx and unfollowed 3xx arrive here; they are answers, not errors.
         status = exc.code
         response_headers = dict(exc.headers.items()) if exc.headers else {}
+        reasons: Tuple[str, ...] = ()
+        if status >= 400:
+            try:
+                reasons = _error_reasons(exc.read(_MAX_ERROR_BODY))
+            except Exception:
+                reasons = ()
         exc.close()
-        return HttpResult(status=status, headers=response_headers)
+        return HttpResult(status=status, headers=response_headers, reasons=reasons)
 
 
 @dataclass(frozen=True)
@@ -206,6 +276,9 @@ def run_probe(
     if inspect_value(label, value).withhold or (rule is not None and rule.check(value)):
         return result("shape", "fail", "fails its shape rule -- run make -C pmoves secrets-shapes-check")
 
+    if any(value.startswith(p) for p in probe.unmeasurable_prefixes):
+        return result("-", "unmeasured", "this token form cannot be measured by this probe")
+
     credential = f"{probe.auth_scheme} {value}" if probe.auth_scheme else value
     headers = {"User-Agent": USER_AGENT, **probe.headers, probe.auth_header: credential}
     try:
@@ -228,6 +301,12 @@ def run_probe(
         return result(status, "ok")
     if response.status in probe.auth_failure_statuses:
         return result(status, "fail", "provider rejected the credential")
+    gated = probe.auth_failure_reasons.get(response.status)
+    if gated is not None:
+        matched = sorted(set(response.reasons) & set(gated))
+        if matched:
+            return result(status, "fail", f"provider rejected the credential ({matched[0]})")
+        return result(status, "unmeasured", "error is not an auth rejection (e.g. region/precondition)")
     return result(status, "unmeasured", "neither accepted nor rejected (retry later)")
 
 

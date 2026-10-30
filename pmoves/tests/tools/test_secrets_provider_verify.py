@@ -45,8 +45,10 @@ class FakeHttp:
         self.calls.append((url, dict(headers), sent))
         if sent in self.raise_for:
             raise self.raise_for[sent]
-        status, response_headers = self.by_label.get(sent, (self.status, self.headers))
-        return v.HttpResult(status=status, headers=response_headers)
+        answer = self.by_label.get(sent, (self.status, self.headers))
+        status, response_headers = answer[0], answer[1]
+        reasons = answer[2] if len(answer) > 2 else ()
+        return v.HttpResult(status=status, headers=response_headers, reasons=reasons)
 
 
 def _run(env, http, *argv):
@@ -98,8 +100,42 @@ def test_a_transport_error_is_unmeasured_and_names_only_the_class(capsys):
     assert secret not in out
 
 
-def test_gemini_answers_a_bad_key_with_400_and_that_is_a_failure():
-    assert _run(KEYS, FakeHttp(by_label={"GEMINI_API_KEY": (400, {})}), "--only", "gemini") == 1
+def test_gemini_400_is_a_failure_only_with_the_api_key_invalid_reason(capsys):
+    bad_key = FakeHttp(by_label={"GEMINI_API_KEY": (400, {}, ("INVALID_ARGUMENT", "API_KEY_INVALID"))})
+    assert _run(KEYS, bad_key, "--only", "gemini") == 1
+    assert "API_KEY_INVALID" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("reasons", [("FAILED_PRECONDITION",), ("INVALID_ARGUMENT",), ()])
+def test_gemini_400_for_anything_else_is_unmeasured(reasons):
+    """An unsupported region answers 400 FAILED_PRECONDITION with a VALID key."""
+    http = FakeHttp(by_label={"GEMINI_API_KEY": (400, {}, reasons)})
+    assert _run(KEYS, http, "--only", "gemini") == 3
+
+
+def test_error_reasons_keep_only_machine_identifiers():
+    secret = KEYS["GEMINI_API_KEY"]
+    body = json.dumps({"error": {
+        "code": 400, "message": f"API key not valid: {secret}", "status": "INVALID_ARGUMENT",
+        "details": [{"reason": "API_KEY_INVALID", "metadata": {"echo": secret}},
+                    {"reason": secret}, "junk"],
+    }}).encode()
+    reasons = v._error_reasons(body)
+    assert reasons == ("INVALID_ARGUMENT", "API_KEY_INVALID")
+    assert v._error_reasons(b"not json") == () and v._error_reasons(b"[1]") == ()
+
+
+def test_an_installation_token_on_ghcr_is_unmeasured_and_never_sent():
+    """ghs_ cannot call GET /user; reporting 403 as 'rejected' would be a lie."""
+    http = FakeHttp()
+    env = {**KEYS, "GHCR_TOKEN": "ghs_123456_FAKEhdr0.FAKEpayload0-0000.FAKEsig_0000"}
+    assert _run(env, http, "--only", "ghcr") == 3
+    assert http.calls == []
+
+
+def test_ghcr_accepts_an_oauth_token_that_carries_read_packages():
+    env = {**KEYS, "GHCR_TOKEN": "gho_FAKE" + "0" * 32}
+    assert _run(env, FakeHttp(), "--only", "ghcr") == 0
 
 
 def test_ghcr_needs_a_packages_scope_not_just_a_live_token():
@@ -161,6 +197,16 @@ def test_unknown_only_name_exits_3():
         # the auth header set statically
         "version: 1\nprobes:\n  - name: x\n    api_key_env: X\n    url: https://example.invalid/\n"
         "    headers: {Authorization: Bearer sk-FAKE0000}\n",
+        # ANY auth-bearing static header, not only the probe's own auth_header
+        "version: 1\nprobes:\n  - name: x\n    api_key_env: X\n    url: https://example.invalid/\n"
+        "    auth_header: x-api-key\n    auth_scheme: ''\n    headers: {Authorization: Bearer sk-FAKE0000}\n",
+        "version: 1\nprobes:\n  - name: x\n    api_key_env: X\n    url: https://example.invalid/\n"
+        "    headers: {X-Goog-Api-Key: AIzaFAKE0000}\n",
+        "version: 1\nprobes:\n  - name: x\n    api_key_env: X\n    url: https://example.invalid/\n"
+        "    headers: {X-Session-Token: FAKE0000}\n",
+        # a reason-gated status that is also unconditional
+        "version: 1\nprobes:\n  - name: x\n    api_key_env: X\n    url: https://example.invalid/\n"
+        "    auth_failure_reasons: {401: [API_KEY_INVALID]}\n",
         # plaintext transport
         "version: 1\nprobes:\n  - name: x\n    api_key_env: X\n    url: http://example.invalid/\n",
         # api_key_env that is not an identifier (a value, not a name)
@@ -209,6 +255,16 @@ def test_urllib_get_returns_statuses_and_does_not_follow_a_redirect():
                 self.send_header("Location", "/landed")
             elif self.path == "/denied":
                 self.send_response(401)
+            elif self.path == "/bad-key":
+                body = json.dumps({"error": {
+                    "status": "INVALID_ARGUMENT", "message": "echoes FAKE0000",
+                    "details": [{"reason": "API_KEY_INVALID"}],
+                }}).encode()
+                self.send_response(400)
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+                return
             else:
                 self.send_response(200)
                 self.send_header("X-OAuth-Scopes", "read:packages")
@@ -223,6 +279,8 @@ def test_urllib_get_returns_statuses_and_does_not_follow_a_redirect():
     try:
         assert v.urllib_get(base + "/redirect", {}, 5).status == 302
         assert v.urllib_get(base + "/denied", {}, 5).status == 401
+        bad = v.urllib_get(base + "/bad-key", {}, 5)
+        assert bad.status == 400 and bad.reasons == ("INVALID_ARGUMENT", "API_KEY_INVALID")
         ok = v.urllib_get(base + "/ok", {}, 5)
         assert ok.status == 200 and v._header_value(ok.headers, "x-oauth-scopes") == "read:packages"
     finally:
