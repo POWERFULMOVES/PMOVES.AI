@@ -59,6 +59,8 @@ import unicodedata
 from dataclasses import dataclass, field
 from typing import Dict, List
 
+from pmoves.tools.secret_shape_rules import prefix_matches
+
 # Codepoint -> the ASCII character it was almost certainly substituted FOR.
 # An empty string means the character is invisible and stands for nothing at all.
 #
@@ -174,7 +176,9 @@ def inspect_value(label: str, value: str, *, prefix: str = "") -> ShapeVerdict:
         else:
             withhold.append(f"{where} -- {_substitution_note(ascii_equivalent)}")
 
-    if prefix and not value.startswith(prefix):
+    # The prefix rule is secret_shape_rules' (the same function ShapeRule
+    # uses), so there is one definition of "matches its vendor prefix".
+    if prefix and not prefix_matches(value, (prefix,)):
         withhold.append(
             f"{label}: does not start with the registered prefix {prefix!r} "
             f"(value is {total} chars) -- this is the shape that would have caught "

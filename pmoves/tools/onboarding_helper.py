@@ -10,6 +10,7 @@ from typing import Sequence
 
 from pmoves.chit.codec import decode_secret_map, load_cgp
 from pmoves.tools import secrets_sync
+from pmoves.tools.secret_shape_rules import EXIT_UNMEASURED, RulesFileError
 
 REPO_ROOT = secrets_sync.REPO_ROOT
 
@@ -128,11 +129,18 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
     manifest_path = (REPO_ROOT / args.manifest).resolve()
-    if args.command == "status":
-        return cmd_status(manifest_path)
-    if args.command == "generate":
-        return cmd_generate(manifest_path)
-    return cmd_prompt(manifest_path, (REPO_ROOT / args.out).resolve())
+    # A rules file or manifest that fails its model means the shape of what
+    # would be delivered cannot be judged: exit 3 with the message, not a
+    # traceback that reads as a crash in this helper.
+    try:
+        if args.command == "status":
+            return cmd_status(manifest_path)
+        if args.command == "generate":
+            return cmd_generate(manifest_path)
+        return cmd_prompt(manifest_path, (REPO_ROOT / args.out).resolve())
+    except (RulesFileError, ValueError) as exc:
+        print(f"ERROR: COULD-NOT-MEASURE -- {exc}", file=sys.stderr)
+        return EXIT_UNMEASURED
 
 
 if __name__ == "__main__":
