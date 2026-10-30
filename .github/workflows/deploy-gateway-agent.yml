@@ -121,6 +121,8 @@ jobs:
           WGER_ADMIN_PASSWORD: ci-build-placeholder
           WGER_DB_PASSWORD: ci-build-placeholder
           WGER_SECRET_KEY: ci-build-placeholder
+          INVIDIOUS_HMAC_KEY: ci-build-placeholder
+          INVIDIOUS_COMPANION_KEY: ci-build-placeholder
           NATS_URL: ${{ secrets.NATS_URL }}
           PRESIGN_SHARED_SECRET: ci-build-placeholder
           SUPABASE_SERVICE_KEY: ci-build-placeholder
@@ -196,6 +198,8 @@ jobs:
           WGER_ADMIN_PASSWORD: ci-deploy-placeholder
           WGER_DB_PASSWORD: ci-deploy-placeholder
           WGER_SECRET_KEY: ci-deploy-placeholder
+          INVIDIOUS_HMAC_KEY: ci-deploy-placeholder
+          INVIDIOUS_COMPANION_KEY: ci-deploy-placeholder
           GATEWAY_AGENT_PORT: "8111"
           NATS_URL: ${{ secrets.NATS_URL }}
           PRESIGN_SHARED_SECRET: ci-deploy-placeholder
@@ -317,6 +321,8 @@ jobs:
           WGER_ADMIN_PASSWORD: ci-build-placeholder
           WGER_DB_PASSWORD: ci-build-placeholder
           WGER_SECRET_KEY: ci-build-placeholder
+          INVIDIOUS_HMAC_KEY: ci-build-placeholder
+          INVIDIOUS_COMPANION_KEY: ci-build-placeholder
           NATS_URL: ${{ secrets.NATS_URL }}
           PRESIGN_SHARED_SECRET: ci-build-placeholder
           SUPABASE_SERVICE_KEY: ci-build-placeholder
@@ -348,6 +354,8 @@ jobs:
           WGER_ADMIN_PASSWORD: ci-deploy-placeholder
           WGER_DB_PASSWORD: ci-deploy-placeholder
           WGER_SECRET_KEY: ci-deploy-placeholder
+          INVIDIOUS_HMAC_KEY: ci-deploy-placeholder
+          INVIDIOUS_COMPANION_KEY: ci-deploy-placeholder
           NATS_URL: ${{ secrets.NATS_URL }}
           PRESIGN_SHARED_SECRET: ci-deploy-placeholder
           SUPABASE_SERVICE_KEY: ci-deploy-placeholder
@@ -483,6 +491,8 @@ jobs:
           WGER_ADMIN_PASSWORD: ci-rollback-placeholder
           WGER_DB_PASSWORD: ci-rollback-placeholder
           WGER_SECRET_KEY: ci-rollback-placeholder
+          INVIDIOUS_HMAC_KEY: ci-rollback-placeholder
+          INVIDIOUS_COMPANION_KEY: ci-rollback-placeholder
           NATS_URL: nats://localhost:4222
           PRESIGN_SHARED_SECRET: ci-rollback-placeholder
           SUPABASE_SERVICE_KEY: ci-rollback-placeholder
@@ -545,6 +555,8 @@ jobs:
           WGER_ADMIN_PASSWORD: ci-rollback-placeholder
           WGER_DB_PASSWORD: ci-rollback-placeholder
           WGER_SECRET_KEY: ci-rollback-placeholder
+          INVIDIOUS_HMAC_KEY: ci-rollback-placeholder
+          INVIDIOUS_COMPANION_KEY: ci-rollback-placeholder
           NATS_URL: nats://localhost:4222
           PRESIGN_SHARED_SECRET: ci-rollback-placeholder
           SUPABASE_SERVICE_KEY: ci-rollback-placeholder
