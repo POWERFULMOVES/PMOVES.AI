@@ -3339,6 +3339,13 @@ channel-monitor-smoke: ## Verify channel-monitor HTTP endpoints
 	  done; \
 	'
 
+.PHONY: invidious-smoke
+invidious-smoke: ## Read-only Invidious check: stats 200, companion healthz, companion accepts the funnel key (exit 0/1/3)
+	@# Sourcing with-env.sh turns errexit on; set +e so the 0/1/3 verdict is
+	@# printed rather than aborted. make still collapses 1 and 3 to 2 -- for the
+	@# exact code run: python3 tools/invidious_smoke.py (with the env loaded).
+	@bash -lc '. ./scripts/with-env.sh; set +e; $(PYTHON) tools/invidious_smoke.py'
+
 .PHONY: up-yt-published up-yt-published-amd
 up-yt-published: ## Start YouTube ingest stack using published images (no local builds)
 	@$(DC) -f docker-compose.integrations.images.yml $(WHISPER_NODE_OVERLAY) --profile data --profile workers --profile yt up -d bgutil-pot-provider ffmpeg-whisper pmoves-yt
