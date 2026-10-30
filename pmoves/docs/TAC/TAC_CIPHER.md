@@ -457,14 +457,15 @@ That second read matters because under `SUPABASE_RUNTIME=compose` the overlay
 is not in `COMPOSE_ENV_FILES` (Makefile `:136-145`). On those nodes compose
 does not read the paste today, but another runtime or branch would.
 
-**Order matters for every Kong client, not only cipher.** Three more sites
-present the service key in the REVERSE of Kong's order,
+**Order matters for every Kong client, not only cipher.** Four more sites
+presented the service key in the REVERSE of Kong's order (fixed in #3433),
 `${SERVICE_ROLE_KEY:-${SUPABASE_SERVICE_ROLE_KEY:-}}`. Kong refuses them on any
 node where the two names differ:
 - `supabase-storage` `SERVICE_KEY` (`docker-compose.yml:1079`)
 - Agent Zero's postgrest MCP `--apiKey` (`docker-compose.yml:3674`, `docker-compose.agents.yml:142`)
+- `docker-compose.core.yml:423` `SERVICE_KEY`
 
-The `kong_order_drift` facet lists them. Their fix rides the same compose grant.
+The `kong_order_drift` facet reports any that come back.
 
 **The funnel mints with the verifiers' secret (PR #3433).**
 `tools/secrets_self_generated.py` used to sign with `JWT_SECRET` first. Every
@@ -475,10 +476,12 @@ differed, every funnel mint was admitted by Kong and refused by PostgREST
 self-generated HS256 key that does not *verify* under that secret, not only one
 that has expired. Non-HS256 values are never judged.
 
-> **Status:** the compose edits need an operator KNOWN_ROAD grant. They are
-> cipher-api in both files plus the three reverse-order sites, and the exact
-> diff is in the PR #3433 body. Until they land, `cipher-auth-check` reports
-> `compose wiring drift` and the reverse-order sites.
+> **Status:** landed in PR #3433 under operator grant `compose:pr:3433`. The
+> grant covered cipher-api in `docker-compose.yml` and
+> `docker-compose.agents.yml`, plus the reverse-order sites in those files and
+> in `docker-compose.core.yml:423`. The edits were made in a sibling worktree
+> and left **no row in `known-roads.jsonl`**; see the PR for the open guard
+> question.
 
 **Diagnose without printing a key: `make -C pmoves cipher-auth-check`**
 (`tools/cipher_service_key_check.py`, read-only). Exit `0` ok / `1` finding /

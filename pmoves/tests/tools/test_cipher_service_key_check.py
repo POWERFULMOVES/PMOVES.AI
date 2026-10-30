@@ -109,12 +109,6 @@ def test_compose_kong_consumer_expression_is_the_funnel_refreshed_pair():
     assert ck.compose_env_expr(docs, *ck.PGRST_SECRET) == SECRET_EXPR
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="BLOCKED: compose is readOnly; the cipher-api edit needs an operator "
-    "KNOWN_ROAD grant (diff in PR #3433). Strict: once it lands this XPASSes and "
-    "the marker must go.",
-)
 @pytest.mark.parametrize("compose", ["docker-compose.yml", "docker-compose.agents.yml"])
 def test_compose_cipher_presents_the_gateway_key(compose):
     gateway = ck.compose_env_expr(_compose(PMOVES / "docker-compose.yml"), *ck.GATEWAY)
@@ -144,16 +138,13 @@ def test_pre_fix_expression_presents_the_expired_paste():
     "cipher_expr",
     [
         pytest.param(GATEWAY, id="proposed"),
-        pytest.param(
-            "on-disk",
-            id="on-disk",
-            marks=pytest.mark.xfail(strict=True, reason="compose edit BLOCKED (see above)"),
-        ),
+        pytest.param("on-disk", id="on-disk"),
     ],
 )
 def test_incident_env_presents_a_key_the_gateway_admits(cipher_expr):
-    """Failing-before control: on the on-disk (pre-fix) compose this fails on
-    the VERDICT (expired + wrong_pair_gateway), not on a missing symbol."""
+    """Failing-before control: on the pre-fix compose (origin/main before
+    #3433) this failed on the VERDICT (expired + wrong_pair_gateway), not on a
+    missing symbol."""
     if cipher_expr == "on-disk":
         cipher_expr = ck.compose_env_expr(_compose(PMOVES / "docker-compose.yml"), *ck.CIPHER)
     v = ck.assess(INCIDENT_ENV, exprs(cipher_expr), now=NOW)
@@ -691,16 +682,15 @@ def test_kong_order_drift_scanner():
     assert ck.kong_order_drift(docs) == ["a:SERVICE_KEY", "b:A0_SET_mcp_servers"]
 
 
-def test_on_disk_reverse_order_sites_are_the_ones_in_the_pr_diff():
-    """Characterises main: these three sites carry the reversed order and ride
-    the same compose grant as cipher-api (diff in PR #3433)."""
-    docs = _compose(PMOVES / "docker-compose.yml") + _compose(PMOVES / "docker-compose.agents.yml")
-    assert set(ck.kong_order_drift(docs)) <= {"supabase-storage:SERVICE_KEY", "agent-zero:A0_SET_mcp_servers"}
-
-
-@pytest.mark.xfail(strict=True, reason="BLOCKED: same compose grant as cipher-api (PR #3433 body)")
-def test_no_service_presents_the_key_in_reverse_of_kongs_order():
-    docs = _compose(PMOVES / "docker-compose.yml") + _compose(PMOVES / "docker-compose.agents.yml")
+@pytest.mark.parametrize(
+    "files",
+    [("docker-compose.yml", "docker-compose.agents.yml"), ("docker-compose.core.yml",)],
+    ids=["stack+agents", "core"],
+)
+def test_no_service_presents_the_key_in_reverse_of_kongs_order(files):
+    """Before #3433: supabase-storage SERVICE_KEY, Agent Zero's postgrest MCP
+    --apiKey (yml + agents) and core.yml's SERVICE_KEY carried the reverse order."""
+    docs = [d for f in files for d in _compose(PMOVES / f)]
     assert ck.kong_order_drift(docs) == []
 
 

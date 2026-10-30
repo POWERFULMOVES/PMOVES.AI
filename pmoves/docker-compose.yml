@@ -1076,7 +1076,7 @@ services:
     environment:
     # Standard key names with legacy fallbacks
     - ANON_KEY=${ANON_KEY:-${SUPABASE_ANON_KEY:-}}
-    - SERVICE_KEY=${SERVICE_ROLE_KEY:-${SUPABASE_SERVICE_ROLE_KEY:-}}
+    - SERVICE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-${SERVICE_ROLE_KEY:-}}
     # JWT secret - standard variable name
     - PGRST_JWT_SECRET=${SUPABASE_JWT_SECRET:-${JWT_SECRET:-}}
     - PGRST_JWT_ALGORITHM=${SUPABASE_JWT_ALGORITHM:-HS256}
@@ -3671,7 +3671,7 @@ services:
     # override is never silently dropped.
     - CIPHER_MCP_URL=${CIPHER_MCP_URL:-http://cipher-api:8105/mcp/sse}
     - CIPHER_MCP_HTTP_URL=${CIPHER_MCP_HTTP_URL:-http://cipher-api:8105/mcp}
-    - 'A0_SET_mcp_servers={"mcpServers":{"docker":{"command":"docker","args":["run","--rm","-i","--mount","type=bind,src=/var/run/docker.sock,dst=/var/run/docker.sock","mcp/docker"]},"pmoves-supabase":{"command":"mcp-server-postgrest","args":["--apiUrl","${SUPABASE_REST_URL:-http://supabase-kong:8000/rest/v1}","--apiKey","${SERVICE_ROLE_KEY:-${SUPABASE_SERVICE_ROLE_KEY:-}}","--schema","public,pmoves_core,pmoves_kb"]},"cipher":{"type":"streamable-http","url":"${CIPHER_MCP_HTTP_URL:-http://cipher-api:8105/mcp}","headers":{"Authorization":"Bearer ${CIPHER_API_TOKEN}"}},"notebook":{"type":"streamable-http","url":"${NOTEBOOK_MCP_URL:-http://notebook-mcp:8092/mcp}","headers":{"Authorization":"Bearer ${OPEN_NOTEBOOK_API_TOKEN}"}},"wealth":{"type":"streamable-http","url":"${WEALTH_MCP_URL:-http://wealth-mcp:8092/mcp}","headers":{"Authorization":"Bearer ${FIREFLY_ACCESS_TOKEN}"}}}}'
+    - 'A0_SET_mcp_servers={"mcpServers":{"docker":{"command":"docker","args":["run","--rm","-i","--mount","type=bind,src=/var/run/docker.sock,dst=/var/run/docker.sock","mcp/docker"]},"pmoves-supabase":{"command":"mcp-server-postgrest","args":["--apiUrl","${SUPABASE_REST_URL:-http://supabase-kong:8000/rest/v1}","--apiKey","${SUPABASE_SERVICE_ROLE_KEY:-${SERVICE_ROLE_KEY:-}}","--schema","public,pmoves_core,pmoves_kb"]},"cipher":{"type":"streamable-http","url":"${CIPHER_MCP_HTTP_URL:-http://cipher-api:8105/mcp}","headers":{"Authorization":"Bearer ${CIPHER_API_TOKEN}"}},"notebook":{"type":"streamable-http","url":"${NOTEBOOK_MCP_URL:-http://notebook-mcp:8092/mcp}","headers":{"Authorization":"Bearer ${OPEN_NOTEBOOK_API_TOKEN}"}},"wealth":{"type":"streamable-http","url":"${WEALTH_MCP_URL:-http://wealth-mcp:8092/mcp}","headers":{"Authorization":"Bearer ${FIREFLY_ACCESS_TOKEN}"}}}}'
     # LLM routing: use TensorZero gateway as OpenAI-compatible provider
     # Agent Zero's get_default_value() reads A0_SET_* from env (dotenv priority)
     # Dummy key silences LiteLLM "Missing API Key" warning — TensorZero handles auth
@@ -4152,15 +4152,16 @@ services:
     - NATS_URL=${NATS_URL}
     - CIPHER_API_TOKEN=${CIPHER_API_TOKEN:-}
     # Per-agent token resolution (auth.ts resolveToken) presents this key to
-    # PostgREST on every cipher_<uuid> bearer lookup. env.shared carries TWO
-    # JWT key pairs (legacy ANON_KEY/SERVICE_ROLE_KEY and newer
-    # SUPABASE_ANON_KEY/SUPABASE_SERVICE_KEY); the running postgrest validates
-    # only the pair it was configured with (measured 2026-09-22 on B850:
-    # PGRST301 on the SUPABASE_* pair, legacy pair verifies). Default keeps
-    # current behavior; a node whose postgrest accepts only the other pair
-    # steers with CIPHER_DB_SERVICE_KEY=<the key postgrest accepts> in
-    # pmoves/.env.local (loaded by with-env.sh into the compose process env).
-    - SUPABASE_SERVICE_KEY=${CIPHER_DB_SERVICE_KEY:-${SUPABASE_SERVICE_KEY:-}}
+    # Kong /rest/v1 on every cipher_<uuid> bearer lookup. Kong key-auth admits
+    # only an EXACT match with supabase-kong's service_role consumer key, then
+    # PostgREST verifies it against PGRST_JWT_SECRET. So this is the gateway's
+    # own expression, character for character: whatever a node's Kong admits,
+    # cipher presents. Both names are funnel-refreshed when expired
+    # (tools/secrets_self_generated.py), so no node needs a paste.
+    # CIPHER_DB_SERVICE_KEY (df0218537, a pmoves/.env.local value override) is
+    # RETIRED: an expired paste shadowed the refreshed keys on knuckles
+    # 2026-10-21. `make -C pmoves cipher-auth-check` WARNs while it is set.
+    - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-${SERVICE_ROLE_KEY:-}}
     # MCP per-request identity (Pmoves-cipher 36b28d0f, src/pmoves/mcp-sse.ts).
     # Empty by default = ADVISORY: '' is in ADVISORY_VALUES (recognised, no
     # WARN), and envNumber() treats '' as unset, so the interval/budget fall
