@@ -1147,16 +1147,23 @@ readOnlyPaths:
   # forces the grant to be set out-of-band (operator, separate terminal). The
   # damage-control hook still READS it internally; only agent tool WRITES are
   # blocked.
+  #
+  # In the BASH guard these two are also covered by a dedicated name rule
+  # (check_grant_state_files) that refuses any command naming them, whatever the
+  # verb or path prefix: this glob entry reached only the bare name there
+  # (measured 2026-09-23). The entries below are what the Write and Edit guards
+  # enforce.
   - "*.known-road-active"
-  # KNOWN GAP, measured 2026-09-23 against origin/main, NOT closed here: in the
-  # Bash guard a basename glob reaches only a BARE name. glob_to_regex maps `*`
+  # GAP CLOSED by lane fix/guard-self-grant-glob-depth (was open as of
+  # 2026-09-23): in the Bash guard a basename glob used to reach only a BARE
+  # name. glob_to_regex maps `*`
   # to `[^\s/]*` and every template anchors the glob right after the verb, so
   # `echo x > .claude/hooks/damage-control/.known-road-active` (and the `./`,
   # `touch` and `tee` forms) exit 0 -- an agent can self-grant from Bash. It is
   # not specific to this file: 17 of the 65 readOnly entries are globs and none
   # reaches `a/b/<name>` (`**/Dockerfile` reaches exactly one directory level).
-  # The Write and Edit guards DO refuse. Tracked for its own guard change; see
-  # the PR that added the entry below.
+  # The Write and Edit guards refused throughout. The depth regex now reaches
+  # any depth for glob entries, so the Bash guard refuses too.
   # Its companion: the GitHub-state cache that decides whether a pr:/issue: grant
   # is still LIVE (known_roads.py "Grant liveness"). A forged `open` entry would
   # revive a merged PR's grant for the cache TTL, and could be re-forged forever,
@@ -1166,9 +1173,10 @@ readOnlyPaths:
   # F3): an ENV grant (KNOWN_ROAD, fixed at launch) takes precedence over any file
   # grant, so the file gap cannot touch it -- but forging this cache CAN revive a
   # stale env grant (e.g. KNOWN_ROAD=compose:pr:3101 after #3101 merged) for as
-  # long as the forgery is refreshed. Until the directory-depth gap is closed
-  # (lane fix/guard-self-grant-glob-depth), cache integrity rests on the Write/Edit
-  # guards and the bare-name Bash rule only. The two other doors to the same
+  # long as the forgery is refreshed. The directory-depth gap is now closed
+  # (lane fix/guard-self-grant-glob-depth), so cache integrity rests on the
+  # Write/Edit guards, the bare-name Bash rule, AND the depth-reaching Bash
+  # glob rule. The two other doors to the same
   # result -- a shim `gh` on the agent-writable PATH, and gh's own agent-writable
   # config re-routing its HTTP -- are closed in known_roads.py (_trusted_gh,
   # fresh GH_CONFIG_DIR). Only the hook writes this file, from Python, never
@@ -1396,11 +1404,14 @@ cacheRoads:
 # post-hoc, in effect_check.py. This is the cheap PreToolUse half that catches
 # the common shapes while prevention is still possible.
 #
-# Verdict: a provable Known Road grant -> allowed and RECORDED (the trail row
-# carries the verb, not a path, because no path is derivable). No grant -> `ask`,
-# not block. These verbs are legitimate constantly; blocking them outright would
-# be disproportionate, and an operator confirmation is the proportionate answer
-# to "this can write somewhere I cannot see".
+# Verdict: `ask`, not block -- with or without a Known Road grant. These verbs
+# are legitimate constantly; blocking them outright would be disproportionate,
+# and an operator confirmation is the proportionate answer to "this can write
+# somewhere I cannot see". A grant does NOT auto-allow them: it used to, on the
+# strength of "some grant is open", and an agent's `tar -x` then ran silently
+# under an operator's unrelated dockerfile: grant (2026-09-24T00:24:01Z). A grant
+# is a per-FILE predicate; an opaque verb names no file. After approval, the
+# PostToolUse effect check records each protected path that actually changed.
 #
 # `pattern` fires; `unless` (optional) withdraws it for the read-only forms of
 # the same verb. Both are matched against the command with HEREDOC BODIES
