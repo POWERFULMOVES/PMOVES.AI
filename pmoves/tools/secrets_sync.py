@@ -555,6 +555,7 @@ def announce_jwt_events(
     context: Mapping[str, str] | None = None,
     sources: Mapping[str, str] | None = None,
     local_services=None,
+    written_labels: set | None = None,
 ) -> List[str]:
     """Print what the self-generated guard changed or refused -- NAMES only.
 
@@ -581,13 +582,27 @@ def announce_jwt_events(
     for e in closed:
         if e["action"] == "left_unchanged":
             print(_refusal_text(e, sources or {}), file=out)
-    reminted = [e for e in closed if e["action"] == "reminted"]
+    # *written_labels*: labels that actually reach an env file on this run
+    # (None = all). A re-mint that is not written -- excluded by --keys, a
+    # report-only run, or an aborted run -- needs no recreate, and saying
+    # "RECREATE" for it would send an operator to restart half the mesh for a
+    # value that never changed on disk (#3433 review r4429049880).
+    def written(e):
+        return written_labels is None or e["label"] in written_labels
+
+    for e in closed:
+        if e["action"] == "reminted" and not written(e):
+            print(f"[secrets-sync] NOT WRITTEN {e['label']} ({e['role']}): re-mint computed "
+                  f"({e['reason']}) but this run does not write it; nothing to recreate for it",
+                  file=out)
+    reminted = [e for e in closed if e["action"] == "reminted" and written(e)]
     if not reminted:
         return []
     for e in reminted:
         print(f"[secrets-sync] RE-MINTED {e['label']} ({e['role']}): {e['reason']}", file=out)
     labels = sorted({e["label"] for e in closed
-                     if e["action"] in ("reminted", "filled") and e["label"] != _UNRECOGNISED})
+                     if e["action"] in ("reminted", "filled") and written(e)
+                     and e["label"] != _UNRECOGNISED})
     if docs is None:
         docs, _ = load_compose_docs(out=out)
     consumers = compose_consumers(labels, docs)
@@ -663,8 +678,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     secrets = fill_self_generated(
         secrets, context=context, events=jwt_events, local_services=local_services
     )
-    announce_jwt_events(jwt_events, docs=compose_docs, context=context, sources=sources,
-                        local_services=local_services)
 
     # Filter entries if --keys is specified (selective rotation)
     if args.keys:
@@ -683,6 +696,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     # either derivable (handled by fill_self_generated) or generated elsewhere
     # (e.g. POSTGRES_PASSWORD at db-init), so they are never operator gaps.
     missing = [k for k in missing if k not in SELF_GENERATED]
+    # Announce only now, against what this run actually writes: the entries that
+    # survived --keys, and only on a generate run that is not about to abort.
+    projected = {e.label for e in entries} | {a for e in entries for a in e.aliases}
+    aborting = bool(missing) and not args.allow_missing
+    writes = args.command == "generate" and not aborting
+    announce_jwt_events(jwt_events, docs=compose_docs, context=context, sources=sources,
+                        local_services=local_services,
+                        written_labels=projected if writes else set())
     if missing:
         joined = ", ".join(sorted(missing))
         if args.allow_missing:

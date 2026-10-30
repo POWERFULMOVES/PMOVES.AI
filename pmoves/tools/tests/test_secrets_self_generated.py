@@ -501,3 +501,98 @@ def test_fuzzed_event_fields_never_print_a_secret(field, shape, capsys):
     assert _FAKE not in printed
     assert "FAKE-SECRET" not in printed and "abcd.supabase.co" not in printed
     assert "<unrecognised>" in printed or field == "action"
+
+
+# ── review threads on #3433: announce only what is written; tags as data ───
+
+
+def _run_sync_main(monkeypatch, capsys, argv, *, required_missing=False):
+    """Drive secrets_sync.main end to end with an in-memory manifest + secret map;
+    nothing touches disk. Returns (rc, stdout, written outputs or None)."""
+    from pmoves.tools import secrets_sync as ss
+
+    ours = derive_supabase_jwt(_OTHER, "service_role", exp=_LIVE)   # signed with our OTHER secret
+    secrets = {"JWT_SECRET": _OTHER, "SUPABASE_JWT_SECRET": _VERIFIER, "SUPABASE_RUNTIME": "compose",
+               "SERVICE_ROLE_KEY": ours, "SUPABASE_SERVICE_ROLE_KEY": ours, "OTHER_TOKEN": "x" * 40}
+    entries = [
+        ss.Entry(id="srk", label="SUPABASE_SERVICE_ROLE_KEY", required=True,
+                 targets=[ss.Target(file="env.tier-agent", key="SUPABASE_SERVICE_ROLE_KEY")],
+                 aliases=("SERVICE_ROLE_KEY",)),
+        ss.Entry(id="other", label="OTHER_TOKEN", required=True,
+                 targets=[ss.Target(file="env.tier-agent", key="OTHER_TOKEN")]),
+    ]
+    if required_missing:
+        entries.append(ss.Entry(id="gone", label="ABSENT_REQUIRED", required=True,
+                                targets=[ss.Target(file="env.tier-agent", key="ABSENT_REQUIRED")]))
+    written = {}
+    monkeypatch.setattr(ss, "load_manifest", lambda path: (path, entries))
+    monkeypatch.setattr(ss, "load_cgp", lambda path: b"")
+    monkeypatch.setattr(ss, "decode_secret_map", lambda payload: dict(secrets))
+    monkeypatch.setattr(ss, "load_compose_docs", lambda *a, **k: ([], []))
+    monkeypatch.setattr(ss, "write_env_files", lambda outputs, **kw: written.update(outputs))
+    for k in ("SUPABASE_RUNTIME", "SUPABASE_URL", "SUPABASE_REST_URL"):
+        monkeypatch.delenv(k, raising=False)
+    rc = ss.main(argv)
+    return rc, capsys.readouterr().out, (written or None)
+
+
+def test_full_generate_announces_the_remint_it_writes(monkeypatch, capsys):
+    rc, out, written = _run_sync_main(monkeypatch, capsys, ["generate"])
+    assert rc == 0 and written
+    assert "RE-MINTED SUPABASE_SERVICE_ROLE_KEY (service_role): signed_with_other_secret" in out
+    assert "RECREATE every consumer" in out and "NOT WRITTEN" not in out
+
+
+@pytest.mark.parametrize(
+    "argv, missing",
+    [(["generate", "--keys", "OTHER_TOKEN"], False),   # --keys excludes the re-minted label
+     (["report"], False),                               # report-only run writes nothing
+     (["generate"], True)],                             # aborted run (missing required secret)
+    ids=["keys-excludes-it", "report-mode", "aborted-run"],
+)
+def test_a_remint_that_is_not_written_is_never_announced_as_one(argv, missing, monkeypatch, capsys):
+    """r4428996868 / r4429049880: 'RE-MINTED ... RECREATE' must correspond to a
+    value written on THIS run; otherwise it is reported as NOT WRITTEN."""
+    rc, out, written = _run_sync_main(monkeypatch, capsys, argv, required_missing=missing)
+    assert "RE-MINTED" not in out and "RECREATE" not in out
+    assert "NOT WRITTEN SUPABASE_SERVICE_ROLE_KEY (service_role)" in out
+    if missing:
+        assert rc == 1 and written is None
+
+
+def test_keys_including_the_label_still_announces_it(monkeypatch, capsys):
+    rc, out, _ = _run_sync_main(monkeypatch, capsys, ["generate", "--keys", "SUPABASE_SERVICE_ROLE_KEY"])
+    assert "RE-MINTED SUPABASE_SERVICE_ROLE_KEY" in out and "NOT WRITTEN" not in out
+
+
+def test_not_written_path_never_prints_a_secret(capsys):
+    from pmoves.tools.secrets_sync import announce_jwt_events
+
+    events = [{"label": _FAKE, "role": _FAKE, "action": "reminted", "reason": _FAKE},
+              {"label": "SERVICE_ROLE_KEY", "role": "service_role", "action": "reminted", "reason": "expired" + _FAKE}]
+    announce_jwt_events(events, docs=[], written_labels=set())
+    printed = capsys.readouterr().out
+    assert "NOT WRITTEN" in printed and _FAKE not in printed and "FAKE-SECRET" not in printed
+
+
+def test_override_and_reset_blocks_are_parsed_as_data_not_dropped(tmp_path):
+    """r4428996874: a label named only inside an !override env list must still
+    make its service a consumer."""
+    from pmoves.tools.secrets_sync import load_compose_docs
+
+    f = tmp_path / "docker-compose.overlay.yml"
+    f.write_text(
+        "services:\n"
+        "  studio:\n"
+        "    environment: !override\n"
+        "      - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-}\n"
+        "  voice:\n"
+        "    deploy: !reset {}\n"
+        "    build:\n"
+        "      args: !override\n"
+        "        ANON: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}\n"
+    )
+    docs, skipped = load_compose_docs([f])
+    assert skipped == []
+    assert compose_consumers(["SUPABASE_SERVICE_ROLE_KEY"], docs) == ["studio"]
+    assert compose_consumers(["NEXT_PUBLIC_SUPABASE_ANON_KEY"], docs) == ["voice"]
