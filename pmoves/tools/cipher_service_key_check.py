@@ -12,51 +12,65 @@ unavailable, token lookup returned HTTP 401``. That message cannot say WHY.
 Two gates judge the key, and they fail differently:
 
 1. **Kong key-auth** (``PMOVES-supabase/docker/volumes/api/kong.yml``, route
-   ``rest-v1``) wants an EXACT match with the ``service_role`` consumer key,
-   which compose renders from ``supabase-kong``'s ``SUPABASE_SERVICE_KEY``.
-   A different value — even a valid JWT — is refused before PostgREST sees it.
-2. **PostgREST** verifies the JWT signature against ``PGRST_JWT_SECRET`` and
-   then its ``exp`` claim.
+   ``rest-v1``) wants an EXACT match with a ``service_role`` consumer key:
+   ``$SUPABASE_SERVICE_KEY`` or ``$SUPABASE_SECRET_KEY`` as rendered from
+   ``supabase-kong``'s env WHEN KONG STARTED. A different value, even a valid
+   JWT, is refused (kong 3.x: 401 ``Unauthorized``) before PostgREST sees it.
+2. **PostgREST** verifies the JWT signature against ``PGRST_JWT_SECRET``
+   (``${SUPABASE_JWT_SECRET:-${JWT_SECRET:-}}``) and then its ``exp`` claim.
 
 Measured on knuckles 2026-10-22: cipher presented ``CIPHER_DB_SERVICE_KEY``, a
 service_role JWT hand-pasted into ``pmoves/.env.local`` per ``df0218537``. It
 expired 2026-10-21. The funnel refresh (#3410) renews ``SUPABASE_SERVICE_ROLE_KEY``
 and ``SERVICE_ROLE_KEY`` but never touches ``.env.local``, and the paste shadowed
-both. Earlier the same knob flipped meaning between nodes and days (2026-09-22:
-the legacy pair verified; 2026-09-23: the legacy pair was refused). A per-node
-value paste cannot be kept right across a mesh.
+both.
 
-WHAT IT CHECKS (read-only; never prints a key, a hash, or a claim value other
+WHAT IT CHECKS (read-only; never prints a key, a digest, or a claim value other
 than ``role``)
 -----------------------------------------------------------------------------
-The expressions come from the compose file on disk, and the values from the same
-``--env-file`` list the Makefile hands ``docker compose`` (process env wins, as in
-compose), so this resolves what the next ``make -C pmoves up-cipher`` presents.
+STATIC (always). Expressions come from the compose file on disk, values from the
+same ``--env-file`` list the Makefile hands ``docker compose`` (process env wins,
+as in compose), so this judges what the NEXT ``up-cipher`` would present:
 
-* ``present``             the cipher expression resolves to a non-empty value
-* ``key_source``          WHICH variable NAME supplied it
-* ``role`` / ``exp_in_past``  decoded claims, signature NOT verified here
-* ``gateway_admits``      value equals Kong's service_role consumer key
-* ``signature_verifies``  HS256 signature verifies under PostgREST's secret
-* ``CIPHER_DB_SERVICE_KEY`` set anywhere -> WARN (retired; a stale paste)
+* ``present`` / ``key_source``   non-empty, and WHICH variable NAME supplied it
+* ``role`` / ``exp_in_past``     decoded claims (signature not trusted for these)
+* ``matches_kong_config``        the value equals one of Kong's CONFIGURED
+                                 consumer keys, evaluated from the same env.
+                                 NOT what the running Kong holds (see below)
+* ``signature_verifies``         HS256 under PostgREST's secret expression
+* ``jwt_secrets_agree``          JWT_SECRET == SUPABASE_JWT_SECRET (bool only)
+* ``kong_order_drift``           other services that present a service key in
+                                 the REVERSE of Kong's order
+* ``CIPHER_DB_SERVICE_KEY`` set  -> WARN (retired; a stale paste). Also read from
+                                 ``--env-local`` by presence only (names), since
+                                 under SUPABASE_RUNTIME=compose the overlay is not
+                                 in compose's env-file list
 
-``--container`` additionally reads the RUNNING ``cipher-api`` container: its
-key's role/exp (decoded inside the container) and whether it equals the key the
-env would deliver now (compared by digest in-process, digest never printed).
-``--probe`` (needs ``--container``) performs the lookup cipher performs, as a
-read-only ``GET ...cipher_agent_tokens?select=agent_id&limit=0`` from inside
-the container, and classifies the answer: Kong refusal / expired / signature.
+LIVE (``--container``, the authority on what is running). Reads the running
+``cipher-api`` key's role/exp (decoded inside the container) and compares digests
+in-process (never printed) with the env key and with the consumer keys the
+running ``supabase-kong`` was started with. A funnel refresh without a Kong
+recreate shows up here as ``kong_live_mismatch``. ``--probe`` performs cipher's
+own lookup from inside the container (read-only ``GET ...?select=agent_id&limit=0``)
+and classifies a refusal: Kong (``lookup_refused_gateway``), expired
+(``PGRST303``), signature (``PGRST301``).
+
+KNOWN LIMITS. A DB-backed Kong with seeded consumers (pre ``KONG_DATABASE=off``),
+or a ``SUPABASE_REST_URL`` pointing cipher at a different Kong (remote, CLI
+runtime), is visible ONLY to ``--probe``; the static and digest facets compare
+against the compose-defined ``supabase-kong``.
 
 Exit codes (``make`` collapses every nonzero exit to 2, so the last line is a
 structured ``CIPHER_AUTH_VERDICT=<json>`` that survives it):
-  0  key present, live, admitted by the gateway
-  1  findings: missing, expired, wrong role, wrong pair (gateway or signature),
-     or the running container's lookup is refused
-  3  could not measure (no env, unreadable compose, opaque key, crash). NOT a pass
+  0  every requested facet measured and clean
+  1  findings: missing, expired, wrong role, wrong pair (Kong or signature),
+     live Kong/cipher mismatch, or the running container's lookup is refused
+  3  could not measure ANY requested facet (no env, unreadable compose, opaque
+     key, container/probe unreadable, probe timed out, crash). NOT a pass
 
 Usage:
-  make -C pmoves cipher-auth-check                 # env + compose only
-  make -C pmoves cipher-auth-check CONTAINER=1     # + running container
+  make -C pmoves cipher-auth-check                 # static (env + compose)
+  make -C pmoves cipher-auth-check CONTAINER=1     # + running cipher-api and Kong
   make -C pmoves cipher-auth-check CONTAINER=1 PROBE=1
 """
 from __future__ import annotations
@@ -82,17 +96,22 @@ if str(_TOOLS_DIR) not in sys.path:
 # (service, variable) pairs read out of compose. Names, not values.
 CIPHER = ("cipher-api", "SUPABASE_SERVICE_KEY")
 GATEWAY = ("supabase-kong", "SUPABASE_SERVICE_KEY")
+# kong.yml consumer service_role carries a second credential ($SUPABASE_SECRET_KEY,
+# an opaque sb_secret_* key on nodes that have one).
+GATEWAY_SECRET = ("supabase-kong", "SUPABASE_SECRET_KEY")
 PGRST_SECRET = ("supabase-postgrest", "PGRST_JWT_SECRET")
 
 RETIRED_OVERRIDE = "CIPHER_DB_SERVICE_KEY"
-# Every name a service_role key has travelled under on this mesh (legacy pair,
-# newer pair, funnel canonical, retired override). Probed by NAME for the
-# wrong-pair diagnosis only; values never leave the process.
-CANDIDATE_NAMES = (
-    "SUPABASE_SERVICE_ROLE_KEY", "SERVICE_ROLE_KEY", "SUPABASE_SERVICE_KEY", RETIRED_OVERRIDE,
-)
+# Live names a service_role key travels under on this mesh. Probed by NAME for the
+# wrong-pair diagnosis only; values never leave the process. The retired override
+# is deliberately NOT a candidate: recommending it would steer back to the paste.
+CANDIDATE_NAMES = ("SUPABASE_SERVICE_ROLE_KEY", "SERVICE_ROLE_KEY", "SUPABASE_SERVICE_KEY")
 EXPECTED_ROLE = "service_role"
 EXPIRY_WARN_S = 30 * 24 * 3600
+
+# Kong's order: canonical first. The REVERSE order presents a different value
+# from Kong's consumer key wherever the two names differ.
+_REVERSED_ORDER = re.compile(r"\$\{SERVICE_ROLE_KEY:?-\$\{SUPABASE_SERVICE_ROLE_KEY")
 
 _NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 
@@ -293,16 +312,57 @@ def _finding(code: str, detail: str) -> Dict[str, str]:
     return {"code": code, "detail": detail}
 
 
+def _safe_interp(expr: Optional[str], env: Mapping[str, str]) -> str:
+    if expr is None:
+        return ""
+    try:
+        return interpolate(expr, env)
+    except (Unresolvable, ValueError):
+        return ""
+
+
+def _live_service_role(value: str, secret: str, now: int) -> bool:
+    """Verifies under *secret*, role service_role, and not expired."""
+    decoded = jwt_parts(value)
+    if decoded is None or hs256_verifies(value, secret) is not True:
+        return False
+    claims = decoded[1]
+    exp = claims.get("exp")
+    return claims.get("role") == EXPECTED_ROLE and isinstance(exp, (int, float)) and exp > now
+
+
+def kong_order_drift(docs: Sequence[Mapping[str, Any]]) -> List[str]:
+    """``service:VAR`` for every env value presenting the service key in the
+    REVERSE of Kong's order (``${SERVICE_ROLE_KEY:-${SUPABASE_SERVICE_ROLE_KEY``),
+    including values embedded in JSON (Agent Zero's postgrest MCP --apiKey)."""
+    sites: List[str] = []
+    for doc in docs:
+        for svc_name, svc in ((doc or {}).get("services") or {}).items():
+            env = (svc or {}).get("environment")
+            items = (
+                [f"{k}={'' if v is None else v}" for k, v in env.items()]
+                if isinstance(env, Mapping) else (env or [])
+            )
+            for item in items:
+                if isinstance(item, str) and _REVERSED_ORDER.search(item):
+                    site = f"{svc_name}:{item.split('=', 1)[0]}"
+                    if site not in sites:
+                        sites.append(site)
+    return sites
+
+
 def assess(
     env: Mapping[str, str],
     exprs: Mapping[str, Optional[str]],
     provenance: Optional[Mapping[str, List[str]]] = None,
     now: Optional[int] = None,
+    overlay_has_retired: Optional[bool] = None,
 ) -> Dict[str, Any]:
     """Verdict for the key the cipher expression resolves to in *env*.
 
-    *exprs* holds the raw compose expressions under ``cipher``, ``gateway`` and
-    ``pgrst_secret``. Nothing in the returned dict is a key, digest or secret.
+    *exprs* holds the raw compose expressions under ``cipher``, ``gateway``,
+    ``gateway_secret`` and ``pgrst_secret``. Nothing returned is a key, digest
+    or secret.
     """
     now = int(time.time()) if now is None else now
     provenance = provenance or {}
@@ -315,27 +375,46 @@ def assess(
         "shape": None,
         "role": None,
         "exp_in_past": None,
-        "gateway_admits": None,
+        "matches_kong_config": None,
         "signature_verifies": None,
+        "jwt_secrets_agree": None,
     }
 
+    cipher_expr = exprs.get("cipher")
+    reads_retired = RETIRED_OVERRIDE in (cipher_expr or "")
+    retire_road = " Remove it on the road: make -C pmoves env-local-unset KEY=CIPHER_DB_SERVICE_KEY"
     if env.get(RETIRED_OVERRIDE):
         where = ", ".join(sorted(set(provenance.get(RETIRED_OVERRIDE, [])))) or "environment"
-        reads = RETIRED_OVERRIDE in (exprs.get("cipher") or "")
         warnings.append(
             f"{RETIRED_OVERRIDE} is set ({where}). It is retired: a pasted value is "
             "never refreshed by the funnel and shadowed the refreshed keys when it "
             + ("expired. The compose cipher-api expression on disk STILL READS IT, so it "
-               "decides the key below." if reads else
+               "decides the key below." if reads_retired else
                "expired. Compose no longer reads it, but a branch that does would.")
-            + " Remove it on the road: make -C pmoves env-local-unset KEY=CIPHER_DB_SERVICE_KEY"
+            + retire_road
+        )
+    elif overlay_has_retired:
+        warnings.append(
+            f"{RETIRED_OVERRIDE} is defined in the .env.local overlay, which is NOT in "
+            "compose's env-file list on this runtime (SUPABASE_RUNTIME=compose without "
+            "INCLUDE_ENV_LOCAL_IN_COMPOSE=1), so compose does not read it today. It "
+            "would decide the key on a runtime or branch that does." + retire_road
         )
 
-    cipher_expr = exprs.get("cipher")
+    a, b = env.get("JWT_SECRET"), env.get("SUPABASE_JWT_SECRET")
+    if a and b:
+        facets["jwt_secrets_agree"] = hmac.compare_digest(a.encode(), b.encode())
+        if not facets["jwt_secrets_agree"]:
+            warnings.append(
+                "JWT_SECRET and SUPABASE_JWT_SECRET differ. Every Supabase verifier reads "
+                "SUPABASE_JWT_SECRET first, and so does the funnel since #3433; a key minted "
+                "under JWT_SECRET is admitted by Kong and refused by PostgREST (PGRST301)"
+            )
+
     gateway_expr = exprs.get("gateway")
     if cipher_expr is None:
         unmeasured.append("compose has no cipher-api SUPABASE_SERVICE_KEY entry")
-        return _verdict(facets, findings, warnings, unmeasured, exprs)
+        return _verdict(facets, findings, warnings, unmeasured)
 
     facets["expressions_match"] = (
         None if gateway_expr is None else cipher_expr.strip() == gateway_expr.strip()
@@ -346,16 +425,25 @@ def assess(
             "supabase-kong's service_role consumer expression, so the two can resolve "
             "to different keys on any node"
         )
+    drift = exprs.get("kong_order_drift")
+    if drift is not None:
+        facets["kong_order_drift"] = list(drift)
+        if drift:
+            warnings.append(
+                "service keys presented in the REVERSE of Kong's order "
+                "(${SERVICE_ROLE_KEY:-${SUPABASE_SERVICE_ROLE_KEY...}) at: " + ", ".join(drift)
+                + ". Wherever the two names differ these are refused by Kong (same defect class)"
+            )
 
     try:
         key, source = interpolate_with_source(cipher_expr, env)
     except Unresolvable as exc:
         findings.append(_finding("missing", f"compose guard ${{{exc}:?}} fired; the key cannot resolve"))
         facets["present"] = False
-        return _verdict(facets, findings, warnings, unmeasured, exprs)
+        return _verdict(facets, findings, warnings, unmeasured)
     except ValueError:
         unmeasured.append("cipher expression could not be parsed")
-        return _verdict(facets, findings, warnings, unmeasured, exprs)
+        return _verdict(facets, findings, warnings, unmeasured)
 
     facets["present"] = bool(key)
     facets["key_source"] = source
@@ -365,7 +453,7 @@ def assess(
             "the cipher expression resolves to an empty value; auth.ts reports "
             "'SUPABASE_SERVICE_KEY not set' and every lookup is 503",
         ))
-        return _verdict(facets, findings, warnings, unmeasured, exprs)
+        return _verdict(facets, findings, warnings, unmeasured)
 
     decoded = jwt_parts(key)
     if decoded is None:
@@ -398,67 +486,71 @@ def assess(
     if gateway_expr is None:
         unmeasured.append("compose has no supabase-kong SUPABASE_SERVICE_KEY entry")
     else:
-        try:
-            gateway_key = interpolate(gateway_expr, env)
-        except (Unresolvable, ValueError):
-            gateway_key = ""
-        if not gateway_key:
-            unmeasured.append("Kong's service_role consumer key does not resolve in this env")
+        kong_keys = [k for k in (_safe_interp(gateway_expr, env),
+                                 _safe_interp(exprs.get("gateway_secret"), env)) if k]
+        if not kong_keys:
+            unmeasured.append("Kong's service_role consumer keys do not resolve in this env")
         else:
-            facets["gateway_admits"] = hmac.compare_digest(gateway_key.encode(), key.encode())
-            if not facets["gateway_admits"]:
+            facets["matches_kong_config"] = any(
+                hmac.compare_digest(k.encode(), key.encode()) for k in kong_keys
+            )
+            if not facets["matches_kong_config"]:
                 findings.append(_finding(
                     "wrong_pair_gateway",
-                    f"cipher presents {source or 'its expression'}'s value but Kong's "
-                    "service_role consumer key is a different value; Kong key-auth "
-                    "refuses it with 401 before PostgREST sees it",
+                    f"cipher presents {source or 'its expression'}'s value, but neither of the "
+                    "consumer keys Kong is CONFIGURED with (SUPABASE_SERVICE_KEY, "
+                    "SUPABASE_SECRET_KEY, same env) is that value; Kong key-auth refuses it "
+                    "with 401 before PostgREST sees it",
                 ))
 
     secret_expr = exprs.get("pgrst_secret")
     if decoded is not None and secret_expr is not None:
-        try:
-            secret = interpolate(secret_expr, env)
-        except (Unresolvable, ValueError):
-            secret = ""
+        secret = _safe_interp(secret_expr, env)
         if not secret:
             unmeasured.append("PostgREST's JWT secret does not resolve in this env")
         else:
             facets["signature_verifies"] = hs256_verifies(key, secret)
             if facets["signature_verifies"] is False:
-                # Which candidate NAMES would verify (booleans over names only).
-                # The 2026-09-22 compose comment: PGRST301 on the SUPABASE_* pair,
-                # legacy SERVICE_ROLE_KEY verifies. If a different name verifies
-                # here, cipher still cannot present it: Kong admits only its own
-                # consumer key. The fix is aligning that name in the funnel.
                 verifying = [
                     name for name in CANDIDATE_NAMES
-                    if env.get(name) and hs256_verifies(env[name], secret)
+                    if env.get(name) and _live_service_role(env[name], secret, now)
                 ]
                 facets["verifying_names"] = verifying
+                cause = (
+                    "JWT_SECRET and SUPABASE_JWT_SECRET differ (see WARN), so a key minted "
+                    "under JWT_SECRET cannot verify. "
+                    if facets["jwt_secrets_agree"] is False else ""
+                )
+                also = (
+                    f"Live service_role keys that DO verify: {', '.join(verifying)} (Kong "
+                    "still admits only its consumer key, so do not paste one of them). "
+                    if verifying else "No live candidate key verifies. "
+                )
                 findings.append(_finding(
                     "wrong_pair_signature",
                     "the key's HS256 signature does not verify under the secret PostgREST "
                     "is configured with (PGRST_JWT_SECRET); PostgREST answers 401 PGRST301. "
-                    + (f"Names that DO verify: {', '.join(verifying)}. Kong admits only its "
-                       "consumer key, so re-mint the supplying name from the secret PostgREST "
-                       "uses (funnel) and recreate supabase-kong; do not paste around it"
-                       if verifying else "No candidate name verifies: the JWT secrets disagree"),
+                    + cause + also
+                    + "Remedy: make -C pmoves secrets-funnel (it re-mints self-generated "
+                    "service_role keys that do not verify under the verifiers' secret), then "
+                    "recreate supabase-kong and cipher-api so both hold the new key",
                 ))
             elif facets["signature_verifies"] is None:
                 unmeasured.append("key is not HS256; signature not checked")
 
-    return _verdict(facets, findings, warnings, unmeasured, exprs)
+    return _verdict(facets, findings, warnings, unmeasured)
 
 
-def _verdict(facets, findings, warnings, unmeasured, exprs) -> Dict[str, Any]:
+def _verdict(facets, findings, warnings, unmeasured, gaps: Sequence[str] = ()) -> Dict[str, Any]:
     core_measured = (
         facets.get("present") is not None
         and (facets.get("present") is False
-             or (facets.get("exp_in_past") is not None and facets.get("gateway_admits") is not None))
+             or (facets.get("exp_in_past") is not None
+                 and facets.get("matches_kong_config") is not None))
     )
     if findings:
         status, code = "finding", 1
-    elif core_measured:
+    elif core_measured and not gaps:
         status, code = "ok", 0
     else:
         status, code = "could_not_measure", 3
@@ -473,7 +565,7 @@ def _verdict(facets, findings, warnings, unmeasured, exprs) -> Dict[str, Any]:
     }
 
 
-# ── running container (opt-in) ─────────────────────────────────────────────
+# ── running containers (opt-in) ─────────────────────────────────────────────
 
 # Runs INSIDE cipher-api with its own node. Emits JSON with role, exp, a digest
 # for in-process comparison, and (optionally) the lookup's status + error code.
@@ -490,7 +582,7 @@ if (k) {
       out.role = typeof c.role === 'string' ? c.role : null;
       out.exp = typeof c.exp === 'number' ? c.exp : null;
     } catch (e) { out.decode_error = true; }
-  }
+  } else { out.opaque = true; }
 }
 const done = () => console.log(JSON.stringify(out));
 if (k && __PROBE__) {
@@ -501,14 +593,24 @@ if (k && __PROBE__) {
     .then(async r => {
       const t = (await r.text()).slice(0, 2000);
       const m = t.match(/PGRST\d{3}/);
+      // Kong key-auth wording: 3.x "Unauthorized" / "No API key found in request";
+      // 2.x "Invalid authentication credentials". Python also treats any 401/403
+      // without a PGRST code as the gateway.
       out.probe = {status: r.status, code: m ? m[0] : null,
                    expired: /expired/i.test(t),
-                   kong: !m && /Invalid authentication credentials|No API key found|no credentials/i.test(t)};
+                   kong: !m && /Unauthorized|No API key found|Invalid authentication credentials|no credentials/i.test(t)};
       done();
     })
     .catch(e => { out.probe = {error: e && e.name ? e.name : 'error'}; done(); });
 } else { done(); }
 """
+
+# Runs INSIDE supabase-kong (ubuntu-based image: sh + sha256sum). Emits one
+# digest per consumer credential, or '-' when unset. Never the value.
+_KONG_SCRIPT = (
+    'for v in "$SUPABASE_SERVICE_KEY" "$SUPABASE_SECRET_KEY"; do '
+    'if [ -n "$v" ]; then printf %s "$v" | sha256sum | cut -d" " -f1; else echo -; fi; done'
+)
 
 Runner = Callable[[List[str]], Tuple[int, str]]
 
@@ -518,9 +620,9 @@ def _default_runner(cmd: List[str]) -> Tuple[int, str]:
     return proc.returncode, proc.stdout
 
 
-def discover_container(runner: Runner) -> Optional[str]:
+def discover_container(runner: Runner, service: str = "cipher-api") -> Optional[str]:
     rc, out = runner([
-        "docker", "ps", "--filter", "label=com.docker.compose.service=cipher-api",
+        "docker", "ps", "--filter", f"label=com.docker.compose.service={service}",
         "--format", "{{.Names}}",
     ])
     names = [n for n in out.splitlines() if n.strip()] if rc == 0 else []
@@ -532,22 +634,24 @@ def classify_probe(probe: Mapping[str, Any]) -> Tuple[Optional[Dict[str, str]], 
     if "error" in probe:
         return None, f"in-container lookup could not complete ({probe['error']})"
     status = probe.get("status")
+    if not isinstance(status, int):
+        return None, "in-container lookup returned no HTTP status"
     if status == 200:
         return None, None
     code = probe.get("code")
-    if probe.get("kong"):
-        return _finding(
-            "lookup_refused_gateway",
-            f"Kong refused the running container's key (HTTP {status}): it is not the "
-            "service_role consumer key Kong was started with. If the funnel refreshed "
-            "the key, supabase-kong still holds the old one until it is recreated",
-        ), None
-    if code == "PGRST303" or probe.get("expired"):
+    if code == "PGRST303" or (code and probe.get("expired")):
         return _finding("lookup_refused_expired", f"PostgREST: key expired (HTTP {status}, {code})"), None
     if code == "PGRST301":
         return _finding(
             "lookup_refused_signature",
             f"PostgREST: signature invalid under its secret (HTTP {status}, {code})",
+        ), None
+    if probe.get("kong") or (status in (401, 403) and not code):
+        return _finding(
+            "lookup_refused_gateway",
+            f"Kong refused the running container's key (HTTP {status}, no PGRST code): it is "
+            "not a service_role consumer key the running Kong holds. After a funnel refresh "
+            "supabase-kong keeps the old key until it is recreated",
         ), None
     return _finding("lookup_http_error", f"lookup returned HTTP {status} ({code or 'no PGRST code'})"), None
 
@@ -560,13 +664,21 @@ def assess_container(
     now: Optional[int] = None,
     name: Optional[str] = None,
 ) -> Dict[str, Any]:
+    """Add the LIVE facets. Any requested live facet that cannot be measured is a
+    gap, and a gap makes the verdict could-not-measure (3), never ok."""
     now = int(time.time()) if now is None else now
+    gaps: List[str] = []
+
+    def gap(note: str) -> None:
+        gaps.append(note)
+        verdict["unmeasured"].append(note)
+
     name = name or discover_container(runner)
     facet: Dict[str, Any] = {"name": name}
     verdict["facets"]["container"] = facet
     if not name:
-        verdict["unmeasured"].append("no running cipher-api container found")
-        return _reverdict(verdict, container_required=True)
+        gap("no running cipher-api container found")
+        return _reverdict(verdict, gaps)
     script = _NODE_SCRIPT.replace("__PROBE__", "true" if probe else "false")
     try:
         rc, out = runner(["docker", "exec", name, "node", "-e", script])
@@ -574,46 +686,109 @@ def assess_container(
     except (ValueError, IndexError, OSError, subprocess.SubprocessError):
         report = None
     if not isinstance(report, dict):
-        verdict["unmeasured"].append("could not read the running container's key claims")
-        return _reverdict(verdict, container_required=True)
+        gap("could not read the running container's key claims")
+        return _reverdict(verdict, gaps)
+
     facet["present"] = bool(report.get("present"))
     facet["role"] = report.get("role")
     exp = report.get("exp")
     facet["exp_in_past"] = (exp <= now) if isinstance(exp, (int, float)) else None
-    digest = report.get("sha256")
-    if env_key and isinstance(digest, str):
-        facet["matches_env"] = hmac.compare_digest(
-            hashlib.sha256(env_key.encode()).hexdigest(), digest
-        )
+    digest = report.get("sha256") if isinstance(report.get("sha256"), str) else None
+    if not facet["present"]:
+        verdict["findings"].append(_finding("container_missing", "running cipher-api has no SUPABASE_SERVICE_KEY"))
+    else:
+        if report.get("decode_error") or report.get("opaque") or facet["exp_in_past"] is None:
+            gap("running cipher-api key claims could not be decoded (role/exp unread)")
+        elif facet["exp_in_past"]:
+            verdict["findings"].append(_finding("container_expired", "running cipher-api presents an expired key"))
+        if facet["role"] is not None and facet["role"] != EXPECTED_ROLE:
+            verdict["findings"].append(_finding("container_wrong_role", f"running cipher-api key role is {facet['role']!r}"))
+
+    if env_key and digest:
+        facet["matches_env"] = hmac.compare_digest(hashlib.sha256(env_key.encode()).hexdigest(), digest)
         if not facet["matches_env"]:
             verdict["warnings"].append(
                 "the running cipher-api presents a different key than this env would "
                 "deliver; it changes only when cipher-api is recreated (make -C pmoves up-cipher)"
             )
-    if not facet["present"]:
-        verdict["findings"].append(_finding("container_missing", "running cipher-api has no SUPABASE_SERVICE_KEY"))
-    elif facet["exp_in_past"]:
-        verdict["findings"].append(_finding("container_expired", "running cipher-api presents an expired key"))
+
+    # What the RUNNING Kong admits: digests of the consumer keys it was started with.
+    kong_name = discover_container(runner, "supabase-kong")
+    facet["kong"] = kong_name
+    kong_digests: Optional[List[str]] = None
+    if kong_name:
+        try:
+            rc, out = runner(["docker", "exec", kong_name, "sh", "-c", _KONG_SCRIPT])
+            lines = [ln.strip() for ln in out.splitlines() if ln.strip()] if rc == 0 else []
+            if len(lines) == 2 and all(ln == "-" or re.fullmatch(r"[0-9a-f]{64}", ln) for ln in lines):
+                kong_digests = [ln for ln in lines if ln != "-"]
+        except (OSError, subprocess.SubprocessError):
+            kong_digests = None
+    if kong_digests is not None and digest:
+        facet["kong_live_admits"] = any(hmac.compare_digest(d, digest) for d in kong_digests)
+        if env_key:
+            env_digest = hashlib.sha256(env_key.encode()).hexdigest()
+            facet["kong_live_matches_env"] = any(hmac.compare_digest(d, env_digest) for d in kong_digests)
+        if not facet["kong_live_admits"]:
+            stale = (
+                "supabase-kong is stale (it predates the current env: recreate it, "
+                "make -C pmoves up-supabase)"
+                if facet.get("matches_env") and facet.get("kong_live_matches_env") is False
+                else "recreate whichever of supabase-kong / cipher-api predates the current env"
+            )
+            verdict["findings"].append(_finding(
+                "kong_live_mismatch",
+                "the RUNNING supabase-kong holds no consumer key equal to the key the RUNNING "
+                f"cipher-api presents, so every lookup is refused at the gateway; {stale}",
+            ))
+
+    probe_ok = False
     if probe:
         result = report.get("probe")
         if not isinstance(result, dict):
-            verdict["unmeasured"].append("in-container lookup did not run")
+            gap("in-container lookup did not run")
         else:
             facet["lookup_status"] = result.get("status")
             finding, note = classify_probe(result)
             if finding:
                 verdict["findings"].append(finding)
             if note:
-                verdict["unmeasured"].append(note)
-    return _reverdict(verdict, container_required=False)
+                gap(note)
+            probe_ok = finding is None and note is None
+    if "kong_live_admits" not in facet and not probe_ok:
+        # Without a 200 from the probe, the running Kong's keys are the only live
+        # evidence of what the gateway admits. Unread = not measured.
+        gap("running supabase-kong consumer keys could not be read"
+            + ("" if kong_name else " (no supabase-kong container: CLI runtime or remote Kong? "
+               "only PROBE=1 can judge that gateway)"))
+    return _reverdict(verdict, gaps)
 
 
-def _reverdict(verdict: Dict[str, Any], container_required: bool) -> Dict[str, Any]:
-    fresh = _verdict(verdict["facets"], verdict["findings"], verdict["warnings"], verdict["unmeasured"], {})
-    if container_required and fresh["status"] == "ok":
-        fresh["status"], fresh["exit"] = "could_not_measure", 3
+def _reverdict(verdict: Dict[str, Any], gaps: Sequence[str]) -> Dict[str, Any]:
+    fresh = _verdict(verdict["facets"], verdict["findings"], verdict["warnings"],
+                     verdict["unmeasured"], gaps)
     verdict.update(status=fresh["status"], exit=fresh["exit"])
     return verdict
+
+
+# ── .env.local overlay presence (names only) ────────────────────────────────
+
+
+def overlay_defines(path: Path, key: str) -> Optional[bool]:
+    """Is *key* defined in the node-local overlay? Uses env_local_key's own
+    resolver and line matcher (the sanctioned reader), so 'defined' means what the
+    loader would load. Returns None if the file cannot be read; never a value."""
+    try:
+        import env_local_key as elk  # type: ignore[import-not-found]
+
+        target, _ = elk._resolve_target(path)
+        data = elk._read(target)
+    except Exception:  # noqa: BLE001 - presence is advisory; unreadable = unknown
+        return None
+    if data is None:
+        return False
+    defs, _ = elk._scan(elk._split(data), key)
+    return bool(defs)
 
 
 # ── CLI ─────────────────────────────────────────────────────────────────────
@@ -623,23 +798,36 @@ def render(verdict: Mapping[str, Any]) -> List[str]:
     f = verdict["facets"]
     yn = {True: "yes", False: "no", None: "unmeasured"}
     lines = [
-        f"key present ......... {yn[f.get('present')]}"
+        f"key present ............. {yn[f.get('present')]}"
         + (f" (from {f['key_source']})" if f.get("key_source") else ""),
-        f"role ................ {f.get('role') or 'unmeasured'}",
-        f"exp in past ......... {yn[f.get('exp_in_past')]}",
-        f"gateway admits ...... {yn[f.get('gateway_admits')]}",
-        f"signature verifies .. {yn[f.get('signature_verifies')]}",
+        f"role .................... {f.get('role') or 'unmeasured'}",
+        f"exp in past ............. {yn[f.get('exp_in_past')]}",
+        f"matches Kong config ..... {yn[f.get('matches_kong_config')]} (env vs Kong's configured key; NOT the running Kong)",
+        f"signature verifies ...... {yn[f.get('signature_verifies')]}",
+        f"JWT secrets agree ....... {yn[f.get('jwt_secrets_agree')]}",
     ]
     if "expressions_match" in f:
-        lines.append(f"compose wiring ...... {'cipher == kong' if f['expressions_match'] else 'DRIFT (cipher != kong)' if f['expressions_match'] is False else 'unmeasured'}")
+        em = f["expressions_match"]
+        lines.append("compose wiring .......... " + (
+            "cipher == kong" if em else "DRIFT (cipher != kong)" if em is False else "unmeasured"))
+    if "kong_order_drift" in f:
+        lines.append(f"reverse-order sites ..... {len(f['kong_order_drift'])}")
     c = f.get("container")
-    if c:
+    if c is None:
+        lines.append("live gateway ............ not checked (CONTAINER=1 PROBE=1 is the authority)")
+    else:
         lines.append(
-            f"container ........... {c.get('name') or 'not found'}"
+            f"container ............... {c.get('name') or 'not found'}"
             + (f": exp in past {yn[c.get('exp_in_past')]}, role {c.get('role') or '?'}"
                f", matches env {yn[c.get('matches_env')]}" if c.get("name") and "present" in c else "")
-            + (f", lookup HTTP {c['lookup_status']}" if c.get("lookup_status") is not None else "")
         )
+        if c.get("name"):
+            lines.append(
+                f"running Kong admits it .. {yn[c.get('kong_live_admits')]}"
+                + (f" ({c['kong']})" if c.get("kong") else " (no supabase-kong container)")
+            )
+        if c.get("lookup_status") is not None:
+            lines.append(f"live lookup ............. HTTP {c['lookup_status']}")
     for w in verdict["warnings"]:
         lines.append(f"WARN: {w}")
     for x in verdict["findings"]:
@@ -653,9 +841,13 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--compose", action="append", type=Path, dest="compose_files",
                         help="compose file(s) to read expressions from (default: pmoves/docker-compose.yml)")
+    parser.add_argument("--scan", action="append", type=Path, default=[], dest="scan_files",
+                        help="extra compose files scanned for wiring drift only")
     parser.add_argument("--env-file", action="append", type=Path, default=[], dest="env_files",
                         help="same list, same order, the Makefile passes docker compose")
-    parser.add_argument("--container", action="store_true", help="also read the running cipher-api")
+    parser.add_argument("--env-local", type=Path, default=None,
+                        help="node-local overlay checked for the retired key by presence only")
+    parser.add_argument("--container", action="store_true", help="also read the running cipher-api and Kong")
     parser.add_argument("--probe", action="store_true",
                         help="with --container: run cipher's own lookup (read-only GET, limit=0)")
     parser.add_argument("--json", action="store_true", dest="as_json")
@@ -663,19 +855,25 @@ def main(argv: Optional[List[str]] = None) -> int:
     try:
         compose_files = args.compose_files or [_PMOVES_DIR / "docker-compose.yml"]
         docs = load_compose(compose_files)
-        exprs = {
+        scan_docs = load_compose(args.scan_files) if args.scan_files else []
+        exprs: Dict[str, Any] = {
             "cipher": compose_env_expr(docs, *CIPHER),
             "gateway": compose_env_expr(docs, *GATEWAY),
+            "gateway_secret": compose_env_expr(docs, *GATEWAY_SECRET),
             "pgrst_secret": compose_env_expr(docs, *PGRST_SECRET),
+            "kong_order_drift": kong_order_drift(list(docs) + list(scan_docs)),
         }
         env, provenance, notes = resolve_env(args.env_files, dict(os.environ))
-        verdict = assess(env, exprs, provenance)
+        overlay = overlay_defines(args.env_local, RETIRED_OVERRIDE) if args.env_local else None
+        verdict = assess(env, exprs, provenance, overlay_has_retired=overlay)
+        for doc_path, doc in zip(args.scan_files, scan_docs):
+            other = compose_env_expr([doc], *CIPHER)
+            if other is not None and exprs["gateway"] is not None and other.strip() != exprs["gateway"].strip():
+                verdict["warnings"].append(
+                    f"compose wiring drift: cipher-api in {doc_path.name} does not present Kong's expression")
         verdict["unmeasured"].extend(notes)
         if args.container:
-            try:
-                env_key = interpolate(exprs["cipher"] or "", env)
-            except (Unresolvable, ValueError):
-                env_key = None
+            env_key = _safe_interp(exprs["cipher"], env) or None
             verdict = assess_container(verdict, env_key, _default_runner, args.probe)
     except Exception as exc:  # noqa: BLE001 - a crash is could-not-measure, never a pass
         verdict = {"tool": "cipher-auth-check", "status": "could_not_measure", "exit": 3,

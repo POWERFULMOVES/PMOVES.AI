@@ -159,7 +159,7 @@ def test_incident_env_presents_a_key_the_gateway_admits(cipher_expr):
     v = ck.assess(INCIDENT_ENV, exprs(cipher_expr), now=NOW)
     assert codes(v) == []
     assert v["status"] == "ok" and v["exit"] == 0
-    assert v["facets"]["gateway_admits"] is True
+    assert v["facets"]["matches_kong_config"] is True
     assert v["facets"]["key_source"] in {"SUPABASE_SERVICE_ROLE_KEY", "SERVICE_ROLE_KEY"}
 
 
@@ -178,7 +178,7 @@ def test_incident_env_presents_a_key_the_gateway_admits(cipher_expr):
 def test_every_node_shape_presents_what_kong_admits_without_a_paste(node_env, source):
     v = ck.assess({**node_env, "JWT_SECRET": PGRST_SECRET}, exprs(), now=NOW)
     assert v["facets"]["key_source"] == source
-    assert v["facets"]["gateway_admits"] is True
+    assert v["facets"]["matches_kong_config"] is True
     assert v["status"] == "ok", v
 
 
@@ -249,7 +249,7 @@ def test_missing_is_a_finding():
 def test_signature_under_another_secret_is_wrong_pair():
     # Kong would admit it (it IS Kong's consumer key) but PostgREST will not.
     v = ck.assess(_env(FOREIGN), exprs(), now=NOW)
-    assert v["facets"]["gateway_admits"] is True
+    assert v["facets"]["matches_kong_config"] is True
     assert v["facets"]["signature_verifies"] is False
     assert codes(v) == ["wrong_pair_signature"]
 
@@ -372,7 +372,8 @@ def test_cli_incident_exits_1_with_structured_verdict_and_no_leak(tmp_path, monk
     verdict = json.loads(last.split("=", 1)[1])
     assert verdict["status"] == "finding" and verdict["exit"] == 1
     assert set(verdict["findings"]) == {"expired", "wrong_pair_gateway"}
-    assert "exp in past ......... yes" in out
+    assert "exp in past ............. yes" in out
+    assert "NOT the running Kong" in out and "CONTAINER=1 PROBE=1 is the authority" in out
     _assert_no_leak(out + err)
 
 
@@ -393,13 +394,30 @@ def test_cli_crash_is_could_not_measure(tmp_path, capsys):
 # ── running container (fake docker) ───────────────────────────────────────
 
 
-def _runner(report, names="pmoves-cipher-api-1"):
+def _digest(value):
+    import hashlib
+    return hashlib.sha256(value.encode()).hexdigest()
+
+
+def _runner(report, names="pmoves-cipher-api-1", kong_keys=(FRESH,), kong="pmoves-supabase-kong-1",
+            kong_out=None):
+    """Fake docker. *kong_keys*: the consumer keys the running Kong holds
+    (None = Kong's exec fails)."""
     calls = []
 
     def run(cmd):
         calls.append(cmd)
         if cmd[:2] == ["docker", "ps"]:
-            return 0, names + "\n" if names else ""
+            if "label=com.docker.compose.service=supabase-kong" in cmd:
+                return 0, (kong + "\n") if kong else ""
+            return 0, (names + "\n") if names else ""
+        if cmd[:3] == ["docker", "exec", kong]:
+            if kong_out is not None:
+                return 0, kong_out
+            if kong_keys is None:
+                return 1, ""
+            keys = list(kong_keys) + ["-"] * (2 - len(kong_keys))
+            return 0, "".join((_digest(k) if k != "-" else "-") + "\n" for k in keys)
         return 0, json.dumps(report) + "\n"
 
     run.calls = calls
@@ -426,12 +444,14 @@ def test_container_matching_env_and_lookup_200_is_ok():
     c = v["facets"]["container"]
     assert c["matches_env"] is True and c["lookup_status"] == 200
     assert v["status"] == "ok"
-    assert run.calls[-1][:3] == ["docker", "exec", "pmoves-cipher-api-1"]
-    assert "if (k && true)" in run.calls[-1][-1]
+    cipher_exec = [c for c in run.calls if c[:3] == ["docker", "exec", "pmoves-cipher-api-1"]]
+    assert len(cipher_exec) == 1 and "if (k && true)" in cipher_exec[0][-1]
+    assert c["kong_live_admits"] is True
 
 
 def test_stale_container_warns_and_expired_container_is_a_finding():
-    run = _runner(_container_report(EXPIRED_PASTE))
+    # Kong still holds the same (old) key the stale container presents.
+    run = _runner(_container_report(EXPIRED_PASTE), kong_keys=(EXPIRED_PASTE,))
     v = ck.assess_container(_base_ok(), FRESH, run, probe=False, now=NOW)
     assert v["facets"]["container"]["matches_env"] is False
     assert any("up-cipher" in w for w in v["warnings"])
