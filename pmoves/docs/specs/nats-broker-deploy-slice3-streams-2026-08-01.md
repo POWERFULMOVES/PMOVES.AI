@@ -62,18 +62,39 @@ immediately discarded (no durable consumer = no storage). The HTTP
 - `pmoves/Makefile` — 3 new targets in the NATS section:
   - `nats-streams-init` — re-runs `init_streams.sh` (idempotent; `stream add`
     is a no-op on existing names)
-  - `nats-streams-validate` — captures `nats stream ls -n` via the
+  - `nats-streams-validate` — captures `nats stream info <NAME> -j` for every
+    stream the broker reports, ONE JSON object after another, via the
     nats-box toolbox container, then runs the validator against the
-    captured output. Exit 0 = all 8 streams present with correct
-    subject filter + retention; exit 1 = regression.
+    captured output. Exit 0 = all 8 streams present with correct subject
+    filter + retention; exit 1 = regression.
   - `nats-streams-list` — ad-hoc inspect
-- `pmoves/scripts/nats/validate_streams.py` — parses `nats stream ls -n`
-  output and asserts each of the 8 expected streams is present. Catches
-  both the "stream not declared" failure mode (this lane's root
-  cause) AND the "retention silently switched to interest" failure mode
+- `pmoves/scripts/nats/validate_streams.py` — parses that concatenated
+  `stream info -j` capture and asserts each of the 8 expected streams is
+  present. Catches both the "stream not declared" failure mode (this lane's
+  root cause) AND the "retention silently switched to interest" failure mode
   (the existing TOKENISM_ATTRIBUTION migration risk). UTF-8 stdout/stderr
   on Windows. CI-runnable, no Docker dependency for the assertion
   itself (only the upstream capture needs the toolbox container).
+
+#### Correction (2026-10-31) — the capture contract was fiction
+
+The `-n` capture described above never worked, and the reason is worth
+recording because the guard LOOKED like it was guarding something:
+
+- `nats stream ls -n` prints **stream NAMES ONLY**.
+- `nats stream ls` prints Name / Description / Created / Messages / Size /
+  Last Message — there is **no Subjects column and no Retention column**.
+- The validator parsed a `NAME SUBJECTS RETENTION` table that the nats CLI
+  has never emitted, so it could not have passed against a real server.
+
+The only output that carries both subjects and retention is
+`nats stream info <NAME> -j`, which emits ONE JSON object per stream.
+The capture is therefore the CONCATENATED sequence of those objects, and
+the validator walks the document with `json.JSONDecoder().raw_decode`
+(`json.loads` accepts exactly one object per document, so it would reject
+the capture the moment a second stream was appended). Subjects are
+compared as SETS, because JetStream promises no order for
+`config.subjects` and the COMPUTE stream carries two families.
 
 ### Docs (this commit) — AGNOTE + spec
 

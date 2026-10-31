@@ -79,11 +79,11 @@ Rooms own presentation and session ergonomics; the notebook plane owns durable m
 **Purpose:** Infrastructure room for topology, service health, secrets discipline, and operator bring-up.
 **Profile:** `z890-infra` · **Agent:** `z890-claude` · **Stage:** `live` · **Manifest:** [`z890-infra.room.fabric.json`](pmoves/config/rooms/z890-infra.room.fabric.json)
 
-- `pmoves/services/node-registry/` — Multi-host node discovery and health reporting
-- `pmoves/services/resource-detector/` — Hardware capability detection (GPU, CPU, memory)
-- `pmoves/services/work-marshaling/` — Distributed task scheduling and work queue management
+- `pmoves/services/node_registry/` — Multi-host node discovery and health reporting
+- `pmoves/services/resource_detector/` — Hardware capability detection (GPU, CPU, memory)
+- `pmoves/services/work_marshaling/` — Distributed task scheduling and work queue management
 - `pmoves/services/gpu-orchestrator/` — GPU resource allocation and scheduling
-- `pmoves/services/vllm-orchestrator/` — vLLM inference server lifecycle management
+- `pmoves/services/vllm_orchestrator/` — vLLM inference server lifecycle management
 - `pmoves/services/model-registry/` — Central model catalog with version tracking
 - `pmoves/services/tensorzero-config-api/` — Dynamic TensorZero model configuration API
 - `pmoves/services/benchmark-runner/` — Automated performance benchmarking harness

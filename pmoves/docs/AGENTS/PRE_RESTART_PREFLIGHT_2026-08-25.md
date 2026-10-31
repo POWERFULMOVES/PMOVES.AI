@@ -229,3 +229,78 @@ CHIT trail **unsigned-local** — which §3 of this document explains is the onl
 state currently available, since the signing key is shared fleet-wide.
 
 <!-- GRAPHITI_MARK: B850-CLAUDE::PRE-RESTART-PREFLIGHT::2026-08-25 -->
+
+---
+
+# Resolution log (added 2026-10-30)
+
+**The rows above are the 2026-08-25 findings, left exactly as they were written.** This
+log records what has since been closed, so a reader of the table does not have to
+re-derive the current state from the git history. Nothing above has been rewritten.
+
+## R8 — Register presence — PARTIALLY RESOLVED
+
+The row names four things as the minimum fix. Three of the four are closed; the
+deployment half is not, and is an operator decision.
+
+| # | The minimum fix | State |
+|---|-----------------|-------|
+| 1 | the subject rename | **CLOSED.** The SUBSCRIBER moved, not the publisher: `pmoves/services/node_registry/registry.py` now subscribes to `mesh.node.announce.v1` / `.v2` and to the announce family `mesh.node.announce.>`. `mesh.node.announce.v1` is the subject with publishers — mesh-agent (the deployed publisher), the node bootstrap scripts, `pmoves/config/agent_registry.yaml` and `pmoves/services/graphiti/nats_subject_registry.py` — while `compute.nodes.announce.v1` had **zero** publishers. The registry also no longer feeds announcements to the capability parser for its own message shape (every real announcement raised `KeyError('node_id')` and was dropped); v1, v2 and the bootstrap dialects now map onto a record, and capacity is never invented. |
+| 2 | a Dockerfile | **NOT DONE** — operator decision. See "Still open" below. |
+| 3 | a compose service entry | **NOT DONE** — operator decision. See "Still open" below. |
+| 4 | a Make target in the bring-up path | **NOT DONE** — operator decision. See "Still open" below. |
+
+Also closed under R8: the service packages now import under the names their own
+importers and docstrings use. `pmoves/services/node-registry/` →
+`node_registry/` and `pmoves/services/resource-detector/` → `resource_detector/`
+(the four importers wrote `..resource_detector.*`, a package that did not exist, so
+**no** importer could resolve it); `work-marshaling/` → `work_marshaling/` and
+`vllm-orchestrator/` → `vllm_orchestrator/` (their docstrings already promised
+`from pmoves.services.work_marshaling import ...` and
+`from pmoves.services.vllm_orchestrator import ...`, which did not work). The
+entry points no longer load their own modules by file path without a parent
+package, so there is exactly ONE module identity per service.
+
+The curated-registry assertion behind this row — `assert len(reg) == 12` — had been
+**RED for twelve weeks** after `crush.yaml` landed on 2026-08-05 (PR #2412). It is
+now the declared slug set, and every curated entry must declare the four exposure
+layers under the canonical names the `mesh_exposure` planner actually reads
+(`crush.yaml` was authored against `layer_1..layer_4`, so it parsed but
+contributed **no** exposure rules at all).
+
+## R8a — node-registry deployability — PARTIALLY RESOLVED
+
+The row names three things. One is closed; the two deployment halves are not.
+
+| # | The requirement | State |
+|---|-----------------|-------|
+| — | the `compute` JetStream stream exists | **CLOSED.** `pmoves/scripts/nats/init_streams.sh` now creates `COMPUTE` on subjects `mesh.node.announce.> compute.nodes.>` with `limits` retention (7d / 1GB), and `pmoves/scripts/nats/validate_streams.py` expects it. The registry's durable subscribe also used `durable_name=` — not a nats-py kwarg — so it always raised and fell back to core NATS; it is now `durable=`. Under `interest` retention an announcement published before the registry first ran would have been discarded immediately, so the stream is `limits`, matching its nine siblings. |
+| — | a Dockerfile | **NOT DONE** — operator decision. See "Still open" below. |
+| — | a compose service entry + Make target | **NOT DONE** — operator decision. See "Still open" below. |
+
+## Still open (operator decisions — deliberately NOT done here)
+
+1. **node-registry deployment wiring.** Needs a Dockerfile (build context `pmoves/`,
+   because the service imports `pmoves.services.resource_detector`; the image must
+   also carry `pmoves/services/common/`, because `pmoves/services/__init__.py`
+   imports it), `CMD ["python","-m","pmoves.services.node_registry.main"]`, a
+   compose entry (`build: {context: ., dockerfile: services/node-registry/Dockerfile}`,
+   `NATS_URL`, `NODE_REGISTRY_HOST/PORT`, `depends_on: nats (healthy)`,
+   `networks: [pmoves_app, pmoves_bus]`, `profiles: ["agents"]`, a `/healthz`
+   healthcheck) and a Make target in the bring-up path.
+   **Resolve the port conflict first:** `main.py` defaults to **8082**, while
+   `pmoves/tests/utils/service_catalog.py` and the docs say **8115**.
+   `pmoves/docker-compose.yml` was deliberately NOT touched by this lane.
+2. **The four-module service identity.** The service keeps the hyphenated identity
+   (`"service": "node-registry"`, `"service": "resource-detector"`) in its API
+   payloads while the Python packages are snake_case. That is intentional — the
+   name is the wire contract, the package is the import contract — but it is worth
+   a decision on whether the catalog should carry both.
+
+## Provenance
+
+`pmoves/tests/tools/test_mesh_node_compatibility.py` (the compatibility ratchet) and
+`pmoves/tests/tools/test_mesh_node_compatibility_mutation_kill.py` (the harness that
+breaks each fix on purpose and requires a NAMED test to go red) are the load-bearing
+artifacts. LEARNINGS: `pmoves/docs/AGENTS/mesh_node_compatibility_LEARNINGS.md`.
+Register row: `pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md`.
