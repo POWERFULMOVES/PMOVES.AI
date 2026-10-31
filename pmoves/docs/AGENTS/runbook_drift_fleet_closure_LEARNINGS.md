@@ -143,6 +143,24 @@ and `make -C pmoves validate-command-anchors-baseline` dropped exactly
 those five. A deployability fix that repairs a documentation ratchet's
 backlog is the same fix showing up in a second instrument.
 
+**The split overlays are GENERATED, and adding a service to the compose
+source regenerates them.** `pmoves/docker-compose.{base,core,agents,media,
+ui,workers,apps,juicefs}.yml` are produced from `pmoves/docker-compose.yml`
+by `pmoves/scripts/split_compose.py` — never hand-edited — and the
+`compose-split-drift-check` job in `.github/workflows/merge-gate.yml`
+regenerates them and fails on `git status --porcelain`. Measured: the
+overlays were in sync on `origin/main` (the gate is green there), and
+adding one service desynchronised exactly one of them:
+`docker-compose.core.yml`, because an ungrouped service lands in the
+`core` overlay. The regeneration is safe **because** main was clean: the
+gate's own warning — "`compose-split` would make this green by DELETING the
+hand-edits that were never ported into the source" — is a warning about
+*unported* edits, and there were none outstanding. The diff was 51
+insertions of the node-registry block and **zero** deletions of live
+config. The gate compares against COMMITTED state, so the regenerated
+overlay has to be committed before the check passes — a regenerated-but-
+uncommitted overlay is still drift.
+
 ### F3 — two pipecat forks in no registry, and six registry claims with no mechanism
 
 `pmoves/config/fork_registry.json` and `.github/workflows/fork-sync.yml` are two
