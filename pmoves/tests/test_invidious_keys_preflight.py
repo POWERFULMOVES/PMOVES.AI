@@ -190,7 +190,7 @@ def test_gate_mode_leaves_env_byte_identical(tmp_path, published, text):
     before = env.read_bytes()
     pf.run(env, mode="gate", registry=REGISTRY, probe=Probe())
     assert env.read_bytes() == before
-    assert not (tmp_path / common.ENV_WRITE_LOCK_NAME).exists()  # never even locked
+    assert [p.name for p in tmp_path.iterdir() if p.name.startswith(common.TEMP_PREFIX)] == []
 
 
 def test_gate_mode_through_the_cli_entrypoint_never_writes(tmp_path, published):
@@ -388,3 +388,55 @@ def test_funnel_path_rotates_a_published_value(tmp_path, monkeypatch):
     env = _env(tmp_path, f"INVIDIOUS_COMPANION_KEY={PUBLISHED}\nINVIDIOUS_HMAC_KEY={LIVE_HMAC}\n")
     assert pf.run(env, mode="fix", registry=REGISTRY, probe=Probe()) == 0
     assert _read(env, "INVIDIOUS_COMPANION_KEY") != PUBLISHED
+
+
+# ---------------------------------------------------------------------------
+# Atomic env writes (review P2a)
+# ---------------------------------------------------------------------------
+
+
+def test_crash_between_write_and_replace_leaves_original_intact(tmp_path, monkeypatch):
+    env = _env(tmp_path, f"OTHER=keep\nINVIDIOUS_COMPANION_KEY={LIVE_COMPANION}\n")
+    before = env.read_bytes()
+    env.chmod(0o640)
+
+    def crash(src, dst):
+        raise OSError("simulated crash before rename")
+
+    monkeypatch.setattr(common.os, "replace", crash)
+    with pytest.raises(OSError):
+        pf._be.rotate_secret("INVIDIOUS_COMPANION_KEY", gen_type="random_hex", length=16, env_path=env)
+    assert env.read_bytes() == before
+    assert [p.name for p in tmp_path.iterdir() if p.name.startswith(common.TEMP_PREFIX)] == []
+
+
+def test_atomic_write_preserves_mode_and_replaces_whole_file(tmp_path):
+    env = _env(tmp_path, "OTHER=keep\n")
+    env.chmod(0o640)
+    ino = env.stat().st_ino
+    pf._be.rotate_secret("INVIDIOUS_COMPANION_KEY", gen_type="random_hex", length=16, env_path=env)
+    assert (env.stat().st_mode & 0o777) == 0o640
+    assert env.stat().st_ino != ino  # replaced, not truncated in place
+    assert _read(env, "OTHER") == "keep"
+
+
+def test_readers_take_the_lock_shared_and_writers_wait(tmp_path):
+    import subprocess
+
+    env = _env(tmp_path, f"INVIDIOUS_HMAC_KEY={LIVE_HMAC}\nINVIDIOUS_COMPANION_KEY={LIVE_COMPANION}\n")
+    clean = {k: v for k, v in __import__("os").environ.items() if k != common.ENV_WRITE_LOCK_HELD}
+    code = (
+        "import sys; sys.path.insert(0, %r)\n"
+        "from pmoves.tools._secrets_common import env_write_lock\n"
+        "with env_write_lock(%r, shared=%s):\n    print('got', flush=True)\n"
+    )
+    with common.env_write_lock(env, shared=True):
+        reader = subprocess.run([sys.executable, "-c", code % (str(PMOVES.parent), str(env), True)],
+                                capture_output=True, text=True, env=clean, timeout=30)
+        assert reader.stdout.strip() == "got"  # a second reader is not blocked
+        writer = subprocess.Popen([sys.executable, "-c", code % (str(PMOVES.parent), str(env), False)],
+                                  stdout=subprocess.PIPE, text=True, env=clean)
+        with pytest.raises(subprocess.TimeoutExpired):
+            writer.communicate(timeout=1.5)  # a writer waits for the reader
+    out, _ = writer.communicate(timeout=30)
+    assert out.strip() == "got"

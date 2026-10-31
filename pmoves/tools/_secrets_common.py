@@ -13,6 +13,7 @@ import hashlib
 import os
 import re
 import sys
+import tempfile
 import urllib.parse
 from pathlib import Path
 from typing import Dict
@@ -126,17 +127,22 @@ ENV_WRITE_LOCK_NAME = ".pmoves-env-write.lock"
 ENV_WRITE_LOCK_HELD = "PMOVES_ENV_WRITE_LOCK_HELD"
 
 
+TEMP_PREFIX = ".pmoves-tmp-"
+
+
 @contextlib.contextmanager
-def env_write_lock(env_path: Path):
+def env_write_lock(env_path: Path, *, shared: bool = False):
     """Serialize read-modify-write cycles on the env files in *env_path*'s directory.
 
     ``make -j`` can run ensure-env-shared (brand_defaults + the Invidious key
     preflight) and a goal's own preflight at the same time; each rewrites
     env.shared from what it read, so one would silently drop the other's write.
-    One advisory lock per directory, held across the whole cycle. A child that
-    the lock holder spawns inherits ``PMOVES_ENV_WRITE_LOCK_HELD`` and must not
-    re-acquire (flock is per open file, so it would deadlock on its parent).
-    No fcntl (Windows): unlocked, as before this existed.
+    One advisory lock per directory: writers take it EXCLUSIVE across the whole
+    cycle, read-only checks take it SHARED (many readers, never beside a
+    writer). The holder exports ``PMOVES_ENV_WRITE_LOCK_HELD``; anything under
+    it -- a child process or a nested call -- must not re-acquire (flock is per
+    open file, so a child would deadlock on its parent). No fcntl (Windows):
+    unlocked, as before this existed.
     """
     lock_path = Path(env_path).resolve().parent / ENV_WRITE_LOCK_NAME
     if os.environ.get(ENV_WRITE_LOCK_HELD) == str(lock_path):
@@ -149,7 +155,7 @@ def env_write_lock(env_path: Path):
         return
     lock_path.parent.mkdir(parents=True, exist_ok=True)
     with open(lock_path, "a", encoding="utf-8") as handle:
-        fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+        fcntl.flock(handle.fileno(), fcntl.LOCK_SH if shared else fcntl.LOCK_EX)
         previous = os.environ.get(ENV_WRITE_LOCK_HELD)
         os.environ[ENV_WRITE_LOCK_HELD] = str(lock_path)
         try:
@@ -160,6 +166,51 @@ def env_write_lock(env_path: Path):
             else:
                 os.environ[ENV_WRITE_LOCK_HELD] = previous
             fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+
+
+def atomic_write_text(path: Path, text: str) -> None:
+    """Replace *path* with *text* so a reader or a crash sees old or new, never half.
+
+    ``write_text`` truncates then writes: a crash in between leaves an empty or
+    torn env file, i.e. every secret on the node gone. Instead: write a temp file
+    in the SAME directory (same filesystem, so the rename is atomic), flush and
+    fsync it, give it the original's mode and owner, then ``os.replace``. If the
+    owner cannot be preserved the replace is refused and the original stays,
+    rather than silently handing a secret file to another user. The temp file
+    never survives an error. New files get 0600.
+    """
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        st = os.stat(path)
+    except FileNotFoundError:
+        st = None
+    fd, tmp = tempfile.mkstemp(dir=str(path.parent), prefix=TEMP_PREFIX + path.name + ".")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(text)
+            handle.flush()
+            os.fsync(handle.fileno())
+        if st is not None:
+            os.chmod(tmp, st.st_mode & 0o7777)
+            if hasattr(os, "chown") and (st.st_uid, st.st_gid) != (os.getuid(), os.getgid()):
+                os.chown(tmp, st.st_uid, st.st_gid)
+        os.replace(tmp, path)
+        tmp = None
+        try:  # make the rename itself durable
+            dfd = os.open(str(path.parent), os.O_RDONLY)
+            try:
+                os.fsync(dfd)
+            finally:
+                os.close(dfd)
+        except OSError:
+            pass
+    finally:
+        if tmp is not None:
+            try:
+                os.unlink(tmp)
+            except FileNotFoundError:
+                pass
 
 
 def is_placeholder(value: str | None) -> bool:

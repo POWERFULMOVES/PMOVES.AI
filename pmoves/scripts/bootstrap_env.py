@@ -26,7 +26,11 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from pmoves.tools._secrets_common import is_known_public  # noqa: E402  (stdlib-only module)
+from pmoves.tools._secrets_common import (  # noqa: E402  (stdlib-only module)
+    atomic_write_text,
+    env_write_lock,
+    is_known_public,
+)
 DEFAULT_REGISTRY_PATH = REPO_ROOT / "pmoves" / "bootstrap" / "registry.json"
 ENV_SHARED_PATH = REPO_ROOT / "pmoves" / "env.shared"
 CLEARED_KEYS_PATH = REPO_ROOT / "pmoves" / "configs" / "secrets_cleared.yaml"
@@ -70,8 +74,7 @@ def _write_cleared_keys(keys: List[str], path: Optional[Path] = None) -> None:
     body = ["cleared_keys: []"] if not keys else ["cleared_keys:"] + [
         f'  - "{k}"' for k in sorted(keys)
     ]
-    target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text("\n".join(header + body) + "\n", encoding="utf-8")
+    atomic_write_text(target, "\n".join(header + body) + "\n")
 
 
 def mark_key_cleared(key: str, path: Optional[Path] = None) -> None:
@@ -294,7 +297,13 @@ def rotate_secret(
         )
     if not target.exists():
         raise FileNotFoundError(f"env file not found: {target}")
+    with env_write_lock(target):
+        _rotate_line(target, key, value)
+    return value
 
+
+def _rotate_line(target: Path, key: str, value: str) -> None:
+    """The read-modify-write half of rotate_secret; caller holds the env write lock."""
     original = target.read_text(encoding="utf-8")
     new_line = f"{key}={value}"
     out: List[str] = []
@@ -319,8 +328,7 @@ def rotate_secret(
     text = "\n".join(out)
     if original.endswith("\n") or not original:
         text += "\n"
-    target.write_text(text, encoding="utf-8")
-    return value
+    atomic_write_text(target, text)
 
 
 def read_env_value(key: str, env_path: Optional[Path] = None) -> Optional[str]:
@@ -625,9 +633,7 @@ class EnvFile:
         # Values actually changed — inject fresh timestamp and write.
         lines[1] = f"# Generated at {_dt.datetime.now(_dt.timezone.utc).isoformat()}Z"
         final_text = "\n".join(lines).rstrip() + "\n"
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        with self.path.open("w", encoding="utf-8") as fh:
-            fh.write(final_text)
+        atomic_write_text(self.path, final_text)
         self.original_text = final_text
         return True
 

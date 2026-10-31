@@ -153,10 +153,10 @@ def run(env_path: Path, *, mode: str = "fix", registry: Optional[str] = None, pr
         # Writing a file here would stop ensure-env-shared seeding the template.
         print(f"invidious-keys: {env_path.name} absent -- skipped (run make -C pmoves secrets-funnel)")
         return EXIT_OK
-    if mode == "gate":
-        return _gate(env_path)
-    if mode == "check":
-        return _check(env_path)
+    if mode in ("gate", "check"):
+        # Readers take the lock SHARED: never beside a writer's half-done cycle.
+        with env_write_lock(env_path, shared=True):
+            return _gate(env_path) if mode == "gate" else _check(env_path)
     with env_write_lock(env_path):
         return _fix(env_path, registry=registry, probe=probe)
 
