@@ -36,6 +36,7 @@ import base64
 import hashlib
 import hmac
 import json
+import math
 import time
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
@@ -141,21 +142,27 @@ def _jwt_exp_claim(value: Optional[str]) -> Optional[float]:
 
 
 def _is_numeric_date(exp: object) -> bool:
-    # RFC 7519 NumericDate: int OR float. bool is an int subclass in Python and
-    # is NOT a date ({"exp": true} must not read as exp=1).
-    return isinstance(exp, (int, float)) and not isinstance(exp, bool)
+    # RFC 7519 NumericDate: a FINITE int or float. bool is an int subclass in
+    # Python and is NOT a date ({"exp": true} must not read as exp=1). Python's
+    # json accepts NaN / Infinity / -Infinity literals: NaN compares false with
+    # everything (numeric-but-never-live), Infinity would never expire -- so a
+    # non-finite exp is malformed, not a date.
+    if isinstance(exp, bool) or not isinstance(exp, (int, float)):
+        return False
+    return isinstance(exp, int) or math.isfinite(exp)
 
 
 def _exp_state(value: Optional[str]) -> str:
-    """``absent`` (no exp claim), ``numeric``, ``malformed`` (an exp of any other
-    type: unknown, so neither live nor adoptable), or ``undecodable``."""
+    """``absent`` (no ``exp`` key), ``numeric`` (a finite NumericDate),
+    ``malformed`` (``exp`` PRESENT with any other value -- null, NaN, +/-Infinity,
+    bool, string...: unknown, so neither live nor adoptable), or ``undecodable``."""
     decoded = _claims(value)
     if decoded is None:
         return "undecodable"
-    exp = decoded[1].get("exp", None)
-    if exp is None:
-        return "absent"
-    return "numeric" if _is_numeric_date(exp) else "malformed"
+    if "exp" not in decoded[1]:
+        return "absent"      # key MISSING: no expiry claimed
+    # key PRESENT: null, NaN, +/-Infinity, bool, string, ... are all malformed
+    return "numeric" if _is_numeric_date(decoded[1]["exp"]) else "malformed"
 
 
 # The precedence every compose verifier uses: PostgREST (PGRST_JWT_SECRET),

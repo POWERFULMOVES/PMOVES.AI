@@ -835,3 +835,76 @@ def test_converged_and_divergent_events_print_closed_text(capsys):
     assert "SUPABASE_SERVICE_KEY left unchanged: differs from the role's key" in out
     assert "RE-MINTED SERVICE_ROLE_KEY (service_role): converged_to_role_key" in out
     assert "<unrecognised>" not in out
+
+
+# ── #3433 re-review at d5e1b6d19 P3: non-finite and null exp ───────────────
+# Python's json emits/accepts NaN, Infinity, -Infinity literals, so a token
+# signed with our secret can carry them. None of them is a NumericDate.
+
+_NONFINITE = {"nan": float("nan"), "inf": float("inf"), "-inf": float("-inf"), "null": None}
+
+
+def _svc_token(exp):
+    return _jwt({"alg": "HS256", "typ": "JWT"},
+                {"role": "service_role", "iss": "supabase-local", "exp": exp}, secret=_VERIFIER)
+
+
+@pytest.mark.parametrize("kind", list(_NONFINITE))
+def test_nonfinite_or_null_exp_is_malformed_not_numeric_not_absent(kind):
+    from pmoves.tools.secrets_self_generated import _exp_state
+
+    tok = _svc_token(_NONFINITE[kind])
+    payload = base64.urlsafe_b64decode(tok.split(".")[1] + "==").decode()
+    assert {"nan": "NaN", "inf": "Infinity", "-inf": "-Infinity", "null": "null"}[kind] in payload
+    assert _exp_state(tok) == "malformed"
+    assert _jwt_exp_claim(tok) is None
+    no_key = _jwt({"alg": "HS256"}, {"role": "service_role"}, secret=_VERIFIER)
+    assert _exp_state(no_key) == "absent"     # MISSING key stays absent
+
+
+@pytest.mark.parametrize("kind", list(_NONFINITE))
+def test_nonfinite_or_null_exp_is_never_adopted_and_is_reminted(kind):
+    """Infinity used to be adopted as donor forever; -Infinity read as expired;
+    null read as 'no exp'."""
+    tok = _svc_token(_NONFINITE[kind])
+    events = []
+    out = fill_self_generated({"SUPABASE_JWT_SECRET": _VERIFIER, "SUPABASE_RUNTIME": "compose",
+                               "SUPABASE_SERVICE_KEY": tok, "SERVICE_ROLE_KEY": ""},
+                              events=events, local_services=_SERVICES)
+    vals = {out[lb] for lb in ("SUPABASE_SERVICE_ROLE_KEY", "SERVICE_ROLE_KEY", "SUPABASE_SERVICE_KEY")}
+    assert tok not in vals and len(vals) == 1
+    assert ("SUPABASE_SERVICE_KEY", "reminted", "malformed_exp") in {
+        (e["label"], e["action"], e["reason"]) for e in events}
+
+
+@pytest.mark.parametrize("kind", list(_NONFINITE))
+def test_nonfinite_or_null_sibling_converges_not_divergent_foreign(kind):
+    """NaN read numeric-but-never-live: the label was neither stale nor the role
+    key, got 'divergent_foreign', and the role ended on TWO keys."""
+    good = derive_supabase_jwt(_VERIFIER, "service_role")
+    tok = _svc_token(_NONFINITE[kind])
+    events = []
+    out = fill_self_generated({"SUPABASE_JWT_SECRET": _VERIFIER, "SUPABASE_RUNTIME": "compose",
+                               "SUPABASE_SERVICE_ROLE_KEY": good, "SUPABASE_SERVICE_KEY": tok},
+                              events=events, local_services=_SERVICES)
+    assert {out[lb] for lb in ("SUPABASE_SERVICE_ROLE_KEY", "SERVICE_ROLE_KEY", "SUPABASE_SERVICE_KEY")} == {good}
+    reasons = {(e["label"], e["reason"]) for e in events}
+    assert ("SUPABASE_SERVICE_KEY", "malformed_exp") in reasons
+    assert ("SUPABASE_SERVICE_KEY", "divergent_foreign") not in reasons
+
+
+@pytest.mark.parametrize("kind", list(_NONFINITE) + ["bool"])
+def test_cipher_check_treats_nonfinite_null_or_bool_exp_as_unmeasured(kind):
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "cipher_service_key_check_nf", Path(__file__).resolve().parents[1] / "cipher_service_key_check.py")
+    ck = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(ck)
+    tok = _svc_token(True if kind == "bool" else _NONFINITE[kind])
+    expr = "${SUPABASE_SERVICE_ROLE_KEY:-${SERVICE_ROLE_KEY:-}}"
+    v = ck.assess({"SUPABASE_SERVICE_ROLE_KEY": tok, "SUPABASE_JWT_SECRET": _VERIFIER},
+                  {"cipher": expr, "gateway": expr, "pgrst_secret": "${SUPABASE_JWT_SECRET:-${JWT_SECRET:-}}"})
+    assert v["facets"]["exp_in_past"] is None        # neither 'live' nor 'expired'
+    assert v["exit"] == 3 and "expired" not in [f["code"] for f in v["findings"]]
+    assert not ck._live_service_role(tok, _VERIFIER, int(time.time()))

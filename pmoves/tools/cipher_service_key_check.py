@@ -81,6 +81,7 @@ import base64
 import hashlib
 import hmac
 import json
+import math
 import os
 import re
 import subprocess
@@ -116,6 +117,15 @@ EXPIRY_WARN_S = 30 * 24 * 3600
 _REVERSED_ORDER = re.compile(r"\$\{SERVICE_ROLE_KEY:?-\$\{SUPABASE_SERVICE_ROLE_KEY")
 
 _NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+
+
+def _numeric_date(exp: object) -> bool:
+    """A finite int/float NumericDate. bool, null, NaN and +/-Infinity are not:
+    NaN compares false with everything (reads 'live' forever), Infinity never
+    expires, and bool is an int subclass."""
+    if isinstance(exp, bool) or not isinstance(exp, (int, float)):
+        return False
+    return isinstance(exp, int) or math.isfinite(exp)
 
 
 class Unresolvable(ValueError):
@@ -330,7 +340,7 @@ def _live_service_role(value: str, secret: str, now: int) -> bool:
         return False
     claims = decoded[1]
     exp = claims.get("exp")
-    return claims.get("role") == EXPECTED_ROLE and isinstance(exp, (int, float)) and exp > now
+    return claims.get("role") == EXPECTED_ROLE and _numeric_date(exp) and exp > now
 
 
 def kong_order_drift(docs: Sequence[Mapping[str, Any]]) -> List[str]:
@@ -466,7 +476,7 @@ def assess(
         claims = decoded[1]
         facets["role"] = claims.get("role") if isinstance(claims.get("role"), str) else None
         exp = claims.get("exp")
-        if isinstance(exp, (int, float)):
+        if _numeric_date(exp):
             facets["exp_in_past"] = exp <= now
             if exp <= now:
                 findings.append(_finding(
@@ -477,7 +487,7 @@ def assess(
             elif exp - now < EXPIRY_WARN_S:
                 warnings.append("key expires within 30 days")
         else:
-            unmeasured.append("JWT carries no numeric exp claim")
+            unmeasured.append("JWT carries no finite numeric exp claim (absent, null, NaN, Infinity or non-number)")
         if facets["role"] != EXPECTED_ROLE:
             findings.append(_finding(
                 "wrong_role",
@@ -734,7 +744,7 @@ def assess_container(
     facet["present"] = bool(report.get("present"))
     facet["role"] = report.get("role")
     exp = report.get("exp")
-    facet["exp_in_past"] = (exp <= now) if isinstance(exp, (int, float)) else None
+    facet["exp_in_past"] = (exp <= now) if _numeric_date(exp) else None
     digest = report.get("sha256") if isinstance(report.get("sha256"), str) else None
     if not facet["present"]:
         verdict["findings"].append(_finding("container_missing", "running cipher-api has no SUPABASE_SERVICE_KEY"))
