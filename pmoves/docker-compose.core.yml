@@ -1563,6 +1563,7 @@ services:
     # make `docker compose config` fail on a host that has no Supabase keys.
     - SUPABASE_URL=${SUPABASE_URL:-http://supabase-kong:8000}
     - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY:-}
+    - PMOVES_NETWORKS=pmoves_api,pmoves_bus,pmoves_external
     ports:
     - "${NODE_REGISTRY_BIND:-0.0.0.0}:8115:8115"
     depends_on:
