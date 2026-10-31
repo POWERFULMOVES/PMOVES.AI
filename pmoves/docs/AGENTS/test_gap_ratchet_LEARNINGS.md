@@ -312,3 +312,84 @@ Pattern after round 5: **contract-correctness now leads outright** — 13 of 25 
 | File | Change |
 |---|---|
 | `pmoves/tests/tools/test_mavis_ratchet_mutation_kill.py` | `_validated_deadline()` (`:680`), `_pytest_timeout_seconds()` rewritten (`:699`), `_spawn_pytest_process()` (`:750`), `_kill_process_tree()` (`:785`), `_drain_process_output()` (`:834`), `_run_pytest()` rewritten (`:855`), `_FakeWedgedChild` (`:1565`), `test_nonfinite_timeout_override_falls_back_to_default` (`:1525`), `test_post_kill_drain_is_bounded_when_a_pipe_holder_survives` (`:1613`), and three new mutation-kill cases (`:1791`, `:1814`, `:1836`) |
+
+---
+
+## Review round 6 (2026-10-30 · PR #3427 follow-on) — "a healthy slow file was reported as a broken one"
+
+The merge gate's `python-tests` job FAILED on this branch at head `f9cec95043b`. The failure is not a broken test — it is a broken REPORT. The CI evidence, verbatim:
+
+```
+--- pmoves/tests/tools [2] timed out; isolating 20 files (budget 600s) ---
+---   no report for pmoves/tests/tools/test_mavis_ratchet_mutation_kill.py (exit -1) ---
+Findings by kind: ERROR=60, FAIL=94
+Test findings: 154 total, 153 baselined, 1 new
+NEW failures — 1 not in the baseline:
+  ERROR|pmoves/tests/tools/test_mavis_ratchet_mutation_kill.py|<pytest-harness>
+    pytest produced no report for this unit
+```
+
+Read the sequence: the chunk timed out, the file-by-file isolation pass then timed out on the SAME file, and the file's real result was replaced by `pytest produced no report for this unit`. That file is healthy. It is slow. The gate reported it as broken — the exact inversion this gate exists to prevent.
+
+### Why the budget model could not see it
+
+The model had no way to say "this one file is legitimately expensive". `GROUP_TIMEOUT_SECONDS = 120` was the wall clock for one chunk of up to `CHUNK_SIZE = 20` files; `FALLBACK_FILE_TIMEOUT = 60` was the wall clock for one file when a chunk timed out and was re-run file-by-file; `FALLBACK_BUDGET_SECONDS = 600` bounded the isolation pass. Chunks were built by FILE COUNT, so file count was standing in for cost.
+
+The mutation-kill harness does not fit that proxy, and cannot be made to fit it. Every one of its 19 cases runs THREE phases (GREEN before → RED under mutation → GREEN after restore), and each phase spawns a full `python -m pytest` child: 19 × 3 = 57 child pytest startups. One child startup was measured at **1.7 s** and is irreducible — `python -c pass` = 0.05 s, `import pytest` = 0.36 s, full child pytest run = 1.7 s; `-p no:cacheprovider` saves 0.12 s, `--assert=plain` saves nothing, `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1` saves nothing, `--confcutdir` saves nothing. 57 × 1.7 s ≈ **97 s is the FLOOR**, before any deliberate timeout wait. The harness is slow because it proves a deadline works by WAITING IT OUT, and proves a tree-kill works by leaving a grandchild holding a pipe open.
+
+The fix is therefore a BUDGET MODEL, not a suppression: a declared-slow file is MEASURED rather than lost, and nothing else changes.
+
+| # | Class | Observation (rule) | Evidence / Why | Apply when |
+|---|-------|---------------------|----------------|------------|
+| 26 | **contract-correctness** | **A budget measured in FILE COUNT is not a budget measured in COST.** | The runner chunked by `CHUNK_SIZE = 20` and gave each chunk `GROUP_TIMEOUT_SECONDS = 120`; a file re-run in isolation got `FALLBACK_FILE_TIMEOUT = 60`. File count was a proxy for cost, and the one file in this repo whose cost is real did not fit it — so the chunk was killed at 120 s, the isolation pass killed the same file again at 60 s, and the result was lost twice. FIX: `chunk_timeout_seconds()` (`:251`) = `GROUP_TIMEOUT_SECONDS` + the sum of the declared allowances of the files in that chunk; `file_timeout_seconds()` (`:264`) = `FALLBACK_FILE_TIMEOUT` + that file's own allowance. Both are pure, so the model itself is assertable. The allowance applies in BOTH places the budget applies, because a file measured in only one of them is still lost in the other. | Any budget that stands in for a cost it cannot measure. |
+| 27 | **reasoning-gap** | **"No report" conflates "the file hung" with "the file was out of budget" — and a false BROKEN is worse than a missing result.** | The runner's only vocabulary for "this unit produced no JUnit report" is the finding `ERROR\|<path>\|<pytest-harness>`, "pytest produced no report for this unit". That single label covers a hang, a crashed conftest, a usage error AND a file that was merely over budget. The consequence is not a missing row: it is a row that says BROKEN. The gate then reports a healthy file as a new failure, and the next person to look spends the round chasing a defect that does not exist. FIX: the cost of the file is declared up front, so the runner can keep "out of budget" and "hung" apart by never putting a declared-slow file out of budget in the first place. | Any gate whose vocabulary collapses distinct causes into one label. |
+| 28 | **defense-in-depth** | **An allowance must be REMOVABLE: with the entry gone, the budgets must fall back to EXACTLY the old values.** | An extra 600 s hardcoded in the runner would have fixed this CI run and made the cost invisible, unreviewable and permanent. FIX: the allowance lives in `pmoves/configs/pytest_ratchet/_slow_files.yaml`, a sibling of `_known_failures.yaml`, hand-parsed (no pyyaml — the runner does not use it and this does not add it). The negative control is `test_the_allowance_is_driven_by_the_config_not_by_the_code` (`:174`): point the runner at a config WITHOUT the harness entry and the computed budgets fall back to exactly `GROUP_TIMEOUT_SECONDS` / `FALLBACK_FILE_TIMEOUT`. A config that cannot be emptied is not a config, it is a constant with paperwork. | Any escape hatch, allow-list or budget raise. |
+| 29 | **pattern-conformance** | **A declared cost belongs in a reviewable config BESIDE the baseline, and a missing config must be an empty allowance rather than an error.** | The baseline `_known_failures.yaml` is hand-parsed line by line, so the sibling `_slow_files.yaml` is parsed the same way — one regex, no new dependency, and a missing file yields `{}` (`test_a_missing_config_is_an_empty_mapping_not_a_crash`, `:142`). Each entry carries a REASON, and the reason is load-bearing rather than decorative: `test_every_declared_entry_carries_a_reason` (`:134`) fails if any declared entry has none, because a declared cost with no stated reason is a budget raise nobody signed off on. | Any per-item declaration that a reviewer has to approve. |
+
+### Round-6 measurement (2026-10-30, Windows, Python 3.12.10, pytest 9.1.1)
+
+| Measurement | Value |
+|---|---|
+| harness cases | 19 (unchanged — no case was dropped, skipped or weakened) |
+| harness wall clock, BEFORE the trim | 121.3 s |
+| harness wall clock, AFTER the trim | **116.29 s — 19 passed** |
+| slowest case before → after | `test_mutation_pytest_run_without_timeout_is_killed` 49.04 s → **42.62 s** |
+| next slowest, after | `test_pytest_run_timeout_fires_and_releases_the_lock` 10.35 s; `test_mutation_unlocked_module_load_is_killed` 9.42 s |
+| child pytest startups | 19 cases × 3 phases = 57 |
+| one child startup | 1.7 s — irreducible (`python -c pass` 0.05 s, `import pytest` 0.36 s) |
+| harness floor | 57 × 1.7 s ≈ 97 s, before any deliberate timeout wait |
+| chunk budget for the harness chunk | 120 s → **720 s** (120 + 600) |
+| per-file budget for the harness | 60 s → **660 s** (60 + 600) |
+| chunk / per-file budget for EVERY other file | **120 s / 60 s — numerically unchanged** |
+| `pmoves/tests/tools/test_pytest_ratchet.py` | **31 passed** (20 pre-existing + 11 new), 0.23 s |
+| `pmoves/tests/test_mavis_cli_timeout.py` | **11 passed, 1 skipped** (the network-gated matrix cross-check), 1.53 s |
+| the harness run UNDER THE NEW CHUNK BUDGET (runner probe) | **rc=0, JUnit report written, 0 findings, 118.5 s** — the file is MEASURED, where the old 120 s/60 s budgets lost it and reported it BROKEN |
+
+The trim in the harness was its own deliberate waste: `test_pytest_run_timeout_fires_and_releases_the_lock` (`:1437`) mutated the slow module to `SLEEP_SECONDS = 20.0` so the MUTATED (deadline-less) harness would let the inner run COMPLETE. 12.0 s is still comfortably longer than the 8 s override — so the timeout still fires first, and the mutated run still finishes — and it cuts ~8 s off the suite. The 8 s override was NOT lowered: it must stay long enough for a healthy pytest startup on a slow CI runner. No assertion was changed.
+
+### Round-6 cross-check (re-tallied)
+
+- **(1) reasoning-gap** — 5 lessons (#3, #7, #11, #14, **#27**)
+- **(2) semantic-naming drift** — 1 lesson (#8)
+- **(3) contract-correctness** — 14 lessons (#2, #4, #10, #15, #17, #18, #19, #20, #21, #22, #23, #24, #25, **#26**)
+- **(4) defense-in-depth** — 7 lessons (#1, #6, #9, #12, #13, #16, **#28**)
+- **(5) pattern-conformance** — 2 lessons (#5, **#29**)
+
+Pattern after round 6: **contract-correctness still leads** — 14 of 29 lessons. Round 6 is the first round in this lane whose subject is the GATE rather than the ratchet it gates: rounds 1–5 made the mavis ratchet itself able to say no, and round 6 found that the thing doing the saying could not distinguish "broken" from "slow". A gate that cannot tell those two apart will spend every future round investigating files that were never broken — and will eventually ignore the one that really was.
+
+### Round-6 SDK provenance
+
+| File | Symbol anchor | What it does |
+|---|---|---|
+| `pmoves/configs/pytest_ratchet/_slow_files.yaml` | `slow_files:` | The declared-slow file and its reason; a sibling of `_known_failures.yaml`, hand-parsed, no new dependency. |
+| `pmoves/tools/pytest_ratchet.py` | `SLOW_FILES` (`:87`) | Path of the declared-slow config. |
+| `pmoves/tools/pytest_ratchet.py` | `_SLOW_ENTRY_RE` (`:186`) | The hand-written `path: seconds` line pattern. |
+| `pmoves/tools/pytest_ratchet.py` | `load_slow_file_entries()` (`:191`) | Parses the config to path → (seconds, reason); a missing file is an empty mapping, never an error. |
+| `pmoves/tools/pytest_ratchet.py` | `load_slow_file_allowances()` (`:241`) | Path → extra seconds. |
+| `pmoves/tools/pytest_ratchet.py` | `_config_key()` (`:246`) | Repo-relative, forward-slash key an entry is written under. |
+| `pmoves/tools/pytest_ratchet.py` | `chunk_timeout_seconds()` (`:251`) | `GROUP_TIMEOUT_SECONDS` + the sum of the chunk's allowances; exactly `GROUP_TIMEOUT_SECONDS` when there are none. |
+| `pmoves/tools/pytest_ratchet.py` | `file_timeout_seconds()` (`:264`) | `FALLBACK_FILE_TIMEOUT` + that file's allowance; exactly `FALLBACK_FILE_TIMEOUT` when there is none. |
+| `pmoves/tools/pytest_ratchet.py` | `run_pytest()` (`:274`) | Uses the chunk budget when no explicit timeout is given; the widened budget reaches the subprocess. |
+| `pmoves/tools/pytest_ratchet.py` | `run_chunk_with_fallback()` (`:416`) | The isolation pass uses the per-file budget, so a declared-slow file is measured there too. |
+| `pmoves/tests/tools/test_pytest_ratchet.py` | `TestDeclaredSlowFiles` (`:115`) | 11 tests pinning the new budget model, including the negative control (`:174`) and the wiring to the subprocess (`:201`) and to the isolation pass (`:224`). |
+| `pmoves/tests/tools/test_mavis_ratchet_mutation_kill.py` | `test_pytest_run_timeout_fires_and_releases_the_lock` (`:1437`) | The deliberate sleep trimmed from 20 s to 12 s (`:1483`); the 8 s override and every assertion unchanged. |
