@@ -21,10 +21,11 @@ iv-org/invidious-companion @fcb0456a)
   (reusing it is "NOT recommended" by the vendor).
 - Neither may be a template placeholder or a value published in this repo.
 
-This is the ONE owner of both keys: brand_defaults no longer writes them, and
-ensure_env_shared.py runs this right after brand_defaults, so every path that
-reaches ensure-env-shared (make up, the funnel's secrets-ensure-generated,
-brand-defaults) repairs them too.
+This is the ONE owner of both keys: brand_defaults no longer writes them.
+ensure_env_shared.py runs this right after brand_defaults in the mode its
+caller asks for -- read-only GATE by default, since ensure-env-shared is a
+prerequisite of read-only goals too (auth-check, a0-model-sync-check, ...);
+the funnel's secrets-ensure-generated asks for FIX.
 
 What it does, per key, in env.shared (the file compose reads first)
 - absent or empty -> recover a live value from a running container if one
@@ -42,9 +43,11 @@ shell wins over every --env-file and cannot be fixed by writing env.shared: an
 empty export is exit 1, a non-empty unusable one is a warning (compose accepts
 it; only Invidious is affected).
 
-Modes. Default = FIX (mint / recover / rotate), only for goals that (re)create
-containers -- rotating under a running container that keeps its old key would
-be silent env/container drift. ``--gate`` is for read-only goals (ps, logs,
+Modes. Default = FIX (mint / recover / rotate): only for goals that recreate
+INVIDIOUS (up-invidious) and for the funnel -- rotating under a running
+container that keeps its old key would be silent env/container drift.
+``--mint`` is for every other goal that (re)creates containers: it writes
+ABSENT keys only (so compose does not refuse), never rotates, warns on the rest. ``--gate`` is for read-only goals (ps, logs,
 down, stop): never writes, exits 1 only when compose will refuse, warns on the
 rest. ``--check`` reports every problem without writing (secrets-ensure-check).
 FIX holds the per-directory env write lock (``env_write_lock``) so ``make -j``
@@ -147,7 +150,8 @@ def _gate(env_path: Path) -> int:
 
 
 def run(env_path: Path, *, mode: str = "fix", registry: Optional[str] = None, probe=None) -> int:
-    """mode: fix (mint/recover/rotate), check (report everything), gate (read-only, fatal only)."""
+    """mode: fix (mint/recover/rotate), mint (absent keys only; never rotates),
+    check (report everything), gate (read-only, fatal only)."""
     if not env_path.exists():
         # A fresh checkout: ensure-env-shared / env-setup / the funnel create it.
         # Writing a file here would stop ensure-env-shared seeding the template.
@@ -158,7 +162,7 @@ def run(env_path: Path, *, mode: str = "fix", registry: Optional[str] = None, pr
         with env_write_lock(env_path, shared=True):
             return _gate(env_path) if mode == "gate" else _check(env_path)
     with env_write_lock(env_path):
-        return _fix(env_path, registry=registry, probe=probe)
+        return _fix(env_path, registry=registry, probe=probe, rotate=(mode == "fix"))
 
 
 def _shell_findings() -> list:
@@ -199,7 +203,7 @@ def _check(env_path: Path) -> int:
     return EXIT_FINDINGS if findings else EXIT_OK
 
 
-def _fix(env_path: Path, *, registry: Optional[str], probe) -> int:
+def _fix(env_path: Path, *, registry: Optional[str], probe, rotate: bool = True) -> int:
     findings = _shell_findings()
     values = {k: _be.read_env_value(k, env_path) for k in KEYS}
     todo = {k: problem(k, values[k], values) for k in KEYS}
@@ -223,7 +227,15 @@ def _fix(env_path: Path, *, registry: Optional[str], probe) -> int:
     values = {k: _be.read_env_value(k, env_path) for k in KEYS}
     for key in KEYS:
         why = problem(key, values[key], values)
-        if why and why != "missing":
+        if why and why != "missing" and not rotate:
+            # MINT mode: this goal does not (re)create Invidious, so a rotation
+            # here would leave running invidious/companion containers on the old
+            # key -- silent drift. Only up-invidious and the funnel rotate.
+            print(
+                f"invidious-keys: WARNING {key} is {why}; left as is by this goal "
+                "(rotated by make -C pmoves up-invidious or make -C pmoves secrets-funnel)"
+            )
+        elif why and why != "missing":
             _rotate(key, env_path, registry)
             values = {k: _be.read_env_value(k, env_path) for k in KEYS}
             print(f"invidious-keys: {key} rotated ({why})")
@@ -265,6 +277,10 @@ def main(argv=None) -> int:
     group = parser.add_mutually_exclusive_group()
     group.add_argument("--check", action="store_true", help="report every problem; never write (exit 1 on any)")
     group.add_argument(
+        "--mint", action="store_true",
+        help="goals that recreate containers but not Invidious: write ABSENT keys only, never rotate",
+    )
+    group.add_argument(
         "--gate", action="store_true",
         help="read-only goals (ps/logs/down/stop): never write; exit 1 only if compose will refuse",
     )
@@ -285,11 +301,17 @@ def main(argv=None) -> int:
             exec_cmd = exec_cmd[1:]
         argv = argv[: at + 1]
     args = parser.parse_args(argv)
-    mode = "check" if args.check else "gate" if args.gate else "fix"
+    mode = "check" if args.check else "gate" if args.gate else "mint" if args.mint else "fix"
+    if args.exec_flag:
+        # Keep compose's stdout clean (pipes, grep, --format json): every message
+        # this tool prints goes to stderr when it is about to exec a command.
+        sys.stdout = sys.stderr
     try:
         rc = run(args.env_file, mode=mode, registry=args.registry)
-    except (OSError, ValueError) as exc:
-        print(f"invidious-keys: COULD-NOT-MEASURE: {type(exc).__name__}")
+    except Exception:  # noqa: BLE001 - closed message by design
+        # Env files hold secrets; an exception message or traceback could quote
+        # one. Report a fixed message and exit 3 (could not measure) instead.
+        print("invidious-keys: COULD-NOT-MEASURE: internal error (no detail by design)")
         rc = EXIT_COULD_NOT_MEASURE
     if args.exec_flag:
         if rc == EXIT_FINDINGS:

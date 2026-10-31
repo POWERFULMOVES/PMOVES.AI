@@ -166,11 +166,16 @@ SERVICE_URL = $(PYTHON) tools/service_health_check.py $(1) --port $(2)
 LOAD_ENV_SHARED := . ./scripts/with-env.sh
 export LOAD_ENV_SHARED
 
+# Invidious key preflight mode for this prerequisite: gate (read-only, never
+# blocks) unless a target opts in with a target-specific value -- the funnel's
+# secrets-ensure-generated sets fix. See tools/ensure_env_shared.py.
+ENSURE_ENV_INVIDIOUS_KEYS ?= gate
+
 .PHONY: ensure-env-shared
 ensure-env-shared:
-	@$(PYTHON) tools/ensure_env_shared.py --env-file "$(ENV_SHARED_FILE)" --template "$(ENV_SHARED_TEMPLATE)" || \
-	python tools/ensure_env_shared.py --env-file "$(ENV_SHARED_FILE)" --template "$(ENV_SHARED_TEMPLATE)" || \
-	py -3 tools/ensure_env_shared.py --env-file "$(ENV_SHARED_FILE)" --template "$(ENV_SHARED_TEMPLATE)"
+	@$(PYTHON) tools/ensure_env_shared.py --env-file "$(ENV_SHARED_FILE)" --template "$(ENV_SHARED_TEMPLATE)" --invidious-keys $(ENSURE_ENV_INVIDIOUS_KEYS) || \
+	python tools/ensure_env_shared.py --env-file "$(ENV_SHARED_FILE)" --template "$(ENV_SHARED_TEMPLATE)" --invidious-keys $(ENSURE_ENV_INVIDIOUS_KEYS) || \
+	py -3 tools/ensure_env_shared.py --env-file "$(ENV_SHARED_FILE)" --template "$(ENV_SHARED_TEMPLATE)" --invidious-keys $(ENSURE_ENV_INVIDIOUS_KEYS)
 
 # -------- Launcher generator (registry-driven) -------------------------------
 # Source of truth: pmoves/configs/cli_tools.yaml :: pmoves_wrappers + 
@@ -3339,13 +3344,18 @@ channel-monitor-smoke: ## Verify channel-monitor HTTP endpoints
 	  done; \
 	'
 
-.PHONY: invidious-keys-preflight invidious-keys-gate invidious-keys-check
-invidious-keys-preflight: ## FIX mode: mint/recover/rotate Invidious keys in env.shared (idempotent; runs before goals that (re)create containers)
+.PHONY: invidious-keys-preflight invidious-keys-mint invidious-keys-gate invidious-keys-check
+invidious-keys-preflight: ## FIX: mint/recover/rotate Invidious keys in env.shared (runs before up-invidious, the only goal that recreates Invidious)
 	@# Exit 1 only when ${VAR:?} would fail compose anyway, so this can never
 	@# make a node worse than compose alone; 3 (could not measure) continues.
 	@# Holds the env write lock, so make -j cannot interleave it with the
-	@# ensure-env-shared prerequisite (which runs this same preflight under it).
+	@# ensure-env-shared prerequisite (which runs the preflight under it).
 	@$(PYTHON) tools/invidious_keys_preflight.py; rc=$$?; \
+	  if [ $$rc -eq 1 ]; then exit 1; \
+	  elif [ $$rc -ne 0 ]; then echo "invidious-keys: could not measure (exit $$rc) -- continuing; compose stays the final gate"; fi
+
+invidious-keys-mint: ## MINT: write ABSENT Invidious keys only, never rotate (before goals that recreate containers other than Invidious)
+	@$(PYTHON) tools/invidious_keys_preflight.py --mint; rc=$$?; \
 	  if [ $$rc -eq 1 ]; then exit 1; \
 	  elif [ $$rc -ne 0 ]; then echo "invidious-keys: could not measure (exit $$rc) -- continuing; compose stays the final gate"; fi
 
@@ -3361,24 +3371,30 @@ invidious-keys-check: ## Report-only Invidious key check, never writes (exit 0/1
 
 # Mesh compatibility. Compose interpolates every service, profile or not, so a
 # node that never runs Invidious still needs both keys or EVERY stack goal fails
-# on ${INVIDIOUS_*_KEY:?}. Only `make secrets-funnel` minted them, and no up-*
-# target runs the funnel. Attach a preflight to the stack goals named on this
+# on ${INVIDIOUS_*_KEY:?}. Attach a preflight to the stack goals named on this
 # make invocation -- the goals whose recipes interpolate docker-compose.yml
 # ($(DC)) or docker-compose.ui.yml (overlay-*):
-#   FIX  (may write env.shared): goals that (re)create containers.
-#   GATE (never writes):          read-only goals -- ps, logs, down, stop.
+#   FIX  (mint + rotate): up-invidious -- the only goal that recreates
+#        invidious + invidious-companion, so a rotation lands in both at once.
+#   MINT (absent keys only): every other goal that (re)creates containers.
+#        Rotating there would leave a running Invidious on the old key.
+#   GATE (never writes): read-only goals -- ps, logs, down, stop.
 # Other goals (tests, CI checks, secrets-*) are untouched. Only DEFINED targets
 # get a prerequisite: giving an unknown goal one would turn make's
 # "No rule to make target" error into a silent success.
-INVIDIOUS_KEYS_FIX_GOALS := $(filter up up-% update recreate-% rebuild-% restart-% overlay-up-full overlay-up-ui,$(MAKECMDGOALS))
+INVIDIOUS_KEYS_FIX_GOALS := $(filter up-invidious,$(MAKECMDGOALS))
+INVIDIOUS_KEYS_MINT_GOALS := $(filter-out up-invidious,$(filter up up-% update recreate-% rebuild-% restart-% overlay-up-full overlay-up-ui,$(MAKECMDGOALS)))
 INVIDIOUS_KEYS_GATE_GOALS := $(filter ps ps-% logs-% down down-% stop-% overlay-down,$(MAKECMDGOALS))
-ifneq ($(strip $(INVIDIOUS_KEYS_FIX_GOALS) $(INVIDIOUS_KEYS_GATE_GOALS)),)
+ifneq ($(strip $(INVIDIOUS_KEYS_MINT_GOALS) $(INVIDIOUS_KEYS_GATE_GOALS)),)
 INVIDIOUS_KEYS_DEFINED_TARGETS := $(shell sed -n 's/^\([A-Za-z0-9_.-][A-Za-z0-9_.-]*\):.*/\1/p' $(wildcard $(CURDIR)/Makefile $(CURDIR)/mk/*.mk))
-INVIDIOUS_KEYS_FIX_GOALS := $(filter $(INVIDIOUS_KEYS_DEFINED_TARGETS),$(INVIDIOUS_KEYS_FIX_GOALS))
+INVIDIOUS_KEYS_MINT_GOALS := $(filter $(INVIDIOUS_KEYS_DEFINED_TARGETS),$(INVIDIOUS_KEYS_MINT_GOALS))
 INVIDIOUS_KEYS_GATE_GOALS := $(filter $(INVIDIOUS_KEYS_DEFINED_TARGETS),$(INVIDIOUS_KEYS_GATE_GOALS))
 endif
 ifneq ($(strip $(INVIDIOUS_KEYS_FIX_GOALS)),)
 $(INVIDIOUS_KEYS_FIX_GOALS): invidious-keys-preflight
+endif
+ifneq ($(strip $(INVIDIOUS_KEYS_MINT_GOALS)),)
+$(INVIDIOUS_KEYS_MINT_GOALS): invidious-keys-mint
 endif
 ifneq ($(strip $(INVIDIOUS_KEYS_GATE_GOALS)),)
 $(INVIDIOUS_KEYS_GATE_GOALS): invidious-keys-gate

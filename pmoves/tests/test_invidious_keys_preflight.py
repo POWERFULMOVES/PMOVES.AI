@@ -160,19 +160,75 @@ def _goals(text, var):
     return text.split(f"{var} := $(filter ", 1)[1].split(",", 1)[0].split()
 
 
-def test_makefile_fix_only_on_goals_that_recreate_containers():
+def test_makefile_modes_match_what_each_goal_recreates():
     text = (PMOVES / "Makefile").read_text(encoding="utf-8")
-    fix, gate = _goals(text, "INVIDIOUS_KEYS_FIX_GOALS"), _goals(text, "INVIDIOUS_KEYS_GATE_GOALS")
+    assert "INVIDIOUS_KEYS_FIX_GOALS := $(filter up-invidious,$(MAKECMDGOALS))" in text
+    mint = text.split("INVIDIOUS_KEYS_MINT_GOALS := $(filter-out up-invidious,$(filter ", 1)[1].split(",", 1)[0].split()
+    gate = _goals(text, "INVIDIOUS_KEYS_GATE_GOALS")
     for goal in ("up", "up-%", "update", "recreate-%", "rebuild-%", "restart-%", "overlay-up-full", "overlay-up-ui"):
-        assert goal in fix and goal not in gate
+        assert goal in mint and goal not in gate
     for goal in ("ps", "ps-%", "logs-%", "down", "down-%", "stop-%", "overlay-down"):
-        assert goal in gate and goal not in fix
+        assert goal in gate and goal not in mint
     for goal in ("secrets-%", "test", "overlay-up-bus", "compose-split-check"):
-        assert goal not in fix and goal not in gate
+        assert goal not in mint and goal not in gate
     assert "$(INVIDIOUS_KEYS_FIX_GOALS): invidious-keys-preflight" in text
+    assert "$(INVIDIOUS_KEYS_MINT_GOALS): invidious-keys-mint" in text
     assert "$(INVIDIOUS_KEYS_GATE_GOALS): invidious-keys-gate" in text
-    gate_recipe = text.split("\ninvidious-keys-gate:", 1)[1].split("\n\n", 1)[0]
-    assert "invidious_keys_preflight.py --gate" in gate_recipe
+    recipe = lambda name: text.split(f"\n{name}:", 1)[1].split("\n\n", 1)[0]
+    assert "invidious_keys_preflight.py --gate" in recipe("invidious-keys-gate")
+    assert "invidious_keys_preflight.py --mint" in recipe("invidious-keys-mint")
+    # ensure-env-shared defaults to read-only; only the funnel opts into fix.
+    assert "ENSURE_ENV_INVIDIOUS_KEYS ?= gate" in text
+    assert recipe("ensure-env-shared").count("--invidious-keys $(ENSURE_ENV_INVIDIOUS_KEYS)") == 3
+    codex = (PMOVES / "mk" / "codex.mk").read_text(encoding="utf-8")
+    assert "secrets-ensure-generated: ENSURE_ENV_INVIDIOUS_KEYS := fix" in codex
+
+
+def test_ensure_env_shared_default_is_read_only_and_never_blocks(tmp_path, published):
+    """ensure-env-shared is a prerequisite of read-only goals (auth-check,
+    a0-model-sync-check, cf-pages-status, pmoves-ai-status): it must neither
+    rotate under running containers nor fail over keys those goals never use."""
+    import subprocess
+
+    text = "OTHER=keep\nINVIDIOUS_HMAC_KEY=short\nINVIDIOUS_COMPANION_KEY=ab-def_123456789\n"
+    for body in (text, "OTHER=keep\n"):  # invalid keys; missing keys
+        env = _env(tmp_path, body)
+        template = tmp_path / "template.example"
+        template.write_text("", encoding="utf-8")
+        r = subprocess.run(
+            [sys.executable, str(PMOVES / "tools" / "ensure_env_shared.py"),
+             "--env-file", str(env), "--template", str(template)],
+            capture_output=True, text=True, env=_hermetic_env(),
+        )
+        assert r.returncode == 0, r.stdout + r.stderr
+        after = env.read_text(encoding="utf-8")
+        for key in pf.KEYS:  # brand_defaults may add its own keys; ours are untouched
+            assert [l for l in after.splitlines() if l.startswith(key + "=")] == [
+                l for l in body.splitlines() if l.startswith(key + "=")
+            ]
+
+
+def test_mint_mode_writes_absent_keys_and_never_rotates(tmp_path, published):
+    env = _env(tmp_path, "OTHER=keep\n")
+    assert pf.run(env, mode="mint", registry=REGISTRY, probe=Probe()) == 0
+    assert _usable(env)
+    text = f"INVIDIOUS_HMAC_KEY={LIVE_HMAC}\nINVIDIOUS_COMPANION_KEY={PUBLISHED}\n"
+    env = _env(tmp_path, text)
+    assert pf.run(env, mode="mint", registry=REGISTRY, probe=Probe()) == 0
+    assert env.read_text(encoding="utf-8") == text  # published, but this goal does not recreate Invidious
+
+
+def test_main_catch_all_is_exit_3_with_a_closed_message(tmp_path, monkeypatch, capsys):
+    secret = "a1b2c3d4e5f60718"
+
+    def boom(*a, **k):
+        raise RuntimeError("leaks " + secret)
+
+    monkeypatch.setattr(pf, "run", boom)
+    assert pf.main(["--env-file", str(tmp_path / "x")]) == 3
+    out = capsys.readouterr()
+    assert secret not in out.out + out.err and "Traceback" not in out.out + out.err
+    assert "COULD-NOT-MEASURE" in out.out
 
 
 @pytest.mark.parametrize(
@@ -323,8 +379,11 @@ TEMPLATE = (
 )
 
 
-def _real_ensure_env_shared(tmp_path, text):
-    """Run the REAL ensure-env-shared step: ensure_env_shared.py -> brand_defaults -> preflight."""
+def _real_ensure_env_shared(tmp_path, text, mode="fix"):
+    """Run the REAL ensure-env-shared step: ensure_env_shared.py -> brand_defaults -> preflight.
+
+    mode "fix" is what the funnel's secrets-ensure-generated passes; the default
+    for every other caller is "gate" (read-only)."""
     import subprocess
 
     env = _env(tmp_path, text)
@@ -332,7 +391,7 @@ def _real_ensure_env_shared(tmp_path, text):
     template.write_text("", encoding="utf-8")
     r = subprocess.run(
         [sys.executable, str(PMOVES / "tools" / "ensure_env_shared.py"),
-         "--env-file", str(env), "--template", str(template)],
+         "--env-file", str(env), "--template", str(template), "--invidious-keys", mode],
         capture_output=True, text=True, env=_hermetic_env(),
     )
     return env, r

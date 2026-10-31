@@ -70,19 +70,26 @@ ensure_compose() {
 # make), so run the same preflight make uses, by path, then exec compose with the
 # keys exported from env.shared: this script relies on compose's default dotenv
 # lookup in the project directory, which is not the file the preflight
-# maintains. Values reach only compose's environment, never the output. Mode
-# "fix" (mint/rotate) for up, which recreates containers; "gate" (read-only) for
-# down/logs/ps, so a status command never changes a key under running
-# containers. Preflight exit 1 means compose would refuse anyway and stops here
-# with the fix; no python3 falls back to plain compose (the final gate).
+# maintains. Values reach only compose's environment, never the output; the
+# preflight's own messages go to stderr, so compose's stdout stays parseable.
+#   mint  `up` -- writes ABSENT keys only. The default profiles never start
+#         Invidious, so a rotation here would strand a running Invidious on
+#         the old key; up-invidious / the funnel rotate.
+#   gate  down / logs -- read-only; exit 1 only when compose would refuse.
+#   env   the health loop's per-service ps -- gate already reported once, so
+#         just export the keys and stay quiet.
+# Preflight exit 1 means compose would refuse anyway and stops here with the
+# fix; no python3 falls back to plain compose (the final gate).
 keys_compose() {
   local mode="$1"; shift
   local preflight="${PMOVES_DIR}/tools/invidious_keys_preflight.py"
   if command -v python3 >/dev/null 2>&1 && [ -f "${preflight}" ]; then
-    local gate=()
-    if [ "${mode}" = "gate" ]; then gate=(--gate); fi
-    python3 "${preflight}" ${gate[@]+"${gate[@]}"} --env-file "${PMOVES_DIR}/env.shared" \
-      --exec -- "${DOCKER_COMPOSE_BIN[@]}" "$@"
+    case "${mode}" in
+      mint) python3 "${preflight}" --mint --env-file "${PMOVES_DIR}/env.shared" --exec -- "${DOCKER_COMPOSE_BIN[@]}" "$@" ;;
+      gate) python3 "${preflight}" --gate --env-file "${PMOVES_DIR}/env.shared" --exec -- "${DOCKER_COMPOSE_BIN[@]}" "$@" ;;
+      env)  python3 "${preflight}" --gate --env-file "${PMOVES_DIR}/env.shared" --exec -- "${DOCKER_COMPOSE_BIN[@]}" "$@" 2>/dev/null ;;
+      *) echo "keys_compose: unknown mode ${mode}" >&2; return 2 ;;
+    esac
   else
     "${DOCKER_COMPOSE_BIN[@]}" "$@"
   fi
@@ -134,6 +141,16 @@ run_secrets_funnel() {
 
 cmd_health() {
   echo "  Checking service health..."
+  # Report the Invidious key state ONCE, visibly, before the loop below pipes
+  # compose's output into grep.
+  if command -v python3 >/dev/null 2>&1 && [ -f "${PMOVES_DIR}/tools/invidious_keys_preflight.py" ]; then
+    local keys_rc=0
+    python3 "${PMOVES_DIR}/tools/invidious_keys_preflight.py" --gate --env-file "${PMOVES_DIR}/env.shared" || keys_rc=$?
+    if [ "${keys_rc}" -eq 1 ]; then
+      echo "  Compose would refuse every service (Invidious keys missing); container state unknown." >&2
+      return 1
+    fi
+  fi
   local pass=0 fail=0 skip=0
   for entry in "${HEALTH_ENDPOINTS[@]}"; do
     local svc="${entry%%:*}"
@@ -147,7 +164,7 @@ cmd_health() {
       ((pass++)) || true
     else
       # Check if container is even running
-      if keys_compose gate -f "${COMPOSE_FILE}" -p "${PROJECT_NAME}" ps --format json 2>/dev/null | grep -q "\"${svc}\""; then
+      if keys_compose env -f "${COMPOSE_FILE}" -p "${PROJECT_NAME}" ps --format json 2>/dev/null | grep -q "\"${svc}\""; then
         echo "    [FAIL] ${svc} (${url})"
         ((fail++)) || true
       else
@@ -171,7 +188,7 @@ cmd_up() {
   run_secrets_funnel
 
   echo "  Launching containers..."
-  keys_compose fix -f "${COMPOSE_FILE}" -p "${PROJECT_NAME}" up -d
+  keys_compose mint -f "${COMPOSE_FILE}" -p "${PROJECT_NAME}" up -d
 
   echo ""
   echo "  Waiting 10s for services to initialize..."
