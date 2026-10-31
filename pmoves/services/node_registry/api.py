@@ -10,6 +10,7 @@ from datetime import datetime
 from typing import Any, Optional
 
 from .registry import NodeRegistry
+from .storage import naive_utc
 from ..resource_detector.models import NodeCapabilities, NodeHeartbeat
 
 logger = logging.getLogger(__name__)
@@ -182,10 +183,19 @@ class NodeRegistryAPI:
                 )
 
             # Create NodeHeartbeat from payload
+            #
+            # WHY THE NORMALISATION (F4): a client that sends a timestamp
+            # with an offset ("...+00:00" / "Z") produced an AWARE
+            # datetime, and the store's naive clock cannot be subtracted
+            # from an aware one -- `list_online()` raised TypeError and the
+            # whole listing died. Every value that enters the store is
+            # naive, so this path normalises too.
             heartbeat = NodeHeartbeat(
                 node_id=payload["node_id"],
-                timestamp=datetime.fromisoformat(
-                    payload.get("timestamp", datetime.now().isoformat())
+                timestamp=naive_utc(
+                    datetime.fromisoformat(
+                        payload.get("timestamp", datetime.now().isoformat())
+                    )
                 ),
                 cpu_utilization=payload.get("cpu_utilization", 0.0),
                 memory_utilization=payload.get("memory_utilization", 0.0),

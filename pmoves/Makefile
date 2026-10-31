@@ -1722,14 +1722,15 @@ nats-streams-init: ## Idempotently create JetStream streams via the nats-init si
 	@bash scripts/nats/init_streams.sh
 	@echo "✅ NATS stream init complete"
 
-nats-streams-validate: ## Assert the 8 expected streams exist (CI-runnable)
+nats-streams-validate: ## Assert the expected streams exist with the expected subjects + retention (CI-runnable)
 	@echo "🔍 Validating NATS JetStream streams..."
 	@. ./scripts/with-env.sh 2>/dev/null || true; \
 	  NATS_URL="$${NATS_URL:-nats://nats:pmoves@nats:4222}"; \
-	  docker run --rm --network "$(NATS_DOCKER_NETWORK)" --entrypoint /bin/sh "$(NATS_BOX_IMAGE)" \
-	    -c "nats -s \"$$NATS_URL\" stream ls -n" > /tmp/nats_streams_actual.txt 2>&1
-	@uv run --script scripts/nats/validate_streams.py /tmp/nats_streams_actual.txt
-	@rm -f /tmp/nats_streams_actual.txt
+	  docker run --rm --network "$(NATS_DOCKER_NETWORK)" -e NATS_URL="$$NATS_URL" --entrypoint /bin/sh "$(NATS_BOX_IMAGE)" \
+	    -c 'for name in $$(nats -s "$$NATS_URL" stream ls -n); do nats -s "$$NATS_URL" stream info "$$name" -j; done' \
+	    > /tmp/nats_streams_actual.json
+	@uv run --script scripts/nats/validate_streams.py /tmp/nats_streams_actual.json
+	@rm -f /tmp/nats_streams_actual.json
 
 nats-streams-list: ## List current JetStream streams (ad-hoc)
 	@. ./scripts/with-env.sh 2>/dev/null || true; \
