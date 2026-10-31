@@ -73,6 +73,8 @@ import time
 from pathlib import Path
 from typing import Iterator
 
+import pytest
+
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
 # The mutated source files, one per finding.
@@ -160,7 +162,28 @@ F4_FIXED_CHMOD = """    if hasattr(os, "fchmod"):
 # AttributeError traceback instead of its own `result=` line.
 F4_DEFECTIVE_CHMOD = """    os.fchmod(fd, mode)"""
 
-F4_KILLED_TEST = "test_env_local_key_never_emits_a_raw_traceback"
+# THE KILL SIGNAL MUST BE PLATFORM-INDEPENDENT.
+#
+# The first choice was the BEHAVIOURAL test
+# (`test_env_local_key_never_emits_a_raw_traceback`), and it was WRONG: on
+# POSIX `os.fchmod` EXISTS, so the defective tool works perfectly there and
+# the mutation SURVIVES. A kill that only bites on Windows is not a kill on
+# the CI that runs the ratchet -- it reported a live defect as a passing
+# lane, which is the exact failure this harness exists to prevent.
+#
+# The defect is STRUCTURAL: "an unguarded POSIX-only syscall is reachable".
+# That is true on every platform, and the AST ratchet states it as a rule.
+# So the structural test is the kill signal, and the behavioural test is
+# kept as the Windows-only proof that the raw traceback really comes back
+# (see the case below).
+F4_KILLED_TEST = "test_env_local_key_has_no_unguarded_posix_only_os_reference"
+
+# The Windows-only, end-to-end proof: with the mutation in place the tool
+# really does print a raw traceback on the operator's platform. It cannot be
+# the primary signal -- on POSIX the defective code is CORRECT code, so
+# there is nothing to kill -- but it is the symptom the operator actually
+# saw, and it is worth proving on the platform that has the symptom.
+F4_WINDOWS_BEHAVIOURAL_TEST = "test_env_local_key_never_emits_a_raw_traceback"
 
 # --------------------------------------------------------------------------
 # F5 -- the fleet image rebuild trigger
@@ -738,7 +761,12 @@ def test_mutation_the_env_local_key_posix_syscall_is_killed() -> None:
     instead of its own ``result=`` line.
 
     The test that must fail is
-    ``test_env_local_key_never_emits_a_raw_traceback``.
+    ``test_env_local_key_has_no_unguarded_posix_only_os_reference``: the
+    defect is STRUCTURAL -- an unguarded POSIX-only syscall is reachable --
+    and a structural defect is visible on every platform. The behavioural
+    test cannot carry this kill, because on POSIX the defective tool is
+    CORRECT code: ``os.fchmod`` exists there, the mutation survives, and the
+    harness would report a live defect as a passing lane.
     """
     killed, output = _mutation_case(
         ENV_LOCAL_KEY,
@@ -750,6 +778,40 @@ def test_mutation_the_env_local_key_posix_syscall_is_killed() -> None:
     assert killed, (
         "the Windows POSIX ratchet did NOT catch the unguarded fchmod -- the "
         f"tool can stack-trace on the operator's platform again.\n{output}"
+    )
+
+
+@pytest.mark.skipif(
+    os.name != "nt",
+    reason=(
+        "the raw-traceback symptom is Windows-only: on POSIX `os.fchmod` "
+        "exists, so the mutated tool behaves correctly and there is nothing "
+        "to kill. The platform-independent kill is the structural ratchet "
+        "case above."
+    ),
+)
+def test_mutation_the_env_local_key_posix_syscall_breaks_the_tool_on_windows() -> None:
+    """On the operator's own platform, the mutation MUST break the tool.
+
+    The structural case proves the defect is REACHABLE. This one proves what
+    it does when it fires: the tool dies with a raw Python traceback instead
+    of its own ``result=`` line -- which is exactly what the operator saw
+    before the lane fixed it.
+
+    It is Windows-only by construction, not by convenience: on POSIX the
+    unguarded ``os.fchmod`` is CORRECT code. Skipping it there is honest;
+    pretending it would fail there would not be.
+    """
+    killed, output = _mutation_case(
+        ENV_LOCAL_KEY,
+        F4_FIXED_CHMOD,
+        F4_DEFECTIVE_CHMOD,
+        select=F4_WINDOWS_BEHAVIOURAL_TEST,
+        expected_failing_test=F4_WINDOWS_BEHAVIOURAL_TEST,
+    )
+    assert killed, (
+        "the unguarded fchmod did NOT make the tool print a raw traceback on "
+        f"Windows -- the operator-visible symptom is not actually caught.\n{output}"
     )
 
 

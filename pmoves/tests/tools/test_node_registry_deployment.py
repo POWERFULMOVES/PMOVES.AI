@@ -106,8 +106,10 @@ from __future__ import annotations
 import ast
 import os
 import re
+import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -443,33 +445,46 @@ def _stack_port_claimants() -> dict[int, set[str]]:
     return claimants
 
 
-def _stub_env(stub_dir: Path) -> dict[str, str]:
-    """A PATH whose first entry satisfies the docker guard's is_stub_dir().
+def _docker_guard():
+    """The session's docker-guard module.
 
-    `pmoves/tests/conftest.py` installs a guard that REFUSES any make spawn
-    unless the PATH the child will search starts with a marked stub dir --
-    make runs its recipes' docker calls where the guard cannot see them, and
-    executes every `$(MAKE)` line even under -n.
-
-    The sanctioned fixtures (`stub_tool_path`, `stub_docker_path`) SKIP on
-    Windows (`_require_posix_stubs`), and a ratchet that is skipped on the
-    operator's platform is not load-bearing. So the stub dir is built here
-    instead: the guard requires an absolute dir holding the marker file and
-    one recorder file per STUB_REQUIRED tool, each a regular non-symlink
-    file carrying the recorder header.
-
-    The recorders never EXECUTE -- `make -n` runs no recipe -- so their
-    POSIX-sh shebangs are irrelevant on Windows, where `os.access(X_OK)` is
-    true for any existing file.
+    `pmoves/tests/conftest.py` loads it under this module name and installs it
+    process-wide, so this returns the SAME module the guard is enforcing with.
     """
-    stub_dir.mkdir(parents=True, exist_ok=True)
-    (stub_dir / ".pmoves-test-stub").write_text("", encoding="utf-8")
-    header = "# pmoves test stub (pmoves/tests/_destructive_docker_guard.py)\n"
-    for tool in ("docker", "docker-compose", "supabase"):
-        (stub_dir / tool).write_text(header, encoding="utf-8")
-    env = os.environ.copy()
-    env["PATH"] = str(stub_dir) + os.pathsep + env.get("PATH", "")
-    return env
+    name = "pmoves_tests_destructive_docker_guard"
+    if name in sys.modules:
+        return sys.modules[name]
+    import importlib.util
+
+    guard_file = Path(__file__).resolve().parents[1] / "_destructive_docker_guard.py"
+    spec = importlib.util.spec_from_file_location(name, guard_file)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def _make_plan_env(stub_dir: Path) -> dict[str, str]:
+    """A PATH the docker guard accepts for a `make` spawn.
+
+    THE SANCTIONED HELPER IS `build_stub_env`, NOT A HAND-ROLLED STUB DIR.
+
+    The guard's `is_stub_dir()` requires each recorder to be EXECUTABLE --
+    `_is_recorder()` tests `os.access(path, os.X_OK)`. A file Python wrote is
+    0644, and `os.access(..., X_OK)` reports that as executable on WINDOWS
+    (where `X_OK` is a no-op on a regular file) and as NOT executable on
+    LINUX. So a hand-rolled stub dir passed on the operator's platform and
+    was REFUSED on CI, where the guard raised `DestructiveDockerCallBlocked`
+    and this test failed for a reason that had nothing to do with
+    node-registry. `build_stub_env` chmods 0o755, which is correct on both.
+
+    `stub_make=False` is required, and the reason is the opposite one: the
+    REAL make must run, because `make -n` printing the recipe IS the
+    assertion. docker/docker-compose/supabase still resolve to recorders, and
+    the node-registry recipe carries no `$(MAKE)`, so `-n` runs nothing.
+    """
+    return dict(_docker_guard().build_stub_env(stub_dir, stub_make=False))
 
 
 # --------------------------------------------------------------------------
@@ -642,8 +657,8 @@ def test_node_registry_make_target_is_reachable() -> None:
         "bring-up, so `make up-model-management` still would not start it"
     )
 
-    stub_dir = Path(os.environ.get("TEMP", "/tmp")) / "pmoves-node-registry-stub"
-    env = _stub_env(stub_dir)
+    stub_dir = Path(tempfile.gettempdir()) / "pmoves-node-registry-stub"
+    env = _make_plan_env(stub_dir)
     try:
         proc = subprocess.run(
             ["make", "-C", str(PMOVES_DIR), "-n", "up-node-registry"],
@@ -653,8 +668,6 @@ def test_node_registry_make_target_is_reachable() -> None:
             timeout=120,
         )
     finally:
-        import shutil
-
         shutil.rmtree(stub_dir, ignore_errors=True)
     assert proc.returncode == 0, (
         f"`make -C pmoves -n up-node-registry` failed:\n{proc.stdout}\n{proc.stderr}"
