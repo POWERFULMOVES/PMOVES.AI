@@ -648,7 +648,7 @@ def test_an_explicit_client_profile_is_honoured_for_any_client(tmp_path: Path):
     )
 
 
-def test_the_rendered_roster_is_created_owner_only(tmp_path: Path):
+def test_the_rendered_roster_is_created_owner_only(tmp_path: Path, monkeypatch):
     """Round-2: the secret-grade mode must be a BIRTHRIGHT, not an afterthought.
 
     `write_text()` opens with the default umask and only got 0o600
@@ -670,6 +670,21 @@ def test_the_rendered_roster_is_created_owner_only(tmp_path: Path):
     process-global). The fixed path passes because it asks for 0o600
     EXPLICITLY; the defective path then produces 0o644 and the assertion
     fails, in every environment.
+
+    WHY THE BIRTH MODE IS ASSERTED, NOT ONLY THE FINAL MODE. The generator
+    ALSO runs `os.chmod(output_path, 0o600)` after the write, so the FINAL
+    mode is 0o600 on BOTH the fixed and the defective path -- an assertion
+    on the final mode alone is structurally blind to the world-readable
+    WINDOW between creation and that chmod. It is exactly why M9 was
+    UNKILLABLE: the suite agreed with the defect.
+
+    So the mode the file was BORN with is observed directly, through a
+    wrapper around `os.chmod`: the wrapper records the mode the file has
+    at the moment the generator asks to tighten it -- which is the last
+    instant of the window -- and then delegates to the real `os.chmod`.
+    The recorded mode must be 0o600, and a birth mode must have been
+    observed at all: a generator that never chmods would leave the
+    assertion vacuous, and "no observation" is a FAILURE, not a pass.
     """
     output = tmp_path / "mcp.json"
     if os.name == "nt":
@@ -691,7 +706,21 @@ def test_the_rendered_roster_is_created_owner_only(tmp_path: Path):
 
     import stat
 
+    # The mode the roster has RIGHT BEFORE the generator tightens it.
+    observed: list[tuple[str, int]] = []
+    real_chmod = os.chmod
+
+    def recording_chmod(path, mode, *args, **kwargs):
+        """Record the mode the file has NOW, then tighten it for real."""
+        try:
+            current = stat.S_IMODE(os.stat(path).st_mode)
+        except OSError:
+            current = -1  # the file was not there to be tightened
+        observed.append((os.fspath(path), current))
+        return real_chmod(path, mode, *args, **kwargs)
+
     previous_umask = os.umask(0o022)
+    monkeypatch.setattr(os, "chmod", recording_chmod)
     try:
         gen.write_client_config(
             "minimax",
@@ -704,8 +733,24 @@ def test_the_rendered_roster_is_created_owner_only(tmp_path: Path):
         )
     finally:
         os.umask(previous_umask)
+        monkeypatch.undo()
 
     assert output.exists()
+
+    target = os.path.normcase(str(output))
+    births = [mode for path, mode in observed if os.path.normcase(path) == target]
+    assert births, (
+        "the generator never chmod'ed the roster, so the mode it was BORN "
+        "with was never observed -- the assertion below would be vacuous"
+    )
+    assert births[0] == 0o600, (
+        "the roster was born "
+        f"{oct(births[0])} instead of owner-only (0o600): it was "
+        "world-readable for the window between creation and the chmod that "
+        "follows it"
+    )
+
+    # And it is still owner-only once the generator is done with it.
     assert stat.S_IMODE(output.stat().st_mode) == 0o600
 
 

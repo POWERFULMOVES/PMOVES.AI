@@ -40,6 +40,30 @@ the exact defect each finding named:
          alias-tolerant check would certify it, but the planner reads the
          canonical names only -- the mesh would be blind to an app the
          registry lists.
+  M8  the COMPUTE subject list goes back to the space-separated form
+      -> the pinned CLI happens to split on whitespace as well, so this is
+         NOT "the old form was broken"; it is the loss of the CANONICAL,
+         version-stable list form the validator reads back.
+  M9  the registry asks for the lowercase stream name again
+      -> `stream="compute"` while init_streams.sh creates `COMPUTE`:
+         JetStream stream names are case-sensitive, so the subscribe raises
+         and the registry falls back to core NATS (R8a).
+  M10 the JetStream subscription is never tracked
+      -> it is not appended to `_subscriptions`, so `stop()` leaves it
+         alive and it leaks on every restart.
+  M11 the registry stops normalising an aware announcement timestamp
+      -> `datetime.fromisoformat` returns an aware datetime, the store's
+         naive clock cannot be subtracted from it, and `list_online()`
+         raises TypeError.
+  M12 the HTTP heartbeat endpoint stops normalising its timestamp
+      -> the same aware/naive crash, through the other producer of a
+         heartbeat timestamp.
+  M13 the validator reads only the FIRST JSON object of the capture
+      -> `json.loads` on a concatenated capture: the second stream is
+         invisible, so a missing stream is never reported.
+  M14 the validator compares the subject list as an ORDERED tuple
+      -> the guard rejects a stream that carries exactly the expected
+         subjects in a different order (JetStream promises no order).
 
 Run:
   python -m pytest pmoves/tests/tools/test_mesh_node_compatibility_mutation_kill.py -v
@@ -60,9 +84,11 @@ TEST_FILE = "pmoves/tests/tools/test_mesh_node_compatibility.py"
 NODE_REGISTRY_DIR = REPO_ROOT / "pmoves" / "services" / "node_registry"
 NODE_REGISTRY_KEBAB_DIR = REPO_ROOT / "pmoves" / "services" / "node-registry"
 REGISTRY_PY = NODE_REGISTRY_DIR / "registry.py"
+REGISTRY_API_PY = NODE_REGISTRY_DIR / "api.py"
 WORK_MARSHALING_INIT = REPO_ROOT / "pmoves" / "services" / "work_marshaling" / "__init__.py"
 VLLM_MAIN = REPO_ROOT / "pmoves" / "services" / "vllm_orchestrator" / "main.py"
 INIT_STREAMS = REPO_ROOT / "pmoves" / "scripts" / "nats" / "init_streams.sh"
+VALIDATE_STREAMS = REPO_ROOT / "pmoves" / "scripts" / "nats" / "validate_streams.py"
 CURATED_ENTRY = (
     REPO_ROOT / "pmoves" / "configs" / "pinokio-apps" / "curated" / "crush.yaml"
 )
@@ -135,11 +161,55 @@ M4_OLD = "from pmoves.services.vllm_orchestrator import VLLMOrchestrator  # noqa
 M4_NEW = "from pmoves.services.vllm_orchestrator_typo import VLLMOrchestrator  # noqa: E402"
 
 # M5 -- the COMPUTE stream stops covering the mesh announcement family.
-M5_OLD = '  --subjects "mesh.node.announce.> compute.nodes.>" \\'
+M5_OLD = '  --subjects "mesh.node.announce.>,compute.nodes.>" \\'
 M5_NEW = '  --subjects "compute.nodes.>" \\'
 
 # M6 -- a curated entry disappears (applied as a file move, not a text edit --
 # the defect IS a missing entry, not a changed one).
+
+# M8 -- the COMPUTE subject list goes back to the space-separated form.
+# HONESTY NOTE: the pinned CLI splits on whitespace as well, so this does
+# NOT reproduce a broken stream -- it removes the CANONICAL, version-stable
+# list form that the validator reads back out of `stream info -j`.
+M8_OLD = '  --subjects "mesh.node.announce.>,compute.nodes.>" \\'
+M8_NEW = '  --subjects "mesh.node.announce.> compute.nodes.>" \\'
+
+# M9 -- the registry asks for the lowercase stream name again.
+M9_OLD = 'ANNOUNCE_STREAM = "COMPUTE"'
+M9_NEW = 'ANNOUNCE_STREAM = "compute"'
+
+# M10 -- the JetStream subscription is never tracked, so stop() leaks it.
+M10_OLD = "            self._subscriptions.append(js_sub)"
+M10_NEW = (
+    "            pass  # MUTATED: the JetStream subscription is never tracked"
+)
+
+# M11 -- the registry stops normalising an aware announcement timestamp.
+M11_OLD = '            return naive_utc(datetime.fromisoformat(raw.replace("Z", "+00:00")))'
+M11_NEW = '            return datetime.fromisoformat(raw.replace("Z", "+00:00"))'
+
+# M12 -- the HTTP heartbeat endpoint stops normalising its timestamp.
+M12_OLD = """                timestamp=naive_utc(
+                    datetime.fromisoformat(
+                        payload.get("timestamp", datetime.now().isoformat())
+                    )
+                ),"""
+M12_NEW = """                timestamp=datetime.fromisoformat(
+                    payload.get("timestamp", datetime.now().isoformat())
+                ),"""
+
+# M13 -- the validator reads only the FIRST JSON object of the capture.
+M13_OLD = "            payload, index = decoder.raw_decode(text, index)"
+M13_NEW = (
+    "            payload = json.loads(text)  # MUTATED: only the first object\n"
+    "            index = length"
+)
+
+# M14 -- the validator compares the subject list as an ORDERED tuple.
+M14_OLD = "        if set(row.subjects) != set(expected.subjects):"
+M14_NEW = (
+    "        if row.subjects != expected.subjects:  # MUTATED: ordered compare"
+)
 
 
 MUTATIONS = [
@@ -170,6 +240,55 @@ MUTATIONS = [
         M5_OLD,
         M5_NEW,
         "test_the_compute_stream_carries_the_announce_family",
+    ),
+    (
+        "M8",
+        INIT_STREAMS,
+        M8_OLD,
+        M8_NEW,
+        "test_the_compute_stream_declares_its_subjects_as_a_comma_separated_list",
+    ),
+    (
+        "M9",
+        REGISTRY_PY,
+        M9_OLD,
+        M9_NEW,
+        "test_the_registry_and_the_stream_script_name_the_same_stream",
+    ),
+    (
+        "M10",
+        REGISTRY_PY,
+        M10_OLD,
+        M10_NEW,
+        "test_the_registry_tears_down_its_jetstream_subscription",
+    ),
+    (
+        "M11",
+        REGISTRY_PY,
+        M11_OLD,
+        M11_NEW,
+        "test_every_datetime_that_enters_the_store_is_naive",
+    ),
+    (
+        "M12",
+        REGISTRY_API_PY,
+        M12_OLD,
+        M12_NEW,
+        "test_every_datetime_that_enters_the_store_is_naive",
+    ),
+    (
+        "M13",
+        VALIDATE_STREAMS,
+        M13_OLD,
+        M13_NEW,
+        "test_the_validator_reads_the_real_stream_info_contract",
+    ),
+    (
+        "M14",
+        VALIDATE_STREAMS,
+        M14_OLD,
+        M14_NEW,
+        "test_the_validator_matches_a_two_subject_stream_by_set",
     ),
 ]
 

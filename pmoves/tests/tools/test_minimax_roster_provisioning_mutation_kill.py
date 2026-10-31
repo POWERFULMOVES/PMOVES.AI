@@ -30,6 +30,15 @@
 #       -> the helper still exists and still works, but nothing calls it,
 #          so a regeneration resets `configured` / `builtin`.
 #
+#   M9  the roster is written with `write_text()` and chmod'd afterwards
+#       -> the file spends a window world-readable while carrying expanded
+#          tokens. This case was UNKILLABLE until the test asserted the
+#          BIRTH mode: the generator ALSO chmods the file to 0o600 after
+#          the write, so the FINAL mode is 0o600 on BOTH the fixed and the
+#          defective path -- an assertion on it certified the defect.
+#          The kill has to observe the mode the file was born with, which
+#          is what the `os.chmod` wrapper records.
+#
 # Run:
 #   python -m pytest pmoves/tests/tools/test_minimax_roster_provisioning_mutation_kill.py -v
 # ============================================================================
@@ -262,6 +271,20 @@ MUTATIONS = [
 ]
 
 
+# The assertion each mutation must fail ON -- not merely fail SOMEWHERE.
+#
+# "The suite went red and the named test is in the report" is not enough: a
+# test that ERRORS for an unrelated reason (a broken import, a TypeError in
+# a hook) is also "red" and would also "kill" the mutation, while proving
+# nothing about the defect. M9 is the case that needs this: it was
+# UNKILLABLE because the suite asserted the FINAL mode, and the final mode
+# is 0o600 on both the fixed and the defective path. The kill has to be the
+# BIRTH-mode assertion.
+EXPECTED_FAILURE_REASON = {
+    "M9": "the roster was born",
+}
+
+
 @pytest.mark.parametrize(
     "label,target,old,new,killing_test,posix_only",
     MUTATIONS,
@@ -284,6 +307,14 @@ def test_mutation_is_killed(label, target, old, new, killing_test, posix_only):
         f"{label}: the mutation was NOT killed -- {killing_test} still passed "
         f"with the defect reintroduced.\nSTDOUT:\n{mutated.stdout}"
     )
+
+    reason = EXPECTED_FAILURE_REASON.get(label)
+    if reason:
+        assert reason in mutated.stdout, (
+            f"{label}: the suite went red, but not on the expected assertion "
+            f"({reason!r}) -- the mutation was killed by an unrelated error, "
+            f"which proves nothing about the defect.\nSTDOUT:\n{mutated.stdout}"
+        )
 
     # And the suite is green again once the fix is restored -- a test that
     # fails for an unrelated reason would "kill" every mutation.

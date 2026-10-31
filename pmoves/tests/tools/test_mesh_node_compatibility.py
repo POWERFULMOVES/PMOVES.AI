@@ -39,10 +39,12 @@ import ast
 import importlib
 import importlib.util
 import inspect
+import json
+import re
 import sys
 import types
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import pytest
 
@@ -57,6 +59,10 @@ MESH_AGENT_MAIN = SERVICES / "mesh-agent" / "main.py"
 
 CURATED_DIR = REPO_ROOT / "pmoves" / "configs" / "pinokio-apps" / "curated"
 INIT_STREAMS = REPO_ROOT / "pmoves" / "scripts" / "nats" / "init_streams.sh"
+VALIDATE_STREAMS = REPO_ROOT / "pmoves" / "scripts" / "nats" / "validate_streams.py"
+REGISTRY_PY = NODE_REGISTRY_DIR / "registry.py"
+STORAGE_PY = NODE_REGISTRY_DIR / "storage.py"
+REGISTRY_API_PY = NODE_REGISTRY_DIR / "api.py"
 MESH_EXPOSURE_TEST = (
     SERVICES / "mesh_exposure" / "tests" / "test_app.py"
 )
@@ -172,6 +178,142 @@ def _mesh_exposure_expected_slugs() -> List[str]:
         "pmoves_mesh_exposure_test_app", MESH_EXPOSURE_TEST
     )
     return list(module.EXPECTED_CURATED_SLUGS)
+
+
+# ---------------------------------------------------------------------------
+# Helpers for the merge-gate findings (F1-F5)
+# ---------------------------------------------------------------------------
+
+
+def _dotted(node: ast.AST) -> str:
+    """The dotted source of an attribute/name chain, e.g. `self._js.subscribe`."""
+    parts: List[str] = []
+    current = node
+    while isinstance(current, ast.Attribute):
+        parts.append(current.attr)
+        current = current.value
+    if not isinstance(current, ast.Name):
+        return ""
+    parts.append(current.id)
+    return ".".join(reversed(parts))
+
+
+def _render(node: ast.AST) -> str:
+    """A readable rendering of the simple expressions used by these checks."""
+    if isinstance(node, ast.Name):
+        return node.id
+    if isinstance(node, ast.Constant):
+        return repr(node.value)
+    if isinstance(node, ast.Attribute):
+        return f"{_render(node.value)}.{node.attr}"
+    if isinstance(node, ast.Subscript):
+        return f"{_render(node.value)}[{_render(node.slice)}]"
+    if isinstance(node, ast.Call):
+        return f"{_render(node.func)}(...)"
+    if isinstance(node, ast.Tuple):
+        return "(" + ", ".join(_render(e) for e in node.elts) + ")"
+    return "<expr>"
+
+
+def _class_method(tree: ast.AST, class_name: str, method_name: str) -> ast.FunctionDef:
+    """The source of one method of one class, by name."""
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.ClassDef) or node.name != class_name:
+            continue
+        for item in node.body:
+            if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                if item.name == method_name:
+                    return item  # type: ignore[return-value]
+    raise AssertionError(f"{class_name}.{method_name} is not in the source")
+
+
+class _LoopResolver(ast.NodeVisitor):
+    """Maps the name of every `for` loop target to the tuple it iterates."""
+
+    def __init__(self) -> None:
+        self.loops: Dict[str, ast.AST] = {}
+
+    def visit_For(self, node: ast.For) -> None:
+        if isinstance(node.target, ast.Name):
+            self.loops[node.target.id] = node.iter
+        self.generic_visit(node)
+
+
+def _add_stream_blocks(script: str) -> Dict[str, List[str]]:
+    """The `add_stream <NAME> ...` blocks of init_streams.sh, by stream name.
+
+    A block is the `add_stream` line plus every continuation line (a
+    continuation is a line that ends with a backslash) -- which is how the
+    script itself is written.
+    """
+    blocks: Dict[str, List[str]] = {}
+    lines = script.splitlines()
+    index = 0
+    while index < len(lines):
+        stripped = lines[index].strip()
+        if not stripped.startswith("add_stream "):
+            index += 1
+            continue
+        name = stripped.split()[1]
+        body = [stripped]
+        index += 1
+        while body[-1].endswith("\\"):
+            body.append(lines[index].strip())
+            index += 1
+        blocks[name] = body
+    return blocks
+
+
+def _subjects_argument(block: List[str]) -> str:
+    """The raw `--subjects` value declared by an `add_stream` block."""
+    for line in block:
+        match = re.search(r'--subjects\s+"([^"]*)"', line)
+        if match:
+            return match.group(1)
+    raise AssertionError("the add_stream block declares no --subjects argument")
+
+
+def _core_subscribed_subjects(tree: ast.AST, subjects: Dict[str, str]) -> List[str]:
+    """Every subject the registry core-NATS subscribes to, fully resolved.
+
+    A subscription argument is either `SUBJECTS["key"]` (resolved through
+    the literal table) or the loop variable of a `for` over a tuple of such
+    keys (the announce fallback), which is resolved through the same table.
+    """
+    resolver = _LoopResolver()
+    resolver.visit(tree)
+
+    resolved: List[str] = []
+    for node in ast.walk(tree):
+        if not (
+            isinstance(node, ast.Call)
+            and _dotted(node.func) == "self._nc.subscribe"
+            and node.args
+        ):
+            continue
+        arg = node.args[0]
+        if isinstance(arg, ast.Subscript) and isinstance(arg.slice, ast.Constant):
+            key = arg.slice.value
+            assert isinstance(key, str)
+            resolved.append(subjects[key])
+        elif isinstance(arg, ast.Name):
+            iterated = resolver.loops.get(arg.id)
+            assert isinstance(iterated, ast.Tuple), (
+                "a core-NATS subscription is made on a name that is not "
+                f"resolved from the SUBJECTS table: {arg.id}"
+            )
+            for element in iterated.elts:
+                assert isinstance(element, ast.Subscript) and isinstance(
+                    element.slice, ast.Constant
+                ), "the subscribed subject is not a SUBJECTS[...] lookup"
+                key = element.slice.value
+                assert isinstance(key, str)
+                resolved.append(subjects[key])
+        else:
+            raise AssertionError(
+                f"unrecognised subscription subject expression: {_render(arg)}"
+            )
+    return sorted(resolved)
 
 
 # ---------------------------------------------------------------------------
@@ -572,13 +714,16 @@ def test_the_curated_entries_declare_the_canonical_exposure_layers() -> None:
 def test_the_compute_stream_carries_the_announce_family() -> None:
     """D5: the stream the registry asks for exists and covers its subjects.
 
-    The registry subscribes with `stream="compute"`; no stream named
-    `compute` was ever created, so every subscribe attempt failed and the
+    The registry subscribes with the stream named `COMPUTE`; no stream of
+    that name was ever created, so every subscribe attempt failed and the
     registry silently fell back to core NATS -- announcements published while
     it was down were gone for good.
+
+    JetStream stream names are case-sensitive, so the name in the registry
+    has to be the name init_streams.sh creates, byte for byte.
     """
     registry = importlib.import_module("pmoves.services.node_registry.registry")
-    assert registry.ANNOUNCE_STREAM == "compute"
+    assert registry.ANNOUNCE_STREAM == "COMPUTE"
 
     script = INIT_STREAMS.read_text(encoding="utf-8")
     assert "add_stream COMPUTE \\" in script, (
@@ -614,3 +759,404 @@ def test_the_registry_does_not_subscribe_to_a_subject_nobody_publishes() -> None
     assert node_registry.SUBJECTS["announce_v2"].startswith("mesh.node.announce.")
     assert node_registry.SUBJECTS["query"].startswith("compute.nodes.")
     assert node_registry.SUBJECTS["drain"].startswith("compute.nodes.")
+
+
+# ---------------------------------------------------------------------------
+# F1-F5 -- the merge-gate findings (2026-10-31)
+# ---------------------------------------------------------------------------
+
+
+def test_the_compute_stream_declares_its_subjects_as_a_comma_separated_list() -> None:
+    """F1: the COMPUTE subject list is comma-separated.
+
+    HONESTY NOTE FIRST, because the temptation to overstate the finding is
+    worse than the finding: the nats CLI splits a `--subjects` value on a
+    comma OR on whitespace, so the OLD space-separated form DID create a
+    two-subject stream against the pinned CLI (nats-box 0.14.5 / nats CLI
+    v0.1.5) and against v0.5.1 as well. The old form was NOT broken.
+
+    The comma form is the CANONICAL list form: it is unambiguous, it is
+    what the nats CLI documents, and it is the form the validator reads back
+    out of `nats stream info COMPUTE -j`. A subject may not contain a
+    space -- the server answers `invalid subject (10052)` -- so the
+    separator has to be one the CLI strips, and a comma is the only
+    separator that is never part of a subject.
+    """
+    script = INIT_STREAMS.read_text(encoding="utf-8")
+    blocks = _add_stream_blocks(script)
+    assert "COMPUTE" in blocks, (
+        "init_streams.sh does not create the COMPUTE stream the node "
+        "registry subscribes to"
+    )
+
+    subjects = _subjects_argument(blocks["COMPUTE"])
+    parts = subjects.split(",")
+    assert len(parts) == 2, (
+        "the COMPUTE stream must declare exactly two subject families in one "
+        f"comma-separated list; got {parts!r}"
+    )
+    assert set(parts) == {"mesh.node.announce.>", "compute.nodes.>"}, (
+        f"the COMPUTE stream declares the wrong subject families: {parts!r}"
+    )
+    assert all(part and part.strip() == part for part in parts), (
+        f"the comma-separated subject list has an empty or padded entry: {parts!r}"
+    )
+
+
+def test_the_registry_and_the_stream_script_name_the_same_stream() -> None:
+    """F2: the registry, init_streams.sh and the validator name ONE stream.
+
+    JetStream stream names are case-sensitive. The registry asked for
+    `stream="compute"` while init_streams.sh creates `COMPUTE`, so every
+    subscribe attempt failed and the registry silently fell back to core
+    NATS -- losing every announcement published while it was down.
+
+    The three sides are checked against EACH OTHER, not against a literal
+    repeated in this file: a name that is right in one place and wrong in
+    another is exactly the defect.
+    """
+    registry = importlib.import_module("pmoves.services.node_registry.registry")
+    validator = _load_module_by_path("pmoves_validate_streams_f2", VALIDATE_STREAMS)
+    script = INIT_STREAMS.read_text(encoding="utf-8")
+    blocks = _add_stream_blocks(script)
+
+    expected_names = {row.name for row in validator.EXPECTED_STREAMS}
+    assert set(blocks) == expected_names, (
+        "init_streams.sh and validate_streams.py disagree about which "
+        f"streams exist: {sorted(set(blocks) ^ expected_names)}"
+    )
+
+    assert registry.ANNOUNCE_STREAM in expected_names, (
+        f"the registry asks for {registry.ANNOUNCE_STREAM!r}, which no "
+        "declared stream provides"
+    )
+    assert registry.ANNOUNCE_STREAM in blocks, (
+        f"the registry asks for {registry.ANNOUNCE_STREAM!r}, which "
+        "init_streams.sh does not create"
+    )
+    assert registry.ANNOUNCE_STREAM == "COMPUTE", (
+        "the registry's stream name must be the uppercase name "
+        f"init_streams.sh creates: {registry.ANNOUNCE_STREAM!r} != 'COMPUTE'"
+    )
+
+    # Every stream's subject set is agreed by the creator and the guard.
+    for row in validator.EXPECTED_STREAMS:
+        script_subjects = set(_subjects_argument(blocks[row.name]).split(","))
+        assert script_subjects == set(row.subjects), (
+            f"{row.name}: init_streams.sh declares {sorted(script_subjects)} "
+            f"but validate_streams.py expects {sorted(row.subjects)}"
+        )
+
+
+def test_the_registry_holds_one_subscription_per_subject_family() -> None:
+    """F3: the announce family is subscribed ONCE, and there is no second
+    subscription for the heartbeat.
+
+    The mesh has no separate heartbeat subject -- it re-announces every
+    ANNOUNCE_SEC seconds, so the announcement IS the heartbeat. The
+    registry used to hold BOTH a JetStream subscription on the announce
+    family AND a core-NATS subscription on the same v1 subject, so every
+    announcement was delivered TWICE and the second copy existed only to
+    keep a "heartbeat" subject alive in the SUBJECTS table.
+
+    The assertion is an EXACT SET of what the registry subscribes to, so a
+    fifth subscription -- a heartbeat one -- fails this test.
+    """
+    registry = importlib.import_module("pmoves.services.node_registry.registry")
+    tree = ast.parse(REGISTRY_PY.read_text(encoding="utf-8"))
+
+    assert set(registry.SUBJECTS) == {
+        "announce",
+        "announce_v2",
+        "announce_family",
+        "query",
+        "response",
+        "drain",
+    }, (
+        "the registry's subject table changed shape: "
+        f"{sorted(registry.SUBJECTS)}"
+    )
+
+    jetstream_calls = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and _dotted(node.func) == "self._js.subscribe"
+    ]
+    assert len(jetstream_calls) == 1, (
+        "the registry must hold exactly ONE JetStream subscription -- the "
+        f"announce family; found {len(jetstream_calls)}"
+    )
+
+    core_subjects = _core_subscribed_subjects(tree, registry.SUBJECTS)
+    assert core_subjects == [
+        "compute.nodes.drain.v1",
+        "compute.nodes.query.v1",
+        "mesh.node.announce.v1",
+        "mesh.node.announce.v2",
+    ], (
+        "the registry's core-NATS subscriptions are not the expected four "
+        f"(the v1/v2 announce fallback, the query and the drain): {core_subjects}"
+    )
+
+
+def test_the_registry_tears_down_its_jetstream_subscription() -> None:
+    """F3: stop() unsubscribes the JetStream subscription too.
+
+    The JetStream subscription was never appended to `_subscriptions`, so
+    `stop()` tore down the core-NATS subscriptions and left the durable
+    consumer's subscription alive -- it leaked on every restart.
+    """
+    tree = ast.parse(REGISTRY_PY.read_text(encoding="utf-8"))
+
+    announce = _class_method(tree, "NodeRegistry", "_subscribe_announce")
+    bound: Optional[str] = None
+    for node in ast.walk(announce):
+        if not isinstance(node, ast.Assign):
+            continue
+        value = node.value
+        # `js_sub = await self._js.subscribe(...)` -- the call is wrapped.
+        if isinstance(value, ast.Await):
+            value = value.value
+        if not (
+            isinstance(value, ast.Call)
+            and _dotted(value.func) == "self._js.subscribe"
+        ):
+            continue
+        assert len(node.targets) == 1 and isinstance(node.targets[0], ast.Name)
+        bound = node.targets[0].id
+
+    assert bound is not None, (
+        "the JetStream subscription result is not bound to a name, so it "
+        "cannot be tracked"
+    )
+
+    appended = [
+        _render(call.args[0])
+        for call in ast.walk(announce)
+        if isinstance(call, ast.Call)
+        and _dotted(call.func) == "self._subscriptions.append"
+        and call.args
+    ]
+    assert bound in appended, (
+        f"the JetStream subscription ({bound}) is never appended to "
+        f"_subscriptions, so stop() cannot tear it down; appended: {appended}"
+    )
+
+    stop = _class_method(tree, "NodeRegistry", "stop")
+    stop_loops = [
+        _render(node.iter)
+        for node in ast.walk(stop)
+        if isinstance(node, ast.For)
+    ]
+    assert "self._subscriptions" in stop_loops, (
+        f"stop() does not iterate _subscriptions: {stop_loops}"
+    )
+    stop_calls = [
+        _render(call.func)
+        for call in ast.walk(stop)
+        if isinstance(call, ast.Call)
+    ]
+    assert "sub.unsubscribe" in stop_calls, (
+        f"stop() does not unsubscribe: {stop_calls}"
+    )
+
+
+def test_every_datetime_that_enters_the_store_is_naive() -> None:
+    """F4: the store holds NAIVE datetimes, so its naive clock can be used.
+
+    The store compares `last_heartbeat` against a naive clock, so an AWARE
+    datetime entering the store made the comparison raise
+    `TypeError: can't subtract offset-naive and offset-aware datetimes` --
+    `list_online()` died and the node record could not be evaluated at all.
+
+    An ISO-8601 publisher that sends an offset ("...+05:00") or the "Z" form
+    the bootstrap scripts send is exactly how an aware value arrives.
+    """
+    from datetime import datetime, timedelta, timezone
+
+    registry = importlib.import_module("pmoves.services.node_registry.registry")
+    storage = importlib.import_module("pmoves.services.node_registry.storage")
+
+    # An offset is converted to UTC and stripped of its tzinfo.
+    offset = registry.timestamp_from_announcement(
+        {"timestamp": "2026-10-31T05:44:05+05:00"}
+    )
+    assert offset.tzinfo is None, "an offset timestamp stayed timezone-aware"
+    assert offset == datetime(2026, 10, 31, 0, 44, 5)
+
+    # The "Z" form the bootstrap scripts send is the same case.
+    zulu = registry.timestamp_from_announcement({"timestamp": "2026-10-31T00:44:05Z"})
+    assert zulu.tzinfo is None, "a Z-suffixed timestamp stayed timezone-aware"
+    assert zulu == datetime(2026, 10, 31, 0, 44, 5)
+
+    # A naive timestamp is left exactly as the publisher meant it.
+    plain = registry.timestamp_from_announcement({"timestamp": "2026-10-31T00:44:05"})
+    assert plain.tzinfo is None
+    assert plain == datetime(2026, 10, 31, 0, 44, 5)
+
+    # An epoch is naive too.
+    epoch = registry.timestamp_from_announcement({"ts": 1_700_000_000})
+    assert epoch.tzinfo is None
+
+    # The helper itself: aware -> naive UTC, naive -> untouched.
+    aware = datetime(2026, 10, 31, 5, 44, 5, tzinfo=timezone(timedelta(hours=5)))
+    assert storage.naive_utc(aware) == datetime(2026, 10, 31, 0, 44, 5)
+    untouched = datetime(2026, 10, 31, 0, 44, 5)
+    assert storage.naive_utc(untouched) is untouched
+
+    # The Supabase read path is the other producer: a TIMESTAMPTZ column
+    # comes back with an offset.
+    parsed = storage.SupabaseNodeStore.__new__(storage.SupabaseNodeStore)
+    assert parsed._parse_datetime("2026-10-31T00:44:05+00:00") == datetime(
+        2026, 10, 31, 0, 44, 5
+    )
+
+    # The HTTP heartbeat endpoint is the OTHER producer of a heartbeat
+    # timestamp (the NATS one is gone since F3), so it normalises too.
+    api_tree = ast.parse(REGISTRY_API_PY.read_text(encoding="utf-8"))
+    heartbeat_timestamps = [
+        _render(keyword.value)
+        for node in ast.walk(api_tree)
+        if isinstance(node, ast.Call)
+        and _dotted(node.func) == "NodeHeartbeat"
+        for keyword in node.keywords
+        if keyword.arg == "timestamp"
+    ]
+    assert heartbeat_timestamps, "the HTTP heartbeat endpoint builds no timestamp"
+    assert all(
+        rendered.startswith("naive_utc(") for rendered in heartbeat_timestamps
+    ), (
+        "the HTTP heartbeat timestamp is not normalised to the store's "
+        f"naive convention: {heartbeat_timestamps}"
+    )
+
+
+def test_the_validator_reads_the_real_stream_info_contract() -> None:
+    """F5: the validator parses the concatenated `nats stream info -j` capture.
+
+    The validator used to claim it read `nats stream ls -n` -- a table of
+    "NAME SUBJECTS RETENTION". The nats CLI does NOT emit that: `stream ls
+    -n` prints NAMES ONLY, and `stream ls` has no Subjects column and no
+    Retention column. The parser was reading a format the tool never
+    produces, so the guard could not have passed against a real server.
+
+    The only output that carries both subjects and retention is
+    `nats stream info <NAME> -j` -- ONE JSON object per stream, several of
+    them concatenated in the capture. `json.loads` accepts exactly one
+    object per document, so the parser has to walk the document with
+    `raw_decode`.
+    """
+    validator = _load_module_by_path(
+        "pmoves_validate_streams_f5a", VALIDATE_STREAMS
+    )
+
+    capture = "\n".join(
+        [
+            json.dumps(
+                {
+                    "config": {
+                        "name": "GEOMETRY_CGP",
+                        "subjects": ["geometry.>"],
+                        "retention": "limits",
+                    }
+                },
+                indent=2,
+            ),
+            json.dumps(
+                {
+                    "config": {
+                        "name": "COMPUTE",
+                        "subjects": ["mesh.node.announce.>", "compute.nodes.>"],
+                        "retention": "limits",
+                    }
+                },
+                indent=2,
+            ),
+        ]
+    )
+
+    rows = validator.parse_stream_info_json(capture)
+    assert [row.name for row in rows] == ["GEOMETRY_CGP", "COMPUTE"], (
+        f"the concatenated capture was not parsed as two streams: {rows}"
+    )
+    compute = rows[1]
+    assert set(compute.subjects) == {"mesh.node.announce.>", "compute.nodes.>"}
+    assert compute.retention == "limits"
+
+
+def _capture_of_every_expected_stream(
+    validator: types.ModuleType,
+    compute_subjects: Optional[List[str]] = None,
+    reverse_compute: bool = False,
+) -> str:
+    """A concatenated-JSON capture of every expected stream."""
+    blocks: List[str] = []
+    for row in validator.EXPECTED_STREAMS:
+        subjects = list(row.subjects)
+        if row.name == "COMPUTE":
+            if compute_subjects is not None:
+                subjects = list(compute_subjects)
+            elif reverse_compute:
+                subjects = list(reversed(subjects))
+        blocks.append(
+            json.dumps(
+                {
+                    "config": {
+                        "name": row.name,
+                        "subjects": subjects,
+                        "retention": row.retention,
+                    }
+                },
+                indent=2,
+            )
+        )
+    return "\n".join(blocks)
+
+
+def test_the_validator_matches_a_two_subject_stream_by_set(
+    tmp_path: Path, capsys: Any
+) -> None:
+    """F5: the subject comparison is a SET comparison.
+
+    JetStream does not promise an order for `config.subjects`, and the
+    COMPUTE stream carries TWO families. Comparing the joined string --
+    which is what the old validator did -- makes the guard fail on a
+    stream that is exactly right, and it cannot express "both families"
+    at all.
+
+    A wrong subject set must still be REJECTED: a set comparison that
+    accepted anything would be as useless as the string comparison.
+    """
+    validator = _load_module_by_path(
+        "pmoves_validate_streams_f5b", VALIDATE_STREAMS
+    )
+
+    reversed_capture = tmp_path / "reversed.json"
+    reversed_capture.write_text(
+        _capture_of_every_expected_stream(validator, reverse_compute=True),
+        encoding="utf-8",
+    )
+    assert validator.main(["validate_streams.py", str(reversed_capture)]) == 0, (
+        "the validator rejected a stream that carries exactly the expected "
+        "subjects in a different order -- JetStream does not promise an order"
+    )
+
+    wrong_capture = tmp_path / "wrong.json"
+    wrong_capture.write_text(
+        _capture_of_every_expected_stream(
+            validator,
+            compute_subjects=["mesh.node.announce.>", "compute.nodes.EXTRA.>"],
+        ),
+        encoding="utf-8",
+    )
+    assert validator.main(["validate_streams.py", str(wrong_capture)]) == 1, (
+        "the validator accepted a COMPUTE stream with the WRONG subject set"
+    )
+    report = capsys.readouterr().out
+    assert "WRONG_SUBJECTS" in report, (
+        f"the validator did not name the subject mismatch: {report}"
+    )
+    assert "COMPUTE" in report, (
+        f"the validator did not name the offending stream: {report}"
+    )

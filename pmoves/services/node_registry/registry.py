@@ -11,9 +11,9 @@ import os
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from .storage import InMemoryNodeStore, NodeRecord, SupabaseNodeStore
+from .storage import InMemoryNodeStore, NodeRecord, SupabaseNodeStore, naive_utc
 from ..resource_detector.hardware import CpuInfo, GpuInfo, NodeTier, SystemMemory
-from ..resource_detector.models import NodeCapabilities, NodeHeartbeat
+from ..resource_detector.models import NodeCapabilities
 
 logger = logging.getLogger(__name__)
 
@@ -38,11 +38,14 @@ SUBJECTS = {
     # Both versions live in one subject family; the JetStream consumer takes
     # the whole family in one durable subscription.
     "announce_family": "mesh.node.announce.>",
-    # The mesh has NO separate heartbeat subject -- it re-announces every
-    # ANNOUNCE_SEC seconds, so the announcement IS the heartbeat. The
-    # heartbeat subject therefore points at the same stream instead of at a
-    # subject nobody publishes.
-    "heartbeat": "mesh.node.announce.v1",
+    # There is NO separate heartbeat subject, and there is no second
+    # subscription for one (F3). The mesh re-announces every ANNOUNCE_SEC
+    # seconds, so the announcement IS the heartbeat: the announce-family
+    # subscription already delivers every v1 message, and the handler
+    # refreshes `last_heartbeat` through `storage.register()`. A second
+    # subscription on the SAME subject was a duplicate delivery of every
+    # announcement, and it was the only thing keeping a "heartbeat" subject
+    # alive in this table.
     "query": "compute.nodes.query.v1",
     "response": "compute.nodes.response.v1",
     "drain": "compute.nodes.drain.v1",
@@ -50,7 +53,14 @@ SUBJECTS = {
 
 # JetStream stream that carries the announce family (see
 # pmoves/scripts/nats/init_streams.sh -- the COMPUTE stream).
-ANNOUNCE_STREAM = "compute"
+#
+# WHY UPPERCASE (F2): the stream's NAME is `COMPUTE` -- that is the literal
+# string `add_stream COMPUTE` creates, and JetStream stream names are
+# case-sensitive. `stream="compute"` asked for a stream that did not exist,
+# so every subscribe attempt failed and the registry silently fell back to
+# core NATS. The name must be byte-for-byte the name init_streams.sh
+# creates, and the validator expects.
+ANNOUNCE_STREAM = "COMPUTE"
 ANNOUNCE_DURABLE = "node-registry-announce"
 
 
@@ -74,20 +84,27 @@ def node_id_from_announcement(payload: Dict[str, Any]) -> Optional[str]:
 
 
 def timestamp_from_announcement(payload: Dict[str, Any]) -> datetime:
-    """Announcement timestamp.
+    """Announcement timestamp, in the store's naive-UTC convention.
 
     mesh-agent and the bootstrap scripts send an integer epoch under "ts";
     the registry's own protocol sends an ISO-8601 string under "timestamp".
+
+    WHY THE NORMALISATION (F4): `datetime.fromisoformat` on a string that
+    carries an offset ("2026-10-31T00:44:05+00:00", or the "Z" form the
+    bootstrap scripts send) returns an AWARE datetime. The store's clock is
+    naive, so `now - aware` raises TypeError and the node record could not
+    be evaluated at all. Every value that enters the store is converted to
+    UTC and stripped of its tzinfo.
     """
     raw = payload.get("timestamp")
     if isinstance(raw, str):
         try:
-            return datetime.fromisoformat(raw)
+            return naive_utc(datetime.fromisoformat(raw.replace("Z", "+00:00")))
         except ValueError:
             pass
     epoch = payload.get("ts")
     if isinstance(epoch, (int, float)):
-        return datetime.fromtimestamp(epoch)
+        return naive_utc(datetime.fromtimestamp(epoch))
     return datetime.now()
 
 
@@ -252,9 +269,6 @@ class NodeRegistry:
             # Subscribe to node announcements
             await self._subscribe_announce()
 
-            # Subscribe to heartbeats
-            await self._subscribe_heartbeat()
-
             # Subscribe to queries
             await self._subscribe_query()
 
@@ -289,7 +303,9 @@ class NodeRegistry:
             except asyncio.CancelledError:
                 pass
 
-        # Unsubscribe and close NATS
+        # Unsubscribe and close NATS. `self._subscriptions` holds the
+        # JetStream announce subscription AND every core-NATS fallback, so
+        # both paths are torn down here.
         for sub in self._subscriptions:
             try:
                 await sub.unsubscribe()
@@ -338,12 +354,17 @@ class NodeRegistry:
         # restarts catches up on the announcements it missed instead of
         # waiting for the next 15s cycle.
         try:
-            await self._js.subscribe(
+            js_sub = await self._js.subscribe(
                 subject=SUBJECTS["announce_family"],
                 stream=ANNOUNCE_STREAM,
                 durable=ANNOUNCE_DURABLE,
                 cb=on_announce,
             )
+            # The JetStream subscription is tracked like every other one, so
+            # stop() tears it down too. Without this the subscription leaked
+            # on every restart and the durable consumer kept a live
+            # interest on the stream.
+            self._subscriptions.append(js_sub)
             logger.info(
                 f"Subscribed to {SUBJECTS['announce_family']} "
                 f"(JetStream stream {ANNOUNCE_STREAM})"
@@ -354,51 +375,6 @@ class NodeRegistry:
                 sub = await self._nc.subscribe(subject, cb=on_announce)
                 self._subscriptions.append(sub)
                 logger.info(f"Subscribed to {subject} (non-JetStream)")
-
-    async def _subscribe_heartbeat(self):
-        """Subscribe to heartbeats.
-
-        WHY (D4): the mesh has no separate heartbeat subject -- it
-        re-announces every ANNOUNCE_SEC seconds -- so the heartbeat subject
-        points at the announce stream. The handler accepts every announcement
-        dialect (mesh-agent v1/v2 and the bootstrap scripts), which carry a
-        node id and a timestamp but no utilisation figures.
-        """
-
-        async def on_heartbeat(msg):
-            try:
-                payload = json.loads(msg.data.decode())
-            except (UnicodeDecodeError, json.JSONDecodeError) as e:
-                logger.error(f"Invalid heartbeat message format: {e}", exc_info=True)
-                return
-            except Exception as e:
-                logger.error(f"Error processing heartbeat: {e}", exc_info=True)
-                return
-
-            node_id = node_id_from_announcement(payload)
-            if not node_id:
-                logger.error("Invalid heartbeat payload: no node identity")
-                return
-
-            heartbeat = NodeHeartbeat(
-                node_id=node_id,
-                timestamp=timestamp_from_announcement(payload),
-                cpu_utilization=float(payload.get("cpu_utilization", 0.0) or 0.0),
-                memory_utilization=float(payload.get("memory_utilization", 0.0) or 0.0),
-                gpu_utilization=list(payload.get("gpu_utilization", []) or []),
-                active_jobs=int(payload.get("active_jobs", 0) or 0),
-                status=payload.get("status", "online"),
-            )
-
-            try:
-                await self.storage.update_heartbeat(heartbeat)
-            except Exception as e:
-                logger.error(f"Error processing heartbeat: {e}", exc_info=True)
-
-        # Subscribe to heartbeats (high volume, use regular subscription)
-        sub = await self._nc.subscribe(SUBJECTS["heartbeat"], cb=on_heartbeat)
-        self._subscriptions.append(sub)
-        logger.info(f"Subscribed to {SUBJECTS['heartbeat']}")
 
     async def _subscribe_query(self):
         """Subscribe to node queries."""
