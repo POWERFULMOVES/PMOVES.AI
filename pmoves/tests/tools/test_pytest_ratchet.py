@@ -7,8 +7,10 @@ pytest subprocess and no network.
 """
 import io
 import sys
+import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "pmoves" / "tools"))
 
@@ -108,6 +110,279 @@ class TestGrouping(unittest.TestCase):
         groups = pytest_ratchet.group_files(files)
         placed = [f for v in groups.values() for f in v]
         self.assertEqual(sorted(placed), sorted(files))
+
+
+class TestDeclaredSlowFiles(unittest.TestCase):
+    """A declared-slow file must be MEASURED, not lost.
+
+    The budget model used file COUNT as a proxy for cost, so a healthy but
+    slow file was killed by the chunk timeout, killed again by the per-file
+    isolation timeout, and then REPORTED AS BROKEN -- the exact inversion this
+    gate exists to prevent. `_slow_files.yaml` names the files that are
+    legitimately slow, and these tests pin both what it buys and what it must
+    NOT buy.
+    """
+
+    HARNESS = "pmoves/tests/tools/test_mavis_ratchet_mutation_kill.py"
+    OTHER = "pmoves/tests/tools/test_pytest_ratchet.py"
+    ALLOWANCE = 600
+
+    def test_the_committed_config_declares_the_harness(self):
+        allowances = pytest_ratchet.load_slow_file_allowances()
+        self.assertEqual(allowances.get(self.HARNESS), self.ALLOWANCE)
+
+    def test_every_declared_entry_carries_a_reason(self):
+        """A declared cost with no stated reason is a budget raise nobody
+        signed off on."""
+        entries = pytest_ratchet.load_slow_file_entries()
+        self.assertTrue(entries)
+        for path, (_seconds, reason) in entries.items():
+            self.assertTrue(reason.strip(), f"{path} declares no reason")
+
+    def test_a_missing_config_is_an_empty_mapping_not_a_crash(self):
+        missing = Path("does") / "not" / "exist.yaml"
+        self.assertEqual(pytest_ratchet.load_slow_file_allowances(missing), {})
+
+    def test_chunk_timeout_for_an_allowed_file_is_the_default_plus_the_allowance(self):
+        timeout = pytest_ratchet.chunk_timeout_seconds([Path(self.HARNESS)])
+        self.assertEqual(
+            timeout, pytest_ratchet.GROUP_TIMEOUT_SECONDS + self.ALLOWANCE
+        )
+
+    def test_chunk_timeout_without_an_allowance_is_exactly_the_default(self):
+        """The default path must be PROVABLY unchanged, not merely unchanged."""
+        timeout = pytest_ratchet.chunk_timeout_seconds([Path(self.OTHER)])
+        self.assertEqual(timeout, pytest_ratchet.GROUP_TIMEOUT_SECONDS)
+
+    def test_the_chunk_allowance_is_the_sum_over_the_files_in_it(self):
+        files = [Path(self.OTHER), Path(self.HARNESS)]
+        self.assertEqual(
+            pytest_ratchet.chunk_timeout_seconds(files),
+            pytest_ratchet.GROUP_TIMEOUT_SECONDS + self.ALLOWANCE,
+        )
+
+    def test_file_timeout_for_an_allowed_file_is_the_default_plus_the_allowance(self):
+        timeout = pytest_ratchet.file_timeout_seconds(Path(self.HARNESS))
+        self.assertEqual(
+            timeout, pytest_ratchet.FALLBACK_FILE_TIMEOUT + self.ALLOWANCE
+        )
+
+    def test_file_timeout_without_an_allowance_is_exactly_the_default(self):
+        timeout = pytest_ratchet.file_timeout_seconds(Path(self.OTHER))
+        self.assertEqual(timeout, pytest_ratchet.FALLBACK_FILE_TIMEOUT)
+
+    def test_the_allowance_is_driven_by_the_config_not_by_the_code(self):
+        """NEGATIVE CONTROL: remove the entry from the config and the budgets
+        fall back to EXACTLY the old values. If this failed, the extra time
+        would be hardcoded rather than declared -- and could never be taken
+        back."""
+        original = pytest_ratchet.SLOW_FILES
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                cfg = Path(tmp) / "_slow_files.yaml"
+                cfg.write_text(
+                    "# the harness entry deliberately absent\n"
+                    "slow_files:\n"
+                    "  pmoves/tests/tools/test_something_else.py: 30\n",
+                    encoding="utf-8",
+                )
+                pytest_ratchet.SLOW_FILES = cfg
+                self.assertEqual(
+                    pytest_ratchet.chunk_timeout_seconds([Path(self.HARNESS)]),
+                    pytest_ratchet.GROUP_TIMEOUT_SECONDS,
+                )
+                self.assertEqual(
+                    pytest_ratchet.file_timeout_seconds(Path(self.HARNESS)),
+                    pytest_ratchet.FALLBACK_FILE_TIMEOUT,
+                )
+        finally:
+            pytest_ratchet.SLOW_FILES = original
+
+    def test_the_chunk_run_actually_receives_the_allowance(self):
+        """The widened budget must reach the subprocess, not just a helper."""
+        captured = {}
+
+        class _Proc:
+            returncode = 0
+            stdout = ""
+            stderr = ""
+
+        def fake_run(cmd, **kwargs):
+            captured.update(kwargs)
+            return _Proc()
+
+        with tempfile.TemporaryDirectory() as tmp:
+            with mock.patch.object(pytest_ratchet.subprocess, "run", fake_run):
+                pytest_ratchet.run_pytest(
+                    [Path(self.HARNESS)], Path(tmp) / "report.xml"
+                )
+        self.assertEqual(
+            captured.get("timeout"),
+            pytest_ratchet.GROUP_TIMEOUT_SECONDS + self.ALLOWANCE,
+        )
+
+    def test_the_isolation_pass_gives_the_allowed_file_its_allowance(self):
+        """The per-file budget must widen too, or the file is lost TWICE."""
+        calls = []
+
+        def fake_run(files, junit, timeout=None):
+            calls.append(([str(f) for f in files], timeout))
+            if len(files) > 1:
+                return -1, "TIMEOUT"
+            junit.write_text("<testsuites/>", encoding="utf-8")
+            return 0, ""
+
+        with tempfile.TemporaryDirectory() as tmp:
+            with mock.patch.object(pytest_ratchet, "run_pytest", fake_run):
+                findings, dead = pytest_ratchet.run_chunk_with_fallback(
+                    "grp", [Path(self.HARNESS), Path(self.OTHER)], Path(tmp), 1
+                )
+        self.assertEqual(dead, [])
+        self.assertEqual(findings, [])
+        _chunk, *file_calls = calls
+        self.assertEqual(
+            file_calls[0][1], pytest_ratchet.FALLBACK_FILE_TIMEOUT + self.ALLOWANCE
+        )
+        self.assertEqual(file_calls[1][1], pytest_ratchet.FALLBACK_FILE_TIMEOUT)
+
+    def test_the_isolation_PASS_budget_is_allowance_aware(self):
+        """THE ESCAPE HATCH MUST NOT HAVE A TRAPDOOR.
+
+        The per-file budget is FALLBACK_FILE_TIMEOUT + allowance, so ONE
+        declared-slow file can legally consume more than the flat pass
+        budget on its own. If the pass still counted in the old currency it
+        could exhaust its budget BEFORE reaching that file -- and the
+        "fallback budget exhausted" path would then re-declare the very file
+        the allowance exists to defend as BROKEN, with less signal than
+        before.
+        """
+        self.assertEqual(
+            pytest_ratchet.fallback_budget_seconds([Path(self.HARNESS)]),
+            pytest_ratchet.FALLBACK_BUDGET_SECONDS + self.ALLOWANCE,
+        )
+
+    def test_a_declared_slow_file_is_still_measured_when_the_pass_budget_is_gone(self):
+        """THE SAME THING, THROUGH THE WIRING.
+
+        A test that only exercises the pure helper would still be GREEN if
+        the CALL SITE reverted to the flat budget -- the helper would be
+        intact and correct while the runner kept using the old currency.
+        So this drives `run_chunk_with_fallback` itself, with the pass
+        budget already exhausted, and requires the declared-slow file to
+        still be MEASURED rather than declared dead.
+
+        With the flat budget the loop breaks on its first check and the file
+        lands in `dead` -- which the runner reports as BROKEN. That is the
+        trapdoor, and it is exactly what this test forbids.
+        """
+        calls = []
+
+        def fake_run(files, junit, timeout=None):
+            calls.append(([str(f) for f in files], timeout))
+            if len(files) > 1:
+                # The CHUNK times out, so the isolation pass runs.
+                return -1, "TIMEOUT"
+            junit.write_text("<testsuites/>", encoding="utf-8")
+            return 0, ""
+
+        original = pytest_ratchet.FALLBACK_BUDGET_SECONDS
+        try:
+            # The pass budget is already spent.
+            pytest_ratchet.FALLBACK_BUDGET_SECONDS = 0
+            with tempfile.TemporaryDirectory() as tmp:
+                with mock.patch.object(pytest_ratchet, "run_pytest", fake_run):
+                    findings, dead = pytest_ratchet.run_chunk_with_fallback(
+                        "grp",
+                        [Path(self.HARNESS), Path(self.OTHER)],
+                        Path(tmp),
+                        1,
+                    )
+        finally:
+            pytest_ratchet.FALLBACK_BUDGET_SECONDS = original
+        self.assertEqual(
+            dead, [],
+            "the declared-slow file was declared BROKEN because the flat "
+            "pass budget was exhausted -- the allowance has a trapdoor",
+        )
+        self.assertEqual(findings, [])
+        measured = [
+            f.replace(chr(92), "/") for call, _timeout in calls for f in call
+        ]
+        self.assertIn(self.HARNESS, measured, "the isolation pass never ran")
+
+    def test_the_isolation_PASS_budget_without_an_allowance_is_exactly_the_default(self):
+        """The default path must be PROVABLY unchanged."""
+        self.assertEqual(
+            pytest_ratchet.fallback_budget_seconds([Path(self.OTHER)]),
+            pytest_ratchet.FALLBACK_BUDGET_SECONDS,
+        )
+
+    def test_the_isolation_PASS_budget_is_the_sum_over_the_files_in_the_chunk(self):
+        self.assertEqual(
+            pytest_ratchet.fallback_budget_seconds(
+                [Path(self.OTHER), Path(self.HARNESS)]
+            ),
+            pytest_ratchet.FALLBACK_BUDGET_SECONDS + self.ALLOWANCE,
+        )
+
+    def test_the_pass_budget_falls_back_exactly_when_the_entry_is_removed(self):
+        """NEGATIVE CONTROL for the pass budget: with the entry gone from the
+        config, the pass budget falls back to EXACTLY the old value."""
+        original = pytest_ratchet.SLOW_FILES
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                cfg = Path(tmp) / "_slow_files.yaml"
+                cfg.write_text(
+                    "slow_files:\n"
+                    "  pmoves/tests/tools/test_something_else.py: 30\n",
+                    encoding="utf-8",
+                )
+                pytest_ratchet.SLOW_FILES = cfg
+                self.assertEqual(
+                    pytest_ratchet.fallback_budget_seconds([Path(self.HARNESS)]),
+                    pytest_ratchet.FALLBACK_BUDGET_SECONDS,
+                )
+        finally:
+            pytest_ratchet.SLOW_FILES = original
+
+    def test_an_unparseable_entry_is_reported_not_silently_dropped(self):
+        """A budget-owning line that fails to parse must NOT vanish.
+
+        A typo'd path means the file silently loses its allowance, and CI
+        re-reports it as BROKEN with less signal than before. The parser
+        quotes the raw line so the mistake is visible.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            cfg = Path(tmp) / "_slow_files.yaml"
+            cfg.write_text(
+                "slow_files:\n"
+                "  pmoves/tests/tools/test_typo.py: 600s\n",
+                encoding="utf-8",
+            )
+            stderr = io.StringIO()
+            with mock.patch.object(pytest_ratchet.sys, "stderr", stderr):
+                entries = pytest_ratchet.load_slow_file_entries(cfg)
+        self.assertEqual(entries, {})
+        self.assertIn("test_typo.py", stderr.getvalue())
+        self.assertIn("600s", stderr.getvalue())
+
+    def test_a_prose_line_outside_the_block_is_not_reported(self):
+        """Only a line INSIDE the block is a budget-owning line. A top-level
+        key that is not `slow_files:` is not this parser's business."""
+        with tempfile.TemporaryDirectory() as tmp:
+            cfg = Path(tmp) / "_slow_files.yaml"
+            cfg.write_text(
+                "other_section:\n"
+                "  something: not-a-number\n"
+                "slow_files:\n"
+                "  pmoves/tests/tools/test_ok.py: 30\n",
+                encoding="utf-8",
+            )
+            stderr = io.StringIO()
+            with mock.patch.object(pytest_ratchet.sys, "stderr", stderr):
+                entries = pytest_ratchet.load_slow_file_entries(cfg)
+        self.assertIn("pmoves/tests/tools/test_ok.py", entries)
+        self.assertNotIn("not-a-number", stderr.getvalue())
 
 
 if __name__ == "__main__":
