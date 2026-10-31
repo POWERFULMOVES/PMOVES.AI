@@ -47,19 +47,47 @@ lookup) kept working, splitting the fleet's cipher behavior by token class.
 ## Procedure: rotating the kong dbless credential (no container recreate)
 
 ```bash
-# 1. Patch the credential inside the container's declarative file
-#    (/usr/local/kong/kong.yml — service_role consumer keyauth_credentials).
-#    NOTE: kong requires UNIQUE key values — one entry per key, not two.
-docker cp pmoves-supabase-kong-1:/usr/local/kong/kong.yml /tmp/kong.yml
-#    edit service_role credentials to the new JWT, dedupe, then:
-# 2. Apply atomically via the admin API (dbless; 'kong reload' won't do it)
-python3 -c 'import urllib.request; r=urllib.request.Request("http://127.0.0.1:8001/config?check_hash=1",data=open("/tmp/kong.yml","rb").read(),method="POST",headers={"Content-Type":"application/yaml"}); print(urllib.request.urlopen(r,timeout=10).status)'
-#    expect 201
+# 1. Copy the declarative config OUT to a private temp file with guaranteed
+#    cleanup — the substituted config contains the service-role JWT and every
+#    other credential; a world-readable /tmp path leaks db-privileged keys
+#    to every local user (codex review, P1).
+KONG_TMP=$(mktemp /tmp/kong-rotate.XXXXXX); chmod 600 "$KONG_TMP"
+trap 'rm -f "$KONG_TMP" "$KONG_TMP.bak"' EXIT
+docker cp pmoves-supabase-kong-1:/usr/local/kong/kong.yml "$KONG_TMP"
+cp "$KONG_TMP" "$KONG_TMP.bak"   # the ONLY rollback: POST replaces the whole config
+
+# 2. Edit the service_role consumer's keyauth_credentials to the new JWT.
+#    Kong requires UNIQUE key values — one entry per key, not two.
+
+# 3. Apply atomically via the admin API (dbless; 'kong reload' won't do it).
+#    Catch HTTPError and print the body: urllib RAISES on 4xx, so a 400
+#    (e.g. the duplicate-key violation above) would otherwise surface as a
+#    bare traceback with kong's actual rejection message discarded.
+python3 - "$KONG_TMP" <<'PY'
+import sys, urllib.request, urllib.error
+r = urllib.request.Request(
+    "http://127.0.0.1:8001/config?check_hash=1",
+    data=open(sys.argv[1], "rb").read(),
+    method="POST", headers={"Content-Type": "application/yaml"})
+try:
+    print("applied:", urllib.request.urlopen(r, timeout=10).status)   # expect 201
+except urllib.error.HTTPError as e:
+    print("REJECTED:", e.code, e.read().decode()); sys.exit(1)
+PY
+
+# 4. VERIFY — 201 only means "received something valid", not "received what
+#    you intended": the POST atomically replaces every service, route and
+#    credential, and kong will happily 201 a config that dropped half your
+#    consumers (kilo review).
+make -C pmoves kong-routes-check          # routes loaded + upstreams resolvable
+#    plus one auth probe with the NEW key against /rest/v1 (see the incident
+#    verification above for the exact request shape). Rollback if either
+#    fails: re-POST "$KONG_TMP.bak" through the same python block.
 ```
 
-Pitfalls measured live: POSTing duplicate key values → 400 uniqueness
-violation; direct PostgREST (`supabase-postgrest:3000`) does not serve the
-`/rest/v1` prefix — that is kong's route (`supabase-kong:8000/rest/v1`).
+Pitfalls measured live: duplicate key values → 400 uniqueness violation;
+direct PostgREST (`supabase-postgrest:3000`) does not serve the `/rest/v1`
+prefix — that is kong's route (`supabase-kong:8000/rest/v1`).
 
 ## Durability gaps (open)
 
