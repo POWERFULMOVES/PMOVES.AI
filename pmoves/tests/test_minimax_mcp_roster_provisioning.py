@@ -654,25 +654,58 @@ def test_the_rendered_roster_is_created_owner_only(tmp_path: Path):
     `write_text()` opens with the default umask and only got 0o600
     afterwards, so every freshly rendered roster spent a brief window
     world-readable while carrying expanded tokens.
+
+    WHY THE UMASK IS SET EXPLICITLY. The verdict here must be about the
+    CODE, not about the host. `write_text()` creates the file with
+    `0o666 & ~umask`, so on a host whose umask is 0o077 the defective path
+    would produce 0o600 -- the same mode the fixed path produces -- and
+    this test would PASS against the defect it exists to catch. That is
+    not hypothetical: the mutation-kill case M9 (which reintroduces
+    `write_text()`) SURVIVED on the CI merge gate, whose container umask
+    is 0o077, while it died on a developer machine with the usual 0o022.
+    A ratchet whose kill depends on the host's umask is not load-bearing.
+
+    So the umask is pinned to a permissive, well-known 0o022 for the
+    duration of the write, and restored immediately afterwards (it is
+    process-global). The fixed path passes because it asks for 0o600
+    EXPLICITLY; the defective path then produces 0o644 and the assertion
+    fails, in every environment.
     """
     output = tmp_path / "mcp.json"
-    gen.write_client_config(
-        "minimax",
-        output,
-        merge=False,
-        inventory=gen.load_inventory(),
-        endpoint="local",
-        context={},
-        allow_os_environ=False,
-    )
-    assert output.exists()
     if os.name == "nt":
         # Windows has no POSIX mode bits -- S_IMODE reports 0o666 for every
         # file -- so the mode cannot be asserted here. The creation path is
         # still exercised: the file exists and parses.
+        gen.write_client_config(
+            "minimax",
+            output,
+            merge=False,
+            inventory=gen.load_inventory(),
+            endpoint="local",
+            context={},
+            allow_os_environ=False,
+        )
+        assert output.exists()
         json.loads(output.read_text(encoding="utf-8"))
         return
+
     import stat
+
+    previous_umask = os.umask(0o022)
+    try:
+        gen.write_client_config(
+            "minimax",
+            output,
+            merge=False,
+            inventory=gen.load_inventory(),
+            endpoint="local",
+            context={},
+            allow_os_environ=False,
+        )
+    finally:
+        os.umask(previous_umask)
+
+    assert output.exists()
     assert stat.S_IMODE(output.stat().st_mode) == 0o600
 
 

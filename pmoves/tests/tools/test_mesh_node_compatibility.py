@@ -38,6 +38,7 @@ from __future__ import annotations
 import ast
 import importlib
 import importlib.util
+import inspect
 import sys
 import types
 from pathlib import Path
@@ -97,6 +98,13 @@ def _ensure_structlog() -> None:
         pass
     stub = types.ModuleType("structlog")
     stub.__getattr__ = lambda name: _Any()  # type: ignore[attr-defined]
+    # MARKED. A stub answers ANY attribute, so any check that asks the
+    # structlog module about its API must be able to tell a stub from the
+    # real package. Without this marker a sibling test that installs the
+    # stub makes every later "ask structlog" check run against a module
+    # that agrees with everything -- and a check that always agrees is a
+    # check that cannot say no.
+    stub.__pmoves_permissive_stub__ = True  # type: ignore[attr-defined]
     sys.modules["structlog"] = stub
 
 
@@ -225,6 +233,97 @@ def test_the_service_entry_points_resolve_their_imports_without_a_package() -> N
     assert node_registry_main.NodeRegistry.__name__ == "NodeRegistry"
     assert work_marshaling_main.WorkMarshaling.__name__ == "WorkMarshaling"
     assert vllm_orchestrator_main.VLLMOrchestrator.__name__ == "VLLMOrchestrator"
+
+
+def test_the_entry_points_use_only_structlog_api_that_exists() -> None:
+    """The entry points configure structlog AT IMPORT TIME, so an API that
+    was never real breaks the module in EVERY environment.
+
+    `node_registry/main.py` passed `cache_class=structlog.WriteLogFile`.
+    Neither half of that has ever existed: `WriteLogFile` is not exported by
+    structlog 21.5.0, 22.3.0, 24.4.0 (the version pmoves/requirements.txt
+    pins) or 26.1.0 (what the unpinned pmoves/requirements-tests.txt
+    resolves to in the merge gate) -- the wheels were unpacked and grepped to
+    confirm -- and `cache_class` is not in `configure()`'s signature in any of
+    them either. So the call raised AttributeError, and would have raised
+    TypeError even if the attribute had existed.
+
+    WHY THIS RATCHET EXISTS: the permissive structlog STUB this file installs
+    when structlog is absent (`_ensure_structlog`) answers ANY attribute, so
+    the bad call sailed through on a developer machine. Only CI, which
+    installs the real package, could see it. A stub that lets you import is
+    not a stub that lets you TRUST the import.
+
+    So the check is against the REAL structlog, and it skips -- with a reason
+    -- when the real package is absent. CI installs it, so CI enforces it.
+    """
+    try:
+        real = importlib.import_module("structlog")
+    except ImportError:
+        pytest.skip(
+            "structlog is not installed here; the permissive stub would accept "
+            "any API, so this check would be vacuous"
+        )
+    if getattr(real, "__pmoves_permissive_stub__", False):
+        pytest.skip(
+            "the structlog module in sys.modules is the PERMISSIVE STUB this "
+            "file installs when the real package is absent -- it answers any "
+            "attribute, so asking it about the API proves nothing. CI "
+            "installs the real structlog, so CI enforces this check."
+        )
+
+    configure_signature = inspect.signature(real.configure).parameters
+    accepted = set(configure_signature)
+
+    offenders: List[str] = []
+    for entry_point in (
+        NODE_REGISTRY_DIR / "main.py",
+        WORK_MARSHALING_DIR / "main.py",
+        VLLM_ORCHESTRATOR_DIR / "main.py",
+        RESOURCE_DETECTOR_DIR / "main.py",
+    ):
+        tree = ast.parse(entry_point.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            # structlog.configure(...) -- the keyword arguments it is given
+            # must all be parameters the installed structlog accepts.
+            if not (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and node.func.attr == "configure"
+                and isinstance(node.func.value, ast.Name)
+                and node.func.value.id == "structlog"
+            ):
+                continue
+            for keyword in node.keywords:
+                if keyword.arg is None:
+                    continue
+                if keyword.arg not in accepted:
+                    offenders.append(
+                        f"{entry_point.parent.name}/{entry_point.name}: "
+                        f"structlog.configure({keyword.arg}=...) -- "
+                        f"'{'/'.join(accepted)}' are the accepted parameters"
+                    )
+
+        # structlog.<attribute> -- every attribute the module reads off the
+        # package must exist on the installed version.
+        for node in ast.walk(tree):
+            if (
+                isinstance(node, ast.Attribute)
+                and isinstance(node.value, ast.Name)
+                and node.value.id == "structlog"
+                and not hasattr(real, node.attr)
+            ):
+                offenders.append(
+                    f"{entry_point.parent.name}/{entry_point.name}: "
+                    f"structlog.{node.attr} does not exist in structlog "
+                    f"{getattr(real, '__version__', '?')}"
+                )
+
+    assert not offenders, (
+        "the entry points use structlog API that does not exist in the "
+        "installed structlog, so they cannot be imported:\n  "
+        + "\n  ".join(sorted(set(offenders)))
+    )
 
 
 def test_the_node_registry_modules_carry_their_package_context() -> None:

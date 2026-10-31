@@ -46,6 +46,26 @@ except ImportError:
 
 
 # Configure structured logging
+#
+# WHY NO `cache_class=`: it was here as `cache_class=structlog.WriteLogFile`,
+# and NEITHER half of that has ever existed in a released structlog.
+# `structlog.WriteLogFile` is not exported by structlog 21.5.0, 22.3.0,
+# 24.4.0 or 26.1.0 (the wheels were unpacked and grepped to confirm);
+# `structlog.WriteLogger` is what those versions export. And `cache_class` is
+# not in `configure()`'s signature in any of them either -- the supported
+# parameters are processors, wrapper_class, context_class, logger_factory and
+# cache_logger_on_first_use. So the call raised AttributeError (the missing
+# attribute) and would have raised TypeError (the unexpected keyword) even if
+# the attribute had existed. Caching is done by `cache_logger_on_first_use`,
+# which is the mechanism structlog actually supports.
+#
+# The module therefore could not be IMPORTED, in any environment, ever --
+# which is why nothing noticed: no test, no script and no service imported
+# this entry point until the mesh compatibility ratchet did, and it failed
+# there. `structlog` is pinned at 24.4.0 in pmoves/requirements.txt and
+# unpinned in pmoves/requirements-tests.txt, so the merge gate (which installs
+# the unpinned set and resolved 26.1.0) failed where a pinned 24.4.0
+# environment would have failed differently.
 structlog.configure(
     processors=[
         structlog.stdlib.filter_by_level,
@@ -61,7 +81,6 @@ structlog.configure(
     wrapper_class=structlog.stdlib.BoundLogger,
     context_class=dict,
     logger_factory=structlog.stdlib.LoggerFactory(),
-    cache_class=structlog.WriteLogFile,
     cache_logger_on_first_use=True,
 )
 
