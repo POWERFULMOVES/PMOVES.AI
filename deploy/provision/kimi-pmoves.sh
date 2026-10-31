@@ -16,7 +16,7 @@
 #
 # Usage:
 #   bash deploy/provision/kimi-pmoves.sh        [args...]
-#   install-kimi-pmoves-pmoves-command.sh && kimi-pmoves         # rc function
+#   install-kimi-pmoves-command.sh && kimi-pmoves         # rc function
 #   kimi-pmoves.cmd                              # Windows Explorer double-click
 #
 # Purpose: Kimi Code with PMOVES context files + Cipher/Agent Zero MCP

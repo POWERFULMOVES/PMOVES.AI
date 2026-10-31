@@ -3,6 +3,12 @@
 This service maintains a catalog of distributed compute nodes,
 tracking their capabilities via NATS announcements and heartbeats.
 
+The package directory used to be kebab-case (`node-registry`), which made
+`pmoves.services.node_registry` unimportable -- the relative imports inside
+the service (`from ..resource_detector.models import ...`) could never
+resolve when the modules were loaded by file path. The directory is now
+`node_registry`, so the import below is true.
+
 Usage:
     from pmoves.services.node_registry import NodeRegistry, run_registry, run_with_api
 
@@ -18,8 +24,8 @@ Usage:
     await registry.start()
 
 NATS Subjects:
-    - compute.nodes.announce.v1: Node capability announcements
-    - compute.nodes.heartbeat.v1: Node liveness updates
+    - mesh.node.announce.v1: Node presence announcements (mesh-agent)
+    - mesh.node.announce.v2: Node announcements with namespace + topology
     - compute.nodes.query.v1: Query for available nodes
     - compute.nodes.drain.v1: Request node to drain
 

@@ -39,6 +39,23 @@ DEFAULT_OUTPUTS = {
     "opencode": PROJECT_ROOT / ".opencode" / "config.json",
     "hermes": Path.home() / ".hermes" / "profiles" / "pmoves-hermes" / "config.yaml",
     "crush": Path.home() / ".config" / "crush" / "crush.json",
+    # MiniMax Code (the Mavis desktop client). The native runtime owns
+    # ~/.minimax/mcp.json -- it carries runtime-managed keys (`configured`,
+    # `builtin`) and pre-existing entries (composio) that the generator
+    # MERGES into rather than replaces.
+    "minimax": Path.home() / ".minimax" / "mcp.json",
+}
+
+# Client bootstrap profiles (pmoves.bootstrap/v1) that pin the roster for a
+# client. When a client has a profile, ONLY the tools the profile declares
+# are rendered -- the profile is load-bearing, not documentation. That keeps
+# the profile and the generated config diffable against each other: every
+# `tools[].key` in the profile must exist in the inventory (fail-closed), and
+# every rendered key must be declared in the profile.
+#
+# Added 2026-10-26 for the MiniMax Code client parity lane.
+CLIENT_PROFILES: Dict[str, Path] = {
+    "minimax": PROJECT_ROOT / "pmoves" / "configs" / "mavis_collection" / "clients" / "minimax-code.yaml",
 }
 
 
@@ -325,6 +342,123 @@ def render_crush(specs: List[ServerSpec], context: Dict[str, str], **kw: Any) ->
     return {"mcp": mcp}
 
 
+def _abs_repo_relative(value: Any, root: Optional[Path] = None) -> Any:
+    """Absolutize a repo-relative `./`-prefixed path against the repo root.
+
+    THE RULE is identical to pmoves/tools/mcp_roster_normalize.py :: _abs_path
+    -- a value that starts with "./" is joined to the repo root, anything else
+    is returned untouched. Reusing the rule (rather than inventing one) is the
+    point: two places now resolve the same declared path the same way.
+
+    WHY THE MINIMAX RENDERER NEEDS IT (the P2 review finding on #3418).
+
+    MiniMax Code reads its roster from `~/.minimax/mcp.json` -- OUTSIDE the
+    repo. Every other client reads a TRACKED roster INSIDE the repo and hands
+    it to the binary with `--mcp-config`, so a repo-relative path inside it
+    resolves against the repo the client was pointed at.
+
+    The MiniMax launcher resolves ROOT but never cd's there and never
+    absolutizes anything, so the inventory's
+
+        uv --directory ./pmoves-nats-mcp run python -m nats_mcp.server
+
+    was resolved against the CALLER's working directory. Launched from
+    anywhere but the repo root, the NATS MCP server simply failed to start --
+    and the failure mode is a server that is ABSENT, not an error the operator
+    could read or act on.
+
+    So the MiniMax renderer absolutizes repo-relative stdio paths against the
+    repo root. Two things deliberately do NOT change:
+
+      * The tracked `.claude/mcp.json` keeps `./pmoves-hirag-mcp` relative.
+        The other renderers are untouched -- absolutizing a path inside a
+        repo-rooted roster would break the contract that roster already has.
+      * Expansion order. The path is absolutized BEFORE `${VAR}` expansion,
+        matching mcp_roster_normalize.py's P3-then-P4 order, so a value the
+        operator supplies at runtime stays their responsibility.
+    """
+    if not isinstance(value, str) or not value.startswith("./"):
+        return value
+    return os.path.join(str(root or PROJECT_ROOT), value[2:])
+
+
+def render_minimax(
+    specs: List[ServerSpec],
+    context: Dict[str, str],
+    *,
+    root: Optional[Path] = None,
+    **kw: Any,
+) -> Dict[str, Any]:
+    """Render MiniMax Code mcpServers block (native `~/.minimax/mcp.json`).
+
+    WHY A DEDICATE RENDERER. MiniMax Code (the Mavis desktop client) does
+    not read the Claude/Kimi `mcpServers` shape verbatim -- it is close, but
+    it carries three extra per-server keys and one different key name:
+
+      * `type`            -- REQUIRED. The Claude renderer omits it (Claude
+                             infers from the presence of `url`); MiniMax
+                             requires an explicit transport discriminator.
+      * `enabled`         -- MiniMax uses `enabled`, not `disabled`. The
+                             inventory's `disabled: true` therefore renders
+                             as `enabled: false` (same mapping KiloCode
+                             already uses for its own schema).
+      * `configured`      -- the MiniMax runtime marks a server as
+                             "configured" once it has been wired; the merge
+                             path preserves the operator's existing value.
+      * `builtin`         -- false for PMOVES-owned servers (true only for
+                             servers the client ships itself).
+
+    The `type` vocabulary is the MiniMax MCP contract: `stdio` takes
+    `command`/`args`/`env`; `http` / `streamable-http` / `sse` take
+    `url`/`headers`. stdio and remote fields are never mixed on one entry.
+
+    `root` is the repo root that repo-relative stdio paths resolve against.
+    It defaults to this module's own PROJECT_ROOT. See `_abs_repo_relative`
+    for why this client -- and only this client -- needs it.
+    """
+    servers: Dict[str, Any] = {}
+    for spec in specs:
+        entry: Dict[str, Any] = {
+            "type": spec.transport,
+            "enabled": not spec.disabled,
+            "configured": True,
+            "builtin": False,
+        }
+        if spec.description:
+            entry["description"] = spec.description
+        if spec.transport in ("sse", "http", "streamable-http"):
+            entry["url"] = _expand(spec.url or "", context, **kw)
+            if spec.headers:
+                entry["headers"] = _render_headers(spec.headers, context, **kw)
+        elif spec.transport == "stdio":
+            command, args = _split_command_args(spec.command or "", spec.args)
+            entry["command"] = _abs_repo_relative(command, root)
+            # Absolutize BEFORE expansion -- see _abs_repo_relative.
+            abs_args = [_abs_repo_relative(a, root) for a in args]
+            entry["args"] = _render_args(abs_args, context, **kw)
+            if spec.env:
+                entry["env"] = _render_env(spec.env, context, **kw)
+        else:
+            # FAIL CLOSED on an unrenderable transport. The old shape was
+            # `continue`, which quietly DELETED the server from the render:
+            # the profile filter had already waved it through by key, so the
+            # generated roster silently stopped being the declared roster --
+            # the exact mismatch this lane's fail-closed profile contract
+            # exists to make impossible. The other renderers share the
+            # pattern, but minimax is the one whose contract explicitly
+            # promises rendered roster == profile roster, so it is the one
+            # that raises.
+            raise MCPConfigError(
+                f"server '{spec.key}' has unsupported transport "
+                f"'{spec.transport}' for client 'minimax' -- refusing to "
+                f"render a roster that is not the declared one."
+            )
+        if spec.timeout:
+            entry["timeout_ms"] = spec.timeout
+        servers[spec.key] = entry
+    return {"mcpServers": servers}
+
+
 RENDERERS = {
     "claude": render_claude_kimi,
     "kimi": render_claude_kimi,
@@ -332,12 +466,55 @@ RENDERERS = {
     "kilocode": render_kilocode,
     "hermes": render_hermes,
     "crush": render_crush,
+    "minimax": render_minimax,
 }
 
+# Renderers that resolve repo-relative paths against the repo root.
+#
+# WHY ONLY MINIMAX. Every other client reads a TRACKED roster that lives
+# INSIDE the repo (`.claude/mcp.json`, `.kimi/mcp.json`, `kilo.json`,
+# `.opencode/config.json`, the Hermes profile) and hands it to the binary
+# with `--mcp-config`. A repo-relative path inside a repo-rooted roster is
+# resolved by the client against the repo -- which is correct, and is what
+# `.claude/mcp.json`'s deliberate `./pmoves-hirag-mcp` depends on.
+#
+# The MiniMax client is the odd one out: it reads `~/.minimax/mcp.json`,
+# which lives OUTSIDE the repo, so nothing about it is repo-rooted. Its
+# repo-relative stdio paths have to be absolutized at render time or they
+# resolve against whatever directory the client happened to be started in.
+# See _abs_repo_relative.
+ROOT_AWARE_RENDERERS = ("minimax",)
 
 # ---------------------------------------------------------------------------
 # Merge / write helpers
 # ---------------------------------------------------------------------------
+
+# Keys the MiniMax RUNTIME owns, not the generator.
+#
+# WHY THIS LIST EXISTS. The renderer docstring (render_minimax) promises:
+# "`configured` -- the MiniMax runtime marks a server as 'configured' once it
+# has been wired; the merge path preserves the operator's existing value."
+# That promise was FALSE until this constant was introduced: the rendered
+# overlay always supplied `configured: True` and `builtin: False`, and
+# _deep_merge overwrites scalars with the overlay, so a regeneration
+# silently reset whatever the runtime had decided.
+#
+# THE CONSEQUENCE (the bug this fixes). A server the operator had NOT yet
+# finished wiring came back marked `configured: true` -- falsely claiming it
+# was live. And a server the runtime had marked `builtin: true` came back
+# marked `builtin: false` -- stripping a runtime-owned marker. Either way
+# the regenerated file disagreed with the runtime's own state.
+#
+# THE FIX. These keys are supplied by the renderer only for NEW entries.
+# On merge, an entry that ALREADY exists in the on-disk config keeps the
+# runtime's value verbatim. That is what "the merge path preserves the
+# operator's existing value" has to mean for it to be true.
+#
+# Deliberately NOT a general "preserve these keys" list for every client:
+# only MiniMax's runtime owns these names. Claude/Kimi/Kilo have no such
+# keys, and inventing a shared mechanism for one client would be a
+# workaround, not a fix.
+MINIMAX_RUNTIME_MANAGED_KEYS = ("configured", "builtin")
 
 
 def _deep_merge(base: Any, overlay: Any, *, _key: Optional[str] = None) -> Any:
@@ -359,6 +536,59 @@ def _deep_merge(base: Any, overlay: Any, *, _key: Optional[str] = None) -> Any:
     return overlay
 
 
+def _restore_minimax_runtime_managed(
+    existing: Dict[str, Any], rendered: Dict[str, Any]
+) -> Dict[str, Any]:
+    """Re-apply the MiniMax runtime's own values onto a freshly rendered roster.
+
+    Call this AFTER `_deep_merge`, because the merge is what overwrites them:
+    the rendered overlay carries `configured: True` / `builtin: False` for
+    every server, and `_deep_merge` lets the overlay win on scalars.
+
+    For each server that ALREADY existed in the on-disk config, the
+    runtime-managed keys are copied back from the on-disk value. Servers
+    that are NEW in this render keep the renderer's defaults -- there is no
+    runtime state for a server the runtime has never seen.
+
+    Returns a NEW dict; the inputs are not mutated.
+    """
+    existing_servers = existing.get("mcpServers")
+    if not isinstance(existing_servers, dict):
+        # Nothing to preserve. Return a copy of the render.
+        return dict(rendered)
+
+    result = dict(rendered)
+    rendered_servers = rendered.get("mcpServers")
+    if not isinstance(rendered_servers, dict):
+        return result
+
+    merged_servers = dict(rendered_servers)
+    for server_key, on_disk in existing_servers.items():
+        if not isinstance(on_disk, dict):
+            continue
+        current = merged_servers.get(server_key)
+        if not isinstance(current, dict):
+            # The render does not carry this server (it was dropped from
+            # the roster). Leave it alone -- do not resurrect it.
+            continue
+        # COPY the per-server dict before touching it. `merged_servers` holds
+        # the SAME dict objects as `rendered`, so assigning into `current`
+        # in place would mutate the caller's input -- which this function
+        # promises not to do. The copy is written back so the restored
+        # values are the ones that land on disk.
+        updated = dict(current)
+        for managed_key in MINIMAX_RUNTIME_MANAGED_KEYS:
+            if managed_key not in on_disk:
+                # The runtime has not expressed an opinion about this key
+                # on this entry. The renderer's default stands.
+                continue
+            updated[managed_key] = on_disk[managed_key]
+        merged_servers[server_key] = updated
+
+    result["mcpServers"] = merged_servers
+    return result
+
+
 def _load_json_or_empty(path: Path) -> Dict[str, Any]:
     if not path.exists():
         return {}
@@ -374,6 +604,53 @@ def _backup_once(path: Path) -> None:
         shutil.copy2(path, backup)
 
 
+def _profile_tool_keys(client: str, profile_path: Optional[Path] = None) -> Optional[List[str]]:
+    """Return the tool keys a client's bootstrap profile declares.
+
+    Returns None when the client has no profile (every other client keeps
+    the whole-inventory behaviour). Raises MCPConfigError when a declared
+    key is missing from the inventory -- fail-closed, because a profile
+    that names a server the fleet does not run is a silent broken roster.
+    """
+    # An EXPLICIT --client-profile must always mean something. The old
+    # shape short-circuited on `client not in CLIENT_PROFILES` and returned
+    # None, so `--client claude --client-profile some-profile.yaml` never
+    # read the file: the flag silently no-op'd and the operator got a
+    # full-inventory render with a clean exit 0. That is the "silent
+    # degradation" failure mode this generator's own comments rail against,
+    # shipped in the tool whose job is to prevent it.
+    #
+    # So: an explicit path is honoured for ANY client. Only a client with no
+    # profile of its own AND no explicit path falls back to whole-inventory.
+    path = profile_path or CLIENT_PROFILES.get(client)
+    if path is None:
+        return None
+    if not path.exists():
+        raise MCPConfigError(f"Client profile not found for '{client}': {path}")
+    try:
+        import yaml  # local import: the generator's core path does not need PyYAML
+    except ImportError as exc:  # pragma: no cover - dependency guard
+        raise MCPConfigError(
+            f"Client profile '{path}' requires PyYAML to read the roster. "
+            f"Install pyyaml or pass --no-profile-filter."
+        ) from exc
+    data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    tools = (data.get("super_nodes") or {}).get("tools") or []
+    keys: List[str] = []
+    for entry in tools:
+        if not isinstance(entry, dict):
+            continue
+        key = entry.get("key")
+        if key:
+            keys.append(key)
+    if not keys:
+        raise MCPConfigError(
+            f"Client profile '{path}' declares no tools[].key entries -- "
+            f"refusing to render an empty roster for '{client}'."
+        )
+    return keys
+
+
 def generate_for_client(
     client: str,
     *,
@@ -381,13 +658,37 @@ def generate_for_client(
     endpoint: str = "fleet",
     context: Optional[Dict[str, str]] = None,
     allow_os_environ: bool = True,
+    profile_path: Optional[Path] = None,
+    use_profile: bool = True,
+    root: Optional[Path] = None,
 ) -> Dict[str, Any]:
     inventory = inventory or load_inventory()
     context = context or {}
     if client not in RENDERERS:
         raise MCPConfigError(f"Unknown client: {client}")
     specs = _collect_servers(inventory, client, endpoint)
-    return RENDERERS[client](specs, context, allow_os_environ=allow_os_environ)
+    if use_profile:
+        declared = _profile_tool_keys(client, profile_path)
+        if declared is not None:
+            by_key = {spec.key: spec for spec in specs}
+            missing = [k for k in declared if k not in by_key]
+            if missing:
+                raise MCPConfigError(
+                    f"Client profile for '{client}' declares tool keys that the "
+                    f"inventory does not resolve for this client/endpoint: "
+                    f"{', '.join(missing)}. Either the inventory entry is "
+                    f"missing, is allowlisted to other clients only, or the "
+                    f"endpoint mode ({endpoint}) excludes it."
+                )
+            specs = [by_key[k] for k in declared]
+    # Only the MiniMax renderer resolves repo-relative paths, because only the
+    # MiniMax client reads its roster from OUTSIDE the repo. See
+    # _abs_repo_relative for the whole argument; the short form is that the
+    # other clients read a repo-rooted roster and would be BROKEN by it.
+    extra: Dict[str, Any] = {}
+    if root is not None and client in ROOT_AWARE_RENDERERS:
+        extra["root"] = root
+    return RENDERERS[client](specs, context, allow_os_environ=allow_os_environ, **extra)
 
 
 def write_client_config(
@@ -399,17 +700,25 @@ def write_client_config(
     endpoint: str = "fleet",
     context: Optional[Dict[str, str]] = None,
     allow_os_environ: bool = True,
+    profile_path: Optional[Path] = None,
+    use_profile: bool = True,
+    root: Optional[Path] = None,
 ) -> Path:
     """Generate and write config for a single client.
 
-    For JSON clients (Claude, Kimi, KiloCode, Crush) the output is merged with
+    For JSON clients (Claude, Kimi, KiloCode, Crush, MiniMax) the output is merged with
     the existing file when merge=True. For Hermes, a YAML mcp_servers snippet
     is printed to stdout; callers are responsible for injecting it into the
     Hermes config.yaml because YAML round-tripping is left to the Hermes
     bootstrap script.
+
+    `root` is the repo root that repo-relative stdio paths resolve against,
+    for the clients that need it (ROOT_AWARE_RENDERERS). It defaults to the
+    generator's own PROJECT_ROOT.
     """
     rendered = generate_for_client(client, inventory=inventory, endpoint=endpoint, context=context,
-                                   allow_os_environ=allow_os_environ)
+                                   allow_os_environ=allow_os_environ, profile_path=profile_path,
+                                   use_profile=use_profile, root=root)
 
     if client == "hermes":
         # Hermes is YAML; write a snippet file for the bootstrap script to merge.
@@ -428,11 +737,56 @@ def write_client_config(
         _backup_once(output_path)
         existing = _load_json_or_empty(output_path)
         final = _deep_merge(existing, rendered)
+        if client == "minimax":
+            # The rendered overlay carries `configured: True` /
+            # `builtin: False` for every server, and _deep_merge lets the
+            # overlay win on scalars -- so the merge is exactly what
+            # clobbers the runtime's own values. Restore them AFTER the
+            # merge. See MINIMAX_RUNTIME_MANAGED_KEYS.
+            final = _restore_minimax_runtime_managed(existing, final)
     else:
         final = rendered
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.write_text(json.dumps(final, indent=2) + "\n", encoding="utf-8")
+    # CREATE WITH THE MODE ALREADY SET. `write_text()` opens with the
+    # default umask and only gets 0o600 afterwards, so every freshly
+    # rendered roster spent a brief window world-readable while carrying
+    # expanded tokens -- a wide-open moment inside the very block whose
+    # comment explains why the file must be secret-grade. The mode is a
+    # BIRTHRIGHT here, not an afterthought applied once the secret is
+    # already on disk.
+    #
+    # os.open() honours the mode only when it CREATES the file, so a
+    # pre-existing file keeps whatever mode it had -- which is why the
+    # chmod below still runs, as belt-and-suspenders for files that
+    # already existed.
+    payload = json.dumps(final, indent=2) + "\n"
+    fd = os.open(output_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    try:
+        handle = os.fdopen(fd, "w", encoding="utf-8")
+    except BaseException:
+        # fdopen did not take ownership of the descriptor -- close it here
+        # rather than leaking it.
+        os.close(fd)
+        raise
+    with handle:
+        handle.write(payload)
+    # Owner-only on POSIX.
+    #
+    # WHY NOW (2026-10-26). A rendered config CAN hold expanded secrets --
+    # the agent-zero MCP token rides in the URL PATH, and the cipher +
+    # flute headers carry API keys. For the tracked repo configs the
+    # placeholders are preserved (allow_os_environ=False), so those files
+    # stay secret-free. But a LIVE per-node config (the MiniMax client's
+    # ~/.minimax/mcp.json, the Hermes profile) is written with the values
+    # expanded, and the default umask would leave it world-readable.
+    #
+    # This is a no-op on Windows (no POSIX mode bits); the mode is still
+    # applied when the same generator runs on a Linux fleet node.
+    try:
+        os.chmod(output_path, 0o600)
+    except (OSError, NotImplementedError):  # pragma: no cover - platform guard
+        pass
     return output_path
 
 
@@ -484,6 +838,24 @@ def main(argv: Optional[List[str]] = None) -> int:
         metavar="KEY=VALUE",
         default=[],
         help="Override context variable for ${...} expansion (can be repeated).",
+    )
+    parser.add_argument(
+        "--client-profile",
+        type=Path,
+        default=None,
+        help=(
+            "Path to a pmoves.bootstrap/v1 client profile that pins the roster "
+            f"for a client. Defaults to the profile registered for that client "
+            f"({', '.join(sorted(CLIENT_PROFILES)) or 'none'})."
+        ),
+    )
+    parser.add_argument(
+        "--no-profile-filter",
+        action="store_true",
+        help=(
+            "Render the whole inventory for the client instead of the roster its "
+            "bootstrap profile declares."
+        ),
     )
     args = parser.parse_args(argv)
 
@@ -549,6 +921,8 @@ def main(argv: Optional[List[str]] = None) -> int:
         rendered = generate_for_client(
             client, inventory=inventory, endpoint=args.endpoint, context=context,
             allow_os_environ=not is_tracked,
+            profile_path=args.client_profile,
+            use_profile=not args.no_profile_filter,
         )
 
         if args.dry_run:
@@ -564,6 +938,8 @@ def main(argv: Optional[List[str]] = None) -> int:
             endpoint=args.endpoint,
             context=context,
             allow_os_environ=not is_tracked,
+            profile_path=args.client_profile,
+            use_profile=not args.no_profile_filter,
         )
         print(f"OK Wrote {client} MCP config to {written}")
 
