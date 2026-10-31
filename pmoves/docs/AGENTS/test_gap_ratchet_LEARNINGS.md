@@ -393,3 +393,64 @@ Pattern after round 6: **contract-correctness still leads** — 14 of 29 lessons
 | `pmoves/tools/pytest_ratchet.py` | `run_chunk_with_fallback()` (`:416`) | The isolation pass uses the per-file budget, so a declared-slow file is measured there too. |
 | `pmoves/tests/tools/test_pytest_ratchet.py` | `TestDeclaredSlowFiles` (`:115`) | 11 tests pinning the new budget model, including the negative control (`:174`) and the wiring to the subprocess (`:201`) and to the isolation pass (`:224`). |
 | `pmoves/tests/tools/test_mavis_ratchet_mutation_kill.py` | `test_pytest_run_timeout_fires_and_releases_the_lock` (`:1437`) | The deliberate sleep trimmed from 20 s to 12 s (`:1483`); the 8 s override and every assertion unchanged. |
+
+## Review round 7 (2026-10-31 · PR #3427 follow-on) — "the escape hatch had a trapdoor"
+
+Round 6 made a declared-slow file MEASURED instead of lost. Round 7 is the review of that change, and it found **two holes in round 6's own fix** — both in the same file, both in the machinery round 6 added.
+
+### Finding 1 — the escape hatch had a trapdoor (actionable)
+
+Round 6 widened the CHUNK budget and the PER-FILE budget. It left the third one alone: `FALLBACK_BUDGET_SECONDS` (600 s) still bounded the whole isolation pass. But the per-file budget could now legally hand ONE file `60 + 600 = 660 s` — more than the pass budget on its own. So if the chunk timed out anyway (a genuine hang elsewhere in it burning the enlarged chunk budget), the isolation pass could exhaust its flat 600 s **before reaching the harness**, and the loop's `--- fallback budget exhausted; N files unmeasured ---` would re-declare the very file the allowance exists to defend as BROKEN — with less signal than round 6 had. The allowance admitted the file at the door and priced it out at the window.
+
+FIX: `fallback_budget_seconds()` (`:282`) = `FALLBACK_BUDGET_SECONDS` + the sum of the chunk's allowances, and the isolation loop compares `spent` against it (`:478`). A chunk with no declared-slow file gets **exactly** `FALLBACK_BUDGET_SECONDS` — the default path is numerically unchanged.
+
+### Finding 2 — a budget-owning line that failed to parse vanished without a sound (nitpick)
+
+`load_slow_file_entries()` skipped any line inside the `slow_files:` block that did not match the entry pattern — a typo'd path, `600s` instead of `600`, a mis-nested line — with no diagnostic at all. A typo'd path means the file **silently loses its allowance**, and CI then re-reports it as BROKEN with less signal than before. Silence is fine for prose; this parser is the single source of a budget.
+
+FIX: an unparseable line inside the block now emits a one-line stderr warning quoting the raw line (`:230`). A line OUTSIDE the block is still skipped quietly — only a budget-owning line is worth a sound.
+
+### Finding 3 — found by the mutation check, not by a reviewer: the HELPER is not the WIRING
+
+The first version of the fix for finding 1 shipped a test that called `fallback_budget_seconds()` and compared the result. That test **SURVIVED** the mutation that reverts the call site to the flat budget — because the helper was intact and correct while the runner kept using the old currency. A green test, a correct helper, and a broken runner.
+
+The test now drives `run_chunk_with_fallback()` itself, with the pass budget already exhausted, and requires the declared-slow file to still be MEASURED rather than declared dead (`test_a_declared_slow_file_is_still_measured_when_the_pass_budget_is_gone`, `:264`). With the flat budget the loop breaks on its first check and the file lands in `dead` — which the runner reports as BROKEN. That is the trapdoor, and the test forbids it.
+
+| # | Class | Observation (rule) | Evidence / Why | Apply when |
+|---|-------|---------------------|----------------|------------|
+| 30 | **contract-correctness** | **An escape hatch must not have a trapdoor: the budget that ADMITS a slow file must also AFFORD it.** | Round 6 widened the chunk budget (120 → 720 s) and the per-file budget (60 → 660 s) but left `FALLBACK_BUDGET_SECONDS = 600` bounding the isolation pass. 660 > 600, so ONE declared-slow file could consume more than the entire pass it lives in. The `--- fallback budget exhausted; N files unmeasured ---` path then re-declared it BROKEN. The allowance worked at the front door and failed at the window. FIX: `fallback_budget_seconds()` (`:282`), used by the isolation loop (`:478`). A chunk with no allowance gets EXACTLY `FALLBACK_BUDGET_SECONDS`. | Any budget that grants a special allowance in one place and prices it in another. |
+| 31 | **reasoning-gap** | **A budget-owning line that fails to parse must NOT vanish — silence is only acceptable for prose.** | `load_slow_file_entries()` skipped an unmatched line inside the `slow_files:` block with no diagnostic. A typo'd path silently strips the file's allowance, and CI re-reports that file as BROKEN with LESS signal than before — a rounding error in the other direction that is harder to see, not easier. FIX: a one-line stderr warning quoting the raw line (`:230`); a line OUTSIDE the block stays quiet. | Any parser whose output is a budget, an allow-list, or a safety limit. |
+| 32 | **defense-in-depth** | **A test that exercises the HELPER is not a test of the WIRING.** | The first fix for finding 1 shipped a test that called `fallback_budget_seconds()` directly. The mutation check proved that test **SURVIVED** reverting the CALL SITE to the flat budget: the helper stayed intact and correct while the runner kept using the old currency. The test now drives `run_chunk_with_fallback()` with the pass budget exhausted and requires the file to be MEASURED, not declared dead (`:264`). Both round-7 mutations are now killed, and the restore is byte-exact with the suite green again. | Any fix that adds a pure helper AND a call site. |
+
+### Round-7 measurement (2026-10-31, Windows, Python 3.12.10, pytest 9.1.1)
+
+| Measurement | Value |
+|---|---|
+| `pmoves/tests/tools/test_pytest_ratchet.py` | **38 passed** (31 after round 6 + 7 new), 0.19 s |
+| round-7 mutation M1 — pass budget reverts to the flat default | **KILLED** (`test_a_declared_slow_file_is_still_measured_when_the_pass_budget_is_gone` goes red) |
+| round-7 mutation M2 — the unparseable-entry warning is removed | **KILLED** (`test_an_unparseable_entry_is_reported_not_silently_dropped` goes red) |
+| restore after the mutation run | byte-exact; the suite is **38 passed** again |
+| isolation-pass budget, chunk WITH the harness | 600 s → **1200 s** (600 + 600) |
+| isolation-pass budget, chunk WITHOUT any allowance | **600 s — numerically unchanged** |
+| chunk / per-file budget, every file with no allowance | **120 s / 60 s — numerically unchanged** |
+
+### Round-7 cross-check (re-tallied)
+
+- **(1) reasoning-gap** — 6 lessons (#3, #7, #11, #14, #27, **#31**)
+- **(2) semantic-naming drift** — 1 lesson (#8)
+- **(3) contract-correctness** — 15 lessons (#2, #4, #10, #15, #17, #18, #19, #20, #21, #22, #23, #24, #25, #26, **#30**)
+- **(4) defense-in-depth** — 8 lessons (#1, #6, #9, #12, #13, #16, #28, **#32**)
+- **(5) pattern-conformance** — 2 lessons (#5, #29)
+
+Pattern after round 7: **contract-correctness still leads** — 15 of 32 lessons. The two rounds that looked at the GATE rather than the ratchet it gates produced the sharpest lessons in the lane, and both of them are about the same thing: a gate that cannot distinguish "broken" from "slow" will spend every future round investigating files that were never broken. Round 6 gave the runner a way to say "this one is slow". Round 7 made sure the same runner could not then say "and it is broken anyway".
+
+### Round-7 SDK provenance
+
+| File | Symbol anchor | What it does |
+|---|---|---|
+| `pmoves/tools/pytest_ratchet.py` | `fallback_budget_seconds()` (`:282`) | `FALLBACK_BUDGET_SECONDS` + the sum of the chunk's allowances; exactly `FALLBACK_BUDGET_SECONDS` when there are none. |
+| `pmoves/tools/pytest_ratchet.py` | `run_chunk_with_fallback()` (`:478`) | The isolation loop compares `spent` against the allowance-aware pass budget. |
+| `pmoves/tools/pytest_ratchet.py` | `load_slow_file_entries()` (`:230`) | An unparseable line inside the `slow_files:` block now emits a one-line stderr warning quoting the raw line. |
+| `pmoves/tests/tools/test_pytest_ratchet.py` | `test_a_declared_slow_file_is_still_measured_when_the_pass_budget_is_gone` (`:264`) | Drives the isolation pass with the budget exhausted; the file must be MEASURED, not declared dead. |
+| `pmoves/tests/tools/test_pytest_ratchet.py` | `test_an_unparseable_entry_is_reported_not_silently_dropped` (`:348`) | A malformed entry must be reported, quoting the raw line. |
+| `pmoves/tests/tools/test_pytest_ratchet.py` | `test_a_prose_line_outside_the_block_is_not_reported` (`:369`) | Only a line INSIDE the block is budget-owning; a top-level key that is not `slow_files:` stays quiet. |

@@ -221,6 +221,14 @@ def load_slow_file_entries(
             continue
         match = _SLOW_ENTRY_RE.match(stripped)
         if not match:
+            # A line INSIDE the block that does not parse is a budget-owning
+            # line, not prose: a typo'd path, "600s" instead of "600", a
+            # mis-nested entry. Skipping it quietly would silently strip the
+            # file's allowance, and CI would then report that file as BROKEN
+            # with LESS signal than before. Say so, and quote the raw line.
+            sys.stderr.write(
+                "--- slow-files config: unparseable entry, IGNORED: %s%s"
+                % (stripped, chr(10)))
             continue
         key = match.group("key").strip().strip('"').strip("'")
         extra = int(match.group("seconds"))
@@ -269,6 +277,29 @@ def file_timeout_seconds(file, allowances: Optional[Dict[str, int]] = None) -> i
     """
     allow = load_slow_file_allowances() if allowances is None else allowances
     return FALLBACK_FILE_TIMEOUT + allow.get(_config_key(file), 0)
+
+
+def fallback_budget_seconds(files, allowances: Optional[Dict[str, int]] = None) -> int:
+    """Wall clock for the WHOLE isolation pass: the default plus the chunk's.
+
+    THE ESCAPE HATCH MUST NOT HAVE A TRAPDOOR. The per-file budget is
+    ``FALLBACK_FILE_TIMEOUT + allowance``, so ONE declared-slow file can
+    legally consume more than the flat pass budget on its own. A pass that
+    still counted in the old currency could exhaust its budget BEFORE
+    reaching that file -- and the "fallback budget exhausted" path then
+    re-declared the very file the allowance exists to defend as BROKEN,
+    with less signal than before.
+
+    So the pass budget is allowance-aware too: a declared-slow file can never
+    be priced out of the very pass its own allowance enlarged.
+
+    Pure, so the budget model itself can be asserted. A chunk with no
+    declared-slow file gets EXACTLY FALLBACK_BUDGET_SECONDS.
+    """
+    allow = load_slow_file_allowances() if allowances is None else allowances
+    return FALLBACK_BUDGET_SECONDS + sum(
+        allow.get(_config_key(f), 0) for f in files
+    )
 
 
 def run_pytest(files: List[Path], junit: Path,
@@ -441,15 +472,19 @@ def run_chunk_with_fallback(group: str, gfiles: List[Path], tmp: Path,
             group, rc, chr(10), output[-1500:], chr(10)))
         return [], [group]
 
+    # The pass budget is allowance-aware: see fallback_budget_seconds(). A
+    # declared-slow file can consume more than the flat default on its own,
+    # so the pass must be able to afford it.
+    pass_budget = fallback_budget_seconds(gfiles)
     sys.stderr.write(
         "--- %s timed out; isolating %d files (budget %ds) ---%s" % (
-            group, len(gfiles), FALLBACK_BUDGET_SECONDS, chr(10)))
+            group, len(gfiles), pass_budget, chr(10)))
 
     findings: List[dict] = []
     dead: List[str] = []
     spent = 0.0
     for j, f in enumerate(gfiles):
-        if spent >= FALLBACK_BUDGET_SECONDS:
+        if spent >= pass_budget:
             # Honest about what was NOT measured. Silently stopping here would
             # reintroduce the defect this function exists to fix.
             remaining = [str(x).replace(chr(92), "/") for x in gfiles[j:]]
