@@ -152,7 +152,29 @@ jobs:
           # to the same repo, so it always synced the fork, but it read as the
           # PMOVES-n8n submodule PATH, which is PMOVES-n8n-FlooS (first-party
           # workflows, no upstream). FlooS is deliberately absent from FORKS.
-          # Fork list: upstream_owner/upstream_repo|fork_name|fork_branch_override
+          # Fork list: upstream_owner/upstream_repo|fork_name|fork_branch_override|upstream_ref
+          #
+          # upstream_ref (4th column, OPTIONAL) pins the UPSTREAM ref that gets
+          # merged into the fork branch. It exists because the upstream's
+          # DEFAULT branch is not always the right source: Pmoves-Glancer's
+          # hardened branch tracks an upstream RELEASE TAG, NOT upstream
+          # develop, and its registry entry says so.
+          #
+          # The pin's value is either:
+          #   - `release`  -> the upstream's latest release TAG, resolved at
+          #                   sync time (so the fork advances to the NEXT
+          #                   release on its own -- the registry's stated
+          #                   policy, with no manual bump to forget);
+          #   - a literal ref (a tag, a branch, a SHA) for a fork that must
+          #     track one specific ref.
+          #
+          # With no 4th column, the upstream's default branch is used --
+          # the historical behaviour, unchanged for every other fork.
+          #
+          # Without the pin, the sync loop would merge upstream develop into
+          # a release-pinned branch and propose a 614-commit development
+          # merge (measured 2026-10-31) — the opposite of the stated policy,
+          # and an unsafe update for a reviewer to merge.
           FORKS="
           openclaw/openclaw|PMOVES-ClawZ|
           Comfy-Org/ComfyUI|PMOVES-Creator|
@@ -189,7 +211,7 @@ jobs:
           Kilo-Org/kilocode|PMOVES-KeYlOkODe|
           tailscale-dev/ScaleTail|PMOVES-ScaleTail|
           nats-io/natscli|PMOVES-natscli-CHIT-EeZz|
-          nicolargo/glances|Pmoves-Glancer|PMOVES.AI-Edition-Hardened
+          nicolargo/glances|Pmoves-Glancer|PMOVES.AI-Edition-Hardened|release
           nats-io/nats.net|Pmoves-nats.net|
           pipecat-ai/pipecat-client-web-transports|Pmoves-pipecat-client-web-transports|
           pipecat-ai/pipecat-mcp-server|Pmoves-pipecat-mcp-server|
@@ -202,7 +224,7 @@ jobs:
           # reason "Results: $SYNCED synced" has always printed 0. The
           # process substitution form runs the `while` in the parent shell
           # so the counters survive the loop.
-          while IFS='|' read upstream fork branch_override; do
+          while IFS='|' read upstream fork branch_override upstream_ref; do
             [ -z "$fork" ] && continue
 
             # Check max
@@ -227,7 +249,30 @@ jobs:
               [ -z "$fb" ] && { fb=$(gh api "repos/POWERFULMOVES/$fork" --jq '.default_branch' 2>/dev/null) || { echo "SKIP $fork: no default branch"; continue; }; }
             fi
             echo "  syncing fork branch: $fb"
-            ub=$(gh api "repos/$upstream" --jq '.default_branch' 2>/dev/null) || { echo "SKIP $fork: no upstream branch"; continue; }
+            # The UPSTREAM ref to merge. The 4th FORKS column pins it:
+            #   - `release`     -> the upstream's latest release TAG, resolved NOW
+            #   - any other value -> that literal ref
+            #   - empty        -> the upstream's default branch (historical
+            #                      behaviour, unchanged for every fork with no pin)
+            #
+            # WHY `release` AND NOT A HARD-CODED TAG: the registry says the
+            # hardened Glancer branch tracks upstream RELEASE TAGS and must be
+            # advanced "by fast-forwarding to the next release tag". A literal
+            # pin implements that only until the next tag is published, and
+            # then the fork stops advancing SILENTLY -- a new rot vector in a
+            # lane whose whole subject is rot that nobody can see. Resolving
+            # `release` at sync time is the policy itself.
+            #
+            # MEASURED: `gh api repos/nicolargo/glances/releases/latest` and
+            # `git ls-remote --tags` agree on v4.5.8 (the current latest).
+            ub="${upstream_ref:-}"
+            if [ "$ub" = "release" ]; then
+                ub=$(gh api "repos/$upstream/releases/latest" --jq '.tag_name' 2>/dev/null) || ub=""
+                [ -z "$ub" ] && { echo "SKIP $fork: upstream has no release to pin to"; continue; }
+                echo "  upstream ref: $ub (latest release)"
+            elif [ -z "$ub" ]; then
+                ub=$(gh api "repos/$upstream" --jq '.default_branch' 2>/dev/null) || { echo "SKIP $fork: no upstream branch"; continue; }
+            fi
             uo=$(echo "$upstream" | cut -d/ -f1)
 
             # Get drift (one call, both fields — dedup'd from 2 calls to 1)
@@ -277,11 +322,34 @@ jobs:
             if ! git -C "$d" fetch --quiet --filter=blob:none --no-tags upstream "$ub"; then
               echo "  FAIL: fetch upstream"; find "$work" -delete 2>/dev/null; continue
             fi
+            # THE REF TO MERGE IS `FETCH_HEAD`, NOT `upstream/$ub`.
+            #
+            # `$ub` may be a TAG (the `release` pin resolves to a release tag).
+            # `git fetch --no-tags upstream v4.5.8` puts that commit in
+            # FETCH_HEAD and creates NO remote-tracking ref, so
+            # `git merge upstream/v4.5.8` fails with "not something we can
+            # merge". A BRANCH ref behaves differently: that fetch
+            # opportunistically updates `refs/remotes/upstream/<branch>`, so
+            # `upstream/$ub` resolves -- which is why the old code worked, and
+            # why a tag pin cannot reuse it.
+            #
+            # MEASURED against the real upstream, both shapes: fetching a TAG
+            # sets FETCH_HEAD and creates no remote-tracking ref; fetching a
+            # BRANCH sets FETCH_HEAD AND updates the remote-tracking ref.
+            # FETCH_HEAD is the one ref both set, so it is the one to merge.
+            merge_ref=$(git -C "$d" rev-parse --verify --quiet 'FETCH_HEAD^{commit}')
+            if [ -z "$merge_ref" ]; then
+              echo "  FAIL: no commit fetched for upstream ref '$ub'"; find "$work" -delete 2>/dev/null; continue
+            fi
             if ! git -C "$d" checkout --quiet -B "$SYNC_BRANCH" "origin/$fb"; then
               echo "  FAIL: checkout $fb"; find "$work" -delete 2>/dev/null; continue
             fi
-            git -C "$d" merge --no-edit "upstream/$ub"
-            if [ $? -ne 0 ]; then
+            # `if !` AND NOT `cmd; if [ $? -ne 0 ]`. GitHub runs `run:` steps
+            # under `bash -e`, so a bare failing `git merge` ABORTS THE WHOLE
+            # STEP -- the remaining forks in the loop would never be synced,
+            # and the conflict would read as a workflow failure instead of
+            # the skip it is meant to be.
+            if ! git -C "$d" merge --no-edit "$merge_ref"; then
               echo "  CONFLICT: $bh behind / $ah ahead — needs manual merge, skipping"
               git -C "$d" merge --abort 2>/dev/null
               find "$work" -delete 2>/dev/null; continue
