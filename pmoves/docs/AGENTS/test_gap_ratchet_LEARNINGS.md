@@ -274,3 +274,41 @@ Pattern after round 4: **contract-correctness now clearly dominates** — 11 of 
 | File | Change |
 |---|---|
 | `pmoves/tests/tools/test_mavis_ratchet_mutation_kill.py` | +417 / −15 — `PytestRunTimeout` (`:373`), `_pytest_timeout_seconds()` (`:576`), the timeout message (`:599`), `_run_pytest()` deadline (`:621`), `_read_and_exec_ratchet_module()` (`:706`), `_load_ratchet_module(lock_path, target)` (`:726`), `_mutation_case(lock_path=…)` (`:754`), `test_module_load_is_serialized_against_concurrent_mutation` (`:1112`), `test_pytest_run_timeout_fires_and_releases_the_lock` (`:1182`), `test_mutation_unlocked_module_load_is_killed` (`:1311`), `test_mutation_pytest_run_without_timeout_is_killed` (`:1333`) |
+
+---
+
+## Review round 5 (2026-10-30 · PR #3427) — "a deadline a typo can switch off, and a deadline that dies with the child"
+
+Two more findings against the round-4 code, both confirmed valid, and both about the SAME guarantee: the lock holder must not be able to hang. Round 4 put a deadline on the holder. Round 5 finds the two edges at which that deadline could still evaporate — the CONFIGURATION edge (a typo) and the CLEANUP edge (the kill path).
+
+| # | Class | Observation (rule) | Evidence / Why | Apply when |
+|---|-------|---------------------|----------------|------------|
+| 24 | **contract-correctness** | **A deadline that a typo can switch off is not a deadline.** | `_pytest_timeout_seconds()` (`:699`) guarded the `PMOVES_MAVIS_RATCHET_PYTEST_TIMEOUT` override with `value <= 0`. But `float("nan")` compares False against EVERYTHING, so `PMOVES_MAVIS_RATCHET_PYTEST_TIMEOUT=nan` sailed straight past the guard and BECAME the deadline — and a `nan` deadline never fires, so the run it was meant to bound was unbounded and the mutation lock could be held forever. `inf` is the same hole with a slower fuse: an astronomically large deadline, so the guarantee is gone. Both are ordinary float literals a typo can produce, and the docstring four lines above the guard already promised the opposite ("a deadline that can be switched off by a typo is the defect this fixes, not a fix"). FIX: `_validated_deadline()` (`:680`) rejects anything that is not FINITE and POSITIVE and falls back to the default; the dead `AttributeError` arm is dropped (`float()` on a `str` raises only `ValueError`, which is kept). Pinned by `test_nonfinite_timeout_override_falls_back_to_default` (`:1525`), killed by `test_mutation_nonfinite_timeout_override_is_killed` (`:1791`). | Any override, knob or env var that can WEAKEN a guarantee: validate the whole domain, not just the obvious sign. `nan`/`inf` are VALUES, not mistakes — a check that only looks at `<= 0` has not validated them. |
+| 25 | **contract-correctness** | **A deadline must survive the KILL: killing the direct child is not ending the tree, and the read that follows a kill needs a deadline of its own.** | On POSIX, CPython's timed-out `subprocess.run` path kills the child and calls `process.wait()` — bounded. On WINDOWS, the same path calls `process.communicate()` with **NO timeout** after the kill: an UNBOUNDED read. This harness spawns nested pytest subprocesses BY DESIGN, so a killed inner pytest can leave GRANDCHILDREN behind, and a surviving grandchild holds the stdout pipe open. The unbounded post-kill read then blocks FOREVER, `PytestRunTimeout` never raises, and `_mutation_case`'s `with _mutation_lock(...)` never exits — the lock is held forever on the one platform where round 4's guarantee was supposed to be airtight. FIX: the child is started in its OWN process group (`start_new_session=True` on POSIX, `CREATE_NEW_PROCESS_GROUP` on Windows) by `_spawn_pytest_process()` (`:750`); `_kill_process_tree()` (`:785`) kills the whole GROUP (`os.killpg`) on POSIX and the whole TREE (`taskkill /T /F`) on Windows; `_drain_process_output()` (`:834`) drains the pipes with its OWN bounded `communicate(timeout=…)` and closes them if a survivor still holds them open. `PytestRunTimeout` is raised on every branch, so the message contract holds on both platforms. Pinned by `test_post_kill_drain_is_bounded_when_a_pipe_holder_survives` (`:1613`) against a FAKE child whose pipe is held open by a survivor (`:1565`), so the simulated wedge fails loudly instead of wedging the suite that runs it; killed by `test_mutation_unbounded_post_kill_drain_is_killed` (`:1814`) and `test_mutation_direct_child_kill_is_killed` (`:1836`). | Any timeout around a process that can spawn children: the deadline must hold THROUGH the kill path, not merely up to it. Kill the TREE, and bound every read that follows the kill. |
+
+### Round-5 measurement (2026-10-30)
+
+| Run | Result | Wall-clock |
+|---|---|---|
+| harness `-v` (19 cases) | **19 passed** | 127.8s |
+| ratchet `-q` | **11 passed, 1 skipped** (the network-gated matrix cross-check) | 1.2s |
+| pair, `PMOVES_MAVIS_MATRIX_CHECK=1` | **31 passed** | 132.0s |
+| pair, `mavis` off PATH | **28 passed, 3 skipped** | 126.5s |
+
+The deadline is **300s per subprocess run** (`_DEFAULT_PYTEST_TIMEOUT_SECONDS`), and the post-kill drain carries its own **10s** bound (`_DRAIN_TIMEOUT_SECONDS`). The slowest harness case is **51.9s** — `test_mutation_pytest_run_without_timeout_is_killed`, the one that must let a hang run out under the MUTATED harness to prove the deadline is what stops it. The three new mutation cases cost ~5.6s each: they kill their mutation in the first phase, so they never wait out a real hang.
+
+### Round-5 cross-check (re-tallied)
+
+- **(1) reasoning-gap** — 4 lessons (#3, #7, #11, #14)
+- **(2) semantic-naming drift** — 1 lesson (#8)
+- **(3) contract-correctness** — 13 lessons (#2, #4, #10, #15, #17, #18, #19, #20, #21, #22, #23, **#24, #25**)
+- **(4) defense-in-depth** — 6 lessons (#1, #6, #9, #12, #13, #16)
+- **(5) pattern-conformance** — 1 lesson (#5)
+
+Pattern after round 5: **contract-correctness now leads outright** — 13 of 25 lessons. Round 5 is round 4 told from the other side: round 4 said the holder must not be able to hang; round 5 says the guarantee must not be defeatable at EITHER edge of the deadline — the configuration that sets it, and the cleanup that ends the run. A deadline a typo can switch off, and a deadline that dies with the child it was meant to bound, are the same defect wearing a different hat.
+
+### Round-5 SDK provenance
+
+| File | Change |
+|---|---|
+| `pmoves/tests/tools/test_mavis_ratchet_mutation_kill.py` | `_validated_deadline()` (`:680`), `_pytest_timeout_seconds()` rewritten (`:699`), `_spawn_pytest_process()` (`:750`), `_kill_process_tree()` (`:785`), `_drain_process_output()` (`:834`), `_run_pytest()` rewritten (`:855`), `_FakeWedgedChild` (`:1565`), `test_nonfinite_timeout_override_falls_back_to_default` (`:1525`), `test_post_kill_drain_is_bounded_when_a_pipe_holder_survives` (`:1613`), and three new mutation-kill cases (`:1791`, `:1814`, `:1836`) |

@@ -80,6 +80,29 @@ Defect H -- the pytest run had NO timeout, and it ran while holding the lock
     timeout on one platform and none on another is two different
     locks"): here the LOCK HOLDER is the one that can hang.
 
+Defect I -- the deadline could be switched OFF by a typo
+    ``_pytest_timeout_seconds`` guarded the override with
+    ``value <= 0``. But ``float("nan")`` compares False against
+    EVERYTHING, so ``PMOVES_MAVIS_RATCHET_PYTEST_TIMEOUT=nan`` sailed
+    straight past the guard and BECAME the deadline -- and a ``nan``
+    deadline never fires, so the run was unbounded. ``inf`` is the same
+    hole with a slower fuse: the deadline becomes astronomically large,
+    so the guarantee is gone. Both are ordinary float literals a typo
+    can produce. The override may now only make the deadline SAFER:
+    anything that is not a FINITE POSITIVE number falls back to the
+    default.
+
+Defect J -- the timeout could still hang on WINDOWS
+    CPython's own timed-out ``subprocess.run`` path kills the DIRECT
+    child and then, on WINDOWS, calls ``process.communicate()`` with NO
+    timeout -- an unbounded read. A killed inner pytest can leave
+    GRANDCHILDREN behind (this harness spawns nested pytest subprocesses
+    BY DESIGN), and a surviving grandchild holds the stdout pipe open:
+    the unbounded post-kill read blocks FOREVER, ``PytestRunTimeout``
+    never raises, and the mutation lock is never released. The child is
+    now started in its OWN process group, the whole TREE is killed on
+    timeout, and the post-kill drain is BOUNDED.
+
 THE KILL SIGNAL IS A TEST NAME, NOT A MOOD
 ------------------------------------------
 Each mutation names the test that MUST fail for the mutation to count as
@@ -98,7 +121,9 @@ from __future__ import annotations
 
 import contextlib
 import importlib.util
+import math
 import os
+import signal
 import socket
 import subprocess
 import sys
@@ -294,29 +319,94 @@ UNLOCKED_MODULE_LOAD = '''    path = TARGET if target is None else Path(target)
     return _read_and_exec_ratchet_module(path)
 '''
 
-# The FIXED pytest run: a REAL deadline, and the timeout is turned into a
-# failure that names the deadline, the test and the lock release.
+# The FIXED pytest run: a REAL deadline, the whole TREE killed on
+# timeout, and a BOUNDED post-kill drain.
 FIXED_PYTEST_RUN = '''    try:
-        return subprocess.run(
-            args,
-            cwd=str(REPO_ROOT),
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-        )
+        stdout, stderr = process.communicate(timeout=timeout)
     except subprocess.TimeoutExpired as exc:
+        _kill_process_tree(process)
+        stdout, stderr = _drain_process_output(process, _DRAIN_TIMEOUT_SECONDS)
         raise PytestRunTimeout(
             _pytest_timeout_message(timeout, args, select)
         ) from exc
 '''
 
 # The ORIGINAL pytest run: NO deadline, and no handling of a hang.
-ORIGINAL_PYTEST_RUN = '''    return subprocess.run(
-        args,
-        cwd=str(REPO_ROOT),
-        capture_output=True,
-        text=True,
-    )
+ORIGINAL_PYTEST_RUN = '''    try:
+        stdout, stderr = process.communicate()
+    except subprocess.TimeoutExpired as exc:
+        _kill_process_tree(process)
+        stdout, stderr = _drain_process_output(process, _DRAIN_TIMEOUT_SECONDS)
+        raise PytestRunTimeout(
+            _pytest_timeout_message(timeout, args, select)
+        ) from exc
+'''
+
+# The FIXED post-kill block: the child is killed as a TREE (not just the
+# direct child), and the drain that follows is BOUNDED.
+FIXED_POST_KILL = '''    except subprocess.TimeoutExpired as exc:
+        _kill_process_tree(process)
+        stdout, stderr = _drain_process_output(process, _DRAIN_TIMEOUT_SECONDS)
+        raise PytestRunTimeout(
+            _pytest_timeout_message(timeout, args, select)
+        ) from exc
+'''
+
+# The ORIGINAL post-kill block: only the DIRECT child is killed. The
+# grandchildren this harness spawns BY DESIGN survive, and one of them
+# holding the stdout pipe open is enough to wedge the drain.
+ORIGINAL_POST_KILL = '''    except subprocess.TimeoutExpired as exc:
+        process.kill()
+        stdout, stderr = _drain_process_output(process, _DRAIN_TIMEOUT_SECONDS)
+        raise PytestRunTimeout(
+            _pytest_timeout_message(timeout, args, select)
+        ) from exc
+'''
+
+# The FIXED post-kill drain: the read of the child's pipes carries its
+# OWN deadline, so a survivor that still holds the pipe open cannot
+# wedge the read forever.
+FIXED_DRAIN = '''    try:
+        stdout, stderr = process.communicate(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        stdout, stderr = "", ""
+        _close_process_pipes(process)
+    finally:
+        try:
+            process.wait(timeout=_TREE_KILL_TIMEOUT_SECONDS)
+        except (subprocess.TimeoutExpired, OSError, AttributeError):
+            pass
+    return stdout or "", stderr or ""
+'''
+
+# The ORIGINAL post-kill drain: an UNBOUNDED read. This is the shape of
+# CPython's own timed-out ``subprocess.run`` path on Windows, and it is
+# what held the mutation lock forever.
+ORIGINAL_DRAIN = '''    try:
+        stdout, stderr = process.communicate()
+    except subprocess.TimeoutExpired:
+        stdout, stderr = "", ""
+        _close_process_pipes(process)
+    finally:
+        try:
+            process.wait(timeout=_TREE_KILL_TIMEOUT_SECONDS)
+        except (subprocess.TimeoutExpired, OSError, AttributeError):
+            pass
+    return stdout or "", stderr or ""
+'''
+
+# The FIXED deadline validation: a deadline must be FINITE and POSITIVE.
+FIXED_DEADLINE_VALIDATION = '''    if not math.isfinite(value) or value <= 0:
+        return _DEFAULT_PYTEST_TIMEOUT_SECONDS
+    return value
+'''
+
+# The ORIGINAL deadline validation: ``value <= 0`` alone. ``float("nan")``
+# compares False against EVERYTHING, so a ``nan`` override became the
+# deadline -- and a ``nan`` deadline never fires.
+ORIGINAL_DEADLINE_VALIDATION = '''    if value <= 0:
+        return _DEFAULT_PYTEST_TIMEOUT_SECONDS
+    return value
 '''
 
 # WHY THE MUTATE WINDOW IS LOCKED
@@ -359,6 +449,20 @@ _DEFAULT_PYTEST_TIMEOUT_SECONDS = 300.0
 # short deadline instead of waiting out the real one. Same pattern as the
 # other gates in this lane (``PMOVES_MAVIS_MATRIX_CHECK``).
 _PYTEST_TIMEOUT_ENV = "PMOVES_MAVIS_RATCHET_PYTEST_TIMEOUT"
+
+# The DEADLINE for the POST-KILL drain of a timed-out child.
+#
+# After the child -- and the whole TREE it spawned -- is killed, the
+# pipes are drained with a SECOND, SHORT deadline. A survivor that still
+# holds the pipe open must not be able to wedge the read forever: the
+# mutation lock is held until this returns, so an unbounded drain is the
+# same defect as no deadline at all.
+_DRAIN_TIMEOUT_SECONDS = 10.0
+
+# The DEADLINE for the tree kill itself, and for the final reap of the
+# child. Both are bounded so that a kill that cannot complete cannot
+# become the new hang.
+_TREE_KILL_TIMEOUT_SECONDS = 30.0
 
 
 class MutationLockTimeout(TimeoutError):
@@ -573,6 +677,25 @@ def _repo_relative(path: Path) -> str:
         return str(path)
 
 
+def _validated_deadline(value: float) -> float:
+    """Return ``value`` if it is a usable deadline, else the DEFAULT.
+
+    A deadline must be FINITE and POSITIVE.
+
+    WHY NON-FINITE MATTERS
+    ---------------------
+    ``float("nan")`` compares False against EVERYTHING, so a
+    ``value <= 0`` guard lets it through -- and a ``nan`` deadline never
+    fires, so the run it was supposed to bound is unbounded. ``inf`` is
+    the same hole with a slower fuse: the deadline becomes
+    astronomically large, so the guarantee is gone. Both are ordinary
+    float literals a typo can produce, so both are REJECTED here.
+    """
+    if not math.isfinite(value) or value <= 0:
+        return _DEFAULT_PYTEST_TIMEOUT_SECONDS
+    return value
+
+
 def _pytest_timeout_seconds() -> float:
     """The deadline for ONE pytest run, with the env override applied.
 
@@ -580,20 +703,22 @@ def _pytest_timeout_seconds() -> float:
     TIMEOUT PATH ITSELF can be tested with a short deadline instead of
     waiting out the real one.
 
-    An unparseable, empty or non-positive override falls back to the
-    DEFAULT rather than silently dropping the deadline: a deadline that
-    can be switched off by a typo is the defect this fixes, not a fix.
+    An unparseable, empty, non-positive or NON-FINITE override falls back
+    to the DEFAULT rather than silently dropping the deadline: a
+    deadline that can be switched off by a typo is the defect this
+    fixes, not a fix.
+
+    ``float(...)`` on a ``str`` raises ``ValueError`` and nothing else,
+    so ``ValueError`` is the only reachable arm here.
     """
     raw = os.environ.get(_PYTEST_TIMEOUT_ENV)
     if raw is None:
         return _DEFAULT_PYTEST_TIMEOUT_SECONDS
     try:
         value = float(raw.strip())
-    except (AttributeError, ValueError):
+    except ValueError:
         return _DEFAULT_PYTEST_TIMEOUT_SECONDS
-    if value <= 0:
-        return _DEFAULT_PYTEST_TIMEOUT_SECONDS
-    return value
+    return _validated_deadline(value)
 
 
 def _pytest_timeout_message(
@@ -612,10 +737,119 @@ def _pytest_timeout_message(
         f"the pytest run TIMED OUT after {timeout:g}s (deadline "
         f"{_PYTEST_TIMEOUT_ENV}={timeout:g}s): {args!r} select={select!r}. "
         f"The mutation lock is about to be RELEASED and the mutated file is "
-        f"being restored. A hung child process, a network-gated test waiting "
-        f"on a socket, or a deadlock inside pytest holds the mutation lock "
-        f"FOREVER without this deadline -- check for a stuck child process."
+        f"being restored. The child and the whole process TREE it spawned "
+        f"were killed, and the pipes were drained with a BOUND "
+        f"({_DRAIN_TIMEOUT_SECONDS:g}s), so a surviving grandchild cannot "
+        f"wedge this read. A hung child process, a network-gated test "
+        f"waiting on a socket, or a deadlock inside pytest holds the "
+        f"mutation lock FOREVER without this deadline -- check for a stuck "
+        f"child process."
     )
+
+
+def _spawn_pytest_process(args: list[str]) -> subprocess.Popen[str]:
+    """Start the pytest child in its OWN process group.
+
+    The child is started in a NEW SESSION on POSIX and a NEW PROCESS
+    GROUP on Windows. That is what makes the TREE killable: without it
+    the child shares this process' group, so a timeout could only ever
+    kill the DIRECT child -- leaving the grandchildren (this harness
+    spawns nested pytest subprocesses BY DESIGN) alive and holding the
+    stdout pipe open.
+    """
+    kwargs: dict[str, object] = {}
+    if os.name == "nt":
+        kwargs["creationflags"] = getattr(
+            subprocess, "CREATE_NEW_PROCESS_GROUP", 0
+        )
+    else:
+        kwargs["start_new_session"] = True
+    return subprocess.Popen(
+        args,
+        cwd=str(REPO_ROOT),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        **kwargs,
+    )
+
+
+def _kill_direct_child(process) -> None:
+    """Kill the DIRECT child, if it is still alive."""
+    try:
+        process.kill()
+    except (OSError, AttributeError):
+        pass
+
+
+def _kill_process_tree(process) -> None:
+    """Kill the child AND every descendant it left behind.
+
+    KILLING ONLY THE DIRECT CHILD IS NOT ENOUGH. This harness spawns
+    nested pytest subprocesses by design, so a killed child can leave
+    GRANDCHILDREN behind, and a surviving grandchild keeps the stdout
+    pipe open. The post-kill read then never sees EOF -- and on Windows
+    CPython's own timed-out ``subprocess.run`` path performs exactly
+    that UNBOUNDED read, so the mutation lock would be held FOREVER.
+
+    POSIX kills the whole process GROUP (the child was started with
+    ``start_new_session=True``, so it leads its own group). Windows
+    kills the whole TREE with ``taskkill /T /F``.
+    """
+    if os.name == "nt":
+        try:
+            subprocess.run(
+                ["taskkill", "/PID", str(process.pid), "/T", "/F"],
+                capture_output=True,
+                text=True,
+                timeout=_TREE_KILL_TIMEOUT_SECONDS,
+            )
+        except (OSError, subprocess.SubprocessError):
+            pass
+        _kill_direct_child(process)
+        return
+    try:
+        os.killpg(
+            os.getpgid(process.pid),
+            getattr(signal, "SIGKILL", signal.SIGTERM),
+        )
+    except (AttributeError, OSError, ValueError):
+        _kill_direct_child(process)
+
+
+def _close_process_pipes(process) -> None:
+    """Close the child's pipes without waiting on whoever still holds them."""
+    for stream in (
+        getattr(process, "stdout", None),
+        getattr(process, "stderr", None),
+    ):
+        if stream is None:
+            continue
+        try:
+            stream.close()
+        except (OSError, ValueError):
+            pass
+
+
+def _drain_process_output(process, timeout: float) -> tuple[str, str]:
+    """Drain the child's pipes with a BOUND.
+
+    The direct child is dead, but a SURVIVOR may still hold the pipe
+    open. An unbounded read would then never return -- and the mutation
+    lock is held until this returns, so an unbounded drain is the same
+    defect as no deadline at all. The drain gives up instead of waiting.
+    """
+    try:
+        stdout, stderr = process.communicate(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        stdout, stderr = "", ""
+        _close_process_pipes(process)
+    finally:
+        try:
+            process.wait(timeout=_TREE_KILL_TIMEOUT_SECONDS)
+        except (subprocess.TimeoutExpired, OSError, AttributeError):
+            pass
+    return stdout or "", stderr or ""
 
 
 def _run_pytest(
@@ -623,6 +857,7 @@ def _run_pytest(
     *,
     select: str | None = None,
     timeout_seconds: float | None = None,
+    spawn=None,
 ) -> subprocess.CompletedProcess[str]:
     """Run a pytest module and capture the whole report.
 
@@ -634,6 +869,11 @@ def _run_pytest(
     to run ONLY the test the mutation is supposed to kill: the other
     tests are not evidence for this mutation, and running the whole
     module would pay for a live ``mavis --version`` on every mutation.
+
+    ``spawn`` replaces the child-starting step. It exists so the timeout
+    path can be exercised against a SIMULATED child (one whose pipe is
+    held open by a survivor) without wedging the suite that runs the
+    test.
 
     THE DEADLINE IS MANDATORY, NOT DECORATION
     -----------------------------------------
@@ -648,6 +888,19 @@ def _run_pytest(
     The deadline is overridable through ``PMOVES_MAVIS_RATCHET_PYTEST_TIMEOUT``
     so the timeout path can be exercised without waiting out the real
     deadline.
+
+    AND THE DEADLINE MUST SURVIVE THE KILL
+    --------------------------------------
+    A deadline on the DIRECT child is not enough. CPython's own
+    timed-out ``subprocess.run`` path kills the direct child and then,
+    on WINDOWS, calls ``process.communicate()`` with NO timeout -- an
+    UNBOUNDED read. A killed inner pytest can leave GRANDCHILDREN behind
+    (this harness spawns nested pytest subprocesses by design), and a
+    surviving grandchild holds the stdout pipe open: the read never
+    returns, ``PytestRunTimeout`` never raises, and the mutation lock is
+    held FOREVER. The child is therefore started in its OWN process
+    group, the whole TREE is killed on timeout, and the post-kill drain
+    is BOUNDED.
     """
     args = [
         sys.executable,
@@ -663,20 +916,22 @@ def _run_pytest(
     timeout = (
         _pytest_timeout_seconds()
         if timeout_seconds is None
-        else float(timeout_seconds)
+        else _validated_deadline(float(timeout_seconds))
+    )
+    process = (
+        _spawn_pytest_process(args) if spawn is None else spawn(args)
     )
     try:
-        return subprocess.run(
-            args,
-            cwd=str(REPO_ROOT),
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-        )
+        stdout, stderr = process.communicate(timeout=timeout)
     except subprocess.TimeoutExpired as exc:
+        _kill_process_tree(process)
+        stdout, stderr = _drain_process_output(process, _DRAIN_TIMEOUT_SECONDS)
         raise PytestRunTimeout(
             _pytest_timeout_message(timeout, args, select)
         ) from exc
+    return subprocess.CompletedProcess(
+        args, process.returncode, stdout or "", stderr or ""
+    )
 
 
 def _failed_test_names(output: str) -> set[str]:
@@ -1267,6 +1522,187 @@ def test_pytest_run_timeout_fires_and_releases_the_lock(
     )
 
 
+def test_nonfinite_timeout_override_falls_back_to_default(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A ``nan`` / ``inf`` override MUST fall back to the DEFAULT.
+
+    ``float("nan")`` compares False against EVERYTHING, so the old
+    ``value <= 0`` guard let a ``nan`` override through and it BECAME
+    the deadline -- and a ``nan`` deadline never fires, so the run it
+    was supposed to bound was unbounded and the mutation lock could be
+    held forever. ``inf`` is the same hole with a slower fuse: the
+    deadline becomes astronomically large, so the guarantee is gone.
+
+    The override exists so the TIMEOUT PATH ITSELF can be exercised with
+    a SHORT deadline. It must never be able to make the deadline
+    WEAKER, so anything that is not a finite positive number falls back
+    to the default.
+    """
+    monkeypatch.setenv(_PYTEST_TIMEOUT_ENV, "7.5")
+    assert _pytest_timeout_seconds() == 7.5, (
+        "a VALID override must still be honoured -- the fallback must not "
+        "swallow the short deadline the timeout tests rely on"
+    )
+    for raw in ("nan", "NaN", "inf", "Infinity", "-inf", "-Infinity"):
+        monkeypatch.setenv(_PYTEST_TIMEOUT_ENV, raw)
+        effective = _pytest_timeout_seconds()
+        assert math.isfinite(effective), (
+            f"the timeout override {raw!r} produced a NON-FINITE deadline "
+            f"({effective!r}) -- a nan/inf deadline never fires, so the "
+            f"mutation lock can be held forever"
+        )
+        assert effective > 0, (
+            f"the timeout override {raw!r} produced a non-positive deadline "
+            f"({effective!r})"
+        )
+        assert effective == _DEFAULT_PYTEST_TIMEOUT_SECONDS, (
+            f"the timeout override {raw!r} did NOT fall back to the default "
+            f"({_DEFAULT_PYTEST_TIMEOUT_SECONDS!r}); it produced {effective!r}"
+        )
+
+
+class _FakeWedgedChild:
+    """A child whose stdout pipe is still held open by a SURVIVOR.
+
+    It simulates the Windows wedge exactly: the direct child is killed,
+    but a grandchild still holds the stdout pipe open, so a read of that
+    pipe never sees EOF.
+
+    The fake NEVER blocks -- a wedge simulated in a test must not become
+    a wedged suite:
+
+    * a BOUNDED ``communicate`` (one that carries a timeout) raises
+      ``TimeoutExpired``, the way a pipe held open by a survivor does;
+    * an UNBOUNDED ``communicate`` raises ``AssertionError``, because
+      that is the defect this harness pins: on a real host it would
+      block forever, and here it fails at the moment it happens.
+    """
+
+    def __init__(self, args: list[str]) -> None:
+        self.args = list(args)
+        # A pid that cannot belong to a live process: the tree kill is
+        # stubbed out in the test, and a stray real kill must be
+        # impossible.
+        self.pid = -1
+        self.returncode: int | None = None
+        self.stdout = None
+        self.stderr = None
+        self.bounded_calls = 0
+        self.unbounded_calls = 0
+        self.killed = False
+
+    def communicate(self, input=None, timeout=None):  # noqa: A002
+        if timeout is None:
+            self.unbounded_calls += 1
+            raise AssertionError(
+                "the post-kill drain was UNBOUNDED -- a surviving pipe "
+                "holder can wedge the read forever, and the mutation lock "
+                "is held forever with it"
+            )
+        self.bounded_calls += 1
+        raise subprocess.TimeoutExpired(self.args, timeout)
+
+    def kill(self) -> None:
+        self.killed = True
+
+    def wait(self, timeout=None) -> int:
+        return -9
+
+
+def test_post_kill_drain_is_bounded_when_a_pipe_holder_survives(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A surviving pipe holder MUST NOT be able to wedge the post-kill read.
+
+    CPython's timed-out ``subprocess.run`` path kills the DIRECT child
+    and then, on WINDOWS, calls ``process.communicate()`` with NO
+    timeout. This harness spawns nested pytest subprocesses BY DESIGN, so
+    a killed child can leave GRANDCHILDREN behind, and a surviving
+    grandchild holds the stdout pipe open. The unbounded post-kill read
+    then blocks FOREVER: ``PytestRunTimeout`` never raises, the mutation
+    lock is never released, and every other case in this file blocks
+    behind it.
+
+    The fix kills the TREE and drains the pipes with a BOUND. The child
+    here is a FAKE that simulates the wedged pipe (a bounded read times
+    out, an unbounded read fails loudly instead of hanging), so this test
+    can never wedge the suite that runs it.
+    """
+    fake = _FakeWedgedChild(["pytest", "simulated"])
+    tree_kills: list[object] = []
+    monkeypatch.setattr(
+        sys.modules[__name__],
+        "_kill_process_tree",
+        lambda process: tree_kills.append(process),
+    )
+    # A SHORT deadline: the simulated child ignores it, but the message
+    # contract must still name the deadline that was in force.
+    monkeypatch.setenv(_PYTEST_TIMEOUT_ENV, "5")
+    lock_path = tmp_path / "drain.lock"
+
+    started = time.monotonic()
+    with pytest.raises(PytestRunTimeout) as excinfo:
+        with _mutation_lock(lock_path):
+            _run_pytest(
+                TARGET,
+                select="test_never_runs",
+                spawn=lambda args: fake,
+            )
+    elapsed = time.monotonic() - started
+
+    assert fake.unbounded_calls == 0, (
+        "the post-kill drain was called WITHOUT a timeout -- a surviving "
+        "pipe holder can wedge the read forever, and the mutation lock is "
+        "held forever with it"
+    )
+    assert fake.bounded_calls >= 2, (
+        "both the timed-out run and the post-kill drain must be BOUNDED "
+        f"(saw {fake.bounded_calls} bounded reads)"
+    )
+    assert tree_kills, (
+        "the timed-out child was not killed as a TREE -- a killed direct "
+        "child can leave grandchildren behind that still hold the pipe open"
+    )
+    assert elapsed < 60, (
+        f"the bounded post-kill drain took {elapsed:.1f}s -- it is not "
+        f"bounded"
+    )
+
+    message = str(excinfo.value)
+    assert "5s" in message, (
+        f"the timeout message does not name the timeout: {message!r}"
+    )
+    assert "lock" in message.lower(), (
+        f"the timeout message does not say the lock is being released: {message!r}"
+    )
+
+    # The lock must be acquirable again -- the timeout path may not leave
+    # it held. The check runs in a THREAD: the in-process half of the
+    # lock is a non-reentrant ``threading.Lock``, so a leak would
+    # deadlock the main thread instead of failing.
+    acquired = threading.Event()
+    failure: dict[str, object] = {}
+
+    def acquire() -> None:
+        try:
+            with _MUTATION_LOCK:
+                with _file_lock(lock_path, timeout_seconds=10):
+                    acquired.set()
+        except BaseException as exc:  # pragma: no cover - diagnostic path
+            failure["exc"] = exc
+
+    thread = threading.Thread(target=acquire, daemon=True)
+    thread.start()
+    thread.join(timeout=30)
+    assert acquired.is_set(), (
+        "the mutation lock was NOT released after the bounded post-kill "
+        f"drain (failure={failure.get('exc')!r}) -- every other case in "
+        f"this file would block behind it forever"
+    )
+
+
 def test_mutation_posix_blocking_flock_is_killed() -> None:
     """A BLOCKING ``flock`` in the POSIX branch MUST fail the harness.
 
@@ -1349,6 +1785,73 @@ def test_mutation_pytest_run_without_timeout_is_killed() -> None:
     assert killed, (
         "the pytest run can hang without a deadline again -- it holds the "
         f"mutation lock forever and blocks every other case.\n{output}"
+    )
+
+
+def test_mutation_nonfinite_timeout_override_is_killed() -> None:
+    """A non-finite timeout override MUST fail the harness.
+
+    The mutation rewrites this harness' own deadline validation back to
+    the ``value <= 0``-only form, so ``float("nan")`` -- which compares
+    False against EVERYTHING -- becomes the deadline again; the test that
+    must fail is
+    ``test_nonfinite_timeout_override_falls_back_to_default``.
+    """
+    killed, output = _mutation_case(
+        HARNESS,
+        FIXED_DEADLINE_VALIDATION,
+        ORIGINAL_DEADLINE_VALIDATION,
+        select="test_nonfinite_timeout_override_falls_back_to_default",
+        expected_failing_test="test_nonfinite_timeout_override_falls_back_to_default",
+    )
+    assert killed, (
+        "the timeout override can be switched OFF by a typo again -- a nan "
+        "or inf override becomes the deadline, and a deadline that never "
+        f"fires is no deadline at all.\n{output}"
+    )
+
+
+def test_mutation_unbounded_post_kill_drain_is_killed() -> None:
+    """An UNBOUNDED post-kill drain MUST fail the harness.
+
+    The mutation rewrites this harness' own post-kill drain back to the
+    unbounded read -- the shape of CPython's timed-out ``subprocess.run``
+    path on Windows; the test that must fail is
+    ``test_post_kill_drain_is_bounded_when_a_pipe_holder_survives``.
+    """
+    killed, output = _mutation_case(
+        HARNESS,
+        FIXED_DRAIN,
+        ORIGINAL_DRAIN,
+        select="test_post_kill_drain_is_bounded_when_a_pipe_holder_survives",
+        expected_failing_test="test_post_kill_drain_is_bounded_when_a_pipe_holder_survives",
+    )
+    assert killed, (
+        "the post-kill drain can block forever again -- a surviving "
+        "grandchild holds the pipe open, the read never returns, and the "
+        f"mutation lock is never released.\n{output}"
+    )
+
+
+def test_mutation_direct_child_kill_is_killed() -> None:
+    """Killing only the DIRECT child MUST fail the harness.
+
+    The mutation rewrites this harness' own post-kill block back to a
+    direct-child kill, so the grandchildren this harness spawns BY
+    DESIGN survive; the test that must fail is
+    ``test_post_kill_drain_is_bounded_when_a_pipe_holder_survives``.
+    """
+    killed, output = _mutation_case(
+        HARNESS,
+        FIXED_POST_KILL,
+        ORIGINAL_POST_KILL,
+        select="test_post_kill_drain_is_bounded_when_a_pipe_holder_survives",
+        expected_failing_test="test_post_kill_drain_is_bounded_when_a_pipe_holder_survives",
+    )
+    assert killed, (
+        "a timed-out child can be killed without its TREE again -- the "
+        "grandchildren survive, one of them holds the stdout pipe open, "
+        f"and the mutation lock is held forever.\n{output}"
     )
 
 
