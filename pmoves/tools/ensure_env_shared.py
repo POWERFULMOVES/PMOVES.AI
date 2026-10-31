@@ -9,6 +9,12 @@ import subprocess
 import sys
 from pathlib import Path
 
+_REPO_ROOT = str(Path(__file__).resolve().parents[2])
+if _REPO_ROOT not in sys.path:
+    sys.path.insert(0, _REPO_ROOT)
+
+from pmoves.tools._secrets_common import env_write_lock  # noqa: E402
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Ensure env.shared exists for local workflows.")
@@ -20,8 +26,16 @@ def parse_args() -> argparse.Namespace:
 def main() -> int:
     args = parse_args()
     env_file = Path(args.env_file)
-    template = Path(args.template)
+    # Seed, brand_defaults and the Invidious preflight are each a read-modify-write
+    # of the same file. Hold the directory's env write lock across all three so a
+    # parallel (make -j) invidious-keys-preflight cannot interleave with them. The
+    # preflight child inherits PMOVES_ENV_WRITE_LOCK_HELD and does not re-acquire.
+    env_file.parent.mkdir(parents=True, exist_ok=True)
+    with env_write_lock(env_file):
+        return _ensure(env_file, Path(args.template))
 
+
+def _ensure(env_file: Path, template: Path) -> int:
     if not env_file.exists() and template.exists():
         print(f"-> Seeding {env_file} from {template}")
         env_file.parent.mkdir(parents=True, exist_ok=True)

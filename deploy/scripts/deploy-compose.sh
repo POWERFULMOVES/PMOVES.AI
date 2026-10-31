@@ -64,6 +64,30 @@ ensure_compose() {
   fi
 }
 
+# Invidious keys (PR #3431). docker-compose.yml declares ${INVIDIOUS_*_KEY:?},
+# and compose interpolates every service, profile or not, so this stack refuses
+# EVERY service until both keys exist. This script calls compose directly (no
+# make), so run the same preflight make uses, by path, then exec compose with the
+# keys exported from env.shared: this script relies on compose's default dotenv
+# lookup in the project directory, which is not the file the preflight
+# maintains. Values reach only compose's environment, never the output. Mode
+# "fix" (mint/rotate) for up, which recreates containers; "gate" (read-only) for
+# down/logs/ps, so a status command never changes a key under running
+# containers. Preflight exit 1 means compose would refuse anyway and stops here
+# with the fix; no python3 falls back to plain compose (the final gate).
+keys_compose() {
+  local mode="$1"; shift
+  local preflight="${PMOVES_DIR}/tools/invidious_keys_preflight.py"
+  if command -v python3 >/dev/null 2>&1 && [ -f "${preflight}" ]; then
+    local gate=()
+    if [ "${mode}" = "gate" ]; then gate=(--gate); fi
+    python3 "${preflight}" ${gate[@]+"${gate[@]}"} --env-file "${PMOVES_DIR}/env.shared" \
+      --exec -- "${DOCKER_COMPOSE_BIN[@]}" "$@"
+  else
+    "${DOCKER_COMPOSE_BIN[@]}" "$@"
+  fi
+}
+
 ensure_files() {
   if [ ! -d "${PMOVES_DIR}" ]; then
     echo "ERROR: pmoves/ directory not found at ${PMOVES_DIR}" >&2
@@ -123,7 +147,7 @@ cmd_health() {
       ((pass++)) || true
     else
       # Check if container is even running
-      if "${DOCKER_COMPOSE_BIN[@]}" -f "${COMPOSE_FILE}" -p "${PROJECT_NAME}" ps --format json 2>/dev/null | grep -q "\"${svc}\""; then
+      if keys_compose gate -f "${COMPOSE_FILE}" -p "${PROJECT_NAME}" ps --format json 2>/dev/null | grep -q "\"${svc}\""; then
         echo "    [FAIL] ${svc} (${url})"
         ((fail++)) || true
       else
@@ -147,7 +171,7 @@ cmd_up() {
   run_secrets_funnel
 
   echo "  Launching containers..."
-  "${DOCKER_COMPOSE_BIN[@]}" -f "${COMPOSE_FILE}" -p "${PROJECT_NAME}" up -d
+  keys_compose fix -f "${COMPOSE_FILE}" -p "${PROJECT_NAME}" up -d
 
   echo ""
   echo "  Waiting 10s for services to initialize..."
@@ -167,14 +191,14 @@ cmd_down() {
   echo "=> Stopping PMOVES local stack"
   echo "   Project: ${PROJECT_NAME}"
 
-  "${DOCKER_COMPOSE_BIN[@]}" -f "${COMPOSE_FILE}" -p "${PROJECT_NAME}" down
+  keys_compose gate -f "${COMPOSE_FILE}" -p "${PROJECT_NAME}" down
 }
 
 cmd_logs() {
   echo "=> Tailing logs for PMOVES local stack"
   echo "   Project: ${PROJECT_NAME}"
 
-  "${DOCKER_COMPOSE_BIN[@]}" -f "${COMPOSE_FILE}" -p "${PROJECT_NAME}" logs -f
+  keys_compose gate -f "${COMPOSE_FILE}" -p "${PROJECT_NAME}" logs -f
 }
 
 main() {

@@ -35,6 +35,7 @@ Never prints the key. Pure stdlib.
 from __future__ import annotations
 
 import argparse
+import hmac
 import json
 import os
 import re
@@ -95,21 +96,32 @@ def _service_env(service: str) -> dict[str, str] | None:
         if out.returncode != 0:
             return None
         entries = json.loads(out.stdout).get("Env") or []
-        return dict(e.split("=", 1) for e in entries if "=" in e)
-    except (OSError, ValueError, AttributeError, subprocess.SubprocessError):
+        return {k: v for k, _, v in (str(e).partition("=") for e in entries) if k}
+    except Exception:  # noqa: BLE001 - deliberate: see below
+        # The data in flight here is secret (every env var of both containers).
+        # Any exception -- including one whose message or traceback would quote a
+        # value -- becomes "not measurable" with NO detail. The caller reports
+        # COULD-NOT-MEASURE (exit 3), so the degradation is visible, not silent.
         return None
 
 
 def containers_agree() -> bool | None:
-    """True/False when both running containers' keys could be read, else None."""
-    inv, comp = _service_env("invidious"), _service_env("invidious-companion")
-    if inv is None or comp is None:
+    """True/False when both running containers' keys could be read, else None.
+
+    Never raises: any failure is None (exit 3) with no detail, so no key can
+    reach an exception message or a traceback.
+    """
+    try:
+        inv, comp = _service_env("invidious"), _service_env("invidious-companion")
+        if inv is None or comp is None:
+            return None
+        match = CONFIG_COMPANION_KEY_RE.search(str(inv.get("INVIDIOUS_CONFIG", "")))
+        inv_key, comp_key = (match.group(1) if match else ""), str(comp.get("SERVER_SECRET_KEY", ""))
+        if not inv_key or not comp_key:
+            return None
+        return hmac.compare_digest(inv_key.encode(), comp_key.encode())
+    except Exception:  # noqa: BLE001 - same contract as _service_env
         return None
-    match = CONFIG_COMPANION_KEY_RE.search(inv.get("INVIDIOUS_CONFIG", ""))
-    inv_key, comp_key = (match.group(1) if match else ""), comp.get("SERVER_SECRET_KEY", "")
-    if not inv_key or not comp_key:
-        return None
-    return inv_key == comp_key
 
 
 def main(argv: list[str] | None = None) -> int:

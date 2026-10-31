@@ -7,6 +7,7 @@ runtime_secrets_hydrate, auth_bootstrap_check, and local_cert_runners.
 
 from __future__ import annotations
 
+import contextlib
 import functools
 import hashlib
 import os
@@ -119,6 +120,46 @@ def is_known_public(value: str | None) -> bool:
     if not candidates or not KNOWN_PUBLIC_SECRET_CHARSET.fullmatch(normalized):
         return False
     return known_public_digest(normalized) in candidates
+
+
+ENV_WRITE_LOCK_NAME = ".pmoves-env-write.lock"
+ENV_WRITE_LOCK_HELD = "PMOVES_ENV_WRITE_LOCK_HELD"
+
+
+@contextlib.contextmanager
+def env_write_lock(env_path: Path):
+    """Serialize read-modify-write cycles on the env files in *env_path*'s directory.
+
+    ``make -j`` can run ensure-env-shared (brand_defaults + the Invidious key
+    preflight) and a goal's own preflight at the same time; each rewrites
+    env.shared from what it read, so one would silently drop the other's write.
+    One advisory lock per directory, held across the whole cycle. A child that
+    the lock holder spawns inherits ``PMOVES_ENV_WRITE_LOCK_HELD`` and must not
+    re-acquire (flock is per open file, so it would deadlock on its parent).
+    No fcntl (Windows): unlocked, as before this existed.
+    """
+    lock_path = Path(env_path).resolve().parent / ENV_WRITE_LOCK_NAME
+    if os.environ.get(ENV_WRITE_LOCK_HELD) == str(lock_path):
+        yield lock_path
+        return
+    try:
+        import fcntl
+    except ImportError:  # pragma: no cover - non-POSIX
+        yield lock_path
+        return
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(lock_path, "a", encoding="utf-8") as handle:
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+        previous = os.environ.get(ENV_WRITE_LOCK_HELD)
+        os.environ[ENV_WRITE_LOCK_HELD] = str(lock_path)
+        try:
+            yield lock_path
+        finally:
+            if previous is None:
+                os.environ.pop(ENV_WRITE_LOCK_HELD, None)
+            else:
+                os.environ[ENV_WRITE_LOCK_HELD] = previous
+            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
 
 
 def is_placeholder(value: str | None) -> bool:

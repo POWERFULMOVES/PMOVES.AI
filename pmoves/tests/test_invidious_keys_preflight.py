@@ -82,7 +82,7 @@ def _usable(env):
 
 def test_mints_both_when_absent(tmp_path, capsys):
     env = _env(tmp_path, "OTHER=keep\n")
-    assert pf.run(env, check=False, registry=REGISTRY, probe=Probe()) == 0
+    assert pf.run(env, mode="fix", registry=REGISTRY, probe=Probe()) == 0
     assert _usable(env)
     assert COMPANION_RE.fullmatch(_read(env, "INVIDIOUS_COMPANION_KEY"))
     assert _read(env, "OTHER") == "keep"
@@ -94,35 +94,35 @@ def test_mints_both_when_absent(tmp_path, capsys):
 def test_recovers_a_live_private_value_instead_of_minting(tmp_path):
     env = _env(tmp_path, "OTHER=keep\n")
     probe = Probe({"pmoves-invidious-1": {"INVIDIOUS_COMPANION_KEY": LIVE_COMPANION}})
-    assert pf.run(env, check=False, registry=REGISTRY, probe=probe) == 0
+    assert pf.run(env, mode="fix", registry=REGISTRY, probe=probe) == 0
     assert _read(env, "INVIDIOUS_COMPANION_KEY") == LIVE_COMPANION
 
 
 def test_private_valid_values_are_untouched(tmp_path):
     text = f"INVIDIOUS_HMAC_KEY={LIVE_HMAC}\nINVIDIOUS_COMPANION_KEY={LIVE_COMPANION}\n"
     env = _env(tmp_path, text)
-    assert pf.run(env, check=False, registry=REGISTRY, probe=Probe()) == 0
+    assert pf.run(env, mode="fix", registry=REGISTRY, probe=Probe()) == 0
     assert env.read_text(encoding="utf-8") == text
 
 
 @pytest.mark.parametrize("bad", ["ab-def_123456789", "short", "a" * 64])
 def test_vendor_invalid_companion_is_rotated(tmp_path, bad):
     env = _env(tmp_path, f"INVIDIOUS_HMAC_KEY={LIVE_HMAC}\nINVIDIOUS_COMPANION_KEY={bad}\n")
-    assert pf.run(env, check=False, registry=REGISTRY, probe=Probe()) == 0
+    assert pf.run(env, mode="fix", registry=REGISTRY, probe=Probe()) == 0
     assert COMPANION_RE.fullmatch(_read(env, "INVIDIOUS_COMPANION_KEY"))
     assert _read(env, "INVIDIOUS_HMAC_KEY") == LIVE_HMAC
 
 
 def test_published_value_is_rotated(tmp_path, published):
     env = _env(tmp_path, f"INVIDIOUS_HMAC_KEY={LIVE_HMAC}\nINVIDIOUS_COMPANION_KEY={PUBLISHED}\n")
-    assert pf.run(env, check=False, registry=REGISTRY, probe=Probe()) == 0
+    assert pf.run(env, mode="fix", registry=REGISTRY, probe=Probe()) == 0
     assert _read(env, "INVIDIOUS_COMPANION_KEY") != PUBLISHED
     assert _usable(env)
 
 
 def test_hmac_equal_to_companion_is_rotated(tmp_path):
     env = _env(tmp_path, f"INVIDIOUS_HMAC_KEY={LIVE_COMPANION}\nINVIDIOUS_COMPANION_KEY={LIVE_COMPANION}\n")
-    assert pf.run(env, check=False, registry=REGISTRY, probe=Probe()) == 0
+    assert pf.run(env, mode="fix", registry=REGISTRY, probe=Probe()) == 0
     assert _read(env, "INVIDIOUS_COMPANION_KEY") == LIVE_COMPANION
     assert _read(env, "INVIDIOUS_HMAC_KEY") != LIVE_COMPANION
 
@@ -130,13 +130,13 @@ def test_hmac_equal_to_companion_is_rotated(tmp_path):
 def test_absent_env_file_is_not_created(tmp_path):
     """Creating it would stop ensure-env-shared seeding the template."""
     env = tmp_path / ("env." + "shared")
-    assert pf.run(env, check=False, registry=REGISTRY, probe=Probe()) == 0
+    assert pf.run(env, mode="fix", registry=REGISTRY, probe=Probe()) == 0
     assert not env.exists()
 
 
 def test_check_mode_never_writes(tmp_path):
     env = _env(tmp_path, "OTHER=keep\n")
-    assert pf.run(env, check=True, registry=REGISTRY, probe=Probe()) == 1
+    assert pf.run(env, mode="check", registry=REGISTRY, probe=Probe()) == 1
     assert env.read_text(encoding="utf-8") == "OTHER=keep\n"
 
 
@@ -144,26 +144,151 @@ def test_empty_shell_export_blocks(tmp_path, monkeypatch):
     """Compose fails ${VAR:?} on an empty export no matter what env files say."""
     monkeypatch.setenv("INVIDIOUS_HMAC_KEY", "")
     env = _env(tmp_path, f"INVIDIOUS_HMAC_KEY={LIVE_HMAC}\nINVIDIOUS_COMPANION_KEY={LIVE_COMPANION}\n")
-    assert pf.run(env, check=False, registry=REGISTRY, probe=Probe()) == 1
+    assert pf.run(env, mode="fix", registry=REGISTRY, probe=Probe()) == 1
 
 
 def test_non_empty_bad_export_only_warns(tmp_path, monkeypatch, capsys):
     """Compose accepts it; only Invidious is affected, so the stack must not block."""
     monkeypatch.setenv("INVIDIOUS_COMPANION_KEY", "has-dash_1234567")
     env = _env(tmp_path, f"INVIDIOUS_HMAC_KEY={LIVE_HMAC}\nINVIDIOUS_COMPANION_KEY={LIVE_COMPANION}\n")
-    assert pf.run(env, check=False, registry=REGISTRY, probe=Probe()) == 0
+    assert pf.run(env, mode="fix", registry=REGISTRY, probe=Probe()) == 0
     out = capsys.readouterr().out
     assert "WARNING" in out and "has-dash_1234567" not in out
 
 
-def test_makefile_runs_preflight_before_stack_goals_only():
+def _goals(text, var):
+    return text.split(f"{var} := $(filter ", 1)[1].split(",", 1)[0].split()
+
+
+def test_makefile_fix_only_on_goals_that_recreate_containers():
     text = (PMOVES / "Makefile").read_text(encoding="utf-8")
-    goals = text.split("INVIDIOUS_KEYS_PREFLIGHT_GOALS := $(filter ", 1)[1].split(",", 1)[0].split()
-    for goal in ("up", "up-%", "down", "down-%", "ps", "overlay-up-full", "overlay-up-ui"):
-        assert goal in goals
+    fix, gate = _goals(text, "INVIDIOUS_KEYS_FIX_GOALS"), _goals(text, "INVIDIOUS_KEYS_GATE_GOALS")
+    for goal in ("up", "up-%", "update", "recreate-%", "rebuild-%", "restart-%", "overlay-up-full", "overlay-up-ui"):
+        assert goal in fix and goal not in gate
+    for goal in ("ps", "ps-%", "logs-%", "down", "down-%", "stop-%", "overlay-down"):
+        assert goal in gate and goal not in fix
     for goal in ("secrets-%", "test", "overlay-up-bus", "compose-split-check"):
-        assert goal not in goals
-    assert "$(INVIDIOUS_KEYS_PREFLIGHT_GOALS): invidious-keys-preflight" in text
+        assert goal not in fix and goal not in gate
+    assert "$(INVIDIOUS_KEYS_FIX_GOALS): invidious-keys-preflight" in text
+    assert "$(INVIDIOUS_KEYS_GATE_GOALS): invidious-keys-gate" in text
+    gate_recipe = text.split("\ninvidious-keys-gate:", 1)[1].split("\n\n", 1)[0]
+    assert "invidious_keys_preflight.py --gate" in gate_recipe
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "OTHER=keep\n",  # missing -> fatal, still no write
+        f"INVIDIOUS_HMAC_KEY={LIVE_HMAC}\nINVIDIOUS_COMPANION_KEY=ab-def_123456789\n",  # invalid
+        f"INVIDIOUS_HMAC_KEY={LIVE_COMPANION}\nINVIDIOUS_COMPANION_KEY={LIVE_COMPANION}\n",  # reused
+        f"INVIDIOUS_HMAC_KEY=short\nINVIDIOUS_COMPANION_KEY={PUBLISHED}\n",  # short + published
+    ],
+)
+def test_gate_mode_leaves_env_byte_identical(tmp_path, published, text):
+    """Read-only goals must not rotate under running containers (silent drift)."""
+    env = _env(tmp_path, text)
+    before = env.read_bytes()
+    pf.run(env, mode="gate", registry=REGISTRY, probe=Probe())
+    assert env.read_bytes() == before
+    assert not (tmp_path / common.ENV_WRITE_LOCK_NAME).exists()  # never even locked
+
+
+def test_gate_mode_through_the_cli_entrypoint_never_writes(tmp_path, published):
+    env = _env(tmp_path, f"INVIDIOUS_HMAC_KEY=short\nINVIDIOUS_COMPANION_KEY={PUBLISHED}\n")
+    before = env.read_bytes()
+    assert pf.main(["--gate", "--env-file", str(env), "--registry", REGISTRY]) == 0
+    assert env.read_bytes() == before
+
+
+def test_gate_exit_semantics(tmp_path, monkeypatch, capsys):
+    env = _env(tmp_path, "OTHER=keep\n")
+    assert pf.run(env, mode="gate") == 1  # compose will refuse
+    monkeypatch.setenv("INVIDIOUS_HMAC_KEY", LIVE_HMAC)
+    monkeypatch.setenv("INVIDIOUS_COMPANION_KEY", LIVE_COMPANION)
+    assert pf.run(env, mode="gate") == 0  # exports satisfy compose
+    env = _env(tmp_path, f"INVIDIOUS_HMAC_KEY={LIVE_HMAC}\nINVIDIOUS_COMPANION_KEY=ab-def_123456789\n")
+    monkeypatch.delenv("INVIDIOUS_HMAC_KEY")
+    monkeypatch.delenv("INVIDIOUS_COMPANION_KEY")
+    assert pf.run(env, mode="gate") == 0  # invalid but present: warn, do not block
+    assert "WARNING" in capsys.readouterr().out
+
+
+def test_exec_exports_keys_without_printing(tmp_path, capfd):
+    import subprocess
+
+    env = _env(tmp_path, f"INVIDIOUS_HMAC_KEY={LIVE_HMAC}\nINVIDIOUS_COMPANION_KEY={LIVE_COMPANION}\n")
+    probe = 'import os,sys; sys.exit(0 if os.environ.get("INVIDIOUS_COMPANION_KEY") == "%s" else 7)' % LIVE_COMPANION
+    r = subprocess.run(
+        [sys.executable, str(PMOVES / "tools" / "invidious_keys_preflight.py"), "--gate",
+         "--env-file", str(env), "--exec", "--", sys.executable, "-c", probe],
+        capture_output=True, text=True, env=_hermetic_env(),
+    )
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert LIVE_COMPANION not in r.stdout + r.stderr and LIVE_HMAC not in r.stdout + r.stderr
+
+
+def test_exec_stops_before_the_command_when_compose_would_refuse(tmp_path):
+    import subprocess
+
+    env = _env(tmp_path, "OTHER=keep\n")
+    marker = tmp_path / "ran"
+    r = subprocess.run(
+        [sys.executable, str(PMOVES / "tools" / "invidious_keys_preflight.py"), "--gate",
+         "--env-file", str(env), "--exec", "--", "touch", str(marker)],
+        capture_output=True, text=True, env=_hermetic_env(),
+    )
+    assert r.returncode == 1 and not marker.exists()
+
+
+def test_fix_and_ensure_env_shared_serialize_under_make_j(tmp_path):
+    """Run ensure_env_shared.py (brand_defaults + preflight) and the goal's own
+    preflight concurrently, repeatedly. Without the shared lock one rewrite can
+    drop the other's: a key line vanishes or appears twice."""
+    import subprocess
+
+    for round_ in range(12):  # unlocked control: 4 of 25 rounds corrupt
+        d = tmp_path / f"r{round_}"
+        d.mkdir()
+        env = _env(d, "OTHER=keep\n")
+        template = d / "template.example"
+        template.write_text("", encoding="utf-8")
+        procs = [
+            subprocess.Popen(
+                [sys.executable, str(PMOVES / "tools" / "ensure_env_shared.py"),
+                 "--env-file", str(env), "--template", str(template)],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=_hermetic_env(),
+            )
+        ] + [
+            subprocess.Popen(
+                [sys.executable, str(PMOVES / "tools" / "invidious_keys_preflight.py"), "--env-file", str(env)],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=_hermetic_env(),
+            )
+            for _ in range(2)
+        ]
+        assert [p.wait(timeout=120) for p in procs] == [0, 0, 0]
+        text = env.read_text(encoding="utf-8")
+        for key in pf.KEYS:
+            assert text.count(f"\n{key}=") + text.startswith(f"{key}=") == 1, f"{key} lines != 1 in round {round_}"
+        assert "OTHER=keep" in text
+        assert _usable(env)
+
+
+def test_lock_excludes_a_second_holder(tmp_path):
+    import subprocess
+
+    env = _env(tmp_path, "OTHER=keep\n")
+    code = (
+        "import sys, time; sys.path.insert(0, %r)\n"
+        "from pmoves.tools._secrets_common import env_write_lock\n"
+        "with env_write_lock(%r):\n    print('got', flush=True)\n" % (str(PMOVES.parent), str(env))
+    )
+    with common.env_write_lock(env):
+        child = subprocess.Popen([sys.executable, "-c", code], stdout=subprocess.PIPE, text=True,
+                                 env={k: v for k, v in __import__("os").environ.items() if k != common.ENV_WRITE_LOCK_HELD})
+        with pytest.raises(subprocess.TimeoutExpired):
+            child.communicate(timeout=1.5)  # blocked while we hold it
+    out, _ = child.communicate(timeout=30)
+    assert out.strip() == "got"
 
 
 # ---------------------------------------------------------------------------
@@ -175,10 +300,10 @@ def test_makefile_runs_preflight_before_stack_goals_only():
 
 def test_preflight_rejects_placeholders_and_short_hmacs(tmp_path):
     env = _env(tmp_path, "INVIDIOUS_HMAC_KEY=localhack\nINVIDIOUS_COMPANION_KEY=your_companion_key_here\n")
-    assert pf.run(env, check=False, registry=REGISTRY, probe=Probe()) == 0
+    assert pf.run(env, mode="fix", registry=REGISTRY, probe=Probe()) == 0
     assert _usable(env)
     env = _env(tmp_path, f"INVIDIOUS_HMAC_KEY={'s' * 20}\nINVIDIOUS_COMPANION_KEY={LIVE_COMPANION}\n")
-    assert pf.run(env, check=False, registry=REGISTRY, probe=Probe()) == 0
+    assert pf.run(env, mode="fix", registry=REGISTRY, probe=Probe()) == 0
     assert len(_read(env, "INVIDIOUS_HMAC_KEY")) == 64
 
 
@@ -261,5 +386,5 @@ def test_funnel_path_rotates_a_published_value(tmp_path, monkeypatch):
     table.setdefault(len(PUBLISHED), set()).add(common.known_public_digest(PUBLISHED))
     monkeypatch.setattr(common, "KNOWN_PUBLIC_SECRET_DIGESTS", {k: frozenset(v) for k, v in table.items()})
     env = _env(tmp_path, f"INVIDIOUS_COMPANION_KEY={PUBLISHED}\nINVIDIOUS_HMAC_KEY={LIVE_HMAC}\n")
-    assert pf.run(env, check=False, registry=REGISTRY, probe=Probe()) == 0
+    assert pf.run(env, mode="fix", registry=REGISTRY, probe=Probe()) == 0
     assert _read(env, "INVIDIOUS_COMPANION_KEY") != PUBLISHED

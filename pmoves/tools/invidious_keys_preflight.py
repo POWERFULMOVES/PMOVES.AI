@@ -42,7 +42,15 @@ shell wins over every --env-file and cannot be fixed by writing env.shared: an
 empty export is exit 1, a non-empty unusable one is a warning (compose accepts
 it; only Invidious is affected).
 
-``--check`` reports without writing (exit 1 if anything needs fixing).
+Modes. Default = FIX (mint / recover / rotate), only for goals that (re)create
+containers -- rotating under a running container that keeps its old key would
+be silent env/container drift. ``--gate`` is for read-only goals (ps, logs,
+down, stop): never writes, exits 1 only when compose will refuse, warns on the
+rest. ``--check`` reports every problem without writing (secrets-ensure-check).
+FIX holds the per-directory env write lock (``env_write_lock``) so ``make -j``
+cannot interleave it with ensure-env-shared. ``--exec -- CMD...`` runs CMD with
+the keys exported from --env-file, for raw compose callers whose interpolation
+source is not that file.
 """
 
 from __future__ import annotations
@@ -60,7 +68,7 @@ _REPO_ROOT = _PMOVES.parent
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-from pmoves.tools._secrets_common import is_known_public, is_placeholder  # noqa: E402
+from pmoves.tools._secrets_common import env_write_lock, is_known_public, is_placeholder  # noqa: E402
 
 
 def _load(name: str, path: Path):
@@ -112,19 +120,54 @@ def _rotate(key: str, env_path: Path, registry: Optional[str]) -> None:
     )
 
 
-def run(env_path: Path, *, check: bool, registry: Optional[str] = None, probe=None) -> int:
+def _effective(key: str, env_path: Path) -> Optional[str]:
+    """What compose will interpolate: a shell export beats every env file."""
+    if key in os.environ:
+        return os.environ[key]
+    return _be.read_env_value(key, env_path)
+
+
+def _gate(env_path: Path) -> int:
+    """Read-only. Exit 1 only when compose's ${VAR:?} will fail; warn on the rest."""
+    values = {k: _effective(k, env_path) for k in KEYS}
+    fatal = []
+    for key in KEYS:
+        why = problem(key, values[key], values)
+        if why == "missing":
+            fatal.append(key)
+        elif why:
+            print(
+                f"invidious-keys: WARNING {key} is {why}; not changed by this read-only goal "
+                "(fixed by the next up/recreate goal or make -C pmoves invidious-keys-preflight)"
+            )
+    for key in fatal:
+        print(f"invidious-keys: {key} is missing, so compose will refuse every service. "
+              "Fix: make -C pmoves invidious-keys-preflight")
+    return EXIT_FINDINGS if fatal else EXIT_OK
+
+
+def run(env_path: Path, *, mode: str = "fix", registry: Optional[str] = None, probe=None) -> int:
+    """mode: fix (mint/recover/rotate), check (report everything), gate (read-only, fatal only)."""
     if not env_path.exists():
         # A fresh checkout: ensure-env-shared / env-setup / the funnel create it.
         # Writing a file here would stop ensure-env-shared seeding the template.
         print(f"invidious-keys: {env_path.name} absent -- skipped (run make -C pmoves secrets-funnel)")
         return EXIT_OK
+    if mode == "gate":
+        return _gate(env_path)
+    if mode == "check":
+        return _check(env_path)
+    with env_write_lock(env_path):
+        return _fix(env_path, registry=registry, probe=probe)
 
+
+def _shell_findings() -> list:
     findings = []
     for key in KEYS:
         shell = os.environ.get(key)
         if shell is None:
             continue
-        values = {k: os.environ.get(k) or _be.read_env_value(k, env_path) for k in KEYS}
+        values = {k: os.environ.get(k) for k in KEYS}
         why = problem(key, shell, values)
         if not why:
             continue
@@ -139,18 +182,28 @@ def run(env_path: Path, *, check: bool, registry: Optional[str] = None, probe=No
         else:
             # An EMPTY export fails ${VAR:?} for the whole project anyway.
             findings.append(message)
+    return findings
 
+
+def _check(env_path: Path) -> int:
+    findings = _shell_findings()
+    values = {k: _be.read_env_value(k, env_path) for k in KEYS}
+    for key in KEYS:
+        why = problem(key, values[key], values)
+        if why:
+            findings.append(f"{key}: {why} (fix: make -C pmoves invidious-keys-preflight)")
+    for f in findings:
+        print(f"invidious-keys: {f}")
+    if not findings:
+        print("invidious-keys: usable")
+    return EXIT_FINDINGS if findings else EXIT_OK
+
+
+def _fix(env_path: Path, *, registry: Optional[str], probe) -> int:
+    findings = _shell_findings()
     values = {k: _be.read_env_value(k, env_path) for k in KEYS}
     todo = {k: problem(k, values[k], values) for k in KEYS}
     todo = {k: why for k, why in todo.items() if why}
-    if check:
-        for key, why in todo.items():
-            findings.append(f"{key}: {why} (fix: make -C pmoves invidious-keys-preflight)")
-        for f in findings:
-            print(f"invidious-keys: {f}")
-        if not findings:
-            print("invidious-keys: usable")
-        return EXIT_FINDINGS if findings else EXIT_OK
 
     missing = [k for k, why in todo.items() if why == "missing"]
     if missing:
@@ -183,23 +236,68 @@ def run(env_path: Path, *, check: bool, registry: Optional[str] = None, probe=No
         return EXIT_FINDINGS
     if todo:
         print(
-            "invidious-keys: env.shared updated. Running containers keep their old keys until "
-            "make -C pmoves up-invidious; run make -C pmoves secrets-funnel to seal the CHIT bundle."
+            f"invidious-keys: {env_path.name} updated. Running containers keep their old keys until "
+            "they are recreated (make -C pmoves up-invidious); make -C pmoves secrets-funnel seals the CHIT bundle."
         )
     return EXIT_OK
 
 
+def _exec(cmd: list, env_path: Path) -> int:
+    """Replace this process with *cmd*, the Invidious keys exported from *env_path*.
+
+    For raw compose callers whose interpolation source is not the env file the
+    preflight maintains (deploy-compose.sh relies on compose's default .env
+    lookup). Values go only into the child's environment, never to output. A
+    key already exported in the shell is left alone -- it already wins.
+    """
+    child = dict(os.environ)
+    for key in KEYS:
+        if key not in child:
+            value = _be.read_env_value(key, env_path) if env_path.exists() else None
+            if value:
+                child[key] = value
+    os.execvpe(cmd[0], cmd, child)
+    return EXIT_COULD_NOT_MEASURE  # pragma: no cover - execvpe does not return
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--check", action="store_true", help="report only; never write")
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument("--check", action="store_true", help="report every problem; never write (exit 1 on any)")
+    group.add_argument(
+        "--gate", action="store_true",
+        help="read-only goals (ps/logs/down/stop): never write; exit 1 only if compose will refuse",
+    )
     parser.add_argument("--env-file", type=Path, default=_be.ENV_SHARED_PATH)
     parser.add_argument("--registry", default=None)
+    parser.add_argument(
+        "--exec", dest="exec_flag", action="store_true",
+        help="--exec -- CMD...: after a non-fatal result, exec CMD with the keys exported from --env-file",
+    )
+    # Everything after --exec is the command, verbatim. Split it off by hand:
+    # argparse.REMAINDER mishandles a leading "--".
+    argv = list(sys.argv[1:] if argv is None else argv)
+    exec_cmd: list = []
+    if "--exec" in argv:
+        at = argv.index("--exec")
+        exec_cmd = argv[at + 1:]
+        if exec_cmd[:1] == ["--"]:
+            exec_cmd = exec_cmd[1:]
+        argv = argv[: at + 1]
     args = parser.parse_args(argv)
+    mode = "check" if args.check else "gate" if args.gate else "fix"
     try:
-        return run(args.env_file, check=args.check, registry=args.registry)
+        rc = run(args.env_file, mode=mode, registry=args.registry)
     except (OSError, ValueError) as exc:
         print(f"invidious-keys: COULD-NOT-MEASURE: {type(exc).__name__}")
-        return EXIT_COULD_NOT_MEASURE
+        rc = EXIT_COULD_NOT_MEASURE
+    if args.exec_flag:
+        if rc == EXIT_FINDINGS:
+            return rc
+        if not exec_cmd:
+            parser.error("--exec needs a command: --exec -- CMD...")
+        return _exec(exec_cmd, args.env_file)
+    return rc
 
 
 if __name__ == "__main__":

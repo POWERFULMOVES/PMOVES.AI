@@ -48,6 +48,18 @@ NODE_SERVICES["kvm2"]="nginx"
 COMPOSE_CMD="docker compose -f docker-compose.yml -f docker-compose.vps.override.yml --env-file .env.vps"
 WORK_DIR="/opt/pmoves/pmoves"
 
+# Invidious keys (PR #3431). docker-compose.yml declares ${INVIDIOUS_*_KEY:?},
+# and compose interpolates every service, profile or not -- so a VPS node that
+# never runs Invidious still refuses EVERY service until its env file holds both
+# keys. These run the same preflight `make` uses, against the env file named in
+# COMPOSE_CMD (by path; this script never reads it). Deploy = FIX mode (mint /
+# rotate; containers are recreated right after). Status = GATE mode (read-only).
+# Exit 1 = compose would refuse anyway -> stop with the one-line fix. Anything
+# else (no python3, could not measure) continues; compose stays the final gate.
+VPS_ENV_FILE="${COMPOSE_CMD##*--env-file }"
+KEYS_PREFLIGHT_FIX="{ python3 tools/invidious_keys_preflight.py --env-file ${VPS_ENV_FILE}; rc=\$?; if [ \$rc -eq 1 ]; then echo 'invidious keys: compose would refuse. Fix: cd ${WORK_DIR} && python3 tools/invidious_keys_preflight.py --env-file ${VPS_ENV_FILE}' >&2; exit 1; fi; }"
+KEYS_PREFLIGHT_GATE="{ python3 tools/invidious_keys_preflight.py --gate --env-file ${VPS_ENV_FILE} >&2; rc=\$?; if [ \$rc -eq 1 ]; then echo 'invidious keys: compose would refuse. Fix: cd ${WORK_DIR} && python3 tools/invidious_keys_preflight.py --env-file ${VPS_ENV_FILE}' >&2; exit 1; fi; }"
+
 # Check connectivity to a node via SSH (honors HOSTINGER_*_IP overrides)
 check_node() {
     local node="$1"
@@ -81,7 +93,7 @@ deploy_node() {
 
     # Build and start services
     log_info "$node: Starting services: $services"
-    if ! ssh -o BatchMode=yes "$ssh_target" "cd ${WORK_DIR} && ${COMPOSE_CMD} pull ${services} 2>/dev/null && ${COMPOSE_CMD} up -d ${services}"; then
+    if ! ssh -o BatchMode=yes "$ssh_target" "cd ${WORK_DIR} && ${KEYS_PREFLIGHT_FIX} && ${COMPOSE_CMD} pull ${services} 2>/dev/null && ${COMPOSE_CMD} up -d ${services}"; then
         log_error "$node: compose pull/up failed"
         failed=1
     fi
@@ -102,7 +114,7 @@ deploy_node() {
             ;;
         kvm2)
             local kvm2_status
-            kvm2_status=$(ssh -o BatchMode=yes "$ssh_target" "cd ${WORK_DIR} && ${COMPOSE_CMD} ps nginx --format '{{.Status}}'" 2>/dev/null)
+            kvm2_status=$(ssh -o BatchMode=yes "$ssh_target" "cd ${WORK_DIR} && ${KEYS_PREFLIGHT_GATE} && ${COMPOSE_CMD} ps nginx --format '{{.Status}}'" 2>/dev/null)
             if echo "$kvm2_status" | grep -qi "Up"; then
                 echo "nginx: $kvm2_status"
             else
@@ -135,7 +147,7 @@ fleet_status() {
         echo -n "  $node: "
         if ssh -o BatchMode=yes -o ConnectTimeout=3 -o StrictHostKeyChecking=no "$ssh_target" true &>/dev/null; then
             echo -e "${GREEN}ONLINE${NC}"
-            ssh -o BatchMode=yes "$ssh_target" "cd ${WORK_DIR} && ${COMPOSE_CMD} ps --format 'table {{.Name}}\t{{.Status}}' 2>/dev/null" | sed 's/^/    /'
+            ssh -o BatchMode=yes "$ssh_target" "cd ${WORK_DIR} && ${KEYS_PREFLIGHT_GATE} && ${COMPOSE_CMD} ps --format 'table {{.Name}}\t{{.Status}}' 2>/dev/null" | sed 's/^/    /'
         else
             echo -e "${RED}OFFLINE${NC}"
         fi

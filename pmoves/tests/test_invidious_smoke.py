@@ -21,6 +21,7 @@ _spec = importlib.util.spec_from_file_location("invidious_smoke_under_test", _MO
 smoke = importlib.util.module_from_spec(_spec)
 sys.modules[_spec.name] = smoke
 _spec.loader.exec_module(smoke)
+_REAL_SERVICE_ENV = smoke._service_env
 
 SERVER_KEY = "a1b2c3d4e5f60718"
 
@@ -138,3 +139,36 @@ def test_config_key_parser_reads_the_compose_blob():
     blob = 'db:\n  dbname: invidious\nhmac_key: "h"\ninvidious_companion_key: "abcDEF0123456789"\nstatistics_enabled: false\n'
     m = smoke.CONFIG_COMPANION_KEY_RE.search(blob)
     assert m and m.group(1) == "abcDEF0123456789"
+
+
+@pytest.mark.parametrize(
+    "stdout,raise_exc",
+    [
+        ("not json " + SERVER_KEY, None),                       # JSONDecodeError quotes the doc
+        ('{"Env": [1, 2, "INVIDIOUS_CONFIG=' + SERVER_KEY + '"]}', None),  # odd entries
+        ('["' + SERVER_KEY + '"]', None),                       # list, not dict
+        (None, TypeError("boom " + SERVER_KEY)),                 # exception carrying a value
+    ],
+)
+def test_inspect_failures_are_exit_3_with_no_detail(stack, monkeypatch, capsys, stdout, raise_exc):
+    """Read errors must never surface a value: exit 3, no traceback, no message."""
+    monkeypatch.setenv("INVIDIOUS_COMPANION_KEY", SERVER_KEY)
+
+    class Done:
+        def __init__(self, out):
+            self.returncode, self.stdout = 0, out
+
+    def fake_run(cmd, **kw):
+        if raise_exc is not None and cmd[1] == "inspect":
+            raise raise_exc
+        return Done("abc123\n" if cmd[1] == "ps" else stdout)
+
+    monkeypatch.setattr(smoke.subprocess, "run", fake_run)
+    args = stack(SERVER_KEY)
+    # Undo the autouse stub: this test drives the REAL docker-inspect parser.
+    monkeypatch.setattr(smoke, "_service_env", _REAL_SERVICE_ENV)
+    rc = smoke.main(args)
+    out = capsys.readouterr()
+    assert rc == 3
+    assert SERVER_KEY not in out.out + out.err
+    assert "Traceback" not in out.out + out.err
