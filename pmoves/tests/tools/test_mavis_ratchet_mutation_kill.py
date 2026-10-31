@@ -1475,7 +1475,12 @@ def test_pytest_run_timeout_fires_and_releases_the_lock(
         _mutation_case(
             slow_module,
             "SLEEP_SECONDS = 0.0",
-            "SLEEP_SECONDS = 20.0",
+            # 12s, not 20s: the MUTATED (deadline-less) harness has to let the
+            # inner run COMPLETE, so the sleep must outlast the 8s override --
+            # but every extra second here is a second the whole suite pays.
+            # 12s is comfortably longer than the 8s deadline, so the timeout
+            # still fires first, and the mutated run still finishes.
+            "SLEEP_SECONDS = 12.0",
             select="test_slow",
             expected_failing_test="test_slow",
             lock_path=lock_path,

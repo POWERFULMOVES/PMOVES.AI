@@ -36,13 +36,14 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
 import time
 import xml.etree.ElementTree as ET
 from pathlib import Path
-from typing import Dict, List, Optional, Set
+from typing import Dict, List, Optional, Set, Tuple
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PMOVES = REPO_ROOT / "pmoves"
@@ -75,6 +76,15 @@ CHUNK_SIZE = int(os.environ.get("PYTEST_RATCHET_CHUNK_SIZE", "20"))
 # chunk full of hangs cannot eat the job.
 FALLBACK_FILE_TIMEOUT = int(os.environ.get("PYTEST_RATCHET_FILE_TIMEOUT", "60"))
 FALLBACK_BUDGET_SECONDS = int(os.environ.get("PYTEST_RATCHET_FALLBACK_BUDGET", "600"))
+
+# Declared-slow files: repo-relative path -> EXTRA seconds. Sibling of the
+# baseline, same directory, same dependency-free parse.
+#
+# The budget model above used FILE COUNT as a proxy for COST, and a file that
+# is legitimately slow does not fit that proxy: it was killed, and reported as
+# BROKEN rather than as slow. This config says which files declare themselves
+# slow, and by how much. See the file's own header for the full story.
+SLOW_FILES = PMOVES / "configs" / "pytest_ratchet" / "_slow_files.yaml"
 
 # Mirrors the workflow's original discovery exactly, minus the `head -20` cap.
 # Kept identical on purpose: this change removes a cap and adds a ratchet, it
@@ -157,6 +167,110 @@ def group_files(files: List[Path]) -> Dict[str, List[Path]]:
     return chunked
 
 
+# ── declared-slow files: the budget model's escape hatch ──────────────────
+#
+# A budget measured in FILE COUNT is not a budget measured in COST. A chunk
+# of up to CHUNK_SIZE files gets GROUP_TIMEOUT_SECONDS of wall clock, and a
+# file re-run in isolation gets FALLBACK_FILE_TIMEOUT. Nothing in that model
+# could say "this one file is legitimately expensive", so a healthy but slow
+# file was killed and then REPORTED AS BROKEN -- the exact inversion this
+# gate exists to prevent.
+#
+# `_slow_files.yaml` names those files and says how much extra wall clock
+# each one gets. It is a sibling of the baseline, it is parsed by hand (no
+# pyyaml, same as _known_failures.yaml), and a MISSING FILE IS AN EMPTY
+# ALLOWANCE rather than an error: an optional config must not be able to
+# break the gate.
+
+# A `path: seconds` entry, with an optional trailing `# reason`.
+_SLOW_ENTRY_RE = re.compile(
+    r"^(?P<key>[^:#\s][^:]*):\s*(?P<seconds>\d+)\s*(?:#\s*(?P<inline>.*))?$"
+)
+
+
+def load_slow_file_entries(
+        path: Optional[Path] = None) -> Dict[str, Tuple[int, str]]:
+    """Parse the declared-slow config: path -> (extra seconds, reason).
+
+    Hand-parsed on purpose: the runner does not depend on pyyaml, and neither
+    does the file it reads. A missing file is an empty mapping, never an
+    error.
+    """
+    cfg = SLOW_FILES if path is None else Path(path)
+    if not cfg.is_file():
+        return {}
+    seconds_by_key: Dict[str, int] = {}
+    reasons: Dict[str, List[str]] = {}
+    current: Optional[str] = None
+    in_block = False
+    for raw in cfg.read_text(encoding="utf-8").splitlines():
+        stripped = raw.strip()
+        if not stripped:
+            continue
+        if stripped.startswith("#"):
+            # A reason line, belonging to the entry above it.
+            if current is not None:
+                reasons[current].append(stripped.lstrip("#").strip())
+            continue
+        if not raw[:1].isspace():
+            # A top-level key. `slow_files:` opens the block that is read.
+            in_block = stripped.split(":", 1)[0].strip() == "slow_files"
+            current = None
+            continue
+        if not in_block:
+            continue
+        match = _SLOW_ENTRY_RE.match(stripped)
+        if not match:
+            continue
+        key = match.group("key").strip().strip('"').strip("'")
+        extra = int(match.group("seconds"))
+        if not key or extra <= 0:
+            continue
+        seconds_by_key[key] = extra
+        reasons[key] = []
+        current = key
+        inline = (match.group("inline") or "").strip()
+        if inline:
+            reasons[key].append(inline)
+    return {
+        key: (seconds_by_key[key], " ".join(reasons.get(key, [])).strip())
+        for key in seconds_by_key
+    }
+
+
+def load_slow_file_allowances(path: Optional[Path] = None) -> Dict[str, int]:
+    """Repo-relative path -> EXTRA seconds allowed for that file."""
+    return {key: value[0] for key, value in load_slow_file_entries(path).items()}
+
+
+def _config_key(file) -> str:
+    """The repo-relative, forward-slash key a config entry is written under."""
+    return Path(file).as_posix()
+
+
+def chunk_timeout_seconds(files, allowances: Optional[Dict[str, int]] = None) -> int:
+    """Wall clock for ONE chunk: the group default plus every allowance in it.
+
+    Pure, so the budget model itself can be asserted. A chunk with no
+    declared-slow file gets EXACTLY GROUP_TIMEOUT_SECONDS -- the default path
+    is unchanged, and hang detection for every other file is untouched.
+    """
+    allow = load_slow_file_allowances() if allowances is None else allowances
+    return GROUP_TIMEOUT_SECONDS + sum(
+        allow.get(_config_key(f), 0) for f in files
+    )
+
+
+def file_timeout_seconds(file, allowances: Optional[Dict[str, int]] = None) -> int:
+    """Wall clock for ONE file in the isolation pass: the default plus its own.
+
+    Pure, so the budget model itself can be asserted. A file with no
+    allowance gets EXACTLY FALLBACK_FILE_TIMEOUT.
+    """
+    allow = load_slow_file_allowances() if allowances is None else allowances
+    return FALLBACK_FILE_TIMEOUT + allow.get(_config_key(file), 0)
+
+
 def run_pytest(files: List[Path], junit: Path,
                 timeout: Optional[int] = None) -> tuple[int, str]:
     """Run pytest over `files`, collecting results into a JUnit XML report.
@@ -164,7 +278,14 @@ def run_pytest(files: List[Path], junit: Path,
     `--continue-on-collection-errors` matters: without it a single unimportable
     module aborts the whole run, which is how 4 collection errors were able to
     hide 455 collected tests.
+
+    With no explicit `timeout`, the run gets the CHUNK budget for the files it
+    was handed: GROUP_TIMEOUT_SECONDS plus the declared allowances of those
+    files. A chunk holding a declared-slow file is therefore not killed
+    before that file can report; a chunk holding no allowance gets exactly
+    the old GROUP_TIMEOUT_SECONDS.
     """
+    effective_timeout = chunk_timeout_seconds(files) if timeout is None else timeout
     cmd = [
         sys.executable, "-m", "pytest",
         # Every option is set explicitly rather than inherited from whichever
@@ -192,14 +313,14 @@ def run_pytest(files: List[Path], junit: Path,
     try:
         proc = subprocess.run(cmd, cwd=REPO_ROOT, env=env, text=True,
                               capture_output=True,
-                              timeout=timeout or GROUP_TIMEOUT_SECONDS)
+                              timeout=effective_timeout)
     except subprocess.TimeoutExpired as exc:
         # subprocess returns TimeoutExpired.stdout/.stderr as raw bytes on some
         # platforms even with text=True, so each is decoded on its own rather
         # than concatenated first (that raised "can't concat str to bytes" on
         # Linux CI while being fine locally on Windows).
         partial = _as_text(exc.stdout) + _as_text(exc.stderr)
-        return -1, f"TIMEOUT after {timeout or GROUP_TIMEOUT_SECONDS}s{chr(10)}{partial}"
+        return -1, f"TIMEOUT after {effective_timeout}s{chr(10)}{partial}"
     # Pytest output is returned, never written to stdout: stdout carries only
     # this tool's report (and --json must stay parseable). Callers surface it
     # on stderr for groups that actually failed to produce a report.
@@ -303,6 +424,10 @@ def run_chunk_with_fallback(group: str, gfiles: List[Path], tmp: Path,
     A timed-out chunk is killed before pytest writes its JUnit report, so
     treating the timeout as one opaque "no report" discards every result in the
     chunk. Isolating per file narrows the loss to the file that actually hangs.
+
+    The per-file budget is FALLBACK_FILE_TIMEOUT plus the file's own declared
+    allowance, so a file that is merely SLOW is measured in the isolation pass
+    too, and not lost there as well.
     """
     junit = tmp / f"report-{index}.xml"
     rc, output = run_pytest(gfiles, junit)
@@ -335,7 +460,7 @@ def run_chunk_with_fallback(group: str, gfiles: List[Path], tmp: Path,
             break
         sub = tmp / f"report-{index}-{j}.xml"
         start = time.monotonic()
-        frc, foutput = run_pytest([f], sub, timeout=FALLBACK_FILE_TIMEOUT)
+        frc, foutput = run_pytest([f], sub, timeout=file_timeout_seconds(f))
         spent += time.monotonic() - start
         if sub.is_file():
             findings.extend(parse_junit(sub))
