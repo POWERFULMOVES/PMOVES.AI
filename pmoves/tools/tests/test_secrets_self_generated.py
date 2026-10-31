@@ -7,6 +7,7 @@ exception to additivity: these labels are re-derivable from JWT_SECRET by
 construction, so a dead key is stale, not operator intent.
 """
 import base64
+from pathlib import Path
 
 import pytest
 import json
@@ -646,3 +647,70 @@ def test_fill_refreshes_the_service_key_label_consumers_read_first():
     claims = _decode_claims(out["SUPABASE_SERVICE_KEY"])
     assert claims["role"] == "service_role"
     assert claims["exp"] > int(time.time()) + 9 * 365 * 86400
+
+
+# ── one role, one key (#3434 merge: SUPABASE_SERVICE_KEY joins the map) ────
+# The measured knuckles shape after the #3410 funnel run (2026-10-31, booleans
+# only): SUPABASE_SERVICE_ROLE_KEY set-but-EMPTY; SERVICE_ROLE_KEY (Kong's key)
+# live, iss supabase-local, verifies under JWT_SECRET only; SUPABASE_SERVICE_KEY
+# live, verifies under SUPABASE_JWT_SECRET; the two secrets differ.
+
+
+def _knuckles_shape():
+    kong_key_wrong_secret = derive_supabase_jwt(_OTHER, "service_role", exp=_LIVE)
+    good_service_key = derive_supabase_jwt(_VERIFIER, "service_role", iat=1_700_000_000, exp=_LIVE)
+    return {"JWT_SECRET": _OTHER, "SUPABASE_JWT_SECRET": _VERIFIER, "SUPABASE_RUNTIME": "compose",
+            "SUPABASE_SERVICE_ROLE_KEY": "", "SERVICE_ROLE_KEY": kong_key_wrong_secret,
+            "SUPABASE_SERVICE_KEY": good_service_key}, good_service_key
+
+
+def test_stale_and_absent_labels_adopt_the_live_verifying_sibling():
+    secrets, good = _knuckles_shape()
+    events = []
+    out = fill_self_generated(secrets, events=events, local_services=_SERVICES)
+    # every service_role label ends on the ONE key that already verifies
+    assert out["SUPABASE_SERVICE_ROLE_KEY"] == out["SERVICE_ROLE_KEY"] == out["SUPABASE_SERVICE_KEY"] == good
+    got = {(e["label"], e["action"], e["reason"]) for e in events if e["role"] == "service_role"}
+    assert got == {("SERVICE_ROLE_KEY", "reminted", "signed_with_other_secret"),
+                   ("SUPABASE_SERVICE_ROLE_KEY", "filled", "absent")}   # SERVICE_KEY untouched
+
+
+def test_knuckles_shape_after_the_funnel_passes_both_gates():
+    """End to end with the cipher check: Kong's key (its own expression) equals
+    what cipher presents AND verifies under PostgREST's secret."""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "cipher_service_key_check_t", Path(__file__).resolve().parents[1] / "cipher_service_key_check.py")
+    ck = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(ck)
+    secrets, _ = _knuckles_shape()
+    before = ck.assess(secrets, {"cipher": "${SUPABASE_SERVICE_ROLE_KEY:-${SERVICE_ROLE_KEY:-}}",
+                                 "gateway": "${SUPABASE_SERVICE_ROLE_KEY:-${SERVICE_ROLE_KEY:-}}",
+                                 "pgrst_secret": "${SUPABASE_JWT_SECRET:-${JWT_SECRET:-}}"})
+    assert [f["code"] for f in before["findings"]] == ["wrong_pair_signature"]   # Kong admits, PostgREST refuses
+    out = fill_self_generated(secrets, local_services=_SERVICES)
+    after = ck.assess(out, {"cipher": "${SUPABASE_SERVICE_ROLE_KEY:-${SERVICE_ROLE_KEY:-}}",
+                            "gateway": "${SUPABASE_SERVICE_ROLE_KEY:-${SERVICE_ROLE_KEY:-}}",
+                            "pgrst_secret": "${SUPABASE_JWT_SECRET:-${JWT_SECRET:-}}"})
+    assert after["status"] == "ok", after["findings"]
+
+
+def test_anon_role_adopts_its_verifying_sibling_in_kongs_order():
+    good = derive_supabase_jwt(_VERIFIER, "anon", iat=1_700_000_000, exp=_LIVE)
+    wrong = derive_supabase_jwt(_OTHER, "anon", exp=_LIVE)
+    out = fill_self_generated({"JWT_SECRET": _OTHER, "SUPABASE_JWT_SECRET": _VERIFIER, "SUPABASE_RUNTIME": "compose",
+                               "ANON_KEY": wrong, "SUPABASE_ANON_KEY": "", "NEXT_PUBLIC_SUPABASE_ANON_KEY": good},
+                              local_services=_SERVICES)
+    assert out["ANON_KEY"] == out["SUPABASE_ANON_KEY"] == out["NEXT_PUBLIC_SUPABASE_ANON_KEY"] == good
+
+
+def test_an_expired_or_foreign_sibling_is_never_adopted():
+    dead_good = derive_supabase_jwt(_VERIFIER, "service_role", iat=1, exp=int(time.time()) - 5)
+    foreign = _jwt({"alg": "HS256"}, {"role": "service_role", "exp": _LIVE}, secret="cloud")
+    for donor_candidate in (dead_good, foreign):
+        out = fill_self_generated({"SUPABASE_JWT_SECRET": _VERIFIER, "SUPABASE_RUNTIME": "compose",
+                                   "SUPABASE_SERVICE_KEY": donor_candidate, "SERVICE_ROLE_KEY": ""},
+                                  local_services=_SERVICES)
+        assert out["SERVICE_ROLE_KEY"] != donor_candidate
+        assert _signed_by(out["SERVICE_ROLE_KEY"], _VERIFIER)

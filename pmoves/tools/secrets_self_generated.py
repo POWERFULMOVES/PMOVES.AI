@@ -67,6 +67,20 @@ _SUPABASE_JWT_KEYS: dict[str, str] = {
     "SERVICE_ROLE_KEY": "service_role",
 }
 
+# One role, one key. When a label of a role is stale or absent, it ADOPTS a
+# live sibling that already verifies under the verifiers' secret, in KONG'S
+# order (supabase-kong: SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-
+# ${SERVICE_ROLE_KEY}}, SUPABASE_ANON_KEY=${ANON_KEY:-${SUPABASE_ANON_KEY}}),
+# before minting a new value. Measured on knuckles 2026-10-31 after the #3410
+# funnel run: SERVICE_ROLE_KEY (Kong's key) was live but signed with the other
+# secret while SUPABASE_SERVICE_KEY was live and verified. A fresh mint for the
+# stale one would leave two different live service keys, and Kong refuses every
+# consumer of whichever its consumer key is not.
+_ROLE_DONOR_ORDER: dict[str, tuple[str, ...]] = {
+    "service_role": ("SUPABASE_SERVICE_ROLE_KEY", "SERVICE_ROLE_KEY", "SUPABASE_SERVICE_KEY"),
+    "anon": ("ANON_KEY", "SUPABASE_ANON_KEY", "NEXT_PUBLIC_SUPABASE_ANON_KEY"),
+}
+
 # Self-generated but NOT derivable in the funnel (minted at db-init, must match
 # the running database). Recognized so it is not reported as an operator gap.
 _GENERATED_ELSEWHERE: frozenset[str] = frozenset({"POSTGRES_PASSWORD", "SUPABASE_DB_PASSWORD"})
@@ -314,6 +328,9 @@ def fill_self_generated(
       verifier refuses.
     * live keys that verify, RS256/ES256 and opaque ``sb_*`` keys are never
       judged and never touched.
+    * one role, one key: a stale or absent label ADOPTS a live sibling that
+      already verifies (Kong's order, ``_ROLE_DONOR_ORDER``) before any new
+      value is minted, so Kong's consumer key and every alias agree.
 
     Keys are minted with the secret the VERIFIERS use
     (``${SUPABASE_JWT_SECRET:-${JWT_SECRET:-}}``). A missing secret is a no-op.
@@ -343,6 +360,17 @@ def fill_self_generated(
     for label, role in _SUPABASE_JWT_KEYS.items():
         roles.setdefault(role, []).append(label)
     for role, labels in roles.items():
+        # A live, verifying sibling to adopt (Kong's order), else None -> mint.
+        donor = next(
+            (
+                out[lb] for lb in _ROLE_DONOR_ORDER.get(role, tuple(labels))
+                if lb in labels and not is_placeholder(out.get(lb))
+                and _hs256_verifies(out.get(lb), jwt_secret) is True
+                and (_claims(out.get(lb)) or ({}, {}))[1].get("role") == role
+                and ((exp := _jwt_exp_claim(out.get(lb))) is None or exp > now)
+            ),
+            None,
+        )
         stale: Dict[str, str] = {}
         for label in labels:
             value = out.get(label)
@@ -367,7 +395,7 @@ def fill_self_generated(
         if stale:
             # Every placeholder/stale alias of the role moves to the same rolling
             # mint. Values that were not judged stale stay untouched.
-            rolling = derive_supabase_jwt(
+            rolling = donor or derive_supabase_jwt(
                 jwt_secret, role, iat=now, exp=now + _REFRESH_LIFETIME_S
             )
             for label in labels:
@@ -382,7 +410,7 @@ def fill_self_generated(
         else:
             for label in labels:
                 if is_placeholder(out.get(label)):
-                    out[label] = derive_supabase_jwt(jwt_secret, role)
+                    out[label] = donor or derive_supabase_jwt(jwt_secret, role)
                     log.append({"label": label, "role": role, "action": "filled",
                                 "reason": "absent"})
     return out
