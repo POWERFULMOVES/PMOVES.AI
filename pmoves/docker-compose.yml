@@ -2071,6 +2071,56 @@ services:
         limits:
           cpus: '1.0'
           memory: 512M
+  node-registry:
+    <<: *tier-api-hardened
+    build:
+      context: .
+      dockerfile: services/node_registry/Dockerfile
+    restart: unless-stopped
+    environment:
+    # The port is pinned to 8115 in BOTH the mapping and the container env.
+    # 8082 is media-audio's live host binding; a service that claims it
+    # cannot bind alongside media-audio, and its consumers would be answered
+    # by media-audio instead of by this service.
+    - NATS_URL=${NATS_URL}
+    - NODE_REGISTRY_HOST=${NODE_REGISTRY_HOST:-0.0.0.0}
+    - NODE_REGISTRY_PORT=8115
+    # Supabase storage is OPTIONAL for this service (InMemoryNodeStore is the
+    # fallback), so neither key carries a `:?` guard -- a guard here would
+    # make `docker compose config` fail on a host that has no Supabase keys.
+    - SUPABASE_URL=${SUPABASE_URL:-http://supabase-kong:8000}
+    - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY:-}
+    ports:
+    - "${NODE_REGISTRY_BIND:-0.0.0.0}:8115:8115"
+    depends_on:
+      nats:
+        condition: service_healthy
+        required: false
+    profiles:
+    - orchestration
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - curl -f http://localhost:8115/healthz || exit 1
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    networks:
+    - pmoves_api
+    - pmoves_bus
+    # pmoves_external: required for the ports: stanza to actually publish --
+    # pmoves_api/pmoves_bus are internal:true, and Docker silently skips host
+    # port publishing when a container has no non-internal network attached
+    # (HostConfig.PortBindings gets recorded but NetworkSettings.Ports stays null).
+    - pmoves_external
+    extra_hosts:
+    - host.docker.internal:host-gateway
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
   clip-embed:
     <<: *tier-api-hardened
     build:

@@ -28,7 +28,16 @@ def _load():
     return module
 
 
-@pytest.mark.skipif(os.geteuid() == 0, reason="root can read mode-000 files")
+# The house guard (see tests/tools/test_lgtm_marker_check.py:215): hasattr()
+# SHORT-CIRCUITS, so `os.geteuid` is never touched where it does not exist.
+# Windows has no os.geteuid at all, and an unguarded call in a decorator
+# argument is evaluated at IMPORT time -- it would fail the COLLECTION of
+# this whole file (0 tests run), not one test.
+# Windows also has no POSIX mode bits: chmod(0) there cannot make a file
+# unreadable, so the mode-000 premise of this test is POSIX-only.
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX mode bits")
+@pytest.mark.skipif(hasattr(os, "geteuid") and os.geteuid() == 0,
+                    reason="root can read mode-000 files")
 def test_unreadable_file_is_skipped_and_recorded(tmp_path):
     audit = _load()
     blocked = tmp_path / "blocked.json"

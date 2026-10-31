@@ -240,6 +240,8 @@ include mk/preflight.mk
 include mk/infra.mk
 include mk/worktree.mk
 include mk/build-gate.mk
+include mk/image-staleness.mk
+include mk/node-registry.mk
 include mk/nvidia-5090.mk
 include mk/nvidia-dgx-spark.mk
 include mk/amd-rdna4.mk

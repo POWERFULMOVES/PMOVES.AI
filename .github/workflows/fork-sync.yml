@@ -83,6 +83,14 @@ jobs:
             PMOVES-spynel
             PMOVES-registry
             PMOVES-Mike
+            Pmoves-pipecat-context-hub
+            PMOVES-KeYlOkODe
+            PMOVES-ScaleTail
+            PMOVES-natscli-CHIT-EeZz
+            Pmoves-Glancer
+            Pmoves-nats.net
+            Pmoves-pipecat-client-web-transports
+            Pmoves-pipecat-mcp-server
 
       - name: Discover forks
         env:
@@ -177,6 +185,14 @@ jobs:
           agent0ai/spynel|PMOVES-spynel|PMOVES.AI-Edition-Hardened
           agentclientprotocol/registry|PMOVES-registry|
           open-legal-products/mike|PMOVES-Mike|
+          pipecat-ai/pipecat-context-hub|Pmoves-pipecat-context-hub|
+          Kilo-Org/kilocode|PMOVES-KeYlOkODe|
+          tailscale-dev/ScaleTail|PMOVES-ScaleTail|
+          nats-io/natscli|PMOVES-natscli-CHIT-EeZz|
+          nicolargo/glances|Pmoves-Glancer|PMOVES.AI-Edition-Hardened
+          nats-io/nats.net|Pmoves-nats.net|
+          pipecat-ai/pipecat-client-web-transports|Pmoves-pipecat-client-web-transports|
+          pipecat-ai/pipecat-mcp-server|Pmoves-pipecat-mcp-server|
           "
 
           # Process substitution (`< <(...)`) instead of `echo | grep | while`

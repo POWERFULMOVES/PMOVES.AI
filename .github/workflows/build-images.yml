@@ -2,6 +2,23 @@ name: build-images-matrix
 
 on:
   workflow_dispatch:
+  # Rebuild the fleet on a cadence instead of on a human's click. Without
+  # this trigger the matrix was dispatch-only, so nothing rebuilt the
+  # images automatically and they went stale silently (flute-gateway was
+  # 65 days stale on 2026-10-30 -- see
+  # pmoves/docs/services/PIPECAT_FORK_PROVENANCE_AUDIT_2026-10-30.md,
+  # "Gap 3").
+  #
+  # Cron minute is 23, NOT 0. GitHub queues scheduled workflows at the top
+  # of the hour, so a fleet-wide build pinned to :00 lands in the same
+  # queue as every other scheduled job in the fleet. 23 keeps this off the
+  # hour and off-peak, matching the repo's own convention
+  # (integrations-ghcr.yml uses '17 7 * * *').
+  # 04:23 UTC is also well clear of fork-sync.yml ('0 6 * * *', 06:00) and
+  # integrations-ghcr.yml ('17 7 * * *', 07:17), so the self-hosted runners
+  # are not contended by two image builds at once.
+  schedule:
+    - cron: '23 4 * * *'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -50,7 +67,15 @@ jobs:
     # `build`, which build-nats-workers.yml (push on main) also publishes.
     # Required checks match on name alone, and dispatch-only is not
     # protection -- see self-hosted-builds.yml and #2840.
-    name: Manual Image Build
+    #
+    # Renamed from `Manual Image Build` (2026-10-31): the workflow now has a
+    # `schedule:` trigger, so "Manual" was a lie -- the job runs unattended.
+    # MEASURED before renaming: the literal string `Manual Image Build`
+    # appeared in exactly ONE place (this file), and main's required status
+    # check contexts are merge-decision, python-tests, hardening-validation,
+    # verify and submodule-gitlink-gate -- so `Manual Image Build` was never
+    # a required context and no branch protection rule referenced it.
+    name: Image Build
     needs: setup-matrix
     runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 60
