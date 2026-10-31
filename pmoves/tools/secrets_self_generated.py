@@ -119,7 +119,7 @@ def derive_supabase_jwt(
     return f"{signing_input}.{_b64url(signature)}"
 
 
-def _jwt_exp_claim(value: Optional[str]) -> Optional[int]:
+def _jwt_exp_claim(value: Optional[str]) -> Optional[float]:
     """Return the ``exp`` claim of a JWT-shaped value, or None if not decodable.
 
     Deliberately does NOT verify the signature: this decides whether a value is
@@ -137,7 +137,25 @@ def _jwt_exp_claim(value: Optional[str]) -> Optional[int]:
     except (ValueError, UnicodeDecodeError):
         return None
     exp = claims.get("exp") if isinstance(claims, dict) else None
-    return exp if isinstance(exp, int) else None
+    return exp if _is_numeric_date(exp) else None
+
+
+def _is_numeric_date(exp: object) -> bool:
+    # RFC 7519 NumericDate: int OR float. bool is an int subclass in Python and
+    # is NOT a date ({"exp": true} must not read as exp=1).
+    return isinstance(exp, (int, float)) and not isinstance(exp, bool)
+
+
+def _exp_state(value: Optional[str]) -> str:
+    """``absent`` (no exp claim), ``numeric``, ``malformed`` (an exp of any other
+    type: unknown, so neither live nor adoptable), or ``undecodable``."""
+    decoded = _claims(value)
+    if decoded is None:
+        return "undecodable"
+    exp = decoded[1].get("exp", None)
+    if exp is None:
+        return "absent"
+    return "numeric" if _is_numeric_date(exp) else "malformed"
 
 
 # The precedence every compose verifier uses: PostgREST (PGRST_JWT_SECRET),
@@ -207,7 +225,7 @@ _REFUSALS = (
     *(f"runtime_{r}" for r in (*KNOWN_RUNTIMES[1:], "other")),
 )
 EVENT_REASONS = (
-    "absent", "expired", "signed_with_other_secret",
+    "absent", "expired", "signed_with_other_secret", "malformed_exp",
     *_REFUSALS, *(f"expired_{r}" for r in _REFUSALS),
 )
 
@@ -367,7 +385,8 @@ def fill_self_generated(
                 if lb in labels and not is_placeholder(out.get(lb))
                 and _hs256_verifies(out.get(lb), jwt_secret) is True
                 and (_claims(out.get(lb)) or ({}, {}))[1].get("role") == role
-                and ((exp := _jwt_exp_claim(out.get(lb))) is None or exp > now)
+                and (_exp_state(out.get(lb)) == "absent"
+                     or (_exp_state(out.get(lb)) == "numeric" and _jwt_exp_claim(out.get(lb)) > now))
             ),
             None,
         )
@@ -379,6 +398,8 @@ def fill_self_generated(
             exp = _jwt_exp_claim(value)
             if exp is not None and exp <= now:
                 why = "expired"
+            elif _exp_state(value) == "malformed":
+                why = "malformed_exp"
             elif _hs256_verifies(value, jwt_secret) is False:
                 why = "signed_with_other_secret"
             else:

@@ -714,3 +714,38 @@ def test_an_expired_or_foreign_sibling_is_never_adopted():
                                   local_services=_SERVICES)
         assert out["SERVICE_ROLE_KEY"] != donor_candidate
         assert _signed_by(out["SERVICE_ROLE_KEY"], _VERIFIER)
+
+
+# ── #3433 review issuecomment-6550168885 P3: exp types ─────────────────────
+
+
+def test_exp_claim_accepts_int_and_float_not_bool():
+    f = _jwt({"alg": "HS256"}, {"role": "anon", "exp": 1799535600.5}, secret=_SECRET)
+    b = _jwt({"alg": "HS256"}, {"role": "anon", "exp": True}, secret=_SECRET)
+    assert _jwt_exp_claim(f) == 1799535600.5
+    assert _jwt_exp_claim(b) is None
+
+
+def test_a_float_exp_in_the_past_is_expired_and_never_adopted():
+    """Reviewer's input: a token signed with V carrying exp=float(now-100) was
+    adopted as donor because a float exp read as 'no expiry'."""
+    dead_float = _jwt({"alg": "HS256", "typ": "JWT"},
+                      {"role": "service_role", "iss": "supabase-local", "exp": float(time.time() - 100)}, secret=_VERIFIER)
+    events = []
+    out = fill_self_generated({"SUPABASE_JWT_SECRET": _VERIFIER, "SUPABASE_RUNTIME": "compose",
+                               "SUPABASE_SERVICE_KEY": dead_float, "SERVICE_ROLE_KEY": ""},
+                              events=events, local_services=_SERVICES)
+    assert out["SERVICE_ROLE_KEY"] != dead_float and out["SUPABASE_SERVICE_KEY"] != dead_float
+    assert ("SUPABASE_SERVICE_KEY", "reminted", "expired") in {(e["label"], e["action"], e["reason"]) for e in events}
+
+
+@pytest.mark.parametrize("bad_exp", ["2099-01-01", True, [1], {"t": 1}])
+def test_a_non_numeric_exp_is_unknown_never_live_never_adopted(bad_exp):
+    weird = _jwt({"alg": "HS256", "typ": "JWT"},
+                 {"role": "service_role", "iss": "supabase-local", "exp": bad_exp}, secret=_VERIFIER)
+    events = []
+    out = fill_self_generated({"SUPABASE_JWT_SECRET": _VERIFIER, "SUPABASE_RUNTIME": "compose",
+                               "SUPABASE_SERVICE_KEY": weird, "SERVICE_ROLE_KEY": ""},
+                              events=events, local_services=_SERVICES)
+    assert out["SERVICE_ROLE_KEY"] != weird            # not adopted as donor
+    assert ("SUPABASE_SERVICE_KEY", "reminted", "malformed_exp") in {(e["label"], e["action"], e["reason"]) for e in events}
