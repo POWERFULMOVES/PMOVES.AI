@@ -234,7 +234,10 @@ def test_rs256_shaped_jwt_is_left_alone():
     events = []
     out = fill_self_generated(_base(SUPABASE_ANON_KEY=rs), events=events)
     assert out["SUPABASE_ANON_KEY"] == rs
-    assert not [e for e in events if e["label"] == "SUPABASE_ANON_KEY"]
+    # Never judged or rewritten; but it differs from the role's key the other anon
+    # labels end on, so it is REPORTED (names only), not silently kept (#3433 P2).
+    assert [(e["action"], e["reason"]) for e in events if e["label"] == "SUPABASE_ANON_KEY"] == [
+        ("left_unchanged", "divergent_foreign")]
 
 
 def test_foreign_iss_hs256_cloud_key_is_left_alone_and_warned_by_name():
@@ -749,3 +752,86 @@ def test_a_non_numeric_exp_is_unknown_never_live_never_adopted(bad_exp):
                               events=events, local_services=_SERVICES)
     assert out["SERVICE_ROLE_KEY"] != weird            # not adopted as donor
     assert ("SUPABASE_SERVICE_KEY", "reminted", "malformed_exp") in {(e["label"], e["action"], e["reason"]) for e in events}
+
+
+# ── #3433 review issuecomment-6550168885 P2: one role, one key, always ─────
+
+
+def test_two_divergent_live_verifying_keys_converge_on_kongs_label():
+    """Reviewer input (a): two distinct live service values, no events before."""
+    now = int(time.time())
+    kong_label = derive_supabase_jwt(_VERIFIER, "service_role")
+    other = derive_supabase_jwt(_VERIFIER, "service_role", iat=now, exp=now + 9999)
+    events = []
+    out = fill_self_generated({"SUPABASE_JWT_SECRET": _VERIFIER, "SUPABASE_RUNTIME": "compose",
+                               "SUPABASE_SERVICE_ROLE_KEY": kong_label, "SERVICE_ROLE_KEY": other},
+                              events=events, local_services=_SERVICES)
+    vals = {out[lb] for lb in ("SUPABASE_SERVICE_ROLE_KEY", "SERVICE_ROLE_KEY", "SUPABASE_SERVICE_KEY")}
+    assert vals == {kong_label}            # Kong's own consumer-key label wins
+    assert ("SERVICE_ROLE_KEY", "reminted", "converged_to_role_key") in {
+        (e["label"], e["action"], e["reason"]) for e in events}
+
+
+def test_an_anon_token_under_a_service_label_is_role_mismatch():
+    """Reviewer input (b): a live, verifying anon token sat as Kong's service key."""
+    anon_in_service = derive_supabase_jwt(_VERIFIER, "anon")
+    events = []
+    out = fill_self_generated({"SUPABASE_JWT_SECRET": _VERIFIER, "SUPABASE_RUNTIME": "compose",
+                               "SUPABASE_SERVICE_ROLE_KEY": anon_in_service},
+                              events=events, local_services=_SERVICES)
+    for lb in ("SUPABASE_SERVICE_ROLE_KEY", "SERVICE_ROLE_KEY", "SUPABASE_SERVICE_KEY"):
+        assert _decode_claims(out[lb])["role"] == "service_role", lb
+    assert len({out[lb] for lb in ("SUPABASE_SERVICE_ROLE_KEY", "SERVICE_ROLE_KEY", "SUPABASE_SERVICE_KEY")}) == 1
+    assert ("SUPABASE_SERVICE_ROLE_KEY", "reminted", "role_mismatch") in {
+        (e["label"], e["action"], e["reason"]) for e in events}
+
+
+def test_role_mismatch_obeys_the_runtime_gate_and_ownership():
+    anon_in_service = derive_supabase_jwt(_VERIFIER, "anon")
+    foreign_anon = _jwt({"alg": "HS256"}, {"role": "anon", "exp": _LIVE}, secret="cloud")
+    for value, ctx, reason in ((anon_in_service, {}, "runtime_unknown"),
+                               (foreign_anon, {"SUPABASE_RUNTIME": "compose"}, "not_minted_here")):
+        events = []
+        out = fill_self_generated({"SUPABASE_JWT_SECRET": _VERIFIER, "SUPABASE_SERVICE_ROLE_KEY": value, **ctx},
+                                  events=events, local_services=_SERVICES)
+        assert out["SUPABASE_SERVICE_ROLE_KEY"] == value
+        assert ("SUPABASE_SERVICE_ROLE_KEY", "left_unchanged", reason) in {
+            (e["label"], e["action"], e["reason"]) for e in events}
+
+
+def test_convergence_never_overwrites_a_foreign_key_and_reports_it():
+    kong_label = derive_supabase_jwt(_VERIFIER, "service_role")
+    rs = _jwt({"alg": "RS256", "typ": "JWT"}, {"role": "service_role", "exp": _LIVE})
+    for foreign in (rs, "sb_secret_hosted_opaque"):
+        events = []
+        out = fill_self_generated({"SUPABASE_JWT_SECRET": _VERIFIER, "SUPABASE_RUNTIME": "compose",
+                                   "SUPABASE_SERVICE_ROLE_KEY": kong_label, "SUPABASE_SERVICE_KEY": foreign},
+                                  events=events, local_services=_SERVICES)
+        assert out["SUPABASE_SERVICE_KEY"] == foreign
+        assert out["SERVICE_ROLE_KEY"] == kong_label
+        assert ("SUPABASE_SERVICE_KEY", "left_unchanged", "divergent_foreign") in {
+            (e["label"], e["action"], e["reason"]) for e in events}
+
+
+def test_convergence_waits_for_a_stated_local_runtime():
+    now = int(time.time())
+    a = derive_supabase_jwt(_VERIFIER, "service_role")
+    b = derive_supabase_jwt(_VERIFIER, "service_role", iat=now, exp=now + 9999)
+    events = []
+    out = fill_self_generated({"SUPABASE_JWT_SECRET": _VERIFIER, "SUPABASE_SERVICE_ROLE_KEY": a,
+                               "SERVICE_ROLE_KEY": b}, events=events, local_services=_SERVICES)
+    assert out["SERVICE_ROLE_KEY"] == b
+    assert ("SERVICE_ROLE_KEY", "left_unchanged", "runtime_unknown") in {
+        (e["label"], e["action"], e["reason"]) for e in events}
+
+
+def test_converged_and_divergent_events_print_closed_text(capsys):
+    from pmoves.tools.secrets_sync import _refusal_text, announce_jwt_events
+
+    print(_refusal_text({"label": "SUPABASE_SERVICE_KEY", "reason": "divergent_foreign"}, {}))
+    announce_jwt_events([{"label": "SERVICE_ROLE_KEY", "role": "service_role", "action": "reminted",
+                          "reason": "converged_to_role_key"}], docs=[])
+    out = capsys.readouterr().out
+    assert "SUPABASE_SERVICE_KEY left unchanged: differs from the role's key" in out
+    assert "RE-MINTED SERVICE_ROLE_KEY (service_role): converged_to_role_key" in out
+    assert "<unrecognised>" not in out

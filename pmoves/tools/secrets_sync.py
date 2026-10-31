@@ -530,7 +530,11 @@ def _refusal_text(e: Mapping[str, str], sources: Mapping[str, str]) -> str:
     reason = _closed(e.get("reason"), EVENT_REASONS)
     expired = reason.startswith("expired_")
     base = reason[len("expired_"):] if expired else reason
-    if base == "not_minted_here":
+    if base == "divergent_foreign":
+        why = ("differs from the role's key (the value Kong's consumer expression resolves "
+               "to) and was not minted by this node, so it is not converged; Kong admits "
+               "only one key per role -- align it at its issuer or remove it")
+    elif base == "not_minted_here":
         why = ("was not minted by this node (no local JWT secret verifies it); "
                + ("it is EXPIRED: obtain a new key from its issuer (cloud project / Supabase CLI / peer node)"
                   if expired else "it may be correct for its own verifier"))

@@ -220,12 +220,13 @@ KNOWN_RUNTIMES = ("compose", "cli", "kong")
 EVENT_ROLES = ("anon", "service_role")
 EVENT_ACTIONS = ("filled", "reminted", "left_unchanged")
 _REFUSALS = (
-    "not_minted_here", "runtime_unknown", "remote_url",
+    "not_minted_here", "runtime_unknown", "remote_url", "divergent_foreign",
     *(f"empty_{k}" for k in ("SUPABASE_RUNTIME", "SUPABASE_URL", "SUPABASE_REST_URL")),
     *(f"runtime_{r}" for r in (*KNOWN_RUNTIMES[1:], "other")),
 )
 EVENT_REASONS = (
-    "absent", "expired", "signed_with_other_secret", "malformed_exp",
+    "absent", "expired", "signed_with_other_secret", "malformed_exp", "role_mismatch",
+    "converged_to_role_key",
     *_REFUSALS, *(f"expired_{r}" for r in _REFUSALS),
 )
 
@@ -298,20 +299,30 @@ def _node_secrets(values: Mapping[str, str]) -> List[str]:
     return out
 
 
-def _minted_by_this_node(value: Optional[str], role: str, node_secrets: Sequence[str]) -> bool:
-    """HS256, the label's role, and the signature VERIFIES under one of this
-    node's own JWT secrets. ``iss`` is deliberately not the proof: every PMOVES
-    funnel stamps ``supabase-local``, so it shows "some PMOVES node", not this
-    one -- while a signature under a local secret can only have been made here
-    (that includes a Supabase-CLI-minted key signed with this node's secret,
-    which is what expired on knuckles 2026-10-21)."""
+def _minted_by_this_node(value: Optional[str], node_secrets: Sequence[str]) -> bool:
+    """HS256 and the signature VERIFIES under one of this node's own JWT secrets.
+    ``iss`` is deliberately not the proof: every PMOVES funnel stamps
+    ``supabase-local``, so it shows "some PMOVES node", not this one -- while a
+    signature under a local secret can only have been made here (that includes
+    a Supabase-CLI-minted key signed with this node's secret, which is what
+    expired on knuckles 2026-10-21). The ROLE is judged separately
+    (``role_mismatch``), so a wrong-role token minted here is still ours."""
     decoded = _claims(value)
-    if decoded is None:
-        return False
-    header, claims = decoded
-    if header.get("alg") != "HS256" or claims.get("role") != role:
+    if decoded is None or decoded[0].get("alg") != "HS256":
         return False
     return any(_hs256_verifies(value, sec) is True for sec in node_secrets)
+
+
+def _is_live_role_key(value: Optional[str], role: str, jwt_secret: str, now: int) -> bool:
+    """A value fit to BE the role's key: HS256, the role's own role claim,
+    verifies under the verifiers' secret, and its exp is absent or a NumericDate
+    in the future (a malformed exp is unknown, so never live)."""
+    if is_placeholder(value) or _hs256_verifies(value, jwt_secret) is not True:
+        return False
+    if (_claims(value) or ({}, {}))[1].get("role") != role:
+        return False
+    state = _exp_state(value)
+    return state == "absent" or (state == "numeric" and _jwt_exp_claim(value) > now)
 
 
 def fill_self_generated(
@@ -378,44 +389,44 @@ def fill_self_generated(
     for label, role in _SUPABASE_JWT_KEYS.items():
         roles.setdefault(role, []).append(label)
     for role, labels in roles.items():
+        order = [lb for lb in _ROLE_DONOR_ORDER.get(role, tuple(labels)) if lb in labels]
+        order += [lb for lb in labels if lb not in order]
         # A live, verifying sibling to adopt (Kong's order), else None -> mint.
-        donor = next(
-            (
-                out[lb] for lb in _ROLE_DONOR_ORDER.get(role, tuple(labels))
-                if lb in labels and not is_placeholder(out.get(lb))
-                and _hs256_verifies(out.get(lb), jwt_secret) is True
-                and (_claims(out.get(lb)) or ({}, {}))[1].get("role") == role
-                and (_exp_state(out.get(lb)) == "absent"
-                     or (_exp_state(out.get(lb)) == "numeric" and _jwt_exp_claim(out.get(lb)) > now))
-            ),
-            None,
-        )
+        donor = next((out[lb] for lb in order if _is_live_role_key(out.get(lb), role, jwt_secret, now)), None)
         stale: Dict[str, str] = {}
+        reported: set = set()
         for label in labels:
             value = out.get(label)
             if is_placeholder(value):
                 continue
             exp = _jwt_exp_claim(value)
+            decoded = _claims(value)
+            hs256 = decoded is not None and decoded[0].get("alg") == "HS256"
             if exp is not None and exp <= now:
                 why = "expired"
             elif _exp_state(value) == "malformed":
                 why = "malformed_exp"
+            elif hs256 and decoded[1].get("role") != role:
+                # e.g. an anon token under a service label: Kong would admit it
+                # as the service consumer key while it carries anon rights.
+                why = "role_mismatch"
             elif _hs256_verifies(value, jwt_secret) is False:
                 why = "signed_with_other_secret"
             else:
-                continue  # live and verifying, or not an HS256 JWT: never judged
-            if not _minted_by_this_node(value, role, node_secrets):
+                continue  # live, verifying, right role -- or not an HS256 JWT
+            if not _minted_by_this_node(value, node_secrets):
                 refusal = "not_minted_here"
             elif not verifier_ok:
                 refusal = runtime_reason
             else:
                 stale[label] = why
                 continue
+            reported.add(label)
             log.append({"label": label, "role": role, "action": "left_unchanged",
                         "reason": ("expired_" if why == "expired" else "") + refusal})
         if stale:
-            # Every placeholder/stale alias of the role moves to the same rolling
-            # mint. Values that were not judged stale stay untouched.
+            # Every placeholder/stale alias of the role moves to the same value:
+            # the live verifying sibling if there is one, else one rolling mint.
             rolling = donor or derive_supabase_jwt(
                 jwt_secret, role, iat=now, exp=now + _REFRESH_LIFETIME_S
             )
@@ -434,6 +445,30 @@ def fill_self_generated(
                     out[label] = donor or derive_supabase_jwt(jwt_secret, role)
                     log.append({"label": label, "role": role, "action": "filled",
                                 "reason": "absent"})
+        # CONVERGE: one role, one key. Every label of the role ends on the first
+        # live role key in Kong's order (Kong's own consumer-key expression wins),
+        # including labels that were live and verifying but DIFFERENT -- Kong
+        # admits only one value per consumer. Only keys minted by this node move,
+        # and only when this node's compose Supabase is the verifier; anything
+        # else that differs is left in place and reported 'divergent_foreign'.
+        role_key = next((out[lb] for lb in order if _is_live_role_key(out.get(lb), role, jwt_secret, now)), None)
+        if role_key is None:
+            continue
+        for label in labels:
+            value = out.get(label)
+            if is_placeholder(value) or value == role_key or label in reported:
+                continue
+            if _is_live_role_key(value, role, jwt_secret, now) and _minted_by_this_node(value, node_secrets):
+                if verifier_ok:
+                    out[label] = role_key
+                    log.append({"label": label, "role": role, "action": "reminted",
+                                "reason": "converged_to_role_key"})
+                else:
+                    log.append({"label": label, "role": role, "action": "left_unchanged",
+                                "reason": runtime_reason})
+            else:
+                log.append({"label": label, "role": role, "action": "left_unchanged",
+                            "reason": "divergent_foreign"})
     return out
 
 
