@@ -13,21 +13,26 @@ the ones that are generated elsewhere so callers can skip them in
 Two classes of self-generated secret:
 
 * **Derivable now** — the Supabase ``anon`` / ``service_role`` API keys are
-  HS256 JWTs over ``JWT_SECRET``. We recreate them byte-for-byte with the same
-  header/claims as ``scripts/supabase/generate-keys.sh`` (the canonical
-  generator), so an operator only ever sets ``JWT_SECRET``.
+  HS256 JWTs over the secret the verifiers use
+  (``${SUPABASE_JWT_SECRET:-${JWT_SECRET:-}}``). We recreate them byte-for-byte
+  with the same header/claims as ``scripts/supabase/generate-keys.sh`` (the
+  canonical generator), so an operator only ever sets the JWT secret.
 * **Generated elsewhere** — ``POSTGRES_PASSWORD`` is minted at db-init
   (``scripts/supabase/db-passwd.sh``) and must match the running database, so we
   do **not** fabricate it here (a funnel-invented value would desync the DB). It
   is only *recognized* as self-generated so it is not flagged as an operator gap.
 
 Design: idempotent, and additive for every value it cannot prove is this
-node's. An existing key is rewritten only when it was minted BY THIS NODE (its
-HS256 signature verifies under one of this node's JWT secrets) AND this node's
-compose Supabase is its verifier, and it is either expired (#3410) or signed
-with this node's other secret. Cloud, CLI, peer, RS256/ES256 and opaque keys
-are never rewritten, expired or not. Every change and refusal is reported by
-NAME through ``events``. Missing ``JWT_SECRET`` is a no-op.
+node's. An existing key is rewritten only when this node minted it (ownership
+is proven by SIGNATURE alone: HS256 verifying under one of this node's JWT
+secrets) AND this node's compose Supabase is its verifier (stated
+``SUPABASE_RUNTIME=compose``, local URLs). Two things can trigger a rewrite:
+it is stale (expired, malformed exp, wrong role claim, or signed with this
+node's other secret), or it is a live key that differs from its role's key and
+is converged onto it (one role, one key, in Kong's order). Cloud, CLI, peer,
+RS256/ES256 and opaque keys are never rewritten, expired or not; a divergent
+one is reported. Every change and refusal is reported by NAME through
+``events``. A missing JWT secret is a no-op.
 """
 
 from __future__ import annotations
@@ -48,9 +53,10 @@ _JWT_IAT = 1641769200   # fixed timestamp for reproducibility (generate-keys.sh)
 _JWT_EXP = 1799535600   # far-future expiry (generate-keys.sh)
 
 # Refreshed keys are minted with a rolling 10-year window instead of the fixed
-# generate-keys.sh timestamps: a refresh happens only when the previous value
-# is stale (expired, or this node's but signed with its other secret), and re-deriving
-# with the same fixed exp would reproduce an expired key on every run forever.
+# generate-keys.sh timestamps: a fresh mint happens only when a role has a stale
+# label (expired, malformed exp, wrong role, or signed with this node's other
+# secret) and no live verifying sibling to adopt, and re-deriving with the same
+# fixed exp would reproduce an expired key on every run forever.
 _REFRESH_LIFETIME_S = 10 * 365 * 24 * 3600
 
 # Canonical label -> role, plus the short aliases the pipe also carries.
@@ -185,8 +191,9 @@ def verifier_secret(values: Mapping[str, str]) -> str:
 def _hs256_verifies(value: Optional[str], secret: str) -> Optional[bool]:
     """True/False for an HS256 JWT under ``secret``; None if not an HS256 JWT.
 
-    Non-HS256 values (asymmetric keys, opaque sb_* keys) return None and are
-    never judged here, so they are never re-minted.
+    Non-HS256 values (asymmetric keys, opaque sb_* keys) return None: they are
+    never judged stale and never re-minted. If one differs from its role's key
+    it is reported ``divergent_foreign`` and left in place.
     """
     if not value:
         return None
@@ -342,31 +349,52 @@ def fill_self_generated(
     """Return a copy of ``secrets`` with derivable self-generated keys filled.
 
     What it changes, exactly (every change and every refusal is appended to
-    *events* as ``{label, role, action, reason}`` -- names only, never values):
+    *events* as ``{label, role, action, reason}`` -- names only, never values,
+    reasons from the closed ``EVENT_REASONS``):
 
-    * **absent / placeholder** label -> derived from the verifiers' secret
-      (``filled``, reason ``absent``).
-    * an existing JWT is rewritten (``reminted``) ONLY when it was minted BY
-      THIS NODE (HS256, the label's role, signature verifies under one of this
-      node's JWT secrets) AND this node's compose Supabase is its verifier
-      (``local_runtime_is_verifier``). Then:
-        - expired -> reason ``expired`` (#3410: a CLI-minted 1-year
-          service_role JWT on knuckles expired 2026-10-21T04:03:43Z and the
-          funnel re-propagated the corpse to every tier env);
-        - live but signed with this node's OTHER secret -> reason
-          ``signed_with_other_secret``.
-    * otherwise the key is LEFT UNCHANGED and reported (``left_unchanged``):
-      ``not_minted_here`` (a cloud/CLI/peer key: it may be right for ITS
-      verifier), or the runtime reason (``runtime_unknown``, ``runtime_cli``,
-      ``remote_url``, ``empty_<VAR>``); an expired one is prefixed
-      ``expired_`` -- a new key must come from its issuer, and re-minting it
-      under our secret would hide that behind a fresh-looking key its real
-      verifier refuses.
-    * live keys that verify, RS256/ES256 and opaque ``sb_*`` keys are never
-      judged and never touched.
-    * one role, one key: a stale or absent label ADOPTS a live sibling that
-      already verifies (Kong's order, ``_ROLE_DONOR_ORDER``) before any new
-      value is minted, so Kong's consumer key and every alias agree.
+    Two gates guard every rewrite of an existing value:
+      - **minted here** -- ownership is proven by SIGNATURE alone: HS256 and the
+        signature verifies under one of this node's JWT secrets
+        (``_minted_by_this_node``). ``iss`` is irrelevant (every PMOVES funnel
+        stamps ``supabase-local``) and the role is judged separately;
+      - **local verifier** -- this node's compose Supabase is the verifier
+        (``local_runtime_is_verifier``: ``SUPABASE_RUNTIME=compose`` STATED,
+        every present ``SUPABASE_URL``/``SUPABASE_REST_URL`` local; unset or
+        set-but-empty is unknown).
+
+    * **absent / placeholder** label -> filled from the role's live key if one
+      exists, else derived from the verifiers' secret (``filled``, ``absent``).
+    * **stale** HS256 label -> ``reminted`` when both gates pass, with reason
+      (first that applies):
+        - ``expired`` -- a finite NumericDate ``exp`` in the past (#3410: a
+          CLI-minted 1-year service_role JWT on knuckles expired
+          2026-10-21T04:03:43Z and the funnel re-propagated the corpse to every
+          tier env);
+        - ``malformed_exp`` -- ``exp`` PRESENT but not a finite int/float
+          (null, NaN, +/-Infinity, bool, string, ...): unknown, so never live,
+          never adoptable, never the role key;
+        - ``role_mismatch`` -- the token's role claim is not the label's role
+          (e.g. an anon token under a service label);
+        - ``signed_with_other_secret`` -- live, but does not verify under the
+          verifiers' secret.
+      A stale label whose gates fail is LEFT UNCHANGED and reported
+      (``left_unchanged``): ``not_minted_here`` (cloud/CLI/peer: it may be right
+      for ITS verifier) or the runtime reason (``runtime_unknown``,
+      ``runtime_cli``/``kong``/``other``, ``remote_url``, ``empty_<VAR>``); an
+      expired one is prefixed ``expired_`` -- a new key must come from its
+      issuer, and re-minting it under our secret would hide that behind a
+      fresh-looking key its real verifier refuses.
+    * **one role, one key** -- every stale/absent label takes the role's key:
+      the first live verifying sibling in Kong's order (``_ROLE_DONOR_ORDER``,
+      Kong's own consumer-key expression first), else one rolling mint. Then
+      every remaining label that differs from that role key is CONVERGED:
+        - a live, verifying key minted here moves onto the role key
+          (``reminted``, ``converged_to_role_key``) -- only when the local
+          verifier gate passes, else ``left_unchanged`` with the runtime reason;
+        - anything else that differs (not minted here, non-HS256 such as
+          RS256/ES256, opaque ``sb_*``) is never overwritten and is reported
+          ``left_unchanged`` / ``divergent_foreign``.
+    * a label that already IS the role key is not touched.
 
     Keys are minted with the secret the VERIFIERS use
     (``${SUPABASE_JWT_SECRET:-${JWT_SECRET:-}}``). A missing secret is a no-op.
