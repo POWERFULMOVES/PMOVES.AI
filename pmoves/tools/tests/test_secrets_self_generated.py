@@ -284,7 +284,10 @@ def test_no_live_remint_unless_the_local_compose_stack_is_the_verifier(ctx, reas
     events = []
     out = fill_self_generated(secrets, events=events)
     assert out["SUPABASE_SERVICE_ROLE_KEY"] == ours and out["SERVICE_ROLE_KEY"] == ours
-    assert {e["reason"] for e in events if e["role"] == "service_role"} == {reason}
+    # (#3434 added SUPABASE_SERVICE_KEY to the map; absent here, it is filled --
+    # the assertion is about the refusals for the keys that ARE present.)
+    assert {e["reason"] for e in events
+            if e["role"] == "service_role" and e["action"] == "left_unchanged"} == {reason}
 
 
 _SERVICES = frozenset({"supabase-kong", "supabase-postgrest"})
@@ -627,3 +630,19 @@ def test_emitted_labels_maps_target_keys_back_to_labels():
     assert ss.emitted_labels(entries, {"f1": {"A_KEY": "v"}}) == {"A", "A_OLD"}
     assert ss.emitted_labels(entries, {"f1": {}, "f2": {"B": "v"}}) == {"B"}
     assert ss.emitted_labels(entries, {"f2": {"A_KEY": "v"}}) == set()   # right key, wrong file
+
+
+# ── from #3434 (main): the label consumers read first refreshes too ─────────
+
+
+def test_fill_refreshes_the_service_key_label_consumers_read_first():
+    # cipher auth.ts reads SUPABASE_SERVICE_KEY ?? SERVICE_ROLE_KEY — the
+    # first label must refresh too, not just the ROLE_KEY aliases.
+    dead = _expired_jwt(_SECRET, "service_role", exp=int(time.time()) - 3600)
+    # #3433: refreshes need the local compose runtime STATED (same as the #3410 tests).
+    out = fill_self_generated({"JWT_SECRET": _SECRET, "SUPABASE_SERVICE_KEY": dead,
+                               "SUPABASE_RUNTIME": "compose"})
+    assert out["SUPABASE_SERVICE_KEY"] != dead
+    claims = _decode_claims(out["SUPABASE_SERVICE_KEY"])
+    assert claims["role"] == "service_role"
+    assert claims["exp"] > int(time.time()) + 9 * 365 * 86400

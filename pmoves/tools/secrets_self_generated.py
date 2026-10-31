@@ -53,10 +53,16 @@ _JWT_EXP = 1799535600   # far-future expiry (generate-keys.sh)
 _REFRESH_LIFETIME_S = 10 * 365 * 24 * 3600
 
 # Canonical label -> role, plus the short aliases the pipe also carries.
+# SUPABASE_SERVICE_KEY is the label consumers read FIRST (cipher auth.ts:
+# `SUPABASE_SERVICE_KEY ?? SERVICE_ROLE_KEY`) and the manifest projects it
+# separately from SUPABASE_SERVICE_ROLE_KEY — omitting it from the refresh map
+# left the corpse in place while its aliases refreshed (measured knuckles
+# 2026-10-22: SERVICE_KEY -10d, ROLE_KEY +3650d after the same funnel run).
 _SUPABASE_JWT_KEYS: dict[str, str] = {
     "SUPABASE_ANON_KEY": "anon",
     "ANON_KEY": "anon",
     "NEXT_PUBLIC_SUPABASE_ANON_KEY": "anon",
+    "SUPABASE_SERVICE_KEY": "service_role",
     "SUPABASE_SERVICE_ROLE_KEY": "service_role",
     "SERVICE_ROLE_KEY": "service_role",
 }
