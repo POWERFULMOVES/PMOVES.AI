@@ -3,7 +3,7 @@
 **Date:** 2026-10-17
 **Author:** mavis (claude M3, worktree `pmoves-wt-hirag-cgp`)
 **Branch:** `fix/hi-rag-cgp-geometry-event-handler`
-**Follow-up to:** PR #3382, commit `a7bfdd3e410` (`fix(hirag): Dockerfile.gpu packages the pmoves.chit namespace`) — the PR-head sha for the same change was `e38c3a1`; the branch was rebuilt onto `origin/main` after review, so the sha moved with it (match the commit by subject, because a further rebase rewrites the sha).
+**Follow-up to:** PR #3382, the chit-namespace commit `f6f6ec33ca3` (`fix(hirag): Dockerfile.gpu packages the pmoves.chit namespace (sibling of CPU Dockerfile)`) — the same change carried the pre-rebase sha `a7bfdd3e410`, and the PR-head sha for it was `e38c3a1`; the branch was rebuilt onto `origin/main` after review, so the sha moved (match the commit by subject, because a further rebase rewrites the sha).
 
 ## TL;DR
 
@@ -73,9 +73,9 @@ follow-up (2026-10-17) it SKIPs on this host because:
 > the defect: it POSTed to `/yt/download` to test "is this video archived?",
 > which *downloads* the video when it is not. The skip decision is now taken
 > from the **emit response** (`_emit_declined_for_archived_video`), so the
-> test no longer mutates the archive it is measuring. On the operator's host
-> the probe video was already archived, so the test **RUNS and PASSES** now —
-> see `hirag_cgp_geometry_event_dockerfile_packaging_LEARNINGS.md`.
+> test no longer mutates the archive it is measuring. With the probe video
+> still archived on the operator's host the test **RUNS and PASSES**; it
+> SKIPs only when the emit response itself declines the probe (404 `transcript not found`, or 200 with an archive message) — see `hirag_cgp_geometry_event_dockerfile_packaging_LEARNINGS.md`.
 
 When the test *did* run, it would have failed with the exact symptom we
 saw in the runtime logs. The fix is to make the static ratchet (which DOES
@@ -145,10 +145,15 @@ parametrized `pmoves.tools` test adds 2, one per Dockerfile in the glob).
   `pmoves.tools` follow-up commit widened all three regions and moved every
   line number inside them.*
 - **class: doc** — this LEARNINGS file + the AGNOTE4482PHI.t1.md UPDATE row
-  timestamped `2026-10-17T23:35:00Z` (currently `:3535`; the sibling RELEASE
-  row is `:3533` and the 2026-10-30 review-fix row `:3536` — the three hirag
-  rows sit at the tail of the register). *Anchored on the row's
-  TIMESTAMP because the register is append-only — later rows push it down.*
+  timestamped `2026-10-17T23:35:00Z`. The sibling hirag rows are the RELEASE
+  row timestamped `2026-10-15T20:45:00Z`, the review-fix UPDATE row
+  `2026-10-30T19:30:00Z` and the provenance-round NOTE row
+  `2026-10-30T23:08:34Z`; at HEAD `df4ea574c51` the four rows read `:3537`,
+  `:3539`, `:3540` and `:3541` respectively. *Anchored on the row's TIMESTAMP
+  because the register is append-only — later rows push it down. An earlier
+  revision of this bullet cited `:3533`/`:3535`/`:3536`; those positions point
+  at the B850-CLAUDE rows rather than the hirag rows, and were already stale
+  when written.*
 - **class: agent memory** — none yet (this finding is project-specific)
 
 ### Bucket: operational
@@ -159,14 +164,15 @@ parametrized `pmoves.tools` test adds 2, one per Dockerfile in the glob).
 - **class: env/ops** — none (no env var changes)
 
 ### Bucket: provenance chain
-- **class: trace/ID** — the follow-up commit `e76036c95aa`
+- **class: trace/ID** — the follow-up commit `32a6ba7138a`
   (`fix(hirag): Dockerfile packages pmoves.tools namespace too`) on
   `fix/hi-rag-cgp-geometry-event-handler`, following the chit-namespace fix
-  `a7bfdd3e410` (`fix(hirag): Dockerfile.gpu packages the pmoves.chit
-  namespace`) and its docs commit `ca9689c74a4` (`docs(hirag): RELEASE row +
-  LEARNINGS …`). *These are the current shas; the branch was rebuilt onto
-  `origin/main` after the review, so match the commits by subject, not by
-  sha.*
+  `f6f6ec33ca3` (`fix(hirag): Dockerfile.gpu packages the pmoves.chit
+  namespace`) and its docs commit `eb3e243d892` (`docs(hirag): RELEASE row +
+  LEARNINGS …`). *These are the shas on this branch; the pre-rebase shas for
+  the same subjects were `e76036c95aa` / `a7bfdd3e410` / `ca9689c74a4`, and
+  the branch was rebuilt onto `origin/main` after the review — so match the
+  commits by subject, not by sha.*
 - **class: SDK+test contract** — `5 passed` ratchet result
   (`pmoves/tests/test_dockerfile_packages_pmoves_chit.py`); full E2E
   verification (`cgp_ok: true`) is the integration test
@@ -221,3 +227,31 @@ parametrized `pmoves.tools` test adds 2, one per Dockerfile in the glob).
    in worktrees that don't carry the gitignored `env.shared`. The
    `--env-file` workaround is documented inline here as the canonical
    bring-up path. Not in scope for the follow-up commit.
+
+### Provenance round (2026-10-30) — the findings against THIS document
+
+A second review round on PR #3382 (kilo-code-bot) raised findings against
+this document and against its sibling
+`hirag_cgp_geometry_event_dockerfile_packaging_LEARNINGS.md`. Every one was
+re-verified against the tree and confirmed VALID. The lane is a PROVENANCE
+lane, so the fix was to re-anchor every claim on a **stable anchor** (a
+symbol, a commit sha, a row TIMESTAMP) rather than a line number that moves,
+and to say which state each citation describes.
+
+Positions are labelled with the state they describe. **"Before this round, at
+`:NN`"** is a position in the tree at `9fe5d56b992` (the parent of the docs
+fix `f6864ed6dda`); **"now reads `:NN`"** is a position in the tree at HEAD
+`df4ea574c51`.
+
+| # | Finding | Before this round (at `9fe5d56b992`) | Now reads (at HEAD `df4ea574c51`) | Stable anchor |
+|---|---------|--------------------------------------|------------------------------------|---------------|
+| 3 | This document carried a stale bullet claiming the CPU-only `assert "/app/pmoves/tools" in source` was the coverage for the CPU tools namespace. That assert was removed in the 2026-10-30 review-fix round as redundant AND weaker — a bare substring match also hits a comment, while the parametrized test asserts the exact `COPY tools/<module> ... /app/pmoves/tools/<module>` destination by regex. | the stale bullet sat at `:109` — "Also extends `test_pmoves_chit_in_cpu_dockerfile_unchanged` to also pin `/app/pmoves/tools` in the CPU sibling." | the corrected bullet sits at `:122` — the CPU tools namespace IS covered by the parametrized `test_dockerfile_packages_pmoves_tools` (its `Dockerfile*` glob includes the CPU `Dockerfile`), and the test file carries an explicit NOTE that the CPU path is NOT asserted in `test_pmoves_chit_in_cpu_dockerfile_unchanged` | the `test_dockerfile_packages_pmoves_tools` function name |
+| 4 | The `class: code/SDK` and `class: doc` bullets mis-anchored the SDK provenance (`Dockerfile.gpu:52-69`, `Dockerfile:18-30`, `test_dockerfile_packages_pmoves_chit.py:84-127`) and cited the agent0-sidecar AGNOTE row (`:3400`) instead of the hirag rows. | the mis-anchored cites sat at `:117-119` | the re-anchored cites sit at `:138` and `:147` | the `COPY chit /app/pmoves/chit` line in each Dockerfile, the `test_dockerfile_packages_pmoves_tools` function name, and the AGNOTE row TIMESTAMPs |
+
+The AGNOTE row positions were corrected in the same round: this document
+cited `:3533`/`:3535`/`:3536` for the hirag rows, and those positions point
+at the B850-CLAUDE rows rather than the hirag rows — they were already stale
+when written. The rows are now identified by their TIMESTAMPs
+(`2026-10-15T20:45:00Z`, `2026-10-17T23:35:00Z`, `2026-10-30T19:30:00Z`,
+`2026-10-30T23:08:34Z`), which at HEAD `df4ea574c51` read `:3537`, `:3539`,
+`:3540` and `:3541`.

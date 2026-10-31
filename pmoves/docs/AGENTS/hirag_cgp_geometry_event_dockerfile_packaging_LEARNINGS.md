@@ -2,7 +2,7 @@
 
 **Lane**: YouTube ingest gap (operator handoff 2026-10-15 "ok you are up MAVIS! lets complete this")
 **Branch**: `fix/hi-rag-cgp-geometry-event-handler`
-**HEAD at write**: `a7bfdd3e410` (chit-namespace fix) + `5aa894cccb8` (ratchet tests) + `ca9689c74a4` (docs) — the branch was rebuilt onto `origin/main` after the review, so these shas moved with it; match the commits by subject (`fix(hirag): Dockerfile.gpu packages the pmoves.chit namespace`, `test(ratchet): fix the review findings on #3382`, `docs(hirag): RELEASE row + LEARNINGS …`), because a further rebase rewrites the shas again
+**HEAD at write**: the tree this document was written against is `df4ea574c51`; the lane's commits on it are `f6f6ec33ca3` (chit-namespace fix), `32a6ba7138a` (the `pmoves.tools` follow-up), `9fe5d56b992` (ratchet tests) and `f6864ed6dda` (these docs) — the branch was rebuilt onto `origin/main` after the review, so the pre-rebase shas for the same subjects were `a7bfdd3e410`, `e76036c95aa`, `5aa894cccb8` and `ca9689c74a4`; match the commits by subject (`fix(hirag): Dockerfile.gpu packages the pmoves.chit namespace`, `fix(hirag): Dockerfile packages pmoves.tools namespace too`, `test(ratchet): fix the review findings on #3382`, `docs(hirag): RELEASE row + LEARNINGS …`), because a further rebase rewrites the shas again
 **Test contract**: `pmoves/tests/test_dockerfile_packages_pmoves_chit.py` 5/5 PASS (2 × `pmoves.chit` + 2 × `pmoves.tools` + 1 × CPU baseline); `pmoves/tests/test_yt_emit_cgp_ok.py` PASSES against the live stack since the 2026-10-30 review-fix round (it SKIPs where `requests` is absent)
 **Fix**: `pmoves/services/hi-rag-gateway-v2/Dockerfile.gpu` add the `pmoves.chit` namespace copy that the CPU `Dockerfile` has had since `30efedfb77f` (2026-02-26)
 
@@ -66,8 +66,8 @@ $ curl -X POST http://localhost:8077/yt/emit -d '{"video_id":"kJQP7kiw5Fk","topi
 | # | Class | What | Measured | Repeatability |
 |---|-------|------|----------|---------------|
 | 3.1 | sibling-dockerfile-pinning | Parametrized test over `Dockerfile*` glob in the service dir. | `test_dockerfile_packages_pmoves_chit[Dockerfile]` PASS, `[Dockerfile.gpu]` PASS | Adding a new `Dockerfile.cpu-amd` to the dir adds a third ratchet row for free |
-| 3.2 | probe-video-archive-aware-skip | The archive skip is decided from the **emit response** (`_emit_declined_for_archived_video(payload, status_code)`), so the test never mutates the archive it measures. *(Before the 2026-10-30 review-fix round this was a `_video_in_archive()` pre-check that POSTed to `POST /yt/download` — itself the defect.)* | Verified: the probe video `0p_1QSUsbsM` is in the archive on this host, so the integration test SKIPs rather than falsely passing | When the operator wants to re-exercise, clear the archive or use a fresh probe |
-| 3.3 | localhost-reachability-probe | `_localhost_reachable()` checks `socket.create_connection` to `localhost:8077` before issuing the HTTP call. | Verified: pmoves-yt is reachable, test reached the emit call and read the archive-skip decision off the response | If the operator takes pmoves-yt down, the test SKIPs without flapping |
+| 3.2 | probe-video-archive-aware-skip | The archive skip is decided from the **emit response** (`_emit_declined_for_archived_video(payload, status_code)`), so the test never mutates the archive it measures. *(Before the 2026-10-30 review-fix round this was a `_video_in_archive()` pre-check that POSTed to `POST /yt/download` — itself the defect.)* | Verified on the operator's host after the 2026-10-30 review-fix round: the probe video `0p_1QSUsbsM` is **still in the download archive**, and the integration test now **RUNS and PASSES** (1 passed, was SKIP) — the archive entry no longer forces a SKIP. The test SKIPs only when the **emit response itself declines the probe** (a 404 whose detail says `transcript not found`, or a 200 whose body says the video is already in the download archive) — i.e. when the stack cannot run the probe at all — not because an archive flag is set anywhere | Nothing to clear: the probe video's archive entry no longer decides the outcome, so the video may stay archived and the CGP path is still exercised. To exercise the skip path deliberately, point the test at a video the stack declines, or take pmoves-yt down (the test SKIPs without flapping) |
+| 3.3 | localhost-reachability-probe | `_localhost_reachable()` checks `socket.create_connection` to `localhost:8077` before issuing the HTTP call. | Verified: pmoves-yt is reachable — the test reached the emit call and read `cgp_ok: true` off the response (1 passed, was SKIP) | If the operator takes pmoves-yt down, the test SKIPs without flapping |
 | 3.4 | live-image-rebuild-required | The integration test can only pass on a freshly rebuilt GPU image. The pre-fix running container from `2026-09-05T20:04:20Z` will not pass the test. | The operator must run `docker compose build hi-rag-gateway-v2-gpu && docker compose up -d hi-rag-gateway-v2-gpu` after merging this PR. | Document the rebuild in the runbook |
 
 ### 4. Cross-references
@@ -115,9 +115,9 @@ The ratchet is parametrized over every `Dockerfile*` in the service dir. Adding 
 
 ## Provenance (DARKXSIDE 2026-09-16: no workarounds; SDK + doc provenance required)
 
-- **SDK file:line** — `pmoves/services/hi-rag-gateway-v2/Dockerfile.gpu` — the `pmoves` namespace block, anchored on the `COPY chit /app/pmoves/chit` line (currently `:74`; the whole block `:70-78`) — the fix. `pmoves/services/hi-rag-gateway-v2/Dockerfile` — the same anchor, `COPY chit /app/pmoves/chit` (currently `:28`; the whole block `:24-32`) — the historical baseline. *Anchored on the `COPY` line rather than a bare range, because the `pmoves.tools` follow-up commit widened both blocks inside this PR and moved every line number in them.*
+- **SDK file:line** — `pmoves/services/hi-rag-gateway-v2/Dockerfile.gpu` — the `pmoves` namespace block, anchored on the `COPY chit /app/pmoves/chit` line (now reads `:74`; the whole block `:70-78`) — the fix. `pmoves/services/hi-rag-gateway-v2/Dockerfile` — the same anchor, `COPY chit /app/pmoves/chit` (now reads `:28`; the whole block `:24-32`) — the historical baseline. *Anchored on the `COPY` line rather than a bare range, because the `pmoves.tools` follow-up commit widened both blocks inside this PR and moved every line number in them. Before the 2026-10-30 provenance round — i.e. in the tree at `9fe5d56b992` — this bullet sat at `:106` and cited the bare ranges `Dockerfile.gpu:52-55` and `Dockerfile:18-21`, which the `pmoves.tools` follow-up had already moved.*
 - **Test contract** — `pmoves/tests/test_dockerfile_packages_pmoves_chit.py` 5/5 PASS (parametrized over both Dockerfiles: 2 × `pmoves.chit` + 2 × `pmoves.tools` + 1 × CPU baseline); `pmoves/tests/test_yt_emit_cgp_ok.py` PASSES against the live stack since the 2026-10-30 review-fix round (it SKIPs where `requests` is absent).
-- **AGNOTE** — RELEASE row timestamped `2026-10-15T20:45:00Z` in `pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md` (currently `:3533`; the pmoves.tools UPDATE row is `:3535` and the 2026-10-30 review-fix row `:3536` — the three hirag rows sit at the tail of the register). The media-audio and Windows-cp1252 rows from the same operator session are at `:3519-3520`. *Anchored on the row's TIMESTAMP rather than its line number, because the register is append-only — later rows push it down.*
+- **AGNOTE** — RELEASE row timestamped `2026-10-15T20:45:00Z` in `pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md`; the pmoves.tools UPDATE row is timestamped `2026-10-17T23:35:00Z`, the review-fix UPDATE row `2026-10-30T19:30:00Z` and the provenance-round NOTE row `2026-10-30T23:08:34Z` — at HEAD `df4ea574c51` those four rows read `:3537`, `:3539`, `:3540` and `:3541`. The media-audio and Windows-cp1252 rows from the same operator session are at `:3519-3520`. *Anchored on the row's TIMESTAMP rather than its line number, because the register is append-only — later rows push it down. An earlier revision of this bullet cited `:3533`/`:3535`/`:3536`; those positions point at the B850-CLAUDE rows rather than the hirag rows, and were already stale when written.*
 - **LEARNINGS** — this file.
 - **PR + branch** — PR #3382, branch `fix/hi-rag-cgp-geometry-event-handler` (this agent, mvs_5d5493b128b640e9aff8d45adcc77a66).
 - **Docs cited** — `pmoves/docs/geometry-bus/pipelines/youtube-to-persona.md` (the CGP bridge documentation).
@@ -127,7 +127,7 @@ The ratchet is parametrized over every `Dockerfile*` in the service dir. Adding 
 
 ## Review-fix round (2026-10-30)
 
-Review on PR #3382 raised five findings against this slice. Each was
+Review on PR #3382 raised five findings against this slice (**review round 1**; a second, provenance-only round against these two LEARNINGS docs followed — see *Provenance round (2026-10-30)* below). Each was
 independently re-verified before acting; **all five were valid — three
 code defects (rows 1, 2, 4) and two documentation-accuracy defects
 (rows 3, 5)** — and the fixes below close all five.
@@ -144,7 +144,7 @@ afterwards, so those line numbers have since moved. Read them with
 | 2 | `test_yt_emit_cgp_ok.py` — the `"already in download archive" in r.text` substring sniff (`:69` at the reviewed commit) is case-sensitive with no status-code check. | **VALID** | Replaced by `_emit_declined_for_archived_video(payload, status_code)`: case-insensitive, status-code-aware, and it covers the **404 `transcript not found`** shape (yt-dlp refused to re-download an archived video → no CGP was built) that the old substring sniff could never see. |
 | 3 | `test_dockerfile_packages_pmoves_chit.py` — the `test_dockerfile_packages_pmoves_tools` docstring (`:96` at the reviewed commit) claims `sign_trail.py` is imported by "shape_store / geometry_decoder / branch_trail / model_fitness". | **VALID — the claim was factually wrong** | Verified: `sign_trail.py` has **exactly ONE** importer in the tree — `pmoves/services/common/branch_trail.py:146` (`from pmoves.tools.sign_trail import build_payload`). The other three import `pmoves.chit` (shape_store), `chit_common` / `chit_security` (geometry_decoder), and `chit_security` (model_fitness) — not `sign_trail`. The docstring now states the real import graph with file:line citations. |
 | 4 | `test_dockerfile_packages_pmoves_chit.py` — `test_pmoves_chit_in_cpu_dockerfile_unchanged` (`:141` at the reviewed commit) duplicates the parametrized `test_dockerfile_packages_pmoves_tools`; the docstring claims the CPU tools namespace is "pinned by this single check". | **VALID** | The redundant `assert "/app/pmoves/tools" in source` is **removed**. It was strictly WEAKER than the parametrized test (a bare substring match hits a comment; the parametrized test asserts the exact `COPY tools/<module> ... /app/pmoves/tools/<module>` destination via regex). The docstring now says the CPU tools namespace is covered by the parametrized test — and carries an explicit NOTE that the CPU path is **not** asserted there, so the next reader does not re-add the weaker check. |
-| 5 | `AUTH_FLIPON_RUNBOOK_2026-10-11.md:11` — cites `env.shared.example:257` for both `..._CLIENT_ID` and `..._SECRET`. | **VALID** | Verified against the blob at the reviewed commit `5eacaa437f`: the row read `\| SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID/SECRET \| ... \| pmoves/env.shared.example:257 \|` — one line for two keys, where `:257` is `SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID` and `:258` is `..._SECRET`. The finding was **VALID, not a false positive**. The citation reads `257-258` today because #3377 (`6ff853221`) landed on `origin/main` and rewrote the row — it reached this branch through the 2026-10-30 `origin/main` merge, and it was not "already" correct when the finding was raised. No edit to the runbook was needed from this branch; the correction arrived with #3377. |
+| 5 | `AUTH_FLIPON_RUNBOOK_2026-10-11.md:11` — at the reviewed commit `5eacaa437f` the row cited `env.shared.example:257` for both `..._CLIENT_ID` and `..._SECRET`. | **VALID** | Verified against the blob at the reviewed commit `5eacaa437f`: the row read `\| SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID/SECRET \| ... \| pmoves/env.shared.example:257 \|` — one line for two keys, where `:257` is `SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID` and `:258` is `..._SECRET`. The finding was **VALID, not a false positive**. The citation now reads `257-258` because #3377 (`6ff853221`) landed on `origin/main` and rewrote the row — it reached this branch through the 2026-10-30 `origin/main` merge, and it was not "already" correct when the finding was raised. No edit to the runbook was needed from this branch; the correction arrived with #3377. |
 
 ### Why the sign_trail.py copy stays even though it has one importer
 
@@ -170,11 +170,11 @@ $ POST http://localhost:8077/yt/emit {"video_id":"0p_1QSUsbsM",...}
 ```
 
 `pmoves/tests/test_yt_emit_cgp_ok.py` → **1 passed** (was SKIP) on the operator's
-host. It SKIPs where `requests` is not installed — the live-stack assertion
-needs it, so the SKIP is environment-driven, not a regression.
-`pmoves/tests/test_dockerfile_packages_pmoves_chit.py` → **5 passed** (3 new
-items from the `pmoves.tools` follow-up on top of the original 2 + CPU
-baseline).
+host, with the probe video still in the download archive. It SKIPs where
+`requests` is not installed — environment-driven, not a regression.
+`pmoves/tests/test_dockerfile_packages_pmoves_chit.py` → **5 passed** (3 → 5
+test items: the parametrized `pmoves.tools` test adds 2, one per Dockerfile
+in the glob — 2 × `pmoves.chit` + 2 × `pmoves.tools` + 1 × CPU baseline).
 
 ### New lessons
 
@@ -197,3 +197,42 @@ baseline).
   `docker exec` is refused in tests outside `pg_isready`/`psql -c`
   (incident 2026-09-26: a test tore down the live `pmoves` compose
   project). The fix moved to pure HTTP rather than adding an exemption.
+
+### Provenance round (2026-10-30) — four findings against these two LEARNINGS docs
+
+A second review round on PR #3382 (kilo-code-bot) raised **four** findings
+against the two LEARNINGS docs of this lane — not against the code. Each was
+re-verified against the tree and every one confirmed VALID. The lane is a
+PROVENANCE lane, so the fix was to re-anchor every claim on a **stable
+anchor** (a symbol, a commit sha, a row TIMESTAMP) rather than a line number
+that moves, and to correct the one verdict that was wrong.
+
+Every position below is labelled with the state it describes. **"Before this
+round, at `:NN`"** is a position in the tree at `9fe5d56b992` (the parent of
+the docs fix `f6864ed6dda`); **"now reads `:NN`"** is a position in the tree
+at HEAD `df4ea574c51`.
+
+| # | Finding | Before this round (at `9fe5d56b992`) | Now reads (at HEAD `df4ea574c51`) | Stable anchor |
+|---|---------|--------------------------------------|------------------------------------|---------------|
+| 1 | The **SDK file:line** bullet cited the bare ranges `Dockerfile.gpu:52-55` / `Dockerfile:18-21`, which the `pmoves.tools` follow-up had already moved. | the bullet sat at `:106` | the bullet sits at `:118` and cites the `COPY chit /app/pmoves/chit` lines — `Dockerfile.gpu` now reads `:74` (block `:70-78`), the CPU `Dockerfile` now reads `:28` (block `:24-32`) | the `COPY chit /app/pmoves/chit` line in each Dockerfile |
+| 2 | The round-1 table recorded the runbook row (`AUTH_FLIPON_RUNBOOK_2026-10-11.md:11`) as a **FALSE POSITIVE**. The reviewer was right and the doc was wrong. | the FALSE POSITIVE row sat at `:129` | the corrected **VALID** row sits at `:147` | the runbook row for `SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID` / `..._SECRET` and its `env.shared.example` cite |
+| 3 | The sibling `hirag_cgp_geometry_event_pmoves_tools_LEARNINGS.md` carried a stale bullet claiming the CPU-only `assert "/app/pmoves/tools" in source` was the CPU coverage. | the stale bullet sat at `:109` **in the sibling document** | the corrected bullet sits at `:122` **in the sibling document** | the `test_dockerfile_packages_pmoves_tools` function name |
+| 4 | The sibling document's SDK-provenance bullets mis-anchored the SDK cites and cited the agent0-sidecar AGNOTE row. | the mis-anchored cites sat at `:117-119` **in the sibling document** | the re-anchored cites sit at `:138` and `:147` **in the sibling document** | the `COPY chit /app/pmoves/chit` lines, the `test_dockerfile_packages_pmoves_tools` function name, and the AGNOTE row TIMESTAMPs |
+
+**The round-1 summary is unchanged, and its wording is quoted from this file
+rather than paraphrased:** "all five were valid — three code defects (rows 1,
+2, 4) and two documentation-accuracy defects (rows 3, 5)" — that is what reads
+at `:131` of this file. No commit of this branch contains a round summary
+reading "all four valid — two documentation-accuracy defects (rows 1 and 5)
+and two stale-citation defects": `git log --all -S` finds that phrasing only
+in the register's NOTE row, where it appears as a *claim about* this file, not
+as this file's wording.
+
+**Register positions.** The four hirag rows in
+`pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md` are identified by their TIMESTAMPs —
+`2026-10-15T20:45:00Z` (RELEASE), `2026-10-17T23:35:00Z` (UPDATE),
+`2026-10-30T19:30:00Z` (review-fix UPDATE) and `2026-10-30T23:08:34Z`
+(provenance-round NOTE). At HEAD `df4ea574c51` they read `:3537`, `:3539`,
+`:3540` and `:3541`. An earlier revision of this document cited `:3533` /
+`:3535` / `:3536` for them; those positions point at the B850-CLAUDE rows
+rather than the hirag rows, and were already stale when written.
