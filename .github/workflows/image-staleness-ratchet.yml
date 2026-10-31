@@ -19,6 +19,7 @@ on:
       - PMOVES.AI-Edition-Hardened-Integrations
     paths:
       - "pmoves/images.yaml"
+      - "pmoves/configs/image_staleness/_known_gaps.yaml"
       - "pmoves/tools/image_staleness_ratchet.py"
       - "pmoves/tools/tests/test_image_staleness_ratchet.py"
       - ".github/workflows/build-images.yml"
@@ -39,6 +40,19 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # SUBMODULES ARE MATERIALISED ON PURPOSE.
+          #
+          # Without this the checkout leaves every submodule directory empty,
+          # and the ratchet -- correctly, because it cannot see into another
+          # repository -- reports those images as UNDECIDED rather than
+          # VERIFIED. MEASURED with a plain checkout: 19 of the 30 matrix
+          # entries were UNDECIDED, so the gate was green while a deleted or
+          # misspelled submodule Dockerfile could not possibly have been
+          # caught. The build job in build-images.yml uses the same
+          # `submodules: recursive`, so this checks out exactly the tree the
+          # build will use.
+          submodules: recursive
 
       - name: Set up Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
@@ -47,6 +61,29 @@ jobs:
 
       - name: Run ratchet (read-only, no network)
         run: python pmoves/tools/image_staleness_ratchet.py
+
+      - name: Assert nothing is UNDECIDED (the gate must not be vacuous)
+        run: |
+          # "I could not check" must not be a way for this gate to pass. With
+          # the submodules materialised above, every entry is decidable. An
+          # UNDECIDED entry here means the ratchet could not resolve a build
+          # input -- and a gate that cannot resolve things cannot catch a
+          # deleted or misspelled Dockerfile. The ratchet deliberately does
+          # NOT fail on UNDECIDED on its own (a tree without submodules is a
+          # legitimate local state); in CI, where the tree IS complete, it
+          # must not happen at all.
+          python - <<'EOF'
+          import json, subprocess, sys
+          payload = json.loads(subprocess.run(
+              [sys.executable, "pmoves/tools/image_staleness_ratchet.py", "--json"],
+              capture_output=True, text=True, check=True).stdout)
+          undecided = payload["undecided"]
+          if undecided:
+              for item in undecided:
+                  print(f"::error::UNDECIDED {item['image']}: {item['evidence']}")
+              sys.exit(1)
+          print(f"OK: {payload['total']} image(s) decidable, 0 undecided")
+          EOF
 
       - name: Pytest the ratchet (regression net for the ratchet itself)
         run: |

@@ -43,10 +43,20 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 IMAGES_PATH = REPO_ROOT / "pmoves" / "images.yaml"
 WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "build-images.yml"
 GITMODULES_PATH = REPO_ROOT / ".gitmodules"
+KNOWN_GAPS_PATH = (
+    REPO_ROOT / "pmoves" / "configs" / "image_staleness" / "_known_gaps.yaml"
+)
 
 VERIFIED = "VERIFIED"
 DRIFTED = "DRIFTED"
 UNDECIDED = "UNDECIDED"
+# A gap that is KNOWN, recorded, and tracked: the image's declared build
+# input is absent, the absence is baselined with a reason, and the ratchet
+# keeps reporting it. It is not DRIFTED (that would fail the gate for a
+# defect the fleet has already accepted and recorded) and it is not VERIFIED
+# (the image still cannot be rebuilt). The house pattern for this is
+# `pmoves/configs/command_anchors/_known_gaps.yaml`.
+KNOWN_GAP = "KNOWN-GAP"
 
 # The fields `.github/workflows/build-images.yml` actually consumes.
 REQUIRED_FIELDS = ("name", "context", "dockerfile", "image")
@@ -142,6 +152,33 @@ def parse_submodule_paths(text: str) -> set[str]:
         if sep and key.strip() == "path":
             paths.add(value.strip())
     return paths
+
+
+def parse_known_gaps(text: str) -> dict[str, str]:
+    """Return {image name: reason} from the known-gaps baseline.
+
+    The baseline is a flat `known_gaps:` mapping of image name to the reason
+    the gap is accepted. Read with the same stdlib-only approach as the rest
+    of this tool: the file is a flat mapping of scalars, and a reason may
+    itself contain a colon, so the split is on the FIRST colon.
+    """
+    gaps: dict[str, str] = {}
+    in_section = False
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        if not raw.startswith((" ", "\t")):
+            in_section = line.rstrip(":") == "known_gaps"
+            continue
+        if not in_section or ":" not in line:
+            continue
+        name, _, reason = line.partition(":")
+        name = name.strip().strip('"').strip("'")
+        reason = reason.strip().strip('"').strip("'")
+        if name:
+            gaps[name] = reason
+    return gaps
 
 
 def parse_workflow_triggers(text: str) -> tuple[set[str], str | None]:
@@ -254,23 +291,36 @@ def _submodule_checked_out(path: Path) -> bool:
 def resolve_build_paths(image: dict, ctx: _Context) -> tuple[Path, Path, Path]:
     """Return (base_dir, context_dir, dockerfile_path) for a matrix entry.
 
-    Mirrors `.github/workflows/build-images.yml`:
-      context: ${{ matrix.context || format('{0}/{1}', github.workspace, matrix.repo) }}
-      file:    ${{ matrix.dockerfile || format('{0}/{1}/Dockerfile', github.workspace, matrix.repo) }}
+    Mirrors `.github/workflows/build-images.yml` LITERALLY:
+      context: ${{ matrix.repo && format('{0}/{1}', github.workspace, matrix.repo) || matrix.context }}
+      file:    ${{ matrix.dockerfile || 'Dockerfile' }}
 
-    so a `repo:`-backed entry builds inside that submodule, and an in-tree
-    entry builds from the repo root (or `pmoves/`).
+    `repo:` is the DISCRIMINATOR and `context` is the fallback. This mirror
+    used to have it the other way round -- `matrix.context || format(...)` --
+    and because every repo-backed entry sets `context: .`, and a dot is
+    TRUTHY in a GitHub Actions expression, the old mirror resolved those
+    entries against the SUBMODULE while the real build resolved them against
+    the WORKSPACE ROOT. The ratchet would then verify a submodule
+    Dockerfile that the build never used, and the file the build actually
+    asked for was never checked at all. The workflow has been corrected to
+    match the intent; this mirror now follows the workflow exactly.
+
+    `file` is RELATIVE in the workflow, so the build action resolves it
+    against the CONTEXT. The mirror does the same, which is why there is
+    exactly ONE candidate path here: a ratchet that tries several readings
+    and accepts whichever matches is a ratchet that can verify a file the
+    build would never open.
     """
     repo = str(image.get("repo", "") or "").strip()
-    context_rel = str(image.get("context", "") or ".").strip() or "."
-    dockerfile_rel = str(image.get("dockerfile", "") or "").strip()
+    context_rel = str(image.get("context", "") or "").strip()
+    dockerfile_rel = str(image.get("dockerfile", "") or "").strip() or "Dockerfile"
 
     if repo:
         base = ctx.repo_root / repo
-        context_dir = base if context_rel == "." else base / context_rel
+        context_dir = base
     else:
         base = ctx.repo_root
-        context_dir = base if context_rel == "." else base / context_rel
+        context_dir = base / context_rel if context_rel else base
 
     dockerfile = context_dir / dockerfile_rel
     return base, context_dir, dockerfile
@@ -303,18 +353,11 @@ def probe_build_inputs(image: dict, ctx: _Context) -> tuple[str, str]:
 
     base, context_dir, dockerfile = resolve_build_paths(image, ctx)
 
-    # The matrix resolves the dockerfile against the build context; the house
-    # tool pmoves/tools/build_gate.py resolves a `repo:`-backed entry's
-    # dockerfile against the submodule ROOT (e.g. tokenism-ui: context
-    # `pmoves-nextjs`, dockerfile `pmoves-nextjs/Dockerfile`). Both readings
-    # are tried for repo-backed entries and the evidence names the one that
-    # matched. In-tree entries resolve against the build context only, so a
-    # stray file at the repo root can never satisfy them.
+    # ONE candidate: the path the build action will actually open. The old
+    # version also tried the "build root" reading and accepted whichever
+    # matched, which is how a repo-backed entry could be VERIFIED against a
+    # file the build never reads.
     candidates = [dockerfile]
-    if repo:
-        alternate = base / dockerfile_rel
-        if alternate != dockerfile:
-            candidates.append(alternate)
 
     for candidate in candidates:
         if candidate.is_file():
@@ -322,12 +365,7 @@ def probe_build_inputs(image: dict, ctx: _Context) -> tuple[str, str]:
                 shown = candidate.relative_to(ctx.repo_root).as_posix()
             except ValueError:
                 shown = candidate.as_posix()
-            how = (
-                "relative to the build context"
-                if candidate == dockerfile
-                else "relative to the build root"
-            )
-            return VERIFIED, f"build input present: {shown} ({how})"
+            return VERIFIED, f"build input present: {shown} (relative to the build context)"
 
     if repo:
         sub_path = ctx.repo_root / repo
@@ -376,6 +414,8 @@ PROBES = {
 def _worst(verdicts: list[str]) -> str:
     if DRIFTED in verdicts:
         return DRIFTED
+    if KNOWN_GAP in verdicts:
+        return KNOWN_GAP
     if UNDECIDED in verdicts:
         return UNDECIDED
     return VERIFIED
@@ -386,8 +426,10 @@ def audit(
     images_path: Path,
     workflow_path: Path,
     gitmodules_path: Path,
+    known_gaps: dict[str, str] | None = None,
 ) -> dict:
     """Run every probe over every matrix entry and return the payload."""
+    known_gaps = known_gaps or {}
     images = parse_images_matrix(images_path.read_text(encoding="utf-8"))
     triggers, trigger_error = parse_workflow_triggers(
         workflow_path.read_text(encoding="utf-8")
@@ -407,6 +449,18 @@ def audit(
         verdicts: list[str] = []
         for probe_name, probe in PROBES.items():
             verdict, evidence = probe(image, ctx)
+            # The baseline covers ONE probe: the build input that is absent.
+            # A gap in any other probe (a missing builder field, a
+            # manual-only rebuild path) is a live defect and stays DRIFTED.
+            if (
+                verdict == DRIFTED
+                and probe_name == "build_inputs"
+                and name in known_gaps
+            ):
+                verdict = KNOWN_GAP
+                evidence = (
+                    f"{evidence} -- KNOWN GAP, baselined: {known_gaps[name]}"
+                )
             verdicts.append(verdict)
             claims.append(
                 {
@@ -418,7 +472,7 @@ def audit(
             )
         rows.append({"name": name, "verdict": _worst(verdicts)})
 
-    counts = {VERIFIED: 0, DRIFTED: 0, UNDECIDED: 0}
+    counts = {VERIFIED: 0, DRIFTED: 0, UNDECIDED: 0, KNOWN_GAP: 0}
     for row in rows:
         counts[row["verdict"]] += 1
 
@@ -432,6 +486,34 @@ def audit(
         for claim in claims
         if claim["verdict"] == UNDECIDED
     ]
+    known_gaps_found = [
+        {
+            "image": claim["image"],
+            "probe": claim["probe"],
+            "evidence": claim["evidence"],
+            "reason": known_gaps.get(claim["image"], ""),
+        }
+        for claim in claims
+        if claim["verdict"] == KNOWN_GAP
+    ]
+    # A baselined gap that no longer occurs is STALE: the defect was fixed
+    # and the baseline still says it is there. The house's
+    # `validate_command_anchors.py` gate fails for exactly this reason --
+    # "drop them so the same defect cannot return silently".
+    #
+    # The staleness is judged on the BUILD INPUTS probe specifically. Every
+    # image has a VERIFIED `matrix_fields` claim, so "any VERIFIED claim"
+    # would mark every baselined entry stale the moment it was looked at.
+    stale_gaps = [
+        name
+        for name in known_gaps
+        if any(
+            claim["image"] == name
+            and claim["probe"] == "build_inputs"
+            and claim["verdict"] == VERIFIED
+            for claim in claims
+        )
+    ]
 
     return {
         "images_matrix": images_path.as_posix(),
@@ -443,6 +525,8 @@ def audit(
         "triggers": sorted(triggers),
         "problems": problems,
         "undecided": undecided,
+        "known_gaps": known_gaps_found,
+        "stale_gaps": stale_gaps,
         "claims": claims,
         "images": rows,
     }
@@ -475,6 +559,15 @@ def main() -> int:
         help=f"Root the matrix paths resolve against (default: {REPO_ROOT})",
     )
     parser.add_argument(
+        "--known-gaps",
+        type=Path,
+        default=KNOWN_GAPS_PATH,
+        help=(
+            "Baseline of images whose declared build input is absent "
+            f"(default: {KNOWN_GAPS_PATH})"
+        ),
+    )
+    parser.add_argument(
         "--json",
         action="store_true",
         help="emit JSON instead of human-readable text",
@@ -489,8 +582,12 @@ def main() -> int:
             print(f"{label} not found: {path}", file=sys.stderr)
             return 2
 
+    known_gaps: dict[str, str] = {}
+    if args.known_gaps.is_file():
+        known_gaps = parse_known_gaps(args.known_gaps.read_text(encoding="utf-8"))
+
     payload = audit(
-        args.repo_root, args.images, args.workflow, args.gitmodules
+        args.repo_root, args.images, args.workflow, args.gitmodules, known_gaps
     )
 
     if args.json:
@@ -500,7 +597,7 @@ def main() -> int:
         print(
             f"image-staleness ratchet: {payload['total']} image(s) - "
             f"{counts[VERIFIED]} verified, {counts[DRIFTED]} drifted, "
-            f"{counts[UNDECIDED]} undecided"
+            f"{counts[UNDECIDED]} undecided, {counts[KNOWN_GAP]} known-gap"
         )
         print(
             f"  build path: triggers = {', '.join(payload['triggers']) or 'none'}"
@@ -514,15 +611,32 @@ def main() -> int:
         else:
             print("  (every image declares its build fields, resolves its build")
             print("   inputs, and has a non-manual rebuild trigger)")
+        if payload["known_gaps"]:
+            print(
+                f"  {len(payload['known_gaps'])} KNOWN GAP(s) -- the build input "
+                f"is absent and the gap is baselined:"
+            )
+            for item in payload["known_gaps"]:
+                print(f"    - {item['image']}: {item['reason']}")
         if payload["undecided"]:
             print(f"  {len(payload['undecided'])} undecided (not failed):")
             for item in payload["undecided"]:
                 print(f"    - {item['image']}: {item['evidence']}")
+        if payload["stale_gaps"]:
+            print(
+                f"  {len(payload['stale_gaps'])} STALE baseline entr(ies) -- the "
+                f"gap is fixed; drop them so it cannot return silently:"
+            )
+            for name in payload["stale_gaps"]:
+                print(f"    - {name}")
 
     # DRIFTED fails the gate. UNDECIDED does NOT: a submodule that is not
     # checked out here is an unanswered question, not a broken image, and a
     # CI runner without submodules must not go permanently red.
-    return 1 if payload["problems"] else 0
+    #
+    # A STALE baseline entry fails too: the defect it recorded has been
+    # fixed, and leaving it in the baseline would let it come back unnoticed.
+    return 1 if payload["problems"] or payload["stale_gaps"] else 0
 
 
 if __name__ == "__main__":

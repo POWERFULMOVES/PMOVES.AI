@@ -40,19 +40,20 @@ def _run(
     workflow: Path,
     gitmodules: Path,
     repo_root: Path,
+    known_gaps: Path | None = None,
 ) -> subprocess.CompletedProcess:
-    return subprocess.run(
-        [
-            PYTHON,
-            str(RATCHET),
-            "--images", str(images),
-            "--workflow", str(workflow),
-            "--gitmodules", str(gitmodules),
-            "--repo-root", str(repo_root),
-            "--json",
-        ],
-        capture_output=True, text=True,
-    )
+    args = [
+        PYTHON,
+        str(RATCHET),
+        "--images", str(images),
+        "--workflow", str(workflow),
+        "--gitmodules", str(gitmodules),
+        "--repo-root", str(repo_root),
+        "--json",
+    ]
+    if known_gaps is not None:
+        args += ["--known-gaps", str(known_gaps)]
+    return subprocess.run(args, capture_output=True, text=True)
 
 
 def _tree(
@@ -125,6 +126,28 @@ images:
 """
 
 DOCKERFILE_BODY = "FROM scratch\n"
+
+# A repo-backed entry that sets `context: .` -- the shape EVERY repo-backed
+# entry in the real matrix has.
+REPO_BACKED_IMAGE = """\
+images:
+  - name: pmoves-repo-backed
+    repo: PMOVES-Foo
+    context: .
+    dockerfile: Dockerfile
+    image: ghcr.io/powerfulmoves/pmoves-repo-backed
+"""
+
+GITMODULES_ONE = (
+    '[submodule "PMOVES-Foo"]\n'
+    "\tpath = PMOVES-Foo\n"
+    "\turl = https://github.com/POWERFULMOVES/PMOVES-Foo.git\n"
+)
+
+KNOWN_GAPS_ONE = """\
+known_gaps:
+  pmoves-repo-backed: "the declared Dockerfile is absent at the pinned commit"
+"""
 
 
 def _claims(out: dict, image: str, probe: str) -> dict:
@@ -370,10 +393,123 @@ def test_good_tree_is_all_verified(tmp_path):
     assert r.returncode == 0, r.stdout + r.stderr
     out = json.loads(r.stdout)
     assert out["total"] == 1
-    assert out["counts"] == {"VERIFIED": 1, "DRIFTED": 0, "UNDECIDED": 0}
+    assert out["counts"] == {
+        "VERIFIED": 1,
+        "DRIFTED": 0,
+        "UNDECIDED": 0,
+        "KNOWN-GAP": 0,
+    }
     for claim in out["claims"]:
         assert claim["verdict"] == "VERIFIED", claim
         assert claim["evidence"], claim
+
+
+def test_a_repo_backed_entry_resolves_inside_its_submodule(tmp_path):
+    """A `repo:`-backed entry builds inside that submodule.
+
+    The workflow resolves `context` to `github.workspace/matrix.repo` when
+    `repo:` is set, and `file` relative to that context. The ratchet must
+    mirror that exactly, or it verifies a file the build never opens.
+    """
+    images, workflow, gitmodules, root = _tree(
+        tmp_path,
+        images_yaml=REPO_BACKED_IMAGE,
+        workflow_yaml=GOOD_WORKFLOW,
+        gitmodules=GITMODULES_ONE,
+        files={"PMOVES-Foo/Dockerfile": DOCKERFILE_BODY},
+    )
+    r = _run(images, workflow, gitmodules, root)
+    out = json.loads(r.stdout)
+    claim = _claims(out, "pmoves-repo-backed", "build_inputs")
+    assert claim["verdict"] == "VERIFIED", claim
+    assert "PMOVES-Foo/Dockerfile" in claim["evidence"], claim
+
+
+def test_a_repo_backed_entry_does_not_accept_a_workspace_root_dockerfile(tmp_path):
+    """A Dockerfile at the WORKSPACE ROOT must not satisfy a repo-backed entry.
+
+    This is the defect the ratchet shipped with: it resolved a repo-backed
+    entry against the submodule while the WORKFLOW resolved it against the
+    workspace root, so the two disagreed about which file the build opens.
+    The ratchet accepted EITHER reading, which meant it could VERIFY a file
+    the build would never read -- and would not have noticed that the file
+    the build DOES ask for is missing.
+    """
+    images, workflow, gitmodules, root = _tree(
+        tmp_path,
+        images_yaml=REPO_BACKED_IMAGE,
+        workflow_yaml=GOOD_WORKFLOW,
+        # The Dockerfile sits at the WORKSPACE ROOT -- not inside PMOVES-Foo.
+        files={"Dockerfile": DOCKERFILE_BODY},
+    )
+    r = _run(images, workflow, gitmodules, root)
+    out = json.loads(r.stdout)
+    claim = _claims(out, "pmoves-repo-backed", "build_inputs")
+    assert claim["verdict"] == "DRIFTED", claim
+    assert r.returncode == 1, r.stdout + r.stderr
+
+
+def test_a_baselined_gap_is_reported_and_does_not_fail_the_gate(tmp_path):
+    """A KNOWN gap is reported on every run and does not fail the gate.
+
+    It is not DRIFTED (the fleet has accepted and recorded it) and it is not
+    VERIFIED (the image still cannot be rebuilt). It stays VISIBLE, so it
+    cannot be forgotten.
+    """
+    images, workflow, gitmodules, root = _tree(
+        tmp_path,
+        images_yaml=REPO_BACKED_IMAGE,
+        workflow_yaml=GOOD_WORKFLOW,
+        files={},
+    )
+    gaps = tmp_path / "gaps.yaml"
+    gaps.write_text(KNOWN_GAPS_ONE, encoding="utf-8")
+    r = _run(images, workflow, gitmodules, root, known_gaps=gaps)
+    out = json.loads(r.stdout)
+    claim = _claims(out, "pmoves-repo-backed", "build_inputs")
+    assert claim["verdict"] == "KNOWN-GAP", claim
+    assert "absent at the pinned commit" in claim["evidence"], claim
+    assert out["counts"]["KNOWN-GAP"] == 1, out["counts"]
+    assert out["problems"] == []
+    assert r.returncode == 0, r.stdout + r.stderr
+
+
+def test_a_fixed_gap_is_stale_and_fails_the_gate(tmp_path):
+    """A baselined gap that is FIXED fails until it is dropped from the file.
+
+    Otherwise the baseline keeps saying "this is broken" about an image that
+    now builds, and the next person to break it gets no warning -- the same
+    contract as `validate_command_anchors.py`'s stale-baseline check.
+    """
+    images, workflow, gitmodules, root = _tree(
+        tmp_path,
+        images_yaml=REPO_BACKED_IMAGE,
+        workflow_yaml=GOOD_WORKFLOW,
+        gitmodules=GITMODULES_ONE,
+        files={"PMOVES-Foo/Dockerfile": DOCKERFILE_BODY},
+    )
+    gaps = tmp_path / "gaps.yaml"
+    gaps.write_text(KNOWN_GAPS_ONE, encoding="utf-8")
+    r = _run(images, workflow, gitmodules, root, known_gaps=gaps)
+    out = json.loads(r.stdout)
+    assert out["stale_gaps"] == ["pmoves-repo-backed"], out["stale_gaps"]
+    assert r.returncode == 1, r.stdout + r.stderr
+
+
+def test_a_new_gap_fails_the_gate(tmp_path):
+    """A gap that is NOT in the baseline fails immediately."""
+    images, workflow, gitmodules, root = _tree(
+        tmp_path,
+        images_yaml=REPO_BACKED_IMAGE,
+        workflow_yaml=GOOD_WORKFLOW,
+        files={},
+    )
+    gaps = tmp_path / "gaps.yaml"
+    gaps.write_text("known_gaps:\n", encoding="utf-8")
+    r = _run(images, workflow, gitmodules, root, known_gaps=gaps)
+    out = json.loads(r.stdout)
+    assert out["problems"], out
+    assert r.returncode == 1, r.stdout + r.stderr
 
 
 def test_missing_matrix_file_returns_2():
