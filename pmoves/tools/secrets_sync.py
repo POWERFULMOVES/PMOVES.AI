@@ -618,6 +618,18 @@ def announce_jwt_events(
     return consumers
 
 
+def emitted_labels(entries: Sequence["Entry"], outputs: Mapping[str, Mapping[str, str]]) -> set:
+    """Labels (and their aliases) of the entries build_outputs actually emitted:
+    an entry counts only if one of its target keys is present in that target
+    file's output. This is the set write_env_files will materialize."""
+    written: set = set()
+    for entry in entries:
+        if any(target.key in outputs.get(target.file, {}) for target in entry.targets):
+            written.add(entry.label)
+            written.update(entry.aliases)
+    return written
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Seed env files from CHIT secrets manifest.")
     parser.add_argument(
@@ -696,14 +708,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     # either derivable (handled by fill_self_generated) or generated elsewhere
     # (e.g. POSTGRES_PASSWORD at db-init), so they are never operator gaps.
     missing = [k for k in missing if k not in SELF_GENERATED]
-    # Announce only now, against what this run actually writes: the entries that
-    # survived --keys, and only on a generate run that is not about to abort.
-    projected = {e.label for e in entries} | {a for e in entries for a in e.aliases}
+    # Announce only now, against what this run actually WRITES: labels whose
+    # entry build_outputs emitted (not merely entries that survived --keys --
+    # a shape/charset veto withholds a value silently for an optional entry or
+    # under --allow-missing), and only on a generate run that is not aborting.
     aborting = bool(missing) and not args.allow_missing
     writes = args.command == "generate" and not aborting
     announce_jwt_events(jwt_events, docs=compose_docs, context=context, sources=sources,
                         local_services=local_services,
-                        written_labels=projected if writes else set())
+                        written_labels=emitted_labels(entries, outputs) if writes else set())
     if missing:
         joined = ", ".join(sorted(missing))
         if args.allow_missing:

@@ -510,7 +510,14 @@ differs from its consumer key.
 (`tools/cipher_service_key_check.py`, read-only). Exit `0` ok / `1` finding /
 `3` could-not-measure. `make` collapses these to 2, so read the final
 `CIPHER_AUTH_VERDICT=` line. All three cipher bring-up roads (`up-cipher`,
-`-nobuild`, `-full`) run it first, non-blocking.
+`-nobuild`, `-full`) run it first with `--container --gate kong_stale_for_env`.
+They **refuse** only when the running supabase-kong holds no consumer key equal
+to the key this env delivers: Kong is stale after a funnel refresh, and a
+cipher-api started now would be refused on every lookup. The fix is to run
+`make -C pmoves up-supabase` first; the override is `CIPHER_KONG_GATE=warn`.
+`--gate` exits **4** when its finding is present and 0 otherwise. It is never
+1, which is Python's own crash exit, so a crashed check cannot block a start.
+Every other verdict only WARNs.
 
 *Static facets* (always on). These evaluate the compose expressions on disk
 against the same `--env-file` list `$(DC)` uses, so they judge what the next

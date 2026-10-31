@@ -886,7 +886,7 @@ def main(argv: Optional[List[str]] = None) -> int:
                         help="with --container: run cipher's own lookup (read-only GET, limit=0)")
     parser.add_argument("--json", action="store_true", dest="as_json")
     parser.add_argument("--gate", action="append", default=[], metavar="FINDING",
-                        help="exit 1 ONLY if this finding code is present, else 0 (the "
+                        help="exit 4 ONLY if this finding code is present, else 0 (the "
                              "verdict still prints). Used by the up-cipher roads to "
                              "refuse on kong_stale_for_env without blocking on anything else")
     args = parser.parse_args(argv)

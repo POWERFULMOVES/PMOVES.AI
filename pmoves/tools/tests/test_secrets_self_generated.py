@@ -506,7 +506,7 @@ def test_fuzzed_event_fields_never_print_a_secret(field, shape, capsys):
 # ── review threads on #3433: announce only what is written; tags as data ───
 
 
-def _run_sync_main(monkeypatch, capsys, argv, *, required_missing=False):
+def _run_sync_main(monkeypatch, capsys, argv, *, required_missing=False, withhold=None):
     """Drive secrets_sync.main end to end with an in-memory manifest + secret map;
     nothing touches disk. Returns (rc, stdout, written outputs or None)."""
     from pmoves.tools import secrets_sync as ss
@@ -515,9 +515,12 @@ def _run_sync_main(monkeypatch, capsys, argv, *, required_missing=False):
     secrets = {"JWT_SECRET": _OTHER, "SUPABASE_JWT_SECRET": _VERIFIER, "SUPABASE_RUNTIME": "compose",
                "SERVICE_ROLE_KEY": ours, "SUPABASE_SERVICE_ROLE_KEY": ours, "OTHER_TOKEN": "x" * 40}
     entries = [
-        ss.Entry(id="srk", label="SUPABASE_SERVICE_ROLE_KEY", required=True,
+        # withhold: "optional" / "required" -> a min_length no JWT meets, so
+        # build_outputs vetoes the re-minted value (silently for an optional
+        # entry; via `missing` for a required one).
+        ss.Entry(id="srk", label="SUPABASE_SERVICE_ROLE_KEY", required=(withhold != "optional"),
                  targets=[ss.Target(file="env.tier-agent", key="SUPABASE_SERVICE_ROLE_KEY")],
-                 aliases=("SERVICE_ROLE_KEY",)),
+                 aliases=("SERVICE_ROLE_KEY",), min_length=10**6 if withhold else 0),
         ss.Entry(id="other", label="OTHER_TOKEN", required=True,
                  targets=[ss.Target(file="env.tier-agent", key="OTHER_TOKEN")]),
     ]
@@ -596,3 +599,31 @@ def test_override_and_reset_blocks_are_parsed_as_data_not_dropped(tmp_path):
     assert skipped == []
     assert compose_consumers(["SUPABASE_SERVICE_ROLE_KEY"], docs) == ["studio"]
     assert compose_consumers(["NEXT_PUBLIC_SUPABASE_ANON_KEY"], docs) == ["voice"]
+
+
+
+@pytest.mark.parametrize(
+    "withhold, argv",
+    [("optional", ["generate"]),                          # optional entry, vetoed silently
+     ("required", ["generate", "--allow-missing"])],      # required, vetoed, run continues
+    ids=["optional-entry", "allow-missing"],
+)
+def test_a_remint_withheld_by_build_outputs_is_not_written(withhold, argv, monkeypatch, capsys):
+    """r4429289224: written_labels must come from what build_outputs EMITTED,
+    not from entries that merely survived --keys."""
+    rc, out, written = _run_sync_main(monkeypatch, capsys, argv, withhold=withhold)
+    assert rc == 0
+    assert "SUPABASE_SERVICE_ROLE_KEY" not in (written or {}).get("env.tier-agent", {})
+    assert "RE-MINTED" not in out and "RECREATE" not in out
+    assert "NOT WRITTEN SUPABASE_SERVICE_ROLE_KEY (service_role)" in out
+
+
+def test_emitted_labels_maps_target_keys_back_to_labels():
+    from pmoves.tools import secrets_sync as ss
+
+    entries = [ss.Entry(id="a", label="A", required=True,
+                        targets=[ss.Target(file="f1", key="A_KEY")], aliases=("A_OLD",)),
+               ss.Entry(id="b", label="B", required=False, targets=[ss.Target(file="f2", key="B")])]
+    assert ss.emitted_labels(entries, {"f1": {"A_KEY": "v"}}) == {"A", "A_OLD"}
+    assert ss.emitted_labels(entries, {"f1": {}, "f2": {"B": "v"}}) == {"B"}
+    assert ss.emitted_labels(entries, {"f2": {"A_KEY": "v"}}) == set()   # right key, wrong file
