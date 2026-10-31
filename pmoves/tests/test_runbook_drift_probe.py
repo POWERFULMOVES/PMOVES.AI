@@ -264,6 +264,39 @@ def test_a_path_claim_into_a_submodule_is_undecided_not_drifted(monkeypatch, tmp
     assert "submodule" in evidence, evidence
 
 
+def test_a_path_claim_into_a_NESTED_submodule_is_undecided_not_drifted(
+    monkeypatch, tmp_path
+):
+    """A NESTED submodule's files live in ANOTHER repository too.
+
+    `pmoves/integrations/archon` and `skills/PMOVES-skills` are declared
+    submodule PATHS, not top-level directories. Comparing only the claim's
+    first component against the complete submodule path never matched them:
+    the head was `pmoves` or `skills`, neither of which is a declared path,
+    so a claim under a nested submodule came back DRIFTED -- the one verdict
+    that is definitely wrong, because the parent tree records a gitlink, not
+    the submodule's files.
+    """
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".gitmodules").write_text(
+        '[submodule "archon"]\n'
+        "\tpath = pmoves/integrations/archon\n"
+        "\turl = https://github.com/POWERFULMOVES/PMOVES-Archon.git\n")
+    _git(repo, "init", "-q")
+    _git(repo, "config", "user.email", "probe@example.invalid")
+    _git(repo, "config", "user.name", "probe")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "-m", "fixture")
+    _git(repo, "update-ref", "refs/remotes/origin/main", "HEAD")
+    m = _load(monkeypatch, repo)
+    verdict, evidence = m.probe_file(
+        "pmoves/integrations/archon/migration/UPGRADE.md"
+    )
+    assert verdict == "UNDECIDED", evidence
+    assert "pmoves/integrations/archon" in evidence, evidence
+
+
 def test_a_git_ignored_path_claim_is_undecided_not_drifted(monkeypatch, tmp_path):
     """A git-ignored path is a LOCAL artifact: absent from the tree by design,
     so its absence says nothing about whether the doc is wrong."""

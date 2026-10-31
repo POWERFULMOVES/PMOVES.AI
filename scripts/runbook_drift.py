@@ -152,6 +152,29 @@ def _submodule_paths():
         _NAME_INDEX_CACHE["submodules"] = paths
     return _NAME_INDEX_CACHE["submodules"]
 
+def _owning_submodule(claim):
+    """The declared submodule path that CONTAINS `claim`, if any.
+
+    A claim can point into a NESTED submodule -- `pmoves/integrations/archon`
+    and `skills/PMOVES-skills` are both declared paths, and their files live
+    in ANOTHER repository. Comparing only the claim's FIRST component against
+    the complete submodule path never matched them: `head` was `pmoves` or
+    `skills`, and neither is a declared path, so a claim under a nested
+    submodule was reported DRIFTED -- the one verdict that is definitely
+    wrong, because the parent tree records a gitlink, not the submodule's
+    files.
+
+    The LONGEST match wins: nested submodule paths share prefixes, and the
+    innermost submodule is the one that owns the claim.
+    """
+    owner = ""
+    for path in _submodule_paths():
+        if claim == path or claim.startswith(path + "/"):
+            if len(path) > len(owner):
+                owner = path
+    return owner
+
+
 def _is_gitignored(rel):
     """True / False / None(unknown) for whether `rel` is excluded by .gitignore.
 
@@ -273,9 +296,9 @@ def probe_file(rel):
     # No path match. Before calling it drift, ask the two questions that make
     # absence meaningless: does the claim point INTO a submodule, and is the
     # path a git-ignored local artifact?
-    head = claim.split("/", 1)[0]
-    if head in _submodule_paths():
-        return "UNDECIDED", (f"path points into the '{head}' submodule — its files live in "
+    owner = _owning_submodule(claim)
+    if owner:
+        return "UNDECIDED", (f"path points into the '{owner}' submodule — its files live in "
                              f"another repository, so absence here proves nothing ({claim})")
     ignored = _is_gitignored(claim)
     if ignored is True:
