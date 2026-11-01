@@ -1,0 +1,184 @@
+name: GitHub App Installation Audit
+
+# The operator's open item: "GH App installation state on the newly-scoped
+# repos" — answered with a 401 from the host, because the App credentials
+# (GH_APP_CLIENT_ID / GH_APP_SEC / GH_APP_INSTALLATION_ID) live only in
+# GitHub Actions secrets. This workflow is the CI-side half: it mints a
+# short-lived App installation token and asks the installation itself which
+# registry repos it covers.
+#
+# The repo universe is DERIVED at run time from
+# pmoves/config/fork_registry.json by the audit tool. Nothing here hardcodes
+# a repo count; the tool prints the number it derived, and the report carries
+# it.
+#
+# FAIL CLOSED. The job fails when:
+#   * the audit exits non-zero (a GitHub API error, an unreadable registry,
+#     a pagination that could not be proven complete), or
+#   * the report's `complete` flag is false (at least one repo could not be
+#     resolved, so the verdict is not a verdict), or
+#   * --fail-on-not-installed finds repos the installation does not cover.
+#
+# A failed audit never prints a reassuring summary, so a red job is the
+# honest outcome and a green job means the coverage question was actually
+# answered.
+
+on:
+  pull_request:
+    branches:
+      - main
+      - PMOVES.AI-Edition-Hardened
+    paths:
+      # The instrument.
+      - "pmoves/tools/gh_app_installation_audit.py"
+      # The instrument's own tests, including the mutation harness.
+      - "pmoves/tests/tools/test_gh_app_installation_audit.py"
+      - "pmoves/tests/tools/test_gh_app_installation_audit_mutation_kill.py"
+      # The universe source: a registry edit changes what is audited.
+      - "pmoves/config/fork_registry.json"
+      # This workflow itself.
+      - ".github/workflows/gh-app-installation-audit.yml"
+  workflow_dispatch:
+  schedule:
+    # Weekly, off the hour — the coverage state is a standing fact, not a
+    # per-PR question.
+    - cron: "17 6 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  mint:
+    # The house's single source of truth for minting an App installation
+    # token. Never re-implement the mint here.
+    uses: ./.github/workflows/_app-token.yml
+    secrets: inherit
+    with:
+      owner: POWERFULMOVES
+      # `repositories` is intentionally EMPTY. The audit has to be able to SEE
+      # every repo in the org, otherwise an uncovered repo cannot be told
+      # apart from one that does not exist and the verdict is incomplete.
+      # The token is minted per run, is read-only, and is auto-revoked at the
+      # end of the job.
+      permission-contents: read
+
+  audit:
+    needs: mint
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Install test dependencies
+        run: |
+          # pmoves/tests/conftest.py imports pytest_asyncio and yaml, and
+          # pmoves/pyproject.toml is the pytest configfile (asyncio_mode=auto),
+          # so the shared conftest chain has to resolve. pyjwt + cryptography
+          # are what the house JWT minter (gh_app_token) needs for RS256.
+          python -m pip install --quiet --upgrade pip
+          python -m pip install --quiet pytest pytest-asyncio pyyaml pyjwt cryptography
+
+      - name: Audit the App installation coverage
+        env:
+          # The token travels by ENV only: never printed, never in argv.
+          GH_TOKEN: ${{ needs.mint.outputs.token }}
+        run: |
+          python pmoves/tools/gh_app_installation_audit.py \
+            --token \
+            --json \
+            --out gh-app-installation-audit.json \
+            --fail-on-not-installed
+
+      - name: Publish the verdict
+        if: always()
+        run: |
+          set -uo pipefail
+          REPORT=gh-app-installation-audit.json
+          if [ ! -f "$REPORT" ]; then
+            {
+              echo "## GitHub App installation audit"
+              echo
+              echo "**No report was produced.** The audit did not run to a verdict."
+              echo 'This is NOT "zero repos missing".'
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "::error::The audit produced no report - the coverage state is unknown."
+            exit 1
+          fi
+          python - "$REPORT" > "$GITHUB_STEP_SUMMARY" <<'PY'
+          import json, sys
+
+          report = json.load(open(sys.argv[1], encoding="utf-8"))
+          universe = report.get("universe") or {}
+          buckets = report.get("buckets") or {}
+          installation = report.get("installation") or {}
+
+          print("## GitHub App installation audit")
+          print()
+          print(f"- mode: `{report.get('mode')}`")
+          print(f"- org: `{report.get('org')}`")
+          print(
+              f"- installation: id=`{installation.get('id')}` "
+              f"account=`{installation.get('account')}`"
+          )
+          print(
+              f"- universe: **{universe.get('size', 'n/a')}** distinct repos "
+              f"({universe.get('entries', 'n/a')} registry entries, "
+              f"{universe.get('excluded', 'n/a')} explicitly excluded)"
+          )
+          print(f"- installed: **{buckets.get('installed', 'n/a')}**")
+          print(f"- not_installed: **{buckets.get('not_installed', 'n/a')}**")
+          print(f"- unknown: **{buckets.get('unknown', 'n/a')}**")
+          print(f"- complete: `{report.get('complete')}`")
+
+          not_installed = report.get("not_installed") or []
+          if not_installed:
+              print()
+              print(f"### NOT covered by the App installation ({len(not_installed)})")
+              print()
+              for name in not_installed:
+                  print(f"- `{name}`")
+
+          unknown = (report.get("repos") or {}).get("unknown") or []
+          if unknown:
+              print()
+              print(f"### UNKNOWN - no claim made ({len(unknown)})")
+              print()
+              for entry in unknown:
+                  print(f"- `{entry.get('name')}` - {entry.get('reason')}")
+
+          if report.get("complete") is not True:
+              print(
+                  "::error::The audit report is INCOMPLETE - the coverage verdict "
+                  "is unknown, not clean.",
+                  file=sys.stderr,
+              )
+              sys.exit(1)
+          PY
+
+      - name: Pytest the audit tool (production path + mutation harness)
+        if: always()
+        run: |
+          # The instrument's own regression net. It runs AFTER the audit so
+          # the coverage verdict is produced even if the harness is broken.
+          python -m pytest \
+            pmoves/tests/tools/test_gh_app_installation_audit.py \
+            pmoves/tests/tools/test_gh_app_installation_audit_mutation_kill.py \
+            -v
+
+      - name: Upload the audit report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: gh-app-installation-audit-report
+          path: gh-app-installation-audit.json
+          if-no-files-found: warn
