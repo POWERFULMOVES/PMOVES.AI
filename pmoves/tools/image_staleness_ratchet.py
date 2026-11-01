@@ -609,18 +609,37 @@ def probe_dead_context(image: dict, ctx: _Context) -> tuple[str, str]:
     )
 
 
-_COPY_RE = re.compile(r"^\s*(?:COPY|ADD)\s+(.*)$", re.IGNORECASE)
+_COPY_RE = re.compile(r"^\s*(COPY|ADD)\s+(.*)$", re.IGNORECASE)
+
+# A REMOTE source: docker FETCHES it over the network.
+_URL_RE = re.compile(r"^(?:[A-Za-z][A-Za-z0-9+.\-]*://|git@)", re.IGNORECASE)
+
+# `ADD <url> <sha256:...> <dest>` carries a CHECKSUM between the URL and the
+# destination. The checksum is not a path either.
+_CHECKSUM_RE = re.compile(r"^(?:sha256:[0-9a-f]{64}|[0-9a-f]{64})$", re.IGNORECASE)
 
 
 def _dockerfile_context_sources(text: str) -> list[list[str]]:
     """Return the BUILD-CONTEXT sources of every COPY/ADD line.
 
-    Two kinds of COPY are NOT build-context sources and are skipped:
+    Three kinds of COPY are NOT build-context sources and are skipped:
 
       * `COPY --from=build /app/build /out` copies from another stage's
         filesystem, not from the context.
       * `COPY <<EOF /dest` has no path source at all -- the body is a
         heredoc.
+      * `ADD https://example.com/x.tar.gz /tmp/` FETCHES the URL over the
+        network. Docker's `ADD` supports remote URLs precisely because it
+        can download them; the build context does not have to contain
+        them. (`COPY` does NOT support remote URLs -- docker rejects them
+        outright -- so a URL in a `COPY` is still reported, because that
+        build really does fail.)
+
+    MEASURED 2026-11-01: the third rule was missing, and it produced a
+    FALSE POSITIVE on `pmoves-remote-view`, whose authored Dockerfile adds
+    the s6-overlay tarballs by URL. The probe reported DRIFTED for a
+    Dockerfile that builds. A probe that cries wolf on a valid Dockerfile
+    teaches the fleet to ignore it.
 
     The LAST word of the line is the destination, so every word before it
     is a source. Flags (`--chown=`, `--chmod=`, `--link=`) are not words.
@@ -633,10 +652,11 @@ def _dockerfile_context_sources(text: str) -> list[list[str]]:
         match = _COPY_RE.match(raw)
         if not match:
             continue
+        verb = match.group(1).upper()
         try:
-            tokens = shlex.split(match.group(1), posix=True)
+            tokens = shlex.split(match.group(2), posix=True)
         except ValueError:
-            tokens = match.group(1).split()
+            tokens = match.group(2).split()
         flags = [t for t in tokens if t.startswith("--")]
         words = [t for t in tokens if not t.startswith("--")]
         if any(flag.startswith("--from=") for flag in flags):
@@ -645,7 +665,14 @@ def _dockerfile_context_sources(text: str) -> list[list[str]]:
             continue
         if len(words) < 2:
             continue
-        groups.append(words[:-1])
+        sources = words[:-1]
+        if verb == "ADD":
+            sources = [
+                word
+                for word in sources
+                if not _URL_RE.match(word) and not _CHECKSUM_RE.match(word)
+            ]
+        groups.append(sources)
     return groups
 
 

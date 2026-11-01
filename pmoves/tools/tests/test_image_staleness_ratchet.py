@@ -981,6 +981,62 @@ def test_a_stage_copy_is_not_a_build_context_source(tmp_path):
     assert claim["verdict"] == "VERIFIED", claim
 
 
+def test_a_remote_add_url_is_not_a_build_context_source(tmp_path):
+    """`ADD https://example.com/x.tar.gz /tmp/` FETCHES the URL.
+
+    Docker's `ADD` supports remote URLs precisely because it can download
+    them; the build context does not have to contain them. So a remote URL
+    is NOT a build-context source, and a Dockerfile that adds one is not
+    broken.
+
+    MEASURED 2026-11-01: this rule was missing and the probe reported
+    DRIFTED for `pmoves-remote-view`, whose authored Dockerfile adds the
+    s6-overlay tarballs by URL -- a Dockerfile that BUILDS, proven by
+    `docker build`. A probe that cries wolf on a valid Dockerfile teaches
+    the fleet to ignore it.
+    """
+    images, workflow, gitmodules, root = _tree(
+        tmp_path,
+        images_yaml=BUILD_CONTEXT_IMAGE,
+        workflow_yaml=GOOD_WORKFLOW,
+        gitmodules=GITMODULES_DOX,
+        files={
+            "PMOVES-DoX/backend/Dockerfile": (
+                "FROM alpine:3.20\n"
+                "ADD https://github.com/just-containers/s6-overlay/releases/"
+                "download/v3.1.0.1/s6-overlay-noarch.tar.xz /tmp/\n"
+            ),
+        },
+    )
+    out = json.loads(_run(images, workflow, gitmodules, root).stdout)
+    claim = _claim(out, "pmoves-dox", "copy_sources")
+    assert claim["verdict"] == "VERIFIED", claim
+
+
+def test_a_remote_copy_url_is_reported_as_unresolvable(tmp_path):
+    """`COPY` does NOT support remote URLs -- docker rejects them.
+
+    So a URL in a `COPY` really does break the build, and the probe must
+    keep reporting it. The rule is narrow on purpose: `ADD` may fetch,
+    `COPY` may not.
+    """
+    images, workflow, gitmodules, root = _tree(
+        tmp_path,
+        images_yaml=BUILD_CONTEXT_IMAGE,
+        workflow_yaml=GOOD_WORKFLOW,
+        gitmodules=GITMODULES_DOX,
+        files={
+            "PMOVES-DoX/backend/Dockerfile": (
+                "FROM alpine:3.20\n"
+                "COPY https://example.com/x.tar.gz /tmp/\n"
+            ),
+        },
+    )
+    out = json.loads(_run(images, workflow, gitmodules, root).stdout)
+    claim = _claim(out, "pmoves-dox", "copy_sources")
+    assert claim["verdict"] == "DRIFTED", claim
+
+
 def test_a_glob_copy_source_resolves_against_the_context(tmp_path):
     images, workflow, gitmodules, root = _tree(
         tmp_path,

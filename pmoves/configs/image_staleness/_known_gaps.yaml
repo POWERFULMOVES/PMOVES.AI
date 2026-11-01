@@ -22,7 +22,7 @@
 #
 # WHAT WAS CLOSED, AND HOW EACH PATH WAS CHOSEN
 # ---------------------------------------------
-# Five entries were closed by choosing the path that the REPO ITSELF builds,
+# Eight entries were closed by choosing the path that the REPO ITSELF builds,
 # not by guessing from a file listing:
 #
 #   pmoves-archon  -> `Dockerfile` (repo root). PMOVES.AI's own compose
@@ -47,9 +47,48 @@
 #                     represent a three-service stack. The old single entry
 #                     is GONE, so it is not a gap any more.
 #
-# The remaining three below need a Dockerfile AUTHORED in their fork, which
-# is why they are still gaps.
-known_gaps:
-  pmoves-hirag: "declares a root Dockerfile; the pinned commit d8484b2d2 contains NO Dockerfile anywhere in PMOVES-HiRAG -- the image has to be written"
-  pmoves-deep-serch: "declares a root Dockerfile; the pinned commit e2af6b686 contains NO Dockerfile anywhere in PMOVES-Deep-Serch -- the image has to be written"
-  pmoves-remote-view: "declares a root Dockerfile; the pinned commit 0e350c19c has docker/Dockerfile and docker-classic/Dockerfile, but neither can be built from a plain checkout -- the fork's CI builds the Rust binaries as artifacts and downloads them into docker/rootfs/usr/bin before the image build, so a self-contained Dockerfile has to be written"
+# The remaining three were closed by AUTHORING a Dockerfile in the fork, at
+# the fork's OWN default branch, and bumping the gitlink to the commit that
+# carries it. Each image was then BUILT and RUN before the gap was closed --
+# a Dockerfile that exists is not one that can be built, and one that builds
+# is not one that starts:
+#
+#   pmoves-hirag       -> `Dockerfile` (repo root), authored in
+#                         PMOVES-HiRAG at `8e5283a7eed86ccda6cf08418405c10e6ca13815`
+#                         (parent `d8484b2d255b6af39fad1b5185e26ee678d7079b`).
+#                         The image BUILDS and the container RUNS as the
+#                         non-root `pmoves` user. It is a LIBRARY, not a
+#                         server: there is no HTTP entrypoint anywhere in the
+#                         repo, and the 8086 gateway is built in-tree by
+#                         PMOVES.AI at `pmoves/services/hi-rag-gateway-v2/`,
+#                         so the image's entrypoint is a shell.
+#                         KNOWN DEFECT, NOT FIXED HERE (upstream's, not the
+#                         Dockerfile's): `from hirag import HiRAG` raises
+#                         `ImportError: cannot import name 'gpt_4o_complete'
+#                         from 'hirag._llm'`. The fork's `_llm.py` is
+#                         byte-identical (SHA256) to upstream's, and upstream
+#                         HEAD has the same mismatch, so the fix is an edit to
+#                         `hirag/*.py` in the fork, not a Dockerfile change.
+#   pmoves-deep-serch  -> `Dockerfile` (repo root), authored in
+#                         PMOVES-Deep-Serch at `74edbe934ca14e8cb4fd2b59da3893aaab0261de`
+#                         (parent `e2af6b6866e19eb300b954127f76adcddc7d1ae4`).
+#                         The image BUILDS and the container RUNS: Streamlit
+#                         serves on 8098 and `/_stcore/health` returns `ok`.
+#   pmoves-remote-view -> `Dockerfile` (repo root), authored in
+#                         PMOVES-Remote-View at `93e26f309de387b7ab1773921f64f1dcaa6f1008`
+#                         (parent `0e350c19cd9e38e1c8f77d28bcc57f8754770fa5`).
+#                         The fork's own `docker/Dockerfile` cannot be built
+#                         from a plain checkout -- its CI builds the Rust
+#                         binaries as artifacts and downloads them into
+#                         `docker/rootfs/usr/bin` first. The new Dockerfile
+#                         builds them FROM SOURCE instead, so a plain
+#                         `docker build .` produces a working image. The
+#                         image BUILDS and the container RUNS: `/usr/bin/hbbs`
+#                         and `/usr/bin/hbbr` are present and `hbbs --version`
+#                         reports `hbbs 1.1.14`.
+#
+# There are NO known gaps left. The list is kept (empty) because the ratchet
+# fails on a gap that is FIXED but still listed -- that is the half of the
+# contract that stops this file from becoming a graveyard.
+known_gaps: {}
+

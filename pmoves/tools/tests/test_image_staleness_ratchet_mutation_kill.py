@@ -166,6 +166,31 @@ MUTATIONS: list[Mutation] = [
             "that catches it must not be removable."
         ),
     ),
+    Mutation(
+        name="M6_remote_add_url_treated_as_a_context_source",
+        target=RATCHET,
+        old="""        if verb == "ADD":
+            sources = [
+                word
+                for word in sources
+                if not _URL_RE.match(word) and not _CHECKSUM_RE.match(word)
+            ]""",
+        new="""        if False:
+            sources = [
+                word
+                for word in sources
+                if not _URL_RE.match(word) and not _CHECKSUM_RE.match(word)
+            ]""",
+        target_test="test_a_remote_add_url_is_not_a_build_context_source",
+        rationale=(
+            "`ADD <url>` FETCHES the url over the network -- docker's `ADD` "
+            "supports remote urls precisely because it can download them, so "
+            "the build context never has to contain them. MEASURED 2026-11-01: "
+            "without this rule the probe reported DRIFTED for "
+            "`pmoves-remote-view`, whose Dockerfile adds the s6-overlay "
+            "tarballs by url -- and that Dockerfile BUILDS."
+        ),
+    ),
 ]
 
 
