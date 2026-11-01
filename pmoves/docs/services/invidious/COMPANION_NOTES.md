@@ -24,14 +24,15 @@ Next steps: supply a valid API key if required for production workloads, otherwi
 | `INVIDIOUS_HMAC_KEY` -> `hmac_key` | mandatory random string; Invidious exits if empty | `random_hex` 64 (any existing value of 32 or more chars is kept) |
 | `INVIDIOUS_COMPANION_KEY` -> `invidious_companion_key` **and** companion `SERVER_SECRET_KEY` | exactly 16 chars (Invidious exits otherwise); companion requires `[a-zA-Z0-9]{16}`; reusing the HMAC key is "NOT recommended" (vendor) | `random_hex` 16 |
 
-Owner: `tools/invidious_keys_preflight.py` is the only writer of both keys. It runs from `ensure-env-shared` and before every stack goal. `brand_defaults.py` no longer writes them.
+Owner: `tools/invidious_keys_preflight.py` is the only writer of both keys. It runs before stack goals, in a mode matching what each one recreates, and in FIX mode from the funnel. `brand_defaults.py` no longer writes them.
 
 Operate:
 
 ```bash
 make -C pmoves invidious-keys-check    # report-only: are both keys usable on this node?
-make -C pmoves invidious-keys-preflight  # FIX: mint/rotate in env.shared (runs automatically before up/recreate/restart goals)
-make -C pmoves invidious-keys-gate       # read-only (runs automatically before ps/logs/down/stop goals; never writes)
+make -C pmoves invidious-keys-preflight  # FIX: mint/rotate in env.shared (runs automatically before up-invidious)
+make -C pmoves invidious-keys-mint       # MINT: absent keys only, never rotates (runs before every other up/recreate goal)
+make -C pmoves invidious-keys-gate       # read-only (runs before ps/logs/down/stop goals; never writes)
 make -C pmoves secrets-funnel          # seal the values into the CHIT bundle
 make -C pmoves secrets-ensure-check    # both must print "provisioned"
 make -C pmoves up-invidious            # recreate invidious + invidious-db + invidious-companion (host 127.0.0.1:${INVIDIOUS_PORT:-3000})
