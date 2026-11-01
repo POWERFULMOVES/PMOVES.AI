@@ -12,11 +12,20 @@ on:
   # Cron minute is 23, NOT 0. GitHub queues scheduled workflows at the top
   # of the hour, so a fleet-wide build pinned to :00 lands in the same
   # queue as every other scheduled job in the fleet. 23 keeps this off the
-  # hour and off-peak, matching the repo's own convention
-  # (integrations-ghcr.yml uses '17 7 * * *').
-  # 04:23 UTC is also well clear of fork-sync.yml ('0 6 * * *', 06:00) and
-  # integrations-ghcr.yml ('17 7 * * *', 07:17), so the self-hosted runners
-  # are not contended by two image builds at once.
+  # hour and off-peak.
+  #
+  # MEASURED against the LIVE schedules in .github/workflows. A commented-out
+  # `schedule:` is not a schedule: integrations-ghcr.yml's '17 7 * * *' is
+  # COMMENTED OUT (lines 97-98), so it never runs and is deliberately NOT
+  # cited as a neighbour here.
+  #
+  # 04:23 UTC is clear of the 03:00 pair (fleet-docker-cleanup
+  # '0 3 * * *', runner-maintenance '0 3 * * *') and of the 06:00 cluster
+  # (fork-sync '0 6 * * *', branch-protection-drift '0 6 * * *',
+  # stale-branch-sweep '0 6 * * *'), so the self-hosted runners are not
+  # contended by two jobs at once. The nearest live neighbour is
+  # branch-protection-ruleset-sync at '0 4 * * 0' (Sundays 04:00) -- 23
+  # minutes earlier, and a weekly branch-admin sync rather than a build.
   schedule:
     - cron: '23 4 * * *'
 
@@ -140,17 +149,26 @@ jobs:
           #
           # MEASURED before changing this: the old expression was
           #   context: ${{ matrix.context || format('{0}/{1}', github.workspace, matrix.repo) }}
-          # and EVERY repo-backed entry sets `context: .`. A dot is TRUTHY in a
-          # GitHub Actions expression, so `matrix.context` always won and the
-          # `github.workspace/matrix.repo` fallback was DEAD CODE: all 19
-          # repo-backed images resolved against the WORKSPACE ROOT, where
-          # their Dockerfiles do not exist. The evidence that this was never
-          # working: the last 7 runs of this workflow ALL failed, and 11 of
-          # those 19 declare a Dockerfile that IS present at their submodule's
-          # pinned commit -- the intent was always to build from the
-          # submodule. `file` is left RELATIVE so the action resolves it
+          # and a NON-EMPTY `context` always won. 18 of the 19 repo-backed
+          # entries set `context: .`; the one exception (pmoves-tokenism-ui)
+          # sets `context: pmoves-nextjs`. A dot is TRUTHY in a GitHub
+          # Actions expression, so `matrix.context` always won and the
+          # `github.workspace/matrix.repo` fallback was DEAD CODE: 18 images
+          # resolved against the WORKSPACE ROOT and one against
+          # `github.workspace/pmoves-nextjs` -- in every case a directory
+          # that does not hold that image's Dockerfile. The evidence that this
+          # was never working: the last 7 runs of this workflow ALL failed,
+          # and 11 of those 19 declare a Dockerfile that IS present at their
+          # submodule's pinned commit -- the intent was always to build from
+          # the submodule. `file` is left RELATIVE so the action resolves it
           # against the context, exactly as it already does for the in-tree
           # entries (whose resolution is unchanged by this edit).
+          #
+          # `context` is now DEAD for every repo-backed entry -- the repo
+          # wins outright -- so `pmoves-tokenism-ui`'s declared
+          # `context: pmoves-nextjs` no longer says anything. The image
+          # staleness ratchet flags that entry rather than letting the
+          # contradiction sit in the matrix where nobody would look for it.
           context: ${{ matrix.repo && format('{0}/{1}', github.workspace, matrix.repo) || matrix.context }}
           file: ${{ matrix.dockerfile || 'Dockerfile' }}
           push: true
