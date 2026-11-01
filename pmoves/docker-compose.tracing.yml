@@ -32,9 +32,9 @@ services:
       - MEMORY_MAX_TRACES=100000
     ports:
       - "${JAEGER_BIND:-127.0.0.1}:${JAEGER_UI_PORT:-16686}:16686"
-      - "14268:14268"
-      - "14250:14250"
-      - "4317:4317"
+      - "${JAEGER_14268_PORT:-14268}:14268"
+      - "${JAEGER_14250_PORT:-14250}:14250"
+      - "${JAEGER_4317_PORT:-4317}:4317"
     networks:
       - pmoves_monitoring
     healthcheck:

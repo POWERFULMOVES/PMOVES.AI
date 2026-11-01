@@ -4,7 +4,7 @@
 # Tailscale hostname: pmoves-dgx-spark
 # Hardware: GB10 Grace-Blackwell, 128GB unified LPDDR5X, 1 petaFLOP FP4
 # Runtime: Ollama (CUDA backend) primary; NVIDIA NIM optional
-# Ports: 11434 (Ollama), 8200 (NIM if deployed)
+# Ports: 11434 (Ollama), 8206 (NIM if deployed)
 
 OLLAMA_SPARK_HOST ?= pmoves-dgx-spark
 OLLAMA_SPARK_PORT ?= 11434

@@ -156,7 +156,7 @@ standing and the video being accessible. Check:
 └──────────────┬──────────────┘
                │
 ┌──────────────▼──────────────┐
-│  yt-cookie-refresher :8115  │ Weekly cron (or POST /refresh)
+│  yt-cookie-refresher :8126  │ Weekly cron (or POST /refresh)
 │  Playwright Chromium        │ → fresh cookies + PO token
 │  Fernet encrypt → Supabase  │ → NATS: ingest.cookies.refreshed.v1
 └──────────────┬──────────────┘

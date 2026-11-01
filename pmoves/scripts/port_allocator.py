@@ -87,7 +87,7 @@ DEFAULT_PORTS = {
     "publisher-discord": 8094,
     "jellyfin-bridge": 8093,
     "n8n": 5678,
-    "botz-gateway": 8090,
+    "botz-gateway": 8054,  # compose publishes 8054; 8090 is reserved for retrieval-eval
 }
 
 # Port ranges to avoid

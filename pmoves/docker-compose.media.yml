@@ -329,7 +329,7 @@ services:
     - SUPA_REST_URL=${SUPA_REST_INTERNAL_URL:-${SUPA_REST_URL:-http://supabase-kong:8000/rest/v1}}
     - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_external
     ports:
-    - ${JELLYFIN_BRIDGE_BIND:-0.0.0.0}:8093:8093
+    - ${JELLYFIN_BRIDGE_BIND:-0.0.0.0}:${JELLYFIN_BRIDGE_PORT:-8093}:8093
     profiles:
     - orchestration
     networks:
@@ -365,7 +365,7 @@ services:
     - TORCH_CUDNN_V8_API_ENABLED=1
     - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
     - PMOVES_NETWORKS=pmoves_app,pmoves_monitoring,pmoves_external
-    ports: ["${TTS_BIND:-127.0.0.1}:7861:7861"]
+    ports: ["${TTS_BIND:-127.0.0.1}:${ULTIMATE_TTS_STUDIO_PORT:-7861}:7861"]
     profiles: ["gpu", "tts", "voice"]
     networks: [pmoves_app, pmoves_monitoring, pmoves_external]  # HuggingFace TTS model downloads
     deploy:
@@ -446,7 +446,7 @@ services:
     - HTTPS_PROXY=
     - NO_PROXY=
     - PMOVES_NETWORKS=pmoves_app,pmoves_api,pmoves_bus,pmoves_external
-    ports: ["${FLUTE_BIND:-127.0.0.1}:8055:8055", "${FLUTE_BIND:-127.0.0.1}:8056:8056"]
+    ports: ["${FLUTE_BIND:-127.0.0.1}:${FLUTE_GATEWAY_8055_PORT:-8055}:8055", "${FLUTE_BIND:-127.0.0.1}:${FLUTE_GATEWAY_8056_PORT:-8056}:8056"]
     profiles: ["orchestration", "media"]
     # Attach a non-internal bridge so published host ports resolve on Docker Desktop.
     networks: [pmoves_app, pmoves_api, pmoves_bus, pmoves_external]
@@ -692,7 +692,7 @@ services:
     - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
     - PMOVES_NETWORKS=pmoves_api,pmoves_bus,pmoves_monitoring
     ports:
-    - "${NIM_BIND:-127.0.0.1}:${NIM_HOST_PORT:-8200}:8000"
+    - "${NIM_BIND:-127.0.0.1}:${NIM_HOST_PORT:-8206}:8000"
     profiles: ["gpu", "nim"]
     networks:
     - pmoves_api
@@ -776,8 +776,11 @@ services:
         required: false
 
   # NVIDIA NIM - Llama-3.3-Nemotron-Super-49B inference server (~30GB VRAM)
-  # Default host port is 8200 (NOT 8000) to avoid colliding with supabase-kong,
-  # which binds 8000 by default. Override via NIM_HOST_PORT.
+  # Default host port is 8206 (NOT 8000, and NOT 8200). 8000 is
+  # supabase-kong's. 8200 is gpu-orchestrator's, and gpu-orchestrator and
+  # nvidia-nim BOTH declare the `gpu` profile -- so under
+  # `docker compose --profile gpu up` they start together and one of them
+  # fails to bind. Override via NIM_HOST_PORT.
   llama-throughput-lab:
     build:
       context: ../PMOVES-llama-throughput-lab
@@ -818,7 +821,7 @@ services:
     - pmoves_bus
     - pmoves_monitoring
     ports:
-    - ${LLAMA_LAB_BIND:-0.0.0.0}:8201:8201
+    - ${LLAMA_LAB_BIND:-0.0.0.0}:${LLAMA_THROUGHPUT_LAB_PORT:-8201}:8201
 
   # =============================================================================
   # GitHub Automation Services (Phase 3)

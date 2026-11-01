@@ -95,7 +95,7 @@ services:
       # to /persona/livingdoc hits the line 38 404 in production.
     - ./rooms/persona:/app/data/rooms/persona:ro
     ports:
-    - "${PMOVES_UI_BIND:-0.0.0.0}:4482:3000"
+    - "${PMOVES_UI_BIND:-0.0.0.0}:${PMOVES_UI_PORT:-4482}:3000"
     # Note: flute-gateway is optional (for voice features). Start with workers profile for full functionality.
     networks: [pmoves_app, pmoves_api, pmoves_external]
     profiles: ["ui"]
@@ -304,7 +304,7 @@ services:
       invidious-companion:
         condition: service_started
     ports:
-    - ${INVIDIOUS_PROXY_BIND:-0.0.0.0}:8281:80
+    - ${INVIDIOUS_PROXY_BIND:-0.0.0.0}:${INVIDIOUS_COMPANION_PROXY_PORT:-8281}:80
     profiles:
     - invidious
     networks:

@@ -65,7 +65,7 @@ yt-cookies-auth: yt-cookies-check ## One-time OAuth2 consent flow (opens browser
 
 yt-cookies-refresh: ## Force a cookie refresh cycle (Playwright harvest + encrypt + store + NATS notify)
 	@echo "=== YT Cookies: manual refresh (via refresher service) ==="
-	@curl -sf -X POST -m 10 http://localhost:$${YT_COOKIE_REFRESHER_PORT:-8115}/refresh \n		|| { echo "refresher API unreachable - is the service up? (make up-yt-cookies)"; exit 1; }
+	@curl -sf -X POST -m 10 http://localhost:$${YT_COOKIE_REFRESHER_PORT:-8126}/refresh \n		|| { echo "refresher API unreachable - is the service up? (make up-yt-cookies)"; exit 1; }
 	@echo ""
 	@echo "Triggered. Status after ~60s: make yt-cookies-status"
 
@@ -101,8 +101,8 @@ yt-cookies-bootstrap: yt-cookies-check ## ONE-CLICK: OAuth consent + first cooki
 	@echo "Step 2/2: triggering first cookie harvest (Playwright + Supabase)..."
 	@bash scripts/with-env.sh $(PYTHON) tools/yt_oauth_flow.py refresh || \
 	  (echo "Note: refresh CLI is a placeholder; production refresh runs via the yt-cookie-refresher service. Pinging it now..." && \
-	   curl -fsS -X POST http://localhost:8115/refresh 2>/dev/null || \
-	   echo "Refresher service not yet up. Run 'make up-yt-cookies' then 'curl -X POST http://localhost:8115/refresh'.")
+	   curl -fsS -X POST http://localhost:$${YT_COOKIE_REFRESHER_PORT:-8126}/refresh 2>/dev/null || \
+	   echo "Refresher service not yet up. Run 'make up-yt-cookies' then 'curl -X POST http://localhost:8126/refresh'.")
 	@echo ""
 	@echo "✓ Cookie pipeline initialised. Verify with 'make yt-cookies-status'."
 
@@ -151,17 +151,17 @@ COOKIES_DC := docker compose -p $(PROJECT) --project-directory $(CURDIR) $(COMPO
 up-yt-cookies: ## Start yt-cookie-refresher + yt-cookie-writer (Phase 9Q.2 services)
 	@echo "🍪 Starting yt-cookie services (refresher + writer)..."
 	@$(COOKIES_DC) --profile yt-cookies up -d yt-cookie-refresher yt-cookie-writer
-	@echo "✅ Cookie services up. Refresher API: http://localhost:8115/healthz"
+	@echo "✅ Cookie services up. Refresher API: http://localhost:$${YT_COOKIE_REFRESHER_PORT:-8126}/healthz"
 
 up-yt-cookies-recreate: ## Force-recreate cookie services to pick up env.shared changes
 	@echo "🍪 Force-recreating yt-cookie services (env refresh)..."
 	@$(COOKIES_DC) --profile yt-cookies up -d --force-recreate yt-cookie-refresher yt-cookie-writer
-	@echo "✅ Cookie services recreated. Refresher API: http://localhost:8115/healthz"
+	@echo "✅ Cookie services recreated. Refresher API: http://localhost:$${YT_COOKIE_REFRESHER_PORT:-8126}/healthz"
 
 up-yt-cookies-rebuild: ## Rebuild images + force-recreate cookie services (code changes)
 	@echo "🍪 Rebuilding + force-recreating yt-cookie services (code refresh)..."
 	@$(COOKIES_DC) --profile yt-cookies up -d --build --force-recreate yt-cookie-refresher yt-cookie-writer
-	@echo "✅ Cookie services rebuilt + recreated. Refresher API: http://localhost:8115/healthz"
+	@echo "✅ Cookie services rebuilt + recreated. Refresher API: http://localhost:$${YT_COOKIE_REFRESHER_PORT:-8126}/healthz"
 
 # Skip-egress variant — runs cookies + multi-client only. Use when the
 # Tailscale exit node is offline/unapproved, to test whether cookies +
