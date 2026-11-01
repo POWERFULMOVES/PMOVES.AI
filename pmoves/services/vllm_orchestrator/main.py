@@ -16,25 +16,26 @@ from urllib.parse import urlparse, urlunparse
 import structlog
 from aiohttp import web
 
-# Import service components (handle hyphenated module name)
-import importlib.util
+# Import service components.
+#
+# WHY (D3): the service directory was kebab-case (`vllm-orchestrator`), so the
+# modules used to be loaded by file path under a top-level name. A module
+# loaded that way has no parent package, so `from .config import ...` inside
+# the package raised "attempted relative import with no known parent package"
+# and the service could not start at all. It also executed `server.py` a
+# SECOND time under a second name -- two module objects, two VLLMOrchestrator
+# classes.
+#
+# The directory is now `vllm_orchestrator`, so it is a REAL package and the
+# canonical import is the only one.
+import pathlib
+import sys
 
-spec = importlib.util.spec_from_file_location(
-    "vllm_orchestrator",
-    os.path.join(os.path.dirname(__file__), "__init__.py")
-)
-vllm_orchestrator = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(vllm_orchestrator)
+_REPO_ROOT = str(pathlib.Path(__file__).resolve().parents[3])
+if _REPO_ROOT not in sys.path:
+    sys.path.insert(0, _REPO_ROOT)
 
-# Import server module
-spec_server = importlib.util.spec_from_file_location(
-    "vllm_orchestrator_server",
-    os.path.join(os.path.dirname(__file__), "server.py")
-)
-vllm_server = importlib.util.module_from_spec(spec_server)
-spec_server.loader.exec_module(vllm_server)
-
-VLLMOrchestrator = vllm_server.VLLMOrchestrator
+from pmoves.services.vllm_orchestrator import VLLMOrchestrator  # noqa: E402
 
 
 # Configure structured logging
@@ -252,7 +253,10 @@ class VLLMOrchestratorService:
         async def model_configs(request):
             """Get available model configurations."""
             try:
-                from .config import MODEL_CONFIGS
+                # WHY (D3): a relative import has no package context when this
+                # file runs as a script. The package is registered under its
+                # canonical name above, so import it absolutely.
+                from pmoves.services.vllm_orchestrator.config import MODEL_CONFIGS
                 return web.json_response(MODEL_CONFIGS)
             except ImportError:
                 return web.json_response({})
@@ -260,7 +264,7 @@ class VLLMOrchestratorService:
         # Parallelism strategies endpoint
         async def strategies(request):
             """Get available parallelism strategies."""
-            from .config import ParallelismStrategy
+            from pmoves.services.vllm_orchestrator.config import ParallelismStrategy
             return web.json_response({
                 "strategies": [s.value for s in ParallelismStrategy]
             })

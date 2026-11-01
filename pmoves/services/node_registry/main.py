@@ -13,44 +13,59 @@ import sys
 import structlog
 from aiohttp import web
 
-# Import service components
+# Import service components.
+#
+# WHY (D3): this entry point used to load its own submodules with
+# importlib.util.spec_from_file_location(...). A module loaded that way has
+# no parent package, so `from ..resource_detector.models import ...` inside
+# registry.py / storage.py / api.py raised "attempted relative import with no
+# known parent package" -- the service could not start at all. The package
+# directory is now `node_registry`, so the relative imports resolve
+# natively; the fallback below covers a plain script launch
+# (`python pmoves/services/node_registry/main.py`), where the module still
+# has no package context.
 try:
     from .registry import NodeRegistry, SUBJECTS
     from .api import NodeRegistryAPI
     from .storage import SupabaseNodeStore, InMemoryNodeStore
 except ImportError:
-    # Handle hyphenated module name
-    import importlib.util
-    spec = importlib.util.spec_from_file_location(
-        "node_registry",
-        os.path.join(os.path.dirname(__file__), "__init__.py")
-    )
-    node_registry = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(node_registry)
-    NodeRegistry = node_registry.NodeRegistry
-    SUBJECTS = node_registry.SUBJECTS
+    # Script mode: no package context. Make the repo root importable and
+    # load the REAL package by its canonical name instead of by file path.
+    import pathlib
 
-    # Import API module
-    spec_api = importlib.util.spec_from_file_location(
-        "node_registry_api",
-        os.path.join(os.path.dirname(__file__), "api.py")
-    )
-    node_registry_api = importlib.util.module_from_spec(spec_api)
-    spec_api.loader.exec_module(node_registry_api)
-    NodeRegistryAPI = node_registry_api.NodeRegistryAPI
+    _REPO_ROOT = str(pathlib.Path(__file__).resolve().parents[3])
+    if _REPO_ROOT not in sys.path:
+        sys.path.insert(0, _REPO_ROOT)
 
-    # Import storage module
-    spec_storage = importlib.util.spec_from_file_location(
-        "node_registry_storage",
-        os.path.join(os.path.dirname(__file__), "storage.py")
+    from pmoves.services.node_registry.registry import NodeRegistry, SUBJECTS
+    from pmoves.services.node_registry.api import NodeRegistryAPI
+    from pmoves.services.node_registry.storage import (
+        SupabaseNodeStore,
+        InMemoryNodeStore,
     )
-    node_registry_storage = importlib.util.module_from_spec(spec_storage)
-    spec_storage.loader.exec_module(node_registry_storage)
-    SupabaseNodeStore = node_registry_storage.SupabaseNodeStore
-    InMemoryNodeStore = node_registry_storage.InMemoryNodeStore
 
 
 # Configure structured logging
+#
+# WHY NO `cache_class=`: it was here as `cache_class=structlog.WriteLogFile`,
+# and NEITHER half of that has ever existed in a released structlog.
+# `structlog.WriteLogFile` is not exported by structlog 21.5.0, 22.3.0,
+# 24.4.0 or 26.1.0 (the wheels were unpacked and grepped to confirm);
+# `structlog.WriteLogger` is what those versions export. And `cache_class` is
+# not in `configure()`'s signature in any of them either -- the supported
+# parameters are processors, wrapper_class, context_class, logger_factory and
+# cache_logger_on_first_use. So the call raised AttributeError (the missing
+# attribute) and would have raised TypeError (the unexpected keyword) even if
+# the attribute had existed. Caching is done by `cache_logger_on_first_use`,
+# which is the mechanism structlog actually supports.
+#
+# The module therefore could not be IMPORTED, in any environment, ever --
+# which is why nothing noticed: no test, no script and no service imported
+# this entry point until the mesh compatibility ratchet did, and it failed
+# there. `structlog` is pinned at 24.4.0 in pmoves/requirements.txt and
+# unpinned in pmoves/requirements-tests.txt, so the merge gate (which installs
+# the unpinned set and resolved 26.1.0) failed where a pinned 24.4.0
+# environment would have failed differently.
 structlog.configure(
     processors=[
         structlog.stdlib.filter_by_level,
@@ -66,7 +81,6 @@ structlog.configure(
     wrapper_class=structlog.stdlib.BoundLogger,
     context_class=dict,
     logger_factory=structlog.stdlib.LoggerFactory(),
-    cache_class=structlog.WriteLogFile,
     cache_logger_on_first_use=True,
 )
 
@@ -79,7 +93,7 @@ def get_settings():
     return {
         "nats_url": os.getenv("NATS_URL", "nats://nats:4222"),
         "api_host": os.getenv("NODE_REGISTRY_HOST", "0.0.0.0"),
-        "api_port": int(os.getenv("NODE_REGISTRY_PORT", "8082")),
+        "api_port": int(os.getenv("NODE_REGISTRY_PORT", "8115")),
         "stale_threshold_seconds": int(os.getenv("STALE_THRESHOLD_SECONDS", "60")),
         "cleanup_interval_seconds": int(os.getenv("CLEANUP_INTERVAL_SECONDS", "300")),
         "log_level": os.getenv("LOG_LEVEL", "INFO").upper(),

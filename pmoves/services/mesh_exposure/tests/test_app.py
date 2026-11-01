@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import os
 import sys
+from pathlib import Path
 
 import pytest
 
@@ -581,21 +582,79 @@ def test_preview_requires_token(client) -> None:
 
 
 # --------------------------------------------------------------------------
-# Live registry: confirm the 12 slice-4 curated entries are reachable
+# Live registry: confirm the curated set the mesh exposes
 # --------------------------------------------------------------------------
 
-def test_live_registry_loads_12_entries_from_slice4_curated() -> None:
-    """Sanity check: the real slice-4 curated dir parses cleanly and the
-    2 L4 apps (comfyui-desktop + ultimate-tts-studio) surface in the
-    plan as expected."""
-    reg = Registry.load_from_dir(DEFAULT_REGISTRY_DIR)
-    assert len(reg) == 12
+# The curated set, BY SLUG. This is the explicit contract: it names every app
+# the mesh reconciles, so adding an app is a visible, intentional diff in this
+# file and removing one fails loudly.
+#
+# WHY NOT A COUNT: the previous assertion was `assert len(reg) == 12`. It
+# rotted the moment the curated set legitimately grew -- crush.yaml was added
+# on 2026-08-05 (commit 56713a7dfe5, PR #2412) and the assertion stayed RED
+# for twelve weeks because a red test in an optional service suite is easy to
+# miss. A count is the wrong shape for "the curated set has not changed
+# unexpectedly": it cannot say WHICH entry moved.
+EXPECTED_CURATED_SLUGS = [
+    "ace-step",
+    "comfyui-desktop",
+    "crush",
+    "customokio",
+    "lightonocr-2-1b",
+    "n8n",
+    "qwen3-tts",
+    "sillytavern",
+    "ultimate-tts-studio",
+    "unsloth",
+    "vibevoice-realtime",
+    "voxforge-pro",
+    "wan",
+]
+
+# The curated dir, resolved from THIS file so the assertion does not depend on
+# the caller's working directory (the production default is a repo-relative
+# string).
+CURATED_DIR = Path(__file__).resolve().parents[3] / "configs" / "pinokio-apps" / "curated"
+
+# The four exposure layers the mesh reconciles (the slice-4 contract).
+CANONICAL_LAYERS = ("l1_venv", "l2_container_same_host", "l3_mesh", "l4_public")
+
+# WHY NO ALIAS VOCABULARY: one curated entry (crush.yaml) was authored against
+# the `layer_1..layer_4` names of the CRUSH_IN_PINOKIO_PLAN_2026-08-04
+# handoff instead of the slice-4 layer names. The four concepts are the same,
+# so an alias table would have accepted the drift -- but
+# `pmoves/services/mesh_exposure/state.py` reads the CANONICAL names ONLY,
+# so the aliased entry contributed NO exposure rules and crush was invisible to
+# the mesh planner. An alias in the TEST and no alias in the PLANNER is the
+# worst shape: the test says the entry is fine while the product ignores it.
+#
+# crush.yaml has been migrated to the canonical names, so the check below is
+# now exact and a future entry authored in the legacy vocabulary FAILS loudly
+# instead of being quietly tolerated.
+
+
+def test_live_registry_matches_the_curated_slug_set() -> None:
+    """Sanity check: the real curated dir parses cleanly, exposes exactly the
+    declared slug set, and the 2 L4 apps (comfyui-desktop +
+    ultimate-tts-studio) surface in the plan as expected."""
+    # The production default must point at this directory (repo-relative).
+    assert DEFAULT_REGISTRY_DIR == "pmoves/configs/pinokio-apps/curated"
+    assert (Path(__file__).resolve().parents[3].parent / DEFAULT_REGISTRY_DIR).resolve() == CURATED_DIR
+
+    reg = Registry.load_from_dir(str(CURATED_DIR))
+    assert reg.slugs == EXPECTED_CURATED_SLUGS
     l4 = reg.filter_l4_public()
     slugs = {e["slug"] for e in l4}
     assert slugs == {"comfyui-desktop", "ultimate-tts-studio"}
-    # All 12 have a valid network_exposure block
+    # Every curated entry declares all four layers, under the CANONICAL names
+    # the planner reads, and every layer says whether it is reachable.
     for e in reg.all():
         assert "network_exposure" in e
-        for layer in ("l1_venv", "l2_container_same_host", "l3_mesh", "l4_public"):
-            assert layer in e["network_exposure"]
-            assert "reachable" in e["network_exposure"][layer]
+        layers = e["network_exposure"]
+        assert set(layers) == set(CANONICAL_LAYERS), (
+            f"{e.get('slug')}: exposure layers {sorted(layers)} != "
+            f"{sorted(CANONICAL_LAYERS)}"
+        )
+        for layer in CANONICAL_LAYERS:
+            assert "reachable" in layers[layer]
+

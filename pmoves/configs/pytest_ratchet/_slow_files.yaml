@@ -1,0 +1,72 @@
+# Declared-slow test files - pytest_ratchet.py
+#
+# WHY THIS FILE EXISTS
+# --------------------
+# The ratchet's budget model used FILE COUNT as a proxy for COST. A chunk of
+# up to CHUNK_SIZE (20) files was given GROUP_TIMEOUT_SECONDS (120s) of wall
+# clock, and a file re-run in isolation after a chunk timeout was given
+# FALLBACK_FILE_TIMEOUT (60s). Nothing in that model could say "this one file
+# is legitimately expensive".
+#
+# That proxy breaks on a file whose cost is real and whose result is GOOD.
+# CI-confirmed on 2026-10-30 (branch fix/ratchet-upstream-matrix-and-shim-origin,
+# head f9cec95043b): the merge gate's python-tests job reported
+#
+#   --- pmoves/tests/tools [2] timed out; isolating 20 files (budget 600s) ---
+#   ---   no report for pmoves/tests/tools/test_mavis_ratchet_mutation_kill.py (exit -1) ---
+#
+# The chunk that contained the mutation-kill harness exceeded 120s, so it was
+# killed and re-run one file at a time; the 60s per-file isolation then killed
+# the harness AGAIN, and its real result was replaced by a false "no report"
+# ERROR. A healthy but slow file was reported as a broken one - the exact
+# inversion this gate exists to prevent.
+#
+# This file is the escape hatch: it says which files are DECLARED slow, and by
+# how much, in a place a reviewer can read and change.
+#
+# HOW THE ALLOWANCE IS APPLIED
+# -----------------------------
+# Each entry is a repo-relative path and the EXTRA seconds that file is
+# allowed, on top of the default budget. The allowance applies in BOTH places
+# the budget applies:
+#
+#   * the CHUNK timeout becomes GROUP_TIMEOUT_SECONDS + the sum of the
+#     allowances of the files in that chunk, so a chunk containing a slow file
+#     is not killed before that file can report;
+#   * the PER-FILE isolation timeout becomes FALLBACK_FILE_TIMEOUT + that
+#     file's allowance, so the file is still MEASURED even if some other
+#     reason times the chunk out.
+#
+# Every file NOT listed here keeps the EXACT old budget. The allowance is
+# additive and per-file; it is never a global raise, and it never weakens hang
+# detection for a file that has not declared itself slow.
+#
+# HOW IT IS PARSED
+# ----------------
+# By hand, line by line, in the same dependency-free style as
+# _known_failures.yaml (the runner does not use pyyaml and neither does this
+# file's sibling). A missing file is an empty allowance, never an error.
+#
+# Format: a `slow_files:` mapping of repo-relative path -> extra seconds, with
+# a reason under each entry. The reason is REQUIRED, not decoration - a
+# declared cost with no stated reason is a budget raise nobody signed off on.
+slow_files:
+  pmoves/tests/tools/test_mavis_ratchet_mutation_kill.py: 600
+    # WHY: a mutation-kill harness that proves a deadline works by WAITING IT
+    # OUT, and proves a tree-kill works by leaving a grandchild holding a pipe
+    # open. Every one of its 19 cases runs THREE phases (GREEN before -> RED
+    # under mutation -> GREEN after restore) and each phase spawns a full
+    # `python -m pytest` child, so the file costs 19 x 3 = 57 pytest startups.
+    # Measured on this host (Windows, Python 3.12.10, pytest 9.1.1): one child
+    # startup is 1.7s and that is IRREDUCIBLE (`python -c pass` = 0.05s,
+    # `import pytest` = 0.36s, full child pytest run = 1.7s; `-p no:cacheprovider`
+    # saves 0.12s, `--assert=plain` saves nothing,
+    # PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 saves nothing, `--confcutdir` saves
+    # nothing), so 57 x 1.7s = ~97s is the FLOOR before any deliberate timeout
+    # wait. Measured suite total was 121.3s (slowest case
+    # `test_mutation_pytest_run_without_timeout_is_killed` at 49.04s,
+    # `test_pytest_run_timeout_fires_and_releases_the_lock` at 10.33s,
+    # `test_mutation_unlocked_module_load_is_killed` at 10.26s).
+    #
+    # The 600s allowance is on top of the default budget, so the file is
+    # MEASURED rather than lost. It is healthy and slow, not broken.

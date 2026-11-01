@@ -49,7 +49,8 @@ jobs:
           # branch creation / merges on the fork repos 403. owner + repositories
           # mints a token scoped to EXACTLY the forks this workflow syncs
           # (least privilege — not every repo the app is installed on). Keep this
-          # list in sync with the FORKS string in the "Sync forks" step below.
+          # list in sync with the FORKS string in the "Prepare the fork policy"
+          # step below.
           owner: ${{ github.repository_owner }}
           repositories: |
             PMOVES-ClawZ
@@ -83,68 +84,33 @@ jobs:
             PMOVES-spynel
             PMOVES-registry
             PMOVES-Mike
+            Pmoves-pipecat-context-hub
+            PMOVES-KeYlOkODe
+            PMOVES-ScaleTail
+            PMOVES-natscli-CHIT-EeZz
+            Pmoves-Glancer
+            Pmoves-nats.net
+            Pmoves-pipecat-client-web-transports
+            Pmoves-pipecat-mcp-server
 
-      - name: Discover forks
-        env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+      - name: Prepare the fork policy
         run: |
-          echo "=== Fork Drift Audit ==="
-          # --limit 1000 is the P1: `gh repo list` defaults to 30, which is ~8% of
-          # the ~374 forks in the org, so audits have been silently missing ~92%.
-          # 1000 covers the full set with headroom; org growth won't break this
-          # until we cross 1k forks, at which point a paginated call replaces it.
-          gh repo list POWERFULMOVES --fork --limit 1000 --json name,parent --jq '.[] | "\(.name)|\(.parent.owner.login)/\(.parent.name)"' | sort -u | while IFS='|' read fork upstream; do
-            fb=$(gh api "repos/POWERFULMOVES/$fork" --jq '.default_branch' 2>/dev/null) || continue
-            ub=$(gh api "repos/$upstream" --jq '.default_branch' 2>/dev/null) || continue
-            # One compare call (was 2 — both .behind_by and .ahead_by in one response).
-            # Saves 1 API call per fork = 374 calls/audit at current org size; without
-            # this dedup we burn the secondary rate limit within ~3 audits.
-            cmp=$(gh api "repos/$upstream/compare/$ub...POWERFULMOVES:$fork:$fb" --jq '{bh: .behind_by, ah: .ahead_by}' 2>/dev/null) || cmp='{"bh":-1,"ah":-1}'
-            bh=$(echo "$cmp" | jq -r '.bh')
-            ah=$(echo "$cmp" | jq -r '.ah')
-            if [ "$bh" = "0" ] 2>/dev/null; then
-              echo "  $fork: synced"
-            elif [ "$bh" -gt 999 ] 2>/dev/null; then
-              echo "  CRITICAL $fork: $bh behind, $ah ahead"
-            elif [ "$bh" -gt 0 ] 2>/dev/null; then
-              echo "  STALE   $fork: $bh behind, $ah ahead"
-            else
-              echo "  ERROR    $fork: unable to compare"
-            fi
-            sleep 1
-          done
-
-      - name: Sync forks
-        if: ${{ !inputs.dry_run }}
-        env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token }}
-          MAX_FORKS: ${{ inputs.max_forks || '3' }}
-          AHEAD_MAX: ${{ inputs.ahead_max || '20' }}
-          BEHIND_MAX: ${{ inputs.behind_max || '1000' }}
-        run: |
-          # GitHub runs `run:` steps under `bash -e` (errexit). This loop is
-          # best-effort and relies on `cmd; if [ $? -ne 0 ]` and
-          # `|| { ...; continue; }` guards — errexit defeats those (a failing
-          # standalone command aborts the whole step before its check, which is
-          # why the sync died on the first fork). Disable errexit for the loop.
-          set +e
-          SYNCED=0
-          SKIPPED=0
-          CONFLICTS=0
-          ERRORS=0
-          RESULTS=""
-
-          # Run-id suffix keeps each run's branch unique (avoids colliding with
-          # leftover sync/* branches from earlier runs).
-          SYNC_BRANCH="sync/upstream-$(date +%Y-%m-%d)-${GITHUB_RUN_ID}"
-
-          # n8n: the n8n-io/n8n entry syncs PMOVES-N8N, the FULL source fork
-          # (submodule path PMOVES-N8N-Auto; repo renamed from PMOVES-N8N-Auto).
-          # It used to read PMOVES-n8n, which GitHub resolves case-insensitively
-          # to the same repo, so it always synced the fork, but it read as the
-          # PMOVES-n8n submodule PATH, which is PMOVES-n8n-FlooS (first-party
-          # workflows, no upstream). FlooS is deliberately absent from FORKS.
-          # Fork list: upstream_owner/upstream_repo|fork_name|fork_branch_override
+          # ONE definition of the fork list, consumed by BOTH the audit below
+          # and the sync after it.
+          #
+          # WHY ONE: the audit and the sync must measure the SAME thing. They
+          # did not. The audit compared every fork against its upstream's
+          # DEFAULT branch, while the sync merged a PINNED policy ref. So the
+          # audit printed "STALE 614 behind" for Pmoves-Glancer on every run
+          # -- against upstream develop, a ref the policy says is NOT the
+          # source -- and would eventually scream CRITICAL about a fork the
+          # policy says is CURRENT. A report that permanently contradicts the
+          # fix is a broken signal, not a report.
+          #
+          # The literal `FORKS="..."` shape is kept deliberately: the registry
+          # ratchet parses this block as TEXT out of this file
+          # (pmoves/tools/fork_registry_ratchet.py::_workflow_forks), so the
+          # shape IS an interface between the workflow and the gate. Keep it.
           FORKS="
           openclaw/openclaw|PMOVES-ClawZ|
           Comfy-Org/ComfyUI|PMOVES-Creator|
@@ -177,8 +143,177 @@ jobs:
           agent0ai/spynel|PMOVES-spynel|PMOVES.AI-Edition-Hardened
           agentclientprotocol/registry|PMOVES-registry|
           open-legal-products/mike|PMOVES-Mike|
+          pipecat-ai/pipecat-context-hub|Pmoves-pipecat-context-hub|
+          Kilo-Org/kilocode|PMOVES-KeYlOkODe|
+          tailscale-dev/ScaleTail|PMOVES-ScaleTail|
+          nats-io/natscli|PMOVES-natscli-CHIT-EeZz|
+          nicolargo/glances|Pmoves-Glancer|PMOVES.AI-Edition-Hardened|release
+          nats-io/nats.net|Pmoves-nats.net|
+          pipecat-ai/pipecat-client-web-transports|Pmoves-pipecat-client-web-transports|
+          pipecat-ai/pipecat-mcp-server|Pmoves-pipecat-mcp-server|
           "
 
+          # Export it so the steps that follow read the SAME list, not a copy.
+          {
+            echo "FORKS<<__PMOVES_FORKS_EOF__"
+            printf '%s\n' "$FORKS"
+            echo "__PMOVES_FORKS_EOF__"
+          } >> "$GITHUB_ENV"
+
+          # The resolver lives in a FILE so the audit and the sync share ONE
+          # implementation of "which branch, and which upstream ref, does this
+          # fork sync against". Two copies of that rule is exactly the
+          # duplication that let the audit and the sync drift apart in the
+          # first place.
+          cat > "$RUNNER_TEMP/pmoves-fork-policy.sh" <<'POLICY_EOF'
+          # resolve_fork_policy <fork-name> <upstream-owner/repo>
+          # Prints "<fork-branch>|<upstream-ref>".
+          #
+          # EVERY gh call is guarded with `|| var=""`. The audit step runs
+          # under `bash -e`, and a bare failing `gh api` would abort the whole
+          # step -- which is how a report step starts failing for reasons that
+          # have nothing to do with the report.
+          resolve_fork_policy() {
+            _fork="$1"
+            _upstream="$2"
+            _pol=$(printf '%s\n' "$FORKS" | awk -F'|' -v f="$_fork" '$2==f {print; exit}') || _pol=""
+            _override=""
+            _ref=""
+            if [ -n "$_pol" ]; then
+              _override=$(printf '%s' "$_pol" | cut -d'|' -f3) || _override=""
+              _ref=$(printf '%s' "$_pol" | cut -d'|' -f4) || _ref=""
+            fi
+            # Fork branch precedence, mirroring the sync exactly:
+            #   1. explicit branch_override (3rd FORKS column)
+            #   2. the branch the fork's PMOVES.AI gitlink tracks (.gitmodules)
+            #   3. the fork's default branch
+            if [ -n "$_override" ]; then
+              _fb="$_override"
+            else
+              _gm="$GITHUB_WORKSPACE/.gitmodules"
+              _subpath=$(git config -f "$_gm" --get-regexp '\.url$' 2>/dev/null | awk -v f="$_fork" '$2 ~ ("/" f "(\\.git)?$") {sub(/\.url$/,"",$1); sub(/^submodule\./,"",$1); print $1; exit}') || _subpath=""
+              _fb=""
+              [ -n "$_subpath" ] && _fb=$(git config -f "$_gm" --get "submodule.$_subpath.branch" 2>/dev/null) || _fb=""
+              [ -n "$_fb" ] || _fb=$(gh api "repos/POWERFULMOVES/$_fork" --jq '.default_branch' 2>/dev/null) || _fb=""
+            fi
+            # Upstream ref precedence:
+            #   1. the 4th FORKS column -- `release` resolves to the upstream's
+            #      latest release TAG, now; any other value is that literal ref
+            #   2. the upstream's default branch
+            if [ "$_ref" = "release" ]; then
+              _ub=$(gh api "repos/$_upstream/releases/latest" --jq '.tag_name' 2>/dev/null) || _ub=""
+            elif [ -n "$_ref" ]; then
+              _ub="$_ref"
+            else
+              _ub=$(gh api "repos/$_upstream" --jq '.default_branch' 2>/dev/null) || _ub=""
+            fi
+            printf '%s|%s\n' "$_fb" "$_ub"
+          }
+          POLICY_EOF
+
+      - name: Discover forks
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          echo "=== Fork Drift Audit ==="
+          # --limit 1000 is the P1: `gh repo list` defaults to 30, which is ~8% of
+          # the ~374 forks in the org, so audits have been silently missing ~92%.
+          # 1000 covers the full set with headroom; org growth won't break this
+          # until we cross 1k forks, at which point a paginated call replaces it.
+          #
+          # THE SAME POLICY THE SYNC USES. Sourced BEFORE the pipeline, so the
+          # `while` runs in a subshell that inherits it.
+          source "$RUNNER_TEMP/pmoves-fork-policy.sh"
+          gh repo list POWERFULMOVES --fork --limit 1000 --json name,parent --jq '.[] | "\(.name)|\(.parent.owner.login)/\(.parent.name)"' | sort -u | while IFS='|' read fork upstream; do
+            # A fork in the policy list is measured against its PINNED upstream
+            # ref and its PINNED branch; a fork outside it keeps the historical
+            # default-branch measurement. Without this the audit reported
+            # Pmoves-Glancer as "STALE 614 behind" against upstream develop --
+            # a ref the policy says is NOT the source -- while the sync
+            # correctly measured it against the latest release tag.
+            policy=$(resolve_fork_policy "$fork" "$upstream") || policy="|"
+            fb="${policy%%|*}"
+            ub="${policy##*|}"
+            [ -z "$fb" ] && continue
+            [ -z "$ub" ] && continue
+            # One compare call (was 2 — both .behind_by and .ahead_by in one response).
+            # Saves 1 API call per fork = 374 calls/audit at current org size; without
+            # this dedup we burn the secondary rate limit within ~3 audits.
+            cmp=$(gh api "repos/$upstream/compare/$ub...POWERFULMOVES:$fork:$fb" --jq '{bh: .behind_by, ah: .ahead_by}' 2>/dev/null) || cmp='{"bh":-1,"ah":-1}'
+            bh=$(echo "$cmp" | jq -r '.bh')
+            ah=$(echo "$cmp" | jq -r '.ah')
+            if [ "$bh" = "0" ] 2>/dev/null; then
+              echo "  $fork: synced"
+            elif [ "$bh" -gt 999 ] 2>/dev/null; then
+              echo "  CRITICAL $fork: $bh behind, $ah ahead"
+            elif [ "$bh" -gt 0 ] 2>/dev/null; then
+              echo "  STALE   $fork: $bh behind, $ah ahead"
+            else
+              echo "  ERROR    $fork: unable to compare"
+            fi
+            sleep 1
+          done
+
+      - name: Sync forks
+        if: ${{ !inputs.dry_run }}
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          MAX_FORKS: ${{ inputs.max_forks || '3' }}
+          AHEAD_MAX: ${{ inputs.ahead_max || '20' }}
+          BEHIND_MAX: ${{ inputs.behind_max || '1000' }}
+        run: |
+          # GitHub runs `run:` steps under `bash -e` (errexit). This loop is
+          # best-effort and relies on `cmd; if [ $? -ne 0 ]` and
+          # `|| { ...; continue; }` guards — errexit defeats those (a failing
+          # standalone command aborts the whole step before its check, which is
+          # why the sync died on the first fork). Disable errexit for the loop.
+          set +e
+          # The SAME resolver the audit used, from the SAME prepared policy.
+          source "$RUNNER_TEMP/pmoves-fork-policy.sh"
+          SYNCED=0
+          SKIPPED=0
+          CONFLICTS=0
+          ERRORS=0
+          RESULTS=""
+
+          # Run-id suffix keeps each run's branch unique (avoids colliding with
+          # leftover sync/* branches from earlier runs).
+          SYNC_BRANCH="sync/upstream-$(date +%Y-%m-%d)-${GITHUB_RUN_ID}"
+
+          # n8n: the n8n-io/n8n entry syncs PMOVES-N8N, the FULL source fork
+          # (submodule path PMOVES-N8N-Auto; repo renamed from PMOVES-N8N-Auto).
+          # It used to read PMOVES-n8n, which GitHub resolves case-insensitively
+          # to the same repo, so it always synced the fork, but it read as the
+          # PMOVES-n8n submodule PATH, which is PMOVES-n8n-FlooS (first-party
+          # workflows, no upstream). FlooS is deliberately absent from FORKS.
+          # Fork list: upstream_owner/upstream_repo|fork_name|fork_branch_override|upstream_ref
+          #
+          # upstream_ref (4th column, OPTIONAL) pins the UPSTREAM ref that gets
+          # merged into the fork branch. It exists because the upstream's
+          # DEFAULT branch is not always the right source: Pmoves-Glancer's
+          # hardened branch tracks an upstream RELEASE TAG, NOT upstream
+          # develop, and its registry entry says so.
+          #
+          # The pin's value is either:
+          #   - `release`  -> the upstream's latest release TAG, resolved at
+          #                   sync time (so the fork advances to the NEXT
+          #                   release on its own -- the registry's stated
+          #                   policy, with no manual bump to forget);
+          #   - a literal ref (a tag, a branch, a SHA) for a fork that must
+          #     track one specific ref.
+          #
+          # With no 4th column, the upstream's default branch is used --
+          # the historical behaviour, unchanged for every other fork.
+          #
+          # Without the pin, the sync loop would merge upstream develop into
+          # a release-pinned branch and propose a 614-commit development
+          # merge (measured 2026-10-31) — the opposite of the stated policy,
+          # and an unsafe update for a reviewer to merge.
+          # The fork list is defined ONCE, in the "Prepare the fork policy"
+          # step above, and arrives here as $FORKS. The audit step above
+          # consumes the SAME list, so the two cannot disagree about what
+          # "behind" means for any given fork.
+          #
           # Process substitution (`< <(...)`) instead of `echo | grep | while`
           # — the pipeline form runs the `while` in a subshell, so any
           # updates to SYNCED / SKIPPED / CONFLICTS / ERRORS / RESULTS
@@ -186,7 +321,7 @@ jobs:
           # reason "Results: $SYNCED synced" has always printed 0. The
           # process substitution form runs the `while` in the parent shell
           # so the counters survive the loop.
-          while IFS='|' read upstream fork branch_override; do
+          while IFS='|' read upstream fork branch_override upstream_ref; do
             [ -z "$fork" ] && continue
 
             # Check max
@@ -195,23 +330,39 @@ jobs:
               break
             fi
 
-            # Resolve the fork branch to sync. Precedence:
-            #   1. explicit branch_override (3rd FORKS column)
-            #   2. the branch THIS fork's PMOVES.AI gitlink tracks, from .gitmodules
-            #      — this is the consumable line (usually PMOVES.AI-Edition-Hardened);
-            #      syncing the default branch instead leaves the gitlink un-advanceable.
-            #   3. the fork's default branch
-            if [ -n "$branch_override" ]; then
-              fb="$branch_override"
-            else
-              gm="$GITHUB_WORKSPACE/.gitmodules"
-              subpath=$(git config -f "$gm" --get-regexp '\.url$' 2>/dev/null | awk -v f="$fork" '$2 ~ ("/" f "(\\.git)?$") {sub(/\.url$/,"",$1); sub(/^submodule\./,"",$1); print $1; exit}')
-              fb=""
-              [ -n "$subpath" ] && fb=$(git config -f "$gm" --get "submodule.$subpath.branch" 2>/dev/null)
-              [ -z "$fb" ] && { fb=$(gh api "repos/POWERFULMOVES/$fork" --jq '.default_branch' 2>/dev/null) || { echo "SKIP $fork: no default branch"; continue; }; }
-            fi
+            # Resolve the fork branch AND the upstream ref through the SHARED
+            # resolver, so the audit above and this sync measure the same
+            # thing and cannot drift apart again. The precedence it applies:
+            #   fork branch:  1. the branch_override (3rd FORKS column)
+            #                 2. the branch THIS fork's PMOVES.AI gitlink
+            #                    tracks, from .gitmodules -- this is the
+            #                    consumable line (usually
+            #                    PMOVES.AI-Edition-Hardened); syncing the
+            #                    default branch instead leaves the gitlink
+            #                    un-advanceable.
+            #                 3. the fork's default branch
+            #   upstream ref: 1. the 4th FORKS column -- `release` resolves to
+            #                    the upstream's latest release TAG, NOW; any
+            #                    other value is that literal ref.
+            #                 2. the upstream's default branch
+            #
+            # WHY `release` AND NOT A HARD-CODED TAG: the registry says the
+            # hardened Glancer branch tracks upstream RELEASE TAGS and must be
+            # advanced "by fast-forwarding to the next release tag". A literal
+            # pin implements that only until the next tag is published, and
+            # then the fork stops advancing SILENTLY -- a new rot vector in a
+            # lane whose whole subject is rot that nobody can see. Resolving
+            # `release` at sync time is the policy itself.
+            #
+            # MEASURED: `gh api repos/nicolargo/glances/releases/latest` and
+            # `git ls-remote --tags` agree on v4.5.8 (the current latest).
+            policy=$(resolve_fork_policy "$fork" "$upstream") || policy="|"
+            fb="${policy%%|*}"
+            ub="${policy##*|}"
+            [ -z "$fb" ] && { echo "SKIP $fork: no branch to sync"; continue; }
+            [ -z "$ub" ] && { echo "SKIP $fork: no upstream ref${upstream_ref:+ ($upstream_ref)}"; continue; }
             echo "  syncing fork branch: $fb"
-            ub=$(gh api "repos/$upstream" --jq '.default_branch' 2>/dev/null) || { echo "SKIP $fork: no upstream branch"; continue; }
+            [ "$upstream_ref" = "release" ] && echo "  upstream ref: $ub (latest release)"
             uo=$(echo "$upstream" | cut -d/ -f1)
 
             # Get drift (one call, both fields — dedup'd from 2 calls to 1)
@@ -261,11 +412,34 @@ jobs:
             if ! git -C "$d" fetch --quiet --filter=blob:none --no-tags upstream "$ub"; then
               echo "  FAIL: fetch upstream"; find "$work" -delete 2>/dev/null; continue
             fi
+            # THE REF TO MERGE IS `FETCH_HEAD`, NOT `upstream/$ub`.
+            #
+            # `$ub` may be a TAG (the `release` pin resolves to a release tag).
+            # `git fetch --no-tags upstream v4.5.8` puts that commit in
+            # FETCH_HEAD and creates NO remote-tracking ref, so
+            # `git merge upstream/v4.5.8` fails with "not something we can
+            # merge". A BRANCH ref behaves differently: that fetch
+            # opportunistically updates `refs/remotes/upstream/<branch>`, so
+            # `upstream/$ub` resolves -- which is why the old code worked, and
+            # why a tag pin cannot reuse it.
+            #
+            # MEASURED against the real upstream, both shapes: fetching a TAG
+            # sets FETCH_HEAD and creates no remote-tracking ref; fetching a
+            # BRANCH sets FETCH_HEAD AND updates the remote-tracking ref.
+            # FETCH_HEAD is the one ref both set, so it is the one to merge.
+            merge_ref=$(git -C "$d" rev-parse --verify --quiet 'FETCH_HEAD^{commit}')
+            if [ -z "$merge_ref" ]; then
+              echo "  FAIL: no commit fetched for upstream ref '$ub'"; find "$work" -delete 2>/dev/null; continue
+            fi
             if ! git -C "$d" checkout --quiet -B "$SYNC_BRANCH" "origin/$fb"; then
               echo "  FAIL: checkout $fb"; find "$work" -delete 2>/dev/null; continue
             fi
-            git -C "$d" merge --no-edit "upstream/$ub"
-            if [ $? -ne 0 ]; then
+            # `if !` AND NOT `cmd; if [ $? -ne 0 ]`. GitHub runs `run:` steps
+            # under `bash -e`, so a bare failing `git merge` ABORTS THE WHOLE
+            # STEP -- the remaining forks in the loop would never be synced,
+            # and the conflict would read as a workflow failure instead of
+            # the skip it is meant to be.
+            if ! git -C "$d" merge --no-edit "$merge_ref"; then
               echo "  CONFLICT: $bh behind / $ah ahead — needs manual merge, skipping"
               git -C "$d" merge --abort 2>/dev/null
               find "$work" -delete 2>/dev/null; continue

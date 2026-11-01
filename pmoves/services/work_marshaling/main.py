@@ -15,18 +15,27 @@ from typing import Any
 import structlog
 from aiohttp import web
 
-# Import service components (handle hyphenated module name)
-import importlib.util
+# Import service components.
+#
+# WHY (D3): the service directory was kebab-case (`work-marshaling`), so the
+# package used to be loaded by file path under the TOP-LEVEL name
+# "work_marshaling" and never registered in sys.modules. Two consequences: the
+# module had no parent package, so a relative import inside it could not
+# resolve, and the module object was a DUPLICATE of
+# `pmoves.services.work_marshaling` -- two distinct class objects for the same
+# service, so an `isinstance` check across the two import paths would be
+# False.
+#
+# The directory is now `work_marshaling`, so it is a REAL package and the
+# canonical import is the only one. One module identity, one parent package.
+import pathlib
+import sys
 
-spec = importlib.util.spec_from_file_location(
-    "work_marshaling",
-    os.path.join(os.path.dirname(__file__), "__init__.py")
-)
-work_marshaling = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(work_marshaling)
+_REPO_ROOT = str(pathlib.Path(__file__).resolve().parents[3])
+if _REPO_ROOT not in sys.path:
+    sys.path.insert(0, _REPO_ROOT)
 
-WorkMarshaling = work_marshaling.WorkMarshaling
-SUBJECTS = work_marshaling.SUBJECTS
+from pmoves.services.work_marshaling import SUBJECTS, WorkMarshaling  # noqa: E402
 
 
 # Configure structured logging
@@ -56,7 +65,7 @@ def get_settings():
     """Get service settings from environment variables."""
     return {
         "nats_url": os.getenv("NATS_URL", "nats://nats:4222"),
-        "registry_url": os.getenv("NODE_REGISTRY_URL", "http://localhost:8082"),
+        "registry_url": os.getenv("NODE_REGISTRY_URL", "http://localhost:8115"),
         "api_host": os.getenv("WORK_MARSHALING_HOST", "0.0.0.0"),
         "api_port": int(os.getenv("WORK_MARSHALING_PORT", "8100")),
         "assignment_timeout_seconds": int(os.getenv("ASSIGNMENT_TIMEOUT_SECONDS", "30")),
