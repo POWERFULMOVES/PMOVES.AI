@@ -36,6 +36,10 @@ on:
       - "pmoves/tests/tools/test_gh_app_installation_audit_mutation_kill.py"
       # The universe source: a registry edit changes what is audited.
       - "pmoves/config/fork_registry.json"
+      # The registry cross-check input. A registry key that is a checkout
+      # PATH rather than a repo name can only be caught against
+      # .gitmodules, so a change to it must wake this gate.
+      - ".gitmodules"
       # This workflow itself.
       - ".github/workflows/gh-app-installation-audit.yml"
   workflow_dispatch:

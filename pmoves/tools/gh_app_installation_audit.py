@@ -103,6 +103,7 @@ from typing import Any, Callable, Iterable, Mapping, Sequence
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_REGISTRY = REPO_ROOT / "pmoves" / "config" / "fork_registry.json"
+DEFAULT_GITMODULES = REPO_ROOT / ".gitmodules"
 
 GITHUB_API = "https://api.github.com"
 PER_PAGE = 100
@@ -479,6 +480,183 @@ def _excluded_map(value: Any) -> dict[str, str]:
                 raise RegistryError(f"registry _excluded entry is not a name: {item!r}")
         return excluded
     raise RegistryError("registry _excluded is neither a map nor a list")
+
+
+# ---------------------------------------------------------------------------
+# the registry <-> .gitmodules cross-check
+# ---------------------------------------------------------------------------
+#
+# WHY THIS EXISTS
+# ---------------
+# A registry key is a REPO NAME. A submodule PATH is a checkout directory.
+# They are not the same thing, and five submodules in this repo are registered
+# under a path that differs from their repo:
+#
+#     pbnj                            -> PMOVES-pinokio
+#     PMOVES-Spark-VSS                -> PM-Spark-video-search-and-summarization
+#     PMOVES-Pipecat                  -> pmoves-pipecat
+#     PMOVES-Headscale                -> PMOVES-headscale
+#     skills/PMOVES-awesome-agent-skills -> PMOVES-awesome-agent-skills
+#
+# Keying a registry entry on the PATH produces a key that names no repo in the
+# org. MEASURED 2026-11-01: the registry carried BOTH
+# `PM-Spark-video-search-and-summarization` (the repo) and `PMOVES-Spark-VSS`
+# (its checkout path) -- two entries, one upstream. The audit resolved 93 of
+# 94 registry repos and the 94th came back HTTP 404 from the org's own repo
+# endpoint. The org has 479 repos visible to an admin-scoped token and no
+# repo named `PMOVES-Spark-VSS`.
+#
+# The house already corrected this bug class twice in the same commit that
+# created it (`PMOVES-Pipecat` -> `pmoves-pipecat`, `PMOVES-Headscale` ->
+# `PMOVES-headscale`). This check makes the third instance impossible to
+# reintroduce, and it does so OFFLINE: `--plan` needs no network and no
+# credentials, so a phantom key is caught on the operator's host rather than
+# only in CI.
+#
+# The comparison is case-insensitive because GitHub repo names are.
+
+
+def submodule_index(gitmodules: Path) -> tuple[dict[str, str], set[str]]:
+    """(checkout PATH -> repo name, the set of repo names), from .gitmodules.
+
+    Parsed as TEXT, not as a config file: this tool imports only the stdlib
+    and a gate that cannot read its input must fail closed rather than grow a
+    dependency. A ``.gitmodules`` is an INI-ish file, but the two keys that
+    matter (``path`` and ``url``) are flat ``key = value`` lines, so a line
+    reader is exact rather than approximate.
+
+    BOTH maps are returned because the cross-check needs both and the case
+    aliases make them different sets. Five submodules are registered under a
+    path that differs from their repo -- ``pbnj`` -> ``PMOVES-pinokio``,
+    ``PMOVES-Spark-VSS`` -> ``PM-Spark-video-search-and-summarization``, and
+    three that differ only in case -- and several paths are shared by two
+    different repos.
+
+    An unreadable file raises ``RegistryError``: this input is what the
+    cross-check is asserted against, and a cross-check that silently checked
+    nothing would be a green gate over an empty population.
+    """
+    try:
+        raw = Path(gitmodules).read_text(encoding="utf-8")
+    except OSError as error:
+        raise RegistryError(
+            f"cannot read the .gitmodules cross-check input {gitmodules}: {error}"
+        ) from error
+
+    path_to_repo: dict[str, str] = {}
+    repo_names: set[str] = set()
+    path: str | None = None
+    url: str | None = None
+
+    def _flush() -> None:
+        nonlocal path, url
+        if path and url:
+            name = url.rstrip("/").rsplit("/", 1)[-1]
+            if name.endswith(".git"):
+                name = name[: -len(".git")]
+            if name:
+                path_to_repo[path.casefold()] = name
+                repo_names.add(name.casefold())
+        path = None
+        url = None
+
+    for raw_line in raw.splitlines():
+        line = raw_line.strip()
+        if line.startswith("[submodule"):
+            _flush()
+            continue
+        if line.startswith("path"):
+            _, _, value = line.partition("=")
+            path = value.strip()
+        elif line.startswith("url"):
+            _, _, value = line.partition("=")
+            url = value.strip()
+    _flush()
+    return path_to_repo, repo_names
+
+
+def check_registry_names(
+    gitmodules: Path, names: Iterable[str]
+) -> tuple[list[str], int]:
+    """Registry keys that are checkout PATHS rather than repo names.
+
+    Returns ``(problems, paths_checked)``. ``paths_checked`` is how many
+    submodule paths the cross-check actually compared against -- it is
+    reported so a reader can tell a real cross-check from one that compared
+    nothing.
+
+    A key is a problem when ALL THREE hold:
+      1. it is not the repo name of ANY submodule (so it names no vendored
+         repo), AND
+      2. it IS the checkout path of a submodule (so it was written from the
+         directory rather than from the repo), AND
+      3. that path's repo is a DIFFERENT repo (a casing difference is not a
+         defect).
+
+    Condition (1) is what keeps the case aliases honest. ``PMOVES-N8N`` is a
+    registry key AND the path ``PMOVES-n8n``, whose URL points at the
+    DIFFERENT repo ``PMOVES-n8n-FlooS`` -- but ``PMOVES-N8N`` is itself the
+    repo checked out at the path ``PMOVES-N8N-Auto``, so it names a real repo
+    and is not a defect. Only a key that names NO repo at all while
+    masquerading as a path is one.
+    """
+    path_to_repo, repo_names = submodule_index(gitmodules)
+    problems: list[str] = []
+    for name in names:
+        key = name.casefold()
+        if key in repo_names:
+            continue
+        repo = path_to_repo.get(key)
+        if repo is None:
+            continue
+        if repo.casefold() == key:
+            continue
+        problems.append(
+            f"{name}: the registry key is a checkout PATH, not a repo name. "
+            f"The submodule at that path points at {repo}. "
+            f"Key the registry on {repo} and drop {name}."
+        )
+    return problems, len(path_to_repo)
+
+
+def _cross_check(gitmodules: Path, names: Sequence[str]) -> dict[str, Any]:
+    """Cross-check the registry keys against .gitmodules. Fails closed.
+
+    A registry key that is a checkout path is a REGISTRY error, not a coverage
+    finding: it names a repo the org does not have, so the audit could never
+    resolve it and the verdict could never be complete. The tool therefore
+    refuses to run rather than reporting an INCOMPLETE verdict it knows how to
+    explain.
+
+    An ABSENT .gitmodules is not an error -- there are no submodule paths, so
+    there is nothing for a key to alias -- but it is REPORTED, so a reader can
+    tell a real cross-check from one that compared nothing.
+    """
+    path = Path(gitmodules)
+    if not path.exists():
+        print(
+            f"cross-check skipped: no .gitmodules at {path} "
+            f"(nothing for a registry key to alias)",
+            file=sys.stderr,
+        )
+        return {
+            "path": str(path),
+            "present": False,
+            "paths_checked": 0,
+            "problems": [],
+        }
+    problems, paths_checked = check_registry_names(path, names)
+    if problems:
+        raise RegistryError(
+            "the fork registry names a checkout path instead of a repo name: "
+            + "; ".join(problems)
+        )
+    return {
+        "path": str(path),
+        "present": True,
+        "paths_checked": paths_checked,
+        "problems": [],
+    }
 
 
 def derive_universe(registry: Mapping[str, Any]) -> Universe:
@@ -912,6 +1090,25 @@ def _write_json(payload: Mapping[str, Any], path: Path | None) -> None:
         raise ConfigError(f"cannot write the report to {path}: {error}") from error
 
 
+def _cross_check_line(report: Mapping[str, Any]) -> str:
+    """One summary line saying what the .gitmodules cross-check compared.
+
+    A summary that claims to BE a measurement needs to say what it measured.
+    If the cross-check found nothing to compare against, that is stated --
+    a silent "0 problems" over an empty comparison proves nothing.
+    """
+    cross = report.get("gitmodules") or {}
+    if not cross.get("present"):
+        return (
+            "cross-check   : SKIPPED (no .gitmodules to compare against) -- a "
+            "registry key that is a checkout path would NOT be caught"
+        )
+    return (
+        f"cross-check   : {cross.get('paths_checked')} submodule path(s) compared "
+        f"against {cross.get('path')} -- 0 registry key is a checkout path"
+    )
+
+
 def render_summary(report: Mapping[str, Any]) -> str:
     """The human summary. A failed audit never reaches this function."""
     universe = report.get("universe", {})
@@ -933,6 +1130,7 @@ def render_summary(report: Mapping[str, Any]) -> str:
         lines.append(f"  explicitly excluded: {len(excluded)}")
         for entry in excluded:
             lines.append(f"    - {entry.get('name')}: {entry.get('reason')}")
+        lines.append(_cross_check_line(report))
         return "\n".join(lines)
 
     installation = report.get("installation", {})
@@ -980,6 +1178,7 @@ def render_summary(report: Mapping[str, Any]) -> str:
             lines.append(f"    - {entry.get('name')}: {entry.get('reason')}")
     else:
         lines.append("    (none)")
+    lines.append(_cross_check_line(report))
     return "\n".join(lines)
 
 
@@ -1021,6 +1220,16 @@ def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
         help=f"the fork registry (default {DEFAULT_REGISTRY})",
     )
     parser.add_argument(
+        "--gitmodules",
+        type=Path,
+        default=DEFAULT_GITMODULES,
+        help=(
+            "the .gitmodules to cross-check the registry keys against "
+            f"(default {DEFAULT_GITMODULES}). A registry key that is a "
+            "checkout path rather than a repo name fails the run."
+        ),
+    )
+    parser.add_argument(
         "--token-file",
         type=Path,
         default=None,
@@ -1047,10 +1256,13 @@ def _run(
 ) -> dict[str, Any]:
     registry = load_registry(args.registry)
     universe = derive_universe(registry)
+    cross_check = _cross_check(args.gitmodules, universe.members)
     generated_at = _now_iso()
 
     if args.plan:
-        return plan_report(universe, generated_at)
+        report = plan_report(universe, generated_at)
+        report["gitmodules"] = cross_check
+        return report
 
     if args.token:
         token = _read_token(args, redactor)
@@ -1067,7 +1279,7 @@ def _run(
             source="installation-token",
             universe_org=universe.org,
         )
-        return audit_installation(
+        report = audit_installation(
             mode="token",
             universe=universe,
             client=client,
@@ -1075,6 +1287,8 @@ def _run(
             installation=installation,
             generated_at=generated_at,
         )
+        report["gitmodules"] = cross_check
+        return report
 
     # --app-jwt
     app_id, private_key = _read_app_credentials()
@@ -1099,7 +1313,7 @@ def _run(
         )
     if isinstance(detail, Mapping):
         installation = detail
-    return audit_installation(
+    report = audit_installation(
         mode="app-jwt",
         universe=universe,
         client=client,
@@ -1109,6 +1323,8 @@ def _run(
         ),
         generated_at=generated_at,
     )
+    report["gitmodules"] = cross_check
+    return report
 
 
 def main(argv: Sequence[str] | None = None, *, fetch: Fetch | None = None) -> int:

@@ -39,10 +39,11 @@ The output on the current registry (tool output, not prose):
 ```
 GitHub App installation audit - PLAN (no network, no credentials)
   org: POWERFULMOVES
-  universe: 94 distinct repos (95 registry entries = 86 forks + 9 first-party)
+  universe: 93 distinct repos (94 registry entries = 85 forks + 9 first-party)
   declared in BOTH sections (counted once): pmoves-hirag-mcp
   explicitly excluded: 1
     - Pmoves-cipher: No common ancestor with upstream — cannot sync via merge API
+cross-check   : 84 submodule path(s) compared against ...\.gitmodules -- 0 registry key is a checkout path
 ```
 
 Two numbers, and they are not the same number:
@@ -60,6 +61,38 @@ number of repos that get classified.
 `_excluded` entries are out of scope, and the plan prints each one **with
 its reason**. A repo that is out of scope and silent is indistinguishable
 from a repo nobody remembered.
+
+### The `.gitmodules` cross-check — a registry key names a REPO, not a PATH
+
+`--plan` also cross-checks every registry key against `.gitmodules`, and
+**fails closed (exit 3)** if a key names a checkout directory instead of a
+repo.
+
+Why this matters, measured on 2026-11-01: the registry carried **two** entries
+for one upstream — `PM-Spark-video-search-and-summarization` (the repo) and
+`PMOVES-Spark-VSS` (its **checkout path**). The org has no repo named
+`PMOVES-Spark-VSS`; the org's own repo endpoint returns HTTP 404 for it. The
+audit could therefore never resolve it, and the verdict could never be
+complete — a coverage question with no actionable answer.
+
+The rule is narrow on purpose, because repo names and paths can differ by
+case, and several submodules here are registered under a path that differs
+from their repo:
+
+| Condition | Verdict |
+|---|---|
+| the key is the repo name of **any** submodule | fine — it names a real repo |
+| the key is **not** any repo name, but **is** a submodule path whose URL points at a **different** repo | **FAIL** — the key is a checkout path |
+| the key is neither a repo name nor a path | fine — a registry-only fork this repo does not vendor |
+
+`PMOVES-N8N` is the case that keeps the rule honest: it is a real repo
+(checked out at the path `PMOVES-N8N-Auto`), while the path `PMOVES-n8n`
+belongs to a **different** repo, `PMOVES-n8n-FlooS`. A rule that compared only
+path→repo would flag a legitimate entry on every run.
+
+Because the check is **offline**, `--plan` catches the defect on the
+operator's host with no network and no credential — which is where it should
+have been caught, rather than in CI.
 
 > The `fork-sync.yml` workflow's sync scope is a **subset** of the universe
 > (the repos it auto-syncs). It is not the universe, and the universe is not
@@ -104,11 +137,22 @@ is more than one.
 
 `.github/workflows/gh-app-installation-audit.yml`:
 
-1. Mints a short-lived installation token through the house reusable
-   workflow `.github/workflows/_app-token.yml` (`secrets: inherit`,
-   `owner: POWERFULMOVES`). The token reaches the audit through the `GH_TOKEN`
-   environment variable — never through a printed argument and never through
-   `argv`.
+1. Mints a short-lived installation token **inline, in the auditing job**
+   (`actions/create-github-app-token`, pinned by SHA, `owner: POWERFULMOVES`).
+   The token reaches the audit through the `GH_TOKEN` environment variable —
+   never through a printed argument and never through `argv`.
+
+   > **Why inline and not the house reusable workflow.** This workflow's first
+   > run called `.github/workflows/_app-token.yml` and consumed
+   > `needs.mint.outputs.token`. The mint job **succeeded** and the token was
+   > still **empty** in the consuming job, because GitHub Actions **skips a
+   > job output whose value "may contain secret"** — the mint job's log says
+   > it verbatim: `##[warning]Skip output 'token' since it may contain
+   > secret.` The reusable's only cross-job consumer, `review-collect.yml`,
+   > failed on **100% of runs** for exactly this reason, and
+   > `branch-protection-sync.yml` and `app-pr-approve.yml` both mint inline
+   > for the same reason. A reusable workflow's contract does not survive the
+   > job boundary, so this one does not use it.
 2. Runs the audit in `--token` mode and writes the JSON report to a file.
 3. Publishes the verdict to `$GITHUB_STEP_SUMMARY` and uploads the report as
    a workflow artifact.
@@ -116,8 +160,9 @@ is more than one.
    `complete` flag is false. A missing report fails closed too.
 
 The workflow runs on pull requests that touch the tool, its tests, the
-workflow itself, or `pmoves/config/fork_registry.json` (the universe source),
-plus a weekly schedule and manual dispatch.
+workflow itself, `pmoves/config/fork_registry.json` (the universe source), or
+`.gitmodules` (the cross-check input), plus a weekly schedule and manual
+dispatch.
 
 `repositories` is intentionally left empty in the mint. The audit has to be
 able to *see* every repo in the org; a token scoped to a subset cannot tell
@@ -209,6 +254,8 @@ The operator's hard rule: *a failed audit must never print a reassuring
 summary*. The tool therefore exits non-zero, and prints this on stderr, when:
 
 - the registry cannot be read or parsed (exit 3);
+- a registry key names a **checkout path** rather than a repo — the
+  `.gitmodules` cross-check (exit 3);
 - a GitHub API call fails, returns an unparseable body, or a pagination walk
   cannot be proven complete (exit 4);
 - the bucket arithmetic does not close (exit 5);
@@ -230,7 +277,7 @@ AUDIT FAILED: no coverage verdict was produced. This is NOT 'zero repos missing'
 |------|---------|
 | 0 | audit completed, coverage fully determined |
 | 2 | usage / configuration error (bad arguments, missing credential, the house JWT minter refused to load) |
-| 3 | the registry could not be read or parsed |
+| 3 | the registry could not be read or parsed, **or a registry key names a checkout path instead of a repo** |
 | 4 | a GitHub API call failed, was unparseable, or paged incompletely |
 | 5 | the bucket arithmetic did not close |
 | 6 | the audit is incomplete: at least one repo could not be resolved |

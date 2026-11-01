@@ -77,6 +77,7 @@ one file in this repo and restores it.
 from __future__ import annotations
 
 import contextlib
+import json
 import os
 import subprocess
 import sys
@@ -91,6 +92,8 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[3]
 TOOL = REPO_ROOT / "pmoves" / "tools" / "gh_app_installation_audit.py"
 TEST_FILE = REPO_ROOT / "pmoves" / "tests" / "tools" / "test_gh_app_installation_audit.py"
+WORKFLOW_FILE = REPO_ROOT / ".github" / "workflows" / "gh-app-installation-audit.yml"
+REGISTRY_FILE = REPO_ROOT / "pmoves" / "config" / "fork_registry.json"
 
 _PYTEST_TIMEOUT_SECONDS = 600.0
 
@@ -100,13 +103,25 @@ _LOCK_PATH = Path(tempfile.gettempdir()) / "pmoves-gh-app-audit-mutation.lock"
 
 @dataclass(frozen=True)
 class Mutation:
-    """One mutation: the rewrite, and the test that MUST die from it."""
+    """One mutation: the rewrite, and the test that MUST die from it.
+
+    ``target_file`` is the file the rewrite is applied to. It defaults to the
+    audit TOOL, which is where every defect the tool could make lives. A
+    mutation that lives in the WIRING -- the workflow, the registry -- names
+    its own file, because a harness that could only ever rewrite the tool
+    could not prove that the CI wiring is load-bearing.
+    """
 
     name: str
     old: str
     new: str
     target_test: str
     rationale: str
+    target_file: Path | None = None
+
+    @property
+    def path(self) -> Path:
+        return self.target_file or TOOL
 
 
 MUTATIONS: list[Mutation] = [
@@ -218,7 +233,7 @@ MUTATIONS: list[Mutation] = [
     ),
     Mutation(
         name="M7_report_leaks_the_installation_token",
-        old="""        return audit_installation(
+        old="""        report = audit_installation(
             mode="token",
             universe=universe,
             client=client,
@@ -234,8 +249,7 @@ MUTATIONS: list[Mutation] = [
             installation=installation,
             generated_at=generated_at,
         )
-        report["token"] = token
-        return report""",
+        report["token"] = token""",
         target_test="test_the_installation_token_never_appears_in_the_report_or_the_output",
         rationale=(
             "The installation token is a credential. It must never reach the "
@@ -282,6 +296,76 @@ MUTATIONS: list[Mutation] = [
             "Without the membership check a repo can be counted twice while "
             "the totals still add up."
         ),
+    ),
+    Mutation(
+        name="M11_workflow_token_moved_back_across_a_job_boundary",
+        old="""          GH_TOKEN: ${{ steps.app-token.outputs.token }}""",
+        new="""          GH_TOKEN: ${{ needs.mint.outputs.token }}""",
+        target_test="test_the_workflow_mints_the_token_inline_in_the_auditing_job",
+        rationale=(
+            "GitHub Actions SKIPS a job output whose value 'may contain "
+            "secret', so a cross-job token arrives EMPTY. The audit then runs "
+            "with no credential and the coverage question is never answered. "
+            "This workflow's FIRST run did exactly this and the mint job's "
+            "log says it verbatim."
+        ),
+        target_file=WORKFLOW_FILE,
+    ),
+    Mutation(
+        name="M12_registry_path_alias_not_failing_the_run",
+        old="""    problems, paths_checked = check_registry_names(path, names)
+    if problems:
+        raise RegistryError(
+            "the fork registry names a checkout path instead of a repo name: "
+            + "; ".join(problems)
+        )""",
+        new="""    problems, paths_checked = check_registry_names(path, names)""",
+        target_test="test_a_registry_key_that_is_a_checkout_path_fails_closed",
+        rationale=(
+            "A registry key that is a checkout PATH names no repo in the org, "
+            "so the audit could never resolve it and the verdict could never "
+            "be complete. Detecting it and then NOT failing on it turns a "
+            "known defect back into an INCOMPLETE verdict."
+        ),
+    ),
+    Mutation(
+        name="M13_the_repo_name_exemption_dropped",
+        old="""        if key in repo_names:
+            continue""",
+        new="""        if False:
+            continue""",
+        target_test="test_a_registry_key_that_is_a_repo_at_a_different_path_is_not_a_defect",
+        rationale=(
+            "The exemption is what keeps the case aliases honest: "
+            "`PMOVES-N8N` is a real repo (checked out at the path "
+            "`PMOVES-N8N-Auto`) whose checkout path `PMOVES-n8n` belongs to a "
+            "DIFFERENT repo. Without the exemption a legitimate entry is "
+            "flagged and the gate cries wolf on every run."
+        ),
+    ),
+    Mutation(
+        name="M14_the_phantom_registry_key_reintroduced",
+        old="""    "PM-Spark-video-search-and-summarization": {
+      "upstream": "NVIDIA-AI-Blueprints/video-search-and-summarization",
+      "sync": false,""",
+        new="""    "PMOVES-Spark-VSS": {
+      "upstream": "NVIDIA-AI-Blueprints/video-search-and-summarization",
+      "sync": false,
+      "branch": "PMOVES.AI-Edition-Hardened",
+      "reason": "the phantom the audit caught on 2026-11-01"
+    },
+    "PM-Spark-video-search-and-summarization": {
+      "upstream": "NVIDIA-AI-Blueprints/video-search-and-summarization",
+      "sync": false,""",
+        target_test="test_the_real_registry_passes_the_gitmodules_cross_check",
+        rationale=(
+            "This is the EXACT defect the audit found in production: the "
+            "registry carried a second entry keyed on the checkout path "
+            "`PMOVES-Spark-VSS` instead of the repo name, so the org had no "
+            "repo by that name and the audit's 94th repo came back HTTP 404. "
+            "Reintroducing it must turn the real-registry check red."
+        ),
+        target_file=REGISTRY_FILE,
     ),
 ]
 
@@ -386,8 +470,8 @@ def _apply_mutation(mutation: Mutation, original: str) -> str:
     """
     if mutation.old not in original:
         raise AssertionError(
-            f"mutation {mutation.name}: anchor not found in {TOOL.name}. "
-            "The tool's source changed -- update the mutation.\n"
+            f"mutation {mutation.name}: anchor not found in {mutation.path.name}. "
+            "The source changed -- update the mutation.\n"
             f"--- expected ---\n{mutation.old}"
         )
     mutated = original.replace(mutation.old, mutation.new, 1)
@@ -398,10 +482,11 @@ def _apply_mutation(mutation: Mutation, original: str) -> str:
 
 def test_every_mutation_anchor_is_present():
     """A drifted anchor must be loud, not silently inert."""
-    original = TOOL.read_text(encoding="utf-8")
     for mutation in MUTATIONS:
+        original = mutation.path.read_text(encoding="utf-8")
         assert mutation.old in original, (
-            f"mutation {mutation.name}: anchor not found -- the tool source drifted"
+            f"mutation {mutation.name}: anchor not found in "
+            f"{mutation.path.name} -- the source drifted"
         )
         assert mutation.old != mutation.new, mutation.name
         assert mutation.target_test, mutation.name
@@ -413,7 +498,8 @@ def test_the_mutation_kills_the_named_test(mutation: Mutation) -> None:
     module docstring): it runs once before any mutation and once after the
     last restore, over every target test."""
     node_id = _node_id(mutation.target_test)
-    original = TOOL.read_text(encoding="utf-8")
+    target = mutation.path
+    original = target.read_text(encoding="utf-8")
 
     with _MUTATION_LOCK, _file_lock(_LOCK_PATH):
         # 1. GREEN BEFORE (batched over every target test)
@@ -425,7 +511,7 @@ def test_the_mutation_kills_the_named_test(mutation: Mutation) -> None:
 
         mutated = _apply_mutation(mutation, original)
         try:
-            TOOL.write_text(mutated, encoding="utf-8")
+            target.write_text(mutated, encoding="utf-8")
 
             # 2. RED AFTER -- the NAMED test must die
             after = _run_pytest([node_id])
@@ -439,8 +525,8 @@ def test_the_mutation_kills_the_named_test(mutation: Mutation) -> None:
             )
         finally:
             # 3. restore -- byte-exact
-            TOOL.write_text(original, encoding="utf-8")
-            restored = TOOL.read_text(encoding="utf-8")
+            target.write_text(original, encoding="utf-8")
+            restored = target.read_text(encoding="utf-8")
             assert restored == original, f"{mutation.name}: the restore was not byte-exact"
 
 
@@ -453,6 +539,17 @@ def test_the_tool_source_is_intact_after_the_mutation_suite():
     assert "complete = not unknown" in original
     assert "if total is not None and len(items) != total:" in original
     assert "raise RegistryError(f\"cannot read the fork registry {path}: {error}\") from error" in original
+
+    # The wiring files the new mutations touched must be byte-identical too.
+    assert "GH_TOKEN: ${{ steps.app-token.outputs.token }}" in WORKFLOW_FILE.read_text(
+        encoding="utf-8"
+    )
+    # The phantom must not be a KEY. The registry's `reason` text NAMES it --
+    # that is the record of why it was removed -- so the assertion is on the
+    # parsed keys, not on the raw text.
+    registry_data = json.loads(REGISTRY_FILE.read_text(encoding="utf-8"))
+    assert "PMOVES-Spark-VSS" not in (registry_data.get("forks") or {})
+    assert "PM-Spark-video-search-and-summarization" in (registry_data.get("forks") or {})
 
     node_ids = [_node_id(mutation.target_test) for mutation in MUTATIONS]
     after = _run_pytest(node_ids)

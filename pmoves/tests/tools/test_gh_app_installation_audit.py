@@ -681,24 +681,82 @@ def test_the_app_jwt_mode_uses_the_house_jwt_minter(tmp_path, capsys, monkeypatc
 # --------------------------------------------------------------------------
 
 
-def test_the_workflow_mirrors_the_house_conventions():
+def test_the_workflow_mints_the_token_inline_in_the_auditing_job():
     """The CI wiring is part of the deliverable, so it is part of the tests.
 
-    Checks the properties the house cares about: the reusable workflow is
-    the token source, the token travels by env (never by --print), the
-    report is uploaded, the run fails on an incomplete report, and the
-    `paths:` filter covers the tool, its tests, the workflow and the
-    registry.
+    MEASURED 2026-11-01: this workflow's FIRST run called the reusable
+    `_app-token.yml` and consumed `needs.mint.outputs.token`. The mint job
+    SUCCEEDED and the token was still EMPTY in the consuming job, because
+    GitHub Actions SKIPS a job output whose value "may contain secret" --
+    the mint job's log says it verbatim:
+
+        ##[warning]Skip output 'token' since it may contain secret.
+
+    `review-collect.yml` was the reusable's only cross-job consumer and
+    failed on 100% of runs for exactly this reason; `branch-protection-sync.yml`
+    and `app-pr-approve.yml` both mint INLINE for the same reason.
+
+    The PREVIOUS version of this test asserted the reusable pattern -- the
+    pattern the run proved broken. A test can enshrine a defect and still
+    call it a convention; the run was what proved it. This version asserts
+    the pattern that WORKS, and asserts it against the PARSED workflow rather
+    than against raw text, so a comment that mentions the broken pattern
+    cannot satisfy it.
     """
     yaml = pytest.importorskip("yaml")
     assert WORKFLOW_PATH.exists(), "the audit workflow must exist"
     workflow = yaml.safe_load(WORKFLOW_PATH.read_text(encoding="utf-8"))
 
     raw = WORKFLOW_PATH.read_text(encoding="utf-8")
-    assert "uses: ./.github/workflows/_app-token.yml" in raw
-    assert "secrets: inherit" in raw
     assert "--print" not in raw, "the token must never be printed"
-    assert "GH_TOKEN: ${{ needs." in raw or "GH_TOKEN: ${{" in raw
+
+    steps = (workflow.get("jobs", {}).get("audit", {}) or {}).get("steps", []) or []
+    assert steps, "the audit job must have steps"
+
+    # The token is minted IN THIS JOB, inline, by the pinned action.
+    mint_steps = [
+        step
+        for step in steps
+        if "create-github-app-token" in str((step or {}).get("uses") or "")
+    ]
+    assert len(mint_steps) == 1, (
+        f"the token must be minted exactly once, in the auditing job "
+        f"(found {len(mint_steps)} mint steps)"
+    )
+    mint = mint_steps[0] or {}
+    assert mint.get("id") == "app-token", (
+        "the mint step must be addressable as `steps.app-token`"
+    )
+    mint_with = mint.get("with") or {}
+    assert mint_with.get("client-id") == "${{ secrets.GH_APP_CLIENT_ID }}"
+    assert mint_with.get("private-key") == "${{ secrets.GH_APP_SEC }}"
+    assert mint_with.get("owner") == "${{ github.repository_owner }}"
+
+    # NO step may delegate the mint to a reusable workflow. A job output that
+    # "may contain secret" is skipped, so the token arrives empty and the
+    # audit runs with no credential -- which is exactly the failure this
+    # workflow's first run had.
+    for step in steps:
+        uses = str((step or {}).get("uses") or "")
+        assert not uses.startswith("./"), (
+            f"the auditing job must not delegate to a reusable workflow "
+            f"(a cross-job token output is skipped as 'may contain secret'): {uses}"
+        )
+
+    # The token reaches the tool from a STEP output of THIS job.
+    audit_steps = [
+        step
+        for step in steps
+        if str((step or {}).get("name") or "") == "Audit the App installation coverage"
+    ]
+    assert len(audit_steps) == 1, "the audit step must exist exactly once"
+    env = (audit_steps[0] or {}).get("env") or {}
+    assert env.get("GH_TOKEN") == "${{ steps.app-token.outputs.token }}", (
+        f"the token must come from the mint STEP output in this job: {env}"
+    )
+    assert "needs." not in str(env.get("GH_TOKEN")), (
+        "a cross-job output is skipped by GitHub as 'may contain secret'"
+    )
 
     assert "upload-artifact@" in raw
     assert "actions/checkout@" in raw
@@ -728,6 +786,87 @@ def test_the_workflow_mirrors_the_house_conventions():
         "pmoves/tests/tools/test_gh_app_installation_audit.py",
         "pmoves/tests/tools/test_gh_app_installation_audit_mutation_kill.py",
         "pmoves/config/fork_registry.json",
+        # The registry cross-check reads .gitmodules: a registry key that is a
+        # checkout path can only be caught against it.
+        ".gitmodules",
         ".github/workflows/gh-app-installation-audit.yml",
     ):
         assert required in paths, f"the paths filter does not cover {required}"
+
+
+def _write_gitmodules(path: Path, sections: list[tuple[str, str]]) -> Path:
+    """A .gitmodules with the given (path, url) pairs."""
+    lines: list[str] = []
+    for index, (sub_path, url) in enumerate(sections):
+        lines.append(f'[submodule "s{index}"]')
+        lines.append(f"\tpath = {sub_path}")
+        lines.append(f"\turl = https://github.com/POWERFULMOVES/{url}.git")
+        lines.append("\tbranch = PMOVES.AI-Edition-Hardened")
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return path
+
+
+def test_a_registry_key_that_is_a_checkout_path_fails_closed(tmp_path):
+    """A key that is a checkout PATH names no repo, so the run must refuse.
+
+    MEASURED 2026-11-01: the registry carried BOTH
+    `PM-Spark-video-search-and-summarization` (the repo) and `PMOVES-Spark-VSS`
+    (its checkout path) -- two entries, one upstream. The audit resolved 93 of
+    94 registry repos and the 94th came back HTTP 404. The cross-check names
+    the cause instead of reporting an INCOMPLETE verdict nobody can act on.
+    """
+    gitmodules = _write_gitmodules(
+        tmp_path / ".gitmodules",
+        [("PMOVES-Spark-VSS", "PM-Spark-video-search-and-summarization")],
+    )
+    registry = _write_registry(
+        tmp_path / "registry.json",
+        forks=["PMOVES-Spark-VSS", "PM-Spark-video-search-and-summarization"],
+    )
+
+    code = audit.main(
+        ["--plan", "--registry", str(registry), "--gitmodules", str(gitmodules)]
+    )
+    assert code == audit.EXIT_REGISTRY, (
+        f"a registry key that is a checkout path must fail closed "
+        f"(exit {audit.EXIT_REGISTRY}), got {code}"
+    )
+
+
+def test_a_registry_key_that_is_a_repo_at_a_different_path_is_not_a_defect(tmp_path):
+    """The case alias must NOT false-fire.
+
+    `PMOVES-N8N` is a real repo -- it is the one checked out at the path
+    `PMOVES-N8N-Auto` -- while the path `PMOVES-n8n` belongs to a DIFFERENT
+    repo, `PMOVES-n8n-FlooS`. The two paths casefold to the same string, so a
+    rule that compared only path->repo would flag a legitimate entry.
+    """
+    gitmodules = _write_gitmodules(
+        tmp_path / ".gitmodules",
+        [
+            ("PMOVES-n8n", "PMOVES-n8n-FlooS"),
+            ("PMOVES-N8N-Auto", "PMOVES-N8N"),
+        ],
+    )
+    registry = _write_registry(tmp_path / "registry.json", forks=["PMOVES-N8N"])
+
+    code = audit.main(
+        ["--plan", "--registry", str(registry), "--gitmodules", str(gitmodules)]
+    )
+    assert code == 0, (
+        f"`PMOVES-N8N` names a real repo and must not be flagged, got exit {code}"
+    )
+
+
+def test_the_real_registry_passes_the_gitmodules_cross_check():
+    """The registry AS IT STANDS must name repos, not checkout paths.
+
+    This is the regression lock for the defect the audit found in production:
+    if a checkout path is ever keyed into the registry again, this goes red
+    before the audit can report an incomplete verdict.
+    """
+    code = audit.main(["--plan", "--registry", str(REGISTRY_PATH)])
+    assert code == 0, (
+        f"the real registry must pass the .gitmodules cross-check, got exit {code}"
+    )
+
