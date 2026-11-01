@@ -108,6 +108,13 @@ today.
 
 Only the *bind address* is a parameter; the *port* is a literal in all three.
 
+(That is the state AT THE MEASUREMENT, which is what this spec records. The
+lane then re-parameterised the host ports — the entries are now
+`${NODE_REGISTRY_BIND:-0.0.0.0}:${NODE_REGISTRY_PORT:-8115}:8115` and
+`${YT_COOKIE_REFRESHER_BIND:-127.0.0.1}:${YT_COOKIE_REFRESHER_PORT:-8126}:8115`
+— and the second claimant's host port moved to 8126. See
+`pmoves/docs/AGENTS/carry_over_closure_LEARNINGS.md` for the shipped state.)
+
 **Two competing "port registries" — neither complete:**
 
 | Registry | Services | Notes |
