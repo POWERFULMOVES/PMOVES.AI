@@ -2,6 +2,71 @@ name: build-images-matrix
 
 on:
   workflow_dispatch:
+  # Rebuild the fleet on a cadence instead of on a human's click. Without
+  # this trigger the matrix was dispatch-only, so nothing rebuilt the
+  # images automatically and they went stale silently (flute-gateway was
+  # 65 days stale on 2026-10-30 -- see
+  # pmoves/docs/services/PIPECAT_FORK_PROVENANCE_AUDIT_2026-10-30.md,
+  # "Gap 3").
+  #
+  # Cron minute is 23, NOT 0. GitHub queues scheduled workflows at the top
+  # of the hour, so a fleet-wide build pinned to :00 lands in the same
+  # queue as every other scheduled job in the fleet. 23 keeps this off the
+  # hour and off-peak.
+  #
+  # MEASURED across .github/workflows by `pmoves/tools/measure_schedule_contention.py`
+  # -- the instrument is IN THE TREE and this comment cites it, so the numbers
+  # below can be re-derived instead of trusted: 74 files scanned, 74 parsed,
+  # 0 dropped, 18 carry a live `schedule:`. A commented-out `schedule:` is
+  # genuinely absent, not "probably absent" -- integrations-ghcr.yml's
+  # '17 7 * * *' is COMMENTED OUT (lines 97-98), so it never runs and is
+  # deliberately NOT cited as a neighbour.
+  #
+  # The `build` job runs on `[self-hosted, Linux, X64]`, so the question that
+  # matters is SELF-HOSTED contention. Measured against all 18:
+  #
+  #   * EXACTLY 2 schedules fire at clock time 04:00 -- the nearest by clock
+  #     time: review-collect.yml ('0 */2 * * *', every even hour, runs-on
+  #     ubuntu-24.04) and branch-protection-ruleset-sync.yml ('0 4 * * 0',
+  #     Sundays only, runs-on ubuntu-24.04). BOTH are HOSTED, so neither takes
+  #     a self-hosted runner. review-collect fires 84 times a week against the
+  #     ruleset sync's once -- the ratio is COMPUTED from the cron fields by
+  #     the tool above, not written by hand.
+  #   * EXACTLY 2 schedules fire at 03:00, 83 minutes earlier, and BOTH are
+  #     SELF-HOSTED. Their runs-on expressions are quoted EXACTLY, because an
+  #     elided "..." is the "probably absent" shape this comment criticises
+  #     elsewhere: fleet-docker-cleanup.yml ('0 3 * * *', runs-on
+  #     [self-hosted, Linux, X64, "${{ matrix.runner_label }}"]) and
+  #     runner-maintenance.yml ('0 3 * * *', runs-on
+  #     [self-hosted, "${{ matrix.label }}"]).
+  #   * BOTH of the 03:00 workflows prune docker on the SAME self-hosted pool
+  #     this build pushes images to (b850, kvm4-1, kvm4-2), so BOTH are the
+  #     contention that matters, and neither is excluded by being "the only
+  #     one": fleet-docker-cleanup.yml runs `docker builder prune -af`
+  #     unconditionally and, on its SCHEDULED path,
+  #     `docker image prune -a -f --filter "until=72h"` -- the bare `-a -f`
+  #     is only under manual `aggressive` dispatch, and
+  #     runner-maintenance.yml runs a fleet-wide `docker system prune` with a
+  #     48-hour filter, and `docker builder prune -af --filter "until=48h"`.
+  #     83 minutes of separation is the margin that rules both out.
+  #   * The next SELF-HOSTED schedule after the slot is
+  #     submodule-update-check.yml at 06:00 -- 97 minutes later, Sundays
+  #     only, runs-on [self-hosted, Linux, X64, ai-lab]. The only other
+  #     self-hosted schedule in the fleet is
+  #     python-images-toolchain-canary.yml at 09:00.
+  #
+  # 04:23 therefore sits clear of every self-hosted schedule in the fleet, and
+  # `pmoves/tests/tools/test_measure_schedule_contention.py` re-checks that on
+  # every PR -- so this claim cannot rot into a falsehood unnoticed.
+  #
+  # For completeness, EXACTLY 7 schedules fire at clock time 06:00:
+  # agent-zero-upstream-check, branch-protection-drift, branch-protection-sync
+  # (Mondays only), fork-sync, review-collect, stale-branch-sweep and
+  # submodule-update-check (Sundays only) -- only the last is self-hosted.
+  # The two other early-morning neighbours are orphan-branch-ratchet at
+  # 06:30 and archon-release-track at 06:41, both hosted.
+  schedule:
+    - cron: '23 4 * * *'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -50,7 +115,15 @@ jobs:
     # `build`, which build-nats-workers.yml (push on main) also publishes.
     # Required checks match on name alone, and dispatch-only is not
     # protection -- see self-hosted-builds.yml and #2840.
-    name: Manual Image Build
+    #
+    # Renamed from `Manual Image Build` (2026-10-31): the workflow now has a
+    # `schedule:` trigger, so "Manual" was a lie -- the job runs unattended.
+    # MEASURED before renaming: the literal string `Manual Image Build`
+    # appeared in exactly ONE place (this file), and main's required status
+    # check contexts are merge-decision, python-tests, hardening-validation,
+    # verify and submodule-gitlink-gate -- so `Manual Image Build` was never
+    # a required context and no branch protection rule referenced it.
+    name: Image Build
     needs: setup-matrix
     runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 60
@@ -111,8 +184,32 @@ jobs:
         id: build
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
         with:
-          context: ${{ matrix.context || format('{0}/{1}', github.workspace, matrix.repo) }}
-          file: ${{ matrix.dockerfile || format('{0}/{1}/Dockerfile', github.workspace, matrix.repo) }}
+          # `repo:` is the DISCRIMINATOR; `context` is the fallback.
+          #
+          # MEASURED before changing this: the old expression was
+          #   context: ${{ matrix.context || format('{0}/{1}', github.workspace, matrix.repo) }}
+          # and a NON-EMPTY `context` always won. 18 of the 19 repo-backed
+          # entries set `context: .`; the one exception (pmoves-tokenism-ui)
+          # sets `context: pmoves-nextjs`. A dot is TRUTHY in a GitHub
+          # Actions expression, so `matrix.context` always won and the
+          # `github.workspace/matrix.repo` fallback was DEAD CODE: 18 images
+          # resolved against the WORKSPACE ROOT and one against
+          # `github.workspace/pmoves-nextjs` -- in every case a directory
+          # that does not hold that image's Dockerfile. The evidence that this
+          # was never working: the last 7 runs of this workflow ALL failed,
+          # and 11 of those 19 declare a Dockerfile that IS present at their
+          # submodule's pinned commit -- the intent was always to build from
+          # the submodule. `file` is left RELATIVE so the action resolves it
+          # against the context, exactly as it already does for the in-tree
+          # entries (whose resolution is unchanged by this edit).
+          #
+          # `context` is now DEAD for every repo-backed entry -- the repo
+          # wins outright -- so `pmoves-tokenism-ui`'s declared
+          # `context: pmoves-nextjs` no longer says anything. The image
+          # staleness ratchet flags that entry rather than letting the
+          # contradiction sit in the matrix where nobody would look for it.
+          context: ${{ matrix.repo && format('{0}/{1}', github.workspace, matrix.repo) || matrix.context }}
+          file: ${{ matrix.dockerfile || 'Dockerfile' }}
           push: true
           tags: |
             ${{ env.REGISTRY_GHCR }}/${{ matrix.name }}:edge

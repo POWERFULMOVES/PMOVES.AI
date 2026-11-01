@@ -1,0 +1,33 @@
+# pmoves/configs/image_staleness/_known_gaps.yaml
+#
+# Images in pmoves/images.yaml whose DECLARED build input does not exist at
+# their submodule's PINNED commit -- so the fleet cannot rebuild them today.
+#
+# WHY A BASELINE AND NOT A FIX
+# -----------------------------
+# The build matrix names a Dockerfile path for every image. For 8 of the 19
+# repo-backed entries that path does not exist in the submodule the main repo
+# pins. Two of them have NO Dockerfile anywhere in the repository, so no path
+# correction can fix them: an image has to be written. The other six DO have
+# Dockerfiles, but more than one candidate each, and picking one would
+# publish an image whose contents nobody has verified -- that is a product
+# decision, not a mechanical one.
+#
+# So the gap is RECORDED rather than silently accepted. The ratchet keeps
+# reporting these entries as KNOWN-GAP on every run, a NEW gap fails the
+# gate immediately, and a gap that gets FIXED fails the gate too until it is
+# dropped from this file -- the same contract as
+# `pmoves/configs/command_anchors/_known_gaps.yaml`.
+#
+# Every reason below was MEASURED against the submodule's pinned commit (the
+# gitlink SHA recorded in the main repo, which is what CI materialises),
+# not against the submodule's default branch.
+known_gaps:
+  pmoves-archon: "declares pmoves/services/archon/Dockerfile; the pinned commit 490d74bce has a root Dockerfile and auth-service/Dockerfile, not that path -- the matrix path needs a decision"
+  pmoves-hirag: "declares a root Dockerfile; the pinned commit d8484b2d2 contains NO Dockerfile anywhere in PMOVES-HiRAG -- the image has to be written"
+  pmoves-deep-serch: "declares a root Dockerfile; the pinned commit e2af6b686 contains NO Dockerfile anywhere in PMOVES-Deep-Serch -- the image has to be written"
+  pmoves-yt: "declares a root Dockerfile; the pinned commit ebd39b7fc has bundle/docker/linux/Dockerfile and pmoves_yt_service/Dockerfile -- the matrix path needs a decision"
+  pmoves-jellyfin-ai-media-stack: "declares a root Dockerfile; the pinned commit 83862ccc1 has three under Cataclysm_Provisioning_Bundle/provisioning_bundle/docker-stacks/jellyfin-ai -- the matrix path needs a decision"
+  pmoves-botz: "declares a root Dockerfile; the pinned commit 8902456e7 has no root Dockerfile and 22 under features/ -- the matrix path needs a decision"
+  pmoves-dox: "declares a root Dockerfile; the pinned commit 912ebbdd9 has backend/Dockerfile and frontend/Dockerfile -- the matrix path needs a decision"
+  pmoves-remote-view: "declares a root Dockerfile; the pinned commit 0e350c19c has docker/Dockerfile and docker-classic/Dockerfile -- the matrix path needs a decision"
