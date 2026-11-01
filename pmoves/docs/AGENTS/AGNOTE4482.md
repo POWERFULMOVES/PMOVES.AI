@@ -118,7 +118,7 @@ other but toward shared goals. Win-win, not zero-sum. That is the PMOVES diff.
 2. BoTZ P1 JWT fail-open remains the highest security priority
 3. DoX NATS auth block completely missing from `nats.conf`
 
-> **ClaWZ Status Update (2026-04-19):** ClaWZ (PMOVES-ClawZ submodule) is now the **active** Discord agent, replacing the BoTZ Gateway pattern. BoTZ is **legacy/archived** — see `pmoves/docs/archive/founding-strategy/BOTZ_GATEWAY_AGENT_INTEGRATION.md`. BoTZ references below are retained for historical audit context only.
+> **ClaWZ Status Update (2026-04-19; corrected 2026-10-31):** ClaWZ (PMOVES-ClawZ submodule) is the **active** Discord agent, taking over the BoTZ Gateway's Discord-integration role. **[Correction 2026-10-31, operator direction:** this note previously called BoTZ "legacy/archived" — that was WRONG. PMOVES-BoTZ is **canonical and foundational**, like PMOVES-transcribe-and-fetch: its gateway, features tree, and compose surface remain live platform substrate (and its compose still ships configs other components consume). Only the Discord-agent role moved to ClaWZ. `pmoves/docs/archive/founding-strategy/BOTZ_GATEWAY_AGENT_INTEGRATION.md` records the founding integration pattern, not a retirement.**]
 4. BPM-prosodic bridge resolves the TAC_FLUTE.md open item
 5. `tokenism.prosodic.bpm.v1` is a new NATS subject connecting Flute → ToKenism
 
