@@ -65,7 +65,7 @@ def get_settings():
     """Get service settings from environment variables."""
     return {
         "nats_url": os.getenv("NATS_URL", "nats://nats:4222"),
-        "registry_url": os.getenv("NODE_REGISTRY_URL", "http://localhost:8082"),
+        "registry_url": os.getenv("NODE_REGISTRY_URL", "http://localhost:8115"),
         "api_host": os.getenv("WORK_MARSHALING_HOST", "0.0.0.0"),
         "api_port": int(os.getenv("WORK_MARSHALING_PORT", "8100")),
         "assignment_timeout_seconds": int(os.getenv("ASSIGNMENT_TIMEOUT_SECONDS", "30")),

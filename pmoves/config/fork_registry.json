@@ -509,8 +509,20 @@
     "Pmoves-Glancer": {
       "upstream": "nicolargo/glances",
       "sync": true,
-      "reason": "Glances is the fleet host-probe backend (docs/operations/GLANCES_RUNBOOK.md; make glances-fetch/glances-check). Hardened branches are pinned to upstream RELEASE TAGS (fast-forwarded to v4.5.7 on 2026-10-07, 0 PMOVES-specific commits), not upstream develop -- so it is deliberately NOT in the fork-sync.yml FORKS list, which would merge the upstream default branch (develop). Advance by fast-forwarding to the next release tag. Not a submodule: nodes install the pinned PyPI release with uv (glances>=4.5.7,<4.6); the fork is the audit/patch point if PMOVES hardening is ever needed. PMOVES.AI-Edition-Hardened-DoX tracks the same tag for the DoX lane.",
+      "reason": "Glances is the fleet host-probe backend (docs/operations/GLANCES_RUNBOOK.md; make glances-fetch/glances-check). Hardened branches are pinned to upstream RELEASE TAGS (fast-forwarded to v4.5.7 on 2026-10-07, 0 PMOVES-specific commits), not upstream develop. Added to the fork-sync.yml FORKS list and GH App scope on 2026-10-31 with the PMOVES.AI-Edition-Hardened branch override so the workflow syncs the hardened branch (measured 2026-10-31: 0 ahead, 614 behind upstream develop) instead of leaving a sync: true registration with no mechanism behind it. Advance by fast-forwarding to the next release tag. Not a submodule: nodes install the pinned PyPI release with uv (glances>=4.5.7,<4.6); the fork is the audit/patch point if PMOVES hardening is ever needed. PMOVES.AI-Edition-Hardened-DoX tracks the same tag for the DoX lane.",
       "branch": "PMOVES.AI-Edition-Hardened"
+    },
+    "Pmoves-pipecat-client-web-transports": {
+      "upstream": "pipecat-ai/pipecat-client-web-transports",
+      "sync": true,
+      "reason": "registered 2026-10-31 from the pipecat fork provenance audit (pmoves/docs/services/PIPECAT_FORK_PROVENANCE_AUDIT_2026-10-30.md, gap 2): the fork existed in the POWERFULMOVES org but had no registry entry, no workflow entry, no GH App token scope and no .gitmodules submodule, so it was prose-only and invisible to every gate that could have answered the drift question. measured 2026-10-31 against upstream main: 117 commits behind upstream, 0 fork-only commits. it carries the 7 browser-side transports (daily, livekit, moq, small-webrtc, websocket, openai-realtime, gemini-live) that the pipecat schooling mapping names as the replacement candidate for flute's hand-rolled flute_pipecat/transports/fastapi_ws.py, so it needs the auto-sync path rather than silent drift.",
+      "branch": "main"
+    },
+    "Pmoves-pipecat-mcp-server": {
+      "upstream": "pipecat-ai/pipecat-mcp-server",
+      "sync": true,
+      "reason": "registered 2026-10-31 from the pipecat fork provenance audit (pmoves/docs/services/PIPECAT_FORK_PROVENANCE_AUDIT_2026-10-30.md, gap 2): the fork existed in the POWERFULMOVES org but had no registry entry, no workflow entry, no GH App token scope and no .gitmodules submodule, so it was prose-only and invisible to the machinery that answers upstream drift. measured 2026-10-31 against upstream main: 0 behind, 0 ahead, because upstream itself is dormant (last push 2026-02-12); the fork is therefore at parity today, but the drift check was still an open item that no mechanism could answer while the fork was unregistered. it is the voice/screen MCP server with the headless bot.py harness for the Jetson/KVM, so the decision to keep it synced is made explicit here instead of left to chance.",
+      "branch": "main"
     }
   },
   "_excluded": {

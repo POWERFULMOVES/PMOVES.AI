@@ -174,7 +174,26 @@ images:
   - name: pmoves-tokenism-ui
     repo: PMOVES-ToKenism-Multi
     ref: heads/PMOVES.AI-Edition-Hardened
-    context: pmoves-nextjs
+    # NO `context:` HERE, AND THAT IS THE POINT.
+    #
+    # This entry used to declare `context: pmoves-nextjs`, which named a
+    # directory that was not the build context under any reading: the build
+    # workflow resolves `context` as
+    #   ${{ matrix.repo && format('{0}/{1}', github.workspace, matrix.repo) || matrix.context }}
+    # so for a repo-backed entry the REPO wins and `matrix.context` is dead.
+    # Before the discriminator was fixed, `matrix.context` always won -- and
+    # this one resolved against `github.workspace/pmoves-nextjs`, a directory
+    # that does not exist in this repo at all.
+    #
+    # The build that IS wanted is the submodule's `pmoves-nextjs/Dockerfile`,
+    # and `dockerfile:` below is relative to the repo context, so it names
+    # exactly that. MEASURED at the pinned gitlink 04285b813f: the submodule
+    # holds BOTH `Dockerfile` and `pmoves-nextjs/Dockerfile`, and the latter
+    # is the one this entry wants.
+    #
+    # The staleness ratchet now FLAGS a repo-backed entry that declares a
+    # `context` other than `.`, so this contradiction cannot come back
+    # unnoticed.
     dockerfile: pmoves-nextjs/Dockerfile
     image: ghcr.io/powerfulmoves/pmoves-tokenism-ui
 

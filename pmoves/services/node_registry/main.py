@@ -93,7 +93,7 @@ def get_settings():
     return {
         "nats_url": os.getenv("NATS_URL", "nats://nats:4222"),
         "api_host": os.getenv("NODE_REGISTRY_HOST", "0.0.0.0"),
-        "api_port": int(os.getenv("NODE_REGISTRY_PORT", "8082")),
+        "api_port": int(os.getenv("NODE_REGISTRY_PORT", "8115")),
         "stale_threshold_seconds": int(os.getenv("STALE_THRESHOLD_SECONDS", "60")),
         "cleanup_interval_seconds": int(os.getenv("CLEANUP_INTERVAL_SECONDS", "300")),
         "log_level": os.getenv("LOG_LEVEL", "INFO").upper(),
