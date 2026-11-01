@@ -1,0 +1,28 @@
+# PMOVES Node Registry Service Dependencies
+# Python 3.11
+#
+# Only the packages this service actually imports. The service is a thin
+# aiohttp API over a NATS subscriber and a pluggable node store:
+#
+#   aiohttp      -> api.py (the HTTP API) and main.py (the app + server)
+#   nats-py      -> registry.py (the mesh.node.announce.v1 subscriber)
+#   structlog    -> main.py (structured logging)
+#   supabase     -> storage.py (SupabaseNodeStore; InMemoryNodeStore is the
+#                   default when it is absent, so this is a runtime
+#                   dependency of the Supabase-backed mode, not of import)
+#
+# The shared modules the image also carries (services/common,
+# services/resource_detector) import only the standard library at import
+# time, so they add nothing here.
+
+# Web server
+aiohttp>=3.9.0
+
+# NATS
+nats-py>=2.6.0
+
+# Database (Supabase-backed node store)
+supabase>=2.0.0
+
+# Logging
+structlog>=23.1.0

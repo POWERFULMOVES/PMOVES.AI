@@ -139,3 +139,13 @@ def test_refreshed_token_signature_verifies_with_same_secret():
         hmac_mod.new(_SECRET.encode(), f"{header}.{payload}".encode(), hashlib.sha256).digest()
     ).rstrip(b"=").decode()
     assert sig == expected
+
+
+def test_fill_refreshes_the_service_key_label_consumers_read_first():
+    # cipher auth.ts reads SUPABASE_SERVICE_KEY ?? SERVICE_ROLE_KEY — the
+    # first label must refresh too, not just the ROLE_KEY aliases.
+    dead = _expired_jwt(_SECRET, "service_role", exp=int(time.time()) - 3600)
+    out = fill_self_generated({"JWT_SECRET": _SECRET, "SUPABASE_SERVICE_KEY": dead})
+    claims = _decode_claims(out["SUPABASE_SERVICE_KEY"])
+    assert claims["role"] == "service_role"
+    assert claims["exp"] > int(time.time()) + 9 * 365 * 86400

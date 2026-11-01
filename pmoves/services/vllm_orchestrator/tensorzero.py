@@ -378,7 +378,7 @@ async def unregister_model_from_tensorzero(
 
 
 async def discover_vllm_models(
-    node_registry_url: str = "http://localhost:8082",
+    node_registry_url: str = "http://localhost:8115",
     tensorzero_url: str = "http://localhost:3030",
 ) -> List[str]:
     """Discover vLLM models from node registry and register with TensorZero.

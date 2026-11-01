@@ -82,6 +82,43 @@ def _audit_rows(tmp_path: Path) -> list[dict]:
     return [json.loads(line) for line in p.read_text().splitlines() if line.strip()]
 
 
+def _is_owner_only(path: Path) -> bool:
+    """0600 on POSIX. Windows has no POSIX mode bits -- os.chmod there sets
+    only the read-only bit -- so the closest expressible claim is "writable
+    by the owner and not marked read-only". On POSIX this is still exactly
+    0600; nothing is weakened there."""
+    mode = stat.S_IMODE(path.stat().st_mode)
+    if os.name == "nt":
+        return bool(mode & 0o200)
+    return mode == 0o600
+
+
+def _mode_matches(path: Path, mode: int) -> bool:
+    """POSIX: the mode must survive the edit EXACTLY. Windows: only the
+    read-only bit is expressible, so the claim that survives is the writable
+    bit -- the POSIX bits are not expressible there."""
+    actual = stat.S_IMODE(path.stat().st_mode)
+    if os.name == "nt":
+        return bool(actual & 0o200) == bool(mode & 0o200)
+    return actual == mode
+
+
+def _symlink_supported(tmp_path: Path) -> bool:
+    """Windows needs a privilege (or Developer Mode) to create a symlink.
+    Ask the filesystem instead of the platform name."""
+    probe = tmp_path / ".symlink-probe"
+    target = tmp_path / ".symlink-target"
+    target.write_text("x")
+    try:
+        probe.symlink_to(target)
+    except (OSError, NotImplementedError):
+        return False
+    finally:
+        probe.unlink(missing_ok=True)
+        target.unlink(missing_ok=True)
+    return True
+
+
 def assert_value_not_in_output(proc: subprocess.CompletedProcess, value: str) -> None:
     """The load-bearing negative assertion, shared with the positive controls."""
     assert value not in proc.stdout, "value leaked to stdout"
@@ -307,7 +344,7 @@ def test_set_creates_missing_file_at_0600(tmp_path):
     assert proc.returncode == 0
     f = tmp_path / "overlay.txt"
     assert f.read_bytes() == b"FRESH=" + SECRET.encode() + b"\n"
-    assert stat.S_IMODE(f.stat().st_mode) == 0o600
+    assert _is_owner_only(f)
 
 
 # ------------------------------------------- backup, mode, atomicity, audit ---
@@ -318,7 +355,7 @@ def test_backup_is_0600_and_holds_the_original_bytes(tmp_path, action, stdin):
     proc = _run(TOOL, tmp_path, action, "TARGET_KEY", stdin=stdin)
     assert proc.returncode == 0
     (bak,) = _backups(tmp_path)
-    assert stat.S_IMODE(bak.stat().st_mode) == 0o600
+    assert _is_owner_only(bak)
     assert bak.read_bytes() == ORIGINAL
     assert f"backup={bak.name}" in proc.stdout
 
@@ -328,7 +365,7 @@ def test_backup_is_0600_and_holds_the_original_bytes(tmp_path, action, stdin):
 def test_file_mode_is_preserved(tmp_path, mode, action, stdin):
     f = _write(tmp_path, mode=mode)
     assert _run(TOOL, tmp_path, action, "TARGET_KEY", stdin=stdin).returncode == 0
-    assert stat.S_IMODE(f.stat().st_mode) == mode
+    assert _mode_matches(f, mode)
 
 
 def test_no_temp_files_are_left_behind(tmp_path):
@@ -352,12 +389,22 @@ def test_audit_rows_carry_lengths_and_never_the_value(tmp_path):
     assert (unset_row["action"], unset_row["old_len"], unset_row["new_len"]) == (
         "unset", len(SECRET), None)
     audit = tmp_path / "audit" / "edits.jsonl"
-    assert stat.S_IMODE(audit.stat().st_mode) == 0o600
+    assert _is_owner_only(audit)
 
 
 # ------------------------------------------------ P2a: audit must not fail quiet ---
 
-@pytest.mark.skipif(os.geteuid() == 0, reason="root ignores directory permissions")
+# The house guard (see tests/tools/test_lgtm_marker_check.py:215): hasattr()
+# SHORT-CIRCUITS, so `os.geteuid` is never touched where it does not exist.
+# Windows has no os.geteuid at all, and an unguarded call in a decorator
+# argument is evaluated at IMPORT time -- it would fail the COLLECTION of
+# this whole file (69 tests), not one test.
+# The POSIX premise also needs POSIX mode bits: on Windows a 0500 directory
+# is still writable, so the audit log WOULD be writable and the refusal
+# this test expects cannot happen.
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX mode bits")
+@pytest.mark.skipif(hasattr(os, "geteuid") and os.geteuid() == 0,
+                    reason="root ignores directory permissions")
 @pytest.mark.parametrize("action,stdin", [("unset", None), ("set", SECRET)])
 def test_unwritable_audit_log_refuses_before_any_change(tmp_path, action, stdin):
     f = _write(tmp_path)
@@ -440,6 +487,8 @@ def test_positive_control_same_oserror_before_write_is_nothing_changed(
     assert f.read_bytes() == ORIGINAL
 
 
+@pytest.mark.skipif(not hasattr(os, "fchown"),
+                    reason="POSIX owner/group model: Windows has no os.fchown")
 def test_lost_group_on_fchown_permission_error_warns_by_name(tmp_path, capsys, monkeypatch):
     mod = _load_tool_module()
 
@@ -466,6 +515,8 @@ def test_lost_group_on_fchown_permission_error_warns_by_name(tmp_path, capsys, m
 
 @pytest.mark.parametrize("action,stdin", [("unset", None), ("set", SECRET)])
 def test_symlink_is_written_through_to_its_target(tmp_path, action, stdin):
+    if not _symlink_supported(tmp_path):
+        pytest.skip("this filesystem/platform cannot create symlinks")
     real_dir = tmp_path / "real"
     real_dir.mkdir()
     target = real_dir / "overlay.txt"
@@ -477,13 +528,15 @@ def test_symlink_is_written_through_to_its_target(tmp_path, action, stdin):
     assert proc.returncode == 0, proc.stderr
     assert link.is_symlink() and link.resolve() == target.resolve()
     assert target.read_bytes() != ORIGINAL
-    assert stat.S_IMODE(target.stat().st_mode) == 0o640
+    assert _mode_matches(target, 0o640)
     assert len(list(real_dir.glob("overlay.txt.bak-*"))) == 1   # next to the target
     assert _backups(tmp_path) == []
     assert f"file={target.resolve()}" in proc.stdout and f"via={link}" in proc.stdout
 
 
 def test_dangling_symlink_is_refused(tmp_path):
+    if not _symlink_supported(tmp_path):
+        pytest.skip("this filesystem/platform cannot create symlinks")
     link = tmp_path / "overlay.txt"
     link.symlink_to(tmp_path / "missing-target")
     proc = _run(TOOL, tmp_path, "set", "TARGET_KEY", stdin=SECRET)
@@ -636,7 +689,7 @@ def test_unexport_key_precedes_every_include_and_shell_call():
     variables, so any parse-time $(shell) or include read BEFORE `unexport
     KEY` can execute a command-line KEY payload. CI runs make 4.3 and cannot
     observe that, so the ordering is asserted structurally instead."""
-    lines = (PMOVES / "Makefile").read_text().splitlines()
+    lines = (PMOVES / "Makefile").read_text(encoding="utf-8").splitlines()
     code = [(i, ln) for i, ln in enumerate(lines) if not ln.lstrip().startswith("#")]
     unexport = [i for i, ln in code if ln.strip() == "unexport KEY"]
     assert len(unexport) == 1, f"expected exactly one `unexport KEY`, found {len(unexport)}"
@@ -651,7 +704,7 @@ def test_unexport_key_precedes_every_include_and_shell_call():
 
 def test_positive_control_structural_check_catches_an_end_of_file_unexport(tmp_path):
     """The ordering assertion must fail on the layout the review rejected."""
-    src = (PMOVES / "Makefile").read_text().replace("\nunexport KEY\n", "\n", 1)
+    src = (PMOVES / "Makefile").read_text(encoding="utf-8").replace("\nunexport KEY\n", "\n", 1)
     variant = src + "\nunexport KEY\n"
     lines = variant.splitlines()
     code = [(i, ln) for i, ln in enumerate(lines) if not ln.lstrip().startswith("#")]

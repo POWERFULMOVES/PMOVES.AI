@@ -51,7 +51,8 @@ WHAT IT GUARANTEES
   printed. A dangling link is refused.
 * The write is atomic (temp `<name>.tmp-*` in the same directory, fsync,
   rename); mode is preserved (0600 for a file this tool creates) and owner is
-  preserved when the process may set it.
+  preserved when the process may set it. (Both are POSIX guarantees; see
+  WINDOWS below for what this tool does on a platform that has neither.)
 * Every other line is preserved byte-for-byte (lines split on `\\n` only).
 * An identical `set` is a no-op: `changed=no`, no backup, no audit row.
 
@@ -67,6 +68,33 @@ EXIT CODES
 
 `make` collapses every nonzero recipe exit to 2; read the printed `result=`
 line, not make's exit code.
+
+WINDOWS
+-------
+Windows has no POSIX mode bits and no uid/gid: `os.geteuid`, `os.getegid`,
+`os.getuid`, `os.getgid`, `os.fchmod`, `os.fchown`, `os.chown`, `os.setuid`
+and `os.setgid` do not exist there, and `os.stat().st_uid`/`st_gid` are
+always 0. The tool ADAPTS -- it never raises a raw traceback and it never
+pretends a guarantee it could not keep:
+
+* mode -- POSIX: `os.fchmod(fd, mode)` on the descriptor (immune to a
+  symlink swap). Windows: `os.chmod(path, mode)` on the same path, where
+  only the READ-ONLY bit is meaningful. The 0600 audit log is a POSIX
+  guarantee; on Windows the audit log's access is governed by the
+  filesystem ACL, so keep the audit directory private.
+* owner -- POSIX: `os.fchown(fd, uid, gid)`, and a WARNING naming the lost
+  group when the kernel refuses it. Windows: there is no owner to preserve,
+  so `fchown` is skipped and a WARNING says the owner/group guarantee does
+  not apply on this platform.
+* the rest is unchanged on both platforms: the value is never printed, the
+  audit log is still opened BEFORE the change, and the write is still
+  atomic (temp file, fsync, rename).
+
+On POSIX the behaviour is byte-for-byte the old one: same `fchmod`, same
+`fchown`, same warning text. One platform caveat: Windows refuses
+`os.replace` onto a READ-ONLY destination, so a read-only overlay is
+refused there ("could-not-measure; nothing changed") where POSIX would
+replace it.
 
 Stdlib only.
 """
@@ -166,6 +194,41 @@ def _eol(line: bytes) -> bytes:
 
 # ------------------------------------------------------------------ file io ---
 
+_WINDOWS_SEMANTICS_WARNED = False
+
+
+def _warn_windows_semantics_once() -> None:
+    """Say ONCE per process that the POSIX guarantees do not apply here.
+
+    Windows has no POSIX mode bits and no uid/gid, so the 0600 audit log and
+    the owner/group preservation are POSIX guarantees that this platform
+    cannot honour. The tool adapts and says so -- it never drops a guarantee
+    silently."""
+    global _WINDOWS_SEMANTICS_WARNED
+    if _WINDOWS_SEMANTICS_WARNED:
+        return
+    _WINDOWS_SEMANTICS_WARNED = True
+    print("env-local-key: WARNING: this platform has no POSIX mode bits and no "
+          "uid/gid (Windows), so the 0600 audit log and the owner/group "
+          "preservation do NOT apply here: os.chmod sets only the read-only "
+          "bit and access is governed by the filesystem ACL. Keep the overlay "
+          "and its audit directory private.", file=sys.stderr)
+
+
+def _chmod_fd(fd: int, path: Path, mode: int) -> None:
+    """Set `mode` on the open file `fd`, which is `path`.
+
+    POSIX: `os.fchmod` on the DESCRIPTOR -- the descriptor is what we hold,
+    and it cannot be swapped by a symlink race. Windows has no `fchmod`, so
+    the portable equivalent `os.chmod` is applied to the same path, where
+    only the read-only bit is meaningful (see WINDOWS in the docstring)."""
+    if hasattr(os, "fchmod"):
+        os.fchmod(fd, mode)
+    else:
+        _warn_windows_semantics_once()
+        os.chmod(path, mode)
+
+
 def _utc_stamp() -> str:
     return _dt.datetime.now(_dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
 
@@ -199,7 +262,7 @@ def _backup(path: Path, data: bytes) -> Path:
         except FileExistsError:
             continue
         try:
-            os.fchmod(fd, 0o600)
+            _chmod_fd(fd, bak, 0o600)
             with os.fdopen(fd, "wb") as fh:
                 fh.write(data)
                 fh.flush()
@@ -218,6 +281,11 @@ def _warn_lost_owner(owner: tuple[int, int]) -> None:
     """fchown was not permitted: the replaced file takes this process's
     uid/gid. Say which group was lost (names only, never a value)."""
     uid, gid = owner
+    if not (hasattr(os, "geteuid") and hasattr(os, "getegid")):
+        # Windows: there is no POSIX owner/group to lose at all (os.stat()'s
+        # st_uid/st_gid are always 0 there). Say that instead of pretending.
+        _warn_windows_semantics_once()
+        return
     if gid == os.getegid() and uid == os.geteuid():
         return  # nothing lost
     try:
@@ -231,18 +299,31 @@ def _warn_lost_owner(owner: tuple[int, int]) -> None:
           file=sys.stderr)
 
 
+def _chown(fd: int, owner: tuple[int, int]) -> None:
+    """Preserve the owner/group of the file we are about to replace.
+
+    POSIX: `os.fchown` on the descriptor, and the same WARNING as before when
+    the kernel refuses it. Windows: no `fchown` and no POSIX owner to
+    preserve, so it is skipped -- with the WARNING that says the owner/group
+    guarantee does not apply on this platform."""
+    if hasattr(os, "fchown"):
+        try:
+            os.fchown(fd, *owner)
+        except PermissionError:
+            _warn_lost_owner(owner)
+    else:
+        _warn_windows_semantics_once()
+
+
 def _atomic_write(path: Path, data: bytes, mode: int,
                   owner: tuple[int, int] | None) -> None:
     # `<name>.tmp-*` so the leftover of a crash still matches the `.env.*`
     # ignore rule (a leading-dot prefix made it `..env.local.tmp-*`).
     fd, tmp = tempfile.mkstemp(prefix=f"{path.name}.tmp-", dir=str(path.parent))
     try:
-        os.fchmod(fd, mode)
+        _chmod_fd(fd, Path(tmp), mode)
         if owner is not None:
-            try:
-                os.fchown(fd, *owner)
-            except PermissionError:
-                _warn_lost_owner(owner)
+            _chown(fd, owner)
         with os.fdopen(fd, "wb") as fh:
             fh.write(data)
             fh.flush()
@@ -269,7 +350,7 @@ class _AuditLog:
             raise Refused(f"audit log not writable ({exc.__class__.__name__}); "
                           "nothing changed") from exc
         try:  # re-tighten a pre-existing looser file
-            os.fchmod(self.fd, 0o600)
+            _chmod_fd(self.fd, self.path, 0o600)
         except OSError:
             pass
 
