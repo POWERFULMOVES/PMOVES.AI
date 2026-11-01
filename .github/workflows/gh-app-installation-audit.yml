@@ -52,25 +52,40 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
-  mint:
-    # The house's single source of truth for minting an App installation
-    # token. Never re-implement the mint here.
-    uses: ./.github/workflows/_app-token.yml
-    secrets: inherit
-    with:
-      owner: POWERFULMOVES
-      # `repositories` is intentionally EMPTY. The audit has to be able to SEE
-      # every repo in the org, otherwise an uncovered repo cannot be told
-      # apart from one that does not exist and the verdict is incomplete.
-      # The token is minted per run, is read-only, and is auto-revoked at the
-      # end of the job.
-      permission-contents: read
-
   audit:
-    needs: mint
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
+      # Mint INLINE in this job, NOT via the _app-token.yml reusable workflow.
+      #
+      # MEASURED 2026-11-01: the first run of this workflow called the
+      # reusable and consumed `needs.mint.outputs.token`. The mint job
+      # SUCCEEDED, and the token was still EMPTY in the consuming job,
+      # because GitHub Actions SKIPS a job output whose value "may contain
+      # secret" -- the mint job's log says it verbatim:
+      #
+      #     ##[warning]Skip output 'token' since it may contain secret.
+      #
+      # `review-collect.yml` was the reusable's only cross-job consumer and
+      # failed on 100% of runs for exactly this reason; its comment records
+      # it ("Consuming it from a downstream job therefore gets a dead,
+      # masked-to-empty value"), and `branch-protection-sync.yml` and
+      # `app-pr-approve.yml` both mint INLINE for the same reason. This
+      # workflow now follows that house pattern.
+      #
+      # `repositories` is intentionally EMPTY: the token is minted for the
+      # whole owner, because the audit has to be able to SEE every repo in
+      # the org -- otherwise an uncovered repo cannot be told apart from
+      # one that does not exist, and the verdict is incomplete. The token is
+      # read-only, is consumed in this job, and is auto-revoked at job end.
+      - uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3
+        id: app-token
+        with:
+          client-id: ${{ secrets.GH_APP_CLIENT_ID }}
+          private-key: ${{ secrets.GH_APP_SEC }}
+          owner: ${{ github.repository_owner }}
+          permission-contents: read
+
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -91,7 +106,9 @@ jobs:
       - name: Audit the App installation coverage
         env:
           # The token travels by ENV only: never printed, never in argv.
-          GH_TOKEN: ${{ needs.mint.outputs.token }}
+          # It comes from the mint STEP in this same job -- a job output
+          # would be skipped by GitHub as "may contain secret".
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           python pmoves/tools/gh_app_installation_audit.py \
             --token \

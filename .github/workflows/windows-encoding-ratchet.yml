@@ -19,7 +19,16 @@ name: Windows Encoding Ratchet
 # `pmoves/scripts/validate_service_tools_packaging.py` (the operator named it)
 # and in five other files.
 #
-# Zero network, stdlib only, read-only against the tree.
+# Zero network, read-only against the tree. The SCAN is stdlib-only (it
+# parses Python with `ast`, never with a regex). The BASELINE READ needs
+# PyYAML, so this workflow installs it -- the house pattern, as in
+# `fork-registry-ratchet.yml`, which installs pyyaml to read a YAML
+# registry. MEASURED 2026-11-01: without it the first run of this gate
+# failed with "INSTRUMENT ERROR: No module named 'yaml'" -- the gate
+# correctly failed closed on an input it could not read, but it could not
+# do its job. A gate that cannot read its input must FAIL CLOSED; a gate
+# that cannot read its input because nobody installed a library must be
+# FIXED.
 
 on:
   pull_request:
@@ -56,6 +65,9 @@ jobs:
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.11"
+
+      - name: Install PyYAML (the baseline read needs it; the SCAN is stdlib-only)
+        run: python -m pip install --quiet "PyYAML>=6,<7"
 
       - name: Run ratchet (read-only, no network)
         run: python pmoves/tools/windows_encoding_ratchet.py

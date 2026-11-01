@@ -289,8 +289,16 @@ MUTATIONS: list[Mutation] = [
 
 
 def _run_pytest(node_id: str, timeout: float = _PYTEST_TIMEOUT_SECONDS) -> subprocess.CompletedProcess:
+    # NOTE: no `--timeout` flag here. That flag belongs to the
+    # `pytest-timeout` PLUGIN, which is not installed in every CI
+    # environment -- and a flag the plugin does not know makes pytest exit
+    # 4 with "unrecognized arguments", which would make the harness report
+    # a mutation kill for the WRONG reason (a collection failure, not a
+    # red test). The outer `subprocess.run(timeout=...)` is the real guard:
+    # a hung inner pytest raises TimeoutExpired and the harness FAILS,
+    # which is the behaviour we want.
     return subprocess.run(
-        [sys.executable, "-m", "pytest", node_id, "-q", "-p", "no:warnings", "--timeout=120"],
+        [sys.executable, "-m", "pytest", node_id, "-q", "-p", "no:warnings"],
         capture_output=True,
         text=True,
         timeout=timeout,
