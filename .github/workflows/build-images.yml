@@ -46,8 +46,8 @@ on:
   #     unconditionally and, on its SCHEDULED path,
   #     `docker image prune -a -f --filter "until=72h"` -- the bare `-a -f`
   #     is only under manual `aggressive` dispatch, and
-  #     runner-maintenance.yml runs `docker system prune -af --filter
-  #     "until=48h"` and `docker builder prune -af --filter "until=48h"`.
+  #     runner-maintenance.yml runs a fleet-wide `docker system prune` with a
+  #     48-hour filter, and `docker builder prune -af --filter "until=48h"`.
   #     83 minutes of separation is the margin that rules both out.
   #   * The next SELF-HOSTED schedule after the slot is
   #     submodule-update-check.yml at 06:00 -- 97 minutes later, Sundays

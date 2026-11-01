@@ -394,9 +394,12 @@ re-used this lane's own shapes against the lane's own code:
     `docker image prune -a -f --filter "until=72h"` (lesson 26, applied to
     the lane's own sentence);
 11. the same comment claimed the cleanup workflow was "the only schedule that
-    could actually race the build", which `runner-maintenance.yml`'s
-    `docker system prune -af --filter "until=48h"` on the same pool
-    contradicts.
+    could actually race the build", which `runner-maintenance.yml` also
+    contradicts: it runs a fleet-wide `docker system prune` with a 48-hour
+    filter on the same b850/kvm4 pool. (The exact invocation stays in that
+    workflow and out of this file — the anchor ratchet blocks the literal
+    form in prose, and a doc that reproduces a blocked command is a doc an
+    agent can copy.)
 
 The instrument now refuses what it cannot derive, normalises what it counts,
 closes the circle on the clock, unions its exclusions, and names every entry
