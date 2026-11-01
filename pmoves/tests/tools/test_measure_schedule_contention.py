@@ -62,12 +62,16 @@ def _load_tool():
     """Load the instrument, or return None when it is not in the tree.
 
     The load is GUARDED on purpose. A module-level `spec.loader.exec_module`
-    makes a missing tool a COLLECTION error: all 21 tests die with one opaque
-    message, and `test_the_measurement_instrument_is_in_the_tree` -- the test
-    whose whole job is to say, in named terms, that the instrument is missing
-    -- can never run. Fail-closed, yes, but collapsed. Here a missing tool
-    lets collection proceed: the in-tree test FAILS with its named message and
-    the rest SKIP.
+    makes a missing tool a COLLECTION error: every test in the file dies
+    with one opaque message, and `test_the_measurement_instrument_is_in_the_tree`
+    -- the test whose whole job is to say, in named terms, that the instrument
+    is missing -- can never run. Fail-closed, yes, but collapsed. Here a
+    missing tool lets collection proceed: the in-tree test FAILS with its
+    named message and the rest SKIP.
+
+    (This docstring deliberately quotes NO test count. An earlier version said
+    "all 21 tests die", and the count was wrong one commit later -- the exact
+    hand-number rot the taxonomy gate exists to prevent.)
     """
     if not TOOL.is_file():
         return None
@@ -433,15 +437,85 @@ def test_the_distance_to_a_slot_wraps_at_midnight(workflow_dir: Path):
 
 
 @requires_tool
-def test_the_slot_owner_exclusion_is_a_union_not_a_replacement():
+def test_the_slot_owner_exclusion_is_a_union_not_a_replacement(workflow_dir: Path):
     """One extra `--exclude-workflow` must not make the slot owner's own
     exclusion evaporate -- or the build would contend with itself at
     distance 0 and `--check` would exit CONTENTION about the very job that
-    owns the slot."""
-    assert "build-images.yml" in msc.DEFAULT_EXCLUDED_WORKFLOWS
-    combined = msc.DEFAULT_EXCLUDED_WORKFLOWS | set(["notes.yml"])
-    assert "build-images.yml" in combined
-    assert "notes.yml" in combined
+    owns the slot.
+
+    THIS TEST MUST BITE. The first version of it re-typed the fix's own
+    expression (`DEFAULT | set([...])`) and asserted set membership, which is
+    pure set-algebra tautology: it never called the CLI, never passed the
+    flag, and never read the reported exclusions. Reverting the fix in
+    `main()` to the round-4 replace-semantics left that version GREEN -- the
+    exact mutation lesson 31 documents, surviving the test named after
+    lesson 31. So this version drives the REAL CLI end to end: the flag is
+    passed, the reported exclusions are read back, and the check's exit code
+    is asserted.
+    """
+    # The slot owner, sitting exactly on the slot.
+    _write_workflow(
+        workflow_dir,
+        "build-images.yml",
+        "name: build-images\non:\n  schedule:\n    - cron: '23 4 * * *'\n"
+        "jobs:\n  build:\n    runs-on: [self-hosted, Linux, X64]\n"
+        "    steps:\n      - run: echo hi\n",
+    )
+    # A second self-hosted workflow, to be excluded by the flag.
+    _write_workflow(
+        workflow_dir,
+        "notes.yml",
+        "name: notes\non:\n  schedule:\n    - cron: '0 9 * * *'\n"
+        "jobs:\n  probe:\n    runs-on: [self-hosted, Linux, X64]\n"
+        "    steps:\n      - run: echo hi\n",
+    )
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(TOOL),
+            "--workflows",
+            str(workflow_dir),
+            "--json",
+            "--exclude-workflow",
+            "notes.yml",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    import json
+
+    payload = json.loads(completed.stdout)
+    assert "notes.yml" in payload["excluded_workflows"], payload["excluded_workflows"]
+    assert "build-images.yml" in payload["excluded_workflows"], (
+        "the slot owner's own exclusion was REPLACED by the extra flag; the "
+        "build would contend with itself at distance 0"
+    )
+
+    # And the check must agree: with the owner excluded, nothing is near the
+    # slot, so the exit code is CLEAR. Under replace-semantics the owner
+    # re-enters at distance 0 and the check exits CONTENTION.
+    checked = subprocess.run(
+        [
+            sys.executable,
+            str(TOOL),
+            "--workflows",
+            str(workflow_dir),
+            "--check",
+            "--exclude-workflow",
+            "notes.yml",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+    assert checked.returncode == msc.EXIT_OK, (
+        "the check reported contention about the very job that owns the slot:\n"
+        + checked.stdout
+        + checked.stderr
+    )
 
 
 # ------------------------------------------------- the slot is not its own ---

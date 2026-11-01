@@ -254,13 +254,15 @@ secrets.
 | 29 | **contract-correctness** | **A shape you cannot derive a value from must be REFUSED, not approximated — and a set must be normalised in the NUMBER, not only in the label.** | (a) The instrument's weekly frequency was `len(dom_values)`, so `0 4 15 * *` (once a MONTH) reported 1/week and `0 4 */1 * *` (semantically DAILY) reported 31/week. A month is not a week: the number was COMPUTED straight into fiction, in the very tool whose contract is "derived, cannot drift". FIX: a day-of-month restricted cron is REFUSED at parse time and becomes a NAMED failure, so the scan fails closed instead of publishing a wrong number. (b) Sunday is 0 AND 7 in cron, so `0,7` is ONE day and `0-7` is EIGHT days in a seven-day week. The prose attribute already deduplicated them — "Sunday only" — while the NUMBER the ratio leaned on did not, which is the worst arrangement: a deduplicated label beside an un-normalised number. FIX: normalise with `d % 7` BEFORE counting, and treat a day-of-week field that covers the whole week as unrestricted. | Any tool that derives a rate, a ratio, or a frequency from a set of dates, times, or identifiers. |
 | 30 | **reasoning-gap** | **A silent drop has more than one GRANULARITY — and a clock is a circle.** | (a) The first version of the instrument dropped unreadable FILES; the rewrite dropped unreadable ENTRIES. A `schedule:` item with no `cron` key, or an unquoted `- cron: 23` that YAML reads as an INT, vanished at a `continue` while `fully_read` stayed True and `--check` printed CLEAR. A dropped entry takes its CONTENTION with it, so this is the same fail-open in a smaller hat — and the fix is the same shape: an unusable entry is a NAMED failure, so the population cannot shrink at either granularity. (b) The distance from a schedule to the build slot was `abs(a - b)`, so 23:50 looked 1420 minutes from 00:10 when it is 20. The CLI advertises `--slot 00:10`, so the check could report CLEAR about a job 20 minutes away on the other side of midnight — a fail-open inside a check mode, in the tool whose origin story is "the check was fail-open". FIX: the distance closes the circle (`min(delta, 1440 - delta)`). | Any scanner over a nested population, and any distance between two points on a cyclic scale. |
 | 31 | **contract-correctness** | **A flag with two readings is a flag with one bug — the union is the safe reading.** | `--exclude-workflow` REPLACED the default exclusion set, so passing one extra workflow made the SLOT OWNER's own exclusion evaporate: `build-images.yml` re-entered contention at distance 0 and `--check` spuriously exited CONTENTION about the very job that owns the slot. The help text read additive ("repeatable; default: build-images.yml") and the code read replace. Two readings, one of them a red CI X. FIX: the exclusion is a UNION with the default (`DEFAULT_EXCLUDED_WORKFLOWS | set(args.exclude_workflow or ())`) and the help says "adds to it, never replaces it". The general rule: when a flag can be read as "replace the default" or "add to the default", the SAFE reading is the one that cannot silently drop a protection the caller did not know about. | Any CLI flag with a default that a caller can override. |
+| 32 | **pattern-conformance** | **A test that re-types the fix's own expression is a TAUTOLOGY — it must drive the real path, and the revert mutation must be PROVEN to die.** | The lesson-31 fix (the exclusion set is a UNION with the default) shipped with a test that re-typed the fix's expression — `DEFAULT_EXCLUDED_WORKFLOWS | set(["notes.yml"])` — and asserted that two names were in the result. That is pure set algebra: it never called `main()`, never passed `--exclude-workflow`, and never read the reported exclusions. Reverting `main()` to the round-4 replace-semantics left that test **GREEN** — the exact mutation lesson 31 documents survived the test named after lesson 31. In a PR whose thesis is "every finding was fixed at the ROOT, with a test that fails without the fix", this was the one fix whose test did not bite — and it did not bite because the test never touched the fix. FIX: the test drives the REAL CLI end to end — the flag is passed, the reported `excluded_workflows` are read back, and the check's exit code is asserted — and the revert mutation was applied and observed to put it RED ("the slot owner's own exclusion was REPLACED by the extra flag") before the restore, which was byte-exact. The rule generalises: if the assertion can be satisfied by re-typing the expression under test, it is a restatement of the fix, not a guard on it. | Every test written for a fix — the assertion must exercise the PRODUCTION PATH, and the revert must be proven to kill it. |
+| 33 | **reasoning-gap** | **A count written in a NARRATIVE rots exactly like a count in a table — and the fix is to make it DERIVED, or to stop quoting it.** | The round-5 header said "ten further findings" and the list under it carried **NINE** bullets: one bullet covered two defects, and one finding (a registry of supported cron shapes that the parser never read) was missing from the list entirely. The count was wrong in the file whose subject is unmeasured claims, and the file that was built to catch exactly that shape has a gate for its TABLES — a gate cannot check prose. FIX: the header now states the DERIVABLE count ("the fifth review bot's ten threads; one thread carried two distinct defects" = eleven findings) and the list is NUMBERED 1..11, so the two can be compared by eye. And where a number genuinely cannot be derived — a test count that changes with the very commit that mentions it — the prose now quotes NO number at all, because a number that cannot be derived can only rot. | Any prose that COUNTS something the prose also lists. |
 
-**Bucket summary** (31 lessons) — (1) **reasoning-gap** 16 lessons (#1, #2, #3, #4, #8,
-#10, #11, #12, #18, #19, #21, **#23, #24, #26, #28, #30**) ·
+**Bucket summary** (33 lessons) — (1) **reasoning-gap** 17 lessons (#1, #2, #3, #4, #8,
+#10, #11, #12, #18, #19, #21, **#23, #24, #26, #28, #30, #33**) ·
 (2) **semantic-naming drift** 0 ·
 (3) **contract-correctness** 10 lessons (#5, #6, #7, #15, #16, #17, #20, #22, **#29,
 #31**) · (4) **defense-in-depth** 2 lessons (**#25, #27**) ·
-(5) **pattern-conformance** 3 lessons (#9, #13, #14).
+(5) **pattern-conformance** 4 lessons (#9, #13, #14, **#32**).
 
 A summary that claims to BE a measurement, in the file where lesson 24 finishes
 explaining that citing a count without measuring it is a failure mode, needs a
@@ -268,7 +270,7 @@ gate of its own — otherwise the summary is the one number in the file nobody
 re-derives. `pmoves/tests/tools/test_runbook_drift_learnings_taxonomy.py`
 RECOMPUTES these counts from the lesson table above and asserts they agree, so
 the summary cannot drift away from the thing it summarises. (MEASURED here, by
-that test: 16 + 0 + 10 + 2 + 3 = 31 = the number of lesson rows.)
+that test: 17 + 0 + 10 + 2 + 4 = 33 = the number of lesson rows.)
 
 ---
 
@@ -352,50 +354,84 @@ a ratio, and it excludes the slot owner from its own contention check. Its
 claim cannot rot into a falsehood unnoticed. (Round 5 audited that instrument
 further; its final test count is 34.)
 
-**Round 5 — ten further findings** (the fifth review bot), all fixed, and all
-of them against the INSTRUMENT the fourth round had just added: a tool written
-in one sitting and then audited by something that reads it the way a hostile
-reviewer would. Every finding was real, and the ones that mattered most were
-the ones that re-used this lane's own shapes against the lane's own code:
+**Round 5 — eleven further findings** (the fifth review bot's ten threads; one
+thread carried two distinct defects), all fixed, and all of them against the
+INSTRUMENT the fourth round had just added: a tool written in one sitting and
+then audited by something that reads it the way a hostile reviewer would.
+Every finding was real, and the ones that mattered most were the ones that
+re-used this lane's own shapes against the lane's own code:
 
-* a schedule ENTRY with no usable cron vanished at a `continue` while
-  `fully_read` stayed True and `--check` printed CLEAR — the same fail-open
-  as the dropped file, in a smaller hat (lesson 30);
-* a day-of-month restricted cron had its MONTH-days counted as a weekly
-  frequency, so a monthly job reported 1/week and a daily one reported
-  31/week — a COMPUTED fiction, in the tool whose contract is "derived,
-  cannot drift" (lesson 29);
-* Sunday is 0 AND 7 in cron, so `0,7` scored two days and `0-7` scored eight
-  days in a seven-day week, while the prose label beside the number had
-  already deduplicated them (lesson 29);
-* the distance to the build slot was `abs(a - b)`, so 23:50 looked 1420
-  minutes from 00:10 when it is 20 — a fail-open inside a check mode (lesson
-  30);
-* `--exclude-workflow` REPLACED the default exclusion set rather than adding
-  to it, so one extra flag made the slot owner's own exclusion evaporate and
-  the check would report CONTENTION about the job that owns the slot (lesson
-  31);
-* the instrument's test module loaded the tool at COLLECTION time, so a
-  missing tool collapsed all 34 tests into one opaque error and destroyed the
-  one test written to explain it (lesson 28);
-* the taxonomy gate's pattern required the word "lessons", so the ZERO-count
-  class was never parsed — the one count in the summary that is all there is
-  stayed unchecked (lesson 28);
-* the lesson table was parsed into a dict, so a duplicated row would
-  silently collapse and every test would stay green (lesson 28);
-* the contention comment quoted the AGGRESSIVE MANUAL prune
-  (`docker image prune -a -f`) as if it were the scheduled one, and claimed
-  the cleanup workflow was "the only schedule that could actually race the
-  build" — `runner-maintenance.yml` runs `docker system prune -af --filter
-  "until=48h"` on the same pool (lesson 26, applied to the lane's own
-  sentence).
+1. a schedule ENTRY with no usable cron vanished at a `continue` while
+   `fully_read` stayed True and `--check` printed CLEAR — the same fail-open
+   as the dropped file, in a smaller hat (lesson 30);
+2. a day-of-month restricted cron had its MONTH-days counted as a weekly
+   frequency, so a monthly job reported 1/week and a daily one reported
+   31/week — a COMPUTED fiction, in the tool whose contract is "derived,
+   cannot drift" (lesson 29);
+3. Sunday is 0 AND 7 in cron, so `0,7` scored two days and `0-7` scored eight
+   days in a seven-day week, while the prose label beside the number had
+   already deduplicated them (lesson 29);
+4. the distance to the build slot was `abs(a - b)`, so 23:50 looked 1420
+   minutes from 00:10 when it is 20 — a fail-open inside a check mode (lesson
+   30);
+5. `--exclude-workflow` REPLACED the default exclusion set rather than adding
+   to it, so one extra flag made the slot owner's own exclusion evaporate and
+   the check would report CONTENTION about the job that owns the slot (lesson
+   31);
+6. a registry of "supported cron shapes" was declared and read by nothing, so
+   it could drift from the parser with nothing noticing;
+7. the instrument's test module loaded the tool at COLLECTION time, so a
+   missing tool collapsed every test in the file — all 21, as the suite then
+   stood — into one opaque error and destroyed the one test written to explain
+   it (lesson 28);
+8. the taxonomy gate's pattern required the word "lessons", so the ZERO-count
+   class was never parsed — the one count in the summary that is all there is
+   stayed unchecked (lesson 28);
+9. the lesson table was parsed into a dict, so a duplicated row would
+   silently collapse and every test would stay green (lesson 28);
+10. the contention comment quoted the AGGRESSIVE MANUAL prune
+    (`docker image prune -a -f`) as if it were the scheduled one, which is
+    `docker image prune -a -f --filter "until=72h"` (lesson 26, applied to
+    the lane's own sentence);
+11. the same comment claimed the cleanup workflow was "the only schedule that
+    could actually race the build", which `runner-maintenance.yml`'s
+    `docker system prune -af --filter "until=48h"` on the same pool
+    contradicts.
 
 The instrument now refuses what it cannot derive, normalises what it counts,
 closes the circle on the clock, unions its exclusions, and names every entry
 it could not read. Its 34 tests include the live rot gate; the taxonomy gate
 is 7. The lane suite is 157 green.
 
-The four rounds are also the lane's own measure of its lessons: every finding that
+**Round 6 — three further findings** (the sixth review bot), all fixed, and the
+most valuable of them pointed at the lane's own thesis:
+
+* the test shipped for lesson 31 was a **TAUTOLOGY**. It re-typed the fix's
+  own expression — `DEFAULT_EXCLUDED_WORKFLOWS | set([...])` — and asserted
+  set membership. It never called `main()`, never passed the flag, and never
+  read the reported exclusions. Reverting `main()` to the round-4
+  replace-semantics left it GREEN: the exact mutation lesson 31 documents
+  survived the test named after lesson 31. In a PR whose thesis is "every
+  finding was fixed at the ROOT, with a test that fails without the fix", this
+  was the one fix whose test did not bite — because it never touched the fix.
+  FIX: the test now drives the REAL CLI end to end, and the revert mutation
+  was applied and observed to put it red before a byte-exact restore
+  (lesson 32);
+* the test module's docstring quoted "all 21 tests die" — a count that was
+  wrong one commit later, because the suite grew in the very commit that
+  fixed the defect it described. FIX: the prose now quotes no count at all,
+  because a number that cannot be derived can only rot (lesson 33);
+* the round-5 header said "ten further findings" and the list beneath it
+  carried **nine** bullets — one bullet covered two defects and one finding
+  was missing from the list entirely. A count written in a narrative rots
+  exactly like a count in a table, and the gate that catches the table shape
+  cannot check prose. FIX: the header now states the DERIVABLE count and the
+  list is numbered, so the two can be compared by eye (lesson 33).
+
+Three findings in a round, against a codebase that had already been through
+five, is the convergence this lane was after.
+
+The six rounds are also the lane's own measure of its lessons: every finding that
 was fixed was fixed at the ROOT, with a test that fails without the fix. Fourteen
 of them are negative controls -- a gate that cannot read its input, a gate that
 cannot check its subject, a gate that cannot see a baseline entry that no longer
