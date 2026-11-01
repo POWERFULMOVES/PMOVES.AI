@@ -1,0 +1,101 @@
+name: Windows Encoding Ratchet
+
+# Hard gate: no text-mode file read or write in pmoves/ may omit an explicit
+# `encoding=`.
+#
+# WHY THIS EXISTS
+# ---------------
+# Python's `open()` / `Path.read_text()` default to the LOCALE encoding when
+# `encoding` is omitted. On the operator's Windows host (cp1252) reading a
+# UTF-8 file raises UnicodeDecodeError -- so a test that only reads a compose
+# file can fail on Windows and pass on Linux CI, for a reason that has nothing
+# to do with what the test asserts.
+#
+# That is not hypothetical. MEASURED 2026-11-01: 25 tests in
+# `pmoves/tests/smoke/test_compose_structure.py` and
+# `pmoves/tests/smoke/test_port_conflicts.py` failed on the operator's Windows
+# host with exactly that error, and ALL 27 passed with PYTHONUTF8=1 -- which
+# proves the failures were decoding, not logic. The same defect existed in
+# `pmoves/scripts/validate_service_tools_packaging.py` (the operator named it)
+# and in five other files.
+#
+# Zero network, stdlib only, read-only against the tree.
+
+on:
+  pull_request:
+    branches:
+      - main
+      - PMOVES.AI-Edition-Hardened
+      - PMOVES.AI-Edition-Hardened-Integrations
+    paths:
+      # The ratchet scans EVERY .py under pmoves/, so ANY of them can
+      # introduce a gap. The filter has to cover the whole scanned surface --
+      # a narrower filter would let a gap into the tree without ever waking
+      # this gate, which is the exact failure mode the gate exists to end.
+      - "pmoves/**/*.py"
+      - "pmoves/configs/encoding_ratchet/_known_gaps.yaml"
+      - ".github/workflows/windows-encoding-ratchet.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  windows-encoding-ratchet:
+    name: windows-encoding-ratchet
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+
+      - name: Run ratchet (read-only, no network)
+        run: python pmoves/tools/windows_encoding_ratchet.py
+
+      - name: Assert the gate measured the whole tree (it must not be vacuous)
+        run: |
+          # "I could not check" must not be a way for this gate to pass.
+          #
+          # The ratchet exits non-zero on a new gap, a stale baseline entry, an
+          # orphaned entry, or an instrument error. This step makes the
+          # failure legible and additionally asserts that the instrument
+          # actually SAW the tree: an empty scan is indistinguishable from a
+          # green run over a tree it silently failed to read.
+          python - <<'EOF'
+          import json, subprocess, sys
+          proc = subprocess.run(
+              [sys.executable, "pmoves/tools/windows_encoding_ratchet.py", "--json"],
+              capture_output=True, text=True)
+          payload = json.loads(proc.stdout)
+          if payload["problems"]:
+              for item in payload["problems"]:
+                  print(f"::error::INSTRUMENT ERROR {item['file']}: {item['error']}")
+              sys.exit(2)
+          if not payload["files_with_gaps"]:
+              print("::error::the ratchet scanned nothing -- a green gate over an empty population proves nothing")
+              sys.exit(2)
+          print(
+              f"OK: {payload['files_with_gaps']} file(s), {payload['total_gaps']} site(s) "
+              f"scanned and baselined; {payload['baseline_files']} baseline entr(ies); "
+              f"0 new, 0 stale, 0 orphaned"
+          )
+          EOF
+
+      - name: Pytest the ratchet (regression net for the ratchet itself)
+        run: |
+          # pmoves/conftest.py is shared across the suite and imports
+          # pytest_asyncio (asyncio_mode=auto in pyproject.toml) AND pyyaml.
+          # The ratchet-only test file inherits both requirements even though
+          # the ratchet tests are sync + stdlib-only -- there's no way to
+          # import from pmoves.tools.* without the conftest import chain
+          # resolving, so install everything conftest pulls in.
+          python -m pip install --quiet pytest pytest-asyncio pyyaml
+          python -m pytest pmoves/tests/tools/test_windows_encoding_ratchet.py -v

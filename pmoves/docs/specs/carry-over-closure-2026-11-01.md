@@ -69,8 +69,21 @@ line 45 (`COMPOSE_FILE.read_text()` — the file's other three reads already
 pass `encoding="utf-8"`) and in `pmoves/scripts/port_allocator.py`
 (2 sites).
 
-**Class size** (AST scan of `pmoves/`, excluding `docs/`): **730** text-mode
-calls without an explicit `encoding=` across **207** files.
+**Class size**, MEASURED at `origin/main` (`2020a9103a9`) with the committed
+instrument `pmoves/tools/windows_encoding_ratchet.py`: **708** text-mode call
+sites across **192** files. This lane removes **25** sites in **9** files,
+leaving **683** sites in **183** files as the baselined remainder. MEASURED as
+a per-file diff between the two populations using the same instrument: **0**
+files added to the population, **0** files grew.
+
+> An earlier draft of this spec said "730 sites across 207 files". That
+> figure came from a throwaway script whose binary-mode check read the FILE
+> argument instead of the MODE argument, so binary `open(path, "rb")` calls
+> were counted as text-mode gaps. The committed instrument reads the mode from
+> the correct slot per signature — builtin `open(file, mode, ...)` takes it
+> second, `Path.open(mode, ...)` takes it first — and the corrected figure is
+> 708/192. The lesson is the one this lane is built on: a number in prose is a
+> claim, and the instrument has to be the one that ships.
 
 ### 1.2 The port landscape
 
@@ -183,7 +196,7 @@ tree. Compared against the installed `mmx` v1.0.25, it is stale:
 
 Undocumented in the PMOVES doc but present in the CLI: `text repl`,
 `speech generate`, `config export-schema`, and the whole `agent` resource
-(`agent setup`) — which `pmoves/tools/models/provider_catalog.yaml:504`
+(`agent setup`) — which `pmoves/config/provider_catalog.yaml:504`
 already references as `mmx agent setup --help`.
 
 The PMOVES side of the integration is otherwise real: `pmoves/tools/mavis_collection_resolve.py`

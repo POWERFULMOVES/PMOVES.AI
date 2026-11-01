@@ -55,7 +55,7 @@ def _resolve_helper() -> str:
     config_path = pathlib.Path.home() / ".docker" / "config.json"
     if config_path.exists():
         try:
-            with config_path.open() as f:
+            with config_path.open(encoding="utf-8") as f:
                 config = json.load(f)
             for domain, helper in config.get("credHelpers", {}).items():
                 if domain in _DOCKERHUB_DOMAINS:
