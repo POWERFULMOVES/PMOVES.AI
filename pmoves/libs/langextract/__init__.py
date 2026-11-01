@@ -2,20 +2,23 @@ import os
 from typing import Dict, Any, Optional
 
 from .providers.rule import RuleProvider
+
+# One try, one except. This block used to carry two `except Exception:` clauses
+# on the same `try`; the second was unreachable, so CloudflareWorkersAIProvider
+# was never bound when the import succeeded (LANGEXTRACT_PROVIDER=cloudflare ->
+# NameError), and when it failed the first handler re-ran the failing import,
+# making the whole package unimportable.
 try:
-    from .providers.llm import OpenAIChatProvider, GeminiProvider, TensorZeroProvider
-except Exception:
-    OpenAIChatProvider = None
-    GeminiProvider = None
-    TensorZeroProvider = None
     from .providers.llm import (
         OpenAIChatProvider,
         GeminiProvider,
+        TensorZeroProvider,
         CloudflareWorkersAIProvider,
     )
 except Exception:
     OpenAIChatProvider = None
     GeminiProvider = None
+    TensorZeroProvider = None
     CloudflareWorkersAIProvider = None
 
 def _get_provider():
