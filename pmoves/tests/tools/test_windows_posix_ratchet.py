@@ -39,6 +39,26 @@ WHAT THIS FILE ASSERTS
    subprocess, it exits with a documented code and never prints a raw
    traceback).
 
+WHAT COUNTS AS A GUARD
+----------------------
+A guard must belong to an ANCESTOR of the reference -- the `if
+hasattr(os, "fchmod"):` block that encloses it, or the `hasattr(os,
+"geteuid") and os.geteuid() == 0` short-circuit inside its own
+expression. The walk stops BEFORE the `ast.Module` node, whose subtree is
+the WHOLE FILE: crediting that would turn the check into a "has this file
+ever heard of `hasattr`" check and issue the bomb a hall pass whenever a
+legitimate guard lived somewhere else in the same file.
+
+WHAT COUNTS AS MODULE SCOPE
+---------------------------
+Module-level code, class bodies, decorator arguments, defaults and
+annotations are evaluated at IMPORT time. So is an EAGER comprehension
+(`ListComp`/`SetComp`/`DictComp`): a module-level `[os.geteuid() for _ in
+range(1)]` is evaluated while the module is imported. A generator
+expression is LAZY -- its body runs when the generator is ITERATED -- so
+its body is function scope; only its FIRST generator's iterable is
+evaluated eagerly, in the enclosing scope.
+
 Hermetic: no network, no docker, no NATS, no gh. It reads files in this
 repo and runs the tool against pytest's tmp_path.
 """
@@ -170,20 +190,39 @@ class _ScopeVisitor(ast.NodeVisitor):
         self.scope = outer
 
     def _visit_comprehension(self, node) -> None:
+        """Comprehension scopes: EAGER bodies are evaluated WHERE the
+        comprehension is written, LAZY bodies are not.
+
+        A list/set/dict comprehension is EAGER: its elements are built
+        when the comprehension expression is evaluated. So a module-level
+        `[os.geteuid() for _ in range(1)]` raises AttributeError at IMPORT
+        time -- precisely the collection bomb this ratchet exists to
+        catch -- and its elements must therefore be classified at the
+        comprehension's OWN scope (module scope at module level).
+
+        A generator expression is LAZY: its body runs when the generator is
+        ITERATED, not when the expression is evaluated. Its body is
+        function scope. The ONE eager part is the FIRST generator's
+        iterable, which Python evaluates in the ENCLOSING scope when the
+        generator expression is evaluated -- that part keeps the
+        enclosing scope.
+        """
         outer = self.scope
+        lazy = isinstance(node, ast.GeneratorExp)
+        # EAGER: the body runs with the enclosing scope's timing.
+        # LAZY : the body runs at iteration time -> function scope.
+        body_scope = "function" if lazy else outer
         for i, gen in enumerate(node.generators):
-            if i == 0:
-                self.visit(gen.iter)          # outermost iterable: enclosing scope
-            else:
-                self.scope = "function"
-                self.visit(gen.iter)
-                self.scope = outer
-            self.scope = "function"
+            # The OUTERMOST iterable is evaluated EAGERLY, in the
+            # ENCLOSING scope, for every comprehension kind.
+            # Inner iterables follow the body's timing.
+            self.scope = outer if i == 0 else body_scope
+            self.visit(gen.iter)
+            self.scope = body_scope
             self.visit(gen.target)
-            self.scope = outer
             for cond in gen.ifs:
                 self.visit(cond)
-        self.scope = "function"
+        self.scope = body_scope
         if isinstance(node, ast.DictComp):
             self.visit(node.key)
             self.visit(node.value)
@@ -239,10 +278,37 @@ def _platform_guard(node: ast.AST) -> bool:
 
 
 def _guard_kind(node: ast.AST, attr: str, parents: dict[ast.AST, ast.AST]) -> str | None:
-    """Which guard (if any) protects this reference."""
+    """Which guard (if any) protects this reference.
+
+    ONLY AN ANCESTOR THAT CAN ACTUALLY PROTECT THE REFERENCE COUNTS.
+
+    The walk stops BEFORE `ast.Module`. The Module node's subtree is the
+    WHOLE FILE, so crediting it turns the guard check into a "has this
+    file ever heard of `hasattr`" check: an unguarded module-scope
+    `os.geteuid()` anywhere in the file would be stamped `guard="hasattr"`
+    because some UNRELATED part of that file mentions `hasattr(os, ...)`.
+    That is a hall pass for the exact defect this ratchet exists to
+    catch -- the ratchet would issue the bomb a pass whenever a
+    legitimate guard lives somewhere else in the building.
+
+    What still counts is an ancestor that really can protect the
+    reference:
+
+    * an `if hasattr(os, "fchmod"):` node -- the `If` node's subtree
+      includes its own `test`, so the `hasattr` call is still found;
+    * the `hasattr(os, "geteuid") and os.geteuid() == 0` `BoolOp` -- the
+      `hasattr` call is a sibling inside the same expression;
+    * a `sys.platform` comparison in the same subtree.
+
+    A module-level call has no such ancestor and correctly ends up
+    UNGUARDED.
+    """
     current = node
     while current in parents:
         current = parents[current]
+        if isinstance(current, ast.Module):
+            # The whole file is NOT a guard. Stop before it.
+            break
         if _hasattr_guard(current, attr):
             return "hasattr"
         if _platform_guard(current):
@@ -424,6 +490,109 @@ def test_scanner_accepts_a_sys_platform_guard():
     hits = [h for h in scan_source(source) if h.scope == "module"]
     assert len(hits) == 1, hits
     assert hits[0].guard == "platform"
+
+
+def test_scanner_does_not_credit_a_guard_that_lives_elsewhere_in_the_file():
+    """A `hasattr(os, ...)` that lives ELSEWHERE in the file is not a guard.
+
+    The ratchet exists to catch the collection bomb. If any `hasattr` in
+    the file could vouch for any call in the file, the ratchet would issue
+    the bomb a hall pass whenever a legitimate guard lived somewhere else
+    in the building. So the guard must belong to an ANCESTOR of the call
+    -- the `if hasattr(...)` block that encloses it, or the `and` inside
+    its own expression -- and NOT to the file as a whole.
+
+    Here the file carries a legitimate `hasattr(os, "geteuid")` in two
+    unrelated places: a module-level constant and a helper function. The
+    decorator argument below has NEITHER, so it must still be flagged.
+    """
+    source = (
+        "import os\n"
+        "import pytest\n"
+        "\n"
+        "HAS_UID = hasattr(os, \"geteuid\")\n"
+        "\n"
+        "\n"
+        "def helper():\n"
+        "    return HAS_UID\n"
+        "\n"
+        "\n"
+        "@pytest.mark.skipif(os.geteuid() == 0, reason=\"root\")\n"
+        "def test_something():\n"
+        "    assert True\n"
+    )
+    hits = [h for h in scan_source(source) if h.scope == "module"]
+    assert len(hits) == 1, hits
+    assert hits[0].attr == "geteuid"
+    assert hits[0].guard is None, (
+        "an unrelated hasattr() elsewhere in the file must not guard this "
+        f"call: {hits[0]}")
+
+
+def test_scanner_credits_the_hasattr_block_that_encloses_the_call():
+    """POSITIVE: the `if hasattr(os, ...):` guard shape credits the call it
+    ENCLOSES -- the `hasattr` lives in the `If` node's own subtree, so the
+    walk finds it without ever reaching the module."""
+    source = (
+        "import os\n"
+        "\n"
+        "def adapt(fd, mode):\n"
+        "    if hasattr(os, \"fchmod\"):\n"
+        "        os.fchmod(fd, mode)\n"
+        "    else:\n"
+        "        os.chmod(\"overlay.txt\", mode)\n"
+    )
+    hits = scan_source(source)
+    assert len(hits) == 1, hits
+    assert hits[0].attr == "fchmod"
+    assert hits[0].guard == "hasattr"
+
+
+def test_scanner_flags_a_module_level_eager_comprehension_as_module_scope():
+    """An EAGER comprehension at module level runs AT IMPORT TIME.
+
+    `[os.geteuid() for _ in range(1)]` at module level is evaluated while
+    the module is imported, so on Windows it raises AttributeError before
+    a single test in the file can run -- the same collection bomb as a
+    decorator argument. It must be MODULE scope.
+    """
+    source = (
+        "import os\n"
+        "\n"
+        "UIDS = [os.geteuid() for _ in range(1)]\n"
+    )
+    hits = scan_source(source)
+    assert len(hits) == 1, hits
+    assert hits[0].scope == "module"
+    assert hits[0].attr == "geteuid"
+    assert hits[0].guard is None
+
+
+def test_scanner_keeps_a_generator_expression_lazy():
+    """A generator expression is LAZY: its body runs when the generator is
+    ITERATED, not when the expression is evaluated. So a module-level
+    generator expression's body is FUNCTION scope -- it is not an
+    import-time bomb.
+
+    The one eager part is the FIRST generator's iterable, which Python
+    evaluates in the ENCLOSING scope when the expression is evaluated --
+    that part keeps the enclosing scope.
+    """
+    source = (
+        "import os\n"
+        "\n"
+        "LAZY = (os.geteuid() for _ in range(1))\n"
+        "\n"
+        "EAGER_ITERABLE = (x for x in os.geteuid())\n"
+    )
+    hits = scan_source(source)
+    assert len(hits) == 2, hits
+    lazy_body = [h for h in hits if h.lineno == 3]
+    assert len(lazy_body) == 1, hits
+    assert lazy_body[0].scope == "function"
+    eager_iterable = [h for h in hits if h.lineno == 5]
+    assert len(eager_iterable) == 1, hits
+    assert eager_iterable[0].scope == "module"
 
 
 # ------------------------------------------------- the tool, structurally ---
