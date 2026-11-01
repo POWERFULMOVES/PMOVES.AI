@@ -29,10 +29,14 @@ secrets) AND this node's compose Supabase is its verifier (stated
 ``SUPABASE_RUNTIME=compose``, local URLs). Two things can trigger a rewrite:
 it is stale (expired, malformed exp, wrong role claim, or signed with this
 node's other secret), or it is a live key that differs from its role's key and
-is converged onto it (one role, one key, in Kong's order). Cloud, CLI, peer,
-RS256/ES256 and opaque keys are never rewritten, expired or not; a divergent
-one is reported. Every change and refusal is reported by NAME through
-``events``. A missing JWT secret is a no-op.
+is converged onto it (one role, one key, in Kong's order). Keys this node did
+not sign (cloud, a peer, a Supabase CLI stack with its own secret), RS256/ES256
+keys and opaque ``sb_*`` keys are never rewritten, expired or not: an expired
+or malformed-exp one is reported ``left_unchanged``, and a live one that
+differs from the role key is reported ``divergent_foreign``. A key the Supabase
+CLI minted with THIS node's secret is ours by signature, and is rewritten under
+the same two conditions as any other. Every change and refusal is reported by
+NAME through ``events``. A missing JWT secret is a no-op.
 """
 
 from __future__ import annotations
@@ -191,9 +195,12 @@ def verifier_secret(values: Mapping[str, str]) -> str:
 def _hs256_verifies(value: Optional[str], secret: str) -> Optional[bool]:
     """True/False for an HS256 JWT under ``secret``; None if not an HS256 JWT.
 
-    Non-HS256 values (asymmetric keys, opaque sb_* keys) return None: they are
-    never judged stale and never re-minted. If one differs from its role's key
-    it is reported ``divergent_foreign`` and left in place.
+    Non-HS256 values (asymmetric keys, opaque sb_* keys) return None, so they
+    are never ``signed_with_other_secret`` and never minted here: they are never
+    re-minted. A non-HS256 JWT is still read for ``exp``. An expired one is
+    reported ``left_unchanged`` / ``expired_not_minted_here``, and one with a
+    malformed exp is reported ``not_minted_here``. Otherwise, if it differs from
+    its role's key, it is reported ``divergent_foreign`` and left in place.
     """
     if not value:
         return None
@@ -364,8 +371,10 @@ def fill_self_generated(
 
     * **absent / placeholder** label -> filled from the role's live key if one
       exists, else derived from the verifiers' secret (``filled``, ``absent``).
-    * **stale** HS256 label -> ``reminted`` when both gates pass, with reason
-      (first that applies):
+    * **stale** label -> ``reminted`` when both gates pass, with reason (first
+      that applies; ``expired`` and ``malformed_exp`` are read from any
+      decodable JWT, the other two only from HS256 -- a non-HS256 key never
+      passes the minted-here gate, so it is only ever reported):
         - ``expired`` -- a finite NumericDate ``exp`` in the past (#3410: a
           CLI-minted 1-year service_role JWT on knuckles expired
           2026-10-21T04:03:43Z and the funnel re-propagated the corpse to every
@@ -386,7 +395,10 @@ def fill_self_generated(
       fresh-looking key its real verifier refuses.
     * **one role, one key** -- every stale/absent label takes the role's key:
       the first live verifying sibling in Kong's order (``_ROLE_DONOR_ORDER``,
-      Kong's own consumer-key expression first), else one rolling mint. Then
+      Kong's own consumer-key expression first). If there is none, a role with
+      a stale label gets ONE rolling mint (10-year window); a role whose labels
+      are only absent gets the canonical ``generate-keys.sh`` vector (fixed
+      ``iat``/``exp``, byte-compatible). Then
       every remaining label that differs from that role key is CONVERGED:
         - a live, verifying key minted here moves onto the role key
           (``reminted``, ``converged_to_role_key``) -- only when the local
