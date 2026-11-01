@@ -33,9 +33,9 @@ DEFAULTS = {
     # Geometry graph (compose reads NEO4J_AUTH; we set URL, user, and generate password if missing)
     "NEO4J_URL": "bolt://neo4j:7687",
     "NEO4J_USER": "neo4j",
-    # Invidious companion (keys will be strengthened below)
-    "INVIDIOUS_HMAC_KEY": "localhack",
-    "INVIDIOUS_COMPANION_KEY": "localhack",
+    # INVIDIOUS_HMAC_KEY / INVIDIOUS_COMPANION_KEY are deliberately NOT here.
+    # Their one owner is tools/invidious_keys_preflight.py (registry generator,
+    # vendor validation), which ensure_env_shared.py runs right after this file.
     # Vector search (Qwen3-4b 2560d embeddings)
     "QDRANT_COLLECTION": "pmoves_chunks_qwen3",
     # TensorZero embedding model (direct model name, not prefixed)
@@ -69,13 +69,6 @@ SUPERSEDED_VALUES: dict[str, str] = {
 
 def _strong_random(n_bytes: int) -> str:
     return secrets.token_urlsafe(n_bytes)
-
-
-def _rand_exact_len(n_chars: int) -> str:
-    s = _strong_random(max(12, n_chars))
-    if len(s) < n_chars:
-        s = (s * ((n_chars // len(s)) + 1))[:n_chars]
-    return s[:n_chars]
 
 
 def _rand_alnum(n_chars: int) -> str:
@@ -489,18 +482,10 @@ def upsert_env(path: Path, env_gen_path: Path, pairs: dict[str, str]) -> None:
     if len(meili_key) < 16:
         text = _set_kv(text, "MEILI_MASTER_KEY", _strong_random(24))
 
-    companion_key = _get_kv(text, "INVIDIOUS_COMPANION_KEY")
-    if len(companion_key) != 16:
-        text = _set_kv(text, "INVIDIOUS_COMPANION_KEY", _rand_exact_len(16))
-
     # Qdrant API key for inter-service authentication
     qdrant_key = _get_kv(text, "QDRANT__API_KEY")
     if len(qdrant_key) < 32:
         text = _set_kv(text, "QDRANT__API_KEY", _strong_random(32))
-
-    hmac_key = _get_kv(text, "INVIDIOUS_HMAC_KEY")
-    if len(hmac_key) < 32:
-        text = _set_kv(text, "INVIDIOUS_HMAC_KEY", _strong_random(24))
 
     neo4j_password = _get_kv(text, "NEO4J_PASSWORD")
     if _is_blank_or_placeholder(neo4j_password):

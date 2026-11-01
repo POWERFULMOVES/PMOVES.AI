@@ -402,3 +402,8 @@ pmoves/tools/comfyui/_input/
 
 # Local model weights (runbook_drift JEV_MODEL default lives here). Rooted, as above.
 /research/models/
+
+# Advisory lock serializing env-file read-modify-write (pmoves/tools/_secrets_common.env_write_lock)
+.pmoves-env-write.lock
+# Temp files of _secrets_common.atomic_write_text (only survive a hard kill)
+.pmoves-tmp-*
