@@ -250,12 +250,17 @@ secrets.
 | 25 | **defense-in-depth** | **A measurement script that silently skips what it cannot read reports a population it never counted** — and a lane whose brand is measured claims must measure its own evidence fail-closed, IN THE TREE. | The script that backs the schedule-contention comment did `continue` on a YAML parse exception, so a workflow file it could not parse was dropped from the population **silently** and the script still exited 0. "18 live scheduled workflows" was therefore a population that could shrink between runs without anyone noticing — the same fail-open shape as lesson 17, in the lane's own evidence-gathering rather than in a shipped gate. And the instrument was worse than fail-open: it lived in a developer's TEMP DIRECTORY, so the claim survived in the prose while the measurement itself did not exist in the tree — a reader hunting for the script that produced the numbers found nothing, and the lane's own lesson 25 was the thing that had to be applied to it. FIX: the measurement is now `pmoves/tools/measure_schedule_contention.py`, IN THE TREE and cited by the comment it backs. It counts the files it scanned, names every parse failure by file, and exits non-zero if any file failed — MEASURED: 74 files scanned, 74 parsed, 0 dropped, 18 live schedules. That rewrite also CAUGHT the quantifier error the comment was hiding: the "06:00 cluster" is **7** schedules, not 6, because `review-collect.yml` (`0 */2 * * *`) fires at 06:00 as well as at 04:00. The tool COMPUTES each schedule's weekly frequency from the parsed cron fields rather than being handed a ratio, which is how the hand-written "365x" was caught and corrected to 84. | Any script whose output is quoted as a number, a count, or a "nearest neighbour" — and any instrument cited by a comment that is not itself in the repository. |
 | 26 | **reasoning-gap** | **A shorthand in a comment is a CLAIM — eliding the expression you measured is the same failure as asserting a number you did not.** | The contention comment wrote the 03:00 workflow's runner as `[self-hosted, Linux, X64, ...]`. The claim was TRUE, and the ellipsis hid the one detail that made it matter: the fourth element is `"${{ matrix.runner_label }}"`, so the workflow runs once per target host on this pool, and it is the same pool the build pushes images to. An ellipsis standing in for a matrix expression is "probably absent" in the same way a commented-out `schedule:` is "probably absent" — and the very comment that elided it criticises exactly that shape two dozen lines later, on the commented-out `integrations-ghcr.yml` cron. The lesson is not "ellipses are forbidden"; it is that a SHORTHAND is a claim, so it carries the same obligation to be exact as the number it stands in for. FIX: the exact `runs-on` expressions are now quoted, and the one schedule that could actually race the build (`docker builder prune -af` / `docker image prune -a -f` on the same pool) is named rather than left as "both are self-hosted, 83 minutes earlier". | Any comment that abbreviates an expression it measured. |
 | 27 | **defense-in-depth** | **A summary that claims to BE a measurement needs a gate of its own** — otherwise it is the one number in the file nobody re-derives. | The bucket summary ("13 reasoning-gap / 0 semantic-naming drift / 8 contract-correctness / 1 defense-in-depth / 3 pattern-conformance = 25") is a MEASUREMENT of the lesson table sitting directly above it. It was written by hand, like every other number in this lane's prose, and hand-written numbers are the thing this lane exists to catch. The reviewer checked the arithmetic by hand — a good check ONCE, not a check that survives the next lesson. FIX: `pmoves/tests/tools/test_runbook_drift_learnings_taxonomy.py` RECOMPUTES the per-class counts and the total from the lesson table, asserts the summary's numbers agree, asserts the summary's lesson LISTS agree (a count that is right while the list is wrong is still a wrong summary), asserts every class present in the table appears in the summary (an absent class reads as an oversight rather than a measurement), and asserts the lesson numbers are contiguous from 1. The summary is now a CHECKED number rather than a claimed one. | Any aggregate, tally, or count published in a document that also contains the items it aggregates. |
+| 28 | **reasoning-gap** | **A gate written to produce a DIAGNOSTIC must not collapse into one — and an UNPARSED value is an UNCHECKED claim.** | Two failures, both in the gates this lane added for itself. (a) The instrument's test module executed the tool file at COLLECTION time, so a missing tool killed all 34 tests with one opaque collection error — and `test_the_measurement_instrument_is_in_the_tree`, the test whose entire job is to say in named terms that the instrument is missing, could NEVER run. Fail-closed, yes, but collapsed: the one test that could explain the failure was the one the failure destroyed. FIX: the load is guarded, so a missing tool lets collection proceed — the in-tree test FAILS with its named message and the rest SKIP. (b) The taxonomy gate's summary pattern required the literal word "lessons" after the count, so the ZERO-count class — `(2) **semantic-naming drift** 0 ·`, which has no lesson list to write — was never parsed. The one count in that summary that is all there is stayed an unchecked claim, in the file about unchecked claims. FIX: the suffix and the list are optional, the list group requires a `#` so the zero class cannot swallow the next class's marker, and a test asserts every house class is DECLARED. | Any diagnostic, alert, or gate whose value is supposed to be READ by a human when something breaks. |
+| 29 | **contract-correctness** | **A shape you cannot derive a value from must be REFUSED, not approximated — and a set must be normalised in the NUMBER, not only in the label.** | (a) The instrument's weekly frequency was `len(dom_values)`, so `0 4 15 * *` (once a MONTH) reported 1/week and `0 4 */1 * *` (semantically DAILY) reported 31/week. A month is not a week: the number was COMPUTED straight into fiction, in the very tool whose contract is "derived, cannot drift". FIX: a day-of-month restricted cron is REFUSED at parse time and becomes a NAMED failure, so the scan fails closed instead of publishing a wrong number. (b) Sunday is 0 AND 7 in cron, so `0,7` is ONE day and `0-7` is EIGHT days in a seven-day week. The prose attribute already deduplicated them — "Sunday only" — while the NUMBER the ratio leaned on did not, which is the worst arrangement: a deduplicated label beside an un-normalised number. FIX: normalise with `d % 7` BEFORE counting, and treat a day-of-week field that covers the whole week as unrestricted. | Any tool that derives a rate, a ratio, or a frequency from a set of dates, times, or identifiers. |
+| 30 | **reasoning-gap** | **A silent drop has more than one GRANULARITY — and a clock is a circle.** | (a) The first version of the instrument dropped unreadable FILES; the rewrite dropped unreadable ENTRIES. A `schedule:` item with no `cron` key, or an unquoted `- cron: 23` that YAML reads as an INT, vanished at a `continue` while `fully_read` stayed True and `--check` printed CLEAR. A dropped entry takes its CONTENTION with it, so this is the same fail-open in a smaller hat — and the fix is the same shape: an unusable entry is a NAMED failure, so the population cannot shrink at either granularity. (b) The distance from a schedule to the build slot was `abs(a - b)`, so 23:50 looked 1420 minutes from 00:10 when it is 20. The CLI advertises `--slot 00:10`, so the check could report CLEAR about a job 20 minutes away on the other side of midnight — a fail-open inside a check mode, in the tool whose origin story is "the check was fail-open". FIX: the distance closes the circle (`min(delta, 1440 - delta)`). | Any scanner over a nested population, and any distance between two points on a cyclic scale. |
+| 31 | **contract-correctness** | **A flag with two readings is a flag with one bug — the union is the safe reading.** | `--exclude-workflow` REPLACED the default exclusion set, so passing one extra workflow made the SLOT OWNER's own exclusion evaporate: `build-images.yml` re-entered contention at distance 0 and `--check` spuriously exited CONTENTION about the very job that owns the slot. The help text read additive ("repeatable; default: build-images.yml") and the code read replace. Two readings, one of them a red CI X. FIX: the exclusion is a UNION with the default (`DEFAULT_EXCLUDED_WORKFLOWS | set(args.exclude_workflow or ())`) and the help says "adds to it, never replaces it". The general rule: when a flag can be read as "replace the default" or "add to the default", the SAFE reading is the one that cannot silently drop a protection the caller did not know about. | Any CLI flag with a default that a caller can override. |
 
-**Bucket summary** (27 lessons) — (1) **reasoning-gap** 14 lessons (#1, #2, #3, #4, #8,
-#10, #11, #12, #18, #19, #21, **#23, #24, #26**) · (2) **semantic-naming drift** 0 ·
-(3) **contract-correctness** 8 lessons (#5, #6, #7, #15, #16, #17, #20, #22) ·
-(4) **defense-in-depth** 2 lessons (**#25, #27**) · (5) **pattern-conformance** 3
-lessons (#9, #13, #14).
+**Bucket summary** (31 lessons) — (1) **reasoning-gap** 16 lessons (#1, #2, #3, #4, #8,
+#10, #11, #12, #18, #19, #21, **#23, #24, #26, #28, #30**) ·
+(2) **semantic-naming drift** 0 ·
+(3) **contract-correctness** 10 lessons (#5, #6, #7, #15, #16, #17, #20, #22, **#29,
+#31**) · (4) **defense-in-depth** 2 lessons (**#25, #27**) ·
+(5) **pattern-conformance** 3 lessons (#9, #13, #14).
 
 A summary that claims to BE a measurement, in the file where lesson 24 finishes
 explaining that citing a count without measuring it is a failure mode, needs a
@@ -263,7 +268,7 @@ gate of its own — otherwise the summary is the one number in the file nobody
 re-derives. `pmoves/tests/tools/test_runbook_drift_learnings_taxonomy.py`
 RECOMPUTES these counts from the lesson table above and asserts they agree, so
 the summary cannot drift away from the thing it summarises. (MEASURED here, by
-that test: 14 + 0 + 8 + 2 + 3 = 27 = the number of lesson rows.)
+that test: 16 + 0 + 10 + 2 + 3 = 31 = the number of lesson rows.)
 
 ---
 
@@ -344,7 +349,51 @@ schedule's weekly frequency from the parsed cron fields rather than being handed
 a ratio, and it excludes the slot owner from its own contention check. Its
 21 tests include a LIVE rot gate: on every PR the fleet is re-read and the
 04:23 slot is re-checked against every self-hosted schedule, so the comment's
-claim cannot rot into a falsehood unnoticed.
+claim cannot rot into a falsehood unnoticed. (Round 5 audited that instrument
+further; its final test count is 34.)
+
+**Round 5 — ten further findings** (the fifth review bot), all fixed, and all
+of them against the INSTRUMENT the fourth round had just added: a tool written
+in one sitting and then audited by something that reads it the way a hostile
+reviewer would. Every finding was real, and the ones that mattered most were
+the ones that re-used this lane's own shapes against the lane's own code:
+
+* a schedule ENTRY with no usable cron vanished at a `continue` while
+  `fully_read` stayed True and `--check` printed CLEAR — the same fail-open
+  as the dropped file, in a smaller hat (lesson 30);
+* a day-of-month restricted cron had its MONTH-days counted as a weekly
+  frequency, so a monthly job reported 1/week and a daily one reported
+  31/week — a COMPUTED fiction, in the tool whose contract is "derived,
+  cannot drift" (lesson 29);
+* Sunday is 0 AND 7 in cron, so `0,7` scored two days and `0-7` scored eight
+  days in a seven-day week, while the prose label beside the number had
+  already deduplicated them (lesson 29);
+* the distance to the build slot was `abs(a - b)`, so 23:50 looked 1420
+  minutes from 00:10 when it is 20 — a fail-open inside a check mode (lesson
+  30);
+* `--exclude-workflow` REPLACED the default exclusion set rather than adding
+  to it, so one extra flag made the slot owner's own exclusion evaporate and
+  the check would report CONTENTION about the job that owns the slot (lesson
+  31);
+* the instrument's test module loaded the tool at COLLECTION time, so a
+  missing tool collapsed all 34 tests into one opaque error and destroyed the
+  one test written to explain it (lesson 28);
+* the taxonomy gate's pattern required the word "lessons", so the ZERO-count
+  class was never parsed — the one count in the summary that is all there is
+  stayed unchecked (lesson 28);
+* the lesson table was parsed into a dict, so a duplicated row would
+  silently collapse and every test would stay green (lesson 28);
+* the contention comment quoted the AGGRESSIVE MANUAL prune
+  (`docker image prune -a -f`) as if it were the scheduled one, and claimed
+  the cleanup workflow was "the only schedule that could actually race the
+  build" — `runner-maintenance.yml` runs `docker system prune -af --filter
+  "until=48h"` on the same pool (lesson 26, applied to the lane's own
+  sentence).
+
+The instrument now refuses what it cannot derive, normalises what it counts,
+closes the circle on the clock, unions its exclusions, and names every entry
+it could not read. Its 34 tests include the live rot gate; the taxonomy gate
+is 7. The lane suite is 157 green.
 
 The four rounds are also the lane's own measure of its lessons: every finding that
 was fixed was fixed at the ROOT, with a test that fails without the fix. Fourteen
@@ -371,8 +420,8 @@ explanations too.
 | **F4b** the ratchet that catches the collection bombs had two holes of its own | `pmoves/tests/tools/test_windows_posix_ratchet.py` (`_guard_kind` stops BEFORE `ast.Module`; eager comprehensions classified at their own scope) | same file (18, 4 of them new) | the AST ratchet itself |
 | **F3b** the Glancer release-tag pin | `.github/workflows/fork-sync.yml` (4th `FORKS` column `upstream_ref`, the `release` keyword, the FETCH_HEAD merge, the `bash -e`-safe conflict skip, ONE shared policy for the audit and the sync) | — | `.github/workflows/fork-registry-ratchet.yml` (the coverage re-check still passes) |
 | **F1b** nested submodule claims | `scripts/runbook_drift.py` (`_owning_submodule()`, longest match wins) | `pmoves/tests/test_runbook_drift_probe.py` (16) | the auditor itself |
-| **F5d** the schedule-contention measurement was cited but not in the TREE | `pmoves/tools/measure_schedule_contention.py` (fail-closed scan; COMPUTES each cron's weekly frequency; excludes the slot owner from its own contention check) | `pmoves/tests/tools/test_measure_schedule_contention.py` (21, incl. a LIVE rot gate that re-reads the real fleet and re-checks the 04:23 slot on every PR) | the tool's own `--check` exit code |
-| **P1** the bucket summary was a number nobody re-derived | `pmoves/docs/AGENTS/runbook_drift_fleet_closure_LEARNINGS.md` (the **Bucket summary** line) | `pmoves/tests/tools/test_runbook_drift_learnings_taxonomy.py` (5 — RECOMPUTES the summary from the lesson table and asserts they agree) | the test itself |
+| **F5d** the schedule-contention measurement was cited but not in the TREE | `pmoves/tools/measure_schedule_contention.py` (fail-closed scan; refuses what it cannot derive; normalises the day-of-week set before counting; closes the circle on the clock; unions its exclusions; COMPUTES each cron's weekly frequency) | `pmoves/tests/tools/test_measure_schedule_contention.py` (34, incl. a LIVE rot gate that re-reads the real fleet and re-checks the 04:23 slot on every PR) | the tool's own `--check` exit code |
+| **P1** the bucket summary was a number nobody re-derived | `pmoves/docs/AGENTS/runbook_drift_fleet_closure_LEARNINGS.md` (the **Bucket summary** line) | `pmoves/tests/tools/test_runbook_drift_learnings_taxonomy.py` (7 — RECOMPUTES the summary from the lesson table, asserts the counts, the total and the lesson LISTS agree, detects duplicated rows, and asserts every house class is DECLARED including the zero-count one) | the test itself |
 
 **The mutation-kill harness** — `pmoves/tests/tools/test_runbook_drift_fleet_closure_mutation_kill.py`
 — is the lane's own proof. **Seven** mutations, each reverting the WIRING rather than

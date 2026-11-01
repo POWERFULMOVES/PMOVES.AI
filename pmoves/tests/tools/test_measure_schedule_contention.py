@@ -58,11 +58,33 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 TOOL = REPO_ROOT / "pmoves" / "tools" / "measure_schedule_contention.py"
 WORKFLOWS = REPO_ROOT / ".github" / "workflows"
 
-spec = importlib.util.spec_from_file_location("measure_schedule_contention", TOOL)
-assert spec and spec.loader, f"cannot load {TOOL}"
-msc = importlib.util.module_from_spec(spec)
-sys.modules["measure_schedule_contention"] = msc
-spec.loader.exec_module(msc)
+def _load_tool():
+    """Load the instrument, or return None when it is not in the tree.
+
+    The load is GUARDED on purpose. A module-level `spec.loader.exec_module`
+    makes a missing tool a COLLECTION error: all 21 tests die with one opaque
+    message, and `test_the_measurement_instrument_is_in_the_tree` -- the test
+    whose whole job is to say, in named terms, that the instrument is missing
+    -- can never run. Fail-closed, yes, but collapsed. Here a missing tool
+    lets collection proceed: the in-tree test FAILS with its named message and
+    the rest SKIP.
+    """
+    if not TOOL.is_file():
+        return None
+    spec = importlib.util.spec_from_file_location("measure_schedule_contention", TOOL)
+    assert spec and spec.loader, f"cannot load {TOOL}"
+    module = importlib.util.module_from_spec(spec)
+    sys.modules["measure_schedule_contention"] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+msc = _load_tool()
+
+requires_tool = pytest.mark.skipif(
+    msc is None,
+    reason="the measurement instrument is not in the tree",
+)
 
 
 # --------------------------------------------------------------- fixtures ---
@@ -148,6 +170,7 @@ def test_the_measurement_instrument_is_in_the_tree():
 # ------------------------------------------------- fail-closed on unread ---
 
 
+@requires_tool
 def test_a_workflow_that_cannot_be_parsed_is_a_named_failure(
     workflow_dir: Path,
 ):
@@ -169,6 +192,7 @@ def test_a_workflow_that_cannot_be_parsed_is_a_named_failure(
     assert [s.workflow for s in result.schedules] == ["good.yml"]
 
 
+@requires_tool
 def test_the_cli_exits_not_measured_when_the_fleet_cannot_be_read(
     workflow_dir: Path, capsys
 ):
@@ -182,6 +206,7 @@ def test_the_cli_exits_not_measured_when_the_fleet_cannot_be_read(
     )
 
 
+@requires_tool
 def test_a_workflow_that_cannot_be_parsed_still_counts_in_the_population(
     workflow_dir: Path,
 ):
@@ -197,6 +222,7 @@ def test_a_workflow_that_cannot_be_parsed_still_counts_in_the_population(
 # ------------------------------------------------------- what counts as a ---
 
 
+@requires_tool
 def test_a_commented_out_schedule_is_not_a_schedule(workflow_dir: Path):
     """A commented-out `schedule:` is genuinely absent. This is the exact
     defect the lane's lesson 21 caught in prose: a dead code block cited as
@@ -207,6 +233,7 @@ def test_a_commented_out_schedule_is_not_a_schedule(workflow_dir: Path):
     assert result.parse_failures == []
 
 
+@requires_tool
 def test_a_self_hosted_runner_label_is_what_makes_a_schedule_contend(
     workflow_dir: Path,
 ):
@@ -233,6 +260,7 @@ def test_a_self_hosted_runner_label_is_what_makes_a_schedule_contend(
         ("16 20 * * 5", 1),    # Fridays only -> 1/week
     ],
 )
+@requires_tool
 def test_the_weekly_frequency_is_computed_from_the_cron_fields(
     workflow_dir: Path, cron: str, expected: int
 ):
@@ -250,6 +278,7 @@ def test_the_weekly_frequency_is_computed_from_the_cron_fields(
     assert result.schedules[0].weekly_frequency == expected
 
 
+@requires_tool
 def test_the_reported_ratio_is_84_not_365(workflow_dir: Path):
     """review-collect (`0 */2 * * *`) against the weekly ruleset sync
     (`0 4 * * 0`). MEASURED, not asserted -- and it is 84, not 365."""
@@ -263,6 +292,7 @@ def test_the_reported_ratio_is_84_not_365(workflow_dir: Path):
     assert frequent // rare == 84
 
 
+@requires_tool
 def test_a_day_restricted_cron_is_reported_with_its_restriction(
     workflow_dir: Path,
 ):
@@ -275,9 +305,149 @@ def test_a_day_restricted_cron_is_reported_with_its_restriction(
     assert schedule.day_note == "Sunday only"
 
 
+# ------------------------------------------- an entry is also a population ---
+
+
+@requires_tool
+def test_a_schedule_entry_with_no_cron_is_a_named_failure(workflow_dir: Path):
+    """An entry the tool cannot measure is a NAMED FAILURE, not a silent
+    drop. v1 dropped unreadable FILES; dropping unreadable ENTRIES is the
+    same fail-open in a smaller hat -- and it is worse, because a dropped
+    entry takes its contention with it."""
+    body = (
+        "name: probe\non:\n  schedule:\n    - weekday: monday\n"
+        "jobs:\n  probe:\n    runs-on: [self-hosted, Linux, X64]\n"
+        "    steps:\n      - run: echo hi\n"
+    )
+    _write_workflow(workflow_dir, "odd.yml", body)
+    result = msc.scan_workflows(workflow_dir)
+    assert result.parse_failures, "a schedule entry with no cron vanished silently"
+    assert result.fully_read is False
+    assert result.schedules == []
+
+
+@requires_tool
+def test_a_cron_that_yaml_read_as_a_number_is_a_named_failure(
+    workflow_dir: Path,
+):
+    """An UNQUOTED `- cron: 23` is an int in YAML, not a cron string. It must
+    be refused by name rather than skipped."""
+    body = (
+        "name: probe\non:\n  schedule:\n    - cron: 23\n"
+        "jobs:\n  probe:\n    runs-on: ubuntu-24.04\n"
+        "    steps:\n      - run: echo hi\n"
+    )
+    _write_workflow(workflow_dir, "numeric.yml", body)
+    result = msc.scan_workflows(workflow_dir)
+    assert result.parse_failures, "an int cron was skipped silently"
+    assert any("numeric.yml" in failure for failure in result.parse_failures)
+
+
+@requires_tool
+def test_a_day_of_month_restricted_cron_is_refused_not_miscounted(
+    workflow_dir: Path,
+):
+    """`0 4 15 * *` fires once a MONTH. A month is not a week, so the weekly
+    frequency cannot be derived from its fields -- and publishing a number
+    anyway would be fiction. The shape is REFUSED, which is this file's own
+    fail-closed doctrine."""
+    body = (
+        "name: probe\non:\n  schedule:\n    - cron: '0 4 15 * *'\n"
+        "jobs:\n  probe:\n    runs-on: ubuntu-24.04\n"
+        "    steps:\n      - run: echo hi\n"
+    )
+    _write_workflow(workflow_dir, "monthly.yml", body)
+    result = msc.scan_workflows(workflow_dir)
+    assert result.parse_failures, "a day-of-month cron was measured as weekly"
+    assert result.schedules == []
+    assert result.fully_read is False
+
+
+@requires_tool
+def test_the_cli_exits_not_measured_on_a_day_of_month_cron(workflow_dir: Path):
+    """The refusal must reach the EXIT CODE, not just the report."""
+    body = (
+        "name: probe\non:\n  schedule:\n    - cron: '0 4 */1 * *'\n"
+        "jobs:\n  probe:\n    runs-on: ubuntu-24.04\n"
+        "    steps:\n      - run: echo hi\n"
+    )
+    _write_workflow(workflow_dir, "monthly.yml", body)
+    code = msc.main(["--workflows", str(workflow_dir), "--check"])
+    assert code == msc.EXIT_UNMEASURED
+
+
+# ------------------------------------------------- Sunday is one day ---
+
+
+@requires_tool
+@pytest.mark.parametrize(
+    "cron,expected",
+    [
+        ("0 4 * * 0", 1),      # Sunday
+        ("0 4 * * 0,7", 1),    # Sunday spelled twice -- ONE day
+        ("0 4 * * 7", 1),      # Sunday's other spelling
+        ("0 4 * * 0-6", 7),    # every day
+        ("0 4 * * 0-7", 7),    # every day, spelled with both Sundays
+        ("0 4 * * 1", 1),      # Monday
+        ("0 4 * * 1,3", 2),    # two days
+    ],
+)
+def test_the_day_of_week_set_is_normalised_before_it_is_counted(
+    workflow_dir: Path, cron: str, expected: int
+):
+    """Sunday is 0 AND 7 in cron. Counting the raw set makes `0,7` two days
+    and `0-7` EIGHT days in a seven-day week -- an impossible number that the
+    ratio would lean on."""
+    body = (
+        "name: probe\non:\n  schedule:\n    - cron: '%s'\n"
+        "jobs:\n  probe:\n    runs-on: ubuntu-24.04\n"
+        "    steps:\n      - run: echo hi\n"
+        % cron
+    )
+    _write_workflow(workflow_dir, "probe.yml", body)
+    result = msc.scan_workflows(workflow_dir)
+    assert len(result.schedules) == 1, result.parse_failures
+    assert result.schedules[0].weekly_frequency == expected
+
+
+# ------------------------------------------- the clock is a circle ---
+
+
+@requires_tool
+def test_the_distance_to_a_slot_wraps_at_midnight(workflow_dir: Path):
+    """A plain `abs(a - b)` makes 23:50 look 1420 minutes from 00:10 when it
+    is 20. The CLI advertises `--slot 00:10`, so the distance has to close
+    the circle -- otherwise `--check` reports CLEAR about a job that is 20
+    minutes away on the other side of midnight."""
+    body = (
+        "name: probe\non:\n  schedule:\n    - cron: '50 23 * * *'\n"
+        "jobs:\n  probe:\n    runs-on: [self-hosted, Linux, X64]\n"
+        "    steps:\n      - run: echo hi\n"
+    )
+    _write_workflow(workflow_dir, "late.yml", body)
+    result = msc.scan_workflows(workflow_dir)
+    assert result.fully_read, result.parse_failures
+    neighbours = msc.self_hosted_neighbours(result, "00:10", 60, set())
+    assert neighbours, "a schedule 20 minutes away across midnight was missed"
+    assert neighbours[0][0] == 20, neighbours
+
+
+@requires_tool
+def test_the_slot_owner_exclusion_is_a_union_not_a_replacement():
+    """One extra `--exclude-workflow` must not make the slot owner's own
+    exclusion evaporate -- or the build would contend with itself at
+    distance 0 and `--check` would exit CONTENTION about the very job that
+    owns the slot."""
+    assert "build-images.yml" in msc.DEFAULT_EXCLUDED_WORKFLOWS
+    combined = msc.DEFAULT_EXCLUDED_WORKFLOWS | set(["notes.yml"])
+    assert "build-images.yml" in combined
+    assert "notes.yml" in combined
+
+
 # ------------------------------------------------- the slot is not its own ---
 
 
+@requires_tool
 def test_the_slot_owner_is_not_its_own_contention(workflow_dir: Path):
     """A build is not in contention with itself. Counting the owner would
     make every slot look contended and the check meaningless."""
@@ -291,6 +461,7 @@ def test_the_slot_owner_is_not_its_own_contention(workflow_dir: Path):
 # ----------------------------------------------------- the CLI, end to end ---
 
 
+@requires_tool
 def test_the_cli_reports_the_measurement_as_json(workflow_dir: Path):
     _write_workflow(workflow_dir, "hosted.yml", HOSTED_WORKFLOW)
     _write_workflow(workflow_dir, "selfhosted.yml", SELF_HOSTED_WORKFLOW)
@@ -307,6 +478,7 @@ def test_the_cli_reports_the_measurement_as_json(workflow_dir: Path):
     assert payload["parse_failures"] == []
 
 
+@requires_tool
 def test_the_cli_fails_when_a_self_hosted_schedule_is_near_the_slot(
     workflow_dir: Path,
 ):
@@ -327,6 +499,7 @@ def test_the_cli_fails_when_a_self_hosted_schedule_is_near_the_slot(
 # --------------------------------------------------------------- the LIVE ---
 
 
+@requires_tool
 def test_the_live_fleet_is_read_completely():
     """No workflow file in this repo may be unreadable. If one becomes
     unreadable, the fleet's schedule population is no longer known and every
@@ -340,6 +513,7 @@ def test_the_live_fleet_is_read_completely():
     assert result.files_scanned > 0
 
 
+@requires_tool
 def test_the_live_build_slot_is_clear_of_self_hosted_contention():
     """THE ROT GATE.
 
@@ -369,6 +543,7 @@ def test_the_live_build_slot_is_clear_of_self_hosted_contention():
     )
 
 
+@requires_tool
 def test_the_live_measurement_still_sees_the_schedules_it_cites():
     """The comment names specific schedules at specific clock times. If the
     fleet's schedules move, the comment's numbers move with them -- and this

@@ -59,8 +59,16 @@ LESSON_ROW_RE = re.compile(r"^\| (\d+) \| \*\*([a-z][a-z -]*)\*\* \| \*\*", re.M
 # literal space, because the summary WRAPS in the source file and a reader
 # should not have to keep a hand-written number on one physical line to keep
 # it parseable. The wrap is caught here rather than by the reader.
+#
+# The "lessons" suffix is OPTIONAL and the lesson list is optional, because a
+# class with ZERO lessons has no list to write: `(2) **semantic-naming drift**
+# 0 ·`. Requiring the suffix left the zero-count class unparsed, so the one
+# count in the summary that is all there is would have stayed an unchecked
+# claim -- in the file about unchecked claims. The list group requires a `#`
+# so the zero class cannot swallow the NEXT class's marker.
 SUMMARY_RE = re.compile(
-    r"\((\d)\) \*\*([a-z][a-z -]*)\*\* (\d+)\s+lessons?\s*\(([^)]*)\)"
+    r"\((\d)\) \*\*([a-z][a-z -]*)\*\* (\d+)(?:\s+lessons?)?"
+    r"(?:\s*\(\*{0,2}(#[^)]*)\))?"
 )
 
 
@@ -69,15 +77,20 @@ def _read() -> str:
     return LEARNINGS.read_text(encoding="utf-8")
 
 
+def _lesson_rows(text: str) -> list[tuple[int, str]]:
+    """Every lesson row, in document order, WITHOUT collapsing duplicates."""
+    return [(int(num), cls) for num, cls in LESSON_ROW_RE.findall(text)]
+
+
 def _lessons(text: str) -> dict[int, str]:
-    return {int(num): cls for num, cls in LESSON_ROW_RE.findall(text)}
+    return dict(_lesson_rows(text))
 
 
 def _summary(text: str) -> dict[str, tuple[int, list[int]]]:
     """class -> (declared count, declared lesson numbers)"""
     out: dict[str, tuple[int, list[int]]] = {}
     for _bucket, cls, count, numbers in SUMMARY_RE.findall(text):
-        listed = [int(n) for n in re.findall(r"#(\d+)", numbers)]
+        listed = [int(n) for n in re.findall(r"#(\d+)", numbers or "")]
         out[cls] = (int(count), listed)
     return out
 
@@ -87,6 +100,18 @@ def test_the_lesson_table_is_parsed_at_all():
     assert len(lessons) >= 25, (
         f"the lesson table parsed to {len(lessons)} lessons; expected at least 25"
     )
+
+
+def test_no_lesson_row_is_counted_twice():
+    """The lesson table is parsed into a DICT, so a duplicated `| 8 |` row
+    would silently collapse into one entry -- and every test in this file
+    would stay green while the summary counted one lesson where the table
+    holds two. Duplicates are detected BEFORE the collapse."""
+    rows = _lesson_rows(_read())
+    numbers = [num for num, _ in rows]
+    duplicates = sorted({num for num in numbers if numbers.count(num) > 1})
+    assert duplicates == [], f"duplicated lesson rows: {duplicates}"
+    assert len(numbers) == len(set(numbers))
 
 
 def test_every_lesson_carries_a_house_class():
@@ -104,6 +129,16 @@ def test_the_lesson_numbers_are_contiguous_from_one():
     assert numbers == list(range(1, len(numbers) + 1)), (
         f"lesson numbers are not contiguous from 1: {numbers}"
     )
+
+
+def test_every_house_class_is_present_in_the_summary():
+    """A class with ZERO lessons has no list to write, so its count is easy
+    to leave unparsed -- and then the one count in the summary that is all
+    there is stays an unchecked claim, in the file about unchecked claims.
+    Every house class must be DECLARED, including the empty one."""
+    summary = _summary(_read())
+    missing = sorted(HOUSE_CLASSES - set(summary))
+    assert missing == [], f"the summary does not declare these house classes: {missing}"
 
 
 def test_the_bucket_summary_counts_match_the_lesson_table():

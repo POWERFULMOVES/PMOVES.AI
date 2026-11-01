@@ -39,11 +39,16 @@ on:
   #     [self-hosted, Linux, X64, "${{ matrix.runner_label }}"]) and
   #     runner-maintenance.yml ('0 3 * * *', runs-on
   #     [self-hosted, "${{ matrix.label }}"]).
-  #   * The one that matters is fleet-docker-cleanup: it runs
-  #     `docker builder prune -af` and `docker image prune -a -f` on the SAME
-  #     self-hosted pool this build pushes images to, so it is the only
-  #     schedule that could actually race the build. 83 minutes of separation
-  #     is the margin that rules it out.
+  #   * BOTH of the 03:00 workflows prune docker on the SAME self-hosted pool
+  #     this build pushes images to (b850, kvm4-1, kvm4-2), so BOTH are the
+  #     contention that matters, and neither is excluded by being "the only
+  #     one": fleet-docker-cleanup.yml runs `docker builder prune -af`
+  #     unconditionally and, on its SCHEDULED path,
+  #     `docker image prune -a -f --filter "until=72h"` -- the bare `-a -f`
+  #     is only under manual `aggressive` dispatch, and
+  #     runner-maintenance.yml runs `docker system prune -af --filter
+  #     "until=48h"` and `docker builder prune -af --filter "until=48h"`.
+  #     83 minutes of separation is the margin that rules both out.
   #   * The next SELF-HOSTED schedule after the slot is
   #     submodule-update-check.yml at 06:00 -- 97 minutes later, Sundays
   #     only, runs-on [self-hosted, Linux, X64, ai-lab]. The only other

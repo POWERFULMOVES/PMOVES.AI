@@ -93,10 +93,11 @@ DAY_NAMES = {
     "4": "Thursday", "5": "Friday", "6": "Saturday", "7": "Sunday",
 }
 
-# The cron field shapes this reader understands. Anything else is reported as
-# UNREADABLE rather than guessed, so the tool fails closed instead of
-# publishing a number it cannot stand behind.
-_SUPPORTED_MINUTE = ("*", "*/", "-", ",")
+# The cron field shapes this reader understands are enforced by
+# `_expand_field`, which raises ValueError on a shape it does not understand.
+# There is deliberately no separate registry of "supported shapes" to drift
+# away from the parser -- a registry the parser never reads is a comment
+# pretending to be a contract.
 
 
 def _expand_field(field_expr: str, low: int, high: int) -> set[int]:
@@ -148,8 +149,6 @@ class Schedule:
     cron: str
     minutes: set[int] = field(default_factory=set)
     hours: set[int] = field(default_factory=set)
-    dom_values: set[int] = field(default_factory=set)
-    dom_restricted: bool = False
     days_of_week: set[int] = field(default_factory=set)
     day_restricted: bool = False
     runner_labels: set[str] = field(default_factory=set)
@@ -181,24 +180,13 @@ class Schedule:
         return len(self.minutes) * len(self.hours) * days
 
     def _days_per_week(self) -> int:
-        # Cron's day rule: when BOTH day-of-month and day-of-week are
-        # restricted, a day matches if EITHER matches; when only one is
-        # restricted, that one must match. The fleet's crons restrict at most
-        # one of the two, so the union case is the rare one and is computed
-        # as the union of the two day sets.
-        #
-        # RESTRICTED is a property of the EXPRESSION, not of the expanded set:
-        # `*` expands to every day, but an unrestricted day-of-month field is
-        # not "31 restricted days" -- reading it that way multiplies every
-        # weekly frequency by 31.
-        if not self.dom_restricted and not self.day_restricted:
+        # Day-of-MONTH restricted crons are REFUSED at parse time (see
+        # `_parse_cron`), so the only day restriction that can reach here is
+        # day-of-week, and the count is the NORMALISED one -- Sunday spelled
+        # 0 and Sunday spelled 7 are one day, not two.
+        if not self.day_restricted:
             return 7
-        if self.dom_restricted and not self.day_restricted:
-            return len(self.dom_values)
-        if self.day_restricted and not self.dom_restricted:
-            return len(self.days_of_week)
-        # Both restricted: the union, capped at the 7 days in a week.
-        return min(7, len(self.dom_values) + len(self.days_of_week))
+        return len(self.days_of_week)
 
 
 @dataclass
@@ -246,8 +234,20 @@ def _schedule_entries(data: dict) -> list:
 
 def _parse_cron(
     cron: str,
-) -> tuple[set[int], set[int], set[int], bool, set[int], bool]:
-    """(minutes, hours, dom, dom_restricted, dow, dow_restricted)."""
+) -> tuple[set[int], set[int], set[int], bool]:
+    """(minutes, hours, days-of-week, day-of-week-restricted).
+
+    Two shapes are REFUSED rather than approximated, because this tool's whole
+    contract is that a number it publishes is derived:
+
+    * a day-of-MONTH restricted cron. `0 4 15 * *` fires once a MONTH, and a
+      month is not a week: reading its day set as "31 days" and calling the
+      result a weekly frequency is fiction. The shape is refused, the entry
+      becomes a NAMED failure, and the scan fails closed.
+    * a day-of-week field that names 7 as well as 0 is normalised, because 7
+      is Sunday's second spelling: `0,7` is ONE day and `0-7` is every day,
+      not two and eight.
+    """
     parts = cron.split()
     if len(parts) != 5:
         raise ValueError(f"cron {cron!r} does not have 5 fields")
@@ -260,14 +260,17 @@ def _parse_cron(
     hours = _expand_field(hour_expr, 0, 23)
     dom = _expand_field(dom_expr, 1, 31)
     dow = _expand_field(dow_expr, 0, 7)
-    return (
-        minutes,
-        hours,
-        dom,
-        dom_expr.strip() != "*",
-        dow,
-        dow_expr.strip() != "*",
-    )
+    if dom_expr.strip() != "*":
+        raise ValueError(
+            f"cron {cron!r} restricts day-of-month; a weekly frequency cannot "
+            "be derived from it (a month is not a week) and it is not "
+            "approximated"
+        )
+    # 7 is Sunday's second spelling. Normalise BEFORE counting, so the number
+    # the ratio leans on is the same one the prose label describes.
+    normalised_dow = {day % 7 for day in dow}
+    restricted = dow_expr.strip() != "*" and normalised_dow != set(range(7))
+    return minutes, hours, normalised_dow, restricted
 
 
 def scan_workflows(workflows_dir: Path) -> ScanResult:
@@ -305,17 +308,18 @@ def scan_workflows(workflows_dir: Path) -> ScanResult:
         self_hosted = any("self-hosted" in label for label in labels)
         for entry in _schedule_entries(data):
             cron = entry.get("cron")
-            if not isinstance(cron, str):
+            if not isinstance(cron, str) or not cron.strip():
+                # An entry with no cron key, or a cron that YAML read as a
+                # NUMBER (an unquoted `23` is an int), is a schedule the tool
+                # cannot measure. It is a NAMED FAILURE, not a silent drop:
+                # v1 dropped unreadable FILES, and dropping unreadable
+                # ENTRIES is the same fail-open in a smaller hat.
+                result.parse_failures.append(
+                    f"{path.name}: schedule entry with no usable cron: {entry!r}"
+                )
                 continue
             try:
-                (
-                    minutes,
-                    hours,
-                    dom,
-                    dom_restricted,
-                    dow,
-                    dow_restricted,
-                ) = _parse_cron(cron)
+                minutes, hours, dow, dow_restricted = _parse_cron(cron)
             except ValueError as exc:
                 result.parse_failures.append(f"{path.name}: {exc}")
                 continue
@@ -325,8 +329,6 @@ def scan_workflows(workflows_dir: Path) -> ScanResult:
                     cron=cron,
                     minutes=minutes,
                     hours=hours,
-                    dom_values=dom,
-                    dom_restricted=dom_restricted,
                     days_of_week=dow,
                     day_restricted=dow_restricted,
                     runner_labels=labels,
@@ -339,6 +341,18 @@ def scan_workflows(workflows_dir: Path) -> ScanResult:
 def _to_minutes(clock: str) -> int:
     hours, minutes = clock.split(":")
     return int(hours) * 60 + int(minutes)
+
+
+def _circular_distance(first: int, second: int) -> int:
+    """Minutes between two clock positions, WRAPPING at midnight.
+
+    A plain `abs(a - b)` makes 23:50 look 1420 minutes from 00:10 when it is
+    20. The CLI advertises `--slot 00:10`, and a self-hosted schedule 20
+    minutes away on the other side of midnight is exactly the contention the
+    check exists to find -- so the distance has to close the circle.
+    """
+    delta = abs(first - second)
+    return min(delta, 1440 - delta)
 
 
 def _slot_minutes(slot: str) -> int:
@@ -374,7 +388,7 @@ def self_hosted_neighbours(
         if schedule.workflow in exclude:
             continue
         for clock in schedule.clock_times:
-            distance = abs(_to_minutes(clock) - slot_minutes)
+            distance = _circular_distance(_to_minutes(clock), slot_minutes)
             if distance <= margin_minutes:
                 found.append((distance, schedule, clock))
     return sorted(found, key=lambda row: row[0])
@@ -393,7 +407,9 @@ def nearest_self_hosted(
         if schedule.workflow in exclude:
             continue
         for clock in schedule.clock_times:
-            found.append((abs(_to_minutes(clock) - slot_minutes), schedule, clock))
+            found.append(
+                (_circular_distance(_to_minutes(clock), slot_minutes), schedule, clock)
+            )
     return sorted(found, key=lambda row: row[0])
 
 
@@ -506,8 +522,8 @@ def main(argv: list[str] | None = None) -> int:
         action="append",
         default=None,
         help=(
-            "workflow that OWNS the slot and is therefore not in contention "
-            "with itself (repeatable; default: build-images.yml)"
+            "workflow to ADD to the exclusion set (repeatable). The set always "
+            "contains the slot owner; this flag adds to it, never replaces it."
         ),
     )
     parser.add_argument(
@@ -518,7 +534,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--json", action="store_true", help="emit JSON")
     args = parser.parse_args(argv)
 
-    exclude = set(args.exclude_workflow or DEFAULT_EXCLUDED_WORKFLOWS)
+    # The exclusion is a UNION with the default, not a replacement of it: one
+    # `--exclude-workflow notes.yml` must not make the slot owner's own
+    # exclusion evaporate, or the build would be reported as contending with
+    # itself at distance 0 and `--check` would exit CONTENTION about the very
+    # job that owns the slot.
+    exclude = DEFAULT_EXCLUDED_WORKFLOWS | set(args.exclude_workflow or ())
 
     try:
         _slot_minutes(args.slot)
