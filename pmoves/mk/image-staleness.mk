@@ -3,7 +3,10 @@
 # The fleet's images go stale silently when nothing rebuilds them.
 # `pmoves/images.yaml` declares the build matrix and
 # `.github/workflows/build-images.yml` builds it; this ratchet asserts that
-# every entry in that matrix still has (a) the fields the builder consumes,
+# every entry in that matrix still has (a) the fields this ratchet REQUIRES
+# (`name` and `dockerfile` -- the builder's own reads are `matrix.name` for
+# the tag and `matrix.dockerfile` for the file; `image` is never read by the
+# build and `context` is a fallback the repo-backed entries never reach),
 # (b) build inputs that exist in the tree, and (c) a build path that does
 # not need a human to click. Read-only, zero network, stdlib only.
 #

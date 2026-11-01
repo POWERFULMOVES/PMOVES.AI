@@ -6,13 +6,22 @@ The ratchet is the fleet's "can these images stay fresh?" number. It must:
      (after the schedule: trigger landed).
   2. REPORT a manual-only workflow (the 65-day flute-gateway bug).
   3. REPORT a bogus dockerfile path.
-  4. REPORT a matrix entry missing a builder-required field.
+  4. REPORT a matrix entry missing a field THIS RATCHET requires.
   5. Say UNDECIDED (NOT DRIFTED) for a submodule-backed entry whose
      submodule is not checked out here -- "I could not check" and "it is
      broken" are different answers, and the gate must not go red on a
      CI runner that has no submodules.
   6. NOT mistake the buildx `--push` flag (`push: true` under `with:`) for
      a workflow trigger.
+  7. FAIL CLOSED on a matrix it cannot parse -- an empty matrix means zero
+     claims, zero problems and a green hard gate that verifies nothing.
+  8. FAIL when its OWN trigger probe gags. UNDECIDED is the answer for an
+     uninitialised SUBMODULE; it is the wrong answer for the gate's own
+     probe breaking, because the rebuild path is then UNMEASURED, not clean.
+  9. REPORT a repo-backed entry whose `context` the build IGNORES -- dead
+     build input is where a silently changed behaviour hides.
+ 10. FAIL on a baseline entry whose image is no longer in the matrix (an
+     ORPHAN): the baseline may not outlive the matrix entry it describes.
 
 Hermetic: no network, no docker, no gh, no registry API. Runs on Linux and
 Windows (no POSIX-only path handling, no shell).
@@ -42,6 +51,17 @@ def _run(
     repo_root: Path,
     known_gaps: Path | None = None,
 ) -> subprocess.CompletedProcess:
+    """Run the ratchet against a temp tree.
+
+    The baseline is ALWAYS passed explicitly. Without this the tool falls
+    back to the REPO's real `_known_gaps.yaml`, whose 8 names describe the
+    real 30-image matrix -- so every temp-tree run would report 8 ORPHANED
+    baseline entries and fail, for a reason that has nothing to do with the
+    tree under test. An empty baseline is the honest default here.
+    """
+    if known_gaps is None:
+        known_gaps = repo_root / "_known_gaps.yaml"
+        known_gaps.write_text("known_gaps:\n", encoding="utf-8")
     args = [
         PYTHON,
         str(RATCHET),
@@ -49,10 +69,9 @@ def _run(
         "--workflow", str(workflow),
         "--gitmodules", str(gitmodules),
         "--repo-root", str(repo_root),
+        "--known-gaps", str(known_gaps),
         "--json",
     ]
-    if known_gaps is not None:
-        args += ["--known-gaps", str(known_gaps)]
     return subprocess.run(args, capture_output=True, text=True)
 
 
@@ -148,6 +167,84 @@ KNOWN_GAPS_ONE = """\
 known_gaps:
   pmoves-repo-backed: "the declared Dockerfile is absent at the pinned commit"
 """
+
+# A workflow with NO readable `on:` block: the gate's own probe gags. This
+# is NOT the same as a manual-only workflow -- the trigger is right there in
+# the file, the probe simply cannot read it, so the rebuild path is
+# UNMEASURED rather than clean.
+UNREADABLE_TRIGGER_WORKFLOW = """\
+name: build-images-matrix
+
+jobs:
+  build:
+    name: Image Build
+    runs-on: [self-hosted, Linux, X64]
+    steps:
+      - uses: docker/build-push-action@v7
+        with:
+          push: true
+"""
+
+# A repo-backed entry whose `context` the build IGNORES. The workflow
+# resolves `${{ matrix.repo && format('{0}/{1}', github.workspace, matrix.repo)
+# || matrix.context }}`, so for a repo-backed entry `context` is dead build
+# input -- and this is the shape the lane's own `pmoves-tokenism-ui` entry
+# has.
+DEAD_CONTEXT_IMAGE = """\
+images:
+  - name: pmoves-tokenism-ui
+    repo: PMOVES-ToKenism-Multi
+    context: pmoves-nextjs
+    dockerfile: pmoves-nextjs/Dockerfile
+    image: ghcr.io/powerfulmoves/pmoves-tokenism-ui
+"""
+
+GITMODULES_TOKENISM = (
+    '[submodule "PMOVES-ToKenism-Multi"]\n'
+    "\tpath = PMOVES-ToKenism-Multi\n"
+    "\turl = https://github.com/POWERFULMOVES/PMOVES-ToKenism-Multi.git\n"
+)
+
+# Matrix shapes this reader does not understand, and the phrase each one
+# must be failed with. The reader REFUSES to guess: a shape it cannot parse
+# used to yield an empty matrix, and an empty matrix made the gate green
+# while verifying nothing.
+UNPARSABLE_MATRICES = {
+    "flow-style entry": (
+        "images:\n"
+        "  - {name: pmoves-flute-gateway, context: pmoves, "
+        "dockerfile: services/flute-gateway/Dockerfile}\n",
+        "flow-style",
+    ),
+    "renamed images key": (
+        "matrix:\n"
+        "  - name: pmoves-flute-gateway\n"
+        "    dockerfile: services/flute-gateway/Dockerfile\n",
+        "no top-level `images:` key",
+    ),
+    "re-indented images key": (
+        "  images:\n"
+        "    - name: pmoves-flute-gateway\n"
+        "      dockerfile: services/flute-gateway/Dockerfile\n",
+        "no top-level `images:` key",
+    ),
+    "entry with no colon": (
+        "images:\n"
+        "  - pmoves-flute-gateway\n",
+        "no `key: value` field",
+    ),
+    "empty images list": (
+        "images:\n",
+        "empty",
+    ),
+    "nested block": (
+        "images:\n"
+        "  - name: pmoves-flute-gateway\n"
+        "    build-args:\n"
+        "      FOO: bar\n",
+        "nested block",
+    ),
+}
 
 
 def _claims(out: dict, image: str, probe: str) -> dict:
@@ -250,13 +347,19 @@ def test_bogus_dockerfile_path_is_drifted(tmp_path):
     assert "build input missing" in claim["evidence"], claim
 
 
-def test_missing_builder_field_is_drifted(tmp_path):
-    """An entry without `image` is unbuildable no matter what is on disk."""
+def test_missing_required_field_is_drifted(tmp_path):
+    """An entry without a field THIS RATCHET requires is DRIFTED.
+
+    The ratchet requires `name` (the build tags the image from it) and
+    `dockerfile` (the build opens it). It does NOT require `image`: the
+    build never reads that field -- the tag comes from `${{ matrix.name }}`
+    -- and demanding a dead field would put a FALSE RED on the lane's own
+    matrix, which teaches the fleet to ignore a red gate.
+    """
     bad = """\
 images:
   - name: pmoves-flute-gateway
     context: pmoves
-    dockerfile: services/flute-gateway/Dockerfile
 """
     images, workflow, gitmodules, root = _tree(
         tmp_path,
@@ -269,7 +372,34 @@ images:
     out = json.loads(r.stdout)
     claim = _claims(out, "pmoves-flute-gateway", "matrix_fields")
     assert claim["verdict"] == "DRIFTED", claim
-    assert "image" in claim["evidence"], claim
+    assert "dockerfile" in claim["evidence"], claim
+
+
+def test_the_dead_image_field_is_not_required(tmp_path):
+    """An entry WITHOUT `image` is VERIFIED -- the build never reads it.
+
+    The positive control for the policy above: the image tag comes from
+    `${{ matrix.name }}`, so `image:` is dead build input. A ratchet that
+    demanded it would red-light a perfectly buildable entry.
+    """
+    without_image = """\
+images:
+  - name: pmoves-flute-gateway
+    context: pmoves
+    dockerfile: services/flute-gateway/Dockerfile
+"""
+    images, workflow, gitmodules, root = _tree(
+        tmp_path,
+        images_yaml=without_image,
+        workflow_yaml=GOOD_WORKFLOW,
+        files={"pmoves/services/flute-gateway/Dockerfile": DOCKERFILE_BODY},
+    )
+    r = _run(images, workflow, gitmodules, root)
+    assert r.returncode == 0, r.stdout + r.stderr
+    out = json.loads(r.stdout)
+    claim = _claims(out, "pmoves-flute-gateway", "matrix_fields")
+    assert claim["verdict"] == "VERIFIED", claim
+    assert "image" not in claim["evidence"], claim
 
 
 # --------------------------------------------------------------------------
@@ -519,6 +649,197 @@ def test_missing_matrix_file_returns_2():
     )
     assert r.returncode == 2
     assert "not found" in r.stderr.lower()
+
+
+# --------------------------------------------------------------------------
+# FAIL CLOSED: the gate must not be green because it read nothing
+# --------------------------------------------------------------------------
+@pytest.mark.parametrize("shape", sorted(UNPARSABLE_MATRICES))
+def test_an_unparsable_matrix_fails_closed(tmp_path, shape):
+    """A matrix the reader cannot understand must NOT be a green gate.
+
+    The reader refuses to guess, and refusing means FAILING. A shape it
+    cannot parse used to yield an empty list, and an empty list meant zero
+    claims, zero problems and exit 0 -- a green hard gate that verified
+    nothing, on exactly the tree it exists to police.
+    """
+    matrix_text, expected_phrase = UNPARSABLE_MATRICES[shape]
+    images, workflow, gitmodules, root = _tree(
+        tmp_path,
+        images_yaml=matrix_text,
+        workflow_yaml=GOOD_WORKFLOW,
+        files={"pmoves/services/flute-gateway/Dockerfile": DOCKERFILE_BODY},
+    )
+    r = _run(images, workflow, gitmodules, root)
+    assert r.returncode != 0, r.stdout + r.stderr
+    payload = json.loads(r.stdout)
+    assert payload["total"] == 0, payload
+    assert payload["claims"] == [], payload
+    assert payload["problems"], payload
+    assert expected_phrase in payload["error"], payload["error"]
+    # The failure names the shape mismatch on stderr too, so the human sees
+    # it in the CI log and not only in the JSON payload.
+    assert expected_phrase in r.stderr, r.stderr
+
+
+def test_a_gagged_trigger_probe_fails_the_gate(tmp_path):
+    """The gate's OWN probe breaking must fail the gate.
+
+    UNDECIDED is the house answer for an uninitialised SUBMODULE -- "I
+    could not check". It is the WRONG answer for the gate's own trigger
+    probe gagging: the trigger is in the workflow file, and the check whose
+    origin story is "the trigger silently disappeared and nobody noticed"
+    must not go green because the probe broke.
+    """
+    images, workflow, gitmodules, root = _tree(
+        tmp_path,
+        images_yaml=ONE_IMAGE,
+        workflow_yaml=UNREADABLE_TRIGGER_WORKFLOW,
+        files={"pmoves/services/flute-gateway/Dockerfile": DOCKERFILE_BODY},
+    )
+    r = _run(images, workflow, gitmodules, root)
+    assert r.returncode == 1, r.stdout + r.stderr
+    out = json.loads(r.stdout)
+    claim = _claims(out, "pmoves-flute-gateway", "build_path")
+    assert claim["verdict"] == "INSTRUMENT-ERROR", claim
+    assert out["errors"], out
+    assert out["errors"][0]["probe"] == "build_path", out["errors"]
+    # It is its OWN class, not DRIFTED: nothing is proven broken.
+    assert claim["verdict"] != "DRIFTED", claim
+    assert out["problems"] == [], out["problems"]
+
+
+# --------------------------------------------------------------------------
+# dead build input: a `context` the build IGNORES
+# --------------------------------------------------------------------------
+def test_a_repo_backed_entry_with_a_dead_context_is_drifted(tmp_path):
+    """A repo-backed entry that declares a `context` the build ignores.
+
+    The workflow resolves
+    `${{ matrix.repo && format('{0}/{1}', github.workspace, matrix.repo) || matrix.context }}`,
+    so `context` is DEAD for a repo-backed entry. A non-`.` value there is
+    dead build input hiding in plain sight -- and it is exactly where a
+    silently changed behaviour hides.
+    """
+    images, workflow, gitmodules, root = _tree(
+        tmp_path,
+        images_yaml=DEAD_CONTEXT_IMAGE,
+        workflow_yaml=GOOD_WORKFLOW,
+        gitmodules=GITMODULES_TOKENISM,
+        # The repo IS present here, so the mismatch is measurable.
+        files={
+            "PMOVES-ToKenism-Multi/pmoves-nextjs/Dockerfile": DOCKERFILE_BODY,
+        },
+    )
+    r = _run(images, workflow, gitmodules, root)
+    out = json.loads(r.stdout)
+    claim = _claims(out, "pmoves-tokenism-ui", "dead_context")
+    assert claim["verdict"] == "DRIFTED", claim
+    # The evidence names WHICH entry and WHICH ignored context.
+    assert "pmoves-tokenism-ui" in claim["evidence"], claim
+    assert "pmoves-nextjs" in claim["evidence"], claim
+    assert r.returncode == 1, r.stdout + r.stderr
+    assert any("dead_context" in p for p in out["problems"]), out["problems"]
+
+
+def test_a_dead_context_is_undecided_when_the_repo_cannot_be_measured(tmp_path):
+    """Where the repo is not checked out, the dead context is UNDECIDED.
+
+    The tool cannot look inside a repo that is not there, so it says "could
+    not check" -- it never claims VERIFIED for a mismatch it cannot see,
+    and it never claims DRIFTED on a tree that simply has no submodules.
+    The dead context is still REPORTED, so it does not hide.
+    """
+    images, workflow, gitmodules, root = _tree(
+        tmp_path,
+        images_yaml=DEAD_CONTEXT_IMAGE,
+        workflow_yaml=GOOD_WORKFLOW,
+        gitmodules=GITMODULES_TOKENISM,
+        # NOTE: PMOVES-ToKenism-Multi/ is deliberately absent.
+    )
+    r = _run(images, workflow, gitmodules, root)
+    out = json.loads(r.stdout)
+    claim = _claims(out, "pmoves-tokenism-ui", "dead_context")
+    assert claim["verdict"] == "UNDECIDED", claim
+    assert "pmoves-nextjs" in claim["evidence"], claim
+    assert out["problems"] == [], out["problems"]
+
+
+def test_a_repo_backed_entry_with_a_dot_context_is_verified(tmp_path):
+    """Positive control: `context: .` is what the build resolves."""
+    images, workflow, gitmodules, root = _tree(
+        tmp_path,
+        images_yaml=REPO_BACKED_IMAGE,
+        workflow_yaml=GOOD_WORKFLOW,
+        gitmodules=GITMODULES_ONE,
+        files={"PMOVES-Foo/Dockerfile": DOCKERFILE_BODY},
+    )
+    r = _run(images, workflow, gitmodules, root)
+    out = json.loads(r.stdout)
+    claim = _claims(out, "pmoves-repo-backed", "dead_context")
+    assert claim["verdict"] == "VERIFIED", claim
+    assert r.returncode == 0, r.stdout + r.stderr
+
+
+def test_an_in_tree_entry_honours_its_declared_context(tmp_path):
+    """Positive control: an entry with no `repo:` resolves its own context."""
+    images, workflow, gitmodules, root = _tree(
+        tmp_path,
+        images_yaml=ONE_IMAGE,
+        workflow_yaml=GOOD_WORKFLOW,
+        files={"pmoves/services/flute-gateway/Dockerfile": DOCKERFILE_BODY},
+    )
+    r = _run(images, workflow, gitmodules, root)
+    out = json.loads(r.stdout)
+    claim = _claims(out, "pmoves-flute-gateway", "dead_context")
+    assert claim["verdict"] == "VERIFIED", claim
+
+
+# --------------------------------------------------------------------------
+# the baseline may not outlive the matrix
+# --------------------------------------------------------------------------
+def test_an_orphaned_baseline_entry_fails_the_gate(tmp_path):
+    """A baseline name with NO matrix entry at all is ORPHANED -- and fails.
+
+    The stale check is one-directional: it catches a gap that got FIXED. A
+    baseline entry whose image was REMOVED or RENAMED produces no claims
+    at all -- not DRIFTED, not VERIFIED, not even UNDECIDED, ABSENT -- so it
+    matches nothing, fails nothing and haunts the baseline forever.
+    """
+    images, workflow, gitmodules, root = _tree(
+        tmp_path,
+        images_yaml=ONE_IMAGE,
+        workflow_yaml=GOOD_WORKFLOW,
+        files={"pmoves/services/flute-gateway/Dockerfile": DOCKERFILE_BODY},
+    )
+    gaps = tmp_path / "gaps.yaml"
+    gaps.write_text(
+        "known_gaps:\n"
+        '  pmoves-removed-from-the-matrix: "the declared Dockerfile is absent"\n',
+        encoding="utf-8",
+    )
+    r = _run(images, workflow, gitmodules, root, known_gaps=gaps)
+    out = json.loads(r.stdout)
+    assert out["orphan_gaps"] == ["pmoves-removed-from-the-matrix"], out
+    assert r.returncode == 1, r.stdout + r.stderr
+
+
+def test_a_baseline_entry_that_is_still_in_the_matrix_is_not_orphaned(tmp_path):
+    """Positive control: a live baseline entry is not an orphan."""
+    images, workflow, gitmodules, root = _tree(
+        tmp_path,
+        images_yaml=REPO_BACKED_IMAGE,
+        workflow_yaml=GOOD_WORKFLOW,
+        gitmodules="",  # not a declared submodule -> the build input is absent
+        files={},
+    )
+    gaps = tmp_path / "gaps.yaml"
+    gaps.write_text(KNOWN_GAPS_ONE, encoding="utf-8")
+    r = _run(images, workflow, gitmodules, root, known_gaps=gaps)
+    out = json.loads(r.stdout)
+    assert out["orphan_gaps"] == [], out["orphan_gaps"]
+    assert out["known_gaps"], out["known_gaps"]
+    assert r.returncode == 0, r.stdout + r.stderr
 
 
 # --------------------------------------------------------------------------
