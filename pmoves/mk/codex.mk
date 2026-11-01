@@ -266,10 +266,6 @@ SECRETS_ENSURE_KEYS ?= \
   INVIDIOUS_COMPANION_KEY
 
 .PHONY: secrets-ensure-generated secrets-harvest-check
-# The funnel is a secrets WRITER: it may rotate a published or vendor-invalid
-# Invidious key (the rollout is "funnel, then up-invidious"). Target-specific, so
-# it reaches this target's ensure-env-shared prerequisite and nothing else.
-secrets-ensure-generated: ENSURE_ENV_INVIDIOUS_KEYS := fix
 secrets-ensure-generated: ensure-env-shared ## Recover live secrets from the running fleet, THEN mint only what is genuinely absent. Idempotent; never overwrites a live value.
 	@# HARVEST BEFORE MINT. THE ORDER IS THE WHOLE POINT.
 	@#
@@ -305,6 +301,11 @@ secrets-ensure-generated: ensure-env-shared ## Recover live secrets from the run
 	  $(CODEX_PY) tools/secrets_harvest.py $(foreach k,$(SECRETS_ENSURE_KEYS),--key $(k)) && \
 	  $(CODEX_PY) scripts/bootstrap_env.py $(foreach k,$(SECRETS_ENSURE_KEYS),--ensure $(k)); \
 	fi
+
+# The funnel is a secrets WRITER: it may rotate a published or vendor-invalid
+# Invidious key (the rollout is "funnel, then up-invidious"). Target-specific, so
+# it reaches secrets-ensure-generated's ensure-env-shared prerequisite and nothing else.
+secrets-ensure-generated: ENSURE_ENV_INVIDIOUS_KEYS := fix
 
 secrets-harvest-check: ## Report what secrets-ensure-generated WOULD do (harvest / mint / refuse). Writes nothing. Exit 3 = refused.
 	@if [ -z "$(strip $(SECRETS_ENSURE_KEYS))" ]; then \
