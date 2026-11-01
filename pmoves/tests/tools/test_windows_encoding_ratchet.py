@@ -48,6 +48,7 @@ from __future__ import annotations
 
 import ast
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -187,6 +188,108 @@ def test_a_mode_keyword_is_honoured_for_both_signatures():
 def test_an_unparseable_file_is_an_instrument_error():
     with pytest.raises(ratchet.InstrumentError):
         ratchet.find_gaps("def broken(:\n", "broken.py")
+
+
+def _declared_minimum_python() -> tuple[int, int]:
+    """The project's declared minimum Python, read from the manifest.
+
+    Read, not hardcoded: the point of the test is that the FLOOR and the
+    JOB agree. Hardcoding the version in the test would let the manifest and
+    the CI job drift apart while the test kept saying it was fine.
+    """
+    manifest = (PMOVES / "pyproject.toml").read_text(encoding="utf-8")
+    match = re.search(r'requires-python\s*=\s*"[^"]*?(\d+)\.(\d+)', manifest)
+    assert match, f"pmoves/pyproject.toml does not declare requires-python: {manifest[:400]}"
+    return int(match.group(1)), int(match.group(2))
+
+
+def _ratchet_job_python_version() -> tuple[int, int]:
+    """The Python the ratchet CI job runs on."""
+    workflow = (
+        REPO_ROOT / ".github" / "workflows" / "windows-encoding-ratchet.yml"
+    )
+    assert workflow.exists(), f"the ratchet workflow is missing: {workflow}"
+    parsed = yaml.safe_load(workflow.read_text(encoding="utf-8"))
+    versions: list[str] = []
+    for job in (parsed.get("jobs") or {}).values():
+        for step in (job or {}).get("steps", []) or []:
+            version = (step or {}).get("with", {}).get("python-version")
+            if isinstance(version, str):
+                versions.append(version)
+    assert versions, "the ratchet workflow declares no python-version"
+    assert len(set(versions)) == 1, f"the ratchet workflow pins several versions: {versions}"
+    major, minor = versions[0].split(".")
+    return int(major), int(minor)
+
+
+def test_no_module_in_the_measured_surface_uses_syntax_newer_than_the_declared_minimum_python():
+    """The tree must parse on the Python this project claims to support.
+
+    MEASURED 2026-11-01: `pmoves/services/semantic-cache/chit_invalidation.py`
+    used PEP 695 type parameter syntax -- `async def call[T](...)` -- which is
+    Python 3.12+. `pmoves/pyproject.toml` declares `requires-python =
+    ">=3.11"` and the `windows-encoding-ratchet` job runs on 3.11, so the file
+    was a SyntaxError there and the ratchet could not even PARSE it to
+    measure it. The gate failed closed, correctly; the message just did not
+    name the cause.
+
+    Three assertions, because no single one covers both interpreters:
+
+      1. the job that parses this tree runs at the DECLARED floor -- if it
+         ran higher, a 3.12-only file would pass the gate while the floor
+         stayed a lie;
+      2. every measured file parses under the interpreter running this test
+         (this is what catches it on 3.11);
+      3. no measured file uses PEP 695 type parameters (this is what catches
+         it on 3.12, where the file parses perfectly).
+
+    The file set is the RATCHET'S OWN -- its `SKIP_DIRS`, not a second list
+    that could drift -- so the test measures the same surface the gate does.
+    """
+    declared = _declared_minimum_python()
+    job_version = _ratchet_job_python_version()
+    assert job_version == declared, (
+        f"the ratchet job runs on {job_version} but the project declares "
+        f">={declared[0]}.{declared[1]}. The job that parses this tree must run "
+        f"at the declared floor, or a file using newer syntax passes the gate "
+        f"while the floor is a lie."
+    )
+
+    files = sorted(
+        path
+        for path in PMOVES.rglob("*.py")
+        if not (ratchet.SKIP_DIRS & set(path.relative_to(PMOVES).parts))
+    )
+    assert files, "the measured surface is empty -- nothing to check"
+
+    unparseable: list[str] = []
+    pep695: list[str] = []
+    for path in files:
+        rel = path.relative_to(PMOVES).as_posix()
+        source = path.read_text(encoding="utf-8")
+        try:
+            tree = ast.parse(source, filename=str(path))
+        except SyntaxError as exc:
+            unparseable.append(f"{rel}: {exc.msg} (line {exc.lineno})")
+            continue
+        for node in ast.walk(tree):
+            params = getattr(node, "type_params", None)
+            if params:
+                pep695.append(
+                    f"{rel}:{node.lineno} {type(node).__name__} "
+                    f"[{','.join(getattr(t, 'name', '?') for t in params)}]"
+                )
+
+    assert not unparseable, (
+        "these modules do not parse under the interpreter running this test "
+        f"(the project's declared floor is {declared[0]}.{declared[1]}):\n  "
+        + "\n  ".join(unparseable)
+    )
+    assert not pep695, (
+        "these modules use PEP 695 type parameter syntax, which is Python "
+        f"3.12+ -- but the project's declared floor is {declared[0]}.{declared[1]}. "
+        "Use a `typing.TypeVar` instead:\n  " + "\n  ".join(pep695)
+    )
 
 
 def test_a_missing_root_is_an_instrument_error():

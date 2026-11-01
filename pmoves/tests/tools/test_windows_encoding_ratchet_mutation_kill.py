@@ -89,13 +89,25 @@ _LOCK_PATH = Path(tempfile.gettempdir()) / "pmoves-windows-encoding-mutation.loc
 
 @dataclass(frozen=True)
 class Mutation:
-    """One mutation: the rewrite, and the test that MUST die from it."""
+    """One mutation: the rewrite, and the test that MUST die from it.
+
+    ``target_file`` is the file the rewrite is applied to. It defaults to the
+    ratchet TOOL. A mutation that lives in the TREE -- a module using syntax
+    newer than the project's declared floor -- names its own file, because a
+    harness that could only ever rewrite the tool could not prove that the
+    tree-level invariant is load-bearing.
+    """
 
     name: str
     old: str
     new: str
     target_test: str
     rationale: str
+    target_file: Path | None = None
+
+    @property
+    def path(self) -> Path:
+        return self.target_file or TOOL
 
 
 MUTATIONS: list[Mutation] = [
@@ -190,6 +202,39 @@ MUTATIONS: list[Mutation] = [
             "never measured."
         ),
     ),
+    Mutation(
+        name="M8_pep_695_type_parameters_reintroduced",
+        old="""    async def call(
+        self,
+        fn: Callable[..., Awaitable[T]],
+        *args: Any,
+        **kwargs: Any,
+    ) -> T:""",
+        new="""    async def call[
+        T
+    ](
+        self,
+        fn: Callable[..., Awaitable[T]],
+        *args: Any,
+        **kwargs: Any,
+    ) -> T:""",
+        target_test=(
+            "test_no_module_in_the_measured_surface_uses_syntax_newer_than_"
+            "the_declared_minimum_python"
+        ),
+        rationale=(
+            "PEP 695 type parameter lists are Python 3.12+. The project "
+            "declares `requires-python = \">=3.11\"` and the ratchet job runs "
+            "on 3.11, so this file becomes a SyntaxError there and the "
+            "ratchet cannot PARSE it to measure it. MEASURED 2026-11-01: this "
+            "was the one PEP 695 site in 1400 files, and it broke the "
+            "windows-encoding-ratchet CI job."
+        ),
+        target_file=(
+            REPO_ROOT / "pmoves" / "services" / "semantic-cache"
+            / "chit_invalidation.py"
+        ),
+    ),
 ]
 
 
@@ -273,8 +318,8 @@ def _apply_mutation(mutation: Mutation, original: str) -> str:
     """
     if mutation.old not in original:
         raise AssertionError(
-            f"mutation {mutation.name}: anchor not found in {TOOL.name}. "
-            "The tool's source changed -- update the mutation.\n"
+            f"mutation {mutation.name}: anchor not found in {mutation.path.name}. "
+            "The source changed -- update the mutation.\n"
             f"--- expected ---\n{mutation.old}"
         )
     mutated = original.replace(mutation.old, mutation.new, 1)
@@ -285,10 +330,11 @@ def _apply_mutation(mutation: Mutation, original: str) -> str:
 
 def test_every_mutation_anchor_is_present():
     """A drifted anchor must be loud, not silently inert."""
-    original = TOOL.read_text(encoding="utf-8")
     for mutation in MUTATIONS:
+        original = mutation.path.read_text(encoding="utf-8")
         assert mutation.old in original, (
-            f"mutation {mutation.name}: anchor not found -- the tool source drifted"
+            f"mutation {mutation.name}: anchor not found in "
+            f"{mutation.path.name} -- the source drifted"
         )
         assert mutation.old != mutation.new, mutation.name
         assert mutation.target_test, mutation.name
@@ -298,7 +344,8 @@ def test_every_mutation_anchor_is_present():
 def test_the_mutation_kills_the_named_test(mutation: Mutation) -> None:
     """GREEN -> RED -> GREEN, with a byte-exact restore."""
     node_id = f"{TEST_FILE.relative_to(REPO_ROOT).as_posix()}::{mutation.target_test}"
-    original = TOOL.read_text(encoding="utf-8")
+    target = mutation.path
+    original = target.read_text(encoding="utf-8")
 
     with _MUTATION_LOCK, _file_lock(_LOCK_PATH):
         # 1. GREEN BEFORE
@@ -310,7 +357,7 @@ def test_the_mutation_kills_the_named_test(mutation: Mutation) -> None:
 
         mutated = _apply_mutation(mutation, original)
         try:
-            TOOL.write_text(mutated, encoding="utf-8")
+            target.write_text(mutated, encoding="utf-8")
 
             # 2. RED AFTER -- the NAMED test must die
             after = _run_pytest(node_id)
@@ -324,8 +371,8 @@ def test_the_mutation_kills_the_named_test(mutation: Mutation) -> None:
             )
         finally:
             # 3. GREEN AFTER -- byte-exact restore
-            TOOL.write_text(original, encoding="utf-8")
-            restored = TOOL.read_text(encoding="utf-8")
+            target.write_text(original, encoding="utf-8")
+            restored = target.read_text(encoding="utf-8")
             assert restored == original, f"{mutation.name}: the restore was not byte-exact"
 
         after_restore = _run_pytest(node_id)
