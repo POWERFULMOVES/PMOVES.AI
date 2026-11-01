@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import secrets
 import subprocess
 import sys
@@ -19,6 +20,14 @@ from pmoves.tools._secrets_common import (
     is_placeholder as _looks_placeholder,
     parse_env_file as _parse_env_file,
 )
+
+# bootstrap_env.py lives in scripts/ (not a package member); load it by path,
+# as secrets_harvest does, to reuse the registry's generators -- one format.
+_BOOTSTRAP_ENV = Path(_REPO_ROOT) / "pmoves" / "scripts" / "bootstrap_env.py"
+_spec = importlib.util.spec_from_file_location("_bootstrap_env_for_hydrate", _BOOTSTRAP_ENV)
+_be = importlib.util.module_from_spec(_spec)
+sys.modules[_spec.name] = _be
+_spec.loader.exec_module(_be)
 
 DEFAULT_ENV_FILE = PROJECT_ROOT / "env.shared"
 DEFAULT_STATUS_FILE = PROJECT_ROOT / ".supabase.status.env"
@@ -222,7 +231,8 @@ def hydrate_runtime_labels(
         _find_container_env_value(
             containers, name_tokens=("invidious",), keys=("INVIDIOUS_COMPANION_KEY", "SERVER_SECRET_KEY")
         )
-        or secrets.token_hex(8),  # 8 bytes = 16 hex chars
+        # Same generator as the registry (random_alnum 16): one owner, one format.
+        or (_be.mint_from_registry("INVIDIOUS_COMPANION_KEY") or ""),
     )
 
     return updates

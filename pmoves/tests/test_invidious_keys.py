@@ -145,6 +145,27 @@ def test_runtime_hydrate_mint_satisfies_the_companion_schema():
     assert COMPANION_KEY_RE.fullmatch(updates["INVIDIOUS_COMPANION_KEY"])
 
 
+def test_runtime_hydrate_fallback_is_the_registry_generator(monkeypatch):
+    """One owner, one format: the hydrate's fallback mint must come from the
+    registry spec through the shared helper, not a second implementation."""
+    spec = _specs()["INVIDIOUS_COMPANION_KEY"]["generate"]
+    for _ in range(50):
+        value = rsh.hydrate_runtime_labels({}, status_values={}, containers=[])["INVIDIOUS_COMPANION_KEY"]
+        assert rsh._be.value_matches_spec(value, spec)
+    calls = []
+
+    def sentinel(key, registry_path=None):
+        calls.append(key)
+        return "Zz" * 8
+
+    monkeypatch.setattr(rsh._be, "mint_from_registry", sentinel)
+    updates = rsh.hydrate_runtime_labels({}, status_values={}, containers=[])
+    assert calls == ["INVIDIOUS_COMPANION_KEY"]
+    assert updates["INVIDIOUS_COMPANION_KEY"] == "Zz" * 8
+    src = (PMOVES / "tools" / "runtime_secrets_hydrate.py").read_text(encoding="utf-8")
+    assert "token_hex(8)" not in src
+
+
 def test_funnel_ensures_both_keys():
     """Compose interpolates every service, profiled or not -> every node mints."""
     text = (PMOVES / "mk" / "codex.mk").read_text(encoding="utf-8")

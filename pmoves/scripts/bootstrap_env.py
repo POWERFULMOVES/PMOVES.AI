@@ -137,6 +137,17 @@ def generate_value(spec: Optional[Dict]) -> Optional[str]:
     return _generate_token_or_passphrase(spec, gen_type)
 
 
+def mint_from_registry(key: str, registry_path: Optional[str] = None) -> Optional[str]:
+    """A fresh value for *key* from the generator the bootstrap registry declares.
+
+    The one place a stack-generated key's FORMAT comes from. Any other tool that
+    needs a fallback mint (runtime_secrets_hydrate) calls this rather than
+    re-implementing the format, so the registry stays the single source of truth.
+    None when the registry declares no generator for *key*.
+    """
+    return generate_value(_registry_generator(key, registry_path))
+
+
 def _generate_token_or_passphrase(spec: Dict, gen_type: str) -> Optional[str]:
     if gen_type == "random_urlsafe":
         length = int(spec.get("length", 32))
