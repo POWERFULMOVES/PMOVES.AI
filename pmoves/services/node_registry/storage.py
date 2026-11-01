@@ -7,12 +7,35 @@ Provides persistent node catalog with Supabase for multi-host deployments.
 import dataclasses
 import json
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Set
 
 from ..resource_detector.models import NodeCapabilities, NodeHeartbeat
 
 logger = logging.getLogger(__name__)
+
+
+def naive_utc(value: datetime) -> datetime:
+    """Normalise a datetime so the store can compare it with its own clock.
+
+    WHY THIS EXISTS (F4). The store compares `last_heartbeat` against a
+    NAIVE clock, so an AWARE datetime entering the store makes the
+    comparison raise `TypeError: can't subtract offset-naive and
+    offset-aware datetimes` -- the node record cannot be evaluated at all.
+
+    Every datetime that ENTERS the store is therefore converted to UTC and
+    stripped of its tzinfo, so the whole record set speaks ONE convention:
+    naive. A datetime that is already naive is returned UNCHANGED -- it is
+    already in the store's convention, and rewriting it would move a value
+    the publisher meant literally.
+
+    The store's own clock (`datetime.now()`) is naive LOCAL time. On the
+    fleet's UTC containers the two agree; on a developer host in another
+    zone the staleness window shifts by that zone's UTC offset.
+    """
+    if value.tzinfo is None:
+        return value
+    return value.astimezone(timezone.utc).replace(tzinfo=None)
 
 
 # Constants
@@ -645,14 +668,20 @@ class SupabaseNodeStore(InMemoryNodeStore):
             return NodeTier.CPU_PEER
 
     def _parse_datetime(self, value: Any) -> Optional[datetime]:
-        """Parse datetime from various formats."""
+        """Parse datetime from various formats, normalised to naive UTC.
+
+        WHY (F4): Supabase hands back TIMESTAMPTZ as an ISO string with an
+        offset ("...+00:00"), so `fromisoformat` produced an AWARE
+        datetime, and the store's naive clock could not be subtracted from
+        it. Normalising here keeps the record set in ONE convention.
+        """
         if value is None:
             return None
         if isinstance(value, datetime):
-            return value
+            return naive_utc(value)
         if isinstance(value, str):
             try:
-                return datetime.fromisoformat(value.replace("Z", "+00:00"))
+                return naive_utc(datetime.fromisoformat(value.replace("Z", "+00:00")))
             except ValueError:
                 pass
         return None

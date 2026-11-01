@@ -6,7 +6,7 @@ docker-compose resource limits for PMOVES.AI services.
 Usage:
     python -m pmoves.services.resource_detector.main
     or
-    python services/resource-detector/main.py
+    python services/resource_detector/main.py
 """
 
 import asyncio
@@ -19,14 +19,33 @@ from typing import Any
 import structlog
 from aiohttp import web
 
-# Import service components (handle hyphenated module name)
+# Import service components.
+#
+# WHY (D2/D3): this service directory used to be kebab-case
+# (`resource-detector`), so the package could never be imported under the name
+# its own docstring advertised (`pmoves.services.resource_detector`) -- every
+# importer in the repo wrote `from ..resource_detector...` and got
+# ModuleNotFoundError. The directory is now `resource_detector`; load the
+# package under its CANONICAL name (with a package search path) so the
+# relative imports inside it resolve, and make the repo root importable so
+# `pmoves.services...` resolves from a plain script launch.
 import importlib.util
+import pathlib
+import sys
 
+_REPO_ROOT = str(pathlib.Path(__file__).resolve().parents[3])
+if _REPO_ROOT not in sys.path:
+    sys.path.insert(0, _REPO_ROOT)
+
+_PKG_NAME = "pmoves.services.resource_detector"
+_PKG_DIR = os.path.dirname(os.path.abspath(__file__))
 spec = importlib.util.spec_from_file_location(
-    "resource_detector",
-    os.path.join(os.path.dirname(__file__), "__init__.py")
+    _PKG_NAME,
+    os.path.join(_PKG_DIR, "__init__.py"),
+    submodule_search_locations=[_PKG_DIR],
 )
 resource_detector = importlib.util.module_from_spec(spec)
+sys.modules[_PKG_NAME] = resource_detector
 spec.loader.exec_module(resource_detector)
 
 get_hardware_profile = resource_detector.get_hardware_profile
@@ -280,7 +299,7 @@ class ResourceDetectorService:
         async def service_requirements(request):
             """Get resource requirements for a specific service."""
             try:
-                from resource_detector import SERVICE_CATEGORIES
+                from pmoves.services.resource_detector import SERVICE_CATEGORIES
 
                 return web.json_response(SERVICE_CATEGORIES)
             except ImportError:

@@ -16,7 +16,7 @@
 #
 # Usage:
 #   bash deploy/provision/hermes-pmoves.sh        [args...]
-#   install-hermes-pmoves-pmoves-command.sh && hermes-pmoves         # rc function
+#   install-hermes-pmoves-command.sh && hermes-pmoves         # rc function
 #   hermes-pmoves.cmd                              # Windows Explorer double-click
 #
 # Purpose: One-shot Hermes bootstrap+launch (profile + MCP + CHIT)

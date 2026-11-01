@@ -264,7 +264,10 @@ def test_prefix_reconciles_onto_an_entry_that_already_exists():
 
 def test_no_registry_entry_declares_an_unrecognised_constraint_key():
     """A typo'd key (`prefx`) is a silent no-op: build_entry just ignores it."""
-    recognised = {"tier", "required", "aliases", "min_length", "prefix"}
+    # "targets" is honoured by build_entry (registry-declared target sets
+    # replace the auto tail) and reconcile_entry flags widening as drift —
+    # the SECRET_KEY trim depends on it (#3422).
+    recognised = {"tier", "required", "aliases", "min_length", "prefix", "targets"}
     offenders = {
         label: sorted(set(spec) - recognised)
         for label, spec in REGISTRY.items()

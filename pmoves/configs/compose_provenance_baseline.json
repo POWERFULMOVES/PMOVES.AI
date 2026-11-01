@@ -46,6 +46,7 @@
     "nats-echo-req",
     "nats-echo-res",
     "nats_event_bus",
+    "node-registry",
     "notebook-mcp",
     "notebook-sync",
     "notebooklm-agent",
