@@ -14,30 +14,45 @@ on:
   # queue as every other scheduled job in the fleet. 23 keeps this off the
   # hour and off-peak.
   #
-  # MEASURED across .github/workflows, by PARSING every workflow file: 74
-  # files scanned, 74 parsed, 0 dropped, 18 carry a live `schedule:`. A
-  # commented-out `schedule:` is genuinely absent, not "probably absent" --
-  # integrations-ghcr.yml's '17 7 * * *' is COMMENTED OUT (lines 97-98), so
-  # it never runs and is deliberately NOT cited as a neighbour.
+  # MEASURED across .github/workflows by `pmoves/tools/measure_schedule_contention.py`
+  # -- the instrument is IN THE TREE and this comment cites it, so the numbers
+  # below can be re-derived instead of trusted: 74 files scanned, 74 parsed,
+  # 0 dropped, 18 carry a live `schedule:`. A commented-out `schedule:` is
+  # genuinely absent, not "probably absent" -- integrations-ghcr.yml's
+  # '17 7 * * *' is COMMENTED OUT (lines 97-98), so it never runs and is
+  # deliberately NOT cited as a neighbour.
   #
   # The `build` job runs on `[self-hosted, Linux, X64]`, so the question that
   # matters is SELF-HOSTED contention. Measured against all 18:
   #
   #   * EXACTLY 2 schedules fire at clock time 04:00 -- the nearest by clock
-  #     time: review-collect.yml ('0 */2 * * *', every even hour) and
-  #     branch-protection-ruleset-sync.yml ('0 4 * * 0', Sundays only). BOTH
-  #     are HOSTED (ubuntu-24.04), so neither takes a self-hosted runner.
+  #     time: review-collect.yml ('0 */2 * * *', every even hour, runs-on
+  #     ubuntu-24.04) and branch-protection-ruleset-sync.yml ('0 4 * * 0',
+  #     Sundays only, runs-on ubuntu-24.04). BOTH are HOSTED, so neither takes
+  #     a self-hosted runner. review-collect fires 84 times a week against the
+  #     ruleset sync's once -- the ratio is COMPUTED from the cron fields by
+  #     the tool above, not written by hand.
   #   * EXACTLY 2 schedules fire at 03:00, 83 minutes earlier, and BOTH are
-  #     SELF-HOSTED: fleet-docker-cleanup.yml ('0 3 * * *', runs-on
-  #     [self-hosted, Linux, X64, ...]) and runner-maintenance.yml
-  #     ('0 3 * * *', runs-on [self-hosted, ...]).
+  #     SELF-HOSTED. Their runs-on expressions are quoted EXACTLY, because an
+  #     elided "..." is the "probably absent" shape this comment criticises
+  #     elsewhere: fleet-docker-cleanup.yml ('0 3 * * *', runs-on
+  #     [self-hosted, Linux, X64, "${{ matrix.runner_label }}"]) and
+  #     runner-maintenance.yml ('0 3 * * *', runs-on
+  #     [self-hosted, "${{ matrix.label }}"]).
+  #   * The one that matters is fleet-docker-cleanup: it runs
+  #     `docker builder prune -af` and `docker image prune -a -f` on the SAME
+  #     self-hosted pool this build pushes images to, so it is the only
+  #     schedule that could actually race the build. 83 minutes of separation
+  #     is the margin that rules it out.
   #   * The next SELF-HOSTED schedule after the slot is
   #     submodule-update-check.yml at 06:00 -- 97 minutes later, Sundays
   #     only, runs-on [self-hosted, Linux, X64, ai-lab]. The only other
   #     self-hosted schedule in the fleet is
   #     python-images-toolchain-canary.yml at 09:00.
   #
-  # 04:23 therefore sits clear of every self-hosted schedule in the fleet.
+  # 04:23 therefore sits clear of every self-hosted schedule in the fleet, and
+  # `pmoves/tests/tools/test_measure_schedule_contention.py` re-checks that on
+  # every PR -- so this claim cannot rot into a falsehood unnoticed.
   #
   # For completeness, EXACTLY 7 schedules fire at clock time 06:00:
   # agent-zero-upstream-check, branch-protection-drift, branch-protection-sync

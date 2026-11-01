@@ -247,13 +247,23 @@ secrets.
 | 22 | **contract-correctness** | **A one-directional baseline check leaves the direction nobody thinks about uncovered** — and an absent entry produces no claim at all. | The stale-gap check catches a gap that gets FIXED: its `build_inputs` claim becomes VERIFIED, so the baselined gap is stale and fails until it is dropped. Good contract — and one-directional. A `known_gaps` name whose image was REMOVED from or RENAMED in `pmoves/images.yaml` produces NO claims, matches nothing, and haunts the baseline forever: `stale_gaps` requires a VERIFIED `build_inputs` claim, so an absent image fails nothing and reports nothing. The baseline validated "broken -> fixed" but not "gone from the matrix entirely" — the one direction where nothing else will ever remind anyone the entry exists. FIX: an ORPHAN check — a baseline name with NO `build_inputs` claim AT ALL (not DRIFTED, not VERIFIED, not even UNDECIDED) is reported and failed, so the baseline cannot outlive the matrix entry it describes. | Any baseline, allowlist, or known-gap file. |
 | 23 | **reasoning-gap** | **A docstring that describes the state of the tree is a CLAIM, not a caption** — and the lane that changes the tree must change the description in the SAME commit. | The `probe_dead_context` docstring said "The lane's own matrix has exactly one such entry: `pmoves-tokenism-ui` declares `context: pmoves-nextjs` ... and that declaration is ignored" — in the PRESENT tense. The SAME lane DROPPED that declaration from `pmoves/images.yaml` (MEASURED at the pinned gitlink `04285b813f`: the submodule holds both `Dockerfile` and `pmoves-nextjs/Dockerfile`, and the latter is what the entry wants). So the gate's own docstring described a tree state that stopped existing in the same PR: a present-tense claim falsified by the change sitting next to it, and a reader cannot tell which half to believe — the code or the prose about the code. FIX: past tense ("used to declare ... until the dead declaration was dropped"), and the probe now fails any entry that declares one again. The general shape: prose about the tree decays at exactly the rate the tree moves, so prose about the tree is a claim and carries the same standard as a claim. | Any docstring, comment or register row that describes the state of the tree it governs. |
 | 24 | **reasoning-gap** | **An argument that cites a measurement can be FALSE, not merely unmeasured** — and the honest reason is usually better than the invented one. | The ratchet justified `REQUIRED_FIELDS = ("name", "dockerfile")` by saying requiring `image` "would put a FALSE RED on the lane's own matrix". MEASURED: **all 30** entries in `pmoves/images.yaml` DO declare `image:`, so requiring it would put exactly **ZERO** reds on the lane's own matrix. The conclusion was right for a fabricated reason. The same clause was half-true for `context`: requiring it would red exactly **one** entry — the now-contextless `pmoves-tokenism-ui`. FIX: the rationale is now the reason that survives measurement — `image` is DEAD BUILD INPUT (the tag comes from `${{ matrix.name }}`), and a dead field should not be law; requiring it would make the gate assert something the build does not do, and the thing a dead `context` actually breaks has its own probe (`dead_context`). Lesson 21 caught an unmeasured UNIVERSAL; this caught a measured-but-false NUMBER — a stronger claim, and the same failure mode wearing a lab coat. | Any rationale that cites a count, a rate or a comparison to justify a rule. |
-| 25 | **defense-in-depth** | **A measurement script that silently skips what it cannot read reports a population it never counted** — and a lane whose brand is measured claims must measure its own evidence fail-closed. | The script that backs the schedule-contention comment did `continue` on a YAML parse exception, so a workflow file it could not parse was dropped from the population **silently** and the script still exited 0. "18 live scheduled workflows" was therefore a population that could shrink between runs without anyone noticing — the same fail-open shape as lesson 17, in the lane's own evidence-gathering rather than in a shipped gate. FIX: the replacement counts the files it scanned, reports every parse failure by name, and exits non-zero if ANY file failed — MEASURED: 74 files scanned, 74 parsed, 0 dropped, 18 live schedules. That rewrite also CAUGHT the quantifier error the comment was hiding: the "06:00 cluster" is **7** schedules, not 6, because `review-collect.yml` (`0 */2 * * *`) fires at 06:00 as well as at 04:00. | Any script whose output is quoted as a number, a count, or a "nearest neighbour". |
+| 25 | **defense-in-depth** | **A measurement script that silently skips what it cannot read reports a population it never counted** — and a lane whose brand is measured claims must measure its own evidence fail-closed, IN THE TREE. | The script that backs the schedule-contention comment did `continue` on a YAML parse exception, so a workflow file it could not parse was dropped from the population **silently** and the script still exited 0. "18 live scheduled workflows" was therefore a population that could shrink between runs without anyone noticing — the same fail-open shape as lesson 17, in the lane's own evidence-gathering rather than in a shipped gate. And the instrument was worse than fail-open: it lived in a developer's TEMP DIRECTORY, so the claim survived in the prose while the measurement itself did not exist in the tree — a reader hunting for the script that produced the numbers found nothing, and the lane's own lesson 25 was the thing that had to be applied to it. FIX: the measurement is now `pmoves/tools/measure_schedule_contention.py`, IN THE TREE and cited by the comment it backs. It counts the files it scanned, names every parse failure by file, and exits non-zero if any file failed — MEASURED: 74 files scanned, 74 parsed, 0 dropped, 18 live schedules. That rewrite also CAUGHT the quantifier error the comment was hiding: the "06:00 cluster" is **7** schedules, not 6, because `review-collect.yml` (`0 */2 * * *`) fires at 06:00 as well as at 04:00. The tool COMPUTES each schedule's weekly frequency from the parsed cron fields rather than being handed a ratio, which is how the hand-written "365x" was caught and corrected to 84. | Any script whose output is quoted as a number, a count, or a "nearest neighbour" — and any instrument cited by a comment that is not itself in the repository. |
+| 26 | **reasoning-gap** | **A shorthand in a comment is a CLAIM — eliding the expression you measured is the same failure as asserting a number you did not.** | The contention comment wrote the 03:00 workflow's runner as `[self-hosted, Linux, X64, ...]`. The claim was TRUE, and the ellipsis hid the one detail that made it matter: the fourth element is `"${{ matrix.runner_label }}"`, so the workflow runs once per target host on this pool, and it is the same pool the build pushes images to. An ellipsis standing in for a matrix expression is "probably absent" in the same way a commented-out `schedule:` is "probably absent" — and the very comment that elided it criticises exactly that shape two dozen lines later, on the commented-out `integrations-ghcr.yml` cron. The lesson is not "ellipses are forbidden"; it is that a SHORTHAND is a claim, so it carries the same obligation to be exact as the number it stands in for. FIX: the exact `runs-on` expressions are now quoted, and the one schedule that could actually race the build (`docker builder prune -af` / `docker image prune -a -f` on the same pool) is named rather than left as "both are self-hosted, 83 minutes earlier". | Any comment that abbreviates an expression it measured. |
+| 27 | **defense-in-depth** | **A summary that claims to BE a measurement needs a gate of its own** — otherwise it is the one number in the file nobody re-derives. | The bucket summary ("13 reasoning-gap / 0 semantic-naming drift / 8 contract-correctness / 1 defense-in-depth / 3 pattern-conformance = 25") is a MEASUREMENT of the lesson table sitting directly above it. It was written by hand, like every other number in this lane's prose, and hand-written numbers are the thing this lane exists to catch. The reviewer checked the arithmetic by hand — a good check ONCE, not a check that survives the next lesson. FIX: `pmoves/tests/tools/test_runbook_drift_learnings_taxonomy.py` RECOMPUTES the per-class counts and the total from the lesson table, asserts the summary's numbers agree, asserts the summary's lesson LISTS agree (a count that is right while the list is wrong is still a wrong summary), asserts every class present in the table appears in the summary (an absent class reads as an oversight rather than a measurement), and asserts the lesson numbers are contiguous from 1. The summary is now a CHECKED number rather than a claimed one. | Any aggregate, tally, or count published in a document that also contains the items it aggregates. |
 
-**Bucket summary** (25 lessons) — (1) **reasoning-gap** 13 lessons (#1, #2, #3, #4, #8,
-#10, #11, #12, #18, #19, #21, **#23, #24**) · (2) **semantic-naming drift** 0 ·
+**Bucket summary** (27 lessons) — (1) **reasoning-gap** 14 lessons (#1, #2, #3, #4, #8,
+#10, #11, #12, #18, #19, #21, **#23, #24, #26**) · (2) **semantic-naming drift** 0 ·
 (3) **contract-correctness** 8 lessons (#5, #6, #7, #15, #16, #17, #20, #22) ·
-(4) **defense-in-depth** 1 lesson (**#25**) · (5) **pattern-conformance** 3 lessons
-(#9, #13, #14).
+(4) **defense-in-depth** 2 lessons (**#25, #27**) · (5) **pattern-conformance** 3
+lessons (#9, #13, #14).
+
+A summary that claims to BE a measurement, in the file where lesson 24 finishes
+explaining that citing a count without measuring it is a failure mode, needs a
+gate of its own — otherwise the summary is the one number in the file nobody
+re-derives. `pmoves/tests/tools/test_runbook_drift_learnings_taxonomy.py`
+RECOMPUTES these counts from the lesson table above and asserts they agree, so
+the summary cannot drift away from the thing it summarises. (MEASURED here, by
+that test: 14 + 0 + 8 + 2 + 3 = 27 = the number of lesson rows.)
 
 ---
 
@@ -294,11 +304,13 @@ direction (lesson 22).
 **Round 3 — three further findings** (the third review bot), all fixed: the
 schedule-contention comment cited `branch-protection-ruleset-sync.yml` as "the
 nearest live neighbour" while `review-collect.yml`'s `0 */2 * * *` fires at the same
-clock time and 365x more often — lesson 21 AGAIN, in the very comment that exists
-because of lesson 21 — and its "06:00 cluster" roll call omitted three live
-schedules; the `dead_context` docstring described a matrix state the same lane had
-already changed (lesson 23); and the `REQUIRED_FIELDS` rationale cited a "FALSE RED
-on the lane's own matrix" that MEASUREMENT shows would be **ZERO** reds (lesson 24).
+clock time — and **84x** more often, not the 365x this lane first wrote down
+(lesson 21 AGAIN, in the very comment that exists because of lesson 21; the
+ratio is now COMPUTED from the cron fields, and the first hand-written figure
+was wrong); the "06:00 cluster" roll call omitted three live schedules; the
+`dead_context` docstring described a matrix state the same lane had already
+changed (lesson 23); and the `REQUIRED_FIELDS` rationale cited a "FALSE RED on
+the lane's own matrix" that MEASUREMENT shows would be **ZERO** reds (lesson 24).
 
 The third round also exposed a defect in the lane's own EVIDENCE-GATHERING: the
 script that measured the schedule contention silently skipped any workflow file it
@@ -311,7 +323,30 @@ runner class (hosted vs self-hosted) and the day-of-week restriction, so the
 contention argument now stands on the build job's actual runner
 (`[self-hosted, Linux, X64]`) rather than on a hand-picked neighbour.
 
-The three rounds are also the lane's own measure of its lessons: every finding that
+**Round 4 — four further findings** (the fourth review bot), all fixed, and the
+first round whose findings were all about the lane's own PROVENANCE rather than
+about a behaviour: the fail-closed measurement was not in the TREE at all — it
+lived in a temp directory, so the claim survived in the prose and the instrument
+did not, and a reader hunting for the script that produced the numbers found
+nothing (lesson 25's own lesson, applied to lesson 25); the **365x** ratio was
+hand-written and WRONG — `0 */2 * * *` is 12 times a day (**84/week**) against
+`0 4 * * 0`'s once a week, so the ratio is 84 (lesson 24, one paragraph after
+the lane mocked itself for the same class of error); the bucket summary claimed
+to be a measurement of the lesson table while the lesson table was the thing
+being measured, so the summary now carries a test that recomputes it; and the
+comment elided a `runs-on` expression into `...`, which is the "probably
+absent" shape the same comment criticises two dozen lines later.
+
+The instrument is now `pmoves/tools/measure_schedule_contention.py`, in the tree,
+cited by the comment it backs. It is fail-closed (an unreadable workflow file is
+a NAMED failure and a non-zero exit, never a silent drop), it COMPUTES each
+schedule's weekly frequency from the parsed cron fields rather than being handed
+a ratio, and it excludes the slot owner from its own contention check. Its
+21 tests include a LIVE rot gate: on every PR the fleet is re-read and the
+04:23 slot is re-checked against every self-hosted schedule, so the comment's
+claim cannot rot into a falsehood unnoticed.
+
+The four rounds are also the lane's own measure of its lessons: every finding that
 was fixed was fixed at the ROOT, with a test that fails without the fix. Fourteen
 of them are negative controls -- a gate that cannot read its input, a gate that
 cannot check its subject, a gate that cannot see a baseline entry that no longer
@@ -336,6 +371,8 @@ explanations too.
 | **F4b** the ratchet that catches the collection bombs had two holes of its own | `pmoves/tests/tools/test_windows_posix_ratchet.py` (`_guard_kind` stops BEFORE `ast.Module`; eager comprehensions classified at their own scope) | same file (18, 4 of them new) | the AST ratchet itself |
 | **F3b** the Glancer release-tag pin | `.github/workflows/fork-sync.yml` (4th `FORKS` column `upstream_ref`, the `release` keyword, the FETCH_HEAD merge, the `bash -e`-safe conflict skip, ONE shared policy for the audit and the sync) | — | `.github/workflows/fork-registry-ratchet.yml` (the coverage re-check still passes) |
 | **F1b** nested submodule claims | `scripts/runbook_drift.py` (`_owning_submodule()`, longest match wins) | `pmoves/tests/test_runbook_drift_probe.py` (16) | the auditor itself |
+| **F5d** the schedule-contention measurement was cited but not in the TREE | `pmoves/tools/measure_schedule_contention.py` (fail-closed scan; COMPUTES each cron's weekly frequency; excludes the slot owner from its own contention check) | `pmoves/tests/tools/test_measure_schedule_contention.py` (21, incl. a LIVE rot gate that re-reads the real fleet and re-checks the 04:23 slot on every PR) | the tool's own `--check` exit code |
+| **P1** the bucket summary was a number nobody re-derived | `pmoves/docs/AGENTS/runbook_drift_fleet_closure_LEARNINGS.md` (the **Bucket summary** line) | `pmoves/tests/tools/test_runbook_drift_learnings_taxonomy.py` (5 — RECOMPUTES the summary from the lesson table and asserts they agree) | the test itself |
 
 **The mutation-kill harness** — `pmoves/tests/tools/test_runbook_drift_fleet_closure_mutation_kill.py`
 — is the lane's own proof. **Seven** mutations, each reverting the WIRING rather than
@@ -402,6 +439,21 @@ restore byte-exact and asserted, all under a two-layer mutation lock:
   parameter id before matching, or every parametrized case would be unkillable.
 - `pmoves/tools/image_staleness_ratchet.py` — the F5 ratchet: per image, the
   builder fields, the build inputs and a build path that needs no human click.
+- `pmoves/tools/measure_schedule_contention.py` — the instrument behind the
+  schedule-contention comment in `.github/workflows/build-images.yml`. It is
+  IN THE TREE because a measurement that survives only in prose is a claim
+  (lesson 25), it fails CLOSED on an unreadable workflow file rather than
+  dropping it silently, and it COMPUTES each schedule's weekly frequency from
+  the parsed cron fields rather than being handed a ratio — which is how a
+  hand-written "365x" was caught and corrected to 84.
+- `pmoves/tests/tools/test_measure_schedule_contention.py` — the gate for that
+  instrument, including the LIVE rot gate: the real fleet is re-read and the
+  04:23 slot is re-checked against every self-hosted schedule on every PR, so
+  the comment's claim cannot rot into a falsehood unnoticed.
+- `pmoves/tests/tools/test_runbook_drift_learnings_taxonomy.py` — the gate for
+  THIS file's bucket summary: it recomputes the per-class counts from the
+  lesson table and asserts they agree, so the one number in the file nobody
+  re-derives is derived.
 - `pmoves/tests/tools/test_windows_posix_ratchet.py` — the F4 ratchet: an AST
   sweep for module-scope POSIX-only `os.*` calls across `pmoves/**/*.py`, with
   the house guard pattern (`hasattr(os, "geteuid") and os.geteuid() == 0`) as its
