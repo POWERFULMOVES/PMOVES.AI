@@ -245,14 +245,25 @@ secrets.
 | 20 | **contract-correctness** | **An audit and the thing it audits must measure the SAME thing** — a report that contradicts the fix is a broken signal. | `fork-sync.yml` had two definitions of "behind": the audit loop compared every fork against its upstream's DEFAULT branch, while the sync loop merged a PINNED policy ref. So the audit printed "STALE 614 behind" for Pmoves-Glancer against upstream develop — a ref the policy says is NOT the source — on every single run, and would eventually scream CRITICAL about a fork the policy says is CURRENT. FIX: ONE definition of the fork list (a "Prepare the fork policy" step that exports it to `$GITHUB_ENV`) and ONE resolver (a file both steps source) that decides the fork branch and the upstream ref, so the two cannot drift apart again. MEASURED locally with a mocked `gh`: 39 entries exported, Glancer resolves to `PMOVES.AI-Edition-Hardened\|v4.5.8`, a branch override resolves to the override, a gitlink branch resolves from `.gitmodules`, and a fork outside the list falls back to the defaults. The literal `FORKS="..."` shape was KEPT because the registry ratchet parses that block as text out of the workflow file — the shape is an interface between the workflow and the gate. | Any report that measures the same subject as an action. |
 | 21 | **reasoning-gap** | **An unmeasured universal quantifier is a defect in a lane whose brand is MEASURED claims** — and the good number was available for free. | The build-context comment said "and EVERY repo-backed entry sets `context: .`". MEASURED: **18 of the 19** do; the exception is `pmoves-tokenism-ui`, which sets `context: pmoves-nextjs`. The corollary "all 19 resolved against the WORKSPACE ROOT" was wrong for that one — it resolved against `github.workspace/pmoves-nextjs`, its own flavour of the wrong place, but not the workspace root. In a lane whose entire brand is measured claims, an unmeasured "EVERY" in the comment explaining WHY measurement mattered was the exact defect the lane exists to catch. The same pass found a comment citing `integrations-ghcr.yml`'s `'17 7 * * *'` as a live schedule when that file's `schedule:` is COMMENTED OUT (lines 97-98) — a dead code block cited as fleet-wide load-balancing evidence. FIX: the quantifier now states 18 of 19 and names the exception; the schedule neighbour now cites the LIVE ones (measured across `.github/workflows`); and the dead `context` is flagged by the ratchet rather than left in the matrix where nobody would look for it. | Any claim of universality in a comment, a docstring, or a register row. |
 | 22 | **contract-correctness** | **A one-directional baseline check leaves the direction nobody thinks about uncovered** — and an absent entry produces no claim at all. | The stale-gap check catches a gap that gets FIXED: its `build_inputs` claim becomes VERIFIED, so the baselined gap is stale and fails until it is dropped. Good contract — and one-directional. A `known_gaps` name whose image was REMOVED from or RENAMED in `pmoves/images.yaml` produces NO claims, matches nothing, and haunts the baseline forever: `stale_gaps` requires a VERIFIED `build_inputs` claim, so an absent image fails nothing and reports nothing. The baseline validated "broken -> fixed" but not "gone from the matrix entirely" — the one direction where nothing else will ever remind anyone the entry exists. FIX: an ORPHAN check — a baseline name with NO `build_inputs` claim AT ALL (not DRIFTED, not VERIFIED, not even UNDECIDED) is reported and failed, so the baseline cannot outlive the matrix entry it describes. | Any baseline, allowlist, or known-gap file. |
+| 23 | **reasoning-gap** | **A docstring that describes the state of the tree is a CLAIM, not a caption** — and the lane that changes the tree must change the description in the SAME commit. | The `probe_dead_context` docstring said "The lane's own matrix has exactly one such entry: `pmoves-tokenism-ui` declares `context: pmoves-nextjs` ... and that declaration is ignored" — in the PRESENT tense. The SAME lane DROPPED that declaration from `pmoves/images.yaml` (MEASURED at the pinned gitlink `04285b813f`: the submodule holds both `Dockerfile` and `pmoves-nextjs/Dockerfile`, and the latter is what the entry wants). So the gate's own docstring described a tree state that stopped existing in the same PR: a present-tense claim falsified by the change sitting next to it, and a reader cannot tell which half to believe — the code or the prose about the code. FIX: past tense ("used to declare ... until the dead declaration was dropped"), and the probe now fails any entry that declares one again. The general shape: prose about the tree decays at exactly the rate the tree moves, so prose about the tree is a claim and carries the same standard as a claim. | Any docstring, comment or register row that describes the state of the tree it governs. |
+| 24 | **reasoning-gap** | **An argument that cites a measurement can be FALSE, not merely unmeasured** — and the honest reason is usually better than the invented one. | The ratchet justified `REQUIRED_FIELDS = ("name", "dockerfile")` by saying requiring `image` "would put a FALSE RED on the lane's own matrix". MEASURED: **all 30** entries in `pmoves/images.yaml` DO declare `image:`, so requiring it would put exactly **ZERO** reds on the lane's own matrix. The conclusion was right for a fabricated reason. The same clause was half-true for `context`: requiring it would red exactly **one** entry — the now-contextless `pmoves-tokenism-ui`. FIX: the rationale is now the reason that survives measurement — `image` is DEAD BUILD INPUT (the tag comes from `${{ matrix.name }}`), and a dead field should not be law; requiring it would make the gate assert something the build does not do, and the thing a dead `context` actually breaks has its own probe (`dead_context`). Lesson 21 caught an unmeasured UNIVERSAL; this caught a measured-but-false NUMBER — a stronger claim, and the same failure mode wearing a lab coat. | Any rationale that cites a count, a rate or a comparison to justify a rule. |
+| 25 | **defense-in-depth** | **A measurement script that silently skips what it cannot read reports a population it never counted** — and a lane whose brand is measured claims must measure its own evidence fail-closed. | The script that backs the schedule-contention comment did `continue` on a YAML parse exception, so a workflow file it could not parse was dropped from the population **silently** and the script still exited 0. "18 live scheduled workflows" was therefore a population that could shrink between runs without anyone noticing — the same fail-open shape as lesson 17, in the lane's own evidence-gathering rather than in a shipped gate. FIX: the replacement counts the files it scanned, reports every parse failure by name, and exits non-zero if ANY file failed — MEASURED: 74 files scanned, 74 parsed, 0 dropped, 18 live schedules. That rewrite also CAUGHT the quantifier error the comment was hiding: the "06:00 cluster" is **7** schedules, not 6, because `review-collect.yml` (`0 */2 * * *`) fires at 06:00 as well as at 04:00. | Any script whose output is quoted as a number, a count, or a "nearest neighbour". |
+
+**Bucket summary** (25 lessons) — (1) **reasoning-gap** 13 lessons (#1, #2, #3, #4, #8,
+#10, #11, #12, #18, #19, #21, **#23, #24**) · (2) **semantic-naming drift** 0 ·
+(3) **contract-correctness** 8 lessons (#5, #6, #7, #15, #16, #17, #20, #22) ·
+(4) **defense-in-depth** 1 lesson (**#25**) · (5) **pattern-conformance** 3 lessons
+(#9, #13, #14).
 
 ---
 
-## Two review rounds, and what they changed
+## Three review rounds, and what they changed
 
-The lane was reviewed twice before it merged, and **both rounds found real defects
-in the lane's own work** — which is the point of running the review before the
-merge rather than after it.
+The lane was reviewed three times before it merged, and **every round found real
+defects in the lane's own work** — which is the point of running the review before
+the merge rather than after it. The third round is the one that makes the first two
+look lucky: its findings were all about PROSE, and prose was where two of the three
+were hiding.
 
 **Round 1 — four P2 findings** (codex connector), all fixed: a claim inside a
 NESTED submodule was reported DRIFTED rather than UNDECIDED; the image ratchet
@@ -280,11 +291,34 @@ entry" where the measured truth was 18 of 19, and cited a COMMENTED-OUT schedule
 as a live neighbour (lesson 21); and the known-gaps baseline only checked one
 direction (lesson 22).
 
-The two rounds are also the lane's own measure of its lessons: every finding that
+**Round 3 — three further findings** (the third review bot), all fixed: the
+schedule-contention comment cited `branch-protection-ruleset-sync.yml` as "the
+nearest live neighbour" while `review-collect.yml`'s `0 */2 * * *` fires at the same
+clock time and 365x more often — lesson 21 AGAIN, in the very comment that exists
+because of lesson 21 — and its "06:00 cluster" roll call omitted three live
+schedules; the `dead_context` docstring described a matrix state the same lane had
+already changed (lesson 23); and the `REQUIRED_FIELDS` rationale cited a "FALSE RED
+on the lane's own matrix" that MEASUREMENT shows would be **ZERO** reds (lesson 24).
+
+The third round also exposed a defect in the lane's own EVIDENCE-GATHERING: the
+script that measured the schedule contention silently skipped any workflow file it
+could not parse and still exited 0, so the population it reported could shrink
+between runs without anyone noticing (lesson 25). Rewriting it fail-closed — **74
+files scanned, 74 parsed, 0 dropped, 18 live schedules** — is what caught the
+missing member of the "06:00 cluster" (`review-collect.yml`), and turned a citation
+into a measurement: the comment now names the exact count at each clock time, the
+runner class (hosted vs self-hosted) and the day-of-week restriction, so the
+contention argument now stands on the build job's actual runner
+(`[self-hosted, Linux, X64]`) rather than on a hand-picked neighbour.
+
+The three rounds are also the lane's own measure of its lessons: every finding that
 was fixed was fixed at the ROOT, with a test that fails without the fix. Fourteen
 of them are negative controls -- a gate that cannot read its input, a gate that
 cannot check its subject, a gate that cannot see a baseline entry that no longer
-exists, and a guard check that could be borrowed from across the room.
+exists, and a guard check that could be borrowed from across the room. The third
+round adds a category the first two missed: a defect can live in the PROSE that
+explains the fix, and a lane that measures everything else must measure its own
+explanations too.
 
 ---
 

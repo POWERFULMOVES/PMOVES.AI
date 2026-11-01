@@ -16,7 +16,7 @@ Reads `pmoves/images.yaml` (the build matrix for
      (`name`, `dockerfile`). This is the tool's POLICY, not a list of the
      builder's reads: the build never reads `image` (the tag comes from
      `${{ matrix.name }}`) and treats `context` as a fallback, so requiring
-     either would put a FALSE RED on the lane's own matrix.
+     either would make law of a dead field.
   4. dead_context -- a repo-backed entry does not declare a `context` the
      build ignores. The workflow resolves
      `${{ matrix.repo && format('{0}/{1}', github.workspace, matrix.repo) || matrix.context }}`,
@@ -96,10 +96,13 @@ INSTRUMENT_ERROR = "INSTRUMENT-ERROR"
 #               demands the path be EXPLICIT so the build input can be
 #               checked at all.
 #
-# `context` is NOT required: the builder treats it as a fallback and an
-# entry without a `repo:` resolves to the workspace root. `image` is NOT
-# required because the build NEVER reads it -- the tag comes from `name` --
-# and requiring a dead field would put a FALSE RED on the lane's own matrix.
+# `context` is NOT required: the builder treats it as a fallback, and for a
+# repo-backed entry it is DEAD (see probe_dead_context, which states that rule
+# directly). `image` is NOT required because the build NEVER reads it -- the
+# tag comes from `name`. Both are DEAD FIELDS, and a dead field should not be
+# law: requiring one would make the gate assert something the build does not
+# do, and the thing it would actually catch (a dead `context` on a repo-backed
+# entry) has its own probe.
 REQUIRED_FIELDS = ("name", "dockerfile")
 
 # Triggers that rebuild the fleet without a human clicking. `workflow_dispatch`
@@ -439,8 +442,10 @@ def probe_matrix_fields(image: dict, ctx: _Context) -> tuple[str, str]:
 
     POLICY, not a description of the builder's reads. The builder never
     reads `image` (the tag comes from `${{ matrix.name }}`) and treats
-    `context` as a fallback, so demanding either would put a FALSE RED on
-    the lane's own matrix -- a red gate teaches the fleet to ignore it.
+    `context` as a fallback, so requiring either would make law of a DEAD
+    FIELD. The thing a dead `context` actually breaks has its own probe
+    (`dead_context`), which states the rule precisely instead of being
+    smuggled in as a required field.
     """
     missing = [
         field
@@ -535,9 +540,12 @@ def probe_dead_context(image: dict, ctx: _Context) -> tuple[str, str]:
     a repo-backed entry the build ALWAYS uses the repo root, which means a
     declared `context` is DEAD build input -- and dead build input is where
     a silently changed behaviour hides (the matrix says one thing, the build
-    does another). The lane's own matrix has exactly one such entry:
-    `pmoves-tokenism-ui` declares `context: pmoves-nextjs` on top of
-    `repo: PMOVES-ToKenism-Multi`, and that declaration is ignored.
+    does another). The lane's own matrix had exactly one such entry:
+    `pmoves-tokenism-ui` used to declare `context: pmoves-nextjs` on top of
+    `repo: PMOVES-ToKenism-Multi`, and that declaration was ignored. The dead
+    declaration was DROPPED in the same lane, so the matrix this gate
+    polices today has ZERO such entries -- and this probe fails any entry
+    that declares one again.
 
     The verdict is DRIFTED only where the tool can MEASURE the mismatch: it
     has to be able to look inside the repo the build actually uses. Where

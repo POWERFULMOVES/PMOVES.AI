@@ -353,8 +353,8 @@ def test_missing_required_field_is_drifted(tmp_path):
     The ratchet requires `name` (the build tags the image from it) and
     `dockerfile` (the build opens it). It does NOT require `image`: the
     build never reads that field -- the tag comes from `${{ matrix.name }}`
-    -- and demanding a dead field would put a FALSE RED on the lane's own
-    matrix, which teaches the fleet to ignore a red gate.
+    -- so requiring it would make law of a DEAD FIELD. The thing a dead
+    `context` actually breaks has its own probe (`dead_context`).
     """
     bad = """\
 images:

@@ -14,18 +14,37 @@ on:
   # queue as every other scheduled job in the fleet. 23 keeps this off the
   # hour and off-peak.
   #
-  # MEASURED against the LIVE schedules in .github/workflows. A commented-out
-  # `schedule:` is not a schedule: integrations-ghcr.yml's '17 7 * * *' is
-  # COMMENTED OUT (lines 97-98), so it never runs and is deliberately NOT
-  # cited as a neighbour here.
+  # MEASURED across .github/workflows, by PARSING every workflow file: 74
+  # files scanned, 74 parsed, 0 dropped, 18 carry a live `schedule:`. A
+  # commented-out `schedule:` is genuinely absent, not "probably absent" --
+  # integrations-ghcr.yml's '17 7 * * *' is COMMENTED OUT (lines 97-98), so
+  # it never runs and is deliberately NOT cited as a neighbour.
   #
-  # 04:23 UTC is clear of the 03:00 pair (fleet-docker-cleanup
-  # '0 3 * * *', runner-maintenance '0 3 * * *') and of the 06:00 cluster
-  # (fork-sync '0 6 * * *', branch-protection-drift '0 6 * * *',
-  # stale-branch-sweep '0 6 * * *'), so the self-hosted runners are not
-  # contended by two jobs at once. The nearest live neighbour is
-  # branch-protection-ruleset-sync at '0 4 * * 0' (Sundays 04:00) -- 23
-  # minutes earlier, and a weekly branch-admin sync rather than a build.
+  # The `build` job runs on `[self-hosted, Linux, X64]`, so the question that
+  # matters is SELF-HOSTED contention. Measured against all 18:
+  #
+  #   * EXACTLY 2 schedules fire at clock time 04:00 -- the nearest by clock
+  #     time: review-collect.yml ('0 */2 * * *', every even hour) and
+  #     branch-protection-ruleset-sync.yml ('0 4 * * 0', Sundays only). BOTH
+  #     are HOSTED (ubuntu-24.04), so neither takes a self-hosted runner.
+  #   * EXACTLY 2 schedules fire at 03:00, 83 minutes earlier, and BOTH are
+  #     SELF-HOSTED: fleet-docker-cleanup.yml ('0 3 * * *', runs-on
+  #     [self-hosted, Linux, X64, ...]) and runner-maintenance.yml
+  #     ('0 3 * * *', runs-on [self-hosted, ...]).
+  #   * The next SELF-HOSTED schedule after the slot is
+  #     submodule-update-check.yml at 06:00 -- 97 minutes later, Sundays
+  #     only, runs-on [self-hosted, Linux, X64, ai-lab]. The only other
+  #     self-hosted schedule in the fleet is
+  #     python-images-toolchain-canary.yml at 09:00.
+  #
+  # 04:23 therefore sits clear of every self-hosted schedule in the fleet.
+  #
+  # For completeness, EXACTLY 7 schedules fire at clock time 06:00:
+  # agent-zero-upstream-check, branch-protection-drift, branch-protection-sync
+  # (Mondays only), fork-sync, review-collect, stale-branch-sweep and
+  # submodule-update-check (Sundays only) -- only the last is self-hosted.
+  # The two other early-morning neighbours are orphan-branch-ratchet at
+  # 06:30 and archon-release-track at 06:41, both hosted.
   schedule:
     - cron: '23 4 * * *'
 
