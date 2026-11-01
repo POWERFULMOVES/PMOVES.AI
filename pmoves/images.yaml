@@ -4,7 +4,14 @@
 # - repo: submodule path in this repo
 # - ref: branch/tag to build from (default: submodule commit)
 # - context: build context
-# - dockerfile: relative dockerfile path
+# - build_context: OPTIONAL build context, RELATIVE TO the repo root (or to
+#   the workspace root for in-tree entries). Use it when the Dockerfile's
+#   COPY sources are relative to its own subdirectory instead of the repo
+#   root -- e.g. `COPY requirements.txt ./` inside `backend/Dockerfile`
+#   only resolves when the context IS `backend`. Default: the repo root.
+#   `file:` is resolved against the build context, so `dockerfile:` is also
+#   relative to it.
+# - dockerfile: relative dockerfile path (relative to the build context)
 # - image: base image name (ghcr + dockerhub mirror assumed)
 
 images:
@@ -19,7 +26,7 @@ images:
     repo: PMOVES-Archon
     ref: heads/PMOVES.AI-Edition-Hardened
     context: .
-    dockerfile: pmoves/services/archon/Dockerfile
+    dockerfile: Dockerfile
     image: ghcr.io/powerfulmoves/pmoves-archon
 
   - name: pmoves-creator
@@ -47,7 +54,7 @@ images:
     repo: PMOVES.YT
     ref: heads/PMOVES.AI-Edition-Hardened
     context: .
-    dockerfile: Dockerfile
+    dockerfile: pmoves_yt_service/Dockerfile
     image: ghcr.io/powerfulmoves/pmoves-yt
 
   - name: pmoves-jellyfin
@@ -57,12 +64,35 @@ images:
     dockerfile: Dockerfile
     image: ghcr.io/powerfulmoves/pmoves-jellyfin
 
-  - name: pmoves-jellyfin-ai-media-stack
+  # The jellyfin-ai stack is THREE services, not one image. The old single
+  # entry (`pmoves-jellyfin-ai-media-stack`) pointed at a root `Dockerfile`
+  # that does not exist in the repo at any commit. PMOVES.AI's own
+  # `pmoves/docker-compose.jellyfin-ai.yml` already builds the three
+  # services separately, each with its own build context -- so the matrix
+  # now mirrors that shape instead of pretending the stack is one image.
+  - name: pmoves-jellyfin-ai-api-gateway
     repo: Pmoves-Jellyfin-AI-Media-Stack
     ref: heads/PMOVES.AI-Edition-Hardened
     context: .
+    build_context: Cataclysm_Provisioning_Bundle/provisioning_bundle/docker-stacks/jellyfin-ai/api-gateway
     dockerfile: Dockerfile
-    image: ghcr.io/powerfulmoves/pmoves-jellyfin-ai-media-stack
+    image: ghcr.io/powerfulmoves/pmoves-jellyfin-ai-api-gateway
+
+  - name: pmoves-jellyfin-ai-dashboard
+    repo: Pmoves-Jellyfin-AI-Media-Stack
+    ref: heads/PMOVES.AI-Edition-Hardened
+    context: .
+    build_context: Cataclysm_Provisioning_Bundle/provisioning_bundle/docker-stacks/jellyfin-ai/dashboard
+    dockerfile: Dockerfile
+    image: ghcr.io/powerfulmoves/pmoves-jellyfin-ai-dashboard
+
+  - name: pmoves-jellyfin-ai-audio-processor
+    repo: Pmoves-Jellyfin-AI-Media-Stack
+    ref: heads/PMOVES.AI-Edition-Hardened
+    context: .
+    build_context: Cataclysm_Provisioning_Bundle/provisioning_bundle/docker-stacks/jellyfin-ai/audio-processor
+    dockerfile: Dockerfile
+    image: ghcr.io/powerfulmoves/pmoves-jellyfin-ai-audio-processor
 
   - name: pmoves-wealth
     repo: PMOVES-Wealth
@@ -82,6 +112,7 @@ images:
     repo: PMOVES-BoTZ
     ref: heads/PMOVES.AI-Edition-Hardened
     context: .
+    build_context: features/gateway/python-gateway
     dockerfile: Dockerfile
     image: ghcr.io/powerfulmoves/pmoves-botz
 
@@ -89,6 +120,7 @@ images:
     repo: PMOVES-DoX
     ref: heads/PMOVES.AI-Edition-Hardened
     context: .
+    build_context: backend
     dockerfile: Dockerfile
     image: ghcr.io/powerfulmoves/pmoves-dox
 
@@ -137,8 +169,8 @@ images:
     image: ghcr.io/powerfulmoves/pmoves-pdf-ingest
 
   - name: pmoves-botz-gateway
-    context: pmoves
-    dockerfile: services/botz-gateway/Dockerfile
+    context: pmoves/services/botz-gateway
+    dockerfile: Dockerfile
     image: ghcr.io/powerfulmoves/pmoves-botz-gateway
 
   - name: pmoves-tokenism-simulator
@@ -152,8 +184,8 @@ images:
     image: ghcr.io/powerfulmoves/pmoves-model-registry
 
   - name: pmoves-gpu-orchestrator
-    context: pmoves
-    dockerfile: services/gpu-orchestrator/Dockerfile
+    context: pmoves/services/gpu-orchestrator
+    dockerfile: Dockerfile
     image: ghcr.io/powerfulmoves/pmoves-gpu-orchestrator
 
   - name: pmoves-a2ui-nats-bridge
@@ -194,13 +226,21 @@ images:
     # The staleness ratchet now FLAGS a repo-backed entry that declares a
     # `context` other than `.`, so this contradiction cannot come back
     # unnoticed.
-    dockerfile: pmoves-nextjs/Dockerfile
+    #
+    # `build_context` is what makes this entry correct. The Next.js UI's
+    # Dockerfile does `COPY package*.json ./`, and `package.json` lives in
+    # `pmoves-nextjs/`, NOT at the repo root -- so with the repo root as the
+    # build context the build failed with "package*.json: not found". The
+    # repo root Dockerfile is the PYTHON BACKEND (`COPY requirements.txt .`),
+    # so pointing at it would have built the wrong thing entirely.
+    build_context: pmoves-nextjs
+    dockerfile: Dockerfile
     image: ghcr.io/powerfulmoves/pmoves-tokenism-ui
 
   # GPU-heavy services (manual dispatch only — not in integrations-ghcr matrix)
   - name: pmoves-ultimate-tts-studio
-    context: pmoves
-    dockerfile: docker/ultimate-tts-studio/Dockerfile
+    context: pmoves/docker/ultimate-tts-studio
+    dockerfile: Dockerfile
     image: ghcr.io/powerfulmoves/pmoves-ultimate-tts-studio
 
   # Submodule-backed services

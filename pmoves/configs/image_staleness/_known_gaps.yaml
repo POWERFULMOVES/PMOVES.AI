@@ -5,13 +5,10 @@
 #
 # WHY A BASELINE AND NOT A FIX
 # -----------------------------
-# The build matrix names a Dockerfile path for every image. For 8 of the 19
-# repo-backed entries that path does not exist in the submodule the main repo
-# pins. Two of them have NO Dockerfile anywhere in the repository, so no path
-# correction can fix them: an image has to be written. The other six DO have
-# Dockerfiles, but more than one candidate each, and picking one would
-# publish an image whose contents nobody has verified -- that is a product
-# decision, not a mechanical one.
+# The build matrix names a Dockerfile path for every image. Where that path
+# does not exist in the submodule the main repo pins, the image cannot be
+# rebuilt. Where NO Dockerfile exists anywhere in the repository, no path
+# correction can fix it: an image has to be written.
 #
 # So the gap is RECORDED rather than silently accepted. The ratchet keeps
 # reporting these entries as KNOWN-GAP on every run, a NEW gap fails the
@@ -22,12 +19,37 @@
 # Every reason below was MEASURED against the submodule's pinned commit (the
 # gitlink SHA recorded in the main repo, which is what CI materialises),
 # not against the submodule's default branch.
+#
+# WHAT WAS CLOSED, AND HOW EACH PATH WAS CHOSEN
+# ---------------------------------------------
+# Five entries were closed by choosing the path that the REPO ITSELF builds,
+# not by guessing from a file listing:
+#
+#   pmoves-archon  -> `Dockerfile` (repo root). PMOVES.AI's own compose
+#                     builds this image four times with
+#                     `context: ../PMOVES-Archon` + `dockerfile: Dockerfile`.
+#   pmoves-yt      -> `pmoves_yt_service/Dockerfile`. PMOVES.AI's compose
+#                     builds it with `context: ../PMOVES.YT` +
+#                     `dockerfile: pmoves_yt_service/Dockerfile`.
+#   pmoves-dox     -> `backend/Dockerfile` (build context `backend`). The
+#                     fork's OWN `.github/workflows/docker-publish.yml`
+#                     builds `ghcr.io/powerfulmoves/pmoves-dox-backend` with
+#                     `context: ./backend` + `file: ./backend/Dockerfile`.
+#   pmoves-botz    -> `features/gateway/python-gateway/Dockerfile` (build
+#                     context `features/gateway/python-gateway`). The fork's
+#                     own root `docker-compose.yml` builds the service named
+#                     `pmoves-botz-gateway` from exactly that context.
+#   pmoves-jellyfin-ai-media-stack -> SPLIT into three entries
+#                     (`-api-gateway`, `-dashboard`, `-audio-processor`).
+#                     PMOVES.AI's own `pmoves/docker-compose.jellyfin-ai.yml`
+#                     already builds the stack as three services, each with
+#                     its own build context; one matrix entry cannot
+#                     represent a three-service stack. The old single entry
+#                     is GONE, so it is not a gap any more.
+#
+# The remaining three below need a Dockerfile AUTHORED in their fork, which
+# is why they are still gaps.
 known_gaps:
-  pmoves-archon: "declares pmoves/services/archon/Dockerfile; the pinned commit 490d74bce has a root Dockerfile and auth-service/Dockerfile, not that path -- the matrix path needs a decision"
   pmoves-hirag: "declares a root Dockerfile; the pinned commit d8484b2d2 contains NO Dockerfile anywhere in PMOVES-HiRAG -- the image has to be written"
   pmoves-deep-serch: "declares a root Dockerfile; the pinned commit e2af6b686 contains NO Dockerfile anywhere in PMOVES-Deep-Serch -- the image has to be written"
-  pmoves-yt: "declares a root Dockerfile; the pinned commit ebd39b7fc has bundle/docker/linux/Dockerfile and pmoves_yt_service/Dockerfile -- the matrix path needs a decision"
-  pmoves-jellyfin-ai-media-stack: "declares a root Dockerfile; the pinned commit 83862ccc1 has three under Cataclysm_Provisioning_Bundle/provisioning_bundle/docker-stacks/jellyfin-ai -- the matrix path needs a decision"
-  pmoves-botz: "declares a root Dockerfile; the pinned commit 8902456e7 has no root Dockerfile and 22 under features/ -- the matrix path needs a decision"
-  pmoves-dox: "declares a root Dockerfile; the pinned commit 912ebbdd9 has backend/Dockerfile and frontend/Dockerfile -- the matrix path needs a decision"
-  pmoves-remote-view: "declares a root Dockerfile; the pinned commit 0e350c19c has docker/Dockerfile and docker-classic/Dockerfile -- the matrix path needs a decision"
+  pmoves-remote-view: "declares a root Dockerfile; the pinned commit 0e350c19c has docker/Dockerfile and docker-classic/Dockerfile, but neither can be built from a plain checkout -- the fork's CI builds the Rust binaries as artifacts and downloads them into docker/rootfs/usr/bin before the image build, so a self-contained Dockerfile has to be written"

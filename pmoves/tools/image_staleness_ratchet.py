@@ -22,6 +22,13 @@ Reads `pmoves/images.yaml` (the build matrix for
      `${{ matrix.repo && format('{0}/{1}', github.workspace, matrix.repo) || matrix.context }}`,
      so `context` is DEAD for a repo-backed entry: a non-`.` value there is
      a declaration the build never honours, hiding in plain sight.
+  5. copy_sources -- every `COPY`/`ADD` source in the resolved Dockerfile
+     resolves against the resolved BUILD CONTEXT. A Dockerfile is only
+     buildable from a context that actually contains the files it copies:
+     `COPY requirements.txt ./` inside `backend/Dockerfile` fails with
+     "not found" unless the context IS `backend`. The `build_inputs` probe
+     only asks whether the Dockerfile FILE exists; without this probe the
+     gate reports VERIFIED for an image whose build cannot succeed.
 
 Verdicts per claim: VERIFIED / DRIFTED / UNDECIDED, mirroring
 `scripts/runbook_drift.py` (fail-closed: a probe that cannot answer says
@@ -55,7 +62,10 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import fnmatch
 import json
+import re
+import shlex
 import sys
 from pathlib import Path
 
@@ -403,7 +413,7 @@ def resolve_build_paths(image: dict, ctx: _Context) -> tuple[Path, Path, Path]:
     """Return (base_dir, context_dir, dockerfile_path) for a matrix entry.
 
     Mirrors `.github/workflows/build-images.yml` LITERALLY:
-      context: ${{ matrix.repo && format('{0}/{1}', github.workspace, matrix.repo) || matrix.context }}
+      context: ${{ matrix.repo && format('{0}/{1}{2}', github.workspace, matrix.repo, matrix.build_context && format('/{0}', matrix.build_context) || '') || matrix.context }}
       file:    ${{ matrix.dockerfile || 'Dockerfile' }}
 
     `repo:` is the DISCRIMINATOR and `context` is the fallback. This mirror
@@ -416,6 +426,12 @@ def resolve_build_paths(image: dict, ctx: _Context) -> tuple[Path, Path, Path]:
     asked for was never checked at all. The workflow has been corrected to
     match the intent; this mirror now follows the workflow exactly.
 
+    `build_context` is RELATIVE TO THE REPO ROOT and applies ONLY to a
+    repo-backed entry -- the workflow's expression reads it inside the
+    `matrix.repo &&` branch, so for an in-tree entry it is dead input and
+    this mirror ignores it too (a mirror that honoured it where the build
+    does not would be a mirror that lies).
+
     `file` is RELATIVE in the workflow, so the build action resolves it
     against the CONTEXT. The mirror does the same, which is why there is
     exactly ONE candidate path here: a ratchet that tries several readings
@@ -424,11 +440,12 @@ def resolve_build_paths(image: dict, ctx: _Context) -> tuple[Path, Path, Path]:
     """
     repo = str(image.get("repo", "") or "").strip()
     context_rel = str(image.get("context", "") or "").strip()
+    build_context_rel = str(image.get("build_context", "") or "").strip()
     dockerfile_rel = str(image.get("dockerfile", "") or "").strip() or "Dockerfile"
 
     if repo:
         base = ctx.repo_root / repo
-        context_dir = base
+        context_dir = base / build_context_rel if build_context_rel else base
     else:
         base = ctx.repo_root
         context_dir = base / context_rel if context_rel else base
@@ -556,8 +573,18 @@ def probe_dead_context(image: dict, ctx: _Context) -> tuple[str, str]:
     name = str(image.get("name", "<unnamed>"))
     repo = str(image.get("repo", "") or "").strip()
     context_rel = str(image.get("context", "") or "").strip()
+    build_context_rel = str(image.get("build_context", "") or "").strip()
 
     if not repo:
+        if build_context_rel:
+            # `build_context` is read INSIDE the workflow's `matrix.repo &&`
+            # branch, so for an entry with no `repo:` it is never read.
+            return DRIFTED, (
+                f"entry '{name}' declares build_context '{build_context_rel}', "
+                f"but the build reads `build_context` only for a repo-backed "
+                f"entry: this entry has no `repo:`, so the declaration is dead "
+                f"build input"
+            )
         return VERIFIED, (
             "entry declares no `repo:`, so the build resolves the declared "
             "`context` and the declaration is honoured"
@@ -582,11 +609,146 @@ def probe_dead_context(image: dict, ctx: _Context) -> tuple[str, str]:
     )
 
 
+_COPY_RE = re.compile(r"^\s*(?:COPY|ADD)\s+(.*)$", re.IGNORECASE)
+
+
+def _dockerfile_context_sources(text: str) -> list[list[str]]:
+    """Return the BUILD-CONTEXT sources of every COPY/ADD line.
+
+    Two kinds of COPY are NOT build-context sources and are skipped:
+
+      * `COPY --from=build /app/build /out` copies from another stage's
+        filesystem, not from the context.
+      * `COPY <<EOF /dest` has no path source at all -- the body is a
+        heredoc.
+
+    The LAST word of the line is the destination, so every word before it
+    is a source. Flags (`--chown=`, `--chmod=`, `--link=`) are not words.
+    """
+    groups: list[list[str]] = []
+    for raw in text.splitlines():
+        stripped = raw.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        match = _COPY_RE.match(raw)
+        if not match:
+            continue
+        try:
+            tokens = shlex.split(match.group(1), posix=True)
+        except ValueError:
+            tokens = match.group(1).split()
+        flags = [t for t in tokens if t.startswith("--")]
+        words = [t for t in tokens if not t.startswith("--")]
+        if any(flag.startswith("--from=") for flag in flags):
+            continue
+        if any(word.startswith("<<") for word in words):
+            continue
+        if len(words) < 2:
+            continue
+        groups.append(words[:-1])
+    return groups
+
+
+def _source_resolves(source: str, context_dir: Path) -> bool:
+    """Does `source` name something the build context actually contains?"""
+    if source in (".", "./", ".."):
+        # The whole context. Always present.
+        return True
+    if source.startswith("/"):
+        # An absolute source is not a context path (docker resolves
+        # context sources against the context root, never the host root).
+        return True
+    if any(ch in source for ch in "*?["):
+        head, _, pattern = source.rpartition("/")
+        base = context_dir / head if head else context_dir
+        if not base.is_dir():
+            return False
+        try:
+            for child in base.iterdir():
+                if fnmatch.fnmatch(child.name, pattern):
+                    return True
+        except OSError:
+            return False
+        return False
+    return (context_dir / source).exists()
+
+
+def probe_copy_sources(image: dict, ctx: _Context) -> tuple[str, str]:
+    """Every COPY/ADD source in the resolved Dockerfile resolves.
+
+    The `build_inputs` probe asks whether the Dockerfile FILE is there.
+    This probe asks the NEXT question: whether that Dockerfile can actually
+    be built from the context the workflow will hand the builder. A
+    Dockerfile that says `COPY requirements.txt ./` is buildable only from a
+    context that CONTAINS `requirements.txt`, and the build context is
+    resolved from the matrix -- so the matrix has to say the same thing the
+    Dockerfile assumes.
+    """
+    name = str(image.get("name", "<unnamed>"))
+    repo = str(image.get("repo", "") or "").strip()
+    dockerfile_rel = str(image.get("dockerfile", "") or "").strip() or "Dockerfile"
+    base, context_dir, dockerfile = resolve_build_paths(image, ctx)
+
+    if not dockerfile.is_file():
+        if repo and _is_submodule(repo, ctx.submodule_paths) and not _submodule_checked_out(ctx.repo_root / repo):
+            return UNDECIDED, (
+                f"cannot resolve the COPY set for '{name}': submodule '{repo}' "
+                f"is not checked out in this tree, so the Dockerfile "
+                f"'{dockerfile_rel}' cannot be read"
+            )
+        # The Dockerfile is ABSENT. That absence is the `build_inputs`
+        # probe's claim, and it is reported there with the full evidence.
+        # Re-reporting it here as UNDECIDED would add a second, vaguer
+        # claim about the same defect.
+        return VERIFIED, (
+            f"no COPY set to resolve for '{name}': the build input "
+            f"'{dockerfile_rel}' is absent (reported by the `build_inputs` "
+            f"probe), so there is no Dockerfile whose sources could fail to "
+            f"resolve"
+        )
+
+    try:
+        text = dockerfile.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        return INSTRUMENT_ERROR, (
+            f"could not read the Dockerfile for '{name}' at "
+            f"'{dockerfile.as_posix()}': {exc} -- the COPY set is UNMEASURED, "
+            f"not clean"
+        )
+
+    groups = _dockerfile_context_sources(text)
+    if not groups:
+        return VERIFIED, (
+            f"the Dockerfile for '{name}' declares no COPY/ADD source that "
+            f"comes from the build context"
+        )
+
+    unresolved: list[str] = []
+    for sources in groups:
+        for source in sources:
+            if not _source_resolves(source, context_dir):
+                unresolved.append(source)
+
+    if unresolved:
+        shown = ", ".join(f"'{s}'" for s in sorted(set(unresolved)))
+        return DRIFTED, (
+            f"the COPY set of '{name}' does not resolve against its build "
+            f"context '{context_dir.as_posix()}': {shown}. The build would "
+            f"fail with 'not found' -- the Dockerfile exists, but the "
+            f"context the matrix declares does not contain what it copies"
+        )
+    return VERIFIED, (
+        f"every COPY/ADD source of '{name}' resolves against the build "
+        f"context '{context_dir.as_posix()}'"
+    )
+
+
 PROBES = {
     "matrix_fields": probe_matrix_fields,
     "build_inputs": probe_build_inputs,
     "build_path": probe_build_path,
     "dead_context": probe_dead_context,
+    "copy_sources": probe_copy_sources,
 }
 
 

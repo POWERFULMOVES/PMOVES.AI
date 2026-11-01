@@ -264,7 +264,12 @@ def test_real_matrix_and_workflow_pass():
     )
     assert r.returncode == 0, r.stdout + r.stderr
     out = json.loads(r.stdout)
-    assert out["total"] == 30, out["total"]
+    # 32, not 30: `pmoves-jellyfin-ai-media-stack` was ONE matrix entry for a
+    # THREE-service stack, and it is now three entries
+    # (`-api-gateway`, `-dashboard`, `-audio-processor`) that mirror how
+    # PMOVES.AI's own `pmoves/docker-compose.jellyfin-ai.yml` builds them.
+    # 30 + 2 = 32.
+    assert out["total"] == 32, out["total"]
     assert out["counts"]["DRIFTED"] == 0, out["problems"]
     assert out["problems"] == []
     # Every image must have a non-manual rebuild path, or the fleet can
@@ -276,6 +281,12 @@ def test_real_matrix_and_workflow_pass():
     for claim in out["claims"]:
         if claim["probe"] == "matrix_fields":
             assert claim["verdict"] == "VERIFIED", claim
+    # And every image's COPY set must resolve against its build context --
+    # a Dockerfile that exists but copies files the context does not hold is
+    # an image the build cannot produce.
+    for claim in out["claims"]:
+        if claim["probe"] == "copy_sources":
+            assert claim["verdict"] in ("VERIFIED", "UNDECIDED"), claim
 
 
 def test_real_workflow_has_a_non_manual_trigger():
@@ -295,7 +306,7 @@ def test_real_workflow_has_a_non_manual_trigger():
     assert "workflow_dispatch" in triggers, triggers
 
 
-def test_real_matrix_parses_to_thirty_images():
+def test_real_matrix_parses_to_thirty_two_images():
     sys.path.insert(0, str(RATCHET.parent))
     try:
         import image_staleness_ratchet as ratchet
@@ -304,10 +315,18 @@ def test_real_matrix_parses_to_thirty_images():
 
     text = (REPO_ROOT / "pmoves" / "images.yaml").read_text(encoding="utf-8")
     images = ratchet.parse_images_matrix(text)
-    assert len(images) == 30, len(images)
+    # 32: the jellyfin-ai stack is three matrix entries, not one. See
+    # `test_real_matrix_and_workflow_pass`.
+    assert len(images) == 32, len(images)
     names = {i["name"] for i in images}
     assert "pmoves-flute-gateway" in names
     assert "pmoves-agent-zero" in names
+    # The three jellyfin-ai services, and NOT the old single stack entry --
+    # a baseline may not outlive the matrix entry it describes.
+    assert "pmoves-jellyfin-ai-api-gateway" in names
+    assert "pmoves-jellyfin-ai-dashboard" in names
+    assert "pmoves-jellyfin-ai-audio-processor" in names
+    assert "pmoves-jellyfin-ai-media-stack" not in names
 
 
 # --------------------------------------------------------------------------
@@ -840,6 +859,209 @@ def test_a_baseline_entry_that_is_still_in_the_matrix_is_not_orphaned(tmp_path):
     assert out["orphan_gaps"] == [], out["orphan_gaps"]
     assert out["known_gaps"], out["known_gaps"]
     assert r.returncode == 0, r.stdout + r.stderr
+
+
+# --------------------------------------------------------------------------
+# 11. the COPY-SOURCE probe and `build_context`
+# --------------------------------------------------------------------------
+# A Dockerfile that EXISTS is not necessarily BUILDABLE: its COPY sources
+# are relative to the BUILD CONTEXT. PMOVES-DoX's `backend/Dockerfile` does
+# `COPY requirements.txt ./`, which only resolves when the context IS
+# `backend` -- so the matrix has to be able to say so, and the gate has to
+# check that what the matrix says actually works.
+
+BUILD_CONTEXT_IMAGE = """\
+images:
+  - name: pmoves-dox
+    repo: PMOVES-DoX
+    context: .
+    build_context: backend
+    dockerfile: Dockerfile
+    image: ghcr.io/powerfulmoves/pmoves-dox
+"""
+
+GITMODULES_DOX = (
+    '[submodule "PMOVES-DoX"]\n'
+    "\tpath = PMOVES-DoX\n"
+    "\turl = https://github.com/POWERFULMOVES/PMOVES-DoX.git\n"
+)
+
+
+def _claim(out: dict, image: str, probe: str) -> dict:
+    for claim in out["claims"]:
+        if claim["image"] == image and claim["probe"] == probe:
+            return claim
+    raise AssertionError(f"no {probe} claim for {image}: {out['claims']}")
+
+
+def test_a_build_context_resolves_the_dockerfile_inside_it(tmp_path):
+    images, workflow, gitmodules, root = _tree(
+        tmp_path,
+        images_yaml=BUILD_CONTEXT_IMAGE,
+        workflow_yaml=GOOD_WORKFLOW,
+        gitmodules=GITMODULES_DOX,
+        files={
+            "PMOVES-DoX/backend/Dockerfile": "FROM python:3.12-slim\nCOPY requirements.txt .\n",
+            "PMOVES-DoX/backend/requirements.txt": "fastapi\n",
+        },
+    )
+    out = json.loads(_run(images, workflow, gitmodules, root).stdout)
+    claim = _claim(out, "pmoves-dox", "build_inputs")
+    assert claim["verdict"] == "VERIFIED", claim
+
+
+def test_a_copy_source_the_context_does_not_hold_is_drifted(tmp_path):
+    """The repo root has no `requirements.txt`, so the build would fail."""
+    images, workflow, gitmodules, root = _tree(
+        tmp_path,
+        images_yaml=BUILD_CONTEXT_IMAGE,
+        workflow_yaml=GOOD_WORKFLOW,
+        gitmodules=GITMODULES_DOX,
+        files={
+            "PMOVES-DoX/backend/Dockerfile": "FROM python:3.12-slim\nCOPY requirements.txt .\n",
+        },
+    )
+    out = json.loads(_run(images, workflow, gitmodules, root).stdout)
+    claim = _claim(out, "pmoves-dox", "copy_sources")
+    assert claim["verdict"] == "DRIFTED", claim
+    assert "requirements.txt" in claim["evidence"], claim
+
+
+def test_a_copy_source_resolves_against_the_declared_build_context(tmp_path):
+    """Same Dockerfile, same registry entry, but the context now holds the
+    file -- so the build CAN succeed and the claim must flip to VERIFIED.
+
+    The evidence is asserted too: the probe also returns VERIFIED when the
+    Dockerfile is ABSENT (there is no COPY set to check), so a verdict-only
+    assertion could pass without ever having resolved a source. The
+    evidence names the context directory it resolved against, which the
+    absent-Dockerfile verdict does not.
+    """
+    images, workflow, gitmodules, root = _tree(
+        tmp_path,
+        images_yaml=BUILD_CONTEXT_IMAGE,
+        workflow_yaml=GOOD_WORKFLOW,
+        gitmodules=GITMODULES_DOX,
+        files={
+            "PMOVES-DoX/backend/Dockerfile": "FROM python:3.12-slim\nCOPY requirements.txt .\n",
+            "PMOVES-DoX/backend/requirements.txt": "fastapi\n",
+        },
+    )
+    out = json.loads(_run(images, workflow, gitmodules, root).stdout)
+    claim = _claim(out, "pmoves-dox", "copy_sources")
+    assert claim["verdict"] == "VERIFIED", claim
+    assert "backend" in claim["evidence"], (
+        "the verdict must name the build context it resolved against, or it "
+        f"may be the vacuous 'no COPY set to resolve' verdict: {claim}"
+    )
+
+
+def test_a_stage_copy_is_not_a_build_context_source(tmp_path):
+    """`COPY --from=build ./dist /out` copies from another stage.
+
+    The source is RELATIVE on purpose: an absolute stage source would be
+    ignored anyway, so only a relative one proves that the `--from=` rule
+    is doing the work.
+    """
+    images, workflow, gitmodules, root = _tree(
+        tmp_path,
+        images_yaml=BUILD_CONTEXT_IMAGE,
+        workflow_yaml=GOOD_WORKFLOW,
+        gitmodules=GITMODULES_DOX,
+        files={
+            "PMOVES-DoX/backend/Dockerfile": (
+                "FROM node:22 AS build\n"
+                "FROM nginx:1.27\n"
+                "COPY --from=build ./dist /usr/share/nginx/html\n"
+            ),
+        },
+    )
+    out = json.loads(_run(images, workflow, gitmodules, root).stdout)
+    claim = _claim(out, "pmoves-dox", "copy_sources")
+    assert claim["verdict"] == "VERIFIED", claim
+
+
+def test_a_glob_copy_source_resolves_against_the_context(tmp_path):
+    images, workflow, gitmodules, root = _tree(
+        tmp_path,
+        images_yaml=BUILD_CONTEXT_IMAGE,
+        workflow_yaml=GOOD_WORKFLOW,
+        gitmodules=GITMODULES_DOX,
+        files={
+            "PMOVES-DoX/backend/Dockerfile": "FROM node:22\nCOPY package*.json ./\n",
+            "PMOVES-DoX/backend/package.json": "{}\n",
+        },
+    )
+    out = json.loads(_run(images, workflow, gitmodules, root).stdout)
+    assert _claim(out, "pmoves-dox", "copy_sources")["verdict"] == "VERIFIED"
+
+
+def test_a_glob_copy_source_with_no_match_is_drifted(tmp_path):
+    images, workflow, gitmodules, root = _tree(
+        tmp_path,
+        images_yaml=BUILD_CONTEXT_IMAGE,
+        workflow_yaml=GOOD_WORKFLOW,
+        gitmodules=GITMODULES_DOX,
+        files={
+            "PMOVES-DoX/backend/Dockerfile": "FROM node:22\nCOPY package*.json ./\n",
+        },
+    )
+    out = json.loads(_run(images, workflow, gitmodules, root).stdout)
+    assert _claim(out, "pmoves-dox", "copy_sources")["verdict"] == "DRIFTED"
+
+
+def test_copying_the_whole_context_always_resolves(tmp_path):
+    images, workflow, gitmodules, root = _tree(
+        tmp_path,
+        images_yaml=BUILD_CONTEXT_IMAGE,
+        workflow_yaml=GOOD_WORKFLOW,
+        gitmodules=GITMODULES_DOX,
+        files={
+            "PMOVES-DoX/backend/Dockerfile": "FROM node:22\nCOPY . .\n",
+        },
+    )
+    out = json.loads(_run(images, workflow, gitmodules, root).stdout)
+    assert _claim(out, "pmoves-dox", "copy_sources")["verdict"] == "VERIFIED"
+
+
+def test_a_dead_build_context_on_an_in_tree_entry_is_drifted(tmp_path):
+    """`build_context` is read INSIDE the workflow's `matrix.repo &&` branch,
+    so an entry with no `repo:` never reads it."""
+    images, workflow, gitmodules, root = _tree(
+        tmp_path,
+        images_yaml=(
+            "images:\n"
+            "  - name: pmoves-in-tree\n"
+            "    context: pmoves\n"
+            "    build_context: backend\n"
+            "    dockerfile: services/in-tree/Dockerfile\n"
+            "    image: ghcr.io/powerfulmoves/pmoves-in-tree\n"
+        ),
+        workflow_yaml=GOOD_WORKFLOW,
+        files={
+            "pmoves/services/in-tree/Dockerfile": "FROM scratch\n",
+        },
+    )
+    out = json.loads(_run(images, workflow, gitmodules, root).stdout)
+    claim = _claim(out, "pmoves-in-tree", "dead_context")
+    assert claim["verdict"] == "DRIFTED", claim
+    assert "build_context" in claim["evidence"], claim
+
+
+def test_the_live_matrix_has_no_unresolved_copy_source():
+    """Every real matrix entry's COPY set resolves against its context.
+
+    The submodules are NOT checked out in this tree, so the repo-backed
+    entries are UNDECIDED here; the IN-TREE entries are fully decidable and
+    must all resolve.
+    """
+    proc = subprocess.run(
+        [PYTHON, str(RATCHET), "--json"], capture_output=True, text=True, timeout=600
+    )
+    out = json.loads(proc.stdout)
+    for claim in out["claims"]:
+        if claim["probe"] == "copy_sources" and claim["verdict"] == "DRIFTED":
+            raise AssertionError(f"a live matrix entry cannot be built: {claim}")
 
 
 # --------------------------------------------------------------------------
