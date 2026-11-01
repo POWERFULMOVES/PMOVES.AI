@@ -36,6 +36,8 @@ ENV_SHARED_PATH = REPO_ROOT / "pmoves" / "env.shared"
 CLEARED_KEYS_PATH = REPO_ROOT / "pmoves" / "configs" / "secrets_cleared.yaml"
 _ENV_KEY_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
+ALNUM_ALPHABET = string.ascii_letters + string.digits
+
 # Used only when neither the command line nor the registry declares an axis.
 DEFAULT_GEN_TYPE = "random_urlsafe"
 DEFAULT_GEN_LENGTH = 48
@@ -126,6 +128,12 @@ def generate_value(spec: Optional[Dict]) -> Optional[str]:
         if length % 2 != 0:
             length += 1
         return secrets.token_hex(length // 2)
+    if gen_type == "random_alnum":
+        # Exact length over [A-Za-z0-9]: log2(62) ~ 5.95 bits/char, vs 4 for hex.
+        # For a fixed-length vendor slot (the Invidious companion key is exactly
+        # 16 of [A-Za-z0-9]) that is ~95 bits instead of hex's 64.
+        length = int(spec.get("length", 32))
+        return "".join(secrets.choice(ALNUM_ALPHABET) for _ in range(length))
     return _generate_token_or_passphrase(spec, gen_type)
 
 
@@ -161,6 +169,12 @@ def value_matches_spec(value: Optional[str], spec: Optional[Dict]) -> bool:
         if len(value) != length:
             return False
         return all(c in string.hexdigits for c in value)
+    if gen_type == "random_alnum":
+        # Strict like hex: the consumer (Invidious companion) rejects anything
+        # else. A hex value of the right length is alnum, so existing hex keys
+        # stay valid and are never rotated by this check.
+        length = int(spec.get("length", 32))
+        return len(value) == length and all(c in ALNUM_ALPHABET for c in value)
     # Intentionally lax for random_urlsafe: some legacy values were generated
     # via `openssl rand -base64 | tr -d '='` which includes `+` and `/` (not
     # strictly url-safe). Regenerating those would rotate working n8n / wger /
@@ -905,7 +919,7 @@ def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
         "--gen-type",
         default=None,
         help=(
-            "Generator type for --rotate (random_urlsafe | random_hex | passphrase). "
+            "Generator type for --rotate (random_urlsafe | random_hex | random_alnum | passphrase). "
             "Default: the type the registry declares for this key, else random_urlsafe."
         ),
     )

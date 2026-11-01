@@ -91,9 +91,40 @@ def _env(tmp_path: Path, text: str) -> Path:
 
 def test_companion_key_generator_is_exactly_16_alphanumeric():
     spec = _specs()["INVIDIOUS_COMPANION_KEY"]["generate"]
-    assert spec == {"type": "random_hex", "length": 16}
+    assert spec == {"type": "random_alnum", "length": 16}
     for _ in range(50):
         assert COMPANION_KEY_RE.fullmatch(be.generate_value(spec))
+
+
+def test_random_alnum_uses_the_whole_alphabet():
+    """~95 bits for 16 chars only if all 62 symbols are actually drawn.
+
+    2000 x 16 = 32000 draws: the chance that a uniform generator misses any one
+    of 62 symbols is about 62 * (61/62)^32000, i.e. effectively zero; a hex-only
+    or lowercase-only generator fails this immediately.
+    """
+    spec = {"type": "random_alnum", "length": 16}
+    seen = set()
+    for _ in range(2000):
+        value = be.generate_value(spec)
+        assert len(value) == 16
+        seen.update(value)
+    assert seen == set(be.ALNUM_ALPHABET)
+    assert len(be.ALNUM_ALPHABET) == 62
+
+
+def test_existing_valid_hex_and_alnum_companion_keys_are_kept(tmp_path):
+    """The new generator must not force a rotation of a working key."""
+    spec = {"type": "random_alnum", "length": 16}
+    for existing in ("0123456789abcdef", "aB3dE5gH7jK9mN1p"):
+        assert be.value_matches_spec(existing, spec)
+        env = tmp_path / ("env." + "shared")
+        env.write_text(f"INVIDIOUS_COMPANION_KEY={existing}\n", encoding="utf-8")
+        generated, _ = be.ensure_secret("INVIDIOUS_COMPANION_KEY", env_path=env, registry_path=str(REGISTRY))
+        assert not generated
+        assert be.read_env_value("INVIDIOUS_COMPANION_KEY", env) == existing
+    for broken in ("ab-def_123456789", "short", "a" * 17):
+        assert not be.value_matches_spec(broken, spec)
 
 
 def test_hmac_key_generator_is_a_long_random_string():

@@ -1059,11 +1059,11 @@
           "key": "INVIDIOUS_COMPANION_KEY",
           "file": "pmoves/env.shared",
           "prompt": "Invidious Companion API key",
-          "help": "Shared key between Invidious (invidious_companion_key) and the companion (SERVER_SECRET_KEY). EXACTLY 16 alphanumeric characters: Invidious exits on any other length and the companion's config schema enforces length 16 + [a-zA-Z0-9]. 16 hex satisfies both. Vendor suggests pwgen 16 1. Written only by tools/invidious_keys_preflight.py.",
+          "help": "Shared key between Invidious (invidious_companion_key) and the companion (SERVER_SECRET_KEY). EXACTLY 16 alphanumeric characters: Invidious exits on any other length and the companion's config schema enforces length 16 + [a-zA-Z0-9]. Minted as random_alnum 16 (~95 bits; hex would be 64); an existing 16-char hex key is equally valid and is kept. Vendor suggests pwgen 16 1. Written only by tools/invidious_keys_preflight.py.",
           "required": true,
           "sensitive": true,
           "generate": {
-            "type": "random_hex",
+            "type": "random_alnum",
             "length": 16
           }
         }

@@ -22,7 +22,7 @@ Next steps: supply a valid API key if required for production workloads, otherwi
 | Key | Vendor requirement (iv-org, read 2026-10-30) | What we mint |
 |---|---|---|
 | `INVIDIOUS_HMAC_KEY` -> `hmac_key` | mandatory random string; Invidious exits if empty | `random_hex` 64 (any existing value of 32 or more chars is kept) |
-| `INVIDIOUS_COMPANION_KEY` -> `invidious_companion_key` **and** companion `SERVER_SECRET_KEY` | exactly 16 chars (Invidious exits otherwise); companion requires `[a-zA-Z0-9]{16}`; reusing the HMAC key is "NOT recommended" (vendor) | `random_hex` 16 |
+| `INVIDIOUS_COMPANION_KEY` -> `invidious_companion_key` **and** companion `SERVER_SECRET_KEY` | exactly 16 chars (Invidious exits otherwise); companion requires `[a-zA-Z0-9]{16}`; reusing the HMAC key is "NOT recommended" (vendor) | `random_alnum` 16 (~95 bits; existing 16-char hex keys stay valid) |
 
 Owner: `tools/invidious_keys_preflight.py` is the only writer of both keys. It runs before stack goals, in a mode matching what each one recreates, and in FIX mode from the funnel. `brand_defaults.py` no longer writes them.
 

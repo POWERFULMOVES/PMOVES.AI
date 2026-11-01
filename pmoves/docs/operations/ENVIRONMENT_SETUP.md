@@ -145,7 +145,7 @@ Contains media processing configurations and integration credentials.
 - `JELLYFIN_URL` - Jellyfin URL
 - `JELLYFIN_PUBLISHED_URL` - Jellyfin published URL
 - `INVIDIOUS_HMAC_KEY` - Invidious `hmac_key` (random string, 32 or more chars; `invidious_keys_preflight.py` mints 64 hex). **Required by compose on every node** -- no default.
-- `INVIDIOUS_COMPANION_KEY` - shared Invidious/companion key, **exactly 16 alphanumeric** (`invidious_keys_preflight.py` mints 16 hex). **Required by compose on every node** -- no default.
+- `INVIDIOUS_COMPANION_KEY` - shared Invidious/companion key, **exactly 16 alphanumeric** (`invidious_keys_preflight.py` mints 16 random alphanumeric; an existing 16-char hex key stays valid). **Required by compose on every node** -- no default.
 - `DISCORD_WEBHOOK_URL` - Discord webhook URL
 - `DISCORD_USERNAME` - Discord bot username
 - `DISCORD_AVATAR_URL` - Discord bot avatar URL

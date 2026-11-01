@@ -433,9 +433,9 @@ def test_funnel_path_mints_registry_format_on_a_virgin_node(tmp_path):
     env, r = _real_ensure_env_shared(tmp_path, "OTHER=keep\n")
     assert r.returncode == 0, r.stdout + r.stderr
     # Booleans only: never let pytest introspect a key into the failure output.
-    minted_companion = bool(re.fullmatch(r"[0-9a-f]{16}", _read(env, "INVIDIOUS_COMPANION_KEY") or ""))
+    minted_companion = bool(re.fullmatch(r"[A-Za-z0-9]{16}", _read(env, "INVIDIOUS_COMPANION_KEY") or ""))
     minted_hmac = bool(re.fullmatch(r"[0-9a-f]{64}", _read(env, "INVIDIOUS_HMAC_KEY") or ""))
-    assert minted_companion, "companion key is not the registry's random_hex 16"
+    assert minted_companion, "companion key is not the registry's random_alnum 16"
     assert minted_hmac, "HMAC key is not the registry's random_hex 64"
 
 
@@ -499,3 +499,13 @@ def test_readers_take_the_lock_shared_and_writers_wait(tmp_path):
             writer.communicate(timeout=1.5)  # a writer waits for the reader
     out, _ = writer.communicate(timeout=30)
     assert out.strip() == "got"
+
+
+
+def test_preflight_keeps_existing_valid_hex_companion_key(tmp_path):
+    """Moving the generator to random_alnum must not rotate a working hex key."""
+    text = f"INVIDIOUS_HMAC_KEY={LIVE_HMAC}\nINVIDIOUS_COMPANION_KEY=0123456789abcdee\n"
+    env = _env(tmp_path, text)
+    for mode in ("fix", "mint", "gate", "check"):
+        assert pf.run(env, mode=mode, registry=REGISTRY, probe=Probe()) == 0
+        assert env.read_text(encoding="utf-8") == text
