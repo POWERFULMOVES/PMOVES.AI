@@ -247,6 +247,11 @@ def _precheck_only(venv_path: Path, req_files: list[Path]) -> int:
         "scikit-learn": "sklearn",
         "sentence-transformers": "sentence_transformers",
     }
+    # Distributions whose MAJOR version is part of the contract, not just the
+    # import. pydantic v1 imports fine and then fails on the v2-only API
+    # (ConfigDict, field_validator) that secret_shape_rules uses -- inside the
+    # funnel, after this gate had passed it.
+    _MIN_MAJOR = {"pydantic": 2}
 
     venv_python = venv_path / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
     if not venv_python.exists():
@@ -268,13 +273,22 @@ def _precheck_only(venv_path: Path, req_files: list[Path]) -> int:
             if not dist:
                 continue
             module = _IMPORT.get(dist, dist.replace("-", "_"))
+            code = f"import {module}"
+            major = _MIN_MAJOR.get(dist)
+            if major is not None:
+                code += (
+                    "; import importlib.metadata as m, sys"
+                    f"; sys.exit(0 if int(m.version({dist!r}).split('.')[0]) >= {major} else 4)"
+                )
             probe = subprocess.run(
-                [str(venv_python), "-c", f"import {module}"],
+                [str(venv_python), "-c", code],
                 capture_output=True,
                 text=True,
                 check=False,
             )
-            if probe.returncode != 0:
+            if probe.returncode == 4:
+                missing.append(f"{dist} (installed, but major version < {major})")
+            elif probe.returncode != 0:
                 missing.append(f"{dist} (import {module})")
 
     if missing:

@@ -1,0 +1,122 @@
+# Provider-auth probes for `make -C pmoves secrets-provider-verify`.
+#
+# One cheap, authenticated, READ-ONLY call per credential: a model list or a
+# whoami. It answers the question a presence check and a shape check cannot --
+# "does the provider accept this key?" -- right after a rotation.
+#
+# Same discipline as the MiniMax Provider Verifier's provider.json
+# (name / model / base_url / api_key, placeholder-only in committed files),
+# made structural: there is no field that can hold a key. `api_key_env` is the
+# NAME of the environment variable, validated as an env-var identifier, and the
+# model (pmoves/tools/secrets_provider_verify.py, ProbeSet) forbids unknown
+# fields, so an `api_key:` line fails to load (exit 3).
+#
+# Static headers are limited to an allowlist of non-credential names
+# (STATIC_HEADER_ALLOWLIST in the tool); anything else fails to load.
+#
+# Every api_key_env must also have a shape rule in secret_shapes.yaml; the tool
+# refuses to send a value that fails its rule (reported `fail`, status `shape`).
+#
+# Status mapping: 2xx -> ok; a status in auth_failure_statuses (default 401,
+# 403) -> fail; anything else (3xx, 404, 429, 5xx, network error) -> unmeasured.
+# Redirects are NOT followed, so a credential header is never forwarded to a
+# host other than the one named here.
+version: 1
+probes:
+  - name: anthropic
+    api_key_env: ANTHROPIC_API_KEY
+    url: https://api.anthropic.com/v1/models
+    # The current docs prefer Authorization: Bearer and list x-api-key as the
+    # "legacy fallback, still supported"; x-api-key works on every API version.
+    auth_header: x-api-key
+    auth_scheme: ""
+    headers:
+      anthropic-version: "2023-06-01"
+    docs:
+      - https://docs.anthropic.com/en/api/models-list
+      - https://docs.anthropic.com/en/api/overview
+
+  - name: openai
+    api_key_env: OPENAI_API_KEY
+    url: https://api.openai.com/v1/models
+    docs:
+      - https://raw.githubusercontent.com/openai/openai-openapi/master/openapi.yaml
+
+  - name: gemini
+    api_key_env: GEMINI_API_KEY
+    url: https://generativelanguage.googleapis.com/v1beta/models
+    # Header, not `?key=`: a query-string credential lands in proxy and
+    # access logs. x-goog-api-key is the documented header form.
+    auth_header: x-goog-api-key
+    auth_scheme: ""
+    # Google APIs answer an unknown or malformed API key with 400
+    # INVALID_ARGUMENT carrying ErrorInfo reason API_KEY_INVALID -- but 400 is
+    # also FAILED_PRECONDITION (e.g. an unsupported region), which says nothing
+    # about the key. So 400 is a failure only with that reason; otherwise it is
+    # unmeasured. Only the machine-readable reason is read from the body.
+    auth_failure_reasons:
+      400: ["API_KEY_INVALID"]
+    docs:
+      - https://ai.google.dev/api/models
+      - https://ai.google.dev/gemini-api/docs/api-key
+
+  - name: huggingface
+    api_key_env: HF_TOKEN
+    url: https://huggingface.co/api/whoami-v2
+    docs:
+      - https://huggingface.co/docs/huggingface_hub/en/package_reference/hf_api
+
+  - name: github-pat
+    api_key_env: GITHUB_PAT
+    url: https://api.github.com/user
+    headers:
+      Accept: application/vnd.github+json
+      X-GitHub-Api-Version: "2022-11-28"
+    docs:
+      - https://docs.github.com/en/rest/users/users#get-the-authenticated-user
+
+  # GH_TOKEN may legitimately be an installation token (ghs_, e.g. a CI
+  # GITHUB_TOKEN). Those cannot call GET /user and would come back 403 -- a
+  # false `fail` -- so they are reported unmeasured and not sent.
+  - name: github-gh-token
+    api_key_env: GH_TOKEN
+    url: https://api.github.com/user
+    unmeasurable_prefixes: ["ghs_"]
+    headers:
+      Accept: application/vnd.github+json
+      X-GitHub-Api-Version: "2022-11-28"
+    docs:
+      - https://docs.github.com/en/rest/users/users#get-the-authenticated-user
+
+  # GHCR: a 200 from /user proves the token is live, not that it can pull.
+  # Classic PATs and OAuth tokens (gho_, e.g. from `gh auth token`) report
+  # their scopes in X-OAuth-Scopes, so the probe requires read:packages or
+  # write:packages. This scope check, not the prefix rule, is the authority on
+  # whether GHCR_TOKEN can pull. A token that sends no X-OAuth-Scopes (a
+  # fine-grained PAT) is reported `fail`: its package access cannot be shown
+  # this way, and the Packages docs name the classic PAT as the supported form.
+  # An installation token (ghs_) cannot call GET /user at all, so it is
+  # reported unmeasured rather than sent.
+  - name: ghcr
+    api_key_env: GHCR_TOKEN
+    url: https://api.github.com/user
+    headers:
+      Accept: application/vnd.github+json
+      X-GitHub-Api-Version: "2022-11-28"
+    unmeasurable_prefixes: ["ghs_"]
+    require_header:
+      name: X-OAuth-Scopes
+      contains_any: ["read:packages", "write:packages"]
+    docs:
+      - https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry
+      - https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/scopes-for-oauth-apps
+
+  - name: tailscale-api
+    api_key_env: TAILSCALE_API_KEY
+    url: https://api.tailscale.com/api/v2/tailnet/-/devices
+    docs:
+      - https://tailscale.com/api
+
+# Deliberately NOT probed: the Tailscale node registration credential. The only
+# way to exercise it is to register a node, which is a mutation, not a read.
+# Shape rules cover it at delivery; registration proves it on first use.
