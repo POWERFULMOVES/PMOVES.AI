@@ -58,7 +58,6 @@ import argparse
 import datetime as _dt
 import json
 import os
-import platform
 import re
 import shutil
 import subprocess
@@ -712,7 +711,7 @@ def run_checks(args: argparse.Namespace) -> List[CheckResult]:
 
 
 def render_text(results: Sequence[CheckResult], code: int) -> str:
-    lines = [f"docker-disk-preflight (read-only) on {platform.node() or 'this node'}"]
+    lines = ["docker-disk-preflight (read-only)"]  # no hostname: output gets pasted
     for r in results:
         lines.append(f"[{r.status}] {r.name}: {r.summary}")
         for e in r.evidence:

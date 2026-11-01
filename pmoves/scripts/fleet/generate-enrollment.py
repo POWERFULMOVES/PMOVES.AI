@@ -26,6 +26,7 @@ import hashlib
 import hmac
 import json
 import os
+import re
 import secrets
 import sys
 import time
@@ -201,10 +202,23 @@ def ledger_serials() -> set[int]:
     if not LEDGER_PATH.exists():
         return set()
     serials = set()
-    for line in LEDGER_PATH.read_text().splitlines():
+    for lineno, line in enumerate(LEDGER_PATH.read_text().splitlines(), 1):
         if not line.strip():
             continue
-        entry = json.loads(line)
+        try:
+            entry = json.loads(line)
+        except json.JSONDecodeError:
+            # A torn append (crash mid-write) must not brick every later mint.
+            # Best effort: reserve a serial only if the fragment shows it
+            # complete (digits followed by `,` or `}`). A number cut off
+            # mid-digit is ignored instead of reserving a shorter, wrong serial.
+            m = re.search(r'"serial"\s*:\s*(\d+)\s*[,}]', line)
+            if m:
+                serials.add(int(m.group(1)))
+            print(f"warning: {LEDGER_PATH.name}:{lineno} is not valid JSON; "
+                  f"{'reserved serial ' + m.group(1) if m else 'no serial found'}",
+                  file=sys.stderr)
+            continue
         if "serial" in entry:
             serials.add(int(entry["serial"]))
     return serials
