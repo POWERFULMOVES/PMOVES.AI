@@ -61,3 +61,28 @@ kong entrypoint substitutes `$SUPABASE_*` at container start). Requires the
 supabase stack recreate (gated) in the same window.
 
 <!-- GRAPHITI_MARK: CRUSH-GLM52::SUPABASE-KEY-BLAST-RADIUS::2026-10-31 -->
+
+## Dry-run proof: supabase recreate from main (the gated lane's missing artifact)
+
+Method: `docker compose -f docker-compose.base.yml -f docker-compose.core.yml config`
+resolved from the **main** checkout (`COMPOSE_PROFILES=supabase-local`, session
+shadows unset), fingerprint-diffed against the running containers' actual
+config. Measured 2026-10-31, knuckles.
+
+**Result: the recreate is credential-refresh-only.**
+
+| Field | Main config | Running | Verdict |
+|---|---|---|---|
+| `SUPABASE_SERVICE_KEY` | JWT +3649d | JWT −11d | **CHANGES — the fix** |
+| `SUPA_REST_INTERNAL_URL` | live kong URL (33c) | dead `:54321` URL (41c) | **CHANGES — the fix** |
+| `SUPABASE_JWT_SECRET` / `JWT_SECRET` / `PGRST_JWT_SECRET` / `GOTRUE_JWT_SECRET` | — | — | byte-SAME (placeholder PGRST secret unchanged — no rotation surprise rides along) |
+| `SUPABASE_ANON_KEY` / `SUPABASE_SERVICE_ROLE_KEY` | — | — | SAME (70d remaining) |
+| Images (kong 3.9.3, postgrest v14.12, gotrue v2.191.0, db 17.6.1.108, realtime v2.102.3, storage v1.60.4) | — | — | SAME |
+| kong.yml mount source | main's `PMOVES-supabase/docker/volumes/api/` | same absolute path | SAME |
+
+The steward's narrowed re-claim demanded "a dry run from the ROOT checkout
+proving a Supabase recreate is a no-op or label-only." Measured, it is
+neither a pure no-op nor a config churn: it is exactly the two credential
+refreshes this incident requires and nothing else. Kong restart side-effect:
+the dbless credential regenerates from the refreshed env — superseding the
+runtime `POST /admin/config` patch (and surviving future restarts).
