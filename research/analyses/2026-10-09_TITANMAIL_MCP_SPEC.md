@@ -1,6 +1,8 @@
 # TitanMail MCP — Seed Spec
 
-**Date:** 2026-10-09 · **Status:** SEED (design only — no implementation started) · **Placement target:** KVM2 (Hostinger VPS), loopback bind, tailnet-only access
+**Date:** 2026-10-09 · **Status:** BUILT, NOT DEPLOYED (2026-10-21, `pmoves/services/titanmail-mcp`; harness 182/182 date-window queries + dedup precision 1.0 over a 468-message / 273-day fixture, in-process and against a throwaway mailpit; Dockerfile + compose service pending operator-apply; Composio transport not yet exercised against a live account) · **Placement target:** KVM2 (Hostinger VPS), loopback bind, tailnet-only access
+
+> Note: the grounding analysis cited below (`2026-10-08_ARAGON_EMAIL_TOOLING_MAILRIGHT_CDP_ANALYSIS.md`) is **not present in this repository** (searched the tree and git history 2026-10-21). The build relied on this spec alone for the Aragon/EmailBench/Mail Right facts. Harness fixture decision: synthetic inbox with known ground truth (not Enron, not a live-inbox sample) — see `pmoves/services/titanmail-mcp/README.md`.
 
 Grounded in: `research/analyses/2026-10-08_ARAGON_EMAIL_TOOLING_MAILRIGHT_CDP_ANALYSIS.md` (Richard Aragon, transcript `Wwi-NEPzenc`, 2026-10-08). Key verified facts from that analysis: Microsoft **EmailBench** (2026-09-25, Enron-based, ~33% raw baseline); Aragon's reconstruction jumped **86% → 99.3%** on date-sensitive retrieval by passing **exact date/time in the API call** (GPT Luna, $0.10/$0.50 in/out); **Mail Right** (released) is the reference email-agent platform; **Agentic CDP v0.1** (released) is the deterministic-first record-unification pattern.
 
