@@ -509,3 +509,52 @@ def test_preflight_keeps_existing_valid_hex_companion_key(tmp_path):
     for mode in ("fix", "mint", "gate", "check"):
         assert pf.run(env, mode=mode, registry=REGISTRY, probe=Probe()) == 0
         assert env.read_text(encoding="utf-8") == text
+
+
+# ---------------------------------------------------------------------------
+# env.shared file mode (review issuecomment-6551214777)
+# ---------------------------------------------------------------------------
+
+
+def _run_ensure(tmp_path, env, template_text=None, umask=0o022):
+    import subprocess
+
+    template = tmp_path / "template.example"
+    if template_text is not None:
+        template.write_text(template_text, encoding="utf-8")
+    args = [sys.executable, str(PMOVES / "tools" / "ensure_env_shared.py"),
+            "--env-file", str(env), "--template", str(template)]
+    old = __import__("os").umask(umask)
+    try:
+        return subprocess.run(args, capture_output=True, text=True, env=_hermetic_env())
+    finally:
+        __import__("os").umask(old)
+
+
+@pytest.mark.parametrize("template_text", ["OTHER=keep\n", None])
+def test_new_env_file_is_created_0600_under_a_permissive_umask(tmp_path, template_text):
+    env = tmp_path / ("env." + "shared")
+    r = _run_ensure(tmp_path, env, template_text, umask=0o000)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert (env.stat().st_mode & 0o777) == 0o600
+    if template_text:
+        assert "OTHER=keep" in env.read_text(encoding="utf-8")
+
+
+def test_existing_loose_env_file_is_reported_not_chmodded(tmp_path):
+    env = _env(tmp_path, "OTHER=keep\nSOME_TOKEN=do-not-print-me\n")
+    env.chmod(0o644)
+    r = _run_ensure(tmp_path, env)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert (env.stat().st_mode & 0o777) == 0o644  # never chmod-ed
+    assert f"{env} is mode 0644" in r.stdout
+    assert "do-not-print-me" not in r.stdout + r.stderr
+
+
+def test_existing_private_env_file_is_not_reported(tmp_path):
+    env = _env(tmp_path, "OTHER=keep\n")
+    env.chmod(0o600)
+    r = _run_ensure(tmp_path, env)
+    assert r.returncode == 0
+    assert "readable beyond its owner" not in r.stdout
+    assert (env.stat().st_mode & 0o777) == 0o600
