@@ -109,6 +109,16 @@ def test_torn_ledger_line_does_not_brick_minting(tmp_path, monkeypatch, capsys):
     assert gen.mint_serial() == 12
 
 
+def test_torn_mid_digit_reserves_nothing(tmp_path, monkeypatch, capsys):
+    """`"serial": 1` cut from 12345 must not reserve the wrong serial 1."""
+    gen = _load_gen()
+    ledger = tmp_path / "ledger.jsonl"
+    ledger.write_text('{"token_id": "torn", "serial": 1\n')
+    monkeypatch.setattr(gen, "LEDGER_PATH", ledger)
+    assert gen.ledger_serials() == set()
+    assert "no serial found" in capsys.readouterr().err
+
+
 def test_minted_serials_are_distinct_and_json_safe(tmp_path, monkeypatch):
     gen = _load_gen()
     monkeypatch.setattr(gen, "LEDGER_PATH", tmp_path / "ledger.jsonl")

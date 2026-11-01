@@ -64,7 +64,7 @@ rollback() {
 }
 # Debian/Ubuntu name the unit `ssh`; RHEL/Arch name it `sshd`.
 restart_sshd() {
-  systemctl restart sshd 2>/dev/null || systemctl restart ssh 2>/dev/null || service ssh restart
+  systemctl restart sshd 2>/dev/null || systemctl restart ssh || service ssh restart
 }
 
 # --- Apply ---

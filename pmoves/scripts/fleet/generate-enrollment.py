@@ -209,8 +209,10 @@ def ledger_serials() -> set[int]:
             entry = json.loads(line)
         except json.JSONDecodeError:
             # A torn append (crash mid-write) must not brick every later mint.
-            # Still reserve any serial the fragment names: reuse is the hazard.
-            m = re.search(r'"serial"\s*:\s*(\d+)', line)
+            # Best effort: reserve a serial only if the fragment shows it
+            # complete (digits followed by `,` or `}`). A number cut off
+            # mid-digit is ignored instead of reserving a shorter, wrong serial.
+            m = re.search(r'"serial"\s*:\s*(\d+)\s*[,}]', line)
             if m:
                 serials.add(int(m.group(1)))
             print(f"warning: {LEDGER_PATH.name}:{lineno} is not valid JSON; "
