@@ -30,6 +30,7 @@ Hermetic: reads one file in this repo.
 
 from __future__ import annotations
 
+import ast
 import re
 from pathlib import Path
 
@@ -152,3 +153,95 @@ def test_each_declared_class_row_is_well_formed(cls):
     assert len(members) == count, (
         f"class {cls!r}: {count} lesson(s) declared but {len(members)} member(s) listed"
     )
+
+
+# ---------------------------------------------------------------------------
+# The shipped-asset counts (row F7i) are a MEASUREMENT too, so they get a gate
+# of their own: the same "a number in prose is a claim" rule as the bucket
+# summary above. The counts are recomputed by AST -- behavioural TEST FUNCTIONS
+# in the suite's behavioural file, and `Mutation(...)` entries in its harness --
+# and compared with what the row states.
+# ---------------------------------------------------------------------------
+
+LANE_SUITES = (
+    (
+        "encoding",
+        "pmoves/tests/tools/test_windows_encoding_ratchet.py",
+        "pmoves/tests/tools/test_windows_encoding_ratchet_mutation_kill.py",
+    ),
+    (
+        "port",
+        "pmoves/tests/tools/test_port_registry_ratchet.py",
+        "pmoves/tests/tools/test_port_registry_ratchet_mutation_kill.py",
+    ),
+    (
+        "image",
+        "pmoves/tools/tests/test_image_staleness_ratchet.py",
+        "pmoves/tools/tests/test_image_staleness_ratchet_mutation_kill.py",
+    ),
+    (
+        "ghapp",
+        "pmoves/tests/tools/test_gh_app_installation_audit.py",
+        "pmoves/tests/tools/test_gh_app_installation_audit_mutation_kill.py",
+    ),
+    (
+        "mmx",
+        "pmoves/tests/tools/test_mmx_surface_parity.py",
+        "pmoves/tests/tools/test_mmx_surface_parity_mutation_kill.py",
+    ),
+)
+
+ASSET_ROW = re.compile(
+    r"^\|\s*F7i\s*\|.*?\*\*(?P<tests>\d+)\*\*\s*behavioural test functions"
+    r"\s+and\s+\*\*(?P<mutations>\d+)\*\*\s+mutation kills",
+    re.MULTILINE,
+)
+
+
+def _count_test_functions(path: Path) -> int:
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    return sum(
+        1
+        for node in ast.walk(tree)
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        and node.name.startswith("test_")
+    )
+
+
+def _count_mutations(path: Path) -> int:
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    total = 0
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call):
+            func = node.func
+            name = getattr(func, "id", None) or getattr(func, "attr", None)
+            if name == "Mutation":
+                total += 1
+    return total
+
+
+def test_the_shipped_asset_counts_are_the_measured_ones():
+    """Row F7i states a count; the count is a CLAIM until it is recomputed."""
+    text = LEARNINGS.read_text(encoding="utf-8")
+    m = ASSET_ROW.search(text)
+    assert m, "the 'What shipped' table has no F7i row with the asset counts"
+
+    measured_tests = 0
+    measured_mutations = 0
+    for _label, behavioural, harness in LANE_SUITES:
+        bpath = REPO_ROOT / behavioural
+        hpath = REPO_ROOT / harness
+        assert bpath.exists(), f"missing suite file: {behavioural}"
+        assert hpath.exists(), f"missing harness file: {harness}"
+        measured_tests += _count_test_functions(bpath)
+        measured_mutations += _count_mutations(hpath)
+
+    assert int(m.group("tests")) == measured_tests, (
+        f"F7i claims {m.group('tests')} behavioural test functions; "
+        f"the tree has {measured_tests}"
+    )
+    assert int(m.group("mutations")) == measured_mutations, (
+        f"F7i claims {m.group('mutations')} mutation kills; "
+        f"the tree has {measured_mutations}"
+    )
+

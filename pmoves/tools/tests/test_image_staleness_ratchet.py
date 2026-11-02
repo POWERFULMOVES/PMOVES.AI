@@ -1066,6 +1066,128 @@ def test_a_glob_copy_source_with_no_match_is_drifted(tmp_path):
     assert _claim(out, "pmoves-dox", "copy_sources")["verdict"] == "DRIFTED"
 
 
+def test_a_line_continued_copy_reports_a_source_that_does_not_exist(tmp_path):
+    """A CONTINUED `COPY` carries more than one source.
+
+    `COPY a \\` + newline + `     b ./dest` is the standard form for a
+    multi-source copy. A reader that iterates PHYSICAL lines sees only the
+    first line, drops `b`, and reports a Dockerfile that cannot build as
+    fine -- a FALSE NEGATIVE, which is the dangerous direction for this gate.
+    """
+    images, workflow, gitmodules, root = _tree(
+        tmp_path,
+        images_yaml=BUILD_CONTEXT_IMAGE,
+        workflow_yaml=GOOD_WORKFLOW,
+        gitmodules=GITMODULES_DOX,
+        files={
+            "PMOVES-DoX/backend/Dockerfile": (
+                "FROM node:22\nCOPY requirements.txt \\\n     missing.txt ./\n"
+            ),
+            "PMOVES-DoX/backend/requirements.txt": "x\n",
+        },
+    )
+    out = json.loads(_run(images, workflow, gitmodules, root).stdout)
+    claim = _claim(out, "pmoves-dox", "copy_sources")
+    assert claim["verdict"] == "DRIFTED", claim
+    assert "missing.txt" in claim["evidence"], claim
+
+
+def test_a_line_continued_copy_resolves_when_every_source_exists(tmp_path):
+    images, workflow, gitmodules, root = _tree(
+        tmp_path,
+        images_yaml=BUILD_CONTEXT_IMAGE,
+        workflow_yaml=GOOD_WORKFLOW,
+        gitmodules=GITMODULES_DOX,
+        files={
+            "PMOVES-DoX/backend/Dockerfile": (
+                "FROM node:22\nCOPY requirements.txt \\\n     package.json ./\n"
+            ),
+            "PMOVES-DoX/backend/requirements.txt": "x\n",
+            "PMOVES-DoX/backend/package.json": "{}\n",
+        },
+    )
+    out = json.loads(_run(images, workflow, gitmodules, root).stdout)
+    claim = _claim(out, "pmoves-dox", "copy_sources")
+    assert claim["verdict"] == "VERIFIED", claim
+
+
+def test_a_mid_path_wildcard_copy_source_resolves_against_the_context(tmp_path):
+    """A wildcard can be in ANY segment, not only the last one.
+
+    `services/*/requirements.txt` is the common form. Matching only the FINAL
+    segment against child names asked whether the literal path `services/*`
+    was a directory, reported a FALSE DRIFTED, and taught the fleet to ignore
+    the probe.
+    """
+    images, workflow, gitmodules, root = _tree(
+        tmp_path,
+        images_yaml=BUILD_CONTEXT_IMAGE,
+        workflow_yaml=GOOD_WORKFLOW,
+        gitmodules=GITMODULES_DOX,
+        files={
+            "PMOVES-DoX/backend/Dockerfile": (
+                "FROM node:22\nCOPY services/*/requirements.txt ./\n"
+            ),
+            "PMOVES-DoX/backend/services/a/requirements.txt": "x\n",
+            "PMOVES-DoX/backend/services/b/requirements.txt": "y\n",
+        },
+    )
+    out = json.loads(_run(images, workflow, gitmodules, root).stdout)
+    claim = _claim(out, "pmoves-dox", "copy_sources")
+    assert claim["verdict"] == "VERIFIED", claim
+
+
+def test_a_mid_path_wildcard_that_matches_nothing_is_drifted(tmp_path):
+    """A wildcard that matches NOTHING is a build that cannot succeed."""
+    images, workflow, gitmodules, root = _tree(
+        tmp_path,
+        images_yaml=BUILD_CONTEXT_IMAGE,
+        workflow_yaml=GOOD_WORKFLOW,
+        gitmodules=GITMODULES_DOX,
+        files={
+            "PMOVES-DoX/backend/Dockerfile": (
+                "FROM node:22\nCOPY services/*/requirements.txt ./\n"
+            ),
+            "PMOVES-DoX/backend/services/a/other.txt": "x\n",
+        },
+    )
+    out = json.loads(_run(images, workflow, gitmodules, root).stdout)
+    claim = _claim(out, "pmoves-dox", "copy_sources")
+    assert claim["verdict"] == "DRIFTED", claim
+
+
+def test_a_remote_add_url_with_a_variable_is_not_a_build_context_source(tmp_path):
+    """The fleet's own `ADD <url>` shape, with a variable in the URL.
+
+    `pmoves/services/agent-zero/Dockerfile` adds a GitHub API URL that carries
+    a `${AGENT_ZERO_REF}` in it. Docker FETCHES it; the build context never
+    holds it, so it is not a context source and the probe must stay quiet.
+
+    The rule is narrow ON PURPOSE: `ADD <url>` is not a context source, but
+    `COPY <url>` still is -- docker rejects remote URLs in `COPY` outright, so
+    that build really does fail. A blanket URL exemption in the RESOLVER would
+    un-report the `COPY` case, which is the defect the rule was written for.
+    """
+    images, workflow, gitmodules, root = _tree(
+        tmp_path,
+        images_yaml=BUILD_CONTEXT_IMAGE,
+        workflow_yaml=GOOD_WORKFLOW,
+        gitmodules=GITMODULES_DOX,
+        files={
+            "PMOVES-DoX/backend/Dockerfile": (
+                "FROM node:22\n"
+                "ADD https://api.github.com/repos/OWNER/REPO/git/ref/heads/${SOME_REF} "
+                "/tmp/ref.json\n"
+                "COPY requirements.txt ./\n"
+            ),
+            "PMOVES-DoX/backend/requirements.txt": "x\n",
+        },
+    )
+    out = json.loads(_run(images, workflow, gitmodules, root).stdout)
+    claim = _claim(out, "pmoves-dox", "copy_sources")
+    assert claim["verdict"] == "VERIFIED", claim
+
+
 def test_copying_the_whole_context_always_resolves(tmp_path):
     images, workflow, gitmodules, root = _tree(
         tmp_path,

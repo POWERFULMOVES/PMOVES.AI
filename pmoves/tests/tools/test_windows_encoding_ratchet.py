@@ -27,14 +27,19 @@ WHAT THIS FILE ASSERTS
    the mode second, ``Path.open(mode, ...)`` takes it FIRST);
 3. the NON-PATH carve-out: ``.open()`` on a known binary/media opener
    (``wave``, ``os``, ``Image`` ...) is not judged;
-4. FAIL CLOSED: an unparseable or unreadable file is an instrument error, not
-   a silent skip;
-5. the BASELINE CONTRACT: a new gap fails, a count that rose fails, a count
+4. the TEXT-MODE openers that are NOT exempt: ``io.open`` and ``codecs.open``
+   open in text mode with the LOCALE encoding, so they are JUDGED -- and
+   because their mode sits in the builtin slot, ``io.open(path, "rb")`` is not
+   flagged;
+5. FAIL CLOSED: an unparseable or UNDECODABLE file is an instrument error,
+   not a silent skip;
+6. the BASELINE CONTRACT: a new gap fails, a count that rose fails, a count
    that fell fails as stale, a deleted file fails as orphaned;
-6. the CLI, driven as a subprocess against a synthetic tree -- the gate really
+7. the CLI, driven as a subprocess against a synthetic tree -- the gate really
    goes red on a new gap and really exits 2 when it cannot measure;
-7. the LIVE tree: the files this lane fixed carry no gaps, and the gate is
-   green against the committed baseline.
+8. the LIVE tree: the files this lane fixed carry no gaps, the live
+   ``io.open``/``codecs.open`` counts are zero, and the gate is green against
+   the committed baseline.
 
 Points 6 and 7 matter more than they look. A test that re-types the
 detector's own expression proves nothing about the detector; these drive the
@@ -133,6 +138,107 @@ def test_a_non_path_opener_is_not_judged():
 def test_an_encoding_keyword_is_not_mistaken_for_a_similar_name():
     """A kwarg named something else must not be read as the encoding."""
     assert _gaps("p.read_text(errors='ignore')\n") != []
+
+
+# ---------------------------------------------------------------------------
+# 1b. the TEXT-MODE openers that are NOT exempt
+# ---------------------------------------------------------------------------
+
+
+def _scan_tree(tmp_path: Path, body: str, name: str = "snippet.py") -> dict[str, int]:
+    """Write `body` into a fixture tree and scan it with the REAL scan().
+
+    The real scan, not a re-typed expression: this is the production path the
+    CLI runs, down to the per-file counts the gate reports.
+    """
+    (tmp_path / name).write_text(body, encoding="utf-8")
+    counts, errors, _oos = ratchet.scan(tmp_path)
+    assert errors == [], errors
+    return counts
+
+
+def test_io_open_without_encoding_is_flagged(tmp_path):
+    """`io.open` IS `builtins.open` -- a TEXT opener with a locale default.
+
+    MEASURED: `io.open is builtins.open` -> True, and the operator's host
+    reports `locale.getencoding()` -> 'cp1252'. So `io.open(path)` reads with
+    the LOCALE encoding -- exactly the defect class this gate exists to
+    catch. It must be JUDGED, never exempted.
+    """
+    counts = _scan_tree(tmp_path, "data = io.open(path).read()\n")
+    assert counts == {"snippet.py": 1}
+
+
+def test_codecs_open_without_encoding_is_flagged(tmp_path):
+    """`codecs.open(path)` with no encoding opens in TEXT mode too.
+
+    CPython's `codecs.open` falls through to `builtins.open(filename, mode,
+    buffering)` when `encoding is None`, so it reads with the LOCALE encoding
+    -- the same defect class, so it is JUDGED, never exempted.
+    """
+    counts = _scan_tree(tmp_path, "data = codecs.open(path).read()\n")
+    assert counts == {"snippet.py": 1}
+
+
+def test_the_binary_archive_openers_are_still_not_flagged(tmp_path):
+    """The genuinely binary openers keep their carve-out."""
+    counts = _scan_tree(
+        tmp_path,
+        "z = zipfile.open(path)\n"
+        "t = tarfile.open(path)\n"
+        "g = gzip.open(path)\n",
+    )
+    assert counts == {}
+
+
+def test_a_binary_io_open_is_not_flagged(tmp_path):
+    """`io.open(path, "rb")` is binary -- the mode is in the BUILTIN slot.
+
+    Reading the mode from the Path slot (first positional) would see the
+    FILENAME, miss the binary mode, and flag every binary handle in the
+    fleet -- a false positive.
+    """
+    counts = _scan_tree(tmp_path, "data = io.open(path, 'rb').read()\n")
+    assert counts == {}
+
+
+def test_a_binary_codecs_open_is_not_flagged(tmp_path):
+    """`codecs.open(path, "rb")` is binary -- same builtin slot."""
+    counts = _scan_tree(tmp_path, "data = codecs.open(path, 'rb').read()\n")
+    assert counts == {}
+
+
+def test_an_io_open_with_encoding_is_not_flagged(tmp_path):
+    counts = _scan_tree(tmp_path, 'data = io.open(path, encoding="utf-8").read()\n')
+    assert counts == {}
+
+
+def test_a_codecs_open_with_encoding_is_not_flagged(tmp_path):
+    counts = _scan_tree(tmp_path, 'data = codecs.open(path, encoding="utf-8").read()\n')
+    assert counts == {}
+
+
+def test_a_codecs_open_with_a_positional_encoding_is_reported_as_positional():
+    """`codecs.open` takes `encoding` THIRD -- and the report says so.
+
+    `codecs.open(path, "r", "utf-8")` passed the encoding POSITIONALLY, in
+    the third slot. The gap must say that, not claim the encoding is absent:
+    the slot is the codecs signature's own, one earlier than builtin open's.
+    """
+    gaps = _gaps("data = codecs.open(path, 'r', 'utf-8').read()\n")
+    assert len(gaps) == 1
+    assert "may be positional" in gaps[0]["reason"]
+
+
+def test_an_io_open_with_three_positional_args_reports_no_encoding():
+    """`io.open` IS `builtins.open`: `encoding` is the FOURTH parameter.
+
+    Three positional arguments cannot have carried it, so the gap must say
+    the encoding is absent -- not that it "may be positional".
+    """
+    gaps = _gaps("data = io.open(path, 'r', -1).read()\n")
+    assert len(gaps) == 1
+    assert gaps[0]["reason"] == "no encoding= keyword"
 
 
 # ---------------------------------------------------------------------------
@@ -303,10 +409,24 @@ def test_a_tree_with_no_python_files_is_an_instrument_error(tmp_path):
 
 
 def test_an_unreadable_file_is_reported_not_skipped(tmp_path):
-    (tmp_path / "ok.py").write_text("x = 1\n", encoding="utf-8")
+    """A file that cannot be decoded as UTF-8 must be REPORTED, not skipped.
+
+    The ratchet reads every file as UTF-8. A file holding invalid UTF-8 bytes
+    raises UnicodeDecodeError -- the very failure this PR exists to prevent --
+    so the gate must surface it as an instrument error for that file: never
+    silently skip it (a silent skip reports success over a population it never
+    measured) and never count it as a scanned file.
+
+    The file under test really is undecodable: `\\xff\\xfe` is not valid UTF-8.
+    """
+    (tmp_path / "ok.py").write_text("data = p.read_text()\n", encoding="utf-8")
+    (tmp_path / "bad.py").write_bytes(b"x = 1\n\xff\xfe\n")
     counts, errors, _oos = ratchet.scan(tmp_path)
-    assert errors == []
-    assert counts == {}
+    assert [e["file"] for e in errors] == ["bad.py"]
+    assert "unreadable" in errors[0]["error"]
+    assert "bad.py" not in counts
+    # the readable file WAS scanned -- the undecodable one did not stop the scan
+    assert counts == {"ok.py": 1}
 
 
 # ---------------------------------------------------------------------------
@@ -433,6 +553,25 @@ def test_the_cli_fails_closed_when_a_file_cannot_be_parsed(tmp_path):
     assert payload["problems"][0]["file"] == "broken.py"
 
 
+def test_the_cli_fails_closed_when_a_file_cannot_be_decoded(tmp_path):
+    """A file the ratchet cannot DECODE must fail the gate, not be skipped.
+
+    The decode failure is the defect class this whole lane is about, so it
+    must not be the one failure the gate tolerates: the run is non-zero and
+    the file is named in the payload.
+    """
+    root = tmp_path / "pmoves"
+    root.mkdir()
+    (root / "bad.py").write_bytes(b"x = 1\n\xff\xfe\n")
+    baseline = tmp_path / "baseline.yaml"
+    baseline.write_text("known_gaps: {}\n", encoding="utf-8")
+    proc = _run_cli(root, baseline)
+    assert proc.returncode != 0, proc.stdout + proc.stderr
+    payload = json.loads(proc.stdout)
+    assert payload["problems"], "the undecodable file must be named in the payload"
+    assert payload["problems"][0]["file"] == "bad.py"
+
+
 def test_the_cli_exits_two_when_the_tree_is_empty(tmp_path):
     """A scan that cannot START exits 2, not 0."""
     root = tmp_path / "pmoves"
@@ -466,6 +605,24 @@ def test_every_file_the_lane_fixed_carries_no_gaps():
     assert errors == []
     for rel in FIXED_FILES:
         assert counts.get(rel, 0) == 0, f"{rel} still has an undecoded file read"
+
+
+def test_the_live_tree_has_no_io_or_codecs_open_gap():
+    """The live `io.open`/`codecs.open` sites all pass an explicit `encoding=`.
+
+    This is the computing code behind the tool's own docstring claim: the
+    counts come from the tool's `gaps_by_call` breakdown -- measured, never
+    hand-typed.
+    """
+    counts, errors, oos = ratchet.scan(PMOVES)
+    assert errors == []
+    by_call = oos["gaps_by_call"]
+    # The breakdown must agree with the per-file counts. A breakdown that
+    # stopped being computed would satisfy an empty assertion -- and would
+    # leave the claim above riding on a number nothing computes.
+    assert sum(by_call.values()) == sum(counts.values())
+    assert by_call.get("io.open", 0) == 0, by_call
+    assert by_call.get("codecs.open", 0) == 0, by_call
 
 
 def test_the_live_gate_is_green_against_the_committed_baseline():

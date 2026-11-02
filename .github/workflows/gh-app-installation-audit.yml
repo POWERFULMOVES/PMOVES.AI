@@ -22,6 +22,34 @@ name: GitHub App Installation Audit
 # A failed audit never prints a reassuring summary, so a red job is the
 # honest outcome and a green job means the coverage question was actually
 # answered.
+#
+# THE TRUST BOUNDARY ON A pull_request
+# -------------------------------------
+# This workflow runs on pull requests that touch the tool, so the PR's own
+# code is in scope. The token minted here is READ-ONLY but OWNER-WIDE: it
+# can read every repo in the org, which the audit needs (an uncovered repo
+# cannot be told apart from one that does not exist without it). Handing an
+# owner-wide token to PR code is a pwn-request shape, so:
+#
+#   * the AUDIT runs TRUSTED code only. On a pull_request the tool is checked
+#     out from the BASE ref (github.event.pull_request.base.sha) into
+#     `trusted/`, and the audit step runs THAT. The PR's head is never what
+#     holds a credential.
+#   * the universe the audit reports on a pull_request is therefore the BASE
+#     registry's universe -- the deployed truth, which is the thing worth
+#     auditing. The PR's own registry edit is covered by the PR's own tests.
+#   * GH_TOKEN is in the environment of the audit step and of NOTHING else.
+#     The PR's tests still run, against the PR's code, with no credential in
+#     scope.
+#
+# RESIDUAL RISK, stated rather than hidden: on a `pull_request` event GitHub
+# runs the WORKFLOW FILE from the PR's merge ref, so the file you are reading
+# is itself PR-controlled. The base-ref boundary above bounds what the audited
+# code can do with the token; it cannot bound what the workflow file does with
+# the App's private key. Closing that last gap needs a workflow DEFINITION
+# that is not PR-controlled (a `pull_request_target` workflow, or a separate
+# scheduled audit of the base branch) -- a change to this file's trigger set,
+# not to this file's contents.
 
 on:
   pull_request:
@@ -90,8 +118,33 @@ jobs:
           owner: ${{ github.repository_owner }}
           permission-contents: read
 
-      - name: Checkout
+      # The UNTRUSTED code: the PR's head, for the TESTS only. It never holds
+      # a credential -- the test step's environment carries no GH_TOKEN, and
+      # the checkout persists no git credential into the workspace.
+      - name: Checkout the working tree (PR head on a pull_request)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # The TRUSTED code: the only code allowed to hold a credential. On a
+      # pull_request this is the BASE ref -- the code that is actually
+      # deployed -- so the tool under test is never the PR's code.
+      - name: Checkout the trusted audit code (base ref)
+        if: github.event_name == 'pull_request'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: trusted
+          persist-credentials: false
+
+      # On schedule / workflow_dispatch the triggering ref IS the trusted
+      # code, so it is checked out the same way.
+      - name: Checkout the trusted audit code (triggering ref)
+        if: github.event_name != 'pull_request'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: trusted
+          persist-credentials: false
 
       - name: Set up Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
@@ -112,9 +165,14 @@ jobs:
           # The token travels by ENV only: never printed, never in argv.
           # It comes from the mint STEP in this same job -- a job output
           # would be skipped by GitHub as "may contain secret".
+          #
+          # This is the ONLY step in the job that carries a credential, and
+          # it runs the TRUSTED code checked out above (`trusted/`), never
+          # the PR's head. The PR's tests run separately, with no credential
+          # in their environment.
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
-          python pmoves/tools/gh_app_installation_audit.py \
+          python trusted/pmoves/tools/gh_app_installation_audit.py \
             --token \
             --json \
             --out gh-app-installation-audit.json \
@@ -149,7 +207,7 @@ jobs:
           print(f"- org: `{report.get('org')}`")
           print(
               f"- installation: id=`{installation.get('id')}` "
-              f"account=`{installation.get('account')}`"
+              f"account=`{installation.get('account') or 'unknown'}`"
           )
           print(
               f"- universe: **{universe.get('size', 'n/a')}** distinct repos "
@@ -191,6 +249,10 @@ jobs:
         run: |
           # The instrument's own regression net. It runs AFTER the audit so
           # the coverage verdict is produced even if the harness is broken.
+          #
+          # This step runs the PR's OWN code (the working tree, not
+          # `trusted/`) -- and it holds NO credential: GH_TOKEN is in the
+          # environment of the audit step alone.
           python -m pytest \
             pmoves/tests/tools/test_gh_app_installation_audit.py \
             pmoves/tests/tools/test_gh_app_installation_audit_mutation_kill.py \

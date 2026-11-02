@@ -23,6 +23,11 @@ the ``## Machine-checkable surface`` heading. That block is the authoritative
 surface; the prose table and the ASCII tree are for humans and are ALSO
 scraped, so a tree that drifts away from the JSON block is still caught.
 
+A table row is a COMMAND PATH, and it is reported the way it is written: when
+the path the doc names is longer than the command the CLI has -- the CLI
+renamed ``video task get`` to ``video task`` -- the dead over-claim is a
+finding of its own. It is never quietly shortened into the live surface.
+
 Scraping prose is never the primary check -- it is a second net, and the
 primary net fails closed: a doc whose JSON block is missing or unparseable is
 a ``PARSE_ERROR``, never a silent pass.
@@ -278,8 +283,8 @@ def _leading_command_words(tokens: list[str]) -> list[str]:
     return words
 
 
-def _resolve_claim(tokens: list[str], known: dict[str, list[str]]) -> tuple[str, str]:
-    """Resolve a claimed invocation into ``(resource, command)``.
+def _resolve_claim(tokens: list[str], known: dict[str, list[str]]) -> tuple[str, str, str | None]:
+    """Resolve a claimed invocation into ``(resource, command, over_claim)``.
 
     ``known`` is the snapshot's command map. It is used to tell a command path
     from its arguments: ``mmx config set api-key`` claims the command
@@ -288,17 +293,29 @@ def _resolve_claim(tokens: list[str], known: dict[str, list[str]]) -> tuple[str,
 
     Resolution never HIDES a drift: when no prefix of the claim matches a
     known command, the whole claim is reported as-is.
+
+    Resolution must never LAUNDER a drift either. The longest-prefix walk can
+    land on a shorter known command than the claim names -- ``video task get``
+    resolves to ``video task`` when the CLI renamed the command -- and the
+    dead over-claim used to disappear into the live surface with no trace.
+    When that happens the claim's full command path comes back as the
+    ``over_claim`` so the caller can report it. The resolved command is still
+    returned: a claim that carries FLAGS (``video task get --limit 5``)
+    resolves to the full command it names, and flags are not part of the
+    command path.
     """
     resource = tokens[1]
     leading = _leading_command_words(tokens[2:])
     if not leading:
-        return resource, ""
+        return resource, "", None
     known_commands = known.get(resource, [])
+    claimed = " ".join(leading)
     for length in range(len(leading), 0, -1):
         candidate = " ".join(leading[:length])
         if candidate in known_commands:
-            return resource, candidate
-    return resource, " ".join(leading)
+            over_claim = claimed if candidate != claimed else None
+            return resource, candidate, over_claim
+    return resource, claimed, None
 
 
 def extract_tree_surface(doc_text: str) -> dict[str, set[str]]:
@@ -339,8 +356,16 @@ def extract_tree_surface(doc_text: str) -> dict[str, set[str]]:
     return resources
 
 
-def extract_table_claims(doc_text: str, known: dict[str, list[str]]) -> dict[str, set[str]]:
-    """Scrape the command table into resolved ``(resource, command)`` claims."""
+def extract_table_claims(
+    doc_text: str, known: dict[str, list[str]]
+) -> tuple[dict[str, set[str]], list[tuple[str, str, str]]]:
+    """Scrape the command table into resolved ``(resource, command)`` claims.
+
+    Also returns the OVER-CLAIMS: rows whose command path is longer than the
+    command it resolved to -- ``(resource, claimed, resolved)`` triples. A row
+    like ``mmx video task get`` against a CLI that only has ``mmx video task``
+    is a dead over-claim, and it is reported rather than absorbed.
+    """
     lines = doc_text.splitlines()
     rows: list[list[str]] = []
     in_table = False
@@ -357,6 +382,7 @@ def extract_table_claims(doc_text: str, known: dict[str, list[str]]) -> dict[str
             in_table = False
 
     resources: dict[str, set[str]] = {}
+    over_claims: list[tuple[str, str, str]] = []
     for cells in rows:
         if not cells:
             continue
@@ -364,15 +390,24 @@ def extract_table_claims(doc_text: str, known: dict[str, list[str]]) -> dict[str
         tokens = claim.split()
         if len(tokens) < 2 or tokens[0] != "mmx":
             continue
-        resource, command = _resolve_claim(tokens, known)
+        resource, command, over_claim = _resolve_claim(tokens, known)
         claimed = resources.setdefault(resource, set())
         if command:
             claimed.add(command)
-    return resources
+        if over_claim:
+            over_claims.append((resource, over_claim, command))
+    return resources, over_claims
 
 
 def extract_prose_global_flags(doc_text: str) -> set[str]:
-    """Scrape the human-readable global-flag list, if the doc has one."""
+    """Scrape the human-readable global-flag list, if the doc has one.
+
+    The section ends at the next HEADING, not at the first line that is not a
+    bullet. A doc that introduces its list with a sentence -- the live doc
+    says "These are accepted by every command:" between the heading and the
+    list -- still carries the list, and a scanner that stops at that sentence
+    scrapes NOTHING: the second net silently catches nothing at all.
+    """
     lines = doc_text.splitlines()
     flags: set[str] = set()
     in_section = False
@@ -391,7 +426,9 @@ def extract_prose_global_flags(doc_text: str) -> set[str]:
         if match:
             flags.add(match.group(1))
         elif not stripped.startswith("- "):
-            break
+            # A prose line between the heading and the list is not the end of
+            # the section: skip it and keep scanning. Only a heading ends it.
+            continue
     return flags
 
 
@@ -424,7 +461,8 @@ def collect_documented_surface(doc_text: str, known: dict[str, list[str]]) -> di
 
     for name, commands in extract_tree_surface(doc_text).items():
         resources.setdefault(name, set()).update(commands)
-    for name, commands in extract_table_claims(doc_text, known).items():
+    table_resources, over_claims = extract_table_claims(doc_text, known)
+    for name, commands in table_resources.items():
         resources.setdefault(name, set()).update(commands)
     flags.update(extract_prose_global_flags(doc_text))
 
@@ -437,6 +475,7 @@ def collect_documented_surface(doc_text: str, known: dict[str, list[str]]) -> di
         "prose_version": prose_version,
         "resources": resources,
         "global_flags": flags,
+        "over_claims": over_claims,
     }
 
 
@@ -468,6 +507,23 @@ def compare(doc_surface: dict, snapshot: dict) -> list[dict]:
                     command=command,
                 )
             )
+
+    # An OVER-CLAIM is a table row whose command path is longer than the
+    # command the CLI has: the CLI renamed `video task get` to `video task`
+    # and the doc still names the old path. Resolving the row lands on the
+    # shorter command, and the dead over-claim must still be VISIBLE.
+    for resource, claimed, resolved in doc_surface.get("over_claims", []):
+        findings.append(
+            _finding(
+                "DOCUMENTED_MISSING",
+                f"the doc's command table claims `mmx {resource} {claimed}`, which the "
+                f"CLI does not have (it resolves to `mmx {resource} {resolved}`)",
+                scope="command",
+                resource=resource,
+                command=claimed,
+                resolved_command=resolved,
+            )
+        )
 
     for name in sorted(snap_resources):
         if name not in doc_resources:

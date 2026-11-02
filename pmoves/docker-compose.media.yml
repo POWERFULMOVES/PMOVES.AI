@@ -681,6 +681,12 @@ services:
       timeout: 10s
       retries: 5
       start_period: 30s
+  # NVIDIA NIM - Llama-3.3-Nemotron-Super-49B inference server (~30GB VRAM)
+  # Default host port is 8206 (NOT 8000, and NOT 8200). 8000 is
+  # supabase-kong's. 8200 is gpu-orchestrator's, and gpu-orchestrator and
+  # nvidia-nim BOTH declare the `gpu` profile -- so under
+  # `docker compose --profile gpu up` they start together and one of them
+  # fails to bind. Override via NIM_HOST_PORT.
   nvidia-nim:
     <<: *tier-llm-hardened
     image: nvcr.io/nim/nvidia/llama-3_3-nemotron-super-49b-v1:1.8.3
@@ -775,12 +781,6 @@ services:
         condition: service_healthy
         required: false
 
-  # NVIDIA NIM - Llama-3.3-Nemotron-Super-49B inference server (~30GB VRAM)
-  # Default host port is 8206 (NOT 8000, and NOT 8200). 8000 is
-  # supabase-kong's. 8200 is gpu-orchestrator's, and gpu-orchestrator and
-  # nvidia-nim BOTH declare the `gpu` profile -- so under
-  # `docker compose --profile gpu up` they start together and one of them
-  # fails to bind. Override via NIM_HOST_PORT.
   llama-throughput-lab:
     build:
       context: ../PMOVES-llama-throughput-lab

@@ -22,7 +22,7 @@ that does not hold the credential. This tool runs where the credential lives.
 |------|---------|------------|--------------|
 | `--plan` | none | none | Derives the repo universe from `pmoves/config/fork_registry.json` and prints it. |
 | `--token` | yes | an installation token (`GH_TOKEN` or `--token-file`) | Reads `GET /installation/repositories` and compares it to the universe. |
-| `--app-jwt` | yes | `GH_APP_CLIENT_ID` / `GH_APP_ID` + `GH_APP_SEC` | Mints an App JWT with the house minter, lists the App's installations, selects one, and reads that installation's repository list. |
+| `--app-jwt` | yes | `GH_APP_CLIENT_ID` / `GH_APP_ID` + `GH_APP_SEC` | Mints an App JWT with the house minter, lists the App's installations (**a top-level JSON array**), selects one, **exchanges the App JWT for an installation access token**, and reads that installation's repository list at `GET /installation/repositories`. |
 
 ### `--plan` — proving the universe, on the operator's host
 
@@ -115,6 +115,11 @@ The token is **never printed, logged, or written to the report** — not even
 in a masked-but-partial form. Only metadata (credential kind, installation
 id, account, endpoints) is emitted.
 
+What the installation token does **not** prove is which installation it
+belongs to. So the report marks that metadata as *given, not observed*: the
+`id` is the one the operator supplied, the `account` is `null` (unknown), and
+a `note` says so. The tool never fills the account in from the registry.
+
 ### `--app-jwt` — audit a specific installation, with no installation token
 
 ```powershell
@@ -130,6 +135,30 @@ that function; it does not reimplement signing. With no
 `GH_APP_INSTALLATION_ID`, the tool selects the installation whose
 `account.login` matches the registry's `org`, and refuses to guess if there
 is more than one.
+
+Two facts about GitHub's API shape this mode, and both were wrong in the
+first cut of this tool:
+
+1. **`GET /app/installations` answers with a TOP-LEVEL JSON ARRAY** — one
+   installation object per element. It is *not* an object carrying an
+   `installations` field, and it carries no `total_count`. The array is read
+   as an array. Pagination for an array-shaped listing is carried by the
+   `Link` header, and a full page with no next link and no count fails the
+   run closed rather than being read as "that was all of them".
+2. **The repository listing is `GET /installation/repositories`, and it takes
+   an INSTALLATION access token.** An App JWT cannot read it, and
+   `GET /app/installations/{id}/repositories` is not an endpoint that exists.
+   So the App JWT is spent exactly once — exchanging it for an installation
+   token at `POST /app/installations/{id}/access_tokens` — and that token
+   reads the listing: the same endpoint, and the same credential kind, the
+   `--token` mode uses.
+
+The private key is registered with the tool's redactor the moment it is
+read, so a third-party failure that quotes it (a PyJWT error, a filesystem
+error echoing the file) cannot carry it to stderr or into the report. The
+App JWT and the installation token are registered the same way. A malformed
+API response — an `account` that is a plain string instead of an object —
+fails the run closed with an `ApiError` instead of crashing.
 
 ---
 
@@ -169,6 +198,45 @@ able to *see* every repo in the org; a token scoped to a subset cannot tell
 an uncovered repo apart from one that does not exist. The token is read-only,
 minted per run, and auto-revoked when the job ends.
 
+### The trust boundary on a `pull_request`
+
+The workflow runs on pull requests, so the PR's own code is in scope — and
+the token it mints is **owner-wide**. Handing an owner-wide token to PR code
+is a pwn-request shape, so the workflow draws a line:
+
+| | What runs it | Credential in scope? |
+|---|---|---|
+| the **audit** | the **base ref's** tool, checked out into `trusted/` | yes — this step, and only this step |
+| the **instrument's tests** | the **PR head's** code, in the working tree | no — `GH_TOKEN` is not in that step's environment |
+
+Concretely:
+
+- On a `pull_request` event the trusted checkout is pinned to
+  `${{ github.event.pull_request.base.sha }}` and lands in `trusted/`. The
+  audit step runs `trusted/pmoves/tools/gh_app_installation_audit.py`. The
+  PR's head is never what holds a credential.
+- Because the trusted copy carries the base's `pmoves/config/fork_registry.json`
+  and `.gitmodules`, **the universe the audit reports on a pull_request is
+  the BASE registry's universe** — the deployed truth, which is the thing
+  worth auditing. The PR's own registry edit is covered by the PR's own
+  tests.
+- On `schedule` / `workflow_dispatch` the triggering ref *is* the trusted
+  code, so it is checked out the same way; the mint stays inline and
+  unconditional, so every event gets a token.
+- `GH_TOKEN` is in the environment of the audit step and of nothing else —
+  not in the job environment, not in the test step, not in any other step's
+  command. The checkouts persist no git credential into the workspace
+  either.
+
+> **Residual risk, stated rather than hidden.** On a `pull_request` event
+> GitHub runs the *workflow file* from the PR's merge ref, so the file
+> itself is PR-controlled. The base-ref boundary above bounds what the
+> **audited code** can do with the token; it cannot bound what the workflow
+> file does with the App's private key. Closing that last gap needs a
+> workflow *definition* that is not PR-controlled — a `pull_request_target`
+> workflow, or a separate scheduled audit of the base branch — which is a
+> change to this workflow's trigger set, not to its contents.
+
 ---
 
 ## 3. Reading the report
@@ -190,10 +258,11 @@ minted per run, and auto-revoked when the job ends.
   },
   "installation": {
     "id": null,                       // installation id that was audited
-    "account": "POWERFULMOVES",
+    "account": "POWERFULMOVES",       // null when it was never observed
     "target_type": "Organization",
     "repository_selection": null,
-    "source": "installation-token"    // or app-jwt
+    "source": "installation-token",   // or app-jwt
+    "note": "..."                     // present when the metadata is unverified
   },
   "endpoints": ["GET /installation/repositories", "..."],
   "buckets": { "installed": 0, "not_installed": 0, "unknown": 0 },

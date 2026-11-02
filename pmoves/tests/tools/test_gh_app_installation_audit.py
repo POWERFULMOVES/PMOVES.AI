@@ -36,6 +36,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import re
 import subprocess
 import sys
 import urllib.parse
@@ -65,6 +66,15 @@ CREDENTIAL_ENV_NAMES = (
 # A distinctive, obviously-fake installation token. If this string ever shows
 # up in a report or on a terminal, the credential leaked.
 TEST_TOKEN = "ghs_TESTTOKEN0123456789ABCDEFGHIJKLMNOP"
+
+# The --app-jwt mode is exercised with a STUBBED MINTER -- the house minter
+# is the third-party boundary, and stubbing it keeps the test hermetic and
+# fast. These two strings stand in for the App JWT and the App private key.
+# They are distinctive on purpose: a leak of either is unmissable.
+FAKE_APP_JWT = "eyJhbGciOiJSUzI1NiJ9.FAKE-APP-JWT-PAYLOAD.fake-signature"
+FAKE_PRIVATE_KEY = (
+    "-----BEGIN PRIVATE KEY-----FAKEKEYMATERIAL0123456789-----END PRIVATE KEY-----"
+)
 
 
 @pytest.fixture(autouse=True)
@@ -131,7 +141,27 @@ class FakeGitHub:
     ``org_repos``    repo names that resolve in the org (HTTP 200 on a probe)
     ``installations``the App's installations
     ``fail_paths``   path prefixes that answer with a hard error
+
+    THE SHAPES ARE GITHUB'S, NOT THE TEST'S
+    ----------------------------------------
+    ``GET /app/installations`` answers with a TOP-LEVEL JSON ARRAY -- one
+    installation object per element. It is NOT an object carrying an
+    ``installations`` field. A fake that served the object shape would hide a
+    tool that only understands the object shape, so this fake serves the
+    array and RECORDS what it served (``served``), and a test asserts the
+    shape the tool was handed.
+
+    ``POST /app/installations/{id}/access_tokens`` answers with an
+    installation token, and that token is what
+    ``GET /installation/repositories`` is read with.
+
+    ``GET /app/installations/{id}/repositories`` is NOT an endpoint that
+    exists -- GitHub has no such route -- so it answers 404, exactly as the
+    real API does. A fake that served the covered repos there would hide a
+    tool that reads an endpoint that does not exist.
     """
+
+    INSTALLATION_TOKEN = "ghs_FAKEINSTALLATIONTOKEN0123456789ABC"
 
     def __init__(
         self,
@@ -141,18 +171,23 @@ class FakeGitHub:
         installations: list[dict] | None = None,
         fail_paths: dict[str, int] | None = None,
         truncated_total: int | None = None,
+        installation_token: str | None = None,
     ) -> None:
         self.covered = list(covered or [])
         self.org_repos = set(org_repos or [])
         self.installations = list(installations or [])
         self.fail_paths = dict(fail_paths or {})
         self.truncated_total = truncated_total
+        self.installation_token = installation_token or self.INSTALLATION_TOKEN
         self.calls: list[tuple[str, str, dict[str, str]]] = []
+        self.served: dict[str, object] = {}
+
+    def _path_of(self, url: str) -> str:
+        return urllib.parse.urlsplit(url).path
 
     def __call__(self, method: str, url: str, headers, timeout: int):
         self.calls.append((method, url, dict(headers)))
-        parsed = urllib.parse.urlsplit(url)
-        path = parsed.path
+        path = self._path_of(url)
         for prefix, status in self.fail_paths.items():
             if path.startswith(prefix):
                 body = json.dumps({"message": "boom"}).encode("utf-8")
@@ -161,21 +196,32 @@ class FakeGitHub:
         if path == "/installation/repositories":
             repos = [{"name": name, "full_name": f"POWERFULMOVES/{name}"} for name in self.covered]
             total = self.truncated_total if self.truncated_total is not None else len(repos)
-            return _json_response({"total_count": total, "repositories": repos})
+            payload = {"total_count": total, "repositories": repos}
+            self.served[path] = payload
+            return _json_response(payload)
 
         if path == "/app/installations":
-            return _json_response(
-                {"total_count": len(self.installations), "installations": self.installations}
-            )
+            # GitHub's real shape: a TOP-LEVEL ARRAY.
+            payload = list(self.installations)
+            self.served[path] = payload
+            return _json_response(payload)
+
+        if path.endswith("/access_tokens"):
+            payload = {
+                "token": self.installation_token,
+                "expires_at": "2026-11-01T00:00:00Z",
+            }
+            self.served[path] = payload
+            return _json_response(payload)
 
         if path.endswith("/repositories"):
-            repos = [{"name": name, "full_name": f"POWERFULMOVES/{name}"} for name in self.covered]
-            total = self.truncated_total if self.truncated_total is not None else len(repos)
-            return _json_response({"total_count": total, "repositories": repos})
+            # /app/installations/{id}/repositories does not exist.
+            return _json_response({"message": "Not Found"}, status=404)
 
         if path.startswith("/app/installations/"):
             for installation in self.installations:
                 if path == f"/app/installations/{installation['id']}":
+                    self.served[path] = installation
                     return _json_response(installation)
             return _json_response({"message": "not found"}, status=404)
 
@@ -677,6 +723,251 @@ def test_the_app_jwt_mode_uses_the_house_jwt_minter(tmp_path, capsys, monkeypatc
 
 
 # --------------------------------------------------------------------------
+# --app-jwt: GitHub's actual API shapes
+# --------------------------------------------------------------------------
+
+
+def _stub_the_minter(monkeypatch: pytest.MonkeyPatch, jwt: str = FAKE_APP_JWT) -> None:
+    """Replace the house JWT minter with a stub.
+
+    The minter IS the third-party boundary (PyJWT plus the PEM), so the
+    tests below drive the production path around it: the credentials are
+    read, the JWT is minted, the installation is selected, the token is
+    exchanged -- all of that is the tool's own code.
+    """
+    monkeypatch.setattr(
+        audit, "_load_build_app_jwt", lambda: (lambda app_id, private_key: jwt)
+    )
+
+
+def test_the_app_jwt_mode_reads_the_array_shaped_installations_and_exchanges_the_jwt(
+    tmp_path, capsys, monkeypatch
+):
+    """Two facts about GitHub's API that the --app-jwt mode has to get right.
+
+    1. ``GET /app/installations`` answers with a TOP-LEVEL JSON ARRAY -- one
+       installation object per element. A tool that expects an object with an
+       ``installations`` field cannot select an installation at all, and a
+       fake that served the OBJECT shape would hide exactly that.
+
+    2. The repository listing lives at ``GET /installation/repositories`` and
+       takes an INSTALLATION access token. The App JWT has to be EXCHANGED
+       for one first; ``GET /app/installations/{id}/repositories`` is not an
+       endpoint that exists.
+    """
+    monkeypatch.setenv("GH_APP_CLIENT_ID", "Iv23liFAKEclientid")
+    monkeypatch.setenv("GH_APP_SEC", FAKE_PRIVATE_KEY)
+    monkeypatch.delenv("GH_APP_INSTALLATION_ID", raising=False)
+    _stub_the_minter(monkeypatch)
+
+    registry = _write_registry(
+        tmp_path / "registry.json", forks=["Covered-One", "Gap-One"]
+    )
+    fake = FakeGitHub(
+        covered=["Covered-One"],
+        org_repos=["Gap-One"],
+        installations=[
+            {
+                "id": 4242,
+                "account": {"login": "POWERFULMOVES"},
+                "target_type": "Organization",
+                "repository_selection": "selected",
+            }
+        ],
+    )
+
+    code = audit.main(["--app-jwt", "--json", "--registry", str(registry)], fetch=fake)
+    out = capsys.readouterr()
+    report = json.loads(out.out) if out.out.strip() else {}
+
+    assert code == 0, out.err
+    # The fixture handed the tool GitHub's ARRAY shape -- asserted here, so
+    # this fake can never quietly drift back to the object shape and hide
+    # the defect again.
+    assert isinstance(fake.served["/app/installations"], list)
+    assert fake.served["/app/installations"] == fake.installations
+
+    assert report["mode"] == "app-jwt"
+    assert report["installation"]["id"] == "4242"
+    assert report["installation"]["account"] == "POWERFULMOVES"
+    assert report["buckets"]["installed"] == 1
+    assert report["not_installed"] == ["Gap-One"]
+
+    # The App JWT was EXCHANGED for an installation token.
+    exchange = [
+        call
+        for call in fake.calls
+        if fake._path_of(call[1]) == "/app/installations/4242/access_tokens"
+    ]
+    assert len(exchange) == 1, "the App JWT must be exchanged for an installation token"
+    assert exchange[0][0] == "POST"
+
+    # The coverage listing was read from the endpoint that EXISTS...
+    coverage = [
+        call
+        for call in fake.calls
+        if fake._path_of(call[1]) == "/installation/repositories"
+    ]
+    assert coverage, "the coverage listing must be read from /installation/repositories"
+    # ...and with the INSTALLATION token, not the App JWT.
+    assert coverage[0][2]["Authorization"] == f"Bearer {fake.installation_token}"
+    assert FAKE_APP_JWT not in coverage[0][2]["Authorization"]
+
+    # The endpoint that does NOT exist was never called.
+    assert not [
+        call
+        for call in fake.calls
+        if fake._path_of(call[1]) == "/app/installations/4242/repositories"
+    ]
+
+    # And neither credential reached the report or the terminal.
+    combined = out.out + out.err
+    assert fake.installation_token not in combined
+    assert FAKE_APP_JWT not in combined
+    assert fake.installation_token not in json.dumps(report)
+    assert FAKE_APP_JWT not in json.dumps(report)
+
+
+def test_the_app_private_key_is_redacted_when_the_jwt_mint_fails(
+    tmp_path, capsys, monkeypatch
+):
+    """The private key is the credential that can MINT every other one.
+
+    It is registered with the redactor as soon as it is read, so a
+    third-party failure that quotes it cannot carry it out to stderr or into
+    the report. This drives the CLI: the minter (the third-party boundary)
+    raises with the key embedded in the message, and the key must not
+    appear in anything the tool emits.
+    """
+    monkeypatch.setenv("GH_APP_CLIENT_ID", "Iv23liFAKEclientid")
+    monkeypatch.setenv("GH_APP_SEC", FAKE_PRIVATE_KEY)
+    monkeypatch.delenv("GH_APP_INSTALLATION_ID", raising=False)
+
+    def _explode(app_id: str, private_key: str) -> str:
+        raise RuntimeError(f"the key was refused: {private_key}")
+
+    monkeypatch.setattr(audit, "_load_build_app_jwt", lambda: _explode)
+
+    registry = _write_registry(tmp_path / "registry.json", forks=["A"])
+    report_path = tmp_path / "report.json"
+
+    code = audit.main(
+        ["--app-jwt", "--json", "--registry", str(registry), "--out", str(report_path)],
+        fetch=FakeGitHub(),
+    )
+    out = capsys.readouterr()
+    combined = out.out + out.err
+    written = report_path.read_text(encoding="utf-8")
+
+    assert code == audit.EXIT_CONFIG, combined
+    assert "could not mint an App JWT" in combined
+    # Not the key -- and not even an 8-character window of it.
+    assert FAKE_PRIVATE_KEY not in combined
+    assert FAKE_PRIVATE_KEY not in written
+    marker = "FAKEKEYMATERIAL0123456789"
+    for start in range(0, max(0, len(marker) - 7)):
+        assert marker[start : start + 8] not in combined
+        assert marker[start : start + 8] not in written
+
+
+def test_an_installation_with_a_string_account_fails_closed_without_crashing(
+    tmp_path, capsys, monkeypatch
+):
+    """``account`` as a plain STRING is a malformed API response.
+
+    The tool promises a fail-closed ApiError for a malformed response; an
+    unhandled AttributeError would be an exit 1 with a traceback instead.
+    Both routes into the metadata are exercised: selecting by id (where the
+    metadata is read) and selecting by org (where a string account simply
+    does not match, so the run fails closed there too).
+    """
+    monkeypatch.setenv("GH_APP_CLIENT_ID", "Iv23liFAKEclientid")
+    monkeypatch.setenv("GH_APP_SEC", FAKE_PRIVATE_KEY)
+    monkeypatch.delenv("GH_APP_INSTALLATION_ID", raising=False)
+    _stub_the_minter(monkeypatch)
+
+    registry = _write_registry(tmp_path / "registry.json", forks=["A"])
+    fake = FakeGitHub(
+        covered=["A"],
+        org_repos=["A"],
+        installations=[{"id": 4242, "account": "POWERFULMOVES"}],
+    )
+
+    # (a) the id is known, so the metadata for that installation is read.
+    code = audit.main(
+        [
+            "--app-jwt",
+            "--json",
+            "--registry",
+            str(registry),
+            "--installation-id",
+            "4242",
+        ],
+        fetch=fake,
+    )
+    out = capsys.readouterr()
+    assert code == audit.EXIT_API, out.err
+    assert "AttributeError" not in out.err
+    assert "no coverage verdict was produced" in out.err
+
+    # (b) no id: a string account matches no org, so the run fails closed.
+    code = audit.main(["--app-jwt", "--json", "--registry", str(registry)], fetch=fake)
+    out = capsys.readouterr()
+    assert code == audit.EXIT_API, out.err
+    assert "AttributeError" not in out.err
+    assert "no coverage verdict was produced" in out.err
+
+
+def test_the_token_mode_reports_the_installation_as_given_and_never_as_observed(
+    tmp_path, capsys
+):
+    """An installation token proves neither WHICH installation it belongs to
+    nor WHICH account it was issued for.
+
+    The report must not claim an account it never observed, and the id the
+    operator supplied must be reported as GIVEN. The no-id branch keeps its
+    honest disclosure.
+    """
+    registry = _write_registry(tmp_path / "registry.json", forks=["A"])
+    fake = FakeGitHub(covered=["A"], org_repos=["A"])
+
+    code = audit.main(
+        [
+            "--token",
+            "--json",
+            "--registry",
+            str(registry),
+            "--installation-id",
+            "4242",
+        ],
+        fetch=fake,
+    )
+    out = capsys.readouterr()
+    report = json.loads(out.out)
+
+    assert code == 0, out.err
+    installation = report["installation"]
+    assert installation["id"] == "4242"
+    assert installation["account"] is None, (
+        "the account was never observed, so it must not be claimed"
+    )
+    assert "NOT verified" in installation["note"]
+    # The human summary must not print an account either.
+    assert "account=POWERFULMOVES" not in out.err
+
+    # The no-id branch keeps its honest disclosure.
+    code = audit.main(["--token", "--json", "--registry", str(registry)], fetch=fake)
+    out = capsys.readouterr()
+    report = json.loads(out.out)
+
+    assert code == 0, out.err
+    installation = report["installation"]
+    assert installation["id"] is None
+    assert installation["account"] is None
+    assert "does not expose its installation id" in installation["note"]
+
+
+# --------------------------------------------------------------------------
 # the workflow
 # --------------------------------------------------------------------------
 
@@ -792,6 +1083,127 @@ def test_the_workflow_mints_the_token_inline_in_the_auditing_job():
         ".github/workflows/gh-app-installation-audit.yml",
     ):
         assert required in paths, f"the paths filter does not cover {required}"
+
+
+def _run_commands(run: str) -> str:
+    """The COMMAND lines of a step's script, with the comments dropped.
+
+    A comment cannot leak a credential; a command can. So the credential
+    checks look at what the step would actually execute.
+    """
+    return "\n".join(
+        line for line in str(run or "").splitlines() if not line.strip().startswith("#")
+    )
+
+
+def test_the_pull_request_audit_runs_trusted_base_code_and_keeps_the_token_off_pr_code():
+    """The audit must never run PR code with a credential in scope.
+
+    The token minted here is owner-wide (the audit has to be able to see
+    every repo in the org), so handing it to the PR's own copy of the tool
+    is a pwn-request shape. The workflow therefore runs TRUSTED code -- the
+    BASE ref -- and the PR's tests still run, against the PR's own code,
+    with no credential in their environment.
+
+    Asserted against the PARSED workflow, so a comment that mentions the
+    wrong ref cannot satisfy it.
+    """
+    yaml = pytest.importorskip("yaml")
+    assert WORKFLOW_PATH.exists(), "the audit workflow must exist"
+    workflow = yaml.safe_load(WORKFLOW_PATH.read_text(encoding="utf-8"))
+
+    job = workflow.get("jobs", {}).get("audit", {}) or {}
+    steps = job.get("steps", []) or []
+    triggers = workflow.get(True, workflow.get("on", {})) or {}
+
+    assert "pull_request" in triggers
+    assert "schedule" in triggers
+    assert "workflow_dispatch" in triggers
+
+    # (1) On a pull_request the TRUSTED code is the BASE ref, and it lives in
+    #     its own directory so the PR's working tree cannot shadow it.
+    base_checkouts = [
+        step
+        for step in steps
+        if str((step or {}).get("uses") or "").startswith("actions/checkout@")
+        and str((step or {}).get("if") or "").strip() == "github.event_name == 'pull_request'"
+    ]
+    assert len(base_checkouts) == 1, (
+        f"exactly one checkout may run on a pull_request alone, found {len(base_checkouts)}"
+    )
+    base = base_checkouts[0] or {}
+    base_with = base.get("with") or {}
+    assert base_with.get("ref") == "${{ github.event.pull_request.base.sha }}"
+    trusted_dir = base_with.get("path")
+    assert trusted_dir and trusted_dir != ".", (
+        "the trusted code needs its own directory, or the PR's tree shadows it"
+    )
+
+    # (2) The audit step runs THAT copy -- never the working tree's.
+    audit_steps = [
+        step
+        for step in steps
+        if str((step or {}).get("name") or "") == "Audit the App installation coverage"
+    ]
+    assert len(audit_steps) == 1, "the audit step must exist exactly once"
+    audit_step = audit_steps[0] or {}
+    run = str(audit_step.get("run") or "")
+    tool_refs = re.findall(r"[^\s\"']*gh_app_installation_audit\.py", run)
+    assert tool_refs, "the audit step must invoke the tool"
+    for ref in tool_refs:
+        assert ref == f"{trusted_dir}/pmoves/tools/gh_app_installation_audit.py", (
+            f"the audit step must run the TRUSTED copy, not {ref!r}"
+        )
+
+    # (3) GH_TOKEN is in the audit step's environment and NOWHERE else -- not
+    #     in the job environment, not in any other step's environment, and
+    #     not in any other step's command.
+    assert "GH_TOKEN" not in (job.get("env") or {}), (
+        "a job-level GH_TOKEN would put the credential in EVERY step, "
+        "including the steps that run the PR's code"
+    )
+    assert "GH_TOKEN" in (audit_step.get("env") or {})
+    for step in steps:
+        if step is audit_step:
+            continue
+        name = (step or {}).get("name")
+        assert "GH_TOKEN" not in ((step or {}).get("env") or {}), (
+            f"GH_TOKEN is in the environment of step {name!r}"
+        )
+        assert "GH_TOKEN" not in _run_commands((step or {}).get("run") or ""), (
+            f"GH_TOKEN is referenced by step {name!r}"
+        )
+
+    # (4) The PR's tests still run -- against the PR's OWN code, with no
+    #     credential in scope.
+    pytest_steps = [
+        step
+        for step in steps
+        if "python -m pytest" in _run_commands((step or {}).get("run") or "")
+    ]
+    assert pytest_steps, "the workflow must still run the instrument's tests"
+    pytest_run = _run_commands((pytest_steps[0] or {}).get("run") or "")
+    assert "pmoves/tests/tools/test_gh_app_installation_audit.py" in pytest_run
+    assert f"{trusted_dir}/" not in pytest_run, (
+        "the tests must run the PR's own code, not the trusted copy"
+    )
+
+    # (5) schedule / workflow_dispatch still mint INLINE, in this job, and
+    #     the mint is not conditional -- so every event gets a token.
+    mint_steps = [
+        step
+        for step in steps
+        if "create-github-app-token" in str((step or {}).get("uses") or "")
+    ]
+    assert len(mint_steps) == 1
+    mint = mint_steps[0] or {}
+    assert not mint.get("if"), "the inline mint must run on every event"
+    mint_with = mint.get("with") or {}
+    assert mint_with.get("client-id") == "${{ secrets.GH_APP_CLIENT_ID }}"
+    assert mint_with.get("private-key") == "${{ secrets.GH_APP_SEC }}"
+    assert (audit_step.get("env") or {}).get("GH_TOKEN") == (
+        "${{ steps.app-token.outputs.token }}"
+    )
 
 
 def _write_gitmodules(path: Path, sections: list[tuple[str, str]]) -> Path:

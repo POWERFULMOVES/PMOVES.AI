@@ -619,6 +619,43 @@ _URL_RE = re.compile(r"^(?:[A-Za-z][A-Za-z0-9+.\-]*://|git@)", re.IGNORECASE)
 _CHECKSUM_RE = re.compile(r"^(?:sha256:[0-9a-f]{64}|[0-9a-f]{64})$", re.IGNORECASE)
 
 
+def _logical_instructions(text: str) -> list[str]:
+    """Return the LOGICAL instructions of a Dockerfile, continuations joined.
+
+    A Dockerfile instruction may be continued with a trailing backslash -- the
+    standard form for a multi-source copy:
+
+        COPY requirements.txt \\
+             package.json ./
+
+    A reader that iterates PHYSICAL lines sees only ``COPY requirements.txt \\``:
+    the trailing backslash becomes a token and the SECOND source is dropped.
+    That is a FALSE NEGATIVE in the dangerous direction -- the build needs
+    ``package.json`` and the probe never checks it.
+
+    MEASURED 2026-11-01: the probe iterated physical lines. Docker strips
+    COMMENT lines before it parses instructions, so a comment inside a
+    continuation is dropped here too.
+    """
+    instructions: list[str] = []
+    buffer = ""
+    for raw in text.splitlines():
+        if raw.strip().startswith("#"):
+            # Docker strips comments before parsing; a comment line inside a
+            # continuation neither ends it nor contributes to it.
+            continue
+        body = raw.rstrip()
+        if body.endswith("\\"):
+            buffer += body[:-1] + " "
+            continue
+        buffer += raw
+        instructions.append(buffer)
+        buffer = ""
+    if buffer:
+        instructions.append(buffer)
+    return instructions
+
+
 def _dockerfile_context_sources(text: str) -> list[list[str]]:
     """Return the BUILD-CONTEXT sources of every COPY/ADD line.
 
@@ -645,9 +682,9 @@ def _dockerfile_context_sources(text: str) -> list[list[str]]:
     is a source. Flags (`--chown=`, `--chmod=`, `--link=`) are not words.
     """
     groups: list[list[str]] = []
-    for raw in text.splitlines():
+    for raw in _logical_instructions(text):
         stripped = raw.strip()
-        if not stripped or stripped.startswith("#"):
+        if not stripped:
             continue
         match = _COPY_RE.match(raw)
         if not match:
@@ -686,18 +723,60 @@ def _source_resolves(source: str, context_dir: Path) -> bool:
         # context sources against the context root, never the host root).
         return True
     if any(ch in source for ch in "*?["):
-        head, _, pattern = source.rpartition("/")
-        base = context_dir / head if head else context_dir
-        if not base.is_dir():
-            return False
-        try:
-            for child in base.iterdir():
-                if fnmatch.fnmatch(child.name, pattern):
-                    return True
-        except OSError:
-            return False
-        return False
+        return _glob_resolves(source, context_dir)
     return (context_dir / source).exists()
+
+
+def _glob_resolves(source: str, context_dir: Path) -> bool:
+    """Does a WILDCARD source resolve to at least one file under the context?
+
+    Docker expands a wildcard against the context, and the wildcard can be in
+    ANY segment -- ``services/*/requirements.txt`` is the common form. The
+    earlier implementation matched only the FINAL segment against the child
+    NAMES of the directory above it, so a mid-path wildcard asked whether the
+    literal path ``services/*`` was a directory (it is not) and reported a
+    FALSE DRIFTED for a Dockerfile that builds.
+
+    Resolution is per SEGMENT: descend through the fixed segments, expand each
+    wildcard segment against the children of the directory reached so far, and
+    require the final segment to match something. A wildcard that matches
+    NOTHING is still a build that cannot succeed, so it is reported.
+    """
+    segments = [s for s in source.replace("\\", "/").split("/") if s not in ("", ".")]
+    if not segments:
+        return True
+    current = [context_dir]
+    for segment in segments[:-1]:
+        expanded: list[Path] = []
+        for base in current:
+            if any(ch in segment for ch in "*?["):
+                try:
+                    children = list(base.iterdir())
+                except OSError:
+                    continue
+                for child in children:
+                    if fnmatch.fnmatch(child.name, segment) and child.is_dir():
+                        expanded.append(child)
+            else:
+                candidate = base / segment
+                if candidate.is_dir():
+                    expanded.append(candidate)
+        current = expanded
+        if not current:
+            return False
+    leaf = segments[-1]
+    for base in current:
+        if any(ch in leaf for ch in "*?["):
+            try:
+                children = list(base.iterdir())
+            except OSError:
+                continue
+            for child in children:
+                if fnmatch.fnmatch(child.name, leaf):
+                    return True
+        elif (base / leaf).exists():
+            return True
+    return False
 
 
 def probe_copy_sources(image: dict, ctx: _Context) -> tuple[str, str]:

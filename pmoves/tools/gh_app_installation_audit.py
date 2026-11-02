@@ -33,9 +33,12 @@ THREE MODES, THREE DIFFERENT FAILURE POSTURES
                 ``--token-file``). Reads ``GET /installation/repositories``.
 ``--app-jwt``   No installation token. Mints an App JWT with the house minter
                 (``gh_app_token.build_app_jwt`` — RS256 via PyJWT, never a
-                hand-rolled signer), lists the App's installations, picks the
-                one for the registry's org, and reads that installation's
-                repository list.
+                hand-rolled signer), lists the App's installations (a
+                top-level JSON ARRAY), picks the one for the registry's org,
+                EXCHANGES the App JWT for an installation access token, and
+                reads that installation's repository list at
+                ``GET /installation/repositories`` with the installation
+                token — the same endpoint the ``--token`` mode reads.
 
 FAIL CLOSED — THE OPERATOR'S HARD RULE
 --------------------------------------
@@ -64,9 +67,12 @@ equality is asserted by the tool, not assumed by it.
 
 SECRETS
 -------
-The installation token and the App JWT are never printed, never logged, never
-written to the report — not even in a masked-but-partial form. Only metadata
-(credential KIND, installation id, account login, endpoints) is emitted.
+The installation token, the App JWT and the App private key are never printed,
+never logged, never written to the report — not even in a masked-but-partial
+form. All three are registered with the redactor as soon as they are read, so
+a third-party exception that quotes one of them cannot carry it out. Only
+metadata (credential KIND, installation id, account login, endpoints) is
+emitted.
 
 Exit codes:
   0  audit completed, coverage is fully determined
@@ -126,6 +132,10 @@ BUCKETS = (BUCKET_INSTALLED, BUCKET_NOT_INSTALLED, BUCKET_UNKNOWN)
 # The one credential-free path: the installation's own repository list.
 INSTALLATION_REPOSITORIES_PATH = "/installation/repositories"
 APP_INSTALLATIONS_PATH = "/app/installations"
+# An App JWT CANNOT read the installation's repository list. The listing lives
+# at INSTALLATION_REPOSITORIES_PATH and that endpoint accepts an INSTALLATION
+# access token, so the App JWT has to be EXCHANGED for one first.
+INSTALLATION_ACCESS_TOKENS_PATH = "/app/installations/{installation_id}/access_tokens"
 
 
 # ---------------------------------------------------------------------------
@@ -269,19 +279,41 @@ class GitHubClient:
         An unparseable body on any status is an ApiError: a body this tool
         cannot read is a body it cannot reason about.
         """
+        return self._request("GET", path, params=params)
+
+    def post(
+        self, path: str, body: Mapping[str, Any] | None = None
+    ) -> tuple[int, Any, Mapping[str, str]]:
+        """POST one resource. Same contract as :meth:`request`."""
+        return self._request("POST", path, body=body)
+
+    def _request(
+        self,
+        method: str,
+        path: str,
+        *,
+        params: Mapping[str, Any] | None = None,
+        body: Mapping[str, Any] | None = None,
+    ) -> tuple[int, Any, Mapping[str, str]]:
+        """One HTTP round trip, for any method."""
         query = dict(params or {})
         url = self.base_url + path
         if query:
             url = f"{url}?{urllib.parse.urlencode(query)}"
-        response = self._fetch("GET", url, self._headers(), self._timeout)
-        self.endpoints.append(f"GET {path}")
+        headers = self._headers()
+        data: bytes | None = None
+        if body is not None:
+            data = json.dumps(body).encode("utf-8")
+            headers["Content-Type"] = "application/json"
+        response = self._fetch(method, url, headers, self._timeout)
+        self.endpoints.append(f"{method} {path}")
         payload: Any = None
         if response.body:
             try:
                 payload = json.loads(response.body.decode("utf-8"))
             except (UnicodeDecodeError, json.JSONDecodeError) as error:
                 raise ApiError(
-                    f"GET {path} returned a body that is not JSON: {error}"
+                    f"{method} {path} returned a body that is not JSON: {error}"
                 ) from error
         return int(response.status), payload, dict(response.headers or {})
 
@@ -885,12 +917,18 @@ def audit_installation(
     coverage_path: str,
     installation: Mapping[str, Any],
     generated_at: str,
+    extra_endpoints: Sequence[str] = (),
 ) -> dict[str, Any]:
     """Audit one installation's coverage of the universe.
 
     The credential itself is NOT a parameter: it lives in the client's
     Authorization header and has no business being anywhere near the report.
     The caller keeps it, and the caller registers it with the redactor.
+
+    ``extra_endpoints`` carries the endpoints a DIFFERENT client reached
+    before this one took over — the App-JWT client's calls, when the coverage
+    listing was read with an installation token. The report lists every
+    endpoint the run touched, so a reader can see which API actually answered.
     """
     covered_items = client.get_paginated(coverage_path, collection="repositories")
     covered = {_repo_name(item).casefold() for item in covered_items}
@@ -913,7 +951,7 @@ def audit_installation(
         universe=universe,
         statuses=statuses,
         installation=installation,
-        endpoints=client.endpoints,
+        endpoints=[*extra_endpoints, *client.endpoints],
         generated_at=generated_at,
     )
     return report
@@ -922,19 +960,30 @@ def audit_installation(
 def _select_installation(
     client: GitHubClient, universe: Universe, wanted_id: str | None
 ) -> Mapping[str, Any]:
-    """Pick the installation to audit: by id if asked, else the org's."""
-    installations = client.get_paginated(
-        APP_INSTALLATIONS_PATH, collection="installations"
-    )
+    """Pick the installation to audit: by id if asked, else the org's.
+
+    ``GET /app/installations`` answers with a TOP-LEVEL JSON ARRAY — one
+    installation object per element. It is NOT an object carrying an
+    ``installations`` field, so it is read as an array (``collection=None``).
+
+    Pagination for an array-shaped listing is carried by the ``Link`` header,
+    which is exactly what :meth:`GitHubClient.get_paginated` follows. An
+    array-shaped endpoint carries no ``total_count``, so the walk's
+    completeness rests on the link chain — and a full page with no next link
+    fails the run closed rather than being read as "that was all of them".
+    """
+    installations = client.get_paginated(APP_INSTALLATIONS_PATH)
     if wanted_id:
         for installation in installations:
+            if not isinstance(installation, Mapping):
+                continue
             if str(installation.get("id")) == str(wanted_id):
                 return installation
         raise ApiError(f"the App has no installation with id {wanted_id}")
     matches = [
         installation
         for installation in installations
-        if _account_login(installation) == universe.org.casefold()
+        if _account_login(installation).casefold() == universe.org.casefold()
     ]
     if not matches:
         raise ApiError(f"the App has no installation on {universe.org}")
@@ -946,34 +995,74 @@ def _select_installation(
     return matches[0]
 
 
-def _account_login(installation: Mapping[str, Any]) -> str:
+def _account_login(installation: Any) -> str:
+    """The installation's account login, or "" when the shape is not ours.
+
+    A plain STRING where an OBJECT is expected is a malformed API response,
+    not a crash: the caller reads "no login" as "no match" and fails closed.
+    The login is returned AS GIVEN — the caller folds the case where it
+    compares.
+    """
+    if not isinstance(installation, Mapping):
+        return ""
     account = installation.get("account")
     if isinstance(account, Mapping):
         login = account.get("login")
         if isinstance(login, str):
-            return login.casefold()
+            return login
     return ""
 
 
 def _installation_metadata(
-    installation: Mapping[str, Any] | None, *, source: str, universe_org: str
+    installation: Mapping[str, Any], *, source: str
 ) -> dict[str, Any]:
-    if not installation:
-        return {
-            "id": None,
-            "account": universe_org,
-            "target_type": None,
-            "repository_selection": None,
-            "source": source,
-            "note": "an installation token does not expose its installation id",
-        }
+    """Metadata for an installation that was OBSERVED against the API.
+
+    A malformed ``account`` is a malformed API response: the run fails
+    closed with an :class:`ApiError` instead of crashing with an
+    AttributeError, and the account is only ever reported when it was
+    actually seen.
+    """
+    account = installation.get("account")
+    if account is not None and not isinstance(account, Mapping):
+        raise ApiError(
+            "the installation's 'account' field is not an object; the API "
+            f"response is malformed: {account!r}"
+        )
     return {
         "id": str(installation.get("id")) if installation.get("id") is not None else None,
-        "account": (installation.get("account") or {}).get("login"),
+        "account": _account_login(installation) or None,
         "target_type": installation.get("target_type"),
         "repository_selection": installation.get("repository_selection"),
         "source": source,
     }
+
+
+def _unverified_installation_metadata(
+    *, installation_id: str | None, source: str
+) -> dict[str, Any]:
+    """Metadata for an installation the audit could NOT verify.
+
+    An installation token proves neither WHICH installation it belongs to
+    nor WHICH account it was issued for. The id the operator supplied is
+    reported as GIVEN, never as observed, and the account is reported as
+    unknown — a report must not claim an installation it never checked.
+    """
+    metadata: dict[str, Any] = {
+        "id": str(installation_id) if installation_id is not None else None,
+        "account": None,
+        "target_type": None,
+        "repository_selection": None,
+        "source": source,
+    }
+    if installation_id is None:
+        metadata["note"] = "an installation token does not expose its installation id"
+    else:
+        metadata["note"] = (
+            "the installation id was supplied by the operator and was NOT verified "
+            "against the GitHub API; the installation's account is unknown"
+        )
+    return metadata
 
 
 # ---------------------------------------------------------------------------
@@ -1038,23 +1127,41 @@ def _load_build_app_jwt() -> Callable[..., str]:
     return build
 
 
-def _read_app_credentials() -> tuple[str, str]:
-    """The App id and private key, from the environment."""
+def _read_app_credentials(redactor: Redactor) -> tuple[str, str]:
+    """The App id and private key, from the environment.
+
+    The private key is registered with the redactor THE MOMENT it is read.
+    It is the credential that can mint every token this tool uses — the App
+    JWT and, through it, the installation token — so it must never reach
+    stderr or the report even by accident (a PyJWT failure quoting the key,
+    a filesystem error echoing the file contents). Registering it here makes
+    that an INVARIANT rather than a lucky accident of the code paths.
+    """
     app_id = (
         os.environ.get("GH_APP_CLIENT_ID", "").strip()
         or os.environ.get("GH_APP_ID", "").strip()
     )
-    private_key = os.environ.get("GH_APP_SEC", "").strip()
+    raw_private_key = os.environ.get("GH_APP_SEC", "").strip()
     if not app_id:
         raise ConfigError(
             "no App id: set GH_APP_CLIENT_ID (preferred) or GH_APP_ID"
         )
-    if not private_key:
+    if not raw_private_key:
         raise ConfigError("no App private key: set GH_APP_SEC")
-    # The funnel stores PEM bodies with literal \n escapes in some tiers.
-    if "\\n" in private_key and "\n" not in private_key:
-        private_key = private_key.replace("\\n", "\n")
+    private_key = _decode_pem(raw_private_key)
+    # The private key is registered with the redactor as soon as it is read:
+    # the RAW value (what an exception quoting the environment would carry)
+    # and the DECODED value (what the minter actually receives).
+    redactor.add(raw_private_key)
+    redactor.add(private_key)
     return app_id, private_key
+
+
+def _decode_pem(value: str) -> str:
+    """Decode the funnel's literal backslash-n PEM escapes, if any."""
+    if "\\n" in value and "\n" not in value:
+        return value.replace("\\n", "\n")
+    return value
 
 
 def _mint_app_jwt(app_id: str, private_key: str) -> str:
@@ -1063,6 +1170,34 @@ def _mint_app_jwt(app_id: str, private_key: str) -> str:
         return build(app_id, private_key)
     except Exception as error:
         raise ConfigError(f"could not mint an App JWT: {error}") from error
+
+
+def _mint_installation_token(
+    client: GitHubClient, installation_id: Any, redactor: Redactor
+) -> str:
+    """EXCHANGE the App JWT for an installation access token.
+
+    GitHub exposes an installation's repository list at
+    ``GET /installation/repositories``, and that endpoint accepts an
+    INSTALLATION access token — an App JWT is not accepted there, and
+    ``GET /app/installations/{id}/repositories`` is not an endpoint that
+    exists. So the App JWT is spent here, once, and the token that comes
+    back is what reads the coverage listing.
+
+    The token is registered with the redactor BEFORE it is used.
+    """
+    path = INSTALLATION_ACCESS_TOKENS_PATH.format(installation_id=installation_id)
+    status, payload, _headers = client.post(path)
+    if status >= 400:
+        raise ApiError(f"POST {path} failed with HTTP {status}")
+    if not isinstance(payload, Mapping):
+        raise ApiError(f"POST {path} did not return a JSON object")
+    token = payload.get("token")
+    if not isinstance(token, str) or not token.strip():
+        raise ApiError(f"POST {path} did not return an installation token")
+    token = token.strip()
+    redactor.add(token)
+    return token
 
 
 # ---------------------------------------------------------------------------
@@ -1137,9 +1272,10 @@ def render_summary(report: Mapping[str, Any]) -> str:
     lines.append("GitHub App installation audit")
     lines.append(f"  mode: {report.get('mode')}")
     lines.append(f"  org: {report.get('org')}")
+    account = installation.get("account") or "unknown"
     lines.append(
         f"  installation: id={installation.get('id')} "
-        f"account={installation.get('account')} "
+        f"account={account} "
         f"target={installation.get('target_type')}"
     )
     lines.append(
@@ -1272,12 +1408,11 @@ def _run(
             or os.environ.get("GH_APP_INSTALLATION_ID", "").strip()
             or None
         )
-        installation = _installation_metadata(
-            {"id": wanted_id, "account": {"login": universe.org}}
-            if wanted_id
-            else None,
+        # The token mode never verified this installation against the API, so
+        # the report says GIVEN, not OBSERVED, and claims no account.
+        installation = _unverified_installation_metadata(
+            installation_id=wanted_id,
             source="installation-token",
-            universe_org=universe.org,
         )
         report = audit_installation(
             mode="token",
@@ -1291,7 +1426,7 @@ def _run(
         return report
 
     # --app-jwt
-    app_id, private_key = _read_app_credentials()
+    app_id, private_key = _read_app_credentials(redactor)
     app_jwt = _mint_app_jwt(app_id, private_key)
     redactor.add(app_jwt)
     client = GitHubClient(app_jwt, fetch=fetch, timeout=args.timeout)
@@ -1313,15 +1448,21 @@ def _run(
         )
     if isinstance(detail, Mapping):
         installation = detail
+    # The App JWT cannot read the coverage listing. Exchange it for an
+    # installation access token and read it with THAT credential — the same
+    # endpoint the --token mode uses.
+    installation_token = _mint_installation_token(client, installation_id, redactor)
+    installation_client = GitHubClient(
+        installation_token, fetch=fetch, timeout=args.timeout
+    )
     report = audit_installation(
         mode="app-jwt",
         universe=universe,
-        client=client,
-        coverage_path=f"{APP_INSTALLATIONS_PATH}/{installation_id}/repositories",
-        installation=_installation_metadata(
-            installation, source="app-jwt", universe_org=universe.org
-        ),
+        client=installation_client,
+        coverage_path=INSTALLATION_REPOSITORIES_PATH,
+        installation=_installation_metadata(installation, source="app-jwt"),
         generated_at=generated_at,
+        extra_endpoints=client.endpoints,
     )
     report["gitmodules"] = cross_check
     return report

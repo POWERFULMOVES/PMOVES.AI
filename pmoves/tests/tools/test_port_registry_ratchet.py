@@ -22,6 +22,13 @@ WHAT THIS FILE ASSERTS
 6. the LIVE tree: the gate is green against the committed registry and
    baseline, every compose file in scope parses with the ratchet's
    merge-tag-aware loader, and the 8115 pair the operator named is resolved.
+7. the WRITER contract: only the host ports TWO OR MORE services claim are
+   baselined, and a freshly written baseline fails the gate as UNREVIEWED --
+   "a human must replace these reasons" -- and NOT as STALE;
+8. the ENTRY grammar: a compose long-syntax port entry and a `ports:` that
+   is not a list are REPORTED, not walked past in silence;
+9. the HYGIENE of this file: it defines no duplicate test-function names, so
+   a copy can never silently shadow another.
 
 Hermetic: no network, no docker, no NATS, no gh. It reads files in this repo
 and runs the tool against pytest's tmp_path.
@@ -29,6 +36,7 @@ and runs the tool against pytest's tmp_path.
 
 from __future__ import annotations
 
+import ast
 import json
 import subprocess
 import sys
@@ -202,18 +210,6 @@ def test_an_orphan_slot_is_flagged(tmp_path):
     assert result["orphans"][0]["port_var"] == "GHOST_PORT"
 
 
-def test_a_container_port_only_entry_is_never_judged(tmp_path):
-    """One slot = container port only; Docker assigns the host port."""
-    path = _write_compose(
-        tmp_path,
-        "services:\n  demo:\n    ports:\n      - \"9001\"\n",
-    )
-    registry = {"demo": {"slots": {"DEMO_PORT": {"host_port": 9001, "container_port": 9001}}}}
-    result = ratchet.scan(registry, [path])
-    assert result["bare"] == [], result["bare"]
-    assert result["unknown"] == [], result["unknown"]
-
-
 def test_an_unparseable_compose_file_is_an_instrument_error(tmp_path):
     path = tmp_path / "pmoves" / "docker-compose.broken.yml"
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -221,6 +217,31 @@ def test_an_unparseable_compose_file_is_an_instrument_error(tmp_path):
     result = ratchet.scan({}, [path])
     assert result["errors"], "an unparseable file must be reported, not skipped"
     assert "cannot parse" in result["errors"][0]["error"]
+
+
+def test_a_compose_long_syntax_port_entry_is_reported_not_skipped(tmp_path):
+    """The compose LONG-SYNTAX mapping form is a legitimate Docker Compose
+    feature that this instrument does not yet measure -- so the entry is
+    REPORTED, not walked past in silence."""
+    path = _write_compose(
+        tmp_path,
+        "services:\n  demo:\n    ports:\n      - published: 8200\n        target: 8000\n",
+    )
+    result = ratchet.scan({}, [path])
+    assert result["errors"], "a long-syntax port entry must be reported, not skipped"
+    message = result["errors"][0]["error"]
+    assert "not a string" in message, message
+    assert "does not yet measure" in message, message
+    assert "malformed" not in message.lower(), (
+        f"a legitimate Compose feature must not be called malformed: {message}"
+    )
+
+
+def test_a_compose_service_whose_ports_is_not_a_list_is_reported_not_skipped(tmp_path):
+    path = _write_compose(tmp_path, "services:\n  demo:\n    ports: \"9001:9001\"\n")
+    result = ratchet.scan({}, [path])
+    assert result["errors"], "a `ports:` that is not a list must be reported, not skipped"
+    assert "not a list" in result["errors"][0]["error"], result["errors"][0]
 
 
 # ---------------------------------------------------------------------------
@@ -243,6 +264,106 @@ def test_a_dynamic_slot_is_not_a_collision():
         {"file": "a.yml", "service": "one", "port_var": "P1", "host_port": None, "container_port": 9000},
     ]
     assert ratchet.find_collisions(published) == {}
+
+
+def _collision_writer_fixture(tmp_path: Path) -> tuple[Path, Path, Path]:
+    """A synthetic tree for the baseline writer.
+
+    Host 9000 is claimed by TWO services (a real collision); host 9001 is
+    claimed by ONE (not a collision). The writer must baseline the first and
+    leave the second out.
+    """
+    root = tmp_path / "repo"
+    pmoves = root / "pmoves"
+    pmoves.mkdir(parents=True)
+    (pmoves / "docker-compose.test.yml").write_text(
+        "services:\n"
+        "  one:\n    ports:\n      - \"${ONE_PORT:-9000}:9000\"\n"
+        "  two:\n    ports:\n      - \"${TWO_PORT:-9000}:9000\"\n"
+        "  solo:\n    ports:\n      - \"${SOLO_PORT:-9001}:9001\"\n",
+        encoding="utf-8",
+    )
+    registry = tmp_path / "ports.yaml"
+    registry.write_text(
+        "version: 1\nservices:\n"
+        "  one:\n    slots:\n      ONE_PORT:\n        host_port: 9000\n        container_port: 9000\n"
+        "  two:\n    slots:\n      TWO_PORT:\n        host_port: 9000\n        container_port: 9000\n"
+        "  solo:\n    slots:\n      SOLO_PORT:\n        host_port: 9001\n        container_port: 9001\n",
+        encoding="utf-8",
+    )
+    return root, registry, tmp_path / "collisions.yaml"
+
+
+def _run_ratchet_cli(args: list[str]) -> subprocess.CompletedProcess:
+    """Drive the SHIPPED CLI -- the writer's contract is a CLI contract."""
+    return subprocess.run(
+        [sys.executable, str(TOOL), *args],
+        capture_output=True,
+        text=True,
+        timeout=300,
+    )
+
+
+def _write_the_baseline(root: Path, registry: Path, collisions: Path) -> None:
+    proc = _run_ratchet_cli(
+        [
+            "--registry",
+            str(registry),
+            "--collisions",
+            str(collisions),
+            "--repo-root",
+            str(root),
+            "--write-collisions",
+            "--yes",
+        ]
+    )
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+
+
+def test_the_collision_writer_baselines_only_multi_claimant_ports(tmp_path):
+    """A host port claimed by ONE service is not a collision. Baselining it
+    would make the next `--check` call it STALE -- the writer manufacturing
+    the failure it was written to prevent."""
+    root, registry, collisions = _collision_writer_fixture(tmp_path)
+    _write_the_baseline(root, registry, collisions)
+    known = yaml.safe_load(collisions.read_text(encoding="utf-8"))["known_collisions"]
+    assert set(known) == {"9000"}, known
+    assert known["9000"]["services"] == ["one", "two"], known["9000"]
+
+
+def test_a_freshly_written_collision_baseline_fails_the_gate_as_unreviewed_and_not_as_stale(tmp_path):
+    """The documented writer flow: write the baseline, then check it. The
+    written file must fail the gate as UNREVIEWED -- "a human must replace
+    these reasons" -- and NOT as STALE, which is noise."""
+    root, registry, collisions = _collision_writer_fixture(tmp_path)
+    _write_the_baseline(root, registry, collisions)
+    proc = _run_ratchet_cli(
+        [
+            "--registry",
+            str(registry),
+            "--collisions",
+            str(collisions),
+            "--repo-root",
+            str(root),
+            "--json",
+        ]
+    )
+    payload = json.loads(proc.stdout)
+    assert payload["unreviewed_collisions"] == ["9000"], payload["unreviewed_collisions"]
+    assert payload["stale_collisions"] == [], payload["stale_collisions"]
+    assert payload["new_collisions"] == {}, payload["new_collisions"]
+    assert proc.returncode == 1, proc.stdout[-2000:]
+
+
+def test_the_collision_writer_header_says_the_gate_rejects_the_placeholder_reason(tmp_path):
+    """The header the writer writes, the reason it writes and the gate's
+    enforcement must tell the SAME story."""
+    root, registry, collisions = _collision_writer_fixture(tmp_path)
+    _write_the_baseline(root, registry, collisions)
+    header = collisions.read_text(encoding="utf-8").split("known_collisions:")[0]
+    assert "the ratchet accepts it" not in header, header
+    assert "UNREVIEWED" in header, header
+    assert "REVIEW THIS" in header, header
 
 
 # ---------------------------------------------------------------------------
@@ -296,6 +417,82 @@ def test_the_python_registry_rule_rejects_an_unknown_service():
     findings = ratchet.check_python_registries({}, {"port_allocator": {"nope": 1234}})
     assert len(findings) == 1
     assert "not in the canonical registry" in findings[0]["reason"]
+
+
+def test_the_python_registry_rule_accepts_a_host_port_match_even_when_a_container_port_is_recorded():
+    """The ENFORCED RULE: a Python registry port matches the CONTAINER port
+    or the HOST port of any slot.
+
+    MEASURED against the committed tree, the host-port arm is load-bearing --
+    a service the canonical registry records with BOTH a container port and a
+    host port is sometimes listed in a Python registry under its published
+    HOST port. So the host-port match stands on its own, and a strict rule
+    ("the host port only for a service with no container port") would turn
+    the committed tree red.
+    """
+    registry = {
+        "demo": {"slots": {"DEMO_PORT": {"host_port": 8054, "container_port": 3000}}}
+    }
+    findings = ratchet.check_python_registries(registry, {"service_catalog": {"demo": 8054}})
+    assert findings == [], findings
+
+
+def test_the_python_registry_docstring_states_the_rule_the_gate_enforces():
+    """The docstring and the code must tell the SAME story."""
+    doc = ratchet.check_python_registries.__doc__ or ""
+    assert "ENFORCED RULE" in doc, (
+        "the docstring must state the rule the gate enforces"
+    )
+    assert "falling back to the host port only when no container port" not in doc, (
+        "the docstring claims a rule the code does not enforce"
+    )
+    registry = {
+        "demo": {"slots": {"DEMO_PORT": {"host_port": 8054, "container_port": 3000}}}
+    }
+    assert ratchet.check_python_registries(registry, {"service_catalog": {"demo": 8054}}) == []
+
+
+def test_the_python_registry_host_port_fallback_is_load_bearing():
+    """MEASURE the docstring's claim instead of hand-writing a number.
+
+    Every decision here is made by the REAL function: an entry the function
+    accepts, and that it REJECTS once the host ports of its service are
+    removed, was carried by the host-port arm.
+    """
+    registry = ratchet.load_registry()
+    py = ratchet.load_python_registries()
+    fallbacks: list[tuple[str, str, int, bool]] = []
+    for source, ports in py.items():
+        for name, port in sorted(ports.items()):
+            if not port:
+                continue
+            entry = registry.get(name)
+            if entry is None:
+                continue
+            if ratchet.check_python_registries({name: entry}, {source: {name: port}}):
+                continue  # the real function rejects it -- a drift, not our case
+            slots = entry.get("slots") or {}
+            without_host = {
+                name: {
+                    "slots": {
+                        key: {**slot, "host_port": None} for key, slot in slots.items()
+                    }
+                }
+            }
+            if ratchet.check_python_registries(without_host, {source: {name: port}}):
+                has_container = any(
+                    slot.get("container_port") is not None for slot in slots.values()
+                )
+                fallbacks.append((source, name, port, has_container))
+    assert fallbacks, (
+        "the docstring claims the host-port arm of the ENFORCED RULE is "
+        "load-bearing, but no committed Python registry entry needs it"
+    )
+    assert any(has_container for *_rest, has_container in fallbacks), (
+        "the docstring claims the STRICT rule would turn the committed tree "
+        "red; that needs a service that records a container port AND is "
+        "listed under its host port"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -594,3 +791,23 @@ def test_a_stale_collision_entry_fails_the_gate(tmp_path):
     payload = json.loads(proc.stdout)
     assert payload["stale_collisions"] == ["9000"], payload["stale_collisions"]
     assert proc.returncode == 1, proc.stdout[-2000:]
+
+
+# ---------------------------------------------------------------------------
+# 6. the hygiene of this file
+# ---------------------------------------------------------------------------
+
+
+def test_this_module_defines_no_duplicate_test_function_names():
+    """A duplicate test name silently shadows the first copy: Python keeps the
+    last definition, pytest collects one, and the other stops existing
+    without anybody noticing."""
+    tree = ast.parse(Path(__file__).read_text(encoding="utf-8"))
+    names = [
+        node.name
+        for node in tree.body
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        and node.name.startswith("test_")
+    ]
+    duplicates = sorted({name for name in names if names.count(name) > 1})
+    assert not duplicates, f"duplicate test function names: {duplicates}"

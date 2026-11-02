@@ -41,6 +41,7 @@ the real binary skip when it is not installed.
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -589,6 +590,115 @@ def test_the_original_doc_is_red() -> None:
 
 
 # --------------------------------------------------------------------------
+# the prose nets: the second net must actually catch something
+# --------------------------------------------------------------------------
+
+
+def test_the_live_docs_prose_global_flag_list_is_scraped() -> None:
+    """The prose net must catch the LIVE doc's global-flag list.
+
+    The live doc introduces its list with a sentence -- "These are accepted
+    by every command:" sits between the heading and the bullets -- so a
+    scanner that stops at the first non-bullet scrapes NOTHING from the real
+    doc, and the flags are policed by the JSON block alone. The expected set
+    is computed from the source of truth (the measured snapshot), never
+    re-typed here.
+    """
+    doc_text = DOC.read_text(encoding="utf-8")
+    prose_flags = parity.extract_prose_global_flags(doc_text)
+    measured = set(json.loads(SNAPSHOT.read_text(encoding="utf-8"))["global_flags"])
+
+    assert prose_flags, "the prose global-flag list scraped nothing from the live doc"
+    assert prose_flags == measured, (
+        f"the doc's prose flag list is {sorted(prose_flags)}, "
+        f"the measured CLI has {sorted(measured)}"
+    )
+
+
+def test_the_prose_flag_scraper_keeps_scanning_past_a_prose_line() -> None:
+    """A sentence before the list is not the end of the list.
+
+    The scan ends at the next HEADING: a flag list that follows a sentence
+    is still scraped, and a list in a LATER section is not.
+    """
+    doc_text = (
+        "# catalog\n\n"
+        "## Global flags\n\n"
+        "These are accepted by every command:\n\n"
+        "- `--alpha` — first\n"
+        "- `--beta` — second\n\n"
+        "## Another section\n\n"
+        "- `--gamma` — not a global flag\n"
+    )
+
+    assert parity.extract_prose_global_flags(doc_text) == {"--alpha", "--beta"}
+
+
+def test_a_stale_over_claiming_table_row_is_reported(tmp_path: Path) -> None:
+    """A table row that names a command the CLI no longer has is VISIBLE.
+
+    The CLI renamed `video task get` to `video task`. The doc's table still
+    says `mmx video task get`. Resolving that row against the known commands
+    lands on `video task` -- and the dead over-claim used to vanish into the
+    live surface with no trace at all. It must be reported instead.
+    """
+    doc = tmp_path / "doc.md"
+    doc.write_text(
+        _doc_text(
+            resources={"video": ["task"]},
+            tree={"video": ["task"]},
+            rows=[("video", "task get")],
+        ),
+        encoding="utf-8",
+    )
+    payload = {
+        "mmx_version": "1.0.25",
+        "resources": {"video": ["task"]},
+        "global_flags": ["--help", "--output"],
+    }
+    snapshot = _write(tmp_path / "snap.json", payload)
+
+    report = parity.check(doc, snapshot)
+
+    over_claims = [
+        finding
+        for finding in report["findings"]
+        if finding["kind"] == "DOCUMENTED_MISSING"
+        and finding.get("scope") == "command"
+        and finding.get("command") == "task get"
+    ]
+    assert over_claims, report["findings"]
+
+
+def test_a_table_row_with_flags_still_resolves_to_the_full_command(tmp_path: Path) -> None:
+    """Flags on a known command are not an over-claim.
+
+    `mmx video task get --limit 5` claims the command `video task get`; the
+    flags are the invocation's, not the command's, so the row resolves to the
+    full command and the gate stays quiet.
+    """
+    doc = tmp_path / "doc.md"
+    doc.write_text(
+        _doc_text(
+            resources={"video": ["task get"]},
+            tree={"video": ["task get"]},
+            rows=[("video", "task get --limit 5")],
+        ),
+        encoding="utf-8",
+    )
+    payload = {
+        "mmx_version": "1.0.25",
+        "resources": {"video": ["task get"]},
+        "global_flags": ["--help", "--output"],
+    }
+    snapshot = _write(tmp_path / "snap.json", payload)
+
+    report = parity.check(doc, snapshot)
+
+    assert report["ok"], report["findings"]
+
+
+# --------------------------------------------------------------------------
 # the probe
 # --------------------------------------------------------------------------
 
@@ -635,6 +745,33 @@ def test_the_probe_fails_closed_when_the_binary_is_missing(tmp_path: Path) -> No
 
     with pytest.raises(probe.ProbeError):
         probe.resolve_mmx(str(missing))
+
+
+def test_the_probe_fails_closed_on_a_non_executable_binary(tmp_path: Path) -> None:
+    """An unexecutable binary is a clean error, not a stack dump.
+
+    POSIX: a file without the exec bit raises PermissionError. Windows: a
+    file that is not a Win32 application raises OSError (WinError 193 /
+    access denied). Both are OSError -- and both must become a ProbeError
+    with a non-zero exit and NO traceback.
+    """
+    binary = tmp_path / "not-a-real-mmx.txt"
+    binary.write_text("this is not a program\n", encoding="utf-8")
+    if os.name != "nt":
+        # POSIX has an exec bit to clear; Windows has none, and the file is
+        # not an executable application either way.
+        binary.chmod(0o600)
+
+    proc = subprocess.run(
+        [sys.executable, str(PROBE_TOOL), "--mmx-bin", str(binary)],
+        capture_output=True,
+        text=True,
+        cwd=str(REPO_ROOT),
+    )
+
+    assert proc.returncode != 0, proc.stdout
+    assert "Traceback" not in proc.stderr, proc.stderr
+    assert "mmx-surface-probe: FAILED" in proc.stderr, proc.stderr
 
 
 def test_the_probe_refuses_to_run_a_non_help_command() -> None:

@@ -48,6 +48,10 @@ not allowed to become a gate that cannot fail.
   M12  ANSI colour codes are no longer stripped
   M13  the command rows are no longer validated, so the model legend leaks in
   M14  the probe stops failing closed on a missing binary
+  M15  the prose flag scan stops at the first prose line again
+  M16  a stale over-claiming table row is laundered into the live surface
+  M17  the probe only fails closed on a MISSING binary, not on an
+       unexecutable one
 
 Run it directly to see the mutation kills in action:
 
@@ -233,8 +237,8 @@ MUTATIONS: list[Mutation] = [
     Mutation(
         name="M11_command_table_no_longer_scraped",
         target=PARITY_TOOL,
-        old="""    for name, commands in extract_table_claims(doc_text, known).items():""",
-        new="""    for name, commands in {}.items():""",
+        old="""    table_resources, over_claims = extract_table_claims(doc_text, known)""",
+        new="""    table_resources, over_claims = {}, []""",
         target_test="test_a_stale_command_table_is_reported",
         rationale=(
             "The command table is the part a sidecar author copies from. If "
@@ -283,6 +287,58 @@ MUTATIONS: list[Mutation] = [
             "A probe that cannot find the CLI must abort, not emit an empty "
             "snapshot. An empty snapshot is a lie the parity gate would "
             "happily compare against."
+        ),
+    ),
+    Mutation(
+        name="M15_prose_flag_scan_stops_at_a_prose_line",
+        target=PARITY_TOOL,
+        old="""        elif not stripped.startswith("- "):
+            # A prose line between the heading and the list is not the end of
+            # the section: skip it and keep scanning. Only a heading ends it.
+            continue""",
+        new="""        elif not stripped.startswith("- "):
+            break""",
+        target_test="test_the_live_docs_prose_global_flag_list_is_scraped",
+        rationale=(
+            "The live doc introduces its global-flag list with a sentence "
+            "('These are accepted by every command:'). A scan that stops at "
+            "the first non-bullet scrapes NOTHING from the real doc, so the "
+            "prose net silently stops being a net: a global flag the doc "
+            "documents in prose only can never become a DOCUMENTED_MISSING."
+        ),
+    ),
+    Mutation(
+        name="M16_stale_over_claim_is_laundered",
+        target=PARITY_TOOL,
+        old="""            over_claim = claimed if candidate != claimed else None
+            return resource, candidate, over_claim""",
+        new="""            return resource, candidate, None""",
+        target_test="test_a_stale_over_claiming_table_row_is_reported",
+        rationale=(
+            "When the CLI renames `video task get` to `video task`, the "
+            "longest-prefix walk lands on the shorter known command and the "
+            "dead over-claim used to disappear into the live surface with no "
+            "trace. The over-claim has to be reported, not absorbed."
+        ),
+    ),
+    Mutation(
+        name="M17_probe_only_catches_a_missing_binary",
+        target=PROBE_TOOL,
+        old="""    except OSError as exc:
+        # OSError covers a MISSING binary (FileNotFoundError) AND a binary
+        # that cannot be EXECUTED: PermissionError on POSIX, and the Windows
+        # "not a valid Win32 application" / "access denied" errors. Both are
+        # ProbeError, not a raw traceback: a missing binary gets a loving
+        # error message, and so does an unexecutable one.
+        raise ProbeError(f"could not execute {exe!r}: {exc}") from exc""",
+        new="""    except FileNotFoundError as exc:
+        raise ProbeError(f"could not execute {exe!r}: {exc}") from exc""",
+        target_test="test_the_probe_fails_closed_on_a_non_executable_binary",
+        rationale=(
+            "PermissionError and the Windows 'not a valid Win32 "
+            "application' error are OSError but not FileNotFoundError, so "
+            "narrowing the handler to FileNotFoundError turns an "
+            "unexecutable binary into a raw traceback."
         ),
     ),
 ]
@@ -443,3 +499,5 @@ def test_the_tool_sources_are_intact_after_the_mutation_suite():
     assert "for command in sorted(doc_resources[name]" in parity_source
     assert 'return ANSI_RE.sub("", text)' in probe_source
     assert "_leading_command_words(head[1:])" in probe_source
+    assert "over_claim = claimed if candidate != claimed else None" in parity_source
+    assert "except OSError as exc:" in probe_source

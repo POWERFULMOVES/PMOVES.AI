@@ -65,7 +65,8 @@ yt-cookies-auth: yt-cookies-check ## One-time OAuth2 consent flow (opens browser
 
 yt-cookies-refresh: ## Force a cookie refresh cycle (Playwright harvest + encrypt + store + NATS notify)
 	@echo "=== YT Cookies: manual refresh (via refresher service) ==="
-	@curl -sf -X POST -m 10 http://localhost:$${YT_COOKIE_REFRESHER_PORT:-8126}/refresh \n		|| { echo "refresher API unreachable - is the service up? (make up-yt-cookies)"; exit 1; }
+	@curl -sf -X POST -m 10 http://localhost:$${YT_COOKIE_REFRESHER_PORT:-8126}/refresh \
+		|| { echo "refresher API unreachable - is the service up? (make up-yt-cookies)"; exit 1; }
 	@echo ""
 	@echo "Triggered. Status after ~60s: make yt-cookies-status"
 

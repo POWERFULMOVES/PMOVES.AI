@@ -217,11 +217,13 @@ images:
     # this one resolved against `github.workspace/pmoves-nextjs`, a directory
     # that does not exist in this repo at all.
     #
-    # The build that IS wanted is the submodule's `pmoves-nextjs/Dockerfile`,
-    # and `dockerfile:` below is relative to the repo context, so it names
-    # exactly that. MEASURED at the pinned gitlink 04285b813f: the submodule
-    # holds BOTH `Dockerfile` and `pmoves-nextjs/Dockerfile`, and the latter
-    # is the one this entry wants.
+    # The build that IS wanted is the submodule's `pmoves-nextjs/Dockerfile`.
+    # With `build_context: pmoves-nextjs` below, `dockerfile: Dockerfile`
+    # resolves to `pmoves-nextjs/Dockerfile` -- `dockerfile:` is relative to
+    # the BUILD CONTEXT, not to the repo root, so the plain name already
+    # means the submodule's file. MEASURED at the pinned gitlink 04285b813f:
+    # the submodule holds BOTH `Dockerfile` and `pmoves-nextjs/Dockerfile`,
+    # and the latter is the one this entry wants.
     #
     # The staleness ratchet now FLAGS a repo-backed entry that declares a
     # `context` other than `.`, so this contradiction cannot come back

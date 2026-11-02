@@ -8,14 +8,23 @@ recorded. It collides silently with whatever else claims the same port, and
 the collision only shows up when two stacks are brought up together -- which
 is exactly the case nobody tests.
 
-That is not hypothetical. MEASURED 2026-11-01 across the 64 compose files in
-the house scope: 262 published-port stanzas, of which 71 had a BARE-LITERAL
-host port (the bind address was parameterised; the port was not) and ZERO
-used Docker's dynamic host port. The 8115 case the operator named --
+That is not hypothetical. MEASURED 2026-11-01, BEFORE this lane's
+re-parameterisation: 71 published host ports were BARE LITERALS (the bind
+address was parameterised; the port was not) and ZERO used Docker's dynamic
+host port. The 8115 case the operator named --
 ``pmoves/docker-compose.yt-cookies.yml`` publishing ``127.0.0.1:8115`` for
 ``yt-cookie-refresher`` while ``node-registry`` published ``0.0.0.0:8115``
 -- is one of those bare literals, in a compose file that is NOT in the
 default stack, which is why it was latent rather than caught.
+
+The live figures are deliberately NOT written here: the tool RECOMPUTES and
+PRINTS them on every run -- 63 compose files in scope, 265 published port
+slots, ZERO bare literals. This paragraph is a dated record of the BEFORE
+state; the tool is the authority on the present, and a number typed into a
+docstring is a claim nobody recomputes. (This file previously carried "64
+compose files" and "262 published-port stanzas" -- the file count was 63 at
+``origin/main`` too, so it was never true, and the two figures counted
+different things.)
 
 WHAT THIS MEASURES
 ------------------
@@ -55,6 +64,15 @@ Usage:
     python pmoves/tools/port_registry_ratchet.py --check
     python pmoves/tools/port_registry_ratchet.py --write-collisions --yes
 
+THE WRITER HANDS YOU A TO-DO LIST, NOT A PASSING GATE
+------------------------------------------------------
+``--write-collisions`` writes the baseline for the host ports TWO OR MORE
+services claim -- not every published port -- and every reason it writes is
+the PLACEHOLDER, which the gate reports as UNREVIEWED. A freshly written
+baseline therefore FAILS the gate until a human replaces each reason with
+why those two services may share the port. The writer, the header it
+writes and the gate's enforcement all say the same thing.
+
 Exit codes: 0 clean | 1 gate failed | 2 instrument/setup error.
 """
 
@@ -81,6 +99,14 @@ PORT_LINE = re.compile(r"^\s*(?P<body>.+?)\s*$")
 # thing (traefik vs nginx, rustdesk.yml vs remote.yml, a base stack vs its
 # own override). They publish the same host ports on purpose.
 KNOWN_ALTERNATIVE_PAIRS: set[frozenset[str]] = set()
+
+# The reason the baseline writer emits for a collision NO HUMAN has
+# reviewed yet. The gate reports any reason carrying this prefix as
+# UNREVIEWED -- so the writer, the header it writes and the gate's
+# enforcement all tell the SAME story: a written baseline is a to-do list
+# until a human replaces each reason.
+REVIEW_PLACEHOLDER_PREFIX = "REVIEW THIS"
+PLACEHOLDER_REASON = "REVIEW THIS -- a pre-existing duplicate host port"
 
 
 class InstrumentError(RuntimeError):
@@ -280,11 +306,48 @@ def scan(registry: dict, files: list[Path] | None = None, root: Path | None = No
         for svc, spec in services.items():
             if not isinstance(spec, dict):
                 continue
-            entries = spec.get("ports") or []
-            if not isinstance(entries, list):
+            raw_entries = spec.get("ports")
+            if raw_entries is None:
+                entries: list = []
+            elif isinstance(raw_entries, list):
+                entries = raw_entries
+            else:
+                # FAIL CLOSED at ENTRY granularity: a `ports:` this
+                # instrument cannot read is reported, not walked past.
+                errors.append(
+                    {
+                        "file": rel,
+                        "error": (
+                            f"service {svc}: `ports` is not a list "
+                            f"(got {type(raw_entries).__name__}) -- this instrument "
+                            "cannot measure it"
+                        ),
+                    }
+                )
                 continue
             for entry in entries:
                 if not isinstance(entry, str):
+                    # FAIL CLOSED at ENTRY granularity. The compose
+                    # LONG-SYNTAX mapping form (`published:`/`target:`) is a
+                    # legitimate Docker Compose feature -- it is NOT malformed
+                    # -- but this instrument measures only the short string
+                    # form, so the entry is REPORTED as unmeasured rather than
+                    # silently skipped.
+                    errors.append(
+                        {
+                            "file": rel,
+                            "error": (
+                                f"service {svc}: port entry is not a string "
+                                f"(got {type(entry).__name__}) -- this instrument "
+                                "measures only the short string form of a compose "
+                                "port entry; the compose LONG-SYNTAX mapping form "
+                                "(`published:`/`target:`) is a legitimate Docker "
+                                "Compose feature that this instrument does not yet "
+                                "measure, so the entry is REPORTED rather than "
+                                "skipped"
+                            ),
+                        }
+                    )
                     continue
                 m = PORT_LINE.match(entry)
                 if not m:
@@ -465,14 +528,27 @@ def check_python_registries(registry: dict, py: dict) -> list[dict]:
     """Each Python registry's port must exist as a slot in the canonical registry.
 
     THE SEMANTIC DISTINCTION, MEASURED: the two Python registries record the
-    port the service LISTENS ON -- the CONTAINER port. Compose publishes a
-    HOST port, which is a different number for most services: ``pmoves-ui``
-    listens on 3000 and is published on 4482; ``supabase-db`` listens on 5432
-    and is published on 54322. Comparing a Python registry against the
-    registry's HOST port therefore reports four false drifts, which is what
-    the first version of this rule did. The comparison is against the
-    CONTAINER port, falling back to the host port only when no container port
-    is recorded.
+    port a client uses to reach the service. For most services that is the
+    CONTAINER port, but it is NOT always: compose publishes a HOST port,
+    which is a different number for most services (``pmoves-ui`` listens on
+    3000 and is published on 4482; ``supabase-db`` listens on 5432 and is
+    published on 54322), and a service the canonical registry records with
+    BOTH a container port and a host port is sometimes listed in a Python
+    registry under its published HOST port.
+
+    ENFORCED RULE: a Python registry port matches when it equals the
+    CONTAINER port or the HOST port of any slot of that service. A drift is
+    reported only when it matches NEITHER.
+
+    WHY NOT THE STRICTER RULE: an earlier version of this docstring promised
+    that the host port counted only for a service whose slots record no
+    container port. MEASURED against the committed tree, the two Python
+    registries do not satisfy that rule -- the host-port arm is load-bearing,
+    and the strict rule turns the committed tree RED for a shape the
+    registries legitimately have. The looser rule above is therefore the
+    enforced one, and the measurement lives in the tree rather than in this
+    paragraph: `test_the_python_registry_host_port_fallback_is_load_bearing`
+    computes it.
     """
     findings: list[dict] = []
     for source, ports in py.items():
@@ -493,6 +569,9 @@ def check_python_registries(registry: dict, py: dict) -> list[dict]:
             slots = entry.get("slots") or {}
             container_ports = [s.get("container_port") for s in slots.values()]
             host_ports = [s.get("host_port") for s in slots.values()]
+            # ENFORCED RULE -- see the docstring: the CONTAINER port or the
+            # HOST port of any slot is a match; only a port that matches
+            # neither is a drift.
             if port in container_ports:
                 continue
             if port in host_ports:
@@ -549,33 +628,53 @@ def main() -> int:
         if not args.yes:
             print("error: --write-collisions rewrites the baseline; pass --yes", file=sys.stderr)
             return 2
+        # ONLY the host ports TWO OR MORE services claim. A port claimed by
+        # ONE service is not a collision: baselining it would make the very
+        # next `--check` report the entry STALE (the port is not shared) and
+        # turn the gate red -- the writer manufacturing the failure it was
+        # written to prevent.
+        shared = {
+            port: info for port, info in collisions.items() if info["count"] > 1
+        }
         body = {
             "known_collisions": {
                 str(port): {
                     "services": info["services"],
                     "files": info["files"],
-                    "reason": "REVIEW THIS -- a pre-existing duplicate host port",
+                    "reason": PLACEHOLDER_REASON,
                 }
-                for port, info in sorted(collisions.items())
+                for port, info in sorted(shared.items())
             }
         }
         header = (
             "# pmoves/configs/port_registry/_known_collisions.yaml\n"
             "#\n"
-            "# Pre-existing duplicate host ports. Each entry names the services that\n"
-            "# claim the port and WHY they may share it. A NEW collision -- one not\n"
+            "# Pre-existing duplicate host ports -- the host ports that TWO OR\n"
+            "# MORE services claim. Each entry names the services that claim\n"
+            "# the port and WHY they may share it. A NEW collision -- one not\n"
             "# listed here -- FAILS the gate, so this baseline cannot grow.\n"
             "#\n"
-            "# Every entry needs a real reason. 'REVIEW THIS' is a placeholder and\n"
-            "# the ratchet accepts it, but a reason that says nothing is a claim\n"
-            "# nobody checked.\n"
+            "# Every entry needs a real reason. The writer emits the\n"
+            "# PLACEHOLDER reason\n"
+            "#\n"
+            "#     REVIEW THIS -- a pre-existing duplicate host port\n"
+            "#\n"
+            "# and the gate reports EVERY entry that still carries it as\n"
+            "# UNREVIEWED. So a freshly written baseline FAILS the gate until\n"
+            "# a human replaces each reason with why these two services may\n"
+            "# share the port. The placeholder is a to-do, NOT a review: the\n"
+            "# ratchet does not accept it.\n"
         )
         args.collisions.parent.mkdir(parents=True, exist_ok=True)
         args.collisions.write_text(
             header + yaml.safe_dump(body, sort_keys=True, default_flow_style=False, width=110),
             encoding="utf-8",
         )
-        print(f"port-registry-ratchet: baseline written: {args.collisions} ({len(collisions)} entr(ies))")
+        print(
+            f"port-registry-ratchet: baseline written: {args.collisions} "
+            f"({len(shared)} entr(ies)) -- every reason is the PLACEHOLDER, so the "
+            f"gate reports them UNREVIEWED until a human replaces each one"
+        )
         return 0
 
     new_collisions = {
@@ -601,11 +700,11 @@ def main() -> int:
             stale_collisions.append(port)
             continue
         # A reason that says nothing is a claim nobody checked. The
-        # baseline writer emits the literal placeholder "REVIEW THIS";
-        # accepting it would let the baseline grow without anybody ever
-        # reading why the two services may share the port.
+        # baseline writer emits the literal placeholder; accepting it
+        # would let the baseline grow without anybody ever reading why
+        # the two services may share the port.
         reason = str(entry.get("reason") or "").strip()
-        if not reason or reason.upper().startswith("REVIEW THIS"):
+        if not reason or reason.upper().startswith(REVIEW_PLACEHOLDER_PREFIX):
             unreviewed_collisions.append(port)
 
     payload = {

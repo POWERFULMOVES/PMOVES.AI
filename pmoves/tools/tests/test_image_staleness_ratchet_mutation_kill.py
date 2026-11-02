@@ -120,12 +120,15 @@ MUTATIONS: list[Mutation] = [
     Mutation(
         name="M3_glob_copy_source_with_no_match_is_no_longer_reported",
         target=RATCHET,
-        old="""        except OSError:
-            return False
-        return False""",
-        new="""        except OSError:
+        old="""            for child in children:
+                if fnmatch.fnmatch(child.name, leaf):
+                    return True
+        elif (base / leaf).exists():""",
+        new="""            for child in children:
+                if fnmatch.fnmatch(child.name, leaf):
+                    return True
             return True
-        return True""",
+        elif (base / leaf).exists():""",
         target_test="test_a_glob_copy_source_with_no_match_is_drifted",
         rationale=(
             "`COPY package*.json ./` fails when the context holds no "
@@ -189,6 +192,44 @@ MUTATIONS: list[Mutation] = [
             "without this rule the probe reported DRIFTED for "
             "`pmoves-remote-view`, whose Dockerfile adds the s6-overlay "
             "tarballs by url -- and that Dockerfile BUILDS."
+        ),
+    ),
+    Mutation(
+        name="M7_line_continuation_is_not_joined",
+        target=RATCHET,
+        old="""    for raw in _logical_instructions(text):""",
+        new="""    for raw in text.splitlines():""",
+        target_test="test_a_line_continued_copy_reports_a_source_that_does_not_exist",
+        rationale=(
+            "A continued `COPY a \\` + newline + `     b ./dest` carries TWO "
+            "sources. Reading physical lines drops the second one and reports "
+            "a Dockerfile that cannot build as fine -- a FALSE NEGATIVE, the "
+            "dangerous direction for this gate."
+        ),
+    ),
+    Mutation(
+        name="M8_mid_path_wildcard_is_resolved_against_the_final_segment_only",
+        target=RATCHET,
+        old="""    if any(ch in source for ch in "*?["):
+        return _glob_resolves(source, context_dir)""",
+        new="""    if any(ch in source for ch in "*?["):
+        head, _, pattern = source.rpartition("/")
+        base = context_dir / head if head else context_dir
+        if not base.is_dir():
+            return False
+        try:
+            for child in base.iterdir():
+                if fnmatch.fnmatch(child.name, pattern):
+                    return True
+        except OSError:
+            return False
+        return False""",
+        target_test="test_a_mid_path_wildcard_copy_source_resolves_against_the_context",
+        rationale=(
+            "`services/*/requirements.txt` has its wildcard in a MIDDLE "
+            "segment. Matching only the final segment against child names "
+            "asked whether the literal path `services/*` was a directory "
+            "and reported a FALSE DRIFTED for a Dockerfile that builds."
         ),
     ),
 ]

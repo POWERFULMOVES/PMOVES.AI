@@ -54,6 +54,34 @@ rule the production path relies on:
       unbaselined file no longer turns the gate red.
   M7  the FAIL-CLOSED half of the exit code is removed -- an unparseable file
       stops failing the gate.
+  M8  a PEP 695 type-parameter list is reintroduced into the measured tree --
+      the file becomes a SyntaxError on the project's declared floor.
+  M9  `io` is re-exempted -- `io.open` IS `builtins.open`, so re-exempting it
+      re-opens the exact defect class the gate exists to catch.
+  M10 `codecs` is re-exempted -- `codecs.open(path)` opens in TEXT mode with
+      the LOCALE encoding, so it is the same defect class.
+  M11 the mode of `io.open`/`codecs.open` is read from the PATH slot instead
+      of the BUILTIN slot -- every binary `io.open(path, "rb")` is then judged
+      text and flagged.
+  M12 an undecodable file is silently skipped instead of REPORTED -- the gate
+      reports success over a population it never measured.
+  M13 the measured gap breakdown is dropped -- the tool stops publishing what
+      it measured, and the live-tree claim rides on it.
+  M14 `codecs.open`'s `encoding` slot is read as the builtin slot -- the tool
+      then reports a site that DID pass the encoding positionally as one with
+      no encoding at all.
+  M15 `io.open`'s `encoding` slot is read as the codecs slot -- three
+      positional arguments cannot have carried the encoding, so the report
+      mislabels the site.
+
+BYTE-EXACT RESTORE
+------------------
+The restore is byte-exact: the file's exact bytes are captured before the
+mutation and written back afterwards, and the check compares BYTES. A
+decoded-text comparison cannot certify bytes -- `read_text` translates CRLF
+back to LF, so it certifies byte-exactness through a lens that blurs the very
+bytes it certifies. The mutation is written with the file's OWN newline
+convention, so a CRLF file stays CRLF for the duration of the mutation.
 
 Run it directly to see the mutation kills in action:
 
@@ -235,7 +263,117 @@ MUTATIONS: list[Mutation] = [
             / "chit_invalidation.py"
         ),
     ),
+    Mutation(
+        name="M9_io_re_exempted",
+        old="""    "bz2",
+    "dbm",""",
+        new="""    "bz2",
+    "dbm",
+    "io",""",
+        target_test="test_io_open_without_encoding_is_flagged",
+        rationale=(
+            "`io.open` IS `builtins.open` (verified: `io.open is builtins.open` "
+            "-> True), so it opens in TEXT mode with the LOCALE encoding -- "
+            "the defect class this gate exists to catch. Exempting it again "
+            "is a permanent blind spot, not a false-positive fix."
+        ),
+    ),
+    Mutation(
+        name="M10_codecs_re_exempted",
+        old="""    "dbm",
+    "fitz",""",
+        new="""    "codecs",
+    "dbm",
+    "fitz",""",
+        target_test="test_codecs_open_without_encoding_is_flagged",
+        rationale=(
+            "`codecs.open(filename, mode, encoding, ...)` with `encoding=None` "
+            "falls through to `builtins.open(filename, mode, buffering)` -- a "
+            "TEXT-mode read with the LOCALE encoding. Same defect class, so it "
+            "is judged, never exempted."
+        ),
+    ),
+    Mutation(
+        name="M11_builtin_signature_mode_slot_reverted",
+        old="""                path_open = False
+                builtin_signature = True""",
+        new="""                path_open = True
+                builtin_signature = True""",
+        target_test="test_a_binary_io_open_is_not_flagged",
+        rationale=(
+            "`io.open`/`codecs.open` take the mode in the BUILTIN slot (second "
+            "positional), not the Path slot (first). Reading the Path slot "
+            "sees the FILENAME, misses the binary mode, and flags every binary "
+            "`io.open(path, \"rb\")` in the fleet -- a false positive."
+        ),
+    ),
+    Mutation(
+        name="M12_undecodable_file_silently_skipped",
+        old="""            errors.append({"file": rel, "error": f"unreadable: {exc}"})""",
+        new="""            pass  # MUTATION: the undecodable file is silently skipped""",
+        target_test="test_an_unreadable_file_is_reported_not_skipped",
+        rationale=(
+            "A file that cannot be decoded as UTF-8 must be an instrument "
+            "error. Silently skipping it reports success over a population "
+            "the gate never measured -- the exact failure the decode path "
+            "exists to prevent."
+        ),
+    ),
+    Mutation(
+        name="M14_codecs_encoding_slot_reverted",
+        old="""    "codecs": 2,""",
+        new="""    "codecs": 3,""",
+        target_test="test_a_codecs_open_with_a_positional_encoding_is_reported_as_positional",
+        rationale=(
+            "`codecs.open(filename, mode, encoding, ...)` takes `encoding` "
+            "THIRD. Reading the builtin slot (fourth) instead makes the tool "
+            "report a site that DID pass the encoding positionally as one "
+            "with no encoding at all -- a wrong report about a real site."
+        ),
+    ),
+    Mutation(
+        name="M15_io_encoding_slot_reverted",
+        old="""    "io": OPEN_ENCODING_POSITIONAL_INDEX,""",
+        new="""    "io": 2,""",
+        target_test="test_an_io_open_with_three_positional_args_reports_no_encoding",
+        rationale=(
+            "`io.open` IS `builtins.open`, whose `encoding` is the FOURTH "
+            "parameter. Three positional arguments cannot have carried it, so "
+            "reading the codecs slot (third) mislabels the site as 'encoding "
+            "may be positional'."
+        ),
+    ),
+    Mutation(
+        name="M13_gap_breakdown_removed",
+        old="""        "gaps_by_call": dict(sorted(gaps_by_call.items())),""",
+        new="""        "gaps_by_call": {},""",
+        target_test="test_the_live_tree_has_no_io_or_codecs_open_gap",
+        rationale=(
+            "The breakdown is what the tool PUBLISHES about what it measured. "
+            "Dropping it leaves the live-tree claim riding on a number "
+            "nothing computes."
+        ),
+    ),
 ]
+
+
+def _read_source(path: Path) -> tuple[bytes, str]:
+    """The file's exact bytes, plus its text with newlines normalised to LF.
+
+    The mutation anchors are written with LF and the ratchet tool is CRLF in
+    this worktree, so the anchor match runs against the normalised text. The
+    BYTES are what the restore must reproduce EXACTLY: a decoded-text
+    comparison cannot tell LF from CRLF, because `read_text` translates them
+    away -- it certifies byte-exactness through a lens that blurs the very
+    bytes it certifies.
+    """
+    raw = path.read_bytes()
+    return raw, raw.decode("utf-8").replace("\r\n", "\n")
+
+
+def _write_source(path: Path, text: str, newline: str) -> None:
+    """Write LF-normalised `text` using the file's OWN newline convention."""
+    path.write_bytes(text.replace("\n", newline).encode("utf-8"))
 
 
 def _run_pytest(node_id: str, timeout: float = _PYTEST_TIMEOUT_SECONDS) -> subprocess.CompletedProcess:
@@ -345,7 +483,8 @@ def test_the_mutation_kills_the_named_test(mutation: Mutation) -> None:
     """GREEN -> RED -> GREEN, with a byte-exact restore."""
     node_id = f"{TEST_FILE.relative_to(REPO_ROOT).as_posix()}::{mutation.target_test}"
     target = mutation.path
-    original = target.read_text(encoding="utf-8")
+    original_bytes, original = _read_source(target)
+    newline = "\r\n" if b"\r\n" in original_bytes else "\n"
 
     with _MUTATION_LOCK, _file_lock(_LOCK_PATH):
         # 1. GREEN BEFORE
@@ -357,7 +496,10 @@ def test_the_mutation_kills_the_named_test(mutation: Mutation) -> None:
 
         mutated = _apply_mutation(mutation, original)
         try:
-            target.write_text(mutated, encoding="utf-8")
+            # The mutation is written with the file's OWN newline convention,
+            # so a CRLF file stays CRLF: the mutation changes what it says and
+            # nothing else.
+            _write_source(target, mutated, newline)
 
             # 2. RED AFTER -- the NAMED test must die
             after = _run_pytest(node_id)
@@ -370,10 +512,14 @@ def test_the_mutation_kills_the_named_test(mutation: Mutation) -> None:
                 f"{mutation.target_test}\n{after.stdout[-4000:]}\n{after.stderr[-2000:]}"
             )
         finally:
-            # 3. GREEN AFTER -- byte-exact restore
-            target.write_text(original, encoding="utf-8")
-            restored = target.read_text(encoding="utf-8")
-            assert restored == original, f"{mutation.name}: the restore was not byte-exact"
+            # 3. GREEN AFTER -- byte-exact restore. The file's exact bytes go
+            # back, and the check compares BYTES: `read_text` would translate
+            # CRLF away and could not tell the difference.
+            target.write_bytes(original_bytes)
+            restored = target.read_bytes()
+            assert restored == original_bytes, (
+                f"{mutation.name}: the restore was not byte-exact"
+            )
 
         after_restore = _run_pytest(node_id)
         assert after_restore.returncode == 0, (
@@ -382,9 +528,47 @@ def test_the_mutation_kills_the_named_test(mutation: Mutation) -> None:
         )
 
 
+def test_the_mutation_write_preserves_the_files_line_endings(tmp_path):
+    """A CRLF file must still be CRLF after a mutation -- and after a restore.
+
+    The harness used to write with `write_text(..., encoding="utf-8")` and NO
+    `newline=""`, so on Windows the LF text it wrote was translated to CRLF on
+    disk, and the `read_text` comparison that "certified" the restore
+    translated it straight back. The bytes it claimed to certify were never
+    compared.
+    """
+    target = tmp_path / "tool.py"
+    target.write_bytes(b"line one\r\nline two\r\n")
+    raw, text = _read_source(target)
+    assert raw == b"line one\r\nline two\r\n"
+    assert text == "line one\nline two\n"
+
+    _write_source(target, text.replace("line one", "line ONE"), "\r\n")
+    written = target.read_bytes()
+    assert written == b"line ONE\r\nline two\r\n"
+    # no lone LF crept in
+    assert b"\n" not in written.replace(b"\r\n", b"")
+
+
+def test_the_restore_reproduces_the_original_bytes(tmp_path):
+    """The restore is byte-exact -- including the bytes `read_text` blurs."""
+    target = tmp_path / "tool.py"
+    original_bytes = b"x = 1\r\ny = 2\r\n"
+    target.write_bytes(original_bytes)
+    raw, text = _read_source(target)
+
+    _write_source(target, text.replace("x = 1", "x = 9"), "\r\n")
+    assert target.read_bytes() != original_bytes
+
+    target.write_bytes(raw)
+    assert target.read_bytes() == original_bytes
+
+
 def test_the_tool_source_is_intact_after_the_mutation_suite():
     """The last mutation must leave the tree exactly as it found it."""
     original = TOOL.read_text(encoding="utf-8")
     assert "mode = node.args[0] if node.args else None" in original
     assert "return recv.id in NON_PATH_OPENERS" in original
     assert 'or payload["problems"]' in original
+    assert 'BUILTIN_SIGNATURE_OPENERS = {"codecs", "io"}' in original
+    assert '"gaps_by_call": dict(sorted(gaps_by_call.items()))' in original

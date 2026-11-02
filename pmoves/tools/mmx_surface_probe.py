@@ -31,11 +31,11 @@ no request.
 
 FAIL CLOSED
 -----------
-A missing binary, a non-zero ``--help`` exit, an unparseable help page, a
-resource whose help cannot be read: every one of these aborts the probe with a
-non-zero exit and writes NOTHING. A partial snapshot that looks like truth is
-worse than no snapshot at all, because the parity gate would then compare the
-doc against a hole.
+A missing binary, an unexecutable binary, a non-zero ``--help`` exit, an
+unparseable help page, a resource whose help cannot be read: every one of
+these aborts the probe with a non-zero exit and writes NOTHING. A partial
+snapshot that looks like truth is worse than no snapshot at all, because the
+parity gate would then compare the doc against a hole.
 
 DETERMINISM
 -----------
@@ -168,7 +168,12 @@ def run_mmx(exe: str, args: list[str]) -> str:
             errors="replace",
             timeout=HELP_TIMEOUT_SECONDS,
         )
-    except FileNotFoundError as exc:
+    except OSError as exc:
+        # OSError covers a MISSING binary (FileNotFoundError) AND a binary
+        # that cannot be EXECUTED: PermissionError on POSIX, and the Windows
+        # "not a valid Win32 application" / "access denied" errors. Both are
+        # ProbeError, not a raw traceback: a missing binary gets a loving
+        # error message, and so does an unexecutable one.
         raise ProbeError(f"could not execute {exe!r}: {exc}") from exc
     except subprocess.TimeoutExpired as exc:
         raise ProbeError(

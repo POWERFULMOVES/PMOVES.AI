@@ -28,11 +28,22 @@ NON-PATH openers listed in :data:`NON_PATH_OPENERS`. Those openers -- ``wave``,
 where an ``encoding`` argument has no meaning at all, so demanding one there
 would be a false positive.
 
-MEASURED at the time of writing: 153 ``.open(...)`` attribute call sites
-exist in ``pmoves/``; 54 of them omit ``encoding=``; of those 54, 48 are
-non-path openers (binary/media/module) and 6 are genuine text-mode Path opens.
-All 6 were fixed in the same commit that added this tool, so no text-mode
-``.open()`` site is left unjudged. The live count is printed on every run.
+``io`` and ``codecs`` are NOT on that list, and deliberately so: ``io.open``
+IS ``builtins.open`` (verified: ``io.open is builtins.open`` -> ``True``), and
+``codecs.open(filename, mode, encoding, ...)`` with ``encoding=None`` falls
+through to ``builtins.open(filename, mode, buffering)``. Both open in TEXT mode
+with the LOCALE encoding when ``encoding`` is omitted -- the exact defect class
+this gate exists to catch -- so both are JUDGED. Both also take the mode in the
+BUILTIN slot (second positional), not the Path slot, so their mode is read from
+the right place.
+
+MEASURED at the time of writing: every live ``io.open``/``codecs.open`` site
+passes an explicit ``encoding=`` -- they are JUDGED now, not exempted -- and the
+tree's remaining ``.open()`` gaps are ``Path.open`` sites that predate this
+tool and are recorded in the baseline. No number here is hand-typed: every run
+prints the breakdown it measured under ``gaps_by_call``, and
+``pmoves/tests/tools/test_windows_encoding_ratchet.py`` asserts the live
+``io.open``/``codecs.open`` counts are zero.
 
 Calls whose ``encoding`` argument is passed POSITIONALLY: ``open()`` takes
 ``encoding`` as its 4th positional parameter; a call with 4+ positional
@@ -96,16 +107,21 @@ OPEN_ENCODING_POSITIONAL_INDEX = 3
 # `.open(...)` attribute calls whose receiver is one of these are NOT
 # path opens. They open binary handles -- audio, images, archives, raw file
 # descriptors -- where an `encoding` argument has no meaning, so demanding one
-# would be a false positive. MEASURED 2026-11-01: 48 of the 54 `.open()`
-# call sites in pmoves/ that omit `encoding=` have a receiver from this list.
+# would be a false positive.
+#
+# `io` and `codecs` are DELIBERATELY ABSENT, and that is the point of the
+# whole gate: `io.open` IS `builtins.open` (verified: `io.open is builtins.open`
+# -> True), so it opens in TEXT mode with the LOCALE encoding; and
+# `codecs.open(filename, mode, encoding, ...)` with `encoding=None` falls
+# through to `builtins.open(filename, mode, buffering)` -- also TEXT mode with
+# the LOCALE encoding. Both are the defect class this gate exists to catch, so
+# both are JUDGED. See BUILTIN_SIGNATURE_OPENERS for their mode slot.
 NON_PATH_OPENERS = {
     "Image",
     "bz2",
-    "codecs",
     "dbm",
     "fitz",
     "gzip",
-    "io",
     "lzma",
     "mmap",
     "os",
@@ -120,6 +136,26 @@ NON_PATH_OPENERS = {
     "zipfile",
 }
 
+# `.open()` receivers that are TEXT-mode openers with the BUILTIN signature.
+# `io.open` IS `builtins.open`, and `codecs.open(filename, mode, encoding, ...)`
+# has the same shape. Both take the mode in the SECOND positional slot (the
+# builtin slot), NOT the Path slot (the first) -- so the mode has to be read
+# from the right place, or a binary `io.open(path, "rb")` is judged text and a
+# text `io.open(path)` is judged binary. Both are JUDGED, never exempted.
+BUILTIN_SIGNATURE_OPENERS = {"codecs", "io"}
+
+# Positional index of the `encoding` parameter for each judged signature. A
+# call with MORE positional arguments than this may have passed `encoding`
+# positionally, which the AST cannot prove or disprove -- so the site counts
+# as a GAP (fail closed).
+#   builtin open(file, mode, buffering, encoding) -> index 3
+#   io.open      == builtin open                   -> index 3
+#   codecs.open(filename, mode, encoding, ...)    -> index 2
+BUILTIN_SIGNATURE_ENCODING_INDEX = {
+    "codecs": 2,
+    "io": OPEN_ENCODING_POSITIONAL_INDEX,
+}
+
 
 class InstrumentError(RuntimeError):
     """The ratchet could not measure its input."""
@@ -131,6 +167,10 @@ def _mode_argument(node: ast.Call, path_open: bool) -> ast.expr | None:
     The two signatures differ: builtin ``open(file, mode, ...)`` takes the mode
     SECOND, while ``Path.open(mode, ...)`` takes it FIRST. Reading the wrong
     slot silently mis-classifies binary as text.
+
+    ``path_open`` selects the slot: True -> the Path slot (first positional),
+    False -> the builtin slot (second positional). ``io.open`` and
+    ``codecs.open`` use the builtin slot.
     """
     if path_open:
         mode = node.args[0] if node.args else None
@@ -157,12 +197,17 @@ def _has_encoding_keyword(node: ast.Call) -> bool:
     return any(kw.arg == "encoding" for kw in node.keywords)
 
 
-def _open_encoding_may_be_positional(node: ast.Call) -> bool:
-    """True when `open()` was called with >= 4 positional args.
+def _open_encoding_may_be_positional(
+    node: ast.Call, encoding_index: int = OPEN_ENCODING_POSITIONAL_INDEX
+) -> bool:
+    """True when `open()` was called with more positional args than the
+    `encoding` slot.
 
     We cannot prove the encoding was supplied, so the site counts as a gap.
+    The slot depends on the signature: builtin `open` (and `io.open`, which IS
+    builtin `open`) take `encoding` fourth; `codecs.open` takes it third.
     """
-    return len(node.args) > OPEN_ENCODING_POSITIONAL_INDEX
+    return len(node.args) > encoding_index
 
 
 def _is_non_path_opener(node: ast.Call) -> bool:
@@ -193,16 +238,29 @@ def find_gaps(source: str, filename: str) -> tuple[list[dict], int]:
             continue
         func = node.func
         path_open = False
+        builtin_signature = False
+        encoding_index = OPEN_ENCODING_POSITIONAL_INDEX
         if isinstance(func, ast.Attribute) and func.attr in TEXT_CALLS:
             call_name = func.attr
         elif isinstance(func, ast.Attribute) and func.attr == "open":
             if _is_non_path_opener(node):
                 skipped += 1
                 continue
-            path_open = True
-            call_name = "Path.open"
+            receiver = func.value.id if isinstance(func.value, ast.Name) else None
+            if receiver in BUILTIN_SIGNATURE_OPENERS:
+                # `io.open` IS `builtins.open` and `codecs.open` has the same
+                # shape: the mode is the SECOND positional argument (the
+                # builtin slot), not the Path slot.
+                path_open = False
+                builtin_signature = True
+                encoding_index = BUILTIN_SIGNATURE_ENCODING_INDEX[receiver]
+                call_name = f"{receiver}.open"
+            else:
+                path_open = True
+                call_name = "Path.open"
         elif isinstance(func, ast.Name) and func.id == "open":
             call_name = "open"
+            builtin_signature = True
         else:
             continue
         if _has_encoding_keyword(node):
@@ -210,7 +268,7 @@ def find_gaps(source: str, filename: str) -> tuple[list[dict], int]:
         if _is_binary_mode(node, path_open):
             continue
         reason = "no encoding= keyword"
-        if call_name == "open" and _open_encoding_may_be_positional(node):
+        if builtin_signature and _open_encoding_may_be_positional(node, encoding_index):
             reason = "no encoding= keyword; encoding may be positional"
         gaps.append({"line": node.lineno, "call": call_name, "reason": reason})
     return gaps, skipped
@@ -229,6 +287,7 @@ def scan(root: Path) -> tuple[dict[str, int], list[dict], dict]:
     errors: list[dict] = []
     path_open_calls = 0
     non_path_skipped = 0
+    gaps_by_call: dict[str, int] = {}
     for path in files:
         rel = path.relative_to(root).as_posix()
         try:
@@ -243,12 +302,15 @@ def scan(root: Path) -> tuple[dict[str, int], list[dict], dict]:
             continue
         non_path_skipped += skipped
         path_open_calls += _count_attribute_opens(source, rel)
+        for gap in gaps:
+            gaps_by_call[gap["call"]] = gaps_by_call.get(gap["call"], 0) + 1
         if gaps:
             counts[rel] = len(gaps)
 
     out_of_scope = {
         "attribute_open_calls": path_open_calls,
         "non_path_openers_skipped": non_path_skipped,
+        "gaps_by_call": dict(sorted(gaps_by_call.items())),
         "note": (
             "`.open()` calls on known binary/media openers are skipped: they open "
             "binary handles where an encoding argument has no meaning"
@@ -448,6 +510,13 @@ def main() -> int:
         print(
             f"  .open() calls       : {out_of_scope['attribute_open_calls']} attribute call(s); "
             f"{out_of_scope['non_path_openers_skipped']} skipped as binary/media openers"
+        )
+        print(
+            "  gaps by call        : "
+            + (
+                ", ".join(f"{name}={n}" for name, n in out_of_scope["gaps_by_call"].items())
+                or "none"
+            )
         )
         if payload["problems"]:
             print(f"  {len(payload['problems'])} INSTRUMENT ERROR(S) -- the scan could not measure:")

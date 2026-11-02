@@ -367,6 +367,148 @@ MUTATIONS: list[Mutation] = [
         ),
         target_file=REGISTRY_FILE,
     ),
+    Mutation(
+        name="M15_the_installation_list_read_as_an_object_instead_of_an_array",
+        old="""    installations = client.get_paginated(APP_INSTALLATIONS_PATH)""",
+        new="""    installations = client.get_paginated(
+        APP_INSTALLATIONS_PATH, collection="installations"
+    )""",
+        target_test=(
+            "test_the_app_jwt_mode_reads_the_array_shaped_installations_and_exchanges_the_jwt"
+        ),
+        rationale=(
+            "GET /app/installations answers with a TOP-LEVEL ARRAY. Reading it "
+            "as an object carrying an 'installations' field raises before any "
+            "installation can be selected -- the advertised --app-jwt mode "
+            "could never run at all."
+        ),
+    ),
+    Mutation(
+        name="M16_the_coverage_listing_read_from_an_endpoint_that_does_not_exist",
+        old="""        coverage_path=INSTALLATION_REPOSITORIES_PATH,
+        installation=_installation_metadata(installation, source="app-jwt"),""",
+        new="""        coverage_path=f"{APP_INSTALLATIONS_PATH}/{installation_id}/repositories",
+        installation=_installation_metadata(installation, source="app-jwt"),""",
+        target_test=(
+            "test_the_app_jwt_mode_reads_the_array_shaped_installations_and_exchanges_the_jwt"
+        ),
+        rationale=(
+            "GitHub exposes the installation's repository list at "
+            "GET /installation/repositories, for an installation token. "
+            "/app/installations/{id}/repositories is not a route that exists, "
+            "so the advertised mode would always die on a 404."
+        ),
+    ),
+    Mutation(
+        name="M17_the_coverage_listing_read_with_the_app_jwt",
+        old="""    installation_client = GitHubClient(
+        installation_token, fetch=fetch, timeout=args.timeout
+    )""",
+        new="""    installation_client = GitHubClient(
+        app_jwt, fetch=fetch, timeout=args.timeout
+    )""",
+        target_test=(
+            "test_the_app_jwt_mode_reads_the_array_shaped_installations_and_exchanges_the_jwt"
+        ),
+        rationale=(
+            "The repository listing takes an INSTALLATION token. Reading it "
+            "with the App JWT asks GitHub for something it will not serve, and "
+            "the report would claim a coverage it never observed."
+        ),
+    ),
+    Mutation(
+        name="M18_the_app_private_key_not_registered_with_the_redactor",
+        old="""    redactor.add(raw_private_key)
+    redactor.add(private_key)""",
+        new="""    pass  # the private key is not registered with the redactor""",
+        target_test="test_the_app_private_key_is_redacted_when_the_jwt_mint_fails",
+        rationale=(
+            "The private key is the credential that can mint every other one. "
+            "Unregistered, a third-party failure that quotes the key carries "
+            "it straight to stderr and into the report -- which is exactly "
+            "what this tool's own doctrine forbids."
+        ),
+    ),
+    Mutation(
+        name="M19_the_malformed_account_guard_removed",
+        old="""    account = installation.get("account")
+    if account is not None and not isinstance(account, Mapping):
+        raise ApiError(
+            "the installation's 'account' field is not an object; the API "
+            f"response is malformed: {account!r}"
+        )
+    return {
+        "id": str(installation.get("id")) if installation.get("id") is not None else None,
+        "account": _account_login(installation) or None,""",
+        new="""    return {
+        "id": str(installation.get("id")) if installation.get("id") is not None else None,
+        "account": (installation.get("account") or {}).get("login"),""",
+        target_test=(
+            "test_an_installation_with_a_string_account_fails_closed_without_crashing"
+        ),
+        rationale=(
+            "A plain STRING where an OBJECT is expected is a malformed API "
+            "response. Reading it with .get() raises an unhandled "
+            "AttributeError -- exit 1 with a traceback -- instead of the "
+            "fail-closed ApiError the tool promises."
+        ),
+    ),
+    Mutation(
+        name="M20_the_token_mode_fabricates_the_installation_account",
+        old="""        installation = _unverified_installation_metadata(
+            installation_id=wanted_id,
+            source="installation-token",
+        )""",
+        new="""        installation = _unverified_installation_metadata(
+            installation_id=wanted_id,
+            source="installation-token",
+        )
+        installation["account"] = universe.org""",
+        target_test=(
+            "test_the_token_mode_reports_the_installation_as_given_and_never_as_observed"
+        ),
+        rationale=(
+            "An installation token proves neither which installation nor "
+            "which account it belongs to. Filling the account in from the "
+            "registry asserts what the tool never checked -- the finding a "
+            "coverage report is read for."
+        ),
+    ),
+    Mutation(
+        name="M21_the_trusted_audit_code_checked_out_from_the_pr_head",
+        old="""          ref: ${{ github.event.pull_request.base.sha }}""",
+        new="""          ref: ${{ github.event.pull_request.head.sha }}""",
+        target_test=(
+            "test_the_pull_request_audit_runs_trusted_base_code_and_keeps_the_token_off_pr_code"
+        ),
+        rationale=(
+            "The audit must run the BASE ref's code on a pull_request. "
+            "Checking out the PR's head instead hands the owner-wide token to "
+            "exactly the code the PR is trying to change -- a pwn-request "
+            "shape."
+        ),
+        target_file=WORKFLOW_FILE,
+    ),
+    Mutation(
+        name="M22_the_token_hoisted_into_the_job_environment",
+        old="""jobs:
+  audit:
+    runs-on: ubuntu-24.04""",
+        new="""jobs:
+  audit:
+    env:
+      GH_TOKEN: ${{ steps.app-token.outputs.token }}
+    runs-on: ubuntu-24.04""",
+        target_test=(
+            "test_the_pull_request_audit_runs_trusted_base_code_and_keeps_the_token_off_pr_code"
+        ),
+        rationale=(
+            "A job-level GH_TOKEN puts the credential in the environment of "
+            "EVERY step -- including the steps that run the PR's own code. "
+            "The token belongs to the audit step and to nothing else."
+        ),
+        target_file=WORKFLOW_FILE,
+    ),
 ]
 
 
@@ -480,10 +622,31 @@ def _apply_mutation(mutation: Mutation, original: str) -> str:
     return mutated
 
 
+def _read_source(path: Path) -> tuple[str, bool]:
+    """(text, uses_crlf) for a source file.
+
+    The text is normalised to ``\\n`` so a mutation anchor is line-ending
+    independent; the flag records the file's OWN convention so the restore
+    can put it back exactly as it was. Reading with ``read_text`` and
+    writing back with ``write_text`` silently rewrote a CRLF file as LF --
+    the restore was not byte-exact, and the working tree's line endings
+    changed under the harness.
+    """
+    raw = path.read_bytes().decode("utf-8")
+    return raw.replace("\r\n", "\n"), "\r\n" in raw
+
+
+def _write_source(path: Path, text: str, crlf: bool) -> None:
+    """Write a source file back in its own line-ending convention."""
+    if crlf:
+        text = text.replace("\n", "\r\n")
+    path.write_bytes(text.encode("utf-8"))
+
+
 def test_every_mutation_anchor_is_present():
     """A drifted anchor must be loud, not silently inert."""
     for mutation in MUTATIONS:
-        original = mutation.path.read_text(encoding="utf-8")
+        original, _crlf = _read_source(mutation.path)
         assert mutation.old in original, (
             f"mutation {mutation.name}: anchor not found in "
             f"{mutation.path.name} -- the source drifted"
@@ -499,7 +662,8 @@ def test_the_mutation_kills_the_named_test(mutation: Mutation) -> None:
     last restore, over every target test."""
     node_id = _node_id(mutation.target_test)
     target = mutation.path
-    original = target.read_text(encoding="utf-8")
+    original, crlf = _read_source(target)
+    original_bytes = target.read_bytes()
 
     with _MUTATION_LOCK, _file_lock(_LOCK_PATH):
         # 1. GREEN BEFORE (batched over every target test)
@@ -511,7 +675,7 @@ def test_the_mutation_kills_the_named_test(mutation: Mutation) -> None:
 
         mutated = _apply_mutation(mutation, original)
         try:
-            target.write_text(mutated, encoding="utf-8")
+            _write_source(target, mutated, crlf)
 
             # 2. RED AFTER -- the NAMED test must die
             after = _run_pytest([node_id])
@@ -524,10 +688,12 @@ def test_the_mutation_kills_the_named_test(mutation: Mutation) -> None:
                 f"{mutation.target_test}\n{after.stdout[-4000:]}\n{after.stderr[-2000:]}"
             )
         finally:
-            # 3. restore -- byte-exact
-            target.write_text(original, encoding="utf-8")
-            restored = target.read_text(encoding="utf-8")
-            assert restored == original, f"{mutation.name}: the restore was not byte-exact"
+            # 3. restore -- byte-exact, line endings included
+            _write_source(target, original, crlf)
+            restored = target.read_bytes()
+            assert restored == original_bytes, (
+                f"{mutation.name}: the restore was not byte-exact"
+            )
 
 
 def test_the_tool_source_is_intact_after_the_mutation_suite():
