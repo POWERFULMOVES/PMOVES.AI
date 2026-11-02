@@ -1565,7 +1565,7 @@ services:
     - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY:-}
     - PMOVES_NETWORKS=pmoves_api,pmoves_bus,pmoves_external
     ports:
-    - "${NODE_REGISTRY_BIND:-0.0.0.0}:8115:8115"
+    - "${NODE_REGISTRY_BIND:-0.0.0.0}:${NODE_REGISTRY_PORT:-8115}:8115"
     depends_on:
       nats:
         condition: service_healthy
@@ -1609,7 +1609,7 @@ services:
     - MODEL_REGISTRY_URL=${MODEL_REGISTRY_URL:-http://model-registry:8110}
     - PMOVES_NETWORKS=pmoves_api,pmoves_bus,pmoves_external
     ports:
-    - "${CLIP_EMBED_BIND:-0.0.0.0}:8109:8109"
+    - "${CLIP_EMBED_BIND:-0.0.0.0}:${CLIP_EMBED_PORT:-8109}:8109"
     # networks: clip-embed carried PMOVES_NETWORKS but NO networks: key, so it
     # landed on the compose DEFAULT network while self-reporting api+bus.
     # Not cosmetic: MODEL_REGISTRY_URL is the SERVICE NAME model-registry:8110,
@@ -1646,7 +1646,7 @@ services:
     - MODEL_REGISTRY_URL=${MODEL_REGISTRY_URL:-http://model-registry:8110}
     - PMOVES_NETWORKS=pmoves_api,pmoves_bus,pmoves_external
     ports:
-    - "${CLAP_EMBED_BIND:-0.0.0.0}:8108:8108"
+    - "${CLAP_EMBED_BIND:-0.0.0.0}:${CLAP_EMBED_PORT:-8108}:8108"
     restart: unless-stopped
     depends_on:
       nats:

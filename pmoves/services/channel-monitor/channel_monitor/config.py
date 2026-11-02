@@ -90,8 +90,8 @@ def ensure_config(path: Path) -> Dict[str, Any]:
     """
     path.parent.mkdir(parents=True, exist_ok=True)
     if not path.exists():
-        path.write_text(json.dumps(DEFAULT_CONFIG, indent=2))
-    with path.open("r") as handle:
+        path.write_text(json.dumps(DEFAULT_CONFIG, indent=2), encoding="utf-8")
+    with path.open("r", encoding="utf-8") as handle:
         loaded = json.load(handle)
     merged = DEFAULT_CONFIG.copy()
     merged.update(loaded)
@@ -122,7 +122,7 @@ def save_config(path: Path, config: Dict[str, Any]) -> None:
     Persist configuration to disk.
     """
     path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w") as handle:
+    with path.open("w", encoding="utf-8") as handle:
         json.dump(config, handle, indent=2)
 
 
