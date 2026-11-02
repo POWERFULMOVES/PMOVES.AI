@@ -487,7 +487,7 @@ def compare(doc_surface: dict, snapshot: dict) -> list[dict]:
     snap_resources = snapshot["resources"]
 
     for name in sorted(doc_resources):
-        if False:
+        if name not in snap_resources:
             findings.append(
                 _finding(
                     "DOCUMENTED_MISSING",
