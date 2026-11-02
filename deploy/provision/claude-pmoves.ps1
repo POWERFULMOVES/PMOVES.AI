@@ -92,6 +92,23 @@ $__pmoves_backend_parse_next = $false
 $root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $envf = if ($env:PMOVES_ENV_SHARED) { $env:PMOVES_ENV_SHARED } else { Join-Path $root 'pmoves\env.shared' }
 
+# Windows siblings of the bash fragments the POSIX launchers source
+# (pm-cipher-token-bind.sh, pm-ca-bundle.sh, pm-brv-check.sh). Same contracts;
+# each header lists its deliberate Windows differences. A missing file costs
+# the feature, never the session -- the call sites check Get-Command.
+foreach ($__pm_helper in @('pm-cipher-token-bind.ps1', 'pm-ca-bundle.ps1', 'pm-brv-check.ps1')) {
+    $__pm_helper_path = Join-Path $root "pmoves\scripts\$__pm_helper"
+    if (Test-Path -LiteralPath $__pm_helper_path) { . $__pm_helper_path }
+    else { Write-Warning "[claude-pmoves] pmoves\scripts\$__pm_helper missing -- that check is skipped." }
+}
+
+# An explicit per-agent cipher token in the CALLER's env must survive
+# env.shared, which carries the node bootstrap bearer and is loaded next.
+# Mirrors PM_CIPHER_PRE_ENV_TOKEN in deploy/provision/claude-pmoves.sh: the
+# fragment's "explicit env token wins" rule has to hold for the FINAL session,
+# not only until env.shared overwrites it. Case-sensitive, as the bash glob is.
+$script:PmCipherPreEnvToken = if ("$env:CIPHER_API_TOKEN" -clike 'cipher_*') { $env:CIPHER_API_TOKEN } else { $null }
+
 # ---------------------------------------------------------------------------
 # Interpreter discovery — the Windows half of pmoves/scripts/pm-python.sh.
 #
@@ -393,6 +410,13 @@ if (Test-Path $envf) {
 # faults with different remedies, and a bare boolean would merge them.
 [Environment]::SetEnvironmentVariable('PMOVES_LAUNCHER_SESSION', $script:launcherSession, 'Process')
 
+# Host TLS -- after env.shared, before any python MCP server is spawned. Prints
+# only when a configured CA path is unreadable (see pm-ca-bundle.ps1).
+if (Get-Command Invoke-PmCaBundleNormalize -ErrorAction SilentlyContinue) {
+    $__pm_ca_line = Invoke-PmCaBundleNormalize
+    if ($__pm_ca_line) { Write-Warning "[claude-pmoves] $__pm_ca_line" }
+}
+
 function Test-PmovesRosterHasBarePlaceholder {
     <#
       Does this roster hold a reference that would be SENT as literal text?
@@ -595,6 +619,18 @@ if (Test-Path -LiteralPath $identTool) {
                 # Silence on a skip is indistinguishable from a healthy carry,
                 # which is the defect the fragment was written to end.
                 # ---------------------------------------------------------
+                # CIPHER TOKEN BIND -- before the carry measurement, so it
+                # reports the post-bind reality, and after env.shared, which
+                # would otherwise overwrite the bind with the node bootstrap
+                # bearer. Keyed on the signing-card agentId, not the registry
+                # key: the token store is CIPHER_TOKEN_<AGENT_ID>. Measured on
+                # Z890 2026-11-02 without this: writes-land-as=bootstrap.
+                # ---------------------------------------------------------
+                if ($script:PmCipherPreEnvToken) { $env:CIPHER_API_TOKEN = $script:PmCipherPreEnvToken }
+                if (Get-Command Invoke-PmCipherTokenBind -ErrorAction SilentlyContinue) {
+                    $bind = Invoke-PmCipherTokenBind -Root $root -Agent $ident['PMOVES_CIPHER_AGENT_ID']
+                    Write-Host "[claude-pmoves] $($bind.Line)"
+                }
                 $carryLine = ''
                 $carryTool = Join-Path $root 'pmoves/tools/cipher_identity.py'
                 if (-not (Test-Path -LiteralPath $carryTool)) {
@@ -697,6 +733,17 @@ if (Test-Path -LiteralPath $identTool) {
         } else {
             Write-Warning '[claude-pmoves] node identity: resolver failed; launching without it.'
         }
+    }
+}
+# brv (ByteRover CLI) -- parity with pm_brv_check in claude-pmoves.sh. Never
+# fails the launch; a missing brv is told to the session so it does not report
+# an empty context tree as "nothing curated yet".
+if (Get-Command Invoke-PmBrvCheck -ErrorAction SilentlyContinue) {
+    $brv = Invoke-PmBrvCheck
+    if ($brv.Ok) { Write-Host "[claude-pmoves] $($brv.Line)" } else { Write-Warning "[claude-pmoves] $($brv.Line)" }
+    if ($brv.Prompt) {
+        if ($identityArgs.Count -ge 2) { $identityArgs[1] = "$($identityArgs[1]) $($brv.Prompt)" }
+        else { $identityArgs = @('--append-system-prompt', $brv.Prompt) }
     }
 }
 $roster = Join-Path $root '.claude\mcp.json'
