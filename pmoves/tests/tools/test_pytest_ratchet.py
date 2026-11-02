@@ -5,7 +5,9 @@ the replacement should not be the one untested thing in the repo. These cover
 the comparison logic that decides whether CI goes red — pure functions only, no
 pytest subprocess and no network.
 """
+import ast
 import io
+import re
 import sys
 import tempfile
 import unittest
@@ -204,6 +206,49 @@ class TestDeclaredSlowFiles(unittest.TestCase):
                     pytest_ratchet.GROUP_TIMEOUT_SECONDS + allowance,
                     f"{key} does not carry the allowance for {path}",
                 )
+
+    def test_a_declared_mutation_count_is_the_measured_one(self):
+        """A mutation count in the config's WHY block is a CLAIM.
+
+        MEASURED 2026-11-02, on the review of this pull request: the config
+        said the encoding harness "has 7 mutations" and "costs 21 pytest
+        startups", and the harness defines FIFTEEN -- so the basis was
+        fiction. The allowance was never sized on that arithmetic, but the
+        block is what a future editor re-reads when re-sizing the budget,
+        and a file whose own footer says "a number in prose is a claim"
+        cannot hold one.
+        """
+        entries = pytest_ratchet.load_slow_file_entries()
+        checked = 0
+        for path, (_seconds, reason) in entries.items():
+            match = re.search(r"(\d+)\s+mutations?\b", reason)
+            if match is None:
+                continue
+            harness = pytest_ratchet.REPO_ROOT / path
+            self.assertTrue(harness.is_file(), f"{path} does not exist")
+            measured = self._count_mutations(harness)
+            self.assertEqual(
+                int(match.group(1)),
+                measured,
+                f"{path}'s config reason claims {match.group(1)} mutations; "
+                f"the file defines {measured}",
+            )
+            checked += 1
+        self.assertGreater(checked, 0, "no declared entry states a mutation count")
+
+    @staticmethod
+    def _count_mutations(path: Path) -> int:
+        """Count `Mutation(...)` entries by AST -- the same shape the
+        lane's own asset-count gate uses."""
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        total = 0
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Call):
+                func = node.func
+                name = getattr(func, "id", None) or getattr(func, "attr", None)
+                if name == "Mutation":
+                    total += 1
+        return total
 
     def test_a_missing_config_is_an_empty_mapping_not_a_crash(self):
         missing = Path("does") / "not" / "exist.yaml"

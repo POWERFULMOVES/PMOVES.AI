@@ -180,13 +180,25 @@ class FakeGitHub:
         self.truncated_total = truncated_total
         self.installation_token = installation_token or self.INSTALLATION_TOKEN
         self.calls: list[tuple[str, str, dict[str, str]]] = []
+        #: The BODY of every request, in order. The transport carries it (a
+        #: POST's body used to be built and then dropped), so a test can
+        #: assert that what the caller asked to send is what arrived.
+        self.bodies: list[bytes | None] = []
         self.served: dict[str, object] = {}
 
     def _path_of(self, url: str) -> str:
         return urllib.parse.urlsplit(url).path
 
-    def __call__(self, method: str, url: str, headers, timeout: int):
+    def __call__(
+        self,
+        method: str,
+        url: str,
+        headers,
+        timeout: int,
+        data: bytes | None = None,
+    ):
         self.calls.append((method, url, dict(headers)))
+        self.bodies.append(data)
         path = self._path_of(url)
         for prefix, status in self.fail_paths.items():
             if path.startswith(prefix):
@@ -251,6 +263,68 @@ def _registry_expectations() -> tuple[set[str], int, dict[str, str]]:
     excluded = dict(raw.get("_excluded", {}))
     members = forks | first_party
     return members, len(forks) + len(first_party), excluded
+
+
+# --------------------------------------------------------------------------
+# the transport: a body that is built must be SENT
+# --------------------------------------------------------------------------
+
+
+def test_a_post_body_reaches_the_transport():
+    """A body that is built and then dropped is a body that was never sent.
+
+    MEASURED 2026-11-02, on the review of this pull request: `post()`
+    serialised its body and set `Content-Type: application/json`, and then
+    called a transport that took NO body -- so the body never reached
+    GitHub. The only caller passes no body today, so the tool was correct BY
+    COINCIDENCE. The dangerous day is the day someone narrows the minted
+    installation token's permissions: the body would be silently discarded,
+    GitHub would mint the default OWNER-WIDE token, and the audit would
+    stay green while the credential quietly grew.
+
+    A parameter that is accepted and ignored is not a stub, it is a landmine.
+    So the transport carries the body, and this test drives the real client
+    to prove that what the caller asked to send is what arrives.
+    """
+    fake = FakeGitHub()
+    client = audit.GitHubClient("token", fetch=fake)
+
+    client.post(
+        "/app/installations/1/access_tokens",
+        body={"permissions": {"contents": "read"}},
+    )
+
+    assert fake.bodies, "no request was made"
+    assert fake.bodies[-1] is not None, (
+        "the POST body was DROPPED -- it was built and never handed to the "
+        "transport"
+    )
+    assert json.loads(fake.bodies[-1].decode("utf-8")) == {
+        "permissions": {"contents": "read"}
+    }, "the body that arrived is not the body that was asked for"
+    assert fake.calls[-1][2].get("Content-Type") == "application/json", (
+        "a JSON body must say that it is JSON"
+    )
+
+
+def test_a_request_without_a_body_sends_none():
+    """The other half of the contract: a request with no body must NOT
+    acquire one. A transport that invents a body is as wrong as one that
+    drops it."""
+    fake = FakeGitHub()
+    client = audit.GitHubClient("token", fetch=fake)
+
+    client.get("/app/installations") if hasattr(client, "get") else client.request(
+        "/app/installations"
+    )
+
+    assert fake.bodies, "no request was made"
+    assert fake.bodies[-1] is None, (
+        f"a request with no body must send no body, got {fake.bodies[-1]!r}"
+    )
+    assert "Content-Type" not in fake.calls[-1][2], (
+        "a request with no body must not claim a content type"
+    )
 
 
 # --------------------------------------------------------------------------
@@ -1174,7 +1248,6 @@ def test_the_token_is_minted_only_on_the_default_branch_and_never_on_a_pull_requ
     mint_with = mint.get("with") or {}
     assert mint_with.get("client-id") == "${{ secrets.GH_APP_CLIENT_ID }}"
     assert mint_with.get("private-key") == "${{ secrets.GH_APP_SEC }}"
-
     # (3) The audit step is gated the same way, and runs the code that is
     #     actually deployed -- the checked-out tree.
     audit_steps = [
@@ -1249,6 +1322,75 @@ def test_the_token_is_minted_only_on_the_default_branch_and_never_on_a_pull_requ
     assert (audit_step.get("env") or {}).get("GH_TOKEN") == (
         "${{ steps.app-token.outputs.token }}"
     )
+
+
+def test_the_mode_step_precedes_every_step_that_is_gated_on_it():
+    """A gate that reads `steps.<id>.outputs.<name>` resolves to the EMPTY
+    STRING when the step it names has not run yet -- and `'' == 'audit'` is
+    false.
+
+    MEASURED 2026-11-02, on the review of this pull request: the mode step
+    sat BELOW the mint, so the mint's own gate read an empty output and
+    SKIPPED the mint on EVERY event -- including the scheduled
+    default-branch run that is the whole point of the redesign. The audit
+    step's gate was fine (it comes after the mode step), so the audit ran
+    with an EMPTY token and would have died 401. On a pull_request nobody
+    noticed, because there the mode is `tests` and the audit is skipped
+    anyway: the broken path was invisible to CI.
+
+    The test that existed asserted the gate's STRING. A string cannot see
+    the order, so it could not catch this -- it was a test that asserted the
+    SHAPE of the gate while the gate was wired to nothing. This one asserts
+    the ORDER of the PARSED steps.
+    """
+    yaml = pytest.importorskip("yaml")
+    assert WORKFLOW_PATH.exists(), "the audit workflow must exist"
+    workflow = yaml.safe_load(WORKFLOW_PATH.read_text(encoding="utf-8"))
+
+    steps = (workflow.get("jobs", {}).get("audit", {}) or {}).get("steps", []) or []
+    assert steps, "the audit job must have steps"
+
+    def _index_of(predicate) -> int:
+        for index, step in enumerate(steps):
+            if predicate(step or {}):
+                return index
+        raise AssertionError("no step matched")
+
+    # EXACTLY ONE step may compute the mode. The gates name it `mode`, so a
+    # second step with that id -- or a step that computes it under another
+    # name -- leaves the gate pointing at nothing.
+    mode_indexes = [
+        index
+        for index, step in enumerate(steps)
+        if str((step or {}).get("id") or "") == "mode"
+    ]
+    assert len(mode_indexes) == 1, (
+        f"exactly one step may compute the mode, and the gates name it as "
+        f"`mode`; found {mode_indexes}"
+    )
+    mode_index = mode_indexes[0]
+    mint_index = _index_of(
+        lambda s: "create-github-app-token" in str(s.get("uses") or "")
+    )
+
+    assert mode_index < mint_index, (
+        f"the mode step must come BEFORE the mint: GitHub Actions populates "
+        f"the `steps` context as steps execute, so a gate that names a LATER "
+        f"step reads an EMPTY output and the gate is false on every event. "
+        f"mode is at index {mode_index}, the mint at {mint_index}"
+    )
+
+    # Every step gated on the mode must come after the mode step -- not just
+    # the mint. A step that is gated on the mode AND consumes the token is
+    # the dangerous one: it would run with an empty credential.
+    for index, step in enumerate(steps):
+        condition = str((step or {}).get("if") or "")
+        if "steps.mode.outputs.mode" not in condition:
+            continue
+        assert index > mode_index, (
+            f"step {index} is gated on the mode but sits at or before the "
+            f"mode step (index {mode_index}): {condition!r}"
+        )
 
 
 def _write_gitmodules(path: Path, sections: list[tuple[str, str]]) -> Path:

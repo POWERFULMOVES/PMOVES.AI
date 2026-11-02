@@ -215,12 +215,37 @@ class HttpResponse:
     body: bytes
 
 
-Fetch = Callable[[str, str, Mapping[str, str], int], HttpResponse]
+Fetch = Callable[[str, str, Mapping[str, str], int, bytes | None], HttpResponse]
 
 
-def _http_fetch(method: str, url: str, headers: Mapping[str, str], timeout: int) -> HttpResponse:
-    """Real transport. The only place this tool touches the network."""
-    request = urllib.request.Request(url, method=method, headers=dict(headers))
+def _http_fetch(
+    method: str,
+    url: str,
+    headers: Mapping[str, str],
+    timeout: int,
+    data: bytes | None = None,
+) -> HttpResponse:
+    """Real transport. The only place this tool touches the network.
+
+    `data` is the request BODY, and it is passed to `urllib.request.Request`
+    so that a POST's body actually reaches GitHub.
+
+    MEASURED 2026-11-02, on the review of this pull request: this function
+    used to take no body, and the caller built one, set a Content-Type for
+    it, and then dropped it on the floor -- the body was never handed to
+    `Request`, so a POST with a body sent NO body. The only caller passes no
+    body today, so the tool was correct BY COINCIDENCE. The dangerous day is
+    the day someone passes a body to narrow the minted installation token's
+    permissions: the body would be silently discarded, GitHub would mint the
+    default OWNER-WIDE token, and the audit would stay green while the
+    credential quietly grew. A parameter that is accepted and ignored is not
+    a stub, it is a landmine; so the transport carries the body, and a
+    transport that cannot accept one now fails loudly rather than dropping
+    it.
+    """
+    request = urllib.request.Request(
+        url, data=data, method=method, headers=dict(headers)
+    )
     try:
         with urllib.request.urlopen(request, timeout=timeout) as response:
             return HttpResponse(int(response.status), dict(response.headers), response.read())
@@ -284,7 +309,12 @@ class GitHubClient:
     def post(
         self, path: str, body: Mapping[str, Any] | None = None
     ) -> tuple[int, Any, Mapping[str, str]]:
-        """POST one resource. Same contract as :meth:`request`."""
+        """POST one resource. Same contract as :meth:`request`.
+
+        A `body` is SERIALISED AND SENT: it reaches GitHub as the request
+        body, with `Content-Type: application/json`. It used to be built,
+        given a Content-Type, and then dropped -- see `_http_fetch`.
+        """
         return self._request("POST", path, body=body)
 
     def _request(
@@ -305,7 +335,7 @@ class GitHubClient:
         if body is not None:
             data = json.dumps(body).encode("utf-8")
             headers["Content-Type"] = "application/json"
-        response = self._fetch(method, url, headers, self._timeout)
+        response = self._fetch(method, url, headers, self._timeout, data)
         self.endpoints.append(f"{method} {path}")
         payload: Any = None
         if response.body:

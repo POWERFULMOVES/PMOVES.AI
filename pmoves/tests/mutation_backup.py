@@ -129,9 +129,18 @@ def _key_for(repo_root: Path, target: Path) -> str:
 
 
 def _target_from_key(repo_root: Path, key: str) -> Path:
-    """The inverse of :func:`_key_for`."""
-    kind, _, payload = key.partition("-")
-    path = unquote(payload)
+    """The inverse of :func:`_key_for`.
+
+    The prefix is read at a FIXED WIDTH -- one letter, one separator, then
+    the payload -- rather than by hunting for the first hyphen. The payload
+    is percent-encoded, and percent-encoding leaves ``-`` alone, so a path
+    like ``pmoves/mk/yt-cookies.mk`` carries hyphens of its own. Hunting for
+    a separator would have to know which one comes first; a fixed width does
+    not have to know anything.
+    """
+    if len(key) < 3 or key[1] != "-":
+        raise ValueError(f"not a backup key: {key!r}")
+    kind, path = key[0], unquote(key[2:])
     return Path(repo_root) / path if kind == "R" else Path(path)
 
 
@@ -247,7 +256,15 @@ def restore_outstanding(repo_root: Path) -> list[str]:
 
 
 def _restore_one(backup: Path, target: Path) -> list[str]:
-    """Restore one target from its backup. The caller holds its lock."""
+    """Restore one target from its backup. The caller holds its lock.
+
+    The backup is removed ONLY when the tree is actually back to its pristine
+    state: either the restore happened, or the target already held the
+    pristine bytes. If the target cannot be read or does not exist, the
+    backup is LEFT ALONE -- it is the only copy of the pristine source, and
+    destroying it while the tree stays mutated turns a recoverable crash into
+    an unrecoverable one.
+    """
     try:
         pristine = backup.read_bytes()
     except OSError:
@@ -255,9 +272,14 @@ def _restore_one(backup: Path, target: Path) -> list[str]:
         # tree may still hold a mutation, and the next session must try
         # again. Silently dropping it would lose the only copy.
         return []
-    restored: list[str] = []
-    if target.is_file() and target.read_bytes() != pristine:
-        target.write_bytes(pristine)
-        restored.append(str(target))
+    if not target.is_file():
+        # The target is gone. The backup may be the only copy of it, so it
+        # stays until a session can put it back.
+        return []
+    if target.read_bytes() == pristine:
+        # Already pristine: the restore happened, or never needed to.
+        backup.unlink(missing_ok=True)
+        return []
+    target.write_bytes(pristine)
     backup.unlink(missing_ok=True)
-    return restored
+    return [str(target)]

@@ -116,6 +116,78 @@ def test_the_restore_is_skipped_while_a_live_harness_owns_the_lock(tmp_path, mon
         mutation_backup.clear_backup(REPO_ROOT, tool)
 
 
+def test_a_hyphenated_target_path_round_trips(tmp_path):
+    """A path with a hyphen of its own must survive the key round trip.
+
+    The backup key is percent-encoded, and percent-encoding leaves ``-``
+    alone -- so a target like ``pmoves/mk/yt-cookies.mk`` carries hyphens
+    that are NOT separators. The prefix is therefore read at a FIXED WIDTH
+    rather than by hunting for a separator, and this test exercises the
+    round trip with a hyphenated path rather than with ``tool.py``.
+
+    MEASURED 2026-11-02, on the review of this pull request: the key was
+    originally split with ``partition("-")``, which hunts for the FIRST
+    hyphen. The first hyphen of ``R-pmoves%2Fmk%2Fyt-cookies.mk`` happens to
+    be the prefix separator, so the split was right -- but only by luck, and
+    only for as long as the prefix is one letter wide. The fixed-width parse
+    removes the question, and this test pins the round trip.
+    """
+    tool = tmp_path / "yt-cookies.mk"
+    tool.write_bytes(b"pristine bytes")
+    path = mutation_backup.write_backup(REPO_ROOT, tool, b"pristine bytes")
+    try:
+        key = path.name[: -len(".mutation-backup")]
+        # A target OUTSIDE the checkout gets the "A-" (absolute) key.
+        assert key.startswith("A-"), key
+        assert "-" in key[2:], "the payload must carry the hyphen"
+        assert key[0] == "A"
+        assert mutation_backup._target_from_key(REPO_ROOT, key) == tool
+    finally:
+        mutation_backup.clear_backup(REPO_ROOT, tool)
+
+    # And the "R-" (relative) key, with a hyphen in the path too.
+    checkout = tmp_path / "checkout"
+    (checkout / "mk").mkdir(parents=True)
+    inside = checkout / "mk" / "yt-cookies.mk"
+    inside.write_bytes(b"pristine bytes")
+    path = mutation_backup.write_backup(checkout, inside, b"pristine bytes")
+    try:
+        key = path.name[: -len(".mutation-backup")]
+        assert key.startswith("R-"), key
+        assert key[2:] == "mk%2Fyt-cookies.mk", key
+        assert mutation_backup._target_from_key(checkout, key) == inside
+    finally:
+        mutation_backup.clear_backup(checkout, inside)
+
+
+def test_a_backup_whose_target_is_gone_is_not_destroyed(tmp_path):
+    """The backup is the ONLY copy of the pristine source.
+
+    If the target cannot be found, the restore could not happen -- and
+    deleting the backup anyway turns a recoverable crash into an
+    unrecoverable one: the tree stays mutated and the pristine bytes are
+    gone. The backup must survive, so a later session can still put it back.
+
+    MEASURED 2026-11-02, on the review of this pull request: the backup was
+    removed unconditionally after a successful read, so a restore that found
+    no target destroyed the only copy of the pristine file and repaired
+    nothing.
+    """
+    tool = tmp_path / "tool.py"
+    tool.write_bytes(b"pristine bytes")
+    path = mutation_backup.write_backup(REPO_ROOT, tool, b"pristine bytes")
+    tool.unlink()
+    try:
+        restored = mutation_backup.restore_outstanding(REPO_ROOT)
+        assert restored == [], restored
+        assert path.exists(), (
+            "the backup was destroyed even though the restore did nothing -- "
+            "it is the only copy of the pristine source"
+        )
+    finally:
+        path.unlink(missing_ok=True)
+
+
 def test_the_conftest_restores_a_leftover_mutation_at_collection(tmp_path):
     """END TO END, through the real wiring.
 

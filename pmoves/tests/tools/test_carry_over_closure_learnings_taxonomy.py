@@ -250,3 +250,90 @@ def test_the_shipped_asset_counts_are_the_measured_ones():
         f"the tree has {measured_mutations}"
     )
 
+
+# ---------------------------------------------------------------------------
+# Every PER-SUITE count in the table is a measurement too, so it gets the
+# same gate. F7i covers the TOTAL; the F-rows below state what each suite
+# contributes, and a stale one is a claim nobody checked.
+#
+# MEASURED 2026-11-02, on the review of this pull request: F3d said "28
+# behavioural tests + 22 mutation kills" for the gh-app suite while the tree
+# held 29 and 22. The total was right, so the F7i gate passed and the stale
+# row sat there. The row is now recomputed, and the F-rows that state a
+# count are checked against the AST measurement of the files they cite.
+# ---------------------------------------------------------------------------
+
+_F_ROW = re.compile(
+    r"^\|\s*(?P<label>F\d+[a-z]?)\s*\|(?P<body>[^|]*)\|(?P<files>[^|]*)\|\s*$",
+    re.MULTILINE,
+)
+
+_STATED_TESTS = re.compile(r"(\d+)\s+behavioural test")
+_STATED_MUTATIONS = re.compile(r"(\d+)\s+mutation kill")
+
+
+def test_every_per_suite_count_in_the_lesson_table_is_the_measured_one():
+    """A row that states a per-suite count is a MEASUREMENT.
+
+    The count is recomputed by AST from the files the row cites, so a suite
+    that grew -- or a row that names the wrong suite -- fails the gate
+    instead of sitting there as a stale claim.
+    """
+    text = LEARNINGS.read_text(encoding="utf-8")
+
+    checked = 0
+    for match in _F_ROW.finditer(text):
+        label = match.group("label")
+        body = match.group("body")
+        files_cell = match.group("files")
+        stated_tests = _STATED_TESTS.search(body)
+        stated_mutations = _STATED_MUTATIONS.search(body)
+        if stated_tests is None and stated_mutations is None:
+            continue
+
+        cited = set(re.findall(r"`([^`]+\.py)`", files_cell))
+        if not cited:
+            # F7i states the TOTAL and cites directories; the total has its
+            # own gate above.
+            continue
+
+        # Which suite does this row talk about? Exactly one, or the row is
+        # ambiguous and the gate must say so rather than pick one.
+        matched = [
+            (suite, behavioural, harness)
+            for suite, behavioural, harness in LANE_SUITES
+            if behavioural in cited or harness in cited
+        ]
+        assert len(matched) == 1, (
+            f"{label} states a count and cites {sorted(cited)}, which matches "
+            f"{len(matched)} suites; the row must name exactly one"
+        )
+        suite, behavioural, harness = matched[0]
+
+        if stated_tests is not None:
+            assert behavioural in cited, (
+                f"{label} states {stated_tests.group(1)} behavioural tests but "
+                f"does not cite the suite's behavioural file {behavioural}"
+            )
+            measured = _count_test_functions(REPO_ROOT / behavioural)
+            assert int(stated_tests.group(1)) == measured, (
+                f"{label} claims {stated_tests.group(1)} behavioural tests for "
+                f"the {suite} suite; the tree has {measured}"
+            )
+        if stated_mutations is not None:
+            assert harness in cited, (
+                f"{label} states {stated_mutations.group(1)} mutation kills but "
+                f"does not cite the suite's harness {harness}"
+            )
+            measured = _count_mutations(REPO_ROOT / harness)
+            assert int(stated_mutations.group(1)) == measured, (
+                f"{label} claims {stated_mutations.group(1)} mutation kills for "
+                f"the {suite} suite; the tree has {measured}"
+            )
+        checked += 1
+
+    assert checked >= len(LANE_SUITES), (
+        f"only {checked} per-suite count rows were checked; every suite "
+        f"({len(LANE_SUITES)}) should have one"
+    )
+

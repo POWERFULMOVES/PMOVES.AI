@@ -211,7 +211,7 @@ strictest one available:
 | | What runs it | Credential in scope? |
 |---|---|---|
 | the **audit** | the **deployed** tool, from the default branch's checkout | yes — this step, and only this step |
-| the **instrument's tests** | the **PR head's** code, in the working tree | no — no token is minted on that event at all |
+| the **instrument's tests** | the **PR's** code — the checkout is the PR's **merge ref**, not its head — in the working tree | no — no token is minted on that event at all |
 
 Concretely:
 

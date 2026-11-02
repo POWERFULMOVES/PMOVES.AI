@@ -514,6 +514,46 @@ MUTATIONS: list[Mutation] = [
         ),
         target_file=WORKFLOW_FILE,
     ),
+    Mutation(
+        name="M23_the_post_body_dropped_before_it_reaches_the_transport",
+        old="response = self._fetch(method, url, headers, self._timeout, data)",
+        new="response = self._fetch(method, url, headers, self._timeout)",
+        target_test="test_a_post_body_reaches_the_transport",
+        rationale=(
+            "The body is serialised and given a Content-Type, and then handed "
+            "to a transport that takes no body -- so it is never sent. The "
+            "only caller passes no body today, so the tool is correct BY "
+            "COINCIDENCE; the dangerous day is the day someone narrows the "
+            "minted installation token's permissions, and the body is "
+            "silently discarded while GitHub mints the default owner-wide "
+            "token. A parameter that is accepted and ignored is a landmine, "
+            "not a stub."
+        ),
+    ),
+    Mutation(
+        name="M24_the_mint_gated_on_a_step_that_has_not_run_yet",
+        old="""        id: mode
+        env:
+          EVENT_NAME: ${{ github.event_name }}""",
+        new="""        id: mode-late
+        env:
+          EVENT_NAME: ${{ github.event_name }}""",
+        target_test="test_the_mode_step_precedes_every_step_that_is_gated_on_it",
+        rationale=(
+            "This reproduces the PRE-FIX BEHAVIOUR of the mint's gate, in one "
+            "line: the gate reads `steps.mode.outputs.mode`, and after this "
+            "rewrite no step is addressed as `mode` at all -- so the gate "
+            "resolves to the EMPTY STRING and the mint is SKIPPED on every "
+            "event, including the scheduled default-branch run that is the "
+            "whole point of the redesign. GitHub Actions populates the "
+            "`steps` context as steps execute, so a gate that names a step "
+            "that has not run yet is false, and a gate that names nothing is "
+            "false too. The ORDER test must catch it: the step that computes "
+            "the mode has to exist, under the name the gates use, and come "
+            "BEFORE every step gated on it."
+        ),
+        target_file=WORKFLOW_FILE,
+    ),
 ]
 
 

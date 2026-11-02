@@ -88,6 +88,76 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
+      # THE TRUST BOUNDARY, stated as a rule the workflow ENFORCES rather
+      # than as a convention a reader has to check.
+      #
+      # The token minted here is READ-ONLY but OWNER-WIDE: it can read every
+      # repo in the org, which the audit needs -- an uncovered repo cannot be
+      # told apart from one that does not exist without it. Handing an
+      # owner-wide token to PR code is a pwn-request shape, so the rule is:
+      #
+      #   THE TOKEN IS MINTED ONLY ON THE DEFAULT BRANCH.
+      #
+      # A pull_request event runs this workflow FILE from the PR's merge ref,
+      # so the file itself is PR-controlled: no amount of care inside it can
+      # make a PR's copy of the file safe to hand a credential to. The only
+      # ref whose workflow file is not PR-controlled is the default branch.
+      # So on a pull_request the job runs the instrument's own TESTS -- against
+      # the PR's code, with NO credential minted and NO token in scope -- and
+      # the coverage verdict is left to the scheduled run, which audits the
+      # DEPLOYED tree.
+      #
+      # That is also the honest answer to the question the audit asks: "is the
+      # App installed across the universe the DEPLOYED registry describes?" A
+      # pull request does not change the deployed tree.
+      #
+      # An earlier revision of this workflow took the BASE ref's copy of the
+      # tool instead, and it failed on the very pull request that introduced
+      # the tool: the base ref does not have the tool yet, so the audit step
+      # died with "can't open file .../trusted/pmoves/tools/...py" and the
+      # verdict was never produced. Not minting is both stronger and simpler.
+      #
+      # THIS STEP IS FIRST, AND THAT IS NOT COSMETIC
+      # -------------------------------------------
+      # GitHub Actions populates the `steps` context as steps EXECUTE. A step
+      # that has not run yet has NO outputs, so a gate that reads
+      # `steps.<id>.outputs.<name>` from a LATER step resolves to the EMPTY
+      # STRING, and `'' == 'audit'` is false.
+      #
+      # MEASURED 2026-11-02, on the review of this pull request: this step
+      # sat BELOW the mint, so the mint's own gate read an empty output and
+      # SKIPPED the mint on EVERY event -- including the scheduled
+      # default-branch run that is the whole point of the redesign. The audit
+      # step's gate was fine (it comes after this step), so the audit ran with
+      # an EMPTY token and would have died 401. On a pull_request nobody
+      # noticed, because there the mode is `tests` and the audit is skipped
+      # anyway -- the broken path was invisible to CI.
+      #
+      # The invariant is therefore: a mode-gated step is ALWAYS preceded by
+      # the step that computes the mode. It is pinned by a named test that
+      # asserts the ORDER of the parsed steps, because a test that compares
+      # the gate's STRING cannot see this at all.
+      - name: Decide whether this event may hold a credential
+        id: mode
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            echo "mode=tests" >> "$GITHUB_OUTPUT"
+            echo "::notice::pull_request: the App token is NOT minted. The coverage verdict is a fact about the DEPLOYED tree, which a pull request does not change; the scheduled run audits it. This job runs the instrument's own tests against the PR's code, with no credential in scope."
+            exit 0
+          fi
+          if [ "$REF" != "refs/heads/$DEFAULT_BRANCH" ]; then
+            echo "mode=tests" >> "$GITHUB_OUTPUT"
+            echo "::notice::ref '$REF' is not the default branch ('$DEFAULT_BRANCH'): the App token is NOT minted, because a workflow file on a non-default ref is not the deployed one."
+            exit 0
+          fi
+          echo "mode=audit" >> "$GITHUB_OUTPUT"
+          echo "::notice::Auditing the deployed tree on the default branch."
+
       # Mint INLINE in this job, NOT via the _app-token.yml reusable workflow.
       #
       # MEASURED 2026-11-01: the first run of this workflow called the
@@ -125,60 +195,11 @@ jobs:
       # ONE checkout, of the code this event is about. On a pull_request that
       # is the PR's own code -- which is exactly the code that must NEVER hold
       # a credential, so on that event the credential is never minted at all
-      # (see the mode step below). On the schedule it is the deployed tree.
+      # (see the mode step above). On the schedule it is the deployed tree.
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-
-      # THE TRUST BOUNDARY, stated as a rule the workflow ENFORCES rather
-      # than as a convention a reader has to check.
-      #
-      # The token minted here is READ-ONLY but OWNER-WIDE: it can read every
-      # repo in the org, which the audit needs -- an uncovered repo cannot be
-      # told apart from one that does not exist without it. Handing an
-      # owner-wide token to PR code is a pwn-request shape, so the rule is:
-      #
-      #   THE TOKEN IS MINTED ONLY ON THE DEFAULT BRANCH.
-      #
-      # A pull_request event runs this workflow FILE from the PR's merge ref,
-      # so the file itself is PR-controlled: no amount of care inside it can
-      # make a PR's copy of the file safe to hand a credential to. The only
-      # ref whose workflow file is not PR-controlled is the default branch.
-      # So on a pull_request the job runs the instrument's own TESTS -- against
-      # the PR's code, with NO credential minted and NO token in scope -- and
-      # the coverage verdict is left to the scheduled run, which audits the
-      # DEPLOYED tree.
-      #
-      # That is also the honest answer to the question the audit asks: "is the
-      # App installed across the universe the DEPLOYED registry describes?" A
-      # pull request does not change the deployed tree.
-      #
-      # An earlier revision of this workflow took the BASE ref's copy of the
-      # tool instead, and it failed on the very pull request that introduced
-      # the tool: the base ref does not have the tool yet, so the audit step
-      # died with "can't open file .../trusted/pmoves/tools/...py" and the
-      # verdict was never produced. Not minting is both stronger and simpler.
-      - name: Decide whether this event may hold a credential
-        id: mode
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          REF: ${{ github.ref }}
-          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
-        run: |
-          set -euo pipefail
-          if [ "$EVENT_NAME" = "pull_request" ]; then
-            echo "mode=tests" >> "$GITHUB_OUTPUT"
-            echo "::notice::pull_request: the App token is NOT minted. The coverage verdict is a fact about the DEPLOYED tree, which a pull request does not change; the scheduled run audits it. This job runs the instrument's own tests against the PR's code, with no credential in scope."
-            exit 0
-          fi
-          if [ "$REF" != "refs/heads/$DEFAULT_BRANCH" ]; then
-            echo "mode=tests" >> "$GITHUB_OUTPUT"
-            echo "::notice::ref '$REF' is not the default branch ('$DEFAULT_BRANCH'): the App token is NOT minted, because a workflow file on a non-default ref is not the deployed one."
-            exit 0
-          fi
-          echo "mode=audit" >> "$GITHUB_OUTPUT"
-          echo "::notice::Auditing the deployed tree on the default branch."
 
       - name: Set up Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0

@@ -74,9 +74,20 @@ slow_files:
     # WHY: a mutation-kill harness that proves a deadline works by WAITING IT
     # OUT runs its named test THREE times per mutation (GREEN before -> RED
     # under the mutation -> GREEN after the restore), and every one of those
-    # phases spawns a full `python -m pytest` child. This file has 7
-    # mutations, so it costs 21 pytest startups, and each child runs the
-    # whole encoding ratchet test file.
+    # phases spawns a full `python -m pytest` child. This file has 15
+    # mutations, so it costs 45 pytest startups, and each child runs ONE
+    # named test from the encoding ratchet suite (a node id, not the file).
+    #
+    # MEASURED 2026-11-02, on the review of this pull request: this block
+    # used to say "7 mutations" and "21 pytest startups" and claimed each
+    # child ran the whole test file. All three were WRONG -- the harness
+    # defines 15 mutations (M1..M15), so 3 phases each is 45 startups, and
+    # `_run_pytest` is handed a node id, so each child runs ONE named test.
+    # The ALLOWANCE itself was never sized on that arithmetic -- it is sized
+    # on the measured 102.6s below -- but a basis that is fiction is still a
+    # lie, and this is the block a future editor re-reads when re-sizing the
+    # budget. The mutation count is now GATED: the pytest-ratchet's suite
+    # recomputes it by AST from this file and fails if it drifts.
     #
     # MEASURED on this host (Windows, Python 3.12.10, pytest 9.1.1) with the
     # ratchet's OWN invocation (pmoves/tools/pytest_ratchet.py:run_pytest,

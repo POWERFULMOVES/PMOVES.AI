@@ -670,6 +670,116 @@ def test_a_stale_over_claiming_table_row_is_reported(tmp_path: Path) -> None:
     assert over_claims, report["findings"]
 
 
+def test_an_argument_after_a_known_command_resolves_to_that_command(tmp_path: Path) -> None:
+    """``mmx config set api-key`` is the command ``config set`` with the
+    ARGUMENT ``api-key`` -- and the CLI HAS ``config set``.
+
+    The tool cannot tell an argument from a dead command path: the CLI's
+    command list does not say which words are arguments. So the claim
+    resolves to the command the CLI has, and the over-claim names the whole
+    path the doc's table wrote -- which is TRUE, because the doc's table
+    names a path the CLI does not have.
+
+    The doc's contract settles it: column 1 of the command table is the
+    COMMAND PATH, and the arguments belong in the example column. The
+    shipped doc writes ``mmx config set``; the doc that predates it wrote
+    ``mmx config set api-key``.
+
+    MEASURED 2026-11-02, on the review of this pull request: this case was
+    an argument, and the resolver's own docstring promised it produced no
+    over-claim. The PROMISE was the defect -- the behaviour is pinned by M16
+    in pmoves/tests/tools/test_mmx_surface_parity_mutation_kill.py, so that
+    a stale over-claiming row cannot vanish into the live surface. This
+    test makes the behaviour EXPLICIT, so it is a decision on the record
+    rather than an incidental artefact of the historical doc fixture.
+    """
+    doc = tmp_path / "doc.md"
+    doc.write_text(
+        _doc_text(
+            resources={"config": ["export-schema", "set", "show"]},
+            tree={"config": ["export-schema", "set", "show"]},
+            rows=[("config", "set api-key")],
+        ),
+        encoding="utf-8",
+    )
+    payload = {
+        "mmx_version": "1.0.25",
+        "resources": {"config": ["export-schema", "set", "show"]},
+        "global_flags": ["--help", "--output"],
+    }
+    snapshot = _write(tmp_path / "snap.json", payload)
+
+    report = parity.check(doc, snapshot)
+
+    over_claims = [
+        finding
+        for finding in report["findings"]
+        if finding["kind"] == "DOCUMENTED_MISSING"
+        and finding.get("scope") == "command"
+        and finding.get("command") == "set api-key"
+    ]
+    assert over_claims, report["findings"]
+    # The finding says WHICH command the path lands on, so a reader can see
+    # that the CLI has `config set` and that the doc named a longer path.
+    assert over_claims[0]["resolved_command"] == "set", over_claims[0]
+    # And the doc's declared surface is the command the CLI HAS: the row
+    # resolved to `set`, so the doc is not claiming a command the CLI lacks
+    # as a DOCUMENTED command -- the drift is in the table's PATH.
+    assert not [
+        finding
+        for finding in report["findings"]
+        if finding.get("command") == "set" and finding.get("scope") == "command"
+    ], report["findings"]
+
+
+def test_the_longest_known_prefix_wins_the_walk(tmp_path: Path) -> None:
+    """The walk takes the LONGEST prefix the CLI HAS -- and the docstring says so.
+
+    MEASURED 2026-11-02, on the review of this pull request: the resolver's
+    docstring described the walk as taking the SHORTEST match. It does not.
+    The walk tries the longest prefix first and takes the first one the CLI
+    has. Prose about an algorithm is a CLAIM about that algorithm, so the
+    algorithm's exact sentence gets a test of its own.
+
+    This is the fixture that tells the two rules apart. When the CLI has BOTH
+    ``set`` and ``set api-key``, a claim of ``mmx config set api-key`` resolves
+    to ``set api-key`` -- the LONGEST -- and is NOT an over-claim. A
+    shortest-first walk would resolve it to ``set`` and report a drift that
+    does not exist: the doc names a path the CLI HAS, and calling that drift
+    is the false positive this gate must not produce.
+
+    The complementary case is already pinned by
+    ``test_an_argument_after_a_known_command_resolves_to_that_command``: when
+    the CLI has only ``set``, the same claim resolves to ``set`` and the
+    over-claim names the path the doc wrote.
+    """
+    doc = tmp_path / "doc.md"
+    doc.write_text(
+        _doc_text(
+            resources={"config": ["set", "set api-key"]},
+            tree={"config": ["set", "set api-key"]},
+            rows=[("config", "set api-key")],
+        ),
+        encoding="utf-8",
+    )
+    payload = {
+        "mmx_version": "1.0.25",
+        "resources": {"config": ["set", "set api-key"]},
+        "global_flags": ["--help", "--output"],
+    }
+    snapshot = _write(tmp_path / "snap.json", payload)
+
+    report = parity.check(doc, snapshot)
+
+    assert report["ok"], report["findings"]
+    assert not [
+        finding
+        for finding in report["findings"]
+        if finding["kind"] == "DOCUMENTED_MISSING"
+        and finding.get("scope") == "command"
+    ], report["findings"]
+
+
 def test_a_table_row_with_flags_still_resolves_to_the_full_command(tmp_path: Path) -> None:
     """Flags on a known command are not an over-claim.
 

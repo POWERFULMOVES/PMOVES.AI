@@ -286,10 +286,14 @@ def _leading_command_words(tokens: list[str]) -> list[str]:
 def _resolve_claim(tokens: list[str], known: dict[str, list[str]]) -> tuple[str, str, str | None]:
     """Resolve a claimed invocation into ``(resource, command, over_claim)``.
 
-    ``known`` is the snapshot's command map. It is used to tell a command path
-    from its arguments: ``mmx config set api-key`` claims the command
-    ``config set`` with ``api-key`` as an argument, while ``mmx config get``
-    claims ``config get``, which the CLI does not have.
+    ``known`` is the snapshot's command map: the commands the CLI actually has
+    under each resource. The walk takes the LONGEST prefix of the claim's
+    command words that the CLI HAS, and the words past it are left over.
+    ``mmx config set api-key`` walks ``set api-key`` (not a command) and then
+    ``set`` (a command the CLI HAS), so it resolves to ``set`` with
+    ``api-key`` left over; ``mmx config get`` matches NO known command at
+    all, so it resolves to itself and surfaces as an UNKNOWN claim -- a
+    different finding from an over-claim.
 
     Resolution never HIDES a drift: when no prefix of the claim matches a
     known command, the whole claim is reported as-is.
@@ -303,6 +307,42 @@ def _resolve_claim(tokens: list[str], known: dict[str, list[str]]) -> tuple[str,
     returned: a claim that carries FLAGS (``video task get --limit 5``)
     resolves to the full command it names, and flags are not part of the
     command path.
+
+    WHAT AN OVER-CLAIM DOES AND DOES NOT MEAN
+    ------------------------------------------
+    An over-claim says ONE thing: **the doc's table names a command path the
+    CLI does not have**. It is not a claim about the CLI's vocabulary -- the
+    CLI may well have the SHORTER command the claim resolved to. The
+    resolved command is reported alongside it, precisely so the finding can
+    say which command the path lands on.
+
+    That is why the doc's table contract settles it. Column 1 of the command
+    table is the COMMAND PATH, and the arguments belong in the example
+    column. The shipped doc writes ``mmx config set``; the doc that predates
+    it wrote ``mmx config set api-key``, where ``api-key`` is the key being
+    set -- and that row names a path the CLI does not have, so the finding
+    about it is TRUE.
+
+    The tool CANNOT tell that row from a stale one. The CLI's command list
+    does not say which words are arguments, and the walk does not need to
+    know: the LONGEST prefix the CLI HAS wins, and the words past it are
+    EITHER an argument or a dead command path. The tool reports, because in
+    both cases the finding it makes is true -- the doc's table names a path
+    the CLI does not have -- and because the fix is the same in both cases:
+    write the command path in column 1.
+
+    MEASURED 2026-11-02, on the review of this pull request: this docstring
+    used to promise that ``mmx config set api-key`` produced NO over-claim,
+    and the code reported one. The PROMISE was the thing that was wrong, not
+    the behaviour: the behaviour is what M16 in
+    pmoves/tests/tools/test_mmx_surface_parity_mutation_kill.py pins, because
+    the lane added it so that a stale over-claiming row could not vanish
+    into the live surface with no trace. The review's proposed rule -- report
+    an over-claim only when the resolved command is itself multi-word -- was
+    NOT adopted, because it would make M16's mutation SURVIVE: it re-opens
+    exactly the hole the lane closed, and it trades a true finding for a
+    false negative. The case is now pinned by a NAMED test rather than left
+    as an incidental artefact of the historical doc fixture.
     """
     resource = tokens[1]
     leading = _leading_command_words(tokens[2:])

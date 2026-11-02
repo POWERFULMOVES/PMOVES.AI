@@ -52,6 +52,8 @@ not allowed to become a gate that cannot fail.
   M16  a stale over-claiming table row is laundered into the live surface
   M17  the probe only fails closed on a MISSING binary, not on an
        unexecutable one
+  M18  the resolver's walk takes the SHORTEST known prefix instead of the
+       longest, which the resolver's docstring says it does not
 
 Run it directly to see the mutation kills in action:
 
@@ -341,6 +343,22 @@ MUTATIONS: list[Mutation] = [
             "application' error are OSError but not FileNotFoundError, so "
             "narrowing the handler to FileNotFoundError turns an "
             "unexecutable binary into a raw traceback."
+        ),
+    ),
+    Mutation(
+        name="M18_the_walk_takes_the_shortest_prefix",
+        target=PARITY_TOOL,
+        old="""    for length in range(len(leading), 0, -1):""",
+        new="""    for length in range(1, len(leading) + 1):""",
+        target_test="test_the_longest_known_prefix_wins_the_walk",
+        rationale=(
+            "The walk takes the LONGEST prefix the CLI HAS, and the resolver's "
+            "docstring says so. A shortest-first walk resolves a claim of "
+            "`mmx config set api-key` to `set` even when the CLI HAS "
+            "`set api-key`, and reports a drift that does not exist -- the "
+            "false positive this gate must never produce. The docstring's "
+            "sentence is a claim about the algorithm, so the algorithm gets "
+            "the test that pins it."
         ),
     ),
 ]
