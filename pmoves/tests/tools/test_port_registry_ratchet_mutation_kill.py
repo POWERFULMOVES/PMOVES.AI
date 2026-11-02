@@ -99,6 +99,8 @@ from pathlib import Path
 
 import pytest
 
+from pmoves.tests import mutation_backup
+
 REPO_ROOT = Path(__file__).resolve().parents[3]
 TOOL = REPO_ROOT / "pmoves" / "tools" / "port_registry_ratchet.py"
 TEST_FILE = REPO_ROOT / "pmoves" / "tests" / "tools" / "test_port_registry_ratchet.py"
@@ -457,8 +459,11 @@ def test_the_mutation_kills_the_named_test(mutation: Mutation) -> None:
     node_id = _node_id(mutation.target_test)
     target = mutation.path
     original = _read_source(target)
+    original_bytes = target.read_bytes()
 
-    with _MUTATION_LOCK, _file_lock(_LOCK_PATH):
+    with _MUTATION_LOCK, _file_lock(_LOCK_PATH), mutation_backup.file_lock(
+        mutation_backup.lock_path(REPO_ROOT, target)
+    ):
         # 1. GREEN BEFORE (batched over every target test)
         before = _green_before()[0]
         assert before.returncode == 0, (
@@ -467,6 +472,10 @@ def test_the_mutation_kills_the_named_test(mutation: Mutation) -> None:
         )
 
         mutated = _apply_mutation(mutation, original)
+        # The pristine bytes go on disk BEFORE the mutation, so a process
+        # that is KILLED mid-mutation cannot leave the tree dirty for the
+        # next session to inherit. See pmoves/tests/mutation_backup.py.
+        mutation_backup.write_backup(REPO_ROOT, target, original_bytes)
         try:
             _write_source(target, mutated)
 
@@ -488,6 +497,11 @@ def test_the_mutation_kills_the_named_test(mutation: Mutation) -> None:
             _write_source(target, original)
             restored = _read_source(target)
             assert restored == original, f"{mutation.name}: the restore was not byte-exact"
+            # The backup is dropped only AFTER a byte-exact restore. If the
+            # assert above fails, the backup is the only good copy of the
+            # pristine source, and the next session must still be able to
+            # restore it -- so it stays on disk.
+            mutation_backup.clear_backup(REPO_ROOT, target)
 
 
 def test_the_tool_source_is_intact_after_the_mutation_suite():

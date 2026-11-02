@@ -105,6 +105,8 @@ from pathlib import Path
 
 import pytest
 
+from pmoves.tests import mutation_backup
+
 REPO_ROOT = Path(__file__).resolve().parents[3]
 TOOL = REPO_ROOT / "pmoves" / "tools" / "windows_encoding_ratchet.py"
 TEST_FILE = REPO_ROOT / "pmoves" / "tests" / "tools" / "test_windows_encoding_ratchet.py"
@@ -486,7 +488,9 @@ def test_the_mutation_kills_the_named_test(mutation: Mutation) -> None:
     original_bytes, original = _read_source(target)
     newline = "\r\n" if b"\r\n" in original_bytes else "\n"
 
-    with _MUTATION_LOCK, _file_lock(_LOCK_PATH):
+    with _MUTATION_LOCK, _file_lock(_LOCK_PATH), mutation_backup.file_lock(
+        mutation_backup.lock_path(REPO_ROOT, target)
+    ):
         # 1. GREEN BEFORE
         before = _run_pytest(node_id)
         assert before.returncode == 0, (
@@ -495,6 +499,10 @@ def test_the_mutation_kills_the_named_test(mutation: Mutation) -> None:
         )
 
         mutated = _apply_mutation(mutation, original)
+        # The pristine bytes go on disk BEFORE the mutation, so a process
+        # that is KILLED mid-mutation cannot leave the tree dirty for the
+        # next session to inherit. See pmoves/tests/mutation_backup.py.
+        mutation_backup.write_backup(REPO_ROOT, target, original_bytes)
         try:
             # The mutation is written with the file's OWN newline convention,
             # so a CRLF file stays CRLF: the mutation changes what it says and
@@ -520,6 +528,11 @@ def test_the_mutation_kills_the_named_test(mutation: Mutation) -> None:
             assert restored == original_bytes, (
                 f"{mutation.name}: the restore was not byte-exact"
             )
+            # The backup is dropped only AFTER a byte-exact restore. If the
+            # assert above fails, the backup is the only good copy of the
+            # pristine source, and the next session must still be able to
+            # restore it -- so it stays on disk.
+            mutation_backup.clear_backup(REPO_ROOT, target)
 
         after_restore = _run_pytest(node_id)
         assert after_restore.returncode == 0, (

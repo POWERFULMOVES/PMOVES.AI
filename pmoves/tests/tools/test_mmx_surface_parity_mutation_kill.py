@@ -75,6 +75,8 @@ from pathlib import Path
 
 import pytest
 
+from pmoves.tests import mutation_backup
+
 REPO_ROOT = Path(__file__).resolve().parents[3]
 PARITY_TOOL = REPO_ROOT / "pmoves" / "tools" / "mmx_surface_parity.py"
 PROBE_TOOL = REPO_ROOT / "pmoves" / "tools" / "mmx_surface_probe.py"
@@ -455,8 +457,11 @@ def test_the_mutation_kills_the_named_test(mutation: Mutation) -> None:
     """GREEN -> RED -> GREEN, with a byte-exact restore."""
     node_id = f"{TEST_FILE.relative_to(REPO_ROOT).as_posix()}::{mutation.target_test}"
     original = mutation.target.read_text(encoding="utf-8")
+    original_bytes = mutation.target.read_bytes()
 
-    with _MUTATION_LOCK, _file_lock(_LOCK_PATH):
+    with _MUTATION_LOCK, _file_lock(_LOCK_PATH), mutation_backup.file_lock(
+        mutation_backup.lock_path(REPO_ROOT, mutation.target)
+    ):
         # 1. GREEN BEFORE
         before = _run_pytest(node_id)
         assert before.returncode == 0, (
@@ -465,6 +470,10 @@ def test_the_mutation_kills_the_named_test(mutation: Mutation) -> None:
         )
 
         mutated = _apply_mutation(mutation, original)
+        # The pristine bytes go on disk BEFORE the mutation, so a process
+        # that is KILLED mid-mutation cannot leave the tree dirty for the
+        # next session to inherit. See pmoves/tests/mutation_backup.py.
+        mutation_backup.write_backup(REPO_ROOT, mutation.target, original_bytes)
         try:
             mutation.target.write_text(mutated, encoding="utf-8", newline="")
 
@@ -483,6 +492,11 @@ def test_the_mutation_kills_the_named_test(mutation: Mutation) -> None:
             mutation.target.write_text(original, encoding="utf-8", newline="")
             restored = mutation.target.read_text(encoding="utf-8")
             assert restored == original, f"{mutation.name}: the restore was not byte-exact"
+            # The backup is dropped only AFTER a byte-exact restore. If the
+            # assert above fails, the backup is the only good copy of the
+            # pristine source, and the next session must still be able to
+            # restore it -- so it stays on disk.
+            mutation_backup.clear_backup(REPO_ROOT, mutation.target)
 
         after_restore = _run_pytest(node_id)
         assert after_restore.returncode == 0, (

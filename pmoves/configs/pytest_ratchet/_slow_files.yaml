@@ -70,3 +70,88 @@ slow_files:
     #
     # The 600s allowance is on top of the default budget, so the file is
     # MEASURED rather than lost. It is healthy and slow, not broken.
+  pmoves/tests/tools/test_windows_encoding_ratchet_mutation_kill.py: 200
+    # WHY: a mutation-kill harness that proves a deadline works by WAITING IT
+    # OUT runs its named test THREE times per mutation (GREEN before -> RED
+    # under the mutation -> GREEN after the restore), and every one of those
+    # phases spawns a full `python -m pytest` child. This file has 7
+    # mutations, so it costs 21 pytest startups, and each child runs the
+    # whole encoding ratchet test file.
+    #
+    # MEASURED on this host (Windows, Python 3.12.10, pytest 9.1.1) with the
+    # ratchet's OWN invocation (pmoves/tools/pytest_ratchet.py:run_pytest,
+    # not a hand-rolled pytest command):
+    #   the file alone          102.6s
+    #   its chunk, tools [4]    152.0s   (4 files: voice-follow 1.7s,
+    #                                        encoding ratchet 34.2s,
+    #                                        this harness 102.6s,
+    #                                        posix ratchet 10.9s)
+    #
+    # CI is faster than this host by roughly 0.8x on this workload, which is
+    # what the two CI observations say: the chunk was killed at the 120s
+    # budget, and the file was killed at the 60s per-file budget.
+    #
+    # The 200s allowance buys a per-file budget of 60 + 200 = 260s (2.5x the
+    # measured file) and a chunk budget of 120 + 200 = 320s (2.1x the
+    # measured chunk). Both are MEASUREMENTS, not estimates.
+    #
+    # WHY IT MATTERS HERE, NOT JUST FOR SPEED: a chunk that is killed while
+    # this harness holds a mutation in the working tree leaves that
+    # mutation ON DISK, because a killed process runs no `finally`. The next
+    # run then imports the mutated tool and reports a defect that does not
+    # exist. CI measured that on 2026-11-02: the merge gate's python-tests
+    # job reported
+    #   FAIL|tests.tools.test_windows_encoding_ratchet|test_the_live_tree_has_no_io_or_codecs_open_gap
+    # for a tree that was green. The allowance stops the kill; the backup in
+    # pmoves/tests/mutation_backup.py repairs the tree if it happens anyway.
+  pmoves/tests/tools/test_mmx_surface_parity_mutation_kill.py: 450
+    # WHY: same three-phase shape as the encoding harness above -- GREEN
+    # before -> RED under the mutation -> GREEN after the restore, each phase
+    # a full `python -m pytest` child -- and this one runs the mmx surface
+    # parity suite, which shells out to the mmx CLI.
+    #
+    # MEASURED on this host (Windows, Python 3.12.10, pytest 9.1.1) with the
+    # ratchet's own invocation:
+    #   the file alone          80.5s
+    #   its chunk, tools [3]   284.7s   (20 files, of which this harness is
+    #                                        80.5s, the mmx parity test
+    #                                        6.1s, the port registry harness
+    #                                        15.9s and the port registry test
+    #                                        4.1s)
+    #
+    # The 450s allowance buys a per-file budget of 60 + 450 = 510s (6.3x the
+    # measured file) and a chunk budget of 120 + 450 = 570s (2.0x the
+    # measured chunk). The chunk is what binds here, not the file: with only
+    # the file's own allowance the chunk would still have been killed.
+  pmoves/tests/tools/test_gh_app_installation_audit_mutation_kill.py: 60
+    # WHY: three phases per mutation, each a full `python -m pytest` child,
+    # and one of its mutations rewrites a COMMITTED registry file
+    # (pmoves/config/fork_registry.json) rather than a scratch file.
+    #
+    # MEASURED on this host (Windows, Python 3.12.10, pytest 9.1.1) with the
+    # ratchet's own invocation: the file alone 41.4s.
+    #
+    # The 60s allowance buys a per-file budget of 60 + 60 = 120s (2.9x the
+    # measured file). It was measured under the default 60s budget, not
+    # under one: the file fits, but only just, and a file that mutates a
+    # COMMITTED file needs to be MEASURED rather than killed.
+  pmoves/tools/tests/test_image_staleness_ratchet_mutation_kill.py: 60
+    # WHY: three phases per mutation, each a full `python -m pytest` child.
+    #
+    # MEASURED on this host (Windows, Python 3.12.10, pytest 9.1.1) with the
+    # ratchet's own invocation: the file alone 39.6s.
+    #
+    # The 60s allowance buys a per-file budget of 60 + 60 = 120s (3.0x the
+    # measured file). It lives in the `pmoves` group, whose chunk budget is
+    # therefore raised from 120s to 180s.
+    #
+    # THE MEASUREMENT IS NOT IN THE REPOSITORY
+    # ----------------------------------------
+    # Every number above was produced by running the ratchet's own
+    # `run_pytest` over the file and over its chunk, and timing the call.
+    # Those timings are properties of a machine, so they are recorded here
+    # as the BASIS for a budget rather than as a test that could fail on a
+    # slower runner. What IS gated is the shape: pmoves/tests/tools/
+    # test_pytest_ratchet.py fails on a declared path that does not exist,
+    # on a declared path that is not a test file, and on a declared entry
+    # with no stated reason.

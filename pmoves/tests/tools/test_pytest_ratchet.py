@@ -127,6 +127,20 @@ class TestDeclaredSlowFiles(unittest.TestCase):
     OTHER = "pmoves/tests/tools/test_pytest_ratchet.py"
     ALLOWANCE = 600
 
+    #: The four mutation harnesses this lane added, with the allowance each
+    #: was given. MEASURED on this host (Windows, Python 3.12.10, pytest
+    #: 9.1.1) with the ratchet's OWN invocation
+    #: (pmoves/tools/pytest_ratchet.py:run_pytest): the encoding harness
+    #: 102.6s, the mmx harness 80.5s, the gh-app harness 41.4s, the
+    #: image-staleness harness 39.6s. The basis for each number is stated in
+    #: pmoves/configs/pytest_ratchet/_slow_files.yaml.
+    LANE_ENTRIES = {
+        "pmoves/tests/tools/test_windows_encoding_ratchet_mutation_kill.py": 200,
+        "pmoves/tests/tools/test_mmx_surface_parity_mutation_kill.py": 450,
+        "pmoves/tests/tools/test_gh_app_installation_audit_mutation_kill.py": 60,
+        "pmoves/tools/tests/test_image_staleness_ratchet_mutation_kill.py": 60,
+    }
+
     def test_the_committed_config_declares_the_harness(self):
         allowances = pytest_ratchet.load_slow_file_allowances()
         self.assertEqual(allowances.get(self.HARNESS), self.ALLOWANCE)
@@ -138,6 +152,58 @@ class TestDeclaredSlowFiles(unittest.TestCase):
         self.assertTrue(entries)
         for path, (_seconds, reason) in entries.items():
             self.assertTrue(reason.strip(), f"{path} declares no reason")
+
+    def test_every_declared_path_exists_in_the_tree(self):
+        """A declared path that no longer exists is a STALE budget raise: it
+        keeps widening the budget of a chunk that no longer contains it, and
+        it hides the fact that the file it was written for is gone."""
+        entries = pytest_ratchet.load_slow_file_entries()
+        missing = [
+            path for path in entries
+            if not (pytest_ratchet.REPO_ROOT / path).is_file()
+        ]
+        self.assertEqual(missing, [], f"declared-slow paths that do not exist: {missing}")
+
+    def test_every_declared_path_is_a_test_file(self):
+        """The ratchet only ever runs TEST files, so only a test file can be
+        the thing whose budget needed widening."""
+        entries = pytest_ratchet.load_slow_file_entries()
+        not_tests = [
+            path for path in entries
+            if not Path(path).name.startswith("test_")
+        ]
+        self.assertEqual(not_tests, [], f"declared-slow paths that are not test files: {not_tests}")
+
+    def test_the_lane_harnesses_are_declared_with_their_measured_allowances(self):
+        """The four mutation harnesses this lane added, with the allowance
+        each was given.
+
+        MEASURED on this host (Windows, Python 3.12.10, pytest 9.1.1) with the
+        ratchet's OWN invocation (pmoves/tools/pytest_ratchet.py:run_pytest):
+        the encoding harness 102.6s, the mmx harness 80.5s, the gh-app
+        harness 41.4s, the image-staleness harness 39.6s. The basis for each
+        number is stated in pmoves/configs/pytest_ratchet/_slow_files.yaml.
+        """
+        allowances = pytest_ratchet.load_slow_file_allowances()
+        for path, expected in self.LANE_ENTRIES.items():
+            self.assertEqual(allowances.get(path), expected, path)
+
+    def test_the_lane_allowances_widen_the_chunk_that_holds_each_harness(self):
+        """The allowance must reach the CHUNK, not just the file. The chunk
+        is what binds: the tools [3] chunk measured 284.7s against a 120s
+        budget, so a per-file allowance alone would still have been killed.
+        """
+        groups = pytest_ratchet.group_files(pytest_ratchet.discover_test_files())
+        for key, members in groups.items():
+            for path, allowance in self.LANE_ENTRIES.items():
+                if not any(str(m).replace("\\", "/").endswith(path) for m in members):
+                    continue
+                budget = pytest_ratchet.chunk_timeout_seconds(members)
+                self.assertGreaterEqual(
+                    budget,
+                    pytest_ratchet.GROUP_TIMEOUT_SECONDS + allowance,
+                    f"{key} does not carry the allowance for {path}",
+                )
 
     def test_a_missing_config_is_an_empty_mapping_not_a_crash(self):
         missing = Path("does") / "not" / "exist.yaml"

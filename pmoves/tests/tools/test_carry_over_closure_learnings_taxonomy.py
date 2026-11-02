@@ -189,6 +189,11 @@ LANE_SUITES = (
         "pmoves/tests/tools/test_mmx_surface_parity.py",
         "pmoves/tests/tools/test_mmx_surface_parity_mutation_kill.py",
     ),
+    (
+        "crashsafe",
+        "pmoves/tests/tools/test_mutation_backup.py",
+        "pmoves/tests/tools/test_mutation_backup_mutation_kill.py",
+    ),
 )
 
 ASSET_ROW = re.compile(
