@@ -23,33 +23,33 @@ name: GitHub App Installation Audit
 # honest outcome and a green job means the coverage question was actually
 # answered.
 #
-# THE TRUST BOUNDARY ON A pull_request
-# -------------------------------------
+# THE TRUST BOUNDARY: the token is minted ONLY on the default branch
+# -----------------------------------------------------------------
 # This workflow runs on pull requests that touch the tool, so the PR's own
 # code is in scope. The token minted here is READ-ONLY but OWNER-WIDE: it
 # can read every repo in the org, which the audit needs (an uncovered repo
 # cannot be told apart from one that does not exist without it). Handing an
 # owner-wide token to PR code is a pwn-request shape, so:
 #
-#   * the AUDIT runs TRUSTED code only. On a pull_request the tool is checked
-#     out from the BASE ref (github.event.pull_request.base.sha) into
-#     `trusted/`, and the audit step runs THAT. The PR's head is never what
-#     holds a credential.
-#   * the universe the audit reports on a pull_request is therefore the BASE
-#     registry's universe -- the deployed truth, which is the thing worth
-#     auditing. The PR's own registry edit is covered by the PR's own tests.
-#   * GH_TOKEN is in the environment of the audit step and of NOTHING else.
-#     The PR's tests still run, against the PR's code, with no credential in
-#     scope.
+#   * on a pull_request NO TOKEN IS MINTED AT ALL. A pull_request event runs
+#     this WORKFLOW FILE from the PR's merge ref, so the file itself is
+#     PR-controlled -- no care taken inside it can make a PR's copy of it
+#     safe to hand a credential to. The mint, the audit and the verdict are
+#     gated on a `mode` step, and on a pull_request that step says `tests`.
+#   * the job then runs the instrument's own TESTS against the PR's code,
+#     with no credential in scope.
+#   * the coverage verdict is a fact about the DEPLOYED tree, and a pull
+#     request does not change the deployed tree. The scheduled run audits it,
+#     on the default branch, with the default branch's code and registry.
 #
-# RESIDUAL RISK, stated rather than hidden: on a `pull_request` event GitHub
-# runs the WORKFLOW FILE from the PR's merge ref, so the file you are reading
-# is itself PR-controlled. The base-ref boundary above bounds what the audited
-# code can do with the token; it cannot bound what the workflow file does with
-# the App's private key. Closing that last gap needs a workflow DEFINITION
-# that is not PR-controlled (a `pull_request_target` workflow, or a separate
-# scheduled audit of the base branch) -- a change to this file's trigger set,
-# not to this file's contents.
+# MEASURED 2026-11-02: the earlier revision ran the BASE ref's copy of the
+# tool instead, and it failed on the very pull request that introduced the
+# tool -- the base ref does not have the tool yet, so the audit step died with
+# "can't open file .../trusted/pmoves/tools/gh_app_installation_audit.py" and
+# no verdict was produced. It was also weaker than it looked: a base-ref
+# boundary bounds what the AUDITED CODE can do with the token, not what the
+# PR-controlled WORKFLOW FILE does with the App's private key. Not minting
+# closes both.
 
 on:
   pull_request:
@@ -112,39 +112,73 @@ jobs:
       # read-only, is consumed in this job, and is auto-revoked at job end.
       - uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3
         id: app-token
+        # Minted ONLY on the default branch. See the mode step above: a
+        # pull_request runs this workflow file from the PR's merge ref, so the
+        # file is PR-controlled and no token is minted there at all.
+        if: steps.mode.outputs.mode == 'audit'
         with:
           client-id: ${{ secrets.GH_APP_CLIENT_ID }}
           private-key: ${{ secrets.GH_APP_SEC }}
           owner: ${{ github.repository_owner }}
           permission-contents: read
 
-      # The UNTRUSTED code: the PR's head, for the TESTS only. It never holds
-      # a credential -- the test step's environment carries no GH_TOKEN, and
-      # the checkout persists no git credential into the workspace.
-      - name: Checkout the working tree (PR head on a pull_request)
+      # ONE checkout, of the code this event is about. On a pull_request that
+      # is the PR's own code -- which is exactly the code that must NEVER hold
+      # a credential, so on that event the credential is never minted at all
+      # (see the mode step below). On the schedule it is the deployed tree.
+      - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
-      # The TRUSTED code: the only code allowed to hold a credential. On a
-      # pull_request this is the BASE ref -- the code that is actually
-      # deployed -- so the tool under test is never the PR's code.
-      - name: Checkout the trusted audit code (base ref)
-        if: github.event_name == 'pull_request'
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ github.event.pull_request.base.sha }}
-          path: trusted
-          persist-credentials: false
-
-      # On schedule / workflow_dispatch the triggering ref IS the trusted
-      # code, so it is checked out the same way.
-      - name: Checkout the trusted audit code (triggering ref)
-        if: github.event_name != 'pull_request'
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          path: trusted
-          persist-credentials: false
+      # THE TRUST BOUNDARY, stated as a rule the workflow ENFORCES rather
+      # than as a convention a reader has to check.
+      #
+      # The token minted here is READ-ONLY but OWNER-WIDE: it can read every
+      # repo in the org, which the audit needs -- an uncovered repo cannot be
+      # told apart from one that does not exist without it. Handing an
+      # owner-wide token to PR code is a pwn-request shape, so the rule is:
+      #
+      #   THE TOKEN IS MINTED ONLY ON THE DEFAULT BRANCH.
+      #
+      # A pull_request event runs this workflow FILE from the PR's merge ref,
+      # so the file itself is PR-controlled: no amount of care inside it can
+      # make a PR's copy of the file safe to hand a credential to. The only
+      # ref whose workflow file is not PR-controlled is the default branch.
+      # So on a pull_request the job runs the instrument's own TESTS -- against
+      # the PR's code, with NO credential minted and NO token in scope -- and
+      # the coverage verdict is left to the scheduled run, which audits the
+      # DEPLOYED tree.
+      #
+      # That is also the honest answer to the question the audit asks: "is the
+      # App installed across the universe the DEPLOYED registry describes?" A
+      # pull request does not change the deployed tree.
+      #
+      # An earlier revision of this workflow took the BASE ref's copy of the
+      # tool instead, and it failed on the very pull request that introduced
+      # the tool: the base ref does not have the tool yet, so the audit step
+      # died with "can't open file .../trusted/pmoves/tools/...py" and the
+      # verdict was never produced. Not minting is both stronger and simpler.
+      - name: Decide whether this event may hold a credential
+        id: mode
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            echo "mode=tests" >> "$GITHUB_OUTPUT"
+            echo "::notice::pull_request: the App token is NOT minted. The coverage verdict is a fact about the DEPLOYED tree, which a pull request does not change; the scheduled run audits it. This job runs the instrument's own tests against the PR's code, with no credential in scope."
+            exit 0
+          fi
+          if [ "$REF" != "refs/heads/$DEFAULT_BRANCH" ]; then
+            echo "mode=tests" >> "$GITHUB_OUTPUT"
+            echo "::notice::ref '$REF' is not the default branch ('$DEFAULT_BRANCH'): the App token is NOT minted, because a workflow file on a non-default ref is not the deployed one."
+            exit 0
+          fi
+          echo "mode=audit" >> "$GITHUB_OUTPUT"
+          echo "::notice::Auditing the deployed tree on the default branch."
 
       - name: Set up Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
@@ -161,25 +195,30 @@ jobs:
           python -m pip install --quiet pytest pytest-asyncio pyyaml pyjwt cryptography
 
       - name: Audit the App installation coverage
+        # Only on the default branch, and therefore only with the DEPLOYED
+        # tool in the workspace -- the code that will actually answer the
+        # coverage question is the code that holds the credential.
+        if: steps.mode.outputs.mode == 'audit'
         env:
           # The token travels by ENV only: never printed, never in argv.
           # It comes from the mint STEP in this same job -- a job output
           # would be skipped by GitHub as "may contain secret".
           #
           # This is the ONLY step in the job that carries a credential, and
-          # it runs the TRUSTED code checked out above (`trusted/`), never
-          # the PR's head. The PR's tests run separately, with no credential
-          # in their environment.
+          # the job only reaches this step on the default branch.
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
-          python trusted/pmoves/tools/gh_app_installation_audit.py \
+          python pmoves/tools/gh_app_installation_audit.py \
             --token \
             --json \
             --out gh-app-installation-audit.json \
             --fail-on-not-installed
 
       - name: Publish the verdict
-        if: always()
+        # `always()` so a FAILED audit still publishes what it found; the
+        # mode check so a pull_request -- which mints no token and produces
+        # no report -- does not report a missing verdict as a failure.
+        if: always() && steps.mode.outputs.mode == 'audit'
         run: |
           set -uo pipefail
           REPORT=gh-app-installation-audit.json

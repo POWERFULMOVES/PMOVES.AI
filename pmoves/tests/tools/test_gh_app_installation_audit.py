@@ -1096,14 +1096,32 @@ def _run_commands(run: str) -> str:
     )
 
 
-def test_the_pull_request_audit_runs_trusted_base_code_and_keeps_the_token_off_pr_code():
+def test_the_token_is_minted_only_on_the_default_branch_and_never_on_a_pull_request():
     """The audit must never run PR code with a credential in scope.
 
     The token minted here is owner-wide (the audit has to be able to see
     every repo in the org), so handing it to the PR's own copy of the tool
-    is a pwn-request shape. The workflow therefore runs TRUSTED code -- the
-    BASE ref -- and the PR's tests still run, against the PR's own code,
-    with no credential in their environment.
+    is a pwn-request shape.
+
+    A pull_request event runs the workflow FILE from the PR's merge ref, so
+    the file itself is PR-controlled: no care taken INSIDE the file can make
+    a PR's copy of it safe to hand a credential to. The only ref whose
+    workflow file is not PR-controlled is the default branch. So the rule the
+    workflow enforces is:
+
+        THE TOKEN IS MINTED ONLY ON THE DEFAULT BRANCH.
+
+    On a pull_request the job runs the instrument's own TESTS -- against the
+    PR's code, with no credential minted and no token in scope -- and the
+    coverage verdict is left to the scheduled run, which audits the DEPLOYED
+    tree. A pull request does not change the deployed tree, so that is also
+    the honest answer to the question the audit asks.
+
+    MEASURED 2026-11-02: the previous revision took the BASE ref's copy of
+    the tool instead, and it failed on the very pull request that introduced
+    the tool -- the base ref does not have the tool yet, so the audit step
+    died with "can't open file .../trusted/pmoves/tools/...py" and no verdict
+    was produced. Not minting is both stronger and simpler.
 
     Asserted against the PARSED workflow, so a comment that mentions the
     wrong ref cannot satisfy it.
@@ -1120,26 +1138,45 @@ def test_the_pull_request_audit_runs_trusted_base_code_and_keeps_the_token_off_p
     assert "schedule" in triggers
     assert "workflow_dispatch" in triggers
 
-    # (1) On a pull_request the TRUSTED code is the BASE ref, and it lives in
-    #     its own directory so the PR's working tree cannot shadow it.
-    base_checkouts = [
-        step
-        for step in steps
-        if str((step or {}).get("uses") or "").startswith("actions/checkout@")
-        and str((step or {}).get("if") or "").strip() == "github.event_name == 'pull_request'"
+    # (1) There is ONE mode step, and it is the thing that decides.
+    mode_steps = [
+        step for step in steps if str((step or {}).get("id") or "") == "mode"
     ]
-    assert len(base_checkouts) == 1, (
-        f"exactly one checkout may run on a pull_request alone, found {len(base_checkouts)}"
+    assert len(mode_steps) == 1, f"exactly one mode step is expected, found {len(mode_steps)}"
+    mode_run = _run_commands((mode_steps[0] or {}).get("run") or "")
+    assert "pull_request" in mode_run, (
+        "the mode step must recognise a pull_request event"
     )
-    base = base_checkouts[0] or {}
-    base_with = base.get("with") or {}
-    assert base_with.get("ref") == "${{ github.event.pull_request.base.sha }}"
-    trusted_dir = base_with.get("path")
-    assert trusted_dir and trusted_dir != ".", (
-        "the trusted code needs its own directory, or the PR's tree shadows it"
+    assert "DEFAULT_BRANCH" in mode_run, (
+        "the mode step must compare the ref against the default branch"
+    )
+    assert "mode=tests" in mode_run and "mode=audit" in mode_run, (
+        "the mode step must be able to refuse the credential as well as grant it"
+    )
+    # The refusal must come FIRST: a pull_request has to be turned away
+    # before the default-branch branch can grant the credential.
+    assert mode_run.index("pull_request") < mode_run.index("mode=audit"), (
+        "the pull_request refusal must be evaluated before the credential is granted"
     )
 
-    # (2) The audit step runs THAT copy -- never the working tree's.
+    # (2) The mint is CONDITIONAL on that mode -- so a pull_request mints no
+    #     token at all, and neither does a non-default-branch dispatch.
+    mint_steps = [
+        step
+        for step in steps
+        if "create-github-app-token" in str((step or {}).get("uses") or "")
+    ]
+    assert len(mint_steps) == 1
+    mint = mint_steps[0] or {}
+    assert str(mint.get("if") or "").strip() == "steps.mode.outputs.mode == 'audit'", (
+        f"the mint must be gated on the mode step, got {mint.get('if')!r}"
+    )
+    mint_with = mint.get("with") or {}
+    assert mint_with.get("client-id") == "${{ secrets.GH_APP_CLIENT_ID }}"
+    assert mint_with.get("private-key") == "${{ secrets.GH_APP_SEC }}"
+
+    # (3) The audit step is gated the same way, and runs the code that is
+    #     actually deployed -- the checked-out tree.
     audit_steps = [
         step
         for step in steps
@@ -1147,15 +1184,34 @@ def test_the_pull_request_audit_runs_trusted_base_code_and_keeps_the_token_off_p
     ]
     assert len(audit_steps) == 1, "the audit step must exist exactly once"
     audit_step = audit_steps[0] or {}
+    assert str(audit_step.get("if") or "").strip() == "steps.mode.outputs.mode == 'audit'", (
+        f"the audit must be gated on the mode step, got {audit_step.get('if')!r}"
+    )
     run = str(audit_step.get("run") or "")
     tool_refs = re.findall(r"[^\s\"']*gh_app_installation_audit\.py", run)
     assert tool_refs, "the audit step must invoke the tool"
     for ref in tool_refs:
-        assert ref == f"{trusted_dir}/pmoves/tools/gh_app_installation_audit.py", (
-            f"the audit step must run the TRUSTED copy, not {ref!r}"
+        assert ref == "pmoves/tools/gh_app_installation_audit.py", (
+            f"the audit step must run the checked-out (deployed) tool, not {ref!r}"
         )
 
-    # (3) GH_TOKEN is in the audit step's environment and NOWHERE else -- not
+    # (4) The verdict is published only when there IS a verdict to publish.
+    publish_steps = [
+        step
+        for step in steps
+        if str((step or {}).get("name") or "") == "Publish the verdict"
+    ]
+    assert len(publish_steps) == 1
+    publish_if = str((publish_steps[0] or {}).get("if") or "")
+    assert "always()" in publish_if, (
+        "a FAILED audit must still publish what it found"
+    )
+    assert "steps.mode.outputs.mode == 'audit'" in publish_if, (
+        f"a pull_request mints no token and produces no report, so it must not "
+        f"report a missing verdict as a failure: {publish_if!r}"
+    )
+
+    # (5) GH_TOKEN is in the audit step's environment and NOWHERE else -- not
     #     in the job environment, not in any other step's environment, and
     #     not in any other step's command.
     assert "GH_TOKEN" not in (job.get("env") or {}), (
@@ -1174,33 +1230,22 @@ def test_the_pull_request_audit_runs_trusted_base_code_and_keeps_the_token_off_p
             f"GH_TOKEN is referenced by step {name!r}"
         )
 
-    # (4) The PR's tests still run -- against the PR's OWN code, with no
-    #     credential in scope.
+    # (6) The PR's tests still run -- against the PR's OWN code, with no
+    #     credential in scope -- and they are NOT gated on the mode.
     pytest_steps = [
         step
         for step in steps
         if "python -m pytest" in _run_commands((step or {}).get("run") or "")
     ]
     assert pytest_steps, "the workflow must still run the instrument's tests"
-    pytest_run = _run_commands((pytest_steps[0] or {}).get("run") or "")
-    assert "pmoves/tests/tools/test_gh_app_installation_audit.py" in pytest_run
-    assert f"{trusted_dir}/" not in pytest_run, (
-        "the tests must run the PR's own code, not the trusted copy"
+    pytest_step = pytest_steps[0] or {}
+    pytest_if = str(pytest_step.get("if") or "").strip()
+    assert pytest_if in ("", "always()"), (
+        f"the tests must run on EVERY event, including a pull_request: {pytest_if!r}"
     )
+    pytest_run = _run_commands((pytest_step or {}).get("run") or "")
+    assert "pmoves/tests/tools/test_gh_app_installation_audit.py" in pytest_run
 
-    # (5) schedule / workflow_dispatch still mint INLINE, in this job, and
-    #     the mint is not conditional -- so every event gets a token.
-    mint_steps = [
-        step
-        for step in steps
-        if "create-github-app-token" in str((step or {}).get("uses") or "")
-    ]
-    assert len(mint_steps) == 1
-    mint = mint_steps[0] or {}
-    assert not mint.get("if"), "the inline mint must run on every event"
-    mint_with = mint.get("with") or {}
-    assert mint_with.get("client-id") == "${{ secrets.GH_APP_CLIENT_ID }}"
-    assert mint_with.get("private-key") == "${{ secrets.GH_APP_SEC }}"
     assert (audit_step.get("env") or {}).get("GH_TOKEN") == (
         "${{ steps.app-token.outputs.token }}"
     )

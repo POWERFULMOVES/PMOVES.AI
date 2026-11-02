@@ -681,13 +681,20 @@ services:
       timeout: 10s
       retries: 5
       start_period: 30s
-  # NVIDIA NIM - Llama-3.3-Nemotron-Super-49B inference server (~30GB VRAM)
-  # Default host port is 8206 (NOT 8000, and NOT 8200). 8000 is
-  # supabase-kong's. 8200 is gpu-orchestrator's, and gpu-orchestrator and
-  # nvidia-nim BOTH declare the `gpu` profile -- so under
-  # `docker compose --profile gpu up` they start together and one of them
-  # fails to bind. Override via NIM_HOST_PORT.
   nvidia-nim:
+    # NVIDIA NIM - Llama-3.3-Nemotron-Super-49B inference server (~30GB VRAM)
+    # Default host port is 8206 (NOT 8000, and NOT 8200). 8000 is
+    # supabase-kong's. 8200 is gpu-orchestrator's, and gpu-orchestrator and
+    # nvidia-nim BOTH declare the `gpu` profile -- so under
+    # `docker compose --profile gpu up` they start together and one of them
+    # fails to bind. Override via NIM_HOST_PORT.
+    #
+    # This comment lives INSIDE the service on purpose: the split overlays are
+    # GENERATED from this file, and a comment block that floats above a KEY is
+    # not carried with the service into the overlay that contains it -- it
+    # lands above whatever service the generator emits next. A comment inside
+    # the service body travels with the service into every overlay that has
+    # it, so the note describes the service it is attached to.
     <<: *tier-llm-hardened
     image: nvcr.io/nim/nvidia/llama-3_3-nemotron-super-49b-v1:1.8.3
     restart: unless-stopped

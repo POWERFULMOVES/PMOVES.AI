@@ -475,17 +475,20 @@ MUTATIONS: list[Mutation] = [
         ),
     ),
     Mutation(
-        name="M21_the_trusted_audit_code_checked_out_from_the_pr_head",
-        old="""          ref: ${{ github.event.pull_request.base.sha }}""",
-        new="""          ref: ${{ github.event.pull_request.head.sha }}""",
+        name="M21_the_mint_gate_removed_so_a_pull_request_mints_a_token",
+        old="""        if: steps.mode.outputs.mode == 'audit'
+        with:
+          client-id: ${{ secrets.GH_APP_CLIENT_ID }}""",
+        new="""        with:
+          client-id: ${{ secrets.GH_APP_CLIENT_ID }}""",
         target_test=(
-            "test_the_pull_request_audit_runs_trusted_base_code_and_keeps_the_token_off_pr_code"
+            "test_the_token_is_minted_only_on_the_default_branch_and_never_on_a_pull_request"
         ),
         rationale=(
-            "The audit must run the BASE ref's code on a pull_request. "
-            "Checking out the PR's head instead hands the owner-wide token to "
-            "exactly the code the PR is trying to change -- a pwn-request "
-            "shape."
+            "The rule is that the token is minted ONLY on the default branch. "
+            "Remove the gate and the mint runs on every event -- including a "
+            "pull_request, whose workflow FILE is PR-controlled. That hands an "
+            "owner-wide token to exactly the code the PR is trying to change."
         ),
         target_file=WORKFLOW_FILE,
     ),
@@ -500,7 +503,7 @@ MUTATIONS: list[Mutation] = [
       GH_TOKEN: ${{ steps.app-token.outputs.token }}
     runs-on: ubuntu-24.04""",
         target_test=(
-            "test_the_pull_request_audit_runs_trusted_base_code_and_keeps_the_token_off_pr_code"
+            "test_the_token_is_minted_only_on_the_default_branch_and_never_on_a_pull_request"
         ),
         rationale=(
             "A job-level GH_TOKEN puts the credential in the environment of "

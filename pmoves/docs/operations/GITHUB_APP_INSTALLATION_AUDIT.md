@@ -198,44 +198,53 @@ able to *see* every repo in the org; a token scoped to a subset cannot tell
 an uncovered repo apart from one that does not exist. The token is read-only,
 minted per run, and auto-revoked when the job ends.
 
-### The trust boundary on a `pull_request`
+### The trust boundary: the token is minted ONLY on the default branch
 
 The workflow runs on pull requests, so the PR's own code is in scope — and
 the token it mints is **owner-wide**. Handing an owner-wide token to PR code
-is a pwn-request shape, so the workflow draws a line:
+is a pwn-request shape. The rule the workflow enforces is therefore the
+strictest one available:
+
+> **The App token is minted only when the workflow runs on the repository's
+> default branch. On a `pull_request` no token is minted at all.**
 
 | | What runs it | Credential in scope? |
 |---|---|---|
-| the **audit** | the **base ref's** tool, checked out into `trusted/` | yes — this step, and only this step |
-| the **instrument's tests** | the **PR head's** code, in the working tree | no — `GH_TOKEN` is not in that step's environment |
+| the **audit** | the **deployed** tool, from the default branch's checkout | yes — this step, and only this step |
+| the **instrument's tests** | the **PR head's** code, in the working tree | no — no token is minted on that event at all |
 
 Concretely:
 
-- On a `pull_request` event the trusted checkout is pinned to
-  `${{ github.event.pull_request.base.sha }}` and lands in `trusted/`. The
-  audit step runs `trusted/pmoves/tools/gh_app_installation_audit.py`. The
-  PR's head is never what holds a credential.
-- Because the trusted copy carries the base's `pmoves/config/fork_registry.json`
-  and `.gitmodules`, **the universe the audit reports on a pull_request is
-  the BASE registry's universe** — the deployed truth, which is the thing
-  worth auditing. The PR's own registry edit is covered by the PR's own
-  tests.
-- On `schedule` / `workflow_dispatch` the triggering ref *is* the trusted
-  code, so it is checked out the same way; the mint stays inline and
-  unconditional, so every event gets a token.
+- A `pull_request` event runs the *workflow file* from the PR's merge ref, so
+  the file itself is PR-controlled. No care taken inside the file can make a
+  PR's copy of it safe to hand a credential to, so the workflow does not try:
+  the mint, the audit and the verdict publication are all gated on a `mode`
+  step, and on a `pull_request` that step sets `mode=tests`. **No token is
+  minted, no step carries `GH_TOKEN`, and the job runs the instrument's own
+  tests against the PR's code.**
+- The coverage verdict is a fact about the **deployed** tree, and a pull
+  request does not change the deployed tree. So the audit question is answered
+  by the scheduled run, which audits the default branch's code and the default
+  branch's `pmoves/config/fork_registry.json` and `.gitmodules` — the deployed
+  truth, which is the thing worth auditing. The PR's own registry edit is
+  covered by the PR's own tests.
+- `workflow_dispatch` on a non-default ref is refused the same way, for the
+  same reason: a workflow file on a non-default ref is not the deployed one.
 - `GH_TOKEN` is in the environment of the audit step and of nothing else —
   not in the job environment, not in the test step, not in any other step's
-  command. The checkouts persist no git credential into the workspace
-  either.
+  command. The checkout persists no git credential into the workspace either.
 
-> **Residual risk, stated rather than hidden.** On a `pull_request` event
-> GitHub runs the *workflow file* from the PR's merge ref, so the file
-> itself is PR-controlled. The base-ref boundary above bounds what the
-> **audited code** can do with the token; it cannot bound what the workflow
-> file does with the App's private key. Closing that last gap needs a
-> workflow *definition* that is not PR-controlled — a `pull_request_target`
-> workflow, or a separate scheduled audit of the base branch — which is a
-> change to this workflow's trigger set, not to its contents.
+> **MEASURED 2026-11-02 — the earlier revision of this boundary did not
+> work.** It ran the *base ref's* copy of the tool, checked out into
+> `trusted/`, on the theory that the base ref is trusted while the PR head is
+> not. It failed on the very pull request that introduced the tool: the base
+> ref does not have the tool yet, so the audit step died with
+> `can't open file .../trusted/pmoves/tools/gh_app_installation_audit.py` and
+> the verdict was never produced. The base-ref boundary was also weaker than
+> it looked, because it bounds only what the *audited code* can do with the
+> token — not what the PR-controlled *workflow file* does with the App's
+> private key. Not minting on a pull request closes both: the credential is
+> never in reach of PR-controlled code at all.
 
 ---
 
