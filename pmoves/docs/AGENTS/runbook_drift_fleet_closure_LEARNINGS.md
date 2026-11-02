@@ -119,6 +119,11 @@ default-stack collision (`docker-compose.yt-cookies.yml` is not in `STACK_FILES`
 `yt-cookies` profile), but it is a latent one, and it is reported to the
 operator as a separate pre-existing defect rather than silently ignored.
 
+*(CLOSED 2026-11-01 by the carry-over-closure lane. The binding is now
+`"${YT_COOKIE_REFRESHER_BIND:-127.0.0.1}:${YT_COOKIE_REFRESHER_PORT:-8126}:8115"`
+— the host port moved to 8126 and the container port stayed at 8115. The
+`8115:8115` form above is the state at the time of THIS measurement.)*
+
 The collision assertion in the shipped ratchet is therefore scoped to the
 **default stack** — the set that is actually brought up together — not to
 every compose file in the tree. A ratchet that is red on arrival teaches the
@@ -472,6 +477,7 @@ restore byte-exact and asserted, all under a two-layer mutation lock:
 | F1 | the path branch's matcher (`_paths_ending` -> `_paths_named`) | `test_a_path_claim_is_not_satisfied_by_an_unrelated_file_of_the_same_name` |
 | F2 | `api.py`'s own default (`port: int = 8115` -> `8082`) | `test_node_registry_code_default_and_compose_binding_match_catalog_port` |
 | F2 | the compose host binding (`:8115:8115` -> `:8082:8082`) | the same test — one named test, two wirings, two mutations |
+| F2 | the same binding, after the carry-over-closure lane re-parameterised it (`${NODE_REGISTRY_PORT:-8115}` -> `:-8082}:`) | the same test — the anchor moved with the source |
 | F3 | a claimed fork out of the workflow's `FORKS` list | `test_every_sync_true_registry_fork_is_in_the_workflow_forks_block` |
 | F4 | the unconditional `os.fchmod` | `test_env_local_key_has_no_unguarded_posix_only_os_reference` — the STRUCTURAL kill, which bites on every platform (lesson 13) |
 | F4 | the same mutation, seen from the operator's platform | `test_env_local_key_never_emits_a_raw_traceback` — WINDOWS-ONLY, because on POSIX the defective code is correct code |

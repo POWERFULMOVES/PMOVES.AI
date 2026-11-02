@@ -208,7 +208,30 @@ jobs:
           # `context: pmoves-nextjs` no longer says anything. The image
           # staleness ratchet flags that entry rather than letting the
           # contradiction sit in the matrix where nobody would look for it.
-          context: ${{ matrix.repo && format('{0}/{1}', github.workspace, matrix.repo) || matrix.context }}
+          #
+          # `build_context` is OPTIONAL and is RELATIVE TO THE REPO ROOT. It
+          # exists because a Dockerfile's COPY sources are relative to the
+          # BUILD CONTEXT, and some of these repos write their Dockerfile for
+          # their own subdirectory: PMOVES-DoX's `backend/Dockerfile` does
+          # `COPY requirements.txt ./` and `COPY app ./app`, and those paths
+          # only resolve when the context IS `backend`. Without this field
+          # the build would fail with "requirements.txt: not found" while the
+          # staleness ratchet (which only checks that the Dockerfile EXISTS)
+          # would still call the image VERIFIED -- a green gate over a build
+          # that cannot succeed.
+          #
+          # MEASURED at the pinned commits: `pmoves-dox` needs `backend`,
+          # `pmoves-botz` needs `features/gateway/python-gateway`, and the
+          # three jellyfin-ai services each need their own directory under
+          # `Cataclysm_Provisioning_Bundle/provisioning_bundle/docker-stacks/
+          # jellyfin-ai/`. `pmoves-archon` and `pmoves-yt` need nothing --
+          # their Dockerfiles COPY from the repo root.
+          #
+          # The image staleness ratchet mirrors this expression LITERALLY and
+          # additionally resolves every COPY source against the resolved
+          # context, so a build context that would break the build is a gate
+          # failure rather than a surprise in CI.
+          context: ${{ matrix.repo && format('{0}/{1}{2}', github.workspace, matrix.repo, matrix.build_context && format('/{0}', matrix.build_context) || '') || matrix.context }}
           file: ${{ matrix.dockerfile || 'Dockerfile' }}
           push: true
           tags: |

@@ -3030,7 +3030,7 @@ smoke-qwen-rerank: ## Enforce Qwen reranker selection on v2-gpu then run strict 
 smoke-new-models: ## Smoke test new model providers (NIM, Qwen3-Coder-Next, Gemma 3n)
 	@echo "=== New Model Providers Smoke Test ==="
 	@echo "1) NVIDIA NIM health:"
-	@curl -sf http://localhost:$${NIM_HOST_PORT:-8000}/v1/health/ready >/dev/null 2>&1 \
+	@curl -sf http://localhost:$${NIM_HOST_PORT:-8206}/v1/health/ready >/dev/null 2>&1 \
 	  && echo "   NIM: ready" \
 	  || echo "   NIM: not available (skipped)"
 	@echo "2) TensorZero model catalog:"

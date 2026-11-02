@@ -46,10 +46,10 @@ root:
           agent_hint: spark_claw
 
         - id: dgx-spark.services.nim
-          task: "NIM API healthy at :8200"
+          task: "NIM API healthy at :8206"
           action:
             type: http
-            url: "http://localhost:8200/v1/models"
+            url: "http://localhost:8206/v1/models"
             expect: "200 OK with NIM model list (optional service)"
           context: >
             NVIDIA NIM inference API. Optional — may not be running

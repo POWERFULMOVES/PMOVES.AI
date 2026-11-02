@@ -87,7 +87,7 @@ DEFAULT_PORTS = {
     "publisher-discord": 8094,
     "jellyfin-bridge": 8093,
     "n8n": 5678,
-    "botz-gateway": 8090,
+    "botz-gateway": 8054,  # compose publishes 8054; 8090 is reserved for retrieval-eval
 }
 
 # Port ranges to avoid
@@ -145,7 +145,7 @@ class PortAllocator:
         """Load port assignments from file."""
         if self.ports_file.exists():
             try:
-                with open(self.ports_file) as f:
+                with open(self.ports_file, encoding="utf-8") as f:
                     self.ports = json.load(f)
             except (json.JSONDecodeError, IOError):
                 self.ports = {}
@@ -153,7 +153,7 @@ class PortAllocator:
     def _save_ports(self):
         """Save port assignments to file."""
         self.ports_file.parent.mkdir(parents=True, exist_ok=True)
-        with open(self.ports_file, "w") as f:
+        with open(self.ports_file, "w", encoding="utf-8") as f:
             json.dump(self.ports, f, indent=2)
 
     def get_port(self, service: str, default: Optional[int] = None) -> int:

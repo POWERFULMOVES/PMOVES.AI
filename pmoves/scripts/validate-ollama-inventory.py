@@ -40,7 +40,7 @@ def load_profile(path: Path) -> dict:
         print("❌ PyYAML required. Install via: `uv pip install --python pmoves/.venv-pmoves/bin/python pyyaml`",
               file=sys.stderr)
         sys.exit(2)
-    with path.open() as f:
+    with path.open(encoding="utf-8") as f:
         return yaml.safe_load(f) or {}
 
 

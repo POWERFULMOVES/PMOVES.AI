@@ -244,7 +244,7 @@ nodes:
         description: "Local LLM inference (CUDA) — Gemma 4 31B, Nemotron Super 49B"
         health_endpoint: "/api/tags"
       - name: NIM
-        port: 8200
+        port: 8206
         class: intentional
         owner: nvidia
         description: "NVIDIA NIM inference API (optional)"

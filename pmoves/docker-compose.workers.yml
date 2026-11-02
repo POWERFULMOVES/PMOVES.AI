@@ -315,7 +315,7 @@ services:
     - NATS_URL=${NATS_URL}
     - PMOVES_NETWORKS=pmoves_app,pmoves_bus
     ports:
-    - ${SESSION_CONTEXT_BIND:-0.0.0.0}:8102:8100
+    - ${SESSION_CONTEXT_BIND:-0.0.0.0}:${SESSION_CONTEXT_WORKER_PORT:-8102}:8100
     profiles:
     - workers
     networks:
@@ -561,7 +561,7 @@ services:
       nats:
         condition: service_healthy
     ports:
-    - ${PUBLISHER_DISCORD_BIND:-0.0.0.0}:8094:8092
+    - ${PUBLISHER_DISCORD_BIND:-0.0.0.0}:${PUBLISHER_DISCORD_PORT:-8094}:8092
     profiles:
     - orchestration
     - agents
@@ -726,8 +726,8 @@ services:
     - AGENTZERO_MCP_URL=${AGENTZERO_MCP_URL:-http://agent-zero:8080/mcp}
     - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_api,pmoves_monitoring,pmoves_external
     ports:
-    - ${GITHUB_CLEANUP_BIND:-0.0.0.0}:8100:8100
-    - ${GITHUB_CLEANUP_BIND:-0.0.0.0}:9096:9096
+    - ${GITHUB_CLEANUP_BIND:-0.0.0.0}:${GITHUB_BRANCH_CLEANUP_8100_PORT:-8100}:8100
+    - ${GITHUB_CLEANUP_BIND:-0.0.0.0}:${GITHUB_BRANCH_CLEANUP_9096_PORT:-9096}:9096
     depends_on:
     # No cross-overlay depends_on: agent-zero is defined in a sibling overlay,
     # and a depends_on referencing an undefined service invalidates the
@@ -769,8 +769,8 @@ services:
     - GITHUB_ORG=${GITHUB_ORG:-POWERFULMOVES}
     - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_api,pmoves_monitoring,pmoves_external
     ports:
-    - ${GITHUB_TRIAGE_BIND:-0.0.0.0}:8101:8101
-    - ${GITHUB_TRIAGE_BIND:-0.0.0.0}:9097:9097
+    - ${GITHUB_TRIAGE_BIND:-0.0.0.0}:${GITHUB_ISSUE_TRIAGE_8101_PORT:-8101}:8101
+    - ${GITHUB_TRIAGE_BIND:-0.0.0.0}:${GITHUB_ISSUE_TRIAGE_9097_PORT:-9097}:9097
     depends_on:
     # No cross-overlay depends_on: botz-gateway is defined in a sibling overlay,
     # and a depends_on referencing an undefined service invalidates the
@@ -809,7 +809,7 @@ services:
     - GITHUB_ORG=${GITHUB_ORG:-POWERFULMOVES}
     - PMOVES_NETWORKS=pmoves_app,pmoves_api,pmoves_bus,pmoves_monitoring,pmoves_external
     ports:
-    - ${GITHUB_AUTOMATION_BIND:-0.0.0.0}:8112:8102
+    - ${GITHUB_AUTOMATION_BIND:-0.0.0.0}:${GITHUB_BRANCH_NAMING_PORT:-8112}:8102
     profiles:
     - github-automation
     networks:
@@ -855,7 +855,7 @@ services:
     - WORKDIR=${WORKDIR:-/tmp/github-crossrepo-sync}
     - PMOVES_NETWORKS=pmoves_app,pmoves_api,pmoves_bus,pmoves_monitoring,pmoves_external
     ports:
-    - ${GITHUB_AUTOMATION_BIND:-0.0.0.0}:8113:8103
+    - ${GITHUB_AUTOMATION_BIND:-0.0.0.0}:${GITHUB_CROSSREPO_SYNC_PORT:-8113}:8103
     profiles:
     - github-automation
     networks:
@@ -898,7 +898,7 @@ services:
     - AUTO_MERGE_REPOS=${AUTO_MERGE_REPOS:-}
     - PMOVES_NETWORKS=pmoves_app,pmoves_api,pmoves_bus,pmoves_monitoring,pmoves_external
     ports:
-    - ${GITHUB_AUTOMATION_BIND:-0.0.0.0}:8114:8104
+    - ${GITHUB_AUTOMATION_BIND:-0.0.0.0}:${GITHUB_CROSSREPO_PR_PORT:-8114}:8104
     profiles:
     - github-automation
     networks:
@@ -945,7 +945,7 @@ services:
     depends_on:
       nats:
         condition: service_healthy
-    ports: ["${GITHUB_RUNNER_CTL_BIND:-0.0.0.0}:8104:8104"]
+    ports: ["${GITHUB_RUNNER_CTL_BIND:-0.0.0.0}:${GITHUB_RUNNER_CTL_PORT:-8104}:8104"]
     volumes:
     - ./services/github-runner-ctl/config:/app/config:ro
     - ./secrets/github_pat:/run/secrets/github_pat:ro

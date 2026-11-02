@@ -1,0 +1,2210 @@
+# pmoves/configs/ports.yaml -- the CANONICAL host-port registry.
+#
+# One entry per service that publishes (or could publish) a host port.
+# This file is the single source of truth;
+# pmoves/tools/port_registry_ratchet.py checks every compose file against
+# it and FAILS the build on drift.
+#
+# A service holds a LIST OF SLOTS, because a compose service can publish
+# several ports. MEASURED: 128 slot conflicts across 146 service names --
+# agent-zero publishes an api port and a ui port; archon publishes three;
+# nats publishes a client port and a monitoring port.
+#
+# A SLOT is keyed by its port VARIABLE, because that is the stable name
+# the fleet already uses. Fields:
+#   host_port       the HOST port. null means DYNAMIC -- Docker assigns a
+#                 free host port at run time and no fixed host port is
+#                 published at all.
+#   container_port  the port the service listens on INSIDE the container.
+#                 Two services may share a container port; they may NOT
+#                 share a host port.
+#   bind_var       the env var naming the bind address, if any.
+#   port_var       the env var naming the host port. Compose reads
+#                 ${<port_var>:-<host_port>}, so the value here is the
+#                 DEFAULT and the operator can override it.
+#   compose_files  the compose files that publish this slot.
+#   sources        which registries knew about the service.
+#
+# GENERATED ONCE by a bootstrap over the measured compose population,
+# then reviewed and COMMITTED. Do not regenerate wholesale: the ratchet
+# exists so this file and the compose files cannot drift apart.
+services:
+  a0-elder-melchor:
+    slots:
+      A0_ELDER_PORT:
+        bind_var: A0_ELDER_BIND
+        compose_files:
+        - docker-compose.a0-elder-melchor.yml
+        container_port: 8080
+        host_port: 8180
+        port_var: A0_ELDER_PORT
+        protocol: null
+    sources:
+    - compose
+  a2ui-nats-bridge:
+    slots:
+      A2UI_NATS_BRIDGE_PORT:
+        bind_var: A2UI_BIND
+        compose_files:
+        - docker-compose.agents.yml
+        - docker-compose.yml
+        container_port: 9224
+        host_port: 9224
+        port_var: A2UI_NATS_BRIDGE_PORT
+        protocol: null
+    sources:
+    - compose
+  a2ui-renderer:
+    slots:
+      A2UI_RENDERER_PORT:
+        bind_var: A2UI_RENDERER_BIND
+        compose_files:
+        - docker-compose.core.yml
+        - docker-compose.yml
+        container_port: 8107
+        host_port: 8107
+        port_var: A2UI_RENDERER_PORT
+        protocol: null
+    sources:
+    - compose
+  activepieces-app:
+    slots:
+      AP_APP_PORT:
+        bind_var: AP_BIND
+        compose_files:
+        - docker-compose.activepieces.yml
+        container_port: 80
+        host_port: 8087
+        port_var: AP_APP_PORT
+        protocol: null
+    sources:
+    - compose
+  agent-zero:
+    slots:
+      AGENT_ZERO_PORT:
+        bind_var: AGENT_ZERO_BIND
+        compose_files:
+        - docker-compose.agents.yml
+        - docker-compose.yml
+        container_port: 8080
+        host_port: 8080
+        port_var: AGENT_ZERO_PORT
+        protocol: null
+      AGENT_ZERO_UI_PORT:
+        bind_var: AGENT_ZERO_BIND
+        compose_files:
+        - docker-compose.agents.yml
+        - docker-compose.yml
+        container_port: 80
+        host_port: 8081
+        port_var: AGENT_ZERO_UI_PORT
+        protocol: null
+    sources:
+    - compose
+    - port_allocator
+    - service_catalog
+  agent-zero-darkxside:
+    slots:
+      DARKXSIDE_PORT:
+        bind_var: DARKXSIDE_BIND
+        compose_files:
+        - docker-compose.darkxside-sidecar.yml
+        container_port: 8080
+        host_port: 8092
+        port_var: DARKXSIDE_PORT
+        protocol: null
+    sources:
+    - compose
+  agent-zero-darkxside-inst:
+    slots:
+      A0INST_PORT:
+        bind_var: A0INST_BIND
+        compose_files:
+        - docker-compose.agent-zero-instances.yml
+        container_port: 80
+        host_port: 60937
+        port_var: A0INST_PORT
+        protocol: null
+    sources:
+    - compose
+  agent-zero-darkxside-vm:
+    slots:
+      A0VM_PORT:
+        bind_var: A0VM_BIND
+        compose_files:
+        - docker-compose.agent-zero-darkxside-vm.yml
+        container_port: 80
+        host_port: 60938
+        port_var: A0VM_PORT
+        protocol: null
+    sources:
+    - compose
+  agent-zero-spark:
+    slots:
+      SPARK_PORT:
+        bind_var: SPARK_BIND
+        compose_files:
+        - docker-compose.spark-sidecar.yml
+        container_port: 8080
+        host_port: 8093
+        port_var: SPARK_PORT
+        protocol: null
+    sources:
+    - compose
+  agent-zero-ui:
+    slots:
+      __registry_only_agent-zero-ui:
+        bind_var: null
+        compose_files: []
+        container_port: null
+        host_port: 8081
+        port_var: null
+        protocol: null
+    sources:
+    - port_allocator
+  agentgym-env-pmoves:
+    slots:
+      AGENTGYM_ENV_PMOVES_PORT:
+        bind_var: null
+        compose_files:
+        - docker-compose.agentgym.yml
+        container_port: 36000
+        host_port: 36000
+        port_var: AGENTGYM_ENV_PMOVES_PORT
+        protocol: null
+    sources:
+    - compose
+  agentgym-rl-coordinator:
+    slots:
+      AGENTGYM_RL_COORDINATOR_PORT:
+        bind_var: null
+        compose_files:
+        - docker-compose.agentgym.yml
+        container_port: 8114
+        host_port: 8114
+        port_var: AGENTGYM_RL_COORDINATOR_PORT
+        protocol: null
+    sources:
+    - compose
+  alertmanager:
+    slots:
+      ALERTMANAGER_PORT:
+        bind_var: ALERTMANAGER_BIND
+        compose_files:
+        - docker-compose.alertmanager.yml
+        container_port: 9093
+        host_port: 9093
+        port_var: ALERTMANAGER_PORT
+        protocol: null
+    sources:
+    - compose
+  alertmanager-discord-bridge:
+    slots:
+      BRIDGE_PORT:
+        bind_var: BRIDGE_BIND
+        compose_files:
+        - docker-compose.alertmanager.yml
+        container_port: 9094
+        host_port: 9094
+        port_var: BRIDGE_PORT
+        protocol: null
+    sources:
+    - compose
+  archon:
+    slots:
+      ARCHON_API_PORT:
+        bind_var: ARCHON_BIND
+        compose_files:
+        - docker-compose.agents.yml
+        - docker-compose.yml
+        container_port: 3090
+        host_port: 8091
+        port_var: ARCHON_API_PORT
+        protocol: null
+      ARCHON_PORT:
+        bind_var: ARCHON_BIND
+        compose_files:
+        - docker-compose.agents.yml
+        - docker-compose.yml
+        container_port: 3090
+        host_port: 3090
+        port_var: ARCHON_PORT
+        protocol: null
+      ARCHON_UI_PORT:
+        bind_var: ARCHON_BIND
+        compose_files:
+        - docker-compose.agents.yml
+        - docker-compose.yml
+        container_port: 3090
+        host_port: 3737
+        port_var: ARCHON_UI_PORT
+        protocol: null
+    sources:
+    - compose
+    - port_allocator
+    - service_catalog
+  benchmark-runner:
+    slots:
+      __registry_only_benchmark-runner:
+        bind_var: null
+        compose_files: []
+        container_port: null
+        host_port: 8119
+        port_var: null
+        protocol: null
+    sources:
+    - service_catalog
+  botz-gateway:
+    slots:
+      BOTZ_PORT:
+        bind_var: BOTZ_BIND
+        compose_files:
+        - docker-compose.apps.yml
+        - docker-compose.yml
+        container_port: 8054
+        host_port: 8054
+        port_var: BOTZ_PORT
+        protocol: null
+    sources:
+    - compose
+    - port_allocator
+  cadvisor:
+    slots:
+      __registry_only_cadvisor:
+        bind_var: null
+        compose_files: []
+        container_port: null
+        host_port: 8080
+        port_var: null
+        protocol: null
+    sources:
+    - service_catalog
+  cast-tts-gateway:
+    slots:
+      CAST_TTS_PORT:
+        bind_var: CAST_TTS_BIND
+        compose_files:
+        - docker-compose.media.yml
+        - docker-compose.yml
+        container_port: 8060
+        host_port: 8060
+        port_var: CAST_TTS_PORT
+        protocol: null
+    sources:
+    - compose
+    - service_catalog
+  channel-monitor:
+    slots:
+      CHANNEL_MONITOR_PORT:
+        bind_var: CHANNEL_MONITOR_BIND
+        compose_files:
+        - docker-compose.workers.yml
+        - docker-compose.yml
+        container_port: 8097
+        host_port: 8097
+        port_var: CHANNEL_MONITOR_PORT
+        protocol: null
+    sources:
+    - compose
+    - service_catalog
+  cipher-api:
+    slots:
+      CIPHER_PORT:
+        bind_var: CIPHER_BIND
+        compose_files:
+        - docker-compose.agents.yml
+        - docker-compose.yml
+        container_port: 8105
+        host_port: 8105
+        port_var: CIPHER_PORT
+        protocol: null
+    sources:
+    - compose
+  clap-embed:
+    slots:
+      CLAP_EMBED_PORT:
+        bind_var: CLAP_EMBED_BIND
+        compose_files:
+        - docker-compose.core.yml
+        - docker-compose.yml
+        container_port: 8108
+        host_port: 8108
+        port_var: CLAP_EMBED_PORT
+        protocol: null
+    sources:
+    - compose
+  clickhouse:
+    slots:
+      __registry_only_clickhouse:
+        bind_var: null
+        compose_files: []
+        container_port: null
+        host_port: 8123
+        port_var: null
+        protocol: null
+    sources:
+    - port_allocator
+  clip-embed:
+    slots:
+      CLIP_EMBED_PORT:
+        bind_var: CLIP_EMBED_BIND
+        compose_files:
+        - docker-compose.core.yml
+        - docker-compose.yml
+        container_port: 8109
+        host_port: 8109
+        port_var: CLIP_EMBED_PORT
+        protocol: null
+    sources:
+    - compose
+  comfyui:
+    slots:
+      COMFYUI_HOST_PORT:
+        bind_var: null
+        compose_files:
+        - docker-compose.comfyui.yml
+        container_port: 8188
+        host_port: 8188
+        port_var: COMFYUI_HOST_PORT
+        protocol: null
+    sources:
+    - compose
+  consciousness-service:
+    slots:
+      CONSCIOUSNESS_HOST_PORT:
+        bind_var: CONSCIOUSNESS_BIND
+        compose_files:
+        - docker-compose.agents.yml
+        - docker-compose.yml
+        container_port: 8106
+        host_port: 8106
+        port_var: CONSCIOUSNESS_HOST_PORT
+        protocol: null
+    sources:
+    - compose
+  container-agent:
+    slots:
+      CONTAINER_AGENT_PORT:
+        bind_var: null
+        compose_files:
+        - docker-compose.z890.yml
+        container_port: 8111
+        host_port: 8111
+        port_var: CONTAINER_AGENT_PORT
+        protocol: null
+    sources:
+    - compose
+  deepresearch:
+    slots:
+      DEEPRESEARCH_PORT:
+        bind_var: DEEPRESEARCH_BIND
+        compose_files:
+        - docker-compose.workers.yml
+        - docker-compose.yml
+        container_port: 8098
+        host_port: 8098
+        port_var: DEEPRESEARCH_PORT
+        protocol: null
+    sources:
+    - compose
+    - port_allocator
+    - service_catalog
+  evo-controller:
+    slots:
+      EVO_CONTROLLER_PORT:
+        bind_var: EVO_CONTROLLER_BIND
+        compose_files:
+        - docker-compose.agents.yml
+        - docker-compose.yml
+        container_port: 8113
+        host_port: 8113
+        port_var: EVO_CONTROLLER_PORT
+        protocol: null
+    sources:
+    - compose
+  extract-worker:
+    slots:
+      EXTRACT_WORKER_PORT:
+        bind_var: EXTRACT_WORKER_BIND
+        compose_files:
+        - docker-compose.workers.yml
+        - docker-compose.yml
+        container_port: 8083
+        host_port: 8083
+        port_var: EXTRACT_WORKER_PORT
+        protocol: null
+    sources:
+    - compose
+    - port_allocator
+    - service_catalog
+  ffmpeg-whisper:
+    slots:
+      FFMPEG_WHISPER_PORT:
+        bind_var: FFMPEG_WHISPER_BIND
+        compose_files:
+        - docker-compose.media.yml
+        - docker-compose.yml
+        container_port: 8078
+        host_port: 8078
+        port_var: FFMPEG_WHISPER_PORT
+        protocol: null
+    sources:
+    - compose
+    - port_allocator
+    - service_catalog
+  firefly:
+    slots:
+      FIREFLY_HTTP_PORT:
+        bind_var: null
+        compose_files:
+        - docker-compose.external.yml
+        container_port: 8080
+        host_port: 8075
+        port_var: FIREFLY_HTTP_PORT
+        protocol: null
+      FIREFLY_PORT:
+        bind_var: null
+        compose_files:
+        - docker-compose.firefly.yml
+        container_port: 8080
+        host_port: 8075
+        port_var: FIREFLY_PORT
+        protocol: null
+    sources:
+    - compose
+  fleet-sentinel:
+    slots:
+      SENTINEL_PORT:
+        bind_var: SENTINEL_BIND
+        compose_files:
+        - docker-compose.agents.yml
+        - docker-compose.yml
+        container_port: 8116
+        host_port: 8116
+        port_var: SENTINEL_PORT
+        protocol: null
+    sources:
+    - compose
+  flute-gateway:
+    slots:
+      FLUTE_GATEWAY_8055_PORT:
+        bind_var: FLUTE_BIND
+        compose_files:
+        - docker-compose.media.yml
+        - docker-compose.yml
+        container_port: 8055
+        host_port: 8055
+        port_var: FLUTE_GATEWAY_8055_PORT
+        protocol: null
+      FLUTE_GATEWAY_8056_PORT:
+        bind_var: FLUTE_BIND
+        compose_files:
+        - docker-compose.media.yml
+        - docker-compose.yml
+        container_port: 8056
+        host_port: 8056
+        port_var: FLUTE_GATEWAY_8056_PORT
+        protocol: null
+    sources:
+    - compose
+    - port_allocator
+    - service_catalog
+  flute-gateway-ws:
+    slots:
+      __registry_only_flute-gateway-ws:
+        bind_var: null
+        compose_files: []
+        container_port: null
+        host_port: 8056
+        port_var: null
+        protocol: null
+    sources:
+    - port_allocator
+  gateway-agent:
+    slots:
+      GATEWAY_AGENT_8111_PORT:
+        bind_var: null
+        compose_files:
+        - docker-compose.vps.override.yml
+        container_port: 8111
+        host_port: 8111
+        port_var: GATEWAY_AGENT_8111_PORT
+        protocol: null
+      GATEWAY_AGENT_PORT:
+        bind_var: GATEWAY_AGENT_BIND
+        compose_files:
+        - docker-compose.agents.yml
+        - docker-compose.yml
+        container_port: 8111
+        host_port: 8111
+        port_var: GATEWAY_AGENT_PORT
+        protocol: null
+    sources:
+    - compose
+  github-branch-cleanup:
+    slots:
+      GITHUB_BRANCH_CLEANUP_8100_PORT:
+        bind_var: GITHUB_CLEANUP_BIND
+        compose_files:
+        - docker-compose.workers.yml
+        - docker-compose.yml
+        container_port: 8100
+        host_port: 8100
+        port_var: GITHUB_BRANCH_CLEANUP_8100_PORT
+        protocol: null
+      GITHUB_BRANCH_CLEANUP_9096_PORT:
+        bind_var: GITHUB_CLEANUP_BIND
+        compose_files:
+        - docker-compose.workers.yml
+        - docker-compose.yml
+        container_port: 9096
+        host_port: 9096
+        port_var: GITHUB_BRANCH_CLEANUP_9096_PORT
+        protocol: null
+    sources:
+    - compose
+  github-branch-naming:
+    slots:
+      GITHUB_BRANCH_NAMING_PORT:
+        bind_var: GITHUB_AUTOMATION_BIND
+        compose_files:
+        - docker-compose.workers.yml
+        - docker-compose.yml
+        container_port: 8102
+        host_port: 8112
+        port_var: GITHUB_BRANCH_NAMING_PORT
+        protocol: null
+    sources:
+    - compose
+  github-crossrepo-pr:
+    slots:
+      GITHUB_CROSSREPO_PR_PORT:
+        bind_var: GITHUB_AUTOMATION_BIND
+        compose_files:
+        - docker-compose.workers.yml
+        - docker-compose.yml
+        container_port: 8104
+        host_port: 8114
+        port_var: GITHUB_CROSSREPO_PR_PORT
+        protocol: null
+    sources:
+    - compose
+  github-crossrepo-sync:
+    slots:
+      GITHUB_CROSSREPO_SYNC_PORT:
+        bind_var: GITHUB_AUTOMATION_BIND
+        compose_files:
+        - docker-compose.workers.yml
+        - docker-compose.yml
+        container_port: 8103
+        host_port: 8113
+        port_var: GITHUB_CROSSREPO_SYNC_PORT
+        protocol: null
+    sources:
+    - compose
+  github-issue-triage:
+    slots:
+      GITHUB_ISSUE_TRIAGE_8101_PORT:
+        bind_var: GITHUB_TRIAGE_BIND
+        compose_files:
+        - docker-compose.workers.yml
+        - docker-compose.yml
+        container_port: 8101
+        host_port: 8101
+        port_var: GITHUB_ISSUE_TRIAGE_8101_PORT
+        protocol: null
+      GITHUB_ISSUE_TRIAGE_9097_PORT:
+        bind_var: GITHUB_TRIAGE_BIND
+        compose_files:
+        - docker-compose.workers.yml
+        - docker-compose.yml
+        container_port: 9097
+        host_port: 9097
+        port_var: GITHUB_ISSUE_TRIAGE_9097_PORT
+        protocol: null
+    sources:
+    - compose
+  github-runner-ctl:
+    slots:
+      GITHUB_RUNNER_CTL_PORT:
+        bind_var: GITHUB_RUNNER_CTL_BIND
+        compose_files:
+        - docker-compose.workers.yml
+        - docker-compose.yml
+        container_port: 8104
+        host_port: 8104
+        port_var: GITHUB_RUNNER_CTL_PORT
+        protocol: null
+    sources:
+    - compose
+  gpu-orchestrator:
+    slots:
+      GPU_ORCHESTRATOR_HOST_PORT:
+        bind_var: GPU_ORCHESTRATOR_BIND
+        compose_files:
+        - docker-compose.media.yml
+        - docker-compose.yml
+        container_port: 8200
+        host_port: 8200
+        port_var: GPU_ORCHESTRATOR_HOST_PORT
+        protocol: null
+    sources:
+    - compose
+  grafana:
+    slots:
+      __registry_only_grafana:
+        bind_var: null
+        compose_files: []
+        container_port: null
+        host_port: 3000
+        port_var: null
+        protocol: null
+    sources:
+    - port_allocator
+    - service_catalog
+  grayjay-plugin-host:
+    slots:
+      GRAYJAY_PLUGIN_HOST_PORT:
+        bind_var: GRAYJAY_BIND
+        compose_files:
+        - docker-compose.ui.yml
+        - docker-compose.yml
+        container_port: 8080
+        host_port: 9096
+        port_var: GRAYJAY_PLUGIN_HOST_PORT
+        protocol: null
+    sources:
+    - compose
+  grayjay-server:
+    slots:
+      GRAYJAY_SERVER_PORT:
+        bind_var: GRAYJAY_BIND
+        compose_files:
+        - docker-compose.ui.yml
+        - docker-compose.yml
+        container_port: 9095
+        host_port: 9095
+        port_var: GRAYJAY_SERVER_PORT
+        protocol: null
+    sources:
+    - compose
+  hbbr:
+    slots:
+      RUSTDESK_HBBR_PORT:
+        bind_var: null
+        compose_files:
+        - docker-compose.rustdesk.yml
+        container_port: 21117
+        host_port: 21117
+        port_var: RUSTDESK_HBBR_PORT
+        protocol: null
+      RUSTDESK_HBBR_WS_PORT:
+        bind_var: null
+        compose_files:
+        - docker-compose.rustdesk.yml
+        container_port: 21119
+        host_port: 21119
+        port_var: RUSTDESK_HBBR_WS_PORT
+        protocol: null
+    sources:
+    - compose
+  hbbs:
+    slots:
+      RUSTDESK_HBBS_PORT_1:
+        bind_var: null
+        compose_files:
+        - docker-compose.rustdesk.yml
+        container_port: 21115
+        host_port: 21115
+        port_var: RUSTDESK_HBBS_PORT_1
+        protocol: null
+      RUSTDESK_HBBS_PORT_2:
+        bind_var: null
+        compose_files:
+        - docker-compose.rustdesk.yml
+        container_port: 21116
+        host_port: 21116
+        port_var: RUSTDESK_HBBS_PORT_2
+        protocol: null
+      RUSTDESK_HBBS_WS_PORT:
+        bind_var: null
+        compose_files:
+        - docker-compose.rustdesk.yml
+        container_port: 21118
+        host_port: 21118
+        port_var: RUSTDESK_HBBS_WS_PORT
+        protocol: null
+    sources:
+    - compose
+  headscale:
+    slots:
+      HEADSCALE_9091_PORT:
+        bind_var: null
+        compose_files:
+        - docker-compose.remote.yml
+        container_port: 9090
+        host_port: 9091
+        port_var: HEADSCALE_9091_PORT
+        protocol: null
+      HEADSCALE_PORT:
+        bind_var: null
+        compose_files:
+        - docker-compose.remote.yml
+        container_port: 8096
+        host_port: 8096
+        port_var: HEADSCALE_PORT
+        protocol: null
+    sources:
+    - compose
+  hf-agent:
+    slots:
+      HF_AGENT_PORT:
+        bind_var: HF_AGENT_BIND
+        compose_files:
+        - docker-compose.agents.yml
+        - docker-compose.yml
+        container_port: 8201
+        host_port: 8201
+        port_var: HF_AGENT_PORT
+        protocol: null
+    sources:
+    - compose
+  hf-mcp-server:
+    slots:
+      HF_MCP_SERVER_PORT:
+        bind_var: HF_MCP_SERVER_BIND
+        compose_files:
+        - docker-compose.agents.yml
+        - docker-compose.yml
+        container_port: 8096
+        host_port: 8203
+        port_var: HF_MCP_SERVER_PORT
+        protocol: null
+    sources:
+    - compose
+  hf-research-agent:
+    slots:
+      HF_RESEARCH_PORT:
+        bind_var: HF_RESEARCH_BIND
+        compose_files:
+        - docker-compose.agents.yml
+        - docker-compose.yml
+        container_port: 8202
+        host_port: 8202
+        port_var: HF_RESEARCH_PORT
+        protocol: null
+    sources:
+    - compose
+  hi-rag-gateway:
+    slots:
+      HIRAG_V1_HOST_PORT:
+        bind_var: HIRAG_V1_BIND
+        compose_files:
+        - docker-compose.agents.yml
+        - docker-compose.yml
+        container_port: 8086
+        host_port: 8089
+        port_var: HIRAG_V1_HOST_PORT
+        protocol: null
+    sources:
+    - compose
+    - service_catalog
+  hi-rag-gateway-gpu:
+    slots:
+      HIRAG_V1_GPU_HOST_PORT:
+        bind_var: HIRAG_BIND
+        compose_files:
+        - docker-compose.agents.yml
+        - docker-compose.yml
+        container_port: 8086
+        host_port: 8187
+        port_var: HIRAG_V1_GPU_HOST_PORT
+        protocol: null
+    sources:
+    - compose
+    - service_catalog
+  hi-rag-gateway-v1-gpu:
+    slots:
+      __registry_only_hi-rag-gateway-v1-gpu:
+        bind_var: null
+        compose_files: []
+        container_port: null
+        host_port: 8187
+        port_var: null
+        protocol: null
+    sources:
+    - port_allocator
+  hi-rag-gateway-v2:
+    slots:
+      HIRAG_V2_HOST_PORT:
+        bind_var: HIRAG_BIND
+        compose_files:
+        - docker-compose.agents.yml
+        - docker-compose.yml
+        container_port: 8086
+        host_port: 8086
+        port_var: HIRAG_V2_HOST_PORT
+        protocol: null
+    sources:
+    - compose
+    - port_allocator
+    - service_catalog
+  hi-rag-gateway-v2-gpu:
+    slots:
+      HIRAG_V2_GPU_HOST_PORT:
+        bind_var: HIRAG_BIND
+        compose_files:
+        - docker-compose.agents.yml
+        - docker-compose.gpu-image.yml
+        - docker-compose.yml
+        container_port: 8086
+        host_port: 8087
+        port_var: HIRAG_V2_GPU_HOST_PORT
+        protocol: null
+    sources:
+    - compose
+    - port_allocator
+    - service_catalog
+  invidious:
+    slots:
+      INVIDIOUS_PORT:
+        bind_var: INVIDIOUS_BIND
+        compose_files:
+        - docker-compose.ui.yml
+        - docker-compose.yml
+        container_port: 3000
+        host_port: 3000
+        port_var: INVIDIOUS_PORT
+        protocol: null
+    sources:
+    - compose
+  invidious-companion:
+    slots:
+      INVIDIOUS_COMPANION_PORT:
+        bind_var: INVIDIOUS_COMPANION_BIND
+        compose_files:
+        - docker-compose.ui.yml
+        - docker-compose.yml
+        container_port: 8282
+        host_port: 8282
+        port_var: INVIDIOUS_COMPANION_PORT
+        protocol: null
+    sources:
+    - compose
+  invidious-companion-proxy:
+    slots:
+      INVIDIOUS_COMPANION_PROXY_PORT:
+        bind_var: INVIDIOUS_PROXY_BIND
+        compose_files:
+        - docker-compose.ui.yml
+        - docker-compose.yml
+        container_port: 80
+        host_port: 8281
+        port_var: INVIDIOUS_COMPANION_PROXY_PORT
+        protocol: null
+    sources:
+    - compose
+  jaeger:
+    slots:
+      JAEGER_14250_PORT:
+        bind_var: null
+        compose_files:
+        - docker-compose.tracing.yml
+        container_port: 14250
+        host_port: 14250
+        port_var: JAEGER_14250_PORT
+        protocol: null
+      JAEGER_14268_PORT:
+        bind_var: null
+        compose_files:
+        - docker-compose.tracing.yml
+        container_port: 14268
+        host_port: 14268
+        port_var: JAEGER_14268_PORT
+        protocol: null
+      JAEGER_4317_PORT:
+        bind_var: null
+        compose_files:
+        - docker-compose.tracing.yml
+        container_port: 4317
+        host_port: 4317
+        port_var: JAEGER_4317_PORT
+        protocol: null
+      JAEGER_UI_PORT:
+        bind_var: JAEGER_BIND
+        compose_files:
+        - docker-compose.tracing.yml
+        container_port: 16686
+        host_port: 16686
+        port_var: JAEGER_UI_PORT
+        protocol: null
+    sources:
+    - compose
+  jellyfin:
+    slots:
+      JELLYFIN_HTTP_PORT:
+        bind_var: null
+        compose_files:
+        - docker-compose.jellyfin-ai.yml
+        container_port: 8096
+        host_port: 9096
+        port_var: JELLYFIN_HTTP_PORT
+        protocol: null
+    sources:
+    - compose
+  jellyfin-api-gateway:
+    slots:
+      JELLYFIN_API_PORT:
+        bind_var: null
+        compose_files:
+        - docker-compose.jellyfin-ai.yml
+        container_port: 3000
+        host_port: 8300
+        port_var: JELLYFIN_API_PORT
+        protocol: null
+    sources:
+    - compose
+  jellyfin-bridge:
+    slots:
+      JELLYFIN_BRIDGE_PORT:
+        bind_var: JELLYFIN_BRIDGE_BIND
+        compose_files:
+        - docker-compose.media.yml
+        - docker-compose.yml
+        container_port: 8093
+        host_port: 8093
+        port_var: JELLYFIN_BRIDGE_PORT
+        protocol: null
+    sources:
+    - compose
+    - port_allocator
+    - service_catalog
+  jellyfin-dashboard:
+    slots:
+      JELLYFIN_DASHBOARD_PORT:
+        bind_var: null
+        compose_files:
+        - docker-compose.jellyfin-ai.yml
+        container_port: 8080
+        host_port: 8400
+        port_var: JELLYFIN_DASHBOARD_PORT
+        protocol: null
+    sources:
+    - compose
+  jellyfin-nvenc:
+    slots:
+      JELLYFIN_HTTP_PORT:
+        bind_var: null
+        compose_files:
+        - docker-compose.jellyfin-ai.yml
+        container_port: 8096
+        host_port: 9096
+        port_var: JELLYFIN_HTTP_PORT
+        protocol: null
+    sources:
+    - compose
+  jellyfin-qwen-audio:
+    slots:
+      JELLYFIN_QWEN_PORT:
+        bind_var: null
+        compose_files:
+        - docker-compose.jellyfin-ai.yml
+        container_port: 11434
+        host_port: 11435
+        port_var: JELLYFIN_QWEN_PORT
+        protocol: null
+    sources:
+    - compose
+  jellyfin-vaapi:
+    slots:
+      JELLYFIN_HTTP_PORT:
+        bind_var: null
+        compose_files:
+        - docker-compose.jellyfin-ai.yml
+        container_port: 8096
+        host_port: 9096
+        port_var: JELLYFIN_HTTP_PORT
+        protocol: null
+    sources:
+    - compose
+  langextract:
+    slots:
+      LANGEXTRACT_PORT:
+        bind_var: LANGEXTRACT_BIND
+        compose_files:
+        - docker-compose.workers.yml
+        - docker-compose.yml
+        container_port: 8084
+        host_port: 8084
+        port_var: LANGEXTRACT_PORT
+        protocol: null
+    sources:
+    - compose
+    - port_allocator
+    - service_catalog
+  llama-throughput-lab:
+    slots:
+      LLAMA_THROUGHPUT_LAB_PORT:
+        bind_var: LLAMA_LAB_BIND
+        compose_files:
+        - docker-compose.media.yml
+        - docker-compose.yml
+        container_port: 8201
+        host_port: 8201
+        port_var: LLAMA_THROUGHPUT_LAB_PORT
+        protocol: null
+    sources:
+    - compose
+  loki:
+    slots:
+      __registry_only_loki:
+        bind_var: null
+        compose_files: []
+        container_port: null
+        host_port: 3100
+        port_var: null
+        protocol: null
+    sources:
+    - port_allocator
+    - service_catalog
+  mai-ui-agent:
+    slots:
+      MAI_UI_AGENT_PORT:
+        bind_var: MAI_UI_BIND
+        compose_files:
+        - docker-compose.agents.yml
+        - docker-compose.yml
+        container_port: 8220
+        host_port: 8220
+        port_var: MAI_UI_AGENT_PORT
+        protocol: null
+    sources:
+    - compose
+  mcp-gateway:
+    slots:
+      MCP_GATEWAY_PORT:
+        bind_var: MCP_GATEWAY_BIND
+        compose_files:
+        - docker-compose.mcp-gateway.yml
+        container_port: 8091
+        host_port: 8189
+        port_var: MCP_GATEWAY_PORT
+        protocol: null
+    sources:
+    - compose
+    - port_allocator
+  media-audio:
+    slots:
+      MEDIA_AUDIO_PORT:
+        bind_var: MEDIA_AUDIO_BIND
+        compose_files:
+        - docker-compose.media.yml
+        - docker-compose.yml
+        container_port: 8082
+        host_port: 8082
+        port_var: MEDIA_AUDIO_PORT
+        protocol: null
+    sources:
+    - compose
+    - port_allocator
+  media-video:
+    slots:
+      MEDIA_VIDEO_PORT:
+        bind_var: MEDIA_VIDEO_BIND
+        compose_files:
+        - docker-compose.media.yml
+        - docker-compose.yml
+        container_port: 8079
+        host_port: 8079
+        port_var: MEDIA_VIDEO_PORT
+        protocol: null
+    sources:
+    - compose
+    - port_allocator
+    - service_catalog
+  meilisearch:
+    slots:
+      MEILISEARCH_PORT:
+        bind_var: MEILISEARCH_BIND
+        compose_files:
+        - docker-compose.core.yml
+        - docker-compose.yml
+        container_port: 7700
+        host_port: 7700
+        port_var: MEILISEARCH_PORT
+        protocol: null
+    sources:
+    - compose
+    - port_allocator
+    - service_catalog
+  mesh-agent:
+    slots:
+      __registry_only_mesh-agent:
+        bind_var: null
+        compose_files: []
+        container_port: null
+        host_port: 0
+        port_var: null
+        protocol: null
+    sources:
+    - port_allocator
+  minio:
+    slots:
+      MINIO_CONSOLE_PORT:
+        bind_var: MINIO_CONSOLE_BIND
+        compose_files:
+        - docker-compose.core.yml
+        - docker-compose.yml
+        container_port: 9001
+        host_port: 9001
+        port_var: MINIO_CONSOLE_PORT
+        protocol: null
+      MINIO_PORT:
+        bind_var: MINIO_BIND
+        compose_files:
+        - docker-compose.core.yml
+        - docker-compose.yml
+        container_port: 9000
+        host_port: 9000
+        port_var: MINIO_PORT
+        protocol: null
+    sources:
+    - compose
+    - port_allocator
+    - service_catalog
+  minio-console:
+    slots:
+      __registry_only_minio-console:
+        bind_var: null
+        compose_files: []
+        container_port: null
+        host_port: 9001
+        port_var: null
+        protocol: null
+    sources:
+    - port_allocator
+  model-registry:
+    slots:
+      MODEL_REGISTRY_PORT:
+        bind_var: MODEL_REGISTRY_BIND
+        compose_files:
+        - docker-compose.workers.yml
+        - docker-compose.yml
+        container_port: 8110
+        host_port: 8110
+        port_var: MODEL_REGISTRY_PORT
+        protocol: null
+    sources:
+    - compose
+  n8n:
+    slots:
+      N8N_5678_PORT:
+        bind_var: null
+        compose_files:
+        - docker-compose.core.yml
+        container_port: 5678
+        host_port: 5678
+        port_var: N8N_5678_PORT
+        protocol: null
+      N8N_PORT:
+        bind_var: N8N_BIND
+        compose_files:
+        - docker-compose.n8n.yml
+        container_port: 5678
+        host_port: 5678
+        port_var: N8N_PORT
+        protocol: null
+    sources:
+    - compose
+    - port_allocator
+  nats:
+    slots:
+      NATS_MONITORING_PORT:
+        bind_var: NATS_MONITORING_BIND
+        compose_files:
+        - docker-compose.core.yml
+        - docker-compose.yml
+        container_port: 8222
+        host_port: 9223
+        port_var: NATS_MONITORING_PORT
+        protocol: null
+      NATS_PORT:
+        bind_var: NATS_BIND
+        compose_files:
+        - docker-compose.core.yml
+        - docker-compose.yml
+        container_port: 4222
+        host_port: 4222
+        port_var: NATS_PORT
+        protocol: null
+    sources:
+    - compose
+    - port_allocator
+    - service_catalog
+  nats-hub:
+    slots:
+      NATS_LEAF_PORT:
+        bind_var: NATS_LEAF_BIND
+        compose_files:
+        - docker-compose.core.yml
+        - docker-compose.yml
+        container_port: 7422
+        host_port: 7422
+        port_var: NATS_LEAF_PORT
+        protocol: null
+      NATS_MONITORING_PORT:
+        bind_var: NATS_HUB_MONITORING_BIND
+        compose_files:
+        - docker-compose.core.yml
+        - docker-compose.yml
+        container_port: 8222
+        host_port: 9223
+        port_var: NATS_MONITORING_PORT
+        protocol: null
+      NATS_PORT:
+        bind_var: NATS_BIND
+        compose_files:
+        - docker-compose.core.yml
+        - docker-compose.yml
+        container_port: 4222
+        host_port: 4222
+        port_var: NATS_PORT
+        protocol: null
+    sources:
+    - compose
+  nats-leaf:
+    slots:
+      NATS_LEAF_4222_PORT:
+        bind_var: null
+        compose_files:
+        - docker-compose.jetson-edge.override.yml
+        - docker-compose.z890.yml
+        container_port: 4222
+        host_port: 4222
+        port_var: NATS_LEAF_4222_PORT
+        protocol: null
+      NATS_LEAF_8222_PORT:
+        bind_var: null
+        compose_files:
+        - docker-compose.z890.yml
+        container_port: 8222
+        host_port: 8222
+        port_var: NATS_LEAF_8222_PORT
+        protocol: null
+    sources:
+    - compose
+  nats-monitoring:
+    slots:
+      __registry_only_nats-monitoring:
+        bind_var: null
+        compose_files: []
+        container_port: null
+        host_port: 8222
+        port_var: null
+        protocol: null
+    sources:
+    - port_allocator
+  nats_event_bus:
+    slots:
+      NATS_EVENT_BUS_PORT:
+        bind_var: NATS_EVENT_BUS_BIND
+        compose_files:
+        - docker-compose.apps.yml
+        - docker-compose.yml
+        container_port: 8131
+        host_port: 8131
+        port_var: NATS_EVENT_BUS_PORT
+        protocol: null
+    sources:
+    - compose
+  neo4j:
+    slots:
+      __registry_only_neo4j:
+        bind_var: null
+        compose_files: []
+        container_port: null
+        host_port: 7474
+        port_var: null
+        protocol: null
+    sources:
+    - port_allocator
+    - service_catalog
+  nginx:
+    slots:
+      NGINX_443_PORT:
+        bind_var: null
+        compose_files:
+        - docker-compose.vps.override.yml
+        container_port: 443
+        host_port: 443
+        port_var: NGINX_443_PORT
+        protocol: null
+      NGINX_80_PORT:
+        bind_var: null
+        compose_files:
+        - docker-compose.vps.override.yml
+        container_port: 80
+        host_port: 80
+        port_var: NGINX_80_PORT
+        protocol: null
+    sources:
+    - compose
+  node-registry:
+    slots:
+      NODE_REGISTRY_PORT:
+        bind_var: NODE_REGISTRY_BIND
+        compose_files:
+        - docker-compose.core.yml
+        - docker-compose.yml
+        container_port: 8115
+        host_port: 8115
+        port_var: NODE_REGISTRY_PORT
+        protocol: null
+    sources:
+    - compose
+    - service_catalog
+  notebook-mcp:
+    slots:
+      NOTEBOOK_MCP_PORT:
+        bind_var: NOTEBOOK_MCP_BIND
+        compose_files:
+        - docker-compose.agents.yml
+        - docker-compose.yml
+        container_port: 8092
+        host_port: 8207
+        port_var: NOTEBOOK_MCP_PORT
+        protocol: null
+    sources:
+    - compose
+  notebook-sync:
+    slots:
+      NOTEBOOK_SYNC_PORT:
+        bind_var: NOTEBOOK_SYNC_BIND
+        compose_files:
+        - docker-compose.workers.yml
+        - docker-compose.yml
+        container_port: 8095
+        host_port: 8095
+        port_var: NOTEBOOK_SYNC_PORT
+        protocol: null
+    sources:
+    - compose
+    - port_allocator
+    - service_catalog
+  nvidia-nim:
+    slots:
+      NIM_HOST_PORT:
+        bind_var: NIM_BIND
+        compose_files:
+        - docker-compose.media.yml
+        - docker-compose.yml
+        container_port: 8000
+        host_port: 8206
+        port_var: NIM_HOST_PORT
+        protocol: null
+    sources:
+    - compose
+  ollama-edge:
+    slots:
+      OLLAMA_EDGE_PORT:
+        bind_var: null
+        compose_files:
+        - docker-compose.jetson-edge.override.yml
+        container_port: 11434
+        host_port: 11434
+        port_var: OLLAMA_EDGE_PORT
+        protocol: null
+    sources:
+    - compose
+  open-notebook:
+    slots:
+      OPEN_NOTEBOOK_API_PORT:
+        bind_var: null
+        compose_files:
+        - docker-compose.open-notebook.yml
+        container_port: 5055
+        host_port: 5055
+        port_var: OPEN_NOTEBOOK_API_PORT
+        protocol: null
+      OPEN_NOTEBOOK_UI_PORT:
+        bind_var: null
+        compose_files:
+        - docker-compose.open-notebook.yml
+        container_port: 8502
+        host_port: 8503
+        port_var: OPEN_NOTEBOOK_UI_PORT
+        protocol: null
+    sources:
+    - compose
+  openroom:
+    slots:
+      OPENROOM_PORT:
+        bind_var: OPENROOM_BIND
+        compose_files:
+        - docker-compose.ui.yml
+        - docker-compose.yml
+        container_port: 3000
+        host_port: 5173
+        port_var: OPENROOM_PORT
+        protocol: null
+    sources:
+    - compose
+  otel-collector:
+    slots:
+      OTEL_GRPC_PORT:
+        bind_var: null
+        compose_files:
+        - docker-compose.tracing.yml
+        container_port: 4317
+        host_port: 4327
+        port_var: OTEL_GRPC_PORT
+        protocol: null
+      OTEL_HTTP_PORT:
+        bind_var: null
+        compose_files:
+        - docker-compose.tracing.yml
+        container_port: 4318
+        host_port: 4318
+        port_var: OTEL_HTTP_PORT
+        protocol: null
+      OTEL_METRICS_PORT:
+        bind_var: null
+        compose_files:
+        - docker-compose.tracing.yml
+        container_port: 8889
+        host_port: 8889
+        port_var: OTEL_METRICS_PORT
+        protocol: null
+    sources:
+    - compose
+  p7:
+    slots:
+      P7_PORT:
+        bind_var: P7_BIND
+        compose_files:
+        - docker-compose.core.yml
+        - docker-compose.yml
+        container_port: 8120
+        host_port: 8120
+        port_var: P7_PORT
+        protocol: null
+    sources:
+    - compose
+  p7-room-orchestrator:
+    slots:
+      P7_ROOM_ORCHESTRATOR_PORT:
+        bind_var: P7_ROOM_ORCHESTRATOR_BIND
+        compose_files:
+        - docker-compose.agents.yml
+        - docker-compose.yml
+        container_port: 8122
+        host_port: 8122
+        port_var: P7_ROOM_ORCHESTRATOR_PORT
+        protocol: null
+    sources:
+    - compose
+    - port_allocator
+    - service_catalog
+  pdf-ingest:
+    slots:
+      PDF_INGEST_PORT:
+        bind_var: PDF_INGEST_BIND
+        compose_files:
+        - docker-compose.workers.yml
+        - docker-compose.yml
+        container_port: 8092
+        host_port: 8092
+        port_var: PDF_INGEST_PORT
+        protocol: null
+    sources:
+    - compose
+    - port_allocator
+    - service_catalog
+  pinokio_bridge:
+    slots:
+      PINOKIO_BRIDGE_PORT:
+        bind_var: PINOKIO_BRIDGE_BIND
+        compose_files:
+        - docker-compose.apps.yml
+        - docker-compose.yml
+        container_port: 8130
+        host_port: 8130
+        port_var: PINOKIO_BRIDGE_PORT
+        protocol: null
+    sources:
+    - compose
+  pmoves-ollama:
+    slots:
+      OLLAMA_HOST_PORT:
+        bind_var: OLLAMA_BIND
+        compose_files:
+        - docker-compose.media.yml
+        - docker-compose.yml
+        - docker-compose.z890.yml
+        container_port: 11434
+        host_port: 11435
+        port_var: OLLAMA_HOST_PORT
+        protocol: null
+      PMOVES_OLLAMA_PORT:
+        bind_var: null
+        compose_files:
+        - docker-compose.spark-sidecar.yml
+        container_port: 11434
+        host_port: 11434
+        port_var: PMOVES_OLLAMA_PORT
+        protocol: null
+    sources:
+    - compose
+  pmoves-ui:
+    slots:
+      PMOVES_UI_PORT:
+        bind_var: PMOVES_UI_BIND
+        compose_files:
+        - docker-compose.ui.yml
+        - docker-compose.yml
+        container_port: 3000
+        host_port: 4482
+        port_var: PMOVES_UI_PORT
+        protocol: null
+    sources:
+    - compose
+    - service_catalog
+  pmoves-yt:
+    slots:
+      PMOVES_YT_PORT:
+        bind_var: PMOVES_YT_BIND
+        compose_files:
+        - docker-compose.apps.yml
+        - docker-compose.yml
+        container_port: 8077
+        host_port: 8077
+        port_var: PMOVES_YT_PORT
+        protocol: null
+    sources:
+    - compose
+    - port_allocator
+    - service_catalog
+  postgres:
+    slots:
+      __registry_only_postgres:
+        bind_var: null
+        compose_files: []
+        container_port: null
+        host_port: 5432
+        port_var: null
+        protocol: null
+    sources:
+    - port_allocator
+    - service_catalog
+  postgrest:
+    slots:
+      __registry_only_postgrest:
+        bind_var: null
+        compose_files: []
+        container_port: null
+        host_port: 3010
+        port_var: null
+        protocol: null
+    sources:
+    - port_allocator
+    - service_catalog
+  presign:
+    slots:
+      PRESIGN_PORT:
+        bind_var: PRESIGN_BIND
+        compose_files:
+        - docker-compose.workers.yml
+        - docker-compose.yml
+        container_port: 8080
+        host_port: 8088
+        port_var: PRESIGN_PORT
+        protocol: null
+    sources:
+    - compose
+    - port_allocator
+    - service_catalog
+  prometheus:
+    slots:
+      __registry_only_prometheus:
+        bind_var: null
+        compose_files: []
+        container_port: null
+        host_port: 9090
+        port_var: null
+        protocol: null
+    sources:
+    - port_allocator
+    - service_catalog
+  publisher-discord:
+    slots:
+      PUBLISHER_DISCORD_PORT:
+        bind_var: PUBLISHER_DISCORD_BIND
+        compose_files:
+        - docker-compose.workers.yml
+        - docker-compose.yml
+        container_port: 8092
+        host_port: 8094
+        port_var: PUBLISHER_DISCORD_PORT
+        protocol: null
+    sources:
+    - compose
+    - port_allocator
+    - service_catalog
+  qdrant:
+    slots:
+      QDRANT_PORT:
+        bind_var: QDRANT_BIND
+        compose_files:
+        - docker-compose.core.yml
+        - docker-compose.yml
+        container_port: 6333
+        host_port: 6333
+        port_var: QDRANT_PORT
+        protocol: null
+    sources:
+    - compose
+    - port_allocator
+    - service_catalog
+  qdrant-dashboard:
+    slots:
+      __registry_only_qdrant-dashboard:
+        bind_var: null
+        compose_files: []
+        container_port: null
+        host_port: 6333
+        port_var: null
+        protocol: null
+    sources:
+    - port_allocator
+  render-webhook:
+    slots:
+      RENDER_WEBHOOK_PORT:
+        bind_var: RENDER_WEBHOOK_BIND
+        compose_files:
+        - docker-compose.workers.yml
+        - docker-compose.yml
+        container_port: 8085
+        host_port: 8085
+        port_var: RENDER_WEBHOOK_PORT
+        protocol: null
+    sources:
+    - compose
+    - port_allocator
+    - service_catalog
+  resource-detector:
+    slots:
+      __registry_only_resource-detector:
+        bind_var: null
+        compose_files: []
+        container_port: null
+        host_port: 8116
+        port_var: null
+        protocol: null
+    sources:
+    - service_catalog
+  retrieval-eval:
+    slots:
+      RETRIEVAL_EVAL_PORT:
+        bind_var: RETRIEVAL_EVAL_BIND
+        compose_files:
+        - docker-compose.workers.yml
+        - docker-compose.yml
+        container_port: 8090
+        host_port: 8090
+        port_var: RETRIEVAL_EVAL_PORT
+        protocol: null
+    sources:
+    - compose
+  rustdesk-hbbr:
+    slots:
+      RUSTDESK_HBBR_21117_PORT:
+        bind_var: null
+        compose_files:
+        - docker-compose.remote.yml
+        container_port: 21117
+        host_port: 21117
+        port_var: RUSTDESK_HBBR_21117_PORT
+        protocol: null
+      RUSTDESK_HBBR_21119_PORT:
+        bind_var: null
+        compose_files:
+        - docker-compose.remote.yml
+        container_port: 21119
+        host_port: 21119
+        port_var: RUSTDESK_HBBR_21119_PORT
+        protocol: null
+    sources:
+    - compose
+  rustdesk-hbbs:
+    slots:
+      RUSTDESK_HBBS_21115_PORT:
+        bind_var: null
+        compose_files:
+        - docker-compose.remote.yml
+        container_port: 21115
+        host_port: 21115
+        port_var: RUSTDESK_HBBS_21115_PORT
+        protocol: null
+      RUSTDESK_HBBS_21116_PORT:
+        bind_var: null
+        compose_files:
+        - docker-compose.remote.yml
+        container_port: 21116
+        host_port: 21116
+        port_var: RUSTDESK_HBBS_21116_PORT
+        protocol: null
+      RUSTDESK_HBBS_21118_PORT:
+        bind_var: null
+        compose_files:
+        - docker-compose.remote.yml
+        container_port: 21118
+        host_port: 21118
+        port_var: RUSTDESK_HBBS_21118_PORT
+        protocol: null
+    sources:
+    - compose
+  semantic-cache:
+    slots:
+      SEMANTIC_CACHE_PORT:
+        bind_var: null
+        compose_files:
+        - docker-compose.cache.yml
+        container_port: 8100
+        host_port: 8100
+        port_var: SEMANTIC_CACHE_PORT
+        protocol: null
+    sources:
+    - compose
+  service-registry:
+    slots:
+      __registry_only_service-registry:
+        bind_var: null
+        compose_files: []
+        container_port: null
+        host_port: 8100
+        port_var: null
+        protocol: null
+    sources:
+    - port_allocator
+  session-context-worker:
+    slots:
+      SESSION_CONTEXT_WORKER_PORT:
+        bind_var: SESSION_CONTEXT_BIND
+        compose_files:
+        - docker-compose.workers.yml
+        - docker-compose.yml
+        container_port: 8100
+        host_port: 8102
+        port_var: SESSION_CONTEXT_WORKER_PORT
+        protocol: null
+    sources:
+    - compose
+  supabase-db:
+    slots:
+      SUPABASE_DB_PORT:
+        bind_var: SUPABASE_DB_BIND
+        compose_files:
+        - docker-compose.core.yml
+        - docker-compose.yml
+        container_port: 5432
+        host_port: 54322
+        port_var: SUPABASE_DB_PORT
+        protocol: null
+    sources:
+    - compose
+    - port_allocator
+  supabase-gotrue:
+    slots:
+      SUPABASE_GOTRUE_PORT:
+        bind_var: SUPABASE_AUTH_BIND
+        compose_files:
+        - docker-compose.core.yml
+        - docker-compose.yml
+        container_port: 9999
+        host_port: 9999
+        port_var: SUPABASE_GOTRUE_PORT
+        protocol: null
+    sources:
+    - compose
+  supabase-kong:
+    slots:
+      SUPABASE_KONG_ADMIN_PORT:
+        bind_var: KONG_ADMIN_BIND
+        compose_files:
+        - docker-compose.core.yml
+        - docker-compose.yml
+        container_port: 8001
+        host_port: 8001
+        port_var: SUPABASE_KONG_ADMIN_PORT
+        protocol: null
+      SUPABASE_KONG_PROXY_PORT:
+        bind_var: KONG_PROXY_BIND
+        compose_files:
+        - docker-compose.core.yml
+        - docker-compose.yml
+        container_port: 8000
+        host_port: 8000
+        port_var: SUPABASE_KONG_PROXY_PORT
+        protocol: null
+    sources:
+    - compose
+  supabase-pooler:
+    slots:
+      SUPABASE_POOLER_PORT:
+        bind_var: SUPABASE_POOLER_BIND
+        compose_files:
+        - docker-compose.core.yml
+        - docker-compose.yml
+        container_port: 5432
+        host_port: 54329
+        port_var: SUPABASE_POOLER_PORT
+        protocol: null
+      SUPABASE_POOLER_TRANSACTION_PORT:
+        bind_var: SUPABASE_POOLER_BIND
+        compose_files:
+        - docker-compose.core.yml
+        - docker-compose.yml
+        container_port: 6543
+        host_port: 6543
+        port_var: SUPABASE_POOLER_TRANSACTION_PORT
+        protocol: null
+    sources:
+    - compose
+  supabase-postgrest:
+    slots:
+      SUPABASE_POSTGREST_PORT:
+        bind_var: SUPABASE_REST_BIND
+        compose_files:
+        - docker-compose.core.yml
+        - docker-compose.yml
+        container_port: 3000
+        host_port: 3010
+        port_var: SUPABASE_POSTGREST_PORT
+        protocol: null
+    sources:
+    - compose
+  supabase-realtime:
+    slots:
+      SUPABASE_REALTIME_PORT:
+        bind_var: SUPABASE_REALTIME_BIND
+        compose_files:
+        - docker-compose.core.yml
+        - docker-compose.yml
+        container_port: 4000
+        host_port: 4010
+        port_var: SUPABASE_REALTIME_PORT
+        protocol: null
+    sources:
+    - compose
+  supabase-storage:
+    slots:
+      SUPABASE_STORAGE_PORT:
+        bind_var: SUPABASE_STORAGE_BIND
+        compose_files:
+        - docker-compose.core.yml
+        - docker-compose.yml
+        container_port: 5000
+        host_port: 5000
+        port_var: SUPABASE_STORAGE_PORT
+        protocol: null
+    sources:
+    - compose
+  supabase-studio:
+    slots:
+      SUPABASE_STUDIO_PORT:
+        bind_var: SUPABASE_STUDIO_BIND
+        compose_files:
+        - docker-compose.core.yml
+        - docker-compose.yml
+        container_port: 3000
+        host_port: 54323
+        port_var: SUPABASE_STUDIO_PORT
+        protocol: null
+    sources:
+    - compose
+  supaserch:
+    slots:
+      SUPASERCH_PORT:
+        bind_var: SUPASERCH_BIND
+        compose_files:
+        - docker-compose.workers.yml
+        - docker-compose.yml
+        container_port: 8099
+        host_port: 8099
+        port_var: SUPASERCH_PORT
+        protocol: null
+    sources:
+    - compose
+    - port_allocator
+    - service_catalog
+  surrealdb:
+    slots:
+      __registry_only_surrealdb:
+        bind_var: null
+        compose_files: []
+        container_port: null
+        host_port: 8000
+        port_var: null
+        protocol: null
+    sources:
+    - port_allocator
+  tensorzero-clickhouse:
+    slots:
+      TENSORZERO_CLICKHOUSE_PORT:
+        bind_var: CLICKHOUSE_BIND
+        compose_files:
+        - docker-compose.core.yml
+        - docker-compose.yml
+        container_port: 8123
+        host_port: 8123
+        port_var: TENSORZERO_CLICKHOUSE_PORT
+        protocol: null
+    sources:
+    - compose
+    - service_catalog
+  tensorzero-gateway:
+    slots:
+      TENSORZERO_PORT:
+        bind_var: TENSORZERO_BIND
+        compose_files:
+        - docker-compose.core.yml
+        - docker-compose.yml
+        container_port: 3000
+        host_port: 3030
+        port_var: TENSORZERO_PORT
+        protocol: null
+    sources:
+    - compose
+    - port_allocator
+    - service_catalog
+  tensorzero-ui:
+    slots:
+      TENSORZERO_UI_PORT:
+        bind_var: TENSORZERO_UI_BIND
+        compose_files:
+        - docker-compose.core.yml
+        - docker-compose.yml
+        container_port: 4000
+        host_port: 4000
+        port_var: TENSORZERO_UI_PORT
+        protocol: null
+    sources:
+    - compose
+    - port_allocator
+    - service_catalog
+  tokenism-simulator:
+    slots:
+      TOKENISM_HOST_PORT:
+        bind_var: TOKENISM_BIND
+        compose_files:
+        - docker-compose.ui.yml
+        - docker-compose.yml
+        container_port: 8100
+        host_port: 8103
+        port_var: TOKENISM_HOST_PORT
+        protocol: null
+    sources:
+    - compose
+  tokenism-ui:
+    slots:
+      TOKENISM_UI_HOST_PORT:
+        bind_var: TOKENISM_UI_BIND
+        compose_files:
+        - docker-compose.ui.yml
+        - docker-compose.yml
+        container_port: 8504
+        host_port: 8504
+        port_var: TOKENISM_UI_HOST_PORT
+        protocol: null
+    sources:
+    - compose
+  traefik:
+    slots:
+      TRAEFIK_443_PORT:
+        bind_var: null
+        compose_files:
+        - docker-compose.traefik.yml
+        container_port: 443
+        host_port: 443
+        port_var: TRAEFIK_443_PORT
+        protocol: null
+      TRAEFIK_80_PORT:
+        bind_var: null
+        compose_files:
+        - docker-compose.traefik.yml
+        container_port: 80
+        host_port: 80
+        port_var: TRAEFIK_80_PORT
+        protocol: null
+    sources:
+    - compose
+  transcribe-backend:
+    slots:
+      TRANSCRIBE_HOST_PORT:
+        bind_var: TRANSCRIBE_BIND
+        compose_files:
+        - docker-compose.media.yml
+        - docker-compose.yml
+        container_port: 8000
+        host_port: 8074
+        port_var: TRANSCRIBE_HOST_PORT
+        protocol: null
+    sources:
+    - compose
+  transcribe-frontend:
+    slots:
+      TRANSCRIBE_FRONTEND_HOST_PORT:
+        bind_var: TRANSCRIBE_FRONTEND_BIND
+        compose_files:
+        - docker-compose.media.yml
+        - docker-compose.yml
+        container_port: 448
+        host_port: 448
+        port_var: TRANSCRIBE_FRONTEND_HOST_PORT
+        protocol: null
+    sources:
+    - compose
+  ultimate-tts-studio:
+    slots:
+      ULTIMATE_TTS_STUDIO_HOST_PORT:
+        bind_var: null
+        compose_files:
+        - docker-compose.ultimate-tts-studio.yml
+        container_port: 7860
+        host_port: 7861
+        port_var: ULTIMATE_TTS_STUDIO_HOST_PORT
+        protocol: null
+      ULTIMATE_TTS_STUDIO_PORT:
+        bind_var: TTS_BIND
+        compose_files:
+        - docker-compose.media.yml
+        - docker-compose.yml
+        container_port: 7861
+        host_port: 7861
+        port_var: ULTIMATE_TTS_STUDIO_PORT
+        protocol: null
+    sources:
+    - compose
+    - port_allocator
+    - service_catalog
+  vibevoice:
+    slots:
+      VIBEVOICE_HOST_PORT:
+        bind_var: null
+        compose_files:
+        - docker-compose.voice.yml
+        container_port: 3000
+        host_port: 3000
+        port_var: VIBEVOICE_HOST_PORT
+        protocol: null
+    sources:
+    - compose
+  vllm-orchestrator:
+    slots:
+      __registry_only_vllm-orchestrator:
+        bind_var: null
+        compose_files: []
+        container_port: null
+        host_port: 8117
+        port_var: null
+        protocol: null
+    sources:
+    - service_catalog
+  voice-relay:
+    slots:
+      VOICE_RELAY_PORT:
+        bind_var: VOICE_RELAY_BIND
+        compose_files:
+        - docker-compose.media.yml
+        - docker-compose.yml
+        container_port: 8121
+        host_port: 8121
+        port_var: VOICE_RELAY_PORT
+        protocol: null
+    sources:
+    - compose
+    - service_catalog
+  voice-sampler:
+    slots:
+      VOICE_SAMPLER_PORT:
+        bind_var: VOICE_SAMPLER_BIND
+        compose_files:
+        - docker-compose.media.yml
+        - docker-compose.yml
+        container_port: 8124
+        host_port: 8124
+        port_var: VOICE_SAMPLER_PORT
+        protocol: null
+    sources:
+    - compose
+  watch-folder-router:
+    slots:
+      WATCH_FOLDER_ROUTER_PORT:
+        bind_var: WATCH_FOLDER_ROUTER_BIND
+        compose_files:
+        - docker-compose.workers.yml
+        - docker-compose.yml
+        container_port: 8125
+        host_port: 8125
+        port_var: WATCH_FOLDER_ROUTER_PORT
+        protocol: null
+    sources:
+    - compose
+  wealth-mcp:
+    slots:
+      WEALTH_MCP_PORT:
+        bind_var: WEALTH_MCP_BIND
+        compose_files:
+        - docker-compose.agents.yml
+        - docker-compose.yml
+        container_port: 8092
+        host_port: 8208
+        port_var: WEALTH_MCP_PORT
+        protocol: null
+    sources:
+    - compose
+  wger:
+    slots:
+      WGER_8000_PORT:
+        bind_var: null
+        compose_files:
+        - docker-compose.wger.yml
+        container_port: 8000
+        host_port: 8000
+        port_var: WGER_8000_PORT
+        protocol: null
+      WGER_PORT:
+        bind_var: WGER_BIND
+        compose_files:
+        - docker-compose.apps.yml
+        - docker-compose.yml
+        container_port: 8000
+        host_port: 8000
+        port_var: WGER_PORT
+        protocol: null
+    sources:
+    - compose
+  work-marshaling:
+    slots:
+      __registry_only_work-marshaling:
+        bind_var: null
+        compose_files: []
+        container_port: null
+        host_port: 8118
+        port_var: null
+        protocol: null
+    sources:
+    - service_catalog
+  yt-cookie-refresher:
+    slots:
+      YT_COOKIE_REFRESHER_PORT:
+        bind_var: YT_COOKIE_REFRESHER_BIND
+        compose_files:
+        - docker-compose.yt-cookies.yml
+        container_port: 8115
+        host_port: 8126
+        port_var: YT_COOKIE_REFRESHER_PORT
+        protocol: null
+    sources:
+    - compose
+version: 1
