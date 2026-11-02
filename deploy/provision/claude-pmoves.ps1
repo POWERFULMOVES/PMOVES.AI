@@ -636,7 +636,11 @@ if (Test-Path -LiteralPath $identTool) {
                 if (-not (Test-Path -LiteralPath $carryTool)) {
                     $carryLine = "cipher carry: unmeasurable (no $carryTool)"
                 } else {
-                    $carryArgv = @($carryTool, '--agent', $nodeIdent, '--shell')
+                    # The signing-card agentId, not the registry key -- parity
+                    # with claude-pmoves.sh (PM_IDENT_CIPHER_ID, falling back to
+                    # the registry identity where no agentId is declared).
+                    $carryAgent = if ($ident['PMOVES_CIPHER_AGENT_ID']) { $ident['PMOVES_CIPHER_AGENT_ID'] } else { $nodeIdent }
+                    $carryArgv = @($carryTool, '--agent', $carryAgent, '--shell')
                     if ($identPy.Count -gt 1) { $carryArgv = @($identPy[1..($identPy.Count - 1)]) + $carryArgv }
                     # Same 5.1 stderr-under-'Stop' guard as the resolver above.
                     $prevErr = $ErrorActionPreference; $ErrorActionPreference = 'SilentlyContinue'
