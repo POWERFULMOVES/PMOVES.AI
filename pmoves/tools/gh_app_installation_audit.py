@@ -617,13 +617,11 @@ def check_registry_names(
     reported so a reader can tell a real cross-check from one that compared
     nothing.
 
-    A key is a problem when ALL THREE hold:
+    A key is a problem when BOTH hold:
       1. it is not the repo name of ANY submodule (so it names no vendored
          repo), AND
       2. it IS the checkout path of a submodule (so it was written from the
-         directory rather than from the repo), AND
-      3. that path's repo is a DIFFERENT repo (a casing difference is not a
-         defect).
+         directory rather than from the repo).
 
     Condition (1) is what keeps the case aliases honest. ``PMOVES-N8N`` is a
     registry key AND the path ``PMOVES-n8n``, whose URL points at the
@@ -631,6 +629,17 @@ def check_registry_names(
     repo checked out at the path ``PMOVES-N8N-Auto``, so it names a real repo
     and is not a defect. Only a key that names NO repo at all while
     masquerading as a path is one.
+
+    There is no THIRD condition, and the reason is structural rather than
+    incidental: ``submodule_index`` records a path and the repo at that path
+    in the SAME step, so the repo's casefolded name is in ``repo_names``
+    whenever the path is in ``path_to_repo``. A key equal to its own path's
+    repo name is therefore already excluded by condition (1). An earlier
+    revision spelled that out as a third clause and guarded it with
+    ``if repo.casefold() == key: continue`` -- a branch that could never be
+    reached, because reaching it required the key to be absent from the very
+    set the same function filled. Dead code in a fail-closed gate still
+    teaches the next reader that the rule is more complicated than it is.
     """
     path_to_repo, repo_names = submodule_index(gitmodules)
     problems: list[str] = []
@@ -640,8 +649,6 @@ def check_registry_names(
             continue
         repo = path_to_repo.get(key)
         if repo is None:
-            continue
-        if repo.casefold() == key:
             continue
         problems.append(
             f"{name}: the registry key is a checkout PATH, not a repo name. "

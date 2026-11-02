@@ -189,7 +189,7 @@ appear in **neither**.
 | F7f | The encoding ratchet: `io.open` and `codecs.open` are TEXT-mode openers and are no longer exempted as binary handles, the unreadable-file test now writes bytes that cannot be decoded instead of a perfectly readable file, and the mutation harness's byte-exact restore no longer certifies byte-exactness through a newline-translating lens | `pmoves/tools/windows_encoding_ratchet.py`, `pmoves/tests/tools/test_windows_encoding_ratchet.py`, `pmoves/tests/tools/test_windows_encoding_ratchet_mutation_kill.py` |
 | F7g | The image staleness probe: a line-CONTINUED `COPY` is joined into one logical instruction (reading physical lines dropped the second source — a FALSE NEGATIVE, the dangerous direction), and a wildcard is resolved PER SEGMENT so `services/*/requirements.txt` resolves instead of asking whether the literal path `services/*` is a directory | `pmoves/tools/image_staleness_ratchet.py` |
 | F7h | The encoding gate's INSTRUMENT-ERROR term restored to the exit condition, with the comment above it restored to the truth: a gate that cannot measure fails CLOSED | `pmoves/tools/windows_encoding_ratchet.py` |
-| F7i | The lane's asset counts, MEASURED by AST rather than hand-written: **191** behavioural test functions and **68** mutation kills across five suites | `pmoves/tests/tools/`, `pmoves/tools/tests/` |
+| F7i | The lane's asset counts, MEASURED by AST rather than hand-written: **192** behavioural test functions and **68** mutation kills across five suites | `pmoves/tests/tools/`, `pmoves/tools/tests/` |
 
 ---
 

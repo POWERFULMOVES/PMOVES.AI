@@ -1270,6 +1270,36 @@ def test_a_registry_key_that_is_a_repo_at_a_different_path_is_not_a_defect(tmp_p
     )
 
 
+def test_a_key_equal_to_its_own_paths_repo_name_is_not_a_problem(tmp_path):
+    """The rule has TWO conditions, not three.
+
+    A submodule checked out at the path `PMOVES-n8n` whose repo is
+    `PMOVES-N8N` records BOTH the path and the repo in the same step, so the
+    repo's casefolded name is already in the repo-name set. A registry key
+    that names that repo is therefore excluded by condition (1) alone.
+
+    An earlier revision carried a third condition -- "that path's repo is a
+    DIFFERENT repo" -- and guarded it with `if repo.casefold() == key:
+    continue`. That branch could never be reached: reaching it required the
+    key to be absent from the very set the same function had just filled.
+    Dead code in a fail-closed gate still teaches the next reader that the
+    rule is more complicated than it is, so it is gone -- and this test pins
+    the behaviour its removal preserved.
+    """
+    gitmodules = _write_gitmodules(
+        tmp_path / ".gitmodules",
+        [("PMOVES-n8n", "PMOVES-N8N")],
+    )
+    registry = _write_registry(tmp_path / "registry.json", forks=["PMOVES-N8N"])
+
+    code = audit.main(
+        ["--plan", "--registry", str(registry), "--gitmodules", str(gitmodules)]
+    )
+    assert code == 0, (
+        f"`PMOVES-N8N` names a repo and must not be flagged, got exit {code}"
+    )
+
+
 def test_the_real_registry_passes_the_gitmodules_cross_check():
     """The registry AS IT STANDS must name repos, not checkout paths.
 
