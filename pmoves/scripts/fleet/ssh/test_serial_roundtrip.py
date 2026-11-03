@@ -40,7 +40,7 @@ def _generate_token(tmp_path, monkeypatch, role="guest", device="roundtrip-test"
     args = argparse.Namespace(role=role, ttl="15m", device=device)
     gen.generate(args)
     assert ledger.exists(), "no ledger written by generate()"
-    entry = json.loads(ledger.read_text().strip().split("\n")[-1])
+    entry = json.loads(ledger.read_text(encoding="utf-8").strip().split("\n")[-1])
     return entry
 
 
@@ -68,7 +68,7 @@ def test_issue_cert_accepts_real_serial(tmp_path, monkeypatch):
         ["ssh-keygen", "-q", "-t", "ed25519", "-f", str(key), "-N", "", "-C", "e2e"],
         check=True, capture_output=True,
     )
-    pubkey = key.with_suffix(".pub").read_text().strip()
+    pubkey = key.with_suffix(".pub").read_text(encoding="utf-8").strip()
     out = issue_cert(payload, ca_dir / "pmoves-fleet-ca_ed25519", pubkey)
     assert out["serial"] == entry["serial"]
     assert "-cert-" in out["cert"]
@@ -113,7 +113,7 @@ def test_torn_mid_digit_reserves_nothing(tmp_path, monkeypatch, capsys):
     """`"serial": 1` cut from 12345 must not reserve the wrong serial 1."""
     gen = _load_gen()
     ledger = tmp_path / "ledger.jsonl"
-    ledger.write_text('{"token_id": "torn", "serial": 1\n')
+    ledger.write_text('{"token_id": "torn", "serial": 1\n', encoding="utf-8")
     monkeypatch.setattr(gen, "LEDGER_PATH", ledger)
     assert gen.ledger_serials() == set()
     assert "no serial found" in capsys.readouterr().err
@@ -143,7 +143,7 @@ def test_full_width_serial_is_revocable(tmp_path):
     )
     payload = {"role": "guest", "expires_at": time.time() + 600, "serial": serial}
     out = issue_cert(payload, ca_dir / "pmoves-fleet-ca_ed25519",
-                     key.with_suffix(".pub").read_text())
+                     key.with_suffix(".pub").read_text(encoding="utf-8"))
     cert = tmp_path / "enrollee-cert.pub"
     cert.write_text(out["cert"] + "\n")
     krl = gen_krl([serial], tmp_path / "revoked.krl",

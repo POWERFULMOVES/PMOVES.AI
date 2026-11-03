@@ -65,7 +65,7 @@ def _bind(root: Path, agent: str, env: dict[str, str] | None = None) -> dict:
 def _root(tmp_path: Path, body: str | None) -> Path:
     (tmp_path / "pmoves").mkdir()
     if body is not None:
-        (tmp_path / "pmoves" / ".env.local").write_text(body, newline="\n")
+        (tmp_path / "pmoves" / ".env.local").write_text(body, encoding="utf-8", newline="\n")
     return tmp_path
 
 
@@ -129,7 +129,7 @@ def test_ca_broken_configured_path_is_kept_and_named(tmp_path):
 @needs_ps
 def test_ca_readable_configured_path_is_silent(tmp_path):
     pem = tmp_path / "ca.pem"
-    pem.write_text("x")
+    pem.write_text("x", encoding="utf-8")
     assert _ca({"SSL_CERT_FILE": str(pem)}) == ""
 
 
