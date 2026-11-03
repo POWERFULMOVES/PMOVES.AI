@@ -84,7 +84,8 @@ def test_mint_serial_never_reuses_a_ledger_serial(tmp_path, monkeypatch):
     ledger = tmp_path / "ledger.jsonl"
     ledger.write_text(
         json.dumps({"token_id": "old", "serial": 7, "expires_at": 1}) + "\n"
-        + json.dumps({"token_id": "legacy-no-serial", "expires_at": 1}) + "\n"
+        + json.dumps({"token_id": "legacy-no-serial", "expires_at": 1}) + "\n",
+        encoding="utf-8",
     )
     monkeypatch.setattr(gen, "LEDGER_PATH", ledger)
     draws = iter([7, 0, 9])  # collision, then the invalid zero, then free
@@ -99,7 +100,8 @@ def test_torn_ledger_line_does_not_brick_minting(tmp_path, monkeypatch, capsys):
     ledger = tmp_path / "ledger.jsonl"
     ledger.write_text(
         json.dumps({"token_id": "ok", "serial": 7, "expires_at": 1}) + "\n"
-        + '{"token_id": "torn", "serial": 11, "expi\n'
+        + '{"token_id": "torn", "serial": 11, "expi\n',
+        encoding="utf-8",
     )
     monkeypatch.setattr(gen, "LEDGER_PATH", ledger)
     assert gen.ledger_serials() == {7, 11}
@@ -145,7 +147,7 @@ def test_full_width_serial_is_revocable(tmp_path):
     out = issue_cert(payload, ca_dir / "pmoves-fleet-ca_ed25519",
                      key.with_suffix(".pub").read_text(encoding="utf-8"))
     cert = tmp_path / "enrollee-cert.pub"
-    cert.write_text(out["cert"] + "\n")
+    cert.write_text(out["cert"] + "\n", encoding="utf-8")
     krl = gen_krl([serial], tmp_path / "revoked.krl",
                   ca_dir / "pmoves-fleet-ca_ed25519.pub")
     # ssh-keygen -Q: 0 = not revoked, 1 = revoked, 255 = unreadable KRL

@@ -79,7 +79,7 @@ def env(tmp_path):
     for name, body in (("sshd", _STUB_SSHD), ("systemctl", _STUB_SYSTEMCTL),
                        ("service", _STUB_SERVICE)):
         p = stubs / name
-        p.write_text(body, newline="\n")
+        p.write_text(body, newline="\n", encoding="utf-8")
         p.chmod(0o755)
     ca_dir = tmp_path / "ca"
     generate_ca(ca_dir)
