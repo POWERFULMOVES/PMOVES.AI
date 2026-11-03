@@ -53,8 +53,16 @@ function Invoke-PmCipherTokenBind {
 
     # First line whose name (text before the first '=') is EXACTLY $key --
     # awk -F= '$1 == k' in the twin. Fixed-string compare, no regex.
+    # A .NET exception is terminating whatever ErrorActionPreference says, so a
+    # locked or unreadable file is caught here and degrades to the loud
+    # 'unbound' line -- the twin's `awk ... 2>/dev/null || line=""`.
+    try {
+        $lines = [System.IO.File]::ReadAllLines($envf)
+    } catch {
+        return [pscustomobject]@{ Ok = $false; Line = "cipher token=unbound -- $envf unreadable ($($_.Exception.GetType().Name)); session keeps the bootstrap bearer" }
+    }
     $tok = $null
-    foreach ($line in [System.IO.File]::ReadAllLines($envf)) {
+    foreach ($line in $lines) {
         $eq = $line.IndexOf('=')
         if ($eq -lt 0) { continue }
         if ($line.Substring(0, $eq) -cne $key) { continue }

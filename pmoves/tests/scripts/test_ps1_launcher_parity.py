@@ -38,16 +38,19 @@ LAUNCHER = REPO_ROOT / "deploy" / "provision" / "claude-pmoves.ps1"
 
 PWSH = shutil.which("pwsh") or (shutil.which("powershell") if os.name == "nt" else None)
 needs_ps = pytest.mark.skipif(PWSH is None, reason="no PowerShell on this host")
+# claude-pmoves.cmd runs `powershell` -- Windows PowerShell 5.1, which throws on
+# path probes that pwsh 7 tolerates. Tests for those use the launcher's shell.
+PS_LAUNCHER = (shutil.which("powershell") if os.name == "nt" else None) or PWSH
 
 # Obviously-fake bearers: shape-valid, never minted.
 GOOD = "cipher_0123456789abcdef0123456789abcdef"
 
 
-def _ps(script: str, env: dict[str, str] | None = None) -> dict:
+def _ps(script: str, env: dict[str, str] | None = None, exe: str | None = None) -> dict:
     full = {k: v for k, v in os.environ.items() if k != "CIPHER_API_TOKEN"}
     full.update(env or {})
     r = subprocess.run(
-        [PWSH, "-NoProfile", "-NonInteractive", "-Command", script],
+        [exe or PWSH, "-NoProfile", "-NonInteractive", "-Command", script],
         capture_output=True, text=True, env=full, timeout=60,
     )
     assert r.returncode == 0, r.stderr
@@ -112,6 +115,22 @@ def test_refusals_leave_the_bootstrap_token_and_say_why(tmp_path, body, agent, w
     assert r["tok"] == "bootstrap-shared"
 
 
+@needs_ps
+def test_locked_env_local_degrades_to_unbound_not_a_crash(tmp_path):
+    # A .NET exception is terminating in PowerShell; the twin's awk fails soft.
+    root = _root(tmp_path, f"CIPHER_TOKEN_Z890_CLAUDE={GOOD}\n")
+    envf = root / "pmoves" / ".env.local"
+    r = _ps(
+        "$ErrorActionPreference = 'Stop'; "
+        f"$h = [System.IO.File]::Open('{envf}', 'Open', 'ReadWrite', 'None'); "
+        f". '{BIND}'; $r = Invoke-PmCipherTokenBind -Root '{root}' -Agent 'z890-claude'; $h.Close(); "
+        "@{ ok = $r.Ok; line = $r.Line; tok = \"$env:CIPHER_API_TOKEN\" } | ConvertTo-Json -Compress",
+        {"CIPHER_API_TOKEN": "bootstrap-shared"},
+    )
+    assert r["ok"] is False and "unreadable" in r["line"]
+    assert r["tok"] == "bootstrap-shared"
+
+
 # ------------------------------------------------------------------- ca + brv
 
 def _ca(env: dict[str, str]) -> str:
@@ -131,6 +150,15 @@ def test_ca_readable_configured_path_is_silent(tmp_path):
     pem = tmp_path / "ca.pem"
     pem.write_text("x", encoding="utf-8")
     assert _ca({"SSL_CERT_FILE": str(pem)}) == ""
+
+
+@needs_ps
+def test_ca_unprobeable_path_warns_under_stop(tmp_path):
+    # Under 5.1 Test-Path throws ArgumentException on '<' / '|' (measured); the
+    # launcher runs with EAP=Stop, so an unguarded probe kills the launch.
+    out = _ps(f"$ErrorActionPreference = 'Stop'; . '{CA}'; @{{ line = (Invoke-PmCaBundleNormalize) }} | ConvertTo-Json -Compress",
+              {"SSL_CERT_FILE": r"C:\pki\a<b|c.crt"}, exe=PS_LAUNCHER)
+    assert "WARN" in (out["line"] or "") and "SSL_CERT_FILE=" in out["line"]
 
 
 @needs_ps
@@ -169,3 +197,12 @@ def test_helpers_are_ascii_for_windows_powershell_5():
     # a message string turns into mojibake on the operator's console.
     for p in (BIND, CA, BRV):
         p.read_bytes().decode("ascii")
+
+
+def test_explicit_token_restore_does_not_wait_for_identity_success():
+    # Every fail-open path in identity resolution would otherwise launch with
+    # env.shared's bootstrap bearer standing (Codex + Kilo review, #3449).
+    text = LAUNCHER.read_text(encoding="utf-8")
+    restore = _pos(text, "if ($script:PmCipherPreEnvToken) { $env:CIPHER_API_TOKEN")
+    assert _pos(text, "if (Test-Path $envf)") < restore < _pos(text, "$identTool = Join-Path")
+    assert text.count("$env:CIPHER_API_TOKEN = $script:PmCipherPreEnvToken") == 1

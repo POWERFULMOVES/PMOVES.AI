@@ -549,6 +549,12 @@ if (Get-Command tailscale -ErrorAction SilentlyContinue) {
 # convenience; losing it must not cost you the session." Every failure warns
 # and launches.
 # ---------------------------------------------------------------------------
+# An explicit cipher_ token captured before env.shared loaded is restored HERE,
+# unconditionally -- not inside the identity-success branch below. Every
+# fail-open path there (no python, resolver exit != 0, node unresolved) would
+# otherwise launch with env.shared's bootstrap bearer standing. Parity with
+# claude-pmoves.sh, which restores before identity resolution.
+if ($script:PmCipherPreEnvToken) { $env:CIPHER_API_TOKEN = $script:PmCipherPreEnvToken }
 $identityArgs = @()
 $identTool = Join-Path $root 'pmoves\tools\node_identity.py'
 if (Test-Path -LiteralPath $identTool) {
@@ -626,7 +632,6 @@ if (Test-Path -LiteralPath $identTool) {
                 # key: the token store is CIPHER_TOKEN_<AGENT_ID>. Measured on
                 # Z890 2026-11-02 without this: writes-land-as=bootstrap.
                 # ---------------------------------------------------------
-                if ($script:PmCipherPreEnvToken) { $env:CIPHER_API_TOKEN = $script:PmCipherPreEnvToken }
                 if (Get-Command Invoke-PmCipherTokenBind -ErrorAction SilentlyContinue) {
                     $bind = Invoke-PmCipherTokenBind -Root $root -Agent $ident['PMOVES_CIPHER_AGENT_ID']
                     Write-Host "[claude-pmoves] $($bind.Line)"

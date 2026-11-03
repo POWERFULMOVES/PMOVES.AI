@@ -32,13 +32,20 @@ function Invoke-PmCaBundleNormalize {
         return ''
     }
 
+    # Test-Path throws on characters illegal in a path ('<', '|', ...), and the
+    # launcher runs with ErrorActionPreference=Stop. A value that cannot even be
+    # probed is not a readable path: report it, never fail the launch.
+    $isPath = {
+        param($p, $type)
+        try { return [bool](Test-Path -LiteralPath $p -PathType $type -ErrorAction Stop) } catch { return $false }
+    }
     $broken = @()
     foreach ($v in @('SSL_CERT_FILE', 'REQUESTS_CA_BUNDLE', 'CURL_CA_BUNDLE', 'NODE_EXTRA_CA_CERTS')) {
         $p = [Environment]::GetEnvironmentVariable($v, 'Process')
-        if ($p -and -not (Test-Path -LiteralPath $p -PathType Leaf)) { $broken += "$v=$p" }
+        if ($p -and -not (& $isPath $p 'Leaf')) { $broken += "$v=$p" }
     }
     $d = $env:SSL_CERT_DIR
-    if ($d -and -not (Test-Path -LiteralPath $d -PathType Container)) { $broken += "SSL_CERT_DIR=$d" }
+    if ($d -and -not (& $isPath $d 'Container')) { $broken += "SSL_CERT_DIR=$d" }
 
     if ($broken.Count -eq 0) { return '' }
 
