@@ -177,6 +177,7 @@ host_clis:
   node:
     purpose: "Node.js — web toolchains (jest/eslint run via package.json scripts, not global). Windows: nvm4w manages versions"
     required: true  # brv needs node >= 20 + npm
+    min_major: 20   # enforced by cli-check (install_tools.check_host_clis)
     install:
       windows: "winget install CoreyButler.NVMforWindows  # then: nvm install lts"
       linux: "curl -fsSL https://fnm.vercel.app/install | bash  # or nvm"
