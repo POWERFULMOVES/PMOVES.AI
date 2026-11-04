@@ -81,10 +81,10 @@ def test_check_registry_outage_is_undecided_not_drift(out, monkeypatch, capsys):
 @pytest.mark.parametrize("live", [True, False])
 def test_check_empty_chat_lane_is_undecided(out, capsys, live):
     if live:
-        out.write_text("[]\n")
+        out.write_text("[]\n", encoding="utf-8")
     assert _exit_code(ms._write_a0_presets, [], [], out, check=True) == 2
     assert _manifest(capsys.readouterr().out)["reason"] == "empty_chat_lane"
-    assert not live or out.read_text() == "[]\n"
+    assert not live or out.read_text(encoding="utf-8") == "[]\n"
 
 
 def test_check_unreadable_live_file_is_undecided(out, capsys):
@@ -95,7 +95,7 @@ def test_check_unreadable_live_file_is_undecided(out, capsys):
 
 def test_check_ignores_the_instance_header(out, monkeypatch):
     ms._write_a0_presets(ROWS, [], out, instance="mesh", apply=True)
-    assert "instance: mesh" in out.read_text()
+    assert "instance: mesh" in out.read_text(encoding="utf-8")
     ms._write_a0_presets(ROWS, [], out, instance="docked", check=True)  # no SystemExit = clean
 
 
@@ -130,7 +130,7 @@ def test_degraded_rederivation_is_reguarded(out, monkeypatch):
     # continue to last-resort rows, never write a header-only file.
     monkeypatch.setattr(ms, "_load_template_rows", lambda: [dict(r) for r in EMBED_ONLY])
     ms._write_a0_presets([], [], out, apply=True)
-    doc = yaml.safe_load(out.read_text())
+    doc = yaml.safe_load(out.read_text(encoding="utf-8"))
     assert doc and doc[0]["name"] == "Default"
     last_resort_chat = next(r for r in ms.A0_LAST_RESORT_ROWS if r["model_type"] == "chat")
     assert doc[0]["chat"]["name"].endswith(last_resort_chat["model_id"])
@@ -180,34 +180,34 @@ def test_review_copies_do_not_collide_across_instances_or_paths(root):
     b = root / "b" / "presets.yaml"
     for p in (a, b):
         p.parent.mkdir(parents=True)
-        p.write_text("[]\n")
+        p.write_text("[]\n", encoding="utf-8")
     ms._write_a0_presets(ROWS, [], a, instance="docked", apply=False)
     ms._write_a0_presets(ROWS, [], b, instance="docked", apply=False)
     ms._write_a0_presets(ROWS, [], a, instance="darkxside", apply=False)
     news = sorted((root / ms.A0_REVIEW_DIR_SUBPATH).glob("*.new"))
     assert len(news) == 3
-    assert a.read_text() == "[]\n" and b.read_text() == "[]\n"  # review mode never touches live
+    assert a.read_text(encoding="utf-8") == "[]\n" and b.read_text(encoding="utf-8") == "[]\n"  # review mode never touches live
 
 
 def test_archives_are_unique_and_pruned_per_instance(root, out, monkeypatch):
     monkeypatch.setenv("A0_PRESETS_BACKUP_KEEP", "3")
     other = root / "other" / "presets.yaml"
     other.parent.mkdir(parents=True)
-    other.write_text("[]\n")
+    other.write_text("[]\n", encoding="utf-8")
     ms._write_a0_presets(ROWS, [], other, instance="darkxside", apply=True)  # 1 archive of its own
-    out.write_text("[]\n")
+    out.write_text("[]\n", encoding="utf-8")
     for _ in range(5):  # same wall-clock second is fine: names never collide
         ms._write_a0_presets(ROWS, [], out, apply=True)
     review = root / ms.A0_REVIEW_DIR_SUBPATH
     mine = sorted(review.glob(ms._review_file_prefix(out, "docked") + ".bak-*"))
     theirs = sorted(review.glob(ms._review_file_prefix(other, "darkxside") + ".bak-*"))
     assert len(mine) == 3 and len(theirs) == 1
-    assert yaml.safe_load(mine[0].read_text())[0]["name"] == "Default"  # oldest pruned first
+    assert yaml.safe_load(mine[0].read_text(encoding="utf-8"))[0]["name"] == "Default"  # oldest pruned first
 
 
 def test_archive_keep_zero_disables_pruning(root, out, monkeypatch):
     monkeypatch.setenv("A0_PRESETS_BACKUP_KEEP", "0")
-    out.write_text("[]\n")
+    out.write_text("[]\n", encoding="utf-8")
     for _ in range(4):
         ms._write_a0_presets(ROWS, [], out, apply=True)
     assert len(list((root / ms.A0_REVIEW_DIR_SUBPATH).glob("*.bak-*"))) == 4
@@ -217,15 +217,15 @@ def test_archive_keep_zero_disables_pruning(root, out, monkeypatch):
 @pytest.mark.parametrize("apply", [True, False])
 def test_malformed_live_file_fails_closed(out, capsys, bad, apply):
     # It may hold hand-kept cloud lanes: never regenerate over it silently.
-    out.write_text(bad)
+    out.write_text(bad, encoding="utf-8")
     assert _exit_code(ms._write_a0_presets, ROWS, [], out, apply=apply) == 2
     assert "hand-kept presets cannot be carried over" in capsys.readouterr().err
-    assert out.read_text() == bad
+    assert out.read_text(encoding="utf-8") == bad
     assert not (ms.ROOT / ms.A0_REVIEW_DIR_SUBPATH).exists()  # no .new / .bak either
 
 
 def test_malformed_live_file_is_drift_under_check(out):
-    out.write_text("- name: [unclosed\n")
+    out.write_text("- name: [unclosed\n", encoding="utf-8")
     assert _exit_code(ms._write_a0_presets, ROWS, [], out, check=True) == 1
 
 
