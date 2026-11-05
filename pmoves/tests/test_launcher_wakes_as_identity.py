@@ -373,28 +373,10 @@ def _ps1_parse(lines: list[str]) -> dict[str, str]:
     return out
 
 
-def _bat_parse(lines: list[str]) -> dict[str, str]:
-    # for /f "tokens=1,* delims==" then set "%%A=%%B": token 1 is the text before
-    # the first '=', token 2 the remainder after it; `set "X="` UNDEFINES X, so an
-    # empty remainder leaves the variable not defined.
-    out: dict[str, str] = {}
-    for line in lines:
-        if not line or line.startswith(";"):
-            continue
-        key, _, rest = line.lstrip("=").partition("=")
-        if rest.lstrip("="):
-            out[key] = rest.lstrip("=")
-    return out
-
-
 def test_the_twins_parsers_are_the_ones_simulated():
     ps1 = PS1.read_text(encoding="utf-8")
     assert f'$line -match "{PS1_PARSE_RE}"' in ps1
     assert "$identOut = & $identPy[0] @identArgv" in ps1 and "'--shell')" in ps1
-    bat = (REPO_ROOT / "pmoves" / "scripts" / "windows" / "claude-pmoves.bat").read_text(encoding="utf-8")
-    assert '"usebackq tokens=1,* delims=="' in bat and "--format cmd" in bat
-    assert 'do set "%%A=%%B"' in bat
-    assert "if not defined PMOVES_IDENTITY_NAME goto ident_noname" in bat
     assert "if ($identName -and $identForm)" in ps1
 
 
@@ -410,25 +392,14 @@ def test_an_undeclared_name_takes_the_fallback_in_the_ps1_parser():
     assert not why.startswith("'") and "'NO-SUCH-IDENTITY'" in why, why
 
 
-def test_an_undeclared_name_takes_the_fallback_in_the_bat_parser():
-    parsed = _bat_parse(_resolver_raw("cmd", PMOVES_REGISTER_IDENTITY="NO-SUCH-IDENTITY"))
-    assert parsed.get("PMOVES_RESOLVED_IDENTITY") == "claude_b850"
-    assert "PMOVES_IDENTITY_NAME" not in parsed      # `if not defined` -> ident_noname
-    assert "PMOVES_REGISTER_FORM" not in parsed
-
-
-def test_a_declared_name_takes_the_bound_branch_in_both_parsers():
-    ps1 = _ps1_parse(_resolver_raw("shell"))
-    bat = _bat_parse(_resolver_raw("cmd"))
-    for parsed in (ps1, bat):
+def test_a_declared_name_takes_the_bound_branch_in_the_ps1_parser():
+    for parsed in (_ps1_parse(_resolver_raw("shell")),):
         assert parsed["PMOVES_IDENTITY_NAME"] == "B850-CLAUDE"
         assert parsed["PMOVES_REGISTER_FORM"] == "B850-CLAUDE (Knuckles)"
         assert parsed["PMOVES_CIPHER_AGENT_ID"] == "b850-claude"
 
 
 def test_every_prompt_twin_carries_the_signing_card():
-    bat = (REPO_ROOT / "pmoves" / "scripts" / "windows" / "claude-pmoves.bat").read_text(encoding="utf-8")
-    assert "signing card %PMOVES_CIPHER_AGENT_ID%" in bat and "%CARD_PART%" in bat
     assert "signing card $identCard" in PS1.read_text(encoding="utf-8")
     assert "signing card ${PM_IDENT_CIPHER_ID}" in LAUNCHER.read_text(encoding="utf-8")
 
@@ -516,14 +487,15 @@ def test_the_second_session_rule_survives_the_default_change(tmp_path: Path):
 
 def test_the_windows_twins_default_to_no_agent():
     """Text-level: neither cmd.exe nor pwsh is assumed on a POSIX CI host."""
-    bat = (REPO_ROOT / "pmoves" / "scripts" / "windows" / "claude-pmoves.bat").read_text(encoding="utf-8")
-    assert 'set "DEFAULT_AGENT=node-steward"' not in bat
-    assert 'set "DEFAULT_AGENT="' in bat
-    assert 'if defined PMOVES_DEFAULT_AGENT set "DEFAULT_AGENT=%PMOVES_DEFAULT_AGENT%"' in bat
-    assert 'if defined DEFAULT_AGENT set "AGENT_ARGS=--agent %DEFAULT_AGENT%"' in bat
-    assert '--agent %DEFAULT_AGENT% %*' not in bat           # the flag path used to force it
-    assert "no role agent and your full tools" in bat
+    # The rule moved out of the .bat shim (now a delegate) into a helper the
+    # .ps1 applies; pm-agent-select.ps1's behaviour is EXECUTED in
+    # tests/scripts/test_ps1_agent_select_and_preflight.py.
+    select = AGENT_SELECT.read_text(encoding="utf-8")
+    assert '$default = "$env:PMOVES_DEFAULT_AGENT"' in select
+    assert "node-steward" not in select.split("function Resolve-PmAgentArgs", 1)[1]  # no baked default
     ps1 = PS1.read_text(encoding="utf-8")
+    assert "pm-agent-select.ps1" in ps1
+    assert ps1.index("Resolve-PmAgentArgs -Root $root") < ps1.index("$identTool = Join-Path")
     assert "no role agent and your full tools" in ps1
     assert "'the role this session was launched with'" not in ps1
 
@@ -553,7 +525,7 @@ def test_the_steward_definition_is_a_delegate_not_the_default():
 # ---------------------------------------------------------------------------
 
 UNKNOWN_NODE = "no-such-node-3243"
-BAT = REPO_ROOT / "pmoves" / "scripts" / "windows" / "claude-pmoves.bat"
+AGENT_SELECT = REPO_ROOT / "pmoves" / "scripts" / "pm-agent-select.ps1"
 NO_AGENT_CLAIM = "This session runs with no role agent and your full tools: claim before any edit, then delegate."
 
 
@@ -596,28 +568,10 @@ def test_the_windows_registry_key_fallbacks_carry_the_no_agent_claim():
     """Text-level, as section 7: neither cmd.exe nor pwsh is assumed here."""
     ps1 = PS1.read_text(encoding="utf-8")
     assert f'if (-not $roleName) {{ $identText += " {NO_AGENT_CLAIM}" }}' in ps1
-    bat = BAT.read_text(encoding="utf-8")
-    assert f'if not defined ROLE set "NOAGENT_PART= {NO_AGENT_CLAIM}"' in bat
-    assert "rather than rediscovering it.%NOAGENT_PART%" in bat
+    # Unresolved identity on Windows gets the .sh's UNRESOLVED claim sentence.
+    assert "Your node identity is UNRESOLVED this session." in ps1
     # The parity holds in the .sh, which the bash tests above execute.
     assert NO_AGENT_CLAIM in LAUNCHER.read_text(encoding="utf-8")
-
-
-def test_the_bat_drops_a_positional_name_with_no_definition():
-    bat = BAT.read_text(encoding="utf-8")
-    assert 'if not exist "%REPO_ROOT%\\.claude\\agents\\%first%.md" set "DROP_FIRST=1"' in bat
-    assert 'if defined DROP_FIRST set "ROLE="' in bat
-    assert "if defined DROP_FIRST goto dropped" in bat
-    assert 'call "%LAUNCHER%" %AGENT_ARGS% %REST% %IDENT_ARGS%' in bat
-    # The drop is routed BEFORE the `--agent %*` call that would forward it.
-    assert bat.index("goto dropped") < bat.index('call "%LAUNCHER%" --agent %*')
-
-
-def test_the_bat_override_echo_is_quoted():
-    """An unquoted &, | or > in the value would be run or redirected by cmd."""
-    bat = BAT.read_text(encoding="utf-8")
-    assert 'echo "[claude-pmoves] PMOVES_DEFAULT_AGENT=%DEFAULT_AGENT% has no' in bat
-    assert "echo [claude-pmoves] PMOVES_DEFAULT_AGENT=" not in bat
 
 
 def test_the_initial_prompt_names_where_a_delegate_finds_its_identity():
