@@ -11,7 +11,11 @@ import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 LAUNCHER = REPO_ROOT / "pmoves" / "scripts" / "claude-pmoves.sh"
-WIN_LAUNCHER = REPO_ROOT / "pmoves" / "scripts" / "windows" / "claude-pmoves.bat"
+# The Windows launcher is the .ps1. The installed claude-pmoves.bat used to carry
+# a second copy of identity resolution and its own prompt; measured 2026-11-04,
+# claude received TWO identity prompts through it. It is a pure delegate now.
+WIN_LAUNCHER = REPO_ROOT / "deploy" / "provision" / "claude-pmoves.ps1"
+WIN_SHIM = REPO_ROOT / "pmoves" / "scripts" / "windows" / "claude-pmoves.bat"
 # The launchers no longer carry identity resolution inline: #3094 extracted it
 # into the shared fragment pm-node-identity.sh (the same shape pm-python.sh and
 # pm-cipher-identity.sh set). These tests grep launcher TEXT for the invariants
@@ -285,9 +289,8 @@ def test_agents_claiming_folds_every_spelling():
 def test_both_launchers_invoke_the_resolver(launcher):
     """BOTH, not either.
 
-    The .bat carries its own copy of DEFAULT_AGENT precisely because "Windows
-    never executes" the .sh -- and the 4090, the node this work exists for, is
-    Windows. An identity wired only into the .sh would have been correct,
+    Windows never executes the .sh -- and the 4090, the node this work exists
+    for, is Windows. An identity wired only into the .sh would have been correct,
     tested, and unreachable on the one machine that needed it. This test is
     parameterised so adding the call to one launcher cannot satisfy it.
     """
@@ -325,31 +328,20 @@ def test_no_launcher_clears_the_operator_override_before_resolving():
         )
 
 
-def test_the_windows_launcher_uses_a_cmd_safe_format():
-    """cmd.exe has no `eval`: --shell's POSIX quotes would be taken literally,
-    setting PMOVES_NODE to the five characters '4090'."""
-    # Match the CALL, not the IDENT_TOOL assignment and not the comments:
-    # `--harness` appears only on the line that actually runs the tool.
-    invocation = [line for line in WIN_LAUNCHER.read_text(encoding="utf-8").splitlines()
-                  if "--harness" in line and not line.strip().startswith("rem")]
-    assert invocation, "no non-comment line invokes the resolver"
-    assert all("--format cmd" in line for line in invocation), invocation
-    assert not any("--shell" in line for line in invocation), invocation
+def test_the_windows_shim_is_a_delegate_not_a_second_launcher():
+    """One launcher per OS. The shim resolves the repo root and hands over.
 
-
-def test_the_windows_launcher_has_no_parenthesised_block_around_the_reason():
-    """The reason strings contain literal parentheses, and cmd.exe expands
-    %VAR% while PARSING a block -- the first `)` closes the block early. The
-    first draft died with "but was unexpected at this time." Guarding on the
-    goto label rather than the absence of `(`, which appears in comments."""
-    text = WIN_LAUNCHER.read_text(encoding="utf-8")
-    assert ":ident_why" in text and "goto ident_why" in text, (
-        "the reason path must be reached by goto, not an if/else block"
-    )
-    assert 'echo "[claude-pmoves] identity unresolved: %PMOVES_IDENTITY_WHY%"' in text, (
-        "the reason must be echoed quoted -- its parentheses are load-bearing "
-        "text, not syntax"
-    )
+    While it resolved identity itself, every Windows launch ran the resolver
+    twice and sent claude two --append-system-prompt blocks, only one carrying
+    the cipher carry (stub-claude dry run on Z890, 2026-11-04).
+    """
+    code = "\n".join(line for line in WIN_SHIM.read_text(encoding="utf-8").splitlines()
+                     if not line.strip().lower().startswith("rem"))
+    for owned_by_the_ps1 in ("node_identity.py", "--append-system-prompt", "PMOVES_DEFAULT_AGENT",
+                             "--agent", "PMOVES_RESOLVED_IDENTITY"):
+        assert owned_by_the_ps1 not in code, f"the shim still does the launcher's job: {owned_by_the_ps1}"
+    assert 'call "%LAUNCHER%" %*' in code
+    assert 'if defined PMOVES_LAUNCHER_ROOT set "REPO_ROOT=%PMOVES_LAUNCHER_ROOT%"' in code
 
 
 # ---------------------------------------------------------------------------
