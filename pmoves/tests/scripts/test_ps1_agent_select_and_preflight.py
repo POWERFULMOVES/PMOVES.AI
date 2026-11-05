@@ -51,10 +51,12 @@ def _root(tmp_path: Path) -> Path:
     return tmp_path
 
 
-def _select(root: Path, argv: list[str], **env: str) -> dict:
+def _select(root: Path, argv: list[str], positional: bool = True, **env: str) -> dict:
+    """positional=True is the shim's entry (PMOVES_AGENT_POSITIONAL=1)."""
     arr = ", ".join("'" + a.replace("'", "''") + "'" for a in argv)
+    sw = " -Positional" if positional else ""
     return _ps(
-        f". '{SELECT}'; $s = Resolve-PmAgentArgs -Root '{root}' -Argv @({arr}); "
+        f". '{SELECT}'; $s = Resolve-PmAgentArgs -Root '{root}' -Argv @({arr}){sw}; "
         "@{ argv = @($s.Argv); role = $s.Role; lines = @($s.Lines) } | ConvertTo-Json -Compress",
         env,
     )
@@ -109,23 +111,59 @@ def test_a_name_that_is_not_a_file_stem_is_never_probed(tmp_path, name):
     assert s["argv"] == [] and s["role"] is None and s["lines"]
 
 
+@needs_ps
+@pytest.mark.parametrize("prompt", ["fix X", "delivery-agent"])
+def test_direct_entry_keeps_a_leading_positional_as_the_prompt(tmp_path, prompt):
+    # Codex #3454 P1: the .ps1 / per-node .cmd wrappers always forwarded it.
+    s = _select(_root(tmp_path), [prompt, "--print"], positional=False)
+    assert s["argv"] == [prompt, "--print"] and s["role"] is None and not s["lines"]
+
+
+@needs_ps
+def test_direct_entry_still_applies_the_default_agent(tmp_path):
+    s = _select(_root(tmp_path), ["fix X"], positional=False, PMOVES_DEFAULT_AGENT="node-steward")
+    assert s["argv"] == ["--agent", "node-steward", "fix X"] and s["role"] == "node-steward"
+
+
+@needs_ps
+def test_a_dangling_agent_flag_is_forwarded_not_doubled(tmp_path):
+    # Kilo #3454: a trailing --agent with no value used to slip past the scan.
+    s = _select(_root(tmp_path), ["-r", "--agent"], PMOVES_DEFAULT_AGENT="node-steward")
+    assert s["argv"] == ["-r", "--agent"] and s["role"] is None
+
+
+def test_only_the_shim_turns_the_positional_shorthand_on():
+    bat = (REPO_ROOT / "pmoves" / "scripts" / "windows" / "claude-pmoves.bat").read_text(encoding="utf-8")
+    ps1 = (REPO_ROOT / "deploy" / "provision" / "claude-pmoves.ps1").read_text(encoding="utf-8")
+    assert 'set "PMOVES_AGENT_POSITIONAL=1"' in bat
+    assert "-Positional:$__positional" in ps1
+    assert "Remove-Item Env:PMOVES_AGENT_POSITIONAL" in ps1      # a nested launch must not inherit it
+
+
 # ----------------------------------------------------------------- preflight
 
 STUB = """import os, sys
 sys.stdout.write(os.environ.get("STUB_OUT", ""))
+sys.stdout.flush()
+sys.stderr.write(os.environ.get("STUB_ERR", ""))
+sys.stderr.flush()
+if os.environ.get("STUB_ARGV"):
+    open(os.environ["STUB_ARGV"], "w", encoding="utf-8").write(" ".join(sys.argv[1:]))
 raise SystemExit(int(os.environ.get("STUB_RC", "0")))
 """
 
 
-def _preflight(tmp_path: Path, rc: int, out: str) -> dict:
+def _preflight(tmp_path: Path, rc: int, out: str, err: str = "", roster: str = "") -> dict:
     (tmp_path / "pmoves" / "tools").mkdir(parents=True)
     (tmp_path / "pmoves" / "tools" / "cipher_preflight.py").write_text("", encoding="utf-8")
     stub = tmp_path / "stub.py"
     stub.write_text(STUB, encoding="utf-8")
     return _ps(
-        f". '{PREFLIGHT}'; $c = Invoke-PmCipherPreflight -Root '{tmp_path}' -Py @('{sys.executable}', '{stub}'); "
+        f". '{PREFLIGHT}'; $c = Invoke-PmCipherPreflight -Root '{tmp_path}' -Roster '{roster}' "
+        f"-Py @('{sys.executable}', '{stub}'); "
         "@{ v = $c.Verdict; line = $c.Line; p = $c.Prompt } | ConvertTo-Json -Compress",
-        {"STUB_RC": str(rc), "STUB_OUT": out},
+        {"STUB_RC": str(rc), "STUB_OUT": out, "STUB_ERR": err,
+         "STUB_ARGV": str(tmp_path / "argv.txt")},
     )
 
 
@@ -141,6 +179,21 @@ def test_preflight_unauthorized_is_not_an_outage(tmp_path):
     c = _preflight(tmp_path, 1, "cipher UNAUTHORIZED pmoves-cipher-local  (http://x) -> 401\n")
     assert c["v"] == "unauthorized" and "do NOT report Cipher as down" in c["p"]
     assert "`docker logs --since " in c["p"]
+
+
+@needs_ps
+def test_preflight_unauthorized_on_stderr_is_still_unauthorized(tmp_path):
+    # Kilo #3454: the REAL tool prints the UNAUTHORIZED row to stderr; a
+    # stdout-only capture called a refused credential "unusable".
+    c = _preflight(tmp_path, 1, "", err="cipher UNAUTHORIZED pmoves-cipher-local  (http://x) -> 401\n")
+    assert c["v"] == "unauthorized", c
+
+
+@needs_ps
+def test_preflight_probes_the_roster_it_is_given(tmp_path):
+    # Codex #3454 P2: probe the roster claude is handed, not the working tree's.
+    _preflight(tmp_path, 0, "cipher OK x (u) -> 200\n", roster=r"C:\r\main-roster.json")
+    assert (tmp_path / "argv.txt").read_text(encoding="utf-8").endswith(r"--roster C:\r\main-roster.json")
 
 
 @needs_ps

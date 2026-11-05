@@ -11,6 +11,10 @@
 #
 # CONTRACT (mirrors the .sh case on the tool's exit code; never fails the launch):
 #   $cp = Invoke-PmCipherPreflight -Root <repo root> -Py <python argv prefix>
+#                  [-Roster <the roster claude is handed>]   -- probe what the
+#                  session will actually get, not the working tree's default
+#                  (Codex #3454 P2: a branch that changes the cipher entries
+#                  would otherwise be judged against servers it does not load)
 #   $cp.Verdict  up | unauthorized | unusable | down | skipped
 #   $cp.Line     one line for the caller to print
 #   $cp.Prompt   the sentence for the session prompt ('' when skipped)
@@ -26,7 +30,8 @@
 function Invoke-PmCipherPreflight {
     param(
         [string]$Root,
-        [string[]]$Py = @()
+        [string[]]$Py = @(),
+        [string]$Roster = ''
     )
     $tool = Join-Path (Join-Path (Join-Path $Root 'pmoves') 'tools') 'cipher_preflight.py'
     if (-not (Test-Path -LiteralPath $tool -PathType Leaf) -or $Py.Count -eq 0) {
@@ -35,16 +40,24 @@ function Invoke-PmCipherPreflight {
     $since = [DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ')
     $recovery = 'Recovery: pmoves/docs/operations/MCP_TOOLKIT.md.'
 
-    # stdout only: under Windows PowerShell 5.1 a 2>&1 on a native command turns
-    # every stderr line into an ErrorRecord, terminating under EAP=Stop. The
-    # tool's verdict lines are printed to stdout; its stderr reaches the console.
+    # stdout AND stderr, as the .sh's 2>&1: only the `cipher OK` row rides
+    # stdout; `cipher UNAUTHORIZED` and every other non-OK row go to STDERR
+    # (cipher_preflight.py), so a stdout-only capture turned a real 401 into
+    # 'unusable' -- telling the model NOT to suspect a credential that was
+    # refused (Kilo #3454). Under Windows PowerShell 5.1 a 2>&1 on a native
+    # command makes each stderr line an ErrorRecord, terminating ONLY under
+    # EAP=Stop -- hence Continue for this call, and the records turned back
+    # into their text.
     $out = ''
     $rc = 3
     $eap = $ErrorActionPreference
     try {
         $ErrorActionPreference = 'Continue'
         $pyArgs = @(if ($Py.Count -gt 1) { $Py[1..($Py.Count - 1)] }) + @($tool)
-        $out = (& $Py[0] @pyArgs | Out-String)
+        if ($Roster) { $pyArgs += @('--roster', $Roster) }
+        $out = (& $Py[0] @pyArgs 2>&1 | ForEach-Object {
+                if ($_ -is [System.Management.Automation.ErrorRecord]) { $_.Exception.Message } else { "$_" }
+            } | Out-String)
         $rc = $LASTEXITCODE
     } catch {
         $out = "cipher_preflight did not run: $($_.Exception.Message)"

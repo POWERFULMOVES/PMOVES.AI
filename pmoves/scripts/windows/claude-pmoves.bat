@@ -31,6 +31,10 @@ set "REPO_ROOT=__PMOVES_REPO_ROOT__"
 if defined PMOVES_LAUNCHER_ROOT set "REPO_ROOT=%PMOVES_LAUNCHER_ROOT%"
 set "LAUNCHER=%REPO_ROOT%\deploy\provision\claude-pmoves.cmd"
 if not exist "%LAUNCHER%" goto missing
+rem The `claude-pmoves <agent-name>` shorthand is THIS command's promise, so it
+rem is switched on here and nowhere else: entered directly, the .ps1 keeps a
+rem leading positional as claude's prompt. setlocal scopes it to this call.
+set "PMOVES_AGENT_POSITIONAL=1"
 call "%LAUNCHER%" %*
 exit /b %ERRORLEVEL%
 

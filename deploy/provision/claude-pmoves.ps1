@@ -117,9 +117,17 @@ $script:PmCipherPreEnvToken = if ("$env:CIPHER_API_TOKEN" -clike 'cipher_*') { $
 # two again: claude received two --append-system-prompt blocks. The shim is now
 # a delegate; the rule it owned lives in pm-agent-select.ps1, applied here,
 # before identity, so the role read-back below sees the final --agent.
+#
+# The `claude-pmoves <agent-name>` shorthand is the SHIM's promise, so only the
+# shim turns it on (PMOVES_AGENT_POSITIONAL=1). Entered directly -- this file,
+# claude-pmoves.cmd, a per-node claude-pmoves-<node>.cmd -- a leading positional
+# stays claude's prompt, as it always was (Codex #3454 P1). Cleared at once so
+# a nested launch from inside the session does not inherit it.
+$__positional = ("$env:PMOVES_AGENT_POSITIONAL" -eq '1')
+Remove-Item Env:PMOVES_AGENT_POSITIONAL -ErrorAction SilentlyContinue
 $script:PmAgentRole = $null
 if (Get-Command Resolve-PmAgentArgs -ErrorAction SilentlyContinue) {
-    $__sel = Resolve-PmAgentArgs -Root $root -Argv @($args)
+    $__sel = Resolve-PmAgentArgs -Root $root -Argv @($args) -Positional:$__positional
     foreach ($__l in @($__sel.Lines)) { Write-Warning $__l }
     $args = [System.Collections.Generic.List[string]]::new()
     foreach ($__arg in @($__sel.Argv)) { $args.Add($__arg) }
@@ -795,8 +803,11 @@ if ($ident['PMOVES_CIPHER_AGENT_ID']) {
 $env:PMOVES_HARNESS = 'claude-code'
 Add-PmSessionPrompt "When you call pmoves_cipher_session_save, ALWAYS pass harness 'claude-code' and model set to your own exact model id. Omitting them files the checkpoint as 'unknown/unknown'."
 # cipher_preflight -- is persistent memory usable, and if not, WHICH failure.
-if (Get-Command Invoke-PmCipherPreflight -ErrorAction SilentlyContinue) {
-    $cp = Invoke-PmCipherPreflight -Root $root -Py @(Get-PmovesPythonArgv -Root $root | Where-Object { $_ })
+# Called at launch, once the roster claude will be handed is chosen, and
+# against THAT roster (Codex #3454 P2) -- see the two call sites at the end.
+function Add-PmCipherPreflight([string]$Roster) {
+    if (-not (Get-Command Invoke-PmCipherPreflight -ErrorAction SilentlyContinue)) { return }
+    $cp = Invoke-PmCipherPreflight -Root $root -Roster $Roster -Py @(Get-PmovesPythonArgv -Root $root | Where-Object { $_ })
     if ($cp.Verdict -eq 'up' -or $cp.Verdict -eq 'skipped') { Write-Host "[claude-pmoves] $($cp.Line)" }
     else {
         Write-Warning "[claude-pmoves] $($cp.Line)"
@@ -961,9 +972,13 @@ if (Test-Path $roster) {
     # `--mcp-config=<file>` (the `=` form): `--mcp-config` is variadic
     # (`<configs...>`), so the space form would swallow a trailing positional
     # prompt as another config value (Codex #2243 P1).
+    # The RAW roster, not $useRoster: the tool resolves ${VAR}s itself, and
+    # the normalized copy is the same servers.
+    Add-PmCipherPreflight $roster
     & claude "--mcp-config=$useRoster" @identityArgs @args
 } else {
     Write-Warning "[claude-pmoves] $roster not found - PMOVES MCP servers will not load."
+    Add-PmCipherPreflight ''
     & claude @identityArgs @args
 }
 exit $LASTEXITCODE
