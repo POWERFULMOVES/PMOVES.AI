@@ -334,3 +334,53 @@ def test_a_gated_job_states_its_dependency_success_explicitly() -> None:
             f"state any dependency's result (if: {condition!r}); it would run "
             f"even when a dependency failed"
         )
+
+
+def test_a_rollback_is_gated_on_the_deploy_job_not_on_the_whole_chain() -> None:
+    """`failure()` is TRUE WHEN ANY ANCESTOR JOB FAILED.
+
+    That makes it the wrong predicate for a rollback. The `changes` job is an
+    ANCESTOR of the deploy jobs, so a fail-closed detection failure -- the
+    exact case where NOTHING was deployed -- makes `failure()` true and arms
+    the rollback. The rollback's steps then stop and remove the currently
+    HEALTHY gateway-agent: the gate that refused to deploy would tear the
+    service down instead.
+
+    So a rollback must be gated on its deploy job's OWN result:
+      'failure' / 'cancelled' -> the deploy ran (or was interrupted) -> roll back
+      'skipped'                -> nothing was deployed -> do NOT roll back
+    """
+    workflow = _workflow()
+    jobs = workflow.get("jobs") or {}
+
+    rollbacks = [
+        name for name, job in jobs.items() if str(name).startswith("rollback-")
+    ]
+    assert rollbacks, (
+        "the workflow has no rollback job; the gate would pass vacuously"
+    )
+
+    for job_name in rollbacks:
+        job = jobs[job_name] or {}
+        condition = str(job.get("if") or "")
+        assert "failure()" not in condition, (
+            f"job {job_name!r} is gated on `failure()` (if: {condition!r}); "
+            f"`failure()` is true when ANY ancestor failed, so a fail-closed "
+            f"detection failure would arm this rollback and remove a healthy "
+            f"gateway-agent"
+        )
+        assert ".result ==" in condition, (
+            f"job {job_name!r} does not state the deploy job's own result "
+            f"(if: {condition!r}); it must be gated on "
+            f"needs.<deploy-job>.result"
+        )
+        # The result it reads must be the DEPLOY job's, not the gate's.
+        deploy_job = (job.get("needs") or [])
+        if isinstance(deploy_job, str):
+            deploy_job = [deploy_job]
+        assert deploy_job, f"job {job_name!r} needs no job to gate on"
+        for needed in deploy_job:
+            assert f"needs.{needed}.result" in condition, (
+                f"job {job_name!r} reads a result other than its deploy job's "
+                f"(if: {condition!r}); it needs {needed}"
+            )

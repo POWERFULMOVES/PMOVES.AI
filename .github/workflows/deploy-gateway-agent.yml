@@ -556,7 +556,20 @@ jobs:
     permissions:
       contents: read
     needs: deploy-ai-lab
-    if: failure() || cancelled()
+    # GATED ON THE DEPLOY JOB'S OWN RESULT, NOT ON `failure()`.
+    #
+    # GitHub defines `failure()` as TRUE WHEN ANY ANCESTOR JOB FAILED. The
+    # `changes` job is an ancestor of `deploy-ai-lab`, so a fail-closed
+    # detection failure -- the exact case where nothing was deployed -- would
+    # make `failure()` true and ARM this rollback. The rollback's steps then
+    # stop and remove the CURRENTLY HEALTHY gateway-agent, turning "the gate
+    # refused to deploy" into "the gate tore down the service".
+    #
+    # `needs.deploy-ai-lab.result` is the deploy job's OWN outcome:
+    #   'failure'   -> the deploy ran and failed -> roll back
+    #   'cancelled' -> the deploy was cancelled   -> roll back
+    #   'skipped'   -> nothing was deployed       -> do NOT roll back
+    if: needs.deploy-ai-lab.result == 'failure' || needs.deploy-ai-lab.result == 'cancelled'
     steps:
       - name: Clear stale nested-submodule state (durable fix for #1871)
         shell: bash
@@ -625,7 +638,10 @@ jobs:
     permissions:
       contents: read
     needs: deploy-vps
-    if: failure() || cancelled()
+    # Gated on the deploy job's OWN result -- see the note on
+    # `rollback-ai-lab` above for why `failure()` is the wrong predicate
+    # here.
+    if: needs.deploy-vps.result == 'failure' || needs.deploy-vps.result == 'cancelled'
     steps:
       - name: Clear stale nested-submodule state (durable fix for #1871)
         shell: bash

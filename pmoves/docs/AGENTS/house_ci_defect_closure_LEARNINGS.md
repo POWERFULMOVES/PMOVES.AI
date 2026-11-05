@@ -114,6 +114,7 @@ valid YAML at all.
 | 10 | **defense-in-depth** | **A workflow whose `paths:` filter includes ITSELF couples "someone edited the deploy config" to "the fleet is deployed"** — and the second layer has to be a separate job. | The filter lists `.github/workflows/deploy-gateway-agent.yml`, so every edit to the workflow re-triggered the live deploys to ai-lab and the VPS; PR #3445's merge re-triggered it, and the operator's own note was that the merge "did not cause it ... but it did re-trigger it". FIX: a `changes` job decides from the push's OWN before/after SHAs whether the push is deploy-relevant. The workflow still RUNS on a workflow-file edit — so the fix is proven on a real runner — but a YAML edit alone cannot deploy. | Any workflow that both triggers on paths and has side effects. |
 | 11 | **contract-correctness** | **`git fetch origin <abbrev>` is a REF ADVERTISEMENT lookup, not a prefix lookup** — an abbreviated SHA fails with "couldn't find remote ref". | MEASURED 2026-11-05: in a fresh depth-1 clone, `git fetch --no-tags --depth=1 origin 361e26e9a0b` fails with `fatal: couldn't find remote ref`, while the full 40-character form succeeds and yields the exact changed-path list. `github.event.before` is always full-length, so the workflow is correct — but a script that builds a SHA by truncation is not. | Any script that fetches a commit by SHA. |
 | 12 | **reasoning-gap** | **Git Bash PREPENDS `/mingw64/bin:/usr/bin` to PATH** — so a PATH-based stub for `git` is silently ignored and the test exercises the REAL git against the REAL network. | MEASURED 2026-11-05: the first version of the change-gate test put a stub `git` in a temp dir and prepended it to PATH. The run went GREEN while executing a real `git fetch` against github.com — `command -v git` resolves to `/mingw64/bin/git` whatever a test prepends. A stub is only honoured for binaries Git Bash does not ship, which is why the sibling `gh` stub worked. FIX: a shell FUNCTION takes precedence over PATH lookup, so it cannot be bypassed that way. | Any test that stubs a binary Git Bash ships (`git`, `bash`, `sh`, `env`). |
+| 13 | **defense-in-depth** | **`failure()` is TRUE WHEN ANY ANCESTOR JOB FAILED** — so it is the wrong predicate for a rollback, and a fail-closed gate upstream of a deploy can arm the teardown of a healthy service. | MEASURED 2026-11-05, on this PR's own review round: the codex review bot raised it as a P1. With `if: failure() || cancelled()` on the rollback jobs, a fail-closed failure of the new `changes` job — the exact case where NOTHING was deployed — made `failure()` true and armed `rollback-ai-lab`, whose steps stop and remove the CURRENTLY HEALTHY gateway-agent. The gate that refused to deploy would have torn the service down. FIX: the rollbacks read `needs.deploy-ai-lab.result` and `needs.deploy-vps.result` and fire only on `'failure'` or `'cancelled'`; `'skipped'` means nothing was deployed, so nothing is torn down. | Any job whose job is to UNDO a side effect, when the chain above it can fail without the side effect having happened. |
 
 ---
 
@@ -123,9 +124,9 @@ valid YAML at all.
 |---|-----|----------|-------|
 | F1 | The approval guard normalises the verdict spelling before comparing, and the raw value still names the failure — 6 behavioural tests + 6 mutation kills | `pmoves/tests/tools/test_app_pr_approve_guard.py`, `pmoves/tests/tools/test_app_pr_approve_guard_mutation_kill.py` |
 | F2 | The workflow's placeholder mirror satisfies every one of the compose file's `:?` guards, and the gate recomputes the required set from the compose file on every run — 2 behavioural tests + 3 mutation kills | `pmoves/tests/tools/test_deploy_gateway_agent_env.py`, `pmoves/tests/tools/test_deploy_gateway_agent_mutation_kill.py` |
-| F3 | A `changes` job decides from the push's own before/after SHAs whether the push is deploy-relevant, so editing the workflow can no longer deploy to the fleet — 7 behavioural tests + 4 mutation kills | `pmoves/tests/tools/test_deploy_gateway_agent_change_gate.py`, `pmoves/tests/tools/test_deploy_gateway_agent_mutation_kill.py` |
+| F3 | A `changes` job decides from the push's own before/after SHAs whether the push is deploy-relevant, so editing the workflow can no longer deploy to the fleet — 8 behavioural tests + 5 mutation kills | `pmoves/tests/tools/test_deploy_gateway_agent_change_gate.py`, `pmoves/tests/tools/test_deploy_gateway_agent_mutation_kill.py` |
 
-**Total: 15 behavioural test functions and 13 mutation kills across the lane's three gates.**
+**Total: 16 behavioural test functions and 14 mutation kills across the lane's three gates.**
 
 The per-row counts above are MEASUREMENTS, not assertions: they are recomputed by AST from the
 files each row cites, and the mutation count for a row is the number of `Mutation(...)` entries
@@ -146,10 +147,10 @@ gate of its own, or it rots silently.
 | reasoning-gap | 3 | 2, 3, 12 |
 | semantic-naming drift | 2 | 6, 8 |
 | contract-correctness | 5 | 1, 4, 7, 9, 11 |
-| defense-in-depth | 2 | 5, 10 |
+| defense-in-depth | 3 | 5, 10, 13 |
 | pattern-conformance | 0 | — |
 
-**Total lessons: 12**
+**Total lessons: 13**
 
 The zero-count classes are DECLARED, not omitted. A summary that lists only the classes that
 happen to have members cannot show that a class was considered and found empty — and an omitted

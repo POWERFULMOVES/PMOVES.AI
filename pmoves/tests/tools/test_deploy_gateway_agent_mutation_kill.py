@@ -232,6 +232,23 @@ MUTATIONS: list[Mutation] = [
         target_file=DEPLOY_WORKFLOW,
         test_file=DEPLOY_CHANGE_TEST,
     ),
+    Mutation(
+        name="M8_the_rollback_gated_on_failure_again",
+        old="""    if: needs.deploy-ai-lab.result == 'failure' || needs.deploy-ai-lab.result == 'cancelled'""",
+        new="""    if: failure() || cancelled()""",
+        target_test="test_a_rollback_is_gated_on_the_deploy_job_not_on_the_whole_chain",
+        rationale=(
+            "`failure()` is TRUE WHEN ANY ANCESTOR JOB FAILED. The `changes` "
+            "job is an ancestor of the deploy jobs, so a fail-closed detection "
+            "failure -- the exact case where NOTHING was deployed -- would "
+            "make `failure()` true and ARM this rollback. Its steps then stop "
+            "and remove the currently HEALTHY gateway-agent: the gate that "
+            "refused to deploy would tear the service down instead. This is "
+            "the finding the codex review bot raised on PR #3455."
+        ),
+        target_file=DEPLOY_WORKFLOW,
+        test_file=DEPLOY_CHANGE_TEST,
+    ),
 ]
 
 
@@ -437,6 +454,8 @@ def test_the_sources_are_intact_after_the_mutation_suite() -> None:
     assert "  changes:\n    name: Detect deploy-relevant changes" in deploy
     assert "needs.changes.outputs.deploy == 'true'" in deploy
     assert "SUPABASE_JWT_SECRET: ci-build-placeholder" in deploy
+    assert "needs.deploy-ai-lab.result == 'failure'" in deploy
+    assert "needs.deploy-vps.result == 'failure'" in deploy
 
     node_ids = [_node_id(mutation) for mutation in MUTATIONS]
     after = _run_pytest(node_ids)

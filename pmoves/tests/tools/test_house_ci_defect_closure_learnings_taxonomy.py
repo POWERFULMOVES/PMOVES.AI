@@ -315,7 +315,7 @@ def test_every_shipped_row_count_is_the_measured_one():
 
     assert checked >= 3, (
         f"only {checked} shipped rows were checked; this lane ships three gates "
-        f"and every one of them states a count"
+        f"that state a count, and every one of them must be recomputed"
     )
 
 
