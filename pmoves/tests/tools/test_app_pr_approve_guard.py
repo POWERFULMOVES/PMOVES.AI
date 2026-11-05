@@ -135,7 +135,13 @@ def _run_guard(tmp_path: Path, api_output: str) -> subprocess.CompletedProcess:
         pytest.skip("no working bash on this host (the gate runs on CI)")
 
     fixture = tmp_path / "api-output.txt"
-    fixture.write_text(api_output, encoding="utf-8")
+    # LF EXPLICITLY. `Path.write_text` with the default newline translates
+    # '\n' to `os.linesep`, so on Windows the captured API output would be
+    # written with CRLF -- and the guard's review-bot name comparison would
+    # then read "Kilo Code Review\r", which matches nothing. The verdict
+    # token survives (it is the first field), so only the NAME-matching
+    # contract would die, from one invisible byte.
+    fixture.write_text(api_output, encoding="utf-8", newline="\n")
 
     # A stub `gh` that emits the captured API output. The guard's own
     # `--jq` filter is not exercised by this stub; what is exercised is the

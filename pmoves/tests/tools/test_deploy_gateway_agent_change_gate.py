@@ -122,7 +122,13 @@ def _run_detect(
         pytest.skip("no working bash on this host (the gate runs on CI)")
 
     fixture = tmp_path / "changed-paths.txt"
-    fixture.write_text(changed_paths, encoding="utf-8")
+    # LF EXPLICITLY. `Path.write_text` with the default newline translates
+    # '\n' to `os.linesep`, so on Windows this fixture would be written with
+    # CRLF -- and the stub `git` would `cat` "pmoves/docker-compose.yml\r"
+    # into the `$`-anchored grep, which matches nothing. The detection would
+    # then report "not deploy-relevant" for a change that IS, for a reason
+    # that has nothing to do with the defect being gated.
+    fixture.write_text(changed_paths, encoding="utf-8", newline="\n")
 
     stub = (
         "git() {\n"

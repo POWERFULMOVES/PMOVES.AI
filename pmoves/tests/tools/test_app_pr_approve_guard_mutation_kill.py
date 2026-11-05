@@ -55,7 +55,7 @@ each is killed by a test that exercises the production path.
 
 Run it directly to see the mutation kills in action:
 
-    python -m pytest pmoves/tests/tools/test_house_ci_defect_closure_mutation_kill.py -v
+    python -m pytest pmoves/tests/tools/test_app_pr_approve_guard_mutation_kill.py -v
 
 Hermetic: no network, no docker, no NATS, no gh, no credentials. It mutates
 workflow files in this repo and restores them.

@@ -116,8 +116,8 @@ jobs:
           # abbreviated SHA fails with "couldn't find remote ref" -- the fetch
           # is a ref advertisement, not a prefix lookup. `github.event.before`
           # is always full-length, and the gate
-          # (pmoves/tests/tools/test_deploy_gateway_agent_env.py) drives this
-          # block with both spellings.
+          # (pmoves/tests/tools/test_deploy_gateway_agent_change_gate.py)
+          # drives this block with both spellings.
           if [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
             echo "No 'before' SHA (manual dispatch, or the branch's first push) -> treat as deploy-relevant."
             echo "build=true" >> "$GITHUB_OUTPUT"
