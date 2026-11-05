@@ -44,6 +44,8 @@ from pathlib import Path
 
 import pytest
 
+from pmoves.tools.bash_resolver import find_bash  # never System32's WSL stub
+
 REPO_ROOT = Path(__file__).resolve().parents[3]
 WORKFLOW_FILE = REPO_ROOT / ".github" / "workflows" / "app-pr-approve.yml"
 
@@ -74,31 +76,14 @@ FAILED_CHECK = "failure python-tests"
 
 
 def _bash() -> str | None:
-    """A bash that actually runs, or None.
+    """A usable bash, or None.
 
-    On Windows `bash` on PATH is usually the WSL launcher, which may have no
-    distribution; Git Bash is the reliable one. Candidates are tried in order
-    and each is VERIFIED by running a command, so a launcher that cannot
-    start is skipped rather than failing the test with a confusing error.
+    Delegates to the house resolver. `shutil.which("bash")` is NOT enough: on
+    Windows it returns `C:\Windows\System32\bash.exe` -- the WSL
+    launcher -- before PATH is ever consulted, so the child would silently run
+    in a different OS. `pmoves/tests/test_no_bare_bash_argv.py` gates that.
     """
-    candidates = []
-    git_bash = Path(r"C:\Program Files\Git\bin\bash.exe")
-    if git_bash.exists():
-        candidates.append(str(git_bash))
-    found = shutil.which("bash")
-    if found:
-        candidates.append(found)
-    for candidate in candidates:
-        try:
-            probe = subprocess.run(
-                [candidate, "-c", "echo ok"],
-                capture_output=True, text=True, timeout=60,
-            )
-        except (OSError, subprocess.SubprocessError):
-            continue
-        if probe.returncode == 0 and "ok" in probe.stdout:
-            return candidate
-    return None
+    return find_bash()
 
 
 def _guard_block() -> str:

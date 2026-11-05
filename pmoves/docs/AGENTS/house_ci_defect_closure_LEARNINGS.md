@@ -115,6 +115,7 @@ valid YAML at all.
 | 11 | **contract-correctness** | **`git fetch origin <abbrev>` is a REF ADVERTISEMENT lookup, not a prefix lookup** — an abbreviated SHA fails with "couldn't find remote ref". | MEASURED 2026-11-05: in a fresh depth-1 clone, `git fetch --no-tags --depth=1 origin 361e26e9a0b` fails with `fatal: couldn't find remote ref`, while the full 40-character form succeeds and yields the exact changed-path list. `github.event.before` is always full-length, so the workflow is correct — but a script that builds a SHA by truncation is not. | Any script that fetches a commit by SHA. |
 | 12 | **reasoning-gap** | **Git Bash PREPENDS `/mingw64/bin:/usr/bin` to PATH** — so a PATH-based stub for `git` is silently ignored and the test exercises the REAL git against the REAL network. | MEASURED 2026-11-05: the first version of the change-gate test put a stub `git` in a temp dir and prepended it to PATH. The run went GREEN while executing a real `git fetch` against github.com — `command -v git` resolves to `/mingw64/bin/git` whatever a test prepends. A stub is only honoured for binaries Git Bash does not ship, which is why the sibling `gh` stub worked. FIX: a shell FUNCTION takes precedence over PATH lookup, so it cannot be bypassed that way. | Any test that stubs a binary Git Bash ships (`git`, `bash`, `sh`, `env`). |
 | 13 | **defense-in-depth** | **`failure()` is TRUE WHEN ANY ANCESTOR JOB FAILED** — so it is the wrong predicate for a rollback, and a fail-closed gate upstream of a deploy can arm the teardown of a healthy service. | MEASURED 2026-11-05, on this PR's own review round: the codex review bot raised it as a P1. With `if: failure() || cancelled()` on the rollback jobs, a fail-closed failure of the new `changes` job — the exact case where NOTHING was deployed — made `failure()` true and armed `rollback-ai-lab`, whose steps stop and remove the CURRENTLY HEALTHY gateway-agent. The gate that refused to deploy would have torn the service down. FIX: the rollbacks read `needs.deploy-ai-lab.result` and `needs.deploy-vps.result` and fire only on `'failure'` or `'cancelled'`; `'skipped'` means nothing was deployed, so nothing is torn down. | Any job whose job is to UNDO a side effect, when the chain above it can fail without the side effect having happened. |
+| 14 | **pattern-conformance** | **The house already ships a resolver for the thing you are about to hand-roll** — and a ratchet that scans the PATTERN fails your pull request even when your version works. | MEASURED 2026-11-05: this PR's `python-tests` failed on exactly ONE new finding — `test_no_repo_python_spawns_a_bare_bash` — because the lane's three test files each derived argv[0] from `shutil.which("bash")` in a hand-rolled `_bash()` helper. The helper WORKED: it probed Git-for-Windows and VERIFIED the candidate by running a command. It would still have worked. But the house ratchet scans the AST for the PATTERN, because on Windows a bare `"bash"` resolves to `C:\Windows\System32\bash.exe` — the WSL launcher — before PATH is consulted, and the sanctioned path is `pmoves/tools/bash_resolver.find_bash()`, which probes the known locations and REJECTS the stub. The other 152 findings in that run were baselined; this was the only new one. FIX: delegate to `find_bash()`. | Any time a repository already exports a helper for something you are about to write yourself. |
 
 ---
 
@@ -148,9 +149,9 @@ gate of its own, or it rots silently.
 | semantic-naming drift | 2 | 6, 8 |
 | contract-correctness | 5 | 1, 4, 7, 9, 11 |
 | defense-in-depth | 3 | 5, 10, 13 |
-| pattern-conformance | 0 | — |
+| pattern-conformance | 1 | 14 |
 
-**Total lessons: 13**
+**Total lessons: 14**
 
 The zero-count classes are DECLARED, not omitted. A summary that lists only the classes that
 happen to have members cannot show that a class was considered and found empty — and an omitted
