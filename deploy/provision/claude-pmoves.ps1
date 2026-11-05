@@ -736,9 +736,13 @@ if (Test-Path -LiteralPath $identTool) {
                 $identCard = $ident['PMOVES_CIPHER_AGENT_ID']
                 # The role arrives in $args as `--agent <name>` (claude-pmoves.cmd
                 # forwards it); this script never chose it, so read it back.
-                $roleName = $null
-                for ($ai = 0; $ai -lt ($args.Count - 1); $ai++) {
-                    if ($args[$ai] -eq '--agent') { $roleName = $args[$ai + 1]; break }
+                # pm-agent-select.ps1 already read it (both `--agent x` and
+                # `--agent=x`); the loop is the fallback when that helper is absent.
+                $roleName = $script:PmAgentRole
+                if (-not (Get-Command Resolve-PmAgentArgs -ErrorAction SilentlyContinue)) {
+                    for ($ai = 0; $ai -lt ($args.Count - 1); $ai++) {
+                        if ($args[$ai] -eq '--agent') { $roleName = $args[$ai + 1]; break }
+                    }
                 }
                 if ($identName -and $identForm) {
                     $cardPart = if ($identCard) { ", signing card $identCard" } else { '' }

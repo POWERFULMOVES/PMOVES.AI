@@ -69,9 +69,12 @@ function Resolve-PmAgentArgs {
 
     # An explicit --agent from the caller is theirs; read it back for the prompt.
     # Scan through the LAST element: a trailing `--agent` is still the caller's.
+    # Both spellings: `--agent <name>` and `--agent=<name>` (Kilo #3454).
     for ($i = 0; $i -lt $argvIn.Count; $i++) {
-        if ($argvIn[$i] -ceq '--agent') {
-            $val = if ($i + 1 -lt $argvIn.Count) { "$($argvIn[$i + 1])" } else { '' }
+        $tok = "$($argvIn[$i])"
+        if ($tok -ceq '--agent' -or $tok.StartsWith('--agent=')) {
+            $val = if ($tok.StartsWith('--agent=')) { $tok.Substring(8) }
+                   elseif ($i + 1 -lt $argvIn.Count) { "$($argvIn[$i + 1])" } else { '' }
             $role = if ($val -and -not $val.StartsWith('-')) { $val } else { $null }
             return [pscustomobject]@{ Argv = $argvIn; Role = $role; Lines = $lines }
         }

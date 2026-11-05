@@ -132,6 +132,13 @@ def test_a_dangling_agent_flag_is_forwarded_not_doubled(tmp_path):
     assert s["argv"] == ["-r", "--agent"] and s["role"] is None
 
 
+@needs_ps
+def test_the_equals_spelling_of_agent_is_not_doubled_either(tmp_path):
+    # Kilo #3454: `--agent=<name>` slipped past an exact-token match.
+    s = _select(_root(tmp_path), ["--agent=delivery-agent", "-r"], PMOVES_DEFAULT_AGENT="node-steward")
+    assert s["argv"] == ["--agent=delivery-agent", "-r"] and s["role"] == "delivery-agent"
+
+
 def test_only_the_shim_turns_the_positional_shorthand_on():
     bat = (REPO_ROOT / "pmoves" / "scripts" / "windows" / "claude-pmoves.bat").read_text(encoding="utf-8")
     ps1 = (REPO_ROOT / "deploy" / "provision" / "claude-pmoves.ps1").read_text(encoding="utf-8")
