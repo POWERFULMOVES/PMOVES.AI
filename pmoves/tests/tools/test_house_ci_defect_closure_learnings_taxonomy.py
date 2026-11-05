@@ -313,8 +313,8 @@ def test_every_shipped_row_count_is_the_measured_one():
             )
         checked += 1
 
-    assert checked >= 3, (
-        f"only {checked} shipped rows were checked; this lane ships three gates "
+    assert checked >= 5, (
+        f"only {checked} shipped rows were checked; this lane ships five gates "
         f"that state a count, and every one of them must be recomputed"
     )
 
@@ -359,3 +359,54 @@ def test_the_lane_total_is_the_measured_total():
         f"the lane total claims {m.group('mutations')} mutation kills; the rows "
         f"add up to {total_mutations}"
     )
+
+
+# ---------------------------------------------------------------------------
+# The "What shipped" table's SHAPE is a claim too: a header that declares more
+# columns than its rows carry is a table that renders wrong.
+# ---------------------------------------------------------------------------
+
+
+def _shipped_table_rows() -> list[list[str]]:
+    """The rows of the 'What shipped' table, as cell lists."""
+    text = LEARNINGS.read_text(encoding="utf-8")
+    start = text.find("## What shipped")
+    assert start != -1, "the LEARNINGS file has no '## What shipped' section"
+    end = text.find("\n## ", start + 1)
+    section = text[start:] if end == -1 else text[start:end]
+    rows = []
+    for line in section.splitlines():
+        line = line.strip()
+        if not line.startswith("|"):
+            continue
+        rows.append([cell.strip() for cell in line.strip("|").split("|")])
+    return rows
+
+
+def test_the_shipped_table_header_and_rows_agree_on_the_column_count():
+    """The header declares the column count; every row must carry that many cells.
+
+    MEASURED 2026-11-05: merging this lane's two LEARNINGS files rebuilt the
+    'What shipped' table with a FOUR-column header over THREE-column rows.
+    Every COUNT in the table was still correct -- the measurement gates passed
+    -- so no gate in the lane noticed. The defect was caught by a reviewer
+    reading the rendered table, and it had ALREADY been fixed once in this lane
+    for exactly the same reason. That is what makes it a defect rather than a
+    typo: a shape fault that survives every gate and reappears after a fix
+    needs a gate of its own.
+
+    So the table's SHAPE is recomputed the way its counts are.
+    """
+    rows = _shipped_table_rows()
+    assert len(rows) >= 2, "the 'What shipped' section holds no table"
+    header, separator, *body = rows
+    assert all(cell and set(cell) <= set("-: ") for cell in separator), (
+        "the second row of the 'What shipped' table is not a markdown separator"
+    )
+    assert body, "the 'What shipped' table has no rows"
+    expected = len(header)
+    for row in body:
+        assert len(row) == expected, (
+            f"the 'What shipped' row {row[0]!r} carries {len(row)} cell(s) but the "
+            f"header declares {expected} column(s): {header}"
+        )
