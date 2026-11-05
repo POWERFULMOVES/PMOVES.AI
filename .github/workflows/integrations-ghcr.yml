@@ -738,6 +738,13 @@ jobs:
             GHCR_SHA="${{ env.REGISTRY }}/$GHCR_NS/${{ steps.cfg.outputs.image_name }}:${DATE_TAG}-${SHA_SHORT}"
             TAGS="${GHCR_LATEST}\n${GHCR_SHA}"
             PRIMARY_TAG="${GHCR_LATEST}"
+            # Upstream-compatible channel tag: consumers pulling :latest
+            # (a0-launcher A0_BACKEND_IMAGE_REPO override lane) resolve it to
+            # the newest pmoves-agent-zero build. Scoped to agent-zero only so
+            # no other integration image changes its tag surface.
+            if [ "${{ steps.cfg.outputs.image_name }}" = "pmoves-agent-zero" ]; then
+              TAGS="${TAGS}\n${{ env.REGISTRY }}/$GHCR_NS/${{ steps.cfg.outputs.image_name }}:latest"
+            fi
           fi
 
           if [ "$INCLUDE_DOCKERHUB" = "true" ] && [ -n "$DOCKERHUB_USERNAME" ]; then
