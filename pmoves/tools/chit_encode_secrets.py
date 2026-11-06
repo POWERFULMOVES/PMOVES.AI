@@ -18,6 +18,7 @@ DEFAULT_ENV_FILE = PMOVES_DIR / "env.shared"
 DEFAULT_OUT = PMOVES_DIR / "data/chit/env.cgp.json"
 
 from pmoves.chit import encode_secret_map
+from pmoves.tools._secrets_common import is_unexpanded_ref
 
 
 def load_env_file(path: Path, keys: set[str] | None = None) -> Dict[str, str]:
@@ -94,6 +95,32 @@ def main() -> None:
     args = parser.parse_args()
 
     secrets = load_env_file(args.env_file, set(args.keys) if args.keys else None)
+
+    # Keep unexpanded `${VAR}` refs out of the bundle. A ref is interpolation
+    # SOURCE text; once it is inside a CGP it is decoupled from the file that
+    # could have expanded it, and it travels as if it were the value -- the Z890
+    # JWT reversion (58 -> 13 chars). secrets_sync refuses refs and placeholders
+    # too; this side stops the poison at the source. Blanks and placeholder
+    # literals are left for secrets_sync to judge: env.shared also carries
+    # non-secret config, and a word like `none` can be a real config value.
+    refs = sorted(key for key, value in secrets.items() if is_unexpanded_ref(value))
+    for key in refs:
+        del secrets[key]
+    if refs:
+        # Names only: `refs` holds KEYS; a value that tripped the check is a
+        # `${VAR}` ref, not credential material.
+        print(
+            f"WARNING: excluded {len(refs)} unexpanded ${{VAR}} ref(s) from the "
+            f"CGP: {', '.join(refs)}. Set real values in the env file before "
+            "exporting.",
+            file=sys.stderr,
+        )
+    if not secrets:
+        raise RuntimeError(
+            f"{args.env_file} held no exportable values (every candidate was an "
+            "unexpanded ${VAR} ref)"
+        )
+
     cgp = encode_secret_map(
         secrets,
         namespace=args.namespace,

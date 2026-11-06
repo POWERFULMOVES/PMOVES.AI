@@ -111,6 +111,33 @@ def is_placeholder(value: str | None) -> bool:
     return False
 
 
+# Whole-value unexpanded variable references: `${VAR}`, `${VAR:-default}` and
+# bare `$VAR`. An interior match (`sk-live-$OTHER`) is not a whole-value ref.
+_UNEXPANDED_REF_RE = re.compile(
+    r"\$\{[A-Za-z_][A-Za-z0-9_]*(?::-[^}]*)?\}|\$[A-Za-z_][A-Za-z0-9_]*"
+)
+
+
+def is_unexpanded_ref(value: str | None) -> bool:
+    """Return True if the WHOLE value is an unexpanded ``${VAR}``/``$VAR`` reference.
+
+    Deliberately not folded into ``is_placeholder``. env.shared legitimately
+    carries refs for non-secret interpolation keys, and ``is_placeholder`` also
+    drives brand_defaults' config defaults and local.env hydration -- folding refs
+    in there would overwrite a deliberate ``KEY=${OTHER}`` with a default. Only
+    the secrets funnel (chit-export, secrets_sync, self-generated fill) treats a
+    ref as a non-value, because a secret is a value, and a ref is a pointer to one.
+
+    Measured on Z890, 2026-09-09: env.shared held SUPABASE_JWT_SECRET=``${JWT_SECRET}``
+    (13 chars) where a fresh 58-char value belonged; chit-export carried it into
+    the CGP, secrets_sync accepted it as non-empty, and the merge write-back spread
+    it across every tier file.
+    """
+    if value is None:
+        return False
+    return bool(_UNEXPANDED_REF_RE.fullmatch(normalize_env_value(value)))
+
+
 # ---------------------------------------------------------------------------
 # Config Path Resolution
 # ---------------------------------------------------------------------------
