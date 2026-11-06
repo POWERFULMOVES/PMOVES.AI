@@ -10,7 +10,15 @@ from typing import Dict, Any, List, Optional
 from fastapi import FastAPI, Body, HTTPException, Request, Response
 import requests
 from qdrant_client import QdrantClient
-from qdrant_client.http.models import Distance, VectorParams, PointStruct
+from qdrant_client.http.models import (
+    Distance,
+    FieldCondition,
+    Filter,
+    FilterSelector,
+    MatchValue,
+    PointStruct,
+    VectorParams,
+)
 from sentence_transformers import SentenceTransformer
 import numpy as np
 
@@ -21,6 +29,19 @@ http_requests_total = Counter('extract_worker_http_requests_total', 'Total HTTP 
 http_request_duration = Histogram('extract_worker_http_request_duration_seconds', 'HTTP request duration')
 qdrant_operations_total = Counter('extract_worker_qdrant_operations_total', 'Qdrant operations', ['operation'])
 embeddings_processed_total = Counter('extract_worker_embeddings_processed_total', 'Embeddings processed')
+oversized_texts_total = Counter(
+    'extract_worker_oversized_texts_total',
+    'Chunks over EXTRACT_MAX_EMBED_CHARS received by /ingest (re-split, never embedded whole)',
+)
+resplit_chunks_total = Counter(
+    'extract_worker_resplit_chunks_total',
+    'Child chunks produced by re-splitting oversized /ingest texts',
+)
+
+# Vendored byte-identical copy of pmoves/libs/langextract/chunking.py: this
+# image is built from services/extract-worker alone and cannot see libs/.
+# tests/test_langextract_chunking.py fails if the two files drift.
+from langextract_chunking import resplit_oversized  # noqa: E402
 
 QDRANT_URL = os.environ.get("QDRANT_URL","http://qdrant:6333")
 COLL = os.environ.get("QDRANT_COLLECTION","pmoves_chunks_qwen3")
@@ -128,6 +149,22 @@ TENSORZERO_EMBED_MODEL = os.environ.get(
 TENSORZERO_EMBED_BATCH_SIZE = int(os.environ.get("TENSORZERO_EMBED_BATCH_SIZE", "16"))
 TENSORZERO_EMBED_TIMEOUT_SECS = float(os.environ.get("TENSORZERO_EMBED_TIMEOUT_SECS", "120"))
 
+# Defence in depth for the 8192-token clipping measured in layer map #3406.
+# 8000 characters is ~2000 tokens of English prose, so a text over it was not
+# produced by the capped langextract chunker (LANGEXTRACT_MAX_CHARS, default
+# 2000) - something upstream skipped chunking. Such texts are counted, logged,
+# and re-split (to LANGEXTRACT_MAX_CHARS) instead of being sent whole to an
+# embedder that would silently truncate them.
+def _int_env(name: str, default: int) -> int:
+    try:
+        value = int(os.environ.get(name, str(default)))
+    except ValueError:
+        return default
+    return value if value > 0 else default
+
+
+EXTRACT_MAX_EMBED_CHARS = _int_env("EXTRACT_MAX_EMBED_CHARS", 8000)
+
 def _meili(method: str, path: str, **kwargs):
     headers = kwargs.pop('headers', {})
     if MEILI_API_KEY:
@@ -201,6 +238,74 @@ def _embed_tensorzero(texts: List[str]):
         out.extend([entry.get("embedding", []) for entry in data])
     return np.array(out, dtype=float)
 
+def _truthy(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    return str(value or "").strip().lower() in ("1", "true", "yes", "on")
+
+
+def _guard_oversized(chunks: List[Dict[str, Any]]):
+    """Re-split any chunk whose text exceeds EXTRACT_MAX_EMBED_CHARS."""
+    out, n_over = resplit_oversized(chunks, threshold=EXTRACT_MAX_EMBED_CHARS)
+    if n_over:
+        oversized_texts_total.inc(n_over)
+        resplit_chunks_total.inc(len(out) - (len(chunks) - n_over))
+        logger.warning(
+            "ingest: %d chunk(s) over EXTRACT_MAX_EMBED_CHARS=%d re-split into %d piece(s) "
+            "(upstream did not cap chunk length)",
+            n_over, EXTRACT_MAX_EMBED_CHARS, len(out) - (len(chunks) - n_over),
+        )
+    return out, n_over
+
+
+def _delete_docs(qc: QdrantClient, chunks: List[Dict[str, Any]]) -> List[str]:
+    """replace=true: delete all Qdrant points + Meili docs for each (doc_id, namespace).
+
+    Meili is cleaned by chunk_id (its primary key), collected from the Qdrant
+    payloads first, so no Meili filterable-attribute setting is required.
+    Meili docs whose Qdrant point was already gone are not found this way.
+    """
+    targets = []
+    seen = set()
+    for c in chunks:
+        doc_id = c.get("doc_id")
+        if not doc_id:
+            continue
+        key = (doc_id, c.get("namespace"))
+        if key not in seen:
+            seen.add(key)
+            targets.append(key)
+
+    for doc_id, ns in targets:
+        must = [FieldCondition(key="doc_id", match=MatchValue(value=doc_id))]
+        if ns:
+            must.append(FieldCondition(key="namespace", match=MatchValue(value=ns)))
+        flt = Filter(must=must)
+        old_ids: List[str] = []
+        offset = None
+        while True:
+            points, offset = qc.scroll(
+                collection_name=COLL, scroll_filter=flt, limit=256, offset=offset,
+                with_payload=True, with_vectors=False,
+            )
+            for pt in points or []:
+                cid = (getattr(pt, "payload", None) or {}).get("chunk_id")
+                if cid:
+                    old_ids.append(cid)
+            if offset is None:
+                break
+        qc.delete(collection_name=COLL, points_selector=FilterSelector(filter=flt))
+        qdrant_operations_total.labels(operation='delete_by_doc').inc()
+        if old_ids:
+            try:
+                _meili('post', f'/indexes/{COLL}/documents/delete-batch', json=old_ids)
+                qdrant_operations_total.labels(operation='meili_docs_delete').inc()
+            except Exception as exc:
+                logger.warning("replace: Meili delete for doc %s failed (non-fatal): %s", doc_id, exc)
+        logger.info("replace: cleared doc_id=%s namespace=%s (%d prior chunks)", doc_id, ns, len(old_ids))
+    return [doc_id for doc_id, _ in targets]
+
+
 @app.get("/healthz")
 def healthz():
     http_requests_total.labels(method='GET', endpoint='/healthz', status='200').inc()
@@ -221,14 +326,24 @@ def ingest(request: Request, body: Dict[str, Any] = Body(...)):
             errors = body.get('errors') or []
             context_id = body.get("context_id") or request.headers.get("x-context-id")
 
+            replace = _truthy(body.get("replace"))
+            resplit = 0
+            replaced_doc_ids: List[str] = []
+
             # Upsert chunks to Qdrant + Meili
             if chunks:
+                chunks, resplit = _guard_oversized(chunks)
                 texts = [c.get('text','') for c in chunks]
                 vecs = _embed(texts)
                 embeddings_processed_total.inc(len(texts))
 
                 qc = QdrantClient(url=QDRANT_URL, timeout=30.0)
                 _ensure_qdrant(qc, vecs.shape[1])
+                if replace:
+                    # After embedding succeeded (the likeliest failure), before
+                    # upsert: drop every existing point of each doc so ids from a
+                    # previous chunking scheme cannot linger as orphans.
+                    replaced_doc_ids = _delete_docs(qc, chunks)
                 points: List[PointStruct] = []
                 for i, v in enumerate(vecs):
                     chunk = chunks[i]
@@ -286,6 +401,10 @@ def ingest(request: Request, body: Dict[str, Any] = Body(...)):
 
             http_requests_total.labels(method='POST', endpoint='/ingest', status=status).inc()
             result = {"ok": True, "chunks": len(chunks), "errors_inserted": inserted}
+            if resplit:
+                result["resplit"] = resplit
+            if replace:
+                result["replaced_doc_ids"] = replaced_doc_ids
             if context_id:
                 result["context_id"] = context_id
             return result
