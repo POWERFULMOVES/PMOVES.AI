@@ -2,7 +2,7 @@
 
 **Submodule:** [Pmoves-cipher/](https://github.com/POWERFULMOVES/Pmoves-cipher) + [pmoves-cipher-mcp/](https://github.com/POWERFULMOVES/pmoves-cipher-mcp)
 **MCP server name:** `pmoves-cipher`
-**Transport:** SSE at `http://localhost:8105/mcp/sse`
+**Transport:** streamable-http at `http://localhost:8105/mcp` (type `http`, stateless POST; switched 2026-10-10). Legacy SSE `/mcp/sse` + `/mcp/messages` still exists but returns 400 `stream is not readable` on any container built before fork PR #27 (pin a0ee2314) — measured on 5090 2026-10-10; `/mcp` works on both.
 **Bearer auth:** `Authorization: Bearer ${CIPHER_API_TOKEN}` — bare, no `:-` default. Without the env var the header does **not** expand empty: Claude Code sends the literal `${CIPHER_API_TOKEN}` text (MEASURED → 401). With the var set it sends the real token, which is a 401 too until the container has been recreated to pick the token up. See `pmoves/docs/operations/CIPHER_AUTH_RUNBOOK.md` §2a for the state table.
 **Discovery entry:** `pmoves/config/agent_registry.yaml` → `mcp_servers.pmoves_cipher_mcp`
 
@@ -39,8 +39,8 @@ The roster carries two cipher entries, and only one connects today:
 
 | Entry | URL | State |
 |---|---|---|
-| `pmoves-cipher` | `http://${TS_Z890}:8105/mcp/sse` | refused |
-| `pmoves-cipher-local` | `http://localhost:8105/mcp/sse` | works |
+| `pmoves-cipher` | `http://${TS_Z890}:8105/mcp` | refused |
+| `pmoves-cipher-local` | `http://localhost:8105/mcp` | works |
 
 **This is configuration, not a design flaw, and the fleet entry should not be
 deleted.** Grounded in source at submodule pin `e24f1323`:

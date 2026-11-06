@@ -310,11 +310,16 @@ MCP_SPECS: List[MCPSpec] = [
     # the shim 401s any non-empty token, so cipher never connected). #2729 fixed
     # both for claude/kilo through the inventory; crush was missed because nothing
     # linked it. test_crush_cipher_matches_inventory.py now fails if they diverge.
+    # TRANSPORT 2026-10-10 (5090): both cipher entries are streamable-http
+    # (type http, POST /mcp) -- the legacy SSE pair 400s "stream is not readable"
+    # on any container built before fork PR #27 (pin a0ee2314), while POST /mcp
+    # works on pre- and post-pin builds (measured on 5090; see .claude/mcp.json
+    # pmoves-cipher _note TRANSPORT). Mirrored in the inventory the same day.
     MCPSpec(
         key="pmoves-cipher",
         config={
-            "type": "sse",
-            "url": "http://${TS_Z890}:8105/mcp/sse",
+            "type": "http",
+            "url": "http://${TS_Z890}:8105/mcp",
             "headers": {"Authorization": "Bearer ${CIPHER_API_TOKEN}"},
             "timeout": 30,
         },
@@ -342,8 +347,8 @@ MCP_SPECS: List[MCPSpec] = [
     MCPSpec(
         key="pmoves-cipher-local",
         config={
-            "type": "sse",
-            "url": "http://localhost:8105/mcp/sse",
+            "type": "http",
+            "url": "http://localhost:8105/mcp",
             "headers": {"Authorization": "Bearer ${CIPHER_API_TOKEN}"},
             "timeout": 30,
         },
@@ -532,7 +537,7 @@ def _select_models(available: Dict[str, ProviderSpec], provider_models: Dict[str
 # ---------------------------------------------------------------------------
 # Pair-review finding (2026-08-26): the same unresolvable-${TS_*} bug that
 # PR #2769 killed for Claude's roster was still live here. `pmoves-cipher`
-# emits http://${TS_Z890}:8105/mcp/sse; on a node without the tailscale CLI,
+# emits http://${TS_Z890}:8105/mcp; on a node without the tailscale CLI,
 # Crush receives the literal string as a hostname -- a silent 404 in the exact
 # harness whose cipher fix (#2762) had just deliberately dropped required_env.
 # #2762 removed the token gate; this restores a *narrower* one for the hostname.
@@ -836,7 +841,7 @@ def build_config() -> Tuple[Dict[str, object], Dict[str, ProviderSpec]]:
         config = dict(spec.config)
         if node == "spark":
             if spec.key in ("pmoves-cipher", "pmoves-cipher-local"):
-                config["url"] = "http://localhost:8105/mcp/sse"
+                config["url"] = "http://localhost:8105/mcp"
             elif spec.key == "agent-zero":
                 config["url"] = "http://localhost:8093/mcp"
         # Normalize agent-zero to SSE with token auth on every node (Spark uses :8093,
