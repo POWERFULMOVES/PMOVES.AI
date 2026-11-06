@@ -1,0 +1,8 @@
+# titanmail-mcp runtime deps. Locked in requirements.lock (uv-cassettes: regenerate with
+#   uv pip compile requirements.txt -o requirements.lock --python-version 3.12 --universal
+# ). Pin mcp to 1.x: mcp 2.x renamed FastMCP -> MCPServer (breaking).
+mcp>=1.2.0,<2
+httpx>=0.27.0
+uvicorn>=0.30.0
+# zoneinfo needs IANA data; python:3.12-slim does not guarantee /usr/share/zoneinfo.
+tzdata>=2024.1

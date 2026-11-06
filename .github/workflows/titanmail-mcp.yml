@@ -1,0 +1,42 @@
+name: TitanMail MCP
+
+# Runs the titanmail-mcp tests and the date-window/dedup harness in the service's own
+# locked environment (requirements.lock). The harness exits 1 below 99% date-window
+# accuracy or 99.9% dedup precision, which fails this job -- spec mandate (b).
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'pmoves/services/titanmail-mcp/**'
+      - '.github/workflows/titanmail-mcp.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'pmoves/services/titanmail-mcp/**'
+      - '.github/workflows/titanmail-mcp.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  titanmail:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - name: Install locked cassette
+        run: |
+          python -m pip install --upgrade pip uv
+          uv pip install --system --constraint pmoves/services/titanmail-mcp/requirements.lock \
+            -r pmoves/services/titanmail-mcp/requirements.txt pytest pytest-asyncio pyyaml
+      - name: Unit tests
+        run: python -m pytest -q pmoves/services/titanmail-mcp/tests
+      - name: Date-window + dedup harness (fails below target)
+        run: python pmoves/services/titanmail-mcp/eval/run_harness.py --json titanmail-harness.json
