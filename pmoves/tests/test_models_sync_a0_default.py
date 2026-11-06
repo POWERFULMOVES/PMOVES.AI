@@ -35,7 +35,7 @@ def out(tmp_path, monkeypatch):
 
 
 def _names(path):
-    return [p["name"] for p in yaml.safe_load(path.read_text())]
+    return [p["name"] for p in yaml.safe_load(path.read_text(encoding="utf-8"))]
 
 
 def test_first_generated_preset_is_named_default(out):
@@ -44,7 +44,7 @@ def test_first_generated_preset_is_named_default(out):
 
 
 def test_hand_presets_survive_a_sync(out):
-    out.write_text(yaml.safe_dump([{"name": "Registry", "chat": {}}, CLOUD]))
+    out.write_text(yaml.safe_dump([{"name": "Registry", "chat": {}}, CLOUD]), encoding="utf-8")
     ms._write_a0_presets(ROWS, [], out, apply=True)
     # The stale generator-owned "Registry" is regenerated (as Default), not
     # carried over; the hand-kept cloud preset survives after it.
@@ -53,12 +53,12 @@ def test_hand_presets_survive_a_sync(out):
 
 def test_stale_generated_names_are_not_carried_over(out):
     stale = [{"name": n, "chat": {}} for n in ("Default", "TensorZero", "Fallback-7")]
-    out.write_text(yaml.safe_dump(stale))
+    out.write_text(yaml.safe_dump(stale), encoding="utf-8")
     ms._write_a0_presets(ROWS, [], out, apply=True)
     assert "Fallback-7" not in _names(out) and _names(out).count("Default") == 1
 
 
 def test_check_is_clean_after_apply_with_hand_presets(out):
-    out.write_text(yaml.safe_dump([CLOUD]))
+    out.write_text(yaml.safe_dump([CLOUD]), encoding="utf-8")
     ms._write_a0_presets(ROWS, [], out, apply=True)
     ms._write_a0_presets(ROWS, [], out, check=True)  # raises SystemExit(1) on drift
