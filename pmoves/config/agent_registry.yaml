@@ -479,6 +479,184 @@ agents:
       VPS (runtime lane kilocode/zai-coding/glm-5.3). CLI harness source of truth:
       PMOVES-KeYlOkODe (fork of Kilo-Org/kilocode, @kilocode/cli); reads repo kilo.json natively.
 
+  # --- Harness rows bridged to the ACP registry (2026-10-11, #3347) ----------
+  # One entry per coding harness PMOVES overlays, so pmoves/tools/acp_registry_map.py
+  # can mark the ACP entry `linked` and so the overlay surface is DECLARED here
+  # rather than detected at launch (danger-room room `overlay-paper-over`).
+  # Signatures are harness names, not model lineage; node_affinity is empty on
+  # purpose so pmoves_launcher_generator.py emits no per-node pin file for them
+  # (the per-node identities claude_5090 / kimi_knuckles / ... already do that).
+  # Sources: skills dirs from skills/PMOVES-skills/src/agents.ts (vercel-labs
+  # fork, read 2026-10-11); settings surfaces from each harness's own docs,
+  # cited in the overlay map row.
+  claude_code:
+    name: "Claude Code"
+    class: standard
+    kind: harness
+    primary_type: agent
+    secondary_type: llm
+    port: null
+    health: null
+    layers: [L0, L2, L4]
+    evolution_stage: stage_2
+    role_class: worker
+    signature: "claude-code"
+    # overlay: the harness's OWN surfaces, read by the launchers and by
+    # pmoves/docs/TAC/TAC_HARNESS_OVERLAY_MAP.md. PMOVES hydrates THROUGH these
+    # (identity, env.shared, MCP roster, routing) and never around them.
+    overlay:
+      acp: {registry_id: claude-acp, command: npx, args: ["@agentclientprotocol/claude-agent-acp"]}
+      settings: ["~/.claude/settings.json", ".claude/settings.json", ".claude/settings.local.json", "--settings <file>", "--mcp-config <file>"]
+      instructions: ["CLAUDE.md", ".claude/CLAUDE.md"]
+      skills_dir: ".claude/skills"
+      launcher: "deploy/provision/claude-pmoves.sh"
+    nats:
+      publishes: []
+      subscribes: []
+    chit_toggles:
+      delta_sensitive: true
+      kappa_sensitive: true
+      hz_sensitive: false
+      swarm_participant: true
+      attribution_gated: true
+    resilience:
+      context_budget: large
+      checkpoint_frequency: per_wave
+      recovery_strategy: cipher_resumable
+      cipher_categories: [agent_checkpoint, agent_completion]
+    topology:
+      node_affinity: []
+      team: implementation
+      ci_runner: ai-lab
+      compose_profile: null
+    description: "Anthropic Claude Code CLI as a PMOVES harness. Settings precedence and --mcp-config are the seam; .claude/mcp.json is the roster it is handed."
+
+  codex_cli:
+    name: "Codex CLI"
+    class: standard
+    kind: harness
+    primary_type: agent
+    secondary_type: llm
+    port: null
+    health: null
+    layers: [L0, L2, L4]
+    evolution_stage: stage_2
+    role_class: worker
+    signature: "codex"
+    # overlay: the harness's OWN surfaces, read by the launchers and by
+    # pmoves/docs/TAC/TAC_HARNESS_OVERLAY_MAP.md. PMOVES hydrates THROUGH these
+    # (identity, env.shared, MCP roster, routing) and never around them.
+    overlay:
+      acp: {registry_id: codex-acp, command: npx, args: ["@agentclientprotocol/codex-acp"]}
+      settings: ["~/.codex/config.toml", ".codex/config.toml (trusted projects only)", "--profile <name>", "-c key=value"]
+      instructions: ["AGENTS.md"]
+      skills_dir: ".agents/skills"
+      launcher: "pmoves/scripts/codex-pmoves.sh"
+    nats:
+      publishes: []
+      subscribes: []
+    chit_toggles:
+      delta_sensitive: true
+      kappa_sensitive: true
+      hz_sensitive: false
+      swarm_participant: true
+      attribution_gated: true
+    resilience:
+      context_budget: large
+      checkpoint_frequency: per_wave
+      recovery_strategy: cipher_resumable
+      cipher_categories: [agent_checkpoint, agent_completion]
+    topology:
+      node_affinity: []
+      team: implementation
+      ci_runner: ai-lab
+      compose_profile: null
+    description: "OpenAI Codex CLI as a PMOVES harness. Reads AGENTS.md natively; the MCP roster belongs in [mcp_servers.<id>] of config.toml, not in a wrapper."
+
+  kimi_code:
+    name: "Kimi Code CLI"
+    class: standard
+    kind: harness
+    primary_type: agent
+    secondary_type: llm
+    port: null
+    health: null
+    layers: [L0, L2, L4]
+    evolution_stage: stage_2
+    role_class: worker
+    signature: "kimi-code"
+    # overlay: the harness's OWN surfaces, read by the launchers and by
+    # pmoves/docs/TAC/TAC_HARNESS_OVERLAY_MAP.md. PMOVES hydrates THROUGH these
+    # (identity, env.shared, MCP roster, routing) and never around them.
+    overlay:
+      acp: {registry_id: null, command: kimi, args: ["acp"], note: "registry entry kimi pins the archived Python kimi-cli; Kimi Code needs its own agent.json upstream"}
+      settings: ["${KIMI_CODE_HOME:-~/.kimi-code}/config.toml", "${KIMI_CODE_HOME:-~/.kimi-code}/mcp.json", "/mcp-config (in-session)"]
+      instructions: ["AGENTS.md"]
+      skills_dir: ".agents/skills"
+      launcher: "pmoves/scripts/kimi-pmoves.sh"
+    nats:
+      publishes: []
+      subscribes: []
+    chit_toggles:
+      delta_sensitive: true
+      kappa_sensitive: true
+      hz_sensitive: false
+      swarm_participant: true
+      attribution_gated: true
+    resilience:
+      context_budget: large
+      checkpoint_frequency: per_wave
+      recovery_strategy: cipher_resumable
+      cipher_categories: [agent_checkpoint, agent_completion]
+    topology:
+      node_affinity: []
+      team: implementation
+      ci_runner: ai-lab
+      compose_profile: null
+    description: "Moonshot Kimi Code CLI as a PMOVES harness. Not the archived kimi-cli (--config-file / .kimi/); the flavor on a node is declared, never sniffed from --help."
+
+  opencode:
+    name: "OpenCode"
+    class: standard
+    kind: harness
+    primary_type: agent
+    secondary_type: llm
+    port: null
+    health: null
+    layers: [L0, L2, L4]
+    evolution_stage: stage_2
+    role_class: worker
+    signature: "opencode"
+    # overlay: the harness's OWN surfaces, read by the launchers and by
+    # pmoves/docs/TAC/TAC_HARNESS_OVERLAY_MAP.md. PMOVES hydrates THROUGH these
+    # (identity, env.shared, MCP roster, routing) and never around them.
+    overlay:
+      acp: {registry_id: opencode, command: opencode, args: ["acp"]}
+      settings: ["~/.config/opencode/opencode.json", "$OPENCODE_CONFIG", "opencode.json", ".opencode/", "$OPENCODE_CONFIG_CONTENT"]
+      instructions: ["AGENTS.md (via instructions)"]
+      skills_dir: ".agents/skills"
+      launcher: "pmoves/scripts/kilo-pmoves.sh (kilo.json is the Kilo fork surface)"
+    nats:
+      publishes: []
+      subscribes: []
+    chit_toggles:
+      delta_sensitive: true
+      kappa_sensitive: true
+      hz_sensitive: false
+      swarm_participant: true
+      attribution_gated: true
+    resilience:
+      context_budget: large
+      checkpoint_frequency: per_wave
+      recovery_strategy: cipher_resumable
+      cipher_categories: [agent_checkpoint, agent_completion]
+    topology:
+      node_affinity: []
+      team: implementation
+      ci_runner: ai-lab
+      compose_profile: null
+    description: "OpenCode as a PMOVES harness; Kilo (kilocode_glm) is its maintained fork with kilo.json and .kilocode/skills. Config sources MERGE in documented order; PMOVES sets OPENCODE_CONFIG, never a flag the binary lacks."
+
   darkxside_persona:
     name: "DARKXSIDE Persona"
     class: specialized

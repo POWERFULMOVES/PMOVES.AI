@@ -124,6 +124,17 @@ CLEANUP_TIMER := ../deploy/provision/docker-fleet-cleanup.timer
 docker-host-policy-check: ## Assert Docker log rotation is APPLIED on this host (exit 3 = unmeasurable, not a pass)
 	@$(PRECHECK_PY) tools/docker_host_policy_check.py $(ARGS)
 
+# READ-ONLY. Run BEFORE any Docker Desktop restart/reset after an engine hang.
+# Docker's wsl-bootstrap cannot tell an unreadable data disk from a blank one
+# and will try to FORMAT it (z890, 2026-10-14). Never mounts, repairs or
+# restarts anything. Tool exit 0 pass / 1 warn / 2 fail / 3 could-not-measure;
+# make itself collapses any non-zero to 2, so read the RESULT line (or the
+# --json exit_code) for the real verdict.
+# Runbook: docs/handoffs/z890-docker-data-disk-usb-spof-2026-10-14.md
+.PHONY: docker-disk-preflight
+docker-disk-preflight: ## Read-only Docker Desktop data-disk check (junction/USB, vhdx header, disk events, health, VM log). ARGS='--json'
+	@$(PRECHECK_PY) tools/docker_disk_preflight.py $(ARGS)
+
 # Uses $(MCP_GATEWAY_DC), defined beside the other per-stack macros in the
 # Makefile, so it carries -p $(PROJECT) and $(COMPOSE_ENV_FILES). A raw
 # `docker compose up -d` here would skip COMPOSE_ENV_FILES injection and the
@@ -738,10 +749,15 @@ dep-matrix-shutdown: ## Print the graceful shutdown order (reverse of bring-up l
 agent-registry-check: ## Assert agent_registry.yaml describes reality (submodule vs path, transport vs endpoint)
 	@uv run --quiet --with pyyaml python tools/agent_registry_check.py
 
-# Sibling of the REPO ROOT (make -C pmoves runs from pmoves/, hence ../../).
-ACP_REGISTRY_PATH ?= ../../PMOVES-registry
-acp-registry-map: ## Regenerate the ACP <-> PMOVES registry mapping (clone POWERFULMOVES/PMOVES-registry as a repo-root sibling first)
+# The PMOVES-registry SUBMODULE pinned in this repo (make -C pmoves runs from
+# pmoves/, hence ../). Not a repo-root sibling clone: a stale sibling silently
+# dropped newer entries. Populate with `git submodule update --init PMOVES-registry`.
+ACP_REGISTRY_PATH ?= ../PMOVES-registry
+acp-registry-map: ## Regenerate the ACP <-> PMOVES registry mapping from the pinned PMOVES-registry submodule
 	@uv run --quiet --with pyyaml python tools/acp_registry_map.py --registry $(ACP_REGISTRY_PATH) --write
+
+acp-registry-map-check: ## Fail if acp_registry_map.json drifted from the pinned PMOVES-registry submodule
+	@uv run --quiet --with pyyaml python tools/acp_registry_map.py --registry $(ACP_REGISTRY_PATH) --check
 
 ACP_PROBE_ENTRIES ?= kilo,glm-acp-agent,minimax-code,qwen-code,codex-acp,claude-acp
 acp-launcher-probe: ## Verify ACP registry launchers on this node (see pmoves/docs/TAC/TAC_ACP_REGISTRY.md); scope with ACP_PROBE_ENTRIES=kilo

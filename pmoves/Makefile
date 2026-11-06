@@ -240,6 +240,8 @@ include mk/preflight.mk
 include mk/infra.mk
 include mk/worktree.mk
 include mk/build-gate.mk
+include mk/image-staleness.mk
+include mk/node-registry.mk
 include mk/nvidia-5090.mk
 include mk/nvidia-dgx-spark.mk
 include mk/amd-rdna4.mk
@@ -258,6 +260,7 @@ include mk/kilo.mk
 include mk/voice.mk
 include mk/kong.mk
 include mk/review.mk
+include mk/mike.mk
 
 # ----------------------------------------------------------------------------
 # venv + bringup-toolchain prereqs
@@ -1721,14 +1724,15 @@ nats-streams-init: ## Idempotently create JetStream streams via the nats-init si
 	@bash scripts/nats/init_streams.sh
 	@echo "✅ NATS stream init complete"
 
-nats-streams-validate: ## Assert the 8 expected streams exist (CI-runnable)
+nats-streams-validate: ## Assert the expected streams exist with the expected subjects + retention (CI-runnable)
 	@echo "🔍 Validating NATS JetStream streams..."
 	@. ./scripts/with-env.sh 2>/dev/null || true; \
 	  NATS_URL="$${NATS_URL:-nats://nats:pmoves@nats:4222}"; \
-	  docker run --rm --network "$(NATS_DOCKER_NETWORK)" --entrypoint /bin/sh "$(NATS_BOX_IMAGE)" \
-	    -c "nats -s \"$$NATS_URL\" stream ls -n" > /tmp/nats_streams_actual.txt 2>&1
-	@uv run --script scripts/nats/validate_streams.py /tmp/nats_streams_actual.txt
-	@rm -f /tmp/nats_streams_actual.txt
+	  docker run --rm --network "$(NATS_DOCKER_NETWORK)" -e NATS_URL="$$NATS_URL" --entrypoint /bin/sh "$(NATS_BOX_IMAGE)" \
+	    -c 'for name in $$(nats -s "$$NATS_URL" stream ls -n); do nats -s "$$NATS_URL" stream info "$$name" -j; done' \
+	    > /tmp/nats_streams_actual.json
+	@uv run --script scripts/nats/validate_streams.py /tmp/nats_streams_actual.json
+	@rm -f /tmp/nats_streams_actual.json
 
 nats-streams-list: ## List current JetStream streams (ad-hoc)
 	@. ./scripts/with-env.sh 2>/dev/null || true; \
@@ -3026,7 +3030,7 @@ smoke-qwen-rerank: ## Enforce Qwen reranker selection on v2-gpu then run strict 
 smoke-new-models: ## Smoke test new model providers (NIM, Qwen3-Coder-Next, Gemma 3n)
 	@echo "=== New Model Providers Smoke Test ==="
 	@echo "1) NVIDIA NIM health:"
-	@curl -sf http://localhost:$${NIM_HOST_PORT:-8000}/v1/health/ready >/dev/null 2>&1 \
+	@curl -sf http://localhost:$${NIM_HOST_PORT:-8206}/v1/health/ready >/dev/null 2>&1 \
 	  && echo "   NIM: ready" \
 	  || echo "   NIM: not available (skipped)"
 	@echo "2) TensorZero model catalog:"
@@ -4331,9 +4335,26 @@ a0-mcp-show: ## Print Agent Zero runtime MCP server map
 	sed -E 's/(password=)[^&"]+/\1***REDACTED***/g; s/(key=)[^&"]+/\1***REDACTED***/g' "$$file"
 
 # Registry (not compose env) owns the Agent Zero model-config surface.
+# Per-node deployment pass-through: INSTANCE stamps header/manifest and picks
+# the instance's usr-dir var; OUT relocates output (default follows that var
+# like compose does). INSTANCE/OUT are generic names, so they are honoured ONLY
+# from the make command line: a stray exported OUT/INSTANCE in the invoking
+# shell must not relocate presets. The namespaced A0_MODEL_SYNC_INSTANCE /
+# A0_MODEL_SYNC_OUT may come from the environment. Empty INSTANCE= -> docked.
+A0_MODEL_SYNC_INSTANCE ?=
+A0_MODEL_SYNC_OUT ?=
+A0_SYNC_INSTANCE = $(or $(if $(filter command line,$(origin INSTANCE)),$(INSTANCE)),$(A0_MODEL_SYNC_INSTANCE),docked)
+A0_SYNC_OUT = $(or $(if $(filter command line,$(origin OUT)),$(OUT)),$(A0_MODEL_SYNC_OUT))
+
 .PHONY: a0-model-sync
 a0-model-sync: ensure-env-shared ## Generate Agent Zero presets.yaml from the live model registry (registry = config authority; T0 demoted to optional lane)
-	@$(LOAD_ENV_SHARED); PYTHONPATH="$(CURDIR)/.." $(PYTHON) tools/models/models_sync.py sync-dynamic --target agent-zero --apply-presets --tensorzero-base "$${TENSORZERO_BASE_URL:-http://tensorzero-gateway:3000}"
+	@$(LOAD_ENV_SHARED); PYTHONPATH="$(CURDIR)/.." $(PYTHON) tools/models/models_sync.py sync-dynamic --target agent-zero --apply-presets --tensorzero-base "$${TENSORZERO_BASE_URL:-http://tensorzero-gateway:3000}" --instance "$(A0_SYNC_INSTANCE)"$(if $(A0_SYNC_OUT), --out "$(A0_SYNC_OUT)",)
+
+# Variant 3 of the ownership plan: drift control. Clean rooms stay quiet;
+# drifted rooms exit 1 so fleet sweepers can score them.
+.PHONY: a0-model-sync-check
+a0-model-sync-check: ensure-env-shared ## Check Agent Zero presets.yaml against the live registry (writes nothing; exit 0 clean, 1 drift, 2 undecided)
+	@$(LOAD_ENV_SHARED); PYTHONPATH="$(CURDIR)/.." $(PYTHON) tools/models/models_sync.py sync-dynamic --target agent-zero --check --tensorzero-base "$${TENSORZERO_BASE_URL:-http://tensorzero-gateway:3000}" --instance "$(A0_SYNC_INSTANCE)"$(if $(A0_SYNC_OUT), --out "$(A0_SYNC_OUT)",)
 
 .PHONY: archon-ui-smoke
 archon-ui-smoke: ## Verify consolidated Archon service API/UI endpoints are reachable (200)
@@ -5679,6 +5700,10 @@ docs-reconcile-check: ## Check living document freshness (read-only, CI-safe)
 .PHONY: docs-reconcile-json
 docs-reconcile-json: ## Living document freshness report (JSON output)
 	@$(PYTHON) tools/docs_reconcile.py --check --json $(ARGS)
+
+.PHONY: skills-parity
+skills-parity: ## Which harnesses see which skills (report; ARGS=--strict to gate, --json for machine output)
+	@$(PYTHON) tools/skills_parity.py $(ARGS)
 
 # Renamed from docs-render-living: it silently shadowed the Lane 2228
 # registry iterator (make keeps the LAST single-colon recipe) — same
