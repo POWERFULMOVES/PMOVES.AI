@@ -6,15 +6,22 @@
 workflow whose own path filter re-triggered its live deploys (F3) — plus the
 `integrations-ghcr.yml` branch-vs-pin divergence (F4), the HiRAG fork repair (F5), and this
 file's own table shape (F6).
-**Lane branch:** `fix/house-ci-defect-closure` (PR #3455, merged) and
-`fix/integrations-recorded-pin-and-hirag` (this PR).
+**Lane branch:** `fix/house-ci-defect-closure` (PR #3455, merged),
+`fix/integrations-recorded-pin-and-hirag` (PR #3456, merged) and
+`register/house-ci-defect-closure-release` (PR #3457, this PR).
 **Base:** `origin/main` @ `9807cd4c6b9b`.
 **Taxonomy:** 4 buckets · 5 classes, as used across the PMOVES lanes.
 **Spec:** this file. The register row is the AGNOTE CLAIM in
 `pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md`.
-**Ships in this PR:** F4–F6 — the image-matrix branch-vs-pin fix, the HiRAG fork promotion, and
-the gate on this file's own table shape. F1–F3 (the two dead house workflows) landed in the first
-PR of this lane; the lessons they contributed are in the table above with them.
+**Ships:** F1–F3 (the two dead house workflows) landed in PR #3455; F4–F6 (the image-matrix
+branch-vs-pin fix, the HiRAG fork promotion, and the gate on this file's own table shape) in
+PR #3456; and **F10 — the lane's own release provenance — in this PR**. F10 is the one fix here
+whose subject is the lane's own closing record: the RELEASE row cited a trail artifact that
+the repository's ignore rules EXCLUDE, so the receipt did not exist for a reader of the tree the
+row was filed in, and the row asserted that no signing key was available without recording WHICH
+check was run. The artifact is now committed at a tracked path, the key availability is recorded
+as a MEASUREMENT over all five resolver sources, and the row's signature state is checked against
+the artifact's ACTUAL state.
 
 ---
 
@@ -144,6 +151,8 @@ the four-column header back and proves the gate bites (lesson 23).
 | 26 | **contract-correctness** | **An exit-code table is a CONTRACT the CODE must honour** — and a docstring the code does not implement is worse than no docstring, because the reader trusts it. | MEASURED 2026-11-05, on this PR's own review round: the resolver's docstring said "5 INCONSISTENT: a submodule declares the fork but the tree records no gitlink for it", and the code raised 5 only when EVERY declaration was missing. One missing declaration alongside a RECORDED sibling fell through to exit 0 with a notice — the build published a commit the tree does not record for the PREFERRED candidate, and the top-level path is the one `build-images.yml` builds, so the two publishers would have disagreed about what they were building. The contract carried no "unless another one happens to be there" clause, and the docstring did not either: the exception lived only in the CODE, where a reader of the docstring would not see it. FIX: a non-empty missing set now fails closed, and the docstring, the exit table and the code agree. | Any documented failure mode whose implementation is not the documented one. |
 | 27 | **contract-correctness** | **The "not tracked" answer must mean EXACTLY "nothing is recorded"** — every OTHER way of failing to recognise a fork must not land there, because that answer tells the caller to build the MOVING BRANCH. | MEASURED 2026-11-05: two doors led to that one wrong answer. (1) `normalise_url` reduced `git@host:org/repo.git` — the spelling git itself prints for an SSH remote — to a key that matches no `.gitmodules` entry, so the fork read as not tracked. MEASURED: 0 entries in this repo's `.gitmodules` use the scp form, so the hole was LATENT — and a latent hole in the one answer that says "build the branch" is still a hole. (2) `main()` caught `LookupError`, and `KeyError` and `IndexError` are `LookupError` subclasses, so any stray subscript inside the resolution became "not tracked". FIX: the scp form is reduced to the same `<org>/<repo>` key, and a dedicated `NotTrackedError` replaces the bare `LookupError`, so a real crash crashes loudly. | Any tool whose failure modes include one benign answer and several loud ones. |
 | 28 | **reasoning-gap** | **Making a pin STATIC moves the obligation** — whatever can change the pin must trigger the publish, because a static pin no longer self-corrects on the next run. | MEASURED 2026-11-05, on this PR's own review round: before, the build followed a MOVING branch, so a stale publish was self-correcting — the next run picked up the newest tip. The recorded pin makes the build reproducible and the pin STATIC, so advancing a pin no longer changes what the next run builds. The workflow's `paths:` filter still listed only the old inputs, so advancing `Pmoves-Health-wger`'s, `PMOVES-ToKenism-Multi`'s or `PMOVES-llama-throughput-lab`'s gitlink would not re-run the publisher, and the published image would stay on the PREVIOUS commit with nothing red. FIX: the pin's own inputs — the fork-backed submodule paths, `.gitmodules`, and the resolver — are in BOTH `push.paths` and `pull_request.paths`, and the set is DERIVED from the matrix and the tree by the gate, so a new fork-backed entry cannot be added without also being covered. | Any change that makes a previously self-correcting value fixed. |
+| 29 | **contract-correctness** | **A provenance artifact that is not IN THE TREE cannot verify a claim filed inside it** — and a row that cites one has cited nothing. | MEASURED 2026-11-06, on this lane's OWN RELEASE row: it cited the trail log `pmoves/docs/logs/graphiti_signed_latest.json`, which `pmoves/.gitignore:37` EXCLUDES, so the row's only provenance artifact did not exist for anyone reading the repository the row was filed in — a reader could neither check the receipt nor reproduce it. FIX: the trail payload is COMMITTED at a tracked, dated path, and a gate asserts that every artifact path the row names is TRACKED by git and NOT gitignored, that the artifact's `agent_id` and `timestamp` appear in the row as `key: value` tokens (so the citation is to a SPECIFIC payload and not to "some trail"), and that the row's declared `trail_signature_state` MATCHES the artifact's ACTUAL state — the `sig` block it does or does not carry. | Any row, receipt or report that cites an artifact as its evidence. |
+| 30 | **reasoning-gap** | **"There is no key here" and "I did not run the check that would find it" are different sentences** — a disclaimer must record the CHECK, not assert a fact about the world. | MEASURED 2026-11-06: the same RELEASE row asserted that no signing key was present while naming only FOUR environment variables — but `pmoves/tools/sign_trail.py`'s `_resolve_chit_passphrase` consults FIVE sources, the fifth being the `pmoves/env.tier-*` scan, and the row never said which had been checked. The register had already adjudicated this class: the 2026-08-09 `5090-CLAUDE` row recorded that the passphrase IS present in that node's shared env, that the register's unsigned-local disclaimers are "a process gap, not a material gap", and that "sessions should attempt `sign-trail` before writing the disclaimer". FIX: the probe is RECORDED as a measurement over all five sources, the precedent is cited so the next session does not inherit the gap a third time, and the node that holds the key — online on the tailnet, but refusing non-interactive SSH from this host — is named with the reason the receipt could not be produced here. | Any statement of absence — "the key is missing", "the file does not exist", "nothing was found". |
 
 ---
 
@@ -157,8 +166,9 @@ the four-column header back and proves the gate bites (lesson 23).
 | F4 | The image build resolves the RECORDED gitlink instead of a moving branch, through a resolver whose failure modes are distinguishable and fail closed — 18 behavioural tests + 9 mutation kills | `pmoves/tests/tools/test_resolve_recorded_pin.py`, `pmoves/tests/tools/test_resolve_recorded_pin_mutation_kill.py` |
 | F5 | The HiRAG fork repair lands through the FORK's PR rule, and its gitlink is promoted from `8e5283a` to the fork's 2-parent merge commit `03d6134b` (`ahead_by=2`, `behind_by=0`) | `PMOVES-HiRAG` |
 | F6 | This table's own SHAPE is gated, so the defect that survived every measurement gate — and its own first fix — cannot recur — 11 behavioural tests + 3 mutation kills | `pmoves/tests/tools/test_house_ci_defect_closure_learnings_taxonomy.py`, `pmoves/tests/tools/test_house_ci_defect_closure_learnings_taxonomy_mutation_kill.py` |
+| F10 | The lane's own RELEASE row cites a trail artifact that is COMMITTED and TRACKED, records its key availability as a probe over all five resolver sources, and has its signature state checked against the artifact's ACTUAL state — 13 behavioural tests + 4 mutation kills | `pmoves/tests/tools/test_house_ci_defect_closure_register_provenance.py`, `pmoves/tests/tools/test_house_ci_defect_closure_register_provenance_mutation_kill.py` |
 
-**Total: 45 behavioural test functions and 26 mutation kills across the lane's five gates.**
+**Total: 58 behavioural test functions and 30 mutation kills across the lane's six gates.**
 
 The per-row counts above are MEASUREMENTS, not assertions: they are recomputed by AST from the
 files each row cites, and the mutation count for a row is the number of `Mutation(...)` entries
@@ -184,6 +194,20 @@ been fixed once in this lane for the same reason, which is what says the missing
 and not more care (lesson 23). The harness puts the four-column header back and proves the gate
 bites, against a NAMED test.
 
+F10 is the lane's own RELEASE ROW, gated: the row that closes the lane is itself a claim, so it
+is checked against the artifacts it names. A reviewer found that it cited a trail artifact the
+repository's ignore rules EXCLUDE — a receipt no reader of the tree could check — and that it
+asserted the absence of a signing key without recording WHICH check was run, while
+`sign_trail.py` consults five sources rather than the four the row's wording implied. The fix
+moved the payload into a COMMITTED, tracked path; recorded the key availability as a measurement
+over all five sources; cited the 2026-08-09 `5090-CLAUDE` precedent that had already ruled this
+disclaimer class "a process gap, not a material gap"; and made the row's `trail_signature_state`
+a claim the gate checks against the artifact's ACTUAL state. The harness puts the gitignored
+citation, the false signature claim, the wrong agent and the removed probe back, one at a time,
+and proves the gate bites against a NAMED test each time. The row's lane totals are checked
+against this file's GATED total, so the row cannot carry a number that has drifted from the one
+the taxonomy gate recomputes (lesson 29, lesson 30).
+
 ---
 
 ## Bucket summary
@@ -195,13 +219,13 @@ gate of its own, or it rots silently.
 
 | Class | Lessons | Members |
 |-------|---------|---------|
-| reasoning-gap | 9 | 2, 3, 12, 15, 19, 21, 23, 24, 28 |
+| reasoning-gap | 10 | 2, 3, 12, 15, 19, 21, 23, 24, 28, 30 |
 | semantic-naming drift | 3 | 6, 8, 18 |
-| contract-correctness | 11 | 1, 4, 7, 9, 11, 16, 20, 22, 25, 26, 27 |
+| contract-correctness | 12 | 1, 4, 7, 9, 11, 16, 20, 22, 25, 26, 27, 29 |
 | defense-in-depth | 3 | 5, 10, 13 |
 | pattern-conformance | 2 | 14, 17 |
 
-**Total lessons: 28**
+**Total lessons: 30**
 
 The zero-count classes are DECLARED, not omitted. A summary that lists only the classes that
 happen to have members cannot show that a class was considered and found empty — and an omitted
