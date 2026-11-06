@@ -34,7 +34,18 @@ import json
 import time
 from typing import Dict, Mapping, Optional
 
-from pmoves.tools._secrets_common import is_placeholder
+from pmoves.tools._secrets_common import is_placeholder, is_unexpanded_ref
+
+
+def _is_nonvalue(value: Optional[str]) -> bool:
+    """Placeholder OR a whole-value ``${VAR}`` ref -- neither is a derivable secret.
+
+    A ref left in the bundle (SUPABASE_JWT_SECRET=``${JWT_SECRET}``, Z890
+    2026-09-09) is not a value: it must be mirrored over like a blank, and it must
+    never be used as the HMAC key the anon/service_role JWTs are signed with.
+    """
+    return is_placeholder(value) or is_unexpanded_ref(value)
+
 
 # Canonical Supabase JWT claims — MUST match scripts/supabase/generate-keys.sh.
 _JWT_ISS = "supabase-local"
@@ -139,12 +150,19 @@ def fill_self_generated(secrets: Mapping[str, str]) -> Dict[str, str]:
     value it replaces; live keys are never touched.
     """
     out: Dict[str, str] = dict(secrets)
-    jwt_secret = (out.get("JWT_SECRET") or out.get("SUPABASE_JWT_SECRET") or "").strip()
-    if not jwt_secret or is_placeholder(jwt_secret):
+    jwt_secret = next(
+        (
+            (out.get(label) or "").strip()
+            for label in ("JWT_SECRET", "SUPABASE_JWT_SECRET")
+            if out.get(label) and not is_unexpanded_ref(out.get(label))
+        ),
+        "",
+    )
+    if not jwt_secret or _is_nonvalue(jwt_secret):
         return out
 
     # Mirror JWT_SECRET into SUPABASE_JWT_SECRET if missing (manifest requires both)
-    if not out.get("SUPABASE_JWT_SECRET") or is_placeholder(out.get("SUPABASE_JWT_SECRET")):
+    if not out.get("SUPABASE_JWT_SECRET") or _is_nonvalue(out.get("SUPABASE_JWT_SECRET")):
         out["SUPABASE_JWT_SECRET"] = jwt_secret
 
     now = int(time.time())
@@ -159,7 +177,7 @@ def fill_self_generated(secrets: Mapping[str, str]) -> Dict[str, str]:
         expired = [
             label
             for label in labels
-            if not is_placeholder(out.get(label))
+            if not _is_nonvalue(out.get(label))
             and (exp := _jwt_exp_claim(out.get(label))) is not None
             and exp <= now
         ]
@@ -171,10 +189,10 @@ def fill_self_generated(secrets: Mapping[str, str]) -> Dict[str, str]:
                 jwt_secret, role, iat=now, exp=now + _REFRESH_LIFETIME_S
             )
             for label in labels:
-                if is_placeholder(out.get(label)) or label in expired:
+                if _is_nonvalue(out.get(label)) or label in expired:
                     out[label] = rolling
         else:
             for label in labels:
-                if is_placeholder(out.get(label)):
+                if _is_nonvalue(out.get(label)):
                     out[label] = derive_supabase_jwt(jwt_secret, role)
     return out

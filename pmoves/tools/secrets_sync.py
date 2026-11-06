@@ -12,6 +12,7 @@ from typing import Dict, List, Mapping, Sequence
 import yaml
 
 from pmoves.chit.codec import decode_secret_map, load_cgp
+from pmoves.tools._secrets_common import is_placeholder, is_unexpanded_ref
 from pmoves.tools.secret_shape import inspect_value
 from pmoves.tools.secrets_self_generated import fill_self_generated, SELF_GENERATED, _SUPABASE_JWT_KEYS
 
@@ -144,16 +145,29 @@ def _parse_target(data: Mapping) -> Target:
     return Target(file=file_name, key=key)
 
 
-def _first_usable(secrets: Mapping[str, str], entry: "Entry") -> str | None:
+def _first_usable(
+    secrets: Mapping[str, str],
+    entry: "Entry",
+    nonvalue_out: set[str] | None = None,
+) -> str | None:
     """First of label-then-aliases whose value is non-empty after stripping.
 
     Returns None when every candidate is absent OR present-but-blank, so callers
     can treat "delivered as empty" and "never delivered" identically — which is how
     every consumer of a line-based env file already treats them.
+
+    A value that is non-empty but not a secret -- an unexpanded ``${OTHER_VAR}``
+    reference or a placeholder literal (``is_placeholder``) -- is skipped too, so
+    a populated alias still wins, and its key is recorded in ``nonvalue_out``.
+    The caller must NOT treat that the same as blank: see ``build_outputs``.
     """
     for key in (entry.label, *entry.aliases):
         value = secrets.get(key)
         if value is not None and value.strip():
+            if is_unexpanded_ref(value) or is_placeholder(value):
+                if nonvalue_out is not None:
+                    nonvalue_out.add(key)
+                continue
             return key
     return None
 
@@ -178,6 +192,7 @@ def build_outputs(
     too_short: List[str] = []
     shape_withheld: List[str] = []
     shape_warnings: List[str] = []
+    nonvalues: set[str] = set()
     for entry in entries:
         # Honor legacy aliases: an operator may supply a deprecated name (e.g.
         # MCP_SERVER_TOKEN) that maps to a canonical label. Emit the canonical
@@ -198,10 +213,22 @@ def build_outputs(
         # as unset, but `${KEY?}` accepts it, and anything that SOURCES an env file
         # and exports it re-exports the blank — where shell environment then beats
         # every `--env-file`. An empty secret is not a secret; treat it as absent.
-        source_key = _first_usable(secrets, entry)
+        entry_nonvalues: set[str] = set()
+        source_key = _first_usable(secrets, entry, entry_nonvalues)
+        nonvalues |= entry_nonvalues
         if source_key is None:
             if entry.required:
                 missing.append(entry.label)
+            # PRESERVE, do not remove, when the reason was a NON-VALUE.
+            #
+            # A ``${VAR}`` ref or placeholder literal is not evidence that the
+            # operator cleared anything, so it must not be read as a clear.
+            # Removing the key does not overwrite the good value a target already
+            # holds -- it DELETES it, which is the Z890 JWT reversion (fresh
+            # 58-char value -> 13-char ref) arriving by another route. Absent and
+            # blank still fall through to removal below.
+            if entry_nonvalues:
+                continue
             # Cleared or never delivered -- either way this key must NOT survive
             # in the generated targets. `write_env_files` runs in merge mode by
             # default (SECRETS_SYNC_FLAGS), and merge PRESERVES keys it is not
@@ -315,6 +342,19 @@ def build_outputs(
             "non-ASCII character cannot be placed in an HTTP header at all, and "
             "surrounding whitespace is emitted verbatim, so verify each against "
             "its source.",
+            file=sys.stderr,
+        )
+    if nonvalues:
+        # Names only: `nonvalues` holds KEYS, and a value that tripped the check
+        # is by definition a ref or placeholder, not credential material.
+        print(
+            "WARNING: withheld "
+            + str(len(nonvalues))
+            + " non-value secret(s) (unexpanded ${VAR} refs or placeholder "
+            "literals): "
+            + ", ".join(sorted(nonvalues))
+            + " -- targets keep their existing values in --merge mode; rotate "
+            "with `make -C pmoves secrets-rotate KEY=<NAME>` to mint real ones.",
             file=sys.stderr,
         )
     if missing and strict:
