@@ -404,14 +404,6 @@ known_gaps:
     count: 20
     reason: pre-existing text-mode file I/O without an explicit encoding= (Windows
       cp1252 class)
-  tests/test_models_sync_a0_default.py:
-    count: 4
-    reason: pre-existing text-mode file I/O without an explicit encoding= (Windows
-      cp1252 class)
-  tests/test_models_sync_review_followups.py:
-    count: 14
-    reason: pre-existing text-mode file I/O without an explicit encoding= (Windows
-      cp1252 class)
   tests/test_neo4j_bind_passthrough.py:
     count: 1
     reason: pre-existing text-mode file I/O without an explicit encoding= (Windows

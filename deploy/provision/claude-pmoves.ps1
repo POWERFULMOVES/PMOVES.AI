@@ -93,10 +93,12 @@ $root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $envf = if ($env:PMOVES_ENV_SHARED) { $env:PMOVES_ENV_SHARED } else { Join-Path $root 'pmoves\env.shared' }
 
 # Windows siblings of the bash fragments the POSIX launchers source
-# (pm-cipher-token-bind.sh, pm-ca-bundle.sh, pm-brv-check.sh). Same contracts;
-# each header lists its deliberate Windows differences. A missing file costs
-# the feature, never the session -- the call sites check Get-Command.
-foreach ($__pm_helper in @('pm-cipher-token-bind.ps1', 'pm-ca-bundle.ps1', 'pm-brv-check.ps1')) {
+# (pm-cipher-token-bind.sh, pm-ca-bundle.sh, pm-brv-check.sh), plus the two
+# blocks the .sh runs inline (agent selection, cipher_preflight). Same
+# contracts; each header lists its deliberate Windows differences. A missing
+# file costs the feature, never the session -- the call sites check Get-Command.
+foreach ($__pm_helper in @('pm-cipher-token-bind.ps1', 'pm-ca-bundle.ps1', 'pm-brv-check.ps1',
+                           'pm-agent-select.ps1', 'pm-cipher-preflight.ps1')) {
     $__pm_helper_path = Join-Path $root "pmoves\scripts\$__pm_helper"
     if (Test-Path -LiteralPath $__pm_helper_path) { . $__pm_helper_path }
     else { Write-Warning "[claude-pmoves] pmoves\scripts\$__pm_helper missing -- that check is skipped." }
@@ -108,6 +110,30 @@ foreach ($__pm_helper in @('pm-cipher-token-bind.ps1', 'pm-ca-bundle.ps1', 'pm-b
 # fragment's "explicit env token wins" rule has to hold for the FINAL session,
 # not only until env.shared overwrites it. Case-sensitive, as the bash glob is.
 $script:PmCipherPreEnvToken = if ("$env:CIPHER_API_TOKEN" -clike 'cipher_*') { $env:CIPHER_API_TOKEN } else { $null }
+
+# AGENT SELECTION -- once, here. Until 2026-11-04 the installed shim
+# (pmoves/scripts/windows/claude-pmoves.bat) chose the agent AND resolved the
+# identity AND built its own prompt before calling this file, which did the last
+# two again: claude received two --append-system-prompt blocks. The shim is now
+# a delegate; the rule it owned lives in pm-agent-select.ps1, applied here,
+# before identity, so the role read-back below sees the final --agent.
+#
+# The `claude-pmoves <agent-name>` shorthand is the SHIM's promise, so only the
+# shim turns it on (PMOVES_AGENT_POSITIONAL=1). Entered directly -- this file,
+# claude-pmoves.cmd, a per-node claude-pmoves-<node>.cmd -- a leading positional
+# stays claude's prompt, as it always was (Codex #3454 P1). Cleared at once so
+# a nested launch from inside the session does not inherit it.
+$__positional = ("$env:PMOVES_AGENT_POSITIONAL" -eq '1')
+Remove-Item Env:PMOVES_AGENT_POSITIONAL -ErrorAction SilentlyContinue
+$script:PmAgentRole = $null
+if (Get-Command Resolve-PmAgentArgs -ErrorAction SilentlyContinue) {
+    $__sel = Resolve-PmAgentArgs -Root $root -Argv @($args) -Positional:$__positional
+    foreach ($__l in @($__sel.Lines)) { Write-Warning $__l }
+    $args = [System.Collections.Generic.List[string]]::new()
+    foreach ($__arg in @($__sel.Argv)) { $args.Add($__arg) }
+    $script:PmAgentRole = $__sel.Role
+}
+Write-Host "[claude-pmoves] agent=$(if ($script:PmAgentRole) { $script:PmAgentRole } else { 'none (node identity, full tools)' })"
 
 # ---------------------------------------------------------------------------
 # Interpreter discovery — the Windows half of pmoves/scripts/pm-python.sh.
@@ -556,11 +582,14 @@ if (Get-Command tailscale -ErrorAction SilentlyContinue) {
 # claude-pmoves.sh, which restores before identity resolution.
 if ($script:PmCipherPreEnvToken) { $env:CIPHER_API_TOKEN = $script:PmCipherPreEnvToken }
 $identityArgs = @()
+$identWhyLine = $null
+$ident = @{}
 $identTool = Join-Path $root 'pmoves\tools\node_identity.py'
 if (Test-Path -LiteralPath $identTool) {
     $identPy = Get-PmovesPythonArgv -Root $root
     if (-not $identPy) {
-        Write-Warning '[claude-pmoves] node identity: no usable python; launching without it.'
+        $identWhyLine = 'node identity: no usable python; launching without it.'
+        Write-Warning "[claude-pmoves] $identWhyLine"
     } else {
         # Same settings.local.json read as the POSIX twin: the resolver runs
         # BEFORE the harness loads that file, so a node whose hostname collides
@@ -707,9 +736,13 @@ if (Test-Path -LiteralPath $identTool) {
                 $identCard = $ident['PMOVES_CIPHER_AGENT_ID']
                 # The role arrives in $args as `--agent <name>` (claude-pmoves.cmd
                 # forwards it); this script never chose it, so read it back.
-                $roleName = $null
-                for ($ai = 0; $ai -lt ($args.Count - 1); $ai++) {
-                    if ($args[$ai] -eq '--agent') { $roleName = $args[$ai + 1]; break }
+                # pm-agent-select.ps1 already read it (both `--agent x` and
+                # `--agent=x`); the loop is the fallback when that helper is absent.
+                $roleName = $script:PmAgentRole
+                if (-not (Get-Command Resolve-PmAgentArgs -ErrorAction SilentlyContinue)) {
+                    for ($ai = 0; $ai -lt ($args.Count - 1); $ai++) {
+                        if ($args[$ai] -eq '--agent') { $roleName = $args[$ai + 1]; break }
+                    }
                 }
                 if ($identName -and $identForm) {
                     $cardPart = if ($identCard) { ", signing card $identCard" } else { '' }
@@ -737,12 +770,54 @@ if (Test-Path -LiteralPath $identTool) {
             } else {
                 $w = $ident['PMOVES_IDENTITY_WHY']
                 if (-not $w) { $w = 'no reason given' }
-                Write-Warning "[claude-pmoves] node identity unresolved: $w"
+                $identWhyLine = "node identity unresolved: $w"
+                Write-Warning "[claude-pmoves] $identWhyLine"
             }
         } else {
-            Write-Warning '[claude-pmoves] node identity: resolver failed; launching without it.'
+            $identWhyLine = 'node identity: resolver failed; launching without it.'
+            Write-Warning "[claude-pmoves] $identWhyLine"
         }
     }
+} else {
+    $identWhyLine = "node identity: no $identTool; launching without it."
+    Write-Warning "[claude-pmoves] $identWhyLine"
+}
+
+# ---------------------------------------------------------------------------
+# SESSION FACTS -- parity with the block after identity in claude-pmoves.sh.
+# All of it rides the ONE --append-system-prompt: a second flag would cancel
+# the first. Measured 2026-11-04: none of these reached a Windows session.
+# ---------------------------------------------------------------------------
+function Add-PmSessionPrompt([string]$Text) {
+    if (-not $Text) { return }
+    if ($script:identityArgs.Count -ge 2) { $script:identityArgs[1] = "$($script:identityArgs[1]) $Text" }
+    else { $script:identityArgs = @('--append-system-prompt', $Text) }
+}
+if ($identityArgs.Count -eq 0 -and -not $script:PmAgentRole) {
+    # Unresolved AND no role agent: full tools, so this sentence is the only
+    # claim discipline the session gets.
+    Add-PmSessionPrompt "Your node identity is UNRESOLVED this session. This session runs with no role agent and your full tools: claim the lane in pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md BEFORE any edit, then delegate. Say at session start that the identity is unresolved, and do not claim under a guessed name: ask the operator which owner string to sign with. The launcher reported -- $identWhyLine"
+}
+if ($ident['PMOVES_CIPHER_AGENT_ID']) {
+    Add-PmSessionPrompt "When calling the Cipher MCP tools, pass agentId '$($ident['PMOVES_CIPHER_AGENT_ID'])'. It is REQUIRED on every call and is the signing-card spelling from pmoves/config/signing_identity_cards.yaml -- not your registry identity, which cipher refuses."
+} else {
+    $cw = if ($ident['PMOVES_CIPHER_AGENT_WHY']) { $ident['PMOVES_CIPHER_AGENT_WHY'] } else { 'not measured' }
+    Add-PmSessionPrompt "You have NO declared Cipher agentId this session. Cipher requires one on every call, so declare it per call and say that you are doing so. Reason: $cw"
+}
+$env:PMOVES_HARNESS = 'claude-code'
+Add-PmSessionPrompt "When you call pmoves_cipher_session_save, ALWAYS pass harness 'claude-code' and model set to your own exact model id. Omitting them files the checkpoint as 'unknown/unknown'."
+# cipher_preflight -- is persistent memory usable, and if not, WHICH failure.
+# Called at launch, once the roster claude will be handed is chosen, and
+# against THAT roster (Codex #3454 P2) -- see the two call sites at the end.
+function Add-PmCipherPreflight([string]$Roster) {
+    if (-not (Get-Command Invoke-PmCipherPreflight -ErrorAction SilentlyContinue)) { return }
+    $cp = Invoke-PmCipherPreflight -Root $root -Roster $Roster -Py @(Get-PmovesPythonArgv -Root $root | Where-Object { $_ })
+    if ($cp.Verdict -eq 'up' -or $cp.Verdict -eq 'skipped') { Write-Host "[claude-pmoves] $($cp.Line)" }
+    else {
+        Write-Warning "[claude-pmoves] $($cp.Line)"
+        if ($cp.Output) { Write-Host $cp.Output.TrimEnd() }
+    }
+    Add-PmSessionPrompt $cp.Prompt
 }
 # brv (ByteRover CLI) -- parity with pm_brv_check in claude-pmoves.sh. Never
 # fails the launch; a missing brv is told to the session so it does not report
@@ -751,8 +826,7 @@ if (Get-Command Invoke-PmBrvCheck -ErrorAction SilentlyContinue) {
     $brv = Invoke-PmBrvCheck
     if ($brv.Ok) { Write-Host "[claude-pmoves] $($brv.Line)" } else { Write-Warning "[claude-pmoves] $($brv.Line)" }
     if ($brv.Prompt) {
-        if ($identityArgs.Count -ge 2) { $identityArgs[1] = "$($identityArgs[1]) $($brv.Prompt)" }
-        else { $identityArgs = @('--append-system-prompt', $brv.Prompt) }
+        Add-PmSessionPrompt $brv.Prompt
     }
 }
 $roster = Join-Path $root '.claude\mcp.json'
@@ -902,9 +976,13 @@ if (Test-Path $roster) {
     # `--mcp-config=<file>` (the `=` form): `--mcp-config` is variadic
     # (`<configs...>`), so the space form would swallow a trailing positional
     # prompt as another config value (Codex #2243 P1).
+    # The RAW roster, not $useRoster: the tool resolves ${VAR}s itself, and
+    # the normalized copy is the same servers.
+    Add-PmCipherPreflight $roster
     & claude "--mcp-config=$useRoster" @identityArgs @args
 } else {
     Write-Warning "[claude-pmoves] $roster not found - PMOVES MCP servers will not load."
+    Add-PmCipherPreflight ''
     & claude @identityArgs @args
 }
 exit $LASTEXITCODE
