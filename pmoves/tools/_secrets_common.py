@@ -7,9 +7,13 @@ runtime_secrets_hydrate, auth_bootstrap_check, and local_cert_runners.
 
 from __future__ import annotations
 
+import contextlib
+import functools
+import hashlib
 import os
 import re
 import sys
+import tempfile
 import urllib.parse
 from pathlib import Path
 from typing import Dict
@@ -72,6 +76,143 @@ def normalize_env_value(value: str) -> str:
     return value
 
 
+# Digests of secret values that were committed to this public repo as compose
+# literal defaults. A value published in git history is compromised for good:
+# removing it from HEAD does not un-publish it. Every predicate that asks "does
+# this slot already hold a usable secret?" must answer NO for these, or the
+# funnel would harvest the public value back out of a running container and keep
+# it forever. Digests, not values -- the point is to stop re-publishing them.
+#
+# Cost: is_placeholder() runs over whole env files from ~17 callers, so the
+# KDF must almost never run. Three cheap gates come first -- the length must
+# match a published one, the value must be in the published charset (lowercase
+# hex), and results are cached per process. PBKDF2 rather than a bare SHA-256
+# because CodeQL (py/weak-sensitive-data-hashing) flags a fast hash over
+# password-tainted input; the iteration count is deliberately low, since the
+# inputs are already public and the digest protects nothing -- it only keeps the
+# literal out of HEAD. The salt is fixed for the same reason: a lookup table,
+# not password storage.
+#
+#   64  INVIDIOUS_HMAC_KEY       docker-compose{,.ui}.yml until fix/invidious-required-keys
+#   16  INVIDIOUS_COMPANION_KEY  same files (also the companion's SERVER_SECRET_KEY default)
+KNOWN_PUBLIC_SECRET_SALT = b"pmoves-known-public-secret-v1"
+KNOWN_PUBLIC_SECRET_ITERATIONS = 10_000
+KNOWN_PUBLIC_SECRET_CHARSET = re.compile(r"[0-9a-f]+")
+KNOWN_PUBLIC_SECRET_DIGESTS: Dict[int, frozenset[str]] = {
+    64: frozenset({"a322b75ef9d4831532616245c5e47146d1fe6c4b3f36b7566d28c7f493138586"}),
+    16: frozenset({"bc5dccd2f4cc885002a13ef6420e430bcf9cad374f38f993041e30f52b9abc36"}),
+}
+
+
+@functools.lru_cache(maxsize=512)
+def known_public_digest(value: str) -> str:
+    """The denylist digest of *value* (already normalized)."""
+    return hashlib.pbkdf2_hmac(
+        "sha256", value.encode("utf-8"), KNOWN_PUBLIC_SECRET_SALT, KNOWN_PUBLIC_SECRET_ITERATIONS
+    ).hex()
+
+
+def is_known_public(value: str | None) -> bool:
+    """Return True if *value* is a secret that was published in this repo."""
+    if not value:
+        return False
+    normalized = normalize_env_value(value)
+    candidates = KNOWN_PUBLIC_SECRET_DIGESTS.get(len(normalized))
+    if not candidates or not KNOWN_PUBLIC_SECRET_CHARSET.fullmatch(normalized):
+        return False
+    return known_public_digest(normalized) in candidates
+
+
+ENV_WRITE_LOCK_NAME = ".pmoves-env-write.lock"
+ENV_WRITE_LOCK_HELD = "PMOVES_ENV_WRITE_LOCK_HELD"
+
+
+TEMP_PREFIX = ".pmoves-tmp-"
+
+
+@contextlib.contextmanager
+def env_write_lock(env_path: Path, *, shared: bool = False):
+    """Serialize read-modify-write cycles on the env files in *env_path*'s directory.
+
+    ``make -j`` can run ensure-env-shared (brand_defaults + the Invidious key
+    preflight) and a goal's own preflight at the same time; each rewrites
+    env.shared from what it read, so one would silently drop the other's write.
+    One advisory lock per directory: writers take it EXCLUSIVE across the whole
+    cycle, read-only checks take it SHARED (many readers, never beside a
+    writer). The holder exports ``PMOVES_ENV_WRITE_LOCK_HELD``; anything under
+    it -- a child process or a nested call -- must not re-acquire (flock is per
+    open file, so a child would deadlock on its parent). No fcntl (Windows):
+    unlocked, as before this existed.
+    """
+    lock_path = Path(env_path).resolve().parent / ENV_WRITE_LOCK_NAME
+    if os.environ.get(ENV_WRITE_LOCK_HELD) == str(lock_path):
+        yield lock_path
+        return
+    try:
+        import fcntl
+    except ImportError:  # pragma: no cover - non-POSIX
+        yield lock_path
+        return
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(lock_path, "a", encoding="utf-8") as handle:
+        fcntl.flock(handle.fileno(), fcntl.LOCK_SH if shared else fcntl.LOCK_EX)
+        previous = os.environ.get(ENV_WRITE_LOCK_HELD)
+        os.environ[ENV_WRITE_LOCK_HELD] = str(lock_path)
+        try:
+            yield lock_path
+        finally:
+            if previous is None:
+                os.environ.pop(ENV_WRITE_LOCK_HELD, None)
+            else:
+                os.environ[ENV_WRITE_LOCK_HELD] = previous
+            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+
+
+def atomic_write_text(path: Path, text: str) -> None:
+    """Replace *path* with *text* so a reader or a crash sees old or new, never half.
+
+    ``write_text`` truncates then writes: a crash in between leaves an empty or
+    torn env file, i.e. every secret on the node gone. Instead: write a temp file
+    in the SAME directory (same filesystem, so the rename is atomic), flush and
+    fsync it, give it the original's mode and owner, then ``os.replace``. If the
+    owner cannot be preserved the replace is refused and the original stays,
+    rather than silently handing a secret file to another user. The temp file
+    never survives an error. New files get 0600.
+    """
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        st = os.stat(path)
+    except FileNotFoundError:
+        st = None
+    fd, tmp = tempfile.mkstemp(dir=str(path.parent), prefix=TEMP_PREFIX + path.name + ".")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(text)
+            handle.flush()
+            os.fsync(handle.fileno())
+        if st is not None:
+            os.chmod(tmp, st.st_mode & 0o7777)
+            if hasattr(os, "chown") and (st.st_uid, st.st_gid) != (os.getuid(), os.getgid()):
+                os.chown(tmp, st.st_uid, st.st_gid)
+        os.replace(tmp, path)
+        tmp = None
+        try:  # make the rename itself durable
+            dfd = os.open(str(path.parent), os.O_RDONLY)
+            try:
+                os.fsync(dfd)
+            finally:
+                os.close(dfd)
+        except OSError:
+            pass
+    finally:
+        if tmp is not None:
+            try:
+                os.unlink(tmp)
+            except FileNotFoundError:
+                pass
+
+
 def is_placeholder(value: str | None) -> bool:
     """Return True if value is missing, empty, or a known placeholder.
 
@@ -86,6 +227,9 @@ def is_placeholder(value: str | None) -> bool:
     normalized = normalize_env_value(value)
     lowered = normalized.lower()
     if not lowered or lowered in PLACEHOLDER_VALUES:
+        return True
+    # A published secret is no secret: treat it exactly like a template value.
+    if is_known_public(normalized):
         return True
     # Pattern: your_* prefix (any position), placeholder_* prefix
     if "your_" in lowered:

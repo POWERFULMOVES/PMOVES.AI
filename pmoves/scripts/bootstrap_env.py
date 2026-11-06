@@ -23,10 +23,20 @@ from urllib.parse import urlparse
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from pmoves.tools._secrets_common import (  # noqa: E402  (stdlib-only module)
+    atomic_write_text,
+    env_write_lock,
+    is_known_public,
+)
 DEFAULT_REGISTRY_PATH = REPO_ROOT / "pmoves" / "bootstrap" / "registry.json"
 ENV_SHARED_PATH = REPO_ROOT / "pmoves" / "env.shared"
 CLEARED_KEYS_PATH = REPO_ROOT / "pmoves" / "configs" / "secrets_cleared.yaml"
 _ENV_KEY_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+ALNUM_ALPHABET = string.ascii_letters + string.digits
 
 # Used only when neither the command line nor the registry declares an axis.
 DEFAULT_GEN_TYPE = "random_urlsafe"
@@ -66,8 +76,7 @@ def _write_cleared_keys(keys: List[str], path: Optional[Path] = None) -> None:
     body = ["cleared_keys: []"] if not keys else ["cleared_keys:"] + [
         f'  - "{k}"' for k in sorted(keys)
     ]
-    target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text("\n".join(header + body) + "\n", encoding="utf-8")
+    atomic_write_text(target, "\n".join(header + body) + "\n")
 
 
 def mark_key_cleared(key: str, path: Optional[Path] = None) -> None:
@@ -119,7 +128,24 @@ def generate_value(spec: Optional[Dict]) -> Optional[str]:
         if length % 2 != 0:
             length += 1
         return secrets.token_hex(length // 2)
+    if gen_type == "random_alnum":
+        # Exact length over [A-Za-z0-9]: log2(62) ~ 5.95 bits/char, vs 4 for hex.
+        # For a fixed-length vendor slot (the Invidious companion key is exactly
+        # 16 of [A-Za-z0-9]) that is ~95 bits instead of hex's 64.
+        length = int(spec.get("length", 32))
+        return "".join(secrets.choice(ALNUM_ALPHABET) for _ in range(length))
     return _generate_token_or_passphrase(spec, gen_type)
+
+
+def mint_from_registry(key: str, registry_path: Optional[str] = None) -> Optional[str]:
+    """A fresh value for *key* from the generator the bootstrap registry declares.
+
+    The one place a stack-generated key's FORMAT comes from. Any other tool that
+    needs a fallback mint (runtime_secrets_hydrate) calls this rather than
+    re-implementing the format, so the registry stays the single source of truth.
+    None when the registry declares no generator for *key*.
+    """
+    return generate_value(_registry_generator(key, registry_path))
 
 
 def _generate_token_or_passphrase(spec: Dict, gen_type: str) -> Optional[str]:
@@ -154,6 +180,12 @@ def value_matches_spec(value: Optional[str], spec: Optional[Dict]) -> bool:
         if len(value) != length:
             return False
         return all(c in string.hexdigits for c in value)
+    if gen_type == "random_alnum":
+        # Strict like hex: the consumer (Invidious companion) rejects anything
+        # else. A hex value of the right length is alnum, so existing hex keys
+        # stay valid and are never rotated by this check.
+        length = int(spec.get("length", 32))
+        return len(value) == length and all(c in ALNUM_ALPHABET for c in value)
     # Intentionally lax for random_urlsafe: some legacy values were generated
     # via `openssl rand -base64 | tr -d '='` which includes `+` and `/` (not
     # strictly url-safe). Regenerating those would rotate working n8n / wger /
@@ -290,7 +322,13 @@ def rotate_secret(
         )
     if not target.exists():
         raise FileNotFoundError(f"env file not found: {target}")
+    with env_write_lock(target):
+        _rotate_line(target, key, value)
+    return value
 
+
+def _rotate_line(target: Path, key: str, value: str) -> None:
+    """The read-modify-write half of rotate_secret; caller holds the env write lock."""
     original = target.read_text(encoding="utf-8")
     new_line = f"{key}={value}"
     out: List[str] = []
@@ -315,8 +353,7 @@ def rotate_secret(
     text = "\n".join(out)
     if original.endswith("\n") or not original:
         text += "\n"
-    target.write_text(text, encoding="utf-8")
-    return value
+    atomic_write_text(target, text)
 
 
 def read_env_value(key: str, env_path: Optional[Path] = None) -> Optional[str]:
@@ -338,6 +375,19 @@ def read_env_value(key: str, env_path: Optional[Path] = None) -> Optional[str]:
         if name.strip() == key:
             found = value
     return found
+
+
+def slot_is_filled(existing: Optional[str]) -> bool:
+    """The one predicate for "this env slot already holds a usable secret".
+
+    Absent and empty are unfilled. So is a value that was published in this
+    repo (``KNOWN_PUBLIC_SECRET_DIGESTS``): the Invidious keys shipped as compose
+    literal defaults, so a node whose env file -- or whose running container --
+    holds them is holding a public value. Treating it as filled would make the
+    funnel defend the compromised key forever. ``secrets_harvest.classify`` calls
+    this too; the two must never disagree.
+    """
+    return existing not in (None, "") and not is_known_public(existing)
 
 
 def ensure_secret(
@@ -382,7 +432,7 @@ def ensure_secret(
     can never rotate live cryptographic material.
     """
     existing = read_env_value(key, env_path)
-    if existing not in (None, ""):
+    if slot_is_filled(existing):
         return False, "already set"
 
     declared = _registry_generator(key, registry_path)
@@ -402,6 +452,8 @@ def ensure_secret(
     # tombstone would permanently block secrets-local-hydrate from it.
     unmark_key_cleared(key)
     detail = gen_type + (f" length {length}" if length else "")
+    if is_known_public(existing):
+        detail += "; replaced a value published in the repo"
     return True, f"generated ({detail})"
 
 
@@ -606,9 +658,7 @@ class EnvFile:
         # Values actually changed — inject fresh timestamp and write.
         lines[1] = f"# Generated at {_dt.datetime.now(_dt.timezone.utc).isoformat()}Z"
         final_text = "\n".join(lines).rstrip() + "\n"
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        with self.path.open("w", encoding="utf-8") as fh:
-            fh.write(final_text)
+        atomic_write_text(self.path, final_text)
         self.original_text = final_text
         return True
 
@@ -734,6 +784,12 @@ def bootstrap(registry: Dict, services: List[Dict], accept_defaults: bool) -> in
             gen_spec = var.get("generate")
             if existing and gen_spec and not value_matches_spec(existing, gen_spec):
                 _warn(f"{key} in {var['file']} fails {gen_spec.get('type')} format check — regenerating")
+                existing = None
+                env.set(key, "")
+            elif existing and is_known_public(existing):
+                # Well-formed but published in the repo: the shape check alone
+                # would keep it (the Invidious companion literal is valid hex).
+                _warn(f"{key} in {var['file']} is a value published in the repo — regenerating")
                 existing = None
                 env.set(key, "")
             inherited = None if existing not in (None, "") else resolve_inherit(var)
@@ -874,7 +930,7 @@ def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
         "--gen-type",
         default=None,
         help=(
-            "Generator type for --rotate (random_urlsafe | random_hex | passphrase). "
+            "Generator type for --rotate (random_urlsafe | random_hex | random_alnum | passphrase). "
             "Default: the type the registry declares for this key, else random_urlsafe."
         ),
     )
@@ -923,9 +979,10 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
             unprovisioned = []
             for key in args.ensure:
                 value = read_env_value(key)
-                if value in (None, ""):
+                if not slot_is_filled(value):
                     unprovisioned.append(key)
-                    _error(f"{key}: UNPROVISIONED (absent or empty in env.shared)")
+                    why = "a value published in the repo" if is_known_public(value) else "absent or empty"
+                    _error(f"{key}: UNPROVISIONED ({why} in env.shared)")
                 else:
                     print(f"{key}: provisioned")
             if unprovisioned:
