@@ -180,7 +180,7 @@ jobs:
       # the org -- otherwise an uncovered repo cannot be told apart from
       # one that does not exist, and the verdict is incomplete. The token is
       # read-only, is consumed in this job, and is auto-revoked at job end.
-      - uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3
+      - uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3
         id: app-token
         # Minted ONLY on the default branch. See the mode step above: a
         # pull_request runs this workflow file from the PR's merge ref, so the
@@ -202,7 +202,7 @@ jobs:
           persist-credentials: false
 
       - name: Set up Python
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.12"
 
