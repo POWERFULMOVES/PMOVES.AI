@@ -1,0 +1,69 @@
+{
+  "launcher_profile_version": "1.0.0",
+  "node_id": "pmoves-5090",
+  "display_name": "PMOVES HERMES 5090",
+  "description": "GPU inference specialist workstation (RTX 5090, 32GB VRAM, 192GB RAM). Primary local-lane compute for coding (KiloCode GLM) and voice studio rooms. Heavy inference stays local via Ollama; cloud fallback follows env.shared order (ollama_cloud first).",
+  "platform": "win32",
+  "pmoves_profile": "desktop-9950xd",
+  "hermes_profile": "PMOVES-HERMES-5090",
+  "room": {
+    "room_id": "5090-kilocode.room.studio",
+    "stage": "rehearsal",
+    "suits": ["5090-kilocode", "5090-voice", "pmoves-hermes"]
+  },
+  "requirements": {
+    "min_ram_gb": 64,
+    "gpu_required": true,
+    "docker_desktop": true,
+    "ollama": true,
+    "hermes_cli": true
+  },
+  "env_secrets": [
+    "OLLAMA_HOST",
+    "OLLAMA_CLOUD_BASE_URL",
+    "OLLAMA_CLOUD_API_KEY",
+    "TELEGRAM_BOT_TOKEN",
+    "DISCORD_BOT_TOKEN"
+  ],
+  "skills": [
+    "minimax-agent-trails",
+    "minimax-bringup-audit",
+    "minimax-cgp-generate",
+    "minimax-multimodal",
+    "minimax-submodule-parity"
+  ],
+  "launcher_refs": [
+    "up-agents",
+    "up-monitoring",
+    "a0-model-sync",
+    "up-darkxside-sidecar"
+  ],
+  "model_routing": {
+    "default": "local",
+    "local": {
+      "provider": "ollama",
+      "model": "qwen3-coder:30b",
+      "base_url": "http://localhost:11434"
+    },
+    "fallback": {
+      "provider": "openai",
+      "model": "glm-5.2",
+      "base_url": "https://ollama.com/v1",
+      "api_key_env": "OLLAMA_CLOUD_API_KEY"
+    }
+  },
+  "platform_toolsets": [
+    "telegram",
+    "discord"
+  ],
+  "notes": [
+    "Ollama tags byte-verified live on the node (pmoves-5090 :11434, 2026-10-25): qwen3-coder:30b, gpt-oss:20b, qwen3.5:9b, gemma3:12b, mistral-small3.2:24b, hermes3:8b; embeds nomic-embed-text (latest + v1.5), Qwen3-Embedding-4B Q8_0. Use only tags that exist in the node registry (see #3402: 3 of 4 suit tags were 404).",
+    "Alternate local chat lane: gpt-oss:20b. Embedding lane: nomic-embed-text:latest.",
+    "pmoves_profile uses the canonical id desktop-9950xd; the workstation_5090 yaml is a deprecated alias.",
+    "Room stage stays rehearsal as the room manifests define it; flip via the room manifest, not this profile.",
+    "A0 presets for this node are generator-owned: make a0-model-sync (registry = config authority); hand presets survive per #3396 hybrid contract.",
+    "The Hermes profile itself must be created on the node (hermes profile use PMOVES-HERMES-5090); this launcher profile declares and seeds it.",
+    "Cloud fallback follows env.shared order: ollama_cloud first. No API-burn lanes by default.",
+    "Profile is local-only; never commit secret values."
+  ]
+}

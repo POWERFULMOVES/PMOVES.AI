@@ -1,0 +1,272 @@
+# pmoves/configs/port_registry/_known_collisions.yaml
+#
+# Host ports that TWO OR MORE services publish on purpose.
+#
+# WHY A BASELINE AND NOT A FIX
+# -----------------------------
+# `docker compose` cannot publish the same host port twice, so a port with
+# two claimants is a real conflict UNLESS the two are alternatives that are
+# never up at the same time. This file records WHY each such pair may share
+# the port.
+#
+# The gate fails on:
+#   * a NEW collision -- one not listed here;
+#   * a STALE entry -- the port is no longer shared, or the SET OF CLAIMANTS
+#     changed (so the reason on file was written about different services);
+#   * an UNREVIEWED entry -- no reason, or the placeholder "REVIEW THIS".
+#
+# The `services` and `files` of every entry are COPIED FROM THE MEASUREMENT,
+# so they cannot drift from what the gate sees. Only the `reason` is written
+# by hand, and it must say WHY these two may share the port.
+#
+# Every reason below was checked against the Makefile's own compose
+# invocations: a pair is safe when their `profiles:` sets are disjoint, or
+# when no recipe ever composes the two files they live in.
+#
+# A collision that is NOT an alternative was FIXED rather than baselined:
+# host 8200 (gpu-orchestrator vs nvidia-nim, both under the `gpu` profile)
+# was a genuine bind failure and nvidia-nim moved to 8206.
+known_collisions:
+  '11434':
+    files:
+    - docker-compose.jetson-edge.override.yml
+    - docker-compose.spark-sidecar.yml
+    reason: 'ollama-edge (docker-compose.jetson-edge.override.yml) and pmoves-ollama (the default stack,
+      the Spark sidecar and the z890 stacks). MEASURED: no Makefile recipe composes the jetson-edge overlay
+      with the default stack.'
+    services:
+    - ollama-edge
+    - pmoves-ollama
+  '11435':
+    files:
+    - docker-compose.jellyfin-ai.yml
+    - docker-compose.media.yml
+    - docker-compose.yml
+    - docker-compose.z890.yml
+    reason: 'jellyfin-qwen-audio (profiles: [jellyfin-audio-local]) and pmoves-ollama. MEASURED: the jellyfin-audio
+      service is declared only in docker-compose.jellyfin-ai.yml and the laptop-4090 overlay, and no Makefile
+      recipe composes either with the default stack.'
+    services:
+    - jellyfin-qwen-audio
+    - pmoves-ollama
+  '21115':
+    files:
+    - docker-compose.remote.yml
+    - docker-compose.rustdesk.yml
+    reason: 'hbbs (docker-compose.rustdesk.yml) and rustdesk-hbbs (docker-compose.remote.yml, profiles:
+      [remote]). MEASURED: two alternative RustDesk deployables -- the standalone ''$(PROJECT)-rustdesk''
+      compose project and the remote-profile stack -- never composed together.'
+    services:
+    - hbbs
+    - rustdesk-hbbs
+  '21116':
+    files:
+    - docker-compose.remote.yml
+    - docker-compose.rustdesk.yml
+    reason: 'Same pair as host 21115 -- hbbs (docker-compose.rustdesk.yml) and rustdesk-hbbs (docker-compose.remote.yml,
+      profiles: [remote]) are alternative RustDesk deployables.'
+    services:
+    - hbbs
+    - rustdesk-hbbs
+  '21117':
+    files:
+    - docker-compose.remote.yml
+    - docker-compose.rustdesk.yml
+    reason: 'hbbr (docker-compose.rustdesk.yml) and rustdesk-hbbr (docker-compose.remote.yml, profiles:
+      [remote]). MEASURED: alternative RustDesk deployables, never composed together.'
+    services:
+    - hbbr
+    - rustdesk-hbbr
+  '21118':
+    files:
+    - docker-compose.remote.yml
+    - docker-compose.rustdesk.yml
+    reason: 'hbbs (docker-compose.rustdesk.yml) and rustdesk-hbbs (docker-compose.remote.yml, profiles:
+      [remote]). MEASURED: alternative RustDesk deployables, never composed together.'
+    services:
+    - hbbs
+    - rustdesk-hbbs
+  '21119':
+    files:
+    - docker-compose.remote.yml
+    - docker-compose.rustdesk.yml
+    reason: 'hbbr (docker-compose.rustdesk.yml) and rustdesk-hbbr (docker-compose.remote.yml, profiles:
+      [remote]). MEASURED: alternative RustDesk deployables, never composed together.'
+    services:
+    - hbbr
+    - rustdesk-hbbr
+  '3000':
+    files:
+    - docker-compose.ui.yml
+    - docker-compose.voice.yml
+    - docker-compose.yml
+    reason: 'invidious (profiles: [invidious]) and vibevoice (profiles: [media, voice]). MEASURED: the
+      profiles are disjoint, and vibevoice belongs to the voice stack (core + media + voice) while invidious
+      belongs to the default stack.'
+    services:
+    - invidious
+    - vibevoice
+  '4222':
+    files:
+    - docker-compose.core.yml
+    - docker-compose.jetson-edge.override.yml
+    - docker-compose.yml
+    - docker-compose.z890.yml
+    reason: 'The NATS family. nats is the legacy single server and declares NO profiles key, so it is
+      always-on in the default stack. nats-hub is the spec section 9 Phase 2 accounts/leaf hub (profiles:
+      [nats-hub]); docker-compose.yml documents it as ''profile-gated OFF so default bring-up is unchanged
+      until the funnel renders the trust material'' and ''the fork entrypoint fails fast without it'',
+      and it carries its own JetStream volume (pmoves-nats-hub-js) so the two never share state. nats-leaf
+      belongs to the jetson-edge and z890 stacks only. MEASURED: the hub cannot start today, so the two
+      are never up together.'
+    services:
+    - nats
+    - nats-hub
+    - nats-leaf
+  '443':
+    files:
+    - docker-compose.traefik.yml
+    - docker-compose.vps.override.yml
+    reason: Same pair as host 80 -- nginx (docker-compose.vps.override.yml) and traefik (docker-compose.traefik.yml)
+      are alternative ingress deployments and are never up together.
+    services:
+    - nginx
+    - traefik
+  '80':
+    files:
+    - docker-compose.traefik.yml
+    - docker-compose.vps.override.yml
+    reason: 'nginx (docker-compose.vps.override.yml) and traefik (docker-compose.traefik.yml) are alternative
+      ingress deployments: the VPS override fronts the stack with nginx, the edge overlay fronts it with
+      traefik. MEASURED: no Makefile recipe composes both files, so the two are never up together.'
+    services:
+    - nginx
+    - traefik
+  '8000':
+    files:
+    - compose/docker-compose.wger.yml
+    - docker-compose.apps.yml
+    - docker-compose.core.yml
+    - docker-compose.yml
+    reason: 'supabase-kong (profiles: [supabase-local]) and wger (profiles: [health, wger]). MEASURED:
+      the profile sets are disjoint, so they are never up together.'
+    services:
+    - supabase-kong
+    - wger
+  '8087':
+    files:
+    - docker-compose.activepieces.yml
+    - docker-compose.agents.yml
+    - docker-compose.gpu-image.yml
+    - docker-compose.yml
+    reason: 'activepieces-app (profiles: [automation]) and hi-rag-gateway-v2-gpu. MEASURED: the ActivePieces
+      app is started either by ''make activepieces-up'' (which names the services explicitly, so hi-rag-gateway-v2-gpu
+      does not come up) or by ''make up-activepieces'', which is a SEPARATE compose project (''pmoves-activepieces'',
+      using activepieces/docker-compose.yml). The Hi-RAG v2 GPU gateway is published by the gpu profile.
+      No house recipe brings both up; only a raw ''docker compose --profile gpu --profile automation up
+      -d'' would collide.'
+    services:
+    - activepieces-app
+    - hi-rag-gateway-v2-gpu
+  '8092':
+    files:
+    - docker-compose.darkxside-sidecar.yml
+    - docker-compose.workers.yml
+    - docker-compose.yml
+    reason: 'agent-zero-darkxside (docker-compose.darkxside-sidecar.yml) and pdf-ingest (profiles: [orchestration,
+      workers]). MEASURED: the DARKXSIDE sidecar is its own compose PROJECT (''docker compose -p darkxside-sidecar
+      -f docker-compose.darkxside-sidecar.yml''), so it is never composed with the default stack.'
+    services:
+    - agent-zero-darkxside
+    - pdf-ingest
+  '8093':
+    files:
+    - docker-compose.media.yml
+    - docker-compose.spark-sidecar.yml
+    - docker-compose.yml
+    reason: 'agent-zero-spark (docker-compose.spark-sidecar.yml) and jellyfin-bridge (profiles: [gpu,
+      orchestration]). MEASURED: the Spark sidecar is its own compose project (''docker compose -p spark-sidecar
+      -f docker-compose.spark-sidecar.yml'').'
+    services:
+    - agent-zero-spark
+    - jellyfin-bridge
+  '8100':
+    files:
+    - docker-compose.cache.yml
+    - docker-compose.workers.yml
+    - docker-compose.yml
+    reason: 'github-branch-cleanup (profiles: [agents, github-automation]) and semantic-cache (docker-compose.cache.yml).
+      MEASURED: semantic-cache is declared only in the cache overlay, and no Makefile recipe composes
+      that overlay with the default stack.'
+    services:
+    - github-branch-cleanup
+    - semantic-cache
+  '8111':
+    files:
+    - docker-compose.agents.yml
+    - docker-compose.vps.override.yml
+    - docker-compose.yml
+    - docker-compose.z890.yml
+    reason: 'container-agent (docker-compose.z890.yml) and gateway-agent (profiles: [agents]). MEASURED:
+      no Makefile recipe composes the z890 overlay with the agents stack.'
+    services:
+    - container-agent
+    - gateway-agent
+  '8113':
+    files:
+    - docker-compose.agents.yml
+    - docker-compose.workers.yml
+    - docker-compose.yml
+    reason: 'evo-controller (profiles: [orchestration]) and github-crossrepo-sync (profiles: [github-automation]).
+      MEASURED: the profile sets are disjoint.'
+    services:
+    - evo-controller
+    - github-crossrepo-sync
+  '8114':
+    files:
+    - docker-compose.agentgym.yml
+    - docker-compose.workers.yml
+    - docker-compose.yml
+    reason: 'agentgym-rl-coordinator (docker-compose.agentgym.yml, profiles: [agentgym, agents]) and github-crossrepo-pr
+      (profiles: [github-automation]). MEASURED: no Makefile recipe composes the agentgym overlay with
+      the default stack.'
+    services:
+    - agentgym-rl-coordinator
+    - github-crossrepo-pr
+  '8201':
+    files:
+    - docker-compose.agents.yml
+    - docker-compose.media.yml
+    - docker-compose.yml
+    reason: 'hf-agent (profiles: [agents, research]) and llama-throughput-lab (profiles: [benchmarks,
+      gpu]). MEASURED: the profile sets are disjoint.'
+    services:
+    - hf-agent
+    - llama-throughput-lab
+  '9096':
+    files:
+    - docker-compose.jellyfin-ai.yml
+    - docker-compose.ui.yml
+    - docker-compose.workers.yml
+    - docker-compose.yml
+    reason: 'Five claimants. github-branch-cleanup (profiles: [agents, github-automation]) and grayjay-plugin-host
+      (profiles: [grayjay]) are disjoint. The three jellyfin entries are mutually exclusive accelerator
+      choices in docker-compose.jellyfin-ai.yml: jellyfin (profiles: [default, jellyfin-ai]), jellyfin-nvenc
+      (profiles: [jellyfin-ai-nvenc]) and jellyfin-vaapi (profiles: [jellyfin-ai-vaapi]). MEASURED: every
+      pair has disjoint profiles.'
+    services:
+    - github-branch-cleanup
+    - grayjay-plugin-host
+    - jellyfin
+    - jellyfin-nvenc
+    - jellyfin-vaapi
+  '9223':
+    files:
+    - docker-compose.core.yml
+    - docker-compose.yml
+    reason: 'The monitoring port of the same NATS family as host 4222 -- nats (always-on legacy server)
+      and nats-hub (profiles: [nats-hub], the spec section 9 Phase 2 hub that cannot start until the funnel
+      renders its trust material). See the 4222 entry for the full reason.'
+    services:
+    - nats
+    - nats-hub
