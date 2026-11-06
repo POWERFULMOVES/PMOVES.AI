@@ -18,7 +18,7 @@ in between says they are the same value.
 
 import pytest
 
-from tools.chit_manifest_register import REGISTRY, build_entry
+from tools.chit_manifest_register import REGISTRY, build_entry, reconcile_entry
 from tools.secrets_sync import Entry, Target, build_outputs
 
 # Assembled rather than written literally: the repo's damage-control hook treats the
@@ -161,3 +161,64 @@ def test_blank_alias_is_not_divergence():
     """
     assert not _diverges({"A": "", "B": "y" * 64}, ["A", "B"])
     assert not _diverges({"A": "   ", "B": "y" * 64}, ["A", "B"])
+
+
+# ---------------------------------------------------------------------------
+# SECRET_KEY trimmed targets — registry-declared, not a hand artifact (P2)
+# ---------------------------------------------------------------------------
+
+
+def test_secret_key_declares_its_trimmed_targets():
+    """The trimmed target set must be machine-reproducible.
+
+    A hand-trimmed manifest entry is lost on the next emitter run — the
+    registrar would faithfully restore github_secret/docker_secret and
+    duplicate the trust root. Declaring targets in the REGISTRY makes the
+    trim survive by construction.
+    """
+    spec = REGISTRY["SECRET_KEY"]
+    assert "targets" in spec
+    entry = build_entry("SECRET_KEY", spec)
+    assert entry["targets"] == spec["targets"]
+    kinds = [k for t in entry["targets"] for k in t]
+    assert "github_secret" not in kinds
+    assert "docker_secret" not in kinds
+
+
+def test_build_entry_auto_tail_unchanged_without_declared_targets():
+    """Labels that do not declare targets keep the classic 4-target tail."""
+    entry = build_entry("E2B_ACCESS_TOKEN", REGISTRY["E2B_ACCESS_TOKEN"])
+    kinds = [k for t in entry["targets"] for k in t]
+    assert "github_secret" in kinds
+    assert "docker_secret" in kinds
+
+
+def test_reconcile_flags_widened_secret_key_targets_as_drift():
+    """A manifest entry restored to the auto tail is drift the gate reports."""
+    widened = {
+        "id": "secret_key",
+        "source": {
+            "type": "cgp",
+            "label": "SECRET_KEY",
+            "aliases": ["SECRET_KEY_BASE"],
+        },
+        "targets": [
+            {"file": ".env.generated", "key": "SECRET_KEY"},
+            {"file": "env.tier-agent", "key": "SECRET_KEY"},
+            {"github_secret": "SECRET_KEY"},
+            {"docker_secret": "pmoves_secret_key"},
+        ],
+    }
+    changes = reconcile_entry(widened, REGISTRY["SECRET_KEY"])
+    assert any("targets" in c for c in changes)
+
+
+def test_reconcile_leaves_undeclared_targets_operator_tuned():
+    """No declared targets = operator's file is authoritative, untouched."""
+    tuned = {
+        "id": "x",
+        "source": {"type": "cgp", "label": "X"},
+        "targets": [{"file": "env.custom", "key": "X"}],
+    }
+    assert reconcile_entry(tuned, {"tier": "agent", "required": False}) == []
+    assert tuned["targets"] == [{"file": "env.custom", "key": "X"}]

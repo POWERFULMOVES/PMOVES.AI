@@ -70,7 +70,7 @@ make -C pmoves yt-cookies-refresh
 
 ```bash
 # Check refresher status:
-curl -s http://localhost:8115/status | python -m json.tool
+curl -s "http://localhost:${YT_COOKIE_REFRESHER_PORT:-8126}/status" | python -m json.tool
 
 # Check cookie file exists in pmoves-yt container:
 docker exec pmoves-pmoves-yt-1 ls -la /app/config/cookies/yt-cookies.txt
@@ -88,7 +88,7 @@ curl -X POST http://localhost:8077/yt/ingest \
 ```bash
 make -C pmoves yt-cookies-refresh
 # Or directly:
-curl -X POST http://localhost:8115/refresh
+curl -X POST "http://localhost:${YT_COOKIE_REFRESHER_PORT:-8126}/refresh"
 ```
 
 ### Check status
@@ -156,7 +156,7 @@ standing and the video being accessible. Check:
 └──────────────┬──────────────┘
                │
 ┌──────────────▼──────────────┐
-│  yt-cookie-refresher :8115  │ Weekly cron (or POST /refresh)
+│  yt-cookie-refresher :8126  │ Weekly cron (or POST /refresh)
 │  Playwright Chromium        │ → fresh cookies + PO token
 │  Fernet encrypt → Supabase  │ → NATS: ingest.cookies.refreshed.v1
 └──────────────┬──────────────┘
