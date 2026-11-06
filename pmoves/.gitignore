@@ -75,3 +75,6 @@ data/spark/
 # WAVs) + voice_cast_on_sign.py generated audio (Phase 0 expressive voice).
 /out/
 chit/keys/
+
+# drop-folder-ingest default host drop folder (operator content, never commit)
+data/drop/

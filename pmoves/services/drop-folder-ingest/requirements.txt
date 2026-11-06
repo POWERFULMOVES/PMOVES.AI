@@ -1,0 +1,12 @@
+# drop-folder-ingest — host drop folder -> MinIO -> NATS (no models, no GPU)
+# Direct deps exact-pinned. The full transitive requirements.lock (uv-cassettes)
+# could not be committed by the authoring agent: *.lock is a damage-control
+# read-only class with no Known Road. Operator-apply, from the repo root:
+#   uv pip compile pmoves/services/drop-folder-ingest/requirements.txt \
+#     -o pmoves/services/drop-folder-ingest/requirements.lock --python-version 3.11 --universal
+fastapi==0.114.2
+uvicorn==0.30.6
+nats-py==2.7.2
+minio==7.2.15
+jsonschema==4.26.0
+prometheus-client==0.26.0

@@ -106,6 +106,7 @@ SERVICE_GROUPS = {
     "workers": [
         "extract-worker",
         "watch-folder-router",
+        "drop-folder-ingest",
         "spark-shape-worker",
         "persona-thirdref",
         "pdf-ingest",
