@@ -350,7 +350,8 @@ def _unquote(value: str) -> str:
 def pinned_variables(registry: Dict) -> List[Dict]:
     """Registry variables declared ``"pinned": true`` -- value is ALWAYS the default.
 
-    The leak guards (SSL_CERT_FILE, *_CA_BUNDLE, *_PROXY, ...) are declared
+    The CA leak guards (SSL_CERT_FILE, SSL_CERT_DIR, *_CA_BUNDLE,
+    NODE_EXTRA_CA_CERTS) are declared
     "Always empty" so a Windows host path never reaches a Linux container. The
     declaration was only ever applied at first bootstrap: ``bootstrap()`` keeps
     an existing value, the preserve allowlist keeps the key, and every funnel
@@ -358,6 +359,11 @@ def pinned_variables(registry: Dict) -> List[Dict]:
     ``SSL_CERT_FILE=<miniconda3>\\Library\\ssl\\...`` -- a host path from an
     install since removed -- so every launcher session exported a CA file that
     does not exist and python/Node TLS in it could not verify anything.
+
+    NOT the proxies (Codex #3459): env.shared.example says to leave
+    HTTP(S)_PROXY / NO_PROXY UNSET or set to a VALID proxy, never empty --
+    an empty proxy crashes Vector and other Rust tools, and a node behind a
+    corporate proxy needs a real value.
     """
     out: List[Dict] = []
     for svc in registry.get("services", []):
@@ -372,14 +378,19 @@ def enforce_pinned(
 ) -> List[str]:
     """Reset every pinned key whose value in env.shared differs from its default.
 
-    Returns the drifted key NAMES (never values: a proxy URL can carry
-    credentials). An absent key is not drift -- absent and empty mean the same
-    to every consumer -- so nothing is appended for it. With *dry_run* nothing is
-    written. Only env.shared-scoped pins are supported; any other ``file`` is a
+    Returns the drifted key NAMES (never values). An ABSENT key is drift too
+    (Codex #3459): the loaders keep an inherited process value unless the file
+    assigns the key (with-env.sh, the launchers), so a missing ``SSL_CERT_FILE=``
+    lets a stale host value straight through -- it is appended with its default.
+    With *dry_run* nothing is written. Only env.shared-scoped pins are supported; any other ``file`` is a
     registry error, raised rather than skipped so it cannot pass silently.
     """
     target = env_path or ENV_SHARED_PATH
     drifted: List[str] = []
+    if not target.exists():
+        # Nothing to enforce yet; ensure-env-shared seeds the file from the
+        # template, which already carries every pin at its default.
+        return drifted
     for var in pinned_variables(registry):
         if var.get("file") != "pmoves/env.shared":
             raise ValueError(
@@ -389,7 +400,7 @@ def enforce_pinned(
         key = var["key"]
         want = str(var.get("default", ""))
         have = read_env_value(key, target)
-        if have is None or _unquote(have) == want:
+        if have is not None and _unquote(have) == want:
             continue
         drifted.append(key)
         if not dry_run:
@@ -910,8 +921,8 @@ def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
         "--enforce-pinned",
         action="store_true",
         default=False,
-        help="Reset every registry key declared \"pinned\": true (the host-leak "
-        "guards: SSL_CERT_FILE, *_CA_BUNDLE, *_PROXY, ...) to its declared default "
+        help="Reset every registry key declared \"pinned\": true (the CA host-leak "
+        "guards: SSL_CERT_FILE, SSL_CERT_DIR, *_CA_BUNDLE, NODE_EXTRA_CA_CERTS) to its declared default "
         "in env.shared. Prints key NAMES only. Run by `make env-shared-repair`, "
         "the first step of every secrets-funnel.",
     )
@@ -955,6 +966,15 @@ def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
 
 def main(argv: Optional[Iterable[str]] = None) -> int:
     args = parse_args(argv)
+
+    # Validate BEFORE any branch runs: each operation returns from its own
+    # branch, so a check placed later never sees a mixed call -- `--clear K
+    # --enforce-pinned-check` used to clear K and exit 0 (Codex #3459).
+    if args.enforce_pinned or args.enforce_pinned_check:
+        if args.clear or args.rotate or args.ensure or (args.enforce_pinned and args.enforce_pinned_check):
+            _error("--enforce-pinned / --enforce-pinned-check take no other key operation "
+                   "and not each other: pick one")
+            return 2
 
     if args.clear and args.rotate:
         _error("--clear and --rotate are mutually exclusive: pick one key operation")
@@ -1137,9 +1157,6 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
     registry = load_registry(args.registry)
 
     if args.enforce_pinned or args.enforce_pinned_check:
-        if args.clear or args.rotate or args.ensure:
-            _error("--enforce-pinned is mutually exclusive with --clear/--rotate/--ensure")
-            return 2
         check = args.enforce_pinned_check
         try:
             drifted = enforce_pinned(registry, dry_run=check)

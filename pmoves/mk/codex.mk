@@ -330,6 +330,9 @@ secrets-funnel: ## Portable secrets flow: env repair -> local hydrate -> CHIT ex
 	@$(MAKE) --no-print-directory env-shared-repair
 	@$(MAKE) --no-print-directory secrets-local-hydrate
 	@$(MAKE) --no-print-directory secrets-runtime-hydrate
+	@# Re-pin after BOTH hydrates and before chit-export seals the bundle. Hydrate
+	@# skips pinned keys itself; this is the backstop for any other overlay.
+	@$(CODEX_PY) scripts/bootstrap_env.py --enforce-pinned
 	@# ORDER IS LOAD-BEARING: must precede secrets-funnel-sync, because that
 	@# target's chit-export prerequisite encodes env.shared into the CGP bundle.
 	@# Mint after this point and the bundle is already sealed without the value.

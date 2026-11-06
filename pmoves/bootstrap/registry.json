@@ -176,7 +176,6 @@
           "file": "pmoves/env.shared",
           "prompt": null,
           "default": "",
-          "pinned": true,
           "help": "HTTP proxy \u2014 cleared to prevent Windows host leak into containers.",
           "required": false,
           "sensitive": false
@@ -186,7 +185,6 @@
           "file": "pmoves/env.shared",
           "prompt": null,
           "default": "",
-          "pinned": true,
           "help": "HTTPS proxy \u2014 cleared to prevent Windows host leak into containers.",
           "required": false,
           "sensitive": false
@@ -196,7 +194,6 @@
           "file": "pmoves/env.shared",
           "prompt": null,
           "default": "",
-          "pinned": true,
           "help": "Proxy bypass list \u2014 cleared to prevent Windows host leak into containers.",
           "required": false,
           "sensitive": false

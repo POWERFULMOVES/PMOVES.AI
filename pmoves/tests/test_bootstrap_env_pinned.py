@@ -27,8 +27,11 @@ REAL_REGISTRY = Path(__file__).resolve().parents[1] / "bootstrap" / "registry.js
 SHARED = "pmoves/" + "env." + "shared"
 LEAK_GUARDS = {
     "SSL_CERT_FILE", "SSL_CERT_DIR", "REQUESTS_CA_BUNDLE", "CURL_CA_BUNDLE",
-    "NODE_EXTRA_CA_CERTS", "HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY",
+    "NODE_EXTRA_CA_CERTS",
 }
+# Never pinned: env.shared.example says leave them UNSET or VALID, never empty
+# (an empty proxy crashes Vector), and a node behind a proxy needs a real one.
+PROXIES = {"HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY"}
 
 
 def _registry(**pins: str) -> dict:
@@ -51,16 +54,60 @@ def test_a_drifted_pin_is_reset_and_nothing_else_moves(tmp_path):
 
 
 def test_unpinned_keys_are_never_touched(tmp_path):
-    env = _env(tmp_path, "FREE=host-value\n")
+    env = _env(tmp_path, "SSL_CERT_FILE=\nFREE=host-value\n")
     assert be.enforce_pinned(_registry(SSL_CERT_FILE=""), env_path=env) == []
-    assert env.read_text(encoding="utf-8") == "FREE=host-value\n"
+    assert env.read_text(encoding="utf-8") == "SSL_CERT_FILE=\nFREE=host-value\n"
 
 
-@pytest.mark.parametrize("text", ["SSL_CERT_FILE=\n", 'SSL_CERT_FILE=""\n', "SSL_CERT_FILE=''\n", "OTHER=1\n"])
-def test_at_default_or_absent_is_not_drift_and_writes_nothing(tmp_path, text):
+@pytest.mark.parametrize("text", ["SSL_CERT_FILE=\n", 'SSL_CERT_FILE=""\n', "SSL_CERT_FILE=''\n"])
+def test_at_default_is_not_drift_and_writes_nothing(tmp_path, text):
     env = _env(tmp_path, text)
     assert be.enforce_pinned(_registry(SSL_CERT_FILE=""), env_path=env) == []
     assert env.read_text(encoding="utf-8") == text
+
+
+def test_an_absent_pin_is_drift_and_is_written_with_its_default(tmp_path):
+    # Codex #3459: loaders keep an inherited process value unless the file
+    # assigns the key, so a missing SSL_CERT_FILE= lets a host value through.
+    env = _env(tmp_path, "OTHER=1\n")
+    assert be.enforce_pinned(_registry(SSL_CERT_FILE=""), env_path=env, dry_run=True) == ["SSL_CERT_FILE"]
+    assert env.read_text(encoding="utf-8") == "OTHER=1\n"
+    assert be.enforce_pinned(_registry(SSL_CERT_FILE=""), env_path=env) == ["SSL_CERT_FILE"]
+    assert env.read_text(encoding="utf-8") == "OTHER=1\nSSL_CERT_FILE=\n"
+
+
+def test_no_env_file_yet_is_not_an_error(tmp_path):
+    assert be.enforce_pinned(_registry(SSL_CERT_FILE=""), env_path=tmp_path / "absent") == []
+
+
+@pytest.mark.parametrize("extra", [["--clear", "K"], ["--rotate", "K"], ["--ensure", "K"], ["--enforce-pinned"]])
+def test_mixed_operations_are_refused_before_anything_runs(tmp_path, monkeypatch, extra):
+    # Codex #3459: `--clear K --enforce-pinned-check` used to clear K and exit 0.
+    env = _env(tmp_path, "K=keep\nSSL_CERT_FILE=/host\n")
+    monkeypatch.setattr(be, "ENV_SHARED_PATH", env)
+    # A regression here RUNS --clear, whose tombstone write must not reach the
+    # repo's real secrets_cleared.yaml (it did, once, under a mutation run).
+    tomb = tmp_path / "secrets_cleared.yaml"
+    monkeypatch.setattr(be, "CLEARED_KEYS_PATH", tomb)
+    assert be.main(["--enforce-pinned-check", *extra]) == 2
+    assert not tomb.exists()
+    assert env.read_text(encoding="utf-8") == "K=keep\nSSL_CERT_FILE=/host\n"
+
+
+def test_hydrate_never_overlays_a_pinned_key_even_under_force(tmp_path):
+    # Codex/Kilo #3459: repair empties the pin, and empty is a placeholder to
+    # hydrate, so the next funnel step used to put the stale value back.
+    from pmoves.tools.secrets_local_hydrate import hydrate
+
+    local = _env(tmp_path, "SSL_CERT_FILE=/stale/conda/cacert\nFREE=new\n")
+    shared = tmp_path / "shared.env"
+    shared.write_text("SSL_CERT_FILE=\nFREE=\n", encoding="utf-8")
+    reg = tmp_path / "registry.json"
+    reg.write_text(json.dumps(_registry(SSL_CERT_FILE="")), encoding="utf-8")
+    for force in (False, True):
+        updates = hydrate(local, shared, force=force, cleared_keys_path=tmp_path / "none.yaml",
+                          registry_path=reg, dry_run=True)
+        assert "SSL_CERT_FILE" not in updates and updates.get("FREE") == "new"
 
 
 def test_a_later_duplicate_is_what_counts_and_is_dropped(tmp_path):
@@ -97,10 +144,11 @@ def test_cli_prints_names_not_values(tmp_path, monkeypatch, capsys):
     assert be.main(["--registry", str(reg), "--enforce-pinned-check"]) == 0
 
 
-def test_the_real_registry_pins_every_leak_guard_empty():
+def test_the_real_registry_pins_every_ca_guard_empty_and_no_proxy():
     data = json.loads(REAL_REGISTRY.read_text(encoding="utf-8"))
     pins = {v["key"]: v for v in be.pinned_variables(data)}
-    assert LEAK_GUARDS <= set(pins), LEAK_GUARDS - set(pins)
+    assert set(pins) == LEAK_GUARDS, set(pins) ^ LEAK_GUARDS
+    assert not PROXIES & set(pins)
     for k in LEAK_GUARDS:
         assert pins[k]["default"] == "" and pins[k]["file"] == SHARED
 
@@ -113,3 +161,5 @@ def test_the_funnel_runs_the_enforcement():
     assert from_prod.index("FORCE=1") < from_prod.index("--enforce-pinned")
     funnel = mk.split("\nsecrets-funnel:", 1)[1].split("\n\n", 1)[0]
     assert "env-shared-repair" in funnel
+    # and again after both hydrates, before the bundle is sealed
+    assert funnel.index("secrets-runtime-hydrate") < funnel.index("--enforce-pinned") < funnel.index("secrets-funnel-sync")
