@@ -48,12 +48,15 @@ def _is_pruned_dir(root: Path, name: str) -> bool:
 
     `.worktrees` is matched as a plain directory name; the dotted form is
     distinctive enough that an accidental skip is implausible. `.claude/worktrees`
-    is matched only as that exact adjacent pair, so an unrelated directory merely
-    named `worktrees` is still audited (no blind spot).
+    and `.kilo/worktrees` (Kilo's own linked-worktree home) are matched only as
+    those exact adjacent pairs, so an unrelated directory merely named `worktrees`
+    is still audited (no blind spot). A single stale `.kilo/worktrees` copy was
+    enough to turn the secrets-funnel audit step red after every file had been
+    written.
     """
     if name in {".git", ".worktrees"}:
         return True
-    return name == "worktrees" and root.name == ".claude"
+    return name == "worktrees" and root.name in {".claude", ".kilo"}
 
 
 def candidate_files() -> Iterable[Path]:
