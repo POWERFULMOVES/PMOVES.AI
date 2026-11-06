@@ -340,6 +340,63 @@ def read_env_value(key: str, env_path: Optional[Path] = None) -> Optional[str]:
     return found
 
 
+def _unquote(value: str) -> str:
+    v = value.strip()
+    if len(v) >= 2 and v[0] == v[-1] and v[0] in ("'", '"'):
+        v = v[1:-1]
+    return v
+
+
+def pinned_variables(registry: Dict) -> List[Dict]:
+    """Registry variables declared ``"pinned": true`` -- value is ALWAYS the default.
+
+    The leak guards (SSL_CERT_FILE, *_CA_BUNDLE, *_PROXY, ...) are declared
+    "Always empty" so a Windows host path never reaches a Linux container. The
+    declaration was only ever applied at first bootstrap: ``bootstrap()`` keeps
+    an existing value, the preserve allowlist keeps the key, and every funnel
+    merges around it. Measured on Z890 2026-11-06: env.shared carried
+    ``SSL_CERT_FILE=<miniconda3>\\Library\\ssl\\...`` -- a host path from an
+    install since removed -- so every launcher session exported a CA file that
+    does not exist and python/Node TLS in it could not verify anything.
+    """
+    out: List[Dict] = []
+    for svc in registry.get("services", []):
+        for var in svc.get("variables", []):
+            if var.get("pinned"):
+                out.append(var)
+    return out
+
+
+def enforce_pinned(
+    registry: Dict, *, env_path: Optional[Path] = None, dry_run: bool = False
+) -> List[str]:
+    """Reset every pinned key whose value in env.shared differs from its default.
+
+    Returns the drifted key NAMES (never values: a proxy URL can carry
+    credentials). An absent key is not drift -- absent and empty mean the same
+    to every consumer -- so nothing is appended for it. With *dry_run* nothing is
+    written. Only env.shared-scoped pins are supported; any other ``file`` is a
+    registry error, raised rather than skipped so it cannot pass silently.
+    """
+    target = env_path or ENV_SHARED_PATH
+    drifted: List[str] = []
+    for var in pinned_variables(registry):
+        if var.get("file") != "pmoves/env.shared":
+            raise ValueError(
+                f"pinned key {var.get('key')!r} declares file {var.get('file')!r}; "
+                "only pmoves/env.shared pins are enforced"
+            )
+        key = var["key"]
+        want = str(var.get("default", ""))
+        have = read_env_value(key, target)
+        if have is None or _unquote(have) == want:
+            continue
+        drifted.append(key)
+        if not dry_run:
+            rotate_secret(key, value=want, allow_empty=True, env_path=target)
+    return drifted
+
+
 def ensure_secret(
     key: str,
     *,
@@ -850,6 +907,21 @@ def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
         "warning — so the whole compose project fails to interpolate.",
     )
     parser.add_argument(
+        "--enforce-pinned",
+        action="store_true",
+        default=False,
+        help="Reset every registry key declared \"pinned\": true (the host-leak "
+        "guards: SSL_CERT_FILE, *_CA_BUNDLE, *_PROXY, ...) to its declared default "
+        "in env.shared. Prints key NAMES only. Run by `make env-shared-repair`, "
+        "the first step of every secrets-funnel.",
+    )
+    parser.add_argument(
+        "--enforce-pinned-check",
+        action="store_true",
+        default=False,
+        help="Like --enforce-pinned but writes nothing; exit 1 if any pinned key drifted.",
+    )
+    parser.add_argument(
         "--value",
         help="Explicit new value for --rotate (e.g. an externally-minted API key). "
         "If omitted, a value is generated from --gen-type/--length. "
@@ -1063,6 +1135,29 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
         return 0
 
     registry = load_registry(args.registry)
+
+    if args.enforce_pinned or args.enforce_pinned_check:
+        if args.clear or args.rotate or args.ensure:
+            _error("--enforce-pinned is mutually exclusive with --clear/--rotate/--ensure")
+            return 2
+        check = args.enforce_pinned_check
+        try:
+            drifted = enforce_pinned(registry, dry_run=check)
+        except (ValueError, FileNotFoundError) as exc:
+            _error(str(exc))
+            return 2
+        if not drifted:
+            _info("pinned keys: all at their declared defaults")
+            return 0
+        verb = "drifted (not written)" if check else "reset to the registry default"
+        _warn(f"pinned keys {verb}: {', '.join(drifted)}")
+        if not check:
+            _info(
+                "A host value in a pinned key leaks into every launcher session and "
+                "container; see 'pinned' in pmoves/bootstrap/registry.json."
+            )
+        return 1 if check else 0
+
     try:
         services = select_services(registry, args.services)
     except ValueError as exc:
