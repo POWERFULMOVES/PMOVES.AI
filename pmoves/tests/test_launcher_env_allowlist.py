@@ -1,8 +1,8 @@
 """The allowlist that decides which env.shared keys reach a launched session.
 
-Pins pmoves/tools/launcher_env_allowlist.py. The launcher half (claude-pmoves
-.sh/.ps1 calling it instead of bulk-exporting) is protected and lands under a
-`launcher` Known Road; these tests are the contract it will be held to.
+Pins pmoves/tools/launcher_env_allowlist.py. The launchers' use of it
+(claude-pmoves.sh/.ps1, no more bulk export) is held by
+test_launcher_env_allowlist_wiring.py.
 """
 
 from __future__ import annotations

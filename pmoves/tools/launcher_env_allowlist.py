@@ -46,6 +46,7 @@ IMPLICIT_READS: dict[str, str] = {
     "OPEN_NOTEBOOK_API_TOKEN": "pmoves-hirag-mcp (hirag_mcp/tools.py)",
     "NATS_PORT": "mcp_roster_normalize.py _IN_STACK_HOSTS (nats -> 127.0.0.1:<port>)",
     "PMOVES_NODE_ID": "claude-pmoves.ps1 identity resolution + damage-control/known_roads.py",
+    "PMOVES_NODE_IDENTITY": "node_identity.py (the operator's identity override input)",
 }
 
 # Claude SDK/session controls. Mirrors the launchers' blocklist: these never
