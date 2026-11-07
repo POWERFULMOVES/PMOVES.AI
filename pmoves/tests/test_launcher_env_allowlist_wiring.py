@@ -125,6 +125,17 @@ def test_sh_launcher_exports_only_the_allowlist(tmp_path: Path):
     _assert_allowlisted(child, proc.stderr)
 
 
+def _write_cmd_stub(bin_dir: Path) -> None:
+    """claude.cmd that dumps its env through a script file; inline -c quoting under cmd is fragile."""
+    (bin_dir / "dump_env.py").write_text(
+        "import os\n"
+        "with open(os.environ['ENV_OUT'], 'wb') as f:\n"
+        "    f.write(b''.join((k + '=' + v).encode('utf-8') + b'\\0' for k, v in os.environ.items()))\n",
+        encoding="utf-8")
+    (bin_dir / "claude.cmd").write_text('@echo off\r\n"%PMOVES_TEST_PY%" "%~dp0dump_env.py"\r\n',
+                                        encoding="utf-8")
+
+
 def _powershell() -> str | None:
     return shutil.which("powershell") or shutil.which("pwsh")
 
@@ -138,11 +149,7 @@ def test_ps1_launcher_exports_only_the_allowlist(tmp_path: Path):
     bin_dir.mkdir()
     # `& claude` resolves claude.cmd through PATHEXT; the dump runs in a child
     # process, so it sees exactly what the real harness would inherit.
-    (bin_dir / "claude.cmd").write_text(
-        '@echo off\r\n"%PMOVES_TEST_PY%" -c "import os,sys;'
-        "open(os.environ['ENV_OUT'],'wb').write(b''.join("
-        "(k+'='+v).encode('utf-8')+b'\\0' for k,v in os.environ.items()))\"\r\n",
-        encoding="utf-8")
+    _write_cmd_stub(bin_dir)
     env_out = tmp_path / "env.bin"
     env = _base_env(tmp_path, bin_dir, env_out)
     env["PMOVES_TEST_PY"] = shutil.which("python") or "python"
@@ -209,3 +216,34 @@ def test_sh_repo_less_mode_still_exports_the_pinned_file(tmp_path: Path):
     assert child.get("SUPABASE_REST_URL") == "http://rest-from-file"
     assert child.get("POSTGRES_PASSWORD") == "leak-sentinel-pg"   # pinned by hand: all of it
     assert "no repo, so no allowlist" in proc.stderr
+
+
+@pytest.mark.skipif(os.name != "nt", reason="the .ps1 launcher runs on Windows nodes")
+def test_ps1_repo_less_mode_still_exports_the_pinned_file(tmp_path: Path):
+    """The .ps1 twin of the repo-less rescue (Kilo #3464: test the behaviour, not strings).
+
+    The .ps1 derives its root from its own location, so a copy outside the repo
+    is the repo-less case -- the one a Windows node with a copied launcher hits.
+    """
+    ps = _powershell()
+    if not ps:
+        pytest.skip("no PowerShell")
+    copy = tmp_path / "copied" / "deploy" / "provision"
+    copy.mkdir(parents=True)
+    shutil.copy2(PS1, copy / PS1.name)
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    _write_cmd_stub(bin_dir)
+    env_out = tmp_path / "env.bin"
+    env = _base_env(tmp_path, bin_dir, env_out)
+    env.pop("PMOVES_LAUNCHER_ROOT", None)
+    env["PMOVES_TEST_PY"] = shutil.which("python") or "python"
+    proc = subprocess.run(
+        [ps, "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(copy / PS1.name), "--print", "hi"],
+        capture_output=True, text=True, env=env, timeout=300)
+    out = proc.stdout + proc.stderr
+    child = {k.upper(): v for k, v in (_parse_env0(env_out.read_bytes()) if env_out.exists() else {}).items()}
+    assert child, f"stub claude was never reached:\n{out}"
+    assert child.get("SUPABASE_REST_URL") == "http://rest-from-file"
+    assert child.get("POSTGRES_PASSWORD") == "leak-sentinel-pg"
+    assert "no repo, so no allowlist" in out
