@@ -89,6 +89,11 @@ def _base_env(tmp_path: Path, bin_dir: Path, env_out: Path) -> dict[str, str]:
 
 def _assert_allowlisted(child: dict[str, str], stderr: str) -> None:
     assert child, f"stub claude was never reached; stderr:\n{stderr}"
+    # The launchers run against the REAL roster. If it ever legitimately names a
+    # sentinel, say that here rather than as a leak below.
+    listed = set(lea.allowlist(REPO_ROOT))
+    assert not listed & {"SUPABASE_JWT_SECRET", "POSTGRES_PASSWORD", "SERVICE_ROLE_KEY"}, (
+        "the roster now references a sentinel; pick another unrelated key for this test")
     # Not on the list: absent, whatever the file says.
     assert "SUPABASE_JWT_SECRET" not in child
     assert "POSTGRES_PASSWORD" not in child
@@ -179,3 +184,28 @@ def test_the_no_python_fallback_reads_the_same_implicit_reads():
     block = re.search(r"(?ms)^IMPLICIT_READS.*?^\}", TOOL.read_text(encoding="utf-8")).group(0)
     assert set(ps_rx.findall(block)) == set(lea.IMPLICIT_READS)
     assert "(?ms)^IMPLICIT_READS.*?^\\}" in PS1.read_text(encoding="utf-8")
+
+
+def test_sh_repo_less_mode_still_exports_the_pinned_file(tmp_path: Path):
+    """Codex #3464: with no repo, an explicit PMOVES_ENV_SHARED is still honoured.
+
+    There is no tool and no roster to cut a list from, so intersecting against
+    them exported nothing and the session started with zero MCP credentials.
+    """
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    stub = bin_dir / "claude"
+    stub.write_text(ENV_DUMPER, encoding="utf-8")
+    stub.chmod(0o755)
+    env_out = tmp_path / "env.bin"
+    env = _base_env(tmp_path, bin_dir, env_out)
+    nowhere = tmp_path / "not-a-repo"
+    nowhere.mkdir()
+    env["PMOVES_LAUNCHER_ROOT"] = str(nowhere)
+    proc = subprocess.run([_bash(), str(SH), "--print", "hi"],
+                          capture_output=True, text=True, env=env, timeout=240)
+    child = _parse_env0(env_out.read_bytes()) if env_out.exists() else {}
+    assert child, f"stub claude was never reached; stderr:\n{proc.stderr}"
+    assert child.get("SUPABASE_REST_URL") == "http://rest-from-file"
+    assert child.get("POSTGRES_PASSWORD") == "leak-sentinel-pg"   # pinned by hand: all of it
+    assert "no repo, so no allowlist" in proc.stderr

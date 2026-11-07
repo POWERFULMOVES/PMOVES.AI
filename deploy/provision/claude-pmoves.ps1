@@ -432,7 +432,15 @@ if (Test-Path $envf) {
     $allowTool = Join-Path $root 'pmoves\tools\launcher_env_allowlist.py'
     if ($pyArgv -and (Test-Path -LiteralPath $allowTool)) {
         $allowArgs = @($allowTool, '--root', $root)
-        if (-not $env:PMOVES_ROSTER_FROM_TREE) { $allowArgs += @('--ref', 'origin/main') }
+        if (-not $env:PMOVES_ROSTER_FROM_TREE) {
+            $allowArgs += @('--ref', 'origin/main')
+            # Fetch before the list is cut, so it and the roster below come from
+            # the same origin/main (see the .sh twin).
+            $prevErr = $ErrorActionPreference; $ErrorActionPreference = 'SilentlyContinue'
+            & git -C $root fetch --quiet origin main 2>$null | Out-Null
+            $ErrorActionPreference = $prevErr
+            $script:pmOriginMainFetched = $true
+        }
         $allowPre = @(if ($pyArgv.Count -gt 1) { $pyArgv[1..($pyArgv.Count - 1)] })
         # Same 5.1 guard as the backend selector: native stderr under 'Stop' is terminating.
         $prevErr = $ErrorActionPreference; $ErrorActionPreference = 'SilentlyContinue'
@@ -440,6 +448,14 @@ if (Test-Path $envf) {
         $allowRc = $LASTEXITCODE
         $ErrorActionPreference = $prevErr
         if ($allowRc -eq 0) { $allow = @($allowOut | Where-Object { $_ -match '^[A-Za-z_][A-Za-z0-9_]*$' }) }
+    }
+    if ($allow.Count -eq 0 -and -not (Test-Path -LiteralPath (Join-Path $root 'pmoves\Makefile'))) {
+        # REPO-LESS MODE (an explicit PMOVES_ENV_SHARED from a copied launcher):
+        # no tool and no roster to cut a list from. Export the pinned file as
+        # before, and say so (see the .sh twin).
+        $allow = @($vars.Keys)
+        $allowHow = 'repo-less: no allowlist source, exporting the pinned PMOVES_ENV_SHARED'
+        Write-Warning "[claude-pmoves] no repo, so no allowlist -- every key of $envf crosses into this session."
     }
     if ($allow.Count -eq 0) {
         # No python (or the tool failed): the same two sources, read without it.
@@ -882,7 +898,7 @@ if (-not $env:PMOVES_ROSTER_FROM_TREE) {
     $mainRoster = Join-Path ([System.IO.Path]::GetTempPath()) `
         ('pmoves-roster-origin-main.' + [System.IO.Path]::GetRandomFileName() + '.json')
     $prev = $ErrorActionPreference; $ErrorActionPreference = 'SilentlyContinue'
-    & git -C $root fetch --quiet origin main 2>$null | Out-Null
+    if (-not $script:pmOriginMainFetched) { & git -C $root fetch --quiet origin main 2>$null | Out-Null }
     $blob = & git -C $root show origin/main:.claude/mcp.json 2>$null
     $ErrorActionPreference = $prev
     if ($LASTEXITCODE -eq 0 -and $blob) {

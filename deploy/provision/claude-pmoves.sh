@@ -343,12 +343,28 @@ if [ -f "$ENVF" ]; then
   _allow_tool="$ROOT/pmoves/tools/launcher_env_allowlist.py"
   _allow_ref="origin/main"
   [ -n "${PMOVES_ROSTER_FROM_TREE:-}" ] && _allow_ref=""
+  if [ -n "$_allow_ref" ] && [ -f "$ROOT/pmoves/Makefile" ]; then
+    # Fetch HERE, not only at the roster block below: the list must be cut from
+    # the same origin/main the roster is, or a var main's roster just gained is
+    # missing for one launch and the normalizer drops that server.
+    git -C "$ROOT" fetch --quiet origin main >/dev/null 2>&1 || true
+    PM_ORIGIN_MAIN_FETCHED=1
+  fi
   if [ -f "$_allow_tool" ] && [ -f "$ROOT/pmoves/scripts/pm-python.sh" ]; then
     # shellcheck source=../../pmoves/scripts/pm-python.sh
     . "$ROOT/pmoves/scripts/pm-python.sh"
     if pm_pick_python "" 2>/dev/null; then
       _allow="$("${PM_PY[@]}" "$_allow_tool" --root "$ROOT" ${_allow_ref:+--ref "$_allow_ref"} 2>/dev/null)" || _allow=""
     fi
+  fi
+  if [ -z "$_allow" ] && [ ! -f "$ROOT/pmoves/Makefile" ]; then
+    # REPO-LESS MODE: the root block above honours an explicit PMOVES_ENV_SHARED
+    # when no repo resolves. There is no tool and no roster to cut a list from,
+    # so intersecting against them would export nothing. The operator pinned
+    # this file by hand; export it as before, and say so.
+    _allow="$(printf '%s' "$_keys")"
+    _allow_how="repo-less: no allowlist source, exporting the pinned PMOVES_ENV_SHARED"
+    echo "[claude-pmoves] WARN: no repo, so no allowlist -- every key of $ENVF crosses into this session." >&2
   fi
   if [ -z "$_allow" ]; then
     # No python (or the tool failed): the same two sources, read without it.
@@ -369,7 +385,7 @@ if [ -f "$ENVF" ]; then
   (
     set +u                                     # tolerate forward refs
     # shellcheck source=/dev/null
-    . "$tmpf" >/dev/null 2>&1
+    . "$tmpf" >/dev/null                      # stderr stays visible: a bad line must say so
     for _v in $(printf '%s\n' "$_allow" | sort -u); do
       case "$_keys" in *$'\n'"$_v"$'\n'*) ;; *) continue ;; esac
       [[ "$_v" =~ $blocklist ]] && continue
@@ -508,7 +524,8 @@ if [ -z "${PMOVES_ROSTER_FROM_TREE:-}" ]; then
   # before anything validates it.
   _main_roster="$(mktemp "${TMPDIR:-/tmp}/pmoves-roster-origin-main.XXXXXXXX.json" 2>/dev/null)" \
     || _main_roster="${TMPDIR:-/tmp}/pmoves-roster-origin-main.$$.json"
-  git -C "$ROOT" fetch --quiet origin main >/dev/null 2>&1 || true
+  [ -n "${PM_ORIGIN_MAIN_FETCHED:-}" ] || git -C "$ROOT" fetch --quiet origin main >/dev/null 2>&1 || true
+  unset PM_ORIGIN_MAIN_FETCHED
   if git -C "$ROOT" show origin/main:.claude/mcp.json > "$_main_roster" 2>/dev/null      && [ -s "$_main_roster" ]; then
     MCP_ROSTER="$_main_roster"
     MCP_ROSTER_SOURCE="origin/main"
