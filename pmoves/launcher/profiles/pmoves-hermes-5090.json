@@ -9,7 +9,11 @@
   "room": {
     "room_id": "5090-kilocode.room.studio",
     "stage": "rehearsal",
-    "suits": ["5090-kilocode", "5090-voice", "pmoves-hermes"]
+    "suits": [
+      "5090-kilocode",
+      "5090-voice",
+      "pmoves-hermes"
+    ]
   },
   "requirements": {
     "min_ram_gb": 64,
@@ -33,6 +37,7 @@
     "minimax-submodule-parity"
   ],
   "launcher_refs": [
+    "secrets-funnel",
     "up-agents",
     "up-monitoring",
     "a0-model-sync",
@@ -65,5 +70,131 @@
     "The Hermes profile itself must be created on the node (hermes profile use PMOVES-HERMES-5090); this launcher profile declares and seeds it.",
     "Cloud fallback follows env.shared order: ollama_cloud first. No API-burn lanes by default.",
     "Profile is local-only; never commit secret values."
-  ]
+  ],
+  "hermes_config_overrides": {
+    "model": {
+      "default": "qwen3-coder:30b",
+      "provider": "ollama",
+      "base_url": "http://localhost:11434",
+      "api_key": "",
+      "context_length": 32768,
+      "ollama_num_ctx": 32768
+    },
+    "model_gpu": {
+      "provider": "ollama",
+      "model": "qwen3-coder:30b",
+      "base_url": "http://localhost:11434",
+      "api_key": "",
+      "context_length": 32768,
+      "ollama_num_ctx": 32768
+    },
+    "models": {
+      "local": {
+        "provider": "ollama",
+        "model": "qwen3-coder:30b",
+        "base_url": "http://localhost:11434",
+        "api_key": ""
+      },
+      "remote_gpu": {
+        "provider": "ollama",
+        "model": "qwen3-coder:30b",
+        "base_url": "http://localhost:11434",
+        "api_key": ""
+      }
+    },
+    "agent": {
+      "max_turns": 90,
+      "verbose": false,
+      "reasoning_effort": "medium"
+    },
+    "terminal": {
+      "backend": "local",
+      "cwd": "D:\\PMOVES.AI\\PMOVES.AI",
+      "timeout": 300,
+      "home_mode": "auto",
+      "container_cpu": 2,
+      "container_memory": 8192,
+      "container_disk": 51200,
+      "container_persistent": true,
+      "docker_mount_cwd_to_workspace": false,
+      "lifetime_seconds": 300
+    },
+    "delegation": {
+      "model": "qwen3-coder:30b",
+      "provider": "ollama",
+      "base_url": "http://localhost:11434",
+      "api_key": "",
+      "max_iterations": 50,
+      "remote_model": "remote_gpu"
+    },
+    "platform_toolsets": {
+      "cli": [
+        "browser",
+        "clarify",
+        "code_execution",
+        "computer_use",
+        "cronjob",
+        "delegation",
+        "file",
+        "image_gen",
+        "kanban",
+        "memory",
+        "session_search",
+        "skills",
+        "terminal",
+        "todo",
+        "tts",
+        "vision",
+        "web"
+      ],
+      "telegram": [
+        "hermes-telegram"
+      ],
+      "discord": [
+        "hermes-discord"
+      ]
+    },
+    "fallback_model": {
+      "provider": "openai",
+      "model": "glm-5.2",
+      "base_url": "https://ollama.com/v1",
+      "api_key": "${OLLAMA_CLOUD_API_KEY}"
+    },
+    "security": {
+      "redact_secrets": true,
+      "tirith_enabled": true,
+      "tirith_path": "tirith",
+      "tirith_timeout": 5,
+      "tirith_fail_open": true
+    },
+    "memory": {
+      "memory_enabled": true,
+      "user_profile_enabled": true,
+      "memory_char_limit": 2200,
+      "user_char_limit": 1375,
+      "nudge_interval": 10,
+      "flush_min_turns": 6
+    },
+    "display": {
+      "compact": false,
+      "busy_input_mode": "interrupt",
+      "bell_on_complete": false,
+      "show_reasoning": false,
+      "streaming": true,
+      "skin": "default",
+      "interim_assistant_messages": true,
+      "tool_progress": "all",
+      "cleanup_progress": false,
+      "long_running_notifications": true,
+      "busy_ack_detail": true,
+      "background_process_notifications": "all"
+    },
+    "compression": {
+      "enabled": true,
+      "threshold": 0.5,
+      "target_ratio": 0.2,
+      "protect_last_n": 20,
+      "protect_first_n": 3
+    }
+  }
 }
