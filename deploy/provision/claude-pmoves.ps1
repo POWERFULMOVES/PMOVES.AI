@@ -420,10 +420,69 @@ if (Test-Path $envf) {
         }
         if (-not $changed) { break }
     }
+    # ALLOWLIST EXPORT -- only the names a roster server or the launcher reads.
+    # This used to set EVERY parsed key into the process env, and the session
+    # env then shadowed env.tier-* for every child (compose gives shell env
+    # precedence over --env-file). Full rationale in the .sh twin; both call
+    # pmoves/tools/launcher_env_allowlist.py, the single source of the list.
+    # An allowed key with a non-empty value wins over an inherited one, as the
+    # old loop did; a key the file does not define is left alone.
+    $allow = @()
+    $allowHow = 'launcher_env_allowlist.py'
+    $allowTool = Join-Path $root 'pmoves\tools\launcher_env_allowlist.py'
+    if ($pyArgv -and (Test-Path -LiteralPath $allowTool)) {
+        $allowArgs = @($allowTool, '--root', $root)
+        if (-not $env:PMOVES_ROSTER_FROM_TREE) {
+            $allowArgs += @('--ref', 'origin/main')
+            # Fetch before the list is cut, so it and the roster below come from
+            # the same origin/main (see the .sh twin).
+            $prevErr = $ErrorActionPreference; $ErrorActionPreference = 'SilentlyContinue'
+            & git -C $root fetch --quiet origin main 2>$null | Out-Null
+            $ErrorActionPreference = $prevErr
+            $script:pmOriginMainFetched = $true
+        }
+        $allowPre = @(if ($pyArgv.Count -gt 1) { $pyArgv[1..($pyArgv.Count - 1)] })
+        # Same 5.1 guard as the backend selector: native stderr under 'Stop' is terminating.
+        $prevErr = $ErrorActionPreference; $ErrorActionPreference = 'SilentlyContinue'
+        $allowOut = & $pyArgv[0] @allowPre @allowArgs 2>$null
+        $allowRc = $LASTEXITCODE
+        $ErrorActionPreference = $prevErr
+        if ($allowRc -eq 0) { $allow = @($allowOut | Where-Object { $_ -match '^[A-Za-z_][A-Za-z0-9_]*$' }) }
+    }
+    if ($allow.Count -eq 0 -and -not (Test-Path -LiteralPath (Join-Path $root 'pmoves\Makefile'))) {
+        # REPO-LESS MODE (an explicit PMOVES_ENV_SHARED from a copied launcher):
+        # no tool and no roster to cut a list from. Export the pinned file as
+        # before, and say so (see the .sh twin).
+        $allow = @($vars.Keys)
+        $allowHow = 'repo-less: no allowlist source, exporting the pinned PMOVES_ENV_SHARED'
+        Write-Warning "[claude-pmoves] no repo, so no allowlist -- every key of $envf crosses into this session."
+    }
+    if ($allow.Count -eq 0) {
+        # No python (or the tool failed): the same two sources, read without it.
+        # Coarser -- no `_`-disabled skip, no origin/main -- but it can only
+        # allow more of what the roster names, never an unrelated key.
+        $allowHow = 'fallback: roster refs + IMPLICIT_READS, no python'
+        foreach ($rf in @((Join-Path $root '.claude\mcp.json'), (Join-Path $root '.mcp.json'))) {
+            if (Test-Path -LiteralPath $rf) {
+                foreach ($m in [regex]::Matches((Get-Content -LiteralPath $rf -Raw), '\$\{([A-Za-z_][A-Za-z0-9_]*)')) {
+                    $allow += $m.Groups[1].Value
+                }
+            }
+        }
+        if (Test-Path -LiteralPath $allowTool) {
+            $implicit = [regex]::Match((Get-Content -LiteralPath $allowTool -Raw), '(?ms)^IMPLICIT_READS.*?^\}').Value
+            foreach ($m in [regex]::Matches($implicit, '(?m)^    "([A-Za-z_][A-Za-z0-9_]*)"')) { $allow += $m.Groups[1].Value }
+        }
+    }
     $n = 0
-    foreach ($k in $vars.Keys) { [Environment]::SetEnvironmentVariable($k, $vars[$k], 'Process'); $n++ }
-    Write-Host "[claude-pmoves] loaded $n vars from $envf"
-    $script:launcherSession = "claude-pmoves.ps1 ($n vars)"
+    foreach ($k in ($allow | Sort-Object -Unique)) {
+        if ($vars.Contains($k) -and $vars[$k] -ne '') {
+            [Environment]::SetEnvironmentVariable($k, $vars[$k], 'Process'); $n++
+        }
+    }
+    Write-Host "[claude-pmoves] exported $n allowlisted of $($vars.Count) parsed vars from $envf ($allowHow)"
+    if ($n -eq 0) { Write-Warning "[claude-pmoves] no env.shared value crossed the allowlist -- MCP creds may be missing." }
+    $script:launcherSession = "claude-pmoves.ps1 ($n of $($vars.Count) vars)"
 } else {
     Write-Warning "[claude-pmoves] $envf not found - MCP creds may be missing. Run: make -C pmoves ensure-env-shared"
     $script:launcherSession = 'claude-pmoves.ps1 (env file NOT FOUND)'
@@ -839,7 +898,7 @@ if (-not $env:PMOVES_ROSTER_FROM_TREE) {
     $mainRoster = Join-Path ([System.IO.Path]::GetTempPath()) `
         ('pmoves-roster-origin-main.' + [System.IO.Path]::GetRandomFileName() + '.json')
     $prev = $ErrorActionPreference; $ErrorActionPreference = 'SilentlyContinue'
-    & git -C $root fetch --quiet origin main 2>$null | Out-Null
+    if (-not $script:pmOriginMainFetched) { & git -C $root fetch --quiet origin main 2>$null | Out-Null }
     $blob = & git -C $root show origin/main:.claude/mcp.json 2>$null
     $ErrorActionPreference = $prev
     if ($LASTEXITCODE -eq 0 -and $blob) {
