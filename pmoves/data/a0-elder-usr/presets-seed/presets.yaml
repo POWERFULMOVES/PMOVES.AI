@@ -1,0 +1,206 @@
+- name: Default
+  chat:
+    provider: ollama
+    name: qwen3:30b-a3b-gpu
+    api_base: http://172.17.0.1:11434
+    ctx_length: 32768
+    ctx_history: 0.7
+    vision: false
+    max_embeds: 10
+    rl_requests: 0
+    rl_input: 0
+    rl_output: 0
+    kwargs:
+      think: false
+  utility:
+    provider: ollama
+    name: qwen3:8b-gpu
+    api_base: http://172.17.0.1:11434
+    ctx_length: 32768
+  embedding:
+    provider: huggingface
+    name: sentence-transformers/all-MiniLM-L6-v2
+    api_base: ''
+    rl_requests: 0
+    rl_input: 0
+    kwargs: {}
+- name: 'Local: SPARK (host Ollama)'
+  chat:
+    provider: ollama
+    name: qwen3:30b-a3b-gpu
+    api_base: http://172.17.0.1:11434
+    ctx_length: 32768
+    ctx_history: 0.7
+    vision: false
+    max_embeds: 10
+    rl_requests: 0
+    rl_input: 0
+    rl_output: 0
+    kwargs:
+      think: false
+  utility:
+    provider: ollama
+    name: qwen3:8b-gpu
+    api_base: http://172.17.0.1:11434
+    ctx_length: 32768
+  embedding:
+    provider: huggingface
+    name: sentence-transformers/all-MiniLM-L6-v2
+    api_base: ''
+- name: Registry
+  chat:
+    provider: ollama
+    name: qwen3:8b
+    api_base: http://pmoves-ollama:11434
+    ctx_length: 32768
+    ctx_history: 0.7
+    vision: false
+    max_embeds: 10
+    rl_requests: 0
+    rl_input: 0
+    rl_output: 0
+    kwargs:
+      think: false
+  utility:
+    provider: ollama
+    name: qwen3:8b
+    api_base: http://pmoves-ollama:11434
+    ctx_length: 32768
+  embedding:
+    provider: ollama
+    name: qwen3-embedding:4b
+    api_base: http://pmoves-ollama:11434
+- name: Fallback-1
+  chat:
+    provider: ollama
+    name: qwen2.5:32b
+    api_base: http://pmoves-ollama:11434
+    ctx_length: 32768
+    ctx_history: 0.7
+    vision: false
+    max_embeds: 10
+    rl_requests: 0
+    rl_input: 0
+    rl_output: 0
+    kwargs:
+      think: false
+  utility:
+    provider: ollama
+    name: qwen2.5:32b
+    api_base: http://pmoves-ollama:11434
+    ctx_length: 32768
+  embedding:
+    provider: ollama
+    name: qwen3-embedding:4b
+    api_base: http://pmoves-ollama:11434
+- name: Fallback-2
+  chat:
+    provider: ollama_edge
+    name: ollama_edge/mistral:7b-instruct
+    api_base: http://jetson-ollama:11434/v1
+    ctx_length: 32768
+    ctx_history: 0.7
+    vision: false
+    max_embeds: 10
+    rl_requests: 0
+    rl_input: 0
+    rl_output: 0
+    kwargs:
+      think: false
+  utility:
+    provider: ollama_edge
+    name: ollama_edge/mistral:7b-instruct
+    api_base: http://jetson-ollama:11434/v1
+    ctx_length: 32768
+  embedding:
+    provider: ollama
+    name: qwen3-embedding:4b
+    api_base: http://pmoves-ollama:11434
+- name: Fallback-3
+  chat:
+    provider: ollama_edge
+    name: ollama_edge/phi3:3.8b-mini-128k-instruct
+    api_base: http://jetson-ollama:11434/v1
+    ctx_length: 32768
+    ctx_history: 0.7
+    vision: false
+    max_embeds: 10
+    rl_requests: 0
+    rl_input: 0
+    rl_output: 0
+    kwargs:
+      think: false
+  utility:
+    provider: ollama_edge
+    name: ollama_edge/phi3:3.8b-mini-128k-instruct
+    api_base: http://jetson-ollama:11434/v1
+    ctx_length: 32768
+  embedding:
+    provider: ollama
+    name: qwen3-embedding:4b
+    api_base: http://pmoves-ollama:11434
+- name: Fallback-4
+  chat:
+    provider: zai_primary
+    name: zai_primary/gpt-4o-mini
+    api_base: https://api.z.ai/api/coding/paas/v4
+    ctx_length: 32768
+    ctx_history: 0.7
+    vision: false
+    max_embeds: 10
+    rl_requests: 0
+    rl_input: 0
+    rl_output: 0
+    kwargs:
+      think: false
+  utility:
+    provider: zai_primary
+    name: zai_primary/gpt-4o-mini
+    api_base: https://api.z.ai/api/coding/paas/v4
+    ctx_length: 32768
+  embedding:
+    provider: ollama
+    name: qwen3-embedding:4b
+    api_base: http://pmoves-ollama:11434
+- name: 'Cloud: OpenRouter'
+  chat:
+    provider: openrouter
+    name: openai/gpt-5.6-terra
+    api_base: ''
+    ctx_length: 200000
+    ctx_history: 0.7
+    vision: true
+    max_embeds: 10
+    rl_requests: 0
+    rl_input: 0
+    rl_output: 0
+    kwargs: {}
+  utility:
+    provider: openrouter
+    name: google/gemini-3.1-flash-lite
+    api_base: ''
+  embedding:
+    provider: huggingface
+    name: sentence-transformers/all-MiniLM-L6-v2
+    api_base: ''
+- name: 'Cloud: GLM-5.3 (TensorZero)'
+  chat:
+    provider: tensorzero
+    name: tensorzero::model_name::chat_zai_glm53
+    api_base: http://tensorzero-gateway:3000/openai/v1
+    ctx_length: 128000
+    ctx_history: 0.7
+    vision: false
+    max_embeds: 10
+    rl_requests: 0
+    rl_input: 0
+    rl_output: 0
+    kwargs: {}
+  utility:
+    provider: tensorzero
+    name: tensorzero::model_name::chat_zai_glm53
+    api_base: http://tensorzero-gateway:3000/openai/v1
+  embedding:
+    provider: huggingface
+    name: sentence-transformers/all-MiniLM-L6-v2
+    api_base: ''

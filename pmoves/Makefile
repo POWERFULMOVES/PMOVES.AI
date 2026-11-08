@@ -251,6 +251,7 @@ include mk/egress.mk
 include mk/neo4j-tailnet.mk
 include mk/a2ui-deploy.mk
 include mk/yt-cookies.mk
+include mk/a0-elder.mk
 include mk/mcp-toolkit.mk
 include mk/mcp-toolkit-4090.mk
 include mk/mcp-toolkit-spark.mk

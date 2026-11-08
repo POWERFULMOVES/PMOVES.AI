@@ -134,6 +134,14 @@ services:
       - a0-elder-knowledge:/a0/knowledge
       - a0-elder-instruments:/a0/instruments
       - a0-elder-workdir:/a0/workdir
+      # Model presets survive recreate + the WHOLE usr tree mounts (not the
+      # nested dir — a nested bind makes Docker pre-create /a0/usr as root and
+      # the runtime uid can no longer write /a0/usr/.env; same hazard documented
+      # on the stock agent-zero stanza, hit live 2026-11-07). Without a presets
+      # seed, every recreate re-runs the _model_config bootstrap and A0 re-adds
+      # a Default pointing at paid OpenRouter (the #3396 hazard, measured live).
+      # Seeded from the SPARK hand-applied set (Default = node-local analog).
+      - ${A0_ELDER_USR_DIR:-./data/a0-elder-usr}:/a0/usr
       # Host CLI auth mounts so crush/opencode/codex share the node's existing
       # logins instead of re-authenticating in-container. Targets follow the
       # runtime user's home (/app, uid 65532) — NOT /root.
