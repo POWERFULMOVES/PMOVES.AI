@@ -120,11 +120,24 @@ F2_FIXED_PORT = "        port: int = 8115,"
 F2_DEFECTIVE_PORT = "        port: int = 8082,"
 
 # FIXED: the compose entry publishes the same port.
-F2_FIXED_COMPOSE_BINDING = '    - "${NODE_REGISTRY_BIND:-0.0.0.0}:8115:8115"'
+#
+# MEASURED 2026-11-01: the binding is now PARAMETERISED --
+# `"${NODE_REGISTRY_BIND:-0.0.0.0}:${NODE_REGISTRY_PORT:-8115}:8115"` -- so
+# the host port comes from the registry-driven variable and this anchor had
+# to move with it. A mutation whose anchor has drifted is not a mutation: it
+# rewrites nothing, and the harness would then be proving that a no-op can
+# fail a test.
+F2_FIXED_COMPOSE_BINDING = (
+    '    - "${NODE_REGISTRY_BIND:-0.0.0.0}:${NODE_REGISTRY_PORT:-8115}:8115"'
+)
 
 # DEFECTIVE: the compose entry claims media-audio's host port, so the two
-# services cannot bind alongside each other.
-F2_DEFECTIVE_COMPOSE_BINDING = '    - "${NODE_REGISTRY_BIND:-0.0.0.0}:8082:8082"'
+# services cannot bind alongside each other. The default of the HOST port
+# variable moves to 8082, which is the same defect the pre-parameterisation
+# literal `:8082:8082` expressed.
+F2_DEFECTIVE_COMPOSE_BINDING = (
+    '    - "${NODE_REGISTRY_BIND:-0.0.0.0}:${NODE_REGISTRY_PORT:-8082}:8082"'
+)
 
 # The test that MUST fail for EITHER revert. It asserts the source default
 # AND the compose binding, so one named test covers both halves -- which is
